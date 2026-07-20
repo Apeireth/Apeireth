@@ -216,3 +216,7 @@ from .autopoiesis import AUTOPOIESIS_VERSION, AutopoieticComponent, AutopoieticS
 from .systems_theory import GST_VERSION, GST_PRINCIPLES, SystemPrinciple, SystemsTheoryLibrary  # Phase 35 Von Bertalanffy 系统论 (跨域调研借鉴)
 from .physical_emergence import PHYSICAL_EMERGENCE_VERSION, Fluctuation, PhaseTransition, PhysicalEmergenceSystem  # Phase 36 Meyer-Ortmanns 物理涌现 (跨域调研借鉴) 
 from .complexity import COMPLEXITY_VERSION, COMPLEXITY_LAWS, CrossDomainApplication, ComplexityHub  # Phase 37 Complexity Hub 跨域综合 (跨域调研借鉴)
+from .game_theory import NASH_VERSION, Agent, NashEquilibrium, IncentiveEngine  # Phase 38 Nash 均衡机制设计 (跨域调研借鉴) 
+from .metaphor import LAKOFF_VERSION, Metaphor, EmbodimentTrace, MetaphorEngine  # Phase 39 Lakoff 隐喻引擎 (跨域调研借鉴, 主人 22:05 不偏离哲学) 
+from .small_world import SMALL_WORLD_VERSION, Node, Link, SmallWorldGraph  # Phase 40 Watts-Strogatz Small-World Network (跨域调研借鉴) 
+from .philosophy import PHILOSOPHY_VERSION, PHILOSOPHY_LINES, PhilosophyCheck, check_philosophy, apeireth_philosophy_summary  # Apeireth 设计哲学守门 (主人 22:05 警告不偏离)
