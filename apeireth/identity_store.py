@@ -275,3 +275,16 @@ class IdentityStore:
         raw["integrity_hash"] = card.integrity_hash()
         p.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
         return p
+
+    def integrity_hash(self) -> str:
+        """跨卡聚合 hash — 给 linkage 层做 5 层完整性校验用.
+
+        排序后 SHA256 → 前 16. 主人 / persona / team 任何一张被改, hash 立即变.
+        """
+        import hashlib
+        cards = sorted(
+            (e.card.integrity_hash() for e in self.entries.values()),
+        )
+        canon = json.dumps({"version": IDENTITY_STORE_VERSION, "cards": cards},
+                          sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
