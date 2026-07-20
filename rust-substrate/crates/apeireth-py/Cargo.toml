@@ -12,7 +12,9 @@ name = "apeireth_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3 = { version = "0.21", features = ["extension-module"] }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
 apeireth-core = { path = "../apeireth-core" }
 apeireth-ports = { path = "../apeireth-ports" }
 apeireth-adapters = { path = "../apeireth-adapters" }
