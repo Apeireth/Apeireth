@@ -9,7 +9,8 @@
 //! - apeireth benchmark forget-sweep --count 10000
 
 use clap::{Parser, Subcommand};
-use apeireth_core::{IdentityCard, Note, Episode, Actor, EpisodeKind};
+use apeireth_core::{IdentityCard, Note, Episode};
+use apeireth_core::episode::{Actor, EpisodeKind};
 use apeireth_core::forget;
 use std::time::Instant;
 
