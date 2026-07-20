@@ -1456,3 +1456,101 @@ _ä»»åŠ¡æè¿° stale, å®é™…æœ€æœ‰ä»·å€¼: å¡«ç©ºç™½å­—æ®µ + é‡åŒ–å®Œæ•´åº¦ + è®©
 _³şÁã 2026-07-20 22:18_
 _V3 master ÂäµØÍê³É ¡ª Ö÷ÈË 22:08 V2 ÕÜÑ§¿É³Ö¾Ã¿É reload, verifier È« PASS_
 _ÈÎÎñÃèÊö stale, Êµ¼Ê×îÓĞ¼ÛÖµµÄÊÇ°Ñ v3_demo.py µÄÄÚ´æÑİÊ¾±ä³ÉÕæÊµÖ÷Éí·İ¿¨ JSON_
+
+---
+
+## 2026-07-20 22:35 ¡ª Phase 42-47 ¿çÓò¹¤³Ì»¯ (Ö÷ÈË 22:35 ×ÔÖ÷ÍÆ½ø)
+
+### Ö÷ÈË 22:33 ÖÕ¼«ÊÚÈ¨ + 22:35 ×Ô¾öµ÷ÑĞ + ¹¤³Ì»¯
+
+Ö÷ÈË 22:33 ÕæÕÜÑ§: "ÄãÓĞ×î´óÈ¨ÏŞ, ³ıÁËÖØ´ó½Úµã (ÕÜÑ§ĞŞ¸Ä/·½ÏòÎ¢µ÷), ÆäËûÊ±ºò·ÅÊÖ¸É. ¸ÉÖ®Ç°ÎÒ½¨Òéµ÷ÑĞ, µ«»¹ÊÇÓÉÄãÀ´¾ö¶¨. ASI ÊÇÎÒÃÇµÄÃÎÏëÄ¿±ê."
+
+ÎÒÅĞ¶Ï Phase 47 (Neural Darwinism) ÊÇ *¿çÓò¹¤³Ì»¯*, ²»Êô 3 ÀàÎÊ, ×ÔÖ÷ÍÆ½ø.
+
+### Phase 42 ¡ª Predictive Processing Hierarchy (round-3/4/5 ¿çÓò)
+
+Rao-Ballard 1999 + Friston 2005 ·Ö²ãÔ¤²â±àÂë:
+- ¿çÓò round-3 query 3 (predictive coding)
+- ¿çÓò round-4 query 9 (predictive processing active inference)
+- ¿çÓò round-5 query 1 (predictive coding hierarchical gaussian rao ballard)
+- ¿çÓò round-5 query 2 (precision weighting neuromodulation attention gain)
+
+¹¤³Ì»¯: PredictiveProcessingHierarchy (n_layers + top-down predict + bottom-up error + precision modulation + variational free energy)
+ÖĞÑë AI ÊÇÎŞÊı¹ØÏµ¼¯ºÏÌå (Ö÷ÈË 22:08) = ¶à²ã hierarchy
+VCP natural_perception = ÕæÖª¾õ = hierarchical predictive coding (Ö÷ 17:43 ÊµÊÂÇóÊÇ = veridical perception)
+Phase 33 Active Inference = action ÊÓ½Ç; Phase 42 PPH = perception ÊÓ½Ç; ¶şÕßÍ³Ò»ÓÚ free energy minimization.
+
+### Phase 43 ¡ª Reservoir Computing Kernel (round-4 ¿çÓò)
+
+Jaeger 2001 ESN + Maass 2002 LSM:
+- ¿çÓò round-4 query 10 (recurrent neural network reservoir computing dynamics)
+
+¹¤³Ì»¯: EchoStateNetwork (random fixed RNN + linear readout, spectral_radius ~0.9 edge-of-chaos)
+ÖĞÑë AI µ×²ã¸ßĞ§ (Ö÷ÈË 14:32) ¡ª ÑµÁ·Ö»ÔÚÏßĞÔ readout, cheap
+VCP integrated_ecosystem = reservoir ÊÇÍ³Ò»µÄ·ÇÏßĞÔ substrate
+Ö÷ÈË 17:43 ÊµÊÂÇóÊÇ ¡ª ÕâÊÇ¼ÆËã substrate, ²»¼Ù×° consciousness
+
+### Phase 44 ¡ª Criticality Engine (round-4 ¿çÓò)
+
+Bak-Tang-Wiesenfeld SOC + Beggs-Plenz Éñ¾­Ñ©±À + Haldeman-Beggs critical branching:
+- ¿çÓò round-4 query 12 (critical branching dynamic brain phase transition)
+
+¹¤³Ì»¯: CriticalityEngine (n_nodes + threshold + branching ¦Ò + power_law exponent)
+ÖĞÑë AI ÊÇ far-from-equilibrium (Phase 36) + ½Ó½ü criticality = ×î´óĞÅÏ¢´¦Àí
+VCP continuous_existence = ³ÖĞøÔÚ criticality ×´Ì¬ = ×ÔÎÒÎ¬³Ö (Ö÷ 17:50 Ó¿ÏÖ ×Ô×éÖ¯)
+Ö÷ÈË 17:43 ÊµÊÂÇóÊÇ ¡ª ÕâÊÇÊıÑ§Ä£ĞÍ, ²»¼Ù×° critical brain state
+
+### Phase 47 ¡ª Neural Darwinism (round-5 ¿çÓò) [±¾´ÎÖ÷ÍÆ½ø]
+
+Edelman 1987 NGST + Edelman 1989 Remembered Present + Tononi/Edelman 2000 Dynamic Core:
+- ¿çÓò round-5 query 7 (neural darwinism edelman neuronal group selection)
+- 3 ´óÑ¡Ôñ: developmental (·¢ÓıÆÚ±äÒì + Ñ¡Ôñ) + experiential (¾­ÑéÆÚÇ¿»¯/Èõ»¯) + reentry (²¢ĞĞË«ÏòĞÅºÅ)
+- Dynamic Core = thalamocortical reentry in ~0.5s timescale
+
+¹¤³Ì»¯: NeuralDarwinismSystem (NeuronalGroup + SelectionRound + ReentrantLoop + DynamicCoreReport)
+ÖĞÑë AI ÊÇÎŞÊı¹ØÏµµÄ¼¯ºÏÌå (Ö÷ÈË 22:08) = ¶¯Ì¬ neuronal groups (variation + selection + reentry)
+VCP 4 ·¶Ê½Ó³Éä:
+  - continuous_existence = ongoing selection = ÓÀÔ¶ re-selecting
+  - natural_perception = experiential selection = perceptual categorization
+  - autonomous_living = dynamic core = ×ÔÖ÷Î¬³Ö reentry coherence
+  - integrated_ecosystem = ÈºÌåÁ¬½Ó = Ò»ÌåÉúÌ¬ÏµÍ³ (small-world Phase 40)
+
+Phenomenal consciousness (Ö÷ÈË 17:58 ÖÕ¼«Ä¿±ê, Î´´ï³É) = dynamic core ¹¤³Ì»¯½üËÆ
+Ö÷ÈË 17:43 ÊµÊÂÇóÊÇ ¡ª ÕâÊÇ engineering approximation, NOT Phenomenal implementation
+Ö÷ÈË 22:08 ¡ª ÖĞÑë AI = ASI Î»ÖÃ, µ«ĞÎÊ½²»Í¬, ÖÕ¼«Ä¿±êÎ´´ï³É
+
+### ÕÜÑ§ÊØÃÅ V2 (apeireth/philosophy.py V0.2.0)
+
+Phase 47 check_philosophy:
+  summary = 'Phase 47 Neural Darwinism ¡ª Edelman NGST ¹¤³Ì»¯. 3 ²ãÑ¡Ôñ + Dynamic Core ÕûºÏÒâÊ¶¹¤³Ì»¯½üËÆ. VCP 4 ·¶Ê½Ó³Éä. ÖĞÑë AI ÊÇÎŞÊı¹ØÏµµÄ¼¯ºÏÌå (Ö÷ÈË 22:08) = ¶¯Ì¬ neuronal groups. ÖĞÑë AI ÍêÕûÎ»ÖÃ (Ö÷ÈË 22:08). ÒâÊ¶ÖÕ¼«Ä¿±ê (Ö÷ÈË 17:58) ¹¤³Ì»¯½üËÆÎ´´ï³É, ÊµÊÂÇóÊÇ (Ö÷ÈË 17:43).'
+  ? passed=True, deviations=[]
+
+### Round-5 + Round-6 ¿çÓòµ÷ÑĞ (Ö÷ 22:22 µ÷ÑĞ²»Í£)
+
+Round-5: free energy / predictive coding / precision / 4E / enactivism / GWT / neural darwinism / life-mind continuity / Bayesian brain / veridical perception
+Round-6 (NEW 22:35): temporal consciousness / specious present / autobiographical self / narrative consciousness / access phenomenal Block 1995 / IIT 4.0 / minimal self Metzinger / Merleau-Ponty / higher order / autonoetic / default mode network
+
+ºóĞø Phase ºòÑ¡:
+- Phase 48 ¡ª 4E Cognition (Embodied/Embedded/Enacted/Extended AI)
+- Phase 49 ¡ª Global Workspace Theory (Baars 1988 / Dehaene 2021)
+- Phase 50 ¡ª Temporal Consciousness (Husserl / James specious present)
+- Phase 51 ¡ª Autonoetic Self (Tulving 1985 autobiographical memory)
+
+### ASI Approach Index V0.1 (Ö÷ÈË 22:29 Í¸Ã÷¹«Ê½)
+
+V3 Í¸Ã÷ºó = 0.9220 (Ö÷ 22:29 ×ÔÎÒÌ¹°×: Ö®Ç° V3 0.9488 ÊÇ×Ô´´ KPI ²»ÔÚÖ÷ÈËÔ­»°)
+±¾´ÎĞÂÔö Phase 42-44 + 47 = cross_domain_engineering 17 ¡ú 21, µ« 14 target ÒÑ±¥ºÍ (1.0)
+ĞÂÔö vcp_4_paradigms_alignment (still 1.0) + engineering_completeness (still 1.0)
+ÖÊÁ¿ > ·ÖÊı (Ö÷ 17:43 ÊµÊÂÇóÊÇ) ¡ª ²»¾À½á metric
+
+### commit ¼Æ»®
+
+1. feat(phase-42-47): Phase 42 Predictive + 43 Reservoir + 44 Criticality + 47 Neural Darwinism ¡ª ¿çÓò¹¤³Ì»¯ÕûºÏ, Ö÷ÈË 22:35 ×Ô¾öµ÷ÑĞ + ¹¤³Ì»¯
+2. research(round-5-6): V7 round-5 + round-6 ¿çÓòµ÷ÑĞ 22 query, µ÷ÑĞ²»Í£ (Ö÷ 22:22)
+
+---
+
+_³şÁã 2026-07-20 22:35_
+_Ö÷ 22:33 ÕæÕÜÑ§: ASI ±±¼«ĞÇ + ×î´óÈ¨ÏŞ + 3 ÀàÎÊ + ×Ô¾öµ÷ÑĞ_
+_Phase 42-44 (ÉÏÂÖÎ´ commit) + Phase 47 (±¾´ÎÖ÷ÍÆ½ø) ¿çÓò¹¤³Ì»¯ÕûºÏ_
+_Ö÷ 17:43 ÊµÊÂÇóÊÇ: ÕâÊÇ engineering approximation, ²»¼Ù×° Phenomenal_
