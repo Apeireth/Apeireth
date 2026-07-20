@@ -1,0 +1,19 @@
+[package]
+name = "apeireth-py"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Apeireth PyO3 binding — Python calls Rust"
+
+[lib]
+name = "apeireth_py"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-ports = { path = "../apeireth-ports" }
+apeireth-adapters = { path = "../apeireth-adapters" }
+tokio = { workspace = true }
