@@ -1,0 +1,18 @@
+﻿[
+    {
+        "err":  "远程服务器返回错误: (401) 未经授权。",
+        "query":  "What is the engineering implementation of Higher-Order Theory of consciousness in AI agents?"
+    },
+    {
+        "err":  "远程服务器返回错误: (401) 未经授权。",
+        "query":  "What is a self-model in AI agents and how does Metzinger\u0027s minimal self apply?"
+    },
+    {
+        "err":  "远程服务器返回错误: (401) 未经授权。",
+        "query":  "How does Damasio\u0027s somatic marker hypothesis map to AI agent decision making?"
+    },
+    {
+        "err":  "远程服务器返回错误: (400) 错误的请求。",
+        "query":  "How does Darwin Gödel Machine use archive to ensure safety while enabling open-ended evolution?"
+    }
+]
