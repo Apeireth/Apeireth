@@ -1,4 +1,4 @@
-//! # Apeireth Core — Domain
+﻿//! # Apeireth Core — Domain
 //!
 //! 主人 14:52 "最高深度, 最深刻优先, 不计成本"
 //! 主人 12:14 "中央 AI 是永恒身份, 不是调度者/思考者"
@@ -41,3 +41,4 @@ pub use memory::{Memory, Tier, TierTransition};
 
 // Re-export tier_manager API
 pub use tier::TierManager;
+pub mod deliberation;
