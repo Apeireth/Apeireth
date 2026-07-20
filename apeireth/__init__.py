@@ -206,3 +206,5 @@ from .kickoff_enrichment import (  # Phase 1 v0.4 enrichment — recall_anchor +
     check_version,
     migrate as enrich_migrate,
 )
+from .observation import OBSERVATION_VERSION, Observation, MetaObservation, MetaMetaObservation, ThreeTierObservation  # Phase 24 二阶控制论 3 阶观察循环 
+from .ecology import NICHE_VERSION, Niche, NicheSpec, NicheConstructor  # Phase 25 生态位构造器 (Ecology Engineering 真生产借鉴)
