@@ -1,0 +1,23 @@
+[package]
+name = "apeireth-gateway"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Apeireth gateway — HTTP / JSON-RPC API (借鉴 MemoryOS-Rust gateway)"
+
+[dependencies]
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+anyhow = { workspace = true }
+
+apeireth-core = { path = "../apeireth-core" }
+apeireth-ports = { path = "../apeireth-ports" }
+apeireth-adapters = { path = "../apeireth-adapters" }
