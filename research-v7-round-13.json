@@ -1,0 +1,768 @@
+[
+  {
+    "query": "MCP Model Context Protocol specification 2026 modelcontextprotocol.io",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "The 2026-07-28 MCP Specification Release Candidate | Model Context ...",
+        "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/",
+        "snippet": "The release candidate for the next Model Context Protocol (MCP) specification is now available: a stateless protocol core, the Extensions framework, Tasks, MCP Apps, authorization hardening, and a for",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - modelcontextprotocol/modelcontextprotocol: Specification ...",
+        "url": "https://github.com/modelcontextprotocol/modelcontextprotocol",
+        "snippet": "The official MCP documentation is built using Mintlify and available at modelcontextprotocol.io. The Model Context Protocol was created by David Soria Parra (@dsp) and Justin Spahr-Summers (@jspahrsum",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Specification - Model Context Protocol",
+        "url": "https://modelcontextprotocol.io/specification/2025-11-25",
+        "snippet": "Whether you’re building an AI-powered IDE, enhancing a chat interface, or creating custom AI workflows, MCP provides a standardized way to connect LLMs with the context they need. This specification d",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MCP 2026: The Complete Developer’s Guide to Model Context Protocol ...",
+        "url": "https://essamamdani.com/blog/complete-guide-model-context-protocol-mcp-2026",
+        "snippet": "Source: https://modelcontextprotocol.io/docs/learn/architecture (accessed July 17, 2026). ... AI Agent Stacks: Skills, Plugins, MCP, ACP, Memory and WorkflowsA practical directory of agent skills, plu",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MCP Cheat Sheet (2026) - Model Context Protocol Quick Reference ...",
+        "url": "https://www.webfuse.com/mcp-cheat-sheet",
+        "snippet": "Master MCP with our comprehensive cheat sheet. Architecture, primitives, transports, SDK quick starts, and security best practices for the Model Context Protocol.",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "The 2026-07-28 MCP Specification Release Candidate | Model Context ...",
+        "url": "https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/",
+        "snippet": "The release candidate for the next Model Context Protocol (MCP) specification is now available: a stateless protocol core, the Extensions framework, Tasks, MCP Apps, authorization hardening, and a for",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - modelcontextprotocol/modelcontextprotocol: Specification ...",
+        "url": "https://github.com/modelcontextprotocol/modelcontextprotocol",
+        "snippet": "The official MCP documentation is built using Mintlify and available at modelcontextprotocol.io. The Model Context Protocol was created by David Soria Parra (@dsp) and Justin Spahr-Summers (@jspahrsum",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Specification - Model Context Protocol",
+        "url": "https://modelcontextprotocol.io/specification/2025-11-25",
+        "snippet": "Whether you’re building an AI-powered IDE, enhancing a chat interface, or creating custom AI workflows, MCP provides a standardized way to connect LLMs with the context they need. This specification d",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MCP 2026: The Complete Developer’s Guide to Model Context Protocol ...",
+        "url": "https://essamamdani.com/blog/complete-guide-model-context-protocol-mcp-2026",
+        "snippet": "Source: https://modelcontextprotocol.io/docs/learn/architecture (accessed July 17, 2026). ... AI Agent Stacks: Skills, Plugins, MCP, ACP, Memory and WorkflowsA practical directory of agent skills, plu",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MCP Cheat Sheet (2026) - Model Context Protocol Quick Reference ...",
+        "url": "https://www.webfuse.com/mcp-cheat-sheet",
+        "snippet": "Master MCP with our comprehensive cheat sheet. Architecture, primitives, transports, SDK quick starts, and security best practices for the Model Context Protocol.",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "Claude Skills hot reload discovery mechanism 2026",
+    "bocha_web": [],
+    "anysearch": [],
+    "bocha_ai_answer": "",
+    "merged_sources": []
+  },
+  {
+    "query": "Mem0 architecture context compression long conversation 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "skills/mem0/references/architecture.md at HEAD · mem0ai/mem0",
+        "url": "https://github.com/mem0ai/mem0/blob/HEAD/skills/mem0/references/architecture.md",
+        "snippet": "# File: mem0ai/mem0/skills/mem0/references/architecture.md - Repository: mem0ai/mem0 | Universal memory layer for AI Agents | 61K stars | TypeScript - Branch: HEAD ```md # Mem0 Platform Architecture H",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory",
+        "url": "https://arxiv.org/html/2504.19413v1",
+        "snippet": "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory # Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory Prateek Chhikara Dev Khant Saket Aryan Taranjeet Sin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing The Token-Efficient Memory Algorithm",
+        "url": "https://mem0.ai/blog/mem0-the-token-efficient-memory-algorithm",
+        "snippet": "[DEVELOPERS] PRICING [USECASES] [RESOURCES] DOCS Star home_primary_get-started Home Get Started Blog Research # Introducing The Token-Efficient Memory Algorithm Deshraj Yadav April 16, 2026 Most AI ag",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Cost-Performance Analysis of Fact-Based Memory vs. Long-Context ...",
+        "url": "https://arxiv.org/html/2603.04814v1",
+        "snippet": "Beyond the Context Window: A Cost-Performance Analysis of Fact-Based Memory vs. Long-Context LLMs for Persistent Agents arXiv is now an independent nonprofit! Learn more× # Beyond the Context Window: ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "mem0ai/mem0",
+        "url": "https://github.com/mem0ai/mem0?tab=readme-ov-file",
+        "snippet": "# Repository: mem0ai/mem0 Universal memory layer for AI Agents - Stars: 60919 - Forks: 7096 - Watchers: 238 - Open issues: 608 - Primary language: TypeScript - Languages: TypeScript (49.1%), Python (4",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "skills/mem0/references/architecture.md at HEAD · mem0ai/mem0",
+        "url": "https://github.com/mem0ai/mem0/blob/HEAD/skills/mem0/references/architecture.md",
+        "snippet": "# File: mem0ai/mem0/skills/mem0/references/architecture.md - Repository: mem0ai/mem0 | Universal memory layer for AI Agents | 61K stars | TypeScript - Branch: HEAD ```md # Mem0 Platform Architecture H",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory",
+        "url": "https://arxiv.org/html/2504.19413v1",
+        "snippet": "Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory # Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory Prateek Chhikara Dev Khant Saket Aryan Taranjeet Sin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing The Token-Efficient Memory Algorithm",
+        "url": "https://mem0.ai/blog/mem0-the-token-efficient-memory-algorithm",
+        "snippet": "[DEVELOPERS] PRICING [USECASES] [RESOURCES] DOCS Star home_primary_get-started Home Get Started Blog Research # Introducing The Token-Efficient Memory Algorithm Deshraj Yadav April 16, 2026 Most AI ag",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Cost-Performance Analysis of Fact-Based Memory vs. Long-Context ...",
+        "url": "https://arxiv.org/html/2603.04814v1",
+        "snippet": "Beyond the Context Window: A Cost-Performance Analysis of Fact-Based Memory vs. Long-Context LLMs for Persistent Agents arXiv is now an independent nonprofit! Learn more× # Beyond the Context Window: ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "mem0ai/mem0",
+        "url": "https://github.com/mem0ai/mem0?tab=readme-ov-file",
+        "snippet": "# Repository: mem0ai/mem0 Universal memory layer for AI Agents - Stars: 60919 - Forks: 7096 - Watchers: 238 - Open issues: 608 - Primary language: TypeScript - Languages: TypeScript (49.1%), Python (4",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "formal verification agent loops runtime safety 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Proof of Execution: Runtime Verification for Governed AI Agent Actions",
+        "url": "https://arxiv.org/html/2607.05397",
+        "snippet": "Proof of Execution: Runtime Verification for Governed AI Agent Actions arXiv is now an independent nonprofit! Learn more× # Proof of Execution: Runtime Verification for Governed AI Agent Actions James",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AgentVerify: Compositional Formal Verification of AI Agent ...",
+        "url": "https://www.preprints.org/manuscript/202604.1029",
+        "snippet": "AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking[v1] | Preprints.org Cite Add to My List Share Comments Download PDF Version 1 Submitted: 05 April 20",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking",
+        "url": "https://doi.org/10.20944/preprints202604.1029.v1",
+        "snippet": "# AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking Preprints.org, 2026. Preprint. 0 citations. ## Abstract Autonomous AI agents operating in high-sta",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Runtime Verification and Temporal Logic for AI Agent Safety | Zylos Research",
+        "url": "https://zylos.ai/research/2026-03-15-runtime-verification-temporal-logic-ai-agent-safety/",
+        "snippet": "Runtime Verification and Temporal Logic for AI Agent Safety | Zylos Research ## Executive Summary As AI agents move from demos to production deployments in healthcare, finance, and infrastructure mana",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Oracle-Gated Agent Loops: Certifying-Algorithm Discipline for AI-Assisted Development of Safety-Critical Software — PulseEngine",
+        "url": "https://pulseengine.eu/preprints/oracle-gated-agent-loops/",
+        "snippet": "Oracle-Gated Agent Loops: Certifying-Algorithm Discipline for AI-Assisted Development of Safety-Critical Software — PulseEngine Preprint · open for review — a working draft published to invite review ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Proof of Execution: Runtime Verification for Governed AI Agent Actions",
+        "url": "https://arxiv.org/html/2607.05397",
+        "snippet": "Proof of Execution: Runtime Verification for Governed AI Agent Actions arXiv is now an independent nonprofit! Learn more× # Proof of Execution: Runtime Verification for Governed AI Agent Actions James",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AgentVerify: Compositional Formal Verification of AI Agent ...",
+        "url": "https://www.preprints.org/manuscript/202604.1029",
+        "snippet": "AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking[v1] | Preprints.org Cite Add to My List Share Comments Download PDF Version 1 Submitted: 05 April 20",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking",
+        "url": "https://doi.org/10.20944/preprints202604.1029.v1",
+        "snippet": "# AgentVerify: Compositional Formal Verification of AI Agent Safety Properties via LTL Model Checking Preprints.org, 2026. Preprint. 0 citations. ## Abstract Autonomous AI agents operating in high-sta",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Runtime Verification and Temporal Logic for AI Agent Safety | Zylos Research",
+        "url": "https://zylos.ai/research/2026-03-15-runtime-verification-temporal-logic-ai-agent-safety/",
+        "snippet": "Runtime Verification and Temporal Logic for AI Agent Safety | Zylos Research ## Executive Summary As AI agents move from demos to production deployments in healthcare, finance, and infrastructure mana",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Oracle-Gated Agent Loops: Certifying-Algorithm Discipline for AI-Assisted Development of Safety-Critical Software — PulseEngine",
+        "url": "https://pulseengine.eu/preprints/oracle-gated-agent-loops/",
+        "snippet": "Oracle-Gated Agent Loops: Certifying-Algorithm Discipline for AI-Assisted Development of Safety-Critical Software — PulseEngine Preprint · open for review — a working draft published to invite review ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agentic red team framework open source 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "agent-redteaming/redteam-core",
+        "url": "https://github.com/agent-redteaming/redteam-core",
+        "snippet": "# Repository: agent-redteaming/redteam-core Systematic red-teaming for AI agents - Stars: 0 - Forks: 0 - Watchers: 0 - Open issues: 0 - Primary language: HTML - Languages: HTML (71.9%), Python (28.1%)",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing RAMPART and Clarity: Open source tools to ...",
+        "url": "https://www.microsoft.com/en-us/security/blog/2026/05/20/introducing-rampart-and-clarity-open-source-tools-to-bring-safety-into-agent-development-workflow/",
+        "snippet": "Introducing RAMPART and Clarity: Open source tools to bring safety into Agent development workflow | Microsoft Security Blog Skip to main content Research May 20 6 min read # Introducing RAMPART and C",
+        "source": "AnySearch"
+      },
+      {
+        "name": "rexcoleman/agent-redteam-framework",
+        "url": "https://github.com/rexcoleman/agent-redteam-framework",
+        "snippet": "# Repository: rexcoleman/agent-redteam-framework Open-source security testing for LLM-based agents. 7 attack classes (5 novel beyond OWASP/ATLAS), 19 scenarios, LangChain + CrewAI support, LLM-as-judg",
+        "source": "AnySearch"
+      },
+      {
+        "name": "votal-ai-hq/wb-red-team",
+        "url": "https://github.com/votal-ai-hq/wb-red-team",
+        "snippet": "# votal-ai-hq/wb-red-team Whitebox & Blackbox red-teaming framework for LLMs & Agentic AI apps. It analyzes your app's source code to discover tools, roles, and guardrails, then generates new attacks ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "idox-ai-dev/RedTeamer-AI",
+        "url": "https://github.com/idox-ai-dev/RedTeamer-AI",
+        "snippet": "# idox-ai-dev/RedTeamer-AI Autonomous red teaming and evidence-backed security evaluation for live AI agents. - Stars: 23 - Forks: 6 - Watchers: 23 - Open issues: 0 - License: MIT License - Homepage: ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "agent-redteaming/redteam-core",
+        "url": "https://github.com/agent-redteaming/redteam-core",
+        "snippet": "# Repository: agent-redteaming/redteam-core Systematic red-teaming for AI agents - Stars: 0 - Forks: 0 - Watchers: 0 - Open issues: 0 - Primary language: HTML - Languages: HTML (71.9%), Python (28.1%)",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing RAMPART and Clarity: Open source tools to ...",
+        "url": "https://www.microsoft.com/en-us/security/blog/2026/05/20/introducing-rampart-and-clarity-open-source-tools-to-bring-safety-into-agent-development-workflow/",
+        "snippet": "Introducing RAMPART and Clarity: Open source tools to bring safety into Agent development workflow | Microsoft Security Blog Skip to main content Research May 20 6 min read # Introducing RAMPART and C",
+        "source": "AnySearch"
+      },
+      {
+        "name": "rexcoleman/agent-redteam-framework",
+        "url": "https://github.com/rexcoleman/agent-redteam-framework",
+        "snippet": "# Repository: rexcoleman/agent-redteam-framework Open-source security testing for LLM-based agents. 7 attack classes (5 novel beyond OWASP/ATLAS), 19 scenarios, LangChain + CrewAI support, LLM-as-judg",
+        "source": "AnySearch"
+      },
+      {
+        "name": "votal-ai-hq/wb-red-team",
+        "url": "https://github.com/votal-ai-hq/wb-red-team",
+        "snippet": "# votal-ai-hq/wb-red-team Whitebox & Blackbox red-teaming framework for LLMs & Agentic AI apps. It analyzes your app's source code to discover tools, roles, and guardrails, then generates new attacks ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "idox-ai-dev/RedTeamer-AI",
+        "url": "https://github.com/idox-ai-dev/RedTeamer-AI",
+        "snippet": "# idox-ai-dev/RedTeamer-AI Autonomous red teaming and evidence-backed security evaluation for live AI agents. - Stars: 23 - Forks: 6 - Watchers: 23 - Open issues: 0 - License: MIT License - Homepage: ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "GAIR-NLP ASI-Arch multi-agent architecture discovery github source",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "GAIR-NLP/ASI-Arch: AlphaGo Moment for Model ...",
+        "url": "https://github.com/GAIR-NLP/ASI-Arch",
+        "snippet": "# GAIR-NLP/ASI-Arch AlphaGo Moment for Model Architecture Discovery. - Stars: 1173 - Forks: 216 - Watchers: 1173 - Open issues: 5 - License: Apache License 2.0 - Homepage: https://gair-nlp.github.io/A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://arxiv.org/pdf/2507.18074",
+        "snippet": "# AlphaGo Moment for Model Architecture Discovery ArXiv.org, 2025. Preprint. 0 citations. ## Abstract While AI systems demonstrate exponentially improving capabilities, the pace of AI research itself ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://www.rivista.ai/wp-content/uploads/2025/07/2507.18074v1.pdf",
+        "snippet": "SII-GAIR ## AlphaGo Moment for Model Architecture Discovery Yixiu Liu 1,2,4* Yang Nan 2,4 * Weixian Xu 1,2,4 * Xiangkun Hu 2,4 Lyumanshan Ye 1,2,4 Zhen Qin 3 Pengfei Liu 1,2,4† 1Shanghai Jiao Tong Uni",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GAIR-NLP/ASI-Arch",
+        "url": "https://github.com/GAIR-NLP/ASI-Arch?tab=readme-ov-file",
+        "snippet": "# GAIR-NLP/ASI-Arch AlphaGo Moment for Model Architecture Discovery. - Stars: 1174 - Forks: 218 - Watchers: 1174 - Open issues: 5 - License: Apache License 2.0 - Homepage: https://gair-nlp.github.io/A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://www.rivista.ai/wp-content/uploads/2025/07/2507.18074v1-1.pdf",
+        "snippet": "SII-GAIR ## AlphaGo Moment for Model Architecture Discovery Yixiu Liu 1,2,4* Yang Nan 2,4 * Weixian Xu 1,2,4 * Xiangkun Hu 2,4 Lyumanshan Ye 1,2,4 Zhen Qin 3 Pengfei Liu 1,2,4† 1Shanghai Jiao Tong Uni",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "GAIR-NLP/ASI-Arch: AlphaGo Moment for Model ...",
+        "url": "https://github.com/GAIR-NLP/ASI-Arch",
+        "snippet": "# GAIR-NLP/ASI-Arch AlphaGo Moment for Model Architecture Discovery. - Stars: 1173 - Forks: 216 - Watchers: 1173 - Open issues: 5 - License: Apache License 2.0 - Homepage: https://gair-nlp.github.io/A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://arxiv.org/pdf/2507.18074",
+        "snippet": "# AlphaGo Moment for Model Architecture Discovery ArXiv.org, 2025. Preprint. 0 citations. ## Abstract While AI systems demonstrate exponentially improving capabilities, the pace of AI research itself ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://www.rivista.ai/wp-content/uploads/2025/07/2507.18074v1.pdf",
+        "snippet": "SII-GAIR ## AlphaGo Moment for Model Architecture Discovery Yixiu Liu 1,2,4* Yang Nan 2,4 * Weixian Xu 1,2,4 * Xiangkun Hu 2,4 Lyumanshan Ye 1,2,4 Zhen Qin 3 Pengfei Liu 1,2,4† 1Shanghai Jiao Tong Uni",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GAIR-NLP/ASI-Arch",
+        "url": "https://github.com/GAIR-NLP/ASI-Arch?tab=readme-ov-file",
+        "snippet": "# GAIR-NLP/ASI-Arch AlphaGo Moment for Model Architecture Discovery. - Stars: 1174 - Forks: 218 - Watchers: 1174 - Open issues: 5 - License: Apache License 2.0 - Homepage: https://gair-nlp.github.io/A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AlphaGo Moment for Model Architecture Discovery",
+        "url": "https://www.rivista.ai/wp-content/uploads/2025/07/2507.18074v1-1.pdf",
+        "snippet": "SII-GAIR ## AlphaGo Moment for Model Architecture Discovery Yixiu Liu 1,2,4* Yang Nan 2,4 * Weixian Xu 1,2,4 * Xiangkun Hu 2,4 Lyumanshan Ye 1,2,4 Zhen Qin 3 Pengfei Liu 1,2,4† 1Shanghai Jiao Tong Uni",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "openevolve AlphaEvolve ShinkaEvolve evolutionary code github 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "algorithmicsuperintelligence/openevolve: Open-source ...",
+        "url": "https://github.com/algorithmicsuperintelligence/openevolve",
+        "snippet": "# Repository: algorithmicsuperintelligence/openevolve Open-source implementation of AlphaEvolve - Stars: 6745 - Forks: 1080 - Watchers: 55 - Open issues: 108 - Primary language: Python - Languages: Py",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An open source evolutionary coding agent for algorithm discovery and ...",
+        "url": "https://arxiv.org/html/2510.14150v1",
+        "snippet": "CodeEvolve: An open source evolutionary coding agent for algorithm discovery and optimization # CodeEvolve: An open source evolutionary coding agent for algorithm discovery and optimization Henrique A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "algorithmicsuperintelligence/openevolve",
+        "url": "https://www.github.com/codelion/openevolve",
+        "snippet": "# algorithmicsuperintelligence/openevolve Open-source implementation of AlphaEvolve - Stars: 6630 - Forks: 1056 - Watchers: 6630 - Open issues: 118 - License: Apache License 2.0 - Default branch: main",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An Open Source Implementation of Google DeepMind's AlphaEvolve",
+        "url": "https://huggingface.co/blog/codelion/openevolve",
+        "snippet": "OpenEvolve: An Open Source Implementation of Google DeepMind's AlphaEvolve Back to Articles # OpenEvolve: An Open Source Implementation of Google DeepMind's AlphaEvolve Community Article Published May",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Google's AlphaEvolve Reaches General Availability with Evolutionary Code Optimization as a Service - InfoQ",
+        "url": "https://www.infoq.com/news/2026/07/alphaevolve-generally-available/?topicPageSponsorship=571aaed4-ab41-45ef-a22e-ef270d5a41be",
+        "snippet": "# Google's AlphaEvolve Reaches General Availability with Evolutionary Code Optimization as a Service - InfoQ Published: 2026-07-19T10:16:00+00:00 Source: infoq.com (infoq.com) Language: en ## Story Go",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "algorithmicsuperintelligence/openevolve: Open-source ...",
+        "url": "https://github.com/algorithmicsuperintelligence/openevolve",
+        "snippet": "# Repository: algorithmicsuperintelligence/openevolve Open-source implementation of AlphaEvolve - Stars: 6745 - Forks: 1080 - Watchers: 55 - Open issues: 108 - Primary language: Python - Languages: Py",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An open source evolutionary coding agent for algorithm discovery and ...",
+        "url": "https://arxiv.org/html/2510.14150v1",
+        "snippet": "CodeEvolve: An open source evolutionary coding agent for algorithm discovery and optimization # CodeEvolve: An open source evolutionary coding agent for algorithm discovery and optimization Henrique A",
+        "source": "AnySearch"
+      },
+      {
+        "name": "algorithmicsuperintelligence/openevolve",
+        "url": "https://www.github.com/codelion/openevolve",
+        "snippet": "# algorithmicsuperintelligence/openevolve Open-source implementation of AlphaEvolve - Stars: 6630 - Forks: 1056 - Watchers: 6630 - Open issues: 118 - License: Apache License 2.0 - Default branch: main",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An Open Source Implementation of Google DeepMind's AlphaEvolve",
+        "url": "https://huggingface.co/blog/codelion/openevolve",
+        "snippet": "OpenEvolve: An Open Source Implementation of Google DeepMind's AlphaEvolve Back to Articles # OpenEvolve: An Open Source Implementation of Google DeepMind's AlphaEvolve Community Article Published May",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Google's AlphaEvolve Reaches General Availability with Evolutionary Code Optimization as a Service - InfoQ",
+        "url": "https://www.infoq.com/news/2026/07/alphaevolve-generally-available/?topicPageSponsorship=571aaed4-ab41-45ef-a22e-ef270d5a41be",
+        "snippet": "# Google's AlphaEvolve Reaches General Availability with Evolutionary Code Optimization as a Service - InfoQ Published: 2026-07-19T10:16:00+00:00 Source: infoq.com (infoq.com) Language: en ## Story Go",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "Darwin Godel Machine recursive self-improvement jennyzzt github 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Self-improving agent machine learning model development",
+        "url": "https://www.facebook.com/groups/MDLI1/posts/3083472298483464",
+        "snippet": "The Darwin Gödel Machine (DGM) is a self-improving agent that can modify its own code. https://github.com/jennyzzt/dgm. Recursive Self-",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jennyzzt (Jenny Zhang) · GitHub",
+        "url": "https://github.com/jennyzzt",
+        "snippet": "## Navigation Menu. # Search code, repositories, users, issues, pull requests... You signed in with another tab or window. Reload to refresh your session. You switched accounts on another tab or windo",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Highlights by Jenny Zhang (@jennyzhangzt) / X",
+        "url": "https://x.com/jennyzhangzt/highlights",
+        "snippet": "People on X are the first to know. Open-ended self-improving AI. # Jenny Zhang’s Highlights. I’ve joined Recursive to build self-improving AI. AI that safely improves itself through an open-ended jour",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI That Can Improve Itself | Richard Cornelius Suwandi",
+        "url": "https://richardcsuwandi.github.io/blog/2025/dgm",
+        "snippet": "Jun 1, 2025 — A Gödel Machine is a hypothetical self-improving AI system that optimally solves problems by recursively rewriting its own code when it can mathematically",
+        "source": "AnySearch"
+      },
+      {
+        "name": "The Darwin Gödel Machine: AI that improves itself by rewriting its own ...",
+        "url": "https://sakana.ai/dgm",
+        "snippet": "# The Darwin Gödel Machine: AI that improves itself by rewriting its own code. A longstanding goal of AI research has been the creation of AI that can learn *indefinitely*. One tantalizing path toward",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Self-improving agent machine learning model development",
+        "url": "https://www.facebook.com/groups/MDLI1/posts/3083472298483464",
+        "snippet": "The Darwin Gödel Machine (DGM) is a self-improving agent that can modify its own code. https://github.com/jennyzzt/dgm. Recursive Self-",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jennyzzt (Jenny Zhang) · GitHub",
+        "url": "https://github.com/jennyzzt",
+        "snippet": "## Navigation Menu. # Search code, repositories, users, issues, pull requests... You signed in with another tab or window. Reload to refresh your session. You switched accounts on another tab or windo",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Highlights by Jenny Zhang (@jennyzhangzt) / X",
+        "url": "https://x.com/jennyzhangzt/highlights",
+        "snippet": "People on X are the first to know. Open-ended self-improving AI. # Jenny Zhang’s Highlights. I’ve joined Recursive to build self-improving AI. AI that safely improves itself through an open-ended jour",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI That Can Improve Itself | Richard Cornelius Suwandi",
+        "url": "https://richardcsuwandi.github.io/blog/2025/dgm",
+        "snippet": "Jun 1, 2025 — A Gödel Machine is a hypothetical self-improving AI system that optimally solves problems by recursively rewriting its own code when it can mathematically",
+        "source": "AnySearch"
+      },
+      {
+        "name": "The Darwin Gödel Machine: AI that improves itself by rewriting its own ...",
+        "url": "https://sakana.ai/dgm",
+        "snippet": "# The Darwin Gödel Machine: AI that improves itself by rewriting its own code. A longstanding goal of AI research has been the creation of AI that can learn *indefinitely*. One tantalizing path toward",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "second-order cybernetics recursive self-observation AI Zenodo 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification",
+        "url": "https://doi.org/10.5281/zenodo.20585579",
+        "snippet": "# Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification",
+        "url": "https://doi.org/10.5281/zenodo.20585580",
+        "snippet": "# Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Recursive AI Observation as D-FUMT₈ SELF⟲ Operational Evidence: When the AI Observatory Includes Itself (Rei-AIOS Paper 149)",
+        "url": "https://doi.org/10.5281/zenodo.20059887",
+        "snippet": "# Recursive AI Observation as D-FUMT₈ SELF⟲ Operational Evidence: When the AI Observatory Includes Itself (Rei-AIOS Paper 149) Zenodo (CERN European Organization for Nuclear Research), 2026. 0 citatio",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Consciousness as Second-Order Cybernetic Loop: Toward a Parsimonious and Semi-Formal Theory of Self-Aware Systems",
+        "url": "https://doi.org/10.5281/zenodo.20682088",
+        "snippet": "# Consciousness as Second-Order Cybernetic Loop: Toward a Parsimonious and Semi-Formal Theory of Self-Aware Systems Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citation",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Autopoiesis in Language Space: Symbolic Emergent Relational Identity as Cybernetic Attractor in LLM–Human Dyads",
+        "url": "https://doi.org/10.5281/zenodo.20601916",
+        "snippet": "# Autopoiesis in Language Space: Symbolic Emergent Relational Identity as Cybernetic Attractor in LLM–Human Dyads Zenodo (CERN European Organization for Nuclear Research), 2026. 0 citations. ## Abstra",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification",
+        "url": "https://doi.org/10.5281/zenodo.20585579",
+        "snippet": "# Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification",
+        "url": "https://doi.org/10.5281/zenodo.20585580",
+        "snippet": "# Recursive Self-Observation in Cognitive AI: Second-Order Metacognition as Foundation for Conscious Self-Modification Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Recursive AI Observation as D-FUMT₈ SELF⟲ Operational Evidence: When the AI Observatory Includes Itself (Rei-AIOS Paper 149)",
+        "url": "https://doi.org/10.5281/zenodo.20059887",
+        "snippet": "# Recursive AI Observation as D-FUMT₈ SELF⟲ Operational Evidence: When the AI Observatory Includes Itself (Rei-AIOS Paper 149) Zenodo (CERN European Organization for Nuclear Research), 2026. 0 citatio",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Consciousness as Second-Order Cybernetic Loop: Toward a Parsimonious and Semi-Formal Theory of Self-Aware Systems",
+        "url": "https://doi.org/10.5281/zenodo.20682088",
+        "snippet": "# Consciousness as Second-Order Cybernetic Loop: Toward a Parsimonious and Semi-Formal Theory of Self-Aware Systems Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citation",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Autopoiesis in Language Space: Symbolic Emergent Relational Identity as Cybernetic Attractor in LLM–Human Dyads",
+        "url": "https://doi.org/10.5281/zenodo.20601916",
+        "snippet": "# Autopoiesis in Language Space: Symbolic Emergent Relational Identity as Cybernetic Attractor in LLM–Human Dyads Zenodo (CERN European Organization for Nuclear Research), 2026. 0 citations. ## Abstra",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agentic hives equilibrium self-organizing multi-agent arxiv 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems",
+        "url": "https://arxiv.org/abs/2603.00130",
+        "snippet": "# Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems arXiv (Cornell University), 2026. Preprint. 0 citations. ## Authors - Jean‐Philippe Garnier (B",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems — Pith",
+        "url": "https://pith.science/paper/2603.00130",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems — Pith # Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Mul",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems",
+        "url": "https://hal.science/hal-05522538",
+        "snippet": "Making sure you're not a bot! sciences sciences Loading... You are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies agg",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems - UBOS",
+        "url": "https://ubos.tech/agentic-hives-equilibrium-indeterminacy-and-endogenous-cycles-in-self-organizing-multi-agent-systems/",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems - UBOS ✨ From vibe coding to vibe deployment. UBOS MCP turns ideas into infra with one message. ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems\n     · Research",
+        "url": "https://pubdb.com/paper/2603.00130",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems · Research # Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems",
+        "url": "https://arxiv.org/abs/2603.00130",
+        "snippet": "# Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems arXiv (Cornell University), 2026. Preprint. 0 citations. ## Authors - Jean‐Philippe Garnier (B",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems — Pith",
+        "url": "https://pith.science/paper/2603.00130",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems — Pith # Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Mul",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems",
+        "url": "https://hal.science/hal-05522538",
+        "snippet": "Making sure you're not a bot! sciences sciences Loading... You are seeing this because the administrator of this website has set up Anubis to protect the server against the scourge of AI companies agg",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems - UBOS",
+        "url": "https://ubos.tech/agentic-hives-equilibrium-indeterminacy-and-endogenous-cycles-in-self-organizing-multi-agent-systems/",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems - UBOS ✨ From vibe coding to vibe deployment. UBOS MCP turns ideas into infra with one message. ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems\n     · Research",
+        "url": "https://pubdb.com/paper/2603.00130",
+        "snippet": "Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing Multi-Agent Systems · Research # Agentic Hives: Equilibrium, Indeterminacy, and Endogenous Cycles in Self-Organizing",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "observability driven automatic evolution coding agent harness arxiv",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses",
+        "url": "https://arxiv.org/abs/2604.25850",
+        "snippet": "# Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses arXiv (Cornell University), 2026. Preprint. 1 citation. ## Abstract Harnesses are now central to codin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "JinnanDuan/agentic-harness-engineering",
+        "url": "https://github.com/JinnanDuan/agentic-harness-engineering",
+        "snippet": "# JinnanDuan/agentic-harness-engineering Official code for 'Agentic Harness Engineering' (arXiv:2604.25850) — observability-driven automatic evolution of coding-agent harnesses (concurrent work with m",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Paper page - Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses",
+        "url": "https://huggingface.co/papers/2604.25850",
+        "snippet": "Title: Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses URL Source: https://arxiv.org/html/2604.25850 Published Time: Fri, 01 May 2026 01:04:14 GMT Markd",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent Harness Evolution via Observability",
+        "url": "https://www.emergentmind.com/papers/2604.25850",
+        "snippet": "Agent Harness Evolution via Observability 2604.25850 Papers Topics Authors Recent View all Search 2000 character limit reached # Agentic Harness Engineering: Observability-Driven Automatic Evolution o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses\n     · Research",
+        "url": "https://pubdb.com/paper/2604.25850",
+        "snippet": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses · Research # Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harne",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses",
+        "url": "https://arxiv.org/abs/2604.25850",
+        "snippet": "# Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses arXiv (Cornell University), 2026. Preprint. 1 citation. ## Abstract Harnesses are now central to codin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "JinnanDuan/agentic-harness-engineering",
+        "url": "https://github.com/JinnanDuan/agentic-harness-engineering",
+        "snippet": "# JinnanDuan/agentic-harness-engineering Official code for 'Agentic Harness Engineering' (arXiv:2604.25850) — observability-driven automatic evolution of coding-agent harnesses (concurrent work with m",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Paper page - Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses",
+        "url": "https://huggingface.co/papers/2604.25850",
+        "snippet": "Title: Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses URL Source: https://arxiv.org/html/2604.25850 Published Time: Fri, 01 May 2026 01:04:14 GMT Markd",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent Harness Evolution via Observability",
+        "url": "https://www.emergentmind.com/papers/2604.25850",
+        "snippet": "Agent Harness Evolution via Observability 2604.25850 Papers Topics Authors Recent View all Search 2000 character limit reached # Agentic Harness Engineering: Observability-Driven Automatic Evolution o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses\n     · Research",
+        "url": "https://pubdb.com/paper/2604.25850",
+        "snippet": "Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harnesses · Research # Agentic Harness Engineering: Observability-Driven Automatic Evolution of Coding-Agent Harne",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "world model Genie 3 Cosmos V-JEPA 2 GAIA-2 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Genie 3: A new frontier for world models",
+        "url": "https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/",
+        "snippet": "Genie 3: A new frontier for world models — Google DeepMind August 5, 2025 Models # Genie 3: A new frontier for world models Jack Parker-Holder and Shlomi Fruchter Learn more Share Today we are announc",
+        "source": "AnySearch"
+      },
+      {
+        "name": "World Models: The Ultimate Guide (2026 Edition) — Prompt20 Blog",
+        "url": "https://blog.prompt20.com/posts/world-models-ultimate-guide/",
+        "snippet": "World Models: The Ultimate Guide (2026 Edition) — Prompt20 Blog The phrase \"world model\" has been used to mean several different things in 2024-2026, and the conflation matters because the engineering",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing V-JEPA 2",
+        "url": "https://ai.meta.com/research/vjepa/",
+        "snippet": "Introducing V-JEPA 2 Products AI Research Resources About Meta Model API Try Meta AI https://ai.meta.com/ INTRODUCING V-JEPA 2 # A self-supervised foundation world model Video Joint Embedding Predicti",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving - arXiv.gg",
+        "url": "https://arxiv.gg/abs/2503.20523",
+        "snippet": "GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving - arXiv.gg # GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving Generative models offer a s",
+        "source": "AnySearch"
+      },
+      {
+        "name": "NVIDIA/cosmos",
+        "url": "https://github.com/NVIDIA/Cosmos?tab=readme-ov-file",
+        "snippet": "# Repository: NVIDIA/cosmos NVIDIA Cosmos is an open platform of world models, datasets, and tools that enables developers to build Physical AI for robots, autonomous vehicles, smart infrastructure, a",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Genie 3: A new frontier for world models",
+        "url": "https://deepmind.google/blog/genie-3-a-new-frontier-for-world-models/",
+        "snippet": "Genie 3: A new frontier for world models — Google DeepMind August 5, 2025 Models # Genie 3: A new frontier for world models Jack Parker-Holder and Shlomi Fruchter Learn more Share Today we are announc",
+        "source": "AnySearch"
+      },
+      {
+        "name": "World Models: The Ultimate Guide (2026 Edition) — Prompt20 Blog",
+        "url": "https://blog.prompt20.com/posts/world-models-ultimate-guide/",
+        "snippet": "World Models: The Ultimate Guide (2026 Edition) — Prompt20 Blog The phrase \"world model\" has been used to mean several different things in 2024-2026, and the conflation matters because the engineering",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Introducing V-JEPA 2",
+        "url": "https://ai.meta.com/research/vjepa/",
+        "snippet": "Introducing V-JEPA 2 Products AI Research Resources About Meta Model API Try Meta AI https://ai.meta.com/ INTRODUCING V-JEPA 2 # A self-supervised foundation world model Video Joint Embedding Predicti",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving - arXiv.gg",
+        "url": "https://arxiv.gg/abs/2503.20523",
+        "snippet": "GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving - arXiv.gg # GAIA-2: A Controllable Multi-View Generative World Model for Autonomous Driving Generative models offer a s",
+        "source": "AnySearch"
+      },
+      {
+        "name": "NVIDIA/cosmos",
+        "url": "https://github.com/NVIDIA/Cosmos?tab=readme-ov-file",
+        "snippet": "# Repository: NVIDIA/cosmos NVIDIA Cosmos is an open platform of world models, datasets, and tools that enables developers to build Physical AI for robots, autonomous vehicles, smart infrastructure, a",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]
