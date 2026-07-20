@@ -1,0 +1,6 @@
+﻿.bocha_key
+*.key
+__pycache__/
+.venv/
+data/
+*.log
