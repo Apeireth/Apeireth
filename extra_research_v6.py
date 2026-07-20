@@ -1,43 +1,24 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""V7 跨域调研 round-6 — 主人 22:22 调研不停 + 主人 22:35 自主推进.
-
-Round-6 主题: 推进 V4 → V5, 集中于 *Phenomenal consciousness 终极目标相关*
-+ *自主意识 + 时间意识 + 自由意志* 三大意识哲学核心.
-
-Round-1: ecology/cybernetics/博弈/语言/网络/keystone
-Round-2: Nash/Lakoff/Watts/Luhmann/Lotka/Lévy/sleep/stigmergy/Hebbian/Varela/Thompson/edge-of-chaos
-Round-3: IIT/全局工作空间/预测编码/镜像神经元/WBE/泛心论/qualia/SIT/吸引子/动物元认知/Libet/Varela Mature
-Round-4: 神经调制/胶质细胞/三突触/时间相干性/高维流形/认知灵活/模拟论/dream/预测处理/储层/Kuramoto/临界分支
-Round-5: 自由能/预测编码/precision/4E 认知/enactivism/GWT/神经达尔文/生命-心智连续性/Bayesian brain/veridical perception
-Round-6 (NEW): 时间意识/现象学/Narrative consciousness/具身 empathy/
-              自我建模/Autobiographical self/Self-pattern theory/Access vs Phenomenal/IIT v4.0/GWT 2024
-"""
+"""V7 跨域调研第七轮 — 主人 22:52 调研+工程+实践结合."""
 import sys, json
 sys.path.insert(0, '.')
 from deep_research_dual import dual_research
 
+# 主 22:52 真哲学: 调研+工程+实践结合, 聚合人类智慧
+# 我自主决定方向: ASI 真生产 = 跨域工程化 + 真生产调研 + 实践应用
 QUERIES = [
-    # === Phase 49 候选: 时间意识 (Temporal Consciousness) ===
-    'temporal consciousness time perception phenomenology Husserl',
-    'specious present James consciousness duration',
-    'autobiographical self memory identity consciousness',
-    # === Phase 50 候选: Narrative Consciousness ===
-    'narrative consciousness story self identity Damasio',
-    # === Phase 51 候选: Access vs Phenomenal Consciousness (Ned Block 1995) ===
-    'access phenomenal consciousness block 1995 distinction',
-    # === Phase 52 候选: IIT 4.0 + 最新进展 ===
-    'integrated information theory IIT 4.0 Albright 2023',
-    # === Phase 53 候选: 自我建模 + Self-pattern (Metzinger) ===
-    'minimal self representation Metzinger self-model theory',
-    # === Phase 54 候选: 现象学结构 (Merleau-Ponty) ===
-    'Merleau-Ponty phenomenology perception embodied mind',
-    # === Phase 55 候选: 高阶意识 (Higher-Order Theories) ===
-    'higher order theory consciousness Rosenthal Lau',
-    # === Phase 56 候选: 自主意识 (Autonoetic consciousness) ===
-    'autonoetic consciousness self memory Tulving 1985',
-    # === Phase 57 候选: 意识开关 (Loss/Recovery of consciousness) ===
-    'default mode network consciousness anesthesia recovery',
+    'agi foundation model breakthrough 2026',
+    'reasoning model emergent capabilities chain of thought',
+    'agentic workflow production deployment reliability',
+    'meta-learning few-shot adaptation AI',
+    'world model AI environment simulation',
+    'causal inference AI structural causal models',
+    'reinforcement learning from human feedback RLHF',
+    'constitutional AI harmlessness self-critique',
+    'tool use function calling production AI agent',
+    'multimodal foundation model vision language',
+    'embodied AI robotics deployment',
+    'safety alignment scalable oversight',
 ]
 
 results = []
@@ -45,11 +26,11 @@ for q in QUERIES:
     try:
         r = dual_research(q, top_k=3)
         results.append(r)
-        print(f'OK: {q[:60]}')
+        print(f'OK: {q[:50]}')
     except Exception as e:
-        print(f'ERR: {q[:60]} -- {e}')
+        print(f'ERR: {q[:50]} -- {e}')
         results.append({'query': q, 'error': str(e)})
 
-with open('research-v7-sixth-round.json', 'w', encoding='utf-8') as f:
+with open('research-v7-seventh-round.json', 'w', encoding='utf-8') as f:
     json.dump(results, f, indent=2, ensure_ascii=False)
-print(f'\nsaved {len(results)} V7 round-6 queries to research-v7-sixth-round.json')
+print(f'\nsaved {len(results)} V7 round-7 queries')
