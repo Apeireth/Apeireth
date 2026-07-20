@@ -114,6 +114,8 @@ dependencies = [
  "apeireth-core",
  "apeireth-ports",
  "async-trait",
+ "chrono",
+ "parking_lot",
  "qdrant-client",
  "reqwest",
  "rusqlite",
@@ -124,15 +126,18 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
 name = "apeireth-cli"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "apeireth-adapters",
  "apeireth-core",
  "apeireth-ports",
+ "chrono",
  "clap",
  "criterion",
  "serde",
@@ -148,14 +153,15 @@ name = "apeireth-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "apeireth-ports",
  "async-trait",
  "chrono",
+ "crc32fast",
  "criterion",
  "parking_lot",
  "serde",
  "serde_json",
  "sha2",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
@@ -184,6 +190,7 @@ dependencies = [
 name = "apeireth-ports"
 version = "0.1.0"
 dependencies = [
+ "apeireth-core",
  "async-trait",
  "chrono",
  "serde",

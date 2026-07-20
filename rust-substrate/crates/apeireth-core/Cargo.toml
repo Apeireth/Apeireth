@@ -19,10 +19,9 @@ async-trait = { workspace = true }
 tracing = { workspace = true }
 parking_lot = { workspace = true }
 sha2 = "0.10"
-
-[dependencies.apeireth-ports]
-path = "../apeireth-ports"
+crc32fast = "1.3"
 
 [dev-dependencies]
 criterion = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = "3.10"
