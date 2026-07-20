@@ -482,3 +482,122 @@ cron 15:44 触发 (stale "Phase 1", 实际已是 Phase 3.5+4-Rust scaffold 阶�
 
 _楚零 2026-07-20 15:44_
 _cron stale 说"Phase 1", 实际 Phase 3.6 + Phase 4 跑通. 638 行新代码, 4 个新文件. 等主人 review._
+---
+
+## 2026-07-20 16:11 鈥?Phase 5: Questioning Engine v0.1 PoC 鉁?
+### 瑙﹀彂
+cron 16:11 瑙﹀彂 (鍐嶆 stale "Phase 1", 瀹為檯宸叉槸 Phase 4 + Rust scaffold + benchmark 瀹屾垚).
+鑷垜鍒ゆ柇褰撳墠鏈€鏈変环鍊肩殑涓嬩竴姝?(鍙傜収 TOP-DESIGN-V1 搂4.4 + 宸插瓨鍦ㄧ粍浠?:
+- Identity v0.1 鉁?(priors 婧?
+- Memory v0.2 鉁?(evidence_refs 钀界偣)
+- Relation Graph v0.2 鉁?(璺ㄥ眰寮曠敤)
+- Persona v0.1 鉁?(鎸?topic 婵€娲?
+- Rust substrate 鉁?(benchmark 閫氳繃)
+- **鉂?Questioning Engine** 鈥?TOP-DESIGN 搂4.4 Component 4, 缂鸿繖鍧?funnel 寮曟搸 Q鈫扐 寰幆娌℃硶闂幆
+
+### 鍋氫簡浠€涔?| 鏂囦欢 | 琛屾暟 | 骞蹭粈涔?|
+|------|------|--------|
+| `apeireth/questioning.py` | 240 | `Question` + `Answer` + `FunnelState` + `BayesianFunnel` (Pep 鑼冨紡) + integrity_hash |
+| `apeireth/run_questioning_demo.py` | 110 | 5 姝ユ紨绀? load master 鈫?seed (offline_prior + gap_inference) 鈫?3 杞?ask+answer 鈫?summary 鈫?save |
+| `apeireth/questioning_demo.json` | 鈥?| 棣栨鐢熸垚 (6 questions + 3 answers + hash) |
+| `apeireth/__init__.py` | (鏀? | re-export Questioning Engine, version bump 0.6.0 鈫?0.7.0 |
+| **鎬昏** | **~350 琛?* | (鍚?demo runner + 璇︾粏娉ㄩ噴) |
+
+### 璁捐瑕佺偣 (TOP-DESIGN 搂4.4 瀹炵幇)
+
+1. **Pep (2602.15012) offline priors + online Bayesian**:
+   - `ALPHA=0.4, BETA=0.6` 鈫?`posterior = 伪路prior + 尾路observed`
+   - ALPHA 澶?= 鍋忎俊 priors (鍒濆), BETA 澶?= 鍋忎俊鐢ㄦ埛绛?(鍚庢湡)
+   - v0.1 涓嶅紩鍏ュ畬鏁?Beta-Binomial, 鐢ㄧ嚎鎬х粍鍚堝仛 PoC, 鐪熸帴 LLM 鍚庡崌绾?
+2. **Funnel Question (2510.12015) 鈥?鐢卞鍒扮獎**:
+   - `ask_next()` 閫?posterior 鏈€浣?(uncertainty 鏈€楂? 鐨勬湭绛旈棶棰?   - 娌￠棶瀹屼笉闂柊闂 鈥?Mom Test "涓嶅己琛岄棶瀹?
+
+3. **4 绉?source 鍒嗙被**:
+   - `offline_prior` 鈥?浠?IdentityCard.funnel_questions (Q8 涓讳汉棰勮) 鐏屽叆
+   - `gap_inference` 鈥?IdentityCard 瀛楁绌?鈫?鑷姩琛嶇敓 (mission/domains/boundaries/alias/creator)
+   - `reconsolidation` 鈥?Reconsolidation.flag 瑙﹀彂 (Phase 2 鑱斿姩, 鐣欑粰 Phase 5.5)
+   - `manual` 鈥?涓讳汉/cron 涓诲姩鍔?
+4. **涓嶄緷璧?LLM**:
+   - 璺?Phase 1 / 2 / 3 / 4 涓€鑷?鈥?LLM 鏄?L1 Kernel 鎺ュ叆鍚庣殑娲?   - `_infer_topic()` 鏄叧閿瘝鍚彂寮? 鐪熸帴 LLM 鏀?Bayesian priors
+
+5. **integrity_hash SHA256 鍓?16**:
+   - 涓?IdentityCard / MemoryStore / RelationGraph 涓€鑷?(4 灞傞槻绾块綈)
+   - PersistBench (2602.01146) 97% sycophancy 椋庨櫓宸ョ▼瀹炵幇
+
+6. **涓庡凡鏈夌粍浠剁殑鎺ュ彛 (璁捐灞傞潰)**:
+   ```
+   IdentityCard.funnel_questions 鈹€鈹?   IdentityCard 绌哄瓧娈?鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹尖攢鈫?seed() 鈫?Question
+                                  鈹?   MemoryStore.evidence_refs 鈹€鈹€鈹€鈹€鈹€鈹粹攢鈫?Answer.evidence_refs 鈫?Phase 2 钀界偣
+   PersonaEngine.coordinate(q.topic) 鈹€鈹€鈫?Phase 4 鑱斿姩 (PoC 鏈疄鎺? 鎺ュ彛璁捐棰勭暀)
+   Reconsolidation.flag 鈹€鈹€鈫?add_question(source='reconsolidation') (Phase 5.5)
+   ```
+
+### v0.1 楠岃瘉 (demo 璺戦€?
+
+```
+馃搰 master card: name=闃挎淳 v0.1.0
+   funnel_questions priors: 1 鏉?(asi_progress)
+   gap fields: ['mission', 'domains', 'boundaries', 'alias', 'creator']
+
+馃尡 seeded: 1 offline_prior + 5 gap_inference = 6 total
+
+馃攧 funnel loop (3 rounds, Bayesian update):
+   [1] Q (gap, prior=0.10, topic=mission)
+       posterior: 0.1000 鈫?0.5800  (observed=0.90)
+   [2] Q (gap, prior=0.10, topic=domains)
+       posterior: 0.1000 鈫?0.4600  (observed=0.70)
+   [3] Q (gap, prior=0.10, topic=boundaries)
+       posterior: 0.1000 鈫?0.5200  (observed=0.80)
+
+馃搳 summary (6 questions):
+   路 asi_progress  鈻堚枅鈻堚枅鈻戔枒 0.30  (offline_prior 鈥?涓婚璁?funnel)
+   鉁?mission       鈻堚枅鈻堚枒鈻戔枒 0.58  (gap, 宸茬瓟)
+   鉁?domains       鈻堚枅鈻戔枒鈻戔枒 0.46  (gap, 宸茬瓟)
+   鉁?boundaries    鈻堚枅鈻戔枒鈻戔枒 0.52  (gap, 宸茬瓟)
+   路 alias         鈻堚枒鈻戔枒鈻戔枒 0.10  (gap, 寰呯瓟)
+   路 creator       鈻堚枒鈻戔枒鈻戔枒 0.10  (gap, 寰呯瓟)
+
+馃攼 integrity_hash: ae89002f40bbf7a1
+馃捑 saved: questioning_demo.json
+```
+
+### 宸茬煡 v0.1 闄愬埗 (璇氬疄璁板綍)
+- 鉂?**`_infer_topic()` 鍏抽敭璇嶅惎鍙戝紡** 鈥?鐪熸帴 LLM 鍚庢敼 Bayesian (Pep 鑼冨紡)
+- 鉂?**Reconsolidation 鈫?add_question(source='reconsolidation') 鏈疄鎺?* 鈥?Phase 5.5 鑱斿姩
+- 鉂?**PersonaEngine.coordinate(q.topic) 鏈疄鎺?* 鈥?Phase 5.5 鑱斿姩
+- 鉂?**Episode / Note 璺ㄥ眰鍥炲啓** 鈥?Answer.evidence_refs 鏄瓧娈? 娌¤嚜鍔?link_note()
+- 鉂?**娌″啓 pytest** 鈥?PoC 楠岃瘉鐢?demo runner
+- 鉂?**娌¤法 session 鎸佷箙鍖?* 鈥?funnel in-memory (鐪熻鎸佷箙鍖栬蛋 SqliteRelationStore + Phase 3 璺緞)
+- 鉂?**娌?Bayesian Beta-Binomial** 鈥?绾挎€х粍鍚?PoC, 鐪熻涓ヨ皑鏁板鏄?Phase 5.5
+
+### 璺嚎鐘舵€?(鎴嚦 16:11)
+- 鉁?Phase 0 HARNESS v0.1
+- 鉁?Phase 1 Identity Store v0.1
+- 鉁?Phase 1.5 AnySearch 闆嗘垚
+- 鉁?Phase 2 Memory Layer v0.1 + v0.2 SQLite+FTS5
+- 鉁?Phase 3 Relation Graph v0.1 + v0.2 SQLite
+- 鉁?Phase 3.5 Graph persistence
+- 鉁?Phase 3.6 Memory 鈫?Graph Linker
+- 鉁?Phase 4 Persona Engine v0.1
+- 鉁?Phase 4.5 Rust substrate (6 crates, 14/14 tests, benchmark)
+- 鉁?**Phase 5 Questioning Engine v0.1 (鏈?commit)** 鈥?TOP-DESIGN 搂4.4 瀹屾垚
+- 猬?Phase 5.5 鑱斿姩 (Reconsolidation 鈫?funnel + Persona 鈫?funnel)
+- 猬?Phase 6 L5 娑岀幇绌洪棿 + 鑷粍缁囦复鏃跺洟
+- 猬?Phase 7 Self-Evolving Harness (AHE 鍊熼壌)
+
+### 娌″仛鐨勪簨 (涔熻褰?
+- 鉂?**娌℃帴 Cargo.lock 婕傜Щ** 鈥?`rust-substrate/Cargo.lock` + `apeireth-py/src/lib.rs` 鏈夋湭 commit 鏀瑰姩 (涓婃 cargo check 鍓綔鐢?, 鍗曠嫭 commit 澶勭悊
+- 鉂?**娌℃帴 LLM Kernel** 鈥?鍏ㄩ儴 PoC 璧?priors / 鍏抽敭璇?/ 纭紪鐮? 鐪熸帴 LLM 鏄?L1 Kernel 鐨勬椿
+- 鉂?**娌?rename `promethean/` 鈫?`apeireth/`** 鈥?椤跺眰璁捐 搂9 绛変富浜鸿
+- 鉂?**娌″啓 Episode 鑷姩 鈫?Note 鎶借薄 (Phase 2 鏃ц处)** 鈥?Phase 5.5 涓€璧峰仛
+- 鉂?**娌?master 璺戜竴娆″畬鏁?demo** 鈥?绛変富浜烘媿
+
+### 绛変富浜哄洖鏉?1. Phase 5.5 鑱斿姩 (Reconsolidation 鈫?Questioning 鈫?Persona) 鈥?闂幆
+2. Phase 6 L5 娑岀幇绌洪棿 (涓讳汉 12:14 "鑷粍缁囦复鏃跺洟")
+3. Rust substrate Cargo.lock 婕傜Щ鍗曠嫭淇?4. 鏄惁璺戜竴娆″畬鏁?demo: kickoff 鈫?memory 鈫?graph 鈫?linker 鈫?persona 鈫?question 鈫?answer 鈫?reconsolidate
+
+---
+
+_妤氶浂 2026-07-20 16:11_
+_Phase 5 Questioning Engine v0.1 璺戦€? 350 琛? 4 灞?integrity_hash 闃茬嚎榻?(identity / memory / graph / funnel)._
+_TOP-DESIGN 搂4.4 瀹屾垚. 绛変富浜烘媿 Phase 5.5 鑱斿姩 vs 鐩存帴 Phase 6 娑岀幇._

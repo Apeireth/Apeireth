@@ -45,8 +45,12 @@ from .persona import (
     SCTProfile, Persona, PersonaEngine,
     seed_default_personas,
 )
+from .questioning import (
+    QUESTIONING_VERSION, ALPHA, BETA,
+    Question, Answer, FunnelState, BayesianFunnel,
+)
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
@@ -91,4 +95,12 @@ __all__ = [
     "Persona",
     "PersonaEngine",
     "seed_default_personas",
+    # Phase 5: Questioning Engine (L2 Interaction 子组件)
+    "QUESTIONING_VERSION",
+    "ALPHA",
+    "BETA",
+    "Question",
+    "Answer",
+    "FunnelState",
+    "BayesianFunnel",
 ] 
