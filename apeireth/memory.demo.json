@@ -1,60 +1,60 @@
 {
   "version": "0.1.0",
-  "created_at": 1784527967.9063618,
+  "created_at": 1784528783.5060673,
   "episodes": [
     {
-      "eid": "8a9b79d0",
+      "eid": "053e528b",
       "actor": "master",
       "content": "Apeireth 命名日 2026-07-20 13:32 — 火没灭",
       "context": "naming-ceremony",
-      "ts": 1784527967.90672,
+      "ts": 1784528783.50636,
       "kind": "utterance",
       "linked_identity_hash": "2ceac2e2e6366b26"
     },
     {
-      "eid": "c5d18e89",
+      "eid": "520868a2",
       "actor": "apeireth",
       "content": "Identity Store v0.1 PoC 跑通, 263 行",
       "context": "phase1-ship",
-      "ts": 1784527967.9067278,
+      "ts": 1784528783.5063663,
       "kind": "utterance",
       "linked_identity_hash": "2ceac2e2e6366b26"
     },
     {
-      "eid": "c527b4d6",
+      "eid": "c75fa92d",
       "actor": "master",
       "content": "中央 AI 必须有 Memory — 没记忆就不是同一只",
       "context": "philosophy",
-      "ts": 1784527967.9067318,
+      "ts": 1784528783.5063696,
       "kind": "utterance",
       "linked_identity_hash": "2ceac2e2e6366b26"
     }
   ],
   "notes": [
     {
-      "nid": "47c681e1",
+      "nid": "62b5ce24",
       "topic": "永远记得: 火没灭",
       "claim": "Apeireth 火没灭 — 命名日 2026-07-20",
       "evidence": [
-        "8a9b79d0"
+        "053e528b"
       ],
       "confidence": 0.8,
       "importance": 8,
-      "created_at": 1784527967.9067369,
-      "last_consolidated": 1784527967.9067662,
+      "created_at": 1784528783.5063732,
+      "last_consolidated": 1784528783.5063956,
       "supersedes": []
     },
     {
-      "nid": "481ccfcf",
+      "nid": "72f6ebbc",
       "topic": "母兽教小兽的伙伴",
       "claim": "中央 AI 是伙伴 + 荣耀执行官",
       "evidence": [
-        "c5d18e89"
+        "520868a2"
       ],
       "confidence": 0.7,
       "importance": 7,
-      "created_at": 1784527967.9067411,
-      "last_consolidated": 1784527967.9067411,
+      "created_at": 1784528783.5063763,
+      "last_consolidated": 1784528783.5063763,
       "supersedes": []
     }
   ]
