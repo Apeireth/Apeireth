@@ -1,9 +1,14 @@
 """Kickoff v2 — 8 问 (主人 13:04 认可)
 依据: TOP-DESIGN-V1 §3.4, KICKOFF-V2-2026-07-20.md
 原则: 离线 priors (Pep 范式) — 让 LLM 带着主人预设玩味
+
+v0.1.1 修复: Q7 (永远记得 / 永远不提) 现在分到两个字段, 而不是全塞 remember_forever。
+   之前 master 卡的 never_mention 字段空, 是因为解析器只切 句号, 整个 Q7 答案进了 1 个 list item。
+   现在用 启发式: 含"不提/永不提/别提/禁止/never"等标记 → never_mention, 其它 → remember_forever。
 """
 
 from __future__ import annotations
+import re
 from typing import Callable
 from .identity import IdentityCard, save_card
 
@@ -48,9 +53,9 @@ KICKOFF_QUESTIONS: list[dict] = [
     },
     {
         "n": 7,
-        "field": "remember_forever",
+        "field": "_q7_dual",
         "q": "你希望我永远记得什么?永远不提起什么?",
-        "why": "主人 13:04: 没硬性红线 — 但问了就知道",
+        "why": "主人 13:04: 没硬性红线 — 但问了就知道 — 双字段特殊处理",
     },
     {
         "n": 8,
@@ -59,6 +64,53 @@ KICKOFF_QUESTIONS: list[dict] = [
         "why": "Funnel 触发器 — 让提问引擎永远跑",
     },
 ]
+
+# Q7 否定标记 — 命中则该项进入 never_mention
+_NEG_MARKERS = ("不提", "永不提", "不许提", "别提", "禁止", "禁提", "不要提", "不要问", "never")
+
+# 列表字段分隔符 — 中文/英文 句号/分号/逗号/顿号/换行
+_LIST_SPLIT = re.compile(r"[。;；,，\n、]+")
+
+
+def _clean_phrase(p: str) -> str:
+    """去掉前缀修饰词 + 端部标点 — 让 remember_forever / never_mention 字段干净"""
+    # 复合修饰词优先 (永远记得 / 永远不要), 否则单字
+    prefixes = (
+        r"(?:永远(?:记得|不提|不提) |永远(?:记得|不提))"
+        r"|(?:记得|不提|不提|不要|永不|永远|都|必须|一定|绝对|请)"
+    )
+    pat = rf"^(?:{prefixes})[\s:：—\-、,，]*"
+    # 应用 2 次 — 防止"永远记得 X"残留
+    p = re.sub(pat, "", p)
+    p = re.sub(pat, "", p)
+    return p.strip(" \t:：—-.，,;；")
+
+
+def _split_keep_ban(text: str) -> tuple[list[str], list[str]]:
+    """Q7 专用解析 — 返回 (remember_forever, never_mention)。
+
+    启发式:
+      1. 按 _LIST_SPLIT 切成候选短语
+      2. 含否定标记的短语 → never_mention (去掉标记后保留目标)
+      3. 其余 → remember_forever
+      4. 兜底: 若都空, 整段进 remember_forever (行为兼容 v0.1.0)
+    """
+    parts = [p for p in _LIST_SPLIT.split(text or "") if p.strip()]
+    keep, ban = [], []
+    for p in parts:
+        hit = next((m for m in _NEG_MARKERS if m in p), None)
+        if hit:
+            target = _clean_phrase(p.replace(hit, "", 1))
+            if target:
+                ban.append(target)
+        else:
+            cleaned = _clean_phrase(p)
+            if cleaned:
+                keep.append(cleaned)
+
+    if not keep and not ban and (text or "").strip():
+        keep = [text.strip()]
+    return keep, ban
 
 
 def run_kickoff(
@@ -77,18 +129,20 @@ def run_kickoff(
         field_name = item["field"]
         prompt = f"[Q{item['n']}/8] {item['q']}\n   (背景: {item['why']})"
         text = answer(prompt).strip()
-        if field_name == "name":
-            card.name = text
-        elif field_name == "purpose":
-            card.purpose = text
-        elif field_name == "origin_reason":
-            card.origin_reason = text
-        elif field_name == "relationship_contract":
-            card.relationship_contract = text
-        else:
-            # 列表型字段 (split by 句号 / 逗号)
-            parts = [s.strip(" \n,。.;") for s in text.replace("\n", "。").split("。") if s.strip()]
-            setattr(card, field_name, parts)
+
+        if field_name == "_q7_dual":
+            keep, ban = _split_keep_ban(text)
+            card.remember_forever = keep
+            card.never_mention = ban
+            continue
+
+        if field_name in {"name", "purpose", "origin_reason", "relationship_contract"}:
+            setattr(card, field_name, text)
+            continue
+
+        # 列表型字段 (Q1/Q3/Q4/Q5/Q8)
+        parts = [p.strip(" \n,。.;") for p in text.replace("\n", "。").split("。") if p.strip()]
+        setattr(card, field_name, parts)
     return card
 
 
@@ -103,7 +157,11 @@ def _interactive(card: IdentityCard) -> IdentityCard:
         print(f"      (背景: {item['why']})")
         ans = input("> ").strip()
         f = item["field"]
-        if f in {"name", "purpose", "origin_reason", "relationship_contract"}:
+        if f == "_q7_dual":
+            keep, ban = _split_keep_ban(ans)
+            card.remember_forever = keep
+            card.never_mention = ban
+        elif f in {"name", "purpose", "origin_reason", "relationship_contract"}:
             setattr(card, f, ans)
         else:
             parts = [s.strip(" \n,。.;") for s in ans.replace("\n", "。").split("。") if s.strip()]
