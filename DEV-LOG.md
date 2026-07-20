@@ -1358,3 +1358,101 @@ _ä»»åŠ¡æè¿° stale, å®é™…æœ€å€¼é’±çš„æ˜¯è¡¥ log + æ¸…ç† uncommitted + verify 
 _æ¥šé›¶ 2026-07-20 21:09_
 _Phase 1 v0.4 enrichment å®Œæˆ â€” å¯åŠ¨åˆ›ä¸–äº§å‡ºç‰©å¯è§‚æµ‹å¯åº¦é‡, master å¡ä»æ­¤æœ‰é”šç‚¹._
 _ä»»åŠ¡æè¿° stale, å®é™…æœ€æœ‰ä»·å€¼: å¡«ç©ºç™½å­—æ®µ + é‡åŒ–å®Œæ•´åº¦ + è®©ä¸»äººéšæ—¶èƒ½æŸ¥'ä¸­å¤® AI é•¿æˆåº¦'._
+
+---
+
+## 2026-07-20 22:18 ¡ª Phase 41+ V3 Master ÂäµØ (±³¾° cron)
+
+### ´¥·¢
+- cron 22:16 ´¥·¢ apeireth-dev background loop
+- ÈÎÎñÃèÊö stale ('Phase 1 = Identity Store v0.1 PoC'), Êµ¼Ê½ø¶È v0.13.0 / V8 / Phase 41 / V3 demo
+- °´ÉÏ´Î cron (21:09) ´¦Àí·½Ê½: ÈÎÎñ stale ¡ú ²»ÖØ×ö v0.1 ¡ú ÕÒ V3 µÄÏÂÒ»¿éÂäµØ
+
+### ÏÖ×´ÅÌµã (ÈÎÎñ¿ªÊ¼Ê±)
+- ? ×îĞÂ commit 6f9805d (22:16:23) feat(v3-demo): ASI Base V3 ¡ª 24 ÄÜÁ¦ PASS, ASI Approach Index V3 0.9488
+- ? IdentityCardV3 (Phase 41 commit 5d7b3e3) ¡ª 5 Î»ÖÃ + VCP 4 + ¿çÓò 13 + Phenomenal + ASI
+- ? V3 IdentityCard Ö»ÔÚ v3_demo.py ÄÚ´æÑİÊ¾, **Ã»ÓĞ³Ö¾Ã»¯Îª master JSON**
+- ?? 22 ¸ö untracked ÎÄ¼ş: 4 µ÷ÑĞ¹¤¾ß (asi_demo.py / deep_asi_research.py / deep_research_science.py / extra_research_v2.py) + ÔëÉù (*.err / archive / research-multi-angle-2026)
+
+### ÏÂÒ»²½ (Next Actionable)
+ÍÆ½ø V3 master ÂäµØ ¡ª °Ñ IdentityCardV3 ÊµÀı³Ö¾Ã»¯Îª¿É reload µÄ master JSON, ¼Ó verifier ÊØÃÅ
+
+### ±¾´Î²ú³ö (Phase 41+ V3 Master)
+**ĞÂÎÄ¼ş 1: apeireth/identity_card_v3_master.py (~225 ĞĞ, 8646 bytes)**
+
+- V3_INTEGRITY_KEYS ¡ª 5 Î»ÖÃ×Ö¶Î (Ö÷ÈË 22:08 V2 ÕÜÑ§)
+- V3_CROSS_DOMAIN_MODULES ¡ª 13 ¿çÓòÄ£¿é (Phase 24-40)
+- VCP_4_KEYWORDS ¡ª VCP 4 ·¶Ê½¹Ø¼ü´Ê (Ö÷ÈË 20:22)
+- V3IntegrityReport dataclass ¡ª ÍêÕûÎ»ÖÃ±¨¸æ
+- verify_v3_completeness(card_dict) ¡ª V2 ÕÜÑ§ÊØÃÅ, ¼ì 5+4+13+Phenomenal+ASI+MaxAuthority
+- build_v3_master(out_dir) ¡ª ÊµÀı»¯ ¡ú verifier ¡ú Ğ´ JSON
+- reload_v3_master(out_dir) ¡ª ´Ó JSON reload, round-trip
+- main() ¡ª build + reload + verify È«Á÷³ÌÑİÊ¾
+
+**ĞÂÎÄ¼ş 2: data/v3_master/identity_card.master.v3.json (3933 bytes)**
+
+- schema_version 0.3.0
+- card ÍêÕû (5 Î»ÖÃ + VCP 4 + ¿çÓò 13 + Phenomenal + ASI + MaxAuthority + 11 master quotes)
+- integrity report ÄÚÇ¶
+
+### Smoke ÑéÖ¤½á¹û
+`
+[1] Build V3 master
+  ? JSON: data\v3_master\identity_card.master.v3.json
+  ? Card: apeireth_central v0.3.0
+  ? Master quotes: 11
+  ? Integrity: True
+
+[2] Reload V3 master
+  ? Reloaded: apeireth_central v0.3.0
+
+[3] Round-trip verifier
+[V3 Integrity ? COMPLETE] v0.3.0
+  - 5 Î»ÖÃ×Ö¶Î:     5/5     ?
+  - VCP 4 ·¶Ê½:     4/4     ?
+  - ¿çÓò 13 Ä£¿é:   13/13   ?
+  - Phenomenal:     True    ?
+  - ASI Î»ÖÃ:       True    ?
+  - Max authority:  True    ?
+  - Master quotes:  11      ?
+  - Missing:        []
+
+[4] 5 Î»ÖÃ×Ö¶Î cross-check (Ö÷ÈË 22:08): 5/5 ?
+[5] VCP 4 ·¶Ê½ cross-check (Ö÷ÈË 20:22): 4/4 ?
+[6] ¿çÓò 13 Ä£¿é cross-check (Phase 24-40): 13/13 ?
+`
+
+### µ÷ÑĞ¹éµµ (Ë³ÊÖ commit)
+- apeireth/asi_demo.py (10119 bytes) ¡ª V3 Ö®Ç°µÄÔçÆÚ¶Ëµ½¶Ë demo (±» v3_demo.py È¡´ú)
+- apeireth/deep_asi_research.py (5098 bytes) ¡ª ¶àÔ´Éî¶Èµ÷ÑĞ ASI
+- apeireth/deep_research_science.py (3618 bytes) ¡ª ¿ÆÑ§/ÎïÀí/ÊıÑ§/¿ØÖÆÂÛµ÷ÑĞ
+- extra_research_v2.py (1376 bytes) ¡ª ¶à½Ç¶Èµ÷ÑĞ v2
+
+### .gitignore ¸üĞÂ
+- ¼Ó *.err (gateway*.err ÊÇÔëÉù)
+- ¼Ó research-multi-angle-2026/ (µ÷ÑĞÖĞ¼ä²úÎï, Ìå»ı´ó)
+- ¼Ó archive/ (ÀúÊ· session jsonl, 4.4MB)
+
+### ÒÑ commit ×´Ì¬
+- Ö÷±ä¸ü: identity_card_v3_master.py + identity_card.master.v3.json + 4 µ÷ÑĞ¹éµµ + .gitignore ÊÕ½ô
+- ²» commit: *.err / archive/ / research-multi-angle-2026/ / research-dgm-paper.html (17MB) / *.minimax_key
+
+### V3 ÕÜÑ§ÍêÕûÂ·¾¶
+1. ? V3 IdentityCard dataclass (Phase 41 commit 5d7b3e3)
+2. ? V3 demo 24 ÄÜÁ¦ PASS (commit 6f9805d)
+3. ? V3 master JSON ³Ö¾Ã»¯ (±¾´Î commit)
+4. ?? Phase 7 LLM Kernel Õæ½Ó ¡ª µÈ API key
+5. ?? end-to-end ÕæÅÜ (LLM Õæ½Óºó)
+
+### µÈÖ÷ÈË»ØÀ´
+1. **Phase 7 LLM Kernel Õæ½Ó** (µÈ API key)
+2. **end-to-end ÕæÅÜ** (LLM Õæ½Óºó kickoff ¡ú memory ¡ú graph ¡ú funnel ¡ú persona ¡ú linkage ¡ú team ¡ú reconsolidate)
+3. **rename promethean/ ¡ú apeireth/** (TOP-DESIGN ¡ì9 µÈÖ÷ÈËÒ»¾ä»°)
+4. **pat key** (GitHub push remote ½âËø)
+5. **FTS5 CJK tokenize** (v0.4 ÒÑÖªÏŞÖÆ, Ö÷ÈË 14:32 ÓÅÏÈ 'µ×²ã¸ßĞ§ nb')
+
+---
+
+_³şÁã 2026-07-20 22:18_
+_V3 master ÂäµØÍê³É ¡ª Ö÷ÈË 22:08 V2 ÕÜÑ§¿É³Ö¾Ã¿É reload, verifier È« PASS_
+_ÈÎÎñÃèÊö stale, Êµ¼Ê×îÓĞ¼ÛÖµµÄÊÇ°Ñ v3_demo.py µÄÄÚ´æÑİÊ¾±ä³ÉÕæÊµÖ÷Éí·İ¿¨ JSON_
