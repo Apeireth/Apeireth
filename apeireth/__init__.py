@@ -7,6 +7,8 @@ Phase 3 (今日): Relation Graph v0.1 PoC (L4 Identity Layer 子组件)
 Phase 3.5 (今日): Relation Graph v0.2 SQLite 持久化 + 跨 session 存活
 Phase 3.6 (今日): Memory ↔ Graph Linker 跨层自动绑定
 Phase 4 (今日): Persona Engine v0.1 PoC (L4 Identity 多身份子组件)
+Phase 5 (今日): Emergence Layer v0.1 PoC (L5 Effect — 不调度的涌现)
+Phase 5.1 (今日): Questioning Engine v0.1 PoC (L2 子组件)
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
@@ -49,8 +51,17 @@ from .questioning import (
     QUESTIONING_VERSION, ALPHA, BETA,
     Question, Answer, FunnelState, BayesianFunnel,
 )
+from .emergence import (
+    EMERGENCE_VERSION,
+    EmergenceSignal, EmergenceEvent, EmergenceSpace,
+    FeedbackLoop,
+    PhaseReport, EvolutionRecord,
+    phase1_eval, phase2_stats, phase24_stability,
+    multi_persona_respond, commit_or_rollback,
+    emergence_cycle,
+)
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
