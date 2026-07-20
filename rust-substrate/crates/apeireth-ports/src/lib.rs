@@ -12,7 +12,6 @@
 //! - 容易测: port 是 trait, mock adapter 即可
 //! - 容易换: 把 Qdrant adapter 换成 Pinecone, business code 不动
 
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -27,10 +26,10 @@ pub mod llm;
 pub use episode::EpisodeRepository;
 pub use note::NoteRepository;
 pub use identity::IdentityRepository;
-pub use vector::VectorIndex;
-pub use fulltext::FullTextIndex;
+pub use vector::{VectorIndex, VectorHit};
+pub use fulltext::{FullTextIndex, FullTextHit};
 pub use wal::WalSink;
-pub use llm::LlmClient;
+pub use llm::{LlmClient, LlmRequest, LlmResponse};
 
 /// Common port error
 #[derive(Debug, Error)]
