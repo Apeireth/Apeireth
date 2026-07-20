@@ -11,6 +11,7 @@ Phase 5 (今日): Emergence Layer v0.1 PoC (L5 Effect — 不调度的涌现)
 Phase 5.1 (今日): Questioning Engine v0.1 PoC (L2 子组件)
 Phase 5.2 (今日): Identity Store v0.2 — JSON Schema + 版本迁移 + 多卡容器
 Phase 5.3 (今日): Self-Evolving Harness v0.1 PoC (L5 元层 — AHE 借鉴)
+Phase 5.5 (今日): Linkage Layer v0.1 — Reconsolidation ↔ Funnel ↔ Persona 闭环
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
@@ -58,6 +59,13 @@ from .questioning import (
     QUESTIONING_VERSION, ALPHA, BETA,
     Question, Answer, FunnelState, BayesianFunnel,
 )
+from .linkage import (
+    LINKAGE_VERSION,
+    LinkageTurn, LinkageOrchestrator,
+    path_a_reconsolidation_to_funnel,
+    path_b_question_to_persona,
+    path_c_feedback_loop,
+)
 from .emergence import (
     EMERGENCE_VERSION,
     EmergenceSignal, EmergenceEvent, EmergenceSpace,
@@ -78,7 +86,7 @@ from .self_evolving import (
     HarnessEvolver,
 )
 
-__version__ = "0.10.0"
+__version__ = "0.11.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
@@ -141,4 +149,11 @@ __all__ = [
     "Answer",
     "FunnelState",
     "BayesianFunnel",
+    # Phase 5.5: Linkage Layer (Phase 2↔4↔5 闭环)
+    "LINKAGE_VERSION",
+    "LinkageTurn",
+    "LinkageOrchestrator",
+    "path_a_reconsolidation_to_funnel",
+    "path_b_question_to_persona",
+    "path_c_feedback_loop",
 ] 
