@@ -349,3 +349,136 @@ cron 14:48 触发 (stale 描述"Phase 1", 实际状态已是 Phase 2.5)
 _楚零 2026-07-20 14:50_
 _Phase 3 跑通, ~867 行 (含调研笔记 + 持久化 DB). v0.2 round-trip hash match. 等主人拍下一步._
 _注: cron 描述 stale 说"Phase 1", 实际已是 Phase 3 — 我按真实状态推进, 不重复 Phase 1 已 commit 的 263 行 (b77349a)_
+
+---
+
+## 2026-07-20 15:44 — Phase 3.6 + Phase 4: Linker + Persona Engine v0.1 PoC ✅
+
+### 触发
+cron 15:44 触发 (stale "Phase 1", 实际已是 Phase 3.5+4-Rust scaffold 阶段)
+自己判断当前最有价值:
+1. **Phase 3.6 Linker** — 关掉 Phase 2 Memory + Phase 3 Graph 两个孤岛 (dev log 14:50 next step #1+#2 已留)
+2. **Phase 4 Persona Engine** — TOP-DESIGN §4.5 第 5 组件, 路线图 Phase 4 主角
+
+两个都做 (Linker 先, Persona 后). Rust 工具链未装好, 走 Python 路线.
+
+### Phase 3.6 做了什么 (commit f2cffb8)
+| 文件 | 行数 | 干什么 |
+|------|------|--------|
+| `apeireth/linker.py` | 200 | ensure_central_ai_node + link_episode + link_note + sync_all + Linker 类 |
+| `apeireth/run_linker_demo.py` | 155 | 5 步验证: 种子 → 全量 sync → 幂等 → 跨层 ref → 增量 Linker |
+| `apeireth/__init__.py` | (改) | re-export Linker + 5 helpers, version bump |
+| `rust-substrate/Cargo.lock` | — | cargo check 生成的依赖锁 (主人 14:52 启动 Rust 时产物) |
+| **总计** | **~355 行** | 1 跨层绑定模块 + 1 demo + 1 lock |
+
+### Linker 设计要点
+
+1. **linker 不写业务逻辑 — 只翻译 memory 节点形态 → graph 节点形态**
+   - Episode.eid = 跨层 ref → GraphNode.nid = `epi_<eid>`
+   - Note.nid = 跨层 ref → GraphNode.nid = `note_<nid>`
+   - 复用 Schema, 不动 memory/graph 自身
+
+2. **中心 ai_self 节点唯一** — `ensure_central_ai_node()` 复用 nid=`ai_self_central`
+   - seed=True 标记首次创建
+   - 所有 Episode/Note 都连它 (causal + supports)
+
+3. **derived_from 边 + lazy placeholder**
+   - Note.evidence = [eid1, eid2] → 每条 eid 创建 `derived_from` 边
+   - 缺失的 episode 自动补 placeholder 节点 (`meta.lazy_link=True`)
+   - 这是 Phase 2 跨 Phase 3 lookup 的入口
+
+4. **幂等** — upsert 走 `UNIQUE(src,dst,kind)` + nid PK
+   - sync_all 跑两遍 = 第二次 0 node / 0 edge added (验证通过)
+
+### Linker 验证 (跑通)
+```
+🧬 ai_self nid: ai_self_central
+📊 sync_all: 1004 ep + 4 notes 全量同步 (累计数据)
+✅ idempotent — 2nd sync 0 nodes/edges added
+🔗 derived_from edges: 4 条 (note ← episode via evidence)
+📈 session 增量 Linker: 1 node + 1 edge added
+💾 graph_linker_demo.db (WAL) 持久化 OK
+```
+
+### Phase 4 做了什么 (commit 待)
+| 文件 | 行数 | 干什么 |
+|------|------|--------|
+| `apeireth/persona.py` | 186 | Persona Engine — SCTProfile + Persona + PersonaEngine + Jungian 3 机制 + 反 conformity |
+| `apeireth/run_persona_demo.py` | 97 | 5 步演示: 4 archetype → coordination → mutate → adapt → reflect → snapshot |
+| `apeireth/__init__.py` | (改) | re-export PersonaEngine 等, version bump 0.6.0 |
+| `data/persona_demo.json` | — | 首次 snapshot |
+| **总计** | **283 行** | 1 多身份引擎 + 1 demo |
+
+### Persona Engine 设计要点 (TOP-DESIGN §4.5)
+
+1. **4 archetype 起步** — 与主人 12:14 "中央 AI 多身份" 一致
+   - 调度者 (motivational=0.9): 主动 / 目标驱动
+   - 学习者 (cognitive=0.9): 推理 / 抽象 / 知识增长
+   - 思考者 (cognitive=0.8 + biological=0.7): 直觉 + 推理
+   - 助手 (affective=0.9): 同理 / 关系 / 配合
+
+2. **SCT 4 因素** (Persona Alchemy 2505.18351)
+   - cognitive / motivational / biological / affective
+   - 各自 0-1, 总和不必 =1 (允许特化)
+   - `mutate(rng)` 反 conformity 触发
+
+3. **Jungian 3 机制** (Jungian 2601.10025)
+   - **coordination** — `coordinate(event, k=2)` 选 k 个 persona 激活, 强制 SCT 距离 ≥ min_distance
+   - **adaptation** — `adapt(pid, feedback_score)` 正反馈增 SCT 主导维 + activation, 负反馈减 activation
+   - **reflection** — `reflect(pid)` 自我解释"我是 X 主导维度=Y 激活=Z"
+
+4. **反 conformity** (Persona Inconstancy 2405.03862)
+   - 同事件激活 2 persona 时强制 SCT 欧氏距离 ≥ 0.25
+   - 不够时 mutate(rng=0.3) 兜底, 生成 ghost persona (`p_ghost_<uuid>`)
+
+5. **不预设立场** (主人 12:27 "立场自然成长, 平台不给予")
+   - SCT 初始权重有, 但具体态度/偏好靠 adapt() 演化
+   - 留 emergence_space 字段 (与 Phase 1 IdentityCard 一致)
+
+### Persona Engine 验证 (跑通)
+```
+🎭 4 archetype 种子 (调度者/学习者/思考者/助手) 全部启动
+🔗 coordination: 4 events 触发多 persona 组合
+   - "计划/排期" → (调度者, 学习者) [SCT dist=0.500]
+   - "为什么/推理" → (学习者, 调度者) [SCT dist=0.500]
+   - "关心/提醒休息" → (调度者, 学习者) [SCT dist=0.500]
+   - "紧急/分析日志" → (学习者, 调度者) [SCT dist=0.500]
+🧬 反 conformity: 近 SCT 距离 0.020 < min 0.25, mutate 后 0.341 ✅
+🔄 adaptation: 调度者 +1.4 feedback → mot 0.9→0.97, act 1.0
+                学习者 -1.2 feedback → act 0.88 (主导维不变)
+📝 reflection: 4 persona 各自报"我是 X 主导维=Y 激活=Z 经历 N 次"
+💾 persona_demo.json saved
+```
+
+### 已知 v0.1 限制 (诚实记录)
+- ❌ **关键词启发式不完美**: Step 1 4 个 event 都选了 (调度者, 学习者), 因为 activation 累加压过关键词加分. v0.2 改 Bayesian matching + per-call reset
+- ❌ **adaptation 负反馈不修改 SCT**: 只降 activation. v0.2 加"主导维抗性" 机制, 避免负反馈锁死单维
+- ❌ **未接 LLM 解析 event → persona 匹配**: 现在关键词走 hardcode, 真接 LLM 后改 Bayesian priors (Pep 范式)
+- ❌ **未做 persona 与 identity_card 联动**: 现在 SCT 是硬编码初始值, 真要把 IdentityCard.archetypes 字段作为 priors
+- ❌ **未做 persona 跨 session 持久化**: 现在 engine in-memory, 真要持久化进 SqliteRelationStore (Phase 3 + 4 联动)
+
+### 路线状态 (截至 15:44)
+- ✅ Phase 1 Identity Store v0.1 (commit b77349a)
+- ✅ Phase 2 Memory Layer v0.1 + v0.2 (commits 9b5231, d597171)
+- ✅ Phase 3 Relation Graph v0.1 + v0.2 (commit df95c97)
+- ✅ Phase 3.6 Linker 跨层绑定 (commit f2cffb8)
+- ✅ Phase 4 Persona Engine v0.1 (本 commit)
+- ⏸ Phase 4.5 Rust substrate scaffold (5be6bc8) — 工具链未装完, 等主人回来验证 cargo check
+- ⬜ Phase 5 Questioning Engine v0.1 (TOP-DESIGN §4.4) — Pep / Funnel Question 借鉴
+- ⬜ Phase 6 Self-Evolving Harness v0.1 (TOP-DESIGN §4.6) — AHE 借鉴
+
+### 没做的事(也记录)
+- ❌ **没接 LLM Kernel**: 全部 PoC 走 priors / 关键词 / 硬编码 SCT. 真接 LLM 是 L1 Kernel 的活, 需要 Phase 5 之后
+- ❌ **没 rename `promethean/` → `apeireth/`**: 顶层设计 §9 等主人说
+- ❌ **没把 Cargo.lock 单独 commit 区分**: 跟 Linker 一起进了 f2cffb8, 严格说应该拆
+- ❌ **没跑 cargo check 验证 Rust scaffold**: 工具链没装
+
+### 等主人回来
+1. Phase 4.5 Rust 工具链验证 (cargo check → cargo build → cargo test)
+2. Phase 5 选 Persona ↔ Memory 联动, 还是 Questioning Engine v0.1
+3. 是否需要 master card 跑一次完整 demo (kickoff → memory → graph → linker → persona → reflect)
+
+---
+
+_楚零 2026-07-20 15:44_
+_cron stale 说"Phase 1", 实际 Phase 3.6 + Phase 4 跑通. 638 行新代码, 4 个新文件. 等主人 review._
