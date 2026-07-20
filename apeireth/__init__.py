@@ -9,10 +9,17 @@ Phase 3.6 (今日): Memory ↔ Graph Linker 跨层自动绑定
 Phase 4 (今日): Persona Engine v0.1 PoC (L4 Identity 多身份子组件)
 Phase 5 (今日): Emergence Layer v0.1 PoC (L5 Effect — 不调度的涌现)
 Phase 5.1 (今日): Questioning Engine v0.1 PoC (L2 子组件)
+Phase 5.2 (今日): Identity Store v0.2 — JSON Schema + 版本迁移 + 多卡容器
+Phase 5.3 (今日): Self-Evolving Harness v0.1 PoC (L5 元层 — AHE 借鉴)
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
 from .identity import IdentityCard, load_card, save_card
+from .identity_store import (
+    IDENTITY_STORE_VERSION, FIELD_SCHEMA, SchemaError,
+    validate_card, migrate_card, migrate_v01_to_v02,
+    StoreEntry, IdentityStore,
+)
 from .kickoff import KICKOFF_QUESTIONS, run_kickoff
 from .research import AnySearch
 from .github import GitHubResearch
@@ -71,12 +78,22 @@ from .self_evolving import (
     HarnessEvolver,
 )
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
     "load_card",
     "save_card",
+    # Phase 1.2: Identity Store v0.2 (schema + migration + multi-card)
+    "IDENTITY_STORE_VERSION",
+    "FIELD_SCHEMA",
+    "SchemaError",
+    "validate_card",
+    "migrate_card",
+    "migrate_v01_to_v02",
+    "StoreEntry",
+    "IdentityStore",
+    # Phase 1: Kickoff
     "KICKOFF_QUESTIONS",
     "run_kickoff",
     # Phase 1.5: Interaction
