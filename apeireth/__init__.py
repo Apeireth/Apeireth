@@ -191,3 +191,6 @@ from .sqlite_identity_store import (  # Phase 6.5 — 身份卡真持久化 (DEV
 )
 
 __version__ = "0.13.0"
+from .skill_library import SKILL_LIBRARY_VERSION, Skill, SkillLibrary, make_default_skill_library, install_seed_skills  # Phase 13 Voyager-inspired Skill Library
+from .phi_proxy import PHI_PROXY_VERSION, compute_phi_proxy, compute_phi_proxy_via_mirror, AWARENESS_VALUES  # Phase 10.x IIT Phi-proxy (量化 consciousness)
+from .dgm_archive import DGM_ARCHIVE_VERSION, Generation, DGMArchive, make_default_dgm_archive  # Phase 14 DGM-inspired Multi-Generation Archive (永远演化)
