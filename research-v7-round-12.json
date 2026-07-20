@@ -1,0 +1,504 @@
+[
+  {
+    "query": "production agent failure modes recovery retry idempotency",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries - Secure AI Agent Architecture",
+        "url": "https://agent-axiom.github.io/agent-arch/en/book/part-iv/chapter-10/",
+        "snippet": "Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries - Secure AI Agent Architecture Skip to content # Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries¶ ## 1. Wh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent Error Recovery Patterns Specification | Geodocs.dev",
+        "url": "https://geodocs.dev/ai-agents/agent-error-recovery-patterns-spec",
+        "snippet": "Agent Error Recovery Patterns Specification | Geodocs.dev # Agent Error Recovery Patterns Specification ai-agentsspecificationadvanced7 min read1,321 wordsUpdated May 2026 Share LinkedIn Copy Link Exp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Failure Recovery for Agent Loops: Retries, Rollback, Resuming a Crashed Run · LoopRails",
+        "url": "https://looprails.dev/article-failure-recovery-agent-loops.html",
+        "snippet": "Failure Recovery for Agent Loops: Retries, Rollback, Resuming a Crashed Run · LoopRails LoopRails· Articles· Failure Recovery for Agent Loops View article-failure-recovery-agent-loops.md on GitHub ↗ #",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries - Secure AI Agent Architecture",
+        "url": "https://agent-axiom.github.io/agent-arch/en/book/part-iv/chapter-10/",
+        "snippet": "Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries - Secure AI Agent Architecture Skip to content # Chapter 10. Idempotency, Retries, Rate Limits, and Rollback Boundaries¶ ## 1. Wh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent Error Recovery Patterns Specification | Geodocs.dev",
+        "url": "https://geodocs.dev/ai-agents/agent-error-recovery-patterns-spec",
+        "snippet": "Agent Error Recovery Patterns Specification | Geodocs.dev # Agent Error Recovery Patterns Specification ai-agentsspecificationadvanced7 min read1,321 wordsUpdated May 2026 Share LinkedIn Copy Link Exp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Failure Recovery for Agent Loops: Retries, Rollback, Resuming a Crashed Run · LoopRails",
+        "url": "https://looprails.dev/article-failure-recovery-agent-loops.html",
+        "snippet": "Failure Recovery for Agent Loops: Retries, Rollback, Resuming a Crashed Run · LoopRails LoopRails· Articles· Failure Recovery for Agent Loops View article-failure-recovery-agent-loops.md on GitHub ↗ #",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agent loop timeout stuck detection circuit breaker",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "feat: Agent circuit breaker — automatic loop detection and token ...",
+        "url": "https://github.com/paperclipai/paperclip/issues/390",
+        "snippet": "Problem Paperclip's budget hard-stop pauses agents when they exceed their monthly budget — but by then the damage is done. There is no mechanism to detect during execution that an agent is stuck in a ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI Agent Timeout & Circuit Breaker Patterns | 2026 Guide",
+        "url": "https://www.buildmvpfast.com/blog/agent-timeout-circuit-breaker-patterns-runaway-ai-workflows-2026",
+        "snippet": "That’s it for v1. Five patterns, under an hour of implementation. Ship it, observe how your agents actually fail in production, then add circuit breakers, retry budgets, and loop detection based on wh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "r/AI_Agents on Reddit: my agent burned $83 in retries before i ...",
+        "url": "https://www.reddit.com/r/AI_Agents/comments/1rap64j/my_agent_burned_83_in_retries_before_i_realized/",
+        "snippet": "i woke up to a $83 OpenAI bill from a single agent run. it wasn't a hallucination. it wasn't a bad prompt. it was a **retry loop** that i didn't see…",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "feat: Agent circuit breaker — automatic loop detection and token ...",
+        "url": "https://github.com/paperclipai/paperclip/issues/390",
+        "snippet": "Problem Paperclip's budget hard-stop pauses agents when they exceed their monthly budget — but by then the damage is done. There is no mechanism to detect during execution that an agent is stuck in a ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI Agent Timeout & Circuit Breaker Patterns | 2026 Guide",
+        "url": "https://www.buildmvpfast.com/blog/agent-timeout-circuit-breaker-patterns-runaway-ai-workflows-2026",
+        "snippet": "That’s it for v1. Five patterns, under an hour of implementation. Ship it, observe how your agents actually fail in production, then add circuit breakers, retry budgets, and loop detection based on wh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "r/AI_Agents on Reddit: my agent burned $83 in retries before i ...",
+        "url": "https://www.reddit.com/r/AI_Agents/comments/1rap64j/my_agent_burned_83_in_retries_before_i_realized/",
+        "snippet": "i woke up to a $83 OpenAI bill from a single agent run. it wasn't a hallucination. it wasn't a bad prompt. it was a **retry loop** that i didn't see…",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "LLM agent tool sandboxing permission policy 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough - Multikernel Technologies",
+        "url": "https://multikernel.io/2026/03/25/sandlock-mcp-per-tool-sandboxing/",
+        "snippet": "Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough - Multikernel Technologies # Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough March 25, 2026 by Cong Wang, Founder and ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic-AI-Risk-Mitigation/Janus",
+        "url": "https://github.com/Agentic-AI-Risk-Mitigation/janus",
+        "snippet": "# Repository: Agentic-AI-Risk-Mitigation/Janus System-level security for LLM agents: fine-grained policy enforcement on tool calls to defend against indirect prompt injection - Stars: 13 - Forks: 2 - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Sandbox Agents | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/guides/agents/sandboxes",
+        "snippet": "# Sandbox Agents A sandbox gives an agent an isolated, Unix-like execution environment with a filesystem, shell, installed packages, mounted data, exposed ports, snapshots, and controlled access to ex",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough - Multikernel Technologies",
+        "url": "https://multikernel.io/2026/03/25/sandlock-mcp-per-tool-sandboxing/",
+        "snippet": "Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough - Multikernel Technologies # Per-Tool Sandboxing for AI Agents: Why One Sandbox Is Not Enough March 25, 2026 by Cong Wang, Founder and ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic-AI-Risk-Mitigation/Janus",
+        "url": "https://github.com/Agentic-AI-Risk-Mitigation/janus",
+        "snippet": "# Repository: Agentic-AI-Risk-Mitigation/Janus System-level security for LLM agents: fine-grained policy enforcement on tool calls to defend against indirect prompt injection - Stars: 13 - Forks: 2 - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Sandbox Agents | OpenAI API",
+        "url": "https://developers.openai.com/api/docs/guides/agents/sandboxes",
+        "snippet": "# Sandbox Agents A sandbox gives an agent an isolated, Unix-like execution environment with a filesystem, shell, installed packages, mounted data, exposed ports, snapshots, and controlled access to ex",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "code execution sandbox gVisor firecracker agent",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation ...",
+        "url": "https://northflank.com/blog/how-to-sandbox-ai-agents",
+        "snippet": "Header image for blog post: How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation strategies. # How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation strategies. ## TL;DR: How to san",
+        "source": "AnySearch"
+      },
+      {
+        "name": "i ran AI agents on 5 sandbox setups for 6 weeks. firecracker won.",
+        "url": "https://www.reddit.com/r/AI_Agents/comments/1t650iy/i_ran_ai_agents_on_5_sandbox_setups_for_6_weeks",
+        "snippet": "i ran AI agents on 5 sandbox setups for 6 weeks. firecracker won. r/AI_Agents - 3 upvotes, 5 comments spent the last 6 weeks evaluating sandbox approaches for running AI agents 24/7 and the tradeoffs ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI Agent Sandbox & Code Execution Isolation | Zylos Research",
+        "url": "https://zylos.ai/research/2026-02-21-ai-agent-sandbox-execution-isolation",
+        "snippet": "# AI Agent Sandbox & Code Execution Isolation. As AI agents increasingly execute code on behalf of users — running Python scripts, terminal commands, and arbitrary programs — sandboxing has become a f",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation ...",
+        "url": "https://northflank.com/blog/how-to-sandbox-ai-agents",
+        "snippet": "Header image for blog post: How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation strategies. # How to sandbox AI agents in 2026: MicroVMs, gVisor & isolation strategies. ## TL;DR: How to san",
+        "source": "AnySearch"
+      },
+      {
+        "name": "i ran AI agents on 5 sandbox setups for 6 weeks. firecracker won.",
+        "url": "https://www.reddit.com/r/AI_Agents/comments/1t650iy/i_ran_ai_agents_on_5_sandbox_setups_for_6_weeks",
+        "snippet": "i ran AI agents on 5 sandbox setups for 6 weeks. firecracker won. r/AI_Agents - 3 upvotes, 5 comments spent the last 6 weeks evaluating sandbox approaches for running AI agents 24/7 and the tradeoffs ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI Agent Sandbox & Code Execution Isolation | Zylos Research",
+        "url": "https://zylos.ai/research/2026-02-21-ai-agent-sandbox-execution-isolation",
+        "snippet": "# AI Agent Sandbox & Code Execution Isolation. As AI agents increasingly execute code on behalf of users — running Python scripts, terminal commands, and arbitrary programs — sandboxing has become a f",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "Model Context Protocol MCP specification 2025",
+    "bocha_web": [],
+    "anysearch": [],
+    "bocha_ai_answer": "",
+    "merged_sources": []
+  },
+  {
+    "query": "agent to agent A2A protocol Google interoperability",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "a2aproject/A2A",
+        "url": "https://github.com/google/A2A",
+        "snippet": "# Repository: a2aproject/A2A Agent2Agent (A2A) is an open protocol enabling communication and interoperability between opaque agentic applications. - Stars: 24871 - Forks: 2518 - Watchers: 235 - Open ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Overview - A2A Protocol",
+        "url": "https://a2a-protocol.org/v1.0.0/specification/",
+        "snippet": "Overview - A2A Protocol Skip to content View source of this page # Agent2Agent (A2A) Protocol Specification¶ Latest Released Version 1.0.0 Previous Versions - 0.3.0 - 0.2.6 - 0.1.0 See Release Notes f",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Announcing the Agent2Agent Protocol (A2A)\n            \n            \n            - Google Developers Blog",
+        "url": "https://developers.googleblog.com/a2a-a-new-era-of-agent-interoperability/",
+        "snippet": "Announcing the Agent2Agent Protocol (A2A) - Google Developers Blog Cloud # Announcing the Agent2Agent Protocol (A2A) APRIL 9, 2025 Rao Surapaneni VP and GM Business Application Platform Miku Jha Direc",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "a2aproject/A2A",
+        "url": "https://github.com/google/A2A",
+        "snippet": "# Repository: a2aproject/A2A Agent2Agent (A2A) is an open protocol enabling communication and interoperability between opaque agentic applications. - Stars: 24871 - Forks: 2518 - Watchers: 235 - Open ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Overview - A2A Protocol",
+        "url": "https://a2a-protocol.org/v1.0.0/specification/",
+        "snippet": "Overview - A2A Protocol Skip to content View source of this page # Agent2Agent (A2A) Protocol Specification¶ Latest Released Version 1.0.0 Previous Versions - 0.3.0 - 0.2.6 - 0.1.0 See Release Notes f",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Announcing the Agent2Agent Protocol (A2A)\n            \n            \n            - Google Developers Blog",
+        "url": "https://developers.googleblog.com/a2a-a-new-era-of-agent-interoperability/",
+        "snippet": "Announcing the Agent2Agent Protocol (A2A) - Google Developers Blog Cloud # Announcing the Agent2Agent Protocol (A2A) APRIL 9, 2025 Rao Surapaneni VP and GM Business Application Platform Miku Jha Direc",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "SWE-bench verified production agent benchmark 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "SWE-bench Verified",
+        "url": "https://www.swebench.com/verified",
+        "snippet": "SWE-bench Verified ## Overview SWE-bench Verified is a human-filtered subset of 500 instances from SWE-bench, created in collaboration with OpenAI. Human annotators reviewed each instance to ensure th",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Explained: What the Coding Agent Leaderboard Actually Measures (and What It Misses) · Groundy",
+        "url": "https://groundy.com/articles/swe-bench-verified-explained-what-the-coding-agent-leaderboard-actually-measures-and-what-it-misses/",
+        "snippet": "SWE-bench Verified Explained: What the Coding Agent Leaderboard Actually Measures (and What It Misses) · Groundy SWE-bench Verified is a 500-task benchmark drawn from real GitHub issues across 12 Pyth",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Leaderboard (July 2026): Top Scores",
+        "url": "https://benchlm.ai/benchmarks/sweVerified",
+        "snippet": "SWE-bench Verified Leaderboard (July 2026): Top Scores | BenchLM.ai Benchmark profile # Software Engineering Benchmark Verified (SWE-bench Verified) A curated, human-verified subset of SWE-bench that ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "SWE-bench Verified",
+        "url": "https://www.swebench.com/verified",
+        "snippet": "SWE-bench Verified ## Overview SWE-bench Verified is a human-filtered subset of 500 instances from SWE-bench, created in collaboration with OpenAI. Human annotators reviewed each instance to ensure th",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Explained: What the Coding Agent Leaderboard Actually Measures (and What It Misses) · Groundy",
+        "url": "https://groundy.com/articles/swe-bench-verified-explained-what-the-coding-agent-leaderboard-actually-measures-and-what-it-misses/",
+        "snippet": "SWE-bench Verified Explained: What the Coding Agent Leaderboard Actually Measures (and What It Misses) · Groundy SWE-bench Verified is a 500-task benchmark drawn from real GitHub issues across 12 Pyth",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Leaderboard (July 2026): Top Scores",
+        "url": "https://benchlm.ai/benchmarks/sweVerified",
+        "snippet": "SWE-bench Verified Leaderboard (July 2026): Top Scores | BenchLM.ai Benchmark profile # Software Engineering Benchmark Verified (SWE-bench Verified) A curated, human-verified subset of SWE-bench that ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agent evaluation harness llm-as-judge framework",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Agent-as-a-Judge: Evaluate Agents with Agents",
+        "url": "https://proceedings.mlr.press/v267/zhuge25a.html",
+        "snippet": "Agent-as-a-Judge: Evaluate Agents with Agents # Agent-as-a-Judge: Evaluate Agents with Agents Mingchen Zhuge, Changsheng Zhao, Dylan R. Ashley, Wenyi Wang, Dmitrii Khizbullin, Yunyang Xiong, Zechun Li",
+        "source": "AnySearch"
+      },
+      {
+        "name": "metauto-ai/agent-as-a-judge",
+        "url": "https://github.com/metauto-ai/agent-as-a-judge",
+        "snippet": "# Repository: metauto-ai/agent-as-a-judge 👩‍⚖️ Agent-as-a-Judge: The Magic for Open-Endedness - Stars: 800 - Forks: 106 - Watchers: 5 - Open issues: 10 - Primary language: HTML - Languages: HTML (76.9",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent-as-a-Judge: Evaluate Agents with Agents",
+        "url": "https://arxiv.org/pdf/2410.10934",
+        "snippet": "# Agent-as-a-Judge: Evaluate Agents with Agents arXiv (Cornell University), 2024. Preprint. 3 citations. ## Authors - Mingchen Zhuge: h-index 13; 1,074 citations - Changsheng Zhao: h-index 7; 243 cita",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Agent-as-a-Judge: Evaluate Agents with Agents",
+        "url": "https://proceedings.mlr.press/v267/zhuge25a.html",
+        "snippet": "Agent-as-a-Judge: Evaluate Agents with Agents # Agent-as-a-Judge: Evaluate Agents with Agents Mingchen Zhuge, Changsheng Zhao, Dylan R. Ashley, Wenyi Wang, Dmitrii Khizbullin, Yunyang Xiong, Zechun Li",
+        "source": "AnySearch"
+      },
+      {
+        "name": "metauto-ai/agent-as-a-judge",
+        "url": "https://github.com/metauto-ai/agent-as-a-judge",
+        "snippet": "# Repository: metauto-ai/agent-as-a-judge 👩‍⚖️ Agent-as-a-Judge: The Magic for Open-Endedness - Stars: 800 - Forks: 106 - Watchers: 5 - Open issues: 10 - Primary language: HTML - Languages: HTML (76.9",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent-as-a-Judge: Evaluate Agents with Agents",
+        "url": "https://arxiv.org/pdf/2410.10934",
+        "snippet": "# Agent-as-a-Judge: Evaluate Agents with Agents arXiv (Cornell University), 2024. Preprint. 3 citations. ## Authors - Mingchen Zhuge: h-index 13; 1,074 citations - Changsheng Zhao: h-index 7; 243 cita",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "cost aware LLM inference routing cascade",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving",
+        "url": "https://arxiv.org/html/2606.27457",
+        "snippet": "Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving arXiv is now an independent nonprofit! Learn more× # Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving Yas",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization | OpenReview",
+        "url": "https://openreview.net/forum?id=H9KBJXHoA8",
+        "snippet": "RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization | OpenReview ## RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey",
+        "url": "https://www.arxiv.org/pdf/2603.04445",
+        "snippet": "Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey arXiv is now an independent nonprofit! Learn more× # Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving",
+        "url": "https://arxiv.org/html/2606.27457",
+        "snippet": "Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving arXiv is now an independent nonprofit! Learn more× # Cluster, Route, Escalate: Cascaded Framework for Cost-Aware LLM Serving Yas",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization | OpenReview",
+        "url": "https://openreview.net/forum?id=H9KBJXHoA8",
+        "snippet": "RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization | OpenReview ## RouteNLP: Closed-Loop LLM Routing with Conformal Cascading and Distillation Co-Optimization ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey",
+        "url": "https://www.arxiv.org/pdf/2603.04445",
+        "snippet": "Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey arXiv is now an independent nonprofit! Learn more× # Dynamic Model Routing and Cascading for Efficient LLM Inference: A Survey",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "energy efficient agent compute budget allocation",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Aagam-Bothara/Joule",
+        "url": "https://github.com/Aagam-Bothara/Joule",
+        "snippet": "# Repository: Aagam-Bothara/Joule Joule is a budget-controlled AI agent runtime that minimizes energy and token usage through hierarchical routing and deterministic tool execution. - Stars: 3 - Forks:",
+        "source": "AnySearch"
+      },
+      {
+        "name": "On Time, Within Budget: Constraint-Driven Online Resource Allocation for Agentic Workflows",
+        "url": "https://arxiv.org/pdf/2605.06110",
+        "snippet": "# On Time, Within Budget: Constraint-Driven Online Resource Allocation for Agentic Workflows arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract Agentic systems increasingly solve com",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Anytime Verified Agents: Adaptive Compute Allocation for Reliable LLM Reasoning under Budget Constraints",
+        "url": "https://openreview.net/pdf?id=JMDCMf7mlF",
+        "snippet": "Anytime Verified Agents: Adaptive Compute Allocation for Reliable LLM Reasoning under Budget Constraints Dipkumar Patel dip@llmsresearch.com LLMs Research Inc. Reviewed on OpenReview: https: // openre",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Aagam-Bothara/Joule",
+        "url": "https://github.com/Aagam-Bothara/Joule",
+        "snippet": "# Repository: Aagam-Bothara/Joule Joule is a budget-controlled AI agent runtime that minimizes energy and token usage through hierarchical routing and deterministic tool execution. - Stars: 3 - Forks:",
+        "source": "AnySearch"
+      },
+      {
+        "name": "On Time, Within Budget: Constraint-Driven Online Resource Allocation for Agentic Workflows",
+        "url": "https://arxiv.org/pdf/2605.06110",
+        "snippet": "# On Time, Within Budget: Constraint-Driven Online Resource Allocation for Agentic Workflows arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract Agentic systems increasingly solve com",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Anytime Verified Agents: Adaptive Compute Allocation for Reliable LLM Reasoning under Budget Constraints",
+        "url": "https://openreview.net/pdf?id=JMDCMf7mlF",
+        "snippet": "Anytime Verified Agents: Adaptive Compute Allocation for Reliable LLM Reasoning under Budget Constraints Dipkumar Patel dip@llmsresearch.com LLMs Research Inc. Reviewed on OpenReview: https: // openre",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "world model agent Sora Genie embodiment 2025",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "🌁#79: Sora and World Models – Bringing magic to muggles",
+        "url": "https://www.turingpost.com/p/fod79",
+        "snippet": "It should be illegal to ship that many updates and releases so close to the holidays, but here we are – two weeks before Christmas, with our hands full of news and research papers (thank you, OpenAI's",
+        "source": "AnySearch"
+      },
+      {
+        "name": "World Models: The Next Leap Beyond LLMs | by Graison Thomas | Medium",
+        "url": "https://medium.com/@graison/world-models-the-next-leap-beyond-llms-012504a9c1e7",
+        "snippet": "Systems, 2024 to 2025: DeepMind Genie 3; NVIDIA Cosmos; Meta V-JEPA 2 (Video Joint Embedding Predictive Architecture 2); Wayve GAIA-2 (Generative Artificial Intelligence for Autonomy 2) and LINGO-2; W",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - tsinghua-fib-lab/World-Model: [ACM CSUR 2025] Understanding ...",
+        "url": "https://github.com/tsinghua-fib-lab/World-Model",
+        "snippet": "AAAI 2025 · Driving into the Future: Multiview Visual Forecasting and Planning with World Model · CVPR 2024 · Vista: A Generalizable Driving World Model with High Fidelity · NeurIPS 2024 · WorldDreame",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "🌁#79: Sora and World Models – Bringing magic to muggles",
+        "url": "https://www.turingpost.com/p/fod79",
+        "snippet": "It should be illegal to ship that many updates and releases so close to the holidays, but here we are – two weeks before Christmas, with our hands full of news and research papers (thank you, OpenAI's",
+        "source": "AnySearch"
+      },
+      {
+        "name": "World Models: The Next Leap Beyond LLMs | by Graison Thomas | Medium",
+        "url": "https://medium.com/@graison/world-models-the-next-leap-beyond-llms-012504a9c1e7",
+        "snippet": "Systems, 2024 to 2025: DeepMind Genie 3; NVIDIA Cosmos; Meta V-JEPA 2 (Video Joint Embedding Predictive Architecture 2); Wayve GAIA-2 (Generative Artificial Intelligence for Autonomy 2) and LINGO-2; W",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - tsinghua-fib-lab/World-Model: [ACM CSUR 2025] Understanding ...",
+        "url": "https://github.com/tsinghua-fib-lab/World-Model",
+        "snippet": "AAAI 2025 · Driving into the Future: Multiview Visual Forecasting and Planning with World Model · CVPR 2024 · Vista: A Generalizable Driving World Model with High Fidelity · NeurIPS 2024 · WorldDreame",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agent self-model metacognition production architecture",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "A Metacognitive Architecture for Correcting LLM Errors in AI Agents",
+        "url": "https://dilab.gatech.edu/test/wp-content/uploads/2026/02/A-Metacognitive-Architecture-for-Correcting-LLM-Errors-in-AI-Agents.pdf",
+        "snippet": "## A Metacognitive Architecture for Correcting LLM Errors in AI Agents ### Jisu Kim, Mahimul Islam, Ashok Goel Design Intelligence Laboratory, Georgia Institute of Technology jisu.kim@gatech.edu, mahi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MetaCognition Patterns for AI Agent Self-Monitoring and Adaptive Control | Zylos Research",
+        "url": "https://zylos.ai/research/2026-03-14-metacognition-ai-agent-self-monitoring-adaptive-control",
+        "snippet": "MetaCognition Patterns for AI Agent Self-Monitoring and Adaptive Control | Zylos Research Back to Notes ## Executive Summary MetaCognition — the capacity to monitor and regulate one's own cognitive pr",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Knowledgeable Self-awareness",
+        "url": "https://aclanthology.org/2025.acl-long.619.pdf",
+        "snippet": "Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 12601–12625 July 27 - August 1, 2025 ©2025 Association for Computational Linguist",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "A Metacognitive Architecture for Correcting LLM Errors in AI Agents",
+        "url": "https://dilab.gatech.edu/test/wp-content/uploads/2026/02/A-Metacognitive-Architecture-for-Correcting-LLM-Errors-in-AI-Agents.pdf",
+        "snippet": "## A Metacognitive Architecture for Correcting LLM Errors in AI Agents ### Jisu Kim, Mahimul Islam, Ashok Goel Design Intelligence Laboratory, Georgia Institute of Technology jisu.kim@gatech.edu, mahi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MetaCognition Patterns for AI Agent Self-Monitoring and Adaptive Control | Zylos Research",
+        "url": "https://zylos.ai/research/2026-03-14-metacognition-ai-agent-self-monitoring-adaptive-control",
+        "snippet": "MetaCognition Patterns for AI Agent Self-Monitoring and Adaptive Control | Zylos Research Back to Notes ## Executive Summary MetaCognition — the capacity to monitor and regulate one's own cognitive pr",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agentic Knowledgeable Self-awareness",
+        "url": "https://aclanthology.org/2025.acl-long.619.pdf",
+        "snippet": "Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 12601–12625 July 27 - August 1, 2025 ©2025 Association for Computational Linguist",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]
