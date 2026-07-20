@@ -197,3 +197,12 @@ from .dgm_archive import DGM_ARCHIVE_VERSION, Generation, DGMArchive, make_defau
 from .deliberation import DELIBERATION_VERSION, ThoughtStep, ThoughtBranch, DeliberationResult, DeliberationEngine, make_default_deliberation_engine  # Phase 19 思考层 (ASI self-thinking, LLM-agnostic, DeepSeek-R1 + ToT + Reflexion 借鉴)
 from .asi_north_star import ASI_NORTH_STAR_VERSION, TARGET_ASI_APPROACH, CURRENT_PHASE, ASIApproachReport, compute_v6_approach, compute_v7_approach, compute_target_approach  # Phase 20 ASI 逼近指数 metric (主人 20:46 哲学修正: 不是距离, 是逼近)
 from .llm_kernel import LLM_KERNEL_VERSION, LLMConfig, LLMResponse, call_llm_minimax, call_llm_template, make_call_llm  # Phase 21 真生产 LLM Kernel (MiniMax 默认, LLM-agnostic)
+from .kickoff_enrichment import (  # Phase 1 v0.4 enrichment — recall_anchor + evidence_refs + completeness_score + version_migration (DEV-LOG 21:09)
+    EnrichmentReport,
+    enrich,
+    derive_recall_anchor,
+    suggest_evidence_refs,
+    compute_completeness,
+    check_version,
+    migrate as enrich_migrate,
+)
