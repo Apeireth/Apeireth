@@ -76,3 +76,70 @@ $ python -m apeireth.run_kickoff_demo
 
 _楚零 2026-07-20 13:42_
 _PoC v0.1 跑通, 268 行代码 (含 demo + log + JSON). 等主人 review + 1 次交互回测_
+
+---
+
+## 2026-07-20 13:55 — AnySearch 集成 (L2 Interaction Layer)
+
+### 触发
+主人 13:51: "你老连不上 GitHub, 这事得严肃解决" + 主人 13:54 提议 AnySearch
+主人 13:54: "anysearch 需要 api 吗? 你继续"
+
+### 调研 (博查搜 + GitHub API)
+- AnySearch **4555 stars** GitHub (2 周内 2.3K → 4.5K — 涨速第一)
+- **Apache-2.0** 开源 (anysearch-ai/anysearch-skill)
+- 17 vertical domains (finance / academic / legal / health / code / etc.)
+- 自带 `SKILL.md` (Anthropic 格式) + 命令行 (Python/Node/PS1/Bash 4 端)
+- 默认 Path 2 = vertical search (质量好于通用搜索)
+- 支持匿名 + API Key (email 注册一键, 30 秒)
+
+### 装 (53KB 下载)
+- `apeireth/skills/anysearch/` — 完整代码 fork
+- 主程序 `scripts/anysearch_cli.py` — 跨平台 CLI
+- `SKILL.md` 12.7KB — 完整接口规范
+- `.env.example` — API key 配置 (anonymous 也可)
+
+### 集成层 (1 文件, 116 行)
+- 新文件 `apeireth/research.py`
+- 纯 Python, 无第三方依赖 (就 urllib)
+- JSON-RPC 2.0 over HTTPS
+- 接口: `search / batch_search / get_sub_domains / extract`
+- 优先 vertical routing (AnySearch 默认 Path 2)
+- 自动从 `.env` 读 `ANYSEARCH_API_KEY`
+
+### 验证
+```
+$ python -m apeireth.research
+[run as script] — runs doctest + real search
+$ python -c "from apeireth import AnySearch; ..."
+✅ API key: anonymous (anysearch 24/7 可用)
+✅ search ok: 8291 chars result (真实结果)
+```
+
+### 决策记录 (给未来)
+- **为什么用 AnySearch 而不是博查**:
+  - 博查 = web-search generic, 不是为 AI 设计
+  - AnySearch = AI-agent-first, 16 个 vertical domain
+  - AnySearch 在 skills.sh TOP1 (认可度)
+  - 纯 JSON-RPC, 无需 MCP server 安装
+  - 0 第三方 Python 依赖 (跟轻)
+- **为什么保留 博查**:
+  - 博查额度多 (主人之前提到)
+  - 博查用作 fallback, AnySearch 主用
+- **anysearch-ai 也写了 `.env.example`, 0 key 也可跑** (跟博查一样)
+
+### 没做的事(也记录, 留给下次)
+- ❌ 没注册 AnySearch API Key: 匿名模式能用, 没必要
+- ❌ 没集成到 Identity Store: 这是 Phase 1.6 还没做
+- ❌ 没给 background cron 用: 主人说 GitHub push 不急
+
+### 等待主人
+- 主人要不要个 demo (展示 AnySearch 在 Apeireth 跑)?
+- 主人 13:47 说"记忆和思考模块", 接下来加深挖?
+- 5 期路线 → 主人 13:47 说"按你判断", 我判断下一步:
+  1. Memory Layer (claude-mem 借鉴 + alibaba/zvec)
+  2. 重整化引擎 (LangMem 借鉴)
+  3. Persona Engine (Letta 借鉴)
+  4. Self-Evolving Harness (AHE 借鉴)
+  
+ 我建议: 1 → 2 → 3 → 4 (Memory 先行, 因为没有 Memory 主人中央 AI 的"永恒身份"实现不了)
