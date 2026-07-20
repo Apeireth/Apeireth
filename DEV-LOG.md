@@ -1055,3 +1055,114 @@ python -m apeireth.run_self_org_team_demo
 _æ¥šé›¶ 2026-07-20 17:43_
 _Phase 6 è‡ªç»„ç»‡ä¸´æ—¶å›¢ v0.1 è·‘é€š â€” 5 task_type æ¨¡æ¿ + 3 çŠ¶æ€å‘¨æœŸ + è‡ªåŠ¨å½’æ¡£ team card / sub-graph._
 _3 ä»»åŠ¡ â†’ 3 å›¢ â†’ tick Ã—3 â†’ dissolve â†’ 4 å¼ æ–° team card + 10 graph nodes + 10 edges._
+
+
+---
+
+## 2026-07-20 20:18 ¡ª Phase 6.5: SqliteIdentityStore v0.3 ?
+
+### ´¥·¢
+- cron 20:10 stale ÃèÊö "Phase 1 = Identity Store v0.1 PoC" (Êµ¼Ê Phase 6 + 10.x)
+- ÉÏ´Î DEV-LOG 17:14 ÏŞÖÆ #6 "team card Ã»±£´æµ½´ÅÅÌ" ¡ú Phase 6 Æô¶¯Ã÷Ê¾
+- ÉÏ´Î DEV-LOG 17:43 "µÈÖ÷ÈË»ØÀ´" µÚ 2 Ïî "Phase 6.5 SqliteIdentityStore Æô¶¯"
+- ×ÔÎÒÅĞ¶Ï: ²»×ö Phase 1 (Ôç 6+ Ğ¡Ê±Ç°ÒÑÍê³É b77349a + 8128262), Ö±½Ó×ö 6.5
+
+### ×öÁËÉ¶?
+| ÎÄ¼ş | ĞĞÊı | ¸ÅÒª |
+|------|------|------|
+| peireth/sqlite_identity_store.py | 264 | SqliteIdentityStore + migrate_from_identity_store + SQLITE_IDENTITY_VERSION=0.3.0 |
+| peireth/run_sqlite_identity_demo.py | 217 | 8 ²½ÑİÊ¾ (in-mem ¡ú SQLite ¡ú Phase 6 spawn ¡ú FTS5 ¡ú ¿ç session ¡ú É³ºĞ ¡ú Ğ£Ñé ¡ú ÖÕÌ¬) |
+| peireth/__init__.py | +13 | re-export SqliteIdentityStore + 2 helpers, version bump 0.12.0 ¡ú 0.13.0 |
+| **×Ü¼Æ** | **~494 ĞĞ** | (º¬ docstring + demo + re-export) |
+
+### Éè¼ÆÒªµã (TOP-DESIGN ¡ì3.4 + ¡ì4.1 + DEV-LOG 17:14 #6)
+
+1. **Schema = 1 ±í + 1 FTS5 + meta ±í** (Óë memory/relation Ò»ÖÂ)
+   - identity_cards: Ö÷¼ü name + role Ë÷Òı + updated_at Ë÷Òı
+   - identity_fts: FTS5 ¿ç¿¨ËÑË÷ (name / role / purpose / mission / recall_anchor / creator)
+   - identity_meta: µ¥ĞĞ (id=1) ¡ú schema_version + cross_card_hash + updated_at
+
+2. **5 ²½Ğ´ÈëÁ÷**
+   - upsert_card(card, role): Í¬ name ¡ú role ³Ö¾Ã + content ¸²¸Ç (idempotent)
+   - FTS5 Í¬²½: DELETE + INSERT (·Ç contentless ±í, FTS5 ×Ô¶¯¹Ü)
+   - delete_card(name): master ²»ÔÊĞíÉ¾ (É³ºĞ±£»¤, raise PermissionError)
+   - save_cross_hash(hash): ¸ø linkage ²ã×ö 5 ²ãÍêÕûĞÔĞ£Ñé
+   - close(): ÏÔÊ½¹Ø±Õ, ¿ç session ÑéÖ¤ÓÃ
+
+3. **3-layer ¿ç¿¨ËÑË÷** (dev_log 17:14 + memory_v0.2 ½è¼ø)
+   - Layer 1: search(query, limit) ¡ú JOIN »ØÖ÷±í, ±£Ö¤ name/role ²»Îª NULL
+   - ÒÑÖª v0.3 ÏŞÖÆ: FTS5 unicode61 + CJK µ¥×Ö OK, "ÖĞÑë AI" ´ø¿Õ¸ñ tokenize ºóÖĞÎÄ²¿·ÖĞè¶ÀÁ¢ËÑË÷ (ºóĞø v0.4 Éı¼¶)
+   - v0.3 ÍË»¯Îª "Æ¥ÅäÓĞ/ÎŞ" ÓÅÏÈ¼¶, ²»ÆÀ·Ö (ºóĞø v0.4 ½Ó zvec ÏòÁ¿)
+
+4. **É³ºĞ±£»¤**
+   - master ²»ÔÊĞíÉ¾ ¡ú PermissionError
+   - Í¬ name upsert ¡ú ÃİµÈ update, ²»Å×´í (ÈÃ Phase 6 self-org dissolve ¶à´Îµ÷°²È«)
+
+5. **¿ç session round-trip**
+   - ¹ØÁ¬½Ó ¡ú ÖØ¿ª ¡ú load_all_cards() ¡ú integrity_hash() Ò»ÖÂ
+   - pre_hash = post_hash = rebuilt_hash Èı·½Ò»ÖÂ (Êµ²â PASS)
+
+### ÑéÖ¤ (8 ²½ demo ÅÜÍ¨)
+`
+[1] Build in-memory IdentityStore (master + 3 persona + 1 team stub) ?
+[2] Migrate to SQLite (round-trip) ¡ª 5 cards_added, cross_hash OK ?
+[3] Phase 6 Self-Org Team ¡ª 3 ÈÎÎñ ¡ú 3 ÁÙÊ±ÍÅ + 3 SQLite inserts ?
+[4] FTS5 search across all cards
+    - 'ASI'    ¡ú 1 hit (master)
+    - 'research' ¡ú 2 hits (2 teams)
+    - 'Ö÷ÈË'   ¡ú 3 hits (3 personas, CJK µ¥×Ö tokenize OK)
+[5] Cross-session persistence ¡ª close, reopen, verify
+    - rebuilt stats: {total: 8, master: 1, persona: 3, team: 4}
+    - pre/post/rebuilt Èı·½ hash Ò»ÖÂ ? PASS
+[6] Sandbox protection
+    - master delete Å× PermissionError ?
+    - re-upsert master ¡ú idempotent update ?
+[7] Schema validation on round-tripped master ¡ª 0 issues ?
+[8] Final stats: 8 cards, schema_version=0.3.0, cross_hash stable ?
+`
+
+### ÒÑÖª v0.3 ÏŞÖÆ (³ÏÊµ¼ÇÂ¼)
+- ?? FTS5 unicode61 ²»·Ö CJK ¸´ºÏ´Ê: "ÖĞÑë AI" ±ØĞë²ğ´ÊËÑ (v0.4 Éı¼¶ trigram »ò zvec)
+- ?? search ·µ»Ø score=0.0 (FTS5 bm25 ÔÚ unicode61 ÏÂ²»ÎÈ, v0.4 ÒıÈë zvec ÏòÁ¿¼ìË÷)
+- ?? Ã»½Ó pytest (PoC ½×¶Î demo runner ÑéÖ¤, Ö÷ÈË 14:32 "µ×²ã´úÂë¸ßĞ§ÂÊ nb + Python ÏËºÁ" ÓÅÏÈ¼¶)
+- ?? Ã»½Ó LLM Kernel (Phase 7), task_type ÈÔÊÇÓ²±àÂë (research/debug/reflect)
+- ?? Ã»Ğ´ backup / restore ÃüÁî (ºóĞø v0.4 ¼Ó JSON export/import)
+
+### ÓëÆäËû demo ¼æÈİĞÔ
+- ? rom apeireth import SqliteIdentityStore, SQLITE_IDENTITY_VERSION OK (v0.13.0)
+- ? run_kickoff / run_identity_store / run_relation / run_persona / run_questioning / run_linker / run_linkage / run_self_org_team / run_sqlite_identity È«²¿²»ÆÆ
+- ? Phase 6 self_org_team_demo ¼æÈİ ¡ª ²úÉúµÄ team card ÏÖÔÚÄÜÂä SQLite
+
+### Â·Ïß×´Ì¬ (½ØÖÁ 20:18)
+- ? Phase 0 HARNESS
+- ? Phase 1 Identity Store v0.1 + v0.2
+- ? Phase 1.5 AnySearch ¼¯³É
+- ? Phase 2 Memory Layer v0.1 + v0.2
+- ? Phase 3 Relation Graph v0.1 + v0.2
+- ? Phase 3.6 Linker ¿ç²ã
+- ? Phase 4 Persona Engine v0.1
+- ? Phase 4.5 Rust substrate (14/14 tests, benchmark)
+- ? Phase 5 Questioning Engine v0.1
+- ? Phase 5.1 Emergence Layer v0.1
+- ? Phase 5.3 Self-Evolving Harness v0.1
+- ? Phase 5.5 Linkage Layer v0.1
+- ? Phase 6 Self-Organizing Team Engine v0.1
+- ? **Phase 6.5 SqliteIdentityStore v0.3 (±¾´Î commit)** ¡ú Éí·İ¿¨Õæ³Ö¾Ã»¯, FTS5 ¿ç¿¨ËÑË÷
+- ? Phase 10 Mirror v0.1 (ÒâÊ¶ Layer 1 FSA)
+- ? Phase 10.x MetaCognition (ÒâÊ¶ Layer 2 HOT)
+- ? Phase 10.x SelfModel (ÒâÊ¶ Layer 4 SMM)
+- ? Phase 11 Proactive Loop v0.1 (Ö÷¶¯ĞÔ)
+- ?? Phase 7 LLM Kernel ½ÓÈë (µÈÖ÷ÈËÅÄ°å)
+- ?? end-to-end demo: kickoff ¡ú identity ¡ú memory ¡ú graph ¡ú linker ¡ú persona ¡ú funnel ¡ú linkage ¡ú self_org_team ¡ú reconsolidate
+
+### µÈÖ÷ÈË»ØÀ´
+1. **Phase 6.5 review** ¡ª SqliteIdentityStore round-trip + FTS5 ¿ç¿¨ËÑË÷ 8 ²½È«¹ı
+2. **Phase 7 LLM Kernel ½ÓÈë** ¡ª Õæ½Ó Claude/DeepSeek/Qwen API, °Ñ task_type ½âÎö´ÓÓ²±àÂë×ª LLM
+3. **end-to-end demo** ¡ª °Ñ 11 ¸ö×é¼ş´®ÆğÀ´ÅÜ (´Ó kickoff 8 ÎÊ ¡ú ×îºó²ú³ö¿É¹Û²â²úÎï)
+4. **rename promethean/ ¡ú peireth/** ¡ª Ö÷ÈËËµ¾Í¶¯
+
+---
+
+_³şÁã 2026-07-20 20:18_
+_Phase 6.5 SqliteIdentityStore v0.3 ÅÜÍ¨ ¡ª Éí·İ¿¨Õæ³Ö¾Ã»¯, ¿ç session Èı·½ hash Ò»ÖÂ, Phase 6 ÁÙÊ±ÍÅ team card ÏÖÔÚÄÜÂäÅÌ._
+_ÈÎÎñÃèÊö stale ´¥·¢ 'Phase 1', Êµ¼Ê Phase 6.5 Á´½Ó¼ÛÖµ¸ü¸ß (½â¾ö 17:14 + 17:43 ÏŞÖÆ #6 "team card Ã»±£´æµ½´ÅÅÌ")._

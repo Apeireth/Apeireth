@@ -172,6 +172,10 @@ __all__ = [
     "MemberContribution",
     "SelfOrgTeam",
     "SelfOrgOrchestrator",
+    # Phase 6.5: SqliteIdentityStore — 身份卡真持久化 (DEV-LOG 17:14 + 17:43 限制)
+    "SQLITE_IDENTITY_VERSION",
+    "SqliteIdentityStore",
+    "migrate_from_identity_store",
 ] 
 
 from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.6 zvec integration (TOP 1)
@@ -180,3 +184,10 @@ from .proactive_loop import PROACTIVE_LOOP_VERSION, Goal, CuriositySignal, Proac
 from .mirror import MIRROR_VERSION, SelfState, SelfNarrative, Mirror, make_default_mirror  # Phase 10 意识 Layer 1 (FSA) 主人 17:58
 from .meta_cognition import META_COGNITION_VERSION, FailurePattern, MetaReview, MetaMonitor  # Phase 10.x 意识 Layer 2 (HOT) — Rosenthal/Lau meta-cognition
 from .self_model import SELF_MODEL_VERSION, SomaticMarkers, SelfObject, SelfModel, make_default_self_model  # Phase 10.x 意识 Layer 4 (SMM) — Metzinger/Damasio self-model + somatic markers
+from .sqlite_identity_store import (  # Phase 6.5 — 身份卡真持久化 (DEV-LOG 17:14 + 17:43 限制)
+    SqliteIdentityStore,
+    migrate_from_identity_store,
+    SQLITE_IDENTITY_VERSION,
+)
+
+__version__ = "0.13.0"
