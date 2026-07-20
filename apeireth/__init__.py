@@ -220,3 +220,4 @@ from .game_theory import NASH_VERSION, Agent, NashEquilibrium, IncentiveEngine  
 from .metaphor import LAKOFF_VERSION, Metaphor, EmbodimentTrace, MetaphorEngine  # Phase 39 Lakoff 隐喻引擎 (跨域调研借鉴, 主人 22:05 不偏离哲学) 
 from .small_world import SMALL_WORLD_VERSION, Node, Link, SmallWorldGraph  # Phase 40 Watts-Strogatz Small-World Network (跨域调研借鉴) 
 from .philosophy import PHILOSOPHY_VERSION, PHILOSOPHY_LINES, PhilosophyCheck, check_philosophy, apeireth_philosophy_summary  # Apeireth 设计哲学守门 (主人 22:05 警告不偏离)
+from .identity_card import IDENTITY_VERSION, MASTER_QUOTES_CENTRAL_AI_V2, VCP_4_PARADIGMS, IdentityCardV3  # Phase 41 V3 IdentityCard (主人 22:08 V2 哲学完整还原, VCP 4 范式引入)
