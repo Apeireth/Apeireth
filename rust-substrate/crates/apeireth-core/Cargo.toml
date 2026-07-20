@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Apeireth core domain — Memory / Identity / Episode / Relation Graph (L3-L5 substrate)"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = { workspace = true }
+parking_lot = { workspace = true }
+sha2 = "0.10"
+
+[dependencies.apeireth-ports]
+path = "../apeireth-ports"
+
+[dev-dependencies]
+criterion = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
