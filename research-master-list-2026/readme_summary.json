@@ -1,0 +1,50 @@
+{
+  "claude-mem": {
+    "url": "thedotmack/claude-mem",
+    "len": 617
+  },
+  "Shadoweave-team/HMS-holographic-memory-system": {
+    "url": "Shadow-Weave/HMS",
+    "len": 617
+  },
+  "rohitg00/agentmemory": {
+    "url": "rohitg00/agentmemory",
+    "len": 617
+  },
+  "MemPalace": {
+    "url": "MemPalace/mempalace",
+    "len": 617
+  },
+  "DeusData/codebase-memory-mcp": {
+    "url": "deusdata/codebase-memory-mcp",
+    "len": 617
+  },
+  "TencentDB/Agent-Memory": {
+    "url": "TencentCloud/TencentDB-Agent-Memory",
+    "len": 617
+  },
+  "OpenSquilla": {
+    "url": "opensquilla/opensquilla",
+    "len": 617
+  },
+  "exo-explore": {
+    "url": "exo-explore/exo",
+    "len": 617
+  },
+  "project-nomad": {
+    "url": "crosstalk-solutions/project-nomad",
+    "len": 617
+  },
+  "pi-mono": {
+    "url": "badlogic/pi-mono",
+    "len": 617
+  },
+  "ComposioHQ/composio": {
+    "url": "orgs/ComposioHQ",
+    "len": 617
+  },
+  "VoltAgent": {
+    "url": "voltagent/voltagent",
+    "len": 617
+  }
+}
