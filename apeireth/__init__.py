@@ -195,5 +195,5 @@ from .skill_library import SKILL_LIBRARY_VERSION, Skill, SkillLibrary, make_defa
 from .phi_proxy import PHI_PROXY_VERSION, compute_phi_proxy, compute_phi_proxy_via_mirror, AWARENESS_VALUES  # Phase 10.x IIT Phi-proxy (量化 consciousness)
 from .dgm_archive import DGM_ARCHIVE_VERSION, Generation, DGMArchive, make_default_dgm_archive  # Phase 14 DGM-inspired Multi-Generation Archive (永远演化)
 from .deliberation import DELIBERATION_VERSION, ThoughtStep, ThoughtBranch, DeliberationResult, DeliberationEngine, make_default_deliberation_engine  # Phase 19 思考层 (ASI self-thinking, LLM-agnostic, DeepSeek-R1 + ToT + Reflexion 借鉴)
-from .asi_north_star import ASI_NORTH_STAR_VERSION, TARGET_ASI_DISTANCE, CURRENT_PHASE, ASIDistanceReport, compute_v6_distance, compute_v7_distance, compute_target_distance  # Phase 20 ASI 北极星距离 metric
+from .asi_north_star import ASI_NORTH_STAR_VERSION, TARGET_ASI_APPROACH, CURRENT_PHASE, ASIApproachReport, compute_v6_approach, compute_v7_approach, compute_target_approach  # Phase 20 ASI 逼近指数 metric (主人 20:46 哲学修正: 不是距离, 是逼近)
 from .llm_kernel import LLM_KERNEL_VERSION, LLMConfig, LLMResponse, call_llm_minimax, call_llm_template, make_call_llm  # Phase 21 真生产 LLM Kernel (MiniMax 默认, LLM-agnostic)
