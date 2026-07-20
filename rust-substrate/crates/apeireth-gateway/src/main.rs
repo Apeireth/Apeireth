@@ -14,10 +14,11 @@ use axum::{
     Json, extract::{State, Query},
 };
 use std::sync::Arc;
-use apeireth_core::{Episode, EpisodeKind, Actor, Note, IdentityCard};
+use apeireth_core::{Episode, Note, IdentityCard};
+use apeireth_core::episode::{Actor, EpisodeKind};
 use apeireth_adapters::{SqliteEpisodeRepository, SqliteNoteRepository};
 use apeireth_ports::{EpisodeRepository, NoteRepository};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Clone)]
 struct AppState {

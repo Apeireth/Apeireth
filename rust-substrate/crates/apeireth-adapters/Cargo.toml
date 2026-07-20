@@ -19,6 +19,9 @@ qdrant-client = { workspace = true }
 tantivy = { workspace = true }
 rusqlite = { version = "0.31", features = ["bundled"] }
 tracing = { workspace = true }
+parking_lot = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
 
 [dependencies.apeireth-core]
 path = "../apeireth-core"
