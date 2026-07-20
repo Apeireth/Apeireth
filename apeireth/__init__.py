@@ -1,4 +1,4 @@
-"""Apeireth — ASI 地基平台
+﻿"""Apeireth — ASI 地基平台
 Phase 1 (Week 1-2): Identity Store v0.1 PoC
 Phase 1.5 (今日): AnySearch 联网集成 (L2 Interaction Layer)
 Phase 2 (Week 3-4): Memory Layer v0.1 PoC
@@ -157,3 +157,5 @@ __all__ = [
     "path_b_question_to_persona",
     "path_c_feedback_loop",
 ] 
+
+from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.6 zvec integration (TOP 1)
