@@ -208,3 +208,5 @@ from .kickoff_enrichment import (  # Phase 1 v0.4 enrichment — recall_anchor +
 )
 from .observation import OBSERVATION_VERSION, Observation, MetaObservation, MetaMetaObservation, ThreeTierObservation  # Phase 24 二阶控制论 3 阶观察循环 
 from .ecology import NICHE_VERSION, Niche, NicheSpec, NicheConstructor  # Phase 25 生态位构造器 (Ecology Engineering 真生产借鉴)
+from .self_ref import KLEIN_BOTTLE_VERSION, KleinBottleSelfRef, CentralAITopology  # Phase 30 Klein Bottle 自指拓扑工程化 (跨域调研借鉴) 
+from .mind_eco import BATESON_MIND_VERSION, MindEntity, MindRelation, MindEcosystem  # Phase 31 Bateson 心灵生态学工程化 (跨域调研借鉴)
