@@ -8,6 +8,7 @@ Phase 2 (Week 3-4): Memory Layer v0.1 PoC
 from .identity import IdentityCard, load_card, save_card
 from .kickoff import KICKOFF_QUESTIONS, run_kickoff
 from .research import AnySearch
+from .github import GitHubResearch
 from .memory import (
     Episode,
     Note,
@@ -19,3 +20,22 @@ from .memory import (
 )
 
 __version__ = "0.3.0"
+__all__ = [
+    # Phase 1: Identity
+    "IdentityCard",
+    "load_card",
+    "save_card",
+    "KICKOFF_QUESTIONS",
+    "run_kickoff",
+    # Phase 1.5: Interaction
+    "AnySearch",
+    "GitHubResearch",
+    # Phase 2: Memory
+    "Episode",
+    "Note",
+    "MemoryStore",
+    "save_store",
+    "load_store",
+    "forget_sweep",
+    "reconsolidate",
+] 
