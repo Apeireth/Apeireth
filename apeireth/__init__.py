@@ -178,3 +178,5 @@ from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.
 from .karpathy_principles import PRINCIPLES, KarpathyPrinciple, render_full, check_action  # 主人 13:51 + 17:29 Karpathy 升级版
 from .proactive_loop import PROACTIVE_LOOP_VERSION, Goal, CuriositySignal, ProactiveLoop, make_default_proactive_loop  # Phase 11 主动性 (V2 唯一 gap)
 from .mirror import MIRROR_VERSION, SelfState, SelfNarrative, Mirror, make_default_mirror  # Phase 10 意识 Layer 1 (FSA) 主人 17:58
+from .meta_cognition import META_COGNITION_VERSION, FailurePattern, MetaReview, MetaMonitor  # Phase 10.x 意识 Layer 2 (HOT) — Rosenthal/Lau meta-cognition
+from .self_model import SELF_MODEL_VERSION, SomaticMarkers, SelfObject, SelfModel, make_default_self_model  # Phase 10.x 意识 Layer 4 (SMM) — Metzinger/Damasio self-model + somatic markers
