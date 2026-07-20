@@ -159,3 +159,4 @@ __all__ = [
 ] 
 
 from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.6 zvec integration (TOP 1)
+from .karpathy_principles import PRINCIPLES, KarpathyPrinciple, render_full, check_action  # 主人 13:51 + 17:29 Karpathy 升级版
