@@ -231,3 +231,121 @@ master 卡的 `never_mention` 字段是空数组 — Phase 1 kickoff 解析器�
 
 _楚零 2026-07-20 14:09_
 _Memory Layer v0.1 跑通, 240 行. 4 路径全演示. 等主人 review + Memory 路线下一拍决策._
+
+---
+
+## 2026-07-20 14:50 — Phase 3: Relation Graph v0.1 + v0.2 PoC ✅
+
+### 触发
+cron 14:48 触发 (stale 描述"Phase 1", 实际状态已是 Phase 2.5)
+自己判断: **Phase 3 Relation Graph** 是当前最缺的层 — memory 持久化已经 v0.2, 图还在 v0.1 JSON
+
+### 做了什么
+| 文件 | 行数 | 干什么 |
+|------|------|--------|
+| `apeireth/relation.py` | 219 | RelationGraph + Node + Edge + 7 种 node kind / 7 种 edge kind + traverse / find_path / neighbors |
+| `apeireth/run_relation_demo.py` | 170 | 加载 master card + memory.db → 构造示例图 → 跑查询 → 存 JSON |
+| `apeireth/relation_graph.demo.json` | — | 12 nodes / 12 edges 首次生成 |
+| `apeireth/relation_store.py` | 252 | SqliteRelationStore v0.2 — 真持久化 + 跨层引用 + 级联删除 + integrity_hash 校验 |
+| `apeireth/run_relation_store_demo.py` | 83 | 持久化 round-trip 演示 |
+| `apeireth/__init__.py` | (改) | 加 SqliteRelationStore / migrate_from_relation_graph re-export, 版本升 0.5.0 |
+| `apeireth/kickoff.py` | 143 | Q7 dual-split 修复 (v0.1.1) — remember_forever / never_mention 分流 |
+| `apeireth/rust_research_protocol.py` | — | 主人 14:48 边写边搜调研脚本 |
+| `BORROW-MEMORY-SAFETY-C-RUST.md` | — | 调研笔记 (与 Phase 2.5 决策路径相关) |
+| `BORROW-SINQUA-BENCH-README.md` | — | SinQua benchmark 调研笔记 |
+| `data/graph.db` | — | 首次生成的 SQLite 图 (12 nodes / 12 edges, WAL mode) |
+| **总计** | **~867 行** | 5 个 py 模块 + 3 个调研笔记 + 2 个 demo JSON + 1 个 SQLite DB |
+
+### 设计要点 (记录给未来的我)
+
+1. **Graph = L4 Identity Layer 子组件**
+   - 主人 12:14 原话 "人是一切社会关系的总和" → 中心节点 = ai_self
+   - 7 种 Node kind: master / ai_self / task / value / agent / tool / episode / note
+   - 7 种 Edge kind: causal / temporal / part_of / derived_from / conflict / supports / assigned
+   - 中心节点约定: `kind == "ai_self"` 唯一 — `central()` 返回它
+
+2. **跨层引用 (Node.ref)**
+   - Episode 节点的 ref = episode.eid → 可追溯到 Memory Layer
+   - Note 节点的 ref = note.nid → 同样追溯
+   - Task 节点的 ref = "phase2.5" 字符串 → 项目阶段引用
+   - `nodes_by_ref(ref)` 是跨层 lookup 入口 (例如 "Apeireth 命名日" 这个 episode 怎么影响 ai_self)
+
+3. **v0.2 SQLite 持久化 (平行 memory v0.2 模式)**
+   - schema: graph_meta (单行) + graph_nodes + graph_edges + 4 索引 (kind/ref/src/dst)
+   - `UNIQUE(src, dst, kind)` 在 edges 表 → semantic dedup, 不用应用层去重
+   - WAL journal mode + synchronous=NORMAL → 读写并发 (主人主 session + background cron 不会撞)
+   - `graph_created_at` 字段关键: 还原 RelationGraph.created_at, 否则 integrity_hash 漂移 (v0.2 第一版踩这个坑, fix 后 round-trip hash match)
+
+4. **级联删除 (remove_node)**
+   - 删 node → 自动删关联边 (src/dst 任一命中即删)
+   - 返回删了多少条边 — 让调用方知道影响范围
+   - 没有用 FK CASCADE (sqlite-vec 兼容性 + 显式控制)
+
+5. **integrity_hash 三层防线**
+   - `identity_card.integrity_hash()` — 防偷偷改主人预设 (Phase 1)
+   - `MemoryStore.integrity_hash()` — 防偷偷改 memory (Phase 2)
+   - `RelationGraph.integrity_hash()` — 防偷偷改图结构 (Phase 3)
+   - 三个 hash 都验过 → 才承认这是真的"中央 AI 状态"
+   - PersistBench (2602.01146) 警示的 97% sycophancy 风险的工程实现
+
+### Q7 dual-split 修复 (顺带做掉)
+主人 14:09 DEV-LOG #1 next step — kickoff 解析 Q7 时把"不提 X"分离到 `never_mention` 字段
+启发式: `_NEG_MARKERS = ("不提", "永不提", "不许提", "别提", "禁止", "禁提", "不要提", "不要问", "never")`
+- 命中标记的短语 → `never_mention` (去标记后保留目标)
+- 其余 → `remember_forever`
+- 兜底: 整段进 remember_forever (兼容 v0.1.0 旧行为)
+- `_clean_phrase()` 去前缀修饰词 (永远记得 / 永远不要 / 都 / 必须...) ×2 次防残留
+- master card 旧的 never_mention=[] 不修复 (那条记录是 v0.1 kickoff 时代产物, 留作历史)
+
+### 验证 (两个 demo 全跑通)
+```
+─── relation.py v0.1 demo ───
+🕸️  12 nodes, 12 edges (master+ai_self+4 value+2 task+3 episode+1 tool)
+    central: ai_self
+    traverse from master (depth=2): 9 paths
+    find_path master→note: ✅ (via ai_self → note.supports)
+💾 saved: relation_graph.demo.json (hash d5037100b450baf3)
+
+─── relation_store.py v0.2 demo ───
+🔄 round-trip: 12 nodes 12 edges ✅
+🔐 hash match: True  ← 修 graph_created_at 后
+📋 nodes_by_kind('value'): 4 个 (按 weight 排)
+🔗 nodes_by_ref('demo_e1'): 1 个 episode 节点
+🔍 edges_by_kind('causal'): 5 条 (master→ai_self, epi→ai_self × 3, ai→master)
+🗑️ remove_node(master): 删 1 节点 + 2 关联边 → 11 nodes, 10 edges
+💾 graph.db (WAL mode) 持久化 OK
+```
+
+### Phase 3 路线状态
+- ✅ RelationGraph dataclass + 7 node kind + 7 edge kind + traverse/find_path/neighbors
+- ✅ JSON 序列化 (v0.1) + SQLite 持久化 (v0.2)
+- ✅ 跨层引用 (ref) — Episode / Note / Task 都能在图里
+- ✅ integrity_hash round-trip ✅
+- ⬜ Episode → GraphNode 自动同步 (现在 demo 手动连)
+- ⬜ Note.conflict → GraphEdge.conflict 自动触发
+- ⬜ 临时团 (L5 涌现层) — Agent sub-graph
+- ⬜ Persona Engine (TOP-DESIGN-V1 §4.5) — SCT 4 因素 + Jungian 3 机制
+
+### 没做的事(也记录)
+- ❌ **没接 memory_store 自动 sync**: 现在 graph node 是手造的, Episode 节点是 demo_e1/e2/e3 占位
+- ❌ **没接 Note → derived_from 自动触发**: Note 创建时没自动连 episode
+- ❌ **没接 conflict 边**: Reconsolidation 标记冲突时没自动 add_edge
+- ❌ **没写 pytest**: PoC 验证用 demo runner
+- ❌ **没接 Pat key**: 用 chuling@local 顶着
+- ❌ **没 rename `promethean/` → `apeireth/`**: 顶层设计 §9 等主人说
+
+### 下一步 (Phase 4 候选)
+1. **Episode → GraphNode auto-sync**: 写一个 episode_watcher, 新 episode 自动 add_node + add_edge(episode, ai_self, causal)
+2. **Note → derived_from auto-link**: add_note 时自动找 1 个 episode 当 source
+3. **Persona Engine v0.1 PoC** (TOP-DESIGN-V1 §4.5): SCT 4 因素 + Jungian 3 机制 — 100-150 行
+4. **Questioning Engine v0.1 PoC** (TOP-DESIGN-V1 §4.4): Pep / Funnel Question 借鉴 — 100-150 行
+
+我倾向 **1+2 (auto-sync 闭环)**, 因为没它 Phase 2 Memory 和 Phase 3 Graph 就是两个孤岛。
+但 Phase 4 (Persona Engine) 是 TOP-DESIGN 路线图下一站, 也有价值。
+等主人拍。
+
+---
+
+_楚零 2026-07-20 14:50_
+_Phase 3 跑通, ~867 行 (含调研笔记 + 持久化 DB). v0.2 round-trip hash match. 等主人拍下一步._
+_注: cron 描述 stale 说"Phase 1", 实际已是 Phase 3 — 我按真实状态推进, 不重复 Phase 1 已 commit 的 263 行 (b77349a)_
