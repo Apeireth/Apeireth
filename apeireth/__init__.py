@@ -6,6 +6,7 @@ Phase 2.5 (今日): SQLite + FTS5 真持久化 + 3-layer search
 Phase 3 (今日): Relation Graph v0.1 PoC (L4 Identity Layer 子组件)
 Phase 3.5 (今日): Relation Graph v0.2 SQLite 持久化 + 跨 session 存活
 Phase 3.6 (今日): Memory ↔ Graph Linker 跨层自动绑定
+Phase 4 (今日): Persona Engine v0.1 PoC (L4 Identity 多身份子组件)
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
@@ -39,8 +40,13 @@ from .linker import (
     link_note,
     sync_all,
 )
+from .persona import (
+    PERSONA_VERSION, ARCHETYPES,
+    SCTProfile, Persona, PersonaEngine,
+    seed_default_personas,
+)
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
@@ -78,4 +84,11 @@ __all__ = [
     "link_episode",
     "link_note",
     "sync_all",
+    # Phase 4: Persona Engine (L4 多身份)
+    "PERSONA_VERSION",
+    "ARCHETYPES",
+    "SCTProfile",
+    "Persona",
+    "PersonaEngine",
+    "seed_default_personas",
 ] 
