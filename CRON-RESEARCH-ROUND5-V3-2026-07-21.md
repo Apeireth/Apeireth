@@ -1,10 +1,37 @@
 # 你 00:25 真务实修调研型任务 — V7 round-5+ 真生产 background cross-domain research
 
-**cron 名**: `cross-domain-research-round5-v3` (主 00:25 重建, 00:46 整合 Apeireth 内涵)
+**cron 名**: `cross-domain-research-round5-v3` (主 00:25 重建, 00:46 整合 Apeireth 内涵, 00:49 cron 是提醒)
 **schedule**: every 2h (主 00:46 改: "因为这时候你可能已经干了很多活会遗忘一些细节")
 **sessionTarget**: isolated
 **payload**: agentTurn + timeoutSeconds=3600
-**delivery**: none (后台跑, 主 session 不阻塞)
+**delivery**: announce (推到主会话, 主 00:49 调研不停 ≠ 打断主人)
+
+---
+
+## ⭐ 主 00:49 真务实 — cron 是'提醒', 不是机械执行
+
+主人 00:49 关键洞察: **"cron 最终起到的是提醒你的作用"**.
+
+这意味着 agentTurn 触发时, **不是机械执行 5 步**, 而是:
+
+1. **先自决**: 跑 `python round_auto_naming.py --json` → 决定要不要跑 + 跑哪个编号
+2. **跳过条件**:
+   - next=-1 (另一 cron 抢了 round-N+1)
+   - 上一轮 < 30 分钟前跑
+   - 主 session 在忙 (主人可能在睡觉/在做别的事)
+3. **默认行为**: 调研不停 = 主 22:52 真哲学, 但不机械打断主人
+
+**工具脚本**: `promethean/round_auto_naming.py` (3.1KB, 主 00:49 创建)
+- 检测 promethean/research-v7-round-*.json 最大编号 N
+- 返回 next=N+1 (正常) 或 next=-1 (冲突)
+- 返回 existing + stale_overwrite 字段
+
+**为什么需要这个**:
+- Apeireth cron (5min 一次, 22:40 自驱 prompt) 跟 round5-v3 cron (2h 一次) 会争用同一个文件名 round-N.json
+- agentTurn 触发时先检测, 避免覆盖别人的成果
+- 调研不停 ≠ 打断不停 — 主 22:52 + 主 00:49 两件事都重要
+
+---
 
 ---
 
@@ -176,13 +203,22 @@
 - 3 个 query 深入 GitHub 源码 (read code, 不只 README)
 - 2 个 query 对应 Apeireth Gap (12 生命特征里的 ❌ MISSING)
 
-## 5 步执行
+## 5 步执行 (主 00:49 改: 先自决再跑)
 
-1. **读** `.openclaw/workspace/promethean/deep_research_dual.py` + `research-v7-round-{N-1}.json` (上一轮避免重复)
-2. **跑** `python round-N-runner.py` (12 query, Bocha web/ai + AnySearch, top_k=5)
-3. **存** `promethean/research-v7-round-N.json` (utf-8, ensure_ascii=False, 无 BOM)
-4. **同步** `memory/2026-07-21.md` (append round-N section)
-5. **commit** `promethean/` 目录: `research: 主人 00:25 真务实修调研型任务 - V7 round-N (12 query 真生产)`
+1. **自决**: `python round_auto_naming.py --json` → 决定要不要跑 + 跑哪个编号
+2. **跳过条件**: (a) next=-1 (冲突) (b) 上一轮 < 30 分钟前跑 (c) 主 session 在忙
+3. **读** `.openclaw/workspace/promethean/deep_research_dual.py` + `research-v7-round-{N-1}.json` (上一轮避免重复)
+4. **跑** `python round-N-runner.py` (12 query, Bocha web/ai + AnySearch, top_k=5)
+5. **存** `promethean/research-v7-round-N.json` (utf-8, ensure_ascii=False, 无 BOM)
+6. **同步** `memory/2026-07-21.md` (append round-N section)
+7. **commit** `promethean/` 目录: `research: 主人 00:25 真务实修调研型任务 - V7 round-N (12 query 真生产)`
+
+## 跳过时报告 (announce)
+
+如果跳过 (主 00:49 调研不停 ≠ 打断主人):
+- announce 推到主会话: "round-N 跳过, 原因: {conflict/时间太近/主 session 在忙}"
+- 写入 `promethean/research-skip-log.json` 记录跳过的原因 + 时间
+- 不写 round-N.json, 调研数据完整保留
 
 ## 范围 (不碰的)
 
