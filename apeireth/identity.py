@@ -9,7 +9,11 @@ import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
 
-CARD_VERSION = "0.1.0"
+CARD_VERSION = "0.2.0"
+
+# v0.1.0 → v0.2.0 迁移增量字段 (定义在 identity_store.py, 这里仅声明)
+# recall_anchor: str = ""     — 一句话锚定, 危急时 recall 用
+# evidence_refs: list[str] = [] — 证据引用, 跨层 (memory/graph) 锚点
 
 
 @dataclass
@@ -52,6 +56,10 @@ class IdentityCard:
 
     # 涌现空间 (主人 12:27 "不预设") — 留给 AI 长出来
     emergence_space: list[str] = field(default_factory=list)
+
+    # v0.2 新字段 — 默认值, 不打破 v0.1 卡
+    recall_anchor: str = ""              # 一句话锚定 — 危急时 recall 用
+    evidence_refs: list[str] = field(default_factory=list)  # 跨层证据引用 (eid/nid/nid)
 
     # meta
     created_at: float = field(default_factory=time.time)

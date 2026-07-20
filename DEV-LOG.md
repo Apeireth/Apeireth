@@ -601,3 +601,109 @@ cron 16:11 瑙﹀彂 (鍐嶆 stale "Phase 1", 瀹為檯宸叉槸 Phase 4 + Ru
 _妤氶浂 2026-07-20 16:11_
 _Phase 5 Questioning Engine v0.1 璺戦€? 350 琛? 4 灞?integrity_hash 闃茬嚎榻?(identity / memory / graph / funnel)._
 _TOP-DESIGN 搂4.4 瀹屾垚. 绛変富浜烘媿 Phase 5.5 鑱斿姩 vs 鐩存帴 Phase 6 娑岀幇._
+
+
+---
+
+## 2026-07-20 16:48 — Identity Store v0.2 — JSON Schema + 版本迁移 + 多卡容器 ✅
+
+### 触发
+- cron 16:41 说 "Phase 1 = Identity Store v0.1 PoC" (stale — 实际已 Phase 5.3)
+- 主人 12:14 "Phase 6 涌现空间 + 自组织临时团" 路线明确要 N 张身份卡
+- v0.1 (commit b77349a) 只有单卡 dataclass, 没 schema 校验, 没多卡容器, 没版本迁移
+- 主人 13:04 "造地基不能有杂质" — Schema 必须一次定型
+
+### 做了什么
+| 文件 | 行数 | 干什么 |
+|------|------|--------|
+| `apeireth/identity.py` | (改) | 加 `recall_anchor: str` + `evidence_refs: list[str]` v0.2 字段, CARD_VERSION 0.1.0 → 0.2.0 |
+| `apeireth/identity_store.py` | 220 | FIELD_SCHEMA (21 字段) + `validate_card` + `migrate_card` (v0.1→v0.2) + `IdentityStore` (多卡容器) + 完整性自检 |
+| `apeireth/run_identity_store_demo.py` | 120 | 7 步演示: master 加载+迁移 → 4 persona 构造 → 1 team 构造 → 装 store → 保存 → 重载 → 完整性自检 |
+| `apeireth/__init__.py` | (改) | re-export IdentityStore 等, version bump 0.9.0 → 0.10.0 |
+| `apeireth/data/identity_store/*.identity.json` | 6 | master + 4 persona + 1 team (磁盘产物) |
+| **总计** | **~340 行** (含 docstring + demo) | 3 新文件 + 2 改 + 6 JSON |
+
+### 设计要点 (TOP-DESIGN §4.1 实现)
+
+1. **JSON Schema 一次定型 (主人 13:04 "造地基不能有杂质")**
+   - FIELD_SCHEMA: 21 字段元数据 (kind / required / description)
+   - 纯 stdlib 实现, 无 Pydantic 依赖 (守住 32G 笔记本极限)
+   - `validate_card(strict=False)` 默认宽松 (主人 master 卡允许空可选字段)
+   - `SchemaError` 异常类为未来 strict 模式预留
+
+2. **版本迁移 v0.1.0 → v0.2.0 (PersistBench 97% sycophancy 风险第一道防线)**
+   - 主版本号解析 (`".".split(".")[:2]`) — 不绑死补丁号
+   - 新字段默认值空 (`recall_anchor=""`, `evidence_refs=[]`)
+   - 未知版本 best-effort 加载 + 警告 — 不丢字段, 不破坏 hash
+   - 迁移日志 (list[str]) 返回给调用方, 可写 DEV-LOG
+
+3. **多卡容器 — 为 Phase 6 涌现 + 自组织临时团铺路**
+   - 1 张 `master` 卡 (中央 AI, 只允许 1 张)
+   - N 张 `persona` 卡 (Phase 4 多身份 — 调度者/学习者/思考者/助手)
+   - M 张 `team` 卡 (Phase 6 临时团 — 任务来了临时组装)
+   - `store.stats()` / `store.master()` / `store.personas()` / `store.teams()` 一目了然
+
+4. **完整性自检 — `integrity_ok` 字段**
+   - 加载时自动比对 stored hash vs computed hash
+   - 不匹配 = `[warn]` 日志 + `entry.integrity_ok=False` 标记
+   - PersistBench (2602.01146) 警示的 97% sycophancy 风险在 IdentityStore 层补第二道防线 (Phase 1 v0.1 已加 identity 层 hash, v0.2 加 store 层 reload 自检)
+
+5. **Disk I/O 隔离 `_role` 和 `integrity_hash`**
+   - JSON 文件存 `_role` (供 load_dir 识别) + `integrity_hash` (供加载自检)
+   - IdentityCard dataclass 不认这两个字段 (构造时 pop)
+   - 干净分离: 卡本体 vs 容器 metadata
+
+### v0.2 验证 (跑通)
+```
+[1] master card migrate notes: ['migrating 0.1.0 → 0.2.0']
+    validate(strict=False): 0 issues  ✓
+[2] 4 persona cards constructed
+[3] 1 team card: Apeireth 团队 — mission=推进 Phase 6 涌现空间 + 自组织临时团 (主人 12:14)
+[4] store.stats():  total=6  by_role={master:1, persona:4, team:1}
+[5] saving 6 张卡 to data/identity_store/
+[6] reload: 6 张全部 [ok] + integrity 6/6 ok
+[7] ✓ Identity Store v0.2 跑通 — Phase 6 准备就绪
+```
+
+### 没回归 — 其他 6 个 demo 全部 OK
+- ✅ `run_kickoff_demo` (master card 重建为 v0.2.0)
+- ✅ `run_relation_demo`
+- ✅ `run_linker_demo`
+- ✅ `run_persona_demo`
+- ✅ `run_questioning_demo`
+- ✅ `run_identity_store_demo` (新)
+
+### 已知 v0.2 限制 (诚实记录)
+- ❌ **没有 Python type hints 完整** — 一些函数签名用了 `Optional[str | Path]`, 3.9 兼容但读起来啰嗦
+- ❌ **schema 校验没支持嵌套** — 暂只校验顶层字段, 列表元素只查类型不查语义 (e.g. domains 不查重)
+- ❌ **没接 SqliteIdentityStore** — 现在是 JSON 文件, Phase 6 临时团高频增删时 JSON 重写成本高, v0.3 上 SQLite (类似 Phase 2.5 路径)
+- ❌ **没写 pytest** — PoC 验证用 demo runner, 等 Phase 6 起再补
+
+### 路线状态 (截至 16:48)
+- ✅ Phase 0 HARNESS v0.1
+- ✅ Phase 1 Identity Store v0.1 (commit b77349a)
+- ✅ Phase 1.2 **Identity Store v0.2 (本 commit)** — Schema + 迁移 + 多卡
+- ✅ Phase 1.5 AnySearch 集成
+- ✅ Phase 2 Memory Layer v0.1 + v0.2
+- ✅ Phase 3 Relation Graph v0.1 + v0.2
+- ✅ Phase 3.6 Linker 跨层绑定
+- ✅ Phase 4 Persona Engine v0.1
+- ✅ Phase 4.5 Rust substrate (14/14 tests, benchmark)
+- ✅ Phase 5 Questioning Engine v0.1
+- ✅ Phase 5.1 Emergence Layer v0.1 (commit 26ce287)
+- ✅ Phase 5.3 Self-Evolving Harness v0.1 (commit 5785701)
+- ⏸ Phase 5.5 联动 — Reconsolidation → funnel + Persona → funnel
+- ⏸ Phase 6 L5 涌现空间 + 自组织临时团 (v0.2 多卡容器 = 基础设施就绪)
+- ⏸ Phase 6.5 SqliteIdentityStore (v0.3 候选)
+- ⏸ Phase 7 LLM Kernel 真接入 (L1 LLM API 网关)
+
+### 等主人回来
+1. Phase 6 启动 — v0.2 多卡容器已就绪, 等主人说 "动手"
+2. SqliteIdentityStore (高频增删) — 取决于 Phase 6 临时团频率
+3. 是否需要 master card 跑一次完整 demo: kickoff → identity_store → memory → graph → linker → persona → question → answer → reconsolidate
+
+---
+
+_楚零 2026-07-20 16:48_
+_Phase 1 v0.2 跑通 — JSON Schema 一次定型, v0.1→v0.2 自动迁移, 多卡容器 6/6 integrity OK._
+_Phase 6 基础设施就绪, 等主人拍板动手._
