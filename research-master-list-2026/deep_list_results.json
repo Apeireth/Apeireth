@@ -1,0 +1,141 @@
+{
+  "found": [
+    {
+      "label": "MemPalace",
+      "owner_repo": "MemPalace/mempalace",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\MemPalace_README.md",
+      "len": 11610
+    },
+    {
+      "label": "simular-ai/Agent-S",
+      "owner_repo": "simular-ai/Agent-S",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\simular-ai_Agent-S_README.md",
+      "len": 16138
+    },
+    {
+      "label": "Openhuman",
+      "owner_repo": "openhuman-ai/openhuman",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\Openhuman_README.md",
+      "len": 54
+    },
+    {
+      "label": "TimesFM",
+      "owner_repo": "google-research/timesfm",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\TimesFM_README.md",
+      "len": 4889
+    },
+    {
+      "label": "lyogavin/airllm",
+      "owner_repo": "lyogavin/airllm",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\lyogavin_airllm_README.md",
+      "len": 15411
+    },
+    {
+      "label": "avaiga/taipy",
+      "owner_repo": "avaiga/taipy",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\avaiga_taipy_README.md",
+      "len": 5520
+    },
+    {
+      "label": "pi-mono-badlogic",
+      "owner_repo": "badlogic/pi-mono",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\pi-mono-badlogic_README.md",
+      "len": 5676
+    },
+    {
+      "label": "LangChain-openwiki",
+      "owner_repo": "langchain-ai/openwiki",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\LangChain-openwiki_README.md",
+      "len": 21194
+    },
+    {
+      "label": "feynman",
+      "owner_repo": "getcompanion-ai/feynman",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\feynman_README.md",
+      "len": 15986
+    },
+    {
+      "label": "getcompanion-ai/feynman",
+      "owner_repo": "getcompanion-ai/feynman",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\getcompanion-ai_feynman_README.md",
+      "len": 15986
+    },
+    {
+      "label": "openbyteinc/quantdinger",
+      "owner_repo": "OpenByteInc/QuantDinger",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\research-master-list-2026\\openbyteinc_quantdinger_README.md",
+      "len": 30371
+    }
+  ],
+  "not_found": [
+    {
+      "label": "Self-herness",
+      "tried": [
+        "self-herness/self-herness",
+        "Self-Herness/self-herness",
+        "herness-ai/herness"
+      ]
+    },
+    {
+      "label": "Dexter-AI",
+      "tried": [
+        "Dexter-AI/Dexter",
+        "dexter-ai/dexter",
+        "DexterAI/dexter"
+      ]
+    },
+    {
+      "label": "Odysseus",
+      "tried": [
+        "OdysseusAI/odysseus",
+        "odysseus-ai/odysseus",
+        "Odysseus-LLM/Odysseus"
+      ]
+    },
+    {
+      "label": "multice-ai/andrej-karpathy-skills",
+      "tried": [
+        "multice-ai/andrej-karpathy-skills"
+      ]
+    },
+    {
+      "label": "hyOCR1.5",
+      "tried": [
+        "hyocr1.5/hyocr",
+        "HyOCR/HyOCR",
+        "yuyz0112/hyocr",
+        "hy-ocr/hyocr"
+      ]
+    },
+    {
+      "label": "Unlimited-OCR",
+      "tried": [
+        "unlimited-ocr/unlimited-ocr",
+        "UnlimitedOCR/unlimited-ocr"
+      ]
+    },
+    {
+      "label": "camofox-browser",
+      "tried": [
+        "camofox-ai/camofox",
+        "Camofox/camofox",
+        "camofox-browser/camofox-browser"
+      ]
+    },
+    {
+      "label": "wechat-article-exporter",
+      "tried": [
+        "liaojieGitHub/wechat-article-exporter",
+        "wechat-article-exporter/wechat-article-exporter"
+      ]
+    },
+    {
+      "label": "m_flow",
+      "tried": [
+        "m-flow/m_flow",
+        "mflow-ai/m_flow",
+        "0xHoneyJar/m_flow"
+      ]
+    }
+  ]
+}
