@@ -60,8 +60,18 @@ from .emergence import (
     multi_persona_respond, commit_or_rollback,
     emergence_cycle,
 )
+from .self_evolving import (
+    SELF_EVOLVING_VERSION,
+    EvolutionPhase, Harness, Patch, PatchArchive,
+    EvalReport, StatsReport, EvolveProposal, Phase5Record,
+    phase1_eval as harness_phase1_eval,
+    phase2_stats as harness_phase2_stats,
+    phase24_stability as harness_phase24_stability,
+    phase3_evolve, phase4_verify, phase5_commit_or_rollback,
+    HarnessEvolver,
+)
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
