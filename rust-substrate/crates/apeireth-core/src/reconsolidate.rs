@@ -108,10 +108,11 @@ mod tests {
     #[test]
     fn test_reconsolidate_flag() {
         let mut card = IdentityCard::new("Apeireth", "p", "r");
-        card.never_mention.push("主人的私人身份细节".to_string());
+        // fingerprint = "私人身份细节" (first 6 chars)
+        card.never_mention.push("私人身份细节".to_string());
 
         let mut notes = vec![
-            Note::new("私人身份", "禁止记录细节", vec![], 0.5, 8, "ltm"),
+            Note::new("私人身份细节", "禁止记录", vec![], 0.5, 8, "ltm"),
         ];
         let stats = reconsolidate(&mut notes, &card);
         assert_eq!(stats.flag.len(), 1);

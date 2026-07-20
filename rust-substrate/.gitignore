@@ -1,0 +1,9 @@
+﻿target/
+Cargo.lock.bak
+*.swp
+.DS_Store
+
+bench.db
+apeireth.db
+*.db
+

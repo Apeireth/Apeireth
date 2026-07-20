@@ -19,6 +19,8 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 criterion = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
 
 apeireth-core = { path = "../apeireth-core" }
 apeireth-ports = { path = "../apeireth-ports" }

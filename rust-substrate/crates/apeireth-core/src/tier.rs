@@ -5,9 +5,7 @@
 //! - MemoryOS-Rust: tier_manager.rs (tier_manager.rs 已 inspect, 实际文件路径不存在 — 用我自己的实现)
 //! - DeltaMemory: salience decay 触发 tier transition
 
-use crate::episode::Episode;
 use crate::memory::{Memory, Tier};
-use crate::note::Note;
 
 /// Tier transition policy
 #[derive(Debug, Clone)]
@@ -46,7 +44,8 @@ impl TierManager {
 
         // STM → MTM: 旧 episode 移到 MTM
         let mut new_stm = Vec::new();
-        for ep in memory.stm_episodes.drain(..) {
+        let stm_episodes = std::mem::take(&mut memory.stm_episodes);
+        for ep in stm_episodes {
             let age = (now - ep.ts).num_seconds();
             if age > self.policy.stm_to_mtm_age_sec {
                 report.stm_to_mtm += 1;
@@ -63,7 +62,8 @@ impl TierManager {
 
         // MTM → LTM: salience 稳定 + 多次访问
         let mut new_mtm = Vec::new();
-        for ep in memory.mtm_episodes.drain(..) {
+        let mtm_episodes = std::mem::take(&mut memory.mtm_episodes);
+        for ep in mtm_episodes {
             // 简化逻辑: MTM 保留 24h + salience > 0.7 → LTM
             let age_days = (now - ep.ts).num_seconds() as f64 / 86400.0;
             if age_days > 1.0 {
@@ -98,7 +98,7 @@ pub struct TierTransitionReport {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::episode::{Actor, EpisodeKind};
+    use crate::episode::{Episode, Actor, EpisodeKind};
 
     #[test]
     fn test_tier_manager_default_policy() {
