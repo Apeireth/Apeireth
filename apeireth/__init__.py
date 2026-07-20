@@ -221,3 +221,4 @@ from .metaphor import LAKOFF_VERSION, Metaphor, EmbodimentTrace, MetaphorEngine 
 from .small_world import SMALL_WORLD_VERSION, Node, Link, SmallWorldGraph  # Phase 40 Watts-Strogatz Small-World Network (跨域调研借鉴) 
 from .philosophy import PHILOSOPHY_VERSION, PHILOSOPHY_LINES, PhilosophyCheck, check_philosophy, apeireth_philosophy_summary  # Apeireth 设计哲学守门 (主人 22:05 警告不偏离)
 from .identity_card import IDENTITY_VERSION, MASTER_QUOTES_CENTRAL_AI_V2, VCP_4_PARADIGMS, IdentityCardV3  # Phase 41 V3 IdentityCard (主人 22:08 V2 哲学完整还原, VCP 4 范式引入)
+from .phi_proxy_v2 import PHI_PROXY_V2_VERSION, IntegrationMeasure, PhiProxyV2  # Phase 45 Φ-proxy V2 (借鉴 IIT, 不假装实现 Phenomenal, 仅 engineering approximation, 主 17:58 终极目标不假装, V0.1 透明公式)
