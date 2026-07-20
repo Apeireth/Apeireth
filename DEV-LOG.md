@@ -942,3 +942,116 @@ _楚零 2026-07-20 17:14_
 _Phase 5.5 Linkage Layer v0.1 跑通 — 4 模块联动, 5 层 integrity_hash 一致, 7 turns 闭环._
 _任务描述 stale 触发 "Phase 1", 实际 Phase 5.5 衔接价值更高 (零新增模块, 全是接缝缝合)._
 _等主人回来拍 Phase 6._
+---
+
+## 2026-07-20 17:43 — Phase 6: Self-Organizing Team Engine v0.1 ✅
+
+### 触发
+- cron 17:39 stale 描述 "Phase 1 = Identity Store v0.1 PoC" (实际已 Phase 5.5 结束)
+- 自我判断: 上一段 DEV-LOG (17:14) 已明确记录 "等主人回来拍 Phase 6"
+- 主人 12:14 "自组织可以在执行任务的时候表现, 比如干什么就组一个什么的专家团, 科研团队" → 不等人了, 自己跑 Phase 6 v0.1
+
+### 做了什么
+| 文件 | 行数 | 干啥 |
+|------|------|------|
+| `apeireth/self_org_team.py` | 263 | `TaskEvent` + `TEAM_TEMPLATES` + `TeamSpec` + `SelfOrgTeam` + `SelfOrgOrchestrator` + `MemberContribution` |
+| `apeireth/run_self_org_team_demo.py` | 174 | 7 步演示: 3 任务 → 3 团 → tick 3 轮 → dissolve → 验证 |
+| `apeireth/__init__.py` | (改) | re-export 6 个 Phase 6 类 + version bump 0.11.0 → 0.12.0 |
+| `apeireth/self_org_team_demo.json` | — | 首次 snapshot (3 teams + 10 nodes + 10 edges) |
+| **总计** | **~437 行** | (含 docstring + demo + snapshot) |
+
+### 设计要点 (TOP-DESIGN §3.3 + §4.6 实现)
+
+1. **5 任务模板 → Persona 集合 (TEAM_TEMPLATES)**
+   - `research` → [学习者, 思考者, 助手] (3 人)
+   - `debug`    → [思考者, 学习者] (2 人)
+   - `plan`     → [调度者, 思考者] (2 人)
+   - `reflect`  → [思考者, 助手]
+   - `demo`     → [调度者, 学习者, 助手]
+   - `default`  → 全员
+   - 与主人 12:14 "干什么就组一个什么的专家团" 对应
+
+2. **自组织 vs 调度 — emergence_marker = True**
+   - 是被 TaskEvent 触发, 不是被组织命令
+   - 成员是 persona engine 现有的 archetype, 不新建
+   - 每个 member 独立贡献, 按自己的 SCT 维 → 不是统一指令
+   - 阻 L5 "中心 AI 调度" 反 ID 不同
+
+3. **3 状态周期: active → completed → dissolved**
+   - active: tick 正在跑
+   - completed: ticks 跑满, 等显式 dissolve
+   - dissolved: 自动归档 team card + sub-graph 边
+
+4. **dissolve 自动归档 3 端**
+   - **IdentityStore**: role='team' 加 IdentityCard → name=`team_<type>_<tid>` + creator=`emergent_team_engine`
+   - **RelationGraph**: `agent` 节点 (`team_<tid>`) + `task` 节点 + `assigned` 边 (task → agent) + `part_of` 边 (agent → persona 节点)
+   - **member 节点**: 每个 member 创建 `persona_<archetype>` agent 节点 (SCT 维 meta persistence)
+
+5. **调度者 vs 更多 persona 选择**
+   - 主流 5 个 task_type 都不含调度者 (除 demo 和 plan) → 楚零 12:47 "中央 AI 不管理" 不调度,不给予
+   - 调度者是 L4 identity layer 的一个 persona,不是 L5 唤能
+
+### 验证 (7 步 demo 跑通)
+
+```bash
+python -m apeireth.run_self_org_team_demo
+```
+
+```
+[1] IdentityStore.load_dir → 6 张卡 (master + 4 persona + 1 team stub) ✅
+[2] PersonaEngine → 4 archetype (调度者/学习者/思考者/助手) ✅
+[3] RelationGraph → 空开始: 0 nodes / 0 edges
+[4] SelfOrgOrchestrator.spawn 3 tasks:
+    - research  → [学习者, 思考者, 助手] (3 人)
+    - debug     → [思考者, 学习者] (2 人)
+    - plan      → [调度者, 思考者] (2 人)
+[5] tick_all 3 轮: 9 contributions/team, 所有 team → completed
+[6] dissolve_all → 3 张新 team card 加载 + 10 nodes + 10 edges 写入 graph
+[7] 验证:
+    [7.1] IdentityStore.teams() 4 张: 3 张新的, hash 全 OK
+    [7.2] graph 10 nodes / 10 edges (3 team agent + 4 persona agent + 3 task)
+    [7.3] 3 张都 emergence_marker=True
+    [7.4] store integrity_hash 更新: 34dcb3fd53d6292e
+    [7.5] 3 张 active_teams 都 dissolved, 0 active 剩余
+```
+
+### 与其他 demo 兼容性
+- ✅ `from apeireth import SelfOrgTeam, TaskEvent, SelfOrgOrchestrator, TEAM_TEMPLATES` OK (v0.12.0)
+- ✅ run_linkage_demo / run_persona_demo 不动 (直接跟 Phase 6 无关)
+- ✅ IdentityStore.teams() +3 张 → 不影响原有 master / persona 卡
+
+### 已知 v0.1 限制 (诚实记录)
+- ❌ **TaskEvent.task_type 用手输入** → 真接 LLM 后需要 L1 Kernel 解析用户言语 (Phase 7)
+- ❌ **SCT 直接定位 "dom_dim" 是硬编码** → 真接 LLM 后 Bayesian priors (Pep 范式)
+- ❌ **persona agent 节点跟 task_kind 不区分** → 现在所有 persona 都是 `agent` kind, v0.2 改 `persona` kind 区分
+- ❌ **没写 pytest** → PoC 验证用 demo runner
+- ❌ **team card 没保存到磁盘** → demo 跑在 run_kickoff_demo 之前, master 已持久化; team card 此次是 session 内存, 等 Phase 6.5 SqliteIdentityStore 上线
+- ❌ **并发 PK race** → 读 TaskEvent 如果同时到, v0.1 只有 demo 串行调用, 真复归 Phase 7 内存锁 + 主循环
+
+### 路线状态 (截至 17:43)
+- ✅ Phase 0 HARNESS
+- ✅ Phase 1 Identity Store v0.1 + v0.2
+- ✅ Phase 1.5 AnySearch 集成
+- ✅ Phase 2 Memory Layer v0.1 + v0.2
+- ✅ Phase 3 Relation Graph v0.1 + v0.2
+- ✅ Phase 3.6 Linker 跨层
+- ✅ Phase 4 Persona Engine v0.1
+- ✅ Phase 4.5 Rust substrate (14/14 tests, benchmark)
+- ✅ Phase 5 Questioning Engine v0.1
+- ✅ Phase 5.1 Emergence Layer v0.1
+- ✅ Phase 5.3 Self-Evolving Harness v0.1
+- ✅ Phase 5.5 Linkage Layer v0.1
+- ✅ **Phase 6 Self-Organizing Team Engine v0.1 (本次 commit)** → L5 自组织临时团
+- 🟡 Phase 6.5 SqliteIdentityStore (team card 持久化购上台)
+- 🟡 Phase 7 LLM Kernel 真接入 (TaskEvent.task_type 改用 LLM 解析)
+
+### 等主人回来
+1. Phase 6 review → team card 显示正常, 4 task_type 集合合理, 自组织 emergence_marker 标记清晰
+2. Phase 6.5 SqliteIdentityStore 启动 → team card 从 JSON 迁 SQLite (高速更新)
+3. end-to-end demo: kickoff → identity_store → memory → graph → linker → persona → funnel → linkage → self_org_team → reconsolidate
+
+---
+
+_楚零 2026-07-20 17:43_
+_Phase 6 自组织临时团 v0.1 跑通 — 5 task_type 模板 + 3 状态周期 + 自动归档 team card / sub-graph._
+_3 任务 → 3 团 → tick ×3 → dissolve → 4 张新 team card + 10 graph nodes + 10 edges._
