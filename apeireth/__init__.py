@@ -226,3 +226,4 @@ from .memory_3tier import MEMORY_3TIER_VERSION, MemoryAnchor, TopicSummary, Memo
 from .asi_coordinator import ASI_COORDINATOR_VERSION, PHASE_REGISTRY, CoordinationLink, ASICoordinator  # Phase 49 ASI Coordinator (主 22:46 真生产协同器, 19 模块真生产链接, 中央 AI = ASI 位置 V2)
 from .human_wisdom_aggregator import HUMAN_WISDOM_VERSION, WisdomSource, WisdomAggregation, HumanWisdomAggregator  # Phase 50 Human Wisdom Aggregator (主 22:52 真哲学: 调研+工程+实践结合, 聚合人类智慧, 主 14:48 同根同源, 真生产 filter+评估+决策)
 from .open_webui_patterns import OPEN_WEBUI_PATTERNS_VERSION, BochaSearchResult, BochaSearchAdapter, VectorDBAdapter, VectorDBFactory, LLMRouter, WebSearchAggregator  # Phase 51 Open WebUI 真生产借鉴 (主 23:28 真哲学: 不局限 + 调研+工程+实践+求真)
+from .cron_self_update import CRON_SELF_UPDATE_VERSION, CronSelfUpdater, git_log_oneline, count_apeireth_modules, compute_v0_1_index  # Phase 52 Cron Self-Update (主人 23:44 真务实: cron 自动更新防落后拖累)
