@@ -1264,3 +1264,97 @@ M apeireth/self_org_team_demo.json        (timestamp 刷新)
 _楚零 2026-07-20 20:39_
 _Gap-bridge 补完 — Phase 10→19 (8 commits, 13 能力 PASS, Rust substrate hot path)._
 _任务描述 stale, 实际最值钱的是补 log + 清理 uncommitted + verify 全栈 import._
+
+---
+
+## 2026-07-20 21:09 — Phase 1 v0.4 enrichment PoC + 全栈 smoke verify
+
+### 触发
+- cron 21:09 触发 apeireth-dev background loop
+- 任务描述 stale ('Phase 1 = Identity Store v0.1 PoC'), 实际进度 v0.13.0 / V8 production / Phase 21
+- 沿用既定策略: 任务描述 stale → 检测 → 找最有价值的 Phase 1+ follow-up (而不是重复 v0.1)
+
+### 现状诊断 (任务开始时)
+- ✅ apeireth v0.13.0, 19 phase, V8 production ready (c01bb6d), V4 spec 红皇后哲学 (d85f89f)
+- ✅ Phase 1 Kickoff v2 + IdentityCard v0.2 + SqliteIdentityStore v0.3 — 全跑通
+- ✅ master 卡 identity_card.master.json — schema valid, integrity_hash 0476607adb946cf3
+- ⚠️ master 卡的 v0.2 新字段 recall_anchor / evidence_refs 一直是空 (kickoff 不填)
+- ⚠️ 完整度未量化, 主人随时查不到"中央 AI 长成度"
+
+### 本次产出 (Phase 1 v0.4 enrichment)
+**新文件 1: apeireth/kickoff_enrichment.py (~150 行, 7396 bytes)**
+- derive_recall_anchor(card) — 从 name + purpose + relationship_contract 派生 1 句召回锚
+  - 模板: '{name} · {purpose_cap} · {rel_cap}'
+  - 截断 80 字 (主 \造地基不能有杂质\ 不加句号)
+  - 兜底: 三者都空 → '(尚未形成 anchor — 完成 8 问后回填)'
+- suggest_evidence_refs(card) — 跨层 (memory/graph) 锚点占位
+  - 命名约定: seed://kickoff/Q{n}/{field_slug} + seed://master/central_ai
+  - 8 问每问非空都生成 1 个 + 中心节点 1 个 = 9 refs (本次)
+- compute_completeness(card) — 0-1 评分, 14 字段 (8 问 + 6 派生 + recall_anchor)
+  - Q7 双字段任一非空即视为非空 (本质一问)
+- check_version(card) — card_version vs CARD_VERSION 对齐状态, 决定是否 migrate
+- enrich(card, write_back=True) — 顶层入口, 返回 EnrichmentReport
+- EnrichmentReport dataclass — 完整可观测产物
+
+**新文件 2: apeireth/run_kickoff_enrichment_demo.py (~85 行, 3344 bytes)**
+- 加载 raw master → 跑 enrich() → 存盘 → reload → round-trip verify → 5 项 acceptance 打印
+- 全 PASS: recall_anchor populated / evidence_refs populated / completeness ≥ 0.5 / schema valid / round-trip integrity
+
+**注册更新: apeireth/__init__.py**
+- 新增 Phase 1 v0.4 enrichment 导出 (enrich / EnrichmentReport / derive_recall_anchor / suggest_evidence_refs / compute_completeness / check_version / enrich_migrate)
+
+### Smoke 验证结果
+`
+[1] Loaded raw master:
+    name            = 阿派
+    recall_anchor   = ''  (空 = 未 enrichment)
+    completeness    = 0.643
+    integrity_hash  = 0476607adb946cf3
+
+[2] Enrichment results:
+    ⚓ recall_anchor  = 阿派 · Apeireth 平台缔造者 — 无限逼近 ASI 的地基工程 · 主仆 + 伙伴 + 师生 — 神圣契约, 不撒谎, 不装, 不夸
+    🔗 evidence_refs  = 9 refs (Q1-Q8 + master/central_ai)
+    📊 completeness   = 0.714  (raw 0.643 → enriched 0.714)
+    📦 version_status = valid=True, needs_migration=False
+
+[3] Saved enriched master → identity_card.master.json
+    integrity_hash (after enrich) = f9aaa9edd0fa2848
+
+[4] Round-trip verify:
+    ✅ enriched_hash == reloaded_hash: True  (三方一致)
+
+[5] Acceptance:
+    ✅ recall_anchor populated:  True
+    ✅ evidence_refs populated:   True
+    ✅ completeness ≥ 0.5:        True (0.714)
+    ✅ schema valid:              True
+    ✅ round-trip integrity:      True
+`
+
+### Phase 1 PoC 完成度盘点 (v0.4 之后)
+- ✅ 8 Kickoff 问 (KICKOFF_V2, 主人 13:04 认可)
+- ✅ IdentityCard dataclass (21 字段, v0.2.0 schema)
+- ✅ save_card / load_card / integrity_hash (SHA256[:16])
+- ✅ IdentityStore v0.2 (FIELD_SCHEMA + validate + migrate)
+- ✅ SqliteIdentityStore v0.3 (FTS5 跨卡搜索)
+- ✅ Master 卡 identity_card.master.json (refreshed with enrichment)
+- 🆕 Enrichment (v0.4) — recall_anchor + evidence_refs + completeness_score + version_check
+- 🆕 Demo run_kickoff_enrichment_demo.py 5/5 acceptance PASS
+
+### 已知限制 (按兵不动, 等 Phase 7 LLM Kernel)
+- ⚠️ enrichment 是 deterministic template, 真接 LLM 后可让 LLM 改写 recall_anchor (主人语气)
+- ⚠️ evidence_refs 是 seed:// 占位, Phase 2 (memory) / Phase 3 (graph) 落地后回填真 eid/nid
+- ⚠️ completeness 评分模板是"填字段数", 不反映质量 — 等 Phase 5.1 Questioning Bayesian 落地后用 posterior 取代
+
+### 等主人回来
+1. **Phase 7 LLM Kernel 真接** (等 API key, MASTER_PRIORS 现在的答案是楚零自填)
+2. **end-to-end 真跑** (kickoff → memory → graph → funnel → persona → linkage → team → reconsolidate)
+3. **rename promethean/ → apeireth/** (TOP-DESIGN §9 主人一句)
+4. **pat key** (GitHub push remote 阻塞)
+5. **FTS5 CJK tokenize** (v0.4 已知限制, 主人 14:32 优先级'底层高效 nb')
+
+---
+
+_楚零 2026-07-20 21:09_
+_Phase 1 v0.4 enrichment 完成 — 启动创世产出物可观测可度量, master 卡从此有锚点._
+_任务描述 stale, 实际最有价值: 填空白字段 + 量化完整度 + 让主人随时能查'中央 AI 长成度'._
