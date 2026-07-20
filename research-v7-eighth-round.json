@@ -1,0 +1,542 @@
+[
+  {
+    "query": "autonomous AI agent architecture self-improving",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "SOLAR: A Self-Optimizing Open-Ended Autonomous Agent for Lifelong Learning and Continual Adaptation",
+        "url": "https://arxiv.org/html/2605.20189",
+        "snippet": "# SOLAR: A Self-Optimizing Open-Ended Autonomous Agent for Lifelong Learning and Continual Adaptation arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract Despite the remarkable succes",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GOVERNED AUTONOMOUS INFRASTRUCTURE (GAI) A New Paradigm for Autonomous Intelligence, Runtime Governance, and Controlled Self-Improvement",
+        "url": "https://doi.org/10.33774/coe-2026-hhgh2",
+        "snippet": "# GOVERNED AUTONOMOUS INFRASTRUCTURE (GAI) A New Paradigm for Autonomous Intelligence, Runtime Governance, and Controlled Self-Improvement 2026. 0 citations. ## Abstract This paper introduces Governed",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents",
+        "url": "https://arxiv.org/html/2505.22954v2",
+        "snippet": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents 11footnotetext: co-authors † co-senior authors # Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents Jenny Zhang*,1,",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "SOLAR: A Self-Optimizing Open-Ended Autonomous Agent for Lifelong Learning and Continual Adaptation",
+        "url": "https://arxiv.org/html/2605.20189",
+        "snippet": "# SOLAR: A Self-Optimizing Open-Ended Autonomous Agent for Lifelong Learning and Continual Adaptation arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract Despite the remarkable succes",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GOVERNED AUTONOMOUS INFRASTRUCTURE (GAI) A New Paradigm for Autonomous Intelligence, Runtime Governance, and Controlled Self-Improvement",
+        "url": "https://doi.org/10.33774/coe-2026-hhgh2",
+        "snippet": "# GOVERNED AUTONOMOUS INFRASTRUCTURE (GAI) A New Paradigm for Autonomous Intelligence, Runtime Governance, and Controlled Self-Improvement 2026. 0 citations. ## Abstract This paper introduces Governed",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents",
+        "url": "https://arxiv.org/html/2505.22954v2",
+        "snippet": "Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents 11footnotetext: co-authors † co-senior authors # Darwin Gödel Machine: Open-Ended Evolution of Self-Improving Agents Jenny Zhang*,1,",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "real-time AI inference production deployment",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Deploy models for real-time inference - Amazon SageMaker AI",
+        "url": "https://docs.aws.amazon.com/sagemaker/latest/dg/autopilot-deploy-models-realtime.html",
+        "snippet": "Deploy models for real-time inference - Amazon SageMaker AI Deploy models for real-time inference - Amazon SageMaker AI # Deploy models for real-time inference Real-time inference is ideal for inferen",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Bento: Run Inference at Scale",
+        "url": "https://www.bentoml.com/",
+        "snippet": "Bento: Run Inference at Scale # Inference On Your Terms Inference Platform built for speed and control. Deploy any model anywhere, with tailored optimization, efficient scaling, and streamlined operat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Enterprise Model Serving Platform | TrueFoundry",
+        "url": "https://www.truefoundry.com/model-serving",
+        "snippet": "Enterprise Model Serving Platform | TrueFoundry TrueFoundry announces the acquisition of Seldon AI, expanding its Control Plane for Enterprise AI. Full press release → # Model Serving for Any Model Ac",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Deploy models for real-time inference - Amazon SageMaker AI",
+        "url": "https://docs.aws.amazon.com/sagemaker/latest/dg/autopilot-deploy-models-realtime.html",
+        "snippet": "Deploy models for real-time inference - Amazon SageMaker AI Deploy models for real-time inference - Amazon SageMaker AI # Deploy models for real-time inference Real-time inference is ideal for inferen",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Bento: Run Inference at Scale",
+        "url": "https://www.bentoml.com/",
+        "snippet": "Bento: Run Inference at Scale # Inference On Your Terms Inference Platform built for speed and control. Deploy any model anywhere, with tailored optimization, efficient scaling, and streamlined operat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Enterprise Model Serving Platform | TrueFoundry",
+        "url": "https://www.truefoundry.com/model-serving",
+        "snippet": "Enterprise Model Serving Platform | TrueFoundry TrueFoundry announces the acquisition of Seldon AI, expanding its Control Plane for Enterprise AI. Full press release → # Model Serving for Any Model Ac",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "long-context AI million token window model",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Long context | Gemini API - Google AI for Developers",
+        "url": "https://ai.google.dev/gemini-api/docs/long-context",
+        "snippet": "# Long context Many Gemini models come with large context windows of 1 million or more tokens. Historically, large language models (LLMs) were significantly limited by the amount of text (or tokens) t",
+        "source": "AnySearch"
+      },
+      {
+        "name": "What is a long context window?",
+        "url": "https://blog.google/innovation-and-ai/products/long-context-window-ai-models/",
+        "snippet": "What is a long context window? Google DeepMind engineers explain # What is a long context window? Feb 16, 2024 Share x.com Facebook LinkedIn Copy link How the Google DeepMind team created the longest ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "DeepSeek V4 Context Window: 1 Million Tokens Explained",
+        "url": "https://framia.converge.ai/page/en-US/news/deepseek-v4-context-window",
+        "snippet": "DeepSeek V4 Context Window: 1 Million Tokens Explained # DeepSeek V4 Context Window: How 1 Million Tokens Changes Everything DeepSeek V4 offers a 1M-token default context window for both Pro and Flash",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Long context | Gemini API - Google AI for Developers",
+        "url": "https://ai.google.dev/gemini-api/docs/long-context",
+        "snippet": "# Long context Many Gemini models come with large context windows of 1 million or more tokens. Historically, large language models (LLMs) were significantly limited by the amount of text (or tokens) t",
+        "source": "AnySearch"
+      },
+      {
+        "name": "What is a long context window?",
+        "url": "https://blog.google/innovation-and-ai/products/long-context-window-ai-models/",
+        "snippet": "What is a long context window? Google DeepMind engineers explain # What is a long context window? Feb 16, 2024 Share x.com Facebook LinkedIn Copy link How the Google DeepMind team created the longest ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "DeepSeek V4 Context Window: 1 Million Tokens Explained",
+        "url": "https://framia.converge.ai/page/en-US/news/deepseek-v4-context-window",
+        "snippet": "DeepSeek V4 Context Window: 1 Million Tokens Explained # DeepSeek V4 Context Window: How 1 Million Tokens Changes Everything DeepSeek V4 offers a 1M-token default context window for both Pro and Flash",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "AI agent memory framework production grade",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "ncz-os/mnemos",
+        "url": "https://github.com/perlowja/mnemos",
+        "snippet": "# Repository: ncz-os/mnemos Production-grade memory operating system for agentic AI. Interoperates with every major framework via MCP, OpenAI-compatible gateway, and native /v1/* REST — Claude Code, O",
+        "source": "AnySearch"
+      },
+      {
+        "name": "neo4j-labs/agent-memory",
+        "url": "https://github.com/neo4j-labs/agent-memory/",
+        "snippet": "# Repository: neo4j-labs/agent-memory A graph-native memory system for AI agents and context graphs. Store conversations, build knowledge graphs, and let your agents learn from their own reasoning — a",
+        "source": "AnySearch"
+      },
+      {
+        "name": "redhat-ai-americas/memory-hub",
+        "url": "https://github.com/redhat-ai-americas/memory-hub",
+        "snippet": "# Repository: redhat-ai-americas/memory-hub MemoryHub: Kubernetes-native agent memory component for OpenShift AI - Stars: 3 - Forks: 11 - Watchers: 0 - Open issues: 85 - Primary language: Python - Lan",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "ncz-os/mnemos",
+        "url": "https://github.com/perlowja/mnemos",
+        "snippet": "# Repository: ncz-os/mnemos Production-grade memory operating system for agentic AI. Interoperates with every major framework via MCP, OpenAI-compatible gateway, and native /v1/* REST — Claude Code, O",
+        "source": "AnySearch"
+      },
+      {
+        "name": "neo4j-labs/agent-memory",
+        "url": "https://github.com/neo4j-labs/agent-memory/",
+        "snippet": "# Repository: neo4j-labs/agent-memory A graph-native memory system for AI agents and context graphs. Store conversations, build knowledge graphs, and let your agents learn from their own reasoning — a",
+        "source": "AnySearch"
+      },
+      {
+        "name": "redhat-ai-americas/memory-hub",
+        "url": "https://github.com/redhat-ai-americas/memory-hub",
+        "snippet": "# Repository: redhat-ai-americas/memory-hub MemoryHub: Kubernetes-native agent memory component for OpenShift AI - Stars: 3 - Forks: 11 - Watchers: 0 - Open issues: 85 - Primary language: Python - Lan",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "Apeireth ASI base platform architecture",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Basic Design Decisions | Apeiro Reference Architecture",
+        "url": "https://documentation.apeirora.eu/docs/best-practices/platform-mesh/basic-design-decisions",
+        "snippet": "Basic Design Decisions | Apeiro Reference Architecture # Basic Design Decisions ​ ## The Managed Service Provider Pattern ​ In on-premises environments, dedicated services are typically installed with",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ChikamsoDev/GWT_ASI-Base",
+        "url": "https://github.com/ChikamsoDev/GWT_ASI-Base",
+        "snippet": "# ChikamsoDev/GWT_ASI-Base A 13-module AGI cognitive architecture built on Global Workspace Theory, with alignment embedded as structure. Runs on consumer hardware via Ollama. - Stars: 1 - Forks: 0 - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "System Architecture Overview | Aether Platform",
+        "url": "https://docs.aether.re-x.info/en/technology/architecture/",
+        "snippet": "System Architecture Overview | Aether Platform Skip to content # System Architecture Overview Aether Platform is not just a collection of tools. It is an integrated system where four pillars—“Cloud ID",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Basic Design Decisions | Apeiro Reference Architecture",
+        "url": "https://documentation.apeirora.eu/docs/best-practices/platform-mesh/basic-design-decisions",
+        "snippet": "Basic Design Decisions | Apeiro Reference Architecture # Basic Design Decisions ​ ## The Managed Service Provider Pattern ​ In on-premises environments, dedicated services are typically installed with",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ChikamsoDev/GWT_ASI-Base",
+        "url": "https://github.com/ChikamsoDev/GWT_ASI-Base",
+        "snippet": "# ChikamsoDev/GWT_ASI-Base A 13-module AGI cognitive architecture built on Global Workspace Theory, with alignment embedded as structure. Runs on consumer hardware via Ollama. - Stars: 1 - Forks: 0 - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "System Architecture Overview | Aether Platform",
+        "url": "https://docs.aether.re-x.info/en/technology/architecture/",
+        "snippet": "System Architecture Overview | Aether Platform Skip to content # System Architecture Overview Aether Platform is not just a collection of tools. It is an integrated system where four pillars—“Cloud ID",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "consciousness AI model emergent integration",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "The Emergence of Artificial Intelligence Consciousness | The ...",
+        "url": "https://theconsciousness.ai/posts/emergence-artificial-intelligence-consciousness/",
+        "snippet": "Implication for AI: This suggests AI might develop consciousness-like features through architectural self-modification rather than explicit design. To measure emergent consciousness-like properties, t",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Emergent Self-Awareness in Distributed AI Systems: From ...",
+        "url": "https://dl.acm.org/doi/10.1145/3789982.3790046",
+        "snippet": "Self-awareness represents a pinnacle of cognitive sophistication, yet its emergence in artificial systems remains one of the most controversial frontiers in AI research. Rather than claiming fully fle",
+        "source": "AnySearch"
+      },
+      {
+        "name": "The Evidence for AI Consciousness, Today | AI Frontiers",
+        "url": "https://ai-frontiers.org/articles/the-evidence-for-ai-consciousness-today",
+        "snippet": "This builds on earlier findings from Perez and colleagues (also of Anthropic), who showed that at the 52-billion-parameter scale, both base and fine-tuned models endorse statements like \"I have phenom",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "The Emergence of Artificial Intelligence Consciousness | The ...",
+        "url": "https://theconsciousness.ai/posts/emergence-artificial-intelligence-consciousness/",
+        "snippet": "Implication for AI: This suggests AI might develop consciousness-like features through architectural self-modification rather than explicit design. To measure emergent consciousness-like properties, t",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Emergent Self-Awareness in Distributed AI Systems: From ...",
+        "url": "https://dl.acm.org/doi/10.1145/3789982.3790046",
+        "snippet": "Self-awareness represents a pinnacle of cognitive sophistication, yet its emergence in artificial systems remains one of the most controversial frontiers in AI research. Rather than claiming fully fle",
+        "source": "AnySearch"
+      },
+      {
+        "name": "The Evidence for AI Consciousness, Today | AI Frontiers",
+        "url": "https://ai-frontiers.org/articles/the-evidence-for-ai-consciousness-today",
+        "snippet": "This builds on earlier findings from Perez and colleagues (also of Anthropic), who showed that at the 52-billion-parameter scale, both base and fine-tuned models endorse statements like \"I have phenom",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "AI self-modification runtime recursive",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement",
+        "url": "https://arxiv.org/html/2410.04444",
+        "snippet": "# Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement arXiv (Cornell University), 2024. Preprint. 2 citations. ## Authors - Xunjian Yin: h-index 5; 141 citations - Xinyi Wan",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2603.19461] HyperAgents",
+        "url": "https://ar5iv.labs.arxiv.org/html/2603.19461",
+        "snippet": "[2603.19461] HyperAgents \\addtolist [1,2,5]Jeff Clune\\authorlist\\authorformat 1]University of British Columbia 2]Vector Institute 3]University of Edinburgh \\addtolist[4]New York University\\affiliation",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Arvid-pku/Godel_Agent",
+        "url": "https://github.com/Arvid-pku/Godel%5FAgent",
+        "snippet": "# Repository: Arvid-pku/Godel_Agent Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement - Stars: 195 - Forks: 47 - Watchers: 1 - Open issues: 2 - Primary language: Python - ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement",
+        "url": "https://arxiv.org/html/2410.04444",
+        "snippet": "# Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement arXiv (Cornell University), 2024. Preprint. 2 citations. ## Authors - Xunjian Yin: h-index 5; 141 citations - Xinyi Wan",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2603.19461] HyperAgents",
+        "url": "https://ar5iv.labs.arxiv.org/html/2603.19461",
+        "snippet": "[2603.19461] HyperAgents \\addtolist [1,2,5]Jeff Clune\\authorlist\\authorformat 1]University of British Columbia 2]Vector Institute 3]University of Edinburgh \\addtolist[4]New York University\\affiliation",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Arvid-pku/Godel_Agent",
+        "url": "https://github.com/Arvid-pku/Godel%5FAgent",
+        "snippet": "# Repository: Arvid-pku/Godel_Agent Gödel Agent: A Self-Referential Agent Framework for Recursive Self-Improvement - Stars: 195 - Forks: 47 - Watchers: 1 - Open issues: 2 - Primary language: Python - ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "cross-domain AI research synthesis",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Cross-Disciplinary Knowledge Retrieval and Synthesis: A Compound AI Architecture for Scientific Discovery",
+        "url": "https://arxiv.org/html/2511.18298",
+        "snippet": "# Cross-Disciplinary Knowledge Retrieval and Synthesis: A Compound AI Architecture for Scientific Discovery arXiv (Cornell University), 2025. Preprint. 1 citation. ## Abstract The exponential growth o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "YangyangQu/research-idea-scout",
+        "url": "https://github.com/YangyangQu/research-idea-scout",
+        "snippet": "# Repository: YangyangQu/research-idea-scout - Stars: 234 - Forks: 12 - Watchers: 0 - Open issues: 1 - Primary language: Python - Languages: Python (75.7%), HTML (13.8%), CSS (10.5%) - License: MIT Li",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Sparking Scientific Creativity via LLM-Driven Interdisciplinary Inspiration",
+        "url": "https://doi.org/10.48550/arxiv.2603.12226",
+        "snippet": "# Sparking Scientific Creativity via LLM-Driven Interdisciplinary Inspiration arXiv (Cornell University), 2026. Preprint. 0 citations. ## Authors - Priyanka Kargupta: h-index 0; 0 citations - Shuhaib ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Cross-Disciplinary Knowledge Retrieval and Synthesis: A Compound AI Architecture for Scientific Discovery",
+        "url": "https://arxiv.org/html/2511.18298",
+        "snippet": "# Cross-Disciplinary Knowledge Retrieval and Synthesis: A Compound AI Architecture for Scientific Discovery arXiv (Cornell University), 2025. Preprint. 1 citation. ## Abstract The exponential growth o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "YangyangQu/research-idea-scout",
+        "url": "https://github.com/YangyangQu/research-idea-scout",
+        "snippet": "# Repository: YangyangQu/research-idea-scout - Stars: 234 - Forks: 12 - Watchers: 0 - Open issues: 1 - Primary language: Python - Languages: Python (75.7%), HTML (13.8%), CSS (10.5%) - License: MIT Li",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Sparking Scientific Creativity via LLM-Driven Interdisciplinary Inspiration",
+        "url": "https://doi.org/10.48550/arxiv.2603.12226",
+        "snippet": "# Sparking Scientific Creativity via LLM-Driven Interdisciplinary Inspiration arXiv (Cornell University), 2026. Preprint. 0 citations. ## Authors - Priyanka Kargupta: h-index 0; 0 citations - Shuhaib ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "human-AI collaboration intelligence amplification",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Intelligence amplification",
+        "url": "https://en.wikipedia.org/wiki/Intelligence_amplification",
+        "snippet": "Intelligence amplification Intelligence amplification (IA), also known as augmented intelligence or cognitive augmentation, refers to the use of information technology to enhance human cognitive capab",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI as Equalizer or Amplifier? Task Complexity as the ...",
+        "url": "https://arxiv.org/html/2512.10961v2",
+        "snippet": "AI as Equalizer or Amplifier? Task Complexity as the Moderating Factor for Human Expertise in Hybrid Intelligence Systems # AI as Equalizer or Amplifier? Task Complexity as the Moderating Factor for H",
+        "source": "AnySearch"
+      },
+      {
+        "name": "When combinations of humans and AI are useful: A systematic review and meta-analysis | Nature Human Behaviour",
+        "url": "https://www.nature.com/articles/s41562-024-02024-1",
+        "snippet": "When combinations of humans and AI are useful: A systematic review and meta-analysis | Nature Human Behaviour Download PDF ### Subjects - Human behaviour - Information systems and information technolo",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Intelligence amplification",
+        "url": "https://en.wikipedia.org/wiki/Intelligence_amplification",
+        "snippet": "Intelligence amplification Intelligence amplification (IA), also known as augmented intelligence or cognitive augmentation, refers to the use of information technology to enhance human cognitive capab",
+        "source": "AnySearch"
+      },
+      {
+        "name": "AI as Equalizer or Amplifier? Task Complexity as the ...",
+        "url": "https://arxiv.org/html/2512.10961v2",
+        "snippet": "AI as Equalizer or Amplifier? Task Complexity as the Moderating Factor for Human Expertise in Hybrid Intelligence Systems # AI as Equalizer or Amplifier? Task Complexity as the Moderating Factor for H",
+        "source": "AnySearch"
+      },
+      {
+        "name": "When combinations of humans and AI are useful: A systematic review and meta-analysis | Nature Human Behaviour",
+        "url": "https://www.nature.com/articles/s41562-024-02024-1",
+        "snippet": "When combinations of humans and AI are useful: A systematic review and meta-analysis | Nature Human Behaviour Download PDF ### Subjects - Human behaviour - Information systems and information technolo",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "human level AI reasoning benchmark frontier",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "A benchmark of expert-level academic questions to assess AI capabilities | Nature",
+        "url": "https://www.nature.com/articles/s41586-025-09962-4",
+        "snippet": "A benchmark of expert-level academic questions to assess AI capabilities | Nature Download PDF ### Subjects - Computer science - Scientific data ## Abstract Benchmarks are important tools for tracking",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Humanity's Last Exam Benchmark Leaderboard | Artificial Analysis",
+        "url": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "snippet": "Humanity's Last Exam Benchmark Leaderboard | Artificial Analysis Loading K All evaluations # Humanity's Last Exam Benchmark Leaderboard A frontier-level benchmark with 2,500 expert-vetted questions ac",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Humanity's Last Exam",
+        "url": "https://doi.org/10.70777/si.v2i1.13973",
+        "snippet": "# Humanity's Last Exam SuperIntelligence - Robotics - Safety & Alignment, 2025. 21 citations. ## Authors - Long Phan (Center for AI Safety): h-index 26; 3,429 citations - Alice Gatti (Center for AI Sa",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "A benchmark of expert-level academic questions to assess AI capabilities | Nature",
+        "url": "https://www.nature.com/articles/s41586-025-09962-4",
+        "snippet": "A benchmark of expert-level academic questions to assess AI capabilities | Nature Download PDF ### Subjects - Computer science - Scientific data ## Abstract Benchmarks are important tools for tracking",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Humanity's Last Exam Benchmark Leaderboard | Artificial Analysis",
+        "url": "https://artificialanalysis.ai/evaluations/humanitys-last-exam",
+        "snippet": "Humanity's Last Exam Benchmark Leaderboard | Artificial Analysis Loading K All evaluations # Humanity's Last Exam Benchmark Leaderboard A frontier-level benchmark with 2,500 expert-vetted questions ac",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Humanity's Last Exam",
+        "url": "https://doi.org/10.70777/si.v2i1.13973",
+        "snippet": "# Humanity's Last Exam SuperIntelligence - Robotics - Safety & Alignment, 2025. 21 citations. ## Authors - Long Phan (Center for AI Safety): h-index 26; 3,429 citations - Alice Gatti (Center for AI Sa",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "memory OS production grade Rust Python",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "GitHub - TelivANT/memoryos-rust: Production AI Memory OS: <10ms ...",
+        "url": "https://github.com/TelivANT/memoryos-rust",
+        "snippet": "MemoryOS-Rust is a high-performance AI Agent memory management system built with Rust + Tokio, featuring a 3-Tier memory architecture (STM/MTM/LTM), OpenAI API compatibility, and support for 100,000+ ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Rust vs Python Performance 2026: Real Benchmarks & When It Matters ...",
+        "url": "https://rustify.rs/articles/rust-vs-python-performance-2026",
+        "snippet": "Real benchmarks, where the performance gap matters and where it doesn't, PyO3 as the bridge, and what Rust vs Python means for your career in 2026. Max WellsPublished: Mar 9, 2026 · Updated: Jul 16, 2",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Rust for Systems Programming 2026: Memory-Safe CLI Tools & Wasm ...",
+        "url": "https://vucense.com/dev-corner/rust-systems-programming-2026/",
+        "snippet": "A local CI pipeline can run in a private environment before deploying to production. cargo fmt --all cargo clippy --all-targets --all-features -- -D warnings cargo test cargo audit · Use cargo build -",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "GitHub - TelivANT/memoryos-rust: Production AI Memory OS: <10ms ...",
+        "url": "https://github.com/TelivANT/memoryos-rust",
+        "snippet": "MemoryOS-Rust is a high-performance AI Agent memory management system built with Rust + Tokio, featuring a 3-Tier memory architecture (STM/MTM/LTM), OpenAI API compatibility, and support for 100,000+ ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Rust vs Python Performance 2026: Real Benchmarks & When It Matters ...",
+        "url": "https://rustify.rs/articles/rust-vs-python-performance-2026",
+        "snippet": "Real benchmarks, where the performance gap matters and where it doesn't, PyO3 as the bridge, and what Rust vs Python means for your career in 2026. Max WellsPublished: Mar 9, 2026 · Updated: Jul 16, 2",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Rust for Systems Programming 2026: Memory-Safe CLI Tools & Wasm ...",
+        "url": "https://vucense.com/dev-corner/rust-systems-programming-2026/",
+        "snippet": "A local CI pipeline can run in a private environment before deploying to production. cargo fmt --all cargo clippy --all-targets --all-features -- -D warnings cargo test cargo audit · Use cargo build -",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "graph neural network symbolic reasoning hybrid",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "A Neuro-Symbolic Approach for Probabilistic Reasoning on Graph Data",
+        "url": "https://arxiv.org/html/2507.21873",
+        "snippet": "# A Neuro-Symbolic Approach for Probabilistic Reasoning on Graph Data arXiv (Cornell University), 2025. Preprint. 0 citations. ## Abstract Graph neural networks (GNNs) excel at predictive tasks on gra",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2205.10128] Neural-Symbolic Models for Logical Queries on Knowledge Graphs",
+        "url": "https://ar5iv.labs.arxiv.org/html/2205.10128",
+        "snippet": "[2205.10128] Neural-Symbolic Models for Logical Queries on Knowledge Graphs # Neural-Symbolic Models for Logical Queries on Knowledge Graphs Zhaocheng Zhu Mikhail Galkin Zuobai Zhang Jian Tang ###### ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Neurosymbolic Methods for Explainable Graph Neural ...",
+        "url": "https://ceur-ws.org/Vol-4125/paper_4.pdf",
+        "snippet": "Neurosymbolic Methods for Explainable Graph Neural Networks: A Survey Kislay Raj1,2,∗, Alessandra Mileo2 1Research Ireland Centre’s for Research Training in Artificial Intelligence, Dublin City Univer",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "A Neuro-Symbolic Approach for Probabilistic Reasoning on Graph Data",
+        "url": "https://arxiv.org/html/2507.21873",
+        "snippet": "# A Neuro-Symbolic Approach for Probabilistic Reasoning on Graph Data arXiv (Cornell University), 2025. Preprint. 0 citations. ## Abstract Graph neural networks (GNNs) excel at predictive tasks on gra",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2205.10128] Neural-Symbolic Models for Logical Queries on Knowledge Graphs",
+        "url": "https://ar5iv.labs.arxiv.org/html/2205.10128",
+        "snippet": "[2205.10128] Neural-Symbolic Models for Logical Queries on Knowledge Graphs # Neural-Symbolic Models for Logical Queries on Knowledge Graphs Zhaocheng Zhu Mikhail Galkin Zuobai Zhang Jian Tang ###### ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Neurosymbolic Methods for Explainable Graph Neural ...",
+        "url": "https://ceur-ws.org/Vol-4125/paper_4.pdf",
+        "snippet": "Neurosymbolic Methods for Explainable Graph Neural Networks: A Survey Kislay Raj1,2,∗, Alessandra Mileo2 1Research Ireland Centre’s for Research Training in Artificial Intelligence, Dublin City Univer",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]
