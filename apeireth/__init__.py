@@ -214,3 +214,5 @@ from .variety import ASHBY_VARIETY_VERSION, VarietyMeasure, RequisiteVarietyCalc
 from .active_inf import ACTIVE_INFERENCE_VERSION, Belief, Perception, ActiveInferenceAgent  # Phase 33 Friston Active Inference (跨域调研借鉴)
 from .autopoiesis import AUTOPOIESIS_VERSION, AutopoieticComponent, AutopoieticSystem  # Phase 34 Maturana 自创生 (跨域调研借鉴) 
 from .systems_theory import GST_VERSION, GST_PRINCIPLES, SystemPrinciple, SystemsTheoryLibrary  # Phase 35 Von Bertalanffy 系统论 (跨域调研借鉴)
+from .physical_emergence import PHYSICAL_EMERGENCE_VERSION, Fluctuation, PhaseTransition, PhysicalEmergenceSystem  # Phase 36 Meyer-Ortmanns 物理涌现 (跨域调研借鉴) 
+from .complexity import COMPLEXITY_VERSION, COMPLEXITY_LAWS, CrossDomainApplication, ComplexityHub  # Phase 37 Complexity Hub 跨域综合 (跨域调研借鉴)
