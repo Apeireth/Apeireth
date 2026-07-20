@@ -177,3 +177,4 @@ __all__ = [
 from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.6 zvec integration (TOP 1)
 from .karpathy_principles import PRINCIPLES, KarpathyPrinciple, render_full, check_action  # 主人 13:51 + 17:29 Karpathy 升级版
 from .proactive_loop import PROACTIVE_LOOP_VERSION, Goal, CuriositySignal, ProactiveLoop, make_default_proactive_loop  # Phase 11 主动性 (V2 唯一 gap)
+from .mirror import MIRROR_VERSION, SelfState, SelfNarrative, Mirror, make_default_mirror  # Phase 10 意识 Layer 1 (FSA) 主人 17:58
