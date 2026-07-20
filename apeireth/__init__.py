@@ -210,3 +210,5 @@ from .observation import OBSERVATION_VERSION, Observation, MetaObservation, Meta
 from .ecology import NICHE_VERSION, Niche, NicheSpec, NicheConstructor  # Phase 25 生态位构造器 (Ecology Engineering 真生产借鉴)
 from .self_ref import KLEIN_BOTTLE_VERSION, KleinBottleSelfRef, CentralAITopology  # Phase 30 Klein Bottle 自指拓扑工程化 (跨域调研借鉴) 
 from .mind_eco import BATESON_MIND_VERSION, MindEntity, MindRelation, MindEcosystem  # Phase 31 Bateson 心灵生态学工程化 (跨域调研借鉴)
+from .variety import ASHBY_VARIETY_VERSION, VarietyMeasure, RequisiteVarietyCalculator  # Phase 32 Ashby 必要多样性律 (跨域调研借鉴) 
+from .active_inf import ACTIVE_INFERENCE_VERSION, Belief, Perception, ActiveInferenceAgent  # Phase 33 Friston Active Inference (跨域调研借鉴)
