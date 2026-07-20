@@ -5,6 +5,7 @@ Phase 2 (Week 3-4): Memory Layer v0.1 PoC
 Phase 2.5 (今日): SQLite + FTS5 真持久化 + 3-layer search
 Phase 3 (今日): Relation Graph v0.1 PoC (L4 Identity Layer 子组件)
 Phase 3.5 (今日): Relation Graph v0.2 SQLite 持久化 + 跨 session 存活
+Phase 3.6 (今日): Memory ↔ Graph Linker 跨层自动绑定
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
@@ -30,6 +31,14 @@ from .relation import (
     load_graph,
 )
 from .relation_store import SqliteRelationStore, migrate_from_relation_graph
+from .linker import (
+    LINKER_VERSION,
+    Linker,
+    ensure_central_ai_node,
+    link_episode,
+    link_note,
+    sync_all,
+)
 
 __version__ = "0.5.0"
 __all__ = [
@@ -62,4 +71,11 @@ __all__ = [
     # Phase 3.5: Relation Graph v0.2 (SQLite persistence)
     "SqliteRelationStore",
     "migrate_from_relation_graph",
+    # Phase 3.6: Memory ↔ Graph Linker
+    "LINKER_VERSION",
+    "Linker",
+    "ensure_central_ai_node",
+    "link_episode",
+    "link_note",
+    "sync_all",
 ] 
