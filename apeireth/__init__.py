@@ -12,6 +12,7 @@ Phase 5.1 (今日): Questioning Engine v0.1 PoC (L2 子组件)
 Phase 5.2 (今日): Identity Store v0.2 — JSON Schema + 版本迁移 + 多卡容器
 Phase 5.3 (今日): Self-Evolving Harness v0.1 PoC (L5 元层 — AHE 借鉴)
 Phase 5.5 (今日): Linkage Layer v0.1 — Reconsolidation ↔ Funnel ↔ Persona 闭环
+Phase 6 v0.1 (今日): Self-Organizing Team Engine — L5 自组织临时团 (主人 12:14)
 作者: 楚零 | 命名: 主人 2026-07-20
 """
 
@@ -85,8 +86,14 @@ from .self_evolving import (
     phase3_evolve, phase4_verify, phase5_commit_or_rollback,
     HarnessEvolver,
 )
+from .self_org_team import (
+    SELF_ORG_TEAM_VERSION,
+    TaskEvent, TeamSpec, MemberContribution,
+    SelfOrgTeam, SelfOrgOrchestrator,
+    TEAM_TEMPLATES, match_team_spec,
+)
 
-__version__ = "0.11.0"
+__version__ = "0.12.0"
 __all__ = [
     # Phase 1: Identity
     "IdentityCard",
@@ -156,6 +163,15 @@ __all__ = [
     "path_a_reconsolidation_to_funnel",
     "path_b_question_to_persona",
     "path_c_feedback_loop",
+    # Phase 6: Self-Organizing Team Engine (L5 自组织临时团 — 主人 12:14)
+    "SELF_ORG_TEAM_VERSION",
+    "TaskEvent",
+    "TEAM_TEMPLATES",
+    "TeamSpec",
+    "match_team_spec",
+    "MemberContribution",
+    "SelfOrgTeam",
+    "SelfOrgOrchestrator",
 ] 
 
 from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE  # Phase 2.6 zvec integration (TOP 1)
