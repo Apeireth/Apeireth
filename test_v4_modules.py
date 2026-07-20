@@ -12,13 +12,13 @@ print(f'PPH={PREDICTIVE_PROCESSING_VERSION}')
 print(f'CRITICALITY={CRITICALITY_VERSION}')
 
 esn = EchoStateNetwork(n_reservoir=100, spectral_radius=0.9)
-print(f'ESN: n_reservoir={esn.n_reservoir}, spectral_radius={esn.spectral_radius}')
+print(f'ESN: n_reservoir={esn.n_reservoir}, target_spectral_radius={esn.target_spectral_radius}')
 
-pph = PredictiveProcessingHierarchy(layers=3, n_features=20)
-print(f'PPH: layers={pph.layers}')
+pph = PredictiveProcessingHierarchy(n_layers=3)
+print(f'PPH: n_layers={pph.n_layers}')
 
 ce = CriticalityEngine(n_nodes=100, target_branching=1.0)
-ce.record_branching(sigma=1.0, n_events=1000)
-print(f'Criticality: state={ce.classify()}')
+report = ce.run(n_triggers=50)
+print(f'Criticality: state={report.state}, is_critical={report.is_critical}')
 
 print('OK')
