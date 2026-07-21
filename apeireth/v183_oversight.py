@@ -3,6 +3,7 @@ from __future__ import annotations
 V183_VERSION = "0.1.0"
 class V183ScalableOversight:
     def __init__(self):
+        self.oversight_log = []
         self.nph = 0
         self.nas = 0
     def add_oversight(self, level, action, result): self.oversight_log.append({"level": level, "action": action, "result": result})
