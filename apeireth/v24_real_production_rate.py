@@ -74,21 +74,24 @@ def measure_n_tests(tests_dir: str = "tests") -> RealProductionMetric:
             timeout=60,
         )
         try:
-            text = result.stdout.decode("utf-8", errors="ignore")
+            text = (result.stdout or b"").decode("utf-8", errors="ignore")
+            text += "\n" + (result.stderr or b"").decode("utf-8", errors="ignore")
         except Exception:
             text = ""
         n = 0
         for line in text.splitlines():
             line = line.strip()
-            if "::" in line and line.startswith("tests/"):
+            if "::" in line and "::" in line.split(" ")[0]:
                 n += 1
         if n == 0:
             for line in text.splitlines():
                 if "tests collected" in line:
-                    try:
-                        n = int(line.split()[0])
-                    except Exception:
-                        pass
+                    for tok in line.split():
+                        try:
+                            n = int(tok)
+                            break
+                        except Exception:
+                            pass
     except Exception:
         n = 0
     return RealProductionMetric(
