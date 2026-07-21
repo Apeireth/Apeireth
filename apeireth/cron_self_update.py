@@ -61,7 +61,7 @@ def count_apeireth_modules(cwd: str = ".") -> int:
 def compute_v0_1_index(cwd: str = ".") -> float:
     """V0.1 透明公式 ASI Approach Index."""
     try:
-        sys_path = Path(cwd) / "promethean"
+        sys_path = Path(cwd) / "apeireth"
     except Exception:
         sys_path = Path(cwd)
     # 简化: 用 file count 作为 metric proxy
@@ -113,7 +113,7 @@ class CronSelfUpdater:
 2. 自主调研: round-N+1 background (AnySearch + Bocha)
 3. 自主决定工程方向 (主 22:40 自决)
 4. 写代码 + 哲学守门 V2 check
-5. 写 log: promethean/DEV-LOG-2026-07-20.md
+5. 写 log: apeireth/DEV-LOG-2026-07-20.md
 6. commit: 'feat(phase-NN): 主人 22:40 自驱 + ASI 北极星'
 
 ## 范围 (主 22:40 最大权限)

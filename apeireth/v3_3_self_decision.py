@@ -128,13 +128,13 @@ class V3SelfDecision:
     不假装 (主 17:43 + V3 守门).
     """
 
-    REPO_DIR = Path(__file__).parent.parent  # promethean/
+    REPO_DIR = Path(__file__).parent.parent  # apeireth/
 
     def __init__(self, repo_dir: Optional[Path] = None):
         """Init V3.3 ASI 自决真测量.
 
         Args:
-            repo_dir: Apeireth 项目根目录 (default: promethean/)
+            repo_dir: Apeireth 项目根目录 (default: apeireth/)
         """
         self.repo_dir = Path(repo_dir) if repo_dir else self.REPO_DIR
 
