@@ -41,6 +41,10 @@ class Episode:
     ts: float = field(default_factory=time.time)
     kind: str = "utterance"   # utterance / tool_call / observation / kickoff
     linked_identity_hash: str = ""  # 触发时的 IdentityCard hash
+    # 借鉴 mem0 (主 9:41 round-19): Observation Date vs Current Date
+    # observation_date = 录入时间. None 表示用 ts 代替 (向后兼容默认).
+    # 用于 temporal grounding: "昨天" 永远 anchor 到 observation_date, 不是当前时间 — 避免时间错位幻觉.
+    observation_date: Optional[float] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -60,6 +64,8 @@ class Note:
     created_at: float = field(default_factory=time.time)
     last_consolidated: float = field(default_factory=time.time)
     supersedes: list[str] = field(default_factory=list)
+    # 借鉴 mem0 (主 9:41 round-19): Note 也需要 observation_date (None = 用 created_at)
+    observation_date: Optional[float] = None
 
     def to_dict(self) -> dict:
         return asdict(self)
