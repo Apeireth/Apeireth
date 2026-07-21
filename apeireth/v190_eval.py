@@ -5,8 +5,6 @@ class V190ModelEval:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def evaluate(self, model_name, metric, score): self.evals.append({"m": model_name, "met": metric, "s": score})
     def n_evals(self): return len(self.evals)
     def stats(self): return {"n_evals": self.n_evals(), "version": V190_VERSION,

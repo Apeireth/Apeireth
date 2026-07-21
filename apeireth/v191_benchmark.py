@@ -5,8 +5,6 @@ class V191Benchmark:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def add_benchmark(self, name, tasks): self.benchmarks.append({"name": name, "tasks": tasks})
     def n_benchmarks(self): return len(self.benchmarks)
     def stats(self): return {"n_benchmarks": self.n_benchmarks(), "version": V191_VERSION,

@@ -5,8 +5,6 @@ class V175RustKVStore:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def put(self, key, value): self.store[key] = value; self.n += 1
     def get(self, key): return self.store.get(key)
     def stats(self): return {"n": self.n, "version": V175_VERSION,

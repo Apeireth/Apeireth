@@ -5,8 +5,6 @@ class V195Interpretability:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def add_circuit(self, name, nodes, edges): self.circuits.append({"n": name, "nodes": nodes, "edges": edges})
     def n_circuits(self): return len(self.circuits)
     def stats(self): return {"n_circuits": self.n_circuits(), "version": V195_VERSION,

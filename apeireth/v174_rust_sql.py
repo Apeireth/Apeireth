@@ -5,8 +5,6 @@ class V174RustSQLClient:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def query(self, sql: str) -> list:
         self.queries += 1; return []
     def stats(self): return {"n_queries": self.queries, "version": V174_VERSION,
