@@ -3,6 +3,7 @@ from __future__ import annotations
 V186_VERSION = "0.1.0"
 class V186RLHFTrainingLoop:
     def __init__(self):
+        self.rounds = []
         self.nph = 0
         self.nas = 0
     def train_round(self, prompt, response, reward): self.rounds.append({"p": prompt, "r": response, "rw": reward})

@@ -4,6 +4,7 @@ import time
 V173_VERSION = "0.1.0"
 class V173RustHTTPServer:
     def __init__(self):
+        self.requests = []
         self.nph = 0
         self.nas = 0
     def handle(self, path: str) -> str: self.requests += 1; return f"OK {path}"

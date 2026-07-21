@@ -3,6 +3,7 @@ from __future__ import annotations
 V174_VERSION = "0.1.0"
 class V174RustSQLClient:
     def __init__(self):
+        self.queries = []
         self.nph = 0
         self.nas = 0
     def query(self, sql: str) -> list:

@@ -3,6 +3,7 @@ from __future__ import annotations
 V187_VERSION = "0.1.0"
 class V187DPO:
     def __init__(self):
+        self.pairs = []
         self.nph = 0
         self.nas = 0
     def add_pair(self, prompt, chosen, rejected): self.pairs.append({"p": prompt, "c": chosen, "r": rejected})

@@ -3,6 +3,7 @@ from __future__ import annotations
 V197_VERSION = "0.1.0"
 class V197AdversarialTesting:
     def __init__(self):
+        self.tests = []
         self.nph = 0
         self.nas = 0
     def test(self, name, input_, output, robust): self.tests.append({"n": name, "i": input_, "o": output, "r": robust})
