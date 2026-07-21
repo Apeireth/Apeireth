@@ -1,0 +1,45 @@
+{
+  "snapshots": [
+    {
+      "label": "v25_init",
+      "n_commits": 201,
+      "n_tests": 946,
+      "n_modules": 27,
+      "n_doc_md": 29,
+      "n_total_lines": 6161,
+      "ts": 1784630187.59
+    },
+    {
+      "label": "v25_after",
+      "n_commits": 201,
+      "n_tests": 946,
+      "n_modules": 27,
+      "n_doc_md": 29,
+      "n_total_lines": 6161,
+      "ts": 1784630188.5
+    },
+    {
+      "label": "v25_init",
+      "n_commits": 202,
+      "n_tests": 946,
+      "n_modules": 27,
+      "n_doc_md": 28,
+      "n_total_lines": 6161,
+      "ts": 1784630198.09
+    },
+    {
+      "label": "v25_after",
+      "n_commits": 202,
+      "n_tests": 946,
+      "n_modules": 27,
+      "n_doc_md": 28,
+      "n_total_lines": 6161,
+      "ts": 1784630198.95
+    },
+    {
+      "ts": "2026-07-22T07:03:00+08:00",
+      "phase": "v1052+v1056+v1057",
+      "event": "ASI 7 philosophical gaps all complete: memory consolidation (V1052) + emergence (V1056) + consciousness (V1057). 1057 modules, 3219 tests pass, 325+ commits, ASI V0.1=0.7905."
+    }
+  ]
+}
