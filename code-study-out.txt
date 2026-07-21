@@ -1,0 +1,22 @@
+[CLONE] alibaba-zvec -> https://github.com/alibaba/zvec.git
+  ERR clone: Command '['git', 'clone', '--depth', '1', 'https://github.com/alibaba/zvec.git', 'code-deep-study\\alibaba-zvec']' timed out after 120 seconds
+[CLONE] memoryos-rust -> https://github.com/TelivANT/memoryos-rust.git
+
+[STUDY] memoryos-rust
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-adapters\src\lib.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-core\src\lib.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-metrics\src\lib.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-core\src\memory\graph.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-core\src\memory\mod.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-core\src\memory\multimodal.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+  ERR reading code-deep-study\memoryos-rust\crates\memoryos-adapters\src\lib.rs: 'gbk' codec can't encode character '\u2713' in position 2: illegal multibyte sequence
+[CLONE] deltamemory -> https://github.com/deltamemory/deltamemory.git
+  ERR clone: Command '['git', 'clone', '--depth', '1', 'https://github.com/deltamemory/deltamemory.git', 'code-deep-study\\deltamemory']' returned non-zero exit status 128.
+[CLONE] agentmemory-karpathy -> https://github.com/rohitg00/agentmemory.git
+  ERR clone: Command '['git', 'clone', '--depth', '1', 'https://github.com/rohitg00/agentmemory.git', 'code-deep-study\\agentmemory-karpathy']' timed out after 120 seconds
+[CLONE] claude-mem -> https://github.com/thedotmack/claude-mem.git
+  ERR clone: Command '['git', 'clone', '--depth', '1', 'https://github.com/thedotmack/claude-mem.git', 'code-deep-study\\claude-mem']' timed out after 120 seconds
+
+[SAVED] code-deep-study\deep-study-v1.json
+
+Total files studied: 0

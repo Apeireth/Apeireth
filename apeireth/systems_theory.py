@@ -1,4 +1,4 @@
-﻿"""Phase 35 General Systems Theory — Von Bertalanffy 系统论原则工程化.
+"""Phase 35 General Systems Theory — Von Bertalanffy 系统论原则工程化.
 
 主人 21:30 跨域调研 AnySearch:
   "General System Theory: Foundations, Development, Applications" (Bertalanffy 1968)

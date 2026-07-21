@@ -1,0 +1,13 @@
+OK: ASI artificial super intelligence foundation model
+OK: long horizon agentic reasoning planning 2026
+OK: LLM memory system stateful agent architecture
+OK: knowledge graph construction LLM real production
+OK: agentic workflow LangGraph 2026 production
+OK: code agent SWE-bench benchmark 2026 state of the a
+OK: constitutional AI harmlessness RLHF 2026
+OK: multi-modal foundation model 2026
+OK: world model generation agent 2026
+OK: tool use function calling production agent reliabi
+OK: human in the loop AI agent feedback learning
+OK: emergent capabilities large language model scaling
+saved 12 V7 round-8 queries

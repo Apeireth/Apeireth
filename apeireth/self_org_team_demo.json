@@ -32,7 +32,7 @@
   },
   "history": [
     {
-      "tid": "8af2d1c1d617473e",
+      "tid": "3377f30339684d1c",
       "spec": {
         "task_type": "research",
         "archetype_set": [
@@ -52,7 +52,7 @@
             "ahe_2604_25850"
           ]
         },
-        "ts": 1784549671.881601
+        "ts": 1784596632.743486
       },
       "members": [
         "学习者",
@@ -61,15 +61,15 @@
       ],
       "status": "dissolved",
       "emergence_marker": true,
-      "started_at": 1784549671.8816345,
-      "completed_at": 1784549671.881786,
-      "dissolved_at": 1784549671.8818555,
+      "started_at": 1784596632.743509,
+      "completed_at": 1784596632.7436311,
+      "dissolved_at": 1784596632.7439945,
       "tick_count": 3,
       "contributions": [
         [
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -78,11 +78,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817098
+            "ts": 1784596632.7435594
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -91,11 +91,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817146
+            "ts": 1784596632.7435634
           },
           {
             "persona": "助手",
-            "pid": "p_922957",
+            "pid": "p_b906bb",
             "content": "[助手/同理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 同理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -104,13 +104,13 @@
               0.3,
               0.9
             ],
-            "ts": 1784549671.8817177
+            "ts": 1784596632.7435658
           }
         ],
         [
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -119,11 +119,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817523
+            "ts": 1784596632.7435997
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -132,11 +132,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817554
+            "ts": 1784596632.7436008
           },
           {
             "persona": "助手",
-            "pid": "p_922957",
+            "pid": "p_b906bb",
             "content": "[助手/同理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 同理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -145,13 +145,13 @@
               0.3,
               0.9
             ],
-            "ts": 1784549671.881757
+            "ts": 1784596632.7436028
           }
         ],
         [
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -160,11 +160,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817823
+            "ts": 1784596632.743627
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -173,11 +173,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817837
+            "ts": 1784596632.7436287
           },
           {
             "persona": "助手",
-            "pid": "p_922957",
+            "pid": "p_b906bb",
             "content": "[助手/同理] saw task='research' — 调研 AHE evolve.py 5 阶段, 借鉴到 Phase 5.3 | 用 同理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -186,22 +186,22 @@
               0.3,
               0.9
             ],
-            "ts": 1784549671.8817856
+            "ts": 1784596632.7436302
           }
         ]
       ],
       "sub_graph_nodes": [
-        "team_8af2d1c1"
+        "team_3377f303"
       ],
       "sub_graph_edges": [
-        "dce1cdb2",
-        "a9a7387d",
-        "1e244f63",
-        "d135fbe2"
+        "86229622",
+        "7075a1e5",
+        "8059448d",
+        "59969ac4"
       ]
     },
     {
-      "tid": "16dbf2a82567401d",
+      "tid": "5f61d370f2624364",
       "spec": {
         "task_type": "debug",
         "archetype_set": [
@@ -219,7 +219,7 @@
           "component": "linkage",
           "version": "0.11.0"
         },
-        "ts": 1784549671.8816032
+        "ts": 1784596632.7434878
       },
       "members": [
         "思考者",
@@ -227,15 +227,15 @@
       ],
       "status": "dissolved",
       "emergence_marker": true,
-      "started_at": 1784549671.8816657,
-      "completed_at": 1784549671.8817904,
-      "dissolved_at": 1784549671.881931,
+      "started_at": 1784596632.743523,
+      "completed_at": 1784596632.7436364,
+      "dissolved_at": 1784596632.7440789,
       "tick_count": 3,
       "contributions": [
         [
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -244,11 +244,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817258
+            "ts": 1784596632.7435725
           },
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -257,13 +257,13 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.881728
+            "ts": 1784596632.7435746
           }
         ],
         [
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -272,11 +272,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.88176
+            "ts": 1784596632.7436056
           },
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -285,13 +285,13 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817618
+            "ts": 1784596632.7436073
           }
         ],
         [
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -300,11 +300,11 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817885
+            "ts": 1784596632.7436347
           },
           {
             "persona": "学习者",
-            "pid": "p_febab9",
+            "pid": "p_9693db",
             "content": "[学习者/推理] saw task='debug' — Phase 5.5 Path A rationale 重复加 question 的 bug | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -313,21 +313,21 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817902
+            "ts": 1784596632.7436361
           }
         ]
       ],
       "sub_graph_nodes": [
-        "team_16dbf2a8"
+        "team_5f61d370"
       ],
       "sub_graph_edges": [
-        "651e8e25",
-        "2b47213d",
-        "b65c53da"
+        "72d51bfb",
+        "43b1cf15",
+        "53cbfaa9"
       ]
     },
     {
-      "tid": "32ab83fba74a4674",
+      "tid": "0c14f9792b904c82",
       "spec": {
         "task_type": "plan",
         "archetype_set": [
@@ -347,7 +347,7 @@
             "6.5"
           ]
         },
-        "ts": 1784549671.8816044
+        "ts": 1784596632.7434888
       },
       "members": [
         "调度者",
@@ -355,15 +355,15 @@
       ],
       "status": "dissolved",
       "emergence_marker": true,
-      "started_at": 1784549671.881677,
-      "completed_at": 1784549671.8817942,
-      "dissolved_at": 1784549671.881979,
+      "started_at": 1784596632.7435315,
+      "completed_at": 1784596632.743641,
+      "dissolved_at": 1784596632.7441294,
       "tick_count": 3,
       "contributions": [
         [
           {
             "persona": "调度者",
-            "pid": "p_630d15",
+            "pid": "p_b1b4d1",
             "content": "[调度者/目标] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 目标 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -372,11 +372,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817317
+            "ts": 1784596632.7435782
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -385,13 +385,13 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817337
+            "ts": 1784596632.7435796
           }
         ],
         [
           {
             "persona": "调度者",
-            "pid": "p_630d15",
+            "pid": "p_b1b4d1",
             "content": "[调度者/目标] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 目标 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -400,11 +400,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817651
+            "ts": 1784596632.7436097
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -413,13 +413,13 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817677
+            "ts": 1784596632.7436109
           }
         ],
         [
           {
             "persona": "调度者",
-            "pid": "p_630d15",
+            "pid": "p_b1b4d1",
             "content": "[调度者/目标] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 目标 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -428,11 +428,11 @@
               0.3,
               0.4
             ],
-            "ts": 1784549671.8817925
+            "ts": 1784596632.7436388
           },
           {
             "persona": "思考者",
-            "pid": "p_7c2201",
+            "pid": "p_ea05a4",
             "content": "[思考者/推理] saw task='plan' — Phase 6 排期 — 涌现空间 + 自组织临时团 + SqliteIdentityStore | 用 推理 维自然回应 (activation=0.00)",
             "confidence": 0.5,
             "sct_snapshot": [
@@ -441,17 +441,17 @@
               0.7,
               0.3
             ],
-            "ts": 1784549671.8817942
+            "ts": 1784596632.7436407
           }
         ]
       ],
       "sub_graph_nodes": [
-        "team_32ab83fb"
+        "team_0c14f979"
       ],
       "sub_graph_edges": [
-        "04edc635",
-        "4eced22d",
-        "f341ae67"
+        "d70e7818",
+        "d8b2c8b5",
+        "665d9ba9"
       ]
     }
   ],
@@ -470,6 +470,6 @@
     },
     "store_version": "0.2.0"
   },
-  "store_integrity_hash": "8e77a148c5156200",
-  "ts": 1784549671.8824723
+  "store_integrity_hash": "af1ce7c108b0b035",
+  "ts": 1784596632.7447278
 }

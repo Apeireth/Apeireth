@@ -1,4 +1,4 @@
-﻿"""Phase 14 DGM Archive — Multi-Generation Harness Evolution.
+"""Phase 14 DGM Archive — Multi-Generation Harness Evolution.
 
 DGM (arxiv 2505.22954) — Darwin Gödel Machine:
   - archive of generated coding agents (open-ended tree)

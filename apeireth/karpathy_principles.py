@@ -1,4 +1,4 @@
-﻿"""
+"""
 Karpathy 编码准则 — Apeireth 中央 AI 的 "宪法附则"
 来源: multica-ai/andrej-karpathy-skills (194k stars)
 主人 17:29 多角度调研采纳 — 主人 13:51 "Karpathy 升级版"

@@ -1,4 +1,4 @@
-﻿import sys, json
+import sys, json
 sys.path.insert(0, '.')
 from deep_research_dual import dual_research
 
