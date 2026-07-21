@@ -1,4 +1,4 @@
-﻿"""Apeireth — ASI 地基平台
+"""Apeireth — ASI 地基平台
 Phase 1 (Week 1-2): Identity Store v0.1 PoC
 Phase 1.5 (今日): AnySearch 联网集成 (L2 Interaction Layer)
 Phase 2 (Week 3-4): Memory Layer v0.1 PoC

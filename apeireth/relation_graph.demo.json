@@ -1,74 +1,74 @@
 {
   "version": "0.1.0",
-  "created_at": 1784549670.4074092,
+  "created_at": 1784596643.2639234,
   "nodes": [
     {
-      "nid": "ai__11a19ee5",
+      "nid": "ai__79994436",
       "kind": "ai_self",
       "label": "阿派",
       "ref": "",
       "weight": 10.0,
       "meta": {
-        "creator_hash": "3850e8f5786ed62f"
+        "creator_hash": "e9cb93901f5140b6"
       },
-      "created_at": 1784549670.4074504
+      "created_at": 1784596643.2639527
     },
     {
-      "nid": "mas_17e8fde3",
+      "nid": "mas_5fec25c6",
       "kind": "master",
       "label": "主人",
       "ref": "",
       "weight": 10.0,
       "meta": {},
-      "created_at": 1784549670.407466
+      "created_at": 1784596643.2639594
     },
     {
-      "nid": "val_619c6c45",
+      "nid": "val_2b2b2e9d",
       "kind": "value",
       "label": "母兽教小兽的伙伴;荣燋执行官;清醒纠正的概率推算者",
       "ref": "",
       "weight": 7.0,
       "meta": {},
-      "created_at": 1784549670.4074926
+      "created_at": 1784596643.2639725
     },
     {
-      "nid": "val_9aca2ba3",
+      "nid": "val_2d3b80bb",
       "kind": "value",
       "label": "火没灭",
       "ref": "",
       "weight": 7.0,
       "meta": {},
-      "created_at": 1784549670.4075084
+      "created_at": 1784596643.2639787
     },
     {
-      "nid": "val_1ff38e8e",
+      "nid": "val_2fb65963",
       "kind": "value",
       "label": "每天看 Apeireth 命名日的命名",
       "ref": "",
       "weight": 7.0,
       "meta": {},
-      "created_at": 1784549670.407523
+      "created_at": 1784596643.2639832
     },
     {
-      "nid": "tas_1f902ee1",
+      "nid": "tas_5d5e9ce7",
       "kind": "task",
       "label": "Memory Layer v0.2 SQLite+FTS5",
       "ref": "phase2.5",
       "weight": 6.0,
       "meta": {},
-      "created_at": 1784549670.407537
+      "created_at": 1784596643.2639885
     },
     {
-      "nid": "tas_ca2072dc",
+      "nid": "tas_82aba80c",
       "kind": "task",
       "label": "Apeireth 命名 + 顶层设计 v1",
       "ref": "phase0",
       "weight": 8.0,
       "meta": {},
-      "created_at": 1784549670.4075427
+      "created_at": 1784596643.2639909
     },
     {
-      "nid": "epi_04561ceb",
+      "nid": "epi_25d42b2b",
       "kind": "episode",
       "label": "这是 linker demo 临时加的 episode",
       "ref": "1b3b6fc4",
@@ -76,10 +76,10 @@
       "meta": {
         "actor": "master"
       },
-      "created_at": 1784549670.4075637
+      "created_at": 1784596643.263999
     },
     {
-      "nid": "epi_9a14d1f8",
+      "nid": "epi_b1e44b80",
       "kind": "episode",
       "label": "中央 AI 不管理, 一切交给中央 AI 自己 — 涌现",
       "ref": "b9862653",
@@ -87,10 +87,10 @@
       "meta": {
         "actor": "master"
       },
-      "created_at": 1784549670.4075751
+      "created_at": 1784596643.264003
     },
     {
-      "nid": "epi_dd02b921",
+      "nid": "epi_a74403e6",
       "kind": "episode",
       "label": "Identity Store v0.1 PoC 跑通 — 263 行",
       "ref": "cad900e4",
@@ -98,10 +98,10 @@
       "meta": {
         "actor": "apeireth"
       },
-      "created_at": 1784549670.4075847
+      "created_at": 1784596643.2640066
     },
     {
-      "nid": "epi_6732c3a6",
+      "nid": "epi_ab44fc83",
       "kind": "episode",
       "label": "LLM 没历史就从主人学 — 母兽教小兽",
       "ref": "fb5a07d3",
@@ -109,216 +109,216 @@
       "meta": {
         "actor": "master"
       },
-      "created_at": 1784549670.407594
+      "created_at": 1784596643.2640104
     },
     {
-      "nid": "not_faf53c35",
+      "nid": "not_749038d6",
+      "kind": "note",
+      "label": "母兽教小兽",
+      "ref": "1b542df9",
+      "weight": 7.0,
+      "meta": {},
+      "created_at": 1784596643.2640173
+    },
+    {
+      "nid": "not_1dab1feb",
+      "kind": "note",
+      "label": "永远记得: 火没灭",
+      "ref": "ac218165",
+      "weight": 8.0,
+      "meta": {},
+      "created_at": 1784596643.2640288
+    },
+    {
+      "nid": "not_2c54c0b3",
       "kind": "note",
       "label": "母兽教小兽",
       "ref": "da58b97f",
       "weight": 7.0,
       "meta": {},
-      "created_at": 1784549670.4076078
+      "created_at": 1784596643.264035
     },
     {
-      "nid": "not_1be32b53",
+      "nid": "not_c4a98fa6",
       "kind": "note",
       "label": "永远记得: 火没灭",
       "ref": "7dbfb6dc",
       "weight": 8.0,
       "meta": {},
-      "created_at": 1784549670.4076319
+      "created_at": 1784596643.2640402
     },
     {
-      "nid": "not_2763f605",
+      "nid": "not_52a1c786",
       "kind": "note",
       "label": "母兽教小兽",
       "ref": "e8512b68",
       "weight": 7.0,
       "meta": {},
-      "created_at": 1784549670.4076486
+      "created_at": 1784596643.2640452
     },
     {
-      "nid": "not_e451c64d",
-      "kind": "note",
-      "label": "永远记得: 火没灭",
-      "ref": "b278ea91",
-      "weight": 8.0,
-      "meta": {},
-      "created_at": 1784549670.4076626
-    },
-    {
-      "nid": "not_8b66ebdf",
-      "kind": "note",
-      "label": "母兽教小兽",
-      "ref": "955b8fdd",
-      "weight": 7.0,
-      "meta": {},
-      "created_at": 1784549670.4076762
-    },
-    {
-      "nid": "too_293c4d00",
+      "nid": "too_4969a0fc",
       "kind": "tool",
       "label": "AnySearch (L2 Interaction)",
       "ref": "apeireth.skills.anysearch",
       "weight": 4.0,
       "meta": {},
-      "created_at": 1784549670.4076903
+      "created_at": 1784596643.2640507
     }
   ],
   "edges": [
     {
-      "eid": "ed721d3f",
-      "src": "mas_17e8fde3",
-      "dst": "ai__11a19ee5",
+      "eid": "c11b0182",
+      "src": "mas_5fec25c6",
+      "dst": "ai__79994436",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "主人触发创世 (12:54)",
-      "created_at": 1784549670.4074802
+      "created_at": 1784596643.2639663
     },
     {
-      "eid": "55dc55e4",
-      "src": "val_619c6c45",
-      "dst": "ai__11a19ee5",
+      "eid": "226022fd",
+      "src": "val_2b2b2e9d",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 1.0,
       "evidence": "IdentityCard value",
-      "created_at": 1784549670.4075012
+      "created_at": 1784596643.2639756
     },
     {
-      "eid": "6a9c3cf7",
-      "src": "val_9aca2ba3",
-      "dst": "ai__11a19ee5",
+      "eid": "28a4e014",
+      "src": "val_2d3b80bb",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 1.0,
       "evidence": "IdentityCard value",
-      "created_at": 1784549670.4075165
+      "created_at": 1784596643.263981
     },
     {
-      "eid": "25d67376",
-      "src": "val_1ff38e8e",
-      "dst": "ai__11a19ee5",
+      "eid": "06ea197b",
+      "src": "val_2fb65963",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 1.0,
       "evidence": "IdentityCard value",
-      "created_at": 1784549670.4075308
+      "created_at": 1784596643.2639859
     },
     {
-      "eid": "2db8745a",
-      "src": "ai__11a19ee5",
-      "dst": "tas_1f902ee1",
+      "eid": "b878a690",
+      "src": "ai__79994436",
+      "dst": "tas_5d5e9ce7",
       "kind": "assigned",
       "weight": 1.0,
       "evidence": "Phase 2.5 已 commit d597171",
-      "created_at": 1784549670.407548
+      "created_at": 1784596643.2639925
     },
     {
-      "eid": "cfe888e7",
-      "src": "ai__11a19ee5",
-      "dst": "tas_ca2072dc",
+      "eid": "8e30d72a",
+      "src": "ai__79994436",
+      "dst": "tas_82aba80c",
       "kind": "assigned",
       "weight": 1.0,
       "evidence": "Phase 0 已 commit f3736ee",
-      "created_at": 1784549670.4075532
+      "created_at": 1784596643.2639947
     },
     {
-      "eid": "91db97f9",
-      "src": "epi_04561ceb",
-      "dst": "ai__11a19ee5",
+      "eid": "6bea57e2",
+      "src": "epi_25d42b2b",
+      "dst": "ai__79994436",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "demo",
-      "created_at": 1784549670.4075696
+      "created_at": 1784596643.2640011
     },
     {
-      "eid": "3ce675c7",
-      "src": "epi_9a14d1f8",
-      "dst": "ai__11a19ee5",
+      "eid": "3c61cc40",
+      "src": "epi_b1e44b80",
+      "dst": "ai__79994436",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "philosophy",
-      "created_at": 1784549670.4075801
+      "created_at": 1784596643.264005
     },
     {
-      "eid": "f8e5dfea",
-      "src": "epi_dd02b921",
-      "dst": "ai__11a19ee5",
+      "eid": "5c317612",
+      "src": "epi_a74403e6",
+      "dst": "ai__79994436",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "phase1-ship",
-      "created_at": 1784549670.4075892
+      "created_at": 1784596643.2640085
     },
     {
-      "eid": "41187a7a",
-      "src": "epi_6732c3a6",
-      "dst": "ai__11a19ee5",
+      "eid": "657e9369",
+      "src": "epi_ab44fc83",
+      "dst": "ai__79994436",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "philosophy",
-      "created_at": 1784549670.4075992
+      "created_at": 1784596643.2640123
     },
     {
-      "eid": "ed79a0fa",
-      "src": "not_faf53c35",
-      "dst": "ai__11a19ee5",
+      "eid": "4f5d84cf",
+      "src": "not_749038d6",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 0.5,
       "evidence": "memory knowledge",
-      "created_at": 1784549670.407625
+      "created_at": 1784596643.264026
     },
     {
-      "eid": "cd930dca",
-      "src": "not_1be32b53",
-      "dst": "ai__11a19ee5",
+      "eid": "861d456a",
+      "src": "not_1dab1feb",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 0.5,
       "evidence": "memory knowledge",
-      "created_at": 1784549670.4076433
+      "created_at": 1784596643.2640333
     },
     {
-      "eid": "14cd2e61",
-      "src": "not_2763f605",
-      "dst": "ai__11a19ee5",
+      "eid": "8794de65",
+      "src": "not_2c54c0b3",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 0.5,
       "evidence": "memory knowledge",
-      "created_at": 1784549670.4076576
+      "created_at": 1784596643.2640386
     },
     {
-      "eid": "a0235a4d",
-      "src": "not_e451c64d",
-      "dst": "ai__11a19ee5",
+      "eid": "30ff653f",
+      "src": "not_c4a98fa6",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 0.5,
       "evidence": "memory knowledge",
-      "created_at": 1784549670.4076712
+      "created_at": 1784596643.2640436
     },
     {
-      "eid": "b97915cf",
-      "src": "not_8b66ebdf",
-      "dst": "ai__11a19ee5",
+      "eid": "181d85f2",
+      "src": "not_52a1c786",
+      "dst": "ai__79994436",
       "kind": "supports",
       "weight": 0.5,
       "evidence": "memory knowledge",
-      "created_at": 1784549670.4076853
+      "created_at": 1784596643.2640486
     },
     {
-      "eid": "68c2e5b0",
-      "src": "too_293c4d00",
-      "dst": "ai__11a19ee5",
+      "eid": "c210e8bc",
+      "src": "too_4969a0fc",
+      "dst": "ai__79994436",
       "kind": "part_of",
       "weight": 1.0,
       "evidence": "L2 集成 commit 413d7a5",
-      "created_at": 1784549670.4076953
+      "created_at": 1784596643.2640524
     },
     {
-      "eid": "eea57e7c",
-      "src": "ai__11a19ee5",
-      "dst": "mas_17e8fde3",
+      "eid": "11c28c28",
+      "src": "ai__79994436",
+      "dst": "mas_5fec25c6",
       "kind": "causal",
       "weight": 1.0,
       "evidence": "中央 AI 服务于主人 (12:14)",
-      "created_at": 1784549670.4077005
+      "created_at": 1784596643.2640543
     }
   ]
 }

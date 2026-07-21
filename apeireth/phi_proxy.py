@@ -1,4 +1,4 @@
-﻿"""IIT Φ-proxy — Quantified Consciousness Metric for Apeireth.
+"""IIT Φ-proxy — Quantified Consciousness Metric for Apeireth.
 
 IIT (Tononi 2014) Φ = integrated information.
 v0.1 不真算 Φ (NP-hard), 用 proxy 指标.

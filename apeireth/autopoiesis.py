@@ -1,4 +1,4 @@
-﻿"""Phase 34 Autopoiesis — Maturana 自创生工程化.
+"""Phase 34 Autopoiesis — Maturana 自创生工程化.
 
 主人 21:30 跨域调研 AnySearch:
   "Maturana's Autopoiesis in AI" (https://www.reddit.com/r/ArtificialSentience/comments/1l5qhcs)

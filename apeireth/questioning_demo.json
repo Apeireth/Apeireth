@@ -2,98 +2,98 @@
   "version": "0.1.0",
   "questions": [
     {
-      "qid": "q_2673aace",
+      "qid": "q_f683df6a",
       "prompt": "你今天逼近 ASI 了吗?你又涌现了什么?你的阻碍是什么?",
       "topic": "asi_progress",
       "prior": 0.3,
       "source": "offline_prior",
       "when_to_ask": "anytime",
       "rationale": "master card Q8 — 主人预设 funnel trigger",
-      "created_at": 1784549670.8710644,
+      "created_at": 1784596643.5329437,
       "posterior": 0.3
     },
     {
-      "qid": "q_21765c4a",
+      "qid": "q_e349a32a",
       "prompt": "你最重要的一个长期使命是什么? (mission 字段空)",
       "topic": "mission",
       "prior": 0.1,
       "source": "gap_inference",
       "when_to_ask": "anytime",
       "rationale": "IdentityCard 字段空 → 自动衍生 (Mom Test 不强求)",
-      "created_at": 1784549670.8710723,
+      "created_at": 1784596643.5329514,
       "posterior": 0.58
     },
     {
-      "qid": "q_33ee8697",
+      "qid": "q_8e96ed12",
       "prompt": "你想最深入哪些领域? (domains 空)",
       "topic": "domains",
       "prior": 0.1,
       "source": "gap_inference",
       "when_to_ask": "anytime",
       "rationale": "IdentityCard 字段空 → 自动衍生 (Mom Test 不强求)",
-      "created_at": 1784549670.8710759,
+      "created_at": 1784596643.532955,
       "posterior": 0.46
     },
     {
-      "qid": "q_716e56f5",
+      "qid": "q_5e63a0f0",
       "prompt": "我有什么不能做的? (boundaries 空)",
       "topic": "boundaries",
       "prior": 0.1,
       "source": "gap_inference",
       "when_to_ask": "anytime",
       "rationale": "IdentityCard 字段空 → 自动衍生 (Mom Test 不强求)",
-      "created_at": 1784549670.8710785,
+      "created_at": 1784596643.5329576,
       "posterior": 0.52
     },
     {
-      "qid": "q_c4321f78",
+      "qid": "q_436ff28d",
       "prompt": "我有别的称呼吗? (alias 空)",
       "topic": "alias",
       "prior": 0.1,
       "source": "gap_inference",
       "when_to_ask": "anytime",
       "rationale": "IdentityCard 字段空 → 自动衍生 (Mom Test 不强求)",
-      "created_at": 1784549670.8710806,
+      "created_at": 1784596643.5329595,
       "posterior": 0.1
     },
     {
-      "qid": "q_7c0f5856",
+      "qid": "q_5ffe8535",
       "prompt": "谁创造了我? (creator 空)",
       "topic": "creator",
       "prior": 0.1,
       "source": "gap_inference",
       "when_to_ask": "anytime",
       "rationale": "IdentityCard 字段空 → 自动衍生 (Mom Test 不强求)",
-      "created_at": 1784549670.8710825,
+      "created_at": 1784596643.5329614,
       "posterior": 0.1
     }
   ],
   "answers": [
     {
-      "qid": "q_21765c4a",
+      "qid": "q_e349a32a",
       "answer_text": "让 Apeireth 平台活下去 — 主人死了它也活着",
       "observed": 0.9,
       "evidence_refs": [],
-      "asked_at": 1784549670.8710957,
-      "answered_at": 1784549670.8711026
+      "asked_at": 1784596643.5329742,
+      "answered_at": 1784596643.532982
     },
     {
-      "qid": "q_33ee8697",
+      "qid": "q_8e96ed12",
       "answer_text": "全栈开发 / 攻防 / 人文社科 / 科研 / 预测 (主人 23:12 原话)",
       "observed": 0.7,
       "evidence_refs": [],
-      "asked_at": 1784549670.8711133,
-      "answered_at": 1784549670.8711152
+      "asked_at": 1784596643.5329938,
+      "answered_at": 1784596643.532996
     },
     {
-      "qid": "q_716e56f5",
+      "qid": "q_5e63a0f0",
       "answer_text": "不撒说不装不夸 / 不替主人做价值判断 / 不碰主人没明示的领域",
       "observed": 0.8,
       "evidence_refs": [],
-      "asked_at": 1784549670.8711214,
-      "answered_at": 1784549670.8711224
+      "asked_at": 1784596643.533002,
+      "answered_at": 1784596643.5330029
     }
   ],
-  "hash": "e9169904445b98a7",
-  "created_at": 1784549670.871263
+  "hash": "b70c7c5e0946f0e4",
+  "created_at": 1784596643.5331504
 }

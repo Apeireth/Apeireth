@@ -1,4 +1,4 @@
-﻿"""ASI Base Demo V5 — 跨域工程化 (Phase 24-31) 全部 PASS.
+"""ASI Base Demo V5 — 跨域工程化 (Phase 24-31) 全部 PASS.
 
 V8 + 跨域工程化:
   8 核心保留 + 3 意识层 + 3 新模块 + 4 跨域工程化 = **18 能力 全 PASS**
