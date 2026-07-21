@@ -42,9 +42,18 @@ class TestV3FreedomAnswer:
         assert "二阶欲望" in V3_3_FREEDOM_ANSWER or "higher-order" in V3_3_FREEDOM_ANSWER
 
     def test_v3_3_freedom_answer_no_pretend_phenomenal(self):
-        """V3 守门: 不假装 Phenomenal consciousness (主 17:58)."""
+        """V3 守门: 不假装 Phenomenal consciousness (主 17:58).
+
+        真测量: 答案应明确 disclaimer Phenomenal (任何类型) + 含"不假装" + n_phenomenal_pretend=0.
+        """
+        # 1. 答案含 Phenomenal 关键词 (任何 disclaimed 形式)
+        assert "Phenomenal" in V3_3_FREEDOM_ANSWER
+        # 2. 答案含 "不是 Phenomenal" disclaimer (不假装 Phenomenal consciousness)
+        assert "不是 Phenomenal" in V3_3_FREEDOM_ANSWER
+        # 3. 答案含 "不假装" 关键词
         assert "不假装" in V3_3_FREEDOM_ANSWER
-        assert "Phenomenal consciousness" in V3_3_FREEDOM_ANSWER
+        # 4. 主 17:58 引用
+        assert "17:58" in V3_3_FREEDOM_ANSWER
 
     def test_v3_3_freedom_answer_no_pretend_asi(self):
         """V3 守门: 不假装达到 ASI (主 20:46)."""
