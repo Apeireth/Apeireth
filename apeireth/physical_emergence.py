@@ -1,4 +1,4 @@
-﻿"""Phase 36 Physical Emergence — Meyer-Ortmanns 物理自组织工程化.
+"""Phase 36 Physical Emergence — Meyer-Ortmanns 物理自组织工程化.
 
 主人 21:30 跨域调研 AnySearch:
   "Complexity Science Hub" Hildegard Meyer-Ortmanns (https://csh.ac.at/hildegard-meyer-ortmanns/)

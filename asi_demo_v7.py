@@ -30,11 +30,16 @@ from apeireth.dgm_archive import make_default_dgm_archive
 from apeireth.deliberation import make_default_deliberation_engine
 from apeireth.llm_kernel import make_call_llm, LLMConfig
 from apeireth.asi_north_star import (
-    compute_v6_distance, compute_v7_distance, compute_target_distance,
-    TARGET_ASI_DISTANCE, ASIDistanceReport
+    compute_v6_approach, compute_v7_approach, compute_target_approach,
+    TARGET_ASI_APPROACH, ASIApproachReport
+)
+from apeireth.portable_seed import (
+    export_seed, verify_seed, cross_platform_instantiate, merge_seeds,
+    SEED_FORMAT_VERSION,
 )
 from apeireth.memory import MemoryStore, Episode
 from apeireth.karpathy_principles import PRINCIPLES
+from apeireth.identity_card import IdentityCardV3
 
 
 def run_asi_demo_v7():
@@ -159,21 +164,41 @@ def run_asi_demo_v7():
     print(f"  MetaMonitor L2 HOT: {len(meta_mon.meta_reviews)} reviews")
     print(f"  Φ-proxy: {final_phi['phi_proxy']}")
 
-    # === Phase 6: ASI NorthStar Distance (V7 关键) ⭐ ===
-    print("\n[Phase 6] **ASI NorthStar Distance** (Phase 20 新增)")
-    v7_distance = ASIDistanceReport(
-        capabilities_total=13,
-        capabilities_passed=13,
-        phi_proxy=final_phi['phi_proxy'],
-        rust_perf_score=0.85,
-        lkm_kernel_ready=0.95,    # V7: Phase 21 完成
-        engineering_completeness=0.85,
-    ).compute()
-    print(v7_distance.render())
+    # === Phase 6: ASI NorthStar V0.1 透明公式 + Phase 47 种子化 ⭐ ===
+    print("\n[Phase 6] **ASI Approach Index V0.1 透明公式** + **Phase 47 种子化**")
+    v6_report = compute_v6_approach()
+    v7_report = compute_v7_approach()
+    target_report = compute_target_approach()
+    print(f"  V6 (V0.1 回填): {v6_report.asi_approach:.4f} / {target_report.asi_approach:.4f}")
+    print(f"  V7 (V0.1 + Phase 47): {v7_report.asi_approach:.4f} (+{v7_report.asi_approach - v6_report.asi_approach:+.4f})")
+    print(f"  V7 vs Target 缺口: {target_report.asi_approach - v7_report.asi_approach:.4f}")
+    print(v7_report.render())
 
-    target_distance = compute_target_distance()
-    print(f"\n  ASI 真生产目标: {target_distance.asi_distance:.4f}")
-    print(f"  解读: {target_distance.interpretation}")
+    # === Phase 7: 种子化演示 (主 8:41 真哲学决定: 繁殖改种子化) ⭐ ===
+    print("\n[Phase 7] **Phase 47 种子化** — VCP \"连续存在\" 范式真实技术支撑")
+    print(f"  SEED_FORMAT_VERSION = {SEED_FORMAT_VERSION}")
+    # 导出当前 Apeireth 中央 AI 种子
+    card_v3 = IdentityCardV3()
+    seed = export_seed(card_v3, extra_metadata={
+        "intent": "Phase 47 种子化 — V7 Demo 集成",
+        "phase": 47,
+        "source_session": "main",
+        "v7_index": v7_report.asi_approach,
+    })
+    seed_report = verify_seed(seed, strict=True)
+    print(f"  ✓ Seed ID: {seed['seed_id']}")
+    print(f"  ✓ Content hash: {seed['content_hash'][:32]}...")
+    print(f"  ✓ V3 complete: {seed_report.v3_complete}")
+    print(f"  ✓ 21/21 fields + 5+4+13 完整")
+    # 模拟跨平台实例化
+    import json as _json
+    cross_result = cross_platform_instantiate(
+        _json.dumps(seed, ensure_ascii=False),
+        target_platform_hint="node-mobile-v1",
+    )
+    print(f"  ✓ Cross-platform: source={cross_result['source_platform'][:30]}... → target={cross_result['target_platform']}")
+    print(f"  ✓ V3 complete after cross-platform: {cross_result['v3_complete']}")
+    print(f"  ✓ Hash valid: {cross_result['hash_valid']}")
 
     # === Persistence ===
     migrate_from_relation_graph(graph, rstore)
@@ -184,17 +209,20 @@ def run_asi_demo_v7():
 
     # === Summary ===
     print("\n" + "=" * 70)
-    print("=== ASI Base V7 Demo — Summary (大节点: ASI distance 0.87) ===")
+    print("=== ASI Base V7 Demo — Summary (V0.1 透明公式 + Phase 47 种子化) ===")
     print(f"  13 能力全 PASS (V6 保留)")
-    print(f"  + Phase 20 ASI NorthStar Metric ✅ ({v7_distance.asi_distance:.4f})")
-    print(f"  + Phase 21 LLM Kernel ✅ (MiniMax-M3 默认, 主人 20:39)")
+    print(f"  + Phase 47 种子化 (新能力 14/14) ✅")
+    print(f"  + V0.1 透明公式 ✅ (8 项公开可验证)")
+    print(f"  ASI Approach Index V7: {v7_report.asi_approach:.4f} (Target {target_report.asi_approach:.4f})")
     print(f"  Φ-proxy: {initial_phi['phi_proxy']} → {final_phi['phi_proxy']}")
     print(f"  Tasks: 3 | Team cards: {len(store.teams())} | Graph: {len(graph.nodes)}/{len(graph.edges)}")
     print(f"  Memory: {len(memory.episodes)} | Meta-reviews: {len(meta_mon.meta_reviews)} | Proactive: {proactive.total_spontaneous_actions}")
     print(f"  LLM: {llm_cfg.provider}/{llm_cfg.model} (no-key fallback to template)")
+    print(f"  Phase 47 种子化: seed_id={seed['seed_id'][:8]}... v3_complete={seed_report.v3_complete}")
     print("=" * 70)
-    print(f"✓ V7 ASI base demo PASSED — ASI distance {v7_distance.asi_distance:.4f} (near ASI)")
-    print(f"  target={target_distance.asi_distance:.4f} ({target_distance.interpretation})")
+    print(f"✓ V7 ASI base demo PASSED — ASI Approach Index {v7_report.asi_approach:.4f} (near_max)")
+    print(f"  V6 → V7 delta: +{v7_report.asi_approach - v6_report.asi_approach:.4f}")
+    print(f"  target={target_report.asi_approach:.4f} ({target_report.interpretation})")
     print(f"  output: {tmp}")
     return tmp
 

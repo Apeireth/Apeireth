@@ -1,4 +1,4 @@
-﻿"""Phase 13 Skill Library — Voyager-inspired skill persistence + curriculum.
+"""Phase 13 Skill Library — Voyager-inspired skill persistence + curriculum.
 
 主人 12:14 "干什么就组一个什么的专家团"
 主人 18:07 "不吝借用好东西" — Voyager 真生产 (arxiv 2305.16291)

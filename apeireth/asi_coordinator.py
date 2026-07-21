@@ -1,4 +1,4 @@
-﻿"""Phase 49 ASI Coordinator — 跨域协同 + 自演化整合.
+"""Phase 49 ASI Coordinator — 跨域协同 + 自演化整合.
 
 主人 22:33 ASI 北极星 + 主人 22:40 自决 + 主人 22:46 推进项目.
 中央 AI 完整位置 V2 + ASI = 终极目标. 这模块把所有 19 个 Phase 整合, 让中央 AI 真"协同".
