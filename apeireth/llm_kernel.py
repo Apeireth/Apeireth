@@ -60,6 +60,19 @@ class LLMResponse:
     tokens_out: int = 0
     latency_ms: float = 0.0
     provider: str = ""
+    # 借鉴 anthropic-sdk (主 11:10 round-20 P0): prompt caching 独立计费
+    # anthropic SDK 返回 cache_creation_input_tokens + cache_read_input_tokens
+    cache_hit: bool = False               # 任何 cache 命中 (creation or read)
+    cache_creation_tokens: int = 0       # 本次创建 cache 用的 input tokens
+    cache_read_tokens: int = 0           # 本次读 cache 用的 input tokens (节省的真实成本)
+
+    @property
+    def cache_savings_ratio(self) -> float:
+        """Cache 节省比率 = cache_read / (cache_read + tokens_in), [0, 1]. 用于监控."""
+        denom = self.cache_read_tokens + self.tokens_in
+        if denom == 0:
+            return 0.0
+        return self.cache_read_tokens / denom
 
     def to_dict(self) -> dict:
         return {
@@ -69,6 +82,10 @@ class LLMResponse:
             "tokens_out": self.tokens_out,
             "latency_ms": self.latency_ms,
             "provider": self.provider,
+            "cache_hit": self.cache_hit,
+            "cache_creation_tokens": self.cache_creation_tokens,
+            "cache_read_tokens": self.cache_read_tokens,
+            "cache_savings_ratio": round(self.cache_savings_ratio, 4),
         }
 
 
@@ -111,6 +128,9 @@ def call_llm_minimax(prompt: str, config: LLMConfig = None) -> LLMResponse:
             choice = data.get("choices", [{}])[0]
             msg = choice.get("message", {})
             usage = data.get("usage", {})
+            # 借鉴 anthropic-sdk (主 11:10 round-20 P0): cache_creation/cache_read 独立计费
+            cache_creation = usage.get("cache_creation_input_tokens", 0)
+            cache_read = usage.get("cache_read_input_tokens", 0)
             return LLMResponse(
                 content=msg.get("content", ""),
                 model=data.get("model", config.model),
@@ -118,6 +138,9 @@ def call_llm_minimax(prompt: str, config: LLMConfig = None) -> LLMResponse:
                 tokens_out=usage.get("completion_tokens", 0),
                 latency_ms=latency,
                 provider=config.provider,
+                cache_hit=(cache_creation + cache_read) > 0,
+                cache_creation_tokens=cache_creation,
+                cache_read_tokens=cache_read,
             )
         else:
             return LLMResponse(
