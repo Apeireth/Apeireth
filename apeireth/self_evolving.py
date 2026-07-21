@@ -85,6 +85,22 @@ class Patch:
     proposer: str        # 'evolution' | 'master' | 'emergence'
     ts: float = field(default_factory=time.time)
     confidence: float = 0.5  # 借鉴 Bayesian — 提议置信度
+    # 借鉴 langgraph (主 11:10 round-20 P0): versions_seen 矩阵防重复 commit
+    # 同一 patch 在同一 seen_versions 状态被看过 → 跳过 (deterministic replay 防环)
+    seen_versions: dict = field(default_factory=dict)  # {node_or_target: {channel_or_field: version_seen}}
+
+    def mark_seen(self, node: str, channel: str, version: int) -> bool:
+        """Mark this patch as seen at given (node, channel, version).
+
+        Returns True if this is a NEW seen (process this patch).
+        Returns False if already seen at this version (skip — replay).
+        """
+        if node not in self.seen_versions:
+            self.seen_versions[node] = {}
+        if self.seen_versions[node].get(channel) == version:
+            return False  # 已经在这个版本看过, 跳过 (防环)
+        self.seen_versions[node][channel] = version
+        return True
 
 
 @dataclass
