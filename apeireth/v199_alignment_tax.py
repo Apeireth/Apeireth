@@ -5,8 +5,6 @@ class V199AlignmentTax:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def measure(self, unaligned_perf, aligned_perf): self.measurements.append({"u": unaligned_perf, "a": aligned_perf})
     def tax(self):
         if not self.measurements: return 0.0

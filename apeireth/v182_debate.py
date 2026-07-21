@@ -5,8 +5,6 @@ class V182Debate:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def debate(self, question, positions): self.debates.append({"q": question, "p": positions})
     def n_debates(self): return len(self.debates)
     def stats(self): return {"n_debates": self.n_debates(), "version": V182_VERSION,

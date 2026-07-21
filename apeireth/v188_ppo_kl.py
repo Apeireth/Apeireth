@@ -10,8 +10,6 @@ class V188PPOKL:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def step(self, old_lp, new_lp, ref_lp):
         loss = ppo_kl_penalty(old_lp, new_lp, ref_lp)
         self.steps.append(loss); return loss
