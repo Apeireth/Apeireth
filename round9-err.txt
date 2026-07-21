@@ -1,0 +1,1 @@
+AppData\Local\Programs\Python\Python313\python.exe: can't open file 'C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\extra_research_v9.py': [Errno 2] No such file or directory

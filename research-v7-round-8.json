@@ -1,0 +1,542 @@
+[
+  {
+    "query": "ASI artificial super intelligence foundation model breakthrough 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "From AGI to ASI",
+        "url": "https://deepmind.google/research/publications/239142/",
+        "snippet": "From AGI to ASI — Google DeepMind June 12, 2026 # From AGI to ASI Share ## Abstract Over the last decade, building human-level artificial general intelligence has moved from far-fetched speculation to",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From AGI to ASI",
+        "url": "https://arxiv.org/html/2606.12683v1",
+        "snippet": "From AGI to ASI arXiv is now an independent nonprofit! Learn more× \\uselogo\\correspondingauthor timgen@google.com # From AGI to ASI Tim Genewein Google DeepMind Matija Franklin Google DeepMind Alexand",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From AGI to ASI | alphaXiv",
+        "url": "https://www.alphaxiv.org/abs/2606.12683",
+        "snippet": "From AGI to ASI Tim Genewein 1 , Matija Franklin 1 , Alexander Lerchner 1 , Laurent Orseau 1 , Samuel Albanie 1 , Adam Bales 1 , Cole Wyeth 1,2 , Stephanie Chan 1 , Iason Gabriel 1 , Joel Z. Leibo 1 ,",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "From AGI to ASI",
+        "url": "https://deepmind.google/research/publications/239142/",
+        "snippet": "From AGI to ASI — Google DeepMind June 12, 2026 # From AGI to ASI Share ## Abstract Over the last decade, building human-level artificial general intelligence has moved from far-fetched speculation to",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From AGI to ASI",
+        "url": "https://arxiv.org/html/2606.12683v1",
+        "snippet": "From AGI to ASI arXiv is now an independent nonprofit! Learn more× \\uselogo\\correspondingauthor timgen@google.com # From AGI to ASI Tim Genewein Google DeepMind Matija Franklin Google DeepMind Alexand",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From AGI to ASI | alphaXiv",
+        "url": "https://www.alphaxiv.org/abs/2606.12683",
+        "snippet": "From AGI to ASI Tim Genewein 1 , Matija Franklin 1 , Alexander Lerchner 1 , Laurent Orseau 1 , Samuel Albanie 1 , Adam Bales 1 , Cole Wyeth 1,2 , Stephanie Chan 1 , Iason Gabriel 1 , Joel Z. Leibo 1 ,",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "long horizon agentic reasoning planning 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context - ACL Anthology",
+        "url": "https://aclanthology.org/2026.acl-long.152/",
+        "snippet": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context - ACL Anthology --- ##### Abstract Long-horizon tasks that require sustained reasoning and multiple tool interactions remain chall",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM Agents",
+        "url": "https://arxiv.org/pdf/2601.22311v1",
+        "snippet": "Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM Agents # Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ReAcTree: Hierarchical LLM Agent Trees with Control Flow for Long-Horizon Task Planning",
+        "url": "https://doi.org/10.65109/ucgt7089",
+        "snippet": "# ReAcTree: Hierarchical LLM Agent Trees with Control Flow for Long-Horizon Task Planning 2026. 1 citation. ## Abstract Recent advancements in large language models (LLMs) have enabled significant pro",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context - ACL Anthology",
+        "url": "https://aclanthology.org/2026.acl-long.152/",
+        "snippet": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context - ACL Anthology --- ##### Abstract Long-horizon tasks that require sustained reasoning and multiple tool interactions remain chall",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM Agents",
+        "url": "https://arxiv.org/pdf/2601.22311v1",
+        "snippet": "Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM Agents # Why Reasoning Fails to Plan: A Planning-Centric Analysis of Long-Horizon Decision Making in LLM",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ReAcTree: Hierarchical LLM Agent Trees with Control Flow for Long-Horizon Task Planning",
+        "url": "https://doi.org/10.65109/ucgt7089",
+        "snippet": "# ReAcTree: Hierarchical LLM Agent Trees with Control Flow for Long-Horizon Task Planning 2026. 1 citation. ## Abstract Recent advancements in large language models (LLMs) have enabled significant pro",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "LLM memory system stateful agent architecture",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Agent Memory: Characterization and System Implications of Stateful Long ...",
+        "url": "https://arxiv.org/html/2606.06448v1",
+        "snippet": "Agent Memory: Characterization and System Implications of Stateful Long-Horizon Workloads arXiv is now an independent nonprofit! Learn more× – # Agent Memory: Characterization and System Implications ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MAGMA: A Multi-Graph based Agentic Memory Architecture for AI Agents",
+        "url": "https://aclanthology.org/2026.acl-long.1709.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 36848–36865 July 2-7, 2026 ©2026 Association for Computational Linguistics ## MAG",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From RAG to Memory Systems: Building Stateful AI Architecture",
+        "url": "https://blogs.oracle.com/developers/from-rag-to-memory-systems-building-stateful-ai-architecture",
+        "snippet": "From RAG to Memory Systems: Building Stateful AI Architecture | developers - Skip to content - Accessibility Policy Database, Developers # From RAG to Memory Systems: Building Stateful AI Architecture",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Agent Memory: Characterization and System Implications of Stateful Long ...",
+        "url": "https://arxiv.org/html/2606.06448v1",
+        "snippet": "Agent Memory: Characterization and System Implications of Stateful Long-Horizon Workloads arXiv is now an independent nonprofit! Learn more× – # Agent Memory: Characterization and System Implications ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "MAGMA: A Multi-Graph based Agentic Memory Architecture for AI Agents",
+        "url": "https://aclanthology.org/2026.acl-long.1709.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 36848–36865 July 2-7, 2026 ©2026 Association for Computational Linguistics ## MAG",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From RAG to Memory Systems: Building Stateful AI Architecture",
+        "url": "https://blogs.oracle.com/developers/from-rag-to-memory-systems-building-stateful-ai-architecture",
+        "snippet": "From RAG to Memory Systems: Building Stateful AI Architecture | developers - Skip to content - Accessibility Policy Database, Developers # From RAG to Memory Systems: Building Stateful AI Architecture",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "knowledge graph construction LLM real production",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "From LLMs to Knowledge Graphs: Building Production-Ready ...",
+        "url": "https://medium.com/@claudiubranzan/from-llms-to-knowledge-graphs-building-production-ready-graph-systems-in-2025-2b4aff1ec99a",
+        "snippet": "1. The Evolution: From Rule-Based Extraction to LLM-Powered Construction. # From LLMs to Knowledge Graphs: Building Production-Ready Graph Systems in 2025. The knowledge graph construction landscape r",
+        "source": "AnySearch"
+      },
+      {
+        "name": "LLM-empowered knowledge graph construction: A survey",
+        "url": "https://arxiv.org/html/2510.20345v1",
+        "snippet": "# LLM-empowered knowledge graph construction: A survey. Knowledge Graphs (KGs) have long served as a fundamental infrastructure for structured knowledge representation and reasoning. With the advent o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Comprehensive Guide to Evaluating LLM-Generated Knowledge Graphs: From PoC to Production | Graphora Blog",
+        "url": "https://graphora.io/blog/eval-llm-graph-creation",
+        "snippet": "# A Comprehensive Guide to Evaluating LLM-Generated Knowledge Graphs: From PoC to Production. **TLDR;** Creating Knowledge Graphs using Large Language Models (LLMs) with Graphora is powerful but requi",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "From LLMs to Knowledge Graphs: Building Production-Ready ...",
+        "url": "https://medium.com/@claudiubranzan/from-llms-to-knowledge-graphs-building-production-ready-graph-systems-in-2025-2b4aff1ec99a",
+        "snippet": "1. The Evolution: From Rule-Based Extraction to LLM-Powered Construction. # From LLMs to Knowledge Graphs: Building Production-Ready Graph Systems in 2025. The knowledge graph construction landscape r",
+        "source": "AnySearch"
+      },
+      {
+        "name": "LLM-empowered knowledge graph construction: A survey",
+        "url": "https://arxiv.org/html/2510.20345v1",
+        "snippet": "# LLM-empowered knowledge graph construction: A survey. Knowledge Graphs (KGs) have long served as a fundamental infrastructure for structured knowledge representation and reasoning. With the advent o",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Comprehensive Guide to Evaluating LLM-Generated Knowledge Graphs: From PoC to Production | Graphora Blog",
+        "url": "https://graphora.io/blog/eval-llm-graph-creation",
+        "snippet": "# A Comprehensive Guide to Evaluating LLM-Generated Knowledge Graphs: From PoC to Production. **TLDR;** Creating Knowledge Graphs using Large Language Models (LLMs) with Graphora is powerful but requi",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "agentic workflow LangGraph 2026 production",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "LangGraph in Production: StateGraph, set_entry_point, and the Patterns We Use for Real Agents",
+        "url": "https://www.kalviumlabs.ai/blog/langgraph-in-production-stateful-multi-step-agents/",
+        "snippet": "LangGraph in Production: StateGraph, set_entry_point, and the Patterns We Use for Real Agents TL;DR - State schema design is the most consequential decision in a LangGraph project. Using Annotated red",
+        "source": "AnySearch"
+      },
+      {
+        "name": "langchain-ai/langgraph",
+        "url": "https://github.com/langchain-ai/langgraph?tab=readme-ov-file",
+        "snippet": "# Repository: langchain-ai/langgraph Build resilient agents. - Stars: 37680 - Forks: 6316 - Watchers: 171 - Open issues: 634 - Primary language: Python - Languages: Python (99.6%), Makefile (0.2%), Ty",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Workflows and agents - Docs by LangChain",
+        "url": "https://docs.langchain.com/oss/javascript/langgraph/workflows-agents",
+        "snippet": "> ## Documentation Index > > Fetch the complete documentation index at: https://docs.langchain.com/llms.txt > Use this file to discover all available pages before exploring further. # Workflows and ag",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "LangGraph in Production: StateGraph, set_entry_point, and the Patterns We Use for Real Agents",
+        "url": "https://www.kalviumlabs.ai/blog/langgraph-in-production-stateful-multi-step-agents/",
+        "snippet": "LangGraph in Production: StateGraph, set_entry_point, and the Patterns We Use for Real Agents TL;DR - State schema design is the most consequential decision in a LangGraph project. Using Annotated red",
+        "source": "AnySearch"
+      },
+      {
+        "name": "langchain-ai/langgraph",
+        "url": "https://github.com/langchain-ai/langgraph?tab=readme-ov-file",
+        "snippet": "# Repository: langchain-ai/langgraph Build resilient agents. - Stars: 37680 - Forks: 6316 - Watchers: 171 - Open issues: 634 - Primary language: Python - Languages: Python (99.6%), Makefile (0.2%), Ty",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Workflows and agents - Docs by LangChain",
+        "url": "https://docs.langchain.com/oss/javascript/langgraph/workflows-agents",
+        "snippet": "> ## Documentation Index > > Fetch the complete documentation index at: https://docs.langchain.com/llms.txt > Use this file to discover all available pages before exploring further. # Workflows and ag",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "code agent SWE-bench benchmark 2026 state of the art",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "SWE-bench Leaderboards",
+        "url": "https://www.swebench.com/",
+        "snippet": "SWE-bench Leaderboards Verified Multilingual Lite Full Multimodal Compare results Agent: mini-SWE-agent v2 mini-SWE-agent v0-v2 All OSS agents All agents Models: All models Open source only Proprietar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-Bench Coding Agent Leaderboard 2026: Claude vs GPT | Awesome Agents",
+        "url": "https://awesomeagents.ai/leaderboards/swe-bench-coding-agent-leaderboard/",
+        "snippet": "SWE-Bench Coding Agent Leaderboard 2026: Claude vs GPT | Awesome Agents Most coding benchmarks measure whether a model can write a function given a docstring. SWE-Bench measures whether an agent can f",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Leaderboard | CodeSOTA | CodeSOTA",
+        "url": "https://www.codesota.com/benchmark/swe-bench-verified-agentic",
+        "snippet": "SWE-bench Verified Leaderboard | CodeSOTA | CodeSOTA Codesota · Benchmark · SWE-bench Verified Home/ Leaderboards/ Code & Software Engineering/ SWE-bench Issue Resolution/SWE-bench Verified Unknown # ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "SWE-bench Leaderboards",
+        "url": "https://www.swebench.com/",
+        "snippet": "SWE-bench Leaderboards Verified Multilingual Lite Full Multimodal Compare results Agent: mini-SWE-agent v2 mini-SWE-agent v0-v2 All OSS agents All agents Models: All models Open source only Proprietar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-Bench Coding Agent Leaderboard 2026: Claude vs GPT | Awesome Agents",
+        "url": "https://awesomeagents.ai/leaderboards/swe-bench-coding-agent-leaderboard/",
+        "snippet": "SWE-Bench Coding Agent Leaderboard 2026: Claude vs GPT | Awesome Agents Most coding benchmarks measure whether a model can write a function given a docstring. SWE-Bench measures whether an agent can f",
+        "source": "AnySearch"
+      },
+      {
+        "name": "SWE-bench Verified Leaderboard | CodeSOTA | CodeSOTA",
+        "url": "https://www.codesota.com/benchmark/swe-bench-verified-agentic",
+        "snippet": "SWE-bench Verified Leaderboard | CodeSOTA | CodeSOTA Codesota · Benchmark · SWE-bench Verified Home/ Leaderboards/ Code & Software Engineering/ SWE-bench Issue Resolution/SWE-bench Verified Unknown # ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "constitutional AI harmlessness RLHF 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://arxiv.org/abs/2212.08073",
+        "snippet": "# CAT'S THEORY: Empirical Validation and Architectural Applications Cross-Architecture AI Consciousness Recognition and the Foundation for Constraint-Preserving Recursive Intelligence arXiv (Cornell U",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://scalingintelligence.stanford.edu/pubs/constitutionalai.pdf",
+        "snippet": "## Constitutional AI: Harmlessness from AI Feedback Yuntao Bai∗, Saurav Kadavath, Sandipan Kundu, Amanda Askell, Jackson Kernion, Andy Jones, Anna Chen, Anna Goldie, Azalia Mirhoseini, Cameron McKinno",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://www-cdn.anthropic.com/7512771452629584566b6303311496c262da1006/Anthropic_ConstitutionalAI_v2.pdf",
+        "snippet": "## Constitutional AI: ## Harmlessness from AI Feedback As artificial intelligence (AI) systems become more capable, it becomes more important that they are aligned with principles that humans find agr",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://arxiv.org/abs/2212.08073",
+        "snippet": "# CAT'S THEORY: Empirical Validation and Architectural Applications Cross-Architecture AI Consciousness Recognition and the Foundation for Constraint-Preserving Recursive Intelligence arXiv (Cornell U",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://scalingintelligence.stanford.edu/pubs/constitutionalai.pdf",
+        "snippet": "## Constitutional AI: Harmlessness from AI Feedback Yuntao Bai∗, Saurav Kadavath, Sandipan Kundu, Amanda Askell, Jackson Kernion, Andy Jones, Anna Chen, Anna Goldie, Azalia Mirhoseini, Cameron McKinno",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Constitutional AI: Harmlessness from AI Feedback",
+        "url": "https://www-cdn.anthropic.com/7512771452629584566b6303311496c262da1006/Anthropic_ConstitutionalAI_v2.pdf",
+        "snippet": "## Constitutional AI: ## Harmlessness from AI Feedback As artificial intelligence (AI) systems become more capable, it becomes more important that they are aligned with principles that humans find agr",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "multi-modal foundation model 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Rosetta: Composable Native Multimodal Pretraining",
+        "url": "https://arxiv.org/html/2607.00293",
+        "snippet": "Rosetta: Composable Native Multimodal Pretraining arXiv is now an independent nonprofit! Learn more× # Rosetta: Composable Native Multimodal Pretraining Xiangyue Liu1 Zijian Zhang2 Miles Yang2 Zhao Zh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "TUNA: Taming Unified Visual Representations for Native Unified Multimodal Models",
+        "url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Liu_TUNA_Taming_Unified_Visual_Representations_for_Native_Unified_Multimodal_Models_CVPR_2026_paper.pdf",
+        "snippet": "## TUNA: Taming Unified Visual Representations for Native Unified ## Multimodal Models #### Zhiheng Liu 1,2,†, Weiming Ren 1,3,†, Haozhe Liu 1,4,‡, Zijian Zhou 1,‡, Shoufa Chen 1,‡, Haonan Qiu 1, Xiao",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Modus: Decoder-Only Any-to-Any Modeling of Diverse Modalities",
+        "url": "https://openreview.net/pdf/fae036138aefddbe19dff5aa36ed3dfa65d502cc.pdf",
+        "snippet": "## MODUS: Decoder-Only Any-to-Any Modeling of Diverse Modalities Mingqiao Ye * 1 Zhaochong An * 1 3 Zhitong Gao 1 Xian Liu 4 Oguzhan Fatih Kar ˘ † 1 2 Jesse Allardice † 2 Roman Bachmann † 1 2 David Mi",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Rosetta: Composable Native Multimodal Pretraining",
+        "url": "https://arxiv.org/html/2607.00293",
+        "snippet": "Rosetta: Composable Native Multimodal Pretraining arXiv is now an independent nonprofit! Learn more× # Rosetta: Composable Native Multimodal Pretraining Xiangyue Liu1 Zijian Zhang2 Miles Yang2 Zhao Zh",
+        "source": "AnySearch"
+      },
+      {
+        "name": "TUNA: Taming Unified Visual Representations for Native Unified Multimodal Models",
+        "url": "https://openaccess.thecvf.com/content/CVPR2026/papers/Liu_TUNA_Taming_Unified_Visual_Representations_for_Native_Unified_Multimodal_Models_CVPR_2026_paper.pdf",
+        "snippet": "## TUNA: Taming Unified Visual Representations for Native Unified ## Multimodal Models #### Zhiheng Liu 1,2,†, Weiming Ren 1,3,†, Haozhe Liu 1,4,‡, Zijian Zhou 1,‡, Shoufa Chen 1,‡, Haonan Qiu 1, Xiao",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Modus: Decoder-Only Any-to-Any Modeling of Diverse Modalities",
+        "url": "https://openreview.net/pdf/fae036138aefddbe19dff5aa36ed3dfa65d502cc.pdf",
+        "snippet": "## MODUS: Decoder-Only Any-to-Any Modeling of Diverse Modalities Mingqiao Ye * 1 Zhaochong An * 1 3 Zhitong Gao 1 Xian Liu 4 Oguzhan Fatih Kar ˘ † 1 2 Jesse Allardice † 2 Roman Bachmann † 1 2 David Mi",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "world model generation agent 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "QwenLM/Qwen-AgentWorld",
+        "url": "https://github.com/QwenLM/Qwen-AgentWorld",
+        "snippet": "# Repository: QwenLM/Qwen-AgentWorld Qwen-AgentWorld: Language World Models for General Agents - Stars: 798 - Forks: 74 - Watchers: 7 - Open issues: 3 - Primary language: Python - Languages: Python - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Qwen-AgentWorld: Language World Models for General Agents",
+        "url": "https://arxiv.org/html/2606.24597",
+        "snippet": "# Qwen-AgentWorld: Language World Models for General Agents arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract A world model predicts environment dynamics based on current observatio",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From Word to World: Can Large Language Models be Implicit Text-based World Models? - ACL Anthology",
+        "url": "https://aclanthology.org/2026.acl-long.366/",
+        "snippet": "From Word to World: Can Large Language Models be Implicit Text-based World Models? - ACL Anthology --- ##### Abstract Agentic learning increasingly hinges on interaction, yet real-world experience is ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "QwenLM/Qwen-AgentWorld",
+        "url": "https://github.com/QwenLM/Qwen-AgentWorld",
+        "snippet": "# Repository: QwenLM/Qwen-AgentWorld Qwen-AgentWorld: Language World Models for General Agents - Stars: 798 - Forks: 74 - Watchers: 7 - Open issues: 3 - Primary language: Python - Languages: Python - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Qwen-AgentWorld: Language World Models for General Agents",
+        "url": "https://arxiv.org/html/2606.24597",
+        "snippet": "# Qwen-AgentWorld: Language World Models for General Agents arXiv (Cornell University), 2026. Preprint. 0 citations. ## Abstract A world model predicts environment dynamics based on current observatio",
+        "source": "AnySearch"
+      },
+      {
+        "name": "From Word to World: Can Large Language Models be Implicit Text-based World Models? - ACL Anthology",
+        "url": "https://aclanthology.org/2026.acl-long.366/",
+        "snippet": "From Word to World: Can Large Language Models be Implicit Text-based World Models? - ACL Anthology --- ##### Abstract Agentic learning increasingly hinges on interaction, yet real-world experience is ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "tool use function calling production agent reliability",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Getting tool calling to 99% reliability in production — datarekha",
+        "url": "https://datarekha.com/blog/tool-calling-reliability-99-percent/",
+        "snippet": "Getting tool calling to 99% reliability in production — datarekha If you have shipped an agent and watched its production logs for a week, you already know that the model itself is rarely the thing th",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Production Design for AI Agent Tool Use: Wiring Claude and OpenAI Function Calling to Be Idempotent, Safe, and Observable | Tomoda Hinata — SaaS/DX",
+        "url": "https://tomodahinata.com/en/blog/ai-agent-tool-use-function-calling-production-design",
+        "snippet": "Production Design for AI Agent Tool Use: Wiring Claude and OpenAI Function Calling to Be Idempotent, Safe, and Observable | Tomoda Hinata — SaaS/DX Contents \"I want to let the LLM use tools\"—a demo ru",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Reliable Tool-Using AI Agents in Production: MCP, State, Retries, Timeouts, and Recovery",
+        "url": "https://labs.adaline.ai/p/reliable-tool-using-ai-agents-production",
+        "snippet": "Reliable Tool-Using AI Agents in Production: MCP, State, Retries, Timeouts, and Recovery # Adaline Labs SubscribeSign in # Reliable Tool-Using AI Agents In Production: MCP, State, Retries, Timeouts, a",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Getting tool calling to 99% reliability in production — datarekha",
+        "url": "https://datarekha.com/blog/tool-calling-reliability-99-percent/",
+        "snippet": "Getting tool calling to 99% reliability in production — datarekha If you have shipped an agent and watched its production logs for a week, you already know that the model itself is rarely the thing th",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Production Design for AI Agent Tool Use: Wiring Claude and OpenAI Function Calling to Be Idempotent, Safe, and Observable | Tomoda Hinata — SaaS/DX",
+        "url": "https://tomodahinata.com/en/blog/ai-agent-tool-use-function-calling-production-design",
+        "snippet": "Production Design for AI Agent Tool Use: Wiring Claude and OpenAI Function Calling to Be Idempotent, Safe, and Observable | Tomoda Hinata — SaaS/DX Contents \"I want to let the LLM use tools\"—a demo ru",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Reliable Tool-Using AI Agents in Production: MCP, State, Retries, Timeouts, and Recovery",
+        "url": "https://labs.adaline.ai/p/reliable-tool-using-ai-agents-production",
+        "snippet": "Reliable Tool-Using AI Agents in Production: MCP, State, Retries, Timeouts, and Recovery # Adaline Labs SubscribeSign in # Reliable Tool-Using AI Agents In Production: MCP, State, Retries, Timeouts, a",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "human in the loop AI agent feedback learning",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Learning Personalized Agents from Human Feedback",
+        "url": "https://arxiv.org/html/2602.16173v1",
+        "snippet": "Learning Personalized Agents from Human Feedback 1]Meta Superintelligence Labs 2]Princeton University 3]Duke University \\contribution[*]Work done at Meta # Learning Personalized Agents from Human Feed",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learning Personalized Agents from Human Feedback",
+        "url": "https://personalized-ai.github.io/",
+        "snippet": "PAHF # Learning Personalized Agents from Human Feedback Continual Personalization Agentic Memory Kaiqu Liang 1,2, Julia Kruk 1, Shengyi Qian 1, Xianjun Yang 1, Shengjie Bi 1, Yuanshun Yao 1, Shaoliang",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learning Personalized Agents from Human Feedback | Research - AI at Meta",
+        "url": "https://ai.meta.com/research/publications/learning-personalized-agents-from-human-feedback/",
+        "snippet": "Learning Personalized Agents from Human Feedback | Research - AI at Meta Products AI Research Resources About Try Meta AI https://ai.meta.com/ #### CONVERSATIONAL AI #### RESEARCH # Learning Personali",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Learning Personalized Agents from Human Feedback",
+        "url": "https://arxiv.org/html/2602.16173v1",
+        "snippet": "Learning Personalized Agents from Human Feedback 1]Meta Superintelligence Labs 2]Princeton University 3]Duke University \\contribution[*]Work done at Meta # Learning Personalized Agents from Human Feed",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learning Personalized Agents from Human Feedback",
+        "url": "https://personalized-ai.github.io/",
+        "snippet": "PAHF # Learning Personalized Agents from Human Feedback Continual Personalization Agentic Memory Kaiqu Liang 1,2, Julia Kruk 1, Shengyi Qian 1, Xianjun Yang 1, Shengjie Bi 1, Yuanshun Yao 1, Shaoliang",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learning Personalized Agents from Human Feedback | Research - AI at Meta",
+        "url": "https://ai.meta.com/research/publications/learning-personalized-agents-from-human-feedback/",
+        "snippet": "Learning Personalized Agents from Human Feedback | Research - AI at Meta Products AI Research Resources About Try Meta AI https://ai.meta.com/ #### CONVERSATIONAL AI #### RESEARCH # Learning Personali",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "emergent capabilities large language model scaling",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Emergent Abilities of Large Language Models",
+        "url": "https://arxiv.org/pdf/2206.07682",
+        "snippet": "# Emergent Abilities of Large Language Models arXiv (Cornell University), 2022. Preprint. 1,033 citations. ## Abstract Scaling up language models has been shown to predictably improve performance and ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Breaking Myths in LLM scaling and emergent abilities with ...",
+        "url": "https://www.sciencedirect.com/science/article/pii/S092523122503214X",
+        "snippet": "Skip to main content Skip to article - View  PDF - Download full issue Search ScienceDirect ## Neurocomputing Volume 670, 14 March 2026, 132542 # Breaking Myths in LLM scaling and emergent abilities w",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Characterizing Emergent Phenomena in Large Language Models",
+        "url": "https://research.google/blog/characterizing-emergent-phenomena-in-large-language-models/",
+        "snippet": "Characterizing Emergent Phenomena in Large Language Models # Characterizing Emergent Phenomena in Large Language Models November 10, 2022 Posted by Jason Wei and Yi Tay, Research Scientists, Google Re",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Emergent Abilities of Large Language Models",
+        "url": "https://arxiv.org/pdf/2206.07682",
+        "snippet": "# Emergent Abilities of Large Language Models arXiv (Cornell University), 2022. Preprint. 1,033 citations. ## Abstract Scaling up language models has been shown to predictably improve performance and ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Breaking Myths in LLM scaling and emergent abilities with ...",
+        "url": "https://www.sciencedirect.com/science/article/pii/S092523122503214X",
+        "snippet": "Skip to main content Skip to article - View  PDF - Download full issue Search ScienceDirect ## Neurocomputing Volume 670, 14 March 2026, 132542 # Breaking Myths in LLM scaling and emergent abilities w",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Characterizing Emergent Phenomena in Large Language Models",
+        "url": "https://research.google/blog/characterizing-emergent-phenomena-in-large-language-models/",
+        "snippet": "Characterizing Emergent Phenomena in Large Language Models # Characterizing Emergent Phenomena in Large Language Models November 10, 2022 Posted by Jason Wei and Yi Tay, Research Scientists, Google Re",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]

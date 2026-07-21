@@ -1,4 +1,4 @@
-﻿"""Phase 32 Requisite Variety — Ashby 必要多样性律工程化.
+"""Phase 32 Requisite Variety — Ashby 必要多样性律工程化.
 
 主人 21:30 跨域调研 AnySearch:
   "W. Ross Ashby, Cybernetics and Requisite Variety (1956)"

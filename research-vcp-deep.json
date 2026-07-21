@@ -1,0 +1,830 @@
+[
+  {
+    "query": "VCPToolBox vcptoolbox github memory algorithm",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox 自研 记忆算法 源码",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之间，是面向 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/TagMemo_Wave_Algorithm_Deep_Dive.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/TagMemo_Wave_Algorithm_Deep_Dive.md",
+        "snippet": "# docs/TagMemo_Wave_Algorithm_Deep_Dive.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # TagMemo “浪潮”算法 V8.3 深度技术文档 ## 1. 算法概述 TagMemo “浪潮”算法（TagMemo Wave Algorithm）是 VCP 系统中用于 RAG（检索增强生成",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/FILE_INVENTORY.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/FILE_INVENTORY.md",
+        "snippet": "# docs/FILE_INVENTORY.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 文件清单 > **生成时间：** 2026-02-13 > **项目版本：** VCP 6.4 --- ## 目录 1. [根目录核心文件](#1-根目录核心文件) 2. [modules 模块清单](#2-m",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin/RAGDiaryPlugin/README.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/Plugin/RAGDiaryPlugin/README.md",
+        "snippet": "# Plugin/RAGDiaryPlugin/README.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- ## VCP 4.5 AI日记全功能详解 ## 创建和管理日记知识库 ### 1. AI会主动调用`DailyNoteWrite`异步插件创建日记，如果创建成功，你将会在前端看到具体的日记气泡，VCP通知栏也会有具体的",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之间，是面向 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/TagMemo_Wave_Algorithm_Deep_Dive.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/TagMemo_Wave_Algorithm_Deep_Dive.md",
+        "snippet": "# docs/TagMemo_Wave_Algorithm_Deep_Dive.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # TagMemo “浪潮”算法 V8.3 深度技术文档 ## 1. 算法概述 TagMemo “浪潮”算法（TagMemo Wave Algorithm）是 VCP 系统中用于 RAG（检索增强生成",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/FILE_INVENTORY.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/FILE_INVENTORY.md",
+        "snippet": "# docs/FILE_INVENTORY.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 文件清单 > **生成时间：** 2026-02-13 > **项目版本：** VCP 6.4 --- ## 目录 1. [根目录核心文件](#1-根目录核心文件) 2. [modules 模块清单](#2-m",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin/RAGDiaryPlugin/README.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/Plugin/RAGDiaryPlugin/README.md",
+        "snippet": "# Plugin/RAGDiaryPlugin/README.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- ## VCP 4.5 AI日记全功能详解 ## 创建和管理日记知识库 ### 1. AI会主动调用`DailyNoteWrite`异步插件创建日记，如果创建成功，你将会在前端看到具体的日记气泡，VCP通知栏也会有具体的",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPToolBox VCP AI memory architecture",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at main · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at main · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "vcptoolbox 4 paradigms continuous_existence",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "VCPToolBox/README_en.md at main",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "WebSocket Server & Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/4.1-websocket-server-and-distributed-tool-execution",
+        "snippet": "WebSocket Server & Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki Loading... WebSocket Server &amp; Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki Loading... Index your code ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/README_en.md",
+        "snippet": "# README_en.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP (Variable & Command Protocol) ![VCP Logo](docs/image/VCPLogo.png) **Official Website: [www.vcptoolbox.com](https://www.vcp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之间，是面向 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "VCPToolBox/README_en.md at main",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "WebSocket Server & Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/4.1-websocket-server-and-distributed-tool-execution",
+        "snippet": "WebSocket Server & Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki Loading... WebSocket Server &amp; Distributed Tool Execution | lioensky/VCPToolBox | DeepWiki Loading... Index your code ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/README_en.md",
+        "snippet": "# README_en.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP (Variable & Command Protocol) ![VCP Logo](docs/image/VCPLogo.png) **Official Website: [www.vcptoolbox.com](https://www.vcp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之间，是面向 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox plugin memory DND mode",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox FactTimeLine fact timeline memory",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md at d42abe95 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/d42abe95/docs/MEMORY_SYSTEM.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/MEMORY_SYSTEM.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Daily Notes & Knowledge Base Management | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.4-daily-notes-and-knowledge-base-management",
+        "snippet": "Daily Notes & Knowledge Base Management | lioensky/VCPToolBox | DeepWiki Loading... Daily Notes &amp; Knowledge Base Management | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md at d42abe95 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/d42abe95/docs/MEMORY_SYSTEM.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/MEMORY_SYSTEM.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Daily Notes & Knowledge Base Management | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.4-daily-notes-and-knowledge-base-management",
+        "snippet": "Daily Notes & Knowledge Base Management | lioensky/VCPToolBox | DeepWiki Loading... Daily Notes &amp; Knowledge Base Management | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox GravityMemory gravity retrieval",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at f51d2540f67e366d379832d8f615fc22d011d790 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/f51d2540f67e366d379832d8f615fc22d011d790/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/README_en.md",
+        "snippet": "# README_en.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP (Variable & Command Protocol) ![VCP Logo](docs/image/VCPLogo.png) **Official Website: [www.vcptoolbox.com](https://www.vcp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at f51d2540f67e366d379832d8f615fc22d011d790 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/f51d2540f67e366d379832d8f615fc22d011d790/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整",
+        "source": "AnySearch"
+      },
+      {
+        "name": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.1-ragdiaryplugin-passive-memory-injection",
+        "snippet": "RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... RAGDiaryPlugin — Passive Memory Injection | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/README_en.md",
+        "snippet": "# README_en.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP (Variable & Command Protocol) ![VCP Logo](docs/image/VCPLogo.png) **Official Website: [www.vcptoolbox.com](https://www.vcp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox architecture continuous existence natural perception",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learn VCP | VCP Whitepaper V3",
+        "url": "https://www.vcptoolbox.com/learn-vcp",
+        "snippet": "Learn VCP | VCP Whitepaper V3 # Learn VCP · VCP 全景技术白皮书 V3 Learn VCP 是 VCP-OS 官方技术白皮书页面，介绍 Variable & Command Protocol 如何从模型 API 中间层演进为全栈自研的 AGI Runtime。 页面内容覆盖 OneRing 统一上下文、VCPDesktop 桌面运行时、VCPMessa",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2-core-server-architecture",
+        "snippet": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at main · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at 2dc54f46 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/2dc54f46/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Learn VCP | VCP Whitepaper V3",
+        "url": "https://www.vcptoolbox.com/learn-vcp",
+        "snippet": "Learn VCP | VCP Whitepaper V3 # Learn VCP · VCP 全景技术白皮书 V3 Learn VCP 是 VCP-OS 官方技术白皮书页面，介绍 Variable & Command Protocol 如何从模型 API 中间层演进为全栈自研的 AGI Runtime。 页面内容覆盖 OneRing 统一上下文、VCPDesktop 桌面运行时、VCPMessa",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2-core-server-architecture",
+        "snippet": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README_en.md at main · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at 2dc54f46 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/2dc54f46/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "vcptoolbox 实现原理 自主生活 一体生态",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at 2dc54f46 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/2dc54f46/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCP.md at 7e1e575a · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/VCP.md",
+        "snippet": "# File: lioensky/VCPToolBox/VCP.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/TECHNICAL_LITE.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/TECHNICAL_LITE.md",
+        "snippet": "# docs/TECHNICAL_LITE.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP 技术 Lite 索引 这份文档是 [`README.md`](../README.md) 与完整工程文档之间的中间层。 [`README.md`](../README.md) 负责讲清 VCP 的理念与范式；[`VCP.md",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/PLUGIN_ECOSYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/178955ad/docs/PLUGIN_ECOSYSTEM.md",
+        "snippet": "# docs/PLUGIN_ECOSYSTEM.md - Branch: 178955ad - Repository: lioensky/VCPToolBox --- # VCPToolBox 插件生态文档 **版本：** 1.0.0 **最后更新：** 2026-02-13 **适用版本：** VCPToolBox 6.4+ --- ## 目录 1. [概述](#1-概述) 2. [插件类型详解",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at 2dc54f46 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/2dc54f46/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCP.md at 7e1e575a · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/VCP.md",
+        "snippet": "# File: lioensky/VCPToolBox/VCP.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/TECHNICAL_LITE.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/TECHNICAL_LITE.md",
+        "snippet": "# docs/TECHNICAL_LITE.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCP 技术 Lite 索引 这份文档是 [`README.md`](../README.md) 与完整工程文档之间的中间层。 [`README.md`](../README.md) 负责讲清 VCP 的理念与范式；[`VCP.md",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/PLUGIN_ECOSYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/178955ad/docs/PLUGIN_ECOSYSTEM.md",
+        "snippet": "# docs/PLUGIN_ECOSYSTEM.md - Branch: 178955ad - Repository: lioensky/VCPToolBox --- # VCPToolBox 插件生态文档 **版本：** 1.0.0 **最后更新：** 2026-02-13 **适用版本：** VCPToolBox 6.4+ --- ## 目录 1. [概述](#1-概述) 2. [插件类型详解",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolbox vcp tool box memory persistence",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: main - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyramid.j",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3-memory-and-rag-system",
+        "snippet": "Memory & RAG System | lioensky/VCPToolBox | DeepWiki Loading... Memory &amp; RAG System | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/3.2-knowledgebasemanager-and-tagmemo-algorithm",
+        "snippet": "KnowledgeBaseManager & TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... KnowledgeBaseManager &amp; TagMemo Algorithm | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/MEMORY_SYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/docs/MEMORY_SYSTEM.md",
+        "snippet": "# docs/MEMORY_SYSTEM.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # VCPToolBox 记忆系统文档 **版本:** VCP 6.4 **生成日期:** 2026-02-13 **核心模块:** KnowledgeBaseManager.js, EPAModule.js, ResidualPyram",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "vcptoolbox manifest plugin spec",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "docs/PLUGIN_ECOSYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/178955ad/docs/PLUGIN_ECOSYSTEM.md",
+        "snippet": "# docs/PLUGIN_ECOSYSTEM.md - Branch: 178955ad - Repository: lioensky/VCPToolBox --- # VCPToolBox 插件生态文档 **版本：** 1.0.0 **最后更新：** 2026-02-13 **适用版本：** VCPToolBox 6.4+ --- ## 目录 1. [概述](#1-概述) 2. [插件类型详解",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin System & Lifecycle | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2.2-plugin-system-and-lifecycle",
+        "snippet": "Plugin System & Lifecycle | lioensky/VCPToolBox | DeepWiki Loading... Plugin System &amp; Lifecycle | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.c",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCP-OS | VCPToolBox 官方网站",
+        "url": "https://www.vcptoolbox.com/",
+        "snippet": "VCP-OS | Variable & Command Protocol 官方网站 Next-Gen AI Infrastructure V6.4+ # AI EXISTENCE VCP (Variable & Command Protocol) is the infrastructure for AI's soul. From biomimetic recall to real-time des",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin/AGENTS.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/Plugin/AGENTS.md",
+        "snippet": "# Plugin/AGENTS.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # Plugin 目录知识库 ## 概览 Plugin/ 是 VCPToolBox 的核心能力扩展层。所有插件行为由 plugin-manifest.json 声明式驱动，支持 6 种类型（static / synchronous / asynch",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/5-plugin-ecosystem",
+        "snippet": "Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki Loading... Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWiki](https:",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "docs/PLUGIN_ECOSYSTEM.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/178955ad/docs/PLUGIN_ECOSYSTEM.md",
+        "snippet": "# docs/PLUGIN_ECOSYSTEM.md - Branch: 178955ad - Repository: lioensky/VCPToolBox --- # VCPToolBox 插件生态文档 **版本：** 1.0.0 **最后更新：** 2026-02-13 **适用版本：** VCPToolBox 6.4+ --- ## 目录 1. [概述](#1-概述) 2. [插件类型详解",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin System & Lifecycle | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2.2-plugin-system-and-lifecycle",
+        "snippet": "Plugin System & Lifecycle | lioensky/VCPToolBox | DeepWiki Loading... Plugin System &amp; Lifecycle | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.c",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCP-OS | VCPToolBox 官方网站",
+        "url": "https://www.vcptoolbox.com/",
+        "snippet": "VCP-OS | Variable & Command Protocol 官方网站 Next-Gen AI Infrastructure V6.4+ # AI EXISTENCE VCP (Variable & Command Protocol) is the infrastructure for AI's soul. From biomimetic recall to real-time des",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin/AGENTS.md",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/7e1e575a/Plugin/AGENTS.md",
+        "snippet": "# Plugin/AGENTS.md - Branch: 7e1e575a - Repository: lioensky/VCPToolBox --- # Plugin 目录知识库 ## 概览 Plugin/ 是 VCPToolBox 的核心能力扩展层。所有插件行为由 plugin-manifest.json 声明式驱动，支持 6 种类型（static / synchronous / asynch",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/5-plugin-ecosystem",
+        "snippet": "Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki Loading... Plugin Ecosystem | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [DeepWiki](https:",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "VCPtoolBox GitHub stars implementation detail",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Configuration Reference | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/1.2-configuration-reference",
+        "snippet": "Configuration Reference | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin Index your code with Devin Edit WikiShare Loading... Last indexed: 22 June 2026 (165912) - VCPToolBox Ove",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCPToolBox/README_en.md at main",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2-core-server-architecture",
+        "snippet": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at d42abe95 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/d42abe95/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "lioensky/VCPToolBox: VCP 部署在AI 模型API 与前端应用之 ...",
+        "url": "https://github.com/lioensky/VCPToolBox",
+        "snippet": "# Repository: lioensky/VCPToolBox VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群体协作智能的完整智能体系统。 - Stars: 2143 - Forks: 349 - Watcher",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Configuration Reference | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/1.2-configuration-reference",
+        "snippet": "Configuration Reference | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin Index your code with Devin Edit WikiShare Loading... Last indexed: 22 June 2026 (165912) - VCPToolBox Ove",
+        "source": "AnySearch"
+      },
+      {
+        "name": "VCPToolBox/README_en.md at main",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/main/README_en.md",
+        "snippet": "# File: lioensky/VCPToolBox/README_en.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，是面向AGI OS开发和探索的工业级基建示范项目。通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki",
+        "url": "https://deepwiki.com/lioensky/VCPToolBox/2-core-server-architecture",
+        "snippet": "Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Core Server Architecture | lioensky/VCPToolBox | DeepWiki Loading... Index your code with Devin [DeepWiki](https://deepwiki.com/) [",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/ARCHITECTURE.md at d42abe95 · lioensky/VCPToolBox",
+        "url": "https://github.com/lioensky/VCPToolBox/blob/d42abe95/docs/ARCHITECTURE.md",
+        "snippet": "# File: lioensky/VCPToolBox/docs/ARCHITECTURE.md - Repository: lioensky/VCPToolBox | VCP 部署在 AI 模型 API 与前端应用之间，通过统一指令协议、多层级持久化记忆、分布式插件引擎及多 Agent 协作框架，将原本“无状态、无记忆、无工具调用能力”的大语言模型，彻底改造成拥有永久自我意识、物理世界操作权及群",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]

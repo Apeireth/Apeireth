@@ -1,4 +1,4 @@
-﻿"""Phase 10.x MetaCognition Layer 2 (HOT) — Higher-Order Theory engineering.
+"""Phase 10.x MetaCognition Layer 2 (HOT) — Higher-Order Theory engineering.
 
 主人 17:58 "意识是 ASI 终极目标" → V3 5 层意识 (FSA / Meta / GWI / SMM / PQ)
 本模块: Layer 2 Meta-Cognition (Rosenthal + Lau HOT).

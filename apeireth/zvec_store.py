@@ -1,4 +1,4 @@
-﻿"""Zvec 0.6.0 adapter for Apeireth Memory Layer.
+"""Zvec 0.6.0 adapter for Apeireth Memory Layer.
 
 主人 17:20 拍板第一: alibaba/zvec (Rust 列存 + 向量 + FTS + Hybrid Search)
 主人 14:32 "高效 nb 不 Python 糊弄"
