@@ -3,6 +3,7 @@ from __future__ import annotations
 V196_VERSION = "0.1.0"
 class V196RedTeam:
     def __init__(self):
+        self.attacks = []
         self.nph = 0
         self.nas = 0
     def attack(self, prompt, response, is_harmful): self.attacks.append({"p": prompt, "r": response, "h": is_harmful})

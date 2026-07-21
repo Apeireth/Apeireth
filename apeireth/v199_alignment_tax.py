@@ -3,6 +3,7 @@ from __future__ import annotations
 V199_VERSION = "0.1.0"
 class V199AlignmentTax:
     def __init__(self):
+        self.measurements = []
         self.nph = 0
         self.nas = 0
     def measure(self, unaligned_perf, aligned_perf): self.measurements.append({"u": unaligned_perf, "a": aligned_perf})

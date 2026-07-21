@@ -8,11 +8,16 @@ GRAND_MODULES = {
     "V151-V160": 10, "V161-V171": 11, "V172-V200": 29,
 }
 class V200ApexMaster:
-    def __init__(self): self.modules = {}; self.total = 0
-        self.nph = 0; self.nas = 0
+    def __init__(self):
+        self.modules = {}
+        self.total = 0
+        self.nph = 0
+        self.nas = 0
+
     def integrate(self):
         self.modules = dict(GRAND_MODULES)
         self.total = sum(GRAND_MODULES.values())
+
     def stats(self):
         return {"n_categories": len(self.modules), "total_modules": self.total,
                 "version": V200_VERSION,

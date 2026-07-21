@@ -3,6 +3,7 @@ from __future__ import annotations
 V181_VERSION = "0.1.0"
 class V181SafetyCase:
     def __init__(self):
+        self.cases = []
         self.nph = 0
         self.nas = 0
     def add_case(self, name, properties, evidence): self.cases.append({"name": name, "p": properties, "e": evidence})

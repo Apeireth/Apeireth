@@ -11,6 +11,7 @@ MIGRATION_PLAN = [
 ]
 class V179RustMigrationPlan:
     def __init__(self):
+        self.plan = []
         self.nph = 0
         self.nas = 0
     def n_migrations(self): return len(self.plan)
