@@ -30,7 +30,7 @@ from .memory import Episode, MemoryStore
 from .memory_store import SqliteMemoryStore
 from .zvec_store import ZvecMemoryStore, ZvecConfig, _ZVEC_AVAILABLE
 from .relation import RelationGraph, Node as RNode, Edge as REdge
-from .relation_store import SqliteRelationStore
+from .relation_store import SqliteRelationStore, migrate_from_relation_graph
 from .persona import PersonaEngine, Persona, SCTProfile, seed_default_personas, ARCHETYPES
 from .self_org_team import SelfOrgOrchestrator, TaskEvent, TEAM_TEMPLATES
 from .self_evolving import HarnessEvolver, Harness
@@ -77,19 +77,28 @@ def setup_store(tmp: Path) -> IdentityStore:
     return store
 
 
-def setup_graph(tmp: Path) -> SqliteRelationStore:
-    """Set up Relation Graph + central ai_self node."""
+def setup_graph(tmp: Path) -> tuple[RelationGraph, SqliteRelationStore]:
+    """Set up Relation Graph + central ai_self node.
+
+    主 9:20 cron 真修 (主 9:15 修好哲学):
+      - 之前 rstore.graph.add_node() 错 — SqliteRelationStore 没有 .graph 属性
+      - 现在创建 RelationGraph (in-memory) + populate SqliteRelationStore (持久化)
+      - 返回 (graph, rstore) — graph 做 in-memory 操作, rstore 做持久化
+    """
     rstore = SqliteRelationStore(tmp / "graph.db")
+    graph = RelationGraph()
     # 写 master node (we don't know master's real name — use placeholder)
     master_nid = "master_楚零"
-    rstore.graph.add_node(kind="master", label="主人 楚零", ref="master", nid=master_nid, weight=1.0)
+    graph.add_node(kind="master", label="主人 楚零", ref="master", nid=master_nid, weight=1.0)
     # 写 ai_self node
-    rstore.graph.add_node(kind="ai_self", label="中央 AI (Apeireth)", ref="apeireth_central",
-                          nid="ai_self_apeireth", weight=1.0, meta={"central": True})
+    graph.add_node(kind="ai_self", label="中央 AI (Apeireth)", ref="apeireth_central",
+                   nid="ai_self_apeireth", weight=1.0, meta={"central": True})
     # 写 ca edge (causal: master triggers AI)
-    rstore.graph.add_edge(master_nid, "ai_self_apeireth", "causal", weight=1.0,
-                           evidence="apeireth created by master 13:32")
-    return rstore
+    graph.add_edge(master_nid, "ai_self_apeireth", "causal", weight=1.0,
+                   evidence="apeireth created by master 13:32")
+    # 持久化到 SqliteRelationStore (migrate_from_relation_graph)
+    migrate_from_relation_graph(graph, rstore)
+    return graph, rstore
 
 
 def setup_memory_zvec(tmp: Path):
@@ -108,24 +117,23 @@ def run_asi_demo():
     # === Phase 0: Setup ===
     print("[Phase 0] Setup IdentityStore + RelationGraph + zvec Memory")
     store = setup_store(tmp)
-    rstore = setup_graph(tmp)
+    graph, rstore = setup_graph(tmp)
     zvec_mem = setup_memory_zvec(tmp)
     central_card = store.get("apeireth_central")
     print(f"  central ai_self: {central_card.name} | hash={central_card.integrity_hash()[:12]}")
-    print(f"  graph nodes: {rstore.graph.node_count()} | edges: {rstore.graph.edge_count()}")
+    print(f"  graph nodes: {len(graph.nodes)} | edges: {len(graph.edges)}")
     if zvec_mem:
         print(f"  zvec memory: {zvec_mem}")
 
     # === Phase 1: Persona Engine (4 archetypes) ===
     print("\n[Phase 1] Persona Engine — 4 archetypes 同时激活")
-    p_engine = PersonaEngine()
-    seed_default_personas(p_engine)
+    p_engine = PersonaEngine(personas=seed_default_personas())
     for p in p_engine.personas:
         print(f"  persona: {p.archetype:8s} | pid={p.pid} | SCT={p.sct.as_tuple()}")
 
     # === Phase 2: SelfOrgOrchestrator ===
     print("\n[Phase 2] SelfOrgOrchestrator — 听到 TaskEvent, 临时团自组织")
-    orch = SelfOrgOrchestrator(p_engine, store, rstore.graph)
+    orch = SelfOrgOrchestrator(p_engine, store, graph)
 
     team_reports = []
     for task_type, desc in TASKS:
@@ -140,7 +148,7 @@ def run_asi_demo():
             for c in cs:
                 print(f"  tick[{i}] {c.persona}: conf={c.confidence:.2f} | {c.content[:80]}")
         # dissolve: 写 IdentityStore team card + sub-graph
-        report = team.dissolve(store, rstore.graph, summary=f"[demo] {task_type}: {desc[:50]}")
+        report = team.dissolve(store, graph, summary=f"[demo] {task_type}: {desc[:50]}")
         print(f"  dissolved: card={report['team_card_name']} hash={report['team_card_hash'][:12]}")
         team_reports.append(report)
         orch.history.append(report)
@@ -149,30 +157,39 @@ def run_asi_demo():
     # === Phase 3: Self-Evolving Harness — 1 cycle demo ===
     print("\n[Phase 3] Self-Evolving Harness — 1 cycle demo")
     initial_harness = Harness(
-        components={"memory": "Episode+Note", "persona": "4 archetypes"},
-        skills=["karpathy_principles"],
-        guidelines=["主人原话优先", "实事求是"],
+        archetypes={"调度者": {"description": "目标驱动", "weight": 1.0},
+                    "学习者": {"description": "知识增长", "weight": 1.0},
+                    "思考者": {"description": "推理直觉", "weight": 1.0},
+                    "助手":   {"description": "同理配合", "weight": 1.0}},
+        sct_weights={"调度者": {"cognitive": 0.5, "motivational": 0.9, "biological": 0.3, "affective": 0.4},
+                     "学习者": {"cognitive": 0.9, "motivational": 0.6, "biological": 0.3, "affective": 0.4},
+                     "思考者": {"cognitive": 0.8, "motivational": 0.5, "biological": 0.7, "affective": 0.3},
+                     "助手":   {"cognitive": 0.4, "motivational": 0.4, "biological": 0.3, "affective": 0.9}},
+        funnel_priors={"主人原话优先": 0.95, "实事求是": 0.90},
     )
-    evolver = HarnessEvolver(initial_harness, max_iterations=1)
+    evolver = HarnessEvolver(harness=initial_harness)
     cycle_reports = []
-    for cycle in evolver.run():
+    for i in range(1):
+        cycle = evolver.cycle()
         cycle_reports.append(cycle)
-        print(f"  cycle {cycle['iteration']}: eval_score={cycle['eval_score']:.2f}, "
-              f"proposed={cycle['proposed']}, accepted={cycle['accepted']}")
-    print(f"  harness evolved: {evolver.harness.components}")
+        print(f"  cycle {i}: before_hash={cycle.get('before_hash', '?')[:8]}, "
+              f"after_hash={cycle.get('after_hash', '?')[:8]}, "
+              f"patches_proposed={cycle.get('patches_proposed', 0)}, "
+              f"phase5={cycle.get('phase5', '?')}")
+    print(f"  harness evolved: {len(evolver.harness.archetypes)} archetypes + {len(evolver.harness.sct_weights)} sct weights")
 
     # === Phase 4: 跨 session 持久化验证 ===
     print("\n[Phase 4] 跨 session 持久化验证 — store reload")
     store2 = IdentityStore(tmp / "identity.jsonl")
-    team_cards = [c for c in store2.list(role="team")]
+    team_cards = store2.teams()
     print(f"  reloaded store: {len(team_cards)} team cards + 1 central card")
     for c in team_cards[:3]:
         print(f"  - {c.name}: '{c.mission[:60]}...' hash={c.integrity_hash()[:12]}")
 
     # === Phase 5: Graph sub-graph 验证 ===
     print("\n[Phase 5] Graph sub-graph 验证 — 临时团节点 + 边全部存活")
-    print(f"  total nodes: {rstore.graph.node_count()} | edges: {rstore.graph.edge_count()}")
-    agent_nodes = [n for n in rstore.graph.nodes.values() if n.kind == "agent"]
+    print(f"  total nodes: {len(graph.nodes)} | edges: {len(graph.edges)}")
+    agent_nodes = [n for n in graph.nodes.values() if n.kind == "agent"]
     print(f"  agent nodes (personas + teams): {len(agent_nodes)}")
     for n in agent_nodes[:3]:
         print(f"  - {n.nid}: {n.label}")
@@ -190,8 +207,8 @@ def run_asi_demo():
     print(f"  Total ticks:            {sum(r['tick_count'] for r in team_reports)}")
     print(f"  Total contributions:    {sum(r['total_contributions'] for r in team_reports)}")
     print(f"  Team cards persisted:   {len(team_cards)}")
-    print(f"  Sub-graph nodes:        {rstore.graph.node_count()}")
-    print(f"  Sub-graph edges:        {rstore.graph.edge_count()}")
+    print(f"  Sub-graph nodes:        {len(graph.nodes)}")
+    print(f"  Sub-graph edges:        {len(graph.edges)}")
     print(f"  Harness cycles:         {len(cycle_reports)}")
     if zvec_mem:
         print(f"  Zvec memory stats:      {zvec_mem.stats()}")
