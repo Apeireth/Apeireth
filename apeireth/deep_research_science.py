@@ -65,6 +65,6 @@ if __name__ == "__main__":
 
     print("\n".join(output))
 
-    out_path = Path(r".openclaw\workspace\promethean\RESEARCH-MULTI-ANGLE-2026-07-20.md")
+    out_path = Path(r".openclaw\workspace\apeireth\RESEARCH-MULTI-ANGLE-2026-07-20.md")
     out_path.write_text("\n".join(output), encoding="utf-8")
     print(f"\nwritten to {out_path}")

@@ -25,7 +25,7 @@ def fetch_raw_readme(url):
         return None
 
 
-base = Path(r'.openclaw\workspace\promethean\research-master-list-2026')
+base = Path(r'.openclaw\workspace\apeireth\research-master-list-2026')
 base.mkdir(exist_ok=True)
 
 # 真存在的 GitHub URL (我刚验证)
