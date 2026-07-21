@@ -147,6 +147,115 @@ class Memory3Tier:
         """按 category 取 LTM 锚点 (检索 / 中央 AI ID 查询等)."""
         return [a for a in self.ltm.values() if a.category == category]
 
+    # ====== 借鉴 letta (主 9:41 round-19 source-deep-read) ======
+    # letta Memory.compile() 3 渲染模式: standard / line-numbered / git-hierarchy
+    # 用于 system prompt 构建 — 不同模式适合不同 LLM 场景
+    def compile(self, mode: str = "standard",
+                ltm_limit: int = 20,
+                mtm_limit: int = 10,
+                stm_limit: int = 20) -> str:
+        """借鉴 letta compile (主 9:41 round-19): 把 3 层 memory 编译成 prompt context.
+
+        3 模式:
+          - "standard": 普通文本块, 适合直接 prompt
+          - "line-numbered": 带行号 (L01/L02/...), 适合 LLM 引用具体行
+          - "git": 层级结构 (parent + child blocks), 适合 tree 思维 LLM
+
+        Args:
+            mode: 3 模式之一
+            ltm_limit: LTM 锚点上限 (按 importance 排序)
+            mtm_limit: MTM 主题上限
+            stm_limit: STM episode 上限
+        """
+        # 1. 准备分层数据
+        ltm_sorted = sorted(self.ltm.values(), key=lambda a: (-a.importance, -a.ts))[:ltm_limit]
+        mtm_sorted = sorted(self.mtm.values(), key=lambda s: -s.last_updated)[:mtm_limit]
+        stm_recent = list(self.stm)[-stm_limit:]
+
+        if mode == "standard":
+            return self._compile_standard(ltm_sorted, mtm_sorted, stm_recent)
+        elif mode == "line-numbered":
+            return self._compile_line_numbered(ltm_sorted, mtm_sorted, stm_recent)
+        elif mode == "git":
+            return self._compile_git(ltm_sorted, mtm_sorted, stm_recent)
+        else:
+            raise ValueError(f"unknown compile mode: {mode} (allow: standard / line-numbered / git)")
+
+    def _compile_standard(self, ltm, mtm, stm) -> str:
+        """standard 模式: 普通文本块, 按 tier 分 section."""
+        parts = []
+        parts.append(f"## LTM (Long-term Memory) — {len(ltm)} anchors")
+        for a in ltm:
+            master = f" (master: {a.master_quoted!r})" if a.master_quoted else ""
+            parts.append(f"- [{a.category}] {a.content}{master}")
+        parts.append("")
+        parts.append(f"## MTM (Medium-term Memory) — {len(mtm)} topics")
+        for s in mtm:
+            parts.append(f"- [{s.topic_label}] {s.n_episodes} episodes, avg importance {s.importance_avg:.1f}")
+        parts.append("")
+        parts.append(f"## STM (Short-term Memory) — {len(stm)} recent episodes")
+        for e in stm:
+            parts.append(f"- [{e['topic']}] {e['content']}")
+        return "\n".join(parts)
+
+    def _compile_line_numbered(self, ltm, mtm, stm) -> str:
+        """line-numbered 模式: 带行号 L01/L02/..., 方便 LLM 引用."""
+        lines = []
+        # LTM 段: L01-LNN
+        lines.append("## LTM (Long-term Memory)")
+        idx = 1
+        for a in ltm:
+            tag = f"L{idx:02d}"
+            master = f" | master: {a.master_quoted!r}" if a.master_quoted else ""
+            lines.append(f"{tag} [{a.category}] {a.content}{master}")
+            idx += 1
+        # MTM 段: M01-MNN
+        lines.append("")
+        lines.append("## MTM (Medium-term Memory)")
+        idx = 1
+        for s in mtm:
+            tag = f"M{idx:02d}"
+            lines.append(f"{tag} [{s.topic_label}] {s.n_episodes} episodes, avg importance {s.importance_avg:.1f}")
+            idx += 1
+        # STM 段: S01-SNN
+        lines.append("")
+        lines.append("## STM (Short-term Memory)")
+        idx = 1
+        for e in stm:
+            tag = f"S{idx:02d}"
+            lines.append(f"{tag} [{e['topic']}] {e['content']}")
+            idx += 1
+        return "\n".join(lines)
+
+    def _compile_git(self, ltm, mtm, stm) -> str:
+        """git 模式: 层级结构 (parent + child blocks), 类似 git tree 输出."""
+        lines = []
+        # 顶层: tier 划分
+        lines.append("memory/")
+        # LTM = "trunk" (主分支, 重要稳定)
+        if ltm:
+            lines.append("├── ltm/  (trunk — identity + decision + value)")
+            for i, a in enumerate(ltm):
+                is_last = (i == len(ltm) - 1)
+                prefix = "│   └── " if is_last else "│   ├── "
+                master = f"  # master: {a.master_quoted!r}" if a.master_quoted else ""
+                lines.append(f"{prefix}[{a.category}] {a.content}{master}")
+        # MTM = "branch" (中期主题)
+        if mtm:
+            lines.append("├── mtm/  (branches — topic summaries)")
+            for i, s in enumerate(mtm):
+                is_last = (i == len(mtm) - 1)
+                prefix = "│   └── " if is_last else "│   ├── "
+                lines.append(f"{prefix}{s.topic_label}/  ({s.n_episodes} episodes, avg importance {s.importance_avg:.1f})")
+        # STM = "working tree" (未提交)
+        if stm:
+            lines.append("└── stm/  (working tree — recent)")
+            for i, e in enumerate(stm):
+                is_last = (i == len(stm) - 1)
+                prefix = "    └── " if is_last else "    ├── "
+                lines.append(f"{prefix}{e['topic']} — {e['content']}")
+        return "\n".join(lines)
+
     def stats(self) -> dict:
         return {
             "version": MEMORY_3TIER_VERSION,
