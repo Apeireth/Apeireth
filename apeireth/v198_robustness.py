@@ -5,8 +5,6 @@ class V198Robustness:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def measure(self, perturbation, accuracy): self.measurements.append({"p": perturbation, "a": accuracy})
     def n_measurements(self): return len(self.measurements)
     def stats(self): return {"n_measurements": self.n_measurements(), "version": V198_VERSION,

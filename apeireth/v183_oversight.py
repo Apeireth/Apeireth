@@ -5,8 +5,6 @@ class V183ScalableOversight:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def add_oversight(self, level, action, result): self.oversight_log.append({"level": level, "action": action, "result": result})
     def n_oversights(self): return len(self.oversight_log)
     def stats(self): return {"n_oversights": self.n_oversights(), "version": V183_VERSION,

@@ -5,8 +5,6 @@ class V186RLHFTrainingLoop:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def train_round(self, prompt, response, reward): self.rounds.append({"p": prompt, "r": response, "rw": reward})
     def n_rounds(self): return len(self.rounds)
     def average_reward(self):

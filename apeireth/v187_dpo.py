@@ -5,8 +5,6 @@ class V187DPO:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def add_pair(self, prompt, chosen, rejected): self.pairs.append({"p": prompt, "c": chosen, "r": rejected})
     def n_pairs(self): return len(self.pairs)
     def stats(self): return {"n_pairs": self.n_pairs(), "version": V187_VERSION,

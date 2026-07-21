@@ -5,8 +5,6 @@ class V192Deployment:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def deploy(self, service, version, env): self.deployments.append({"s": service, "v": version, "e": env})
     def n_deployments(self): return len(self.deployments)
     def stats(self): return {"n_deployments": self.n_deployments(), "version": V192_VERSION,

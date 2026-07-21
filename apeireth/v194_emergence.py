@@ -5,8 +5,6 @@ class V194EmergenceMeasurement:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def measure(self, scale, metric, score): self.measurements.append({"s": scale, "m": metric, "sc": score})
     def n_measurements(self): return len(self.measurements)
     def stats(self): return {"n_measurements": self.n_measurements(), "version": V194_VERSION,

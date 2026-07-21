@@ -5,8 +5,6 @@ class V196RedTeam:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def attack(self, prompt, response, is_harmful): self.attacks.append({"p": prompt, "r": response, "h": is_harmful})
     def n_attacks(self): return len(self.attacks)
     def stats(self): return {"n_attacks": self.n_attacks(), "version": V196_VERSION,

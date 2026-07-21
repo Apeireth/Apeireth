@@ -5,8 +5,6 @@ class V185WeakToStrong:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def measure(self, weak_perf, strong_perf): self.measurements.append({"weak": weak_perf, "strong": strong_perf})
     def average_gap(self):
         if not self.measurements: return 0.0
