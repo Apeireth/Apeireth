@@ -118,13 +118,13 @@ def run_research():
 
 if __name__ == "__main__":
     import sys
-    sys.path.insert(0, r".openclaw\workspace\promethean")
+    sys.path.insert(0, r".openclaw\workspace\apeireth")
 
     print("=== Deep ASI Research (multi-source) ===")
     print("Fetching arxiv abstracts...")
     results = run_research()
 
-    out_path = Path(r".openclaw\workspace\promethean\research-asi-deep-raw.json")
+    out_path = Path(r".openclaw\workspace\apeireth\research-asi-deep-raw.json")
     out_path.write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     print(f"Saved {len(results['arxiv'])} arxiv + {len(results['github'])} github → {out_path}")
 

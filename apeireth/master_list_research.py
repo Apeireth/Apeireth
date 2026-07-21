@@ -14,7 +14,7 @@ from apeireth import AnySearch, GitHubResearch
 s = AnySearch()
 g = GitHubResearch()
 
-base = Path(r'.openclaw\workspace\promethean\research-master-list-2026')
+base = Path(r'.openclaw\workspace\apeireth\research-master-list-2026')
 base.mkdir(exist_ok=True)
 
 # 主人清单 - 按领域分类
