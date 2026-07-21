@@ -29,7 +29,7 @@ papers = [
     ('2501.13956', 'Zep temporal knowledge graph'),
 ]
 
-base = Path(r'.openclaw\workspace\promethean\arxiv-deep')
+base = Path(r'.openclaw\workspace\apeireth\arxiv-deep')
 base.mkdir(exist_ok=True)
 
 findings = []

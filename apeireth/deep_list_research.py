@@ -11,7 +11,7 @@ import sys
 import time
 from pathlib import Path
 
-OUT = Path(r".openclaw\workspace\promethean\research-master-list-2026")
+OUT = Path(r".openclaw\workspace\apeireth\research-master-list-2026")
 OUT.mkdir(parents=True, exist_ok=True)
 
 # 主人清单 + 真名/候选名

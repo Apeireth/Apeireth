@@ -10,7 +10,7 @@ from apeireth import AnySearch
 from pathlib import Path
 
 s = AnySearch()
-base = Path(r'.openclaw\workspace\promethean\research-philosophy-biology-2026')
+base = Path(r'.openclaw\workspace\apeireth\research-philosophy-biology-2026')
 base.mkdir(exist_ok=True)
 
 # === A. 哲学界调研 ===
