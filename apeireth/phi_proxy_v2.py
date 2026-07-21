@@ -94,6 +94,66 @@ class PhiProxyV2:
         self.history.append(m)
         return m
 
+    def measure_from_self_state(self, state: "SelfState") -> IntegrationMeasure:
+        """V8 推进 (主 12:02 cron tick): 真从 Mirror SelfState 算 Φ-proxy.
+
+        Args:
+            state: apeireth.mirror.SelfState 真 runtime 状态
+
+        Returns:
+            IntegrationMeasure 真从 runtime 算 (不再 hardcoded 0.6628)
+
+        设计:
+          - components = identity + team + graph_node + memory_note (系统总组件数)
+          - mutual_info_avg ≈ graph_edge_count / components (互信息平均)
+          - v2_alignment ≈ V2 哲学 5 位置 还原度 (heuristic from 字段)
+          - vcp_4_alignment ≈ VCP 4 范式还原度 (heuristic from archetypes 个数)
+
+        主 22:33 ASI V8 目标: phi_proxy 0.6628 -> 0.85 (dynamic, observable)
+        """
+        # 真从 SelfState 提取 metrics
+        archetype_count = len(state.self_archetypes or [])
+        components = (
+            (state.identity_card_count or 0)
+            + (state.team_card_count or 0)
+            + (state.graph_node_count or 0)
+            + (state.memory_note_count or 0)
+            + archetype_count  # 借鉴 VCP 4 范式: archetypes 是系统组件
+        )
+        # Avoid zero components
+        if components == 0:
+            components = 1
+        # Mutual info proxy = edges / components (average connectivity)
+        edges = state.graph_edge_count or 0
+        mutual_info_avg = min(edges / components, 1.0) if components > 0 else 0.0
+        # V2 哲学 5 位置字段 (heuristic): self_name+self_creator+self_origin+self_purpose+archetypes 都有
+        v2_fields_present = sum([
+            bool(state.self_name),
+            bool(state.self_creator),
+            bool(state.self_origin),
+            bool(state.self_purpose),
+            bool(state.self_archetypes),
+        ])
+        v2_alignment = v2_fields_present / 5.0
+        # VCP 4 范式对齐: 4 archetypes (调度/学习/思考/助手) 算 4 完整
+        archetypes = state.self_archetypes or []
+        archetype_keys = {"调度者", "学习者", "思考者", "助手"}
+        archetype_count = len([a for a in archetypes if a in archetype_keys])
+        vcp_4_alignment = archetype_count / 4.0
+        # Engineering complete proxy: episode presence
+        engineering_complete = 0.5 if (state.memory_episode_count or 0) > 0 else 0.0
+        # cross domain ratio: graph_node_count as proxy (more nodes = more domains)
+        cross_domain_ratio = min((state.graph_node_count or 0) / 20.0, 1.0)
+
+        return self.measure(
+            components=components,
+            mutual_info_avg=mutual_info_avg,
+            v2_alignment=v2_alignment,
+            vcp_4_alignment=vcp_4_alignment,
+            engineering_complete=engineering_complete,
+            cross_domain_ratio=cross_domain_ratio,
+        )
+
     def stats(self) -> dict:
         if not self.history:
             return {"n_measures": 0}
