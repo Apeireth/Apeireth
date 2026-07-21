@@ -1,4 +1,4 @@
-﻿"""Phase 33 Active Inference — Friston 自由能原理工程化.
+"""Phase 33 Active Inference — Friston 自由能原理工程化.
 
 主人 21:30 跨域调研 AnySearch:
   "Reinforcement Learning or Active Inference?" (Friston)

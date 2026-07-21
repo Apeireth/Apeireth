@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Deep Research Dual-Source — Bocha AI + AnySearch."""
 from __future__ import annotations

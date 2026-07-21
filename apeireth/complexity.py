@@ -1,4 +1,4 @@
-﻿"""Phase 37 ComplexityHub — 复杂度科学综合 (CSH 跨域调研借鉴).
+"""Phase 37 ComplexityHub — 复杂度科学综合 (CSH 跨域调研借鉴).
 
 主人 21:30 跨域调研 AnySearch:
   "Complexity Science Hub" (https://csh.ac.at)

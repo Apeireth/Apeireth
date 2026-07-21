@@ -1,4 +1,4 @@
-﻿"""Phase 19 DeliberationEngine — ASI 思考层 (Thinking Layer).
+"""Phase 19 DeliberationEngine — ASI 思考层 (Thinking Layer).
 
 主人 20:29 哲学指令 (历史性):
   "底层记得用rust，我们追求极致"

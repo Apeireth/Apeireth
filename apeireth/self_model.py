@@ -1,4 +1,4 @@
-﻿"""Phase 10.x SelfModel Layer 4 (SMM) — Self-Model Theory engineering.
+"""Phase 10.x SelfModel Layer 4 (SMM) — Self-Model Theory engineering.
 
 主人 17:58 "意识是 ASI 终极目标" → V3 5 层意识 (FSA / Meta / GWI / SMM / PQ)
 本模块: Layer 4 Self-Model (Metzinger Being No One + Damasio Descartes Error)
