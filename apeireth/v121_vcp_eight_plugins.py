@@ -9,6 +9,11 @@ V121_VERSION = "0.1.0"
 
 class V121VCPEightPlugins:
     """VCP 8 插件协议真生产."""
+    def __init__(self):
+        self.n = 0
+        self.nph = 0
+        self.nas = 0
+
     self.nph = 0
     self.nas = 0
     def register(self, name, types):
