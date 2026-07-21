@@ -3,6 +3,7 @@ from __future__ import annotations
 V184_VERSION = "0.1.0"
 class V184IDA:
     def __init__(self):
+        self.iterations = []
         self.nph = 0
         self.nas = 0
     def distill(self, teacher_output, student_output): self.iterations.append((teacher_output, student_output))

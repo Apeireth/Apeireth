@@ -3,6 +3,7 @@ from __future__ import annotations
 V182_VERSION = "0.1.0"
 class V182Debate:
     def __init__(self):
+        self.debates = []
         self.nph = 0
         self.nas = 0
     def debate(self, question, positions): self.debates.append({"q": question, "p": positions})
