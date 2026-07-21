@@ -6,8 +6,6 @@ class V180RustBenchmark:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def benchmark(self, name, fn, n_iters=1000):
         t0 = time.time()
         for _ in range(n_iters): fn()

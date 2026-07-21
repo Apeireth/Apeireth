@@ -5,8 +5,6 @@ class V184IDA:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def distill(self, teacher_output, student_output): self.iterations.append((teacher_output, student_output))
     def n_iterations(self): return len(self.iterations)
     def stats(self): return {"n_iterations": self.n_iterations(), "version": V184_VERSION,
