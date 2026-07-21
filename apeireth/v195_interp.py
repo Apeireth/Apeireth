@@ -3,6 +3,7 @@ from __future__ import annotations
 V195_VERSION = "0.1.0"
 class V195Interpretability:
     def __init__(self):
+        self.circuits = []
         self.nph = 0
         self.nas = 0
     def add_circuit(self, name, nodes, edges): self.circuits.append({"n": name, "nodes": nodes, "edges": edges})
