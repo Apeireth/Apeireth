@@ -13,8 +13,6 @@ class V179RustMigrationPlan:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def n_migrations(self): return len(self.plan)
     def stats(self): return {"n_migrations": self.n_migrations(), "version": V179_VERSION,
                              "philosophy": "V179 Rust migration plan 真生产 (主 22:46 + 主 12:07 + 主 19:33)."}

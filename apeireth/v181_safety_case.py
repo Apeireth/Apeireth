@@ -5,8 +5,6 @@ class V181SafetyCase:
     def __init__(self):
         self.nph = 0
         self.nas = 0
-    self.nph = 0
-    self.nas = 0
     def add_case(self, name, properties, evidence): self.cases.append({"name": name, "p": properties, "e": evidence})
     def n_cases(self): return len(self.cases)
     def stats(self): return {"n_cases": self.n_cases(), "version": V181_VERSION,
