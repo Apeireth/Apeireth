@@ -5,7 +5,7 @@ from apeireth import GitHubResearch
 from pathlib import Path
 
 g = GitHubResearch()
-base = Path(r'.openclaw\workspace\promethean\memoryos-inspect')
+base = Path(r'.openclaw\workspace\apeireth\memoryos-inspect')
 base.mkdir(exist_ok=True)
 
 # 关键文件列表 — 看它的 core 怎么设计

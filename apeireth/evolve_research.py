@@ -14,7 +14,7 @@ from apeireth import AnySearch, GitHubResearch
 s = AnySearch()
 g = GitHubResearch()
 
-base = Path(r'.openclaw\workspace\promethean\research-2026')
+base = Path(r'.openclaw\workspace\apeireth\research-2026')
 base.mkdir(exist_ok=True)
 
 # === Phase A: arXiv 2026 论文调研 ===
