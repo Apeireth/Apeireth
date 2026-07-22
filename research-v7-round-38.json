@@ -1,0 +1,706 @@
+[
+  {
+    "query": "Pearl do-calculus causal inference LLM agent production 2026",
+    "bocha_web": [],
+    "anysearch": [],
+    "bocha_ai_answer": "",
+    "merged_sources": []
+  },
+  {
+    "query": "causal Bayesian network CBN production agent decision reasoning 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/41486",
+        "snippet": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing | Proceedings of the AAAI Conference on Artificial Intelligence # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "CausalPulse: An Industrial-Grade Neurosymbolic Multi-Agent Copilot for Causal Diagnostics in Smart Manufacturing",
+        "url": "https://arxiv.org/pdf/2603.29755",
+        "snippet": "# CausalPulse: An Industrial-Grade Neurosymbolic Multi-Agent Copilot for Causal Diagnostics in Smart Manufacturing arXiv (Cornell University), 2026. 0 citations. ## Abstract Modern manufacturing envir",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Bayesian network approach to production decisions by incorporating complex causal factors",
+        "url": "https://doi.org/10.1016/j.jmse.2025.03.002",
+        "snippet": "# A Bayesian network approach to production decisions by incorporating complex causal factors Journal of Management Science and Engineering, 2025. 7 citations. ## Abstract Handling uncertainty is a ke",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[Paper Note] CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing - 📚 AI Paper Notes",
+        "url": "https://en.papernotes.org/AAAI2026/llm_agent/causaltrace_a_neurosymbolic_causal_analysis_agent_for_smart_manufacturing/",
+        "snippet": "[Paper Note] CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing Skip to content # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing¶ Conference: AAAI 2",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal AI Decision Intelligence: Why It Will Emerge in 2026",
+        "url": "https://thecuberesearch.com/why-causal-ai-decision-intelligence-2026/",
+        "snippet": "Causal AI Decision Intelligence: Why It Will Emerge in 2026 - theCUBE Research # Causal AI Decision Intelligence: Why It Will Emerge in 2026 Today’s AI agents are built on a powerful but increasingly ",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/41486",
+        "snippet": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing | Proceedings of the AAAI Conference on Artificial Intelligence # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "CausalPulse: An Industrial-Grade Neurosymbolic Multi-Agent Copilot for Causal Diagnostics in Smart Manufacturing",
+        "url": "https://arxiv.org/pdf/2603.29755",
+        "snippet": "# CausalPulse: An Industrial-Grade Neurosymbolic Multi-Agent Copilot for Causal Diagnostics in Smart Manufacturing arXiv (Cornell University), 2026. 0 citations. ## Abstract Modern manufacturing envir",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Bayesian network approach to production decisions by incorporating complex causal factors",
+        "url": "https://doi.org/10.1016/j.jmse.2025.03.002",
+        "snippet": "# A Bayesian network approach to production decisions by incorporating complex causal factors Journal of Management Science and Engineering, 2025. 7 citations. ## Abstract Handling uncertainty is a ke",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[Paper Note] CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing - 📚 AI Paper Notes",
+        "url": "https://en.papernotes.org/AAAI2026/llm_agent/causaltrace_a_neurosymbolic_causal_analysis_agent_for_smart_manufacturing/",
+        "snippet": "[Paper Note] CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing Skip to content # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing¶ Conference: AAAI 2",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal AI Decision Intelligence: Why It Will Emerge in 2026",
+        "url": "https://thecuberesearch.com/why-causal-ai-decision-intelligence-2026/",
+        "snippet": "Causal AI Decision Intelligence: Why It Will Emerge in 2026 - theCUBE Research # Causal AI Decision Intelligence: Why It Will Emerge in 2026 Today’s AI agents are built on a powerful but increasingly ",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "counterfactual reasoning agent long-horizon decision planning production 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "Counterfactual Planning for Generalizable Agents’ Actions\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/40184",
+        "snippet": "Counterfactual Planning for Generalizable Agents’ Actions | Proceedings of the AAAI Conference on Artificial Intelligence # Counterfactual Planning for Generalizable Agents’ Actions ## Authors - Jiaru",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability",
+        "url": "https://arxiv.org/html/2607.14145v1",
+        "snippet": "ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability arXiv is now an independent nonprofit! Learn more× # ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Too",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Counterfactual Planning for Generalizable Agents’ Actions",
+        "url": "https://doi.org/10.48448/8xvg-c054",
+        "snippet": "# Counterfactual Planning for Generalizable Agents’ Actions Underline Science Inc., 2026. 0 citations. ## Abstract Large language models have revolutionized agent planning by serving as the central re",
+        "source": "AnySearch"
+      },
+      {
+        "name": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context",
+        "url": "https://aclanthology.org/2026.acl-long.152.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 3360–3380 July 2-7, 2026 ©2026 Association for Computational Linguistics ## COMPA",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Long-Horizon Planning and Goal Decomposition in AI Agents",
+        "url": "https://zylos.ai/research/2026-05-14-long-horizon-planning-goal-decomposition-ai-agents/",
+        "snippet": "Long-Horizon Planning and Goal Decomposition in AI Agents | Zylos Research Back to Notes ## Executive Summary The frontier of AI agent capability in 2026 is not raw model intelligence — it is sustaine",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "Counterfactual Planning for Generalizable Agents’ Actions\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/40184",
+        "snippet": "Counterfactual Planning for Generalizable Agents’ Actions | Proceedings of the AAAI Conference on Artificial Intelligence # Counterfactual Planning for Generalizable Agents’ Actions ## Authors - Jiaru",
+        "source": "AnySearch"
+      },
+      {
+        "name": "ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability",
+        "url": "https://arxiv.org/html/2607.14145v1",
+        "snippet": "ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Tool-use Capability arXiv is now an independent nonprofit! Learn more× # ToolAnchor: Anchoring Counterfactual Context to Boost Agentic Too",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Counterfactual Planning for Generalizable Agents’ Actions",
+        "url": "https://doi.org/10.48448/8xvg-c054",
+        "snippet": "# Counterfactual Planning for Generalizable Agents’ Actions Underline Science Inc., 2026. 0 citations. ## Abstract Large language models have revolutionized agent planning by serving as the central re",
+        "source": "AnySearch"
+      },
+      {
+        "name": "COMPASS: Enhancing Agent Long-Horizon Reasoning with Evolving Context",
+        "url": "https://aclanthology.org/2026.acl-long.152.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 3360–3380 July 2-7, 2026 ©2026 Association for Computational Linguistics ## COMPA",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Long-Horizon Planning and Goal Decomposition in AI Agents",
+        "url": "https://zylos.ai/research/2026-05-14-long-horizon-planning-goal-decomposition-ai-agents/",
+        "snippet": "Long-Horizon Planning and Goal Decomposition in AI Agents | Zylos Research Back to Notes ## Executive Summary The frontier of AI agent capability in 2026 is not raw model intelligence — it is sustaine",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "structural causal models SCM AI agent production causal graph 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "How Agentic AI Finally Makes Causal Inference Deployable",
+        "url": "https://newsletter.wangari.global/p/how-agentic-ai-finally-makes-causal",
+        "snippet": "How Agentic AI Finally Makes Causal Inference Deployable SubscribeSign in # How Agentic AI Finally Makes Causal Inference Deployable ### A technical walkthrough of the five bottlenecks that kept causa",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Agent Replay: Counterfactual Attribution for LLM-Agent Failures",
+        "url": "https://arxiv.org/html/2606.08275",
+        "snippet": "# Causal Agent Replay: Counterfactual Attribution for LLM-Agent Failures arXiv (Cornell University), 2026. 0 citations. ## Abstract When an LLM agent fails -- issues a refund it should not have, calls",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Building an AI-Native Causal Agent Platform: From Prototype to Production",
+        "url": "https://sophiashunqinchen.medium.com/building-an-ai-native-causal-agent-platform-f5f39d83213d",
+        "snippet": "# Building an AI-Native Causal Agent Platform: From Prototype to Production Published: 2026-07-16T06:19:23.560000+00:00 Source: sophiashunqinchen.medium.com (sophiashunqinchen.medium.com) Language: en",
+        "source": "AnySearch"
+      },
+      {
+        "name": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/41486",
+        "snippet": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing | Proceedings of the AAAI Conference on Artificial Intelligence # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Outcome-Aware Agents: From Token Prediction to Action Consequence Modeling",
+        "url": "https://doi.org/10.5281/zenodo.20379455",
+        "snippet": "# Outcome-Aware Agents: From Token Prediction to Action Consequence Modeling Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citations. ## Abstract Large language models ar",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "How Agentic AI Finally Makes Causal Inference Deployable",
+        "url": "https://newsletter.wangari.global/p/how-agentic-ai-finally-makes-causal",
+        "snippet": "How Agentic AI Finally Makes Causal Inference Deployable SubscribeSign in # How Agentic AI Finally Makes Causal Inference Deployable ### A technical walkthrough of the five bottlenecks that kept causa",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Agent Replay: Counterfactual Attribution for LLM-Agent Failures",
+        "url": "https://arxiv.org/html/2606.08275",
+        "snippet": "# Causal Agent Replay: Counterfactual Attribution for LLM-Agent Failures arXiv (Cornell University), 2026. 0 citations. ## Abstract When an LLM agent fails -- issues a refund it should not have, calls",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Building an AI-Native Causal Agent Platform: From Prototype to Production",
+        "url": "https://sophiashunqinchen.medium.com/building-an-ai-native-causal-agent-platform-f5f39d83213d",
+        "snippet": "# Building an AI-Native Causal Agent Platform: From Prototype to Production Published: 2026-07-16T06:19:23.560000+00:00 Source: sophiashunqinchen.medium.com (sophiashunqinchen.medium.com) Language: en",
+        "source": "AnySearch"
+      },
+      {
+        "name": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing\n\t\t\t\t\t\t\t| Proceedings of the AAAI Conference on Artificial Intelligence",
+        "url": "https://ojs.aaai.org/index.php/AAAI/article/view/41486",
+        "snippet": "CausalTrace: A Neurosymbolic Causal Analysis Agent for Smart Manufacturing | Proceedings of the AAAI Conference on Artificial Intelligence # CausalTrace: A Neurosymbolic Causal Analysis Agent for Smar",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Outcome-Aware Agents: From Token Prediction to Action Consequence Modeling",
+        "url": "https://doi.org/10.5281/zenodo.20379455",
+        "snippet": "# Outcome-Aware Agents: From Token Prediction to Action Consequence Modeling Zenodo (CERN European Organization for Nuclear Research), 2026. Preprint. 0 citations. ## Abstract Large language models ar",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "causal discovery neuroscience agent substrate brain network 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "A graph neural network framework for causal inference in brain ...",
+        "url": "https://www.nature.com/articles/s41598-021-87411-8",
+        "snippet": "A central question in neuroscience is how self-organizing dynamic interactions in the brain emerge on their relatively static structural backbone. Due to the complexity of spatial and temporal depende",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Whole-brain causal discovery using fMRI | Network Neuroscience ...",
+        "url": "https://direct.mit.edu/netn/article/9/1/392/127393/Whole-brain-causal-discovery-using-fMRI",
+        "snippet": "Abstract. Despite significant research, discovering causal relationships from fMRI remains a challenge. Popular methods such as Granger causality and dynamic causal modeling fall short in handling con",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Inference Meets Deep Learning: A Comprehensive Survey | ...",
+        "url": "https://spj.science.org/doi/10.34133/research.0467",
+        "snippet": "Deep learning relies on learning from extensive data to generate prediction results. This approach may inadvertently capture spurious correlations within the data, leading to models that lack interpre",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Generating Hypotheses of Dynamic Causal Graphs in Neuroscience: ...",
+        "url": "https://arxiv.org/html/2505.20697v1",
+        "snippet": "Existing machine learning methods can generate scientific hypotheses from complex datasets, but many approaches assume causal relationships are static over time, limiting their applicability to system",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Whole-brain causal discovery using fMRI - PMC",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11949584/",
+        "snippet": "Despite significant research, discovering causal relationships from fMRI remains a challenge. Popular methods such as Granger causality and dynamic causal modeling fall short in handling contemporaneo",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "A graph neural network framework for causal inference in brain ...",
+        "url": "https://www.nature.com/articles/s41598-021-87411-8",
+        "snippet": "A central question in neuroscience is how self-organizing dynamic interactions in the brain emerge on their relatively static structural backbone. Due to the complexity of spatial and temporal depende",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Whole-brain causal discovery using fMRI | Network Neuroscience ...",
+        "url": "https://direct.mit.edu/netn/article/9/1/392/127393/Whole-brain-causal-discovery-using-fMRI",
+        "snippet": "Abstract. Despite significant research, discovering causal relationships from fMRI remains a challenge. Popular methods such as Granger causality and dynamic causal modeling fall short in handling con",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Inference Meets Deep Learning: A Comprehensive Survey | ...",
+        "url": "https://spj.science.org/doi/10.34133/research.0467",
+        "snippet": "Deep learning relies on learning from extensive data to generate prediction results. This approach may inadvertently capture spurious correlations within the data, leading to models that lack interpre",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Generating Hypotheses of Dynamic Causal Graphs in Neuroscience: ...",
+        "url": "https://arxiv.org/html/2505.20697v1",
+        "snippet": "Existing machine learning methods can generate scientific hypotheses from complex datasets, but many approaches assume causal relationships are static over time, limiting their applicability to system",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Whole-brain causal discovery using fMRI - PMC",
+        "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC11949584/",
+        "snippet": "Despite significant research, discovering causal relationships from fMRI remains a challenge. Popular methods such as Granger causality and dynamic causal modeling fall short in handling contemporaneo",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "Pearl causal ladder L1 L2 L3 association intervention counterfactual hierarchy 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "The Three Layer Causal Hierarchy",
+        "url": "https://web.cs.ucla.edu/~kaoru/3-layer-causal-hierarchy.pdf",
+        "snippet": "### The Three Layer Causal Hierarchy Recent discussions concerning causal mediation gave me the impression that many researchers in the field are not familiar with the ramifications of the Causal Hier",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2602.23541",
+        "snippet": "# Causal Identification from Counterfactual Data: Completeness and Bounding Results ArXiv.org, 2026. 0 citations. ## Authors - Arvind Raghavan: h-index 9; 290 citations - Elias Bareinboim: h-index 1; ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Distributional Perspective on Pearl’s Causal Hierarchy: From Marginal to Joint and Individualized Potential Outcomes",
+        "url": "https://openreview.net/pdf/66fc387ab994f86cfe4aabea7f9dfb724fe7ff68.pdf",
+        "snippet": "### A Distributional Perspective on Pearl’s Causal Hierarchy: From Marginal to Joint and Individualized Potential Outcomes Abstract Pearl’s causal hierarchy has garnered sustained attention as a found",
+        "source": "AnySearch"
+      },
+      {
+        "name": "1On Pearl's Hierarchy and the Foundations of Causal Inference",
+        "url": "https://causalai.net/r60.pdf",
+        "snippet": "1 On Pearl’s Hierarchy and the Foundations of Causal Inference TECHNICAL REPORT R-60 First Version: July, 2020 Last Revision: Mar, 2021 Elias Bareinboim † EB@CS.COLUMBIA.EDU Juan D. Correa † JDCORREA@",
+        "source": "AnySearch"
+      },
+      {
+        "name": "METER: Evaluating Multi-Level Contextual Causal Reasoning in Large Language Models",
+        "url": "https://aclanthology.org/2026.acl-long.1668.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 36049–36073 July 2-7, 2026 ©2026 Association for Computational Linguistics METER:",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "The Three Layer Causal Hierarchy",
+        "url": "https://web.cs.ucla.edu/~kaoru/3-layer-causal-hierarchy.pdf",
+        "snippet": "### The Three Layer Causal Hierarchy Recent discussions concerning causal mediation gave me the impression that many researchers in the field are not familiar with the ramifications of the Causal Hier",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2602.23541",
+        "snippet": "# Causal Identification from Counterfactual Data: Completeness and Bounding Results ArXiv.org, 2026. 0 citations. ## Authors - Arvind Raghavan: h-index 9; 290 citations - Elias Bareinboim: h-index 1; ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "A Distributional Perspective on Pearl’s Causal Hierarchy: From Marginal to Joint and Individualized Potential Outcomes",
+        "url": "https://openreview.net/pdf/66fc387ab994f86cfe4aabea7f9dfb724fe7ff68.pdf",
+        "snippet": "### A Distributional Perspective on Pearl’s Causal Hierarchy: From Marginal to Joint and Individualized Potential Outcomes Abstract Pearl’s causal hierarchy has garnered sustained attention as a found",
+        "source": "AnySearch"
+      },
+      {
+        "name": "1On Pearl's Hierarchy and the Foundations of Causal Inference",
+        "url": "https://causalai.net/r60.pdf",
+        "snippet": "1 On Pearl’s Hierarchy and the Foundations of Causal Inference TECHNICAL REPORT R-60 First Version: July, 2020 Last Revision: Mar, 2021 Elias Bareinboim † EB@CS.COLUMBIA.EDU Juan D. Correa † JDCORREA@",
+        "source": "AnySearch"
+      },
+      {
+        "name": "METER: Evaluating Multi-Level Contextual Causal Reasoning in Large Language Models",
+        "url": "https://aclanthology.org/2026.acl-long.1668.pdf",
+        "snippet": "Proceedings of the 64th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 36049–36073 July 2-7, 2026 ©2026 Association for Computational Linguistics METER:",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "actual causation Hall Winston production LLM agent audit attribution 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "tejgokani/Winston",
+        "url": "https://github.com/tejgokani/Winston",
+        "snippet": "# tejgokani/Winston - Stars: 0 - Forks: 0 - Watchers: 0 - Open issues: 0 - License: Other - Default branch: main - Created: 2026-07-06T14:28:30Z ## Languages - CSS - HTML - JavaScript - TypeScript ## ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent audit logs need a causal commit log, not tool traces",
+        "url": "https://nhimg.org/articles/agent-audit-logs-need-a-causal-commit-log-not-tool-traces/",
+        "snippet": "Agent audit logs need a causal commit log, not tool traces Subscribe to the Non-Human & AI Identity Journal Home› Articles› Agentic AI & NHIs› Agent audit logs need a causal commit log,… Agentic AI & ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2604.05485",
+        "snippet": "# Auditable Agents arXiv (Cornell University), 2026. 0 citations. ## Abstract LLM agents call tools, query databases, delegate tasks, and trigger external side effects. Once an agent system can act in",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Tamper-Evident ≠ Trustworthy: Forensically Sound Attribution of Autonomous-Agent Actions Under Unfaithful Reasoning and Adversarial Anti-Forensics",
+        "url": "https://doi.org/10.5281/zenodo.20698153",
+        "snippet": "# Tamper-Evident ≠ Trustworthy: Forensically Sound Attribution of Autonomous-Agent Actions Under Unfaithful Reasoning and Adversarial Anti-Forensics Zenodo (CERN European Organization for Nuclear Rese",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jaineet17/causal-agent-replay",
+        "url": "https://github.com/jaineet17/causal-agent-replay",
+        "snippet": "# Repository: jaineet17/causal-agent-replay Counterfactual replay and causal attribution over LLM-agent trajectories: find which step actually caused a failure by intervening on it. - Stars: 6 - Forks",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "tejgokani/Winston",
+        "url": "https://github.com/tejgokani/Winston",
+        "snippet": "# tejgokani/Winston - Stars: 0 - Forks: 0 - Watchers: 0 - Open issues: 0 - License: Other - Default branch: main - Created: 2026-07-06T14:28:30Z ## Languages - CSS - HTML - JavaScript - TypeScript ## ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Agent audit logs need a causal commit log, not tool traces",
+        "url": "https://nhimg.org/articles/agent-audit-logs-need-a-causal-commit-log-not-tool-traces/",
+        "snippet": "Agent audit logs need a causal commit log, not tool traces Subscribe to the Non-Human & AI Identity Journal Home› Articles› Agentic AI & NHIs› Agent audit logs need a causal commit log,… Agentic AI & ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2604.05485",
+        "snippet": "# Auditable Agents arXiv (Cornell University), 2026. 0 citations. ## Abstract LLM agents call tools, query databases, delegate tasks, and trigger external side effects. Once an agent system can act in",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Tamper-Evident ≠ Trustworthy: Forensically Sound Attribution of Autonomous-Agent Actions Under Unfaithful Reasoning and Adversarial Anti-Forensics",
+        "url": "https://doi.org/10.5281/zenodo.20698153",
+        "snippet": "# Tamper-Evident ≠ Trustworthy: Forensically Sound Attribution of Autonomous-Agent Actions Under Unfaithful Reasoning and Adversarial Anti-Forensics Zenodo (CERN European Organization for Nuclear Rese",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jaineet17/causal-agent-replay",
+        "url": "https://github.com/jaineet17/causal-agent-replay",
+        "snippet": "# Repository: jaineet17/causal-agent-replay Counterfactual replay and causal attribution over LLM-agent trajectories: find which step actually caused a failure by intervening on it. - Stars: 6 - Forks",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "py-why dowhy DoWhy end-to-end causal inference github source code Microsoft 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "py-why/dowhy: DoWhy is a Python library for causal inference that ...",
+        "url": "https://github.com/py-why/dowhy",
+        "snippet": "# Repository: py-why/dowhy DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions. DoWhy is based on a unified language for causal inference, ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "dowhy v0.9",
+        "url": "https://pypi.org/project/dowhy/0.9/",
+        "snippet": "# dowhy v0.9 DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions - Author: PyWhy Community - Email: amshar@microsoft.com - License: MIT - P",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An end-to-end library for causal inference — DoWhy documentation",
+        "url": "https://www.pywhy.org/dowhy/v0.5/index.html",
+        "snippet": "DoWhy | An end-to-end library for causal inference — DoWhy documentation # DoWhy | An end-to-end library for causal inference Amit Sharma, Emre Kiciman Introducing DoWhy and the 4 steps of causal inf",
+        "source": "AnySearch"
+      },
+      {
+        "name": "DoWhy: An End-to-End Library for Causal Inference",
+        "url": "https://www.microsoft.com/en-us/research/publication/dowhy-an-end-to-end-library-for-causal-inference/",
+        "snippet": "DoWhy: An End-to-End Library for Causal Inference - Microsoft Research # DoWhy: An End-to-End Library for Causal Inference - Amit Sharma, - Emre Kiciman November 2020 Causal Data Science Meeting (http",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README.rst at main · py-why/dowhy",
+        "url": "https://github.com/py-why/dowhy/blob/main/README.rst",
+        "snippet": "# File: py-why/dowhy/README.rst - Repository: py-why/dowhy | DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions. DoWhy is based on a unifi",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "py-why/dowhy: DoWhy is a Python library for causal inference that ...",
+        "url": "https://github.com/py-why/dowhy",
+        "snippet": "# Repository: py-why/dowhy DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions. DoWhy is based on a unified language for causal inference, ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "dowhy v0.9",
+        "url": "https://pypi.org/project/dowhy/0.9/",
+        "snippet": "# dowhy v0.9 DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions - Author: PyWhy Community - Email: amshar@microsoft.com - License: MIT - P",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An end-to-end library for causal inference — DoWhy documentation",
+        "url": "https://www.pywhy.org/dowhy/v0.5/index.html",
+        "snippet": "DoWhy | An end-to-end library for causal inference — DoWhy documentation # DoWhy | An end-to-end library for causal inference Amit Sharma, Emre Kiciman Introducing DoWhy and the 4 steps of causal inf",
+        "source": "AnySearch"
+      },
+      {
+        "name": "DoWhy: An End-to-End Library for Causal Inference",
+        "url": "https://www.microsoft.com/en-us/research/publication/dowhy-an-end-to-end-library-for-causal-inference/",
+        "snippet": "DoWhy: An End-to-End Library for Causal Inference - Microsoft Research # DoWhy: An End-to-End Library for Causal Inference - Amit Sharma, - Emre Kiciman November 2020 Causal Data Science Meeting (http",
+        "source": "AnySearch"
+      },
+      {
+        "name": "README.rst at main · py-why/dowhy",
+        "url": "https://github.com/py-why/dowhy/blob/main/README.rst",
+        "snippet": "# File: py-why/dowhy/README.rst - Repository: py-why/dowhy | DoWhy is a Python library for causal inference that supports explicit modeling and testing of causal assumptions. DoWhy is based on a unifi",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "causal-ml ananke causal inference library github source code graph 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "GitHub - uber/causalml: Uplift modeling and causal inference with ...",
+        "url": "https://github.com/uber/causalml",
+        "snippet": "Uplift modeling and causal inference with machine learning algorithms - uber/causalml",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Inference with Graphical Models — ananke-causal documentation",
+        "url": "https://ananke.readthedocs.io/en/latest/notebooks/causal_graphs.html",
+        "snippet": "A sound and complete algorithm for identification in ADMGs is known due to Tian and Pearl, and Shpitser and Pearl. In Ananke, we use a purely graphical formulation of the aforementioned works that use",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2301.11477] Ananke: A Python Package For Causal Inference Using ...",
+        "url": "https://arxiv.org/abs/2301.11477",
+        "snippet": "Abstract:We implement Ananke: an object-oriented Python package for causal inference with graphical models. At the top of our inheritance structure is an easily extensible Graph class that provides an",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An Open Source Ecosystem for Causal Machine Learning",
+        "url": "https://www.pywhy.org/",
+        "snippet": "An introduction to DoWhy, a Python library for causal inference that supports explicit modeling and testing of causal assumptions.",
+        "source": "AnySearch"
+      },
+      {
+        "name": "causal-inference · GitHub Topics · GitHub",
+        "url": "https://github.com/topics/causal-inference",
+        "snippet": "GitHub is where people build software. More than 150 million people use GitHub to discover, fork, and contribute to over 420 million projects.",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "GitHub - uber/causalml: Uplift modeling and causal inference with ...",
+        "url": "https://github.com/uber/causalml",
+        "snippet": "Uplift modeling and causal inference with machine learning algorithms - uber/causalml",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Causal Inference with Graphical Models — ananke-causal documentation",
+        "url": "https://ananke.readthedocs.io/en/latest/notebooks/causal_graphs.html",
+        "snippet": "A sound and complete algorithm for identification in ADMGs is known due to Tian and Pearl, and Shpitser and Pearl. In Ananke, we use a purely graphical formulation of the aforementioned works that use",
+        "source": "AnySearch"
+      },
+      {
+        "name": "[2301.11477] Ananke: A Python Package For Causal Inference Using ...",
+        "url": "https://arxiv.org/abs/2301.11477",
+        "snippet": "Abstract:We implement Ananke: an object-oriented Python package for causal inference with graphical models. At the top of our inheritance structure is an easily extensible Graph class that provides an",
+        "source": "AnySearch"
+      },
+      {
+        "name": "An Open Source Ecosystem for Causal Machine Learning",
+        "url": "https://www.pywhy.org/",
+        "snippet": "An introduction to DoWhy, a Python library for causal inference that supports explicit modeling and testing of causal assumptions.",
+        "source": "AnySearch"
+      },
+      {
+        "name": "causal-inference · GitHub Topics · GitHub",
+        "url": "https://github.com/topics/causal-inference",
+        "snippet": "GitHub is where people build software. More than 150 million people use GitHub to discover, fork, and contribute to over 420 million projects.",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "microsoft EconML causal ML heterogeneous treatment effects github source code 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "econml v0.16.0",
+        "url": "https://pypi.org/project/econml/",
+        "snippet": "# econml v0.16.0 This package contains several methods for calculating Conditional Average Treatment Effects - Author: PyWhy contributors - License: MIT - Python: >=3.9 - Keywords: treatment-effect - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "EconML - Microsoft Research",
+        "url": "https://www.microsoft.com/en-us/research/project/econml/",
+        "snippet": "EconML - Microsoft Research # EconML Estimate causal effects with ML ## Overview EconML is a Python package that applies the power of machine learning techniques to estimate individualized causal resp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - py-why/EconML at refs/heads/main · GitHub",
+        "url": "https://github.com/py-why/EconML/tree/refs/heads/main",
+        "snippet": "GitHub - py-why/EconML at refs/heads/main · GitHub / EconML Public Star 4.6k - Pricing - Notifications - Fork 803 refs/heads/main Branches Tags Go to file Code Last commit message Last commit date 562",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Index — econml 0.16.0 documentation",
+        "url": "https://econml.azurewebsites.net/genindex.html",
+        "snippet": "Index — econml 0.16.0 documentation # Index _ | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | R | S | T | U | V | W | X | Y | Z ## _ __init__() (econml.cate_interpreter.SingleTreeCat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "v0.16.0",
+        "url": "https://github.com/py-why/EconML/releases/tag/v0.16.0",
+        "snippet": "# v0.16.0 - Tag: v0.16.0 - Repository: py-why/EconML - Published: 2025-07-14T16:49:08Z - Author: kbattocchi --- This is a major update to EconML, with new features, support for newer versions of Pytho",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "econml v0.16.0",
+        "url": "https://pypi.org/project/econml/",
+        "snippet": "# econml v0.16.0 This package contains several methods for calculating Conditional Average Treatment Effects - Author: PyWhy contributors - License: MIT - Python: >=3.9 - Keywords: treatment-effect - ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "EconML - Microsoft Research",
+        "url": "https://www.microsoft.com/en-us/research/project/econml/",
+        "snippet": "EconML - Microsoft Research # EconML Estimate causal effects with ML ## Overview EconML is a Python package that applies the power of machine learning techniques to estimate individualized causal resp",
+        "source": "AnySearch"
+      },
+      {
+        "name": "GitHub - py-why/EconML at refs/heads/main · GitHub",
+        "url": "https://github.com/py-why/EconML/tree/refs/heads/main",
+        "snippet": "GitHub - py-why/EconML at refs/heads/main · GitHub / EconML Public Star 4.6k - Pricing - Notifications - Fork 803 refs/heads/main Branches Tags Go to file Code Last commit message Last commit date 562",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Index — econml 0.16.0 documentation",
+        "url": "https://econml.azurewebsites.net/genindex.html",
+        "snippet": "Index — econml 0.16.0 documentation # Index _ | A | B | C | D | E | F | G | H | I | J | K | L | M | N | O | P | R | S | T | U | V | W | X | Y | Z ## _ __init__() (econml.cate_interpreter.SingleTreeCat",
+        "source": "AnySearch"
+      },
+      {
+        "name": "v0.16.0",
+        "url": "https://github.com/py-why/EconML/releases/tag/v0.16.0",
+        "snippet": "# v0.16.0 - Tag: v0.16.0 - Repository: py-why/EconML - Published: 2025-07-14T16:49:08Z - Author: kbattocchi --- This is a major update to EconML, with new features, support for newer versions of Pytho",
+        "source": "AnySearch"
+      }
+    ]
+  },
+  {
+    "query": "LLM agent counterfactual reasoning hallucination production audit 2026",
+    "bocha_web": [],
+    "anysearch": [],
+    "bocha_ai_answer": "",
+    "merged_sources": []
+  },
+  {
+    "query": "causal attribution production agent decision audit transparency LLM 2026",
+    "bocha_web": [],
+    "anysearch": [
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2604.05485",
+        "snippet": "# Auditable Agents arXiv (Cornell University), 2026. 0 citations. ## Abstract LLM agents call tools, query databases, delegate tasks, and trigger external side effects. Once an agent system can act in",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Transparency in Agentic AI: A Survey of Interpretability, Explainability, and Governance",
+        "url": "https://doi.org/10.31224/6451",
+        "snippet": "# Transparency in Agentic AI: A Survey of Interpretability, Explainability, and Governance 2026. 0 citations. ## Authors - Shaina Raza (Vector (United States)): h-index 0; 0 citations - Ahmed Radwan: ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/adr/0006-causal-traceability.md at v0.1.0 · shimo4228/agent-attribution-practice",
+        "url": "https://github.com/shimo4228/agent-attribution-practice/blob/v0.1.0/docs/adr/0006-causal-traceability.md",
+        "snippet": "# File: shimo4228/agent-attribution-practice/docs/adr/0006-causal-traceability.md - Repository: shimo4228/agent-attribution-practice | Eight architectural decision records on accountability distributi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2601.02314v1",
+        "snippet": "Project Ariadne: A Structural Causal Framework for Auditing Faithfulness in LLM Agents # Project Ariadne: A Structural Causal Framework for Auditing Faithfulness in LLM Agents Sourena Khanzadeh (Janua",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jaineet17/causal-agent-replay",
+        "url": "https://github.com/jaineet17/causal-agent-replay",
+        "snippet": "# Repository: jaineet17/causal-agent-replay Counterfactual replay and causal attribution over LLM-agent trajectories: find which step actually caused a failure by intervening on it. - Stars: 6 - Forks",
+        "source": "AnySearch"
+      }
+    ],
+    "bocha_ai_answer": "",
+    "merged_sources": [
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2604.05485",
+        "snippet": "# Auditable Agents arXiv (Cornell University), 2026. 0 citations. ## Abstract LLM agents call tools, query databases, delegate tasks, and trigger external side effects. Once an agent system can act in",
+        "source": "AnySearch"
+      },
+      {
+        "name": "Transparency in Agentic AI: A Survey of Interpretability, Explainability, and Governance",
+        "url": "https://doi.org/10.31224/6451",
+        "snippet": "# Transparency in Agentic AI: A Survey of Interpretability, Explainability, and Governance 2026. 0 citations. ## Authors - Shaina Raza (Vector (United States)): h-index 0; 0 citations - Ahmed Radwan: ",
+        "source": "AnySearch"
+      },
+      {
+        "name": "docs/adr/0006-causal-traceability.md at v0.1.0 · shimo4228/agent-attribution-practice",
+        "url": "https://github.com/shimo4228/agent-attribution-practice/blob/v0.1.0/docs/adr/0006-causal-traceability.md",
+        "snippet": "# File: shimo4228/agent-attribution-practice/docs/adr/0006-causal-traceability.md - Repository: shimo4228/agent-attribution-practice | Eight architectural decision records on accountability distributi",
+        "source": "AnySearch"
+      },
+      {
+        "name": "-",
+        "url": "https://arxiv.org/pdf/2601.02314v1",
+        "snippet": "Project Ariadne: A Structural Causal Framework for Auditing Faithfulness in LLM Agents # Project Ariadne: A Structural Causal Framework for Auditing Faithfulness in LLM Agents Sourena Khanzadeh (Janua",
+        "source": "AnySearch"
+      },
+      {
+        "name": "jaineet17/causal-agent-replay",
+        "url": "https://github.com/jaineet17/causal-agent-replay",
+        "snippet": "# Repository: jaineet17/causal-agent-replay Counterfactual replay and causal attribution over LLM-agent trajectories: find which step actually caused a failure by intervening on it. - Stars: 6 - Forks",
+        "source": "AnySearch"
+      }
+    ]
+  }
+]

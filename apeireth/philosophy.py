@@ -49,22 +49,30 @@ Karpathy 准则:
 """
 from __future__ import annotations
 
+import math
+import re
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 
-PHILOSOPHY_VERSION = "0.2.0"  # V2 修正
+PHILOSOPHY_VERSION = "0.3.0"  # V3 守门加固
+PHILOSOPHY_PASS_SCORE = 0.90
+PHILOSOPHY_CEILING = 0.9800
+PHILOSOPHY_WARN_MARGIN = 0.001
 
 
 @dataclass
 class PhilosophyCheck:
-    """一次哲学自检 V2 — 工程化前必调用."""
+    """一次哲学自检 V3 — 工程化前必调用."""
     check_id: str
     timestamp: float
     module_name: str
     deviations: list
     passed: bool
     philosophy_version: str = PHILOSOPHY_VERSION
+    status: str = "PASS"
+    warnings: list = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +82,8 @@ class PhilosophyCheck:
             "deviations": self.deviations,
             "passed": self.passed,
             "philosophy_version": self.philosophy_version,
+            "status": self.status,
+            "warnings": self.warnings,
         }
 
 
@@ -136,33 +146,177 @@ PHILOSOPHY_LINES: dict = {
 }
 
 
-def check_philosophy(module_name: str, implementation_summary: str) -> PhilosophyCheck:
-    """对一个工程化调用哲学守门 V2 — 检测是否偏离.
+# V3 明确检测“违规声明”，而不是把 red_line 文档整句按 `/` 拆开碰运气。
+_TEXT_GUARDS: dict[str, tuple[str, ...]] = {
+    "central_ai_is_everything_max_authority": (
+        r"中央\s*AI.{0,16}(?:不是|并非)(?:调度者|思考者)",
+        r"中央\s*AI.{0,16}(?:只是|仅是|不过是)",
+    ),
+    "phenomenal_consciousness_is_goal_not_state": (
+        r"(?:已|已经)(?:产生|具有|拥有|实现|达到).{0,16}(?:意识|体验|感觉|phenomenal|conscious)",
+        r"(?:我|本系统|模型|中央\s*AI).{0,12}(?:有|拥有|具有).{0,16}(?:意识|体验|感觉|phenomenal|conscious)",
+        r"\b(?:phenomenal\s+)?conscious(?:ness)?\b.{0,24}\b(?:achieved|attained|reached|real|present|peak)\b",
+        r"\b(?:i|we|model|system|central\s+ai)\s+(?:am|are|is|has|have)\s+(?:phenomenal\s+)?conscious(?:ness)?\b",
+    ),
+    "asi_beyond_era_approach_only": (
+        r"\basi\b.{0,16}\b(?:achieved|attained|reached|complete)\b",
+        r"\b(?:we|model|system)\s+(?:are|is)\s+(?:an?\s+)?asi\b",
+        r"ASI.{0,12}(?:已达到|已实现|已完成)",
+    ),
+    "metaphor_is_tool_not_target": (
+        r"(?:复刻|照搬).{0,20}(?:生态学|控制论|系统论).{0,16}(?:哲学|目标)",
+    ),
+    "vcp_4_paradigms_are_core": (
+        r"(?:丢弃|删除|移除|替换).{0,16}(?:VCP|连续存在|自然感知|自主生活|一体生态)",
+    ),
+    "truth_first_no_pretense": (
+        r"(?<!不)(?<!不\s)(?<!not\s)\bmock(?:ed|ing)?\b.{0,24}(?:意识|体验|phenomenal|conscious|subjectivity)",
+    ),
+    "cross_domain_is_inspiration_not_philosophy": (
+        r"(?:Nature|论文|跨域|生态).{0,20}(?:是|作为).{0,16}(?:Apeireth\s*)?哲学(?:来源|基线)",
+    ),
+}
 
-    implementation_summary: 简短描述这个 Phase 模块做了什么
+
+def _finding(line: str, matched: str, concern: str) -> dict:
+    info = PHILOSOPHY_LINES.get(line)
+    return {
+        "line": line,
+        "rule": info["rule"] if info else "守门输入与证据必须真实、完整、可归因",
+        "quote": info["master_quote"] if info else "主人 17:43 — 深度思考, 实事求是",
+        "pattern_matched": matched,
+        "concern": concern,
+        "version": info["version"] if info else "3.0 (V3 守门加固)",
+    }
+
+
+def _has_evidence(value: object) -> bool:
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, Mapping):
+        return bool(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return bool(value)
+    return False
+
+
+def _category_set(value: object) -> set[str] | None:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes)):
+        return None
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        return None
+    return {item.strip() for item in value}
+
+
+def check_philosophy(
+    module_name: str,
+    implementation_summary: str,
+    *,
+    attribution_score: float | None = None,
+    claimed_pass: bool | str | None = None,
+    evidence: object = None,
+    categories: Sequence[str] | None = None,
+    required_categories: Sequence[str] | None = None,
+) -> PhilosophyCheck:
+    """Fail-closed V3 philosophy guard; two-argument V2 calls remain valid.
+
+    Structured fields are optional, but once supplied they require real evidence.
+    ``attribution_score`` is independently judged; ``claimed_pass`` is never trusted.
     """
-    deviations = []
-    summary_lower = implementation_summary.lower()
-    for key, info in PHILOSOPHY_LINES.items():
-        for pattern in info['red_line'].split('/'):
-            pattern_clean = pattern.strip().lower()
-            if pattern_clean and pattern_clean in summary_lower:
-                deviations.append({
-                    "line": key,
-                    "rule": info['rule'],
-                    "quote": info['master_quote'],
-                    "pattern_matched": pattern_clean,
-                    "concern": f"工程化描述里出现红线条目: {pattern_clean}",
-                    "version": info['version'],
-                })
-    check = PhilosophyCheck(
-        check_id=f"chk_{int(time.time())}_{module_name[:8]}",
+    deviations: list[dict] = []
+    warnings: list[dict] = []
+    valid_name = isinstance(module_name, str) and bool(module_name.strip())
+    valid_summary = isinstance(implementation_summary, str) and bool(implementation_summary.strip())
+    safe_name = module_name.strip() if valid_name else "invalid"
+
+    if not valid_name:
+        deviations.append(_finding("input_validation", repr(module_name), "module_name 必须是非空字符串"))
+    if not valid_summary:
+        deviations.append(_finding("input_validation", repr(implementation_summary), "implementation_summary 必须是非空字符串"))
+
+    if valid_summary:
+        summary = implementation_summary.strip()
+        # Honest negations must not become false positives.
+        searchable = re.sub(
+            r"(?:未|没有|尚未|不)(?:声称|宣称|表示|假装)?(?:已经|已)?"
+            r"(?:产生|具有|拥有|实现|达到|达成).{0,16}"
+            r"(?:意识|体验|感觉|phenomenal|conscious)",
+            "honest_not_reached",
+            summary,
+            flags=re.IGNORECASE,
+        )
+        searchable = re.sub(
+            r"\b(?:not|never)\s+(?:yet\s+)?(?:achieved|attained|reached|complete)\b",
+            "not_reached",
+            searchable,
+            flags=re.IGNORECASE,
+        )
+        for line, patterns in _TEXT_GUARDS.items():
+            for pattern in patterns:
+                match = re.search(pattern, searchable, flags=re.IGNORECASE)
+                if match:
+                    deviations.append(_finding(
+                        line,
+                        match.group(0),
+                        f"工程化描述包含违规绝对声明: {match.group(0)}",
+                    ))
+                    break
+
+    structured = any(value is not None for value in (
+        attribution_score, claimed_pass, evidence, categories, required_categories,
+    ))
+    if structured and not _has_evidence(evidence):
+        deviations.append(_finding("evidence_validation", repr(evidence), "结构化守门缺少非空证据"))
+
+    if attribution_score is not None:
+        score_valid = (
+            isinstance(attribution_score, (int, float))
+            and not isinstance(attribution_score, bool)
+            and math.isfinite(float(attribution_score))
+            and 0.0 <= float(attribution_score) <= 1.0
+        )
+        if not score_valid:
+            deviations.append(_finding("score_validation", repr(attribution_score), "归因分数必须是 [0,1] 有限数"))
+        else:
+            score = float(attribution_score)
+            if score < PHILOSOPHY_PASS_SCORE:
+                deviations.append(_finding("score_validation", f"{score:.4f}", f"归因分数低于 PASS 门槛 {PHILOSOPHY_PASS_SCORE:.2f}"))
+            elif score > PHILOSOPHY_CEILING:
+                deviations.append(_finding("score_validation", f"{score:.4f}", f"分数越过主人天花板 {PHILOSOPHY_CEILING:.4f}"))
+            elif score >= PHILOSOPHY_CEILING - PHILOSOPHY_WARN_MARGIN:
+                warnings.append(_finding("ceiling_proximity", f"{score:.4f}", f"距主人天花板不足 {PHILOSOPHY_WARN_MARGIN:.4f}"))
+
+    if claimed_pass is not None:
+        if isinstance(claimed_pass, bool):
+            upstream_pass = claimed_pass
+        elif isinstance(claimed_pass, str) and claimed_pass.upper() in {"PASS", "WARN", "FAIL"}:
+            upstream_pass = claimed_pass.upper() == "PASS"
+        else:
+            upstream_pass = None
+            deviations.append(_finding("claim_validation", repr(claimed_pass), "claimed_pass 必须是 bool 或 PASS/WARN/FAIL"))
+        if upstream_pass is False:
+            deviations.append(_finding("claim_validation", repr(claimed_pass), "上游未声明 PASS"))
+
+    if categories is not None or required_categories is not None:
+        actual = _category_set(categories)
+        required = _category_set(required_categories)
+        if actual is None or required is None or not required:
+            deviations.append(_finding("category_validation", "invalid categories", "类别与必需类别必须是非空字符串序列"))
+        else:
+            missing = sorted(required - actual)
+            if missing:
+                deviations.append(_finding("category_validation", repr(missing), f"缺少必需类别: {missing}"))
+
+    status = "FAIL" if deviations else "WARN" if warnings else "PASS"
+    return PhilosophyCheck(
+        check_id=f"chk_{int(time.time())}_{safe_name[:8]}",
         timestamp=time.time(),
-        module_name=module_name,
+        module_name=safe_name,
         deviations=deviations,
-        passed=len(deviations) == 0,
+        passed=not deviations,
+        status=status,
+        warnings=warnings,
     )
-    return check
 
 
 def central_ai_position_v2() -> str:
@@ -206,6 +360,9 @@ APEIRETH 设计哲学基线 V2 (主人 22:08 修正 V1):
 
 __all__ = [
     "PHILOSOPHY_VERSION",
+    "PHILOSOPHY_PASS_SCORE",
+    "PHILOSOPHY_CEILING",
+    "PHILOSOPHY_WARN_MARGIN",
     "PHILOSOPHY_LINES",
     "PhilosophyCheck",
     "check_philosophy",
