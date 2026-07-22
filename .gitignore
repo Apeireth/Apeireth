@@ -1,4 +1,5 @@
-﻿.bocha_key
+﻿code-deep-study/
+.bocha_key
 *.key
 *.minimax_key
 __pycache__/
