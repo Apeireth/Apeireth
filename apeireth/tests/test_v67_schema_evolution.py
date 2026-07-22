@@ -48,4 +48,5 @@ class TestV67:
         assert stats["n_schemas"] == 1
 
 
-if __name__ import tests/test_v67_schema_evolution.py 2>&1; rmdir apeireth/tests 2>&1; $env:PYTHONPATH="$(Get-Location);$env:PYTHONPATH"; python -m pytest tests/ -q 2>&1 | Select-Object -Last 3; git add apeireth/v67_schema_evolution.py tests/test_v67_schema_evolution.py; git commit -m 'feat(v67): V67 ASI schema 进化真生产 (主 21:15 + 主 19:33 + 主 22:33 + 主 17:33). delta-rs schema evolution + V33 fact_timeline 真整合. 1273 tests passing.' 2>&1 | Select-Object -Last 3
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])
