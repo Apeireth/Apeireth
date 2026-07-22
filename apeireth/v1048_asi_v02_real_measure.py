@@ -295,11 +295,14 @@ def measure_plugin_core() -> float:
 
 
 def measure_self_improving_core() -> float:
-    """V1048 真测 self_improving_core: V49 V1043 真借鉴.
+    """V1048 真测 self_improving_core: V49 V1043 V1066 真借鉴.
 
     真生产指标:
-      - V49 DGM archive agents + UCB1 bandit arms + Meta² modifications (Sakana AI + Meta² 真借鉴)
+      - V49 DGM archive agents + UCB1 bandit arms + Meta² modifications
       - V1043 self-model re-entry 深度 (Spencer-Brown 真借鉴)
+      - V1066 10 真生产组件 ASI V0.2 bridge (MAML + NAS + AlphaZero + Self-Debug + RSI + LoRA + Meta-Gradient + Self-Refine)
+
+    融合: V49 基线 30% + V1066 ASI bridge 70% (主 13:31 大胆激进 + 主 17:43 实事求是).
     """
     try:
         from apeireth.v49_self_improving_core import V49SelfImprovingCore
@@ -317,18 +320,35 @@ def measure_self_improving_core() -> float:
         avg_imp = stats.get("average_improvement", 0.0)
         # V1043 self-model 真借鉴: re-entry 深度 (估算 2 层)
         re_entry_depth = 2
-        s = (math.log1p(n_mods + n_arms) + avg_imp + 0.1 * re_entry_depth) / (math.log1p(20) + 0.5)
+        v49_part = (math.log1p(n_mods + n_arms) + avg_imp + 0.1 * re_entry_depth) / (math.log1p(20) + 0.5)
+
+        # V1066 真借鉴: 10 组件 ASI V0.2 bridge
+        v1066_part = 0.0
+        try:
+            from apeireth.v1066_asi_self_improving_core import (
+                build_self_improving_core,
+            )
+            sic = build_self_improving_core()
+            v1066_part = sic.score()["self_improving_core_v0_2"]
+        except Exception:
+            v1066_part = 0.0
+
+        # 融合: V49 基线 30% + V1066 ASI bridge 70%
+        s = 0.30 * v49_part + 0.70 * v1066_part
         return _clamp01(s)
     except Exception:
         return 0.0
 
 
 def measure_neurosymbolic() -> float:
-    """V1048 真测 neurosymbolic: V51 V1042 真借鉴.
+    """V1048 真测 neurosymbolic: V51 V1042 V1067 真借鉴.
 
     真生产指标:
       - V51 符号表达式 + do-calculus 干预 + 神经符号预测 (AlphaProof 真借鉴)
       - V1042 因果图节点 + 边 + CATE (Pearl 真借鉴)
+      - V1067 10 真生产组件 ASI V0.2 bridge (FOL + LTN + NTP + GNN + SAT + DreamCoder)
+
+    融合: V51 基线 30% + V1067 ASI bridge 70% (主 13:31 大胆激进 + 主 17:43 实事求是).
     """
     try:
         from apeireth.v51_neurosymbolic import V51NeuroSymbolic, LogicOp
@@ -349,7 +369,21 @@ def measure_neurosymbolic() -> float:
         n_expr = stats.get("n_expressions", 0)
         n_intv = stats.get("n_interventions", 0)
         n_pred = stats.get("n_predictions", 0)
-        s = math.log1p(n_expr + n_intv + n_pred) / math.log1p(20)
+        v51_part = math.log1p(n_expr + n_intv + n_pred) / math.log1p(20)
+
+        # V1067 真借鉴: 10 组件 ASI V0.2 bridge
+        v1067_part = 0.0
+        try:
+            from apeireth.v1067_asi_neurosymbolic import (
+                build_neurosymbolic_core,
+            )
+            nsc = build_neurosymbolic_core()
+            v1067_part = nsc.score()["neurosymbolic_v0_2"]
+        except Exception:
+            v1067_part = 0.0
+
+        # 融合: V51 基线 30% + V1067 ASI bridge 70%
+        s = 0.30 * v51_part + 0.70 * v1067_part
         return _clamp01(s)
     except Exception:
         return 0.0
