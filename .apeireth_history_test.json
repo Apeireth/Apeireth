@@ -6614,6 +6614,186 @@
       "n_doc_md": 56,
       "n_total_lines": 86870,
       "ts": 1784688500.0
+    },
+    {
+      "label": "snap1",
+      "n_commits": 381,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784689232.71
+    },
+    {
+      "label": "g1",
+      "n_commits": 381,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784689234.61
+    },
+    {
+      "label": "g2",
+      "n_commits": 381,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784689236.55
+    },
+    {
+      "label": "r1",
+      "n_commits": 381,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784689238.58
+    },
+    {
+      "label": "s1",
+      "n_commits": 381,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784689240.49
+    },
+    {
+      "label": "snap1",
+      "n_commits": 382,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784690727.01
+    },
+    {
+      "label": "g1",
+      "n_commits": 382,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784690728.93
+    },
+    {
+      "label": "g2",
+      "n_commits": 382,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784690730.86
+    },
+    {
+      "label": "r1",
+      "n_commits": 382,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784690732.76
+    },
+    {
+      "label": "s1",
+      "n_commits": 382,
+      "n_tests": 4457,
+      "n_modules": 1079,
+      "n_doc_md": 56,
+      "n_total_lines": 87812,
+      "ts": 1784690734.66
+    },
+    {
+      "label": "snap1",
+      "n_commits": 384,
+      "n_tests": 4495,
+      "n_modules": 1080,
+      "n_doc_md": 56,
+      "n_total_lines": 88357,
+      "ts": 1784692085.04
+    },
+    {
+      "label": "g1",
+      "n_commits": 384,
+      "n_tests": 4495,
+      "n_modules": 1080,
+      "n_doc_md": 56,
+      "n_total_lines": 88357,
+      "ts": 1784692087.09
+    },
+    {
+      "label": "g2",
+      "n_commits": 384,
+      "n_tests": 4495,
+      "n_modules": 1080,
+      "n_doc_md": 56,
+      "n_total_lines": 88357,
+      "ts": 1784692089.28
+    },
+    {
+      "label": "r1",
+      "n_commits": 384,
+      "n_tests": 4495,
+      "n_modules": 1080,
+      "n_doc_md": 56,
+      "n_total_lines": 88357,
+      "ts": 1784692091.33
+    },
+    {
+      "label": "s1",
+      "n_commits": 384,
+      "n_tests": 4495,
+      "n_modules": 1080,
+      "n_doc_md": 56,
+      "n_total_lines": 88357,
+      "ts": 1784692093.39
+    },
+    {
+      "label": "snap1",
+      "n_commits": 387,
+      "n_tests": 4571,
+      "n_modules": 1081,
+      "n_doc_md": 57,
+      "n_total_lines": 89620,
+      "ts": 1784699111.54
+    },
+    {
+      "label": "g1",
+      "n_commits": 387,
+      "n_tests": 4571,
+      "n_modules": 1081,
+      "n_doc_md": 57,
+      "n_total_lines": 89620,
+      "ts": 1784699113.49
+    },
+    {
+      "label": "g2",
+      "n_commits": 387,
+      "n_tests": 4571,
+      "n_modules": 1081,
+      "n_doc_md": 57,
+      "n_total_lines": 89620,
+      "ts": 1784699115.42
+    },
+    {
+      "label": "r1",
+      "n_commits": 387,
+      "n_tests": 4571,
+      "n_modules": 1081,
+      "n_doc_md": 57,
+      "n_total_lines": 89620,
+      "ts": 1784699117.35
+    },
+    {
+      "label": "s1",
+      "n_commits": 387,
+      "n_tests": 4571,
+      "n_modules": 1081,
+      "n_doc_md": 57,
+      "n_total_lines": 89620,
+      "ts": 1784699119.27
     }
   ]
 }
