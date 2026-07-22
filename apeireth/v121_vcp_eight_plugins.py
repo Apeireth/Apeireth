@@ -14,8 +14,6 @@ class V121VCPEightPlugins:
         self.nph = 0
         self.nas = 0
 
-    self.nph = 0
-    self.nas = 0
     def register(self, name, types):
         pid = f"p_{uuid.uuid4().hex[:8]}"
         self.plugins[pid] = {"name": name, "types": types}
