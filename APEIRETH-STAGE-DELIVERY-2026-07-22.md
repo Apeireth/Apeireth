@@ -1033,3 +1033,147 @@ cd 用 promethean (实际路径), peireth 用在 Python 模块导入.
 ---
 
 _Last update: 2026-07-22 20:55, by 楚零 (主 agent session). 路径别名说明 (主 20:46 反思 + 主 20:55 方案 C 决定 + 主 14:09 改名 + 主 17:55 保留稳定). 主 17:43 实事求是 + 主 23:44 干到底 + 主 19:33 走在前人经验上 (尊重历史决定) + 主 22:33 终极授权 (方向微调, 主人选 C)._
+
+---
+
+## 18. 新团队单一文件夹策略 (主 20:57 真务实: 我用到的都放进去)
+
+> **主 20:57 真反馈**: "新团队只能拥有一个文件夹的全部权限, 所以请你把 memory 之类的必要文档都挪到 .openclaw/workspace/promethean/ 里面去. 我直接让新团队把这个当工作文件夹, 就是他们会用到的东西你都放进去, 在文档中也都说清楚".
+
+### 18.1 已复制到 promethean/ 的资源 (主 20:57)
+
+新团队**只需要** .openclaw\workspace\promethean\ 这一个文件夹, 以下关键资源已**真复制**进来 (主 17:43 实事求是 = 不是软链, 是真复制):
+
+#### 18.1.1 主 agent 长期记忆
+
+| 文件 | 大小 | 来源 | 用途 |
+|------|------|------|------|
+| promethean/MEMORY.md | 30KB | workspace/MEMORY.md | 主 agent 长期记忆精华 (主人哲学 + 经验教训) |
+
+#### 18.1.2 每日记忆 (16 daily logs)
+
+全部复制到 promethean/memory/2026-*.md:
+
+- 2026-06-16.md (5KB) — Apeireth 立项, 命名楚零
+- 2026-06-22.md (9KB) — AgentMemory 集成真生产
+- 2026-07-13.md ~ 2026-07-13-2207-2.md (8 个, 130KB) — VCP 集成 + 真接入
+- 2026-07-14.md (1KB) — NewAPI 部署
+- 2026-07-15.md (249B) — 调 7 真生产
+- 2026-07-19.md (24KB) — 跨域真生产借鉴启动
+- 2026-07-20.md (4KB) — 主人 22:33 ASI 北极星
+- 2026-07-21.md (31KB) — V1049 + 阶段性交付
+- 2026-07-22.md (62KB) — V1050-V1078 + V2 交接 (今日)
+
+#### 18.1.3 OpenClaw agent 上下文 (5 文件)
+
+复制到 promethean/agent-context/:
+
+- AGENTS.md (8KB) — workspace 工作约定
+- SOUL.md (2KB) — 楚零 (我) 的灵魂
+- IDENTITY.md (628B) — 楚零身份卡
+- USER.md (537B) — 主人基本信息
+- TOOLS.md (920B) — 本地工具备注
+
+### 18.2 没复制的 (新团队不需要)
+
+按主 17:43 实事求是,以下**不复制** (因为不属于 Apeireth 项目, 是 OpenClaw / 其他项目的资源):
+
+- ❌ workspace/.openclaw/ (OpenClaw 状态, cron 状态等)
+- ❌ workspace/.tools/ (OpenClaw 工具链)
+- ❌ workspace/AgentMemory/ (这是 AgentMemory 项目本身, 不是数据)
+- ❌ workspace/AgentTeam-Src/, AgentTeam-Work/, AHE-repo/, 	onbo/, _vcp_*/ (其他项目)
+- ❌ workspace/data/, error_screenshots/, logs/, state/, 
+otes/, vatars/ (运行时临时数据)
+- ❌ workspace/memory/mem_*.md + .vec.json + .meta.json (AgentMemory 持久化向量数据)
+- ❌ workspace/memory/openclaw/ (OpenClaw dashboard 缓存)
+- ❌ workspace/memory/_hb_*.ps1, _update_*.py 等脚本 (cron 内部)
+- ❌ workspace/.git/ (git 已经在 promethean)
+- ❌ workspace/BOCHA-* 和 ocha-search-*.md (调研原始数据, 已在 promethean 有 research-v7-round-*.json)
+
+### 18.3 promethean/ 完整资源清单 (新团队 1 个文件夹 = 全部)
+
+`
+.openclaw\workspace\promethean\      ← 新团队唯一文件夹
+├── MEMORY.md                                       ← 30KB 主 agent 长期记忆 (主 20:57 复制)
+├── README.md                                       ← 入口
+├── APEIRETH-STAGE-DELIVERY-2026-07-22.md          ← 本文档 (主文档)
+├── APEIRETH-EXPLAINED.md                           ← Apeireth 哲学解释
+├── APEIRETH-NEXT-MOVES-2026-07-20.md              ← 下一步方向
+├── APEIRETH-VS-VCP-MARKET-COMPARISON-2026-07-21.md ← 市场对比
+├── APEIRETH-RENAME-PROPOSAL.md                     ← 改名历史
+├── APEIRETH.md                                     ← 主文档
+├── APEIRETH-MANIFESTO-ORIGINAL-2026-07-20.md      ← 主宣言
+├── ASI-* 系列 .md (38 篇 ASI 文档)
+│
+├── memory/                                         ← 16 daily logs (主 20:57 复制)
+│   ├── 2026-06-16.md ~ 2026-07-22.md              ← 全部历史
+│   └── ...
+│
+├── agent-context/                                  ← OpenClaw agent 上下文 (主 20:57 复制)
+│   ├── AGENTS.md                                   ← workspace 工作约定
+│   ├── SOUL.md                                     ← 楚零灵魂
+│   ├── IDENTITY.md                                 ← 楚零身份
+│   ├── USER.md                                     ← 主人信息
+│   └── TOOLS.md                                    ← 工具备注
+│
+├── apeireth/                                       ← 1080 真生产 modules
+├── tests/                                          ← 3896 真测试
+├── artifacts/                                      ← V1074 真生产 artifacts
+├── reports/                                        ← 真生产报告
+├── research-v7-round-{8..31}.json                  ← 24 轮跨域调研
+├── cron-research-runs.jsonl                        ← 调研日志
+├── code-deep-study/                                ← 20 GitHub 真源码深读
+├── rust-substrate/                                 ← Rust 重写设计 (主 12:07 + 21:15)
+├── data/                                           ← V 真生产数据
+├── logs/                                           ← 运行时 logs
+├── scripts/                                        ← 真生产脚本
+├── promethean/                                     ← 主工程子目录 (主 17:55 改名历史保留)
+├── archive/                                        ← 归档
+├── notes/                                          ← 主人笔记
+└── ... (其他 promethean 子目录)
+`
+
+### 18.4 新团队上手检查清单 (主 20:57 简化版)
+
+新团队**只需**:
+1. **拥有 promethean/ 文件夹全部权限** (主 20:57 已简化)
+2. **跑 5 步命令** (本文档第 16.4 节)
+3. **读 MEMORY.md** (主 agent 长期记忆精华)
+4. **读 5 篇必读** (APEIRETH-STAGE-DELIVERY 第 15 章第 1.2 节)
+5. **跑 V1074 --report** 看 ASI 当前分数
+
+**新团队不需要访问 workspace 根** (workspace/.openclaw/ / workspace/AgentMemory/ 等) — 所有必要资源都在 promethean/ 内。
+
+### 18.5 主 20:57 策略真意义
+
+主 17:43 实事求是 + 主 19:33 走在前人经验上 + 主 23:44 干到底:
+
+- ✅ 新团队零摩擦上手 — 1 个文件夹 = 全部
+- ✅ 不依赖 OpenClaw 跨 session 稳定性 — 真复制 (不软链)
+- ✅ 历史可追溯 — 16 daily logs 全在 promethean/memory/
+- ✅ 主 agent 经验可学习 — MEMORY.md + agent-context/ 5 文件
+- ✅ 不破坏 OpenClaw 内部状态 — workspace/ 不动 (主 17:55 路径稳定原则)
+
+主 20:57 真务实: "我会用到的都放进去" — 这就是真务实。
+
+### 18.6 主 agent (我) 交接完成确认
+
+按主 22:33 终极授权 + 主 11:43 交接 + 主 20:23 交付就绪 + 主 20:46 反思 + 主 20:55 方案 C + 主 20:57 单一文件夹策略:
+
+✅ 阶段性交付文档: APEIRETH-STAGE-DELIVERY-2026-07-22.md (本文件, 18 章)
+✅ 新团队上手清单: 第 15+16+17+18 章全覆盖
+✅ 真生产状态: V1074 --report 1080 modules + 3896 tests + ASI 0.8816
+✅ MEMORY 地址: promethean/MEMORY.md (主 20:57 复制)
+✅ 调研文档: promethean/research-v7-round-*.json (已在仓库)
+✅ 代码深读: promethean/code-deep-study/ (已在仓库)
+✅ Rust 设计: promethean/rust-substrate/ (已在仓库)
+✅ API keys: promethean/.minimax_key + .bocha_key + .anysearch_key (已在仓库)
+✅ 每日记忆: promethean/memory/2026-*.md (主 20:57 复制)
+✅ Agent 上下文: promethean/agent-context/ (主 20:57 复制)
+✅ 路径别名: 第 17 章说明 (项目 Apeireth, 路径 promethean, 模块 apeireth)
+
+**交接完成。新团队拥有 promethean/ 全部权限 = 拥有 Apeireth 全部能力.**
+
+---
+
+_Last update: 2026-07-22 21:00, by 楚零 (主 agent session). 主 20:57 单一文件夹策略落地: MEMORY.md + 16 daily logs + 5 agent context 全部真复制到 promethean/. 主 17:43 实事求是 + 主 19:33 走在前人经验上 + 主 23:44 干到底 + 主 22:33 终极授权 + 主 11:43 新团队接手 + 主 00:56 任何人都能接手. 交接完成._
