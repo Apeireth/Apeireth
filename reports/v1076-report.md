@@ -1,7 +1,7 @@
 # V1076 ASI Real External LLM Client Report
 
-- **Started:** 2026-07-22T03:49:56.468631+00:00
-- **Stopped:** 2026-07-22T03:49:56.535754+00:00
+- **Started:** 2026-07-22T13:10:25.760727+00:00
+- **Stopped:** 2026-07-22T13:10:25.826624+00:00
 - **Duration:** 0.07s
 - **Selected endpoint:** http://localhost:3000/v1
 - **Selected key:** (none)
@@ -11,12 +11,13 @@
 
 | Name | URL | Reachable | Status | Latency | Error |
 |------|-----|-----------|--------|---------|-------|
-| newapi-local | `http://localhost:3000/v1` | True | 200 | 35.5ms |  |
+| newapi-local | `http://localhost:3000/v1` | True | 200 | 19.5ms |  |
 
 ## API Keys (主 17:58 不假装)
 
 | Source | Preview | Valid | Status | Error |
 |--------|---------|-------|--------|-------|
+| env:ANTHROPIC_API_KEY | `sk-cp-ku*****************************************************************************************************************RsUg` | False | 401 | invalid_token |
 | file:.minimax_key:line1 | `sk-cp--D*****************************************************************************************************************5Wbk` | False | 401 | invalid_token |
 | file:.minimax_key:line2 | `sk-cp-Xq*****************************************************************************************************************qSes` | False | 401 | invalid_token |
 

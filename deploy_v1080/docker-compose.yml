@@ -1,0 +1,25 @@
+# ASI docker-compose V1080 (主 17:33 + 主 19:33 Compose v2 真借鉴)
+services:
+  asi-api:
+    build: .
+    image: apeireth-asi:0.1.0
+    container_name: apeireth-asi
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - ASI_VERSION=0.1.0
+      - OTEL_SERVICE_NAME=apeireth-asi
+      - V1080_HOST=0.0.0.0
+      - V1080_PORT=8765
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/health',timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M

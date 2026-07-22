@@ -1,0 +1,17 @@
+# ASI systemd unit V1080 (主 19:33 systemd 真借鉴)
+[Unit]
+Description=Apeireth ASI Real Service V1080
+After=network.target
+
+[Service]
+Type=simple
+User=asi
+WorkingDirectory=/app
+Environment="ASI_VERSION=0.1.0"
+Environment="V1080_PORT=8765"
+ExecStart=/usr/bin/python -c "import apeireth.v1080_asi_real_subprocess_deploy as v; v.app"
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

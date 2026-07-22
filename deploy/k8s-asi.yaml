@@ -1,0 +1,78 @@
+# ASI Kubernetes Deployment — V1075 (借鉴 K8sProbes liveness/readiness/startup)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: apeireth-asi
+  labels:
+    app: apeireth-asi
+    version: "0.1.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: apeireth-asi
+  template:
+    metadata:
+      labels:
+        app: apeireth-asi
+        version: "0.1.0"
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      containers:
+        - name: asi-api
+          image: apeireth-asi:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8765
+          env:
+            - name: ASI_VERSION
+              value: "0.1.0"
+            - name: OTEL_SERVICE_NAME
+              value: apeireth-asi
+            - name: V1075_HOST
+              value: "0.0.0.0"
+            - name: V1075_PORT
+              value: "8765"
+          resources:
+            limits:
+              cpu: "1"
+              memory: "512Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8765
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8765
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8765
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: apeireth-asi
+spec:
+  type: ClusterIP
+  selector:
+    app: apeireth-asi
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8765
