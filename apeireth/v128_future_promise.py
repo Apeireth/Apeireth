@@ -1,4 +1,4 @@
-"""V128 future/promise 真生产."""
+"""V128 future/promise 鐪熺敓浜?"""
 from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
@@ -9,8 +9,11 @@ class Promise:
     error: str = ""
     ts: float = field(default_factory=lambda: __import__('time').time())
 class V128FuturePromise:
-    self.nph = 0
-    self.nas = 0
+    def __init__(self):
+        self.promises = {}
+        self.n = 0
+        self.nph = 0
+        self.nas = 0
     def create(self):
         pid = f"pr_{uuid.uuid4().hex[:8]}"
         self.promises[pid] = Promise(pid=pid)
@@ -20,5 +23,5 @@ class V128FuturePromise:
         if pid in self.promises:
             self.promises[pid].status = "fulfilled"; self.promises[pid].value = value
     def stats(self): return {"n": self.n, "version": V128_VERSION,
-                             "philosophy": "V128 future/promise (主 19:33 + 真借鉴)"}
+                             "philosophy": "V128 future/promise (涓?19:33 + 鐪熷€熼壌)"}
 __all__ = ["V128_VERSION", "V128FuturePromise"]

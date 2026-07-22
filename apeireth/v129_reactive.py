@@ -1,4 +1,4 @@
-"""V129 reactive 真生产."""
+"""V129 reactive 鐪熺敓浜?"""
 from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
@@ -9,8 +9,11 @@ class Observable:
     subscribers: list = field(default_factory=list)
     ts: float = field(default_factory=lambda: __import__('time').time())
 class V129Reactive:
-    self.nph = 0
-    self.nas = 0
+    def __init__(self):
+        self.observables = {}
+        self.n = 0
+        self.nph = 0
+        self.nas = 0
     def create(self, name):
         oid = f"obs_{uuid.uuid4().hex[:8]}"
         self.observables[oid] = Observable(oid=oid, name=name)
@@ -24,5 +27,5 @@ class V129Reactive:
             obs = self.observables[oid]; obs.value = value
             for cb in obs.subscribers: cb(value)
     def stats(self): return {"n": self.n, "version": V129_VERSION,
-                             "philosophy": "V129 reactive (主 19:33 + 真借鉴 RxPy)"}
+                             "philosophy": "V129 reactive (涓?19:33 + 鐪熷€熼壌 RxPy)"}
 __all__ = ["V129_VERSION", "V129Reactive"]
