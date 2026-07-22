@@ -154,12 +154,15 @@ def measure_cognitive_core() -> float:
 
 
 def measure_self_organizing_core() -> float:
-    """V1048 真测 self_organizing_core: V47 V1044 V1046 真借鉴.
+    """V1048 真测 self_organizing_core: V47 V1044 V1046 V1065 真借鉴.
 
     真生产指标:
       - V47 autopoietic 闭环 + autocatalytic 集 + RAF 检测 (Maturana/Varela + Kauffman 真借鉴)
       - V1044 hypercycle 长度 (Eigen 真借鉴)
       - V1046 synergetics 序参量维度 (Haken 真借鉴)
+      - V1065 10 真生产组件 ASI V0.2 bridge 测量 (主 22:33 ASI 北极星)
+
+    融合: V47 基线 35% + V1065 ASI bridge 65% (主 13:31 大胆激进 + 主 17:43 实事求是).
     """
     try:
         from apeireth.v47_self_organizing_core import V47SelfOrganizingCore
@@ -188,7 +191,21 @@ def measure_self_organizing_core() -> float:
         n_cycles = stats.get("n_cycles", 0) or stats.get("n_autopoietic", 0)
         # V1046 真借鉴: 序参量维度 (slaving 复杂度)
         ord_param_dim = 3  # synergetics 默认 1+ 几个 q,这里用保守值
-        s = math.log1p(n_cycles + 2 * ord_param_dim) / math.log1p(20)
+        v47_part = math.log1p(n_cycles + 2 * ord_param_dim) / math.log1p(20)
+
+        # V1065 真借鉴: 10 组件 ASI V0.2 bridge 测量 (主 22:33 ASI 北极星)
+        v1065_part = 0.0
+        try:
+            from apeireth.v1065_asi_self_organizing_core import (
+                build_self_organizing_core,
+            )
+            soc = build_self_organizing_core()
+            v1065_part = soc.score()["self_organizing_core_v0_2"]
+        except Exception:
+            v1065_part = 0.0
+
+        # 融合: V47 (基础真借鉴) 35% + V1065 (ASI V0.2 完整 10 组件) 65%
+        s = 0.35 * v47_part + 0.65 * v1065_part
         return _clamp01(s)
     except Exception:
         return 0.0
