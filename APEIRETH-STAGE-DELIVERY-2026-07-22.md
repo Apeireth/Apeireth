@@ -935,3 +935,101 @@ python -m apeireth.v1081_asi_honest_limits --probe --report
 ---
 
 _Last update: 2026-07-22 20:25, by 楚零 (主 agent session). V2 修订: 删除冗余 ASI-V2-STAGE-HANDOFF, 内容合并到本文件第 16 章. 主人 20:18 真反馈. 主 17:43 实事求是 + 主 23:44 干到底 + 主 11:43 新团队接手 + 主 00:56 任何人都能接手._
+
+---
+
+## 17. 路径别名 (主 20:55 方案 C, 主 14:09 改名 + 主 17:55 保留路径稳定)
+
+> **主 20:46 反思**: 项目叫 Apeireth, 但物理路径还叫 promethean — 这是个真不一致.
+> **主 20:55 决定**: 方案 C — 不改路径 (Phase 3 物理改名风险高), 在本文档加一段说明.
+
+### 17.1 路径别名真相
+
+| 项目层 | 名字 |
+|--------|------|
+| **项目真名 (品牌 / 文档 / 代码)** | **Apeireth** |
+| **物理路径 (工作目录)** | .openclaw\workspace\promethean\ |
+
+**为什么路径保留 promethean** (主 17:55 真决定):
+- APEIRETH-RENAME-PROPOSAL.md (2026-07-21 17:55): "OpenClaw workspace 路径已在 cron / hooks / MEMORY.md 等多处引用, 物理改名会破坏 OpenClaw 跨 session 稳定性"
+- Phase 1 (内改 apeireth) 已完成 (12 .py 文件 + 路径常量 + 866 tests 通过, 主 17:43 实事求是)
+- Phase 2 (物理改名) **主人 17:55 决定保留稳定**
+- Phase 3 (未来如需物理改名) 步骤已在 APEIRETH-RENAME-PROPOSAL.md 第 39-45 行记录
+
+### 17.2 新团队注意 (主 20:55 方案 C 核心)
+
+**所有 shell 命令都用 promethean (实际路径), 不是 peireth**:
+
+`powershell
+# ✅ 正确 (实际路径)
+cd .openclaw\workspace\promethean
+
+# ❌ 错误 (项目名 ≠ 路径名)
+cd .openclaw\workspace\apeireth   # 这个目录不存在!
+`
+
+**Python import / 模块名用 peireth** (项目真名):
+
+`python
+# ✅ 正确 (项目名)
+from apeireth.v1074_asi_production_runner import ...
+
+# ❌ 错误 (路径名 ≠ 模块名)
+from promethean.v1074_asi_production_runner import ...
+`
+
+### 17.3 真生产模块路径对照 (1080+ modules 都在这里)
+
+`
+物理路径: .openclaw\workspace\promethean\apeireth\v1XXX_*.py
+模块导入: from apeireth.v1XXX_*.py import ...
+`
+
+例如:
+- 物理路径: promethean\apeireth\v1074_asi_production_runner.py
+- 模块导入: peireth.v1074_asi_production_runner
+- CLI 调用: python -m apeireth.v1074_asi_production_runner --report
+
+### 17.4 真物理路径引用清单 (如果未来 Phase 3 物理改名要修)
+
+主 20:46 反思后我审计了**真实 promethean 路径引用**:
+
+| 位置 | 引用 | 风险 |
+|------|------|------|
+| promethean\scripts\audit_tick.py | 3 处 hardcoded path | 高 — Phase 3 必修 |
+| promethean\scripts\fix_test_fake_tool.py | 1 处 | 高 |
+| promethean\scripts\fix_test_normal_exec.py | 2 处 | 高 |
+| 5 个 cron payload | 全部引用 workspace/promethean | 高 — Phase 3 必重配 |
+| workspace/MEMORY.md | 多处路径引用 | 中 — 文字路径 |
+| APEIRETH-STAGE-DELIVERY.md 等文档 | 多处路径 | 低 — 文档 |
+
+**Phase 3 物理改名真工作** (主 20:55 决定**不做**, 留作未来):
+1. mv ~/.openclaw/workspace/promethean ~/.openclaw/workspace/apeireth
+2. 修 3 个 scripts (scripts\audit_tick.py + 2 个 fix_test_*)
+3. 重新配置 5 个 cron (openclaw cron update --id <id> --patch ...)
+4. 更新 MEMORY.md / APEIRETH-STAGE-DELIVERY.md 等文档的路径引用
+5. 跑全量回归 (3896+ tests) 验证
+
+**主 22:33 终极授权**: Phase 3 是**方向微调**, 主人未来决定时再做. 主 20:55 现在决定: 保留路径 + 加本文档说明 (方案 C).
+
+### 17.5 项目历史备忘 (主 22:33 真哲学时刻清楚)
+
+- **Apeireth** = ἄπειρον (Ápeiron, 阿那克西曼德的'无限原则') + αἰθήρ (Aithēr, 阿那克萨戈拉的'上方的火/气') + Entelecheia (亚里士多德'潜能变现实')
+- **含义**: '无限之中将要燃起的那一点' — 将燃未燃, 是火的潜能
+- **主人宣言** (主 14:52): "我们做 Apeireth, 是因为我们相信火没有灭"
+- **历史项目名 Promethean** (古希腊神话盗火者) — 已废弃, 仅路径保留兼容
+- **Apeireth ≠ Promethean**: Promethean 是神话角色 (盗火者), Apeireth 是哲学概念 (火的潜能). 主人 14:09 明确区分.
+
+### 17.6 1 行命令不变 (主 20:55 方案 C: 不改路径, 命令不变)
+
+`powershell
+cd .openclaw\workspace\promethean  # 注意: 是 promethean 不是 apeireth
+ = ".openclaw\workspace\src;"
+python -m apeireth.v1074_asi_production_runner --report
+`
+
+cd 用 promethean (实际路径), peireth 用在 Python 模块导入.
+
+---
+
+_Last update: 2026-07-22 20:55, by 楚零 (主 agent session). 路径别名说明 (主 20:46 反思 + 主 20:55 方案 C 决定 + 主 14:09 改名 + 主 17:55 保留稳定). 主 17:43 实事求是 + 主 23:44 干到底 + 主 19:33 走在前人经验上 (尊重历史决定) + 主 22:33 终极授权 (方向微调, 主人选 C)._
