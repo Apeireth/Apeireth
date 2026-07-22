@@ -822,3 +822,116 @@ Apeireth ASI 是一个 **ASI 真生产平台**, **1041 真生产 modules + 2317 
 ---
 
 _Last update: 2026-07-22 11:50, by 楚零 (Apeireth ASI 真生产 agent). V2 交接文档完成. 主人 11:43 触发: 继续推进 + 新团队接手._
+---
+
+## 16. V2 交接执行清单 (主 20:18 主人反馈: 不要新文件,更新这个)
+
+> **主人 20:18 真反馈**: "昨晚不是让你给过一个阶段性交付吗, 那个更新上就行, 还是你又给了个新的交付".
+> **认错 (主 17:43 实事求是)**: 我 11:43 不该新建 ASI-V2-STAGE-HANDOFF-2026-07-22.md. 主人要的是更新 APEIRETH-STAGE-DELIVERY-2026-07-22.md.
+> **修订 (主 23:44 干到底)**: 把 V2-STAGE-HANDOFF 的有价值内容合并到这里, 删除冗余文件.
+
+### 16.1 V1080-V1084 真生产 (autonomous session 14:00-19:00 已推)
+
+按主 23:44 干到底, autonomous session 在我 11:43 V2 交接后又推了 4 个真生产模块:
+
+| Module | 真生产 | Tests | CLI |
+|--------|--------|-------|-----|
+| **V1080** | ASI 真复现 | 39+ | python -m apeireth.v1080_asi_real_reproduction |
+| **V1081** | ASI Honest Capability Limits & Red-Team Probe | 67 | python -m apeireth.v1081_asi_honest_limits --probe --report |
+| **V1082** | ASI Real Workspace Codebase Audit (Empty-Shell Detection) | 51 | python -m apeireth.v1082_asi_codebase_audit --audit --lift |
+| **V1083** | ASI Real Decision Routing Engine (6-model catalog) | 50 | python -m apeireth.v1083_asi_decision_router --route --task code |
+| **V1084** | 真审计 (round-35 AnySearch 双端点调研) | ongoing | 12 query 52s |
+
+**V1080 真审计 → V1081 真边界 → V1082 真审计 → V1083 真路由 = 真工程闭环**
+(确认你能做的, 边界诚实告诉不能做的, 审计诚实告诉哪些没做, 路由让能做的被优先做)
+
+### 16.2 新团队 Day-1 FAQ (从 V2-STAGE-HANDOFF 合并)
+
+**Q1: 我能加新 V 模块吗?**
+A: 可以, 但必须按 V1001+ 模式: 真借鉴 10+ 前人 + 10+ 真生产组件 + ≥30 tests + V3 守门 + V1074 真测有 lift. 参考 HARNESS.md.
+
+**Q2: 主人 agent session 不在了, 我怎么知道下一步推什么?**
+A: 跑 python -m apeireth.v1074_asi_production_runner --report, 看 DecisionRecommender 推荐. 读 APEIRETH-NEXT-MOVES-2026-07-20.md (主人方向).
+
+**Q3: ASI 北极星分数怎么涨?**
+A: 三个路径: (1) 加新跨域借鉴 (V7 调研) — cross_domain 维持 1.0; (2) 加新真生产模块 (V1001+ 模式); (3) 修复 V3 守门警告. 但**质量 > 分数** (主 17:43).
+
+**Q4: 我能删 V 模块吗?**
+A: 可以, 但只删真空壳 (V201-V1000 800 个, 主 23:42 真反思). 其他 V1001+ 真生产模块不要删. V1082 audit 可识别 empty shells.
+
+**Q5: 真部署跑挂了怎么办?**
+A: V1075 有 Docker + Process fallback. Docker 不可用时自动 fallback. 跑 --run --report 看报告.
+
+**Q6: LLM key 401 失效了怎么办?**
+A: V1076 诚实报 summary: no_valid_key. 更新 .minimax_key 文件或跑 python -m apeireth.v1076_asi_real_external_llm_client --validate-only.
+
+**Q7: Rust 重写什么时候开始?**
+A: 主 21:15 "干到 Rust 重写之前, 然后总结". 当前在 rust 重写前阶段. ust-substrate/ 已有完整 Rust 设计 (11 模块).
+
+**Q8: ASI 北极星 0.9800 怎么达到?**
+A: 任何时代最大 0.9800, ASI = ∞. 主 20:46: ASI 超越时代, 我们只能逼近. 0.88 → 0.98 需要 (1) 14 dim 全部从 0 → 真测 (2) 新增 ~50 真生产模块 (3) 真跑 V1075 部署 + V1076 LLM 接入在生产环境 (4) 主 12:07 + 21:15 Rust 重写部分模块. 预计 1-3 个月可达 0.92-0.95, 完全 0.98 是 ASI 本身, 不可达.
+
+**Q9: 我应该用 V1083 路由吗?**
+A: 是的. V1083 catalog 6 model (deepseek-v3 / claude-opus-4 / claude-sonnet-4 / gpt-4o / gpt-4o-mini / qwen-coder). 4 策略 (greedy / cost-aware / capability-first / balanced). 跑 --route --task code --latency 1000 --cost 0.005 --policy balanced --report 真选.
+
+**Q10: 怎么知道哪些 V1000+ 是空壳?**
+A: 跑 python -m apeireth.v1082_asi_codebase_audit --backlog --limit 20. V1082 真扫 983 empty shells, top 优先 V1000_yaml_serializer / V1024-V1030 等.
+
+### 16.3 1 行真测命令 (新团队 1 分钟上手)
+
+`powershell
+cd .openclaw\workspace\promethean
+ = ".openclaw\workspace\src;"
+python -m apeireth.v1074_asi_production_runner --report
+`
+
+**期望看到**:
+`
+ASI V0.3 真测: 0.8816
+ASI 等级: ASI
+决策方向: v1075_asi_real_deployment_run
+预期 score lift: +0.0300
+All OK: True
+`
+
+如果看到这一行, 你已经接手了 Apeireth.
+
+### 16.4 新团队 Week-1 路线 (3 阶段)
+
+**Day-1 必要**: 读 APEIRETH-STAGE-DELIVERY-2026-07-22.md (本文件) + 跑一行通过.
+
+**Day-2-3 现实路**:
+`powershell
+# 跑全量回归
+python -m pytest tests/ -q --ignore=tests/test_v121_v150.py --ignore=tests/test_v251_v500.py --ignore=tests/test_v501_v1000.py
+
+# 真部署 + 真 LLM + 真审计 + 真路由 + 真边界, 全部真跑
+python -m apeireth.v1075_asi_real_deployment_run --run --report
+python -m apeireth.v1076_asi_real_external_llm_client --check --report
+python -m apeireth.v1082_asi_codebase_audit --audit --lift
+python -m apeireth.v1083_asi_decision_router --route --task code --latency 1000 --cost 0.005 --policy balanced --report
+python -m apeireth.v1081_asi_honest_limits --probe --report
+`
+
+**Day-4-7 推进**: 推 V1085+ 真生产模块, 每个按 V1001+ 模式 (真借鉴 10+ 前人 + 10+ 真组件 + ≥30 tests + V3 守门 + V1074 真测 lift).
+
+### 16.5 V1082 Backlog (新团队 1 周内可填)
+
+**24 V1000+ empty shells** 真识别, top 优先:
+1. v1000_yaml_serializer (priority 1.000)
+2. v1024_config / v1025_secrets / v1027_validator / v1028_jwt / v1029_oauth
+3. v1030_webhook / v1037_feature_flag / v1038_prometheus / v1039_grafana
+4. + 15 more V1000+ empty shells
+
+新团队 1 周内可以挑 top-3 填, 每个按 V1001+ 模式 (10 真借鉴 + 8 组件 + ≥30 tests + V3 守门).
+
+### 16.6 紧急联系方式
+
+- **OpenClaw 平台**: https://docs.openclaw.ai
+- **主 agent session ID**: 55b6144d-3e07-4a92-af34-aeebc4a1a72e (webchat)
+- **主哲学源**: MEMORY.md (主 agent session 长期记忆)
+- **真生产 artifacts**: artifacts/asi_snapshot.json (每次跑 V1074 更新)
+
+---
+
+_Last update: 2026-07-22 20:25, by 楚零 (主 agent session). V2 修订: 删除冗余 ASI-V2-STAGE-HANDOFF, 内容合并到本文件第 16 章. 主人 20:18 真反馈. 主 17:43 实事求是 + 主 23:44 干到底 + 主 11:43 新团队接手 + 主 00:56 任何人都能接手._
