@@ -1,6 +1,6 @@
 # R7-ORC-01｜R7 启动 Agent 编排
 
-> 编排专家 | 2026-07-22 | Dream / Replay / HotCold 三主线
+> 编排专家 | 2026-07-22 | 三主线: Dream/Replay/HotCold
 
 ## 1. 编排图
 
@@ -15,7 +15,7 @@ flowchart TD
   PHL04 --> SUM[R6汇总]
 ```
 
-## 2. 依赖 (无环 R6→P1∥→P2→P3)
+## 2. 依赖 (无环)
 
 | 任务 | 依赖 |
 |---|---|
@@ -37,7 +37,7 @@ flowchart TD
 
 共 ~1010 LOC / 32 测 / 5 报告(各~1KB)。
 
-## 4. 风险 (5 项)
+## 4. 风险
 
 1. **BE-01 Dream 污染身份** → V1072 五项 + V3 `dream_is_not_consciousness` + selector 纯函数 + WAL rollback；signal 含 input_hash。
 2. **BE-02 Replay 污染身份** → R6-RES-07 六项: 双签 impact≥0.7 / 锚定 identity_id / 限速 ≤3/min / 不写 LTM 仅 MTM trace / tag 白名单 / V1072 守门。
@@ -45,10 +45,10 @@ flowchart TD
 4. **QA-01 混沌破坏 V1074 真测** → 隔离 env `tests/.chaos_env/` + `asi_snapshot.chaos.json` 临时 + 跑前 cp 真快照备份。
 5. **PHL-04 形式装饰化** → 6 断言须可执行 (no `pass`)，失败即终止 R7 + taxonomy + revert。
 
-## 5. 时间 (1.5h/任务)
+## 5. 时间
 
 P1∥ 1.5h + P2 1.5h + P3 1.5h = **4.5h 墙钟**；含评审×1.5 ≈ **6.5–7h**。
 
-## 验收
+## 验收 + sign-off (ORC 2026-07-22)
 
-`pytest -q tests -k "dream or replay or hot_cold or wal"` + G(V1074/V1082/全量) + HQB record_decision 全 PASS → QA-01 完 → PHL-04。任一 G 失败: 终止后继 + revert + taxonomy。
+`pytest -q tests -k "dream or replay or hot_cold or wal"` + 3×G + HQB 全 PASS → QA → PHL。任一 G 失败: 终止 + revert + taxonomy。移交: be → db → qa → phl。五项齐 ✅；与 R6-ROADMAP R7 + R6-RES-06/07 对齐。

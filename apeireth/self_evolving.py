@@ -27,6 +27,7 @@
 """
 
 from __future__ import annotations
+import copy
 import time
 import uuid
 import math
@@ -308,8 +309,9 @@ class HarnessEvolver:
         # Phase 2.4 STABILITY
         stability = phase24_stability(self.history)
 
-        # 记录 before
+        # 记录 before；phase4 会原地修改 harness，rollback 必须有真快照。
         before_hash = self.harness.integrity_hash()
+        before_snapshot = copy.deepcopy(self.harness.snapshot())
         before_score = eval_r.score
 
         # Phase 3 EVOLVE
@@ -323,9 +325,11 @@ class HarnessEvolver:
         phase5 = phase5_commit_or_rollback(before_score, new_eval.score, threshold=0.02)
 
         if phase5.decision == 'rollback':
-            # 回滚: 恢复旧配置 — 主人 14:52 "24/7 不能崩"
-            # 简化: 我们没真保留 before snapshot, 这里只标记
-            pass
+            # 真回滚：恢复 phase4_verify 原地修改前的完整配置。
+            self.harness.archetypes = before_snapshot['archetypes']
+            self.harness.sct_weights = before_snapshot['sct_weights']
+            self.harness.funnel_priors = before_snapshot['funnel_priors']
+            self.harness.version = before_snapshot['version']
 
         # 记录 history
         self.history.append({

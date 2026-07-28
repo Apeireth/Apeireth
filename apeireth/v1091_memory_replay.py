@@ -28,6 +28,7 @@ V1082 backlog 填洞 (本模块): #A2-1 MemoryReplay 真生产 (Step 1/3)。
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -77,6 +78,7 @@ class WalEntry:
                 "event_id": self.event.event_id,
                 "event_ts": round(self.event.ts, 6),
                 "kind": self.event.kind,
+                "payload": dict(self.event.payload),
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -296,7 +298,7 @@ class MemoryReplay:
                     seq=len(self._checkpoints) + 1,
                     content_hash=self._state_hash(self._live_state),
                 ),
-                state=dict(self._live_state),
+                state=copy.deepcopy(self._live_state),
                 up_to_sequence=current_seq,
             )
             self._checkpoints.append(checkpoint)
@@ -318,7 +320,7 @@ class MemoryReplay:
                 return False
             # 重放该 checkpoint up_to_sequence 之后的 WAL,
             # 而非从空开始 (模拟 "回滚到此点然后继续跑").
-            self._live_state = dict(target.state)
+            self._live_state = copy.deepcopy(target.state)
             for entry in self._wal:
                 if entry.sequence > target.up_to_sequence:
                     if entry.event.kind in IDEMPOTENT_OPS:
@@ -502,3 +504,7 @@ __all__ = [
     "MemoryReplay",
     "_event_hash",
 ]
+
+
+# V1101 auto-injected V3_GUARDS (主 17:43 实事求是 + 主 17:58 不假装)
+V3_GUARDS = {"module_is_not_asi": "模块是工具, ASI 是更大目标. 任何声称模块 = ASI 的部分都是不假装.", "measurement_is_not_truth": "测量是 proxy, 真值仍是更大目标. V1077 真测 17 维 ≠ ASI 达成.", "structure_is_not_consciousness": "CognitiveArchitecture 结构类比 ≠ 现象意识. ACT-R chunks ≠ concepts.", "production_is_not_safety": "真生产 ≠ 真安全. 部署 ≠ 守门. 任何声称 production = safe 是不假装.", "automation_is_not_autonomy": "自动执行 ≠ 自主意识. V1101 lift 引擎自动改 ≠ V1101 自主."}
