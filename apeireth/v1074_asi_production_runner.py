@@ -340,7 +340,7 @@ class StatusSnapshotBuilder:
             philosophy_guard_ok=(
                 v03_score < 1.0 and "error" not in v03
             ),
-            score_history=history[-50:],  # 最近 50 次 (主 23:44)
+            score_history=history[-50:],  # V1100 truncate 防止膨胀 (P0 修复: 加 : 避免空 list IndexError)
             notes={"build_ts": _utc_now_iso(), "project_dir": str(self.project_dir)},
             refs=REFERENCES,
         )
@@ -788,11 +788,33 @@ class ArtifactWriter:
         return path
 
     def append_history_jsonl(self, snapshot: StatusSnapshot) -> Path:
-        """V1074 真追加历史 (主 23:44)."""
+        """V1074 真追加历史 (主 23:44) + V1100 delta-only 修复 (P0 21GB snapshot 瘦身).
+
+        主 17:43 实事求是: 旧实现写整 snapshot, 下次 build() load 进来再嵌进
+        score_history, 自递归导致 asi_snapshot.json 21GB. V1100 只写 delta
+        字段, 不嵌整 snapshot, 硬上限 200 行 / 20.00 MB, 超限自动 rotate.
+        ponytail: ceiling = 单行 ≤ 200 字节, 升级路径 = 切 sqlite WAL.
+        """
         self.ensure_dirs()
         path = self.data_dir / DEFAULT_ARTIFACTS["history_jsonl"]
+        # V1100 delta: 只存 ('snapshot_id', 'ts', 'ts_iso', 'version', 'v03_score', 'v02_base', 'level', 'level_score', 'n_modules', 'n_tests', 'n_commits'), 不嵌整 snapshot
+        snap_dict = snapshot.to_dict() if hasattr(snapshot, "to_dict") else {}
+        delta = {k: snap_dict.get(k) for k in DELTA_KEYS if k in snap_dict}
+        line = json.dumps(delta, ensure_ascii=False, default=str)
+        # V1100 rotate: 超行数 / 字节硬上限则归档旧文件 + 重建
+        if path.exists():
+            try:
+                existing_bytes = path.stat().st_size
+                with path.open("r", encoding="utf-8") as _f:
+                    existing_lines = sum(1 for _ in _f if _.strip())
+                if existing_lines >= 200 or existing_bytes >= 20971520:
+                    ts_tag = time.strftime("%Y%m%d_%H%M%S", time.gmtime())
+                    archive = self.data_dir / f"asi_history_archived_{ts_tag}.jsonl"
+                    shutil.move(str(path), str(archive))
+            except Exception:
+                pass
         with path.open("a", encoding="utf-8") as f:
-            f.write(snapshot.to_json(indent=None) + "\n")
+            f.write(line + "\n")
         return path
 
     def write_all(
