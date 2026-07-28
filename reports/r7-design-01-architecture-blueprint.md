@@ -21,11 +21,11 @@
 
 | Phase | 任务 | 主 | 协 | LOC | 估时 | 模式 |
 |---|---|---|---|---:|---:|---|
-| P1 ∥ | BE-01 DreamSubsystem | backend | qa/arch2+cr | 250 | 1.5h | 并行 |
-| P1 ∥ | BE-02 MemoryReplay | backend | db/arch2+cr | 300 | 1.5h | 并行(等 BE-01 防污染) |
-| P1 ∥ | DB-01 HotCold/WAL | database | be/cr+po | 220 | 1.5h | 并行 |
-| P2 | QA-01 崩溃/重复/保留 | qa | 三主跑/arch+phl | 180 | 1.5h | 串行 |
-| P3 | PHL-04 三契约真验证 | phl | arch/cr | 60 | 0.5h | 收尾 |
+| Phase 1 ∥ (P1) | BE-01 DreamSubsystem | backend | qa/arch2+cr | 250 | 1.5h | 并行 |
+| Phase 1 ∥ (P1) | BE-02 MemoryReplay | backend | db/arch2+cr | 300 | 1.5h | 并行(等 BE-01 防污染) |
+| Phase 1 ∥ (P1) | DB-01 HotCold/WAL | database | be/cr+po | 220 | 1.5h | 并行 |
+| Phase 2 (P2) | QA-01 崩溃/重复/保留 | qa | 三主跑/arch+phl | 180 | 1.5h | 串行 |
+| Phase 3 (P3) | PHL-04 三契约真验证 | phl | arch/cr | 60 | 0.5h | 收尾 |
 
 总计 ~1010 LOC / 32 测 / 5 报告;墙钟 4.5h + 评审×1.5 ≈ 6.5-7h(R7-ORC-01 §5)
 

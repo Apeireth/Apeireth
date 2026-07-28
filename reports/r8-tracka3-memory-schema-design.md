@@ -5,8 +5,9 @@
 
 ## 0. 执行摘要
 
-**结论: V1094 Memory Schema 0.1.0 真生产就绪。** 8 业务表 + meta 表 + 26 索引，
-覆盖 R8-TrackA 描述 6 项要求全部要点，**23/23 测试通过**，与现仓零破坏兼容。
+**结论: V1094 Memory Schema 0.1.1 真生产就绪。** 8 业务表 + meta 表 + 26 索引，
+覆盖 R8-TrackA 描述 6 项要求全部要点，**27/27 测试通过**（含 4 个真生产兼容回归），
+与现仓零破坏兼容。
 
 关键决策:
 
@@ -15,6 +16,12 @@
 - WAL 用 `event_id UNIQUE` 作幂等键，借鉴 `memory_replay_design.IDEMPOTENT_OPS`
 - LTM `fingerprint UNIQUE` 借鉴 mem0 (主 9:41 round-19) hash dedup
 - snapshot `(scope, seq) UNIQUE` 借鉴 letta/messages 自引用 + R7-BE-02 StateID
+- **V1094 0.1.1 patch** (2026-07-29 数据库工程师补): 真生产兼容加固
+  - `memory_meta.schema_version` 永远由 memory_store.py v0.3 拥有，V1094 走
+    `v1094_schema_version` 命名空间，避免覆盖导致旧 reader 误报
+  - WAL 表加 `CHECK (scope IN …) / (op IN …) / (applied IN (0,1))`，
+    让 SQLite 成为白名单真理之源；`wal_append` 走应用层校验 + `ON CONFLICT DO NOTHING`
+  - `downgrade` 永远不动 memory_store 旧表 + 旧 meta；仅清 V1094 命名空间键
 
 **真生产兼容 (零破坏)**:
 
@@ -22,6 +29,13 @@
 - 未触碰 `apeireth/hqb/schema.py` v0.1 表 (`hqb_decisions/.../hqb_meta`)
 - 唯一新增 `apeireth/v1094_memory_schema.py` (additive)
 - 唯一新增 `tests/test_v1094_memory_schema.py` (additive)
+
+**回归验证 (R8-TrackA3 兼容专项)**:
+
+- T24: 旧 v0.3 库升级 — `episodes/notes/notes` 行保留, 旧 `schema_version=0.3.0` 不被覆盖
+- T25: `wal_append` 非法 op/scope 在应用层即抛 ValueError, 不污染 WAL
+- T26: `downgrade(keep_meta=True)` 仅清 V1094 命名空间键 + V1094 表, 旧数据 0 损
+- T27: `wal_append` 同 event_id 重复调用幂等 (UNIQUE 索引真理之源)
 
 ---
 
