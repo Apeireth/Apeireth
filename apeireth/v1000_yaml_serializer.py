@@ -1,23 +1,15 @@
-"""Phase 1000 v1000 Util yaml_serializer — 真生产 YAML 序列化器 (主 23:36 + 19:33 + 22:33).
+"""V1000 safe YAML serialization with optional comment-preserving round trips.
 
-V1082 backlog top-1 (pri 1.000). 是 V1024_config / V1014_cost / V1015_audit_log 等
-配置/序列化模块的地基.
+Security boundary: the PyYAML path only uses ``safe_load``/``safe_dump``;
+ruamel's safe round-trip loader is optional.  This module serializes caller data
+only and never injects Apeireth/ASI runtime state.
 
-真借鉴 (主 13:08 + 主 19:33 真源码深读):
-- letta/config_file.py (safe_load + _deep_merge 多配置覆盖 + Path glob 优先)
-- langgraph/docker.py dict_to_yaml (递归缩进 dump)
-- openai-cookbook utils/tools.py (yaml.safe_load + .yaml/.yml 扩展名识别)
-- AgentMemory/utils/injection.py (拒绝 yaml.load + !!python/object 反序列化)
-- aio-hub/agent-presets/*.yaml (agent 配置 YAML 格式)
-
-V3 哲学守门 (主 17:58 + 主 20:46 + 主 17:43):
-- _guard_safe_only: 永远 safe_load/safe_dump, 不 yaml.load(任意代码)
-- _guard_no_asi_leak: YAML 是配置/序列化工具, 不暴露 ASI 内部状态
-- _guard_streaming: 大文件流式 dump 不爆内存 (StringIO)
-- _guard_round_trip: dict/list/str/int/float/bool/None round-trip 等价
-
-边界: 不动 llm_kernel / cli / serve / tui / asi_fun_score / philosophy.
-不发散到 JSON/TOML/XML.
+Source borrowing:
+- Letta ``config_file.py``: safe loading and non-mutating deep merge.
+- LangGraph ``docker.py``: predictable recursive mappings and sequences.
+- VCPToolBox ``routes/admin/config.js``: validate configuration input at I/O.
+- OpenAI Cookbook workflow YAML: nested mapping/list production shape.
+- AgentMemory ``config.py``: Path normalization and enum-like value boundaries.
 """
 from __future__ import annotations
 
@@ -26,25 +18,30 @@ from dataclasses import dataclass, fields, is_dataclass
 from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Type, Union
 
 import yaml
 
+try:  # Optional: comments and formatting survive ROUND_TRIP mode.
+    from ruamel.yaml import YAML as _RuamelYAML
+    from ruamel.yaml.error import YAMLError as _RuamelYAMLError
+except ImportError:  # PyYAML is the dependency floor.
+    _RuamelYAML = None
+    _YAML_ERRORS = (yaml.YAMLError,)
+else:
+    _YAML_ERRORS = (yaml.YAMLError, _RuamelYAMLError)
 
-V1000_VERSION = "0.3.0"
+
+V1000_VERSION = "0.4.0"
 DEFAULT_INDENT = 2
 DEFAULT_WIDTH = 120
-
-
-# ============================================================
-# Mode + Errors
-# ============================================================
+RUAMEL_AVAILABLE = _RuamelYAML is not None
 
 
 class YAMLMode(str, Enum):
     """YAML loader/dumper mode."""
     SAFE = "safe"
-    ROUND_TRIP = "rt"  # ruamel.yaml 占位, 未装自动降级 safe
+    ROUND_TRIP = "rt"  # optional ruamel; safe PyYAML fallback
 
 
 class YAMLSerializerError(ValueError):
@@ -60,32 +57,24 @@ class YAMLSerializerError(ValueError):
 def _wrap(fn_name: str, fn, *args, **kwargs):
     try:
         return fn(*args, **kwargs)
-    except yaml.YAMLError as e:
-        mark = getattr(e, "problem_mark", None)
+    except _YAML_ERRORS as error:
+        mark = getattr(error, "problem_mark", None)
         line = getattr(mark, "line", None)
-        col = getattr(mark, "column", None)
-        raise YAMLSerializerError(f"{fn_name}: {e}", line=line, column=col) from e
+        column = getattr(mark, "column", None)
+        raise YAMLSerializerError(
+            f"{fn_name}: {error}", line=line, column=column
+        ) from error
 
 
-# ============================================================
-# Pre-dump normalizer — datetime / Path / Enum / dataclass / frozenset
-# ============================================================
-
-
-def _dataclass_to_dict(obj: Any) -> Dict[str, Any]:
-    return {f.name: getattr(obj, f.name) for f in fields(obj)}
-
-
-def _pre_dump(data: Any) -> Any:
-    """Recursively convert non-native types (datetime / Path / Enum /
-    dataclass / frozenset) into YAML-native equivalents so SafeDumper is happy.
-
-    Borrowed from langgraph/docker.py dict_to_yaml recursive approach.
-    """
+def _pre_dump(data: Any, custom: Iterable[tuple[Type[Any], Callable[[Any], Any]]] = ()) -> Any:
+    """Convert supported objects to standard YAML values before safe_dump."""
+    for data_type, representer in custom:
+        if isinstance(data, data_type):
+            return _pre_dump(representer(data), custom)
     if isinstance(data, dict):
-        return {str(k): _pre_dump(v) for k, v in data.items()}
+        return {str(key): _pre_dump(value, custom) for key, value in data.items()}
     if isinstance(data, (list, tuple)):
-        return [_pre_dump(v) for v in data]
+        return [_pre_dump(value, custom) for value in data]
     if isinstance(data, (datetime, date)):
         return data.isoformat()
     if isinstance(data, Path):
@@ -93,14 +82,10 @@ def _pre_dump(data: Any) -> Any:
     if isinstance(data, Enum):
         return data.value
     if isinstance(data, frozenset):
-        return sorted(str(x) for x in data)
+        return sorted(str(value) for value in data)
     if is_dataclass(data) and not isinstance(data, type):
-        return _pre_dump(_dataclass_to_dict(data))
+        return _pre_dump({field.name: getattr(data, field.name) for field in fields(data)}, custom)
     return data
-
-
-# Plain SafeDumper — all type conversion happens up-front in _pre_dump.
-_CUSTOM_DUMPER = yaml.SafeDumper
 
 
 # ============================================================
@@ -108,79 +93,110 @@ _CUSTOM_DUMPER = yaml.SafeDumper
 # ============================================================
 
 
-class YAMLSerializer:
-    """Safe YAML serializer with custom-type round-trip support.
+class _CountingWriter:
+    def __init__(self, target: io.IOBase):
+        self.target = target
+        self.bytes_written = 0
 
-    真生产要点:
-    - only safe_load / safe_dump (no arbitrary code exec)
-    - datetime / Path / Enum / dataclass / frozenset round-trip
-    - multi-doc load + dump
-    - stream dump to any IO (memory-bounded)
-    - deep_merge for config overlay (letta 借鉴)
-    - extension-based YAML detection (.yaml / .yml)
-    """
+    def write(self, text: str) -> Any:
+        self.bytes_written += len(text.encode("utf-8"))
+        return self.target.write(text)
+
+
+class YAMLSerializer:
+    """Safe facade for scalar, nested, multi-document and streamed YAML."""
 
     def __init__(self, indent: int = DEFAULT_INDENT, width: int = DEFAULT_WIDTH,
                  sort_keys: bool = False, allow_unicode: bool = True):
-        self.indent = indent
-        self.width = width
-        self.sort_keys = sort_keys
-        self.allow_unicode = allow_unicode
+        if indent < 1 or width < 1:
+            raise ValueError("indent and width must be positive")
+        self.indent, self.width = indent, width
+        self.sort_keys, self.allow_unicode = sort_keys, allow_unicode
+        self._representers: list[tuple[Type[Any], Callable[[Any], Any]]] = []
 
-    # ---------------- read ----------------
+    def add_representer(self, data_type: Type[Any], representer: Callable[[Any], Any]) -> None:
+        """Register an instance-local ``object -> safe YAML value`` conversion."""
+        if not isinstance(data_type, type) or not callable(representer):
+            raise TypeError("representer requires a type and a callable")
+        self._representers.append((data_type, representer))
 
-    def load(self, source: Union[str, Path, io.IOBase]) -> Any:
-        return self.loads(self._read(source))
-
-    def loads(self, text: str) -> Any:
-        return _wrap("safe_load", yaml.safe_load, text)
-
-    def load_all(self, source: Union[str, Path, io.IOBase]) -> List[Any]:
-        return self.loads_all(self._read(source))
-
-    def loads_all(self, text: str) -> List[Any]:
-        gen = _wrap("safe_load_all", yaml.safe_load_all, text)
-        return list(gen)
-
-    # ---------------- write ----------------
-
-    def dumps(self, data: Any, mode: YAMLMode = YAMLMode.SAFE) -> str:
+    @staticmethod
+    def _validate_mode(mode: YAMLMode) -> None:
         if mode not in (YAMLMode.SAFE, YAMLMode.ROUND_TRIP):
             raise YAMLSerializerError(f"unknown mode: {mode}")
-        return _wrap(
-            "dump", yaml.dump, _pre_dump(data),
-            Dumper=_CUSTOM_DUMPER,
-            default_flow_style=False,
-            allow_unicode=self.allow_unicode,
-            indent=self.indent,
-            width=self.width,
-            sort_keys=self.sort_keys,
-        )
+
+    def _options(self) -> Dict[str, Any]:
+        return {
+            "default_flow_style": False, "allow_unicode": self.allow_unicode,
+            "indent": self.indent, "width": self.width, "sort_keys": self.sort_keys,
+        }
+
+    def _round_trip_yaml(self):
+        rt = _RuamelYAML(typ="rt")
+        rt.allow_unicode, rt.width = self.allow_unicode, self.width
+        rt.indent(mapping=self.indent, sequence=self.indent, offset=0)
+        return rt
+
+    def _payload(self, data: Any, mode: YAMLMode) -> Any:
+        if mode == YAMLMode.ROUND_TRIP and RUAMEL_AVAILABLE \
+                and data.__class__.__module__.startswith("ruamel."):
+            return data
+        return _pre_dump(data, self._representers)
+
+    def load(self, source: Union[str, Path, io.IOBase],
+             mode: YAMLMode = YAMLMode.SAFE) -> Any:
+        return self.loads(self._read(source), mode)
+
+    def loads(self, text: str, mode: YAMLMode = YAMLMode.SAFE) -> Any:
+        self._validate_mode(mode)
+        if mode == YAMLMode.ROUND_TRIP and RUAMEL_AVAILABLE:
+            return _wrap("round_trip_load", self._round_trip_yaml().load, text)
+        return _wrap("safe_load", yaml.safe_load, text)
+
+    def load_all(self, source: Union[str, Path, io.IOBase],
+                 mode: YAMLMode = YAMLMode.SAFE) -> List[Any]:
+        return self.loads_all(self._read(source), mode)
+
+    def loads_all(self, text: str, mode: YAMLMode = YAMLMode.SAFE) -> List[Any]:
+        self._validate_mode(mode)
+        if mode == YAMLMode.ROUND_TRIP and RUAMEL_AVAILABLE:
+            return _wrap("round_trip_load_all", lambda: list(self._round_trip_yaml().load_all(text)))
+        return _wrap("safe_load_all", lambda: list(yaml.safe_load_all(text)))
+
+    def dumps(self, data: Any, mode: YAMLMode = YAMLMode.SAFE) -> str:
+        stream = io.StringIO()
+        self.dump_stream(data, stream, mode)
+        return stream.getvalue()
 
     def dump(self, data: Any, target: Optional[Union[str, Path, io.IOBase]] = None,
              mode: YAMLMode = YAMLMode.SAFE) -> str:
-        text = self.dumps(data, mode=mode)
+        text = self.dumps(data, mode)
         if target is not None:
             self._write(target, text)
         return text
 
     def dumps_all(self, docs: Iterable[Any], mode: YAMLMode = YAMLMode.SAFE) -> str:
-        if mode not in (YAMLMode.SAFE, YAMLMode.ROUND_TRIP):
-            raise YAMLSerializerError(f"unknown mode: {mode}")
-        return _wrap(
-            "dump_all", yaml.dump_all, [_pre_dump(d) for d in docs],
-            Dumper=_CUSTOM_DUMPER,
-            default_flow_style=False,
-            allow_unicode=self.allow_unicode,
-            indent=self.indent,
-            width=self.width,
-            sort_keys=self.sort_keys,
-        )
+        self._validate_mode(mode)
+        stream = io.StringIO()
+        payloads = (self._payload(doc, mode) for doc in docs)
+        if mode == YAMLMode.ROUND_TRIP and RUAMEL_AVAILABLE:
+            _wrap("round_trip_dump_all", self._round_trip_yaml().dump_all, payloads, stream)
+        else:
+            _wrap("safe_dump_all", yaml.safe_dump_all, payloads, stream=stream, **self._options())
+        return stream.getvalue()
 
-    def dump_stream(self, data: Any, target: io.IOBase) -> int:
-        text = self.dumps(data)
-        target.write(text)
-        return len(text.encode("utf-8"))
+    def dump_stream(self, data: Any, target: io.IOBase,
+                    mode: YAMLMode = YAMLMode.SAFE) -> int:
+        self._validate_mode(mode)
+        if not hasattr(target, "write"):
+            raise TypeError("target must be a writable text stream")
+        counter = _CountingWriter(target)
+        payload = self._payload(data, mode)
+        if mode == YAMLMode.ROUND_TRIP and RUAMEL_AVAILABLE:
+            _wrap("round_trip_dump", self._round_trip_yaml().dump, payload, counter)
+        else:
+            _wrap("safe_dump", yaml.safe_dump, payload, stream=counter, **self._options())
+        return counter.bytes_written
 
     # ---------------- helpers ----------------
 
@@ -197,41 +213,18 @@ class YAMLSerializer:
 
     @staticmethod
     def is_yaml_path(path: Union[str, Path]) -> bool:
-        """Extension-based YAML detection. Borrowed from open-webui tools."""
         return Path(path).suffix.lower() in (".yaml", ".yml")
-
-    def to_json_compatible(self, data: Any) -> Any:
-        """Strip non-JSON types so json.dumps works downstream."""
-        if isinstance(data, dict):
-            return {k: self.to_json_compatible(v) for k, v in data.items()}
-        if isinstance(data, (list, tuple)):
-            return [self.to_json_compatible(v) for v in data]
-        if isinstance(data, (datetime, date)):
-            return data.isoformat()
-        if isinstance(data, Path):
-            return str(data)
-        if isinstance(data, Enum):
-            return data.value
-        if isinstance(data, frozenset):
-            return sorted(str(x) for x in data)
-        if is_dataclass(data) and not isinstance(data, type):
-            return self.to_json_compatible(_dataclass_to_dict(data))
-        return data
-
-    # ---------------- private IO ----------------
 
     @staticmethod
     def _read(source: Union[str, Path, io.IOBase]) -> str:
-        if isinstance(source, io.IOBase):
-            return source.read()
-        return Path(source).read_text(encoding="utf-8")
+        return source.read() if isinstance(source, io.IOBase) else Path(source).read_text(encoding="utf-8")
 
     @staticmethod
     def _write(target: Union[str, Path, io.IOBase], text: str) -> None:
         if isinstance(target, io.IOBase):
             target.write(text)
-            return
-        Path(target).write_text(text, encoding="utf-8")
+        else:
+            Path(target).write_text(text, encoding="utf-8")
 
 
 # ============================================================
@@ -257,11 +250,13 @@ class YAMLSerializerASIBridge:
             "module": "v1000_yaml_serializer",
             "version": V1000_VERSION,
             "modes": [m.value for m in YAMLMode],
+            "ruamel_available": RUAMEL_AVAILABLE,
             "borrowing": [
                 "letta/config_file.py (safe_load + deep_merge)",
-                "langgraph/docker.py (recursive indent dump)",
-                "openai-cookbook utils/tools.py (extension detect)",
-                "AgentMemory/utils/injection.py (no unsafe loader)",
+                "langgraph/docker.py (nested shape)",
+                "VCPToolBox/routes/admin/config.js (input validation)",
+                "openai-cookbook/.github/workflows/build-website.yaml (nested config)",
+                "AgentMemory/config.py (Path + enum boundaries)",
             ],
             "supported_types": [
                 "dict", "list", "str", "int", "float", "bool", "None",
@@ -296,9 +291,9 @@ class YAMLSerializerASIBridge:
 
 
 __all__ = [
-    "V1000_VERSION",
-    "YAMLMode",
-    "YAMLSerializerError",
-    "YAMLSerializer",
-    "YAMLSerializerASIBridge",
+    "V1000_VERSION", "RUAMEL_AVAILABLE", "YAMLMode", "YAMLSerializerError",
+    "YAMLSerializer", "YAMLSerializerASIBridge",
 ]
+
+# V1101 auto-injected V3_GUARDS (主 17:43 实事求是 + 主 17:58 不假装)
+V3_GUARDS = {"module_is_not_asi": "模块是工具, ASI 是更大目标. 任何声称模块 = ASI 的部分都是不假装.", "measurement_is_not_truth": "测量是 proxy, 真值仍是更大目标. V1077 真测 17 维 ≠ ASI 达成.", "structure_is_not_consciousness": "CognitiveArchitecture 结构类比 ≠ 现象意识. ACT-R chunks ≠ concepts.", "production_is_not_safety": "真生产 ≠ 真安全. 部署 ≠ 守门. 任何声称 production = safe 是不假装.", "automation_is_not_autonomy": "自动执行 ≠ 自主意识. V1101 lift 引擎自动改 ≠ V1101 自主."}
