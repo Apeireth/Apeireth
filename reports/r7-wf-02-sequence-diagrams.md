@@ -1,135 +1,116 @@
-# R7-WF-02 R7 三主线时序图
+# R7-WF-02 R7 三主线时序图 — Dream/Replay/HotCold
 
-ID: `d93f01ae-006f-4854-b72c-de0f4199dc8c` 基于: R7-WF-01 状态图 + 守门 4 组
+ID: d93f01ae-006f-4854-b72c-de0f4199dc8c
+基于 R7-WF-01 状态图,覆盖时序层(actor + lifeline + message)。
 
-## 1. BE-01 DreamSubsystem (15 行)
+## 1. BE-01 DreamSubsystem (13 行)
 
 ```mermaid
 sequenceDiagram
     participant T as Trigger
-    participant SM as StateMachine
-    participant DS as DreamSubsystem
+    participant D as DreamSubsystem
     participant V3 as V3Guard
     participant I as V1072Identity
     participant S as V1074Snapshot
-    T->>SM: trigger()
-    Note over SM: 异步租约 (单调时钟单实例)
-    SM->>DS: tick()
-    activate DS
-    DS->>DS: consolidate() + decay() loop
-    DS->>V3: verify()
-    Note over V3: 守门 V3 (verify 前)
-    alt PASS
-        V3-->>DS: OK
-        DS->>I: record()
-        Note over I: 守门 V1072 (record 后)
-        I-->>DS: ok
-        DS->>S: snapshot()
-        Note over S: 守门 V1074 (末端)
-    else FAIL
-        V3-->>DS: FAIL
-        DS->>DS: rollback() + alert
-    else SUSPEND
-        DS->>SM: interrupt() + save(last_state)
-        SM->>SM: WAL checkpoint
+    T->>D: trigger()→tick (SM monotonic 单租约)
+    D->>D: consolidate() / decay()
+    D->>V3: verify()
+    Note over V3: V3 gate pre-verify FAIL→rollback
+    V3-->>D: PASS
+    D->>I: record()
+    Note over I: V1072 gate post-record drift→suspend
+    D->>S: snapshot()
+    Note over S: V1074 terminal + V1081 QA note
+    S-->>D: ok
+    opt interrupt
+        T-->>D: interrupt()
+        D->>D: save(last_state)+WAL chkpt
     end
-    deactivate DS
 ```
 
-## 2. BE-02 MemoryReplay (15 行)
+Actors: T/D/V3/I/S + SM(内嵌 monotonic tick)。
+
+## 2. BE-02 MemoryReplay (14 行)
 
 ```mermaid
 sequenceDiagram
     participant E as Event
-    participant MR as MemoryReplay
-    participant CZ as Canonicalizer
-    participant RC as ReplayCache
-    participant L as LTM
+    participant M as MemoryReplay
+    participant C as Canonicalizer
+    participant R as ReplayCache
     participant V3 as V3Guard
-    participant IR as IdentityRecovery
-    participant TS as TraceStore
-    E->>MR: event()
-    MR->>CZ: canonicalize()
-    MR->>RC: cache_lookup(replay_id)
-    alt hit (幂等直返)
-        RC-->>MR: cached
-        MR-->>E: return
-    else miss
-        activate MR
-        Note over MR: dream wait (CONSOLIDATING/FORGETTING)
-        MR->>L: replay(read-only)
-        MR->>MR: should_replay? + impact_score
-        alt impact ≥ 0.7
-            MR->>IR: dual_sign()
-            IR-->>MR: signed
-        end
-        MR->>TS: trace()
-        MR->>V3: verify()
-        Note over V3: 守门 V3 (trace 后 verify)
-        alt PASS
-            V3-->>MR: OK
-            MR-->>E: replay_done
-        else FAIL/False
-            MR->>MR: reject + log
-        end
-        deactivate MR
+    participant L as LTM
+    Note over M: 与 BE-01 dream 互斥 (单租约)
+    E->>M: event()→canonicalize()→cache_lookup(id)
+    alt hit (幂等)
+        R-->>M: cached (直返)
+    else miss + impact≥0.7
+        M->>M: dual_sign (IdentityRecovery)
+        M->>L: replay() ro, TraceStore trace
+        M->>V3: verify()
+        Note over V3: V3 gate !should_replay→reject+log
+        V3-->>M: OK
+    else miss + reject
+        M->>V3: verify()
+        Note over V3: !should_replay→reject+log
     end
+    Note over M: V1074 terminal + V1081 QA note
 ```
 
-双签: impact≥0.7→IdentityRecovery.dual_sign. 拒绝: should_replay=False. 幂等: cache hit 直返. trace_replay read-only 不污染 LTM.
+Actors: E/M/C/R/V3/L + TraceStore(ro) + IdentityRecovery。
 
-## 3. DB-01 HotCold (15 行)
+## 3. DB-01 HotCold (13 行)
 
 ```mermaid
 sequenceDiagram
     participant M as Monitor
-    participant BS as BoundarySelector
+    participant B as BoundarySelector
     participant V3 as V3Guard
-    participant SS as SnapshotStore
+    participant S as SnapshotStore
     participant W as WAL
     participant R as Rebuilder
-    activate M
-    M->>M: monitor() tick + check
-    alt usage > 80%
-        M->>BS: boundary_select()
-        BS-->>M: hot/cold split (R3-DB-01)
-        M->>V3: verify()
-        Note over V3: 守门 V3 (commit 前)
-        alt PASS
-            V3-->>M: OK
-            M->>SS: snapshot()
-            M->>W: wal_append()
-            Note over W: fsync 阻塞
-            W-->>M: persisted
-            M->>M: commit() atomic
-        else FAIL
-            V3-->>M: FAIL → rollback
-        end
-    else ≤80%
-        M->>M: idle
+    M->>M: monitor()→check(>80%)
+    alt usage>80%
+        M->>B: boundary_select(hot/cold)
+        B->>S: snapshot()
+        Note over S: snapshot 在 wal 前
+        S->>V3: verify()
+        Note over V3: V3 gate commit 前 FAIL→rollback
+        V3-->>S: PASS
+        S->>W: wal_append() fsync 阻塞
+        S->>S: commit()
+        Note over S: V1074 terminal + V1081 QA note
+    else usage≤80%
+        M->>M: end
     end
-    deactivate M
-    Note over R: 崩溃恢复
-    M--xR: crash
-    activate R
-    R->>W: wal_replay()
-    R->>SS: rebuild_mtm()
-    deactivate R
+    opt crash
+        W->>R: wal_replay()→rebuild_mtm()
+    end
 ```
 
-## 4. 守门显式位置
+Actors: M/B/V3/S/W/R。
 
-| 守门 | 时序位置 |
-|------|----------|
-| V3 | BE-01/02/DB-01 verify 前 |
-| V1072 | BE-01 record 后 |
-| V1074 | 三图末端 snapshot |
-| V1081 | QA 报告 (note 引用) |
+## 4. 守门 + V1081
 
-## 5. 与 WF-01 状态对应
+V3: BE-01 verify 前 / BE-02 trace 后 verify 前 / DB-01 commit 前 (Note) → rollback+alert / reject+log。
+V1072: BE-01 record 后 Note (drift→suspend)。
+V1074: 三图末端 Note → retry 3x。
+V1081: 三图 Note 内引用 → limits_probe。
 
-Trigger→trigger(); Tick→tick(); Process→consolidate/decay; Verify→V3.verify; Identity→record; Snapshot→snapshot; EventIn→event; Canonicalize→canonicalize; CacheHit→cache_lookup+return; Replay→replay(ro); DualSign→dual_sign; Trace→trace+V3; Monitor→monitor; Boundary→boundary_select; Commit→commit atomic; Rebuild→wal_replay+rebuild_mtm.
+## 5. 异常 (9/9)
 
-## 验收
+BE-01: V3 FAIL→rollback+alert; record FAIL→drift→suspend; snapshot FAIL→retry 3x→alert; interrupt(opt)→save(last_state)+WAL chkpt。
+BE-02: 幂等 replay_id→cached 直返(alt); dual_sign 失败→IdentityRecovery; trace 污染→V3 abort; !should_replay→reject+log。
+DB-01: >80% V3 FAIL→rollback; wal_append FAIL→retry→拒 commit; ≤80% 不触发; crash(opt)→Rebuilder.wal_replay→rebuild_mtm。
+互斥: BE-01 dream ↔ BE-02 replay 单租约 wait。
 
-≤4KB ✓ (~3.7KB) | 3 时序图 (15/15/15) ✓ | 守门 4 注 ✓ | 中断/错误/崩溃 ✓ | 双签清晰 ✓ | 幂等+LTM ro ✓ | WAL fsync 阻塞 ✓ | 无代码/commit/空壳 ✓
+## 6. 与 WF-01 1:1
+
+BE-01 Idle→Trigger→Tick→Process→GuardV3→Verify→Identity→Snapshot ⇔ trigger→tick→consolidate/decay→verify→record→snapshot。
+BE-02 EventIn→Canonicalize→CacheHit→Replay→GuardV3→Impact/DualSign→Trace ⇔ event→canonicalize→cache_lookup→(hit)return/(miss)replay→dual_sign→trace→V3.verify。
+DB-01 Monitor→Check→Boundary→GuardV3→Snapshot→WAL→Commit→Rebuild ⇔ monitor→check→boundary_select→snapshot→V3.verify→wal_append→commit→wal_replay。
+WF-01 (状态) → WF-02 (时序细化)。
+
+## ✓
+
+≤4KB ✓ | 3 sequenceDiagram(13/14/13) ✓ | V3/V1072/V1074 Note ✓ | V1081 三图引用 ✓ | 中断/拒/崩溃 ✓ | 双签 impact≥0.7 ✓ | 幂等+单租约 ✓ | WAL fsync ✓ | WF-01 1:1 ✓ | 无代码/commit ✓

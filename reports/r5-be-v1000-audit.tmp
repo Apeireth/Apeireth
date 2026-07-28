@@ -1,0 +1,17 @@
+V1082 Codebase Audit
+  total_modules=1090
+  empty_shells=984 (90.3%)
+  v1000_plus_shells=25
+  total_loc=98136
+  avg_loc=90.0
+  with_tests=165 (15.1%)
+  with_asi_bridge=33 (3.0%)
+  avg_doc_quality=0.33
+
+V1082 -> ASI V0.3 Lift:
+{
+  "v1082_subscore": 0.3886,
+  "current_asi_v03": 0.8813,
+  "lift": 0.0078,
+  "projected_asi_v03": 0.8891
+}

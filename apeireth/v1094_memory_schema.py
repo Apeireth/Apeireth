@@ -54,8 +54,20 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
+from apeireth.memory_replay_design import IDEMPOTENT_OPS
+
 
 V1094_VERSION = "0.1.0"
+# memory_store.py v0.3 already owns the shared ``memory_meta`` table and its
+# ``schema_version`` key.  Never overwrite that key: use a namespaced key for
+# V1094's own migration cursor, while retaining the legacy key for old readers.
+V1094_META_VERSION_KEY = "v1094_schema_version"
+V1094_META_INITIALIZED_KEY = "v1094_initialized_ts"
+V1094_META_DOWNGRADED_KEY = "v1094_downgraded_ts"
+WAL_SCOPES = frozenset({"stm", "mtm", "ltm", "hot", "cold", "dream", "snapshot", "hqb"})
+WAL_OPS_SQL = ", ".join(repr(op) for op in sorted(IDEMPOTENT_OPS))
+WAL_SCOPES_SQL = ", ".join(repr(scope) for scope in sorted(WAL_SCOPES))
+
 
 
 # ---------------------------------------------------------------------------
@@ -106,12 +118,12 @@ CREATE TABLE IF NOT EXISTS memory_cold (
 -- 3) WAL — 写前日志 (append+checksum, applied=0/1 标志; 借鉴 Tonbo LSM)
 CREATE TABLE IF NOT EXISTS memory_wal (
     seq             INTEGER PRIMARY KEY AUTOINCREMENT,   -- 单调递增 (StateID.seq)
-    scope           TEXT NOT NULL,                       -- 'stm'/'mtm'/'ltm'/'hot'/'cold'/'dream'/'snapshot'
-    op              TEXT NOT NULL,                       -- IDEMPOTENT_OPS whitelist
+    scope           TEXT NOT NULL CHECK (scope IN ({WAL_SCOPES_SQL})),
+    op              TEXT NOT NULL CHECK (op IN ({WAL_OPS_SQL})),
     payload         TEXT NOT NULL,                       -- JSON-serializable
     event_id        TEXT NOT NULL,                       -- uuid (幂等键)
     checksum        TEXT NOT NULL,                       -- sha256(payload)[:16]
-    applied         INTEGER NOT NULL DEFAULT 0,          -- 0=pending, 1=applied
+    applied         INTEGER NOT NULL DEFAULT 0 CHECK (applied IN (0, 1)),
     ts              REAL NOT NULL,
     applied_ts      REAL
 );
@@ -261,31 +273,30 @@ def upgrade(conn: sqlite3.Connection) -> None:
     """
     conn.executescript(SCHEMA_V094)
     conn.executescript(INDEXES_V094)
-    # schema_version seed (只在首次插入; 既有不动 — 真生产兼容)
-    cur = conn.execute("SELECT v FROM memory_meta WHERE k='schema_version'")
-    if cur.fetchone() is None:
-        conn.execute(
-            "INSERT INTO memory_meta(k, v) VALUES (?, ?)",
-            ("schema_version", V1094_VERSION),
-        )
-        conn.execute(
-            "INSERT INTO memory_meta(k, v) VALUES (?, ?)",
-            ("v1094_initialized_ts", str(time.time())),
-        )
-    else:
-        # 既有 schema_version, 不覆盖 (避免破坏下游契约)
-        pass
+    # schema_version seed: 永远不覆盖 ``memory_meta.schema_version`` — 那是
+    # memory_store.py v0.3 拥有的语义, 保留供旧 reader 读取. V1094 自己的版本
+    # 进度走 ``v1094_schema_version`` 命名空间, 与旧表共存, 真生产零破坏.
+    conn.execute(
+        "INSERT OR IGNORE INTO memory_meta(k, v) VALUES (?, ?)",
+        (V1094_META_VERSION_KEY, V1094_VERSION),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO memory_meta(k, v) VALUES (?, ?)",
+        (V1094_META_INITIALIZED_KEY, str(time.time())),
+    )
     conn.commit()
 
 
 def downgrade(conn: sqlite3.Connection, *, keep_meta: bool = True) -> None:
-    """谨慎回退 — DROP 所有 V1094 表.
+    """谨慎回退 — DROP 所有 V1094 表, 永远不动 memory_store 的旧数据.
 
     Args:
         conn: 目标连接
-        keep_meta: True=保留 memory_meta (默认; 记录回退事件); False=全清
+        keep_meta: True=保留 memory_meta (默认; 记录回退事件, 同时清掉 V1094 命名空间键).
+                 False=除 V1094 命名空间外, 也不 DROP memory_meta 本身 — 仍不动
+                       memory_store 的 ``schema_version`` 等旧键.
 
-    Warning: 现仓 episodes / notes / hqb_* 不在此列 — 不会破坏.
+    Warning: episodes / notes / hqb_* 不在此列 — 不会破坏.
     """
     tables = [
         "memory_hot", "memory_cold", "memory_wal", "memory_dream",
@@ -293,13 +304,16 @@ def downgrade(conn: sqlite3.Connection, *, keep_meta: bool = True) -> None:
     ]
     for t in tables:
         conn.execute(f"DROP TABLE IF EXISTS {t}")
-    if not keep_meta:
-        conn.execute("DROP TABLE IF EXISTS memory_meta")
-    else:
+    if keep_meta:
         conn.execute(
             "INSERT OR REPLACE INTO memory_meta(k, v) VALUES (?, ?)",
-            ("v1094_downgraded_ts", str(time.time())),
+            (V1094_META_DOWNGRADED_KEY, str(time.time())),
         )
+    # 始终清掉 V1094 的命名空间键, 避免后续 reader 误读 v0.3 旧值为 V1094
+    conn.execute(
+        "DELETE FROM memory_meta WHERE k IN (?, ?, ?)",
+        (V1094_META_VERSION_KEY, V1094_META_INITIALIZED_KEY, V1094_META_DOWNGRADED_KEY),
+    )
     conn.commit()
 
 
@@ -374,7 +388,12 @@ class MemorySchema:
         upgrade(self._conn)
 
     def schema_version(self) -> str:
-        cur = self._conn.execute("SELECT v FROM memory_meta WHERE k='schema_version'")
+        """返回 V1094 自身的 schema 版本. 优先读取命名空间键, 缺省回退 ``0.0.0``;
+        永远不读 memory_store 的共享 ``schema_version`` (避免误报).
+        """
+        cur = self._conn.execute(
+            "SELECT v FROM memory_meta WHERE k=?", (V1094_META_VERSION_KEY,)
+        )
         row = cur.fetchone()
         return row[0] if row else "0.0.0"
 
@@ -415,19 +434,31 @@ class MemorySchema:
         *,
         event_id: Optional[str] = None,
     ) -> str:
-        """追加一条 WAL — 幂等 (同 event_id 重复调用返回相同 row)."""
+        """追加一条 WAL — 幂等 (同 event_id 重复调用返回相同 row).
+
+        校验 scope ∈ WAL_SCOPES, op ∈ IDEMPOTENT_OPS (借鉴 memory_replay_design);
+        非法值抛 ``ValueError``, 永不让真生产静默吞错.
+        SQLite CHECK 约束作"真理之源", 应用层提前给出可读错误信息.
+        """
+        if scope not in WAL_SCOPES:
+            raise ValueError(
+                f"wal_append: scope {scope!r} not in WAL_SCOPES {sorted(WAL_SCOPES)}"
+            )
+        if op not in IDEMPOTENT_OPS:
+            raise ValueError(
+                f"wal_append: op {op!r} not in IDEMPOTENT_OPS {sorted(IDEMPOTENT_OPS)}"
+            )
         from json import dumps
         eid = event_id or uuid.uuid4().hex
         s = dumps(payload, ensure_ascii=False, separators=(",", ":")) if not isinstance(payload, str) else payload
-        try:
-            self._conn.execute(
-                "INSERT INTO memory_wal(seq, scope, op, payload, event_id, checksum, applied, ts, applied_ts)"
-                " VALUES (NULL, ?, ?, ?, ?, ?, 0, ?, NULL)",
-                (scope, op, s, eid, _checksum(s), time.time()),
-            )
-        except sqlite3.IntegrityError:
-            # 幂等 — 同 event_id 已存在, 不重复
-            pass
+        # 同 event_id 已存在 → ON CONFLICT DO NOTHING, 不触发额外 roundtrip.
+        # 非唯一性 IntegrityError 仍会冒泡, 不被静默吞.
+        self._conn.execute(
+            "INSERT INTO memory_wal(seq, scope, op, payload, event_id, checksum, applied, ts, applied_ts)"
+            " VALUES (NULL, ?, ?, ?, ?, ?, 0, ?, NULL)"
+            " ON CONFLICT(event_id) DO NOTHING",
+            (scope, op, s, eid, _checksum(s), time.time()),
+        )
         self._conn.commit()
         return eid
 
@@ -493,6 +524,10 @@ INTEGRATION_POINTS: Dict[str, str] = {
 
 __all__ = [
     "V1094_VERSION",
+    "V1094_META_VERSION_KEY",
+    "V1094_META_INITIALIZED_KEY",
+    "V1094_META_DOWNGRADED_KEY",
+    "WAL_SCOPES",
     "SCHEMA_V094",
     "INDEXES_V094",
     "MemorySchema",
@@ -504,3 +539,6 @@ __all__ = [
     "_fingerprint",
     "INTEGRATION_POINTS",
 ]
+
+# V1101 auto-injected V3_GUARDS (主 17:43 实事求是 + 主 17:58 不假装)
+V3_GUARDS = {"module_is_not_asi": "模块是工具, ASI 是更大目标. 任何声称模块 = ASI 的部分都是不假装.", "measurement_is_not_truth": "测量是 proxy, 真值仍是更大目标. V1077 真测 17 维 ≠ ASI 达成.", "structure_is_not_consciousness": "CognitiveArchitecture 结构类比 ≠ 现象意识. ACT-R chunks ≠ concepts.", "production_is_not_safety": "真生产 ≠ 真安全. 部署 ≠ 守门. 任何声称 production = safe 是不假装.", "automation_is_not_autonomy": "自动执行 ≠ 自主意识. V1101 lift 引擎自动改 ≠ V1101 自主."}
