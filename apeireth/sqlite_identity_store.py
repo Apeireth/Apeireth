@@ -44,8 +44,10 @@ from typing import Optional
 from .identity import IdentityCard
 from .identity_store import (
     IDENTITY_STORE_VERSION,
+    VALID_IDENTITY_ROLES,
     StoreEntry,
     IdentityStore,
+    validate_card,
 )
 
 
@@ -128,16 +130,25 @@ class SqliteIdentityStore:
 
         Returns True if inserted, False if updated.
         """
+        if role not in VALID_IDENTITY_ROLES:
+            raise ValueError(f"invalid identity role: {role!r}")
         if not card.name:
             raise ValueError("card.name is required")
+        issues = validate_card(card)
+        if issues:
+            raise ValueError(f"invalid identity card: {issues}")
         card_json = json.dumps(card.to_dict(), ensure_ascii=False, sort_keys=True)
         hash_now = card.integrity_hash()
         now = time.time()
         cur = self._conn.execute(
-            "SELECT created_at FROM identity_cards WHERE name=?", (card.name,)
+            "SELECT created_at, role FROM identity_cards WHERE name=?", (card.name,)
         )
         row = cur.fetchone()
         if row:
+            if role != row[1]:
+                raise PermissionError(
+                    f"identity role for '{card.name}' is immutable ({row[1]!r} -> {role!r})"
+                )
             self._conn.execute(
                 "UPDATE identity_cards SET role=?, card_json=?, updated_at=?, integrity_hash=? WHERE name=?",
                 (role, card_json, now, hash_now, card.name),
@@ -150,6 +161,12 @@ class SqliteIdentityStore:
             )
             self._conn.commit()
             return False
+        if role == "master":
+            existing_master = self._conn.execute(
+                "SELECT name FROM identity_cards WHERE role='master' LIMIT 1"
+            ).fetchone()
+            if existing_master is not None:
+                raise ValueError(f"identity store already has master card {existing_master[0]!r}")
         self._conn.execute(
             "INSERT INTO identity_cards(name, role, card_json, created_at, updated_at, integrity_hash) VALUES (?,?,?,?,?,?)",
             (card.name, role, card_json, now, now, hash_now),
@@ -178,10 +195,6 @@ class SqliteIdentityStore:
         return True
 
     # ---------- read ----------
-        self._conn.commit()
-        return True
-
-    # ---------- read ----------
 
     def load_all_cards(self) -> IdentityStore:
         """从 SQLite 重建 IdentityStore (in-memory).
@@ -202,18 +215,28 @@ class SqliteIdentityStore:
                 card = IdentityCard(**raw)
             except Exception:
                 continue
-            entry = StoreEntry(card=card, role=r[1], path=None, integrity_ok=True)
+            entry = StoreEntry(
+                card=card,
+                role=r[1],
+                path=None,
+                integrity_ok=(card.integrity_hash() == r[4]),
+            )
+            if not entry.integrity_ok:
+                continue
             store.entries[card.name] = entry
         return store
 
     def get_card(self, name: str) -> Optional[IdentityCard]:
         cur = self._conn.execute(
-            "SELECT card_json FROM identity_cards WHERE name=?", (name,)
+            "SELECT card_json, integrity_hash FROM identity_cards WHERE name=?", (name,)
         )
         row = cur.fetchone()
         if row is None:
             return None
-        return IdentityCard(**json.loads(row[0]))
+        card = IdentityCard(**json.loads(row[0]))
+        if card.integrity_hash() != row[1]:
+            raise ValueError(f"identity card '{name}' failed integrity check")
+        return card
 
     def cards_by_role(self, role: str) -> list[IdentityCard]:
         rows = self._conn.execute(

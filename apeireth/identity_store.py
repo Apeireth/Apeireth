@@ -26,6 +26,16 @@ from typing import Optional
 from .identity import IdentityCard, CARD_VERSION
 
 IDENTITY_STORE_VERSION = "0.2.0"
+VALID_IDENTITY_ROLES = frozenset({"master", "persona", "team", "snapshot"})
+LEGACY_ROLE_ALIASES = {"central_ai": "master", "default": "snapshot"}
+
+
+def _normalize_role(role: str) -> str:
+    if role in VALID_IDENTITY_ROLES:
+        return role
+    if role in LEGACY_ROLE_ALIASES:
+        return LEGACY_ROLE_ALIASES[role]
+    raise ValueError(f"invalid identity role: {role!r}")
 
 
 # === 1. Schema 定义 — 一份人类可读的契约 ===
@@ -187,11 +197,15 @@ class IdentityStore:
         self.entries: dict[str, StoreEntry] = {}  # name -> StoreEntry
 
     def add(self, card: IdentityCard, role: str = "snapshot") -> StoreEntry:
-        """添加一张卡到内存 store"""
+        """添加一张卡到内存 store。master 唯一且不可被 add 覆盖。"""
+        role = _normalize_role(role)
         if not card.name:
             raise ValueError("card.name is required for store key")
-        if card.name in self.entries and role == "master":
-            raise ValueError(f"master card '{card.name}' already exists")
+        existing = self.entries.get(card.name)
+        if existing is not None and existing.role == "master":
+            raise PermissionError(f"master card '{card.name}' cannot be overwritten")
+        if role == "master" and any(e.role == "master" for e in self.entries.values()):
+            raise ValueError("identity store already has a master card")
         entry = StoreEntry(card=card, role=role, integrity_ok=True)
         self.entries[card.name] = entry
         return entry
@@ -244,6 +258,7 @@ class IdentityStore:
             log.extend([f"[{p.name}] {n}" for n in notes])
             # 弹掉 non-schema 字段 (IdentityCard 不认)
             role = migrated.pop("_role", "snapshot")
+            role = _normalize_role(role)
             expected_hash = migrated.pop("integrity_hash", None)
             try:
                 card = IdentityCard(**migrated)
@@ -255,8 +270,8 @@ class IdentityStore:
             if expected_hash is not None:
                 actual = card.integrity_hash()
                 if expected_hash != actual:
-                    log.append(f"[warn] {p.name}: integrity mismatch ({expected_hash} vs {actual})")
-                    integrity_ok = False
+                    log.append(f"[error] {p.name}: integrity mismatch ({expected_hash} vs {actual})")
+                    continue
             entry = StoreEntry(
                 card=card, role=role, path=p,
                 integrity_ok=integrity_ok, migration_notes=notes,
@@ -267,6 +282,7 @@ class IdentityStore:
 
     def save_card(self, card: IdentityCard, path: str | Path, role: str = "snapshot") -> Path:
         """保存一张卡 — 含 integrity_hash"""
+        role = _normalize_role(role)
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
         # 注入 _role 供 load_dir 识别

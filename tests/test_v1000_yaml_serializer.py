@@ -30,6 +30,7 @@ import pytest
 import yaml
 
 from apeireth.v1000_yaml_serializer import (
+    RUAMEL_AVAILABLE,
     V1000_VERSION,
     YAMLMode,
     YAMLSerializer,
@@ -71,7 +72,7 @@ def cfg():
 
 
 def test_module_version_constant():
-    assert V1000_VERSION == "0.3.0"
+    assert V1000_VERSION == "0.4.0"
 
 
 def test_yaml_modes_enum_values():
@@ -354,21 +355,16 @@ def test_is_yaml_path_yaml_and_yml():
     assert not YAMLSerializer.is_yaml_path("a.txt")
 
 
-def test_to_json_compatible_strips_non_json_types(ser):
-    payload = {
-        "dt": datetime(2026, 7, 22),
-        "d": date(2026, 1, 1),
-        "p": Path("a/b"),
-        "k": _Kind.FOO,
-        "fs": frozenset({"z", "a"}),
-    }
-    out = ser.to_json_compatible(payload)
-    import json
-    json.dumps(out)  # must serialize without error
-    assert out["dt"] == "2026-07-22T00:00:00"
-    assert out["d"] == "2026-01-01"
-    assert out["k"] == "foo"
-    assert out["fs"] == ["a", "z"]
+def test_custom_representer_is_instance_local(ser):
+    class Port:
+        def __init__(self, value):
+            self.value = value
+
+    ser.add_representer(Port, lambda port: {"port": port.value})
+    assert ser.loads(ser.dumps(Port(8080))) == {"port": 8080}
+    with pytest.raises(YAMLSerializerError) as exc:
+        YAMLSerializer().dumps(Port(8080))
+    assert isinstance(exc.value.__cause__, yaml.representer.RepresenterError)
 
 
 # ============================================================
@@ -483,3 +479,35 @@ def test_special_chars_in_string(ser):
     payload = {"s": "line1\nline2\ttab: \"quoted\" # not comment"}
     out = ser.loads(ser.dumps(payload))
     assert out == payload
+
+
+def test_safe_mode_calls_safe_dump(monkeypatch, ser):
+    original = yaml.safe_dump
+    called = []
+
+    def spy(*args, **kwargs):
+        called.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(yaml, "safe_dump", spy)
+    assert ser.loads(ser.dumps({"safe": True})) == {"safe": True}
+    assert called == [True]
+
+
+def test_dump_stream_does_not_call_dumps(monkeypatch, ser):
+    monkeypatch.setattr(ser, "dumps", lambda *_: pytest.fail("buffered dumps called"))
+    stream = io.StringIO()
+    assert ser.dump_stream({"items": list(range(1000))}, stream) > 1000
+    assert ser.loads(stream.getvalue())["items"][-1] == 999
+
+
+def test_round_trip_mode_fallback_remains_safe(ser):
+    with pytest.raises(YAMLSerializerError):
+        ser.loads("!!python/name:os.system", YAMLMode.ROUND_TRIP)
+    assert ser.loads(ser.dumps({"a": 1}, YAMLMode.ROUND_TRIP), YAMLMode.ROUND_TRIP)["a"] == 1
+
+
+@pytest.mark.skipif(not RUAMEL_AVAILABLE, reason="optional ruamel.yaml is not installed")
+def test_round_trip_mode_preserves_comments(ser):
+    data = ser.loads("# kept\na: 1\n", YAMLMode.ROUND_TRIP)
+    assert "# kept" in ser.dumps(data, YAMLMode.ROUND_TRIP)

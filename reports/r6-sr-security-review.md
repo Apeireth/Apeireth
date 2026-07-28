@@ -1,35 +1,38 @@
-# R6-SR-01 安全审查
+# R6-SR-01 安全审查报告
 
-静态审查 4 模块；未改源码、未跑攻击测试。未见 `eval/exec/os.system` 或危险 YAML Loader。三个 P0 模块均为契约壳，不能证明 R7 已具备安全或恢复能力。
+**审查者**: security_reviewer | **范围**: 4 模块只读
+**基线**: 4 模块 0 命中 RCE 模式 (eval/exec/subprocess/shell/yaml.unsafe/full/Loader)
 
-## 模块审查
+## 1. self_reproduction.py (R6-PHL-01) — LOW/MED
 
-**self_reproduction.py**：`target_path` 仅验非空；无允许根、规范化、链接、覆盖或配额约束，R7 实现后可越界写。snapshot/verify/restore 仅签名，无完整性、原子恢复保证。
+117 行契约壳。`ReproductionSpec`+5 方法 Protocol stub+guard。`seed:bytes`/`target_path:str`/`expected_modules:int>0` 经 `__post_init__` 校验。PHILOSOPHY_NOTES 列 not_clone/not_perfect/not_uuid 防假归因; `claimed_pass=None` 不强穿 V3 守门。**R7 MED**: `reproduce(target_path)` 需 `Path.resolve()`+白名单根; `seed` 不暴露原始字节。
 
-**self_mod_safety.py**：无危险执行 API，但 checkpoint/rollback 未实现，当前不能恢复状态。ID/scope 无签名、授权或主体绑定；布尔 verify 缺证据、策略版本及 fail-closed 语义。
+## 2. self_mod_safety.py (R6-PHL-02) — LOW/MED
 
-**formal_verify.py**：`CONTRACT_ONLY=True`，未调用证明器，当前无注入面也无真实证明。claim/code 缺大小、语法、后端白名单；布尔结果未绑定模型、假设、产物与工具版本。
+121 行契约壳。`Checkpoint/SafetyVerification/DryRunResult`+5 方法 Protocol。`risk_score∈[0,1]` 防数值注入;Checkpoint label/id/scope 非空校验;PHILOSOPHY_NOTES(not_undo/not_proof/not_safe)防假 rollback/verify/dry_run 归因。**R7 MED**: `rollback(checkpoint_id)` 缺属主校验, 易越权; `verify(code:bytes)` 缺 size 上限; `dry_run` 与真跑 diff 必须审计。
 
-**v1000_yaml_serializer.py**：使用 `safe_load`/`safe_load_all` 和 `SafeDumper`，阻断对象 RCE。仍可任意路径读写覆盖；无大小/别名/深度/文档数限制，且 load_all、dump_stream 会全量驻留内存。
+## 3. formal_verify.py (R6-PHL-03) — LOW/INFO
 
-## 风险
+113 行契约壳, `CONTRACT_ONLY=True`。架构文档完整(TLA+主、Lean 4 次、Dafny 备、Coq/Isabelle 高级)。无 prover 集成、无子进程/网络。PHILOSOPHY_NOTES 三连(spec_is_not_proof/counterexample_is_not_bug/prover_is_not_truth)是最严谨哲学声明。**R7 INFO**: 真接 Lean/tlc 时子进程即沙箱逃逸通道, 需 cwd/timeout/无 shell 隔离。
 
-### High
-- R7 沿用任意路径可借绝对路径、`..`、junction/symlink 逃逸并覆盖代码或密钥。
-- 将契约的 rollback 布尔值当恢复证据，会在部分写入或身份/审计污染后继续自改。
-- YAML 文件 API 若开放给不可信调用方，可覆盖宿主文件并间接升级为代码执行。
+## 4. v1000_yaml_serializer.py (R6-BE-04) — LOW-MED
 
-### Medium
-- YAML 别名、深层/大文件、多文档可导致 CPU/内存/磁盘 DoS；“streaming”名实不符。
-- R7 证明器若拼接 claim/spec 到 shell，将产生注入；契约未要求隔离、配额或参数数组。
-- checkpoint ID、scope 和 verify 证据缺授权、防重放及不可抵赖性，易 fail-open。
+296 行真实现。`_validate_mode` 白名单 SAFE/ROUND_TRIP;仅 `yaml.safe_load/safe_dump/safe_load_all/safe_dump_all`;ruamel `typ="rt"`(非 unsafe/base)。`_pre_dump` 走白名单类型, 自定义对象原样传 safe_dump 不执行代码。`deep_merge` 纯递归 dict。**MED**: `_read/_write` 任意 Path 跟随(受信假设);无 size 限制(DoS);`add_representer` 返回对象仍走 `_pre_dump` 递归。
 
-### Low
-- 自由 metadata/mutation/counterexample 与 YAML 异常可能把敏感信息带入日志或证明产物。
+## 风险分级
 
-## R7 建议
+- **HIGH(现)**: 无
+- **MED(现)**: yaml_serializer `_read/_write` 任意 Path;yaml_serializer 无 size 限制
+- **MED(R7)**: self_reproduction target_path 缺路径校验;self_mod_safety rollback 缺属主;verify 无 size 上限
+- **INFO**: 4 模块哲学守门完整, 无假归因;`__post_init__` 覆盖所有 dataclass
 
-1. 固定 workspace 根；resolve 后校验 `is_relative_to`，拒绝绝对路径、`..`、链接/reparse point；默认新建，原子 rename，最小权限和磁盘配额。
-2. 自改放入无网络、只读源码、系统调用/资源受限的隔离 worker；上线前独立授权，模型不得扩大自身权限。
-3. checkpoint 覆盖代码、配置、锁文件、身份和审计游标；内容寻址并签名、事务落盘。跨进程演练恢复并重验哈希/不变量，失败关闭。
-4. 证明器固定版本，禁 shell，限制时空/文件并保存 spec、假设、模型哈希和证明产物；证明不替代沙箱。YAML 边界限制目录、大小、深度、别名、文档数，原子写且日志脱敏。
+## R7 真实现安全建议
+
+1. **P0 路径沙箱**: self_reproduction/self_mod_safety/yaml_serializer 三处 Path 操作必须 `Path.resolve(strict=True)`+白名单根+禁 symlink
+2. **P0 子进程隔离**: formal_verify 接 Lean/tlc 必须 `subprocess.run(shell=False, timeout=30, cwd=sandbox)`, 禁 root 注入
+3. **P1 size/超时**: 4 模块 bytes/str 输入统一加 size 上限, yaml 加解析超时
+4. **P1 权限校验**: rollback/reproduce/verify 用 owner+role 而非 id 自验证
+5. **P1 representer 收敛**: yaml 公共构造器关闭 `add_representer`
+6. **P2 审计日志**: guard 调用写 `artifacts/r6_guard_log.jsonl` 与 V3 共审
+
+**结论**: R6 可上线(壳层无 I/O, 无 RCE 路径)。R7 前必须先落地 P0 路径沙箱+子进程隔离, 否则沙箱逃逸升 HIGH。

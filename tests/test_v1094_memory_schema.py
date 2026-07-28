@@ -68,10 +68,17 @@ def file_store(tmp_path: Path) -> MemorySchema:
 
 
 def test_t01_schema_version_seeded(mem_store: MemorySchema) -> None:
-    """T01: 首次 init → memory_meta.schema_version=V1094_VERSION."""
+    """T01: 首次 init → V1094 命名空间键 memory_meta.v1094_schema_version=V1094_VERSION.
+
+    旧 ``schema_version`` 键 (memory_store.py v0.3 拥有) 永不被 V1094 写入,
+    以保证真生产兼容; 新 reader 通过 ``v1094_schema_version`` 读进度.
+    """
     assert mem_store.schema_version() == V1094_VERSION
-    assert mem_store.meta_get("schema_version") == V1094_VERSION
+    # 命名空间键 (V1094 拥有)
+    assert mem_store.meta_get("v1094_schema_version") == V1094_VERSION
     assert mem_store.meta_get("v1094_initialized_ts") is not None
+    # 旧 key 不应被 V1094 写入 (新库情况下)
+    assert mem_store.meta_get("schema_version") is None
 
 
 def test_t02_all_tables_created(mem_store: MemorySchema) -> None:
@@ -414,10 +421,12 @@ def test_t21_mtm_themes_unique_topic_id(mem_store: MemorySchema) -> None:
 
 
 def test_t22_meta_protected_from_overwrite() -> None:
-    """T22: memory_meta.schema_version 不会被 upgrade 覆盖 — 真生产兼容."""
+    """T22: V1094 命名空间键不会被 upgrade 覆盖 — 真生产兼容."""
     s = MemorySchema(":memory:")
-    # 手动篡改 schema_version
-    s._conn.execute("UPDATE memory_meta SET v='99.99.99' WHERE k='schema_version'")
+    # 手动篡改 V1094 命名空间键 (模拟外部 reader 写入了别的进度)
+    s._conn.execute(
+        "UPDATE memory_meta SET v='99.99.99' WHERE k='v1094_schema_version'"
+    )
     s._conn.commit()
     # 再次 upgrade — 不应被覆盖
     upgrade(s._conn)
@@ -444,3 +453,154 @@ def test_t23_v94_constants_consistent() -> None:
         assert f"CREATE UNIQUE INDEX IF NOT EXISTS {idx}" in SCHEMA_V094, f"missing in SCHEMA_V094: {idx}"
     # 版本号一致
     assert V1094_VERSION in SCHEMA_V094
+
+
+# ===========================================================================
+# Group 7: 真生产兼容 (R8-DB-COMPAT, 2026-07-29 数据库工程师补) — 4 用例
+#
+# 目标:
+#   - 旧 memory_store.py v0.3 库升级到 V1094: 旧 episodes/notes 仍可读,
+#     旧 schema_version 永不被覆盖.
+#   - 非法 op / scope 在 wal_append 应用层即被拒, 不污染 WAL.
+#   - downgrade 不会破坏 memory_store 的旧数据.
+#   - wal_append 同 event_id 重复调用仍是幂等 (UNIQUE 索引真理之源).
+# ===========================================================================
+
+
+def test_t24_legacy_v030_db_upgrade(tmp_path: Path) -> None:
+    """T24: 模拟旧 memory_store.py v0.3 库 — 升级后旧 episodes/notes 仍在, 旧 schema_version=0.3.0 不被覆盖."""
+    p = tmp_path / "legacy_v030.db"
+    # 1) 用 memory_store 的 SCHEMA 模拟 v0.3 库
+    legacy = sqlite3.connect(str(p))
+    legacy.executescript(
+        """
+        CREATE TABLE memory_meta (
+            k TEXT PRIMARY KEY,
+            v TEXT NOT NULL
+        );
+        CREATE TABLE episodes (
+            eid TEXT PRIMARY KEY, actor TEXT NOT NULL, content TEXT NOT NULL,
+            context TEXT DEFAULT '', kind TEXT DEFAULT 'utterance',
+            ts REAL NOT NULL, linked_identity_hash TEXT DEFAULT '',
+            fingerprint TEXT NOT NULL
+        );
+        CREATE TABLE notes (
+            nid TEXT PRIMARY KEY, topic TEXT NOT NULL, claim TEXT NOT NULL,
+            confidence REAL DEFAULT 0.5, importance INTEGER DEFAULT 5,
+            evidence TEXT DEFAULT '[]', created_at REAL NOT NULL,
+            last_consolidated REAL NOT NULL, supersedes TEXT DEFAULT '[]'
+        );
+        INSERT INTO episodes(eid, actor, content, ts, fingerprint)
+            VALUES ('old-e1', 'master', '历史会话内容', 1700000000.0, 'fp-old-1');
+        INSERT INTO notes(nid, topic, claim, created_at, last_consolidated)
+            VALUES ('old-n1', '历史主题', '历史事实', 1700000000.0, 1700000000.0);
+        INSERT INTO memory_meta(k, v) VALUES ('schema_version', '0.3.0');
+        """
+    )
+    legacy.commit()
+    legacy.close()
+
+    # 2) 在同一文件上跑 V1094 upgrade
+    upgrade_path(p)
+
+    # 3) 旧表 + 旧行 + 旧 schema_version 必须完整保留
+    c = sqlite3.connect(str(p))
+    try:
+        ep = c.execute("SELECT content FROM episodes WHERE eid='old-e1'").fetchone()
+        assert ep is not None and ep[0] == "历史会话内容"
+        nt = c.execute("SELECT claim FROM notes WHERE nid='old-n1'").fetchone()
+        assert nt is not None and nt[0] == "历史事实"
+        sv = c.execute(
+            "SELECT v FROM memory_meta WHERE k='schema_version'"
+        ).fetchone()
+        assert sv is not None and sv[0] == "0.3.0", (
+            "V1094 不得覆盖 memory_store v0.3 拥有的 schema_version"
+        )
+        # 4) V1094 命名空间键被注入
+        v94 = c.execute(
+            "SELECT v FROM memory_meta WHERE k='v1094_schema_version'"
+        ).fetchone()
+        assert v94 is not None and v94[0] == V1094_VERSION
+        # 5) V1094 自身表全部建好
+        for t in ("memory_hot", "memory_cold", "memory_wal", "memory_dream",
+                  "memory_snapshots", "stm_messages", "mtm_themes", "ltm_facts"):
+            row = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (t,)
+            ).fetchone()
+            assert row is not None, f"V1094 table missing: {t}"
+    finally:
+        c.close()
+
+
+def test_t25_wal_append_rejects_invalid_op() -> None:
+    """T25: wal_append 非法 op / scope 在应用层抛 ValueError, 不污染 WAL."""
+    s = MemorySchema(":memory:")
+    with pytest.raises(ValueError, match="not in IDEMPOTENT_OPS"):
+        s.wal_append("hot", "drop_database", {"k": 1})
+    with pytest.raises(ValueError, match="not in WAL_SCOPES"):
+        s.wal_append("rogue_scope", "tag_set", {"k": 1})
+    # WAL 应保持空 (无非法行落入)
+    cur = s._conn.execute("SELECT COUNT(*) FROM memory_wal")
+    assert cur.fetchone()[0] == 0
+    s.close()
+
+
+def test_t26_downgrade_preserves_legacy_meta(tmp_path: Path) -> None:
+    """T26: downgrade(keep_meta=True) 仅清 V1094 命名空间键 + V1094 表, 旧 memory_store 数据不动."""
+    p = tmp_path / "downgrade_keep.db"
+    # 1) 旧 v0.3 + V1094 共存
+    legacy = sqlite3.connect(str(p))
+    legacy.executescript(
+        """
+        CREATE TABLE memory_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+        CREATE TABLE episodes (eid TEXT PRIMARY KEY, actor TEXT NOT NULL,
+            content TEXT NOT NULL, ts REAL NOT NULL, fingerprint TEXT NOT NULL);
+        INSERT INTO episodes VALUES ('ep-keep', 'master', 'old', 1.0, 'fp');
+        INSERT INTO memory_meta(k, v) VALUES ('schema_version', '0.3.0');
+        INSERT INTO memory_meta(k, v) VALUES ('legacy_key', 'legacy_value');
+        """
+    )
+    legacy.commit()
+    legacy.close()
+    upgrade_path(p)
+    # 2) downgrade (keep_meta=True)
+    downgrade_path(p, keep_meta=True)
+    # 3) 旧表 + 旧 meta 完整; V1094 表已清; 命名空间键清掉
+    c = sqlite3.connect(str(p))
+    try:
+        row = c.execute("SELECT content FROM episodes WHERE eid='ep-keep'").fetchone()
+        assert row is not None and row[0] == "old"
+        legacy_sv = c.execute(
+            "SELECT v FROM memory_meta WHERE k='schema_version'"
+        ).fetchone()
+        assert legacy_sv is not None and legacy_sv[0] == "0.3.0"
+        legacy_kv = c.execute(
+            "SELECT v FROM memory_meta WHERE k='legacy_key'"
+        ).fetchone()
+        assert legacy_kv is not None and legacy_kv[0] == "legacy_value"
+        # V1094 命名空间键全清
+        v94 = c.execute(
+            "SELECT 1 FROM memory_meta WHERE k IN "
+            "('v1094_schema_version', 'v1094_initialized_ts', 'v1094_downgraded_ts')"
+        ).fetchall()
+        assert v94 == []
+        # V1094 表已 DROP
+        for t in ("memory_hot", "memory_wal", "ltm_facts"):
+            present = c.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (t,)
+            ).fetchone()
+            assert present is None, f"downgrade 未清 {t}"
+    finally:
+        c.close()
+
+
+def test_t27_wal_append_idempotent_on_duplicate_event() -> None:
+    """T27: wal_append 同 event_id 二次调用幂等 (SQLite UNIQUE 真理之源)."""
+    s = MemorySchema(":memory:")
+    eid = s.wal_append("hot", "tag_set", {"x": 1}, event_id="dup-eid")
+    # 二次 append: 不抛错, 仍返回同一 event_id, 行数 = 1
+    eid2 = s.wal_append("hot", "tag_set", {"x": 1}, event_id="dup-eid")
+    assert eid2 == eid
+    cur = s._conn.execute("SELECT COUNT(*) FROM memory_wal")
+    assert cur.fetchone()[0] == 1
+    s.close()

@@ -1,8 +1,7 @@
 """Apeireth self_mod_safety contract shell — R6-PHL-02.
 
-占位契约壳 (NOT 实现). 自改安全 = 变体修改的安全边界.
-self_reproduction (R6-PHL-01 同型重生, replica safety) ≠ self_mod_safety (variant safety — 本模块).
-本模块只暴露 Protocol + dataclass + guard, 不写真改逻辑 (R7+ 范围).
+占位契约壳 (NOT 实现). self_mod_safety = 变体修改的安全边界,
+区别于 self_reproduction 的同型重生; 仅暴露 Protocol、dataclass 与 guard。
 """
 from __future__ import annotations
 
@@ -20,8 +19,6 @@ PHILOSOPHY_NOTES: Dict[str, str] = {
     "not_proof": "verify 是 heuristic 校验, 不是形式化证明 (那是 formal_verify).",
     "not_safe": "dry_run 可能与真跑有差异; dry_run 不等于 safe.",
 }
-
-
 @dataclass
 class Checkpoint:
     """检查点引用 — 落盘 ID + 时间戳 + 范围 (R6-PHL-02 契约)."""
@@ -38,7 +35,6 @@ class Checkpoint:
         if not isinstance(self.scope, str) or not self.scope.strip():
             raise ValueError("scope 必须是非空字符串")
 
-
 @dataclass
 class SafetyVerification:
     """自改安全性验证结果 — 含 risk_score (连续 0-1) 与 rationale."""
@@ -54,7 +50,6 @@ class SafetyVerification:
             raise TypeError("verified 必须是 bool")
         if not isinstance(self.risk_score, (int, float)) or not 0.0 <= self.risk_score <= 1.0:
             raise ValueError("risk_score 必须是 [0.0, 1.0] 的数")
-
 
 @dataclass
 class DryRunResult:
