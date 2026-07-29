@@ -530,35 +530,34 @@ class IdentityStoreV1095:
     # ---------- 真 fsync (不假装守门) ----------
 
     def _commit_with_fsync(self, op_label: str = "commit") -> None:
-        """commit + 立即 fsync 数据文件 + WAL 文件.
+        """Commit, then force the database and WAL files to stable storage.
 
-        不假装: fsync 让数据真正落盘, 进程崩溃 / OS 崩溃后仍可读.
+        ``PRAGMA synchronous=FULL`` is the primary SQLite durability contract.
+        Explicit file fsyncs make that contract observable and prevent the audit
+        counter from claiming a flush that never happened.
         """
+        self._conn.execute(
+            "UPDATE profile_meta SET updated_at=? WHERE id=1",
+            (time.time(),),
+        )
         self._conn.commit()
-        # Python sqlite3 commit 后, 数据已写入 WAL 文件, 但未 fsync 到 disk
-        # 调用 os.fsync(fd) 强制刷盘
-        try:
-            fd = self._conn._db_handle_ if hasattr(self._conn, "_db_handle_") else None
-        except Exception:
-            fd = None
-        # Python 3.12+ 提供 Connection.fsync(), 否则手刷
-        if hasattr(self._conn, "fsync"):
+
+        # ponytail: SQLite owns ordering; this is only an explicit durability
+        # barrier.  Add platform-specific directory fsync only if atomic rename
+        # based database replacement is introduced.
+        synced = 0
+        for candidate in (self.path, Path(f"{self.path}-wal")):
+            if not candidate.exists():
+                continue
+            fd = os.open(str(candidate), os.O_RDWR | getattr(os, "O_BINARY", 0))
             try:
-                self._conn.fsync()
-            except Exception:
-                # Fallback: os.fsync on raw fd (sqlite3 不暴露, 但 commit() + WAL = durable)
-                pass
-        # 记录 audit
+                os.fsync(fd)
+                synced += 1
+            finally:
+                os.close(fd)
+        if synced == 0:
+            raise OSError(f"{op_label}: no SQLite file available to fsync")
         self._n_fsync_total += 1
-        # 更新 meta 的 updated_at
-        try:
-            self._conn.execute(
-                "UPDATE profile_meta SET updated_at=? WHERE id=1",
-                (time.time(),),
-            )
-            self._conn.commit()
-        except Exception:
-            pass
 
     # ---------- 中央 AI Profile CRUD ----------
 
