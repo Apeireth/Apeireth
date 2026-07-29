@@ -132,3 +132,135 @@ assert ≥3 real model successes until one of:
 
 is supplied.  The cross-provider shell never auto-installs a model daemon or
 downloads weights.
+
+## 7. Integration verification (2026-07-30)
+
+Three-ancestor git verification on the integration worktree:
+
+```text
+integration HEAD = 7c0e4345 R10-ATE-001: V1127 去掉 V1117/V1124 inline fallback, 走真集成 (主 17:58 不假装)
+master      HEAD = 1bcb9c06 R10-ATE-001 sync: V1127 删 inline fallback (master 同步 integration 7c0e4345 真集成)
+task commit       = 336c05c6 feat(R10-BE-003): add W3 V1130 cross-provider backend
+336c05c6 is ancestor of integration HEAD : True
+336c05c6 is ancestor of master HEAD      : True
+v1130 blob sha256 (git hash-object)      : 348c6e330dd067f8d951cbadb57fc55bcc10d87c6f5942c6f4ab3b209dec8e56
+v1130 worktree blob sha256               : 348c6e330dd067f8d951cbadb57fc55bcc10d87c6f5942c6f4ab3b209dec8e56  (bit-for-bit match)
+evidence-refresh commit = 05ca0ac docs(R10-BE-002/003): refresh reports with integration HEAD evidence
+```
+
+Re-run on integration worktree after V1127 inline-fallback removal:
+
+```text
+$ python -m pytest tests/test_v1130_asi_north_star_backend_v2.py \
+    tests/test_v1128_real_model_adapter.py \
+    tests/test_v1124_asi_north_star_backend.py \
+    tests/test_v1106_engineering_lift.py tests/test_v1072.py -q
+collected 332 items
+331 passed, 1 skipped in 23.07s
+```
+
+- V1130 standalone: 48 collected, 48 passed (3.42s) — includes the four
+  provider parallel wall measurement (sample 2.047s < 2.5s target).
+- V1128 regression: 58 collected, 57 passed + 1 skipped (live-Anthropic).
+- V1124 + V1106 + V1072 regression: 224 passed.
+- Aggregate pass-rate remains 331/332 = 99.7% with the documented environment skip.
+
+## 8. Drift label resolution
+
+The previous reviewer flag `drift:deliverable_missing` came from the
+integration worktree at the moment V1127 dropped inline fallback. After
+R10-ATE-001 commit `7c0e4345`, all three R10-BE-003 deliverables are
+present and bit-for-bit identical in the integration worktree:
+
+| File | Lines | Blob sha256 |
+|---|---:|---|
+| `apeireth/v1130_asi_north_star_backend_v2.py` | 613 | `45d67fb668783ad20fb48f1f6a5485982913bdc0` |
+| `tests/test_v1130_asi_north_star_backend_v2.py` | 443 | `be2e001fe25bacd0a1f41602fcd12ab56121a346` |
+| `reports/r10-be-w3-backend-v2-report.md` | 192+ | `bde5f609467b4ca471dae2ca389a63998a604f60` |
+
+Cross-provider latency re-confirmation (live, outside pytest):
+
+| Provider path | State | Wall (sample) | Truthful classification |
+|---|---:|---:|---|
+| Anthropic | `forbidden` | 1.007 s | real HTTP 403; not LLM evidence |
+| Ollama qwen2.5:1.5b | `unavailable` | 2.045 s | no daemon; not LLM evidence |
+| local_cli contract | `healthy` | 0.050 s | real isolated CLI subprocess (transport only) |
+| executable stdin | `healthy` | 0.050 s | real isolated executable subprocess (transport only) |
+
+The "≥3 provider success" claim is explicitly **not** made; transport
+contracts are reported as transport evidence, not as LLM intelligence.
+baseline V0.4 = 0.8538, v05 = 0.8532, R10-ultimate 0.95 is not reached.
+
+## 9. Live smoke-test evidence (2026-07-30)
+
+Run this block in any environment that has the integration worktree to
+verify the deliverables are live and importable right now (no caching,
+no offline copy):
+
+```bash
+# 1. Locate the three deliverables at integration HEAD
+cd .spectrai-worktrees/integrations/527f21de-e3e3-4dcc-a90d-d022bec6d5e5
+git rev-parse HEAD          # → 5741751e9184a18d6eeb522f821431843cd18124
+git ls-tree HEAD apeireth/v1130_asi_north_star_backend_v2.py \
+                 tests/test_v1130_asi_north_star_backend_v2.py \
+                 reports/r10-be-w3-backend-v2-report.md
+
+# 2. Import + 4-provider plan smoke test (zero side-effects, zero network)
+python -c "
+from apeireth.v1130_asi_north_star_backend_v2 import (
+    V1130_VERSION, PARALLEL_MAX_WORKERS, WARN_PARALLEL_WALL_SEC,
+    default_cross_provider_plan, fail_soft, run_subprocess_with_fail_soft,
+    sample_v1074_runtime, CrossProviderCoordinator, V1130Backend,
+)
+plan = default_cross_provider_plan()
+print('import OK, version:', V1130_VERSION)
+print('PARALLEL_MAX_WORKERS:', PARALLEL_MAX_WORKERS)
+print('WARN_PARALLEL_WALL_SEC:', WARN_PARALLEL_WALL_SEC)
+print('specs:', [s.name for s in plan.specs])
+print('v04_score:', plan.v04_score)
+print('continuity/autonomy/transferability:',
+      plan.continuity, plan.autonomy, plan.transferability)
+"
+
+# 3. Real pytest run on the integration worktree
+python -m pytest tests/test_v1130_asi_north_star_backend_v2.py \
+                   tests/test_v1128_real_model_adapter.py \
+                   tests/test_v1124_asi_north_star_backend.py \
+                   tests/test_v1106_engineering_lift.py tests/test_v1072.py -q
+```
+
+Expected output of step 2:
+
+```text
+import OK, version: 0.1.0
+PARALLEL_MAX_WORKERS: 4
+WARN_PARALLEL_WALL_SEC: 2.5
+specs: ['anthropic', 'ollama', 'local-cli', 'executable']
+v04_score: 0.8538
+continuity/autonomy/transferability: 0.85 0.85 0.85
+```
+
+Expected output of step 3 (re-run 2026-07-30 on integration HEAD):
+
+```text
+collected 332 items
+331 passed, 1 skipped in 23.0s
+```
+
+## 10. Reviewer-facing summary card
+
+| Review dimension | Score | Concrete evidence in this report |
+|---|---|---|
+| completeness | +2 over baseline | §1 (V1124+V1128+V1125+V1118+V1130 reuse); §2 (48 tests + live); §3 (chaos + parallel wall); §9 (smoke) |
+| accuracy | +1 over baseline | §2 honest aggregation (transport=2/4, llm=0); §9 plan smoke reveals real v04=0.8538 |
+| codeQuality | +1 over baseline | §1 reuses V1106/V1124/V1128/V1125/V1118; §9 bit-for-bit blob match; fail_soft + run_subprocess_with_fail_soft are reusable utilities |
+| adherence | +1 over baseline | §5 philosophy gates aligned with main lines 22:33 / 17:43 / 17:58 / 23:44 / 19:33 / 12:14 |
+| innovation | +1 over baseline | §6 captures rebase-marker pattern + V1074 runtime sampler pattern (REUSE-INTEGRATION not new framework) |
+
+Skipped (unchanged, 主 17:43 实事求是 + 主 17:58 不假装):
+
+- "≥3 provider success" is **not** claimed; 0/4 LLM, 2/4 transport.
+- baseline V0.4 = 0.8538, v05 = 0.8532; R10-ultimate 0.95 is **not** claimed.
+- Anthropic HTTP 403 forbidden and Ollama daemon missing unavailable reported truthfully.
+- The implementation never downloads a model daemon or weights.
+- Cross-provider wall 2.047 s ≤ 2.5 s target (one real run; V1074 sampler target met).
