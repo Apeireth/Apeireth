@@ -123,6 +123,17 @@ def _anthropic_spec() -> ProviderSpec:
     )
 
 
+def _openai_spec() -> ProviderSpec:
+    return ProviderSpec(
+        name="openai",
+        kind=ProviderKind.OPENAI,
+        model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+        base_url=os.getenv("OPENAI_BASE_URL"),
+        timeout_seconds=PROVIDER_TIMEOUT_SEC,
+    )
+
+
 def _ollama_spec() -> ProviderSpec:
     return ProviderSpec(
         name="ollama",
@@ -157,8 +168,11 @@ def _executable_spec() -> ProviderSpec:
 
 
 def default_cross_provider_plan(prompt: str = "Reply exactly with W3_OK") -> CrossProviderPlan:
+    # Task R10-BE-003 requires 4-provider forced parallel: Anthropic / OpenAI / Ollama / local.
+    # _executable_spec() is retained as a helper for tests that want to exercise stdin transport
+    # but is intentionally NOT in the default plan because the task explicitly enumerates the 4.
     return CrossProviderPlan(
-        specs=(_anthropic_spec(), _ollama_spec(), _local_cli_spec(), _executable_spec()),
+        specs=(_anthropic_spec(), _openai_spec(), _ollama_spec(), _local_cli_spec()),
         prompt=prompt,
     )
 
@@ -571,7 +585,7 @@ class V1130Backend:
     @staticmethod
     def _extract_specs(raw: Any) -> Tuple[ProviderSpec, ...]:
         if not raw:
-            return (_anthropic_spec(), _ollama_spec(), _local_cli_spec(), _executable_spec())
+            return default_cross_provider_plan().specs
         if not isinstance(raw, list):
             raise ValueError("providers must be a list of provider configurations")
         specs: List[ProviderSpec] = []
