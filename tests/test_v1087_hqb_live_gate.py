@@ -378,6 +378,11 @@ class TestGateStatsAggregator:
         assert s["by_policy"]["greedy"] == 1
 
     def test_avg_hqb_score(self):
+        # R9-QA-001 fix: V1087 aggregate() applies round(_, 4) by design (display
+        # precision for audit report). 4-decimal rounding causes ~3.3e-5 epsilon on
+        # 3-input mean (0.8/0.6/0.3 → 0.5666...). Threshold relaxed from 1e-6 to 1e-4
+        # to match the documented display precision. Algorithmic correctness is
+        # unaffected — see render_gate_audit_report ("**Avg HQB Score**: ...").
         agg = GateStatsAggregator()
         for score, v in [(0.8, "accept"), (0.6, "review"), (0.3, "reject")]:
             bd = HQBScoreBreakdown(score, score, score, score)
@@ -386,7 +391,7 @@ class TestGateStatsAggregator:
                 {"reject": 0.4, "accept": 0.7, "veto": 0.95}, True,
             ))
         s = agg.aggregate()
-        assert abs(s["avg_hqb_score"] - (0.8 + 0.6 + 0.3) / 3) < 1e-6
+        assert abs(s["avg_hqb_score"] - (0.8 + 0.6 + 0.3) / 3) < 1e-4
 
 
 # ============================================================
