@@ -684,17 +684,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-# ---------------------------------------------------------------------------
-# V1130 rebase-marker (R10-A2-003 retry): 验证 d1c049ce + 037b7dc 均已合入 integration,
-# 30 tests PASS, 0 conflict. 2026-07-30 (主 17:43 实事求是)
-# ---------------------------------------------------------------------------
-V1130_REBASE_MARKER_R10_A2_003 = "verified-already-merged"
-
-
-# V1130 rebase-marker (R10-A2-003 retry 2): verified d164be7 + d1c049ce + 037b7dc all merged.
-V1130_REBASE_MARKER_R10_A2_003_RETRY_2 = "verified-already-merged-retry2"
-
-
-# V1130 rebase-marker (R10-A2-003 retry 3): verified 6467c9c + d164be7 + d1c049ce + 037b7dc all merged.
-V1130_REBASE_MARKER_R10_A2_003_RETRY_3 = "verified-already-merged-retry3"
