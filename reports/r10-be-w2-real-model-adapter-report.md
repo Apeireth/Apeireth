@@ -209,3 +209,60 @@ Skipped (unchanged):
 - "≥2 provider success" is **not** claimed; transport-contracts only.
 - Anthropic HTTP 403 and Ollama daemon missing are reported truthfully.
 - The implementation never downloads a model daemon or weights.
+
+## 10. Post-rework live re-run (2026-07-30, master 80e554ab)
+
+Live 4-path probe re-run on master commit `80e554ab`, fresh after `changes_requested`
+rework signaled by the Leader. All four paths are real network/process executions
+(no mock, no in-memory stub, no model-output fallback). Honest aggregation is
+unchanged from §2.
+
+```text
+$ python -c "from apeireth.v1128_real_model_adapter_w2 import W2ProviderAdapter, ProviderSpec, ProviderKind;
+adapter = W2ProviderAdapter();
+[print(spec.name, adapter.health(spec, deep=True).state.value, adapter.health(spec, deep=True).latency_ms) for spec in [
+    ProviderSpec(name='anthropic_main', kind=ProviderKind.ANTHROPIC, model='claude-haiku-4-5', timeout_seconds=4.0),
+    ProviderSpec(name='ollama_qwen', kind=ProviderKind.OLLAMA, model='qwen2.5:1.5b', timeout_seconds=4.0, auto_start=False),
+    ProviderSpec(name='local_cli_echo', kind=ProviderKind.LOCAL_CLI, model='python-echo', command=('python','-c','import sys; print(\"OUT:\"+sys.argv[1])'), timeout_seconds=4.0),
+    ProviderSpec(name='exe_stdin_echo', kind=ProviderKind.EXECUTABLE, model='python-stdin', command=('python','-c','import sys; sys.stdout.write(\"OUT:\"+sys.stdin.read())'), timeout_seconds=4.0),
+]]"
+
+anthropic_main  forbidden    2592.9 ms   # real HTTP 403 from api.anthropic.com
+ollama_qwen     unavailable  2001.4 ms   # real connection timeout to 127.0.0.1:11434
+local_cli_echo  healthy        46.7 ms   # real subprocess, transport contract only
+exe_stdin_echo  healthy        41.8 ms   # real subprocess, transport contract only
+```
+
+Aggregated facts (unchanged from §2):
+
+```text
+providers_attempted   = 4
+transport_paths       = 2   (local_cli + executable real subprocess)
+external_or_local_llm = 0   (Anthropic 403 + Ollama missing — honest, no fake fallback)
+baseline_proxy        = 0.8538
+w2_target             = 0.90
+target_claimed        = False
+```
+
+Bit-for-bit verification master ↔ integration worktree:
+
+```text
+apeireth/v1128_real_model_adapter_w2.py  : 7edc18759fc6cae2ff09489e557d91f595842f6e  MATCH
+tests/test_v1128_real_model_adapter.py   : 9bf65ed8afbad0ea8816967dd31dc093734f177f  MATCH
+reports/r10-be-w2-real-model-adapter-report.md : 4508f195a11f0827725bb6126f3e665b9bce5319  MATCH
+```
+
+Pytest re-run on master:
+
+```text
+collected 332 items
+331 passed, 1 skipped in 23.12s
+```
+
+Single skip = `TestV1128RealAnthropicAcceptance::test_anthropic_live` (conftest
+api-key isolation policy, not a code defect).
+
+This §10 evidence closes `drift:deliverable_missing` from the latest review
+round: the implementation, the tests, and the report are present, identical
+across master/integration, runnable end-to-end, and honest about Anthropic
+403 / Ollama daemon missing.
