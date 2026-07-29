@@ -87,12 +87,15 @@ ROOT = Path(__file__).resolve().parents[1]
 # ---------------------------------------------------------------------------
 
 def _run(cmd: List[str], timeout: int = 90) -> Tuple[int, str, str, float]:
+    # ponytail: 加 encoding='utf-8' + errors='replace' 防 Windows GBK UnicodeDecodeError
+    # (主 23:44 干到底: 不让编码差异破守门)
     started = time.perf_counter()
     try:
-        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, timeout=timeout)
-        return p.returncode, p.stdout, p.stderr, round((time.perf_counter() - started) * 1000, 2)
+        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
+                           timeout=timeout, encoding="utf-8", errors="replace")
+        return p.returncode, p.stdout or "", p.stderr or "", round((time.perf_counter() - started) * 1000, 2)
     except subprocess.TimeoutExpired as exc:
-        return -1, exc.stdout or "", f"TIMEOUT after {timeout}s", round((time.perf_counter() - started) * 1000, 2)
+        return -1, (exc.stdout or "").decode("utf-8", errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or ""), f"TIMEOUT after {timeout}s", round((time.perf_counter() - started) * 1000, 2)
 
 
 def _parse_float(text: str, pattern: str, default: float = 0.0) -> float:
