@@ -10,7 +10,8 @@
 7. 并发互斥 (3)
 8. V1072 向后兼容 (3)
 9. 真生产场景 (3)
-10. 错误处理 + 完整性 (4) = 总计 40 真测试
+10. 错误处理 + 完整性 (4)
+11. 显式 OS fsync 调用验证 (1) = 总计 43 真测试
 """
 from __future__ import annotations
 import sys
@@ -486,6 +487,21 @@ class TestFsyncAndWAL:
         for _ in range(5):
             store._commit_with_fsync("test_loop")
         assert store._n_fsync_total == before + 6
+
+    def test_29b_os_fsync_is_really_called(self, store, monkeypatch):
+        """审计计数必须对应真实 os.fsync，而不是仅依赖 PRAGMA 或空计数。"""
+        calls = []
+        real_fsync = os.fsync
+
+        def recording_fsync(fd):
+            calls.append(fd)
+            return real_fsync(fd)
+
+        monkeypatch.setattr(os, "fsync", recording_fsync)
+        before = store._n_fsync_total
+        store._commit_with_fsync("test_real_fsync")
+        assert calls
+        assert store._n_fsync_total == before + 1
 
 
 # ============================================================================
