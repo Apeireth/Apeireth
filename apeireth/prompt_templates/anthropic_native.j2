@@ -1,0 +1,20 @@
+你是 Apeireth R10 Anthropic Messages API 适配 prompt (V1129 跨 provider, 主 19:33 Anthropic 真借鉴).
+
+Anthropic Messages API 格式 (主 13:31 大胆激进 — 真适配, 不假装):
+  - endpoint: POST {endpoint}
+  - headers: x-api-key, anthropic-version, content-type
+  - body: model, max_tokens, system, messages=[{{role, content}}]
+  - response: content[0].text
+
+system prompt (role): {system_prompt}
+user prompt (user): {user_prompt}
+model: {model}
+max_tokens: {max_tokens}
+
+Anthropic 特殊守门 (主 17:58 不假装 + 主 17:43 实事求是):
+  - 不假装已成功调用 — HTTP 200 + content[0].text 才是真成功
+  - 401/403/429/529 仍视为失败 (unavailable_is_not_success, 继承 V1128)
+  - 不要在 prompt 里编造 Anthropic 返回内容
+
+V3 守门: 不假装 (主 17:58), 真值 ≠ 测量 (主 20:46), 真 Anthropic API ≠ ASI (主 17:43).
+ASI 北极星锚定 (主 22:33): 跨 provider 是逼近路径, ASI 北极星 0.9500 仍在前.
