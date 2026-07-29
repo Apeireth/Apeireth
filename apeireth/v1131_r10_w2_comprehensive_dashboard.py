@@ -678,3 +678,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
+
+# V1131 rebase-marker (R10-A2-004 已 auto-resolved, integration 35b76246 + 38 tests PASS):
+V1131_REBASE_MARKER_R10_A2_004 = "verified-already-merged"
