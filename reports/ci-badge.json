@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "badge": {
+    "schemaVersion": 1,
+    "label": "cross-small-model-ci",
+    "message": "2/4 pass · lift -0.0125",
+    "color": "yellow",
+    "status": "mixed",
+    "pass_threshold": 0.5
+  },
+  "lift_summary": {
+    "n_loaded": 1,
+    "n_failed": 2,
+    "mean_delta": -0.0125,
+    "max_delta": -0.0125,
+    "min_delta": -0.0125,
+    "baseline_name": "fixture-7b-v1"
+  },
+  "computed_at": 1785333803.4118962,
+  "computed_at_iso": "2026-07-29T22:03:23+0800",
+  "n_models": 4,
+  "n_passed": 2,
+  "n_available": 2,
+  "avg_subscore": 0.4344,
+  "pass_threshold": 0.5
+}
