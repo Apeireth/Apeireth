@@ -1,0 +1,35 @@
+site_name: 阿佩瑞斯 Apeireth — R9 文档站
+site_description: 以 ASI 能力为终极梦想的 AI 基座平台
+site_author: technical_writer (R9-TW-001)
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: readthedocs
+  highlightjs: true
+
+nav:
+  - 首页: index.md
+  - R9 阶段:
+      - R9 架构总览: r9-architecture-overview.md
+      - R9 关键模块参考: r9-modules-reference.md
+      - R9 → R10 移交: r9-handoff-r10.md
+  - 架构模块:
+      - V1072 永恒身份: architecture/v1072-eternal-identity.md
+      - V1095 fsync 强制: architecture/v1095-fsync-enforcement.md
+      - V1112 DGM v0.4 演化: architecture/v1112-dgm-v04-evolution.md
+      - V1119 集成验证: architecture/v1119-integration-verifier.md
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - tables
+
+plugins:
+  - search
+
+extra:
+  generator: false
