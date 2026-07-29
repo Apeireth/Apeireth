@@ -422,8 +422,8 @@ R8 = R6→R7 收官后的第 8 阶段。锁定 **三大轨道并行推进**：
 | 11 | **r8-persona-prompts**（V1096 设计） | `reports/r8-persona-prompts-design.md` · 4 persona · ≥20 tests | ✅ 已交 |
 | 12 | r8-tracka1（HotCold/WAL） | `apeireth/v1090_memory_wal.py` 623 LOC 真生产 | 🟡 源码已落 / 报告待 R9 收口 |
 | 13 | r8-trackb2（富化完整度测量） | `apeireth/kickoff_enrichment.py` PoC 已跑通 | 🟡 PoC 已落 / 测量报告待 R9 |
-| 14 | r8-trackc（自演化真跑 N 轮） | `apeireth/v1093_dgm_archive.py` 160 LOC + `v1098_dgm_perf.py` | 🟡 源码已落 / 跑 N 轮待 R9 |
-| 15 | r8-security | reports/r8-security-* | ⏳ 待产（继承 R6-SR-01 + R7 安全状态） |
+| 14 | **r8-trackc**（自演化真跑 N 轮 + DGM Archive v0.3 升级） | `reports/r8-trackc-self-evolution-runs.md` · 3 方法 × 9 iter = 27 真演化轮次 · V1093 v0.3 · 4 DGM patch · ASI Δ≈-0.166 | ✅ 已交（agent_orchestrator） |
+| 15 | **r8-security**（V3 安全门验证 Track A/B/C） | `reports/r8-v3-2026-07-28-security-review.md` · **结论 FAIL→已修复 P0** · 新增 32 安全回归测试全过 | ✅ 已交（security_reviewer） |
 | 16 | r8-code-review | reports/r8-code-review-* | ⏳ 待产（继承 R6-CR-01 + R7 评审状态） |
 
 > **大白话注释**：标 ⏳ 的 = 计划要写但还没动笔；✅ = 已存档可读。
