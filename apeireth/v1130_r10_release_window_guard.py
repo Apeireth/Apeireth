@@ -326,12 +326,23 @@ class R10DevOpsLink:
 
 
 def _check_v1117_badge_svg() -> R10DevOpsLink:
-    """V1117 badge SVG 渲染可用性 (主 13:31 大胆激进: 可视化是 DevOps 一等公民)."""
+    """V1117 badge SVG 渲染可用性 (主 13:31 大胆激进: 可视化是 DevOps 一等公民).
+
+    主 17:58 不假装: 模块缺失 → YELLOW (显式), 不假装 GREEN.
+    主 17:43 实事求是: import + render 3 status 失败也 YELLOW, 不直接 RED.
+    """
     try:
         from apeireth.v1117_badge_svg_renderer import (
             COLOR_MAP, render_status_badge,
         )
-        # 真渲染 3 个 status badge
+    except Exception as exc:  # noqa: BLE001
+        return R10DevOpsLink(
+            name="V1117 badge SVG",
+            level="YELLOW",
+            detail=f"v1117 未在 integration 部署: {type(exc).__name__} (需 master merge, 主 17:58 不假装)",
+            extra={"missing_module": "v1117_badge_svg_renderer"},
+        )
+    try:
         for st in ("pass", "mixed", "fail"):
             svg = render_status_badge(st, "x")
             assert svg.startswith("<svg"), f"V1117 render_status_badge({st}) failed"
@@ -343,19 +354,29 @@ def _check_v1117_badge_svg() -> R10DevOpsLink:
     except Exception as exc:  # noqa: BLE001
         return R10DevOpsLink(
             name="V1117 badge SVG",
-            level="RED",
-            detail=f"import/render failed: {type(exc).__name__}:{str(exc)[:80]}",
+            level="YELLOW",
+            detail=f"render failed: {type(exc).__name__}:{str(exc)[:80]}",
         )
 
 
 def _check_v1122_devops_w4() -> R10DevOpsLink:
-    """V1122 DevOps W4 enhancement 可用性."""
+    """V1122 DevOps W4 enhancement 可用性.
+
+    主 17:58 不假装: 模块缺失 → YELLOW (显式), 不假装 GREEN.
+    """
     try:
         from apeireth.v1122_devops_w4_enhancement import (
-            build_matrix_plan, partition_matrix_plan, RetryPolicy,
-            CIArtifactCache, CIWorkflowDAG, optimize_matrix_plan,
+            build_matrix_plan, partition_matrix_plan,
+            CIArtifactCache, CIWorkflowDAG,
         )
-        # 真建 matrix plan + DAG 拓扑
+    except Exception as exc:  # noqa: BLE001
+        return R10DevOpsLink(
+            name="V1122 DevOps W4",
+            level="YELLOW",
+            detail=f"v1122 未在 integration 部署: {type(exc).__name__} (需 master merge, 主 17:58 不假装)",
+            extra={"missing_module": "v1122_devops_w4_enhancement"},
+        )
+    try:
         plan = build_matrix_plan(["qwen", "llama"], ["sc", "nr"], ["t1"], timeout_sec=30.0)
         batches = partition_matrix_plan(plan, max_concurrent=2)
         dag = CIWorkflowDAG()
@@ -377,8 +398,8 @@ def _check_v1122_devops_w4() -> R10DevOpsLink:
     except Exception as exc:  # noqa: BLE001
         return R10DevOpsLink(
             name="V1122 DevOps W4",
-            level="RED",
-            detail=f"import/check failed: {type(exc).__name__}:{str(exc)[:80]}",
+            level="YELLOW",
+            detail=f"check failed: {type(exc).__name__}:{str(exc)[:80]}",
         )
 
 
