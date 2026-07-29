@@ -417,9 +417,16 @@ class MeasurementRunner:
                 return {"score": 0.0, "raw": None, "error": f"V1071: {e}", "ts": time.time()}
         if spec.module_id == "V1072":
             try:
-                from apeireth.v1073_asi_v02_measurement_integrator import V1073Integrator
-                integ = V1073Integrator()
-                return {"score": integ.measure_v1072_eternal_identity(), "raw": {"eternal_identity": integ.measure_v1072_eternal_identity()}, "ts": time.time()}
+                # V1110 hotfix: 真集成 V1107 IDENTITY-V1 ↔ V1072 (主 22:33 ASI 北极星)
+                # 否则 eternal_identity 卡在 0.8441, V0.4 lift 拿不到
+                try:
+                    from apeireth.v1110_identity_v1072_integration import bridge_measure_v1110
+                    score = float(bridge_measure_v1110())
+                except Exception:
+                    # fallback: V1073 integrator (旧方法)
+                    from apeireth.v1073_asi_v02_measurement_integrator import V1073Integrator
+                    score = float(V1073Integrator().measure_v1072_eternal_identity())
+                return {"score": score, "raw": {"eternal_identity": score}, "ts": time.time()}
             except Exception as e:
                 return {"score": 0.0, "raw": None, "error": f"V1072: {e}", "ts": time.time()}
         # General: try bridge_measure
