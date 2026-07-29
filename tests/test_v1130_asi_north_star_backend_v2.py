@@ -76,10 +76,15 @@ def test_guards_contain_fail_soft():
     assert len(V3_GUARDS) >= 5
 
 
-def test_default_plan_has_four_real_specs():
+def test_default_plan_has_four_task_specs():
+    # R10-BE-003 task description enumerates Anthropic / OpenAI / Ollama / local
+    # as the forced-parallel set; executable (stdin) is retained as a helper but
+    # is intentionally not part of the default plan.
     plan = default_cross_provider_plan("ping")
     assert len(plan.specs) == 4
-    assert {spec.kind for spec in plan.specs} == set(ProviderKind)
+    expected = {ProviderKind.ANTHROPIC, ProviderKind.OPENAI,
+                ProviderKind.OLLAMA, ProviderKind.LOCAL_CLI}
+    assert {spec.kind for spec in plan.specs} == expected
 
 
 def test_plan_requires_prompt():

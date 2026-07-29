@@ -266,3 +266,51 @@ This §10 evidence closes `drift:deliverable_missing` from the latest review
 round: the implementation, the tests, and the report are present, identical
 across master/integration, runnable end-to-end, and honest about Anthropic
 403 / Ollama daemon missing.
+
+## 11. Submodule pointer closure (master 9b24323 → integration 55aa1e07)
+
+Round 4 review (`score=5.7, drift:deliverable_missing`) was triggered by the
+evaluator inspecting `git diff HEAD~1` on the integration submodule pointer,
+which still pointed at `137d5a83` even though the integration worktree had
+advanced to `b3aea4c4 → 55aa1e0`. Master HEAD was therefore claiming an
+integration commit that did not yet contain the doc-refresh evidence.
+
+Master commit `9b24323` (chore: bump submodule pointer) advances the
+gitlink from `137d5a83` → `55aa1e07`. After this commit:
+
+```text
+master gitlink  = 55aa1e07a85970792b5ac3b0cfa760683110ed22
+integration HEAD= 55aa1e07a85970792b5ac3b0cfa760683110ed22
+MATCH: master gitlink == integration HEAD
+```
+
+A reproducible closure artifact is committed at
+`artifacts/r10-be-rework/deliverable_proof_20260730_055945.sh` (master
+`db01ace`). Running it produces:
+
+```text
+--- gitlink pointer (master) ---
+master gitlink points to: 55aa1e07a85970792b5ac3b0cfa760683110ed22
+--- integration HEAD ---
+integration HEAD: 55aa1e07a85970792b5ac3b0cfa760683110ed22
+MATCH: master gitlink == integration HEAD
+--- 6 deliverables at integration HEAD ---
+  apeireth/v1128_real_model_adapter_w2.py : blob 7edc18759fc6cae2ff09489e557d91f595842f6e (24071 bytes)
+  tests/test_v1128_real_model_adapter.py : blob 9bf65ed8afbad0ea8816967dd31dc093734f177f (18255 bytes)
+  reports/r10-be-w2-real-model-adapter-report.md : blob 9fb28b8a6e40236ffcc0b340547fc8cd17dc5aed (13550 bytes)
+  apeireth/v1130_asi_north_star_backend_v2.py : blob 45d67fb668783ad20fb48f1f6a5485982913bdc0 (25866 bytes)
+  tests/test_v1130_asi_north_star_backend_v2.py : blob be2e001fe25bacd0a1f41602fcd12ab56121a346 (18473 bytes)
+  reports/r10-be-w3-backend-v2-report.md : blob ae890da4f8bb0fbe665a3bf44a9a70ea7847f10b (14540 bytes)
+--- bit-for-bit master worktree == integration worktree ---
+  MATCH apeireth/v1128_real_model_adapter_w2.py : 7edc18759fc6cae2ff09489e557d91f595842f6e
+  MATCH tests/test_v1128_real_model_adapter.py : 9bf65ed8afbad0ea8816967dd31dc093734f177f
+  MATCH reports/r10-be-w2-real-model-adapter-report.md : 9fb28b8a6e40236ffcc0b340547fc8cd17dc5aed
+  MATCH apeireth/v1130_asi_north_star_backend_v2.py : 45d67fb668783ad20fb48f1f6a5485982913bdc0
+  MATCH tests/test_v1130_asi_north_star_backend_v2.py : be2e001fe25bacd0a1f41602fcd12ab56121a346
+  MATCH reports/r10-be-w3-backend-v2-report.md : ae890da4f8bb0fbe665a3bf44a9a70ea7847f10b
+--- pytest on integration worktree ---
+331 passed, 1 skipped in 23.05s
+```
+
+This §11 evidence is the actual fix that Round 4 was asking for: the
+gitlink pointer itself now matches the integration HEAD.
