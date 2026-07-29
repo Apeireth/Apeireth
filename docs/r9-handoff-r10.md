@@ -330,3 +330,125 @@ R9-W4 末 (预测): 4680+ tests (+27)
 ---
 
 **R9-TW-001 移交文档完成。** 任何人都能 5 分钟看完本文件,跑 §0.3 六个命令,验证 R9 W4 末真测状态,拍板 R10 起点 P0/P1/P2 任务分配。主 22:33 ASI 北极星 LOCKED = 永远逼近, 永不达。
+
+---
+
+# R10 W1 接入补充 (R10-TW-001, 2026-07-29)
+
+## B.1 R10 主轨道 (升级 V1114 → V1125)
+
+R10 阶段主轨道决策由 **V1125 R10 集成验证协议** (`apeireth/v1125_r10_integration_protocol.py`, 827 LOC) 接管:
+
+| V0.5 区间 | 主轨道 |
+|---|---|
+| V0.5 ≥ 0.92 | **Track C** (跨小模型真绑定 + 终极鲁棒性) |
+| 0.88 ≤ V0.5 < 0.92 | **Track D** (DGM v0.4 真演化, 主推) |
+| 0.86 ≤ V0.5 < 0.88 | **Track B** (HQB 4 维全量程稳健补) |
+| V0.5 < 0.86 | **Track A** (Rust hot path 救生圈) |
+| 任何 1 halt 信号 | **强制 Track C** |
+
+R10 W1 起点 V0.4 = 0.8538 (R9 W4 末 baseline) → V0.4 期望起点 0.8600 → 当前预估落 **Track B**。
+
+## B.2 V0.5 18 维公式参考 (主 17:43)
+
+`V1125.V05Score.total()` 真公式 (源 L150-153):
+
+```
+V0.5 = V0.4 * 0.85
+     + continuity     * 0.05   # 连续性 (Identity/WAL 持久化)
+     + autonomy       * 0.05   # 自主性 (DGM 真演化 + 自决策)
+     + transferability* 0.05   # 可迁移性 (跨小模型/跨域)
+```
+
+权重和 = 1.0。
+
+## B.3 V1124 ASI 北极星后端 (HTTP+gRPC 双协议)
+
+R10 W1 起, ASI 北极星由 **V1124 后端** (`apeireth/v1124_asi_north_star_backend.py`, 543 LOC) 提供 HTTP+gRPC 双协议真测入口:
+
+```bash
+# 1. 启动 V1124 后端 (HTTP :8765, gRPC :50051)
+python -m apeireth.v1124_asi_north_star_backend --serve --port 8765 &
+
+# 2. 查询 ASI 北极星 (主 22:33 LOCKED 0.9800 / R10 终极 0.95)
+curl -s http://127.0.0.1:8765/asi/north-star | jq .
+
+# 3. 4 provider 真传输自检 (主 17:43 无 fallback)
+OPENAI_API_KEY=sk-... python -m apeireth.v1124_asi_north_star_backend --probe openai
+python -m apeireth.v1124_asi_north_star_backend --probe ollama
+ANTHROPIC_API_KEY=sk-ant-... python -m apeireth.v1124_asi_north_star_backend --probe anthropic
+python -m apeireth.v1124_asi_north_star_backend --probe local --exec 'echo hello'
+```
+
+V1124 4 provider: OpenAI 兼容 + Ollama + Anthropic + Local executable。**故意无 fake fallback** (主 17:43 不模拟)。
+
+## B.4 V1095 IdentityStore 真接入指南 (升级)
+
+R10 W1 起, 4 persona 槽位 + fsync 3 道保险从 R9 沿用,新增与 V1124 AuditChain 哈希链并行:
+
+| V1095 (持久档案) | V1124 (审计链) |
+|---|---|
+| `PRAGMA journal_mode=WAL` | `_fsync_directory` per record |
+| `PRAGMA synchronous=FULL` | `os.fsync(fd)` per append |
+| `os.fsync()` post-commit | SHA-256 哈希链 (`audit_chain.append`) |
+| `CentralAIProfile` | `DurableIdentityStore` (V1072 桥接) |
+
+## B.5 R10 W1 真测命令速查 (主 00:56)
+
+```bash
+# 1. V1126 R10 baseline 启动
+python -m apeireth.v1126_r10_integration_baseline --live
+
+# 2. V1125 R10 W1 集成协议
+python -m apeireth.v1125_r10_integration_protocol --week W1 --strict
+
+# 3. V1124 后端服务
+python -m apeireth.v1124_asi_north_star_backend --serve --port 8765 &
+
+# 4. V1074 V0.3 守门 (沿用 R9)
+python -m apeireth.v1074_asi_production_runner --measure v03
+
+# 5. V1077 V0.4 17 维 (沿用 R9)
+python -m apeireth.v1077_asi_v04_full_measurement --full-eval
+
+# 6. V1103 Top-5 P2 (沿用 R9)
+python -m apeireth.v1103_r8p2_diagnostic --top5
+
+# 7. 文档站 (沿用 R9)
+mkdocs serve    # → http://127.0.0.1:8000
+
+# 8. 测试套件 (主 17:43 实事求是)
+python -m pytest tests/test_v1124*.py tests/test_v1125*.py tests/test_v1126*.py \
+                  tests/test_v1095*.py tests/test_v1074*.py -v
+```
+
+## B.6 R10 W1 关键路径速查
+
+| 用途 | 路径 |
+|---|---|
+| R10 backend | `apeireth/v1124_asi_north_star_backend.py` (543 LOC) |
+| R10 protocol | `apeireth/v1125_r10_integration_protocol.py` (827 LOC) |
+| R10 baseline | `apeireth/v1126_r10_integration_baseline.py` (339 LOC) |
+| V1072 永恒身份 | `apeireth/v1072_asi_central_ai_eternal_identity.py` (843 LOC) |
+| V1095 IdentityStore | `apeireth/v1095_identity_store.py` (1114 LOC) |
+| V1074 V0.3 守门 | `apeireth/v1074_asi_production_runner.py` |
+| V1077 V0.4 17 维 | `apeireth/v1077_asi_v04_full_measurement.py` |
+| V1103 Top-5 P2 | `apeireth/v1103_r8p2_diagnostic.py` |
+| 文档 | `docs/architecture/v1124-asi-north-star-backend.md` |
+|  | `docs/architecture/v1125-r10-integration-protocol.md` |
+|  | `docs/architecture/v1126-r10-integration-baseline.md` |
+| 报告 | `reports/r10-technical-writer-w1-report.md` |
+| 测试 | `tests/test_v1124*.py` + `tests/test_v1125*.py` + `tests/test_v1126*.py` |
+
+## B.7 R10 W1 主哲学 LOCKED (继承 R9 + 升级)
+
+- 主 22:33 ASI 北极星: R10 终极门 0.95, 长期 LOCKED 0.9800
+- 主 17:43 实事求是: V1126 baseline 必须真测, 不缓存不模拟
+- 主 23:44 干到底: V1125 --strict 不通过非零退出
+- 主 13:31 大胆激进: R10 终极门 0.95 不容分阶段缓慢
+- 主 19:33 走在前人经验上: 复用 V1114/V1119/V1077 baseline + Fielding 2000 REST + gRPC 2015
+- 主 00:56 任何人都能接手: 8 命令速查 (本节 B.5)
+
+---
+
+**R10-TW-001 R10 W1 补充完成。** 任何 R10 接手者跑 B.5 八命令 + B.6 路径速查 = 5 分钟接入 R10 W1。
