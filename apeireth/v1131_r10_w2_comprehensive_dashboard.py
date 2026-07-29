@@ -678,10 +678,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
-
-# V1131 rebase-marker (R10-A2-004 已 auto-resolved, integration 35b76246 + 38 tests PASS):
-V1131_REBASE_MARKER_R10_A2_004 = "verified-already-merged"
-
-
-# V1131 rebase-marker R10-A2-004 (第 3/3 次重派): verified cbdb9ca + 35b76246 + 8ad8580 all merged.
-V1131_REBASE_MARKER_R10_A2_004_RETRY_3 = "verified-already-merged-retry3"
