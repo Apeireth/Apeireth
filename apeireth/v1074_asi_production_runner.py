@@ -61,6 +61,7 @@ import sys
 import textwrap
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from pathlib import Path
@@ -108,6 +109,13 @@ DEFAULT_ARTIFACTS: Dict[str, str] = {
     "decision_json": "asi_decision.json",
     "history_jsonl": "asi_history.jsonl",
 }
+
+# V1100: 每行只存这些字段，避免 score_history 整 snapshot 递归导致 21GB
+DELTA_KEYS: Tuple[str, ...] = (
+    "snapshot_id", "ts", "ts_iso", "version",
+    "v03_score", "v02_base", "level", "level_score",
+    "n_modules", "n_tests", "n_commits",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -283,19 +291,23 @@ class StatusSnapshotBuilder:
         path = history_path or (self.project_dir / DEFAULT_DATA_DIR / DEFAULT_ARTIFACTS["history_jsonl"])
         if not path.exists():
             return []
-        history: List[Dict[str, Any]] = []
+        history: deque[Dict[str, Any]] = deque(maxlen=50)
         try:
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    history.append(json.loads(line))
-                except Exception:
-                    pass
+            # V1100: 流式读取并限制最近 50 条，避免旧递归 JSONL 一次性加载进内存。
+            with path.open("r", encoding="utf-8") as history_file:
+                for line in history_file:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                        if isinstance(record, dict):
+                            history.append(record)
+                    except Exception:
+                        pass
         except Exception:
             pass
-        return history
+        return list(history)
 
     def build(self, history_path: Optional[Path] = None) -> StatusSnapshot:
         """V1074 真建快照 (主 17:43 实事求是)."""
