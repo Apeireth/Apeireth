@@ -116,6 +116,10 @@ class ModuleInfo:
     version: Optional[str] = None
     docstring_preview: Optional[str] = None
     check_time: float = 0.0
+    # V1106 engineering lift (主 17:43 实事求是): detect ENGINEERING_CAPABILITIES marker
+    engineering_capabilities_count: int = 0
+    engineering_capabilities_sample: List[str] = field(default_factory=list)
+    has_engineering_harness: bool = False
 
 @dataclass
 class OrchestratorReport:
@@ -257,6 +261,18 @@ class ModuleImporter:
                         if line and len(line) > 10:
                             info.docstring_preview = line[:120]
                             break
+
+                # V1106 engineering lift: detect ENGINEERING_CAPABILITIES marker (主 17:43 实事求是)
+                eng_caps = getattr(mod, "ENGINEERING_CAPABILITIES", None)
+                if eng_caps is not None:
+                    try:
+                        caps_list = sorted(list(eng_caps))
+                        info.engineering_capabilities_count = len(caps_list)
+                        info.engineering_capabilities_sample = caps_list[:5]
+                        # harness = 5+ capabilities (V1106 baseline)
+                        info.has_engineering_harness = len(caps_list) >= 5
+                    except Exception:
+                        pass
 
                 # Check key attributes
                 if level in (CheckLevel.STANDARD, CheckLevel.DEEP):
