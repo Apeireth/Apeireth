@@ -108,6 +108,46 @@ class TestV1092DreamGate:
         with pytest.raises(Exception):
             c.cid = "tampered"  # type: ignore[misc]
 
+    def test_dream_candidate_rejects_construction_with_dream_false(self):
+        with pytest.raises((TypeError, ValueError)):
+            DreamCandidate(
+                cid="x", premise_nids=("n",), scenario="s",
+                bindings=(), confidence=0.5, schema_phase="assimilation",
+                _dream=False,  # type: ignore[call-arg]
+            )
+
+    def test_dream_candidate_rejects_invalid_confidence(self):
+        with pytest.raises(ValueError):
+            DreamCandidate(
+                cid="x", premise_nids=("n",), scenario="s",
+                bindings=(), confidence=1.7, schema_phase="assimilation",
+            )
+        with pytest.raises(ValueError):
+            DreamCandidate(
+                cid="x", premise_nids=("n",), scenario="s",
+                bindings=(), confidence=-0.1, schema_phase="assimilation",
+            )
+
+    def test_dream_candidate_rejects_unknown_schema_phase(self):
+        with pytest.raises(ValueError):
+            DreamCandidate(
+                cid="x", premise_nids=("n",), scenario="s",
+                bindings=(), confidence=0.5, schema_phase="fictional_phase",
+            )
+
+    def test_consolidate_keeps_only_dream_flagged_candidates(self):
+        d = MemoryDream(seed=42)
+        real = d.dream([MtmNote("n1", "t", "c", 0.9, 0.9)])[0]
+        # Manually craft an impostor: identical fields, but _dream=False via __dict__.
+        impostor_dict = real.to_dict()
+        impostor_dict["_dream"] = False
+        impostor_dict["cid"] = "dream-impostor"
+        impostor = DreamCandidate(**{k: v for k, v in impostor_dict.items() if k != "_dream"})
+
+        consolidated = d.consolidate_to_ltm_candidate([real, impostor])
+
+        assert all(cand._dream is True for cand in consolidated)
+
 
 # ============================================================
 # phase 选择 — assimilation / accommodation / replay
@@ -268,6 +308,15 @@ class TestV1092Dedupe:
         a = d.dream(notes, context={"topic": "alpha"})
         b = d.dream(notes, context={"topic": "beta"})
         assert a[0].cid != b[0].cid
+
+    def test_dedupe_distinguishes_claims_for_same_nid(self):
+        """同 nid 不同 claim 应当产出不同 cid (避免误去重吞掉真实分歧)."""
+        d = MemoryDream(seed=42)
+        first = d.dream([MtmNote("n1", "safety", "no harm", 0.8, 0.6)])
+        second = d.dream([MtmNote("n1", "safety", "may trade risk for benefit", 0.8, 0.6)])
+
+        assert first[0].cid != second[0].cid
+        assert len(d._dedupe_cache) >= 2
 
 
 # ============================================================

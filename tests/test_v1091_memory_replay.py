@@ -111,19 +111,16 @@ class TestV1091CaptureRestore:
         bogus = StateID(scope="ghost", seq=999, content_hash="xx")
         assert mr.restore_state(bogus) is False
 
-    def test_restore_rebuilds_pre_checkpoint_state(self):
+    def test_restore_rolls_back_to_exact_checkpoint_state(self):
         mr = MemoryReplay()
         mr.apply_event("s", Event("e1", 1.0, "tag_set", (("orig", "yes"),)))
         sid = mr.capture_state("s")
-        # post-checkpoint 写入
-        mr.apply_event("s", Event("e2", 1.0, "tag_set", (("added", "yes"),)))
+        mr.apply_event("s", Event("e2", 2.0, "tag_set", (("added", "yes"),)))
         assert "added" in mr._live_state.get("tags", {})
-        mr.restore_state(sid)
-        # live state 回到 checkpoint 处, 但之后的 events 重新应用
-        assert "orig" in mr._live_state.get("tags", {})
-        # added 也应在 (restore 语义: 回滚到 cp 然后重放 cp 之后的事件)
-        # 这是文档化的语义: restore = 回滚此点然后继续增量跑
-        assert "added" in mr._live_state.get("tags", {})
+
+        assert mr.restore_state(sid) is True
+
+        assert mr._live_state.get("tags", {}) == {"orig": "yes"}
 
     def test_capture_state_with_empty_scope_allowed(self):
         mr = MemoryReplay()
@@ -147,11 +144,14 @@ class TestV1091ReplayEvents:
         events = list(mr.replay_events(0.0, 10.0))
         assert events == []
 
-    def test_replay_inclusive_boundaries(self):
+    def test_replay_uses_half_open_boundaries(self):
         mr = MemoryReplay()
-        mr.apply_event("s", Event("e1", 5.0, "tag_set", (("k", "v"),)))
-        events = list(mr.replay_events(5.0, 5.0))
-        assert len(events) == 1  # boundary inclusive
+        mr.apply_event("s", Event("lower", 5.0, "tag_set", (("k", "v1"),)))
+        mr.apply_event("s", Event("upper", 6.0, "tag_set", (("k", "v2"),)))
+
+        events = list(mr.replay_events(5.0, 6.0))
+
+        assert [event.event_id for event in events] == ["upper"]
 
     def test_replay_excludes_outside_window(self):
         mr = MemoryReplay()
@@ -175,6 +175,15 @@ class TestV1091ReplayEvents:
         events = list(mr.replay_events(0.0, 100.0))
         seqs = [int(ev.event_id[1:]) for ev in events]
         assert seqs == sorted(seqs)
+    def test_replay_ordered_by_event_timestamp(self):
+        mr = MemoryReplay()
+        mr.apply_event("s", Event("late", 30.0, "tag_set", (("k", "late"),)))
+        mr.apply_event("s", Event("early", 10.0, "tag_set", (("k", "early"),)))
+        mr.apply_event("s", Event("middle", 20.0, "tag_set", (("k", "middle"),)))
+
+        events = list(mr.replay_events(0.0, 100.0))
+
+        assert [event.ts for event in events] == [10.0, 20.0, 30.0]
 
 
 # ============================================================
@@ -206,14 +215,32 @@ class TestV1091DiffStates:
         diff = mr.diff_states(sid_a, bogus)
         assert diff == StateDiff()
 
+    def test_diff_is_symmetric_up_to_sign(self):
+        mr = MemoryReplay()
+        sid_a = mr.capture_state("a")
+        mr.apply_event("s", Event("e1", 1.0, "tag_set", (("k", "v"),)))
+        sid_b = mr.capture_state("b")
+
+        forward = mr.diff_states(sid_a, sid_b)
+        reverse = mr.diff_states(sid_b, sid_a)
+
+        assert forward.added == reverse.removed
+        assert forward.removed == reverse.added
+        assert forward.changed == tuple((after, before) for before, after in reverse.changed)
+
     def test_diff_detects_payload_change(self):
         mr = MemoryReplay()
         mr.apply_event("s", Event("e1", 1.0, "tag_set", (("k", "v1"),)))
         sid_a = mr.capture_state("a")
-        mr.apply_event("s", Event("e1", 1.0, "tag_set", (("k", "v2"),)))
+        mr.apply_event("s", Event("e2", 2.0, "tag_set", (("k", "v2"),)))
         sid_b = mr.capture_state("b")
+
         diff = mr.diff_states(sid_a, sid_b)
-        assert len(diff.changed) >= 0  # may be empty depending on WAL semantics; check no crash
+
+        assert len(diff.changed) == 1
+        before, after = diff.changed[0]
+        assert dict(before.payload) == {"k": "v1"}
+        assert dict(after.payload) == {"k": "v2"}
 
 
 # ============================================================
@@ -246,14 +273,19 @@ class TestV1091IdempotentApply:
         assert r1.event_hash == r2.event_hash
         assert r2.cached is True
 
-    def test_apply_different_payloads_independent(self):
+    def test_same_event_id_with_different_payload_is_rejected(self):
         mr = MemoryReplay()
         ev1 = Event("e1", 1.0, "tag_set", (("k", "v1"),))
-        ev2 = Event("e1", 1.0, "tag_set", (("k", "v2"),))
-        r1 = mr.idempotent_apply(ev1)
-        r2 = mr.idempotent_apply(ev2)
-        assert r1.cached is False
-        assert r2.cached is False
+        ev2 = Event("e1", 2.0, "tag_set", (("k", "v2"),))
+
+        first = mr.idempotent_apply(ev1)
+        second = mr.idempotent_apply(ev2)
+
+        assert first.status == "applied"
+        assert second.status == "rejected"
+        assert "event_id" in second.reason
+        assert mr._live_state["tags"]["k"] == "v1"
+        assert len(mr._wal) == 1
 
     def test_apply_updates_live_state(self):
         mr = MemoryReplay()
@@ -344,6 +376,45 @@ class TestV1091WalPersistence:
         events = list(mr2.replay_events(0.0, 100.0))
         assert len(events) == 2
 
+    def test_recovery_rebuilds_live_state_from_wal(self, tmp_path: Path):
+        wal = tmp_path / "wal.jsonl"
+        writer = MemoryReplay(wal_path=wal)
+        writer.apply_event("s", Event("e1", 1.0, "tag_set", (("first", "yes"),)))
+        writer.apply_event("s", Event("e2", 2.0, "tag_set", (("second", "yes"),)))
+
+        recovered = MemoryReplay(wal_path=wal)
+
+        assert recovered._live_state["tags"] == {"first": "yes", "second": "yes"}
+
+    def test_checkpoint_restore_survives_restart(self, tmp_path: Path):
+        wal = tmp_path / "wal.jsonl"
+        writer = MemoryReplay(wal_path=wal)
+        writer.apply_event("s", Event("before", 1.0, "tag_set", (("before", "yes"),)))
+        state_id = writer.capture_state("session-1")
+        writer.apply_event("s", Event("after", 2.0, "tag_set", (("after", "yes"),)))
+
+        recovered = MemoryReplay(wal_path=wal)
+        assert recovered.restore_state(state_id) is True
+        assert recovered._live_state["tags"] == {"before": "yes"}
+
+        restarted_again = MemoryReplay(wal_path=wal)
+        assert restarted_again._live_state["tags"] == {"before": "yes"}
+
+    def test_structurally_malformed_json_record_is_skipped(self, tmp_path: Path):
+        wal = tmp_path / "wal.jsonl"
+        wal.write_text(json.dumps({
+            "sequence": 1,
+            "ts": 1.0,
+            "scope": "s",
+            "event": [],
+            "checksum": "not-relevant",
+        }) + "\n", encoding="utf-8")
+
+        recovered = MemoryReplay(wal_path=wal)
+
+        assert recovered._wal == []
+        assert recovered._skipped_corrupt == 1
+
     def test_corrupt_json_line_skipped(self, tmp_path: Path):
         wal = tmp_path / "wal.jsonl"
         # 写入混合: 1 正常 + 1 损坏 + 1 正常
@@ -386,6 +457,19 @@ class TestV1091WalPersistence:
             mr1.apply_event("s", Event(f"e{i}", float(i), "tag_set"))
         mr2 = MemoryReplay(wal_path=wal)
         assert mr2._seq == 5
+
+    def test_continue_appending_after_recovery_preserves_monotonic_seq(self, tmp_path: Path):
+        wal = tmp_path / "wal.jsonl"
+        first = MemoryReplay(wal_path=wal)
+        first.apply_event("s", Event("e0", 0.5, "tag_set", (("k", "v0"),)))
+        first.apply_event("s", Event("e1", 1.0, "tag_set", (("k", "v1"),)))
+
+        resumed = MemoryReplay(wal_path=wal)
+        new_seq = resumed.apply_event("s", Event("e2", 2.0, "tag_set", (("k", "v2"),)))
+
+        assert new_seq == 3
+        events = list(resumed.replay_events(0.0, 10.0))
+        assert [event.event_id for event in events] == ["e0", "e1", "e2"]
 
     def test_verify_wal_after_recovery(self, tmp_path: Path):
         wal = tmp_path / "wal.jsonl"
