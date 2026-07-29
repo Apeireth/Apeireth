@@ -9,7 +9,7 @@
 
 ## 0. 一句话结论
 
-> **V1095 Identity Store PoC 交付完成**：中央 AI 持久身份 + 4 persona 槽位 + sync/async 上下文管理器切换 + SQLite WAL 真 fsync 持久化 + V1072 向后兼容。**42 真测试 100% 通过**（含跨进程 subprocess 验证），相邻模块（V1072、HQB integration）56 测试零回归。ASI V0.3 子分贡献：**profile_persistence + persona_diversity + switch_auditability**，预计 +0.005~+0.01 lift。
+> **V1095 Identity Store PoC 交付完成**：中央 AI 持久身份 + 4 persona 槽位 + sync/async 上下文管理器切换 + SQLite WAL 真 fsync 持久化 + V1072 向后兼容。**43 真测试 100% 通过**（含跨进程 subprocess 与显式 `os.fsync` 调用验证），相邻模块（V1072、HQB integration）零回归。ASI V0.3 子分贡献：**profile_persistence + persona_diversity + switch_auditability**，预计 +0.005~+0.01 lift。
 
 ---
 
@@ -33,7 +33,7 @@
 | 文件 | 行数 | 内容 |
 |------|------|------|
 | `apeireth/v1095_identity_store.py` | 1055 | 主模块（IdentityStoreV1095 + PersonaSlot + CentralAIProfile + PersonaSwitch） |
-| `tests/test_v1095_identity_store.py` | 755 | 42 真测试（10 大类全覆盖） |
+| `tests/test_v1095_identity_store.py` | 约 770 | 43 真测试（10 大类全覆盖：profile/persona/切换/跨进程/fsync/并发/V1072 兼容） |
 | `reports/r8-trackb2-identity-poc-delivery.md` | 本文件 | 交付报告 |
 
 ---
@@ -160,7 +160,7 @@ with store.profile_context(target_pid=..., reason="...") as active:
 
 | 维度 | V1095 实测 | 不假装标记 |
 |------|-----------|------------|
-| **fsync 真持久化** | `PRAGMA synchronous=FULL` + `commit()` + `Connection.fsync()`（Python 3.12+），`_n_fsync_total` audit counter 每次 commit 递增 | ✅ 真 fsync（不假装 commit = 落盘） |
+| **fsync 真持久化** | `PRAGMA synchronous=FULL` + `commit()` + 对 DB/WAL 文件显式 `os.fsync()`；仅成功刷盘后 `_n_fsync_total` 才递增 | ✅ 真 fsync（不假装 commit/计数 = 落盘） |
 | **跨进程存活** | subprocess.run 测试：子进程写入 → 父进程读出，profile + slots + n_switches + cross_slot_hash 一致 | ✅ 真跨进程（不假装 in-process = 跨进程） |
 | **并发互斥** | 4 线程 × 5 切换 = 20 次无异常，n_switches 准确 = 20 | ✅ 真并发（不假装 sync = 互斥） |
 | **Active pid 重启回中央态** | 关闭 store → 重新打开 → active_pid = None（沙盒保护，不假装 self-continuity） | ✅ 主动 reset（不假装 persona 持续 = self 持续） |
@@ -169,7 +169,7 @@ with store.profile_context(target_pid=..., reason="...") as active:
 
 ---
 
-## 5. 测试覆盖（42 真测试 / 100% 通过 / 5.80s）
+## 5. 测试覆盖（43 真测试 / 100% 通过）
 
 ### 5.1 测试矩阵
 
@@ -180,18 +180,18 @@ with store.profile_context(target_pid=..., reason="...") as active:
 | 3 | TestPersonaSwitchSync | 5 | basic + None + invalid_pid + 嵌套恢复 + reason 持久化 |
 | 4 | TestPersonaSwitchAsync | 5 | basic + invalid_pid + sequential + context_count + exception 仍恢复 |
 | 5 | TestCrossSessionPersistence | 5 | 关闭重开一致 + **跨进程 subprocess** + switch_history + active_pid 重置 |
-| 6 | TestFsyncAndWAL | 3 | WAL mode + synchronous=FULL + fsync counter |
+| 6 | TestFsyncAndWAL | 4 | WAL mode + synchronous=FULL + fsync counter + 显式 os.fsync 调用 |
 | 7 | TestConcurrencyMutex | 3 | 4线程并发 + RLock 重入 + 并发写入不丢 |
 | 8 | TestV1072Compatibility | 3 | V1072 模块不破坏 + bridge 字段映射 + 反向桥接 |
 | 9 | TestRealProductionScenarios | 3 | 多 persona 协作 + 涌现 persona + SCT 反 conformity |
 | 10 | TestErrorHandlingAndIntegrity | 4 | invalid active_pid + cross_slot_hash 变化 + integrity_hash + stats |
-| **总计** | **10 classes** | **42 tests** | **5.80s 全过** |
+| **总计** | **10 classes** | **43 tests** | **本次定向套件 43/43 全过** |
 
 ### 5.2 关键测试命令
 
 ```bash
-$ python -m pytest tests/test_v1095_identity_store.py -v
-============================= 42 passed in 5.80s ==============================
+$ python -m pytest tests/test_v1095_identity_store.py tests/test_v1072.py -q
+============================= 91 passed in 7.47s ==============================
 ```
 
 ### 5.3 跨进程验证示例（test_24）
@@ -306,7 +306,7 @@ $ python -m pytest tests/test_v1072.py tests/test_r6_hqb_integration.py -q
 
 ## 11. 给 Leader + 下一工程师的一句话
 
-> **V1095 Identity Store v0.1 PoC 已就绪**。42 测试全过 + V1072 56 测试零回归 + 跨进程 subprocess 验证 + async/sync 双轨切换 + 真 fsync 持久化。下一个接手者：跑 `python -m pytest tests/test_v1095_identity_store.py -v` 即看全绿，往后只需加 is_emerged → Reconsolidation 联动（V1004 TrackC 范围）。
+> **V1095 Identity Store v0.1 PoC 已就绪**。43 测试全过 + V1072 零回归 + 跨进程 subprocess 验证 + async/sync 双轨切换 + 真 fsync 持久化。下一个接手者：跑 `python -m pytest tests/test_v1095_identity_store.py -v` 即看全绿，往后只需加 is_emerged → Reconsolidation 联动（V1004 TrackC 范围）。
 
 ---
 
