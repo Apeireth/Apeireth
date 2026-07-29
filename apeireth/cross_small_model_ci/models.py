@@ -347,6 +347,94 @@ class Gemma4Adapter(ModelAdapter):
 
 
 # ---------------------------------------------------------------------------
+# Real HuggingFace Embedding Adapter (R9-DEV-002 W3 增强)
+# ---------------------------------------------------------------------------
+class Text2VecEmbeddingAdapter(ModelAdapter):
+    """shibing624/text2vec-base-chinese 真生产 embedding adapter (R9-DEV-002 W3 增强).
+
+    主 19:33 借鉴 HF transformers + sentence-transformers.
+    用 HF transformers AutoModel 直接加载 text2vec-base-chinese 真生产 (BertModel, ~100MB).
+    推理 = CLS embedding → norm 校验 → 返回 "emb:n_tokens=<n>,norm=<x.xxxx>,hidden=<dim>".
+
+    主 17:43 实事求是: 真加载真推理, 不假装.
+    主 17:58 不假装: HF cache 没有 → is_available()=False, 不假装.
+
+    Why text2vec-base-chinese (主 19:33):
+      - 已缓存在 HF cache, 加载快 (~5s)
+      - BertModel 标准架构, 与 CausalLM 不同, 证明框架支持多种架构
+      - 同样可用于验证 HQB 4 维: SC (同 prompt 多次 norm 一致), NR (扰动版 norm 稳定)
+    """
+
+    name = "text2vec-base-chinese"
+    family = "embedding"
+    params_b = 0.1  # ~100M params
+    local_path: Optional[str] = None
+
+    def __init__(self, model_id: str = "shibing624/text2vec-base-chinese",
+                 local_path: Optional[str] = None):
+        super().__init__(local_path=local_path or model_id)
+        self.model_id = model_id
+        self._tok = None
+        self._model = None
+
+    def is_available(self) -> bool:
+        if self.local_path is None:
+            return False
+        # 如果是 model_id (shibing624/text2vec-base-chinese), 检查 HF hub 缓存
+        if "/" in str(self.local_path) and not Path(str(self.local_path)).exists():
+            try:
+                from huggingface_hub import try_to_load_from_cache  # type: ignore
+                cached = try_to_load_from_cache(self.local_path, "config.json")
+                return cached is not None and Path(str(cached)).exists()
+            except ImportError:
+                return False
+        return Path(str(self.local_path)).exists()
+
+    def load(self) -> None:
+        """W3 增强: 缓存 model + tokenizer, 避免每次 infer 都重载."""
+        try:
+            from transformers import AutoModel, AutoTokenizer  # type: ignore
+        except ImportError as e:
+            raise RuntimeError(f"transformers not installed: {e}") from e
+        local = self.local_path or self.model_id
+        self._tok = AutoTokenizer.from_pretrained(local)
+        self._model = AutoModel.from_pretrained(local)
+        self._model.eval()
+        self._loaded = True
+
+    def _infer_impl(self, prompt: str, **kw: Any) -> str:
+        """真生产: 缓存的 HF model → CLS pooling → 输出维度 + norm."""
+        try:
+            import torch  # type: ignore
+        except ImportError as e:
+            raise RuntimeError(f"torch not installed: {e}") from e
+
+        if self._tok is None or self._model is None:
+            self.load()
+        with torch.no_grad():
+            inputs = self._tok(prompt, return_tensors="pt", truncation=True, max_length=128)
+            out = self._model(**inputs)
+            emb = out.last_hidden_state[:, 0, :]
+            norm = emb.norm().item()
+            n_tokens = int(inputs["input_ids"].shape[1])
+        return f"emb:n_tokens={n_tokens},norm={norm:.4f},hidden={emb.shape[-1]}"
+
+    def score(self, prompt: str, response: str) -> float:
+        """text2vec 输出结构化字符串, 评分靠内容是否含 norm + 长度合理性."""
+        if "emb:" not in response:
+            return 0.0
+        m = re.search(r"norm=([0-9.]+)", response)
+        if not m:
+            return 0.3
+        norm = float(m.group(1))
+        if norm < 0.1:
+            return 0.1
+        if 1.0 < norm < 50.0:
+            return 0.95
+        return 0.5
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 class ModelRegistry:
@@ -374,11 +462,12 @@ class ModelRegistry:
         return [a.name for a in self._adapters]
 
 
-# 默认 registry: 4 真模型 adapter + 1 fixture (主 13:31 大胆激进: ≥2 真接入)
+# 默认 registry: 4 真模型 adapter + 1 embedding + 1 fixture (主 13:31 大胆激进: ≥2 真接入)
 DEFAULT_REGISTRY = ModelRegistry([
     Qwen35Adapter(),
     Llama31Adapter(),
     HermesAdapter(),
     Gemma4Adapter(),
+    Text2VecEmbeddingAdapter(),
     FixtureAdapter(),
 ])
