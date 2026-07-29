@@ -131,7 +131,7 @@
 | **测试** | 待 R9 跑（v1090 头注释 28 行 + 借鉴清单） |
 | **状态** | 🟢 源码已落 / 报告待 R9 收口 |
 | **ASI 归因** | 撑 V0.4 `engineering` + `real_production` 两维 |
-| **Track A1 报告** | `reports/r8-tracka1-hotcold-wal.md`（与 v1094 schema 报告配套） |
+| **Track A1 报告** | ⏳ 待产（与 `r8-tracka3-memory-schema-design.md` 配套收口）· 源码已落 `apeireth/v1090_memory_wal.py` 623 LOC |
 
 > 大白话：HotCold = 把记忆按"热度"分层 —— 刚用过的放快盘（热），很久没用的挪到慢盘（冷）。WAL = 每次写之前先写一行日志，万一断电崩了能从日志恢复。
 
@@ -207,7 +207,7 @@
 | **富化字段** | recall_anchor（危急时一句话锚定）+ evidence_refs（证据引用）+ completeness_score（完整度）+ version_migration |
 | **依据** | TOP-DESIGN-V1 §3.4 + DEV-LOG 21:09 "Phase 1 PoC enrichment 完整度 = v0.4" |
 | **Demo** | `apeireth/run_kickoff_enrichment_demo.py` 输出 "Phase 1 v0.4 enrichment PoC ✅ — 富化产物已写入 master" |
-| **Track B2 报告** | `reports/r8-trackb2-enrichment.md` ⏳ 待产（含完整度测量循环） |
+| **Track B2 报告** | ✅ `reports/r8-trackb2-identity-poc-delivery.md`（PoC 跑通 · 富化完整度测量 v0.4） |
 | **ASI 归因** | 直接撑 `eternal_identity` 完整度上升（0.8441 → 0.95 区间） |
 
 > 大白话：富化 = 启动系统时，自动把"我是谁"卡上没填的格子补上 —— 不是瞎补，要带证据（哪句话、哪个事件、哪个来源）+ 完整度打分。
@@ -258,7 +258,7 @@
 | **提案-验证分离** | LLM 提案 + deterministic code 验证 |
 | **Gated archive** | 按问题类型分门别类（GSME） |
 | **状态** | 🟢 v0.1 落地 / 真生产主循环未启动 |
-| **Track C 报告** | `reports/r8-trackc-self-evolution.md` ⏳ 待产 |
+| **Track C 报告** | ✅ `reports/r8-trackc-self-evolution-runs.md` · 27 真演化轮次 · V1093 v0.3 + 4 DGM patch |
 | **ASI 归因** | 直接撑 V0.4 `self_improving_core` 维（当前 0.0） |
 
 ### 5.2 L5.B — V1093 DGM Archive v0.2（真生产）
