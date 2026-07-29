@@ -77,7 +77,7 @@ class DreamCandidate:
     """Dream 产出: 假设性场景的"想象样本".
 
     不可变设计 (frozen=True): V3 守门 — 产出一旦生成, 所有字段不可改,
-    _dream=True 永久标记, 防止意外混入事实流。
+    _dream=True 永久标记, 防止意外混入事实流.
     字段:
       - cid          : candidate id (deterministic from inputs)
       - premise_nids : 输入了哪些 MtmNote.nid
@@ -92,9 +92,29 @@ class DreamCandidate:
     scenario: str
     bindings: Tuple[Tuple[str, str], ...]
     confidence: float
-    schema_phase: str       # 'assimilation' | 'accommodation' | 'replay'
+    schema_phase: str
     created_at: float = field(default_factory=time.time)
     _dream: bool = field(default=True, init=False, repr=True)
+
+    def __post_init__(self) -> None:
+        if not self.cid:
+            raise ValueError("cid must be non-empty")
+        if not self.premise_nids:
+            raise ValueError("premise_nids must be non-empty")
+        for nid in self.premise_nids:
+            if not isinstance(nid, str) or not nid:
+                raise ValueError("premise_nids must contain non-empty strings")
+        if not isinstance(self.scenario, str) or not self.scenario:
+            raise ValueError("scenario must be a non-empty string")
+        if not (0.0 <= float(self.confidence) <= 1.0):
+            raise ValueError(f"confidence must be in [0,1], got {self.confidence}")
+        if self.schema_phase not in _VALID_SCHEMA_PHASES:
+            raise ValueError(
+                f"schema_phase must be one of {sorted(_VALID_SCHEMA_PHASES)}, "
+                f"got {self.schema_phase!r}"
+            )
+        if not self._dream:
+            raise ValueError("DreamCandidate must keep _dream=True (V3 守门)")
 
     def is_dream(self) -> bool:
         """永远 True. 这是 V3 守门核心: dream ≠ fact."""
@@ -122,6 +142,11 @@ class SchemaPhase(str, Enum):
     ASSIMILATION = "assimilation"   # 把新事件套入既有 schema (1 note 单演)
     ACCOMMODATION = "accommodation" # 既有 schema 不足以解释, 重塑 (2+ note 冲突)
     REPLAY = "replay"               # 重放既有 schema (3+ note 关联演)
+
+
+_VALID_SCHEMA_PHASES: frozenset[str] = frozenset(
+    phase.value for phase in SchemaPhase
+)
 
 
 # ============================================================================
@@ -201,12 +226,14 @@ class MemoryDream:
         """二次校验: dream 候选 → 仍为 dream, 不转换 fact stream.
 
         作用: 模拟 "LTM 巩固前审计" 这一步骤, V3 守门: 任何被消费
-        的 dream candidate 必须 _dream=True, 消费方必须 is_dream() 检查。
+        的 dream candidate 必须 _dream=True. 通过 is_dream() + 字段直读
+        双重核对, 防止任何伪造来源.
         """
         out: List[DreamCandidate] = []
         for c in candidates:
             if not c.is_dream():
-                # 理论上不可达 (frozen=True), 但护栏在此
+                continue
+            if c._dream is not True:
                 continue
             out.append(c)
         return out
@@ -281,7 +308,14 @@ class MemoryDream:
         scenario = self._compose_scenario(notes, ctx, phase, idx)
         bindings = tuple(sorted(bindings_seed.items()))
         confidence = self._derive_confidence(notes, phase)
-        cid = self._compute_cid(premise_nids, scenario, phase)
+        cid = self._compute_cid(
+            premise_nids=premise_nids,
+            scenario=scenario,
+            phase=phase,
+            claims=tuple(sorted(n.claim for n in notes)),
+            bindings=bindings,
+            context=ctx,
+        )
         return DreamCandidate(
             cid=cid,
             premise_nids=premise_nids,
@@ -311,11 +345,26 @@ class MemoryDream:
 
     @staticmethod
     def _compute_cid(
-        premise_nids: Tuple[str, ...], scenario: str, phase: SchemaPhase
+        *,
+        premise_nids: Tuple[str, ...],
+        scenario: str,
+        phase: SchemaPhase,
+        claims: Tuple[str, ...] = (),
+        bindings: Tuple[Tuple[str, str], ...] = (),
+        context: Optional[Dict[str, Any]] = None,
     ) -> str:
+        """确定性指纹: 必须包含 claim + bindings + context, 防止同 nid 不同
+        假设被误去重, 也防止两个真不同 dream 因只长 scenario 共享 cid."""
         canonical = json.dumps(
-            {"n": list(premise_nids), "s": scenario, "p": phase.value},
-            ensure_ascii=False, sort_keys=True,
+            {
+                "n": list(premise_nids),
+                "s": scenario,
+                "p": phase.value,
+                "c": list(claims),
+                "b": [list(b) for b in bindings],
+                "x": context or {},
+            },
+            ensure_ascii=False, sort_keys=True, separators=(",", ":"),
         )
         return "dream-" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
