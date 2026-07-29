@@ -1,0 +1,348 @@
+{
+  "started_at": 1785333455.4765623,
+  "ended_at": 1785333455.6904714,
+  "runtime_ms": 213.909,
+  "success": true,
+  "migration": {
+    "drill_id": "mig_90520c1fb918",
+    "started_at": 1785333455.4769583,
+    "ended_at": 1785333455.584697,
+    "runtime_ms": 107.739,
+    "n_rows_before": 146,
+    "n_rows_after": 146,
+    "n_columns_added": 3,
+    "n_indexes_added": 11,
+    "meta_v094_seeded": true,
+    "meta_v1109_seeded": true,
+    "migration_idempotent_runs": 5,
+    "sample_preservation": {
+      "memory_hot": [
+        {
+          "id": "hot_000",
+          "content": "hot content 0: epsilon_epsilon_epsilon"
+        },
+        {
+          "id": "hot_001",
+          "content": "hot content 1: beta_gamma_delta"
+        },
+        {
+          "id": "hot_002",
+          "content": "hot content 2: epsilon_delta_delta"
+        }
+      ],
+      "memory_wal": [
+        {
+          "event_id": "ev_v010_000",
+          "scope": "hot"
+        },
+        {
+          "event_id": "ev_v010_001",
+          "scope": "cold"
+        },
+        {
+          "event_id": "ev_v010_002",
+          "scope": "mtm"
+        }
+      ],
+      "memory_dream": [
+        {
+          "id": "dream_000",
+          "summary": "dream summary 0: candidate scenario",
+          "dream_phase": "ASSIMILATION"
+        },
+        {
+          "id": "dream_001",
+          "summary": "dream summary 1: candidate scenario",
+          "dream_phase": "ASSIMILATION"
+        },
+        {
+          "id": "dream_002",
+          "summary": "dream summary 2: candidate scenario",
+          "dream_phase": "ASSIMILATION"
+        }
+      ]
+    },
+    "trace": [
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "drill_init",
+        "detail": {
+          "seed": 42,
+          "db_path": "C:\\Users\\REDACTED\\AppData\\Local\\Temp\\v1113_full_m84cmfkc\\migration.db"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v010_schema_seeded",
+        "detail": {
+          "version": "0.1.0"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v010_baseline_built",
+        "detail": {
+          "n_rows": 146,
+          "tables": [
+            "memory_hot",
+            "memory_cold",
+            "memory_wal",
+            "memory_dream",
+            "memory_snapshots",
+            "stm_messages",
+            "mtm_themes",
+            "ltm_facts"
+          ]
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v012_upgrade_done",
+        "detail": {
+          "version": "0.1.2"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "idempotent_runs_done",
+        "detail": {
+          "runs": 5
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "drill_done",
+        "detail": {
+          "success": true,
+          "n_rows_after": 146
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  "join": {
+    "drill_id": "join_4b1ddf5446e8",
+    "started_at": 1785333455.584779,
+    "ended_at": 1785333455.661889,
+    "runtime_ms": 77.11,
+    "identity_id": "id_chuling_9f6b206d6a74",
+    "n_rows_total": 1000,
+    "per_table_counts": {
+      "memory_hot": 200,
+      "memory_cold": 120,
+      "memory_wal": 300,
+      "memory_dream": 80,
+      "memory_snapshots": 30,
+      "stm_messages": 120,
+      "mtm_themes": 50,
+      "ltm_facts": 100
+    },
+    "n_join_records": 1000,
+    "n_distinct_identities": 1,
+    "continuity_metrics": {
+      "n_sessions": 4,
+      "n_ltm_entries": 1,
+      "n_mtm_topics": 1,
+      "n_stm_sessions": 1,
+      "identity_locked": true,
+      "rows_per_session_mean": 250.0
+    },
+    "trace": [
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "drill_init",
+        "detail": {
+          "n_rows": 1000
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v1072_identity_seeded",
+        "detail": {
+          "identity_id": "id_chuling_9f6b206d6a74",
+          "essence": "central_ai_eternal_identity"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v1072_manifest_seeded",
+        "detail": {
+          "n_entries": 3,
+          "n_ltm": 1,
+          "n_mtm": 1,
+          "n_stm": 1,
+          "n_archived": 0,
+          "importance_mean": 0.75
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v1072_continuity_seeded",
+        "detail": {
+          "n_sessions": 4,
+          "current_session": "ses_63aeb9ae022d"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "v012_rows_anchored",
+        "detail": {
+          "n_rows_total": 1000,
+          "per_table": {
+            "memory_hot": 200,
+            "memory_cold": 120,
+            "memory_wal": 300,
+            "memory_dream": 80,
+            "memory_snapshots": 30,
+            "stm_messages": 120,
+            "mtm_themes": 50,
+            "ltm_facts": 100
+          },
+          "identity_id": "id_chuling_9f6b206d6a74"
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "drill_done",
+        "detail": {
+          "success": true,
+          "n_join_records": 1000
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  },
+  "disaster": {
+    "drill_id": "dr_74751daed6bc",
+    "started_at": 1785333455.6619916,
+    "ended_at": 1785333455.6904478,
+    "runtime_ms": 28.456,
+    "n_wal_rows_initial": 50,
+    "n_corrupted_rows": 7,
+    "n_recovered_rows": 43,
+    "n_skipped_rows": 7,
+    "recovery_record": {
+      "ts": 1785333455.6849732,
+      "schema_version": "0.1.2",
+      "report": {
+        "total": 48,
+        "valid": 43,
+        "corrupt": 5,
+        "health_ratio": 0.895833,
+        "corrupt_event_ids": [
+          "dr_ev_003",
+          "dr_ev_007",
+          "dr_ev_015",
+          "dr_ev_023",
+          "dr_ev_041"
+        ]
+      },
+      "high_impact_signs_total": 0
+    },
+    "checksum_report": {
+      "total": 48,
+      "valid": 43,
+      "corrupt": 5,
+      "health_ratio": 0.895833,
+      "corrupt_event_ids": [
+        "dr_ev_003",
+        "dr_ev_007",
+        "dr_ev_015",
+        "dr_ev_023",
+        "dr_ev_041"
+      ]
+    },
+    "trace": [
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "drill_init",
+        "detail": {
+          "n_wal_rows": 50
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "wal_seeded",
+        "detail": {
+          "n_wal_rows": 50,
+          "chunks": [
+            "alpha",
+            "beta",
+            "gamma",
+            "delta"
+          ]
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "corruption_injected",
+        "detail": {
+          "tampered_checksum_ids": [
+            "dr_ev_003",
+            "dr_ev_007",
+            "dr_ev_015",
+            "dr_ev_023",
+            "dr_ev_041"
+          ],
+          "deleted_ids": [
+            "dr_ev_012",
+            "dr_ev_028"
+          ]
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "verify_wal_checksums",
+        "detail": {
+          "total": 48,
+          "valid": 43,
+          "corrupt": 5,
+          "health_ratio": 0.895833,
+          "corrupt_event_ids": [
+            "dr_ev_003",
+            "dr_ev_007",
+            "dr_ev_015",
+            "dr_ev_023",
+            "dr_ev_041"
+          ]
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "replay_per_chunk",
+        "detail": {
+          "dr_chunk_alpha": 11,
+          "dr_chunk_beta": 12,
+          "dr_chunk_gamma": 12,
+          "dr_chunk_delta": 8
+        }
+      },
+      {
+        "ts_iso": "2026-07-29T13:57:35",
+        "step": "recover_corrupt",
+        "detail": {
+          "ts": 1785333455.6849732,
+          "schema_version": "0.1.2",
+          "report": {
+            "total": 48,
+            "valid": 43,
+            "corrupt": 5,
+            "health_ratio": 0.895833,
+            "corrupt_event_ids": [
+              "dr_ev_003",
+              "dr_ev_007",
+              "dr_ev_015",
+              "dr_ev_023",
+              "dr_ev_041"
+            ]
+          },
+          "high_impact_signs_total": 0
+        }
+      }
+    ],
+    "success": true,
+    "error": null
+  }
+}
