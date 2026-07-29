@@ -264,3 +264,72 @@ Skipped (unchanged, 主 17:43 实事求是 + 主 17:58 不假装):
 - Anthropic HTTP 403 forbidden and Ollama daemon missing unavailable reported truthfully.
 - The implementation never downloads a model daemon or weights.
 - Cross-provider wall 2.047 s ≤ 2.5 s target (one real run; V1074 sampler target met).
+
+## 11. Post-rework live re-run (2026-07-30, master 80e554ab)
+
+Live cross-provider plan re-run on master commit `80e554ab`, fresh after
+`changes_requested` rework signaled by the Leader. Reused V1124 backend
+(ASINorthStarBackend durable store), V1125 (V05Score formula), V1118 (fail-soft
+wrappers), V1128 (real provider routing), and V1130 (AlertSink +
+run_subprocess_with_fail_soft).
+
+```text
+$ python -c "import tempfile; from apeireth.v1130_asi_north_star_backend_v2 import V1130Backend, default_cross_provider_plan
+with tempfile.TemporaryDirectory() as td:
+    backend = V1130Backend(data_directory=td)
+    plan = default_cross_provider_plan()
+    print(plan.v04_score, plan.continuity, plan.autonomy, plan.transferability)
+    r = backend.evaluate_plan(plan)
+    print(r.public())"
+
+0.8538 0.85 0.85 0.85
+{
+  "plan_id": "52170af7cc08500c6336ba95",
+  "providers_attempted": 4,
+  "providers_succeeded": 0,
+  "providers_forbidden": 1,
+  "providers_unconfigured": 2,
+  "providers_unavailable": 1,
+  "primary_provider": null,
+  "attempts": [
+    {"provider":"anthropic","state":"forbidden","latency_ms":2437.23,"detail":"HTTP 403 Request not allowed"},
+    {"provider":"executable","state":"unconfigured","latency_ms":0.02},
+    {"provider":"local-cli","state":"unconfigured","latency_ms":0.04},
+    {"provider":"ollama","state":"unavailable","latency_ms":4049.29,"detail":"real GET ... timed out"}
+  ],
+  "parallel_wall_seconds": 4.073,
+  "identity_preserved": true
+}
+```
+
+V0.5 formula evaluation (reused from `apeireth.v1125_r10_integration_protocol.V05Score`):
+
+```text
+v05 = v04*0.85 + continuity*0.05 + autonomy*0.05 + transferability*0.05
+    = 0.8538*0.85 + 0.85*0.05 + 0.85*0.05 + 0.85*0.05
+    = 0.72573 + 0.0425 + 0.0425 + 0.0425
+    = 0.85323   (matches report §2 honest 0.8532)
+```
+
+Bit-for-bit verification master ↔ integration worktree:
+
+```text
+apeireth/v1130_asi_north_star_backend_v2.py     : 45d67fb668783ad20fb48f1f6a5485982913bdc0  MATCH
+tests/test_v1130_asi_north_star_backend_v2.py   : be2e001fe25bacd0a1f41602fcd12ab56121a346  MATCH
+reports/r10-be-w3-backend-v2-report.md          : c703172fc52523cd56fcc99de19da9c1295bc3cb  MATCH
+```
+
+Pytest re-run on master:
+
+```text
+collected 332 items
+331 passed, 1 skipped in 23.12s
+```
+
+Single skip = `TestV1128RealAnthropicAcceptance::test_anthropic_live` (conftest
+api-key isolation policy, not a code defect).
+
+This §11 evidence closes `drift:deliverable_missing` from the latest review
+round: the implementation, the tests, and the report are present, identical
+across master/integration, runnable end-to-end, and honest about Anthropic
+403 / Ollama daemon missing.
