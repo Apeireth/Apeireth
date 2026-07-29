@@ -69,6 +69,18 @@ class WalEntry:
     event: Event
     checksum: str = ""
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.sequence, int) or isinstance(self.sequence, bool) or self.sequence < 1:
+            raise ValueError("sequence must be a positive integer")
+        if not isinstance(self.ts, (int, float)) or isinstance(self.ts, bool):
+            raise ValueError("ts must be numeric")
+        if not isinstance(self.scope, str):
+            raise ValueError("scope must be a string")
+        if not isinstance(self.event, Event):
+            raise ValueError("event must be an Event instance")
+        if not self.event.event_id:
+            raise ValueError("event.event_id must be non-empty")
+
     def compute_checksum(self) -> str:
         canonical = json.dumps(
             {
@@ -103,19 +115,29 @@ class WalEntry:
 
     @staticmethod
     def from_jsonl(line: str) -> "WalEntry":
+        if not isinstance(line, str) or not line.strip():
+            raise ValueError("WAL line must be a non-empty string")
         rec = json.loads(line)
+        if not isinstance(rec, dict):
+            raise ValueError("WAL record must be a JSON object")
+        event_rec = rec.get("event")
+        if not isinstance(event_rec, dict):
+            raise ValueError("WAL record missing event object")
+        payload_value = event_rec.get("payload", {})
+        if not isinstance(payload_value, dict):
+            raise ValueError("event.payload must be a JSON object")
         ev = Event(
-            event_id=rec["event"]["event_id"],
-            ts=rec["event"]["ts"],
-            kind=rec["event"]["kind"],
-            payload=tuple(sorted(rec["event"]["payload"].items())),
+            event_id=str(event_rec.get("event_id", "")),
+            ts=float(event_rec["ts"]),
+            kind=str(event_rec.get("kind", "")),
+            payload=tuple(sorted(payload_value.items())),
         )
         entry = WalEntry(
-            sequence=rec["sequence"],
-            ts=rec["ts"],
-            scope=rec["scope"],
+            sequence=int(rec["sequence"]),
+            ts=float(rec["ts"]),
+            scope=str(rec.get("scope", "")),
             event=ev,
-            checksum=rec.get("checksum", ""),
+            checksum=str(rec.get("checksum", "")),
         )
         return entry
 
@@ -130,6 +152,12 @@ def _event_hash(event: Event) -> str:
 # ============================================================================
 # 2. 快照 (StateID + 状态字典的 diff 化存储)
 # ============================================================================
+
+
+# V1091 内部事件 kind — 由 capture_state / restore_state 写盘.
+# 仅 _recover_from_disk 识别; 不参与 IDEMPOTENT_OPS, 永远不修改 live_state.
+_CHECKPOINT_KIND = "v1091_checkpoint"
+_ROLLBACK_KIND = "v1091_rollback"
 
 
 @dataclass
@@ -175,9 +203,11 @@ class MemoryReplay:
         self._seq: int = 0
         self._wal: List[WalEntry] = []                 # 内存 WAL (权威)
         self._checkpoint_seq: List[int] = []           # 每个 checkpoint 对应的 up_to seq (有序)
-        self._checkpoints: List[Checkpoint] = []       # 与 _checkpoint_seq 平行的 checkpoint 列表
+        self._checkpoint_marker_seq: List[int] = []    # checkpoint 自身 WAL seq (用于回放恢复)
+        self._checkpoints: List[Checkpoint] = []       # 内存 checkpoint 镜像 (同进程内 capture)
         self._live_state: Dict[str, Any] = {}          # 当前 live state (从最近 checkpoint replay 后增量)
         self._applied: Dict[str, ApplyResult] = {}     # idempotent_apply 缓存 (key=sha256(event_id+payload))
+        self._applied_event_ids: Dict[str, str] = {}   # event_id -> event_hash (漂移检测)
         self._skipped_corrupt: int = 0
 
         if wal_path is not None:
@@ -188,7 +218,13 @@ class MemoryReplay:
     # ------------------------------------------------------------------
 
     def _recover_from_disk(self, path: Path) -> None:
-        """从磁盘 JSONL 重建 WAL; 损坏行跳过, 累计 _skipped_corrupt."""
+        """从磁盘 JSONL 重建 WAL; 损坏行跳过, 累计 _skipped_corrupt.
+
+        恢复完成后:
+          - _wal 持有所有有效 WAL 行 (checkpoint / rollback / idempotent 写)
+          - _seq 跟到目前最大 seq
+          - _live_state 通过从最早 checkpoint 行开始回放 idempotent op 重建
+        """
         if not path.exists():
             return
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,7 +236,7 @@ class MemoryReplay:
                     continue
                 try:
                     entry = WalEntry.from_jsonl(line)
-                except (json.JSONDecodeError, KeyError, ValueError):
+                except (json.JSONDecodeError, KeyError, ValueError, TypeError):
                     self._skipped_corrupt += 1
                     continue
                 expected = entry.compute_checksum()
@@ -211,6 +247,44 @@ class MemoryReplay:
                 if entry.sequence > last_seq:
                     last_seq = entry.sequence
         self._seq = last_seq
+        # 重建 live_state: 先重放所有 IDEMPOTENT_OPS (单调覆盖), 再按最后
+        # 一个 rollback 标记将 live_state 截断回 checkpoint 快照.
+        # 取最后一个 rollback 标记 (最大 seq).
+        rollback_seq = 0
+        rollback_target_seq = 0
+        for entry in self._wal:
+            if entry.event.kind == _ROLLBACK_KIND:
+                rollback_seq = entry.sequence
+                payload = dict(entry.event.payload)
+                target_hash = payload.get("content_hash", "")
+                if target_hash:
+                    rollback_target_seq = self._find_checkpoint_seq_by_hash(target_hash)
+
+        self._live_state = {}
+        for entry in self._wal:
+            if entry.event.kind in IDEMPOTENT_OPS:
+                self._apply_to_state(entry.event)
+
+        if rollback_target_seq:
+            snapshot = self._find_snapshot_by_seq(rollback_target_seq)
+            if snapshot is not None:
+                self._live_state = snapshot  # snapshot 已是 dict, deep-copy 在 _locate_checkpoint 做过
+        elif rollback_seq:
+            # rollback 标记存在但找不到 checkpoint (e.g. rotate). 兜底: 不
+            # 截断, 上面 replay 仍完整.
+            pass
+
+        # 重建 idempotent 缓存. 由于 rollback 之后的事件已不再属于 live_state,
+        # 缓存要按 replay_wal 重建, 只记录 rollback 之前的事件.
+        self._applied.clear()
+        self._applied_event_ids.clear()
+        for entry in self._wal:
+            if rollback_seq and entry.sequence >= rollback_seq:
+                continue
+            if entry.event.kind in IDEMPOTENT_OPS:
+                eh = _event_hash(entry.event)
+                self._applied_event_ids[entry.event.event_id] = eh
+                self._applied[eh] = ApplyResult(status="applied", event_hash=eh)
 
     def _persist(self, entry: WalEntry) -> None:
         if self.wal_path is None:
@@ -223,12 +297,37 @@ class MemoryReplay:
             fh.write(line)
 
     def _rotate_wal(self) -> None:
-        """软轮转: 保留后 75% 行 (借鉴 DeltaMemory compact 借鉴)."""
+        """软轮转: 保留后 75% 行 (借鉴 DeltaMemory compact 借鉴).
+
+        只保留完整 WAL 行; 若剩余行过少 (≤ 4 行) 不截断, 避免把 checkpoint
+        标记或活跃重放窗口全部丢失.
+        """
         if self.wal_path is None or not self.wal_path.exists():
             return
         lines = self.wal_path.read_text(encoding="utf-8").splitlines()
-        keep = lines[len(lines) * 3 // 4 :] if len(lines) > 4 else lines
+        if len(lines) <= 4:
+            return
+        keep = lines[len(lines) * 3 // 4:]
         self.wal_path.write_text("\n".join(keep) + "\n", encoding="utf-8")
+
+    def _checkpoint_marker_event(self, state_id: StateID, snapshot: Dict[str, Any]) -> Event:
+        """构造写盘的 checkpoint 事件 (内含 deep-copy 状态快照)."""
+        event_id = f"cp:{state_id.seq}:{state_id.content_hash[:16]}"
+        payload = (
+            ("scope", state_id.scope),
+            ("content_hash", state_id.content_hash),
+            ("state_snapshot", json.dumps(snapshot, ensure_ascii=False, sort_keys=True)),
+        )
+        return Event(event_id=event_id, ts=self._clock(), kind=_CHECKPOINT_KIND, payload=payload)
+
+    def _rollback_marker_event(self, state_id: StateID, up_to_seq: int) -> Event:
+        event_id = f"rb:{state_id.seq}:{state_id.content_hash[:16]}"
+        payload = (
+            ("scope", state_id.scope),
+            ("content_hash", state_id.content_hash),
+            ("up_to_seq", int(up_to_seq)),
+        )
+        return Event(event_id=event_id, ts=self._clock(), kind=_ROLLBACK_KIND, payload=payload)
 
     # ------------------------------------------------------------------
     # 内部: 受锁的事件写入
@@ -238,7 +337,7 @@ class MemoryReplay:
         """写入一条事件到 WAL 并按 op 类型更新 live state.
 
         仅在 IDEMPOTENT_OPS 内的 kind 才更新 live state, 其他 kind 仅落 WAL
-        (用于审计, 不污染状态机). 返回新 sequence。
+        (用于审计, 不污染状态机). 返回新 sequence.
 
         并发: 多线程同时写入通过 _lock 串行化; 写完后立即持久化。
         """
@@ -260,7 +359,6 @@ class MemoryReplay:
 
     def _apply_to_state(self, event: Event) -> None:
         """把白名单事件应用到 live state dict (无副作用读取)."""
-        key = f"{event.kind}:{event.event_id}"
         if event.kind == "tag_set":
             tags = self._live_state.setdefault("tags", {})
             for k, v in event.payload:
@@ -284,149 +382,26 @@ class MemoryReplay:
             traces = self._live_state.setdefault("traces", [])
             traces.append(dict(event.payload))
 
-    # ------------------------------------------------------------------
-    # 5 方法契约 — 真生产实现
-    # ------------------------------------------------------------------
+    def _record_idempotent(self, event: Event, *, persist: bool) -> bool:
+        """白名单事件写入幂等缓存.
 
-    def capture_state(self, scope: str) -> StateID:
-        """捕获当前 live state 为 checkpoint, 返回 StateID."""
-        with self._lock:
-            current_seq = self._seq
-            checkpoint = Checkpoint(
-                state_id=StateID(
-                    scope=scope,
-                    seq=len(self._checkpoints) + 1,
-                    content_hash=self._state_hash(self._live_state),
-                ),
-                state=copy.deepcopy(self._live_state),
-                up_to_sequence=current_seq,
-            )
-            self._checkpoints.append(checkpoint)
-            self._checkpoint_seq.append(current_seq)
-            return checkpoint.state_id
+        - event_id 已知且 payload hash 不一致 → 拒绝 (漂移攻击护栏).
+        - event_id 已知且 payload hash 一致 → 命中, cached=True.
+        - 否则写入, 返回 True.
 
-    def restore_state(self, state_id: StateID) -> bool:
-        """回滚 live state 到指定 StateID 对应的 checkpoint.
-
-        返回 True 表示成功; False 表示 state_id 找不到或已被轮转清除。
+        ``persist=True`` 时同时落 WAL; ``persist=False`` 仅刷新缓存 (恢复路径).
         """
-        with self._lock:
-            target = None
-            for cp in self._checkpoints:
-                if cp.state_id == state_id:
-                    target = cp
-                    break
-            if target is None:
+        if event.kind not in IDEMPOTENT_OPS:
+            return False
+        eh = _event_hash(event)
+        existing = self._applied_event_ids.get(event.event_id)
+        if existing is not None:
+            if existing != eh:
                 return False
-            # 重放该 checkpoint up_to_sequence 之后的 WAL,
-            # 而非从空开始 (模拟 "回滚到此点然后继续跑").
-            self._live_state = copy.deepcopy(target.state)
-            for entry in self._wal:
-                if entry.sequence > target.up_to_sequence:
-                    if entry.event.kind in IDEMPOTENT_OPS:
-                        self._apply_to_state(entry.event)
             return True
-
-    def replay_events(
-        self, from_ts: float, to_ts: float
-    ) -> Iterator[Event]:
-        """在 [from_ts, to_ts] 时间窗口内按 seq 顺序产出事件.
-
-        闭区间语义: from_ts <= event_ts <= to_ts。
-        返回 iterator 而非 list 以节约内存。
-        """
-        # 走 snapshot 防止迭代时被并发写入干扰
-        with self._lock:
-            snapshot = list(self._wal)
-        for entry in snapshot:
-            if from_ts <= entry.event.ts <= to_ts:
-                yield entry.event
-
-    def diff_states(self, state_a: StateID, state_b: StateID) -> StateDiff:
-        """计算两个检查点之间的对称事件差.
-
-        思路: 在 [seq_a+1, seq_b] 窗口里提取事件;
-              - 在 state_a state dict 里出现过但不在 window 内的事件 = removed (来自 a 视角)
-              - 在 window 内的事件 = added (来自 b 视角)
-              - 改动的事件 (event_id 同, payload 不同) = changed
-        """
-        with self._lock:
-            cp_a = self._find_checkpoint(state_a)
-            cp_b = self._find_checkpoint(state_b)
-            if cp_a is None or cp_b is None:
-                return StateDiff()
-            seq_a = cp_a.up_to_sequence
-            seq_b = cp_b.up_to_sequence
-            events_in_window = [
-                entry.event
-                for entry in self._wal
-                if seq_a < entry.sequence <= seq_b
-            ]
-
-        # changed: 同 event_id 但 payload 不同
-        seen: Dict[str, Event] = {}
-        changed_pairs: List[Tuple[Event, Event]] = []
-        for ev in events_in_window:
-            if ev.event_id in seen:
-                prev = seen[ev.event_id]
-                if prev.payload != ev.payload:
-                    changed_pairs.append((prev, ev))
-            else:
-                seen[ev.event_id] = ev
-
-        # added (b 视角新增) / removed (a 视角去除)
-        # 简化: 拿 a 的 state 字典 keys 当基线, 比对事件级别
-        a_event_keys = set(self._state_event_keys(cp_a.state))
-        b_event_keys = set()
-        for ev in events_in_window:
-            b_event_keys.add(f"{ev.kind}:{ev.event_id}")
-
-        added = tuple(ev for ev in events_in_window if f"{ev.kind}:{ev.event_id}" not in a_event_keys)
-        removed_keys = a_event_keys - b_event_keys
-        # 不在 window 里的 a 事件 = removed (构造镜像)
-        removed: List[Event] = []
-        for k in sorted(removed_keys):
-            kind, eid = k.split(":", 1)
-            removed.append(Event(event_id=eid, ts=0.0, kind=kind, payload=()))
-
-        return StateDiff(
-            added=tuple(added),
-            removed=tuple(removed),
-            changed=tuple(changed_pairs),
-        )
-
-    def idempotent_apply(self, event: Event) -> ApplyResult:
-        """幂等应用事件 (白名单 only).
-
-        相同 event 重复调用 → 第二次返回 cached=True 且 status/event_hash 不变。
-        非白名单 kind → rejected, 绝不静默通过 (V3 哲学守门).
-        """
-        with self._lock:
-            if event.kind not in IDEMPOTENT_OPS:
-                return ApplyResult(
-                    status="rejected",
-                    event_hash=_event_hash(event),
-                    reason=f"op {event.kind!r} not whitelisted",
-                )
-            # 幂等 key: kind + event_id + payload hash (同 eid 不同 payload = 不同 key)
-            payload_digest = hashlib.sha256(
-                json.dumps(dict(event.payload), sort_keys=True, ensure_ascii=False).encode("utf-8")
-            ).hexdigest()[:16]
-            key = f"{event.kind}|{event.event_id}|{payload_digest}"
-            prev = self._applied.get(key)
-            if prev is not None:
-                return ApplyResult(
-                    status=prev.status,
-                    event_hash=prev.event_hash,
-                    cached=True,
-                )
-            result = ApplyResult(
-                status="applied",
-                event_hash=_event_hash(event),
-            )
-            self._applied[key] = result
-            self._apply_to_state(event)
-            # 同时落 WAL (幂等调用也只写一次)
+        self._applied_event_ids[event.event_id] = eh
+        self._applied[eh] = ApplyResult(status="applied", event_hash=eh)
+        if persist:
             self._seq += 1
             entry = WalEntry(
                 sequence=self._seq,
@@ -437,7 +412,287 @@ class MemoryReplay:
             entry.checksum = entry.compute_checksum()
             self._wal.append(entry)
             self._persist(entry)
-            return result
+        self._apply_to_state(event)
+        return True
+
+    # ------------------------------------------------------------------
+    # 5 方法契约 — 真生产实现
+    # ------------------------------------------------------------------
+
+    def capture_state(self, scope: str) -> StateID:
+        """捕获当前 live state 为 checkpoint, 返回 StateID.
+
+        行为:
+          1. 生成 StateID (scope + seq + content_hash).
+          2. 在内存保存 deep-copy 快照 (同进程兜底).
+          3. 写一条 WAL checkpoint 标记, 让 restore 跨进程也能定位.
+        """
+        with self._lock:
+            snapshot = copy.deepcopy(self._live_state)
+            state_id = StateID(
+                scope=scope,
+                seq=len(self._checkpoints) + 1,
+                content_hash=self._state_hash(snapshot),
+            )
+            checkpoint = Checkpoint(
+                state_id=state_id,
+                state=snapshot,
+                up_to_sequence=self._seq,
+            )
+            self._checkpoints.append(checkpoint)
+            self._checkpoint_seq.append(self._seq)
+
+            self._seq += 1
+            marker = self._checkpoint_marker_event(state_id, snapshot)
+            entry = WalEntry(
+                sequence=self._seq,
+                ts=self._clock(),
+                scope=scope,
+                event=marker,
+            )
+            entry.checksum = entry.compute_checksum()
+            self._wal.append(entry)
+            self._persist(entry)
+            self._checkpoint_marker_seq.append(entry.sequence)
+            return state_id
+
+    def restore_state(self, state_id: StateID) -> bool:
+        """回滚 live state 到指定 StateID 对应的 checkpoint.
+
+        行为 (契约: 仅返回成功/失败, 不自动重新跑):
+          1. 找到 state_id 对应的 checkpoint 快照 (优先 in-mem, 兜底 WAL).
+          2. 把快照写回 live_state.
+          3. 写 rollback 标记 WAL 行, 附带 up_to_seq, 便于跨进程恢复时
+             截断 rollback 之后的事件.
+        """
+        with self._lock:
+            snapshot, up_to_seq = self._locate_checkpoint(state_id)
+            if snapshot is None:
+                return False
+            self._live_state = copy.deepcopy(snapshot)
+
+            self._seq += 1
+            entry = WalEntry(
+                sequence=self._seq,
+                ts=self._clock(),
+                scope=state_id.scope,
+                event=self._rollback_marker_event(state_id, up_to_seq),
+            )
+            entry.checksum = entry.compute_checksum()
+            self._wal.append(entry)
+            self._persist(entry)
+            return True
+
+    def _locate_checkpoint(self, state_id: StateID) -> Tuple[Optional[Dict[str, Any]], int]:
+        """返回 (snapshot_dict, up_to_seq). 失败时 (None, 0).
+
+        优先从 WAL 持久化 checkpoint 恢复; 内存副本作为兜底.
+        """
+        for idx, cp in enumerate(self._checkpoints):
+            if cp.state_id == state_id:
+                up_to = self._checkpoint_seq[idx]
+                # 同一进程内, 内存快照是源真.
+                return copy.deepcopy(cp.state), up_to
+        # 跨进程: 解析 WAL 中的 checkpoint 行
+        for entry in self._wal:
+            if entry.event.kind != _CHECKPOINT_KIND:
+                continue
+            payload = dict(entry.event.payload)
+            if payload.get("scope") != state_id.scope:
+                continue
+            if payload.get("content_hash") != state_id.content_hash:
+                continue
+            raw_snapshot = payload.get("state_snapshot")
+            if not isinstance(raw_snapshot, str):
+                continue
+            try:
+                snap = json.loads(raw_snapshot)
+                if not isinstance(snap, dict):
+                    continue
+            except (json.JSONDecodeError, ValueError):
+                continue
+            # up_to_seq = checkpoint 行前一行 (因为 checkpoint 标记本身就
+            # 是当前 seq, 物理 seq > up_to_seq)
+            return snap, entry.sequence - 1
+        return None, 0
+
+    def replay_events(
+        self, from_ts: float, to_ts: float
+    ) -> Iterator[Event]:
+        """在 (from_ts, to_ts] 时间窗口内按 ts 升序产出事件.
+
+        半开 (R6-RES-07 契约): from_ts < event_ts <= to_ts.
+        返回 iterator 而非 list 以节约内存.
+        """
+        # 走 snapshot 防止迭代时被并发写入干扰
+        with self._lock:
+            snapshot = list(self._wal)
+        snapshot.sort(key=lambda e: (e.event.ts, e.sequence))
+        for entry in snapshot:
+            if from_ts < entry.event.ts <= to_ts:
+                yield entry.event
+
+    def diff_states(self, state_a: StateID, state_b: StateID) -> StateDiff:
+        """计算两个 checkpoint 之间的"字段级"对称 diff.
+
+        实现: 还原 checkpoint 时的 live_state dict (tag_set / anchor 等),
+        以 (field, key) 为单位:
+          - added:   b 有 a 无  → Event(kind="<kind>", payload=[(key, value)])
+          - removed: a 有 b 无  → Event(kind="<kind>", payload=[(key, value)])
+          - changed: 双方皆有, value 不同 → (a_event, b_event)
+        """
+        with self._lock:
+            stateA = self._state_at_checkpoint(state_a)
+            stateB = self._state_at_checkpoint(state_b)
+        return self._diff_state_dicts(stateA, stateB)
+
+    def _state_at_checkpoint(self, state_id: StateID) -> Dict[str, Any]:
+        """还原 checkpoint 处的 live_state dict (跨进程也 OK)."""
+        # 1. 优先同进程内存副本 (深拷贝)
+        for cp in self._checkpoints:
+            if cp.state_id == state_id:
+                return copy.deepcopy(cp.state)
+        # 2. 跨进程: 从 WAL 还原到 up_to_seq
+        up_to_seq = self._seq_up_to(state_id)
+        if up_to_seq is None:
+            return {}
+        reconstructing: Dict[str, Any] = {}
+        for entry in self._wal:
+            if entry.sequence > up_to_seq:
+                break
+            if entry.event.kind in IDEMPOTENT_OPS:
+                self._apply_to_state_dict(entry.event, reconstructing)
+        return reconstructing
+
+    @staticmethod
+    def _apply_to_state_dict(event: Event, state: Dict[str, Any]) -> None:
+        """与 _apply_to_state 等价, 但写入传入的 dict (不污染 self)."""
+        if event.kind == "tag_set":
+            tags = state.setdefault("tags", {})
+            for k, v in event.payload:
+                tags[k] = v
+        elif event.kind == "anchor_link":
+            links = state.setdefault("anchors", [])
+            links.append(dict(event.payload))
+        elif event.kind == "anchor_unlink":
+            anchors = state.get("anchors", [])
+            payload_d = dict(event.payload)
+            state["anchors"] = [
+                a for a in anchors if a.get("id") != payload_d.get("id")
+            ]
+        elif event.kind == "score_record":
+            scores = state.setdefault("scores", [])
+            scores.append(dict(event.payload))
+        elif event.kind == "phase_emit":
+            phases = state.setdefault("phases", [])
+            phases.append(dict(event.payload))
+        elif event.kind == "trace_record":
+            traces = state.setdefault("traces", [])
+            traces.append(dict(event.payload))
+
+    def _seq_up_to(self, state_id: StateID) -> Optional[int]:
+        """checkpoint 物理 seq 上限 (即 marker 之前的 seq)."""
+        for idx, cp in enumerate(self._checkpoints):
+            if cp.state_id == state_id:
+                return self._checkpoint_seq[idx]
+        for entry in self._wal:
+            if entry.event.kind != _CHECKPOINT_KIND:
+                continue
+            payload = dict(entry.event.payload)
+            if (
+                payload.get("scope") == state_id.scope
+                and payload.get("content_hash") == state_id.content_hash
+            ):
+                return entry.sequence - 1
+        return None
+
+    @staticmethod
+    def _diff_state_dicts(
+        state_a: Dict[str, Any], state_b: Dict[str, Any]
+    ) -> StateDiff:
+        """对称 diff: tag_set 字段级 (added/removed/changed), 列表字段整体。"""
+
+        def _tag_event(key: str, value: Any, ts: float = 0.0) -> Event:
+            return Event(
+                event_id=f"tag:{key}",
+                ts=ts,
+                kind="tag_set",
+                payload=((key, value),),
+            )
+
+        tags_a = state_a.get("tags", {}) or {}
+        tags_b = state_b.get("tags", {}) or {}
+        keys_a = set(tags_a.keys())
+        keys_b = set(tags_b.keys())
+
+        added: List[Event] = []
+        removed: List[Event] = []
+        changed: List[Tuple[Event, Event]] = []
+
+        for key in sorted(keys_b - keys_a):
+            added.append(_tag_event(key, tags_b[key]))
+        for key in sorted(keys_a - keys_b):
+            removed.append(_tag_event(key, tags_a[key]))
+        for key in sorted(keys_a & keys_b):
+            if tags_a[key] != tags_b[key]:
+                changed.append((
+                    _tag_event(key, tags_a[key]),
+                    _tag_event(key, tags_b[key]),
+                ))
+
+        return StateDiff(
+            added=tuple(added),
+            removed=tuple(removed),
+            changed=tuple(changed),
+        )
+
+    def idempotent_apply(self, event: Event) -> ApplyResult:
+        """幂等应用事件 (白名单 only).
+
+        行为:
+          - op ∉ IDEMPOTENT_OPS → rejected (reason 列出).
+          - event_id 已记录且 payload hash 改变 → rejected (drift 护栏).
+          - event_id 已记录且 payload hash 一致 → cached=True.
+          - 否则 applied, 落 WAL + state.
+        """
+        with self._lock:
+            if event.kind not in IDEMPOTENT_OPS:
+                return ApplyResult(
+                    status="rejected",
+                    event_hash=_event_hash(event),
+                    reason=f"op {event.kind!r} not whitelisted",
+                )
+            eh = _event_hash(event)
+            existing = self._applied_event_ids.get(event.event_id)
+            if existing is not None and existing != eh:
+                return ApplyResult(
+                    status="rejected",
+                    event_hash=eh,
+                    reason=(
+                        f"event_id {event.event_id!r} already applied with "
+                        "different payload (drift blocked)"
+                    ),
+                )
+            if existing is not None and existing == eh:
+                return ApplyResult(
+                    status="applied",
+                    event_hash=eh,
+                    cached=True,
+                )
+            self._applied_event_ids[event.event_id] = eh
+            self._applied[eh] = ApplyResult(status="applied", event_hash=eh)
+            self._apply_to_state(event)
+            self._seq += 1
+            entry = WalEntry(
+                sequence=self._seq,
+                ts=self._clock(),
+                scope="idempotent",
+                event=event,
+            )
+            entry.checksum = entry.compute_checksum()
+            self._wal.append(entry)
+            self._persist(entry)
+            return ApplyResult(status="applied", event_hash=eh)
 
     # ------------------------------------------------------------------
     # 辅助
@@ -449,23 +704,31 @@ class MemoryReplay:
                 return cp
         return None
 
+    def _find_checkpoint_seq_by_hash(self, content_hash: str) -> int:
+        for entry in self._wal:
+            if entry.event.kind != _CHECKPOINT_KIND:
+                continue
+            if dict(entry.event.payload).get("content_hash") == content_hash:
+                return entry.sequence
+        return 0
+
+    def _find_snapshot_by_seq(self, seq: int) -> Optional[Dict[str, Any]]:
+        for entry in self._wal:
+            if entry.sequence == seq and entry.event.kind == _CHECKPOINT_KIND:
+                raw = dict(entry.event.payload).get("state_snapshot")
+                if isinstance(raw, str):
+                    try:
+                        snap = json.loads(raw)
+                        if isinstance(snap, dict):
+                            return snap
+                    except (json.JSONDecodeError, ValueError):
+                        return None
+        return None
+
     @staticmethod
     def _state_hash(state: Dict[str, Any]) -> str:
         canonical = json.dumps(state, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
-
-    @staticmethod
-    def _state_event_keys(state: Dict[str, Any]) -> Iterator[str]:
-        for tag_k in state.get("tags", {}):
-            yield f"tag_set:{tag_k}"
-        for i, _ in enumerate(state.get("anchors", [])):
-            yield f"anchor_link:{i}"
-        for i in range(len(state.get("scores", []))):
-            yield f"score_record:{i}"
-        for i in range(len(state.get("phases", []))):
-            yield f"phase_emit:{i}"
-        for i in range(len(state.get("traces", []))):
-            yield f"trace_record:{i}"
 
     # ------------------------------------------------------------------
     # 自检 / 报告 (供测试与运维)
@@ -478,7 +741,12 @@ class MemoryReplay:
                 "wal_entries": len(self._wal),
                 "current_seq": self._seq,
                 "checkpoints": len(self._checkpoints),
+                "checkpoint_markers": len(self._checkpoint_marker_seq),
+                "rollback_markers": sum(
+                    1 for e in self._wal if e.event.kind == _ROLLBACK_KIND
+                ),
                 "applied_cache": len(self._applied),
+                "applied_event_ids": len(self._applied_event_ids),
                 "skipped_corrupt": self._skipped_corrupt,
                 "live_state_keys": sorted(self._live_state.keys()),
                 "philosophy_guards": list(PHILOSOPHY_GUARDS),
