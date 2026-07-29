@@ -20,6 +20,9 @@ nav:
       - V1095 fsync 强制: architecture/v1095-fsync-enforcement.md
       - V1112 DGM v0.4 演化: architecture/v1112-dgm-v04-evolution.md
       - V1119 集成验证: architecture/v1119-integration-verifier.md
+      - V1124 北极星后端: architecture/v1124-asi-north-star-backend.md
+      - V1125 R10 协议: architecture/v1125-r10-integration-protocol.md
+      - V1126 R10 baseline: architecture/v1126-r10-integration-baseline.md
 
 markdown_extensions:
   - admonition
