@@ -75,16 +75,20 @@ class TestAdapterContract(unittest.TestCase):
 # Registry
 # ---------------------------------------------------------------------------
 class TestModelRegistry(unittest.TestCase):
-    def test_default_registry_has_5_adapters(self):
+    def test_default_registry_has_at_least_5_adapters(self):
+        # W3 增强 (R9-DEV-002): 加了 text2vec-base-chinese 真 embedding adapter, 现 6 个
         names = DEFAULT_REGISTRY.names()
-        self.assertEqual(len(names), 5)
+        self.assertGreaterEqual(len(names), 5)
         self.assertIn("qwen-3.5-7b", names)
         self.assertIn("llama-3.1-8b", names)
+        self.assertIn("text2vec-base-chinese", names)
         self.assertIn("fixture-7b-v1", names)
 
-    def test_default_registry_available_includes_fixture(self):
-        avail = DEFAULT_REGISTRY.available()
-        self.assertEqual([a.name for a in avail], ["fixture-7b-v1"])
+    def test_default_registry_available_includes_fixture_and_text2vec(self):
+        # W3 增强: text2vec-base-chinese 已缓存到 HF cache → available
+        avail = [a.name for a in DEFAULT_REGISTRY.available()]
+        self.assertIn("fixture-7b-v1", avail)
+        self.assertIn("text2vec-base-chinese", avail)
 
     def test_by_name_lookup(self):
         a = DEFAULT_REGISTRY.by_name("fixture-7b-v1")

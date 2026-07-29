@@ -1,0 +1,93 @@
+{
+  "computed_at": 1785333803.410399,
+  "computed_at_iso": "2026-07-29T22:03:23+0800",
+  "baseline": {
+    "model_name": "fixture-7b-v1",
+    "family": "fixture",
+    "available": true,
+    "sc": 1.0,
+    "nr": 1.0,
+    "ev": 0.5,
+    "cdt": 1.0,
+    "cdt_per_domain": {
+      "code": 1.0,
+      "math": 1.0,
+      "reasoning": 1.0,
+      "creative": 1.0
+    },
+    "subscore": 0.875,
+    "passed": true,
+    "error": null,
+    "elapsed_sec": 0.001,
+    "n_inferences": 24,
+    "detail": {
+      "sc_per_task": {
+        "code-001-hello": 1.0,
+        "code-002-sum": 1.0
+      },
+      "nr_per_task": {
+        "code-001-hello": 1.0,
+        "code-002-sum": 1.0
+      },
+      "ev_per_task": {
+        "code-001-hello": 0.5,
+        "code-002-sum": 0.5
+      },
+      "cdt_per_domain": {
+        "code": 1.0,
+        "math": 1.0,
+        "reasoning": 1.0,
+        "creative": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "target": "text2vec-base-chinese",
+      "family": "embedding",
+      "available": true,
+      "delta_sc": 0.0,
+      "delta_nr": 0.0,
+      "delta_ev": 0.0,
+      "delta_cdt": -0.05,
+      "delta_subscore": -0.0125,
+      "error": null,
+      "target_subscore": 0.8625,
+      "baseline_subscore": 0.875
+    },
+    {
+      "target": "real-qwen",
+      "family": "qwen",
+      "available": false,
+      "delta_sc": null,
+      "delta_nr": null,
+      "delta_ev": null,
+      "delta_cdt": null,
+      "delta_subscore": null,
+      "error": "env APEIRETH_QWEN35_PATH not set (主 17:58 不假装: 未提供 local_path → 跳过真模型)",
+      "target_subscore": 0.0
+    },
+    {
+      "target": "real-llama",
+      "family": "llama",
+      "available": false,
+      "delta_sc": null,
+      "delta_nr": null,
+      "delta_ev": null,
+      "delta_cdt": null,
+      "delta_subscore": null,
+      "error": "env APEIRETH_LLAMA31_PATH not set (主 17:58 不假装: 未提供 local_path → 跳过真模型)",
+      "target_subscore": 0.0
+    }
+  ],
+  "lift_summary": {
+    "n_targets": 3,
+    "n_loaded": 1,
+    "n_failed": 2,
+    "mean_delta": -0.0125,
+    "max_delta": -0.0125,
+    "min_delta": -0.0125,
+    "baseline_name": "fixture-7b-v1",
+    "baseline_subscore": 0.875
+  }
+}
