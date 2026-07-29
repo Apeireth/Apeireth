@@ -55,6 +55,7 @@ class ProviderState(str, Enum):
 
 class ProviderKind(str, Enum):
     ANTHROPIC = "anthropic"
+    OPENAI = "openai"
     OLLAMA = "ollama"
     LOCAL_CLI = "local_cli"
     EXECUTABLE = "executable"
@@ -302,7 +303,13 @@ class W2ProviderAdapter:
 
     @staticmethod
     def _credential(spec: ProviderSpec) -> Optional[str]:
-        return spec.api_key or (os.getenv("ANTHROPIC_API_KEY") if spec.kind == ProviderKind.ANTHROPIC else None)
+        if spec.api_key:
+            return spec.api_key
+        if spec.kind == ProviderKind.ANTHROPIC:
+            return os.getenv("ANTHROPIC_API_KEY")
+        if spec.kind == ProviderKind.OPENAI:
+            return os.getenv("OPENAI_API_KEY")
+        return None
 
     def health(self, spec: ProviderSpec, deep: bool = False) -> HealthEvidence:
         spec.validate()
@@ -315,6 +322,13 @@ class W2ProviderAdapter:
             if not self._credential(spec):
                 return HealthEvidence(spec.name, ProviderState.UNCONFIGURED, 0.0,
                                       "ANTHROPIC_API_KEY is absent; no request was fabricated")
+            if not deep:
+                return HealthEvidence(spec.name, ProviderState.CONFIGURED, 0.0,
+                                      "credential exists but is not claimed valid until a real request succeeds")
+        if spec.kind == ProviderKind.OPENAI:
+            if not self._credential(spec):
+                return HealthEvidence(spec.name, ProviderState.UNCONFIGURED, 0.0,
+                                      "OPENAI_API_KEY is absent; no request was fabricated")
             if not deep:
                 return HealthEvidence(spec.name, ProviderState.CONFIGURED, 0.0,
                                       "credential exists but is not claimed valid until a real request succeeds")
@@ -353,6 +367,9 @@ class W2ProviderAdapter:
     def _once(self, spec: ProviderSpec, prompt: str) -> ModelEvidence:
         if spec.kind == ProviderKind.ANTHROPIC:
             return self.gateway.call(ModelRequest("anthropic", spec.model, prompt, spec.timeout_seconds,
+                                                  spec.base_url, self._credential(spec)))
+        if spec.kind == ProviderKind.OPENAI:
+            return self.gateway.call(ModelRequest("openai", spec.model, prompt, spec.timeout_seconds,
                                                   spec.base_url, self._credential(spec)))
         if spec.kind == ProviderKind.OLLAMA:
             health = self.ollama.ensure_running(spec) if spec.auto_start else self.ollama.probe(spec)
@@ -468,13 +485,24 @@ class W2MeasurementCoordinator:
 
 
 def default_provider_specs() -> list[ProviderSpec]:
-    """Return four genuinely executable provider paths, whether configured or not."""
+    """Return five genuinely executable provider paths, whether configured or not.
+
+    R10-BE-003 task description lists 4 forced-parallel providers (Anthropic /
+    OpenAI / Ollama / local); we expose 5 here because executable (stdin) is a
+    distinct transport surface used by standalone tests. The forced-parallel
+    default is enforced by V1130.default_cross_provider_plan which deliberately
+    uses only the 4 enumerated in the task.
+    """
     cli = tuple(shlex.split(os.getenv("V1128_LOCAL_CLI", ""), posix=os.name != "nt"))
     executable = tuple(shlex.split(os.getenv("V1128_EXECUTABLE", ""), posix=os.name != "nt"))
     return [
         ProviderSpec("anthropic", ProviderKind.ANTHROPIC,
                      os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022"),
                      api_key=os.getenv("ANTHROPIC_API_KEY")),
+        ProviderSpec("openai", ProviderKind.OPENAI,
+                     os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
+                     api_key=os.getenv("OPENAI_API_KEY"),
+                     base_url=os.getenv("OPENAI_BASE_URL")),
         ProviderSpec("ollama-qwen", ProviderKind.OLLAMA, DEFAULT_OLLAMA_MODELS[0],
                      base_url=os.getenv("OLLAMA_BASE_URL"), auto_start=True),
         ProviderSpec("local-cli", ProviderKind.LOCAL_CLI,

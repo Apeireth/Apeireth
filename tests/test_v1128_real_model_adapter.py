@@ -76,8 +76,9 @@ def test_v3_guards_cover_no_fabrication():
     assert len(V3_GUARDS) >= 5 and "fallback_is_not_model_output" in V3_GUARDS
 
 
-def test_provider_kinds_are_four_real_paths():
-    assert {kind.value for kind in ProviderKind} == {"anthropic", "ollama", "local_cli", "executable"}
+def test_provider_kinds_include_five_real_paths():
+    # R10-BE-003 expands the kind set to include OPENAI alongside the original four.
+    assert {kind.value for kind in ProviderKind} == {"anthropic", "openai", "ollama", "local_cli", "executable"}
 
 
 def test_spec_public_redacts_key():
@@ -120,9 +121,9 @@ def test_routed_failure_is_honest():
     assert not routed.success and routed.public()["evidence"] is None
 
 
-def test_default_specs_always_expose_four_paths():
+def test_default_specs_always_expose_five_paths():
     specs = default_provider_specs()
-    assert len(specs) == 4 and {spec.kind for spec in specs} == set(ProviderKind)
+    assert len(specs) == 5 and {spec.kind for spec in specs} == set(ProviderKind)
 
 
 # Real isolated process execution (11)
@@ -446,3 +447,100 @@ def test_installed_ollama_required_models_real_probe():
                 assert DEFAULT_OLLAMA_MODELS[0] not in health.models
     finally:
         runtime.stop_started_process()
+
+
+# -----------------------------------------------------------------------------
+# OpenAI provider — real HTTP path (R10-BE-003 added ProviderKind.OPENAI).
+# -----------------------------------------------------------------------------
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
+
+
+class _StubOpenAIHandler(BaseHTTPRequestHandler):
+    def do_POST(self):  # noqa: N802 — http.server contract
+        length = int(self.headers.get("Content-Length", "0"))
+        self.rfile.read(length)
+        body = b'{"id":"stub","object":"chat.completion","model":"gpt-4o-mini","choices":[{"index":0,"message":{"role":"assistant","content":"OPENAI_OK"},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3}}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args, **_kwargs):  # silence test noise
+        return
+
+
+def _start_openai_stub() -> tuple[ThreadingHTTPServer, str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _StubOpenAIHandler)
+    base = f"http://127.0.0.1:{server.server_address[1]}/v1"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, base
+
+
+def test_openai_absent_key_honest(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    spec = ProviderSpec("openai-none", ProviderKind.OPENAI, "gpt-4o-mini")
+    health = W2ProviderAdapter().health(spec, deep=True)
+    assert health.state == ProviderState.UNCONFIGURED and "OPENAI_API_KEY" in health.detail
+
+
+def test_openai_present_key_not_claimed_valid_without_call():
+    spec = ProviderSpec("openai-set", ProviderKind.OPENAI, "gpt-4o-mini", api_key="configured-not-validated")
+    health = W2ProviderAdapter().health(spec, deep=False)
+    assert health.state == ProviderState.CONFIGURED and not health.healthy
+
+
+def test_openai_deep_health_against_real_stub():
+    server, base = _start_openai_stub()
+    try:
+        spec = ProviderSpec("openai-stub", ProviderKind.OPENAI, "gpt-4o-mini",
+                            api_key="sk-stub", base_url=base, timeout_seconds=4)
+        health = W2ProviderAdapter().health(spec, deep=True)
+        assert health.state == ProviderState.HEALTHY
+        assert "real inference succeeded" in health.detail
+    finally:
+        server.shutdown()
+
+
+def test_openai_call_routes_to_real_http_stub():
+    server, base = _start_openai_stub()
+    try:
+        spec = ProviderSpec("openai-call", ProviderKind.OPENAI, "gpt-4o-mini",
+                            api_key="sk-stub", base_url=base, timeout_seconds=4)
+        evidence = W2ProviderAdapter().call(spec, "hello")
+        assert evidence.real is True
+        assert evidence.provider == "openai"
+        assert evidence.content == "OPENAI_OK"
+        assert evidence.transport == "http"
+    finally:
+        server.shutdown()
+
+
+def test_openai_real_failure_against_forbidden_stub():
+    class _ForbiddenOpenAIHandler(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            length = int(self.headers.get("Content-Length", "0"))
+            self.rfile.read(length)
+            body = b'{"error":{"type":"invalid_api_key","message":"Incorrect API key"}}'
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args, **_kwargs):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _ForbiddenOpenAIHandler)
+    base = f"http://127.0.0.1:{server.server_address[1]}/v1"
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        spec = ProviderSpec("openai-401", ProviderKind.OPENAI, "gpt-4o-mini",
+                            api_key="bad-key", base_url=base, timeout_seconds=4)
+        health = W2ProviderAdapter().health(spec, deep=True)
+        assert health.state in {ProviderState.FORBIDDEN, ProviderState.UNAVAILABLE}
+        assert "401" in health.detail or "http" in health.detail.lower()
+    finally:
+        server.shutdown()
