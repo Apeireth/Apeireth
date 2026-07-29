@@ -53,6 +53,7 @@ from .models import (
     Llama31Adapter,
     HermesAdapter,
     Gemma4Adapter,
+    Text2VecEmbeddingAdapter,
     ModelRegistry,
     DEFAULT_REGISTRY,
 )
@@ -66,13 +67,19 @@ from .harness import (
     measure_sc, measure_nr, measure_ev, measure_cdt,
 )
 from .tasks import DEFAULT_TASKS, HQBTask, TaskDomain
-from .runner import CIRunner, run_ci, run_one_model, summarize
-from .report import render_markdown, render_json, write_report
+from .runner import CIRunner, run_ci, run_one_model, summarize, REAL_MODEL_ENV
+from .report import (
+    render_markdown, render_json, write_report,
+    compute_diff, render_diff_table, write_diff,
+    render_badge, render_badge_markdown, write_badge,
+)
 
 __all__ = [
     # models
     "ModelAdapter", "ModelResult",
     "FixtureAdapter", "Qwen35Adapter", "Llama31Adapter", "HermesAdapter", "Gemma4Adapter",
+    "BgeM3EmbeddingAdapter",  # legacy alias (renamed to Text2VecEmbeddingAdapter)
+    "Text2VecEmbeddingAdapter",
     "ModelRegistry", "DEFAULT_REGISTRY",
     # harness
     "HarnessResult", "HQBHarness",
@@ -81,9 +88,11 @@ __all__ = [
     # tasks
     "DEFAULT_TASKS", "HQBTask", "TaskDomain",
     # runner
-    "CIRunner", "run_ci", "run_one_model", "summarize",
+    "CIRunner", "run_ci", "run_one_model", "summarize", "REAL_MODEL_ENV",
     # report
     "render_markdown", "render_json", "write_report",
+    "compute_diff", "render_diff_table", "write_diff",
+    "render_badge", "render_badge_markdown", "write_badge",
 ]
 
 __version__ = "0.1.0"
