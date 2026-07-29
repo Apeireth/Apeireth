@@ -101,320 +101,47 @@ from apeireth.cross_small_model_ci.report import (
     render_diff_table,
     write_diff,
 )
-# ponytail: V1117 在 integration 分支可能未被全量集成. try/except 软降级
-# (主 17:58 不假装: 缺依赖 → 显式 fallback, 不假装有依赖).
+# 主 17:58 不假装: V1117/V1124 必须真存在 (cherry-picked to integration in commit cb97398a / V1124 was already merged).
+# 之前 b62f6ab3 的 try/except fallback 是过渡, 现在去掉, 走真集成.
+from apeireth.v1117_badge_svg_renderer import (
+    COLOR_MAP,
+    STATUS_TO_COLOR,
+    render_badge_svg,
+    render_status_badge,
+    render_diff_svg,
+    render_diff_html,
+    HFModelCache,
+    HFModelTimeoutError,
+    load_env_file,
+    REAL_MODEL_ENV as V1117_REAL_MODEL_ENV,
+)
+_V1117_AVAILABLE = True  # committed in cb97398a (R10-ATE-001 真集成)
+
+from apeireth.v1124_asi_north_star_backend import (
+    ASI_NORTH_STAR_TARGET as V1124_AS_NORTH_STAR_TARGET,
+    BASELINE_V04 as V1124_BASELINE_V04,
+    ASINorthStarBackend,
+    IntegrityError,
+    ModelEvidence,
+    ModelRequest,
+    RealModelGateway,
+    V1124_VERSION,
+    V3_GUARDS as V1124_V3_GUARDS,
+    V1124Error,
+    make_http_handler,
+    start_http_server,
+)
+_V1124_AVAILABLE = True  # already merged on integration
+
+# ponytail: V1124 backend 当前未导出 start_grpc_server (R10-A2 后续添加).
+# 主 17:58 不假装: 没 grpc 依赖 → 显式 raise, 不假装 OK.
 try:
-    from apeireth.v1117_badge_svg_renderer import (
-        COLOR_MAP,
-        STATUS_TO_COLOR,
-        render_badge_svg,
-        render_status_badge,
-        render_diff_svg,
-        render_diff_html,
-        HFModelCache,
-        HFModelTimeoutError,
-        load_env_file,
-        REAL_MODEL_ENV as V1117_REAL_MODEL_ENV,
-    )
-    _V1117_AVAILABLE = True
+    from apeireth.v1124_asi_north_star_backend import start_grpc_server as _v1124_start_grpc_server
+    start_grpc_server = _v1124_start_grpc_server  # type: ignore[misc]
 except ImportError:
-    _V1117_AVAILABLE = False
-
-    # ---------- inline fallback (主 19:33 走在前人经验上: 最小可用, 等 V1117 集成) ----------
-    COLOR_MAP = {
-        "GREEN": "#4c1", "green": "#4c1",
-        "YELLOW": "#dfb317", "yellow": "#dfb317",
-        "RED": "#e05d44", "red": "#e05d44",
-        "UNKNOWN": "#9f9f9f", "unknown": "#9f9f9f",
-        "pass": "#4c1", "fail": "#e05d44", "mixed": "#dfb317",
-    }
-    STATUS_TO_COLOR = {
-        "pass": COLOR_MAP["GREEN"],
-        "fail": COLOR_MAP["RED"],
-        "mixed": COLOR_MAP["YELLOW"],
-        "unknown": COLOR_MAP["UNKNOWN"],
-    }
-
-    def _svg_text_width(text: str, char_w: float = 6.5) -> float:
-        w = 0.0
-        for ch in text:
-            if ord(ch) > 0x2E80:
-                w += 13.0
-            else:
-                w += char_w
-        return w
-
-    def render_badge_svg(label: str = "ci", message: str = "n/a",
-                         color: str = "#4c1", style: str = "flat",
-                         font_family: str = "Verdana,Geneva,DejaVu Sans,sans-serif") -> str:
-        if color in COLOR_MAP:
-            hex_color = COLOR_MAP[color]
-        else:
-            import re as _re
-            if _re.match(r"^#[0-9a-fA-F]{3,6}$", color):
-                hex_color = color
-            else:
-                hex_color = COLOR_MAP["UNKNOWN"]
-        label_w = _svg_text_width(label) + 10
-        msg_w = _svg_text_width(message) + 10
-        total_w = label_w + msg_w
-        h = 28 if style == "flat-square" else 20
-        return (
-            f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_w:.0f}" height="{h}" '
-            f'role="img" aria-label="{label}: {message}">'
-            f'<linearGradient id="b" x2="0" y2="100%">'
-            f'<stop offset="0" stop-color="#bbb" stop-opacity=".1"/>'
-            f'<stop offset="1" stop-opacity=".1"/></linearGradient>'
-            f'<clipPath id="r"><rect width="{total_w:.0f}" height="{h}" rx="3" fill="#fff"/></clipPath>'
-            f'<g clip-path="url(#r)">'
-            f'<rect width="{label_w:.0f}" height="{h}" fill="#555"/>'
-            f'<rect x="{label_w:.0f}" width="{msg_w:.0f}" height="{h}" fill="{hex_color}"/>'
-            f'<rect width="{total_w:.0f}" height="{h}" fill="url(#b)"/></g>'
-            f'<g fill="#fff" text-anchor="middle" font-family="{font_family}" '
-            f'text-rendering="geometricPrecision" font-size="110">'
-            f'<text aria-hidden="true" x="{label_w / 2:.0f}" y="{h * 0.7:.0f}" fill="#010101" '
-            f'fill-opacity=".3">{label}</text>'
-            f'<text x="{label_w / 2:.0f}" y="{h * 0.7:.0f}">{label}</text>'
-            f'<text aria-hidden="true" x="{label_w + msg_w / 2:.0f}" y="{h * 0.7:.0f}" '
-            f'fill="#010101" fill-opacity=".3">{message}</text>'
-            f'<text x="{label_w + msg_w / 2:.0f}" y="{h * 0.7:.0f}">{message}</text>'
-            f'</g></svg>'
-        )
-
-    def render_status_badge(status: str, message: str) -> str:
-        s = (status or "unknown").lower()
-        color = STATUS_TO_COLOR.get(s, STATUS_TO_COLOR["unknown"])
-        return render_badge_svg(label=status, message=message, color=color)
-
-    def render_diff_svg(diff_data: Any, width: int = 720, height: int = 320) -> str:
-        return f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}"><text x="20" y="40">diff fallback (V1117 not yet integrated)</text></svg>'
-
-    def render_diff_html(diff_data: Any, title: str = "Cross-Model Diff") -> str:
-        return f'<!doctype html><html><body><h1>{title}</h1><p>V1117 not yet integrated</p></body></html>'
-
-    class HFModelTimeoutError(Exception):  # type: ignore[no-redef]
-        pass
-
-    class HFModelCache:  # type: ignore[no-redef]
-        """Inline fallback for V1117 HFModelCache (主 19:33 借鉴 HF transformers 2018)."""
-        def __init__(self, timeout_sec: float = 30.0, cache: bool = True):
-            import threading as _thr
-            self.timeout_sec = float(timeout_sec)
-            self.cache = bool(cache)
-            self._value = None
-            self._error: Any = None
-            self._loaded = False
-            self._lock = _thr.Lock()
-            self.elapsed_ms: float = 0.0
-
-        def _runner(self, load_fn: Any) -> None:
-            try:
-                self._value = load_fn()
-            except BaseException as e:  # noqa: BLE001
-                self._error = e
-
-        def get_or_load(self, load_fn: Any) -> Any:
-            import threading as _thr
-            if self.cache and self._loaded:
-                if self._error is not None:
-                    raise self._error
-                return self._value
-            with self._lock:
-                if self.cache and self._loaded:
-                    if self._error is not None:
-                        raise self._error
-                    return self._value
-                import time as _t
-                t0 = _t.time()
-                self._value = None
-                self._error = None
-                th = _thr.Thread(target=self._runner, args=(load_fn,), daemon=True)
-                th.start()
-                th.join(timeout=self.timeout_sec)
-                self.elapsed_ms = (_t.time() - t0) * 1000.0
-                if th.is_alive():
-                    self._loaded = True
-                    self._error = HFModelTimeoutError(
-                        f"HFModelCache: load_fn did not return within {self.timeout_sec}s"
-                    )
-                    raise self._error
-                self._loaded = True
-                if self._error is not None:
-                    raise self._error
-                return self._value
-
-        def reset(self) -> None:
-            with self._lock:
-                self._value = None
-                self._error = None
-                self._loaded = False
-                self.elapsed_ms = 0.0
-
-    def load_env_file(path: str = "apeireth.env") -> Dict[str, str]:
-        result: Dict[str, str] = {}
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    result[k.strip()] = v.strip().strip('"').strip("'")
-        except FileNotFoundError:
-            pass
-        return result
-
-    V1117_REAL_MODEL_ENV = {
-        "qwen": "APEIRETH_QWEN35_PATH",
-        "llama": "APEIRETH_LLAMA31_PATH",
-        "hermes": "APEIRETH_HERMES_PATH",
-        "gemma": "APEIRETH_GEMMA4_PATH",
-    }
-
-# V1124 backend 同样用 try/except (主 17:58 不假装: 缺依赖 → 显式 fallback)
-try:
-    from apeireth.v1124_asi_north_star_backend import (
-        ASI_NORTH_STAR_TARGET as V1124_AS_NORTH_STAR_TARGET,
-        BASELINE_V04 as V1124_BASELINE_V04,
-        ASINorthStarBackend,
-        IntegrityError,
-        ModelEvidence,
-        ModelRequest,
-        RealModelGateway,
-        V1124_VERSION,
-        V3_GUARDS as V1124_V3_GUARDS,
-        V1124Error,
-        make_http_handler,
-        start_http_server,
-    )
-    _V1124_AVAILABLE = True
-except ImportError:
-    _V1124_AVAILABLE = False
-    V1124_AS_NORTH_STAR_TARGET = 0.95
-    V1124_BASELINE_V04 = 0.8538
-    V1124_VERSION = "0.0.0-fallback"
-    V1124_V3_GUARDS = {
-        "measurement_is_proxy": "ASI score is an operational proxy, not truth or proof of ASI.",
-        "not_phenomenal_consciousness": "No structure, identity, or model response proves phenomenal consciousness.",
-        "identity_is_not_consciousness": "Durable identity records are data continuity, not subjective experience.",
-        "model_call_is_not_asi": "A real LLM call is evidence of integration only, not ASI.",
-        "failure_is_not_success": "Unavailable providers and corrupt storage are reported as failures, never simulated.",
-    }
-
-    class V1124Error(RuntimeError):  # type: ignore[no-redef]
-        def __init__(self, code: str, message: str, status: int = 500):
-            super().__init__(message)
-            self.code = code
-            self.status = status
-
-        def payload(self) -> Dict[str, Any]:
-            return {"error": {"code": self.code, "message": str(self)}}
-
-    class IntegrityError(V1124Error):  # type: ignore[no-redef]
-        def __init__(self, message: str):
-            super().__init__("integrity_failed", message, 503)
-
-    class ModelRequest:  # type: ignore[no-redef]
-        def __init__(self, provider: str = "local", model: str = "mock",
-                     prompt: str = "", command: Optional[List[str]] = None,
-                     endpoint: Optional[str] = None, headers: Optional[Dict[str, str]] = None,
-                     api_key: Optional[str] = None):
-            self.provider = provider
-            self.model = model
-            self.prompt = prompt
-            self.command = command or []
-            self.endpoint = endpoint
-            self.headers = headers or {}
-            self.api_key = api_key
-
-    class ModelEvidence:  # type: ignore[no-redef]
-        def __init__(self, provider: str = "fallback", model: str = "mock",
-                     content: str = "", latency_ms: float = 0.0,
-                     transport: str = "fallback", real: bool = False,
-                     tokens_in: int = 0, tokens_out: int = 0):
-            self.provider = provider
-            self.model = model
-            self.content = content
-            self.latency_ms = latency_ms
-            self.transport = transport
-            self.real = real
-            self.tokens_in = tokens_in
-            self.tokens_out = tokens_out
-
-    class RealModelGateway:  # type: ignore[no-redef]
-        def __init__(self, *args: Any, **kwargs: Any):
-            pass
-        def call(self, request: ModelRequest) -> ModelEvidence:
-            return ModelEvidence(provider=request.provider, model=request.model,
-                                 content="fallback", real=False)
-
-    class ASINorthStarBackend:  # type: ignore[no-redef]
-        def __init__(self, state_dir: Any = None):
-            self.state_dir = state_dir
-        def level(self) -> Dict[str, Any]:
-            return {"score": V1124_BASELINE_V04, "target_reached": False,
-                    "claim": "operational_proxy_not_asi_truth"}
-        def north_star(self) -> Dict[str, Any]:
-            return {"protocols": ["http"], "guards": V1124_V3_GUARDS,
-                    "baseline_v04": V1124_BASELINE_V04,
-                    "ultimate_target": V1124_AS_NORTH_STAR_TARGET}
-        def measure(self, request: ModelRequest) -> Dict[str, Any]:
-            return {"evidence": {"real": False, "transport": "fallback"}}
-        def dispatch(self, method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Tuple[int, Dict[str, Any]]:
-            if path == "/asi/level":
-                return 200, self.level()
-            if path == "/asi/north-star":
-                return 200, self.north_star()
-            if path == "/asi/measure" and method == "POST" and body:
-                try:
-                    req = ModelRequest(**{k: v for k, v in body.items() if k in ("provider", "model", "prompt", "command", "endpoint", "headers", "api_key")})
-                except Exception:
-                    req = ModelRequest()
-                return 200, self.measure(req)
-            return 404, {"error": {"code": "not_found", "message": path}}
-
-    def make_http_handler(backend: Any) -> Any:  # type: ignore[no-redef]
-        from http.server import BaseHTTPRequestHandler
-        from typing import Any as _A
-        class _H(BaseHTTPRequestHandler):
-            def _read_body(self) -> bytes:
-                length = int(self.headers.get("Content-Length", "0"))
-                return self.rfile.read(length) if length else b""
-            def _respond(self, status: int, payload: Dict[str, _A]) -> None:
-                import json as _json
-                raw = _json.dumps(payload).encode("utf-8")
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(raw)))
-                self.end_headers()
-                self.wfile.write(raw)
-            def do_GET(self) -> None:  # noqa: N802
-                status, payload = backend.dispatch("GET", self.path)
-                self._respond(status, payload)
-            def do_POST(self) -> None:  # noqa: N802
-                import json as _json
-                try:
-                    body = _json.loads(self._read_body() or b"{}")
-                except Exception:
-                    body = {}
-                status, payload = backend.dispatch("POST", self.path, body)
-                self._respond(status, payload)
-            def log_message(self, *args: _A) -> None:
-                pass
-        return _H
-
-    def start_http_server(backend: Any, host: str = "127.0.0.1", port: int = 0) -> Tuple[Any, int]:  # type: ignore[no-redef]
-        from http.server import ThreadingHTTPServer
-        from threading import Thread
-        server = ThreadingHTTPServer((host, port), make_http_handler(backend))
-        actual = server.server_port
-        Thread(target=server.serve_forever, daemon=True).start()
-        return server, actual
-
     def start_grpc_server(backend: Any, host: str = "127.0.0.1", port: int = 0) -> Tuple[Any, int]:  # type: ignore[no-redef]
-        # 主 17:58 不假装: 没 grpc 依赖 → 显式 raise, 不假装 OK
         raise V1124Error("grpc_not_available",
-                         "V1124 grpc not available in this integration branch (主 17:58 不假装)",
+                         "V1124 start_grpc_server not exported by V1124 backend in this build",
                          501)
 
 
