@@ -1,0 +1,129 @@
+{
+  "passed": false,
+  "measured_asi_level": 0.8538,
+  "baseline_asi_level": 0.8538,
+  "delta": 0.0,
+  "w2_target": 0.9,
+  "ultimate_target": 0.95,
+  "drop_tolerance": 0.005,
+  "passed_w2": false,
+  "passed_ultimate": false,
+  "passed_no_regression": true,
+  "backend_available": true,
+  "backend_url": "http://127.0.0.1:57122",
+  "matrix": {
+    "entries": [
+      {
+        "family": "fixture",
+        "model": "fixture-7b-v1",
+        "params_b": 7.0,
+        "role": "deterministic_baseline",
+        "available": true,
+        "asi_level": 0.875,
+        "hqb_subscore": 0.875,
+        "hqb_sc": 1.0,
+        "hqb_nr": 1.0,
+        "hqb_ev": 0.5,
+        "hqb_cdt": 1.0,
+        "passed": true,
+        "error": null,
+        "elapsed_sec": 0.001,
+        "n_inferences": 24,
+        "meta": {
+          "harness_result": {
+            "model_name": "fixture-7b-v1",
+            "family": "fixture",
+            "available": true,
+            "sc": 1.0,
+            "nr": 1.0,
+            "ev": 0.5,
+            "cdt": 1.0,
+            "cdt_per_domain": {
+              "code": 1.0,
+              "math": 1.0,
+              "reasoning": 1.0,
+              "creative": 1.0
+            },
+            "subscore": 0.875,
+            "passed": true,
+            "error": null,
+            "elapsed_sec": 0.001,
+            "n_inferences": 24,
+            "detail": {
+              "sc_per_task": {
+                "code-001-hello": 1.0,
+                "code-002-sum": 1.0
+              },
+              "nr_per_task": {
+                "code-001-hello": 1.0,
+                "code-002-sum": 1.0
+              },
+              "ev_per_task": {
+                "code-001-hello": 0.5,
+                "code-002-sum": 0.5
+              },
+              "cdt_per_domain": {
+                "code": 1.0,
+                "math": 1.0,
+                "reasoning": 1.0,
+                "creative": 1.0
+              }
+            }
+          }
+        }
+      }
+    ],
+    "n_passed": 1,
+    "n_available": 1,
+    "avg_asi_level": 0.875,
+    "min_asi_level": 0.875,
+    "max_asi_level": 0.875,
+    "all_pass": true,
+    "computed_at": 1785343305.0128384,
+    "computed_at_iso": "2026-07-30T00:41:45+0800",
+    "meta": {
+      "harness_count": 1
+    }
+  },
+  "error": null,
+  "computed_at": 1785343305.0143507,
+  "computed_at_iso": "2026-07-30T00:41:45+0800",
+  "meta": {
+    "elapsed_sec": 0.075,
+    "baseline_valid": false,
+    "version": "0.1.0"
+  },
+  "chaos": {
+    "n_models": 1,
+    "n_passed": 1,
+    "n_timed_out": 0,
+    "n_failed": 0,
+    "chaos_timeout_sec": 3.0,
+    "results": [
+      {
+        "name": "fixture:fixture-7b-v1",
+        "loaded": true,
+        "elapsed_sec": 0.234,
+        "timed_out": false,
+        "error": null
+      }
+    ]
+  },
+  "test_summary": {
+    "total": 55,
+    "passed": 55,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "breakdown": {
+      "A_constants_version": 9,
+      "B_client": 6,
+      "C_inline_backend": 5,
+      "D_guard": 9,
+      "E_matrix": 5,
+      "F_chaos": 7,
+      "G_reporter": 7,
+      "H_e2e": 4,
+      "I_integration": 3
+    }
+  }
+}
