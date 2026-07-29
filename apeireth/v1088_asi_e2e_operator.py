@@ -274,7 +274,7 @@ GUARD_NO_SILENT_FAILURE = (
     "Silent catch = fake. (主 17:58+20:46 不假装)"
 )
 GUARD_E2E_DOES_NOT_REPLACE = (
-    "V1088 wires V1081/83/84/87/00, does not rewrite their logic. Each stage must "
+    "V1088 wires V1080/V1081/V1083/V1084/V1087, does not rewrite their logic. Each stage must "
     "call real production functions, not stubs. (主 19:33 走在前人经验上 + 主 17:43 实事求是)"
 )
 
