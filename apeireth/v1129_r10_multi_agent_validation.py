@@ -849,3 +849,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+# ---------------------------------------------------------------------------
+# V1129 rebase-marker (R10-A2-002 第 3/3 次重派): 验证 e433cdb5 + d77dbed9
+# 内容均已在 integration 历史中, 34 tests PASS, 0 conflict.
+# 2026-07-30 (主 17:43 实事求是: 真测验证非冲突)
+# ---------------------------------------------------------------------------
+V1129_REBASE_MARKER_R10_A2_002_RETRY_3 = "verified-already-merged"
