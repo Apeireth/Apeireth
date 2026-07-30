@@ -46,6 +46,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+# T24 (T6-F-1, T13 报告 §7.2 P1 残留): discover_modules_with_capabilities 的 method
+# 字段有 2 个版本兼容值 — 'ast_grep_capabilities' (legacy) 与 'r11_ast_ownership'
+# (R11 V0.4 closure, T6-A 引入的 working changes 升级到 AST-based ownership)
+_ALLOWED_LIFT_METHODS = ("ast_grep_capabilities", "r11_ast_ownership")
+
 # Path setup
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -1082,11 +1087,15 @@ class TestDiscoverModulesWithCapabilities:
         with tempfile.TemporaryDirectory() as td:
             r = discover_modules_with_capabilities(module_dir=td)
             assert r["total"] == 0
-            assert r["method"] == "ast_grep_capabilities"
+            # T24 (T6-F-1, T13 报告 §7.2 P1 残留): 兼容 'ast_grep_capabilities'
+            # (legacy) 与 'r11_ast_ownership' (R11 V0.4 closure, T6-A 引入)
+            assert r["method"] in _ALLOWED_LIFT_METHODS
 
     def test_method_set(self):
         r = discover_modules_with_capabilities()
-        assert r["method"] == "ast_grep_capabilities"
+        # T24 (T6-F-1, T13 报告 §7.2 P1 残留): 兼容 'ast_grep_capabilities'
+        # (legacy) 与 'r11_ast_ownership' (R11 V0.4 closure, T6-A 引入)
+        assert r["method"] in _ALLOWED_LIFT_METHODS
 
 
 class TestScoreEngineeringQuality:
