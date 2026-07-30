@@ -22,6 +22,7 @@ pub mod vector;
 pub mod fulltext;
 pub mod wal;
 pub mod llm;
+pub mod dispatcher;
 
 pub use episode::EpisodeRepository;
 pub use note::NoteRepository;
@@ -30,6 +31,7 @@ pub use vector::{VectorIndex, VectorHit};
 pub use fulltext::{FullTextIndex, FullTextHit};
 pub use wal::WalSink;
 pub use llm::{LlmClient, LlmRequest, LlmResponse};
+pub use dispatcher::AsyncDispatcher;
 
 /// Common port error
 #[derive(Debug, Error)]
