@@ -612,8 +612,11 @@ class V1130ASINorthStarRunner:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="V1130 R10 ASI 北极星 V0.5 真跑 + dashboard 性能提升")
     parser.add_argument("--week", type=str, default="R10-W3", help="R10 阶段周次 (R10-W2/R10-W3/R10-W4)")
-    parser.add_argument("--v04", type=float, default=0.8538, help="V0.4 实际真测 (R9 W4 末 baseline = 0.8538)")
-    parser.add_argument("--v03", type=float, default=0.8897, help="V0.3 实际真测 (R9 守门 ≥ 0.8884)")
+    # 主 17:43 实事求是: 默认值必须显式 provenance
+    # v04_score=0.8538 = R9 W4 末 baseline (provenance: r9-w4-baseline.json, ASI 北极星 LOCKED 0.9800)
+    # v1074_v03_score=0.8897 = R9 守门 ≥ 0.8884 (provenance: r9-guard-floor)
+    parser.add_argument("--v04", type=float, default=0.8538, help="V0.4 实际真测 (R9 W4 末 baseline = 0.8538; provenance: r9-w4-baseline.json)")
+    parser.add_argument("--v03", type=float, default=0.8897, help="V0.3 实际真测 (R9 守门 ≥ 0.8884; provenance: r9-guard-floor)")
     parser.add_argument("--continuity", type=float, default=0.85, help="V1125 continuity 维")
     parser.add_argument("--autonomy", type=float, default=0.85, help="V1125 autonomy 维")
     parser.add_argument("--transferability", type=float, default=0.85, help="V1125 transferability 维")

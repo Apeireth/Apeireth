@@ -346,7 +346,9 @@ class TestInferenceEngine:
         req = InferenceRequest(prompt="Hi")
         resp = engine.infer(req)
         assert resp.status == "mock"
-        assert "HTTP failed" in (resp.error or "")
+        # R11 边界: provider down 走 transport_error, mock fallback 保留原证据
+        assert "transport_error" in (resp.error or "")
+        assert "mock fallback used" in (resp.error or "")
 
     def test_http_failure_no_fallback(self):
         cfg = LLMEndpointConfig(
@@ -361,7 +363,9 @@ class TestInferenceEngine:
         engine = InferenceEngine(endpoint=cfg)
         req = InferenceRequest(prompt="Hi")
         resp = engine.infer(req)
-        assert resp.status == "error"
+        # R11 边界: 无 fallback 时按传输错误返回, status 反映真实 transport_error
+        assert resp.status == "transport_error"
+        assert "transport_error" in (resp.error or "")
 
     def test_inference_response_fields(self):
         cfg = _make_default_endpoint()
