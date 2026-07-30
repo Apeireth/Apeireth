@@ -39,7 +39,7 @@ st.set_page_config(
 )
 
 st.title("🤖 Apeireth ASI 真生产 dashboard")
-st.markdown("**主 22:33 ASI 北极星 = 0.7905** | 主 00:44 效果 + 工程化 | V1035 真生产 streamlit 真启动")
+st.markdown("**ASI 北极星真测** | 主 00:44 效果 + 工程化 | V1035 UI + V1136 live measurement")
 
 # Sidebar
 page = st.sidebar.selectbox("选择页面", [
@@ -64,7 +64,9 @@ if page.startswith("🏠"):
     with col2:
         st.metric("V1031 真 E2E pass rate", "100%", "12/12 全过")
     with col3:
-        st.metric("ASI 北极星 V0.1", "0.7905", "主 22:33 真测量")
+        st.metric("ASI 北极星 V0.1 (historical)", "0.7905", "legacy compatibility")
+    from apeireth.v1136_dashboard import measure_dashboard_state, render_streamlit_v05
+    render_streamlit_v05(st, measure_dashboard_state())
     st.subheader("真生产模块统计")
     from pathlib import Path
     import subprocess

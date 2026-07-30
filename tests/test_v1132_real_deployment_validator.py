@@ -140,6 +140,7 @@ def test_report_to_dict_has_required_keys():
         "services_seen", "k8s_manifests_ok", "dockerfile_valid",
         "subprocess_runs_ok", "subprocess_runs_failed",
         "health_probes_ok", "health_probes_failed",
+        "canonical_bundle_valid", "offline_valid", "runtime_valid",
         "passed", "checks", "notes",
     ):
         assert k in d, f"missing key: {k}"
@@ -178,6 +179,24 @@ def test_validator_artefacts_include_v1008_and_v1032():
     assert "v1032_Dockerfile" in rep.artefacts
     assert "v1032_docker-compose.yml" in rep.artefacts
     assert "v1032_k8s-deployment.yaml" in rep.artefacts
+
+
+def test_validator_canonical_bundle_is_semantically_consistent():
+    v = V1132DeploymentValidator(repo_root=_repo_root())
+    rep = v.run_full_validation()
+    canonical = next(c for c in rep.checks if c.name == "canonical_bundle")
+    assert canonical.passed is True, canonical.detail
+    assert rep.canonical_bundle_valid is True
+    assert rep.offline_valid is True
+
+
+def test_validator_offline_success_does_not_claim_runtime_success():
+    v = V1132DeploymentValidator(repo_root=_repo_root())
+    rep = v.run_full_validation()
+    assert rep.offline_valid is True
+    if not rep.docker_daemon_available or rep.health_probes_ok == 0:
+        assert rep.runtime_valid is False
+        assert rep.passed is False
 
 
 def test_validator_consistency_check_runs():
