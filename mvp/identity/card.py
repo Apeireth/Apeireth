@@ -12,6 +12,7 @@ When Phase 1.3 lands, IdentityCard consolidates from Notes.
 from __future__ import annotations
 
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -19,6 +20,13 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 DEFAULT_CARD = Path.home() / ".apeireth_mvp" / "identity_card.json"
+
+# Token 切分: 与 retrieve.py / consolidate.py 一致. 中文 char + 英文 word.
+_TOKEN_RE_CARD = re.compile(r"[A-Za-z]+|[\u4e00-\u9fff]", re.UNICODE)
+
+
+def _tokenize_for_card(text: str) -> List[str]:
+    return _TOKEN_RE_CARD.findall(text)
 
 
 @dataclass
@@ -93,6 +101,51 @@ class IdentityCard:
         else:
             # arbitrary custom key
             self.custom[key] = value
+
+    def consolidate(self, notes: List["Note"],
+                    min_freq: int = 2,
+                    min_confidence: float = 0.5) -> "IdentityCard":
+        """从 Note 周期 consolidate IdentityCard (Phase 1.3 主入口).
+
+        Ponytail ceiling: token 频次 + 置信度阈值. 频次 >= min_freq 且
+        note.confidence >= min_confidence 的 token, 若不在 owner_background
+        里则追加. 不写死: 每次对话可更新.
+
+        噪音过滤策略 (主 17:43 实事求是: 不刷 KPI):
+        - 多字符 token (英文 word / 2+ 字中文词): freq >= min_freq 入卡
+        - 单字中文: 过滤 (噪音太多, 主人哲学"借鉴而非闭门")
+
+        Phase 2 LLM 接入后: 换成 LLM 提炼 background / values.
+        """
+        from collections import Counter
+        if not notes:
+            return self
+        counter: Counter = Counter()
+        for n in notes:
+            if n.confidence < min_confidence:
+                continue
+            for tok in _tokenize_for_card(n.content):
+                # 单字中文噪音过滤 (主 17:43 实事求是)
+                if len(tok) <= 1:
+                    continue
+                counter[tok] += 1
+        added: List[str] = []
+        for tok, freq in counter.most_common():
+            if freq < min_freq:
+                continue
+            if tok in self.owner_background or tok in self.owner_values:
+                continue
+            self.owner_background.append(tok)
+            added.append(tok)
+        if added:
+            self.touch()
+            self.evolution_log.append({
+                "ts": self.updated_at,
+                "key": "consolidate.added",
+                "value": added,
+                "source": "consolidate",
+            })
+        return self
 
 
 def load(path: Optional[Path] = None) -> IdentityCard:
