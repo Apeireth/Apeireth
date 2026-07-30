@@ -90,6 +90,8 @@ REFERENCES: List[Dict[str, str]] = [
 # V0.4 权重: 17 维度, sum=1.0
 # V1073 base: V0.2 16 dim + eternal_identity (0.04) - real_production (0.02) - rubric_open (0.02)
 # V1077 新: 全部 17 维度真测, 权重重新分配 (orchestrator 加进来)
+# R12 fix (主 17:43 实事求是 + 主 23:44 干到底): rubric_open 0.00 → 0.02,
+#   eternal_identity 0.04 → 0.02 — 恢复原始调整注释意图, 让 17/17 全维度真贡献 > 0.
 V04_WEIGHTS: Dict[str, float] = {
     # V0.1/V0.2 base 8 dim (维持)
     "phi_proxy": 0.12,            # FEP 代理 (V1045 bridge)
@@ -116,6 +118,8 @@ V04_WEIGHTS: Dict[str, float] = {
 #    + 0.07 + 0.07 + 0.06 + 0.06 + 0.05 + 0.04 + 0.03 + 0.02
 #    + 0.04 = 1.02 → 需 adjust
 # adjust: rubric_open 0.02 → 0.00, eternal_identity 0.04 → 0.02 (sum=1.0)
+# R12 fix (主 17:43 实事求是): 恢复 rubric_open 0.00 → 0.02, eternal_identity 0.04 → 0.02,
+#   让 17/17 维度都有 weight > 0 真贡献 (sum=1.0, 公式不动). 还原设计意图 + dashboard 17/17.
 V04_WEIGHTS = {
     "phi_proxy": 0.12,
     "capabilities": 0.10,
@@ -123,7 +127,7 @@ V04_WEIGHTS = {
     "engineering": 0.10,
     "vcp_4": 0.05,
     "v2_philosophy": 0.05,
-    "rubric_open": 0.00,
+    "rubric_open": 0.02,        # R12 fix: 0.00 → 0.02
     "real_production": 0.04,
     "cognitive_core": 0.07,
     "self_organizing_core": 0.07,
@@ -133,7 +137,7 @@ V04_WEIGHTS = {
     "world_model": 0.04,
     "reinforcement_learning": 0.03,
     "scientific_method": 0.02,
-    "eternal_identity": 0.04,
+    "eternal_identity": 0.02,    # R12 fix: 0.04 → 0.02
 }
 assert abs(sum(V04_WEIGHTS.values()) - 1.0) < 1e-9, f"weights must sum to 1.0: got {sum(V04_WEIGHTS.values())}"
 
@@ -368,8 +372,8 @@ class MeasurementRunner:
             elif kind == "philosophy_guard_pass":
                 return self._measure_philosophy_guard(spec)
             elif kind == "open_rubric_score":
-                # weight=0, return 0 gracefully
-                return {"score": 0.0, "raw": {"weight": 0}, "ts": time.time()}
+                # R12 fix: 真测 rubric_open (V36 HQB 4 维 + V1003 V4 真哲学 rubric)
+                return self._measure_open_rubric_score(spec)
             elif kind == "deployment_pass":
                 return self._measure_deployment_pass(spec)
             else:
@@ -435,6 +439,71 @@ class MeasurementRunner:
                 r = getattr(mod, fn_name)()
                 return {"score": float(r), "raw": {"bridge_value": r}, "ts": time.time()}
         return {"score": 0.0, "raw": None, "error": f"{spec.module_id}: no bridge fn", "ts": time.time()}
+
+    def _measure_open_rubric_score(self, spec: DimensionSpec) -> Dict[str, Any]:
+        """R12 fix (主 17:43 实事求是 + 主 19:33 走在前人经验上): 真测 rubric_open.
+
+        "open rubric" = 评价框架的开放性 / 完整性 / 跨域锚定质量.
+        公式借鉴 V36 HQB 4 维 (apeireth/v36_hqb_benchmark.py, 主 18:52):
+            - SC (Style Consistency 自洽性): 所有 V4 哲学答案都有非空 anchor
+            - NR (No Repetition 抗噪性): 7 哲学问题 key 唯一 (V4_PHILOSOPHY_FULL dict 天然)
+            - EV (Evolvability 可演化性): 平均 answer 长度归一化 (越深越能演化)
+            - CDT (Cross-Domain Transfer 跨域迁移): 平均 reference 数归一化
+
+        真生产借鉴:
+            - V1003V4PhilosophyFull (apeireth/v1003_v4_philosophy_full.py) 提供
+              V4_PHILOSOPHY_FULL = {7 questions: V4PhilosophyAnswer}
+            - V36 HQB 提供 4 维评分结构 (主 18:52)
+        公式: score = clamp01( 0.25 * (SC + NR + EV + CDT) )
+
+        V3 守门: V1077 量的是 rubric 开放性, ASI 仍 > 任何 rubric.
+        """
+        try:
+            from apeireth.v1003_v4_philosophy_full import V1003V4PhilosophyFull
+        except Exception as e:
+            return {"score": 0.0, "raw": None, "error": f"V1003 import: {e}", "ts": time.time()}
+        try:
+            p = V1003V4PhilosophyFull()
+            answers = p.all_answers()
+            n = len(answers)
+            if n == 0:
+                return {"score": 0.0, "raw": None, "error": "V1003 no answers", "ts": time.time()}
+            # SC: 答案 anchor 都非空 + 长度 >= 5 (主 22:33 真锚定)
+            n_with_anchor = sum(
+                1 for a in answers.values()
+                if a.anchor and isinstance(a.anchor, str) and len(a.anchor.strip()) >= 5
+            )
+            sc = n_with_anchor / n
+            # NR: V4_PHILOSOPHY_FULL 是 dict, key 天然唯一. 但要 7 完整 (V1003 设计 7 问)
+            # coverage = n / 7 才是 NR 真实开放度
+            nr = min(1.0, n / 7.0)
+            # EV: 平均 answer 长度 (归一化: 200 字 = 1.0)
+            avg_len = sum(len(a.answer or "") for a in answers.values()) / n
+            ev = min(1.0, avg_len / 200.0)
+            # CDT: 平均 reference 数 (归一化: 5 个 = 1.0)
+            avg_refs = sum(len(a.references or []) for a in answers.values()) / n
+            cdt = min(1.0, avg_refs / 5.0)
+            # 综合: V36 HQB 等权 4 维
+            score = max(0.0, min(1.0, 0.25 * (sc + nr + ev + cdt)))
+            return {
+                "score": score,
+                "raw": {
+                    "method": "v36_hqb_4dim_v1003_v4",
+                    "module_id": "V1003",
+                    "n_answers": n,
+                    "sc": round(sc, 4),
+                    "nr": round(nr, 4),
+                    "ev": round(ev, 4),
+                    "cdt": round(cdt, 4),
+                    "avg_answer_len": round(avg_len, 1),
+                    "avg_refs": round(avg_refs, 2),
+                    "n_with_anchor": n_with_anchor,
+                    "weights": {"sc": 0.25, "nr": 0.25, "ev": 0.25, "cdt": 0.25},
+                },
+                "ts": time.time(),
+            }
+        except Exception as e:
+            return {"score": 0.0, "raw": None, "error": f"open_rubric: {e}", "ts": time.time()}
 
     def _measure_compute_metrics(self, spec: DimensionSpec) -> Dict[str, Any]:
         mod = self._import_module(spec.module_id)
@@ -539,13 +608,51 @@ class MeasurementRunner:
                 n_with_test = sum(1 for m in mods if m.get("has_test_file", False)) if isinstance(mods[0], dict) else 0
                 score = n_with_test / len(mods) if mods else 0.0
                 return {"score": float(score), "raw": {"test_coverage": score, "n_modules": len(mods), "n_with_test": n_with_test, "method": "v1060_legacy"}, "ts": time.time()}
-            # Fallback: count test files vs source files
+            # Fallback: count test files vs source files.
+            # R11 V0.4 closure (主 17:43 实事求是): when V1060's run_orchestrator
+            # cannot deliver a module_details list (e.g. on Python 3.13 + Windows
+            # where __import__ side-effects trigger closed-file GC errors), we
+            # fall back to the AST-based test ownership utility which counts
+            # short-name tests (e.g. test_v1074.py) that *actually* import the
+            # module — fixing the real V0.4 base data access bug. Weights and
+            # formula are unchanged.
             apeireth_dir = Path(__file__).resolve().parent
             tests_dir = apeireth_dir.parent / "tests"
             n_src = sum(1 for f in apeireth_dir.glob("v10*.py") if f.name.startswith("v10"))
-            n_test = sum(1 for f in tests_dir.glob("test_v10*.py"))
-            score = min(1.0, n_test / max(1, n_src))
-            return {"score": score, "raw": {"n_src": n_src, "n_test": n_test, "method": "file_count_fallback"}, "ts": time.time()}
+            try:
+                from apeireth.r11_v04_test_ownership import aggregate_v04_test_ownership
+                ownership = aggregate_v04_test_ownership(
+                    apeireth_dir=apeireth_dir,
+                    test_dir=tests_dir,
+                    min_num=1000,
+                    max_num=1110,
+                )
+                n_test = int(ownership.get("with_test", 0))
+                score = min(1.0, n_test / max(1, n_src))
+                return {
+                    "score": score,
+                    "raw": {
+                        "n_src": n_src,
+                        "n_test": n_test,
+                        "method": "r11_ast_ownership_fallback",
+                        "ownership_version": ownership.get("version"),
+                        "ownership_method": ownership.get("method"),
+                    },
+                    "ts": time.time(),
+                }
+            except Exception as exc:
+                n_test = sum(1 for f in tests_dir.glob("test_v10*.py"))
+                score = min(1.0, n_test / max(1, n_src))
+                return {
+                    "score": score,
+                    "raw": {
+                        "n_src": n_src,
+                        "n_test": n_test,
+                        "method": "file_count_fallback",
+                        "fallback_error": str(exc)[:120],
+                    },
+                    "ts": time.time(),
+                }
         except Exception as e:
             return {"score": 0.0, "raw": None, "error": f"test_cov: {e}", "ts": time.time()}
 
