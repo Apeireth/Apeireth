@@ -1,4 +1,4 @@
-# ASI Kubernetes Deployment — V1075 (借鉴 K8sProbes liveness/readiness/startup)
+# Canonical Kubernetes deployment. The image must be published before apply.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -8,6 +8,13 @@ metadata:
     version: "0.1.0"
 spec:
   replicas: 1
+  revisionHistoryLimit: 3
+  progressDeadlineSeconds: 300
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
   selector:
     matchLabels:
       app: apeireth-asi
@@ -16,13 +23,23 @@ spec:
       labels:
         app: apeireth-asi
         version: "0.1.0"
-      annotations:
-        sidecar.istio.io/inject: "false"
     spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: asi-api
           image: apeireth-asi:0.1.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
           ports:
             - name: http
               containerPort: 8765
@@ -36,6 +53,9 @@ spec:
             - name: V1075_PORT
               value: "8765"
           resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
             limits:
               cpu: "1"
               memory: "512Mi"
@@ -59,7 +79,6 @@ spec:
             httpGet:
               path: /health
               port: 8765
-            initialDelaySeconds: 0
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 12
