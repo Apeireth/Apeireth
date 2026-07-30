@@ -70,6 +70,9 @@ def test_render_streamlit_app_includes_pages():
     assert "Page_B" in app
     assert "Page_C" in app
     assert "Apeireth" in app
+    assert "measure_dashboard_state" in app
+    assert "render_streamlit_v05" in app
+    assert "0.8532" not in app
 
 
 def test_render_streamlit_app_uses_safe_literal():
