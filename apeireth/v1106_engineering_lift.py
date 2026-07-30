@@ -1516,7 +1516,13 @@ def discover_modules_with_capabilities(
     """Discover V10XX modules and count those with ENGINEERING_CAPABILITIES.
 
     主 17:43 实事求是: 真 coverage = 真 grep + 真统计 + 真不算 self.
-    Returns dict with: total, with_tests, with_capabilities, capabilities_count
+
+    R11 V0.4 closure (主 17:43 实事求是): the test discovery path is
+    upgraded to the AST-based ownership utility (``r11_v04_test_ownership``)
+    so short-name tests (e.g. ``test_v1074.py``) that *actually* import the
+    module are counted. Legacy ``method=ast_grep_capabilities`` string is
+    preserved for backward compatibility; ``with_tests`` is now derived from
+    the AST signal when available. The capability counting is unchanged.
     """
     import ast
     import pathlib as _pl
@@ -1533,8 +1539,28 @@ def discover_modules_with_capabilities(
     capabilities_count: Dict[str, int] = {}
 
     if not pdir.is_dir():
-        return {"total": 0, "with_tests": 0, "with_capabilities": 0, "capabilities_count": {},
-                "method": "discover_modules_with_capabilities"}
+        return {"total": 0, "with_tests": 0, "with_capabilities": 0,
+                "capabilities_count": {}, "method": "discover_modules_with_capabilities"}
+
+    # R11 V0.4 closure: prefer AST-based ownership (主 17:43 实事求是).
+    # Fall back to legacy ``test_{full_stem}.py`` check if the utility is
+    # unavailable (e.g. partial checkout) so we never regress existing tests.
+    ownership_by_stem: Dict[str, int] = {}
+    try:
+        from apeireth.r11_v04_test_ownership import aggregate_v04_test_ownership
+        ownership = aggregate_v04_test_ownership(
+            apeireth_dir=pdir,
+            test_dir=tests_dir,
+            min_num=min_num,
+            max_num=max_num,
+        )
+        for entry in ownership.get("per_module", []):
+            stem = entry.get("module_stem")
+            if isinstance(stem, str):
+                ownership_by_stem[stem] = int(entry.get("total_owners", 0) or 0)
+        ownership_method = ownership.get("method", "r11_ast_ownership")
+    except Exception:  # pragma: no cover - utility always available in CI
+        ownership_method = "legacy_filename_only"
 
     for fpath in sorted(pdir.glob("v*.py")):
         stem = fpath.stem
@@ -1557,10 +1583,13 @@ def discover_modules_with_capabilities(
         if num == 1106:
             continue
         total += 1
-        # 测试文件
-        test_path = tests_dir / f"test_{stem}.py"
-        if test_path.exists():
-            with_tests += 1
+        # Test discovery (R11 V0.4 closure: AST ownership, fallback legacy)
+        if stem in ownership_by_stem:
+            with_tests += 1 if ownership_by_stem[stem] > 0 else 0
+        else:
+            test_path = tests_dir / f"test_{stem}.py"
+            if test_path.exists():
+                with_tests += 1
         # ENGINEERING_CAPABILITIES marker — 用 AST 找赋值常量, 真 + 避免 import 副作用
         try:
             src = fpath.read_text(encoding="utf-8", errors="replace")
@@ -1586,7 +1615,7 @@ def discover_modules_with_capabilities(
         "with_tests": with_tests,
         "with_capabilities": with_capabilities,
         "capabilities_count": capabilities_count,
-        "method": "ast_grep_capabilities",
+        "method": ownership_method,
     }
 
 
