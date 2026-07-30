@@ -82,6 +82,121 @@ from apeireth.v1118_perf_optimizer_v01 import (
 # ---------------------------------------------------------------------------
 
 V1130_VERSION = "0.1.0"
+CONTINUITY_SCHEMA_VERSION = 2
+
+
+class ContinuitySnapshotStore:
+    """SQLite contract for traceable ContinuityTracker and V0.5 snapshots.
+
+    The migration is additive so databases created by the earlier dashboard keep
+    all rows. Scores are persisted as measured values only; this store never
+    computes or changes V0.5 weights.
+    """
+
+    def __init__(self, db_path: Path | str) -> None:
+        self.db_path = Path(db_path)
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def migrate(self) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS continuity_schema_meta ("
+                "key TEXT PRIMARY KEY, value TEXT NOT NULL)"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS continuity_session ("
+                "identity_id TEXT NOT NULL, session_id TEXT NOT NULL, "
+                "started_at REAL NOT NULL, ended_at REAL NOT NULL DEFAULT 0, "
+                "n_entries_added INTEGER NOT NULL DEFAULT 0 CHECK(n_entries_added >= 0), "
+                "n_importance_avg REAL NOT NULL DEFAULT 0 CHECK(n_importance_avg BETWEEN 0 AND 1), "
+                "is_active INTEGER NOT NULL DEFAULT 0 CHECK(is_active IN (0,1)), "
+                "tracker_version TEXT NOT NULL DEFAULT 'v1072', "
+                "recorded_at TEXT NOT NULL, PRIMARY KEY(identity_id, session_id))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS continuity_snapshot ("
+                "snapshot_id TEXT PRIMARY KEY, identity_id TEXT NOT NULL, measured_at REAL NOT NULL, "
+                "measurement_version TEXT NOT NULL, contract_version INTEGER NOT NULL, "
+                "continuity REAL NOT NULL CHECK(continuity BETWEEN 0 AND 1), "
+                "autonomy REAL CHECK(autonomy BETWEEN 0 AND 1), "
+                "transferability REAL CHECK(transferability BETWEEN 0 AND 1), "
+                "v05_total REAL CHECK(v05_total BETWEEN 0 AND 1), "
+                "source_payload_json TEXT NOT NULL CHECK(json_valid(source_payload_json)))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS continuity_snapshot_source ("
+                "snapshot_id TEXT NOT NULL REFERENCES continuity_snapshot(snapshot_id) ON DELETE CASCADE, "
+                "dimension TEXT NOT NULL CHECK(dimension IN ('continuity','autonomy','transferability')), "
+                "source_name TEXT NOT NULL, source_version TEXT NOT NULL, detail_json TEXT NOT NULL CHECK(json_valid(detail_json)), "
+                "PRIMARY KEY(snapshot_id, dimension, source_name))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_continuity_session_time ON continuity_session(identity_id, started_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_continuity_snapshot_time ON continuity_snapshot(identity_id, measured_at DESC)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_continuity_source_dimension ON continuity_snapshot_source(dimension, source_version)")
+            conn.execute(
+                "INSERT INTO continuity_schema_meta(key,value) VALUES('schema_version',?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (str(CONTINUITY_SCHEMA_VERSION),),
+            )
+        return CONTINUITY_SCHEMA_VERSION
+
+    def persist_tracker(self, identity_id: str, tracker: ContinuityTracker) -> int:
+        self.migrate()
+        recorded_at = _now_iso()
+        rows = [
+            (identity_id, s.session_id, s.started_at, s.ended_at, s.n_entries_added,
+             s.n_importance_avg, int(s.is_active), "v1072", recorded_at)
+            for s in tracker.sessions.values()
+        ]
+        with sqlite3.connect(self.db_path) as conn:
+            conn.executemany(
+                "INSERT INTO continuity_session VALUES(?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(identity_id,session_id) DO UPDATE SET ended_at=excluded.ended_at, "
+                "n_entries_added=excluded.n_entries_added, n_importance_avg=excluded.n_importance_avg, "
+                "is_active=excluded.is_active, recorded_at=excluded.recorded_at",
+                rows,
+            )
+        return len(rows)
+
+    def persist_snapshot(self, identity_id: str, measurement: Any) -> str:
+        self.migrate()
+        data = measurement.to_dict() if hasattr(measurement, "to_dict") else dict(measurement)
+        measured_at = float(data.get("timestamp", time.time()))
+        snapshot_id = "snap_" + hashlib.sha256(
+            f"{identity_id}:{measured_at}:{json.dumps(data, sort_keys=True, default=str)}".encode()
+        ).hexdigest()[:16]
+        version = str(data.get("measurement_version", "v1136-0.1.0"))
+        source_rows = []
+        for dimension in ("continuity", "autonomy", "transferability"):
+            detail = data.get(f"{dimension}_detail", {})
+            sub_scores = detail.get("sub_scores", {}) if isinstance(detail, dict) else {}
+            if not sub_scores:
+                sub_scores = {"aggregate": data[dimension]}
+            for source_name, score in sub_scores.items():
+                source_rows.append((snapshot_id, dimension, str(source_name), version,
+                                    json.dumps({"score": score, "detail": detail}, ensure_ascii=False, default=str)))
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute("PRAGMA foreign_keys=ON")
+            conn.execute(
+                "INSERT OR IGNORE INTO continuity_snapshot VALUES(?,?,?,?,?,?,?,?,?,?)",
+                (snapshot_id, identity_id, measured_at, version, CONTINUITY_SCHEMA_VERSION,
+                 float(data["continuity"]), float(data["autonomy"]), float(data["transferability"]),
+                 data.get("v05_total_v1136"), json.dumps(data, ensure_ascii=False, default=str)),
+            )
+            conn.executemany("INSERT OR IGNORE INTO continuity_snapshot_source VALUES(?,?,?,?,?)", source_rows)
+        return snapshot_id
+
+    def timeline(self, identity_id: str) -> List[Dict[str, Any]]:
+        self.migrate()
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT snapshot_id, measured_at, measurement_version, contract_version, "
+                "continuity, autonomy, transferability, v05_total FROM continuity_snapshot "
+                "WHERE identity_id=? ORDER BY measured_at ASC, snapshot_id ASC", (identity_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
 
 def _now_iso() -> str:
@@ -223,6 +338,7 @@ class DashboardPayload:
     stress_reports: List[Dict[str, Any]]
     recovery_summary: Dict[str, Any]
     perf_stats: V1130PerfWrapStats
+    persistence_summary: Dict[str, Any] = field(default_factory=dict)
     chaos_recovery: Optional[Dict[str, Any]] = None
     built_at: str = field(default_factory=_now_iso)
 
@@ -251,6 +367,7 @@ class ContinuityDashboard:
         config.ensure_dirs()
         self.perf = V1130PerfWrap(config)
         self._timeline: Optional[ContinuityTimelineViz] = None
+        self._tracker: Optional[ContinuityTracker] = None
         self._recovery: Optional[RecoveryRecordIndex] = None
         self._benchmark_rows: List[Dict[str, Any]] = []
         self._stress_reports: List[StressReport] = []
@@ -307,6 +424,7 @@ class ContinuityDashboard:
         viz.feed_manifest(manifest)
         # 不调 write_all (本类自己管 dashboard 输出), 仅留 in-memory 数据
         self._timeline = viz
+        self._tracker = ct
         return viz
 
     # ---- step 2: recovery_record 索引摘要 ----
@@ -411,6 +529,22 @@ class ContinuityDashboard:
         md_path = Path(paths.get("markdown", self.config.out_dir / "continuity_timeline.md"))
         svg_path = Path(paths.get("svg", self.config.out_dir / "continuity_timeline.svg"))
 
+        contract_path = self.config.db_dir / "continuity_contract.sqlite3"
+        store = ContinuitySnapshotStore(contract_path)
+        persisted_sessions = store.persist_tracker(self.config.identity_id, self._tracker or ContinuityTracker())
+        with sqlite3.connect(contract_path) as conn:
+            stored_sessions = conn.execute(
+                "SELECT COUNT(*) FROM continuity_session WHERE identity_id=?",
+                (self.config.identity_id,),
+            ).fetchone()[0]
+        persistence_summary = {
+            "db_path": str(contract_path),
+            "schema_version": CONTINUITY_SCHEMA_VERSION,
+            "tracker_version": "v1072",
+            "persisted_sessions": persisted_sessions,
+            "stored_sessions": stored_sessions,
+        }
+
         payload = DashboardPayload(
             config=self.config,
             timeline_json=viz.to_json(),
@@ -420,6 +554,7 @@ class ContinuityDashboard:
             stress_reports=stress_dicts,
             recovery_summary=recovery_summary,
             perf_stats=perf,
+            persistence_summary=persistence_summary,
         )
 
         return payload
@@ -882,6 +1017,8 @@ V3_GUARDS = {
 
 __all__ = [
     "V1130_VERSION",
+    "CONTINUITY_SCHEMA_VERSION",
+    "ContinuitySnapshotStore",
     "V3_GUARDS",
     "DashboardConfig",
     "V1130PerfWrap",
