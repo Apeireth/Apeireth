@@ -140,6 +140,7 @@ dependencies = [
  "chrono",
  "clap",
  "criterion",
+ "futures",
  "serde",
  "serde_json",
  "tempfile",
