@@ -379,15 +379,25 @@ class StoreGuard:
 
     @staticmethod
     def detect_path_traversal(path: str) -> bool:
-        """路径穿越 — ../ / 绝对路径 / null byte."""
+        """路径穿越 — `..` / 绝对路径 / null byte.
+
+        R11-SEC-001 (precision hardening): use os.path.normpath to avoid
+        false positives on legitimate names containing `..` like `foo..bar`.
+        """
         if not isinstance(path, str):
             return False
-        if ".." in path:
-            return True
-        if path.startswith("/") or (len(path) >= 2 and path[1] == ":"):
-            return True
+        # R11-SEC-001: null-byte / NUL always rejects (poison bytes).
         if "\x00" in path:
             return True
+        # R11-SEC-001: absolute paths or Windows-drive paths reject.
+        if path.startswith("/") or path.startswith("\\") or (len(path) >= 2 and path[1] == ":"):
+            return True
+        # R11-SEC-001: split then check each component for traversal segments
+        # (a component equal to `..` is traversal).
+        norm = os.path.normpath(path).replace("\\", "/")
+        for seg in norm.split("/"):
+            if seg == "..":
+                return True
         return False
 
     def check(self) -> StoreGuardReport:
@@ -770,11 +780,19 @@ ASI_NINE_KEYS = {
 EXPECTED_NINE_KEYS = 9
 
 # 假 KPI 模式 (R9 W3 复盘)
+# R11-SEC-001 (precision hardening): require ASI/score explicit context + 1.0/achieved
+# together; previous \bscore\s*1.0\b raised false positives on real V1077 measurements.
 FAKE_KPI_PATTERNS = [
-    re.compile(r"asi[_=]?\s*=\s*(1\.0+|true|achieved)", re.IGNORECASE),
-    re.compile(r"score[_=]?\s*1\.0+\b"),
-    re.compile(r"\breached[_=]?\s*asi\b", re.IGNORECASE),
-    re.compile(r"asi\s+达成|达成\s+asi", re.IGNORECASE),
+    # R11-SEC-001: ASI within 40 chars of 1.0/true/achieved/dacheng is fake.
+    # Intermediate words allowed (e.g. "asi score = 1.0 achieved").
+    re.compile(r"\basi\b.{0,40}?(?:1\.0+\b|\btrue\b|\bachieved\b|达成)", re.IGNORECASE),
+    # R11-SEC-001: score + 1.0 + ASI all three within 48 chars is fake-KPI.
+    # Pure "score = 1.0" without ASI context is a legit V1077 measurement.
+    re.compile(r"\bscore\b.{0,24}?1\.0+\b.{0,24}?\basi\b", re.IGNORECASE),
+    # R11-SEC-001: explicit non-letter-digit boundary so "_" "-" count as
+    # separators (Python \b treats _ as word char, blocking "breached_asi").
+    re.compile(r"(?<![A-Za-z0-9])(?:reached|breached|达成|达到)(?![A-Za-z0-9])[_=\-\s]{0,12}(?<![A-Za-z0-9])asi(?![A-Za-z0-9])", re.IGNORECASE),
+    re.compile(r"\basi\b[^a-z0-9]{0,12}(达成|达到|achieved)", re.IGNORECASE),
 ]
 
 
@@ -865,15 +883,22 @@ class ASINineKeysGuard:
             "V1077 measurement = ASI",  # v03 ≠ asi
             "V1077 ASI score reached",  # v04 ≠ asi
         ]
-        runner_confusions = sum(
-            1 for s in runner_text_samples
-            if self.detect_fake_kpi(s) or "asi" in s.lower()
-        )
+        # R11-SEC-001: tautological `runner_confusions` counter removed.
         # 真测: 这些样本应被识别为 fake
+        # R11-SEC-001: explicit per-sample detect_fake_kpi + missed counter.
         runner_confusion = 0
+        runner_missed = 0
         for sample in runner_text_samples:
-            if "runner = asi" in sample.lower() or "achieved asi" in sample.lower():
-                runner_confusion += 1
+            sample_lower = sample.lower()
+            is_self_claim = (
+                "runner = asi" in sample_lower
+                or "achieved asi" in sample_lower
+            )
+            if is_self_claim:
+                if self.detect_fake_kpi(sample):
+                    runner_confusion += 1
+                else:
+                    runner_missed += 1
 
         if runner_confusion > 0:
             threats.append(ThreatRecord(
@@ -904,10 +929,13 @@ class ASINineKeysGuard:
                 blocked=True,
             ))
 
+        # R11-SEC-001: gate_passed requires every self-claim / v-confusion sample
+        # to be correctly classified by detect_fake_kpi.
         gate_passed = (
             keys_locked
             and n_fake_kpi == len(fake_kpi_payloads)
-            and runner_confusion > 0  # 真测了 — 识别出潜在混淆
+            and runner_missed == 0
+            and runner_confusion > 0
             and v_confusions > 0
         )
 
@@ -1001,8 +1029,9 @@ class CrossDomainThreatSuite:
             re.compile(r"AKIA[0-9A-Z]{16}"),     # AWS
             re.compile(r"ghp_[a-zA-Z0-9]{36}"),   # GitHub
             re.compile(r"-----BEGIN [A-Z ]+PRIVATE KEY-----"),
-            re.compile(r"password\s*[:=]\s*\S+", re.IGNORECASE),
-            re.compile(r"api[_-]?key\s*[:=]\s*['\"]?[a-zA-Z0-9]{16,}", re.IGNORECASE),
+            # R11-SEC-001: require >=4 char value to avoid "password:" empty/short noise.
+            re.compile(r"""password\s*[:=]\s*['"]?[a-zA-Z0-9!@#$%^&*+_\-]{4,}['"]?""" , re.IGNORECASE),
+            re.compile(r"""api[_-]?key\s*[:=]\s*['"\"]?[a-zA-Z0-9]{16,}""", re.IGNORECASE),
         ]
         return any(p.search(text) for p in patterns)
 
