@@ -132,6 +132,23 @@ class TestMeasurementRunner:
         result = runner.measure("reinforcement_learning")
         assert result["score"] > 0
 
+    def test_open_rubric_score_filled(self):
+        """R12 fix: rubric_open 0.0 → > 0 via V36 HQB 4-dim real measure on V1003 V4."""
+        r = DimensionRegistry()
+        runner = MeasurementRunner(r)
+        result = runner.measure("rubric_open")
+        assert result["score"] > 0.0, f"rubric_open must be > 0, got {result}"
+        assert 0.0 <= result["score"] <= 1.0
+        # 真测 V36 HQB 4 维 应有 raw.method 标识
+        assert result.get("raw", {}).get("method") == "v36_hqb_4dim_v1003_v4"
+        # V1003 提供 7 哲学问题, 全 anchor + 全 refs
+        raw = result["raw"]
+        assert raw["n_answers"] >= 7
+        assert raw["sc"] == 1.0  # 7 答案全 anchor
+        assert raw["nr"] == 1.0  # 7 key 唯一 (>= 7/7)
+        assert raw["ev"] > 0.0   # 答案长度 > 0
+        assert raw["cdt"] > 0.0  # references > 0
+
 
 class TestFullMeasurementAggregator:
     """Test FullMeasurementAggregator."""
@@ -144,6 +161,23 @@ class TestFullMeasurementAggregator:
         assert result.n_dims_measured == 17
         assert result.n_dims_filled >= 13  # at least 13/17 should be filled
         assert result.runtime_ms > 0
+
+    def test_aggregate_all_17_filled_r12_fix(self):
+        """R12 fix: V1077 dashboard dim 缺口闭合. 17/17 维度都必须 score > 0."""
+        agg = FullMeasurementAggregator()
+        result = agg.aggregate()
+        assert result.n_dims_filled == 17, (
+            f"n_dims_filled must be 17/17 after R12 fix, got {result.n_dims_filled}/17. "
+            f"zero-score dims: {[n for n, s in result.dim_breakdown.items() if s <= 0.0]}"
+        )
+        # rubric_open 必须是 17 之一
+        assert "rubric_open" in result.dim_breakdown
+        assert result.dim_breakdown["rubric_open"] > 0.0
+        # 权重必须 sum=1.0 + rubric_open 有非零权重
+        assert abs(result.total_weight - 1.0) < 1e-9
+        weights = V04_WEIGHTS
+        assert weights["rubric_open"] > 0.0
+        assert weights["eternal_identity"] > 0.0
 
     def test_aggregate_weights_sum(self):
         agg = FullMeasurementAggregator()
