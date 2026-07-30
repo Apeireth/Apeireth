@@ -21,6 +21,8 @@ tracing-subscriber = { workspace = true }
 criterion = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+futures = "0.3"
+tempfile = "3.10"
 
 apeireth-core = { path = "../apeireth-core" }
 apeireth-ports = { path = "../apeireth-ports" }
