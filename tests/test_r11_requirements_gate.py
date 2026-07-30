@@ -26,6 +26,7 @@ from apeireth.r11_requirements_gate import (
     gate_b_dashboard_version_contract,
     gate_c_v3_nine_key_guard,
     gate_e_git_traceability,
+    gate_d_test_evidence,
     render_markdown_report,
     run_all_gates,
 )
@@ -161,6 +162,103 @@ def test_gate_a_fails_when_v1136_falls_out_of_range(monkeypatch):
     assert "continuity" in r.reason and "越界" in r.reason, (
         f"gate A 失败必须给出明确原因; got: {r.reason}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Gate D — Test evidence (主 17:43 实事求是: 跑 pytest 子集)
+# ---------------------------------------------------------------------------
+
+
+def test_gate_d_fails_when_all_test_files_missing(tmp_path):
+    """当全部门 test files 缺失 → gate D 必拒服 (主 17:43 实事求是)."""
+    r = gate_d_test_evidence(
+        tmp_path,
+        test_files=("tests/nonexistent_a.py", "tests/nonexistent_b.py"),
+    )
+    assert not r.passed, "全缺时必须 FAIL"
+    assert "缺失" in r.reason or "missing" in r.reason.lower()
+    assert r.details["present_test_files"] == []
+    assert len(r.details["missing_test_files"]) == 2
+
+
+def test_gate_d_degrades_when_some_files_missing(tmp_path, monkeypatch):
+    """当部分 files 缺失 → gate D 必透明化记 warning + 仍尝试跑在场子集.
+
+    主 17:43 实事求是: 跨 worktree 跑 gate 时, 部分 P0 测试文件可能尚未 commit
+    (如 automation_test_engineer 仍在写 tests/test_r11_p0_regression_guard.py).
+    gate 不能因为 1 个文件未 commit 就死锁; 但要透明化记 missing_warning.
+    """
+    import apeireth.r11_requirements_gate as g
+
+    captured: dict = {}
+
+    def fake_proc(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return {
+            "ok": True,
+            "returncode": 0,
+            "stdout": "============================= 7 passed in 1.23s =============================\n",
+            "stderr": "",
+            "elapsed_seconds": 1.5,
+        }
+
+    monkeypatch.setattr(g, "_run_python_module", fake_proc)
+
+    r = g.gate_d_test_evidence(
+        tmp_path,
+        test_files=(
+            "tests/_test_present_in_gate_d.py",  # 假定会建 (tmp_path /) 但不在场
+            "tests/_test_missing_in_gate_d.py",
+        ),
+    )
+
+    # 两文件都缺 → 仍走"全缺"分支
+    # 但若 1 个在场, 应该尝试跑在场
+    # 这里两都缺, 所以 fail
+    assert not r.passed
+    assert len(r.details["missing_test_files"]) == 2
+
+
+def test_gate_d_runs_present_files_and_passes(monkeypatch):
+    """当 1 个在场 + 1 个缺失 → gate D 跑在场文件 + pass (主 17:43 实事求是)."""
+    import apeireth.r11_requirements_gate as g
+
+    captured: dict = {}
+
+    def fake_proc(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return {
+            "ok": True,
+            "returncode": 0,
+            "stdout": "============================= 3 passed in 0.5s =============================\n",
+            "stderr": "",
+            "elapsed_seconds": 0.6,
+        }
+
+    monkeypatch.setattr(g, "_run_python_module", fake_proc)
+
+    # 在 tmp_path 下建 1 个在场文件
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        td_path = Path(td)
+        (td_path / "tests").mkdir()
+        (td_path / "tests" / "_gate_d_present.py").write_text("# stub\n", encoding="utf-8")
+        r = g.gate_d_test_evidence(
+            td_path,
+            test_files=(
+                "tests/_gate_d_present.py",
+                "tests/_gate_d_missing.py",
+            ),
+        )
+    assert r.passed, f"在场子集全过 → gate D 应 PASS; reason={r.reason}"
+    assert r.details["missing_warning"]  # 必须透明化
+    assert r.details["present_test_files"] == ["tests/_gate_d_present.py"]
+    # _run_python_module 签名: (module, args=()) → positional=module name, kwargs['args']=list
+    pytest_args = captured.get("kwargs", {}).get("args", ())
+    assert "tests/_gate_d_present.py" in pytest_args
+    assert "tests/_gate_d_missing.py" not in pytest_args
 
 
 # ---------------------------------------------------------------------------
