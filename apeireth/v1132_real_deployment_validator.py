@@ -48,19 +48,38 @@ class V1132DeploymentReport:
     subprocess_runs_failed: int = 0
     health_probes_ok: int = 0
     health_probes_failed: int = 0
+    canonical_bundle_valid: bool = False
     checks: List[CheckResult] = field(default_factory=list)
     artefacts: Dict[str, str] = field(default_factory=dict)
     notes: List[str] = field(default_factory=list)
 
     @property
-    def passed(self) -> bool:
+    def offline_valid(self) -> bool:
+        """Static/subprocess validation only; this does not claim containers ran."""
         return (
-            self.compose_files_parsed >= 3
+            self.compose_files_parsed >= 2
             and self.services_seen >= 5
-            and self.k8s_manifests_ok >= 1
-            and self.dockerfile_valid >= 1
+            and self.k8s_manifests_ok >= 3
+            and self.dockerfile_valid >= 2
+            and self.subprocess_runs_ok >= 2
+            and self.subprocess_runs_failed == 0
+            and self.canonical_bundle_valid
+        )
+
+    @property
+    def runtime_valid(self) -> bool:
+        """Strict runtime result: daemon and the canonical HTTP endpoint both ran."""
+        return (
+            self.offline_valid
+            and self.docker_daemon_available
+            and self.health_probes_ok >= 1
             and self.health_probes_failed == 0
         )
+
+    @property
+    def passed(self) -> bool:
+        # Backwards-compatible strict verdict. Offline validation is reported separately.
+        return self.runtime_valid
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -76,6 +95,9 @@ class V1132DeploymentReport:
             "subprocess_runs_failed": self.subprocess_runs_failed,
             "health_probes_ok": self.health_probes_ok,
             "health_probes_failed": self.health_probes_failed,
+            "canonical_bundle_valid": self.canonical_bundle_valid,
+            "offline_valid": self.offline_valid,
+            "runtime_valid": self.runtime_valid,
             "checks": [
                 {"name": c.name, "passed": c.passed, "detail": c.detail, "ms": round(c.ms, 3)}
                 for c in self.checks
@@ -180,12 +202,32 @@ def _subprocess_run_python(code: str, timeout: float = 30.0) -> Tuple[int, str, 
 
 
 def _http_probe(url: str, timeout: float = 2.0) -> Tuple[bool, str]:
-    """Honest HTTP probe via urllib (no requests dependency)."""
+    """Honest HTTP probe via urllib (no requests dependency).
+
+    R11-SEC-001 (SSRF hardening):
+      严格 scheme 白名单 (http/https) + host 白名单 (loopback).
+      拒绝 file:// / gopher:// / ftp:// / data: + 任何非 loopback host.
+      防止: 内部端口扫面 (127.0.0.1:3306) / 元数据接口 (169.254.169.254)
+             / 任意网络外泄 / file:// 读取本地敏感文件.
+    """
     try:
+        from urllib.parse import urlparse
         from urllib.request import urlopen  # type: ignore
         from urllib.error import URLError, HTTPError  # type: ignore
     except ImportError:
         return False, "urllib unavailable"
+    try:
+        parsed = urlparse(url)
+    except Exception as e:
+        return False, f"url parse error: {type(e).__name__}: {e}"
+    if parsed.scheme not in ("http", "https"):
+        return False, f"refused: scheme={parsed.scheme!r} not in (http, https)"
+    host = (parsed.hostname or "").lower()
+    if host not in _LOOPBACK_HOSTS:
+        return False, f"refused: host={host!r} not in loopback allowlist"
+    if parsed.port is not None and parsed.port not in _LOOPBACK_PORTS:
+        # 留口子: 显式 allowlist 端口(由调用方决定); 不在白名单 = 拒绝
+        return False, f"refused: port={parsed.port} not in loopback allowlist"
     try:
         resp = urlopen(url, timeout=timeout)
         return (200 <= resp.status < 400), f"HTTP {resp.status}"
@@ -193,6 +235,12 @@ def _http_probe(url: str, timeout: float = 2.0) -> Tuple[bool, str]:
         return False, f"HTTP {e.code}"
     except (URLError, socket.timeout, ConnectionRefusedError) as e:
         return False, f"{type(e).__name__}: {e}"
+
+
+# R11-SEC-001: SSRF 防护 — host 白名单仅 loopback(127.0.0.1 / localhost / ::1)
+# 端口允许列表覆盖历史生成器端口和 canonical V1075 端口 8765.
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1", "0.0.0.0", "0:0:0:0:0:0:0:1"})
+_LOOPBACK_PORTS = frozenset({80, 443, 8080, 8081, 8082, 8132, 8765})
 
 
 # ---------- main orchestrator ----------
@@ -295,27 +343,108 @@ class V1132DeploymentValidator:
         ok2, kdetail = _validate_k8s_yaml(all_arts["k8s-deployment.yaml"])
         if ok2:
             self.report.k8s_manifests_ok += 1
-        return CheckResult("v1032_subprocess_render", True, f"files={out.strip()}; dockerfile={detail}; k8s={kdetail}", ms)
+        return CheckResult("v1032_subprocess_render", ok and ok2, f"files={out.strip()}; dockerfile={detail}; k8s={kdetail}", ms)
+
+    def check_canonical_bundle(self) -> CheckResult:
+        """Validate deploy/Dockerfile + Compose + Kubernetes as one offline bundle."""
+        deploy_dir = os.path.join(self.repo_root, "deploy")
+        dockerfile_path = os.path.join(deploy_dir, "Dockerfile")
+        compose_path = os.path.join(deploy_dir, "docker-compose.yml")
+        k8s_path = os.path.join(deploy_dir, "k8s-asi.yaml")
+        requirements_path = os.path.join(deploy_dir, "requirements.txt")
+        required_paths = (dockerfile_path, compose_path, k8s_path, requirements_path)
+        missing = [p for p in required_paths if not os.path.isfile(p)]
+        if missing:
+            return CheckResult("canonical_bundle", False, f"missing files: {missing}")
+
+        try:
+            import yaml  # type: ignore
+            with open(dockerfile_path, encoding="utf-8") as f:
+                dockerfile = f.read()
+            with open(k8s_path, encoding="utf-8") as f:
+                k8s_text = f.read()
+            with open(requirements_path, encoding="utf-8") as f:
+                requirements = f.read()
+            compose, compose_detail = _parse_compose(compose_path)
+            k8s_ok, k8s_detail = _validate_k8s_yaml(k8s_text)
+            dockerfile_ok, dockerfile_detail = _validate_dockerfile(dockerfile)
+            if compose is None or not k8s_ok or not dockerfile_ok:
+                return CheckResult(
+                    "canonical_bundle", False,
+                    f"compose={compose_detail}; dockerfile={dockerfile_detail}; k8s={k8s_detail}",
+                )
+
+            service = (compose.get("services") or {}).get("asi-api") or {}
+            build = service.get("build") or {}
+            compose_ports = {str(p) for p in service.get("ports") or []}
+            health_text = str(service.get("healthcheck") or {})
+            env = service.get("environment") or {}
+
+            docs = [d for d in yaml.safe_load_all(k8s_text) if isinstance(d, dict)]
+            deployment = next((d for d in docs if d.get("kind") == "Deployment"), None)
+            k8s_service = next((d for d in docs if d.get("kind") == "Service"), None)
+            if deployment is None or k8s_service is None:
+                return CheckResult("canonical_bundle", False, "Kubernetes requires Deployment + Service")
+
+            spec = deployment.get("spec") or {}
+            pod_spec = (((spec.get("template") or {}).get("spec")) or {})
+            containers = pod_spec.get("containers") or []
+            container = containers[0] if containers else {}
+            selector = (spec.get("selector") or {}).get("matchLabels") or {}
+            pod_labels = ((spec.get("template") or {}).get("metadata") or {}).get("labels") or {}
+            svc_spec = k8s_service.get("spec") or {}
+            svc_ports = svc_spec.get("ports") or []
+            probes = [container.get(name) or {} for name in ("startupProbe", "readinessProbe", "livenessProbe")]
+
+            assertions = {
+                "pinned_python_base": "FROM python:3.13.14-slim-bookworm" in dockerfile,
+                "runtime_requirements_copied": "COPY deploy/requirements.txt" in dockerfile,
+                "non_root_image": "USER 10001:10001" in dockerfile,
+                "dockerfile_port": "EXPOSE 8765" in dockerfile,
+                "dockerfile_server": "apeireth.v1075_asi_real_deployment_run" in dockerfile,
+                "dependencies_pinned": "fastapi==" in requirements and "uvicorn==" in requirements,
+                "compose_context": isinstance(build, dict) and build.get("context") == ".." and build.get("dockerfile") == "deploy/Dockerfile",
+                "compose_image": service.get("image") == "apeireth-asi:0.1.0",
+                "compose_port": "8765:8765" in compose_ports,
+                "compose_health": "8765/health" in health_text,
+                "compose_env": isinstance(env, dict) and str(env.get("V1075_PORT")) == "8765",
+                "k8s_selector": bool(selector) and selector.items() <= pod_labels.items() and svc_spec.get("selector") == selector,
+                "k8s_image": container.get("image") == service.get("image"),
+                "k8s_port": any(p.get("containerPort") == 8765 for p in container.get("ports") or []),
+                "k8s_service_port": any(p.get("targetPort") == 8765 for p in svc_ports),
+                "k8s_probes": all((p.get("httpGet") or {}).get("port") == 8765 and (p.get("httpGet") or {}).get("path") == "/health" for p in probes),
+                "k8s_non_root": (pod_spec.get("securityContext") or {}).get("runAsNonRoot") is True,
+                "k8s_rollout": spec.get("revisionHistoryLimit") == 3 and (spec.get("strategy") or {}).get("type") == "RollingUpdate",
+            }
+            failed = sorted(name for name, passed in assertions.items() if not passed)
+            if failed:
+                return CheckResult("canonical_bundle", False, f"semantic checks failed: {failed}")
+
+            self.report.canonical_bundle_valid = True
+            self.report.dockerfile_valid += 1
+            self.report.k8s_manifests_ok += 1
+            return CheckResult(
+                "canonical_bundle", True,
+                f"{len(assertions)}/{len(assertions)} semantic checks passed; image=apeireth-asi:0.1.0 port=8765",
+            )
+        except Exception as e:
+            return CheckResult("canonical_bundle", False, f"{type(e).__name__}: {e}")
 
     def check_health_probes(self) -> List[CheckResult]:
-        """Probe the same ports that V1008/V1032 declare. Honest: most will fail
-        because no container is running; we record both ok and failed counts."""
+        """Probe only the canonical deploy/ endpoint; generated examples are offline-only."""
         results: List[CheckResult] = []
-        targets = [
-            ("http://127.0.0.1:8132/health", "v1132-self"),
-            ("http://127.0.0.1:8080/health", "v1008-default"),
-            ("http://127.0.0.1:8081/health", "v1009-streamlit"),
-            ("http://127.0.0.1:8082/health", "v1032-default"),
-        ]
+        targets = [("http://127.0.0.1:8765/health", "canonical-v1075")]
         for url, label in targets:
             (ok, detail), ms = _time_call(lambda u=url: _http_probe(u, timeout=1.5))
             if ok:
                 self.report.health_probes_ok += 1
                 results.append(CheckResult(f"probe[{label}]", True, f"{detail} ({url})", ms))
             else:
-                # expected to fail without docker; counted as failed but acceptable
                 self.report.health_probes_failed += 1
-                results.append(CheckResult(f"probe[{label}]", False, f"expected without docker: {detail}", ms))
+                results.append(CheckResult(
+                    f"probe[{label}]", False,
+                    f"runtime not verified at {url}: {detail}", ms,
+                ))
         return results
 
     def check_consistency(self) -> CheckResult:
@@ -337,11 +466,11 @@ class V1132DeploymentValidator:
         common = (s1008 & s1032) | (s1008 & sr8) | (s1032 & sr8)
         if not common and (s1008 or s1032 or sr8):
             self.report.notes.append(
-                f"V1008 services={sorted(s1008)}, V1032 services={sorted(s1032)}, "
-                f"R8 services={len(sr8)} — different naming conventions, no shared service keys"
+                f"historical V1008/V1032/R8 examples use distinct service names; canonical deploy/ bundle is checked separately: "
+                f"v1008={sorted(s1008)} v1032={sorted(s1032)} r8_n={len(sr8)}"
             )
             return CheckResult("consistency_check", True,
-                               f"intentional divergence: v1008={sorted(s1008)} v1032={sorted(s1032)} r8_n={len(sr8)}")
+                               f"historical generators isolated; canonical bundle governs deploy/: v1008={sorted(s1008)} v1032={sorted(s1032)} r8_n={len(sr8)}")
         return CheckResult("consistency_check", True, f"shared_service_keys={sorted(common)}")
 
     # ---- orchestration ----
@@ -351,6 +480,7 @@ class V1132DeploymentValidator:
         self.report.checks.extend(self.check_compose_files())
         self.report.checks.append(self.check_v1008_render())
         self.report.checks.append(self.check_v1032_render())
+        self.report.checks.append(self.check_canonical_bundle())
         self.report.checks.append(self.check_consistency())
         self.report.checks.extend(self.check_health_probes())
         return self.report
@@ -369,7 +499,10 @@ def render_markdown(report: V1132DeploymentReport) -> str:
         f"- dockerfile_valid: **{report.dockerfile_valid}**",
         f"- subprocess_runs_ok / failed: **{report.subprocess_runs_ok}** / {report.subprocess_runs_failed}",
         f"- health_probes_ok / failed: **{report.health_probes_ok}** / {report.health_probes_failed}",
-        f"- passed: **{report.passed}**",
+        f"- canonical_bundle_valid: **{report.canonical_bundle_valid}**",
+        f"- offline_valid: **{report.offline_valid}** (static/subprocess only; no container claim)",
+        f"- runtime_valid: **{report.runtime_valid}** (requires daemon + live canonical health probe)",
+        f"- passed: **{report.passed}** (strict runtime verdict)",
         "",
         "## Checks",
         "",
