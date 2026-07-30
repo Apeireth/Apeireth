@@ -1,17 +1,20 @@
-# ASI docker-compose v2 — V1075 (借鉴 ComposeV2 services/healthcheck/depends_on)
+# Canonical local deployment. Run from repository root:
+#   docker compose -f deploy/docker-compose.yml up --build -d
 services:
   asi-api:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     image: apeireth-asi:0.1.0
-    container_name: apeireth-asi
     restart: unless-stopped
+    init: true
     ports:
       - "8765:8765"
     environment:
-      - ASI_VERSION=0.1.0
-      - OTEL_SERVICE_NAME=apeireth-asi
-      - V1075_HOST=0.0.0.0
-      - V1075_PORT=8765
+      ASI_VERSION: "0.1.0"
+      OTEL_SERVICE_NAME: apeireth-asi
+      V1075_HOST: 0.0.0.0
+      V1075_PORT: "8765"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/health',timeout=3)"]
       interval: 15s

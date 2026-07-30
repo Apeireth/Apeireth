@@ -139,8 +139,6 @@ st.markdown("""
 | metric | value |
 |--------|-------|
 | ASI 北极星 (target) | 0.98 |
-| V0.5 (latest) | 0.8532 |
-| gap | 0.1268 (12.94%) |
 
 ## Live endpoints
 
@@ -151,10 +149,13 @@ st.markdown("""
 - /v1006/themes — research themes
 
 ## Pages inventory (from V1009)
-""')
+""")
 
 for _p in __PAGES__:
     st.markdown(f"- {_p}")
+
+from apeireth.v1136_dashboard import measure_dashboard_state, render_streamlit_v05
+render_streamlit_v05(st, measure_dashboard_state())
 
 st.success("V1134 Streamlit real startup OK")
 '''
@@ -223,7 +224,14 @@ def run_real_streamlit(
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            env={
+                **os.environ,
+                "PYTHONUNBUFFERED": "1",
+                "PYTHONPATH": os.pathsep.join(filter(None, [
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    os.environ.get("PYTHONPATH", ""),
+                ])),
+            },
         )
     except (FileNotFoundError, OSError) as e:
         rep.notes.append(f"failed to spawn streamlit: {type(e).__name__}: {e}")
