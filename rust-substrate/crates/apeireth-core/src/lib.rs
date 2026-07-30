@@ -33,6 +33,7 @@ pub mod reconsolidate;
 pub mod forget;
 pub mod wal;
 pub mod tier;
+pub mod dispatcher;
 
 pub use episode::Episode;
 pub use note::Note;
@@ -42,3 +43,8 @@ pub use memory::{Memory, Tier, TierTransition};
 // Re-export tier_manager API
 pub use tier::TierManager;
 pub mod deliberation;
+
+// Re-export dispatcher types (V30 async_dispatcher Rust port)
+pub use dispatcher::{
+    AsyncTask, ContextObject, ContextType, DispatcherStats, PluginType, TaskKind, TaskStatus,
+};
