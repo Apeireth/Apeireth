@@ -151,10 +151,80 @@ def recall(ctx: click.Context, session_id: Optional[str], query: str) -> None:
     store.close()
 
 
+@cli.command(name="consolidate")
+@click.option("--session-id", default=None,
+              help="Target session id (default: last)")
+@click.option("--note-threshold", default=0.2, type=float,
+              help="Forget notes with confidence below this (default: 0.2)")
+@click.option("--merge-threshold", default=0.85, type=float,
+              help="Merge notes with cosine similarity >= this (default: 0.85)")
+@click.pass_context
+def consolidate_cmd(ctx: click.Context, session_id: Optional[str],
+                     note_threshold: float, merge_threshold: float) -> None:
+    """周期 consolidate: 从 Episode 提炼 Note + 合并相似 + 更新 IdentityCard.
+
+    主 17:43 实事求是: 启发式, Phase 2 LLM 接入后换 LLM 提炼.
+    """
+    from mvp.memory import consolidate as cm
+    from mvp.memory import forget as fm
+
+    db_path = ctx.obj["db"]
+    # IdentityCard JSON 路径 = db_path 同目录 + 不同后缀, 避免读 SQLite binary
+    card_path = db_path.with_suffix(".card.json")
+    store = _make_store(db_path)
+    sid = session_id or store.last_session()
+    if sid is None:
+        click.echo("no previous session; use --new-session first", err=True)
+        sys.exit(1)
+
+    episodes = store.list_episodes(session_id=sid, limit=200)
+    if not episodes:
+        click.echo(f"no episodes in session {sid}; nothing to consolidate")
+        store.close()
+        return
+
+    # 1. extract_notes (启发式)
+    card = idcard.load(card_path)
+    notes = cm.extract_notes(episodes, card)
+
+    # 2. merge_similar_notes (cosine)
+    notes = cm.merge_similar_notes(notes, threshold=merge_threshold)
+
+    # 3. forget_low_confidence_notes
+    notes = fm.forget_low_confidence_notes(notes, threshold=note_threshold)
+
+    # 4. 写回 Store (先清空旧 notes for session, 再 add)
+    # Ponytail: Phase 1.2 简化方案, 全删全加. Phase 1.4 可换 upsert by content.
+    store._conn.execute("DELETE FROM notes")
+    store._conn.commit()
+    saved: list = []
+    for n in notes:
+        saved_note = store.add_note(
+            content=n.content,
+            source_episode_ids=n.source_episode_ids,
+            confidence=n.confidence,
+            tags=n.tags,
+        )
+        saved.append(saved_note)
+
+    # 5. IdentityCard consolidate
+    added = list(card.owner_background)
+    card.consolidate(saved)
+    new_added = [x for x in card.owner_background if x not in added]
+    idcard.save(card, card_path)
+
+    click.echo(f"consolidated: {len(episodes)} episodes → {len(saved)} notes"
+               f" (forget < {note_threshold}, merge >= {merge_threshold})")
+    if new_added:
+        click.echo(f"identity evolved: +{new_added}")
+    store.close()
+
+
 cli.add_command(new_session)
 cli.add_command(resume_session)
 cli.add_command(chat)
 cli.add_command(recall)
+cli.add_command(consolidate_cmd)
 
 
 def main() -> None:
