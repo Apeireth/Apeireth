@@ -44,6 +44,37 @@ DEFAULT_PORT = 8080
 DEFAULT_PROVIDER = "template"  # 无依赖即可跑 (主 17:43 实事求是)
 DEFAULT_MODEL = "apeireth-default"
 
+# R11 security hardening (R11-SEC-001):
+# - Body size cap prevents OOM DoS via huge Content-Length (OWASP A05:2021).
+# - Messages count + per-content size cap prevents prompt-bomb DoS.
+# - All limits are env-overridable for tests; defaults are conservative.
+MAX_BODY_BYTES = int(os.environ.get("APEIRETH_MAX_BODY_BYTES", 1 * 1024 * 1024))       # 1 MiB
+MAX_MESSAGES_COUNT = int(os.environ.get("APEIRETH_MAX_MESSAGES_COUNT", 100))
+MAX_MESSAGE_CONTENT_BYTES = int(os.environ.get("APEIRETH_MAX_MESSAGE_CONTENT_BYTES", 32 * 1024))
+MAX_TOTAL_CONTENT_BYTES = int(os.environ.get("APEIRETH_MAX_TOTAL_CONTENT_BYTES", 256 * 1024))
+
+
+def _safe_path_label(raw_path: str, max_len: int = 64) -> str:
+    """R11-SEC-001: 返回可安全回显到 JSON / 日志的路径标签.
+
+    防御:
+    - CR/LF 回车注入 (破坏 header / 日志行)
+    - 控制字符 (0x00-0x1F, 0x7F)
+    - 超长原始路径撑大响应
+    仅保留可见 ASCII, 其它替换为 '?'.
+    """
+    if not isinstance(raw_path, str):
+        raw_path = str(raw_path)
+    cleaned = "".join(c if 0x20 <= ord(c) < 0x7F else "?" for c in raw_path)
+    # 截断前剥离 query / fragment 防止超长 URL 撑大响应
+    for sep in ("?", "#"):
+        idx = cleaned.find(sep)
+        if idx >= 0:
+            cleaned = cleaned[:idx]
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len] + "..."
+    return cleaned
+
 
 # -----------------------------------------------------------------------------
 # Internal: 12 生命特征 / HQB / philosophy guard 在这里跑 (不外显)
@@ -225,9 +256,10 @@ def make_handler(state: _ServerState) -> type:
             if self.path == "/v1/models":
                 self._send_json(200, build_models_response(state.model))
                 return
+            # R11-SEC-001: 不回显原始 self.path (CR/LF/控制字符 + 超长输入可注入)
             self._send_json(404, {
                 "error": {
-                    "message": f"not found: {self.path}",
+                    "message": f"not found: {_safe_path_label(self.path)}",
                     "type": "invalid_request_error",
                     "code": "not_found",
                 }
@@ -235,15 +267,58 @@ def make_handler(state: _ServerState) -> type:
 
         def do_POST(self) -> None:  # noqa: N802
             if self.path != "/v1/chat/completions":
+                # R11-SEC-001: 不回显原始 self.path
                 self._send_json(404, {
                     "error": {
-                        "message": f"not found: {self.path}",
+                        "message": f"not found: {_safe_path_label(self.path)}",
                         "type": "invalid_request_error",
                         "code": "not_found",
                     }
                 })
                 return
-            length = int(self.headers.get("Content-Length", 0))
+            # R11-SEC-001: 强制 Content-Type=application/json (避免 form/multipart 绕过)
+            ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+            if ctype and ctype != "application/json":
+                self._send_json(415, {
+                    "error": {
+                        "message": "Content-Type must be application/json",
+                        "type": "invalid_request_error",
+                        "code": "unsupported_media_type",
+                    }
+                })
+                return
+            # R11-SEC-001: Content-Length 上限 — 防止 OOM (OWASP A05:2021)
+            cl_header = self.headers.get("Content-Length")
+            if cl_header is None:
+                self._send_json(411, {
+                    "error": {
+                        "message": "Content-Length required",
+                        "type": "invalid_request_error",
+                        "code": "length_required",
+                    }
+                })
+                return
+            try:
+                length = int(cl_header)
+            except ValueError:
+                self._send_json(400, {
+                    "error": {
+                        "message": "invalid Content-Length",
+                        "type": "invalid_request_error",
+                        "code": "bad_request",
+                    }
+                })
+                return
+            if length < 0 or length > MAX_BODY_BYTES:
+                self._send_json(413, {
+                    "error": {
+                        "message": f"body too large: limit={MAX_BODY_BYTES}",
+                        "type": "invalid_request_error",
+                        "code": "payload_too_large",
+                    }
+                })
+                return
+            # R11-SEC-001: 即使 Content-Length 在限内, 实际 read 也限到 length (防 split response)
             try:
                 raw = self.rfile.read(length).decode("utf-8")
                 req = json.loads(raw) if raw else {}
@@ -264,6 +339,54 @@ def make_handler(state: _ServerState) -> type:
                         "message": "messages must be non-empty list",
                         "type": "invalid_request_error",
                         "code": "bad_request",
+                    }
+                })
+                return
+            # R11-SEC-001: 消息数上限 (DoS 防护)
+            if len(messages) > MAX_MESSAGES_COUNT:
+                self._send_json(413, {
+                    "error": {
+                        "message": f"too many messages: limit={MAX_MESSAGES_COUNT}",
+                        "type": "invalid_request_error",
+                        "code": "payload_too_large",
+                    }
+                })
+                return
+            # R11-SEC-001: 单条 content 大小 + 总量上限 (DoS 防护)
+            total_content = 0
+            for i, m in enumerate(messages):
+                if not isinstance(m, dict):
+                    self._send_json(400, {
+                        "error": {
+                            "message": f"message[{i}] must be object",
+                            "type": "invalid_request_error",
+                            "code": "bad_request",
+                        }
+                    })
+                    return
+                content = m.get("content", "")
+                if not isinstance(content, str):
+                    content = str(content) if content is not None else ""
+                if len(content.encode("utf-8")) > MAX_MESSAGE_CONTENT_BYTES:
+                    self._send_json(413, {
+                        "error": {
+                            "message": (
+                                f"message[{i}] content too large: limit={MAX_MESSAGE_CONTENT_BYTES}"
+                            ),
+                            "type": "invalid_request_error",
+                            "code": "payload_too_large",
+                        }
+                    })
+                    return
+                total_content += len(content.encode("utf-8"))
+            if total_content > MAX_TOTAL_CONTENT_BYTES:
+                self._send_json(413, {
+                    "error": {
+                        "message": (
+                            f"total content too large: limit={MAX_TOTAL_CONTENT_BYTES}"
+                        ),
+                        "type": "invalid_request_error",
+                        "code": "payload_too_large",
                     }
                 })
                 return

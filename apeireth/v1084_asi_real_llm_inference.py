@@ -53,6 +53,7 @@ import hashlib
 import json
 import os
 import socket
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -122,6 +123,8 @@ class LLMEndpointConfig:
     input_price_per_1k: float = 0.002  # USD
     output_price_per_1k: float = 0.006  # USD
     headers_extra: Dict[str, str] = field(default_factory=dict)
+    # Optional provider response version guard. Standard OpenAI responses may omit it.
+    expected_api_version: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = asdict(self)
@@ -290,13 +293,58 @@ class LLMHTTPClient:
                 raw = resp.read().decode("utf-8")
                 latency_ms = (time.perf_counter() - start) * 1000.0
                 data = json.loads(raw) if raw else {}
+                if not isinstance(data, dict):
+                    return {
+                        "_error": "PartialResponse: top-level JSON is not an object",
+                        "_status": "partial",
+                        "_response_type": type(data).__name__,
+                    }, latency_ms
                 return data, latency_ms
-        except (urllib.error.URLError, urllib.error.HTTPError, socket.timeout, TimeoutError) as e:
+        except urllib.error.HTTPError as e:
             latency_ms = (time.perf_counter() - start) * 1000.0
-            return {"_error": f"{type(e).__name__}: {e}", "_latency_ms": latency_ms}, latency_ms
+            # 主 17:43 实事求是: 任何 HTTPError 一律报 http_error 终态
+            # (5xx 看起来像 transport, 但客户端无法区分上游瞬时 vs 持续,
+            #  所以尊重协议: 收到底层 HTTPError 就停止重试, 失败语义真暴露).
+            return {
+                "_error": f"HTTPError {e.code}: {e.reason}",
+                "_status": "http_error",
+                "_latency_ms": latency_ms,
+            }, latency_ms
+        except (ssl.SSLError, urllib.error.URLError, socket.timeout, TimeoutError, OSError) as e:
+            latency_ms = (time.perf_counter() - start) * 1000.0
+            return {
+                "_error": f"{type(e).__name__}: {e}",
+                "_status": "transport_error",
+                "_latency_ms": latency_ms,
+            }, latency_ms
         except (json.JSONDecodeError, ValueError) as e:
             latency_ms = (time.perf_counter() - start) * 1000.0
-            return {"_error": f"JSONDecodeError: {e}", "_latency_ms": latency_ms}, latency_ms
+            return {"_error": f"JSONDecodeError: {e}", "_status": "invalid_json", "_latency_ms": latency_ms}, latency_ms
+
+    def _validate_response(self, data: Dict[str, Any]) -> Tuple[bool, str]:
+        """Validate the small OpenAI-compatible response contract.
+
+        A 2xx transport response is not necessarily a usable completion.  Keep
+        partial/schema failures explicit so callers can choose fallback without
+        claiming that the provider produced a complete answer.
+        """
+        expected = self.config.expected_api_version
+        if expected is not None:
+            actual = data.get("api_version", data.get("version"))
+            if actual is not None and actual != expected:
+                return False, f"ProviderVersionMismatch: expected {expected!r}, got {actual!r}"
+
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return False, "PartialResponse: missing non-empty choices"
+        first = choices[0]
+        if not isinstance(first, dict):
+            return False, "PartialResponse: first choice is not an object"
+        message = first.get("message")
+        content = message.get("content") if isinstance(message, dict) else None
+        if not isinstance(content, str) or not content.strip():
+            return False, "PartialResponse: missing non-empty assistant message content"
+        return True, "ok"
 
     def call(self, request: InferenceRequest) -> Tuple[Dict[str, Any], float, str]:
         """真调 LLM API, 真重试. 返回 (json, latency_ms, status)."""
@@ -309,14 +357,26 @@ class LLMHTTPClient:
             data, latency = self._do_request_once(payload)
             last_data, last_latency = data, latency
             if "_error" not in data:
-                last_status = "ok"
-                return data, latency, last_status
-            # retry-able error
+                valid, validation = self._validate_response(data)
+                if valid:
+                    return data, latency, "ok"
+                # A response was received, but it is not a complete compatible
+                # completion. Do not retry it as a transport failure or call it ok.
+                data = dict(data)
+                data["_error"] = validation
+                data["_status"] = "version_mismatch" if validation.startswith("ProviderVersionMismatch:") else "partial"
+                last_data = data
+                return data, latency, data["_status"]
+            # Only retry transport failures. HTTP/protocol errors are deterministic
+            # responses; repeating them can amplify provider load without recovery.
+            error_status = str(data.get("_status", "error"))
+            if error_status != "transport_error":
+                return data, latency, error_status
             if attempt < self.config.max_retries:
                 time.sleep(self.config.retry_backoff_s * (attempt + 1))
                 last_status = "retry"
             else:
-                last_status = "error"
+                last_status = error_status
         return last_data, last_latency, last_status
 
     def is_reachable(self) -> bool:
@@ -426,6 +486,11 @@ class InferenceEngine:
             choices = data.get("choices", [])
             text = ""
             finish_reason = ""
+            # Only complete live/offline completions are user-visible.  A provider
+            # schema/version error may include a tempting partial message; keep it
+            # in audit metadata, not in the successful response text.
+            if status not in {"ok", "mock"}:
+                choices = []
             if choices:
                 msg = choices[0].get("message", {})
                 text = msg.get("content", "")
@@ -452,7 +517,11 @@ class InferenceEngine:
                 cost_usd=cost,
                 model_id=request.model_id or self.endpoint.model_id,
                 status=status,
-                error=data.get("_error"),
+                error=(
+                    f"{status}: {data.get('_error')}"
+                    if data.get("_error") and status not in str(data.get("_error"))
+                    else data.get("_error")
+                ),
                 endpoint=self.endpoint.name,
                 finish_reason=finish_reason or ("stop" if status == "ok" else ""),
                 ts_iso=datetime.now(timezone.utc).isoformat(),
@@ -488,12 +557,14 @@ class InferenceEngine:
             self._last_was_mock = False
             return self._parse_response(data, request, latency, status)
 
-        # HTTP failed → mock fallback (主 17:43 实事求是)
+        # HTTP failed or returned an unusable/partial response → mock fallback.
+        # Preserve the provider evidence; a deterministic response is not live output.
+        provider_error = data.get("_error", "unknown")
         if self.endpoint.mock_fallback:
             data, mock_latency = self.mock.call(request)
             self._last_was_mock = True
             resp = self._parse_response(data, request, mock_latency, "mock")
-            resp.error = f"HTTP failed: {data.get('_error', 'unknown')}; mock fallback used"
+            resp.error = f"{status}: {provider_error}; mock fallback used"
             return resp
 
         # No fallback
