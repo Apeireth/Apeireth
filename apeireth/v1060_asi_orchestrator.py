@@ -338,6 +338,13 @@ class TestVerifier:
 
     真借鉴 (Ansible 2012 inventory pattern):
     - inventory = 模块 + 对应测试文件的映射
+
+    R11 V0.4 closure (主 17:43 实事求是): in addition to the exact
+    ``test_{module_name}.py`` filename check, we accept short-name tests
+    (e.g. ``test_v1074.py``) that *actually* import this module — proven by
+    AST import inspection, not string grep. This repairs the long-standing
+    data-access bug where ~80 short-name tests were ignored by the
+    engineering dimension, dragging V0.4 base below the 0.85 target.
     """
 
     def __init__(self, module_dir: Optional[pathlib.Path] = None):
@@ -345,12 +352,31 @@ class TestVerifier:
         self.test_dir = self.module_dir.parent / "tests"
 
     def verify(self, modules: List[ModuleInfo]) -> List[ModuleInfo]:
-        """Verify test file existence for each module."""
+        """Verify test file existence for each module (exact + AST ownership)."""
+        # Lazy import to keep this class import-cheap when r11 is absent
+        try:
+            from apeireth.r11_v04_test_ownership import (
+                find_tests_owning_module as _r11_find,
+            )
+            r11_available = True
+        except Exception:
+            r11_available = False
+
         for info in modules:
             test_path = self.test_dir / f"test_{info.module_name}.py"
             if test_path.exists():
                 info.has_test_file = True
                 info.test_file_path = str(test_path.resolve())
+                continue
+            if r11_available:
+                owners = _r11_find(
+                    info.module_name,
+                    apeireth_dir=self.module_dir,
+                    test_dir=self.test_dir,
+                )
+                if owners:
+                    info.has_test_file = True
+                    info.test_file_path = str(owners[0].resolve())
         return modules
 
     def test_coverage(self, modules: List[ModuleInfo]) -> float:
