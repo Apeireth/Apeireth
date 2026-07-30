@@ -169,6 +169,24 @@ def _build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("demo", help="run the user-facing demo phases 1-5")
     commands.add_parser("tui", help="open the terminal observation console")
+
+    gate_parser = commands.add_parser(
+        "gate", help="run the R11 P0 acceptance gate (Omnibus §9 A/B/C)"
+    )
+    gate_parser.add_argument(
+        "--workspace", default=".",
+        help="workspace root (default: current dir)",
+    )
+    gate_parser.add_argument(
+        "--strict", action="store_true",
+        help="exit 1 if any gate fails (CI use)",
+    )
+    gate_parser.add_argument(
+        "--json", action="store_true", help="emit JSON instead of Markdown report"
+    )
+    gate_parser.add_argument(
+        "--out", default=None, help="write report to this file (default: stdout)"
+    )
     return parser
 
 
@@ -206,6 +224,42 @@ def main(argv: Sequence[str] | None = None) -> int:
         except Exception as exc:
             print(f"apeireth: tui failed: {exc}", file=sys.stderr)
             return 1
+
+    if args.command == "gate":
+        # Delegate to the R11 P0 acceptance gate module (主 17:43 实事求是).
+        # Surfaces exit code from the gate: 0 = all pass, 1 = some fail, 2 = bad input.
+        from .r11_requirements_gate import run_all_gates, render_markdown_report
+        from pathlib import Path as _Path
+
+        workspace = _Path(args.workspace).resolve()
+        if not workspace.exists():
+            print(f"apeireth: gate workspace 不存在: {workspace}", file=sys.stderr)
+            return 2
+        results = run_all_gates(workspace)
+        n_pass = sum(1 for r in results.values() if r.passed)
+        n_total = len(results)
+
+        if args.json:
+            import json as _json
+            payload = {
+                "workspace": str(workspace),
+                "n_pass": n_pass,
+                "n_total": n_total,
+                "all_passed": n_pass == n_total,
+                "results": {k: v.to_dict() for k, v in results.items()},
+            }
+            out_text = _json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+        else:
+            out_text = render_markdown_report(results)
+
+        if args.out:
+            _Path(args.out).write_text(out_text, encoding="utf-8")
+            print(f"apeireth: gate report → {args.out} ({n_pass}/{n_total} PASS)")
+        else:
+            print(out_text)
+        if args.strict and n_pass != n_total:
+            return 1
+        return 0
 
     parser.print_help()
     return 0
