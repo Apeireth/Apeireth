@@ -1,0 +1,8 @@
+timestamp_utc=2026-07-30T07:01:46Z
+docker_path=MISSING
+/usr/bin/bash: line 1: docker: command not found
+docker_info_rc=127
+docker_compose_path=MISSING
+kubectl_path=MISSING
+/usr/bin/bash: line 1: kubectl: command not found
+kubectl_client_rc=127
