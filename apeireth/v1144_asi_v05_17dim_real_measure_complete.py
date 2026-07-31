@@ -221,22 +221,37 @@ def _measure_real_production() -> float:
 
 
 def _measure_cognitive_core() -> float:
-    """V1107 cognitive_core_lift 真分 — V1107CognitiveLift 类.execute_full_lift().
+    """V1156 cognitive_core V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    V1107CognitiveLift.execute_full_lift() 返回 dict (version/repair/dream/...).
-    真测: dict 中 'n_patterns' / 'n_edges' / 'n_concepts' 总和 / 30 = lift 强度.
+    真测 (主 17:43 实事求是):
+      1. V1156.measure_cognitive_core_v06() → 5 sub-dim 真测 (C1-C5)
+      2. fallback → V1145.execute_full_lift_v2() 真 lift
+      3. fallback → V1107.execute_full_lift() 真 lift
+      4. 最后 fallback → 0.0 (V1144 baseline 0.5 已被 V1156 接替)
     """
-    mod = _safe_import("apeireth.v1107_cognitive_core_lift")
+    # 优先 V1156 (主 22:33 V1156 = V0.6 真补主入口)
+    try:
+        import importlib
+        v1156_mod = importlib.import_module("apeireth.v1156_asi_cognitive_core_v06_real_measure")
+        fn = getattr(v1156_mod, "measure_cognitive_core_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback 1: V1145 V0.5 真补 (主 22:33 V1145 = V1144 cognitive_core 真测漏接)
+    mod = _safe_import("apeireth.v1145_asi_cognitive_core_v2")
     if mod is not None:
-        cls = _attr_first(mod, ["V1107CognitiveLift", "CognitiveCoreLift", "CognitiveLift"])
+        cls = _attr_first(mod, ["V1145CognitiveCoreV2", "CognitiveCoreV2"])
         if cls is not None:
             try:
                 inst = cls()
-                fn = getattr(inst, "execute_full_lift", None)
-                if fn is not None:
-                    result = fn()
+                fn2 = getattr(inst, "execute_full_lift_v2", None)
+                if fn2 is not None:
+                    result = fn2()
                     if isinstance(result, dict):
-                        # 真测: 综合 lift 强度 (n_patterns + n_concepts + n_edges) / 30
                         score = 0.0
                         for k in ["n_patterns", "n_concepts", "n_edges"]:
                             v = result.get(k, 0)
@@ -244,15 +259,41 @@ def _measure_cognitive_core() -> float:
                                 score += min(10.0, float(v)) / 30.0
                         if score > 0:
                             return min(1.0, score)
-                        # 至少有 repair/dream/sleep 步骤
+                        n_steps = sum(1 for k in ["repair", "dream", "sleep", "consolidate", "verify"] if k in result)
+                        return 0.4 + 0.15 * n_steps  # 0.4 / 0.55 / 0.7 / 0.85 / 1.0
+                mdim = getattr(inst, "measure_dim", None)
+                if callable(mdim):
+                    r = mdim()
+                    if isinstance(r, (int, float)) and r > 0:
+                        return min(1.0, float(r))
+            except Exception:
+                return 0.3
+
+    # fallback 2: V1107 原
+    mod = _safe_import("apeireth.v1107_cognitive_core_lift")
+    if mod is not None:
+        cls = _attr_first(mod, ["V1107CognitiveLift", "CognitiveCoreLift", "CognitiveLift"])
+        if cls is not None:
+            try:
+                inst = cls()
+                fn3 = getattr(inst, "execute_full_lift", None)
+                if fn3 is not None:
+                    result = fn3()
+                    if isinstance(result, dict):
+                        score = 0.0
+                        for k in ["n_patterns", "n_concepts", "n_edges"]:
+                            v = result.get(k, 0)
+                            if isinstance(v, (int, float)) and v > 0:
+                                score += min(10.0, float(v)) / 30.0
+                        if score > 0:
+                            return min(1.0, score)
                         n_steps = sum(1 for k in ["repair", "dream", "sleep"] if k in result)
-                        return 0.3 + 0.2 * n_steps  # 0.3 / 0.5 / 0.7
-                # fallback: 实例化 + injected_components 计数
+                        return 0.3 + 0.2 * n_steps
                 injected = getattr(inst, "injected_components", None)
                 if isinstance(injected, (list, tuple, set)):
                     return min(0.8, 0.1 * len(injected))
             except Exception:
-                return 0.2  # 能 import 但 instantiate 失败
+                return 0.2
     return 0.0
 
 
