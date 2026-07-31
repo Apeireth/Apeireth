@@ -1,18 +1,17 @@
-# ASI V0.6 Trend Heatmap — v1155-fe71e8cb
+# ASI V0.6 Trend Heatmap — v1155-2b6a4473
 
-- **taken_at**: 2026-08-01 00:41:49
+- **taken_at**: 2026-08-01 00:45:29
 - **version**: 0.1.0
-- **git_commit**: `53036f59` (dirty)
-- **score**: **0.8423**
+- **git_commit**: `960cd2a3` (dirty)
+- **score**: **0.8593**
 - **north_star (LOCKED)**: 0.9800
-- **gap**: **-0.1377** (score - north_star)
+- **gap**: **-0.1207** (score - north_star)
 - **dims**: 21 total | R=21 H=0 P=0 M=0
 
 ## 21-dim Heatmap (sorted by value asc)
 
 | dim | value | weight | bar | status | source |
 |-----|------:|-------:|-----|:------:|--------|
-| `self_improving_core` | 0.5000 | 0.0500 | `██████████░░░░░░░░░░` | R | V0.5 hardcoded |
 | `plugin_core` | 0.6500 | 0.0500 | `█████████████░░░░░░░` | R | V0.5 hardcoded |
 | `engineering` | 0.6636 | 0.0500 | `█████████████░░░░░░░` | R | V0.5 hardcoded |
 | `vcp_deep_read` | 0.6667 | 0.0375 | `█████████████░░░░░░░` | R | V1147 |
@@ -20,6 +19,7 @@
 | `v2_philosophy` | 0.7143 | 0.0500 | `██████████████░░░░░░` | R | V0.5 hardcoded |
 | `reinforcement_learning` | 0.7272 | 0.0500 | `███████████████░░░░░` | R | V0.5 hardcoded |
 | `self_organizing_core` | 0.8000 | 0.0500 | `████████████████░░░░` | R | V0.5 hardcoded |
+| `self_improving_core` | 0.8400 | 0.0500 | `█████████████████░░░` | R | V0.5 hardcoded |
 | `phi_proxy` | 0.8441 | 0.0500 | `█████████████████░░░` | R | V0.5 hardcoded |
 | `eternal_identity` | 0.8441 | 0.0500 | `█████████████████░░░` | R | V1072 |
 | `capabilities` | 0.8636 | 0.0500 | `█████████████████░░░` | R | V1133 |
