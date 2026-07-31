@@ -1,0 +1,164 @@
+{
+  "snapshot_id": "v1155-ed6ff16f",
+  "taken_at": 1785517092.937831,
+  "version": "0.1.0",
+  "git_commit": "026aaa58",
+  "git_dirty": true,
+  "score": 0.8929,
+  "north_star": 0.98,
+  "gap": -0.0871,
+  "n_dims": 21,
+  "n_real": 21,
+  "n_hardcoded": 0,
+  "n_partial": 0,
+  "n_missing": 0,
+  "dims": [
+    {
+      "dim": "phi_proxy",
+      "weight": 0.049999999999999996,
+      "value": 0.8441,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "capabilities",
+      "weight": 0.049999999999999996,
+      "value": 0.8636,
+      "status": "R",
+      "source": "V1133"
+    },
+    {
+      "dim": "cross_domain",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1071"
+    },
+    {
+      "dim": "engineering",
+      "weight": 0.049999999999999996,
+      "value": 0.9199999999999999,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "vcp_4",
+      "weight": 0.049999999999999996,
+      "value": 0.9588,
+      "status": "R",
+      "source": "V1071"
+    },
+    {
+      "dim": "v2_philosophy",
+      "weight": 0.049999999999999996,
+      "value": 0.72,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "rubric_open",
+      "weight": 0.049999999999999996,
+      "value": 0.8800000000000001,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "real_production",
+      "weight": 0.049999999999999996,
+      "value": 0.96,
+      "status": "R",
+      "source": "V1151"
+    },
+    {
+      "dim": "cognitive_core",
+      "weight": 0.049999999999999996,
+      "value": 0.9199999999999999,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "self_organizing_core",
+      "weight": 0.049999999999999996,
+      "value": 0.8,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "plugin_core",
+      "weight": 0.049999999999999996,
+      "value": 0.8800000000000001,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "self_improving_core",
+      "weight": 0.049999999999999996,
+      "value": 0.8400000000000001,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "neurosymbolic",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "world_model",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "reinforcement_learning",
+      "weight": 0.049999999999999996,
+      "value": 0.7272,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "scientific_method",
+      "weight": 0.049999999999999996,
+      "value": 0.9499999999999998,
+      "status": "R",
+      "source": "V0.5 hardcoded"
+    },
+    {
+      "dim": "eternal_identity",
+      "weight": 0.049999999999999996,
+      "value": 0.8441,
+      "status": "R",
+      "source": "V1072"
+    },
+    {
+      "dim": "llm_bridge",
+      "weight": 0.0375,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1152"
+    },
+    {
+      "dim": "multi_agent_dag",
+      "weight": 0.0375,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1149"
+    },
+    {
+      "dim": "vcp_real_run",
+      "weight": 0.0375,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1148"
+    },
+    {
+      "dim": "vcp_deep_read",
+      "weight": 0.0375,
+      "value": 0.6666666666666666,
+      "status": "R",
+      "source": "V1147"
+    }
+  ]
+}
