@@ -1,12 +1,12 @@
 {
-  "snapshot_id": "v1155-dc598e78",
-  "taken_at": 1785516721.5162961,
+  "snapshot_id": "v1155-38e84440",
+  "taken_at": 1785516864.029679,
   "version": "0.1.0",
-  "git_commit": "7d9370e9",
+  "git_commit": "6780080a",
   "git_dirty": true,
-  "score": 0.8836,
+  "score": 0.8926,
   "north_star": 0.98,
-  "gap": -0.0964,
+  "gap": -0.0874,
   "n_dims": 21,
   "n_real": 21,
   "n_hardcoded": 0,
@@ -58,7 +58,7 @@
     {
       "dim": "rubric_open",
       "weight": 0.049999999999999996,
-      "value": 0.7,
+      "value": 0.8800000000000001,
       "status": "R",
       "source": "V0.5 hardcoded"
     },
