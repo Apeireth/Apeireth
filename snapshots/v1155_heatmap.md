@@ -1,18 +1,17 @@
-# ASI V0.6 Trend Heatmap — v1155-2b6a4473
+# ASI V0.6 Trend Heatmap — v1155-c63a1082
 
-- **taken_at**: 2026-08-01 00:45:29
+- **taken_at**: 2026-08-01 00:49:23
 - **version**: 0.1.0
-- **git_commit**: `960cd2a3` (dirty)
-- **score**: **0.8593**
+- **git_commit**: `afa34bd0` (dirty)
+- **score**: **0.8708**
 - **north_star (LOCKED)**: 0.9800
-- **gap**: **-0.1207** (score - north_star)
+- **gap**: **-0.1092** (score - north_star)
 - **dims**: 21 total | R=21 H=0 P=0 M=0
 
 ## 21-dim Heatmap (sorted by value asc)
 
 | dim | value | weight | bar | status | source |
 |-----|------:|-------:|-----|:------:|--------|
-| `plugin_core` | 0.6500 | 0.0500 | `█████████████░░░░░░░` | R | V0.5 hardcoded |
 | `engineering` | 0.6636 | 0.0500 | `█████████████░░░░░░░` | R | V0.5 hardcoded |
 | `vcp_deep_read` | 0.6667 | 0.0375 | `█████████████░░░░░░░` | R | V1147 |
 | `rubric_open` | 0.7000 | 0.0500 | `██████████████░░░░░░` | R | V0.5 hardcoded |
@@ -23,6 +22,7 @@
 | `phi_proxy` | 0.8441 | 0.0500 | `█████████████████░░░` | R | V0.5 hardcoded |
 | `eternal_identity` | 0.8441 | 0.0500 | `█████████████████░░░` | R | V1072 |
 | `capabilities` | 0.8636 | 0.0500 | `█████████████████░░░` | R | V1133 |
+| `plugin_core` | 0.8800 | 0.0500 | `██████████████████░░` | R | V0.5 hardcoded |
 | `cognitive_core` | 0.9200 | 0.0500 | `██████████████████░░` | R | V0.5 hardcoded |
 | `scientific_method` | 0.9500 | 0.0500 | `███████████████████░` | R | V0.5 hardcoded |
 | `vcp_4` | 0.9588 | 0.0500 | `███████████████████░` | R | V1071 |
