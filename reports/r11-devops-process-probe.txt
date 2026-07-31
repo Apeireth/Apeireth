@@ -1,0 +1,86 @@
+report: reports\r11-v1075-process\deployment-report.md
+{
+  "state": "STOPPED",
+  "mode": "process",
+  "host": "127.0.0.1",
+  "port": 8875,
+  "pid": 20408,
+  "artifacts": [
+    {
+      "path": "reports\\r11-v1075-process\\Dockerfile",
+      "kind": "dockerfile",
+      "content": "# ASI Real Deployment Dockerfile — V1075 (主 23:44 干到底)\n# 借鉴 Docker 2013 HEALTHCHECK + 12-Factor 2011 config + OTel 2019 resource\nFROM python:3.11-slim\n\nLABEL org.opencontainers.image.title=\"apeireth-asi\" \\\n      org.opencontainers.image.version=\"0.1.0\" \\\n      org.opencontainers.image.source=\"apeireth\" \\\n      org.opencontainers.image.licenses=\"Apache-2.0\"\n\nENV PYTHONUNBUFFERED=1 \\\n    PYTHONDONTWRITEBYTECODE=1 \\\n    PIP_NO_CACHE_DIR=1 \\\n    ASI_VERSION=\"0.1.0\" \\\n    OTEL_SERVICE_NAME=apeireth-asi \\\n    OTEL_SERVICE_VERSION=0.1.0\n\nWORKDIR /app\n\nCOPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\n\nCOPY apeireth/ ./apeireth/\nCOPY deploy/ ./deploy/\n\nEXPOSE 8875\n\nHEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \\\n    CMD python -c \"import urllib.request,sys;\\\nr=urllib.request.urlopen('http://127.0.0.1:8875/health',timeout=3);\\\nsys.exit(0 if r.status==200 else 1)\"\n\nCMD [\"python\", \"-m\", \"apeireth.v1075_asi_real_deployment_run\", \"--serve\", \"--host\", \"0.0.0.0\", \"--port\", \"8875\"]\n",
+      "sha256": "604da21208f9e0a9"
+    },
+    {
+      "path": "reports\\r11-v1075-process\\docker-compose.yml",
+      "kind": "compose",
+      "content": "# ASI docker-compose v2 — V1075 (借鉴 ComposeV2 services/healthcheck/depends_on)\nservices:\n  asi-api:\n    build: .\n    image: apeireth-asi:0.1.0\n    container_name: apeireth-asi\n    restart: unless-stopped\n    ports:\n      - \"8875:8875\"\n    environment:\n      - ASI_VERSION=0.1.0\n      - OTEL_SERVICE_NAME=apeireth-asi\n      - V1075_HOST=0.0.0.0\n      - V1075_PORT=8875\n    healthcheck:\n      test: [\"CMD\", \"python\", \"-c\", \"import urllib.request;urllib.request.urlopen('http://127.0.0.1:8875/health',timeout=3)\"]\n      interval: 15s\n      timeout: 5s\n      retries: 3\n      start_period: 10s\n    deploy:\n      resources:\n        limits:\n          cpus: \"1.0\"\n          memory: 512M\n",
+      "sha256": "c04b043aae233132"
+    },
+    {
+      "path": "reports\\r11-v1075-process\\k8s-asi.yaml",
+      "kind": "k8s",
+      "content": "# ASI Kubernetes Deployment — V1075 (借鉴 K8sProbes liveness/readiness/startup)\napiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: apeireth-asi\n  labels:\n    app: apeireth-asi\n    version: \"0.1.0\"\nspec:\n  replicas: 1\n  selector:\n    matchLabels:\n      app: apeireth-asi\n  template:\n    metadata:\n      labels:\n        app: apeireth-asi\n        version: \"0.1.0\"\n      annotations:\n        sidecar.istio.io/inject: \"false\"\n    spec:\n      containers:\n        - name: asi-api\n          image: apeireth-asi:0.1.0\n          imagePullPolicy: IfNotPresent\n          ports:\n            - name: http\n              containerPort: 8875\n          env:\n            - name: ASI_VERSION\n              value: \"0.1.0\"\n            - name: OTEL_SERVICE_NAME\n              value: apeireth-asi\n            - name: V1075_HOST\n              value: \"0.0.0.0\"\n            - name: V1075_PORT\n              value: \"8875\"\n          resources:\n            limits:\n              cpu: \"1\"\n              memory: \"512Mi\"\n          livenessProbe:\n            httpGet:\n              path: /health\n              port: 8875\n            initialDelaySeconds: 10\n            periodSeconds: 15\n            timeoutSeconds: 5\n            failureThreshold: 3\n          readinessProbe:\n            httpGet:\n              path: /health\n              port: 8875\n            initialDelaySeconds: 5\n            periodSeconds: 10\n            timeoutSeconds: 3\n            failureThreshold: 2\n          startupProbe:\n            httpGet:\n              path: /health\n              port: 8875\n            initialDelaySeconds: 0\n            periodSeconds: 5\n            timeoutSeconds: 3\n            failureThreshold: 12\n---\napiVersion: v1\nkind: Service\nmetadata:\n  name: apeireth-asi\nspec:\n  type: ClusterIP\n  selector:\n    app: apeireth-asi\n  ports:\n    - name: http\n      port: 80\n      targetPort: 8875\n",
+      "sha256": "ef84f9f53ed359dc"
+    },
+    {
+      "path": "reports\\r11-v1075-process\\apeireth-asi.service",
+      "kind": "systemd",
+      "content": "# ASI systemd unit — V1075 (借鉴 systemd2010 [Service] ExecStart Restart)\n[Unit]\nDescription=Apeireth ASI Real Service (V1075)\nAfter=network-online.target\nWants=network-online.target\n\n[Service]\nType=simple\nUser=apeireth\nWorkingDirectory=/opt/apeireth\nEnvironment=ASI_VERSION=0.1.0\nEnvironment=V1075_HOST=0.0.0.0\nEnvironment=V1075_PORT=8875\nExecStart=/usr/bin/python3 -m apeireth.v1075_asi_real_deployment_run --serve --host 0.0.0.0 --port 8875\nRestart=on-failure\nRestartSec=5\nStandardOutput=journal\nStandardError=journal\nSyslogIdentifier=apeireth-asi\n\n[Install]\nWantedBy=multi-user.target\n",
+      "sha256": "23c058b4ae9f75b7"
+    },
+    {
+      "path": "reports\\r11-v1075-process\\apeireth-asi.supervisor.conf",
+      "kind": "supervisor",
+      "content": "; ASI supervisord program — V1075 (借鉴 supervisord2004 program autorestart)\n[program:apeireth-asi]\ncommand=/usr/bin/python3 -m apeireth.v1075_asi_real_deployment_run --serve --host 0.0.0.0 --port 8875\ndirectory=/opt/apeireth\nuser=apeireth\nautostart=true\nautorestart=true\nstartsecs=5\nstartretries=3\nstopsignal=TERM\nstopwaitsecs=10\nstdout_logfile=/var/log/apeireth-asi.out.log\nstderr_logfile=/var/log/apeireth-asi.err.log\nenvironment=ASI_VERSION=\"0.1.0\",V1075_HOST=\"0.0.0.0\",V1075_PORT=\"8875\"\n",
+      "sha256": "cce9389e80bc0fc9"
+    },
+    {
+      "path": "reports\\r11-v1075-process\\.env.example",
+      "kind": "env_example",
+      "content": "# ASI env example (12-Factor 2011)\nASI_VERSION=0.1.0\nV1075_HOST=127.0.0.1\nV1075_PORT=8875\nOTEL_SERVICE_NAME=apeireth-asi\nOTEL_SERVICE_VERSION=0.1.0\n",
+      "sha256": "5a5c7873bdeb1c58"
+    }
+  ],
+  "health": {
+    "healthy": true,
+    "status_code": 200,
+    "latency_ms": 1150.4003000154626,
+    "body": "{\"status\":\"ok\",\"service\":\"apeireth-asi\",\"version\":\"0.1.0\",\"python\":\"3.13.14\",\"platform\":\"Windows-11-10.0.26200-SP0\",\"pid\":20408,\"ts\":\"2026-07-30T07:01:48.531513+00:00\",\"endpoint\":\"health\"}",
+    "error": "",
+    "attempt": 1,
+    "attempts_total": 5
+  },
+  "started_at": "2026-07-30T07:01:47.369189+00:00",
+  "stopped_at": "2026-07-30T07:01:48.543286+00:00",
+  "duration_sec": 1.17409640000551,
+  "logs": [
+    "[1/6] probing environment",
+    "  docker=False compose=False port_free=True",
+    "[2/6] mode=process",
+    "[3/6] writing artifacts to reports\\r11-v1075-process",
+    "  wrote 6 artifacts",
+    "[4/6] starting uvicorn on 127.0.0.1:8875",
+    "  pid=20408",
+    "[5/6] health check (5 retries)",
+    "  healthy status=200 latency=1150.4ms attempt=1",
+    "[6/6] stopping service",
+    "  uvicorn stopped=True"
+  ],
+  "error": "",
+  "env_info": {
+    "docker_available": false,
+    "docker_version": "",
+    "compose_available": false,
+    "compose_version": "",
+    "python_version": "3.13.14",
+    "port_free": true,
+    "port_in_use_by": "",
+    "platform": "win32",
+    "notes": [
+      "platform=win32 python=3.13.14",
+      "docker: 未安装"
+    ]
+  }
+}
