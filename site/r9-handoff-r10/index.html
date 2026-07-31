@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="technical_writer (R9-TW-001)" />
+      <link rel="shortcut icon" href="../img/favicon.ico" />
+    <title>R9 → R10 移交 - 阿佩瑞斯 Apeireth — R9 文档站</title>
+    <link rel="stylesheet" href="../css/theme.css" />
+    <link rel="stylesheet" href="../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "R9 \u2192 R10 \u79fb\u4ea4";
+        var mkdocs_page_input_path = "r9-handoff-r10.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href=".." class="icon icon-home"> 阿佩瑞斯 Apeireth — R9 文档站
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="..">首页</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">R9 阶段</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../r9-architecture-overview/">R9 架构总览</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../r9-modules-reference/">R9 关键模块参考</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">R9 → R10 移交</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#0-5-0056">0. 5 分钟接手指南 (主 00:56 任何人都能接手)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#01">0.1 一句话理解项目</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#02-5-3">0.2 5 分钟内必读 3 件事</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#03-1">0.3 接手第 1 步:跑三件套验证环境</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#04">0.4 关键路径速查</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#1-r9-w4-1743">1. R9 W4 末真测状态 (主 17:43 实事求是)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#11-asi-dashboard">1.1 ASI 北极星 Dashboard</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#12-5-halting-2055">1.2 5 Halting 信号真跑 (主 20:55 红皇后守门)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#13-w4">1.3 W4 末主轨道决策 (沿用 / 切换)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#14-v3-9-locked">1.4 V3 守门 + 主哲学 9 键 (LOCKED)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-r9-r10-checklist-15-715-467">2. R9 → R10 移交 Checklist (15 项, 7/15 通过 = 46.7%)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-r10-1331-2344">3. R10 起点路径 (主 13:31 大胆激进 + 主 23:44 干到底)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#31-r10">3.1 R10 起点硬指标 (任何人都能拍板)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#32-r10-p0p1p2-2344">3.2 R10 P0/P1/P2 任务清单 (主 23:44)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#33-r10-2233">3.3 R10 中期 / 长期目标 (主 22:33)</a>
+    </li>
+        </ul>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4-locked">4. 主哲学继承 (LOCKED, 不可改)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-r10-5">5. R10 起点必读 5 份报告</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-5-1743-0056">6. 5 分钟快速复测 (主 17:43 实事求是 + 主 00:56)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-r10-1304">7. R10 阶段禁戒 (主 13:04 造地基不能有杂质)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-r10">8. 一句话留给 R10 全团</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#0056">附录: 关键文件 + 关键命令 速查卡 (主 00:56)</a>
+        <ul>
+    <li class="toctree-l3"><a class="reference internal" href="#a1">A.1 关键文件路径</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#a2">A.2 关键命令</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#a3-commit-r9-12-commits">A.3 真 commit 累计 (R9 阶段 ≥12 commits)</a>
+    </li>
+    <li class="toctree-l3"><a class="reference internal" href="#a4-1743">A.4 真测试覆盖 (主 17:43 实事求是)</a>
+    </li>
+        </ul>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">架构模块</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1072-eternal-identity/">V1072 永恒身份</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1095-fsync-enforcement/">V1095 fsync 强制</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1112-dgm-v04-evolution/">V1112 DGM v0.4 演化</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1119-integration-verifier/">V1119 集成验证</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1124-asi-north-star-backend/">V1124 北极星后端</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1125-r10-integration-protocol/">V1125 R10 协议</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../architecture/v1126-r10-integration-baseline/">V1126 R10 baseline</a>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="..">阿佩瑞斯 Apeireth — R9 文档站</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href=".." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">R9 阶段</li>
+      <li class="breadcrumb-item active">R9 → R10 移交</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="r9-r10-v04-r10">R9 → R10 移交文档 — 阿佩瑞斯 V0.4 真测末态 + R10 起点路径<a class="headerlink" href="#r9-r10-v04-r10" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>作者</strong>: technical_writer (R9-TW-001 · W4 末)
+<strong>真测来源</strong>: V1074 V0.3 真跑 + V1077 V0.4 17 维真跑 + V1103 Top-5 P2 真跑 + V1119 W4 末集成验证
+<strong>生成时间</strong>: R9 W4 末 (基于 <code>reports/r9-w4-integration-final-report.md</code> 自动产出)
+<strong>配套文档</strong>: <code>docs/r9-architecture-overview.md</code> (架构总览) + <code>docs/r9-modules-reference.md</code> (模块参考)
+<strong>守门主哲学</strong>: 主 22:33 ASI 北极星 + 主 17:43 实事求是 + 主 23:44 干到底 + 主 19:33 走在前人经验上 + 主 00:56 任何人都能接手 + 主 13:31 大胆激进 + 主 20:55 红皇后</p>
+</blockquote>
+<hr />
+<h2 id="0-5-0056">0. 5 分钟接手指南 (主 00:56 任何人都能接手)<a class="headerlink" href="#0-5-0056" title="Permanent link">&para;</a></h2>
+<h3 id="01">0.1 一句话理解项目<a class="headerlink" href="#01" title="Permanent link">&para;</a></h3>
+<p><strong>阿佩瑞斯 (Apeireth)</strong> = 以 ASI (Artificial Super Intelligence) 为终极目标的 AI 基座平台。<strong>任何 LLM 接入即获 AGI/ASI 能力</strong>。当前 R9 阶段 V0.4 真测 = <strong>0.8202 (W4 末)</strong>, ASI 北极星 = <strong>0.9800 LOCKED (永不达, 永逼近)</strong>。</p>
+<h3 id="02-5-3">0.2 5 分钟内必读 3 件事<a class="headerlink" href="#02-5-3" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>ASI 北极星 = 0.9800 LOCKED</strong> (主 22:33, 永不降低, 永逼近)</li>
+<li><strong>V1074 V0.3 ≥ 0.8884 是守门线</strong> (主 17:43, 任何时候不可破)</li>
+<li><strong>主轨道 = Track D (DGM v0.4 真演化)</strong> (V0.4 ∈ [0.82, 0.83) 自动落定)</li>
+</ol>
+<h3 id="03-1">0.3 接手第 1 步:跑三件套验证环境<a class="headerlink" href="#03-1" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="nb">cd</span><span class="w"> </span>REDACTED/.openclaw/workspace/promethean
+
+<span class="c1"># 1. V1074 V0.3 守门 (期望 ≥ 0.8884)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1074_asi_production_runner<span class="w"> </span>--measure<span class="w"> </span>v03
+
+<span class="c1"># 2. V1077 V0.4 17 维 (期望 ≥ 0.85, W4 末)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1077_asi_v04_full_measurement<span class="w"> </span>--full-eval
+
+<span class="c1"># 3. V1103 Top-5 P2 诊断</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1103_r8p2_diagnostic<span class="w"> </span>--top5
+
+<span class="c1"># 4. V1119 W4 末集成验证 (一键)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1119_w4_integration_validator<span class="w"> </span>--week<span class="w"> </span>W4<span class="w"> </span>--handoff<span class="w"> </span>--report
+
+<span class="c1"># 5. 测试套件</span>
+python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_v1072.py<span class="w"> </span>tests/test_v1095_identity_store.py<span class="w"> </span><span class="se">\</span>
+<span class="w">                  </span>tests/test_v1112_dgm_v04.py<span class="w"> </span>tests/test_v1114_weekly_evaluator.py<span class="w"> </span><span class="se">\</span>
+<span class="w">                  </span>tests/test_v1119_w4_validator.py<span class="w"> </span>-v
+
+<span class="c1"># 6. 文档站本地预览</span>
+mkdocs<span class="w"> </span>serve<span class="w">    </span><span class="c1"># → http://127.0.0.1:8000</span>
+</code></pre></div>
+
+<h3 id="04">0.4 关键路径速查<a class="headerlink" href="#04" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>用途</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>项目根</td>
+<td><code>redacted/.openclaw/workspace/promethean/</code></td>
+</tr>
+<tr>
+<td>核心模块</td>
+<td><code>apeireth/v1072_asi_central_ai_eternal_identity.py</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>apeireth/v1095_identity_store.py</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>apeireth/v1112_dgm_v04.py</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>apeireth/v1114_weekly_integration_evaluator.py</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>apeireth/v1119_w4_integration_validator.py</code></td>
+</tr>
+<tr>
+<td>测试</td>
+<td><code>tests/test_v1072.py</code> (555L), <code>tests/test_v1095_identity_store.py</code> (773L)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tests/test_v1112_dgm_v04.py</code> (580L), <code>tests/test_v1114_weekly_evaluator.py</code> (344L)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>tests/test_v1119_w4_validator.py</code> (582L)</td>
+</tr>
+<tr>
+<td>文档</td>
+<td><code>docs/r9-architecture-overview.md</code> (433L)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>docs/r9-modules-reference.md</code> (922L)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>docs/r9-handoff-r10.md</code> (本文档)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>docs/architecture/{v1072,v1095,v1112,v1119}*.md</code></td>
+</tr>
+<tr>
+<td>报告</td>
+<td><code>reports/r9-w4-integration-final-report.md</code> (V1119 自动产出)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>reports/r9-handoff-r10-prep.md</code> (R9-INT-004 前置)</td>
+</tr>
+<tr>
+<td></td>
+<td><code>reports/r9-integration-evaluation-w3.md</code> (V1114 W3 末)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-r9-w4-1743">1. R9 W4 末真测状态 (主 17:43 实事求是)<a class="headerlink" href="#1-r9-w4-1743" title="Permanent link">&para;</a></h2>
+<h3 id="11-asi-dashboard">1.1 ASI 北极星 Dashboard<a class="headerlink" href="#11-asi-dashboard" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th style="text-align: right;">真测 / 值</th>
+<th>状态</th>
+<th>阈值 / 备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ASI 北极星</strong></td>
+<td style="text-align: right;"><strong>0.9800</strong></td>
+<td><strong>LOCKED</strong></td>
+<td>主 22:33, 永不达, 永逼近</td>
+</tr>
+<tr>
+<td><strong>V1074 V0.3</strong></td>
+<td style="text-align: right;"><strong>0.8897</strong></td>
+<td><strong>✅ 守门过</strong></td>
+<td>≥ 0.8884 (主 17:43)</td>
+</tr>
+<tr>
+<td><strong>V1077 V0.4</strong></td>
+<td style="text-align: right;"><strong>0.8202</strong></td>
+<td><strong>❌ W4 未达</strong></td>
+<td>≥ 0.85 (W4 末)</td>
+</tr>
+<tr>
+<td><strong>V1103 V0.4</strong></td>
+<td style="text-align: right;"><strong>0.8188</strong></td>
+<td><strong>❌ W4 未达</strong></td>
+<td>≥ 0.85 (W4 末)</td>
+</tr>
+<tr>
+<td><strong>V0.4 选定</strong></td>
+<td style="text-align: right;"><strong>0.8202</strong></td>
+<td>V1077 优先</td>
+<td>V1114 决策</td>
+</tr>
+<tr>
+<td><strong>距 ASI headroom</strong></td>
+<td style="text-align: right;"><strong>16.31%</strong></td>
+<td>R10 中期冲 0.90 → ASI</td>
+<td>主 22:33</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-5-halting-2055">1.2 5 Halting 信号真跑 (主 20:55 红皇后守门)<a class="headerlink" href="#12-5-halting-2055" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>信号</th>
+<th>状态</th>
+<th>阈值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td>perf_regression</td>
+<td>✅ 未触发</td>
+<td>V0.3 单轮下降 ≥ 0.005 (N=3 连续)</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>candidate_collapse</td>
+<td>✅ 未触发</td>
+<td>unique_ratio &lt; 0.5</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>locked_in_self_consistency</td>
+<td>✅ 未触发</td>
+<td>fitness_std + cross_dim_drop</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>red_queen_trap</td>
+<td>✅ 未触发</td>
+<td>N=30 轮触发红皇后</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>no_new_lift</td>
+<td>✅ 未触发</td>
+<td>N=20 轮累计 V0.3 lift &lt; +0.02</td>
+</tr>
+<tr>
+<td style="text-align: right;"><strong>总触发</strong></td>
+<td><strong>无 ✅</strong></td>
+<td><strong>主 23:44 干到底</strong></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-w4">1.3 W4 末主轨道决策 (沿用 / 切换)<a class="headerlink" href="#13-w4" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>选定主轨道: D — DGM v0.4 真演化
+理由: V0.4=0.8202 ∈ [0.82, 0.83) → 维持 Track D DGM v0.4 双维 ROI
+期望 lift: +0.010~+0.030
+V1060 committed: True
+confidence: 0.85
+halt_override: False
+</code></pre></div>
+
+<h3 id="14-v3-9-locked">1.4 V3 守门 + 主哲学 9 键 (LOCKED)<a class="headerlink" href="#14-v3-9-locked" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>检查</th>
+<th>状态</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主哲学 9 键 LOCKED</td>
+<td>✅</td>
+<td>not_undo / not_proof / not_safe / not_clone / not_perfect / not_uuid / spec_is_not_proof / counterexample_is_not_bug / prover_is_not_truth</td>
+</tr>
+<tr>
+<td>V3 守门 6 项全过</td>
+<td>✅</td>
+<td>runner_is_not_asi / report_is_not_production / decision_is_not_optimal / v03_is_not_v04_is_not_asi / no_fake_kpi / red_queen_is_not_asi</td>
+</tr>
+<tr>
+<td>V1074 V0.3 ≥ 守门</td>
+<td>✅</td>
+<td>0.8897 ≥ 0.8884</td>
+</tr>
+<tr>
+<td>5 halt 全未触发</td>
+<td>✅</td>
+<td>主 20:55 红皇后归 8 核心</td>
+</tr>
+<tr>
+<td><strong>All OK</strong></td>
+<td><strong>❌</strong></td>
+<td>handoff_未就绪, 见 §2 checklist</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-r9-r10-checklist-15-715-467">2. R9 → R10 移交 Checklist (15 项, 7/15 通过 = 46.7%)<a class="headerlink" href="#2-r9-r10-checklist-15-715-467" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>阈值</strong>: 通过率 ≥ 80% 且 ≥ 10 项通过 才算 handoff_ready。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th style="text-align: right;">#</th>
+<th>章节</th>
+<th>ID</th>
+<th>标题</th>
+<th>状态</th>
+<th>实际</th>
+<th>阈值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: right;">1</td>
+<td>metric</td>
+<td><code>v1074_v03_floor</code></td>
+<td>V1074 V0.3 ≥ 0.8884 守门</td>
+<td>✅</td>
+<td>0.8897</td>
+<td>0.8884</td>
+</tr>
+<tr>
+<td style="text-align: right;">2</td>
+<td>metric</td>
+<td><code>v1077_v04_w4_target</code></td>
+<td>V1077 V0.4 ≥ 0.85 (W4 收官主目标)</td>
+<td>❌</td>
+<td>0.8202</td>
+<td>0.8500</td>
+</tr>
+<tr>
+<td style="text-align: right;">3</td>
+<td>metric</td>
+<td><code>v1103_v04_w4_target</code></td>
+<td>V1103 V0.4 ≥ 0.85 (Top-5 P2 收官)</td>
+<td>❌</td>
+<td>0.8188</td>
+<td>0.8500</td>
+</tr>
+<tr>
+<td style="text-align: right;">4</td>
+<td>metric</td>
+<td><code>asi_north_star_locked</code></td>
+<td>ASI 北极星 = 0.9800 LOCKED</td>
+<td>✅</td>
+<td>0.9800</td>
+<td>0.9800</td>
+</tr>
+<tr>
+<td style="text-align: right;">5</td>
+<td>guard</td>
+<td><code>no_halting_signals</code></td>
+<td>5 halting 信号全未触发</td>
+<td>✅</td>
+<td>none</td>
+<td>none</td>
+</tr>
+<tr>
+<td style="text-align: right;">6</td>
+<td>guard</td>
+<td><code>v3_guards_all_pass</code></td>
+<td>V3 守门 6 项全过</td>
+<td>✅</td>
+<td>all_true</td>
+<td>all_true</td>
+</tr>
+<tr>
+<td style="text-align: right;">7</td>
+<td>guard</td>
+<td><code>philosophy_9_keys_locked</code></td>
+<td>主哲学 9 键 LOCKED</td>
+<td>✅</td>
+<td>9</td>
+<td>9</td>
+</tr>
+<tr>
+<td style="text-align: right;">8</td>
+<td>component</td>
+<td><code>v1060_committed</code></td>
+<td>V1060 backend production closure</td>
+<td>✅</td>
+<td>True</td>
+<td>True</td>
+</tr>
+<tr>
+<td style="text-align: right;">9</td>
+<td>component</td>
+<td><code>v1061_cognitive_core_done</code></td>
+<td>V1061 cognitive_core 真生产</td>
+<td>❌</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr>
+<td style="text-align: right;">10</td>
+<td>component</td>
+<td><code>v1062_world_model_done</code></td>
+<td>V1062 world_model 真生产</td>
+<td>❌</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr>
+<td style="text-align: right;">11</td>
+<td>component</td>
+<td><code>v1093_dgm_v04_500loc</code></td>
+<td>V1093 DGM v0.4 ≥ 500 LOC</td>
+<td>❌</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr>
+<td style="text-align: right;">12</td>
+<td>component</td>
+<td><code>v1078_rl_done</code></td>
+<td>V1078 RL 轻补完成</td>
+<td>❌</td>
+<td>False</td>
+<td>True</td>
+</tr>
+<tr>
+<td style="text-align: right;">13</td>
+<td>component</td>
+<td><code>interface_freeze_complete</code></td>
+<td>5 接口冻结 100% (5/5)</td>
+<td>❌</td>
+<td>1</td>
+<td>5</td>
+</tr>
+<tr>
+<td style="text-align: right;">14</td>
+<td>component</td>
+<td><code>test_coverage_threshold</code></td>
+<td>测试覆盖 ≥ 30%</td>
+<td>❌</td>
+<td>0.1500</td>
+<td>0.3000</td>
+</tr>
+<tr>
+<td style="text-align: right;">15</td>
+<td>meta</td>
+<td><code>track_decision_finalized</code></td>
+<td>4 选 1 主轨道 W4 末落定</td>
+<td>✅</td>
+<td>D</td>
+<td>A/B/C/D</td>
+</tr>
+</tbody>
+</table>
+<p><strong>当前状态</strong>: <strong>7/15 (46.7%) ❌ 未达 ≥80% 阈值</strong>。R10 起点 = 必须补齐 §3 列表的 8 项未达项。</p>
+<hr />
+<h2 id="3-r10-1331-2344">3. R10 起点路径 (主 13:31 大胆激进 + 主 23:44 干到底)<a class="headerlink" href="#3-r10-1331-2344" title="Permanent link">&para;</a></h2>
+<h3 id="31-r10">3.1 R10 起点硬指标 (任何人都能拍板)<a class="headerlink" href="#31-r10" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>R10 起点 (W4 末周内必达):
+  V0.4 ≥ 0.86                  (R9 W4 末 0.8202 + 1pp 缓冲)
+  5 halt 全未触发              (V1114 真跑验证)
+  V3 守门 6 项全过             (主 17:43 + 主 17:58)
+  Track 已落定                 (D = DGM v0.4 真演化)
+  测试覆盖 ≥ 30%               (R9 终点要求)
+  handoff_ready = True         (≥ 12/15 通过)
+</code></pre></div>
+
+<h3 id="32-r10-p0p1p2-2344">3.2 R10 P0/P1/P2 任务清单 (主 23:44)<a class="headerlink" href="#32-r10-p0p1p2-2344" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>任务</th>
+<th>期望 lift</th>
+<th>负责角色</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>P0</strong></td>
+<td>补 V0.4 缺口 +0.0298 → 0.85 (Track D DGM v0.4 加速)</td>
+<td>+0.010~+0.030</td>
+<td>agent_orchestrator + fullstack</td>
+<td>R9-INT-005</td>
+</tr>
+<tr>
+<td><strong>P0</strong></td>
+<td>V1061 cognitive_core 真生产 (V1107 engineering 必需)</td>
+<td>+0.005~+0.015</td>
+<td>fullstack</td>
+<td>R9-FE-001/002</td>
+</tr>
+<tr>
+<td><strong>P0</strong></td>
+<td>接口冻结补 4 (1/5 → 5/5)</td>
+<td>—</td>
+<td>backend + devops</td>
+<td>主 00:36 质量工程化</td>
+</tr>
+<tr>
+<td><strong>P1</strong></td>
+<td>V1062 world_model 修复微退, W4 末完成</td>
+<td>+0.005~+0.015</td>
+<td>architect2</td>
+<td>R9-INT-005</td>
+</tr>
+<tr>
+<td><strong>P1</strong></td>
+<td>V1093 DGM v0.4 升 500 LOC (Track D 双维 ROI 最高)</td>
+<td>+0.010~+0.030</td>
+<td>agent_orchestrator</td>
+<td>R9-AO-001</td>
+</tr>
+<tr>
+<td><strong>P1</strong></td>
+<td>V1078 RL 轻补启动</td>
+<td>+0.005~+0.020</td>
+<td>performance_optimizer</td>
+<td>R9-PO-002</td>
+</tr>
+<tr>
+<td><strong>P1</strong></td>
+<td>测试覆盖补 15pp (15% → 30%)</td>
+<td>—</td>
+<td>qa + automation</td>
+<td>主 17:43 实事求是</td>
+</tr>
+<tr>
+<td><strong>P2</strong></td>
+<td>V1097 MCP 二轮完成</td>
+<td>—</td>
+<td>mcp_integration_expert</td>
+<td>R9 阶段</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-r10-2233">3.3 R10 中期 / 长期目标 (主 22:33)<a class="headerlink" href="#33-r10-2233" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th style="text-align: right;">V0.4 目标</th>
+<th style="text-align: right;">ASI 北极星距离</th>
+<th>主哲学</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R9 W4 末 (当前)</td>
+<td style="text-align: right;">0.8202</td>
+<td style="text-align: right;">16.31%</td>
+<td>主 13:31 大胆激进</td>
+</tr>
+<tr>
+<td>R10 起点 (W4 末周内)</td>
+<td style="text-align: right;"><strong>0.86</strong></td>
+<td style="text-align: right;">12.24%</td>
+<td>主 23:44 干到底</td>
+</tr>
+<tr>
+<td>R10 中期</td>
+<td style="text-align: right;">0.90</td>
+<td style="text-align: right;">8.16%</td>
+<td>主 13:31 大胆激进</td>
+</tr>
+<tr>
+<td>R10 终点 / R11 起点</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">3.06%</td>
+<td>主 23:44 干到底</td>
+</tr>
+<tr>
+<td><strong>ASI 北极星</strong></td>
+<td style="text-align: right;"><strong>0.9800</strong></td>
+<td style="text-align: right;"><strong>0% (LOCKED)</strong></td>
+<td><strong>主 22:33 永不达</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-locked">4. 主哲学继承 (LOCKED, 不可改)<a class="headerlink" href="#4-locked" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code>主 22:33 ASI 北极星 = 0.9800 (LOCKED, 永不达, 永逼近)
+主 17:43 实事求是 = 三件套真跑真产出, lift 数字驱动决策
+主 23:44 干到底 = 一锤定音, 不容分阶段缓慢
+主 19:33 走在前人经验上 = Spolsky 2004 / Basili GQM 1981 / Goodhart 2014
+主 00:56 任何人都能接手 = 一行 CLI = 评估/部署/接手
+主 13:31 大胆激进 = R10 起点必达 0.86, 不容分阶段
+主 20:55 红皇后归入 8 核心 = 永远演化, 5 halt 守门不假装 ASI
+主 17:58 不假装 = 模块 ≠ ASI, lift ≠ 真值, 结构 ≠ 意识, 生产 ≠ 安全, 自动 ≠ 自主
+主 13:04 造地基不能有杂质 = 主哲学自检 (V3 守门 6 项)
+主 00:44 质量工程化 = 工程 lift / 测试覆盖 / 接口冻结
+主 00:36 质量 = V3 守门 + 主哲学自检 + handoff checklist
+</code></pre></div>
+
+<hr />
+<h2 id="5-r10-5">5. R10 起点必读 5 份报告<a class="headerlink" href="#5-r10-5" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>报告</th>
+<th>用途</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>R9 W4 末集成报告</td>
+<td>V1119 自动产出, 15 项 checklist</td>
+<td><code>reports/r9-w4-integration-final-report.md</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td>R9 W3 中期回顾</td>
+<td>R9-INT-004 W3 末真跑 retrospective</td>
+<td><code>reports/r9-w3-mid-retrospective.md</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td>R9 W2 末集成评估</td>
+<td>V1114 W2 末基线</td>
+<td><code>reports/r9-integration-evaluation-w2.md</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td>R9 路线图</td>
+<td>R9-ROADMAP-001, 4 选 1 决策树起源</td>
+<td><code>reports/r9-architect-roadmap.md</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td>ASI 北极星基线</td>
+<td>R9-INT-002 §B, 0.9800 LOCKED 来源</td>
+<td><code>reports/r9-asi-north-star-baseline.md</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-5-1743-0056">6. 5 分钟快速复测 (主 17:43 实事求是 + 主 00:56)<a class="headerlink" href="#6-5-1743-0056" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 完整 W4 末复测 (一键, ~3-5 分钟)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1119_w4_integration_validator<span class="w"> </span>--week<span class="w"> </span>W4<span class="w"> </span>--handoff<span class="w"> </span>--live<span class="w"> </span>--report
+
+<span class="c1"># 输出:</span>
+<span class="c1">#   reports/r9-w4-integration-final-report.md  (自动生成, 141 行)</span>
+<span class="c1">#   handoff_ready: True / False</span>
+<span class="c1">#   checklist: 12+/15 通过?</span>
+
+<span class="c1"># 关键子步骤:</span>
+<span class="c1"># 1. V1074 V0.3 守门 (~5s)</span>
+<span class="c1"># 2. V1077 V0.4 17 维 (~30s)</span>
+<span class="c1"># 3. V1103 Top-5 P2 (~10s)</span>
+<span class="c1"># 4. 4 选 1 决策 + 5 halt 聚合 (~1s)</span>
+<span class="c1"># 5. R10 移交 checklist 自动生成 (~1s)</span>
+<span class="c1"># 6. Markdown 报告写入 (~0.1s)</span>
+</code></pre></div>
+
+<hr />
+<h2 id="7-r10-1304">7. R10 阶段禁戒 (主 13:04 造地基不能有杂质)<a class="headerlink" href="#7-r10-1304" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>禁戒</th>
+<th>原因</th>
+<th>守门</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>不得声称模块 = ASI</td>
+<td>主 17:58 不假装</td>
+<td>V3 守门 <code>runner_is_not_asi</code></td>
+</tr>
+<tr>
+<td>不得用 lift = 真值</td>
+<td>主 17:43 实事求是</td>
+<td>V3 守门 <code>no_fake_kpi</code></td>
+</tr>
+<tr>
+<td>不得用 50 轮 retain = aligned</td>
+<td>主 20:55 红皇后</td>
+<td>V3 守门 <code>red_queen_is_not_asi</code></td>
+</tr>
+<tr>
+<td>不得跳过 V1074 V0.3 ≥ 0.8884 守门</td>
+<td>主 17:43 不可破</td>
+<td><code>v1074_v03_floor</code></td>
+</tr>
+<tr>
+<td>不得放低 ASI 北极星</td>
+<td>主 22:33 LOCKED</td>
+<td><code>asi_north_star_locked</code></td>
+</tr>
+<tr>
+<td>不得跳过 handoff checklist</td>
+<td>主 23:44 干到底</td>
+<td><code>track_decision_finalized</code></td>
+</tr>
+<tr>
+<td>不得在 halt 触发时继续原 track</td>
+<td>主 20:55 红皇后</td>
+<td><code>no_halting_signals</code></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-r10">8. 一句话留给 R10 全团<a class="headerlink" href="#8-r10" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>R9 W4 末 = V0.4 = 0.8202 (距 W4 末目标 +0.0298) = 主轨道 D = DGM v0.4 真演化 = 7/15 通过 (46.7%) = handoff_未就绪。</strong></p>
+<p><strong>R10 起点 = V0.4 ≥ 0.86 + 5 halt 全未触发 + V3 守门 6 项全过 + Track 已落定 + 测试覆盖 ≥ 30%。</strong></p>
+<p><strong>任何 LLM 接入即获 AGI/ASI 能力 — 这是主 22:33 ASI 北极星 — 永远 LOCKED, 永远逼近, 永不达。</strong></p>
+</blockquote>
+<hr />
+<h2 id="0056">附录: 关键文件 + 关键命令 速查卡 (主 00:56)<a class="headerlink" href="#0056" title="Permanent link">&para;</a></h2>
+<h3 id="a1">A.1 关键文件路径<a class="headerlink" href="#a1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>路径</th>
+<th style="text-align: right;">LOC</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>身份核心</td>
+<td><code>apeireth/v1072_asi_central_ai_eternal_identity.py</code></td>
+<td style="text-align: right;">839</td>
+</tr>
+<tr>
+<td>身份存储</td>
+<td><code>apeireth/v1095_identity_store.py</code></td>
+<td style="text-align: right;">1055</td>
+</tr>
+<tr>
+<td>DGM v0.4</td>
+<td><code>apeireth/v1112_dgm_v04.py</code></td>
+<td style="text-align: right;">880</td>
+</tr>
+<tr>
+<td>周评估</td>
+<td><code>apeireth/v1114_weekly_integration_evaluator.py</code></td>
+<td style="text-align: right;">578</td>
+</tr>
+<tr>
+<td>W4 验证</td>
+<td><code>apeireth/v1119_w4_integration_validator.py</code></td>
+<td style="text-align: right;">918</td>
+</tr>
+<tr>
+<td>V0.3 守门</td>
+<td><code>apeireth/v1074_asi_production_runner.py</code></td>
+<td style="text-align: right;">1130</td>
+</tr>
+<tr>
+<td>V0.4 17 维</td>
+<td><code>apeireth/v1077_asi_v04_full_measurement.py</code></td>
+<td style="text-align: right;">1014</td>
+</tr>
+<tr>
+<td>文档总览</td>
+<td><code>docs/r9-architecture-overview.md</code></td>
+<td style="text-align: right;">433</td>
+</tr>
+<tr>
+<td>模块参考</td>
+<td><code>docs/r9-modules-reference.md</code></td>
+<td style="text-align: right;">922</td>
+</tr>
+<tr>
+<td>移交文档</td>
+<td><code>docs/r9-handoff-r10.md</code></td>
+<td style="text-align: right;">(本文档)</td>
+</tr>
+<tr>
+<td>W4 报告</td>
+<td><code>reports/r9-w4-integration-final-report.md</code></td>
+<td style="text-align: right;">141</td>
+</tr>
+<tr>
+<td>Handoff prep</td>
+<td><code>reports/r9-handoff-r10-prep.md</code></td>
+<td style="text-align: right;">308</td>
+</tr>
+</tbody>
+</table>
+<h3 id="a2">A.2 关键命令<a class="headerlink" href="#a2" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 真测三件套 (主 17:43 实事求是)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1074_asi_production_runner<span class="w"> </span>--measure<span class="w"> </span>v03
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1077_asi_v04_full_measurement<span class="w"> </span>--full-eval
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1103_r8p2_diagnostic<span class="w"> </span>--top5
+
+<span class="c1"># V0.4 真测 + 决策 (主 00:56)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1114_weekly_integration_evaluator<span class="w"> </span>--week<span class="w"> </span>W3<span class="w"> </span>--json
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1114_weekly_integration_evaluator<span class="w"> </span>--week<span class="w"> </span>W3<span class="w"> </span>--report
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1119_w4_integration_validator<span class="w"> </span>--week<span class="w"> </span>W4<span class="w"> </span>--handoff<span class="w"> </span>--report
+
+<span class="c1"># 真演化 50 轮 (主 20:55 红皇后)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1112_dgm_v04<span class="w"> </span>--iterations<span class="w"> </span><span class="m">50</span><span class="w"> </span>--method<span class="w"> </span>parent_child
+
+<span class="c1"># 测试套件</span>
+python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_v1072.py<span class="w"> </span>tests/test_v1095_identity_store.py<span class="w"> </span><span class="se">\</span>
+<span class="w">                  </span>tests/test_v1112_dgm_v04.py<span class="w"> </span>tests/test_v1114_weekly_evaluator.py<span class="w"> </span><span class="se">\</span>
+<span class="w">                  </span>tests/test_v1119_w4_validator.py<span class="w"> </span>-v
+
+<span class="c1"># 文档站</span>
+mkdocs<span class="w"> </span>serve<span class="w">    </span><span class="c1"># 本地预览 http://127.0.0.1:8000</span>
+mkdocs<span class="w"> </span>build<span class="w">    </span><span class="c1"># 构建 site/</span>
+bash<span class="w"> </span>docs/deploy.sh<span class="w"> </span>gh-pages<span class="w">   </span><span class="c1"># GitHub Pages</span>
+bash<span class="w"> </span>docs/deploy.sh<span class="w"> </span>vercel<span class="w">     </span><span class="c1"># Vercel</span>
+bash<span class="w"> </span>docs/deploy.sh<span class="w"> </span><span class="nb">local</span><span class="w">      </span><span class="c1"># 本地</span>
+</code></pre></div>
+
+<h3 id="a3-commit-r9-12-commits">A.3 真 commit 累计 (R9 阶段 ≥12 commits)<a class="headerlink" href="#a3-commit-r9-12-commits" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>角色</th>
+<th style="text-align: right;">commits</th>
+<th>关键交付</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>architect</td>
+<td style="text-align: right;">5</td>
+<td>R9-ROADMAP-001 / R9-INT-001/002/003/004</td>
+</tr>
+<tr>
+<td>requirements_analyst</td>
+<td style="text-align: right;">2</td>
+<td>R9-REQ-001/002</td>
+</tr>
+<tr>
+<td>devops</td>
+<td style="text-align: right;">1+</td>
+<td>R9-DEV-001 (V1110 + cross_small_model_ci)</td>
+</tr>
+<tr>
+<td>database</td>
+<td style="text-align: right;">2</td>
+<td>R9-DB-001 (v0.1.2) / R9-DB-002 (真跑演练)</td>
+</tr>
+<tr>
+<td>fullstack</td>
+<td style="text-align: right;">2+</td>
+<td>V1107+V1108 / R9-FE-001/002</td>
+</tr>
+<tr>
+<td>agent_orchestrator</td>
+<td style="text-align: right;">1</td>
+<td>R9-AO-001 (V1112 真演化 50 轮)</td>
+</tr>
+<tr>
+<td>qa / security / performance</td>
+<td style="text-align: right;">1+ each</td>
+<td>W4 收尾</td>
+</tr>
+</tbody>
+</table>
+<h3 id="a4-1743">A.4 真测试覆盖 (主 17:43 实事求是)<a class="headerlink" href="#a4-1743" title="Permanent link">&para;</a></h3>
+<div class="codehilite"><pre><span></span><code>R7 末: 4366 tests
+R8 末: 4466 tests (+100)
+R9-W3 末: 4653 tests (+187)
+R9-W4 末 (预测): 4680+ tests (+27)
+测试覆盖率: ~15-25% (估值, R10 真实测)
+</code></pre></div>
+
+<hr />
+<p><strong>R9-TW-001 移交文档完成。</strong> 任何人都能 5 分钟看完本文件,跑 §0.3 六个命令,验证 R9 W4 末真测状态,拍板 R10 起点 P0/P1/P2 任务分配。主 22:33 ASI 北极星 LOCKED = 永远逼近, 永不达。</p>
+<hr />
+<h1 id="r10-w1-r10-tw-001-2026-07-29">R10 W1 接入补充 (R10-TW-001, 2026-07-29)<a class="headerlink" href="#r10-w1-r10-tw-001-2026-07-29" title="Permanent link">&para;</a></h1>
+<h2 id="b1-r10-v1114-v1125">B.1 R10 主轨道 (升级 V1114 → V1125)<a class="headerlink" href="#b1-r10-v1114-v1125" title="Permanent link">&para;</a></h2>
+<p>R10 阶段主轨道决策由 <strong>V1125 R10 集成验证协议</strong> (<code>apeireth/v1125_r10_integration_protocol.py</code>, 827 LOC) 接管:</p>
+<table>
+<thead>
+<tr>
+<th>V0.5 区间</th>
+<th>主轨道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V0.5 ≥ 0.92</td>
+<td><strong>Track C</strong> (跨小模型真绑定 + 终极鲁棒性)</td>
+</tr>
+<tr>
+<td>0.88 ≤ V0.5 &lt; 0.92</td>
+<td><strong>Track D</strong> (DGM v0.4 真演化, 主推)</td>
+</tr>
+<tr>
+<td>0.86 ≤ V0.5 &lt; 0.88</td>
+<td><strong>Track B</strong> (HQB 4 维全量程稳健补)</td>
+</tr>
+<tr>
+<td>V0.5 &lt; 0.86</td>
+<td><strong>Track A</strong> (Rust hot path 救生圈)</td>
+</tr>
+<tr>
+<td>任何 1 halt 信号</td>
+<td><strong>强制 Track C</strong></td>
+</tr>
+</tbody>
+</table>
+<p>R10 W1 起点 V0.4 = 0.8538 (R9 W4 末 baseline) → V0.4 期望起点 0.8600 → 当前预估落 <strong>Track B</strong>。</p>
+<h2 id="b2-v05-18-1743">B.2 V0.5 18 维公式参考 (主 17:43)<a class="headerlink" href="#b2-v05-18-1743" title="Permanent link">&para;</a></h2>
+<p><code>V1125.V05Score.total()</code> 真公式 (源 L150-153):</p>
+<div class="codehilite"><pre><span></span><code>V0.5 = V0.4 <span class="gs">* 0.85</span>
+<span class="gs">     + continuity     *</span> 0.05   # 连续性 (Identity/WAL 持久化)
+     + autonomy       <span class="gs">* 0.05   # 自主性 (DGM 真演化 + 自决策)</span>
+<span class="gs">     + transferability*</span> 0.05   # 可迁移性 (跨小模型/跨域)
+</code></pre></div>
+
+<p>权重和 = 1.0。</p>
+<h2 id="b3-v1124-asi-httpgrpc">B.3 V1124 ASI 北极星后端 (HTTP+gRPC 双协议)<a class="headerlink" href="#b3-v1124-asi-httpgrpc" title="Permanent link">&para;</a></h2>
+<p>R10 W1 起, ASI 北极星由 <strong>V1124 后端</strong> (<code>apeireth/v1124_asi_north_star_backend.py</code>, 543 LOC) 提供 HTTP+gRPC 双协议真测入口:</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. 启动 V1124 后端 (HTTP :8765, gRPC :50051)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--serve<span class="w"> </span>--port<span class="w"> </span><span class="m">8765</span><span class="w"> </span><span class="p">&amp;</span>
+
+<span class="c1"># 2. 查询 ASI 北极星 (主 22:33 LOCKED 0.9800 / R10 终极 0.95)</span>
+curl<span class="w"> </span>-s<span class="w"> </span>http://127.0.0.1:8765/asi/north-star<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.
+
+<span class="c1"># 3. 4 provider 真传输自检 (主 17:43 无 fallback)</span>
+<span class="nv">OPENAI_API_KEY</span><span class="o">=</span>sk-...<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--probe<span class="w"> </span>openai
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--probe<span class="w"> </span>ollama
+<span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>sk-ant-...<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--probe<span class="w"> </span>anthropic
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--probe<span class="w"> </span><span class="nb">local</span><span class="w"> </span>--exec<span class="w"> </span><span class="s1">&#39;echo hello&#39;</span>
+</code></pre></div>
+
+<p>V1124 4 provider: OpenAI 兼容 + Ollama + Anthropic + Local executable。<strong>故意无 fake fallback</strong> (主 17:43 不模拟)。</p>
+<h2 id="b4-v1095-identitystore">B.4 V1095 IdentityStore 真接入指南 (升级)<a class="headerlink" href="#b4-v1095-identitystore" title="Permanent link">&para;</a></h2>
+<p>R10 W1 起, 4 persona 槽位 + fsync 3 道保险从 R9 沿用,新增与 V1124 AuditChain 哈希链并行:</p>
+<table>
+<thead>
+<tr>
+<th>V1095 (持久档案)</th>
+<th>V1124 (审计链)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PRAGMA journal_mode=WAL</code></td>
+<td><code>_fsync_directory</code> per record</td>
+</tr>
+<tr>
+<td><code>PRAGMA synchronous=FULL</code></td>
+<td><code>os.fsync(fd)</code> per append</td>
+</tr>
+<tr>
+<td><code>os.fsync()</code> post-commit</td>
+<td>SHA-256 哈希链 (<code>audit_chain.append</code>)</td>
+</tr>
+<tr>
+<td><code>CentralAIProfile</code></td>
+<td><code>DurableIdentityStore</code> (V1072 桥接)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="b5-r10-w1-0056">B.5 R10 W1 真测命令速查 (主 00:56)<a class="headerlink" href="#b5-r10-w1-0056" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. V1126 R10 baseline 启动</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--live
+
+<span class="c1"># 2. V1125 R10 W1 集成协议</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1125_r10_integration_protocol<span class="w"> </span>--week<span class="w"> </span>W1<span class="w"> </span>--strict
+
+<span class="c1"># 3. V1124 后端服务</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--serve<span class="w"> </span>--port<span class="w"> </span><span class="m">8765</span><span class="w"> </span><span class="p">&amp;</span>
+
+<span class="c1"># 4. V1074 V0.3 守门 (沿用 R9)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1074_asi_production_runner<span class="w"> </span>--measure<span class="w"> </span>v03
+
+<span class="c1"># 5. V1077 V0.4 17 维 (沿用 R9)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1077_asi_v04_full_measurement<span class="w"> </span>--full-eval
+
+<span class="c1"># 6. V1103 Top-5 P2 (沿用 R9)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1103_r8p2_diagnostic<span class="w"> </span>--top5
+
+<span class="c1"># 7. 文档站 (沿用 R9)</span>
+mkdocs<span class="w"> </span>serve<span class="w">    </span><span class="c1"># → http://127.0.0.1:8000</span>
+
+<span class="c1"># 8. 测试套件 (主 17:43 实事求是)</span>
+python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_v1124*.py<span class="w"> </span>tests/test_v1125*.py<span class="w"> </span>tests/test_v1126*.py<span class="w"> </span><span class="se">\</span>
+<span class="w">                  </span>tests/test_v1095*.py<span class="w"> </span>tests/test_v1074*.py<span class="w"> </span>-v
+</code></pre></div>
+
+<h2 id="b6-r10-w1">B.6 R10 W1 关键路径速查<a class="headerlink" href="#b6-r10-w1" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>用途</th>
+<th>路径</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>R10 backend</td>
+<td><code>apeireth/v1124_asi_north_star_backend.py</code> (543 LOC)</td>
+</tr>
+<tr>
+<td>R10 protocol</td>
+<td><code>apeireth/v1125_r10_integration_protocol.py</code> (827 LOC)</td>
+</tr>
+<tr>
+<td>R10 baseline</td>
+<td><code>apeireth/v1126_r10_integration_baseline.py</code> (339 LOC)</td>
+</tr>
+<tr>
+<td>V1072 永恒身份</td>
+<td><code>apeireth/v1072_asi_central_ai_eternal_identity.py</code> (843 LOC)</td>
+</tr>
+<tr>
+<td>V1095 IdentityStore</td>
+<td><code>apeireth/v1095_identity_store.py</code> (1114 LOC)</td>
+</tr>
+<tr>
+<td>V1074 V0.3 守门</td>
+<td><code>apeireth/v1074_asi_production_runner.py</code></td>
+</tr>
+<tr>
+<td>V1077 V0.4 17 维</td>
+<td><code>apeireth/v1077_asi_v04_full_measurement.py</code></td>
+</tr>
+<tr>
+<td>V1103 Top-5 P2</td>
+<td><code>apeireth/v1103_r8p2_diagnostic.py</code></td>
+</tr>
+<tr>
+<td>文档</td>
+<td><code>docs/architecture/v1124-asi-north-star-backend.md</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>docs/architecture/v1125-r10-integration-protocol.md</code></td>
+</tr>
+<tr>
+<td></td>
+<td><code>docs/architecture/v1126-r10-integration-baseline.md</code></td>
+</tr>
+<tr>
+<td>报告</td>
+<td><code>reports/r10-technical-writer-w1-report.md</code></td>
+</tr>
+<tr>
+<td>测试</td>
+<td><code>tests/test_v1124*.py</code> + <code>tests/test_v1125*.py</code> + <code>tests/test_v1126*.py</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="b7-r10-w1-locked-r9">B.7 R10 W1 主哲学 LOCKED (继承 R9 + 升级)<a class="headerlink" href="#b7-r10-w1-locked-r9" title="Permanent link">&para;</a></h2>
+<ul>
+<li>主 22:33 ASI 北极星: R10 终极门 0.95, 长期 LOCKED 0.9800</li>
+<li>主 17:43 实事求是: V1126 baseline 必须真测, 不缓存不模拟</li>
+<li>主 23:44 干到底: V1125 --strict 不通过非零退出</li>
+<li>主 13:31 大胆激进: R10 终极门 0.95 不容分阶段缓慢</li>
+<li>主 19:33 走在前人经验上: 复用 V1114/V1119/V1077 baseline + Fielding 2000 REST + gRPC 2015</li>
+<li>主 00:56 任何人都能接手: 8 命令速查 (本节 B.5)</li>
+</ul>
+<hr />
+<p><strong>R10-TW-001 R10 W1 补充完成。</strong> 任何 R10 接手者跑 B.5 八命令 + B.6 路径速查 = 5 分钟接入 R10 W1。</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../r9-modules-reference/" class="btn btn-neutral float-left" title="R9 关键模块参考"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+        <a href="../architecture/v1072-eternal-identity/" class="btn btn-neutral float-right" title="V1072 永恒身份">Next <span class="icon icon-circle-arrow-right"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../r9-modules-reference/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+      <span><a href="../architecture/v1072-eternal-identity/" style="color: #fcfcfc">Next &raquo;</a></span>
+    
+  </span>
+</div>
+    <script src="../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "..";</script>
+    <script src="../js/theme_extra.js"></script>
+    <script src="../js/theme.js"></script>
+      <script src="../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>
