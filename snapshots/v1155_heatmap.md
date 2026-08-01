@@ -1,8 +1,8 @@
-# ASI V0.6 Trend Heatmap — v1155-ed6ff16f
+# ASI V0.6 Trend Heatmap — v1155-a40f9177
 
-- **taken_at**: 2026-08-01 00:58:12
+- **taken_at**: 2026-08-01 13:45:31
 - **version**: 0.1.0
-- **git_commit**: `026aaa58` (dirty)
+- **git_commit**: `6e4eee0b` (dirty)
 - **score**: **0.8929**
 - **north_star (LOCKED)**: 0.9800
 - **gap**: **-0.0871** (score - north_star)
