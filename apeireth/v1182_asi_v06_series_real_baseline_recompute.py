@@ -217,12 +217,13 @@ def _safe_call_module_total(module_path: str, fn_name: str = "measure", default:
         return default, False
 
 
-def _safe_call_subprocess(module_path: str, default: float = 0.0, timeout: int = 90) -> Tuple[float, bool]:
+def _safe_call_subprocess(module_path: str, default: float = 0.0, timeout: int = 30) -> Tuple[float, bool]:
     """真用 subprocess 跑模块 --json, 解析 total 字段. 用于网络/IO 重的模块.
     
     主 17:43 实事求是 + Windows cp936/gbk fix:
     - 用 PYTHONIOENCODING=utf-8 强制 stdout/stderr utf-8
     - errors=replace 兜底
+    - timeout 30s 短超时, 失败 fallback 不卡整体
     """
     try:
         env = os.environ.copy()
@@ -246,6 +247,8 @@ def _safe_call_subprocess(module_path: str, default: float = 0.0, timeout: int =
         m = re.search(r'"total"\s*:\s*([\d.eE+-]+)', out)
         if m:
             return max(0.0, min(1.0, float(m.group(1)))), True
+        return default, False
+    except subprocess.TimeoutExpired:
         return default, False
     except Exception:
         return default, False
@@ -348,7 +351,7 @@ def _collect_v06_new() -> Dict[str, Any]:
 
     values: List[float] = []
     for dim_name, module_path in new_dim_modules.items():
-        v, ok = _safe_call_subprocess(module_path, timeout=60)
+        v, ok = _safe_call_subprocess(module_path, timeout=15)
         if ok:
             values.append(v)
             evidence["dims"][dim_name] = {"value": v, "module": module_path, "ok": True}
