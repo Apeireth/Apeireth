@@ -1,0 +1,414 @@
+{
+  "snapshot_id": "v1182-605b2f36",
+  "taken_at": 1785578387.158091,
+  "version": "0.1.0",
+  "dim_version": "0.6.2-recomputed",
+  "git_commit": "7119c379cf4b",
+  "git_dirty": true,
+  "total": 0.7425439393939395,
+  "north_star": 0.98,
+  "v1155_baseline": 0.8929,
+  "vs_v1155_delta": -0.15035606060606055,
+  "vs_asi_locked_gap": 0.2374560606060605,
+  "n_dims": 23,
+  "n_v06_real": 13,
+  "n_v05_fallback": 6,
+  "n_v06_new": 4,
+  "n_missing": 3,
+  "sub_dim_scores": {
+    "v0_6_real_collector": 0.838502335600907,
+    "v0_5_fallback_collector": 0.9184333333333333,
+    "v0_6_new_dim_collector": 0.0,
+    "weighted_aggregate": 0.7425439393939395,
+    "baseline_compare": 0.8316092948750582
+  },
+  "sub_dim_evidence": {
+    "v0_6_real_collector": {
+      "name": "v0_6_real_collector",
+      "modules": {
+        "v1156_cognitive_core": {
+          "module": "apeireth.v1156_asi_cognitive_core_v06_real_measure",
+          "value": 0.9199999999999999,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1157_self_improving_core": {
+          "module": "apeireth.v1157_asi_self_improving_core_v06_real_measure",
+          "value": 0.8400000000000001,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1158_plugin_core": {
+          "module": "apeireth.v1158_asi_plugin_core_v06_real_measure",
+          "value": 0.8800000000000001,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1159_engineering": {
+          "module": "apeireth.v1159_asi_engineering_v06_real_measure",
+          "value": 0.9199999999999999,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1160_rubric_open": {
+          "module": "apeireth.v1160_asi_rubric_open_v06_real_measure",
+          "value": 0.8800000000000001,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1161_v2_philosophy": {
+          "module": "apeireth.v1161_asi_v2_philosophy_v06_real_measure",
+          "value": 0.72,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1164_world_model": {
+          "module": "apeireth.v1164_asi_world_model_v06_patched",
+          "value": 0.7944,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1165_self_organizing_core": {
+          "module": "apeireth.v1165_asi_self_organizing_core_v06_real_measure",
+          "value": 0.9333,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1166_real_llm_benchmark": {
+          "module": "apeireth.v1166_asi_real_llm_benchmark_v06_real_measure",
+          "value": 0.41600000000000004,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1167_streamlit_real_startup": {
+          "module": "apeireth.v1167_asi_streamlit_real_startup_v06_real_measure",
+          "value": 1.0,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1168_philosophy_5gaps": {
+          "module": "apeireth.v1168_asi_philosophy_5gaps_v06_real_measure",
+          "value": 0.8676666666666666,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1169_reinforcement_learning": {
+          "module": "apeireth.v1169_asi_reinforcement_learning_v06_real_measure",
+          "value": 1.0,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1171_real_production_patched": {
+          "module": "apeireth.v1171_asi_real_production_v06_patched",
+          "value": 0.654,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1180_real_production_r1r2": {
+          "module": "apeireth.v1180_real_production_r1r2_realboost",
+          "value": 0.8521683673469388,
+          "success": true,
+          "proc": "subprocess"
+        },
+        "v1181_docker_compose_v1050": {
+          "module": "apeireth.v1181_asi_docker_compose_real_v1050spec",
+          "value": 0.9,
+          "success": true,
+          "proc": "subprocess"
+        }
+      },
+      "score": 0.838502335600907,
+      "success_count": 15,
+      "total_modules": 15
+    },
+    "v0_5_fallback_collector": {
+      "name": "v0_5_fallback_collector",
+      "dims": {
+        "cross_domain": {
+          "value": 1.0,
+          "ok": true
+        },
+        "vcp_4": {
+          "value": 0.9588,
+          "ok": true
+        },
+        "eternal_identity": {
+          "value": 0.8441,
+          "ok": true
+        },
+        "capabilities": {
+          "value": 0.8636,
+          "ok": true
+        },
+        "neurosymbolic": {
+          "value": 1.0,
+          "ok": true
+        },
+        "phi_proxy": {
+          "value": 0.8441,
+          "ok": true
+        },
+        "multi_agent_dag": {
+          "value": 0.0,
+          "ok": false
+        }
+      },
+      "score": 0.9184333333333333,
+      "n_ok": 6,
+      "n_total": 7
+    },
+    "v0_6_new_dim_collector": {
+      "name": "v0_6_new_dim_collector",
+      "dims": {
+        "llm_bridge": {
+          "value": 0.0,
+          "module": "apeireth.v1152_asi_llm_bridge",
+          "ok": false
+        },
+        "multi_agent_dag": {
+          "value": 0.0,
+          "module": "apeireth.v1149_multi_agent_role_dag",
+          "ok": false
+        },
+        "vcp_real_run": {
+          "value": 0.0,
+          "module": "apeireth.v1148_vcp_5_repos_real_run",
+          "ok": false
+        },
+        "vcp_deep_read": {
+          "value": 0.0,
+          "module": "apeireth.v1147_vcp_5_repos_deep_read",
+          "ok": false
+        }
+      },
+      "score": 0.0,
+      "n_ok": 0,
+      "n_total": 4
+    },
+    "baseline_compare": {
+      "name": "baseline_compare",
+      "v1155_baseline": 0.8929,
+      "asi_north_star": 0.98,
+      "v1182_total": 0.7425439393939395,
+      "vs_v1155_delta": -0.15035606060606055,
+      "vs_asi_locked_gap": 0.2374560606060605,
+      "score": 0.8316092948750582
+    }
+  },
+  "dim_breakdown": [
+    {
+      "dim": "cognitive_core",
+      "weight": 0.049999999999999996,
+      "value": 0.9199999999999999,
+      "status": "R",
+      "source": "v1156_cognitive_core",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1156_asi_cognitive_core_v06_real_measure"
+    },
+    {
+      "dim": "self_improving_core",
+      "weight": 0.049999999999999996,
+      "value": 0.8400000000000001,
+      "status": "R",
+      "source": "v1157_self_improving_core",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1157_asi_self_improving_core_v06_real_measure"
+    },
+    {
+      "dim": "plugin_core",
+      "weight": 0.049999999999999996,
+      "value": 0.8800000000000001,
+      "status": "R",
+      "source": "v1158_plugin_core",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1158_asi_plugin_core_v06_real_measure"
+    },
+    {
+      "dim": "engineering",
+      "weight": 0.049999999999999996,
+      "value": 0.9199999999999999,
+      "status": "R",
+      "source": "v1159_engineering",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1159_asi_engineering_v06_real_measure"
+    },
+    {
+      "dim": "rubric_open",
+      "weight": 0.049999999999999996,
+      "value": 0.8800000000000001,
+      "status": "R",
+      "source": "v1160_rubric_open",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1160_asi_rubric_open_v06_real_measure"
+    },
+    {
+      "dim": "v2_philosophy",
+      "weight": 0.049999999999999996,
+      "value": 0.72,
+      "status": "R",
+      "source": "v1161_v2_philosophy",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1161_asi_v2_philosophy_v06_real_measure"
+    },
+    {
+      "dim": "world_model",
+      "weight": 0.049999999999999996,
+      "value": 0.7944,
+      "status": "R",
+      "source": "v1164_world_model",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1164_asi_world_model_v06_patched"
+    },
+    {
+      "dim": "real_production",
+      "weight": 0.049999999999999996,
+      "value": 0.654,
+      "status": "R",
+      "source": "v1171_real_production_patched",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1171_asi_real_production_v06_patched"
+    },
+    {
+      "dim": "self_organizing_core",
+      "weight": 0.049999999999999996,
+      "value": 0.9333,
+      "status": "R",
+      "source": "v1165_self_organizing_core",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1165_asi_self_organizing_core_v06_real_measure"
+    },
+    {
+      "dim": "real_llm_benchmark",
+      "weight": 0.05,
+      "value": 0.41600000000000004,
+      "status": "R",
+      "source": "v1166_real_llm_benchmark",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1166_asi_real_llm_benchmark_v06_real_measure"
+    },
+    {
+      "dim": "streamlit_real_startup",
+      "weight": 0.05,
+      "value": 1.0,
+      "status": "R",
+      "source": "v1167_streamlit_real_startup",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1167_asi_streamlit_real_startup_v06_real_measure"
+    },
+    {
+      "dim": "philosophy_5gaps",
+      "weight": 0.05,
+      "value": 0.8676666666666666,
+      "status": "R",
+      "source": "v1168_philosophy_5gaps",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1168_asi_philosophy_5gaps_v06_real_measure"
+    },
+    {
+      "dim": "reinforcement_learning",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "v1169_reinforcement_learning",
+      "data_basis": "v0.6_real",
+      "module_ref": "apeireth.v1169_asi_reinforcement_learning_v06_real_measure"
+    },
+    {
+      "dim": "cross_domain",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1144._measure_cross_domain",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "vcp_4",
+      "weight": 0.049999999999999996,
+      "value": 0.9588,
+      "status": "R",
+      "source": "V1144._measure_vcp_4",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "eternal_identity",
+      "weight": 0.049999999999999996,
+      "value": 0.8441,
+      "status": "R",
+      "source": "V1144._measure_eternal_identity",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "capabilities",
+      "weight": 0.049999999999999996,
+      "value": 0.8636,
+      "status": "R",
+      "source": "V1144._measure_capabilities",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "neurosymbolic",
+      "weight": 0.049999999999999996,
+      "value": 1.0,
+      "status": "R",
+      "source": "V1144._measure_neurosymbolic",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "phi_proxy",
+      "weight": 0.049999999999999996,
+      "value": 0.8441,
+      "status": "R",
+      "source": "V1144._measure_phi_proxy",
+      "data_basis": "v0.5_real",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "multi_agent_dag",
+      "weight": 0.0375,
+      "value": 0.0,
+      "status": "R",
+      "source": "V1144._measure_multi_agent_dag",
+      "data_basis": "v0.6_new",
+      "module_ref": "apeireth.v1144_asi_v05_17dim_real_measure_complete"
+    },
+    {
+      "dim": "llm_bridge",
+      "weight": 0.0375,
+      "value": 0.0,
+      "status": "M",
+      "source": "apeireth.v1152_asi_llm_bridge",
+      "data_basis": "v0.6_new",
+      "module_ref": "apeireth.v1152_asi_llm_bridge"
+    },
+    {
+      "dim": "vcp_real_run",
+      "weight": 0.0375,
+      "value": 0.0,
+      "status": "M",
+      "source": "apeireth.v1148_vcp_5_repos_real_run",
+      "data_basis": "v0.6_new",
+      "module_ref": "apeireth.v1148_vcp_5_repos_real_run"
+    },
+    {
+      "dim": "vcp_deep_read",
+      "weight": 0.0375,
+      "value": 0.0,
+      "status": "M",
+      "source": "apeireth.v1147_vcp_5_repos_deep_read",
+      "data_basis": "v0.6_new",
+      "module_ref": "apeireth.v1147_vcp_5_repos_deep_read"
+    }
+  ],
+  "elapsed_seconds": 88.27990579605103,
+  "notes": [
+    "B1 v0.6_real_collector: 15/15 modules ok, score=0.8385",
+    "B2 v0.5_fallback_collector: 6/7 dims ok, score=0.9184",
+    "B3 v0.6_new_dim_collector: 0/4 new dims ok, score=0.0000",
+    "V1182 total=0.7425, V1155 baseline=0.8929, delta=-0.1504, gap to north_star=0.2375"
+  ]
+}
