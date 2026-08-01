@@ -1,0 +1,31 @@
+# apeireth-life-force — R14 阶段 5 Docker image (V1180 真渲染)
+FROM python:3.13.14-slim-bookworm
+
+LABEL org.opencontainers.image.title="apeireth-life-force" \
+      org.opencontainers.image.version="0.14.0" \
+      org.opencontainers.image.source="apeireth" \
+      org.opencontainers.image.licenses="Apache-2.0" \
+      apeireth.crate="apeireth-life-force" \
+      apeireth.r14_stage5="true"
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    APEIRETH_CRATE="apeireth-life-force" \
+    APEIRETH_R14_STAGE5=1
+
+WORKDIR /app/apeireth-life-force
+
+COPY deploy/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt \
+    && useradd --create-home --uid 10001 --shell /usr/sbin/nologin apeireth
+
+COPY --chown=apeireth:apeireth apeireth/ ./apeireth/
+
+USER 10001:10001
+EXPOSE 8811
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8811/health',timeout=3); sys.exit(0 if r.status==200 else 1)"
+
+CMD ["python", "-m", "apeireth.apeireth_life_force"]
