@@ -232,6 +232,22 @@ def _parse_simple_yaml(text: str) -> Dict[str, Any]:
                 key, _, val = item_content.partition(":")
                 key = key.strip()
                 val = val.strip()
+                # Heuristic: if val is non-empty and the line itself is fully consumed
+                # (no deeper-indent keys follow), AND either val is a port-like string
+                # (digits matching key) OR val is something that doesn't look like a
+                # proper YAML scalar → keep the whole item as a scalar string.
+                # This handles docker-compose port mappings like "- 8765:8765"
+                # or "- 9000:9000" which should be parsed as the string "8765:8765".
+                is_port_mapping = (
+                    val
+                    and key.isdigit()
+                    and val.replace(".", "").isdigit()
+                    and "." not in val  # port, not float
+                )
+                if is_port_mapping:
+                    lst.append(f"{key}:{val}")
+                    j += 1
+                    continue
                 d: Dict[str, Any] = {key: _parse_value(val) if val else None}
                 # peek for more keys at deeper indent
                 k = j + 1
