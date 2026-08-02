@@ -19,7 +19,7 @@ BOCHA_KEY = read_key(r'.openclaw\workspace\promethean\.bocha_key')
 ANYSEARCH_KEY = read_key(r'.openclaw\workspace\promethean\.anysearch_key')
 
 BOCHA_HEADERS = {
-    'Authorization': '***' + BOCHA_KEY,
+    'Authorization': 'Bearer ' + BOCHA_KEY,
     'Content-Type': 'application/json',
     'User-Agent': 'ApeirethResearch/3.0',
 }
