@@ -952,18 +952,18 @@ def _measure_multimodal_real() -> Tuple[float, V1201SubDimEvidence]:
         ev.raw = {"test_results": [{"name": n, "ok": ok, "note": note} for n, ok, note in test_results]}
         return 0.0, ev
 
-    # 验证 V1198 关键字段 (PHILOSOPHY_9_KEYS = 1.0, ASI_7_QUESTIONS = 1.0)
+    # 验证 V1198 关键字段 (PHILOSOPHY_9_KEYS_real = 1.0, ASI_7_QUESTIONS_real = 1.0)
     sub_scores = v1198_data.get("sub_dim_scores", {})
-    phil_9 = sub_scores.get("PHILOSOPHY_9_KEYS", 0.0)
-    asi_7 = sub_scores.get("ASI_7_QUESTIONS", 0.0)
-    v3_guards = sub_scores.get("v3_guards", 0.0)
+    phil_9 = sub_scores.get("PHILOSOPHY_9_KEYS_real", 0.0)
+    asi_7 = sub_scores.get("ASI_7_QUESTIONS_real", 0.0)
+    v3_guards = sub_scores.get("v3_guards_real", 0.0)
     n_subs = len(sub_scores)
 
     test_results.append(("has_phil_9_keys", phil_9 > 0, f"phil_9={phil_9:.4f}"))
     test_results.append(("has_asi_7_questions", asi_7 > 0, f"asi_7={asi_7:.4f}"))
     test_results.append(("has_v3_guards", v3_guards > 0, f"v3_guards={v3_guards:.4f}"))
     test_results.append(("n_subdim_ge_5", n_subs >= 5, f"n={n_subs}"))
-    test_results.append(("v2_philosophy_lift_ok", v1198_data.get("new_value", 0) > 0.8, f"new={v1198_data.get('new_value', 0):.4f}"))
+    test_results.append(("v2_philosophy_lift_ok", v1198_data.get("v2_philosophy_lifted", 0) > 0.8, f"lifted={v1198_data.get('v2_philosophy_lifted', 0):.4f}"))
 
     n_pass = sum(1 for _, ok, _ in test_results if ok)
     ev.score = float(n_pass) / 5.0
@@ -1279,7 +1279,7 @@ def measure_v1201_full(write_artifact: bool = True, artifact_dir: str = DEFAULT_
         f"V1201 3-formula: additive={rep.formula_1_additive:.4f} | recompute={rep.formula_2_recompute:.4f} | corrected={rep.formula_3_corrected:.4f}",
         f"V1201 vs north_star {ASI_NORTH_STAR:.4f}: gap={rep.gap_to_north_star_recompute:+.4f}, position={rep.position_pct_recompute:.2f}%",
         f"V1201 主 17:43 实事求是: V1201 = 2 dim 真 lift, 不魔改 ASI 总",
-        f"V1201 主 17:58+20:46: V1201 ≠ ASI 终极 (gap={rep.gap_to_north_star_recompute:+.4f})",
+        f"V1201 主 17:58+20:46 不假装: V1201 ≠ ASI 终极 (gap={rep.gap_to_north_star_recompute:+.4f})",
         f"V1201 主 22:33 北极星: ASI={ASI_NORTH_STAR:.4f} LOCKED, V1201={rep.formula_2_recompute:.4f} 中间",
         f"V1201 主 19:33: 站在 V1200 + V1199 + V1198 + V1197 + V1194 + V1191 + V1190 + V1188 肩上",
         f"V1201 主 13:31 大胆激进: 一次 cron 双 dim 联合 lift, self_improving_core 8 sub-dim + capabilities 5 sub-dim",
