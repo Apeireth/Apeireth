@@ -379,36 +379,58 @@ def _call_safely(fn: Optional[Callable], *args: Any, default: Any = None, **kwar
 
 
 def _v1114_evaluate_week() -> Tuple[bool, Dict[str, Any]]:
+    """V1114 evaluate_week cache (主 00:44 质量工程化: 10 sub-dim × 6s = 60s 避免重复)."""
+    global _V1114_EVAL_CACHE
+    if _V1114_EVAL_CACHE is not None:
+        return _V1114_EVAL_CACHE
     mod = _safe_import("apeireth.v1114_weekly_integration_evaluator")
     if mod is None:
-        return False, {}
+        _V1114_EVAL_CACHE = (False, {})
+        return _V1114_EVAL_CACHE
     fn = _attr_first(mod, ["evaluate_week", "evaluate"])
     if not callable(fn):
-        return False, {}
+        _V1114_EVAL_CACHE = (False, {})
+        return _V1114_EVAL_CACHE
     ok, r = _call_safely(fn)
     if not ok or not isinstance(r, dict):
-        return False, {}
-    return True, r
+        _V1114_EVAL_CACHE = (False, {})
+        return _V1114_EVAL_CACHE
+    _V1114_EVAL_CACHE = (True, r)
+    return _V1114_EVAL_CACHE
+
+
+_V1114_EVAL_CACHE: Optional[Tuple[bool, Dict[str, Any]]] = None
+_V1065_MEASURE_CACHE: Optional[Tuple[bool, Dict[str, float]]] = None
 
 
 def _v1065_core_measure() -> Tuple[bool, Dict[str, float]]:
+    """V1065 measure cache (主 00:44 质量工程化)."""
+    global _V1065_MEASURE_CACHE
+    if _V1065_MEASURE_CACHE is not None:
+        return _V1065_MEASURE_CACHE
     mod = _safe_import("apeireth.v1065_asi_self_organizing_core")
     if mod is None:
-        return False, {}
+        _V1065_MEASURE_CACHE = (False, {})
+        return _V1065_MEASURE_CACHE
     factory = getattr(mod, "build_self_organizing_core", None)
     if not callable(factory):
-        return False, {}
+        _V1065_MEASURE_CACHE = (False, {})
+        return _V1065_MEASURE_CACHE
     try:
         core = factory()
     except Exception:
-        return False, {}
+        _V1065_MEASURE_CACHE = (False, {})
+        return _V1065_MEASURE_CACHE
     try:
         m = core.measure()
     except Exception:
-        return False, {}
+        _V1065_MEASURE_CACHE = (False, {})
+        return _V1065_MEASURE_CACHE
     if not isinstance(m, dict):
-        return False, {}
-    return True, m
+        _V1065_MEASURE_CACHE = (False, {})
+        return _V1065_MEASURE_CACHE
+    _V1065_MEASURE_CACHE = (True, m)
+    return _V1065_MEASURE_CACHE
 
 
 # ============================================================================
