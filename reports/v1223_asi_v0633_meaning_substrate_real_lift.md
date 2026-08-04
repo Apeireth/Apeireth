@@ -1,5 +1,5 @@
 # V1223 ASI V0.6.33 meaning_substrate_real_lift (16th dim 意义 / meaning / meaning-making substrate)
-Snapshot ID: `e1d007af-d71d-4fc7-b7eb-ba6c7fba5823` · dim_version: `0.6.33`
+Snapshot ID: `dd4527b6-5736-4d43-9eda-185bffa346e0` · dim_version: `0.6.33`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1223 16-dim × 13-R matrix extension (新增 ME 意义 dim)
@@ -77,5 +77,5 @@ V1222 baseline 15 dim × 13 R = 195 cell → V1223 16 dim × 13 R = 208 cell
 ## 关键路径
 
 - `apeireth/v1223_asi_v0633_meaning_substrate_real_lift.py`
-- `artifacts/e1d007af-d71d-4fc7-b7eb-ba6c7fba5823_asi_v0633_meaning_substrate_real_lift.json`
+- `artifacts/dd4527b6-5736-4d43-9eda-185bffa346e0_asi_v0633_meaning_substrate_real_lift.json`
 - `reports/v1223_asi_v0633_meaning_substrate_real_lift.md`
