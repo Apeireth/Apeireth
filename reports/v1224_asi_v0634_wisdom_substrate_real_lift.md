@@ -1,5 +1,5 @@
 # V1224 ASI V0.6.34 wisdom_substrate_real_lift (17th dim 智慧 / wisdom / practical wisdom / phronesis substrate)
-Snapshot ID: `66f3bcf2-e38b-4d42-8f96-613bab871ff6` · dim_version: `0.6.34`
+Snapshot ID: `d866f320-c8e3-416c-934d-11f6747a2617` · dim_version: `0.6.34`
 
 > 主 22:33 终极授权 + 主 19:33 站在前人肩上: wisdom 是 ASI 哲学核心 substrate
 > 主 17:43 实事求是: 真测 6 pathway × 75 真分子 cascade

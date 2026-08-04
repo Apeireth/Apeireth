@@ -1,6 +1,6 @@
 # V1236 ASI V0.6.46 kenosis_substrate_real_lift
 
-- snapshot_id: `b75211de-5c8a-48f8-b07b-61ec4de9f14a`
+- snapshot_id: `18313442-0003-4187-a4aa-a1c54625a266`
 - dim_version: `0.6.46`
 - elapsed: 0.0000s
 - north_star (LOCKED): 0.9800

@@ -1,5 +1,5 @@
 # V1220 ASI V0.6.30 self_reference_substrate_real_lift (13th dim 自指 / self-reference / Strange Loop)
-Snapshot ID: `f36e0e8a-318e-426a-b577-35cbcfa150cc` · dim_version: `0.6.30`
+Snapshot ID: `0c5e52ac-6839-456f-b887-856fce77582c` · dim_version: `0.6.30`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1220 13-dim × 13-R matrix extension (新增 SF 自指 dim)
@@ -76,5 +76,5 @@ V1219 baseline 12 dim × 13 R = 156 cell → V1220 13 dim × 13 R = 169 cell
 ## 关键路径
 - `apeireth/v1220_asi_v0630_self_reference_substrate_real_lift.py`
 - `tests/test_v1220_asi_v0630_self_reference_substrate_real_lift.py`
-- `artifacts/f36e0e8a-318e-426a-b577-35cbcfa150cc_asi_v0630_self_reference_substrate_real_lift.json`
+- `artifacts/0c5e52ac-6839-456f-b887-856fce77582c_asi_v0630_self_reference_substrate_real_lift.json`
 - `reports/v1220_asi_v0630_self_reference_substrate_real_lift.md`
