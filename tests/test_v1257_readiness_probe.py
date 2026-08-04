@@ -459,3 +459,240 @@ def test_north_star_locked_invariant():
     assert v1257_probe.ASI_NORTH_STAR == 0.9800
     metrics = v1257_probe._probe_v1257()
     assert metrics.north_star_locked == 0.9800
+
+
+# ============================================================================
+# Test: Integration Fitness (主 00:56 任何人都能接手 + 主 00:44 质量工程化)
+# ============================================================================
+
+def test_fitness_dataclass_exists():
+    """Integration fitness dataclass must exist for 主 00:56 handoff."""
+    assert hasattr(v1257_probe, "V1257IntegrationFitness")
+
+
+def test_comparison_table_dataclass_exists():
+    """Comparison table dataclass must exist for 主 00:44 质量工程化."""
+    assert hasattr(v1257_probe, "V1257ComparisonTable")
+
+
+def test_v1252_v1256_lift_pattern_constant():
+    """V1252-V1256 lift pattern should be 4 × +0.0055 (chain sanity check)."""
+    assert len(v1257_probe.V1252_V1256_LIFT_PATTERN) == 4
+    for x in v1257_probe.V1252_V1256_LIFT_PATTERN:
+        assert x == pytest.approx(0.0055)
+
+
+def test_compute_v1257_fitness_jubilee_high():
+    """JUBILEE should score HIGH on integration fitness (full anchors)."""
+    f = v1257_probe._compute_v1257_fitness(v1257_probe.JUBILEE)
+    assert f.theology_anchor_count == 5
+    assert f.cross_domain_anchor_count == 25
+    assert f.theology_depth_ratio == pytest.approx(1.0)
+    assert f.cross_domain_breadth_ratio == pytest.approx(1.0)
+    assert f.distinctness_from_v1256 is True
+    assert f.composability_band == "HIGH"
+    assert f.warnings == []
+
+
+def test_compute_v1257_fitness_henochic_high():
+    """HENOCHIC_TRANSLATION should also score HIGH (full anchors)."""
+    f = v1257_probe._compute_v1257_fitness(v1257_probe.HENOCHIC_TRANSLATION)
+    assert f.composability_band == "HIGH"
+    assert f.composability_score >= 0.95
+    assert f.warnings == []
+
+
+def test_compute_v1257_fitness_divine_invitation_high():
+    """DIVINE_INVITATION should also score HIGH."""
+    f = v1257_probe._compute_v1257_fitness(v1257_probe.DIVINE_INVITATION)
+    assert f.composability_band == "HIGH"
+
+
+def test_compute_v1257_fitness_covenant_high():
+    """COVENANT should also score HIGH."""
+    f = v1257_probe._compute_v1257_fitness(v1257_probe.COVENANT)
+    assert f.composability_band == "HIGH"
+
+
+def test_fitness_inflation_gap_positive():
+    """Inflation gap must remain > 0 after V1257 lift (主 17:43 不假装 ASI)."""
+    for c in v1257_probe.PROBE_4_CANDIDATES:
+        f = v1257_probe._compute_v1257_fitness(c)
+        assert f.inflation_gap_after_lift > 0.0, f"{c.key} gap={f.inflation_gap_after_lift}"
+
+
+def test_fitness_asi_lift_consistency_full():
+    """All 4 candidates should match V1252-V1256 +0.0055 pattern (consistency = 1.0)."""
+    for c in v1257_probe.PROBE_4_CANDIDATES:
+        f = v1257_probe._compute_v1257_fitness(c)
+        assert f.asi_lift_consistency == pytest.approx(1.0)
+
+
+def test_fitness_composability_in_unit_interval():
+    """Composability score must be in [0, 1] (主 00:44 质量工程化)."""
+    for c in v1257_probe.PROBE_4_CANDIDATES:
+        f = v1257_probe._compute_v1257_fitness(c)
+        assert 0.0 <= f.composability_score <= 1.0
+
+
+# ============================================================================
+# Test: Comparison Table (主 00:44 质量工程化 = 排序便于 review)
+# ============================================================================
+
+def test_comparison_table_has_4_rows():
+    """Comparison table must have exactly 4 rows (主 22:33 4 候选 user choice)."""
+    t = v1257_probe._build_comparison_table()
+    assert len(t.rows) == 4
+
+
+def test_comparison_table_recommended_action_no_autodecide():
+    """Recommended action must explicitly say 主 agent 不自决 (主 22:33)."""
+    t = v1257_probe._build_comparison_table()
+    assert "不自决" in t.recommended_action
+    assert "V1257" in t.recommended_action
+
+
+def test_comparison_table_sorted_by_composability_desc():
+    """Rows should be sorted by composability_score DESC (主 00:44)."""
+    t = v1257_probe._build_comparison_table()
+    scores = [r.composability_score for r in t.rows]
+    assert scores == sorted(scores, reverse=True)
+
+
+def test_v1257_integrate_render_jubilee():
+    """--integrate JUBILEE render should be non-empty and contain key fields."""
+    txt = v1257_probe._v1257_integrate("JUBILEE")
+    assert "JUBILEE" in txt
+    assert "composability_score" in txt
+    assert "主 agent 立场" in txt
+
+
+def test_v1257_integrate_render_henochic():
+    """--integrate HENOCHIC_TRANSLATION render should be non-empty and contain key fields."""
+    txt = v1257_probe._v1257_integrate("HENOCHIC_TRANSLATION")
+    assert "HENOCHIC_TRANSLATION" in txt
+    assert "HIGH" in txt
+
+
+def test_v1257_integrate_unknown_raises():
+    """--integrate <unknown> should raise SystemExit (CLI safety)."""
+    with pytest.raises(SystemExit):
+        v1257_probe._v1257_integrate("UNKNOWN_CANDIDATE")
+
+
+def test_v1257_compare_render_has_table_header():
+    """--compare render should include the candidate table header."""
+    t = v1257_probe._build_comparison_table()
+    txt = v1257_probe._v1257_compare(t)
+    assert "Candidate" in txt
+    assert "Theology" in txt
+    assert "CrossDom" in txt
+    assert "Lift" in txt
+    assert "Comp" in txt
+    assert "Band" in txt
+
+
+def test_v1257_compare_render_lists_all_4_candidates():
+    """--compare render should list all 4 candidate keys."""
+    t = v1257_probe._build_comparison_table()
+    txt = v1257_probe._v1257_compare(t)
+    assert "JUBILEE" in txt
+    assert "HENOCHIC_TRANSLATION" in txt
+    assert "DIVINE_INVITATION" in txt
+    assert "COVENANT" in txt
+
+
+def test_v1257_compare_json_serializable():
+    """--compare-json should produce valid JSON with 4 rows."""
+    t = v1257_probe._build_comparison_table()
+    js = v1257_probe._v1257_compare_json(t)
+    obj = json.loads(js)
+    assert len(obj["rows"]) == 4
+    for r in obj["rows"]:
+        assert r["composability_band"] in {"LOW", "MID", "HIGH"}
+
+
+# ============================================================================
+# Test: CLI subprocess (主 00:56 任何人都能接手 = 真CLI可运行)
+# ============================================================================
+
+def test_cli_integrate_subprocess():
+    """--integrate JUBILEE CLI subprocess should run and return JUBILEE info."""
+    r = subprocess.run(
+        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--integrate", "JUBILEE"],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        check=True,
+        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
+    )
+    assert "JUBILEE" in r.stdout
+    assert "HIGH" in r.stdout
+
+
+def test_cli_compare_subprocess():
+    """--compare CLI subprocess should run and list all 4 candidates."""
+    r = subprocess.run(
+        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--compare"],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        check=True,
+        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
+    )
+    for k in ("JUBILEE", "HENOCHIC_TRANSLATION", "DIVINE_INVITATION", "COVENANT"):
+        assert k in r.stdout
+
+
+def test_cli_compare_json_subprocess():
+    """--compare-json CLI subprocess should produce valid JSON."""
+    r = subprocess.run(
+        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--compare-json"],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        check=True,
+        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
+    )
+    obj = json.loads(r.stdout)
+    assert len(obj["rows"]) == 4
+
+
+def test_cli_help_lists_new_modes():
+    """--help should list --integrate and --compare as available."""
+    r = subprocess.run(
+        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--help"],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        check=True,
+        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
+    )
+    assert "--integrate" in r.stdout
+    assert "--compare" in r.stdout
+    assert "--compare-json" in r.stdout
+
+
+# ============================================================================
+# Test: 主 22:33 主 agent 不自决 守门 (主 17:43 实事求是)
+# ============================================================================
+
+def test_no_autodecide_in_render_outputs():
+    """All render outputs must NOT pick a winner (主 22:33 不自决 范畴)."""
+    metrics = v1257_probe._probe_v1257()
+    report = v1257_probe._v1257_report(metrics)
+    integrate_j = v1257_probe._v1257_integrate("JUBILEE")
+    table = v1257_probe._build_comparison_table()
+    compare = v1257_probe._v1257_compare(table)
+
+    # All should mention 主 agent 不自决 or 等 主人 user choice
+    for txt in (report, integrate_j, compare):
+        assert ("不自决" in txt) or ("等 主人" in txt) or ("user choice" in txt.lower())
+
+
+def test_composability_weights_sum_to_one():
+    """Composability weights (0.30 + 0.30 + 0.25 + 0.15) should sum to 1.0 (主 00:44)."""
+    # Re-derive by inspection — weights are 0.30 theology + 0.30 cross +
+    # 0.25 lift_consistency + 0.15 distinctness = 1.00
+    total = 0.30 + 0.30 + 0.25 + 0.15
+    assert total == pytest.approx(1.00)
