@@ -48,6 +48,12 @@ ASI_NORTH_STAR = 0.9800
 V1224_VERSION = "0.1.0"
 V1224_DIM_VERSION = "0.6.34"
 
+# V1224 self-baseline (主 17:43 实事求是 — 写死历史值, 不能改)
+# 这是 V1224 自身在 142 cell 上 realized_mean + 221 cell 上 overall_mean + WIS dim realized
+V1224_REALIZED_MEAN_142 = 0.6979
+V1224_OVERALL_MEAN_221 = 0.4483
+V1224_WIS_REALIZED = 1.0000
+
 # V1223 baseline (主 17:43 实事求是 — 写死历史值, 不能改)
 V1223_RECOMPUTE_BASELINE = 1.000000
 V1223_REALIZED_MEAN_136 = 0.6846
