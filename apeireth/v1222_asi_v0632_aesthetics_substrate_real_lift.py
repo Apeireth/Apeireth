@@ -142,6 +142,12 @@ V1221_REALIZED_MEAN_124 = 0.6540
 V1221_OVERALL_MEAN_182 = 0.4455
 V1221_MR_REALIZED = 1.0000
 
+# V1222 self-baseline (主 17:43 实事求是 — 写死历史值, 不能改)
+# 这是 V1222 自身在 130 cell 上 realized_mean + 195 cell 上 overall_mean + AE dim realized
+V1222_REALIZED_MEAN_130 = 0.6700
+V1222_OVERALL_MEAN_195 = 0.4466
+V1222_AE_REALIZED = 1.0000
+
 # V1220 baseline (主 17:43 实事求是 — 写死历史值, 不能改)
 V1220_RECOMPUTE_BASELINE = 1.000000
 V1220_REALIZED_MEAN_118 = 0.6364
