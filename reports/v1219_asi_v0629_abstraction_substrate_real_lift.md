@@ -1,5 +1,5 @@
 # V1219 ASI V0.6.29 abstraction_substrate_real_lift (12th dim 抽象 / abstraction)
-Snapshot ID: `c34aaf95-7f8e-4d4b-8602-96029c510e7b` · dim_version: `0.6.29`
+Snapshot ID: `15f4452f-31ab-4357-be8c-b4619fb873f7` · dim_version: `0.6.29`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1219 12-dim × 13-R matrix extension (新增 AB 抽象 dim)
@@ -76,5 +76,5 @@ V1218 baseline 11 dim × 13 R = 143 cell → V1219 12 dim × 13 R = 156 cell
 ## 关键路径
 - `apeireth/v1219_asi_v0629_abstraction_substrate_real_lift.py`
 - `tests/test_v1219_asi_v0629_abstraction_substrate_real_lift.py`
-- `artifacts/c34aaf95-7f8e-4d4b-8602-96029c510e7b_asi_v0629_abstraction_substrate_real_lift.json`
+- `artifacts/15f4452f-31ab-4357-be8c-b4619fb873f7_asi_v0629_abstraction_substrate_real_lift.json`
 - `reports/v1219_asi_v0629_abstraction_substrate_real_lift.md`

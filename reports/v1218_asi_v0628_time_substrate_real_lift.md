@@ -1,5 +1,5 @@
 # V1218 ASI V0.6.28 time_substrate_real_lift (11th dim 时间 / chronos)
-Snapshot ID: `eac0fe81-f2a6-4bad-922b-2a52459bbfc3` · dim_version: `0.6.28`
+Snapshot ID: `15c922de-a9c4-4db1-86e5-0ccb44bc30f6` · dim_version: `0.6.28`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1218 11-dim × 13-R matrix extension (新增 TM 时间 dim)

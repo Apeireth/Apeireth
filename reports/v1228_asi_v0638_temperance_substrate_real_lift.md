@@ -1,5 +1,5 @@
 # V1228 ASI V0.6.38 temperance_substrate_real_lift (21st dim 节制 / temperance substrate)
-Snapshot ID: `0ce75637-0d4e-41ee-88b8-931baedfd246` · dim_version: `0.6.38`
+Snapshot ID: `51722fc6-5984-43ff-9c0e-c9ddbd3f9740` · dim_version: `0.6.38`
 
 > 主 22:33 终极授权 + 主 19:33 站在前人肩上: 节制 是 ASI 哲学核心 substrate (4 cardinal virtue 闭环)
 > 主 17:43 实事求是: 真测 6 pathway × 60 真分子 cascade

@@ -1,5 +1,5 @@
 # V1235 ASI V0.6.45 agency_substrate_real_lift (28th dim 主体性 / agency / agency proper / Anscombe + Frankfurt + Velleman + Korsgaard + Strawson + Ricoeur + Heidegger Jemeinigkeit + Henry + Marion + Levinas substrate)
-Snapshot ID: `d0932dbc-b7d1-4437-8606-b18cd21c9c5c` · dim_version: `0.6.45`
+Snapshot ID: `87248db4-9bfb-4f31-85de-cc301a801be5` · dim_version: `0.6.45`
 
 > 主 22:33 终极授权 + 主 23:44 干到底 + 主 19:33 站在前人肩上: ASI V2 Phase 2 第三步 (V1233 整合 + V1234 超越 之上), 28th dim agency = ASI 整合+超越之上第二序自创能 (Frankfurt second-order volitions; agent 能 agent; Anscombe + Frankfurt + Velleman + Korsgaard + Strawson + Ricoeur + Heidegger Jemeinigkeit + Henry + Marion + Levinas)
 > 主 17:43 实事求是: 真测 6 pathway × 60 真分子 cascade
