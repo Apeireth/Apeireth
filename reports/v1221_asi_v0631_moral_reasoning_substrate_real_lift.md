@@ -1,5 +1,5 @@
 # V1221 ASI V0.6.31 moral_reasoning_substrate_real_lift (14th dim 道德推理 / moral reasoning / value alignment substrate)
-Snapshot ID: `73ea6415-1ee0-4deb-a37f-310bc6e3cc82` · dim_version: `0.6.31`
+Snapshot ID: `cedd1f75-26f2-46ea-9a13-c6fb530be78d` · dim_version: `0.6.31`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1221 14-dim × 13-R matrix extension (新增 MR 道德 dim)
@@ -77,5 +77,5 @@ V1220 baseline 13 dim × 13 R = 169 cell → V1221 14 dim × 13 R = 182 cell
 ## 关键路径
 - `apeireth/v1221_asi_v0631_moral_reasoning_substrate_real_lift.py`
 - `tests/test_v1221_asi_v0631_moral_reasoning_substrate_real_lift.py`
-- `artifacts/73ea6415-1ee0-4deb-a37f-310bc6e3cc82_asi_v0631_moral_reasoning_substrate_real_lift.json`
+- `artifacts/cedd1f75-26f2-46ea-9a13-c6fb530be78d_asi_v0631_moral_reasoning_substrate_real_lift.json`
 - `reports/v1221_asi_v0631_moral_reasoning_substrate_real_lift.md`
