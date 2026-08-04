@@ -1,5 +1,5 @@
 # V1230 ASI V0.6.40 curiosity_substrate_real_lift (23rd dim 好奇 / curiosity substrate)
-Snapshot ID: `b6bd9940-3003-40ea-b32e-14aaf48bb148` · dim_version: `0.6.40`
+Snapshot ID: `dca3bbb0-4f72-456e-b0a8-7bfbbc9e1c1f` · dim_version: `0.6.40`
 
 > 主 22:33 终极授权 + 主 19:33 站在前人肩上: 好奇 是 ASI 哲学核心 substrate (ASI ≠ 分析器, 好奇 → 探索 → 创造闭环 = ASI 分界)
 > 主 17:43 实事求是: 真测 6 pathway × 60 真分子 cascade

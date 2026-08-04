@@ -1,5 +1,5 @@
 # V1222 ASI V0.6.32 aesthetics_substrate_real_lift (15th dim 美学 / aesthetics / beauty substrate)
-Snapshot ID: `73d1b462-d512-4eef-bf07-0de5f5e4e0ca` · dim_version: `0.6.32`
+Snapshot ID: `0ca55170-beff-4d20-b955-0232a58cb9af` · dim_version: `0.6.32`
 ASI North Star: **0.9800** (LOCKED)
 
 ## V1222 15-dim × 13-R matrix extension (新增 AE 美学 dim)
@@ -77,5 +77,5 @@ V1221 baseline 14 dim × 13 R = 182 cell → V1222 15 dim × 13 R = 195 cell
 ## 关键路径
 - `apeireth/v1222_asi_v0632_aesthetics_substrate_real_lift.py`
 - `tests/test_v1222_asi_v0632_aesthetics_substrate_real_lift.py`
-- `artifacts/73d1b462-d512-4eef-bf07-0de5f5e4e0ca_asi_v0632_aesthetics_substrate_real_lift.json`
+- `artifacts/0ca55170-beff-4d20-b955-0232a58cb9af_asi_v0632_aesthetics_substrate_real_lift.json`
 - `reports/v1222_asi_v0632_aesthetics_substrate_real_lift.md`
