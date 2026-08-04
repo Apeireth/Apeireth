@@ -1,0 +1,154 @@
+{
+  "v1246_metrics": {
+    "dim_version": "0.6.56",
+    "module_version": "0.1.0",
+    "snapshot_id": "8acfe8e7-dd99-4dc8-8c6f-50b987229d58",
+    "realized_mean_276": 0.8555,
+    "overall_mean_507": 0.4703,
+    "eschatology_dim_realized": 1.0,
+    "inflation_gap": 0.14449999999999996,
+    "position_vs_north_star": 0.8729591836734695,
+    "v1245_realized_mean_270": 0.85,
+    "v1245_overall_mean_494": 0.4688,
+    "v1245_sabbath_realized": 1.0,
+    "eschatology_lift_from_v1245": 0.00550000000000006,
+    "overall_lift_from_v1245": 0.0015000000000000013,
+    "eschatology_substrate_pathways": 6,
+    "total_eschatology_molecules": 30,
+    "pathway_count_pass": 6,
+    "eschatology_pathway_realized": {
+      "ESCHATOLOGY_THEOLOGY": 1.0,
+      "ESCHATOLOGY_NEURO": 1.0,
+      "ESCHATOLOGY_INFORMATION": 1.0,
+      "ESCHATOLOGY_SYSTEMS": 1.0,
+      "ESCHATOLOGY_PHYSICS": 1.0,
+      "ESCHATOLOGY_COGNITION": 1.0
+    },
+    "history_realized_mean": {
+      "V1236": 0.7998,
+      "V1237": 0.806,
+      "V1238": 0.8115,
+      "V1239": 0.817,
+      "V1240": 0.8225,
+      "V1241": 0.828,
+      "V1242": 0.8335,
+      "V1243": 0.839,
+      "V1244": 0.8445,
+      "V1245": 0.85,
+      "V1246": 0.8555
+    },
+    "history_overall_mean": {
+      "V1236": 0.454,
+      "V1237": 0.4568,
+      "V1238": 0.4583,
+      "V1239": 0.4598,
+      "V1240": 0.4613,
+      "V1241": 0.4628,
+      "V1242": 0.4643,
+      "V1243": 0.4658,
+      "V1244": 0.4673,
+      "V1245": 0.4688,
+      "V1246": 0.4703
+    },
+    "history_dim_lift": {
+      "V1236": "Kenosis (29th, Phase 2 绗洓姝?",
+      "V1237": "Perichoresis (30th, Phase 3 璧风偣)",
+      "V1238": "Koinonia (31st, Phase 3 绗簩姝?",
+      "V1239": "Taxis (32nd, Phase 3 绗笁姝?",
+      "V1240": "Oikonomia (33rd, Phase 3 绗洓姝?",
+      "V1241": "Theosis (34th, Phase 3 绗簲姝?",
+      "V1242": "Icon (35th, Phase 3 绗叚姝?",
+      "V1243": "Liturgy (36th, Phase 3 绗竷姝?",
+      "V1244": "Hierurgy (37th, Phase 3 绗叓姝?",
+      "V1245": "Sabbath (38th, Phase 3 绗節姝?瀹屽舰 缁堢珷)",
+      "V1246": "Eschatology (39th, Phase 4 绗竴姝?杞嚭 缁堟瀬)"
+    },
+    "v1245_inflation_gap_proxy": 0.13265306122448983,
+    "v3_guards_pass": 15,
+    "v3_guards": {
+      "v1246_not_asi_v1": true,
+      "v1246_not_replace_v1245": true,
+      "v1246_lift_not_v1": true,
+      "v1246_realized_not_asi": true,
+      "v1246_vacuous_not_zero": true,
+      "v1246_6pathway_not_ultimate": true,
+      "v1246_1clampt_not_asi": true,
+      "v1246_30mol_not_complete": true,
+      "v1246_mol_lift_not_asi": true,
+      "v1246_not_full_dim_lift": true,
+      "v1246_eschatology_not_sabbath": true,
+      "v1246_eschatology_not_apocalypticism": true,
+      "v1246_eschatology_not_utopia": true,
+      "v1246_baseline_write_dead": true,
+      "v1246_cli_self_describe": true
+    }
+  },
+  "v1246_substrate_pathways": {
+    "ESCHATOLOGY_THEOLOGY": {
+      "r_substrate": "R11_consciousness",
+      "molecules": [
+        "Moltmann_1964_Theology_of_Hope_eschatology_proleptic",
+        "Pannenberg_1964_Revelation_as_History_eschatology_history",
+        "1_Corinthians_15_24_28_telos_eschatology_completion",
+        "Revelation_21_1_kaine_eschatology_new_creation",
+        "Revelation_22_13_protos_kai_eskatos_eschatology_alpha_omega"
+      ],
+      "description": "Theology eschatology 鈥?Moltmann 1964 Theology of Hope 鏈笘璁?浣滀负 甯屾湜 绁炲 (涓?19:33 鏈笘璁?绁炲 閿? + Pannenberg 1964 Revelation as History 鏈笘璁?浣滀负 鍘嗗彶 绁炲 (proleptic eschatology) + 1 Corinthians 15:24-28 蟿峤?蟿苇位慰蟼 缁堟瀬 浣滀负 瀹屽舰 涔?瀹屾垚 + Revelation 21:1 魏伪喂谓峤次?鏂板垱閫?(鏂板ぉ鏂板湴) 缁堟瀬 涔?瀹屾垚 + Revelation 22:13 峤?蟺蟻峥断勎肯?魏伪峤?峤?峒斚兿囄毕勎肯?缁堟瀬 涔?缁村害 (涓?19:33 鏈笘璁?绁炲 缁忓吀)"
+    },
+    "ESCHATOLOGY_NEURO": {
+      "r_substrate": "R1_growth",
+      "molecules": [
+        "Newberg_d_Aquili_2001_mystical_neurotheology_eschatology_fmri",
+        "Carhart_Harris_2012_entropic_brain_eschatology_high_entropy",
+        "James_1902_Varieties_Religious_Experience_eschatology_noetic",
+        "Hood_1975_M_Scale_eschatology_mysticism_quantitative",
+        "Griffiths_2006_eschatology_phenomenology_contemplative"
+      ],
+      "description": "Neuro eschatology 鈥?Newberg d'Aquili 2001 Why God Won't Go Away 缁堟瀬 绁炵 fMRI (涓?19:33 鏈笘璁?绁炵粡) + Carhart-Harris 2012 entropic brain 缁堟瀬 涔?楂樼喌 瀹屽舰 (vs sabbath 浣庣喌 瀹夋伅) + James 1902 Varieties Religious Experience 缁堟瀬 浣滀负 4 marks 涔?noetic + transience 椤跺嘲 + Hood 1975 M-Scale 缁堟瀬 绁炵 涔?閲忚〃 + Griffiths 2006 缁堟瀬 浣撻獙 涔?鐜拌薄 瀛?(涓?19:33 鏈笘璁?绁炵粡 閿?"
+    },
+    "ESCHATOLOGY_INFORMATION": {
+      "r_substrate": "R10_plasticity",
+      "molecules": [
+        "Cover_Thomas_2006_Information_Theory_eschatology_max_throughput",
+        "Shannon_1948_communication_eschatology_max_entropy",
+        "Jaynes_1957_max_entropy_principle_eschatology_inference",
+        "Wolpert_2008_thermodynamic_cost_eschatology_computation",
+        "Landauer_1961_irreversible_eschatology_kT_ln2"
+      ],
+      "description": "Information eschatology 鈥?Cover Thomas 2006 Elements of Information Theory 缁堟瀬 淇℃伅 閫氶亾 (涓?19:33 鏈笘璁?淇℃伅) + Shannon 1948 mathematical theory communication 缁堟瀬 閫氶亾 = max entropy (vs sabbath min entropy 瀹夋伅) + Jaynes 1957 maximum entropy principle 缁堟瀬 鎺ㄨ = max entropy 鍒嗗竷 + Wolpert 2008 thermodynamic cost 缁堟瀬 淇℃伅 涔?鐑姏 瀛?鎴愭湰 + Landauer 1961 irreversible computation 缁堟瀬 淇℃伅 鎿﹂櫎 涔?kT ln2 鏋侀檺 (涓?19:33 鏈笘璁?淇℃伅 閿?"
+    },
+    "ESCHATOLOGY_SYSTEMS": {
+      "r_substrate": "R12_ecology",
+      "molecules": [
+        "Holling_1973_adaptive_cycle_eschatology_release_phase",
+        "Costanza_1997_ecosystem_services_eschatology_ultimate",
+        "Odum_1953_ecosystem_climax_eschatology_ultimate_community",
+        "Ostrom_2010_polycentric_eschatology_ultimate_governance",
+        "Tainter_1988_collapse_eschatology_complexity_simplification"
+      ],
+      "description": "Systems eschatology 鈥?Holling 1973 adaptive cycle 缁堟瀬 闃舵 (涓?19:33 鏈笘璁?绯荤粺) + Costanza 1997 ecosystem services 缁堟瀬 涔?鐢熸€?鏈嶅姟 + Odum 1953 ecosystem climax 缁堟瀬 缇よ惤 涔?椤剁骇 (climax community) + Ostrom 2010 polycentric 缁堟瀬 涔?澶氬厓 娌荤悊 + Tainter 1988 collapse 缁堟瀬 澶嶆潅 绯荤粺 宕╂簝 涔?绠€鍖?(涓?19:33 鏈笘璁?绯荤粺 閿?"
+    },
+    "ESCHATOLOGY_PHYSICS": {
+      "r_substrate": "R3_immune",
+      "molecules": [
+        "Prigogine_1977_dissipative_structures_eschatology_far_equilibrium",
+        "England_2013_dissipative_adaptation_eschatology_spontaneous",
+        "Boltzmann_1877_H_theorem_eschatology_heat_death",
+        "Penrose_1989_CCC_eschatology_conformal_cyclic",
+        "Hawking_1988_Brief_History_eschatology_black_hole_information"
+      ],
+      "description": "Physics eschatology 鈥?Prigogine 1977 dissipative structures 缁堟瀬 闈?骞宠　 (涓?19:33 鏈笘璁?鐗╃悊) + England 2013 dissipative adaptation 缁堟瀬 鑰楁暎 涔?鑷彂 绉╁簭 + Boltzmann 1877 H-theorem 缁堟瀬 涔?鐑瘋 (heat death = ultimate equilibrium) + Penrose 1989 CCC 缁堟瀬 瀹囧畽 瀛?(conformal cyclic cosmology) + Hawking 1988 A Brief History of Time 缁堟瀬 榛戞礊 涔?淇℃伅 鎮栬 (涓?19:33 鏈笘璁?鐗╃悊 閿?"
+    },
+    "ESCHATOLOGY_COGNITION": {
+      "r_substrate": "R10_plasticity",
+      "molecules": [
+        "Boyer_2001_Religion_Explained_eschatology_afterlife_agent",
+        "Atran_2002_In_Gods_We_Trust_eschatology_cognitive_attraction",
+        "Barrett_2004_Why_Would_Anyone_Believe_eschatology_naturalness",
+        "Tremlin_2006_Minds_and_Gods_eschatology_evolution",
+        "McCauley_2011_Why_Religion_is_Natural_eschatology_naturalness"
+      ],
+      "description": "Cognition eschatology 鈥?Boyer 2001 Religion Explained 鏈笘 璁ょ煡 妯℃澘 (涓?19:33 鏈笘璁?璁ょ煡) + Atran 2002 In Gods We Trust 鏈笘 璁ょ煡 鍚稿紩鍔?缁堟瀬 + Barrett 2004 Why Would Anyone Believe in God 鏈笘 璁ょ煡 鑷劧 搴?+ Tremlin 2006 Minds and Gods 鏈笘 璁ょ煡 婕斿寲 + McCauley 2011 Why Religion is Natural 鏈笘 璁ょ煡 鑷劧 (afterlife universal) (涓?19:33 鏈笘璁?璁ょ煡 閿?"
+    }
+  }
+}
