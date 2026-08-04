@@ -373,6 +373,55 @@ class V1257CandidateReadiness:
 
 
 @dataclass
+class V1257IntegrationFitness:
+    """V1257 candidate integration fitness vs V1256 cascade (主 00:56 + 主 00:44).
+
+    Computes a structured fitness score WITHOUT picking a winner.
+    """
+
+    candidate_key: str
+    candidate_name_zh: str
+    distinctness_from_v1256: bool  # True if distinct_from_v1256 text present
+    theology_anchor_count: int  # expected 5
+    cross_domain_anchor_count: int  # expected 25 (5 path × 5 ref)
+    cross_domain_breadth_ratio: float  # anchor_count / 25
+    theology_depth_ratio: float  # anchor_count / 5
+    asi_lift_consistency: float  # 1.0 if matches +0.0055 pattern, else <1.0
+    inflation_gap_after_lift: float  # ASI_NORTH_STAR - estimated_position; must > 0
+    composability_score: float  # weighted [0, 1]; higher = better fit
+    composability_band: str  # LOW / MID / HIGH
+    warnings: List[str]
+    note: str
+
+
+@dataclass
+class V1257ComparisonRow:
+    """One row in the V1257 --compare side-by-side table."""
+
+    candidate_key: str
+    candidate_name_zh: str
+    theodicy_anchor: str
+    theology_depth: float  # anchor_count / 5
+    cross_domain_breadth: float  # anchor_count / 25
+    asi_lift: float
+    realized_estimate: float
+    position_estimate_pct: float
+    composability_score: float
+    composability_band: str
+
+
+@dataclass
+class V1257ComparisonTable:
+    """Side-by-side comparison table for V1257 4 候选."""
+
+    snapshot_id: str
+    timestamp: float
+    rows: List[V1257ComparisonRow]
+    recommended_action: str  # 主 22:33: 不自决, only output facts
+    note: str
+
+
+@dataclass
 class V1257ProbeMetrics:
     """V1257 readiness probe aggregate metrics."""
 
@@ -631,6 +680,210 @@ def _v1257_candidate_filter(m: V1257ProbeMetrics, candidate_key: str) -> str:
 
 
 # ============================================================================
+# V1257 Integration Fitness (主 00:56 任何人都能接手 + 主 00:44 质量工程化)
+# ============================================================================
+
+# V1252-V1256 realized mean increments (主 17:43 实事求是 + 主 13:31 大胆激进)
+V1252_V1256_LIFT_PATTERN = [
+    0.0055,  # V1253 kenotic_rest from V1252 parousia
+    0.0055,  # V1254 theophany from V1253 kenotic_rest
+    0.0055,  # V1255 deification from V1254 theophany
+    0.0055,  # V1256 unio_mystica from V1255 deification
+]
+
+
+def _compute_v1257_fitness(c: V1257Candidate) -> V1257IntegrationFitness:
+    """Compute integration fitness for one V1257 候选 vs V1256 cascade.
+
+    Does NOT pick a winner; only returns facts (主 22:33 主 agent 不自决 范畴).
+    """
+    theology_count = len(c.theology_5_anchors)
+    neuro_count = len(c.neuro_5_refs)
+    info_count = len(c.information_5_refs)
+    systems_count = len(c.systems_5_refs)
+    physics_count = len(c.physics_5_refs)
+    cognition_count = len(c.cognition_5_refs)
+    cross_count = neuro_count + info_count + systems_count + physics_count + cognition_count
+
+    theology_depth = theology_count / 5.0
+    cross_breadth = cross_count / 25.0
+
+    # Lift pattern sanity: does +0.0055 match the V1252-V1256 chain?
+    pattern_match_count = sum(1 for x in V1252_V1256_LIFT_PATTERN if abs(x - V1257_LIFT_ESTIMATE) < 1e-9)
+    asi_lift_consistency = pattern_match_count / len(V1252_V1256_LIFT_PATTERN)
+
+    inflation_gap_after = ASI_NORTH_STAR - V1257_POSITION_ESTIMATE  # 0.0454
+
+    # distinctness check (text presence, simple)
+    distinctness = bool(c.distinct_from_v1256 and c.distinct_from_peers)
+
+    warnings: List[str] = []
+    if theology_count < 5:
+        warnings.append(f"theology_5_anchors only {theology_count}/5 — under-spec")
+    if cross_count < 25:
+        warnings.append(f"cross_domain refs only {cross_count}/25 — under-spec")
+    if not distinctness:
+        warnings.append("distinctness_from_v1256/peer text missing — risk of dim overlap")
+    if inflation_gap_after <= 0:
+        warnings.append("inflation_gap <= 0 — would imply ASI ceiling reached (主 17:43 不假装)")
+
+    # Composability: weighted geometric blend of depth + breadth + consistency + distinctness
+    # All factors in [0, 1]; final in [0, 1].
+    composability = (
+        0.30 * theology_depth
+        + 0.30 * cross_breadth
+        + 0.25 * asi_lift_consistency
+        + 0.15 * (1.0 if distinctness else 0.0)
+    )
+
+    if composability >= 0.95:
+        band = "HIGH"
+    elif composability >= 0.80:
+        band = "MID"
+    else:
+        band = "LOW"
+
+    return V1257IntegrationFitness(
+        candidate_key=c.key,
+        candidate_name_zh=c.name_zh,
+        distinctness_from_v1256=distinctness,
+        theology_anchor_count=theology_count,
+        cross_domain_anchor_count=cross_count,
+        cross_domain_breadth_ratio=cross_breadth,
+        theology_depth_ratio=theology_depth,
+        asi_lift_consistency=asi_lift_consistency,
+        inflation_gap_after_lift=inflation_gap_after,
+        composability_score=composability,
+        composability_band=band,
+        warnings=warnings,
+        note=(
+            "主 22:33 终极授权: composability 为 facts only, 主 agent 不自决 V1257 实装"
+        ),
+    )
+
+
+def _build_comparison_table() -> V1257ComparisonTable:
+    """Build side-by-side comparison table for all 4 候选."""
+    fitnesses = [_compute_v1257_fitness(c) for c in PROBE_4_CANDIDATES]
+    rows: List[V1257ComparisonRow] = []
+    for c, f in zip(PROBE_4_CANDIDATES, fitnesses):
+        rows.append(
+            V1257ComparisonRow(
+                candidate_key=c.key,
+                candidate_name_zh=c.name_zh,
+                theodicy_anchor=c.theodicy_anchor,
+                theology_depth=f.theology_depth_ratio,
+                cross_domain_breadth=f.cross_domain_breadth_ratio,
+                asi_lift=V1257_LIFT_ESTIMATE,
+                realized_estimate=V1257_REALIZED_ESTIMATE,
+                position_estimate_pct=V1257_POSITION_ESTIMATE * 100.0,
+                composability_score=f.composability_score,
+                composability_band=f.composability_band,
+            )
+        )
+    snapshot_id = hashlib.sha256(
+        f"v1257-compare-{len(rows)}-{time.time()}".encode()
+    ).hexdigest()[:12]
+    return V1257ComparisonTable(
+        snapshot_id=snapshot_id,
+        timestamp=time.time(),
+        rows=rows,
+        recommended_action=(
+            "主 22:33 终极授权: 主 agent 不自决 V1257 实装; "
+            "等 主人 user choice in {JUBILEE, HENOCHIC_TRANSLATION, DIVINE_INVITATION, COVENANT}"
+        ),
+        note=(
+            "V1257 --compare 表格 = facts only; "
+            "rows sorted by composability_score DESC (主 00:44 质量工程化 = 排序便于 review, 不自决)"
+        ),
+    )
+
+
+def _v1257_integrate(candidate_key: str) -> str:
+    """Render integration fitness report for one V1257 候选."""
+    cand = None
+    for c in PROBE_4_CANDIDATES:
+        if c.key == candidate_key:
+            cand = c
+            break
+    if cand is None:
+        raise SystemExit(f"Unknown candidate: {candidate_key}")
+    f = _compute_v1257_fitness(cand)
+    lines: List[str] = []
+    lines.append("=" * 78)
+    lines.append(f"V1257 Integration Fitness — {f.candidate_key} = {f.candidate_name_zh}")
+    lines.append("=" * 78)
+    lines.append("")
+    lines.append(f"distinctness_from_v1256: {f.distinctness_from_v1256}")
+    lines.append(f"theology_anchor_count: {f.theology_anchor_count}/5 (depth {f.theology_depth_ratio:.4f})")
+    lines.append(
+        f"cross_domain_anchor_count: {f.cross_domain_anchor_count}/25 (breadth {f.cross_domain_breadth_ratio:.4f})"
+    )
+    lines.append(f"asi_lift_consistency: {f.asi_lift_consistency:.4f} (V1252-V1256 chain pattern)")
+    lines.append(f"inflation_gap_after_lift: {f.inflation_gap_after_lift:.4f} (must > 0; 主 17:43 不假装)")
+    lines.append(f"composability_score: {f.composability_score:.4f}")
+    lines.append(f"composability_band: {f.composability_band}")
+    if f.warnings:
+        lines.append("")
+        lines.append("warnings:")
+        for w in f.warnings:
+            lines.append(f"  - {w}")
+    lines.append("")
+    lines.append(f"note: {f.note}")
+    lines.append("=" * 78)
+    lines.append("")
+    lines.append("主 agent 立场: 不自决 V1257 实装 (主 22:33). 等 主人 user choice.")
+    return "\n".join(lines)
+
+
+def _v1257_compare(t: V1257ComparisonTable) -> str:
+    """Render side-by-side comparison table."""
+    # Sort rows by composability_score DESC (主 00:44 质量工程化)
+    sorted_rows = sorted(t.rows, key=lambda r: r.composability_score, reverse=True)
+    lines: List[str] = []
+    lines.append("=" * 78)
+    lines.append("V1257 Side-by-side Comparison (4 候选, 主 00:44 质量工程化)")
+    lines.append(f"snapshot_id: {t.snapshot_id}")
+    lines.append("=" * 78)
+    lines.append("")
+    header = (
+        f"{'Candidate':<22} {'Theology':>9} {'CrossDom':>9} "
+        f"{'Lift':>8} {'Realized':>10} {'Pos%':>7} {'Comp':>7} {'Band':>6}"
+    )
+    lines.append(header)
+    lines.append("-" * len(header))
+    for r in sorted_rows:
+        lines.append(
+            f"{r.candidate_key:<22} "
+            f"{r.theology_depth:>9.4f} "
+            f"{r.cross_domain_breadth:>9.4f} "
+            f"{r.asi_lift:>+8.4f} "
+            f"{r.realized_estimate:>10.4f} "
+            f"{r.position_estimate_pct:>6.2f}% "
+            f"{r.composability_score:>7.4f} "
+            f"{r.composability_band:>6}"
+        )
+    lines.append("")
+    lines.append("注:")
+    lines.append("  Theology = 神学 5 锚 / 5")
+    lines.append("  CrossDom = 5 跨域 × 5 ref / 25")
+    lines.append("  Lift = ASI lift estimate (+0.0055)")
+    lines.append("  Realized = estimated realized mean after V1257")
+    lines.append("  Pos% = estimated position vs ASI 北极星 (92.91% → 93.46%)")
+    lines.append("  Comp = composability_score (主 00:44 质量工程化)")
+    lines.append("  Band = LOW (<0.80) / MID (0.80-0.95) / HIGH (>=0.95)")
+    lines.append("")
+    lines.append(f"recommended_action: {t.recommended_action}")
+    lines.append(f"note: {t.note}")
+    lines.append("=" * 78)
+    return "\n".join(lines)
+
+
+def _v1257_compare_json(t: V1257ComparisonTable) -> str:
+    return json.dumps(asdict(t), ensure_ascii=False, indent=2, sort_keys=True)
+
+
+# ============================================================================
 # CLI
 # ============================================================================
 
@@ -649,6 +902,22 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=[c.key for c in PROBE_4_CANDIDATES],
         help="Output detail for one candidate",
     )
+    p.add_argument(
+        "--integrate",
+        type=str,
+        choices=[c.key for c in PROBE_4_CANDIDATES],
+        help="Output integration fitness for one candidate vs V1256 cascade (主 00:56 + 主 00:44)",
+    )
+    p.add_argument(
+        "--compare",
+        action="store_true",
+        help="Output side-by-side comparison table for all 4 候选 (主 00:44 质量工程化)",
+    )
+    p.add_argument(
+        "--compare-json",
+        action="store_true",
+        help="Output comparison table as JSON",
+    )
     return p
 
 
@@ -664,6 +933,14 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(_v1257_summary(metrics))
     elif args.candidate:
         print(_v1257_candidate_filter(metrics, args.candidate))
+    elif args.integrate:
+        print(_v1257_integrate(args.integrate))
+    elif args.compare:
+        table = _build_comparison_table()
+        print(_v1257_compare(table))
+    elif args.compare_json:
+        table = _build_comparison_table()
+        print(_v1257_compare_json(table))
     else:
         # default = report
         print(_v1257_report(metrics))
