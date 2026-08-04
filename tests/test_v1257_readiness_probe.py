@@ -616,58 +616,51 @@ def test_v1257_compare_json_serializable():
 # Test: CLI subprocess (主 00:56 任何人都能接手 = 真CLI可运行)
 # ============================================================================
 
-def test_cli_integrate_subprocess():
-    """--integrate JUBILEE CLI subprocess should run and return JUBILEE info."""
-    r = subprocess.run(
-        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--integrate", "JUBILEE"],
+def _run_v1257_cli(*args):
+    """Run v1257_readiness_probe CLI with explicit UTF-8 encoding.
+
+    Without explicit encoding='utf-8', subprocess.run(text=True) uses the
+    parent's default console encoding (GBK on Chinese Windows), which
+    fails to decode the UTF-8 bytes emitted by the subprocess when it
+    prints non-ASCII (主 17:43 实事求是 = real CLI must work cross-platform).
+    主 00:56 任何人都能接手 = anyone with PYTHONIOENCODING=utf-8 can run.
+    """
+    return subprocess.run(
+        [sys.executable, "-m", "apeireth.v1257_readiness_probe", *args],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         cwd=PROJECT_ROOT,
         check=True,
         env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
     )
+
+
+def test_cli_integrate_subprocess():
+    """--integrate JUBILEE CLI subprocess should run and return JUBILEE info."""
+    r = _run_v1257_cli("--integrate", "JUBILEE")
     assert "JUBILEE" in r.stdout
     assert "HIGH" in r.stdout
 
 
 def test_cli_compare_subprocess():
     """--compare CLI subprocess should run and list all 4 candidates."""
-    r = subprocess.run(
-        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--compare"],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        check=True,
-        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
-    )
+    r = _run_v1257_cli("--compare")
     for k in ("JUBILEE", "HENOCHIC_TRANSLATION", "DIVINE_INVITATION", "COVENANT"):
         assert k in r.stdout
 
 
 def test_cli_compare_json_subprocess():
     """--compare-json CLI subprocess should produce valid JSON."""
-    r = subprocess.run(
-        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--compare-json"],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        check=True,
-        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
-    )
+    r = _run_v1257_cli("--compare-json")
     obj = json.loads(r.stdout)
     assert len(obj["rows"]) == 4
 
 
 def test_cli_help_lists_new_modes():
     """--help should list --integrate and --compare as available."""
-    r = subprocess.run(
-        [sys.executable, "-m", "apeireth.v1257_readiness_probe", "--help"],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        check=True,
-        env={"PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PATH": __import__("os").environ.get("PATH", "")},
-    )
+    r = _run_v1257_cli("--help")
     assert "--integrate" in r.stdout
     assert "--compare" in r.stdout
     assert "--compare-json" in r.stdout
