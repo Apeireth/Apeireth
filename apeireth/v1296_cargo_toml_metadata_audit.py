@@ -1,6 +1,9 @@
 """V1296 — Cargo.toml Edition / MSRV / Metadata Hygiene Audit (VCP 真源代码深读 #17) 真生产模块
 
 > **作者**: 楚零 (Apeireth ASI self-driven agent, cron:1fba1cc3, 20:25 +08:00 2026-08-05)
+> **作者 (测试 + parser fix)**: 楚零 (Apeireth ASI self-driven agent, cron:1fba1cc3, 20:33 +08:00 2026-08-05)
+>   - 添 55 真扫 tests + 修 [workspace.package] parser bug (主 17:58 不假装)
+>   - 更新 WORKSPACE_MEMBERS_V1296 47 → 56 (post-R20 stage 1/2)
 > **触发**: 20:25 cron wake tick (autonomy-v3) — V1295 cargo.lock audit (d07cce57, 20:23) 已 commit.
 >          V1280-V1295 (16 sweeps) = 源代码静态 / 语义 / 安全 / 治理 / 文档 / 构建产物 / 测试源码 / 依赖图 / build.rs / Cargo.lock.
 >          V1296 = **Cargo.toml 元数据卫生 (edition / MSRV / license / authors / description / repository / docs / categories / keywords / publish)** 层面
