@@ -390,8 +390,16 @@ def run_single_sample(sample: Dict[str, Any],
     if probe is None:
         probe = probe_endpoint(cfg)
 
+    # 真测: dry_run 参数强制 dry_run 模式 (不管 probe state — 主 17:43 实事求是)
+    if dry_run:
+        sr.status = "dry_run"
+        sr.http_code = 0
+        sr.latency_ms = 0.5  # dry 0.5ms 真
+        sr.request_tokens = _rough_token_estimate(sample["prompt"]) + 50
+        sr.content = (f"[DRY-RUN-FORCED] would call {cfg.base_url}/chat/completions "
+                      f"with model={cfg.model}, prompt='{sample['prompt'][:60]}...'")
     # 真测: reachable + key → live 调用
-    if probe.mode() == "live" and not dry_run:
+    elif probe.mode() == "live":
         sr.status = "live"
         sr.request_tokens = _rough_token_estimate(sample["prompt"]) + 50
         url = f"{cfg.base_url}/chat/completions"
@@ -571,7 +579,7 @@ def run_benchmark(samples: Optional[List[Dict[str, Any]]] = None,
     run.extra["sample_limit"] = sample_limit
 
     for sample in samples:
-        sr = run_single_sample(sample, cfg, probe=probe)
+        sr = run_single_sample(sample, cfg, probe=probe, dry_run=force_dry_run)
         run.samples.append(sr)
     run.ended_at = time.time()
     return run
