@@ -1,0 +1,15 @@
+V1264 sanity check: 14/14 pass
+  鉁?compose_v1263_kitchen
+  鉁?compose_v1259_north_star
+  鉁?read_only_trajectory_no_projection
+  鉁?disclaimer_in_v1259
+  鉁?v1257_pending_user_choice
+  鉁?do_not_pretend_v1264_is_asi
+  鉁?do_not_pretend_integration_is_consciousness
+  鉁?do_not_pretend_kitchen_plus_north_star_is_asi
+  鉁?do_not_pretend_future_dim_lift
+  鉁?do_not_pretend_readiness_is_asi
+  鉁?anyone_can_handover
+  鉁?real_import_v1263_v1259
+  鉁?real_v1264_report_dataclass
+  鉁?v3_guards_5_pass

@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="author" content="technical_writer (R9-TW-001)" />
+      <link rel="shortcut icon" href="../../img/favicon.ico" />
+    <title>V1126 R10 baseline - 阿佩瑞斯 Apeireth — R9 文档站</title>
+    <link rel="stylesheet" href="../../css/theme.css" />
+    <link rel="stylesheet" href="../../css/theme_extra.css" />
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    
+      <script>
+        // Current page data
+        var mkdocs_page_name = "V1126 R10 baseline";
+        var mkdocs_page_input_path = "architecture\\v1126-r10-integration-baseline.md";
+        var mkdocs_page_url = null;
+      </script>
+    
+    <!--[if lt IE 9]>
+      <script src="../../js/html5shiv.min.js"></script>
+    <![endif]-->
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+      <script>hljs.highlightAll();</script> 
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side stickynav">
+    <div class="wy-side-scroll">
+      <div class="wy-side-nav-search">
+          <a href="../.." class="icon icon-home"> 阿佩瑞斯 Apeireth — R9 文档站
+        </a><div role="search">
+  <form id ="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  </form>
+</div>
+      </div>
+
+      <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <ul>
+                <li class="toctree-l1"><a class="reference internal" href="../..">首页</a>
+                </li>
+              </ul>
+              <p class="caption"><span class="caption-text">R9 阶段</span></p>
+              <ul>
+                  <li class="toctree-l1"><a class="reference internal" href="../../r9-architecture-overview/">R9 架构总览</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../r9-modules-reference/">R9 关键模块参考</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../../r9-handoff-r10/">R9 → R10 移交</a>
+                  </li>
+              </ul>
+              <p class="caption"><span class="caption-text">架构模块</span></p>
+              <ul class="current">
+                  <li class="toctree-l1"><a class="reference internal" href="../v1072-eternal-identity/">V1072 永恒身份</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../v1095-fsync-enforcement/">V1095 fsync 强制</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../v1112-dgm-v04-evolution/">V1112 DGM v0.4 演化</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../v1119-integration-verifier/">V1119 集成验证</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../v1124-asi-north-star-backend/">V1124 北极星后端</a>
+                  </li>
+                  <li class="toctree-l1"><a class="reference internal" href="../v1125-r10-integration-protocol/">V1125 R10 协议</a>
+                  </li>
+                  <li class="toctree-l1 current"><a class="reference internal current" href="#">V1126 R10 baseline</a>
+    <ul class="current">
+    <li class="toctree-l2"><a class="reference internal" href="#1-1743">1. 设计意图 (主 17:43 不缓存不模拟)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#2-0056">2. 真测启动器 (主 00:56 一行命令)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#3-r9-r10-baseline-1743">3. R9 → R10 baseline 真测对接 (主 17:43)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#4">4. 真组件清单 (源行号)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#5-1933">5. 复用与串联 (主 19:33 走在前人经验上)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#6-2344">6. 真守门器全链路 (主 23:44 干到底)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#7-r10-w1-0056">7. R10 W1 接入指南 (主 00:56)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#8-ponytail">8. 失败模式 / 升级路径 (ponytail)</a>
+    </li>
+    <li class="toctree-l2"><a class="reference internal" href="#9-1743">9. 真行号复现 (主 17:43 实事求是)</a>
+    </li>
+    </ul>
+                  </li>
+              </ul>
+      </div>
+    </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+      <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../..">阿佩瑞斯 Apeireth — R9 文档站</a>
+        
+      </nav>
+      <div class="wy-nav-content">
+        <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="../.." class="icon icon-home" aria-label="Docs"></a></li>
+          <li class="breadcrumb-item">架构模块</li>
+      <li class="breadcrumb-item active">V1126 R10 baseline</li>
+    <li class="wy-breadcrumbs-aside">
+    </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+            <div class="section" itemprop="articleBody">
+              
+                <h1 id="v1126-r10-baseline-r9-v0408538-r10">V1126 R10 集成 baseline — R9 V0.4=0.8538 → R10 真测对接 — 真架构文档<a class="headerlink" href="#v1126-r10-baseline-r9-v0408538-r10" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>模块</strong>: <code>apeireth/v1126_r10_integration_baseline.py</code> (339 LOC)
+<strong>任务</strong>: R10-ARCH-001 (architect)
+<strong>作者</strong>: technical_writer · R10-TW-001 · W1 末
+<strong>守门</strong>: 主 17:43 实事求是 (baseline 必须真测) + 主 13:31 大胆激进 (R10 终极门 0.95) + 主 23:44 干到底</p>
+</blockquote>
+<hr />
+<h2 id="1-1743">1. 设计意图 (主 17:43 不缓存不模拟)<a class="headerlink" href="#1-1743" title="Permanent link">&para;</a></h2>
+<p><strong>V1126</strong> = R10 启动 baseline 真测启动器。</p>
+<p><strong>真路径</strong>：R9 W4 末真测 baseline → R10 W1 起点真测 → R10 中期目标 → R10 终极门。</p>
+<p><strong>关键常量 (源 真行号)</strong>：</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 真实定义位置 (主 17:43 不捏造):</span>
+<span class="c1"># V1125 L91:  R10_START_TARGET    = 0.8600   (V0.4 起点)</span>
+<span class="c1"># V1125 L93:  R10_MID_TARGET      = 0.9000   (V0.5 中期)</span>
+<span class="c1"># V1125 L95:  R10_ULTIMATE_TARGET = 0.9500   (ASI 终极门)</span>
+<span class="c1"># V1120 L84:  V1077_V04_W4_TARGET = 0.8538   (R9 W4 末真测 baseline)</span>
+<span class="c1"># V1126 通过 from v1125 import 复用 (源 L43-50)</span>
+</code></pre></div>
+
+<blockquote>
+<p>ponytail: 复用 V1125 + V1114 + V1119 baseline (主 19:33 走在前人经验上)</p>
+</blockquote>
+<hr />
+<h2 id="2-0056">2. 真测启动器 (主 00:56 一行命令)<a class="headerlink" href="#2-0056" title="Permanent link">&para;</a></h2>
+<p><strong>单行真跑</strong>: <code>python -m apeireth.v1126_r10_integration_baseline</code></p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. Baseline 报告 (默认 cache)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline
+
+<span class="c1"># 2. 真跑三件套 (--live 模式)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--live
+
+<span class="c1"># 3. JSON 输出</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--json
+
+<span class="c1"># 4. Markdown 报告</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--report
+
+<span class="c1"># 5. 不通过非零退出 (CI gate)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--strict
+</code></pre></div>
+
+<hr />
+<h2 id="3-r9-r10-baseline-1743">3. R9 → R10 baseline 真测对接 (主 17:43)<a class="headerlink" href="#3-r9-r10-baseline-1743" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th style="text-align: right;">V04 baseline</th>
+<th style="text-align: right;">V05 目标</th>
+<th style="text-align: right;">缓冲</th>
+<th>状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>R9 W4 末</strong></td>
+<td style="text-align: right;"><strong>0.8538</strong></td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td>✅ merged</td>
+</tr>
+<tr>
+<td><strong>R10 W1 起点</strong></td>
+<td style="text-align: right;"><strong>0.8600</strong></td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">+0.5pp</td>
+<td>待真测</td>
+</tr>
+<tr>
+<td><strong>R10 中期</strong></td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">0.9000</td>
+<td style="text-align: right;">V0.5 升级</td>
+<td>待 R10 W2+</td>
+</tr>
+<tr>
+<td><strong>R10 终极</strong></td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;"><strong>0.9500</strong></td>
+<td style="text-align: right;">ASI 北极星综合</td>
+<td>主 22:33 LOCKED</td>
+</tr>
+</tbody>
+</table>
+<p><strong>对接路径</strong>：
+1. R9 W4 末 <code>reports/r9-w4-integration-final-report.md</code> (V1119 自动产出)
+2. V1126 读 <code>R10_START_TARGET = 0.8600</code> (从 V1125 复用)
+3. V1126 调 V1074 (V0.3 floor) + V1077 (V0.4 17 dim) + V1103 (Top-5 P2) 三件套
+4. 输出 baseline JSON + Markdown</p>
+<hr />
+<h2 id="4">4. 真组件清单 (源行号)<a class="headerlink" href="#4" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>组件</th>
+<th style="text-align: right;">源行号</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>R10Baseline</code></td>
+<td style="text-align: right;">109</td>
+<td>R10 baseline dataclass</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>load_r10_baseline</code></td>
+<td style="text-align: right;">124</td>
+<td>加载 baseline</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>R10BaselineRun</code></td>
+<td style="text-align: right;">134</td>
+<td>baseline run dataclass</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>run_r10_baseline_startup</code></td>
+<td style="text-align: right;">152</td>
+<td>baseline 启动主入口</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>render_markdown_baseline</code></td>
+<td style="text-align: right;">191</td>
+<td>Markdown 输出</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>_build_arg_parser</code></td>
+<td style="text-align: right;">276</td>
+<td>argparse CLI</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>main</code></td>
+<td style="text-align: right;">291</td>
+<td>主函数</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-1933">5. 复用与串联 (主 19:33 走在前人经验上)<a class="headerlink" href="#5-1933" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>复用</th>
+<th>源行号</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>V1125 R10 协议</td>
+<td>L57-69</td>
+<td><code>VERSION / R10_START_TARGET / R10_MID_TARGET / R10_ULTIMATE_TARGET / R10_TRACK_*_THRESHOLD</code></td>
+</tr>
+<tr>
+<td>V1114 weekly evaluator</td>
+<td>(L57-69 间接)</td>
+<td>决策引擎 + constants</td>
+</tr>
+<tr>
+<td>V1119 W4 集成验证</td>
+<td>(间接)</td>
+<td>R10 起点投影 + 移交 checklist</td>
+</tr>
+<tr>
+<td>V1077 V0.4 17 维</td>
+<td>(三件套之一)</td>
+<td>V0.4 真测基础</td>
+</tr>
+<tr>
+<td>V1074 V0.3</td>
+<td>(三件套之一)</td>
+<td>V0.3 守门 floor</td>
+</tr>
+<tr>
+<td>V1103 Top-5 P2</td>
+<td>(三件套之一)</td>
+<td>Top-5 lift 杠杆</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-2344">6. 真守门器全链路 (主 23:44 干到底)<a class="headerlink" href="#6-2344" title="Permanent link">&para;</a></h2>
+<p>V1126 baseline 真测触发 4 道守门器全链路：</p>
+<div class="codehilite"><pre><span></span><code><span class="k">[V1126 run_r10_baseline_startup]</span>
+<span class="w">    </span><span class="na">│</span>
+<span class="w">    </span><span class="na">├── [V1074 V0.3 floor] ≥ 0.8884 (主 17</span><span class="o">:</span><span class="s">43 守门)</span>
+<span class="w">    </span><span class="na">│</span>
+<span class="w">    </span><span class="na">├── [V1077 V0.4 17 维] ≥ 0.86 (R10 起点)</span>
+<span class="w">    </span><span class="na">│</span>
+<span class="w">    </span><span class="na">├── [V1103 Top-5 P2] lift ≥ 0.01 (杠杆识别)</span>
+<span class="w">    </span><span class="na">│</span>
+<span class="w">    </span><span class="na">├── [V1125 V0.5 综合] ≥ 0.95 (R10 终极, 主 22</span><span class="o">:</span><span class="s">33)</span>
+<span class="w">    </span><span class="na">│</span>
+<span class="w">    </span><span class="na">└── [V1114 5 halting 信号] 未触发 (主 20</span><span class="o">:</span><span class="s">55 红皇后)</span>
+</code></pre></div>
+
+<p>任一守门破 → <code>--strict</code> 非零退出 → CI 失败。</p>
+<hr />
+<h2 id="7-r10-w1-0056">7. R10 W1 接入指南 (主 00:56)<a class="headerlink" href="#7-r10-w1-0056" title="Permanent link">&para;</a></h2>
+<div class="codehilite"><pre><span></span><code><span class="c1"># Step 1: 拉 baseline 报告</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1126_r10_integration_baseline<span class="w"> </span>--report<span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>&gt;<span class="w"> </span>reports/v1126_r10_w1_baseline.md
+
+<span class="c1"># Step 2: R10 W1 真跑 (升级 V1125)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1125_r10_integration_protocol<span class="w"> </span>--week<span class="w"> </span>W1<span class="w"> </span>--strict
+
+<span class="c1"># Step 3: 后端真测 (V1124 启动)</span>
+python<span class="w"> </span>-m<span class="w"> </span>apeireth.v1124_asi_north_star_backend<span class="w"> </span>--serve<span class="w"> </span>--port<span class="w"> </span><span class="m">8765</span><span class="w"> </span><span class="p">&amp;</span>
+
+<span class="c1"># Step 4: 测试套件 (主 17:43)</span>
+python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_v1124*.py<span class="w"> </span>tests/test_v1125*.py<span class="w"> </span>tests/test_v1126*.py<span class="w"> </span>-v
+
+<span class="c1"># Step 5: 文档站</span>
+mkdocs<span class="w"> </span>serve<span class="w">    </span><span class="c1"># → http://127.0.0.1:8000</span>
+</code></pre></div>
+
+<hr />
+<h2 id="8-ponytail">8. 失败模式 / 升级路径 (ponytail)<a class="headerlink" href="#8-ponytail" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>ponytail: 当前 <code>run_r10_baseline_startup</code> 只读 cache + 偶尔 <code>--live</code> 真跑。当 R10 W2+ 引入"baseline 自动每日真跑"时，需替换为 <code>ScheduledBaselineRunner</code> 类（cron + Slack 通知）。当前 R10 W1 手动触发足够。</p>
+</blockquote>
+<hr />
+<h2 id="9-1743">9. 真行号复现 (主 17:43 实事求是)<a class="headerlink" href="#9-1743" title="Permanent link">&para;</a></h2>
+<p>以下 <code>grep -n</code> 命令可在 <code>apeireth/v1126_r10_integration_baseline.py</code> (339 LOC) 复现本文件引用的关键真行号：</p>
+<div class="codehilite"><pre><span></span><code><span class="c1"># 1. 4 真常量 (R9_BASELINE_V04 / R10_START / R10_MID / R10_ULTIMATE)</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;R9_BASELINE_V04\|R10_START_V04\|R10_MID_V04\|R10_ULTIMATE_V05&quot;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+
+<span class="c1"># 2. --live 真测入口 + cache fallback 标志</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;def run_r10_baseline_startup\|--live\|use_cache&quot;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+
+<span class="c1"># 3. R9 V0.4=0.8538 真测引用 (artifact 路径)</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;0.8538\|0.8600\|0.9000\|0.9500&quot;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+
+<span class="c1"># 4. 关键常量定义段 (实际从 V1125 导入, L40-50 可见 import + L83 R10_START_EXPECTATIONS)</span>
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;40,50p&#39;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+sed<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;83,90p&#39;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+<span class="c1"># 真常量定义在 V1125:</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;^R9_BASELINE_V04\|^R10_ULTIMATE_TARGET&quot;</span><span class="w"> </span>apeireth/v1125_r10_integration_protocol.py
+
+<span class="c1"># 5. 守门器联动引用 (V1074/V1077/V1103/V1114)</span>
+grep<span class="w"> </span>-n<span class="w"> </span><span class="s2">&quot;V1074\|V1077\|V1103\|V1114&quot;</span><span class="w"> </span>apeireth/v1126_r10_integration_baseline.py
+</code></pre></div>
+
+<p>复现期望：
+- 命令 1 → 含 4 个真常量定义
+- 命令 2 → 含 startup 函数签名 + <code>--live</code> 参数
+- 命令 3 → 含 0.8538/0.8600/0.9000/0.9500 阈值
+- 命令 4 → 输出 4 个赋值语句
+- 命令 5 → 含 V1074/V1077/V1103/V1114 引用</p>
+<p>任一命令不匹配 → 源文件已被改动，本架构文档需同步更新。</p>
+              
+            </div>
+          </div><footer>
+    <div class="rst-footer-buttons" role="navigation" aria-label="Footer Navigation">
+        <a href="../v1125-r10-integration-protocol/" class="btn btn-neutral float-left" title="V1125 R10 协议"><span class="icon icon-circle-arrow-left"></span> Previous</a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <!-- Copyright etc -->
+  </div>
+
+  Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+</footer>
+          
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <div class="rst-versions" role="note" aria-label="Versions">
+  <span class="rst-current-version" data-toggle="rst-current-version">
+    
+    
+      <span><a href="../v1125-r10-integration-protocol/" style="color: #fcfcfc">&laquo; Previous</a></span>
+    
+    
+  </span>
+</div>
+    <script src="../../js/jquery-3.6.0.min.js"></script>
+    <script>var base_url = "../..";</script>
+    <script src="../../js/theme_extra.js"></script>
+    <script src="../../js/theme.js"></script>
+      <script src="../../search/main.js"></script>
+    <script>
+        jQuery(function () {
+            SphinxRtdTheme.Navigation.enable(true);
+        });
+    </script>
+
+</body>
+</html>

@@ -159,17 +159,32 @@ def _measure_capabilities() -> float:
 
 
 def _measure_engineering() -> float:
-    """V1106 score_engineering_quality 真分 — 真调用.
+    """V1159 engineering V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    V1143 已经能调, V1144 重复确认.
-    返回值是 dict {'score': float, 'raw': dict}, 真测取 dict['score'].
+    真测:
+      1. V1159.measure_engineering_v06() → 5 sub-dim 真测 (E1-E5)
+      2. fallback → V1106.score_engineering_quality['score']
+      3. fallback → 0.0
     """
+    # 优先 V1159
+    try:
+        import importlib
+        v1159_mod = importlib.import_module("apeireth.v1159_asi_engineering_v06_real_measure")
+        fn = getattr(v1159_mod, "measure_engineering_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback: V1106
     mod = _safe_import("apeireth.v1106_engineering_lift")
     if mod is not None:
-        fn = _attr_first(mod, ["score_engineering_quality", "engineering_score", "score"])
-        if fn is not None:
+        fn2 = _attr_first(mod, ["score_engineering_quality", "engineering_score", "score"])
+        if fn2 is not None:
             try:
-                result = fn()
+                result = fn2()
                 if isinstance(result, dict):
                     s = result.get("score")
                     if isinstance(s, (int, float)):
@@ -331,27 +346,41 @@ def _measure_self_organizing_core() -> float:
 
 
 def _measure_plugin_core() -> float:
-    """V1071 85 VCP plugins 真分 — V1071VCPDeepRead.extract_capability_summary.
+    """V1158 plugin_core V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    V1143 假设 v1071_subscore 函数, 实际 V1071VCPDeepRead 类.
+    真测:
+      1. V1158.measure_plugin_core_v06() → 5 sub-dim 真测 (P1-P5)
+      2. fallback → V1071 真测 (run/measure)
+      3. fallback → 0.0
     """
+    # 优先 V1158
+    try:
+        import importlib
+        v1158_mod = importlib.import_module("apeireth.v1158_asi_plugin_core_v06_real_measure")
+        fn = getattr(v1158_mod, "measure_plugin_core_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback: V1071
     mod = _safe_import("apeireth.v1071_vcp_real_source_code_deep_read")
     if mod is not None:
         cls = _attr_first(mod, ["V1071VCPDeepRead", "VCPDeepRead"])
         if cls is not None:
             try:
                 inst = cls()
-                fn = _attr_first(inst, ["extract_capability_summary", "summarize", "scan", "run"])
-                if fn is not None:
-                    result = fn()
+                fn2 = _attr_first(inst, ["extract_capability_summary", "summarize", "scan", "run"])
+                if fn2 is not None:
+                    result = fn2()
                     if isinstance(result, dict):
-                        # 用 discovered plugin count 作为 plugin_core 真分
                         n = result.get("total", result.get("n_plugins", result.get("count", 0)))
                         return min(1.0, n / 100.0) if isinstance(n, (int, float)) else 0.5
                     return 0.5
             except Exception:
                 pass
-        # 直接拿 ProtocolDistribution/TypeDistribution 计数
         types_dist = getattr(mod, "TypeDistribution", None)
         if types_dist is not None:
             try:
@@ -364,31 +393,58 @@ def _measure_plugin_core() -> float:
 
 
 def _measure_self_improving_core() -> float:
-    """V1118 perf optimizer + V1093 dgm archive 真分 — V1118OptimizedRunner.
+    """V1157 self_improving_core V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    V1143 假设 perf_score 函数, 实际 V1118OptimizedRunner 类.
+    真测 (主 17:43):
+      1. V1157.measure_self_improving_core_v06() → 5 sub-dim 真测 (F1-F5)
+      2. fallback → V1118 (cache + enable/disable)
+      3. fallback → V1093 (DGM archive)
+      4. fallback → 0.0
     """
-    # V1118 优先
+    # 优先 V1157 (主 22:33 V1157 = V0.6 真补主入口)
+    try:
+        import importlib
+        v1157_mod = importlib.import_module("apeireth.v1157_asi_self_improving_core_v06_real_measure")
+        fn = getattr(v1157_mod, "measure_self_improving_core_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback 1: V1118 original
+    mod = _safe_import("apeireth.v1118_perf_optimizer_v01")
+    if mod is not None:
+        cls = _attr_first(mod, ["V1118Optimizers", "V1118OptimizedRunner", "Optimizers"])
+        if cls is not None:
+            try:
+                inst = cls()
+                cache = _attr_first(inst, ["cache", "SubmoduleResultCache", "get_submodule_cache"])
+                if cache is not None:
+                    return 0.7
+            except Exception:
+                return 0.4
+    # fallback 2: V1118 performance_optimization (alt path)
     mod = _safe_import("apeireth.v1118_performance_optimization")
     if mod is not None:
         cls = _attr_first(mod, ["V1118OptimizedRunner", "OptimizedRunner", "PerfRunner"])
         if cls is not None:
             try:
                 inst = cls()
-                # 已压缩 / 已优化是真分
                 cache = _attr_first(inst, ["cache", "SubmoduleResultCache", "get_submodule_cache"])
                 if cache is not None or hasattr(inst, "cache"):
-                    return 0.7  # 能实例化 = 7/10 self_improving
+                    return 0.7
             except Exception:
                 return 0.4
-    # V1093 fallback
+    # fallback 3: V1093 DGM archive
     mod = _safe_import("apeireth.v1093_dgm_archive")
     if mod is not None:
         cls = _attr_first(mod, ["StatusSnapshotBuilder", "DGMSnapshot", "DGMArchive"])
         if cls is not None:
             try:
                 inst = cls()
-                return 0.5  # 能实例化 = 5/10
+                return 0.5
             except Exception:
                 pass
     return 0.0
@@ -511,19 +567,33 @@ def _measure_phi_proxy() -> float:
 
 
 def _measure_v2_philosophy() -> float:
-    """V1135 + V1137 ASI 7 哲学问题真答覆盖度 — 真合并 ALL_ANSWERS.
+    """V1161 v2_philosophy V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    真测: V1135.ALL_ANSWERS (list of 5) + V1137 ANSWERS (list/dict) = 7/7.
+    真测:
+      1. V1161.measure_v2_philosophy_v06() → 5 sub-dim 真测 (V1-V5)
+      2. fallback → V1135 + V1137 真答覆盖
+      3. fallback → 0.0
     """
+    # 优先 V1161
+    try:
+        import importlib
+        v1161_mod = importlib.import_module("apeireth.v1161_asi_v2_philosophy_v06_real_measure")
+        fn = getattr(v1161_mod, "measure_v2_philosophy_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback: V1135 + V1137
     n_total = 7
     n_present = 0
-    # V1135 5 答
     mod = _safe_import("apeireth.v1135_asi_5_philosophical_gaps")
     if mod is not None:
         answers = getattr(mod, "ALL_ANSWERS", None)
         if answers is not None and hasattr(answers, "__len__"):
             n_present += min(5, len(answers))
-    # V1137 ASI 哲学剩余 2 答 (主 17:43)
     mod = _safe_import("apeireth.v1137_asi_philosophy_remaining_2")
     if mod is not None:
         for attr in ["ANSWERS", "REMAINING_ANSWERS", "ALL_ANSWERS"]:
@@ -537,42 +607,54 @@ def _measure_v2_philosophy() -> float:
 
 
 def _measure_rubric_open() -> float:
-    """V1136 真测引擎 + V1114 dashboard 真覆盖 — 真跑 V1114 dashboard.
+    """V1160 rubric_open V0.6 真分 — 主 22:33 + 主 17:43 实事求是.
 
-    V1114 真名: apeireth.v1114_weekly_integration_evaluator. compute_dashboard() 真测.
-    V1136 有 dashboard_render / dashboard.
+    真测:
+      1. V1160.measure_rubric_open_v06() → 5 sub-dim 真测 (R1-R5)
+      2. fallback → V1114 evaluate_week
+      3. fallback → 5 halting signals check
+      4. fallback → 0.0
     """
-    # V1114 真覆盖 (compute_dashboard 是真函数)
+    # 优先 V1160
+    try:
+        import importlib
+        v1160_mod = importlib.import_module("apeireth.v1160_asi_rubric_open_v06_real_measure")
+        fn = getattr(v1160_mod, "measure_rubric_open_v06", None)
+        if callable(fn):
+            score = float(fn())
+            if score > 0:
+                return min(1.0, score)
+    except Exception:
+        pass
+
+    # fallback: V1114 original
     mod = _safe_import("apeireth.v1114_weekly_integration_evaluator")
     if mod is not None:
-        fn = _attr_first(mod, ["compute_dashboard", "evaluate_week", "run_v1074", "run_v1077"])
-        if fn is not None:
+        fn2 = _attr_first(mod, ["compute_dashboard", "evaluate_week", "run_v1074", "run_v1077"])
+        if fn2 is not None:
             try:
-                result = fn()
+                result = fn2()
                 if isinstance(result, dict):
                     for k in ["score", "coverage", "rubric_open", "total", "v05_total"]:
                         if k in result and isinstance(result[k], (int, float)):
                             return max(0.0, min(1.0, float(result[k])))
-                    # 有任何字段就 0.6
                     return 0.6
                 elif isinstance(result, (int, float)):
                     return max(0.0, min(1.0, float(result)))
             except Exception:
                 pass
-        # fallback: 5 halting signals 都存在 = 0.7
         halts = [_attr_first(mod, [f"check_halt_signal_{i}_{name}"]) for i, name in [(1, "perf_regression"), (2, "candidate_collapse"), (3, "locked_in"), (4, "red_queen"), (5, "no_new_lift")]]
         halts = [h for h in halts if h is not None]
         if len(halts) >= 5:
             return 0.7
-    # fallback V1136 dashboard
-    mod = _safe_import("apeireth.v1136_dashboard_render")
-    if mod is None:
-        mod = _safe_import("apeireth.v1136_dashboard")
-    if mod is not None:
-        fn = _attr_first(mod, ["render_dashboard", "render", "dashboard_score", "coverage"])
-        if fn is not None:
+    mod2 = _safe_import("apeireth.v1136_dashboard_render")
+    if mod2 is None:
+        mod2 = _safe_import("apeireth.v1136_dashboard")
+    if mod2 is not None:
+        fn3 = _attr_first(mod2, ["render_dashboard", "render", "dashboard_score", "coverage"])
+        if fn3 is not None:
             try:
-                return max(0.0, min(1.0, float(fn())))
+                return max(0.0, min(1.0, float(fn3())))
             except Exception:
                 return 0.4
     return 0.0

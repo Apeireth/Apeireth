@@ -1,8 +1,0 @@
-import json,sys
-sys.stdout.reconfigure(encoding='utf-8')
-for r in [37,38,39]:
-    d=json.load(open(f'research-v7-round-{r}.json',encoding='utf-8'))
-    print(f'=== round {r} ===')
-    for i,q in enumerate(d):
-        print(f'  {i:2d} - {q["query"][:130]}')
-    print()
