@@ -141,15 +141,38 @@ class TestV1102StabilityBridge:
     """Test V1102V1077StabilityBridge — real end-to-end."""
 
     def test_run_full(self):
-        bridge = v1102.V1102V1077StabilityBridge()
-        result = bridge.run_full()
-        assert "v1102_version" in result
-        assert result["v1102_version"] == "0.1.0"
-        assert "audit" in result
-        assert "grep_scan" in result
-        assert "seed_available" in result
-        assert "v1077_measurement" in result
-        assert result["seed_available"] is True
+        # Python 3.13 + V1077 大量 stderr write 在 in-process 调用会触发
+        # `I/O operation on closed file` 并破坏 pytest capture. 用 subprocess 隔离.
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, "-u", "-c",
+             "import sys, json; sys.path.insert(0, r'"
+             + str(REPO_DIR).replace("\\", "\\\\")
+             + r"'); from apeireth.v1102_v1077_io_fix import V1102V1077StabilityBridge; "
+             r"print(json.dumps(V1102V1077StabilityBridge().run_full(), default=str))"],
+            capture_output=True, cwd=str(REPO_DIR), timeout=120,
+        )
+        # Decode with errors=replace
+        stdout = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, bytes) else result.stdout
+        assert "v1102_version" in stdout, f"No v1102_version in stdout: {stdout[:500]}"
+        import json as _json
+        # Last non-empty JSON line
+        data = None
+        for line in stdout.splitlines()[::-1]:
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                try:
+                    data = _json.loads(line)
+                    break
+                except Exception:
+                    continue
+        assert data is not None, f"No JSON dict in stdout: {stdout[:500]}"
+        assert data["v1102_version"] == "0.1.0"
+        assert "audit" in data
+        assert "grep_scan" in data
+        assert "seed_available" in data
+        assert "v1077_measurement" in data
+        assert data["seed_available"] is True
 
     def test_run_full_v1077_score_lifted(self):
         # Python 3.13 + pytest capture mode + V1077 大量 stderr write 会触发
@@ -216,10 +239,14 @@ class TestV1102EndToEnd:
         assert "V0.4 score:" in result.stdout
 
     def test_report_cli(self):
-        from apeireth.v1102_v1077_io_fix import main
-        exit_code = main(["--audit", "--verify", "--report", "--quiet"])
+        # subprocess 隔离 V1077 measurement 避免 Python 3.13 pytest capture 冲突
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, "-u", "-m", "apeireth.v1102_v1077_io_fix", "--audit", "--verify", "--report", "--quiet"],
+            capture_output=True, text=True, cwd=str(REPO_DIR), timeout=120,
+            encoding="utf-8", errors="replace",
+        )
         # report generation may not need to call V1077 measurement, which is fine
-        # (we already verified --audit alone works)
         report_path = REPO_DIR / "reports" / "v1102_v1077_hotfix_report.md"
         if report_path.exists():
             content = report_path.read_text(encoding="utf-8")
