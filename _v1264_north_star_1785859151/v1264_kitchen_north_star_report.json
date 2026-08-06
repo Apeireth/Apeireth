@@ -1,0 +1,715 @@
+{
+  "report_id": "v1264-1785859151639",
+  "started_at": 1785859151.6399114,
+  "ended_at": 1785859153.6867652,
+  "duration_sec": 2.04685378074646,
+  "config": {
+    "enable_north_star": true,
+    "enable_kitchen": true,
+    "kitchen_probe_only": true,
+    "kitchen_bench_only": false,
+    "kitchen_dry_run": true,
+    "kitchen_full": false,
+    "only_north_star": false,
+    "north_star_timeout": 5.0,
+    "kitchen_timeout": 60.0,
+    "kitchen_base_port": 8800,
+    "kitchen_e2e_base_port": 8840,
+    "kitchen_streamlit_port": 8581,
+    "kitchen_benchmark_samples": 5,
+    "kitchen_health_cycles": 3,
+    "artifacts_dir": null,
+    "write_json_artifact": true,
+    "write_text_artifact": true,
+    "extra": {}
+  },
+  "artifacts_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\_v1264_north_star_1785859151",
+  "import_result": {
+    "ok_count": 2,
+    "fail_count": 0,
+    "modules": {
+      "v1263_real_kitchen_integration": {
+        "ok": true,
+        "version": null,
+        "error": null
+      },
+      "v1259_north_star_trajectory": {
+        "ok": true,
+        "version": null,
+        "error": null
+      }
+    }
+  },
+  "kitchen": {
+    "report_id": "kitchen-1785859151645",
+    "started_at": 1785859151.6455688,
+    "ended_at": 1785859153.6858294,
+    "duration_sec": 2.0402605533599854,
+    "config": {
+      "enable_substrate": true,
+      "enable_environment": true,
+      "enable_deploy_default": false,
+      "enable_deploy_e2e": false,
+      "enable_benchmark": false,
+      "enable_streamlit": false,
+      "enable_health_cycle": false,
+      "deploy_timeout": 20.0,
+      "health_cycles": 3,
+      "health_interval": 0.5,
+      "benchmark_sample_limit": 5,
+      "streamlit_timeout": 12.0,
+      "base_port": 8800,
+      "e2e_base_port": 8840,
+      "streamlit_port": 8581,
+      "artifacts_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\_v1264_north_star_1785859151",
+      "write_json_artifact": true,
+      "write_text_artifact": true,
+      "streamlit_dry_run": true,
+      "streamlit_real_run": false,
+      "benchmark_dry_run": true,
+      "extra": {}
+    },
+    "substrate": {
+      "source_module": "apeireth.v1256_asi_v0666_unio_mystica_substrate_real_lift",
+      "source_module_dim_version": "0.6.66",
+      "asi_north_star": 0.98,
+      "absolute_ceiling": 1.0,
+      "current_realized_mean": 0.9105,
+      "current_overall_mean": 0.4838,
+      "position_vs_north_star_pct": 0.9291,
+      "gap_to_north_star": 0.0695,
+      "inflation_gap": 0.0895,
+      "audit_pass": true,
+      "audit_pass_count": 15,
+      "audit_fail_count": 0,
+      "history_length": 21,
+      "phase4_dim_count": 11,
+      "sixteen_pillars_count": 16,
+      "molecules_per_pathway": [
+        5,
+        5,
+        5,
+        5,
+        5,
+        5
+      ],
+      "total_molecules": 30
+    },
+    "environment": {
+      "docker_available": false,
+      "docker_compose_available": false,
+      "podman_available": false,
+      "wsl_available": false,
+      "python_available": true,
+      "strategy": "subprocess"
+    },
+    "deploy_default": null,
+    "deploy_e2e": null,
+    "benchmark": null,
+    "streamlit": null,
+    "health_cycles": null,
+    "stages": [
+      {
+        "stage_name": "substrate_status_v1258",
+        "started_at": 1785859151.6595924,
+        "ended_at": 1785859151.66109,
+        "success": true,
+        "duration_sec": 0.001497507095336914,
+        "summary": {
+          "source_module": "apeireth.v1256_asi_v0666_unio_mystica_substrate_real_lift",
+          "source_module_dim_version": "0.6.66",
+          "asi_north_star": 0.98,
+          "absolute_ceiling": 1.0,
+          "current_realized_mean": 0.9105,
+          "current_overall_mean": 0.4838,
+          "position_vs_north_star_pct": 0.9291,
+          "gap_to_north_star": 0.0695,
+          "inflation_gap": 0.0895,
+          "audit_pass": true,
+          "audit_pass_count": 15,
+          "audit_fail_count": 0,
+          "history_length": 21,
+          "phase4_dim_count": 11,
+          "sixteen_pillars_count": 16,
+          "molecules_per_pathway": [
+            5,
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "total_molecules": 30
+        },
+        "error": null
+      },
+      {
+        "stage_name": "environment_probe_v1260",
+        "started_at": 1785859151.6610942,
+        "ended_at": 1785859153.685813,
+        "success": true,
+        "duration_sec": 2.024718761444092,
+        "summary": {
+          "docker_available": false,
+          "docker_compose_available": false,
+          "podman_available": false,
+          "wsl_available": false,
+          "python_available": true,
+          "strategy": "subprocess"
+        },
+        "error": null
+      }
+    ],
+    "success": true,
+    "error": null,
+    "artifacts_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\_v1264_north_star_1785859151"
+  },
+  "north_star": {
+    "asi_north_star": 0.98,
+    "absolute_ceiling": 1.0,
+    "current_realized": 0.9105,
+    "current_overall": 0.4853,
+    "current_position_pct": 92.90816326530611,
+    "gap_to_north_star": 0.0695,
+    "gap_to_ceiling": 0.08950000000000002,
+    "inflation_gap": 0.08950000000000002,
+    "history_length": 21,
+    "big_picture_count": 11,
+    "pillars_count": 16,
+    "v1257_status": "PENDING_USER_CHOICE (JUBILEE | HENOCHIC_TRANSLATION | DIVINE_INVITATION | COVENANT)",
+    "v3_guards_pass": 12,
+    "module_version": "0.1.0",
+    "build_ts": "2026-08-04",
+    "snapshot_id": "b3b6ff92-da70-4737-973b-9092ab435f69",
+    "raw_big_picture": [
+      {
+        "version": "V1049",
+        "realized_mean_306": 0.7905,
+        "position_pct": 80.66326530612244,
+        "note": "Phase 1 baseline (value alignment)"
+      },
+      {
+        "version": "V1218",
+        "realized_mean_306": 0.771,
+        "position_pct": 78.6734693877551,
+        "note": "Phase 2 step 1 (time substrate)"
+      },
+      {
+        "version": "V1232",
+        "realized_mean_306": 0.782,
+        "position_pct": 79.79591836734694,
+        "note": "Phase 2 step 2 (freedom substrate)"
+      },
+      {
+        "version": "V1235",
+        "realized_mean_306": 0.7935,
+        "position_pct": 80.96938775510203,
+        "note": "Phase 2 step 3 (agency substrate)"
+      },
+      {
+        "version": "V1236",
+        "realized_mean_306": 0.7998,
+        "position_pct": 81.61224489795919,
+        "note": "Phase 2 step 4 (kenosis)"
+      },
+      {
+        "version": "V1237",
+        "realized_mean_306": 0.806,
+        "position_pct": 82.24489795918369,
+        "note": "Phase 3 step 1 (perichoresis)"
+      },
+      {
+        "version": "V1241",
+        "realized_mean_306": 0.828,
+        "position_pct": 84.48979591836735,
+        "note": "Phase 3 step 5 (theosis)"
+      },
+      {
+        "version": "V1245",
+        "realized_mean_306": 0.85,
+        "position_pct": 86.73469387755102,
+        "note": "Phase 3 step 9 / 完形 (sabbath)"
+      },
+      {
+        "version": "V1246",
+        "realized_mean_306": 0.8555,
+        "position_pct": 87.29591836734694,
+        "note": "Phase 4 step 1 (eschatology)"
+      },
+      {
+        "version": "V1250",
+        "realized_mean_306": 0.8775,
+        "position_pct": 89.5408163265306,
+        "note": "Phase 4 step 5 (divine_communion)"
+      },
+      {
+        "version": "V1256",
+        "realized_mean_306": 0.9105,
+        "position_pct": 92.90816326530611,
+        "note": "Phase 4 step 11 (unio_mystica, current)"
+      }
+    ],
+    "raw_pillars": [
+      {
+        "pillar": "theosis",
+        "v_id": "V1241",
+        "dim": 34,
+        "phase": "Phase 3 第五步"
+      },
+      {
+        "pillar": "icon",
+        "v_id": "V1242",
+        "dim": 35,
+        "phase": "Phase 3 第六步"
+      },
+      {
+        "pillar": "liturgy",
+        "v_id": "V1243",
+        "dim": 36,
+        "phase": "Phase 3 第七步"
+      },
+      {
+        "pillar": "hierurgy",
+        "v_id": "V1244",
+        "dim": 37,
+        "phase": "Phase 3 第八步"
+      },
+      {
+        "pillar": "sabbath",
+        "v_id": "V1245",
+        "dim": 38,
+        "phase": "Phase 3 第九步 完形"
+      },
+      {
+        "pillar": "eschatology",
+        "v_id": "V1246",
+        "dim": 39,
+        "phase": "Phase 4 第一步"
+      },
+      {
+        "pillar": "new_creation",
+        "v_id": "V1247",
+        "dim": 40,
+        "phase": "Phase 4 第二步"
+      },
+      {
+        "pillar": "consummation",
+        "v_id": "V1248",
+        "dim": 41,
+        "phase": "Phase 4 第三步"
+      },
+      {
+        "pillar": "glorification",
+        "v_id": "V1249",
+        "dim": 42,
+        "phase": "Phase 4 第四步"
+      },
+      {
+        "pillar": "divine_communion",
+        "v_id": "V1250",
+        "dim": 43,
+        "phase": "Phase 4 第五步"
+      },
+      {
+        "pillar": "beatific_vision",
+        "v_id": "V1251",
+        "dim": 44,
+        "phase": "Phase 4 第六步"
+      },
+      {
+        "pillar": "parousia",
+        "v_id": "V1252",
+        "dim": 45,
+        "phase": "Phase 4 第七步"
+      },
+      {
+        "pillar": "kenotic_rest",
+        "v_id": "V1253",
+        "dim": 46,
+        "phase": "Phase 4 第八步"
+      },
+      {
+        "pillar": "theophany",
+        "v_id": "V1254",
+        "dim": 47,
+        "phase": "Phase 4 第九步"
+      },
+      {
+        "pillar": "deification",
+        "v_id": "V1255",
+        "dim": 48,
+        "phase": "Phase 4 第十步"
+      },
+      {
+        "pillar": "unio_mystica",
+        "v_id": "V1256",
+        "dim": 49,
+        "phase": "Phase 4 第十一步"
+      }
+    ],
+    "raw_v3_guards": {
+      "v1259_read_only_no_write": true,
+      "v1259_no_future_lift_projection": true,
+      "v1259_no_asi_v1_claim": true,
+      "v1259_no_phenomenal_claim": true,
+      "v1259_no_kpi_inflation": true,
+      "v1259_no_v1257_self_decision": true,
+      "v1259_history_from_v1256_only": true,
+      "v1259_baseline_write_dead": true,
+      "v1259_big_picture_no_projection": true,
+      "v1259_pillars_no_completion_claim": true,
+      "v1259_cli_self_describe": true,
+      "v1259_disclaimer_in_every_mode": true
+    }
+  },
+  "stages": [
+    {
+      "stage_name": "north_star_v1259",
+      "started_at": 1785859151.6431975,
+      "ended_at": 1785859151.6448162,
+      "success": true,
+      "duration_sec": 0.0016186237335205078,
+      "summary": {
+        "asi_north_star": 0.98,
+        "absolute_ceiling": 1.0,
+        "current_realized": 0.9105,
+        "current_overall": 0.4853,
+        "current_position_pct": 92.90816326530611,
+        "gap_to_north_star": 0.0695,
+        "gap_to_ceiling": 0.08950000000000002,
+        "inflation_gap": 0.08950000000000002,
+        "history_length": 21,
+        "big_picture_count": 11,
+        "pillars_count": 16,
+        "v1257_status": "PENDING_USER_CHOICE (JUBILEE | HENOCHIC_TRANSLATION | DIVINE_INVITATION | COVENANT)",
+        "v3_guards_pass": 12,
+        "module_version": "0.1.0",
+        "build_ts": "2026-08-04",
+        "snapshot_id": "b3b6ff92-da70-4737-973b-9092ab435f69",
+        "raw_big_picture": [
+          {
+            "version": "V1049",
+            "realized_mean_306": 0.7905,
+            "position_pct": 80.66326530612244,
+            "note": "Phase 1 baseline (value alignment)"
+          },
+          {
+            "version": "V1218",
+            "realized_mean_306": 0.771,
+            "position_pct": 78.6734693877551,
+            "note": "Phase 2 step 1 (time substrate)"
+          },
+          {
+            "version": "V1232",
+            "realized_mean_306": 0.782,
+            "position_pct": 79.79591836734694,
+            "note": "Phase 2 step 2 (freedom substrate)"
+          },
+          {
+            "version": "V1235",
+            "realized_mean_306": 0.7935,
+            "position_pct": 80.96938775510203,
+            "note": "Phase 2 step 3 (agency substrate)"
+          },
+          {
+            "version": "V1236",
+            "realized_mean_306": 0.7998,
+            "position_pct": 81.61224489795919,
+            "note": "Phase 2 step 4 (kenosis)"
+          },
+          {
+            "version": "V1237",
+            "realized_mean_306": 0.806,
+            "position_pct": 82.24489795918369,
+            "note": "Phase 3 step 1 (perichoresis)"
+          },
+          {
+            "version": "V1241",
+            "realized_mean_306": 0.828,
+            "position_pct": 84.48979591836735,
+            "note": "Phase 3 step 5 (theosis)"
+          },
+          {
+            "version": "V1245",
+            "realized_mean_306": 0.85,
+            "position_pct": 86.73469387755102,
+            "note": "Phase 3 step 9 / 完形 (sabbath)"
+          },
+          {
+            "version": "V1246",
+            "realized_mean_306": 0.8555,
+            "position_pct": 87.29591836734694,
+            "note": "Phase 4 step 1 (eschatology)"
+          },
+          {
+            "version": "V1250",
+            "realized_mean_306": 0.8775,
+            "position_pct": 89.5408163265306,
+            "note": "Phase 4 step 5 (divine_communion)"
+          },
+          {
+            "version": "V1256",
+            "realized_mean_306": 0.9105,
+            "position_pct": 92.90816326530611,
+            "note": "Phase 4 step 11 (unio_mystica, current)"
+          }
+        ],
+        "raw_pillars": [
+          {
+            "pillar": "theosis",
+            "v_id": "V1241",
+            "dim": 34,
+            "phase": "Phase 3 第五步"
+          },
+          {
+            "pillar": "icon",
+            "v_id": "V1242",
+            "dim": 35,
+            "phase": "Phase 3 第六步"
+          },
+          {
+            "pillar": "liturgy",
+            "v_id": "V1243",
+            "dim": 36,
+            "phase": "Phase 3 第七步"
+          },
+          {
+            "pillar": "hierurgy",
+            "v_id": "V1244",
+            "dim": 37,
+            "phase": "Phase 3 第八步"
+          },
+          {
+            "pillar": "sabbath",
+            "v_id": "V1245",
+            "dim": 38,
+            "phase": "Phase 3 第九步 完形"
+          },
+          {
+            "pillar": "eschatology",
+            "v_id": "V1246",
+            "dim": 39,
+            "phase": "Phase 4 第一步"
+          },
+          {
+            "pillar": "new_creation",
+            "v_id": "V1247",
+            "dim": 40,
+            "phase": "Phase 4 第二步"
+          },
+          {
+            "pillar": "consummation",
+            "v_id": "V1248",
+            "dim": 41,
+            "phase": "Phase 4 第三步"
+          },
+          {
+            "pillar": "glorification",
+            "v_id": "V1249",
+            "dim": 42,
+            "phase": "Phase 4 第四步"
+          },
+          {
+            "pillar": "divine_communion",
+            "v_id": "V1250",
+            "dim": 43,
+            "phase": "Phase 4 第五步"
+          },
+          {
+            "pillar": "beatific_vision",
+            "v_id": "V1251",
+            "dim": 44,
+            "phase": "Phase 4 第六步"
+          },
+          {
+            "pillar": "parousia",
+            "v_id": "V1252",
+            "dim": 45,
+            "phase": "Phase 4 第七步"
+          },
+          {
+            "pillar": "kenotic_rest",
+            "v_id": "V1253",
+            "dim": 46,
+            "phase": "Phase 4 第八步"
+          },
+          {
+            "pillar": "theophany",
+            "v_id": "V1254",
+            "dim": 47,
+            "phase": "Phase 4 第九步"
+          },
+          {
+            "pillar": "deification",
+            "v_id": "V1255",
+            "dim": 48,
+            "phase": "Phase 4 第十步"
+          },
+          {
+            "pillar": "unio_mystica",
+            "v_id": "V1256",
+            "dim": 49,
+            "phase": "Phase 4 第十一步"
+          }
+        ],
+        "raw_v3_guards": {
+          "v1259_read_only_no_write": true,
+          "v1259_no_future_lift_projection": true,
+          "v1259_no_asi_v1_claim": true,
+          "v1259_no_phenomenal_claim": true,
+          "v1259_no_kpi_inflation": true,
+          "v1259_no_v1257_self_decision": true,
+          "v1259_history_from_v1256_only": true,
+          "v1259_baseline_write_dead": true,
+          "v1259_big_picture_no_projection": true,
+          "v1259_pillars_no_completion_claim": true,
+          "v1259_cli_self_describe": true,
+          "v1259_disclaimer_in_every_mode": true
+        }
+      },
+      "error": null
+    },
+    {
+      "stage_name": "kitchen_v1263",
+      "started_at": 1785859151.645413,
+      "ended_at": 1785859153.6867502,
+      "success": true,
+      "duration_sec": 2.041337251663208,
+      "summary": {
+        "report_id": "kitchen-1785859151645",
+        "started_at": 1785859151.6455688,
+        "ended_at": 1785859153.6858294,
+        "duration_sec": 2.0402605533599854,
+        "config": {
+          "enable_substrate": true,
+          "enable_environment": true,
+          "enable_deploy_default": false,
+          "enable_deploy_e2e": false,
+          "enable_benchmark": false,
+          "enable_streamlit": false,
+          "enable_health_cycle": false,
+          "deploy_timeout": 20.0,
+          "health_cycles": 3,
+          "health_interval": 0.5,
+          "benchmark_sample_limit": 5,
+          "streamlit_timeout": 12.0,
+          "base_port": 8800,
+          "e2e_base_port": 8840,
+          "streamlit_port": 8581,
+          "artifacts_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\_v1264_north_star_1785859151",
+          "write_json_artifact": true,
+          "write_text_artifact": true,
+          "streamlit_dry_run": true,
+          "streamlit_real_run": false,
+          "benchmark_dry_run": true,
+          "extra": {}
+        },
+        "substrate": {
+          "source_module": "apeireth.v1256_asi_v0666_unio_mystica_substrate_real_lift",
+          "source_module_dim_version": "0.6.66",
+          "asi_north_star": 0.98,
+          "absolute_ceiling": 1.0,
+          "current_realized_mean": 0.9105,
+          "current_overall_mean": 0.4838,
+          "position_vs_north_star_pct": 0.9291,
+          "gap_to_north_star": 0.0695,
+          "inflation_gap": 0.0895,
+          "audit_pass": true,
+          "audit_pass_count": 15,
+          "audit_fail_count": 0,
+          "history_length": 21,
+          "phase4_dim_count": 11,
+          "sixteen_pillars_count": 16,
+          "molecules_per_pathway": [
+            5,
+            5,
+            5,
+            5,
+            5,
+            5
+          ],
+          "total_molecules": 30
+        },
+        "environment": {
+          "docker_available": false,
+          "docker_compose_available": false,
+          "podman_available": false,
+          "wsl_available": false,
+          "python_available": true,
+          "strategy": "subprocess"
+        },
+        "deploy_default": null,
+        "deploy_e2e": null,
+        "benchmark": null,
+        "streamlit": null,
+        "health_cycles": null,
+        "stages": [
+          {
+            "stage_name": "substrate_status_v1258",
+            "started_at": 1785859151.6595924,
+            "ended_at": 1785859151.66109,
+            "success": true,
+            "duration_sec": 0.001497507095336914,
+            "summary": {
+              "source_module": "apeireth.v1256_asi_v0666_unio_mystica_substrate_real_lift",
+              "source_module_dim_version": "0.6.66",
+              "asi_north_star": 0.98,
+              "absolute_ceiling": 1.0,
+              "current_realized_mean": 0.9105,
+              "current_overall_mean": 0.4838,
+              "position_vs_north_star_pct": 0.9291,
+              "gap_to_north_star": 0.0695,
+              "inflation_gap": 0.0895,
+              "audit_pass": true,
+              "audit_pass_count": 15,
+              "audit_fail_count": 0,
+              "history_length": 21,
+              "phase4_dim_count": 11,
+              "sixteen_pillars_count": 16,
+              "molecules_per_pathway": [
+                5,
+                5,
+                5,
+                5,
+                5,
+                5
+              ],
+              "total_molecules": 30
+            },
+            "error": null
+          },
+          {
+            "stage_name": "environment_probe_v1260",
+            "started_at": 1785859151.6610942,
+            "ended_at": 1785859153.685813,
+            "success": true,
+            "duration_sec": 2.024718761444092,
+            "summary": {
+              "docker_available": false,
+              "docker_compose_available": false,
+              "podman_available": false,
+              "wsl_available": false,
+              "python_available": true,
+              "strategy": "subprocess"
+            },
+            "error": null
+          }
+        ],
+        "success": true,
+        "error": null,
+        "artifacts_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\_v1264_north_star_1785859151"
+      },
+      "error": null
+    }
+  ],
+  "success": true,
+  "error": null,
+  "v3_guards_pass": 5,
+  "v3_guards": {
+    "north_star_is_not_asi": true,
+    "trajectory_is_not_projection": true,
+    "kitchen_is_not_asi": true,
+    "non_realized_not_realized": true,
+    "reproducibility_is_not_asi": true
+  }
+}

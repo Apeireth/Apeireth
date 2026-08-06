@@ -1,0 +1,4 @@
+# Runtime-only dependencies for deploy/Dockerfile.
+# Pinned to the versions used by the verified local V1075 process probe.
+fastapi==0.139.0
+uvicorn==0.51.0

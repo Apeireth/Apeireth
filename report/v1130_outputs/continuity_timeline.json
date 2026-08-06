@@ -1,0 +1,89 @@
+{
+  "v1122_version": "0.1.0",
+  "title": "V1072 ContinuityTracker Dashboard",
+  "identity_id": "id_v1130_default",
+  "generated_at_iso": "2026-08-04T03:41:12",
+  "generated_at_epoch": 1785814865.8984206,
+  "n_sessions": 6,
+  "total_entries": 252,
+  "total_duration_s": 2.52,
+  "continuity_score": 1.0,
+  "manifest_stats": {
+    "n_entries": 16,
+    "n_ltm": 8,
+    "n_mtm": 5,
+    "n_stm": 3,
+    "n_archived": 0,
+    "importance_mean": 0.7334763849802972,
+    "core_identity_id": "id_v1130_default"
+  },
+  "points": [
+    {
+      "session_id": "ses_3cd601b51e98",
+      "started_at": 1785814865.8984003,
+      "ended_at": 1785814866.0184002,
+      "duration_s": 0.11999988555908203,
+      "n_entries_added": 12,
+      "n_importance_avg": 0.5,
+      "is_active": false,
+      "continuity_weight": 0.16666666666666666
+    },
+    {
+      "session_id": "ses_fca9230f1f02",
+      "started_at": 1785814865.898404,
+      "ended_at": 1785814866.138404,
+      "duration_s": 0.24000000953674316,
+      "n_entries_added": 24,
+      "n_importance_avg": 0.5700000000000001,
+      "is_active": false,
+      "continuity_weight": 0.3333333333333333
+    },
+    {
+      "session_id": "ses_64cee8bef85f",
+      "started_at": 1785814865.8984065,
+      "ended_at": 1785814866.2584064,
+      "duration_s": 0.3599998950958252,
+      "n_entries_added": 36,
+      "n_importance_avg": 0.64,
+      "is_active": false,
+      "continuity_weight": 0.5
+    },
+    {
+      "session_id": "ses_1b19400742c8",
+      "started_at": 1785814865.8984082,
+      "ended_at": 1785814866.3784082,
+      "duration_s": 0.48000001907348633,
+      "n_entries_added": 48,
+      "n_importance_avg": 0.71,
+      "is_active": false,
+      "continuity_weight": 0.6666666666666666
+    },
+    {
+      "session_id": "ses_fc9eee9dc33f",
+      "started_at": 1785814865.8984103,
+      "ended_at": 1785814866.4984102,
+      "duration_s": 0.5999999046325684,
+      "n_entries_added": 60,
+      "n_importance_avg": 0.78,
+      "is_active": false,
+      "continuity_weight": 0.8333333333333334
+    },
+    {
+      "session_id": "ses_071e8b90788f",
+      "started_at": 1785814865.8984122,
+      "ended_at": 1785814866.6184123,
+      "duration_s": 0.7200000286102295,
+      "n_entries_added": 72,
+      "n_importance_avg": 0.8500000000000001,
+      "is_active": true,
+      "continuity_weight": 1.0
+    }
+  ],
+  "philosophy_anchor": [
+    "Hofstadter 1979 strange loop",
+    "Maturana-Varela 1980 autopoiesis",
+    "Damasio 1999 autobiographical self",
+    "Metzinger 2003 PSM",
+    "Parfit 1984 psychological continuity"
+  ]
+}

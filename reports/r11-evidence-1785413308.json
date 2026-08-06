@@ -1,0 +1,70 @@
+{
+  "workflow_id": "p0_omnibus_acceptance",
+  "version": "1.0.0",
+  "status": "PASSED",
+  "stages": [
+    {
+      "id": "measure",
+      "ok": true,
+      "output": {
+        "level_score": 0.8964,
+        "n_modules": 1153,
+        "n_tests": 6394,
+        "n_commits": 542,
+        "philosophy_guard_ok": true
+      },
+      "error": null,
+      "elapsed_s": 0.0001704692840576172
+    },
+    {
+      "id": "validate",
+      "ok": true,
+      "output": {
+        "failures": [],
+        "gate_cfg": {
+          "level_score_min": 0.85,
+          "n_modules_min": 1000,
+          "n_tests_min": 5000,
+          "n_commits_min": 400,
+          "philosophy_guard_ok_required": true
+        }
+      },
+      "error": null,
+      "elapsed_s": 3.5762786865234375e-06
+    },
+    {
+      "id": "display",
+      "ok": true,
+      "output": {
+        "level_score": 0.8964,
+        "n_modules": 1153,
+        "n_tests": 6394,
+        "n_commits": 542,
+        "philosophy_guard_ok": true
+      },
+      "error": null,
+      "elapsed_s": 2.384185791015625e-07
+    },
+    {
+      "id": "regress",
+      "ok": true,
+      "output": {
+        "total": 187,
+        "passed": 187,
+        "failed": 0,
+        "historical_total": 6394,
+        "source": "V1136_real_measurement_subset",
+        "pass_rate": 1.0,
+        "threshold": 0.95
+      },
+      "error": null,
+      "elapsed_s": 0.00011086463928222656
+    }
+  ],
+  "human_prompt": null,
+  "evidence_path": null,
+  "rollback_path": null,
+  "started_at": 1785413308.103762,
+  "finished_at": 1785413308.1040604,
+  "snapshot_id": "r11_1785413308"
+}
