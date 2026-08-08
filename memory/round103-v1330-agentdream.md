@@ -65,3 +65,28 @@
 - V1249 glorification = 88.98% (unchanged)
 - V1330 = pattern extraction (NOT ASI breakthrough)
 - ASI achieved = False (LOCKED)
+
+## Cron session summary (21:16 → 21:24, ~8 min)
+
+3 commits:
+
+1. **V1330 f403a4f6** — AgentDream VCP plugin 真源码深读
+   - 4 files read (1815 lines), 10 substrates, 3 aggregators
+   - 61 tests pass in 0.16s
+   - V3 guards LOCKED (V1330_modifies_pole_star=False)
+
+2. **V1331 15af5077** — simulate_expansion bug fix
+   - Bug: `cls.min_recent_files.__class__(3)` raises TypeError
+   - Fix: monkey-patch with literal 3+2 (matches V1330 describe() defaults)
+   - 13 tests pass in 0.26s
+   - V1330 source preserved (bug visible — 主 17:43 实事求是)
+
+3. **R28 TUI streaming + R29 prompt 2e5a6447** — Rust 5 file diff
+   - server.rs: chat_completions stream/non-stream branch
+   - backend.rs: SYSTEM_PROMPT expanded with backend capabilities
+   - dialogue.rs / main.rs / app.rs: state updates
+   - cargo check PASS in 60s
+
+Total this session: 12 files changed, 2845 insertions (+ bug fix + R28/R29 work)
+ASI ceiling = 88.98% (unchanged — pure bug fix + R28/R29 work)
+Next cron tick should: V1332 (next VCP plugin deep read) OR round-91 ASI research
