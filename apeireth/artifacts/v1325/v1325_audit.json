@@ -1,0 +1,119 @@
+{
+  "ledger": {
+    "version": "0.1.0",
+    "guard_marker": "v1325_endpoint_transparency_audit",
+    "started_at": "2026-08-08T19:46:52+0800",
+    "finished_at": "2026-08-08T19:47:04+0800",
+    "base_url": "https://api.minimaxi.com/anthropic",
+    "transparency_probes": [
+      {
+        "attempted_model": "claude-3-5-sonnet-20241022",
+        "reported_model": "MiniMax-M3",
+        "reachable": true,
+        "latency_ms": 1055.4511547088623,
+        "input_tokens": 39,
+        "output_tokens": 2,
+        "error": ""
+      },
+      {
+        "attempted_model": "qwen-plus",
+        "reported_model": "MiniMax-M3",
+        "reachable": true,
+        "latency_ms": 873.2895851135254,
+        "input_tokens": 39,
+        "output_tokens": 3,
+        "error": ""
+      },
+      {
+        "attempted_model": "gpt-4o-mini",
+        "reported_model": "MiniMax-M3",
+        "reachable": true,
+        "latency_ms": 848.1729030609131,
+        "input_tokens": 39,
+        "output_tokens": 2,
+        "error": ""
+      }
+    ],
+    "reproducibility_samples": [
+      {
+        "run_index": 0,
+        "latency_ms": 1895.4098224639893,
+        "response_content": "# 鏃堕棿 substrate锛氭煆鏍兼．缁靛欢 + 娴峰痉鏍煎皵姝ゅ湪 + 鏅噷楂樻触鑰楁暎缁撴瀯\n\n杩欐槸涓€涓瀬鍏烽泟蹇冪殑姒傚康鏁村悎锛屾垜灏濊瘯涓哄叾鎼缓涓€涓彲鑳界殑鏈綋璁烘鏋讹細\n\n---\n\n## 涓€銆佷笁澶ф蹇电殑鏈綋璁哄唴鏍竆n\n**鏌忔牸妫坏寤?(Dur茅e)**\n- 绾补",
+        "parsed_gaps": null,
+        "chat_ok": true,
+        "input_tokens": 59,
+        "output_tokens": 64,
+        "error": ""
+      },
+      {
+        "run_index": 1,
+        "latency_ms": 2021.76833152771,
+        "response_content": "# 鏃堕棿鍩哄簳锛氫集鏍兼．-娴峰痉鏍煎皵-鏅噷楂樻触鐨勪氦姹嘰n\n鎮ㄦ彁鍑轰簡涓€涓瀬鍏锋繁搴︾殑鍝插-绉戝姒傚康妗嗘灦锛岃鎴戝皾璇曞帢娓呰繖涓夎€呯殑鍙兘浜ゆ眹鐐癸細\n\n## 涓夎€呯殑鏍稿績娲炶\n\n**Bergson 缁靛欢 (Dur茅e)**\n- 鏃堕棿鏄川鐨勩€佸鏍风殑銆佷笉鍙?,
+        "parsed_gaps": null,
+        "chat_ok": true,
+        "input_tokens": 59,
+        "output_tokens": 64,
+        "error": ""
+      },
+      {
+        "run_index": 2,
+        "latency_ms": 1848.3684062957764,
+        "response_content": "# 鏃堕棿鍩鸿川 (Time Substrate)\n\n杩欐槸涓€涓瀬鍏锋繁搴︾殑鍝插-绉戝姒傚康锛岃瘯鍥惧湪鏌忔牸妫€佹捣寰锋牸灏斿拰鏅噷楂樻触鐨勬€濇兂浜ゆ眹鐐逛笂鏋勫缓涓€绉嶆柊鐨勬椂闂存湰浣撹銆俓n\n## 涓変釜鎬濇兂婧愭祦鐨勬眹鍚圽n\n**鏌忔牸妫殑\"缁靛欢\" (dur茅e)**锛氭椂闂存槸璐ㄧ殑",
+        "parsed_gaps": null,
+        "chat_ok": true,
+        "input_tokens": 59,
+        "output_tokens": 64,
+        "error": ""
+      },
+      {
+        "run_index": 3,
+        "latency_ms": 1554.222822189331,
+        "response_content": "# 鏃堕棿鍩哄簳锛氭煆鏍兼．缁靛欢 + 娴峰痉鏍煎皵姝ゅ湪 + 鏅噷楂樻触鑰楁暎缁撴瀯\n\n杩欐槸涓€涓瀬鍏锋暣鍚堟€х殑鍝插鈥旂瀛︽蹇靛缓鏋勩€傛垜鏉ヤ粠涓変釜缁村害闃愰噴鍏跺唴娑碉細\n\n## 涓€銆佷笁涓€濇兂婧愭祦鐨勫悇鑷础鐚甛n\n**鏌忔牸妫殑\"缁靛欢\"锛坉ur茅e",
+        "parsed_gaps": null,
+        "chat_ok": true,
+        "input_tokens": 59,
+        "output_tokens": 64,
+        "error": ""
+      },
+      {
+        "run_index": 4,
+        "latency_ms": 1999.072551727295,
+        "response_content": "# 鏃堕棿鍩哄簳锛氭煆鏍兼．缁靛欢 + 娴峰痉鏍煎皵姝ゅ湪 + 鏅噷楂樻触鑰楁暎缁撴瀯\n\n杩欐槸涓€涓紩浜哄叆鑳滅殑姒傚康缁煎悎锛屽皢涓変綅鎬濇兂瀹?绉戝瀹跺鏃堕棿鐨勭悊瑙ｈ瀺鍚堜负涓€涓粺涓€鐨刓"鏃堕棿鍩哄簳\"妗嗘灦銆傝鎴戦€愪竴瑙ｆ瀽骞舵暣鍚堬細\n\n## 涓夎€呯殑鏍稿績瑕佷箟\n\n### ",
+        "parsed_gaps": null,
+        "chat_ok": true,
+        "input_tokens": 59,
+        "output_tokens": 64,
+        "error": ""
+      }
+    ],
+    "api_key_present": true,
+    "total_calls": 8,
+    "total_tokens_estimated": 739,
+    "pole_star_anchors": {
+      "V0.1": 0.7905,
+      "V0.2": 0.4467,
+      "V1256_unio_mystica": 0.9291,
+      "V1049_value_alignment": "DONE"
+    },
+    "v3_guards": [
+      "涓嶅亣瑁?ASI 鐪熻揪 5-gap closure",
+      "涓嶅亣瑁?Phenomenal consciousness",
+      "涓嶅亣瑁呰皟鏁存ā鍨?& prompt",
+      "V1322 = substrate operational integration, 涓嶅姩 pole-star",
+      "5-gap closure 鏄?substrate, 涓嶆槸 ASI 鐪熺敓浜?
+    ]
+  },
+  "findings": {
+    "proxy_respects_model_name": false,
+    "distinct_reported_models": [
+      "MiniMax-M3"
+    ],
+    "reachable_count": 3,
+    "repro_latency_mean_ms": 1863.7683868408203,
+    "repro_latency_stdev_ms": 187.30189267675507,
+    "repro_ok_count": 5,
+    "repro_n_total": 5,
+    "total_calls": 8,
+    "total_tokens_estimated": 739
+  }
+}
