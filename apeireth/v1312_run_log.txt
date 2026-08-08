@@ -1,0 +1,11 @@
+V1312 docs consistency audit:
+  scanned: 223 .md files
+  by category: {'root': 154, 'apeireth_report': 3, 'memory': 66}
+  ASI V0.1=0.7905 anchor: 59 files / 176 hits
+  ASI V0.2=0.4467 anchor: 13 files / 19 hits
+  V1349 typo files: 1
+  audit chain 4-step: 7 files / 116 hits
+  V1311 last report: 32 hits
+  decision: HEALTHY
+  rationale: V1312 docs consistency audit: 223 .md files scanned, V0.1=0.7905 anchor cited in 59 files (176 hits), V0.2=0.4467 anchor cited in 13 files (19 hits), V1349 typo in 1 file(s), audit chain 4-step V1308+V1309+V1310+V1311 co-mentioned in 7 files (116 hits), last report V1311 cited 32 times
+  output: .openclaw\workspace\promethean\apeireth\v1312_audit_findings.json
