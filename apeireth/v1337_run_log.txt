@@ -1,0 +1,74 @@
+V1337 run log
+=============
+
+Trigger: 2026-08-08 22:01 +08:00 (Saturday)
+Cron:    apeireth-autonomy-v3 (1fba1cc3-1a6d-4e3a-abb8-fccef1c94cdf)
+Mode:    isolated M3 (deepseek-v4-flash fallback after MiniMax-M3 idle timeout)
+Author:  楚零 (Chu Ling)
+
+State at trigger:
+- V1336 commit b6d4fa31 (22:01) DONE — VCP Plugin Conformance Linter CLI
+- V1336 self-test: 34/34 PASS; pytest: 66/66 PASS
+- V1337 = next: VCP Plugin Compliance Dashboard (real-data application of V1336 linter)
+- ASI pole-star V0.1=0.7905 / V1335 不动 LOCKED
+
+Decision: V1337 = VCP Plugin Compliance Dashboard (V1336 linter × 6 VCP plugins → matrix)
+
+V1335 = registry (substrate ledger + 8 invariant classes + 0.4107 coverage)
+V1336 = linter (single file → report)
+V1337 = dashboard (multi-file → cross-plugin compliance matrix + safety-critical gap)
+
+Steps:
+1. Wrote apeireth/v1337_vcp_plugin_compliance_dashboard.py (~22 KB, 11 API surfaces)
+2. Reuses V1335 (registry) + V1336 (linter) — no new regex
+3. Self-test: 30/30 PASS
+4. Wrote tests/test_v1337_vcp_plugin_compliance_dashboard.py (12 sections, 62 tests)
+5. Pytest: 62/62 PASS in 0.38s
+6. Chain regression: V1326-V1337 = 831/831 PASS in 4.47s
+7. Real CLI test:
+   - Plugin compliance: 6/6 FAIL (correct — V13xx modules are source-only analysis, not "plugin")
+   - Critical pass rate: 0.0000 (correct — 5 SC classes require source code analysis patterns)
+   - Critical gaps detected: 18 (visible gaps in VCP ecosystem)
+   - Total substrates: 138 (across 6 plugin files)
+   - Avg coverage score: 0.4000
+8. V1337_REPORT.md + v1337_run_log.txt (this file) written
+9. Commit (pending)
+
+Files written:
+- apeireth/v1337_vcp_plugin_compliance_dashboard.py (~22 KB, 11 API surfaces)
+- tests/test_v1337_vcp_plugin_compliance_dashboard.py (~17 KB, 62 canonical tests)
+- V1337_REPORT.md (~10 KB, full audit + cross-plugin matrix + V3 守门)
+- apeireth/v1337_run_log.txt (this file)
+
+Total: 4 files, ~49 KB
+
+Verification totals:
+- API surfaces: 11 (build_dashboard, dashboard_to_markdown, dashboard_to_csv,
+  _build_cross_plugin_matrix, _build_dashboard_summary, _scan_substrates_for_plugin,
+  _self_test, _self_test_summary, CrossPluginComplianceCell, DashboardSummary,
+  VCPPluginComplianceDashboard, main)
+- Popper self-tests: 30/30 PASS
+- Pytest: 62/62 PASS in 0.38s
+- Chain regression: 831/831 PASS in 4.47s
+- V3 守门: 7 forbidden phrases checked
+- ASI pole-star: LOCKED (4/4 anchors unchanged)
+- Cross-plugin matrix: 6 plugins × 8 invariant classes = 48 cells
+- 5-critical coverage rule: 30 SC cells (6 plugins × 5 SC classes)
+
+Critical findings (real data, 主 17:43 实事求是):
+- V1334 ThoughtClusterManager: 0.8 coverage (highest) — only missing IC4_ipc
+- V1330 AgentDream: 0.0 coverage (lowest) — missing all 5 SC classes
+- V1327 VCP-6-core: 0.6 coverage — missing IC1_security + IC4_ipc
+- V1328 AnySearch: 0.4 coverage — missing 3 SC classes
+- V1332 RAGDiary: 0.2 coverage — missing 4 SC classes
+- V1333 VCPTimeLine: 0.4 coverage — missing 3 SC classes
+- 18 (plugin, class) cells have critical gaps
+
+Next natural pivot (V1338+):
+- V1338 = VCP Substrate-By-Example Cookbook (8 invariant classes × 1 minimal example each)
+- V1338 = V1335 coverage score uplift (add IC8_lifecycle-derivable patterns → 0.4107 → 0.60+)
+- V1338 = VCP Plugin Migration Tool (old format → new V1335-conformant format)
+- V1338 = Lineage Report V10xx-V1337 (end-to-end 真生产 evidence chain)
+- V1338 = V1337 dashboard JSON Schema (typed API for downstream tools)
+- V1338 = Critical Gap Auto-Filler (run on V13xx modules, suggest substrate additions)
+- V1338 = VCP Plugin Compliance Dashboard HTML output (browser-renderable)
