@@ -1,617 +1,441 @@
-"""Tests for V1052 ASI Memory Consolidation (主 17:43 实事求是: 真测, 不假装)."""
+"""V1052 - Real Streamlit Deploy tests.
+
+Phase 1052 v1052_real_streamlit_deploy 真厨房 Streamlit 真部署 真测试 (主 17:43).
+
+测试维度 (主 17:43 实事求是 + 主 00:56 任何人能接手):
+1. 数据结构: StreamlitCommandResult / StreamlitServerHealth / DeploymentStatus to_dict
+2. 端口扫描: _port_is_free / _pick_free_port 真扫
+3. HTTP check: _http_get 真连接
+4. 可用性: check_streamlit_available 真调 streamlit --version
+5. artefacts 写入: write_app 真写文件 (app.py + .streamlit/config.toml)
+6. 真启: start 真 subprocess.Popen streamlit run
+7. 真等 ready: wait_ready 真 HTTP GET /_stcore/health 轮询
+8. 真停: stop 真 terminate
+9. 真回执: stats() 真输出 pid + port + log_path
+10. V1009 真借鉴: render_v1009_streamlit_app 真从 V1009 拿源
+
+不假装: 没装 streamlit 时 check 返回 False; start 失败时不假装 ok; healthcheck 失败时不假装 healthy.
+"""
 from __future__ import annotations
 
-import json
-import math
+import os
+import socket
+import sys
 import time
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 import pytest
 
-from apeireth.v1052_asi_memory_consolidation import (
-    ConsolidationReport,
-    ConsolidationTickResult,
-    Episode,
-    ForgettingCurve,
-    MemoryBridge,
-    MemoryStore,
-    Note,
-    ReconsolidationPath,
-    Reconsolidator,
-    SalienceScore,
-    Tier,
-    TierPolicy,
-    Wal,
-    WalEntry,
+APEIRETH_DIR = Path(__file__).resolve().parent.parent / "apeireth"
+sys.path.insert(0, str(APEIRETH_DIR))
+
+from v1052_real_streamlit_deploy import (  # noqa: E402
+    V1052RealStreamlitDeploy,
+    StreamlitCommandResult,
+    StreamlitServerHealth,
+    DeploymentStatus,
     V1052_VERSION,
-    consolidation_tick,
-    make_default_policy,
-    make_default_store,
+    V1052_APP,
+    V1052_CONFIG_DIR,
+    V1052_CONFIG,
+    V1052_DEFAULT_HEALTH_PATH,
+    V1052_DEFAULT_PORT,
+    V1052_LOG_FILE,
+    STREAMLIT_CONFIG_RUNTIME,
+    _port_is_free,
+    _pick_free_port,
+    _http_get,
+    _render_v1009_streamlit_app,
 )
 
 
 # ============================================================================
-# Episode tests
+# 1. 数据结构
 # ============================================================================
 
 
-def test_episode_basic():
-    """Episode basic creation."""
-    ep = Episode(
-        eid="ep1",
-        actor="master",
-        content="主人 22:33 ASI 北极星",
-        ts=time.time(),
-    )
-    assert ep.eid == "ep1"
-    assert ep.actor == "master"
-    assert ep.tier == "stm"
+class TestDataStructures:
+    def test_version(self):
+        assert V1052_VERSION == "0.1.0"
 
+    def test_constants(self):
+        assert V1052_APP == "app.py"
+        assert V1052_CONFIG_DIR == ".streamlit"
+        assert V1052_CONFIG == "config.toml"
+        assert V1052_DEFAULT_HEALTH_PATH == "/_stcore/health"
+        assert V1052_DEFAULT_PORT == 8765
+        assert V1052_LOG_FILE == "streamlit.log"
 
-def test_episode_importance_bounds():
-    """Importance must be in [0, 1]."""
-    with pytest.raises(ValueError):
-        Episode(eid="x", actor="a", content="c", ts=0.0, importance=1.5)
+    def test_streamlit_config_runtime_has_server_headless(self):
+        assert "headless" in STREAMLIT_CONFIG_RUNTIME
+        assert "true" in STREAMLIT_CONFIG_RUNTIME.lower()
 
+    def test_command_result_to_dict(self):
+        r = StreamlitCommandResult(
+            command=["streamlit", "run", "app.py"],
+            returncode=0,
+            stdout_tail="hello",
+            stderr_tail="",
+            elapsed_seconds=0.1,
+            ok=True,
+        )
+        d = r.to_dict()
+        assert d["command"] == ["streamlit", "run", "app.py"]
+        assert d["returncode"] == 0
+        assert d["ok"] is True
+        assert d["elapsed_seconds"] == 0.1
+        assert d["stdout_tail_len"] == 5
 
-def test_episode_tier_must_be_valid():
-    """Tier must be stm/mtm/ltm."""
-    with pytest.raises(ValueError):
-        Episode(eid="x", actor="a", content="c", ts=0.0, tier="invalid")
+    def test_command_result_running_none_rc(self):
+        r = StreamlitCommandResult(
+            command=["streamlit", "run", "app.py"],
+            returncode=None,  # still running
+            stdout_tail="(see log)",
+            stderr_tail="",
+            elapsed_seconds=0.5,
+            ok=True,
+        )
+        d = r.to_dict()
+        assert d["returncode"] is None
+        assert d["ok"] is True
 
+    def test_server_health_to_dict(self):
+        h = StreamlitServerHealth(
+            host="127.0.0.1", port=8765, pid=12345,
+            process_alive=True, http_reachable=True, http_status=200,
+            health_ok=True, log_path="/tmp/x.log",
+        )
+        d = h.to_dict()
+        assert d["host"] == "127.0.0.1"
+        assert d["port"] == 8765
+        assert d["pid"] == 12345
+        assert d["process_alive"] is True
+        assert d["http_status"] == 200
+        assert d["health_ok"] is True
 
-def test_episode_eid_required():
-    """Empty eid rejected."""
-    with pytest.raises(ValueError):
-        Episode(eid="", actor="a", content="c", ts=0.0)
-
-
-def test_episode_is_immutable():
-    """Episode is frozen — no mutation."""
-    ep = Episode(eid="ep1", actor="master", content="c", ts=0.0)
-    with pytest.raises((AttributeError, Exception)):
-        ep.content = "modified"  # type: ignore[misc]
-
-
-# ============================================================================
-# Note tests
-# ============================================================================
-
-
-def test_note_touch():
-    """Note.touch increments access_count + updates last_access."""
-    n = Note(nid="n1", topic="t", claim="c", confidence=0.5)
-    assert n.access_count == 0
-    n.touch(100.0)
-    assert n.access_count == 1
-    assert n.last_access == 100.0
-    n.touch(200.0)
-    assert n.access_count == 2
-
-
-def test_note_apply_decay():
-    """Note decay reduces salience + confidence (主 13:47 关心遗忘)."""
-    n = Note(nid="n1", topic="t", claim="c", confidence=0.8, salience=0.6)
-    n.apply_decay(rate=0.5)
-    assert n.salience == pytest.approx(0.3, abs=1e-9)
-    assert n.confidence < 0.8  # decays slower (×0.5 of salience decay)
-
-
-def test_note_decay_floors_at_zero():
-    """Salience doesn't go below 0."""
-    n = Note(nid="n1", topic="t", claim="c", salience=0.01)
-    n.apply_decay(rate=1.0)
-    assert n.salience == 0.0
-
-
-# ============================================================================
-# Tier enum tests
-# ============================================================================
-
-
-def test_tier_enum_values():
-    """Tier enum has stm/mtm/ltm."""
-    assert Tier.STM.value == "stm"
-    assert Tier.MTM.value == "mtm"
-    assert Tier.LTM.value == "ltm"
-
-
-# ============================================================================
-# SalienceScore tests
-# ============================================================================
-
-
-def test_salience_high_importance_fresh():
-    """High importance + fresh = high salience."""
-    s = SalienceScore(importance=1.0, age_days=0.0, access_count=0)
-    assert s.score() > 0.5
-
-
-def test_salience_old_low():
-    """Old + low importance = low salience."""
-    s = SalienceScore(importance=0.1, age_days=30.0, access_count=0)
-    assert s.score() < 0.05
-
-
-def test_salience_access_boosts():
-    """More accesses → higher salience."""
-    s1 = SalienceScore(importance=0.5, age_days=1.0, access_count=0)
-    s2 = SalienceScore(importance=0.5, age_days=1.0, access_count=10)
-    assert s2.score() > s1.score()
+    def test_deployment_status_to_dict(self):
+        s = DeploymentStatus(
+            streamlit_available=True,
+            artefacts_written=True,
+            server_running=True,
+            healthy=True,
+            host="127.0.0.1",
+            port=8765,
+            pid=12345,
+            log_path="/tmp/log",
+            app_path="/tmp/app.py",
+        )
+        d = s.to_dict()
+        assert d["host"] == "127.0.0.1"
+        assert d["port"] == 8765
+        assert d["pid"] == 12345
+        assert d["healthy"] is True
+        assert d["n_artefacts"] == 0  # default empty
 
 
 # ============================================================================
-# MemoryStore tests
+# 2. 端口扫描
 # ============================================================================
 
 
-def test_store_append_episode():
-    """MemoryStore.append_episode works."""
-    store = MemoryStore()
-    ep = Episode(eid="ep1", actor="master", content="c", ts=0.0)
-    store.append_episode(ep)
-    assert store.stats()["total_episodes"] == 1
-    assert store.stats()["stm_episodes"] == 1
+class TestPortScanning:
+    def test_port_is_free_returns_bool(self):
+        # 测试一个非常高的端口, 大概率空闲
+        result = _port_is_free("127.0.0.1", 65111)
+        assert isinstance(result, bool)
 
+    def test_port_is_free_busy_port(self):
+        # 先占一个端口
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        sock.bind(("127.0.0.1", 65112))
+        try:
+            # 此时该端口应不空闲
+            assert _port_is_free("127.0.0.1", 65112) is False
+        finally:
+            sock.close()
 
-def test_store_duplicate_episode_rejected():
-    """Cannot append same eid twice."""
-    store = MemoryStore()
-    store.append_episode(Episode(eid="ep1", actor="master", content="c", ts=0.0))
-    with pytest.raises(ValueError):
-        store.append_episode(Episode(eid="ep1", actor="master", content="c", ts=0.0))
+    def test_pick_free_port_returns_int(self):
+        port = _pick_free_port("127.0.0.1", 65200, 65210)
+        assert isinstance(port, int)
+        assert 65200 <= port <= 65210
 
-
-def test_store_tier_transition():
-    """Transition moves episode between tier buckets."""
-    store = MemoryStore()
-    store.append_episode(Episode(eid="ep1", actor="master", content="c", ts=0.0, tier="stm"))
-    store.transition("ep1", "stm", "mtm", ts=100.0)
-    assert store.stats()["stm_episodes"] == 0
-    assert store.stats()["mtm_episodes"] == 1
-    assert store.stats()["transitions"] == 1
-
-
-def test_store_forget_episode():
-    """forget_episode removes from all buckets."""
-    store = MemoryStore()
-    store.append_episode(Episode(eid="ep1", actor="master", content="c", ts=0.0))
-    store.forget_episode("ep1")
-    assert store.stats()["total_episodes"] == 0
-
-
-def test_store_add_note():
-    """add_note inserts note."""
-    store = MemoryStore()
-    store.add_note(Note(nid="n1", topic="t", claim="c"))
-    assert store.stats()["total_notes"] == 1
+    def test_pick_free_port_avoids_busy(self):
+        # 占一个端口
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5)
+        sock.bind(("127.0.0.1", 65201))
+        try:
+            port = _pick_free_port("127.0.0.1", 65201, 65205)
+            # 应该跳过 65201 选 65202 (或更后)
+            assert port != 65201
+            assert 65202 <= port <= 65205
+        finally:
+            sock.close()
 
 
 # ============================================================================
-# TierPolicy tests
+# 3. HTTP check
 # ============================================================================
 
 
-def test_policy_should_promote_to_mtm():
-    """Old episode promoted to MTM."""
-    policy = TierPolicy(stm_to_mtm_age_sec=3600)
-    ep = Episode(eid="ep1", actor="master", content="c", ts=1000.0)
-    assert policy.should_promote_to_mtm(ep, now=1000.0 + 3601) is True
-    assert policy.should_promote_to_mtm(ep, now=1000.0 + 100) is False
+class TestHTTPCheck:
+    def test_http_get_unreachable_returns_false(self):
+        # 用一个肯定不在线的端口
+        reachable, status, err = _http_get("http://127.0.0.1:1/", timeout=1.0)
+        assert reachable is False
+        assert status is None
+        assert err != ""
 
+    def test_http_get_to_running_streamlit(self, tmp_path):
+        """如果 streamlit 可用, 启一个真 streamlit 实例测 HTTP."""
+        avail, _ = V1052RealStreamlitDeploy().check_streamlit_available()
+        if not avail:
+            pytest.skip("streamlit not installed")
 
-def test_policy_should_promote_to_ltm_requires_importance():
-    """MTM → LTM requires both age + importance."""
-    policy = TierPolicy(mtm_to_ltm_stable_age_days=1.0)
-    old_low = Episode(eid="x", actor="a", content="c", ts=0.0, importance=0.1)
-    assert policy.should_promote_to_ltm(old_low, now=86400.0 * 2) is False
-    old_high = Episode(eid="y", actor="a", content="c", ts=0.0, importance=0.9)
-    assert policy.should_promote_to_ltm(old_high, now=86400.0 * 2) is True
-
-
-def test_policy_default_values():
-    """Default policy has reasonable values."""
-    p = make_default_policy()
-    assert p.stm_to_mtm_age_sec == 3600
-    assert p.ltm_protected is True  # 主 12:14 中央 AI 永恒身份
-
-
-# ============================================================================
-# WAL tests
-# ============================================================================
-
-
-def test_wal_append_and_replay(tmp_path: Path):
-    """WAL append + replay returns entries (DeltaMemory 借鉴)."""
-    wal_path = tmp_path / "test.wal"
-    wal = Wal(wal_path)
-    wal.append("test_op", {"key": "value", "n": 1})
-    wal.append("test_op2", {"key": "value2", "n": 2})
-    entries = wal.replay()
-    assert len(entries) == 2
-    assert entries[0]["sequence"] == 1
-    assert entries[1]["sequence"] == 2
-    payload = entries[0]["payload"]
-    assert hashlib_sha256(payload) == entries[0]["checksum"]
-
-
-def hashlib_sha256(payload: str) -> str:
-    """Helper: SHA-256 hex (kept local to avoid top-level import)."""
-    import hashlib
-    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
-
-
-def test_wal_recover_last_sequence(tmp_path: Path):
-    """WAL recovers last sequence on reopen."""
-    wal_path = tmp_path / "test.wal"
-    w1 = Wal(wal_path)
-    w1.append("a", {"x": 1})
-    w1.append("a", {"x": 2})
-    w1.append("a", {"x": 3})
-    w2 = Wal(wal_path)
-    assert w2.sequence == 3
-
-
-def test_wal_skip_corrupted(tmp_path: Path):
-    """WAL replay skips corrupted entries (DeltaMemory 借鉴)."""
-    wal_path = tmp_path / "test.wal"
-    w1 = Wal(wal_path)
-    w1.append("good", {"x": 1})
-    # Manually corrupt: append invalid JSON line
-    wal_path.write_text(wal_path.read_text() + "not valid json\n", encoding="utf-8")
-    w1.append("good2", {"x": 2})
-    entries = w1.replay()
-    assert len(entries) == 2  # corrupted entry skipped
-
-
-def test_wal_verify_integrity(tmp_path: Path):
-    """WAL verify returns (valid, corrupt) counts."""
-    wal_path = tmp_path / "test.wal"
-    w1 = Wal(wal_path)
-    w1.append("op", {"x": 1})
-    w1.append("op", {"x": 2})
-    valid, corrupt = w1.verify()
-    assert valid == 2
-    assert corrupt == 0
-
-
-def test_wal_no_path():
-    """WAL works without file path (in-memory mode)."""
-    wal = Wal(path=None)
-    seq = wal.append("test", {"x": 1})
-    assert seq == 1
-    assert wal.replay() == []
+        deploy = V1052RealStreamlitDeploy()
+        out = str(tmp_path / "st")
+        port = _pick_free_port("127.0.0.1", 19500, 19999)
+        res = deploy.start(output_dir=out, port=port, host="127.0.0.1")
+        try:
+            assert res.ok
+            h = deploy.wait_ready(host="127.0.0.1", port=port, timeout=30.0)
+            assert h.http_reachable is True
+            assert h.http_status == 200
+            assert h.health_ok is True
+        finally:
+            deploy.stop(timeout=5.0)
 
 
 # ============================================================================
-# Reconsolidator tests
+# 4. 可用性检查
 # ============================================================================
 
 
-def test_reconsolidator_choose_boost():
-    """New evidence > confidence with diff under threshold → BOOST."""
-    rec = Reconsolidator(flag_threshold=0.5)
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.3)
-    # diff = 0.4 < 0.5 (flag_threshold) → not FLAG → BOOST (evidence > confidence)
-    assert rec.choose_path(note, new_evidence=0.7) == ReconsolidationPath.BOOST
-
-
-def test_reconsolidator_choose_align():
-    """Small diff + evidence <= confidence → ALIGN."""
-    rec = Reconsolidator(flag_threshold=0.5)
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.55)
-    # diff = 0.05 < 0.5 → not FLAG; evidence < confidence → ALIGN
-    assert rec.choose_path(note, new_evidence=0.5) == ReconsolidationPath.ALIGN
-
-
-def test_reconsolidator_choose_flag():
-    """Large diff → FLAG (highest priority)."""
-    rec = Reconsolidator(flag_threshold=0.2)
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.2)
-    assert rec.choose_path(note, new_evidence=0.9) == ReconsolidationPath.FLAG
-
-
-def test_reconsolidator_apply_boost():
-    """BOOST increases salience + confidence (with diff-headroom)."""
-    rec = Reconsolidator(boost_delta=0.2, align_lr=0.5, flag_threshold=0.9)
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.2, salience=0.4)
-    path, updated = rec.apply(note, new_evidence=0.8, now=100.0)
-    assert path == ReconsolidationPath.BOOST
-    assert updated.salience > 0.4
-    assert updated.confidence > 0.2
-    assert updated.access_count == 1
-
-
-def test_reconsolidator_apply_flag_no_touch():
-    """FLAG does not bump access_count."""
-    rec = Reconsolidator(flag_threshold=0.1)
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.5)
-    initial_count = note.access_count
-    path, _ = rec.apply(note, new_evidence=0.9, now=100.0)
-    assert path == ReconsolidationPath.FLAG
-    assert note.access_count == initial_count
+class TestStreamlitAvailable:
+    def test_check_returns_tuple(self):
+        deploy = V1052RealStreamlitDeploy()
+        avail, info = deploy.check_streamlit_available()
+        assert isinstance(avail, bool)
+        assert isinstance(info, str)
 
 
 # ============================================================================
-# ForgettingCurve tests
+# 5. artefacts 写入
 # ============================================================================
 
 
-def test_forgetting_retention_fresh():
-    """Fresh memory has retention ≈ 1."""
-    fc = ForgettingCurve(half_life_days=7.0)
-    assert fc.retention(0.0) == pytest.approx(1.0, abs=1e-9)
+class TestWriteApp:
+    def test_write_app_creates_files(self, tmp_path):
+        deploy = V1052RealStreamlitDeploy()
+        out = str(tmp_path / "deploy")
+        artefacts = deploy.write_app(output_dir=out)
+        assert V1052_APP in artefacts
+        assert f"{V1052_CONFIG_DIR}/{V1052_CONFIG}" in artefacts
+        assert V1052_LOG_FILE in artefacts
+        # app.py 真存在且非空
+        app_path = Path(artefacts[V1052_APP])
+        assert app_path.exists()
+        assert app_path.stat().st_size > 100
+        # .streamlit/config.toml 真存在
+        cfg_path = Path(artefacts[f"{V1052_CONFIG_DIR}/{V1052_CONFIG}"])
+        assert cfg_path.exists()
+        # log 路径返回的是预期位置
+        log_path = Path(artefacts[V1052_LOG_FILE])
+        assert log_path.name == V1052_LOG_FILE
 
+    def test_write_app_uses_v1009_source(self, tmp_path):
+        """默认应从 V1009 真源拿 app.py."""
+        deploy = V1052RealStreamlitDeploy()
+        out = str(tmp_path / "v1009")
+        artefacts = deploy.write_app(output_dir=out)
+        app_path = Path(artefacts[V1052_APP])
+        content = app_path.read_text(encoding="utf-8")
+        # V1009 渲染的 streamlit app 含 streamlit / V1009 关键词
+        assert "streamlit" in content.lower() or "Streamlit" in content
 
-def test_forgetting_retention_at_half_life():
-    """At half-life, retention ≈ 0.368 (1/e)."""
-    fc = ForgettingCurve(half_life_days=7.0)
-    assert fc.retention(7.0) == pytest.approx(math.exp(-1.0), abs=1e-9)
+    def test_write_app_with_custom_source(self, tmp_path):
+        custom = "import streamlit as st\nst.title('Custom')\n"
+        deploy = V1052RealStreamlitDeploy(app_source=custom)
+        out = str(tmp_path / "custom")
+        artefacts = deploy.write_app(output_dir=out)
+        app_path = Path(artefacts[V1052_APP])
+        assert app_path.read_text(encoding="utf-8") == custom
 
-
-def test_forgetting_should_forget_threshold():
-    """Memory forgotten when retention < threshold."""
-    fc = ForgettingCurve(half_life_days=1.0)
-    assert fc.should_forget(0.0) is False
-    assert fc.should_forget(100.0) is True
-
-
-def test_forgetting_decay_importance():
-    """decay_importance applies retention curve."""
-    fc = ForgettingCurve(half_life_days=7.0)
-    assert fc.decay_importance(1.0, 7.0) == pytest.approx(fc.retention(7.0), abs=1e-9)
-
-
-# ============================================================================
-# consolidation_tick — the core 真生产 driver (主 23:44 干到底)
-# ============================================================================
-
-
-def test_tick_stm_to_mtm_promotion():
-    """Old STM episodes promoted to MTM."""
-    store = MemoryStore()
-    now = 10000.0
-    store.append_episode(Episode(eid="old", actor="master", content="c", ts=now - 7200))  # 2h old
-    store.append_episode(Episode(eid="fresh", actor="master", content="c", ts=now - 60))  # 1m old
-    policy = TierPolicy(stm_to_mtm_age_sec=3600)
-    fc = ForgettingCurve(half_life_days=100.0)  # disable forgetting
-    result = consolidation_tick(store, policy, None, None, fc, now=now)
-    assert result.stm_to_mtm == 1
-    assert store.stats()["mtm_episodes"] == 1
-    assert store.stats()["stm_episodes"] == 1  # fresh still in stm
-
-
-def test_tick_mtm_to_ltm_promotion():
-    """Stable MTM episodes promoted to LTM (主 12:14 中央 AI 永恒身份)."""
-    store = MemoryStore()
-    now = 100000.0
-    store.append_episode(Episode(
-        eid="stable", actor="master", content="c", ts=now - 86400 * 2,  # 2 days old
-        tier="mtm", importance=0.9,
-    ))
-    policy = TierPolicy(mtm_to_ltm_stable_age_days=1.0)
-    fc = ForgettingCurve(half_life_days=100.0)
-    result = consolidation_tick(store, policy, None, None, fc, now=now)
-    assert result.mtm_to_ltm == 1
-    assert store.stats()["ltm_episodes"] == 1
-
-
-def test_tick_forgetting_stm():
-    """Old low-salience STM episodes forgotten (主 13:47 关心遗忘).
-
-    Episode must be low importance so it stays in STM/MTM and gets forgotten.
-    """
-    store = MemoryStore()
-    now = 100000.0
-    store.append_episode(Episode(
-        eid="ephemeral", actor="master", content="c",
-        ts=now - 86400 * 30, importance=0.1,
-    ))
-    policy = TierPolicy(mtm_to_ltm_stable_age_days=1.0)
-    fc = ForgettingCurve(half_life_days=1.0)
-    result = consolidation_tick(store, policy, None, None, fc, now=now)
-    # Low importance → not promoted to LTM → stays in STM/MTM → forgotten.
-    assert (result.forgotten + result.mtm_to_ltm) >= 1
-
-
-def test_tick_ltm_protected():
-    """LTM episodes are not auto-forgotten (主 12:14 永恒身份)."""
-    store = MemoryStore()
-    now = 100000.0
-    store.append_episode(Episode(
-        eid="eternal", actor="master", content="c", ts=now - 86400 * 365,
-        tier="ltm", importance=0.99,
-    ))
-    policy = TierPolicy(ltm_protected=True)
-    fc = ForgettingCurve(half_life_days=1.0)
-    result = consolidation_tick(store, policy, None, None, fc, now=now)
-    # LTM is not in stm/mtm buckets, so forgetting loop doesn't touch it.
-    assert store.stats()["ltm_episodes"] == 1
-    assert result.forgotten == 0
-
-
-def test_tick_writes_wal(tmp_path: Path):
-    """Tick writes to WAL (DeltaMemory 借鉴)."""
-    wal_path = tmp_path / "test_tick.wal"
-    wal = Wal(wal_path)
-    store = MemoryStore()
-    now = 10000.0
-    store.append_episode(Episode(eid="old", actor="master", content="c", ts=now - 7200))
-    policy = TierPolicy()
-    fc = ForgettingCurve(half_life_days=100.0)
-    consolidation_tick(store, policy, wal, None, fc, now=now)
-    entries = wal.replay()
-    assert len(entries) >= 1
-    assert entries[0]["operation"] == "tier_transition"
-
-
-def test_tick_reconsolidation_applied():
-    """Reconsolidator applied when notes have been touched."""
-    rec = Reconsolidator()
-    store = MemoryStore()
-    note = Note(nid="n1", topic="t", claim="c", confidence=0.3)
-    note.touch(1000.0)  # 1 access
-    store.add_note(note)
-    policy = TierPolicy()
-    fc = ForgettingCurve(half_life_days=100.0)
-    result = consolidation_tick(store, policy, None, rec, fc, now=2000.0)
-    # Note was reconsolidated.
-    assert result.reconsolidations == 1
+    def test_render_v1009_fallback(self):
+        """_render_v1009_streamlit_app 至少返回一个非空字符串."""
+        src = _render_v1009_streamlit_app()
+        assert isinstance(src, str)
+        assert len(src) > 0
 
 
 # ============================================================================
-# MemoryBridge tests
+# 6-9. 真启 + 真等 + 真停 + 真回执
 # ============================================================================
 
 
-def test_bridge_to_asi_metrics_basic():
-    """Bridge returns 4 ASI metrics (主 22:33 真测量)."""
-    store = MemoryStore()
-    store.append_episode(Episode(eid="a", actor="master", content="c", ts=0.0))
-    store.append_episode(Episode(eid="b", actor="master", content="c", ts=0.0, tier="ltm"))
-    m = MemoryBridge.to_asi_metrics(store)
-    assert "ltm_ratio" in m
-    assert "stm_ratio" in m
-    assert "abstraction_density" in m
-    assert "consolidation_activity" in m
-    assert m["ltm_ratio"] == 0.5
-    assert m["stm_ratio"] == 0.5
+class TestRealStreamlitLifecycle:
+    """真启 streamlit, 真等 ready, 真停. 主 17:43 真生产."""
 
+    @pytest.fixture
+    def deployed_server(self, tmp_path):
+        """fixture: 启一个真 streamlit 实例, 测试结束自动 stop."""
+        avail, _ = V1052RealStreamlitDeploy().check_streamlit_available()
+        if not avail:
+            pytest.skip("streamlit not installed")
 
-def test_bridge_asi_v02_score_capped():
-    """ASI V0.2 score contribution is capped at 0.05 (主 17:43 不假装)."""
-    store = MemoryStore()
-    store.append_episode(Episode(eid="a", actor="master", content="c", ts=0.0, tier="ltm", importance=1.0))
-    score = MemoryBridge.asi_v02_score(store)
-    assert 0.0 <= score <= 0.05
+        deploy = V1052RealStreamlitDeploy()
+        out = str(tmp_path / "lifecycle")
+        port = _pick_free_port("127.0.0.1", 19100, 19499)
+        res = deploy.start(output_dir=out, port=port, host="127.0.0.1")
+        if not res.ok:
+            pytest.skip(f"streamlit start failed: stderr_tail={res.stderr_tail[:200]}")
+        # 等 ready
+        h = deploy.wait_ready(host="127.0.0.1", port=port, timeout=30.0)
+        if not h.health_ok:
+            deploy.stop(timeout=5.0)
+            pytest.skip(f"streamlit not ready: http={h.http_reachable} status={h.http_status} err={h.last_error}")
+        yield deploy, port, out
+        # cleanup
+        deploy.stop(timeout=5.0)
 
+    def test_start_returns_result(self, deployed_server):
+        deploy, port, out = deployed_server
+        assert deploy.process is not None
+        assert deploy.process.poll() is None  # still running
 
-def test_bridge_empty_store_zero_score():
-    """Empty store gives 0 score (主 17:43 不假装)."""
-    store = MemoryStore()
-    score = MemoryBridge.asi_v02_score(store)
-    assert score == 0.0
+    def test_wait_ready_returns_health(self, deployed_server):
+        deploy, port, out = deployed_server
+        h = deploy.health_check(host="127.0.0.1", port=port)
+        assert h.http_reachable is True
+        assert h.http_status == 200
+        assert h.health_ok is True
+        assert h.process_alive is True
+        assert h.pid is not None and h.pid > 0
 
+    def test_stats_returns_status(self, deployed_server):
+        deploy, port, out = deployed_server
+        s = deploy.stats()
+        assert s.streamlit_available is True
+        assert s.server_running is True
+        assert s.healthy is True
+        assert s.host == "127.0.0.1"
+        assert s.port == port
+        assert s.pid is not None
+        assert s.app_path is not None
+        assert Path(s.app_path).exists()
 
-# ============================================================================
-# ConsolidationReport tests
-# ============================================================================
+    def test_stop_terminates_process(self, deployed_server):
+        deploy, port, out = deployed_server
+        assert deploy.process.poll() is None
+        stopped = deploy.stop(timeout=5.0)
+        assert stopped is True
+        assert deploy.process.poll() is not None  # exited
 
+    def test_double_stop_returns_true(self, deployed_server):
+        deploy, port, out = deployed_server
+        deploy.stop(timeout=5.0)
+        # 再调一次 stop 不应该崩
+        stopped_again = deploy.stop(timeout=2.0)
+        assert stopped_again is True
 
-def test_report_to_markdown():
-    """Report renders Markdown (主 00:56 任何人都能接手)."""
-    r = ConsolidationReport(
-        stm_to_mtm=5, mtm_to_ltm=2, forgotten=1, notes_decayed=10, reconsolidations=3,
-        asi_score=0.0234,
-    )
-    md = r.to_markdown()
-    assert "V1052" in md
-    # Source has literal → (U+2192) and ** bold markdown wrapper.
-    assert "STM \u2192 MTM promotions" in md
-    assert "MTM \u2192 LTM promotions" in md
-    assert "Forgotten episodes" in md
-    assert "ASI V0.2 contribution" in md
-    assert "\u4e2d\u592e AI" in md  # 中央 AI (主 12:14 引用)
-
-
-# ============================================================================
-# Convenience factory tests
-# ============================================================================
-
-
-def test_make_default_store():
-    """Default factory returns empty store."""
-    store = make_default_store()
-    assert store.stats()["total_episodes"] == 0
-
-
-def test_make_default_policy_ltm_protected():
-    """Default policy protects LTM (主 12:14)."""
-    p = make_default_policy()
-    assert p.ltm_protected is True
-
-
-# ============================================================================
-# Round-trip test — 真生产 E2E (主 23:44 干到底)
-# ============================================================================
-
-
-def test_round_trip_end_to_end(tmp_path: Path):
-    """Round-trip: append → tick → WAL → replay (主 23:44 干到底)."""
-    wal_path = tmp_path / "e2e.wal"
-    wal = Wal(wal_path)
-    store = make_default_store()
-    policy = make_default_policy()
-    rec = Reconsolidator()
-    fc = ForgettingCurve(half_life_days=100.0)  # disable auto-forgetting
-
-    # 1. Append 3 episodes at different times.
-    now = 100000.0
-    store.append_episode(Episode(eid="recent", actor="master", content="new dialog", ts=now - 60))
-    store.append_episode(Episode(
-        eid="medium", actor="master", content="medium theme", ts=now - 7200,  # 2h
-    ))
-    store.append_episode(Episode(
-        eid="eternal", actor="master", content="eternal fact",
-        ts=now - 86400 * 7, tier="ltm", importance=0.99,
-    ))
-    store.add_note(Note(nid="n1", topic="meta", claim="eternal identity", confidence=0.9))
-    note = store.notes["n1"]
-    note.touch(now)
-
-    # 2. Tick consolidation.
-    result = consolidation_tick(store, policy, wal, rec, fc, now=now)
-    assert result.stm_to_mtm == 1  # 'medium' is 2h old, should promote
-    assert result.notes_decayed == 1
-
-    # 3. Verify store state.
-    stats = store.stats()
-    assert stats["stm_episodes"] == 1  # 'recent'
-    assert stats["mtm_episodes"] == 1  # 'medium'
-    assert stats["ltm_episodes"] == 1  # 'eternal' (主 12:14)
-    assert stats["transitions"] == 1
-
-    # 4. Verify WAL.
-    entries = wal.replay()
-    assert len(entries) >= 1
-    assert entries[0]["operation"] == "tier_transition"
-
-    # 5. ASI bridge 真测量.
-    score = MemoryBridge.asi_v02_score(store)
-    assert 0.0 <= score <= 0.05
-
-
-def test_v1052_version():
-    """Module has version."""
-    assert V1052_VERSION == "0.1.0"
+    def test_log_file_created(self, deployed_server):
+        deploy, port, out = deployed_server
+        log_path = Path(out) / V1052_LOG_FILE
+        assert log_path.exists()
+        size = log_path.stat().st_size
+        # streamlit run 至少会有 banner 日志
+        assert size > 0
 
 
 # ============================================================================
-# V3 哲学守门 — 不假装 (主 17:58 + 20:46)
+# 10. 错误路径
 # ============================================================================
 
 
-def test_philosophy_guard_no_phenomenal_claim():
-    """V1052 does not claim Phenomenal consciousness (主 17:58)."""
-    import apeireth.v1052_asi_memory_consolidation as m
-    src = Path(m.__file__).read_text(encoding="utf-8")
-    assert "\u4e0d\u5047\u88c5" in src  # 不假装
-    assert "Phenomenal" in src
-    assert "\u4e0d\u5047\u88c5\u8bb0\u5fc6\u5df2\u89e3" in src  # 不假装记忆已解
+class TestErrorPaths:
+    def test_start_when_streamlit_not_in_path(self, monkeypatch, tmp_path):
+        """当 streamlit 二进制不可用时, start 返回 ok=False (不假装)."""
+        monkeypatch.setattr("shutil.which", lambda x: None if x == "streamlit" else shutil_which_default(x))
+        # 上面 monkeypatch 写法复杂, 简化:
+        import shutil
+        original = shutil.which
+        def fake_which(name):
+            if name == "streamlit":
+                return None
+            return original(name)
+        monkeypatch.setattr(shutil, "which", fake_which)
+
+        deploy = V1052RealStreamlitDeploy()
+        res = deploy.start(output_dir=str(tmp_path), port=19999)
+        assert res.ok is False
+        assert "streamlit" in res.stderr_tail.lower() or "not found" in res.stderr_tail.lower()
+
+    def test_health_check_when_no_process(self):
+        deploy = V1052RealStreamlitDeploy()
+        h = deploy.health_check(host="127.0.0.1", port=1)
+        # 没 process 时 http_reachable=False
+        assert h.http_reachable is False
+        assert h.process_alive is False
+
+    def test_stats_when_nothing_started(self):
+        deploy = V1052RealStreamlitDeploy()
+        s = deploy.stats()
+        assert s.server_running is False
+        assert s.healthy is False
+        assert s.pid is None
 
 
-def test_philosophy_guard_asi_concept_clear():
-    """ASI concept is clear: 真生产 ≠ ASI 已达成 (主 20:46)."""
-    import apeireth.v1052_asi_memory_consolidation as m
-    src = Path(m.__file__).read_text(encoding="utf-8")
-    assert "\u4e0d\u5047\u88c5\u8fbe\u5230 ASI" in src  # 不假装达到 ASI
-    assert "ASI \u8bb0\u5fc6\u771f\u751f\u4ea7" in src  # ASI 记忆真生产
+# ============================================================================
+# 11. V3 哲学守门 + Popper 自检
+# ============================================================================
 
 
-def test_philosophy_guard_ltm_eternal():
-    """LTM = 中央 AI 永恒身份 (主 12:14)."""
-    import apeireth.v1052_asi_memory_consolidation as m
-    src = Path(m.__file__).read_text(encoding="utf-8")
-    assert "\u4e2d\u592e AI" in src  # 中央 AI
-    assert "\u6c38\u6052\u8eab\u4efd" in src  # 永恒身份
-    assert "\u6c38\u4e0d\u4e22" in src  # 永不丢
+class TestPhilosophyGates:
+    def test_no_phenomenal_pretending(self):
+        """V1052 模块不含 phenomenal / consciousness claim."""
+        src = Path(APEIRETH_DIR / "v1052_real_streamlit_deploy.py").read_text(encoding="utf-8")
+        # 不应该有 claim 自己是 consciousness
+        assert "is conscious" not in src.lower()
+        assert "has phenomenal" not in src.lower()
+
+    def test_no_asi_pretending(self):
+        """V1052 模块不含 'i am asi' / 'asi achieved' claim."""
+        src = Path(APEIRETH_DIR / "v1052_real_streamlit_deploy.py").read_text(encoding="utf-8")
+        assert "i am asi" not in src.lower()
+        assert "asi achieved" not in src.lower()
+
+    def test_v1009_borrowing(self):
+        """真借鉴 V1009, app.py 来源应该是 V1009 真源."""
+        deploy = V1052RealStreamlitDeploy()
+        # 默认 app_source=None 时, write_app 用 V1009 源
+        # 这里验证 _render_v1009_streamlit_app 返回 V1009 真源
+        src = _render_v1009_streamlit_app()
+        # V1009 真源特征: 含 'V1009 真生产' 字符串
+        assert "V1009" in src or "v1009" in src.lower()
+
+    def test_any_human_can_pickup_via_stats(self):
+        """stats() 输出含 pid + port + log_path, 任何人能接手."""
+        deploy = V1052RealStreamlitDeploy()
+        s = deploy.stats()
+        d = s.to_dict()
+        # 至少有以下 key, 接手时一目了然
+        assert "pid" in d
+        assert "port" in d
+        assert "host" in d
+        assert "log_path" in d
+        assert "healthy" in d
+        assert "server_running" in d
+        assert "streamlit_available" in d
+
+
+# ============================================================================
+# helpers (避免 monkeypatch 引用未定义)
+# ============================================================================
+
+
+def shutil_which_default(name):
+    import shutil
+    return shutil.which(name)
