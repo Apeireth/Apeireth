@@ -72,6 +72,9 @@ V1389_DEFAULT_TARGET = "deploy"
 # V1389 真生产 默认 baseline (主 17:43)
 V1389_DEFAULT_BASELINE = ".v1387_baseline.json"
 
+# V1389 真生产: apeireth package 根 (= promethean/) so subprocess 可以 `-m apeireth.v1388_...`
+V1389_PKG_ROOT = str(Path(__file__).resolve().parent.parent)
+
 
 # V1389 真生产 bash probe (主 17:43 实事求是)
 # Windows AppX bash.exe (WSL launcher) hangs forever when invoked non-interactively;
@@ -513,6 +516,7 @@ def run_gate(
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env={**os.environ, "PYTHONPATH": V1389_PKG_ROOT},
             )
             gr.exit_code = proc.returncode
             gr.stdout = proc.stdout or ""
@@ -553,6 +557,7 @@ def run_gate(
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                env={**os.environ, "PYTHONPATH": V1389_PKG_ROOT},
             )
             gr.exit_code = py_proc.returncode
             gr.stdout = (gr.stdout + "\n[fallback python: " +

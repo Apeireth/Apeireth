@@ -56,22 +56,44 @@ try:
     from apeireth.v1384_real_dockerfile_lint import V1384DockerfileLint  # noqa: E402
     _V1384_AVAILABLE = True
 except Exception:  # pragma: no cover
-    V1384DockerfileLint = None  # type: ignore[assignment,misc]
-    _V1384_AVAILABLE = False
+    try:
+        import sys as _sys
+        _v1387_dir = Path(__file__).resolve().parent
+        if str(_v1387_dir) not in _sys.path:
+            _sys.path.insert(0, str(_v1387_dir))
+        from v1384_real_dockerfile_lint import V1384DockerfileLint  # type: ignore[no-redef]
+        _V1384_AVAILABLE = True
+    except Exception:
+        V1384DockerfileLint = None  # type: ignore[assignment,misc]
+        _V1384_AVAILABLE = False
 
 try:
     from apeireth.v1385_real_compose_lint import V1385ComposeLint  # noqa: E402
     _V1385_AVAILABLE = True
 except Exception:  # pragma: no cover
-    V1385ComposeLint = None  # type: ignore[assignment,misc]
-    _V1385_AVAILABLE = False
+    try:
+        _v1387_dir = Path(__file__).resolve().parent
+        if str(_v1387_dir) not in _sys.path:
+            _sys.path.insert(0, str(_v1387_dir))
+        from v1385_real_compose_lint import V1385ComposeLint  # type: ignore[no-redef]
+        _V1385_AVAILABLE = True
+    except Exception:
+        V1385ComposeLint = None  # type: ignore[assignment,misc]
+        _V1385_AVAILABLE = False
 
 try:
     from apeireth.v1386_real_k8s_lint import V1386K8sLint  # noqa: E402
     _V1386_AVAILABLE = True
 except Exception:  # pragma: no cover
-    V1386K8sLint = None  # type: ignore[assignment,misc]
-    _V1386_AVAILABLE = False
+    try:
+        _v1387_dir = Path(__file__).resolve().parent
+        if str(_v1387_dir) not in _sys.path:
+            _sys.path.insert(0, str(_v1387_dir))
+        from v1386_real_k8s_lint import V1386K8sLint  # type: ignore[no-redef]
+        _V1386_AVAILABLE = True
+    except Exception:
+        V1386K8sLint = None  # type: ignore[assignment,misc]
+        _V1386_AVAILABLE = False
 
 
 V1387_VERSION = "0.1.0"
