@@ -1,0 +1,65 @@
+V1335 run log
+=============
+
+Trigger: 2026-08-08 22:01 +08:00 (Saturday)
+Cron:    apeireth-autonomy-v3 (1fba1cc3-1a6d-4e3a-abb8-fccef1c94cdf)
+Mode:    isolated M3 (deepseek-v4-flash fallback after MiniMax-M3 idle timeout)
+Author:  楚零 (Chu Ling)
+
+State at trigger:
+- V1334 commit 68dc3461 (21:50) DONE — 6th VCP plugin chain 收官
+- V1335 commit c5f9b690 (post-V1334) — module written, tests MISSING
+- ASI pole-star V0.1=0.7905 / V1256=0.9105 / V1049=DONE / V1335 不动 LOCKED
+- Chain: V1313 → V1326 → V1327 → V1328 → V1330 → V1332 → V1333 → V1334 → V1335
+
+Decision: write test_v1335 + run chain regression + log + commit
+
+Steps:
+1. Wrote tests/test_v1335_vcp_cross_plugin_invariant_synthesis.py (15 sections, 104 tests)
+2. First run: 102/103 PASS — 1 failure (test_8_invariant_classes_in_docstring expected literal IDs)
+3. Fix: docstring check → labels (SecurityInvariants etc.); add new section for IDs in INVARIANT_CLASSES
+4. Second run: 104/104 PASS in 0.61s
+5. Chain regression: V1326+V1327+V1328+V1330+V1332+V1333+V1334+V1335 = 703/703 PASS in 4.11s
+6. V1335_REPORT.md written
+7. v1335_run_log.txt written (this file)
+8. Commit (pending)
+
+Files written:
+- tests/test_v1335_vcp_cross_plugin_invariant_synthesis.py (~27 KB, 104 canonical tests)
+- V1335_REPORT.md (~9 KB, full audit + V3 守门)
+- apeireth/v1335_run_log.txt (this file)
+
+Total: 3 files, ~36 KB
+
+Verification totals:
+- Substrate components extracted: 153
+- V13xx modules verified: 7 (V1327-V1334)
+- Invariant classes: 8 (5 safety-critical: IC1/IC2/IC3/IC4/IC7)
+- Popper self-tests: 16/16 PASS
+- Pytest: 104/104 PASS in 0.61s
+- Chain regression: 703/703 PASS in 4.11s
+- V3 守门: 7 forbidden phrases checked
+- ASI pole-star: LOCKED (4/4 anchors unchanged)
+
+Coverage score: 0.4107 (8 invariant classes × 7 plugins = 56 max);
+
+Per-class breakdown:
+[SC] IC1_security (SecurityInvariants): 3 substrates, 2 plugins
+[SC] IC2_file_handling (FileHandlingInvariants): 8 substrates, 3 plugins
+[SC] IC3_schema (SchemaInvariants): 7 substrates, 5 plugins
+[SC] IC4_ipc (IPCProtocolInvariants): 1 substrates, 1 plugins
+[  ] IC5_error_handling (ErrorHandlingInvariants): 4 substrates, 2 plugins
+[  ] IC6_configuration (ConfigurationInvariants): 1 substrates, 1 plugins
+[SC] IC7_resource_bounds (ResourceBoundsInvariants): 7 substrates, 2 plugins
+[  ] IC8_lifecycle (LifecycleInvariants): 11 substrates, 7 plugins
+
+Key finding: IC8_lifecycle is the most cross-cutting (7/7 plugins), while IC6_configuration
+has the narrowest surface (1 plugin). This means future plugin authors MUST respect lifecycle
+patterns (self-test / cleanup / graceful-degrade) but have flexibility on configuration.
+
+Next natural pivot (V1336+):
+- V1336 = VCP Substrate-by-Example Cookbook (8 invariant classes × 1 minimal example each)
+- V1336 = Invariant Diff Tool (compare 2 VCP plugin generations for regression)
+- V1336 = Cross-Plugin Safety Audit (run invariant linter against new plugin source)
+- V1336 = V10xx-V1335 cumulative lineage report (end-to-end真生产evidence)
+- V1336 = VCP plugin authoring LINT wrapper (github-style PR check)
