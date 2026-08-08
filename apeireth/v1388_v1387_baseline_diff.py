@@ -69,9 +69,22 @@ try:
     )
     _V1387_AVAILABLE = True
 except Exception:  # pragma: no cover
-    V1387DeployStackRunner = None  # type: ignore[assignment,misc]
-    V1387StackReport = None  # type: ignore[assignment,misc]
-    _V1387_AVAILABLE = False
+    # Fallback: 测试有时只把 apeireth/ 加进 sys.path (没有 promethean/),
+    # 这种情况下 `apeireth.v1387_...` 包式导入失败. 直接同目录导入也能用.
+    try:
+        import sys as _sys
+        _v1388_dir = Path(__file__).resolve().parent
+        if str(_v1388_dir) not in _sys.path:
+            _sys.path.insert(0, str(_v1388_dir))
+        from v1387_deploy_stack_runner import (  # type: ignore[no-redef]
+            V1387DeployStackRunner,
+            StackReport as V1387StackReport,
+        )
+        _V1387_AVAILABLE = True
+    except Exception:  # pragma: no cover
+        V1387DeployStackRunner = None  # type: ignore[assignment,misc]
+        V1387StackReport = None  # type: ignore[assignment,misc]
+        _V1387_AVAILABLE = False
 
 
 V1388_VERSION = "0.1.0"
