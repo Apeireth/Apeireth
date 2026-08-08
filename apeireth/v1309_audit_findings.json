@@ -1,0 +1,1840 @@
+{
+  "workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean",
+  "crates_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\Apeireth-rust\\crates",
+  "total_crates_scanned": 91,
+  "class_counts": {
+    "P0": 0,
+    "P1": 1,
+    "P2": 6,
+    "P3": 84
+  },
+  "p0_critical_no_tests": [],
+  "p1_no_tests_non_critical": [
+    "apeireth-tauri-stub"
+  ],
+  "p2_unit_only_no_integration": [
+    "apeireth-acp",
+    "apeireth-config",
+    "apeireth-cron",
+    "apeireth-eval",
+    "apeireth-skills",
+    "apeireth-test"
+  ],
+  "p3_well_tested": [
+    "apeireth-action",
+    "apeireth-agent",
+    "apeireth-api",
+    "apeireth-asi",
+    "apeireth-bench",
+    "apeireth-blueprint-impl",
+    "apeireth-bus",
+    "apeireth-cache",
+    "apeireth-central",
+    "apeireth-cli",
+    "apeireth-cognition",
+    "apeireth-consciousness",
+    "apeireth-constraint",
+    "apeireth-core",
+    "apeireth-council",
+    "apeireth-credentials",
+    "apeireth-evolution",
+    "apeireth-extension",
+    "apeireth-formal",
+    "apeireth-graph",
+    "apeireth-http-client",
+    "apeireth-i18n",
+    "apeireth-image-prompt",
+    "apeireth-integration-e2e",
+    "apeireth-integration-r20-stage4",
+    "apeireth-keyring",
+    "apeireth-lark",
+    "apeireth-life-force",
+    "apeireth-livekit",
+    "apeireth-machine-id",
+    "apeireth-mcp",
+    "apeireth-mcp-relay-image",
+    "apeireth-mcp-ssh",
+    "apeireth-mcp-winrm",
+    "apeireth-memory",
+    "apeireth-metrics",
+    "apeireth-motivation",
+    "apeireth-naming-v05",
+    "apeireth-oauth",
+    "apeireth-observability",
+    "apeireth-onion",
+    "apeireth-perception",
+    "apeireth-pipeline",
+    "apeireth-pipeline-g5",
+    "apeireth-plugin",
+    "apeireth-protocol",
+    "apeireth-provider-claude-code",
+    "apeireth-provider-codex",
+    "apeireth-provider-copilot",
+    "apeireth-provider-gemini-cli",
+    "apeireth-provider-opencode",
+    "apeireth-pybridge",
+    "apeireth-rate-limiter",
+    "apeireth-relation",
+    "apeireth-repo-analyzer",
+    "apeireth-repo-scan",
+    "apeireth-rollback",
+    "apeireth-sandbox",
+    "apeireth-sdk",
+    "apeireth-sdk-lark",
+    "apeireth-sdk-livekit",
+    "apeireth-sdk-sandbox",
+    "apeireth-sdk-voice",
+    "apeireth-sovereignty",
+    "apeireth-state",
+    "apeireth-supervisor",
+    "apeireth-task",
+    "apeireth-team-lead",
+    "apeireth-tool-approval",
+    "apeireth-tool-registry",
+    "apeireth-tool-runtime",
+    "apeireth-tools",
+    "apeireth-tracing",
+    "apeireth-tree-sitter",
+    "apeireth-tui",
+    "apeireth-tui-e2e",
+    "apeireth-update",
+    "apeireth-upgrade",
+    "apeireth-value",
+    "apeireth-vector",
+    "apeireth-verify",
+    "apeireth-voice",
+    "apeireth-web",
+    "apeireth-workflow"
+  ],
+  "audit_rows": [
+    {
+      "crate": "apeireth-acp",
+      "class": "P2",
+      "unit_tests": 12,
+      "test_attr_breakdown": {
+        "test": 12,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 172
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-action",
+      "class": "P3",
+      "unit_tests": 19,
+      "test_attr_breakdown": {
+        "test": 19,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 834
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-agent",
+      "class": "P3",
+      "unit_tests": 52,
+      "test_attr_breakdown": {
+        "test": 52,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 3,
+        "total_loc": 1362
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-api",
+      "class": "P3",
+      "unit_tests": 209,
+      "test_attr_breakdown": {
+        "test": 143,
+        "tokio_test": 66,
+        "async_test": 0,
+        "files_scanned": 41,
+        "total_loc": 15084
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 9,
+      "has_examples": true,
+      "example_files": 12,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-asi",
+      "class": "P3",
+      "unit_tests": 75,
+      "test_attr_breakdown": {
+        "test": 74,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 9,
+        "total_loc": 2573
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 3,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-bench",
+      "class": "P3",
+      "unit_tests": 13,
+      "test_attr_breakdown": {
+        "test": 13,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 3,
+        "total_loc": 621
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": true,
+      "bench_files": 2,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "class": "P3",
+      "unit_tests": 129,
+      "test_attr_breakdown": {
+        "test": 129,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 3458
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-bus",
+      "class": "P3",
+      "unit_tests": 21,
+      "test_attr_breakdown": {
+        "test": 12,
+        "tokio_test": 9,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 1897
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-cache",
+      "class": "P3",
+      "unit_tests": 122,
+      "test_attr_breakdown": {
+        "test": 101,
+        "tokio_test": 21,
+        "async_test": 0,
+        "files_scanned": 20,
+        "total_loc": 4398
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-central",
+      "class": "P3",
+      "unit_tests": 33,
+      "test_attr_breakdown": {
+        "test": 33,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 1112
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-cli",
+      "class": "P3",
+      "unit_tests": 19,
+      "test_attr_breakdown": {
+        "test": 19,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 963
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-cognition",
+      "class": "P3",
+      "unit_tests": 29,
+      "test_attr_breakdown": {
+        "test": 29,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 752
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-config",
+      "class": "P2",
+      "unit_tests": 10,
+      "test_attr_breakdown": {
+        "test": 10,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 144
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-consciousness",
+      "class": "P3",
+      "unit_tests": 19,
+      "test_attr_breakdown": {
+        "test": 19,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 788
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-constraint",
+      "class": "P3",
+      "unit_tests": 56,
+      "test_attr_breakdown": {
+        "test": 56,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 2058
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 3,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-core",
+      "class": "P3",
+      "unit_tests": 32,
+      "test_attr_breakdown": {
+        "test": 32,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 2805
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 7,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-council",
+      "class": "P3",
+      "unit_tests": 37,
+      "test_attr_breakdown": {
+        "test": 37,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 18,
+        "total_loc": 2844
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-credentials",
+      "class": "P3",
+      "unit_tests": 88,
+      "test_attr_breakdown": {
+        "test": 69,
+        "tokio_test": 19,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 3203
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-cron",
+      "class": "P2",
+      "unit_tests": 12,
+      "test_attr_breakdown": {
+        "test": 12,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 169
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-eval",
+      "class": "P2",
+      "unit_tests": 14,
+      "test_attr_breakdown": {
+        "test": 14,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 136
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-evolution",
+      "class": "P3",
+      "unit_tests": 98,
+      "test_attr_breakdown": {
+        "test": 98,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 2917
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-extension",
+      "class": "P3",
+      "unit_tests": 58,
+      "test_attr_breakdown": {
+        "test": 31,
+        "tokio_test": 27,
+        "async_test": 0,
+        "files_scanned": 15,
+        "total_loc": 2260
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 3,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-formal",
+      "class": "P3",
+      "unit_tests": 23,
+      "test_attr_breakdown": {
+        "test": 23,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 12,
+        "total_loc": 277
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-graph",
+      "class": "P3",
+      "unit_tests": 3,
+      "test_attr_breakdown": {
+        "test": 0,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 565
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-http-client",
+      "class": "P3",
+      "unit_tests": 29,
+      "test_attr_breakdown": {
+        "test": 29,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 5,
+        "total_loc": 930
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-i18n",
+      "class": "P3",
+      "unit_tests": 13,
+      "test_attr_breakdown": {
+        "test": 13,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 626
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-image-prompt",
+      "class": "P3",
+      "unit_tests": 9,
+      "test_attr_breakdown": {
+        "test": 7,
+        "tokio_test": 2,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 722
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-integration-e2e",
+      "class": "P3",
+      "unit_tests": 102,
+      "test_attr_breakdown": {
+        "test": 75,
+        "tokio_test": 27,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 3134
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-integration-r20-stage4",
+      "class": "P3",
+      "unit_tests": 0,
+      "test_attr_breakdown": {
+        "test": 0,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 90
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 7,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-keyring",
+      "class": "P3",
+      "unit_tests": 18,
+      "test_attr_breakdown": {
+        "test": 12,
+        "tokio_test": 6,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 2410
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-lark",
+      "class": "P3",
+      "unit_tests": 10,
+      "test_attr_breakdown": {
+        "test": 9,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 1245
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-life-force",
+      "class": "P3",
+      "unit_tests": 39,
+      "test_attr_breakdown": {
+        "test": 39,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 3,
+        "total_loc": 1089
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-livekit",
+      "class": "P3",
+      "unit_tests": 16,
+      "test_attr_breakdown": {
+        "test": 16,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 1521
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-machine-id",
+      "class": "P3",
+      "unit_tests": 31,
+      "test_attr_breakdown": {
+        "test": 28,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 2378
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-mcp",
+      "class": "P3",
+      "unit_tests": 39,
+      "test_attr_breakdown": {
+        "test": 24,
+        "tokio_test": 15,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 2198
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-mcp-relay-image",
+      "class": "P3",
+      "unit_tests": 5,
+      "test_attr_breakdown": {
+        "test": 5,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 622
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-mcp-ssh",
+      "class": "P3",
+      "unit_tests": 7,
+      "test_attr_breakdown": {
+        "test": 2,
+        "tokio_test": 5,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 245
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-mcp-winrm",
+      "class": "P3",
+      "unit_tests": 6,
+      "test_attr_breakdown": {
+        "test": 5,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 721
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-memory",
+      "class": "P3",
+      "unit_tests": 52,
+      "test_attr_breakdown": {
+        "test": 52,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 10,
+        "total_loc": 3278
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-metrics",
+      "class": "P3",
+      "unit_tests": 166,
+      "test_attr_breakdown": {
+        "test": 160,
+        "tokio_test": 6,
+        "async_test": 0,
+        "files_scanned": 12,
+        "total_loc": 4162
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-motivation",
+      "class": "P3",
+      "unit_tests": 10,
+      "test_attr_breakdown": {
+        "test": 10,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 855
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-naming-v05",
+      "class": "P3",
+      "unit_tests": 96,
+      "test_attr_breakdown": {
+        "test": 96,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2731
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-oauth",
+      "class": "P3",
+      "unit_tests": 135,
+      "test_attr_breakdown": {
+        "test": 135,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2822
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-observability",
+      "class": "P3",
+      "unit_tests": 62,
+      "test_attr_breakdown": {
+        "test": 54,
+        "tokio_test": 8,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 2581
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": true,
+      "bench_files": 2,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-onion",
+      "class": "P3",
+      "unit_tests": 18,
+      "test_attr_breakdown": {
+        "test": 18,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 776
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-perception",
+      "class": "P3",
+      "unit_tests": 29,
+      "test_attr_breakdown": {
+        "test": 29,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 880
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-pipeline",
+      "class": "P3",
+      "unit_tests": 69,
+      "test_attr_breakdown": {
+        "test": 60,
+        "tokio_test": 9,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 1793
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-pipeline-g5",
+      "class": "P3",
+      "unit_tests": 1,
+      "test_attr_breakdown": {
+        "test": 1,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 10,
+        "total_loc": 1799
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-plugin",
+      "class": "P3",
+      "unit_tests": 7,
+      "test_attr_breakdown": {
+        "test": 4,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 742
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-protocol",
+      "class": "P3",
+      "unit_tests": 83,
+      "test_attr_breakdown": {
+        "test": 83,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 11,
+        "total_loc": 3910
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-provider-claude-code",
+      "class": "P3",
+      "unit_tests": 20,
+      "test_attr_breakdown": {
+        "test": 19,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 1024
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-provider-codex",
+      "class": "P3",
+      "unit_tests": 82,
+      "test_attr_breakdown": {
+        "test": 80,
+        "tokio_test": 2,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2404
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-provider-copilot",
+      "class": "P3",
+      "unit_tests": 86,
+      "test_attr_breakdown": {
+        "test": 83,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2827
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-provider-gemini-cli",
+      "class": "P3",
+      "unit_tests": 84,
+      "test_attr_breakdown": {
+        "test": 82,
+        "tokio_test": 2,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 2550
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-provider-opencode",
+      "class": "P3",
+      "unit_tests": 93,
+      "test_attr_breakdown": {
+        "test": 89,
+        "tokio_test": 4,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2884
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-pybridge",
+      "class": "P3",
+      "unit_tests": 40,
+      "test_attr_breakdown": {
+        "test": 40,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 5,
+        "total_loc": 1030
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-rate-limiter",
+      "class": "P3",
+      "unit_tests": 49,
+      "test_attr_breakdown": {
+        "test": 35,
+        "tokio_test": 14,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2304
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-relation",
+      "class": "P3",
+      "unit_tests": 8,
+      "test_attr_breakdown": {
+        "test": 8,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 396
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-repo-analyzer",
+      "class": "P3",
+      "unit_tests": 8,
+      "test_attr_breakdown": {
+        "test": 8,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 785
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-repo-scan",
+      "class": "P3",
+      "unit_tests": 0,
+      "test_attr_breakdown": {
+        "test": 0,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 554
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-rollback",
+      "class": "P3",
+      "unit_tests": 10,
+      "test_attr_breakdown": {
+        "test": 10,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 934
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sandbox",
+      "class": "P3",
+      "unit_tests": 20,
+      "test_attr_breakdown": {
+        "test": 19,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 2035
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sdk",
+      "class": "P3",
+      "unit_tests": 31,
+      "test_attr_breakdown": {
+        "test": 28,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 1988
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sdk-lark",
+      "class": "P3",
+      "unit_tests": 121,
+      "test_attr_breakdown": {
+        "test": 120,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 9,
+        "total_loc": 3798
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sdk-livekit",
+      "class": "P3",
+      "unit_tests": 101,
+      "test_attr_breakdown": {
+        "test": 98,
+        "tokio_test": 3,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 2862
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sdk-sandbox",
+      "class": "P3",
+      "unit_tests": 35,
+      "test_attr_breakdown": {
+        "test": 34,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 1848
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-sdk-voice",
+      "class": "P3",
+      "unit_tests": 121,
+      "test_attr_breakdown": {
+        "test": 119,
+        "tokio_test": 2,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 3254
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-skills",
+      "class": "P2",
+      "unit_tests": 11,
+      "test_attr_breakdown": {
+        "test": 11,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 178
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-sovereignty",
+      "class": "P3",
+      "unit_tests": 155,
+      "test_attr_breakdown": {
+        "test": 148,
+        "tokio_test": 7,
+        "async_test": 0,
+        "files_scanned": 26,
+        "total_loc": 8934
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 8,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-state",
+      "class": "P3",
+      "unit_tests": 69,
+      "test_attr_breakdown": {
+        "test": 69,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 1906
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-supervisor",
+      "class": "P3",
+      "unit_tests": 14,
+      "test_attr_breakdown": {
+        "test": 13,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 641
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-task",
+      "class": "P3",
+      "unit_tests": 17,
+      "test_attr_breakdown": {
+        "test": 17,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 5,
+        "total_loc": 1207
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tauri-stub",
+      "class": "P1",
+      "unit_tests": 0,
+      "test_attr_breakdown": {
+        "test": 0,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 677
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-team-lead",
+      "class": "P3",
+      "unit_tests": 5,
+      "test_attr_breakdown": {
+        "test": 1,
+        "tokio_test": 4,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 624
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-test",
+      "class": "P2",
+      "unit_tests": 13,
+      "test_attr_breakdown": {
+        "test": 13,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 170
+      },
+      "has_integration_tests": false,
+      "integration_test_files": 0,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tool-approval",
+      "class": "P3",
+      "unit_tests": 57,
+      "test_attr_breakdown": {
+        "test": 51,
+        "tokio_test": 6,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 1781
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tool-registry",
+      "class": "P3",
+      "unit_tests": 61,
+      "test_attr_breakdown": {
+        "test": 52,
+        "tokio_test": 9,
+        "async_test": 0,
+        "files_scanned": 5,
+        "total_loc": 1837
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tool-runtime",
+      "class": "P3",
+      "unit_tests": 59,
+      "test_attr_breakdown": {
+        "test": 42,
+        "tokio_test": 17,
+        "async_test": 0,
+        "files_scanned": 6,
+        "total_loc": 2362
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tools",
+      "class": "P3",
+      "unit_tests": 62,
+      "test_attr_breakdown": {
+        "test": 16,
+        "tokio_test": 46,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 2587
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tracing",
+      "class": "P3",
+      "unit_tests": 77,
+      "test_attr_breakdown": {
+        "test": 52,
+        "tokio_test": 25,
+        "async_test": 0,
+        "files_scanned": 9,
+        "total_loc": 3244
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tree-sitter",
+      "class": "P3",
+      "unit_tests": 32,
+      "test_attr_breakdown": {
+        "test": 32,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 1557
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tui",
+      "class": "P3",
+      "unit_tests": 423,
+      "test_attr_breakdown": {
+        "test": 369,
+        "tokio_test": 54,
+        "async_test": 0,
+        "files_scanned": 44,
+        "total_loc": 15489
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 25,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 3,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-tui-e2e",
+      "class": "P3",
+      "unit_tests": 98,
+      "test_attr_breakdown": {
+        "test": 98,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 7,
+        "total_loc": 2776
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-update",
+      "class": "P3",
+      "unit_tests": 94,
+      "test_attr_breakdown": {
+        "test": 88,
+        "tokio_test": 6,
+        "async_test": 0,
+        "files_scanned": 8,
+        "total_loc": 2709
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-upgrade",
+      "class": "P3",
+      "unit_tests": 132,
+      "test_attr_breakdown": {
+        "test": 132,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 10,
+        "total_loc": 4109
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 3,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-value",
+      "class": "P3",
+      "unit_tests": 46,
+      "test_attr_breakdown": {
+        "test": 46,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 1348
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": true
+    },
+    {
+      "crate": "apeireth-vector",
+      "class": "P3",
+      "unit_tests": 6,
+      "test_attr_breakdown": {
+        "test": 6,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 4,
+        "total_loc": 536
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-verify",
+      "class": "P3",
+      "unit_tests": 28,
+      "test_attr_breakdown": {
+        "test": 28,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 1032
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 3,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-voice",
+      "class": "P3",
+      "unit_tests": 16,
+      "test_attr_breakdown": {
+        "test": 15,
+        "tokio_test": 1,
+        "async_test": 0,
+        "files_scanned": 2,
+        "total_loc": 1796
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 2,
+      "has_examples": true,
+      "example_files": 2,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-web",
+      "class": "P3",
+      "unit_tests": 7,
+      "test_attr_breakdown": {
+        "test": 7,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 12,
+        "total_loc": 3258
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": false,
+      "example_files": 0,
+      "has_benches": false,
+      "bench_files": 0,
+      "is_p0_critical": false
+    },
+    {
+      "crate": "apeireth-workflow",
+      "class": "P3",
+      "unit_tests": 12,
+      "test_attr_breakdown": {
+        "test": 12,
+        "tokio_test": 0,
+        "async_test": 0,
+        "files_scanned": 1,
+        "total_loc": 1322
+      },
+      "has_integration_tests": true,
+      "integration_test_files": 1,
+      "has_examples": true,
+      "example_files": 1,
+      "has_benches": true,
+      "bench_files": 1,
+      "is_p0_critical": false
+    }
+  ]
+}
