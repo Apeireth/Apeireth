@@ -1,0 +1,1944 @@
+{
+  "workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean",
+  "crates_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\Apeireth-rust\\crates",
+  "total_crates_scanned": 91,
+  "parse_errors": [],
+  "workspace_dependencies_count": 17,
+  "total_external_dep_occurrences": 885,
+  "total_workspace_dep_occurrences": 176,
+  "intra_workspace_graph": {
+    "apeireth-action": [
+      "apeireth-core"
+    ],
+    "apeireth-agent": [
+      "apeireth-memory",
+      "apeireth-tool-approval",
+      "apeireth-tool-registry",
+      "apeireth-tool-runtime"
+    ],
+    "apeireth-api": [
+      "apeireth-core",
+      "apeireth-http-client",
+      "apeireth-keyring",
+      "apeireth-observability",
+      "apeireth-pipeline",
+      "apeireth-protocol",
+      "apeireth-tool-registry",
+      "apeireth-tools"
+    ],
+    "apeireth-asi": [
+      "apeireth-api",
+      "apeireth-core",
+      "apeireth-memory"
+    ],
+    "apeireth-bench": [
+      "apeireth-asi",
+      "apeireth-core",
+      "apeireth-memory",
+      "apeireth-verify"
+    ],
+    "apeireth-blueprint-impl": [
+      "apeireth-protocol"
+    ],
+    "apeireth-bus": [
+      "apeireth-core",
+      "apeireth-extension"
+    ],
+    "apeireth-central": [
+      "apeireth-core"
+    ],
+    "apeireth-cli": [
+      "apeireth-api",
+      "apeireth-asi",
+      "apeireth-core",
+      "apeireth-memory"
+    ],
+    "apeireth-cognition": [
+      "apeireth-asi",
+      "apeireth-core"
+    ],
+    "apeireth-consciousness": [
+      "apeireth-core"
+    ],
+    "apeireth-constraint": [
+      "apeireth-core"
+    ],
+    "apeireth-council": [
+      "apeireth-api",
+      "apeireth-core",
+      "apeireth-verify"
+    ],
+    "apeireth-evolution": [
+      "apeireth-core",
+      "apeireth-council",
+      "apeireth-verify"
+    ],
+    "apeireth-extension": [
+      "apeireth-verify"
+    ],
+    "apeireth-graph": [
+      "apeireth-supervisor"
+    ],
+    "apeireth-integration-e2e": [
+      "apeireth-api",
+      "apeireth-constraint",
+      "apeireth-observability",
+      "apeireth-protocol",
+      "apeireth-rate-limiter"
+    ],
+    "apeireth-integration-r20-stage4": [
+      "apeireth-agent",
+      "apeireth-i18n",
+      "apeireth-image-prompt",
+      "apeireth-keyring",
+      "apeireth-lark",
+      "apeireth-machine-id",
+      "apeireth-mcp",
+      "apeireth-mcp-relay-image",
+      "apeireth-mcp-ssh",
+      "apeireth-mcp-winrm",
+      "apeireth-observability",
+      "apeireth-plugin",
+      "apeireth-repo-analyzer",
+      "apeireth-repo-scan",
+      "apeireth-rollback",
+      "apeireth-sdk",
+      "apeireth-team-lead",
+      "apeireth-voice",
+      "apeireth-workflow"
+    ],
+    "apeireth-life-force": [
+      "apeireth-core"
+    ],
+    "apeireth-mcp": [
+      "apeireth-tool-registry"
+    ],
+    "apeireth-mcp-relay-image": [
+      "apeireth-mcp",
+      "apeireth-protocol"
+    ],
+    "apeireth-mcp-ssh": [
+      "apeireth-mcp",
+      "apeireth-protocol"
+    ],
+    "apeireth-mcp-winrm": [
+      "apeireth-mcp",
+      "apeireth-protocol"
+    ],
+    "apeireth-memory": [
+      "apeireth-api",
+      "apeireth-core",
+      "apeireth-memory-extensions",
+      "apeireth-vector"
+    ],
+    "apeireth-motivation": [
+      "apeireth-core"
+    ],
+    "apeireth-onion": [
+      "apeireth-core"
+    ],
+    "apeireth-perception": [
+      "apeireth-core"
+    ],
+    "apeireth-pipeline": [
+      "apeireth-http-client",
+      "apeireth-protocol"
+    ],
+    "apeireth-plugin": [
+      "apeireth-extension",
+      "apeireth-tool-registry",
+      "apeireth-tool-runtime"
+    ],
+    "apeireth-provider-claude-code": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-provider-codex": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-provider-copilot": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-provider-gemini-cli": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-provider-opencode": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-pybridge": [
+      "apeireth-asi",
+      "apeireth-core",
+      "apeireth-memory"
+    ],
+    "apeireth-relation": [
+      "apeireth-core"
+    ],
+    "apeireth-rollback": [
+      "apeireth-agent",
+      "apeireth-team-lead"
+    ],
+    "apeireth-sdk": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-sdk-lark": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-sdk-livekit": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-sdk-sandbox": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-sdk-voice": [
+      "apeireth-keyring",
+      "apeireth-protocol"
+    ],
+    "apeireth-sovereignty": [
+      "apeireth-core",
+      "apeireth-council",
+      "apeireth-verify"
+    ],
+    "apeireth-supervisor": [
+      "apeireth-verify"
+    ],
+    "apeireth-team-lead": [
+      "apeireth-agent",
+      "apeireth-bus",
+      "apeireth-council",
+      "apeireth-graph",
+      "apeireth-pipeline",
+      "apeireth-protocol",
+      "apeireth-supervisor",
+      "apeireth-tool-registry",
+      "apeireth-tool-runtime"
+    ],
+    "apeireth-tool-approval": [
+      "apeireth-tool-registry",
+      "apeireth-tool-runtime"
+    ],
+    "apeireth-tool-runtime": [
+      "apeireth-memory",
+      "apeireth-protocol",
+      "apeireth-tool-registry"
+    ],
+    "apeireth-tools": [
+      "apeireth-core",
+      "apeireth-http-client",
+      "apeireth-tool-registry"
+    ],
+    "apeireth-tui": [
+      "apeireth-action",
+      "apeireth-api",
+      "apeireth-asi",
+      "apeireth-central",
+      "apeireth-cognition",
+      "apeireth-consciousness",
+      "apeireth-core",
+      "apeireth-i18n",
+      "apeireth-life-force",
+      "apeireth-memory",
+      "apeireth-motivation",
+      "apeireth-observability",
+      "apeireth-perception",
+      "apeireth-relation",
+      "apeireth-sovereignty",
+      "apeireth-supervisor",
+      "apeireth-value"
+    ],
+    "apeireth-upgrade": [
+      "apeireth-constraint",
+      "apeireth-core",
+      "apeireth-council",
+      "apeireth-sovereignty"
+    ],
+    "apeireth-value": [
+      "apeireth-asi",
+      "apeireth-core"
+    ],
+    "apeireth-verify": [
+      "apeireth-asi",
+      "apeireth-cognition",
+      "apeireth-constraint",
+      "apeireth-core",
+      "apeireth-council",
+      "apeireth-sovereignty",
+      "apeireth-supervisor"
+    ],
+    "apeireth-web": [
+      "apeireth-api",
+      "apeireth-asi",
+      "apeireth-cognition",
+      "apeireth-consciousness",
+      "apeireth-core",
+      "apeireth-life-force",
+      "apeireth-memory",
+      "apeireth-motivation",
+      "apeireth-perception",
+      "apeireth-sovereignty",
+      "apeireth-value"
+    ],
+    "apeireth-workflow": [
+      "apeireth-agent",
+      "apeireth-graph",
+      "apeireth-protocol",
+      "apeireth-tool-runtime"
+    ]
+  },
+  "intra_workspace_graph_edges": 176,
+  "version_drift_count": 5,
+  "version_drifts": [
+    {
+      "dep": "ratatui",
+      "versions_found": [
+        "0.29",
+        "0.30"
+      ],
+      "crates_using": [
+        "apeireth-integration-e2e",
+        "apeireth-tui",
+        "apeireth-tui-e2e"
+      ],
+      "severity": "LOW"
+    },
+    {
+      "dep": "regex",
+      "versions_found": [
+        "1",
+        "1.10"
+      ],
+      "crates_using": [
+        "apeireth-image-prompt",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-pipeline",
+        "apeireth-tool-runtime"
+      ],
+      "severity": "LOW"
+    },
+    {
+      "dep": "tempfile",
+      "versions_found": [
+        "3",
+        "3.10"
+      ],
+      "crates_using": [
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-credentials",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-metrics",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-rate-limiter",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-update",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-workflow"
+      ],
+      "severity": "LOW"
+    },
+    {
+      "dep": "url",
+      "versions_found": [
+        "2",
+        "2.5"
+      ],
+      "crates_using": [
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-voice"
+      ],
+      "severity": "LOW"
+    },
+    {
+      "dep": "wiremock",
+      "versions_found": [
+        "0.5",
+        "0.6"
+      ],
+      "crates_using": [
+        "apeireth-http-client",
+        "apeireth-integration-e2e",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-pipeline",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-update",
+        "apeireth-voice"
+      ],
+      "severity": "LOW"
+    }
+  ],
+  "lock_duplicate_count": 92,
+  "lock_duplicates": [
+    {
+      "dep": "windows-sys",
+      "versions_in_lock": [
+        "0.45.0",
+        "0.48.0",
+        "0.52.0",
+        "0.59.0",
+        "0.60.2",
+        "0.61.2"
+      ],
+      "distinct_version_count": 6
+    },
+    {
+      "dep": "hashbrown",
+      "versions_in_lock": [
+        "0.12.3",
+        "0.14.5",
+        "0.15.5",
+        "0.16.1",
+        "0.17.1"
+      ],
+      "distinct_version_count": 5
+    },
+    {
+      "dep": "getrandom",
+      "versions_in_lock": [
+        "0.1.16",
+        "0.2.17",
+        "0.3.4",
+        "0.4.3"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "rand",
+      "versions_in_lock": [
+        "0.10.2",
+        "0.7.3",
+        "0.8.7",
+        "0.9.5"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "rand_core",
+      "versions_in_lock": [
+        "0.10.1",
+        "0.5.1",
+        "0.6.4",
+        "0.9.5"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "toml_edit",
+      "versions_in_lock": [
+        "0.19.15",
+        "0.20.7",
+        "0.22.27",
+        "0.25.13+spec-1.1.0"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows-targets",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.5"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_aarch64_gnullvm",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_aarch64_msvc",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_i686_gnu",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_i686_msvc",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_x86_64_gnu",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_x86_64_gnullvm",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "windows_x86_64_msvc",
+      "versions_in_lock": [
+        "0.42.2",
+        "0.48.5",
+        "0.52.6",
+        "0.53.1"
+      ],
+      "distinct_version_count": 4
+    },
+    {
+      "dep": "base64",
+      "versions_in_lock": [
+        "0.13.1",
+        "0.21.7",
+        "0.22.1"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "convert_case",
+      "versions_in_lock": [
+        "0.10.0",
+        "0.6.0",
+        "0.7.1"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "itertools",
+      "versions_in_lock": [
+        "0.10.5",
+        "0.13.0",
+        "0.14.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "lru",
+      "versions_in_lock": [
+        "0.12.5",
+        "0.16.4",
+        "0.18.2"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "proc-macro-crate",
+      "versions_in_lock": [
+        "1.3.1",
+        "2.0.0",
+        "3.5.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "rand_chacha",
+      "versions_in_lock": [
+        "0.2.2",
+        "0.3.1",
+        "0.9.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "schemars",
+      "versions_in_lock": [
+        "0.8.22",
+        "0.9.0",
+        "1.2.2"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "syn",
+      "versions_in_lock": [
+        "1.0.109",
+        "2.0.119",
+        "3.0.3"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "toml",
+      "versions_in_lock": [
+        "0.8.23",
+        "0.9.12+spec-1.1.0",
+        "1.1.4+spec-1.1.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "toml_datetime",
+      "versions_in_lock": [
+        "0.6.11",
+        "0.7.5+spec-1.1.0",
+        "1.1.1+spec-1.1.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "tungstenite",
+      "versions_in_lock": [
+        "0.21.0",
+        "0.24.0",
+        "0.25.0"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "wasi",
+      "versions_in_lock": [
+        "0.11.1+wasi-snapshot-preview1",
+        "0.14.7+wasi-0.2.4",
+        "0.9.0+wasi-snapshot-preview1"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "winnow",
+      "versions_in_lock": [
+        "0.5.40",
+        "0.7.15",
+        "1.0.4"
+      ],
+      "distinct_version_count": 3
+    },
+    {
+      "dep": "bit-set",
+      "versions_in_lock": [
+        "0.5.3",
+        "0.8.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "bit-vec",
+      "versions_in_lock": [
+        "0.6.3",
+        "0.8.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "bitflags",
+      "versions_in_lock": [
+        "1.3.2",
+        "2.13.1"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "block-buffer",
+      "versions_in_lock": [
+        "0.10.4",
+        "0.12.1"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "compact_str",
+      "versions_in_lock": [
+        "0.8.2",
+        "0.9.1"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "core-foundation",
+      "versions_in_lock": [
+        "0.10.1",
+        "0.9.4"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "cpufeatures",
+      "versions_in_lock": [
+        "0.2.17",
+        "0.3.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "crossterm",
+      "versions_in_lock": [
+        "0.28.1",
+        "0.29.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "crypto-common",
+      "versions_in_lock": [
+        "0.1.7",
+        "0.2.2"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "darling",
+      "versions_in_lock": [
+        "0.23.0",
+        "0.24.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "darling_core",
+      "versions_in_lock": [
+        "0.23.0",
+        "0.24.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "darling_macro",
+      "versions_in_lock": [
+        "0.23.0",
+        "0.24.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "deadpool",
+      "versions_in_lock": [
+        "0.12.3",
+        "0.9.5"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "digest",
+      "versions_in_lock": [
+        "0.10.7",
+        "0.11.3"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "event-listener",
+      "versions_in_lock": [
+        "2.5.3",
+        "5.4.2"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "fallible-iterator",
+      "versions_in_lock": [
+        "0.2.0",
+        "0.3.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "fancy-regex",
+      "versions_in_lock": [
+        "0.11.0",
+        "0.14.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "fastrand",
+      "versions_in_lock": [
+        "1.9.0",
+        "2.5.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "fixedbitset",
+      "versions_in_lock": [
+        "0.4.2",
+        "0.5.7"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "foldhash",
+      "versions_in_lock": [
+        "0.1.5",
+        "0.2.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "gloo-net",
+      "versions_in_lock": [
+        "0.5.0",
+        "0.6.0"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "h2",
+      "versions_in_lock": [
+        "0.3.27",
+        "0.4.15"
+      ],
+      "distinct_version_count": 2
+    },
+    {
+      "dep": "heck",
+      "versions_in_lock": [
+        "0.4.1",
+        "0.5.0"
+      ],
+      "distinct_version_count": 2
+    }
+  ],
+  "high_fan_in_deps": [
+    {
+      "dep": "serde",
+      "crate_count": 87,
+      "crates": [
+        "apeireth-acp",
+        "apeireth-action",
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-bench",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-config",
+        "apeireth-consciousness",
+        "apeireth-constraint",
+        "apeireth-core",
+        "apeireth-council",
+        "apeireth-credentials",
+        "apeireth-cron",
+        "apeireth-eval",
+        "apeireth-evolution",
+        "apeireth-extension",
+        "apeireth-graph",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-life-force",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-motivation",
+        "apeireth-naming-v05",
+        "apeireth-oauth",
+        "apeireth-observability",
+        "apeireth-onion",
+        "apeireth-perception",
+        "apeireth-pipeline",
+        "apeireth-pipeline-g5",
+        "apeireth-plugin",
+        "apeireth-protocol",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-pybridge",
+        "apeireth-rate-limiter",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-skills",
+        "apeireth-sovereignty",
+        "apeireth-state",
+        "apeireth-supervisor",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-test",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-web",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "thiserror",
+      "crate_count": 84,
+      "crates": [
+        "apeireth-acp",
+        "apeireth-action",
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-config",
+        "apeireth-consciousness",
+        "apeireth-constraint",
+        "apeireth-core",
+        "apeireth-council",
+        "apeireth-credentials",
+        "apeireth-cron",
+        "apeireth-evolution",
+        "apeireth-extension",
+        "apeireth-formal",
+        "apeireth-graph",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-life-force",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-motivation",
+        "apeireth-naming-v05",
+        "apeireth-oauth",
+        "apeireth-observability",
+        "apeireth-onion",
+        "apeireth-perception",
+        "apeireth-pipeline",
+        "apeireth-pipeline-g5",
+        "apeireth-plugin",
+        "apeireth-protocol",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-pybridge",
+        "apeireth-rate-limiter",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-skills",
+        "apeireth-sovereignty",
+        "apeireth-state",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-web",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "serde_json",
+      "crate_count": 82,
+      "crates": [
+        "apeireth-acp",
+        "apeireth-action",
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-bench",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-consciousness",
+        "apeireth-constraint",
+        "apeireth-core",
+        "apeireth-council",
+        "apeireth-credentials",
+        "apeireth-evolution",
+        "apeireth-extension",
+        "apeireth-graph",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-life-force",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-motivation",
+        "apeireth-naming-v05",
+        "apeireth-oauth",
+        "apeireth-observability",
+        "apeireth-onion",
+        "apeireth-perception",
+        "apeireth-pipeline",
+        "apeireth-plugin",
+        "apeireth-protocol",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-pybridge",
+        "apeireth-rate-limiter",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-skills",
+        "apeireth-sovereignty",
+        "apeireth-state",
+        "apeireth-supervisor",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-web",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "tokio",
+      "crate_count": 75,
+      "crates": [
+        "apeireth-action",
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-bench",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-consciousness",
+        "apeireth-constraint",
+        "apeireth-core",
+        "apeireth-council",
+        "apeireth-credentials",
+        "apeireth-extension",
+        "apeireth-graph",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-motivation",
+        "apeireth-naming-v05",
+        "apeireth-oauth",
+        "apeireth-observability",
+        "apeireth-perception",
+        "apeireth-pipeline",
+        "apeireth-plugin",
+        "apeireth-protocol",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-pybridge",
+        "apeireth-rate-limiter",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-sovereignty",
+        "apeireth-supervisor",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-voice",
+        "apeireth-web",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "anyhow",
+      "crate_count": 61,
+      "crates": [
+        "apeireth-action",
+        "apeireth-asi",
+        "apeireth-bench",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-consciousness",
+        "apeireth-core",
+        "apeireth-credentials",
+        "apeireth-extension",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-motivation",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-perception",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-pybridge",
+        "apeireth-rate-limiter",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "async-trait",
+      "crate_count": 52,
+      "crates": [
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-credentials",
+        "apeireth-extension",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-metrics",
+        "apeireth-observability",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-rate-limiter",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-sovereignty",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-update",
+        "apeireth-voice",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "tracing",
+      "crate_count": 50,
+      "crates": [
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-blueprint-impl",
+        "apeireth-cache",
+        "apeireth-credentials",
+        "apeireth-http-client",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-metrics",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-pipeline",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-rate-limiter",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-update",
+        "apeireth-voice",
+        "apeireth-web",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "tempfile",
+      "crate_count": 47,
+      "crates": [
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cache",
+        "apeireth-credentials",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-metrics",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-rate-limiter",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-rollback",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-task",
+        "apeireth-team-lead",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tree-sitter",
+        "apeireth-update",
+        "apeireth-vector",
+        "apeireth-voice",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "chrono",
+      "crate_count": 42,
+      "crates": [
+        "apeireth-api",
+        "apeireth-asi",
+        "apeireth-blueprint-impl",
+        "apeireth-bus",
+        "apeireth-cli",
+        "apeireth-cognition",
+        "apeireth-consciousness",
+        "apeireth-constraint",
+        "apeireth-core",
+        "apeireth-credentials",
+        "apeireth-extension",
+        "apeireth-http-client",
+        "apeireth-image-prompt",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-life-force",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-memory",
+        "apeireth-motivation",
+        "apeireth-observability",
+        "apeireth-perception",
+        "apeireth-plugin",
+        "apeireth-relation",
+        "apeireth-repo-analyzer",
+        "apeireth-repo-scan",
+        "apeireth-sandbox",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-sovereignty",
+        "apeireth-task",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tui",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-voice"
+      ]
+    },
+    {
+      "dep": "uuid",
+      "crate_count": 31,
+      "crates": [
+        "apeireth-action",
+        "apeireth-api",
+        "apeireth-bus",
+        "apeireth-cognition",
+        "apeireth-consciousness",
+        "apeireth-core",
+        "apeireth-credentials",
+        "apeireth-extension",
+        "apeireth-graph",
+        "apeireth-image-prompt",
+        "apeireth-livekit",
+        "apeireth-machine-id",
+        "apeireth-mcp",
+        "apeireth-memory",
+        "apeireth-motivation",
+        "apeireth-perception",
+        "apeireth-plugin",
+        "apeireth-relation",
+        "apeireth-sandbox",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-task",
+        "apeireth-tool-approval",
+        "apeireth-tool-runtime",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-update",
+        "apeireth-upgrade",
+        "apeireth-value",
+        "apeireth-vector",
+        "apeireth-voice"
+      ]
+    },
+    {
+      "dep": "futures",
+      "crate_count": 25,
+      "crates": [
+        "apeireth-api",
+        "apeireth-blueprint-impl",
+        "apeireth-credentials",
+        "apeireth-livekit",
+        "apeireth-mcp",
+        "apeireth-pipeline",
+        "apeireth-plugin",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-repo-analyzer",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-sdk-lark",
+        "apeireth-sdk-livekit",
+        "apeireth-sdk-sandbox",
+        "apeireth-sdk-voice",
+        "apeireth-tools",
+        "apeireth-tracing",
+        "apeireth-tui",
+        "apeireth-tui-e2e",
+        "apeireth-update",
+        "apeireth-voice"
+      ]
+    },
+    {
+      "dep": "criterion",
+      "crate_count": 24,
+      "crates": [
+        "apeireth-bench",
+        "apeireth-formal",
+        "apeireth-graph",
+        "apeireth-i18n",
+        "apeireth-image-prompt",
+        "apeireth-keyring",
+        "apeireth-lark",
+        "apeireth-machine-id",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-ssh",
+        "apeireth-mcp-winrm",
+        "apeireth-memory",
+        "apeireth-observability",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-sandbox",
+        "apeireth-sdk-sandbox",
+        "apeireth-team-lead",
+        "apeireth-tui",
+        "apeireth-voice",
+        "apeireth-workflow"
+      ]
+    },
+    {
+      "dep": "reqwest",
+      "crate_count": 21,
+      "crates": [
+        "apeireth-api",
+        "apeireth-http-client",
+        "apeireth-integration-e2e",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-mcp",
+        "apeireth-mcp-relay-image",
+        "apeireth-mcp-winrm",
+        "apeireth-oauth",
+        "apeireth-observability",
+        "apeireth-protocol",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-tui",
+        "apeireth-update",
+        "apeireth-voice"
+      ]
+    },
+    {
+      "dep": "wiremock",
+      "crate_count": 14,
+      "crates": [
+        "apeireth-http-client",
+        "apeireth-integration-e2e",
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-pipeline",
+        "apeireth-provider-claude-code",
+        "apeireth-provider-codex",
+        "apeireth-provider-copilot",
+        "apeireth-provider-gemini-cli",
+        "apeireth-provider-opencode",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-update",
+        "apeireth-voice"
+      ]
+    },
+    {
+      "dep": "parking_lot",
+      "crate_count": 13,
+      "crates": [
+        "apeireth-agent",
+        "apeireth-api",
+        "apeireth-cache",
+        "apeireth-http-client",
+        "apeireth-integration-e2e",
+        "apeireth-integration-r20-stage4",
+        "apeireth-metrics",
+        "apeireth-pipeline",
+        "apeireth-rate-limiter",
+        "apeireth-tool-approval",
+        "apeireth-tool-registry",
+        "apeireth-tool-runtime",
+        "apeireth-tools"
+      ]
+    },
+    {
+      "dep": "sha2",
+      "crate_count": 7,
+      "crates": [
+        "apeireth-api",
+        "apeireth-image-prompt",
+        "apeireth-keyring",
+        "apeireth-machine-id",
+        "apeireth-mcp-relay-image",
+        "apeireth-oauth",
+        "apeireth-update"
+      ]
+    },
+    {
+      "dep": "tracing-subscriber",
+      "crate_count": 6,
+      "crates": [
+        "apeireth-api",
+        "apeireth-http-client",
+        "apeireth-observability",
+        "apeireth-tracing",
+        "apeireth-update",
+        "apeireth-web"
+      ]
+    },
+    {
+      "dep": "hex",
+      "crate_count": 5,
+      "crates": [
+        "apeireth-api",
+        "apeireth-keyring",
+        "apeireth-machine-id",
+        "apeireth-observability",
+        "apeireth-update"
+      ]
+    },
+    {
+      "dep": "regex",
+      "crate_count": 5,
+      "crates": [
+        "apeireth-image-prompt",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-pipeline",
+        "apeireth-tool-runtime"
+      ]
+    },
+    {
+      "dep": "url",
+      "crate_count": 5,
+      "crates": [
+        "apeireth-lark",
+        "apeireth-livekit",
+        "apeireth-sandbox",
+        "apeireth-sdk",
+        "apeireth-voice"
+      ]
+    }
+  ],
+  "bare_version_count": 244,
+  "bare_versions_sample": [
+    {
+      "crate": "apeireth-api",
+      "section": "dependencies",
+      "dep": "reqwest",
+      "crate_version": "0.12",
+      "workspace_decl": "{'version': '0.12', 'default-features': False, 'features': ['json', 'rustls-tls', 'stream']}"
+    },
+    {
+      "crate": "apeireth-api",
+      "section": "dependencies",
+      "dep": "futures",
+      "crate_version": "0.3",
+      "workspace_decl": "0.3"
+    },
+    {
+      "crate": "apeireth-api",
+      "section": "dependencies",
+      "dep": "lru",
+      "crate_version": "0.16",
+      "workspace_decl": "0.16"
+    },
+    {
+      "crate": "apeireth-api",
+      "section": "dev-dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-api",
+      "section": "dev-dependencies",
+      "dep": "serde_json",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "serde",
+      "crate_version": "1.0",
+      "workspace_decl": "{'version': '1.0', 'features': ['derive']}"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "serde_json",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "anyhow",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "thiserror",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "async-trait",
+      "crate_version": "0.1",
+      "workspace_decl": "0.1"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "futures",
+      "crate_version": "0.3",
+      "workspace_decl": "0.3"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dependencies",
+      "dep": "chrono",
+      "crate_version": "0.4",
+      "workspace_decl": "{'version': '0.4', 'features': ['serde']}"
+    },
+    {
+      "crate": "apeireth-blueprint-impl",
+      "section": "dev-dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "serde",
+      "crate_version": "1.0",
+      "workspace_decl": "{'version': '1.0', 'features': ['derive']}"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "serde_json",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "anyhow",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "thiserror",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "async-trait",
+      "crate_version": "0.1",
+      "workspace_decl": "0.1"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dependencies",
+      "dep": "lru",
+      "crate_version": "0.16",
+      "workspace_decl": "0.16"
+    },
+    {
+      "crate": "apeireth-cache",
+      "section": "dev-dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "tokio",
+      "crate_version": "1.40",
+      "workspace_decl": "{'version': '1.40', 'features': ['full']}"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "serde",
+      "crate_version": "1.0",
+      "workspace_decl": "{'version': '1.0', 'features': ['derive']}"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "serde_json",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "anyhow",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "thiserror",
+      "crate_version": "1.0",
+      "workspace_decl": "1.0"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "async-trait",
+      "crate_version": "0.1",
+      "workspace_decl": "0.1"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "chrono",
+      "crate_version": "0.4",
+      "workspace_decl": "{'version': '0.4', 'features': ['serde']}"
+    },
+    {
+      "crate": "apeireth-credentials",
+      "section": "dependencies",
+      "dep": "uuid",
+      "crate_version": "1.10",
+      "workspace_decl": "{'version': '1.10', 'features': ['v4', 'serde']}"
+    }
+  ],
+  "audit_decision": "REVIEW",
+  "audit_reason": "V1310 dep audit: 91 crates, 885 external dep occurrences, 176 workspace path-dep occurrences, 5 version drifts (text-level: ratatui/regex/tempfile/url/wiremock), 92 Cargo.lock duplicate-version deps (actual bin waste: ratatui + wiremock), 244 bare versions (skeleton V1302-V1306 legacy hardcoded).",
+  "audit_action": "修真 = commit 锁定现状. workspace 跨 crate version drift = 5 (text-level 4 OK, ratatui/wiremock 真有 Cargo.lock 多版本). 修真建议: ratatui/wiremock 选主要版本统一, 修真后续战役 (修真现在 = 动 3-14 crate, 触碰 V1311/V1312 audit chain, 非 must-fix). V1311 build.rs audit 后续处理."
+}
