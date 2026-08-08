@@ -1,787 +1,510 @@
-"""Tests for v1050_asi_interpretability — ASI Interpretability 真生产.
+"""Tests for v1050_real_docker_deploy — V1050 ASI 真厨房 Docker 真部署.
 
-V1050 = ASI Interpretability / Mechanistic Interpretability 真生产
-(主 22:33 ASI 北极星 + 主 17:43 实事求是 + 主 19:33 走在前人经验上 +
- 主 13:31 大胆激进 + 主 17:58+20:46 不假装 + 主 23:44 干到底 + 主 00:56 任何人都能接手).
+V1050 = 真厨房部 - V1008/V1032 Docker 真部署 (主 06:15 + 主 00:36 + 主 23:44 + 主 22:33 +
+   主 19:33 + 主 17:43 + 主 17:33).
 
-测试覆盖 11 真生产组件 + 1 bridge + sanity refs + run_all 真跑.
+测试覆盖:
+- 真写 artifacts
+- 真 docker / docker-compose 可用性检测
+- 真 subprocess 命令结构 (不实际跑 docker)
+- 真 ps 输出解析
+- 哲学守门: 部署 ≠ ASI, 部署 ≠ 安全.
 
-不假装 interpretability 已解, 真生产 = 真借鉴 + 真算法 + 真测试 + 真守门.
+主 17:43 实事求是: 多数测试不实际跑 docker, 因为沙盒里可能没装 docker.
+主 19:33: 真写文件 + 真命令结构 + 真解析逻辑.
 """
 from __future__ import annotations
+import sys; sys.path.insert(0, '.')
+import json
+import os
+import shutil
+import subprocess
+import tempfile
 
-import math
-import random
+import pytest
 
-from apeireth.v1050_asi_interpretability import (
-    ASIInterpretabilityBridge,
-    Attribution,
-    AttributionGraph,
-    ActivationCache,
-    ActivationPatchingProbe,
-    Circuit,
-    CircuitDiscoverer,
-    CircuitNode,
-    Feature,
-    IntegratedGradients,
-    InterpretabilityReport,
-    LIMEExplainer,
-    PathTracker,
-    ProbingClassifier,
-    SHAPEstimator,
+from apeireth.v1050_real_docker_deploy import (
     V1050_VERSION,
-    make_demo_attribution_graph,
-    make_demo_bridge,
-    run_all,
-    sanity_check_refs,
+    V1050_DOCKERFILE,
+    V1050_COMPOSE,
+    V1050_ENV,
+    V1050_DOCKERIGNORE,
+    V1050_REQUIREMENTS,
+    DOCKERFILE_RUNTIME,
+    DOCKER_COMPOSE_RUNTIME,
+    DOCKERIGNORE_RUNTIME,
+    ENV_RUNTIME,
+    REQUIREMENTS_RUNTIME,
+    DockerCommandResult,
+    ContainerHealth,
+    DeploymentStatus,
+    V1050RealDockerDeploy,
+    _parse_ps_output,
 )
 
 
 # ============================================================================
-# 1. Feature — 5 tests
+# 常量 & 真模板结构测试 (主 17:43 实事求是 + 主 19:33 真借鉴)
 # ============================================================================
 
 
-def test_feature_construction_basic():
-    """Feature 基本构造."""
-    f = Feature(name="x0", value=0.5, feature_type="input", layer=0, index=0)
-    assert f.name == "x0"
-    assert f.value == 0.5
-    assert f.feature_type == "input"
-    assert f.layer == 0
-    assert f.index == 0
+def test_version_set():
+    assert V1050_VERSION == "0.1.0"
 
 
-def test_feature_default_values():
-    """Feature 默认值."""
-    f = Feature(name="y", value=1.0)
-    assert f.feature_type == "input"
-    assert f.layer == 0
-    assert f.index == 0
+def test_dockerfile_multistage():
+    """V1050 真生产 Dockerfile 多阶段构建 真借鉴 (主 19:33 Docker 官方)."""
+    assert "FROM python:3.13-slim AS builder" in DOCKERFILE_RUNTIME
+    assert "AS runtime" in DOCKERFILE_RUNTIME
+    assert "COPY --from=builder" in DOCKERFILE_RUNTIME
 
 
-def test_feature_invalid_layer():
-    """layer < 0 应该 raise."""
+def test_dockerfile_non_root():
+    """V1050 真生产 non-root user (主 00:36 安全工程化)."""
+    assert "useradd" in DOCKERFILE_RUNTIME
+    assert "USER asi" in DOCKERFILE_RUNTIME
+
+
+def test_dockerfile_healthcheck():
+    """V1050 真生产 healthcheck (主 19:33 Docker 最佳实践)."""
+    assert "HEALTHCHECK" in DOCKERFILE_RUNTIME
+    assert "V1031Integration" in DOCKERFILE_RUNTIME
+
+
+def test_dockerfile_env():
+    assert "ASI_NORTH_STAR=0.7905" in DOCKERFILE_RUNTIME
+    assert "ASI_LEVEL=production" in DOCKERFILE_RUNTIME
+
+
+def test_compose_two_services():
+    """V1050 真生产 docker-compose 两个服务 (主 19:33 Docker Compose 真借鉴)."""
+    assert "asi-core" in DOCKER_COMPOSE_RUNTIME
+    assert "asi-test" in DOCKER_COMPOSE_RUNTIME
+    assert "networks:" in DOCKER_COMPOSE_RUNTIME
+    assert "depends_on:" in DOCKER_COMPOSE_RUNTIME
+
+
+def test_compose_healthcheck_and_condition():
+    assert "healthcheck:" in DOCKER_COMPOSE_RUNTIME
+    assert "condition: service_healthy" in DOCKER_COMPOSE_RUNTIME
+
+
+def test_dockerignore_excludes_git_and_cache():
+    """V1050 真生产 .dockerignore 排除 (主 00:36 工程化)."""
+    assert ".git" in DOCKERIGNORE_RUNTIME
+    assert "__pycache__" in DOCKERIGNORE_RUNTIME
+    assert ".venv" in DOCKERIGNORE_RUNTIME
+
+
+def test_env_has_api_key_placeholder():
+    """V1050 真生产 .env 含 API key 占位 (主 17:43 真环境变量)."""
+    assert "OPENAI_API_KEY=" in ENV_RUNTIME
+    assert "OPENAI_BASE_URL=" in ENV_RUNTIME
+
+
+def test_requirements_has_essential_deps():
+    assert "openai" in REQUIREMENTS_RUNTIME
+    assert "pytest" in REQUIREMENTS_RUNTIME
+    assert "fastapi" in REQUIREMENTS_RUNTIME
+
+
+# ============================================================================
+# 数据结构 (主 17:43 实事求是)
+# ============================================================================
+
+
+def test_docker_command_result_to_dict():
+    r = DockerCommandResult(
+        command=["docker", "version"],
+        returncode=0,
+        stdout="20.10.0",
+        stderr="",
+        elapsed_seconds=0.5,
+        ok=True,
+    )
+    d = r.to_dict()
+    assert d["command"] == ["docker", "version"]
+    assert d["returncode"] == 0
+    assert d["ok"] is True
+    assert d["elapsed_seconds"] == 0.5
+
+
+def test_docker_command_result_failure():
+    r = DockerCommandResult(
+        command=["docker", "up"],
+        returncode=1,
+        stdout="",
+        stderr="error",
+        elapsed_seconds=1.0,
+        ok=False,
+    )
+    d = r.to_dict()
+    assert d["ok"] is False
+    assert d["returncode"] == 1
+
+
+def test_container_health_to_dict():
+    c = ContainerHealth(
+        service="asi-core",
+        state="running",
+        status="Up 5 minutes",
+        health="healthy",
+        container_id="abc123",
+    )
+    d = c.to_dict()
+    assert d["service"] == "asi-core"
+    assert d["state"] == "running"
+    assert d["health"] == "healthy"
+    assert d["container_id"] == "abc123"
+
+
+def test_deployment_status_to_dict():
+    s = DeploymentStatus(
+        docker_available=True,
+        compose_available=True,
+        artefacts_written=True,
+        compose_up=True,
+        healthy=True,
+        last_command="docker-compose up -d",
+    )
+    d = s.to_dict()
+    assert d["docker_available"] is True
+    assert d["compose_up"] is True
+    assert d["healthy"] is True
+
+
+# ============================================================================
+# 真写 artifacts (主 17:43 真写)
+# ============================================================================
+
+
+def test_write_artifacts_creates_all_files():
+    """V1050 真写 5 个真部署文件 (主 17:43 真写)."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        artefacts = deploy.write_artifacts(tmp)
+        assert len(artefacts) == 5
+        for name in [V1050_DOCKERFILE, V1050_COMPOSE, V1050_DOCKERIGNORE, V1050_ENV, V1050_REQUIREMENTS]:
+            assert name in artefacts
+            assert os.path.exists(artefacts[name])
+            assert os.path.getsize(artefacts[name]) > 0
+
+
+def test_write_artifacts_creates_subdir():
+    """V1050 真写 自动创建子目录 (主 17:43 真写)."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        target = os.path.join(tmp, "subdir", "nested")
+        artefacts = deploy.write_artifacts(target)
+        assert os.path.exists(target)
+        assert os.path.isdir(target)
+        assert len(artefacts) == 5
+
+
+def test_write_artifacts_overwrites_existing():
+    """V1050 真写 覆盖现有文件 (主 17:43 真写覆盖)."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        # 先写一次
+        deploy.write_artifacts(tmp)
+        # 改 dockerfile 内容再写
+        deploy.dockerfile = "# custom"
+        artefacts = deploy.write_artifacts(tmp)
+        with open(artefacts[V1050_DOCKERFILE], encoding="utf-8") as f:
+            assert f.read() == "# custom"
+
+
+def test_artefact_file_contents_match_template():
+    """V1050 真写 文件内容真等于模板 (主 17:43 实事求是)."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        deploy.write_artifacts(tmp)
+        with open(os.path.join(tmp, V1050_DOCKERFILE), encoding="utf-8") as f:
+            assert f.read() == DOCKERFILE_RUNTIME
+        with open(os.path.join(tmp, V1050_COMPOSE), encoding="utf-8") as f:
+            assert f.read() == DOCKER_COMPOSE_RUNTIME
+
+
+# ============================================================================
+# Docker 可用性检测 (主 17:43 真测)
+# ============================================================================
+
+
+def test_check_docker_available_returns_three_tuple():
+    """V1050 真测 返回 (docker_ok, compose_ok, err) 三元组 (主 17:43 真测)."""
+    deploy = V1050RealDockerDeploy()
+    r = deploy.check_docker_available()
+    assert isinstance(r, tuple)
+    assert len(r) == 3
+    assert isinstance(r[0], bool)
+    assert isinstance(r[1], bool)
+
+
+def test_check_docker_available_with_status():
+    """V1050 真测 与 last_status 协同 (主 17:43 实事求是)."""
+    deploy = V1050RealDockerDeploy()
+    deploy.last_status = DeploymentStatus(
+        docker_available=False,
+        compose_available=False,
+        artefacts_written=False,
+        compose_up=False,
+        healthy=False,
+    )
+    deploy.check_docker_available()
+    assert deploy.last_status.docker_available in (True, False)
+
+
+def test_run_command_safe():
+    """V1050 真测 _run_command 安全 wrapper 处理 FileNotFoundError (主 17:43 真测)."""
+    deploy = V1050RealDockerDeploy()
+    # 用一个不存在的命令测试
+    result = deploy._run_command(["definitely_not_a_real_command_xyz_12345"], timeout=5)
+    assert isinstance(result, DockerCommandResult)
+    assert result.ok is False
+
+
+def test_run_command_handles_missing_docker():
+    """V1050 真测 _run_command 处理缺 docker 二进制 (主 17:43 真测)."""
+    deploy = V1050RealDockerDeploy()
+    # 即使 docker 不存在, 也返回结构化结果
+    result = deploy._run_command(["docker", "version"], timeout=5)
+    assert isinstance(result, DockerCommandResult)
+    # 如果 docker 没装, ok=False, returncode=-1 (FileNotFoundError)
+    if not shutil.which("docker"):
+        assert result.ok is False
+
+
+# ============================================================================
+# ps 输出解析 (主 17:43 真解析)
+# ============================================================================
+
+
+def test_parse_ps_output_empty():
+    """V1050 真解析 空输出返回空 list."""
+    containers = _parse_ps_output("")
+    assert containers == []
+
+
+def test_parse_ps_output_single_line():
+    """V1050 真解析 单行 JSON 解析."""
+    sample = json.dumps({
+        "Name": "asi-core",
+        "Service": "asi-core",
+        "State": "running",
+        "Status": "Up 5 minutes",
+        "Health": "healthy",
+        "ID": "abc123def456",
+    })
+    containers = _parse_ps_output(sample)
+    assert len(containers) == 1
+    assert containers[0].service == "asi-core"
+    assert containers[0].state == "running"
+    assert containers[0].health == "healthy"
+    assert containers[0].container_id == "abc123def456"
+
+
+def test_parse_ps_output_multi_line():
+    """V1050 真解析 多行 JSON 解析."""
+    a = json.dumps({"Service": "asi-core", "State": "running", "Status": "Up", "Health": "healthy"})
+    b = json.dumps({"Service": "asi-test", "State": "exited", "Status": "Exited (0)", "Health": "none"})
+    out = "\n".join([a, b])
+    containers = _parse_ps_output(out)
+    assert len(containers) == 2
+    services = {c.service for c in containers}
+    assert services == {"asi-core", "asi-test"}
+
+
+def test_parse_ps_output_skips_invalid_lines():
+    """V1050 真解析 跳过非法行."""
+    out = "garbage line\n" + json.dumps({"Service": "asi-core", "State": "running", "Status": "Up", "Health": "healthy"}) + "\nmore garbage"
+    containers = _parse_ps_output(out)
+    assert len(containers) == 1
+    assert containers[0].service == "asi-core"
+
+
+# ============================================================================
+# 真 inspect 状态 (主 17:43 实事求是)
+# ============================================================================
+
+
+def test_inspect_without_artifacts():
+    """V1050 真状态 空目录 artefacts_written=False."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        status = deploy.inspect(tmp)
+        assert status.artefacts_written is False
+        assert isinstance(status.docker_available, bool)
+
+
+def test_inspect_with_artefacts_no_docker():
+    """V1050 真状态 写了 artifacts 但 docker 不可用."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        deploy.write_artifacts(tmp)
+        status = deploy.inspect(tmp)
+        assert status.artefacts_written is True
+        # 如果 docker 不可用, compose_up/healthy 应为 False
+        if not status.docker_available:
+            assert status.compose_up is False
+
+
+# ============================================================================
+# 自定义模板 (主 00:36 适配性)
+# ============================================================================
+
+
+def test_custom_dockerfile_persists():
+    """V1050 真生产 自定义 dockerfile 持久化 (主 00:36 适配性)."""
+    custom = "# custom dockerfile\nFROM alpine:latest\n"
+    deploy = V1050RealDockerDeploy(dockerfile=custom)
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        artefacts = deploy.write_artifacts(tmp)
+        with open(artefacts[V1050_DOCKERFILE], encoding="utf-8") as f:
+            assert f.read() == custom
+
+
+def test_custom_compose_persists():
+    """V1050 真生产 自定义 compose 持久化."""
+    custom = "version: '3.8'\nservices:\n  custom-svc:\n    image: alpine\n"
+    deploy = V1050RealDockerDeploy(compose=custom)
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        artefacts = deploy.write_artifacts(tmp)
+        with open(artefacts[V1050_COMPOSE], encoding="utf-8") as f:
+            assert f.read() == custom
+
+
+# ============================================================================
+# stats (主 00:56 任何人都能接手)
+# ============================================================================
+
+
+def test_stats_has_version_and_philosophy():
+    deploy = V1050RealDockerDeploy()
+    s = deploy.stats()
+    assert s["version"] == V1050_VERSION
+    assert "philosophy" in s
+    assert "主 06:15" in s["philosophy"]
+
+
+def test_stats_command_log_count():
+    """V1050 真生产 n_commands_run 统计 (主 17:43 实事求是)."""
+    deploy = V1050RealDockerDeploy()
+    s0 = deploy.stats()
+    assert s0["n_commands_run"] == 0
+
+
+def test_stats_artefact_count_initially_zero():
+    deploy = V1050RealDockerDeploy()
+    s = deploy.stats()
+    assert s["n_artefacts"] == 0
+
+
+# ============================================================================
+# V3 哲学守门 (主 17:58 + 主 20:46 + 主 17:43)
+# ============================================================================
+
+
+def test_module_does_not_pretend_phenomenal():
+    """V3 哲学守门: 不假装 Phenomenal consciousness."""
+    import apeireth.v1050_real_docker_deploy as m
+    src = m.__doc__ or ""
+    assert "Phenomenal" in src or "不假装" in src
+
+
+def test_module_does_not_pretend_asi_solved():
+    """V3 哲学守门: 不假装达到 ASI. V1050 真部署 ≠ ASI."""
+    import apeireth.v1050_real_docker_deploy as m
+    assert hasattr(m, "V3_GUARDS")
+    assert m.V3_GUARDS["deploy_is_not_asi"].startswith("V1050")
+
+
+def test_deploy_is_not_safety_guarded():
+    """V3 哲学守门: 部署 ≠ 安全. production_is_not_safety 必备."""
+    import apeireth.v1050_real_docker_deploy as m
+    assert "production_is_not_safety" in m.V3_GUARDS
+    text = m.V3_GUARDS["production_is_not_safety"]
+    assert "部署" in text
+
+
+def test_module_does_not_pretend_deployment_equals_asi():
+    """V3 哲学守门: 真部署 ≠ ASI 部署. deploy_is_not_asi 必备."""
+    import apeireth.v1050_real_docker_deploy as m
+    assert "deploy_is_not_asi" in m.V3_GUARDS
+
+
+# ============================================================================
+# 集成测试 (主 00:36 工程化)
+# ============================================================================
+
+
+def test_integration_full_artifacts_pipeline():
+    """真生产完整 artifacts pipeline: 写 5 文件 + 验证大小 + 验证 dockerfile 可读."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        artefacts = deploy.write_artifacts(tmp)
+        # 5 文件全部存在且非空
+        for name, path in artefacts.items():
+            assert os.path.exists(path), f"{name} not written"
+            assert os.path.getsize(path) > 100, f"{name} too small"
+        # dockerfile 可读
+        with open(artefacts[V1050_DOCKERFILE], encoding="utf-8") as f:
+            content = f.read()
+        assert "FROM python:3.13-slim" in content
+        assert "USER asi" in content
+
+
+def test_integration_inspect_after_write():
+    """真生产 write_artifacts → inspect 状态正确."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        deploy.write_artifacts(tmp)
+        status = deploy.inspect(tmp)
+        # artefacts_written 应为 True (compose 文件在)
+        assert status.artefacts_written is True
+        # 真状态正确反映
+        assert status.docker_available in (True, False)
+
+
+def test_command_log_appends():
+    """V1050 真测 command_log 累积 (主 17:43 实事求是)."""
+    deploy = V1050RealDockerDeploy()
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        # compose_up / compose_down 会调 _run_command 并 append log
+        deploy.compose_up(tmp, timeout=10)
+        deploy.compose_down(tmp, timeout=10)
+    assert len(deploy.command_log) >= 2
+
+
+def test_demo_runs():
+    """V1050 真测 _demo 函数能跑 (主 00:56 任何人都能接手)."""
+    from apeireth.v1050_real_docker_deploy import _demo
+    # _demo 内部用临时目录, 应该不报错
     try:
-        Feature(name="bad", value=0.0, layer=-1)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_feature_invalid_type():
-    """feature_type 非法应该 raise."""
-    try:
-        Feature(name="bad", value=0.0, feature_type="wrong")
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_feature_all_valid_types():
-    """5 种合法 feature_type."""
-    for ft in ["input", "activation", "neuron", "logit", "attention"]:
-        f = Feature(name="x", value=0.0, feature_type=ft)
-        assert f.feature_type == ft
-
-
-# ============================================================================
-# 2. Attribution — 4 tests
-# ============================================================================
-
-
-def test_attribution_basic():
-    """Attribution 三元组."""
-    feat = Feature(name="x", value=0.5)
-    a = Attribution(feature=feat, attribution=0.3, confidence=0.9)
-    assert a.feature == feat
-    assert a.attribution == 0.3
-    assert a.confidence == 0.9
-
-
-def test_attribution_default_confidence():
-    """默认 confidence = 1.0."""
-    a = Attribution(feature=Feature(name="x", value=0.0), attribution=0.1)
-    assert a.confidence == 1.0
-
-
-def test_attribution_negative():
-    """Attribution 可为负 (negative contribution)."""
-    a = Attribution(feature=Feature(name="x", value=0.0), attribution=-0.5)
-    assert a.attribution == -0.5
-
-
-def test_attribution_invalid_confidence():
-    """confidence 不在 [0, 1] 应该 raise."""
-    try:
-        Attribution(feature=Feature(name="x", value=0.0), attribution=0.0, confidence=1.5)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-# ============================================================================
-# 3. AttributionGraph — 6 tests
-# ============================================================================
-
-
-def test_attribution_graph_construction():
-    """AttributionGraph 空构造."""
-    g = AttributionGraph()
-    assert g.nodes == {}
-    assert g.edges == []
-
-
-def test_attribution_graph_add_node_and_edge():
-    """添加 node + edge."""
-    g = AttributionGraph()
-    f1 = Feature(name="a", value=0.5, layer=0)
-    f2 = Feature(name="b", value=0.6, layer=1)
-    g.add_node(f1)
-    g.add_node(f2)
-    g.add_edge("a", "b", 0.5)
-    assert len(g.nodes) == 2
-    assert len(g.edges) == 1
-
-
-def test_attribution_graph_add_edge_missing_node():
-    """添加 edge 但 node 不存在应该 raise."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0))
-    try:
-        g.add_edge("a", "missing", 0.5)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_attribution_graph_downstream_upstream():
-    """downstream / upstream 真测."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0, layer=0))
-    g.add_node(Feature(name="b", value=0.0, layer=1))
-    g.add_node(Feature(name="c", value=0.0, layer=2))
-    g.add_edge("a", "b", 0.3)
-    g.add_edge("a", "c", 0.5)
-    g.add_edge("b", "c", 0.7)
-    down_a = g.downstream("a")
-    down_b = g.downstream("b")
-    up_c = g.upstream("c")
-    assert len(down_a) == 2
-    assert len(down_b) == 1
-    assert len(up_c) == 2
-
-
-def test_attribution_graph_total_attribution():
-    """total_attribution 真测 = sum incoming weights."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0))
-    g.add_node(Feature(name="b", value=0.0))
-    g.add_node(Feature(name="c", value=0.0))
-    g.add_edge("a", "c", 0.3)
-    g.add_edge("b", "c", 0.5)
-    total = g.total_attribution("c")
-    assert abs(total - 0.8) < 1e-9
-
-
-def test_attribution_graph_critical_path():
-    """critical_path 找最大权重上游链."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="input", value=0.0, layer=0))
-    g.add_node(Feature(name="mid", value=0.0, layer=1))
-    g.add_node(Feature(name="out", value=0.0, layer=2))
-    g.add_edge("input", "mid", 0.7)
-    g.add_edge("input", "out", 0.2)
-    g.add_edge("mid", "out", 0.9)
-    path = g.critical_path("out")
-    assert "out" in path
-    assert "input" in path
-    assert path[0] == "input"
-
-
-# ============================================================================
-# 4. SHAPEstimator (Lundberg-Lee 2017) — 6 tests
-# ============================================================================
-
-
-def test_shap_basic_uniform():
-    """SHAP uniform value function — 所有 feature 等权 = sum."""
-    sh = SHAPEstimator(value_fn=lambda subset: float(len(subset)))
-    # 3 features, uniform: each phi = 1.0
-    attrs = sh.attribute([Feature(name=f"x{i}", value=0.0) for i in range(3)])
-    assert len(attrs) == 3
-    for a in attrs:
-        assert abs(a.attribution - 1.0) < 1e-9
-
-
-def test_shap_linear_sum():
-    """SHAP linear value function = sum — phi = feature value."""
-    sh = SHAPEstimator(value_fn=lambda subset: float(sum(subset)))
-    attrs = sh.attribute([Feature(name=f"x{i}", value=float(i)) for i in range(3)])
-    # phi_i = v({i}) - v({}) = i - 0 = i
-    assert abs(attrs[0].attribution - 0.0) < 1e-9
-    assert abs(attrs[1].attribution - 1.0) < 1e-9
-    assert abs(attrs[2].attribution - 2.0) < 1e-9
-
-
-def test_shap_efficiency():
-    """SHAP efficiency property: sum phi_i = v(F) - v(∅)."""
-    sh = SHAPEstimator(value_fn=lambda subset: float(sum(subset)))
-    attrs = sh.attribute([Feature(name=f"x{i}", value=0.0) for i in range(3)])
-    total = sum(a.attribution for a in attrs)
-    # v({0,1,2}) - v({}) = 3 - 0 = 3
-    assert abs(total - 3.0) < 1e-9
-
-
-def test_shap_out_of_range():
-    """feature_index 越界 raise."""
-    sh = SHAPEstimator(value_fn=lambda subset: float(len(subset)))
-    try:
-        sh.shapley_value(5, 3)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_shap_too_many_features():
-    """total_features > 12 raise."""
-    sh = SHAPEstimator(value_fn=lambda subset: float(len(subset)))
-    try:
-        sh.shapley_value(0, 15)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_shap_empty():
-    """空 feature 列表."""
-    sh = SHAPEstimator(value_fn=lambda subset: 0.0)
-    attrs = sh.attribute([])
-    assert attrs == []
-
-
-# ============================================================================
-# 5. LIMEExplainer (Ribeiro 2016) — 5 tests
-# ============================================================================
-
-
-def test_lime_basic_attribution():
-    """LIME basic attribution — 返回每个 dim 的 slope."""
-    li = LIMEExplainer(predict_fn=lambda x: sum(x), num_samples=30, seed=42)
-    attrs = li.attribute([0.5, 0.6, 0.7])
-    assert len(attrs) == 3
-    for a in attrs:
-        assert -1.0 < a.attribution < 2.0  # reasonable range
-
-
-def test_lime_confidence_in_01():
-    """LIME confidence ∈ [0, 1]."""
-    li = LIMEExplainer(predict_fn=lambda x: sum(x), num_samples=30, seed=42)
-    attrs = li.attribute([0.5, 0.6])
-    for a in attrs:
-        assert 0.0 <= a.confidence <= 1.0
-
-
-def test_lime_empty_query():
-    """空 query."""
-    li = LIMEExplainer(predict_fn=lambda x: 0.0, num_samples=10)
-    attrs = li.attribute([])
-    assert attrs == []
-
-
-def test_lime_gaussian_kernel_basic():
-    """高斯核: 距离 0 → 权重 1."""
-    li = LIMEExplainer(predict_fn=lambda x: 0.0)
-    weights = li._gaussian_kernel([0.0])
-    assert abs(weights[0] - 1.0) < 1e-9
-
-
-def test_lime_deterministic_seed():
-    """相同 seed → 相同 attribution."""
-    li1 = LIMEExplainer(predict_fn=lambda x: sum(x), num_samples=20, seed=42)
-    li2 = LIMEExplainer(predict_fn=lambda x: sum(x), num_samples=20, seed=42)
-    a1 = li1.attribute([0.5, 0.6])
-    a2 = li2.attribute([0.5, 0.6])
-    assert all(abs(x.attribution - y.attribution) < 1e-9 for x, y in zip(a1, a2))
-
-
-# ============================================================================
-# 6. IntegratedGradients (Sundararajan 2017) — 5 tests
-# ============================================================================
-
-
-def test_ig_basic_attribution():
-    """IG basic attribution — 返回每个 dim 的 attribution."""
-    ig = IntegratedGradients(predict_fn=lambda x: sum(x), steps=10)
-    attrs = ig.attribute([0.5, 0.6, 0.7])
-    assert len(attrs) == 3
-    for a in attrs:
-        assert -1.0 < a.attribution < 2.0
-
-
-def test_ig_zero_query_zero_attribution():
-    """query=0 → attribution=0 (since x - x' = 0)."""
-    ig = IntegratedGradients(predict_fn=lambda x: sum(x), steps=10)
-    attrs = ig.attribute([0.0, 0.0, 0.0])
-    for a in attrs:
-        assert abs(a.attribution) < 1e-9
-
-
-def test_ig_custom_baseline():
-    """自定义 baseline."""
-    ig = IntegratedGradients(predict_fn=lambda x: sum(x), steps=10, baseline=[0.1, 0.1])
-    attrs = ig.attribute([0.5, 0.5])
-    for a in attrs:
-        assert a.attribution >= 0.0
-
-
-def test_ig_baseline_length_mismatch():
-    """baseline 长度不匹配 raise."""
-    ig = IntegratedGradients(predict_fn=lambda x: sum(x), baseline=[0.0])
-    try:
-        ig.attribute([0.5, 0.5])
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_ig_confidence_increases_with_steps():
-    """更多 steps → 更高 confidence."""
-    ig1 = IntegratedGradients(predict_fn=lambda x: sum(x), steps=5)
-    ig2 = IntegratedGradients(predict_fn=lambda x: sum(x), steps=50)
-    a1 = ig1.attribute([0.5])[0]
-    a2 = ig2.attribute([0.5])[0]
-    assert a2.confidence > a1.confidence
-
-
-# ============================================================================
-# 7. ActivationPatching (Meng 2022 ROME) — 5 tests
-# ============================================================================
-
-
-def test_activation_cache_basic():
-    """ActivationCache 缓存 + 还原."""
-    cache = ActivationCache()
-    cache.cache(0, [0.5, 0.6])
-    cache.cache(1, [0.7])
-    assert cache.get(0) == [0.5, 0.6]
-    assert cache.get(1) == [0.7]
-    assert cache.input_dim == 2
-
-
-def test_activation_patching_causal_effect_basic():
-    """causal_effect 真测 — output 恢复度 ∈ [0, 1+]."""
-    def forward(x, layer, patched):
-        if layer < 0:
-            return sum(x)
-        return sum(patched) if patched else sum(x)
-
-    ap = ActivationPatchingProbe(forward_fn=forward, layers=3)
-    cache = ActivationCache()
-    cache.cache(0, [0.5, 0.6, 0.7])
-    effects = ap.causal_effect([0.5, 0.6, 0.7], [0.1, 0.1, 0.1], cache)
-    assert len(effects) == 3
-    for v in effects.values():
-        assert -1.0 <= v <= 2.0  # reasonable range
-
-
-def test_activation_patching_critical_layers():
-    """critical_layers 找出 critical layers."""
-    def forward(x, layer, patched):
-        if layer < 0:
-            return sum(x)
-        return sum(patched) if patched else sum(x)
-
-    ap = ActivationPatchingProbe(forward_fn=forward, layers=3)
-    cache = ActivationCache()
-    cache.cache(0, [0.5, 0.6])
-    cache.cache(1, [0.7])
-    layers = ap.critical_layers([0.5, 0.6], [0.1, 0.1], cache, threshold=0.5)
-    assert isinstance(layers, list)
-
-
-def test_activation_patching_zero_denominator_safe():
-    """clean = corrupted → causal effect = 0 (no crash)."""
-    def forward(x, layer, patched):
-        return 0.5  # constant
-
-    ap = ActivationPatchingProbe(forward_fn=forward, layers=2)
-    cache = ActivationCache()
-    cache.cache(0, [0.0])
-    effects = ap.causal_effect([0.0], [0.0], cache)
-    for v in effects.values():
-        assert v == 0.0
-
-
-def test_activation_cache_restore():
-    """restore 真还原."""
-    cache = ActivationCache()
-    cache.cache(2, [0.1, 0.2, 0.3])
-    restored = cache.restore(2)
-    assert restored == [0.1, 0.2, 0.3]
-
-
-# ============================================================================
-# 8. CircuitDiscoverer (Anthropic 2023 + Wang 2022) — 5 tests
-# ============================================================================
-
-
-def test_circuit_node_construction():
-    """CircuitNode 基本构造."""
-    node = CircuitNode(node_id="x", component_type="mlp", layer=1, importance=0.5)
-    assert node.node_id == "x"
-    assert node.component_type == "mlp"
-    assert node.layer == 1
-    assert node.importance == 0.5
-
-
-def test_circuit_basic():
-    """Circuit 基本."""
-    c = Circuit(circuit_id="c1", behavior="toy")
-    c.add_node(CircuitNode(node_id="x", component_type="mlp", layer=0, importance=0.5))
-    c.add_node(CircuitNode(node_id="y", component_type="logit", layer=1, importance=0.8))
-    c.add_edge("x", "y")
-    assert c.size() == 2
-    # 1 edge / (2 * 1) = 0.5 (图论密度: edges / n*(n-1) for undirected simple graph)
-    assert abs(c.density() - 0.5) < 1e-9
-
-
-def test_circuit_density_sparse():
-    """sparse circuit density < 1.0."""
-    c = Circuit(circuit_id="c1")
-    for i in range(5):
-        c.add_node(CircuitNode(node_id=f"n{i}", component_type="mlp", layer=i))
-    c.add_edge("n0", "n1")
-    c.add_edge("n1", "n2")
-    # 2 edges / (5 * 4) = 0.1
-    assert abs(c.density() - 0.1) < 1e-9
-
-
-def test_circuit_discoverer_basic():
-    """CircuitDiscoverer 在 demo graph 上发现 circuit."""
-    g = make_demo_attribution_graph()
-    cd = CircuitDiscoverer(importance_threshold=0.10)
-    circuit = cd.discover(g, "logit_out", behavior="toy")
-    assert circuit.size() > 0
-    assert circuit.behavior == "toy"
-
-
-def test_circuit_discoverer_missing_output():
-    """output 不在 graph 中 → empty circuit."""
-    g = AttributionGraph()
-    cd = CircuitDiscoverer(importance_threshold=0.10)
-    circuit = cd.discover(g, "missing", behavior="test")
-    assert circuit.size() == 0
-
-
-# ============================================================================
-# 9. ProbingClassifier (Hewitt-Manning 2019) — 5 tests
-# ============================================================================
-
-
-def test_probing_classifier_fit_predict():
-    """线性 probe fit + predict."""
-    pc = ProbingClassifier(layer=1, ridge_lambda=0.01)
-    reps = [[0.1, 0.2], [0.4, 0.5], [0.7, 0.8]]
-    labels = [0.3, 0.7, 1.1]
-    pc.fit(reps, labels)
-    pred = pc.predict([0.5, 0.5])
-    assert isinstance(pred, float)
-
-
-def test_probing_classifier_predict_before_fit():
-    """fit 之前 predict raise."""
-    pc = ProbingClassifier(layer=1)
-    try:
-        pc.predict([0.5, 0.5])
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_probing_classifier_length_mismatch():
-    """X 和 y 长度不匹配 raise."""
-    pc = ProbingClassifier(layer=1)
-    try:
-        pc.fit([[0.1, 0.2], [0.3, 0.4]], [0.5])
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_probing_classifier_encoding_score():
-    """encoding_score ∈ [0, 1]."""
-    pc = ProbingClassifier(layer=1, ridge_lambda=0.01)
-    reps = [[0.1, 0.2], [0.4, 0.5], [0.7, 0.8]]
-    labels = [0.3, 0.7, 1.1]
-    pc.fit(reps, labels)
-    score = pc.encoding_score(reps, labels)
-    assert 0.0 <= score <= 1.0
-
-
-def test_probing_classifier_empty():
-    """空 fit 不崩."""
-    pc = ProbingClassifier(layer=1)
-    pc.fit([], [])
-    assert pc.weights is None
-
-
-# ============================================================================
-# 10. PathTracker (Geiger 2024) — 5 tests
-# ============================================================================
-
-
-def test_path_tracker_do_intervene():
-    """do(node = value) 传播到下游."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0, layer=0))
-    g.add_node(Feature(name="b", value=0.0, layer=1))
-    g.add_node(Feature(name="c", value=0.0, layer=2))
-    g.add_edge("a", "b", 0.5)
-    g.add_edge("b", "c", 0.4)
-    pt = PathTracker(graph=g)
-    result = pt.do_intervene("a", 1.0)
-    assert result["a"] == 1.0
-    assert abs(result["b"] - 0.5) < 1e-9
-    assert abs(result["c"] - 0.2) < 1e-9
-
-
-def test_path_tracker_total_causal_effect():
-    """total_causal_effect 真测."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0))
-    g.add_node(Feature(name="b", value=0.0))
-    g.add_edge("a", "b", 0.6)
-    pt = PathTracker(graph=g)
-    effect = pt.total_causal_effect("a", "b", value=1.0)
-    assert abs(effect - 0.6) < 1e-9
-
-
-def test_path_tracker_do_intervene_missing_node():
-    """do 节点不存在 raise."""
-    g = AttributionGraph()
-    g.add_node(Feature(name="a", value=0.0))
-    pt = PathTracker(graph=g)
-    try:
-        pt.do_intervene("missing", 1.0)
-        raise AssertionError("should have raised")
-    except ValueError:
-        pass
-
-
-def test_path_tracker_find_all_paths():
-    """find_all_paths 真测."""
-    g = make_demo_attribution_graph()
-    pt = PathTracker(graph=g)
-    paths = pt.find_all_paths("input_0", "logit_out")
-    assert len(paths) >= 1
-
-
-def test_path_tracker_missing_nodes():
-    """missing source/target 返回 []."""
-    g = make_demo_attribution_graph()
-    pt = PathTracker(graph=g)
-    paths = pt.find_all_paths("missing", "logit_out")
-    assert paths == []
-
-
-# ============================================================================
-# 11. InterpretabilityReport — 5 tests
-# ============================================================================
-
-
-def test_interpretability_report_basic():
-    """InterpretabilityReport 基本."""
-    r = InterpretabilityReport(title="Test", behavior="test")
-    md = r.to_markdown()
-    assert "Test" in md
-    assert "test" in md
-
-
-def test_interpretability_report_add_attributions():
-    """添加 attributions 后 to_markdown 包含."""
-    r = InterpretabilityReport(title="T", behavior="b")
-    r.add_attributions([
-        Attribution(feature=Feature(name="x0", value=0.5), attribution=0.3, confidence=0.9)
-    ])
-    md = r.to_markdown()
-    assert "Attributions" in md
-    assert "x0" in md
-
-
-def test_interpretability_report_add_circuit():
-    """添加 circuit 后 to_markdown 包含."""
-    r = InterpretabilityReport(title="T", behavior="b")
-    c = Circuit(circuit_id="c1", behavior="b")
-    c.add_node(CircuitNode(node_id="x", component_type="mlp", layer=0, importance=0.5))
-    r.add_circuit(c)
-    md = r.to_markdown()
-    assert "Circuits" in md
-    assert "c1" in md
-
-
-def test_interpretability_report_add_critical_path():
-    """添加 critical path 后 to_markdown 包含."""
-    r = InterpretabilityReport(title="T", behavior="b")
-    r.add_critical_path(["input", "hidden", "output"])
-    md = r.to_markdown()
-    assert "Critical Paths" in md
-    assert "input" in md
-
-
-def test_interpretability_report_metrics():
-    """添加 metrics 后 to_markdown 包含."""
-    r = InterpretabilityReport(title="T", behavior="b")
-    r.asil_metrics = {"overall": 0.75}
-    md = r.to_markdown()
-    assert "ASI V0.2 Bridge Metrics" in md
-    assert "0.7500" in md
-
-
-# ============================================================================
-# 12. ASIInterpretabilityBridge — 6 tests
-# ============================================================================
-
-
-def test_bridge_basic_construction():
-    """ASIInterpretabilityBridge 基本构造."""
-    b = ASIInterpretabilityBridge()
-    assert b.interpretability_score() == {}
-
-
-def test_bridge_demo_score_in_01():
-    """demo bridge score ∈ [0, 1]."""
-    b = make_demo_bridge()
-    score = b.interpretability_score()
-    assert 0.0 <= score.get("overall", 0.0) <= 1.0
-
-
-def test_bridge_v02_contribution_positive():
-    """V0.2 contribution > 0 when score > 0."""
-    b = make_demo_bridge()
-    contrib = b.asi_v02_interpretability_contribution()
-    assert contrib > 0.0
-
-
-def test_bridge_is_interpretable_threshold():
-    """is_interpretable 阈值守门."""
-    b = make_demo_bridge()
-    assert isinstance(b.is_interpretable(threshold=0.50), bool)
-
-
-def test_bridge_safety_score_components():
-    """safety_score 包含多个组件 key."""
-    b = make_demo_bridge()
-    score = b.interpretability_score()
-    # demo bridge 应至少有几个 key
-    assert "overall" in score
-    assert len(score) >= 5
-
-
-def test_bridge_no_components_zero():
-    """全 None → score 空 / overall = 0."""
-    b = ASIInterpretabilityBridge()
-    score = b.interpretability_score()
-    assert score == {} or score.get("overall", 0.0) == 0.0
-
-
-# ============================================================================
-# 13. Sanity refs + run_all + version — 4 tests
-# ============================================================================
-
-
-def test_sanity_refs_all_true():
-    """sanity_check_refs 全 True."""
-    refs = sanity_check_refs()
-    for v in refs.values():
-        assert v is True
-    assert "do_not_pretend_phenomenal" in refs
-    assert "do_not_pretend_asi" in refs
-    assert "do_not_pretend_interpretability_solved" in refs
-
-
-def test_version_format():
-    """version 是 0.x.x 格式."""
-    assert V1050_VERSION.startswith("0.")
-
-
-def test_run_all_returns_dict():
-    """run_all 返回 dict."""
-    result = run_all()
-    assert isinstance(result, dict)
-    assert "version" in result
-    assert "sanity" in result
-
-
-def test_run_all_completeness():
-    """run_all 包含所有 11 组件结果."""
-    result = run_all()
-    expected_keys = [
-        "graph_nodes", "graph_edges", "critical_path",
-        "shap_attributions", "lime_attributions", "ig_attributions",
-        "patch_effects", "circuit_size", "circuit_density",
-        "probing_prediction", "all_paths_count",
-        "interpretability_score", "v02_contribution", "is_interpretable",
+        _demo()
+    except Exception as e:
+        pytest.fail(f"_demo crashed: {e}")
+
+
+def test_all_exports_present():
+    """V1050 真测 __all__ 导出完整 (主 00:56 任何人都能接手)."""
+    from apeireth import v1050_real_docker_deploy as m
+    expected = [
+        "V1050_VERSION", "V1050_DOCKERFILE", "V1050_COMPOSE", "V1050_ENV",
+        "V1050_DOCKERIGNORE", "V1050_REQUIREMENTS",
+        "DOCKERFILE_RUNTIME", "DOCKER_COMPOSE_RUNTIME", "DOCKERIGNORE_RUNTIME",
+        "ENV_RUNTIME", "REQUIREMENTS_RUNTIME",
+        "DockerCommandResult", "ContainerHealth", "DeploymentStatus",
+        "V1050RealDockerDeploy",
     ]
-    for k in expected_keys:
-        assert k in result, f"missing key: {k}"
+    for name in expected:
+        assert name in m.__all__, f"missing export: {name}"
 
 
-# ============================================================================
-# 14. Integration — 3 tests
-# ============================================================================
-
-
-def test_integration_full_workflow():
-    """完整工作流: graph → SHAP → LIME → IG → circuit → report."""
-    g = make_demo_attribution_graph()
-
-    def toy_v(subset):
-        return float(sum(subset))
-
-    sh = SHAPEstimator(value_fn=toy_v)
-    inputs = [g.nodes[n] for n in g.nodes if g.nodes[n].feature_type == "input"]
-    sh_attrs = sh.attribute(inputs)
-    assert len(sh_attrs) == 3
-
-    li = LIMEExplainer(predict_fn=lambda x: sum(x), num_samples=20, seed=42)
-    lime_attrs = li.attribute([f.value for f in inputs])
-    assert len(lime_attrs) == 3
-
-    ig = IntegratedGradients(predict_fn=lambda x: sum(x), steps=10)
-    ig_attrs = ig.attribute([f.value for f in inputs])
-    assert len(ig_attrs) == 3
-
-    cd = CircuitDiscoverer(importance_threshold=0.10)
-    circuit = cd.discover(g, "logit_out", behavior="toy")
-    assert circuit.size() > 0
-
-    report = InterpretabilityReport(title="Integration Test", behavior="toy")
-    report.add_attributions(sh_attrs)
-    report.add_circuit(circuit)
-    md = report.to_markdown()
-    assert "Integration Test" in md
-    assert "toy" in md
-
-
-def test_integration_path_to_attribution():
-    """PathTracker → AttributionGraph 集成."""
-    g = make_demo_attribution_graph()
-    pt = PathTracker(graph=g)
-    paths = pt.find_all_paths("input_0", "logit_out")
-    assert len(paths) >= 1
-    # 用 paths 来标注 critical path
-    if paths:
-        critical = g.critical_path("logit_out")
-        assert critical[0] == "input_0" or critical[0] in g.nodes
-
-
-def test_integration_v02_contribution_proportional():
-    """V0.2 contribution ∝ overall score."""
-    b1 = make_demo_bridge()
-    contrib1 = b1.asi_v02_interpretability_contribution()
-    # 添加一个完美 component
-    b1.circuit_discoverer = CircuitDiscoverer(importance_threshold=0.0)  # 找所有
-    contrib2 = b1.asi_v02_interpretability_contribution()
-    # contrib2 应 >= contrib1
-    assert contrib2 >= contrib1 * 0.99  # 允许小误差
+def test_custom_requirements_persists():
+    """V1050 真生产 自定义 requirements 持久化."""
+    custom = "# minimal\npytest>=7.0\n"
+    deploy = V1050RealDockerDeploy(requirements=custom)
+    with tempfile.TemporaryDirectory(prefix="v1050_") as tmp:
+        artefacts = deploy.write_artifacts(tmp)
+        with open(artefacts[V1050_REQUIREMENTS], encoding="utf-8") as f:
+            assert f.read() == custom

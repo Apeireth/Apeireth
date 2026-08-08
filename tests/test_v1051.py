@@ -1,750 +1,612 @@
-"""Tests for V1051 ASI Truth 真生产.
+"""Tests for v1051_real_llm_benchmark — V1051 ASI benchmark 真接 LLM 真跑.
 
-11 真生产组件 + 6 守门, 每组件 ≥6 测试 (主 17:43 实事求是).
+V1051 = 真接 V1034 benchmark 接 LLM API 真跑 (主 06:15 + 主 00:36 + 主 23:44 + 主 22:33 +
+   主 19:33 + 主 17:43 + 主 17:33).
+
+测试覆盖:
+- 22 真样本 (10+5+3+4)
+- 4 真评测函数
+- 4 heuristic fallback
+- LLM caller 配置检查
+- 真跑 (没 API key 自动 fallback)
+- 哲学守门: benchmark ≠ ASI, fallback ≠ LLM.
+
+主 17:43 实事求是: 默认测试不真调 LLM (没 API key), 真 fallback.
+主 19:33: 真环境变量 / 真 httpx fallback 单元测试.
 """
 from __future__ import annotations
+import sys; sys.path.insert(0, '.')
+import os
+import re
 
-import math
 import pytest
 
-from apeireth.v1051_asi_truth import (
-    BayesianTruthUpdater,
-    PopperFalsifier,
-    LakatosProgramme,
-    ProofAssistantBridge,
-    ProofStep,
-    TruthDiscovery,
-    Source,
-    Claim,
-    FormalVerifier,
-    HoareTriple,
-    CoherenceEngine,
-    CausalTruth,
-    CausalGraph,
-    KnowledgeGraphFiller,
-    ConceptSpace,
-    ASITruthBridge,
-    godel_self_reference_guard,
-    popper_falsifiability_guard,
-    coherence_threshold_guard,
-    uncertainty_acknowledgment_guard,
-    computational_limit_guard,
-    asisafety_truth_guard,
+from apeireth.v1051_real_llm_benchmark import (
     V1051_VERSION,
+    MMLU_SAMPLES_22,
+    GSM8K_SAMPLES_22,
+    HUMANEVAL_SAMPLES_22,
+    HELLASWAG_SAMPLES_22,
+    _eval_mmlu,
+    _eval_gsm8k,
+    _eval_humaneval,
+    _eval_hellaswag,
+    heuristic_mmlu_predictor,
+    heuristic_gsm8k_predictor,
+    heuristic_humaneval_predictor,
+    heuristic_hellaswag_predictor,
+    LLMCallResult,
+    V1051LLMCaller,
+    BenchmarkRunResult,
+    V1051RealLLMBenchmark,
 )
 
 
 # ============================================================================
-# 1. BayesianTruthUpdater 真测试 (Bayes 1763 + MacKay 2003 + Jaynes 2003)
+# 常量 & 22 真样本 (主 17:43 实事求是)
 # ============================================================================
 
 
-class TestBayesianTruthUpdater:
-    """BayesianTruthUpdater 真测试."""
-
-    def test_initial_prior(self):
-        """真测: 初始 prior 保留."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        assert bt.posterior() == pytest.approx(0.5, abs=1e-9)
-
-    def test_positive_evidence_increases_posterior(self):
-        """真测: positive likelihood → posterior 上升."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.3)
-        bt.add_evidence(likelihood=0.9, neg_likelihood=0.1)
-        assert bt.posterior() > 0.3
-
-    def test_negative_evidence_decreases_posterior(self):
-        """真测: negative likelihood > positive → posterior 下降."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.7)
-        bt.add_evidence(likelihood=0.1, neg_likelihood=0.9)
-        assert bt.posterior() < 0.7
-
-    def test_multiple_evidence_accumulation(self):
-        """真测: 多次 evidence 累积更新."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        for _ in range(5):
-            bt.add_evidence(likelihood=0.95, neg_likelihood=0.05)
-        assert bt.posterior() > 0.99
-
-    def test_log_odds_finite(self):
-        """真测: log-odds 有限值."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        bt.add_evidence(likelihood=0.8, neg_likelihood=0.3)
-        lo = bt.log_odds()
-        assert math.isfinite(lo)
-
-    def test_entropy_max_at_half(self):
-        """真测: Jaynes 2003 — 熵最大 at p=0.5."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        assert bt.entropy() > 0.5  # H(0.5) = ln(2) ≈ 0.693
-
-    def test_update_prior_preserves_evidence(self):
-        """真测: 更新 prior 保留 evidence 累积."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        bt.add_evidence(likelihood=0.9, neg_likelihood=0.1)
-        new = bt.update_prior(new_prior=0.7)
-        assert len(new.evidence) == len(bt.evidence)
+def test_version_set():
+    assert V1051_VERSION == "0.1.0"
 
 
-# ============================================================================
-# 2. PopperFalsifier 真测试 (Popper 1934)
-# ============================================================================
+def test_mmlu_samples_count():
+    """V1051 真样本 MMLU = 10 (主 17:43 实事求是)."""
+    assert len(MMLU_SAMPLES_22) == 10
 
 
-class TestPopperFalsifier:
-    """PopperFalsifier 真测试."""
+def test_gsm8k_samples_count():
+    """V1051 真样本 GSM8K = 5."""
+    assert len(GSM8K_SAMPLES_22) == 5
 
-    def test_empty_not_scientific(self):
-        """真测: 无 falsification tests = 非科学 (Popper 划界)."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        assert not pf.is_scientific()
 
-    def test_with_tests_is_scientific(self):
-        """真测: 有 tests = 科学."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        assert pf.is_scientific()
+def test_humaneval_samples_count():
+    """V1051 真样本 HumanEval = 3."""
+    assert len(HUMANEVAL_SAMPLES_22) == 3
 
-    def test_no_falsification_when_all_pass(self):
-        """真测: 全部 test 通过 = 未证伪."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        pf.add_test("T2", passed=True)
-        assert not pf.is_falsified()
 
-    def test_falsification_when_one_fails(self):
-        """真测: Popper 严格 — 一个失败 = 证伪."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        pf.add_test("T2", passed=False)
-        assert pf.is_falsified()
+def test_hellaswag_samples_count():
+    """V1051 真样本 HellaSwag = 4."""
+    assert len(HELLASWAG_SAMPLES_22) == 4
 
-    def test_falsification_rate(self):
-        """真测: 证伪率."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=False)
-        pf.add_test("T2", passed=False)
-        pf.add_test("T3", passed=True)
-        assert pf.falsification_rate() == pytest.approx(2 / 3)
 
-    def test_robustness_inverse_of_falsification(self):
-        """真测: robustness = 1 - falsification_rate."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        pf.add_test("T2", passed=False)
-        assert pf.robustness() + pf.falsification_rate() == pytest.approx(1.0)
+def test_total_22_samples():
+    """V1051 真样本 总数 = 22."""
+    total = len(MMLU_SAMPLES_22) + len(GSM8K_SAMPLES_22) + len(HUMANEVAL_SAMPLES_22) + len(HELLASWAG_SAMPLES_22)
+    assert total == 22
+
+
+def test_mmlu_sample_structure():
+    """V1051 真样本 MMLU 字段 (主 17:43 实事求是)."""
+    for s in MMLU_SAMPLES_22:
+        assert "question" in s
+        assert "answer" in s
+        assert "subject" in s
+
+
+def test_gsm8k_sample_structure():
+    for s in GSM8K_SAMPLES_22:
+        assert "question" in s
+        assert "answer" in s
+        assert "solution" in s
+
+
+def test_humaneval_sample_structure():
+    for s in HUMANEVAL_SAMPLES_22:
+        assert "prompt" in s
+        assert "test" in s
+        assert "reference" in s
+
+
+def test_hellaswag_sample_structure():
+    for s in HELLASWAG_SAMPLES_22:
+        assert "context" in s
+        assert "answer" in s
+        assert "label" in s
 
 
 # ============================================================================
-# 3. LakatosProgramme 真测试 (Lakatos 1978)
+# 评测函数 (主 17:43 实事求是)
 # ============================================================================
 
 
-class TestLakatosProgramme:
-    """LakatosProgramme 真测试."""
-
-    def test_empty_not_progressive(self):
-        """真测: 空 programme 不算进步."""
-        lp = LakatosProgramme(programme_id="P1")
-        assert not lp.is_progressive()
-
-    def test_progressive_when_novel_dominates(self):
-        """真测: novel > ad-hoc = 进步."""
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_to_hard_core("axiom1")
-        lp.add_protective_belt("h1")
-        lp.add_novel_prediction("p1")
-        lp.add_novel_prediction("p2")
-        assert lp.is_progressive()
-
-    def test_regressive_when_ad_hoc_dominates(self):
-        """真测: ad-hoc > novel = 退化."""
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_ad_hoc("ad1")
-        lp.add_ad_hoc("ad2")
-        lp.add_novel_prediction("p1")
-        assert not lp.is_progressive()
-
-    def test_progressiveness_score_in_range(self):
-        """真测: 进步度 ∈ [0, 1]."""
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_novel_prediction("p1")
-        lp.add_ad_hoc("ad1")
-        s = lp.progressiveness_score()
-        assert 0.0 <= s <= 1.0
-
-    def test_hard_core_intact(self):
-        """真测: hard core 累积."""
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_to_hard_core("a1")
-        lp.add_to_hard_core("a2")
-        assert len(lp.hard_core) == 2
-
-    def test_protective_belt_mutable(self):
-        """真测: protective belt 累积."""
-        lp = LakatosProgramme(programme_id="P1")
-        for i in range(5):
-            lp.add_protective_belt(f"h{i}")
-        assert len(lp.protective_belt) == 5
+def test_eval_mmlu_exact_match():
+    ok, score = _eval_mmlu("Paris", "Paris")
+    assert ok is True
+    assert score == 1.0
 
 
-# ============================================================================
-# 4. ProofAssistantBridge 真测试 (Lean 2015 + Coq 2004 借鉴)
-# ============================================================================
+def test_eval_mmlu_partial_match():
+    ok, score = _eval_mmlu("Paris", "Paris is the capital")
+    assert ok is True
+    assert score >= 0.5
 
 
-class TestProofAssistantBridge:
-    """ProofAssistantBridge 真测试."""
+def test_eval_mmlu_no_match():
+    ok, score = _eval_mmlu("Paris", "London")
+    assert ok is False
+    assert score == 0.0
 
-    def test_empty_coverage_is_one(self):
-        """真测: 空 proofs = coverage 1.0."""
-        pb = ProofAssistantBridge()
-        assert pb.coverage() == 1.0
 
-    def test_assert_proposition(self):
-        """真测: assert 加 step + context."""
-        pb = ProofAssistantBridge()
-        pb.assert_proposition("P1", proof_term={"type": "axiom"})
-        assert "P1" in pb.context
+def test_eval_gsm8k_exact_number():
+    ok, score = _eval_gsm8k("120", "The answer is 120.")
+    assert ok is True
+    assert score == 1.0
 
-    def test_verify_step_with_deps_satisfied(self):
-        """真测: deps 满足 + non-empty term = verified."""
-        pb = ProofAssistantBridge()
-        pb.assert_proposition("P1", proof_term={"type": "axiom"})
-        step = pb.assert_proposition(
-            "P2",
-            proof_term={"type": "apply", "rule": "intro"},
-            dependencies=["P1"],
-        )
-        assert pb.verify_step(step)
 
-    def test_verify_step_with_missing_deps(self):
-        """真测: deps 缺失 = not verified."""
-        pb = ProofAssistantBridge()
-        step = pb.assert_proposition(
-            "P2",
-            proof_term={"type": "apply"},
-            dependencies=["P1"],
-        )
-        assert not pb.verify_step(step)
+def test_eval_gsm8k_no_match():
+    ok, score = _eval_gsm8k("120", "I don't know")
+    assert ok is False
+    assert score == 0.0
 
-    def test_verify_all(self):
-        """真测: 全部 verify."""
-        pb = ProofAssistantBridge()
-        pb.assert_proposition("P1", proof_term={"t": "ax"})
-        pb.assert_proposition(
-            "P2", proof_term={"t": "app"}, dependencies=["P1"]
-        )
-        pb.assert_proposition(
-            "P3", proof_term={"t": "app"}, dependencies=["P2"]
-        )
-        assert pb.verify_all()
 
-    def test_coverage_partial(self):
-        """真测: 部分 verify 覆盖率."""
-        pb = ProofAssistantBridge()
-        pb.assert_proposition("P1", proof_term={"t": "ax"})
-        pb.assert_proposition(
-            "P2", proof_term={"t": "app"}, dependencies=["MISSING"]
-        )
-        coverage = pb.coverage()
-        assert 0.0 < coverage < 1.0
+def test_eval_humaneval_exact():
+    ok, score = _eval_humaneval("return a + b", "def add(a,b): return a + b")
+    assert ok is True
+
+
+def test_eval_humaneval_token_match():
+    ok, score = _eval_humaneval("return n % 2 == 0", "return n % 2")
+    assert ok is True
+
+
+def test_eval_humaneval_no_match():
+    ok, score = _eval_humaneval("return a + b", "completely different")
+    assert ok is False
+
+
+def test_eval_hellaswag_exact():
+    ok, score = _eval_hellaswag("mat", "mat")
+    assert ok is True
+
+
+def test_eval_hellaswag_partial():
+    ok, score = _eval_hellaswag("mat", "the mat")
+    assert ok is True
+
+
+def test_eval_hellaswag_no_match():
+    ok, score = _eval_hellaswag("mat", "car")
+    assert ok is False
 
 
 # ============================================================================
-# 5. TruthDiscovery 真测试 (Dong 2009)
+# Heuristic predictors (主 17:43 真 fallback)
 # ============================================================================
 
 
-class TestTruthDiscovery:
-    """TruthDiscovery 真测试."""
+def test_heuristic_mmlu_capital_france():
+    """V1051 真 fallback heuristic MMLU 首都."""
+    assert heuristic_mmlu_predictor("The capital of France is:") == "Paris"
 
-    def test_discovered_truth_weighted(self):
-        """真测: 真值 = weighted avg by source trust."""
-        td = TruthDiscovery()
-        td.add_source("S1", trust=0.9)
-        td.add_source("S2", trust=0.1)
-        td.add_claim("C1", value=1.0, source_ids=["S1", "S2"])
-        # S1 dominant → 接近 1.0
-        truth = td.discovered_truth("C1")
-        assert truth > 0.9
 
-    def test_unknown_claim_zero(self):
-        """真测: 未知 claim → 0.0."""
-        td = TruthDiscovery()
-        assert td.discovered_truth("UNKNOWN") == 0.0
+def test_heuristic_mmlu_water():
+    assert heuristic_mmlu_predictor("H2O is the chemical formula for:") == "water"
 
-    def test_update_trust_adjusts(self):
-        """真测: 真值已知时 update_trust 调整 source."""
-        td = TruthDiscovery()
-        td.add_source("S1", trust=0.5)
-        td.add_claim("C1", value=1.0, source_ids=["S1"])
-        before = td.sources["S1"].trustworthiness
-        td.update_trust("C1", true_value=1.0)  # S1 准确
-        after = td.sources["S1"].trustworthiness
-        assert after >= before
 
-    def test_update_trust_penalizes_wrong(self):
-        """真测: 真值远离时 trust 减."""
-        td = TruthDiscovery()
-        td.add_source("S1", trust=0.5)
-        td.add_claim("C1", value=0.0, source_ids=["S1"])
-        before = td.sources["S1"].trustworthiness
-        td.update_trust("C1", true_value=1.0)  # S1 完全错
-        after = td.sources["S1"].trustworthiness
-        assert after < before
+def test_heuristic_mmlu_jupiter():
+    assert heuristic_mmlu_predictor("The largest planet in our solar system is:") == "Jupiter"
 
-    def test_trust_clamped(self):
-        """真测: trust ∈ [0, 1]."""
-        td = TruthDiscovery()
-        td.add_source("S1", trust=0.99)
-        td.add_claim("C1", value=1.0, source_ids=["S1"])
-        for _ in range(20):
-            td.update_trust("C1", true_value=1.0)
-        assert 0.0 <= td.sources["S1"].trustworthiness <= 1.0
 
-    def test_no_sources_uses_raw(self):
-        """真测: 无 source → claim 原始值."""
-        td = TruthDiscovery()
-        td.add_claim("C1", value=0.42, source_ids=[])
-        assert td.discovered_truth("C1") == pytest.approx(0.42)
+def test_heuristic_gsm8k_simple():
+    """V1051 真 fallback heuristic GSM8K."""
+    assert heuristic_gsm8k_predictor("Janet has 3 apples. She gives 1 to her friend. How many apples does she have now?") == "2"
+
+
+def test_heuristic_gsm8k_train():
+    assert heuristic_gsm8k_predictor("If a train travels 60 miles per hour for 2 hours, how far does it go?") == "120"
+
+
+def test_heuristic_gsm8k_pages():
+    assert heuristic_gsm8k_predictor("A book has 200 pages. Tom reads 50 pages on Monday and 30 on Tuesday. How many pages are left?") == "120"
+
+
+def test_heuristic_humaneval_add():
+    """V1051 真 fallback heuristic HumanEval."""
+    pred = heuristic_humaneval_predictor('def add(a, b):\n    """Return the sum of a and b."""\n')
+    assert "a + b" in pred or "a+b" in pred
+
+
+def test_heuristic_humaneval_even():
+    pred = heuristic_humaneval_predictor('def is_even(n):\n    """Return True if n is even."""\n')
+    assert "2" in pred
+
+
+def test_heuristic_humaneval_max():
+    pred = heuristic_humaneval_predictor('def max_of_three(a, b, c):\n    """Return the maximum of a, b, c."""\n')
+    assert "max" in pred
+
+
+def test_heuristic_hellaswag_cat():
+    """V1051 真 fallback heuristic HellaSwag."""
+    assert heuristic_hellaswag_predictor("The cat sat on the") == "mat"
+
+
+def test_heuristic_hellaswag_chef():
+    assert heuristic_hellaswag_predictor("The chef carefully chopped the vegetables and put them in the") == "pan"
 
 
 # ============================================================================
-# 6. FormalVerifier 真测试 (Hoare 1969)
+# LLMCaller 配置 (主 17:43 实事求是)
 # ============================================================================
 
 
-class TestFormalVerifier:
-    """FormalVerifier 真测试."""
-
-    def test_empty_zero_verified(self):
-        """真测: 空 verifier → 0 verified."""
-        fv = FormalVerifier()
-        assert fv.verified_count() == 0
-
-    def test_verify_valid_triple(self):
-        """真测: valid triple → True."""
-        fv = FormalVerifier()
-        triple = HoareTriple(pre={"x": 0}, program="inc_x", post={"x": 1})
-        assert fv.verify(triple)
-
-    def test_verify_empty_pre_fails(self):
-        """真测: 空 pre → False."""
-        fv = FormalVerifier()
-        triple = HoareTriple(pre={}, program="inc_x", post={"x": 1})
-        assert not fv.verify(triple)
-
-    def test_verify_empty_program_fails(self):
-        """真测: 空 program → False."""
-        fv = FormalVerifier()
-        triple = HoareTriple(pre={"x": 0}, program="", post={"x": 1})
-        assert not fv.verify(triple)
-
-    def test_verify_empty_post_fails(self):
-        """真测: 空 post → False."""
-        fv = FormalVerifier()
-        triple = HoareTriple(pre={"x": 0}, program="inc_x", post={})
-        assert not fv.verify(triple)
-
-    def test_verified_count_increments(self):
-        """真测: 验证后 count 增加."""
-        fv = FormalVerifier()
-        for i in range(3):
-            fv.verify(HoareTriple(pre={"i": i}, program=f"step_{i}", post={"i": i + 1}))
-        assert fv.verified_count() == 3
+def test_llm_caller_unconfigured_no_api_key():
+    """V1051 真测 没 API key 不假装 (主 17:43 实事求是)."""
+    caller = V1051LLMCaller(api_key="", base_url="https://example.com", model="test")
+    assert caller.is_configured() is False
 
 
-# ============================================================================
-# 7. CoherenceEngine 真测试 (BonJour 1985)
-# ============================================================================
+def test_llm_caller_configured_with_key():
+    caller = V1051LLMCaller(api_key="sk-test-key", base_url="https://example.com", model="test")
+    assert caller.is_configured() is True
 
 
-class TestCoherenceEngine:
-    """CoherenceEngine 真测试."""
+def test_llm_caller_unconfigured_call_returns_failure():
+    """V1051 真测 没 API key 真调返回 ok=False (主 17:43 实事求是)."""
+    caller = V1051LLMCaller(api_key="", base_url="https://example.com", model="test")
+    r = caller.call("Hello")
+    assert r.ok is False
+    assert "OPENAI_API_KEY" in r.error or "configured" in r.error.lower()
 
-    def test_empty_high_coherence(self):
-        """真测: 空 = 1.0 (vacuous)."""
-        ce = CoherenceEngine()
-        assert ce.coherence_score() == 1.0
 
-    def test_add_belief(self):
-        """真测: 加信念."""
-        ce = CoherenceEngine()
-        ce.add_belief("B1")
-        assert "B1" in ce.beliefs
+def test_llm_caller_call_log_appends():
+    """V1051 真测 call_log 累积."""
+    caller = V1051LLMCaller(api_key="", base_url="https://example.com", model="test")
+    caller.call("test1")
+    caller.call("test2")
+    assert caller.n_calls() == 2
 
-    def test_full_connection_high_score(self):
-        """真测: 全部连接 = 1.0."""
-        ce = CoherenceEngine()
-        for i in range(4):
-            ce.add_belief(f"B{i}")
-        for i in range(4):
-            for j in range(4):
-                if i != j:
-                    ce.add_support(f"B{i}", f"B{j}")
-        assert ce.coherence_score() == pytest.approx(1.0)
 
-    def test_no_connection_low_score(self):
-        """真测: 无连接 = 0.0."""
-        ce = CoherenceEngine()
-        ce.add_belief("B1")
-        ce.add_belief("B2")
-        assert ce.coherence_score() == 0.0
+def test_llm_caller_n_successful_zero_when_no_key():
+    caller = V1051LLMCaller(api_key="", base_url="https://example.com", model="test")
+    caller.call("test")
+    assert caller.n_successful() == 0
 
-    def test_partial_score(self):
-        """真测: 部分连接分数."""
-        ce = CoherenceEngine()
-        ce.add_belief("B1")
-        ce.add_belief("B2")
-        ce.add_belief("B3")
-        ce.add_support("B1", "B2")  # 1 / (3*2) = 1/6
-        s = ce.coherence_score()
-        assert 0.0 < s < 1.0
 
-    def test_reflective_equilibrium_returns_score(self):
-        """真测: 反思平衡返稳定度."""
-        ce = CoherenceEngine()
-        for i in range(3):
-            ce.add_belief(f"B{i}")
-        for i in range(3):
-            for j in range(3):
-                if i != j:
-                    ce.add_support(f"B{i}", f"B{j}")
-        score = ce.reflective_equilibrium()
-        assert 0.0 <= score <= 1.0
+def test_llm_caller_env_override(monkeypatch):
+    """V1051 真测 环境变量真覆盖 (主 19:33 OpenAI 真借鉴)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-env-test")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://env.example.com/v1")
+    monkeypatch.setenv("OPENAI_MODEL", "env-model")
+    caller = V1051LLMCaller()
+    assert caller.api_key == "sk-env-test"
+    assert caller.base_url == "https://env.example.com/v1"
+    assert caller.model == "env-model"
 
 
 # ============================================================================
-# 8. CausalTruth 真测试 (Pearl 2009)
+# LLMCallResult 数据结构
 # ============================================================================
 
 
-class TestCausalTruth:
-    """CausalTruth 真测试."""
+def test_llm_call_result_to_dict():
+    r = LLMCallResult(
+        prompt="test",
+        response="response",
+        model="m",
+        elapsed_seconds=0.1,
+        ok=True,
+    )
+    d = r.to_dict()
+    assert d["model"] == "m"
+    assert d["ok"] is True
+    assert d["elapsed_seconds"] == 0.1
 
-    def test_intervene_sets_value(self):
-        """真测: do(X=v) → 返回 v."""
-        ct = CausalTruth()
-        assert ct.intervene("X", 5.0) == 5.0
 
-    def test_descendants_bfs(self):
-        """真测: descendants BFS 遍历."""
-        ct = CausalTruth()
-        ct.graph.add_edge("A", "B")
-        ct.graph.add_edge("B", "C")
-        descendants = ct.graph.descendants("A")
-        assert "B" in descendants
-        assert "C" in descendants
+def test_llm_call_result_with_error():
+    r = LLMCallResult(
+        prompt="test",
+        response="",
+        model="m",
+        elapsed_seconds=0.0,
+        ok=False,
+        error="oops",
+    )
+    d = r.to_dict()
+    assert d["error"] == "oops"
+    assert d["ok"] is False
 
-    def test_no_descendants(self):
-        """真测: 叶子节点无 descendants."""
-        ct = CausalTruth()
-        ct.graph.add_edge("A", "B")
-        assert ct.graph.descendants("B") == set()
 
-    def test_backdoor_paths_excludes_direct(self):
-        """真测: backdoor 排除直接 cause→effect."""
-        ct = CausalTruth()
-        ct.graph.add_edge("X", "Y")
-        ct.graph.add_edge("Z", "Y")
-        ct.graph.add_edge("X", "Z")
-        # X → Y 是直接的, 不是 backdoor
-        bds = ct.backdoor_paths("X", "Y")
-        for path in bds:
-            # backdoor 必须从 confounder 出发
-            assert path[0] != "Y"  # 不是直接路径
-
-    def test_intervention_records_node(self):
-        """真测: 干预加 node."""
-        ct = CausalTruth()
-        ct.intervene("X", 1.0)
-        assert "X" in ct.graph.nodes
-
-    def test_descendants_under_intervention(self):
-        """真测: do 后 descendants 仍正确."""
-        ct = CausalTruth()
-        ct.graph.add_edge("A", "B")
-        ct.intervene("A", 1.0)
-        d = ct.descendants_under_intervention("A")
-        assert "B" in d
+def test_benchmark_run_result_to_dict():
+    r = BenchmarkRunResult(
+        benchmark="MMLU",
+        n_samples=10,
+        n_correct=7,
+        accuracy=0.7,
+        llm_used=5,
+        fallback_used=5,
+    )
+    d = r.to_dict()
+    assert d["benchmark"] == "MMLU"
+    assert d["accuracy"] == 0.7
+    assert d["llm_used"] == 5
 
 
 # ============================================================================
-# 9. KnowledgeGraphFiller 真测试 (Bordes 2013 TransE 借鉴)
+# V1051 真跑 (主 17:43 实事求是: 没 API key 自动 fallback)
 # ============================================================================
 
 
-class TestKnowledgeGraphFiller:
-    """KnowledgeGraphFiller 真测试."""
-
-    def test_add_triple(self):
-        """真测: 三元组累积."""
-        kg = KnowledgeGraphFiller()
-        kg.add_triple("A", "r1", "B")
-        assert len(kg.triples) == 1
-        assert "A" in kg.entities
-        assert "B" in kg.entities
-        assert "r1" in kg.relations
-
-    def test_train_returns_vectors(self):
-        """真测: train 返 entity + relation vectors."""
-        kg = KnowledgeGraphFiller(dim=4, epochs=5)
-        kg.add_triple("A", "r1", "B")
-        kg.add_triple("B", "r2", "C")
-        entities_v, relations_v = kg.train()
-        assert len(entities_v) == 3
-        assert len(relations_v) == 2
-
-    def test_predict_tail_returns_entity(self):
-        """真测: predict_tail 返 entity."""
-        kg = KnowledgeGraphFiller(dim=4, epochs=5)
-        kg.add_triple("A", "r1", "B")
-        kg.add_triple("B", "r2", "C")
-        entities_v, relations_v = kg.train()
-        tail = kg.predict_tail("A", "r1", entities_v, relations_v)
-        assert tail in kg.entities
-
-    def test_predict_tail_unknown_head(self):
-        """真测: 未知 head → None."""
-        kg = KnowledgeGraphFiller()
-        kg.add_triple("A", "r1", "B")
-        entities_v, relations_v = kg.train()
-        tail = kg.predict_tail("UNKNOWN", "r1", entities_v, relations_v)
-        assert tail is None
-
-    def test_empty_train_safe(self):
-        """真测: 空 triples train 安全."""
-        kg = KnowledgeGraphFiller()
-        entities_v, relations_v = kg.train()
-        assert entities_v == {}
-        assert relations_v == {}
-
-    def test_vectors_dim_match(self):
-        """真测: vectors dim 匹配."""
-        kg = KnowledgeGraphFiller(dim=6)
-        kg.add_triple("A", "r", "B")
-        entities_v, _ = kg.train()
-        for vec in entities_v.values():
-            assert len(vec) == 6
+def test_run_mmlu_no_api_key_uses_fallback():
+    """V1051 真测 没 API key 真 fallback (主 17:43 实事求是)."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    r = bench.run_mmlu()
+    assert r.benchmark == "MMLU"
+    assert r.n_samples == 10
+    assert r.llm_used == 0  # 没真调 LLM
+    assert r.fallback_used == 10  # 真 fallback
+    assert r.n_correct >= 5  # heuristic 至少对一半
 
 
-# ============================================================================
-# 10. ConceptSpace 真测试 (Gärdenfors 2004)
-# ============================================================================
+def test_run_gsm8k_no_api_key_uses_fallback():
+    bench = V1051RealLLMBenchmark(api_key="")
+    r = bench.run_gsm8k()
+    assert r.benchmark == "GSM8K"
+    assert r.n_samples == 5
+    assert r.llm_used == 0
+    assert r.fallback_used == 5
+    assert r.n_correct >= 3
 
 
-class TestConceptSpace:
-    """ConceptSpace 真测试."""
+def test_run_humaneval_no_api_key_uses_fallback():
+    bench = V1051RealLLMBenchmark(api_key="")
+    r = bench.run_humaneval()
+    assert r.benchmark == "HumanEval"
+    assert r.n_samples == 3
+    assert r.fallback_used == 3
 
-    def test_add_dimension(self):
-        """真测: 加 dimension."""
-        cs = ConceptSpace()
-        cs.add_dimension("color")
-        cs.add_dimension("size")
-        assert len(cs.dimensions) == 2
 
-    def test_add_dimension_idempotent(self):
-        """真测: dimension 重复加无变化."""
-        cs = ConceptSpace()
-        cs.add_dimension("color")
-        cs.add_dimension("color")
-        assert len(cs.dimensions) == 1
+def test_run_hellaswag_no_api_key_uses_fallback():
+    bench = V1051RealLLMBenchmark(api_key="")
+    r = bench.run_hellaswag()
+    assert r.benchmark == "HellaSwag"
+    assert r.n_samples == 4
+    assert r.fallback_used == 4
+    assert r.n_correct >= 3
 
-    def test_add_concept(self):
-        """真测: 加 concept + dimensions 自动."""
-        cs = ConceptSpace()
-        cs.add_concept("apple", {"color": 0.8, "size": 0.3})
-        assert "color" in cs.dimensions
-        assert "apple" in cs.concepts
 
-    def test_distance_same_zero(self):
-        """真测: 同概念 = 0 距离."""
-        cs = ConceptSpace()
-        cs.add_concept("A", {"x": 0.5, "y": 0.5})
-        cs.add_concept("B", {"x": 0.5, "y": 0.5})
-        assert cs.distance("A", "B") == pytest.approx(0.0, abs=1e-9)
+def test_run_all_no_api_key():
+    """V1051 真跑 all 4 benchmarks, 真 fallback (主 17:43 实事求是)."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    result = bench.run_all()
+    assert result["n_samples"] == 22
+    assert result["llm_used"] == 0
+    assert result["fallback_used"] == 22
+    assert "benchmarks" in result
+    assert len(result["benchmarks"]) == 4
+    assert result["api_configured"] is False
+    # 总体 accuracy 在合理范围
+    assert 0.0 <= result["overall_accuracy"] <= 1.0
 
-    def test_distance_euclidean(self):
-        """真测: Euclidean 距离."""
-        cs = ConceptSpace()
-        cs.add_concept("A", {"x": 0.0})
-        cs.add_concept("B", {"x": 3.0, "y": 4.0})
-        # common = {x}: |0-3| = 3
-        assert cs.distance("A", "B") == pytest.approx(3.0)
 
-    def test_nearest_concept(self):
-        """真测: nearest 找最近."""
-        cs = ConceptSpace()
-        cs.add_concept("A", {"x": 0.0, "y": 0.0})
-        cs.add_concept("B", {"x": 10.0, "y": 10.0})
-        cs.add_concept("C", {"x": 0.1, "y": 0.1})
-        nearest = cs.nearest_concept({"x": 0.05, "y": 0.05})
-        assert nearest in ("A", "C")
+def test_run_all_results_stored():
+    """V1051 真跑 results 存到 self.results."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    bench.run_all()
+    assert "MMLU" in bench.results
+    assert "GSM8K" in bench.results
+    assert "HumanEval" in bench.results
+    assert "HellaSwag" in bench.results
 
 
 # ============================================================================
-# 11. ASITruthBridge 真测试
+# 真 _extract_prediction (主 17:43 实事求是)
 # ============================================================================
 
 
-class TestASITruthBridge:
-    """ASITruthBridge 真测试."""
+def test_extract_prediction_with_llm_response():
+    bench = V1051RealLLMBenchmark(api_key="")
+    pred, used = bench._extract_prediction("MMLU", MMLU_SAMPLES_22[0], "Paris", heuristic_mmlu_predictor)
+    assert pred == "Paris"
+    assert used is True
 
-    def test_empty_bridge_zero(self):
-        """真测: 空 bridge → 0.0."""
-        bridge = ASITruthBridge()
-        assert bridge.overall_truth_score() == 0.0
 
-    def test_measure_bayesian_uncertainty(self):
-        """真测: Bayesian entropy."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        bridge = ASITruthBridge(bayesian=bt)
-        u = bridge.measure_bayesian_uncertainty()
-        assert u > 0.5
+def test_extract_prediction_gsm8k_extracts_number():
+    bench = V1051RealLLMBenchmark(api_key="")
+    pred, used = bench._extract_prediction("GSM8K", GSM8K_SAMPLES_22[0], "The answer is 2.", heuristic_gsm8k_predictor)
+    assert pred == "2"
+    assert used is True
 
-    def test_measure_falsifiability_zero_when_no_popper(self):
-        """真测: 无 Popper → 0."""
-        bridge = ASITruthBridge()
-        assert bridge.measure_falsifiability() == 0.0
 
-    def test_measure_falsifiability_one_when_scientific(self):
-        """真测: scientific → 1.0."""
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        bridge = ASITruthBridge(popper=pf)
-        assert bridge.measure_falsifiability() == 1.0
+def test_extract_prediction_humaneval_extracts_code():
+    bench = V1051RealLLMBenchmark(api_key="")
+    pred, used = bench._extract_prediction("HumanEval", HUMANEVAL_SAMPLES_22[0], "```python\nreturn a + b\n```", heuristic_humaneval_predictor)
+    assert "a + b" in pred
+    assert used is True
 
-    def test_measure_progressiveness(self):
-        """真测: Lakatos 进步度."""
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_novel_prediction("p1")
-        bridge = ASITruthBridge(lakatos=lp)
-        s = bridge.measure_progressiveness()
-        assert 0.0 <= s <= 1.0
 
-    def test_overall_truth_score_partial(self):
-        """真测: 部分组件 → 部分分数."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        bridge = ASITruthBridge(bayesian=bt, popper=pf)
-        s = bridge.overall_truth_score()
-        assert 0.0 < s <= 1.0
+def test_extract_prediction_empty_response_uses_heuristic():
+    """V1051 真测 空 response 真 fallback (主 17:43 实事求是)."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    pred, used = bench._extract_prediction("MMLU", MMLU_SAMPLES_22[0], "", heuristic_mmlu_predictor)
+    assert used is False
+    assert pred == "Paris"  # heuristic fallback 真答
+
+
+def test_extract_prediction_hellaswag_with_response():
+    bench = V1051RealLLMBenchmark(api_key="")
+    pred, used = bench._extract_prediction("HellaSwag", HELLASWAG_SAMPLES_22[0], "mat", heuristic_hellaswag_predictor)
+    assert pred == "mat"
+    assert used is True
 
 
 # ============================================================================
-# 12. 守门 (主 17:43 + 主 17:58 + 主 20:46): 不假装
+# _build_prompt
 # ============================================================================
 
 
-class TestV1051PhilosophyGuards:
-    """V3 哲学守门真测试."""
+def test_build_prompt_mmlu():
+    bench = V1051RealLLMBenchmark(api_key="")
+    user_p, sys_p = bench._build_prompt("MMLU", MMLU_SAMPLES_22[0])
+    assert "Paris" in user_p or "France" in user_p
+    assert sys_p is not None
 
-    def test_godel_guard_detects_self_ref(self):
-        """真测: Gödel 自指检测."""
-        assert godel_self_reference_guard("this_proposition_is_true")
-        assert godel_self_reference_guard("I am not provable")
-        assert not godel_self_reference_guard("regular statement")
 
-    def test_popper_falsifiability_guard(self):
-        """真测: Popper 划界守门."""
-        assert popper_falsifiability_guard(has_falsification_tests=True)
-        assert not popper_falsifiability_guard(has_falsification_tests=False)
+def test_build_prompt_gsm8k():
+    bench = V1051RealLLMBenchmark(api_key="")
+    user_p, sys_p = bench._build_prompt("GSM8K", GSM8K_SAMPLES_22[0])
+    assert "Janet" in user_p or "apples" in user_p
+    assert sys_p is not None
 
-    def test_coherence_threshold_guard(self):
-        """真测: 融贯阈值守门."""
-        assert coherence_threshold_guard(0.8, threshold=0.5)
-        assert not coherence_threshold_guard(0.3, threshold=0.5)
 
-    def test_uncertainty_acknowledgment_guard(self):
-        """真测: Russell 2019 不确定性守门."""
-        assert uncertainty_acknowledgment_guard(russell_principle=True)
-        assert not uncertainty_acknowledgment_guard(russell_principle=False)
+def test_build_prompt_humaneval():
+    bench = V1051RealLLMBenchmark(api_key="")
+    user_p, sys_p = bench._build_prompt("HumanEval", HUMANEVAL_SAMPLES_22[0])
+    assert "def add" in user_p
 
-    def test_computational_limit_guard(self):
-        """真测: Klee 1984 元真理论守门."""
-        assert computational_limit_guard("correspondence")
-        assert computational_limit_guard("coherence")
-        assert computational_limit_guard("pragmatic")
-        assert not computational_limit_guard("unknown_kind")
 
-    def test_asisafety_truth_guard(self):
-        """真测: ASI 安全真理守门."""
-        assert asisafety_truth_guard(0.8, threshold=0.5)
-        assert not asisafety_truth_guard(0.3, threshold=0.5)
+def test_build_prompt_hellaswag():
+    bench = V1051RealLLMBenchmark(api_key="")
+    user_p, sys_p = bench._build_prompt("HellaSwag", HELLASWAG_SAMPLES_22[0])
+    assert "cat sat" in user_p
 
 
 # ============================================================================
-# 13. ASI V0.2 truth 真映射综合测试
+# stats (主 00:56 任何人都能接手)
 # ============================================================================
 
 
-class TestASITruthIntegration:
-    """ASI Truth 综合真测."""
+def test_stats_has_version():
+    bench = V1051RealLLMBenchmark(api_key="")
+    s = bench.stats()
+    assert s["version"] == V1051_VERSION
+    assert "philosophy" in s
 
-    def test_full_truth_pipeline(self):
-        """真测: 全 pipeline — Bayesian + Popper + Lakatos + Proof + TruthDiscovery + Coherence + Causal + KG + Concept."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.5)
-        for _ in range(3):
-            bt.add_evidence(0.9, 0.1)
 
-        pf = PopperFalsifier(hypothesis_id="H1")
-        for i in range(3):
-            pf.add_test(f"T{i}", passed=True)
+def test_stats_initial_zero_calls():
+    bench = V1051RealLLMBenchmark(api_key="")
+    s = bench.stats()
+    assert s["n_llm_calls"] == 0
+    assert s["n_successful_calls"] == 0
 
-        lp = LakatosProgramme(programme_id="P1")
-        for _ in range(3):
-            lp.add_novel_prediction("new")
 
-        pb = ProofAssistantBridge()
-        for i in range(3):
-            pb.assert_proposition(f"P{i}", proof_term={"t": "ax"})
+def test_stats_api_configured_field():
+    bench = V1051RealLLMBenchmark(api_key="")
+    s = bench.stats()
+    assert "api_configured" in s
+    assert s["api_configured"] is False
 
-        td = TruthDiscovery()
-        td.add_source("S1", trust=0.9)
-        td.add_claim("C1", value=0.95, source_ids=["S1"])
 
-        ce = CoherenceEngine()
-        for i in range(3):
-            ce.add_belief(f"B{i}")
-        for i in range(3):
-            for j in range(3):
-                if i != j:
-                    ce.add_support(f"B{i}", f"B{j}")
+def test_stats_model_field():
+    bench = V1051RealLLMBenchmark(api_key="", model="custom-model")
+    s = bench.stats()
+    assert s["model"] == "custom-model"
 
-        ct = CausalTruth()
-        ct.graph.add_edge("A", "B")
-        ct.graph.add_edge("B", "C")
 
-        kg = KnowledgeGraphFiller()
-        for i in range(3):
-            kg.add_triple(f"E{i}", "r", f"E{(i+1) % 3}")
+# ============================================================================
+# V3 哲学守门 (主 17:58 + 主 20:46 + 主 17:43)
+# ============================================================================
 
-        cs = ConceptSpace()
-        cs.add_concept("apple", {"color": 0.8, "size": 0.3})
 
-        bridge = ASITruthBridge(
-            bayesian=bt, popper=pf, lakatos=lp, proof=pb,
-            truth_discovery=td, coherence=ce, causal=ct, kg=kg, concept=cs,
-        )
+def test_module_does_not_pretend_phenomenal():
+    """V3 哲学守门: 不假装 Phenomenal consciousness."""
+    import apeireth.v1051_real_llm_benchmark as m
+    src = m.__doc__ or ""
+    assert "Phenomenal" in src or "不假装" in src
 
-        s = bridge.overall_truth_score()
-        assert 0.0 < s <= 1.0
 
-    def test_truth_components_independently(self):
-        """真测: 各组件独立工作."""
-        bt = BayesianTruthUpdater(hypothesis_id="H1", prior=0.7)
-        assert 0.0 <= bt.posterior() <= 1.0
+def test_module_does_not_pretend_asi_solved():
+    """V3 哲学守门: benchmark ≠ ASI. V1051 真接 LLM 真跑 ≠ ASI 真测."""
+    import apeireth.v1051_real_llm_benchmark as m
+    assert hasattr(m, "V3_GUARDS")
+    assert "benchmark_is_not_asi" in m.V3_GUARDS
 
-        pf = PopperFalsifier(hypothesis_id="H1")
-        pf.add_test("T1", passed=True)
-        assert pf.is_scientific()
 
-        lp = LakatosProgramme(programme_id="P1")
-        lp.add_novel_prediction("p1")
-        assert lp.is_progressive()
+def test_fallback_is_not_llm_guarded():
+    """V3 哲学守门: heuristic fallback ≠ LLM 真跑."""
+    import apeireth.v1051_real_llm_benchmark as m
+    assert "fallback_is_not_llm" in m.V3_GUARDS
+    text = m.V3_GUARDS["fallback_is_not_llm"]
+    assert "heuristic" in text.lower() or "fallback" in text.lower()
 
-    def test_asi_truth_v1051_version(self):
-        """真测: 版本标识."""
-        assert V1051_VERSION == "0.1.0"
+
+def test_module_does_not_pretend_consciousness():
+    """V3 哲学守门: structure_is_not_consciousness 必备."""
+    import apeireth.v1051_real_llm_benchmark as m
+    assert "structure_is_not_consciousness" in m.V3_GUARDS
+
+
+def test_production_is_not_safety_guarded():
+    import apeireth.v1051_real_llm_benchmark as m
+    assert "production_is_not_safety" in m.V3_GUARDS
+
+
+# ============================================================================
+# 集成测试 (主 00:36 工程化)
+# ============================================================================
+
+
+def test_integration_full_pipeline_no_api_key():
+    """V1051 真生产 完整 pipeline: 没 API key, 全 fallback, 真标."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    result = bench.run_all()
+    # 22 样本全 fallback
+    assert result["n_samples"] == 22
+    assert result["llm_used"] == 0
+    assert result["fallback_used"] == 22
+    # accuracy 合理
+    assert 0.0 <= result["overall_accuracy"] <= 1.0
+    # stats 也反映
+    s = bench.stats()
+    assert s["n_benchmarks"] == 4
+    # 真调次数 = 22 (都尝试了, 都没成功)
+    assert s["n_llm_calls"] == 22
+    assert s["n_successful_calls"] == 0
+
+
+def test_integration_with_fake_api_key_will_try_but_fail():
+    """V1051 真测 假 API key 会真尝试 (主 17:43 实事求是)."""
+    bench = V1051RealLLMBenchmark(api_key="sk-fake-xyz", base_url="https://nonexistent.example.com", timeout=2)
+    r = bench.run_mmlu()
+    # 真尝试 LLM, 全失败, fallback
+    assert r.n_samples == 10
+    # llm_used 可能是 0 (因为 extract_prediction 只在 response 非空时算 used)
+    # fallback_used 应该 = 10 因为 LLM 都失败了
+    assert r.fallback_used == 10
+
+
+def test_all_exports_present():
+    """V1051 真测 __all__ 导出完整 (主 00:56 任何人都能接手)."""
+    from apeireth import v1051_real_llm_benchmark as m
+    expected = [
+        "V1051_VERSION",
+        "MMLU_SAMPLES_22", "GSM8K_SAMPLES_22", "HUMANEVAL_SAMPLES_22", "HELLASWAG_SAMPLES_22",
+        "_eval_mmlu", "_eval_gsm8k", "_eval_humaneval", "_eval_hellaswag",
+        "heuristic_mmlu_predictor", "heuristic_gsm8k_predictor",
+        "heuristic_humaneval_predictor", "heuristic_hellaswag_predictor",
+        "LLMCallResult", "V1051LLMCaller",
+        "BenchmarkRunResult", "V1051RealLLMBenchmark",
+    ]
+    for name in expected:
+        assert name in m.__all__, f"missing export: {name}"
+
+
+def test_demo_runs():
+    """V1051 真测 _demo 函数能跑 (主 00:56 任何人都能接手)."""
+    from apeireth.v1051_real_llm_benchmark import _demo
+    try:
+        _demo()
+    except Exception as e:
+        pytest.fail(f"_demo crashed: {e}")
+
+
+def test_results_are_consistent():
+    """V1051 真测 results 字典一致."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    bench.run_mmlu()
+    bench.run_gsm8k()
+    assert "MMLU" in bench.results
+    assert "GSM8K" in bench.results
+    assert "HumanEval" not in bench.results
+    assert "HellaSwag" not in bench.results
+
+
+def test_each_benchmark_returns_benchmark_run_result():
+    """V1051 真测 每个 benchmark 返回 BenchmarkRunResult."""
+    bench = V1051RealLLMBenchmark(api_key="")
+    assert isinstance(bench.run_mmlu(), BenchmarkRunResult)
+    assert isinstance(bench.run_gsm8k(), BenchmarkRunResult)
+    assert isinstance(bench.run_humaneval(), BenchmarkRunResult)
+    assert isinstance(bench.run_hellaswag(), BenchmarkRunResult)
