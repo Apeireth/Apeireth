@@ -304,8 +304,17 @@ def render_trend_md(trend: Dict[str, Any]) -> str:
         return "\n".join(lines)
     lines.append(f"- window: `{trend['window']}` entries (each side)")
     lines.append(f"- n_entries: `{trend['n_entries']}`")
-    lines.append(f"- newest_avg: `{trend['newest_avg']:.4f}`")
-    lines.append(f"- oldest_avg: `{trend['oldest_avg']:.4f}`")
+    # V1367 fix: handle None newest_avg/oldest_avg (can occur if recent window
+    # is all text-capture entries with no pole_star_total field). Honest
+    # disclosure rather than crash.
+    if trend["newest_avg"] is None:
+        lines.append("- newest_avg: `n/a` (recent window has no measurable entries)")
+    else:
+        lines.append(f"- newest_avg: `{trend['newest_avg']:.4f}`")
+    if trend["oldest_avg"] is None:
+        lines.append("- oldest_avg: `n/a` (early window has no measurable entries)")
+    else:
+        lines.append(f"- oldest_avg: `{trend['oldest_avg']:.4f}`")
     delta = trend["delta"]
     if delta is None:
         lines.append("- delta: `n/a`")
