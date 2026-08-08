@@ -23,11 +23,23 @@ Returns a JSON document with:
 
 ## CLI subcommands
 
-  v1357-snapshot snapshot [--json] [--pretty]   # full snapshot
+  v1357-snapshot snapshot [--json] [--pretty] [--record [--tag TAG]]   # full snapshot
   v1357-snapshot summary                         # one-line summary
   v1357-snapshot recipe                          # "if you only read one thing"
   v1357-snapshot self-test [--verbose]           # 18+ Popper checks
   v1357-snapshot version
+
+## V1364 --record flag (post-V1363 next-step)
+
+`v1357-snapshot snapshot --record [--tag TAG]` chains the snapshot with
+V1362's `append_snapshot`, so a single command both produces the JSON and
+appends it to the JSONL history ledger.
+
+Default OFF. The default snapshot behavior is read-only (GUARD_NO_WRITES).
+The `--record` flag is an EXPLICIT opt-in. We add a new philosophy guard
+`GUARD_RECORD_IS_OPT_IN` to document this contract. V1357 still does not
+move the pole-star cap (snapshot is still cap 0.005; recording is a write
+side-effect, not a measurement).
 
 ## Exit codes
 
@@ -316,6 +328,8 @@ def build_snapshot() -> ProjectSnapshot:
             "GUARD_NO_WRITES",
             "GUARD_HONEST_UNKNOWN_DISCLOSURE",
             "GUARD_DELEGATE_TO_V1355_V1356",
+            "GUARD_DELEGATE_TO_V1362_ON_OPT_IN",
+            "GUARD_RECORD_IS_OPT_IN",
             "GUARD_SNAPSHOT_NOT_ASI",
         ),
     )
@@ -527,8 +541,45 @@ def _cli_snapshot(args: argparse.Namespace) -> int:
     else:
         # Default: JSON (most useful for downstream tooling)
         print(json.dumps(snap.to_dict(), indent=2, ensure_ascii=False))
+
+    # V1364: opt-in auto-append to V1362 history ledger.
+    # Default OFF. The user must pass --record explicitly.
+    if getattr(args, "record", False):
+        record_info = _record_to_history(snap, tag=getattr(args, "tag", None))
+        if record_info is not None:
+            print(
+                f"[v1364] recorded to history: tag={record_info.get('tag')!r} "
+                f"measured_at={record_info.get('measured_at')}",
+                file=sys.stderr,
+            )
+        else:
+            print("[v1364] record skipped (V1362 unavailable)", file=sys.stderr)
+
     rc = 1 if snap.known_unknowns else 0
     return rc
+
+
+def _record_to_history(snap: ProjectSnapshot, tag: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """V1364 helper: append this snapshot to V1362 history (lazy import).
+
+    Returns the appended entry dict on success, or None if V1362 cannot
+    be imported (which would indicate a serious regression).
+    """
+    try:
+        from apeireth import v1362_pole_star_history as v1362
+    except Exception as exc:
+        # Honest disclosure: do NOT silently swallow; we already print to stderr.
+        print(f"[v1364] cannot import v1362: {exc}", file=sys.stderr)
+        return None
+    try:
+        # Re-use the just-built snapshot to avoid building it twice.
+        return v1362.append_snapshot_with_dict(snap.to_dict(), tag=tag)
+    except AttributeError:
+        # Older V1362 without the explicit _with_dict helper; fall back to default.
+        return v1362.append_snapshot(tag=tag)
+    except Exception as exc:
+        print(f"[v1364] append failed: {exc}", file=sys.stderr)
+        return None
 
 
 def _cli_summary(_: argparse.Namespace) -> int:
@@ -560,6 +611,10 @@ def _build_parser() -> argparse.ArgumentParser:
     p_s = sub.add_parser("snapshot", help="full JSON snapshot")
     p_s.add_argument("--json", action="store_true", help="JSON output (default)")
     p_s.add_argument("--pretty", action="store_true", help="human-readable pretty")
+    p_s.add_argument("--record", action="store_true",
+                     help="V1364: also append this snapshot to V1362 history ledger (opt-in)")
+    p_s.add_argument("--tag", default=None,
+                     help="V1364: optional tag for the recorded entry (e.g. 'v1364-ship')")
     p_s.set_defaults(func=_cli_snapshot)
 
     sub.add_parser("summary", help="one-line summary").set_defaults(func=_cli_summary)
