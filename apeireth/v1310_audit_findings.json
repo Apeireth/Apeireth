@@ -4,7 +4,7 @@
   "total_crates_scanned": 91,
   "parse_errors": [],
   "workspace_dependencies_count": 17,
-  "total_external_dep_occurrences": 885,
+  "total_external_dep_occurrences": 892,
   "total_workspace_dep_occurrences": 176,
   "intra_workspace_graph": {
     "apeireth-action": [
@@ -293,8 +293,21 @@
     ]
   },
   "intra_workspace_graph_edges": 176,
-  "version_drift_count": 5,
+  "version_drift_count": 6,
   "version_drifts": [
+    {
+      "dep": "notify",
+      "versions_found": [
+        "5",
+        "6"
+      ],
+      "crates_using": [
+        "apeireth-agent",
+        "apeireth-tool-registry",
+        "apeireth-tui"
+      ],
+      "severity": "LOW"
+    },
     {
       "dep": "ratatui",
       "versions_found": [
@@ -319,7 +332,8 @@
         "apeireth-naming-v05",
         "apeireth-observability",
         "apeireth-pipeline",
-        "apeireth-tool-runtime"
+        "apeireth-tool-runtime",
+        "apeireth-tools"
       ],
       "severity": "LOW"
     },
@@ -373,6 +387,7 @@
         "apeireth-tools",
         "apeireth-tracing",
         "apeireth-tree-sitter",
+        "apeireth-tui",
         "apeireth-update",
         "apeireth-vector",
         "apeireth-voice",
@@ -420,7 +435,7 @@
       "severity": "LOW"
     }
   ],
-  "lock_duplicate_count": 92,
+  "lock_duplicate_count": 93,
   "lock_duplicates": [
     {
       "dep": "windows-sys",
@@ -1053,7 +1068,7 @@
     },
     {
       "dep": "serde_json",
-      "crate_count": 82,
+      "crate_count": 83,
       "crates": [
         "apeireth-acp",
         "apeireth-action",
@@ -1066,6 +1081,7 @@
         "apeireth-cache",
         "apeireth-cli",
         "apeireth-cognition",
+        "apeireth-config",
         "apeireth-consciousness",
         "apeireth-constraint",
         "apeireth-core",
@@ -1289,7 +1305,7 @@
     },
     {
       "dep": "async-trait",
-      "crate_count": 52,
+      "crate_count": 53,
       "crates": [
         "apeireth-agent",
         "apeireth-api",
@@ -1316,6 +1332,7 @@
         "apeireth-metrics",
         "apeireth-observability",
         "apeireth-plugin",
+        "apeireth-protocol",
         "apeireth-provider-claude-code",
         "apeireth-provider-codex",
         "apeireth-provider-copilot",
@@ -1403,7 +1420,7 @@
     },
     {
       "dep": "tempfile",
-      "crate_count": 47,
+      "crate_count": 48,
       "crates": [
         "apeireth-agent",
         "apeireth-api",
@@ -1448,6 +1465,7 @@
         "apeireth-tools",
         "apeireth-tracing",
         "apeireth-tree-sitter",
+        "apeireth-tui",
         "apeireth-update",
         "apeireth-vector",
         "apeireth-voice",
@@ -1602,7 +1620,7 @@
     },
     {
       "dep": "reqwest",
-      "crate_count": 21,
+      "crate_count": 22,
       "crates": [
         "apeireth-api",
         "apeireth-http-client",
@@ -1622,6 +1640,7 @@
         "apeireth-provider-opencode",
         "apeireth-sandbox",
         "apeireth-sdk",
+        "apeireth-tools",
         "apeireth-tui",
         "apeireth-update",
         "apeireth-voice"
@@ -1692,6 +1711,18 @@
       ]
     },
     {
+      "dep": "regex",
+      "crate_count": 6,
+      "crates": [
+        "apeireth-image-prompt",
+        "apeireth-naming-v05",
+        "apeireth-observability",
+        "apeireth-pipeline",
+        "apeireth-tool-runtime",
+        "apeireth-tools"
+      ]
+    },
+    {
       "dep": "hex",
       "crate_count": 5,
       "crates": [
@@ -1700,17 +1731,6 @@
         "apeireth-machine-id",
         "apeireth-observability",
         "apeireth-update"
-      ]
-    },
-    {
-      "dep": "regex",
-      "crate_count": 5,
-      "crates": [
-        "apeireth-image-prompt",
-        "apeireth-naming-v05",
-        "apeireth-observability",
-        "apeireth-pipeline",
-        "apeireth-tool-runtime"
       ]
     },
     {
@@ -1939,6 +1959,6 @@
     }
   ],
   "audit_decision": "REVIEW",
-  "audit_reason": "V1310 dep audit: 91 crates, 885 external dep occurrences, 176 workspace path-dep occurrences, 5 version drifts (text-level: ratatui/regex/tempfile/url/wiremock), 92 Cargo.lock duplicate-version deps (actual bin waste: ratatui + wiremock), 244 bare versions (skeleton V1302-V1306 legacy hardcoded).",
+  "audit_reason": "V1310 dep audit: 91 crates, 892 external dep occurrences, 176 workspace path-dep occurrences, 6 version drifts (text-level: ratatui/regex/tempfile/url/wiremock), 93 Cargo.lock duplicate-version deps (actual bin waste: ratatui + wiremock), 244 bare versions (skeleton V1302-V1306 legacy hardcoded).",
   "audit_action": "修真 = commit 锁定现状. workspace 跨 crate version drift = 5 (text-level 4 OK, ratatui/wiremock 真有 Cargo.lock 多版本). 修真建议: ratatui/wiremock 选主要版本统一, 修真后续战役 (修真现在 = 动 3-14 crate, 触碰 V1311/V1312 audit chain, 非 must-fix). V1311 build.rs audit 后续处理."
 }
