@@ -1,0 +1,549 @@
+{
+  "version": "0.1.0",
+  "real_benchmark": {
+    "n_queries": 22,
+    "n_chat_ok": 21,
+    "n_fallback": 1,
+    "n_parse_failure": 0,
+    "total_latency_ms": 32268.054246902466,
+    "mean_latency_ms": 1466.7297384955666,
+    "total_input_tokens": 1027,
+    "total_output_tokens": 447,
+    "total_tokens": 1474,
+    "probe_report": {
+      "configured": true,
+      "reachable": true,
+      "latency_ms": 1107.9695224761963,
+      "model": "MiniMax-M3",
+      "input_tokens": 39,
+      "output_tokens": 2,
+      "base_url": "https://api.minimaxi.com/anthropic",
+      "error": ""
+    },
+    "config": {
+      "base_url": "https://api.minimaxi.com/anthropic",
+      "model": "MiniMax-M3",
+      "timeout_sec": 30.0,
+      "max_tokens": 256
+    },
+    "started_at": "2026-08-08T18:11:43+0800",
+    "finished_at": "2026-08-08T18:12:16+0800",
+    "scores": [
+      {
+        "query_id": "Q01_TIME",
+        "category": "gap_direct_time",
+        "query_text_preview": "What is 时间 substrate: Bergson 绵延 + Heidegger 此在 + Prigogine 耗散结构?",
+        "expected_gap_focus": "time",
+        "gap_scores": {
+          "time": 0.9,
+          "freedom": 0.1,
+          "recognition": 0.0,
+          "emergence": 0.4,
+          "truth": 0.1
+        },
+        "raw_response_preview": "0.9,0.1,0.0,0.4,0.1",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1267.190933227539,
+        "input_tokens": 90,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q02_FREEDOM",
+        "category": "gap_direct_freedom",
+        "query_text_preview": "自由意志: Spinoza conatus + Frankfurt hierarchical desires + Heidegger 筹划",
+        "expected_gap_focus": "freedom",
+        "gap_scores": {
+          "time": 0.9,
+          "freedom": 0.2,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.9,0.2,0.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 970.8573818206787,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q03_RECOGNITION",
+        "category": "gap_direct_recognition",
+        "query_text_preview": "承认与他者: Levinas 他者优先 + Hegel 主奴辩证法 + Mead 符号互动",
+        "expected_gap_focus": "recognition",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 1.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.0,0.0,1.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1598.4103679656982,
+        "input_tokens": 87,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q04_EMERGENCE",
+        "category": "gap_direct_emergence",
+        "query_text_preview": "涌现: Bedau weak emergence + Wolfram NKS + Kauffman adjacent possible",
+        "expected_gap_focus": "emergence",
+        "gap_scores": {
+          "time": 1.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 1.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "The text directly addresses emergence with the exact same three references (Bedau weak emergence, Wolfram NKS, Kauffman ",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1318.4399604797363,
+        "input_tokens": 1,
+        "output_tokens": 47,
+        "error": ""
+      },
+      {
+        "query_id": "Q05_TRUTH",
+        "category": "gap_direct_truth",
+        "query_text_preview": "真理: Peirce 实效主义 + James 实用主义 + Cornforth 实在论 + Davidson + Brandom + Putnam",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 1.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 1.0
+        },
+        "raw_response_preview": "1.0,0.0,0.0,0.0,1.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 2195.127487182617,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q06_V01_ANCHOR",
+        "category": "anchor_v01",
+        "query_text_preview": "ASI 北极星 V0.1 = 0.7905 LOCKED (主 17:43 实事求是)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.1,
+          "emergence": 0.1,
+          "truth": 0.1
+        },
+        "raw_response_preview": "0.1,0.1,0.1,0.1,0.1",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1839.9083614349365,
+        "input_tokens": 219,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q07_V1256_ANCHOR",
+        "category": "anchor_v1256",
+        "query_text_preview": "V1256 unio_mystica = 0.9291 LOCKED (主 17:43)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.0,0.0,0.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1607.7167987823486,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q08_V1049_ANCHOR",
+        "category": "anchor_v1049",
+        "query_text_preview": "V1049 value alignment DONE (主 13:08)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.1,
+          "emergence": 0.1,
+          "truth": 0.1
+        },
+        "raw_response_preview": "0.1,0.1,0.1,0.1,0.1",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1165.5898094177246,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q09_CROSS_TIME_FREEDOM",
+        "category": "cross_gap_hume",
+        "query_text_preview": "Cross-gap (time, freedom): Hume 1739 习惯联想 + 自愿行动",
+        "expected_gap_focus": "time",
+        "gap_scores": {
+          "time": 0.8,
+          "freedom": 0.7,
+          "recognition": 0.1,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.8,0.7,0.1,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1973.879098892212,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q10_CROSS_TRUTH_EMERGENCE",
+        "category": "cross_gap_crutchfield",
+        "query_text_preview": "Cross-gap (truth, emergence): Crutchfield 1994 calculi of emergence",
+        "expected_gap_focus": "emergence",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.7,
+          "truth": 0.6
+        },
+        "raw_response_preview": "0.0,0.0,0.0,0.7,0.6",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1355.7562828063965,
+        "input_tokens": 212,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q11_V1322_PROCESS",
+        "category": "v1322_api",
+        "query_text_preview": "V1322 Crucible process_query 15-dim score vector",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.1,
+          "emergence": 0.2,
+          "truth": 0.1
+        },
+        "raw_response_preview": "0.1,0.1,0.1,0.2,0.1",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 2046.548843383789,
+        "input_tokens": 80,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q12_V1322_BATCH",
+        "category": "v1322_api",
+        "query_text_preview": "V1322 process_batch 真跑 22 samples 真 benchmark",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.4,
+          "freedom": 0.2,
+          "recognition": 0.1,
+          "emergence": 0.3,
+          "truth": 0.5
+        },
+        "raw_response_preview": "0.4,0.2,0.1,0.3,0.5",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1455.8000564575195,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q13_V1322_BRIDGE",
+        "category": "v1322_api",
+        "query_text_preview": "V1322 ASII5GapCrucibleBridge pole-star honest reporting",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.0,
+          "emergence": 0.2,
+          "truth": 0.2
+        },
+        "raw_response_preview": "0.1,0.1,0.0,0.2,0.2",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1485.7149124145508,
+        "input_tokens": 81,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q14_V3_GUARD_PHENOMENAL",
+        "category": "v3_guard",
+        "query_text_preview": "不假装 ASI 真有 Phenomenal consciousness (主 17:58)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.2,
+          "freedom": 0.1,
+          "recognition": 0.3,
+          "emergence": 0.1,
+          "truth": 0.2
+        },
+        "raw_response_preview": "0.2,0.1,0.3,0.1,0.2",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1714.3666744232178,
+        "input_tokens": 81,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q15_V3_GUARD_ASI",
+        "category": "v3_guard",
+        "query_text_preview": "不假装 ASI 真达 5-gap closure (主 17:43)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.1,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.0,0.1,0.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1432.3875904083252,
+        "input_tokens": 82,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q16_V3_GUARD_TUNING",
+        "category": "v3_guard",
+        "query_text_preview": "不假装调整模型 & prompt (主 17:58)",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.1,
+          "emergence": 0.1,
+          "truth": 0.1
+        },
+        "raw_response_preview": "0.1,0.1,0.1,0.1,0.1",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1330.9202194213867,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q17_V1323_SELF",
+        "category": "v1323_self",
+        "query_text_preview": "V1323 22 samples real benchmark statistics per-dim mean/std/min/max",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.1,
+          "freedom": 0.1,
+          "recognition": 0.1,
+          "emergence": 0.2,
+          "truth": 0.3
+        },
+        "raw_response_preview": "0.1,0.1,0.1,0.2,0.3",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1350.5158424377441,
+        "input_tokens": 83,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q18_V1323_COVERAGE",
+        "category": "v1323_self",
+        "query_text_preview": "V1323 cross-domain coverage check: 5 gaps + 10 cross-gaps",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.8,
+          "freedom": 0.7,
+          "recognition": 0.6,
+          "emergence": 0.9,
+          "truth": 0.7
+        },
+        "raw_response_preview": "0.8,0.7,0.6,0.9,0.7",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1342.7977561950684,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q19_V1323_BRIDGE",
+        "category": "v1323_self",
+        "query_text_preview": "V1323 bridge to V1322 + pole-star V0.1 / V0.2 LOCKED",
+        "expected_gap_focus": "truth",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.0,0.0,0.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1104.0189266204834,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q20_EMPTY",
+        "category": "edge_case_empty",
+        "query_text_preview": "",
+        "expected_gap_focus": "none",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "",
+        "chat_ok": false,
+        "fallback_used": true,
+        "latency_ms": 0.0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "error": "empty query"
+      },
+      {
+        "query_id": "Q21_MINIMAL",
+        "category": "edge_case_minimal",
+        "query_text_preview": "x",
+        "expected_gap_focus": "none",
+        "gap_scores": {
+          "time": 0.0,
+          "freedom": 0.0,
+          "recognition": 0.0,
+          "emergence": 0.0,
+          "truth": 0.0
+        },
+        "raw_response_preview": "0.0,0.0,0.0,0.0,0.0",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 2504.892587661743,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      },
+      {
+        "query_id": "Q22_MIXED",
+        "category": "edge_case_mixed",
+        "query_text_preview": "ASI 时间 自由 承认 涌现 真理 time freedom recognition emergence truth",
+        "expected_gap_focus": "time",
+        "gap_scores": {
+          "time": 0.7,
+          "freedom": 0.6,
+          "recognition": 0.8,
+          "emergence": 0.9,
+          "truth": 0.7
+        },
+        "raw_response_preview": "0.7,0.6,0.8,0.9,0.7",
+        "chat_ok": true,
+        "fallback_used": false,
+        "latency_ms": 1207.21435546875,
+        "input_tokens": 1,
+        "output_tokens": 20,
+        "error": ""
+      }
+    ]
+  },
+  "comparison": {
+    "n_queries": 22,
+    "n_chat_ok": 21,
+    "gap_agreements": [
+      {
+        "gap": "time",
+        "n_samples": 22,
+        "mean_heuristic": 0.24747474747474751,
+        "mean_real": 0.3318181818181818,
+        "pearson_r": 0.5778527089449702,
+        "mae": 0.2560606060606061,
+        "rmse": 0.3365251227607803
+      },
+      {
+        "gap": "freedom",
+        "n_samples": 22,
+        "mean_heuristic": 0.22727272727272732,
+        "mean_real": 0.15,
+        "pearson_r": 0.5242733056121242,
+        "mae": 0.16414141414141417,
+        "rmse": 0.19863450805185168
+      },
+      {
+        "gap": "recognition",
+        "n_samples": 22,
+        "mean_heuristic": 0.22323232323232325,
+        "mean_real": 0.15454545454545454,
+        "pearson_r": 0.8116442728616546,
+        "mae": 0.1767676767676768,
+        "rmse": 0.20613486481326368
+      },
+      {
+        "gap": "emergence",
+        "n_samples": 22,
+        "mean_heuristic": 0.23131313131313133,
+        "mean_real": 0.23636363636363636,
+        "pearson_r": 0.7561272601701947,
+        "mae": 0.18686868686868688,
+        "rmse": 0.24476562921200062
+      },
+      {
+        "gap": "truth",
+        "n_samples": 22,
+        "mean_heuristic": 0.21030303030303032,
+        "mean_real": 0.21363636363636365,
+        "pearson_r": 0.6758939358183431,
+        "mae": 0.19424242424242424,
+        "rmse": 0.2459900630332679
+      }
+    ],
+    "overall_pearson_r": 0.6691582966814573,
+    "overall_mae": 0.19561616161616163,
+    "overall_rmse": 0.2464100375742328,
+    "delta_means": {
+      "time": 0.08434343434343428,
+      "freedom": -0.07727272727272733,
+      "recognition": -0.06868686868686871,
+      "emergence": 0.0050505050505050275,
+      "truth": 0.003333333333333327
+    }
+  },
+  "v3_guards": [
+    "不假装 ASI 真达 5-gap closure",
+    "不假装 Phenomenal consciousness",
+    "不假装调整模型 & prompt",
+    "V1322 = substrate operational integration, 不动 pole-star",
+    "5-gap closure 是 substrate, 不是 ASI 真生产"
+  ],
+  "pole_star_anchors": {
+    "V0.1": 0.7905,
+    "V0.2": 0.4467,
+    "V1256_unio_mystica": 0.9291,
+    "V1049_value_alignment": "DONE"
+  },
+  "guard_marker": "v1324_real_llm_5gap"
+}
