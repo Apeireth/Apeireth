@@ -1,0 +1,4 @@
+n_chat_ok=21 n_fallback=1
+total_tokens=4636 mean_latency_ms=1233.27
+overall_pearson_r=+0.6490
+overall_mae=0.1925

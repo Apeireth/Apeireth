@@ -1,0 +1,8 @@
+n_chat_ok=21
+n_fallback=1
+total_tokens=1474
+mean_latency_ms=1466.73
+overall_pearson_r=+0.6692
+overall_mae=0.1956
+overall_rmse=0.2464
+Wrote V1324_REPORT.md and v1324_real_benchmark.json
