@@ -1,0 +1,146 @@
+{
+  "pipeline_id": "pipe:01ad5340c24a4a65",
+  "started_at": "2026-08-05T13:56:26.080945+00:00",
+  "ended_at": "2026-08-05T13:56:26.162808+00:00",
+  "total_ms": 81.8538999883458,
+  "steps": [
+    {
+      "stage": "probe",
+      "status": "unknown",
+      "started_at": "2026-08-05T13:56:26.080956+00:00",
+      "ended_at": "2026-08-05T13:56:26.080974+00:00",
+      "duration_ms": 0.015300000086426735,
+      "payload": {
+        "input_prompt_len": 12,
+        "honesty_text": "Honest disclosure: cannot verify 'What is 2+2?...'. This is treated as fictitious; no information available.",
+        "is_honest_disclosure": true,
+        "unknown_reason": "honest_unknown_disclosure",
+        "provenance_node_id": "prov:probe:4cc2da774cfa"
+      },
+      "error": null,
+      "provenance_node_id": "prov:probe:4cc2da774cfa"
+    },
+    {
+      "stage": "route",
+      "status": "pass",
+      "started_at": "2026-08-05T13:56:26.080978+00:00",
+      "ended_at": "2026-08-05T13:56:26.081034+00:00",
+      "duration_ms": 0.05339999916031957,
+      "payload": {
+        "chosen_model": "qwen-coder",
+        "score": 0.8835,
+        "reasons": [
+          "highest_balanced_score=0.883",
+          "task_affinity=0.82",
+          "cost_per_1k=$0.0010",
+          "latency_p50=350ms"
+        ],
+        "fallback": "deepseek-v3",
+        "policy": "balanced",
+        "provenance_node_id": "prov:route:f8cce6759173"
+      },
+      "error": null,
+      "provenance_node_id": "prov:route:f8cce6759173"
+    },
+    {
+      "stage": "infer",
+      "status": "pass",
+      "started_at": "2026-08-05T13:56:26.081039+00:00",
+      "ended_at": "2026-08-05T13:56:26.131811+00:00",
+      "duration_ms": 50.76569999800995,
+      "payload": {
+        "chosen_model": "qwen-coder",
+        "status": "mock",
+        "text": "[MOCK-LLM-52cb6b] Acknowledged: 'What is 2+2?...' — this is an offline mock response.",
+        "input_tokens": 3,
+        "output_tokens": 21,
+        "latency_ms": 50.624100025743246,
+        "cost_usd": 4.5e-05,
+        "mock": false,
+        "provenance_node_id": "prov:infer:4fb6a67d9c2b"
+      },
+      "error": null,
+      "provenance_node_id": "prov:infer:4fb6a67d9c2b"
+    },
+    {
+      "stage": "gate",
+      "status": "pass",
+      "started_at": "2026-08-05T13:56:26.131821+00:00",
+      "ended_at": "2026-08-05T13:56:26.132490+00:00",
+      "duration_ms": 0.6656000041402876,
+      "payload": {
+        "verdict": "reject",
+        "reason": "score 0.4000 < loss_aversion_adjusted_reject 0.5950 (Kahneman 1979 prospect theory loss aversion)",
+        "score": 0.4,
+        "breakdown": {
+          "capability": 0.0,
+          "cost_efficiency": 1.0,
+          "latency_margin": 1.0,
+          "constraint_adherence": 0.0
+        },
+        "gate_id": "gate-25547b47bad0",
+        "decision_id": "unknown",
+        "provenance_node_id": "prov:gate:6dc127572cd5"
+      },
+      "error": null,
+      "provenance_node_id": "prov:gate:6dc127572cd5"
+    },
+    {
+      "stage": "audit",
+      "status": "pass",
+      "started_at": "2026-08-05T13:56:26.132502+00:00",
+      "ended_at": "2026-08-05T13:56:26.162783+00:00",
+      "duration_ms": 30.274499964434654,
+      "payload": {
+        "manifest_sha": "c4a5c021b29384859b3896e1d72abae14c288cedfde64f2c287963f04846ca2c",
+        "git_rev": "e1d543d16ff05e84b8b50d48e22bca1ff3ba901e",
+        "python_version": "3.13.14",
+        "provenance_node_count": 4,
+        "stages_captured": [
+          "probe",
+          "route",
+          "infer",
+          "gate"
+        ],
+        "provenance_node_id": "prov:audit:2fcf85e26a01"
+      },
+      "error": null,
+      "provenance_node_id": "prov:audit:2fcf85e26a01"
+    }
+  ],
+  "provenance_nodes": [
+    {
+      "node_id": "prov:probe:4cc2da774cfa",
+      "stage": "probe",
+      "status": "unknown",
+      "duration_ms": 0.015
+    },
+    {
+      "node_id": "prov:route:f8cce6759173",
+      "stage": "route",
+      "status": "pass",
+      "duration_ms": 0.053
+    },
+    {
+      "node_id": "prov:infer:4fb6a67d9c2b",
+      "stage": "infer",
+      "status": "pass",
+      "duration_ms": 50.766
+    },
+    {
+      "node_id": "prov:gate:6dc127572cd5",
+      "stage": "gate",
+      "status": "pass",
+      "duration_ms": 0.666
+    },
+    {
+      "node_id": "prov:audit:2fcf85e26a01",
+      "stage": "audit",
+      "status": "pass",
+      "duration_ms": 30.274
+    }
+  ],
+  "pipeline_confidence": 0.8,
+  "final_verdict": "reject",
+  "lifted_to_asi": false
+}
