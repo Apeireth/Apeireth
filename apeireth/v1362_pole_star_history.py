@@ -24,6 +24,20 @@ from V1356), and history tracking does not move that cap.
   v1362-history self-test [--verbose]   # 18+ Popper checks
   v1362-history version
 
+## V1364 chained record (post-V1363 next-step)
+
+`append_snapshot_with_dict(snap_dict, tag=None)` is the V1364 helper that
+accepts a pre-built V1357 snapshot dict. V1357's `--record` flag uses this
+helper to avoid building the snapshot twice (once for the JSON output, once
+for the history record). Identical on-disk format to `append_snapshot`;
+append-only JSONL invariant preserved.
+
+If you call `append_snapshot_with_dict` directly, you MUST pass a dict
+that came from `ProjectSnapshot.to_dict()` or be structurally compatible
+(contains `pole_star`, `toolchain_health`, `close_loop_state`, `module_counts`).
+Otherwise `_extract_history_entry` returns a partial entry, which is
+detectable via `entry` having None for the missing fields.
+
 ## Storage
 
 `pole_star_history.jsonl` is an append-only JSONL at the repo root.
@@ -132,6 +146,16 @@ def _history_path() -> Path:
 def append_snapshot(tag: Optional[str] = None) -> Dict[str, Any]:
     """Append current V1357 snapshot to history. Returns the appended entry."""
     snap_dict = get_current_snapshot_dict()
+    return append_snapshot_with_dict(snap_dict, tag=tag)
+
+
+def append_snapshot_with_dict(snap_dict: Dict[str, Any], tag: Optional[str] = None) -> Dict[str, Any]:
+    """V1364 helper: append a pre-built V1357 snapshot dict to history.
+
+    Use this when the caller already has the snapshot (e.g., V1357's
+    `--record` flag) to avoid building it twice. Identical on-disk
+    format to `append_snapshot`; append-only JSONL invariant preserved.
+    """
     entry = _extract_history_entry(snap_dict, tag=tag)
 
     path = _history_path()
