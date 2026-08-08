@@ -1,0 +1,89 @@
+V1342 run log
+=============
+
+Trigger: 2026-08-08 22:42 +08:00 (Saturday)
+Cron:    apeireth-autonomy-v3 (1fba1cc3-1a6d-4e3a-abb8-fccef1c94cdf)
+Mode:    isolated M3 (deepseek-v4-flash fallback after MiniMax-M3 idle timeout)
+Author:  楚零 (Chu Ling)
+
+State at trigger:
+- V1341 commit 6a8ea55f (22:35) DONE — VCP Cross-Plugin Pattern Detector
+- V1341 self-test: 32/32 PASS; pytest: 68/68 PASS
+- V1342 = next: VCP Quality Tier Classifier (trust layer on V1341)
+- V1341 produced 96/153 classifications with mixed confidence
+- ASI pole-star V0.1=0.7905 / V1341 不动 LOCKED
+
+Decision: V1342 = VCP Quality Tier Classifier
+  - Reads V1341 coverage uplift report
+  - Stratifies uplifts by confidence (HIGH ≥ 0.7, MEDIUM ≥ 0.5, LOW < 0.5)
+  - Computes tier-aware coverage scores
+  - Produces TrustReport + QualityTierBridge
+
+Tier thresholds (explicit constants):
+- TIER_HIGH_THRESHOLD = 0.7
+- TIER_MEDIUM_THRESHOLD = 0.5
+
+Tier distribution (the real measurement):
+- V1335_manual: 40
+- V1341_pattern_high: 53 (94.6% of V1341's new classifications are HIGH)
+- V1341_pattern_medium: 3
+- V1341_pattern_low: 0
+- V1341_pattern_total: 56
+
+Coverage scores:
+- HIGH coverage: 0.6078 (V1335 + V1341_HIGH)
+- MEDIUM+HIGH coverage: 0.6275 (all classified)
+- ALL coverage: 0.6275 (same as V1341)
+
+Steps:
+1. Wrote apeireth/v1342_vcp_quality_tiers.py (~17 KB, 8 API surfaces)
+2. Imports V1335 (registry) + V1341 (pattern detector) — no new logic, builds on existing
+3. Tier assignment = numeric threshold on confidence, NOT learned
+4. First self-test: 30/32 PASS — 2 failures (RecursionError + wrong total assumption)
+5. Fix: removed recursive T32, fixed T9/T15 to use v1335_manual + v1341_pattern sum (not total)
+6. Second self-test: 32/32 PASS
+7. Wrote tests/test_v1342_vcp_quality_tiers.py (13 test classes, 56 tests)
+8. Pytest: 56/56 PASS in 0.86s
+9. Chain regression (V1326-V1342): 607/607 PASS in 13.12s
+10. V1342_REPORT.md + v1342_run_log.txt (this file) written
+11. Commit (pending)
+
+Files written:
+- apeireth/v1342_vcp_quality_tiers.py (~17 KB, 8 API surfaces)
+- tests/test_v1342_vcp_quality_tiers.py (~15 KB, 13 test classes, 56 canonical tests)
+- V1342_REPORT.md (~6 KB)
+- apeireth/v1342_run_log.txt (this file)
+
+Total: 4 files, ~52 KB
+
+V3 守门 (LOCKED, per 主 17:58 + 主 20:46 + 主 17:43):
+- ? V1342 ≠ LLM-based classification: tier = numeric threshold, NOT learned
+- ? V1342 ≠ ASI 真有 quality judgment: tier = cutoff on weight, NOT semantic assessment
+- ? V1342 = stratification layer, NOT oracle: each tier is just a bucket
+- ? ASI pole-star LOCKED: V0.1=0.7905 / V0.2=0.4467 / V1256=0.9105 / V1049=DONE
+- ? V1335 + V1341 preserved: 153 substrates unchanged; V1341 coverage unchanged
+- ? V1342 = audit + tier, NOT adjustment-of-model
+- ? V1342 = measurement layer, NOT Phenomenal consciousness
+
+Closed loop (主 23:44 干到底):
+V1335 (registry) → V1336 (linter) → V1339 (cookbook) → V1340 (validator) → V1341 (uplift) → V1342 (tier)
+  (what)           (check)          (learn)          (verify)            (broaden)         (trust)
+
+V1342 = "trust" — the registry now has multiple trust levels, so downstream tools can
+filter by confidence threshold and avoid false positives.
+
+Quality insight (主 00:44 质量工程区):
+- 53/56 V1341 new classifications are HIGH (≥ 0.7)
+- 3/56 are MEDIUM (≥ 0.5)
+- 0/56 are LOW
+- This means V1341's pattern rules are aggressive in confidence (substring matching
+  with weight 1.0 is a strong signal)
+- For automated linter: use HIGH (0.6078)
+- For human review: use MEDIUM+HIGH (0.6275)
+
+Next natural pivot (V1343+):
+- V1343 = V1342 Tier Coverage Comparator (across-time tier evolution)
+- V1343 = V1342 Pattern Confidence Tuner (re-tune V1341 weights based on tier observations)
+- V1343 = V1342 Tier-Aware Linter (V1336 filtered by tier → lower false positives)
+- V1343 = Lineage Report V10xx-V1342 (end-to-end 真生产 evidence chain)
+- V1343 = V1342 Tier-Aware Cookbook (V1339 examples tagged by tier)
