@@ -1,0 +1,813 @@
+{
+  "workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean",
+  "rust_workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\Apeireth-rust",
+  "workspace_members_total": 92,
+  "workspace_members_with_build_rs": [
+    "Apeireth-rust\\crates\\apeireth-bus\\build.rs",
+    "Apeireth-rust\\crates\\apeireth-tauri-stub\\build.rs"
+  ],
+  "total_build_rs_found": 43,
+  "active_workspace_build_rs_count": 3,
+  "research_vendored_build_rs_count": 40,
+  "by_location": {
+    "workspace_root_app": [
+      {
+        "path": "Apeireth-rust\\src-tauri\\build.rs",
+        "location": "workspace_root_app",
+        "size_bytes": 39,
+        "line_count": 3,
+        "declared_build_deps": [
+          "tauri-build"
+        ],
+        "used_crate_calls": [
+          "tauri_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": true,
+        "has_conditional_gating": false,
+        "println_count": 0,
+        "risk_level": "LOW",
+        "risk_reasons": [
+          "tauri_build unconditional (default hook)"
+        ]
+      }
+    ],
+    "workspace_member": [
+      {
+        "path": "Apeireth-rust\\crates\\apeireth-bus\\build.rs",
+        "location": "workspace_member",
+        "size_bytes": 970,
+        "line_count": 29,
+        "declared_build_deps": [
+          "protoc-bin-vendored",
+          "tonic-build"
+        ],
+        "used_crate_calls": [
+          "protoc_bin_vendored",
+          "tonic_build"
+        ],
+        "has_compile_protos": true,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "LOW",
+        "risk_reasons": [
+          "compile_protos with vendored protoc (safe)"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\crates\\apeireth-tauri-stub\\build.rs",
+        "location": "workspace_member",
+        "size_bytes": 327,
+        "line_count": 8,
+        "declared_build_deps": [
+          "tauri-build"
+        ],
+        "used_crate_calls": [
+          "tauri_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": true,
+        "has_conditional_gating": true,
+        "println_count": 0,
+        "risk_level": "LOW",
+        "risk_reasons": [
+          "tauri_build with env-var gating (safer)",
+          "std::env::var(CARGO_BIN_NAME) legitimate"
+        ]
+      }
+    ],
+    "research_vendored": [
+      {
+        "path": "Apeireth-rust\\research\\source\\codex\\codex-rs\\bwrap\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 3851,
+        "line_count": 106,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "pkg_config",
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 10,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\codex\\codex-rs\\cli\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 140,
+        "line_count": 5,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\codex\\codex-rs\\linux-sandbox\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 77,
+        "line_count": 3,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\codex\\codex-rs\\skills\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 598,
+        "line_count": 27,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\codex\\codex-rs\\windows-sandbox-rs\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1416,
+        "line_count": 39,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 5,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\hermes-agent\\apps\\bootstrap-installer\\src-tauri\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 7698,
+        "line_count": 190,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "tauri_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 10,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\openclaw\\apps\\linux\\src-tauri\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1328,
+        "line_count": 35,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "tauri_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\api\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 30385,
+        "line_count": 492,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "tonic_prost_build",
+          "prost_wkt_types",
+          "quantization_config_diff"
+        ],
+        "has_compile_protos": true,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 3,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\common\\common\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1366,
+        "line_count": 38,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 6,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\quantization\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1445,
+        "line_count": 42,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\segment\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 953,
+        "line_count": 23,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 0,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\segment\\src\\index\\hnsw_index\\hnsw\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 27740,
+        "line_count": 714,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "hardware_counter",
+          "progress_tracker",
+          "old_index",
+          "operation_error",
+          "id_tracker",
+          "field_index",
+          "hnsw_index",
+          "build_condition_checker",
+          "gpu_graph_builder",
+          "gpu_insert_context",
+          "graph_layers",
+          "graph_layers_builder",
+          "graph_layers_healer",
+          "graph_links",
+          "point_scorer",
+          "struct_payload_index",
+          "visited_pool",
+          "json_path",
+          "segment_constructor",
+          "vector_storage",
+          "quantized_vectors",
+          "gpu_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 0,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\qdrant\\lib\\segment\\src\\index\\struct_payload_index\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 3980,
+        "line_count": 108,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "hardware_counter",
+          "operation_error",
+          "id_tracker",
+          "field_index",
+          "payload_storage"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 0,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\vcptoolbox\\rust-vexus-lite\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 65,
+        "line_count": 5,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "napi_build"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 0,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1106,
+        "line_count": 44,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 5,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\cranelift\\assembler-x64\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 804,
+        "line_count": 22,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\cranelift\\codegen\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 8833,
+        "line_count": 255,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "cranelift_isle"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 18,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\cranelift\\isle\\isle\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1426,
+        "line_count": 39,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\cranelift\\isle\\veri\\veri\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1064,
+        "line_count": 38,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\c-api\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1390,
+        "line_count": 55,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 4,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\cache\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 537,
+        "line_count": 15,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\component-macro\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 176,
+        "line_count": 5,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\core\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 119,
+        "line_count": 4,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\cranelift\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 816,
+        "line_count": 24,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_environ"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 3,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\fiber\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1334,
+        "line_count": 35,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_versioned_export_macros",
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 4,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\fuzzing\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1431,
+        "line_count": 44,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_test_util"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 3,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\fuzzing\\wasm-spec-interpreter\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 3682,
+        "line_count": 97,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 9,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\gdbstub-component\\artifact\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 2513,
+        "line_count": 77,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\jit-debug\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 494,
+        "line_count": 17,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_versioned_export_macros",
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\test-programs\\artifacts\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 18539,
+        "line_count": 483,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "heck",
+          "wit_component",
+          "cargo_metadata",
+          "wat",
+          "wasmtime_test_util",
+          "parse_test_config",
+          "serde_derive"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 11,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\test-programs\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 392,
+        "line_count": 7,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 5,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\unwinder\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 466,
+        "line_count": 18,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\wasi-nn\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 392,
+        "line_count": 11,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 1,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\wasi-preview1-component-adapter\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 10917,
+        "line_count": 318,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasm_encoder"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 4,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\wasmtime\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 5731,
+        "line_count": 137,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_versioned_export_macros",
+          "cc"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 5,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\wiggle\\macro\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 176,
+        "line_count": 5,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 2,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\crates\\wizer\\benches\\uap-bench\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 535,
+        "line_count": 15,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 0,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\examples\\wasip2-plugins\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 2199,
+        "line_count": 81,
+        "declared_build_deps": [],
+        "used_crate_calls": [],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 3,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\fuzz\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 6950,
+        "line_count": 197,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "proc_macro2",
+          "wasmtime_test_util",
+          "component_fuzz",
+          "component_api",
+          "static_api_test",
+          "libfuzzer_sys",
+          "wasmtime_fuzzing"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": false,
+        "println_count": 4,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      },
+      {
+        "path": "Apeireth-rust\\research\\source\\wasmtime\\winch\\codegen\\build.rs",
+        "location": "research_vendored",
+        "size_bytes": 1235,
+        "line_count": 40,
+        "declared_build_deps": [],
+        "used_crate_calls": [
+          "wasmtime_environ"
+        ],
+        "has_compile_protos": false,
+        "has_tauri_build": false,
+        "has_conditional_gating": true,
+        "println_count": 6,
+        "risk_level": "AUDIT_ONLY",
+        "risk_reasons": [
+          "research/source vendored, not workspace member"
+        ]
+      }
+    ],
+    "unknown": []
+  },
+  "risk_distribution": {
+    "LOW": 3,
+    "AUDIT_ONLY": 40
+  },
+  "undeclared_build_deps": [],
+  "audit_decision": "HEALTHY",
+  "audit_reason": "V1311 build.rs audit: total 43 build.rs in Apeireth-rust/. Active workspace build.rs = 3 (root_app=1, member=2). Research vendored = 40 (audit_only). Unknown = 0. Risk distribution: LOW=3, MEDIUM=0, HIGH=0, AUDIT_ONLY=40. Undeclared build-deps: 0.",
+  "audit_action": "修真 = commit 锁定现状. Active workspace build.rs = 3 (src-tauri root + 92 members 扫描 → 仅 2 crates 有 build.rs: apeireth-bus, apeireth-tauri-stub). 所有 active build.rs 都 documented + correct build-deps. Research/source vendored build.rs (40 files) 不在 workspace member, audit_only 跳过. V1312 docs consistency audit 续."
+}
