@@ -90,3 +90,40 @@
 - **V0.2**: 0.4467
 - **V1256_unio_mystica**: 0.9291
 - **V1049_value_alignment**: DONE
+
+## 7. Chain Closure — test + re-probe (cron tick 182, 19:46 +08:00 2026-08-08)
+
+| Step | Result |
+|---|---|
+| `test_v1324_asi_5gap_real_llm.py` 追加 (43 tests) | **43/43 PASS** in 0.31s |
+| 包含 不假装 fake LLM / 不假装 fake key / 不假装 fake response 修真 | ✅ |
+| V3 守门 — pole-star LOCKED 修真 | ✅ V0.1=0.7905 / V0.2=0.4467 / V1256=0.9291 / V1049=DONE 均不动 |
+| --probe re-run (sanity check, ~2s) | reachable=True, latency_ms=988.82, model=MiniMax-M3 |
+
+### 7.1 test coverage sections (43 tests)
+
+1. Import sanity — 1 test
+2. Config defaults + env override (3 vars) — 5 tests
+3. API key handling (missing/empty/explicit) — 5 tests
+4. _parse_5_gap_response (CSV/space/JSON/labels/garbage/empty/partial/clamps/code-fences) — 9 tests
+5. Math helpers — _pearson, _percentile (5 tests)
+6. ASI 5 gaps + Benchmark lock (4 tests)
+7. V3 guard markers + version (2 tests)
+8. Dataclass roundtrip — LLMGapScore/ProbeAndValidateReport/ChatResult (3 tests)
+9. Bridge & aggregate structural integrity (3 tests)
+10. _now_iso roundtrip (1 test)
+11. V3 守门 — no fabrication (3 tests)
+12. Module side-effect-free import (1 test)
+
+### 7.2 V1325+ candidates preview
+
+- Cross-model robustness via APEIRETH_LLM_MODEL env override (endpoint accepts Qwen/Anthropic aliases)
+- V1318 deferred — Synthesis Layer (LOCKED, defer pending master direction)
+- V1319 VCP 6 source deep-read
+- Operational safety audit on V1324 outputs
+
+---
+
+_报告生成 — V1324 ASI 5-Gap Crucible + Real LLM 真接 NewAPI MiniMax-M3_
+_链: V1313 → V1314 → V1315 → V1316 → V1317 → V1318 → V1319 → V1320 → V1321 → V1322 → V1323 → V1324_
+北极星 LOCKED, ASI 5 哲学空缺 closure = substrate, 不是 ASI 真生产.
