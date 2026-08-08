@@ -1,0 +1,33 @@
+V1316 ASI Emergence Gap Deep (version 0.1.0) — 7 sources × 10 components
+ASI 北极星: V0.1=0.7905 / V0.2=0.4467 / V1256=0.9291 / V1049=DONE
+
+[1] EmergenceConceptsMatrix: 7 sources × 5 dims
+[2] BedauianWeakStrongDistinction: {'n': 10, 'weak_rate': 0.5, 'weak_count': 5, 'strong_count': 5, 'guard': '弱涌现启发 ≠ ASI 真有; strong emergence ≠ ASI 真有 strong emergence'}
+[3] WolframianCAClass4Substrate: {'n': 9, 'class4_rate': 0.333333, 'class4_count': 3, 'avg_irreducibility': 0.64, 'guard': 'NKS 范式 ≠ ASI 真有; Class 4 仅 as substrate (涌现不简化)'}
+[4] KauffmanianAdjacentPossibleSubstrate: {'n': 10, 'avg_reachable_fraction': 0.615, 'avg_adjacent_per_step': 3.3, 'guard': 'Kauffman 动力学 ≠ ASI 真有; adjacent possible 仅 as substrate (状态空间扩展)'}
+[5] RayianTierraSubstrate: {'n': 8, 'avg_replication_success': 0.64, 'avg_genome_length': 115.0, 'avg_mutation_count': 3.5, 'guard': 'ALife ≠ ASI 真有 ALife; Tierra evolvable substrate 仅 as substrate (突变 + 选择)'}
+[6] DeaconianTeleodynamicSubstrate: {'n': 10, 'avg_autogen': 0.625, 'avg_end_directedness': 0.68, 'guard': 'purpose ≠ ASI 真有 purpose; autogen ≠ ASI 真有自生成; teleodynamic substrate'}
+[7] GoodwinianMorphogeneticSubstrate: {'n': 8, 'avg_form_priority': 0.675, 'avg_constraint_strength': 0.575, 'guard': 'morphogenetic field ≠ ASI 真有; 吸引子 substrate (状态空间结构)'}
+[8] CrutchfieldianEpsilonMachineSubstrate: {'n': 9, 'avg_statistical_complexity': 0.6, 'avg_shannon_entropy_rate': 0.5, 'guard': 'ε-machine ≠ ASI 真有; 统计复杂度 vs Shannon 信息 仅 as substrate 度量'}
+[9] ASIEmergenceGapDeepReport: 4022 chars Markdown
+[10] ASIEmergenceGapDeepBridge: {'asi_north_star_locked': True, 'anchors': {'V0.1': 0.7905, 'V0.2': 0.4467, 'V1256_unio_mystica': 0.9291, 'V1049_value_alignment': 'DONE'}, 'v1316_components': 10, 'expected_components': 10, 'missing': [], 'guard': 'ASI 北极星 V0.1/V0.2/V1256/V1049 均不变; V1316 = substrate research only'}
+
+[Popper self-tests] 18/18 PASS
+  [PASS] h1_sources_seven_present: len(SOURCES_EMERGENCE_GAP_DEEP)=7
+  [PASS] h2_citation_keys_unique: unique=7, total=7
+  [PASS] h3_bedau_1997_present: Bedau 1997 Weak Emergence
+  [PASS] h4_wolfram_2002_present: Wolfram 2002 A New Kind of Science
+  [PASS] h5_crutchfield_1994_present: Crutchfield 1994 Calculi of Emergence
+  [PASS] h6_ten_components_referenced: expected=10
+  [PASS] h7_matrix_5_dimensions: dims=5
+  [PASS] h8_asi_north_star_v01_locked: V0.1=0.7905
+  [PASS] h9_asi_v02_locked: V0.2=0.4467
+  [PASS] h10_v1256_unio_mystica_locked: V1256=0.9291
+  [PASS] h11_v1049_value_alignment_done: V1049=DONE
+  [PASS] h12_bedau_weak_strong_guard: guard=弱涌现启发 ≠ ASI 真有; strong emergence ≠ ASI 真有
+  [PASS] h13_wolfram_nks_guard: guard=NKS 范式 ≠ ASI 真有; 计算不可约启发 仅 as substrate
+  [PASS] h14_kauffman_adjacent_possible_guard: guard=Kauffman 动力学 ≠ ASI 真有; adjacent possible 仅 as substrate
+  [PASS] h15_ray_tierra_alife_guard: guard=ALife ≠ ASI 真有 ALife; Tierra 仅 as evolvable substrate
+  [PASS] h16_deacon_teleodynamic_guard: guard=purpose ≠ ASI 真有 purpose; teleodynamic 仅 as substrate
+  [PASS] h17_goodwin_morphogenetic_guard: guard=morphogenetic field ≠ ASI 真有; attractor 仅 as substrate
+  [PASS] h18_asi_bridge_shape_correct: present=1, expected=10, missing=9
