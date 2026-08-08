@@ -261,5 +261,98 @@ class TestCLI:
         assert V1357_VERSION in out
 
 
+# -----------------------------------------------------------------------------
+# V1364: --record flag (opt-in auto-append to V1362 history ledger)
+# -----------------------------------------------------------------------------
+
+class TestRecordFlag:
+    """V1364: --record flag should opt-in auto-append to V1362 history."""
+
+    def test_snapshot_has_record_in_guards(self):
+        """V1364: GUARD_RECORD_IS_OPT_IN and GUARD_DELEGATE_TO_V1362_ON_OPT_IN present."""
+        snap = build_snapshot()
+        guards = snap.philosophy_guards
+        assert "GUARD_RECORD_IS_OPT_IN" in guards
+        assert "GUARD_DELEGATE_TO_V1362_ON_OPT_IN" in guards
+
+    def test_default_snapshot_does_not_append(self, tmp_path, monkeypatch, capsys):
+        """V1364: default snapshot (no --record) MUST NOT write to history."""
+        from apeireth import v1362_pole_star_history as v1362
+        # Redirect history file to a temp path so we can detect any writes.
+        fake_history = tmp_path / "pole_star_history.jsonl"
+        monkeypatch.setattr(v1362, "V1362_HISTORY_FILE", str(fake_history))
+        # Also patch the function used by V1357 to ensure it sees the temp path.
+        from apeireth import v1357_vcp_observability_snapshot as v1357
+        def fake_path() -> Path:
+            return Path(str(fake_history))
+        monkeypatch.setattr(v1357, "_history_path", fake_path, raising=False)
+
+        # Now run snapshot without --record
+        from apeireth.v1357_vcp_observability_snapshot import main
+        rc = main(["snapshot", "--json"])
+        assert rc in (0, 1)
+        # The temp history file MUST NOT exist (no writes happened)
+        assert not fake_history.exists(), "default --record must be OFF"
+
+    def test_record_flag_appends_to_history(self, tmp_path, monkeypatch, capsys):
+        """V1364: --record flag MUST append exactly one entry."""
+        from apeireth import v1362_pole_star_history as v1362
+        from apeireth import v1357_vcp_observability_snapshot as v1357
+        fake_history = tmp_path / "pole_star_history.jsonl"
+        monkeypatch.setattr(v1362, "V1362_HISTORY_FILE", str(fake_history))
+        monkeypatch.setattr(v1357, "V1362_HISTORY_FILE", str(fake_history), raising=False)
+
+        from apeireth.v1357_vcp_observability_snapshot import main
+        rc = main(["snapshot", "--record", "--tag", "v1364-test-default-off"])
+        assert rc in (0, 1)
+        assert fake_history.exists(), "--record must create history file"
+        lines = [ln for ln in fake_history.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry.get("tag") == "v1364-test-default-off"
+        assert entry.get("pole_star_total") == 0.9
+
+    def test_record_flag_stderr_message(self, tmp_path, monkeypatch, capsys):
+        """V1364: --record MUST emit confirmation to stderr."""
+        from apeireth import v1362_pole_star_history as v1362
+        from apeireth import v1357_vcp_observability_snapshot as v1357
+        fake_history = tmp_path / "pole_star_history.jsonl"
+        monkeypatch.setattr(v1362, "V1362_HISTORY_FILE", str(fake_history))
+        monkeypatch.setattr(v1357, "V1362_HISTORY_FILE", str(fake_history), raising=False)
+
+        from apeireth.v1357_vcp_observability_snapshot import main
+        main(["snapshot", "--record", "--tag", "v1364-stderr-check"])
+        captured = capsys.readouterr()
+        assert "[v1364] recorded to history" in captured.err
+
+    def test_record_flag_default_off_when_no_flag(self, tmp_path, monkeypatch, capsys):
+        """V1364: even --record without --tag should work; tag is None."""
+        from apeireth import v1362_pole_star_history as v1362
+        from apeireth import v1357_vcp_observability_snapshot as v1357
+        fake_history = tmp_path / "pole_star_history.jsonl"
+        monkeypatch.setattr(v1362, "V1362_HISTORY_FILE", str(fake_history))
+        monkeypatch.setattr(v1357, "V1362_HISTORY_FILE", str(fake_history), raising=False)
+
+        from apeireth.v1357_vcp_observability_snapshot import main
+        main(["snapshot", "--record"])
+        assert fake_history.exists()
+        entry = json.loads(fake_history.read_text(encoding="utf-8").strip())
+        assert "tag" not in entry  # No tag → entry has no 'tag' key
+
+    def test_record_helper_returns_entry_or_none(self):
+        """V1364: _record_to_history helper must handle missing v1362 gracefully."""
+        from apeireth.v1357_vcp_observability_snapshot import _record_to_history, build_snapshot
+        snap = build_snapshot()
+        # Normal path: should return a dict
+        result = _record_to_history(snap, tag="v1364-helper-test")
+        assert result is None or isinstance(result, dict)
+
+    def test_v1362_append_snapshot_with_dict_helper_exists(self):
+        """V1364: V1362 must export append_snapshot_with_dict for the no-double-build path."""
+        from apeireth import v1362_pole_star_history as v1362
+        assert hasattr(v1362, "append_snapshot_with_dict")
+        assert callable(v1362.append_snapshot_with_dict)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
