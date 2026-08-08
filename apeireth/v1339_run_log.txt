@@ -1,0 +1,92 @@
+V1339 run log
+=============
+
+Trigger: 2026-08-08 22:01 +08:00 (Saturday)
+Cron:    apeireth-autonomy-v3 (1fba1cc3-1a6d-4e3a-abb8-fccef1c94cdf)
+Mode:    isolated M3 (deepseek-v4-flash fallback after MiniMax-M3 idle timeout)
+Author:  楚零 (Chu Ling)
+
+State at trigger:
+- V1338 commit 014f82ff (22:01) DONE — VCP Plugin Migration Tool
+- V1338 self-test: 28/28 PASS; pytest: 67/67 PASS
+- V1339 = next: VCP Substrate-by-Example Cookbook (8 runnable examples)
+- ASI pole-star V0.1=0.7905 / V1335 不动 LOCKED
+
+Decision: V1339 = VCP Substrate-by-Example Cookbook (8 examples, one per invariant class)
+
+V1335 = registry ([8 invariant classes])
+V1336 = linter (single-file detection)
+V1337 = dashboard (multi-file matrix)
+V1338 = migrator (action suggestions)
+V1339 = **cookbook**: 8 runnable Python examples demonstrating each invariant class
+
+Steps:
+1. Wrote apeireth/v1339_vcp_substrate_cookbook.py (~29 KB, 8 API surfaces + 8 templates)
+2. Created 8 example templates in EXAMPLE_TEMPLATES dict
+3. Generated 8 example files + index.md to apeireth/v1339_cookbook_examples/
+4. Verified each example runs cleanly:
+   - example_ic1_security.py: 3/3 checks PASS
+   - example_ic2_file_handling.py: 3/3 checks PASS
+   - example_ic3_schema.py: 5/5 checks PASS
+   - example_ic4_ipc.py: 4/4 checks PASS
+   - example_ic5_error_handling.py: 5/5 checks PASS
+   - example_ic6_configuration.py: 6/6 checks PASS
+   - example_ic7_resource_bounds.py: 7/7 checks PASS
+   - example_ic8_lifecycle.py: 4/4 checks PASS
+5. Self-test: 86/86 PASS
+6. Wrote tests/test_v1339_vcp_substrate_cookbook.py (13 sections, 61 tests)
+7. Pytest: 61/61 PASS in 0.59s (incl. test_written_examples_are_runnable subprocess check)
+8. Chain regression: V1326-V1339 = 959/959 PASS in 5.13s
+9. V1339_REPORT.md + v1339_run_log.txt (this file) written
+10. Commit (pending)
+
+Files written:
+- apeireth/v1339_vcp_substrate_cookbook.py (~29 KB, 8 API surfaces + 8 templates)
+- tests/test_v1339_vcp_substrate_cookbook.py (~19 KB, 61 canonical tests)
+- apeireth/v1339_cookbook_examples/index.md (1.6 KB)
+- apeireth/v1339_cookbook_examples/example_ic1_security.py (2.4 KB)
+- apeireth/v1339_cookbook_examples/example_ic2_file_handling.py (2.3 KB)
+- apeireth/v1339_cookbook_examples/example_ic3_schema.py (1.9 KB)
+- apeireth/v1339_cookbook_examples/example_ic4_ipc.py (2.2 KB)
+- apeireth/v1339_cookbook_examples/example_ic5_error_handling.py (1.7 KB)
+- apeireth/v1339_cookbook_examples/example_ic6_configuration.py (2.0 KB)
+- apeireth/v1339_cookbook_examples/example_ic7_resource_bounds.py (2.0 KB)
+- apeireth/v1339_cookbook_examples/example_ic8_lifecycle.py (2.2 KB)
+- V1339_REPORT.md (~10 KB)
+- apeireth/v1339_run_log.txt (this file)
+
+Total: 13 files, ~78 KB
+
+Verification totals:
+- API surfaces: 8 (build_examples, build_index, write_examples_to_dir, write_index_to_dir,
+  _self_test, _self_test_summary, CookbookExample, CookbookIndex)
+- Example templates: 8 (one per invariant class)
+- All 8 examples runnable + verified
+- Popper self-tests: 86/86 PASS
+- Pytest: 61/61 PASS in 0.59s (incl. subprocess run-all check)
+- Chain regression: 959/959 PASS in 5.13s
+- V3 守门: 7 forbidden phrases checked
+- ASI pole-star: LOCKED (4/4 anchors unchanged)
+
+Real CLI test (主 17:43 实事求是):
+$ python -m apeireth.v1339_vcp_substrate_cookbook --output-dir apeireth/v1339_cookbook_examples
+→ Wrote 8 example files + index.md (1616 bytes index + 8 × ~2KB examples)
+$ python apeireth/v1339_cookbook_examples/example_ic1_security.py
+→ ALL CHECKS PASS
+$ python apeireth/v1339_cookbook_examples/example_ic7_resource_bounds.py
+→ ALL CHECKS PASS
+
+5-critical coverage (主 22:33 终极授权):
+- 5 SC examples: IC1_security, IC2_file_handling, IC3_schema, IC4_ipc, IC7_resource_bounds
+- 3 non-SC examples: IC5_error_handling, IC6_configuration, IC8_lifecycle
+- All 8 examples cover 1 of 8 invariant classes each
+
+Next natural pivot (V1340+):
+- V1340 = VCP Cookbook Validator (run linter on all 8 examples, verify they pass)
+- V1340 = V1335 coverage score uplift (add IC8_lifecycle-derivable patterns → 0.4107 → 0.60+)
+- V1340 = VCP Plugin Migration Auto-Apply (apply V1338 suggestions to actual file)
+- V1340 = Lineage Report V10xx-V1339 (end-to-end 真生产 evidence chain)
+- V1340 = V1339 cookbook JSON Schema (typed API for downstream tools)
+- V1340 = VCP Plugin Migration Cookbook Generator (template matrix for all 8 classes)
+- V1340 = VCP Plugin Migration Diff Tool (compare original vs migrated)
+- V1340 = VCP Substrate Cookbook Expansion (5 examples per class, not 1)
