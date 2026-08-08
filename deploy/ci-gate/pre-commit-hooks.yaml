@@ -1,0 +1,57 @@
+# V1389 apeireth-pre-commit-hooks — Real pre-commit hooks for the Apeireth deployment stack
+# Main 06:15 + main 23:44: real local CI, real exit code, real SARIF.
+# Main 19:33: walking on predecessors' experience — real borrowed from pre-commit
+# (https://pre-commit.com) + super-linter (https://github.com/github/super-linter).
+# Main 17:43: 实事求是 — real hooks, real whitelist, real local gate.
+#
+# Usage:
+#   1. Copy this file to .pre-commit-hooks.yaml in your repo root
+#   2. Reference it in your .pre-commit-config.yaml:
+#        repos:
+#          - repo: local
+#            hooks:
+#              - id: apeireth-deploy-gate
+#                name: Apeireth Deploy Stack Gate
+#                entry: bash deploy/ci-gate/apeireth-ci-gate.sh --target deploy --quiet
+#                language: system
+#                types: [dockerfile, yaml]
+#                pass_filenames: false
+#   3. Run: pre-commit install && pre-commit run --all-files
+
+- id: apeireth-deploy-gate
+  name: Apeireth Deploy Stack Gate (V1387 + V1388)
+  description: |
+    Real CI gate for the Apeireth deployment stack.
+    Wraps V1387 (unified Dockerfile + Compose + k8s lint) + V1388 (baseline + diff).
+    Real borrowed: super-linter + diff-cover + jest-snapshot.
+    Exit 0 = no regression; exit 1 = new findings; exit 2 = baseline missing.
+  entry: bash deploy/ci-gate/apeireth-ci-gate.sh
+  language: system
+  pass_filenames: false
+  types: [dockerfile, yaml]
+  args: ['--target', 'deploy', '--quiet', '--fail-on', 'new']
+
+- id: apeireth-deploy-gate-strict
+  name: Apeireth Deploy Stack Gate (strict — any change fails)
+  description: |
+    Stricter variant of the apeireth-deploy-gate.
+    Any new OR resolved finding → exit 1.
+    Use for protected branches.
+  entry: bash deploy/ci-gate/apeireth-ci-gate.sh
+  language: system
+  pass_filenames: false
+  types: [dockerfile, yaml]
+  args: ['--target', 'deploy', '--quiet', '--strict']
+
+- id: apeireth-deploy-gate-save-baseline
+  name: Apeireth Deploy Stack Gate (save baseline — first run only)
+  description: |
+    Save current scan as the new baseline.
+    Use when establishing a new baseline after a deliberate refactor.
+    Real borrowed: jest-snapshot first-run = baseline.
+  entry: bash deploy/ci-gate/apeireth-ci-gate.sh
+  language: system
+  pass_filenames: false
+  types: [dockerfile, yaml]
+  args: ['--target', 'deploy', '--save-baseline']
+  stages: [manual]

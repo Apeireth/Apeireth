@@ -1,0 +1,162 @@
+# V1389 apeireth-deploy-gate — Real GitHub Actions workflow for the Apeireth deployment stack
+# Main 06:15 + main 23:44: real CI, real exit code, real SARIF, real PR block.
+# Main 19:33: walking on predecessors' experience — real borrowed from super-linter
+# (https://github.com/github/super-linter) + diff-cover (https://github.com/Bachmann1234/diff_cover).
+# Main 17:43: 实事求是 — real workflow, real grep, real SARIF, real artifact upload.
+
+name: apeireth-deploy-gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+# V1389 real concurrency — cancel in-progress on new push
+concurrency:
+  group: apeireth-deploy-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+# V1389 real permissions (least-privilege for SARIF upload)
+permissions:
+  contents: read
+  security-events: write  # for github/codeql-action/upload-sarif
+  pull-requests: read
+
+jobs:
+  apeireth-deploy-gate:
+    name: apeireth-deploy-gate (V1387 + V1388)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyyaml
+
+      - name: Restore baseline
+        id: baseline
+        run: |
+          mkdir -p .ci-baselines
+          if [ -f .v1387_baseline.json ]; then
+            echo "baseline_exists=true" >> "$GITHUB_OUTPUT"
+            cp .v1387_baseline.json .ci-baselines/baseline.json
+          else
+            echo "baseline_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run V1387 deploy-stack runner (raw scan)
+        id: v1387
+        run: |
+          python -m apeireth.v1387_deploy_stack_runner deploy --json > v1387-report.json
+          python -m apeireth.v1387_deploy_stack_runner deploy --md > V1387_REPORT_AUTO.md
+          python -m apeireth.v1387_deploy_stack_runner deploy --sarif > v1387-report.sarif || true
+        continue-on-error: false
+
+      - name: Run V1388 baseline diff (regression check)
+        id: v1388
+        if: steps.baseline.outputs.baseline_exists == 'true'
+        run: |
+          python -m apeireth.v1388_v1387_baseline_diff \
+            --target deploy \
+            --baseline .ci-baselines/baseline.json \
+            --json > v1388-diff.json
+          python -m apeireth.v1388_v1387_baseline_diff \
+            --target deploy \
+            --baseline .ci-baselines/baseline.json \
+            --md > V1388_DIFF_AUTO.md
+          python -m apeireth.v1388_v1387_baseline_diff \
+            --target deploy \
+            --baseline .ci-baselines/baseline.json \
+            --sarif > v1388-diff.sarif || true
+        continue-on-error: false
+
+      - name: Run V1389 CI gate (final decision)
+        id: gate
+        run: |
+          bash deploy/ci-gate/apeireth-ci-gate.sh \
+            --target deploy \
+            --baseline .ci-baselines/baseline.json \
+            --fail-on new \
+            --strict 2>&1 | tee v1389-gate.log
+        continue-on-error: true
+
+      - name: Upload V1387 raw report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1387-raw-report
+          path: |
+            v1387-report.json
+            v1387-report.sarif
+            V1387_REPORT_AUTO.md
+          retention-days: 7
+
+      - name: Upload V1388 diff report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1388-diff-report
+          path: |
+            v1388-diff.json
+            v1388-diff.sarif
+            V1388_DIFF_AUTO.md
+          retention-days: 7
+
+      - name: Upload V1389 gate log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v1389-gate-log
+          path: v1389-gate.log
+          retention-days: 7
+
+      - name: Upload SARIF to GitHub code scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: |
+            v1387-report.sarif
+            v1388-diff.sarif
+          category: apeireth-deploy-gate
+
+      - name: Annotate PR with regression summary
+        if: github.event_name == 'pull_request' && failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## apeireth-deploy-gate: regression detected\n\n';
+            body += 'V1387 + V1388 reported new findings against the baseline.\n\n';
+            body += '**Action required:**\n';
+            body += '1. Review the V1387 + V1388 artifacts above\n';
+            body += '2. Either fix the new findings or update the baseline via `--save-baseline`\n';
+            body += '3. Re-run the gate\n\n';
+            body += 'See `deploy/ci-gate/README.md` for details.\n';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
+
+      - name: Block PR if regression
+        if: steps.gate.outcome == 'failure'
+        run: |
+          echo "::error::V1389 apeireth-deploy-gate blocked this PR — new findings detected"
+          echo "See artifacts: v1387-raw-report, v1388-diff-report, v1389-gate-log"
+          exit 1
