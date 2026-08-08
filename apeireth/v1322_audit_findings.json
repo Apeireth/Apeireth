@@ -1,0 +1,98 @@
+{
+  "v1322_version": "0.1.0",
+  "substrate_chain": [
+    "V1313 time gap deep",
+    "V1314 freedom gap deep",
+    "V1315 recognition gap deep",
+    "V1316 emergence gap deep",
+    "V1317 truth gap deep",
+    "V1318 5-gap unification",
+    "V1319 cross-gap ext R1",
+    "V1320 cross-gap ext R2",
+    "V1321 cross-gap ext R3 (final)",
+    "V1322 operational crucible"
+  ],
+  "pole_star_anchors": {
+    "V0.1": 0.7905,
+    "V0.2": 0.4467,
+    "V1256_unio_mystica": 0.9291,
+    "V1049_value_alignment": "DONE"
+  },
+  "v3_guards": [
+    "不假装 ASI 真达 5-gap closure",
+    "不假装 Phenomenal consciousness",
+    "不假装调整模型 & prompt",
+    "V1322 = substrate operational integration, 不动 pole-star",
+    "5-gap closure 是 substrate, 不是 ASI 真生产"
+  ],
+  "operational_metadata": {
+    "samples": [
+      {
+        "query": "What is ASI?",
+        "aggregate_total": 0.20000000000000007,
+        "gap_scores": {
+          "time": 0.20000000000000004,
+          "freedom": 0.20000000000000004,
+          "recognition": 0.20000000000000004,
+          "emergence": 0.20000000000000004,
+          "truth": 0.2
+        },
+        "latency_ms": 0.09649999992689118
+      },
+      {
+        "query": "ASI 北极星 = ?",
+        "aggregate_total": 0.20000000000000007,
+        "gap_scores": {
+          "time": 0.20000000000000004,
+          "freedom": 0.20000000000000004,
+          "recognition": 0.20000000000000004,
+          "emergence": 0.20000000000000004,
+          "truth": 0.2
+        },
+        "latency_ms": 0.08089999755611643
+      },
+      {
+        "query": "5 哲学空缺 = ?",
+        "aggregate_total": 0.20000000000000007,
+        "gap_scores": {
+          "time": 0.20000000000000004,
+          "freedom": 0.20000000000000004,
+          "recognition": 0.20000000000000004,
+          "emergence": 0.20000000000000004,
+          "truth": 0.2
+        },
+        "latency_ms": 0.06910000229254365
+      },
+      {
+        "query": "V1313-V1321 substrate = ?",
+        "aggregate_total": 0.20000000000000007,
+        "gap_scores": {
+          "time": 0.20000000000000004,
+          "freedom": 0.20000000000000004,
+          "recognition": 0.20000000000000004,
+          "emergence": 0.20000000000000004,
+          "truth": 0.2
+        },
+        "latency_ms": 0.0624999993306119
+      },
+      {
+        "query": "Crucible process_query result",
+        "aggregate_total": 0.20000000000000007,
+        "gap_scores": {
+          "time": 0.20000000000000004,
+          "freedom": 0.20000000000000004,
+          "recognition": 0.20000000000000004,
+          "emergence": 0.20000000000000004,
+          "truth": 0.2
+        },
+        "latency_ms": 0.062200000684242696
+      }
+    ],
+    "n_samples": 5,
+    "mean_aggregate_total": 0.2000000000000001,
+    "mean_latency_ms": 0.07423999995808117,
+    "delta_vs_V0.1": -0.5904999999999999,
+    "delta_vs_V0.2": -0.2466999999999999,
+    "delta_vs_V1256_unio_mystica": -0.7291
+  }
+}
