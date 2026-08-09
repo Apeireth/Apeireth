@@ -1,0 +1,238 @@
+{
+  "schema": "v1441.asi-philosophical-gaps-round2/v1",
+  "version": "0.1.0",
+  "module": "v1441_asi_philosophical_gaps_round2",
+  "started_iso": "2026-08-09T22-13-12Z",
+  "ended_iso": "2026-08-09T22-13-12Z",
+  "n_probes": 15,
+  "n_gaps": 5,
+  "n_cross_pairs": 0,
+  "probes": [
+    {
+      "gap": "time",
+      "kind": "primary",
+      "value": 0.15196756454078234,
+      "n_samples": 137,
+      "source": "v1417",
+      "note": "inter-day entropy"
+    },
+    {
+      "gap": "time",
+      "kind": "secondary",
+      "value": 0.6788321167883211,
+      "n_samples": 137,
+      "source": "v1417",
+      "note": "uniqueness 93/137"
+    },
+    {
+      "gap": "time",
+      "kind": "primary",
+      "value": 0.0,
+      "n_samples": 69,
+      "source": "v1417",
+      "note": "inter-day entropy"
+    },
+    {
+      "gap": "freedom",
+      "kind": "primary",
+      "value": null,
+      "n_samples": 0,
+      "source": "v1419",
+      "note": "no policies"
+    },
+    {
+      "gap": "freedom",
+      "kind": "secondary",
+      "value": null,
+      "n_samples": 0,
+      "source": "v1419",
+      "note": "no policies"
+    },
+    {
+      "gap": "freedom",
+      "kind": "primary",
+      "value": null,
+      "n_samples": 0,
+      "source": "v1419",
+      "note": "no policies"
+    },
+    {
+      "gap": "recognition",
+      "kind": "primary",
+      "value": 0.09090909090909091,
+      "n_samples": 880,
+      "source": "v1424",
+      "note": "accuracy 80/880"
+    },
+    {
+      "gap": "recognition",
+      "kind": "secondary",
+      "value": null,
+      "n_samples": 0,
+      "source": "v1424",
+      "note": "no latencies"
+    },
+    {
+      "gap": "recognition",
+      "kind": "primary",
+      "value": 0.09090909090909091,
+      "n_samples": 440,
+      "source": "v1424",
+      "note": "accuracy 40/440"
+    },
+    {
+      "gap": "emergence",
+      "kind": "primary",
+      "value": 1.0,
+      "n_samples": 137,
+      "source": "v1417",
+      "note": "n_modules density"
+    },
+    {
+      "gap": "emergence",
+      "kind": "secondary",
+      "value": 1.0,
+      "n_samples": 137,
+      "source": "v1417",
+      "note": "chain_ok 137/137"
+    },
+    {
+      "gap": "emergence",
+      "kind": "primary",
+      "value": 1.0,
+      "n_samples": 69,
+      "source": "v1417",
+      "note": "n_modules density"
+    },
+    {
+      "gap": "truth",
+      "kind": "primary",
+      "value": 1.0,
+      "n_samples": 137,
+      "source": "v1417",
+      "note": "majority consistency"
+    },
+    {
+      "gap": "truth",
+      "kind": "secondary",
+      "value": null,
+      "n_samples": 0,
+      "source": "v1417",
+      "note": "no alerts"
+    },
+    {
+      "gap": "truth",
+      "kind": "primary",
+      "value": 1.0,
+      "n_samples": 69,
+      "source": "v1417",
+      "note": "majority consistency"
+    }
+  ],
+  "stats": [
+    {
+      "gap": "time",
+      "primary": 0.15196756454078234,
+      "secondary": 0.6788321167883211,
+      "tertiary": 0.0,
+      "composite": 0.27693322710970114,
+      "variance": 0.08461038220786324,
+      "trend_slope": 0.0,
+      "n_history_points": 0,
+      "note": ""
+    },
+    {
+      "gap": "freedom",
+      "primary": null,
+      "secondary": null,
+      "tertiary": null,
+      "composite": null,
+      "variance": null,
+      "trend_slope": 0.0,
+      "n_history_points": 0,
+      "note": ""
+    },
+    {
+      "gap": "recognition",
+      "primary": 0.09090909090909091,
+      "secondary": null,
+      "tertiary": 0.09090909090909091,
+      "composite": 0.09090909090909091,
+      "variance": 0.0,
+      "trend_slope": 0.0,
+      "n_history_points": 0,
+      "note": ""
+    },
+    {
+      "gap": "emergence",
+      "primary": 1.0,
+      "secondary": 1.0,
+      "tertiary": 1.0,
+      "composite": 1.0,
+      "variance": 0.0,
+      "trend_slope": 0.0,
+      "n_history_points": 0,
+      "note": ""
+    },
+    {
+      "gap": "truth",
+      "primary": 1.0,
+      "secondary": null,
+      "tertiary": 1.0,
+      "composite": 1.0,
+      "variance": 0.0,
+      "trend_slope": 0.0,
+      "n_history_points": 0,
+      "note": ""
+    }
+  ],
+  "correlations": [],
+  "history_present": true,
+  "history_n_runs": 0,
+  "honest_disclosure": "V1441 is a **5 philosophical gaps round 2 deep probe**. It does NOT claim that 15 probes across 5 gaps solves Phenomenal consciousness, ASI achievement, human-level judgment, or absolute truth. It claims only: **from this host, 3 bounded probes per gap (15 total) were executed on real V1417/V1419/V1424 JSONL + V1425 history, cross-gap correlation was computed (5×5 matrix = 25 pairs), and the empirical composite + variance + trend per gap is reported**. V1441 ≠ Phenomenal gap-solver, ≠ ASI gap-solver, ≠ human-level gap-solver, ≠ absolute gap-solver. 15 bounded probes ≠ understanding. Cross-gap correlation ≠ causation. Trend slope ≠ progress. Composite score ≠ truth.",
+  "guards": [
+    "GUARD_BOUNDED_PROBE",
+    "GUARD_NO_RAISE",
+    "GUARD_OFFLINE_SAFE",
+    "GUARD_HISTORY_LOADED",
+    "GUARD_TREND_BOUNDED",
+    "GUARD_CORRELATION_BOUNDED",
+    "GUARD_POPPER_RUNS",
+    "GUARD_CHAIN_OK",
+    "GUARD_HONEST_DISCLOSURE",
+    "GUARD_NO_V1425_REPLACE",
+    "GUARD_NO_V1417_WRITE",
+    "GUARD_NO_V1419_WRITE",
+    "GUARD_NO_V1424_WRITE",
+    "GUARD_CLI_RUNNABLE"
+  ],
+  "v3_guards": [
+    "GUARD_NO_PHENOMENAL_GAP_SOLVER",
+    "GUARD_NO_ASI_GAP_SOLVER",
+    "GUARD_NO_HUMAN_LEVEL_GAP_SOLVER",
+    "GUARD_NO_ABSOLUTE_GAP_SOLVER",
+    "GUARD_NO_PROBE_OVERCLAIM"
+  ],
+  "borrowed": [
+    [
+      "V1425",
+      "5 philosophical gaps round 1 — gap definitions + history format"
+    ],
+    [
+      "V1417",
+      "DGM tick history — JSONL source for time probes"
+    ],
+    [
+      "V1419",
+      "multi-policy evaluator — JSONL source for freedom probes"
+    ],
+    [
+      "V1424",
+      "real LLM benchmark — JSONL source for recognition probes"
+    ],
+    [
+      "stdlib math + statistics + json + dataclasses",
+      "core probe arithmetic"
+    ]
+  ]
+}
