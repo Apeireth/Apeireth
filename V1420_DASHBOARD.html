@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ASI 鎬绘鏋?鈥?V1420 status dashboard</title>
+<style>
+  body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; color: #111; }
+  h1 { margin: 0 0 .25rem 0; }
+  .sub { color: #666; margin-bottom: 1.5rem; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 1rem; }
+  .card { border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: #fafafa; }
+  .k { color: #555; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; }
+  .v { font-size: 1.4rem; font-weight: 600; margin-top: .25rem; }
+  .stable { color: #0a7a2f; }
+  .shift { color: #b86a00; }
+  .unknown { color: #555; }
+  .ok { color: #0a7a2f; }
+  .fail { color: #a40000; }
+  code { background: #eee; padding: .15rem .35rem; border-radius: 4px; }
+</style>
+</head>
+<body>
+<h1>ASI 鎬绘鏋?鈥?V1420 status dashboard</h1>
+<div class="sub">Version 0.1.0 路 Schema v1420.asi-http-status-endpoint/v1 路 PID 10332 路 started 2026-08-09T19-22-29Z</div>
+
+<div class="grid">
+  <div class="card">
+    <div class="k">Last V1419 verdict</div>
+    <div class="v stable">STABLE</div>
+  </div>
+  <div class="card">
+    <div class="k">Worst severity</div>
+    <div class="v">INFO</div>
+  </div>
+  <div class="card">
+    <div class="k">n_alerts</div>
+    <div class="v">0</div>
+  </div>
+  <div class="card">
+    <div class="k">Chain integrity</div>
+    <div class="v ok">OK (2 modules)</div>
+  </div>
+  <div class="card">
+    <div class="k">History ticks</div>
+    <div class="v">11</div>
+  </div>
+  <div class="card">
+    <div class="k">Policy distribution</div>
+    <div class="v">P 11 路 Pa 0 路 L 0</div>
+  </div>
+  <div class="card">
+    <div class="k">Chain_ok rate</div>
+    <div class="v">1.000</div>
+  </div>
+  <div class="card">
+    <div class="k">Avg alerts / tick</div>
+    <div class="v">0.091</div>
+  </div>
+</div>
+
+<h2 style="margin-top:2rem">Endpoints (anyone can curl)</h2>
+<ul>
+  <li><code>GET /api/asi/health</code> 鈥?200 OK always</li>
+  <li><code>GET /api/asi/status</code> 鈥?JSON full status (this page)</li>
+  <li><code>GET /api/asi/verdict</code> 鈥?JSON latest V1419 verdict</li>
+  <li><code>GET /api/asi/history</code> 鈥?JSON V1417 history summary</li>
+  <li><code>GET /api/asi/chain</code> 鈥?JSON V1419 chain integrity</li>
+  <li><code>GET /api/asi/version</code> 鈥?JSON V1420 module version</li>
+  <li><code>GET /api/asi/snapshot</code> 鈥?JSON aggregate snapshot</li>
+  <li><code>POST /api/asi/refresh</code> 鈥?re-runs V1419 evaluate, returns JSON</li>
+</ul>
+
+<p class="sub">V1420 is a deterministic HTTP routing layer. It is bounded by HTTP request parsing and JSON serialization. It is NOT Phenomenal consciousness, ASI 杈炬垚, human-level judgment, or absolute certainty.</p>
+
+</body>
+</html>
+
