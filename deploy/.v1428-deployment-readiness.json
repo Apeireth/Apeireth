@@ -1,0 +1,53 @@
+{
+  "n_total": 6,
+  "n_valid": 6,
+  "readiness": 1.0,
+  "per_kind": {
+    "docker-compose.yml": {
+      "kind": "docker-compose.yml",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\docker-compose.yml",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    "k8s-asi.yaml": {
+      "kind": "k8s-asi.yaml",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\k8s-asi.yaml",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    "Dockerfile": {
+      "kind": "Dockerfile",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\Dockerfile",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    "requirements.txt": {
+      "kind": "requirements.txt",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\requirements.txt",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    "start-asi.sh": {
+      "kind": "start-asi.sh",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\start-asi.sh",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    ".env.example": {
+      "kind": ".env.example",
+      "path": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy\\.env.example",
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    }
+  },
+  "output_dir": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\deploy",
+  "started_iso": "2026-08-09T20-17-50Z",
+  "ended_iso": "2026-08-09T20-17-50Z",
+  "note": "v1428 deployment-readiness (主 23:44 平层即应)"
+}
