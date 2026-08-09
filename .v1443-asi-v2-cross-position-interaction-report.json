@@ -1,0 +1,1338 @@
+{
+  "module": "v1443_asi_v2_cross_position_interaction",
+  "version": "0.1.0",
+  "schema": "v1443.asi-v2-cross-position-interaction/v1",
+  "phase": 1443,
+  "date": "2026-08-10",
+  "started_utc": "2026-08-09T22:30:47.170829+00:00",
+  "finished_utc": "2026-08-09T22:30:51.354527+00:00",
+  "aggregates": {
+    "n_positions": 5,
+    "n_directed_pairs": 20,
+    "n_probes_per_pair": 3,
+    "n_pair_probes_total": 60,
+    "n_pair_probes_passed": 47,
+    "n_meta_probes": 4,
+    "n_meta_probes_passed": 4,
+    "mean_pair_rate": 0.7833333333333333,
+    "meta_pass_rate": 1.0,
+    "total_interaction_rate": 0.796875
+  },
+  "caveats": [
+    "static structural probe only (string reference + attr presence + chain handoff shape)",
+    "NOT runtime data-flow proof",
+    "compositional on V1442 occupancy; if V1442 is wrong, V1443 inherits error",
+    "localhost probe ≠ production interaction"
+  ],
+  "pairs": [
+    {
+      "source_position": "scheduler",
+      "target_position": "cogitator",
+      "source_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "target_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1425_asi_five_philosophical_gaps",
+              "v1441_asi_philosophical_gaps_round2"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_VERSION"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True) tgt=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "aggregator",
+      "source_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "target_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1426_vcp_six_protocol_dispatcher",
+              "v1433_asi_vcp_structural_consistency",
+              "v1432_vcp_real_source_deep_read"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:3",
+          "details": {
+            "found_attrs": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_VERSION"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_VERSION"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True) tgt=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "max_authority",
+      "source_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "target_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1414_asi_overarching_watchdog",
+              "v1429_asi_deployment_semantic_linter"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERSION"
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True) tgt=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "asi_occupier",
+      "source_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "target_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1411_asi_overarching_framework",
+              "v1410_asi_five_position_framework"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_VERSION"
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True) tgt=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "scheduler",
+      "source_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "target_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:3_matches",
+          "details": {
+            "matches": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "v1418_asi_dgm_cron_integration"
+              ],
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "v1417_asi_dgm_tick_history"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "v1417_asi_dgm_tick_history"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_VERSION"
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True) tgt=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "aggregator",
+      "source_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "target_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1426_vcp_six_protocol_dispatcher",
+              "v1433_asi_vcp_structural_consistency",
+              "v1432_vcp_real_source_deep_read"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:3",
+          "details": {
+            "found_attrs": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_VERSION"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_VERSION"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True) tgt=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "max_authority",
+      "source_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "target_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:1_matches",
+          "details": {
+            "matches": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "v1414_asi_overarching_watchdog"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERSION"
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True) tgt=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "asi_occupier",
+      "source_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "target_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:2_matches",
+          "details": {
+            "matches": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "v1411_asi_overarching_framework"
+              ],
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "v1410_asi_five_position_framework"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_VERSION"
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True) tgt=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "scheduler",
+      "source_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "target_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:1_matches",
+          "details": {
+            "matches": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "v1418_asi_dgm_cron_integration"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_VERSION"
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True) tgt=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "cogitator",
+      "source_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "target_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:3_matches",
+          "details": {
+            "matches": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "v1425_asi_five_philosophical_gaps"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "v1425_asi_five_philosophical_gaps"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "v1425_asi_five_philosophical_gaps"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_VERSION"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True) tgt=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "max_authority",
+      "source_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "target_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1414_asi_overarching_watchdog",
+              "v1429_asi_deployment_semantic_linter"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERSION"
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True) tgt=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "asi_occupier",
+      "source_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "target_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:2_matches",
+          "details": {
+            "matches": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "v1411_asi_overarching_framework"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "v1411_asi_overarching_framework"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_VERSION"
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True) tgt=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "scheduler",
+      "source_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "target_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1418_asi_dgm_cron_integration",
+              "v1417_asi_dgm_tick_history"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_VERSION"
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>) tgt=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "cogitator",
+      "source_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "target_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1425_asi_five_philosophical_gaps",
+              "v1441_asi_philosophical_gaps_round2"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_VERSION"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>) tgt=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "aggregator",
+      "source_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "target_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1426_vcp_six_protocol_dispatcher",
+              "v1433_asi_vcp_structural_consistency",
+              "v1432_vcp_real_source_deep_read"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:3",
+          "details": {
+            "found_attrs": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_VERSION"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_VERSION"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>) tgt=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "asi_occupier",
+      "source_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "target_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "interaction_rate": 1.0,
+      "n_passed": 3,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": true,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": true,
+          "evidence": "referenced:1_matches",
+          "details": {
+            "matches": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "v1411_asi_overarching_framework"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_VERSION"
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>) tgt=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "scheduler",
+      "source_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "target_modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1418_asi_dgm_cron_integration",
+              "v1417_asi_dgm_tick_history"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_VERSION"
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>) tgt=True(v1418_asi_dgm_cron_integration:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "cogitator",
+      "source_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "target_modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1425_asi_five_philosophical_gaps",
+              "v1441_asi_philosophical_gaps_round2"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_VERSION"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>) tgt=True(v1425_asi_five_philosophical_gaps:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "aggregator",
+      "source_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "target_modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1426_vcp_six_protocol_dispatcher",
+              "v1433_asi_vcp_structural_consistency",
+              "v1432_vcp_real_source_deep_read"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:3",
+          "details": {
+            "found_attrs": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_VERSION"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_VERSION"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>) tgt=True(v1426_vcp_six_protocol_dispatcher:chain_delegate:all_ok=True)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "max_authority",
+      "source_modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "target_modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "interaction_rate": 0.6666666666666666,
+      "n_passed": 2,
+      "n_total": 3,
+      "chain_source_ok": true,
+      "chain_target_ok": true,
+      "module_referenced": false,
+      "handoff_attr_present": true,
+      "probes": [
+        {
+          "probe_kind": "probe_source_to_target_invoke",
+          "passed": false,
+          "evidence": "no_literal_module_reference_found",
+          "details": {
+            "checked_target_modules": [
+              "v1414_asi_overarching_watchdog",
+              "v1429_asi_deployment_semantic_linter"
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_data_handoff_attr",
+          "passed": true,
+          "evidence": "version_attrs:2",
+          "details": {
+            "found_attrs": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERSION"
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_VERSION"
+              ]
+            ]
+          }
+        },
+        {
+          "probe_kind": "probe_chain_delegate_handoff",
+          "passed": true,
+          "evidence": "src=True(v1411_asi_overarching_framework:chain_delegate:unknown_shape...<truncated>) tgt=True(v1414_asi_overarching_watchdog:chain_delegate_v1414:tuple_fi...<truncated>)",
+          "details": {
+            "src_ok": true,
+            "tgt_ok": true
+          }
+        }
+      ]
+    }
+  ],
+  "meta_probes": [
+    {
+      "probe_kind": "probe_round_trip_ok",
+      "passed": true,
+      "evidence": "fwd=0.67 bwd=1.00",
+      "details": {
+        "forward": {
+          "rate": 0.6666666666666666,
+          "n_passed": 2
+        },
+        "backward": {
+          "rate": 1.0,
+          "n_passed": 3
+        }
+      }
+    },
+    {
+      "probe_kind": "probe_fan_out_balanced",
+      "passed": true,
+      "evidence": "lacking=none (min=2)",
+      "details": {
+        "per_position": {
+          "scheduler": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "cogitator": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "aggregator": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "max_authority": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "asi_occupier": {
+            "n_passing": 4,
+            "n_total": 4
+          }
+        },
+        "min_outgoing": 2
+      }
+    },
+    {
+      "probe_kind": "probe_fan_in_balanced",
+      "passed": true,
+      "evidence": "lacking=none (min=2)",
+      "details": {
+        "per_position": {
+          "cogitator": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "aggregator": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "max_authority": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "asi_occupier": {
+            "n_passing": 4,
+            "n_total": 4
+          },
+          "scheduler": {
+            "n_passing": 4,
+            "n_total": 4
+          }
+        },
+        "min_incoming": 2
+      }
+    },
+    {
+      "probe_kind": "probe_no_self_loop",
+      "passed": true,
+      "evidence": "self_loops=0",
+      "details": {}
+    }
+  ]
+}
