@@ -1,0 +1,53 @@
+{
+  "alerts": [],
+  "comparison": {
+    "delta_alerts_avg": -0.3333333333333333,
+    "delta_chain_ok_rate": 0.0,
+    "delta_lockdown_ratio": 0.0,
+    "delta_pause_ratio": 0.0,
+    "delta_proceed_ratio": 0.0,
+    "note": "V1419 comparison a=A:last3 b=B:last3",
+    "reason": "magnitude=0.000 < threshold=0.100 → STABLE",
+    "shift_magnitude": 0.0,
+    "shift_verdict": "STABLE",
+    "window_a_label": "A:last3",
+    "window_b_label": "B:last3"
+  },
+  "n_alerts": 0,
+  "verdict": "STABLE",
+  "window_a": {
+    "alerts_avg": 0.0,
+    "alerts_total": 0,
+    "chain_ok_count": 3,
+    "chain_ok_rate": 1.0,
+    "first_timestamp": "2026-08-09T18-56-08Z",
+    "last_timestamp": "2026-08-09T18-56-09Z",
+    "lockdown_count": 0,
+    "lockdown_ratio": 0.0,
+    "n_snapshots": 3,
+    "note": "V1419 distribution window=A:last3 n=3",
+    "pause_count": 0,
+    "pause_ratio": 0.0,
+    "proceed_count": 3,
+    "proceed_ratio": 1.0,
+    "window_label": "A:last3"
+  },
+  "window_b": {
+    "alerts_avg": 0.3333333333333333,
+    "alerts_total": 1,
+    "chain_ok_count": 3,
+    "chain_ok_rate": 1.0,
+    "first_timestamp": "2026-08-10T00-01-00Z",
+    "last_timestamp": "2026-08-09T18-56-05Z",
+    "lockdown_count": 0,
+    "lockdown_ratio": 0.0,
+    "n_snapshots": 3,
+    "note": "V1419 distribution window=B:last3 n=3",
+    "pause_count": 0,
+    "pause_ratio": 0.0,
+    "proceed_count": 3,
+    "proceed_ratio": 1.0,
+    "window_label": "B:last3"
+  },
+  "worst_severity": "INFO"
+}
