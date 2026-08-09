@@ -28,20 +28,20 @@
 | position | n_probes | n_closed | closure_rate | broken_kinds |
 |---|---|---|---|---|
 | scheduler | 5 | 5 | 1.0000 | — |
-| cogitator | 5 | 5 | 1.0000 | — |
+| cogitator | 5 | 4 | 0.8000 | cross_link |
 | aggregator | 5 | 4 | 0.8000 | cross_link |
-| max_authority | 5 | 5 | 1.0000 | — |
-| asi_occupier | 5 | 3 | 0.6000 | cross_link, cross_link |
+| max_authority | 5 | 4 | 0.8000 | cross_link |
+| asi_occupier | 5 | 5 | 1.0000 | — |
 
 ### Cross-position matrix (5×5)
 
 | source \\ target | scheduler | cogitator | aggregator | max_authority | asi_occupier |
 |---|---|---|---|---|---|
-| scheduler | 0 | 0 | 0 | 0 | 1 |
-| cogitator | 0 | 0 | 1 | 0 | 1 |
-| aggregator | 0 | 1 | 0 | 0 | 0 |
-| max_authority | 0 | 0 | 0 | 0 | 1 |
-| asi_occupier | 0 | 0 | 0 | 1 | 0 |
+| scheduler | — | 1 | 0 | 0 | 0 |
+| cogitator | 0 | — | 0 | 0 | 0 |
+| aggregator | 0 | 0 | — | 0 | 0 |
+| max_authority | 0 | 0 | 0 | — | 0 |
+| asi_occupier | 1 | 1 | 1 | 1 | — |
 
 ## Honest disclosure (主 17:43 实事求是)
 
@@ -132,7 +132,8 @@
 
 - forward + backward + history + guard_compliance = 1.0 (architecture is well-formed)
 - cross_link = 0.4 (positions are 40% inter-referenced in module source)
-- aggregator has 1 cross_link break (no references to scheduler/cogitator/max_authority/asi_occupier)
-- asi_occupier has 2 cross_link breaks (only references max_authority)
-- scheduler + cogitator + max_authority: 1.0 closure_rate
+- scheduler + asi_occupier: 1.0 closure_rate (cross_link = 1, source references ≥1 other position)
+- cogitator + aggregator + max_authority: 0.8 closure_rate (cross_link = 0, no other positions referenced in source)
+- scheduler → cogitator: 1 (scheduler source references "cogitator")
+- asi_occupier → all 4 others: 1 (V1442/V1443 source contains all position names from V1442_POSITIONS tuple)
 - This confirms V1444 cross_link=0 finding pattern: empirically verifiable cross-link gaps exist
