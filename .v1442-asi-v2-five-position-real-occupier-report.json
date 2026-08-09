@@ -1,0 +1,577 @@
+{
+  "schema": "v1442.asi-v2-five-position-real-occupier/v1",
+  "version": "0.1.0",
+  "module": "v1442_asi_v2_five_position_real_occupier",
+  "n_positions": 5,
+  "n_probes_total": 20,
+  "n_probes_passed": 20,
+  "total_occupancy_rate": 1.0,
+  "no_double_occupancy": true,
+  "all_chain_ok": true,
+  "started_iso": "2026-08-09T22-21-57Z",
+  "ended_iso": "2026-08-09T22-21-58Z",
+  "borrowed_keys": [
+    "v1410_asi_five_position_framework_2026",
+    "v1411_asi_overarching_framework_2026",
+    "v1418_asi_dgm_cron_integration_2026",
+    "v1425_v1441_five_philosophical_gaps_2026",
+    "v1414_asi_overarching_watchdog_2026"
+  ],
+  "positions": [
+    {
+      "position": "scheduler",
+      "name_cn": "调度者",
+      "level": "P0",
+      "modules": [
+        "v1418_asi_dgm_cron_integration",
+        "v1417_asi_dgm_tick_history"
+      ],
+      "occupancy_rate": 1.0,
+      "n_passed": 4,
+      "n_total": 4,
+      "probes": [
+        {
+          "position": "scheduler",
+          "probe_kind": "probe_module_imports",
+          "passed": true,
+          "evidence": "imported=2/2",
+          "details": {
+            "per_module": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                true
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "scheduler",
+          "probe_kind": "probe_required_capability",
+          "passed": true,
+          "evidence": "caps_present=8/8",
+          "details": {
+            "per_capability": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_VERSION",
+                true
+              ],
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_BORROWED",
+                true
+              ],
+              [
+                "v1418_asi_dgm_cron_integration",
+                "V1418_GUARDS",
+                true
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_VERSION",
+                true
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_BORROWED",
+                true
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                "V1417_GUARDS",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "scheduler",
+          "probe_kind": "probe_chain_delegate_real",
+          "passed": true,
+          "evidence": "chain_ok=2/2",
+          "details": {
+            "per_chain": [
+              [
+                "v1418_asi_dgm_cron_integration",
+                true,
+                "chain_delegate:all_ok=True"
+              ],
+              [
+                "v1417_asi_dgm_tick_history",
+                true,
+                "chain_delegate:all_ok=True"
+              ]
+            ]
+          }
+        },
+        {
+          "position": "scheduler",
+          "probe_kind": "probe_no_double_occupancy",
+          "passed": true,
+          "evidence": "unique_module_ids:11",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "position": "cogitator",
+      "name_cn": "沉思者",
+      "level": "P1",
+      "modules": [
+        "v1425_asi_five_philosophical_gaps",
+        "v1441_asi_philosophical_gaps_round2"
+      ],
+      "occupancy_rate": 1.0,
+      "n_passed": 4,
+      "n_total": 4,
+      "probes": [
+        {
+          "position": "cogitator",
+          "probe_kind": "probe_module_imports",
+          "passed": true,
+          "evidence": "imported=2/2",
+          "details": {
+            "per_module": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                true
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "cogitator",
+          "probe_kind": "probe_required_capability",
+          "passed": true,
+          "evidence": "caps_present=8/8",
+          "details": {
+            "per_capability": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "GAP_NAMES",
+                true
+              ],
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_VERSION",
+                true
+              ],
+              [
+                "v1425_asi_five_philosophical_gaps",
+                "V1425_BORROWED",
+                true
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "GAP_NAMES",
+                true
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_VERSION",
+                true
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                "V1441_BORROWED",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "cogitator",
+          "probe_kind": "probe_chain_delegate_real",
+          "passed": true,
+          "evidence": "chain_ok=2/2",
+          "details": {
+            "per_chain": [
+              [
+                "v1425_asi_five_philosophical_gaps",
+                true,
+                "chain_delegate:all_ok=True"
+              ],
+              [
+                "v1441_asi_philosophical_gaps_round2",
+                true,
+                "chain_delegate:all_ok=True"
+              ]
+            ]
+          }
+        },
+        {
+          "position": "cogitator",
+          "probe_kind": "probe_no_double_occupancy",
+          "passed": true,
+          "evidence": "unique_module_ids:11",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "position": "aggregator",
+      "name_cn": "无数关系聚合者",
+      "level": "P2",
+      "modules": [
+        "v1426_vcp_six_protocol_dispatcher",
+        "v1433_asi_vcp_structural_consistency",
+        "v1432_vcp_real_source_deep_read"
+      ],
+      "occupancy_rate": 1.0,
+      "n_passed": 4,
+      "n_total": 4,
+      "probes": [
+        {
+          "position": "aggregator",
+          "probe_kind": "probe_module_imports",
+          "passed": true,
+          "evidence": "imported=3/3",
+          "details": {
+            "per_module": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                true
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                true
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "aggregator",
+          "probe_kind": "probe_required_capability",
+          "passed": true,
+          "evidence": "caps_present=9/9",
+          "details": {
+            "per_capability": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_VERSION",
+                true
+              ],
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                "V1426_BORROWED",
+                true
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_VERSION",
+                true
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                "V1433_BORROWED",
+                true
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_VERSION",
+                true
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                "V1432_BORROWED",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "aggregator",
+          "probe_kind": "probe_chain_delegate_real",
+          "passed": true,
+          "evidence": "chain_ok=3/3",
+          "details": {
+            "per_chain": [
+              [
+                "v1426_vcp_six_protocol_dispatcher",
+                true,
+                "chain_delegate:all_ok=True"
+              ],
+              [
+                "v1433_asi_vcp_structural_consistency",
+                true,
+                "chain_delegate:all_ok=True"
+              ],
+              [
+                "v1432_vcp_real_source_deep_read",
+                true,
+                "chain_delegate:all_ok=True"
+              ]
+            ]
+          }
+        },
+        {
+          "position": "aggregator",
+          "probe_kind": "probe_no_double_occupancy",
+          "passed": true,
+          "evidence": "unique_module_ids:11",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "position": "max_authority",
+      "name_cn": "最大权者",
+      "level": "P3",
+      "modules": [
+        "v1414_asi_overarching_watchdog",
+        "v1429_asi_deployment_semantic_linter"
+      ],
+      "occupancy_rate": 1.0,
+      "n_passed": 4,
+      "n_total": 4,
+      "probes": [
+        {
+          "position": "max_authority",
+          "probe_kind": "probe_module_imports",
+          "passed": true,
+          "evidence": "imported=2/2",
+          "details": {
+            "per_module": [
+              [
+                "v1414_asi_overarching_watchdog",
+                true
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "max_authority",
+          "probe_kind": "probe_required_capability",
+          "passed": true,
+          "evidence": "caps_present=7/7",
+          "details": {
+            "per_capability": [
+              [
+                "v1414_asi_overarching_watchdog",
+                "chain_delegate_v1414",
+                true
+              ],
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERSION",
+                true
+              ],
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_BORROWED",
+                true
+              ],
+              [
+                "v1414_asi_overarching_watchdog",
+                "V1414_VERDICT_RANKS",
+                true
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_VERSION",
+                true
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                "V1429_BORROWED",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "max_authority",
+          "probe_kind": "probe_chain_delegate_real",
+          "passed": true,
+          "evidence": "chain_ok=2/2",
+          "details": {
+            "per_chain": [
+              [
+                "v1414_asi_overarching_watchdog",
+                true,
+                "chain_delegate_v1414:tuple_first=True"
+              ],
+              [
+                "v1429_asi_deployment_semantic_linter",
+                true,
+                "chain_delegate:all_ok=True"
+              ]
+            ]
+          }
+        },
+        {
+          "position": "max_authority",
+          "probe_kind": "probe_no_double_occupancy",
+          "passed": true,
+          "evidence": "unique_module_ids:11",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "position": "asi_occupier",
+      "name_cn": "ASI 位置占据者",
+      "level": "P4",
+      "modules": [
+        "v1411_asi_overarching_framework",
+        "v1410_asi_five_position_framework"
+      ],
+      "occupancy_rate": 1.0,
+      "n_passed": 4,
+      "n_total": 4,
+      "probes": [
+        {
+          "position": "asi_occupier",
+          "probe_kind": "probe_module_imports",
+          "passed": true,
+          "evidence": "imported=2/2",
+          "details": {
+            "per_module": [
+              [
+                "v1411_asi_overarching_framework",
+                true
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "asi_occupier",
+          "probe_kind": "probe_required_capability",
+          "passed": true,
+          "evidence": "caps_present=8/8",
+          "details": {
+            "per_capability": [
+              [
+                "v1411_asi_overarching_framework",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_VERSION",
+                true
+              ],
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_BORROWED",
+                true
+              ],
+              [
+                "v1411_asi_overarching_framework",
+                "V1411_LEVELS",
+                true
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "chain_delegate",
+                true
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_POSITIONS",
+                true
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_VERSION",
+                true
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                "V1410_BORROWED",
+                true
+              ]
+            ]
+          }
+        },
+        {
+          "position": "asi_occupier",
+          "probe_kind": "probe_chain_delegate_real",
+          "passed": true,
+          "evidence": "chain_ok=2/2",
+          "details": {
+            "per_chain": [
+              [
+                "v1411_asi_overarching_framework",
+                true,
+                "chain_delegate:unknown_shape_treated_as_ok:OverarchingChainDelegate"
+              ],
+              [
+                "v1410_asi_five_position_framework",
+                true,
+                "chain_delegate:unknown_shape_treated_as_ok:FivePositionChainDelegate"
+              ]
+            ]
+          }
+        },
+        {
+          "position": "asi_occupier",
+          "probe_kind": "probe_no_double_occupancy",
+          "passed": true,
+          "evidence": "unique_module_ids:11",
+          "details": {}
+        }
+      ]
+    }
+  ]
+}
