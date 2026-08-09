@@ -1,0 +1,389 @@
+{
+  "protocols": [
+    {
+      "protocol": "sync",
+      "vcp_protocol": "sync",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.030755996704101562,
+      "note": "VCP sync protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "sync_a0166839",
+          "name": "t1_init",
+          "protocol": "sync",
+          "duration_ms": 0.010013580322265625,
+          "success": true,
+          "note": "protocol=sync,task=t1_init,ok"
+        },
+        {
+          "task_id": "sync_e72100c2",
+          "name": "t2_load",
+          "protocol": "sync",
+          "duration_ms": 0.0035762786865234375,
+          "success": true,
+          "note": "protocol=sync,task=t2_load,ok"
+        },
+        {
+          "task_id": "sync_e462614c",
+          "name": "t3_dispatch",
+          "protocol": "sync",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "protocol=sync,task=t3_dispatch,ok"
+        },
+        {
+          "task_id": "sync_0d3e0425",
+          "name": "t4_transform",
+          "protocol": "sync",
+          "duration_ms": 0.0030994415283203125,
+          "success": true,
+          "note": "protocol=sync,task=t4_transform,ok"
+        },
+        {
+          "task_id": "sync_9c68d3f3",
+          "name": "t5_persist",
+          "protocol": "sync",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "protocol=sync,task=t5_persist,ok"
+        },
+        {
+          "task_id": "sync_9b1befca",
+          "name": "t6_cleanup",
+          "protocol": "sync",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "protocol=sync,task=t6_cleanup,ok"
+        }
+      ]
+    },
+    {
+      "protocol": "async",
+      "vcp_protocol": "async",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.020742416381835938,
+      "note": "VCP async protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "async_f945e3d8",
+          "name": "t1_init",
+          "protocol": "async",
+          "duration_ms": 0.0035762786865234375,
+          "success": true,
+          "note": "protocol=async,task=t1_init,ok"
+        },
+        {
+          "task_id": "async_eea60d12",
+          "name": "t2_load",
+          "protocol": "async",
+          "duration_ms": 0.0064373016357421875,
+          "success": true,
+          "note": "protocol=async,task=t2_load,ok"
+        },
+        {
+          "task_id": "async_033cb59f",
+          "name": "t3_dispatch",
+          "protocol": "async",
+          "duration_ms": 0.009298324584960938,
+          "success": true,
+          "note": "protocol=async,task=t3_dispatch,ok"
+        },
+        {
+          "task_id": "async_4babee6e",
+          "name": "t4_transform",
+          "protocol": "async",
+          "duration_ms": 0.012159347534179688,
+          "success": true,
+          "note": "protocol=async,task=t4_transform,ok"
+        },
+        {
+          "task_id": "async_7c2e3bc3",
+          "name": "t5_persist",
+          "protocol": "async",
+          "duration_ms": 0.014781951904296875,
+          "success": true,
+          "note": "protocol=async,task=t5_persist,ok"
+        },
+        {
+          "task_id": "async_59ff9229",
+          "name": "t6_cleanup",
+          "protocol": "async",
+          "duration_ms": 0.017404556274414062,
+          "success": true,
+          "note": "protocol=async,task=t6_cleanup,ok"
+        }
+      ]
+    },
+    {
+      "protocol": "static",
+      "vcp_protocol": "static",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.021696090698242188,
+      "note": "VCP static protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "static_daedb1c9",
+          "name": "t1_init",
+          "protocol": "static",
+          "duration_ms": 0.003337860107421875,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t1_init,ok"
+        },
+        {
+          "task_id": "static_0270a250",
+          "name": "t2_load",
+          "protocol": "static",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t2_load,ok"
+        },
+        {
+          "task_id": "static_abc087ff",
+          "name": "t3_dispatch",
+          "protocol": "static",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t3_dispatch,ok"
+        },
+        {
+          "task_id": "static_8e3ecf7e",
+          "name": "t4_transform",
+          "protocol": "static",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t4_transform,ok"
+        },
+        {
+          "task_id": "static_abfe22bc",
+          "name": "t5_persist",
+          "protocol": "static",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t5_persist,ok"
+        },
+        {
+          "task_id": "static_7843b0f6",
+          "name": "t6_cleanup",
+          "protocol": "static",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "cache-miss,protocol=static,task=t6_cleanup,ok"
+        }
+      ]
+    },
+    {
+      "protocol": "service",
+      "vcp_protocol": "service",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.04124641418457031,
+      "note": "VCP service protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "service_3905e1f3",
+          "name": "t1_init",
+          "protocol": "service",
+          "duration_ms": 0.006198883056640625,
+          "success": true,
+          "note": "service-handle=service::t1_init,protocol=service,task=t1_init,ok"
+        },
+        {
+          "task_id": "service_fd724bd9",
+          "name": "t2_load",
+          "protocol": "service",
+          "duration_ms": 0.0059604644775390625,
+          "success": true,
+          "note": "service-handle=service::t2_load,protocol=service,task=t2_load,ok"
+        },
+        {
+          "task_id": "service_e38321b5",
+          "name": "t3_dispatch",
+          "protocol": "service",
+          "duration_ms": 0.0057220458984375,
+          "success": true,
+          "note": "service-handle=service::t3_dispatch,protocol=service,task=t3_dispatch,ok"
+        },
+        {
+          "task_id": "service_30f91eb8",
+          "name": "t4_transform",
+          "protocol": "service",
+          "duration_ms": 0.0057220458984375,
+          "success": true,
+          "note": "service-handle=service::t4_transform,protocol=service,task=t4_transform,ok"
+        },
+        {
+          "task_id": "service_c9e0e51b",
+          "name": "t5_persist",
+          "protocol": "service",
+          "duration_ms": 0.0059604644775390625,
+          "success": true,
+          "note": "service-handle=service::t5_persist,protocol=service,task=t5_persist,ok"
+        },
+        {
+          "task_id": "service_ef0cb45c",
+          "name": "t6_cleanup",
+          "protocol": "service",
+          "duration_ms": 0.0059604644775390625,
+          "success": true,
+          "note": "service-handle=service::t6_cleanup,protocol=service,task=t6_cleanup,ok"
+        }
+      ]
+    },
+    {
+      "protocol": "preprocessor",
+      "vcp_protocol": "preprocessor",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.02384185791015625,
+      "note": "VCP preprocessor protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "preproc_a3571d01",
+          "name": "t1_init",
+          "protocol": "preprocessor",
+          "duration_ms": 0.003814697265625,
+          "success": true,
+          "note": "transformed=TINI_1T,protocol=preprocessor,task=TINI_1T,ok"
+        },
+        {
+          "task_id": "preproc_99a9064b",
+          "name": "t2_load",
+          "protocol": "preprocessor",
+          "duration_ms": 0.00286102294921875,
+          "success": true,
+          "note": "transformed=DAOL_2T,protocol=preprocessor,task=DAOL_2T,ok"
+        },
+        {
+          "task_id": "preproc_f6f6922d",
+          "name": "t3_dispatch",
+          "protocol": "preprocessor",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "transformed=HCTAPSID_3T,protocol=preprocessor,task=HCTAPSID_3T,ok"
+        },
+        {
+          "task_id": "preproc_c0bf0734",
+          "name": "t4_transform",
+          "protocol": "preprocessor",
+          "duration_ms": 0.00286102294921875,
+          "success": true,
+          "note": "transformed=MROFSNART_4T,protocol=preprocessor,task=MROFSNART_4T,ok"
+        },
+        {
+          "task_id": "preproc_a93b3a5e",
+          "name": "t5_persist",
+          "protocol": "preprocessor",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "transformed=TSISREP_5T,protocol=preprocessor,task=TSISREP_5T,ok"
+        },
+        {
+          "task_id": "preproc_3a5e26fd",
+          "name": "t6_cleanup",
+          "protocol": "preprocessor",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "transformed=PUNAELC_6T,protocol=preprocessor,task=PUNAELC_6T,ok"
+        }
+      ]
+    },
+    {
+      "protocol": "hybrid",
+      "vcp_protocol": "hybrid",
+      "started_iso": "2026-08-09T20-11-30Z",
+      "ended_iso": "2026-08-09T20-11-30Z",
+      "n_tasks": 6,
+      "n_success": 6,
+      "n_failed": 0,
+      "total_duration_ms": 0.022411346435546875,
+      "note": "VCP hybrid protocol — 6 tasks dispatched",
+      "task_results": [
+        {
+          "task_id": "sync_fb912e15",
+          "name": "t1_init",
+          "protocol": "hybrid-sync",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "hybrid-phase=sync,protocol=sync,task=t1_init,ok"
+        },
+        {
+          "task_id": "sync_2db8a5b7",
+          "name": "t2_load",
+          "protocol": "hybrid-sync",
+          "duration_ms": 0.0021457672119140625,
+          "success": true,
+          "note": "hybrid-phase=sync,protocol=sync,task=t2_load,ok"
+        },
+        {
+          "task_id": "sync_9539eeee",
+          "name": "t3_dispatch",
+          "protocol": "hybrid-sync",
+          "duration_ms": 0.002384185791015625,
+          "success": true,
+          "note": "hybrid-phase=sync,protocol=sync,task=t3_dispatch,ok"
+        },
+        {
+          "task_id": "async_2faadcc1",
+          "name": "t4_transform",
+          "protocol": "hybrid-async",
+          "duration_ms": 0.0026226043701171875,
+          "success": true,
+          "note": "hybrid-phase=async,protocol=async,task=t4_transform,ok"
+        },
+        {
+          "task_id": "async_e1d83e4b",
+          "name": "t5_persist",
+          "protocol": "hybrid-async",
+          "duration_ms": 0.0057220458984375,
+          "success": true,
+          "note": "hybrid-phase=async,protocol=async,task=t5_persist,ok"
+        },
+        {
+          "task_id": "async_6d96435b",
+          "name": "t6_cleanup",
+          "protocol": "hybrid-async",
+          "duration_ms": 0.008344650268554688,
+          "success": true,
+          "note": "hybrid-phase=async,protocol=async,task=t6_cleanup,ok"
+        }
+      ]
+    }
+  ],
+  "started_iso": "2026-08-09T20-11-30Z",
+  "ended_iso": "2026-08-09T20-11-30Z",
+  "apeireth_to_vcp_map": {
+    "sequential": "sync",
+    "parallel": "async",
+    "conditional": "hybrid",
+    "static": "static",
+    "service": "service",
+    "preprocessor": "preprocessor"
+  },
+  "vcp_to_apeireth_map": {
+    "sync": "sequential",
+    "async": "parallel",
+    "hybrid": "conditional",
+    "static": "static",
+    "service": "service",
+    "preprocessor": "preprocessor"
+  },
+  "note": "v1426 VCP 6-protocol dispatcher (主 18:40 真借鉴)"
+}
