@@ -1,0 +1,10 @@
+{
+  "alerts_count": 1,
+  "baseline_timestamp": "2026-08-10T00-02-00Z",
+  "chain_ok": true,
+  "created_at": "2026-08-09T18-45-36Z",
+  "escalation_count": 0,
+  "note": "regenerated after sim",
+  "policy": "PROCEED",
+  "source_snapshot_index": 3
+}
