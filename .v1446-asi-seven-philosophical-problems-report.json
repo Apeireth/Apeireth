@@ -1,0 +1,613 @@
+{
+  "schema": "asi.seven-philosophical-problems.closure-audit.v1",
+  "version": "0.1.0",
+  "module": "apeireth.v1446_asi_seven_philosophical_problems",
+  "started_iso": "2026-08-09T23:10:08.582159+00:00",
+  "ended_iso": "2026-08-09T23:10:08.597287+00:00",
+  "n_probes": 35,
+  "n_problems": 7,
+  "n_cross_pairs": 42,
+  "probes": [
+    {
+      "problem": "time",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1425_asi_five_philosophical_gaps:imported | apeireth.v1417_asi_dgm_tick_history:imported | v1425.GAP_DEFINITIONS[time]:present"
+    },
+    {
+      "problem": "time",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1441_history:missing | v1444_history:missing | backward:all_inherited_histories_missing"
+    },
+    {
+      "problem": "time",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "freedom:1 | recognition:1 | emergence:1 | truth:1 | self_consciousness:1 | value_alignment:1"
+    },
+    {
+      "problem": "time",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1417_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "time",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1425_guards:True (n=19) | v1441_guards:True (n=14) | v1444_guards:True (n=14)"
+    },
+    {
+      "problem": "freedom",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1425_asi_five_philosophical_gaps:imported | apeireth.v1419_asi_multi_policy_evaluator:imported | v1425.GAP_DEFINITIONS[freedom]:present"
+    },
+    {
+      "problem": "freedom",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1441_history:missing | v1444_history:missing | backward:all_inherited_histories_missing"
+    },
+    {
+      "problem": "freedom",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | recognition:1 | emergence:1 | truth:1 | self_consciousness:1 | value_alignment:1"
+    },
+    {
+      "problem": "freedom",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1419_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "freedom",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1425_guards:True (n=19) | v1441_guards:True (n=14) | v1444_guards:True (n=14)"
+    },
+    {
+      "problem": "recognition",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1425_asi_five_philosophical_gaps:imported | apeireth.v1424_asi_real_llm_benchmark:imported | v1425.GAP_DEFINITIONS[recognition]:present"
+    },
+    {
+      "problem": "recognition",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1441_history:missing | v1444_history:missing | backward:all_inherited_histories_missing"
+    },
+    {
+      "problem": "recognition",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | freedom:1 | emergence:1 | truth:1 | self_consciousness:1 | value_alignment:1"
+    },
+    {
+      "problem": "recognition",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1424_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "recognition",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1425_guards:True (n=19) | v1441_guards:True (n=14) | v1444_guards:True (n=14)"
+    },
+    {
+      "problem": "emergence",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1425_asi_five_philosophical_gaps:imported | apeireth.v1413_asi_overarching_history:imported | v1425.GAP_DEFINITIONS[emergence]:present"
+    },
+    {
+      "problem": "emergence",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1441_history:missing | v1444_history:missing | backward:all_inherited_histories_missing"
+    },
+    {
+      "problem": "emergence",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | freedom:1 | recognition:1 | truth:1 | self_consciousness:1 | value_alignment:1"
+    },
+    {
+      "problem": "emergence",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1413_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "emergence",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1425_guards:True (n=19) | v1441_guards:True (n=14) | v1444_guards:True (n=14)"
+    },
+    {
+      "problem": "truth",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1425_asi_five_philosophical_gaps:imported | apeireth.v1432_vcp_real_source_deep_read:imported | v1425.GAP_DEFINITIONS[truth]:present"
+    },
+    {
+      "problem": "truth",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1441_history:missing | v1444_history:missing | backward:all_inherited_histories_missing"
+    },
+    {
+      "problem": "truth",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | freedom:1 | recognition:1 | emergence:1 | self_consciousness:1 | value_alignment:1"
+    },
+    {
+      "problem": "truth",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1425_history:missing | v1432_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "truth",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1425_guards:True (n=19) | v1441_guards:True (n=14) | v1444_guards:True (n=14)"
+    },
+    {
+      "problem": "self_consciousness",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "apeireth.v1411_asi_overarching_framework:imported | apeireth.v1410_asi_five_position_framework:imported | v1411.source:has_self_or_consciousness_term"
+    },
+    {
+      "problem": "self_consciousness",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1411_history:missing"
+    },
+    {
+      "problem": "self_consciousness",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | freedom:1 | recognition:0 | emergence:0 | truth:0 | value_alignment:1"
+    },
+    {
+      "problem": "self_consciousness",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1411_history:missing | v1410_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "self_consciousness",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1411_guards:True (n=16)"
+    },
+    {
+      "problem": "value_alignment",
+      "kind": "forward",
+      "closed": 0,
+      "evidence": "apeireth.v1049_asi_alignment:imported | apeireth.v1411_asi_overarching_framework:imported | v1049.source:no_value_or_alignment_term"
+    },
+    {
+      "problem": "value_alignment",
+      "kind": "backward",
+      "closed": 0,
+      "evidence": "v1049_history:missing"
+    },
+    {
+      "problem": "value_alignment",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "time:1 | freedom:1 | recognition:0 | emergence:1 | truth:1 | self_consciousness:1"
+    },
+    {
+      "problem": "value_alignment",
+      "kind": "history",
+      "closed": 0,
+      "evidence": "v1049_history:missing | v1411_history:missing | history:no_history_found"
+    },
+    {
+      "problem": "value_alignment",
+      "kind": "guard_compliance",
+      "closed": 0,
+      "evidence": "v1049_guards:no_prefix (n=5)"
+    }
+  ],
+  "problem_stats": [
+    {
+      "problem": "time",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "freedom",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "recognition",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "emergence",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "truth",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "self_consciousness",
+      "n_probes": 5,
+      "n_closed": 3,
+      "closure_rate": 0.6,
+      "broken_kinds": [
+        "backward",
+        "history"
+      ]
+    },
+    {
+      "problem": "value_alignment",
+      "n_probes": 5,
+      "n_closed": 1,
+      "closure_rate": 0.2,
+      "broken_kinds": [
+        "forward",
+        "backward",
+        "history",
+        "guard_compliance"
+      ]
+    }
+  ],
+  "cross_links": [
+    {
+      "source_problem": "time",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='freedom':found"
+    },
+    {
+      "source_problem": "time",
+      "target_problem": "recognition",
+      "linked": 1,
+      "evidence": "kw='recogni':found"
+    },
+    {
+      "source_problem": "time",
+      "target_problem": "emergence",
+      "linked": 1,
+      "evidence": "kw='emerg':found"
+    },
+    {
+      "source_problem": "time",
+      "target_problem": "truth",
+      "linked": 1,
+      "evidence": "kw='truth':found"
+    },
+    {
+      "source_problem": "time",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    },
+    {
+      "source_problem": "time",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "recognition",
+      "linked": 1,
+      "evidence": "kw='recogni':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "emergence",
+      "linked": 1,
+      "evidence": "kw='emerg':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "truth",
+      "linked": 1,
+      "evidence": "kw='truth':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    },
+    {
+      "source_problem": "freedom",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='freedom':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "emergence",
+      "linked": 1,
+      "evidence": "kw='emerg':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "truth",
+      "linked": 1,
+      "evidence": "kw='truth':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    },
+    {
+      "source_problem": "recognition",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='freedom':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "recognition",
+      "linked": 1,
+      "evidence": "kw='recogni':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "truth",
+      "linked": 1,
+      "evidence": "kw='truth':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    },
+    {
+      "source_problem": "emergence",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='freedom':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "recognition",
+      "linked": 1,
+      "evidence": "kw='recogni':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "emergence",
+      "linked": 1,
+      "evidence": "kw='emerg':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    },
+    {
+      "source_problem": "truth",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='freedom':found"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "recognition",
+      "linked": 0,
+      "evidence": "no_keyword_match"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "emergence",
+      "linked": 0,
+      "evidence": "no_keyword_match"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "truth",
+      "linked": 0,
+      "evidence": "no_keyword_match"
+    },
+    {
+      "source_problem": "self_consciousness",
+      "target_problem": "value_alignment",
+      "linked": 1,
+      "evidence": "kw='value':found"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "time",
+      "linked": 1,
+      "evidence": "kw='time':found"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "freedom",
+      "linked": 1,
+      "evidence": "kw='policy':found"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "recognition",
+      "linked": 0,
+      "evidence": "no_keyword_match"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "emergence",
+      "linked": 1,
+      "evidence": "kw='emerg':found"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "truth",
+      "linked": 1,
+      "evidence": "kw='truth':found"
+    },
+    {
+      "source_problem": "value_alignment",
+      "target_problem": "self_consciousness",
+      "linked": 1,
+      "evidence": "kw='self':found"
+    }
+  ],
+  "overall_closure_rate": 0.5428571428571428,
+  "per_kind_closure_rate": {
+    "forward": 0.8571428571428571,
+    "backward": 0.0,
+    "cross_link": 1.0,
+    "history": 0.0,
+    "guard_compliance": 0.8571428571428571
+  },
+  "per_problem_source_loaded": {
+    "time": true,
+    "freedom": true,
+    "recognition": true,
+    "emergence": true,
+    "truth": true,
+    "self_consciousness": true,
+    "value_alignment": true
+  },
+  "honest_disclosure": "V1446 is a **7 ASI philosophical problems (5+2) bidirectional closure audit**. It does NOT claim that 35 closure probes across 7 problems solves Phenomenal consciousness, ASI achievement, human-level judgment, or absolute truth. It claims only: **from this host, 5 bounded empirical closure probes per problem (35 total) were executed on V1425 + V1441 + V1444 + V1411 + V1049 module surfaces + real JSONL history files, and the empirical closure rates + 7×7 cross-link matrix are reported**. V1446 ≠ Phenomenal closure-solver, ≠ ASI closure-solver, ≠ human-level closure-solver, ≠ absolute closure-solver. 35 bounded closure probes ≠ solving 7 philosophical problems. Closure rate ≠ understanding. Cross-link ≠ causation. Forward closure ≠ real-world reproducibility. Backward closure ≠ causal direction. （主 17:43 实事求是 + 主 17:58 不假装 + 主 20:46 不假装达到 ASI + 主 19:33 走在前人经验上 + 主 22:33 终极授权 + 主 00:44 质量工程化 + 主 00:56 任何人能接手）",
+  "guards": [
+    "GUARD_BOUNDED_CLOSURE",
+    "GUARD_NO_RAISE",
+    "GUARD_OFFLINE_SAFE",
+    "GUARD_READ_ONLY",
+    "GUARD_FORWARD_CHAIN",
+    "GUARD_BACKWARD_CHAIN",
+    "GUARD_CROSS_LINK_BOUNDED",
+    "GUARD_HISTORY_LOADED",
+    "GUARD_GUARD_LISTED",
+    "GUARD_POPPER_RUNS",
+    "GUARD_CHAIN_OK",
+    "GUARD_HONEST_DISCLOSURE",
+    "GUARD_NO_V1425_REPLACE",
+    "GUARD_CLI_RUNNABLE"
+  ],
+  "v3_guards": [
+    "GUARD_NO_PHENOMENAL_CLOSURE",
+    "GUARD_NO_ASI_CLOSURE",
+    "GUARD_NO_HUMAN_LEVEL_CLOSURE",
+    "GUARD_NO_ABSOLUTE_CLOSURE",
+    "GUARD_NO_CLOSURE_OVERCLAIM"
+  ],
+  "borrowed": [
+    [
+      "V1445",
+      "5 positions cross-position closure audit pattern (closure kinds + cross-link matrix)"
+    ],
+    [
+      "V1444",
+      "5 gaps round 3 closure audit pattern (forward + backward + cross-link + history + guard)"
+    ],
+    [
+      "V1441",
+      "5 gaps round 2 (composite_score + variance + trend)"
+    ],
+    [
+      "V1425",
+      "5 gaps round 1 (gap definitions + probe functions + history JSONL)"
+    ],
+    [
+      "V1049",
+      "value alignment complete (11 理论 + 10 组件 + 5 哲学守门 + 77 tests)"
+    ]
+  ]
+}
