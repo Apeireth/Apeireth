@@ -1,0 +1,60 @@
+{
+  "time": {
+    "gap_name": "time",
+    "probe_name": "probe_time",
+    "value": 0.0,
+    "normalized_value": 0.0,
+    "n_samples": 65,
+    "gap_status": "OPEN",
+    "v3_guard": "GUARD_TIME_PROBE_IS_NOT_TIME",
+    "note": "inter-tick interval entropy over 65 records across 1 cycles; this measures distribution of cycle_index occurrences — NOT subjective time",
+    "ran_at_iso": "2026-08-09T20-07-58Z"
+  },
+  "freedom": {
+    "gap_name": "freedom",
+    "probe_name": "probe_freedom",
+    "value": 0.0,
+    "normalized_value": 0.0,
+    "n_samples": 65,
+    "gap_status": "OPEN",
+    "v3_guard": "GUARD_FREEDOM_PROBE_IS_NOT_FREEDOM",
+    "note": "policy entropy over 65 records, distribution={'PROCEED': 65}; this measures distribution of policy labels — NOT free will",
+    "ran_at_iso": "2026-08-09T20-07-58Z"
+  },
+  "recognition": {
+    "gap_name": "recognition",
+    "probe_name": "probe_recognition",
+    "value": 1.0,
+    "normalized_value": 1.0,
+    "n_samples": 22,
+    "gap_status": "OPEN",
+    "v3_guard": "GUARD_RECOGNITION_PROBE_IS_NOT_RECOGNITION",
+    "note": "benchmark accuracy 22/22 = 100.00% (upper bound — perfect predictor); this measures evaluator-framework alignment — NOT understanding",
+    "ran_at_iso": "2026-08-09T20-07-58Z"
+  },
+  "emergence": {
+    "gap_name": "emergence",
+    "probe_name": "probe_emergence",
+    "value": 1.0,
+    "normalized_value": 1.0,
+    "n_samples": 25,
+    "gap_status": "OPEN",
+    "v3_guard": "GUARD_EMERGENCE_PROBE_IS_NOT_EMERGENCE",
+    "note": "framework presence 25/25 = 100.00% (missing: []); this measures module presence — NOT emergent behavior",
+    "ran_at_iso": "2026-08-09T20-07-58Z"
+  },
+  "truth": {
+    "gap_name": "truth",
+    "probe_name": "probe_truth",
+    "value": 1.0,
+    "normalized_value": 1.0,
+    "n_samples": 152,
+    "gap_status": "OPEN",
+    "v3_guard": "GUARD_TRUTH_PROBE_IS_NOT_TRUTH",
+    "note": "inter-source consistency 152/152 = 100.00%; this measures V1417/V1416 policy agreement — NOT correspondence truth",
+    "ran_at_iso": "2026-08-09T20-07-58Z"
+  },
+  "started_iso": "2026-08-09T20-07-58Z",
+  "ended_iso": "2026-08-09T20-07-58Z",
+  "note": "v1425 5-gap probe (主 17:43 实事求是 — none of these 'solve' the gaps)"
+}
