@@ -163,22 +163,22 @@
       "probe_name": "probe_time",
       "value": 0.0,
       "normalized_value": 0.0,
-      "n_samples": 83,
+      "n_samples": 137,
       "gap_status": "OPEN",
       "v3_guard": "GUARD_TIME_PROBE_IS_NOT_TIME",
-      "note": "inter-tick interval entropy over 83 records across 1 cycles; this measures distribution of cycle_index occurrences — NOT subjective time",
-      "ran_at_iso": "2026-08-09T20-14-34Z"
+      "note": "inter-tick interval entropy over 137 records across 1 cycles; this measures distribution of cycle_index occurrences — NOT subjective time",
+      "ran_at_iso": "2026-08-09T21-09-49Z"
     },
     "freedom": {
       "gap_name": "freedom",
       "probe_name": "probe_freedom",
       "value": 0.0,
       "normalized_value": 0.0,
-      "n_samples": 83,
+      "n_samples": 137,
       "gap_status": "OPEN",
       "v3_guard": "GUARD_FREEDOM_PROBE_IS_NOT_FREEDOM",
-      "note": "policy entropy over 83 records, distribution={'PROCEED': 83}; this measures distribution of policy labels — NOT free will",
-      "ran_at_iso": "2026-08-09T20-14-34Z"
+      "note": "policy entropy over 137 records, distribution={'PROCEED': 137}; this measures distribution of policy labels — NOT free will",
+      "ran_at_iso": "2026-08-09T21-09-49Z"
     },
     "recognition": {
       "gap_name": "recognition",
@@ -189,7 +189,7 @@
       "gap_status": "OPEN",
       "v3_guard": "GUARD_RECOGNITION_PROBE_IS_NOT_RECOGNITION",
       "note": "benchmark accuracy 22/22 = 100.00% (upper bound — perfect predictor); this measures evaluator-framework alignment — NOT understanding",
-      "ran_at_iso": "2026-08-09T20-14-34Z"
+      "ran_at_iso": "2026-08-09T21-09-49Z"
     },
     "emergence": {
       "gap_name": "emergence",
@@ -200,21 +200,21 @@
       "gap_status": "OPEN",
       "v3_guard": "GUARD_EMERGENCE_PROBE_IS_NOT_EMERGENCE",
       "note": "framework presence 25/25 = 100.00% (missing: []); this measures module presence — NOT emergent behavior",
-      "ran_at_iso": "2026-08-09T20-14-34Z"
+      "ran_at_iso": "2026-08-09T21-09-49Z"
     },
     "truth": {
       "gap_name": "truth",
       "probe_name": "probe_truth",
       "value": 1.0,
       "normalized_value": 1.0,
-      "n_samples": 195,
+      "n_samples": 331,
       "gap_status": "OPEN",
       "v3_guard": "GUARD_TRUTH_PROBE_IS_NOT_TRUTH",
-      "note": "inter-source consistency 195/195 = 100.00%; this measures V1417/V1416 policy agreement — NOT correspondence truth",
-      "ran_at_iso": "2026-08-09T20-14-34Z"
+      "note": "inter-source consistency 331/331 = 100.00%; this measures V1417/V1416 policy agreement — NOT correspondence truth",
+      "ran_at_iso": "2026-08-09T21-09-49Z"
     },
-    "started_iso": "2026-08-09T20-14-34Z",
-    "ended_iso": "2026-08-09T20-14-34Z",
+    "started_iso": "2026-08-09T21-09-49Z",
+    "ended_iso": "2026-08-09T21-09-49Z",
     "note": "v1425 5-gap probe (主 17:43 实事求是 — none of these 'solve' the gaps)"
   },
   "protocol_results": {
@@ -222,56 +222,56 @@
       {
         "protocol": "sync",
         "vcp_protocol": "sync",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.04267692565917969,
+        "total_duration_ms": 0.04673004150390625,
         "note": "VCP sync protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "sync_7ecc9c7f",
+            "task_id": "sync_3ec413c8",
             "name": "t1_init",
             "protocol": "sync",
-            "duration_ms": 0.022649765014648438,
+            "duration_ms": 0.024318695068359375,
             "success": true,
             "note": "protocol=sync,task=t1_init,ok"
           },
           {
-            "task_id": "sync_e6cbebfe",
+            "task_id": "sync_79bc1e0f",
             "name": "t2_load",
             "protocol": "sync",
-            "duration_ms": 0.003337860107421875,
+            "duration_ms": 0.0030994415283203125,
             "success": true,
             "note": "protocol=sync,task=t2_load,ok"
           },
           {
-            "task_id": "sync_abf11366",
+            "task_id": "sync_0cb44316",
             "name": "t3_dispatch",
             "protocol": "sync",
-            "duration_ms": 0.0021457672119140625,
+            "duration_ms": 0.002384185791015625,
             "success": true,
             "note": "protocol=sync,task=t3_dispatch,ok"
           },
           {
-            "task_id": "sync_23a31c4c",
+            "task_id": "sync_52b0bb6f",
             "name": "t4_transform",
             "protocol": "sync",
-            "duration_ms": 0.0016689300537109375,
+            "duration_ms": 0.0019073486328125,
             "success": true,
             "note": "protocol=sync,task=t4_transform,ok"
           },
           {
-            "task_id": "sync_73abf5e8",
+            "task_id": "sync_bf704bef",
             "name": "t5_persist",
             "protocol": "sync",
-            "duration_ms": 0.001430511474609375,
+            "duration_ms": 0.0011920928955078125,
             "success": true,
             "note": "protocol=sync,task=t5_persist,ok"
           },
           {
-            "task_id": "sync_a11ed790",
+            "task_id": "sync_40663891",
             "name": "t6_cleanup",
             "protocol": "sync",
             "duration_ms": 0.0016689300537109375,
@@ -283,59 +283,59 @@
       {
         "protocol": "async",
         "vcp_protocol": "async",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.015735626220703125,
+        "total_duration_ms": 0.0152587890625,
         "note": "VCP async protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "async_ea1240ef",
+            "task_id": "async_a4dbb0f4",
             "name": "t1_init",
             "protocol": "async",
-            "duration_ms": 0.003337860107421875,
+            "duration_ms": 0.00286102294921875,
             "success": true,
             "note": "protocol=async,task=t1_init,ok"
           },
           {
-            "task_id": "async_0e89edd7",
+            "task_id": "async_fc7e7ee9",
             "name": "t2_load",
             "protocol": "async",
-            "duration_ms": 0.0054836273193359375,
+            "duration_ms": 0.00476837158203125,
             "success": true,
             "note": "protocol=async,task=t2_load,ok"
           },
           {
-            "task_id": "async_b1cab0d9",
+            "task_id": "async_1a6f3b47",
             "name": "t3_dispatch",
             "protocol": "async",
-            "duration_ms": 0.0073909759521484375,
+            "duration_ms": 0.0069141387939453125,
             "success": true,
             "note": "protocol=async,task=t3_dispatch,ok"
           },
           {
-            "task_id": "async_6fb4fb3c",
+            "task_id": "async_7f2a1181",
             "name": "t4_transform",
             "protocol": "async",
-            "duration_ms": 0.009298324584960938,
+            "duration_ms": 0.008821487426757812,
             "success": true,
             "note": "protocol=async,task=t4_transform,ok"
           },
           {
-            "task_id": "async_32e4853e",
+            "task_id": "async_4e5d6875",
             "name": "t5_persist",
             "protocol": "async",
-            "duration_ms": 0.010967254638671875,
+            "duration_ms": 0.01049041748046875,
             "success": true,
             "note": "protocol=async,task=t5_persist,ok"
           },
           {
-            "task_id": "async_307355ac",
+            "task_id": "async_febfa1ef",
             "name": "t6_cleanup",
             "protocol": "async",
-            "duration_ms": 0.013113021850585938,
+            "duration_ms": 0.012636184692382812,
             "success": true,
             "note": "protocol=async,task=t6_cleanup,ok"
           }
@@ -344,56 +344,56 @@
       {
         "protocol": "static",
         "vcp_protocol": "static",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.016927719116210938,
+        "total_duration_ms": 0.015497207641601562,
         "note": "VCP static protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "static_d4766c91",
+            "task_id": "static_f8b74487",
             "name": "t1_init",
             "protocol": "static",
-            "duration_ms": 0.0026226043701171875,
+            "duration_ms": 0.002384185791015625,
             "success": true,
             "note": "cache-miss,protocol=static,task=t1_init,ok"
           },
           {
-            "task_id": "static_d35bf358",
+            "task_id": "static_b6b2e00f",
             "name": "t2_load",
             "protocol": "static",
-            "duration_ms": 0.0021457672119140625,
+            "duration_ms": 0.0019073486328125,
             "success": true,
             "note": "cache-miss,protocol=static,task=t2_load,ok"
           },
           {
-            "task_id": "static_36568fcb",
+            "task_id": "static_5bca144f",
             "name": "t3_dispatch",
             "protocol": "static",
-            "duration_ms": 0.0016689300537109375,
+            "duration_ms": 0.0019073486328125,
             "success": true,
             "note": "cache-miss,protocol=static,task=t3_dispatch,ok"
           },
           {
-            "task_id": "static_43dedd23",
+            "task_id": "static_2c7da7aa",
             "name": "t4_transform",
             "protocol": "static",
-            "duration_ms": 0.0019073486328125,
+            "duration_ms": 0.0016689300537109375,
             "success": true,
             "note": "cache-miss,protocol=static,task=t4_transform,ok"
           },
           {
-            "task_id": "static_c03f544b",
+            "task_id": "static_47d57218",
             "name": "t5_persist",
             "protocol": "static",
-            "duration_ms": 0.0021457672119140625,
+            "duration_ms": 0.0016689300537109375,
             "success": true,
             "note": "cache-miss,protocol=static,task=t5_persist,ok"
           },
           {
-            "task_id": "static_1c67fd74",
+            "task_id": "static_f59774d7",
             "name": "t6_cleanup",
             "protocol": "static",
             "duration_ms": 0.0016689300537109375,
@@ -405,24 +405,24 @@
       {
         "protocol": "service",
         "vcp_protocol": "service",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.027418136596679688,
+        "total_duration_ms": 0.028371810913085938,
         "note": "VCP service protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "service_b66f97ad",
+            "task_id": "service_a91142fd",
             "name": "t1_init",
             "protocol": "service",
-            "duration_ms": 0.004291534423828125,
+            "duration_ms": 0.0045299530029296875,
             "success": true,
             "note": "service-handle=service::t1_init,protocol=service,task=t1_init,ok"
           },
           {
-            "task_id": "service_8dd6e05c",
+            "task_id": "service_88ca9327",
             "name": "t2_load",
             "protocol": "service",
             "duration_ms": 0.003814697265625,
@@ -430,23 +430,23 @@
             "note": "service-handle=service::t2_load,protocol=service,task=t2_load,ok"
           },
           {
-            "task_id": "service_a66c57ef",
+            "task_id": "service_58fb779d",
             "name": "t3_dispatch",
             "protocol": "service",
-            "duration_ms": 0.003814697265625,
+            "duration_ms": 0.0040531158447265625,
             "success": true,
             "note": "service-handle=service::t3_dispatch,protocol=service,task=t3_dispatch,ok"
           },
           {
-            "task_id": "service_1154a9ba",
+            "task_id": "service_605435ba",
             "name": "t4_transform",
             "protocol": "service",
-            "duration_ms": 0.0040531158447265625,
+            "duration_ms": 0.0035762786865234375,
             "success": true,
             "note": "service-handle=service::t4_transform,protocol=service,task=t4_transform,ok"
           },
           {
-            "task_id": "service_1cad1699",
+            "task_id": "service_ef07b482",
             "name": "t5_persist",
             "protocol": "service",
             "duration_ms": 0.003814697265625,
@@ -454,10 +454,10 @@
             "note": "service-handle=service::t5_persist,protocol=service,task=t5_persist,ok"
           },
           {
-            "task_id": "service_d88d39ad",
+            "task_id": "service_61b58c1d",
             "name": "t6_cleanup",
             "protocol": "service",
-            "duration_ms": 0.0035762786865234375,
+            "duration_ms": 0.003814697265625,
             "success": true,
             "note": "service-handle=service::t6_cleanup,protocol=service,task=t6_cleanup,ok"
           }
@@ -466,40 +466,40 @@
       {
         "protocol": "preprocessor",
         "vcp_protocol": "preprocessor",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.01621246337890625,
+        "total_duration_ms": 0.016689300537109375,
         "note": "VCP preprocessor protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "preproc_470e7aa5",
+            "task_id": "preproc_4f0229f1",
             "name": "t1_init",
             "protocol": "preprocessor",
-            "duration_ms": 0.00286102294921875,
+            "duration_ms": 0.0030994415283203125,
             "success": true,
             "note": "transformed=TINI_1T,protocol=preprocessor,task=TINI_1T,ok"
           },
           {
-            "task_id": "preproc_5851b639",
+            "task_id": "preproc_8af025a4",
             "name": "t2_load",
             "protocol": "preprocessor",
-            "duration_ms": 0.0019073486328125,
+            "duration_ms": 0.001430511474609375,
             "success": true,
             "note": "transformed=DAOL_2T,protocol=preprocessor,task=DAOL_2T,ok"
           },
           {
-            "task_id": "preproc_8628fc77",
+            "task_id": "preproc_7fde608e",
             "name": "t3_dispatch",
             "protocol": "preprocessor",
-            "duration_ms": 0.0016689300537109375,
+            "duration_ms": 0.001430511474609375,
             "success": true,
             "note": "transformed=HCTAPSID_3T,protocol=preprocessor,task=HCTAPSID_3T,ok"
           },
           {
-            "task_id": "preproc_68e6b2bb",
+            "task_id": "preproc_f24336b5",
             "name": "t4_transform",
             "protocol": "preprocessor",
             "duration_ms": 0.0019073486328125,
@@ -507,18 +507,18 @@
             "note": "transformed=MROFSNART_4T,protocol=preprocessor,task=MROFSNART_4T,ok"
           },
           {
-            "task_id": "preproc_cc98f2eb",
+            "task_id": "preproc_1c92cfa7",
             "name": "t5_persist",
             "protocol": "preprocessor",
-            "duration_ms": 0.0016689300537109375,
+            "duration_ms": 0.001430511474609375,
             "success": true,
             "note": "transformed=TSISREP_5T,protocol=preprocessor,task=TSISREP_5T,ok"
           },
           {
-            "task_id": "preproc_4bc3c2b1",
+            "task_id": "preproc_d74f8336",
             "name": "t6_cleanup",
             "protocol": "preprocessor",
-            "duration_ms": 0.001430511474609375,
+            "duration_ms": 0.0019073486328125,
             "success": true,
             "note": "transformed=PUNAELC_6T,protocol=preprocessor,task=PUNAELC_6T,ok"
           }
@@ -527,16 +527,16 @@
       {
         "protocol": "hybrid",
         "vcp_protocol": "hybrid",
-        "started_iso": "2026-08-09T20-14-34Z",
-        "ended_iso": "2026-08-09T20-14-34Z",
+        "started_iso": "2026-08-09T21-09-49Z",
+        "ended_iso": "2026-08-09T21-09-49Z",
         "n_tasks": 6,
         "n_success": 6,
         "n_failed": 0,
-        "total_duration_ms": 0.0171661376953125,
+        "total_duration_ms": 0.015974044799804688,
         "note": "VCP hybrid protocol — 6 tasks dispatched",
         "task_results": [
           {
-            "task_id": "sync_567d40c9",
+            "task_id": "sync_d5ecda1f",
             "name": "t1_init",
             "protocol": "hybrid-sync",
             "duration_ms": 0.0019073486328125,
@@ -544,7 +544,7 @@
             "note": "hybrid-phase=sync,protocol=sync,task=t1_init,ok"
           },
           {
-            "task_id": "sync_206c2bb5",
+            "task_id": "sync_68ac291d",
             "name": "t2_load",
             "protocol": "hybrid-sync",
             "duration_ms": 0.001430511474609375,
@@ -552,23 +552,23 @@
             "note": "hybrid-phase=sync,protocol=sync,task=t2_load,ok"
           },
           {
-            "task_id": "sync_9bd74873",
+            "task_id": "sync_7ebd2a54",
             "name": "t3_dispatch",
             "protocol": "hybrid-sync",
-            "duration_ms": 0.001430511474609375,
+            "duration_ms": 0.0016689300537109375,
             "success": true,
             "note": "hybrid-phase=sync,protocol=sync,task=t3_dispatch,ok"
           },
           {
-            "task_id": "async_39063bc9",
+            "task_id": "async_82291b0a",
             "name": "t4_transform",
             "protocol": "hybrid-async",
-            "duration_ms": 0.0016689300537109375,
+            "duration_ms": 0.0019073486328125,
             "success": true,
             "note": "hybrid-phase=async,protocol=async,task=t4_transform,ok"
           },
           {
-            "task_id": "async_4ce88387",
+            "task_id": "async_97785037",
             "name": "t5_persist",
             "protocol": "hybrid-async",
             "duration_ms": 0.003814697265625,
@@ -576,7 +576,7 @@
             "note": "hybrid-phase=async,protocol=async,task=t5_persist,ok"
           },
           {
-            "task_id": "async_4e68db2a",
+            "task_id": "async_abc11e12",
             "name": "t6_cleanup",
             "protocol": "hybrid-async",
             "duration_ms": 0.0054836273193359375,
@@ -586,8 +586,8 @@
         ]
       }
     ],
-    "started_iso": "2026-08-09T20-14-34Z",
-    "ended_iso": "2026-08-09T20-14-34Z",
+    "started_iso": "2026-08-09T21-09-49Z",
+    "ended_iso": "2026-08-09T21-09-49Z",
     "apeireth_to_vcp_map": {
       "sequential": "sync",
       "parallel": "async",
@@ -607,49 +607,49 @@
     "note": "v1426 VCP 6-protocol dispatcher (主 18:40 真借鉴)"
   },
   "benchmark_stats": {
-    "n_records": 418,
-    "n_correct": 38,
+    "n_records": 814,
+    "n_correct": 74,
     "accuracy": 0.09090909090909091,
     "by_benchmark": {
       "MMLU": {
-        "n": 190,
-        "n_correct": 19,
+        "n": 370,
+        "n_correct": 37,
         "accuracy": 0.1
       },
       "GSM8K": {
-        "n": 95,
-        "n_correct": 19,
+        "n": 185,
+        "n_correct": 37,
         "accuracy": 0.2
       },
       "HUMANEVAL": {
-        "n": 57,
+        "n": 111,
         "n_correct": 0,
         "accuracy": 0.0
       },
       "HELLASWAG": {
-        "n": 76,
+        "n": 148,
         "n_correct": 0,
         "accuracy": 0.0
       }
     },
     "by_mode": {
       "MOCK": {
-        "n": 418,
-        "n_correct": 38,
+        "n": 814,
+        "n_correct": 74,
         "accuracy": 0.09090909090909091
       }
     },
     "by_provider": {
       "UNKNOWN": {
-        "n": 418,
-        "n_correct": 38,
+        "n": 814,
+        "n_correct": 74,
         "accuracy": 0.09090909090909091
       }
     },
-    "total_cost_usd": 0.0019351500000000016,
+    "total_cost_usd": 0.003768450000000004,
     "source": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\.v1424-benchmark-results.jsonl"
   },
-  "started_iso": "2026-08-09T20-14-33Z",
-  "ended_iso": "2026-08-09T20-14-34Z",
+  "started_iso": "2026-08-09T21-09-48Z",
+  "ended_iso": "2026-08-09T21-09-49Z",
   "note": "v1427 stage-delivery report V1411-V1426 (主 00:56 阶段性交付)"
 }

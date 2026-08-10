@@ -1,4 +1,31 @@
-# Runtime-only dependencies for deploy/Dockerfile.
-# Pinned to the versions used by the verified local V1075 process probe.
-fastapi==0.139.0
-uvicorn==0.51.0
+# ASI 真生产依赖 (主 00:36 工程化)
+# LLM / AI
+openai>=1.0.0
+anthropic>=0.18.0
+sentence-transformers>=2.2.0
+
+# Web
+fastapi>=0.100.0
+uvicorn>=0.23.0
+streamlit>=1.28.0
+
+# Auth
+pyjwt>=2.8.0
+
+# Validation
+pydantic>=2.0.0
+jsonschema>=4.19.0
+
+# Async
+aiohttp>=3.9.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Logging
+structlog>=23.1.0
+
+# Config
+omegaconf>=2.3.0
+python-dotenv>=1.0.0
