@@ -1,0 +1,86 @@
+name: Dependabot auto-merge
+
+# R20 阶段 6 — Dependabot PR 自动 merge
+# 主人 2026-08-05 21:09 拍板"BC 都派"
+# 蓝图: docs/stage4/v09021-rust-translation-blueprint-2026-08-05.md §3.5 #11 ci
+# 触发: Dependabot 开/更新/重开 PR 时自动 squash merge
+# 守门:
+#   - 0 触碰 24 LOCKED crate src/ (per m3-hallucination-defense §6.1 项 8)
+#   - 0 改 workspace version 字段 (per APEIRETH-VERSIONING §1)
+#   - 仅 patch/minor 自动 merge, major 留给主人复核
+#   - 失败 CI 不 merge (per status check 守门)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [master, main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot-auto-merge:
+    name: auto-merge patch/minor dependabot PR
+    runs-on: ubuntu-22.04
+    if: github.actor == 'dependabot[bot]'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # === 0 触碰守门: 确保 PR 没改 LOCKED crate ===
+      - name: Verify no LOCKED crate src/ changes
+        run: |
+          # 24 LOCKED crate src/ 文件改动直接 fail
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^crates/apeireth-[a-z-]+/src/.*\.rs$'; then
+            echo "::error::Dependabot PR touches LOCKED crate src/ (24 LOCKED 守门, per m3-hallucination-defense §6.1 项 8)"
+            exit 1
+          fi
+          # workspace version 守门 (per APEIRETH-VERSIONING §1)
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -E '^(Cargo\.toml|apeireth-legacy/Cargo\.toml|Cargo\.lock)$'; then
+            echo "::warning::Dependabot PR touches Cargo.toml/lock — verify workspace version 严守 1.0.0"
+          fi
+          echo "✅ 0 触碰 LOCKED crate, 0 改 workspace version 字段"
+
+      # === 自动 merge 守门: 仅 patch/minor, major 留给主人 ===
+      - name: Determine update type
+        id: update-type
+        run: |
+          # dependabot 标题格式: "Bump <pkg> from X to Y"
+          # major: 1.0.0 -> 2.0.0 (X.Y.0+ 变)
+          # minor: 1.0.0 -> 1.1.0 (Y 变)
+          # patch: 1.0.0 -> 1.0.1 (Z 变)
+          TITLE="${{ github.event.pull_request.title }}"
+          FROM=$(echo "$TITLE" | grep -oP 'from \K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          TO=$(echo "$TITLE" | grep -oP 'to \K[0-9]+\.[0-9]+\.[0-9]+' || echo "")
+          if [[ -z "$FROM" || -z "$TO" ]]; then
+            echo "type=unknown" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FROM_MAJOR=$(echo "$FROM" | cut -d. -f1)
+          TO_MAJOR=$(echo "$TO" | cut -d. -f1)
+          FROM_MINOR=$(echo "$FROM" | cut -d. -f2)
+          TO_MINOR=$(echo "$TO" | cut -d. -f2)
+          if [[ "$FROM_MAJOR" != "$TO_MAJOR" ]]; then
+            echo "type=major" >> "$GITHUB_OUTPUT"
+          elif [[ "$FROM_MINOR" != "$TO_MINOR" ]]; then
+            echo "type=minor" >> "$GITHUB_OUTPUT"
+          else
+            echo "type=patch" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected: $FROM -> $TO = ${{ steps.update-type.outputs.type }}"
+
+      # === 仅 patch/minor 自动 merge, major/manual 等主人 ===
+      - name: Auto-merge dependabot PR (patch/minor only)
+        if: steps.update-type.outputs.type == 'patch' || steps.update-type.outputs.type == 'minor'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Skip auto-merge (major update — 留给主人复核)
+        if: steps.update-type.outputs.type == 'major' || steps.update-type.outputs.type == 'unknown'
+        run: |
+          echo "::notice::Dependabot PR is major version bump — skipping auto-merge, requires 主人复核"
+          echo "PR: ${{ github.event.pull_request.html_url }}"
+          echo "Title: ${{ github.event.pull_request.title }}"

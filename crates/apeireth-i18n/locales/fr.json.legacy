@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Apeireth",
+    "tagline": "Système d'exploitation AGI pour la croissance IA à long terme",
+    "version": "Version {{version}}"
+  },
+  "nav": {
+    "home": "Accueil",
+    "tools": "Outils",
+    "history": "Historique",
+    "settings": "Paramètres",
+    "organs": "Organes"
+  },
+  "tools": {
+    "web_search": "Recherche Web",
+    "file_ops": "Opérations de fichiers",
+    "git_ops": "Opérations Git",
+    "code_exec": "Exécution de code",
+    "calendar": "Calendrier",
+    "message": "Message",
+    "terminal": "Terminal"
+  },
+  "error": {
+    "not_implemented": "Cette fonctionnalité n'est pas encore implémentée",
+    "tool_not_whitelisted": "L'outil {{tool}} n'est pas dans la liste blanche",
+    "key_not_found": "Clé de traduction introuvable : {{key}}",
+    "locale_not_supported": "Langue non prise en charge : {{locale}}",
+    "template_render": "Échec du rendu du modèle pour la clé {{key}}",
+    "io": "Erreur d'E/S : {{message}}",
+    "parse": "Erreur d'analyse JSON : {{message}}"
+  },
+  "health": {
+    "ok": "Le service est sain",
+    "degraded": "Le service est dégradé",
+    "unhealthy": "Le service est défaillant"
+  },
+  "status": {
+    "loading": "Chargement...",
+    "ready": "Prêt",
+    "busy": "Occupé",
+    "error": "Erreur"
+  },
+  "locale": {
+    "name": {
+      "en": "Anglais",
+      "zh_cn": "Chinois simplifié",
+      "ja": "Japonais",
+      "fr": "Français",
+      "de": "Allemand"
+    }
+  },
+  "tauri": {
+    "window": {
+      "title": "Apeireth Bureau"
+    },
+    "menu": {
+      "file": "Fichier",
+      "edit": "Édition",
+      "view": "Affichage",
+      "help": "Aide"
+    }
+  },
+  "tui": {
+    "welcome": "Bienvenue dans Apeireth TUI",
+    "prompt": ">",
+    "goodbye": "Au revoir",
+    "shortcut": {
+      "quit": "Appuyez sur Ctrl+C pour quitter"
+    }
+  },
+  "settings": {
+    "language": "Langue",
+    "theme": "Thème",
+    "about": "À propos"
+  },
+  "must_do": {
+    "translation_complete": "i18n est indispensable pour la version 1.0"
+  }
+}

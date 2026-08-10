@@ -1,0 +1,63 @@
+[package]
+name = "apeireth-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R17 战役 2-5: 工具集成 (5 trait 真实现: web_search / file_ops / git_ops / code_exec / tool_result, VCP FileOperator 68KB 真代码字段级复刻)"
+keywords = ["ai", "agent", "tools", "web-search", "file-ops", "git", "shell"]
+categories = ["api-bindings", "filesystem", "command-line-utilities"]
+
+[dependencies]
+# 战役 1-2: HTTP 客户端 (5 字段 keep-alive + LIFO 池, 复刻 VCP chatCompletionHandler.js:22-28)
+apeireth-http-client = { path = "../apeireth-http-client" }
+# 战役 2-1: 工具注册中心 (6 类 enum + 5 轴正交 + notify 热加载, 供 register_all)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# Apeireth 内部 (R11 baseline)
+apeireth-core = { path = "../apeireth-core" }
+
+# workspace 通用依赖
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+tracing = "0.1"
+futures = "0.3"
+parking_lot = "0.12"
+# R30 U2: WebFetch 需要 reqwest
+reqwest = { workspace = true }
+# Tech-Review 2026-08-05 P0-4: shell-words safe argv 解析 (替换 `cmd /c <user_input>` shell 注入)
+shell-words = { workspace = true }
+# R30 P1 Grep (ripgrep-style content search)
+regex = "1.10"
+walkdir = "2.5"
+# R33-1: Aider-style project conventions scanner (Cargo.toml 真解析, 跟 apeireth-api 0.8 一致)
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lib]
+name = "apeireth_tools"
+path = "src/lib.rs"
+
+[[example]]
+name = "tools_demo"
+path = "examples/tools_demo.rs"
+
+# R21 监督验证 harness (per 主人 2026-08-06 14:00 拍 B 方案, 真接 MiniMax-M2.7-highspeed)
+# 0 触碰 LOCKED (harness 在 workspace tests/ 临时, 0 改 src/)
+[[test]]
+name = "apeireth_supervision_harness_2026_08_06"
+path = "../../tests/apeireth_supervision_harness_2026_08_06.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

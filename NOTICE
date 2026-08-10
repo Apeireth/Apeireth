@@ -1,0 +1,71 @@
+Apeireth
+Copyright 2026 Apeireth Team
+
+This product includes software developed at
+the Apeireth organization (https://apeireth.example/).
+
+---
+
+## 1. 项目声明
+
+Apeireth (读作 /əˈpaɪərɛθ/, 希腊语 "试一试") 是 Apeireth Team 自 2026 年起
+开发的"长程 AI 成长平台"参考实现。本项目前身 SpectrAI 0.9.21 (Apache-2.0)
+由 7 人核心团队在 2024-2025 年完成,本仓库为其 1:1 Rust 重写 + 增量扩展。
+
+## 2. 致谢 (Acknowledgements)
+
+本项目站在以下开源项目 / 业界惯例的肩膀上:
+
+- **Rust 工具链**: rustc, cargo, clippy, rustfmt (Mozilla 公共许可证 2.0)
+- **异步运行时**: tokio, async-std
+- **序列化**: serde, serde_json
+- **HTTP 客户端 / 服务端**: reqwest, axum, hyper, tower
+- **WebSocket**: tokio-tungstenite, axum::extract::ws
+- **数据库**: sqlx, rusqlite, deadpool-postgres
+- **搜索引擎**: tantivy
+- **可观测性**: tracing, tracing-subscriber, prometheus, metrics
+- **配置**: config, dotenvy, figment
+- **CLI**: clap, indicatif, dialoguer
+- **错误处理**: thiserror, anyhow
+- **测试**: cargo test, proptest, mockall, wiremock
+- **文档**: MADR (https://adr.github.io/madr/), Keep a Changelog 1.1.0
+- **CI**: GitHub Actions, cargo-deny, cargo-audit, cargo-about
+
+完整 561 crate 第三方 attribution 见 `THIRD-PARTY-NOTICES.md`
+(1709 lines / 12 unique SPDX / 0 cargo-deny violation)。
+
+## 3. 法律声明 (Legal)
+
+本项目以 Apache License, Version 2.0 发布 (见根目录 `LICENSE`)。
+第三方组件各自的许可证见 `THIRD-PARTY-NOTICES.md` 第 2 节。
+
+如发现任何许可证冲突或 attribution 缺失, 请提交 issue 至
+本仓库 issue tracker, 我们会在 R21+ 估补 (1.0 release 不阻塞 tag)。
+
+## 4. 商标 (Trademarks)
+
+"Apeireth" 名称和 logo (如有) 为 Apeireth Team 商标。
+本许可证不授予使用本商标的权利, 除非满足 §6 条款 (描述作品来源)。
+
+## 5. 不假装边界 (Honest Boundaries)
+
+按 APEIRETH-CONVENTIONS §10 哲学锚 "S-2 实事求是":
+
+- 1.0 release (v1.0.0) 计划 2026-09-30 tag, 当前 2 P0 fail 阻塞
+  (test + perf, 见 `docs/adr/0024-1.0-release-checklist.md`)
+- 4 个 Provider 客户端 (gemini-cli / codex / copilot / opencode) 1.0 release 时为 stub
+- 6 工具写操作 (calendar/message/contact/task/search/drive 的 create/update/delete)
+  1.0 release 时部分返 501
+- 详细 "不假装" 边界见 `docs/adr/0013-apeireth-rust-1.0.md` §3.2
+
+## 6. 联系方式 (Contact)
+
+- 仓库: https://github.com/apeireth/apeireth-rust
+- 文档: https://docs.apeireth.example/
+- 邮件: team@apeireth.example
+- Slack: apeireth-team.slack.com
+
+---
+
+Last-Modified: 2026-08-05
+Format: Apache 2.0 standard NOTICE (https://www.apache.org/dev/release-distribution#notice)

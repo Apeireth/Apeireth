@@ -1,0 +1,53 @@
+[package]
+name = "apeireth-i18n"
+# 显式版本 (跟 team-lead / plugin / lark skeleton 同模式; 整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth 1.0 release 必做 #10: i18n 骨架 (1:1 翻译 v0.9.21 商业版 out/main 中 i18next@^26.0.5 + react-i18next@^17.0.3 集成面; 5 语言 en/zh-CN/ja/fr/de, TOML 格式 locales/*.toml 编译期 hardcode, 12 类别 69 keys 100% 翻译覆盖: 5 nav + 6 tools + 9 organs + 5 R-Measure + 6 哲学锚 + 8 承诺 + 5 Provider + 4 SDK + 3 observability + 5 鉴权 + 10 通用 + 3 readiness)"
+keywords = ["i18n", "l10n", "translation", "locale", "agent", "toml"]
+categories = ["localization", "internationalization"]
+
+[dependencies]
+# 异步运行时 (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# 序列化
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# TOML 格式 (1.0 release #10 i18n 改 TOML 编译期守门, 替代原 JSON)
+toml = "0.8"
+# 错误处理
+anyhow = "1.0"
+thiserror = "1.0"
+# 日志
+tracing = "0.1"
+# 异步 trait
+async-trait = "0.1"
+# 编译期嵌入 locales/*.toml (避免运行时 IO 失败)
+# ⏳ R20 阶段 1 续: 真实集成可改 hot-reload (运行时读磁盘), 现 skeleton 用 include_str! 编译期守门
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "i18n_demo"
+path = "examples/i18n_demo.rs"
+
+# R20 阶段 1 续: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 1. 删本 [workspace] 块 ✅
+# 2. version 改 `version.workspace = true` ⏳ 整合 #2 时
+# 3. deps 改 `{ workspace = true }` ⏳ 整合 #2 时
+# 4. workspace Cargo.toml members 加 `crates/apeireth-i18n` ⏳ 整合 #2 时
+# 当前 lints 留空, 不强求跟外层 workspace 同步, 避免 noise
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"

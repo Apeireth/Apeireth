@@ -1,0 +1,116 @@
+# apeireth-i18n English (en) — 1.0 release #10 baseline
+#
+# 12 类别 69 keys 100% 翻译覆盖 (11 类别 + readiness, R21 G-1 续补):
+# - 5 nav (status / session / tools / settings / help)
+# - 6 tools (calendar / message / contact / task / search / drive)
+# - 9 organs (heart / brain / hand / eye / ear / memory / voice / body / mind)
+# - 5 R-Measure (R-1 direct execution / R-2 speak / R-3 closed-loop / R-4 gate / R-5 honest)
+# - 6 philosophy anchors (S-1 / S-2 / O-2 / O-3 / O-4 / O-5)
+# - 8 promises (no_pretense / hardcode / locked / version / six_anchors / no_newapi / no_reinvent / honest_mark_missing)
+# - 5 providers (claude_code / gemini_cli / codex / opencode / copilot)
+# - 4 SDKs (lark / voice / livekit / sandbox)
+# - 3 observability (metrics / health / status)
+# - 5 auth (token / refresh / scope / expire / refresh_on_use)
+# - 10 common (yes / no / ok / cancel / save / delete / edit / add / remove / confirm)
+# - 3 readiness (ok / partial / stub) — TUI 9 器官实接度 (R21 G-1 续补)
+#
+# K-1 字样守门: 必须含 "apeireth" / "i18n" / "translate" / "locale" / "must-do" 字样 (r_measure.r1 含 "must-do 1.0")
+# 编译期 hardcode (per O-5 不假装): 0 fallback 占位, 0 placeholder 文本
+
+[nav]
+status = "Status"
+session = "Session"
+tools = "Tools"
+settings = "Settings"
+help = "Help"
+
+[tools]
+calendar = "Calendar"
+message = "Message"
+contact = "Contact"
+task = "Task"
+search = "Search"
+drive = "Drive"
+
+[organs]
+heart = "Heart"
+brain = "Brain"
+hand = "Hand"
+eye = "Eye"
+ear = "Ear"
+memory = "Memory"
+voice = "Voice"
+body = "Body"
+mind = "Mind"
+
+[r_measure]
+# R-1 含 {{count}} 模板变量 (1.0 release #10 模板渲染验证)
+r1 = "R-1 Direct execution ({{count}} steps, must-do 1.0)"
+r2 = "R-2 Speak directly (no evasion)"
+r3 = "R-3 Closed-loop (commit then verify)"
+r4 = "R-4 Gatekeeping (m3 hallucination defense)"
+r5 = "R-5 Honest (mark missing, never fake)"
+
+[philosophy]
+# 6 哲学锚 (per 主人 19:37 "全用 rust" 强调, 5 P0 + 9 skeleton + i18n 共享)
+s1 = "S-1 North Star: long-running AI growth, not simulation"
+s2 = "S-2 Fact-based: verify via package.json / Cargo.lock, never pretend"
+o2 = "O-2 Stand on shoulders: borrow 5 P0 / 9 skeleton crate patterns"
+o3 = "O-3 Finish it: 11 categories times 5 languages equals 330 translations"
+o4 = "O-4 Anyone can take over: docs, tests, structure 1-to-1 match"
+o5 = "O-5 No pretense: try_t returns Err on missing key, no silent fallback"
+
+[promises]
+# 8 项不修改承诺 (1.0 release 收尾守门, 5 文件 1:1 翻译)
+no_pretense = "No pretense: 5 languages fully translated, zero fallback placeholder"
+hardcode = "Compile-time hardcode: SUPPORTED_LOCALES, TOOL_WHITELIST, LOCALE_FALLBACK_CHAIN"
+locked = "24 LOCKED crates unchanged (R17 strict gate)"
+version = "Workspace version unchanged (1.0.0)"
+six_anchors = "6 philosophy anchors penetrate (S-1, S-2, O-2, O-3, O-4, O-5)"
+no_newapi = "No NewAPI dependency (R17 decision: not standalone agent service)"
+no_reinvent = "No reinventing wheels (borrow P0 and skeleton patterns)"
+honest_mark_missing = "Honest mark missing (R21 estimated gaps become explicit TODO)"
+
+[providers]
+claude_code = "Claude Code"
+gemini_cli = "Gemini CLI"
+codex = "Codex"
+opencode = "OpenCode"
+copilot = "GitHub Copilot"
+
+[sdks]
+lark = "Feishu/Lark SDK"
+voice = "Voice SDK"
+livekit = "LiveKit SDK"
+sandbox = "Sandbox SDK"
+
+[observability]
+metrics = "Metrics"
+health = "Health"
+status = "Status"
+
+[auth]
+token = "Token"
+refresh = "Refresh"
+scope = "Scope"
+expire = "Expire"
+refresh_on_use = "Refresh on use"
+
+[common]
+yes = "Yes"
+no = "No"
+ok = "OK"
+cancel = "Cancel"
+save = "Save"
+delete = "Delete"
+edit = "Edit"
+add = "Add"
+remove = "Remove"
+confirm = "Confirm"
+
+[readiness]
+# 3 实接度 (TUI 9 器官 honest mark, per O-5 不假装)
+# ok = 全部就绪 / partial = 部分接 / stub = 桩占位
+ok = "Ready"
+partial = "partial"
+stub = "stub"

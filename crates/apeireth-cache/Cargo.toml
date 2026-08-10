@@ -1,0 +1,65 @@
+[package]
+name = "apeireth-cache"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 估缺: LRU + TTL cache skeleton (1:1 翻译 v0.9.21 @anthropic-ai/cache 商业版). 5 eviction policy (LRU/LFU/FIFO/ARC/TinyLFU) + 4 backend stub (Memory/Disk/Redis/Memcached) + 16-256 分片锁 + lazy/eager TTL expiration + 8-10 CacheError variant. 0 真接 R20 阶段 6 skeleton, 留 R21 续真接 (1 owner × 1 周). 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺"
+keywords = ["cache", "lru", "ttl", "shard", "eviction", "agent"]
+categories = ["caching", "data-structures", "asynchronous"]
+
+# R20 阶段 6: skeleton 阶段不强求 workspace lint 同步, 避免 noise
+# (跟 i18n / observability / lark / voice / keyring / machine-id / tree-sitter / naming-v05 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[dependencies]
+apeireth-telemetry = { path = "../apeireth-telemetry" }
+# async runtime (Cache trait 全部 async)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (CacheConfig / CacheStats / CacheError Serialize/Deserialize)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (CacheError 8-10 variant, per skeleton 模式 + m3 防御)
+anyhow = "1.0"
+thiserror = "1.0"
+# logging (eviction / TTL expiration / backend 切换 log)
+tracing = "0.1"
+# async trait (Cache trait dyn-compatible)
+async-trait = "0.1"
+# parking_lot 锁 (分片锁 Mutex 用 parking_lot::Mutex 性能更好, 不用 std::sync::Mutex)
+parking_lot = "0.12"
+# indexmap (LRU 用 indexmap 维护插入序, 4 LRU 实现之一)
+indexmap = { version = "2", features = ["serde"] }
+# lru crate 0.12 (工业界默认, 4 LRU 实现之一)
+lru = "0.16"
+# hash 工具 (shard 路由用 std::hash::Hasher + 简单 fnv)
+fnv = "1.0"
+# R20 借鉴 Golutra #4: memory provider Sqlite 真实接 (workspace 硬锁 0.32, 跟 memory / vector / api / mcp 一致)
+# 仅 SqliteProvider / HybridProvider 用, 4 stub (Redis/Postgres/S3/DiskLru) 不需要
+rusqlite = { workspace = true }
+# R121 续 (V2-4 战区 2.5): Redis cache backend (B 留 §5.2 R21+ 续)
+# 0.27 复用 workspace 已锁版本 (redis 0.27.6, per overnight check 6)
+# 单测用 #[ignore] (无 redis-server 跑不了), 真连需要 R21 续部署时启用
+redis = { version = "0.27", features = ["tokio-comp", "aio"] }
+
+[dev-dependencies]
+# 临时文件 (test fixture - 后续 disk backend 真实落盘时用)
+tempfile = "3"
+# workspace tokio 全 feature
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "cache_demo"
+path = "examples/cache_demo.rs"
+
+# R20 借鉴 Golutra #4: memory provider 7 模式演示
+[[example]]
+name = "memory_provider_demo"
+path = "examples/memory_provider_demo.rs"
+
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"
+unused_must_use = "allow"

@@ -1,0 +1,36 @@
+[package]
+name = "apeireth-sovereignty"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 主权 + MEWG 五重治理 (Multi-Evidence Weighted Governance: MEWG/多人/多AI/物理多签/反思期) — R14 Phase 5, 纯 Rust trait + mock, 无 PyO3/外部 SDK"
+
+[dependencies]
+apeireth-verify = { path = "../apeireth-verify" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-council = { path = "../apeireth-council" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+
+[lib]
+name = "apeireth_sovereignty"
+path = "src/lib.rs"
+
+[[example]]
+name = "sovereignty_demo"
+path = "examples/sovereignty_demo.rs"
+
+[[example]]
+name = "permission_effect_demo"
+path = "examples/permission_effect_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

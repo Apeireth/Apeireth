@@ -1,0 +1,26 @@
+# ============================================================================
+# nextest.toml — cargo-nextest 配置 (R18 第 1 阶段)
+# ============================================================================
+# 抄自: qdrant/.config/nextest.toml
+# https://github.com/qdrant/qdrant/blob/master/.config/nextest.toml
+#
+# profile "ci" 用于 CI, profile "default" 用于本地
+
+[profile.default]
+retries = 0
+# Test execution
+test-threads = "num-cpus"
+failure-output = "immediate-final"
+status-level = "fail"
+final-status-level = "fail"
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[profile.ci]
+inherits = "default"
+# Fail fast on first error
+fail-fast = true
+retries = 2
+slow-timeout = { period = "90s", terminate-after = 2 }
+# Output to JUnit for GitHub Actions
+# (qdrant: junit = "nextest junit --output-path=$dest")
+# Apeireth: 直接 nextest run 自带 junit 输出

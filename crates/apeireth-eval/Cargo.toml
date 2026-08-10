@@ -1,0 +1,32 @@
+[package]
+name = "apeireth-eval"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-eval — R23 6 module eval 子模块: 评测维度 + 分数聚合"
+[lib]
+name = "apeireth_eval"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+# R32-3: smoke_task 借 R32-2 tool_loop 跑 1 个 task (0 LLM 真接, stub F 内部)
+apeireth-pipeline = { path = "../apeireth-pipeline" }
+# R32-3: smoke_task 借 R33-1 conventions_scanner 抽 workspace Cargo.toml
+apeireth-tools = { path = "../apeireth-tools" }
+# R32-3-1: real LLM smoke — HttpClient (5 字段 Keep-Alive) + Anthropic adapter 真接
+apeireth-http-client = { path = "../apeireth-http-client" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+tokio = { workspace = true }
+# R114: 真接 apeireth-mcp (EvalScenario → MCP ToolServer)
+apeireth-mcp = { path = "../apeireth-mcp" }
+anyhow = { workspace = true }
+[dev-dependencies]
+# R32-3: smoke_task tests 写临时 Cargo.toml
+tempfile = "3"
+# R32-3-1: real LLM smoke — wiremock 模拟 MiniMax /v1/messages
+wiremock = "0.6"
+[lints]
+workspace = true

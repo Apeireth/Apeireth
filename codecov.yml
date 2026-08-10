@@ -1,0 +1,42 @@
+# ============================================================================
+# codecov.yml — Coverage 阈值配置 (R18 第 3 阶段)
+# ============================================================================
+# 业界来源: tokio + wasmtime + qdrant 风格
+# https://docs.codecov.com/docs/codecov-yaml
+#
+# 阈值: 业界共识 (Rust 后端 70-80% 算合格)
+# - 架构层 (apeireth-core / sovereignty / council / upgrade / constraint): 90%
+# - 产品层 (其他): 60%
+# - 项目整体: 70%
+# 这些阈值在 R18 后续 adjust (等真实覆盖率数据后)
+
+codecov:
+  require_ci_to_pass: true
+  status:
+    project:
+      default:
+        target: 70%
+        threshold: 5%
+    patch:
+      default:
+        target: 60%
+        threshold: 5%
+
+comment:
+  layout: "header, diff, components, files"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: 70%
+    patch:
+      default:
+        target: 60%
+  precision: 2
+  round: down
+  range: "60...90"

@@ -1,0 +1,17 @@
+[package]
+name = "apeireth-config"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-config — R23 6 module config 子模块: 强类型配置项"
+[lib]
+name = "apeireth_config"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+[lints]
+workspace = true

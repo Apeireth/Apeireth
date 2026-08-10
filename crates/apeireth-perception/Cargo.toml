@@ -1,0 +1,36 @@
+[package]
+name = "apeireth-perception"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 感知器官 (A9 落点 — R14 Phase 3 外部输入接入层: 信号/IO/Token 流 → 统一 PerceptionEvent)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+# R37-2: 9 organ 部分合并 — consciousness → perception 透明 re-export
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_perception"
+path = "src/lib.rs"
+
+[[example]]
+name = "perception_demo"
+path = "examples/perception_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

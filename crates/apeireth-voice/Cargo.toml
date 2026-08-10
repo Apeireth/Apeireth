@@ -1,0 +1,67 @@
+[package]
+name = "apeireth-voice"
+# 显式版本 (跟 apeireth-plugin / apeireth-lark 模板同模式;
+# R20 阶段 3 整合 #2 sub-agent 改 `version.workspace = true` + deps { workspace = true })
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 flesh out: Voice SDK (1:1 翻译 v0.9.21 商业版 Porcupine 唤醒词 + pvrecorder 录音 + TTS/STT; STUB MODE 9 工具返 NotImplemented (lib.rs 路径, 编译期 hardcode=true 守门) + 真接实现 (real.rs 4 块: TTS/STT/唤醒词/声纹, 走 reqwest 0.12 + rustls-tls HTTP, wiremock 0.6 测); STUB_MODE 编译期 hardcode=true 守门, 切 false 需 6 哲学锚 + 主人审)"
+keywords = ["ai", "voice", "wake-word", "porcupine", "tts", "stt", "stub"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+# async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (VoiceConfig / WakeWordType / AudioBuffer 序列化反序列化)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (VoiceError 用 thiserror 派生)
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing (stub 工具返 NotImplemented 时 log)
+tracing = "0.1"
+# async traits (VoiceWake / VoiceRecorder 后续真接 Porcupine 异步)
+async-trait = "0.1"
+# 时间戳 (audio_frame.timestamp 派生)
+chrono = { version = "0.4", features = ["serde"] }
+# UUID (session_id 派生, R20 阶段 3 录音 session 用)
+uuid = { version = "1.10", features = ["v4", "serde"] }
+# HTTP 客户端 (R20 阶段 6 flesh out: 真接 TTS/STT/声纹 3 块 HTTP 端点)
+# 跟 workspace [workspace.dependencies] reqwest 同 0.12 + rustls-tls 模板
+# multipart feature 给 STT 走 multipart/form-data 用 (per OpenAI Whisper API 1:1)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
+# URL 解析 (TTS POST 拼接 + endpoint path 编码)
+url = "2.5"
+# ⏳ R20 阶段 3 真接 picovoice 时再加 (per RIVAL §2.5.3):
+#    porcupine = { version = "0.4" }     # 唤醒词 (R21+ Porcupine 真接)
+#    pvrecorder = { version = "0.3" }    # 录音
+#    整合 #2 sub-agent 1 commit 落地时连同 deps 一起加
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+futures = "0.3"
+criterion = { version = "0.5", features = ["html_reports"] }
+# HTTP mock server (wiremock 0.6, async, std 兼容, 同 apeireth-lark / apeireth-http-client / apeireth-sdk 模板)
+wiremock = "0.6"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "voice_stub_demo"
+path = "examples/voice_stub_demo.rs"
+
+[[example]]
+name = "voice_real_demo"
+path = "examples/voice_real_demo.rs"
+
+# R20 阶段 6 flesh out 升级到 workspace lint 继承 (跟 apeireth-lark / apeireth-http-client / apeireth-sdk 模板同款).
+# 严守 8 项不修改承诺: STUB_MODE 仍 = true, 9 VoiceSdk 工具仍返 NotImplemented,
+# 新增 VoiceRealImpl 是独立路径 (不破现有 23 fixture + 23 测试).
+[lints]
+workspace = true

@@ -1,0 +1,52 @@
+[package]
+name = "apeireth-tree-sitter"
+# 显式版本 (跟 team-lead / plugin / lark / i18n / observability / voice / repo-scan / repo-analyzer / keyring / machine-id / image-prompt / rollback skeleton 同模式; 整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 5 估补: tree-sitter skeleton (1:1 翻译 v0.9.21 商业版 out/main/chunks/tree-sitter-bash-* (2.9MB) + tree-sitter-Fukzi_* (647KB) 集成面; 8 编译期 hardcode Language 枚举 + 8 工具白名单, 5 K-1 强校验 5 字样. 阶段 5 skeleton 用纯 enum + 编译期守门, 0 引 tree-sitter 真实 grammar (留 R20 阶段 4 续: bash / typescript / python / rust 4 grammar 接入))"
+keywords = ["tree-sitter", "ast", "syntax-highlight", "lsp", "agent"]
+categories = ["parser-implementations", "development-tools", "text-editors"]
+
+# R20 阶段 5: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 跟 `apeireth-i18n` / `apeireth-observability` / `apeireth-lark` / `apeireth-voice` / `apeireth-keyring` / `apeireth-machine-id` skeleton 阶段同模式.
+[dependencies]
+# async runtime (skeleton 阶段最小集, 真实 grammar 接入留 R20 阶段 4 续)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (8 Language 枚举序列化 + highlight token 输出)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (10 TreeSitterError variant, per skeleton 模式)
+anyhow = "1.0"
+thiserror = "1.0"
+# logging (warn! 占位 skeleton 阶段不假装已接 tree-sitter)
+tracing = "0.1"
+# async trait (5 核心 API: highlight / parse / search / fold / indent)
+async-trait = "0.1"
+
+# === R20 阶段 5 留口子 (R20 阶段 4 续接入) ===
+# - tree-sitter = "0.25" (per 蓝图 §2.3.1 Cargo.toml deps 行)
+# - tree-sitter-bash = "0.23"
+# - tree-sitter-typescript = "0.23"
+# - tree-sitter-python = "0.23"
+# - tree-sitter-rust = "0.23"
+# - lsp-types = "0.95" (LSP 协议类型, per §2.5.1 LSP 协议支持)
+# 当前 0 引, 编译期守门 + skeleton 阶段 enum/struct 完整, 阶段 4 续时一行 Cargo.toml 加 dep 即可.
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "tree_sitter_demo"
+path = "examples/tree_sitter_demo.rs"
+
+# R20 阶段 5: skeleton 阶段不强求 workspace lint 同步, 避免 noise (跟 i18n / observability / lark / voice / keyring / machine-id 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"

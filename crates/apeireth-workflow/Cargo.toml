@@ -1,0 +1,50 @@
+[package]
+name = "apeireth-workflow"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R20 阶段 1: Workflow Generator (1:1 翻译 v0.9.21 商业版 out/main/chunks/WorkflowGenerator-* 缺 P0)"
+keywords = ["ai", "workflow", "agent", "orchestrator", "task-orchestration"]
+categories = ["api-bindings", "data-structures"]
+
+[dependencies]
+# async runtime
+tokio = { workspace = true }
+# serialization
+serde = { workspace = true }
+serde_json = "1.0"
+serde_yaml = "0.9"
+# error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = { workspace = true }
+# graph (workflow DAG 编排)
+apeireth-graph = { path = "../apeireth-graph" }
+# shared agent types
+apeireth-agent = { path = "../apeireth-agent" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+# tools
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "workflow_demo"
+path = "examples/workflow_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承
+[lints]
+workspace = true

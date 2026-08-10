@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-upgrade"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 升级器官 (A15 落点 — R14 Phase 5 OTA 升级 + sandbox-validator + 5 重治理)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+# round10-10 跨 crate 集成: OTA 3 阶段接入外部 governance 守门
+apeireth-council = { path = "../apeireth-council" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-constraint = { path = "../apeireth-constraint" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_upgrade"
+path = "src/lib.rs"
+
+[[example]]
+name = "upgrade_demo"
+path = "examples/upgrade_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

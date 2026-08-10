@@ -1,0 +1,59 @@
+[package]
+name = "apeireth-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 记忆子系统 (Episode/Note/Session SQLite 存储 + BM25 检索) — R14 Phase 1 主目标 (V1130 wallclock 2.5s)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-api = { path = "../apeireth-api" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v5"] }
+apeireth-vector = { path = "../apeireth-vector", optional = true }
+# R23 #6 派工: extensions 子 crate (per Cargo.toml workspace "0 触碰 src/", 仅在 src/lib.rs 加 pub use re-export 1 行)
+apeireth-memory-extensions = { path = "extensions" }
+# R37-2: 9 organ 部分合并 — life_force → memory 透明 re-export (workspace member 真删)
+apeireth-life-force = { path = "../apeireth-life-force" }
+
+[features]
+# R19 P2 战区 4: 默认开 semantic feature, 让 SqliteMemoryStore::semantic_search + extract_user_profile
+# 即可用 (SemanticIndex / UserProfile / ProfileExtractor 都在 semantic.rs / user_profile.rs).
+# 0 改 workspace.version, 0 触碰 24 LOCKED crate, 0 改 semantic feature 形状.
+# 注意: bench `v2-memory-vector-bench` 的 `required-features = ["semantic"]` 保持不变
+# (bench 是可选目标, 显式 opt-in, 不被 default 覆盖).
+default = ["semantic"]
+semantic = ["apeireth-vector"]
+
+[dev-dependencies]
+criterion = { workspace = true }
+# R18 第 2 阶段: in-memory SQLite 测试
+rusqlite = { workspace = true }
+
+[lib]
+name = "apeireth_memory"
+path = "src/lib.rs"
+
+[[example]]
+name = "memory_effect_demo"
+path = "examples/memory_effect_demo.rs"
+
+[[bench]]
+name = "v2-memory-vector-bench"
+path = "benches/v2-memory-vector-bench.rs"
+harness = false
+required-features = ["semantic"]
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

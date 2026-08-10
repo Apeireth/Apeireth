@@ -1,0 +1,62 @@
+name: Kani formal verification (V2 战区 5)
+
+# 战役 P2 战区 5: 形式化验证骨架 (docs/v2-strategy/03 §4A)
+# - 单独 workflow, 不与 rust-ci.yml 合并 (Kani 慢, 不应挡 PR)
+# - 仅 ubuntu-latest (Kani 不支持 Windows / macOS runner)
+# - 触发: push 到 main/master, PR, 手动 dispatch
+# - 验收: cargo kani --harness double_onion_sample 跑通
+
+on:
+  push:
+    branches: [master, main, rebase/d7d8-into-integration]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  kani-sample:
+    name: cargo kani --harness double_onion_sample
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Kani 自带 nightly toolchain (kani-init); 不需要 dtolnay/rust-toolchain
+
+      - name: Install cargo-kani
+        # ponytail: 直接装最新稳定版. 若未来要锁版本, 在 kani-version 文件里改.
+        run: |
+          cargo install --locked kani-verifier
+          cargo install --locked cargo-kani
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-kani-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-kani-
+
+      - name: Verify cargo kani installation
+        run: cargo kani --version
+
+      # ponytail: 这是验收命令. workspace 其它 crate 不参与 Kani 编译,
+      # 只在 apeireth-formal 单 crate 跑. 若失败 = 验收失败.
+      - name: Run Kani proof for double_onion_sample
+        run: cargo kani -p apeireth-formal --harness double_onion_sample --verbose
+
+      # ponytail: 同时跑 runtime sanity test 作为兜底 (即使 cargo-kani 离线,
+      # cargo test 仍能验证不变量在具体输入上不爆).
+      - name: Runtime sanity tests (fallback)
+        # 不带 --workspace 避免触发已知的 rusqlite 冲突 (预存问题, 不在本次范围)
+        run: rustc --edition=2021 --test --crate-name=apeireth_formal -o /tmp/apeireth-formal-testbin crates/apeireth-formal/src/lib.rs && /tmp/apeireth-formal-testbin
+        continue-on-error: true  # 仅 smoke, 不挡 kani 验收
+
+      # ponytail: Kani harness 名锁定 — 改名会立刻断本 workflow.
+      # 文档化保证在 tests::harness_function_is_publicly_visible.

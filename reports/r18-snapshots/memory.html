@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth Memory — Episode 时间线</title>
+    <meta name="description" content="apeireth-memory 真接通: append-only episode 流 + IdentityCard (R18 sub-agent #1)" />
+    <style>
+        .memory-app { max-width: 880px; margin: 0 auto; padding: 1.5rem; }
+        .memory-header h1 { margin: 0 0 .25rem 0; font-size: 1.6rem; }
+        .memory-header .tagline { color: #666; font-size: .95rem; margin: 0 0 1.5rem 0; }
+        .memory-identity {
+            border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem 1.25rem;
+            background: #f6f8fa; margin-bottom: 1.5rem;
+        }
+        .memory-identity h2 { margin: 0 0 .75rem 0; font-size: 1.15rem; }
+        .memory-identity-fields { display: grid; grid-template-columns: 140px 1fr; gap: .35rem 1rem; margin: 0; }
+        .memory-identity-fields dt { color: #57606a; font-weight: 600; }
+        .memory-identity-fields dd { margin: 0; word-break: break-all; }
+        .memory-timeline h2 { font-size: 1.15rem; margin: 0 0 .75rem 0; }
+        .memory-card {
+            border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1rem;
+            margin-bottom: .75rem; background: #ffffff;
+        }
+        .memory-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .35rem; }
+        .memory-role { font-weight: 600; font-size: .9rem; }
+        .memory-role-user { color: #0969da; }
+        .memory-role-assistant { color: #1a7f37; }
+        .memory-role-system { color: #6e7781; }
+        .memory-ts { color: #6e7781; font-size: .8rem; font-family: ui-monospace, SFMono-Regular, monospace; }
+        .memory-content p { margin: 0; white-space: pre-wrap; word-break: break-word; }
+        .memory-empty { color: #6e7781; font-style: italic; }
+        .memory-form-wrap {
+            border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem 1.25rem;
+            background: #f6f8fa; margin-top: 1.5rem;
+        }
+        .memory-form-wrap h2 { margin: 0 0 .75rem 0; font-size: 1.15rem; }
+        .memory-form label { display: block; margin-bottom: .75rem; }
+        .memory-form label > span { display: block; font-weight: 600; margin-bottom: .25rem; color: #57606a; font-size: .9rem; }
+        .memory-form select, .memory-form textarea {
+            width: 100%; padding: .5rem; border: 1px solid #d0d7de; border-radius: 6px;
+            font: inherit; box-sizing: border-box;
+        }
+        .memory-form textarea { min-height: 80px; resize: vertical; }
+        .memory-form button {
+            background: #1f883d; color: white; border: none; border-radius: 6px;
+            padding: .5rem 1rem; font: inherit; font-weight: 600; cursor: pointer;
+        }
+        .memory-form button:hover { background: #1a7f37; }
+        .memory-nav { margin-top: 1.5rem; }
+        .memory-nav a { color: #0969da; text-decoration: none; }
+        .memory-nav a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <main class="memory-app">
+        <header class="memory-header">
+            <h1>🧠 Apeireth Memory</h1>
+            <p class="tagline">Episode 时间线 · append-only · 真接通 apeireth-memory (SqliteMemoryStore)</p>
+        </header>
+
+        <div class="memory-identity">
+                <h2>🪪 当前 IdentityCard</h2>
+                <dl class="memory-identity-fields">
+                    <dt>continuity_id</dt>
+                    <dd><code>apeireth-web-default</code></dd>
+                    <dt>birth_time</dt>
+                    <dd>2026-08-03 16:42:00 UTC</dd>
+                    <dt>carriers</dt>
+                    <dd>apeireth-web</dd>
+                    <dt>migration_history</dt>
+                    <dd>0 条</dd>
+                </dl>
+            </div>
+
+        <section class="memory-timeline">
+            <h2>📜 最近 20 条 Episode (session: <code>web-session</code>)</h2>
+            <div class="memory-card">
+                    <div class="memory-card-header">
+                        <span class="memory-role memory-role-assistant">🤖 assistant</span>
+                        <span class="memory-ts">2026-08-03 16:49:01 UTC</span>
+                    </div>
+                    <div class="memory-content">
+                        <p>已记录,等 7 个 advisor 真调 LLM 给你看</p>
+                    </div>
+                </div><div class="memory-card">
+                    <div class="memory-card-header">
+                        <span class="memory-role memory-role-user">👤 user</span>
+                        <span class="memory-ts">2026-08-03 16:48:59 UTC</span>
+                    </div>
+                    <div class="memory-content">
+                        <p>我想看看 Apeireth Council 7 advisor 怎么辩论</p>
+                    </div>
+                </div><div class="memory-card">
+                    <div class="memory-card-header">
+                        <span class="memory-role memory-role-user">👤 user</span>
+                        <span class="memory-ts">2026-08-03 16:48:57 UTC</span>
+                    </div>
+                    <div class="memory-content">
+                        <p>主人是研究生,做 2026 学术研究项目</p>
+                    </div>
+                </div><div class="memory-card">
+                    <div class="memory-card-header">
+                        <span class="memory-role memory-role-user">👤 user</span>
+                        <span class="memory-ts">2026-08-03 16:46:46 UTC</span>
+                    </div>
+                    <div class="memory-content">
+                        <p>Test memory append from R18</p>
+                    </div>
+                </div><div class="memory-card">
+                    <div class="memory-card-header">
+                        <span class="memory-role memory-role-user">👤 user</span>
+                        <span class="memory-ts">2026-08-03 16:42:21 UTC</span>
+                    </div>
+                    <div class="memory-content">
+                        <p>Hello from R18 sub-agent #1 end-to-end test</p>
+                    </div>
+                </div>
+        </section>
+
+        <div class="memory-form-wrap">
+            <h2>✍️ Append 新 Episode</h2>
+            <form class="memory-form" method="POST" action="/memory/append">
+                <label>
+                    <span>role</span>
+                    <select name="role" required>
+                        <option value="user" selected>user</option>
+                        <option value="assistant">assistant</option>
+                        <option value="system">system</option>
+                    </select>
+                </label>
+                <label>
+                    <span>content</span>
+                    <textarea name="content" required placeholder="写一条 episode 进去..."></textarea>
+                </label>
+                <button type="submit">Append</button>
+            </form>
+        </div>
+
+        <div class="memory-nav">
+            <a href="/">← 返回 Council 首页</a>
+        </div>
+    </main>
+</body>
+</html>

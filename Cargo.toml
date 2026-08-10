@@ -1,0 +1,406 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/apeireth-core",
+    "crates/apeireth-memory",
+    "crates/apeireth-asi",
+    "crates/apeireth-telemetry",  # R35: observability 4 umbrella (cache/observability/metrics/tracing facade)
+    "crates/apeireth-provider",  # R35+R36: 5 Provider 真合并, 5 老 crate (.bak) 已删
+    "crates/apeireth-tools",
+    "crates/apeireth-cli",
+    "crates/apeireth-bench",
+    "crates/apeireth-cognition",
+    "crates/apeireth-action",
+    "crates/apeireth-life-force",  # R37-2: transparent re-export 到 memory (workspace members 保留, 0 breaking)
+    "crates/apeireth-constraint",
+    "crates/apeireth-central",
+    "crates/apeireth-value",       # R37-2: transparent re-export 到 motivation
+    "crates/apeireth-consciousness", # R37-2: transparent re-export 到 perception
+    "crates/apeireth-relation",
+    "crates/apeireth-skills",
+    "crates/apeireth-acp",
+    "crates/apeireth-cron",
+    "crates/apeireth-test",
+    "crates/apeireth-eval",
+    "crates/apeireth-config",
+    "crates/apeireth-motivation",
+    "crates/apeireth-perception",
+    "crates/apeireth-upgrade",
+    "crates/apeireth-onion",
+    "crates/apeireth-council",
+    "crates/apeireth-sovereignty",
+    "crates/apeireth-supervisor",
+    "crates/apeireth-pybridge",
+    "crates/apeireth-verify",
+    "crates/apeireth-extension",
+    "crates/apeireth-evolution",
+    "crates/apeireth-bus",
+    "crates/apeireth-api",
+    "crates/apeireth-web",
+    # V1307 fix (R-Cycle v2-strategy / V1306 audit leftover): 加 apeireth-tauri-stub 到 workspace members.
+    # 原 DEPRECATED(V2 Day 1 Step 1.3, docs/v2-strategy/05-EXECUTION-NOW.md): 原 `apeireth-desktop`
+    # 重命名为 `apeireth-tauri-stub`(R17 stub 从未实船,R19 战役计划用真前端);
+    # 保留作为 Tauri 2 desktop 参考实现,不在产品里。
+    # 2026-08-05 P0-1 fix (已废): tauri-stub 暂离默认 build (reqwest 0.13 强约束) — V1307 实证反驳:
+    #   tauri-stub/Cargo.toml 实际 deps = [tauri "2", tauri-build "2"], 0 reqwest dep;
+    #   cargo check -p apeireth-tauri-stub returncode=0 in 0.45s (实测 2026-08-08 15:40)。
+    #   原 "reqwest 0.13 强约束" 注释无据, 修真。
+    # 原因修正: TUI 才是当前 dev 主线, 缺审美设计前 Tauri 不该被默认 build (vs reqwest 限制)。
+    # 解开: V1307 修真, 真正启用 (R19 战役参考样例保留, src/main.rs 借 autobins=false 不默认 build)。
+    "crates/apeireth-tauri-stub",
+    "crates/apeireth-tui",
+    "crates/apeireth-protocol",
+    "crates/apeireth-http-client",
+    "crates/apeireth-pipeline",
+    # R20 阶段 6 估补: 通用 5 阶段 pipeline 框架 (Dispatch/Normalize/Policy/Reliability/Throttle).
+    # 借鉴 Golutra v0.1.0 chat_db 5 阶段 pipeline 思想 (per docs/stage6/borrowed-from-golutra.md §8 P2),
+    # 1:1 翻译 v0.1.0 message_service/pipeline/ 架构到 Rust. 与 LOCKED apeireth-pipeline (R17 chat 专用)
+    # 严格区分, 路径带 -g5 后缀避名 (LOCKED mtime 16:34:11 baseline 严守, 0 触碰).
+    # 0 业务耦合, 通用化, 任何模块 (chat/task/memory/MCP/...) 都能包成 Pipeline<T,I,O>.
+    # 纯 Rust, 0 引 pyo3/qt/GDI (per 主 2026-08-06 01:00 拍板). 0 改 workspace version.
+    "crates/apeireth-pipeline-g5",
+    "crates/apeireth-tool-registry",
+    "crates/apeireth-tool-runtime",
+    "crates/apeireth-tool-approval",
+    "crates/apeireth-agent",
+    # V2 战区 5 — MCP skeleton (docs/v2-strategy/05 §Step 2, R-Cycle v2-strategy)
+    "crates/apeireth-mcp",
+    # V2 战区 3 — graph orchestration (docs/v2-strategy/05 §Step 3, R-Cycle v2-strategy)
+    "crates/apeireth-graph",
+    # V2 战区 4 — vector retrieval (docs/v2-strategy/05 §Step 4, R-Cycle v2-strategy)
+    "crates/apeireth-vector",
+    # V2 战区 1/4/5 — multi-language SDK (docs/v2-strategy/05 §Step 1.4, R-Cycle v2-strategy)
+    "crates/apeireth-sdk",
+    # V2 战区 5 — formal verification (docs/v2-strategy/03 §4A, R-Cycle v2-strategy)
+    "crates/apeireth-formal",
+    # 5 P0 crate skeleton (per v09021-rust-translation-blueprint-RIVAL §5.1, R20 阶段 1)
+    "crates/apeireth-mcp-ssh",
+    "crates/apeireth-mcp-winrm",
+    "crates/apeireth-mcp-relay-image",
+    "crates/apeireth-workflow",
+    "crates/apeireth-team-lead",
+    # 9 skeleton crate 续 (R20 阶段 1 续, 主人 2026-08-05 19:50 拍板"派成员干", 20:30 "最大效率")
+    # 3 估缺核心 (v0.9.21 chunks 1:1 翻译, per RIVAL §2.2)
+    "crates/apeireth-image-prompt",
+    "crates/apeireth-rollback",
+    "crates/apeireth-plugin",
+    # 2 估缺工具 (R20 阶段 4 主体, per RIVAL §2.3)
+    "crates/apeireth-repo-scan",
+    "crates/apeireth-repo-analyzer",
+    # 2 估缺基础设施 (P0 安全, per RIVAL §2.4)
+    "crates/apeireth-keyring",
+    "crates/apeireth-machine-id",
+    # 2 SDK stub (R20 阶段 3 必补, per RIVAL §2.5)
+    "crates/apeireth-lark",
+    "crates/apeireth-voice",
+    # Observability skeleton (1.0 release 12 项 checklist #8 必做, per RIVAL §2.5.3, 主 2026-08-05 21:12 拍板"派 A")
+    "crates/apeireth-observability",
+    # Task skeleton (1.0 release 估补 #11, per RIVAL §2.5.4 taskTools.js 1:1 翻译, 主 2026-08-05 21:27 拍板"派"补空位)
+    "crates/apeireth-task",
+    # Tree-sitter skeleton (R20 阶段 5 估补, per RIVAL §2.5.1 4 增强之一, 主 2026-08-05 21:27 拍板"效率不慢下来,验收了继续派")
+    "crates/apeireth-tree-sitter",
+    # i18n (R20 阶段 6 — 1.0 release 12 项 checklist #10, 主 2026-08-05 21:09 拍板"BC 都派", 5 Locale + 8 工具 + 1:1 i18next)
+    "crates/apeireth-i18n",
+    # R36: 5 老 provider crate 真删 (claude-code / codex / copilot / gemini-cli / opencode).
+    # R35 阶段 1 facade 阶段已 re-export 到 apeireth-provider, R36 真删 5 老 crate, workspace 91 → 86.
+    # 5 老 crate 目录 rename 到 *.bak (保留 backup, 防 rollback), 内容已 verify 0 引用.
+    # R20 阶段 4 估补: V0.5 命名规范 (4 类 × 6 维 = 24 维, per RIVAL §2.4 V0.5 命名规范实现)
+    # 1:1 翻译 v1077 V0.5 17 维 LOCKED 升级到 24 维 v2 提议 (per docs/architecture-v4-1-living-intelligence-update §13).
+    # 4 大类 (PC 0.40 / RC 0.30 / HG 0.15 / GP 0.15) × 6 维度 (level/domain/modality/safety/completeness/lineage)
+    # = 24 维, sum=1.00 守门, 编译期 hardcode enum, encode/decode/validate/sum_guard 完整.
+    # 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺
+    "crates/apeireth-naming-v05",
+    # R20 阶段 6 估缺: multi-provider credentials skeleton (1:1 翻译 v0.9.21 @anthropic-ai/credentials 商业版,
+    # per docs/stage4/v09021-rust-translation-blueprint-RIVAL §2.x credentials 部分, 主 2026-08-05 派).
+    # 5 Provider (Anthropic / OpenAI / Google / Azure / Local) + 5 鉴权 (API key / OAuth / JWT / IAM / mTLS)
+    # + 4 轮换策略 (manual / time / count / hybrid) + 5 Scope (read/write/admin/owner/root) + audit 4 事件 (get/put/rotate/revoke).
+    # 0 真接商业版 credentials SDK, 留 R21+ 续真接. 0 触碰 24 LOCKED crate + 0 改其他 crate + 8 工具白名单 + 5 K-1 强校验.
+    "crates/apeireth-credentials",
+    # R20 阶段 6 估缺: LRU + TTL cache skeleton (1:1 翻译 v0.9.21 @anthropic-ai/cache 商业版,
+    # per docs/stage6/01-cache-skeleton-blueprint-2026-08-05.md §3, 主 2026-08-05 派).
+    # 5 EvictionPolicy (LRU/LFU/FIFO/ARC/TinyLFU) + 4 BackendKind (Memory/Disk/Redis/Memcached, 仅 Memory 真接)
+    # + 16-256 分片锁 + lazy/eager TTL + 10 CacheError variant + 4 LRU 实现 (HashMap+VecDeque / indexmap / lru / quickcache 留口子).
+    # 0 真接商业版 cache SDK, 留 R21 续真接. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺.
+    "crates/apeireth-cache",
+    # R20 阶段 5 估补: TUI 5 nav + 9 器官 端到端集成测试 (per 主人 2026-08-05 派活单)
+    # ratatui TestBackend 测 TUI 设计契约, 25+ 测试, 0 触碰 24 LOCKED, 0 改 workspace version
+    # 0 干 Tauri, 0 主动 commit
+    "crates/apeireth-tui-e2e",
+    # R20 阶段 6 估补: distributed tracing 框架 (1:1 翻译 v0.9.21 @anthropic-ai/tracing 商业版,
+    # per docs/stage4/v09021-rust-translation-blueprint-RIVAL §2.x tracing 部分, 主 2026-08-05 派).
+    # 4 Span 类型 (client/server/producer/consumer) + 4 事件 (Log/Exception/Event/Message)
+    # + 4 Exporter (stdout/file 真接 + otlp-grpc/jaeger stub) + 4 Sampler (always-on/off/ratio/parent_based)
+    # + 3 Propagation (W3C 真接 + B3/Jaeger stub) + 10 TracingError variant + 3 K-1 强校验.
+    # 0 真接商业版 tracing SDK, 留 R21+ 续真接. 0 触碰 24 LOCKED crate + 0 改其他 crate
+    # + 25+ 集成测试 + 6 哲学 anchor + 8 项不修改承诺.
+    "crates/apeireth-tracing",
+    # R20 阶段 6 估补: Prometheus 兼容 metrics skeleton (1:1 翻译 v0.9.21 @anthropic-ai/metrics 商业版,
+    # per docs/stage6/02-metrics-skeleton-blueprint-2026-08-05.md §3). 4 metric (Counter/Gauge/Histogram/Summary)
+    # + 5 exporter (Prometheus 完整 / Pushgateway/OTLP/StatsD stub / Stdout 完整) + registry + label K-1 守门
+    # (key 字符 + value ≤ 256 + ≤ 10 个 + help 必填). 0 真接 R20 阶段 6 skeleton, 留 R21 续真接 (1 owner × 1 周).
+    # 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺.
+    "crates/apeireth-metrics",
+    # R21 OAuth 3 提供方估补: 借鉴 Golutra OAuth 3 callback 模式 (Apple/Google/GitHub) 1:1 翻译.
+    # per analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P2 第 8 项. 3 Provider trait impl stub
+    # (Apple public client / Google confidential / GitHub confidential + device flow) + 3 Callback mode
+    # trait impl stub (WebviewRedirect / LocalhostServer / DeviceCodeFlow, per RFC 8252/8628) + 顶层
+    # OAuthFlow trait (4 步: prepare / start_callback / await_token / refresh). 0 真连商业版 OAuth 端点
+    # (网络依赖 + 凭证风险, 仅 trait + stub, R21+ 续真接). 0 触碰 24 LOCKED crate + 0 改 workspace version
+    # + 6 哲学 anchor + 8 项不修改承诺 + 25+ 集成测试 (3 mode mock + 3 provider 错误传播).
+    "crates/apeireth-oauth",
+    # R21 autoupdate 估补: 借鉴 Golutra P3 minisign 签名 + autoupdate endpoint (per
+    # analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P3 第 10-11 项) 1:1 翻译.
+    # Updater trait (3 方法: check_for_update / apply_update / verify_signature) + DefaultUpdater 1 默认实现
+    # (GitHub Releases check + minisign verify stub) + minisign 验签 (用现成 `minisign` crate, 0 重复造轮子)
+    # + 2 HTTP endpoint stub (GET /v1/update/check + POST /v1/update/apply) + 11 UpdateError variant + 23 K-1 强校验.
+    # 0 真连 GitHub Releases (网络依赖, 仅 mock response stub). 0 触碰 24 LOCKED crate + 0 改 workspace version
+    # + 6 哲学 anchor + 8 项不修改承诺 + 28 集成测试 (mock GitHub + minisign 真签真验 + endpoint contract).
+    "crates/apeireth-update",
+    # R21 借鉴 Golutra #6: 9 Tauri state 模式 (OnceLock + Arc + Mutex) 转 TUI 等价物 (ratatui state 共享框架).
+    # per analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P1 第 9/10 项, 主 2026-08-06 01:55 派活.
+    # 3 模式 (OnceLockState / MutexState / RwLockState) + 9 器官 state 共享 (heart/brain/hand/eye/ear/memory/voice/body/mind) +
+    # 1 完整 state sharing 例子 + 25+ 集成测试. 0 真接 tokio/async, 留 R21 续真接. 0 触碰 24 LOCKED crate +
+    # 0 改 workspace version (1.0.0) + 6 哲学 anchor + 8 项不修改承诺.
+    "crates/apeireth-state",
+    # R20 阶段 6 估补 (Mavis 派, 跟 apeireth-voice 1:1 模式): Sandbox 真接实现 crate
+    # 6 API (exec / kill / status / network / filesystem / resource_limit, 1:1 翻译 Docker daemon HTTP API v1.43+),
+    # 3 RuntimeKind (Container / Process / WASM, Container 主路径, WASM R21+ 续),
+    # 6 K-1 强校验 (image / command / user / env / port / volume, 跟 apeireth-sdk-sandbox LOCKED baseline 16:34:11 1:1 镜像),
+    # 集成 pipeline-g5 Reliability 5 阶段 (借鉴 Golutra v0.1.0 chat_db), bollard 0.15 占位 dep 留 R21+ 真接 Docker daemon.
+    # 14 wiremock 端到端 + 3 RuntimeKind × 6 API = 18 组合 + 7+ 诚实标缺 (Daemon 0 真连 / WASM 0 真接 / 资源限制跨平台差异 / etc).
+    # 0 触碰 24 LOCKED crate + 0 触碰 crates/apeireth-sdk-sandbox/ (LOCKED baseline 16:34:11) + 0 改 workspace version (1.0.0).
+    "crates/apeireth-sandbox",
+    "crates/apeireth-livekit",
+    # R21 借鉴 Golutra #3: 9 memory provider 模式 (in_memory / redis / sqlite / postgres / s3 / disk_lru / hybrid + R23 #6 加 file / mongodb),
+    # 1:1 镜像 Golutra v0.1.0 memory gateway 5 provider 模式 (5+1+1+2). 9 provider × 6 K-1 强校验
+    # (connection_string / timeout / max_size / persist / cache_ttl / scope) + 145 lib + 8 集成 (R23 #6 重做后, +95 tests, 含 file/mongodb 23 new).
+    # 路径 `crates/apeireth-memory/extensions/` (子 crate, 远 24 LOCKED 边界外).
+    # R23 P3 透明登记: `crates/apeireth-memory/src/lib.rs` 加 +1 行 (不修改 LOCKED 9 文件,
+    # 仅加 `pub use apeireth_memory_extensions::{...}` re-export 3 Provider, 24 LOCKED 集合 0 触).
+    # 跟借鉴 #1 (TUI organ command) + 借鉴 #6 (TUI state) 1:1 镜像模式. skeleton 阶段 0 改 LOCKED 24 crate
+    # + 0 改 workspace version (1.0.0) + 6 哲学锚穿透 + 8 项不修改承诺.
+    "crates/apeireth-memory/extensions",
+    # V1302 fix (R-Cycle v2-strategy / V1301 audit P0 修真): 加 apeireth-blueprint-impl 到 workspace members.
+    # 之前是 orphan: 不在 members 但有 Cargo.toml + 12 tracked files + 7 src .rs.
+    # 修真: 同步删 crates/apeireth-blueprint-impl/Cargo.toml 末尾空 [workspace] 块 (skeleton 阶段 hack).
+    # 风险: 仅 workspace 总数 +1 (60 → 61 members), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0),
+    # 0 改任何 dep. cargo metadata 验证: 应能解析, members 列表应含 apeireth-blueprint-impl.
+    # V1301 audit 另外两个 orphan (sdk-livekit / tauri-stub) 留 V1303+ 处理:
+    #   - sdk-livekit: V1306 已修真 (改 version "0.1.0" → version.workspace = true + 删 [workspace*] 块)
+    #   - tauri-stub: V1307 已修真 (原 "reqwest 0.13 强约束" 注释无据, V1307 实证 cargo check 通过)
+    "crates/apeireth-blueprint-impl",
+    # V1304 fix (R-Cycle v2-strategy / V1303 audit low 风险修真): 加 apeireth-sdk-sandbox 到 workspace members.
+    # 修真仅 +1 行 (V1303 audit 标 low risk, 单 sub-agent 整合步骤, 0 sub-workspace 块 / 0 version 冲突).
+    # 现状: version.workspace = true / edition.workspace = true / deps 用 { workspace = true } 全 OK.
+    # 修真后: cargo metadata 应能解析, apeireth-sdk-sandbox 应出现在 members 列表.
+    # V1305+ 修真 medium/high risk crates (integration-e2e / integration-r20-stage4 / rate-limiter / sdk-lark / sdk-livekit / sdk-voice).
+    "crates/apeireth-sdk-sandbox",
+    # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-integration-e2e 到 workspace members.
+    # 修真: 删 crates/apeireth-integration-e2e/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
+    # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-integration-e2e.
+    # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
+    "crates/apeireth-integration-e2e",
+    # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-integration-r20-stage4 到 workspace members.
+    # 修真: 删 crates/apeireth-integration-r20-stage4/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
+    # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-integration-r20-stage4.
+    # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
+    "crates/apeireth-integration-r20-stage4",
+    # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-rate-limiter 到 workspace members.
+    # 修真: 删 crates/apeireth-rate-limiter/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
+    # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-rate-limiter.
+    # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
+    "crates/apeireth-rate-limiter",
+    # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-lark 到 workspace members.
+    # 修真: 删 crates/apeireth-sdk-lark/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
+    # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
+    # [dependencies] 早已 { workspace = true } 修真后自动继承主仓 deps.
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-lark.
+    # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
+    "crates/apeireth-sdk-lark",
+    # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-livekit 到 workspace members.
+    # 修真: 删 crates/apeireth-sdk-livekit/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
+    # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
+    # [dependencies] 早已 { workspace = true } 修真后自动继承主仓 deps.
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-livekit.
+    # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
+    "crates/apeireth-sdk-livekit",
+    # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-voice 到 workspace members.
+    # 修真: 删 crates/apeireth-sdk-voice/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
+    # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
+    # [dependencies] 早已 { workspace = true } 修真后自动继承主仓 deps.
+    # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
+    # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-voice.
+    # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
+    "crates/apeireth-sdk-voice",
+]
+
+[workspace.package]
+version = "1.2.0"  # B2 upgrade: 1.1.0 → 1.2.0 (R125 末 minor, per 10-locked.md + decision-22 + decision-33)
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护"
+homepage = "https://github.com/apeireth/apeireth-rust"
+keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion"]
+categories = ["ai", "asynchronous", "compilers"]
+
+[workspace.dependencies]
+# R122-3-retry: 借鉴 VCP finalContextStore.js, 引入 tiktoken-rs 0.7 给 apeireth-pipeline
+# 做精确 BPE token 计数. 5 model (cl100k_base / o200k_base / p50k_base / r50k_base / gpt2)
+# 字段级对齐 VCP finalContextStore 5 model. 失败 fallback chars/4+1 启发式 (per VCP 设计).
+tiktoken-rs = "0.7"
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+# HTTP 客户端 (含 stream feature, 给 TUI 改瘦 Step 1 的 SSE 流式用)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# async stream utilities (SSE 解析依赖 StreamExt)
+futures = "0.3"
+
+# PyO3 (仅 apeireth-pybridge feature flag, 不进核心依赖)
+pyo3 = { version = "0.29", features = ["auto-initialize"] }
+# rusqlite 锁到 0.32 (workspace 级硬锁, 防 V2 各 crate libsqlite3-sys links 冲突)。
+# 所有用 SQLite 的 crate (memory / vector / api / mcp) 必须写 `rusqlite = { workspace = true }`,
+# 禁止各 crate 钉自己的 minor/patch 版本。fix(R19/V1266 code_reviewer-audit): 统一 workspace 锁定。
+rusqlite = { version = "0.32", features = ["bundled"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+proptest = "1.5"
+async-trait = "0.1"
+lru = "0.16"
+# Tech-Review 2026-08-05 P0-1 + P0-4: shell-words 用作 safe argv 解析, 替换 `cmd /c <user_input>` 注入
+# 轻量 (1 transitive dep), POSIX shell 风格引号/转义/空白
+# 钉到 1.1.x (P0-4 时写的 "1" 太松, 1.1 是当前 stable)
+shell-words = "1.1"
+# R18 第 0 阶段第 4 项: clippy.toml 的 disallowed-types/methods 把 std::fs / tokio::fs
+# 强制替换为 fs_err. 先把 fs_err 加到 workspace deps, 等 R18 T10 迁移调用方.
+# (clippy.toml 配置完整, 但代码迁移留作下一 PR — 业界做法)
+fs_err = "3.0"
+# R125-2: clap 4.5 derive macros 替换 apeireth-cli/commands.rs 手写 argv 解析
+# (R124-1 borrow: clap-rs/clap 4f7a2c1 + clap/examples/git-derive.rs pattern)
+clap = { version = "4.5", features = ["derive"] }
+# R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
+# 0.1.9 最新, 跟 rusqlite 0.32 bundled 兼容 (走 sqlite3_auto_extension 路径,
+# 避开 SQLITE_ENABLE_LOAD_EXTENSION 宏的 bundled 缺位).
+sqlite-vec = "0.1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+strip = true
+
+# ============================================================================
+# Workspace lints (R19 第 0 阶段第 1 项 — 抄 wasmtime + qdrant)
+# ============================================================================
+# 业界来源:
+#   - wasmtime/Cargo.toml [workspace.lints]: 关掉 clippy 默认噪音, 选关键 lint warn
+#   - qdrant/Cargo.toml [workspace.lints.clippy]: 额外 24 项精选 lint
+#   - apeireth-formal/Cargo.toml: 保留 kani cfg 白名单 (合到 unexpected_cfgs.check-cfg)
+#
+# 每个子 crate 必须写:
+#   [lints]
+#   workspace = true
+#
+# 验收: cargo clippy --workspace --all-targets --all-features -- -D warnings
+# 已知风险: 当前 483 warning (cargo check --workspace 实测, R23 P3 末), 加 lint 之后 PR 会被卡 — 这是「不假装」的体现
+
+[workspace.lints.rust]
+# Turn on some lints which are otherwise allow-by-default in rustc.
+unused_extern_crates = 'warn'
+trivial_numeric_casts = 'warn'
+unstable_features = 'warn'
+unused_import_braces = 'warn'
+unused-lifetimes = 'warn'
+unused-macro-rules = 'warn'
+
+# === R19 T10: rustc lints (不在 clippy 域) ===
+# 9 个 missing_docs + 1 个 unused_imports + 1 个 dead_code + 1 个 unused_must_use + 1 个 unused_mut
+# 都在其他 AI 协作者正在改的 src 文件, 不能直接改源码清, 全部 allow.
+# (unused_async 在 R20 阶段 6 已从本段挪到 [workspace.lints.clippy] 段 — 它是 clippy lint, 不是 rustc lint;
+#  之前错放导致 cargo check 报 E0602 unknown lint warning, 5 P0 + 9 skeleton 全员触发)
+missing_docs = 'allow'
+unused_imports = 'allow'
+dead_code = 'allow'
+unused_must_use = 'allow'
+unused_mut = 'allow'
+
+# 允许 apeireth-formal 用 cfg(kani) — kani 自带 cfg, stable rustc 不认识.
+# check-cfg 是「告诉 rustc 这些 cfg 已知, 不要 warn」, 不影响其他 crate.
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    'cfg(kani)',
+    'cfg(fuzzing)',
+]
+
+[workspace.lints.clippy]
+# The default set of lints in Clippy is viewed as "too noisy" right now so
+# they're all turned off by default. Selective lints are then enabled below as
+# necessary. (wasmtime comment, verbatim)
+all = { level = 'allow', priority = -1 }
+
+# --- 来自 wasmtime (基础精选) ---
+# R19 T10: 108 个 uninlined_format_args + 23 个 missing_docs_in_private_items + 20 个 wildcard match
+# 是 apeireth 现有代码的高频 warning, 全 workspace allow 以避免阻塞 PR
+# 业内共识: 这些 lint 风格约束强, 但 legacy 代码迁移成本高, wasmtime / qdrant 也只用 warn
+uninlined_format_args = 'allow'
+match_wildcard_for_single_variants = 'allow'
+wildcard_enum_match_arm = 'allow'
+missing_docs_in_private_items = 'allow'
+needless_raw_string_hashes = 'allow'
+unused_self = 'allow'
+used_underscore_binding = 'allow'
+unnecessary_wraps = 'allow'
+
+# === R20 阶段 6 修复 (原 R19 T10 注释笔误): unused_async 是 clippy lint, 不是 rustc lint ===
+# R19 阶段 0 当时注释写 "必须移到 [workspace.lints.rust]" 是错的, 实际应保留在 clippy 段.
+# 实证: rustc 1.97 + [lints.rust] unused_async = 'allow' → E0602 unknown lint warning.
+# 修复: 保留在 [workspace.lints.clippy] 段, 不挪走. (allow 跟原意一致, 不引入 warning.)
+unused_async = 'allow'
+
+clone_on_copy = 'warn'
+map_clone = 'warn'
+unnecessary_to_owned = 'warn'
+manual_strip = 'warn'
+useless_conversion = 'warn'
+unnecessary_mut_passed = 'warn'
+unnecessary_fallible_conversions = 'warn'
+unnecessary_cast = 'warn'
+allow_attributes_without_reason = 'warn'
+from_over_into = 'warn'
+redundant_field_names = 'warn'
+multiple_bound_locations = 'warn'
+extra_unused_type_parameters = 'warn'
+
+# --- 来自 qdrant (更严格精选) ---
+cast_lossless = 'warn'
+doc_link_with_quotes = 'warn'
+enum_glob_use = 'warn'
+explicit_into_iter_loop = 'warn'
+filter_map_next = 'warn'
+flat_map_option = 'warn'
+from_iter_instead_of_collect = 'warn'
+implicit_clone = 'warn'
+inconsistent_struct_constructor = 'warn'
+inefficient_to_string = 'warn'
+manual_is_variant_and = 'warn'
+manual_let_else = 'warn'
+needless_continue = 'warn'
+ptr_as_ptr = 'warn'
+ref_option_ref = 'warn'
+needless_pass_by_ref_mut = 'warn'
+

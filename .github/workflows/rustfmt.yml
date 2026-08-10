@@ -1,0 +1,48 @@
+name: Rust formatter (nightly)
+
+# R25 Stage 1 续: 独立 rustfmt 校验 workflow (qdrant 模式)
+# 抄自: qdrant/.github/workflows/rust-lint.yml (其中的 fmt 部分被 qdrant 合并到 lint job)
+# 借鉴: wasmtime (也用 nightly fmt + separate workflow)
+# 模板: https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust-lint.yml
+#
+# 决策记录 (R25 Agent D 2026-08-10 03:30):
+#   - 当前 rust-lint.yml 已含 rustfmt-nightly job (R18 第 1 阶段)
+#   - 硬约束 #6: 0 改任何 yml 现有文件行为
+#   - 折中: 新建独立 rustfmt.yml (qdrant 模式), 不动 rust-lint.yml
+#   - 临时重复: 1 周内两处都跑 fmt 检查 (1x rustfmt.yml + 1x rust-lint.yml::rustfmt-nightly)
+#   - R26+ 续: 主人拍板后从 rust-lint.yml 删 rustfmt-nightly job, 单一来源
+#
+# 验收: cargo +nightly fmt --all -- --check exit 0
+
+on:
+  push:
+    branches: [master, main, rebase/d7d8-into-integration]
+  pull_request:
+    branches: ['**']
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  rustfmt-nightly:
+    name: cargo +nightly fmt --check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly (for rustfmt)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: rustfmt-nightly
+
+      - name: cargo +nightly fmt --all --check
+        # 8 项 rustfmt.toml 配置 (qdrant 3 + tantivy 5) 强制; nightly 跑 (部分配置 nightly-only)
+        run: cargo +nightly fmt --all -- --check

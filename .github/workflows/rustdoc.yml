@@ -1,0 +1,42 @@
+name: rustdoc (nightly)
+
+# R18 第 3 阶段: 抄 wasmtime main.yml [doc] job
+# https://github.com/bytecodealliance/wasmtime/blob/main/.github/workflows/main.yml
+# nightly cargo doc, RUSTDOCFLAGS = "-Dwarnings" 拦截坏 doc 链接
+# docs.rs 配置用 --cfg docsrs
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+
+jobs:
+  rustdoc:
+    name: cargo +nightly doc -Dwarnings
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust nightly (for rustdoc)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo +nightly doc --workspace
+        env:
+          RUSTDOCFLAGS: "-Dwarnings --cfg docsrs"
+        run: cargo +nightly doc --workspace --no-deps --all-features
+
+      - name: Upload doc artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-${{ github.sha }}
+          path: target/doc
+          retention-days: 30

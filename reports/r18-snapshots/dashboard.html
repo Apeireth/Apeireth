@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth Dashboard — 6 器官状态汇总</title>
+    <meta name="description" content="Apeireth Web 综合 Dashboard — cognition / perception / consciousness / life-force / motivation / value 6 器官实时状态" />
+    <style>
+        /* Dashboard 专用样式 (inline, 不污染 main.css — 保持 main.rs 风格一致) */
+        .dashboard-metrics {
+            margin: 0.75rem 0 0.5rem 0;
+            display: grid;
+            grid-template-columns: max-content 1fr;
+            gap: 0.4rem 1rem;
+            font-size: 0.92rem;
+        }
+        .dashboard-metrics dt {
+            color: #9090b0;
+            font-weight: 600;
+        }
+        .dashboard-metrics dd {
+            color: #d0d0e0;
+            margin: 0;
+            font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+            font-size: 0.88rem;
+        }
+        .dashboard-metrics dd.dashboard-key {
+            color: #fbbf24;
+            font-weight: 700;
+        }
+        .dashboard-status {
+            color: #e0e0ff;
+            font-weight: 500;
+            line-height: 1.5;
+            margin-bottom: 0.5rem;
+        }
+        .dashboard-source {
+            margin-top: 0.75rem;
+            padding-top: 0.5rem;
+            border-top: 1px dashed rgba(255, 255, 255, 0.08);
+            color: #707090;
+            font-size: 0.78rem;
+            font-style: italic;
+        }
+        .dashboard-meta {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 1rem;
+            color: #a0a0c0;
+            font-size: 0.88rem;
+            margin-bottom: 1.5rem;
+        }
+        .dashboard-meta code {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            font-size: 0.82rem;
+        }
+    </style>
+</head>
+<body>
+    <main class="apeireth-app">
+        <header class="apeireth-header">
+            <h1>🛰️ Apeireth Dashboard</h1>
+            <p class="apeireth-tagline">6 器官综合状态 · cognition / perception / consciousness / life-force / motivation / value</p>
+        </header>
+
+        <div class="dashboard-meta">
+            <span>📅 snapshot: <code>2026-08-03 16:49:26 UTC</code></span>
+            <span>🆔 continuity: <code>did:apeireth:dashboard:178577576…</code></span>
+            <span>📊 6 器官 · 全 real API</span>
+        </div>
+
+        <div class="council-grid">
+            <h2>器官状态 (snapshot at 2026-08-03 16:49:26 UTC)</h2>
+            <div class="council-cards">
+                <div class="council-card dashboard-card dashboard-cognition">
+            <div class="council-card-header">
+                <span class="council-domain">🧠 认知</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">5/5 阶段完成 — Decision (1 verdict)</p>
+                <dl class="dashboard-metrics">
+                    <dt>周期</dt><dd class="dashboard-key">5/5 阶段</dd>
+                    <dt>verdict 链</dt><dd>1 步</dd>
+                    <dt>最终决策</dt><dd>allowed ✓</dd>
+                </dl>
+                <p class="dashboard-source">data: real: run_cycle(validate+score+verdict+decide+reflect)</p>
+            </div>
+        </div><div class="council-card dashboard-card dashboard-perception">
+            <div class="council-card-header">
+                <span class="council-domain">👁️ 感知</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">5 通道全在线 · active = text · threshold=0.50 · top_k=5</p>
+                <dl class="dashboard-metrics">
+                    <dt>active channel</dt><dd class="dashboard-key">1/5 — text</dd>
+                    <dt>通道列表</dt><dd>text(1) · voice(2) · vision(3) · tactile(4) · command(5)</dd>
+                    <dt>snapshot 主体</dt><dd>did:apeireth:dashboard:1785775766</dd>
+                </dl>
+                <p class="dashboard-source">data: real: 5 ChannelKind + 5 channel.kind() + default_*()</p>
+            </div>
+        </div><div class="council-card dashboard-card dashboard-consciousness">
+            <div class="council-card-header">
+                <span class="council-domain">💭 意识</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">awake — 主备待机 — 处理日常输入</p>
+                <dl class="dashboard-metrics">
+                    <dt>当前状态</dt><dd class="dashboard-key">awake</dd>
+                    <dt>合法下一步</dt><dd>2 个选项</dd>
+                    <dt>已转换次数</dt><dd>0</dd>
+                </dl>
+                <p class="dashboard-source">data: real: CognitiveDreamStateMachine::new + current + legal_targets_now</p>
+            </div>
+        </div><div class="council-card dashboard-card dashboard-life-force">
+            <div class="council-card-header">
+                <span class="council-domain">💪 生命力</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">待机 — endurance 1.00 / 1.00</p>
+                <dl class="dashboard-metrics">
+                    <dt>endurance</dt><dd class="dashboard-key">1.00 (100%)</dd>
+                    <dt>reflection</dt><dd>dormant</dd>
+                    <dt>SGI 目标</dt><dd>已设置 ✓</dd>
+                </dl>
+                <p class="dashboard-source">data: real: LifeForce::new + reflection_progress + exhaustion_check + SGI</p>
+            </div>
+        </div><div class="council-card dashboard-card dashboard-motivation">
+            <div class="council-card-header">
+                <span class="council-domain">🎯 动机</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">V0.5 v2 §13 总分 0.922 (门槛 0.85) — ✓ 过门槛</p>
+                <dl class="dashboard-metrics">
+                    <dt>SGI (总分)</dt><dd class="dashboard-key">0.922 / 1.000</dd>
+                    <dt>autonomy / value / intrinsic</dt><dd>0.91 / 0.92 / 0.95</dd>
+                    <dt>门槛</dt><dd>0.85 (✓ 过门槛)</dd>
+                </dl>
+                <p class="dashboard-source">data: real: motivation_score(AutonomyConsistency, ValueStability, IntrinsicIntensity)</p>
+            </div>
+        </div><div class="council-card dashboard-card dashboard-value">
+            <div class="council-card-header">
+                <span class="council-domain">🧅 价值</span>
+                <span class="council-stance stance-neutral">live</span>
+            </div>
+            <div class="council-reasoning">
+                <p class="dashboard-status">洋葱 5 层 (5), 当前层 = E (原则) — ✓ 过门槛</p>
+                <dl class="dashboard-metrics">
+                    <dt>motivation_score</dt><dd class="dashboard-key">0.912 (门槛 0.85)</dd>
+                    <dt>当前层</dt><dd>E (原则)</dd>
+                    <dt>AI 可自决层</dt><dd>3 个 (O M A)</dd>
+                </dl>
+                <p class="dashboard-source">data: real: ValueDimension::ALL + ValueCandidate + motivation_score + is_ai_self_modifiable</p>
+            </div>
+        </div>
+            </div>
+        </div>
+
+        <div class="apeireth-actions">
+            <a class="apeireth-button-link" href="/">← 返回 Council</a>
+        </div>
+
+        <footer class="dashboard-meta" style="margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1);">
+            <span>✅ real: cognition.run_cycle / perception.ChannelKind / consciousness.state_machine / life-force.LifeForce / motivation.motivation_score / value.ValueDimension</span>
+        </footer>
+    </main>
+</body>
+</html>

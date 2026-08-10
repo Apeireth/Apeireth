@@ -1,0 +1,59 @@
+{
+  "lru_strategy": "timestamp_ascending_oldest_first",
+  "current_total_size_bytes": 74_547_200_000,
+  "current_total_size_human": "71 GB",
+  "target_total_size_bytes": 2_147_483_648,
+  "target_total_size_human": "2 GB",
+  "must_evict_bytes": 72_399_716_352,
+  "must_evict_snapshots": 88,
+  "keep_snapshots": 3,
+  "eviction_plan": [
+    {
+      "rank": 1,
+      "snapshot_id": "agent-9z9y9z-1712448000",
+      "age_days": 90,
+      "size_bytes": 815_200_000,
+      "reason": "oldest + largest cumulative"
+    },
+    {
+      "rank": 2,
+      "snapshot_id": "agent-1a1b1c-1712534400",
+      "age_days": 89,
+      "size_bytes": 798_400_000,
+      "reason": "oldest + largest cumulative"
+    },
+    {
+      "rank": 3,
+      "snapshot_id": "agent-2b2c2d-1712620800",
+      "age_days": 88,
+      "size_bytes": 824_300_000,
+      "reason": "oldest + largest cumulative"
+    },
+    {
+      "rank": 4,
+      "snapshot_id": "agent-3c3d3e-1712707200",
+      "age_days": 87,
+      "size_bytes": 815_700_000,
+      "reason": "oldest + largest cumulative"
+    },
+    {
+      "rank": 5,
+      "snapshot_id": "agent-4d4e4f-1712793600",
+      "age_days": 86,
+      "size_bytes": 780_500_000,
+      "reason": "oldest + largest cumulative"
+    }
+  ],
+  "elided_count": 83,
+  "elided_note": "剩下 83 个 LRU 清理条目省略, 按 timestamp 升序排, 每条 800 MB 平均",
+  "defense_layer": "71GB 事故根因修复 4 重防御 #3 (LRU 清理 + 总大小上限)",
+  "defense_constants": {
+    "MAX_TOTAL_SHADOW_SIZE_BYTES": 2_147_483_648,
+    "MAX_SHADOW_AGE_DAYS": 7,
+    "MAX_SHADOW_SIZE_BYTES": 104_857_600,
+    "CLEANUP_HOOK_STARTUP": true,
+    "CLEANUP_HOOK_BEFORE_SNAPSHOT": true,
+    "CLEANUP_HOOK_CRON_DAILY": true
+  },
+  "must_do": "LRU cleanup 是 71GB 事故的兜底防御, 启动时必跑"
+}

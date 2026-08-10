@@ -1,0 +1,72 @@
+# R20 阶段 4 效果: LiveKit 实时音视频 SDK stub, 0 改 workspace version (1.0.0 LOCKED).
+# 跟 apeireth-provider-gemini-cli / apeireth-provider-claude-code 同模式 (workspace inherit).
+# 1:1 翻译 livekit-client v0.9.21 商业版 Room / Participant / Track: 6 核心 API (connect / disconnect
+# / publishTrack / subscribe / setCameraEnabled / setMicrophoneEnabled) + 5 RoomState 状态机
+# (Disconnected / Connecting / Connected / Reconnecting / Disconnected) + 8 RoomEvent 事件
+# (ParticipantConnected / ParticipantDisconnected / TrackSubscribed / TrackUnsubscribed /
+# ActiveSpeakersChanged / ConnectionStateChanged / DataReceived / Reconnected)
+# + 4 K-1 强校验 (API Key / Secret / Room Name / wss:// URL) + LiveKitError + RoomEvent Stream.
+# 0 真接 livekit-server SDK (R20 阶段 4 skeleton, R21 续真接, 1 owner × 1 周).
+# 整合阶段: integration sub-agent 删本 [workspace] 块 + 加 `crates/apeireth-sdk-livekit` 到主 workspace members.
+[package]
+name = "apeireth-sdk-livekit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R20 阶段 4 效果: LiveKit 实时音视频 SDK stub (1:1 翻译 livekit-client v0.9.21 商业版, 6 核心 API + 5 RoomState + 8 RoomEvent + 4 K-1 强校验, 0 真接 SDK 留 R21 续接, 1 owner × 1 周)"
+keywords = ["livekit", "webrtc", "realtime", "audio-video", "sdk-stub", "agent"]
+categories = ["api-bindings", "asynchronous", "multimedia"]
+
+[dependencies]
+# async runtime (workspace 统一, 跟 gemini-cli / claude-code / machine-id 同模式)
+tokio = { workspace = true }
+# serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+# error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing (R20 阶段 4 估补: stub 工具返 NotImplemented 时 log)
+tracing = "0.1"
+# async traits (per LiveKitClient trait, 6 工具全 async)
+async-trait = { workspace = true }
+# async stream utilities (per RoomEvent Stream<Item> 返回)
+futures = { workspace = true }
+# 5 Provider 集成点 (per R20 阶段 4 + apeireth-protocol-4-adapter-analysis §2):
+#   1. ProtocolAdapter trait  (adapter.rs)
+#   2. 4 ZST adapter          (adapters/)
+#   3. NormalizedRequest      (normalized.rs)
+#   4. NormalizedResponse     (normalized.rs)
+#   5. ProtocolRouter dispatch(router.rs)
+# LiveKit 集成点: 走 ProtocolRouter 复用 4 协议 ZST adapter.
+apeireth-protocol = { path = "../apeireth-protocol" }
+# P0 凭证安全 (per apeireth-keyring §2.4.1 + v09021 §2.4.1):
+#   API key / secret 走 OS keyring (Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD)
+#   + fallback AES-256-GCM + PBKDF2 600_000 加密 (per OWASP 2023)
+#   0 明文存盘 (P0 安全铁律 主人 19:50 拍板)
+apeireth-keyring = { path = "../apeireth-keyring" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[[example]]
+name = "livekit_demo"
+path = "examples/livekit_demo.rs"
+
+# R19 阶段 0 模式: workspace lint 继承 (wasmtime + qdrant 模式)
+# 跟 gemini-cli / claude-code / machine-id 同模式, 6 哲学 anchor + 8 项不修改承诺: skeleton 阶段, 允许全 lint
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_must_use = "allow"
+unused_mut = "allow"
+dead_code = "allow"
+unused_imports = "allow"
+missing_docs = "allow"

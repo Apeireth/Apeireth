@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ΑΠΕΙΡΕΘ Logo — 古朴 ARCHAIC (琥珀金)
+    4 顶点 path, 凹刻感, 发丝线 (黄金分割 0.618 处断裂)
+    字标永远灰白, 星色随主题
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="480">
+    <!-- 发丝线 (左右对称, 黄金分割 0.618 处磨损断裂) -->
+    <line x1="100" y1="160" x2="358" y2="160"
+          stroke="var(--text-primary)" stroke-width="0.5" opacity="0.6" />
+    <line x1="370" y1="160" x2="500" y2="160"
+          stroke="var(--text-primary)" stroke-width="0.5" opacity="0.4" />
+
+    <!-- ΑΠΕΙΡΕΘ 字标 (凹刻: 上缘暗, 下缘亮, 字内略暗) -->
+    <defs>
+        <filter id="engrave" x="-5%" y="-5%" width="110%" height="110%">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="0.5" result="blur" />
+            <feSpecularLighting in="blur" surfaceScale="2" specularConstant="0.5"
+                                specularExponent="20" lighting-color="var(--text-primary)" result="spec">
+                <feDistantLight azimuth="135" elevation="45" />
+            </feSpecularLighting>
+            <feComposite in="spec" in2="SourceAlpha" operator="in" result="specOut" />
+            <feComposite in="SourceGraphic" in2="specOut" operator="arithmetic"
+                         k1="0" k2="1" k3="1" k4="0" />
+        </filter>
+    </defs>
+    <text x="300" y="100" text-anchor="middle"
+          font-family="Theano Didot, Cormorant Garamond, Times New Roman, serif"
+          font-size="36" font-weight="400" letter-spacing="0.35em"
+          fill="var(--text-primary)" filter="url(#engrave)">
+        ΑΠΕΙΡΕΘ
+    </text>
+
+    <!-- 北极星 (4 顶点 path, 纵轴 = 横轴 × 2.6, 古朴金) -->
+    <!-- 中心 (300, 160), 横轴半径 8, 纵轴半径 21 -->
+    <polygon points="300,139 302,158 300,160 298,158
+                      300,181 302,162 300,160 298,162"
+             fill="var(--accent)" opacity="0.95" />
+    <polygon points="300,160 308,160 300,160 300,160
+                      300,160 292,160 300,160 300,160"
+             fill="var(--accent)" opacity="0.95" />
+
+    <!-- 简化: 4 顶点菱形, 纵长 21, 横 8 -->
+    <path d="M 300 139 L 308 160 L 300 181 L 292 160 Z"
+          fill="var(--accent)" />
+    <circle cx="300" cy="160" r="3" fill="var(--accent-dim)" />
+
+    <!-- 边角细节: 微弱光晕 -->
+    <circle cx="300" cy="160" r="12" fill="var(--accent)" opacity="0.08" />
+</svg>

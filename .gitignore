@@ -1,52 +1,157 @@
-﻿code-deep-study/
-.bocha_key
-*.key
-*.minimax_key
-__pycache__/
-.venv/
-data/
-*.log
-*.err
-*.out
-archive/
-research-multi-angle-2026/
-research-dgm-paper.html
-research-v7-second-round.json
-research-v7-third-round.json
-research-v7-fourth-round.json
-research-asi-deep-raw.json
-anysearch-extra-error.txt
-anysearch-extra-output.txt
-extra-res-v*.txt
-extra-research-*.txt
+# Rust build artifacts
+target/
+Cargo.lock.bak
 
-code-deep-study/open-webui-main/open-webui-main/src/
-code-deep-study/open-webui-main/open-webui-main/static/
-code-deep-study/open-webui-main/open-webui-main/dist/
-code-deep-study/aio-hub-main/aio-hub-main/src/
-code-deep-study/aio-hub-main/aio-hub-main/dist/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/Plugin/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/AdminPanel-Vue/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/ToolConfigs/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/dailynote/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/dailynote/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/knowledge/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/image/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/scripts/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/routes/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/modules/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/SillyTavernSub/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/TVStxt/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/OpenWebUISub/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/docs/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/rust-vexus-lite/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/vcp-installer-source/
-code-deep-study/VCPToolBox-main/VCPToolBox-main/tests/
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-_v1265_full_audit/_v1265_audit_quick/_v1265_probe/_v1264_north_star_*/_v1260_deploy_*/_v1263_*_*/
+# OS
+.DS_Store
+Thumbs.db
 
-_v1265_full_audit/
-_v1265_audit_quick/
-_v1265_probe/
-_v1264_north_star_*/
-_v1260_deploy_*/
+# Local overrides
+**/*.local.toml
+.env
+
+# SQLite (apeireth-memory.db)
+*.db
+*.db-shm
+*.db-wal
+
+# Mac metadata (._*)
+._*
+
+# Python egg-info (apeireth-sdk/src-py) — src-py 整目录已于 R25 删 (纯 Rust 重写)
+*.egg-info/
+
+# R25 防御: apeireth-sdk 虚拟环境 (Cargo.toml 已无 pyo3, 别再创建 .venv)
+crates/apeireth-sdk/.venv/
+
+# 一次性 trash (V1271 smoke + 类似)
+_v1271_smoke_trash_*/
+_*/.trash/
+
+# ad-hoc 检查脚本 (Hermes 16:40 战报后已用完, 留本地)
+check_*.ps1
+count_*.ps1
+debug_test.ps1
+head_unwraps.ps1
+show_head_line.ps1
+test_regex.ps1
+
+# Worktree 临时工具 (引用 UUID path, 不能跨机器跑)
+scripts/_*.py
+scripts/_*.sh
+
+# Leaked / 反编译源码 (license 风险, 永远不 commit)
+research/source/
+claude-code-leaked/
+vended/
+
+# 临时 typo 文件
+=
+=*
+
+# Release signing private keys must never enter the repository
+**/cosign.key
+**/cosign.key.*
+
+# Lock the cosign-keygen scratch directory so private keys never enter the repo
+reports/.tmp-cosign-keygen/
+
+
+# R23 清理: 84+ tmp / audit / check / commit-msg / build / test 一次性文件 (仓库根 + reports/ + scripts/)
+# 历史: codex/hermes R17-R23 期间累积, 全部为 ad-hoc debug, 不再需要.
+# R23+ 起: 每次需要即兴写 /tmp/<name>.ps1 或 New-TemporaryFile, 避免污染仓库根.
+.tmp-*.txt
+.tmp-*.sh
+.tmp-*.ps1
+.tmp-*.py
+.tmp-*.md
+.tmp-*.bak
+audit-*.txt
+check-*.txt
+commit-msg-*.txt
+test-*.txt
+build-*.txt
+.commit-msg-*.txt
+.commit-r20-*.txt
+.commit-raw*.txt
+
+# R23 一次性 wrk trees (其他分支 worktree 留下, 主仓跨 worktree 0 触碰)
+.spectrai-worktrees/
+
+# R23 一次性 backup (升级前/后 snapshot, 留本地)
+.tmp-cargo-lock-*.bak
+.tmp-cargo-toml-*.bak
+.tmp-apeireth-metrics-*.bak
+.tmp-extensions-Cargo.lock-*.bak
+.tmp-axum-tokio-tungstenite-tree.txt
+.tmp-bus-tokio-tungstenite-tree.txt
+.tmp-cargo-audit-*.txt
+.tmp-cargo-deny-*.txt
+.tmp-cargo-metadata-check.txt
+.tmp-r21-fix-*.py
+.tmp-tokio-tungstenite-*.txt
+.tmp-check-*.lock
+.tmp-head-cargo.lock
+
+# R23 清理 — Tauri build artifacts
+dist/
+DEPENDENCY-trees/
+
+# 一次性 backup (.v2-base / .pre-idx.bak) 备份文件不 commit
+*.v2-base
+*.pre-*.bak
+
+# R23 P3 audit 后续 final 报告（一次性, 留 gitignore 保护避免再变异）
+reports/cargo-audit-r23-final-2026-08-06.txt
+
+
+# R119 Mavis (2026-08-10): _workspace/ 目录约定
+# 施工人临时工作副本专用目录: _workspace/README.md + .gitkeep 跟踪, 其他全部忽略
+# 用途: 临时脚本 / 临时 log / 临时 backup / worktree 工具
+# 规则: 用完即删, 不参与 build, 父目录在 Apeireth-rust/_workspace/
+_workspace/_archive/
+_workspace/*
+!_workspace/README.md
+!_workspace/.gitkeep
+
+
+# R119-5 Mavis (2026-08-10): 根目录 throwaway 临时脚本 (R19-R26 era 留)
+# 历史: codex/hermes/codex-r19-r26 累积, 全是 ad-hoc debug, 永不 commit
+# R119+ 约束: 一次性脚本请用 /tmp/<name>.ps1 或 New-TemporaryFile, 不要留在根目录
+# 临时 Python 脚本 (root only)
+/append_*.py
+/dump*.py
+/debug_*.py
+/fix_*.py
+/patch_*.py
+/loosen_*.py
+/trace_*.py
+/test_*.py
+# 临时 web 模板
+/about.hbs
+/about.toml
+# 临时 web 错误/输出
+/apeireth-web.err
+/apeireth-web.out
+# 临时分析报告
+/audit-report.json
+/DEPENDENCY
+# 0 字节 typo
+/=
+# R26 era .openclaw build log (root only)
+/.openclaw-*.log
+# 修真 backup 目录 (R119-1 _v1306_backup + R119-5 .apeireth-a16-build 同性质)
+/.apeireth-a16-build/
+# Tauri 端 (R19+ 砍前端, 主人 8/4 19:53 决策不归本仓范围)
+/src-tauri/
+
+# R125 17:23 Mavis (per decision-33): Python audit + commit msg 草稿 ignore
+out/
+Apeireth-rust/apeireth/out/
+.git_commit_msg.txt

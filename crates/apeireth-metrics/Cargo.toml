@@ -1,0 +1,53 @@
+[package]
+name = "apeireth-metrics"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 估缺: Prometheus 兼容 metrics skeleton (1:1 翻译 v0.9.21 @anthropic-ai/metrics 商业版). 4 metric type (Counter/Gauge/Histogram/Summary) + 5 exporter (Prometheus 完整 / Pushgateway/OTLP/StatsD stub / Stdout 完整) + registry + label K-1 守门 (key 字符 + value 长度 256). 0 真接 R20 阶段 6 skeleton, 留 R21 续真接 (1 owner × 1 周). 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺"
+keywords = ["metrics", "prometheus", "counter", "gauge", "histogram", "summary", "agent"]
+categories = ["api-bindings", "development-tools", "asynchronous"]
+
+# R20 阶段 6: skeleton 阶段不强求 workspace lint 同步, 避免 noise
+# (跟 i18n / observability / lark / voice / keyring / machine-id / tree-sitter / naming-v05 / cache / credentials 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[dependencies]
+apeireth-telemetry = { path = "../apeireth-telemetry" }
+# async runtime (Prometheus exporter HTTP endpoint 需 tokio)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (MetricsConfig / MetricValue / MetricsError Serialize/Deserialize)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (MetricsError 8-10 variant, per skeleton 模式 + m3 防御)
+anyhow = "1.0"
+thiserror = "1.0"
+# logging (registry 增删 / exporter push log)
+tracing = "0.1"
+# async trait (Exporter trait dyn-compatible, 5 exporter 共享 interface)
+async-trait = "0.1"
+# parking_lot 锁 (registry 内部 HashMap 用 parking_lot::Mutex 性能更好, 不用 std::sync::Mutex)
+parking_lot = "0.12"
+# R21 续修 #12 security D-S1 (RUSTSEC-2024-0437): 移除 prometheus 0.13 dep.
+# 原因: protobuf 2.28.0 (transitive via prometheus 0.13.4) 触发 RUSTSEC-2024-0437 (uncontrolled recursion
+# in CodedInputStream::skip_group), apeireth-metrics src/ 0 调 prometheus crate API (自实现 text exposition
+# format encoder), 0 实际风险. 但 cargo audit 仍报 vulnerability. 续修方案: 移除 prometheus dep.
+# 0 触碰 24 LOCKED crate (R20 阶段 6 估补, 不在 LOCKED baseline) + 0 改 workspace version (1.0.0).
+# R21+ 真接 prometheus 库时再补回 (届时 protobuf 升级到 >=3.7.2 即可).
+
+[dev-dependencies]
+# 临时文件 (test fixture - 后续真接 stdout exporter 文件输出时用)
+tempfile = "3"
+# workspace tokio 全 feature
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "metrics_demo"
+path = "examples/metrics_demo.rs"
+
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"
+unused_must_use = "allow"

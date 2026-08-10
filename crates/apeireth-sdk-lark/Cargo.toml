@@ -1,0 +1,69 @@
+# R20 阶段 4 效果: Lark 飞书 SDK stub, 0 改 workspace version (1.0.0 LOCKED).
+# 跟 apeireth-sdk-livekit / apeireth-sdk-sandbox / apeireth-sdk-voice 同模式 (workspace inherit).
+# 1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21 商业版 API 表面: 8 核心 API (send_message /
+# list_calendar_events / get_user / get_department / create_doc / create_sheet /
+# get_approval_instance / verify_webhook) + 6 消息类型 (text / post / image / file / card /
+# interactive) + 5 鉴权 (App ID + App Secret + tenant_access_token + user_access_token +
+# webhook_token) + 4 实体 (Message / CalendarEvent / User / Document) + 6 K-1 强校验
+# (app_id / app_secret / chat_id / open_id / email / mobile) + LarkError 10 variant.
+# 0 真接 @larksuiteoapi/lark-sdk (R20 阶段 4 skeleton, R21 续真接, 1 owner × 1 周).
+# 整合阶段: integration sub-agent 删本 [workspace] 块 + 加 `crates/apeireth-sdk-lark` 到主 workspace members.
+[package]
+name = "apeireth-sdk-lark"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 效果: Lark 飞书 SDK stub (1:1 翻译 @larksuiteoapi/lark-sdk v0.9.21 商业版, 8 核心 API + 6 消息类型 + 5 鉴权 + 4 实体 + 6 K-1 强校验, 0 真接 SDK 留 R21 续接, 1 owner × 1 周)"
+keywords = ["lark", "feishu", "im", "calendar", "approval", "sdk-stub", "agent"]
+categories = ["api-bindings", "asynchronous", "web-programming"]
+
+[dependencies]
+# async runtime (workspace 统一, 跟 livekit / sandbox 同模式)
+tokio = { workspace = true }
+# serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+# error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing (R20 阶段 4 估补: stub 工具返 NotImplemented 时 log)
+tracing = "0.1"
+# async traits (per LarkClient trait, 8 工具全 async)
+async-trait = { workspace = true }
+# async stream utilities (per webhook 事件 Stream<Item> 返回, 后续真接用)
+futures = { workspace = true }
+# 时间戳 (Message / CalendarEvent / ApprovalTask 时间字段)
+chrono = { workspace = true }
+# P0 协议归一化 (per apeireth-protocol, webhook 事件 / message dispatch 错误走 ProtocolError).
+apeireth-protocol = { path = "../apeireth-protocol" }
+# P0 凭证安全 (per apeireth-keyring §2.4.1 + v09021 §2.4.1):
+#   App ID / App Secret / tenant_access_token / user_access_token 走 OS keyring
+#   (Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD)
+#   + fallback AES-256-GCM + PBKDF2 600_000 加密 (per OWASP 2023)
+#   0 明文存盘 (P0 安全铁律 主人 19:50 拍板)
+apeireth-keyring = { path = "../apeireth-keyring" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[[example]]
+name = "lark_demo"
+path = "examples/lark_demo.rs"
+
+# R19 阶段 0 模式: workspace lint 继承 (wasmtime + qdrant 模式)
+# 跟 livekit / sandbox 同模式, 6 哲学 anchor + 8 项不修改承诺: skeleton 阶段, 允许全 lint
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_must_use = "allow"
+unused_mut = "allow"
+dead_code = "allow"
+unused_imports = "allow"
+missing_docs = "allow"
