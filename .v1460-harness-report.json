@@ -1,0 +1,174 @@
+{
+  "module": "v1460_asi_real_windows_anyone_run_harness",
+  "version": "0.1.0",
+  "generated_at": "2026-08-10T04:11:59.962548Z",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python_version": "3.13.14",
+  "n_stages": 11,
+  "n_passed": 10,
+  "n_failed": 0,
+  "overall_score": 1.0,
+  "stage_results": [
+    {
+      "stage": "python_version",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 0.16546249389648438,
+      "detail": "python 3.13.14 (OK)",
+      "exit_code": null,
+      "bounded": true
+    },
+    {
+      "stage": "import_apeireth",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 0.0011920928955078125,
+      "detail": "apeireth import OK",
+      "exit_code": null,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1454_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 244.8866367340088,
+      "detail": "exit=0 | schema: asi.hypercube-four-axis-deployment.v1 | stderr_first=",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1455_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 244.54617500305176,
+      "detail": "exit=0 | schema: asi.hypercube-full-source-content-audit-v5.v1 | stderr_first=",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1456_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 242.89202690124512,
+      "detail": "exit=0 | version: 0.1.0 | stderr_first=",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1457_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 241.50681495666504,
+      "detail": "exit=0 | version: 0.1.0 | stderr_first=",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1458_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 242.933988571167,
+      "detail": "exit=0 | module: v1458_asi_north_star_ceiling_chain_audit | stderr_first=",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "run_v1459_subprocess",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 259.57179069519043,
+      "detail": "exit=0 | V1459 5-axis hypercube | cells=6300 | 5d_closed=6300 | 4d_closed=0 | chain_deleg | stderr_first=C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\apeireth\\v1459_asi_five_axis_hyper",
+      "exit_code": 0,
+      "bounded": true
+    },
+    {
+      "stage": "docker_probe",
+      "passed": false,
+      "score": 1.0,
+      "latency_ms": 0.9098052978515625,
+      "detail": "docker CLI not on PATH; allowed to fail",
+      "exit_code": null,
+      "bounded": true
+    },
+    {
+      "stage": "streamlit_probe",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 262.68458366394043,
+      "detail": "streamlit 1.60.0",
+      "exit_code": null,
+      "bounded": true
+    },
+    {
+      "stage": "requests_probe",
+      "passed": true,
+      "score": 1.0,
+      "latency_ms": 81.99644088745117,
+      "detail": "requests 2.31.0",
+      "exit_code": null,
+      "bounded": true
+    }
+  ],
+  "honest_disclosure": [
+    "docker_probe not OK (allowed to fail per GUARD_DOCKER_OPTIONAL): docker CLI not on PATH; allowed to fail"
+  ],
+  "guards": [
+    "GUARD_STAGES_DECLARED",
+    "GUARD_PROBES_REAL",
+    "GUARD_EXIT_CODES_CAPTURED",
+    "GUARD_HONEST_DISCLOSURE",
+    "GUARD_BOUNDED_TIMEOUT",
+    "GUARD_DOCKER_OPTIONAL",
+    "GUARD_CLI_RUNNABLE",
+    "GUARD_BORROWED_LINEAGE"
+  ],
+  "v3_guards": [
+    "GUARD_HARNESS_NOT_ASI",
+    "GUARD_HARNESS_NOT_PHENOMENAL",
+    "GUARD_HARNESS_NOT_LOCK_CHANGE",
+    "GUARD_HARNESS_NOT_ABSOLUTE",
+    "GUARD_HARNESS_NOT_HUMAN_LEVEL"
+  ],
+  "borrowed": [
+    {
+      "key": "v1256_unio_mystica_2026",
+      "use": "V1460 借用 V1256 unio_mystica anchor 0.9105 LOCKED",
+      "applied_to": "ceiling chain unchanged (no inflation)"
+    },
+    {
+      "key": "v1411_asi_overarching_framework_2026",
+      "use": "V1460 借用 V1411 chain_delegate pattern (lineage only)",
+      "applied_to": "harness structure inspired by chain_delegate"
+    },
+    {
+      "key": "v1442_asi_v2_five_position_real_occupier_2026",
+      "use": "V1460 借用 V1442 position math (lineage only)",
+      "applied_to": "harness reports per-stage score"
+    },
+    {
+      "key": "v1450_asi_cross_modular_cube_history_2026",
+      "use": "V1460 借用 V1450 cube history JSONL pattern",
+      "applied_to": ".v1460-cube-history.jsonl append"
+    },
+    {
+      "key": "v1456_asi_six_deployment_real_execution_parity_2026",
+      "use": "V1460 借用 V1456 SUBPROCESS_REAL execution evidence",
+      "applied_to": "real subprocess execution"
+    },
+    {
+      "key": "v1457_asi_six_deployment_operational_runbook_2026",
+      "use": "V1460 借用 V1457 stage lifecycle pattern",
+      "applied_to": "stage_score pattern"
+    },
+    {
+      "key": "v1458_asi_north_star_ceiling_chain_audit_2026",
+      "use": "V1460 借用 V1458 honest disclosure pattern",
+      "applied_to": "failures reported as failures"
+    },
+    {
+      "key": "v1459_asi_five_axis_hypercube_synthesis_2026",
+      "use": "V1460 借用 V1459 chain_delegate precedent",
+      "applied_to": "V1459 is one of the 6 subprocess stages"
+    }
+  ]
+}
