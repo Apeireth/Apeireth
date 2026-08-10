@@ -1,0 +1,279 @@
+{
+  "module": "v1458_asi_north_star_ceiling_chain_audit",
+  "version": "0.1.0",
+  "generated_at": "2026-08-10T03:50:47.218304Z",
+  "ceiling_chain": [
+    {
+      "module_name": "v1256_asi_v0666_unio_mystica_substrate_real_lift",
+      "module_id": "V1256",
+      "importable": true,
+      "import_error": null,
+      "anchor_value": 0.9105,
+      "north_star_ceiling": 0.98,
+      "absolute_ceiling": 1.0,
+      "published_gap_to_north_star": null,
+      "published_gap_to_ceiling": null,
+      "computed_gap_to_north_star": 0.0695,
+      "computed_gap_to_ceiling": 0.0895,
+      "check_anchor_locked": true,
+      "check_north_star_locked": true,
+      "check_absolute_ceiling_consistent": true,
+      "check_gap_to_north_star": true,
+      "check_gap_to_ceiling": true,
+      "check_published_gap": true,
+      "internal_consistency_score": 1.0,
+      "notes": [
+        "V1256 family: absolute_ceiling=1.0 (V1256 evidence audit math)",
+        "no_published_gap_to_compare (assumed ok)"
+      ]
+    },
+    {
+      "module_name": "v1256_evidence_audit",
+      "module_id": "V1256_evidence_audit",
+      "importable": true,
+      "import_error": null,
+      "anchor_value": 0.9105,
+      "north_star_ceiling": 0.98,
+      "absolute_ceiling": 1.0,
+      "published_gap_to_north_star": null,
+      "published_gap_to_ceiling": null,
+      "computed_gap_to_north_star": 0.0695,
+      "computed_gap_to_ceiling": 0.0895,
+      "check_anchor_locked": true,
+      "check_north_star_locked": true,
+      "check_absolute_ceiling_consistent": true,
+      "check_gap_to_north_star": true,
+      "check_gap_to_ceiling": true,
+      "check_published_gap": true,
+      "internal_consistency_score": 1.0,
+      "notes": [
+        "V1256 family: absolute_ceiling=1.0 (V1256 evidence audit math)",
+        "no_published_gap_to_compare (assumed ok)"
+      ]
+    },
+    {
+      "module_name": "v1259_north_star_trajectory",
+      "module_id": "V1259",
+      "importable": true,
+      "import_error": null,
+      "anchor_value": 0.9105,
+      "north_star_ceiling": 0.98,
+      "absolute_ceiling": 1.0,
+      "published_gap_to_north_star": 0.0695,
+      "published_gap_to_ceiling": 0.08950000000000002,
+      "computed_gap_to_north_star": 0.0695,
+      "computed_gap_to_ceiling": 0.0895,
+      "check_anchor_locked": true,
+      "check_north_star_locked": true,
+      "check_absolute_ceiling_consistent": true,
+      "check_gap_to_north_star": true,
+      "check_gap_to_ceiling": true,
+      "check_published_gap": true,
+      "internal_consistency_score": 1.0,
+      "notes": []
+    },
+    {
+      "module_name": "v1410_asi_five_position_framework",
+      "module_id": "V1410",
+      "importable": true,
+      "import_error": null,
+      "anchor_value": 0.9105,
+      "north_star_ceiling": 0.98,
+      "absolute_ceiling": 0.99,
+      "published_gap_to_north_star": 0.0695,
+      "published_gap_to_ceiling": 0.0795,
+      "computed_gap_to_north_star": 0.0695,
+      "computed_gap_to_ceiling": 0.0795,
+      "check_anchor_locked": true,
+      "check_north_star_locked": true,
+      "check_absolute_ceiling_consistent": true,
+      "check_gap_to_north_star": true,
+      "check_gap_to_ceiling": true,
+      "check_published_gap": true,
+      "internal_consistency_score": 1.0,
+      "notes": []
+    },
+    {
+      "module_name": "v1411_asi_overarching_framework",
+      "module_id": "V1411",
+      "importable": true,
+      "import_error": null,
+      "anchor_value": 0.9105,
+      "north_star_ceiling": 0.98,
+      "absolute_ceiling": 0.99,
+      "published_gap_to_north_star": 0.0695,
+      "published_gap_to_ceiling": 0.0795,
+      "computed_gap_to_north_star": 0.0695,
+      "computed_gap_to_ceiling": 0.0795,
+      "check_anchor_locked": true,
+      "check_north_star_locked": true,
+      "check_absolute_ceiling_consistent": true,
+      "check_gap_to_north_star": true,
+      "check_gap_to_ceiling": true,
+      "check_published_gap": true,
+      "internal_consistency_score": 1.0,
+      "notes": []
+    }
+  ],
+  "deployment_cube": [
+    {
+      "module_name": "v1450_asi_cross_modular_cube_history",
+      "module_id": "V1450",
+      "importable": true,
+      "import_error": null,
+      "defines_anchor": false,
+      "defines_north_star": false,
+      "defines_absolute_ceiling": false,
+      "has_ceiling_disclosure": true,
+      "no_ceiling_touch": true,
+      "check_no_ceiling_touch": true,
+      "check_honest_disclosure": true,
+      "notes": [
+        "no_ceiling_mention (acceptable — module does not touch ceiling chain)"
+      ]
+    },
+    {
+      "module_name": "v1454_asi_hypercube_four_axis_deployment",
+      "module_id": "V1454",
+      "importable": true,
+      "import_error": null,
+      "defines_anchor": false,
+      "defines_north_star": false,
+      "defines_absolute_ceiling": false,
+      "has_ceiling_disclosure": true,
+      "no_ceiling_touch": true,
+      "check_no_ceiling_touch": true,
+      "check_honest_disclosure": true,
+      "notes": [
+        "no_ceiling_mention (acceptable — module does not touch ceiling chain)"
+      ]
+    },
+    {
+      "module_name": "v1455_asi_hypercube_full_source_content_audit_v5",
+      "module_id": "V1455",
+      "importable": true,
+      "import_error": null,
+      "defines_anchor": false,
+      "defines_north_star": false,
+      "defines_absolute_ceiling": false,
+      "has_ceiling_disclosure": true,
+      "no_ceiling_touch": true,
+      "check_no_ceiling_touch": true,
+      "check_honest_disclosure": true,
+      "notes": [
+        "no_ceiling_mention (acceptable — module does not touch ceiling chain)"
+      ]
+    },
+    {
+      "module_name": "v1457_asi_six_deployment_operational_runbook",
+      "module_id": "V1457",
+      "importable": true,
+      "import_error": null,
+      "defines_anchor": false,
+      "defines_north_star": false,
+      "defines_absolute_ceiling": false,
+      "has_ceiling_disclosure": true,
+      "no_ceiling_touch": true,
+      "check_no_ceiling_touch": true,
+      "check_honest_disclosure": true,
+      "notes": [
+        "no_ceiling_mention (acceptable — module does not touch ceiling chain)"
+      ]
+    }
+  ],
+  "n_ceiling_modules": 5,
+  "n_ceiling_modules_passed": 5,
+  "n_deployment_modules": 4,
+  "n_deployment_modules_passed": 4,
+  "aggregate_internal_consistency": 1.0,
+  "aggregate_cross_consistency": 1.0,
+  "aggregate_gap_preservation": 1.0,
+  "aggregate_ceiling_convention_uniformity": 0.6,
+  "n_using_v1256_convention": 3,
+  "n_using_v1410_convention": 2,
+  "any_inflation": false,
+  "any_lowered_north_star": false,
+  "any_lowered_ceiling": false,
+  "any_published_gap_drift": false,
+  "inconsistencies": [
+    {
+      "type": "ceiling_convention_split",
+      "module": "V1410",
+      "value": 0.99,
+      "expected": 1.0,
+      "note": "V1410/V1411 use 0.99 convention; V1256 family uses 1.0. Both internally consistent."
+    },
+    {
+      "type": "ceiling_convention_split",
+      "module": "V1411",
+      "value": 0.99,
+      "expected": 1.0,
+      "note": "V1410/V1411 use 0.99 convention; V1256 family uses 1.0. Both internally consistent."
+    }
+  ],
+  "guards": [
+    "GUARD_CEILING_CHAIN_DECLARED",
+    "GUARD_DEPLOYMENT_CUBE_DECLARED",
+    "GUARD_INTERNAL_CONSISTENCY",
+    "GUARD_CROSS_CONSISTENCY",
+    "GUARD_GAP_PRESERVATION",
+    "GUARD_NO_INFLATION",
+    "GUARD_NO_LOWERED_NORTH",
+    "GUARD_NO_LOWERED_CEILING",
+    "GUARD_BOUNDED_TOLERANCE",
+    "GUARD_HONEST_DISCLOSURE",
+    "GUARD_DEPLOYMENT_NO_CEILING_TOUCH",
+    "GUARD_CLI_RUNNABLE",
+    "GUARD_POPPER_RUNS",
+    "GUARD_BORROWED_LINEAGE"
+  ],
+  "v3_guards": [
+    "GUARD_CEILING_AUDIT_NOT_PHENOMENAL",
+    "GUARD_CEILING_AUDIT_NOT_ASI",
+    "GUARD_CEILING_AUDIT_NOT_HUMAN_LEVEL",
+    "GUARD_CEILING_AUDIT_NOT_ABSOLUTE",
+    "GUARD_CEILING_AUDIT_NOT_LOCK_CHANGE"
+  ],
+  "borrowed": [
+    {
+      "key": "v1256_unio_mystica_2026",
+      "use": "V1458 借用 V1256 unio_mystica anchor 0.9105 LOCKED + ASI_NORTH_STAR 0.98 + ABSOLUTE_CEILING 1.0",
+      "applied_to": "ceiling chain locked-value baseline"
+    },
+    {
+      "key": "v1256_evidence_audit_2026",
+      "use": "V1458 借用 V1256 evidence audit gap math (1.0 - 0.9105 = 0.0895)",
+      "applied_to": "gap_to_ceiling reference math"
+    },
+    {
+      "key": "v1259_north_star_trajectory_2026",
+      "use": "V1458 借用 V1259 trajectory reporter (current_realized + gap_to_north_star + gap_to_ceiling)",
+      "applied_to": "ceiling chain module extraction pattern"
+    },
+    {
+      "key": "v1410_asi_five_position_framework_2026",
+      "use": "V1458 借用 V1410 5-position framework ceiling math (north_star_ceiling + absolute_ceiling + current_realized)",
+      "applied_to": "ceiling chain module extraction pattern"
+    },
+    {
+      "key": "v1411_asi_overarching_framework_2026",
+      "use": "V1458 借用 V1411 overarching framework anchor + north_star_ceiling + absolute_ceiling 0.99",
+      "applied_to": "ceiling chain module extraction pattern + V1411 0.99 case"
+    },
+    {
+      "key": "v1442_asi_v2_five_position_real_occupier_2026",
+      "use": "V1458 借用 V1442 real-occupier chain_delegate pattern",
+      "applied_to": "importlib-based bounded module import pattern"
+    },
+    {
+      "key": "v1457_asi_six_deployment_operational_runbook_2026",
+      "use": "V1458 借用 V1457 runbook audit pattern (per_module + per_stage pass_rate)",
+      "applied_to": "audit report structure + JSON serialization"
+    },
+    {
+      "key": "stdlib_importlib_json_dataclasses_argparse",
+      "use": "V1458 借用 stdlib importlib (bounded module import) + json (serialization) + dataclasses (report schema) + argparse (CLI)",
+      "applied_to": "core audit machinery"
+    }
+  ]
+}
