@@ -1,0 +1,136 @@
+# ============================================================================
+# ⚠️  DEPRECATION NOTE (R25 Agent D 2026-08-10):
+#    本 workflow (rust-ci.yml) 临时保留 1 周作 fallback。
+#    "rust-tests" + "release-build" + "battle-1-2" + "ci-summary" 4 个 job
+#    已被新独立 workflow 取代:
+#      - rust.yml              → 替代 "rust-tests" job (qdrant 模式, 3 OS matrix + nextest + JUnit)
+#      - (release-build 待决)  → 候选: release.yml 已含
+#      - (battle-1-2 待决)     → 候选: 等 R26 主人拍板挪到独立战役 workflow 或并入 rust.yml
+#      - (ci-summary 待决)     → 候选: 删 (qdrant 模式无对应 job)
+#    临时保留理由: 硬约束 #6 0 改行为, 1 周后主人拍板删 "rust-tests" job.
+#    修改日期: 2026-08-10 (本注释新增, 0 改 yaml 行为)
+# ============================================================================
+name: Rust tests (OS matrix + cargo-nextest)
+
+# R18 第 1 阶段: 抄 qdrant/.github/workflows/rust.yml
+# - OS matrix: ubuntu + windows + macos
+# - cargo-nextest + JUnit 报告
+# - 不再包含 clippy / fmt (rust-lint.yml / rustfmt.yml 单独跑)
+#
+# R25 Agent D 2026-08-10: 上述功能已抽到独立 .github/workflows/rust.yml
+# 本文件保留 1 周, 跟新 rust.yml 并行跑 (RUST 双重保险)
+
+on:
+  push:
+    branches: [master, main, rebase/d7d8-into-integration]
+  pull_request:
+    branches: ['**']
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  rust-tests:
+    name: cargo nextest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: ${{ matrix.os != 'macos-latest' }}
+
+      - name: cargo build --workspace --tests --locked
+        run: cargo build --workspace --tests --locked
+
+      # === cargo-nextest 跑全部测试, JUnit 输出 ===
+      - name: cargo nextest run --workspace --profile ci --locked
+        # Profile "ci" 在 .config/nextest.toml 定义: fail-fast + retries 2
+        run: cargo nextest run --workspace --profile ci --locked
+
+      # === TUI 单独跑 (--test-threads=1 避免 stdout 冲突, 抄 R17 原版) ===
+      - name: cargo test -p apeireth-tui --test-threads=1
+        run: cargo test -p apeireth-tui --test-threads=1 -- --nocapture
+        env:
+          CI: "true"
+
+      # === 上传 JUnit 报告 ===
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-junit-${{ matrix.os }}.xml
+          path: target/nextest/ci/junit.xml
+
+  # === Release build 验证 (matrix) ===
+  release-build:
+    name: release build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: ${{ matrix.os != 'macos-latest' }}
+      - name: cargo build --release --workspace --locked
+        run: cargo build --release --workspace --locked
+
+  # === 战役 1+2 单独测 (保留 R17 主 master 报告) ===
+  battle-1-2:
+    name: 战役 1+2 (4 协议 + 工具 5 件套)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 战役 1 - protocol/http-client/pipeline/api
+        run: |
+          cargo nextest run -p apeireth-protocol --profile ci
+          cargo nextest run -p apeireth-http-client --profile ci
+          cargo nextest run -p apeireth-pipeline --profile ci
+          cargo nextest run -p apeireth-api --profile ci
+
+      - name: 战役 2 - tool-registry/runtime/approval/agent/tools
+        run: |
+          cargo nextest run -p apeireth-tool-registry --profile ci
+          cargo nextest run -p apeireth-tool-runtime --profile ci
+          cargo nextest run -p apeireth-tool-approval --profile ci
+          cargo nextest run -p apeireth-agent --profile ci
+          cargo nextest run -p apeireth-tools --profile ci
+
+
+  # === B5 补: rust-ci 汇总 (miri + kani + cargo-deny 整套成功才进 summary 绿) ===
+  ci-summary:
+    name: rust-ci summary (miri + kani + cargo-deny)
+    runs-on: ubuntu-latest
+    needs: [rust-tests, release-build, battle-1-2]
+    if: success()
+    steps:
+      - name: All good
+        run: |
+          echo "✅ rust-ci matrix + battle-1-2 绿"
+          echo "🔗 配 miri.yml + kani.yml + cargo-deny.yml 的 Actions 状态"
+          echo "   https://github.com/${{ github.repository }}/actions/workflows/miri.yml"
+          echo "   https://github.com/${{ github.repository }}/actions/workflows/kani.yml"
+          echo "   https://github.com/${{ github.repository }}/actions/workflows/cargo-deny.yml"

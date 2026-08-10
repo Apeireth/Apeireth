@@ -1,0 +1,156 @@
+# ============================================================================
+# Feature Request — Apeireth 1.0+ issue form (R26 工程化补全)
+# ============================================================================
+# 模式: qdrant/tokio 业界惯例 (GitHub Issue Forms 2024+ YAML 1:1)
+# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
+# 字段验证: 必填项 = 问题描述 + 提议方案 + 替代方案 (跟业界 1:1)
+# 跟 .github/ISSUE_TEMPLATE/feature.md (R20 写, R20 阶段 1-6) 共存, 不删 (向后兼容)
+
+name: Feature Request
+description: Propose a new feature for Apeireth (Rust 92+ crate backend, 24 LOCKED + 9 organ)
+title: "[FEATURE] "
+labels:
+  - enhancement
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing a feature. Please describe the problem and the proposed solution.
+
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target release
+      description: Which release cycle does this target?
+      options:
+        - R26+ (post-1.0 patch, e.g. 1.1.1 / 1.1.2)
+        - R27+ (1.2 minor, e.g. 1.2.0)
+        - R30+ (1.x major, e.g. 2.0.0)
+        - Backlog (no timeline)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: crate
+    attributes:
+      label: Affected crate(s)
+      description: Which crate(s) does this feature touch?
+      options:
+        - apeireth-asi (24 LOCKED — 0 触碰!)
+        - apeireth-cognition (24 LOCKED — 0 触碰!)
+        - apeireth-core (24 LOCKED — 0 触碰!)
+        - apeireth-sovereignty (24 LOCKED — 0 触碰!)
+        - apeireth-formal (24 LOCKED — 0 触碰!)
+        - apeireth-memory (semantic_search + user_profile)
+        - apeireth-vector (sqlite-vec backend)
+        - apeireth-tui (瘦客户端)
+        - apeireth-api (cache / retry / routing)
+        - apeireth-tool-registry (8 工具)
+        - apeireth-council (多 AI 投票)
+        - apeireth-eval (7 阶段 eval)
+        - apeireth-pipeline (orchestrator)
+        - workspace-level (CI / docs / tooling)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: anchor
+    attributes:
+      label: 6 哲学 anchor 主驱动
+      description: Which philosophy anchor is the primary driver?
+      options:
+        - S-1 走在前人经验上 (北极星)
+        - S-2 实事求是
+        - O-2 走在前人肩上
+        - O-3 干到底
+        - O-4 任何人都能接手
+        - O-5 不假装
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem does this feature solve? Be specific.
+      placeholder: |
+        I'm always frustrated when [...]
+        This affects my workflow because [...]
+        Currently I have to [...]
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: Proposed solution
+      description: What do you want to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What other solutions did you consider? Why this one over those?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links, screenshots, prior art (e.g. tokio / qdrant / wasmtime analogues), benchmark data
+      render: markdown
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 0 触碰实查 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
+
+        If this feature touches a LOCKED crate, **DO NOT propose direct changes**. Propose an extension crate or feature flag instead.
+
+        24 LOCKED crate (per `docs/conventions/10-locked.md`):
+
+        ```
+        apeireth-supervisor  apeireth-agent       apeireth-council
+        apeireth-bus         apeireth-protocol    apeireth-mcp
+        apeireth-tool-registry  apeireth-tool-runtime
+        apeireth-graph       apeireth-pipeline    apeireth-tool-approval
+        apeireth-extension   apeireth-evolution   apeireth-api
+        apeireth-core        apeireth-memory      apeireth-asi
+        apeireth-tools       apeireth-cli         apeireth-bench
+        apeireth-cognition   apeireth-action      apeireth-life-force
+        apeireth-constraint  apeireth-formal
+        ```
+
+  - type: checkboxes
+    id: locked_check
+    attributes:
+      label: 0 触碰实查确认
+      options:
+        - label: 0 触碰 24 LOCKED crate (mtime 实查)
+          required: true
+        - label: 0 改 workspace version (1.1.0)
+          required: true
+        - label: 0 改 R11 baseline 3 值 (V1141 / V1131 / V1136)
+          required: true
+        - label: 0 改 7 LOCKED 文档
+          required: true
+        - label: 0 改 6 哲学锚 (S-1 / S-2 / O-2 / O-3 / O-4 / O-5)
+          required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 8 项不修改承诺验证
+
+        - ✅ 不假装已实现 (skeleton 标 ⏳)
+        - ✅ 编译期 hardcode (守门)
+        - ✅ 不改 LOCKED 24 crate
+        - ✅ 不改 workspace version
+        - ✅ 6 哲学 anchor 穿透
+        - ✅ 不依赖 NewAPI
+        - ✅ 不重复造轮子 (复用 std / tokio / 业界标准)
+        - ✅ 诚实标缺

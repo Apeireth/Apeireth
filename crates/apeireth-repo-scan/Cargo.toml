@@ -1,0 +1,49 @@
+[package]
+name = "apeireth-repo-scan"
+# 显式版本 (R20 阶段 4 续时整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 续: Repo Scanner (1:1 翻译 v0.9.21 RepoScanAdapter-CsMFZlsN.js + RepoAnalyzer-BjPzFZvZ.js, P1)"
+keywords = ["ai", "repo-scan", "git", "code-metrics", "lsp"]
+categories = ["development-tools", "filesystem"]
+
+[dependencies]
+# async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# 时间戳 (ScanResult.scanned_at / CacheEntry.cached_at)
+chrono = { version = "0.4", features = ["serde"] }
+# 注: 商业版 package.json 0 命中 simple-git / fast-glob / linguist, 走 std::fs walk + 自实现分类.
+# git2 / tree-sitter 暂不引 (蓝图 §2.3.1 P0 估补依赖, 阶段 4 续时整合 #2 加).
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "repo_scan_demo"
+path = "examples/repo_scan_demo.rs"
+
+# R20 阶段 4 续: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 1. 删 [workspace] 表 ✅
+# 2. version 改 `version.workspace = true` ⏳ R20 阶段 4 续时
+# 3. deps 改 `{ workspace = true }` ⏳ R20 阶段 4 续时
+# 4. workspace Cargo.toml members 加 `crates/apeireth-repo-scan` ✅
+# 当前 lints 留空 (跟 plugin 模式同), 不强求跟外层 workspace 同步, 避免 noise.
+# 整合 #2 改成 `[lints]\nworkspace = true` 继承 root workspace.lints.
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"

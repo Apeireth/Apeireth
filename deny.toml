@@ -1,0 +1,168 @@
+# ============================================================================
+# deny.toml — Apeireth 后端依赖治理 (R19 第 0 阶段第 2 项)
+# ============================================================================
+# 抄自: wasmtime/deny.toml (1537B)
+# 文档: https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+#
+# 验收: `cargo deny check` 0 issue
+# 已知风险: Cargo.lock 当前有多版本分裂 (reqwest 0.12+0.13 / thiserror 1+2 /
+#   windows-sys 5 个版本 / hashbrown 4 个版本 / toml_edit 4 个版本 / getrandom 3 个)
+#   本文件先按 wasmtime 模式用 [bans.skip] 跳过, 留作 R19+ 任务收敛 (需要
+#   各 crate 改用 workspace = true 锁版本, 然后 cargo update)。
+
+[graph]
+# Apeireth 当前 CI 只在 ubuntu-latest 跑, 但目标支持跨平台 (第 1 阶段 OS matrix)
+# 抄 wasmtime: 4 个 target 三元组明确声明
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "aarch64-linux-android" },
+]
+
+# ----------------------------------------------------------------------------
+# Licenses — 允许列表 (抄 wasmtime)
+# ----------------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/licenses/cfg.html
+[licenses]
+# 实际用到的 15 种 (用 `cargo deny list` 生成):
+#   0BSD, Apache-2.0, BSD-2-Clause, BSD-3-Clause, BSL-1.0, ISC, MIT, MIT-0,
+#   MPL-2.0, Unicode-3.0, Unlicense, Zlib, CDLA-Permissive-2.0,
+#   Artistic-2.0, CC0-1.0 (这两个是 notify v5 的 CC0-1.0 OR Artistic-2.0 组合)
+allow = [
+    "0BSD",
+    "Apache-2.0 WITH LLVM-exception",
+    "Apache-2.0",
+    "Artistic-2.0",       # notify v5.2.0 的 license 组合之一
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",            # xxhash-rust v0.8.18
+    "CC0-1.0",            # notify v5.2.0 的 license 组合之一
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",              # borrow-or-share v0.2.4
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+
+# ----------------------------------------------------------------------------
+# Bans — 多版本 / wildcards / 黑名单
+# ----------------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/bans/cfg.html
+[bans]
+multiple-versions = "deny"   # ← 多版本强制 deny, 业界顶尖标准
+wildcards = "allow"
+deny = []
+skip = [
+    # ---- Windows 系统 crate (业界共识: skip) ----
+    # 11 个 windows-* crate 各分裂 3-5 版本, 总共 49 个版本分裂
+    # 业界共识: 等 transitive deps 升级, 自己锁版本收益低
+    # (wasmtime / tokio 都这么做)
+    "windows-sys", "windows-targets", "windows-core", "windows-link",
+    "windows-result", "windows-strings",
+    "windows_aarch64_gnullvm", "windows_aarch64_msvc",
+    "windows_i686_gnu", "windows_i686_msvc",
+    "windows_x86_64_gnu", "windows_x86_64_gnullvm", "windows_x86_64_msvc",
+
+    # ---- 其他业界共识 skip 的多版本 ----
+    { name = "hashbrown", reason = "wasmtime 也 skip (waiting on lots of crates to update)" },
+    { name = "base64", reason = "0.21 vs 0.22 — httpmock 决定" },
+    { name = "bitflags", reason = "1.x vs 2.x API 不兼容, 需要逐步迁移" },
+    { name = "http", reason = "0.x vs 1.x API 不兼容, hyper 依赖决定" },
+    { name = "http-body", reason = "跟随 http 版本" },
+    { name = "hyper", reason = "0.x vs 1.x API 不兼容, reqwest/axum/tokio 决定" },
+    { name = "indexmap", reason = "1.x vs 2.x serde 兼容" },
+    { name = "itertools", reason = "0.10/11/13/14 — 多 crate 各自钉版本" },
+    { name = "syn", reason = "1.x/2.x/3.x — proc macro crate 决定" },
+    { name = "toml", reason = "跟随 toml_edit 版本" },
+    { name = "toml_datetime", reason = "跟随 toml_edit 版本" },
+    { name = "toml_edit", reason = "4 个版本 (0.19/0.20/0.22/0.25) — 待 R19 T10 收敛" },
+    { name = "tower", reason = "0.4 vs 0.5 — reqwest/axum 决定" },
+    { name = "tower-http", reason = "跟随 tower 版本" },
+    { name = "tungstenite", reason = "0.21 vs 0.25 — reqwest 决定" },
+    # R21 续修 #12 security D-S2 (tokio-tungstenite 0.24+0.25 duplicate):
+    # axum 0.7.9 要 0.24.x, apeireth-bus 要 0.25.x, 跨 minor version 不能 cargo [patch.crates-io] unify
+    # (0.24.x 和 0.25.x 是 disjoint version specs). R21+ 续 axum 0.7.9→0.8+ 真修 (届时 axum 内部已用 0.25+).
+    # 0 实际安全风险 (API 兼容, 业界普遍接受 minor bump).
+    { name = "tokio-tungstenite", reason = "R21 #12 security D-S2: axum 0.7.9 (0.24.x) + apeireth-bus (0.25.x) 跨 minor dup, 待 axum 0.8+ 升" },
+    { name = "winnow", reason = "3 个版本 — 跟随 toml 版本" },
+
+    # ---- 待 R19 T10 收敛的 crate (有理由收敛) ----
+    { name = "reqwest", reason = "reqwest 0.12 vs 0.13 双版本 — 待 R19 T10 各 crate 改 workspace = true 收敛" },
+    { name = "thiserror", reason = "thiserror 1.0 vs 2.0 双版本 — 待 R19 T10 全量升 2.0 或 1.0" },
+    { name = "thiserror-impl", reason = "跟随 thiserror 版本" },
+    { name = "getrandom", reason = "3 个版本 (0.2/0.3/0.4) — 待 R19 T10 收敛" },
+    { name = "proc-macro-crate", reason = "3 个版本 (1.x/2.x/3.x) — 待 R19 T10 收敛" },
+    { name = "rand", reason = "0.8 vs 0.10 — 跟随 getrandom 版本" },
+    { name = "rand_core", reason = "跟随 rand 版本" },
+    { name = "jni-sys", reason = "android-ndk-rs 决定" },
+    { name = "mio", reason = "tokio 决定" },
+    { name = "rustix", reason = "0.38 vs 1.x — 等 rustix 自己升" },
+    { name = "schemars", reason = "0.x/1.x — serde 决定" },
+    { name = "socket2", reason = "tokio 决定" },
+    { name = "darling", reason = "跟随 syn 版本" },
+    { name = "darling_core", reason = "跟随 darling" },
+    { name = "darling_macro", reason = "跟随 darling" },
+    { name = "event-listener", reason = "2.x vs 5.x — tokio 决定" },
+    { name = "cpufeatures", reason = "wasmtime 也 skip (requires update to sha2)" },
+    { name = "linux-raw-sys", reason = "rustix 决定" },
+    { name = "petgraph", reason = "0.6 vs 0.7 — Cargo 自己" },
+    { name = "phf_shared", reason = "serde 决定" },
+    { name = "png", reason = "0.17 vs 0.18" },
+    { name = "r-efi", reason = "uefi 决定" },
+    { name = "redox_users", reason = "redox-os 决定" },
+    { name = "serde_spanned", reason = "跟随 toml 版本" },
+    { name = "string_cache", reason = "html5ever 决定" },
+    { name = "unicode-width", reason = "crossterm 决定" },
+    { name = "wasm-streams", reason = "wasm-bindgen 决定" },
+    { name = "bit-set", reason = "bit-vec 0.5 vs 0.8" },
+    { name = "bit-vec", reason = "bit-set 决定" },
+    { name = "convert_case", reason = "syn 决定" },
+    { name = "fixedbitset", reason = "petgraph 决定" },
+    { name = "foldhash", reason = "hashbrown 决定" },
+    { name = "heck", reason = "proc macros 决定" },
+    { name = "gloo-net", reason = "leptos 决定" },
+    { name = "async-channel", reason = "tokio 决定" },
+]
+
+# ----------------------------------------------------------------------------
+# Sources — 限制 crate 来源
+# ----------------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+# ----------------------------------------------------------------------------
+# Advisories — 安全漏洞 (cargo-deny 自动从 RustSec 拉数据)
+# ----------------------------------------------------------------------------
+# https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+yanked = "warn"
+ignore = [
+    # R25 Agent D 2026-08-10 — 0 vulnerabilities verified.
+    # 上次验证: 2026-08-09 .github/workflows/cargo-audit.yml 跑 cargo audit --json
+    #   → "vulnerabilities": {"found": [], "count": 0}
+    # 上次验证: 2026-08-05 .github/workflows/cargo-deny.yml 跑 cargo deny check (4 类)
+    #   → advisories check ok (CI ubuntu-latest, EmbarkStudios/cargo-deny-action@v2 拉 RustSec db)
+    #
+    # 留空 = 0 项需 ignore. 未来如出现 known false-positive, 按以下模板加:
+    #   "RUSTSEC-YYYY-NNNN",  # <crate> <vuln> - <reason why we ignore>
+    #
+    # 业界参考 (per docs/Apeireth-v2.1-Industry-Top-Backend-Roadmap.md §A.7):
+    #   - tokio deny.toml: 0 ignore (austere)
+    #   - wasmtime deny.toml: 0 ignore (跟 tokio 同样)
+    #   - memoryos-rust: 列具体 ignored CVE + 理由
+    #   - qdrant: 0 ignore (推给 dependabot/RUSTSEC 自动)
+    #
+    # Apeireth 暂学 tokio/wasmtime/qdrant 的 0-ignore austere 模式. 后续如 cargo deny
+    # check advisories 报 known false-positive (典型: getrandom 0.2 / chrono < 0.4.20 /
+    # time < 0.3.7 / wasmtime CVE false-positive 等), 再按上面模板加.
+]

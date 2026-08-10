@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Apeireth",
+    "tagline": "长程 AI 成长的 AGI 操作系统",
+    "version": "版本 {{version}}"
+  },
+  "nav": {
+    "home": "首页",
+    "tools": "工具",
+    "history": "历史",
+    "settings": "设置",
+    "organs": "器官"
+  },
+  "tools": {
+    "web_search": "网络搜索",
+    "file_ops": "文件操作",
+    "git_ops": "Git 操作",
+    "code_exec": "代码执行",
+    "calendar": "日历",
+    "message": "消息",
+    "terminal": "终端"
+  },
+  "error": {
+    "not_implemented": "该功能尚未实现",
+    "tool_not_whitelisted": "工具 {{tool}} 不在白名单内",
+    "key_not_found": "翻译键未找到: {{key}}",
+    "locale_not_supported": "不支持的语言: {{locale}}",
+    "template_render": "键 {{key}} 模板渲染失败",
+    "io": "I/O 错误: {{message}}",
+    "parse": "JSON 解析错误: {{message}}"
+  },
+  "health": {
+    "ok": "服务健康",
+    "degraded": "服务降级",
+    "unhealthy": "服务异常"
+  },
+  "status": {
+    "loading": "加载中...",
+    "ready": "就绪",
+    "busy": "繁忙",
+    "error": "错误"
+  },
+  "locale": {
+    "name": {
+      "en": "英语",
+      "zh_cn": "简体中文",
+      "ja": "日语",
+      "fr": "法语",
+      "de": "德语"
+    }
+  },
+  "tauri": {
+    "window": {
+      "title": "Apeireth 桌面"
+    },
+    "menu": {
+      "file": "文件",
+      "edit": "编辑",
+      "view": "视图",
+      "help": "帮助"
+    }
+  },
+  "tui": {
+    "welcome": "欢迎使用 Apeireth TUI",
+    "prompt": ">",
+    "goodbye": "再见",
+    "shortcut": {
+      "quit": "按 Ctrl+C 退出"
+    }
+  },
+  "settings": {
+    "language": "语言",
+    "theme": "主题",
+    "about": "关于"
+  },
+  "must_do": {
+    "translation_complete": "i18n 是 1.0 release 必做项"
+  }
+}

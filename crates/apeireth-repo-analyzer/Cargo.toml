@@ -1,0 +1,47 @@
+[package]
+name = "apeireth-repo-analyzer"
+# 显式版本 (跟 apeireth-plugin skeleton 同模式; R20 阶段 1 续时整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 1 续: Repo Analyzer (1:1 翻译 v0.9.21 商业版 out/main/chunks/RepoAnalyzer-BjPzFZvZ.js ~6KB, 估缺 P1; 范围: 代码质量分析 + 技术债识别 + 复杂度分析 + 依赖分析 + 安全审计 + 报告生成 + m3 防御)"
+keywords = ["ai", "repo", "analyzer", "code-quality", "tech-debt"]
+categories = ["development-tools", "api-bindings"]
+
+[dependencies]
+# async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits (per QualityAnalyzer 5 个 async fn)
+async-trait = "0.1"
+# 时间戳 (AnalysisResult.completed_at)
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+futures = "0.3"
+
+[[example]]
+name = "repo_analyzer_demo"
+path = "examples/repo_analyzer_demo.rs"
+
+# R20 阶段 1 续: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 1. 删本 [workspace] 块 ✅
+# 2. version 改 `version.workspace = true` ⏳ R20 阶段 4 续时
+# 3. deps 改 `{ workspace = true }` ⏳ R20 阶段 4 续时
+# 4. workspace Cargo.toml members 加 `crates/apeireth-repo-analyzer` ✅
+# 当前 lints 留空, 不强求跟外层 workspace 同步, 避免 noise
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"

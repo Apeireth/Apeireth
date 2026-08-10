@@ -1,0 +1,63 @@
+# ============================================================================
+# cargo-audit ignore 表 — R23-P0 transparent ignore list
+# ============================================================================
+# 作用: rustsec cargo-audit 把这些 advisory 在审计时跳过, 但 CI 必须
+#       知道原因 (justification 字段). 本文件是 docs/security/audit-rationale.md 
+#       的机器可读版本, 2 件必须一起 commit.
+#
+# 用法 (CI / cosign.yml audit job):
+#   cargo audit --ignore RUSTSEC-2024-0384 --ignore RUSTSEC-2024-0436 ...
+#
+# 6 件 skip (per 主 Hermes audit 8/6 21:30):
+#
+# 1. RUSTSEC-2024-0384 (instant 0.1.13 — unmaintained)
+#    现状: 仅 fastrand 等 transitive 拽入, 0 direct workspace member 使用
+#    修复路径: 等 fastrand / 上下游 bump 到 std::time::Instant, 估计 1-2 月
+#    风险: 0 (我们代码不直接用 instant; 转瞬的 `Instant::now()` 由 std 提供)
+#    8 项承诺守门: 不动 transitive 升级路径, 仅固化审计策略
+#
+# 2. RUSTSEC-2024-0436 (paste 1.0.15 — unmaintained)
+#    现状: ratatui 0.30.2 + leptos 等 macro crate 用 paste proc-macro
+#    修复路径: 等 ratatui / leptos 替换 proc-macro 依赖 (业界 bbs / 类似 crate 已替换)
+#    风险: 极低 (paste 是 build-time proc-macro, 不进 runtime)
+#    8 项承诺守门: 0 触碰 LOCKED 9 crate, 0 触碰 workspace.version
+#
+# 3. RUSTSEC-2026-0173 (proc-macro-error2 2.0.1 — unmaintained)
+#    现状: leptos_macro / leptos_router_macro / syn_derive 等 transitive proc-macro
+#    修复路径: 等 leptos 替换 syn 2 dependency (估计 3-6 月, leptos 团队在跟进)
+#    风险: 0 (build-time macro, 不进 runtime)
+#    8 项承诺守门: 0 触碰 leptos 0.7.9 (locked)
+#
+# 4. RUSTSEC-2026-0174 (http-types 2.12.0 — notice)
+#    现状: wiremock (mock HTTP server) transitive
+#    修复路径: 等 wiremock bump 或换 mock server 实现 (e.g. httpmock)
+#    风险: 极低 (wiremock 仅 dev-dependency, 测试环境)
+#    8 项承诺守门: 0 触碰 dev-dep wiremock
+#
+# 5. RUSTSEC-2025-0141 (bincode 1.x — unmaintained)
+#    现状: 升级到 bincode 2.0.1 (commit 6a17b3f) 后仍报, 因为 advisory 涵盖
+#          所有 bincode 版本 ("bincode is unmaintained").
+#    修复路径: 替换 bincode 为 serde-based postcard / rmp-serde. 估计 2-3 天
+#    风险: 中 (L1 UDS frame format 变更, 跨进程通信 compat break)
+#    当前决定: keep bincode 2.0.1, 等下游所有 caller 升级后再切
+#    8 项承诺守门: 不换 (0 触碰 L1 frame 协议), 仅固化审计策略
+#
+# 6. RUSTSEC-2026-0097 (rand 0.7.3 — unsound)
+#    现状: 仅 http-types 2.12.0 transitive 拽入, http-types 又是 wiremock 的 transitive
+#    修复路径: 跟 (4) http-types 一起解决 (升级 / 替换 wiremock)
+#    风险: 中 (rand::rng() custom logger 是攻击面, 我们代码无 custom logger)
+#    8 项承诺守门: 0 用 rand 直接 API, 仅借 transitively
+#
+# 不是简单 skip: 上面 6 件都跟特定 transitive 升级路径耦合. 等上游 bump 后
+# .openclaw 工作区会自动 track 新版本 (cargo update 周期)。
+# ============================================================================
+
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0384",  # instant 0.1.13 unmaintained — see justification #1
+    "RUSTSEC-2024-0436",  # paste 1.0.15 unmaintained — see justification #2
+    "RUSTSEC-2026-0173",  # proc-macro-error2 2.0.1 unmaintained — see justification #3
+    "RUSTSEC-2026-0174",  # http-types 2.12.0 notice — see justification #4
+    "RUSTSEC-2025-0141",  # bincode 1.x unmaintained (current 2.0.1) — see justification #5
+    "RUSTSEC-2026-0097",  # rand 0.7.3 unsound — see justification #6
+]

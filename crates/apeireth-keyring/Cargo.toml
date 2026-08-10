@@ -1,0 +1,66 @@
+[package]
+name = "apeireth-keyring"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 1: P0 凭证安全 keyring (1:1 翻译 v0.9.21 商业版 out/main/chunks/keychain-token-storage-Cqa8o4z8.js ~12KB). OS keyring + 加密文件 fallback (AES-256-GCM + PBKDF2 600k), 跨 4 平台 (Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD), 5 Provider API key 存这里."
+keywords = ["security", "keyring", "credential", "secret-storage", "encryption"]
+categories = ["authentication", "cryptography", "os"]
+
+# R20 阶段 1: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 跟 `apeireth-team-lead` skeleton 阶段同模式 (整合后保留显式 version + 自定义 lints).
+[dependencies]
+# async runtime
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# OS keyring (1:1 翻译 v0.9.21 keytar 7.0.0 — Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD)
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+# memory 擦除 (zeroize 1.8 per 设计表 §2.4.1)
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+# Fallback 加密文件 (AES-256-GCM)
+aes-gcm = "0.10"
+# Fallback 密钥派生 (PBKDF2-HMAC-SHA256, 600_000 iterations per OWASP 2023)
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+# 随机数 (nonce / salt)
+rand = "0.8"
+# 十六进制编码 (debug / log only, 不存密文)
+hex = "0.4"
+# 时间戳 (TokenEntry metadata)
+chrono = { version = "0.4", features = ["serde"] }
+# 跨平台 OS 检测
+cfg-if = "1.0"
+# HMAC-SHA256 (defense #4 文件完整性, 1:1 翻译 v0.9.21 商业版 file checksum)
+hmac = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "keyring_demo"
+path = "examples/keyring_demo.rs"
+
+# R19 第 0 阶段: skeleton 阶段不强求 workspace lint 同步, 避免 noise (跟 team-lead 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"

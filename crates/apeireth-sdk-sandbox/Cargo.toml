@@ -1,0 +1,72 @@
+[package]
+name = "apeireth-sdk-sandbox"
+# 8 项承诺 (per task spec + 蓝图 §2.5 风格):
+#   - version.workspace = true ✅
+#   - edition.workspace = true ✅
+#   - rust-version.workspace = true ✅
+#   - license.workspace = true ✅
+#   - authors.workspace = true ✅
+#   - description 自定义 (R20 阶段 4 SDK stub 描述)
+#   - repository 显式 (其他 crate 也显式, 跟 workspace.homepage 不同, 不冲突)
+#   - keywords/categories 自定义 (Sandbox SDK 域)
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 效果: Sandbox SDK Stub (1:1 翻译 v0.9.21 商业版 @anthropic-ai/sandbox 进程隔离 / 资源限制 / 安全策略 API 表面; STUB MODE, R21+ 真接 docker/firecracker/gvisor; 6 API + 3 RuntimeKind + 3 IsolationLevel + 5 ResourceLimit + 6 K-1 强校验 + m3 防御)"
+keywords = ["ai", "sandbox", "isolation", "stub", "agent"]
+categories = ["api-bindings", "asynchronous", "os"]
+
+[dependencies]
+# async runtime (workspace 锁版本, 8 项承诺)
+tokio = { workspace = true }
+# serialization (SandboxConfig / RuntimeKind / IsolationLevel 序列化反序列化)
+serde = { workspace = true }
+serde_json = { workspace = true }
+# error handling (SandboxError 用 thiserror 派生)
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing (stub 工具返 NotImplemented 时 log)
+tracing = "0.1"
+# async traits (SandboxRuntime 异步 trait, 后续真接 docker/firecracker 异步客户端)
+async-trait = { workspace = true }
+# 时间戳 (SandboxHandle.started_at 派生)
+chrono = { workspace = true }
+# UUID (sandbox_id 派生, 1:1 翻译 v0.9.21 商业版 sandbox id 字段)
+uuid = { workspace = true }
+# Stream utilities (stream_logs async stream)
+futures = { workspace = true }
+# P0 协议归一化 (per apeireth-protocol 1:1 翻译, 真实集成 R20 阶段 4 续)
+apeireth-protocol = { path = "../apeireth-protocol" }
+# P0 凭证安全 (per apeireth-keyring §2.4.1, 运行时 image pull credentials)
+apeireth-keyring = { path = "../apeireth-keyring" }
+# ⏳ R21 真接 sandbox 运行时 (per @anthropic-ai/sandbox 商业版) 时再加:
+#    bollard = { version = "0.15" }    # Docker daemon client
+#    firecracker-rs = "0.5"             # firecracker microVM SDK
+#    runsc = "..."                       # gVisor runsc client
+#    整合 #X sub-agent 1 commit 落地时连同 deps 一起加
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+criterion = { workspace = true }
+
+[[example]]
+name = "sandbox_demo"
+path = "examples/sandbox_demo.rs"
+
+# 8 项承诺 (per task spec):
+#   1. version.workspace = true ✅
+#   2. edition.workspace = true ✅
+#   3. rust-version.workspace = true ✅
+#   4. license.workspace = true ✅
+#   5. authors.workspace = true ✅
+#   6. deps 用 { workspace = true } (除 tracing 显式版本因 workspace 没声明) ✅
+#   7. 不修改 workspace Cargo.toml (由整合 #X sub-agent 加 member) ⏳
+#   8. 不引 unsafe (workspace #![deny(unsafe_code)] 继承) ✅
+# 当前 lints 留空, 不强求跟外层 workspace 同步, 避免 noise (跟 voice/lark 风格一致)
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"

@@ -1,0 +1,698 @@
+warning[license-not-encountered]: license was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:45:6
+   鈹?45 鈹?    "MPL-2.0",
+   鈹?     鈹佲攣鈹佲攣鈹佲攣鈹?unmatched license allowance
+
+error[duplicate]: found 2 duplicate entries for crate 'tokio-tungstenite'
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:459:1
+    鈹? 
+459 鈹?鈺?tokio-tungstenite 0.24.0 registry+https://github.com/rust-lang/crates.io-index
+460 鈹?鈹?tokio-tungstenite 0.25.0 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈺扳攢鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹?lock entries
+    鈹? 
+    鈹?tokio-tungstenite v0.24.0
+      鈹斺攢鈹€ axum v0.7.9
+          鈹溾攢鈹€ apeireth-api v1.0.0
+          鈹?  鈹溾攢鈹€ apeireth-asi v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-cognition v1.0.0
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ (dev) apeireth-verify v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-council v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-evolution v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-sovereignty v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-upgrade v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-rollback v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-upgrade v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-evolution v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-extension v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-bus v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-team-lead v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-plugin v0.1.0
+          鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-sovereignty v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-supervisor v1.0.0
+          鈹?  鈹?  鈹?  鈹?      鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?      鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹?      鈹斺攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-pybridge v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-value v1.0.0
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-verify v1.0.0 (*)
+          鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0 (*)
+          鈹?  鈹溾攢鈹€ apeireth-council v1.0.0 (*)
+          鈹?  鈹溾攢鈹€ apeireth-memory v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-agent v1.0.0
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-rollback v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-workflow v1.0.0
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-asi v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-pybridge v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-tool-runtime v1.0.0
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-agent v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-plugin v0.1.0 (*)
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tool-approval v1.0.0
+          鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-agent v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-workflow v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+          鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹溾攢鈹€ apeireth-cli v1.0.0 (*)
+          鈹溾攢鈹€ apeireth-web v1.0.0 (*)
+          鈹溾攢鈹€ leptos_axum v0.7.8
+          鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+          鈹溾攢鈹€ server_fn v0.7.8
+          鈹?  鈹溾攢鈹€ leptos v0.7.8
+          鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+          鈹?  鈹?  鈹溾攢鈹€ leptos_integration_utils v0.7.8
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_axum v0.7.8 (*)
+          鈹?  鈹?  鈹溾攢鈹€ leptos_meta v0.7.8
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0 (*)
+          鈹?  鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+          鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+          鈹?  鈹?  鈹斺攢鈹€ leptos_router v0.7.8
+          鈹?  鈹?      鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+          鈹?  鈹?      鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+          鈹?  鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+          鈹?  鈹斺攢鈹€ leptos_server v0.7.8
+          鈹?      鈹斺攢鈹€ leptos v0.7.8 (*)
+          鈹斺攢鈹€ tonic v0.12.3
+              鈹斺攢鈹€ apeireth-bus v1.0.0 (*)
+    鈹?tokio-tungstenite v0.25.0
+      鈹斺攢鈹€ apeireth-bus v1.0.0
+          鈹斺攢鈹€ apeireth-team-lead v1.0.0
+              鈹斺攢鈹€ apeireth-rollback v1.0.0
+
+warning[unnecessary-skip]: skip 'windows-core' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:64:40
+   鈹?64 鈹?    "windows-sys", "windows-targets", "windows-core", "windows-link",
+   鈹?                                       鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'windows-link' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:64:56
+   鈹?64 鈹?    "windows-sys", "windows-targets", "windows-core", "windows-link",
+   鈹?                                                       鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'windows-result' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:65:6
+   鈹?65 鈹?    "windows-result", "windows-strings",
+   鈹?     鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'windows-strings' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:65:24
+   鈹?65 鈹?    "windows-result", "windows-strings",
+   鈹?                       鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'windows_aarch64_gnullvm' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:66:6
+   鈹?66 鈹?    "windows_aarch64_gnullvm", "windows_aarch64_msvc",
+   鈹?     鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'windows_aarch64_msvc' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:66:33
+   鈹?66 鈹?    "windows_aarch64_gnullvm", "windows_aarch64_msvc",
+   鈹?                                鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'windows_i686_gnu' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:67:6
+   鈹?67 鈹?    "windows_i686_gnu", "windows_i686_msvc",
+   鈹?     鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'windows_i686_msvc' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:67:26
+   鈹?67 鈹?    "windows_i686_gnu", "windows_i686_msvc",
+   鈹?                         鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'windows_x86_64_gnullvm' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:68:28
+   鈹?68 鈹?    "windows_x86_64_gnu", "windows_x86_64_gnullvm", "windows_x86_64_msvc",
+   鈹?                           鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unmatched skip configuration
+
+warning[unnecessary-skip]: skip 'base64' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:72:15
+   鈹?72 鈹?    { name = "base64", reason = "0.21 vs 0.22 鈥?httpmock 鍐冲畾" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                  
+   鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'http-body' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:75:15
+   鈹?75 鈹?    { name = "http-body", reason = "璺熼殢 http 鐗堟湰" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                      
+   鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'hyper' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:76:15
+   鈹?76 鈹?    { name = "hyper", reason = "0.x vs 1.x API 涓嶅吋瀹? reqwest/axum/tokio 鍐冲畾" },
+   鈹?              鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                 
+   鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'toml_edit' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:82:15
+   鈹?82 鈹?    { name = "toml_edit", reason = "4 涓増鏈?(0.19/0.20/0.22/0.25) 鈥?寰?R19 T10 鏀舵暃" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                     
+   鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'reqwest' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:89:15
+   鈹?89 鈹?    { name = "reqwest", reason = "reqwest 0.12 vs 0.13 鍙岀増鏈?鈥?寰?R19 T10 鍚?crate 鏀?workspace = true 鏀舵暃" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                   
+   鈹?              unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'proc-macro-crate' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:93:15
+   鈹?93 鈹?    { name = "proc-macro-crate", reason = "3 涓増鏈?(1.x/2.x/3.x) 鈥?寰?R19 T10 鏀舵暃" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                            
+   鈹?              unmatched skip configuration
+
+warning[unnecessary-skip]: skip 'rand' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:94:15
+   鈹?94 鈹?    { name = "rand", reason = "0.8 vs 0.10 鈥?璺熼殢 getrandom 鐗堟湰" },
+   鈹?              鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                
+   鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'rand_core' applied to a crate with only one version
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:95:15
+   鈹?95 鈹?    { name = "rand_core", reason = "璺熼殢 rand 鐗堟湰" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                      
+   鈹?              unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'jni-sys' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:96:15
+   鈹?96 鈹?    { name = "jni-sys", reason = "android-ndk-rs 鍐冲畾" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                   
+   鈹?              unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'schemars' was not encountered
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:99:15
+   鈹?99 鈹?    { name = "schemars", reason = "0.x/1.x 鈥?serde 鍐冲畾" },
+   鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+   鈹?              鈹?                    
+   鈹?              unmatched skip configuration
+
+warning[unnecessary-skip]: skip 'darling' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:101:15
+    鈹?101 鈹?    { name = "darling", reason = "璺熼殢 syn 鐗堟湰" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                    
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'darling_core' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:102:15
+    鈹?102 鈹?    { name = "darling_core", reason = "璺熼殢 darling" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                         
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'darling_macro' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:103:15
+    鈹?103 鈹?    { name = "darling_macro", reason = "璺熼殢 darling" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                          
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'event-listener' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:104:15
+    鈹?104 鈹?    { name = "event-listener", reason = "2.x vs 5.x 鈥?tokio 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                          
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'cpufeatures' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:105:15
+    鈹?105 鈹?    { name = "cpufeatures", reason = "wasmtime 涔?skip (requires update to sha2)" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                       
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'petgraph' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:107:15
+    鈹?107 鈹?    { name = "petgraph", reason = "0.6 vs 0.7 鈥?Cargo 鑷繁" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                    
+    鈹?              unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'phf_shared' was not encountered
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:108:15
+    鈹?108 鈹?    { name = "phf_shared", reason = "serde 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                      
+    鈹?              unmatched skip configuration
+
+warning[unnecessary-skip]: skip 'png' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:109:15
+    鈹?109 鈹?    { name = "png", reason = "0.17 vs 0.18" },
+    鈹?              鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?               
+    鈹?              unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'r-efi' was not encountered
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:110:15
+    鈹?110 鈹?    { name = "r-efi", reason = "uefi 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                 
+    鈹?              unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'redox_users' was not encountered
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:111:15
+    鈹?111 鈹?    { name = "redox_users", reason = "redox-os 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                       
+    鈹?              unmatched skip configuration
+
+warning[unmatched-skip]: skipped crate 'string_cache' was not encountered
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:113:15
+    鈹?113 鈹?    { name = "string_cache", reason = "html5ever 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                        
+    鈹?              unmatched skip configuration
+
+warning[unnecessary-skip]: skip 'wasm-streams' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:115:15
+    鈹?115 鈹?    { name = "wasm-streams", reason = "wasm-bindgen 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                        
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'bit-set' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:116:15
+    鈹?116 鈹?    { name = "bit-set", reason = "bit-vec 0.5 vs 0.8" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                   
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'bit-vec' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:117:15
+    鈹?117 鈹?    { name = "bit-vec", reason = "bit-set 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                   
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'fixedbitset' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:119:15
+    鈹?119 鈹?    { name = "fixedbitset", reason = "petgraph 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                       
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'foldhash' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:120:15
+    鈹?120 鈹?    { name = "foldhash", reason = "hashbrown 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                    
+    鈹?              unnecessary skip configuration
+
+warning[unnecessary-skip]: skip 'heck' applied to a crate with only one version
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:121:15
+    鈹?121 鈹?    { name = "heck", reason = "proc macros 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣             鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                
+    鈹?              unnecessary skip configuration
+
+warning[unmatched-skip]: skipped crate 'async-channel' was not encountered
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust\deny.toml:123:15
+    鈹?123 鈹?    { name = "async-channel", reason = "tokio 鍐冲畾" },
+    鈹?              鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?            鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€ reason
+    鈹?              鈹?                         
+    鈹?              unmatched skip configuration
+
+error[unmaintained]: Bincode is unmaintained
+   鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:89:1
+   鈹?89 鈹?bincode 1.3.3 registry+https://github.com/rust-lang/crates.io-index
+   鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unmaintained advisory detected
+   鈹?   鈹?ID: RUSTSEC-2025-0141
+   鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2025-0141
+   鈹?Due to a doxxing and harassment incident, the bincode team has taken the decision to cease development permanently.
+     
+     The team considers version 1.3.3 a complete version of bincode that is not in need of any updates.
+     
+     ## Alternatives to consider
+     
+     * [wincode](https://crates.io/crates/wincode)
+     * [postcard](https://crates.io/crates/postcard)
+     * [bitcode](https://crates.io/crates/bitcode)
+     * [rkyv](https://crates.io/crates/rkyv)
+   鈹?Announcement: https://git.sr.ht/~stygianentity/bincode/tree/v3.0/item/README.md
+   鈹?Solution: No safe upgrade is available!
+   鈹?bincode v1.3.3
+     鈹斺攢鈹€ apeireth-bus v1.0.0
+         鈹斺攢鈹€ apeireth-team-lead v1.0.0
+             鈹斺攢鈹€ apeireth-rollback v1.0.0
+
+error[unsound]: Potential undefined behavior when dereferencing Buf struct
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:195:1
+    鈹?195 鈹?git2 0.19.0 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unsound advisory detected
+    鈹?    鈹?ID: RUSTSEC-2026-0008
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0008
+    鈹?if we dereference the Buf struct right after calling new() or default() on Buf struct, it passes Null Pointer to the unsafe function slice::from_raw_parts. Based on the safety section documentation of function,
+      data must be non-null and aligned even for zero-length slices or slices of ZSTs. Thus, passing Null Pointer will lead to undefined behavior.
+    鈹?Announcement: https://github.com/rust-lang/git2-rs/pull/1213
+    鈹?Solution: Upgrade to >=0.20.4 (try `cargo update -p git2`)
+    鈹?git2 v0.19.0
+      鈹斺攢鈹€ apeireth-rollback v1.0.0
+
+error[unsound]: Potential undefined behavior when calling Remote::list()
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:195:1
+    鈹?195 鈹?git2 0.19.0 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unsound advisory detected
+    鈹?    鈹?ID: RUSTSEC-2026-0183
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0183
+    鈹?When calling `Remote::list()` for a remote of a git repository, when that remote does not advertise any references, git2 passes a null pointer to the unsafe function `slice::from_raw_parts()`. Based on the safety section documentation of function, data must be non-null even for slices of length zero. Thus, the use of a null pointer leads to undefined behavior.
+    鈹?Announcement: https://github.com/rust-lang/git2-rs/pull/1250
+    鈹?Solution: Upgrade to >=0.21.0 (try `cargo update -p git2`)
+    鈹?git2 v0.19.0
+      鈹斺攢鈹€ apeireth-rollback v1.0.0
+
+error[unsound]: Potential undefined behavior with Signature from a buffer-created BlameHunk
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:195:1
+    鈹?195 鈹?git2 0.19.0 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unsound advisory detected
+    鈹?    鈹?ID: RUSTSEC-2026-0184
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0184
+    鈹?When a `Blame` is created via `Blame::blame_buffer()`, and a `BlameHunk` is retrieved, the pointers to the original author, original committer, final author, and final committer may be null if unavailable. The corresponding `BlameHunk` methods then create `Signature`s based on null pointers; attempting to access the data of the `Signature`s leads to dereferencing null pointers.
+    鈹?Announcement: https://github.com/rust-lang/git2-rs/pull/1254
+    鈹?Solution: Upgrade to >=0.21.0 (try `cargo update -p git2`)
+    鈹?git2 v0.19.0
+      鈹斺攢鈹€ apeireth-rollback v1.0.0
+
+error[unsound]: `IterMut` violates Stacked Borrows by invalidating internal pointer
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:284:1
+    鈹?284 鈹?lru 0.12.5 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unsound advisory detected
+    鈹?    鈹?ID: RUSTSEC-2026-0002
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0002
+    鈹?Affected versions of this crate contain a soundness issue in the `IterMut`
+      iterator implementation. The `IterMut::next` and `IterMut::next_back`
+      methods temporarily create an exclusive reference to the key when
+      dereferencing the internal node pointer.
+      
+      This invalidates the shared pointer held by the internal `HashMap`,
+      violating Stacked Borrows rules.
+    鈹?Announcement: https://github.com/jeromefroe/lru-rs/pull/224
+    鈹?Solution: Upgrade to >=0.16.3 (try `cargo update -p lru`)
+    鈹?lru v0.12.5
+      鈹溾攢鈹€ apeireth-agent v1.0.0
+      鈹?  鈹溾攢鈹€ apeireth-rollback v1.0.0
+      鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0
+      鈹?  鈹?  鈹斺攢鈹€ apeireth-rollback v1.0.0 (*)
+      鈹?  鈹斺攢鈹€ apeireth-workflow v1.0.0
+      鈹溾攢鈹€ apeireth-api v1.0.0
+      鈹?  鈹溾攢鈹€ apeireth-asi v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-cognition v1.0.0
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ (dev) apeireth-verify v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-council v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-evolution v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-sovereignty v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-upgrade v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-upgrade v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-evolution v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-extension v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-bus v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-team-lead v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-plugin v0.1.0
+      鈹?  鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-sovereignty v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-supervisor v1.0.0
+      鈹?  鈹?  鈹?  鈹?      鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?      鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹?      鈹斺攢鈹€ (dev) apeireth-verify v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-pybridge v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-value v1.0.0
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-verify v1.0.0 (*)
+      鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0 (*)
+      鈹?  鈹溾攢鈹€ apeireth-council v1.0.0 (*)
+      鈹?  鈹溾攢鈹€ apeireth-memory v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-agent v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-asi v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-bench v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-cli v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-pybridge v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-tool-runtime v1.0.0
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-agent v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-plugin v0.1.0 (*)
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-team-lead v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-tool-approval v1.0.0
+      鈹?  鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-agent v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-workflow v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹溾攢鈹€ apeireth-tui v1.0.0 (*)
+      鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹溾攢鈹€ apeireth-image-prompt v0.1.0
+      鈹斺攢鈹€ ratatui v0.29.0
+          鈹斺攢鈹€ apeireth-tui v1.0.0 (*)
+
+error[unmaintained]: paste - no longer maintained
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:323:1
+    鈹?323 鈹?paste 1.0.15 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 unmaintained advisory detected
+    鈹?    鈹?ID: RUSTSEC-2024-0436
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2024-0436
+    鈹?The creator of the crate `paste` has stated in the [`README.md`](https://github.com/dtolnay/paste/blob/master/README.md) 
+      that this project is not longer maintained as well as archived the repository
+      
+      ## Possible Alternative(s)
+      
+      - [`pastey`]: a fork of paste and is aimed to be a drop-in replacement with additional features for paste crate
+      - [`with_builtin_macros`]: crate providing a [superset of `paste`'s functionality including general `macro_rules!` eager expansions](https://docs.rs/with_builtin_macros/0.1.0/with_builtin_macros/macro.with_eager_expansions.html)  and `concat!`/`concat_idents!` macros
+      
+      [`pastey`]: https://crates.io/crates/pastey
+      [`with_builtin_macros`]: https://crates.io/crates/with_builtin_macros
+    鈹?Announcement: https://github.com/dtolnay/paste
+    鈹?Solution: No safe upgrade is available!
+    鈹?paste v1.0.15
+      鈹溾攢鈹€ either_of v0.1.9
+      鈹?  鈹溾攢鈹€ leptos v0.7.8
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ leptos_integration_utils v0.7.8
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?  鈹溾攢鈹€ leptos_meta v0.7.8
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+      鈹?  鈹?  鈹斺攢鈹€ leptos_router v0.7.8
+      鈹?  鈹?      鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?      鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+      鈹?  鈹溾攢鈹€ leptos_router v0.7.8 (*)
+      鈹?  鈹斺攢鈹€ tachys v0.1.9
+      鈹?      鈹溾攢鈹€ leptos v0.7.8 (*)
+      鈹?      鈹溾攢鈹€ leptos_dom v0.7.8
+      鈹?      鈹?  鈹斺攢鈹€ leptos v0.7.8 (*)
+      鈹?      鈹溾攢鈹€ leptos_router v0.7.8 (*)
+      鈹?      鈹斺攢鈹€ leptos_server v0.7.8
+      鈹?          鈹斺攢鈹€ leptos v0.7.8 (*)
+      鈹溾攢鈹€ leptos v0.7.8 (*)
+      鈹溾攢鈹€ ratatui v0.29.0
+      鈹?  鈹斺攢鈹€ apeireth-tui v1.0.0
+      鈹溾攢鈹€ reactive_stores v0.1.8
+      鈹?  鈹斺攢鈹€ tachys v0.1.9 (*)
+      鈹斺攢鈹€ tachys v0.1.9 (*)
+
+error[unmaintained]: proc-macro-error2 is unmaintained
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:342:1
+    鈹?342 鈹?proc-macro-error2 2.0.1 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹?unmaintained advisory detected
+    鈹?    鈹?ID: RUSTSEC-2026-0173
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0173
+    鈹?The author of `proc-macro-error2` has [confirmed](https://github.com/GnomedDev/proc-macro-error-2/issues/17#issuecomment-4643215473) that the crate is no longer maintained and recommends that users migrate away from it.
+      
+      `proc-macro-error2` was originally created as a maintained fork of [`proc-macro-error`](https://crates.io/crates/proc-macro-error) (see [RUSTSEC-2024-0370](https://rustsec.org/advisories/RUSTSEC-2024-0370)). Both the original crate and this fork are now unmaintained.
+      
+      ## Possible Alternative(s)
+      
+      - [manyhow](https://crates.io/crates/manyhow)
+      - [proc-macro2-diagnostics](https://github.com/SergioBenitez/proc-macro2-diagnostics)
+    鈹?Announcement: https://github.com/GnomedDev/proc-macro-error-2/issues/17
+    鈹?Solution: No safe upgrade is available!
+    鈹?proc-macro-error2 v2.0.1
+      鈹溾攢鈹€ leptos_macro v0.7.9
+      鈹?  鈹溾攢鈹€ leptos v0.7.8
+      鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0
+      鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹溾攢鈹€ leptos_integration_utils v0.7.8
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?  鈹溾攢鈹€ leptos_meta v0.7.8
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ apeireth-web v1.0.0 (*)
+      鈹?  鈹?  鈹?  鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?  鈹?  鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+      鈹?  鈹?  鈹斺攢鈹€ leptos_router v0.7.8
+      鈹?  鈹?      鈹溾攢鈹€ leptos_axum v0.7.8 (*)
+      鈹?  鈹?      鈹斺攢鈹€ leptos_integration_utils v0.7.8 (*)
+      鈹?  鈹斺攢鈹€ leptos_axum v0.7.8 (*)
+      鈹溾攢鈹€ leptos_router_macro v0.7.8
+      鈹?  鈹斺攢鈹€ leptos_router v0.7.8 (*)
+      鈹溾攢鈹€ reactive_stores_macro v0.1.8
+      鈹?  鈹斺攢鈹€ reactive_stores v0.1.8
+      鈹?      鈹斺攢鈹€ tachys v0.1.9
+      鈹?          鈹溾攢鈹€ leptos v0.7.8 (*)
+      鈹?          鈹溾攢鈹€ leptos_dom v0.7.8
+      鈹?          鈹?  鈹斺攢鈹€ leptos v0.7.8 (*)
+      鈹?          鈹溾攢鈹€ leptos_router v0.7.8 (*)
+      鈹?          鈹斺攢鈹€ leptos_server v0.7.8
+      鈹?              鈹斺攢鈹€ leptos v0.7.8 (*)
+      鈹斺攢鈹€ syn_derive v0.2.0
+          鈹斺攢鈹€ rstml v0.12.1
+              鈹溾攢鈹€ leptos_hot_reload v0.7.8
+              鈹?  鈹溾攢鈹€ leptos v0.7.8 (*)
+              鈹?  鈹斺攢鈹€ leptos_macro v0.7.9 (*)
+              鈹斺攢鈹€ leptos_macro v0.7.9 (*)
+
+error[vulnerability]: Quadratic run time when checking a start tag for duplicate attribute names
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:361:1
+    鈹?361 鈹?quick-xml 0.36.2 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 security vulnerability detected
+    鈹?    鈹?ID: RUSTSEC-2026-0194
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0194
+    鈹?`BytesStart::attributes()` returns an `Attributes` iterator which, by default
+      (`with_checks(true)`), rejects a start tag that repeats an attribute name. For
+      each attribute yielded, the iterator compared the new name against every name
+      seen so far in the same tag using a linear scan, so a start tag with `N`
+      distinct attribute names cost `O(N虏)` byte comparisons. There was no bound on
+      `N` other than the size of the buffered start tag.
+      
+      ## Impact
+      
+      Any code that parses untrusted XML and iterates a start tag's attributes with
+      the default duplicate check enabled can be made to spend CPU time quadratic in
+      the number of attributes on a single tag. Because the check is pure computation
+      with no `.await`/I/O, an I/O-based timeout on the consumer (for example a read
+      or request timeout) cannot interrupt it while it runs.
+      
+      Measured cost of a single start tag, release build:
+      
+      | Attributes on one tag | Time |
+      |---|---|
+      | 80,000  | ~6 s   |
+      | 800,000 | ~10 min |
+      
+      The cost grows with the square of the attribute count, so a start tag of a few
+      tens of megabytes can stall a parsing thread for hours. No memory is exhausted
+      and the parser does not crash; the effect is CPU exhaustion on the thread doing
+      the parsing: a single crafted start tag can pin a CPU core for minutes to hours,
+      denying service to that worker. A deployment that places a wall-clock bound on
+      parsing, or confines it to a non-critical thread, may consider the availability
+      impact lower.
+      
+      ## Affected code paths
+      
+      * `BytesStart::attributes()` / `Attributes` iterated with checks enabled (the
+        default), and `BytesStart::try_get_attribute`.
+      * `NsReader`, which resolves namespaces by iterating a tag's attributes and so
+        reaches the same check internally.
+      
+      Consumers that iterate attributes with `.attributes().with_checks(false)` and do
+      not use `NsReader` are not affected.
+      
+      This was reported as reachable by a remote, unauthenticated attacker in a
+      real-world RPKI relying party (NLnet Labs Routinator) via a crafted RRDP
+      `snapshot.xml`.
+      
+      ## Remediation
+      
+      Upgrade to `quick-xml >= 0.41.0`, where the duplicate check keeps the linear
+      scan for start tags with a small number of attributes and switches to an `O(1)`
+      hash pre-filter above a threshold, making the whole tag `O(N)`. The reported
+      `AttrError::Duplicated` positions are unchanged.
+      
+      If upgrading is not possible and duplicate-name detection is not required,
+      disable it with `.attributes().with_checks(false)` (this does not help
+      `NsReader` consumers, which have no equivalent opt-out before 0.41.0).
+    鈹?Announcement: https://github.com/tafia/quick-xml/issues/969
+    鈹?Solution: Upgrade to >=0.41.0 (try `cargo update -p quick-xml`)
+    鈹?quick-xml v0.36.2
+      鈹斺攢鈹€ apeireth-mcp-winrm v1.0.0
+
+error[vulnerability]: Unbounded namespace-declaration allocation in `NsReader` enables memory-exhaustion denial of service
+    鈹屸攢 .openclaw\workspace\promethean\Apeireth-rust/Cargo.lock:361:1
+    鈹?361 鈹?quick-xml 0.36.2 registry+https://github.com/rust-lang/crates.io-index
+    鈹?鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣鈹佲攣 security vulnerability detected
+    鈹?    鈹?ID: RUSTSEC-2026-0195
+    鈹?Advisory: https://rustsec.org/advisories/RUSTSEC-2026-0195
+    鈹?`NsReader` resolves namespaces by calling `NamespaceResolver::push` for every
+      `Start`/`Empty` event *before* the event is returned to the caller. `push`
+      iterated all `xmlns` / `xmlns:*` attributes on the start tag and, for each one,
+      appended the prefix bytes to an internal buffer and pushed a `NamespaceBinding`
+      (32 bytes on 64-bit) to an internal `Vec`, with no upper bound on the number of
+      declarations.
+      
+      ## Impact
+      
+      A start tag with `N` namespace declarations drove roughly `3脳` the tag's byte
+      size in `NamespaceResolver` heap, allocated *inside* `quick-xml` before the
+      `NsReader` consumer ever received the event and could inspect or reject it. A
+      consumer that bounds its *input* size therefore still cannot bound this
+      allocation: an `M`-byte start tag yields on the order of `3 脳 M` bytes of
+      resolver heap the caller never sees.
+      
+      On untrusted XML this lets a remote, unauthenticated attacker force large heap
+      allocations with a single start tag. With several `NsReader`s running
+      concurrently on independent inputs (a common server pattern), the allocations
+      stack and can exhaust process memory, causing the operating system to kill the
+      process (OOM). This was confirmed against a real-world RPKI relying party (NLnet
+      Labs Routinator), where concurrent RRDP validation workers parsing a crafted
+      `snapshot.xml` exceeded the memory limit and the process was OOM-killed.
+      
+      ## Affected code paths
+      
+      Consumers using `NsReader` (which always calls `NamespaceResolver::push` before
+      yielding `Start`/`Empty`), or calling `NamespaceResolver::push` directly. A plain
+      `Reader` that does not perform namespace resolution is not affected.
+      
+      ## Remediation
+      
+      Upgrade to `quick-xml >= 0.41.0`. `NamespaceResolver::push` now rejects a start
+      tag that declares more than `DEFAULT_MAX_DECLARATIONS_PER_ELEMENT` (256)
+      namespace bindings, returning the new `NamespaceError::TooManyDeclarations`
+      instead of allocating without limit. The limit is configurable via
+      `NamespaceResolver::set_max_declarations_per_element` (use `usize::MAX` to
+      restore the previous unbounded behavior), and `NsReader::resolver_mut()` is
+      provided to reach it.
+      
+      There is no clean workaround for `NsReader` consumers before 0.41.0, as the
+      allocation happens inside the reader with no configuration knob to cap it.
+    鈹?Announcement: https://github.com/tafia/quick-xml/issues/970
+    鈹?Solution: Upgrade to >=0.41.0 (try `cargo update -p quick-xml`)
+    鈹?quick-xml v0.36.2
+      鈹斺攢鈹€ apeireth-mcp-winrm v1.0.0
+
+advisories FAILED, bans FAILED, licenses ok, sources ok

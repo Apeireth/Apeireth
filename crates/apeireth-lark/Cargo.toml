@@ -1,0 +1,63 @@
+[package]
+name = "apeireth-lark"
+# 显式版本 (跟 team-lead / plugin skeleton 同模式; R20 阶段 3 续时整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 flesh out: Lark/Feishu SDK (1:1 翻译 v0.9.21 商业版 out/main 中 `@larksuiteoapi/node-sdk@^1.59.0` 集成面; STUB 模式 (LarkClientImpl 8 工具返 NotImplemented) + 真接实现 (LarkRealImpl 5 端点 HTTP, reqwest 0.12 + rustls-tls, wiremock 0.6 测); STUB_MODE 编译期 hardcode=true 守门, 切 false 需 6 哲学锚 + 主人审)"
+keywords = ["ai", "lark", "feishu", "sdk", "openapi", "agent"]
+categories = ["api-bindings", "asynchronous", "web-programming"]
+
+[dependencies]
+# async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# 时间戳 (Message/Event/Record 派生)
+chrono = { version = "0.4", features = ["serde"] }
+# HTTP 客户端 (R20 阶段 6 flesh out: 真接飞书 Open API 5 端点)
+# 跟 workspace [workspace.dependencies] reqwest 同 0.12 + rustls-tls 模板
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# URL 解析 (消息 receive_id_type 区分 + endpoint path 拼接)
+url = "2.5"
+
+# R20 阶段 6 flesh out 决定 (Mavis 整合 #3 拍板前保守不引):
+# 1. `apeireth-keyring` (path dep) — app_id / app_secret 改走 OS keyring
+#    现阶段 stub 阶段明文, R21+ 续时改 SecretString
+# 2. `lark-rs` 社区 crate — 0 引 (per STUB_MODE 守门 + 0 重复造轮子, 自封 reqwest 1:1 翻译)
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+# HTTP mock server (wiremock 0.6, async, std 兼容, 同 apeireth-http-client / apeireth-sdk 模板)
+wiremock = "0.6"
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "lark_stub_demo"
+path = "examples/lark_stub_demo.rs"
+
+[[example]]
+name = "lark_real_demo"
+path = "examples/lark_real_demo.rs"
+
+# R20 阶段 6 flesh out 升级到 workspace lint 继承 (跟 apeireth-http-client / apeireth-sdk 模板同款).
+# 严守 8 项不修改承诺: STUB_MODE 仍 = true, 8 LarkClient trait 工具仍返 NotImplemented,
+# 新增 LarkRealImpl 是独立路径 (不破现有 5 fixture + 5 K-1 强校验测试).
+[lints]
+workspace = true

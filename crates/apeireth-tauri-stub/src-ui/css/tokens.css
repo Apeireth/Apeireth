@@ -1,0 +1,85 @@
+/* ===========================================================
+ * Apeireth R19 — CSS Tokens (基底 + 古朴/时代 accent)
+ *
+ * 设计哲学: 新碑刻 (Neo-Lapidary)
+ *   - 旧骨: 黑暗本体 / 单光纪律 / 4s 呼吸 / 碑刻排印 / 明暗切换
+ *   - 新光: 极端字号 / 数据即艺术 / 电影级转场 / 工程 HUD
+ *
+ * 一切颜色 / 装饰 / 密度经 CSS custom properties;
+ * 切换 mode × theme = 换属性 + 1.2s 明暗呼吸遮罩
+ * =========================================================== */
+
+:root {
+    /* ---------- 基底 (两主题共用) ---------- */
+    --bg-abyss: #08080e;
+    --bg-stone: #0c0c14;
+    --bg-deep: #12101e;
+    --text-primary: #d8d6d0;
+    --text-secondary: #8a8880;
+    --text-faint: #55534e;
+    --hairline: #2a2836;
+
+    /* ---------- 功能色 (共用, 去饱和) ---------- */
+    --ok: #7a9d6f;
+    --warn: #b98a3e;
+    --err: #a4554e;
+
+    /* ---------- 古朴 ARCHAIC (默认) ---------- */
+    --accent: #c8860a;
+    --accent-dim: #a05a10;
+    --glow: rgba(200, 134, 10, 0.08);
+
+    /* ---------- 字体 (CSS 实际回退到 web safe 字体, W2 接入 OFL 字体) ---------- */
+    --font-zh: "Source Han Serif SC", "Noto Serif SC", "Songti SC", "STSong", serif;
+    --font-gr: "Theano Didot", "Cormorant Garamond", "Times New Roman", serif;
+    --font-mono: "JetBrains Mono", "Cascadia Code", "SF Mono", "Consolas", monospace;
+
+    /* ---------- 4s 呼吸节奏 ---------- */
+    --breath-duration: 4s;
+    --breath-easing: cubic-bezier(0.4, 0.0, 0.2, 1);
+
+    /* ---------- 1.2s 明暗呼吸切换 ---------- */
+    --transition-duration: 1.2s;
+}
+
+/* ---------- 时代 ERA (切换) ---------- */
+[data-theme="era"] {
+    --accent: #8fb3d9;
+    --accent-dim: #5a7a9e;
+    --glow: rgba(143, 179, 217, 0.08);
+    --font-zh: "Source Han Serif SC", "Noto Serif SC", serif;
+}
+
+/* ---------- 工程 ENGINEER (密度增强) ---------- */
+[data-mode="engineer"] {
+    /* 工程模式: HUD 风格, 略密, 对比更狠 */
+    --hairline: #1a1820;
+    --text-secondary: #a8a6a0;
+    --text-faint: #6a6860;
+}
+
+/* ---------- 主题 × 模式 组合 (4 格, 各有特色) ---------- */
+/* 专注×古朴: 默认, 暖衬线宽字距, 留白多 */
+[data-mode="focus"][data-theme="archaic"] {
+    --letter-spacing-zh: 0.05em;
+    --letter-spacing-gr: 0.35em;
+}
+/* 专注×时代: 现代陪伴, 冷衬线 */
+[data-mode="focus"][data-theme="era"] {
+    --letter-spacing-zh: 0.04em;
+    --letter-spacing-gr: 0.32em;
+}
+/* 工程×古朴: 凹刻 + 金线, 庄严 */
+[data-mode="engineer"][data-theme="archaic"] {
+    --letter-spacing-zh: 0.03em;
+    --letter-spacing-gr: 0.28em;
+    --hairline: #c8860a;
+    opacity: 0.6;
+    filter: contrast(1.05);
+}
+/* 工程×时代: 发丝网格 + 钢蓝, 冷冽作战室 */
+[data-mode="engineer"][data-theme="era"] {
+    --letter-spacing-zh: 0.02em;
+    --letter-spacing-gr: 0.25em;
+    --hairline: #5a7a9e;
+}

@@ -1,0 +1,2 @@
+      Loaded 1190 security advisories (from .cargo\advisory-db)
+    Scanning Cargo.lock for vulnerabilities (789 crate dependencies)

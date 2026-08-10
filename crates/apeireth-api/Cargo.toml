@@ -1,0 +1,135 @@
+[package]
+name = "apeireth-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 自研 API 接入平台 — 直连 Anthropic + OpenAI 协议双标准 (R17 重构, 不再依赖 NewAPI)"
+
+[lib]
+name = "apeireth_api"
+path = "src/lib.rs"
+
+[dependencies]
+apeireth-observability = { path = "../apeireth-observability" }
+apeireth-core = { path = "../apeireth-core" }
+# R17 战役 1-1: 4 协议归一化 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini)
+apeireth-protocol = { path = "../apeireth-protocol" }
+# R17 战役 1-2: Keep-Alive LIFO 5 字段 (VCP chatCompletionHandler.js:22-28 字段级借鉴)
+apeireth-http-client = { path = "../apeireth-http-client" }
+# R17 战役 1-3: 5 步主 chat 管线 (#15/#17/#19/#20 借鉴)
+apeireth-pipeline = { path = "../apeireth-pipeline" }
+# V2 Step 2 — 仅引入无循环依赖的 6 类 JSON 端点依赖
+# (apeireth-memory / apeireth-asi / apeireth-sovereignty / apeireth-agent /
+#  apeireth-cognition 都通过 apeireth-memory 或 apeireth-council 形成循环,
+#  v2_endpoints.rs 实现自包含 stub, 字段级对齐真 crate 升级路径明确)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tools = { path = "../apeireth-tools" }
+# R20 阶段 2: 鉴权 5 组件 — 复用 R20 阶段 1 的 keyring (5 重防御 P0)
+# 不引 apeireth-bus (apeireth-bus → apeireth-extension → apeireth-verify → apeireth-asi → apeireth-api
+# 形成 crate 循环, 跟 v2_endpoints 同样自包含 stub 模式, 走本地 AtomicU64 trace_id 计数器)
+apeireth-keyring = { path = "../apeireth-keyring" }
+# R120 (B2 战区 2): Response replay cache (1:1 翻译 apeireth-cache MemoryCache)
+# R120 (B2/B3/B4 战区 2): telemetry 1.1 umbrella (counter + span, 0 改 4 老 crate)
+apeireth-cache = { path = "../apeireth-cache" }
+apeireth-telemetry = { path = "../apeireth-telemetry" }
+# R20 阶段 2: 6 工具 v1 endpoint — Calendar/Message 用 UUID v4 生成 event_id / message_id
+uuid = { workspace = true }
+async-trait = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+toml = "0.8"
+futures = "0.3"
+# R20 阶段 2: WebSocket 8 帧 handler (split sink/stream + SinkExt/StreamExt)
+futures-util = { version = "0.3", features = ["sink"] }
+once_cell = "1.20"
+parking_lot = "0.12"
+chrono = { workspace = true }
+axum = { version = "0.7", features = ["macros", "ws"] }
+http = "1"
+tower = "0.5"
+tower-http = { version = "0.5", features = ["trace", "cors"] }
+# V2 Step 2 自包含 6 类 stub (EpisodeStore SQLite / ASI Registry / SelfDisableGuard / AgentManager / LRU cache)
+rusqlite = { workspace = true }
+lru = "0.16"
+# R20 阶段 2: API key SHA-256 hash (走 sha2 + hex, 跟 apeireth-keyring 一致)
+sha2 = "0.10"
+hex = "0.4"
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+# 战役 4-1: 真流式测试用 bytes::Bytes 模拟 reqwest bytes_stream
+bytes = "1.7"
+# R18 第 2 阶段: in-memory HTTP 测试 (axum 0.7 + tower::ServiceExt::oneshot 模式)
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+serde_json = "1.0"
+# R20 阶段 2 6 fixture: file_ops / git_ops 用临时目录 (TempDir)
+tempfile = "3"
+
+[[example]]
+name = "hello_api"
+path = "examples/hello_api.rs"
+
+[[example]]
+name = "anthropic_hello"
+path = "examples/anthropic_hello.rs"
+
+[[example]]
+name = "router_demo_legacy"
+path = "examples/router_demo.rs"
+
+[[example]]
+name = "config_demo"
+path = "examples/config_demo.rs"
+
+[[example]]
+name = "serve"
+path = "examples/serve.rs"
+
+[[example]]
+name = "e2e"
+path = "examples/e2e.rs"
+
+# R25 Step 2 + Step 3: 端到端冒烟 — 起 api server + 模拟 TUI 调全部 6 类 V2 + LLM 端点
+[[example]]
+name = "v2_smoke"
+path = "examples/v2_smoke.rs"
+
+# R17 战役 1-4: 4 协议端点 examples (走 apeireth-pipeline 5 步管线 + Keep-Alive LIFO)
+[[example]]
+name = "openai_chat"
+path = "examples/openai_chat.rs"
+
+[[example]]
+name = "openai_responses"
+path = "examples/openai_responses.rs"
+
+[[example]]
+name = "anthropic"
+path = "examples/anthropic.rs"
+
+[[example]]
+name = "gemini"
+path = "examples/gemini.rs"
+
+# R17 战役 4-1: 真 SSE 推流 example (走 LlmProvider::complete_stream)
+[[example]]
+name = "openai_stream"
+path = "examples/openai_stream.rs"
+
+# R123-2: 4 协议 handler 抽 trait 抽象 demo (4 stub handler 注册 + dispatch)
+[[example]]
+name = "protocol_handler_demo"
+path = "examples/protocol_handler_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

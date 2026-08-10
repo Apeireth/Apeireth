@@ -1,0 +1,175 @@
+# ============================================================================
+# Bug Report — Apeireth 1.0+ issue form (R26 工程化补全)
+# ============================================================================
+# 模式: qdrant/tokio 业界惯例 (GitHub Issue Forms 2024+ YAML 1:1)
+# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
+# 硬约束 (per CONTRIBUTING.md):
+#   - 0 触碰 24 LOCKED crate (mtime 实查)
+#   - 0 改 workspace version (1.1.0 semver 严守)
+#   - 0 改 R11 baseline 3 值 (V1141 / V1131 / V1136)
+#   - 0 改 7 LOCKED 文档
+# 字段验证: 必填项 = 复现步骤 + 期望行为 + 实际行为 + version + severity + OS (跟业界 1:1)
+# 跟 .github/ISSUE_TEMPLATE/bug.md (R20 写, 1.0 release 阶段 bug) 共存, 不删 (向后兼容)
+
+name: Bug Report
+description: Report a bug in Apeireth (Rust 92+ crate backend, 24 LOCKED + 9 organ + 5 重守门)
+title: "[BUG] "
+labels:
+  - bug
+  - triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill out the template below — it helps us reproduce and fix faster.
+
+  - type: input
+    id: version
+    attributes:
+      label: Apeireth version
+      description: Output of `apeireth --version` or `cargo run -p apeireth-cli -- --version`
+      placeholder: e.g. 1.1.0 (workspace semver)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How severe is the bug?
+      options:
+        - Critical (data loss / crash / 1.0 release blocker)
+        - High (1.0 release 0-优先级)
+        - Medium (post-1.0 fix)
+        - Low (cosmetic / docs)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux (Ubuntu 22.04)
+        - Linux (Ubuntu 24.04)
+        - macOS (latest stable)
+        - Windows 10
+        - Windows 11
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: input
+    id: rustc
+    attributes:
+      label: Rust toolchain
+      placeholder: e.g. stable 1.81.0 / nightly-2026-08-01
+      description: Output of `rustc --version` and `rustup show`
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal sequence to reproduce the bug
+      placeholder: |
+        1. cargo build --workspace
+        2. cargo run -p apeireth-cli -- chat
+        3. Send message: "..."
+        4. Observe: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / output
+      description: Paste `RUST_LOG=debug` output, stack traces, or screenshots
+      render: shell
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 0 触碰实查 (per [CONTRIBUTING.md §0 触碰实查](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
+
+        Run before submitting:
+
+        ```bash
+        # 0 改 24 LOCKED crate (24 个 crate: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
+        git diff main..HEAD -- crates/apeireth-{supervisor,agent,council,bus,protocol,mcp,tool-registry,tool-runtime,graph,pipeline,tool-approval,extension,evolution,api,core,memory,asi,tools,cli,bench,cognition,action,life-force,constraint}/
+        # 必须 0 行
+        ```
+
+  - type: checkboxes
+    id: locked_check
+    attributes:
+      label: 0 触碰实查确认
+      description: Confirm no hard-locked items were modified
+      options:
+        - label: 0 改 24 LOCKED crate (mtime 实查)
+          required: false
+        - label: 0 改 workspace version (1.1.0)
+          required: false
+        - label: 0 改 R11 baseline 3 值 (V1141 / V1131 / V1136, in `apeireth-asi/src/lib.rs`)
+          required: false
+        - label: 0 改 7 LOCKED 文档 (per `docs/conventions/10-locked.md`)
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 6 哲学 anchor 影响 (per `docs/conventions/09-anchor.md`)
+
+        - **S-1** 北极星导向: 跟 1:1 翻译 v0.9.21 商业版冲突吗?
+        - **S-2** 实事求是: 实查 5 决策点 (loc / files / deps / hardcode / 0 触碰) 了吗?
+        - **O-2** 走在前人肩上: 复用 std / tokio / 业界标准了吗?
+        - **O-3** 干到底: cargo check 0 error + cargo test pass 了吗?
+        - **O-4** 任何人都能接手: doc 顶部 30+ 行 + 编译期 hardcode 守门了吗?
+        - **O-5** 不假装: skeleton 标 ⏳ + 不假装已实现了吗?
+
+  - type: checkboxes
+    id: philosophy_check
+    attributes:
+      label: 6 哲学 anchor 穿透
+      options:
+        - label: S-1 北极星导向 穿透
+          required: false
+        - label: S-2 实事求是 穿透
+          required: false
+        - label: O-2 走在前人肩上 穿透
+          required: false
+        - label: O-3 干到底 穿透
+          required: false
+        - label: O-4 任何人都能接手 穿透
+          required: false
+        - label: O-5 不假装 穿透
+          required: false
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 8 项不修改承诺影响 (per `docs/conventions/10-locked.md`)
+
+        - ✅ 不假装已实现
+        - ✅ 编译期 hardcode
+        - ✅ 不改 LOCKED 24 crate
+        - ✅ 不改 workspace version
+        - ✅ 6 哲学 anchor 穿透
+        - ✅ 不依赖 NewAPI
+        - ✅ 不重复造轮子
+        - ✅ 诚实标缺

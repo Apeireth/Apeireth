@@ -1,0 +1,87 @@
+name: Bench measurement (criterion, no source change)
+
+# 主人 8/6 17:30 拍板 (R23 #2): bench measurement 走 GitHub Actions, 0 改 src
+# 触发: workflow_dispatch 手动 + weekly schedule
+# 目标: 5 个 crate 的 criterion bench 真正出 measurement
+#   - apeireth-formal/benches/bench.rs        (5 functions)
+#   - apeireth-tui/benches/render_5_nav.rs    (1)
+#   - apeireth-tui/benches/render_9_organ.rs  (1)
+#   - apeireth-tui/benches/render_dashboard.rs(1)
+#   - apeireth-observability/benches/bench.rs (1)
+#   - apeireth-observability/benches/dashboard.rs (1)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-measurement-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  formal-bench:
+    name: apeireth-formal criterion bench
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run criterion bench (no source change)
+        run: cargo bench -p apeireth-formal --bench bench
+      - name: Upload criterion HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-formal-criterion-report
+          path: target/criterion
+          retention-days: 14
+
+  tui-bench:
+    name: apeireth-tui criterion bench
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run render benches
+        run: |
+          cargo bench -p apeireth-tui --bench render_5_nav
+          cargo bench -p apeireth-tui --bench render_9_organ
+          cargo bench -p apeireth-tui --bench render_dashboard
+      - name: Upload criterion HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-tui-criterion-report
+          path: target/criterion
+          retention-days: 14
+
+  observability-bench:
+    name: apeireth-observability criterion bench
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Run observability benches
+        run: |
+          cargo bench -p apeireth-observability --bench bench
+          cargo bench -p apeireth-observability --bench dashboard
+      - name: Upload criterion HTML reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-observability-criterion-report
+          path: target/criterion
+          retention-days: 14

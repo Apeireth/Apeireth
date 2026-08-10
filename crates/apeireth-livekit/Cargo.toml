@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-livekit"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 flesh out: LiveKit Server SDK 真接实现 (1:1 翻译 livekit-server-sdk 0.6+ Twirp API: server_url / api_key / room / track / participant / event 6 端点, 走 reqwest 0.12 + rustls-tls HTTP, wiremock 0.6 测; STUB 守门 6 核心 API + 5 K-1 强校验 + 8 tool whitelist 编译期 hardcode)"
+keywords = ["ai", "livekit", "webrtc", "server-sdk", "twirp", "stub"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.10", features = ["v4", "serde"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+url = "2.5"
+jsonwebtoken = "9.3"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+futures = "0.3"
+wiremock = "0.6"
+
+[[example]]
+name = "livekit_real_demo"
+path = "examples/livekit_real_demo.rs"
+
+[lints]
+workspace = true

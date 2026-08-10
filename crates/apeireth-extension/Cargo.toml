@@ -1,0 +1,33 @@
+[package]
+name = "apeireth-extension"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-extension — VCP 6 类插件 (sync/async/static/service/messagePreprocessor/hybrid) + extension.toml 严格 schema + 审核后注册 + 沙盒 + 调用审计 (P28 round 5-03)"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+toml = "0.8"
+apeireth-verify = { path = "../apeireth-verify" }
+
+[lib]
+name = "apeireth_extension"
+path = "src/lib.rs"
+
+[[example]]
+name = "extension_lifecycle"
+path = "examples/extension_lifecycle.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

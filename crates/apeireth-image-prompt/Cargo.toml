@@ -1,0 +1,82 @@
+[package]
+name = "apeireth-image-prompt"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+description = "Apeireth R20 阶段 4: Image Prompt Library (1:1 翻译 v0.9.21 商业版 out/main/chunks/ImagePromptLibrary-C5wQe0hi.js ~36KB)"
+keywords = ["ai", "image", "prompt", "library", "agent"]
+categories = ["api-bindings", "data-structures"]
+
+# ----------------------------------------------------------------
+# 注意: 此 crate 是新 P1 估缺, 暂不在 workspace members 列表里
+# (per v09021-rust-translation-blueprint-RIVAL §5.1, 整合 #2 sub-agent
+#  1 commit 落地时加到 `Apeireth-rust/Cargo.toml` members 末尾).
+#
+# 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除 (0 effect).
+# 保留 2 path dep 注释作为 R20 阶段 4 1:1 翻译点提示.
+# ----------------------------------------------------------------
+[dependencies]
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# async runtime
+tokio = { version = "1.40", features = ["full"] }
+# SHA256 (prompt dedup 主键算法, per v0.9.21 sha256 1:1 翻译)
+sha2 = "0.10"
+# LRU cache (prompt 索引, 估 1000 项 LRU, per v0.9.21 LRU 1:1 翻译)
+lru = "0.16"
+# regex (template var replacement, per v0.9.21 handlebars-like 占位符 1:1 翻译)
+regex = "1.10"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# CSV export (per v0.9.21 import/export 1:1 翻译)
+csv = "1.3"
+# UUID (prompt id 派生, per v0.9.21 uuid v4 1:1 翻译)
+uuid = { version = "1.10", features = ["v4"] }
+# time (created_at / updated_at, per v0.9.21 timestamp 1:1 翻译)
+chrono = { version = "0.4", features = ["serde"] }
+
+# ----------------------------------------------------------------
+# 1:1 翻译点 per RIVAL §2.2.3:
+# - `apeireth-memory` FTS5 (R20 阶段 4 集成 search 工具用)
+# - `apeireth-mcp-relay-image` (R20 阶段 1 集成 image 工具用)
+# ----------------------------------------------------------------
+# 这 2 path dep 暂不写 — 它们用 `version.workspace = true` 依赖父 workspace,
+# 当前 crate 处于 standalone 模式 ([workspace] empty table 隔离父 workspace),
+# 引入会触发 "version.workspace = true 找不到父 workspace" 错误.
+# 整合 #2 sub-agent 把本 crate 加入 Apeireth-rust members 后, 删 [workspace] empty
+# table + 加这 2 path dep (RIVAL §2.2.3 1:1 翻译点保 1:1):
+#   apeireth-mcp-relay-image = { path = "../apeireth-mcp-relay-image" }
+#   apeireth-memory = { path = "../apeireth-memory" }
+# ----------------------------------------------------------------
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "image_prompt_demo"
+path = "examples/image_prompt_demo.rs"
+
+# V1300 (R-Cycle v2-strategy / R20 阶段 4 续):
+# 加 [lints] workspace = true 继承父 workspace.lints (rust + clippy 47 条).
+# 修 V1298 audit 发现的 1 个完全无 [lints] 段 crate — V1298 报告 16 缺, 现 15 缺.
+# 风险评估: workspace.lints 已 'allow' 大部分高频 lint
+#   (uninlined_format_args / match_wildcard_for_single_variants / missing_docs_in_private_items
+#    / unused_imports / dead_code / unused_async / etc.) — 不会雪崩警告.
+# 实际生效: clone_on_copy / map_clone / cast_lossless / ptr_as_ptr / etc. 都 'warn' 级, 
+#   可在后续 R20 阶段 4 主体 PR 里逐项清.
+[lints]
+workspace = true

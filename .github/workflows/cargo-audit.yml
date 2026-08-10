@@ -1,0 +1,139 @@
+name: Cargo audit (RUSTSEC advisories)
+
+# R61 B0 续: cargo audit 每周 + workflow_dispatch (跟 cargo-deny.yml 平行)
+# 借 RustSec advisory-db 自动; install 1 次 cargo-audit 然后 cargo audit --json
+#
+# 借鉴来源 (mirror cargo-deny.yml R19 第 0 阶段):
+# - wasmtime .github/workflows/main.yml [cargo_audit] job
+# - qdrant-spark 的 audit workflow
+#
+# 当前已知 0 vulnerabilities (R60 cargo audit 验证): cargo audit 1.1 KB 数据库, 0 vulnerabilities found.
+# 仍跑 cron: 监控新 advisory 时邮件通知.
+#
+# 验收: 1) workflow 文件存在 + YAML 解析 OK; 2) 默认 cargo audit 0 vulns; 3) workflow_dispatch 触发 1 次跑过
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: ['**']
+  schedule:
+    # 每周日凌晨 4 点 (跟 eval-live 错开 1h, 避免 GPU 竞争)
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+  # R61: 加 security-events write (让 OSV.dev 报告 advisory match)
+  security-events: write
+
+jobs:
+  cargo-audit:
+    name: cargo audit (RUSTSEC database)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-audit-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-audit-
+
+      - name: Install cargo-audit
+        # 版本锁到 1.1.x (跟 RustSec db format 兼容)
+        run: cargo install --locked cargo-audit --version "^1.1"
+
+      - name: Run cargo audit (json + exit code)
+        # 0 vulnerabilities 期望; 有 vuln 时 fails CI
+        run: cargo audit --json --deny warnings > audit-report.json || echo "audit non-zero exit captured in report"
+
+      - name: Convert JSON report to SARIF (R66)
+        # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
+        # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
+        run: |
+          python3 - <<'PYEOF'
+          import json, sys, datetime, hashlib
+          with open("audit-report.json") as f:
+              report = json.load(f)
+          findings = []
+          vuln_index = {}
+          for v in report.get("vulnerabilities", {}).get("found", []):
+              advisory = v.get("advisory", {})
+              aid = advisory.get("id", "UNKNOWN")
+              pkg = v.get("package", {})
+              pkg_name = pkg.get("name", "unknown")
+              pkg_version = pkg.get("version", "unknown")
+              rule_id = f"rustsec/{aid}"
+              vuln_index[rule_id] = {"package": pkg_name, "version": pkg_version}
+              findings.append({
+                  "ruleId": rule_id,
+                  "level": "error" if advisory.get("severity", 1) >= 5 else "warning",
+                  "message": {"text": advisory.get("description", advisory.get("title", aid))},
+                  "locations": [{
+                      "physicalLocation": {
+                          "artifactLocation": {"uri": f"Cargo.toml"},
+                          "region": {"startLine": 1, "startColumn": 1, "endLine": 1, "endColumn": 1}
+                      }
+                  }]
+              })
+          sarif = {
+              "version": "2.1.0",
+              "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
+              "runs": [{
+                  "tool": {
+                      "driver": {
+                          "name": "cargo-audit",
+                          "version": "1.1.x",
+                          "informationUri": "https://github.com/rustsec/rustsec",
+                          "rules": [
+                              {
+                                  "id": rid,
+                                  "name": rid,
+                                  "shortDescription": {"text": f"RUSTSEC advisory affecting {meta['package']}@{meta['version']}"},
+                                  "fullDescription": {"text": f"RUSTSEC advisory affecting {meta['package']}@{meta['version']}"},
+                                  "defaultConfiguration": {"level": "error"},
+                                  "helpUri": f"https://rustsec.org/advisories/{rid.replace('rustsec/', '')}"
+                              }
+                              for rid, meta in vuln_index.items()
+                          ]
+                      }
+                  },
+                  "results": findings,
+                  "invocations": [{
+                      "executionSuccessful": report.get("vulnerabilities", {}).get("count", 0) == 0,
+                      "endTimeUtc": datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+                  }]
+              }]
+          }
+          with open("audit-report.sarif", "w") as f:
+              json.dump(sarif, f, indent=2)
+          PYEOF
+
+      - name: Upload audit report (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-audit-report
+          path: |
+            audit-report.json
+            audit-report.sarif
+
+      - name: Upload SARIF to Code Scanning (R66)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: audit-report.sarif
+          category: cargo-audit

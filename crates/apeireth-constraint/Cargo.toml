@@ -1,0 +1,31 @@
+[package]
+name = "apeireth-constraint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 约束器官 (P12 — v4.1 新增: 12 键 verdict cache 复用 + 5 重守门 trait (编译时/运行时/多AI/物理隔离/反思期))"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_constraint"
+path = "src/lib.rs"
+
+[[example]]
+name = "constraint_demo"
+path = "examples/constraint_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

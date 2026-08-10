@@ -1,0 +1,64 @@
+[package]
+name = "apeireth-sandbox"
+# 显式版本 (跟 apeireth-voice / apeireth-machine-id / apeireth-lark 模板同模式;
+# 整合 #3 sub-agent 改 `version.workspace = true` + deps `{ workspace = true }` 阶段续)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 flesh out: Sandbox 真接实现 (1:1 翻译 Docker daemon REST API v1.43+, 3 RuntimeKind Container/Process/WASM, 6 API exec/kill/status/network/filesystem/resource_limit, 跟 apeireth-sdk-sandbox 1:1 翻译 v0.9.21 商业版 @anthropic-ai/sandbox 设计参考; 0 改 STUB 路径, 0 改 LOCKED 24 crate, 0 改 workspace version 1.0.0; 集成 pipeline-g5 Reliability 5 阶段 (借鉴 Golutra v0.1.0 chat_db), bollard 0.15 占位 dep 留 R21+ 真接 Docker daemon, wiremock 0.6 测 14 端到端用例, 不假装已实现)"
+keywords = ["ai", "sandbox", "docker", "isolation", "stub", "agent"]
+categories = ["api-bindings", "asynchronous", "os"]
+
+[dependencies]
+# async runtime (跟 voice 1:1 模式, 1.40 workspace 同款)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (RuntimeKind / SandboxStatus / SandboxConfig)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (SandboxError 用 thiserror 派生)
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing (真接调用 log)
+tracing = "0.1"
+# async traits (SandboxRuntime / DaemonClient 异步 trait, 后续 bollard 真接用)
+async-trait = "0.1"
+# 时间戳 (SandboxHandle.started_at)
+chrono = { version = "0.4", features = ["serde"] }
+# UUID (sandbox_id 派生)
+uuid = { version = "1.10", features = ["v4", "serde"] }
+# Stream utilities (stream_logs async stream)
+futures = "0.3"
+# HTTP 客户端 (R20 阶段 6 flesh out: 真接 Docker daemon HTTP API + wiremock 0.6 测)
+# 跟 workspace [workspace.dependencies] reqwest 同 0.12 + rustls-tls 模板
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+# URL 解析 (Docker daemon URL 拼接 + endpoint path 编码)
+url = "2.5"
+# ⏳ R21+ 真接 Docker daemon 时启用 bollard (本机可能没装, 编译期守门 DOCKER_BOLLARD_ENABLED):
+#    bollard = "0.15"  # Docker daemon Rust client (windows 用 named pipe, unix 用 socket)
+# 当前 flesh out 阶段: bollard 留作占位 (注释, 不实际引, 避免本机编译失败 + 跨平台问题)
+# 整合 #3 sub-agent 1 commit 落地时, 由 Mavis 评估是否真引 bollard
+#
+# 0 改 LOCKED 跟 STUB 路径承诺:
+#   - 0 触碰 crates/apeireth-sdk-sandbox/ (LOCKED baseline 16:34:11)
+#   - 0 触碰 crates/apeireth-pipeline-g5/ (LOCKED), 借鉴其 Reliability 阶段设计思想但 0 改源码
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+futures = "0.3"
+criterion = { version = "0.5", features = ["html_reports"] }
+# HTTP mock server (wiremock 0.6, 跟 voice/lark 1:1 模板)
+wiremock = "0.6"
+
+[[example]]
+name = "sandbox_real_demo"
+path = "examples/sandbox_real_demo.rs"
+
+# R20 阶段 6 flesh out 升级到 workspace lint 继承 (跟 apeireth-voice / apeireth-lark / apeireth-http-client 模板同款).
+# 严守 8 项不修改承诺: STUB_MODE 仍 = true, 6 API dispatcher 仍返 NotImplemented,
+# 新增 SandboxRealImpl 是独立路径 (不破现有 6 公开 API 守门).
+[lints]
+workspace = true

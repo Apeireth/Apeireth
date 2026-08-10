@@ -1,0 +1,44 @@
+[package]
+name = "apeireth-council"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 智囊团 7 强制 Advisor + 按住机制 + 拟人化 synthesis + mock LLM provider — R14 Phase 5 P22 (架构师2 落点, P15 7 强制顾问)"
+
+[dependencies]
+apeireth-verify = { path = "../apeireth-verify" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-api = { path = "../apeireth-api" }
+# R113: 真接 apeireth-graph (cognition summary → council deliberation context)
+apeireth-graph = { path = "../apeireth-graph" }
+# R115: 真接 apeireth-mcp (CouncilMember → MCP Prompt/ResourceServer)
+apeireth-mcp = { path = "../apeireth-mcp" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_council"
+path = "src/lib.rs"
+
+[[example]]
+name = "council_demo"
+path = "examples/council_demo.rs"
+
+# R33-4-1: CouncilMember 多轮协商 deliberation demo (4 场景: keyword 兜底 / strong_disapprove / 模拟多 LLM / env-gated 真 MiniMax)
+[[example]]
+name = "council_member_deliberation_demo"
+path = "examples/council_member_deliberation_demo.rs"
+
+# R25 D-3: 3 advisor 协作任务 + reasoning trace 可视化 (per v2.0 strategy §2B 验收硬指标)
+[[example]]
+name = "trace_visualize"
+path = "examples/trace_visualize.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

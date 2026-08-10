@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-vector"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 向量检索子系统 (VectorStore trait + SqliteVecBackend) — V2 P1 战区 4 skeleton (docs/v2-strategy/05 §Step 4)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# 与 workspace / apeireth-memory 同步: rusqlite 0.32.
+# (apeireth-api 在 V2 P1 战区 4 同步升级到 0.32, libsqlite3-sys links 冲突消除)
+rusqlite = { workspace = true }
+uuid = { workspace = true }
+# R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
+# 0.1.9 走 sqlite3_auto_extension 路径自动注册, 不依赖 SQLITE_ENABLE_LOAD_EXTENSION 宏.
+sqlite-vec = { workspace = true }
+
+[lib]
+name = "apeireth_vector"
+path = "src/lib.rs"
+
+[dev-dependencies]
+# R18 第 2 阶段: vector 真实 sqlite-vec 测试
+tempfile = "3"
+uuid = { workspace = true, features = ["v4"] }
+
+[[example]]
+name = "semantic_smoke"
+path = "examples/semantic_smoke.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

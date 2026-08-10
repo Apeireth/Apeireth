@@ -1,0 +1,46 @@
+[package]
+name = "apeireth-task"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 5 估补: Task skeleton (1:1 翻译 v0.9.21 商业版 out/main/chunks/taskTools-BfnOrPUJ.js ~313KB, 估 1500 LOC 估缺 → skeleton 阶段抽核心 7 状态机 + DAG + 5 优先级队列 + 调度. 阶段 1 skeleton 用同步 std collection, 阶段 3 续接 tokio async runtime + 1:1 翻译 TaskSessionCoordinator)"
+keywords = ["ai", "task", "dag", "state-machine", "scheduler"]
+categories = ["asynchronous", "data-structures", "development-tools"]
+
+# R20 阶段 5 估补: skeleton 阶段只引 workspace 必要依赖, 不引 taskTools.js 估缺 1500 LOC 全量
+# (apeireth-team-lead / apeireth-workflow 通过 trait/接口引用, 不在本 crate 直接依赖, 解耦 stage 1)
+[dependencies]
+# async runtime (skeleton 阶段保留 1 async fn 给 cancel, 阶段 3 续接)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (Task / TaskResult / TaskError 跨 crate 通信序列化)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing (per request trace_id 注入, 跟 apeireth-observability 对齐)
+tracing = "0.1"
+# async traits (TaskScheduler trait, 阶段 3 apeireth-team-lead 可覆盖)
+async-trait = "0.1"
+# 时间戳 (Task.submitted_at / completed_at / duration_ms)
+chrono = { version = "0.4", features = ["serde"] }
+# 唯一 ID (TaskId, 16 字节 hex 跟 apeireth-observability TraceId 同模式)
+uuid = { version = "1.10", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "task_demo"
+path = "examples/task_demo.rs"
+
+# R20 阶段 5 skeleton: 跟 keyring/machine-id/lark/observability 同款不强求 workspace lint
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"

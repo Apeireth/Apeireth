@@ -1,0 +1,70 @@
+# Apeireth 1.0 release CODEOWNERS
+# 主人 2026-08-05 拍板
+
+# 顶层
+/CHANGELOG.md          @chuling
+/README.md             @chuling
+/ROADMAP.md            @chuling
+
+# 7 LOCKED 文档 (per APEIRETH-CONVENTIONS)
+/docs/APEIRETH-CONVENTIONS.md  @chuling
+/docs/APEIRETH-VERSIONING.md   @chuling
+/docs/APEIRETH-GLOSSARY.md     @chuling
+/docs/stage1/                   @chuling
+/docs/stage2/                   @chuling
+/docs/stage3/                   @chuling
+/docs/v2-strategy/             @chuling
+/docs/v4-strategy/             @chuling
+/docs/v4.1-strategy/           @chuling
+/docs/v6-baseline-architecture/ @chuling
+/docs/stage4/R11-baseline.md    @chuling
+
+# 24 LOCKED crate
+/crates/apeireth-supervisor/   @chuling
+/crates/apeireth-agent/        @chuling
+/crates/apeireth-council/      @chuling
+/crates/apeireth-bus/          @chuling
+/crates/apeireth-protocol/     @chuling
+/crates/apeireth-mcp/          @chuling
+/crates/apeireth-tool-registry/ @chuling
+/crates/apeireth-tool-runtime/ @chuling
+/crates/apeireth-graph/        @chuling
+/crates/apeireth-pipeline/     @chuling
+/crates/apeireth-tool-approval/ @chuling
+/crates/apeireth-extension/    @chuling
+/crates/apeireth-evolution/    @chuling
+/crates/apeireth-api/          @chuling
+/crates/apeireth-core/         @chuling
+/crates/apeireth-memory/       @chuling
+/crates/apeireth-asi/          @chuling
+/crates/apeireth-tools/        @chuling
+/crates/apeireth-cli/          @chuling
+/crates/apeireth-bench/        @chuling
+/crates/apeireth-cognition/    @chuling
+/crates/apeireth-action/       @chuling
+/crates/apeireth-life-force/   @chuling
+/crates/apeireth-constraint/   @chuling
+
+# 5 P0 MCP (R20 阶段 1)
+/crates/apeireth-mcp-ssh/         @chuling
+/crates/apeireth-mcp-winrm/       @chuling
+/crates/apeireth-mcp-relay-image/ @chuling
+/crates/apeireth-workflow/        @chuling
+/crates/apeireth-team-lead/       @chuling
+
+# 9 skeleton (R20 阶段 1 续)
+/crates/apeireth-image-prompt/    @chuling
+/crates/apeireth-rollback/        @chuling
+/crates/apeireth-plugin/          @chuling
+/crates/apeireth-repo-scan/       @chuling
+/crates/apeireth-repo-analyzer/   @chuling
+/crates/apeireth-keyring/         @chuling
+/crates/apeireth-machine-id/      @chuling
+/crates/apeireth-lark/            @chuling
+/crates/apeireth-voice/           @chuling
+
+# 1.0 release 估补
+/crates/apeireth-i18n/            @chuling
+/crates/apeireth-observability/   @chuling
+/crates/apeireth-sdk/             @chuling
+/src-tauri/                       @chuling

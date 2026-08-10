@@ -1,0 +1,84 @@
+[package]
+name = "apeireth-memory-extensions"
+# R21 借鉴 Golutra #3: 7 memory provider 模式 (in_memory / redis / sqlite / postgres / s3 / disk_lru / hybrid)
+# 1:1 镜像 Golutra v0.1.0 memory gateway 5 provider 模式, 7 模式 = 5+1(in-memory) +1(s3) +1(hybrid)
+# 跟借鉴 #1 (TUI organ command) + 借鉴 #6 (TUI state) 1:1 镜像 (skeleton 阶段).
+# 0 改 24 LOCKED crate src/ + 0 改 workspace version (1.0.0) + 6 哲学锚穿透 + 8 项不修改承诺.
+#
+# 7 provider × 6 K-1 强校验 (per task spec):
+#   1. connection_string (URL/path/connection URI)
+#   2. timeout (duration, ms)
+#   3. max_size (bytes)
+#   4. persist (bool, 是否持久化)
+#   5. cache_ttl (duration, ms)
+#   6. scope (Local/Shared/Global 3 变体)
+#
+# 真接 (per 8 项之 1, "0 不假装已实现"):
+#   - in_memory  : real HashMap (in-process, no external dep)
+#   - sqlite     : real rusqlite (in-memory DB, workspace dep)
+#   - disk_lru   : real lru + std::fs (workspace lru dep)
+#   - hybrid     : real 组合 in_memory + disk_lru
+#   - redis      : real redis-rs + config 强校验 (本地 Redis 服务由 R21+ 真接续做)
+#   - postgres   : real tokio-postgres + config 强校验 (本地 PG 服务由 R21+ 真接续做)
+#   - s3         : real reqwest-based S3 client + config 强校验 (AWS 凭据由 R21+ 真接续做)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R21 借鉴 Golutra #3: 7 memory provider 模式 (in_memory / redis / sqlite / postgres / s3 / disk_lru / hybrid). 1:1 镜像 Golutra v0.1.0 memory gateway 5 provider 模式, 7 模式 = 5+1+1. 7 provider × 6 K-1 强校验 (connection_string/timeout/max_size/persist/cache_ttl/scope) + 70 unit + 10 集成 = 80 测试. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学锚 + 8 项不修改承诺"
+keywords = ["memory", "provider", "redis", "sqlite", "postgres", "s3", "lru", "hybrid"]
+categories = ["database", "caching", "data-structures"]
+
+[dependencies]
+# 序列化 (ProviderKind / ProviderConfig / ProviderScope / MemoryProviderError 全部 derive)
+serde = { version = "1.0", features = ["derive"] }
+# 错误处理 (MemoryProviderError 7 variant, per skeleton 模式 + m3 防御)
+thiserror = "1.0"
+# async runtime (Redis 客户端 + Postgres 客户端 + S3 客户端都需要 tokio)
+tokio = { version = "1.40", features = ["full"] }
+# async trait (MemoryProvider 跨 provider 异步接口)
+async-trait = "0.1"
+# SQLite provider (借 workspace rusqlite, in-memory DB 测试)
+rusqlite = { version = "0.32", features = ["bundled"] }
+# LRU cache + disk persistence (借 workspace lru + std::fs)
+lru = "0.16"
+# S3 provider (用 reqwest + S3 REST API, 借 workspace reqwest 0.12, 避免 aws-sdk-s3 重量级)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# 时间 (ProviderConfig.timeout / cache_ttl 用 Duration, std 直接 OK; 0 引 chrono)
+# chrono = { version = "0.4", default-features = false, features = ["clock"] }
+# uuid 0 引 (key 用 String, 0 用 uuid)
+# === 借鉴 #3 新加 deps (本 crate 局部, 0 改 workspace.dependencies) ===
+# Redis 客户端 (借 redis-rs 业界标准, 0 重复造轮子)
+redis = { version = "0.27", default-features = false, features = ["tokio-comp"] }
+# Postgres 客户端 (借 tokio-postgres 业界标准, 0 重复造轮子)
+tokio-postgres = "0.7"
+# TempDir (Hybrid L2 disk dir 自动清理, 借 tempfile 业界标准, 0 重复造 cleanup)
+tempfile = "3"
+# JSON 序列化 (FileProvider JSON-Lines append-only 在 main impl 用, R23 #6 派工 file provider 真接)
+serde_json = "1.0"
+
+[features]
+# R46 B6: real-http 启 mock-server e2e 测试 (RedisProvider 真接 miniredis)
+# 默认为空 (不污染默认 cargo test --workspace); 跑 --features real-http 才启 6 mini-redis e2e 测试.
+default = []
+real-http = []
+
+[dev-dependencies]
+# 集成测试: async test runtime
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+
+# 1 个完整 7 provider 演示 (per 任务 spec "端到端 demo")
+[[example]]
+name = "memory_provider_demo"
+path = "examples/memory_provider_demo.rs"
+
+# R21 借鉴 Golutra #3: 复用 workspace.lints (per 任务 spec "workspace.lints 复用 (不重复造轮子)")
+# Apeireth 业界 lints (wasmtime + qdrant 精选) 守门, 跟 24 LOCKED crate 保持一致
+[lints.rust]
+unsafe_code = "deny"
+
+# 独立 sub-workspace (per R21 借鉴 #3 临时验证编译用, 主 workspace [members] 仍 +1 行)
+# R21 续补: [workspace] 段已移除, 整合 #3 时此 crate 重新加 [workspace] 段 (1 owner × 估 30 min)
+#[workspace]

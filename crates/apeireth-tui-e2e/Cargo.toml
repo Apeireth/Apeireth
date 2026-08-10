@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-tui-e2e"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth TUI 5 nav + 9 器官 端到端集成测试 (R20 阶段 5 估补, ratatui TestBackend 测 TUI 设计契约, 干 TUI 不干前端)"
+
+[lib]
+name = "apeireth_tui_e2e"
+path = "src/lib.rs"
+
+[dependencies]
+# 终端 + 后端 (跟 apeireth-tui 同版 0.29 / 0.28, 避免 workspace 双编译)
+ratatui = "0.30"
+crossterm = "0.28"
+
+# 序列化 + 错误 + async (workspace 继承, 不引入新传递依赖)
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+# 同步跑 async 测试 (nav_e2e / organ_e2e 的 block_on wrapper 用)
+futures = { workspace = true }
+
+# 设计契约引用 (e2e 镜像 apeireth-tui 的 5 nav / 9 organ 公开 API, 不直接 path-dep
+# binary-only 的 apeireth-tui; 后续 apeireth-tui 加 lib.rs 后可切到 path-dep)
+# apeireth-tui = { path = "../apeireth-tui" }   # 等 R20 后续 tui 增 lib.rs
+# apeireth-api = { path = "../apeireth-api" }   # e2e 不直连 LLM, 走 fixture
+
+[dev-dependencies]
+# 集成测试在 tests/ 下用, 不进 lib
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+
+[lints]
+workspace = true

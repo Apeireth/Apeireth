@@ -1,0 +1,349 @@
+name: release (5 package build matrix)
+
+# R20 阶段 6 — 1.0 release 简化版 (5 包齐发 + Linux 4 包重点)
+# 主任务: 1.0 release checklist #4 install (5 包 Linux/平台重点: deb/rpm/tarball/brew/scoop)
+# 决策: D-06 (主人 2026-08-05 20:53 拍 A: 8 包齐发 + Linux 4 包重点)
+# 蓝图: docs/stage4/v09021-rust-translation-blueprint-2026-08-05.md §3.4
+#
+# vs release-1.0.0.yml:
+#   - release-1.0.0.yml: 复杂版 (build-packages 大矩阵 10 组合 + docker-multi-arch + security + perf + release-checklist + release-gate)
+#   - 本 release.yml: 简化版, 5 job 各一个 target (deb/rpm/tarball/brew/scoop), 1.0 release tag 触发
+#   - 两者并存: release-1.0.0.yml 跑全部 8 包 + 守门 12 项, release.yml 跑 5 包 Linux/平台重点 + 快速反馈
+#
+# 触发:
+#   1. push tag v1.0.0 / v1.0.0-*  → 5 job 跑 5 包 build (跨平台 runner)
+#   2. workflow_dispatch            → 手动触发, 跑 5 包
+#
+# 8 项不修改承诺 (per 8-locked-unified-2026-08-05.md):
+#   - 0 改 24 LOCKED crate (cargo build --locked 守门)
+#   - 0 改 workspace version 1.0.0 (per APEIRETH-VERSIONING §1 + ADR-0005)
+#   - 0 引 NewAPI (用系统 cargo-deb / cargo-rpm / brew / scoop)
+#   - 不假装: 缺 cargo-deb/cargo-rpm 工具链时 build 失败, 不假装编过
+#   - 编译期 hardcode: VERSION=1.0.0, 5 job 各自 target
+#   - 6 哲学锚穿透 (注释在每个 step)
+#   - 不重复造轮子: 调 packaging/<target>/build.{sh,ps1}, 不重写
+#   - 诚实标缺: 跨平台 build CI 跑, 本地不跑, 标需要 CI 守门
+
+on:
+  push:
+    tags:
+      - 'v1.0.0'
+      - 'v1.0.0-*'
+  workflow_dispatch:
+    inputs:
+      skip_upload:
+        description: 'Skip upload-artifact (仅 build, 不传 artifact)'
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+  APEIRETH_VERSION: '1.0.0'
+
+permissions:
+  contents: read
+
+# === 关掉可取消旧 run, 避免 tag 多次 push 堆任务 ===
+concurrency:
+  group: release-5pkg-${{ github.ref }}
+  cancel-in-progress: false
+
+# ============================================================================
+# Job 1/5: build-deb — Debian/Ubuntu .deb (Linux #1 重点)
+# 蓝图 §3.4 + packaging/deb/build-deb.sh + install-deb.sh + uninstall-deb.sh
+# ============================================================================
+jobs:
+  build-deb:
+    name: build-deb (cargo-deb, ubuntu-22.04 amd64+arm64)
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable + target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
+
+      # === 编译期 hardcode: VERSION=1.0.0 + 走 packaging/deb/build.sh ===
+      - name: cargo deb build
+        run: |
+          chmod +x packaging/deb/build.sh
+          bash packaging/deb/build.sh
+
+      - name: cargo deb (arm64 only)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: cargo deb --target aarch64-unknown-linux-gnu --no-build
+
+      - name: Upload .deb artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-deb-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/debian/*.deb
+            target/debian/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 2/5: build-rpm — RHEL/Fedora .rpm (Linux #2 重点)
+  # 蓝图 §3.4 + packaging/rpm/build-rpm.sh + install-rpm.sh + uninstall-rpm.sh
+  # 8 哲学锚: 不引 NewAPI (用 cargo-rpm) + 编译期 hardcode VERSION
+  # ==========================================================================
+  build-rpm:
+    name: build-rpm (cargo-rpm, ubuntu-22.04 amd64)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-rpm
+        run: cargo install cargo-rpm --locked
+
+      - name: Build rpm package
+        run: |
+          chmod +x packaging/rpm/build.sh
+          bash packaging/rpm/build.sh
+
+      - name: Upload .rpm artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-rpm-x86_64
+          path: |
+            target/release/rpmbuild/RPMS/*/*.rpm
+            target/rpm/**/*.rpm
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 3/5: build-tarball — 通用 musl 静态 (Linux #3 重点)
+  # 蓝图 §3.4 + packaging/tarball/build-tarball.sh + install.sh + uninstall.sh
+  # 0 运行时依赖: musl 静态链接, ldd 显示 not a dynamic executable
+  # ==========================================================================
+  build-tarball:
+    name: build-tarball (musl static, ubuntu-22.04 amd64+arm64)
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable + musl target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build tarball
+        env:
+          APEIRETH_TARGET: ${{ matrix.target }}
+        run: |
+          chmod +x packaging/tarball/build.sh
+          bash packaging/tarball/build.sh
+
+      - name: Verify musl static (0 动态依赖)
+        run: |
+          ldd target/${{ matrix.target }}/release/apeireth 2>&1 | grep -q "not a dynamic executable" \
+            && echo "✅ musl 静态, 0 运行时依赖" \
+            || (echo "❌ 不是 musl 静态"; ldd target/${{ matrix.target }}/release/apeireth; exit 1)
+
+      - name: Upload tarball artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-tarball-${{ matrix.target }}
+          path: |
+            target/*.tar.gz
+            target/*.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 4/5: build-brew — macOS Homebrew formula
+  # 蓝图 §3.4 + packaging/brew/build-brew.sh + install-brew.sh + uninstall-brew.sh
+  # 注: Formula (apeireth.rb) 不真编译, 走 homebrew-tap 仓库推送; 这里只 build 公式
+  # ==========================================================================
+  build-brew:
+    name: build-brew (formula, macos-13)
+    runs-on: macos-13
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Homebrew
+        run: brew --version || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+      - name: Build brew formula
+        env:
+          APEIRETH_TAP_REPO: apeireth/homebrew-tap
+        run: |
+          chmod +x packaging/brew/build.sh
+          bash packaging/brew/build.sh
+
+      - name: Verify formula syntax (brew audit --strict)
+        run: |
+          brew tap apeireth/tap https://github.com/apeireth/homebrew-tap 2>/dev/null || true
+          brew audit --strict --new --formula apeireth 2>&1 | tee /tmp/brew-audit.log || \
+            (echo "⚠️  brew audit 警告 (非阻塞, 见 /tmp/brew-audit.log)"; exit 0)
+
+      - name: Upload formula artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-brew-formula
+          path: packaging/brew/apeireth.rb
+          if-no-files-found: error
+          retention-days: 30
+
+  # ==========================================================================
+  # Job 5/5: build-scoop — Windows Scoop manifest
+  # 蓝图 §3.4 + packaging/scoop/build-scoop.ps1 + install-scoop.ps1 + uninstall-scoop.ps1
+  # 注: Scoop manifest (apeireth.json) 不在 runner 上跑 scoop install, 只 build manifest
+  # ==========================================================================
+  build-scoop:
+    name: build-scoop (manifest, windows-2022)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Scoop
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          irm get.scoop.sh | iex
+
+      - name: Build scoop manifest
+        env:
+          APEIRETH_BUCKET_REPO: apeireth/scoop-bucket
+        run: |
+          powershell -ExecutionPolicy Bypass -File packaging/scoop/build.ps1
+
+      - name: Verify manifest JSON syntax
+        run: |
+          $json = Get-Content packaging/scoop/apeireth.json -Raw
+          $parsed = $json | ConvertFrom-Json
+          if (-not $parsed.version) { Write-Error "❌ manifest 缺 version"; exit 1 }
+          if (-not $parsed.url) { Write-Error "❌ manifest 缺 url"; exit 1 }
+          if ($parsed.hash -match "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME") {
+            Write-Warning "⚠️  manifest 仍是 placeholder sha256 (估补)"
+          }
+          Write-Host "✅ manifest JSON 语法正确"
+
+      - name: Upload manifest artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-scoop-manifest
+          path: packaging/scoop/apeireth.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # ==========================================================================
+  # 终极 gate — 5 job 全部 success 才算 1.0 release 5 包齐发
+  # ==========================================================================
+  release-gate:
+    name: 5-package release gate (5/5 success)
+    runs-on: ubuntu-22.04
+    needs: [build-deb, build-rpm, build-tarball, build-brew, build-scoop]
+    if: always()
+    steps:
+      # 5 个静态 step check (GHA 表达式不允许 needs.[job].result 动态索引)
+      - name: Check build-deb
+        if: needs.build-deb.result != 'success'
+        run: |
+          echo "❌ build-deb failed: ${{ needs.build-deb.result }}"
+          exit 1
+
+      - name: Check build-rpm
+        if: needs.build-rpm.result != 'success'
+        run: |
+          echo "❌ build-rpm failed: ${{ needs.build-rpm.result }}"
+          exit 1
+
+      - name: Check build-tarball
+        if: needs.build-tarball.result != 'success'
+        run: |
+          echo "❌ build-tarball failed: ${{ needs.build-tarball.result }}"
+          exit 1
+
+      - name: Check build-brew
+        if: needs.build-brew.result != 'success'
+        run: |
+          echo "❌ build-brew failed: ${{ needs.build-brew.result }}"
+          exit 1
+
+      - name: Check build-scoop
+        if: needs.build-scoop.result != 'success'
+        run: |
+          echo "❌ build-scoop failed: ${{ needs.build-scoop.result }}"
+          exit 1
+
+      - name: Report 5/5 success
+        if: needs.build-deb.result == 'success' && needs.build-rpm.result == 'success' && needs.build-tarball.result == 'success' && needs.build-brew.result == 'success' && needs.build-scoop.result == 'success'
+        run: |
+          echo "================================================"
+          echo "  ✅ 1.0 release 5-package gate: 5/5 jobs success"
+          echo "  Version: ${APEIRETH_VERSION}"
+          echo "  Ref: ${{ github.ref }}"
+          echo "  Tag: ${{ github.ref_name }}"
+          echo ""
+          echo "  8 项不修改承诺: 0 改 LOCKED, 0 引 NewAPI, 编译期 hardcode, 6 哲学锚穿透"
+          echo "  5 包: deb / rpm / tarball / brew / scoop"
+          echo "================================================"

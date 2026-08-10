@@ -1,0 +1,55 @@
+[package]
+name = "apeireth-plugin"
+# 显式版本 (跟 team-lead skeleton 同模式; R20 阶段 4 续时整合 #2 sub-agent 改 `version.workspace = true`)
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 续: Plugin Manager (1:1 翻译 v0.9.21 商业版 out/main/chunks/PluginManager-BAmNCucP.js ~12KB, 估缺 P1; 范围: marketplace 插件安装 + 元信息 + 权限 + 生命周期 + 文件 watcher + m3 防御)"
+keywords = ["ai", "plugin", "marketplace", "lifecycle", "sandbox"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+# async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# UUID (PluginId 派生)
+uuid = { version = "1.10", features = ["v4", "serde"] }
+# 时间戳 (PluginMetadata.installed_at)
+chrono = { version = "0.4", features = ["serde"] }
+# shared types
+# 集成点: apeireth-extension 已有 6 类插件 + extension.toml + 沙盒 + 审计 (LOCKED, 只 use, 不改 src/)
+apeireth-extension = { path = "../apeireth-extension" }
+# 工具注册/运行时 (plugin 工具注册走这里)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+futures = "0.3"
+
+[[example]]
+name = "plugin_demo"
+path = "examples/plugin_demo.rs"
+
+# R20 阶段 4 续: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 当前 lints 留 allow, 整合时不强求跟外层 workspace 同步, 避免 noise.
+# 1. 删本 [workspace] 块 ✅
+# 2. version 改 `version.workspace = true` ⏳ R20 阶段 4 续时
+# 3. deps 改 `{ workspace = true }` ⏳ R20 阶段 4 续时
+# 4. workspace Cargo.toml members 加 `crates/apeireth-plugin` ✅
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
