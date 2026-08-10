@@ -1,0 +1,43 @@
+[package]
+name = "apeireth-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth CLI (CliRunner, 暴露 Rust 子系统给终端) — R14 Phase 0 接口规范对照"
+
+[[bin]]
+name = "apeireth"
+path = "src/main.rs"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-asi = { path = "../apeireth-asi" }
+# DEPRECATED(V2 Day 1 Step 1.1): `apeireth-philosophy` 已删; 来源已物理删除，依赖摘除。
+apeireth-api = { path = "../apeireth-api" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+# R116: commands submodule (skills/eval/council subcommands)
+apeireth-skills = { path = "../apeireth-skills" }
+apeireth-eval = { path = "../apeireth-eval" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-mcp = { path = "../apeireth-mcp" }
+axum = { version = "0.7", features = ["macros"] }
+tower-http = { version = "0.5", features = ["trace"] }
+# R125-2: clap derive macros 替换手写 argv 解析 (commands.rs -55%)
+clap = { workspace = true }
+
+[lib]
+name = "apeireth_cli"
+path = "src/lib.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

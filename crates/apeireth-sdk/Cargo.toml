@@ -1,0 +1,68 @@
+[package]
+name = "apeireth-sdk"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth 纯 Rust SDK 客户端 (1.0 release #2 install), 0 PyO3, 0 .venv"
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+async-trait = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls-tls"] }
+url = "2"
+apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-keyring = { path = "../apeireth-keyring" }
+
+# R122-8 (Multi-Lang SDK skeleton, 2026-08-10)
+# cfg-gated optional deps, default features = [] (0 装, O-5 实质守门 per R25)
+# python: PyO3 桥接 (复用 workspace pyo3 0.29, 0 改 workspace 顶层)
+# node:   napi-rs 桥接 (2.x, 任务 2.16, 真实 2.x branch)
+# c:      cbindgen C-ABI 桥接 (5 fn C 签名, apeireth_sdk.h auto-generate)
+# sha2:   R122-8 inline 简版 hash_request (R122-1 1:1 port, retry 跑中 0 依赖)
+pyo3 = { workspace = true, features = ["extension-module"], optional = true }
+napi = { version = "2", optional = true }
+napi-derive = { version = "2", optional = true }
+sha2 = { version = "0.10", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+wiremock = "0.6"
+
+# R122-8 build-dep: cbindgen 仅在 c feature 启用时跑 (build.rs 守门)
+# 0 启用 c feature 时 build.rs 0 生成 header, 0 编译 cbindgen 0 装
+[build-dependencies]
+cbindgen = { version = "0.26", optional = true }
+
+# R122-8 cfg-gated features
+# 0 装原则: default = [] (0 装 pyo3/napi/cbindgen), 跨语言客户按需启用
+# per O-5 哲学锚实质: "不假装 / 0 跨语言污染默认 build"
+# 0 走 R25 独立 crate 路径 (apeireth-pybridge 风格), 节省 1 个新 crate
+# (R119 8 项形式撤销后 R122 路线图新决策, R123 可拆独立 crate 切换)
+[features]
+default = []
+python = ["dep:pyo3"]
+node = ["dep:napi", "dep:napi-derive", "dep:sha2"]
+c = ["dep:cbindgen", "dep:sha2"]
+
+[lints.rust]
+# R19 阶段 0 模式
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_must_use = "allow"
+unused_mut = "allow"
+dead_code = "allow"
+unused_imports = "allow"
+missing_docs = "allow"

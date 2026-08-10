@@ -1,0 +1,51 @@
+name: Cargo deny
+
+# R19 第 0 阶段第 2 项: 抄 wasmtime main.yml [cargo_deny] job
+# https://github.com/bytecodealliance/wasmtime/blob/main/.github/workflows/main.yml
+# 跑全部 4 类 check: bans / licenses / sources / advisories
+#
+# 验收: PR 触发时 cargo deny check 全绿, 主线合并必须先过
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+
+jobs:
+  cargo_deny:
+    name: cargo deny check (bans + licenses + sources + advisories)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-deny-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-deny-
+
+      # wasmtime 用 `cargo deny check bans licenses` (只跑这 2 项)
+      # 我们跑全部 4 项, 因为 deny.toml 配置齐全 (advisories 用 RustSec db 自动)
+      # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+      - name: Run cargo deny check (全部 4 类)
+        uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          # arguments: 默认跑全部 4 类 check
+          # RustSec db 自动从 https://github.com/rustsec/advisory-db 拉
+          arguments: --all-features
+
+      # 可选: 把 denied licenses / multiple-versions 输出到 dotviz 图
+      # 业界做法, 但默认关掉 (会刷屏). 需要时手动 cargo deny check --graph ./out

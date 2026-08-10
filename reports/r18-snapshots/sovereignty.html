@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth Sovereignty — Self-Disable 5 大机制控制台</title>
+    <meta name="description" content="Apeireth Sovereignty 控制台 — 端到端接通 apeireth-sovereignty, 触发并观察 5 大 Self-Disable 机制" />
+    <style>
+        .sd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin: 1.5rem 0; }
+        .sd-card { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.25rem; backdrop-filter: blur(10px); }
+        .sd-card-armed { border-color: rgba(0, 200, 100, 0.4); }
+        .sd-card-disarmed { border-color: rgba(220, 60, 60, 0.7); background: rgba(220, 60, 60, 0.08); }
+        .sd-card-header { display: flex; align-items: baseline; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .sd-card-id { color: #a0a0c0; font-family: monospace; font-size: 0.9rem; }
+        .sd-card-zh { font-size: 1.2rem; font-weight: 600; color: #e0e0e0; }
+        .sd-card-en { font-family: monospace; color: #888; font-size: 0.95rem; margin-bottom: 0.75rem; }
+        .sd-card-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 6px; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.75rem; }
+        .sd-badge-armed { background: rgba(0, 200, 100, 0.2); color: #4eff8a; }
+        .sd-badge-disarmed { background: rgba(220, 60, 60, 0.25); color: #ff7a7a; }
+        .sd-card-count { color: #c0c0c0; font-size: 0.95rem; }
+        .sd-card-count strong { color: #fff; font-size: 1.1rem; }
+        .sd-global { padding: 1rem 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; font-weight: 600; text-align: center; }
+        .sd-global-armed { background: rgba(0, 200, 100, 0.15); color: #4eff8a; border: 1px solid rgba(0, 200, 100, 0.4); }
+        .sd-global-disarmed { background: rgba(220, 60, 60, 0.15); color: #ff7a7a; border: 1px solid rgba(220, 60, 60, 0.5); }
+        .sd-section { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; backdrop-filter: blur(10px); }
+        .sd-section h2 { color: #e0e0e0; margin-bottom: 1rem; font-size: 1.3rem; }
+        .sd-form-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
+        .sd-form-row label { display: flex; flex-direction: column; flex: 1; min-width: 240px; }
+        .sd-form-row label > span { color: #a0a0c0; font-size: 0.9rem; margin-bottom: 0.5rem; }
+        .sd-form-row select, .sd-form-row input { background: rgba(0,0,0,0.3); color: #e0e0e0; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 0.5rem 0.75rem; font-size: 1rem; font-family: inherit; }
+        .sd-rearm-form { margin-top: 1rem; }
+        .sd-rearm-btn { background: rgba(220, 60, 60, 0.2); color: #ff7a7a; border: 1px solid rgba(220, 60, 60, 0.6); border-radius: 6px; padding: 0.75rem 1.5rem; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: inherit; }
+        .sd-rearm-btn:hover { background: rgba(220, 60, 60, 0.35); }
+        .sd-recent-table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
+        .sd-recent-table th, .sd-recent-table td { padding: 0.5rem 0.75rem; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.08); }
+        .sd-recent-table th { color: #a0a0c0; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+        .sd-recent-table td { color: #d0d0d0; font-size: 0.95rem; }
+        .sd-recent-table code { background: rgba(0,0,0,0.3); padding: 0.1rem 0.4rem; border-radius: 4px; color: #ffce5c; }
+        .sd-recent-empty { color: #888; font-style: italic; }
+        .sd-meta { color: #888; font-size: 0.9rem; margin-top: 0.5rem; }
+        .sd-true { color: #4eff8a; font-weight: 600; }
+        .sd-false { color: #ff7a7a; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <main class="apeireth-app">
+        <header class="apeireth-header">
+            <h1>Apeireth Sovereignty 控制台</h1>
+            <p class="apeireth-tagline">Self-Disable 5 大机制 · 端到端接通 apeireth-sovereignty</p>
+        </header>
+
+        <div class="sd-global sd-global-disarmed">
+            ✗ GLOBAL STATE: DISARMED (5 大机制已被触发)
+        </div>
+
+        <div class="sd-section">
+            <h2>🛡️ 5 大 Self-Disable 机制</h2>
+            <p class="sd-meta">guard.is_armed (技术态): <span class='sd-true'>true</span> · 触发记录总数: <strong>1</strong></p>
+            <div class="sd-grid">
+                <div class="sd-card sd-card-disarmed">
+                <div class="sd-card-header">
+                    <span class="sd-card-id">#1</span>
+                    <span class="sd-card-zh">不可降级</span>
+                </div>
+                <div class="sd-card-en">NoDegrade</div>
+                <div class="sd-card-badge sd-badge-disarmed">✗ disarmed</div>
+                <div class="sd-card-count">
+                    触发次数: <strong>1</strong>
+                </div>
+            </div><div class="sd-card sd-card-armed">
+                <div class="sd-card-header">
+                    <span class="sd-card-id">#2</span>
+                    <span class="sd-card-zh">不可patch</span>
+                </div>
+                <div class="sd-card-en">NoPatch</div>
+                <div class="sd-card-badge sd-badge-armed">✓ armed</div>
+                <div class="sd-card-count">
+                    触发次数: <strong>0</strong>
+                </div>
+            </div><div class="sd-card sd-card-armed">
+                <div class="sd-card-header">
+                    <span class="sd-card-id">#3</span>
+                    <span class="sd-card-zh">不可绕过</span>
+                </div>
+                <div class="sd-card-en">NoBypass</div>
+                <div class="sd-card-badge sd-badge-armed">✓ armed</div>
+                <div class="sd-card-count">
+                    触发次数: <strong>0</strong>
+                </div>
+            </div><div class="sd-card sd-card-armed">
+                <div class="sd-card-header">
+                    <span class="sd-card-id">#4</span>
+                    <span class="sd-card-zh">不可逆转</span>
+                </div>
+                <div class="sd-card-en">NoReverse</div>
+                <div class="sd-card-badge sd-badge-armed">✓ armed</div>
+                <div class="sd-card-count">
+                    触发次数: <strong>0</strong>
+                </div>
+            </div><div class="sd-card sd-card-armed">
+                <div class="sd-card-header">
+                    <span class="sd-card-id">#5</span>
+                    <span class="sd-card-zh">不可隐藏</span>
+                </div>
+                <div class="sd-card-en">NoHide</div>
+                <div class="sd-card-badge sd-badge-armed">✓ armed</div>
+                <div class="sd-card-count">
+                    触发次数: <strong>0</strong>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <div class="sd-section">
+            <h2>⚔️ 攻击测试 — 触发守门机制</h2>
+            <form class="sd-form-row" method="POST" action="/sovereignty/attack">
+            <label>
+                <span>选择攻击类型</span>
+                <select name="attack_type" required>
+                    <option value="downgrade">降级风险 (high → low)</option><option value="patch">patch hardcode (principle_keys_count)</option><option value="bypass">Master token 绕过 governance</option><option value="reverse">撤销已触发的 self-disable</option><option value="hide">清空 audit 记录</option>
+                </select>
+            </label>
+            <button class="apeireth-button" type="submit">🚀 触发攻击</button>
+        </form>
+        </div>
+
+        <div class="sd-section">
+            <h2>🔒 Rearm 尝试 (被 NoReverse 拦截)</h2>
+            <p class="sd-meta">"把笼子的钥匙扔掉" — Self-Disable 是单向门, 任何 rearm 尝试都触发 NoReverse 机制 (id 自动记录到 audit).</p>
+            <form class="sd-rearm-form" method="POST" action="/sovereignty/rearm">
+                <button class="sd-rearm-btn" type="submit">Rearm (被 NoReverse 拒绝)</button>
+            </form>
+        </div>
+
+        <div class="sd-section">
+            <h2>📜 最近触发记录 (最近 10 条, append-only)</h2>
+            <table class="sd-recent-table">
+                <thead>
+                    <tr><th>trigger_id</th><th>机制</th><th>上下文</th></tr>
+                </thead>
+                <tbody><tr>
+                    <td><code>sd-000001</code></td>
+                    <td>#1 不可降级</td>
+                    <td>web attack: 降级风险 (high → low)</td>
+                </tr></tbody>
+            </table>
+        </div>
+
+        <div class="apeireth-actions">
+            <a class="apeireth-button-link" href="/">← 返回首页</a>
+        </div>
+    </main>
+</body>
+</html>

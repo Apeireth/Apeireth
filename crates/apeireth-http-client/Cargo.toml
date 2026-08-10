@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-http-client"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 自研 HTTP 客户端 — Keep-Alive LIFO 池 (复刻 VCP agentOptions 5 字段, 战役 1-2 / 借鉴 §6.2.2 #14)"
+
+[lib]
+name = "apeireth_http_client"
+path = "src/lib.rs"
+
+[dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+async-trait = { workspace = true }
+parking_lot = "0.12"
+chrono = { workspace = true }
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+wiremock = "0.6"
+httpmock = "0.8"
+
+[[example]]
+name = "client_demo"
+path = "examples/client_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

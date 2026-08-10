@@ -1,0 +1,38 @@
+{
+    "version": "1.0.0",
+    "description": "Apeireth OS - AI Growth Platform (API server)",
+    "homepage": "https://github.com/apeireth/apeireth-rust",
+    "license": "Apache-2.0",
+    "depends": "",
+    "suggest": {
+        "postgresql": "extras/postgresql",
+        "redis": "main/redis"
+    },
+    "url": [
+        "https://github.com/apeireth/apeireth-rust/releases/download/v1.0.0/apeireth-v1.0.0-x86_64-pc-windows-msvc.zip"
+    ],
+    "hash": "REPLACE_WITH_RELEASE_SHA256_AT_TAG_TIME",
+    "bin": "apeireth.exe",
+    "env_set": {
+        "APEIRETH_HOME": "%USERPROFILE%\\.apeireth",
+        "APEIRETH_CONFIG": "%APEIRETH_HOME%\\config.toml"
+    },
+    "persist": "data",
+    "post_install": [
+        "[Environment]::SetEnvironmentVariable('Path', $env:Path + ';$dir', 'User')",
+        "if (!(Test-Path $env:APEIRETH_HOME)) { New-Item -ItemType Directory -Path $env:APEIRETH_HOME -Force | Out-Null }",
+        "Write-Host 'Apeireth installed. Run: apeireth serve'"
+    ],
+    "pre_uninstall": [
+        "Write-Host 'Stopping Apeireth...'",
+        "Get-Process apeireth -ErrorAction SilentlyContinue | Stop-Process -Force"
+    ],
+    "checkver": {
+        "url": "https://api.github.com/repos/apeireth/apeireth-rust/releases/latest",
+        "regex": "tag/v([\\d.]+)"
+    },
+    "autoupdate": {
+        "url": "https://api.github.com/repos/apeireth/apeireth-rust/releases?per_page=10",
+        "regex": "tag/v([\\d.]+)"
+    }
+}

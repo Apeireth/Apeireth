@@ -1,0 +1,16 @@
+[package]
+name = "apeireth-cron"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-cron — R23 6 module cron 子模块: 计划任务声明 + 时间窗校验"
+[lib]
+name = "apeireth_cron"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+thiserror = { workspace = true }
+[lints]
+workspace = true

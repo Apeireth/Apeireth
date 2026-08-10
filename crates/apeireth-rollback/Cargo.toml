@@ -1,0 +1,44 @@
+[package]
+name = "apeireth-rollback"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R20 阶段 4 估补: Rollback Service (1:1 翻译 v0.9.21 商业版 out/main/chunks/RollbackService-DN4d2R0Q.js ~22KB, 71GB 事故根因修复 crate)"
+keywords = ["ai", "rollback", "snapshot", "shadow", "incident-defense"]
+categories = ["filesystem", "development-tools"]
+
+[dependencies]
+# async runtime
+tokio = { workspace = true }
+# serialization
+serde = { workspace = true }
+serde_json = "1.0"
+# error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = { workspace = true }
+# git operations (1:1 翻译 RollbackService.js 调 git 子进程, 改走 git2 libgit2 绑定)
+git2 = "0.21"
+# worktree 集成 (per RIVAL §2.2.4 "跟 apeireth-team-lead 的 worktree 子系统联动")
+apeireth-team-lead = { path = "../apeireth-team-lead" }
+# snapshot metadata 持久化 (per RIVAL §2.2.4 集成点)
+apeireth-agent = { path = "../apeireth-agent" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[[example]]
+name = "rollback_demo"
+path = "examples/rollback_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承
+# 业界来源: wasmtime + qdrant 等 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

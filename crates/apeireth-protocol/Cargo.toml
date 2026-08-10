@@ -1,0 +1,35 @@
+[package]
+name = "apeireth-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴 VCP protocolBridge.js 真代码"
+keywords = ["ai", "agent", "protocol", "normalization", "llm"]
+categories = ["api-bindings", "data-structures"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+async-trait = { workspace = true }  # R30 U10: ProtocolBridge async trait
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[[example]]
+name = "router_demo"
+path = "examples/router_demo.rs"
+
+[[example]]
+name = "live_normalize_minimaxi"
+path = "examples/live_normalize_minimaxi.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

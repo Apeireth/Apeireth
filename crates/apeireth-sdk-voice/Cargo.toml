@@ -1,0 +1,72 @@
+# R20 阶段 4 效果: Voice 语音 SDK stub, 默认唤醒词 'apeireth', 0 改 workspace version, 1 owner × 1 周
+# 跟 apeireth-sdk-livekit / apeireth-sdk-sandbox 同模式 (独立 [workspace] 块 + workspace inherit, 0 改主仓库 workspace version).
+# 1:1 翻译 @anthropic-ai/voice v0.9.21 商业版 API 表面: 6 核心 API (transcribe / synthesize /
+# detect_wake / start_listening / stop_listening / stream_audio) + 4 STT 模型 (whisper / wav2vec /
+# deepgram / google) + 4 TTS 模型 (elevenlabs / azure / google / openai) + 4 唤醒词类别
+# (hardcoded / custom / phonetic / semantic) + 3 VAD 算法 (energy / silence / webrtc) +
+# 6 K-1 强校验 (api_key / audio_format / sample_rate / bit_depth / channels / language) +
+# VoiceError 12 variant. 0 真接 @anthropic-ai/voice (R20 阶段 4 skeleton, R21 续真接, 1 owner × 1 周).
+# 默认唤醒词 hardcode "apeireth" (per R20 设计拍板, 1:1 翻译 v0.9.21 商业版品牌一致).
+# 整合阶段: integration sub-agent 删本 [workspace] 块 + 加 `crates/apeireth-sdk-voice` 到主 workspace members.
+# R20 阶段 4 估补: 独立 [workspace] 块让 cargo check / cargo test 在主仓库 workspace members 加入前可跑.
+[package]
+name = "apeireth-sdk-voice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 效果: Voice 语音 SDK stub (1:1 翻译 @anthropic-ai/voice v0.9.21 商业版, 6 核心 API + 4 STT + 4 TTS + 4 唤醒词类别 + 3 VAD + 6 K-1 强校验 + 默认唤醒词 'apeireth', 0 真接 SDK 留 R21 续接, 1 owner × 1 周)"
+keywords = ["voice", "stt", "tts", "wake-word", "vad", "sdk-stub", "agent"]
+categories = ["api-bindings", "asynchronous", "audio"]
+
+[dependencies]
+# async runtime (workspace 锁版本, 跟 lark / livekit / sandbox 同模式)
+tokio = { workspace = true }
+# serialization (VoiceConfig / SttModel / TtsModel / VAD 序列化反序列化)
+serde = { workspace = true }
+serde_json = { workspace = true }
+# error handling (VoiceError 用 thiserror 派生, 10+ variant)
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# tracing (R20 阶段 4 估补: stub 工具返 NotImplemented 时 log)
+tracing = "0.1"
+# async traits (per VoiceClient trait, 6 工具全 async)
+async-trait = { workspace = true }
+# async stream utilities (per stream_audio 事件 Stream<Item> 返回, 后续真接用)
+futures = { workspace = true }
+# 时间戳 (transcribe / synthesize / wake_detect 时间字段)
+chrono = { workspace = true }
+# UUID (audio session id 派生, 1:1 翻译 v0.9.21 商业版 session id 字段)
+uuid = { workspace = true }
+# P0 协议归一化 (per apeireth-protocol 1:1 翻译, 真实集成 R20 阶段 4 续)
+apeireth-protocol = { path = "../apeireth-protocol" }
+# P0 凭证安全 (per apeireth-keyring §2.4.1 + v09021 §2.4.1):
+#   Voice API key 走 OS keyring
+#   (Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD)
+#   + fallback AES-256-GCM + PBKDF2 600_000 加密 (per OWASP 2023)
+#   0 明文存盘 (P0 安全铁律 主人 19:50 拍板)
+apeireth-keyring = { path = "../apeireth-keyring" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[[example]]
+name = "voice_demo"
+path = "examples/voice_demo.rs"
+
+# R19 阶段 0 模式: workspace lint 继承 (wasmtime + qdrant 模式)
+# 跟 livekit / sandbox 同模式, 6 哲学 anchor + 8 项不修改承诺: skeleton 阶段, 允许全 lint
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_must_use = "allow"
+unused_mut = "allow"
+dead_code = "allow"
+unused_imports = "allow"
+missing_docs = "allow"

@@ -1,0 +1,24 @@
+[package]
+name = "apeireth-provider"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R35: 5 Provider client unified (ClaudeCode/Codex/Copilot/GeminiCli/OpenCode)"
+keywords = ["ai", "provider", "claude-code", "codex", "copilot", "gemini", "opencode", "llm-client"]
+categories = ["api-bindings", "asynchronous"]
+publish = false
+
+[dependencies]
+# R35: 直接版本号 (workspace 没声明 [workspace.dependencies])
+# 老 provider crate 的 src/auth.rs 等用了这些
+serde = "1"
+serde_json = "1"
+thiserror = "1"
+tokio = { version = "1", features = ["rt", "macros"] }
+async-trait = "0.1"
+
+[lints]
+workspace = true

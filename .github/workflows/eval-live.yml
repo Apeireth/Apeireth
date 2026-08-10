@@ -1,0 +1,74 @@
+﻿name: Eval LIVE (env-gated MiniMax)
+
+# B5: APEIRETH_EVAL_LIVE=1 env-gated eval 跑 MiniMax
+# - 走 apeireth-eval cross_model_benchmark + smoke_task 真 LLM 跑
+# - 不默认触发 (workflow_dispatch + 手动 trigger), 不污染默认 CI
+# - 借鉴 qdrant-spark CI 模式: live 跑单独 workflow, 默认 CI 走 deterministic
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: 'Provider to test (minimax / openai / anthropic)'
+        required: true
+        default: 'minimax'
+        type: choice
+        options:
+          - minimax
+          - openai
+          - anthropic
+  schedule:
+    # 每周日凌晨 3 点跑 1 次, 监控 LLM 兼容性
+    - cron: '0 3 * * 0'
+  push:
+    branches: [master]
+    paths:
+      - 'crates/apeireth-eval/**'
+      - '.github/workflows/eval-live.yml'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  eval-live:
+    name: eval LIVE (${{ github.event.inputs.provider || 'minimax' }})
+    runs-on: ubuntu-latest
+    if: ${{ vars.APEIRETH_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo build -p apeireth-eval --tests
+        run: cargo build -p apeireth-eval --tests --locked
+
+      - name: APEIRETH_EVAL_LIVE=1 cargo test
+        env:
+          APEIRETH_EVAL_LIVE: "1"
+          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
+          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
+          APEIRETH_PROVIDER: ${{ github.event.inputs.provider || 'minimax' }}
+        run: cargo test -p apeireth-eval --lib -- --nocapture --test-threads=1
+
+      - name: cargo run -p apeireth-eval --example cross_model_benchmark
+        env:
+          APEIRETH_EVAL_LIVE: "1"
+          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
+          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
+        run: cargo run -p apeireth-eval --example cross_model_benchmark
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-live-${{ github.event.inputs.provider || 'minimax' }}-${{ github.run_id }}
+          path: |
+            reports/eval-live-*.md
+            target/cross-model-benchmark-*.json

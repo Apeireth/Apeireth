@@ -1,0 +1,58 @@
+[package]
+name = "apeireth-team-lead"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 1: Team Lead (1:1 翻译 v0.9.21 商业版 out/main/agent/AgentMCPServer.js Orchestrator 缺 P0, A 改 13:34 的版本同步)"
+keywords = ["ai", "agent", "team-lead", "supervisor", "multi-agent"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+# async runtime
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# shared agent types
+apeireth-agent = { path = "../apeireth-agent" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-supervisor = { path = "../apeireth-supervisor" }
+apeireth-bus = { path = "../apeireth-bus" }
+# tools
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# graph (team DAG)
+apeireth-graph = { path = "../apeireth-graph" }
+# pipeline
+apeireth-pipeline = { path = "../apeireth-pipeline" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "team_lead_demo"
+path = "examples/team_lead_demo.rs"
+
+# R19 第 0 阶段: standalone crate (R20 阶段 1 阶段临时独立 workspace,
+# 整合其他 5 P0 crate 时一起 rebase 回归 workspace members)
+# 当前 lints 设置, 不强求跟着 workspace 同步, 减少 noise
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"

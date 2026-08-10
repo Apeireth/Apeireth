@@ -1,0 +1,24 @@
+[Unit]
+Description=Apeireth OS - AI Growth Platform (API server)
+After=network.target
+Documentation=https://github.com/apeireth/apeireth-rust
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/apeireth serve
+Restart=on-failure
+RestartSec=5s
+User=apeireth
+Group=apeireth
+Environment="APEIRETH_HOME=/var/lib/apeireth"
+Environment="APEIRETH_CONFIG=/etc/apeireth/config.toml"
+EnvironmentFile=-/etc/apeireth/env
+LimitNOFILE=65536
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/apeireth /var/log/apeireth
+
+[Install]
+WantedBy=multi-user.target

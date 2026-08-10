@@ -1,0 +1,85 @@
+[package]
+name = "apeireth-integration-e2e"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 5 集成测试 e2e (主仓 + API + TUI 三层端到端, 60+ 测试, 不碰 24 LOCKED)"
+keywords = ["integration-test", "e2e", "workspace", "tui", "api"]
+categories = ["development-tools", "asynchronous", "api-bindings"]
+publish = false
+
+[lib]
+name = "apeireth_integration_e2e"
+path = "src/lib.rs"
+
+[dependencies]
+# 基础 — async runtime + 序列化 + 错误 + tracing
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# TUI 测试 (跟 parent workspace 同款, 避免编译版本冲突)
+ratatui = "0.29"
+crossterm = "0.28"
+
+# HTTP mock server (wiremock 0.6, async + std 兼容)
+wiremock = "0.6"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# 临时目录 (workspace 隔离测试用)
+tempfile = "3"
+
+# 5 K-1 强校验: 同步原语 (parking_lot 比 std Mutex 快, 跟 parent workspace 风格一致)
+parking_lot = "0.12"
+
+# 8 项不修改承诺 #3 "0 改 LOCKED" — path-dep 5 个 LOCKED crate 全部进 dev-dependencies
+# 让 lib (apeireth_integration_e2e) 保持轻量, 仅 tests/ + examples/ 用真 source crate
+# 这也避免 5 crate 传递依赖 (axum + tower + rusqlite + lru + ...) 污染 lib
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+
+# 6 source crate path-dep (dev-only, 0 进 lib)
+apeireth-api = { path = "../apeireth-api" }
+apeireth-observability = { path = "../apeireth-observability" }
+apeireth-constraint = { path = "../apeireth-constraint" }
+apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+
+# 8 项不修改承诺 #4 — 本 crate 不进 parent workspace members
+# 验证: `cd crates/apeireth-integration-e2e && cargo test`
+
+# Lints — 复用 parent workspace 风格 (qdrant/wasmtime 精选, missing_docs allow)
+# 不继承 `workspace = true` (sub-workspace 没继承)
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+missing_docs = "allow"
+unused_imports = "allow"
+dead_code = "allow"
+unused_must_use = "allow"
+unused_mut = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+uninlined_format_args = "allow"
+match_wildcard_for_single_variants = "allow"
+wildcard_enum_match_arm = "allow"
+missing_docs_in_private_items = "allow"
+needless_raw_string_hashes = "allow"
+unused_async = "allow"
+
+[[example]]
+name = "integration_e2e_demo"
+path = "examples/integration_e2e_demo.rs"

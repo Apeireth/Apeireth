@@ -1,0 +1,15 @@
+[package]
+name = "apeireth-test"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-test — R23 6 module test 子模块: 测试用例描述 + 重试 + 报告"
+[lib]
+name = "apeireth_test"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+[lints]
+workspace = true

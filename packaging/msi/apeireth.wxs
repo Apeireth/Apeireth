@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Apeireth Windows MSI (8 包之 1, D-06 拍板)
+  平台: Windows (msiexec /i apeireth-1.0.0-x86_64.msi)
+  工具: WiX 3.x (cargo-wix 自动生成)
+  体积: ~50MB (含 Windows service 注册)
+  验证: msiexec /i apeireth-1.0.0-x86_64.msi
+        services.msc 找 "Apeireth OS"
+        curl http://localhost:8080/health
+  卸载: msiexec /x apeireth-1.0.0-x86_64.msi
+
+  注: cargo-wix 会基于此模板 + Cargo.toml [package.metadata.wix] 自动生成 MSI。
+      0 触碰 (per 任务规范): MSI 实装待 release engineer 阶段 3 末触发。
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <Product Id="*" Name="Apeireth OS" Version="1.0.0.0"
+           Manufacturer="Apeireth Team" Language="1033"
+           UpgradeCode="PUT-GUID-HERE-AT-BUILD-TIME">
+
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine"
+             Description="Apeireth OS 1.0.0 - AI Growth Platform"
+             Comments="Apache-2.0 license, 详见 https://github.com/apeireth/apeireth-rust"
+             Manufacturer="Apeireth Team" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- 功能组件: 必选 (默认 install) -->
+    <Feature Id="ProductFeature" Title="Apeireth OS" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentRef Id="ServiceComponent" />
+      <ComponentRef Id="EnvironmentComponent" />
+    </Feature>
+
+    <!-- 默认安装目录: C:\Program Files\Apeireth\ -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="Apeireth">
+          <Directory Id="BIN" Name="bin" />
+          <Directory Id="CONFIG" Name="config" />
+          <Directory Id="LOG" Name="log" />
+          <Directory Id="DATA" Name="data" />
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <!-- 主程序 + LICENSE + 配置 -->
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLDIR">
+      <Component Id="MainExecutable" Guid="PUT-GUID-MAIN">
+        <File Id="ApeirethExe" Source="target\x86_64-pc-windows-msvc\release\apeireth.exe"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="LicenseFile" Guid="PUT-GUID-LICENSE">
+        <File Id="LicenseFile" Source="LICENSE" />
+      </Component>
+      <Component Id="ReadmeFile" Guid="PUT-GUID-README">
+        <File Id="ReadmeFile" Source="README.md" />
+      </Component>
+      <Component Id="ConfigExample" Guid="PUT-GUID-CONFIG">
+        <File Id="ConfigExample" Source="packaging\zip\stage\config\apeireth.env.example" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- Windows Service 注册 (util:ServiceConfig) -->
+    <Component Id="ServiceComponent" Guid="PUT-GUID-SERVICE" Directory="INSTALLDIR">
+      <util:ServiceConfig
+        Id="ApeirethService"
+        Name="ApeirethOS"
+        DisplayName="Apeireth OS - AI Growth Platform"
+        Description="长程 AI 成长平台 API server"
+        Start="auto"
+        Type="ownProcess"
+        ErrorControl="normal"
+        Arguments="serve"
+        BinaryKey="ApeirethExe" />
+    </Component>
+
+    <!-- 环境变量 (per blueprint §3.4 install.ps1 等价) -->
+    <Component Id="EnvironmentComponent" Guid="PUT-GUID-ENV" Directory="INSTALLDIR">
+      <Environment Id="APEIRETH_HOME" Name="APEIRETH_HOME" Value="[INSTALLDIR]data"
+                    Action="set" System="yes" Part="all" />
+      <Environment Id="APEIRETH_CONFIG" Name="APEIRETH_CONFIG"
+                    Value="[INSTALLDIR]config\config.toml" Action="set" System="yes" Part="all" />
+    </Component>
+
+    <!-- UI -->
+    <UI>
+      <UIRef Id="WixUI_Minimal" />
+    </UI>
+
+  </Product>
+</Wix>

@@ -1,0 +1,41 @@
+[package]
+name = "apeireth-asi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth ASI 北极星指标 (V0.5 5 维 + V1136 真测 7 子测度) — R14 Phase 2 Rust 重设计"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-api = { path = "../apeireth-api" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[lib]
+name = "apeireth_asi"
+path = "src/lib.rs"
+
+[[example]]
+name = "calibrate_demo"
+path = "examples/calibrate_demo.rs"
+
+[[example]]
+name = "real_judge_demo"
+path = "examples/real_judge_demo.rs"
+
+[[example]]
+name = "real_effect_demo"
+path = "examples/real_effect_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

@@ -1,0 +1,69 @@
+[package]
+name = "apeireth-observability"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 1: observability skeleton (1:1 翻译 v09021-rust-translation-blueprint §2.5.3, 1.0 release 12 项 checklist #8 observability 必做). tracing (per-request trace_id+span_id) + metrics (Prometheus 文本格式) + structured JSON logging + 3 health 端点 (/health /ready /metrics). 阶段 1 skeleton 用 std tracing + 简单 JSON 日志, 0 引 OpenTelemetry SDK (留 R20 阶段 3 续)."
+keywords = ["observability", "tracing", "metrics", "prometheus", "opentelemetry"]
+categories = ["development-tools", "asynchronous", "api-bindings"]
+
+# R20 阶段 1: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+# 跟 `apeireth-keyring` / `apeireth-machine-id` / `apeireth-lark` skeleton 阶段同模式.
+[dependencies]
+apeireth-telemetry = { path = "../apeireth-telemetry" }
+# async runtime (给 /ready 异步 + 示例)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (Prometheus exposition format + JSON 日志 + trace context 注入)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing core (per-request span_id/trace_id 注入; 0 引 OpenTelemetry SDK)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+# async traits
+async-trait = "0.1"
+# 时间戳 (health check 探针 + log timestamp)
+chrono = { version = "0.4", features = ["serde"] }
+# random (TraceId / SpanId 16-byte / 8-byte 生成)
+rand = "0.8"
+# HTTP 客户端 (Prometheus OTLP push 留口子, skeleton 阶段 0 实际 push)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# PII 脱敏 (regex pattern 匹配 password/secret/token/key)
+regex = "1.10"
+# hex 编码 (TraceId / SpanId 16 进制可读输出)
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+# R21 1.0 release #7 perf 续 (D-P3): observability 9 organ + 3 端点 + 整体 dashboard bench.
+# 借 criterion 0.5 (dev-dependencies 已有), 跟 sister 报告 §5.2 9+3+5+1+1 = 19 bench 中核心 9+3+1 部分对齐.
+[[bench]]
+name = "dashboard"
+harness = false
+
+[[example]]
+name = "observability_demo"
+path = "examples/observability_demo.rs"
+
+# R25.2 估补: 9 器官 + 3 端点端到端例子 (per 1.0 release #8 observability 100%).
+# examples/*.rs 自动发现, 不需 [[example]] 块 (0 改 Cargo.toml LOCKED 守门).
+# 跑: cargo run -p apeireth-observability --example tui_dashboard_demo
+
+# R19 第 0 阶段: skeleton 阶段不强求 workspace lint 同步, 避免 noise (跟 keyring/machine-id/lark 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"

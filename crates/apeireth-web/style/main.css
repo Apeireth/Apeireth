@@ -1,0 +1,250 @@
+/* Apeireth Web 样式 (R18 MVP) */
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 2rem;
+}
+
+.apeireth-app {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.apeireth-header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+}
+
+.apeireth-header h1 {
+    font-size: 3rem;
+    background: linear-gradient(90deg, #00d2ff 0%, #3a47d5 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+    font-weight: 700;
+}
+
+.apeireth-tagline {
+    color: #a0a0c0;
+    font-size: 1.1rem;
+    font-style: italic;
+}
+
+.apeireth-form {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(10px);
+}
+
+.apeireth-label {
+    display: block;
+    margin-bottom: 1.5rem;
+}
+
+.apeireth-label > span {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #c0c0e0;
+}
+
+.apeireth-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: #e0e0e0;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+.apeireth-input:focus {
+    outline: none;
+    border-color: #00d2ff;
+    box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.2);
+}
+
+.apeireth-button {
+    display: block;
+    width: 100%;
+    padding: 1rem 2rem;
+    background: linear-gradient(90deg, #00d2ff 0%, #3a47d5 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.apeireth-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 210, 255, 0.3);
+}
+
+.apeireth-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.apeireth-error {
+    background: rgba(220, 38, 38, 0.2);
+    border: 1px solid rgba(220, 38, 38, 0.5);
+    color: #fca5a5;
+    padding: 1rem;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+
+.apeireth-loading {
+    text-align: center;
+    padding: 3rem;
+}
+
+.apeireth-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #00d2ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.apeireth-result {
+    margin-top: 2rem;
+}
+
+.verdict-panel {
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.verdict-approved {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(34, 197, 94, 0.05));
+    border: 2px solid rgba(34, 197, 94, 0.5);
+}
+
+.verdict-rejected {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.2), rgba(220, 38, 38, 0.05));
+    border: 2px solid rgba(220, 38, 38, 0.5);
+}
+
+.verdict-review {
+    background: linear-gradient(135deg, rgba(234, 179, 8, 0.2), rgba(234, 179, 8, 0.05));
+    border: 2px solid rgba(234, 179, 8, 0.5);
+}
+
+.verdict-label {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.verdict-topic {
+    color: #a0a0c0;
+    font-size: 1rem;
+}
+
+.verdict-topic-label {
+    color: #7070a0;
+    font-weight: 600;
+}
+
+.council-grid h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    color: #c0c0e0;
+}
+
+.council-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.council-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 1.5rem;
+    backdrop-filter: blur(10px);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.council-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.council-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.council-domain {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #e0e0e0;
+}
+
+.council-stance {
+    padding: 0.25rem 0.75rem;
+    border-radius: 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.stance-approve {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+    border: 1px solid rgba(34, 197, 94, 0.5);
+}
+
+.stance-reject {
+    background: rgba(220, 38, 38, 0.2);
+    color: #fca5a5;
+    border: 1px solid rgba(220, 38, 38, 0.5);
+}
+
+.stance-neutral {
+    background: rgba(234, 179, 8, 0.2);
+    color: #fde68a;
+    border: 1px solid rgba(234, 179, 8, 0.5);
+}
+
+.council-reasoning {
+    color: #c0c0e0;
+    line-height: 1.6;
+    font-size: 0.95rem;
+    max-height: 200px;
+    overflow-y: auto;
+}

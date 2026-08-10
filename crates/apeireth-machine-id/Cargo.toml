@@ -1,0 +1,68 @@
+[package]
+name = "apeireth-machine-id"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R20 阶段 1: 跨平台机器指纹 crate (1:1 翻译 v0.9.21 商业版 out/main/chunks/getMachineId-{bsd,darwin,linux,unsupported,win}-*.js 5 文件)"
+keywords = ["ai", "machine-id", "device-fingerprint", "cross-platform", "agent"]
+categories = ["api-bindings", "os", "hardware-support"]
+
+[dependencies]
+# async runtime (workspace 统一, 包含 process/fs features)
+tokio = { workspace = true }
+# serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+# error handling
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# SHA-256 + hex (MACHINE_ID_HASH_ALGO = "sha256" hardcode 实现)
+sha2 = "0.10"
+hex = "0.4"
+# 文件读取 (4 平台共, Linux 3 个 fallback + BSD hostid + Windows reg 备)
+# workspace 的 fs_err 键 broken (实际 crate 名 fs-err, 0 改 workspace root, 直接引)
+fs-err = "3.0"
+# UUID v4 (derive_id 返 Uuid, 1:1 翻译 v0.9.21 machineId 格式 RFC 4122)
+# 加 v5 feature: 派生稳定的 RFC 4122 v5 UUID (per Uuid::new_v5 API)
+uuid = { workspace = true, features = ["v5"] }
+# HMAC-SHA256 (per 1:1 翻译 v0.9.21, 商业版用 node crypto.createHmac 派生稳定 machine_id)
+hmac = "0.12"
+# tracing (log 探测结果, 0 落密文, 只记 source + 长度)
+tracing = "0.1"
+# 时间 (MachineIdExport RFC 3339 格式化)
+chrono = { workspace = true }
+# async-trait (R20 阶段 6 flesh out #1: Provider trait dyn 兼容, workspace 已有)
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "machine_id_demo"
+path = "examples/machine_id_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (wasmtime + qdrant 模式)
+# 6 哲学 anchor + 8 项不修改承诺: skeleton 严守, 不增全局 lint
+#
+# 注: workspace.lints.rust 把 `unused_async` (clippy lint) 放错了段 (R19 T10 known issue),
+# 继承后本 crate cargo check 会出 E0602 unknown lint warning. 本 crate 自定义最小 lint 集回避.
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_must_use = "allow"
+unused_mut = "allow"
+dead_code = "allow"
+unused_imports = "allow"
+missing_docs = "allow"

@@ -1,0 +1,43 @@
+[package]
+name = "apeireth-graph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth v2.0 P0 deterministic graph orchestration and checkpoints"
+
+[features]
+default = []
+supervisor-integration = ["dep:apeireth-supervisor"]
+
+[dependencies]
+apeireth-supervisor = { path = "../apeireth-supervisor", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "rt", "macros"] }
+uuid = { workspace = true }
+apeireth-asi = { path = '../apeireth-asi' }
+apeireth-mcp = { path = "../apeireth-mcp" }
+apeireth-cognition = { path = '../apeireth-cognition' }
+apeireth-core = { path = '../apeireth-core' }
+
+[[example]]
+name = "linear_3_nodes"
+path = "examples/linear_3_nodes.rs"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true
+
+

@@ -1,0 +1,89 @@
+[package]
+name = "apeireth-integration-r20-stage4"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 集成测试 — 14 crate cross-crate (5 P0 MCP + 3 估缺核心 + 2 工具 + 2 基础设施 + 2 SDK stub), 30+ 集成测试, 0 改 LOCKED, 0 改 workspace version"
+keywords = ["integration-test", "r20-stage4", "14-crate", "m3-defense", "rollback"]
+categories = ["development-tools"]
+publish = false
+
+[lib]
+name = "apeireth_integration_r20_stage4"
+path = "src/lib.rs"
+
+[dependencies]
+# 基础 — async runtime + 序列化 + 错误 + tracing
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# 5 K-1 强校验: 同步原语 (parking_lot 比 std Mutex 快, 跟 parent workspace 风格一致)
+parking_lot = "0.12"
+
+# 8 项不修改承诺 #3 "0 改 LOCKED" — path-dep 14 source crate 全部进 dev-dependencies
+# 让 lib (apeireth_integration_r20_stage4) 保持轻量, 仅 tests/ 用真 source crate
+# 这也避免 14 crate 传递依赖污染 lib (m3-defense 5 P0 MCP crate 各有 ~50 dep)
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+tempfile = "3"
+
+# 14 source crate path-dep (dev-only, 0 进 lib)
+apeireth-sdk = { path = "../apeireth-sdk" }
+apeireth-team-lead = { path = "../apeireth-team-lead" }
+apeireth-observability = { path = "../apeireth-observability" }
+apeireth-i18n = { path = "../apeireth-i18n" }
+apeireth-agent = { path = "../apeireth-agent" }
+apeireth-rollback = { path = "../apeireth-rollback" }
+apeireth-mcp = { path = "../apeireth-mcp" }
+apeireth-mcp-ssh = { path = "../apeireth-mcp-ssh" }
+apeireth-mcp-winrm = { path = "../apeireth-mcp-winrm" }
+apeireth-mcp-relay-image = { path = "../apeireth-mcp-relay-image" }
+apeireth-keyring = { path = "../apeireth-keyring" }
+apeireth-machine-id = { path = "../apeireth-machine-id" }
+apeireth-workflow = { path = "../apeireth-workflow" }
+apeireth-plugin = { path = "../apeireth-plugin" }
+apeireth-repo-analyzer = { path = "../apeireth-repo-analyzer" }
+apeireth-repo-scan = { path = "../apeireth-repo-scan" }
+apeireth-lark = { path = "../apeireth-lark" }
+apeireth-voice = { path = "../apeireth-voice" }
+apeireth-image-prompt = { path = "../apeireth-image-prompt" }
+
+# 8 项不修改承诺 #4 — 本 crate 不进 parent workspace members
+# 验证: `cd crates/apeireth-integration-r20-stage4 && cargo test`
+
+# Lints — 复用 parent workspace 风格 (qdrant/wasmtime 精选, missing_docs allow)
+# 不继承 `workspace = true` (sub-workspace 没继承)
+[lints.rust]
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+missing_docs = "allow"
+unused_imports = "allow"
+dead_code = "allow"
+unused_must_use = "allow"
+unused_mut = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+uninlined_format_args = "allow"
+match_wildcard_for_single_variants = "allow"
+wildcard_enum_match_arm = "allow"
+missing_docs_in_private_items = "allow"
+needless_raw_string_hashes = "allow"
+unused_async = "allow"
+
+[[test]]
+name = "r20_stage4"
+path = "tests/r20_stage4_integration_14crates.rs"
