@@ -1,18 +1,18 @@
 # V1417 — ASI 总框架 DGM tick history (JSONL log + trend + digest)
 
-**Generated:** 2026-08-09T19-10-37Z (Asia/Shanghai deep night, cron tick)
+**Generated:** 2026-08-09T21-09-03Z (Asia/Shanghai deep night, cron tick)
 **Version:** 0.1.0
 **Schema:** v1417.asi-dgm-tick-history/v1
 **Module:** v1417_asi_dgm_tick_history
 
 ## 1. Summary (主 22:33 ASI 总框架 DGM tick history 真生产)
 
-- 真实 tick 数: **11**
-- PROCEED: **11** (100.0%)
+- 真实 tick 数: **2**
+- PROCEED: **2** (100.0%)
 - PAUSE: **0** (0.0%)
 - LOCKDOWN: **0** (0.0%)
-- chain_ok 率: **100.0%** (11/11)
-- alerts 总数 / 平均: **1** / **0.09**
+- chain_ok 率: **100.0%** (2/2)
+- alerts 总数 / 平均: **0** / **0.00**
 - escalation 总数 / 平均: **0** / **0.00**
 - trend: **IMPROVING** (proceed_ratio=1.00 ≥ 0.8, chain_ok_rate=1.00 ≥ 0.7, lockdown_ratio=0.00 < 0.2)
 - 真借鉴 (主 19:33 走在前人经验上): 4 borrowed
@@ -33,22 +33,13 @@
 
 | timestamp | tick_id | policy | chain_ok | alerts | max_severity | escalation | n_modules |
 |---|---|---|---|---|---|---|---|
-| 2026-08-09T19-10-37Z | `2026-08-09T19-10-37Z_v1416_598c` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T19-10-36Z | `2026-08-09T19-10-36Z_v1416_4452` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T19-10-35Z | `2026-08-09T19-10-35Z_v1416_81d8` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T18-56-09Z | `2026-08-09T18-56-09Z_v1416_6c6c` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T18-56-09Z | `2026-08-09T18-56-09Z_v1416_6c6c` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T18-56-08Z | `2026-08-09T18-56-08Z_v1416_a876` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T18-56-05Z | `2026-08-09T18-56-05Z_v1416_bbcd` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-10T00-02-00Z | `sim_t4` | PROCEED | True | 1 | WARN | 0 | 5 |
-| 2026-08-10T00-01-00Z | `sim_t3` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-10T00-00-00Z | `sim_t2` | PROCEED | True | 0 | INFO | 0 | 5 |
-| 2026-08-09T18-39-16Z | `2026-08-09T18-39-16Z_v1416_db46` | PROCEED | True | 0 | INFO | 0 | 5 |
+| 2026-08-09T21-09-03Z | `2026-08-09T21-09-03Z_v1416_0f5e` | PROCEED | True | 0 | INFO | 0 | 5 |
+| 2026-08-09T21-09-03Z | `2026-08-09T21-09-03Z_v1416_0f5e` | PROCEED | True | 0 | INFO | 0 | 5 |
 
 ## 4. Trend (主 00:44 质量工程化 4 trend)
 
 - direction: **IMPROVING**
-- n_snapshots: **11**
+- n_snapshots: **2**
 - first_policy → last_policy: `PROCEED` → `PROCEED`
 - proceed_ratio: **100.00%**
 - chain_ok_rate: **100.00%**
@@ -59,33 +50,12 @@
 
 ## 5. Digest (主 19:33 走在前人经验上 V1376)
 
-- n_ticks: **11**
-- span: **1881s** (2026-08-09T18-39-16Z → 2026-08-09T19-10-37Z)
+- n_ticks: **2**
+- span: **0s** (2026-08-09T21-09-03Z → 2026-08-09T21-09-03Z)
 - proceed_ratio / pause_ratio / lockdown_ratio: **100.00%** / **0.00%** / **0.00%**
-- alerts_total / alerts_avg: **1** / **0.09**
+- alerts_total / alerts_avg: **0** / **0.00**
 - escalation_total / escalation_avg: **0** / **0.00**
 - chain_ok_rate: **100.00%**
-
-## 6. Baseline
-
-- baseline_timestamp: **2026-08-10T00-02-00Z**
-- policy: **PROCEED**
-- chain_ok: **True**
-- alerts_count: **1**
-- escalation_count: **0**
-- source_snapshot_index: **3**
-- created_at: **2026-08-09T18-45-36Z**
-
-## 7. Compare to baseline
-
-- baseline_timestamp → current_timestamp: `2026-08-10T00-02-00Z` → `2026-08-09T19-10-37Z`
-- delta_alerts: **-1**
-- delta_escalation: **+0**
-- policy_regressed: **False**
-- policy_improved: **False**
-- chain_ok_regressed: **False**
-- verdict: **IMPROVEMENT**
-- reasons: alerts Δ=-1
 
 ## 8. Honest disclosure (主 17:58)
 

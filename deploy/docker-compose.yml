@@ -1,28 +1,26 @@
-# Canonical local deployment. Run from repository root:
-#   docker compose -f deploy/docker-compose.yml up --build -d
+# Apeireth ASI 真生产 Docker Compose (主 23:44 + 主 22:33 + 主 17:33)
+version: '3.8'
 services:
-  asi-api:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
-    image: apeireth-asi:0.1.0
-    restart: unless-stopped
-    init: true
+  asi-core:
+    image: apeireth/asi-core:0.1.0
     ports:
-      - "8765:8765"
+      - "18765:18765"
     environment:
-      ASI_VERSION: "0.1.0"
-      OTEL_SERVICE_NAME: apeireth-asi
-      V1075_HOST: 0.0.0.0
-      V1075_PORT: "8765"
+      - ASI_MODE=core
+      - ASI_LOG_LEVEL=INFO
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8765/health',timeout=3)"]
-      interval: 15s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:18765/api/asi/health"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 10s
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 512M
+  asi-bench:
+    image: apeireth/asi-bench:0.1.0
+    ports:
+      - "18766:18766"
+    environment:
+      - ASI_MODE=benchmark
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18766/api/asi/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
