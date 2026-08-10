@@ -1,0 +1,4 @@
+# 调研归档 — 大文件不进 git
+research/08-rust-substrate-current/target/
+research/08-rust-substrate-current/Cargo.lock
+*.tmp

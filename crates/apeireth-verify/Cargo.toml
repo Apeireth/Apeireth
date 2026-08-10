@@ -1,0 +1,32 @@
+[package]
+name = "apeireth-verify"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth cross-crate regression verification mechanism"
+
+[lib]
+name = "apeireth_verify"
+path = "src/lib.rs"
+
+[dependencies]
+apeireth-asi = { path = "../apeireth-asi" }
+
+[dev-dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-supervisor = { path = "../apeireth-supervisor" }
+apeireth-cognition = { path = "../apeireth-cognition" }
+apeireth-constraint = { path = "../apeireth-constraint" }
+
+[[example]]
+name = "walk_all_crates"
+path = "examples/walk_all_crates.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

@@ -1,0 +1,32 @@
+# Apeireth cargo-rpm metadata
+# 用于 `cargo rpm build` 自动生成 apeireth.spec (本目录的 spec 是手写正本)
+# cargo-rpm 文档: https://github.com/rust-embedded/cargo-rpm
+#
+# 0 触碰 (per 任务规范): 1.0 release 时由 release engineer 决定用 yaml 自动生成还是手写 spec
+# 当前用 packaging/rpm/apeireth.spec (手写, 信息更全, 含 %pre / %post / systemd 集成)
+
+name: apeireth
+version: 1.0.0
+release: 1
+summary: Apeireth OS - AI Growth Platform (API server)
+license: Apache-2.0
+url: https://github.com/apeireth/apeireth-rust
+description: |
+  Apeireth OS — 长程 AI 成长平台 (立体架构 v2 + 生命架构 v4).
+  本包提供 API server (apeireth) 二进制, 默认监听 :8080 (HTTP/WS) + :9090 (metrics).
+
+build_depends:
+  - cargo
+  - pkgconfig(openssl)
+  - pkgconfig(sqlite3)
+  - pkgconfig(libgit2)
+
+depends:
+  - openssl-libs
+  - sqlite-libs
+  - libgit2
+  - ca-certificates
+
+files:
+  - target/release/apeireth
+  - /usr/lib/systemd/system/apeireth.service

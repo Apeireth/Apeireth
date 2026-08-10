@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    ΑΠΕΙΡΕΘ Logo — 时代 ERA (钢蓝)
+    同款不同色, 锋锐 display 衬线, 发丝线更细, 星座连线
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240" width="480">
+    <!-- 发丝线 (更细, 0.4) -->
+    <line x1="100" y1="160" x2="358" y2="160"
+          stroke="var(--text-primary)" stroke-width="0.4" opacity="0.5" />
+    <line x1="370" y1="160" x2="500" y2="160"
+          stroke="var(--text-primary)" stroke-width="0.4" opacity="0.3" />
+
+    <!-- ΑΠΕΙΡΕΘ 字标 (锋锐 display, 凹陷) -->
+    <text x="300" y="100" text-anchor="middle"
+          font-family="Cormorant Garamond, Times New Roman, serif"
+          font-size="34" font-weight="300" letter-spacing="0.32em"
+          fill="var(--text-primary)" filter="url(#engrave)">
+        ΑΠΕΙΡΕΘ
+    </text>
+
+    <!-- 北极星 (4 顶点, 钢蓝) -->
+    <path d="M 300 139 L 308 160 L 300 181 L 292 160 Z"
+          fill="var(--accent)" />
+    <circle cx="300" cy="160" r="3" fill="var(--accent-dim)" />
+
+    <!-- 边角细节: 钢蓝冷光 -->
+    <circle cx="300" cy="160" r="12" fill="var(--accent)" opacity="0.06" />
+</svg>

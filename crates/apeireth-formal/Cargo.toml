@@ -1,0 +1,31 @@
+[package]
+name = "apeireth-formal"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth formal verification and proof backend facade"
+[lib]
+name = "apeireth_formal"
+path = "src/lib.rs"
+[dependencies]
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
+
+[[example]]
+name = 'formal_demo'
+path = 'examples/formal_demo.rs'
+
+
+[dev-dependencies]
+criterion = { version = '0.5', features = ['html_reports'] }
+# R122-9 (v2.1 P2-11): Kani 形式化验证 skeleton (Apeireth 独家, VCP 0 Kani)
+# `kani` crate 0.0.1 是 crates.io 上的 placeholder — 真路径 cargo-kani 在
+# 跑 `cargo kani` 时自动注入 kani crate (含 kani::any() / kani::proof / kani::assume).
+# 占位 crate 的作用: 让 `cargo build` / `cargo test` 不需要 cargo-kani 也能编.
+# 详见: https://model-checking.github.io/kani/ + 本 crate KANI.md
+kani = "0.0.1"
+

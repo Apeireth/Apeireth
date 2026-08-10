@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-tool-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R17 战役 2-2: 工具运行时 (parser + executor + record + privacy, VCP 借鉴 vcpLoop + toolCallRecordStore + toolResultPrivacyGuard + §6.2.2 #18)"
+keywords = ["ai", "tool", "runtime", "parser", "executor", "privacy"]
+categories = ["api-bindings", "data-structures"]
+
+[dependencies]
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-memory = { path = "../apeireth-memory" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+regex = "1"
+chrono = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+tracing = "0.1"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "runtime_demo"
+path = "examples/runtime_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

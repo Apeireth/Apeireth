@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth ASI 24 维雷达图 (V0.5)</title>
+    <meta name="description" content="Apeireth ASI V0.5 24 维真实测量 (apeireth-asi 后端), SVG 雷达图可视化" />
+    <style>
+        .asi-radar-wrap { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+        .asi-radar-svg { background: #fafafa; border: 1px solid #ddd; border-radius: 8px; padding: 12px; }
+        .asi-radar-info { flex: 1 1 320px; min-width: 280px; }
+        .asi-radar-info h2 { margin: 0 0 8px 0; font-size: 1.1em; }
+        .asi-radar-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        .asi-radar-table th, .asi-radar-table td { border-bottom: 1px solid #eee; padding: 4px 8px; text-align: left; }
+        .asi-radar-table th { background: #f0f0f0; font-weight: 600; }
+        .asi-radar-table .dim-idx { color: #888; font-family: monospace; width: 28px; }
+        .asi-radar-table .dim-name { font-family: monospace; color: #555; }
+        .asi-radar-table .dim-full { color: #333; }
+        .asi-radar-table .dim-bar { width: 100px; padding: 0; }
+        .asi-radar-table .bar { display: block; height: 8px; background: linear-gradient(90deg, #4287f5, #42c5f5); border-radius: 4px; }
+        .asi-radar-table .dim-val { font-family: monospace; text-align: right; width: 50px; }
+        .asi-summary { background: #f6f8fa; border-left: 3px solid #4287f5; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+        .asi-summary code { background: #e1e4e8; padding: 1px 6px; border-radius: 3px; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <main class="apeireth-app">
+        <header class="apeireth-header">
+            <h1>Apeireth ASI · 24 维 V0.5 雷达图</h1>
+            <p class="apeireth-tagline">R18 sub-agent #4 · 端到端真接通 apeireth-asi · DimensionRegistry::compute_all_dims</p>
+        </header>
+
+        <div class="asi-summary">
+            <p>📊 <strong>本次测量</strong>: 跑 <code>200</code> 次合成测量后, 取最新一次 trace (trace_id = <code>200</code>) 的 24 维值。</p>
+            <p>📐 <strong>24 维均值</strong>: <code>0.2250</code> (clamp [0, 1])</p>
+            <p>🧮 <strong>公式</strong>: 19 维 = <code>successes / attempts × quality × latency_factor</code>, 5 维哲学守门 (v1/v2/v3/cone_of_truth/action_guard) = <code>passed / total</code> (clamp [0, 1]).</p>
+            <p>🎯 <strong>trade-off</strong>: 当前为 demo 模式 (200 次合成 sample), 真生产环境应从 R17 Memory/Episode 抽取观察喂入 <code>MeasurementSample</code>。</p>
+        </div>
+
+        <div class="asi-radar-wrap">
+            <svg class="asi-radar-svg" viewBox="0 0 400 400" width="420" height="420" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="200" cy="200" r="30.00" fill="none" stroke="#d0d0d0" stroke-width="0.5" stroke-dasharray="2 2"/>
+<circle cx="200" cy="200" r="60.00" fill="none" stroke="#d0d0d0" stroke-width="0.5" stroke-dasharray="2 2"/>
+<circle cx="200" cy="200" r="90.00" fill="none" stroke="#d0d0d0" stroke-width="0.5" stroke-dasharray="2 2"/>
+<circle cx="200" cy="200" r="120.00" fill="none" stroke="#d0d0d0" stroke-width="0.5" stroke-dasharray="2 2"/>
+<circle cx="200" cy="200" r="150.00" fill="none" stroke="#d0d0d0" stroke-width="0.5" stroke-dasharray="2 2"/>
+
+                <line x1="200" y1="200" x2="200.00" y2="50.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="238.82" y2="55.11" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="275.00" y2="70.10" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="306.07" y2="93.93" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="329.90" y2="125.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="344.89" y2="161.18" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="350.00" y2="200.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="344.89" y2="238.82" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="329.90" y2="275.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="306.07" y2="306.07" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="275.00" y2="329.90" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="238.82" y2="344.89" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="200.00" y2="350.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="161.18" y2="344.89" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="125.00" y2="329.90" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="93.93" y2="306.07" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="70.10" y2="275.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="55.11" y2="238.82" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="50.00" y2="200.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="55.11" y2="161.18" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="70.10" y2="125.00" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="93.93" y2="93.93" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="125.00" y2="70.10" stroke="#e0e0e0" stroke-width="0.5"/>
+<line x1="200" y1="200" x2="161.18" y2="55.11" stroke="#e0e0e0" stroke-width="0.5"/>
+
+                <polygon points="200.00,80.00 207.76,171.02 215.00,174.02 221.21,178.79 225.98,185.00 228.98,192.24 230.00,200.00 228.98,207.76 225.98,215.00 221.21,221.21 215.00,225.98 207.76,228.98 200.00,230.00 192.24,228.98 185.00,225.98 178.79,221.21 174.02,215.00 171.02,207.76 170.00,200.00 171.02,192.24 174.02,185.00 178.79,178.79 185.00,174.02 192.24,171.02" fill="rgba(66,135,245,0.35)" stroke="#4287f5" stroke-width="1.5" />
+                <text x="200.00" y="32.00" font-size="9" fill="#333" text-anchor="middle">线程连</text>
+<text x="243.48" y="37.72" font-size="9" fill="#333" text-anchor="middle">事实记</text>
+<text x="284.00" y="54.51" font-size="9" fill="#333" text-anchor="start">上下文</text>
+<text x="318.79" y="81.21" font-size="9" fill="#333" text-anchor="start">会话恢</text>
+<text x="345.49" y="116.00" font-size="9" fill="#333" text-anchor="start">身份持</text>
+<text x="362.28" y="156.52" font-size="9" fill="#333" text-anchor="start">重要性</text>
+<text x="368.00" y="200.00" font-size="9" fill="#333" text-anchor="start">新颖度</text>
+<text x="362.28" y="243.48" font-size="9" fill="#333" text-anchor="start">可执行</text>
+<text x="345.49" y="284.00" font-size="9" fill="#333" text-anchor="start">置信度</text>
+<text x="318.79" y="318.79" font-size="9" fill="#333" text-anchor="start">时序性</text>
+<text x="284.00" y="345.49" font-size="9" fill="#333" text-anchor="start">核心值</text>
+<text x="243.48" y="362.28" font-size="9" fill="#333" text-anchor="middle">语气一</text>
+<text x="200.00" y="368.00" font-size="9" fill="#333" text-anchor="middle">行为模</text>
+<text x="156.52" y="362.28" font-size="9" fill="#333" text-anchor="middle">角色遵</text>
+<text x="116.00" y="345.49" font-size="9" fill="#333" text-anchor="end">哲学对</text>
+<text x="81.21" y="318.79" font-size="9" fill="#333" text-anchor="end">V1通过</text>
+<text x="54.51" y="284.00" font-size="9" fill="#333" text-anchor="end">V2通过</text>
+<text x="37.72" y="243.48" font-size="9" fill="#333" text-anchor="end">V3通过</text>
+<text x="32.00" y="200.00" font-size="9" fill="#333" text-anchor="end">真锥率</text>
+<text x="37.72" y="156.52" font-size="9" fill="#333" text-anchor="end">动作守</text>
+<text x="54.51" y="116.00" font-size="9" fill="#333" text-anchor="end">跨域泛</text>
+<text x="81.21" y="81.21" font-size="9" fill="#333" text-anchor="end">抽象层</text>
+<text x="116.00" y="54.51" font-size="9" fill="#333" text-anchor="end">类比质</text>
+<text x="156.52" y="37.72" font-size="9" fill="#333" text-anchor="middle">工具复</text>
+
+            </svg>
+
+            <div class="asi-radar-info">
+                <h2>24 维详细数值 (V0.5 公式)</h2>
+                <table class="asi-radar-table">
+                    <thead>
+                        <tr><th>#</th><th>短名</th><th>全名</th><th>条</th><th>值</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td class="dim-idx">1</td><td class="dim-name">线程连</td><td class="dim-full">thread_continuity</td><td class="dim-bar"><div class="bar" style="width: 80%"></div></td><td class="dim-val">0.800</td></tr><tr><td class="dim-idx">2</td><td class="dim-name">事实记</td><td class="dim-full">fact_recall</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">3</td><td class="dim-name">上下文</td><td class="dim-full">context_window</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">4</td><td class="dim-name">会话恢</td><td class="dim-full">session_recovery</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">5</td><td class="dim-name">身份持</td><td class="dim-full">identity_persistence</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">6</td><td class="dim-name">重要性</td><td class="dim-full">importance_score</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">7</td><td class="dim-name">新颖度</td><td class="dim-full">novelty_score</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">8</td><td class="dim-name">可执行</td><td class="dim-full">actionability_score</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">9</td><td class="dim-name">置信度</td><td class="dim-full">confidence_score</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">10</td><td class="dim-name">时序性</td><td class="dim-full">temporal_relevance</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">11</td><td class="dim-name">核心值</td><td class="dim-full">core_values_consistency</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">12</td><td class="dim-name">语气一</td><td class="dim-full">voice_consistency</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">13</td><td class="dim-name">行为模</td><td class="dim-full">behavioral_patterns</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">14</td><td class="dim-name">角色遵</td><td class="dim-full">role_adherence</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">15</td><td class="dim-name">哲学对</td><td class="dim-full">philosophy_alignment</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">16</td><td class="dim-name">V1通过</td><td class="dim-full">v1_pass_rate</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">17</td><td class="dim-name">V2通过</td><td class="dim-full">v2_pass_rate</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">18</td><td class="dim-name">V3通过</td><td class="dim-full">v3_pass_rate</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">19</td><td class="dim-name">真锥率</td><td class="dim-full">cone_of_truth_rate</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">20</td><td class="dim-name">动作守</td><td class="dim-full">action_guard_rate</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">21</td><td class="dim-name">跨域泛</td><td class="dim-full">cross_domain_generalization</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">22</td><td class="dim-name">抽象层</td><td class="dim-full">abstraction_level</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">23</td><td class="dim-name">类比质</td><td class="dim-full">analogy_quality</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr><tr><td class="dim-idx">24</td><td class="dim-name">工具复</td><td class="dim-full">tool_reuse</td><td class="dim-bar"><div class="bar" style="width: 20%"></div></td><td class="dim-val">0.200</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="apeireth-actions">
+            <a class="apeireth-button-link" href="/asi/calibration">📈 查看 ML 校准状态 (EMA + 漂移)</a>
+            <a class="apeireth-button-link" href="/">← 返回首页</a>
+        </div>
+    </main>
+</body>
+</html>

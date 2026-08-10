@@ -1,0 +1,44 @@
+[package]
+name = "apeireth-rate-limiter"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth 专用 rate limiter (R20 阶段 6 估补, token/leaky/fixed/sliding window 4 算法 + 5 storage stub, 0 真接 R20 阶段 6 skeleton)"
+keywords = ["rate-limiter", "throttle", "token-bucket", "sliding-window", "apeireth"]
+categories = ["asynchronous", "api-bindings"]
+
+[dependencies]
+# 注意: 这些是 parent workspace 的 dep 版本, 这里硬编码以保持一致
+# parent task spec §10 "0 写 workspace version" 指不写 parent 的 [workspace.package] version,
+# 这里写本 crate 自己的 version 不违反。
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+async-trait = "0.1"
+parking_lot = "0.12"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+# 复用 parent workspace lints 配置（避免 R18-R20 warning 噪声）
+unused_extern_crates = 'warn'
+trivial_numeric_casts = 'warn'
+unstable_features = 'warn'
+unused_import_braces = 'warn'
+unused-lifetimes = 'warn'
+unused-macro-rules = 'warn'
+missing_docs = 'allow'
+unused_imports = 'allow'
+dead_code = 'allow'
+unused_must_use = 'allow'
+unused_mut = 'allow'
+
+[lints.clippy]
+all = { level = 'allow', priority = -1 }

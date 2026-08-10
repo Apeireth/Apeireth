@@ -1,0 +1,75 @@
+[package]
+name = "apeireth-bus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "apeireth-bus — 5 层通信总线 (L0 inproc / L1 UDS / L2 pipe / L3 gRPC / L4 WebSocket) + pub-sub/req-rep/streaming + 反背压 + Trace ID 链路追踪 (round15-02)"
+homepage.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-extension = { path = "../apeireth-extension" }
+
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+
+# L1: UDS + bincode
+bincode = "2"
+
+# L2: pipe + JSON / MsgPack
+rmp-serde = "1.3"
+
+# L3: gRPC + protobuf
+tonic = "0.12"
+prost = "0.13"
+
+# L4: WebSocket + JSON Schema
+async-tungstenite = "0.25"
+futures-util = "0.3"
+jsonschema = { version = "0.28", default-features = false }
+tokio-tungstenite = "0.25"
+tungstenite = "0.25"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = "3.10"
+
+[build-dependencies]
+tonic-build = { version = "0.12", features = ["prost"] }
+protoc-bin-vendored = "3.0"
+
+[features]
+# `full-bus` enables l3 (gRPC) + l4 (WebSocket) physical layers, which require
+# additional dependencies (`tonic`, `prost`, `async-tungstenite`, `jsonschema`,
+# `tungstenite`, `async-stream`). Default feature set is intentionally empty so
+# `cargo build --workspace` stays green on hosts without those system deps; the
+# full 5-layer bus is reopened by V28.x-2 (see HANDS-ON-MANUAL.md §"🚀 当前已就绪资源").
+default = []
+# round15-03: declared feature entry so `#[cfg(feature = "full-bus")]` is a known cfg.
+full-bus = []
+
+[lib]
+name = "apeireth_bus"
+path = "src/lib.rs"
+
+# Note: `bus_echo` bin (src/bin/bus_echo.rs) previously referenced l2.rs; l2 is now
+# `#[cfg(unix)]` and the bin source is not shipped on Windows. Removed the dangling
+# `[[bin]]` stanza in round15-03 to keep `cargo build --workspace` green on Windows.
+# The bin can be reintroduced under `[[bin]] required-features = ["full-bus"]`
+# together with the V28.x-2 bus-5-layer physical-integration work.
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

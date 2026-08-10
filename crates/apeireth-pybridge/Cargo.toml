@@ -1,0 +1,40 @@
+[package]
+name = "apeireth-pybridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth PyO3 桥 (Python 3.13.14 <-> Rust) — R14 Phase 3 (暴露 Rust crate 给 Python mvp/) — ADR 0007 compat-components-layer + ADR 0008 feature-gating-pybridge (round9-11 qa_engineer)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-asi = { path = "../apeireth-asi" }
+# DEPRECATED(V2 Day 1 Step 1.1): `apeireth-philosophy` 已删; 来源已物理删除，依赖摘除。
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+# ADR 0008: pyo3 是可选依赖 — 默认 build 不需要 Python 运行时,
+# 仅在启用 `python-ext` feature 时才编译 PyO3 绑定 + 暴露 `#[pymodule]`。
+pyo3 = { workspace = true, optional = true }
+
+[lib]
+name = "apeireth_pybridge"
+path = "src/lib.rs"
+crate-type = ["rlib"]
+
+# ADR 0007 + ADR 0008:
+# - `default = []`               → 默认 build 不编译 pyo3 (cargo build --workspace 0 依赖 Python)
+# - `python-ext = ["dep:pyo3"]`   → 显式启用时才引入 pyo3 + pyo3/extension-module
+#   (完整 Python 3.13.14 ABI 绑定, 需要 Python 运行时)
+[features]
+default = []
+python-ext = ["dep:pyo3", "pyo3/extension-module"]
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

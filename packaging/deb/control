@@ -1,0 +1,27 @@
+# Apeireth Debian package control file (1.0 release #4 install, D-06 Linux 4 包重点)
+# 平台: Debian 11+ / Ubuntu 20.04+ (apt install ./apeireth_1.0.0_amd64.deb)
+# 注: cargo-deb 默认从 Cargo.toml [package.metadata.deb] 生成 control 段, 本文件是
+#     reference / fallback — 给 release engineer 在 1.0 release 时手动覆盖字段用.
+#     正常构建走 packaging/deb/build-deb.sh + Cargo.toml metadata, 不走本文件.
+# 兄弟: packaging/deb/apeireth.service (systemd unit, 跟 deb 一起装到 /etc/systemd/system/)
+# 卸载: sudo apt remove --purge apeireth  (用 packaging/deb/uninstall-deb.sh)
+
+Package: apeireth
+Version: 1.0.0
+Section: science
+Priority: optional
+Architecture: amd64 arm64
+Maintainer: Apeireth Team <dev@apeireth.io>
+Homepage: https://github.com/apeireth/apeireth-rust
+Vcs-Browser: https://github.com/apeireth/apeireth-rust
+Vcs-Git: https://github.com/apeireth/apeireth-rust.git
+
+# 运行时依赖 (per 蓝图 §3.4 5 守门 + Cargo.toml reexport)
+Depends: ${misc:Depends}, ${shlibs:Depends}, libssl3 (>= 3.0.0), libsqlite3-0 (>= 3.40), ca-certificates
+Recommends: postgresql (>= 15), redis-server (>= 7.0)
+Suggests: apeireth-doc (= ${binary:Version})
+Conflicts: apeireth-beta, apeireth-nightly
+Replaces: apeireth-cli
+
+# 体积 (估, build 后看实际)
+Installed-Size: 51200

@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="archaic" data-mode="focus">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ΑΠΕΙΡΕΘ</title>
+    <meta name="description" content="Apeireth R19 桌面端 — 无限之中将要燃起的那一点" />
+    <link rel="stylesheet" href="css/tokens.css" />
+    <link rel="stylesheet" href="css/breath.css" />
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/splash.css" />
+</head>
+<body>
+    <!-- =================== 开屏 (W2 反馈后简化: 沉默→发丝线→ΑΠΕΙΡΕΘ 浮现, 砍北极星) =================== -->
+    <div id="splash" class="splash" aria-hidden="false">
+        <svg class="splash-logo" viewBox="0 0 600 240" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <line class="splash-hairline" x1="100" y1="160" x2="500" y2="160"
+                  stroke="var(--text-primary)" stroke-width="0.5"
+                  stroke-dasharray="180 30 90" />
+            <g class="splash-stone" id="splashStone">
+                <text x="300" y="100" text-anchor="middle"
+                      class="splash-glyph"
+                      fill="var(--text-primary)">ΑΠΕΙΡΕΘ</text>
+            </g>
+        </svg>
+        <div class="splash-skip">按 Esc 或点击跳过</div>
+    </div>
+
+    <!-- =================== 主框架 =================== -->
+    <div class="app" data-state="loading">
+        <!-- 左侧 nav 栏 (5 nav + 希腊铭文 + 呼吸光点) -->
+        <nav class="nav" aria-label="主导航">
+            <div class="nav-brand">
+                <div class="nav-brand-glyph">ΑΠΕΙΡΕΘ</div>
+            </div>
+            <!-- R27 Web TUI: 后端连通 badge (跟 TUI status_bar 一致) -->
+            <div class="backend-badge" id="backendBadge" data-online="false"
+                 title="apeireth-api 后端连通状态 (探测中)">
+                API …
+            </div>
+            <ul class="nav-list">
+                <li class="nav-item" data-page="dialogue" data-active="true">
+                    <a href="#dialogue" class="nav-link">
+                        <span class="nav-zh">对话</span>
+                        <span class="nav-gr">ΔΙΑΛΟΓΟΣ</span>
+                        <span class="nav-dot" aria-hidden="true"></span>
+                    </a>
+                </li>
+                <li class="nav-item" data-page="growth">
+                    <a href="#growth" class="nav-link">
+                        <span class="nav-zh">生长</span>
+                        <span class="nav-gr">ΑΥΞΗΣΙΣ</span>
+                        <span class="nav-dot" aria-hidden="true"></span>
+                    </a>
+                </li>
+                <li class="nav-item" data-page="chronicle">
+                    <a href="#chronicle" class="nav-link">
+                        <span class="nav-zh">历史</span>
+                        <span class="nav-gr">ΙΣΤΟΡΙΑ</span>
+                        <span class="nav-dot" aria-hidden="true"></span>
+                    </a>
+                </li>
+                <li class="nav-item" data-page="bridge">
+                    <a href="#bridge" class="nav-link">
+                        <span class="nav-zh">舰桥</span>
+                        <span class="nav-gr">ΣΚΟΠΗ</span>
+                        <span class="nav-dot" aria-hidden="true"></span>
+                    </a>
+                </li>
+                <li class="nav-item" data-page="settings">
+                    <a href="#settings" class="nav-link">
+                        <span class="nav-zh">设置</span>
+                        <span class="nav-gr">ΤΑΞΙΣ</span>
+                        <span class="nav-dot" aria-hidden="true"></span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- 主体内容 (5 个 page, 默认 bridge 启屏) -->
+        <main class="main">
+            <!-- 1. 对话 ΔΙΑΛΟΓΟΣ -->
+            <section class="page" data-page="dialogue" hidden>
+                <header class="page-header">
+                    <h1 class="page-title">对话</h1>
+                    <p class="page-sub">ΔΙΑΛΟΓΟΣ · 与主 AI 完整对话</p>
+                </header>
+                <div class="dialogue-cycle" id="dialogueCycle">
+                    <span class="cycle-step" data-step="1">Scoring</span>
+                    <span class="cycle-step" data-step="2">Verdict</span>
+                    <span class="cycle-step" data-step="3">Decide</span>
+                    <span class="cycle-step" data-step="4">Reflect</span>
+                    <span class="cycle-step" data-step="5">Commit</span>
+                </div>
+                <div class="dialogue-log" id="dialogueLog">
+                    <!-- 由 JS 注入 -->
+                </div>
+                <form class="dialogue-form" id="dialogueForm">
+                    <input type="text" class="dialogue-input" id="dialogueInput"
+                           placeholder="向主 AI 说点什么…" autocomplete="off" />
+                    <button type="submit" class="dialogue-send" aria-label="发送">
+                        <span class="breath-dot"></span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- 2. 生长 ΑΥΞΗΣΙΣ (结构主页) -->
+            <section class="page" data-page="growth" hidden>
+                <header class="page-header">
+                    <h1 class="page-title">生长</h1>
+                    <p class="page-sub">ΑΥΞΗΣΙΣ · 主 AI 状态卡 + 9 器官呼吸星群 + 阶段时间线</p>
+                </header>
+
+                <!-- 主 AI 状态卡 (7 数字三档) -->
+                <div class="status-card" id="statusCard">
+                    <div class="status-card-row status-card-row-big">
+                        <div class="status-metric">
+                            <div class="status-value" id="metricAsi">0.8595</div>
+                            <div class="status-label">ASI V0.5</div>
+                        </div>
+                        <div class="status-metric">
+                            <div class="status-value" id="metricStage">成长</div>
+                            <div class="status-label">阶段</div>
+                        </div>
+                        <div class="status-metric">
+                            <div class="status-value" id="metricReflection">dormant</div>
+                            <div class="status-label">反思期</div>
+                        </div>
+                    </div>
+                    <div class="status-card-row status-card-row-mid">
+                        <div class="status-metric">
+                            <div class="status-value" id="metricEpisodes">824</div>
+                            <div class="status-label">Episode</div>
+                        </div>
+                        <div class="status-metric">
+                            <div class="status-value" id="metricCycles">8,240</div>
+                            <div class="status-label">Cognitive Cycle</div>
+                        </div>
+                    </div>
+                    <div class="status-card-row status-card-row-small">
+                        <div class="status-metric">
+                            <div class="status-value" id="metricTokens">142,857</div>
+                            <div class="status-label">Tokens</div>
+                        </div>
+                        <div class="status-metric">
+                            <div class="status-value" id="metricFiveSelf">✓ armed</div>
+                            <div class="status-label">5 Self</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9 器官呼吸星群 (3x3 星座) -->
+                <div class="organs" id="organs">
+                    <!-- 由 JS 注入 -->
+                </div>
+
+                <!-- 8 阶段时间线 (R19 砍衰老病死) -->
+                <div class="timeline" id="timeline">
+                    <!-- 由 JS 注入 -->
+                </div>
+            </section>
+
+            <!-- 3. 历史 ΙΣΤΟΡΙΑ -->
+            <section class="page" data-page="chronicle" hidden>
+                <header class="page-header">
+                    <h1 class="page-title">历史</h1>
+                    <p class="page-sub">ΙΣΤΟΡΙΑ · 6 历史流 + 决策日志 + 反思期 + Episode</p>
+                </header>
+                <div class="chronicle-placeholder">
+                    <p class="placeholder-text">6 流待 W2 接 R18 memory.rs 真数据</p>
+                    <ul class="stream-list">
+                        <li>思想流 (Thought)</li>
+                        <li>提案流 (Proposal)</li>
+                        <li>行动流 (Action)</li>
+                        <li>关系流 (Relation)</li>
+                        <li>演化流 (Evolution)</li>
+                        <li>反思期流 (Reflection)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 4. 舰桥 ΣΚΟΠΗ (启屏默认, 凝视页) -->
+            <section class="page page-bridge" data-page="bridge">
+                <header class="page-header">
+                    <h1 class="page-title-bridge">舰桥</h1>
+                    <p class="page-sub">ΣΚΟΠΗ · 30 crate 星图 + ASI 大数字 · 纯凝视</p>
+                </header>
+
+                <!-- ASI 大数字 (Display 级) -->
+                <div class="asi-display">
+                    <div class="asi-value" id="asiValue">0.8595</div>
+                    <svg class="asi-arc" viewBox="0 0 200 30" aria-hidden="true">
+                        <line x1="0" y1="15" x2="200" y2="15"
+                              stroke="var(--hairline)" stroke-width="0.5" />
+                        <line class="asi-arc-progress" id="asiArcProgress"
+                              x1="0" y1="15" x2="170" y2="15"
+                              stroke="var(--accent)" stroke-width="1" />
+                    </svg>
+                    <div class="asi-meta">
+                        ultimate <code>0.9800</code> · gap <code>12.94%</code> · 距 ASI 终态
+                    </div>
+                </div>
+
+                <!-- 30 crate 星图 -->
+                <svg class="star-map" id="starMap" viewBox="0 0 800 600" aria-label="30 crate 星图">
+                    <!-- 由 JS 注入 -->
+                </svg>
+
+                <!-- 底部: 9 器官 + mono 注释 -->
+                <div class="bridge-bottom">
+                    <div class="bridge-organs" id="bridgeOrgans">
+                        <!-- 由 JS 注入 (压缩版) -->
+                    </div>
+                    <div class="bridge-meta">
+                        mode: <code id="metaMode">focus</code> ·
+                        theme: <code id="metaTheme">archaic</code> ·
+                        uptime: <code id="metaUptime">02h 14m</code> ·
+                        continuity_id: <code id="metaContinuity">did:apeireth:web-001</code>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. 设置 ΤΑΞΙΣ -->
+            <section class="page" data-page="settings" hidden>
+                <header class="page-header">
+                    <h1 class="page-title">设置</h1>
+                    <p class="page-sub">ΤΑΞΙΣ · 进去要全</p>
+                </header>
+
+                <div class="settings-grid">
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">个性化</h2>
+                        <div class="settings-row">
+                            <span class="settings-label">主题</span>
+                            <div class="settings-pills" id="themePills">
+                                <button class="pill pill-theme" data-theme="archaic" data-active="true">古朴 ARCHAIC</button>
+                                <button class="pill pill-theme" data-theme="era">时代 ERA</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">模式</span>
+                            <div class="settings-pills" id="modePills">
+                                <button class="pill pill-mode" data-mode="focus" data-active="true">专注 FOCUS</button>
+                                <button class="pill pill-mode" data-mode="engineer">工程 ENGINEER</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">语言</span>
+                            <div class="settings-pills">
+                                <button class="pill" data-lang="zh" data-active="true">中文</button>
+                                <button class="pill" data-lang="en">English</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">启屏</span>
+                            <div class="settings-pills">
+                                <button class="pill" data-launch="bridge" data-active="true">舰桥</button>
+                                <button class="pill" data-launch="dialogue">对话</button>
+                            </div>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">开屏播放</span>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="splashToggle" checked />
+                                <span>每次冷启动播放 (Esc/点击跳过)</span>
+                            </label>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">呼吸动画</span>
+                            <label class="settings-toggle">
+                                <input type="checkbox" id="breathToggle" checked />
+                                <span>4s 呼吸节奏 (无障碍可关)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">连接 (W2 接入)</h2>
+                        <div class="settings-row">
+                            <span class="settings-label">LLM provider</span>
+                            <code class="settings-mock">8+ providers (R18 接通)</code>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">API key</span>
+                            <code class="settings-mock">apikey.txt fallback</code>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">安全 (W5 接入)</h2>
+                        <div class="settings-row">
+                            <span class="settings-label">HA 模式</span>
+                            <code class="settings-mock">single (R11 v7)</code>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">OS 鉴权</span>
+                            <code class="settings-mock">Windows Hello / TouchID</code>
+                        </div>
+                    </div>
+
+                    <div class="settings-group">
+                        <h2 class="settings-group-title">关于</h2>
+                        <div class="settings-row">
+                            <span class="settings-label">版本</span>
+                            <code>0.14.0 (R19-W1)</code>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">commit</span>
+                            <code>R19-W1 init</code>
+                        </div>
+                        <div class="settings-row">
+                            <span class="settings-label">诚实登记</span>
+                            <code class="settings-disclaimer">5 项不假装 LOCKED</code>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- =================== JS (顺序敏感: tokens → breath → store → 渲染) =================== -->
+    <script src="js/store.js"></script>
+    <script src="js/breath.js"></script>
+    <script src="js/splash.js"></script>
+    <script src="js/organs.js"></script>
+    <script src="js/bridge.js"></script>
+    <script src="js/timeline.js"></script>
+    <script src="js/dialogue.js"></script>
+    <script src="js/mode-theme.js"></script>
+    <script src="js/nav.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>

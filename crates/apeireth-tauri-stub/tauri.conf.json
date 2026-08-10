@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "productName": "Apeireth",
+  "version": "0.14.0",
+  "identifier": "com.apeireth.desktop",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "src-ui",
+    "devUrl": "http://localhost:1420"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "ΑΠΕΙΡΕΘ",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1280,
+        "minHeight": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "transparent": false,
+        "decorations": true,
+        "backgroundColor": "#08080e"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": ["msi", "nsis", "deb", "appimage", "dmg"],
+    "icon": [],
+    "category": "DeveloperTool",
+    "shortDescription": "Apeireth ASI 长程成长平台",
+    "longDescription": "Apeireth = 无限之中将要燃起的那一点. 30 Rust crate 全栈, 双洋葱统一体守门, 4 重守门 + 5 重治理, 4-维立体架构, 4 维立体 v2."
+  }
+}

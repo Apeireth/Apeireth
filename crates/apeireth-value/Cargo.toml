@@ -1,0 +1,35 @@
+[package]
+name = "apeireth-value"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 价值器官 (A11.3 落点 — R14 Phase 4 动机/价值评估: ValueEvaluation + ValuePrioritization + 5 层原则洋葱一致性 + motivation_score 0.85 门槛)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-asi = { path = "../apeireth-asi" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_value"
+path = "src/lib.rs"
+
+[[example]]
+name = "value_demo"
+path = "examples/value_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

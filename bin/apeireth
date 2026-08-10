@@ -1,4 +1,0 @@
-#!/usr/bin/env sh
-# Repository-local launcher; keeps the package importable from any cwd.
-ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-PYTHONPATH="$ROOT_DIR${PYTHONPATH:+:$PYTHONPATH}" exec python -m apeireth.cli "$@"

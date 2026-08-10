@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-state"
+# R21 借鉴 Golutra #6: 9 Tauri state 模式转 TUI 等价物 (ratatui state 共享框架).
+# skeleton 阶段: 3 模式 trait + 3 模式 stub impl + 9 器官 state 注册表 + 1 完整例子.
+# 0 真接 tokio/async (留 R21 续做), 0 引 NewAPI, 0 触碰 24 LOCKED crate.
+# 跟 apeireth-pipeline-g5 / apeireth-oauth / apeireth-cache 同模式 (skeleton + workspace lints).
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R21 借鉴 Golutra #6: 9 Tauri state 模式 (OnceLock + Arc + Mutex) 转 TUI 等价物 (ratatui state 共享框架). 3 模式 (OnceLockState / MutexState / RwLockState) + 9 器官 state 共享 (heart/brain/hand/eye/ear/memory/voice/body/mind) + 1 完整状态共享例子 + 25+ 集成测试. 0 真接 tokio/async, 留 R21 续真接. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺"
+keywords = ["state-sharing", "ratatui", "tauri-state", "organ", "mutex", "rwlock", "once-lock", "shared-state"]
+categories = ["concurrency", "data-structures", "asynchronous"]
+
+# R21 借鉴 Golutra #6 skeleton: 纯 std (per 借鉴 #5 pipeline-g5 / #1 oauth 模式).
+# 0 引 tokio (留 R21+ 续做 async 集成), 0 引 NewAPI, 0 引 parking_lot (用 std::sync 守边).
+# 阶段 skeleton 故意留口子: R21 续做 async/wasm/observability 集成时, 加 feature flag.
+[dependencies]
+# 序列化 (3 模式 + 9 Organ enum 序列化, K-1 强校验守门)
+serde = { version = "1.0", features = ["derive"] }
+# 错误处理 (StateError 5 variant, per skeleton 模式 + m3 防御)
+thiserror = "1.0"
+# 标准库 std::sync::{Mutex, RwLock, OnceLock, Arc} + std::any::type_name, 无需外部 crate
+
+[dev-dependencies]
+# serde_json (test + example 序列化验 SharedStateMode / Organ / StateErrorKind)
+serde_json = "1.0"
+
+# 1 个完整 9 器官并发访问例子 (per 任务 spec "1 状态共享例子")
+[[example]]
+name = "state_sharing_demo"
+path = "examples/state_sharing_demo.rs"
+
+# R21 借鉴 Golutra #6: 复用 workspace.lints (per 任务 spec "workspace.lints 复用 (不重复造轮子)")
+# Apeireth 业界 lints (wasmtime + qdrant 精选) 守门, 跟 24 LOCKED crate 保持一致
+[lints]
+workspace = true

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth ASI · ML 校准状态</title>
+    <meta name="description" content="Apeireth ASI ML 校准 (EMA + 漂移检测 + 重校准次数), 端到端真接通 apeireth-asi" />
+    <style>
+        .calib-grid { display: grid; grid-template-columns: 1fr; gap: 24px; margin: 16px 0; }
+        .calib-card { background: #fafafa; border: 1px solid #ddd; border-radius: 8px; padding: 16px; }
+        .calib-card h2 { margin: 0 0 12px 0; font-size: 1.1em; }
+        .calib-table { width: 100%; border-collapse: collapse; font-size: 0.85em; }
+        .calib-table th, .calib-table td { border-bottom: 1px solid #eee; padding: 4px 8px; text-align: left; }
+        .calib-table th { background: #f0f0f0; font-weight: 600; }
+        .calib-table .dim-idx { color: #888; font-family: monospace; width: 28px; }
+        .calib-table .dim-name { font-family: monospace; color: #555; }
+        .calib-table .dim-val { font-family: monospace; text-align: right; width: 80px; }
+        .calib-table tr.drift-active { background: #fff3f3; }
+        .calib-summary { background: #f6f8fa; border-left: 3px solid #4287f5; padding: 12px 16px; margin: 16px 0; border-radius: 4px; }
+        .calib-summary code { background: #e1e4e8; padding: 1px 6px; border-radius: 3px; font-size: 0.9em; }
+        .calib-stats { display: flex; gap: 16px; flex-wrap: wrap; }
+        .calib-stat { background: #fff; border: 1px solid #ddd; border-radius: 4px; padding: 8px 16px; }
+        .calib-stat .label { color: #888; font-size: 0.8em; }
+        .calib-stat .value { font-size: 1.4em; font-weight: 600; color: #333; font-family: monospace; }
+        ul.calib-alarm-list { margin: 0; padding-left: 20px; font-family: monospace; font-size: 0.85em; }
+    </style>
+</head>
+<body>
+    <main class="apeireth-app">
+        <header class="apeireth-header">
+            <h1>Apeireth ASI · ML 校准状态</h1>
+            <p class="apeireth-tagline">R18 sub-agent #4 · 端到端真接通 apeireth-asi · AdaptiveBaseline + DriftDetector + RecalibrationScheduler</p>
+        </header>
+
+        <div class="calib-summary">
+            <p>🔄 <strong>校准循环</strong>: 跑 <code>200</code> 次合成 trace → AdaptiveBaseline (EMA) + DriftDetector (z≥2σ 连续 3 次) + RecalibrationScheduler (每 M=100 次)</p>
+            <div class="calib-stats">
+                <div class="calib-stat"><div class="label">trace 数</div><div class="value">200</div></div>
+                <div class="calib-stat"><div class="label">baseline.seen</div><div class="value">200</div></div>
+                <div class="calib-stat"><div class="label">alpha (EMA)</div><div class="value">0.05</div></div>
+                <div class="calib-stat"><div class="label">重校准次数</div><div class="value">2</div></div>
+                <div class="calib-stat"><div class="label">活跃 drift 维度</div><div class="value">0</div></div>
+            </div>
+        </div>
+
+        <div class="calib-grid">
+            <div class="calib-card">
+                <h2>📊 AdaptiveBaseline 24 维 EMA 均值 (滚动更新)</h2>
+                <p>公式: <code>mean_new = α·x + (1-α)·mean_prev</code>, 默认 α=0.05, seen=200</p>
+                <table class="calib-table">
+                    <thead><tr><th>#</th><th>维度</th><th>EMA 均值</th><th>EMA 方差</th></tr></thead>
+                    <tbody><tr><td class="dim-idx">1</td><td class="dim-name">线程连</td><td class="dim-val">0.8183</td><td class="dim-val">0.000595</td></tr><tr><td class="dim-idx">2</td><td class="dim-name">事实记</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">3</td><td class="dim-name">上下文</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">4</td><td class="dim-name">会话恢</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">5</td><td class="dim-name">身份持</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">6</td><td class="dim-name">重要性</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">7</td><td class="dim-name">新颖度</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">8</td><td class="dim-name">可执行</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">9</td><td class="dim-name">置信度</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">10</td><td class="dim-name">时序性</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">11</td><td class="dim-name">核心值</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">12</td><td class="dim-name">语气一</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">13</td><td class="dim-name">行为模</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">14</td><td class="dim-name">角色遵</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">15</td><td class="dim-name">哲学对</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">16</td><td class="dim-name">V1通过</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">17</td><td class="dim-name">V2通过</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">18</td><td class="dim-name">V3通过</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">19</td><td class="dim-name">真锥率</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">20</td><td class="dim-name">动作守</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">21</td><td class="dim-name">跨域泛</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">22</td><td class="dim-name">抽象层</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">23</td><td class="dim-name">类比质</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr><tr><td class="dim-idx">24</td><td class="dim-name">工具复</td><td class="dim-val">0.2379</td><td class="dim-val">0.001452</td></tr></tbody>
+                </table>
+            </div>
+
+            <div class="calib-card">
+                <h2>🚨 DriftDetector streak (z≥2σ 连续 3 次触发 ALARM)</h2>
+                <p>当前活跃 ALARM 数: <strong>0</strong> / 24 维 (高亮行 = 已超阈值)</p>
+                <table class="calib-table">
+                    <thead><tr><th>#</th><th>维度</th><th>streak</th><th>状态</th></tr></thead>
+                    <tbody><tr class=""><td class="dim-idx">1</td><td class="dim-name">线程连</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">2</td><td class="dim-name">事实记</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">3</td><td class="dim-name">上下文</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">4</td><td class="dim-name">会话恢</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">5</td><td class="dim-name">身份持</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">6</td><td class="dim-name">重要性</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">7</td><td class="dim-name">新颖度</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">8</td><td class="dim-name">可执行</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">9</td><td class="dim-name">置信度</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">10</td><td class="dim-name">时序性</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">11</td><td class="dim-name">核心值</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">12</td><td class="dim-name">语气一</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">13</td><td class="dim-name">行为模</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">14</td><td class="dim-name">角色遵</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">15</td><td class="dim-name">哲学对</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">16</td><td class="dim-name">V1通过</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">17</td><td class="dim-name">V2通过</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">18</td><td class="dim-name">V3通过</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">19</td><td class="dim-name">真锥率</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">20</td><td class="dim-name">动作守</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">21</td><td class="dim-name">跨域泛</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">22</td><td class="dim-name">抽象层</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">23</td><td class="dim-name">类比质</td><td class="dim-val">0</td><td>ok</td></tr><tr class=""><td class="dim-idx">24</td><td class="dim-name">工具复</td><td class="dim-val">0</td><td>ok</td></tr></tbody>
+                </table>
+                <h3 style="margin-top: 16px; font-size: 1em;">最近告警 (前 5 条)</h3>
+                <ul class="calib-alarm-list"><li><code>thread_continuity</code>  z=-3.12σ  current=0.490  mean=0.499  std=0.003  streak=3</li><li><code>fact_recall</code>  z=-3.12σ  current=0.490  mean=0.499  std=0.003  streak=3</li><li><code>context_window</code>  z=-3.12σ  current=0.490  mean=0.499  std=0.003  streak=3</li><li><code>session_recovery</code>  z=-3.12σ  current=0.490  mean=0.499  std=0.003  streak=3</li><li><code>identity_persistence</code>  z=-3.12σ  current=0.490  mean=0.499  std=0.003  streak=3</li></ul>
+            </div>
+
+            <div class="calib-card">
+                <h2>🔧 RecalibrationScheduler history (M=100)</h2>
+                <p>共 <strong>2</strong> 次重校准 (history.len)。每行 = 一次触发的 <code>CalibrationCoefficients</code> (24 维 scale, 前 5 维预览)。</p>
+                <table class="calib-table">
+                    <thead><tr><th>#</th><th>sample_count</th><th>calibrated_at</th><th>scale [0..4]</th></tr></thead>
+                    <tbody><tr><td>1</td><td>0</td><td>1700000100</td><td><code>1.00,1.00,1.00,1.00,1.00, … (+19)</code></td></tr><tr><td>2</td><td>0</td><td>1700000200</td><td><code>1.00,1.00,1.00,1.00,1.00, … (+19)</code></td></tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="apeireth-actions">
+            <a class="apeireth-button-link" href="/asi">📊 查看 24 维雷达图</a>
+            <a class="apeireth-button-link" href="/">← 返回首页</a>
+        </div>
+    </main>
+</body>
+</html>

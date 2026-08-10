@@ -1,0 +1,30 @@
+[package]
+name = "apeireth-life-force"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 生命力维 (A13 落点 — R14 Phase 4 维度 1 穿透架构: 持续力 + 反思期 + SGI 单字段 + 涌现 + 内稳态)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+
+[lib]
+name = "apeireth_life_force"
+path = "src/lib.rs"
+
+[[example]]
+name = "life_force_demo"
+path = "examples/life_force_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

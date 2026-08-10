@@ -1,0 +1,31 @@
+# ============================================================================
+# Issue Chooser — Apeireth (R26 工程化补全)
+# ============================================================================
+# 模式: qdrant/tokio 业界惯例 (GitHub Issue Chooser 2024+ YAML 1:1)
+# 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository
+# 作用: 控制用户新建 issue 时看到的 chooser (隐藏 blank issue + 加 contact links)
+# 跟 .github/ISSUE_TEMPLATE/{bug,feature,1.0-blocker}.md (R20 写) 共存, 不删 (向后兼容)
+#   - .yml 优先显示 (GitHub 2024+ 行为)
+#   - .md 仍可被选 (但优先级低)
+#   - 1.0-blocker.md 是 1.0 release 专用, 跟 1.0 release 12 项 checklist 强绑定, 保留
+
+# 关闭 blank issue (强制走模板, 跟 qdrant 1:1)
+blank_issues_enabled: false
+
+# contact links: 用户在 chooser 看到的额外链接
+contact_links:
+  - name: Apeireth Discussions
+    url: https://github.com/apeireth/apeireth-rust/discussions
+    about: General questions, design discussions, and community chat (替代裸 issue)
+
+  - name: Apeireth Documentation
+    url: https://github.com/apeireth/apeireth-rust/tree/main/docs
+    about: Read the docs first — conventions, versioning, glossary, 6 哲学 anchor, 8 项不修改承诺
+
+  - name: Security vulnerability
+    url: https://github.com/apeireth/apeireth-rust/security/advisories/new
+    about: Report security issues privately (per `.well-known/security.txt` RFC 9116) — do NOT use public issues
+
+  - name: 1.0 release blocker
+    url: https://github.com/apeireth/apeireth-rust/issues/new?template=1.0-blocker.md
+    about: 1.0 release 必须 1.0 前修的 blocker (跟 1.0 release 12 项 checklist 强绑定, 跟 bug report 区分)

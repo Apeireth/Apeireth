@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Apeireth",
+    "tagline": "長期的AI成長のためのAGIオペレーティングシステム",
+    "version": "バージョン {{version}}"
+  },
+  "nav": {
+    "home": "ホーム",
+    "tools": "ツール",
+    "history": "履歴",
+    "settings": "設定",
+    "organs": "器官"
+  },
+  "tools": {
+    "web_search": "ウェブ検索",
+    "file_ops": "ファイル操作",
+    "git_ops": "Git 操作",
+    "code_exec": "コード実行",
+    "calendar": "カレンダー",
+    "message": "メッセージ",
+    "terminal": "ターミナル"
+  },
+  "error": {
+    "not_implemented": "この機能はまだ実装されていません",
+    "tool_not_whitelisted": "ツール {{tool}} はホワイトリストにありません",
+    "key_not_found": "翻訳キーが見つかりません: {{key}}",
+    "locale_not_supported": "サポートされていない言語: {{locale}}",
+    "template_render": "キー {{key}} のテンプレートレンダリングに失敗しました",
+    "io": "I/O エラー: {{message}}",
+    "parse": "JSON 解析エラー: {{message}}"
+  },
+  "health": {
+    "ok": "サービスは正常です",
+    "degraded": "サービス低下",
+    "unhealthy": "サービス異常"
+  },
+  "status": {
+    "loading": "読み込み中...",
+    "ready": "準備完了",
+    "busy": "ビジー",
+    "error": "エラー"
+  },
+  "locale": {
+    "name": {
+      "en": "英語",
+      "zh_cn": "簡体字中国語",
+      "ja": "日本語",
+      "fr": "フランス語",
+      "de": "ドイツ語"
+    }
+  },
+  "tauri": {
+    "window": {
+      "title": "Apeireth デスクトップ"
+    },
+    "menu": {
+      "file": "ファイル",
+      "edit": "編集",
+      "view": "表示",
+      "help": "ヘルプ"
+    }
+  },
+  "tui": {
+    "welcome": "Apeireth TUI へようこそ",
+    "prompt": ">",
+    "goodbye": "さようなら",
+    "shortcut": {
+      "quit": "Ctrl+C で終了"
+    }
+  },
+  "settings": {
+    "language": "言語",
+    "theme": "テーマ",
+    "about": "について"
+  },
+  "must_do": {
+    "translation_complete": "i18n は 1.0 リリースの必須項目です"
+  }
+}

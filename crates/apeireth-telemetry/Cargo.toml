@@ -1,0 +1,48 @@
+[package]
+name = "apeireth-telemetry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Apeireth R35 telemetry umbrella (cache + metric + trace + observability facade)"
+keywords = ["telemetry", "observability", "metric", "trace", "log"]
+categories = ["development-tools", "api-bindings"]
+
+[dependencies]
+# 1.1: 4 老 crate 真合并. 聚合 4 crate deps (R20 估缺阶段 1, 0 引 OpenTelemetry SDK).
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+async-trait = "0.1"
+parking_lot = "0.12"
+indexmap = { version = "2", features = ["serde"] }
+lru = "0.16"
+fnv = "1.0"
+uuid = { version = "1.10", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.8"
+regex = "1.10"
+hex = "0.4"
+rusqlite = { workspace = true }
+
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+futures = "0.3"
+# R25 dev fix (Mavis 04:30 起, 主人 02:55 离场授权, R119 form-unlock 后 OK):
+# 7 telemetry doctest 引用 `apeireth_tracing::*` / `apeireth_observability::*`,
+# 这 2 crate 在 workspace 已存在 (crates/apeireth-tracing + crates/apeireth-observability),
+# 加 path dev-dep 让 doctest compile pass. 0 触碰 24 LOCKED (telemetry/tracing/observability
+# 都不在 24 LOCKED mtime 16:34 baseline), 0 改 workspace.version.
+apeireth-tracing = { path = "../apeireth-tracing" }
+apeireth-observability = { path = "../apeireth-observability" }
+

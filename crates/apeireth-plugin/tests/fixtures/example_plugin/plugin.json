@@ -1,0 +1,15 @@
+{
+  "schema_version": "1",
+  "name": "apeireth-plugin-example",
+  "version": "0.1.0",
+  "author": "Apeireth Team <team@apeireth.dev>",
+  "entry": "src/lib.rs",
+  "permissions": [
+    "file_read",
+    "file_write",
+    "network",
+    "mcp_call"
+  ],
+  "min_apeireth_version": "apeireth",
+  "description": "Example plugin fixture for apeireth-plugin in-process test (Fixture 5). Demonstrates 1:1 translation of v0.9.21 commercial PluginManager plugin.json schema."
+}

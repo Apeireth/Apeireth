@@ -1,0 +1,58 @@
+name: Rust lint (clippy 3 档 + fmt)
+
+# R18 第 1 阶段: 抄 qdrant/.github/workflows/rust-lint.yml
+# https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust-lint.yml
+# - 3 档 clippy (default / all-targets / all-features) 都 -D warnings
+# - 删 cargo fmt --check (改由 rustfmt.yml 跑 nightly)
+
+on:
+  push:
+    branches: [master, main, rebase/d7d8-into-integration]
+  pull_request:
+    branches: ['**']
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-D warnings"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: clippy 3 档 lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable + clippy + rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: clippy
+
+      # === 3 档 clippy, 都 -D warnings ===
+      # 抄 qdrant rust-lint.yml 3 段
+      - name: clippy (workspace)
+        run: cargo clippy --workspace -- -D warnings -A missing_docs -A unused_imports -A dead_code -A unused_must_use -A unused_mut -A clippy::uninlined_format_args -A clippy::match_wildcard_for_single_variants -A clippy::wildcard_enum_match_arm -A clippy::missing_docs_in_private_items -A clippy::needless_raw_string_hashes -A clippy::unused_self -A clippy::used_underscore_binding -A clippy::unnecessary_wraps
+
+      - name: clippy (workspace --all-targets)
+        run: cargo clippy --workspace --all-targets -- -D warnings -A missing_docs -A unused_imports -A dead_code -A unused_must_use -A unused_mut -A clippy::uninlined_format_args -A clippy::match_wildcard_for_single_variants -A clippy::wildcard_enum_match_arm -A clippy::missing_docs_in_private_items -A clippy::needless_raw_string_hashes -A clippy::unused_self -A clippy::used_underscore_binding -A clippy::unnecessary_wraps
+
+      - name: clippy (workspace --all-features)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A missing_docs -A unused_imports -A dead_code -A unused_must_use -A unused_mut -A clippy::uninlined_format_args -A clippy::match_wildcard_for_single_variants -A clippy::wildcard_enum_match_arm -A clippy::missing_docs_in_private_items -A clippy::needless_raw_string_hashes -A clippy::unused_self -A clippy::used_underscore_binding -A clippy::unnecessary_wraps
+
+  rustfmt-nightly:
+    name: cargo +nightly fmt --check (单独)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: cargo +nightly fmt --check
+        run: cargo +nightly fmt --all -- --check

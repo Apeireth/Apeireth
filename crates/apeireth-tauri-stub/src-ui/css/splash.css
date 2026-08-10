@@ -1,0 +1,103 @@
+/* ===========================================================
+ * 开屏 (W2 反馈后简化: 砍北极星, 只保留 沉默 + 发丝线 + ΑΠΕΙΡΕΘ)
+ *
+ * 时间轴 (W2 简化: 总 3.0s):
+ *   0–1.5s   phase 1: 纯黑沉默 (沉默之前, 是无限)
+ *   1.5s     phase 2: 发丝线 + ΑΠΕΙΡΕΘ 浮现 (fade-in, 无位移, 无弹跳, 无星星)
+ *   3.0s     phase 3: 1.2s 明暗呼吸进入 app
+ *
+ * ❌ 砍掉: 北极星 (polygon + drop-shadow) — 飞起来不行
+ * ❌ 砍掉: 4s 呼吸停留 (W1 4.5-6.0s)
+ * =========================================================== */
+
+.splash {
+    position: fixed;
+    inset: 0;
+    background: var(--bg-abyss);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    cursor: pointer;
+    transition: opacity 1.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+}
+
+.splash[data-done="true"] {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* 默认隐藏所有元素, 等 JS 触发 */
+.splash-hairline,
+.splash-stone {
+    opacity: 0;
+}
+
+/* 1.5s: 发丝线 + ΑΠΕΙΡΕΘ 同时浮现 */
+.splash[data-phase="2"] .splash-hairline {
+    opacity: 1;
+    animation: hairline-carve 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+}
+
+@keyframes hairline-carve {
+    0% {
+        stroke-dashoffset: 300;
+        opacity: 0.3;
+    }
+    100% {
+        stroke-dashoffset: 0;
+        opacity: 1;
+    }
+}
+
+.splash[data-phase="2"] .splash-stone {
+    opacity: 1;
+    animation: stone-emerge 1.5s cubic-bezier(0.4, 0.0, 0.2, 1) forwards;
+}
+
+@keyframes stone-emerge {
+    0% {
+        opacity: 0;
+        filter: brightness(0.4);
+    }
+    100% {
+        opacity: 1;
+        filter: brightness(1);
+    }
+}
+
+/* Logo 容器 */
+.splash-logo {
+    width: 480px;
+    max-width: 80vw;
+    height: auto;
+}
+
+.splash-glyph {
+    font-family: "Theano Didot", "Cormorant Garamond", "Times New Roman", serif;
+    font-size: 32px;
+    letter-spacing: 0.35em;
+    text-anchor: middle;
+    font-weight: 400;
+}
+
+/* 跳过提示 */
+.splash-skip {
+    position: absolute;
+    bottom: 3rem;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-faint);
+    letter-spacing: 0.15em;
+    opacity: 0;
+    animation: skip-fade-in 1s 0.5s forwards;
+}
+
+@keyframes skip-fade-in {
+    to { opacity: 1; }
+}
+
+.splash[data-done="true"] .splash-skip {
+    display: none;
+}

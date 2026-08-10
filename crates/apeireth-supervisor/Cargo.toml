@@ -1,0 +1,30 @@
+[package]
+name = "apeireth-supervisor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth process-level supervisor: PID 1 + 5 sub-supervisors + 3 restart strategies + actor mailbox"
+
+[dependencies]
+apeireth-verify = { path = "../apeireth-verify" }
+tokio = { workspace = true, features = ["sync", "process", "rt", "macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+
+[lib]
+name = "apeireth_supervisor"
+path = "src/lib.rs"
+
+[[example]]
+name = "supervisor_demo"
+path = "examples/supervisor_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

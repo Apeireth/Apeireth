@@ -1,0 +1,89 @@
+# ============================================================================
+# Dependabot — Apeireth 后端依赖自动更新 (R18 第 0 阶段第 6 项)
+# ============================================================================
+# 业界来源: tokio / wasmtime / qdrant 默认配置
+# 双周更新: 周一早上 PR (rust 生态惯例)
+
+version: 2
+
+updates:
+  # --- Cargo dependencies: workspace + 42 个子 crate ---
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    # Group related updates to reduce PR noise
+    groups:
+      tokio:
+        patterns:
+          - "tokio*"
+          - "mio*"
+          - "socket2*"
+      http:
+        patterns:
+          - "reqwest*"
+          - "hyper*"
+          - "http*"
+          - "h2*"
+      serde:
+        patterns:
+          - "serde*"
+          - "toml*"
+      wasm:
+        patterns:
+          - "wasm*"
+          - "leptos*"
+          - "js-sys"
+      # Catch-all: other updates
+      dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "tokio*"
+          - "mio*"
+          - "socket2*"
+          - "reqwest*"
+          - "hyper*"
+          - "http*"
+          - "h2*"
+          - "serde*"
+          - "toml*"
+          - "wasm*"
+          - "leptos*"
+          - "js-sys"
+    # Don't auto-merge major version updates
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    # Commit message format
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # PR labels
+    labels:
+      - "dependencies"
+      - "automated"
+    # Auto-assign
+    assignees:
+      - "apeireth/maintainers"
+
+  # --- GitHub Actions: 5 个 workflow ---
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "automated"
+      - "ci"

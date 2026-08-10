@@ -1,0 +1,32 @@
+[package]
+name = "apeireth-tauri-stub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Tauri 2 desktop stub (DEPRECATED, R17 stub never shipped — R19 战役计划用真前端; 现作为参考实现,不在产品里。 docs/v2-strategy/05-EXECUTION-NOW.md §Step 1.3)"
+publish = false
+# V2 Day 1 Step 1.3: tauri-desktop 25KB 主入口已 DEPRECATED, 不进默认 build。
+# src/main.rs 仅作为 R19 战役参考样例保留, R19 worker 接管前不会编译 (Rust 2021 default-features 关掉 bin 自动检测)。
+autobins = false
+
+[lib]
+path = "src/lib.rs"
+name = "apeireth_tauri_stub"
+
+# Tauri 2 deps 声明 (R19 战役待实现, R17 stub 预先声明让 Cargo.lock 保留 Tauri packages)
+# R19 worker 替换此 stub 时这些 deps 自动可用
+[dependencies]
+apeireth-pipeline = { path = '../apeireth-pipeline' }
+tauri = { version = "2", features = [] }
+tauri-build = { version = "2", features = [] }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

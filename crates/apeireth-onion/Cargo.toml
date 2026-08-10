@@ -1,0 +1,27 @@
+[package]
+name = "apeireth-onion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 双洋葱统一体 trait abstraction layer — 原则洋葱 5 层 (E/S/A/M/O) + 权限洋葱 6 层 (L0-L5) + 电子环网络 (R14 Phase 4 P16, ADR-0001)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_onion"
+path = "src/lib.rs"
+
+[[example]]
+name = "onion_demo"
+path = "examples/onion_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

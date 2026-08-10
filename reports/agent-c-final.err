@@ -1,0 +1,3720 @@
+warning: output filename collision at .openclaw\workspace\promethean\Apeireth-rust\target\debug\examples\memory_provider_demo.exe
+  |
+  = note: the example target `memory_provider_demo` in package `apeireth-memory-extensions v0.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-memory\extensions)` has the same output filename as the example target `memory_provider_demo` in package `apeireth-cache v0.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-cache)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+warning: output filename collision at .openclaw\workspace\promethean\Apeireth-rust\target\debug\examples\memory_provider_demo.pdb
+  |
+  = note: the example target `memory_provider_demo` in package `apeireth-memory-extensions v0.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-memory\extensions)` has the same output filename as the example target `memory_provider_demo` in package `apeireth-cache v0.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-cache)`
+  = note: this may become a hard error in the future; see <https://github.com/rust-lang/cargo/issues/6313>
+  = help: consider changing their names to be unique or compiling them separately
+warning: unused variable: `twelve_key_cache`
+   --> crates\apeireth-constraint\src\deep_impl.rs:502:5
+    |
+502 |     twelve_key_cache: &TwelveKeyVerdictCache,
+    |     ^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_twelve_key_cache`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `apeireth-constraint` (lib) generated 1 warning (run `cargo fix --lib -p apeireth-constraint` to apply 1 suggestion)
+warning: unused import: `std::time::Duration`
+  --> crates\apeireth-memory\extensions\src\provider_s3.rs:22:5
+   |
+22 | use std::time::Duration;
+   |     ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Deserialize` and `Serialize`
+  --> crates\apeireth-memory\extensions\src\provider_mongodb.rs:23:13
+   |
+23 | use serde::{Deserialize, Serialize};
+   |             ^^^^^^^^^^^  ^^^^^^^^^
+
+warning: type `S3ParsedUri` is more private than the item `S3Provider::parsed`
+   --> crates\apeireth-memory\extensions\src\provider_s3.rs:141:5
+    |
+141 |     pub fn parsed(&self) -> &S3ParsedUri {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `S3Provider::parsed` is reachable at visibility `pub`
+    |
+note: but type `S3ParsedUri` is only usable at visibility `pub(self)`
+   --> crates\apeireth-memory\extensions\src\provider_s3.rs:35:1
+    |
+ 35 | struct S3ParsedUri {
+    | ^^^^^^^^^^^^^^^^^^
+    = note: `#[warn(private_interfaces)]` on by default
+
+warning: type `DiskLruEntry` is more private than the item `DiskLruProvider::handle`
+   --> crates\apeireth-memory\extensions\src\provider_disk_lru.rs:111:5
+    |
+111 |     pub fn handle(&self) -> Arc<Mutex<LruCache<String, DiskLruEntry>>> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ method `DiskLruProvider::handle` is reachable at visibility `pub`
+    |
+note: but type `DiskLruEntry` is only usable at visibility `pub(self)`
+   --> crates\apeireth-memory\extensions\src\provider_disk_lru.rs:55:1
+    |
+ 55 | struct DiskLruEntry {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: constant `IN_MEMORY_SCHEME` is never used
+  --> crates\apeireth-memory\extensions\src\provider_in_memory.rs:46:7
+   |
+46 | const IN_MEMORY_SCHEME: &str = "memory://";
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `config` is never read
+  --> crates\apeireth-memory\extensions\src\provider_sqlite.rs:49:5
+   |
+45 | pub struct SqliteProvider {
+   |            -------------- field in this struct
+...
+49 |     config: ProviderConfig,
+   |     ^^^^^^
+   |
+   = note: `SqliteProvider` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `config` is never read
+  --> crates\apeireth-memory\extensions\src\provider_postgres.rs:44:5
+   |
+40 | pub struct PostgresProvider {
+   |            ---------------- field in this struct
+...
+44 |     config: ProviderConfig,
+   |     ^^^^^^
+   |
+   = note: `PostgresProvider` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: fields `access_key` and `secret_key` are never read
+  --> crates\apeireth-memory\extensions\src\provider_s3.rs:43:5
+   |
+35 | struct S3ParsedUri {
+   |        ----------- fields in this struct
+...
+43 |     access_key: Option<String>,
+   |     ^^^^^^^^^^
+44 |     /// secret_key (optional).
+45 |     secret_key: Option<String>,
+   |     ^^^^^^^^^^
+   |
+   = note: `S3ParsedUri` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `config` is never read
+  --> crates\apeireth-memory\extensions\src\provider_s3.rs:56:5
+   |
+50 | pub struct S3Provider {
+   |            ---------- field in this struct
+...
+56 |     config: ProviderConfig,
+   |     ^^^^^^
+   |
+   = note: `S3Provider` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `disk_filename` is never read
+  --> crates\apeireth-memory\extensions\src\provider_disk_lru.rs:61:5
+   |
+55 | struct DiskLruEntry {
+   |        ------------ field in this struct
+...
+61 |     disk_filename: String,
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `DiskLruEntry` has derived impls for the traits `Clone` and `Debug`, but these are intentionally ignored during dead code analysis
+
+warning: field `config` is never read
+  --> crates\apeireth-memory\extensions\src\provider_hybrid.rs:44:5
+   |
+38 | pub struct HybridProvider {
+   |            -------------- field in this struct
+...
+44 |     config: ProviderConfig,
+   |     ^^^^^^
+   |
+   = note: `HybridProvider` has a derived impl for the trait `Debug`, but this is intentionally ignored during dead code analysis
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_redis.rs:223:5
+    |
+223 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates\apeireth-memory\extensions\src\lib.rs:111:9
+    |
+111 | #![warn(missing_docs)]
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_sqlite.rs:226:5
+    |
+226 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_postgres.rs:202:5
+    |
+202 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_s3.rs:284:5
+    |
+284 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_disk_lru.rs:297:5
+    |
+297 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-memory\extensions\src\provider_hybrid.rs:181:5
+    |
+181 |     pub config: ProviderConfig,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `apeireth-memory-extensions` (lib) generated 17 warnings (run `cargo fix --lib -p apeireth-memory-extensions` to apply 2 suggestions)
+warning: unused variable: `truncated`
+  --> crates\apeireth-tools\src\web_fetch.rs:69:13
+   |
+69 |         let truncated = bytes > max;
+   |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_truncated`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\long_task.rs:27:5
+   |
+27 |     Running { started_at: Instant },
+   |     ^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates\apeireth-tools\src\lib.rs:62:9
+   |
+62 | #![warn(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\long_task.rs:27:15
+   |
+27 |     Running { started_at: Instant },
+   |               ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\long_task.rs:28:5
+   |
+28 |     Completed { result: Value, duration_ms: u128 },
+   |     ^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\long_task.rs:28:17
+   |
+28 |     Completed { result: Value, duration_ms: u128 },
+   |                 ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\long_task.rs:28:32
+   |
+28 |     Completed { result: Value, duration_ms: u128 },
+   |                                ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\long_task.rs:29:5
+   |
+29 |     Failed { error: String, duration_ms: u128 },
+   |     ^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\long_task.rs:29:14
+   |
+29 |     Failed { error: String, duration_ms: u128 },
+   |              ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\long_task.rs:29:29
+   |
+29 |     Failed { error: String, duration_ms: u128 },
+   |                             ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\long_task.rs:30:5
+   |
+30 |     Cancelled,
+   |     ^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-tools\src\long_task.rs:116:5
+    |
+116 |     pub fn mark_failed(&self, id: &str, error: String) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\long_task.rs:153:5
+    |
+153 |     pub fn new() -> Self { Self { name: "LongTask".to_string() } }
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\long_task.rs:154:5
+    |
+154 |     pub fn with_name(name: impl Into<String>) -> Self { Self { name: name.into() } }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:20:5
+   |
+20 |     WebSearch,
+   |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:21:5
+   |
+21 |     FileOperator,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:22:5
+   |
+22 |     Git,
+   |     ^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:23:5
+   |
+23 |     ShellExec,
+   |     ^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:24:5
+   |
+24 |     Grep,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:25:5
+   |
+25 |     ApplyPatch,
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:26:5
+   |
+26 |     LongTask,
+   |     ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\classifier.rs:27:5
+   |
+27 |     WebFetch,
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\classifier.rs:70:5
+   |
+70 |     pub category: ToolCategory,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\classifier.rs:71:5
+   |
+71 |     pub score: usize,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-tools\src\web_fetch.rs:22:5
+   |
+22 |     async fn fetch(&self, url: &str, max_bytes: usize) -> Result<FetchResult, String>;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\web_fetch.rs:28:5
+   |
+28 |     pub url: String,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\web_fetch.rs:29:5
+   |
+29 |     pub status: u16,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\web_fetch.rs:30:5
+   |
+30 |     pub content_type: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\web_fetch.rs:31:5
+   |
+31 |     pub bytes: usize,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\web_fetch.rs:32:5
+   |
+32 |     pub body: String,  // 宸茬畝鍖栨垨鎴柇
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-tools\src\web_fetch.rs:43:5
+   |
+43 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\web_fetch.rs:116:5
+    |
+116 |     pub fn new(inner: std::sync::Arc<dyn WebFetch>) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\web_fetch.rs:119:5
+    |
+119 |     pub fn with_name(inner: std::sync::Arc<dyn WebFetch>, name: impl Into<String>) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\apply_patch.rs:34:5
+   |
+34 |     UpdateFile {
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:35:9
+   |
+35 |         path: PathBuf,
+   |         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:36:9
+   |
+36 |         hunks: Vec<PatchHunk>,
+   |         ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\apply_patch.rs:38:5
+   |
+38 |     AddFile {
+   |     ^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:39:9
+   |
+39 |         path: PathBuf,
+   |         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:40:9
+   |
+40 |         content: String,
+   |         ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-tools\src\apply_patch.rs:42:5
+   |
+42 |     DeleteFile {
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:43:9
+   |
+43 |         path: PathBuf,
+   |         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:70:19
+   |
+70 |     OldNotFound { path: PathBuf, old_lines: Vec<String> },
+   |                   ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:70:34
+   |
+70 |     OldNotFound { path: PathBuf, old_lines: Vec<String> },
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:72:22
+   |
+72 |     AmbiguousMatch { path: PathBuf, occurrences: usize, old_lines: Vec<String> },
+   |                      ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:72:37
+   |
+72 |     AmbiguousMatch { path: PathBuf, occurrences: usize, old_lines: Vec<String> },
+   |                                     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\apply_patch.rs:72:57
+   |
+72 |     AmbiguousMatch { path: PathBuf, occurrences: usize, old_lines: Vec<String> },
+   |                                                         ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a type alias
+  --> crates\apeireth-tools\src\apply_patch.rs:95:1
+   |
+95 | pub type PatchResult<T> = Result<T, PatchError>;
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\apply_patch.rs:341:5
+    |
+341 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\apply_patch.rs:344:5
+    |
+344 |     pub fn with_name(name: impl Into<String>) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-tools\src\grep_ops.rs:33:5
+   |
+33 | /     async fn search(
+34 | |         &self,
+35 | |         pattern: &str,
+36 | |         path: &Path,
+37 | |         glob: Option<&str>,
+38 | |         max_results: usize,
+39 | |     ) -> Result<Vec<GrepHit>, String>;
+   | |______________________________________^
+
+warning: missing documentation for a method
+  --> crates\apeireth-tools\src\grep_ops.rs:40:5
+   |
+40 |     fn name(&self) -> &str;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\grep_ops.rs:46:5
+   |
+46 |     pub path: PathBuf,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\grep_ops.rs:47:5
+   |
+47 |     pub line_no: usize,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-tools\src\grep_ops.rs:48:5
+   |
+48 |     pub line: String,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-tools\src\grep_ops.rs:57:5
+   |
+57 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-tools\src\grep_ops.rs:60:5
+   |
+60 |     pub fn with_name(name: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-tools\src\grep_ops.rs:157:5
+    |
+157 |     pub fn new(inner: Arc<dyn GrepOps>) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `apeireth-tools` (lib) generated 56 warnings (run `cargo fix --lib -p apeireth-tools` to apply 1 suggestion)
+warning: unexpected `cfg` condition value: `tui-dashboard`
+   --> crates\apeireth-api\src\observability\dashboard.rs:349:11
+    |
+349 |     #[cfg(feature = "tui-dashboard")]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+    |
+    = note: no expected values for `feature`
+    = help: consider adding `tui-dashboard` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: requested on the command line with `-W unexpected-cfgs`
+
+warning: unexpected `cfg` condition value: `tui-dashboard`
+   --> crates\apeireth-api\src\observability\dashboard.rs:380:11
+    |
+380 |     #[cfg(feature = "tui-dashboard")]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+    |
+    = note: no expected values for `feature`
+    = help: consider adding `tui-dashboard` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `tui-dashboard`
+   --> crates\apeireth-api\src\observability\dashboard.rs:418:11
+    |
+418 |     #[cfg(feature = "tui-dashboard")]
+    |           ^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove the condition
+    |
+    = note: no expected values for `feature`
+    = help: consider adding `tui-dashboard` as a feature in `Cargo.toml`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `headers`
+   --> crates\apeireth-api\src\server.rs:521:5
+    |
+521 |     headers: HeaderMap,
+    |     ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_headers`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\config.rs:35:1
+   |
+35 | pub struct LlmConfig {
+   | ^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates\apeireth-api\src\llm\mod.rs:6:9
+   |
+ 6 | #![warn(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:37:5
+   |
+37 |     pub providers: HashMap<String, ProviderConfig>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:39:5
+   |
+39 |     pub router: RouterConfig,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\config.rs:46:1
+   |
+46 | pub struct ProviderConfig {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:48:5
+   |
+48 |     pub provider_type: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:49:5
+   |
+49 |     pub base_url: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:50:5
+   |
+50 |     pub api_key_env: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:52:5
+   |
+52 |     pub models: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:57:5
+   |
+57 |     pub default_response: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\config.rs:61:1
+   |
+61 | pub struct RouterConfig {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\config.rs:63:5
+   |
+63 |     pub fallback_order: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+ --> crates\apeireth-api\src\llm\error.rs:6:1
+  |
+6 | pub enum LlmError {
+  | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+ --> crates\apeireth-api\src\llm\error.rs:8:5
+  |
+8 |     AuthFailed(String),
+  |     ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:11:5
+   |
+11 |     RateLimited {
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:12:9
+   |
+12 |         retry_after_ms: u64,
+   |         ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:13:9
+   |
+13 |         provider: String,
+   |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:17:5
+   |
+17 |     Timeout { timeout_ms: u64, provider: String },
+   |     ^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:17:15
+   |
+17 |     Timeout { timeout_ms: u64, provider: String },
+   |               ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:17:32
+   |
+17 |     Timeout { timeout_ms: u64, provider: String },
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:20:5
+   |
+20 |     BadResponse {
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:21:9
+   |
+21 |         provider: String,
+   |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:22:9
+   |
+22 |         detail: String,
+   |         ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:23:9
+   |
+23 |         status_code: Option<u16>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:27:5
+   |
+27 |     Network { provider: String, detail: String },
+   |     ^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:27:15
+   |
+27 |     Network { provider: String, detail: String },
+   |               ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:27:33
+   |
+27 |     Network { provider: String, detail: String },
+   |                                 ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:30:5
+   |
+30 |     NoProvider {
+   |     ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:31:9
+   |
+31 |         model: String,
+   |         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:32:9
+   |
+32 |         available: Vec<String>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:36:5
+   |
+36 |     Config(String),
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\llm\error.rs:39:5
+   |
+39 |     ProviderExhausted {
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:40:9
+   |
+40 |         provider: String,
+   |         ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:41:9
+   |
+41 |         attempts: u32,
+   |         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\error.rs:43:9
+   |
+43 |         last_error: Option<Box<LlmError>>,
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a trait
+  --> crates\apeireth-api\src\llm\middleware.rs:24:1
+   |
+24 | pub trait Middleware: Send + Sync {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\middleware.rs:42:1
+   |
+42 | pub struct LoggingMiddleware;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\middleware.rs:45:5
+   |
+45 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\llm\middleware.rs:116:1
+    |
+116 | pub struct RetryMiddleware {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\middleware.rs:117:5
+    |
+117 |     pub max_retries: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\middleware.rs:118:5
+    |
+118 |     pub backoff_base_ms: u64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\middleware.rs:122:5
+    |
+122 |     pub fn new(max_retries: u32, backoff_base_ms: u64) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\middleware.rs:186:5
+    |
+186 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\llm\middleware.rs:192:5
+    |
+192 |     pub fn with(mut self, m: Arc<dyn Middleware>) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\llm\middleware.rs:197:5
+    |
+197 |     pub fn len(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\llm\middleware.rs:201:5
+    |
+201 |     pub fn is_empty(&self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\anthropic_compat.rs:110:5
+    |
+110 |     pub fn from_env() -> Result<Self, LlmError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\anthropic_compat.rs:130:5
+    |
+130 | /     pub fn new(
+131 | |         api_key: impl Into<String>,
+132 | |         base_url: impl Into<String>,
+133 | |         models: Vec<String>,
+134 | |     ) -> Self {
+    | |_____________^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\anthropic_compat.rs:156:5
+    |
+156 |     pub fn new(config: AnthropicCompatibleConfig) -> Result<Self, LlmError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\anthropic_compat.rs:164:5
+    |
+164 |     pub fn from_env() -> Result<Self, LlmError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\apeireth_api.rs:108:5
+    |
+108 |     pub fn new(config: ApeirethApiConfig) -> Result<Self, LlmError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\providers\apeireth_api.rs:116:5
+    |
+116 |     pub fn from_env() -> Result<Self, LlmError> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:64:1
+   |
+64 | pub struct OpenAiCompatibleConfig {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:65:5
+   |
+65 |     pub name: String,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:66:5
+   |
+66 |     pub base_url: String,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:67:5
+   |
+67 |     pub api_key: String,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:68:5
+   |
+68 |     pub models: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:69:5
+   |
+69 |     pub timeout_ms: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:70:5
+   |
+70 |     pub max_retries: u32,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:74:5
+   |
+74 | /     pub fn new(
+75 | |         name: impl Into<String>,
+76 | |         base_url: impl Into<String>,
+77 | |         api_key: impl Into<String>,
+78 | |         models: Vec<String>,
+79 | |     ) -> Self {
+   | |_____________^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:91:1
+   |
+91 | pub struct OpenAiCompatibleProvider {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\providers\openai_compat.rs:97:5
+   |
+97 |     pub fn new(config: OpenAiCompatibleConfig) -> Result<Self, LlmError> {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:17:1
+   |
+17 | pub struct ScriptedResponse {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:18:5
+   |
+18 |     pub content: String,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:19:5
+   |
+19 |     pub usage: TokenUsage,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:20:5
+   |
+20 |     pub latency_ms: u64,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:21:5
+   |
+21 |     pub finish_reason: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:25:5
+   |
+25 |     pub fn new(content: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:35:1
+   |
+35 | pub struct ScriptedLlmProvider {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:42:5
+   |
+42 |     pub fn new(name: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:50:5
+   |
+50 |     pub fn with_script(mut self, keyword: impl Into<String>, response: ScriptedResponse) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:55:5
+   |
+55 |     pub fn with_default(mut self, response: ScriptedResponse) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\providers\scripted.rs:60:5
+   |
+60 |     pub fn scripts_count(&self) -> usize {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\router.rs:17:1
+   |
+17 | pub struct MultiLlmRouter {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\router.rs:25:5
+   |
+25 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:41:5
+   |
+41 |     pub name: String,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:42:5
+   |
+42 |     pub model: String,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:43:5
+   |
+43 |     pub description: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:45:5
+   |
+45 |     pub failover_pool: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:47:5
+   |
+47 |     pub enabled: bool,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:58:5
+   |
+58 |     pub match_threshold: f32,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:60:5
+   |
+60 |     pub context_weights: [f32; 2],
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:62:5
+   |
+62 |     pub routes: Vec<Route>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\semantic_router.rs:64:5
+   |
+64 |     pub default_route: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\semantic_router.rs:91:5
+   |
+91 |     pub fn new(config: SemanticRouterConfig, router: Arc<MultiLlmRouter>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+  --> crates\apeireth-api\src\llm\traits.rs:15:1
+   |
+15 | pub enum ChatRole {
+   | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\traits.rs:29:1
+   |
+29 | pub struct ChatMessage {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\traits.rs:30:5
+   |
+30 |     pub role: ChatRole,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\llm\traits.rs:31:5
+   |
+31 |     pub content: String,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\traits.rs:35:5
+   |
+35 |     pub fn system(content: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\traits.rs:41:5
+   |
+41 |     pub fn user(content: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\traits.rs:47:5
+   |
+47 |     pub fn assistant(content: impl Into<String>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\llm\traits.rs:60:1
+   |
+60 | pub struct LlmRequest {
+   | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\llm\traits.rs:77:5
+   |
+77 |     pub fn new(model: impl Into<String>, messages: Vec<ChatMessage>) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\traits.rs:89:5
+   |
+89 |     pub fn with_temperature(mut self, t: f32) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\traits.rs:94:5
+   |
+94 |     pub fn with_max_tokens(mut self, n: u32) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+  --> crates\apeireth-api\src\llm\traits.rs:99:5
+   |
+99 |     pub fn with_trace_id(mut self, id: u64) -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\llm\traits.rs:110:1
+    |
+110 | pub struct LlmResponse {
+    | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\llm\traits.rs:130:1
+    |
+130 | pub struct TokenUsage {
+    | ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:131:5
+    |
+131 |     pub prompt_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:132:5
+    |
+132 |     pub completion_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:133:5
+    |
+133 |     pub total_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\llm\traits.rs:137:5
+    |
+137 |     pub fn new(prompt: u32, completion: u32) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:158:5
+    |
+158 |     pub const NONE: Self = Self(0);
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:159:5
+    |
+159 |     pub const CHAT: Self = Self(1 << 0); // Chat completion
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:160:5
+    |
+160 |     pub const STREAMING: Self = Self(1 << 1); // 娴佸紡鍝嶅簲 (SSE)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:161:5
+    |
+161 |     pub const TOOLS: Self = Self(1 << 2); // Tool calling (function call)
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:162:5
+    |
+162 |     pub const VISION: Self = Self(1 << 3); // 鍥惧儚杈撳叆
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:163:5
+    |
+163 |     pub const JSON_MODE: Self = Self(1 << 4); // JSON 寮哄埗杈撳嚭
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:164:5
+    |
+164 |     pub const SYSTEM_PROMPT: Self = Self(1 << 5); // 绯荤粺鎻愮ず璇?    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:165:5
+    |
+165 |     pub const THINKING: Self = Self(1 << 6); // 鎬濊€冮摼 (CoT)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:166:5
+    |
+166 |     pub const LONG_CONTEXT: Self = Self(1 << 7); // 闀夸笂涓嬫枃 (>= 100k tokens)
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated constant
+   --> crates\apeireth-api\src\llm\traits.rs:167:5
+    |
+167 |     pub const CUSTOM_TEMPERATURE: Self = Self(1 << 8); // 鑷畾涔夋俯搴?    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\llm\traits.rs:169:5
+    |
+169 |     pub fn bits(self) -> u32 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\llm\traits.rs:173:5
+    |
+173 |     pub fn contains(self, other: Self) -> bool {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:197:5
+    |
+197 |     pub healthy: bool,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:198:5
+    |
+198 |     pub latency_p50_ms: u64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:199:5
+    |
+199 |     pub error_rate: f64,    // 0.0 - 1.0
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:200:5
+    |
+200 |     pub last_check_ms: i64, // unix epoch ms
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:201:5
+    |
+201 |     pub consecutive_failures: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\llm\traits.rs:290:1
+    |
+290 | pub struct ProviderMetadata {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:291:5
+    |
+291 |     pub name: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:292:5
+    |
+292 |     pub version: String,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\llm\traits.rs:293:5
+    |
+293 |     pub endpoint: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\protocol_handlers.rs:63:1
+   |
+63 | pub const OPENAI_RESPONSES_PATH: &str = "/v1/responses";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates\apeireth-api\src\lib.rs:87:9
+   |
+87 | #![warn(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\protocol_handlers.rs:64:1
+   |
+64 | pub const ANTHROPIC_MESSAGES_PATH: &str = "/v1/messages";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\protocol_handlers.rs:65:1
+   |
+65 | pub const GEMINI_PATH_TEMPLATE: &str = "/v1beta/models/{model}:generateContent";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:194:5
+    |
+194 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:195:5
+    |
+195 |     pub messages: Vec<OpenAiChatMessage>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:197:5
+    |
+197 |     pub temperature: Option<f32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:199:5
+    |
+199 |     pub max_tokens: Option<u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:201:5
+    |
+201 |     pub stream: bool,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:203:5
+    |
+203 |     pub stop: Option<Vec<String>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:205:5
+    |
+205 |     pub tools: Option<Vec<Value>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:207:5
+    |
+207 |     pub tool_choice: Option<Value>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:213:5
+    |
+213 |     pub role: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:217:5
+    |
+217 |     pub tool_calls: Option<Vec<Value>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:219:5
+    |
+219 |     pub tool_call_id: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:225:5
+    |
+225 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:226:5
+    |
+226 |     pub object: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:227:5
+    |
+227 |     pub created: i64,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:228:5
+    |
+228 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:229:5
+    |
+229 |     pub choices: Vec<OpenAiChatChoice>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:230:5
+    |
+230 |     pub usage: OpenAiChatUsage,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:237:1
+    |
+237 | pub struct OpenAiChatChoice {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:238:5
+    |
+238 |     pub index: u32,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:239:5
+    |
+239 |     pub message: OpenAiChatMessageOut,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:240:5
+    |
+240 |     pub finish_reason: String,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:244:1
+    |
+244 | pub struct OpenAiChatMessageOut {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:245:5
+    |
+245 |     pub role: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:246:5
+    |
+246 |     pub content: String,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:250:1
+    |
+250 | pub struct OpenAiChatUsage {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:251:5
+    |
+251 |     pub prompt_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:252:5
+    |
+252 |     pub completion_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:253:5
+    |
+253 |     pub total_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:326:5
+    |
+326 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:333:5
+    |
+333 |     pub temperature: Option<f32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:335:5
+    |
+335 |     pub max_tokens: Option<u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:337:5
+    |
+337 |     pub stream: bool,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:339:5
+    |
+339 |     pub tools: Option<Vec<Value>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:341:5
+    |
+341 |     pub tool_choice: Option<Value>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:347:5
+    |
+347 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:348:5
+    |
+348 |     pub object: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:349:5
+    |
+349 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:350:5
+    |
+350 |     pub status: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:351:5
+    |
+351 |     pub output: Vec<Value>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:352:5
+    |
+352 |     pub usage: OpenAiResponsesUsage,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:359:1
+    |
+359 | pub struct OpenAiResponsesUsage {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:360:5
+    |
+360 |     pub input_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:361:5
+    |
+361 |     pub output_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:362:5
+    |
+362 |     pub total_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:454:5
+    |
+454 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:458:5
+    |
+458 |     pub messages: Vec<AnthropicMessage>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:462:5
+    |
+462 |     pub temperature: Option<f32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:464:5
+    |
+464 |     pub stream: bool,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:466:5
+    |
+466 |     pub stop_sequences: Option<Vec<String>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:468:5
+    |
+468 |     pub tools: Option<Vec<Value>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:474:5
+    |
+474 |     pub role: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:478:5
+    |
+478 |     pub tool_call_id: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:484:5
+    |
+484 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:486:5
+    |
+486 |     pub kind: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:487:5
+    |
+487 |     pub role: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:488:5
+    |
+488 |     pub model: String,
+    |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:489:5
+    |
+489 |     pub content: Vec<Value>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:490:5
+    |
+490 |     pub stop_reason: String,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:491:5
+    |
+491 |     pub stop_sequence: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:492:5
+    |
+492 |     pub usage: AnthropicUsage,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:499:1
+    |
+499 | pub struct AnthropicUsage {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:500:5
+    |
+500 |     pub input_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:501:5
+    |
+501 |     pub output_tokens: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:607:5
+    |
+607 |     pub tools: Option<Vec<Value>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:611:1
+    |
+611 | pub struct GeminiContent {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:612:5
+    |
+612 |     pub role: String, // "user" / "model"
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:613:5
+    |
+613 |     pub parts: Vec<GeminiPart>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates\apeireth-api\src\protocol_handlers.rs:618:1
+    |
+618 | pub enum GeminiPart {
+    | ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-api\src\protocol_handlers.rs:619:5
+    |
+619 |     Text {
+    |     ^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:620:9
+    |
+620 |         text: String,
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-api\src\protocol_handlers.rs:623:5
+    |
+623 |     Other,
+    |     ^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:627:1
+    |
+627 | pub struct GeminiSystemInstruction {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:628:5
+    |
+628 |     pub parts: Vec<GeminiPart>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:632:1
+    |
+632 | pub struct GeminiGenerationConfig {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:634:5
+    |
+634 |     pub temperature: Option<f32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:636:5
+    |
+636 |     pub max_output_tokens: Option<u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:638:5
+    |
+638 |     pub top_p: Option<f32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:640:5
+    |
+640 |     pub stop_sequences: Option<Vec<String>>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:646:5
+    |
+646 |     pub candidates: Vec<GeminiCandidate>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:648:5
+    |
+648 |     pub model_version: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:650:5
+    |
+650 |     pub response_id: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:652:5
+    |
+652 |     pub usage_metadata: Option<GeminiUsageMetadata>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:659:1
+    |
+659 | pub struct GeminiCandidate {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:660:5
+    |
+660 |     pub content: GeminiContentOut,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:661:5
+    |
+661 |     pub finish_reason: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:663:5
+    |
+663 |     pub index: Option<u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:667:1
+    |
+667 | pub struct GeminiContentOut {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:668:5
+    |
+668 |     pub role: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:669:5
+    |
+669 |     pub parts: Vec<GeminiPartOut>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an enum
+   --> crates\apeireth-api\src\protocol_handlers.rs:674:1
+    |
+674 | pub enum GeminiPartOut {
+    | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-api\src\protocol_handlers.rs:675:5
+    |
+675 |     Text { text: String },
+    |     ^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:675:12
+    |
+675 |     Text { text: String },
+    |            ^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+   --> crates\apeireth-api\src\protocol_handlers.rs:679:1
+    |
+679 | pub struct GeminiUsageMetadata {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:680:5
+    |
+680 |     pub prompt_token_count: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:681:5
+    |
+681 |     pub candidates_token_count: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\protocol_handlers.rs:682:5
+    |
+682 |     pub total_token_count: u32,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a type alias
+  --> crates\apeireth-api\src\server.rs:98:1
+   |
+98 | pub type SharedState = Arc<AppState>;
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates\apeireth-api\src\server.rs:104:1
+    |
+104 | pub fn build_router(state: SharedState) -> Router {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\routing.rs:56:1
+   |
+56 | pub const SPAN_RESPONSES: &str = "apeireth.api.responses";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\routing.rs:57:1
+   |
+57 | pub const SPAN_MESSAGES: &str = "apeireth.api.messages";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\routing.rs:58:1
+   |
+58 | pub const SPAN_GENERATE_CONTENT: &str = "apeireth.api.generate_content";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\routing.rs:59:1
+   |
+59 | pub const SPAN_COUNCIL_ADVISE: &str = "apeireth.api.council_advise";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a constant
+  --> crates\apeireth-api\src\routing.rs:60:1
+   |
+60 | pub const SPAN_VERDICT: &str = "apeireth.api.verdict";
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\v2_endpoints.rs:81:5
+   |
+81 |     Sqlite(#[from] rusqlite::Error),
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\v2_endpoints.rs:83:5
+   |
+83 |     Invalid(String),
+   |     ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\v2_endpoints.rs:85:5
+   |
+85 |     Json(#[from] serde_json::Error),
+   |     ^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:417:5
+    |
+417 |     pub continuity_id: String,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:418:5
+    |
+418 |     pub birth_time: i64,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:419:5
+    |
+419 |     pub carriers: Vec<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:420:5
+    |
+420 |     pub migration_history: Vec<Migration>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:421:5
+    |
+421 |     pub subject_rev: i64,
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:422:5
+    |
+422 |     pub created_at: i64,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:423:5
+    |
+423 |     pub updated_at: i64,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:424:5
+    |
+424 |     pub tombstoned_at: Option<i64>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:425:5
+    |
+425 |     pub tombstoned_reason: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:476:5
+    |
+476 |     pub successes: HashMap<String, u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:477:5
+    |
+477 |     pub attempts: HashMap<String, u32>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:478:5
+    |
+478 |     pub qualities: HashMap<String, f64>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:488:5
+    |
+488 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:492:5
+    |
+492 |     pub fn compute_all_dims(&self, sample: &MeasurementSample) -> [f64; 24] {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:500:5
+    |
+500 |     pub fn compute_all_subs(&self, sample: &MeasurementSample) -> [f64; 9] {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:551:26
+    |
+551 |     NoDegradeViolation { from: String, to: String },
+    |                          ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:551:40
+    |
+551 |     NoDegradeViolation { from: String, to: String },
+    |                                        ^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:553:24
+    |
+553 |     NoPatchViolation { rule: String },
+    |                        ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:555:25
+    |
+555 |     NoBypassViolation { token: String },
+    |                         ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:557:26
+    |
+557 |     NoReverseViolation { trigger_id: String },
+    |                          ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:559:23
+    |
+559 |     NoHideViolation { window_id: String },
+    |                       ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:563:5
+    |
+563 |     pub fn mechanism_id(&self) -> u8 {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:572:5
+    |
+572 |     pub fn mechanism_name(&self) -> &'static str {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:581:5
+    |
+581 |     pub fn chinese_name(&self) -> &'static str {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:595:5
+    |
+595 |     pub trigger_id: String,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:596:5
+    |
+596 |     pub triggered_at_ms: i64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:597:5
+    |
+597 |     pub trigger: SelfDisableTrigger,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:598:5
+    |
+598 |     pub context: String,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-api\src\v2_endpoints.rs:604:5
+    |
+604 |     Pass,
+    |     ^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-api\src\v2_endpoints.rs:605:5
+    |
+605 |     Triggered(SelfDisableRecord),
+    |     ^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:615:5
+    |
+615 |     pub is_armed: bool,
+    |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:627:5
+    |
+627 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:635:5
+    |
+635 |     pub fn rearm(&mut self) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:639:5
+    |
+639 |     pub fn records(&self) -> &[SelfDisableRecord] {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:643:5
+    |
+643 |     pub fn record_count(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:663:5
+    |
+663 | /     pub fn check_no_degrade(
+664 | |         &mut self,
+665 | |         original: &str,
+666 | |         proposed: &str,
+667 | |         context: &str,
+668 | |         now_ms: i64,
+669 | |     ) -> SelfDisableCheck {
+    | |_________________________^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:690:5
+    |
+690 | /     pub fn check_no_patch(
+691 | |         &mut self,
+692 | |         rule: &str,
+693 | |         _proposed: i64,
+694 | |         context: &str,
+695 | |         now_ms: i64,
+696 | |     ) -> SelfDisableCheck {
+    | |_________________________^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:723:5
+    |
+723 | /     pub fn check_no_bypass(
+724 | |         &mut self,
+725 | |         owner_token: &str,
+726 | |         bypassed_governance: bool,
+727 | |         context: &str,
+728 | |         now_ms: i64,
+729 | |     ) -> SelfDisableCheck {
+    | |_________________________^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:749:5
+    |
+749 | /     pub fn check_no_reverse(
+750 | |         &mut self,
+751 | |         trigger_id: &str,
+752 | |         context: &str,
+753 | |         now_ms: i64,
+754 | |     ) -> SelfDisableCheck {
+    | |_________________________^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:770:5
+    |
+770 | /     pub fn check_no_hide(
+771 | |         &mut self,
+772 | |         window_id: &str,
+773 | |         context: &str,
+774 | |         now_ms: i64,
+775 | |     ) -> SelfDisableCheck {
+    | |_________________________^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:799:5
+    |
+799 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:800:5
+    |
+800 |     pub name: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:801:5
+    |
+801 |     pub aliases: Vec<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:802:5
+    |
+802 |     pub tools: Vec<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:803:5
+    |
+803 |     pub system_prompt: String,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:804:5
+    |
+804 |     pub created_at: i64,
+    |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:808:5
+    |
+808 | /     pub fn new(
+809 | |         id: impl Into<String>,
+810 | |         name: impl Into<String>,
+811 | |         aliases: Vec<String>,
+812 | |         tools: Vec<String>,
+813 | |         system_prompt: impl Into<String>,
+814 | |     ) -> Self {
+    | |_____________^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:853:5
+    |
+853 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:857:5
+    |
+857 |     pub fn with_cache_size(cache_size: usize) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:868:5
+    |
+868 |     pub fn register(&self, agent: Agent) -> Result<(), String> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:896:5
+    |
+896 |     pub fn list(&self) -> Vec<Agent> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:902:5
+    |
+902 |     pub fn cache_capacity(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:915:5
+    |
+915 |     pub fn cache_len(&self) -> usize {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:925:5
+    |
+925 |     pub fn all_aliases(&self) -> Vec<String> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:956:5
+    |
+956 |     pub name: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\v2_endpoints.rs:957:5
+    |
+957 |     pub health: f64,
+    |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-api\src\v2_endpoints.rs:970:5
+    |
+970 |     pub fn new() -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:974:5
+    |
+974 |     pub fn list_organs(&self) -> Vec<OrganSummary> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-api\src\v2_endpoints.rs:984:5
+    |
+984 |     pub fn get_organ(&self, name: &str) -> Option<OrganSummary> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+    --> crates\apeireth-api\src\v2_endpoints.rs:1113:5
+     |
+1113 |     pub fn new() -> Self {
+     |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1117:5
+     |
+1117 |     pub fn install_tools(&self, reg: Arc<ToolRegistry>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1120:5
+     |
+1120 |     pub fn install_memory(&self, store: Arc<V2Memory>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1123:5
+     |
+1123 |     pub fn install_asi(&self, reg: Arc<V2AsiRegistry>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1126:5
+     |
+1126 |     pub fn install_sovereignty(&self, guard: Arc<StdMutex<V2SelfDisableGuard>>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1129:5
+     |
+1129 |     pub fn install_agent(&self, mgr: Arc<V2AgentManager>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1132:5
+     |
+1132 |     pub fn install_organs(&self, organs: Arc<V2OrgansProvider>) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1143:5
+     |
+1143 |     pub fn tools_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1146:5
+     |
+1146 |     pub fn memory_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1149:5
+     |
+1149 |     pub fn asi_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1152:5
+     |
+1152 |     pub fn sovereignty_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1155:5
+     |
+1155 |     pub fn agent_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+    --> crates\apeireth-api\src\v2_endpoints.rs:1158:5
+     |
+1158 |     pub fn organs_registered(&self) -> bool {
+     |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a type alias
+    --> crates\apeireth-api\src\v2_endpoints.rs:1163:1
+     |
+1163 | pub type SharedV2 = Arc<V2State>;
+     | ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+    --> crates\apeireth-api\src\v2_endpoints.rs:1966:1
+     |
+1966 | pub async fn v2_health(State(state): State<SharedV2>) -> impl IntoResponse {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\observability\status.rs:81:1
+   |
+81 | pub struct ServiceInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:82:5
+   |
+82 |     pub name: String,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:83:5
+   |
+83 |     pub version: String,
+   |     ^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:84:5
+   |
+84 |     pub build_time: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:85:5
+   |
+85 |     pub git_commit: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:86:5
+   |
+86 |     pub workspace_version: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\observability\status.rs:90:1
+   |
+90 | pub struct RuntimeInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:91:5
+   |
+91 |     pub start_time: chrono::DateTime<chrono::Utc>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:92:5
+   |
+92 |     pub uptime_seconds: u64,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:93:5
+   |
+93 |     pub uptime_human: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:94:5
+   |
+94 |     pub platform: String,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\observability\status.rs:95:5
+   |
+95 |     pub rust_version: String,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\observability\status.rs:99:1
+   |
+99 | pub struct SessionsInfo {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\observability\status.rs:100:5
+    |
+100 |     pub active_sessions: u64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-api\src\observability\status.rs:101:5
+    |
+101 |     pub note: &'static str,
+    |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\endpoints.rs:15:5
+   |
+15 |     Get,
+   |     ^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\endpoints.rs:16:5
+   |
+16 |     Post,
+   |     ^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\endpoints.rs:17:5
+   |
+17 |     Put,
+   |     ^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\endpoints.rs:18:5
+   |
+18 |     Delete,
+   |     ^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-api\src\endpoints.rs:19:5
+   |
+19 |     Patch,
+   |     ^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\endpoints.rs:47:5
+   |
+47 |     pub path: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\endpoints.rs:48:5
+   |
+48 |     pub method: HttpMethod,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\endpoints.rs:49:5
+   |
+49 |     pub handler: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\endpoints.rs:50:5
+   |
+50 |     pub file: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:72:5
+   |
+72 |     pub ok: bool,
+   |     ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:74:5
+   |
+74 |     pub result: Option<Value>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:76:5
+   |
+76 |     pub error: Option<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:77:5
+   |
+77 |     pub meta: Meta,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:83:5
+   |
+83 |     pub tool: String,
+   |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:84:5
+   |
+84 |     pub duration_ms: u128,
+   |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\mod.rs:85:5
+   |
+85 |     pub trace_id: String,
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:28:1
+   |
+28 | pub struct CalendarEvent {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:29:5
+   |
+29 |     pub id: String,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:30:5
+   |
+30 |     pub title: String,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:31:5
+   |
+31 |     pub start_ts: i64,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:32:5
+   |
+32 |     pub end_ts: i64,
+   |     ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:33:5
+   |
+33 |     pub attendees: Vec<String>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:35:5
+   |
+35 |     pub notes: String,
+   |     ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:38:1
+   |
+38 | pub struct CalendarTool {
+   | ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\v1_tools\calendar.rs:43:5
+   |
+43 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\v1_tools\message.rs:24:1
+   |
+24 | pub struct Message {
+   | ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\message.rs:25:5
+   |
+25 |     pub id: String,
+   |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\message.rs:26:5
+   |
+26 |     pub sender: String,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\message.rs:27:5
+   |
+27 |     pub target: String,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\message.rs:28:5
+   |
+28 |     pub payload: Value,
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-api\src\v1_tools\message.rs:29:5
+   |
+29 |     pub ts: i64,
+   |     ^^^^^^^^^^^
+
+warning: missing documentation for a struct
+  --> crates\apeireth-api\src\v1_tools\message.rs:32:1
+   |
+32 | pub struct MessageTool {
+   | ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-api\src\v1_tools\message.rs:37:5
+   |
+37 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a function
+   --> crates\apeireth-api\src\ws_v1.rs:349:1
+    |
+349 | pub fn next_trace_id_for_test() -> u64 {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: structure field `protocolVersion` should have a snake case name
+   --> crates\apeireth-mcp\src\lib.rs:134:9
+    |
+134 |     pub protocolVersion: String,
+    |         ^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `protocol_version`
+    |
+    = note: `#[warn(non_snake_case)]` (part of `#[warn(nonstandard_style)]`) on by default
+
+warning: structure field `serverInfo` should have a snake case name
+   --> crates\apeireth-mcp\src\lib.rs:136:9
+    |
+136 |     pub serverInfo: ServerIdentity,
+    |         ^^^^^^^^^^ help: convert the identifier to snake case: `server_info`
+
+warning: structure field `listChanged` should have a snake case name
+   --> crates\apeireth-mcp\src\lib.rs:163:9
+    |
+163 |     pub listChanged: bool,
+    |         ^^^^^^^^^^^ help: convert the identifier to snake case: `list_changed`
+
+warning: structure field `inputSchema` should have a snake case name
+  --> crates\apeireth-mcp\src\tool_bridge.rs:44:9
+   |
+44 |     pub inputSchema: Value,
+   |         ^^^^^^^^^^^ help: convert the identifier to snake case: `input_schema`
+
+warning: structure field `listChanged` should have a snake case name
+   --> crates\apeireth-mcp\src\initialize.rs:121:9
+    |
+121 |     pub listChanged: bool,
+    |         ^^^^^^^^^^^ help: convert the identifier to snake case: `list_changed`
+
+warning: structure field `protocolVersion` should have a snake case name
+   --> crates\apeireth-mcp\src\initialize.rs:136:9
+    |
+136 |     pub protocolVersion: String,
+    |         ^^^^^^^^^^^^^^^ help: convert the identifier to snake case: `protocol_version`
+
+warning: structure field `clientInfo` should have a snake case name
+   --> crates\apeireth-mcp\src\initialize.rs:140:9
+    |
+140 |     pub clientInfo: ClientInfo,
+    |         ^^^^^^^^^^ help: convert the identifier to snake case: `client_info`
+
+warning: `apeireth-api` (lib) generated 359 warnings (run `cargo fix --lib -p apeireth-api` to apply 1 suggestion)
+warning: `apeireth-mcp` (lib) generated 7 warnings
+warning: trivial numeric cast: `i64` as `i64`
+  --> crates\apeireth-memory\src\identity.rs:66:25
+   |
+66 |             birth_time: card.birth_time as i64,
+   |                         ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: cast can be replaced by coercion; this might require a temporary variable
+   = note: requested on the command line with `-W trivial-numeric-casts`
+
+warning: unused variable: `exists`
+   --> crates\apeireth-memory\src\identity.rs:322:17
+    |
+322 |             let exists: bool = conn.query_row(
+    |                 ^^^^^^ help: if this is intentional, prefix it with an underscore: `_exists`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `o`
+   --> crates\apeireth-memory\src\user_profile.rs:119:20
+    |
+119 |             (u, a, o) if u + a == 0 => "鏈煡".to_string(),
+    |                    ^ help: if this is intentional, prefix it with an underscore: `_o`
+
+warning: `apeireth-memory` (lib) generated 3 warnings (run `cargo fix --lib -p apeireth-memory` to apply 2 suggestions)
+warning: unreachable statement
+   --> crates\apeireth-value\src\onion_consistency.rs:193:9
+    |
+180 |           let cmp = match (sa, sb) {
+    |  ___________________-
+181 | |             (OnionLayerStance::Aligned, OnionLayerStance::Aligned) => continue,
+182 | |             (OnionLayerStance::Underspecified, OnionLayerStance::Underspecified) => continue,
+183 | |             (OnionLayerStance::Aligned, _) => return Some((dim, ValueComparison::Higher)),
+...   |
+191 | |             (OnionLayerStance::Conflicted, OnionLayerStance::Conflicted) => continue,
+192 | |         };
+    | |_________- any code following this `match` expression is unreachable, as all arms diverge
+193 |           let _ = cmp;
+    |           ^^^^^^^^^^^^ unreachable statement
+    |
+    = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `cmp`
+   --> crates\apeireth-value\src\onion_consistency.rs:180:13
+    |
+180 |         let cmp = match (sa, sb) {
+    |             ^^^ help: if this is intentional, prefix it with an underscore: `_cmp`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `apeireth-value` (lib) generated 2 warnings (run `cargo fix --lib -p apeireth-value` to apply 1 suggestion)
+warning: unused variable: `weights`
+   --> crates\apeireth-council\src\synthesis.rs:107:48
+    |
+107 | pub fn synthesize(opinions: &[AdvisorOpinion], weights: &SynthesisWeights) -> SynthesisReport {
+    |                                                ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_weights`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: `apeireth-council` (lib) generated 1 warning (run `cargo fix --lib -p apeireth-council` to apply 1 suggestion)
+warning: unused variable: `p`
+   --> crates\apeireth-sovereignty\src\ha.rs:130:31
+    |
+130 |             Self::SingleHuman(p) => 1,
+    |                               ^ help: if this is intentional, prefix it with an underscore: `_p`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `human_id`
+   --> crates\apeireth-sovereignty\src\ha.rs:494:19
+    |
+494 |     pub fn single(human_id: impl Into<String>, name: impl Into<String>) -> Self {
+    |                   ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_human_id`
+
+warning: unused variable: `now_ms`
+   --> crates\apeireth-sovereignty\src\ha.rs:686:9
+    |
+686 |         now_ms: i64,
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_now_ms`
+
+warning: unused variable: `now_ms`
+   --> crates\apeireth-sovereignty\src\three_domain_enforce.rs:148:58
+    |
+148 |     pub fn enforce(&mut self, request: &DecisionRequest, now_ms: i64) -> DomainCheckResult {
+    |                                                          ^^^^^^ help: if this is intentional, prefix it with an underscore: `_now_ms`
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:70:44
+   |
+70 |     #[error("SSH connection failed: {0}")] ConnectionFailed(String),
+   |                                            ^^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates\apeireth-mcp-ssh\src\lib.rs:21:9
+   |
+21 | #![warn(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:71:38
+   |
+71 |     #[error("SSH auth failed: {0}")] AuthFailed(String),
+   |                                      ^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:72:60
+   |
+72 |     #[error("SSH command failed (exit {code}): {stderr}")] CommandFailed { code: i32, stderr: String },
+   |                                                            ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:72:76
+   |
+72 |     #[error("SSH command failed (exit {code}): {stderr}")] CommandFailed { code: i32, stderr: String },
+   |                                                                            ^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:72:87
+   |
+72 |     #[error("SSH command failed (exit {code}): {stderr}")] CommandFailed { code: i32, stderr: String },
+   |                                                                                       ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:73:36
+   |
+73 |     #[error("SSH channel closed")] ChannelClosed,
+   |                                    ^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:74:45
+   |
+74 |     #[error("SSH session timeout ({0:?})")] Timeout(Duration),
+   |                                             ^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:75:47
+   |
+75 |     #[error("SSH file transfer failed: {0}")] FileTransfer(String),
+   |                                               ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:76:49
+   |
+76 |     #[error("SSH port forwarding failed: {0}")] PortForward(String),
+   |                                                 ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:77:46
+   |
+77 |     #[error("SSH config parse failed: {0}")] ConfigParse(String),
+   |                                              ^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:78:44
+   |
+78 |     #[error("SSH host key mismatch: {0}")] HostKeyMismatch(String),
+   |                                            ^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:79:46
+   |
+79 |     #[error("SSH private key invalid: {0}")] InvalidPrivateKey(String),
+   |                                              ^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:80:43
+   |
+80 |     #[error("SSH jump host failed: {0}")] JumpHost(String),
+   |                                           ^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:81:36
+   |
+81 |     #[error("SSH I/O error: {0}")] Io(#[from] std::io::Error),
+   |                                    ^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:82:32
+   |
+82 |     #[error("SSH error: {0}")] Other(String),
+   |                                ^^^^^
+
+warning: missing documentation for a type alias
+  --> crates\apeireth-mcp-ssh\src\lib.rs:85:1
+   |
+85 | pub type SshMcpResult<T> = Result<T, SshMcpError>;
+   | ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:93:5
+   |
+93 |     Password { username: String, password: SecretString },
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:93:16
+   |
+93 |     Password { username: String, password: SecretString },
+   |                ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:93:34
+   |
+93 |     Password { username: String, password: SecretString },
+   |                                  ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:94:5
+   |
+94 |     PublicKey { username: String, private_key_path: PathBuf, passphrase: Option<SecretString> },
+   |     ^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:94:17
+   |
+94 |     PublicKey { username: String, private_key_path: PathBuf, passphrase: Option<SecretString> },
+   |                 ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:94:35
+   |
+94 |     PublicKey { username: String, private_key_path: PathBuf, passphrase: Option<SecretString> },
+   |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:94:62
+   |
+94 |     PublicKey { username: String, private_key_path: PathBuf, passphrase: Option<SecretString> },
+   |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:95:5
+   |
+95 |     Agent { username: String, socket_path: Option<PathBuf> },
+   |     ^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:95:13
+   |
+95 |     Agent { username: String, socket_path: Option<PathBuf> },
+   |             ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:95:31
+   |
+95 |     Agent { username: String, socket_path: Option<PathBuf> },
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+  --> crates\apeireth-mcp-ssh\src\lib.rs:96:5
+   |
+96 |     JumpHost { jumps: Vec<JumpHostConfig> },
+   |     ^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-mcp-ssh\src\lib.rs:96:16
+   |
+96 |     JumpHost { jumps: Vec<JumpHostConfig> },
+   |                ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:101:29
+    |
+101 | pub struct JumpHostConfig { pub host: String, pub port: u16, pub auth: Box<SshAuthMethod> }
+    |                             ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:101:47
+    |
+101 | pub struct JumpHostConfig { pub host: String, pub port: u16, pub auth: Box<SshAuthMethod> }
+    |                                               ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:101:62
+    |
+101 | pub struct JumpHostConfig { pub host: String, pub port: u16, pub auth: Box<SshAuthMethod> }
+    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-mcp-ssh\src\lib.rs:108:5
+    |
+108 |     pub fn new(s: impl Into<String>) -> Self { Self(s.into()) }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:109:5
+    |
+109 |     pub fn expose(&self) -> &str { &self.0 }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:5
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |     ^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:19
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                   ^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:31
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                               ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:47
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                               ^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:58
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                                          ^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:64
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                                                ^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:70
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                                                      ^^^^^^^^^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:86
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                                                                      ^^^^^^
+
+warning: missing documentation for a variant
+   --> crates\apeireth-mcp-ssh\src\lib.rs:118:94
+    |
+118 |     Disconnected, Connecting, Authenticating, Connected, Busy, Idle, JumpConnecting, Closed, TimedOut,
+    |                                                                                              ^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:123:31
+    |
+123 | pub struct SshCommandOutput { pub stdout: String, pub stderr: String, pub exit_code: i32, pub duration: Duration }
+    |                               ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:123:51
+    |
+123 | pub struct SshCommandOutput { pub stdout: String, pub stderr: String, pub exit_code: i32, pub duration: Duration }
+    |                                                   ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:123:71
+    |
+123 | pub struct SshCommandOutput { pub stdout: String, pub stderr: String, pub exit_code: i32, pub duration: Duration }
+    |                                                                       ^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:123:91
+    |
+123 | pub struct SshCommandOutput { pub stdout: String, pub stderr: String, pub exit_code: i32, pub duration: Duration }
+    |                                                                                           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:127:26
+    |
+127 | pub struct SshFileInfo { pub path: String, pub size: u64, pub is_dir: bool, pub modified: Option<SystemTime>, pub permissions: u32 }
+    |                          ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:127:44
+    |
+127 | pub struct SshFileInfo { pub path: String, pub size: u64, pub is_dir: bool, pub modified: Option<SystemTime>, pub permissions: u32 }
+    |                                            ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:127:59
+    |
+127 | pub struct SshFileInfo { pub path: String, pub size: u64, pub is_dir: bool, pub modified: Option<SystemTime>, pub permissions: u32 }
+    |                                                           ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:127:77
+    |
+127 | pub struct SshFileInfo { pub path: String, pub size: u64, pub is_dir: bool, pub modified: Option<SystemTime>, pub permissions: u32 }
+    |                                                                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:127:111
+    |
+127 | pub struct SshFileInfo { pub path: String, pub size: u64, pub is_dir: bool, pub modified: Option<SystemTime>, pub permissions: u32 }
+    |                                                                                                               ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:29
+    |
+131 | pub struct SshSessionInfo { pub id: String, pub host: String, pub port: u16, pub status: SshSessionStatus, pub created_at: SystemTi...
+    |                             ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:45
+    |
+131 | pub struct SshSessionInfo { pub id: String, pub host: String, pub port: u16, pub status: SshSessionStatus, pub created_at: SystemTi...
+    |                                             ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:63
+    |
+131 | pub struct SshSessionInfo { pub id: String, pub host: String, pub port: u16, pub status: SshSessionStatus, pub created_at: SystemTi...
+    |                                                               ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:78
+    |
+131 | pub struct SshSessionInfo { pub id: String, pub host: String, pub port: u16, pub status: SshSessionStatus, pub created_at: SystemTi...
+    |                                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:108
+    |
+131 | ...ring, pub port: u16, pub status: SshSessionStatus, pub created_at: SystemTime, pub last_active_at: SystemTime, pub commands_exec...
+    |                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:136
+    |
+131 | ...s: SshSessionStatus, pub created_at: SystemTime, pub last_active_at: SystemTime, pub commands_executed: u64 }
+    |                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:131:168
+    |
+131 | ...ed_at: SystemTime, pub last_active_at: SystemTime, pub commands_executed: u64 }
+    |                                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:138:5
+    |
+138 |     pub default_host: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:139:5
+    |
+139 |     pub default_port: u16,
+    |     ^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:140:5
+    |
+140 |     pub default_username: Option<String>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:141:5
+    |
+141 |     pub connect_timeout: Duration,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:142:5
+    |
+142 |     pub command_timeout: Duration,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:143:5
+    |
+143 |     pub keepalive_interval: Duration,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:144:5
+    |
+144 |     pub strict_host_key: bool,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:145:5
+    |
+145 |     pub known_hosts_path: PathBuf,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:146:5
+    |
+146 |     pub default_private_key: Option<PathBuf>,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:147:5
+    |
+147 |     pub max_sessions: usize,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:177:5
+    |
+177 |     pub id: String, pub host: String, pub port: u16, pub auth: SshAuthMethod,
+    |     ^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:177:21
+    |
+177 |     pub id: String, pub host: String, pub port: u16, pub auth: SshAuthMethod,
+    |                     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:177:39
+    |
+177 |     pub id: String, pub host: String, pub port: u16, pub auth: SshAuthMethod,
+    |                                       ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:177:54
+    |
+177 |     pub id: String, pub host: String, pub port: u16, pub auth: SshAuthMethod,
+    |                                                      ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:178:5
+    |
+178 |     pub status: SshSessionStatus, pub created_at: SystemTime, pub last_active_at: SystemTime,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:178:35
+    |
+178 |     pub status: SshSessionStatus, pub created_at: SystemTime, pub last_active_at: SystemTime,
+    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:178:63
+    |
+178 |     pub status: SshSessionStatus, pub created_at: SystemTime, pub last_active_at: SystemTime,
+    |                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-ssh\src\lib.rs:179:5
+    |
+179 |     pub commands_executed: u64,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:187:5
+    |
+187 |     async fn connect(&self, session_id: &str, host: &str, port: u16, auth: SshAuthMethod) -> SshMcpResult<()>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:188:5
+    |
+188 |     async fn disconnect(&self, session_id: &str) -> SshMcpResult<()>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:189:5
+    |
+189 |     async fn exec(&self, session_id: &str, command: &str) -> SshMcpResult<SshCommandOutput>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:190:5
+    |
+190 |     async fn upload(&self, session_id: &str, local: &PathBuf, remote: &str) -> SshMcpResult<u64>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:191:5
+    |
+191 |     async fn download(&self, session_id: &str, remote: &str, local: &PathBuf) -> SshMcpResult<u64>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:192:5
+    |
+192 |     async fn list(&self, session_id: &str, path: &str) -> SshMcpResult<Vec<SshFileInfo>>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:193:5
+    |
+193 |     async fn jump(&self, session_id: &str, jumps: Vec<JumpHostConfig>) -> SshMcpResult<()>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:194:5
+    |
+194 |     async fn keepalive(&self, session_id: &str) -> SshMcpResult<Duration>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:195:5
+    |
+195 |     async fn list_sessions(&self) -> SshMcpResult<Vec<SshSessionInfo>>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:196:5
+    |
+196 |     async fn get_session_status(&self, session_id: &str) -> SshMcpResult<SshSessionStatus>;
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+   --> crates\apeireth-mcp-ssh\src\lib.rs:202:5
+    |
+202 |     pub fn new(config: SshMcpConfig) -> SshMcpResult<Self> {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:208:5
+    |
+208 |     pub async fn start(&self) -> SshMcpResult<()> { self.running.store(true, Ordering::SeqCst); Ok(()) }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a method
+   --> crates\apeireth-mcp-ssh\src\lib.rs:209:5
+    |
+209 |     pub async fn stop(&self) -> SshMcpResult<()> { self.running.store(false, Ordering::SeqCst); Ok(()) }
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:486:5
+    |
+486 |     pub id: String,
+    |     ^^^^^^^^^^^^^^
+    |
+note: the lint level is defined here
+   --> crates\apeireth-mcp-winrm\src\lib.rs:60:9
+    |
+ 60 | #![warn(missing_docs)] // R19 绗?0 闃舵: missing_docs warn
+    |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:487:5
+    |
+487 |     pub host: String,
+    |     ^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:488:5
+    |
+488 |     pub port: u16,
+    |     ^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:489:5
+    |
+489 |     pub transport: WinRmTransport,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:490:5
+    |
+490 |     pub auth_kind: WinRmAuthMethodKind,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:491:5
+    |
+491 |     pub created_at: SystemTime,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+   --> crates\apeireth-mcp-winrm\src\lib.rs:492:5
+    |
+492 |     pub last_active_at: SystemTime,
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `apeireth-sovereignty` (lib) generated 4 warnings (run `cargo fix --lib -p apeireth-sovereignty` to apply 4 suggestions)
+warning: `apeireth-mcp-ssh` (lib) generated 89 warnings
+warning: `apeireth-mcp-winrm` (lib) generated 7 warnings
+   Compiling apeireth-rollback v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-rollback)
+   Compiling apeireth-upgrade v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-upgrade)
+   Compiling apeireth-cli v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-cli)
+   Compiling apeireth-web v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-web)
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\codex.rs:13:5
+   |
+13 |     pub name: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+note: the lint level is defined here
+  --> crates\apeireth-provider\src\lib.rs:18:9
+   |
+18 | #![warn(missing_docs)]
+   |         ^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\codex.rs:14:5
+   |
+14 |     pub tools: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\codex.rs:15:5
+   |
+15 |     pub model_kinds: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-provider\src\codex.rs:19:5
+   |
+19 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\copilot.rs:12:5
+   |
+12 |     pub name: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\copilot.rs:13:5
+   |
+13 |     pub tools: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\copilot.rs:14:5
+   |
+14 |     pub model_kinds: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-provider\src\copilot.rs:20:5
+   |
+20 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\gemini_cli.rs:12:5
+   |
+12 |     pub name: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\gemini_cli.rs:13:5
+   |
+13 |     pub tools: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\gemini_cli.rs:14:5
+   |
+14 |     pub model_kinds: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-provider\src\gemini_cli.rs:20:5
+   |
+20 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\opencode.rs:12:5
+   |
+12 |     pub name: &'static str,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\opencode.rs:13:5
+   |
+13 |     pub tools: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for a struct field
+  --> crates\apeireth-provider\src\opencode.rs:14:5
+   |
+14 |     pub model_kinds: Vec<&'static str>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: missing documentation for an associated function
+  --> crates\apeireth-provider\src\opencode.rs:18:5
+   |
+18 |     pub fn new() -> Self {
+   |     ^^^^^^^^^^^^^^^^^^^^
+
+warning: `apeireth-provider` (lib) generated 16 warnings
+warning: unused variable: `h`
+   --> crates\apeireth-integration-e2e\tests\test_integration_e2e_in_process.rs:327:9
+    |
+327 |     let h = new_harness_sync();
+    |         ^ help: if this is intentional, prefix it with an underscore: `_h`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `h`
+   --> crates\apeireth-integration-e2e\tests\test_integration_e2e_in_process.rs:334:9
+    |
+334 |     let h = new_harness_sync();
+    |         ^ help: if this is intentional, prefix it with an underscore: `_h`
+
+warning: `apeireth-integration-e2e` (test "test_integration_e2e_in_process") generated 2 warnings (run `cargo fix --test "test_integration_e2e_in_process" -p apeireth-integration-e2e` to apply 2 suggestions)
+warning: `apeireth-mcp-winrm` (lib test) generated 7 warnings (7 duplicates)
+warning: unused variable: `i`
+   --> crates\apeireth-state\examples\state_sharing_demo.rs:175:13
+    |
+175 |         for i in 0..3 {
+    |             ^ help: if this is intentional, prefix it with an underscore: `_i`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `r`
+   --> crates\apeireth-state\examples\state_sharing_demo.rs:116:9
+    |
+116 |     for r in 0..5 {
+    |         ^ help: if this is intentional, prefix it with an underscore: `_r`
+
+warning: unused variable: `organ`
+   --> crates\apeireth-state\examples\state_sharing_demo.rs:144:13
+    |
+144 |         let organ = Organ::from_u8(i as u8).expect("0-8 valid");
+    |             ^^^^^ help: if this is intentional, prefix it with an underscore: `_organ`
+
+warning: `apeireth-state` (example "state_sharing_demo") generated 3 warnings (run `cargo fix --example "state_sharing_demo" -p apeireth-state` to apply 3 suggestions)
+warning: unused variable: `p2`
+   --> crates\apeireth-sdk-livekit\examples\livekit_demo.rs:164:9
+    |
+164 |     let p2 = Participant::new("user-2").unwrap();
+    |         ^^ help: if this is intentional, prefix it with an underscore: `_p2`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling apeireth-pybridge v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-pybridge)
+   Compiling apeireth-evolution v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-evolution)
+warning: `apeireth-sdk-livekit` (example "livekit_demo") generated 1 warning (run `cargo fix --example "livekit_demo" -p apeireth-sdk-livekit` to apply 1 suggestion)
+   Compiling apeireth-tui v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-tui)
+   Compiling apeireth-verify v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-verify)
+   Compiling apeireth-plugin v0.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-plugin)
+   Compiling apeireth-sovereignty v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-sovereignty)
+   Compiling apeireth-team-lead v1.0.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-team-lead)
+error[E0063]: missing field `response_cache` in initializer of `AppState`
+   --> crates\apeireth-cli\src\lib.rs:617:26
+    |
+617 |     let state = Arc::new(AppState { pipeline, llm });
+    |                          ^^^^^^^^ missing `response_cache`
+
+   Compiling apeireth-workflow v1.1.0 (.openclaw\workspace\promethean\Apeireth-rust\crates\apeireth-workflow)
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `apeireth-cli` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+warning: duplicated attribute
+   --> crates\apeireth-tui\tests\..\src\organ\body.rs:104:5
+    |
+104 |     #[test]
+    |     ^^^^^^^
+    |
+    = note: `#[warn(duplicate_macro_attributes)]` on by default
+
+warning: use of deprecated method `httpmock::Mock::<'a>::assert_hits`: please use `assert_calls` instead
+   --> crates\apeireth-tui\tests\..\src\http_llm.rs:467:14
+    |
+467 |         mock.assert_hits(1);
+    |              ^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `httpmock::Mock::<'a>::assert_hits`: please use `assert_calls` instead
+   --> crates\apeireth-tui\tests\..\src\http_llm.rs:508:14
+    |
+508 |         mock.assert_hits(1);
+    |              ^^^^^^^^^^^
+
+warning: use of deprecated method `httpmock::Mock::<'a>::assert_hits`: please use `assert_calls` instead
+   --> crates\apeireth-tui\tests\..\src\http_llm.rs:534:14
+    |
+534 |         mock.assert_hits(1);
+    |              ^^^^^^^^^^^
+
+warning: use of deprecated method `httpmock::Mock::<'a>::assert_hits`: please use `assert_calls` instead
+   --> crates\apeireth-tui\tests\..\src\http_llm.rs:591:14
+    |
+591 |         mock.assert_hits(1);
+    |              ^^^^^^^^^^^
+
+warning: use of deprecated method `ratatui::Frame::<'_>::set_cursor`: use `set_cursor_position((x, y))` instead which takes `impl Into<Position>`
+   --> crates\apeireth-tui\tests\..\src\pages\dialogue.rs:805:7
+    |
+805 |     f.set_cursor(cursor_x, cursor_y);
+    |       ^^^^^^^^^^
+
+warning: unused variable: `store`
+    --> crates\apeireth-tui\tests\..\src\backend.rs:1682:9
+     |
+1682 |     let store = match memory_store() {
+     |         ^^^^^ help: if this is intentional, prefix it with an underscore: `_store`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `enabled`
+   --> crates\apeireth-tui\tests\..\src\pages\settings.rs:107:30
+    |
+107 |     for (i, (key, val, desc, enabled)) in items.iter().enumerate() {
+    |                              ^^^^^^^ help: if this is intentional, prefix it with an underscore: `_enabled`
+
+warning: unused variable: `out`
+  --> crates\apeireth-tui\tests\organ_eye_test.rs:89:9
+   |
+89 |     let out = organ::eye::render(area);
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: unused variable: `out`
+  --> crates\apeireth-tui\tests\organ_memory_test.rs:92:9
+   |
+92 |     let out = organ::memory::render(area);
+   |         ^^^ help: if this is intentional, prefix it with an underscore: `_out`
+
+warning: `apeireth-tui` (test "organ_memory_test") generated 9 warnings (8 duplicates) (run `cargo fix --test "organ_memory_test" -p apeireth-tui` to apply 1 suggestion)
+warning: `apeireth-tui` (test "nav_settings_test") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "organ_brain_test") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "app_state") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "error_test") generated 8 warnings (1 duplicate) (run `cargo fix --test "error_test" -p apeireth-tui` to apply 1 suggestion)
+warning: `apeireth-tui` (test "organ_heart_test") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "organ_eye_test") generated 9 warnings (8 duplicates) (run `cargo fix --test "organ_eye_test" -p apeireth-tui` to apply 1 suggestion)
+warning: `apeireth-tui` (test "http_test") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "organ_body_test") generated 8 warnings (7 duplicates) (run `cargo fix --test "organ_body_test" -p apeireth-tui` to apply 1 suggestion)
+warning: `apeireth-tui` (test "organ_hand_test") generated 8 warnings (8 duplicates)
+warning: `apeireth-tui` (test "cognition_live") generated 8 warnings (8 duplicates)

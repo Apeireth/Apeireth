@@ -1,0 +1,68 @@
+# Kani configuration for `apeireth-formal` (R122-9 v2.1 P2-11).
+#
+# 借鉴 ID: `R122-9-NEW-Kani-2026-08-10` (VCP 0 Kani, Apeireth 独家).
+#
+# 跑命令: `cargo kani -p apeireth-formal --harness <name>`
+# 详见: `KANI.md` + `docs/kani-setup.md`.
+
+# ============================================================
+# 全局 Kani 配置
+# ============================================================
+
+# 单个 harness 有界 unwinding bound (per 主人节奏: 实用即可, 0 装"全形式化")
+# 100 步足够覆盖 5 个 harness 的状态空间, 超过会 CBMC 跑死
+unwind = 100
+
+# 默认 harness (cargo kani 不带 --harness 时跑全部)
+# 注意: Kani 当前不支持一次跑全部, 需要逐个 --harness 跑
+# 这里列出来给 CI 脚本当白名单
+
+# CBMC args (传递给 CBMC 后端)
+# --unwinding-assertions: 严格检查 unwind bound 0 被违反
+# --object-bits 8: 限制指针对象位数, 减少状态空间
+[cbmc_args]
+unwinding-assertions = true
+object-bits = 8
+
+# ============================================================
+# 5 个 Kani harness (R122-9 新增, 跑命令见 KANI.md §3)
+# ============================================================
+
+# Harness 1: BackoffPolicy step ≤ cap (POD 模型, 验证 R122-4 LOCKED retry.rs)
+[harness.kani_verify_backoff_policy_step_within_cap]
+options = []
+
+# Harness 2: JitteredSleep ∈ [0, cap] (POD 模型, Full mode, AWS SDK retry pattern)
+[harness.kani_verify_jitter_sleep_returns_value_in_range]
+options = []
+
+# Harness 3: ResponseCache LRU 超 cap 0 panic (POD 模型, 验证 R120 LOCKED cache.rs)
+[harness.kani_verify_response_cache_capacity_respected]
+options = []
+
+# Harness 4: ResponseReplayCache lookup 0 panic on empty key (POD 模型, R122-1)
+[harness.kani_verify_response_replay_lookup_consistent]
+options = []
+
+# Harness 5: RoleDivide wrap + parse round trip (POD 模型, R122-2 LOCKED role_divider.rs)
+[harness.kani_verify_role_divide_wrap_unwrap_round_trip]
+options = []
+
+# ============================================================
+# 既有 5 harness (per R22 ST-A5, 0 改, 仅白名单列出)
+# ============================================================
+
+[harness.double_onion_sample]
+options = []
+
+[harness.e_layer_isolation]
+options = []
+
+[harness.permission_grant_l0]
+options = []
+
+[harness.mid_task_atomicity]
+options = []
+
+[harness.seven_advisor_voting]
+options = []

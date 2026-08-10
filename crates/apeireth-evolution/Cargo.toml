@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-evolution"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 演化器官 — 6 状态机 + trait fail-6 + Learning/Abstraction/SelfModification/Extension + 与 apeireth-council 集成 — R14 round5-01 (backend_engineer2)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-verify = { path = "../apeireth-verify" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_evolution"
+path = "src/lib.rs"
+
+[[example]]
+name = "evolution_demo"
+path = "examples/evolution_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true
