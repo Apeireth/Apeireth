@@ -1,0 +1,51 @@
+      Loaded 1190 security advisories (from .cargo\advisory-db)
+    Scanning Cargo.lock for vulnerabilities (789 crate dependencies)
+Crate:     http-types
+Version:   2.12.0
+Warning:   notice
+Title:     `Authorization::value` and `WwwAuthenticate::value` can violate ASCII invariants
+Date:      2026-03-11
+ID:        RUSTSEC-2026-0174
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0174
+
+Crate:     bincode
+Version:   2.0.1
+Warning:   unmaintained
+Title:     Bincode is unmaintained
+Date:      2025-12-16
+ID:        RUSTSEC-2025-0141
+URL:       https://rustsec.org/advisories/RUSTSEC-2025-0141
+
+Crate:     instant
+Version:   0.1.13
+Warning:   unmaintained
+Title:     `instant` is unmaintained
+Date:      2024-09-01
+ID:        RUSTSEC-2024-0384
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0384
+
+Crate:     paste
+Version:   1.0.15
+Warning:   unmaintained
+Title:     paste - no longer maintained
+Date:      2024-10-07
+ID:        RUSTSEC-2024-0436
+URL:       https://rustsec.org/advisories/RUSTSEC-2024-0436
+
+Crate:     proc-macro-error2
+Version:   2.0.1
+Warning:   unmaintained
+Title:     proc-macro-error2 is unmaintained
+Date:      2026-06-07
+ID:        RUSTSEC-2026-0173
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0173
+
+Crate:     rand
+Version:   0.7.3
+Warning:   unsound
+Title:     Rand is unsound with a custom logger using `rand::rng()`
+Date:      2026-04-09
+warning: 6 allowed warnings found
+ID:        RUSTSEC-2026-0097
+URL:       https://rustsec.org/advisories/RUSTSEC-2026-0097
+

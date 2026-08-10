@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link id="leptos" rel="stylesheet" href="/style/main.css" />
+    <title>Apeireth Council — 7 Advisor 真辩论</title>
+    <meta name="description" content="Apeireth Web (R18 MVP) — 真 minimaxi LLM 接入, Council 7 advisor 实时辩论" />
+</head>
+<body>
+    <main class="apeireth-app">
+        <header class="apeireth-header">
+            <h1>Apeireth Council</h1>
+            <p class="apeireth-tagline">7 advisor 真辩论 · 真 minimaxi LLM · Leptos SSR</p>
+        </header>
+
+        <form class="apeireth-form" method="POST" action="/advise">
+            <label class="apeireth-label">
+                <span>议题</span>
+                <textarea
+                    class="apeireth-input"
+                    name="topic"
+                    rows="3"
+                    placeholder="例如: 2026 学术研究项目应该优先关注什么?"
+                    required
+                ></textarea>
+            </label>
+            <label class="apeireth-label">
+                <span>上下文 (可选)</span>
+                <textarea
+                    class="apeireth-input"
+                    name="context"
+                    rows="2"
+                    placeholder="例如: 调研对象是地方 60+ 岁独居老人"
+                ></textarea>
+            </label>
+            <label class="apeireth-label">
+                <span>LLM 协议 (R18-04: 多协议切换)</span>
+                <select class="apeireth-input" name="protocol">
+                    <option value="openai" selected>🅾️ OpenAI 协议 (默认 · minimaxi /v1)</option>
+                    <option value="anthropic">🅰️ Anthropic 协议 (minimaxi /anthropic · APEIRETH_ANTHROPIC_KEY)</option>
+                </select>
+            </label>
+            <button class="apeireth-button" type="submit">
+                召唤 Council 7 advisor
+            </button>
+        </form>
+
+        <div class="apeireth-info">
+            <p>📋 流程: 输入议题 → 选协议 → 点击召唤 → 后端真调 7 次 minimaxi LLM → 显示 7 advisor 立场 + 推理 + 最终 verdict → 自动存到 apeireth-memory</p>
+            <p>⏱️  预计 30-60 秒 (7 次 LLM 调用)</p>
+            <p>🧠 新增: <a href="/memory" style="color:#0969da;">/memory</a> → Episode 时间线 (R18 sub-agent #1)</p>
+            <p>📚 新增: <a href="/council/history" style="color:#0969da;">/council/history</a> → Council 辩论历史 (R18 sub-agent #2, 多协议 + 自动存)</p>
+        </div>
+    </main>
+</body>
+</html>

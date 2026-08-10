@@ -1,0 +1,50 @@
+// apeireth-bus L3 gRPC schema.
+//
+// Single bus service; payload is opaque JSON bytes so caller's `T` round-trips
+// via serde_json inside `bytes_payload`. A real proto descriptor for inner T
+// is unnecessary because we already envelope the message in lib::BusMessage
+// (trace_id + created_at_ms + payload).
+//
+// Unary call:   Publish(topic, body) -> Ack
+// Server-stream: Subscribe(topic)    -> stream<ServerMessage>
+// Client-stream:StreamRequest       -> Ack (connect-and-pump)
+// Bidi:         Chat(stream<ClientMessage>) -> stream<ServerMessage>
+
+syntax = "proto3";
+
+package apeireth_bus;
+
+service BusService {
+    // Unary publish (Pub-Sub on server: fans out to all subscribers of `topic`).
+    rpc Publish(PublishRequest) returns (PublishAck);
+
+    // Server streaming: subscribe to a topic; server pushes messages.
+    rpc Subscribe(SubscribeRequest) returns (stream BusWire);
+
+    // Connect a client stream (used for request-reply: caller streams one
+    // request and waits for one reply — keepalive channel).
+    rpc Request(stream BusWire) returns (BusWire);
+}
+
+message PublishRequest {
+    string topic = 1;
+    uint64 trace_id = 2;
+    int64 created_at_ms = 3;
+    bytes payload = 4;
+}
+
+message PublishAck {
+    bool accepted = 1;
+    uint64 trace_id = 2;
+}
+
+message SubscribeRequest {
+    string topic = 1;
+}
+
+message BusWire {
+    string topic = 1;
+    uint64 trace_id = 2;
+    int64 created_at_ms = 3;
+    bytes payload = 4;
+}

@@ -1,0 +1,70 @@
+[package]
+# R21 autoupdate (借鉴 Golutra P3 minisign + endpoint, per docs/stage4 BORROW_FROM_GOLUTRA.md §8 P3 第 10-11 项)
+# 仿 apeireth-oauth / cache 模板: 显式 version + 自定义 lints, workspace = true 在整合 #2 时由 sub-agent 改
+name = "apeireth-update"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Apeireth R21 autoupdate (借鉴 Golutra P3 minisign + endpoint, per docs/stage4/BORROW_FROM_GOLUTRA.md §8 P3 第 10-11 项). 3 endpoint (/v1/update/version + /check + /apply), minisign 真签真验 (用现成 minisign crate 0.9, 0 重复造轮子), 1:1 镜像 cosign.yml verify 流程 (SHA-256 + minisign verify + trusted comment + fingerprint K-1 强校验). 0 真连 GitHub, 0 真下载, 0 真应用 — 留 R21+ 续真接, 端到端 wiremock 测."
+keywords = ["autoupdate", "minisign", "ed25519", "release-checker", "cosign-mirror"]
+categories = ["api-bindings", "authentication", "asynchronous"]
+
+[dependencies]
+# async runtime (跟 oauth / cache 同款)
+tokio = { workspace = true }
+# serialization (Release / Asset / Endpoint 响应序列化)
+serde = { workspace = true }
+serde_json = "1.0"
+# error handling (UpdateError + 6 K-1 校验错误)
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing (apply_update stub 阶段 warn! 日志)
+tracing = "0.1"
+# async traits (Updater trait 异步接口, 跟 oauth Provider 一致)
+async-trait = "0.1"
+# 时间戳 (release.published_at + check 时戳)
+chrono = { workspace = true }
+# UUID (apply request_id, 跨 CSRF 防御)
+uuid = { workspace = true }
+# 编译期 semver 解析 (channel 比较 + 1.0.0 严守)
+semver = { version = "1.0", features = ["serde"] }
+# 哈希 (asset_sha256 校验, 验签之外的二次校验, 跟 cosign.yml verify job 1:1 镜像)
+sha2 = "0.10"
+hex = "0.4"
+# minisign 验签 (业界成熟 crate, jedisct1/rust-minisign, 0.9.x)
+# 任务: 借鉴 Golutra minisign 公钥 `99F790EC4BE6E38D` 思想 + 协议 + 0 重复造轮子
+# ⏳ R21+ 真接时: 改 minisign_signatures fixture, 加载 Apeireth 真实 minisign 公钥
+minisign = "0.9"
+
+[dev-dependencies]
+# tracing subscriber (example + test 用, 不进正常 deps)
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# tempdir (release fixture 临时目录)
+tempfile = "3"
+# futures (test assert)
+futures = "0.3"
+# wiremock (跟 cosign.yml 1:1 镜像 — GitHub Releases 端到端 wiremock 测, 0 真连外网)
+# 8 项承诺 #7 0 重复造轮子: 借 wiremock 业界标准
+# 注: 用 `wiremock` 0.5 (不跟 workspace [patch.crates-io] tokio-tungstenite 0.25 冲突)
+wiremock = "0.5"
+# HTTP client (端到端 wiremock 测用, 0 进 runtime)
+# 注: 用 default features 0, 只开 json + rustls-tls (0 stream, 避 workspace [patch.crates-io] tokio-tungstenite 0.25 冲突)
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[[example]]
+name = "update_check_demo"
+path = "examples/update_check_demo.rs"
+
+# R21 autoupdate 估补: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除 (本 crate 不加 [workspace], 跟 oauth / cache 同款)
+#   1. workspace Cargo.toml members 加 `crates/apeireth-update` ⏳ 本任务做
+#   2. version 改 `version.workspace = true` ⏳ 整合 #2 时
+#   3. deps 改 `{ workspace = true }` ⏳ 整合 #2 时
+# 当前 lints 留空 (跟 oauth / cache 同款, 避免 noise)
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"

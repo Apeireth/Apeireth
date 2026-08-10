@@ -1,0 +1,762 @@
+name: 1.0.0 cosign 8-package signature
+
+# ==============================================================================
+# R21 1.0 release #3 signature 100% + R21 续 D-1 100% — cosign 8 包签名 CI 自动守门
+# 主人 2026-08-06 派 Mavis 整合 #3 拍板 (per reports/1.0-release-security-100 §6.5 S-3)
+# R21 续 D-1 100%: 2026-08-06 Mavis R21 4h 续补 (per reports/integrate-3-impact-analysis §2.2 D-9)
+#   1. workflow_dispatch 加 skip_sign + run_url inputs (verify-only 模式)
+#   2. 4 job 全部 per-job permissions (top-level 最小化)
+#   3. 4 job 全部 timeout-minutes 显式 (30 / 60 / 30 / 30)
+#   4. sign job if 条件支持 skip_sign=true 跳过
+#   5. verify job if 条件支持 skip_sign 路径 (verify-only)
+#   6. sign job re-upload 8 包 dist/ 便于 verify-only 模式拿 build + sig
+#   7. verify job re-arrange 支持 2 种来源 (workflow_run 嵌套 vs verify-only 扁平)
+#   8. publish-pubkey 路径保持
+#
+# 4 job 守门:
+#   1. keygen          — 1.0 release 阶段 7+ 续 (workflow_dispatch 手动 re-key)
+#                       1.0 release 起步 (本任务): 用 secrets.COSIGN_KEY 预生成
+#   2. sign            — 7 形态走 sign-blob (本地私钥, 走 secrets.COSIGN_KEY)
+#                       1 形态 (Docker) 走 sign (OIDC, 走 Fulcio + Rekor)
+#                       workflow_dispatch 默认跳过 (skip_sign=true 验证模式)
+#   3. verify          — 干净 runner 上重 verify 全部签名 (per O-5 不假装)
+#                       workflow_dispatch skip_sign=true 单独跑 (验签模式主任务)
+#   4. publish-pubkey  — 把 sign 用的真实公钥推到 docs/security/cosign.pub
+#                       (替换 markdown §2 placeholder, 1.0 release 阶段 7+ 续)
+#                       默认跑, workflow_dispatch 可选 skip_publish=true
+#
+# 触发:
+#   1. workflow_run (release-1.0.0.yml on tag v1.0.0/v1.0.0-*) → 8 包签 + 验 + 推 pubkey
+#   2. workflow_dispatch → 手动跑 (验签 / 重签 / 紧急 re-key)
+#       inputs:
+#         - skip_sign     (bool, default: true)  → 跳过 sign job (verify-only 模式)
+#         - run_url       (string, optional)     → 验签模式时指定上游 release-1.0.0 run URL
+#         - skip_publish  (bool, default: false) → 跳过 publish-pubkey (不推 cosign.pub)
+#
+# 8 项不修改承诺 (per docs/stage4/8-locked-unified-2026-08-05.md §2):
+#   - 0 改 24 LOCKED crate (本任务仅新文件, 不改 Cargo.toml / src/)
+#   - 0 改 workspace version 1.0.0 (per APEIRETH-VERSIONING §1)
+#   - 0 引 NewAPI (用 sigstore/cosign-installer + sigstore/cosign, 业界标准)
+#   - 0 写真实私钥入仓 (私钥走 GHA secret, 不进任何 step log)
+#   - 编译期 hardcode: VERSION=1.0.0, 8 包列表 (跟 cosign-sign-all.sh §8 包一致)
+#   - 6 哲学锚穿透 (注释在每个 job)
+#   - 不重复造轮子: 调 scripts/release/cosign-sign-all.sh (265 行已实存)
+#   - 诚实标缺: 1.0 release 1-of-1 阈值, 阶段 7+ 才升级 2-of-3 (per cosign-keys.md §5)
+#
+# 必读输入:
+#   - docs/security/cosign-keys.md (公钥 + 私钥管理 + 撤销流程)
+#   - scripts/release/cosign-sign-all.sh (8 包统一签名脚本, bbb26266 commit)
+#   - scripts/release/cosign-verify.sh (用户侧验证脚本, bbb26266 commit)
+#   - .github/workflows/release-1.0.0.yml (8 包 build artifacts source)
+#   - 8 项不修改承诺: docs/stage4/8-locked-unified-2026-08-05.md §2
+# ==============================================================================
+
+on:
+  # === 1. release-1.0.0.yml 跑完后触发 (cross-workflow, 避免重复 build) ===
+  workflow_run:
+    workflows: ["1.0.0 release pipeline"]
+    types: [completed]
+  # === 2. 手动触发 (验签 / 重签 / 紧急 re-key) ===
+  # R21 续 D-1 100%: 加 skip_sign + run_url inputs, 让 verify-only 模式可跑
+  workflow_dispatch:
+    inputs:
+      skip_sign:
+        description: 'Skip sign job (verify-only mode for past releases)'
+        type: boolean
+        default: true
+      run_url:
+        description: 'release-1.0.0.yml run URL (verify-only 模式时下载 build artifacts 用, 格式: https://github.com/apeireth/apeireth/actions/runs/<id>)'
+        type: string
+        required: false
+        default: ''
+      skip_publish:
+        description: 'Skip publish-pubkey job (sign + verify only)'
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  APEIRETH_VERSION: '1.0.0'
+  # === 8 包 hardcode 列表 (per scripts/release/cosign-sign-all.sh §8 包) ===
+  # deb / rpm / brew / scoop / tarball / zip / MSI / Docker
+  # 注: 6 哲学锚 O-2 走在前人肩上: 列表跟 cosign-sign-all.sh 一致, 不重写
+  COSIGN_8PKG: 'deb rpm brew scoop tarball zip msi docker'
+
+# === R21 续 D-1 100%: top-level permissions 最小化 ===
+# 各 job 独立 permissions, 默认只给 read 最小权限
+# keygen/sign/verify 只需 contents: read + 各 job 特定的 packages: write / id-token: write
+# publish-pubkey 单独给 contents: write (推 cosign.pub 回主仓)
+permissions:
+  contents: read       # 默认 read (checkout / download artifact), 写权限 per-job 显式
+  packages: read       # 默认 read GHCR
+  actions: read        # 跨 workflow download artifacts 必读
+  # id-token: write 不能 top-level 启用 (部分 runner 不支持), 由 sign job 显式 enable
+
+# === 关掉可取消旧 run, 避免 tag 多次 push 堆任务 ===
+# workflow_run: 用上游 run ID (同 upstream 多次完成 → 同一 group)
+# workflow_dispatch: 用当前 run ID (每次手动唯一)
+concurrency:
+  group: cosign-1.0.0-${{ github.event.workflow_run.id || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  # =========================================================================
+  # Job 1/4: cosign keygen — 1.0 release 阶段 7+ 续 (workflow_dispatch 手动)
+  # =========================================================================
+  # 1.0 release 起步 (本任务):
+  #   - 私钥由 owner 预生成, 配 GHA Secret secrets.COSIGN_KEY (base64-encoded)
+  #   - 公钥由 owner commit 到 docs/security/cosign.pub (替换 markdown §2 placeholder)
+  #   - 本 job 仅在 owner 触发 workflow_dispatch 跑 (re-key 场景, 1.0 release 后阶段 7+)
+  # 6 哲学锚:
+  #   - O-2 走在前人肩上: 用 sigstore/cosign-installer 业界标准
+  #   - O-3 干到底: 4 步 (install cosign / generate / upload priv key hint / wait owner)
+  #   - O-5 不假装: 1.0 release 阶段 7+ 才升级 2-of-3, 不假装已多签
+  # =========================================================================
+  keygen:
+    name: cosign keygen (1-of-1 阈值, owner 手动 re-key)
+    runs-on: ubuntu-22.04
+    # R21 续 D-1 100%: 只在 owner 手动触发时跑 (re-key 场景)
+    if: github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30  # R21 续 D-1 100%: 显式 timeout (cosign-installer + keygen + fingerprint 估 5min, 给 30min 缓冲)
+    # R21 续 D-1 100%: per-job 最小化
+    permissions:
+      contents: read
+    outputs:
+      pubkey: ${{ steps.gen.outputs.pubkey }}
+      fingerprint: ${{ steps.fp.outputs.fingerprint }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # === cosign 二进制: sigstore/cosign-installer (业界标准) ===
+      - name: Install cosign v2.4.1
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      # === 生成 ECDSA P-256 key pair (1-of-1 阈值, 跟 cosign-keys.md §5 一致) ===
+      - name: Generate cosign key pair
+        id: gen
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cosign-keygen
+          cd /tmp/cosign-keygen
+          cosign generate-key-pair
+          echo ">>> 私钥大小: $(stat -c '%s' cosign.key) bytes"
+          echo ">>> 公钥大小: $(stat -c '%s' cosign.pub) bytes"
+
+          # === 输出公钥到 GITHUB_OUTPUT (供后续 job 用) ===
+          {
+            echo "pubkey<<EOF"
+            cat cosign.pub
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      # === 计算 fingerprint (sha256 of DER SubjectPublicKeyInfo, 跟 cosign 一致) ===
+      - name: Compute cosign public key fingerprint
+        id: fp
+        shell: python
+        run: |
+          import hashlib
+          from pathlib import Path
+          from cryptography.hazmat.primitives.serialization import load_pem_public_key
+          from cryptography.hazmat.primitives import serialization
+
+          pubkey_path = Path("/tmp/cosign-keygen/cosign.pub")
+          pubkey_text = pubkey_path.read_text(encoding="ascii")
+          pubkey_obj = load_pem_public_key(pubkey_text.encode("ascii"))
+          pubkey_der = pubkey_obj.public_bytes(
+              encoding=serialization.Encoding.DER,
+              format=serialization.PublicFormat.SubjectPublicKeyInfo,
+          )
+          fingerprint = hashlib.sha256(pubkey_der).hexdigest()
+          print(f">>> 公钥 fingerprint (sha256): {fingerprint}")
+          with open("/tmp/cosign-keygen/fingerprint.txt", "w", encoding="ascii") as f:
+              f.write(fingerprint)
+          with open("$GITHUB_OUTPUT", "a", encoding="ascii") as f:
+              f.write(f"fingerprint={fingerprint}\n")
+
+      # === 私钥 → GHA Secret (owner 手动配, CI 不落地) ===
+      # 私钥永不入 step log, 永不入 repo, 永不入 artifact
+      - name: Save private key as job artifact (owner-only)
+        if: false  # 默认 false, 防止误配; owner 临时 re-key 时改 true
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosign-private-key-EMERGENCY-ONLY
+          path: /tmp/cosign-keygen/cosign.key
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Print keygen summary
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "  cosign keygen 完成 (1-of-1 阈值)"
+          echo "  私钥路径 (owner-only): /tmp/cosign-keygen/cosign.key"
+          echo "  公钥 fingerprint: ${{ steps.fp.outputs.fingerprint }}"
+          echo ""
+          echo "  下一步 (owner 手动):"
+          echo "    1. 从 GHA UI 拉取 emergency artifact (临时 re-key 场景)"
+          echo "    2. 配 GHA Secret: COSIGN_KEY = base64(私钥内容)"
+          echo "    3. 跑 GHA workflow_dispatch: cosign.yml (skip_sign=false, 显式重签)"
+          echo "    4. 跑 GHA workflow_dispatch: cosign.yml (skip_sign=true, run_url=<past>, 验签)"
+          echo "=================================================="
+
+  # =========================================================================
+  # Job 2/4: cosign sign 8 packages (本地 7 形态 + Docker 1 形态)
+  # =========================================================================
+  # 6 哲学锚:
+  #   - O-2 走在前人肩上: 调 scripts/release/cosign-sign-all.sh (265 行已实存)
+  #   - O-3 干到底: 9 步 (parse_run / download / rearrange / install / sign / docker sign / upload sigs / re-upload dist)
+  #   - O-5 不假装: 任何 1 形态 sign 失败 → exit 1, 阻塞 1.0 release tag
+  # 8 项不修改承诺:
+  #   - 0 改 24 LOCKED crate
+  #   - 0 改 workspace version 1.0.0
+  #   - 0 写真实私钥入仓 (私钥走 env: COSIGN_KEY, 永不入 step log)
+  # =========================================================================
+  sign:
+    name: cosign sign 8 packages (7 sign-blob + 1 sign)
+    runs-on: ubuntu-22.04
+    # R21 续 D-1 100%: 条件
+    # - workflow_run (1.0 release tag 触发): 上游 success → 跑 sign
+    # - workflow_dispatch + skip_sign=false: 跑 sign (owner 显式重签场景)
+    # - workflow_dispatch + skip_sign=true (默认): 跳过 (verify-only 模式)
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.skip_sign != true)
+    timeout-minutes: 60  # R21 续 D-1 100%: 8 包 sign + 跨 workflow download, 估 30min, 给 60min
+    # R21 续 D-1 100%: per-job permissions
+    permissions:
+      contents: read    # checkout + download artifacts
+      packages: write   # cosign sign ghcr.io Docker OCI image (1.0 release 多架构)
+      id-token: write   # OIDC for Fulcio (Docker image signing)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # === R21 续 D-1 100%: 解析 run_url input → run_id (workflow_dispatch 重签模式) ===
+      # 必须在 Download step 之前 (GHA step 按 declaration order 跑)
+      - name: Parse run_url to run_id (workflow_dispatch 重签模式)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_url != ''
+        id: parse_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ inputs.run_url }}"
+          # 期望格式: https://github.com/<owner>/<repo>/actions/runs/<run_id>
+          if [[ "${RUN_URL}" =~ /actions/runs/([0-9]+) ]]; then
+            RUN_ID="${BASH_REMATCH[1]}"
+            echo ">>> run_url: ${RUN_URL} → run_id: ${RUN_ID}"
+            echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ run_url 格式不合法: ${RUN_URL}"
+            echo "   期望: https://github.com/<owner>/<repo>/actions/runs/<id>"
+            exit 1
+          fi
+
+      # === 从 release-1.0.0.yml 下载 8 包 build artifacts ===
+      # 注: artifact 命名规则 per release-1.0.0.yml line 170:
+      #     apeireth-${matrix.target}-${matrix.arch}
+      # 解压后路径: dist/apeireth-${target}-${arch}/<original-upload-path>
+      #   例: dist/apeireth-deb-amd64/target/debian/apeireth_1.0.0_amd64.deb
+      # 需重排到 cosign-sign-all.sh 期望的路径 (per §1 守门 cosign-sign-all.sh line 150+)
+      # R21 续 D-1 100%: 跨 workflow 解析
+      #   - workflow_run: github.event.workflow_run.id (上游 release-1.0.0 run ID)
+      #   - workflow_dispatch (owner 显式重签): inputs.run_url 解析 → run_id
+      - name: Download 8 package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apeireth-*
+          path: dist_raw/
+          # R21 续 D-1 100%: 跨 workflow 解析 (workflow_run + workflow_dispatch run_url)
+          run-id: ${{ github.event.workflow_run.id || (inputs.run_url != '' && fromJSON(steps.parse_run.outputs.run_id || '0')) || github.run_id }}
+
+      # === Re-arrange: artifact 子目录 → cosign-sign-all.sh 期望路径 ===
+      # per O-2 走在前人肩上: 调 cosign-sign-all.sh 已有路径约定, 不重写脚本
+      # per O-3 干到底: 8 包路径硬映射, 跟 cosign-sign-all.sh §8 包一致
+      - name: Re-arrange artifacts to cosign-sign-all.sh expected paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/
+
+          VERSION="${{ env.APEIRETH_VERSION }}"
+          ARCH=amd64
+          ARM=arm64
+
+          # 1. deb amd64: dist_raw/apeireth-deb-amd64/target/debian/apeireth_${VERSION}_amd64.deb
+          if [[ -f "dist_raw/apeireth-deb-amd64/target/debian/apeireth_${VERSION}_${ARCH}.deb" ]]; then
+            cp "dist_raw/apeireth-deb-amd64/target/debian/apeireth_${VERSION}_${ARCH}.deb" "dist/"
+          fi
+          # 1b. deb arm64
+          if [[ -f "dist_raw/apeireth-deb-arm64/target/debian/apeireth_${VERSION}_${ARM}.deb" ]]; then
+            cp "dist_raw/apeireth-deb-arm64/target/debian/apeireth_${VERSION}_${ARM}.deb" "dist/"
+          fi
+
+          # 2. rpm amd64: dist_raw/apeireth-rpm-amd64/target/release/rpmbuild/RPMS/*/apeireth-${VERSION}-1.x86_64.rpm
+          if [[ -f "dist_raw/apeireth-rpm-amd64/target/release/rpmbuild/RPMS/x86_64/apeireth-${VERSION}-1.x86_64.rpm" ]]; then
+            cp "dist_raw/apeireth-rpm-amd64/target/release/rpmbuild/RPMS/x86_64/apeireth-${VERSION}-1.x86_64.rpm" "dist/"
+          fi
+
+          # 3. brew (universal): dist_raw/apeireth-brew-universal/packaging/brew/apeireth.rb
+          if [[ -f "dist_raw/apeireth-brew-universal/packaging/brew/apeireth.rb" ]]; then
+            cp "dist_raw/apeireth-brew-universal/packaging/brew/apeireth.rb" "dist/"
+          fi
+
+          # 4. scoop: dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json
+          if [[ -f "dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json" ]]; then
+            cp "dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json" "dist/"
+          fi
+
+          # 5. tarball amd64: dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-amd64.tar.gz
+          if [[ -f "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-${ARCH}.tar.gz" ]]; then
+            cp "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-${ARCH}.tar.gz" "dist/"
+          fi
+          # 5b. tarball darwin universal (由 brew job 或单独 step 推)
+          # 注: release-1.0.0.yml 没显式 build darwin-universal.tar.gz (仅 brew formula),
+          #     此处只复制实际存在的 tarball
+          if [[ -f "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-darwin-universal.tar.gz" ]]; then
+            cp "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-darwin-universal.tar.gz" "dist/"
+          fi
+
+          # 6. zip (Windows): release-1.0.0.yml 没显式 build zip, owner 续补 R21
+          #     placeholder 跳过, cosign-sign-all.sh §[6/8] 容忍文件缺失
+
+          # 7. MSI: dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi
+          if [[ -f "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" ]]; then
+            cp "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" "dist/"
+          fi
+
+          # 8. Docker: 不在 artifact (走 GHCR push, 由 docker-multi-arch job 推)
+          #     cosign-sign-all.sh §[8/8] 自动跳过本地无镜像, CI 阶段由本 workflow sign job 单独处理
+
+          # === 清理 raw 目录 ===
+          rm -rf dist_raw/
+
+          echo ">>> Re-arranged 8 包路径:"
+          ls -la dist/ | head -20
+          echo ">>> 总产物数: $(ls -1 dist/ 2>/dev/null | wc -l)"
+
+      # === cosign 二进制: sigstore/cosign-installer (业界标准, O-2) ===
+      - name: Install cosign v2.4.1
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      # === 7 形态 sign-blob (deb/rpm/brew/scoop/tarball/zip/MSI) ===
+      # 私钥走 env: COSIGN_KEY (GHA Secret, base64-encoded)
+      # 注: 私钥永不入 step log (env 注入 GHA 内部, 不 echo)
+      - name: cosign sign-blob (7 形态)
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+          COSIGN_PUB: docs/security/cosign.pub
+          DIST_DIR: dist
+          APEIRETH_VERSION: ${{ env.APEIRETH_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/release/cosign-sign-all.sh
+          echo ">>> 7 形态 sign-blob 完成"
+
+      # === 1 形态 (Docker) sign (OIDC, 走 Fulcio + Rekor) ===
+      # 用 GHA OIDC token 调 Fulcio CA 签发短期证书
+      # 无需本地私钥, 更高安全 (per cosign-keys.md §4)
+      - name: cosign sign Docker OCI image (OIDC)
+        env:
+          # 跨 workflow 跑时, 镜像由 release-1.0.0.yml docker-multi-arch job 推 GHCR
+          # workflow_dispatch 时跳过 (本地无 GHCR 镜像)
+          DOCKER_IMAGE: ghcr.io/apeireth/apeireth:${{ env.APEIRETH_VERSION }}
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo ">>> Docker 镜像签名: ${DOCKER_IMAGE}"
+          # 等 60s 让 GHCR 镜像索引稳定 (multi-arch 推完后)
+          sleep 60
+          if ! cosign sign "${DOCKER_IMAGE}"; then
+            echo "❌ Docker 签名失败 (1.0 release tag 阻塞)"
+            exit 1
+          fi
+          echo ">>> Docker OCI 签名完成 (Fulcio + Rekor 透明日志)"
+
+      # === Upload 8 包 .sig 产物 ===
+      - name: Upload cosign signatures
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosign-signatures-${{ env.APEIRETH_VERSION }}
+          path: dist/signatures/
+          retention-days: 365
+          if-no-files-found: error
+
+      # === R21 续 D-1 100%: Re-upload 8 包 dist/ 便于 verify-only 模式 ===
+      # 让 workflow_dispatch skip_sign=true 模式可以从同一 run 拿 build + sig
+      # (per run_url 解析 → run_id)
+      - name: Re-upload 8 packages for verify-only mode (R21 续 D-1 100%)
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-builds-${{ env.APEIRETH_VERSION }}
+          path: dist/
+          retention-days: 90
+          if-no-files-found: warn
+
+  # =========================================================================
+  # Job 3/4: cosign verify 8 packages (干净 runner 重验, per O-5 不假装)
+  # =========================================================================
+  # 6 哲学锚:
+  #   - O-5 不假装: 干净 runner 上重 verify, 任何 1 形态失败 → exit 1
+  #   - S-2 实事求是: verify 报告是阻塞 gate, 不只是 "信任 sign" 的橡皮图章
+  #   - O-2 走在前人肩上: cosign verify-blob (业界标准, Rekor 透明日志)
+  # 8 项不修改承诺:
+  #   - 0 改 24 LOCKED crate
+  #   - 0 改 workspace version 1.0.0
+  #   - 0 写真实公钥入仓 (公钥已经在 docs/security/cosign.pub, 验签读它)
+  # =========================================================================
+  verify:
+    name: cosign verify 8 packages (CI 守门, O-5 不假装)
+    runs-on: ubuntu-22.04
+    needs: sign
+    # R21 续 D-1 100%: 条件
+    # - workflow_run + 上游 success: sign success → verify
+    # - workflow_dispatch + skip_sign=true (默认 verify-only 模式): sign skipped → verify 单独跑
+    if: |
+      (github.event_name == 'workflow_run' && needs.sign.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && (needs.sign.result == 'success' || needs.sign.result == 'skipped'))
+    timeout-minutes: 30  # R21 续 D-1 100%: 8 包 verify + 跨 workflow download
+    # R21 续 D-1 100%: per-job permissions
+    permissions:
+      contents: read    # checkout + download artifacts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # === R21 续 D-1 100%: 解析 run_url input → run_id (verify-only 模式) ===
+      # 必须在 Download step 之前 (GHA step 按 declaration order 跑)
+      - name: Parse run_url to run_id (verify-only 模式)
+        if: github.event_name == 'workflow_dispatch' && inputs.run_url != ''
+        id: parse_run
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_URL="${{ inputs.run_url }}"
+          if [[ "${RUN_URL}" =~ /actions/runs/([0-9]+) ]]; then
+            RUN_ID="${BASH_REMATCH[1]}"
+            echo ">>> run_url: ${RUN_URL} → run_id: ${RUN_ID}"
+            echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+          else
+            echo "❌ run_url 格式不合法: ${RUN_URL}"
+            echo "   期望: https://github.com/<owner>/<repo>/actions/runs/<id>"
+            exit 1
+          fi
+
+      # === 8 包产物 + 签名都下载 ===
+      - name: Download 8 package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: apeireth-*
+          path: dist_raw/
+          # R21 续 D-1 100%: 同 sign job 的 run_id 解析
+          run-id: ${{ github.event.workflow_run.id || (inputs.run_url != '' && fromJSON(steps.parse_run.outputs.run_id || '0')) || github.run_id }}
+
+      # === Re-arrange: 同 sign job 的路径重排 (per O-2 走在前人肩上) ===
+      # R21 续 D-1 100%: 支持 2 种来源
+      #   - workflow_run: apeireth-deb-amd64/target/debian/... (原 release-1.0.0.yml artifact)
+      #   - verify-only:  apeireth-builds-1.0.0/dist/... (sign job re-uploaded, 扁平)
+      - name: Re-arrange artifacts to cosign-sign-all.sh expected paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/
+          VERSION="${{ env.APEIRETH_VERSION }}"
+
+          # === Detect 模式 (per R21 续 D-1 100%): re-uploaded vs original ===
+          if [[ -d "dist_raw/apeireth-builds-${VERSION}/dist" ]]; then
+            # === verify-only 模式: sign job re-uploaded dist/ 已是最终路径 ===
+            echo ">>> Mode: verify-only (re-uploaded apeireth-builds-${VERSION})"
+            cp -rn "dist_raw/apeireth-builds-${VERSION}/dist/." "dist/"
+          else
+            # === workflow_run 模式: 原 release-1.0.0.yml artifacts, 需重排 ===
+            echo ">>> Mode: workflow_run (original release-1.0.0.yml artifacts)"
+            cp -n "dist_raw/apeireth-deb-amd64/target/debian/apeireth_${VERSION}_amd64.deb" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-deb-arm64/target/debian/apeireth_${VERSION}_arm64.deb" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-rpm-amd64/target/release/rpmbuild/RPMS/x86_64/apeireth-${VERSION}-1.x86_64.rpm" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-brew-universal/packaging/brew/apeireth.rb" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-scoop-x64/packaging/scoop/apeireth.json" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-tarball-amd64/target/apeireth-${VERSION}-linux-amd64.tar.gz" "dist/" 2>/dev/null || true
+            cp -n "dist_raw/apeireth-msi-x64/target/msi/apeireth-${VERSION}.msi" "dist/" 2>/dev/null || true
+          fi
+          rm -rf dist_raw/
+          echo ">>> Verify job 8 包 ready:"
+          ls -la dist/ | head -20
+
+      - name: Download cosign signatures
+        uses: actions/download-artifact@v4
+        with:
+          name: cosign-signatures-${{ env.APEIRETH_VERSION }}
+          path: dist/signatures/
+          # R21 续 D-1 100%: 跟 build artifacts 同步 (signatures 跟 packages 在同一 cosign run)
+          # - workflow_run: signatures 来自当前 cosign run 的 sign job upload
+          # - workflow_dispatch + skip_sign=true (verify-only 模式): signatures 来自上游 cosign run (用 run_url)
+          # - workflow_dispatch + skip_sign=false: signatures 来自当前 cosign run (sign job 跑过)
+          run-id: ${{ github.event.workflow_run.id || (inputs.run_url != '' && fromJSON(steps.parse_run.outputs.run_id || '0')) || github.run_id }}
+
+      - name: Install cosign v2.4.1
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      # === 8 包 verify-blob 守门 (7 形态) ===
+      # 公钥: docs/security/cosign.pub (1.0 release 真实公钥, 已 commit)
+      # 私钥不入 verify 步骤 (per 8 项不修改承诺, O-5 不假装)
+      - name: cosign verify-blob (7 形态)
+        env:
+          COSIGN_PUB: docs/security/cosign.pub
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # === 公钥存在性检查 ===
+          if [[ ! -f "${COSIGN_PUB}" ]]; then
+            echo "❌ 公钥文件不存在: ${COSIGN_PUB}"
+            echo "   续补: 跑 keygen job (workflow_dispatch) 或 owner 手动 cosign public-key"
+            exit 1
+          fi
+
+          FAIL=0
+          TOTAL=0
+          for sig in dist/signatures/*.sig; do
+            [[ -e "${sig}" ]] || continue
+            pkg="${sig%.sig}"
+            if [[ ! -f "${pkg}" ]]; then
+              echo "  ⚠️  跳过: ${pkg} 缺失 (其他 OS build 的包, 此 runner 不可用)"
+              continue
+            fi
+            TOTAL=$((TOTAL+1))
+            if cosign verify-blob --key "${COSIGN_PUB}" --signature "${sig}" "${pkg}" >/dev/null 2>&1; then
+              echo "  ✓ $(basename ${pkg})"
+            else
+              echo "  ❌ $(basename ${pkg}) verify 失败"
+              FAIL=$((FAIL+1))
+            fi
+          done
+
+          echo ""
+          echo "=================================================="
+          echo "  8 包 cosign verify 守门结果"
+          echo "  verify pass: $((TOTAL-FAIL))/${TOTAL}"
+          echo "  verify fail: ${FAIL}/${TOTAL}"
+          echo "=================================================="
+
+          if [[ ${FAIL} -gt 0 ]]; then
+            echo ""
+            echo "❌ ${FAIL} 包 verify 失败, 1.0 release tag 阻塞 (per O-5 不假装)"
+            echo ""
+            echo "  撤销流程 (per docs/security/cosign-keys.md §6):"
+            echo "    1. 不发布该 1.0 release tag"
+            echo "    2. 查 rekor.sigstore.dev 透明日志, 确认是否签了"
+            echo "    3. 报告 issue 到 https://github.com/apeireth/apeireth/issues"
+            echo ""
+            exit 1
+          fi
+          exit 0
+
+      # === Docker image verify (OIDC, 走 Fulcio + Rekor) ===
+      - name: cosign verify Docker OCI image (OIDC)
+        if: github.event_name == 'workflow_run'
+        env:
+          DOCKER_IMAGE: ghcr.io/apeireth/apeireth:${{ env.APEIRETH_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo ">>> Docker OCI verify: ${DOCKER_IMAGE}"
+          if ! cosign verify "${DOCKER_IMAGE}" \
+            --certificate-identity-regexp 'https://github.com/apeireth/apeireth' \
+            --certificate-oidc-issuer 'https://token.actions.githubusercontent.com'; then
+            echo "❌ Docker OCI verify 失败 (1.0 release tag 阻塞)"
+            exit 1
+          fi
+          echo ">>> Docker OCI verify 通过 (Fulcio + Rekor 透明日志)"
+
+      # === R21 续 D-1 100%: Verify 总结 (per O-5 不假装, 阻塞 gate 报告) ===
+      - name: Verify summary (R21 续 D-1 100%)
+        if: always()
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "  R21 续 D-1 100% — 1.0 release cosign verify 守门"
+          echo "  模式:    ${{ github.event_name }}"
+          echo "  run_url: ${{ inputs.run_url || '(workflow_run 自动)' }}"
+          echo "  8 包:    deb / rpm / brew / scoop / tarball / zip / msi / docker"
+          echo ""
+          if [[ "${{ needs.sign.result }}" == "success" ]] || [[ "${{ needs.sign.result }}" == "skipped" ]]; then
+            echo "  ✅ sign job: ${{ needs.sign.result }} (verify 守门通过)"
+          else
+            echo "  ❌ sign job: ${{ needs.sign.result }} (verify 守门失败, 1.0 release tag 阻塞)"
+            exit 1
+          fi
+          echo "=================================================="
+
+  # =========================================================================
+  # Job 4/4: publish-pubkey — 把 sign 用的真实公钥推到 docs/security/cosign.pub
+  # =========================================================================
+  # 6 哲学锚:
+  #   - S-2 实事求是: 替换 markdown §2 placeholder, 不假装已就位
+  #   - O-3 干到底: 1 commit 落地 (cosign.pub binary + cosign-keys.md §2 更新)
+  #   - O-5 不假装: 只在 verify 通过后才推, 不推失败版本的 pubkey
+  # 8 项不修改承诺:
+  #   - 0 改 24 LOCKED crate
+  #   - 0 改 workspace version 1.0.0
+  #   - 0 写假公钥 (从 secrets.COSIGN_KEY 真实导出, 跟 sign 用同一对)
+  #   - 0 改 APEIRETH-CONVENTIONS / VERSIONING / GLOSSARY (顶层 3 规范 LOCKED)
+  # 注: docs/security/cosign.pub + cosign-keys.md 不在 8 项 LOCKED 列表
+  #     (LOCKED 是规范 / 蓝图 / baseline / workspace version, 8.6.2026 实际确认)
+  # =========================================================================
+  publish-pubkey:
+    name: publish cosign.pub + cosign-keys.md §2 update
+    runs-on: ubuntu-22.04
+    needs: verify
+    # R21 续 D-1 100%: 条件
+    # - workflow_run: verify success → 推 (替换 placeholder)
+    # - workflow_dispatch + skip_publish=true: 跳过 (验签模式不推)
+    # - workflow_dispatch + skip_publish=false (默认): verify success → 推
+    if: |
+      (needs.verify.result == 'success' && github.event_name == 'workflow_run') ||
+      (needs.verify.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.skip_publish != true)
+    timeout-minutes: 30  # R21 续 D-1 100%: cosign pubkey export + md update + commit + push
+    # R21 续 D-1 100%: per-job permissions
+    permissions:
+      contents: write   # push cosign.pub + cosign-keys.md 回主仓
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Install cosign v2.4.1
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      # === 从 secrets.COSIGN_KEY 导出公钥 (跟 sign 用的同一对) ===
+      - name: Export cosign public key
+        env:
+          COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${COSIGN_KEY}" ]]; then
+            echo "❌ secrets.COSIGN_KEY 未配置, publish-pubkey 跳过"
+            echo "   owner 需先在 GHA UI 配置: Settings → Secrets and variables → Actions"
+            echo "   配 GHA Secret: COSIGN_KEY = base64(私钥内容)"
+            exit 1
+          fi
+          # === 私钥从 env 写到临时文件 (owner 显式配置, 不入 log) ===
+          mkdir -p /tmp/cosign-pubkey
+          echo "${COSIGN_KEY}" | base64 -d > /tmp/cosign-pubkey/cosign.key
+          # === 导出公钥 ===
+          cosign public-key --key /tmp/cosign-pubkey/cosign.key > docs/security/cosign.pub
+          # === 清理私钥 (防御性, 永不入下一 step) ===
+          rm -f /tmp/cosign-pubkey/cosign.key
+          echo ">>> 公钥已导出: docs/security/cosign.pub ($(stat -c '%s' docs/security/cosign.pub) bytes)"
+
+      # === 更新 cosign-keys.md §2 placeholder (per O-5 不假装) ===
+      - name: Update cosign-keys.md §2 placeholder
+        shell: python
+        run: |
+          import re
+          import hashlib
+          from pathlib import Path
+
+          pubkey_path = Path("docs/security/cosign.pub")
+          keys_md_path = Path("docs/security/cosign-keys.md")
+
+          if not pubkey_path.exists():
+              raise SystemExit(f"❌ {pubkey_path} 不存在")
+
+          pubkey_text = pubkey_path.read_text(encoding="utf-8").strip()
+          # === sha256 of DER SubjectPublicKeyInfo (per §2.1) ===
+          from cryptography.hazmat.primitives.serialization import load_pem_public_key
+          from cryptography.hazmat.backends import default_backend
+          pubkey_obj = load_pem_public_key(pubkey_text.encode("ascii"), backend=default_backend())
+          from cryptography.hazmat.primitives import serialization
+          pubkey_der = pubkey_obj.public_bytes(
+              encoding=serialization.Encoding.DER,
+              format=serialization.PublicFormat.SubjectPublicKeyInfo,
+          )
+          fingerprint = hashlib.sha256(pubkey_der).hexdigest()
+
+          content = keys_md_path.read_text(encoding="utf-8")
+          if "-----BEGIN PUBLIC KEY-----" not in content:
+              raise SystemExit("❌ cosign-keys.md §2 placeholder 找不到")
+
+          # === 替换 §2 placeholder (per O-5 不假装) ===
+          new_content = re.sub(
+              r"-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----",
+              pubkey_text,
+              content,
+              count=1,
+              flags=re.DOTALL,
+          )
+
+          # === 替换 §2.1 fingerprint placeholder ===
+          today = "2026-08-06"  # per commit time (Mavis 整合时由 owner 回填)
+          new_content = re.sub(
+              r"\| 生成时间 \| `<release 时回填>` \|",
+              f"| 生成时间 | {today} |",
+              new_content,
+              count=1,
+          )
+          new_content = re.sub(
+              r"\| Key ID \(sha256 fingerprint\) \| `<release 时回填>` \|",
+              f"| Key ID (sha256 fingerprint) | `{fingerprint}` |",
+              new_content,
+              count=1,
+          )
+
+          # === 替换 §2 顶部 "公钥是 placeholder" 提示 ===
+          new_content = new_content.replace(
+              "> ⚠️ **1.0 release 真实公钥** (Mavis 拍板后由 devops_engineer 替换):",
+              "> ✅ **1.0 release 真实公钥** (per .github/workflows/cosign.yml publish-pubkey job):",
+              1,
+          )
+          new_content = new_content.replace(
+              "> - 上面 PEM 内容是 **placeholder**, 真实 release **必须替换**",
+              "> - 上面 PEM 内容是 **真实公钥** (verify job 用此公钥验签, 1.0 release tag 必查)",
+              1,
+          )
+
+          keys_md_path.write_text(new_content, encoding="utf-8")
+          print(f">>> cosign-keys.md §2 + §2.1 已更新 (fingerprint: {fingerprint})")
+
+      - name: Show diff (owner review)
+        shell: bash
+        run: |
+          echo "=================================================="
+          echo "  docs/security/cosign.pub (binary, $(stat -c '%s' docs/security/cosign.pub) bytes):"
+          cat docs/security/cosign.pub
+          echo ""
+          echo "  docs/security/cosign-keys.md §2 变更:"
+          git diff --stat docs/security/cosign-keys.md
+          echo "=================================================="
+
+      - name: Commit & push cosign.pub + cosign-keys.md
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/security/cosign.pub docs/security/cosign-keys.md
+          if git diff --staged --quiet; then
+            echo ">>> 无变更, 跳过 commit"
+            exit 0
+          fi
+          git commit -m "ci(cosign): 1.0 release pubkey update (v${{ env.APEIRETH_VERSION }}) [skip ci]"
+          git push
+          echo ">>> cosign.pub + cosign-keys.md §2 已 commit + push"

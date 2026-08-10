@@ -1,0 +1,12 @@
+
+Name                          Status  Baseline                          Current
+----                          ------  --------                          -------
+apeireth-api                  CHANGED 2026-08-05T21:32:31.2527252+08:00 2026-08-05T21:44:57.6468442+08:00
+apeireth-i18n                 CHANGED 2026-08-05T21:15:56.2986613+08:00 2026-08-05T21:36:58.6029567+08:00
+apeireth-mcp-ssh              CHANGED 2026-08-05T21:35:54.5160011+08:00 2026-08-05T21:44:57.6488441+08:00
+apeireth-provider-claude-code NEW                                       2026-08-05T21:46:14.1145394+08:00
+apeireth-provider-gemini-cli  NEW                                       2026-08-05T21:58:41.2310753+08:00
+apeireth-sdk                  CHANGED 2026-08-05T21:36:23.4698804+08:00 2026-08-05T21:44:57.6498435+08:00
+apeireth-tree-sitter          CHANGED 2026-08-05T21:34:54.7255610+08:00 2026-08-05T21:38:42.5908699+08:00
+
+7 crate changes (NOT caused by this task — concurrent sub-agents)

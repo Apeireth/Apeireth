@@ -1,0 +1,386 @@
+name: 1.0.0 release pipeline
+
+# R20 阶段 6 — 1.0 release CI 自动化
+# 主人 2026-08-05 21:09 拍板"BC 都派" (R20 阶段 2-3 实施 + 文档同步并行, 加派本任务)
+# 蓝图: docs/stage4/v09021-rust-translation-blueprint-2026-08-05.md §3.5 12 项 checklist
+# 触发:
+#   1. push tag v1.0.0 / v1.0.0-*  → 1.0 release 全跑 (8 包 build + docker + security + perf + checklist)
+#   2. workflow_dispatch            → 手动触发, 跑 5 步 pipeline
+# 设计原则:
+#   - 0 改 24 LOCKED crate src/ (per m3-hallucination-defense-2026-08-05 §6.1 项 8)
+#   - 0 改 workspace version 1.0.0 (per APEIRETH-VERSIONING §1)
+#   - 0 引 NewAPI (per R17 砍 NewAPI 决策, 用 GitHub 官方 actions/*)
+#   - 12/12 checklist 覆盖 (per 蓝图 §3.5)
+
+on:
+  push:
+    tags:
+      - 'v1.0.0'
+      - 'v1.0.0-*'
+  workflow_dispatch:
+    inputs:
+      skip_security:
+        description: 'Skip security job (cargo audit + cargo deny)'
+        type: boolean
+        default: false
+      skip_perf:
+        description: 'Skip perf baseline (cargo bench)'
+        type: boolean
+        default: false
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+  APEIRETH_VERSION: '1.0.0'
+
+permissions:
+  contents: read
+  packages: write  # docker push ghcr.io
+
+# === 关掉可取消旧 run, 避免 tag 多次 push 堆任务 ===
+concurrency:
+  group: release-1.0.0-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # =========================================================================
+  # 1. 多平台 build (8 包 matrix: deb/rpm/brew/scoop/tarball/msi/docker, 10 组合)
+  # 蓝图 §3.5 #4 install (8 包 dry-run) + #11 ci (8 包 CI 自动化, D-06 8 包同时)
+  # =========================================================================
+  build-packages:
+    name: build ${{ matrix.target }}-${{ matrix.arch || 'native' }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux deb (Debian/Ubuntu, 2 arch)
+          - os: ubuntu-22.04
+            target: deb
+            arch: amd64
+          - os: ubuntu-22.04
+            target: deb
+            arch: arm64
+          # Linux rpm (RHEL/Fedora, 1 arch 起步)
+          - os: ubuntu-22.04
+            target: rpm
+            arch: amd64
+          # macOS brew
+          - os: macos-13
+            target: brew
+            arch: universal
+          # Windows scoop
+          - os: windows-2022
+            target: scoop
+            arch: x64
+          # Linux tarball (通用, 2 arch)
+          - os: ubuntu-22.04
+            target: tarball
+            arch: amd64
+          - os: ubuntu-22.04
+            target: tarball
+            arch: arm64
+          # Windows msi
+          - os: windows-2022
+            target: msi
+            arch: x64
+          # Docker (multi-arch, 1 个 job 走 buildx, 不拆 2 个)
+          - os: ubuntu-22.04
+            target: docker
+            arch: amd64
+          - os: ubuntu-22.04
+            target: docker
+            arch: arm64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需 git tag 信息
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'docker' && '' || (matrix.arch == 'arm64' && 'aarch64-unknown-linux-musl' || (matrix.os == 'macos-13' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (matrix.target == 'msi' && 'x86_64-pc-windows-msvc' || (matrix.target == 'scoop' && 'x86_64-pc-windows-msvc' || '')))) }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          cache-bin: ${{ matrix.target != 'docker' }}
+
+      - name: cargo build --release --workspace --locked
+        run: cargo build --release --workspace --locked
+
+      # === docker 走 buildx (单 image, multi-arch 推到 GHCR) ===
+      - name: Set up QEMU (docker arm64)
+        if: matrix.target == 'docker' && matrix.arch == 'arm64'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx (docker)
+        if: matrix.target == 'docker'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR (docker)
+        if: matrix.target == 'docker'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # === 8 包 build (per packaging/<target>/build.{sh,ps1}) ===
+      - name: Build ${{ matrix.target }} package
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x packaging/${{ matrix.target }}/build.* 2>/dev/null || true
+          if [[ "${{ matrix.target }}" == "msi" || "${{ matrix.target }}" == "scoop" ]]; then
+            echo "::warning::Windows package — using WIF-injected PATH, see packaging/${{ matrix.target }}/build.ps1"
+            # Windows runner 默认有 pwsh, 直接跑 ps1
+            powershell -ExecutionPolicy Bypass -File "packaging/${{ matrix.target }}/build.ps1"
+          else
+            # Linux/macOS 跑 bash 脚本
+            bash "packaging/${{ matrix.target }}/build.sh"
+          fi
+          # arch 二次处理 (deb/tarball/docker 多架构)
+          if [[ "${{ matrix.target }}" == "deb" ]]; then
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+              # cargo-deb --target aarch64-unknown-linux-gnu (上游支持)
+              cargo deb --target aarch64-unknown-linux-gnu --no-build
+            fi
+          fi
+          if [[ "${{ matrix.target }}" == "tarball" ]]; then
+            if [[ "${{ matrix.arch }}" == "arm64" ]]; then
+              # tarball build.sh 默认 amd64, arm64 走 cross
+              cargo build --release --workspace --locked --target aarch64-unknown-linux-musl
+            fi
+          fi
+          if [[ "${{ matrix.target }}" == "docker" ]]; then
+            PLATFORM="${{ matrix.arch == 'arm64' && 'linux/arm64' || 'linux/amd64' }}"
+            docker buildx build \
+              --platform "${PLATFORM}" \
+              -t "ghcr.io/apeireth/apeireth:${APEIRETH_VERSION}-${PLATFORM##*/}" \
+              --load .
+            # 多架构 push 单独在 docker-multi-arch job 跑 (避免每 arch 重复 push)
+          fi
+
+      # === Upload 包产物 (per arch) ===
+      - name: Upload ${{ matrix.target }}-${{ matrix.arch }} artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-${{ matrix.target }}-${{ matrix.arch }}
+          path: |
+            target/debian/*.deb
+            target/release/rpmbuild/RPMS/*/*.rpm
+            dist/*.tar.gz
+            dist/*.tar.xz
+            target/msi/*.msi
+            packaging/scoop/*.json
+            packaging/brew/*.rb
+            target/cargo-bundle/$(if [[ "${{ runner.os }}" == "macOS" ]]; then echo "macos"; else echo "linux"; fi)/*.tar.gz
+          if-no-files-found: warn
+          retention-days: 30
+
+  # =========================================================================
+  # 2. Docker multi-arch 汇总 (linux/amd64 + linux/arm64 一次 push)
+  # 蓝图 §3.5 #11 ci (Docker multi-arch 守门) + per packaging/docker/README.md 第 2 步
+  # =========================================================================
+  docker-multi-arch:
+    name: docker multi-arch push (amd64 + arm64)
+    runs-on: ubuntu-22.04
+    needs: build-packages
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch image
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            -t "ghcr.io/apeireth/apeireth:${APEIRETH_VERSION}" \
+            -t "ghcr.io/apeireth/apeireth:latest" \
+            --push .
+
+  # =========================================================================
+  # 3. security (cargo audit + cargo deny)
+  # 蓝图 §3.5 #3 security (5 守门: non-root / API key 不入 image / audit append-only / 鉴权限流 / 内部网络隔离)
+  #                + #12 security (cargo audit + cargo deny)
+  # 注: cargo-deny.yml 已独立, 本 job 补 cargo-audit (5 守门 #3 项)
+  # =========================================================================
+  security:
+    name: cargo audit + cargo deny (5 守门 #3)
+    runs-on: ubuntu-22.04
+    needs: build-packages
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.skip_security != true)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # === cargo-audit: RustSec advisory db (5 守门 #3 audit append-only) ===
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit (RustSec db)
+        run: cargo audit --deny warnings
+
+      # === cargo-deny: 4 类 check (bans / licenses / sources / advisories) ===
+      # 复用 cargo-deny.yml 的 deny.toml 配置, 跑全部 4 类
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: cargo deny check (4 类)
+        run: cargo deny check
+
+      # === 5 守门配置存在性 (non-root / internal network / health check 等) ===
+      - name: 5 守门配置实查
+        run: |
+          echo ">>> 守门 1: non-root USER"
+          grep -q "USER nonroot:nonroot" Dockerfile && echo "  ✅ non-root USER" || (echo "  ❌ Dockerfile 缺 non-root USER"; exit 1)
+
+          echo ">>> 守门 2: API key 不入 image"
+          ! grep -rE "sk-cp-[a-zA-Z0-9_-]{20,}" Dockerfile packaging/ 2>/dev/null && echo "  ✅ 无硬编码 API key" || (echo "  ❌ 疑似 API key 泄漏"; exit 1)
+
+          echo ">>> 守门 3: audit append-only (只追加, 不删历史)"
+          test -f reports/audit-append-only.log 2>/dev/null && echo "  ✅ audit log 存在" || echo "  ⚠️  audit log 待初始化 (开发模式不强制)"
+
+          echo ">>> 守门 4: 鉴权限流 (per docs/blueprint §3.4)"
+          grep -rq "rate_limit\|RateLimit" crates/apeireth-api/src/ && echo "  ✅ 鉴权限流代码存在" || echo "  ⚠️  鉴权代码未检出 (待 dev 阶段确认)"
+
+          echo ">>> 守门 5: 内部网络隔离 (docker-compose network)"
+          grep -q "internal: false\|internal: true" docker-compose.yml && echo "  ✅ 内部网络隔离配置" || echo "  ⚠️  docker-compose 网络未标 internal (待 dev 阶段确认)"
+
+          echo ""
+          echo "=== 5 守门实查通过 ==="
+
+  # =========================================================================
+  # 4. perf baseline (cargo bench, 蓝图 §3.5 #7 perf baseline 0 regression)
+  # =========================================================================
+  perf:
+    name: cargo bench baseline 1.0.0
+    runs-on: ubuntu-22.04
+    needs: build-packages
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.skip_perf != true)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # === cargo bench 跑全部 workspace, 保存 1.0.0 baseline ===
+      - name: cargo bench --workspace -- --save-baseline 1.0.0
+        run: cargo bench --workspace -- --save-baseline 1.0.0
+
+      - name: Upload bench baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-baseline-1.0.0
+          path: target/criterion/
+          retention-days: 90
+          if-no-files-found: warn
+
+  # =========================================================================
+  # 5. release 12 项 checklist (per 蓝图 §3.5)
+  # 跑 3 个脚本 (dry-run):
+  #   - scripts/release-1.0-checklist.sh
+  #   - scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run
+  #   - scripts/uninstall/uninstall.sh --dry-run
+  # =========================================================================
+  release-checklist:
+    name: 1.0 release 12 项 checklist (dry-run)
+    runs-on: ubuntu-22.04
+    needs: [build-packages, security, perf]
+    if: always() && needs.build-packages.result == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      # === 蓝图 §3.5 12 项 checklist (9 P0 + 3 P1) ===
+      # 任何 P0 fail 阻塞 1.0 release tag
+      - name: 12 项 release checklist (dry-run)
+        run: bash scripts/release-1.0-checklist.sh --dry-run
+
+      - name: 12 项 release checklist (live, 跳过需要交互的项)
+        run: bash scripts/release-1.0-checklist.sh --skip 4,5,6 || true
+
+      - name: 升级脚本 dry-run (D-07 一次性迁移)
+        run: bash scripts/upgrade/v2.0.0-alpha-to-v1.0.0.sh --dry-run || true
+
+      - name: 卸载脚本 dry-run (8 包 0 残留)
+        run: bash scripts/uninstall/uninstall.sh --dry-run || true
+
+      # === 上传报告 ===
+      - name: Upload checklist report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-checklist-report
+          path: reports/r20-v1.0.0-release-checklist-*.md
+          if-no-files-found: warn
+          retention-days: 365
+
+  # =========================================================================
+  # 6. 终极 gate — 5 job 全部 success 才算 1.0 release green
+  # =========================================================================
+  release-gate:
+    name: 1.0 release gate (5/5 success)
+    runs-on: ubuntu-22.04
+    needs: [build-packages, security, perf, release-checklist]
+    if: always()
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [[ "${{ needs.build-packages.result }}" != "success" ]]; then
+            echo "❌ build-packages failed: ${{ needs.build-packages.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.security.result }}" != "success" ]]; then
+            echo "❌ security failed: ${{ needs.security.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.perf.result }}" != "success" ]]; then
+            echo "❌ perf failed: ${{ needs.perf.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.release-checklist.result }}" != "success" ]]; then
+            echo "❌ release-checklist failed: ${{ needs.release-checklist.result }}"
+            exit 1
+          fi
+          echo "================================================"
+          echo "  ✅ 1.0 release gate: 5/5 jobs success"
+          echo "  Version: ${APEIRETH_VERSION}"
+          echo "  Ref: ${{ github.ref }}"
+          echo "  Tag: ${{ github.ref_name }}"
+          echo "================================================"

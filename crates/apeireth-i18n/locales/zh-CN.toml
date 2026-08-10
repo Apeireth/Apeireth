@@ -1,0 +1,103 @@
+# apeireth-i18n 简体中文 (zh-CN) — 1.0 release #10
+#
+# 12 类别 69 keys 100% 翻译覆盖 (11 类别 + readiness, R21 G-1 续补, 跟 en 1:1 对齐, K-1 强校验: 5 文件 key 集合完全一致)
+# K-1 字样守门: zh-CN 翻译含 "必做 1.0" 标识
+
+[nav]
+status = "状态"
+session = "会话"
+tools = "工具"
+settings = "设置"
+help = "帮助"
+
+[tools]
+calendar = "日历"
+message = "消息"
+contact = "联系人"
+task = "任务"
+search = "搜索"
+drive = "云盘"
+
+[organs]
+# 9 器官 (拟人化, 监控 AI 状态 — 心脏/大脑/手/眼/耳/记忆/声音/身体/心智)
+heart = "心脏"
+brain = "大脑"
+hand = "双手"
+eye = "眼睛"
+ear = "耳朵"
+memory = "记忆"
+voice = "声音"
+body = "身体"
+mind = "心智"
+
+[r_measure]
+# R-1 含 {{count}} 模板变量, 5 Locale 同步模板渲染
+r1 = "R-1 直行 ({{count}} 步, 必做 1.0)"
+r2 = "R-2 直说 (不回避)"
+r3 = "R-3 闭环 (提交即验证)"
+r4 = "R-4 守门 (m3 幻觉防御)"
+r5 = "R-5 诚实 (缺则标缺, 不假装)"
+
+[philosophy]
+# 6 哲学锚 (S-1 / S-2 / O-2 / O-3 / O-4 / O-5)
+s1 = "S-1 北极星导向: 长程 AI 成长, 不是模拟"
+s2 = "S-2 实事求是: 用 package.json / Cargo.lock 实查, 不假装"
+o2 = "O-2 走在前人肩上: 借 5 P0 / 9 skeleton crate 模式"
+o3 = "O-3 干到底: 11 类别 × 5 语言 = 330 翻译"
+o4 = "O-4 任何人都能接手: 文档 / 测试 / 结构 1:1 对齐"
+o5 = "O-5 不假装: try_t 缺 key 返 Err, 不静默回退"
+
+[promises]
+# 8 项不修改承诺 (1.0 release 收尾守门)
+no_pretense = "不假装: 5 语言全译, 零 fallback 占位"
+hardcode = "编译期 hardcode: SUPPORTED_LOCALES / TOOL_WHITELIST / LOCALE_FALLBACK_CHAIN"
+locked = "24 LOCKED crate 不改 (R17 严格守门)"
+version = "workspace version 不改 (1.0.0)"
+six_anchors = "6 哲学锚穿透 (S-1, S-2, O-2, O-3, O-4, O-5)"
+no_newapi = "不依赖 NewAPI (R17 决议: 非独立代理服务)"
+no_reinvent = "不重复造轮子 (借 P0 / skeleton 模式)"
+honest_mark_missing = "诚实标缺 (R21 估补标 TODO)"
+
+[providers]
+claude_code = "Claude Code"
+gemini_cli = "Gemini CLI"
+codex = "Codex"
+opencode = "OpenCode"
+copilot = "GitHub Copilot"
+
+[sdks]
+lark = "飞书 / Lark SDK"
+voice = "语音 SDK"
+livekit = "LiveKit SDK"
+sandbox = "沙箱 SDK"
+
+[observability]
+metrics = "指标"
+health = "健康"
+status = "状态"
+
+[auth]
+token = "令牌"
+refresh = "刷新"
+scope = "权限范围"
+expire = "过期"
+refresh_on_use = "使用即刷新"
+
+[common]
+yes = "是"
+no = "否"
+ok = "好"
+cancel = "取消"
+save = "保存"
+delete = "删除"
+edit = "编辑"
+add = "添加"
+remove = "移除"
+confirm = "确认"
+
+[readiness]
+# 3 实接度 (TUI 9 器官诚实标缺, per O-5 不假装)
+# ok = 全部就绪 / partial = 部分接 / stub = 桩占位
+ok = "就绪"
+partial = "部分"
+stub = "桩"

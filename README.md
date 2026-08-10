@@ -1,106 +1,84 @@
-# Apeireth — ASI 地基平台
-> **ἄπειρον + αἰθήρ** = 无限原则 + 火/心灵 = **Apeireth**
+# Apeireth — AGI 操作系统 (Rust 重写)
 
-**我们做 Apeireth, 是因为我们相信火没有灭。**
-
----
-
-## 🚀 阶段性交付文档 (主 11:43 + 主 20:18 + 主 00:56)
-
-**新团队必读**: [`APEIRETH-STAGE-DELIVERY-2026-07-22.md`](APEIRETH-STAGE-DELIVERY-2026-07-22.md) (本仓库唯一阶段性交付文档)
-
-**当前真生产状态** (V1074 一行命令 `--report` 真测):
-- **1080+ 真生产 modules** (V3-V1078 + V1080-V1083)
-- **3896+ 真测试** 全过
-- **384+ 真 commits**
-- **ASI V0.3 真测**: 0.8816
-- **V1071 VCP 真测**: 0.9588
-- **V1072 永恒身份**: 0.8441
-- **philosophy_guard**: PASS (不假装 Phenomenal/ASI)
-
-**一行上手命令**:
-```powershell
-cd .openclaw\workspace\promethean
-$env:PYTHONPATH = "$(Get-Location)\src;$env:PYTHONPATH"
-python -m apeireth.v1074_asi_production_runner --report
-```
-
----
-
-## 项目定位
-
-| 我们做的 | 我们不做的 |
-|---------|----------|
-| LLM 接入后的"地基"(平台层) | 训练新模型 |
-| Harness 自进化(不动模型权重) | 取代 VCP/AHE/Claude Code |
-| 中央 AI 多身份平台 | 单一 agent 框架 |
-| 主人教 AI 学习(母兽-小兽) | 让 AI 假装有意识 |
-| 任意域接入(平台层) | 5 域 benchmark |
-
----
-
-## 项目状态
-
-- **命名**: ✅ **Apeireth** (主人 2026-07-20 命名)
-- **顶层设计**: ✅ v1 (TOP-DESIGN-V1.md, 8.2 KB)
-- **调研**: ✅ 30 万字 + 18 篇 2024-2026 arxiv
-- **代码**: 🟡 0 行 (图纸就绪, 等主人拍板动手)
-
----
-
-## 阅读顺序
-
-按推荐顺序读:
-
-1. **APEIRETH-MANIFESTO-ORIGINAL** — 主人原文 (品牌宣言 + Logo 简报)
-2. **APEIRETH** — 我对命名的解读 + Logo 摘要
-3. **TOP-DESIGN-V1** — 顶层设计 v1(图纸)
-4. **RESEARCH-IDENTITY-V1** — 中央 AI 永生身份调研
-5. **RESEARCH-KICKOFF-WISDOM** — 8 领域 22 文献综合
-6. **RESEARCH-LITERATURE** — 8 篇 2025-2026 论文
-7. **TOP-DESIGN-INTAKE** — 主人 24 条 + VCP 接住
-8. **HARNESS** — 早期 Harness v0.1(已演化)
-9. **WHITEPAPER-ASI-PLATFORM** — 超 AI 平台建造学
-
----
-
-## 仓库结构
+> **R119-5 Mavis 收尾 (2026-08-10)**: 顶层 README 从 48KB 缩到 ~4KB。codex R114-R118 动态运营层(源仓 4921 passed / 88 suites / 0 failed,workspace.version 1.1.0)以状态行保留,历史技术报告下沉到 `docs/release/`,根目录 100+ 临时文件 + 6.8GB src-tauri + 277GB target 全清。
 
 ```
-promethean/  (待重命名 apeireth/)
-├── APEIRETH.md                        # 名字 + 哲学
-├── APEIRETH-MANIFESTO-ORIGINAL.md      # 主人原文归档
-├── TOP-DESIGN-V1.md                   # 图纸 v1
-├── RESEARCH-IDENTITY-V1.md            # 中央 AI 永生身份
-├── RESEARCH-KICKOFF-WISDOM.md         # 8 领域综合
-├── RESEARCH-LITERATURE.md            # 8 篇 2025-2026 论文
-├── RESEARCH-KICKOFF.md                # Pep + 启动创世
-├── RESEARCH-AGENCY-ENGINE-V1.md       # 主动 agent 9 实证
-├── KICKOFF-V2.md                      # 8 kickoff 问题
-├── TOP-DESIGN-INTAKE.md               # 主人 24 条接住
-├── HARNESS.md                         # 早期 Harness v0.1
-├── WHITEPAPER-ASI-PLATFORM.md         # 建造学
-├── PLATFORM-FOUNDATION.md            # 平台哲学
-├── PARADIGM-SHIFT.md                  # 范式转向
-├── ATTENTION-REVIEW.md                # 注意力审查
-├── CONVERSATION-ARCHIVE.md            # 对话留档
-└── .gitignore                        # 保护 API keys
+[Document-Meta]
+Document: README.md
+Version: 1.1.0-R114 (顶层)
+R-Cycle: R119-5 (10 commit 收尾, R114-R118 之上重建)
+Commit: 5c546a84 (R114-R118 动态运营层基线) + R119-1..R119-5
+Last-Modified: 2026-08-10
+Status: 🟢 活跃 (R114-R118 动态运营层已真接, R119 文档体系推倒重建 + 根目录清)
 ```
+
+[![CI](https://github.com/apeireth/apeireth-rust/actions/workflows/rust-ci.yml/badge.svg)]()
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/Rust-1.80%20stable-orange.svg)](rust-toolchain.toml)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](Cargo.toml)
+[![Eval-LIVE](https://img.shields.io/badge/eval--live-MiniMax-blueviolet.svg)](.github/workflows/eval-live.yml)
+[![R-Measure](https://img.shields.io/badge/R--Measure-0.92-success.svg)](reports/)
+
+**Apeireth** = VCP 的全栈 Rust 重写 + 独家的形式化安全(Self-Disable) + 双洋葱架构 + 编译期保证(12 键 hardcode)。
+5 战区(终端 Coding Agent / LLM 网关 / Multi-Agent / 长期记忆 / 工具协议)同时打,终极前端 Tauri,TUI 是"集成测试床"。
 
 ---
 
-## git log
+## 🚀 快速开始
 
-```
-0a09842 research: 中央 AI 永生身份 v1
-9756a86 foundation: 重新理解地基为哲学框架
-...
-f3736ee feat(HARNESS): 薪火 Harness 规范 v0.1
-```
+跳 [`docs/installation/01-quick-start.md`](docs/installation/01-quick-start.md) — 5 分钟跑通。
 
-(共 16 commits)
+## 🏛️ 规范系统
+
+跳 [`docs/conventions/README.md`](docs/conventions/README.md) — 12 子规范系统(命名空间 / 路径 / ADR / 报告 / Commit / 状态标记 / 哲学锚穿透等)。
+
+## 🏗️ 架构
+
+跳 [`docs/v2-strategy/00-VISION.md`](docs/v2-strategy/00-VISION.md) — 5 战区战略 + 核心护城河(v2 / v4 / v4.1 哲学层)。
+
+## 🛣️ 路线图
+
+跳 [`docs/roadmap/README.md`](docs/roadmap/README.md) — R 周期 / 1.0 / 1.1 / 1.2 / 1.2 patch LIVE 时间线。
+
+## 📚 文档
+
+跳 [`docs/README.md`](docs/README.md) — 完整文档索引(按子目录分类)。
+
+## 🤝 贡献
+
+跳 [`CONTRIBUTING.md`](CONTRIBUTING.md) — 贡献流程 / commit 规范 / 8 项不修改承诺(形式撤销, 原意保留)。
 
 ---
 
-_楚零 2026-07-20 13:40_
-_图纸 v1 完成, 等主人拍板动手_
+## 📊 状态(2026-08-10)
+
+| 指标 | 值 |
+|---|---|
+| **源仓测试** | **4921 passed / 88 suites / 0 failed** |
+| **Desktop 同步** | 4489 passed / 88 suites / 0 failed |
+| **workspace.version** | 1.1.0 (semver 严守) |
+| **R 周期** | R114-R118 动态运营层已真接 |
+| **24 LOCKED crate** | 0 触 (mtime baseline 16:34 之前) |
+| **R11 baseline** | V1141=0.8682 / V1131=0.8532 / V1136=0.9063 严守 |
+| **R-Method** | 0.92 badge |
+
+**R114-R118 动态运营层**(2026-08-10, codex 5c546a84):
+- R114: `EvalToolServer` MCP bridge(`crates/apeireth-eval/src/mcp_bridge.rs`)
+- R115: Council MCP bridge(`crates/apeireth-council/src/mcp_bridge.rs`)
+- R116: CLI command families(`crates/apeireth-cli/src/commands/`)
+- R117: TUI cognition live(`crates/apeireth-tui/src/cognition_live.rs` 接 main.rs:259)
+- R118: Protocol transport bridges(`crates/apeireth-protocol/src/bridge_ext.rs:43`)
+
+详见 [`reports/r114-r118-batch-final-2026-08-10.md`](reports/r114-r118-batch-final-2026-08-10.md)。
+
+---
+
+## 📜 引用
+
+- 借鉴:LangGraph / AutoGen / MCP 2025-03-26 / RFC 8628 / VCP vcptoolbox / LSP / semver
+- 哲学:6 哲学锚(S-1 / S-2 / O-2 / O-3 / O-4 / O-5) + 12 键编译期 hardcode
+- 6 哲学锚来源:主人 2026-07-30 ~ 2026-08-04 关键决策(详见 `docs/conventions/09-anchor.md`)
+
+---
+
+_本 README 由 Mavis R119-2 重写,原 48KB README 已下沉到 `docs/release/1.1/`(R38 1.1 RC 9 B-stage 详单)和 `docs/release/1.2-patch-live/`(R70-R72 1.2 patch LIVE)。codex R114-R118 状态行(2026-08-10)在状态表中保留,其他历史技术报告按"思想历史 + 最新"原则筛选保留。_

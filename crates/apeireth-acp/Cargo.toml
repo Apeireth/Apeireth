@@ -1,0 +1,17 @@
+[package]
+name = "apeireth-acp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-acp — R23 6 module acp 子模块: Agent Communication Protocol 抽象 + 信封 + 路由"
+[lib]
+name = "apeireth_acp"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+[lints]
+workspace = true

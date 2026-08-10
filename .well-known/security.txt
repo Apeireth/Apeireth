@@ -1,0 +1,21 @@
+# RFC 9116 security.txt
+# Contact: chuling@apeireth.local
+# Expires: 2027-12-31T23:59:59Z
+# Preferred-Languages: zh-CN, en
+# Canonical: https://github.com/apeireth/apeireth-rust/.well-known/security.txt
+
+Contact: mailto:security@apeireth.local
+Contact: https://github.com/apeireth/apeireth-rust/security/advisories/new
+Expires: 2027-12-31T23:59:59Z
+Preferred-Languages: zh-CN, en
+Canonical: https://github.com/apeireth/apeireth-rust/.well-known/security.txt
+
+# 1.0 release 加密 (per 1.0 release #12 security)
+Encryption: https://github.com/apeireth/apeireth-rust/blob/main/docs/security/cosign.pub
+Encryption: dns:apeireth-security._domainkey.apeireth.local
+
+# 1.0 release 致谢 (per 1.0 release #12 security 致谢)
+Acknowledgments: https://github.com/apeireth/apeireth-rust/blob/main/docs/security/acknowledgments.md
+
+# Hiring (1.0 release 招人)
+Hiring: https://github.com/apeireth/apeireth-rust/blob/main/docs/hiring.md

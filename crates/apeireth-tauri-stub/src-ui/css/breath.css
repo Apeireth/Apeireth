@@ -1,0 +1,72 @@
+/* ===========================================================
+ * 4s 呼吸节奏 (4s 亮 / 4s 暗, 熟睡人的胸口起伏)
+ *
+ * 单光纪律: 一处活的光点 (主 AI 状态指示器 / 当前焦点 / 激活 nav)
+ * 一切 "活" 元素 = 呼吸
+ * =========================================================== */
+
+@keyframes breath {
+    0%, 100% {
+        opacity: 0.45;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
+@keyframes breath-glow {
+    0%, 100% {
+        opacity: 0.3;
+        filter: drop-shadow(0 0 1px var(--accent));
+    }
+    50% {
+        opacity: 1;
+        filter: drop-shadow(0 0 6px var(--accent));
+    }
+}
+
+@keyframes breath-soft {
+    0%, 100% {
+        opacity: 0.55;
+    }
+    50% {
+        opacity: 0.95;
+    }
+}
+
+/* 呼吸点 (通用) */
+.breath-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: breath-glow var(--breath-duration) var(--breath-easing) infinite;
+}
+
+/* 呼吸光点 (器官 / nav 当前 / 主 AI 心跳) */
+.breath-point {
+    fill: var(--accent);
+    animation: breath-glow var(--breath-duration) var(--breath-easing) infinite;
+}
+
+/* 呼吸柔和 (文字 / 弧 / 副指标) */
+.breath-soft {
+    animation: breath-soft var(--breath-duration) var(--breath-easing) infinite;
+}
+
+/* 尊重无障碍偏好 */
+@media (prefers-reduced-motion: reduce) {
+    .breath-dot,
+    .breath-point,
+    .breath-soft {
+        animation: none;
+    }
+}
+
+/* 用户在设置里关掉时 */
+body.breath-disabled .breath-dot,
+body.breath-disabled .breath-point,
+body.breath-disabled .breath-soft {
+    animation: none;
+}

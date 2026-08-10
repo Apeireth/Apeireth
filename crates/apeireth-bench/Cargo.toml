@@ -1,0 +1,56 @@
+[package]
+name = "apeireth-bench"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 性能基准 (criterion benchmarks, V1130 wallclock 2.5s target) — R14 Phase 1 性能验证"
+
+[[bench]]
+name = "v1130_wallclock"
+harness = false
+
+[[bench]]
+name = "v1190_memory_e2e"
+harness = false
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-asi = { path = "../apeireth-asi" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+criterion = { workspace = true }
+apeireth-verify = { path = "../apeireth-verify" }
+# B-2 (2026-08-10): latency_bench lib 内部用 (LRU 实现, 跟 B 写的 apeireth-cache::MemoryCache 1:1)
+lru = { workspace = true }
+# B-2 (2026-08-10): latency_bench lib 内部用 (Mutex 同步, 跟 B 写的 cache 行为 1:1)
+parking_lot = "0.12"
+# B-2 (2026-08-10): wiremock 模拟 4 协议上游 LLM (复用 apeireth-pipeline/tests/pipeline.rs 0.6.5 模式, Cargo.lock 已有)
+wiremock = "0.6"
+# B-2 (2026-08-10): reqwest HTTP client 走 cache miss / retry 场景的真发 HTTP
+reqwest = { workspace = true }
+
+[dev-dependencies]
+# B-2 (2026-08-10): axum mini HTTP server 留给 integration test 端到端 (暂未用, 0 强约束)
+axum = "0.7"
+
+[lib]
+name = "apeireth_bench"
+path = "src/lib.rs"
+
+[[example]]
+name = "latency_smoke"
+path = "examples/latency_smoke.rs"
+
+[[example]]
+name = "self_disable_smoke"
+path = "examples/self_disable_smoke.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

@@ -1,0 +1,60 @@
+[package]
+name = "apeireth-blueprint-impl"
+# === R20 阶段 1 skeleton 阶段显式 version (跟 apeireth-keyring / apeireth-team-lead 同款) ===
+# 整合时 (Mavis 整合 commit) 改为 version.workspace = true + 加到 [workspace] members.
+# 原因: 任务规范要求 "不动 workspace Cargo.toml", 必须保留 skeleton 阶段独立 crate 形态.
+# 8 项承诺保留项: 整合后 version.workspace = true + 24 LOCKED crate 不动 + 阶段 1-5 LOCKED 不动 +
+#                workspace version = "1.0.0" 不动 + Document-Meta 格式不动 + v10 版本号系统不动 +
+#                v1-v10 修正链文件名保留 + R11 baseline 三值 LOCKED.
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 4 估补 (RIVAL §2.4): 蓝图实装 = 4 风险类 (K-1/K-2/K-3/K-4) + 4 决策表 (D-01..D-04) + 6 实战模板 (A-F) + 5 R-Measure (R-1..R-5) + 3 评估指标 (Q1/Q2/Q3). 1 crate 打包, 跟 V0.5 命名 (apeireth-naming-v05) 互不冲突."
+keywords = ["blueprint", "risk", "decision", "template", "r-measure", "q-metric"]
+categories = ["api-bindings", "asynchronous", "data-structures"]
+
+[dependencies]
+# async runtime
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# async stream utilities (R-Measure / Q-Metric 聚合)
+futures = "0.3"
+# time (token TTL, rate limit refill)
+chrono = { version = "0.4", features = ["serde"] }
+# shared types (K-1 强校验 / R-Measure 复用)
+apeireth-protocol = { path = "../apeireth-protocol" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+
+[[example]]
+name = "blueprint_impl_demo"
+path = "examples/blueprint_impl_demo.rs"
+
+# R19 第 0 阶段: skeleton 阶段不强求 workspace lint 同步, 避免 noise (跟 keyring / team-lead 同款)
+# 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"
+
+# V1302 fix (R-Cycle v2-strategy / V1301 audit 修真): 移除 skeleton 阶段空 [workspace] 块,
+# 整合到主仓 workspace = apeireth-blueprint-impl 成为正式 member.
+# 原因: V1301 标 P0 — 不在 members 但有 Cargo.toml = orphan, Cargo 无法被 cargo metadata / cargo build 解析.
+# 修真: 删 [workspace] 让 cargo 识别主 workspace 上下文, 依赖 apeireth-protocol 仍然 path = "../apeireth-protocol" OK.
+# 风险评估: skeleton crate 加到 members 仅触发 workspace 总数 +1, 不触碰任何现有 dep.
+# [lints.rust] 块保留 (skeleton 阶段明示保留, 整合时不强求 workspace lint 同步 — V1300 audit 也建议保留).
+# 验证: cargo metadata --format-version=1 应能解析, apeireth-blueprint-impl 应出现在 members 列表.

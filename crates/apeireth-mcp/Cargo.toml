@@ -1,0 +1,53 @@
+[package]
+name = "apeireth-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth v2.0 战区 5 P0: Model Context Protocol skeleton (client/server + JSON-RPC 2.0 + stdio/SSE transport + tool-registry bridge, 字段级参考 MCP 2025-03-26 规范)"
+keywords = ["ai", "mcp", "json-rpc", "agent", "tool"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# R33-3-1: ConventionResourceServer 复用 R33-1 conventions_scanner
+apeireth-tools = { path = "../apeireth-tools" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+tracing = "0.1"
+futures = { workspace = true }
+uuid = { workspace = true }
+# SSE + HTTP-streamable transport 用 reqwest (workspace dep 已含 json + rustls-tls + stream)
+reqwest = { workspace = true }
+# SSE 帧解析需要 bytes (reqwest::Response::bytes_stream 产出 bytes::Bytes)
+bytes = "1.7"
+
+[dev-dependencies]
+# R18 第 2 阶段: in-memory MCP conformance tests
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+serde_json = "1.0"
+
+[[example]]
+name = "hello"
+path = "examples/hello.rs"
+
+# R123-4: 多模态 dispatcher template demo (per 07 §2 P2-13, 0 真接, R124+ 真接)
+[[example]]
+name = "multimodal_mcp_demo"
+path = "examples/multimodal_mcp_demo.rs"
+
+# R123-3: v2.1 P2-12 浏览器自动化 skeleton demo
+[[example]]
+name = "browser_mcp_demo"
+path = "examples/browser_mcp_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

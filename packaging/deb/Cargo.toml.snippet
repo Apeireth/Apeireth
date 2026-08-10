@@ -1,0 +1,25 @@
+# Apeireth deb metadata snippet
+# 粘贴到 crates/apeireth-cli/Cargo.toml 的 [package] 之后
+# 触发 cargo-deb 自动生成 .deb 包
+# 0 触碰 (per 任务规范): 1.0 release 时统一由 release engineer 合并
+
+[package.metadata.deb]
+name = "apeireth"
+maintainer = "Apeireth Team <dev@apeireth.io>"
+copyright = "2026, Apeireth Team"
+license-file = ["../../LICENSE", "4"]
+depends = ["libssl3", "libsqlite3-0", "ca-certificates"]
+section = "science"
+priority = "optional"
+extended-description = """\
+Apeireth OS — 长程 AI 成长平台 (立体架构 v2 + 生命架构 v4).
+本包提供 API server (apeireth) 二进制, 默认监听 :8080 (HTTP/WS) + :9090 (metrics)."""
+description = "Apeireth OS - AI Growth Platform (API server)"
+
+# systemd 集成 (per blueprint §3.4)
+[[package.metadata.deb.systemd-units]]
+unit-scripts = "apeireth.service"
+
+[package.metadata.deb.systemd-units."apeireth.service"]
+enable = false
+start = false

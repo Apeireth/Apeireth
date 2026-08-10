@@ -1,0 +1,19 @@
+[package]
+name = "apeireth-skills"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "apeireth-skills — R23 6 module (cron/skills/acp/config/test/eval) skills 子模块: 可复用能力声明 + 描述 + 输入/输出 schema + 版本"
+[lib]
+name = "apeireth_skills"
+path = "src/lib.rs"
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+walkdir = "2.5"
+apeireth-mcp = { path = "../apeireth-mcp" }
+[lints]
+workspace = true

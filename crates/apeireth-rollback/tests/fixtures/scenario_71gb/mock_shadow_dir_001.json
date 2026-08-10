@@ -1,0 +1,24 @@
+{
+  "schema_version": "1",
+  "snapshot_id": "agent-1f3a7b-1722864000",
+  "session_id": "agent-sandbox-91-snapshot-001",
+  "timestamp": 1722864000,
+  "timestamp_iso": "2025-08-05T12:00:00Z",
+  "shadow_dir_pattern": "agent-XXXXXX-{ts}",
+  "shadow_dir": "C:\\Users\\REDACTED\\.minimax-agent-cn\\agent-1f3a7b-1722864000",
+  "size_bytes": 819_200_000,
+  "size_human": "780 MB",
+  "strategy": "auto",
+  "file_diff": "M src/lib.rs\nA tests/test_71gb.rs\nD deprecated/old_junk.rs",
+  "branch_state": {
+    "branch": "main",
+    "commit": "8a643778a3b1c2d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "dirty": true
+  },
+  "description": "71GB 事故 fixture #1: 单个 780 MB 影子目录元数据 mock",
+  "incident_note": "v0.9.21 RollbackService.js 不清理影子, 累积 71 GB",
+  "must_do": [
+    "compile-time hardcode MAX_SHADOW_SIZE_BYTES = 100 MB",
+    "reject snapshots > 100 MB at creation time"
+  ]
+}

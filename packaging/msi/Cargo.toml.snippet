@@ -1,0 +1,14 @@
+# Apeireth MSI metadata snippet
+# 粘贴到 crates/apeireth-cli/Cargo.toml 的 [package] 之后
+# 触发 cargo-wix 自动生成 .msi 包
+# 0 触碰 (per 任务规范): 1.0 release 时统一由 release engineer 合并
+
+[package.metadata.wix]
+# WiX 3.x 配置
+ui-dir = "packaging/msi"
+wix-template = "packaging/msi/apeireth.wxs"
+language = [1033]
+# 默认安装路径
+install-path = "C:\\Program Files\\Apeireth"
+# 升级策略
+upgrade-requires = "PUT-GUID-HERE-AT-BUILD-TIME"

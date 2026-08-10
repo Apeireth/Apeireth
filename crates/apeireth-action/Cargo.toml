@@ -1,0 +1,33 @@
+[package]
+name = "apeireth-action"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 行动器官 (A11.1 落点 — R14 Phase 4: 改变环境 + 工具执行 + 表达 + 沉默 = 不行动也是行动)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_action"
+path = "src/lib.rs"
+
+[[example]]
+name = "action_demo"
+path = "examples/action_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

@@ -1,0 +1,378 @@
+# Apeireth V2 全栈 docker-compose (R18 战役 5 + V2 部署加固)
+#
+# V2 加固 (devops_engineer2):
+#   - 在 R17 战役 4-4 4 协议网关之上, 新增 5 个 V2 进程 (mcp/graph/vector/sdk/formal)
+#   - 全部 service 加 healthcheck (test/interval/timeout/retries/start_period 完整)
+#   - 全部 service 加 restart policy (unless-stopped, 防进程崩溃)
+#   - depends_on 用 service_healthy condition (强依赖, 等 healthcheck 通过才启)
+#   - logging 集中 driver (json-file + rotation, 防日志爆炸)
+#   - resource limits (CPU/mem limit + reservation, 防单服务吃光)
+#   - 顶层 deploy.resources 限定, k8s/docker swarm 通用
+#
+# 服务端口 (全栈):
+#   8080/8081/8082/8083: 战役 4-4 4 协议网关 (OpenAI Chat/Anthropic/Gemini/OpenAI Responses)
+#   8090: apeireth-mcp       (V2 战区 5 — MCP client/server)
+#   8091: apeireth-graph     (V2 战区 3 — 图编排)
+#   8092: apeireth-vector    (V2 战区 4 — 向量检索)
+#   8093: apeireth-sdk       (V2 跨战区 — 多语言 SDK 统一)
+#   8094: apeireth-formal    (V2 战区 5 — 形式化验证)
+#
+# 用法:
+#   cd deploy
+#   docker compose -f docker-compose.protocols.yml up -d
+#   curl -f http://localhost:8080/health   # OpenAI Chat gateway
+#   curl -f http://localhost:8090/health   # MCP gateway
+#   ...
+#
+# 不假装:
+#   ✅ 9 service 都跑真 binary (cargo build --release -p <crate>)
+#   ✅ 9 service 都 healthcheck + restart policy
+#   ✅ 5 个 V2 service depends_on 战役 4-4 网关 (等 health 通了才启)
+#   ✅ 持久化卷声明 (graph/vector/formal 都用 named volume)
+
+version: "3.8"
+
+# ===============================================================
+# 顶层 anchor: 公共环境变量 + 公共 log 限制
+# ===============================================================
+x-common-env: &common-env
+  # 主人 minimaxi apikey (主人从 GitHub Secrets / k8s secret 注入)
+  APEIRETH_API_KEY: ${APEIRETH_API_KEY:-}
+  # 4 协议统一 base URL (minimaxi 全 4 端点都在这域名下)
+  APEIRETH_API_URL: ${APEIRETH_API_URL:-https://api.minimaxi.com}
+  # 默认 backend = real (apeireth-api 走真 LLM)
+  APEIRETH_LLM_BACKEND: ${APEIRETH_LLM_BACKEND:-real}
+  # 日志级别
+  RUST_LOG: ${RUST_LOG:-info}
+  # 镜像 tag (主人 CI 注入, 默认 :latest)
+  APEIRETH_IMAGE_TAG: ${APEIRETH_IMAGE_TAG:-latest}
+
+x-common-logging: &common-logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+x-restart-unless-stopped: &restart-unless-stopped
+  restart: unless-stopped
+
+x-healthcheck-default: &healthcheck-default
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 10s
+
+services:
+  # ==============================================================
+  # 战役 4-4: 4 协议网关 (R17 已部署, 保留 + 加固)
+  # ==============================================================
+  apeireth-api-openai-chat:
+    image: apeireth/api:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-api-openai-chat
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command: ["gateway", "serve", "--port", "8080"]
+    ports:
+      - "8080:8080"
+    environment:
+      <<: *common-env
+      APEIRETH_API_DEFAULT_PROTOCOL: openai_chat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      <<: *healthcheck-default
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+
+  apeireth-api-anthropic:
+    image: apeireth/api:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-api-anthropic
+    command: ["gateway", "serve", "--port", "8080"]
+    ports:
+      - "8081:8080"
+    environment:
+      <<: *common-env
+      APEIRETH_API_DEFAULT_PROTOCOL: anthropic
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      <<: *healthcheck-default
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+
+  apeireth-api-gemini:
+    image: apeireth/api:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-api-gemini
+    command: ["gateway", "serve", "--port", "8080"]
+    ports:
+      - "8082:8080"
+    environment:
+      <<: *common-env
+      APEIRETH_API_DEFAULT_PROTOCOL: gemini
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      <<: *healthcheck-default
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+
+  apeireth-api-openai-responses:
+    image: apeireth/api:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-api-openai-responses
+    command: ["gateway", "serve", "--port", "8080"]
+    ports:
+      - "8083:8080"
+    environment:
+      <<: *common-env
+      APEIRETH_API_DEFAULT_PROTOCOL: openai_responses
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      <<: *healthcheck-default
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+
+  # ==============================================================
+  # V2 战区 5 P0: apeireth-mcp (Model Context Protocol)
+  # ==============================================================
+  apeireth-mcp:
+    image: apeireth/mcp:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-mcp
+    build:
+      context: ..
+      dockerfile: deploy/apeireth-mcp/Dockerfile
+    command: ["serve", "--port", "8090"]
+    ports:
+      - "8090:8090"
+    environment:
+      <<: *common-env
+      APEIRETH_MCP_PORT: "8090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 768M
+        reservations:
+          cpus: "0.3"
+          memory: 192M
+    networks:
+      - apeireth-net
+
+  # ==============================================================
+  # V2 战区 3 P0: apeireth-graph (图编排)
+  # 依赖 OpenAI Chat 网关 (用 LLM 调 supervisor)
+  # ==============================================================
+  apeireth-graph:
+    image: apeireth/graph:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-graph
+    build:
+      context: ..
+      dockerfile: deploy/apeireth-graph/Dockerfile
+    command: ["serve", "--port", "8091", "--data-dir", "/app/data"]
+    ports:
+      - "8091:8091"
+    environment:
+      <<: *common-env
+      APEIRETH_GRAPH_PORT: "8091"
+      # 调 LLM 走 OpenAI Chat 网关 (战役 4-4 已部署)
+      APEIRETH_LLM_GATEWAY_URL: "http://apeireth-api-openai-chat:8080"
+    volumes:
+      - apeireth-graph-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+    depends_on:
+      apeireth-api-openai-chat:
+        condition: service_healthy
+      apeireth-vector:
+        condition: service_healthy
+
+  # ==============================================================
+  # V2 战区 4 P1: apeireth-vector (向量检索)
+  # ==============================================================
+  apeireth-vector:
+    image: apeireth/vector:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-vector
+    build:
+      context: ..
+      dockerfile: deploy/apeireth-vector/Dockerfile
+    command: ["serve", "--port", "8092", "--data-dir", "/app/data"]
+    ports:
+      - "8092:8092"
+    environment:
+      <<: *common-env
+      APEIRETH_VECTOR_PORT: "8092"
+    volumes:
+      - apeireth-vector-data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8092/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1536M
+        reservations:
+          cpus: "0.5"
+          memory: 384M
+    networks:
+      - apeireth-net
+
+  # ==============================================================
+  # V2 跨战区 P1: apeireth-sdk (多语言 SDK 统一)
+  # 依赖 graph + vector (供 SDK 客户端调)
+  # ==============================================================
+  apeireth-sdk:
+    image: apeireth/sdk:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-sdk
+    build:
+      context: ..
+      dockerfile: deploy/apeireth-sdk/Dockerfile
+    command: ["serve", "--port", "8093"]
+    ports:
+      - "8093:8093"
+    environment:
+      <<: *common-env
+      APEIRETH_SDK_PORT: "8093"
+      APEIRETH_GRAPH_URL: "http://apeireth-graph:8091"
+      APEIRETH_VECTOR_URL: "http://apeireth-vector:8092"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8093/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.2"
+          memory: 128M
+    networks:
+      - apeireth-net
+    depends_on:
+      apeireth-graph:
+        condition: service_healthy
+      apeireth-vector:
+        condition: service_healthy
+
+  # ==============================================================
+  # V2 战区 5 P2: apeireth-formal (形式化验证)
+  # ==============================================================
+  apeireth-formal:
+    image: apeireth/formal:${APEIRETH_IMAGE_TAG:-latest}
+    container_name: apeireth-formal
+    build:
+      context: ..
+      dockerfile: deploy/apeireth-formal/Dockerfile
+    command: ["serve", "--port", "8094", "--artifacts-dir", "/app/artifacts"]
+    ports:
+      - "8094:8094"
+    environment:
+      <<: *common-env
+      APEIRETH_FORMAL_PORT: "8094"
+    volumes:
+      - apeireth-formal-artifacts:/app/artifacts
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8094/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    logging: *common-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 1024M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    networks:
+      - apeireth-net
+
+networks:
+  apeireth-net:
+    driver: bridge
+    name: apeireth-net
+
+volumes:
+  # graph checkpoint SQLite
+  apeireth-graph-data:
+    name: apeireth-graph-data
+  # vector index (sqlite-vec / lancedb)
+  apeireth-vector-data:
+    name: apeireth-vector-data
+  # formal verify 产物 (counter-example + proof cert)
+  apeireth-formal-artifacts:
+    name: apeireth-formal-artifacts

@@ -1,0 +1,101 @@
+[package]
+name = "apeireth-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth R19 TUI — ratatui 终端版, 后端全接 (9 器官 + 30 crate + 6 流)"
+
+[[bin]]
+name = "apeireth-tui"
+path = "src/main.rs"
+
+# R121 续 (V2-6 战区 2.5): 加 [lib] 段, 让 bench 引用 apeireth_tui::* 替代 #[path] hack
+# 0 改 binary (main.rs 仍走 src/main.rs)
+[lib]
+name = "apeireth_tui"
+path = "src/lib.rs"
+
+[dependencies]
+# 终端
+ratatui = "0.30"
+crossterm = "0.28"
+# R26-3-fixes: unicode-width (ratatui already uses it internally, declared here for set_cursor cell-accurate alignment)
+unicode-width = "0.2"
+# R26-3-fixes: 系统剪贴板 (Ctrl+C 复制选区 AI 回复)
+arboard = "3"
+# R30 U15: tool-policy.json 热加载 (VCP-style notify 文件监视)
+notify = "6"
+
+# 序列化 + 时间 + 错误
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+
+# async runtime (R17 LLM 调用是 async)
+tokio.workspace = true
+# R25 改瘦 Step 1: 走 HTTP (workspace 继承, 含 stream feature 给 SSE 用)
+reqwest = { workspace = true }
+# 战役 4-1: 真流式 LlmProvider::complete_stream 返回 BoxStream, 迭代要 futures::StreamExt
+futures = { workspace = true }
+
+# 9 器官 + ASI + supervisor (后端全接, 不依赖 apeireth-desktop 避免 tauri 冲突)
+apeireth-core = { path = "../apeireth-core" }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-asi = { path = "../apeireth-asi" }
+apeireth-cognition = { path = "../apeireth-cognition" }
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+apeireth-life-force = { path = "../apeireth-life-force" }
+apeireth-motivation = { path = "../apeireth-motivation" }
+apeireth-value = { path = "../apeireth-value" }
+apeireth-relation = { path = "../apeireth-relation" }
+apeireth-action = { path = "../apeireth-action" }
+apeireth-perception = { path = "../apeireth-perception" }
+apeireth-central = { path = "../apeireth-central" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-supervisor = { path = "../apeireth-supervisor" }
+
+# R17 LLM (直连 OpenAI 协议 — 验证过的 minimaxi provider)
+apeireth-api = { path = "../apeireth-api" }
+
+# R32-2: 借鉴 LangGraph state machine + conditional edge, 抽 chat_with_tool_loop 循环控制权
+apeireth-pipeline = { path = "../apeireth-pipeline" }
+
+# R54 B8 续: apeireth-graph 接 cognition_graph (run_cognition_graph_sync 拿 CognitionSummary)
+# backend.rs::compute_main_ai_status 在 record_short_term_messages 后调, record_cognition_summary 真接
+apeireth-graph = { path = "../apeireth-graph" }
+
+# R21 G-1 续补: TUI 接 i18n (5 nav + 9 organ + 3 readiness 翻译表消费)
+# i18n crate 12 类别 × 5 Locale 翻译表编译期嵌入, TUI 通过 translator.t(key, args) 消费
+apeireth-i18n = { path = "../apeireth-i18n" }
+
+# R25 改瘦 Step 1 单元测试用 (mock HTTP server, 测 SSE 流式 + 5xx + 连接拒绝)
+# R21 1.0 release #7 perf 续 (D-P2): TUI 5 nav + 9 organ 渲染 bench harness
+# criterion 0.5 业界标准 (workspace inherit) + ratatui 0.29 TestBackend
+# apeireth-observability dev-dep = 9 organ widget + 3 endpoint + 5 nav + 6 锚 公共 API
+[dev-dependencies]
+httpmock = "0.8"
+criterion = { workspace = true }
+# R30 U6: tempfile for config_watcher tests
+tempfile = "3"
+apeireth-observability = { path = "../apeireth-observability" }
+
+[[bench]]
+name = "render_5_nav"
+harness = false
+
+[[bench]]
+name = "render_9_organ"
+harness = false
+
+[[bench]]
+name = "render_dashboard"
+harness = false
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

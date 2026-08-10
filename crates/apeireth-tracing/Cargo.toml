@@ -1,0 +1,56 @@
+[package]
+name = "apeireth-tracing"
+# 显式版本 (跟 apeireth-credentials / apeireth-cache / apeireth-i18n / apeireth-voice 模板同模式;
+# 整合 #2 sub-agent 改 `version.workspace = true` + deps { workspace = true })
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 6 估缺: distributed tracing 框架 (1:1 翻译 v0.9.21 @anthropic-ai/tracing 商业版, OpenTelemetry 兼容). 4 Span 类型 (client/server/producer/consumer) + 4 事件 (Log/Exception/Event/Message) + 4 exporter (stdout/file/otlp-grpc/jaeger, 1+1 完整 + 2 stub) + 4 sampler (always-on/off/ratio/parent_based) + 3 propagation (W3C 完整 + B3/Jaeger stub). 0 真接 R20 阶段 6 skeleton, 留 R21 续真接 (1 owner × 1 周). 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺"
+keywords = ["tracing", "opentelemetry", "distributed", "w3c", "span", "agent"]
+categories = ["development-tools", "asynchronous", "api-bindings"]
+
+[dependencies]
+apeireth-telemetry = { path = "../apeireth-telemetry" }
+# async runtime (Trace + Span 全部 async)
+tokio = { version = "1.40", features = ["full"] }
+# serialization (TraceConfig / Span / SpanEvent / TraceContext 全部 Serialize/Deserialize)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling (TracingError 8-10 variant, per skeleton 模式 + m3 防御)
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing-subscriber (file exporter + future stdout subscriber 集成)
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"] }
+# async trait (Span / Exporter / Sampler / Propagator 异步接口 dyn-compatible)
+async-trait = "0.1"
+# UUID (trace_id / span_id 派生 + 内部标识)
+uuid = { version = "1.10", features = ["v4", "serde"] }
+# 时间戳 (Span start_time / end_time)
+chrono = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# 临时文件 (file exporter 测 JSONL 落盘)
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+futures = "0.3"
+
+[[example]]
+name = "tracing_demo"
+path = "examples/tracing_demo.rs"
+
+# R20 阶段 6: 整合 #2 sub-agent 已加 Apeireth-rust members, [workspace] 块删除.
+#   1. 删本 [workspace] 块 ✅
+#   2. version 改 `version.workspace = true` ⏳ 整合 #2 时
+#   3. deps 改 `{ workspace = true }` ⏳ 整合 #2 时
+#   4. workspace Cargo.toml members 加 `crates/apeireth-tracing` ⏳ 整合 #2 时 (待整合)
+# 当前 lints 留空, 不强求跟外层 workspace 同步, 避免 noise
+[lints.rust]
+unused_imports = "allow"
+dead_code = "allow"
+missing_docs = "allow"
+unused_must_use = "allow"
+unused_mut = "allow"

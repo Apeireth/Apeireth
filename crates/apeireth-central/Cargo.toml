@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-central"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth CentralAI aggregate root, lifecycle coordinator, and PID 1 supervisor entry"
+
+[features]
+# 测试专用 feature: 启用 __test_force_stage 等内部 hook
+testing = []
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+
+[lib]
+name = "apeireth_central"
+path = "src/lib.rs"
+
+[[example]]
+name = "central_demo"
+path = "examples/central_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

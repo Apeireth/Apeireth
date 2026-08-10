@@ -1,0 +1,43 @@
+{
+  "schema_version": "1",
+  "rollback_schema_version": "1",
+  "total_snapshots": 91,
+  "total_size_bytes": 74_547_200_000,
+  "total_size_human": "71 GB",
+  "max_total_size_bytes": 2_147_483_648,
+  "max_total_size_human": "2 GB",
+  "overflow_ratio": 34.71,
+  "max_age_days": 7,
+  "max_shadow_size_bytes": 104_857_600,
+  "oldest_timestamp": 1712448000,
+  "oldest_age_days_at_2026_08_05": 90,
+  "newest_timestamp": 1722864000,
+  "snapshots_sample": [
+    { "id": "agent-1f3a7b-1722864000", "size_bytes": 819_200_000, "age_days": 0, "expired": false },
+    { "id": "agent-2c4d8e-1722777600", "size_bytes": 798_400_000, "age_days": 1, "expired": false },
+    { "id": "agent-3e5f9a-1722691200", "size_bytes": 824_300_000, "age_days": 2, "expired": false },
+    { "id": "agent-4f6a0b-1722604800", "size_bytes": 815_700_000, "age_days": 3, "expired": false },
+    { "id": "agent-5a7b1c-1722518400", "size_bytes": 832_100_000, "age_days": 4, "expired": false },
+    { "id": "agent-6b8c2d-1722432000", "size_bytes": 780_500_000, "age_days": 5, "expired": false },
+    { "id": "agent-7c9d3e-1722345600", "size_bytes": 821_900_000, "age_days": 6, "expired": false },
+    { "id": "agent-8d0e4f-1722259200", "size_bytes": 808_600_000, "age_days": 7, "expired": true, "expired_reason": "MAX_SHADOW_AGE_DAYS = 7" },
+    { "id": "agent-9e1f5a-1722172800", "size_bytes": 815_200_000, "age_days": 8, "expired": true },
+    { "id": "agent-0a2b6b-1722086400", "size_bytes": 799_800_000, "age_days": 9, "expired": true }
+  ],
+  "elided_count": 81,
+  "elided_note": "剩下 81 个影子省略, 字段跟 snapshots_sample 1:1",
+  "incident_metadata": {
+    "incident_date": "2026-08-05",
+    "discovered_by": "主人 紧急救援",
+    "root_cause": "v0.9.21 RollbackService.js 影子备份从来不清理",
+    "total_actual_size_gb": 71,
+    "fix_crate": "apeireth-rollback",
+    "fix_defense_layers": 4,
+    "must_do_fixes": [
+      "TTL 7 天过期 (MAX_SHADOW_AGE_DAYS)",
+      "单影子 100 MB 上限 (MAX_SHADOW_SIZE_BYTES)",
+      "总 2 GB 上限 (MAX_TOTAL_SHADOW_SIZE_BYTES)",
+      "3 重清理钩子 (CLEANUP_HOOK_STARTUP / BEFORE_SNAPSHOT / CRON_DAILY)"
+    ]
+  }
+}

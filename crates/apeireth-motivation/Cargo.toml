@@ -1,0 +1,36 @@
+[package]
+name = "apeireth-motivation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 动机器官 (A11.2 落点 — R14 Phase 4 动机/价值器官: MotivationDrive trait + SGI 单字段 (sgi_current+sgi_history 二元) + C-SGI-1~7 七条硬约束编译时 hardcode + E 层校验 + ReflectionAuditor 告警)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+# R37-2: 9 organ 部分合并 — value → motivation 透明 re-export
+apeireth-value = { path = "../apeireth-value" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_motivation"
+path = "src/lib.rs"
+
+[[example]]
+name = "motivation_demo"
+path = "examples/motivation_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

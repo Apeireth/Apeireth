@@ -1,0 +1,70 @@
+name: Rust tests (OS matrix + cargo-nextest)
+
+# R25 Stage 1: 独立 rust tests workflow (qdrant 模式)
+# 抄自: qdrant/.github/workflows/rust.yml
+# 模板: https://github.com/qdrant/qdrant/blob/master/.github/workflows/rust.yml
+# 借鉴: tokio ci.yml [test-tokio-full] / [test-workspace-all-features] job
+# 借鉴: wasmtime main.yml [ci] job
+#
+# 跟 rust-ci.yml 的关系 (R25 Agent D 2026-08-10):
+#   - rust-ci.yml = 旧"一锅炖"R18 升级版 (OS matrix + nextest + release-build + battle-1-2 + ci-summary)
+#   - rust.yml = 新 qdrant 风格"仅测试"workflow (本文件)
+#   - 两者临时并存 1 周 (per R25 硬约束 #6: 保留 fallback)
+#   - R26+ 续: 主人拍板后从 rust-ci.yml 删 rust-tests job, 单一来源
+#
+# 验收 (按 qdrant rust.yml 1:1):
+#   - 3 OS matrix (ubuntu-latest + windows-latest + macos-latest) × stable
+#   - cargo build --workspace --tests --locked exit 0
+#   - cargo nextest run --workspace --profile ci --locked exit 0
+#   - JUnit XML 上传 artifact (target/nextest/ci/junit.xml)
+
+on:
+  push:
+    branches: [master, main, rebase/d7d8-into-integration]
+  pull_request:
+    branches: ['**']
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  rust-tests:
+    name: cargo nextest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # FIXME: macOS cache bin 临时关 (Swatinem/rust-cache#341)
+          cache-bin: ${{ matrix.os != 'macos-latest' }}
+
+      - name: cargo build --workspace --tests --locked
+        run: cargo build --workspace --tests --locked
+
+      - name: cargo nextest run --workspace --profile ci --locked
+        # profile "ci" 在 .config/nextest.toml 定义 (fail-fast + retries 2)
+        run: cargo nextest run --workspace --profile ci --locked
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextest-junit-${{ matrix.os }}.xml
+          path: target/nextest/ci/junit.xml
+          retention-days: 14

@@ -1,0 +1,34 @@
+# ============================================================================
+# rustfmt.toml — Apeireth 后端格式化配置 (R18 第 0 阶段第 3 项)
+# ============================================================================
+# 抄自: qdrant/rustfmt.toml + tantivy/rustfmt.toml
+#
+# qdrant (基础 4 项):
+#   reorder_imports = true
+#   imports_granularity = "Module"
+#   group_imports = "StdExternalCrate"
+#
+# tantivy (额外 5 项):
+#   comment_width = 120
+#   format_strings = true
+#   normalize_comments = true
+#   where_single_line = true
+#   wrap_comments = true
+#
+# 验收:
+#   cargo fmt --all                       # 统一格式
+#   cargo +nightly fmt --all -- --check   # CI 强挡
+#
+# 注意: CI 用 nightly 跑 fmt --check, 因为部分选项只在 nightly 生效
+
+# --- 来自 qdrant (基础) ---
+reorder_imports = true
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"
+
+# --- 来自 tantivy (额外) ---
+comment_width = 120
+format_strings = true
+normalize_comments = true
+where_single_line = true
+wrap_comments = true
