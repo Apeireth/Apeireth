@@ -1,0 +1,67 @@
+{
+  "n_endpoints": 8,
+  "n_ok": 8,
+  "ok_rate": 1.0,
+  "host": "127.0.0.1",
+  "port": 18080,
+  "results": [
+    {
+      "endpoint": "GET /healthz",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "GET /status",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "GET /pipeline/adversarial",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "POST /pipeline/lint (safe)",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "POST /pipeline/policy-gate (bad)",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "POST /pipeline/run (mixed)",
+      "status": 200,
+      "body_ok": true
+    },
+    {
+      "endpoint": "GET /nope (expect 404)",
+      "status": 404,
+      "body_ok": true
+    },
+    {
+      "endpoint": "POST /healthz (expect 405)",
+      "status": 405,
+      "body_ok": true
+    }
+  ],
+  "stats": {
+    "started_at": 1786337618.28293,
+    "uptime_s": 3.19,
+    "n_requests": 8,
+    "n_2xx": 8,
+    "n_4xx": 0,
+    "n_5xx": 0,
+    "by_endpoint": {
+      "GET /healthz": 1,
+      "GET /status": 1,
+      "GET /pipeline/adversarial": 1,
+      "POST /pipeline/lint": 1,
+      "POST /pipeline/policy-gate": 1,
+      "POST /pipeline/run": 1,
+      "GET /nope": 1,
+      "POST /healthz": 1
+    }
+  }
+}
