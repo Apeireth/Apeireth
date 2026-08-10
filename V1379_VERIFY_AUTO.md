@@ -1,7 +1,7 @@
 # V1379 — V1375 Archive Integrity Verify
 
 - **schema:** `v1379.integrity/v1.verify/v1`
-- **generated:** 2026-08-08T20:47:07Z
+- **generated:** 2026-08-08T20:49:38Z
 - **archive dir:** `V1375_HISTORY`
 - **manifest path:** `V1379_INTEGRITY_AUTO.json`
 - **manifest archive count:** 1

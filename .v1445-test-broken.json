@@ -1,0 +1,381 @@
+{
+  "schema": "v1445.asi-v2-position-closure-audit/v1",
+  "version": "0.1.0",
+  "module": "apeireth.v1445_asi_v2_position_closure_audit",
+  "started_iso": "2026-08-10T00:08:16Z",
+  "ended_iso": "2026-08-10T00:08:16Z",
+  "n_probes": 25,
+  "n_positions": 5,
+  "n_cross_pairs": 20,
+  "probes": [
+    {
+      "position": "scheduler",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "position_declared:True (n_declared=5) | module_imports:2/2:all_ok | chain_delegate:True | modules_field:True (n=2)"
+    },
+    {
+      "position": "scheduler",
+      "kind": "backward",
+      "closed": 1,
+      "evidence": "v1442_history_exists:True | position_entry_in_v1442_history:True (n_candidates=1) | position_value_recoverable:1.0000 | v1443_history_exists:True"
+    },
+    {
+      "position": "scheduler",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "cross_position_links:1/4"
+    },
+    {
+      "position": "scheduler",
+      "kind": "history",
+      "closed": 1,
+      "evidence": "v1442_history:True | position_mentions_in_history:5 | v1443_history:True"
+    },
+    {
+      "position": "scheduler",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1442_guards:True (n=14, has_prefix=True) | v1443_guards:True (n=14, has_prefix=True)"
+    },
+    {
+      "position": "cogitator",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "position_declared:True (n_declared=5) | module_imports:3/3:all_ok | chain_delegate:True | modules_field:True (n=2)"
+    },
+    {
+      "position": "cogitator",
+      "kind": "backward",
+      "closed": 1,
+      "evidence": "v1442_history_exists:True | position_entry_in_v1442_history:True (n_candidates=1) | position_value_recoverable:1.0000 | v1443_history_exists:True"
+    },
+    {
+      "position": "cogitator",
+      "kind": "cross_link",
+      "closed": 0,
+      "evidence": "cross_position_links:0/4 (no other positions referenced in module source)"
+    },
+    {
+      "position": "cogitator",
+      "kind": "history",
+      "closed": 1,
+      "evidence": "v1442_history:True | position_mentions_in_history:5 | v1443_history:True"
+    },
+    {
+      "position": "cogitator",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1442_guards:True (n=14, has_prefix=True) | v1443_guards:True (n=14, has_prefix=True)"
+    },
+    {
+      "position": "aggregator",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "position_declared:True (n_declared=5) | module_imports:3/3:all_ok | chain_delegate:True | modules_field:True (n=3)"
+    },
+    {
+      "position": "aggregator",
+      "kind": "backward",
+      "closed": 1,
+      "evidence": "v1442_history_exists:True | position_entry_in_v1442_history:True (n_candidates=1) | position_value_recoverable:1.0000 | v1443_history_exists:True"
+    },
+    {
+      "position": "aggregator",
+      "kind": "cross_link",
+      "closed": 0,
+      "evidence": "cross_position_links:0/4 (no other positions referenced in module source)"
+    },
+    {
+      "position": "aggregator",
+      "kind": "history",
+      "closed": 1,
+      "evidence": "v1442_history:True | position_mentions_in_history:5 | v1443_history:True"
+    },
+    {
+      "position": "aggregator",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1442_guards:True (n=14, has_prefix=True) | v1443_guards:True (n=14, has_prefix=True)"
+    },
+    {
+      "position": "max_authority",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "position_declared:True (n_declared=5) | module_imports:2/2:all_ok | chain_delegate:True | modules_field:True (n=2)"
+    },
+    {
+      "position": "max_authority",
+      "kind": "backward",
+      "closed": 1,
+      "evidence": "v1442_history_exists:True | position_entry_in_v1442_history:True (n_candidates=1) | position_value_recoverable:1.0000 | v1443_history_exists:True"
+    },
+    {
+      "position": "max_authority",
+      "kind": "cross_link",
+      "closed": 0,
+      "evidence": "cross_position_links:0/4 (no other positions referenced in module source)"
+    },
+    {
+      "position": "max_authority",
+      "kind": "history",
+      "closed": 1,
+      "evidence": "v1442_history:True | position_mentions_in_history:5 | v1443_history:True"
+    },
+    {
+      "position": "max_authority",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1442_guards:True (n=14, has_prefix=True) | v1443_guards:True (n=14, has_prefix=True)"
+    },
+    {
+      "position": "asi_occupier",
+      "kind": "forward",
+      "closed": 1,
+      "evidence": "position_declared:True (n_declared=5) | module_imports:4/4:all_ok | chain_delegate:True | modules_field:True (n=2)"
+    },
+    {
+      "position": "asi_occupier",
+      "kind": "backward",
+      "closed": 1,
+      "evidence": "v1442_history_exists:True | position_entry_in_v1442_history:True (n_candidates=1) | position_value_recoverable:1.0000 | v1443_history_exists:True"
+    },
+    {
+      "position": "asi_occupier",
+      "kind": "cross_link",
+      "closed": 1,
+      "evidence": "cross_position_links:4/4"
+    },
+    {
+      "position": "asi_occupier",
+      "kind": "history",
+      "closed": 1,
+      "evidence": "v1442_history:True | position_mentions_in_history:5 | v1443_history:True"
+    },
+    {
+      "position": "asi_occupier",
+      "kind": "guard_compliance",
+      "closed": 1,
+      "evidence": "v1442_guards:True (n=14, has_prefix=True) | v1443_guards:True (n=14, has_prefix=True)"
+    }
+  ],
+  "position_stats": [
+    {
+      "position": "scheduler",
+      "n_probes": 5,
+      "n_closed": 5,
+      "closure_rate": 1.0,
+      "broken_kinds": []
+    },
+    {
+      "position": "cogitator",
+      "n_probes": 5,
+      "n_closed": 4,
+      "closure_rate": 0.8,
+      "broken_kinds": [
+        "cross_link"
+      ]
+    },
+    {
+      "position": "aggregator",
+      "n_probes": 5,
+      "n_closed": 4,
+      "closure_rate": 0.8,
+      "broken_kinds": [
+        "cross_link"
+      ]
+    },
+    {
+      "position": "max_authority",
+      "n_probes": 5,
+      "n_closed": 4,
+      "closure_rate": 0.8,
+      "broken_kinds": [
+        "cross_link"
+      ]
+    },
+    {
+      "position": "asi_occupier",
+      "n_probes": 5,
+      "n_closed": 5,
+      "closure_rate": 1.0,
+      "broken_kinds": []
+    }
+  ],
+  "cross_links": [
+    {
+      "source_position": "scheduler",
+      "target_position": "cogitator",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "aggregator",
+      "linked": 1,
+      "evidence": "ry is a **deterministic JSONL aggregator** for V1416 DGM closed-loop t"
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "max_authority",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "scheduler",
+      "target_position": "asi_occupier",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "scheduler",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "aggregator",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "max_authority",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "cogitator",
+      "target_position": "asi_occupier",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "scheduler",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "cogitator",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "max_authority",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "aggregator",
+      "target_position": "asi_occupier",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "scheduler",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "cogitator",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "aggregator",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "max_authority",
+      "target_position": "asi_occupier",
+      "linked": 0,
+      "evidence": "no_reference"
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "scheduler",
+      "linked": 1,
+      "evidence": "rarching 借用 V1410 5-position (scheduler + cogitator + \""
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "cogitator",
+      "linked": 1,
+      "evidence": "V1410 5-position (scheduler + cogitator + \"                \"aggregato"
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "aggregator",
+      "linked": 1,
+      "evidence": "cogitator + \"                \"aggregator + max_authority + asi_occupie"
+    },
+    {
+      "source_position": "asi_occupier",
+      "target_position": "max_authority",
+      "linked": 1,
+      "evidence": "\"aggregator + max_authority + asi_occupier)\",         \"ap"
+    }
+  ],
+  "overall_closure_rate": 0.88,
+  "per_kind_closure_rate": {
+    "forward": 1.0,
+    "backward": 1.0,
+    "cross_link": 0.4,
+    "history": 1.0,
+    "guard_compliance": 1.0
+  },
+  "honest_disclosure": "V1445 is a **5 ASI V2 positions cross-position closure audit**. It does NOT claim that 25 closure probes across 5 positions solves Phenomenal consciousness, ASI achievement, human-level judgment, or absolute closure. It claims only: **from this host, 5 bounded empirical closure probes per position (25 total) were executed on V1442 + V1443 module surfaces + real JSON history files, and the empirical closure rates + cross-position matrix are reported**. V1445 ≠ Phenomenal closure-solver, ≠ ASI closure-solver, ≠ human-level closure-solver, ≠ absolute closure-solver. 25 bounded closure probes ≠ solving V2 positions. Closure rate ≠ understanding. Cross-link ≠ causation. Forward closure ≠ real-world reproducibility. Backward closure ≠ causal direction.",
+  "guards": [
+    "GUARD_BOUNDED_CLOSURE",
+    "GUARD_NO_RAISE",
+    "GUARD_OFFLINE_SAFE",
+    "GUARD_READ_ONLY",
+    "GUARD_FORWARD_CHAIN",
+    "GUARD_BACKWARD_CHAIN",
+    "GUARD_CROSS_POSITION_BOUNDED",
+    "GUARD_HISTORY_LOADED",
+    "GUARD_GUARD_LISTED",
+    "GUARD_POPPER_RUNS",
+    "GUARD_CHAIN_OK",
+    "GUARD_HONEST_DISCLOSURE",
+    "GUARD_NO_V1442_REPLACE",
+    "GUARD_CLI_RUNNABLE"
+  ],
+  "v3_guards": [
+    "GUARD_NO_PHENOMENAL_CLOSURE",
+    "GUARD_NO_ASI_CLOSURE",
+    "GUARD_NO_HUMAN_LEVEL_CLOSURE",
+    "GUARD_NO_ABSOLUTE_CLOSURE",
+    "GUARD_NO_CLOSURE_OVERCLAIM"
+  ],
+  "borrowed": [
+    [
+      "V1444",
+      "round 3 closure audit pattern — closure kinds + cross-link matrix"
+    ],
+    [
+      "V1442",
+      "5-position real-occupier — POSITIONS dict + occupancy_rate + chain_delegate"
+    ],
+    [
+      "V1443",
+      "cross-position interaction — interaction_rate + V{N}_VERSION attribute"
+    ],
+    [
+      "V1411",
+      "overarching framework — honest disclosure pattern"
+    ],
+    [
+      "stdlib importlib + inspect + json + dataclasses + ast + re",
+      "core closure probe machinery"
+    ]
+  ]
+}

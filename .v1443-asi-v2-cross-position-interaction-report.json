@@ -4,8 +4,8 @@
   "schema": "v1443.asi-v2-cross-position-interaction/v1",
   "phase": 1443,
   "date": "2026-08-10",
-  "started_utc": "2026-08-09T22:30:47.170829+00:00",
-  "finished_utc": "2026-08-09T22:30:51.354527+00:00",
+  "started_utc": "2026-08-10T00:07:34.321174+00:00",
+  "finished_utc": "2026-08-10T00:07:38.532572+00:00",
   "aggregates": {
     "n_positions": 5,
     "n_directed_pairs": 20,

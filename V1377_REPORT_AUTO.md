@@ -1,64 +1,41 @@
 # V1377 — V1375 Multi-File Diff
 
 - **schema:** `v1377.multidiff/v1`
-- **generated:** 2026-08-08T20:22:09Z
-- **reports compared:** 3
-- **first:** `2026-08-08T12:00:00Z`
+- **generated:** 2026-08-08T21:24:53Z
+- **reports compared:** 2
+- **first:** `2026-08-09T03:00:00Z`
 - **last:** `2026-08-09T04:00:00Z`
-- **pairs:** 2
+- **pairs:** 1
 
 ## Summary
 
 | metric | value |
 |--------|------:|
-| window seconds | 57600 |
-| triggers seen | 8 |
-| triggers net-zero | 8 |
-| triggers non-zero | 0 |
-| triggers monotonic | 0 |
-| max abs movement | 0 |
-| max movement trigger | `—` |
+| window seconds | 3600 |
+| triggers seen | 3 |
+| triggers net-zero | 0 |
+| triggers non-zero | 2 |
+| triggers monotonic | 2 |
+| max abs movement | 1 |
+| max movement trigger | `T1` |
 
 ## Per-trigger aggregate
 
 | trigger | kind | first | last | net | min step | max step | Σ\|Δ\| | n steps | mono |
 |---------|------|------:|-----:|----:|---------:|---------:|-------:|--------:|:----:|
-| `CAP_BECOMES_DISHONEST` | v03_evolution | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `DELTA_ANY_COMPONENT` | remeasure | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `LEDGER_CAP_SATURATION_3` | v03_evolution | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `LEDGER_PLATEAU_SIGNAL` | remeasure | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `NEW_MEASUREMENT_COMPONENT` | v03_evolution | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `NEW_SURFACE_SHIPPED` | remeasure | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `TIME_TICK_INTERVAL` | remeasure | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
-| `V1318_CELL_NEWLY_FILLED` | v03_evolution | 0 | 0 | 0 | 0 | 0 | 0 | 2 | · |
+| `T1` | remeasure | 0 | 1 | +1 | +1 | +1 | 1 | 1 | ✓ |
+| `T2` | remeasure | 1 | 2 | +1 | +1 | +1 | 1 | 1 | ✓ |
+| `T3` | v03_evolution | — | 0 | — | — | — | 0 | 0 | · |
 
 ## Pairwise drift
 
-### Pair 1: `2026-08-08T12-00-00Z__v1374.md` → `2026-08-08T18-00-00Z__v1374.md` (Δt = 21600s)
+### Pair 1: `a.md` → `b.md` (Δt = 3600s)
 
 | status | trigger | kind | from raw | to raw | Δraw | Δcal | Δsup |
 |:------:|---------|------|---------:|-------:|-----:|-----:|-----:|
-| = | `TIME_TICK_INTERVAL` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `DELTA_ANY_COMPONENT` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `NEW_SURFACE_SHIPPED` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `CAP_BECOMES_DISHONEST` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `LEDGER_PLATEAU_SIGNAL` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `LEDGER_CAP_SATURATION_3` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `V1318_CELL_NEWLY_FILLED` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `NEW_MEASUREMENT_COMPONENT` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-
-### Pair 2: `2026-08-08T18-00-00Z__v1374.md` → `2026-08-09T04-00-00Z__v1374.md` (Δt = 36000s)
-
-| status | trigger | kind | from raw | to raw | Δraw | Δcal | Δsup |
-|:------:|---------|------|---------:|-------:|-----:|-----:|-----:|
-| = | `TIME_TICK_INTERVAL` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `DELTA_ANY_COMPONENT` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `NEW_SURFACE_SHIPPED` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `CAP_BECOMES_DISHONEST` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `LEDGER_PLATEAU_SIGNAL` | remeasure | 0 | 0 | 0 | 0 | 0 |
-| = | `LEDGER_CAP_SATURATION_3` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `V1318_CELL_NEWLY_FILLED` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
-| = | `NEW_MEASUREMENT_COMPONENT` | v03_evolution | 0 | 0 | 0 | 0 | 0 |
+| ~ | `T1` | remeasure | 0 | 1 | +1 | 0 | 0 |
+| ~ | `T2` | remeasure | 1 | 2 | +1 | +1 | 0 |
+| + | `T3` | v03_evolution | — | 0 | — | — | — |
 
 ## Legend
 
@@ -73,16 +50,16 @@
 
 ## Honesty disclosure
 
-This drift report is a pure reader of 3 V1374-family .md file(s). It does not write back, does not touch the sidecar, does not touch the ledger, does not raise the cap, does not pretend anything.
+This drift report is a pure reader of 2 V1374-family .md file(s). It does not write back, does not touch the sidecar, does not touch the ledger, does not raise the cap, does not pretend anything.
 
-- **reports read:** 3
-- **pairs computed:** 2
-- **triggers seen:** 8
-- **triggers with net-zero drift:** 8
-- **triggers with non-zero drift:** 0
-- **max absolute movement:** 0 (—)
+- **reports read:** 2
+- **pairs computed:** 1
+- **triggers seen:** 3
+- **triggers with net-zero drift:** 0
+- **triggers with non-zero drift:** 2
+- **max absolute movement:** 1 (T1)
 
-**Honest baseline:** no trigger has any drift across the window. This is **plateau, not failure** — the system is in steady state. See V1370_REPORT.md for trigger calibration details.
+**Honest baseline:** at least one trigger has drift across the window. The aggregate table shows net delta, step range, and monotonicity per trigger. V1377 does not interpret the cause — that is left to the human auditor.
 
 ---
 
