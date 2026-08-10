@@ -1,7 +1,7 @@
 {
   "workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean",
   "rust_workspace_root": "C:\\Users\\REDACTED\\.openclaw\\workspace\\promethean\\Apeireth-rust",
-  "workspace_members_total": 92,
+  "workspace_members_total": 89,
   "workspace_members_with_build_rs": [
     "Apeireth-rust\\crates\\apeireth-bus\\build.rs",
     "Apeireth-rust\\crates\\apeireth-tauri-stub\\build.rs"
