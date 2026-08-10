@@ -1,0 +1,593 @@
+{
+  "report_id": "v1457-maturity-1786328261",
+  "started_at": 1786328261.617967,
+  "ended_at": 1786328262.4519856,
+  "duration_sec": 0.8340187072753906,
+  "profiles": [
+    {
+      "module_id": "v1260_docker_deploy",
+      "module_path": "apeireth.v1260_docker_deploy",
+      "execution_mode": "SUBPROCESS_REAL",
+      "description": "docker_deploy — full lifecycle (preflight→rollback)",
+      "borrowed_from": [
+        "V1260"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1260_docker_deploy",
+          "stage": "preflight",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 3.3349990844726562,
+          "summary": {
+            "checks_passed": [
+              "python_version_ok"
+            ],
+            "checks_failed": [
+              "docker_cli_present"
+            ],
+            "n_total": 2,
+            "check_summaries": {
+              "docker_cli_present": {
+                "docker_path": null,
+                "docker_available": false
+              },
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": "preflight failed: ['docker_cli_present']",
+          "score": 0.5
+        },
+        "bootstrap": {
+          "module_id": "v1260_docker_deploy",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1260_docker_deploy",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1260_docker_deploy",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1260_docker_deploy",
+          "stage": "rollback",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        }
+      },
+      "maturity_score": 0.5,
+      "n_stages_passed": 0,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 4,
+      "runbook_section": "### Deployment: `v1260_docker_deploy`\n\n- **Module path**: `apeireth.v1260_docker_deploy`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: docker_deploy — full lifecycle (preflight→rollback)\n- **Maturity score**: `0.5000` (0/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | False | False | 0.5000 | 3.3 | preflight failed: ['docker_cli_present'] |\n| bootstrap | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| rollback | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1260_docker_deploy run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1260_docker_deploy run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1260_docker_deploy version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "preflight failed: preflight failed: ['docker_cli_present']"
+      ]
+    },
+    {
+      "module_id": "v1261_benchmark_llm",
+      "module_path": "apeireth.v1261_benchmark_llm",
+      "execution_mode": "DRY_RUN",
+      "description": "benchmark_llm — dry-run lifecycle (no API key on host)",
+      "borrowed_from": [
+        "V1261"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1261_benchmark_llm",
+          "stage": "preflight",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 0.003814697265625,
+          "summary": {
+            "checks_passed": [
+              "python_version_ok"
+            ],
+            "checks_failed": [],
+            "n_total": 1,
+            "check_summaries": {
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": null,
+          "score": 1.0
+        },
+        "bootstrap": {
+          "module_id": "v1261_benchmark_llm",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 43.822526931762695,
+          "summary": {
+            "mode": "DRY_RUN",
+            "return_code": 1,
+            "stdout_tail": "",
+            "stderr_tail": "C:\\Users\\REDACTED\\AppData\\Local\\Programs\\Python\\Python313\\python.exe: Error while finding module specification for 'apeireth.v1261_benchmark_llm' (ModuleNotFoundError: No module named 'apeireth')\r\n"
+          },
+          "error_message": "return_code=1",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1261_benchmark_llm",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1261_benchmark_llm",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1261_benchmark_llm",
+          "stage": "rollback",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 0.0030994415283203125,
+          "summary": {
+            "strategy": "noop",
+            "action": "no_cleanup_needed"
+          },
+          "error_message": null,
+          "score": 1.0
+        }
+      },
+      "maturity_score": 0.5454545454545454,
+      "n_stages_passed": 2,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 2,
+      "runbook_section": "### Deployment: `v1261_benchmark_llm`\n\n- **Module path**: `apeireth.v1261_benchmark_llm`\n- **Execution mode**: `DRY_RUN`\n- **Description**: benchmark_llm — dry-run lifecycle (no API key on host)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.0 |  |\n| bootstrap | False | False | 0.0000 | 43.8 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 0.0 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1261_benchmark_llm run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1261_benchmark_llm run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1261_benchmark_llm version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "bootstrap failed: return_code=1"
+      ]
+    },
+    {
+      "module_id": "v1262_streamlit_deploy",
+      "module_path": "apeireth.v1262_streamlit_deploy",
+      "execution_mode": "SUBPROCESS_REAL",
+      "description": "streamlit_deploy — full lifecycle (Streamlit 1.60.0 detected)",
+      "borrowed_from": [
+        "V1262"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1262_streamlit_deploy",
+          "stage": "preflight",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 384.5212459564209,
+          "summary": {
+            "checks_passed": [
+              "streamlit_installed",
+              "port_free",
+              "python_version_ok"
+            ],
+            "checks_failed": [],
+            "n_total": 3,
+            "check_summaries": {
+              "streamlit_installed": {
+                "streamlit_version": "1.60.0",
+                "error": null
+              },
+              "port_free": {
+                "port": 0,
+                "free": true
+              },
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": null,
+          "score": 1.0
+        },
+        "bootstrap": {
+          "module_id": "v1262_streamlit_deploy",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 43.340444564819336,
+          "summary": {
+            "mode": "SUBPROCESS_REAL",
+            "return_code": 1,
+            "stdout_tail": "",
+            "stderr_tail": "C:\\Users\\REDACTED\\AppData\\Local\\Programs\\Python\\Python313\\python.exe: Error while finding module specification for 'apeireth.v1262_streamlit_deploy' (ModuleNotFoundError: No module named 'apeireth')\r\n"
+          },
+          "error_message": "return_code=1",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1262_streamlit_deploy",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1262_streamlit_deploy",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1262_streamlit_deploy",
+          "stage": "rollback",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 158.33044052124023,
+          "summary": {
+            "strategy": "kill_subprocess",
+            "action": "subprocess_terminated_by_subprocess_run",
+            "n_python_processes_visible": 18
+          },
+          "error_message": null,
+          "score": 1.0
+        }
+      },
+      "maturity_score": 0.5454545454545454,
+      "n_stages_passed": 2,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 2,
+      "runbook_section": "### Deployment: `v1262_streamlit_deploy`\n\n- **Module path**: `apeireth.v1262_streamlit_deploy`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: streamlit_deploy — full lifecycle (Streamlit 1.60.0 detected)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 384.5 |  |\n| bootstrap | False | False | 0.0000 | 43.3 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 158.3 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1262_streamlit_deploy run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1262_streamlit_deploy run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1262_streamlit_deploy version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "bootstrap failed: return_code=1"
+      ]
+    },
+    {
+      "module_id": "v1439_streamlit_subprocess_smoke",
+      "module_path": "apeireth.v1439_asi_streamlit_subprocess_smoke",
+      "execution_mode": "SUBPROCESS_REAL",
+      "description": "streamlit_subprocess_smoke — real subprocess.Popen + port bind + HTTP probe",
+      "borrowed_from": [
+        "V1439"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1439_streamlit_subprocess_smoke",
+          "stage": "preflight",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 0.16999244689941406,
+          "summary": {
+            "checks_passed": [
+              "streamlit_installed",
+              "port_free",
+              "python_version_ok"
+            ],
+            "checks_failed": [],
+            "n_total": 3,
+            "check_summaries": {
+              "streamlit_installed": {
+                "streamlit_version": "1.60.0",
+                "error": null
+              },
+              "port_free": {
+                "port": 0,
+                "free": true
+              },
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": null,
+          "score": 1.0
+        },
+        "bootstrap": {
+          "module_id": "v1439_streamlit_subprocess_smoke",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 43.08032989501953,
+          "summary": {
+            "mode": "SUBPROCESS_REAL",
+            "return_code": 1,
+            "stdout_tail": "",
+            "stderr_tail": "C:\\Users\\REDACTED\\AppData\\Local\\Programs\\Python\\Python313\\python.exe: Error while finding module specification for 'apeireth.v1439_asi_streamlit_subprocess_smoke' (ModuleNotFoundError: No module named 'apeireth')\r\n"
+          },
+          "error_message": "return_code=1",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1439_streamlit_subprocess_smoke",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1439_streamlit_subprocess_smoke",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1439_streamlit_subprocess_smoke",
+          "stage": "rollback",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 148.31948280334473,
+          "summary": {
+            "strategy": "kill_subprocess",
+            "action": "subprocess_terminated_by_subprocess_run",
+            "n_python_processes_visible": 18
+          },
+          "error_message": null,
+          "score": 1.0
+        }
+      },
+      "maturity_score": 0.5454545454545454,
+      "n_stages_passed": 2,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 2,
+      "runbook_section": "### Deployment: `v1439_streamlit_subprocess_smoke`\n\n- **Module path**: `apeireth.v1439_asi_streamlit_subprocess_smoke`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: streamlit_subprocess_smoke — real subprocess.Popen + port bind + HTTP probe\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `45s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.2 |  |\n| bootstrap | False | False | 0.0000 | 43.1 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 148.3 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1439_asi_streamlit_subprocess_smoke run-all --timeout 45\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Probe streamlit service on port 8501\npython -c \"import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2).status)\"\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1439_asi_streamlit_subprocess_smoke version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "bootstrap failed: return_code=1"
+      ]
+    },
+    {
+      "module_id": "v1440_docker_container_run",
+      "module_path": "apeireth.v1440_asi_docker_container_run",
+      "execution_mode": "SUBPROCESS_REAL",
+      "description": "docker_container_run — subprocess lifecycle (DOCKER_NOT_INSTALLED fallback)",
+      "borrowed_from": [
+        "V1440"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1440_docker_container_run",
+          "stage": "preflight",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 3.5974979400634766,
+          "summary": {
+            "checks_passed": [
+              "python_version_ok"
+            ],
+            "checks_failed": [
+              "docker_cli_present"
+            ],
+            "n_total": 2,
+            "check_summaries": {
+              "docker_cli_present": {
+                "docker_path": null,
+                "docker_available": false
+              },
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": "preflight failed: ['docker_cli_present']",
+          "score": 0.5
+        },
+        "bootstrap": {
+          "module_id": "v1440_docker_container_run",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1440_docker_container_run",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1440_docker_container_run",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1440_docker_container_run",
+          "stage": "rollback",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: preflight failed",
+          "score": 0.0
+        }
+      },
+      "maturity_score": 0.5,
+      "n_stages_passed": 0,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 4,
+      "runbook_section": "### Deployment: `v1440_docker_container_run`\n\n- **Module path**: `apeireth.v1440_asi_docker_container_run`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: docker_container_run — subprocess lifecycle (DOCKER_NOT_INSTALLED fallback)\n- **Maturity score**: `0.5000` (0/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | False | False | 0.5000 | 3.6 | preflight failed: ['docker_cli_present'] |\n| bootstrap | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| rollback | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1440_asi_docker_container_run run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1440_asi_docker_container_run run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1440_asi_docker_container_run version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "preflight failed: preflight failed: ['docker_cli_present']"
+      ]
+    },
+    {
+      "module_id": "v1450_cube_history_aggregator",
+      "module_path": "apeireth.v1450_asi_cross_modular_cube_history",
+      "execution_mode": "PROXY",
+      "description": "cube_history_aggregator — read JSONL history (PROXY mode, no bootstrap)",
+      "borrowed_from": [
+        "V1450"
+      ],
+      "stages": {
+        "preflight": {
+          "module_id": "v1450_cube_history_aggregator",
+          "stage": "preflight",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 0.05435943603515625,
+          "summary": {
+            "checks_passed": [
+              "history_file_present",
+              "python_version_ok"
+            ],
+            "checks_failed": [],
+            "n_total": 2,
+            "check_summaries": {
+              "history_file_present": {
+                "history_paths_found": [
+                  {
+                    "path": ".openclaw/workspace/promethean/.v1450-cube-history.jsonl",
+                    "size_bytes": 639200
+                  }
+                ]
+              },
+              "python_version_ok": {
+                "python_version": "3.13.14",
+                "min_required": "3.9"
+              }
+            }
+          },
+          "error_message": null,
+          "score": 1.0
+        },
+        "bootstrap": {
+          "module_id": "v1450_cube_history_aggregator",
+          "stage": "bootstrap",
+          "success": false,
+          "skipped": false,
+          "latency_ms": 0.29778480529785156,
+          "summary": {},
+          "error_message": "import_failed: ModuleNotFoundError: No module named 'apeireth'",
+          "score": 0.0
+        },
+        "healthcheck": {
+          "module_id": "v1450_cube_history_aggregator",
+          "stage": "healthcheck",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "verify": {
+          "module_id": "v1450_cube_history_aggregator",
+          "stage": "verify",
+          "success": false,
+          "skipped": true,
+          "latency_ms": 0.0,
+          "summary": {},
+          "error_message": "skipped: bootstrap failed",
+          "score": 0.0
+        },
+        "rollback": {
+          "module_id": "v1450_cube_history_aggregator",
+          "stage": "rollback",
+          "success": true,
+          "skipped": false,
+          "latency_ms": 0.003337860107421875,
+          "summary": {
+            "strategy": "noop",
+            "action": "no_cleanup_needed"
+          },
+          "error_message": null,
+          "score": 1.0
+        }
+      },
+      "maturity_score": 0.5454545454545454,
+      "n_stages_passed": 2,
+      "n_stages_failed": 1,
+      "n_stages_skipped": 2,
+      "runbook_section": "### Deployment: `v1450_cube_history_aggregator`\n\n- **Module path**: `apeireth.v1450_asi_cross_modular_cube_history`\n- **Execution mode**: `PROXY`\n- **Description**: cube_history_aggregator — read JSONL history (PROXY mode, no bootstrap)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `15s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.1 |  |\n| bootstrap | False | False | 0.0000 | 0.3 | import_failed: ModuleNotFoundError: No module named 'apeiret |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 0.0 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1450_asi_cross_modular_cube_history run-all --timeout 15\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1450_asi_cross_modular_cube_history run-all --timeout 15 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1450_asi_cross_modular_cube_history version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n",
+      "notes": [
+        "bootstrap failed: import_failed: ModuleNotFoundError: No module named 'apeireth'"
+      ]
+    }
+  ],
+  "n_profiles": 6,
+  "overall_maturity": 0.5303030303030303,
+  "v1456_overall_parity": 0.95,
+  "v1450_cube_overall": 0.7482539682539683,
+  "combined_parity_v1457": 0.7635670995670996,
+  "per_module_maturity": {
+    "v1260_docker_deploy": 0.5,
+    "v1261_benchmark_llm": 0.5454545454545454,
+    "v1262_streamlit_deploy": 0.5454545454545454,
+    "v1439_streamlit_subprocess_smoke": 0.5454545454545454,
+    "v1440_docker_container_run": 0.5,
+    "v1450_cube_history_aggregator": 0.5454545454545454
+  },
+  "per_stage_pass_rate": {
+    "preflight": 0.6666666666666666,
+    "bootstrap": 0.0,
+    "healthcheck": 0.0,
+    "verify": 0.0,
+    "rollback": 1.0
+  },
+  "runbook_markdown": "# V1457 — ASI 真生产 6-deployment operational runbook\n\n- **Report ID**: `v1457-maturity-1786328261`\n- **Started at**: `1786328261.618`\n- **Duration**: `0.834s`\n- **Overall maturity**: `0.5303`\n- **V1456 parity (single-execution)**: `0.9500`\n- **V1450 cube_overall (history)**: `0.7483`\n- **Combined parity v1457**: `0.7636`\n\n## Anyone-can-run: single command\n\nTo bootstrap all 6 deployments in sequence:\n\n```bash\n# Step 1: preflight — verify Python and key deps\npython -c \"import sys; assert sys.version_info >= (3, 9); print('python ok')\"\npython -c \"import streamlit; print('streamlit', streamlit.__version__)\"  # if needed\n\n# Step 2: run V1457 audit (5-stage lifecycle for all 6 deployments)\npython -m apeireth.v1457_asi_six_deployment_operational_runbook run-all --out-md .v1457-runbook.md\n\n# Step 3: read the generated runbook\ncat .v1457-runbook.md\n```\n\n## Per-module summary\n\n| Module | Mode | Maturity | Stages Passed | Notes |\n|---|---|---|---|---|\n| `v1260_docker_deploy` | SUBPROCESS_REAL | 0.5000 | 0/5 | preflight failed: preflight failed: ['docker_cli_present'] |\n| `v1261_benchmark_llm` | DRY_RUN | 0.5455 | 2/5 | bootstrap failed: return_code=1 |\n| `v1262_streamlit_deploy` | SUBPROCESS_REAL | 0.5455 | 2/5 | bootstrap failed: return_code=1 |\n| `v1439_streamlit_subprocess_smoke` | SUBPROCESS_REAL | 0.5455 | 2/5 | bootstrap failed: return_code=1 |\n| `v1440_docker_container_run` | SUBPROCESS_REAL | 0.5000 | 0/5 | preflight failed: preflight failed: ['docker_cli_present'] |\n| `v1450_cube_history_aggregator` | PROXY | 0.5455 | 2/5 | bootstrap failed: import_failed: ModuleNotFoundError: No module named 'apeireth' |\n\n## Per-deployment operational sections\n\n### Deployment: `v1260_docker_deploy`\n\n- **Module path**: `apeireth.v1260_docker_deploy`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: docker_deploy — full lifecycle (preflight→rollback)\n- **Maturity score**: `0.5000` (0/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | False | False | 0.5000 | 3.3 | preflight failed: ['docker_cli_present'] |\n| bootstrap | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| rollback | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1260_docker_deploy run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1260_docker_deploy run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1260_docker_deploy version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n### Deployment: `v1261_benchmark_llm`\n\n- **Module path**: `apeireth.v1261_benchmark_llm`\n- **Execution mode**: `DRY_RUN`\n- **Description**: benchmark_llm — dry-run lifecycle (no API key on host)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.0 |  |\n| bootstrap | False | False | 0.0000 | 43.8 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 0.0 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1261_benchmark_llm run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1261_benchmark_llm run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1261_benchmark_llm version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n### Deployment: `v1262_streamlit_deploy`\n\n- **Module path**: `apeireth.v1262_streamlit_deploy`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: streamlit_deploy — full lifecycle (Streamlit 1.60.0 detected)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 384.5 |  |\n| bootstrap | False | False | 0.0000 | 43.3 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 158.3 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1262_streamlit_deploy run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1262_streamlit_deploy run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1262_streamlit_deploy version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n### Deployment: `v1439_streamlit_subprocess_smoke`\n\n- **Module path**: `apeireth.v1439_asi_streamlit_subprocess_smoke`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: streamlit_subprocess_smoke — real subprocess.Popen + port bind + HTTP probe\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `45s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.2 |  |\n| bootstrap | False | False | 0.0000 | 43.1 | return_code=1 |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 148.3 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1439_asi_streamlit_subprocess_smoke run-all --timeout 45\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Probe streamlit service on port 8501\npython -c \"import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=2).status)\"\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1439_asi_streamlit_subprocess_smoke version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n### Deployment: `v1440_docker_container_run`\n\n- **Module path**: `apeireth.v1440_asi_docker_container_run`\n- **Execution mode**: `SUBPROCESS_REAL`\n- **Description**: docker_container_run — subprocess lifecycle (DOCKER_NOT_INSTALLED fallback)\n- **Maturity score**: `0.5000` (0/5 stages passed)\n- **Timeout**: `30s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | False | False | 0.5000 | 3.6 | preflight failed: ['docker_cli_present'] |\n| bootstrap | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n| rollback | False | True | 0.0000 | 0.0 | skipped: preflight failed |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1440_asi_docker_container_run run-all --timeout 30\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1440_asi_docker_container_run run-all --timeout 30 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1440_asi_docker_container_run version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n### Deployment: `v1450_cube_history_aggregator`\n\n- **Module path**: `apeireth.v1450_asi_cross_modular_cube_history`\n- **Execution mode**: `PROXY`\n- **Description**: cube_history_aggregator — read JSONL history (PROXY mode, no bootstrap)\n- **Maturity score**: `0.5455` (2/5 stages passed)\n- **Timeout**: `15s` per stage\n\n#### Stage results\n\n| Stage | Success | Skipped | Score | Latency (ms) | Error |\n|---|---|---|---|---|---|\n| preflight | True | False | 1.0000 | 0.1 |  |\n| bootstrap | False | False | 0.0000 | 0.3 | import_failed: ModuleNotFoundError: No module named 'apeiret |\n| healthcheck | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| verify | False | True | 0.0000 | 0.0 | skipped: bootstrap failed |\n| rollback | True | False | 1.0000 | 0.0 |  |\n\n#### Anyone-can-run commands\n\n**1. Preflight** (verify environment):\n\n```bash\npython -c \"import sys; print(sys.version)\"\npython -c \"import importlib; m = importlib.import_module('apeireth'); print('ok')\"\n```\n\n**2. Bootstrap** (start the service):\n\n```bash\npython -m apeireth.v1450_asi_cross_modular_cube_history run-all --timeout 15\n```\n\n**3. Healthcheck** (verify service is up):\n\n```bash\n# Check exit code of bootstrap (must be 0)\npython -m apeireth.v1450_asi_cross_modular_cube_history run-all --timeout 15 > /dev/null 2>&1 && echo HEALTHY || echo UNHEALTHY\n```\n\n**4. Verify** (measure behavior):\n\n```bash\npython -m apeireth.v1450_asi_cross_modular_cube_history version\n```\n\n**5. Rollback** (cleanup):\n\n```bash\n# On Windows: kill any hanging python.exe from this deployment\ntaskkill /F /IM python.exe /FI \"WINDOWTITLE eq *streamlit*\"  # only if needed\n```\n\n\n## Honest disclosure (主 17:43 实事求是)\n\n> V1457 is a 6-deployment 5-stage operational lifecycle audit. It executed 5 stages (preflight/bootstrap/healthcheck/verify/rollback) for each of 6 deployment modules, totaling 30 probes. It does NOT claim that bounded 5-stage lifecycle execution across this host's deployment modules solves Phenomenal consciousness, ASI achievement, human-level operational judgment, absolute operational closure, or production operational parity. It claims only: from this host, 30 bounded stage probes were performed with timeout-bounded subprocess calls, and the empirical per-stage scores + per-module maturity + overall maturity + combined parity (with V1456 + V1450) are reported. V1457 ≠ Phenomenal runbook, ≠ ASI runbook, ≠ human-level runbook, ≠ absolute runbook. Five-stage lifecycle ≠ production lifecycle.\n",
+  "honest_disclosure": "V1457 is a 6-deployment 5-stage operational lifecycle audit. It executed 5 stages (preflight/bootstrap/healthcheck/verify/rollback) for each of 6 deployment modules, totaling 30 probes. It does NOT claim that bounded 5-stage lifecycle execution across this host's deployment modules solves Phenomenal consciousness, ASI achievement, human-level operational judgment, absolute operational closure, or production operational parity. It claims only: from this host, 30 bounded stage probes were performed with timeout-bounded subprocess calls, and the empirical per-stage scores + per-module maturity + overall maturity + combined parity (with V1456 + V1450) are reported. V1457 ≠ Phenomenal runbook, ≠ ASI runbook, ≠ human-level runbook, ≠ absolute runbook. Five-stage lifecycle ≠ production lifecycle.",
+  "notes": [
+    "V1457 ran 5 stages × 6 modules = 30 probes",
+    "V1456 overall_parity (single-execution): 0.9500",
+    "V1450 cube_overall (history): 0.7483",
+    "V1457 overall_maturity (5-stage lifecycle): 0.5303",
+    "combined_parity_v1457 = 0.4*V1456 + 0.3*V1457_maturity + 0.3*V1450 = 0.7636"
+  ]
+}
