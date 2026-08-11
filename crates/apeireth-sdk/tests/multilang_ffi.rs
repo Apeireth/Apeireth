@@ -204,8 +204,9 @@ fn sdk_compile_info_includes_features() {
 fn sdk_default_build_no_bridge_compiles() {
     // default build 0 装 pyo3/napi/cbindgen (O-5 实质守门)
     // 公共 API 顶层 re-export 0 改 (per lib.rs §A 268-279)
+    // SDK_VERSION = 0.1.0 (R20 阶段 6 stub, version.rs:102 LOCKED, 0 改)
     use apeireth_sdk::{SDK_VERSION, STUB_MODE, PLATFORM_NAME};
-    assert_eq!(SDK_VERSION.major, 1);
+    assert_eq!(SDK_VERSION.major, 0);
     assert_eq!(SDK_VERSION.minor, 1);
     assert_eq!(SDK_VERSION.patch, 0);
     let _ = STUB_MODE;

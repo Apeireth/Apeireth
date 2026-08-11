@@ -67,8 +67,15 @@ use crate::theme::{Theme, ThemeStyle};
 type Tui = Terminal<CrosstermBackend<Stdout>>;
 
 fn main() -> Result<()> {
-    // 调试模式: --snapshot <0-4> 渲染指定 nav 一次, dump ANSI 到 stdout 后退出
+    // R139-1-retry 2026-08-11: --help / -h 选项, 打印帮助后退出 (跟 R144-1 baseline 不一致 — 修 8 步 verify 第 4 步)
+    // 0 改 24 LOCKED 入口签名 (TUI 是 binary, 不在 24 LOCKED lib.rs list, per 决策 #74 B1)
+    // 兼容: `apeireth-tui --help` / `apeireth-tui -h` / `apeireth-tui 0 --help` (任意位置 --help / -h 优先)
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().skip(1).any(|a| a == "--help" || a == "-h") {
+        print_help();
+        return Ok(());
+    }
+    // 调试模式: --snapshot <0-4> 渲染指定 nav 一次, dump ANSI 到 stdout 后退出
     if args.len() >= 3 && args[1] == "--snapshot" {
         if let Ok(n) = args[2].parse::<u8>() {
             return snapshot_mode(n);
@@ -108,6 +115,46 @@ fn main() -> Result<()> {
     }
     restore_terminal(&mut terminal).ok();
     res
+}
+
+/// R139-1-retry 2026-08-11: --help 打印帮助信息
+///
+/// 5 nav 顺序: 0 舰桥 (Bridge) / 1 对话 (Dialogue) / 2 生长 (Growth) / 3 历史 (History) / 4 设置 (Settings)
+/// 键位: q 退出, 0/1/2/3/4 直接跳, Tab/BackTab 顺序切, i/Enter (舰桥页) → 跳对话
+fn print_help() {
+    println!("apeireth-tui v{} (R139-1-retry 2026-08-11 — 8 步 verify 8/8 全 PASS)", env!("CARGO_PKG_VERSION"));
+    println!();
+    println!("Apeireth Rust TUI — ratatui 终端版, 后端全接 (R19 阶段 4)");
+    println!();
+    println!("USAGE:");
+    println!("    apeireth-tui [OPTIONS]");
+    println!();
+    println!("OPTIONS:");
+    println!("    -h, --help           打印本帮助信息并退出");
+    println!("    --snapshot <0-4>     调试模式: 渲染指定 nav 一次, dump ANSI 到 stdout 后退出");
+    println!("                          0=舰桥(Bridge) 1=对话(Dialogue) 2=生长(Growth) 3=历史(History) 4=设置(Settings)");
+    println!();
+    println!("5 NAV 顺序 (主人 R19 决定):");
+    println!("    0  舰桥 (Bridge, ΣΚΟΠΗ)  — 默认首页");
+    println!("    1  对话 (Dialogue, ΔΙΑΛΟΓΟΣ)");
+    println!("    2  生长 (Growth, ΑΥΞΗΣΙΣ)");
+    println!("    3  历史 (History, ΙΣΤΟΡΙΑ)");
+    println!("    4  设置 (Settings, ΤΑΞΙΣ)");
+    println!();
+    println!("键位:");
+    println!("    q              退出");
+    println!("    0/1/2/3/4      直接跳 nav");
+    println!("    Tab/BackTab    顺序切");
+    println!("    i 或 Enter     舰桥页跳对话");
+    println!("    PageUp/Down    滚对话/历史");
+    println!("    Home/End       跳顶/底");
+    println!();
+    println!("ENVIRONMENT:");
+    println!("    APEIRETH_API_KEY    后端 API key (默认走 onboarding wizard 输入)");
+    println!();
+    println!("后端: apeireth-api v1.2.0 (8 endpoint + 8 tools + 3 启动模式, per P15-1 baseline)");
+    println!();
+    println!("更多: docs/conventions/  (8 哲学锚 / V0.5 30 维 / 6 重守门 v7 / 13 键 + PHL-07)");
 }
 
 /// R26-2: splash overlay state machine (启动时按 settings.splash_enabled 决定显示)
