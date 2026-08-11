@@ -53,6 +53,10 @@ apeireth-core = { path = "../apeireth-core" }
 apeireth-constraint = { path = "../apeireth-constraint" }
 apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
 apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-tools = { path = "../apeireth-tools" }
 
 # 8 项不修改承诺 #4 — 本 crate 不进 parent workspace members
 # 验证: `cd crates/apeireth-integration-e2e && cargo test`
@@ -88,3 +92,7 @@ path = "examples/integration_e2e_demo.rs"
 [[example]]
 name = "minimax_memory_roundtrip"
 path = "examples/minimax_memory_roundtrip.rs"
+
+[[example]]
+name = "tool_orchestrator_e2e"
+path = "examples/tool_orchestrator_e2e.rs"
