@@ -21,6 +21,11 @@ tracing = "0.1"
 async-trait = { workspace = true }
 parking_lot = "0.12"
 chrono = { workspace = true }
+# R127-2 P9-1 Stage 2 借脑 1.0 — hyper-util 真 use (per decision-56 §2.4)
+# 补 P2-1 follow-up 8/12 (R125-3 era): 整合 #4 commit done 时仅 借鉴 ID 索引 +
+# Cargo.toml dep, 0 装 src 实施. P9-1 借脑 1.0 = 实际 use hyper-util in src
+# (deepen 借脑 0.5 → 1.0).
+hyper-util = { workspace = true }
 
 [dev-dependencies]
 tracing-subscriber = "0.3"

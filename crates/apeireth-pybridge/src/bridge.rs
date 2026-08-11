@@ -225,6 +225,172 @@ fn map_call_result(
     })
 }
 
+// =============================================================================
+// R127-2 Stage 6.1: 跨语言桥深化 — kwargs 透传 + eval 表达式 + 池复用
+// 借鉴 PyO3 0.22+ function-calls.md (args + kwargs IntoPyDict) +
+// calling-existing-code.md (Python::eval) + hyper 80 池复用 LIFO 策略
+// =============================================================================
+
+/// 带 kwargs 的 Python 函数调用 (借鉴 PyO3 0.22+ `func.call(args, kwargs)` 模式)
+#[cfg(feature = "python-ext")]
+pub fn call_python_function_kw(
+    module_name: &str,
+    func_name: &str,
+    args: &[&str],
+    kwargs: &[(&str, &str)],
+) -> Result<String, BridgeError> {
+    validate_args(module_name, func_name)?;
+    let raw = with_python(|py| call_py_func_kw(py, module_name, func_name, args, kwargs));
+    map_call_result(raw, module_name, func_name)
+}
+
+/// 默认 build (无 `python-ext`): 立即返回 `ModuleNotFound` 降级.
+#[cfg(not(feature = "python-ext"))]
+pub fn call_python_function_kw(
+    module_name: &str,
+    func_name: &str,
+    args: &[&str],
+    kwargs: &[(&str, &str)],
+) -> Result<String, BridgeError> {
+    validate_args(module_name, func_name)?;
+    let _ = (args, kwargs);
+    Err(BridgeError::ModuleNotFound(format!(
+        "{module_name}: pyo3 disabled — rebuild with --features python-ext to call Python with kwargs"
+    )))
+}
+
+/// 求值 Python 表达式 (借鉴 PyO3 0.22+ `py.eval(c"expr", None, None)`)
+///
+/// # 警告
+/// 调用方负责保证 expr 安全 — eval 等价于 Python 表达式求值, 不可信输入请走 `call_python_function` 调用具名函数.
+#[cfg(feature = "python-ext")]
+pub fn eval_python_expression(expr: &str) -> Result<String, BridgeError> {
+    if expr.is_empty() {
+        return Err(BridgeError::InvalidArg("expr is empty".into()));
+    }
+    let raw = with_python(|py| {
+        // 用 CString 路径 (避免 &str → &CStr unsafe leak)
+        let c_expr = std::ffi::CString::new(expr)
+            .map_err(|e| pyo3::PyErr::from(pyo3::exceptions::PyValueError::new_err(format!("expr nul byte: {e}"))))?;
+        let result = py.eval(c_expr.as_c_str(), None, None)?;
+        result
+            .str()
+            .map(|s| s.to_string())
+            .or_else(|_| result.repr().map(|s| s.to_string()))
+    });
+    raw.map_err(|e| BridgeError::CallFailed(format!("eval_python_expression: {e}")))
+}
+
+/// 默认 build (无 `python-ext`): 立即返回 `ModuleNotFound` 降级.
+#[cfg(not(feature = "python-ext"))]
+pub fn eval_python_expression(expr: &str) -> Result<String, BridgeError> {
+    if expr.is_empty() {
+        return Err(BridgeError::InvalidArg("expr is empty".into()));
+    }
+    Err(BridgeError::ModuleNotFound(
+        "pyo3 disabled — rebuild with --features python-ext to eval".into(),
+    ))
+}
+
+/// 通过模块池获取或导入 (借鉴 hyper 80 LIFO 池复用模式)
+#[cfg(feature = "python-ext")]
+pub fn get_or_import_via_pool<'py>(
+    py: pyo3::Python<'py>,
+    pool: &crate::bridge_pool::BridgeModulePool,
+    module_name: &str,
+) -> pyo3::PyResult<pyo3::Bound<'py, pyo3::types::PyModule>> {
+    pool.get_or_import(py, module_name)
+}
+
+// =============================================================================
+// R128 阶段 A Stage 2 集成测试辅助 (per decision-57 §2.1 P10-2 集成测试)
+// 借鉴 Stage 1 BridgeModulePool LIFO 复用 + call_python_function 端到端
+// cfg-gated: python-ext 走真 Python 调用, 默认 build 走 stub 守门
+// =============================================================================
+
+/// 端到端调用 Python 函数 (经 BridgeModulePool 复用, R128 Stage 2 集成测试)
+/// python-ext: 走 Python::attach + pool.get_or_import + getattr + call1 真调用
+/// 默认 build: 返回 ModuleNotFound 降级 (跟 Stage 1 call_python_function 守门一致)
+#[cfg(feature = "python-ext")]
+pub fn call_python_function_via_pool(
+    pool: &crate::bridge_pool::BridgeModulePool,
+    module_name: &str,
+    func_name: &str,
+    args: &[&str],
+) -> Result<String, BridgeError> {
+    validate_args(module_name, func_name)?;
+    let raw = with_python(|py| {
+        let module = pool
+            .get_or_import(py, module_name)
+            .map_err(|e| pyo3::PyErr::from(e))?;
+        let func = module.getattr(func_name)?;
+        let bound_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = args
+            .iter()
+            .map(|s| pyo3::types::PyString::new(py, s).into_any())
+            .collect();
+        let result = func.call1(pyo3::types::PyTuple::new(py, &bound_args)?)?;
+        result
+            .str()
+            .map(|s| s.to_string())
+            .or_else(|_| result.repr().map(|s| s.to_string()))
+    });
+    map_call_result(raw, module_name, func_name)
+}
+
+/// 默认 build stub (跟 call_python_function 默认 build 守门一致)
+#[cfg(not(feature = "python-ext"))]
+pub fn call_python_function_via_pool(
+    _pool: &crate::bridge_pool::BridgeModulePool,
+    module_name: &str,
+    func_name: &str,
+    args: &[&str],
+) -> Result<String, BridgeError> {
+    validate_args(module_name, func_name)?;
+    let _ = args;
+    Err(BridgeError::ModuleNotFound(format!(
+        "{module_name}: pyo3 disabled — call_python_function_via_pool requires --features python-ext (R128 Stage 2 集成测试 helper)"
+    )))
+}
+
+/// 默认 build 占位: pool 不可用, 调用方应通过 `is_module_available` 走 ModuleNotFound 降级
+#[cfg(not(feature = "python-ext"))]
+pub fn get_or_import_via_pool(
+    _py: (),
+    _pool: &crate::bridge_pool::BridgeModulePool,
+    _module_name: &str,
+) -> Result<(), BridgeError> {
+    Err(BridgeError::ModuleNotFound(
+        "pyo3 disabled — rebuild with --features python-ext to use module pool".into(),
+    ))
+}
+
+/// kwargs 透传的内部 helper (借 PyDict::set_item + func.call(args, kwargs))
+#[cfg(feature = "python-ext")]
+fn call_py_func_kw<'py>(
+    py: Python<'py>,
+    module_name: &str,
+    func_name: &str,
+    args: &[&str],
+    kwargs: &[(&str, &str)],
+) -> Result<String, pyo3::PyErr> {
+    let module = py.import(module_name)?;
+    let func = module.getattr(func_name)?;
+    let bound_args: Vec<Bound<'py, PyAny>> = args
+        .iter()
+        .map(|s| PyString::new(py, s).into_any())
+        .collect();
+    // 借 PyDict + set_item 路径 (异构 kwargs) — per function-calls.md L107-110
+    let py_dict = pyo3::types::PyDict::new(py);
+    for (k, v) in kwargs {
+        py_dict.set_item(*k, PyString::new(py, *v))?;
+    }
+    let result = func.call(PyTuple::new(py, &bound_args)?, Some(&py_dict))?;
+    result
+        .str()
+        .map(|s| s.to_string())
+        .or_else(|_| result.repr().map(|s| s.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +459,62 @@ mod tests {
             assert!(r.is_err());
             assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Degrade);
         }
+    }
+
+    // ============================================================
+    // R127-2 Stage 6.1 新增 unit tests — 跨语言桥深化 (kwargs + eval + 池复用)
+    // ============================================================
+
+    /// `call_python_function_kw` 入参校验 cfg-无关 — 空 module/func 双配置一致 fail
+    #[test]
+    fn r127_2_call_python_function_kw_validates_empty() {
+        let r = call_python_function_kw("", "f", &[], &[]);
+        assert!(r.is_err());
+        assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Fail);
+
+        let r2 = call_python_function_kw("m", "", &[], &[]);
+        assert!(r2.is_err());
+        assert_eq!(r2.unwrap_err().suggested_action(), SuggestedAction::Fail);
+    }
+
+    /// `call_python_function_kw` 默认 build 走 ModuleNotFound 降级 (cfg-gated 守门)
+    #[test]
+    fn r127_2_call_python_function_kw_default_build_degrades() {
+        if !python_ext_enabled() {
+            let r = call_python_function_kw("json", "dumps", &["x"], &[]);
+            assert!(r.is_err());
+            assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Degrade);
+            // 含 kwargs 也降级
+            let r2 = call_python_function_kw("json", "dumps", &[], &[("ensure_ascii", "false")]);
+            assert!(r2.is_err());
+            assert_eq!(r2.unwrap_err().suggested_action(), SuggestedAction::Degrade);
+        }
+    }
+
+    /// `eval_python_expression` 空 expr cfg-无关 fail
+    #[test]
+    fn r127_2_eval_python_expression_empty() {
+        let r = eval_python_expression("");
+        assert!(r.is_err());
+        assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Fail);
+    }
+
+    /// `eval_python_expression` 默认 build 走 ModuleNotFound 降级 (cfg-gated 守门)
+    #[test]
+    fn r127_2_eval_python_expression_default_build_degrades() {
+        if !python_ext_enabled() {
+            let r = eval_python_expression("1 + 1");
+            assert!(r.is_err());
+            assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Degrade);
+        }
+    }
+
+    /// `get_or_import_via_pool` 默认 build 编译 (cfg-gated 实现, 不调用)
+    #[test]
+    fn r127_2_pool_get_or_import_compiles_default_build() {
+        // 默认 build 下 BridgeModulePool 是占位 stub, 不能真正 import;
+        // 本测试仅验证 4 个新 API 入口在默认 build 下编译 (用 cfg-gated 守门).
+        let pool = crate::bridge_pool::BridgeModulePool::new();
+        assert_eq!(pool.stats().cached_modules, 0);
     }
 }

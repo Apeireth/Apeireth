@@ -155,3 +155,17 @@ _workspace/*
 out/
 Apeireth-rust/apeireth/out/
 .git_commit_msg.txt
+
+# R126 P2-2 Mavis (2026-08-10): 8 硬墙 验证日志 (per 决策 #33 + 决策 #51 §1.3 P2-2)
+# crates/apeireth-integration-e2e/ 6 重守门 v6 (B4) verify 一次性 .log 留本地
+# 实际 5 文件: .test.log (test gatekeeper) + .check.log (compile gatekeeper)
+#             + .demo.log (behavior gatekeeper) + .all-test.log (full test)
+#             + .final-test.log (final verify)
+# 6 重守门 v6 验证产物, 0 必进 git
+crates/apeireth-integration-e2e/.*.log
+
+# R126 P2-2 Mavis (2026-08-10): R125+ sub-agent scratch (8 硬墙 升级 spec/stub 草稿)
+# 8 硬墙 升级期间 (B7 9 organ 内部借 + A3 13 键 PHL-07 等) sub-agent 写的 spec/stub 草稿
+# 实际 3 文件: .r125-12-REFACTOR-PLAN.md + .r125-12-13-keys-stub.rs + .r125-12-PHL-07-SPEC.md
+# 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
+.r[0-9][0-9][0-9]-*-*

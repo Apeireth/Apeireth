@@ -388,7 +388,8 @@ fn k6_line_regex_compiles() {
 
 #[test]
 fn k6_naming_error_variant_count() {
-    assert_eq!(NAMING_ERROR_VARIANT_COUNT, 10);
+    // R126 P1-4 扩展: 10 原始 + 1 InvalidMetaDimOutOfRange = 11
+    assert_eq!(NAMING_ERROR_VARIANT_COUNT, 11);
 }
 
 // ============================================================================

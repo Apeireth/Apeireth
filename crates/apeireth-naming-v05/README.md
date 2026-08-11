@@ -46,7 +46,8 @@ V0.5 命名规范是 ASI 测量公式的命名空间 (per v1077 V0.5 17 维 LOCK
 - `encode` — 24 维 → 字符串 (4 行, 1 行 1 大类)
 - `decode` — 字符串 → 24 维 (regex 解析)
 - `validate` — 24 维合法性 + sum=1.00 守门 + roundtrip
-- `error` — 10 个 `NamingError` variant
+- `error` — 11 个 `NamingError` variant (10 原始 + 1 R126 扩展 InvalidMetaDimOutOfRange)
+- `extension` — **R126 P1-4**: V0.5 → V0.5.30 扩展 (5 new meta-dim + 1 derived overall = 30 dim)
 - `sum_guard` — 4 大类权重 sum=1.00 守门 (核心)
 
 ## 用法示例
@@ -83,7 +84,7 @@ assert_eq!(spec, parsed);
 - **O-5 主 17:58 不假装** — 24 维 编译期 hardcode enum, 不假装"已对齐 V0.5"
 - **O-2 主 19:33 走在前人肩上** — 借 v1077 + v4.1 §13 + R17 命名 v12 规范
 - **O-3 主 23:44 干到底** — 24 维 立即落, 守门硬约束 (sum=1.00 容差 0.001)
-- **O-4 主 00:56 任何人都能接手** — 7 模块 + 24 维 struct + sum_guard + 10 error variant 全文档化
+- **O-4 主 00:56 任何人都能接手** — 8 模块 + 30 维 struct + sum_guard + 11 error variant 全文档化 (R126 P1-4 扩展 7→8, 24→30, 10→11)
 
 ## 8 项不修改承诺 (per APEIRETH-CONVENTIONS §10)
 

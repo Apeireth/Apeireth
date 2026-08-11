@@ -65,11 +65,18 @@
 
 pub mod agent;
 pub mod manager;
+// R127-2 P6-2: opencode 子代理 重试 — 4 专家 + AgentRouter (langgraph 829 cloned 借脑)
+pub mod subagent;
 
 pub use agent::{now_ms, Agent};
 pub use manager::{
     AgentEvent, AgentManager, ALIAS_NOT_FOUND_PLACEHOLDER_PREFIX, DEFAULT_CACHE_SIZE,
     DEFAULT_WATCHER_DEBOUNCE_MS,
+};
+// R127-2 P6-2: re-export subagent 公开 API
+pub use subagent::{
+    AgentRouter, ExpertRole, OracleSubAgent, LibrarianSubAgent, ExploreSubAgent, FrontendSubAgent,
+    SubAgent, SubAgentError, SubAgentRegistry, DEFAULT_ORGAN_ROUTE_COUNT, EXPERT_ROLE_COUNT,
 };
 
 // ============================================================

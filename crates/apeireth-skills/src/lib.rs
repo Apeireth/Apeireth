@@ -7,6 +7,10 @@
 //! **8 项承诺**: 全部遵守. **不修改承诺 (LOCKED)**: 0 触碰 workspace.version.
 //!
 //! R63: 加 file_loader submodule — 借鉴 VCP `vcptoolbox/modules` 真扫目录 JSON.
+//!
+//! R125-19 (per decision-51 §1.4 P3-2): 加 skill_executor submodule — 5 phase state machines
+//! 落地 obra/superpowers 14 公开 SKILL.md workflow 模式 (TDD / Plan-Verify / Parallel /
+//! Review / Meta). 借鉴 ID: `R125-19-BORROW-obra/superpowers-2026-05-2026-08-10`.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -17,6 +21,8 @@ pub mod semver_strict;
 pub mod eval_bridge;  // R110: Skill descriptor → eval scenario 桥接
 pub mod watcher;  // R109: 文件 watcher 热加载 (polling-based, 0 新 dep)  // R107: 严格 semver 2.0.0 (3-segment + pre-release + build metadata)  // R86: Skill → MCP ToolServer 适配器 (SkillDescriptor → Tool, call 走 dispatch)
 pub mod file_loader;
+pub mod skill_executor;  // R125-19: Skill execution layer (5 phase state machines, superpowers 14 → 5 patterns)
+pub mod library_stage6_guardianship;  // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
 
 #[derive(Debug, Error)]
 pub enum SkillError {

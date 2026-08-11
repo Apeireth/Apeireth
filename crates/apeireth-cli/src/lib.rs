@@ -267,6 +267,8 @@ pub fn placeholder() -> &'static str {
     "apeireth-cli R14 skeleton"
 }
 pub mod commands;  // R116: skills/eval/council subcommand set
+// R127-2 P9-1: clap ValueEnum 借鉴 (Stage 2 借脑 1.0, per decision-56 §2.4)
+pub mod output_format;
 
 // 重新导出核心常量（CLI 用户可能需要的哲学键）
 pub use apeireth_core::PhilosophyKey as Key;

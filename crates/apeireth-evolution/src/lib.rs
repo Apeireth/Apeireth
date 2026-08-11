@@ -50,6 +50,16 @@ pub mod fail;
 pub mod poda_cycle;
 pub mod state;
 pub mod traits;
+// R127 P5-1 Library Stage 4 自治 (per decision-55-r127-integration-5-library-stage-4-6-2026-08-10.md §2.2)
+// 3 机制: SelfEvolution (superpowers 234 ⏳ + aGLM 108 PODA ✅) + SelfUpgrade (superpowers 234 ⏳ + aGLM 108 PODA ✅)
+//       + SelfRepair (chidori journal ✅ + apeireth-rollback 6 策略 ✅). 0 改 24 LOCKED #5 入口签名.
+pub mod library_autonomy;
+// R127-2 P8-1 Library Stage 4.1 自治 - 自循环 (per decision-56-r127-2-borrowed-3-retry-release-prep-2026-08-10.md §2.3)
+// 3 模块: 自循环 (AutonomyLoop + LoopStage 借鉴 aGLM 108 PODA 4 阶段) +
+//        自反馈 (FeedbackChannel + 3 FeedbackSignal 借鉴 aGLM 108 PODA 闭环) +
+//        自调整 (SelfAdjust + 5 AdjustPolicy + 5 AdjustPolicyTrigger 借鉴 superpowers 234 skill priority).
+// 0 改 P5-1 任何入口签名, 仅 import 类型 + 调其 step() / metrics() 方法. 0 改 24 LOCKED #5 入口签名.
+pub mod library_autonomy_loop;
 
 pub use council_bridge::{
     CouncilAdapter, CouncilIntegrationConfig, EvolutionOutcome, EvolutionProposal,
@@ -60,6 +70,23 @@ pub use fail::{FailKind, FailOutcome, FailPolicy, FailRecord};
 // R125-7 PODA cycle re-exports (新增, 0 改原 crate 任何入口签名)
 pub use poda_cycle::{
     PodaAction, PodaConfig, PodaContext, PodaCycle, PodaError, PodaOutcome, PodaResult, PodaStage,
+};
+// R127 P5-1 Library Stage 4 自治 re-exports (新增, 0 改原 crate 任何入口签名)
+pub use library_autonomy::{
+    AutonomyError, AutonomyMetrics, AutonomyReport, AutonomyResult, LibraryAutonomy, Skill,
+    SkillRegistry, TddFirstSkill, FailureEvent, FailureEventKind, DeterminismMeta, ObserveSkill,
+    PlanSkill, AdaptSkill, RepairJournal, RepairResult, RepairStrategy, SelfEvolution,
+    SelfEvolutionAction, SelfEvolutionState, SelfRepair, SelfRepairAction, SelfRepairState,
+    SelfUpgrade, SelfUpgradeAction, SelfUpgradeState, UpgradePlan,
+};
+// R127-2 P8-1 Library Stage 4.1 自治 - 自循环 re-exports (新增, 0 改 P5-1 任何入口签名)
+// 8 类型: AutonomyLoop (顶层) + LoopStage (4 阶段) + FeedbackChannel + FeedbackSignal (3 variant)
+//        + SignalSource (4) + SignalTarget (3) + SignalPriority + LoopError + LoopResult
+//        + SelfAdjust + AdjustPolicy (5) + AdjustPolicyTrigger (5) + LoopMetrics + LoopReport
+pub use library_autonomy_loop::{
+    AdjustPolicy, AdjustPolicyTrigger, AutonomyLoop, FeedbackChannel, FeedbackSignal, LoopError,
+    LoopMetrics, LoopReport, LoopResult, LoopStage, SelfAdjust, SignalPriority, SignalSource,
+    SignalTarget, REPAIR_STORM_THRESHOLD, EVOLUTION_HEALTHY_THRESHOLD,
 };
 pub use state::{EvolutionState, EvolutionStateMachine, StateTransition, TransitionReason};
 pub use traits::{
