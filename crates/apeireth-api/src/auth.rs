@@ -36,7 +36,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use apeireth_keyring::KeyringStore;
+use apeireth_host::keyring::KeyringStore;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -676,7 +676,7 @@ mod auth_tests {
 
     fn make_pipeline() -> AuthPipeline {
         // skeleton 阶段 keyring 不可用, 走 in-memory test token 即可
-        let cfg = apeireth_keyring::KeyringConfig::default();
+        let cfg = apeireth_host::keyring::KeyringConfig::default();
         let keyring = Arc::new(KeyringStore::new(cfg));
         AuthPipeline::new(keyring)
     }

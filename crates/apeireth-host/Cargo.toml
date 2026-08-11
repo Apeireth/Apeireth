@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth host infrastructure facade: secure keyring and cross-platform machine identity"
+keywords = ["security", "keyring", "machine-id", "infrastructure"]
+categories = ["authentication", "os"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+async-trait = { workspace = true }
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+rand = "0.8"
+hex = "0.4"
+chrono = { workspace = true }
+cfg-if = "1.0"
+hmac = "0.12"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+fs-err = "3.0"
+uuid = { workspace = true, features = ["v5"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+criterion = { version = "0.5", features = ["html_reports"] }

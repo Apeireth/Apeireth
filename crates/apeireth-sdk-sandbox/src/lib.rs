@@ -91,7 +91,7 @@ use uuid::Uuid;
 // P0 协议归一化 (per apeireth-protocol, sandbox log stream 错误用 ProtocolError).
 use apeireth_protocol::ProtocolError as SandboxProtocolError;
 // P0 凭证安全 (per apeireth-keyring, image pull credentials 走 keyring 而非明文).
-use apeireth_keyring::{KeyringConfig, Platform as KeyringPlatform, SecretBytes, TokenType};
+use apeireth_host::keyring::{KeyringConfig, Platform as KeyringPlatform, SecretBytes, TokenType};
 
 pub use error::{SandboxError, SandboxResult, SANDBOX_ERROR_VARIANT_COUNT};
 pub use isolation::{IsolationConfig, SandboxRuntime, StubSandboxRuntime};
@@ -230,7 +230,7 @@ pub struct SandboxCredentials {
     pub registry: String,
     /// 用户名.
     pub username: String,
-    /// keyring secret 名 (走 `apeireth_keyring::KeyringStore.get(secret_ref)`).
+    /// keyring secret 名 (走 `apeireth_host::keyring::KeyringStore.get(secret_ref)`).
     pub secret_ref: String,
 }
 
@@ -666,7 +666,7 @@ impl SandboxSpawner for StubSandboxSpawner {
 //   - BollardDockerSpawner (per `bollard::Docker::create_container`)
 //   - FirecrackerSpawner (per `firecracker::VM::start`)
 //   - GvisorSpawner (per `runsc::Runsc::exec`)
-//   - 真实 keyring 凭证加载 (per `apeireth_keyring::KeyringStore.get`)
+//   - 真实 keyring 凭证加载 (per `apeireth_host::keyring::KeyringStore.get`)
 //   - 真实 stream 适配 (per `bollard::Docker::logs(stream=true)`)
 //   - 真实 cgroup v2 资源下发 (per `cgroupfs` / systemd-run --scope)
 // 当前 STUB 模式: 不引 bollard / firecracker-rs / runsc 任何 crate, 编译期 hardcode

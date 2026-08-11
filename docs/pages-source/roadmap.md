@@ -76,6 +76,24 @@ B1 24 LOCKED 入口签名 0 改 / B2 1.2.0 0 改 / A1 3 值 0 改 / B3 30 维 / 
 4. **Tools** — 工具集
 5. **Settings** — 设置
 
+
+## 3.5 R128 大规模合并 (2026-08-12, ✅ 落实待 commit)
+
+**R128 实际执行 (per [conventions/16-crate-merge-policy.md](../conventions/16-crate-merge-policy.md))**:
+
+- ✅ **13 frozen crate** 移至 crates/_frozen/ (credentials / cache / tracing / metrics / oauth / update / sandbox / tree-sitter / i18n[recovery] / image-prompt / plugin / observability / task)
+- ✅ **5 merge 源 crate** 移至 crates/_archived/ (rollback → upgrade / keyring + machine-id → host / repo-scan + repo-analyzer → repo-tools)
+- ✅ **peireth-host 新 crate** = peireth-keyring + peireth-machine-id (5 子模块)
+- ✅ **peireth-repo-tools 新 crate** = peireth-repo-scan + peireth-repo-analyzer
+- ✅ **peireth-upgrade::rollback** 子模块合并
+- ✅ **peireth-integration-r20-stage4** superseded by peireth-integration-e2e → crates/_archived/
+- ✅ **调用方迁移**: TUI / API / SDK-{sandbox,lark,livekit,voice} 全部切到新路径
+- ✅ **cargo check --workspace 0 errors** (296 historical warnings, 0 effect)
+- ✅ **24 LOCKED 入口签名冻结降级** (per 主人 8/11 22:31 拍板),仅保 3 项不可变脊柱
+
+**workspace 收敛**: 74 active + 18 archived/frozen (从原 ~94 收敛)
+
+**核验**: cargo check --workspace exit 0,23.23s 完成
 ## 4. v2.0 (2027+, ⏳ 计划)
 
 **v2.0 计划** (per ROADMAP.md P7-2 阶段 v2.0):

@@ -1,5 +1,7 @@
 # 10 不修改承诺 8 项 + 9 项实质 Locked (R119 R125 形式撤销 + 实质保留)
 
+> **R128 进一步落实 (2026-08-12, 主人 8/11 22:31 拍板)**: 24 LOCKED crate 入口签名冻结 (lib.rs pub mod/pub fn/pub struct 0 改) **降级为历史记录**,不再具有约束力. 仅保留 3 项不可变'脊柱': Self-Disable 判定逻辑 / L0 HA 物理隔离 / 13 键 verdict cache 语义含义. 详见 [16-crate-merge-policy.md](16-crate-merge-policy.md) §1.
+
 > **R119-3a-1 Mavis 重建 (2026-08-10)**: 8 项不修改承诺在 R119 由 Mavis 拍板**形式撤销**,原意保留。
 > **R125 9 项实质 B1-B7 落实 (2026-08-10 16:55, Mavis 自主, 主人 16:31 最高权限授权)**: 24 LOCKED 名单 + V0.5 25 维 + 5→6 重守门 + 6→8 哲学锚 + 1.1.0 升版 + 9 organ 内部借 + 12 键+1 (PHL-07).
 
