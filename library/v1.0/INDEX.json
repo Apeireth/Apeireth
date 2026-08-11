@@ -1,0 +1,174 @@
+{
+  "version": "1.0",
+  "date": "2026-08-10",
+  "author": "R125-21 sub-agent (Mavis 派, per 决策 #51 §1.4 P3-4)",
+  "borrow_id": "R125-21-BORROW-obra/superpowers-2026-05-2026-08-10",
+  "borrow_source": ".openclaw/workspace/borrowed-repos/superpowers/ (234 files, ✅ cloned, per 决策 #36 §1.1 + 决策 #41 §1)",
+  "task": "Library v1.0 1.0 release 礼物 (per 决策 #51 §1.4 P3-4 + library-upgrade-plan-2026-08-10.md §2 阶段 6)",
+  "hard_walls_zero_violation": true,
+  "install_pass_strict": true,
+  "active_commit": false,
+  "active_push": false,
+
+  "organ_classification": {
+    "heart": {"count": 3, "chinese": "心", "files_dir": "01-books-classic/heart/"},
+    "brain": {"count": 4, "chinese": "脑", "files_dir": "01-books-classic/brain/"},
+    "ear": {"count": 3, "chinese": "耳", "files_dir": "01-books-classic/ear/"},
+    "eye": {"count": 3, "chinese": "眼", "files_dir": "01-books-classic/eye/"},
+    "hand": {"count": 3, "chinese": "手", "files_dir": "01-books-classic/hand/"},
+    "memory": {"count": 3, "chinese": "忆", "files_dir": "01-books-classic/memory/"},
+    "mind": {"count": 4, "chinese": "意", "files_dir": "01-books-classic/mind/"},
+    "body": {"count": 3, "chinese": "身", "files_dir": "01-books-classic/body/"},
+    "voice": {"count": 4, "chinese": "声", "files_dir": "01-books-classic/voice/"}
+  },
+
+  "categories": {
+    "01-books-classic": {
+      "path": "01-books-classic/",
+      "readme": "01-books-classic/README.md",
+      "skills_index": "01-books-classic/_SKILLS_INDEX.md",
+      "type": "books",
+      "count": 30,
+      "source": "R125-21 真写 (NEW)",
+      "borrow_id": "R125-21-BORROW-obra/superpowers-2026-05-2026-08-10",
+      "status": "✅ 30/30 done",
+      "install_pass": "✅ cloned = 真实施 (superpowers ✅ cloned 234 files = 真实施, 30 本书都写独立 SKILL.md)"
+    },
+    "02-papers-research": {
+      "path": "02-papers-research/",
+      "readme": "02-papers-research/README.md",
+      "type": "papers",
+      "count": 100,
+      "sub_count": {
+        "arxiv": 30,
+        "rfc": 20,
+        "blogs": 19,
+        "stub": 31
+      },
+      "source": "R125-15a (30 arxiv 准备) + R125-15b (20 RFC 真) + R125-15c (19 博客 真) + 31 stub",
+      "borrow_ids": [
+        "R125-15a-BORROW-arxiv-{arxiv_id}-{hash}-2026-08-10",
+        "R125-15b-BORROW-rfc-{rfc_num}-{hash}-2026-08-10",
+        "R125-15c-BORROW-blog-{name}-{hash}-2026-08-10"
+      ],
+      "status": "✅/⏳ mixed (20+19 真, 30+31 准备)",
+      "install_pass": "✅ R125-15b/c 真实施, ⏳ R125-15a 准备 (arxiv 限流), 31 stub 0 装"
+    },
+    "03-videos-talks": {
+      "path": "03-videos-talks/",
+      "readme": "03-videos-talks/README.md",
+      "type": "videos",
+      "count": 50,
+      "sub_count": {
+        "conferences": 10,
+        "ai_engineer": 10,
+        "podcasts": 10,
+        "education": 20
+      },
+      "source": "R125-15d (15 metadata 准备) + 35 stub",
+      "borrow_ids": [
+        "R125-15d-BORROW-video-{title}-{hash}-2026-08-10"
+      ],
+      "status": "⏳ 0/50 done (等 R125-15d 跑中, P3-3 0 重派)",
+      "install_pass": "⏳ R125-15d 准备 (视频 0 抓), 35 stub 0 装"
+    },
+    "04-communities": {
+      "path": "04-communities/",
+      "readme": "04-communities/README.md",
+      "type": "communities",
+      "count": 10,
+      "sub_count": {
+        "tech_news": 3,
+        "discord": 3,
+        "academic": 2,
+        "ml_twitter": 2
+      },
+      "source": "R125-15e ✅ done P0-1 整合 #4 commit abf12243 (14 Skill .md + SkillRegistry)",
+      "borrow_ids": [
+        "R125-15e-BORROW-community-{name}-{hash}-2026-08-10"
+      ],
+      "status": "✅ 10/10 done (整合 #4 commit)",
+      "install_pass": "✅ R125-15e 真实施 100% 落实 (superpowers ✅ cloned = 真实施)"
+    },
+    "05-hubs": {
+      "path": "05-hubs/",
+      "readme": "05-hubs/README.md",
+      "type": "hubs",
+      "count": 10,
+      "sub_count": {
+        "model_hubs": 4,
+        "data_bench": 3,
+        "academic": 2,
+        "benchmark": 1
+      },
+      "source": "R125-15f NEW P0-2 跑中 (bg_16a97b77-4867-434b-a8ed-d20c18bff46b, per 决策 #52)",
+      "borrow_ids": [
+        "R125-15f-BORROW-hub-{name}-{hash}-2026-08-10"
+      ],
+      "status": "⏳ 0/10 done (等 P0-2 done, Mavis 5 min tick 监督)",
+      "install_pass": "⏳ R125-15f 跑中 0 重写 0 重派 (Mavis 监督)"
+    }
+  },
+
+  "total_resources": 200,
+  "total_books": 30,
+  "total_papers_rfc_blogs": 100,
+  "total_videos": 50,
+  "total_communities": 10,
+  "total_hubs": 10,
+
+  "skill_framework_borrow": {
+    "name": "Skill (Markdown 行为准则)",
+    "source": "obra/superpowers 公开 SKILL.md 4 字段 frontmatter (name/description) + body",
+    "borrow_id": "R125-21-BORROW-obra/superpowers-2026-05-2026-08-10",
+    "implementation": "apeireth-central SkillRegistry (per R125-15e 整合 #4 commit done)",
+    "register_count_target": 200
+  },
+
+  "hard_walls_verify": {
+    "B2_workspace_version": "1.2.0 ✅ 0 改 (Cargo.toml:246)",
+    "A1_R11_baseline_3_values": "0.8682/0.8532/0.9063 ✅ 0 删 0 改 (17 文件原位)",
+    "B1_24_LOCKED_entry_signatures": "✅ 0 改 (R125-21 0 触碰 crates/ 任何 src, 24 LOCKED 0 触)",
+    "B5_6_to_8_philosophy_anchors": "✅ 0 改 (仅在 description 引用 9 organ, 0 改哲学锚定义)",
+    "B3_V0_5_25_to_30_dimensions": "✅ 0 改 (R125-21 0 触碰 V0.5 公式)",
+    "B4_6_guard_v6": "✅ 0 改 (Library 资料库 0 涉及守门逻辑)",
+    "A3_12_keys_PHL_07_13_keys": "✅ 0 改 (0 触碰 13 键 verdict cache)",
+    "C1_0_active_commit": "✅ 0 commit (Mavis 整合 #5 拍板)",
+    "C2_0_install_pass_strict": "✅ 严守 (✅ cloned 真实施, ⏳ 限流 准备, ❌ 跳过 0 集成)",
+    "C3_v6_upgrade": "✅ 0 改 (整合 #4 commit done)",
+    "0_active_push": "✅ 0 push (等 1.0 release 配 GitHub remote)"
+  },
+
+  "install_pass_verify": {
+    "cloned": "superpowers 234 files ✅ cloned = 真实施 (R125-21 写 30 经典书 SKILL.md 1:1 借鉴 公开 SKILL.md 4 字段)",
+    "rate_limited": "arxiv 30 (⏳ R125-15a 准备) + 视频 50 (⏳ R125-15d 准备) — 0 装\"已抓\"",
+    "skipped": "OpenCog AGPL-3.0 — 0 集成 (跟 R125-21 无关)"
+  },
+
+  "related_decisions": [
+    "decision-24 (R125-15 + Library 升级登记)",
+    "decision-33 (主人 17:22 升级授权 + 8 硬墙重置)",
+    "decision-34 (17:30 整合 #3 commit 21aa85f3 拍板 done)",
+    "decision-35 (16 真派模式)",
+    "decision-36 (P2 借鉴源码 3/4 ✅ cloned)",
+    "decision-41 (R125 16 sub-agent succeeded)",
+    "decision-48 (整合 #4 commit abf12243 done)",
+    "decision-50 (promethean/ 收尾 done)",
+    "decision-51 (§1.4 P3-4 R125-21 升级 = 本任务)",
+    "decision-52 (16 sub-agent 派活 done, R125-21 bg_3e193c71-7515-40ee-a385-b2a1dd6eb563)"
+  ],
+
+  "related_reports": [
+    "library-upgrade-plan-2026-08-10.md (R125-15 + Library 升级 6 阶段 spec)",
+    "r125-15-non-github-resources.md (R125-15 6 大类 spec)",
+    "agent-r125-15e-final-2026-08-10.md (R125-15e ✅ done, 14 Skill .md + SkillRegistry)",
+    "agent-r125-21-final-2026-08-10.md (本任务 final 报告)"
+  ],
+
+  "next_steps": [
+    "整合 #5 commit (Mavis 拍板, 跑过夜明早 8/11-8/22 done 后)",
+    "1.0 release 配 GitHub remote (主人)",
+    "1.0 release push (主人)",
+    "apeireth-central SkillRegistry 扩展注册 200 Library Skill (1.0 release 后)"
+  ]
+}
