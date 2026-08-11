@@ -1,0 +1,11 @@
+﻿Test suites: 380
+Total passed: 21907
+Total failed: 0
+Total ignored: 78
+Non-ok lines: 5
+Apeireth-rust\reports\agent-r154-3-cargo-test-2026-08-11.log:14037:test result::tests::ok_constructors ... ok
+Apeireth-rust\reports\agent-r154-3-cargo-test-2026-08-11.log:14038:test result::tests::empty_ok_value ... ok
+Apeireth-rust\reports\agent-r154-3-cargo-test-2026-08-11.log:14040:test result::tests::err_constructors_and_accessors ... ok
+Apeireth-rust\reports\agent-r154-3-cargo-test-2026-08-11.log:14041:test result::tests::serde_round_trip_err ... ok
+Apeireth-rust\reports\agent-r154-3-cargo-test-2026-08-11.log:14044:test result::tests::serde_round_trip_ok ... ok
+
