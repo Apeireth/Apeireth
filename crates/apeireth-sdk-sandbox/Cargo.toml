@@ -41,7 +41,7 @@ futures = { workspace = true }
 # P0 协议归一化 (per apeireth-protocol 1:1 翻译, 真实集成 R20 阶段 4 续)
 apeireth-protocol = { path = "../apeireth-protocol" }
 # P0 凭证安全 (per apeireth-keyring §2.4.1, 运行时 image pull credentials)
-apeireth-keyring = { path = "../apeireth-keyring" }
+apeireth-host = { path = "../apeireth-host" }
 # ⏳ R21 真接 sandbox 运行时 (per @anthropic-ai/sandbox 商业版) 时再加:
 #    bollard = { version = "0.15" }    # Docker daemon client
 #    firecracker-rs = "0.5"             # firecracker microVM SDK

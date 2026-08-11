@@ -43,6 +43,4 @@ futures = "0.3"
 # 这 2 crate 在 workspace 已存在 (crates/apeireth-tracing + crates/apeireth-observability),
 # 加 path dev-dep 让 doctest compile pass. 0 触碰 24 LOCKED (telemetry/tracing/observability
 # 都不在 24 LOCKED mtime 16:34 baseline), 0 改 workspace.version.
-apeireth-tracing = { path = "../apeireth-tracing" }
-apeireth-observability = { path = "../apeireth-observability" }
 
