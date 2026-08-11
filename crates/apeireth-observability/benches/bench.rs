@@ -229,39 +229,39 @@ fn bench_render_health_endpoint_metrics(c: &mut Criterion) {
 
 fn setup_organ_dashboard_full() -> OrganDashboard {
     let mut dash = OrganDashboard::new();
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Heart,
         TuiOrganState::ok(OrganKind::Heart, 100.0, "60Hz pulse"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Brain,
         TuiOrganState::ok(OrganKind::Brain, 100.0, "LLM call"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Hand,
         TuiOrganState::ok(OrganKind::Hand, 100.0, "tool call"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Eye,
         TuiOrganState::partial(OrganKind::Eye),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Ear,
         TuiOrganState::partial(OrganKind::Ear),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Memory,
         TuiOrganState::ok(OrganKind::Memory, 100.0, "sqlite"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Voice,
         TuiOrganState::ok(OrganKind::Voice, 100.0, "tts"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Body,
         TuiOrganState::ok(OrganKind::Body, 100.0, "vital"),
     );
-    dash.register_tui_organ_state(
+    let _ = dash.register_tui_organ_state(
         OrganKind::Mind,
         TuiOrganState::ok(OrganKind::Mind, 100.0, "6 anchors"),
     );
@@ -275,7 +275,7 @@ fn bench_render_5_nav_dispatch(c: &mut Criterion) {
             // 5 nav dispatch (走 render_dashboard 内部 FIVE_NAV 分支, 0-4 全循环)
             for nav_idx in 0u8..5 {
                 let mut d = black_box(dash.clone());
-                d.set_current_nav(nav_idx);
+                let _ = d.set_current_nav(nav_idx);
                 let _ = render_dashboard(black_box(&d));
             }
         });

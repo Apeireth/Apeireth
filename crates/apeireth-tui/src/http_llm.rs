@@ -464,7 +464,7 @@ mod tests {
             rx.recv_timeout(Duration::from_millis(100)).is_err(),
             "流结束后应无更多 chunk"
         );
-        mock.assert_hits(1);
+        mock.assert_calls(1);
     }
 
     #[tokio::test]
@@ -505,7 +505,7 @@ mod tests {
         assert_eq!(reply.usage.prompt_tokens, 12);
         assert_eq!(reply.usage.completion_tokens, 8);
         assert_eq!(reply.usage.total_tokens, 20);
-        mock.assert_hits(1);
+        mock.assert_calls(1);
     }
 
     #[tokio::test]
@@ -531,7 +531,7 @@ mod tests {
             err.contains("internal server error"),
             "错误信息应含 body, 实际: {err}"
         );
-        mock.assert_hits(1);
+        mock.assert_calls(1);
     }
 
     #[tokio::test]
@@ -588,7 +588,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
 
         assert!(result.is_ok(), "auth 流应 ok: {:?}", result);
-        mock.assert_hits(1);
+        mock.assert_calls(1);
     }
 
     /// R26-3-fixes 验收: endpoint path 按 provider 走, OpenAI 兼容 prototype 用 /chat/completions
