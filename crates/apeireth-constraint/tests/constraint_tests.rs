@@ -1,5 +1,8 @@
 //! 集成测试 — 跨 crate 复用 apeireth-core 12 键 + 5 重守门端到端验证
 
+// v15 命名修正: constraint_tests.rs 验证 v14 旧 API 兼容性, 保留 verify_all_five_gates 调用
+#![allow(deprecated)]
+
 use apeireth_constraint::{
     council_grant, human_grant, multi_ai_consensus, physical_isolation_check,
     reflection_period_audit, risk_level_grant, runtime_intercept, verify_all_five_gates,
