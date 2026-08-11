@@ -403,6 +403,34 @@ git log --oneline -5
 
 ---
 
+
+---
+
+## §12. R128 大规模合并补记 (2026-08-12)
+
+> **性质**: 本节为 R128 落实补充 (2026-08-12),覆盖原 §0-§11 中描述的状态变更.
+
+### §12.1 状态变更
+
+- **HEAD**: ade11d5 (整合#8 R128 大规模 crate 重构 94→55 + 文档解锁) — 但实际改动在 working tree,待 commit
+- **workspace members**: 74 active (从原 ~94 收敛)
+- **crates/_frozen/**: 13 纯骨架 (apeireth-{credentials,cache,tracing,metrics,oauth,update,sandbox,tree-sitter,i18n[recovery],image-prompt,plugin,observability,task})
+- **crates/_archived/**: 6 (apeireth-rollback → upgrade / apeireth-keyring + machine-id → host / apeireth-repo-scan + repo-analyzer → repo-tools / apeireth-integration-r20-stage4 superseded)
+- **新 crate**: peireth-host (keyring + machine-id) + peireth-repo-tools (scan + analyzer)
+- **peireth-upgrade::rollback**: rollback 子模块合并完成
+
+### §12.2 24 LOCKED 入口签名冻结降级 (R128)
+
+per 主人 8/11 22:31 拍板 + 楚零 8/11 22:31 follow-up,24 LOCKED crate 的入口签名冻结降级为历史记录. 仅保留 3 项不可变'脊柱':
+1. Self-Disable 判定逻辑 (peireth-sovereignty/src/self_disable.rs + 4 项自动扫描 + 三级响应)
+2. L0 HA 物理隔离定义 (peireth-sovereignty/src/ha_modes.rs + physical_multisig.rs)
+3. 13 键 verdict cache 语义含义 (peireth-core/src/lib.rs 12 键 + PHL-07)
+
+详见 [conventions/16-crate-merge-policy.md](conventions/16-crate-merge-policy.md) §1.
+
+### §12.3 VCP 接入目标 (R128 era)
+
+用户 2026-08-11 22:34 指令: '把 Apeireth 推向能用好用, 能落地, 外围扎实的方向 ... 把我和 VCP 的接上, vcp 现在不在了'. VCP (Node.js 版) 当前不在, Rust 端需自生长能用的接口. 当前最优先: 让 Rust 端的 /v1/guard 端点 + TUI + CLI 形成端到端可跑链路.
 _写作完成时间: 2026-07-31 终极版 (覆盖 2026-07-30 末班旧版) — R14-Architecture-Final-Record 重写_
 _明天唤醒时: 读这份文档 → §7 下次对话启动指引 → §5 R14 阶段进度 → §1 主人 6 大洞见 → §6.4 立体架构 v2 链接 → 跑 git log --oneline -20 → 等新指令_
 

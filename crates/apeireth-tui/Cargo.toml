@@ -81,7 +81,7 @@ httpmock = "0.8"
 criterion = { workspace = true }
 # R30 U6: tempfile for config_watcher tests
 tempfile = "3"
-apeireth-observability = { path = "../apeireth-observability" }
+apeireth-telemetry = { path = "../apeireth-telemetry" }
 
 [[bench]]
 name = "render_5_nav"

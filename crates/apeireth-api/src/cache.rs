@@ -31,7 +31,7 @@
 
 use std::sync::Arc;
 
-use apeireth_cache::{
+use apeireth_telemetry::cache::{
     build_cache, BackendKind, Cache, CacheConfig, EvictionPolicy,
 };
 use apeireth_protocol::{NormalizedRequest, NormalizedResponse, ProtocolKind};
@@ -171,7 +171,7 @@ impl ResponseCache {
     pub async fn with_config(config: CacheConfig) -> Result<Self, String> {
         let cache: Arc<dyn Cache<String, Vec<u8>>> = build_cache(config)
             .await
-            .map_err(|e| format!("apeireth-cache build: {e}"))?;
+            .map_err(|e| format!("apeireth-telemetry::cache build: {e}"))?;
 
         // K-1 强校验: name + help 必填 (Counter::new 内置)
         let hit_counter = Arc::new(
@@ -722,9 +722,9 @@ mod tests {
     #[tokio::test]
     async fn response_cache_default_constants_match_apeireth_cache() {
         // 0 漂移 1.1 baseline
-        assert_eq!(DEFAULT_CACHE_TTL_SECS, apeireth_cache::DEFAULT_TTL_SECS);
-        assert_eq!(DEFAULT_CACHE_MAX_SIZE, apeireth_cache::DEFAULT_MAX_SIZE);
-        assert_eq!(DEFAULT_CACHE_SHARDS, apeireth_cache::DEFAULT_SHARDS);
+        assert_eq!(DEFAULT_CACHE_TTL_SECS, apeireth_telemetry::cache::DEFAULT_TTL_SECS);
+        assert_eq!(DEFAULT_CACHE_MAX_SIZE, apeireth_telemetry::cache::DEFAULT_MAX_SIZE);
+        assert_eq!(DEFAULT_CACHE_SHARDS, apeireth_telemetry::cache::DEFAULT_SHARDS);
     }
 
     // ---------- 集成测试: cache_key 行为 (5 个) ----------

@@ -1,6 +1,6 @@
 # Apeireth 规范系统 — 12 子规范
 
-> **R119-3a-1 Mavis 重建 (2026-08-10)**: 从顶层 APEIRETH-CONVENTIONS.md 12.8KB 拆为 14 文件目录结构。核验实际:workspace 90+ crate, 12 ADR (R20 阶段 6 重排 0001-0012) + 3 配套 (0013-0015) + 1 (0018), 25+ reports 命名, 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5) 严守。
+> **R119-3a-1 Mavis 重建 (2026-08-10)**: 从顶层 APEIRETH-CONVENTIONS.md 12.8KB 拆为 16 文件目录结构。核验实际:workspace 90+ crate, 12 ADR (R20 阶段 6 重排 0001-0012) + 3 配套 (0013-0015) + 1 (0018), 25+ reports 命名, 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5) 严守。
 
 ```
 [Document-Meta]
@@ -12,7 +12,7 @@ Last-Modified: 2026-08-10
 Status: 🟢 活跃
 ```
 
-## 12 子规范索引(13 子文件 + 1 README = 14 文件)
+## 16 子规范索引(15 子文件 + 1 README = 16 文件)
 
 | # | 文件 | 主题 | 状态 |
 |---|---|---|---|
@@ -29,7 +29,9 @@ Status: 🟢 活跃
 | 11 | [`11-baseline.md`](11-baseline.md) | R-Measure baseline 3 值 (V1141/V1131/V1136) | 🔒 LOCKED |
 | 12 | [`12-arch-diagram.md`](12-arch-diagram.md) | 架构图编号系统 (P1-P5) | 🟢 |
 | 13 | [`13-document-meta.md`](13-document-meta.md) | Document-Meta 元信息格式 | 🟢 |
-| 14 | [`14-correction-chain.md`](14-correction-chain.md) | 修正链 v3-v17 (思想历史保留) | 🟢 |
+| 14 | [14-correction-chain.md](14-correction-chain.md) | 修正链 v3-v17 (思想历史保留) | 🟢 |
+| 15 | [15-no-fear-complexity.md](15-no-fear-complexity.md) | 不要怕复杂度 (R130 era 主人 8/11 01:14 拍板) | 🟢 |
+| 16 | [16-crate-merge-policy.md](16-crate-merge-policy.md) | Crate 合并与冻结策略 (R128 落实) | 🟢 |
 
 ## 12 子规范一句话定位
 
@@ -56,7 +58,7 @@ Apeireth = **12 个子规范系统** + **7 个版本号子系统** ([`docs/versi
 | S-2 实事求是 | 核验后写(per R119-3a-1 主人 8/10 01:14 拍板"实际可能有偏差") |
 | O-2 走在前人肩上 | 借鉴 semver / Linux kernel / Rust crate / VCP vcptoolbox / LangGraph / AutoGen / MCP / LSP / GitHub Releases |
 | O-3 干到底 | 12 子规范统一 |
-| O-4 任何人都能接手 | 14 文件目录索引 + 跳 |
+| O-4 任何人都能接手 | 16 文件目录索引 + 跳 |
 | O-5 不假装 | 8 项形式撤销,原意保留,实际核验 |
 
 ---

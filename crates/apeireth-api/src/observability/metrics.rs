@@ -5,7 +5,7 @@
 //!
 //! **架构** (跟 v2_endpoints handler 同模式, axum 0.7):
 //! - State: 全局 `crate::observability::global_state()` (RwLock`ObsState`)
-//! - 渲染: 复用 `apeireth_observability::render_prometheus` (1:1 翻译 Prometheus 工业标准)
+//! - 渲染: 复用 `apeireth_telemetry::observability::render_prometheus` (1:1 翻译 Prometheus 工业标准)
 //! - 0 假装 OTLP push (R20 阶段 3 续, skeleton 阶段仅 expose HTTP scrape)
 //!
 //! **6 哲学锚穿透**:
@@ -32,9 +32,9 @@ pub async fn metrics_handler() -> Response {
     let state = global_state();
     let state = state.read();
 
-    // 把 MetricSnapshot 转 apeireth_observability::MetricSample (复用 render_prometheus)
+    // 把 MetricSnapshot 转 apeireth_telemetry::observability::MetricSample (复用 render_prometheus)
     // 编译期对 18 metric 数量做断言 (5 K-1 字样 #2: 18 个)
-    let samples: Vec<apeireth_observability::MetricSample> = state
+    let samples: Vec<apeireth_telemetry::observability::MetricSample> = state
         .metrics
         .values()
         .map(|m| snapshot_to_sample(m))
@@ -42,7 +42,7 @@ pub async fn metrics_handler() -> Response {
     debug_assert_eq!(samples.len(), 18, "18 metric (8 counter + 8 gauge + 2 histogram)");
 
     // 渲染 Prometheus text format (复用 apeireth-observability 公开 API)
-    let body = apeireth_observability::render_prometheus(&samples);
+    let body = apeireth_telemetry::observability::render_prometheus(&samples);
 
     // 强加 header: schema_version + platform (K-1 强校验)
     let mut enriched = body;
@@ -62,16 +62,16 @@ pub async fn metrics_handler() -> Response {
         .into_response()
 }
 
-/// `MetricSnapshot` → `apeireth_observability::MetricSample` (跨 crate 类型转换).
-fn snapshot_to_sample(m: &MetricSnapshot) -> apeireth_observability::MetricSample {
+/// `MetricSnapshot` → `apeireth_telemetry::observability::MetricSample` (跨 crate 类型转换).
+fn snapshot_to_sample(m: &MetricSnapshot) -> apeireth_telemetry::observability::MetricSample {
     let kind = match m.kind.as_str() {
-        "counter" => apeireth_observability::MetricKind::Counter,
-        "gauge" => apeireth_observability::MetricKind::Gauge,
-        "histogram" => apeireth_observability::MetricKind::Histogram,
+        "counter" => apeireth_telemetry::observability::MetricKind::Counter,
+        "gauge" => apeireth_telemetry::observability::MetricKind::Gauge,
+        "histogram" => apeireth_telemetry::observability::MetricKind::Histogram,
         // O-5: 未知类型 fallback to gauge, 不假装
-        _ => apeireth_observability::MetricKind::Gauge,
+        _ => apeireth_telemetry::observability::MetricKind::Gauge,
     };
-    let mut sample = apeireth_observability::MetricSample::new(&m.name, kind, m.value);
+    let mut sample = apeireth_telemetry::observability::MetricSample::new(&m.name, kind, m.value);
     let labels: HashMap<String, String> = m.labels.clone();
     for (k, v) in &labels {
         sample = sample.with_label(k.clone(), v.clone());

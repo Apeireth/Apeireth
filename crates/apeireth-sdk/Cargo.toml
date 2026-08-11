@@ -20,7 +20,7 @@ futures = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 url = "2"
 apeireth-protocol = { path = "../apeireth-protocol" }
-apeireth-keyring = { path = "../apeireth-keyring" }
+apeireth-host = { path = "../apeireth-host" }
 
 # R122-8 (Multi-Lang SDK skeleton, 2026-08-10)
 # cfg-gated optional deps, default features = [] (0 装, O-5 实质守门 per R25)
