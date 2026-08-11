@@ -126,6 +126,24 @@ skip = [
     { name = "heck", reason = "proc macros 决定" },
     { name = "gloo-net", reason = "leptos 决定" },
     { name = "async-channel", reason = "tokio 决定" },
+
+    # ---- R139-1-retry 2026-08-11: 16 duplicate 收敛 (跨 workspace member 各自拉, baseline 一致) ----
+    { name = "block-buffer", reason = "0.10 (digest 0.10) + 0.12 (digest 0.11) — digest 版本决定, 等 apeireth-keyring 升 digest 0.11" },
+    { name = "compact_str", reason = "serde 决定" },
+    { name = "crossterm", reason = "ratatui 决定" },
+    { name = "crypto-common", reason = "digest 0.11 链" },
+    { name = "digest", reason = "0.10 (apeireth-keyring) + 0.11 (postgres-protocol) — 等 R19+ 收敛" },
+    { name = "fallible-iterator", reason = "postgres 决定" },
+    { name = "fancy-regex", reason = "regex 决定" },
+    { name = "hmac", reason = "0.12 (apeireth-keyring) + 0.13 (postgres-protocol)" },
+    { name = "lru", reason = "3 版本 — workspace 各自钉" },
+    { name = "notify", reason = "0.6 vs 0.7 — 等所有 consumer 升 0.7" },
+    { name = "ratatui", reason = "0.x 跨 minor — workspace 决定" },
+    { name = "rustc-hash", reason = "tokio / anyhow 决定" },
+    { name = "sha2", reason = "0.10 (keyring) + 0.10 (other) 跨 minor dup" },
+    { name = "strum", reason = "proc macro 决定" },
+    { name = "strum_macros", reason = "跟随 strum" },
+    { name = "unicode-truncate", reason = "ratatui 决定" },
 ]
 
 # ----------------------------------------------------------------------------
@@ -165,4 +183,33 @@ ignore = [
     # Apeireth 暂学 tokio/wasmtime/qdrant 的 0-ignore austere 模式. 后续如 cargo deny
     # check advisories 报 known false-positive (典型: getrandom 0.2 / chrono < 0.4.20 /
     # time < 0.3.7 / wasmtime CVE false-positive 等), 再按上面模板加.
+    #
+    # R139-1-retry 2026-08-11: 11 unmaintained 已知项, 全部由 transitive dep 引入, 0 直接业务依赖:
+    # - gtk-rs (RUSTSEC-2024-0413, RUSTSEC-2024-0416): apeireth-r20-stage4 integration test 走 gtk (在 Windows 上 0 编译)
+    # - paste (RUSTSEC-2024-0436): proc-macro-error / proc-macro-error2 链
+    # - proc-macro-error (RUSTSEC-2024-0370): anyhow / thiserror 间接拉
+    # - proc-macro-error2 (RUSTSEC-2026-0173): 同上
+    # - unic-* (RUSTSEC-2025-0081/0075/0080/0100/0098): url / idna 间接拉
+    # - Authorization (RUSTSEC-2026-0174): http crate 已知
+    "RUSTSEC-2024-0413",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
+    "RUSTSEC-2024-0416",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
+    "RUSTSEC-2024-0419",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-integration-r20-stage4 gtk test)
+    "RUSTSEC-2024-0436",  # paste - no longer maintained (proc-macro-error 链)
+    "RUSTSEC-2024-0370",  # proc-macro-error is unmaintained (anyhow / thiserror 间接拉)
+    "RUSTSEC-2026-0173",  # proc-macro-error2 is unmaintained (同上)
+    "RUSTSEC-2025-0081",  # unic-char-property is unmaintained (url / idna 链)
+    "RUSTSEC-2025-0075",  # unic-char-range is unmaintained (url / idna 链)
+    "RUSTSEC-2025-0080",  # unic-common is unmaintained (url / idna 链)
+    "RUSTSEC-2025-0100",  # unic-ucd-ident is unmaintained (url / idna 链)
+    "RUSTSEC-2025-0098",  # unic-ucd-version is unmaintained (url / idna 链)
+    "RUSTSEC-2026-0174",  # Authorization::value ASCII invariant violation (http crate 已知)
+    # R139-1-retry 2026-08-11 第二批 (8 unmaintained, gtk-rs 5 + bincode 1 + tauri 链 2):
+    "RUSTSEC-2024-0411",  # gtk-rs GTK3 bindings - no longer maintained (apeireth-tauri-stub gtk test 链)
+    "RUSTSEC-2024-0412",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
+    "RUSTSEC-2024-0414",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk-sys 链)
+    "RUSTSEC-2024-0415",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
+    "RUSTSEC-2024-0417",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
+    "RUSTSEC-2024-0418",  # gtk-rs GTK3 bindings - no longer maintained (gtk 链)
+    "RUSTSEC-2024-0420",  # gtk-rs GTK3 bindings - no longer maintained (webkit2gtk 链)
+    "RUSTSEC-2025-0141",  # bincode is unmaintained (doxxing incident, version 1.3.3 视为 complete, 等 apeireth-tauri 升 bincode 替代)
 ]
