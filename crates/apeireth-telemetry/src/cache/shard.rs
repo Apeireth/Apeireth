@@ -211,6 +211,57 @@ where
         }
     }
 
+    /// 真 eviction 钩子: 跨所有 shard 调用 score 取 score, 找最小, 删除并返其 key.
+    ///
+    /// **用途**: MemoryCache::put 满时调, 腾出 1 个 slot (替代旧的 CapacityExceeded).
+    ///
+    /// **policy 由 score closure 决定**:
+    /// - LRU-like: score = inserted_at (最早插入最小, FIFO 淘汰)
+    /// - TTL-like: score = expires_at (最快过期最小, 近似 LFU)
+    /// - 真 LRU 需要 touch timestamp tracking, O-3 已在 roadmap.md 排.
+    ///
+    /// **锁**: §1 阶段持锁时间 = O(shards × per_shard_len); 通常 shards=16-256, 毫秒级.
+    /// §2 阶段重新锁 victim shard 1 次. parking_lot::Mutex 不可重入, 所以 §1 锁在迭代中
+    /// 短持有 (per shard lock 即 drop), §2 重锁安全.
+    pub fn pop_by_min_score<F>(&self, score: F) -> Option<K>
+    where
+        F: Fn(&V) -> u128,
+        K: Clone,
+    {
+        // §1: 跨 shard 扫, 找出 score 最小的 (shard_idx, key)
+        let mut victim_shard: Option<usize> = None;
+        let mut victim_key: Option<K> = None;
+        let mut victim_score: Option<u128> = None;
+
+        for (shard_idx, shard_mutex) in self.shards.iter().enumerate() {
+            let shard = shard_mutex.lock();
+            for (k, v) in shard.iter() {
+                let s = score(v);
+                let take = match victim_score {
+                    None => true,
+                    Some(prev) => s < prev,
+                };
+                if take {
+                    victim_shard = Some(shard_idx);
+                    victim_key = Some(k.clone());
+                    victim_score = Some(s);
+                }
+            }
+        }
+
+        // §2: 重锁 victim shard, 删除该 entry
+        match (victim_shard, victim_key) {
+            (Some(idx), Some(k)) => {
+                let mut shard = self.shards[idx].lock();
+                shard.remove(&k);
+                Some(k)
+            }
+            _ => None,
+        }
+    }
+
+
+
     /// 单 shard size (测试 / 调试用).
     pub fn shard_len(&self, shard_id: usize) -> usize {
         if shard_id >= self.shards.len() {
