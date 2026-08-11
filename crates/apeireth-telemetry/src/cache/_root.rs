@@ -196,16 +196,26 @@ where
             return Err(CacheError::InvalidTtl(ttl));
         }
 
-        // K-1 强校验: capacity 守门 (R20 阶段 6 skeleton 简化: 不做 value_size 字节估算,
-        // 只检查当前 size >= max_size 时先 evict 1 个; 如果 put 后仍 > max_size 返 CapacityExceeded)
-        let current_size = self.shards.len();
-        if current_size >= self.config.max_size {
-            // 简化处理: 返 CapacityExceeded (skeleton 阶段不做真 eviction loop)
-            // 真 eviction 在 R21 续接时实现 (依赖 5 policy)
-            return Err(CacheError::CapacityExceeded {
-                value_size: 1,
-                max_size: self.config.max_size,
+        // K-1 强校验: capacity 守门
+        // R128 续 (per task spec §5.4): 不再返 CapacityExceeded, 真 eviction
+        // 通过 ShardedMap::pop_by_min_score + TtlEntry.inserted_at (FIFO-on-insert) 实现.
+        // 真 LRU (touch tracking) 在 roadmap.md §3 排, v1.2 续.
+        let mut current_size = self.shards.len();
+        while current_size >= self.config.max_size {
+            // 用 FIFO 策略淘汰 1 个 (TtlEntry.inserted_at 最早)
+            // V 在调用点是 TtlEntry<V_inner>, monomorphize 后 inserted_at() 可用.
+            let evicted = self.shards.pop_by_min_score(|v| {
+                let inst = v.inserted_at();
+                let dur = std::time::Instant::now().saturating_duration_since(inst);
+                let elapsed_ns = (dur.as_secs() as u128) * 1_000_000_000 + (dur.subsec_nanos() as u128);
+                u128::MAX - elapsed_ns
             });
+            if evicted.is_some() {
+                self.stats.record_eviction();
+            } else {
+                break;
+            }
+            current_size = self.shards.len();
         }
 
         let entry = TtlEntry::new(value, ttl);

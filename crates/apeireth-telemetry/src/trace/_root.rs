@@ -91,7 +91,7 @@ pub const PLATFORM_NAME: &str = "apeireth";
 /// # Example
 ///
 /// ```no_run
-/// # use apeireth_tracing::quick_trace;
+/// # use apeireth_telemetry::trace::quick_trace;
 /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// let _trace = quick_trace("apeireth-api").await?;
 /// # Ok(())
@@ -157,7 +157,7 @@ pub fn validate_service_name(s: &str) -> TracingResult<()> {
 /// # Example
 ///
 /// ```no_run
-/// # use apeireth_tracing::{inject_context, span::SpanKind, trace::Trace, exporter::ExporterKind, sampler::AlwaysOnSampler, config::TracingConfig};
+/// # use apeireth_telemetry::trace::{inject_context, SpanKind, Trace, ExporterKind, AlwaysOnSampler, TracingConfig};
 /// # use std::collections::HashMap;
 /// # use std::sync::Arc;
 /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
@@ -194,7 +194,7 @@ pub async fn extract_context(
 /// # Example
 ///
 /// ```no_run
-/// # use apeireth_tracing::{Tracer, span::SpanKind};
+/// # use apeireth_telemetry::trace::{Tracer, SpanKind};
 /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 /// let mut tracer = Tracer::new("apeireth-api").build().await?;
 /// let root = tracer.trace_mut().start_root("op", SpanKind::Server).await?;
@@ -370,7 +370,7 @@ pub fn metric_reset() {
 /// # Example
 ///
 /// ```
-/// use apeireth_tracing::{make_test_span, span::SpanKind};
+/// use apeireth_telemetry::trace::{make_test_span, SpanKind};
 /// let span = make_test_span("test", SpanKind::Client);
 /// assert_eq!(span.name, "test");
 /// ```
@@ -384,7 +384,7 @@ pub fn make_test_span(name: &str, kind: SpanKind) -> Span {
 /// # Example
 ///
 /// ```
-/// use apeireth_tracing::make_test_ctx;
+/// use apeireth_telemetry::trace::make_test_ctx;
 /// let ctx = make_test_ctx();
 /// assert_eq!(ctx.trace_id.len(), 32);
 /// assert_eq!(ctx.span_id.len(), 16);
