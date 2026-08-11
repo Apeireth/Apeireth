@@ -85,6 +85,12 @@ impl ClassWeights {
     pub fn is_valid(&self) -> bool {
         self.delta() < SUM_GUARD_TOLERANCE
     }
+
+    /// 按 [pc, rc, hg, gp] 顺序产出 4 元素迭代器, 供 sum()/max()/min() 组合使用.
+    #[inline]
+    pub fn iter(&self) -> std::array::IntoIter<f32, 4> {
+        [self.pc, self.rc, self.hg, self.gp].into_iter()
+    }
 }
 
 /// 默认权重 (4 大类 估 0.40 / 0.30 / 0.15 / 0.15, sum=1.00 守门).

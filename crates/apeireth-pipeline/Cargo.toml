@@ -38,6 +38,11 @@ tiktoken-rs = { workspace = true }
 name = "pipeline_demo"
 path = "examples/pipeline_demo.rs"
 
+# R126-1: Provider Registry demo (LiteLLM ⏳ 限流 = 准备, 0 装 PASS 严守)
+[[example]]
+name = "provider_registry_demo"
+path = "examples/provider_registry_demo.rs"
+
 # R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]

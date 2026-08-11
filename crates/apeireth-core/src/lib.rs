@@ -2863,11 +2863,11 @@ mod release_manifest_tests {
     use super::*;
 
     #[test]
-    fn test_release_version_is_1_1_0() {
-        // 编译期 hardcode: workspace version 改 1.1.0 后 (R38 B9 + R40-R42 升级), RELEASE_VERSION 自动穿透
+    fn test_release_version_is_1_2_0() {
+        // 编译期 hardcode: workspace version 改 1.2.0 后 (R125 B2 minor, per 10-locked.md + decision-33), RELEASE_VERSION 自动穿透
         assert_eq!(
-            RELEASE_VERSION, "1.1.0",
-            "RELEASE_VERSION must be 1.1.0 (Cargo.toml workspace version 改后自动穿透)"
+            RELEASE_VERSION, "1.2.0",
+            "RELEASE_VERSION must be 1.2.0 (Cargo.toml workspace version 改后自动穿透, per R125 B2 升 1.2.0)"
         );
     }
 

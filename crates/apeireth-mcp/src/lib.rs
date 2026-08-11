@@ -46,6 +46,7 @@ pub mod prompts;
 pub mod telemetry_bridge;  // R112: MCP handler call metrics (atomic-based, 0 改现有 handler)  // R84: MCP prompts protocol (prompts/list + prompts/get)
 pub mod transport;
 pub mod primitives;  // R125-4: MCP primitive namespace enum (借鉴 modelcontextprotocol/servers)
+pub mod multimodal;  // R123-4: multimodal dispatcher (9 Gen plugins + 6 output formats)
 pub mod macros;  // R125-4: JSON-RPC envelope macro (借鉴 servers dispatch pattern, 减 5+ 处重复)
 
 use std::collections::HashMap;

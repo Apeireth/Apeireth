@@ -59,6 +59,8 @@ pub mod client;
 pub mod config;
 pub mod error;
 pub mod lifo_pool;
+// R127-2 P9-1: hyper-util bridge (借脑 1.0, per decision-56 §2.4)
+pub mod hyper_util_bridge;
 
 // ============================================================
 // Re-exports
@@ -68,3 +70,8 @@ pub use client::{HttpClient, Response};
 pub use config::{KeepAliveConfig, SchedulingPolicy};
 pub use error::{HttpClientError, Result};
 pub use lifo_pool::{LifoGuard, LifoPool, PoolFull, RequestTicket};
+// R127-2 P9-1: hyper_util_bridge re-exports
+pub use hyper_util_bridge::{
+    build_legacy_client, tokio_io_bridge_marker_compile_time, HyperUtilConfig, LegacyHttpClient,
+    TokioIoBridge,
+};

@@ -70,7 +70,7 @@ pub const EIGHT_PROMISES_SOURCE_FILES: &[&str] = &[
 ];
 
 /// 期望 workspace version
-pub const EXPECTED_WORKSPACE_VERSION: &str = "1.1.0";  // R38 1.1 升级 (per APEIRETH-VERSIONING.md 主代码版本 semver)
+pub const EXPECTED_WORKSPACE_VERSION: &str = "1.2.0";  // R125 B2 1.1.0 → 1.2.0 (per 10-locked.md + decision-22 + decision-33)
 
 /// 错误 sandbox 路径前缀 (per task spec §严禁)
 pub const FORBIDDEN_SANDBOX_PREFIXES: &[&str] = &[
@@ -148,7 +148,7 @@ pub fn test_workspace_no_sandbox_path_writes(workspace_root: &Path) -> E2EResult
     Ok(())
 }
 
-/// 测试 4: workspace version = 1.1.0 (R38 B9 + R40-R42 升级)
+/// 测试 4: workspace version = 1.2.0 (R125 B2 minor, per 10-locked.md + decision-22 + decision-33)
 pub fn test_workspace_no_workspace_version_modified(workspace_root: &Path) -> E2EResult<()> {
     let cargo_toml = workspace_root.join("Cargo.toml");
     let content = std::fs::read_to_string(&cargo_toml).map_err(|e| E2EError::WorkspaceAudit {
@@ -157,12 +157,12 @@ pub fn test_workspace_no_workspace_version_modified(workspace_root: &Path) -> E2
         actual: e.to_string(),
         context: "test_workspace_no_workspace_version_modified".into(),
     })?;
-    // 简单 grep: 期望 `version = "1.1.0"` 在 [workspace.package] 段
-    if !content.contains("version = \"1.1.0\"") {
+    // 简单 grep: 期望 `version = "1.2.0"` 在 [workspace.package] 段
+    if !content.contains("version = \"1.2.0\"") {
         return Err(E2EError::WorkspaceAudit {
             dimension: "workspace_version".into(),
             expected: EXPECTED_WORKSPACE_VERSION.into(),
-            actual: "workspace version != 1.1.0".into(),
+            actual: "workspace version != 1.2.0".into(),
             context: "test_workspace_no_workspace_version_modified".into(),
         });
     }
