@@ -169,3 +169,4 @@ crates/apeireth-integration-e2e/.*.log
 # 实际 3 文件: .r125-12-REFACTOR-PLAN.md + .r125-12-13-keys-stub.rs + .r125-12-PHL-07-SPEC.md
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
+*.py
