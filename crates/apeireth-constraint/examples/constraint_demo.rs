@@ -2,6 +2,9 @@
 //!
 //! 运行: `cargo run -p apeireth-constraint --example constraint_demo`
 
+// v15 命名修正: verify_all_five_gates 保留为向后兼容别名, 示例演示 v14 旧 API
+#![allow(deprecated)]
+
 use apeireth_constraint::{
     multi_ai_consensus, physical_isolation_check, reflection_period_audit, runtime_intercept,
     verify_all_five_gates, verify_at_compile_time, ConstraintEngine, FiveGates, GateVerdict,
