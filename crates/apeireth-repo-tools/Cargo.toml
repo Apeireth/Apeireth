@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-repo-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth repository scanning and quality analysis facade"
+keywords = ["repository", "scanning", "analysis", "quality"]
+categories = ["development-tools", "filesystem"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+async-trait = { workspace = true }
+chrono = { workspace = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = "3"
+futures = "0.3"

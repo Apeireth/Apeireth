@@ -23,7 +23,7 @@ use apeireth_api::auth::{
     ApiError, AuditEvent, AuthPipeline, Principal, API_KEY_SERVICE, WS_TOKEN_SERVICE,
 };
 use apeireth_api::ws_v1::{STUB_TOOLS, TOOL_WHITELIST, WS_PATH};
-use apeireth_keyring::{KeyringConfig, KeyringStore};
+use apeireth_host::keyring::{KeyringConfig, KeyringStore};
 use apeireth_protocol::ws_v1::{
     AuthFrame, CloseFrame, ErrorFrame, PingFrame, StreamChunkFrame, StreamEndFrame,
     ToolInvokeFrame, ToolResultFrame, WsFrame, WS_PROTOCOL_VERSION,
