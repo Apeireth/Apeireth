@@ -448,7 +448,7 @@ impl HealthResponse {
 /// # Examples
 ///
 /// ```
-/// use apeireth_observability::redact_pii;
+/// use apeireth_telemetry::observability::redact_pii;
 /// assert_eq!(redact_pii("password=secret123").as_deref(), Some("password=***"));
 /// assert_eq!(redact_pii("api_token=abc").as_deref(), Some("api_token=***"));
 /// ```

@@ -90,7 +90,7 @@ pub fn next_trace_id() -> TraceId {
 /// # Examples
 ///
 /// ```
-/// use apeireth_observability::tracing_integration::trace_span;
+/// use apeireth_telemetry::observability::tracing_integration::trace_span;
 /// let _span = trace_span("http_request");
 /// // span 退出时自动 record 结束时间
 /// ```
