@@ -1,40 +1,54 @@
 # apeireth-core
 
-> **职责**: 核心抽象 (traits / 错误层级 / 类型 / 配置加载)
-> **状态**: R11 占位实现
-> **对应文档**: 阶段 2 §3 核心抽象层 + 阶段 2 §2 通信总线 (Bus trait 抽象)
+> **Apeireth 主路径核心类型** — Episode / Note / Session / IdentityCard + bus + 13-key verdict cache.
+> **当前状态**: R128 实际实施, 0 改 13 键 hardcode, PHL-07 V1.0 spec-only.
+> **对应 crate**: `apeireth-sovereignty` (Self-Disable 4 项自动扫描), `apeireth-formal` (Kani proofs).
 
 ---
 
-## 设计意图
+## 公共 API (R128 实际)
 
-`apeireth-core` 是 Apeireth 的"核心抽象层"crate, 所有其他 crate 都依赖它:
+- `Episode` — 主路径 episode (id / timestamp / role / content / session_id)
+- `Note` — session 内的笔记
+- `Session` — 多 episode 容器
+- `IdentityCard` — 主体身份卡 (per continuity_id)
+- `bus` — 内部通信总线 trait
+- `verdict` — 13 键 verdict cache 类型 (12 键 + PHL-07 = 13 键)
+- `ApeirethError` — 顶层错误层级
 
-1. **核心 traits** — `Sovereignty` / `Council` / `PrincipleLayer` / `PermissionMatrix` / `ExperienceStore` / `PluginHost` (阶段 2 §16 6 traits)
-2. **错误层级** — `ApeirethError` 顶层 + 各子错误
-3. **类型定义** — `Message` / `Decision` / `Situation` 等
-4. **配置加载** — TOML / env / secret
+## 13 键 verdict cache (编译期 hardcode)
+
+| 键 | 语义 |
+|---|---|
+| V0 | 0 主动 commit |
+| V1 | 0 主动 push |
+| V2 | workspace.version 严守 |
+| V3 | 24 LOCKED 入口签名冻结 (R128 降级, 历史保留) |
+| V4 | R11 baseline 3 值严守 |
+| V5 | V0.5 30 维守门 |
+| V6 | 6 重守门 v7 |
+| V7 | 8 哲学锚穿透 |
+| V8 | 双洋葱架构 (PrincipleOnion + PermissionOnion) |
+| V9 | 9 organ 内部 fn |
+| V10 | 0 装 PASS 严守 |
+| V11 | 0 重复造轮子严守 |
+| V12 / PHL-07 | 借鉴标注开源 license 严守 |
 
 ## 依赖方向
 
 ```
-所有 crate → apeireth-core (依赖)
-apeireth-core → std only (零依赖)
+所有 crate → apeireth-core (顶层依赖)
+apeireth-core → std + serde + chrono + uuid + thiserror (5 核心库)
 ```
 
-## 6 个核心 trait (阶段 2 §16)
+## 验证
 
-```rust
-pub trait Sovereignty: Send + Sync { /* 主 AI 决策 */ }
-pub trait Council: Send + Sync { /* 智囊团咨询 */ }
-pub trait PrincipleLayer: Send + Sync { /* 原则洋葱 5 层 */ }
-pub trait PermissionMatrix: Send + Sync { /* 权限矩阵 */ }
-pub trait ExperienceStore: Send + Sync { /* 经验沉淀 */ }
-pub trait PluginHost: Send + Sync { /* 插件宿主 */ }
-```
+- `cargo check -p apeireth-core` — 0 errors
+- `cargo test -p apeireth-core` — 13 键 + Self-Disable 测试
+- 12 + 1 = 13 键 编译期 hardcode 保证
 
-**不模仿 Hermes** — 按 Apeireth 实际情况设计 (阶段 1 §16 修正)。
+## See also
 
----
-
-_主哲学 anchor: 主 19:33 走在前人经验上 (trait 设计借鉴 OpenClaw/Hermes) + 主 17:43 实事求是 (基于实际需求)._
+- [Self-Disable](../apeireth-sovereignty/src/self_disable.rs)
+- [13 键 verdict cache 规范](../../docs/conventions/10-locked.md)
+- [13 键 + PHL-07 decision-130](../../reports/decision-130-12-15-tick-owner-3-q-a-6-b-phl-07-b-integrate-5-1-commit-execute-2026-08-11.md)
