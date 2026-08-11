@@ -79,28 +79,17 @@ members = [
     "crates/apeireth-mcp-relay-image",
     "crates/apeireth-workflow",
     "crates/apeireth-team-lead",
-    # 9 skeleton crate 续 (R20 阶段 1 续, 主人 2026-08-05 19:50 拍板"派成员干", 20:30 "最大效率")
-    # 3 估缺核心 (v0.9.21 chunks 1:1 翻译, per RIVAL §2.2)
-    "crates/apeireth-image-prompt",
-    "crates/apeireth-rollback",
-    "crates/apeireth-plugin",
+    # R128: shared infrastructure facade replacing standalone keyring and machine-id crates.
+    "crates/apeireth-host",
+    # R128: repository scanning and analysis facade.
+    "crates/apeireth-repo-tools",
+    # R128: i18n remains active because TUI consumes its translation runtime.
+    "crates/apeireth-i18n",
     # 2 估缺工具 (R20 阶段 4 主体, per RIVAL §2.3)
-    "crates/apeireth-repo-scan",
-    "crates/apeireth-repo-analyzer",
     # 2 估缺基础设施 (P0 安全, per RIVAL §2.4)
-    "crates/apeireth-keyring",
-    "crates/apeireth-machine-id",
     # 2 SDK stub (R20 阶段 3 必补, per RIVAL §2.5)
     "crates/apeireth-lark",
     "crates/apeireth-voice",
-    # Observability skeleton (1.0 release 12 项 checklist #8 必做, per RIVAL §2.5.3, 主 2026-08-05 21:12 拍板"派 A")
-    "crates/apeireth-observability",
-    # Task skeleton (1.0 release 估补 #11, per RIVAL §2.5.4 taskTools.js 1:1 翻译, 主 2026-08-05 21:27 拍板"派"补空位)
-    "crates/apeireth-task",
-    # Tree-sitter skeleton (R20 阶段 5 估补, per RIVAL §2.5.1 4 增强之一, 主 2026-08-05 21:27 拍板"效率不慢下来,验收了继续派")
-    "crates/apeireth-tree-sitter",
-    # i18n (R20 阶段 6 — 1.0 release 12 项 checklist #10, 主 2026-08-05 21:09 拍板"BC 都派", 5 Locale + 8 工具 + 1:1 i18next)
-    "crates/apeireth-i18n",
     # R36: 5 老 provider crate 真删 (claude-code / codex / copilot / gemini-cli / opencode).
     # R35 阶段 1 facade 阶段已 re-export 到 apeireth-provider, R36 真删 5 老 crate, workspace 91 → 86.
     # 5 老 crate 目录 rename 到 *.bak (保留 backup, 防 rollback), 内容已 verify 0 引用.
@@ -110,66 +99,16 @@ members = [
     # = 24 维, sum=1.00 守门, 编译期 hardcode enum, encode/decode/validate/sum_guard 完整.
     # 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺
     "crates/apeireth-naming-v05",
-    # R20 阶段 6 估缺: multi-provider credentials skeleton (1:1 翻译 v0.9.21 @anthropic-ai/credentials 商业版,
-    # per docs/stage4/v09021-rust-translation-blueprint-RIVAL §2.x credentials 部分, 主 2026-08-05 派).
-    # 5 Provider (Anthropic / OpenAI / Google / Azure / Local) + 5 鉴权 (API key / OAuth / JWT / IAM / mTLS)
-    # + 4 轮换策略 (manual / time / count / hybrid) + 5 Scope (read/write/admin/owner/root) + audit 4 事件 (get/put/rotate/revoke).
-    # 0 真接商业版 credentials SDK, 留 R21+ 续真接. 0 触碰 24 LOCKED crate + 0 改其他 crate + 8 工具白名单 + 5 K-1 强校验.
-    "crates/apeireth-credentials",
-    # R20 阶段 6 估缺: LRU + TTL cache skeleton (1:1 翻译 v0.9.21 @anthropic-ai/cache 商业版,
-    # per docs/stage6/01-cache-skeleton-blueprint-2026-08-05.md §3, 主 2026-08-05 派).
-    # 5 EvictionPolicy (LRU/LFU/FIFO/ARC/TinyLFU) + 4 BackendKind (Memory/Disk/Redis/Memcached, 仅 Memory 真接)
-    # + 16-256 分片锁 + lazy/eager TTL + 10 CacheError variant + 4 LRU 实现 (HashMap+VecDeque / indexmap / lru / quickcache 留口子).
-    # 0 真接商业版 cache SDK, 留 R21 续真接. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺.
-    "crates/apeireth-cache",
     # R20 阶段 5 估补: TUI 5 nav + 9 器官 端到端集成测试 (per 主人 2026-08-05 派活单)
     # ratatui TestBackend 测 TUI 设计契约, 25+ 测试, 0 触碰 24 LOCKED, 0 改 workspace version
     # 0 干 Tauri, 0 主动 commit
     "crates/apeireth-tui-e2e",
-    # R20 阶段 6 估补: distributed tracing 框架 (1:1 翻译 v0.9.21 @anthropic-ai/tracing 商业版,
-    # per docs/stage4/v09021-rust-translation-blueprint-RIVAL §2.x tracing 部分, 主 2026-08-05 派).
-    # 4 Span 类型 (client/server/producer/consumer) + 4 事件 (Log/Exception/Event/Message)
-    # + 4 Exporter (stdout/file 真接 + otlp-grpc/jaeger stub) + 4 Sampler (always-on/off/ratio/parent_based)
-    # + 3 Propagation (W3C 真接 + B3/Jaeger stub) + 10 TracingError variant + 3 K-1 强校验.
-    # 0 真接商业版 tracing SDK, 留 R21+ 续真接. 0 触碰 24 LOCKED crate + 0 改其他 crate
-    # + 25+ 集成测试 + 6 哲学 anchor + 8 项不修改承诺.
-    "crates/apeireth-tracing",
-    # R20 阶段 6 估补: Prometheus 兼容 metrics skeleton (1:1 翻译 v0.9.21 @anthropic-ai/metrics 商业版,
-    # per docs/stage6/02-metrics-skeleton-blueprint-2026-08-05.md §3). 4 metric (Counter/Gauge/Histogram/Summary)
-    # + 5 exporter (Prometheus 完整 / Pushgateway/OTLP/StatsD stub / Stdout 完整) + registry + label K-1 守门
-    # (key 字符 + value ≤ 256 + ≤ 10 个 + help 必填). 0 真接 R20 阶段 6 skeleton, 留 R21 续真接 (1 owner × 1 周).
-    # 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺.
-    "crates/apeireth-metrics",
-    # R21 OAuth 3 提供方估补: 借鉴 Golutra OAuth 3 callback 模式 (Apple/Google/GitHub) 1:1 翻译.
-    # per analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P2 第 8 项. 3 Provider trait impl stub
-    # (Apple public client / Google confidential / GitHub confidential + device flow) + 3 Callback mode
-    # trait impl stub (WebviewRedirect / LocalhostServer / DeviceCodeFlow, per RFC 8252/8628) + 顶层
-    # OAuthFlow trait (4 步: prepare / start_callback / await_token / refresh). 0 真连商业版 OAuth 端点
-    # (网络依赖 + 凭证风险, 仅 trait + stub, R21+ 续真接). 0 触碰 24 LOCKED crate + 0 改 workspace version
-    # + 6 哲学 anchor + 8 项不修改承诺 + 25+ 集成测试 (3 mode mock + 3 provider 错误传播).
-    "crates/apeireth-oauth",
-    # R21 autoupdate 估补: 借鉴 Golutra P3 minisign 签名 + autoupdate endpoint (per
-    # analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P3 第 10-11 项) 1:1 翻译.
-    # Updater trait (3 方法: check_for_update / apply_update / verify_signature) + DefaultUpdater 1 默认实现
-    # (GitHub Releases check + minisign verify stub) + minisign 验签 (用现成 `minisign` crate, 0 重复造轮子)
-    # + 2 HTTP endpoint stub (GET /v1/update/check + POST /v1/update/apply) + 11 UpdateError variant + 23 K-1 强校验.
-    # 0 真连 GitHub Releases (网络依赖, 仅 mock response stub). 0 触碰 24 LOCKED crate + 0 改 workspace version
-    # + 6 哲学 anchor + 8 项不修改承诺 + 28 集成测试 (mock GitHub + minisign 真签真验 + endpoint contract).
-    "crates/apeireth-update",
     # R21 借鉴 Golutra #6: 9 Tauri state 模式 (OnceLock + Arc + Mutex) 转 TUI 等价物 (ratatui state 共享框架).
     # per analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P1 第 9/10 项, 主 2026-08-06 01:55 派活.
     # 3 模式 (OnceLockState / MutexState / RwLockState) + 9 器官 state 共享 (heart/brain/hand/eye/ear/memory/voice/body/mind) +
     # 1 完整 state sharing 例子 + 25+ 集成测试. 0 真接 tokio/async, 留 R21 续真接. 0 触碰 24 LOCKED crate +
     # 0 改 workspace version (1.0.0) + 6 哲学 anchor + 8 项不修改承诺.
     "crates/apeireth-state",
-    # R20 阶段 6 估补 (Mavis 派, 跟 apeireth-voice 1:1 模式): Sandbox 真接实现 crate
-    # 6 API (exec / kill / status / network / filesystem / resource_limit, 1:1 翻译 Docker daemon HTTP API v1.43+),
-    # 3 RuntimeKind (Container / Process / WASM, Container 主路径, WASM R21+ 续),
-    # 6 K-1 强校验 (image / command / user / env / port / volume, 跟 apeireth-sdk-sandbox LOCKED baseline 16:34:11 1:1 镜像),
-    # 集成 pipeline-g5 Reliability 5 阶段 (借鉴 Golutra v0.1.0 chat_db), bollard 0.15 占位 dep 留 R21+ 真接 Docker daemon.
-    # 14 wiremock 端到端 + 3 RuntimeKind × 6 API = 18 组合 + 7+ 诚实标缺 (Daemon 0 真连 / WASM 0 真接 / 资源限制跨平台差异 / etc).
-    # 0 触碰 24 LOCKED crate + 0 触碰 crates/apeireth-sdk-sandbox/ (LOCKED baseline 16:34:11) + 0 改 workspace version (1.0.0).
-    "crates/apeireth-sandbox",
     "crates/apeireth-livekit",
     # R21 借鉴 Golutra #3: 9 memory provider 模式 (in_memory / redis / sqlite / postgres / s3 / disk_lru / hybrid + R23 #6 加 file / mongodb),
     # 1:1 镜像 Golutra v0.1.0 memory gateway 5 provider 模式 (5+1+1+2). 9 provider × 6 K-1 强校验
@@ -208,7 +147,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-integration-r20-stage4.
     # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
-    "crates/apeireth-integration-r20-stage4",
     # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-rate-limiter 到 workspace members.
     # 修真: 删 crates/apeireth-rate-limiter/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
     # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
@@ -320,6 +258,18 @@ borrow_skipped = [
 borrow_local_path = ".openclaw/workspace/borrowed-repos/"
 
 # 8 硬墙 (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略, per decision-33 §2 + decision-58 §4)
+# R128 + decision-130 update (2026-08-12, per minimax team 8/11 12:15 tick):
+# - B1 24 LOCKED entry signature V1.0 release strict relaxed (decision-74, decision-130)
+# - A1 R11 baseline 3 values Mavis self-decide (decision-130)
+# - A3 12 keys Mavis self-decide (decision-130)
+# - A3 PHL-07 V1.0 spec-only strict relaxed, option B accepted (decision-130)
+# - B3 V0.5 30-dim Mavis self-decide (decision-130)
+# - B4 6-gate v7 Mavis self-decide (decision-130)
+# - B5 8 anchors Mavis self-decide (decision-130)
+# - C1 0 proactive commit (master awake before) strict relaxed (decision-126)
+# - C2 0 fake PASS strict maintained (decision-74)
+# - 0 proactive push strict maintained (decision-126)
+# R128 hard_walls metadata still 8 for cargo metadata history, V1.1 release (2026-11-30) regenerate.
 hard_walls = "8 (B1 24 LOCKED 持续更新 / B2 workspace.version 1.2.0 0 改 / B3 V0.5 30 维 / B4 6 重守门 v7 / B5 8 哲学锚 / B6 三洋葱 / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit / C2 0 装 PASS 严守 / C3 升 6 重 v7 / 0 主动 push 严守)"
 
 # 24 LOCKED 入口签名 0 改 (per decision-22 §1.2 + decision-33 §2.3 B1 + decision-41 §2 + P2-3 retry verify done + P4-1 verify done + P14-1 retry verify done)
@@ -522,4 +472,5 @@ needless_continue = 'warn'
 ptr_as_ptr = 'warn'
 ref_option_ref = 'warn'
 needless_pass_by_ref_mut = 'warn'
+
 

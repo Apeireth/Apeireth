@@ -30,6 +30,8 @@ mod monitor;
 mod multisig;
 mod ota;
 mod sandbox;
+/// Snapshot and rollback service, merged from the former standalone crate.
+pub mod rollback;
 // round10-10: 跨 crate 集成适配层 (pub 以便 integration 测试)
 pub mod cross_crate;
 

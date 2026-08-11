@@ -21,7 +21,7 @@
 
 use std::sync::Arc;
 
-use apeireth_observability::tui_dashboard::{
+use apeireth_telemetry::observability::tui_dashboard::{
     OrganDashboard, OrganKind, OrganReadiness, TuiOrganState, render_dashboard,
     render_organ_widget,
 };

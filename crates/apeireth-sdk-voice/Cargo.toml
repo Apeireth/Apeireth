@@ -47,7 +47,7 @@ apeireth-protocol = { path = "../apeireth-protocol" }
 #   (Windows Credential Manager / macOS Keychain / Linux Secret Service / BSD)
 #   + fallback AES-256-GCM + PBKDF2 600_000 加密 (per OWASP 2023)
 #   0 明文存盘 (P0 安全铁律 主人 19:50 拍板)
-apeireth-keyring = { path = "../apeireth-keyring" }
+apeireth-host = { path = "../apeireth-host" }
 
 [dev-dependencies]
 tempfile = "3"
