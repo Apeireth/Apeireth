@@ -22,6 +22,14 @@ path = "src/lib.rs"
 name = "central_demo"
 path = "examples/central_demo.rs"
 
+[[example]]
+name = "skill_demo"
+path = "examples/skill_demo.rs"
+
+[[example]]
+name = "skill_recommender_demo"
+path = "examples/skill_recommender_demo.rs"
+
 # R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]

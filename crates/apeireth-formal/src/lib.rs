@@ -34,6 +34,12 @@ pub mod invariant;
 pub mod kani_harness;
 pub mod proof;
 pub mod tla;
+// R127-2 P9-1: 5 NEW POD 模型 + 5 NEW Kani harness (借脑 1.0)
+pub mod borrowed_models_v2;
+// R129-10: Stage 5.2 形式化扩展 — 10 模块 (F1-F10) (per 决策 #33 + #55 + #61 §3.1)
+pub mod stage5_2;
+// R129-20: Stage 5.3 跨模块证明 — 10 模块 (F11-F20) (per 决策 #33 + #55 + #61 §3.1 R129-20)
+pub mod stage5_3;
 
 /// 权限洋葱的最小 POD 配置 (Kani-friendly).
 ///

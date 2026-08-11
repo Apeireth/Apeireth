@@ -17,3 +17,9 @@ walkdir = "2.5"
 apeireth-mcp = { path = "../apeireth-mcp" }
 [lints]
 workspace = true
+# R125-19 (per decision-51 §1.4 P3-2): 加 skill_executor_demo example
+# 5 phase state machine 演示 (TDD / Plan-Verify / Parallel / Review / Meta).
+# 借鉴 ID: R125-19-BORROW-obra/superpowers-2026-05-2026-08-10
+[[example]]
+name = "skill_executor_demo"
+path = "examples/skill_executor_demo.rs"

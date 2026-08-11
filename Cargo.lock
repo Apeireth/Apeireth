@@ -567,6 +567,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "httpmock",
+ "hyper-util",
  "parking_lot",
  "reqwest 0.12.28",
  "serde",
@@ -717,6 +718,13 @@ dependencies = [
  "tracing",
  "url",
  "wiremock 0.6.5",
+]
+
+[[package]]
+name = "apeireth-library-governance"
+version = "1.2.0"
+dependencies = [
+ "thiserror 1.0.69",
 ]
 
 [[package]]

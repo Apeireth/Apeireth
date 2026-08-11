@@ -44,7 +44,8 @@
 //! - [`encode`] — 24 维 → 字符串 (4 行, 1 行 1 大类)
 //! - [`decode`] — 字符串 → 24 维 (regex 解析)
 //! - [`validate`] — 24 维合法性 + sum=1.00 守门 + roundtrip
-//! - [`error`] — 10 个 `NamingError` variant
+//! - [`error`] — 11 个 `NamingError` variant (10 原始 + 1 R126 扩展)
+//! - [`extension`] — **R126 P1-4**: V0.5 → V0.5.30 扩展 (5 new meta-dim + 1 overall = 30 dim, 借鉴 langgraph)
 //! - [`sum_guard`] — 4 大类权重 sum=1.00 守门 (核心)
 //!
 //! ## 6 哲学 anchor (per APEIRETH-CONVENTIONS §9)
@@ -54,7 +55,7 @@
 //! - **O-5 主 17:58 不假装** — 24 维 编译期 hardcode enum, 不假装"已对齐 V0.5"
 //! - **O-2 主 19:33 走在前人肩上** — 借 v1077 + v4.1 §13 + R17 命名 v12 规范
 //! - **O-3 主 23:44 干到底** — 24 维 立即落, 守门硬约束 (sum=1.00 容差 0.001)
-//! - **O-4 主 00:56 任何人都能接手** — 7 模块 + 24 维 struct + sum_guard + 10 error variant 全文档化
+//! - **O-4 主 00:56 任何人都能接手** — 7 模块 + 24 维 struct + sum_guard + 11 error variant 全文档化 (R126 P1-4 扩展 10 → 11)
 //!
 //! ## 8 项不修改承诺 (per APEIRETH-CONVENTIONS §10)
 //!
@@ -110,6 +111,7 @@ pub mod decode;
 pub mod dimension;
 pub mod encode;
 pub mod error;
+pub mod extension;
 pub mod sum_guard;
 pub mod validate;
 
@@ -130,6 +132,11 @@ pub use sum_guard::{
     SUM_GUARD_TOLERANCE,
 };
 pub use validate::{validate_roundtrip, validate_v05, validate_v05_structure, validate_v05_with_weights};
+pub use extension::{
+    Adversarial, CiPassRate, MetaDims, MetaOverall, Robustness, SelfImprovement,
+    V05Spec30, VerifierConsistency, BASE_CLASS_COUNT, BASE_DIM_COUNT, META_DIM_COUNT,
+    OVERALL_DIM_COUNT, V05_30_TOTAL_DIMS,
+};
 
 // ============================================================================
 // Crate-level 常量 (K-1 强校验, 编译期 hardcode)

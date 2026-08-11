@@ -1,6 +1,6 @@
-//! # NamingError — V0.5 命名规范错误类型 (10 variant)
+//! # NamingError — V0.5 命名规范错误类型 (10 + 1 = 11 variant)
 //!
-//! 10 个错误 variant 覆盖 encode/decode/validate/sum_guard 全流程:
+//! 10 个原始 variant (per R20 阶段 4 skeleton) + 1 个 R126 扩展 variant (per B3 25→30 维):
 //! 1. `InvalidPrefix` — 缺 "apeireth:" 前缀
 //! 2. `InvalidLevel` — level 0-9 越界
 //! 3. `InvalidClass` — class 不在 4 大类内 (PC/RC/HG/GP)
@@ -11,6 +11,7 @@
 //! 8. `InvalidLineage` — lineage 不在 4 血统内
 //! 9. `SumNotEquals1` — 4 大类权重和 ≠ 1.00 (守门破坏)
 //! 10. `MalformedFormat` — 字符串格式错乱 (段数不对 / 段间分隔符错)
+//! 11. `InvalidMetaDimOutOfRange` — **R126 P1-4 扩展**: 5 新 meta-dim ∈ [0.0, 1.0] 越界
 //!
 //! ## m3 防御 (per `m3-hallucination-defense §2.1`)
 //!
@@ -24,10 +25,10 @@
 use thiserror::Error;
 
 // ============================================================================
-// §1 NamingError 枚举 (10 variant, per skeleton 模式 + m3 防御)
+// §1 NamingError 枚举 (10 + 1 = 11 variant, per skeleton 模式 + m3 防御)
 // ============================================================================
 
-/// V0.5 命名规范错误 (10 variant, 编译期 hardcode).
+/// V0.5 命名规范错误 (11 variant, 编译期 hardcode).
 #[derive(Debug, Error, PartialEq)]
 pub enum NamingError {
     /// 字符串缺 "apeireth:" 前缀 (e.g. "5.PC.code.text.high.complete.apeireth-1.0").
@@ -74,6 +75,20 @@ pub enum NamingError {
     /// 字符串格式错乱 (段数 ≠ 7 / 段间分隔符错 / 段内容空).
     #[error("malformed format: {0}")]
     MalformedFormat(String),
+
+    /// R126 P1-4 扩展: 5 新 meta-dim ∈ [0.0, 1.0] 越界
+    /// (Robustness / SelfImprovement / Adversarial / CiPassRate / VerifierConsistency).
+    #[error("invalid meta-dim {name}: value {value} out of range [{min}, {max}]")]
+    InvalidMetaDimOutOfRange {
+        /// meta-dim 名字 (e.g. "Robustness").
+        name: &'static str,
+        /// 实际传入值.
+        value: f32,
+        /// 最小值 (0.0).
+        min: f32,
+        /// 最大值 (1.0).
+        max: f32,
+    },
 }
 
 // ============================================================================
@@ -87,9 +102,9 @@ pub type NamingResult<T> = std::result::Result<T, NamingError>;
 // §3 错误 variant 计数 (K-1 强校验, 编译期守门)
 // ============================================================================
 
-/// NamingError 编译期 hardcode variant 数 (10).
+/// NamingError 编译期 hardcode variant 数 (10 原始 + 1 R126 扩展 = 11).
 /// m3 防御: 改这个数字会立刻破坏 build, 防止 hallucination 加/减 variant.
-pub const NAMING_ERROR_VARIANT_COUNT: usize = 10;
+pub const NAMING_ERROR_VARIANT_COUNT: usize = 11;
 
 // ============================================================================
 // §4 in-module 测试
@@ -99,13 +114,30 @@ pub const NAMING_ERROR_VARIANT_COUNT: usize = 10;
 mod tests {
     use super::*;
 
-    /// 守门 #1: NamingError 编译期 10 variant.
+    /// 守门 #1: NamingError 编译期 11 variant (10 原始 + 1 R126 扩展).
     #[test]
     fn naming_error_has_ten_variants() {
-        // 10 variant 1:1: InvalidPrefix / InvalidLevel / InvalidClass / InvalidDomain
+        // 11 variant 1:1: InvalidPrefix / InvalidLevel / InvalidClass / InvalidDomain
         //               / InvalidModality / InvalidSafety / InvalidCompleteness
         //               / InvalidLineage / SumNotEquals1 / MalformedFormat
-        assert_eq!(NAMING_ERROR_VARIANT_COUNT, 10);
+        //               / InvalidMetaDimOutOfRange (R126 扩展)
+        assert_eq!(NAMING_ERROR_VARIANT_COUNT, 11);
+    }
+
+    /// R126 P1-4 扩展: InvalidMetaDimOutOfRange 守门.
+    #[test]
+    fn naming_error_invalid_meta_dim_displays_correctly() {
+        let e = NamingError::InvalidMetaDimOutOfRange {
+            name: "Robustness",
+            value: 1.5,
+            min: 0.0,
+            max: 1.0,
+        };
+        let s = format!("{e}");
+        assert!(s.contains("Robustness"));
+        assert!(s.contains("1.5"));
+        assert!(s.contains("0"));
+        assert!(s.contains("1"));
     }
 
     /// 守门 #2: 错误 Display 实现正常.
