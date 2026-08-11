@@ -73,6 +73,9 @@ pub enum Provider {
     Ollama,
     /// 任意 OpenAI 兼容端点 (代理 / LMStudio / vLLM ...)
     Custom,
+    /// MiniMax (minimax.com, OpenAI 兼容 + Anthropic Messages API 双协议)
+    /// R128+: TUI 集成 minimax 6th provider descriptor (per apeireth-provider/minimax.rs)
+    Minimax,
 }
 
 impl Provider {
@@ -84,6 +87,7 @@ impl Provider {
             Self::Deepseek => ("https://api.deepseek.com/v1", "deepseek-chat"),
             Self::Ollama => ("http://localhost:11434/v1", "llama3"),
             Self::Custom => ("", ""),
+            Self::Minimax => ("https://api.minimaxi.com/v1", "MiniMax-M3"),
         }
     }
     pub fn label(&self) -> &'static str {
@@ -93,6 +97,7 @@ impl Provider {
             Self::Deepseek => "DeepSeek",
             Self::Ollama => "Ollama",
             Self::Custom => "自定义",
+            Self::Minimax => "MiniMax",
         }
     }
     /// R26-3 fix: 不同 provider 的 endpoint path 取决于 base_url 是否含 /v1 前缀
@@ -104,7 +109,7 @@ impl Provider {
     /// → 404. MiniMax 主人 (主人反馈) 这次发现的就是这个 bug.
     pub fn endpoint_path(&self) -> &'static str {
         match self {
-            Self::Openai | Self::Deepseek | Self::Ollama | Self::Custom => "/chat/completions",
+            Self::Openai | Self::Deepseek | Self::Ollama | Self::Custom | Self::Minimax => "/chat/completions",
             Self::Anthropic => "/v1/messages",
         }
     }
