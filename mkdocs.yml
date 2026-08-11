@@ -1,0 +1,141 @@
+# mkdocs.yml — Apeireth 1.0 GitHub Pages 静态网站配置
+#
+# 用途: 1.0 release 配套 GitHub Pages 文档站 (per 决策 #55 §2.6 + 决策 #58 §5 + 主人 8/4 23:33 Tauri 终极)
+# 源: docs/pages-source/ (7 markdown 文档, R129-13 写)
+# 部署: gh-pages branch (主人手跑, Mavis 0 主动)
+#
+# 0 主动 build 严守: Mavis 0 主动 mkdocs build, 主人起床后手跑 `mkdocs build`
+# 0 主动 push 严守: Mavis 0 主动 push gh-pages, 主人手跑 `git push origin gh-pages`
+#
+# 关联: decision-33 §2.3 (0 主动 push 严守) + decision-58 §7 + decision-61 §6 + decision-62 §9
+# 整合 #4 commit: abf12243 (2026-08-10 19:41, 46752 file changes, 0 重跑, master HEAD 严守)
+
+site_name: Apeireth 1.0 — AGI 操作系统
+site_description: VCP 全栈 Rust 重写 + 单一定形式可全自关 (Self-Disable) + 双层中架构 + 编译期内保证 (13 键 hardcode) + R-测量 0.92
+site_author: Apeireth Team
+copyright: Copyright © 2026 Apeireth Team. Licensed under Apache License, Version 2.0.
+
+# 仓库 (1.0 release 后主人配)
+repo_name: apeireth/apeireth-rust
+repo_url: https://github.com/apeireth/apeireth-rust
+edit_uri: edit/gh-pages/docs/pages-source/
+
+# 文档源目录 (R129-13 写到 docs/pages-source/, 跟现有丰富 docs/ 隔离)
+docs_dir: docs/pages-source
+site_dir: site
+
+# 主题: Material (信息密度高, 拟人化 + 拟物化 per 用户记忆 #5)
+theme:
+  name: material
+  language: zh
+  features:
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    view: material/eye
+
+# 额外 CSS (Material 主题微调)
+extra_css:
+  - assets/css/extra.css
+
+# 额外 JavaScript (Material 主题微调, 可选)
+# extra_javascript:
+#   - assets/js/extra.js
+
+# Markdown 扩展 (admonition / codehilite / toc / pymdownx)
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 4
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+  - pymdownx.caret
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+# 插件 (search 是 mkdocs 内置)
+plugins:
+  - search:
+      lang:
+        - en
+        - zh
+
+# 导航 (5 主导航 + 3 链式页)
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - API: api.md
+  - Roadmap: roadmap.md
+  - Architecture: architecture.md
+  - Changelog: changelog.md
+  - Borrowed Repos: borrowed-repos.md
+
+# 严格模式 (broken link 警告)
+strict: true
+
+# 不使用 mkdocs 自带版本管理 (Apeireth 版本在 ROADMAP.md)
+# extra:
+#   version:
+#     provider: mike
+
+# 0 主动 build 严守
+# Mavis 0 主动 mkdocs build
+# 主人起床后手跑 `mkdocs build` 生成 site/ 目录
+# 主人手跑 `gh-deploy` 或 `git push origin gh-pages` 部署
+# 主人手跑 GitHub repo Settings → Pages → 选 gh-pages branch
