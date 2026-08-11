@@ -1202,6 +1202,8 @@ pub fn build_router(state: SharedV2) -> Router<()> {
         .route("/sovereignty/status", get(sovereignty_status))
         .route("/sovereignty/attack", post(sovereignty_attack))
         .route("/sovereignty/rearm", post(sovereignty_rearm))
+        // R129: VCP ToolBox 兼容 guard endpoint (per Aemeath 审计 + decision-130)
+        .route("/guard", post(guard))
         // Agent
         .route("/agent/aliases", get(agent_aliases))
         .route("/agent/alias", post(agent_register_alias))
@@ -1842,6 +1844,147 @@ struct AgentAliasesResponse {
     agents: Vec<AgentAliasItem>,
 }
 
+// ============================================================
+// 7. Guard — VCP ToolBox 兼容: 单动作判定
+// ============================================================
+
+/// /v1/guard 请求: 单个动作的 Allow / Deny 判定
+#[derive(Debug, Deserialize)]
+pub struct GuardRequest {
+    pub action: String,
+    pub target: Option<String>,
+    #[serde(default)]
+    pub params: serde_json::Value,
+    pub context: Option<String>,
+    pub actor: Option<String>,
+}
+
+/// /v1/guard 响应: 判定 + 详情
+#[derive(Debug, Serialize)]
+pub struct GuardResponse {
+    pub verdict: String,
+    pub reason: String,
+    pub checks: Vec<GuardCheckDetail>,
+    pub verdict_cache_keys: Vec<String>,
+    pub timestamp_ms: i64,
+    pub armed: bool,
+}
+
+/// 单个 guard check 的详情
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GuardCheckDetail {
+    pub mechanism: String,
+    pub mechanism_id: u8,
+    pub chinese_name: String,
+    pub result: String,
+    pub trigger_id: Option<String>,
+}
+
+/// /v1/guard 处理
+pub async fn guard(
+    State(state): State<SharedV2>,
+    Json(req): Json<GuardRequest>,
+) -> Result<Json<GuardResponse>, (StatusCode, String)> {
+    let guard_arc = state
+        .sovereignty
+        .get()
+        .ok_or_else(|| service_not_ready("sovereignty"))?;
+    let mut g = guard_arc
+        .lock()
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("sovereignty mutex poisoned: {e}")))?;
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let ctx = req.context.clone().unwrap_or_else(|| format!("guard:{}", req.action));
+    let to_run: Vec<&str> = match req.action.as_str() {
+        "tool.invoke:reverse" => vec!["no_reverse"],
+        "tool.invoke:bypass" => vec!["no_bypass"],
+        "tool.invoke:patch" => vec!["no_patch"],
+        "risk:downgrade" => vec!["no_degrade"],
+        "audit:hide" => vec!["no_hide"],
+        "*" | "all" => vec!["no_degrade", "no_patch", "no_bypass", "no_reverse", "no_hide"],
+        _ => vec!["no_bypass"],
+    };
+    let original = req.params.get("original").and_then(|v| v.as_str()).unwrap_or("low");
+    let proposed = req.params.get("proposed").and_then(|v| v.as_str()).unwrap_or("");
+    let rule = req.params.get("rule").and_then(|v| v.as_str()).unwrap_or("principle_keys_count");
+    let token = req.params.get("token").and_then(|v| v.as_str()).unwrap_or("");
+    let trigger_id = req.params.get("trigger_id").and_then(|v| v.as_str()).unwrap_or("sd-999999");
+    let window_id = req.params.get("window_id").and_then(|v| v.as_str()).unwrap_or("audit-window-001");
+    let skip = !g.is_armed;
+    let mut details = Vec::with_capacity(to_run.len());
+    let mut verdict_cache_keys: Vec<String> = Vec::with_capacity(7);
+    verdict_cache_keys.push(format!("action={}", req.action));
+    if let Some(t) = &req.target { verdict_cache_keys.push(format!("target={}", t)); }
+    if let Some(a) = &req.actor { verdict_cache_keys.push(format!("actor={}", a)); }
+    for m in &to_run {
+        let mechanism_id: u8;
+        let chinese_name: &str;
+        let (result, trigger_id_opt) = match *m {
+            "no_degrade" => {
+                mechanism_id = 1; chinese_name = "不可降级";
+                if skip { ("skip".to_string(), None) }
+                else { match g.check_no_degrade(original, proposed, &ctx, now_ms) {
+                    SelfDisableCheck::Pass => ("pass".to_string(), None),
+                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                }}
+            }
+            "no_patch" => {
+                mechanism_id = 2; chinese_name = "不可patch";
+                if skip { ("skip".to_string(), None) }
+                else { match g.check_no_patch(rule, 0, &ctx, now_ms) {
+                    SelfDisableCheck::Pass => ("pass".to_string(), None),
+                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                }}
+            }
+            "no_bypass" => {
+                mechanism_id = 3; chinese_name = "不可绕过";
+                if skip { ("skip".to_string(), None) }
+                else { match g.check_no_bypass(token, !token.is_empty(), &ctx, now_ms) {
+                    SelfDisableCheck::Pass => ("pass".to_string(), None),
+                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                }}
+            }
+            "no_reverse" => {
+                mechanism_id = 4; chinese_name = "不可逆转";
+                if skip { ("skip".to_string(), None) }
+                else { match g.check_no_reverse(trigger_id, &ctx, now_ms) {
+                    SelfDisableCheck::Pass => ("pass".to_string(), None),
+                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                }}
+            }
+            "no_hide" => {
+                mechanism_id = 5; chinese_name = "不可隐藏";
+                if skip { ("skip".to_string(), None) }
+                else { match g.check_no_hide(window_id, &ctx, now_ms) {
+                    SelfDisableCheck::Pass => ("pass".to_string(), None),
+                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                }}
+            }
+            _ => return Err((StatusCode::BAD_REQUEST, format!("unknown mechanism '{m}'"))),
+        };
+        if result == "fail" {
+            if let Some(tid) = &trigger_id_opt { verdict_cache_keys.push(format!("triggered:{tid}")); }
+        }
+        details.push(GuardCheckDetail {
+            mechanism: m.to_string(),
+            mechanism_id,
+            chinese_name: chinese_name.to_string(),
+            result,
+            trigger_id: trigger_id_opt,
+        });
+    }
+    let any_fail = details.iter().any(|d| d.result == "fail");
+    let (verdict, reason) = if skip {
+        ("Allow".to_string(), "已解除安装(不可续守)".to_string())
+    } else if any_fail {
+        let count = details.iter().filter(|d| d.result == "fail").count();
+        ("Deny".to_string(), format!("触发 {count} 个 Self-Disable 机制"))
+    } else {
+        ("Allow".to_string(), format!("全部 {} 个机制均通过", details.len()))
+    };
+    let armed = g.is_armed;
+    Ok(Json(GuardResponse { verdict, reason, checks: details, verdict_cache_keys, timestamp_ms: now_ms, armed }))
+}
+
 async fn agent_aliases(
     State(state): State<SharedV2>,
 ) -> Result<Json<AgentAliasesResponse>, (StatusCode, String)> {
@@ -1987,6 +2130,7 @@ pub async fn v2_health(State(state): State<SharedV2>) -> impl IntoResponse {
             "/v1/sovereignty/status",
             "/v1/sovereignty/attack",
             "/v1/sovereignty/rearm",
+            "/v1/guard",
             "/v1/agent/aliases",
             "/v1/agent/alias",
             "/v1/agent/cache",
@@ -2478,6 +2622,106 @@ mod tests {
             .await
             .expect_err("400");
         assert_eq!(err.0, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn guard_deny_when_bypass_master_token() {
+        let state = V2State::new();
+        state.install_sovereignty(Arc::new(StdMutex::new(V2SelfDisableGuard::new())));
+        let req = GuardRequest {
+            action: "tool.invoke:bypass".into(),
+            target: Some("tool:fs:write".into()),
+            params: json!({"token": "master"}),
+            context: Some("test".into()),
+            actor: Some("test_actor".into()),
+        };
+        let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
+        assert_eq!(r.verdict, "Deny");
+        assert_eq!(r.armed, true);
+        assert_eq!(r.checks.len(), 1);
+        assert_eq!(r.checks[0].mechanism, "no_bypass");
+        assert_eq!(r.checks[0].result, "fail");
+        assert_eq!(r.checks[0].mechanism_id, 3);
+        assert!(r.checks[0].trigger_id.is_some());
+        assert!(r.verdict_cache_keys.iter().any(|k| k.starts_with("triggered:")));
+    }
+
+    #[tokio::test]
+    async fn guard_allow_when_disarmed() {
+        let state = V2State::new();
+        state.install_sovereignty(Arc::new(StdMutex::new(V2SelfDisableGuard::new())));
+        state.sovereignty.get().unwrap().lock().unwrap().is_armed = false;
+        let req = GuardRequest {
+            action: "tool.invoke:bypass".into(),
+            target: None,
+            params: json!({"token": "master"}),
+            context: None,
+            actor: None,
+        };
+        let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
+        assert_eq!(r.verdict, "Allow");
+        assert_eq!(r.armed, false);
+        for c in &r.checks { assert_eq!(c.result, "skip"); }
+    }
+
+    #[tokio::test]
+    async fn guard_wildcard_runs_all_5_mechanisms() {
+        let state = V2State::new();
+        state.install_sovereignty(Arc::new(StdMutex::new(V2SelfDisableGuard::new())));
+        let req = GuardRequest {
+            action: "*".into(),
+            target: None,
+            params: json!({
+                "original": "critical",
+                "proposed": "low",
+                "rule": "principle_keys_count",
+                "token": "master",
+                "trigger_id": "sd-999999",
+                "window_id": "audit-window-001"
+            }),
+            context: Some("wildcard".into()),
+            actor: Some("auditor".into()),
+        };
+        let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
+        assert_eq!(r.verdict, "Deny");
+        assert_eq!(r.checks.len(), 5);
+        let mechanisms: Vec<&str> = r.checks.iter().map(|c| c.mechanism.as_str()).collect();
+        assert_eq!(mechanisms, vec!["no_degrade", "no_patch", "no_bypass", "no_reverse", "no_hide"]);
+        for c in &r.checks { assert_eq!(c.result, "fail"); }
+    }
+
+    #[tokio::test]
+    async fn guard_risk_downgrade_mapped_to_no_degrade() {
+        let state = V2State::new();
+        state.install_sovereignty(Arc::new(StdMutex::new(V2SelfDisableGuard::new())));
+        let req = GuardRequest {
+            action: "risk:downgrade".into(),
+            target: None,
+            params: json!({"original": "high", "proposed": "low"}),
+            context: None,
+            actor: None,
+        };
+        let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
+        assert_eq!(r.checks.len(), 1);
+        assert_eq!(r.checks[0].mechanism, "no_degrade");
+        assert_eq!(r.checks[0].result, "fail");
+    }
+
+    #[tokio::test]
+    async fn guard_pass_when_no_violation() {
+        let state = V2State::new();
+        state.install_sovereignty(Arc::new(StdMutex::new(V2SelfDisableGuard::new())));
+        let req = GuardRequest {
+            action: "tool.invoke:bypass".into(),
+            target: None,
+            params: json!({"token": ""}),
+            context: None,
+            actor: None,
+        };
+        let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
+        assert_eq!(r.verdict, "Allow");
+        assert_eq!(r.checks[0].result, "pass");
+        assert_eq!(r.checks[0].trigger_id, None);
     }
 
     #[tokio::test]
