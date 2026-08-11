@@ -61,6 +61,15 @@ EXPOSE 8080 9090
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD ["/usr/local/bin/apeireth", "--health-check"]
 
+# R128+ LLM env: minimax (MiniMax) endpoint
+#   APEIRETH_API_KEY    = minimax coding plan key
+#   APEIRETH_BASE_URL   = https://api.minimaxi.com/v1 (default)
+#   APEIRETH_MODEL      = MiniMax-M3 (default)
+ENV APEIRETH_API_KEY=""
+ENV APEIRETH_BASE_URL="https://api.minimaxi.com/v1"
+ENV APEIRETH_MODEL="MiniMax-M3"
+
+
 ENTRYPOINT ["/usr/local/bin/apeireth"]
 
 # multi-arch build (linux/amd64 + linux/arm64):
