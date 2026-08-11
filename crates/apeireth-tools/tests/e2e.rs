@@ -420,7 +420,8 @@ fn project_conventions_scans_own_workspace_root() {
     assert!(conv.scan_error.is_none(), "scan should succeed, got: {:?}", conv.scan_error);
     assert_eq!(conv.edition.as_deref(), Some("2021"));
     assert_eq!(conv.resolver.as_deref(), Some("2"));
-    assert!(conv.members_count >= 80, "real workspace has 80+ crates, got {}", conv.members_count);
+    // R128 匕累: 94 → 73 active (+ _frozen + _archived), 期望 ≥ 70 即可.
+    assert!(conv.members_count >= 70, "real workspace has 70+ crates (post-R128 94→73), got {}", conv.members_count);
     // lint 类别应含 rust + clippy (workspace lint)
     assert!(conv.lint_categories.contains(&"rust".to_string()));
     assert!(conv.lint_categories.contains(&"clippy".to_string()));

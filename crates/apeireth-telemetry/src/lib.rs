@@ -21,11 +21,41 @@
 /// 1.1 cache module - LRU/LFU/FIFO/ARC/TinyLFU + 4 backend (1:1 from apeireth-cache)
 pub mod cache;
 
+// 1.1 兼容层 (R128 续): 过洋 doctests 参考老 crate 名.
+// R35+1.1 合并 apeireth-{cache,metrics,tracing,observability} 到 telemetry/src.
+// 老 crate 已 frozen, 但 doctest 仍引 `crate::trace::quick_trace`.
+// 在 lib.rs 加 4 个 compat module 别名, 让旧 import 路径通过 pub use 归丛.
+// 新码推荐 `apeireth_telemetry::trace::*`. per S-2/O-4.
+
+/// 1.1 兼容: `apeireth_cache::*` 归丛 `cache::*`.
+#[doc(hidden)]
+pub mod apeireth_cache {
+    pub use crate::cache::*;
+}
+
+/// 1.1 兼容: `apeireth_metrics::*` 归丛 `metric::*`.
+#[doc(hidden)]
+pub mod apeireth_metrics {
+    pub use crate::metric::*;
+}
+
 /// 1.1 metric module - Counter/Gauge/Histogram/Summary + Prometheus (1:1 from apeireth-metrics)
 pub mod metric;
 
+/// 1.1 兼容: `apeireth_tracing::*` 归丛 `trace::*`.
+#[doc(hidden)]
+pub mod apeireth_tracing {
+    pub use crate::trace::*;
+}
+
 /// 1.1 trace module - W3C trace_id + 4 SpanKind + 4 exporter (1:1 from apeireth-tracing)
 pub mod trace;
+
+/// 1.1 兼容: `apeireth_observability::*` 归丛 `observability::*`.
+#[doc(hidden)]
+pub mod apeireth_observability {
+    pub use crate::observability::*;
+}
 
 /// 1.1 observability module - 5 component health + 3 endpoint + tui_dashboard (1:1 from apeireth-observability)
 pub mod observability;
