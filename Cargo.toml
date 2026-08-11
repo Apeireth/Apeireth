@@ -240,19 +240,134 @@ members = [
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-voice.
     # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
     "crates/apeireth-sdk-voice",
+    # R127 P5-2 Mavis (2026-08-10): Library Stage 5 治理 crate (per decision-33 §1.4 Stage 5 + decision-55 §2.3).
+    # 借鉴 clap 725 derive 模式 (R125-2 ✅ done) + Kani 4502 形式化模型 (R125-10 ✅ done) + Kani proofs 模板.
+    # 三大模块: strategy (5 政策 + 3 行动 + 决策树) + verification (6 invariant + 6 harness + 8 boundary)
+    #         + consistency (5 check + 5 API lock + 编译期 hardcode).
+    # 0 触碰 24 LOCKED crate + 0 改 workspace version 1.2.0 (B2 严守, 整合 #4 commit abf12243)
+    # + R11 baseline 3 值 0 删 0 改 (A1 严守) + 8 硬墙 0 越界 + 0 装 PASS 严守.
+    # 0 主动 commit (Mavis 整合 #5 拍板) + 0 push (等 1.0 release 配 GitHub remote).
+    "crates/apeireth-library-governance",
 ]
 
+# ============================================================================
+# Workspace Package Metadata (R128-2 阶段 C 收尾, per decision-22 + #33 + #55 + #57 + #58)
+# ----------------------------------------------------------------------------
+# LICENSE 引用链 (Apache 2.0 §4(d) NOTICE 条款, per P13-1 OSS_NOTICE.md §0.1):
+#   - 根目录 `LICENSE`         : Apache License 2.0 完整文本 (175 行, 2026-08-05 写入, P13-1 严守不动)
+#   - 根目录 `NOTICE`           : 项目特有 attribution (66 行, R20 阶段 6, P13-1 严守不动)
+#   - 根目录 `OSS_NOTICE.md`    : 借鉴源码 8/11 整合 + 决策链 (346 行, P13-1 R128 阶段 D 新写)
+#   - 根目录 `THIRD-PARTY-NOTICES.md` : cargo-about 0.8.4 生成 561 crates 第三方 attribution
+#                                       (1709 lines / 12 unique SPDX / 0 cargo-deny violation, 2026-08-06)
+#
+# 借鉴源码 8/11 ✅ cloned (per decision-36 §1.1 + decision-47 §3.1 + decision-55 §3 + decision-58 §1.3):
+#   ✅ 7 真实施 + ⏳ 3 限流持续 (LiteLLM/opencode/Guardrails P6-1/2/3 21:18 派) + ❌ 1 跳过 (OpenCog AGPL-3.0)
+#   详见 [workspace.metadata.apeireth] §borrow 段
+#
+# Cargo.toml license field 0 装 PASS 严守 verify (P15-1 R128-2 阶段 C):
+#   - [workspace.package] license = "Apache-2.0"  ← 主仓 license 单一来源
+#   - 90+ sub-crate 中 65+ 已用 `license.workspace = true` 继承
+#   - 27 skeleton 阶段硬编码 (license = "Apache-2.0" + version 硬编码 0.1.0/1.0.0) = **已知 TODO, 1.0 release 后清**
+#     (per decision-22 §2.2 B2 1.2.0 严守 → 0 改 version 边界 + P15-1 0 主动 commit 严守 → 0 改 27 crate scope creep)
+# ============================================================================
 [workspace.package]
 version = "1.2.0"  # B2 upgrade: 1.1.0 → 1.2.0 (R125 末 minor, per 10-locked.md + decision-22 + decision-33)
 edition = "2021"
 rust-version = "1.80"
 authors = ["Apeireth Team"]
+# 单一 license 来源 (per Apache 2.0 §4(d) NOTICE 条款, 完整文本见 根目录 `LICENSE`)
+# Sub-crate 继承 = `license.workspace = true` (90+ crate 中 65+ 已用, 27 硬编码待 1.0 后清)
 license = "Apache-2.0"
+# SPDX 表达式 (per cargo + crates.io 推荐, Apache-2.0 单一 license 不需 OR; dual license 如 clap/PyO3/kani 见各 crate)
 repository = "https://github.com/apeireth/apeireth-rust"
-description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护"
+# 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0)
+# 借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 = 1.0 release
+description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + 1.0 release (借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache)"
 homepage = "https://github.com/apeireth/apeireth-rust"
-keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion"]
+keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
+
+# ============================================================================
+# Workspace Metadata — Apeireth 项目内部 metadata (per decision-22 + #55 + #58)
+# ----------------------------------------------------------------------------
+# 借鉴源码 8/11 + 决策链 + 24 LOCKED + 8 哲学锚 metadata
+# 0 影响 cargo 编译 / 0 影响 crates.io publish, 纯项目自描述
+# ============================================================================
+[workspace.metadata.apeireth]
+
+# 借鉴源码 8/11 ✅ cloned (per decision-36 + #47 + #55 + #58)
+# 0 装 PASS 严守 (per decision-33 §2.3 C2 + 主人 17:22 升级授权):
+#   ✅ = 真实施 (有真 src 改动 + tests pass) | ⏳ = 限流持续重试 | ❌ = 永久跳过
+borrow = { count_total = 11, count_cloned = 8, count_rate_limited = 3, count_skipped = 1 }
+borrow_cloned = [
+    "clap-rs/clap 4.6.6 (Apache-2.0 + MIT dual, R125-2 ✅ done, 整合 #5 commit 时机 P0 supervisor era)",
+    "hyperium/hyper 0.1.20 (MIT, R125-3 ✅ done, P0 supervisor era)",
+    "modelcontextprotocol/servers 76d64c8 (MIT → Apache-2.0 过渡, R125-4 ✅ done, P0 supervisor era)",
+    "PyO3/PyO3 0.29.2 (Apache-2.0 + MIT dual, R125-9 ✅ done, P1 supervisor era)",
+    "model-checking/kani 0.67.0 (MIT + Apache-2.0 dual, R125-10 ✅ done, P2 supervisor era, 触发 B3 V0.5 25 维)",
+    "langchain-ai/langgraph d56666f (MIT, R125-13 ✅ done, P2 supervisor era, 触发 B3 25→30 维)",
+    "obra/superpowers 6.2.0 (MIT, R125-14 ✅ done, P2 supervisor era, 触发 Library Stage 4 自治 P5-1)",
+]
+borrow_rate_limited = [
+    "BerriAI/litellm (⏳ 限流持续 15+ min, P6-1 R127-2 阶段 A 21:18 派重试, 通常 MIT)",
+    "sst/opencode (⏳ 限流持续, P6-2 R127-2 阶段 A 21:18 派重试, 通常 MIT)",
+    "NVIDIA/NeMo-Guardrails (⏳ git submodule 0 init, P6-3 R127-2 阶段 A 21:18 派重试, 通常 Apache-2.0)",
+]
+borrow_skipped = [
+    "opencog/opencog (❌ AGPL-3.0 传染性 copyleft, 跟主仓 Apache-2.0 不兼容, per decision-22 §4 + decision-55 §3, 0 集成 0 假装)",
+]
+# 借鉴源码本地路径 (per 决策 #36 §1 + 决策 #55 §2)
+borrow_local_path = ".openclaw/workspace/borrowed-repos/"
+
+# 8 硬墙 (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略, per decision-33 §2 + decision-58 §4)
+hard_walls = "8 (B1 24 LOCKED 持续更新 / B2 workspace.version 1.2.0 0 改 / B3 V0.5 30 维 / B4 6 重守门 v7 / B5 8 哲学锚 / B6 三洋葱 / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit / C2 0 装 PASS 严守 / C3 升 6 重 v7 / 0 主动 push 严守)"
+
+# 24 LOCKED 入口签名 0 改 (per decision-22 §1.2 + decision-33 §2.3 B1 + decision-41 §2 + P2-3 retry verify done + P4-1 verify done + P14-1 retry verify done)
+locked_crates_count = 24
+# 完整 24 LOCKED 名单见 docs/conventions/10-locked.md §11.2 + docs/omnibus/24-locked-crates.md
+# B1 0 改 = 入口签名 (lib.rs pub mod / pub use / pub const / pub struct / pub enum / pub fn) 0 改
+# 内部 fn 实施可改 (per decision-41 §2 + decision-47)
+
+# 8 哲学锚 (per decision-22 §2.5 B5 + R126 P1-2 8 哲学锚升级 done)
+# S-1 北极星 + S-2 实事求是 + S-3 质量工程化 + O-1 安全优先 + O-2 走在前人 + O-3 干到底 + O-4 接手 + O-5 不假装
+philosophy_anchors = ["S-1", "S-2", "S-3", "O-1", "O-2", "O-3", "O-4", "O-5"]
+
+# V0.5 30 维 (per decision-22 §2.3 B3 升 30 维 + R126 P1-4 25→30 维 verify retry done)
+# 4 大类 (PC 0.40 / RC 0.30 / HG 0.15 / GP 0.15) × 6 维度 + 6 增强 (R125-13 实施) = 30 维
+# sum=1.00 守门, 编译期 hardcode enum (0 装严守)
+measurement_dimensions = "V0.5 30 维 (24 基础 + 6 增强)"
+
+# 6 重守门 v7 (per decision-22 §2.4 B4 升 6 重 v6 → v7 + R126 P1-3 6 重守门 v7 retry done)
+# 1-5 重嵌套 + 6 重 Colang DSL (R125-5 NVIDIA Guardrails 借鉴)
+guard_gates_version = "v7 (6 重: 1-5 嵌套 + 6 Colang DSL)"
+
+# 13 键 verdict cache (per decision-22 §2.8 A3 + decision-33 §2.3)
+# V3 9 键 + v4.1 3 键 (原 12 键 0 改) + PHL-07 NotUnoptimizable (R125-12 实施)
+verdict_cache_keys = 13
+
+# 整合链 (per decision-22 + #33 + #41 + #42 + #47 + #48 + #51 + #55 + #56 + #57 + #58)
+integration_chain = [
+    "整合 #1 (decision-25 17:30, 1.0.0 baseline)",
+    "整合 #2 (decision-31 17:17, R125 续 dry-run)",
+    "整合 #3 (decision-34 17:30, 主人 14:56 拍板, df6dfb69 128 files)",
+    "整合 #4 (decision-48 19:41, 主人自执行, abf12243 46752 file changes, 0 重跑)",
+    "整合 #5 (待拍板, 41 任务 R125 16 + R126 16 + R127 4 + R127-2 10 + R128 6 + R128-2 3 全 done + 0 装 PASS verify + 8 硬墙 verify + 24 LOCKED 入口 verify, Mavis 拍板 OR 主人 8/15 拍板)",
+]
+
+# LICENSE 引用链 (per P13-1 OSS_NOTICE.md §0.1 + Apache 2.0 §4(d))
+license_files = [
+    "LICENSE (175 行, Apache 2.0 verbatim, 2026-08-05 写入, P13-1 严守不动)",
+    "NOTICE (66 行, 项目特有 attribution, R20 阶段 6, P13-1 严守不动)",
+    "OSS_NOTICE.md (346 行, 借鉴源码 8/11 致谢, P13-1 R128 阶段 D 新写)",
+    "THIRD-PARTY-NOTICES.md (1709 lines / 12 SPDX / 0 cargo-deny violation, cargo-about 0.8.4 生成, 2026-08-06)",
+]
+
+# 0 主动 commit + 0 主动 push 严守 (per decision-33 §2.3 + decision-55 §5 + decision-57 §5 + decision-58 §5)
+commit_policy = "0 主动 commit (Mavis 整合 #5 commit 时机拍板) + 0 主动 push (等 1.0 release 配 GitHub remote)"
+
+# 决策链 (per decision-22 ~ #58)
+decision_chain_range = "decision-22 ~ decision-58 (37 个决策文件, 完整可追溯 reports/decision-*.md)"
+
 
 [workspace.dependencies]
 # R122-3-retry: 借鉴 VCP finalContextStore.js, 引入 tiktoken-rs 0.7 给 apeireth-pipeline
@@ -292,6 +407,10 @@ fs_err = "3.0"
 # R125-2: clap 4.5 derive macros 替换 apeireth-cli/commands.rs 手写 argv 解析
 # (R124-1 borrow: clap-rs/clap 4f7a2c1 + clap/examples/git-derive.rs pattern)
 clap = { version = "4.5", features = ["derive"] }
+# R127-2 P9-1: hyper-util 0.1 (R124-1 borrow: hyperium/hyper-util 4684c71)
+# 补 P2-1 follow-up 8/12 (per agent-r126-borrowed-final-2026-08-10 §3.2):
+# 整合 #4 commit 仅加借鉴 ID 索引 + Cargo.toml dep 0 装, P9-1 借脑 1.0 真 use
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1"] }
 # R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
 # 0.1.9 最新, 跟 rusqlite 0.32 bundled 兼容 (走 sqlite3_auto_extension 路径,
 # 避开 SQLITE_ENABLE_LOAD_EXTENSION 宏的 bundled 缺位).

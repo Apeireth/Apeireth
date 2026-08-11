@@ -28,6 +28,11 @@ apeireth-core = { path = '../apeireth-core' }
 name = "linear_3_nodes"
 path = "examples/linear_3_nodes.rs"
 
+# R126-3: Subgraph + Channel demo
+[[example]]
+name = "subgraph_channel_demo"
+path = "examples/subgraph_channel_demo.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 

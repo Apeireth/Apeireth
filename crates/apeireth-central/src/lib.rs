@@ -13,6 +13,38 @@
 //! 4. **Supervisor 5 子树调度** — Core/Cognition/Council/Upgrade/Plugin 真实调度
 //!
 //! 所有 LOCKED 文档未触碰 (docs/stage1-6/* + OMNIBUS/CONVENTIONS), V3 9 键 / V0.5 / V1136 仅引用。
+//!
+//! # R125-15e 升级: 借鉴 obra/superpowers Skill 化工作流
+//!
+//! 借鉴 ID: `R125-15e-BORROW-obra/superpowers-2026-05-2026-08-10` (per 决策 #36 §1.1 +
+//! 决策 #51 §1.1). 借鉴源码 ✅ cloned (234 files, per 决策 #41 §1). 14 个 Skill struct
+//! 1:1 映射 superpowers 公开 `skills/<name>/SKILL.md`, 配 `SkillRegistry` 中央注册.
+//! 详见 `skill_trait` 与 `skill_registry` 2 个子模块.
+//!
+//! # R125-18 升级: 借鉴 obra/superpowers v6.2.0 Skill 完整化 (per 决策 #51 §1.4 P3-1)
+//!
+//! 借鉴 ID: `R125-18-BORROW-obra/superpowers-v6.2-2026-08-10`. 借鉴源码 ✅ cloned (234 files).
+//! 5 new sub-mod: skill_execution (SkillExecutor + StepExecution + 9 unit test) +
+//! skill_prompt (SkillPrompt + SkillPromptCache + 11 unit test) +
+//! skill_validation (validate_skill + 5 项质量门 + 9 unit test) +
+//! skill_companion (7 variant 协作资源 + 8 unit test) +
+//! skill_frontmatter (parse_frontmatter + 12 unit test). 详见各子模块.
+//!
+//! # R125-16 升级: 借鉴 obra/superpowers Skill 自动推荐 (recommender 层, 0 重复造轮子)
+//!
+//! 借鉴 ID: `R125-16-BORROW-obra/superpowers-2026-05-2026-08-10` (per 决策 #36 §1.1 +
+//! 决策 #51 §1.1 + 决策 #52). 借鉴源码 ✅ cloned (234 files, 跟 R125-15e / R125-18 同一个
+//! superpowers 借鉴). 跟 R125-15e "data" 层 (Skill trait + SkillRegistry) + R125-18
+//! "engine" 层 (SkillExecutor 等 5 mod) 1:1 配合, R125-16 写 "recommender" 层:
+//!
+//! - `skill_recommender` — 14 Skill 关键词自动推荐, 借鉴 superpowers 公开 README
+//!   "The agent checks for relevant skills before any task. Mandatory workflows,
+//!   not suggestions." 1:1 映射. 根据 task description / keywords 自动推荐相关 skill
+//!   列表 (含匹配分数 + 排序). 0 跟 R125-15e (Skill trait) + R125-18 (SkillExecutor) +
+//!   R125-19 (5 phase state machine) 冲突, 互补.
+//!
+//! **0 重复造轮子严守** (per 主人 10 项偏好 #6): R125-16 0 重写 R125-15e / R125-18 / R125-19
+//! 任何内容. 详见 `skill_recommender` 1 个子模块 + 1 NEW test + 1 NEW example.
 
 #![deny(unsafe_code)]
 
@@ -20,6 +52,15 @@ pub use apeireth_core::LifeStage;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;
+
+pub mod skill_companion;
+pub mod skill_execution;
+pub mod skill_frontmatter;
+pub mod skill_prompt;
+pub mod skill_recommender;
+pub mod skill_registry;
+pub mod skill_trait;
+pub mod skill_validation;
 
 /// Number of components below the central aggregate root: 9 organs + 3 cores + 5 supports.
 pub const COMPONENT_COUNT: usize = 17;

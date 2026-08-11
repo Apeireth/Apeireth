@@ -49,11 +49,18 @@
 
 pub mod executor;
 pub mod fuzzy;
+// R127-2 P6-2: opencode 子代理 重试 — MCP 协议 (servers 175 cloned 借脑)
+pub mod mcp_protocol;
 pub mod parser;
 pub mod privacy;
 pub mod record;
 
 pub use executor::{ExecutionResult, ToolExecutor};
+// R127-2 P6-2: re-export mcp_protocol 公开 API
+pub use mcp_protocol::{
+    McpAnnotations, McpContent, McpError, McpServer, McpToolAdapter, McpToolCall, McpToolDefinition,
+    McpToolHandler, McpToolResult, MCP_ANNOTATION_COUNT, MCP_CONTENT_TYPE_COUNT,
+};
 pub use fuzzy::{levenshtein_distance, FuzzyToolMatcher};
 pub use parser::{ParseError, ParsedToolCall, ToolCallParser};
 pub use privacy::{PrivacyConfig, PrivacyGuard};

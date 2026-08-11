@@ -57,6 +57,7 @@
 pub mod force_translate;
 pub mod model_router; // R122-5: 借鉴 VCP SemanticModelRouter.json (R122-5-VCP-SemanticModelRouter-2026-08-10)
 pub mod placeholder;
+pub mod provider_registry; // R126-1: 借鉴 LiteLLM Provider Registry 模式 (R126-1-BORROW-BerriAI/litellm-3a8e2c1-2026-08-10, ⏳ 限流 = 准备)
 pub mod tiktoken_counter; // R122-3-retry: 借鉴 VCP finalContextStore.js (R122-3-retry-VCP-FinalContextStore-Tiktoken-2026-08-10)
 pub mod retry_suppression;
 pub mod role_divider; // R122-2-retry: 借鉴 VCP roleDivider.js (R122-2-retry-VCP-RoleDivider-2026-08-10)
@@ -70,6 +71,11 @@ pub use force_translate::{
 };
 pub use placeholder::{
     resolve_placeholders, PlaceholderContext, MAX_RECURSION_DEPTH, PLACEHOLDER_REGEX_STR,
+};
+pub use provider_registry::{
+    CostTracker, FallbackChain, FallbackError, ProviderCapability, ProviderRegistry, ProviderSpec,
+    RegistryError, SelectionStrategy, UsageRecord, ALL_PROVIDER_CAPABILITIES,
+    ALL_SELECTION_STRATEGIES,
 };
 pub use retry_suppression::{RetrySuppression, DEFAULT_SUPPRESSION_WINDOW_MS};
 pub use streaming::{stream_to_sender, StreamChunk};
