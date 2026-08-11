@@ -1,38 +1,59 @@
 # apeireth-cli
 
-> **职责**: CLI 入口 + TUI + slash commands
-> **状态**: R11 占位实现
-> **对应文档**: 阶段 2 §3 入口层
+> **Apeireth CLI** — 终端入口, 暴露 Rust 子系统 (skills / eval / council) 给 shell.
+> **当前状态**: R116 + R125-2 clap 4.5 derive (3 subcommand 组, 15 命令).
+> **二进制名**: `apeireth`.
 
 ---
 
-## 设计意图
+## 启动
 
-`apeireth-cli` 是 Apeireth 的"命令行入口"crate, 包含:
+```bash
+# 编译 + 装到 PATH
+cargo install --path crates/apeireth-cli
 
-1. **CLI 入口** — `apeireth` 可执行文件
-2. **TUI** — 终端 UI (类似 OpenClaw CLI)
-3. **slash commands** — `/model`, `/mcp`, `/memory` 等
-4. **Admin RPC** — Unix domain socket (本地管理)
+# 跑命令
+apeireth --version
+apeireth skills list
+apeireth skills show <id>
+apeireth skills validate <file>
+apeireth skills scenarios
+apeireth skills watch <dir>
 
-## 命令列表 (v1)
+apeireth eval list-tools
+apeireth eval scenarios
+apeireth eval smoke <workspace>
+apeireth eval markdown-snapshot <workspace>
 
-```
-apeireth                     # 交互式 REPL (默认)
-apeireth chat                # 单次查询
-apeireth serve               # 启动 API server + gateway + cron
-apeireth gateway             # 仅 Gateway (无 API)
-apeireth config              # 配置管理
-apeireth model               # 模型/提供者管理
-apeireth auth                # 认证 (登录/登出/状态)
-apeireth tools               # 工具管理
-apeireth mcp                 # MCP 服务器管理
-apeireth skills              # 技能管理
-apeireth memory              # 记忆提供者管理
-apeireth doctor              # 健康检查
-apeireth status              # 运行状态
+apeireth council list-members
+apeireth council add-member <role> <goal> <backstory> <provider>
+apeireth council risk-hint
+apeireth council markdown <query>
 ```
 
----
+## 3 个 subcommand 组 (per commands.rs)
 
-_主哲学 anchor: 主 00:56 任何人都能接手 (CLI 友好)._
+| Group | 命令数 | 用途 |
+|---|---|---|
+| `skills` | 5 | skill 描述符 + 验证 + 监控 (Watch mode) |
+| `eval` | 4 | eval 场景 + smoke 跑 + markdown 快照 |
+| `council` | 4 | 智囊团成员注册 + 风险提示 + 决议模板 |
+
+## 依赖
+
+- `apeireth-core` + `apeireth-memory` + `apeireth-asi` + `apeireth-api` + `apeireth-skills` + `apeireth-eval` + `apeireth-council` + `apeireth-mcp`
+- `clap` 4.5 (derive)
+- `tokio` + `serde` + `serde_json` + `anyhow` + `thiserror` + `chrono`
+
+## 验证
+
+```bash
+cargo check -p apeireth-cli    # 0 errors
+cargo build --release -p apeireth-cli
+apeireth --version
+```
+
+## See also
+
+- [R116 CLI command family spec](../../docs/conventions/)
+- [R125-2 clap derive 借用 clap-rs/clap 4.6.6](../../reports/)

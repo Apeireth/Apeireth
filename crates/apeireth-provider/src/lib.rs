@@ -23,14 +23,16 @@ pub mod codex;
 pub mod copilot;
 pub mod gemini_cli;
 pub mod opencode;
+pub mod minimax;  // R128: 6th provider (MiniMax-M3 family)
 
 /// R35: 5 provider name 1:1 对应, 启动时配置用
-pub const ALL_PROVIDERS: [&str; 5] = [
+pub const ALL_PROVIDERS: [&str; 6] = [
     "claude-code",
     "codex",
     "copilot",
     "gemini-cli",
     "opencode",
+    "minimax",
 ];
 
 #[cfg(test)]
@@ -38,13 +40,14 @@ mod r35_provider_umbrella_tests {
     use super::*;
 
     #[test]
-    fn r35_5_providers_all_present() {
-        assert_eq!(ALL_PROVIDERS.len(), 5);
+    fn r35_6_providers_all_present() {
+        assert_eq!(ALL_PROVIDERS.len(), 6);
         // 5 module 都在
         let _claude = std::any::type_name::<claude_code::ClaudeCodeProvider>();
         let _codex = std::any::type_name::<codex::CodexProvider>();
         let _copilot = std::any::type_name::<copilot::CopilotProvider>();
         let _gemini = std::any::type_name::<gemini_cli::GeminiCliProvider>();
         let _opencode = std::any::type_name::<opencode::OpencodeProvider>();
+        let _minimax = std::any::type_name::<minimax::MinimaxProvider>();
     }
 }

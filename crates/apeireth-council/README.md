@@ -1,0 +1,24 @@
+# apeireth-council
+
+> Apeireth 鏅哄泭鍥?7 寮哄埗 Advisor + 鎸変綇鏈哄埗 + 鎷熶汉鍖?synthesis + mock LLM provider 鈥?R14 Phase 5 P22 (鏋舵瀯甯? 钀界偣, P15 7 寮哄埗椤鹃棶)
+
+## Status
+
+Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
+
+**No-fake**: every public type or trait documented in this crate is real.
+**Run-no-fear**: cargo check --workspace passes (0 errors).
+
+## Where to start
+
+- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
+- src/lib.rs: see top-level doc comment for module-level overview.
+
+## See also
+
+- [Apeireth conventions](../../docs/conventions/README.md)
+- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
+
+---
+
+_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
