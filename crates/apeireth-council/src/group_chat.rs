@@ -445,10 +445,11 @@ mod tests {
 
     #[test]
     fn t01_role_count() {
+        // R148 fix: can_speak() 是 Participant 上的方法, 不是 ParticipantRole 上的.
         assert_eq!(ParticipantRole::COUNT, 3);
-        assert!(ParticipantRole::Host.can_speak());
-        assert!(ParticipantRole::Agent.can_speak());
-        assert!(!ParticipantRole::Observer.can_speak());
+        assert!(Participant::new("h", "H", ParticipantRole::Host).can_speak());
+        assert!(Participant::new("a", "A", ParticipantRole::Agent).can_speak());
+        assert!(!Participant::new("o", "O", ParticipantRole::Observer).can_speak());
     }
 
     #[test]

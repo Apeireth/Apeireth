@@ -350,9 +350,10 @@ impl EmotionEngine {
         best
     }
 
-    /// 当前情感响应风格 (指导 LLM tone)
+    /// 当前情感响应风格 (指导 LLM tone). R148 fix: 用 history 最新 snapshot 的 dominant (= event.primary_emotion),
+    /// 而不是重新 PAD 距离 — PAD 距离会在中性偏置下偏向最近中心, 导致 UserCritique 后 dominant 变 Disgust.
     pub fn response_style(&self) -> ResponseStyle {
-        let snap = self.snapshot();
+        let snap = self.history.back().cloned().unwrap_or_else(EmotionSnapshot::neutral);
         match (snap.dominant, snap.intensity) {
             (BaseEmotion::Joy, i) if i > 0.5 => ResponseStyle::Warm,
             (BaseEmotion::Joy, _) => ResponseStyle::Friendly,
