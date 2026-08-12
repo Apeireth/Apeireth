@@ -40,6 +40,12 @@ pub mod borrowed_models_v2;
 pub mod stage5_2;
 // R129-20: Stage 5.3 跨模块证明 — 10 模块 (F11-F20) (per 决策 #33 + #55 + #61 §3.1 R129-20)
 pub mod stage5_3;
+// R131.8: Self-Disable 5 机制 Kani harness (critical missing proof 1)
+pub mod self_disable_harness;
+// R133.1: 字符串 ownership_token 形式化 (5 机制用 StringPod + 5 Kani proof + 10 unit test)
+pub mod self_disable_string_harness;
+// R131.9: 9 重守门 + flush_noop Kani harness (critical missing 2+3)
+pub mod nine_fold_harness;
 
 /// 权限洋葱的最小 POD 配置 (Kani-friendly).
 ///
@@ -123,3 +129,5 @@ pub use tla::{TlaExpr, TlaSpec};
 /// Unified proof engine dispatching a catalog invariant to a backend.
 pub struct FormalEngine { registry: BackendRegistry }
 impl FormalEngine { pub fn with_defaults()->Self{Self{registry:BackendRegistry::with_defaults()}} pub fn check_invariant(&self,invariant:&Invariant)->FormalResult<ProofResult>{self.registry.prove(invariant)} pub fn dispatch_by_name(&self,name:&str)->FormalResult<ProofResult>{let i=invariant::presets::ALL.iter().find(|i|i.name==name).ok_or_else(||FormalError::UnknownInvariant(name.into()))?;self.check_invariant(i)} pub fn health_check(&self)->bool{self.registry.health_check()} }
+
+

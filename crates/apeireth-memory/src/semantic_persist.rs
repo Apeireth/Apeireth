@@ -104,21 +104,25 @@ impl PersistentSemanticIndex {
         })
     }
 
-    /// 强制持久化 (WAL checkpoint + TRUNCATE).
+    /// 显式 no-op flush — 留作公开 API 当 caller 想"心理 flush"时用.
     ///
-    /// ## 实际行为: no-op
-    /// `SqliteVecBackend::open(path)` 已配置 `journal_mode=WAL` + `synchronous=NORMAL`,
-    /// 每次写入 (commit) 即落盘. 跨 daemon 重启数据不丢, **不需要** 显式 `save()`.
-    ///
-    /// `save()` 保留作为公开 API, 主要是:
-    /// 1. 给 caller 心理安慰 (跟"显式 save" 习惯一致)
-    /// 2. 未来真要 fsync 时, 只需改这一处 impl (trait 公开 API 不变)
-    /// 3. 当前 impl 立即返 Ok, 0 假动作, 0 假装 fsync
-    pub fn save(&self) -> MemoryResult<()> {
-        // 真实 fsync 路径需要 SqliteVecBackend::checkpoint() (要改 apeireth-vector,
-        // 超出本战区范围). 当前: WAL NORMAL 已 write-through, 接受 last-commit
-        // 丢几个 (R19 战区 4 1.0 验收基准一致).
+    /// 当前 impl: WAL NORMAL 已 write-through, 0 真实 fsync 动作.
+    /// 未来 SqliteVecBackend::checkpoint() 可用时, 改这一处 impl 即可.
+    /// 实际行为: 立即返 Ok(()), 0 伪装 fsync, 0 假装持久化强保证.
+    pub fn flush_noop(&self) -> MemoryResult<()> {
         Ok(())
+    }
+
+    /// **DEPRECATED** (since 1.2.0): 改名 + 暴露"不假装"性.
+    ///
+    /// 原 `save()` 听起来像 fsync, 实际是 no-op. 公开 API 留这个名字
+    /// 只会让 caller 误以为有强保证. 改用 [`flush_noop`] 显式声明意图.
+    #[deprecated(
+        since = "1.2.0",
+        note = "save() 是 no-op (WAL NORMAL 已 write-through). 改用 flush_noop() 显式声明, 或 0 调用 (WAL 自动落盘)."
+    )]
+    pub fn save(&self) -> MemoryResult<()> {
+        self.flush_noop()
     }
 
     /// 索引单条 episode (持久化到 disk, 跨 daemon 不丢).

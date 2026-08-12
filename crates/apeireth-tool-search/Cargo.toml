@@ -1,0 +1,26 @@
+[package]
+name = "apeireth-tool-search"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R145 VSearch: 全文 + 聚合 + TF-IDF 排序内存搜索. 区别于 apeireth-tool-codesearch (regex/AST) + apeireth-tool-image-process (perceptual). 借鉴 VCP v1.1 VSearch/VSearch+, 上升为 Rust 编译期保证."
+keywords = ["ai", "tool", "search", "full-text", "tf-idf", "vsearch"]
+categories = ["text-processing"]
+
+[dependencies]
+tokio = { workspace = true, features = ["sync"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+unicode-segmentation = "1.12"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

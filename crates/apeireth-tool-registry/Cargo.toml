@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R17 战役 2-1: 工具注册中心 (6 类 enum + 5 轴正交 + token 预算三层 + notify 热加载, VCP 借鉴 §6.2.1 #12/#13 + §6.2.2 #15 + agentManager.js chokidar)"
+description = "Apeireth R17 战役 2-1: 工具注册中心 (6 类 enum + 5 轴正交 + token 预算三层 + notify 热加载 + 异步任务推送, VCP 借鉴 §6.2.1 #12/#13 + §6.2.2 #15 + agentManager.js chokidar)"
 keywords = ["ai", "tool", "registry", "plugin", "hot-reload"]
 categories = ["api-bindings", "data-structures"]
 
@@ -19,6 +19,10 @@ async-trait = { workspace = true }
 notify = "5"
 parking_lot = "0.12"
 tracing = "0.1"
+
+# 注: AsyncTaskStore 不直接依赖 apeireth-bus, 避免
+# tool-registry -> bus -> extension -> verify -> asi -> api -> tool-registry 循环
+# 调用方 (tool-runtime) 自行把 TaskRecord 投到 bus
 
 [dev-dependencies]
 tempfile = "3"

@@ -24,7 +24,7 @@ pyo3 = { workspace = true, optional = true }
 [lib]
 name = "apeireth_pybridge"
 path = "src/lib.rs"
-crate-type = ["rlib"]
+crate-type = ["rlib", "cdylib"]
 
 # ADR 0007 + ADR 0008:
 # - `default = []`               → 默认 build 不编译 pyo3 (cargo build --workspace 0 依赖 Python)

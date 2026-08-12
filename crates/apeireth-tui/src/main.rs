@@ -852,12 +852,54 @@ fn render_nav_bar(f: &mut ratatui::Frame, area: Rect, app: &App, style: &ThemeSt
 }
 
 fn render_current_page(f: &mut ratatui::Frame, area: Rect, app: &mut App, style: &ThemeStyle) {
+    // R135: split bottom strip for addon panels (per docs/tui-r135-integration-design.md)
+    // 0 触碰既有 page render — 仅 layout 切条 + 调用 r135_addons
     match app.nav {
-        NavPage::Bridge => pages::bridge::render(f, area, app, style),
+        NavPage::Bridge => {
+            let rows = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Vertical)
+                .constraints([
+                    ratatui::layout::Constraint::Min(0),
+                    ratatui::layout::Constraint::Length(pages::r135_addons::BRIDGE_STRIP_HEIGHT),
+                ])
+                .split(area);
+            pages::bridge::render(f, rows[0], app, style);
+            pages::r135_addons::render_bridge_strip(f, rows[1], app, style);
+        }
         NavPage::Dialogue => pages::dialogue::render(f, area, app, style),
-        NavPage::Growth => pages::growth::render(f, area, app, style),
-        NavPage::History => pages::history::render(f, area, app, style),
-        NavPage::Settings => pages::settings::render(f, area, app, style),
+        NavPage::Growth => {
+            let rows = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Vertical)
+                .constraints([
+                    ratatui::layout::Constraint::Min(0),
+                    ratatui::layout::Constraint::Length(pages::r135_addons::SINGLE_STRIP_HEIGHT),
+                ])
+                .split(area);
+            pages::growth::render(f, rows[0], app, style);
+            pages::r135_addons::render_formal_proofs(f, rows[1], app, style);
+        }
+        NavPage::History => {
+            let rows = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Vertical)
+                .constraints([
+                    ratatui::layout::Constraint::Min(0),
+                    ratatui::layout::Constraint::Length(pages::r135_addons::SINGLE_STRIP_HEIGHT),
+                ])
+                .split(area);
+            pages::history::render(f, rows[0], app, style);
+            pages::r135_addons::render_repo_scan(f, rows[1], app, style);
+        }
+        NavPage::Settings => {
+            let rows = ratatui::layout::Layout::default()
+                .direction(ratatui::layout::Direction::Vertical)
+                .constraints([
+                    ratatui::layout::Constraint::Min(0),
+                    ratatui::layout::Constraint::Length(pages::r135_addons::SETTINGS_STRIP_HEIGHT),
+                ])
+                .split(area);
+            pages::settings::render(f, rows[0], app, style);
+            pages::r135_addons::render_settings_strip(f, rows[1], app, style);
+        }
     }
 }
 
