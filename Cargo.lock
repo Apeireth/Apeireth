@@ -941,6 +941,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-runtime"
+version = "1.2.0"
+dependencies = [
+ "apeireth-arbitration",
+ "apeireth-bus",
+ "apeireth-consciousness",
+ "apeireth-council",
+ "apeireth-supervisor",
+ "apeireth-tool-registry",
+ "apeireth-tool-search",
+ "async-trait",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "apeireth-sdk"
 version = "1.2.0"
 dependencies = [
