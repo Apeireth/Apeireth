@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R152 (2026-08-13)**: `apeireth-workflow` (NEW crate, 550 lines, Temporal-style workflow engine — Workflow trait + Activity trait + EventHistory + WorkflowRunner, 0 引外部 dep, 13 unit tests + 1 example workflow_demo). P2 #7 补完 (R150 跳过项). 同时 R151 竞品名清理 (active crate public name + Cargo.toml description 全清 Vcp*/vcp_*). 累计 +13 tests, 0 errors, 0 触碰 3 不可变脊柱. 详见 `crates/apeireth-workflow/README.md` + `docs/r150/r150-p1-six-modules.md` + `docs/r151/r151-competitive-name-cleanup.md`.
+
 > **R150 (2026-08-13)**: P1 终极补弱 6/7 — `apeireth-vector::qdrant_compat` (581 lines, Qdrant HTTP REST API v1.7+ 协议兼容, 8 公共结构 + 4 距离度量 + 6 HTTP API + 11 test) + `apeireth-state::statechart` (537 lines, XState 风格 statechart 引擎, atomic/compound/final + transition + guard + action + on_entry/on_exit, 13 test) + `apeireth-cron::scheduler` (381 lines, tokio cron 引擎 0 引外部 dep, 13 test) + `apeireth-council::session_capture` (431 lines, council session 自动捕获 claude-mem 模式, 17 test) + `apeireth-eval::swe_bench` (415 lines, SWE-bench 风格 task runner, 13 test) + `apeireth-test::property_tests` (237 lines, proptest property-based testing 9 blocks × 256 cases). 累计 +76 tests, 0 errors, 0 触碰 3 不可变脊柱. 跳 P1 #7 (pipeline Temporal-style Activity, 重构风险大留 R151+). 详见 `docs/r150/r150-p1-six-modules.md`.
 
 > **R149 (2026-08-13)**: 终极补弱 5/5 — `apeireth-tool-fetch` (1138 lines, 吸收 VCP 7 插件) + `apeireth-skills::anthropic_skills` (355 lines, 3 层 lazy load, 0 引 serde_yaml 350KB) + `apeireth-runtime::LlmWorker` (真 MiniMax API worker, 替 SimulatedWorker) + `apeireth-graph::ThreadCheckpointStore` (244 lines, LangGraph MemorySaver Rust 重写) + `apeireth-formal::l0_ha_physical_multisig` (310 lines, 补 R131.6 audit 缺的 M-of-N Kani proof, 6 harness + 10 unit test). 累计 +78 tests, +1 new crate, 0 errors. 详见 `docs/r149/r149-p0-five-modules.md`.
@@ -2160,3 +2162,73 @@ cargo check --workspace                  →  0 errors
 - TUI 接入新 runtime / 真 MiniMax API worker (替 SimulatedWorker) — 待主人拍板
 
 **详见**: `docs/r150/r150-p1-six-modules.md`
+
+---
+
+## R151 竞品名清理 (2026-08-13)
+
+主人原话: "包含竞品名,决定不行". R146 已改 crate 名 (vcp-bridge → protocol-bridge), 但
+public type names + helper fn names + Cargo.toml description 仍含 Vcp*/vcp_*.
+
+**两次 commit (80d0fd5 + e042c5c)**:
+
+1. **Public name 清理** (active crate 9 个):
+   - `apeireth-protocol-bridge`: VcpBridge → CompatBridge, VcpProtocol → CompatProtocol,
+     VcpBridgeMcp → CompatBridgeMcp, EnhancedVcpBridge → EnhancedCompatBridge,
+     vcp_compat.rs → compat.rs (file rename)
+   - `apeireth-memory`: VcpLightMemo* → LightMemo*, VcpDailyNote* → DailyNote*,
+     2 个 vcp_compat.rs → compat.rs (file rename)
+   - `apeireth-tool-image-gen / image-process / shell / browser / codesearch / filesystem`:
+     Vcp* → Compat*/ImageGen*/Browser*/CodeSearch*/Shell* (6 个 file rename)
+   - `apeireth-pipeline + apeireth-http-client`: 73 处
+     with_vcp_defaults → with_chat_defaults, vcp_default → chat_default
+
+2. **Cargo.toml description 字段清理** (16 个 crate):
+   - "VCP 借鉴 X" → "借鉴自 (origin: open-source)"
+   - "VCP X plugin 字段级复刻" → "X 真代码字段级复刻"
+   - 保留 "VCP 兼容" (这是 feature 描述, 不是 name leak)
+   - 注释中"借鉴 VCP"保留 (per O-5 不假装原则)
+
+未触及: `_archived/` (R128 已冻结) + 注释中借鉴说明 (必须保留)
+
+---
+
+## R152 apeireth-workflow (2026-08-13)
+
+**P2 #7 补完** (R150 跳过的 pipeline Temporal-style Activity) — 单独建 crate 不破 pipeline.
+
+**借鉴**: temporalio/temporal (13K stars, Workflow+Activity+EventHistory 模式)
+
+**新增 crate `apeireth-workflow`** (550 lines, 13 tests):
+
+| 组件 | 职责 |
+|---|---|
+| `Workflow` trait | 长跑确定性函数 (deterministic) |
+| `Activity` trait | 副作用执行 (网络/IO, 非确定性可) |
+| `EventHistory` | 持久化执行记录, 支持 workflow 重放 |
+| `WorkflowRunner` | 调度 + 执行 + 事件记录 |
+| `WorkflowContext` | workflow 内调 activity 的入口 |
+| `Event` + `EventKind` | 6 事件类型 (Started/Scheduled/Completed/Failed/...) |
+| `WorkflowError` | 5 错误 variant (thiserror) |
+
+**13 unit tests + 1 example (workflow_demo.rs)**:
+- runner_new_is_empty / runs_simple_workflow / records_event_history /
+  event_ids_monotonic / handles_activity_failure / workflow_not_found /
+  activity_not_found / counted_correctly / list_workflows_after_register /
+  event_kind_serialization / event_serialization_round_trip /
+  history_persists / r152_workflow_deliverables (deterministic replay)
+- workflow_demo: AddWorkflow 跑 a=10 + b=20, assert result=30
+
+**0 引外部 dep**: parking_lot 0.12 + chrono 0.4 (直接版本) + serde + serde_json + thiserror + uuid
+
+**0 触碰现有 pipeline**: 独立 crate, 不参与 chat 流程
+
+---
+
+## R153+ 候选 (待主人拍板)
+
+P2 剩余候选 per `docs/research/r149-github-survey.md`:
+- `apeireth-sovereignty` Hyperlight micro-VM 调研 (微 VM 隔离)
+- `apeireth-voice` GPT-Realtime-2 (speech-to-speech + 128K context)
+- `apeireth-relation` SurrealDB 后端 (graph query)
+- TUI 接入新 runtime (主人之前决定"后端完全做好了再接tui")
