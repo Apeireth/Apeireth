@@ -21,8 +21,30 @@
 //! - ❌ 不修改 apeireth-core 任何已实装类型签名
 //! - ❌ 不碰 R11 baseline 三值
 //! - ❌ 不碰 apeireth-legacy/
+//!
+//! ## R154 graph modules (graph / traversal / query)
+//!
+//! The `graph` / `traversal` / `query` modules provide property-graph storage
+//! with adjacency-list indexes, BFS/DFS iterators, shortest-path queries, and
+//! predicate-based node/edge filtering. They coexist with the existing
+//! `Relation` / `RelationKind` / `RelationRegistry` types (no breaking changes).
+//!
+//! Borrowed upstream references (per O-5):
+//! - **SurrealDB** — RELATE statement, `->` arrow traversal, graph storage
+//! - **Neo4j / Memgraph** — BFS/DFS semantics, depth-limited traversal
+//! - **Cypher** — MATCH pattern inspiration for predicate filters
 
 #![deny(unsafe_code)]
+
+// R154 modules (graph + traversal + query)
+pub mod graph;
+pub mod traversal;
+pub mod query;
+
+// Convenience re-exports (调用方少打路径)
+pub use graph::{EdgeId, GraphEdge, GraphNode, NodeId, RelationGraph};
+pub use traversal::{BfsIter, DfsIter, PathResult, TraversalDirection, shortest_path};
+pub use query::{CombinedQuery, EdgeQuery, NodeQuery, PropertyMatch, count_by_kind};
 
 use chrono::{DateTime, Utc};
 use thiserror::Error;
