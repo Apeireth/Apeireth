@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R144: context folding (FoldStrategy + FoldMarker + cross-session token accumulator), borrows VCP ContextFoldingV2 design"
+description = "Apeireth R144: context folding (FoldStrategy + FoldMarker + cross-session token accumulator), borrows ContextFoldingV2 design (origin: open-source)"
 
 [dependencies]
 apeireth-tools = { path = "../apeireth-tools" }

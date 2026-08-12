@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 自研 HTTP 客户端 — Keep-Alive LIFO 池 (复刻 VCP agentOptions 5 字段, 战役 1-2 / 借鉴 §6.2.2 #14)"
+description = "Apeireth 自研 HTTP 客户端 — Keep-Alive LIFO 池 (复刻开源 agentOptions 5 字段 (战役 1-2 / 借鉴 §6.2.2 #14)"
 
 [lib]
 name = "apeireth_http_client"

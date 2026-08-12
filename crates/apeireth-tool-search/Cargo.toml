@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R145 VSearch: 全文 + 聚合 + TF-IDF 排序内存搜索. 区别于 apeireth-tool-codesearch (regex/AST) + apeireth-tool-image-process (perceptual). 借鉴 VCP v1.1 VSearch/VSearch+, 上升为 Rust 编译期保证."
+description = "Apeireth R145 VSearch: 全文 + 聚合 + TF-IDF 排序内存搜索. 区别于 apeireth-tool-codesearch (regex/AST) + apeireth-tool-image-process (perceptual). 上升为 Rust 编译期保证, 字段级复刻 VSearch/VSearch+ (origin: open-source)."
 keywords = ["ai", "tool", "search", "full-text", "tf-idf", "vsearch"]
 categories = ["text-processing"]
 

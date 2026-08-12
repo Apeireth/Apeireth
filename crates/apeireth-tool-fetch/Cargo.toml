@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R149 unified fetch engine: HTTP+search+deep+Bilibili+anime. 吸收 VCP 7 plugins (UrlFetch+TavilySearch+AnySearch+VSearch+FlashDeepSearch+BilibiliFetch+AnimeFinder), 上升为 Rust 类型系统 + 多 provider 单 crate."
+description = "Apeireth R149 unified fetch engine: HTTP+search+deep+Bilibili+anime. 吸收 7 个 fetch/search plugins (UrlFetch+TavilySearch+AnySearch+VSearch+FlashDeepSearch+BilibiliFetch+AnimeFinder), 上升为 Rust 类型系统 + 多 provider 单 crate."
 keywords = ["ai", "tool", "fetch", "http", "search", "bilibili", "anime"]
 categories = ["text-processing", "web-programming"]
 
