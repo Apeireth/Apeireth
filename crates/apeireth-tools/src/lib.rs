@@ -223,7 +223,7 @@ mod lib_tests {
         // 4 impl (类型可达)
         let _: HttpWebSearch = HttpWebSearch::new(
             std::sync::Arc::new(
-                apeireth_http_client::HttpClient::with_vcp_defaults().expect("client"),
+                apeireth_http_client::HttpClient::with_chat_defaults().expect("client"),
             ),
             "https://example.com",
             "W",
@@ -235,7 +235,7 @@ mod lib_tests {
         // 4 *Tool 适配器
         let _ = WebSearchTool::new(std::sync::Arc::new(HttpWebSearch::new(
             std::sync::Arc::new(
-                apeireth_http_client::HttpClient::with_vcp_defaults().expect("client"),
+                apeireth_http_client::HttpClient::with_chat_defaults().expect("client"),
             ),
             "u",
             "w",

@@ -29,13 +29,13 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 /// 构造 VCP 默认 5 字段 HttpClient (keep_alive=true / 1000 / 8000 / lifo / 10000)
 fn make_client() -> HttpClient {
-    HttpClient::with_vcp_defaults().expect("HttpClient::with_vcp_defaults() must succeed")
+    HttpClient::with_chat_defaults().expect("HttpClient::with_chat_defaults() must succeed")
 }
 
 /// 构造带自定义 scheduling 的 HttpClient (供 FIFO vs LIFO 对比测)
 fn make_client_with_scheduling(scheduling: SchedulingPolicy) -> HttpClient {
     use apeireth_http_client::KeepAliveConfig;
-    let mut cfg = KeepAliveConfig::vcp_default();
+    let mut cfg = KeepAliveConfig::chat_default();
     cfg.scheduling = scheduling;
     HttpClient::new(cfg).expect("HttpClient::new(scheduling) must succeed")
 }

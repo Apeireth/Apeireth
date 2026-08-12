@@ -22,19 +22,19 @@ pub mod convert;
 pub mod audit;
 pub mod bridge;
 pub mod mcp;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
-pub use protocol::{VcpProtocol, ProtocolHints};
+pub use protocol::{CompatProtocol, ProtocolHints};
 pub use detect::detect_protocol;
 pub use convert::{convert_request, convert_response};
 pub use audit::{AuditLog, AuditEntry};
-pub use bridge::{VcpBridge, BridgeError};
-pub use mcp::{VcpBridgeMcp, BridgeTool};
-pub use vcp_compat::{VcpBridgeCommand, VcpBridgeRouter, VCP_BRIDGE_COMMAND_COUNT};
-pub use enhanced::EnhancedVcpBridge;
+pub use bridge::{CompatBridge, BridgeError};
+pub use mcp::{CompatBridgeMcp, BridgeTool};
+pub use compat::{CompatBridgeCommand, CompatBridgeRouter, COMPAT_BRIDGE_COMMAND_COUNT};
+pub use enhanced::EnhancedCompatBridge;
 
 /// R141 deliverables for vcp-bridge:
-/// - 4 modules (protocol / detect / convert / audit) + bridge + mcp + vcp_compat + enhanced
+/// - 4 modules (protocol / detect / convert / audit) + bridge + mcp + compat + enhanced
 /// - 5→1 merge per v2 plan §9.5
-pub const R141_VCP_BRIDGE_DELIVERABLES: usize = 8;
+pub const R141_COMPAT_BRIDGE_DELIVERABLES: usize = 8;

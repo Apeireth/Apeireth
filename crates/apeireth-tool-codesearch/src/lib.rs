@@ -31,7 +31,7 @@ pub mod symbols;
 pub mod graph;
 pub mod index;
 pub mod mcp;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 pub use search::{CodeSearcher, SearchMatch, SearchKind, SearchOptions};
@@ -40,11 +40,11 @@ pub use symbols::{SymbolKind, Symbol, extract_symbols, supported_languages};
 pub use graph::{KnowledgeGraph, GraphNode, GraphEdge, NodeKind};
 pub use index::{CodeIndex, IndexEntry};
 pub use mcp::{CodeSearchMcp, McpTool};
-pub use vcp_compat::{VcpCodeSearchCommand, VcpCodeSearchRouter, VCP_CODESEARCH_COMMAND_COUNT};
+pub use compat::{CodeSearchCommand, CodeSearchCompatRouter, CODESEARCH_COMMAND_COUNT};
 pub use enhanced::EnhancedCodeSearch;
 
 /// R140 deliverables (per v2 plan §9.5):
-/// - 7 modules (search / files / symbols / graph / index / mcp / vcp_compat) + enhanced
+/// - 7 modules (search / files / symbols / graph / index / mcp / compat) + enhanced
 /// - 5 content search modes (literal / regex / multi-pattern / case-insensitive / word-boundary)
 /// - 10+ MCP tools
 pub const R140_DELIVERABLES: usize = 8;

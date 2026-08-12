@@ -7,7 +7,7 @@
 use crate::mcp::McpTool;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpCodeSearchCommand {
+pub enum CodeSearchCommand {
     /// VCP `CodeSearch` (regex search across files)
     CodeSearch,
     /// VCP `RepoInspector` (project structure)
@@ -17,9 +17,9 @@ pub enum VcpCodeSearchCommand {
     Unknown,
 }
 
-pub const VCP_CODESEARCH_COMMAND_COUNT: usize = 3;
+pub const CODESEARCH_COMMAND_COUNT: usize = 3;
 
-impl VcpCodeSearchCommand {
+impl CodeSearchCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "CodeSearch" => Self::CodeSearch,
@@ -32,26 +32,26 @@ impl VcpCodeSearchCommand {
     /// Map VCP command to our MCP tool (for compatibility shim).
     pub fn to_mcp_tool(&self) -> Option<McpTool> {
         match self {
-            VcpCodeSearchCommand::CodeSearch => Some(McpTool::SearchText),
-            VcpCodeSearchCommand::RepoInspector => Some(McpTool::ProjectOverview),
-            VcpCodeSearchCommand::CodeAnalyzer => Some(McpTool::ExtractSymbols),
-            VcpCodeSearchCommand::Unknown => None,
+            CodeSearchCommand::CodeSearch => Some(McpTool::SearchText),
+            CodeSearchCommand::RepoInspector => Some(McpTool::ProjectOverview),
+            CodeSearchCommand::CodeAnalyzer => Some(McpTool::ExtractSymbols),
+            CodeSearchCommand::Unknown => None,
         }
     }
 }
 
-pub struct VcpCodeSearchRouter;
+pub struct CodeSearchCompatRouter;
 
-impl VcpCodeSearchRouter {
+impl CodeSearchCompatRouter {
     pub fn new() -> Self {
         Self
     }
     pub fn command_count() -> usize {
-        VCP_CODESEARCH_COMMAND_COUNT
+        CODESEARCH_COMMAND_COUNT
     }
 }
 
-impl Default for VcpCodeSearchRouter {
+impl Default for CodeSearchCompatRouter {
     fn default() -> Self {
         Self::new()
     }
@@ -63,26 +63,26 @@ mod tests {
     #[test]
     fn parse_3_commands() {
         for s in ["CodeSearch", "RepoInspector", "CodeAnalyzer"] {
-            assert_ne!(VcpCodeSearchCommand::from_str(s), VcpCodeSearchCommand::Unknown);
+            assert_ne!(CodeSearchCommand::from_str(s), CodeSearchCommand::Unknown);
         }
-        assert_eq!(VCP_CODESEARCH_COMMAND_COUNT, 3);
+        assert_eq!(CODESEARCH_COMMAND_COUNT, 3);
     }
 
     #[test]
     fn unknown_maps_correctly() {
-        assert_eq!(VcpCodeSearchCommand::from_str("xyz"), VcpCodeSearchCommand::Unknown);
+        assert_eq!(CodeSearchCommand::from_str("xyz"), CodeSearchCommand::Unknown);
     }
 
     #[test]
     fn all_have_mcp_mapping() {
-        assert!(VcpCodeSearchCommand::CodeSearch.to_mcp_tool().is_some());
-        assert!(VcpCodeSearchCommand::RepoInspector.to_mcp_tool().is_some());
-        assert!(VcpCodeSearchCommand::CodeAnalyzer.to_mcp_tool().is_some());
-        assert!(VcpCodeSearchCommand::Unknown.to_mcp_tool().is_none());
+        assert!(CodeSearchCommand::CodeSearch.to_mcp_tool().is_some());
+        assert!(CodeSearchCommand::RepoInspector.to_mcp_tool().is_some());
+        assert!(CodeSearchCommand::CodeAnalyzer.to_mcp_tool().is_some());
+        assert!(CodeSearchCommand::Unknown.to_mcp_tool().is_none());
     }
 
     #[test]
     fn router_count() {
-        assert_eq!(VcpCodeSearchRouter::command_count(), 3);
+        assert_eq!(CodeSearchCompatRouter::command_count(), 3);
     }
 }

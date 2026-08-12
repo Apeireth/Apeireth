@@ -70,7 +70,7 @@ impl RetrySuppression {
     }
 
     /// VCP 默认 15s 窗口快速构造
-    pub fn with_vcp_default() -> Self {
+    pub fn with_chat_default() -> Self {
         Self::default()
     }
 
@@ -159,8 +159,8 @@ mod tests {
     }
 
     #[test]
-    fn with_vcp_default_uses_15s() {
-        let s = RetrySuppression::with_vcp_default();
+    fn with_chat_default_uses_15s() {
+        let s = RetrySuppression::with_chat_default();
         assert_eq!(s.window, Duration::from_millis(15_000));
     }
 
@@ -168,14 +168,14 @@ mod tests {
 
     #[test]
     fn should_suppress_first_call_false() {
-        let s = RetrySuppression::with_vcp_default();
+        let s = RetrySuppression::with_chat_default();
         // 第一次调用 → 不抑制 (VCP 行为: 记录, 不拒)
         assert!(!s.should_suppress("client1:msg-001"));
     }
 
     #[test]
     fn should_suppress_second_call_within_window_true() {
-        let s = RetrySuppression::with_vcp_default();
+        let s = RetrySuppression::with_chat_default();
         assert!(!s.should_suppress("client1:msg-001"));
         // 立即第二次 → 抑制
         assert!(s.should_suppress("client1:msg-001"));
@@ -211,7 +211,7 @@ mod tests {
 
     #[test]
     fn keys_are_independent() {
-        let s = RetrySuppression::with_vcp_default();
+        let s = RetrySuppression::with_chat_default();
         assert!(!s.should_suppress("client1:msg-001"));
         // 不同 key → 独立
         assert!(!s.should_suppress("client1:msg-002"));
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn key_count_tracks_unique_keys() {
-        let s = RetrySuppression::with_vcp_default();
+        let s = RetrySuppression::with_chat_default();
         assert_eq!(s.len(), 0);
         let _ = s.should_suppress("a");
         assert_eq!(s.len(), 1);
@@ -237,7 +237,7 @@ mod tests {
 
     #[test]
     fn clear_empties_map() {
-        let s = RetrySuppression::with_vcp_default();
+        let s = RetrySuppression::with_chat_default();
         let _ = s.should_suppress("a");
         let _ = s.should_suppress("b");
         assert_eq!(s.len(), 2);

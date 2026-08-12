@@ -37,7 +37,7 @@
 //!
 //! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 //! // VCP 默认配置 (5 字段全开)
-//! let client = HttpClient::with_vcp_defaults()?;
+//! let client = HttpClient::with_chat_defaults()?;
 //!
 //! // POST JSON
 //! let body = serde_json::json!({"model": "MiniMax-M3", "messages": []});

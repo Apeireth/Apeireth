@@ -7,7 +7,7 @@ use thiserror::Error;
 use crate::audit::{AuditDirection, AuditEntry, AuditLog};
 use crate::convert::{convert_request, convert_response};
 use crate::detect::detect_protocol;
-use crate::protocol::{ProtocolHints, VcpProtocol};
+use crate::protocol::{ProtocolHints, CompatProtocol};
 
 #[derive(Debug, Error)]
 pub enum BridgeError {
@@ -17,11 +17,11 @@ pub enum BridgeError {
     Io(#[from] std::io::Error),
 }
 
-pub struct VcpBridge {
+pub struct CompatBridge {
     audit: AuditLog,
 }
 
-impl VcpBridge {
+impl CompatBridge {
     pub fn new() -> Self {
         Self { audit: AuditLog::default() }
     }
@@ -29,13 +29,13 @@ impl VcpBridge {
         &self.audit
     }
     /// Detect protocol from hints.
-    pub fn detect(&self, hints: &ProtocolHints) -> VcpProtocol {
+    pub fn detect(&self, hints: &ProtocolHints) -> CompatProtocol {
         detect_protocol(hints)
     }
     /// Convert incoming request + record audit entry.
-    pub fn incoming(&mut self, hints: &ProtocolHints, body: Value) -> Result<(VcpProtocol, Value), BridgeError> {
+    pub fn incoming(&mut self, hints: &ProtocolHints, body: Value) -> Result<(CompatProtocol, Value), BridgeError> {
         let proto = self.detect(hints);
-        if proto == VcpProtocol::Unknown {
+        if proto == CompatProtocol::Unknown {
             return Err(BridgeError::UnknownProtocol);
         }
         let converted = convert_request(proto, body);
@@ -48,7 +48,7 @@ impl VcpBridge {
         Ok((proto, converted))
     }
     /// Convert outgoing response + record audit entry.
-    pub fn outgoing(&mut self, proto: VcpProtocol, internal: Value) -> Value {
+    pub fn outgoing(&mut self, proto: CompatProtocol, internal: Value) -> Value {
         let resp = convert_response(proto, internal);
         self.audit.record(AuditEntry {
             timestamp: Utc::now(),
@@ -60,7 +60,7 @@ impl VcpBridge {
     }
 }
 
-impl Default for VcpBridge { fn default() -> Self { Self::new() } }
+impl Default for CompatBridge { fn default() -> Self { Self::new() } }
 
 #[cfg(test)]
 mod tests {
@@ -69,17 +69,17 @@ mod tests {
 
     #[test]
     fn detect_and_convert() {
-        let mut b = VcpBridge::new();
+        let mut b = CompatBridge::new();
         let hints = ProtocolHints { path: Some("/v1/messages".into()), ..Default::default() };
         let (proto, body) = b.incoming(&hints, json!({"model": "c", "messages": []})).unwrap();
-        assert_eq!(proto, VcpProtocol::AnthropicMessages);
+        assert_eq!(proto, CompatProtocol::AnthropicMessages);
         assert_eq!(body["max_tokens"], 4096);
         assert_eq!(b.audit().count(), 1);
     }
 
     #[test]
     fn unknown_protocol_errors() {
-        let mut b = VcpBridge::new();
+        let mut b = CompatBridge::new();
         let hints = ProtocolHints { path: Some("/random".into()), ..Default::default() };
         let r = b.incoming(&hints, json!({}));
         assert!(matches!(r, Err(BridgeError::UnknownProtocol)));
@@ -87,8 +87,8 @@ mod tests {
 
     #[test]
     fn outgoing_audit() {
-        let mut b = VcpBridge::new();
-        let r = b.outgoing(VcpProtocol::OpenAIChatCompletions, json!({"x": 1}));
+        let mut b = CompatBridge::new();
+        let r = b.outgoing(CompatProtocol::OpenAIChatCompletions, json!({"x": 1}));
         assert_eq!(r["x"], 1);
         assert_eq!(b.audit().count(), 1);
     }

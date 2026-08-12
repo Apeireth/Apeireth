@@ -772,11 +772,11 @@ impl AppState {
         llm_provider: Arc<dyn LlmProvider>,
     ) -> Result<Self, String> {
         // Pipeline 5 步管线 (战役 1-3) + Keep-Alive LIFO 5 字段 (战役 1-2)
-        // 手动构造 Pipeline, 因为 protocol_handlers::build_pipeline 内部用 vcp_defaults
+        // 手动构造 Pipeline, 因为 protocol_handlers::build_pipeline 内部用 chat_defaults
         use apeireth_http_client::HttpClient;
         use apeireth_pipeline::PipelineConfig;
 
-        let http = HttpClient::new(KeepAliveConfig::vcp_default())
+        let http = HttpClient::new(KeepAliveConfig::chat_default())
             .map_err(|e| format!("http client build: {e}"))?;
         let mut config = PipelineConfig::default();
         config.base_url = base_url;

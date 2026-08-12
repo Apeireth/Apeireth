@@ -133,8 +133,8 @@ impl HttpClient {
     }
 
     /// VCP 默认配置快速构造
-    pub fn with_vcp_defaults() -> Result<Self> {
-        Self::new(KeepAliveConfig::vcp_default())
+    pub fn with_chat_defaults() -> Result<Self> {
+        Self::new(KeepAliveConfig::chat_default())
     }
 
     /// 获取配置 (测试用)
@@ -241,10 +241,10 @@ mod tests {
     use crate::config::SchedulingPolicy;
 
     #[test]
-    fn new_with_vcp_default_succeeds() {
+    fn new_with_chat_default_succeeds() {
         // VCP 5 字段默认配置, 应该能成功构造
-        let client = HttpClient::with_vcp_defaults().expect("VCP default must build");
-        assert_eq!(client.config(), KeepAliveConfig::vcp_default());
+        let client = HttpClient::with_chat_defaults().expect("VCP default must build");
+        assert_eq!(client.config(), KeepAliveConfig::chat_default());
         assert_eq!(client.config().scheduling, SchedulingPolicy::Lifo);
         assert_eq!(client.config().max_sockets, 10_000);
     }
@@ -254,7 +254,7 @@ mod tests {
         // 字段级校验, max_sockets=0 必失败
         let cfg = KeepAliveConfig {
             max_sockets: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         let result = HttpClient::new(cfg);
         assert!(matches!(result, Err(HttpClientError::InvalidConfig(_))));
@@ -264,7 +264,7 @@ mod tests {
     fn new_rejects_zero_keep_alive_msecs() {
         let cfg = KeepAliveConfig {
             keep_alive_msecs: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         let result = HttpClient::new(cfg);
         assert!(matches!(result, Err(HttpClientError::InvalidConfig(_))));
@@ -274,7 +274,7 @@ mod tests {
     fn new_rejects_zero_free_socket_timeout() {
         let cfg = KeepAliveConfig {
             free_socket_timeout: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         let result = HttpClient::new(cfg);
         assert!(matches!(result, Err(HttpClientError::InvalidConfig(_))));
@@ -283,7 +283,7 @@ mod tests {
     #[test]
     fn clone_shares_underlying_client() {
         // Clone 必须共享 reqwest::Client (reqwest::Client 本身就是 Arc)
-        let client = HttpClient::with_vcp_defaults().unwrap();
+        let client = HttpClient::with_chat_defaults().unwrap();
         let client2 = client.clone();
         // 两个 client 用同一个底层连接池 (LIFO 池也共享)
         let _g0 = client.pool().try_enter().unwrap();
@@ -297,7 +297,7 @@ mod tests {
         // scheduling='fifo' 真的进 LifoPool 构造
         let cfg = KeepAliveConfig {
             scheduling: SchedulingPolicy::Fifo,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         let client = HttpClient::new(cfg).unwrap();
         assert_eq!(client.pool().scheduling(), SchedulingPolicy::Fifo);
@@ -308,7 +308,7 @@ mod tests {
         // max_sockets 自定义值 (e.g. 5) 真的进 Semaphore
         let cfg = KeepAliveConfig {
             max_sockets: 5,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         let client = HttpClient::new(cfg).unwrap();
         // 拿满 5 个 permit, 第 6 个必失败
@@ -323,7 +323,7 @@ mod tests {
     fn post_to_invalid_url_returns_request_error() {
         // 网络错误 → Request 变体
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let client = HttpClient::with_vcp_defaults().unwrap();
+        let client = HttpClient::with_chat_defaults().unwrap();
         rt.block_on(async {
             // 用一个不可达的 URL (端口 1 是保留的, 必失败)
             let result = client
@@ -337,7 +337,7 @@ mod tests {
     fn get_to_invalid_url_returns_request_error() {
         // 同上, 但用 GET
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let client = HttpClient::with_vcp_defaults().unwrap();
+        let client = HttpClient::with_chat_defaults().unwrap();
         rt.block_on(async {
             let result = client.get("http://127.0.0.1:1/never").await;
             assert!(matches!(result, Err(HttpClientError::Request(_))));
