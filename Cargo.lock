@@ -734,28 +734,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "apeireth-memory-dailynote"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-core",
- "apeireth-memory",
- "apeireth-sovereignty",
- "apeireth-tool-approval",
- "apeireth-tool-registry",
- "apeireth-tool-runtime",
- "apeireth-tools",
- "async-trait",
- "chrono",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
-]
-
-[[package]]
 name = "apeireth-memory-extensions"
 version = "0.1.0"
 dependencies = [
@@ -770,25 +748,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-postgres",
-]
-
-[[package]]
-name = "apeireth-memory-lightmemo"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-core",
- "apeireth-memory",
- "apeireth-sovereignty",
- "async-trait",
- "chrono",
- "rusqlite",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -890,6 +849,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-protocol-bridge"
+version = "1.2.0"
+dependencies = [
+ "anyhow",
+ "apeireth-api",
+ "apeireth-core",
+ "apeireth-protocol",
+ "apeireth-sovereignty",
+ "apeireth-tool-approval",
+ "apeireth-tool-registry",
+ "apeireth-tool-runtime",
+ "apeireth-tools",
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-provider"
 version = "1.2.0"
 dependencies = [
@@ -983,80 +963,6 @@ dependencies = [
  "tracing",
  "url",
  "wiremock",
-]
-
-[[package]]
-name = "apeireth-sdk-lark"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-host",
- "apeireth-protocol",
- "async-trait",
- "chrono",
- "futures",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "apeireth-sdk-livekit"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-host",
- "apeireth-protocol",
- "async-trait",
- "futures",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "apeireth-sdk-sandbox"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-host",
- "apeireth-protocol",
- "async-trait",
- "chrono",
- "criterion",
- "futures",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "apeireth-sdk-voice"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-host",
- "apeireth-protocol",
- "async-trait",
- "chrono",
- "futures",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "uuid",
 ]
 
 [[package]]
@@ -1481,27 +1387,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "uuid",
-]
-
-[[package]]
-name = "apeireth-vcp-bridge"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-api",
- "apeireth-core",
- "apeireth-protocol",
- "apeireth-sovereignty",
- "apeireth-tool-approval",
- "apeireth-tool-registry",
- "apeireth-tool-runtime",
- "apeireth-tools",
- "async-trait",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
 ]
 
 [[package]]

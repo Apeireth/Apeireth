@@ -1,4 +1,4 @@
-//! `apeireth-vcp-bridge` - R141 VCP protocol bridge (4-protocol 5→1 merge per v2 plan §9.5).
+//! `apeireth-protocol-bridge` - R141 VCP protocol bridge (4-protocol 5→1 merge per v2 plan §9.5).
 //!
 //! VCP had 4 separate protocol adapters (OpenAI / Anthropic / Gemini / Responses) and 5 plugins
 //! (vcp-protocol-*). We merge into 1 cohesive bridge that:

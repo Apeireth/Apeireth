@@ -49,10 +49,16 @@ cbindgen = { version = "0.26", optional = true }
 # 0 走 R25 独立 crate 路径 (apeireth-pybridge 风格), 节省 1 个新 crate
 # (R119 8 项形式撤销后 R122 路线图新决策, R123 可拆独立 crate 切换)
 [features]
+# R146: 5 SDK -> 1, 4 子 SDK 由 feature 门控
 default = []
 python = ["dep:pyo3"]
 node = ["dep:napi", "dep:napi-derive", "dep:sha2"]
 c = ["dep:cbindgen", "dep:sha2"]
+lark = []
+livekit = []
+sandbox = []
+voice = []
+all-sdk = ["lark", "livekit", "sandbox", "voice"]
 
 [lints.rust]
 # R19 阶段 0 模式

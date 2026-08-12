@@ -542,3 +542,14 @@ mod tests {
     }
 }
 
+
+
+/// R146: 3 memory crate -> 1 apeireth-memory (子模块)
+///
+/// dailynote: 按日期分区存储 (R141)
+/// lightmemo: VCP production V3 拓扑简化 (R142-R143)
+pub mod dailynote;
+pub mod lightmemo;
+
+/// 编译期守门 (per O-5 不假装)
+pub const MEMORY_SUBMODULE_COUNT: usize = 2;

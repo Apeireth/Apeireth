@@ -70,9 +70,7 @@ members = [
     "crates/apeireth-tool-codesearch",
     "crates/apeireth-tool-image-gen",
     "crates/apeireth-tool-image-process",
-    "crates/apeireth-memory-dailynote",
-    "crates/apeireth-vcp-bridge",
-    "crates/apeireth-memory-lightmemo",
+    "crates/apeireth-protocol-bridge",
     "crates/apeireth-context-fold",
     "crates/apeireth-tool-approval",
     "crates/apeireth-agent",
@@ -143,7 +141,6 @@ members = [
     # 现状: version.workspace = true / edition.workspace = true / deps 用 { workspace = true } 全 OK.
     # 修真后: cargo metadata 应能解析, apeireth-sdk-sandbox 应出现在 members 列表.
     # V1305+ 修真 medium/high risk crates (integration-e2e / integration-r20-stage4 / rate-limiter / sdk-lark / sdk-livekit / sdk-voice).
-    "crates/apeireth-sdk-sandbox",
     # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-integration-e2e 到 workspace members.
     # 修真: 删 crates/apeireth-integration-e2e/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
     # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
@@ -171,7 +168,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-lark.
     # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
-    "crates/apeireth-sdk-lark",
     # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-livekit 到 workspace members.
     # 修真: 删 crates/apeireth-sdk-livekit/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
     # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
@@ -179,7 +175,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-livekit.
     # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
-    "crates/apeireth-sdk-livekit",
     # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-voice 到 workspace members.
     # 修真: 删 crates/apeireth-sdk-voice/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
     # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
@@ -187,7 +182,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (88 -> 91), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-sdk-voice.
     # 修真剩 0 个 orphan (3 high risk + 1 intentional; intentional 留 Cargo.toml 注释).
-    "crates/apeireth-sdk-voice",
     # R127 P5-2 Mavis (2026-08-10): Library Stage 5 治理 crate (per decision-33 §1.4 Stage 5 + decision-55 §2.3).
     # 借鉴 clap 725 derive 模式 (R125-2 ✅ done) + Kani 4502 形式化模型 (R125-10 ✅ done) + Kani proofs 模板.
     # 三大模块: strategy (5 政策 + 3 行动 + 决策树) + verification (6 invariant + 6 harness + 8 boundary)
