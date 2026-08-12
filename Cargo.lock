@@ -1520,20 +1520,13 @@ dependencies = [
 name = "apeireth-workflow"
 version = "1.2.0"
 dependencies = [
- "anyhow",
- "apeireth-agent",
- "apeireth-graph",
- "apeireth-protocol",
- "apeireth-tool-runtime",
- "async-trait",
- "criterion",
+ "chrono",
+ "parking_lot",
  "serde",
  "serde_json",
- "serde_yaml",
- "tempfile",
  "thiserror 1.0.69",
  "tokio",
- "tracing",
+ "uuid",
 ]
 
 [[package]]
