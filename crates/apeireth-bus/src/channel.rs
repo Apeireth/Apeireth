@@ -1,4 +1,4 @@
-//! 三套通知系统 (Three Notification Channels)
+﻿//! 三套通知系统 (Three Notification Channels)
 //!
 //! **源**: VCP v1.1 官网 "三套通知系统" 双盲分桶:
 //! - **AI 通知栏** (Channel::Ai) — 工具调用结果、系统信息、异步任务进度。**仅 AI 可见**。
@@ -138,12 +138,13 @@ impl ChannelSet {
     /// 底层位
     pub const fn bits(&self) -> u8 { self.0 }
 
-    /// 转为 Vec 便于迭代
+    /// 转为 Vec 便于迭代. R148 fix: 用独立 bit 位置提取, 而不是 contains().
+    /// ChannelSet::BOTH = 0b011 (= Ai | Human fan-out), 但 contains(Both) 检查 (0b011 & 0b011) == 0b011 = true, 导致 BOTH 也会被加 Both 自己. 现按 bit 0/1/2 拆, 0b100 才是 Both 单独 bit.
     pub fn to_vec(&self) -> Vec<Channel> {
         let mut out = Vec::new();
-        if self.contains(Channel::Ai) { out.push(Channel::Ai); }
-        if self.contains(Channel::Human) { out.push(Channel::Human); }
-        if self.contains(Channel::Both) { out.push(Channel::Both); }
+        if self.0 & 0b001 != 0 { out.push(Channel::Ai); }
+        if self.0 & 0b010 != 0 { out.push(Channel::Human); }
+        if self.0 & 0b100 != 0 { out.push(Channel::Both); }
         out
     }
 }
