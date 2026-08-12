@@ -23,6 +23,7 @@ pub mod channel;
 pub mod state_graph;
 // R127-2 P6-2: opencode 子代理 重试 — Context 管理 (langgraph 829 cloned 借脑)
 pub mod context_graph;
+pub mod thread_history;  // R149: LangGraph-style thread-based checkpoint history
 
 pub use checkpoint::{Checkpoint, CheckpointStore};
 pub use conditional::{ConditionalDecision, ConditionalEdge, ConditionalError, END_LABEL};
@@ -40,6 +41,7 @@ pub use state_graph::{
     StateGraphExecutor,
 };
 // R127-2 P6-2: re-export context_graph 公开 API
+pub use thread_history::{ThreadHistory, ThreadCheckpointStore};
 pub use context_graph::{
     ContextError, ContextGraph, ContextNode, ContextPhase, ContextSnapshot, ContextStore,
     InMemoryContextStore, CONTEXT_PHASE_COUNT,

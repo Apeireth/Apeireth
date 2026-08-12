@@ -12,6 +12,7 @@ path = "src/lib.rs"
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+parking_lot = "0.12"
 thiserror = { workspace = true }
 walkdir = "2.5"
 apeireth-mcp = { path = "../apeireth-mcp" }

@@ -46,6 +46,8 @@ pub mod self_disable_harness;
 pub mod self_disable_string_harness;
 // R131.9: 9 重守门 + flush_noop Kani harness (critical missing 2+3)
 pub mod nine_fold_harness;
+// R149: L0 HA 物理多签 M-of-N Kani harness (补 R131.6 audit 缺的 critical proof 2)
+pub mod l0_ha_physical_multisig;
 
 /// 权限洋葱的最小 POD 配置 (Kani-friendly).
 ///
