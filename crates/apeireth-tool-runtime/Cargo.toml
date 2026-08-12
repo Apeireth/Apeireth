@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R17 战役 2-2: 工具运行时 (parser + executor + record + privacy, VCP 借鉴 vcpLoop + toolCallRecordStore + toolResultPrivacyGuard + §6.2.2 #18)"
+description = "Apeireth R17 战役 2-2: 工具运行时 (parser + executor + record + privacy, 借鉴开源 runtime loop + toolCallRecordStore + toolResultPrivacyGuard + §6.2.2 #18 (origin: open-source))"
 keywords = ["ai", "tool", "runtime", "parser", "executor", "privacy"]
 categories = ["api-bindings", "data-structures"]
 
