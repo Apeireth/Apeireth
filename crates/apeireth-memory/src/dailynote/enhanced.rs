@@ -78,7 +78,7 @@ mod tests {
     #[test]
     fn dispatch_mcp() {
         let e = EnhancedDailyNote::new_in_memory();
-        let r = e.dispatch_mcp(super::mcp::McpRequest {
+        let r = e.dispatch_mcp(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(serde_json::json!(1)),
             method: "initialize".to_string(),

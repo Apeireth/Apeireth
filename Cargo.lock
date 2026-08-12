@@ -536,6 +536,7 @@ dependencies = [
  "apeireth-mcp",
  "apeireth-supervisor",
  "criterion",
+ "parking_lot",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -728,6 +729,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",
@@ -948,6 +950,7 @@ dependencies = [
  "apeireth-bus",
  "apeireth-consciousness",
  "apeireth-council",
+ "apeireth-http-client",
  "apeireth-supervisor",
  "apeireth-tool-registry",
  "apeireth-tool-search",
@@ -991,6 +994,7 @@ name = "apeireth-skills"
 version = "1.2.0"
 dependencies = [
  "apeireth-mcp",
+ "parking_lot",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -1153,6 +1157,21 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "walkdir",
+]
+
+[[package]]
+name = "apeireth-tool-fetch"
+version = "1.2.0"
+dependencies = [
+ "apeireth-http-client",
+ "parking_lot",
+ "regex",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
