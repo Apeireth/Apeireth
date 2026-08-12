@@ -18,7 +18,7 @@
 //! - **#20** Force-Translate → `force_translate.rs` (`chatCompletionHandler.js:222-257` + `multiModalConfigStore.js`)
 //!
 //! **不引用但已被战役 1-3 pipeline 调用的真代码**:
-//! - **#14** Keep-Alive LIFO 池 (战役 1-2 已在 `apeireth-http-client` 落地, 本 pipeline 通过 `HttpClient::with_vcp_defaults()` 调用)
+//! - **#14** Keep-Alive LIFO 池 (战役 1-2 已在 `apeireth-http-client` 落地, 本 pipeline 通过 `HttpClient::with_chat_defaults()` 调用)
 //! - **归一化模式** (战役 1-1 已在 `apeireth-protocol` 落地, 本 pipeline 通过 `encode_for_kind` / `decode_for_kind` 调用 (R37-1 bridge facade, R36-2 删 ProtocolRouter))
 //!
 //! **架构位置**:
@@ -143,10 +143,10 @@ impl Default for PipelineConfig {
         Self {
             base_url: "https://api.minimaxi.com".to_string(),
             auth_token: None, // 编译期无 key, example 设
-            force_translate: ForceTranslateConfig::vcp_default(),
+            force_translate: ForceTranslateConfig::chat_default(),
             max_injection_chars: VCP_MAX_INJECTION_CHARS,
             placeholder_context: PlaceholderContext::new(),
-            suppression: RetrySuppression::with_vcp_default(),
+            suppression: RetrySuppression::with_chat_default(),
         }
     }
 }
@@ -173,8 +173,8 @@ impl Pipeline {
     }
 
     /// VCP 全默认快速构造
-    pub fn with_vcp_defaults() -> Result<Self, HttpClientError> {
-        Self::new(HttpClient::with_vcp_defaults()?)
+    pub fn with_chat_defaults() -> Result<Self, HttpClientError> {
+        Self::new(HttpClient::with_chat_defaults()?)
     }
 
     /// 自定义 config
@@ -436,7 +436,7 @@ mod lib_tests {
     use std::time::Duration;
 
     fn test_pipeline() -> Pipeline {
-        let http = HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         Pipeline::new(http).unwrap()
     }
 
@@ -459,7 +459,7 @@ mod lib_tests {
     }
 
     #[test]
-    fn pipeline_constructs_with_vcp_defaults() {
+    fn pipeline_constructs_with_chat_defaults() {
         let p = test_pipeline();
         assert_eq!(p.config().max_injection_chars, 16_000);
         assert_eq!(p.config().suppression.window, Duration::from_millis(15_000));
@@ -476,8 +476,8 @@ mod lib_tests {
     }
 
     #[test]
-    fn pipeline_with_vcp_defaults_quick_construct() {
-        let p = Pipeline::with_vcp_defaults();
+    fn pipeline_with_chat_defaults_quick_construct() {
+        let p = Pipeline::with_chat_defaults();
         assert!(p.is_ok());
     }
 
@@ -551,7 +551,7 @@ mod lib_tests {
             .await;
 
         // 2) Pipeline + base URL 指向 mock server
-        let http = HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let mut config = PipelineConfig::default();
         config.base_url = server.uri();
         // **不抑制**: fresh suppression 避免上一次测试残留
@@ -590,7 +590,7 @@ mod lib_tests {
             .await;
 
         // 2) Pipeline 配 placeholder context: {{greeting}} -> "Hi from placeholder"
-        let http = HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let mut config = PipelineConfig::default();
         config.base_url = server.uri();
         config.suppression = RetrySuppression::new(Duration::from_millis(50));
@@ -628,7 +628,7 @@ mod lib_tests {
             .mount(&server)
             .await;
 
-        let http = HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let mut config = PipelineConfig::default();
         config.base_url = server.uri();
         // 默认 15s 窗口, 2 次都在窗口内

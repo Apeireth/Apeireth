@@ -24,7 +24,7 @@
 //!   |- watch      : fsnotify 事件订阅
 //!   |- lock       : fd-lock 文件锁
 //!   |- parse      : PDF/Word/Excel 异步解析 (feature gated)
-//!   |- vcp_compat : VCP FileOperator 19 command 兼容层
+//!   |- compat : VCP FileOperator 19 command 兼容层
 //!   |- enhanced   : EnhancedFileOps trait (5 维度升级总入口)
 //! `
 //!
@@ -44,7 +44,7 @@ pub mod watch;
 pub mod lock;
 #[cfg(feature = "full")]
 pub mod parse;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 pub use enhanced::{EnhancedFileOps, StdEnhancedFileOps};
@@ -54,10 +54,10 @@ pub use watch::{FileWatcher, WatchEvent, WatchError};
 pub use lock::{FileLock, FileLockGuard, LockError};
 #[cfg(feature = "full")]
 pub use parse::{parse_document, DocumentType, ParseError};
-pub use vcp_compat::{VcpCommand, VcpManifest, VcpCompatRouter, VcpError};
+pub use compat::{CompatCommand, CompatManifest, CompatRouter, CompatError};
 
 /// R137 完成定义 (per 主人 R134 A4 闭环):
-/// - 6 模块 (sandbox/atomic/watch/lock/parse/vcp_compat) 全部真实现
+/// - 6 模块 (sandbox/atomic/watch/lock/parse/compat) 全部真实现
 /// - EnhancedFileOps 在 apeireth-tools/file_ops 6 ops 基础上加 5 维度
 /// - VCP FileOperator 19 command 兼容层 (cargo test 19 个 e2e)
 /// - 4 维测试: unit + 沙箱逃逸 + 并发 + 集成

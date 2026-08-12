@@ -298,7 +298,7 @@ mod tests {
     }
 
     #[test]
-    fn vcp_default_max_sockets_10000() {
+    fn chat_default_max_sockets_10000() {
         // VCP `maxSockets: 10000` 真代码对齐
         let pool = LifoPool::new(10_000, SchedulingPolicy::Lifo);
         // 拿 100 个 permit (远小于 10000, 不会满)

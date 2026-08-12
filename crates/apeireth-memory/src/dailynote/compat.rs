@@ -1,7 +1,7 @@
 //! VCP daily note (4→1 merge) compatibility.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpDailyNoteCommand {
+pub enum DailyNoteCommand {
     DailyNote,
     DailyNoteSearcher,
     DailyNoteFolder,
@@ -9,9 +9,9 @@ pub enum VcpDailyNoteCommand {
     Unknown,
 }
 
-pub const VCP_DAILYNOTE_COMMAND_COUNT: usize = 4;
+pub const DAILYNOTE_COMMAND_COUNT: usize = 4;
 
-impl VcpDailyNoteCommand {
+impl DailyNoteCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "DailyNote" => Self::DailyNote,
@@ -23,14 +23,14 @@ impl VcpDailyNoteCommand {
     }
 }
 
-pub struct VcpDailyNoteRouter;
+pub struct DailyNoteCompatRouter;
 
-impl VcpDailyNoteRouter {
+impl DailyNoteCompatRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_DAILYNOTE_COMMAND_COUNT }
+    pub fn command_count() -> usize { DAILYNOTE_COMMAND_COUNT }
 }
 
-impl Default for VcpDailyNoteRouter {
+impl Default for DailyNoteCompatRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -40,18 +40,18 @@ mod tests {
     #[test]
     fn parse_4_commands() {
         for s in ["DailyNote", "DailyNoteSearcher", "DailyNoteFolder", "DailyNoteExporter"] {
-            assert_ne!(VcpDailyNoteCommand::from_str(s), VcpDailyNoteCommand::Unknown);
+            assert_ne!(DailyNoteCommand::from_str(s), DailyNoteCommand::Unknown);
         }
-        assert_eq!(VCP_DAILYNOTE_COMMAND_COUNT, 4);
+        assert_eq!(DAILYNOTE_COMMAND_COUNT, 4);
     }
 
     #[test]
     fn unknown_maps() {
-        assert_eq!(VcpDailyNoteCommand::from_str("xyz"), VcpDailyNoteCommand::Unknown);
+        assert_eq!(DailyNoteCommand::from_str("xyz"), DailyNoteCommand::Unknown);
     }
 
     #[test]
     fn router_count() {
-        assert_eq!(VcpDailyNoteRouter::command_count(), 4);
+        assert_eq!(DailyNoteCompatRouter::command_count(), 4);
     }
 }

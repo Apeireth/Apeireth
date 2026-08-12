@@ -27,18 +27,18 @@ pub mod generators;
 pub mod params;
 pub mod result;
 pub mod mcp;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 pub use provider::{ImageGenProvider, ProviderKind, ProviderRegistry};
 pub use params::{ImageGenParams, ImageSize, ImageQuality, ImageStyle};
 pub use result::{ImageGenResult, GeneratedImage};
 pub use mcp::{ImageGenMcp, ImageMcpTool};
-pub use vcp_compat::{VcpImageGenCommand, VcpImageGenRouter, VCP_IMAGEGEN_COMMAND_COUNT};
+pub use compat::{ImageGenCommand, ImageGenCompatRouter, IMAGEGEN_COMMAND_COUNT};
 pub use enhanced::EnhancedImageGen;
 
 /// R141 deliverables (per v2 plan §9.5):
-/// - 5 modules (provider / generators / params / result / mcp) + vcp_compat + enhanced
+/// - 5 modules (provider / generators / params / result / mcp) + compat + enhanced
 /// - 13-provider enum (VCP compat) + 4 real impls (1 mock + 3 API stubs)
 pub const R141_DELIVERABLES: usize = 7;
 

@@ -1,16 +1,16 @@
 //! VCP image-process compatibility.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpImageProcessCommand {
+pub enum ImageProcessCommand {
     ImageProcessor,
     ImageHasher,
     ImageOcrTool,
     Unknown,
 }
 
-pub const VCP_IMAGEPROC_COMMAND_COUNT: usize = 3;
+pub const IMAGEPROC_COMMAND_COUNT: usize = 3;
 
-impl VcpImageProcessCommand {
+impl ImageProcessCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "ImageProcessor" => Self::ImageProcessor,
@@ -21,14 +21,14 @@ impl VcpImageProcessCommand {
     }
 }
 
-pub struct VcpImageProcessRouter;
+pub struct ImageProcessCompatRouter;
 
-impl VcpImageProcessRouter {
+impl ImageProcessCompatRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_IMAGEPROC_COMMAND_COUNT }
+    pub fn command_count() -> usize { IMAGEPROC_COMMAND_COUNT }
 }
 
-impl Default for VcpImageProcessRouter {
+impl Default for ImageProcessCompatRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -38,18 +38,18 @@ mod tests {
     #[test]
     fn parse_3_commands() {
         for s in ["ImageProcessor", "ImageHasher", "ImageOcrTool"] {
-            assert_ne!(VcpImageProcessCommand::from_str(s), VcpImageProcessCommand::Unknown);
+            assert_ne!(ImageProcessCommand::from_str(s), ImageProcessCommand::Unknown);
         }
-        assert_eq!(VCP_IMAGEPROC_COMMAND_COUNT, 3);
+        assert_eq!(IMAGEPROC_COMMAND_COUNT, 3);
     }
 
     #[test]
     fn unknown_maps() {
-        assert_eq!(VcpImageProcessCommand::from_str("xyz"), VcpImageProcessCommand::Unknown);
+        assert_eq!(ImageProcessCommand::from_str("xyz"), ImageProcessCommand::Unknown);
     }
 
     #[test]
     fn router_count() {
-        assert_eq!(VcpImageProcessRouter::command_count(), 3);
+        assert_eq!(ImageProcessCompatRouter::command_count(), 3);
     }
 }

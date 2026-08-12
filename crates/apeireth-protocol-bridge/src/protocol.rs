@@ -1,7 +1,7 @@
 //! VCP protocol enum + detection hints.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VcpProtocol {
+pub enum CompatProtocol {
     OpenAIChatCompletions,
     AnthropicMessages,
     OpenAIResponses,
@@ -9,18 +9,18 @@ pub enum VcpProtocol {
     Unknown,
 }
 
-impl VcpProtocol {
+impl CompatProtocol {
     pub fn name(&self) -> &'static str {
         match self {
-            VcpProtocol::OpenAIChatCompletions => "openai-chat-completions",
-            VcpProtocol::AnthropicMessages => "anthropic-messages",
-            VcpProtocol::OpenAIResponses => "openai-responses",
-            VcpProtocol::Gemini => "gemini",
-            VcpProtocol::Unknown => "unknown",
+            CompatProtocol::OpenAIChatCompletions => "openai-chat-completions",
+            CompatProtocol::AnthropicMessages => "anthropic-messages",
+            CompatProtocol::OpenAIResponses => "openai-responses",
+            CompatProtocol::Gemini => "gemini",
+            CompatProtocol::Unknown => "unknown",
         }
     }
-    pub fn all() -> &'static [VcpProtocol] {
-        &[VcpProtocol::OpenAIChatCompletions, VcpProtocol::AnthropicMessages, VcpProtocol::OpenAIResponses, VcpProtocol::Gemini]
+    pub fn all() -> &'static [CompatProtocol] {
+        &[CompatProtocol::OpenAIChatCompletions, CompatProtocol::AnthropicMessages, CompatProtocol::OpenAIResponses, CompatProtocol::Gemini]
     }
 }
 
@@ -37,12 +37,12 @@ mod tests {
     use super::*;
     #[test]
     fn protocol_count() {
-        assert_eq!(VcpProtocol::all().len(), 4);
+        assert_eq!(CompatProtocol::all().len(), 4);
     }
 
     #[test]
     fn protocol_names_unique() {
-        let names: Vec<_> = VcpProtocol::all().iter().map(|p| p.name()).collect();
+        let names: Vec<_> = CompatProtocol::all().iter().map(|p| p.name()).collect();
         let mut sorted = names.clone();
         sorted.sort();
         sorted.dedup();

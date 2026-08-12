@@ -1,7 +1,7 @@
 //! VCP image-gen compatibility (1 router for 13 VCP image providers).
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpImageGenCommand {
+pub enum ImageGenCommand {
     OpenAiDallE,
     StabilityAi,
     Midjourney,
@@ -17,9 +17,9 @@ pub enum VcpImageGenCommand {
     Unknown,
 }
 
-pub const VCP_IMAGEGEN_COMMAND_COUNT: usize = 12;
+pub const IMAGEGEN_COMMAND_COUNT: usize = 12;
 
-impl VcpImageGenCommand {
+impl ImageGenCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "OpenAiDallE" => Self::OpenAiDallE,
@@ -39,14 +39,14 @@ impl VcpImageGenCommand {
     }
 }
 
-pub struct VcpImageGenRouter;
+pub struct ImageGenCompatRouter;
 
-impl VcpImageGenRouter {
+impl ImageGenCompatRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_IMAGEGEN_COMMAND_COUNT }
+    pub fn command_count() -> usize { IMAGEGEN_COMMAND_COUNT }
 }
 
-impl Default for VcpImageGenRouter {
+impl Default for ImageGenCompatRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -57,18 +57,18 @@ mod tests {
     fn parse_12_commands() {
         let names = ["OpenAiDallE","StabilityAi","Midjourney","MiniMaxImage","GoogleImagen","AdobeFirefly","LeonardoAi","Ideogram","PlaygroundAi","BingImageCreator","Craiyon","Nightcafe"];
         for s in names {
-            assert_ne!(VcpImageGenCommand::from_str(s), VcpImageGenCommand::Unknown);
+            assert_ne!(ImageGenCommand::from_str(s), ImageGenCommand::Unknown);
         }
-        assert_eq!(VCP_IMAGEGEN_COMMAND_COUNT, 12);
+        assert_eq!(IMAGEGEN_COMMAND_COUNT, 12);
     }
 
     #[test]
     fn unknown_maps() {
-        assert_eq!(VcpImageGenCommand::from_str("xyz"), VcpImageGenCommand::Unknown);
+        assert_eq!(ImageGenCommand::from_str("xyz"), ImageGenCommand::Unknown);
     }
 
     #[test]
     fn router_count() {
-        assert_eq!(VcpImageGenRouter::command_count(), 12);
+        assert_eq!(ImageGenCompatRouter::command_count(), 12);
     }
 }

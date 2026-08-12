@@ -1,15 +1,15 @@
 //! VCP LightMemo compatibility (1 router).
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpLightMemoCommand {
+pub enum LightMemoCommand {
     LightMemo,
     MemoryConsolidator,
     Unknown,
 }
 
-pub const VCP_LIGHTMEMO_COMMAND_COUNT: usize = 2;
+pub const LIGHTMEMO_COMMAND_COUNT: usize = 2;
 
-impl VcpLightMemoCommand {
+impl LightMemoCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "LightMemo" => Self::LightMemo,
@@ -19,14 +19,14 @@ impl VcpLightMemoCommand {
     }
 }
 
-pub struct VcpLightMemoRouter;
+pub struct LightMemoCompatRouter;
 
-impl VcpLightMemoRouter {
+impl LightMemoCompatRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_LIGHTMEMO_COMMAND_COUNT }
+    pub fn command_count() -> usize { LIGHTMEMO_COMMAND_COUNT }
 }
 
-impl Default for VcpLightMemoRouter {
+impl Default for LightMemoCompatRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -36,14 +36,14 @@ mod tests {
     #[test]
     fn parse_2_commands() {
         for s in ["LightMemo", "MemoryConsolidator"] {
-            assert_ne!(VcpLightMemoCommand::from_str(s), VcpLightMemoCommand::Unknown);
+            assert_ne!(LightMemoCommand::from_str(s), LightMemoCommand::Unknown);
         }
-        assert_eq!(VCP_LIGHTMEMO_COMMAND_COUNT, 2);
+        assert_eq!(LIGHTMEMO_COMMAND_COUNT, 2);
     }
     #[test]
     fn unknown_maps() {
-        assert_eq!(VcpLightMemoCommand::from_str("xyz"), VcpLightMemoCommand::Unknown);
+        assert_eq!(LightMemoCommand::from_str("xyz"), LightMemoCommand::Unknown);
     }
     #[test]
-    fn router_count() { assert_eq!(VcpLightMemoRouter::command_count(), 2); }
+    fn router_count() { assert_eq!(LightMemoCompatRouter::command_count(), 2); }
 }

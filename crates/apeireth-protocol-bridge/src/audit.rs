@@ -3,12 +3,12 @@
 use chrono::{DateTime, Utc};
 use std::collections::VecDeque;
 
-use crate::protocol::VcpProtocol;
+use crate::protocol::CompatProtocol;
 
 #[derive(Debug, Clone)]
 pub struct AuditEntry {
     pub timestamp: DateTime<Utc>,
-    pub protocol: VcpProtocol,
+    pub protocol: CompatProtocol,
     pub direction: AuditDirection,
     pub status: i32,
 }
@@ -53,7 +53,7 @@ mod tests {
         let mut log = AuditLog::new(10);
         log.record(AuditEntry {
             timestamp: Utc::now(),
-            protocol: VcpProtocol::OpenAIChatCompletions,
+            protocol: CompatProtocol::OpenAIChatCompletions,
             direction: AuditDirection::Request,
             status: 200,
         });
@@ -66,7 +66,7 @@ mod tests {
         for _ in 0..5 {
             log.record(AuditEntry {
                 timestamp: Utc::now(),
-                protocol: VcpProtocol::Unknown,
+                protocol: CompatProtocol::Unknown,
                 direction: AuditDirection::Request,
                 status: 200,
             });

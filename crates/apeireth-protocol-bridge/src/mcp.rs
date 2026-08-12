@@ -45,9 +45,9 @@ impl BridgeTool {
 
 pub const BRIDGE_MCP_TOOL_COUNT: usize = 2;
 
-pub struct VcpBridgeMcp;
+pub struct CompatBridgeMcp;
 
-impl VcpBridgeMcp {
+impl CompatBridgeMcp {
     pub fn new() -> Self { Self }
     pub fn handle(&self, req: McpRequest) -> McpResponse {
         match req.method.as_str() {
@@ -105,7 +105,7 @@ impl VcpBridgeMcp {
     }
 }
 
-impl Default for VcpBridgeMcp { fn default() -> Self { Self::new() } }
+impl Default for CompatBridgeMcp { fn default() -> Self { Self::new() } }
 
 #[cfg(test)]
 mod tests {
@@ -114,13 +114,13 @@ mod tests {
     fn tool_count_is_2() { assert_eq!(BRIDGE_MCP_TOOL_COUNT, 2); }
     #[test]
     fn initialize() {
-        let m = VcpBridgeMcp::new();
+        let m = CompatBridgeMcp::new();
         let r = m.handle(McpRequest { jsonrpc: "2.0".to_string(), id: Some(json!(1)), method: "initialize".to_string(), params: json!({}) });
         assert!(r.result.is_some());
     }
     #[test]
     fn tools_list() {
-        let m = VcpBridgeMcp::new();
+        let m = CompatBridgeMcp::new();
         let r = m.handle(McpRequest { jsonrpc: "2.0".to_string(), id: Some(json!(2)), method: "tools/list".to_string(), params: json!({}) });
         let binding = r.result.unwrap();
         let tools = binding["tools"].as_array().unwrap();
@@ -128,7 +128,7 @@ mod tests {
     }
     #[test]
     fn detect_protocol_tool() {
-        let m = VcpBridgeMcp::new();
+        let m = CompatBridgeMcp::new();
         let r = m.handle(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(3)),

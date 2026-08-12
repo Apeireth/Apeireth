@@ -100,7 +100,7 @@ pub fn build_pipeline(base_url: String, auth_token: Option<String>) -> Result<Pi
     use apeireth_http_client::HttpClient;
     use apeireth_pipeline::PipelineConfig;
 
-    let http = HttpClient::with_vcp_defaults().map_err(|e| format!("http client build: {e}"))?;
+    let http = HttpClient::with_chat_defaults().map_err(|e| format!("http client build: {e}"))?;
 
     let mut config = PipelineConfig::default();
     config.base_url = base_url;

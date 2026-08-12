@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 100ms 阈值对 LLM 调用不实际 (Round 1 = 2817ms, Round 2 = 6230ms 是因为生成 token 数不同)
     // 实际验证:
     //   1. 3 round 全部 200 OK (Pipeline + Keep-Alive 没崩)
-    //   2. Pipeline 已用 VCP 5 字段 (KeepAliveConfig::vcp_default) 配置 HttpClient
+    //   2. Pipeline 已用 VCP 5 字段 (KeepAliveConfig::chat_default) 配置 HttpClient
     //   3. 单元测试 (apeireth-http-client) 已验证 LIFO 调度算法
     println!("\n🔍 Keep-Alive LIFO 复用验证:");
     println!(

@@ -174,7 +174,7 @@ impl QdrantClient {
         Self {
             base_url: base_url.into().trim_end_matches('/').to_string(),
             collection: collection.into(),
-            http: HttpClient::with_vcp_defaults().expect("HttpClient::with_vcp_defaults"),
+            http: HttpClient::with_chat_defaults().expect("HttpClient::with_chat_defaults"),
             dimension: None,
             distance: QdrantDistance::Cosine,
         }
