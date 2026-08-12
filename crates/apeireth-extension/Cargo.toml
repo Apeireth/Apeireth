@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-extension — VCP 6 类插件 (sync/async/static/service/messagePreprocessor/hybrid) + extension.toml 严格 schema + 审核后注册 + 沙盒 + 调用审计 (P28 round 5-03)"
+description = "apeireth-extension — 6 类扩展 (sync/async/static/service/messagePreprocessor/hybrid) + extension.toml 严格 schema + 审核后注册 + 沙盒 + 调用审计 (P28 round 5-03)"
 
 [dependencies]
 tokio = { workspace = true }
