@@ -1,0 +1,30 @@
+[package]
+name = "apeireth-vcp-bridge"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R141: VCP protocol bridge (4-protocol 5→1 merge per v2 plan §9.5)"
+
+[dependencies]
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-api = { path = "../apeireth-api" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+
+[lib]
+path = "src/lib.rs"

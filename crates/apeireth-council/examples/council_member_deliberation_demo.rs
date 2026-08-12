@@ -4,7 +4,7 @@
 //! 1. **0 LLM** (keyword 兜底): 5 member + 1 query, 看 consensus / strong_disapprove / max_rounds
 //! 2. **ScriptedMockLlm**: 5 member + per-member keyword 路由, 模拟多 LLM
 //! 3. **真 LLM** (env-gated, 需 APEIRETH_MINIMAX_LIVE_TEST=1 + APEIRETH_MINIMAX_API_KEY):
-//!    3 member + MiniMax `/anthropic/v1/messages` 真接 LLM 多轮协商
+//!    3 member + MiniMax `/anthropic` (协议: Anthropic Messages) 真接 LLM 多轮协商 (模型: MiniMax-M3, catalog 唯一白名单)
 //!
 //! 运行:
 //! ```bash
@@ -114,7 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 api_key,
                 std::env::var("APEIRETH_MINIMAX_URL")
                     .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
-                vec!["MiniMax-M2.7-highspeed".to_string()],
+                vec!["MiniMax-M3".to_string()],
             );
             let provider = AnthropicCompatibleProvider::new(cfg)?;
             let arc_provider: Arc<dyn apeireth_api::llm::LlmProvider> = Arc::new(provider);

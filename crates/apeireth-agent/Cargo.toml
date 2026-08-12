@@ -12,6 +12,8 @@ categories = ["api-bindings", "data-structures"]
 
 [dependencies]
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-api = { path = "../apeireth-api" }
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
 apeireth-tool-approval = { path = "../apeireth-tool-approval" }
 apeireth-memory = { path = "../apeireth-memory" }

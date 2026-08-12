@@ -21,6 +21,10 @@ impl LlmAdvisorBackend {
     }
 }
 
+// LlmAdvisorBackend 是 OFFICIAL 真 LLM 桥 — `MockLlmProvider` deprecation 警告
+// 里写的"真 LLM 用 ... + LlmAdvisorBackend"就是这一个 impl. 这是 trait 退役路径,
+// 不是误用. 显式 allow + 注释说明.
+#[allow(deprecated)]
 impl MockLlmProvider for LlmAdvisorBackend {
     fn generate(&self, prompt: &str, system: &str) -> MockLlmResponse {
         // 用 tokio Handle::current().block_on 调 async LLM

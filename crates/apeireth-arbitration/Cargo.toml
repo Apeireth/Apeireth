@@ -1,0 +1,30 @@
+[package]
+name = "apeireth-arbitration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R145: HASH-SQL 仲裁 + 唯一事实时间线. 跨前端/群聊/邮箱/Agent 通讯 1 套 SQL, content_hash 决定 canonical order. 借鉴 VCP v1.1 HASH-SQL 仲裁, 上升为 Rust 编译期保证."
+keywords = ["ai", "agent", "arbitration", "timeline", "csl", "hash-sql"]
+categories = ["data-structures", "database"]
+
+[dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "sync", "time", "macros"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+sha2 = "0.10"
+hex = "0.4"
+async-trait = { workspace = true }
+rusqlite = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

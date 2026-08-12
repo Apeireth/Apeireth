@@ -21,6 +21,9 @@ apeireth-consciousness = { path = "../apeireth-consciousness" }
 
 [dev-dependencies]
 tokio = { workspace = true }
+apeireth-cognition = { path = "../apeireth-cognition" }
+apeireth-life-force = { path = "../apeireth-life-force" }
+apeireth-asi = { path = "../apeireth-asi" }
 
 [lib]
 name = "apeireth_perception"
@@ -34,3 +37,9 @@ path = "examples/perception_demo.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+# R131.4 cognition 4-crate 闭环 demo
+[[example]]
+name = "r131_organ_loop"
+path = "examples/r131_organ_loop.rs"
+

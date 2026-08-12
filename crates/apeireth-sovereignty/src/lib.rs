@@ -76,6 +76,12 @@ pub mod skill_guard;
 pub mod action_rail;
 pub mod flow_executor;
 
+// R131 升级 (B4 8 重守门 v8 → 9 重守门 v9): 加 evidence_guard 1 个新 mod
+// 借鉴 Claude-mem / Letta evidence-chain 思想, 对应 S-2 实事求是 + O-5 不假装
+// 借鉴 ID: R131-evidence-9-BORROW-claude-mem+literal-2026-08-12
+// 8 硬墙 0 越界: 0 改 Governance.process / SkillRegistry / SkillGuard / ActionRail / ActionKind 公开签名
+pub mod evidence_guard;
+
 // ============================================================
 // 公共 re-export — 让 `use apeireth_sovereignty::*;` 拿到常用 API
 // ============================================================
@@ -172,6 +178,12 @@ pub use action_rail::{
     SystemFlowDispatchAction, SystemSkillInvokeAction,
 };
 pub use flow_executor::{FlowError, FlowExecutor, FlowOutcome, FlowRunner, FlowState, FlowStep};
+pub use evidence_guard::{
+    EvidenceCheck, EvidenceEntry, EvidenceGuard, EvidenceKind, EVIDENCE_FOLD_GUARD_COUNT,
+    EVIDENCE_FOLD_GUARD_INDEX, NINE_FOLD_GUARDS_HARDCODE,
+};
+
+
 
 /// 7 重守门 v7 严守 (R126-guard-7 B4 升级, 编译期 hardcode).
 ///

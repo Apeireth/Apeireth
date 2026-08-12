@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod l0;
+pub mod channel;
 #[cfg(unix)]
 pub mod l1;
 #[cfg(unix)]
@@ -27,6 +28,7 @@ pub mod l3;
 pub mod l4;
 
 pub use l0::L0Bus;
+pub use channel::{Channel, ChannelSet, ChanneledBus};
 #[cfg(unix)]
 pub use l1::{L1Client, L1Server};
 #[cfg(unix)]
