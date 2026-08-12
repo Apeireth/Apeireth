@@ -34,7 +34,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ============================================================
     // 1. 构造 HttpClient (VCP 5 字段 baked in)
     // ============================================================
-    let client = HttpClient::with_vcp_defaults()?;
+    let client = HttpClient::with_chat_defaults()?;
     let cfg: KeepAliveConfig = client.config();
     println!("\n✅ HttpClient 构造成功 (5 字段已 baked in reqwest::Client):");
     println!("   keep_alive:          {}", cfg.keep_alive);

@@ -4,7 +4,7 @@
 //! command names to Rust types. Real execution routes through EnhancedShell.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpShellCommand {
+pub enum ShellCommand {
     /// VCP LinuxShellExecutor (113KB, 六层安全)
     LinuxShellExecutor,
     /// VCP PowerShellExecutor (3KB)
@@ -16,7 +16,7 @@ pub enum VcpShellCommand {
 
 pub const VCP_SHELL_COMMAND_COUNT: usize = 3;
 
-impl VcpShellCommand {
+impl ShellCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "LinuxShellExecutor" => Self::LinuxShellExecutor,
@@ -27,9 +27,9 @@ impl VcpShellCommand {
     }
 }
 
-pub struct VcpShellRouter;
+pub struct ShellCompatRouter;
 
-impl VcpShellRouter {
+impl ShellCompatRouter {
     pub fn new() -> Self {
         Self
     }
@@ -38,7 +38,7 @@ impl VcpShellRouter {
     }
 }
 
-impl Default for VcpShellRouter {
+impl Default for ShellCompatRouter {
     fn default() -> Self {
         Self::new()
     }
@@ -50,13 +50,13 @@ mod tests {
     #[test]
     fn parse_3_commands() {
         for s in ["LinuxShellExecutor", "PowerShellExecutor", "SciCalculator"] {
-            assert_ne!(VcpShellCommand::from_str(s), VcpShellCommand::Unknown);
+            assert_ne!(ShellCommand::from_str(s), ShellCommand::Unknown);
         }
         assert_eq!(VCP_SHELL_COMMAND_COUNT, 3);
     }
 
     #[test]
     fn unknown_maps_correctly() {
-        assert_eq!(VcpShellCommand::from_str("Nonexistent"), VcpShellCommand::Unknown);
+        assert_eq!(ShellCommand::from_str("Nonexistent"), ShellCommand::Unknown);
     }
 }

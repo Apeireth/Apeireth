@@ -297,7 +297,7 @@ impl fmt::Debug for GeminiHandler {
 /// use apeireth_api::protocol_handler_trait::HandlerRegistry;
 /// use apeireth_pipeline::Pipeline;
 ///
-/// let pipeline = Arc::new(Pipeline::with_vcp_defaults().unwrap());
+/// let pipeline = Arc::new(Pipeline::with_chat_defaults().unwrap());
 /// let registry = RegistryBuilder::register_all(pipeline);
 /// // registry 现在 4 协议 handler 都已注册, server.rs 可改调 registry.dispatch
 /// ```
@@ -406,7 +406,7 @@ mod protocol_handlers_v2_tests {
         // (Pipeline 创建需 HttpClient 配置, 走 mock 在 Test 7 验证)
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         // endpoint_url 应 1:1 对齐 protocol_handlers.rs 的 const
@@ -422,7 +422,7 @@ mod protocol_handlers_v2_tests {
     fn four_handlers_supports_stream_all_true() {
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         assert!(OpenAiChatHandler::new(Arc::clone(&pipeline)).supports_stream());
@@ -437,7 +437,7 @@ mod protocol_handlers_v2_tests {
     fn cache_key_stable_and_unique() {
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         let h = OpenAiChatHandler::new(pipeline);
@@ -458,7 +458,7 @@ mod protocol_handlers_v2_tests {
     fn registry_builder_registers_all_4_kinds() {
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         let registry = RegistryBuilder::register_all(pipeline);
@@ -476,7 +476,7 @@ mod protocol_handlers_v2_tests {
     fn registry_supports_stream_all_4_kinds_true() {
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         let registry = RegistryBuilder::register_all(pipeline);
@@ -532,7 +532,7 @@ mod protocol_handlers_v2_tests {
     fn dispatch_works_without_caller_tokio_runtime() {
         use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
-        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default()).unwrap();
+        let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         let h = OpenAiChatHandler::new(pipeline);

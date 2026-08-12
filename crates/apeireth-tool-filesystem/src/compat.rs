@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum VcpError {
+pub enum CompatError {
     #[error("unknown command: `{0}`")]
     UnknownCommand(String),
     #[error("missing required field: `{0}`")]
@@ -14,7 +14,7 @@ pub enum VcpError {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum VcpCommand {
+pub enum CompatCommand {
     ReadFile,
     WebReadFile,
     FileInfo,
@@ -38,7 +38,7 @@ pub enum VcpCommand {
 
 pub const VCP_COMMAND_COUNT: usize = 18;
 
-impl VcpCommand {
+impl CompatCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "ReadFile" => Self::ReadFile,
@@ -65,30 +65,30 @@ impl VcpCommand {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VcpManifest {
+pub struct CompatManifest {
     pub name: String,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub commands: Vec<String>,
 }
 
-impl VcpManifest {
+impl CompatManifest {
     pub fn parse(json: &str) -> Result<Self, serde_json::Error> {
         serde_json::from_str(json)
     }
-    pub fn supported_commands(&self) -> Vec<VcpCommand> {
-        self.commands.iter().map(|s| VcpCommand::from_str(s)).filter(|c| *c != VcpCommand::Unknown).collect()
+    pub fn supported_commands(&self) -> Vec<CompatCommand> {
+        self.commands.iter().map(|s| CompatCommand::from_str(s)).filter(|c| *c != CompatCommand::Unknown).collect()
     }
 }
 
-pub struct VcpCompatRouter;
+pub struct CompatRouter;
 
-impl VcpCompatRouter {
+impl CompatRouter {
     pub fn new() -> Self { Self }
     pub fn command_count() -> usize { VCP_COMMAND_COUNT }
 }
 
-impl Default for VcpCompatRouter {
+impl Default for CompatRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -104,7 +104,7 @@ mod tests {
             "SearchFiles","DownloadFile","CreateCanvas",
         ];
         for s in cmds {
-            assert_ne!(VcpCommand::from_str(s), VcpCommand::Unknown, "command `{s}` not parsed");
+            assert_ne!(CompatCommand::from_str(s), CompatCommand::Unknown, "command `{s}` not parsed");
         }
         assert_eq!(VCP_COMMAND_COUNT, 18);
     }
@@ -112,7 +112,7 @@ mod tests {
     #[test]
     fn parse_manifest() {
         let json = r#"{"name":"FileOperator","commands":["ReadFile","WriteFile"]}"#;
-        let m = VcpManifest::parse(json).unwrap();
+        let m = CompatManifest::parse(json).unwrap();
         assert_eq!(m.commands.len(), 2);
         assert_eq!(m.supported_commands().len(), 2);
     }

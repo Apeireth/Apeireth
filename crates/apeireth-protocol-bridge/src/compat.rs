@@ -1,38 +1,38 @@
 //! VCP bridge (5→1 merge) compatibility.
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum VcpBridgeCommand {
+pub enum CompatBridgeCommand {
     VcpOpenAIAdapter,
     VcpAnthropicAdapter,
     VcpGeminiAdapter,
     VcpResponsesAdapter,
-    VcpProtocolMux,
+    CompatProtocolMux,
     Unknown,
 }
 
-pub const VCP_BRIDGE_COMMAND_COUNT: usize = 5;
+pub const COMPAT_BRIDGE_COMMAND_COUNT: usize = 5;
 
-impl VcpBridgeCommand {
+impl CompatBridgeCommand {
     pub fn from_str(s: &str) -> Self {
         match s {
             "VcpOpenAIAdapter" => Self::VcpOpenAIAdapter,
             "VcpAnthropicAdapter" => Self::VcpAnthropicAdapter,
             "VcpGeminiAdapter" => Self::VcpGeminiAdapter,
             "VcpResponsesAdapter" => Self::VcpResponsesAdapter,
-            "VcpProtocolMux" => Self::VcpProtocolMux,
+            "CompatProtocolMux" => Self::CompatProtocolMux,
             _ => Self::Unknown,
         }
     }
 }
 
-pub struct VcpBridgeRouter;
+pub struct CompatBridgeRouter;
 
-impl VcpBridgeRouter {
+impl CompatBridgeRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_BRIDGE_COMMAND_COUNT }
+    pub fn command_count() -> usize { COMPAT_BRIDGE_COMMAND_COUNT }
 }
 
-impl Default for VcpBridgeRouter {
+impl Default for CompatBridgeRouter {
     fn default() -> Self { Self::new() }
 }
 
@@ -41,19 +41,19 @@ mod tests {
     use super::*;
     #[test]
     fn parse_5_commands() {
-        for s in ["VcpOpenAIAdapter","VcpAnthropicAdapter","VcpGeminiAdapter","VcpResponsesAdapter","VcpProtocolMux"] {
-            assert_ne!(VcpBridgeCommand::from_str(s), VcpBridgeCommand::Unknown);
+        for s in ["VcpOpenAIAdapter","VcpAnthropicAdapter","VcpGeminiAdapter","VcpResponsesAdapter","CompatProtocolMux"] {
+            assert_ne!(CompatBridgeCommand::from_str(s), CompatBridgeCommand::Unknown);
         }
-        assert_eq!(VCP_BRIDGE_COMMAND_COUNT, 5);
+        assert_eq!(COMPAT_BRIDGE_COMMAND_COUNT, 5);
     }
 
     #[test]
     fn unknown_maps() {
-        assert_eq!(VcpBridgeCommand::from_str("xyz"), VcpBridgeCommand::Unknown);
+        assert_eq!(CompatBridgeCommand::from_str("xyz"), CompatBridgeCommand::Unknown);
     }
 
     #[test]
     fn router_count() {
-        assert_eq!(VcpBridgeRouter::command_count(), 5);
+        assert_eq!(CompatBridgeRouter::command_count(), 5);
     }
 }

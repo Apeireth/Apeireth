@@ -81,7 +81,7 @@ pub struct KeepAliveConfig {
 impl Default for KeepAliveConfig {
     fn default() -> Self {
         // **编译期 hardcode VCP 默认值** — 守住字面量
-        Self::vcp_default()
+        Self::chat_default()
     }
 }
 
@@ -89,7 +89,7 @@ impl KeepAliveConfig {
     /// **VCP 默认值** — `chatCompletionHandler.js:22-28` 真代码 5 字段默认值
     ///
     /// 这是 `Default::default()` 的真源, 单独抽出来便于测试 + 文档
-    pub const fn vcp_default() -> Self {
+    pub const fn chat_default() -> Self {
         Self {
             keep_alive: true,
             keep_alive_msecs: 1000,
@@ -101,7 +101,7 @@ impl KeepAliveConfig {
 
     /// LIFO 策略 + VCP 默认其他字段 — 最常用的快速构造
     pub const fn lifo_default() -> Self {
-        Self::vcp_default()
+        Self::chat_default()
     }
 
     /// 字段级校验 — 防止 max_sockets=0 这种运行时崩溃
@@ -126,7 +126,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn vcp_default_matches_chat_completion_handler_22_28() {
+    fn chat_default_matches_chat_completion_handler_22_28() {
         // **字段级断言**: VCP 5 字段默认值必须一字不差
         // `chatCompletionHandler.js:22-28`:
         //   const agentOptions = {
@@ -136,7 +136,7 @@ mod tests {
         //     scheduling: 'lifo',
         //     maxSockets: 10000
         //   };
-        let cfg = KeepAliveConfig::vcp_default();
+        let cfg = KeepAliveConfig::chat_default();
         assert!(cfg.keep_alive, "keep_alive must be true (VCP line 23)");
         assert_eq!(
             cfg.keep_alive_msecs, 1000,
@@ -158,8 +158,8 @@ mod tests {
     }
 
     #[test]
-    fn default_impl_returns_vcp_default() {
-        assert_eq!(KeepAliveConfig::default(), KeepAliveConfig::vcp_default());
+    fn default_impl_returns_chat_default() {
+        assert_eq!(KeepAliveConfig::default(), KeepAliveConfig::chat_default());
     }
 
     #[test]
@@ -180,7 +180,7 @@ mod tests {
     fn validate_rejects_zero_max_sockets() {
         let cfg = KeepAliveConfig {
             max_sockets: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         assert!(cfg.validate().is_err());
     }
@@ -189,7 +189,7 @@ mod tests {
     fn validate_rejects_zero_keep_alive_msecs() {
         let cfg = KeepAliveConfig {
             keep_alive_msecs: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         assert!(cfg.validate().is_err());
     }
@@ -198,14 +198,14 @@ mod tests {
     fn validate_rejects_zero_free_socket_timeout() {
         let cfg = KeepAliveConfig {
             free_socket_timeout: 0,
-            ..KeepAliveConfig::vcp_default()
+            ..KeepAliveConfig::chat_default()
         };
         assert!(cfg.validate().is_err());
     }
 
     #[test]
-    fn validate_accepts_vcp_default() {
-        assert!(KeepAliveConfig::vcp_default().validate().is_ok());
+    fn validate_accepts_chat_default() {
+        assert!(KeepAliveConfig::chat_default().validate().is_ok());
     }
 
     #[test]
