@@ -40,6 +40,9 @@ mod llm_config;
 mod onboarding;
 mod theme;
 
+// R155 TUI × runtime bridge
+mod runtime_bridge;
+
 use std::io::{self, Stdout};
 use std::time::{Duration, Instant};
 

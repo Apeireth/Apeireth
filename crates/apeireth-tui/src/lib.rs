@@ -41,6 +41,10 @@ mod llm_config;
 mod onboarding;
 mod theme;
 
+// R155 TUI × runtime bridge (per master 后端完全做好了再接 tui)
+// Wraps apeireth-runtime for pull-based state inspection from the TUI main loop.
+mod runtime_bridge;
+
 // ============================================================================
 // 公开 API (给 bench / 集成测试用)
 // ============================================================================
@@ -57,6 +61,9 @@ pub use theme::{Theme, ThemeStyle};
 
 // CognitionLive tracker (集成测试用)
 pub use cognition_live::{CognitionLiveTracker, LiveEvent};
+
+// R155 runtime bridge (TUI main loop pulls Runtime state via this bridge)
+pub use runtime_bridge::{BridgeState, RuntimeBridge};
 
 // 注: bench 实际引用路径 `apeireth_tui::pages::bridge::render` (跟 main.rs `pages::bridge::render` 同形)
 //     上面 `pub mod pages` 重新导出让 bench 透明使用
