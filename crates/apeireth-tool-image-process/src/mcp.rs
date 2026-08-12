@@ -1,5 +1,7 @@
 //! MCP server for image-process.
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

@@ -1,5 +1,7 @@
 //! EXIF data extraction (honest stub).
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Default)]

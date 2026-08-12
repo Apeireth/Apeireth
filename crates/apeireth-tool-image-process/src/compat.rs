@@ -1,5 +1,7 @@
 //! VCP image-process compatibility.
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImageProcessCommand {
     ImageProcessor,

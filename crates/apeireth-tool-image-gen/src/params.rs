@@ -1,4 +1,6 @@
 //! Generation parameters (prompt / size / quality / style / count).
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 
@@ -36,9 +38,7 @@ impl ImageSize {
             ImageSize::Large => "1024x1024",
             ImageSize::Portrait => "1024x1792",
             ImageSize::Landscape => "1792x1024",
-            ImageSize::Custom(w, h) => "custom",
-            // avoid including the actual values
-            _ => "custom",
+            ImageSize::Custom(_, _) => "custom",
         }
     }
 }

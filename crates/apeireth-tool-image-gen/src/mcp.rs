@@ -1,4 +1,6 @@
 //! MCP server for image-gen — 2 tools.
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
