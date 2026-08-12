@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth R19 TUI — ratatui 终端版, 后端全接 (9 器官 + 30 crate + 6 流)"
+description = "Apeireth TUI (R19 + R155) - ratatui 终端版, 5 nav 页面 (舰桥/对话/生长/历史/设置) + 9 器官 + 30+ 后端 crate 全接 + R155 RuntimeBridge 拉 apeireth-runtime 7 模块 (HeartbeatScheduler/AsyncTaskStore/ChanneledBus/ArbitrationLog/SearchEngine/GroupChat/EmotionEngine) 状态供 TUI main loop 渲染"
 
 [[bin]]
 name = "apeireth-tui"
@@ -67,6 +67,18 @@ apeireth-pipeline = { path = "../apeireth-pipeline" }
 # R54 B8 续: apeireth-graph 接 cognition_graph (run_cognition_graph_sync 拿 CognitionSummary)
 # backend.rs::compute_main_ai_status 在 record_short_term_messages 后调, record_cognition_summary 真接
 apeireth-graph = { path = "../apeireth-graph" }
+
+# R155 TUI × runtime 集成 (per master 后端完全做好了再接 tui)
+# apeireth-runtime 提供 Runtime / RuntimeEvent / CycleReport, runtime_bridge.rs 包装后给 TUI main loop 拉取
+apeireth-runtime = { path = "../apeireth-runtime" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-arbitration = { path = "../apeireth-arbitration" }
+apeireth-tool-search = { path = "../apeireth-tool-search" }
+# parking_lot 提供 Mutex (apeireth-runtime 内部使用, 0 引外部 dep 原则只对子模块要求)
+parking_lot = "0.12"
+
+# 0 引外部 dep 原则 (ponytail ceiling): parking_lot 是 workspace transitive dep, 已在 apeireth-runtime 用过
 
 # R21 G-1 续补: TUI 接 i18n (5 nav + 9 organ + 3 readiness 翻译表消费)
 # i18n crate 12 类别 × 5 Locale 翻译表编译期嵌入, TUI 通过 translator.t(key, args) 消费
