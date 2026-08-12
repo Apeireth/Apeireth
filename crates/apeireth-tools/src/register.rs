@@ -52,7 +52,7 @@ pub const TOOL_NAMES: [&str; REGISTERED_TOOL_COUNT] = [
 /// - `GitCliOps` / `ShellCodeExec` / `StdFileOps` — 用默认配置
 pub fn register_all(registry: &ToolRegistry) -> Result<(), String> {
     // 1. web_search (用 HttpClient 5 字段 keep-alive)
-    let http = HttpClient::with_vcp_defaults().map_err(|e| format!("HttpClient: {e}"))?;
+    let http = HttpClient::with_chat_defaults().map_err(|e| format!("HttpClient: {e}"))?;
     let web_search: Arc<dyn WebSearch> =
         Arc::new(HttpWebSearch::with_minimaxi_default(Arc::new(http)));
     registry.register(

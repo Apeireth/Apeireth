@@ -20,18 +20,18 @@ pub mod ssh;
 pub mod persist;
 pub mod streaming;
 pub mod calculator;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 pub use sandbox::{SandboxPolicy, SandboxMode, apply_sandbox};
 pub use ssh::SshClient;
 pub use persist::{PersistentTaskStore, TaskRecord};
 pub use calculator::{evaluate_expression, CalcError};
-pub use vcp_compat::{VcpShellRouter, VcpShellCommand};
+pub use compat::{ShellCompatRouter, ShellCommand};
 pub use enhanced::{EnhancedShell, ShellError};
 
 /// R138 deliverables (per 5-dim extension):
-/// - 7 modules (sandbox / ssh / persist / streaming / calculator / vcp_compat / enhanced)
+/// - 7 modules (sandbox / ssh / persist / streaming / calculator / compat / enhanced)
 /// - all real impls (no skeleton), 0 borrowed-from-VCP strings
 pub const R138_DELIVERABLES: usize = 7;
 

@@ -1,19 +1,19 @@
-//! EnhancedVcpBridge composed entry.
+//! EnhancedCompatBridge composed entry.
 
-use crate::bridge::VcpBridge;
-use crate::mcp::{VcpBridgeMcp, McpRequest, McpResponse};
-use crate::protocol::{ProtocolHints, VcpProtocol};
+use crate::bridge::CompatBridge;
+use crate::mcp::{CompatBridgeMcp, McpRequest, McpResponse};
+use crate::protocol::{ProtocolHints, CompatProtocol};
 
-pub struct EnhancedVcpBridge {
-    bridge: VcpBridge,
-    mcp: VcpBridgeMcp,
+pub struct EnhancedCompatBridge {
+    bridge: CompatBridge,
+    mcp: CompatBridgeMcp,
 }
 
-impl EnhancedVcpBridge {
+impl EnhancedCompatBridge {
     pub fn new() -> Self {
-        Self { bridge: VcpBridge::new(), mcp: VcpBridgeMcp::new() }
+        Self { bridge: CompatBridge::new(), mcp: CompatBridgeMcp::new() }
     }
-    pub fn detect(&self, hints: &ProtocolHints) -> VcpProtocol {
+    pub fn detect(&self, hints: &ProtocolHints) -> CompatProtocol {
         self.bridge.detect(hints)
     }
     pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse {
@@ -21,7 +21,7 @@ impl EnhancedVcpBridge {
     }
 }
 
-impl Default for EnhancedVcpBridge { fn default() -> Self { Self::new() } }
+impl Default for EnhancedCompatBridge { fn default() -> Self { Self::new() } }
 
 #[cfg(test)]
 mod tests {
@@ -30,14 +30,14 @@ mod tests {
 
     #[test]
     fn detect_via_path() {
-        let e = EnhancedVcpBridge::new();
+        let e = EnhancedCompatBridge::new();
         let p = e.detect(&ProtocolHints { path: Some("/v1/chat/completions".into()), ..Default::default() });
-        assert_eq!(p, VcpProtocol::OpenAIChatCompletions);
+        assert_eq!(p, CompatProtocol::OpenAIChatCompletions);
     }
 
     #[test]
     fn dispatch_mcp() {
-        let e = EnhancedVcpBridge::new();
+        let e = EnhancedCompatBridge::new();
         let r = e.dispatch_mcp(McpRequest {
             jsonrpc: "2.0".to_string(),
             id: Some(json!(1)),

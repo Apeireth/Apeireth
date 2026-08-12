@@ -19,7 +19,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 /// 跟 src/lib.rs:543 内置测试的同款模式:
 /// `let mut config = PipelineConfig::default(); config.base_url = server.uri();`
 fn make_pipeline_at(server: &MockServer) -> Pipeline {
-    let http = HttpClient::new(apeireth_http_client::KeepAliveConfig::vcp_default()).unwrap();
+    let http = HttpClient::new(apeireth_http_client::KeepAliveConfig::chat_default()).unwrap();
     let mut config = PipelineConfig::default();
     config.base_url = server.uri();
     // **不抑制**: fresh suppression 避免上一次测试残留
@@ -29,7 +29,7 @@ fn make_pipeline_at(server: &MockServer) -> Pipeline {
 
 /// 兼容旧 API: 不带 mock server 时用 vcp defaults (用于单测 Pipeline 自身 API)
 fn make_pipeline() -> Pipeline {
-    let http = HttpClient::with_vcp_defaults().expect("http client");
+    let http = HttpClient::with_chat_defaults().expect("http client");
     Pipeline::new(http).expect("pipeline new")
 }
 
@@ -40,8 +40,8 @@ fn pipeline_new_works() {
 }
 
 #[test]
-fn pipeline_with_vcp_defaults_works() {
-    let p = Pipeline::with_vcp_defaults().expect("vcp defaults");
+fn pipeline_with_chat_defaults_works() {
+    let p = Pipeline::with_chat_defaults().expect("vcp defaults");
     assert!(p.config().base_url.contains("api.minimaxi.com"));
 }
 

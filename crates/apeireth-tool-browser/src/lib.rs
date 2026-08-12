@@ -34,7 +34,7 @@ pub mod accessibility;
 pub mod fetch;
 pub mod cli;
 pub mod mcp;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 #[cfg(feature = "cdp")]
@@ -45,11 +45,11 @@ pub use accessibility::{AccessibilityTree, AccessibilityNode, NodeRole, extract_
 pub use fetch::{FetchBrowser, FetchConfig};
 pub use cli::{BrowserCli, CliCommand, parse_command};
 pub use mcp::{McpServer, McpRequest, McpResponse};
-pub use vcp_compat::{VcpBrowserCommand, VcpBrowserRouter, VCP_BROWSER_COMMAND_COUNT};
+pub use compat::{BrowserCommand, BrowserCompatRouter, BROWSER_COMMAND_COUNT};
 pub use enhanced::EnhancedBrowser;
 
 /// R139 deliverables (per v2 plan §9.5):
-/// - 6 modules (browser / accessibility / fetch / cli / mcp / vcp_compat) + enhanced
+/// - 6 modules (browser / accessibility / fetch / cli / mcp / compat) + enhanced
 /// - HTTP fetch + accessibility tree + CLI/SKILL + MCP + VCP compat
 pub const R139_DELIVERABLES: usize = 7;
 

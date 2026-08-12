@@ -96,7 +96,7 @@ async fn main() {
         }
     });
 
-    let client = Arc::new(HttpClient::with_vcp_defaults().expect("http client"));
+    let client = Arc::new(HttpClient::with_chat_defaults().expect("http client"));
     let url = format!("http://{local_addr}/search?q={{query}}&n={{max}}");
     let search = HttpWebSearch::new(client, url, "LocalDemoSearch");
     println!(

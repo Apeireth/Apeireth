@@ -261,7 +261,7 @@ mod tests {
     #[tokio::test]
     async fn empty_query_returns_400() {
         // 字段级校验: 空 query 必返 400 typed 错误
-        let client = Arc::new(HttpClient::with_vcp_defaults().expect("client"));
+        let client = Arc::new(HttpClient::with_chat_defaults().expect("client"));
         let s = HttpWebSearch::new(client, "https://example.com/api?q={query}", "TestSearch");
         let r = s.search("", 10).await.expect("outer result");
         assert!(r.is_err(), "空 query 必失败");
@@ -271,7 +271,7 @@ mod tests {
 
     #[tokio::test]
     async fn zero_max_results_returns_400() {
-        let client = Arc::new(HttpClient::with_vcp_defaults().expect("client"));
+        let client = Arc::new(HttpClient::with_chat_defaults().expect("client"));
         let s = HttpWebSearch::new(client, "https://example.com/api?q={query}", "TestSearch");
         let r = s.search("rust", 0).await.expect("outer result");
         assert!(r.is_err());
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn with_minimaxi_default_url() {
-        let client = Arc::new(HttpClient::with_vcp_defaults().expect("client"));
+        let client = Arc::new(HttpClient::with_chat_defaults().expect("client"));
         let s = HttpWebSearch::with_minimaxi_default(client);
         assert_eq!(s.name(), "WebSearch");
         assert!(s.search_url().contains("{query}"));
@@ -342,7 +342,7 @@ mod tests {
         });
 
         // 2. 配 HttpWebSearch 指向本地 server
-        let client = Arc::new(HttpClient::with_vcp_defaults().expect("client"));
+        let client = Arc::new(HttpClient::with_chat_defaults().expect("client"));
         let url = format!("http://{local_addr}/search?q={{query}}&n={{max}}");
         let search = HttpWebSearch::new(client, url, "LocalTestSearch");
 

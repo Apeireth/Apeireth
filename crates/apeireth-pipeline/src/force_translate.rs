@@ -76,7 +76,7 @@ impl Default for ForceTranslateConfig {
 
 impl ForceTranslateConfig {
     /// VCP 默认 config (跟 `multiModalConfigStore.js` FIELD_DEFAULTS 字段对齐)
-    pub fn vcp_default() -> Self {
+    pub fn chat_default() -> Self {
         // 真代码 line 36: `MultiModalForceTranslateModels: []` (空)
         Self {
             tag_list: Vec::new(),

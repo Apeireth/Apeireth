@@ -2,19 +2,19 @@
 
 use serde_json::{json, Value};
 
-use crate::protocol::VcpProtocol;
+use crate::protocol::CompatProtocol;
 
 /// Convert a request from one protocol to our internal canonical form.
 /// For now: pass-through + tag the source protocol.
-pub fn convert_request(protocol: VcpProtocol, body: Value) -> Value {
+pub fn convert_request(protocol: CompatProtocol, body: Value) -> Value {
     match protocol {
-        VcpProtocol::OpenAIChatCompletions => {
+        CompatProtocol::OpenAIChatCompletions => {
             // OpenAI: { model, messages, ... } — already canonical
             let mut body = body;
             body["__apeireth_source_protocol"] = json!(protocol.name());
             body
         }
-        VcpProtocol::AnthropicMessages => {
+        CompatProtocol::AnthropicMessages => {
             // Anthropic: { model, messages, max_tokens } → canonical
             let mut body = body;
             if body.get("max_tokens").is_none() {
@@ -23,31 +23,31 @@ pub fn convert_request(protocol: VcpProtocol, body: Value) -> Value {
             body["__apeireth_source_protocol"] = json!(protocol.name());
             body
         }
-        VcpProtocol::OpenAIResponses => {
+        CompatProtocol::OpenAIResponses => {
             let mut body = body;
             body["__apeireth_source_protocol"] = json!(protocol.name());
             body
         }
-        VcpProtocol::Gemini => {
+        CompatProtocol::Gemini => {
             let mut body = body;
             body["__apeireth_source_protocol"] = json!(protocol.name());
             body
         }
-        VcpProtocol::Unknown => body,
+        CompatProtocol::Unknown => body,
     }
 }
 
 /// Convert a response from internal canonical form to target protocol.
-pub fn convert_response(protocol: VcpProtocol, internal: Value) -> Value {
+pub fn convert_response(protocol: CompatProtocol, internal: Value) -> Value {
     match protocol {
-        VcpProtocol::OpenAIChatCompletions => internal,
-        VcpProtocol::AnthropicMessages => {
+        CompatProtocol::OpenAIChatCompletions => internal,
+        CompatProtocol::AnthropicMessages => {
             // Internal { content: [{type: "text", text}], stop_reason } → Anthropic { content: [{type: "text", text}], stop_reason }
             internal
         }
-        VcpProtocol::OpenAIResponses => internal,
-        VcpProtocol::Gemini => internal,
-        VcpProtocol::Unknown => internal,
+        CompatProtocol::OpenAIResponses => internal,
+        CompatProtocol::Gemini => internal,
+        CompatProtocol::Unknown => internal,
     }
 }
 
@@ -58,21 +58,21 @@ mod tests {
     #[test]
     fn openai_chat_passthrough() {
         let body = json!({"model": "gpt", "messages": []});
-        let out = convert_request(VcpProtocol::OpenAIChatCompletions, body);
+        let out = convert_request(CompatProtocol::OpenAIChatCompletions, body);
         assert_eq!(out["__apeireth_source_protocol"], "openai-chat-completions");
     }
 
     #[test]
     fn anthropic_adds_max_tokens_default() {
         let body = json!({"model": "c", "messages": []});
-        let out = convert_request(VcpProtocol::AnthropicMessages, body);
+        let out = convert_request(CompatProtocol::AnthropicMessages, body);
         assert_eq!(out["max_tokens"], 4096);
     }
 
     #[test]
     fn response_passthrough() {
         let resp = json!({"content": []});
-        let out = convert_response(VcpProtocol::AnthropicMessages, resp);
+        let out = convert_response(CompatProtocol::AnthropicMessages, resp);
         assert!(out.get("content").is_some());
     }
 }

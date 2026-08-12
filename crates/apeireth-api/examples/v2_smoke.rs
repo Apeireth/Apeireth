@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let llm: Arc<dyn LlmProvider> = Arc::new(scripted);
 
     // 4. 构造最小 Pipeline (占位 — LLM 走 scripted legacy path, 不真打 minimaxi)
-    let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::vcp_default())
+    let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default())
         .map_err(|e| format!("http client: {e}"))?;
     let mut config = apeireth_pipeline::PipelineConfig::default();
     config.base_url = "http://localhost:0".to_string(); // 不会被调
