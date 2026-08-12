@@ -70,6 +70,7 @@ pub mod fuzzy_bridge;
 pub mod history;
 pub mod manager;
 pub mod rule;
+pub mod approval_bridge;
 pub mod rule_trait;
 
 pub use decision::ApprovalDecision;

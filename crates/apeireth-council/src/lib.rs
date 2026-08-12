@@ -52,7 +52,8 @@ pub mod advisors;
 pub mod collaboration;  // R25 D-3 Stage 2 §2B (4 模式: Planner+Executor / Debate / Voting / Hierarchical)
 pub mod constitution;   // R25 D-3 角色宪法 (5 字段 1:1 镜像 R11 5 重守门)
 pub mod trace;          // R25 D-3 reasoning trace 可视化 (3 输出格式)
-pub mod graph_orchestration;  // R25 D-3 图编排集成 (4 模式包成 Graph Node)
+pub mod graph_orchestration;
+pub mod group_chat;  // R25 D-3 图编排集成 (4 模式包成 Graph Node)
 
 pub use advisor::{
     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,

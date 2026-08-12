@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-tool-codesearch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R140: code search + knowledge graph (regex + Aho-Corasick + symbol extraction), 15 MCP tools, borrows codebase-memory-mcp design"
+
+[dependencies]
+# Apeireth core
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-tool-filesystem = { path = "../apeireth-tool-filesystem" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+
+# Workspace deps
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+regex = "1.10"
+tempfile = "3.10"
+aho-corasick = "1.1"
+globset = "0.4"
+walkdir = "2.5"
+ignore = "0.4"
+rusqlite = { workspace = true }
+
+[lib]
+path = "src/lib.rs"

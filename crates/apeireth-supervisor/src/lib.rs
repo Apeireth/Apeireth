@@ -14,12 +14,14 @@
 
 pub mod actor;
 pub mod child;
+pub mod heartbeat;
 pub mod pid_one;
 pub mod strategy;
 pub mod supervisor;
 
 pub use actor::{spawn_actor, Actor, ActorRef, ActorState};
 pub use child::ChildSpec;
+pub use heartbeat::{Heartbeat, HeartbeatPriority, HeartbeatResult, HeartbeatScheduler, Schedule, WakeupContext, WakeupSource};
 pub use pid_one::PidOneSupervisor;
 pub use strategy::{ExitReason, RestartDecision, RestartStrategy};
 pub use supervisor::SubSupervisorKind;

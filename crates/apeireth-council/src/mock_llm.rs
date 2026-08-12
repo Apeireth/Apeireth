@@ -45,7 +45,22 @@ impl MockLlmResponse {
     }
 }
 
-/// Mock LLM Provider trait — Rust 内推理 (无外部依赖)。
+/// **DEPRECATED** (since 1.2.0): 这是 mock / 脚本化 LLM, **不是真 LLM**.
+///
+/// 公开 API 留这个 trait 是为了:
+/// 1. Backward compat (57+ 处使用)
+/// 2. 测试用 mock / scripted LLM
+/// 3. `LlmAdvisorBackend` (llm_backend.rs) 适配实 LLM 也用这 trait
+///
+/// 真 LLM 接入走: `apeireth_api::llm::LlmProvider` (traits.rs),
+/// 配合 `apeireth_council::LlmAdvisorBackend` (llm_backend.rs) -> council 7 advisor.
+///
+/// **不假装**: 别误用 `ScriptedMockLlm` / `HashMapMockLlm` 做生产 — 它们是脚本关键词匹配, 不是推理.
+/// 用它当 advisor 后端就是"假装有 LLM".
+#[deprecated(
+    since = "1.2.0",
+    note = "MockLlmProvider 是 mock/scripted LLM, 不是真 LLM. 真 LLM 用 apeireth_api::llm::LlmProvider + LlmAdvisorBackend. 这个 trait 留作测试 + 兼容 adapter."
+)]
 pub trait MockLlmProvider: Send + Sync {
     /// 生成响应
     fn generate(&self, prompt: &str, system: &str) -> MockLlmResponse;

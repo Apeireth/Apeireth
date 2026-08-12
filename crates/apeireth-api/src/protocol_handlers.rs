@@ -622,13 +622,13 @@ pub struct GeminiContent {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all = "snake_case")]
+/// R132.2: 换 untagged 兼容标准 Gemini `parts: [{"text": "..."}]` 格式
+/// (R131.10 暴露 bug: externally tagged 期望 `{"Text": {"text": "..."}}`)
+#[serde(untagged)]
 pub enum GeminiPart {
     Text {
         text: String,
     },
-    #[serde(other)]
-    Other,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1780,6 +1780,69 @@ mod stream_forward_tests {
         let unique: std::collections::HashSet<&str> = urls.iter().map(|s| s.as_str()).collect();
         assert_eq!(unique.len(), 4, "4 协议流式 endpoint 必须 distinct");
     }
+
+    // ============================================================
+    // R132.2: Gemini untagged enum schema 修复验证 (R131.10 暴露 bug)
+    // ============================================================
+
+    #[test]
+    fn r132_2_gemini_part_untagged_standard_format_parses() {
+        // R131.10 之前: `{"Text": {"text": "..."}}` (externally tagged)
+        // R132.2 修复: 标准 Gemini 格式 `{"text": "..."}` (untagged struct variant)
+        let standard_gemini = r#"{"text": "hi"}"#;
+        let parsed: GeminiPart = serde_json::from_str(standard_gemini)
+            .expect("R132.2: standard Gemini format should now parse");
+        if let GeminiPart::Text { text } = parsed {
+            assert_eq!(text, "hi");
+        } else {
+            panic!("expected Text variant");
+        }
+    }
+
+    #[test]
+    fn r132_2_gemini_request_untagged_standard_format_full_request() {
+        // 完整标准 Gemini GenerateContent 请求 (curl -d 格式)
+        let body = r#"{
+            "contents": [
+                {"role": "user", "parts": [{"text": "Reply with: GEMINI-ALIVE"}]},
+                {"role": "model", "parts": [{"text": "hello back"}]}
+            ],
+            "system_instruction": {"parts": [{"text": "You are a test assistant"}]}
+        }"#;
+        let req: GeminiRequest = serde_json::from_str(body)
+            .expect("R132.2: full standard Gemini request should parse");
+        assert_eq!(req.contents.len(), 2);
+        assert_eq!(req.contents[0].role, "user");
+        assert_eq!(req.contents[0].parts.len(), 1);
+        if let GeminiPart::Text { text } = &req.contents[0].parts[0] {
+            assert_eq!(text, "Reply with: GEMINI-ALIVE");
+        } else {
+            panic!("expected Text variant in first part");
+        }
+        // 验证 systemInstruction 也接受标准格式
+        assert!(req.system_instruction.is_some());
+        let si = req.system_instruction.as_ref().unwrap();
+        if let GeminiPart::Text { text } = &si.parts[0] {
+            assert_eq!(text, "You are a test assistant");
+        } else {
+            panic!("expected Text variant in system_instruction");
+        }
+    }
+
+    #[test]
+    fn r132_2_gemini_part_untagged_text_only() {
+        // 额外 part (image/file/audio) 应该在 untagged 下被忽略 / 不抛
+        // R131.10 之前: `#[serde(other)] Other` 兼容未知 part
+        // R132.2 之后: untagged enum 只接受 Text variant, 其他 part 会失败
+        // 决策: Gemini 现阶段只用 text, 多模态等真接时再加
+        let image_part = r#"{"inline_data": {"mime_type": "image/png", "data": "..."}}"#;
+        let parsed: Result<GeminiPart, _> = serde_json::from_str(image_part);
+        // 当前 schema 不支持 inline_data, 这会失败 (设计决策: text-only)
+        // 这个 test 记录"当前不支持多模态 part" 的事实
+        assert!(parsed.is_err(), "R132.2 暂不支持多模态 part, 仅 text");
+    }
+
+
 }
 
 // ============================================================

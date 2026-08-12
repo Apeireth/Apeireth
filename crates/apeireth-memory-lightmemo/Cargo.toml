@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-memory-lightmemo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R142: LightMemo memory system (4-layer AgentMemory v2.1.0 Rust port: file + vector + tag + LCM, plus decay engine + dream subsystem + multi-pipe search)"
+
+[dependencies]
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+rusqlite = { workspace = true }
+uuid = { workspace = true }
+tempfile = "3.10"
+
+[lib]
+path = "src/lib.rs"

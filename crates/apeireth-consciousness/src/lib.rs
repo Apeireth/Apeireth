@@ -28,6 +28,7 @@
 use chrono::{DateTime, Utc};
 
 // R22 ST-A2.2 — Cognitive-Dream 6 状态机深化 (transition_rate_limit + cycle_detector)
+pub mod emotion;
 pub mod transfer_monitor;
 use thiserror::Error;
 use uuid::Uuid;

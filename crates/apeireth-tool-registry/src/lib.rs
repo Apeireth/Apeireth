@@ -50,12 +50,14 @@
 // 公共模块
 // ============================================================
 
+pub mod async_task;
 pub mod classifier;
 pub mod registry;
 pub mod token_budget;
 pub mod trait_def;
 pub mod types;
 
+pub use async_task::{AsyncTaskError, AsyncTaskResult, AsyncTaskStore, NotifyChannel, TaskId, TaskRecord, TaskStatus, next_task_id};
 pub use classifier::{
     cosine_similarity, Category, ClassifyError, Classifier, EmbeddingClassifier, EmbedFn,
     HeuristicClassifier, LlmClassifier, MockHashEmbedFn, CATEGORY_COUNT,

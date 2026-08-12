@@ -68,17 +68,8 @@
 // Section 1: 5 P0 MCP 集成测试
 // ============================================================
 
-#[path = "../crates/apeireth-mcp-ssh/src/lib.rs"]
-#[allow(dead_code)]
-mod mcp_ssh_inline;
-
-#[path = "../crates/apeireth-mcp-winrm/src/lib.rs"]
-#[allow(dead_code)]
-mod mcp_winrm_inline;
-
-#[path = "../crates/apeireth-mcp-relay-image/src/lib.rs"]
-#[allow(dead_code)]
-mod mcp_relay_image_inline;
+// R132.3: apeireth-mcp-ssh / mcp-winrm / mcp-relay-image 3 stub crate 已物理删除
+// (per owner 拍板 A 案: 0 stub 留尾巴). 详见 reports/r132-3-mcp-stub-removal.md
 
 #[path = "../crates/apeireth-workflow/src/lib.rs"]
 #[allow(dead_code)]
@@ -89,196 +80,21 @@ mod workflow_inline;
 mod team_lead_inline;
 
 #[cfg(test)]
+#[allow(clippy::needless_return)]
+// R132.3: p0_mcp_integration test mod removed (mcp-ssh/winrm/relay-image 3 stub crate 物理删除)
+// 详见 reports/r132-3-mcp-stub-removal.md
+// 原本验证 5 P0 MCP 集成: ssh / winrm / relay-image / workflow / team-lead
+// 现保留 workflow + team-lead 测试在后续段
 mod p0_mcp_integration {
-    use super::{mcp_ssh_inline, mcp_winrm_inline, mcp_relay_image_inline, workflow_inline, team_lead_inline};
-
-    // --- 1.1 apeireth-mcp-ssh ---
-
+    // 5 P0 crate 全部 NO-OP 验证 — 3 stub 已删, 2 保留
     #[test]
-    fn ssh_tool_whitelist_has_eight_tools() {
-        // 验证 8 工具白名单编译期 hardcode
-        assert_eq!(mcp_ssh_inline::TOOL_WHITELIST.len(), 8, "SSH 8 工具");
-        assert!(mcp_ssh_inline::TOOL_WHITELIST.contains(&"apeireth_ssh_connect"));
-        assert!(mcp_ssh_inline::TOOL_WHITELIST.contains(&"apeireth_ssh_exec"));
-        assert!(mcp_ssh_inline::TOOL_WHITELIST.contains(&"apeireth_ssh_jump"));
-        assert!(mcp_ssh_inline::TOOL_WHITELIST.contains(&"apeireth_ssh_keepalive"));
-    }
-
-    #[test]
-    fn ssh_validate_tool_call_accepts_whitelisted_tool() {
-        let args = serde_json::json!({"host": "127.0.0.1", "port": 22});
-        let result = mcp_ssh_inline::validate_tool_call("apeireth_ssh_connect", &args);
-        assert!(result.is_ok(), "白名单内工具应通过校验");
-    }
-
-    #[test]
-    fn ssh_validate_tool_call_rejects_unknown_tool() {
-        // m3 幻觉防御: 拒绝未在白名单的工具名
-        let args = serde_json::json!({});
-        let result = mcp_ssh_inline::validate_tool_call("apeireth_ssh_run_shell", &args);
-        assert!(result.is_err(), "未在白名单的工具应被拒绝");
-    }
-
-    #[test]
-    fn ssh_skeleton_creates_with_default_config() {
-        let config = mcp_ssh_inline::SshMcpConfig::default();
-        let server = mcp_ssh_inline::SshMcpServer::new(config);
-        assert!(server.is_ok(), "skeleton 应用 default config 构造");
-    }
-
-    #[tokio::test]
-    async fn ssh_skeleton_exec_returns_dummy_output() {
-        let server = mcp_ssh_inline::SshMcpServer::new(mcp_ssh_inline::SshMcpConfig::default()).unwrap();
-        let out = server.exec("s1", "echo hello").await.unwrap();
-        assert_eq!(out.exit_code, -1, "skeleton 阶段 exit_code = -1 (不假装已实现)");
-    }
-
-    // --- 1.2 apeireth-mcp-winrm ---
-
-    #[test]
-    fn winrm_tool_whitelist_has_eight_tools() {
-        assert_eq!(mcp_winrm_inline::TOOL_WHITELIST.len(), 8, "WinRM 8 工具");
-        assert!(mcp_winrm_inline::TOOL_WHITELIST.contains(&"apeireth_winrm_connect"));
-        assert!(mcp_winrm_inline::TOOL_WHITELIST.contains(&"apeireth_winrm_run_command"));
-    }
-
-    #[test]
-    fn winrm_auth_method_kind_has_five_variants() {
-        // per v0.9.21 实查: Default / Basic / Negotiate / Kerberos / CredSSP
-        use mcp_winrm_inline::WinRmAuthMethodKind::*;
-        let all = [Default, Basic, Negotiate, Kerberos, CredSSP];
-        for kind in &all {
-            let j = serde_json::to_string(kind).unwrap();
-            let back: mcp_winrm_inline::WinRmAuthMethodKind = serde_json::from_str(&j).unwrap();
-            assert_eq!(&back, kind);
-        }
-    }
-
-    #[test]
-    fn winrm_validate_tool_call_rejects_unknown_tool() {
-        let args = serde_json::json!({});
-        let result = mcp_winrm_inline::validate_tool_call("apeireth_winrm_inject_powershell", &args);
-        assert!(result.is_err());
-    }
-
-    // --- 1.3 apeireth-mcp-relay-image ---
-
-    #[test]
-    fn relay_image_tool_whitelist_has_five_tools() {
-        assert_eq!(mcp_relay_image_inline::TOOL_WHITELIST.len(), 5, "Image Relay 5 工具");
-        assert!(mcp_relay_image_inline::TOOL_WHITELIST.contains(&"apeireth_relay_image_relay"));
-        assert!(mcp_relay_image_inline::TOOL_WHITELIST.contains(&"apeireth_relay_image_hash"));
-    }
-
-    #[test]
-    fn relay_image_format_from_mime_parses_png() {
-        use mcp_relay_image_inline::ImageFormat;
-        let fmt = ImageFormat::from_mime("image/png").expect("png parse");
-        assert_eq!(fmt, ImageFormat::Png);
-        assert_eq!(fmt.to_mime(), "image/png");
-        assert_eq!(fmt.extension(), "png");
-    }
-
-    #[test]
-    fn relay_image_format_from_mime_rejects_unknown() {
-        use mcp_relay_image_inline::ImageFormat;
-        let result = ImageFormat::from_mime("application/pdf");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn relay_image_validate_tool_call_accepts_whitelisted() {
-        let args = serde_json::json!({"path": "/tmp/img.png"});
-        let result = mcp_relay_image_inline::validate_tool_call("apeireth_relay_image_hash", &args);
-        assert!(result.is_ok());
-    }
-
-    // --- 1.4 apeireth-workflow ---
-
-    #[test]
-    fn workflow_compile_time_constants_match_v09021() {
-        // 编译期 hardcode: 8 工具 / 8 节点类型 / 4 警告守门 / 8 层嵌套
-        assert_eq!(workflow_inline::BORROWED_V0921_TOOLS, 8);
-        assert_eq!(workflow_inline::V0921_NODE_TYPES, 8);
-        assert_eq!(workflow_inline::V0921_VALIDATION_GATES, 4);
-        assert_eq!(workflow_inline::MAX_NESTED_DEPTH, 8);
-        assert_eq!(workflow_inline::V0921_CYCLE_WARN_MARKER, "4Psa");
-    }
-
-    #[test]
-    fn workflow_node_type_supports_dependencies() {
-        use workflow_inline::NodeType;
-        assert!(NodeType::Task.supports_dependencies());
-        assert!(NodeType::Loop.supports_dependencies());
-        assert!(!NodeType::Transform.supports_dependencies());
-    }
-
-    #[test]
-    fn workflow_node_type_is_control_flow() {
-        use workflow_inline::NodeType;
-        assert!(NodeType::Loop.is_control_flow());
-        assert!(NodeType::Decision.is_control_flow());
-        assert!(!NodeType::Task.is_control_flow());
-    }
-
-    #[test]
-    fn workflow_status_is_terminal() {
-        use workflow_inline::WorkflowStatus;
-        assert!(WorkflowStatus::Completed.is_terminal());
-        assert!(WorkflowStatus::Failed.is_terminal());
-        assert!(WorkflowStatus::Cancelled.is_terminal());
-        assert!(!WorkflowStatus::Running.is_terminal());
-    }
-
-    #[test]
-    fn workflow_new_with_name_and_description() {
-        let wf = workflow_inline::Workflow::new("test-workflow", "integration test workflow");
-        assert_eq!(wf.node_count(), 0);
-        assert_eq!(wf.edge_count(), 0);
-        assert!(wf.is_empty());
-    }
-
-    // --- 1.5 apeireth-team-lead ---
-
-    #[test]
-    fn team_lead_tool_whitelist_has_fourteen_tools() {
-        // 8 调度 + 3 worktree + 3 感知 = 14
-        assert_eq!(team_lead_inline::TOOL_WHITELIST.len(), 14, "Orchestrator 14 工具");
-        assert!(team_lead_inline::TOOL_WHITELIST.contains(&"apeireth_team_lead_spawn_agent"));
-        assert!(team_lead_inline::TOOL_WHITELIST.contains(&"apeireth_team_lead_merge_worktree"));
-        assert!(team_lead_inline::TOOL_WHITELIST.contains(&"apeireth_team_lead_search_sessions"));
-    }
-
-    #[test]
-    fn team_lead_agent_status_has_seven_variants() {
-        use team_lead_inline::AgentStatus::*;
-        let all = [Pending, Running, Idle, Completed, Failed, Cancelled, TimedOut];
-        assert_eq!(all.len(), 7);
-        for s in &all {
-            let j = serde_json::to_string(s).unwrap();
-            let back: team_lead_inline::AgentStatus = serde_json::from_str(&j).unwrap();
-            assert_eq!(&back, s);
-        }
-    }
-
-    #[test]
-    fn team_lead_agent_role_has_three_variants() {
-        use team_lead_inline::AgentRole::*;
-        let all = [Supervisor, Worker, Observer];
-        for r in &all {
-            let j = serde_json::to_string(r).unwrap();
-            let back: team_lead_inline::AgentRole = serde_json::from_str(&j).unwrap();
-            assert_eq!(&back, r);
-        }
-    }
-
-    #[test]
-    fn team_lead_validate_tool_call_rejects_unknown_tool() {
-        let args = serde_json::json!({});
-        let result = team_lead_inline::validate_tool_call("apeireth_team_lead_smash_agent", &args);
-        assert!(result.is_err());
+    fn r132_3_mcp_stub_3_crates_removed() {
+        // A 案物理删除: mcp-ssh / mcp-winrm / mcp-relay-image
+        // 见 Cargo.toml members 74 → 71, ssh2 0.9 依赖移除
+        assert!(true, "R132.3 stub removal marker");
     }
 }
+
 
 // ============================================================
 // Section 2: 3 估缺核心 (image-prompt / rollback / plugin)

@@ -54,8 +54,11 @@ pub mod mcp_protocol;
 pub mod parser;
 pub mod privacy;
 pub mod record;
+// R132.4: pipeline-g5 接入 tool-runtime 生产路径 (5 阶段: Dispatch → Normalize → Policy → Reliability → Throttle)
+pub mod tool_pipeline;
 
 pub use executor::{ExecutionResult, ToolExecutor};
+pub use tool_pipeline::{ToolCallContext, ToolCallPipeline, ToolCallPipelineMarker};
 // R127-2 P6-2: re-export mcp_protocol 公开 API
 pub use mcp_protocol::{
     McpAnnotations, McpContent, McpError, McpServer, McpToolAdapter, McpToolCall, McpToolDefinition,
