@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R17 战役 2-5: 工具集成 (5 trait 真实现: web_search / file_ops / git_ops / code_exec / tool_result, VCP FileOperator 68KB 真代码字段级复刻)"
+description = "Apeireth R17 战役 2-5: 工具集成 (5 trait 真实现: web_search / file_ops / git_ops / code_exec / tool_result, FileOperator 68KB 真代码字段级复刻 (origin: open-source))"
 keywords = ["ai", "agent", "tools", "web-search", "file-ops", "git", "shell"]
 categories = ["api-bindings", "filesystem", "command-line-utilities"]
 

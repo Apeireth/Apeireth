@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R17 战役 2-4: Agent 管理系统 (alias 解析 + LRU cache + notify 热加载, VCP 借鉴 agentManager.js 339 行字段级复刻)"
+description = "Apeireth R17 战役 2-4: Agent 管理系统 (alias 解析 + LRU cache + notify 热加载, 字段级复刻 agentManager.js 339 行)"
 keywords = ["ai", "agent", "alias", "cache", "hot-reload", "lru"]
 categories = ["api-bindings", "data-structures"]
 

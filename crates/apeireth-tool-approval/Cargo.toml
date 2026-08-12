@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R17 战役 2-3: 工具审批 (5 规则 + 5 分钟窗口 + fuzzy matching 集成, VCP 借鉴 toolApprovalManager.js)"
+description = "Apeireth R17 战役 2-3: 工具审批 (5 规则 + 5 分钟窗口 + fuzzy matching 集成, 借鉴自 toolApprovalManager.js (origin: open-source))"
 keywords = ["ai", "tool", "approval", "security", "fuzzy"]
 categories = ["api-bindings", "data-structures"]
 
