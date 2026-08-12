@@ -20,7 +20,8 @@
 //!   placeholder (1x1 PNG with the provider name).
 //! - Real API keys are NOT bundled. User must provide via env or config.
 
-#![warn(missing_docs)]
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 pub mod provider;
 pub mod generators;

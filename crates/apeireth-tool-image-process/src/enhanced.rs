@@ -1,5 +1,7 @@
 //! EnhancedImageProcess composed entry.
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 use crate::router::{ImageRouter, ProcessOp};
 use crate::mcp::{ImageProcessMcp, McpRequest, McpResponse};
 

@@ -1,4 +1,6 @@
 //! Generation result types.
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 

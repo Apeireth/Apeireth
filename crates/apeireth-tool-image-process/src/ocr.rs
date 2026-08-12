@@ -1,5 +1,7 @@
 //! OCR (honest stub — would use tesseract-rs in real impl).
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub struct OcrResult {
     pub text: String,

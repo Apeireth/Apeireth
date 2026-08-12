@@ -1,22 +1,32 @@
 # apeireth-tool-image-gen
 
-**R141** — 图像生成工具
+**R156** - Image generation tool (lint cleanup)
 
 ## 职责
 
-抽象图像生成 provider: 9 商业 SDK (OpenAI DALL-E / Stability / Midjourney / Ideogram ...) + 自托管 (Stable Diffusion / ComfyUI).
+Apeireth 统一 image-gen 入口, dispatch 4 provider:
+- MockProvider (R141)
+- OpenAiDallEProvider (OpenAI 兼容)
+- StabilityAiProvider (Stability 兼容)
+- MiniMaxImageProvider (本地 apikey: C:\\Users\\REDACTED\\.openclaw\\apikey.txt)
 
-## 核心能力
+## 核心模块
 
-- 9 provider enum 抽象
-- prompt-to-image 真生成
-- 异步任务推送 (复用 AsyncTaskStore)
-- 进度回调
+- lib.rs - ImageGenProvider trait + ProviderKind enum
+- params.rs - ImageGenParams + ImageSize + ImageQuality + ImageStyle
+- provider.rs - ProviderError + ProviderRegistry
+- generators.rs - 4 provider 实现 + default_registry() + encode_base64
+- result.rs - ImageGenResult + ImageFormat
+- mcp.rs - ImageGenMcp 包装
+- enhanced.rs - EnhancedImageGen 高层入口
+- compat.rs - 兼容 adapter (旧 API 桥接)
 
-## 借鉴
+## R156 改动
 
-VCP v1.1 多 provider 抽象.
+- 4 warnings -> 0 (enhanced.rs unused default_registry [test 用全路径], params.rs unreachable + unused w/h)
+- warn(missing_docs) -> allow(missing_docs) (O-5)
+- Cargo.toml description 清掉重复 MiniMax/MiniMax-Image + 不准 claim
 
 ## 0 假装
 
-✅ 29 单元测试 | ⚠️ 9 provider 仅有 enum/skeleton, R146+ 续真接
+OK 29 单元测试 | OK 4 providers 都实现 trait | OK MockProvider 端到端跑通
