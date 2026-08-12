@@ -85,7 +85,7 @@ cargo run -p apeireth-api --example serve   # HTTP server (默认 :8080)
 | S-3 流程自化 | 流程工程化 | CI 17 workflows + cargo bench + eval-live |
 | O-1 安全优先 | Self-Disable 物理熔断 | `apeireth-sovereignty/src/self_disable.rs` (4 项自动扫描 + 三级响应) |
 | O-2 走在前人肩上 | 借鉴 8/11 开源 | clap / hyper / PyO3 / kani / langgraph / superpowers / Guardrails / LiteLLM / opencode |
-| O-3 干到底 | 实施到底 | 74 active crate 全部实质化, 不假装 |
+| O-3 干到底 | 实施到底 | 75 active crate 全部实质化, 不假装 |
 | O-4 任何人都能接手 | 文档 + 索引 | 51/51 crate 有 README, 顶层 README 重写 |
 | O-5 不假装 | 真接非 mock | minimax 4 协议真端到端, SQLite 真持久化 drop+reopen |
 
@@ -300,7 +300,7 @@ https://api.minimaxi.com/anthropic/v1/messages
 | 指标 | 值 |
 |---|---|
 | workspace.version | 1.2.0 (semver 严守) |
-| active crate | 74 (R128 收敛, 原 94) |
+| active crate | 75 (R146 进一步收敛, 5 SDK + 3 内存合并) |
 | archived/frozen | 18 (`crates/_frozen/` 13 + `crates/_archived/` 5) |
 | tests | 4921 passed / 88 suites / 0 failed |
 | 24 LOCKED | 入口签名冻结降级为历史 (R128), 仅保 3 项不可变脊柱 |
@@ -1797,7 +1797,7 @@ Total: 20599 passed, 0 failed
 
 **4→1 merge**: VCP `DailyNote` + `DailyNoteSearcher` + `DailyNoteFolder` + `DailyNoteExporter` 4 个 plugin 合并到 1 个 crate, 共用 1 个 SQLite 表 + 1 个 tag index 表.
 
-**子任务 4: apeireth-vcp-bridge** (5→1 merge, 7 src / ~20KB / 27 tests)
+**子任务 4: apeireth-protocol-bridge** (5→1 merge, 7 src / ~20KB / 27 tests)
 
 | 文件 | 内容 |
 |---|---|

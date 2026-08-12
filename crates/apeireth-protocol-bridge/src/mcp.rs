@@ -56,7 +56,7 @@ impl VcpBridgeMcp {
                 id: req.id,
                 result: Some(json!({
                     "protocolVersion": "2024-11-05",
-                    "serverInfo": {"name": "apeireth-vcp-bridge", "version": "1.2.0"},
+                    "serverInfo": {"name": "apeireth-protocol-bridge", "version": "1.2.0"},
                     "capabilities": {"tools": {}}
                 })),
                 error: None,
