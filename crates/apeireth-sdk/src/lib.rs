@@ -257,3 +257,35 @@ const _MODULE_COUNT: usize = {
 // ============================================================================
 //
 // **背景**: R25 纯 Rust 重写后, 4 语言 (Python / Node / Go / Rust) 客户仍期望
+
+
+// =============================================================================
+// R146: 5 SDK -> 1 apeireth-sdk (feature flags)
+// 4 子 SDK 由 feature 门控, 0 装时 0 编译 (per O-5 不假装)
+//
+// 字段级引用 R20 阶段 4 (lark / livekit / sandbox / voice 4 个 stub 1:1 翻译).
+// =============================================================================
+
+#[cfg(feature = "lark")]
+pub mod lark;
+#[cfg(feature = "livekit")]
+pub mod livekit;
+#[cfg(feature = "sandbox")]
+pub mod sandbox;
+#[cfg(feature = "voice")]
+pub mod voice;
+
+// 编译期 feature 守门 (per [11-baseline.md] R11 baseline)
+#[cfg(any(feature = "lark", feature = "livekit", feature = "sandbox", feature = "voice"))]
+pub const SDK_SUBMODULES_ENABLED: usize = {
+    let mut n = 0;
+    if cfg!(feature = "lark") { n += 1; }
+    if cfg!(feature = "livekit") { n += 1; }
+    if cfg!(feature = "sandbox") { n += 1; }
+    if cfg!(feature = "voice") { n += 1; }
+    n
+};
+
+// 4 子 SDK 编译期常量 (per O-5 不假装, 透明可见)
+#[allow(dead_code)]
+pub const SDK_SUBMODULE_COUNT: usize = 4;
