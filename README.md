@@ -1,6 +1,9 @@
-# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
+﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R147 (2026-08-13)**: 新增 `apeireth-runtime` crate — 7 模块 (HeartbeatScheduler / AsyncTaskStore / ChanneledBus / ArbitrationLog / SearchEngine / GroupChat / EmotionEngine) 端到端 orchestration 串成单一可运行 runtime. 10 单元测试全过, 8 stage demo <1s 跑通. `MODULES_ORCHESTRATED = 7` 编译期守门. LivingCycleHeartbeat 自动驱动 scheduler → AsyncTask → Bus publish → 仲裁 → 搜索 → 群聊 → 情感 闭环. 非破坏增强: GroupChat `+#[derive(Clone)]` + 2 helper fn; consciousness `emotion::*` 8 项顶层 re-export; EmotionEngine `set_baseline()` 运行时改 baseline. 见 `crates/apeireth-runtime/README.md` + `docs/architecture-v4-2-r145-modules/`.
+
+> **R146 (2026-08-12)**: 优雅化总修复. `apeireth-vcp-bridge` → `apeireth-protocol-bridge` (去竞品名). 5 SDK → 1 `apeireth-sdk` (feature flags). 3 内存 → 1 `apeireth-memory` (dailynote/lightmemo 子模块). tauri-stub 冻结. 12 缺 README 补. V0.5 30→24 维修正. v4.2 哲学文档 8 文件. 9-锚映射 + 16-crate-merge-policy §6/§7.
 > **R145 (2026-08-12)**: VCP 终极差距补弱完工. 7 模块 (3 新 crate + 4 扩模块) 全部 0 errors, 67+ 单元测试. 涵盖三套通知系统 / 异步任务推送 / HASH-SQL 仲裁 / AI 自驱心跳 / VSearch 全文聚合 / OpenHer 情感引擎 / 跨 Agent 群聊. 详单 `temp/r145_final_report.md`.
 
 > **R128 (2026-08-12)**: workspace 收敛 94→55 active crate, 18 archived/frozen. 24 LOCKED 入口签名降级, 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache). minimax (MiniMax) 4 协议真端到端跑通. `cargo check --workspace` 0 errors.
