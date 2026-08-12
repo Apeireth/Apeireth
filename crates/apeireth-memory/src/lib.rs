@@ -74,10 +74,22 @@ pub use apeireth_memory_extensions::{
     provider_file::FileProvider,
     provider_mongodb::MongoDbProvider,
 };
-// R37-2: 9 organ 部分合并 — life_force 内容透明 re-export 到 memory.
-// 透明登记: 此处 +1 行 (pub use), 不动 LOCKED 9 文件 + 0 触碰 R23 extensions re-export.
-// 下游调用方 `use apeireth_life_force::X` 仍能用 (workspace member 删了但 0 breaking).
-pub use apeireth_life_force::*;
+// R37-2: 9 organ 部分合并 — life_force 透明 re-export 到 memory.
+// 注释修正 (R131 P0-1 真实化): apeireth-life-force 仍是 workspace member
+// (path dep 在 Cargo.toml:93), re-export 仅为 API 便利, 0 breaking.
+// 显式列出导出 (避免 `pub use ...::*` 隐藏依赖关系).
+pub use apeireth_life_force::{
+    // 核心类型
+    SelfGrowthIndicator, ReflectionPeriod, ReflectionPeriodState, StandardReflectionPeriod,
+    ReflectionTrigger, LifeForce, LifeForceError,
+    // 触发函数
+    reflection_trigger, exhaustion_check, recovery_start, validate_endurance, reflection_progress,
+    // 常量
+    ENDURANCE_MIN, ENDURANCE_MAX, ENDURANCE_EXHAUSTION_THRESHOLD, ENDURANCE_RECOVERY_TARGET,
+    // 子模块 re-export
+    emergence::{EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal, EmergenceSignalType},
+    reflection_cycle::{ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler, ReflectionPhase},
+};
 
 
 /// 顶层错误: 所有 memory 子系统的 fallback error.

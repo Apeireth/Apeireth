@@ -1,0 +1,37 @@
+[package]
+name = "apeireth-tool-filesystem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R137: filesystem extension (sandbox + atomic write + fsnotify + file lock + doc parsing)"
+
+[dependencies]
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-core = { path = "../apeireth-core" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+notify = "6.1"
+fd-lock = "4.0"
+tempfile = "3.10"
+lopdf = { version = "0.34", optional = true }
+docx-rs = { version = "0.4", optional = true }
+calamine = { version = "0.26", optional = true }
+
+[features]
+default = []
+full = ["lopdf", "docx-rs", "calamine"]
+
+[lib]
+path = "src/lib.rs"

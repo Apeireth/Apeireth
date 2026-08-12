@@ -12,7 +12,10 @@ categories = ["api-bindings", "data-structures"]
 
 [dependencies]
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
+apeireth-telemetry = { path = "../apeireth-telemetry" }
 apeireth-memory = { path = "../apeireth-memory" }
 tokio = { workspace = true }
 serde = { workspace = true }
@@ -26,7 +29,10 @@ tracing = "0.1"
 parking_lot = "0.12"
 
 [dev-dependencies]
-tempfile = "3"
+tokio = { workspace = true }
+apeireth-api = { path = "../apeireth-api" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
 
 [[example]]
 name = "runtime_demo"
@@ -36,3 +42,8 @@ path = "examples/runtime_demo.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+# R131.12 LLM 决策 tool_call 端到端
+[[example]]
+name = "r131_llm_tool_call"
+path = "examples/r131_llm_tool_call.rs"
