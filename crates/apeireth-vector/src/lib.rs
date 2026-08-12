@@ -27,7 +27,10 @@
 mod error;
 mod sqlite_backend;
 mod traits;
+// R150 P1 #6: Qdrant HTTP 协议兼容层 (借鉴 qdrant/qdrant REST API v1.7+)
+pub mod qdrant_compat;
 
 pub use error::VectorError;
 pub use sqlite_backend::SqliteVecBackend;
 pub use traits::{ScoredId, SearchHit, Vector, VectorStore};
+pub use qdrant_compat::{QdrantClient, QdrantDistance, QdrantError, ScoredPoint};

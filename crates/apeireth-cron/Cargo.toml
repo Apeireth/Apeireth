@@ -14,3 +14,8 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 [lints]
 workspace = true
+
+[dev-dependencies]
+# R150 P1 #9: tokio cron scheduler (test-only, 0 触碰生产依赖)
+tokio = { workspace = true, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+serde_json = { workspace = true }
