@@ -1,4 +1,4 @@
-[workspace]
+﻿[workspace]
 resolver = "2"
 members = [
     "crates/apeireth-core",
@@ -36,6 +36,7 @@ members = [
     "crates/apeireth-evolution",
     "crates/apeireth-bus",
     "crates/apeireth-arbitration",  # R145: HASH-SQL 仲裁 + 唯一事实时间线
+    "crates/apeireth-runtime",       # R147: 7 模块端到端 orchestration (heartbeat/task/bus/arbitration/search/group_chat/emotion)
     "crates/apeireth-api",
     "crates/apeireth-web",
     # V1307 fix (R-Cycle v2-strategy / V1306 audit leftover): 加 apeireth-tauri-stub 到 workspace members.
