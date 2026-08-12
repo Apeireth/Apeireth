@@ -1,9 +1,11 @@
 //! Multimodal router: dispatch image ops to right impl.
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 use thiserror::Error;
 
-use crate::hash::{perceptual_hash, ImageHash};
-use crate::exif::{extract_exif, ExifData};
+use crate::hash::perceptual_hash;
+use crate::exif::extract_exif;
 use crate::ocr::{ocr_extract, OcrResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
