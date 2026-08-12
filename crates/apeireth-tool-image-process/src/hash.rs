@@ -1,5 +1,7 @@
 //! Perceptual image hashing (aHash — average hash).
 
+// R156 O-5: allow(missing_docs) 同父底
+#![allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImageHash {
     pub bits: u64,

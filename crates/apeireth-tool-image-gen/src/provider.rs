@@ -1,4 +1,6 @@
 //! ImageGenProvider trait + 13-kind enum + registry.
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 use async_trait::async_trait;
 use std::collections::HashMap;
