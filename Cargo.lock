@@ -469,7 +469,9 @@ name = "apeireth-cron"
 version = "1.2.0"
 dependencies = [
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -1091,6 +1093,7 @@ dependencies = [
 name = "apeireth-test"
 version = "1.2.0"
 dependencies = [
+ "proptest",
  "serde",
 ]
 
@@ -1434,6 +1437,7 @@ name = "apeireth-vector"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "apeireth-http-client",
  "rusqlite",
  "serde",
  "serde_json",

@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R150 (2026-08-13)**: P1 终极补弱 6/7 — `apeireth-vector::qdrant_compat` (581 lines, Qdrant HTTP REST API v1.7+ 协议兼容, 8 公共结构 + 4 距离度量 + 6 HTTP API + 11 test) + `apeireth-state::statechart` (537 lines, XState 风格 statechart 引擎, atomic/compound/final + transition + guard + action + on_entry/on_exit, 13 test) + `apeireth-cron::scheduler` (381 lines, tokio cron 引擎 0 引外部 dep, 13 test) + `apeireth-council::session_capture` (431 lines, council session 自动捕获 claude-mem 模式, 17 test) + `apeireth-eval::swe_bench` (415 lines, SWE-bench 风格 task runner, 13 test) + `apeireth-test::property_tests` (237 lines, proptest property-based testing 9 blocks × 256 cases). 累计 +76 tests, 0 errors, 0 触碰 3 不可变脊柱. 跳 P1 #7 (pipeline Temporal-style Activity, 重构风险大留 R151+). 详见 `docs/r150/r150-p1-six-modules.md`.
+
 > **R149 (2026-08-13)**: 终极补弱 5/5 — `apeireth-tool-fetch` (1138 lines, 吸收 VCP 7 插件) + `apeireth-skills::anthropic_skills` (355 lines, 3 层 lazy load, 0 引 serde_yaml 350KB) + `apeireth-runtime::LlmWorker` (真 MiniMax API worker, 替 SimulatedWorker) + `apeireth-graph::ThreadCheckpointStore` (244 lines, LangGraph MemorySaver Rust 重写) + `apeireth-formal::l0_ha_physical_multisig` (310 lines, 补 R131.6 audit 缺的 M-of-N Kani proof, 6 harness + 10 unit test). 累计 +78 tests, +1 new crate, 0 errors. 详见 `docs/r149/r149-p0-five-modules.md`.
 
 > **R148 (2026-08-13)**: 24 LOCKED 形式撤销扫尾. Cargo.toml metadata + `docs/conventions/10-locked.md` + `docs/omnibus/24-locked-crates.md` 全部标记 R148 状态 (`0 约束力`, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache). 修 3 个 pre-existing test bugs: `apeireth-bus::ChannelSet::to_vec` bit-based 重写 (旧 `contains(Both)` 对 `BOTH = 0b011` 返回 true, 重复加入 Both), `apeireth-consciousness::EmotionEngine::response_style` 改用 `history.back()` 而非 PAD 距离重算 (避免中性偏置下 dominant 错位), `apeireth-council::group_chat::tests::t01_role_count` 改用 `Participant::new(..., role).can_speak()` (`can_speak` 是 Participant 的方法不是 ParticipantRole). 累计验证: `cargo test -p apeireth-runtime` 10/10, `apeireth-bus` 24/24, `apeireth-consciousness` 31/31.
@@ -2104,3 +2106,57 @@ cargo test -p apeireth-formal --lib       → 253/253 (含 10 new)
 - TUI 接入新 runtime / 真 MiniMax API worker (替 SimulatedWorker) — 待主人拍板
 
 **详见**: `docs/r149/r149-p0-five-modules.md` + `docs/research/r149-github-survey.md`
+
+---
+
+## R150 P1 终极补弱 6/7 完成 (2026-08-13)
+
+| 子模块 | 目标 | 行数 | 新测试 | 状态 |
+|---|---|---|---|---|
+| `#6` `apeireth-vector::qdrant_compat` | Qdrant HTTP REST 协议兼容层 | 581 | +11 | ✅ |
+| `#8` `apeireth-state::statechart` | XState-style statechart 引擎 | 537 | +13 | ✅ |
+| `#9` `apeireth-cron::scheduler` | tokio cron 引擎 (0 引外部) | 381 | +13 | ✅ |
+| `#10` `apeireth-council::session_capture` | council session 自动捕获 (claude-mem) | 431 | +17 | ✅ |
+| `#11` `apeireth-eval::swe_bench` | SWE-bench 风格 task runner | 415 | +13 | ✅ |
+| `#12` `apeireth-test::property_tests` | proptest property-based testing | 237 | +9 (256 cases each) | ✅ |
+| `#7` pipeline Temporal-style Activity | 重构 pipeline 为 workflow+activity | — | — | ⏸️ 跳 |
+
+**累计**: 6/7 P1, 2582 lines new code, +76 tests.
+
+**各 crate 单测验证**:
+```
+cargo test -p apeireth-vector --lib      →  29/29 (+11 qdrant_compat)
+cargo test -p apeireth-state --lib        →  82/82 (+13 statechart)
+cargo test -p apeireth-cron --lib         →  25/25 (+13 scheduler)
+cargo test -p apeireth-council --lib session_capture  →  17/17
+cargo test -p apeireth-eval --lib         →  74/74 (+13 swe_bench)
+cargo test -p apeireth-test --lib         →  22/22 (+9 proptest)
+cargo check --workspace                  →  0 errors
+```
+
+**apeireth-http-client 扩展**: 加 `put()` / `put_json()` / `delete()` 方法 (Qdrant 协议 PUT/DELETE 需要).
+
+**跳过 #7 pipeline Temporal**:
+- apeireth-pipeline 是 LLM chat 5 步管线, 不是 workflow engine
+- Temporal 范畴 (long-running deterministic workflow + side-effect activity) 跟 chat pipeline 范畴不直接对应
+- 真实施需重构 pipeline 为 Activity trait + EventHistory, 现有 30+ 测试要全改, 风险大
+- 留 R151+: 单独建 `apeireth-workflow` crate 包装 Temporal 概念, 不破坏现有 pipeline
+
+**借鉴 ID 完整列表 (R150)**:
+| ID | 来源 | 用处 |
+|---|---|---|
+| `R150-VECTOR-BORROW-qdrant-http-rest-api-2026-08` | qdrant/qdrant + rust-client | `apeireth-vector::qdrant_compat` |
+| `R150-STATE-BORROW-statelyco/xstate-28k-stars-2026-08` | statelyco/xstate | `apeireth-state::statechart` |
+| `R150-CRON-BORROW-tokio-cron-scheduler-800-2026-08` | questdb/tokio-cron-scheduler | `apeireth-cron::scheduler` |
+| `R150-COUNCIL-BORROW-claude-mem-24k-stars-2026-08` | claude-mem | `apeireth-council::session_capture` |
+| `R150-EVAL-BORROW-SWE-bench-3k-stars-2026-08` | SWE-bench Verified | `apeireth-eval::swe_bench` |
+| `R150-TEST-BORROW-proptest-1.7k-stars-2026-08` | alt-proptest/proptest | `apeireth-test::property_tests` |
+
+**下一周期候选 (R151+)** per `docs/research/r149-github-survey.md`:
+- `apeireth-workflow` Temporal Workflow+Activity (R150 跳过的 #7)
+- `apeireth-sovereignty` Hyperlight micro-VM 调研
+- `apeireth-relation` SurrealDB 后端 (可选)
+- `apeireth-voice` GPT-Realtime-2 (speech-to-speech)
+- TUI 接入新 runtime / 真 MiniMax API worker (替 SimulatedWorker) — 待主人拍板
+
+**详见**: `docs/r150/r150-p1-six-modules.md`
