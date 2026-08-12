@@ -163,6 +163,144 @@ impl AsyncWorker for SimulatedWorker {
     }
 }
 
+
+// ============================================================================
+// R149: LlmWorker — 真接 MiniMax API (OpenAI Chat Completions 协议)
+// 替换 SimulatedWorker 在需要真 LLM 调用时的占位
+// ============================================================================
+
+/// R149: 真 LLM worker (MiniMax provider, OpenAI Chat Completions 协议)
+pub struct LlmWorker {
+    name: String,
+    base_url: String,
+    api_key: String,
+    model: String,
+}
+
+impl LlmWorker {
+    /// 构造 LlmWorker (MiniMax 默认)
+    /// api_key 应来自环境变量或安全存储 (e.g. `.openclaw` 配置)
+    pub fn new(name: impl Into<String>, api_key: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            base_url: "https://api.minimaxi.com".into(),
+            api_key: api_key.into(),
+            model: "MiniMax-M3".into(),
+        }
+    }
+
+    /// 自定义 base_url + model
+    pub fn with_config(
+        name: impl Into<String>,
+        api_key: impl Into<String>,
+        base_url: impl Into<String>,
+        model: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            base_url: base_url.into(),
+            api_key: api_key.into(),
+            model: model.into(),
+        }
+    }
+
+    pub fn model(&self) -> &str { &self.model }
+    pub fn base_url(&self) -> &str { &self.base_url }
+
+    /// 真接 OpenAI Chat Completions 协议
+    /// params_json 格式: {"prompt": "user text", "system": "optional sys", "max_tokens": 1024}
+    pub async fn chat(&self, prompt: &str, system: Option<&str>) -> Result<String, String> {
+        use serde_json::json;
+        let mut messages = Vec::new();
+        if let Some(sys) = system {
+            messages.push(json!({"role": "system", "content": sys}));
+        }
+        messages.push(json!({"role": "user", "content": prompt}));
+        let body = json!({
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": 1024,
+            "temperature": 0.7,
+        });
+        let url = format!("{}/v1/chat/completions", self.base_url);
+        let client = apeireth_http_client::HttpClient::with_vcp_defaults()
+            .map_err(|e| format!("http client init: {e}"))?;
+        let resp = client.post_json(&url, body).await
+            .map_err(|e| format!("post: {e}"))?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(format!("LLM API {} returned {}", url, status.as_u16()));
+        }
+        let v: serde_json::Value = resp.json().await
+            .map_err(|e| format!("json parse: {e}"))?;
+        // OpenAI Chat Completions response: choices[0].message.content
+        let content = v.get("choices")
+            .and_then(|c| c.get(0))
+            .and_then(|c| c.get("message"))
+            .and_then(|m| m.get("content"))
+            .and_then(|c| c.as_str())
+            .ok_or_else(|| "missing choices[0].message.content".to_string())?;
+        Ok(content.to_string())
+    }
+}
+
+#[async_trait::async_trait]
+impl AsyncWorker for LlmWorker {
+    fn name(&self) -> &str { &self.name }
+
+    async fn execute(&self, task_id: TaskId, params_json: String) -> Result<String, String> {
+        // 解析 params: {"prompt": "...", "system": "..."}
+        let params: serde_json::Value = serde_json::from_str(&params_json)
+            .map_err(|e| format!("invalid params_json: {e}"))?;
+        let prompt = params.get("prompt")
+            .and_then(|p| p.as_str())
+            .ok_or_else(|| "missing `prompt` field".to_string())?;
+        let system = params.get("system").and_then(|s| s.as_str());
+        let result = self.chat(prompt, system).await?;
+        Ok(serde_json::json!({
+            "task_id": task_id,
+            "result": result,
+            "model": self.model,
+        }).to_string())
+    }
+}
+
+#[cfg(test)]
+mod llm_worker_tests {
+    use super::*;
+
+    #[test]
+    fn llm_worker_construction() {
+        let w = LlmWorker::new("test", "fake-key");
+        assert_eq!(w.name(), "test");
+        assert_eq!(w.model(), "MiniMax-M3");
+        assert_eq!(w.base_url(), "https://api.minimaxi.com");
+    }
+
+    #[test]
+    fn llm_worker_with_config() {
+        let w = LlmWorker::with_config("c", "k", "https://custom.api", "claude-opus");
+        assert_eq!(w.base_url(), "https://custom.api");
+        assert_eq!(w.model(), "claude-opus");
+    }
+
+    #[tokio::test]
+    async fn llm_worker_execute_missing_prompt_errors() {
+        let w = LlmWorker::new("t", "k");
+        let r = w.execute(0, "{}".to_string()).await;
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("prompt"));
+    }
+
+    #[tokio::test]
+    async fn llm_worker_execute_invalid_json_errors() {
+        let w = LlmWorker::new("t", "k");
+        let r = w.execute(0, "not json".to_string()).await;
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("invalid params_json"));
+    }
+}
+
 pub struct LivingCycleHeartbeat {
     runtime: Arc<Runtime>,
 }

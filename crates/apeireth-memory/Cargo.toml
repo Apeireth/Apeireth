@@ -36,6 +36,7 @@ semantic = ["apeireth-vector"]
 
 [dev-dependencies]
 criterion = { workspace = true }
+tempfile = "3"
 # R18 第 2 阶段: in-memory SQLite 测试
 rusqlite = { workspace = true }
 
