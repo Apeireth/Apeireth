@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R148 (2026-08-13)**: 24 LOCKED 形式撤销扫尾. Cargo.toml metadata + `docs/conventions/10-locked.md` + `docs/omnibus/24-locked-crates.md` 全部标记 R148 状态 (`0 约束力`, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache). 修 3 个 pre-existing test bugs: `apeireth-bus::ChannelSet::to_vec` bit-based 重写 (旧 `contains(Both)` 对 `BOTH = 0b011` 返回 true, 重复加入 Both), `apeireth-consciousness::EmotionEngine::response_style` 改用 `history.back()` 而非 PAD 距离重算 (避免中性偏置下 dominant 错位), `apeireth-council::group_chat::tests::t01_role_count` 改用 `Participant::new(..., role).can_speak()` (`can_speak` 是 Participant 的方法不是 ParticipantRole). 累计验证: `cargo test -p apeireth-runtime` 10/10, `apeireth-bus` 24/24, `apeireth-consciousness` 31/31.
+
 > **R147 (2026-08-13)**: 新增 `apeireth-runtime` crate — 7 模块 (HeartbeatScheduler / AsyncTaskStore / ChanneledBus / ArbitrationLog / SearchEngine / GroupChat / EmotionEngine) 端到端 orchestration 串成单一可运行 runtime. 10 单元测试全过, 8 stage demo <1s 跑通. `MODULES_ORCHESTRATED = 7` 编译期守门. LivingCycleHeartbeat 自动驱动 scheduler → AsyncTask → Bus publish → 仲裁 → 搜索 → 群聊 → 情感 闭环. 非破坏增强: GroupChat `+#[derive(Clone)]` + 2 helper fn; consciousness `emotion::*` 8 项顶层 re-export; EmotionEngine `set_baseline()` 运行时改 baseline. 见 `crates/apeireth-runtime/README.md` + `docs/architecture-v4-2-r145-modules/`.
 
 > **R146 (2026-08-12)**: 优雅化总修复. `apeireth-vcp-bridge` → `apeireth-protocol-bridge` (去竞品名). 5 SDK → 1 `apeireth-sdk` (feature flags). 3 内存 → 1 `apeireth-memory` (dailynote/lightmemo 子模块). tauri-stub 冻结. 12 缺 README 补. V0.5 30→24 维修正. v4.2 哲学文档 8 文件. 9-锚映射 + 16-crate-merge-policy §6/§7.

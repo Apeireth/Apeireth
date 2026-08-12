@@ -225,7 +225,7 @@ license = "Apache-2.0"
 repository = "https://github.com/apeireth/apeireth-rust"
 # 1.0 release 描述 (per decision-22 §3 + decision-57 §0 + decision-58 §0)
 # 借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 = 1.0 release
-description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + 1.0 release (借鉴 8/11 + 24 LOCKED + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache)"
+description = "Apeireth R14 Rust 重写 — 立体架构 v2 + 生命架构 v4/v4.1 + 17 crate 本源推导 + 双洋葱统一体 + Self-Disable 防护 + 1.0 release (借鉴 8/11 + R128 24 LOCKED 形式撤销 + 8 哲学锚 + V0.5 30 维 + 6 重守门 v7 + 13 键 verdict cache)"
 homepage = "https://github.com/apeireth/apeireth-rust"
 keywords = ["ai", "agent", "autopoietic", "principle-onion", "permission-onion", "long-lived-ai", "growth-platform"]
 categories = ["ai", "asynchronous", "compilers"]
@@ -233,7 +233,7 @@ categories = ["ai", "asynchronous", "compilers"]
 # ============================================================================
 # Workspace Metadata — Apeireth 项目内部 metadata (per decision-22 + #55 + #58)
 # ----------------------------------------------------------------------------
-# 借鉴源码 8/11 + 决策链 + 24 LOCKED + 8 哲学锚 metadata
+# 借鉴源码 8/11 + 决策链 + R128 24 LOCKED 形式撤销 + 8 哲学锚 metadata
 # 0 影响 cargo 编译 / 0 影响 crates.io publish, 纯项目自描述
 # ============================================================================
 [workspace.metadata.apeireth]
@@ -274,14 +274,13 @@ borrow_local_path = ".openclaw/workspace/borrowed-repos/"
 # - C1 0 proactive commit (master awake before) strict relaxed (decision-126)
 # - C2 0 fake PASS strict maintained (decision-74)
 # - 0 proactive push strict maintained (decision-126)
-# R128 hard_walls metadata still 8 for cargo metadata history, V1.1 release (2026-11-30) regenerate.
-hard_walls = "8 (B1 24 LOCKED 持续更新 / B2 workspace.version 1.2.0 0 改 / B3 V0.5 30 维 / B4 6 重守门 v7 / B5 8 哲学锚 / B6 三洋葱 / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit / C2 0 装 PASS 严守 / C3 升 6 重 v7 / 0 主动 push 严守)"
+# R148 hard_walls metadata 反映 B1 已形式撤销 (per decision-130). V1.1 release 重新生成.
+hard_walls = "8 (B1 24 LOCKED 已形式撤销 R128 / B2 workspace.version 1.2.0 0 改 / B3 V0.5 30 维 / B4 6 重守门 v7 / B5 8 哲学锚 / B6 三洋葱 / B7 9 organ 内部 fn / A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 / A2 9 子测度结构严守 / A3 12 键 + PHL-07 = 13 键 / C1 0 主动 commit 已放宽 R147 / C2 0 装 PASS 严守 / C3 升 6 重 v7 / 0 主动 push 严守 / 3 不可变脊柱: Self-Disable + L0 HA + 13 键 verdict cache)"
 
-# 24 LOCKED 入口签名 0 改 (per decision-22 §1.2 + decision-33 §2.3 B1 + decision-41 §2 + P2-3 retry verify done + P4-1 verify done + P14-1 retry verify done)
+# R148 状态 (per decision-74 + decision-130, 主人 8/11 22:31 拍板): 24 LOCKED 入口签名 0 改 已形式撤销, 不再有约束力.
+# 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache). 见 docs/conventions/10-locked.md + docs/omnibus/24-locked-crates.md.
+# locked_crates_count 字段保留作为历史技术事实 (R125 B1 落实的 24 crate 名单), 0 约束力.
 locked_crates_count = 24
-# 完整 24 LOCKED 名单见 docs/conventions/10-locked.md §11.2 + docs/omnibus/24-locked-crates.md
-# B1 0 改 = 入口签名 (lib.rs pub mod / pub use / pub const / pub struct / pub enum / pub fn) 0 改
-# 内部 fn 实施可改 (per decision-41 §2 + decision-47)
 
 # 8 哲学锚 (per decision-22 §2.5 B5 + R126 P1-2 8 哲学锚升级 done)
 # S-1 北极星 + S-2 实事求是 + S-3 质量工程化 + O-1 安全优先 + O-2 走在前人 + O-3 干到底 + O-4 接手 + O-5 不假装

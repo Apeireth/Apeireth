@@ -1,4 +1,9 @@
+﻿# 24 LOCKED Crate 索引 (历史技术事实, R148 状态: 0 约束力)
+
+> **R148 状态 (2026-08-13, Mavis 自决)**: 本文档作为历史技术事实保留 (per R125 B1 落实的 24 crate 名单). **0 约束力** (per decision-74 + decision-130, 主人 8/11 22:31 拍板). 24 LOCKED 入口签名冻结已形式撤销, 仅保 3 项不可变脊柱. 详见 `docs/conventions/10-locked.md` R148 段落.
+
 # 24 LOCKED Crate 索引 (技术事实, 持续更新)
+
 
 > **R119-3b Mavis 重建 (2026-08-10)**: 24 LOCKED crate 索引, R11 LOCKED baseline 16:34 之前严守。
 > **R119-8 原则调整 (2026-08-10, 主人 1:49 拍板)**: 技术类文档不锁。24 LOCKED crate 实际列表是技术事实, 文档持续更新。**数据严守 ≠ 文档结构锁**。
