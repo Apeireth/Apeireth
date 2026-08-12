@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 关系子系统 (A12 — 4 类关系: Symbiosis/Coordination/Embedding/SelfRelation + 关系决策树)"
+description = "Apeireth relation subsystem (A12) - 4 relation kinds (Symbiosis/Coordination/Embedding/SelfRelation) + relation decision tree + property graph (R154: RelationGraph with adjacency indexes + BFS/DFS iterators + shortest path + predicate query). 0 引 external dep."
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
@@ -32,3 +32,7 @@ path = "examples/relation_demo.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+[[example]]
+name = "graph_demo"
+path = "examples/graph_demo.rs"
