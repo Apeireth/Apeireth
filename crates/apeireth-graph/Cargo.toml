@@ -23,6 +23,7 @@ apeireth-asi = { path = '../apeireth-asi' }
 apeireth-mcp = { path = "../apeireth-mcp" }
 apeireth-cognition = { path = '../apeireth-cognition' }
 apeireth-core = { path = '../apeireth-core' }
+parking_lot = "0.12"
 
 [[example]]
 name = "linear_3_nodes"

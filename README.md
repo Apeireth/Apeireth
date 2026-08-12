@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R149 (2026-08-13)**: 终极补弱 5/5 — `apeireth-tool-fetch` (1138 lines, 吸收 VCP 7 插件) + `apeireth-skills::anthropic_skills` (355 lines, 3 层 lazy load, 0 引 serde_yaml 350KB) + `apeireth-runtime::LlmWorker` (真 MiniMax API worker, 替 SimulatedWorker) + `apeireth-graph::ThreadCheckpointStore` (244 lines, LangGraph MemorySaver Rust 重写) + `apeireth-formal::l0_ha_physical_multisig` (310 lines, 补 R131.6 audit 缺的 M-of-N Kani proof, 6 harness + 10 unit test). 累计 +78 tests, +1 new crate, 0 errors. 详见 `docs/r149/r149-p0-five-modules.md`.
+
 > **R148 (2026-08-13)**: 24 LOCKED 形式撤销扫尾. Cargo.toml metadata + `docs/conventions/10-locked.md` + `docs/omnibus/24-locked-crates.md` 全部标记 R148 状态 (`0 约束力`, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache). 修 3 个 pre-existing test bugs: `apeireth-bus::ChannelSet::to_vec` bit-based 重写 (旧 `contains(Both)` 对 `BOTH = 0b011` 返回 true, 重复加入 Both), `apeireth-consciousness::EmotionEngine::response_style` 改用 `history.back()` 而非 PAD 距离重算 (避免中性偏置下 dominant 错位), `apeireth-council::group_chat::tests::t01_role_count` 改用 `Participant::new(..., role).can_speak()` (`can_speak` 是 Participant 的方法不是 ParticipantRole). 累计验证: `cargo test -p apeireth-runtime` 10/10, `apeireth-bus` 24/24, `apeireth-consciousness` 31/31.
 
 > **R147 (2026-08-13)**: 新增 `apeireth-runtime` crate — 7 模块 (HeartbeatScheduler / AsyncTaskStore / ChanneledBus / ArbitrationLog / SearchEngine / GroupChat / EmotionEngine) 端到端 orchestration 串成单一可运行 runtime. 10 单元测试全过, 8 stage demo <1s 跑通. `MODULES_ORCHESTRATED = 7` 编译期守门. LivingCycleHeartbeat 自动驱动 scheduler → AsyncTask → Bus publish → 仲裁 → 搜索 → 群聊 → 情感 闭环. 非破坏增强: GroupChat `+#[derive(Clone)]` + 2 helper fn; consciousness `emotion::*` 8 项顶层 re-export; EmotionEngine `set_baseline()` 运行时改 baseline. 见 `crates/apeireth-runtime/README.md` + `docs/architecture-v4-2-r145-modules/`.
@@ -2057,3 +2059,48 @@ Total: 20599 passed, 0 failed
 | 新增测试 | 10 | 19 | 48 | 47 | 102 | 49 | (+17) | 17 | **309** |
 | VCP 命令兼容 | 18 | 3 | 2 | 3 | 22 | 2 | (0) | 0 | **50** |
 | 跨 crate 回归 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | **0** |
+
+---
+
+## R149 终极补弱 P0 5/5 完成 (2026-08-13)
+
+| 子模块 | 目标 | 行数 | 新测试 | 状态 |
+|---|---|---|---|---|
+| `#1` `apeireth-tool-fetch` | 统一 fetch 引擎, 吸收 VCP 7 插件 | 1138 | +44 | ✅ |
+| `#2` `apeireth-skills::anthropic_skills` | Anthropic Skills 3 层 lazy load | 355 | +12 | ✅ |
+| `#3` `apeireth-runtime::LlmWorker` | 真 MiniMax API worker | 145 | +4 | ✅ |
+| `#4` `apeireth-graph::ThreadCheckpointStore` | LangGraph MemorySaver Rust 重写 | 244 | +8 | ✅ |
+| `#5` `apeireth-formal::l0_ha_physical_multisig` | R131.6 audit 缺的 M-of-N Kani proof | 310 | +10 | ✅ |
+
+**累计**: 5/5, +78 tests, +1 new crate (`apeireth-tool-fetch`), +4 new modules.
+
+**单 crate 验证** (全部 0 failures):
+```
+cargo test -p apeireth-tool-fetch --lib   →  44/44
+cargo test -p apeireth-skills --lib       → 188/188 (含 12 new)
+cargo test -p apeireth-runtime --lib      →  14/14 (含 4 new)
+cargo test -p apeireth-graph --lib        →  88/88 (含 8 new)
+cargo test -p apeireth-formal --lib       → 253/253 (含 10 new)
+```
+
+**pre-existing test bugs 同时修复** (主人授权"全部自主决定"):
+- `apeireth-memory/src/dailynote/enhanced.rs:81` — 测试块 `use super::*;` 已导入, 不需 `super::mcp::` 前缀
+- `apeireth-memory/src/lightmemo/adapter.rs:130` — `tempfile` crate 缺 dev-dep → 加 `tempfile = "3"`
+
+**L0 HA 物理多签 Kani proof** (补 R131.6 audit 缺失):
+- 6 个 `#[cfg_attr(kani, kani::proof)]` harness (形式属性验证)
+- 10 个 unit test (cargo test 路径)
+- POD 模型 0 触碰 production sovereignty::physical_multisig 代码
+- 验证 ≥2 签名 + ≥2 distinct kinds + ≥1 witness 三重条件缺一不可
+
+**下一周期候选 (R150+)** per `docs/research/r149-github-survey.md`:
+- `apeireth-vector` Qdrant protocol compat layer (战区 4)
+- `apeireth-pipeline` Temporal-style Activity (战区 2)
+- `apeireth-state` XState-style statechart (Multi-agent)
+- `apeireth-cron` migrate to `tokio-cron-scheduler`
+- `apeireth-council` session auto-capture (claude-mem pattern)
+- `apeireth-eval` SWE-bench style tasks (战区 1)
+- `apeireth-test` add `proptest` (property-based testing)
+- TUI 接入新 runtime / 真 MiniMax API worker (替 SimulatedWorker) — 待主人拍板
+
+**详见**: `docs/r149/r149-p0-five-modules.md` + `docs/research/r149-github-survey.md`

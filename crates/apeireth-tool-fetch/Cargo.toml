@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-tool-fetch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R149 unified fetch engine: HTTP+search+deep+Bilibili+anime. 吸收 VCP 7 plugins (UrlFetch+TavilySearch+AnySearch+VSearch+FlashDeepSearch+BilibiliFetch+AnimeFinder), 上升为 Rust 类型系统 + 多 provider 单 crate."
+keywords = ["ai", "tool", "fetch", "http", "search", "bilibili", "anime"]
+categories = ["text-processing", "web-programming"]
+
+[dependencies]
+tokio = { workspace = true, features = ["sync", "time"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+url = "2.5"
+regex = "1.10"
+apeireth-http-client = { path = "../apeireth-http-client" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true
