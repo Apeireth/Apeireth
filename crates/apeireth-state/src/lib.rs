@@ -125,6 +125,8 @@ pub mod mode_mutex;
 pub mod mode_rw_lock;
 /// 9 器官 state 共享注册表 (9 字段, 1:1 跟借鉴 #1 sister 报告 9 organ 对齐).
 pub mod registry;
+// R150 P1 #8: XState-style statechart 引擎 (借鉴 statelyco/xstate 28K stars)
+pub mod statechart;
 
 // ============================================================================
 // 公共 re-export (顶层级 API, 不需要 `apeireth_state::organ::Organ`)
