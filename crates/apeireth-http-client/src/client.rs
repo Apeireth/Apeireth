@@ -176,6 +176,43 @@ impl HttpClient {
         self.post(url, &body).await
     }
 
+    /// PUT JSON (per R150 P1 #6 Qdrant compat — Qdrant uses PUT for collection create / upsert points)
+    pub async fn put<B: Serialize>(&self, url: &str, body: &B) -> Result<Response> {
+        let start = std::time::Instant::now();
+        let _guard = self.pool.enter().await;
+        let resp = self.inner.put(url).json(body).send().await?;
+        let elapsed = start.elapsed();
+        let status = resp.status();
+        let url_final = resp.url().to_string();
+        Ok(Response {
+            inner: resp,
+            elapsed,
+            status,
+            url: url_final,
+        })
+    }
+
+    /// PUT JSON (typed body — `serde_json::Value` 简写)
+    pub async fn put_json(&self, url: &str, body: serde_json::Value) -> Result<Response> {
+        self.put(url, &body).await
+    }
+
+    /// DELETE 请求 (per R150 P1 #6 Qdrant compat — Qdrant uses DELETE for point delete)
+    pub async fn delete(&self, url: &str) -> Result<Response> {
+        let start = std::time::Instant::now();
+        let _guard = self.pool.enter().await;
+        let resp = self.inner.delete(url).send().await?;
+        let elapsed = start.elapsed();
+        let status = resp.status();
+        let url_final = resp.url().to_string();
+        Ok(Response {
+            inner: resp,
+            elapsed,
+            status,
+            url: url_final,
+        })
+    }
+
     /// GET 请求
     pub async fn get(&self, url: &str) -> Result<Response> {
         let start = std::time::Instant::now();

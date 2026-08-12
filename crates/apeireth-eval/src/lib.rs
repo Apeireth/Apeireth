@@ -14,6 +14,8 @@ pub mod cross_model_benchmark;
 pub mod mcp_bridge;  // R114: EvalScenario → MCP ToolServer 桥接
 pub mod real_llm_smoke;
 pub mod smoke_task;
+// R150 P1 #11: SWE-bench 风格 task runner (借鉴 SWE-bench Verified 1.0)
+pub mod swe_bench;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct EvalScore { pub dimension: String, pub value: f64 }
