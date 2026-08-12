@@ -8,7 +8,7 @@ rust-version = "1.80"
 authors = ["Apeireth Team"]
 license = "Apache-2.0"
 repository = "https://github.com/apeireth/apeireth-rust"
-description = "Apeireth R20 阶段 6 flesh out: Voice SDK (1:1 翻译 v0.9.21 商业版 Porcupine 唤醒词 + pvrecorder 录音 + TTS/STT; STUB MODE 9 工具返 NotImplemented (lib.rs 路径, 编译期 hardcode=true 守门) + 真接实现 (real.rs 4 块: TTS/STT/唤醒词/声纹, 走 reqwest 0.12 + rustls-tls HTTP, wiremock 0.6 测); STUB_MODE 编译期 hardcode=true 守门, 切 false 需 6 哲学锚 + 主人审)"
+description = "Apeireth voice subsystem - wake word detection (Porcupine-style on-device STUB) + audio capture (pvrecorder-style stream STUB) + HTTP TTS/STT/voiceprint (real.rs, reqwest + wiremock) + OpenAI Realtime API protocol (realtime.rs: 3-model dispatch gpt-realtime/gpt-realtime-mini/gpt-4o-realtime, 128K context, ephemeral tokens, WebSocket event schema, function calling, multimodal image input, server VAD). STUB_MODE compile-time hardcode guard for lib.rs Porcupine/pvrecorder facade; real HTTP path is opt-in. 0 引 external dep beyond reqwest + tokio."
 keywords = ["ai", "voice", "wake-word", "porcupine", "tts", "stt", "stub"]
 categories = ["api-bindings", "asynchronous"]
 
@@ -65,3 +65,8 @@ path = "examples/voice_real_demo.rs"
 # 新增 VoiceRealImpl 是独立路径 (不破现有 23 fixture + 23 测试).
 [lints]
 workspace = true
+
+
+[[example]]
+name = "realtime_session_demo"
+path = "examples/realtime_session_demo.rs"

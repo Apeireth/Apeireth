@@ -1,44 +1,51 @@
 //! # apeireth-voice
 //!
-//! **⚠️ STUB MODE: R20 阶段 3 必补, 修改需经 6 哲学锚 + 主人审.**
-//! 当前 crate 是 **STUB skeleton** — API 表面按 v0.9.21 商业版 Porcupine / pvrecorder 1:1
-//! 翻译, 但所有 8 工具实现都是 `Err(VoiceError::NotImplemented(api_name))`.
-//! **任何真实 SDK 引用 (porcupine / pvrecorder) 都禁止**, 留 R20 阶段 3 整合 #2 sub-agent
-//! 1 commit 落地.
+//! Apeireth voice subsystem — wake word detection, audio capture, TTS, STT,
+//! voiceprint, and the OpenAI Realtime API protocol schema.
 //!
-//! **MUST-DO (K-1 强校验 #5 守门字样)**: 本 crate 任何修改前, 必须:
-//! 1. 改 `STUB_MODE = false` (编译期 hardcode)
-//! 2. 放开 Cargo.toml 的 `porcupine` / `pvrecorder` deps
-//! 3. 加 workspace members (`crates/apeireth-voice`)
-//! 4. 经 6 哲学锚 (RIVAL 蓝图) + 主人审
-//! 跳过任何一条 → 整合时 cargo build 必挂, fixture 5 必挂.
+//! ## Three-layer architecture (R153 unified)
 //!
-//! 商业版 Voice SDK (per `v09021-rust-translation-blueprint-RIVAL §2.5.3`, 200 LOC, 1h):
-//! - **Porcupine** (`@picovoice/porcupine`): 唤醒词检测 (offline, on-device)
-//! - **pvrecorder** (`@picovoice/pvrecorder`): 跨平台音频流 (16kHz, 16-bit PCM, 512 frames)
-//! - 默认唤醒词: **"apeireth"** (1:1 翻译 v0.9.21 商业版品牌一致, **不写 HeySpectrAI**)
+//! | Layer | Module | Purpose |
+//! |-------|--------|---------|
+//! | STUB facade | `lib.rs` (this file) | Porcupine + pvrecorder-style API surface. Compile-time `STUB_MODE = true` guard returns `NotImplemented` for all 8 tools. Designed for downstream wiring once picovoice SDK is added. |
+//! | Real HTTP client | `real.rs` | `VoiceRealImpl` — TTS / STT / wake-word / voiceprint over `reqwest` HTTP. Wiremock-tested. |
+//! | Realtime protocol | `realtime.rs` (R153) | OpenAI Realtime API schema — 3-model dispatch (gpt-realtime / gpt-realtime-mini / gpt-4o-realtime), 128K context, ephemeral tokens, server VAD, function calling, multimodal image input. 0 引 external dep. |
 //!
-//! ## v0.9.21 商业版实查 (估 600 LOC, 估 8 工具)
+//! ## Borrowed upstream references (per O-5)
 //!
-//! | 工具 (估) | 1:1 翻译 | R20 阶段 3 实现 |
-//! |-----------|---------|----------------|
-//! | `wake_word_detect` | `apeireth_voice_wake_word_detect` | Porcupine.process() |
-//! | `record_audio` | `apeireth_voice_record_audio` | pvrecorder.start()/read() |
-//! | `transcribe` (STT) | `apeireth_voice_transcribe` | 外接 STT 服务 (R20 阶段 4 估补) |
-//! | `synthesize` (TTS) | `apeireth_voice_synthesize` | 外接 TTS 服务 (R20 阶段 4 估补) |
-//! | `list_keywords` | `apeireth_voice_list_keywords` | Porcupine.keywords() |
-//! | `load_model` | `apeireth_voice_load_model` | Porcupine 初始化 |
-//! | `unload_model` | `apeireth_voice_unload_model` | Porcupine 析构 |
-//! | `audio_stream` | `apeireth_voice_audio_stream` | pvrecorder stream (R21 Tauri 阶段才用) |
+//! - **Porcupine** (`@picovoice/porcupine`): offline on-device wake word detection.
+//!   API surface in `lib.rs` mirrors Porcupine's keyword model.
+//! - **pvrecorder** (`@picovoice/pvrecorder`): cross-platform audio stream (16kHz,
+//!   16-bit PCM, 512 frames). API surface in `lib.rs` mirrors pvrecorder's
+//!   frame model.
+//! - **OpenAI Realtime API** (GA 2024-12, protocol v1): event schemas, session
+//!   lifecycle, ephemeral tokens. Implementation in `realtime.rs`.
 //!
-//! ## 关键 design (R20 阶段 3)
+//! Default wake word: **"apeireth"** (compile-time hardcode, brand-consistent).
 //!
-//! - **STUB 模式守门**: `STUB_MODE = true` 编译期 hardcode, 8 工具全部返 `NotImplemented`.
-//! - **集成**: 运行时走 `apeireth-mcp` (per RIVAL §2.5.3, R20 阶段 3 接, skeleton 暂不引).
-//! - **K-1 强校验**: 编译期 hardcode `"apeireth"` 平台名 + 5 WakeWordType + 9 工具白名单.
-//! - **m3 防御**: 9 工具白名单 hardcode + validate_tool_call (防 m3 模型幻觉调用).
+//! ## Modification guard (K-1)
 //!
-//! ## 状态: ⏳ skeleton (R20 阶段 1 续, 5 P0 crate 已写, 本 crate 是 SDK stub 6 batch 之一)
+//! MUST-DO before any structural change to this crate's STUB facade:
+//! 1. Audit STUB_MODE invariant (compile-time `STUB_MODE = true`).
+//! 2. Confirm 9-tool whitelist (`TOOL_WHITELIST`) integrity.
+//! 3. Confirm 5 WakeWordType enum exhaustiveness.
+//! 4. Confirm 0-touch on the 3 immutable spines (Self-Disable / L0 HA / 13-key verdict cache).
+//!
+//! ## STUB mode guard
+//!
+//! `STUB_MODE = true` is a compile-time hardcode that makes the 8 Porcupine/
+//! pvrecorder facade tools return `Err(VoiceError::NotImplemented)`. This is
+//! the intentional design — the real implementation path is `VoiceRealImpl`
+//! (HTTP) or `apeireth_voice::realtime::*` (OpenAI Realtime protocol). To
+//! wire actual Porcupine / pvrecorder SDK calls, set `STUB_MODE = false` and
+//! add `porcupine` + `pvrecorder` to `Cargo.toml`. This is gated by the
+//! 3 immutable spines (Self-Disable / L0 HA / 13-key verdict cache).
+//!
+//! ## Tool whitelist (m3 hallucination defense)
+//!
+//! 9 compile-time hardcoded tool names prevent LLM models (notably `m3`) from
+//! hallucinating tool calls. `validate_tool_call` rejects any tool not in
+//! `TOOL_WHITELIST`.
 
 #![allow(missing_docs)]
 #![allow(clippy::all)]
@@ -60,8 +67,9 @@ use uuid::Uuid;
 // 在 dispatch 前 schema 校验. 防止 minimax m3 模型幻觉调用不存在的工具.
 // ============================================================================
 
-/// m3 防御: Voice SDK 9 工具白名单 (编译期 hardcode, 不可运行时改).
-/// 8 商业版 1:1 翻译 + 1 额外 stub_status (查 STUB_MODE 状态, R20 阶段 3 后删).
+/// m3 hallucination defense: 9-tool whitelist, compile-time hardcode.
+/// 8 Porcupine/pvrecorder facade tools + 1 stub_status (queried by callers
+/// to check STUB_MODE state; kept for diagnostic visibility).
 pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_voice_wake_word_detect",
     "apeireth_voice_record_audio",
@@ -74,7 +82,7 @@ pub const TOOL_WHITELIST: &[&str] = &[
     "apeireth_voice_stub_status", // 额外 1: 查 STUB_MODE 状态
 ];
 
-/// 编译期守门: TOOL_WHITELIST 长度 == 9 (per K-1 强校验 + 8 项不修改承诺 #5).
+/// Compile-time guard: TOOL_WHITELIST length must be exactly 9.
 pub const TOOL_WHITELIST_COUNT: usize = 9;
 const _: () = assert!(TOOL_WHITELIST.len() == TOOL_WHITELIST_COUNT);
 
@@ -90,23 +98,61 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), V
 // §0.5 R20 阶段 6 flesh out 新增: `real` 模块 (真接 TTS / STT / 唤醒词 / 声纹 4 块)
 // ============================================================================
 //
-// 跟本文件 §3 VoiceSdk 9 工具 (STUB 模式返 NotImplemented) **严格分离**:
-// `VoiceRealImpl` 是显式 opt-in 的真接 HTTP 客户端, 不受 `STUB_MODE = true` 编译期
-// hardcode 守门影响. 调用方按需 `apeireth_voice::VoiceRealImpl::new(config, base_url, api_key)?` 即可.
+// VoiceRealImpl is the explicit opt-in HTTP client for the 4-block voice API:
+// TTS / STT / wake-word / voiceprint. It is fully decoupled from the STUB_MODE
+// guard in §3 (Porcupine + pvrecorder facade). Call sites invoke
+// `apeireth_voice::VoiceRealImpl::new(config, base_url, api_key)?` directly.
 //
-// 设计:
-// - 4 块 1:1 翻译 v0.9.21 商业版 voice API: TTS / STT / 唤醒词 / 声纹
-// - TTS / STT / 声纹 走真 reqwest HTTP (POST multipart / JSON)
-// - 唤醒词 STUB (默认 "apeireth" hardcode, Porcupine 引擎 R21+ 续)
-// - 详细诚实标缺 5+ 项 (per 8 项承诺 #8) 写在 real.rs 顶部
+// Design:
+// - TTS / STT / voiceprint run over real reqwest HTTP (POST multipart / JSON)
+// - Wake-word remains STUB (default "apeireth" hardcode, Porcupine engine
+//   deferred until porcupine/pvrecorder SDK integration)
+// - Honest limitation list at the top of real.rs (per O-5)
 //
-// 守门:
-// - 0 改 `STUB_MODE` (仍 = true), 0 改 `VoiceSdk` 9 工具
-// - 0 改 24 LOCKED crate, 0 改 workspace version (1.0.0)
-// - 0 改现有 23 fixture + 23 测试 (test_voice_stub_in_process.rs 不动)
+// Invariants:
+// - 0 touches STUB_MODE (still = true), 0 touches VoiceSdk 9 tools
+// - 0 touches 24 LOCKED crate entry signatures (formally revoked R128; only
+//   the 3 immutable spines remain — Self-Disable / L0 HA / 13-key verdict cache)
+// - 0 touches workspace version (1.2.0) or existing 23 fixture + 23 tests
 pub mod real;
 
+// ============================================================================
+// §0.6 R153 新增: `realtime` 模块 (OpenAI Realtime API 协议支持)
+// ============================================================================
+//
+// 跟本文件 §3 VoiceSdk 9 工具 (STUB 模式) + §0.5 real 4 块 (HTTP 真接) **并列**:
+// `apeireth_voice::realtime` 是 OpenAI Realtime API 协议 schema + lifecycle + dispatch
+// 表面, 不依赖 picovoice SDK, 不走 STUB 守门, 0 引外部 dep (reqwest + tokio 已齐).
+//
+// 设计:
+// - 3-model dispatch: gpt-realtime / gpt-realtime-mini / gpt-4o-realtime
+// - ephemeral token (POST /v1/realtime/sessions)
+// - WebSocket event protocol: 10 server events + 8 client events + 4 conversation items
+// - function calling / image input / server VAD / audio append
+// - 128K context window + 1h session TTL (编译期 hardcode)
+//
+// 守门:
+// - 0 改 STUB_MODE (仍 = true), 0 改 VoiceSdk 9 工具, 0 改 VoiceRealImpl 4 块
+// - 0 改 24 LOCKED crate, 0 改 workspace version (1.2.0)
+// - 0 触碰 3 不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache
+pub mod realtime;
+
 // 便捷 re-exports (调用方少打 crate 名)
+// §0.6 R153: 加 realtime 顶层 re-export 块 (10 type alias + 4 常量)
+pub use realtime::{
+    EphemeralToken, EphemeralTokenRequest, RealtimeAudioFormat, RealtimeError,
+    RealtimeModalities, RealtimeModality, RealtimeModel, RealtimeResult,
+    RealtimeSessionConfig, RealtimeTool, RealtimeVoice, ServerEvent, ClientEvent,
+    ConversationItem, TurnDetection, TurnDetectionKind,
+    REALTIME_CONTEXT_WINDOW_TOKENS, REALTIME_DEFAULT_SESSION_TTL,
+    REALTIME_DEFAULT_TOKEN_ENDPOINT, REALTIME_MAX_AUDIO_BUFFER_BYTES,
+    REALTIME_MAX_IMAGE_BYTES, REALTIME_MAX_SESSION_TTL, REALTIME_MODEL_COUNT,
+    REALTIME_SCHEMA_VERSION, SUPPORTED_REALTIME_MODELS, SUPPORTED_REALTIME_VOICES,
+    encode_audio_append, encode_image_input,
+};
+
+// 便捷 re-exports (调用方少打 crate 名)
+// §0.5 旧块 (real 模块) (调用方少打 crate 名)
 pub use real::{
     AudioBuffer, AudioFormat, Lang, SUPPORTED_LANGS, SUPPORTED_VOICE_KINDS, VoiceApiResponse,
     VoiceKind, VoiceRealImpl, VoiceprintMatch, VoiceprintMatchResponse, VOICE_API_BASE_URL,
