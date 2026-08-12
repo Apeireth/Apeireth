@@ -13,3 +13,8 @@ path = "src/lib.rs"
 serde = { workspace = true }
 [lints]
 workspace = true
+
+[dev-dependencies]
+# R150 P1 #12: property-based testing (借鉴 alt-proptest/proptest 1.7K stars)
+# 0 触碰 LOCKED (R148 已撤销), 仅 dev-dep
+proptest = { workspace = true }

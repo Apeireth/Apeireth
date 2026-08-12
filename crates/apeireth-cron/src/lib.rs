@@ -10,6 +10,12 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+// R150 P1 #9: tokio cron scheduler (test-only, 0 触碰生产依赖)
+// 默认 build 0 引 tokio; test build 引入 scheduler 模块跑验证.
+// 业务侧若要真调度, R150+ 续 feature gate `tokio_scheduler` (留口).
+#[cfg(test)]
+mod scheduler;
+
 #[derive(Debug, Error)]
 pub enum CronError {
     #[error("cron: interval `{0}` must be > 0")]

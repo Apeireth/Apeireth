@@ -42,6 +42,7 @@ pub mod hold;
 pub mod lifecycle;
 pub mod mock_llm;
 pub mod persona;
+pub mod session_capture;  // R150 P1 #10: council session 自动捕获 (claude-mem 模式)
 pub mod sovereignty;
 pub mod stress_test;  // R68: deliberation stress test runner
 pub mod synthesis;

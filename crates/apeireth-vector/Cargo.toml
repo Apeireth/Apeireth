@@ -16,6 +16,8 @@ thiserror = { workspace = true }
 # (apeireth-api 在 V2 P1 战区 4 同步升级到 0.32, libsqlite3-sys links 冲突消除)
 rusqlite = { workspace = true }
 uuid = { workspace = true }
+# R150 P1 #6: Qdrant HTTP 协议兼容层 (借鉴 qdrant/qdrant REST API)
+apeireth-http-client = { path = "../apeireth-http-client" }
 # R19 P2 战区 4: 真接 sqlite-vec C 扩展 (0.1.x, MIT/Apache-2.0).
 # 0.1.9 走 sqlite3_auto_extension 路径自动注册, 不依赖 SQLITE_ENABLE_LOAD_EXTENSION 宏.
 sqlite-vec = { workspace = true }
