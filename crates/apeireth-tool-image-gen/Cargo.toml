@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R141: image generation tool (13 ImageGenProvider trait, OpenAI/Stability/MiniMax/MiniMax-Image mock providers, VCP 13-provider compatible)"
+description = "Apeireth R141: image generation tool (13 ImageGenProvider trait, OpenAI/Stability/MiniMax/MiniMax-Image mock providers, 13-provider compatible (origin: open-source))"
 
 [dependencies]
 apeireth-tools = { path = "../apeireth-tools" }
