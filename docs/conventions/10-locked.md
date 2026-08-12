@@ -1,3 +1,7 @@
+﻿# 10 不修改承诺 + LOCKED 状态 (R148 现状)
+
+> **R148 状态 (2026-08-13, Mavis 自决)**: 本文档作为历史/技术事实保留, **0 约束力** (per decision-74 + decision-130 + R128 主人 8/11 22:31 拍板). 24 LOCKED crate 入口签名冻结已**形式撤销**, 实际仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache). 详见 §R148 末尾说明.
+
 # 10 不修改承诺 8 项 + 9 项实质 Locked (R119 R125 形式撤销 + 实质保留)
 
 > **R128 进一步落实 (2026-08-12, 主人 8/11 22:31 拍板)**: 24 LOCKED crate 入口签名冻结 (lib.rs pub mod/pub fn/pub struct 0 改) **降级为历史记录**,不再具有约束力. 仅保留 3 项不可变'脊柱': Self-Disable 判定逻辑 / L0 HA 物理隔离 / 13 键 verdict cache 语义含义. 详见 [16-crate-merge-policy.md](16-crate-merge-policy.md) §1.
@@ -111,3 +115,21 @@ Status: 🟢 活跃 (R125 形式撤销, 原意保留, 9 项实质 B1-B7 升级)
 - 0 改 6 哲学锚原 6 实质 (R125 B5 升 8 是扩展, 0 破坏 S-1/S-2/O-2/O-3/O-4/O-5)
 - 0 改 双洋葱原则 + 权限 (R125 B6 升三洋葱是扩展, 0 破坏原双)
 - 0 改 9 organ 入口签名 (B7 内部借是内部 fn 借, 0 改入口)
+
+
+## R148 现状 (2026-08-13) — LOCKED 形式撤销确认
+
+主人 8/11 22:31 拍板: 24 LOCKED crate 入口签名冻结 = **0 约束力**, 降级为历史记录. 仅保留 3 项不可变脊柱:
+
+| 不可变脊柱 | 位置 | 含义 |
+|---|---|---|
+| Self-Disable 判定逻辑 | `apeireth-sovereignty/src/self_disable.rs` | 4 项自动扫描 + 3 级响应 + 物理多签 |
+| L0 HA 物理隔离 | `apeireth-sovereignty/src/ha.rs` | HumanAuthority trait + 物理多签 + 24h 安静期 |
+| 13 键 verdict cache | `apeireth-core/src/lib.rs` | 9 + 3 + PHL-07 = 13 键编译期硬编码 |
+
+R147 + R148 案例 (已不再被 LOCKED 约束, 但仍严守):
+- `apeireth-council::GroupChat` + `#[derive(Clone)]` + 2 helper fn (R147)
+- `apeireth-consciousness` `emotion::*` 8 项顶层 re-export (R147)
+- `EmotionEngine::set_baseline()` 运行时改 baseline (R147)
+
+后续如需重整 LOCKED 命名/分类, 直接修改本文件 + 24-locked-crates.md + Cargo.toml metadata 即可, 0 其它约束.
