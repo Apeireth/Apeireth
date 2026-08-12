@@ -7,3 +7,4 @@ pub mod dialogue;
 pub mod growth;
 pub mod history;
 pub mod settings;
+pub mod r135_addons;

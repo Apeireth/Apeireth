@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-tool-image-process"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R141: image processing tool (multimodal router, OCR placeholder, image hash, EXIF)"
+
+[dependencies]
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-tool-image-gen = { path = "../apeireth-tool-image-gen" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+base64 = "0.22"
+
+[lib]
+path = "src/lib.rs"

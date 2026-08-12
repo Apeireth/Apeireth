@@ -19,6 +19,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+parking_lot = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1", features = ["v4"] }
 
 [lib]
 name = "apeireth_council"
@@ -38,7 +42,27 @@ path = "examples/council_member_deliberation_demo.rs"
 name = "trace_visualize"
 path = "examples/trace_visualize.rs"
 
+# R131 七强制 advisor 真接 LLM demo (env-gated APEIRETH_MINIMAX_LIVE_TEST)
+[[example]]
+name = "seven_advisors_live_demo"
+path = "examples/seven_advisors_live_demo.rs"
+
 # R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+
+# R131.1 mini 验证: 5 连发 + 异步直跑
+[[example]]
+name = "r131_mini_live"
+path = "examples/r131_mini_live.rs"
+
+# R131.2 async 直跑 7-advisor (绕过 LlmAdvisorBackend::block_on)
+[[example]]
+name = "r131_seven_advisors_async"
+path = "examples/r131_seven_advisors_async.rs"
+
+# R131.3 collaboration 4 模式真接 LLM
+[[example]]
+name = "r131_collab_live"
+path = "examples/r131_collab_live.rs"

@@ -49,3 +49,29 @@ Status: 🟢 活跃 (8 锚, R125 末 B5 升)
 - 0 触碰任何 LOCKED 文档
 - 0 改 workspace.version
 - 0 改 R11 baseline 3 值
+
+
+---
+
+## R145 7 新模块锚点映射 (2026-08-12)
+
+> **R145 落实**: 7 新模块按 8 锚分配. 详见 [`docs/architecture-v4-2-r145-modules/README.md`](../architecture-v4-2-r145-modules/README.md).
+
+| 锚 | 承担模块 |
+|---|---|
+| S-1 北极星 | heartbeat 自演化目的 |
+| S-2 实事求是 | arbitration 唯一事实 + search 查得到 |
+| S-3 质量工程化 | async_task 状态机 |
+| O-1 安全优先 | group_chat 治理 + arbitration append-only |
+| O-2 走在前人 | search BM25-lite + emotion PAD |
+| O-3 干到底 | heartbeat 主动循环 |
+| O-4 接手 | emotion 调温 + 全部模块编译期守门 |
+| O-5 不假装 | channel 透明 + arbitration 不假装分布式 |
+
+## 锚点穿透检查 (R145+)
+
+每个新模块必须满足:
+- 至少承担 1 锚 (主承担)
+- 编译期硬编码守门 (O-4 接手)
+- 不假装分布式 / 不假装一致 / 不假装未实现 (O-5 不假装)
+- 命名/路径符合 conventions/01-namespace.md + 02-path.md

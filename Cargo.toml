@@ -35,6 +35,7 @@ members = [
     "crates/apeireth-extension",
     "crates/apeireth-evolution",
     "crates/apeireth-bus",
+    "crates/apeireth-arbitration",  # R145: HASH-SQL 仲裁 + 唯一事实时间线
     "crates/apeireth-api",
     "crates/apeireth-web",
     # V1307 fix (R-Cycle v2-strategy / V1306 audit leftover): 加 apeireth-tauri-stub 到 workspace members.
@@ -47,7 +48,8 @@ members = [
     #   原 "reqwest 0.13 强约束" 注释无据, 修真。
     # 原因修正: TUI 才是当前 dev 主线, 缺审美设计前 Tauri 不该被默认 build (vs reqwest 限制)。
     # 解开: V1307 修真, 真正启用 (R19 战役参考样例保留, src/main.rs 借 autobins=false 不默认 build)。
-    "crates/apeireth-tauri-stub",
+    # R145: tauri-stub 冻结到 _frozen/, 移出 workspace members (per 16-crate-merge-policy.md §2)
+    # "crates/_frozen/apeireth-tauri-stub",  # frozen R145 — 0 业务依赖, 留 archive
     "crates/apeireth-tui",
     "crates/apeireth-protocol",
     "crates/apeireth-http-client",
@@ -61,6 +63,17 @@ members = [
     "crates/apeireth-pipeline-g5",
     "crates/apeireth-tool-registry",
     "crates/apeireth-tool-runtime",
+    "crates/apeireth-tool-search",  # R145: VSearch + aggregate + TF-IDF-like score
+    "crates/apeireth-tool-shell",
+    "crates/apeireth-tool-filesystem",
+    "crates/apeireth-tool-browser",
+    "crates/apeireth-tool-codesearch",
+    "crates/apeireth-tool-image-gen",
+    "crates/apeireth-tool-image-process",
+    "crates/apeireth-memory-dailynote",
+    "crates/apeireth-vcp-bridge",
+    "crates/apeireth-memory-lightmemo",
+    "crates/apeireth-context-fold",
     "crates/apeireth-tool-approval",
     "crates/apeireth-agent",
     # V2 战区 5 — MCP skeleton (docs/v2-strategy/05 §Step 2, R-Cycle v2-strategy)
@@ -74,9 +87,6 @@ members = [
     # V2 战区 5 — formal verification (docs/v2-strategy/03 §4A, R-Cycle v2-strategy)
     "crates/apeireth-formal",
     # 5 P0 crate skeleton (per v09021-rust-translation-blueprint-RIVAL §5.1, R20 阶段 1)
-    "crates/apeireth-mcp-ssh",
-    "crates/apeireth-mcp-winrm",
-    "crates/apeireth-mcp-relay-image",
     "crates/apeireth-workflow",
     "crates/apeireth-team-lead",
     # R128: shared infrastructure facade replacing standalone keyring and machine-id crates.

@@ -1,0 +1,38 @@
+[package]
+name = "apeireth-tool-browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R139: browser tool extension (Playwright accessibility tree + CLI/SKILL + MCP dual mode), HTTP fetch by default, optional CDP via chromiumoxide"
+
+[dependencies]
+# Apeireth core
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-http-client = { path = "../apeireth-http-client" }
+
+# Workspace deps
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+url = "2.5"
+
+[features]
+# Default: HTTP fetch only (no Chrome required).
+# Enable cdp for full browser automation via chromiumoxide.
+default = []
+cdp = []
+
+[lib]
+path = "src/lib.rs"
