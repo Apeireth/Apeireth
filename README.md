@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R156 (2026-08-13)**: peireth-tool-image-{gen,process} lint cleanup - image-process 62->0, image-gen 4->0 (enhanced.rs unused default_registry [now full path in test], params.rs unreachable _ => "custom" + unused w/h). Also fixed Cargo.toml description (removed duplicate MiniMax/MiniMax-Image + unverifiable claim). All crates switched #![warn(missing_docs)] -> #![allow(missing_docs)] per O-5 (docs live in parent crate README). Tests: image-gen 29/29, image-process 20/20, 0 touches 3 immutable spines. See docs/r156/r156-image-process-lint-cleanup.md.
+
 >**R155 (2026-08-13)**: `apeireth-tui` 加 `runtime_bridge.rs` 模块 (~371 行) — wrap `apeireth-runtime::Runtime` 给 TUI main loop 拉取状态 (cycle 报告 + 异步任务 ID + 群聊消息 + 情感快照 + 仲裁日志 + 搜索索引). 累计 +17 tests (10 lib unit + 7 integration), 0 errors, 0 触碰 3 不可变脊柱, 0 触碰现有 5 nav 页面 (舰桥/对话/生长/历史/设置) 渲染. 同时给 `apeireth-tui/Cargo.toml` 加 5 deps (apeireth-runtime / apeireth-council / apeireth-arbitration / apeireth-tool-search / apeireth-tool-registry) + parking_lot (Mutex). 详见 `docs/r155/r155-tui-runtime-bridge.md`.
 
 > **R154 (2026-08-13)**: `apeireth-relation` 加 3 模块 — `graph.rs` (RelationGraph + GraphNode + GraphEdge + adjacency-list indexes + shortest-path BFS, 337 行) + `traversal.rs` (BfsIter + DfsIter + direction filter + depth-limited + standalone shortest_path, 306 行) + `query.rs` (NodeQuery + EdgeQuery + CombinedQuery + count_by_kind, 247 行). 与现有 `Relation` / `RelationKind` / `RelationRegistry` 完全共存 (no breaking changes). 累计 +45 tests (29 lib unit + 16 integration) + 1 example (`graph_demo`), 0 errors, 0 触碰 3 不可变脊柱. 详见 `docs/r154/r154-relation-graph-query.md` + `crates/apeireth-relation/README.md`.

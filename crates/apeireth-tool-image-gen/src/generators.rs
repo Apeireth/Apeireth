@@ -1,4 +1,6 @@
 //! Built-in image generators (1 mock + 3 API stubs).
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 use async_trait::async_trait;
 use base64::Engine;

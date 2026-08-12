@@ -1,6 +1,8 @@
 //! EnhancedImageGen — composed entry point.
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
-use crate::generators::{default_registry, MockProvider};
+use crate::generators::MockProvider;
 use crate::params::ImageGenParams;
 use crate::provider::{ImageGenProvider, ProviderError, ProviderRegistry};
 use crate::result::ImageGenResult;
@@ -49,6 +51,6 @@ mod tests {
 
     #[test]
     fn default_registry_helper() {
-        assert_eq!(default_registry().count(), 4);
+        assert_eq!(crate::generators::default_registry().count(), 4);
     }
 }

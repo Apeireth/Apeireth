@@ -1,4 +1,6 @@
 //! VCP image-gen compatibility (1 router for 13 VCP image providers).
+// R156 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ImageGenCommand {
