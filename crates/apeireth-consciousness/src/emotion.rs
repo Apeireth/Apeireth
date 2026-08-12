@@ -1,4 +1,4 @@
-//! OpenHer 情感引擎 (Emotional Engine)
+﻿//! OpenHer 情感引擎 (Emotional Engine)
 //!
 //! **源**: VCP v1.1 官网 "OpenHer 情感引擎调动当日记忆, 提供身份依赖与情绪共振".
 //!
@@ -273,6 +273,11 @@ impl EmotionEngine {
             history_capacity: 64,
             event_count: 0,
         }
+    }
+
+    /// R147: 运行时改 baseline (per docs/architecture-v4-2-r145-modules/).
+    pub fn set_baseline(&mut self, baseline: Pad) {
+        self.baseline = baseline;
     }
 
     pub fn with_baseline(mut self, baseline: Pad) -> Self {

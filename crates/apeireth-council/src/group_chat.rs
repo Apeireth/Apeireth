@@ -1,4 +1,4 @@
-//! 跨 Agent 群聊 (Cross-Agent Group Chat)
+﻿//! 跨 Agent 群聊 (Cross-Agent Group Chat)
 //!
 //! **源**: VCP v1.1 官网 "通过 AgentAssistant或者VCPGroupChat 与其它 Agent 朋友们围炉夜话".
 //!
@@ -336,6 +336,7 @@ impl GroupRoom {
 // GroupChat 管理器
 // ============================================================================
 
+#[derive(Clone)]
 pub struct GroupChat {
     rooms: Arc<Mutex<HashMap<String, GroupRoom>>>,
 }
@@ -383,6 +384,19 @@ impl GroupChat {
         let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
         r.archive();
         Ok(())
+    }
+
+    // R147: 新增 helper 方法 (不改 LOCKED 入口签名, 仅 +2 fn)
+    pub fn add_participant_public(&self, room_id: &str, p: Participant) -> GroupChatResult<()> {
+        let mut g = self.rooms.lock();
+        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        r.add(p)
+    }
+
+    pub fn post_message_public(&self, room_id: &str, msg: ChatMessage) -> GroupChatResult<()> {
+        let mut g = self.rooms.lock();
+        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        r.post(msg)
     }
 }
 

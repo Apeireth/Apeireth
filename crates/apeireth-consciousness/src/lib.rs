@@ -1,4 +1,4 @@
-//! apeireth-consciousness: 意识子系统 (A12 落点 — Cognitive-Dream 6 状态机)
+﻿//! apeireth-consciousness: 意识子系统 (A12 落点 — Cognitive-Dream 6 状态机)
 //!
 //! **职责**: 建模主体的"意识状态机" — 6 状态 (Awake / Reflecting / Dreaming /
 //! Meditating / SelfDisabling / Recovering) + 合法转换矩阵 + 转换历史 + 主体
@@ -404,6 +404,7 @@ mod tests {
 }
 
 
+pub use crate::emotion::{BaseEmotion, EmError, EmResult, EmotionEngine, EmotionEvent, EmotionSnapshot, Pad, ResponseStyle};
 pub use crate::transfer_monitor::{
     CognitiveDreamMonitor, CycleInfo, MonitorError, RateLimitError, TransferSnapshot,
 };

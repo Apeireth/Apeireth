@@ -1,0 +1,40 @@
+[package]
+name = "apeireth-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R147: end-to-end runtime orchestration - HeartbeatScheduler + AsyncTaskStore + ChanneledBus + ArbitrationLog + SearchEngine + GroupChat + EmotionEngine integrated runtime. Borrows VCP v1.1 'self-driven living day' concept, lifted to Rust compile-time guaranteed unified runtime."
+keywords = ["ai", "agent", "runtime", "orchestration", "autopoietic", "living-day"]
+categories = ["asynchronous", "asynchronous"]
+
+[dependencies]
+# 7 orchestration core crates (per R147 design)
+apeireth-supervisor = { path = "../apeireth-supervisor" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-bus = { path = "../apeireth-bus" }
+apeireth-arbitration = { path = "../apeireth-arbitration" }
+apeireth-tool-search = { path = "../apeireth-tool-search" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+
+# Workspace deps
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "r147_full_chain"
+path = "examples/r147_full_chain.rs"
+
+[lints]
+workspace = true
