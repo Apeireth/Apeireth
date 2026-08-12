@@ -66,6 +66,7 @@ members = [
     "crates/apeireth-tool-runtime",
     "crates/apeireth-tool-search",  # R145: VSearch + aggregate + TF-IDF-like score
     "crates/apeireth-tool-shell",
+    "crates/apeireth-tool-fetch",  # R149: Tier 1.5 unified fetch engine (absorb VCP 7 plugins)
     "crates/apeireth-tool-filesystem",
     "crates/apeireth-tool-browser",
     "crates/apeireth-tool-codesearch",

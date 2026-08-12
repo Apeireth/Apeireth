@@ -22,7 +22,9 @@ pub mod eval_bridge;  // R110: Skill descriptor → eval scenario 桥接
 pub mod watcher;  // R109: 文件 watcher 热加载 (polling-based, 0 新 dep)  // R107: 严格 semver 2.0.0 (3-segment + pre-release + build metadata)  // R86: Skill → MCP ToolServer 适配器 (SkillDescriptor → Tool, call 走 dispatch)
 pub mod file_loader;
 pub mod skill_executor;  // R125-19: Skill execution layer (5 phase state machines, superpowers 14 → 5 patterns)
-pub mod library_stage6_guardianship;  // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
+pub mod library_stage6_guardianship;
+pub mod anthropic_skills;  // R149: Anthropic Skills 模式 (SKILL.md + 3 层加载)
+  // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
 
 #[derive(Debug, Error)]
 pub enum SkillError {
@@ -38,6 +40,15 @@ pub enum SkillError {
     UnknownSkill(String),
 }
 pub type SkillResult<T> = Result<T, SkillError>;
+
+pub use anthropic_skills::{
+    AnthropicSkillLoader,
+    AnthropicSkillError,
+    AnthropicSkillResult,
+    SkillManifest,
+    SkillDocument,
+    SkillEntry,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Skill {

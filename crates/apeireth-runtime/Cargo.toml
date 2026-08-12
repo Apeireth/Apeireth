@@ -19,6 +19,7 @@ apeireth-arbitration = { path = "../apeireth-arbitration" }
 apeireth-tool-search = { path = "../apeireth-tool-search" }
 apeireth-council = { path = "../apeireth-council" }
 apeireth-consciousness = { path = "../apeireth-consciousness" }
+apeireth-http-client = { path = "../apeireth-http-client" }
 
 # Workspace deps
 tokio = { workspace = true, features = ["full"] }
