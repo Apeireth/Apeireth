@@ -223,7 +223,7 @@ impl LlmWorker {
             "temperature": 0.7,
         });
         let url = format!("{}/v1/chat/completions", self.base_url);
-        let client = apeireth_http_client::HttpClient::with_vcp_defaults()
+        let client = apeireth_http_client::HttpClient::with_chat_defaults()
             .map_err(|e| format!("http client init: {e}"))?;
         let resp = client.post_json(&url, body).await
             .map_err(|e| format!("post: {e}"))?;

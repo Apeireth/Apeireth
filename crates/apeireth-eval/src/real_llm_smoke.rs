@@ -346,7 +346,7 @@ pub async fn run_real_llm_smoke(
     }
 
     // 阶段 4-7: HTTP call + response validation
-    let http = match HttpClient::with_vcp_defaults() {
+    let http = match HttpClient::with_chat_defaults() {
         Ok(h) => h,
         Err(e) => {
             report.error = Some(format!("http_request_ok: HttpClient 构造失败: {e}"));

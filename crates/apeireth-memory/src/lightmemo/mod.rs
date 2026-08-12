@@ -39,7 +39,7 @@ pub mod sleep_cycle;
 pub mod librarian;
 pub mod adapter;
 pub mod mcp;
-pub mod vcp_compat;
+pub mod compat;
 pub mod enhanced;
 
 pub use l1_file::{L1FileStore, FileEntry as L1Entry};
@@ -55,11 +55,11 @@ pub use sleep_cycle::{SleepCycle, SleepConfig};
 pub use librarian::{Librarian, Category};
 pub use adapter::{AdapterRegistry, MemoryAdapter, MemorySource, SourceKind, ConversationAdapter, FileAdapter};
 pub use mcp::{LightMemoMcp, LightMemoTool};
-pub use vcp_compat::{VcpLightMemoCommand, VcpLightMemoRouter, VCP_LIGHTMEMO_COMMAND_COUNT};
+pub use compat::{LightMemoCommand, LightMemoCompatRouter, LIGHTMEMO_COMMAND_COUNT};
 pub use enhanced::EnhancedLightMemo;
 
 /// R142 deliverables (per v2 plan §9.5):
-/// - 11 modules (L1/L2/L3/L4 + manager + decay + dream + search/pipe + mcp + vcp_compat + enhanced)
+/// - 11 modules (L1/L2/L3/L4 + manager + decay + dream + search/pipe + mcp + compat + enhanced)
 /// - 4-layer closed-loop architecture
 /// - Multi-pipe search (BM25 + vector + tag fusion)
 pub const R142_DELIVERABLES: usize = 12;

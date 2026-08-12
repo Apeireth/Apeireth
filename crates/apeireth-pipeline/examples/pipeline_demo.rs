@@ -87,7 +87,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // #19 15s 抑制窗口
     println!("\n  #19 15s 抑制窗口 (VCP protocolBridge.js:11-12):");
-    let sup = RetrySuppression::with_vcp_default();
+    let sup = RetrySuppression::with_chat_default();
     println!(
         "    DEFAULT_SUPPRESSION_WINDOW_MS = {} (VCP 真值)",
         apeireth_pipeline::DEFAULT_SUPPRESSION_WINDOW_MS
@@ -144,7 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("    5. HTTP 调用 (apeireth-http-client Keep-Alive LIFO 5 字段)");
 
     // 构造 Pipeline: 配 placeholder context + bearer auth
-    let http = HttpClient::with_vcp_defaults()?;
+    let http = HttpClient::with_chat_defaults()?;
     let mut config = apeireth_pipeline::PipelineConfig::default();
     config.base_url = base_url.clone();
     config.auth_token = Some(api_key.clone());
@@ -189,7 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("    error: {e}");
             // 诊断: 用 apeireth-http-client 直接发, 看 raw response
             eprintln!("\n[诊断] 单独发请求, 看 raw response:");
-            let http2 = HttpClient::with_vcp_defaults()?;
+            let http2 = HttpClient::with_chat_defaults()?;
             let body = serde_json::json!({
                 "model": model,
                 "messages": [{"role": "user", "content": "hi"}],

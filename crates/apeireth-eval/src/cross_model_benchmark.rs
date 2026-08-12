@@ -187,7 +187,7 @@ pub async fn run_single_model(
     // 用 apeireth_http_client 跟 real_llm_smoke 一致, 5 字段 Keep-Alive
     // real_llm_smoke 也是借 HttpClient::reqwest_client() 暴露原生 reqwest::Client 来加 header
     // (因为 HttpClient::post() 内部 hardcode Content-Type=application/json, 不让我们加 x-api-key).
-    let http = match apeireth_http_client::HttpClient::with_vcp_defaults() {
+    let http = match apeireth_http_client::HttpClient::with_chat_defaults() {
         Ok(c) => c,
         Err(e) => {
             result.error = Some(format!("http_client_init: {e}"));
