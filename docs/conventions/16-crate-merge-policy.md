@@ -111,3 +111,18 @@ Status: 🟢 活跃
 ---
 
 _R128 首次落实 (2026-08-12). 楚零 8/11 22:31 "承认 24 LOCKED crate 入口签名冻结是 R20 阶段为了'守住边界'而设的临时护栏,但 R119 已经形式撤销了 8 项不修改承诺,继续锁着入口签名实际上是用架构约束代替重构勇气"。_
+
+## §6 R146 实际执行清单 (本次落实)
+
+| # | 动作 | 详情 | 来源 |
+|---|---|---|---|
+| 1 | 5 SDK 合并 | `apeireth-sdk-lark` / `apeireth-sdk-livekit` / `apeireth-sdk-sandbox` / `apeireth-sdk-voice` → 1 `apeireth-sdk` (feature flags: `lark` / `livekit` / `sandbox` / `voice` / `all-sdk`) | R146 拍板 |
+| 2 | 3 内存合并 | `apeireth-memory-dailynote` / `apeireth-memory-lightmemo` → 子模块 `apeireth-memory::dailynote` / `apeireth-memory::lightmemo` | R146 拍板 |
+| 3 | 命名修复 | `apeireth-vcp-bridge` → `apeireth-protocol-bridge` (去竞品名) | R146 主人拍板"包含竞品名, 决定不行" |
+| 4 | 合并后统计 | 75 active crate (82 - 7 已合并) | per `crates/_archived/` |
+
+## §7 R146 不合并的决策
+
+- **3 工具执行架构** (`apeireth-tool-registry` / `apeireth-tool-runtime` / `apeireth-tool-approval`) 不合并 — 依赖层级清晰 (registry → runtime → approval), 各自职责分明, 非冗余
+- **5 哲学器官** (consciousness / perception / cognition / life-force / motivation) 不合并 — 每个 14-29KB 真实代码, 合并即丢清晰度
+- **工具领域** (filesystem / shell / browser / search / image-*) 不合并 — 各自独立部署单元, 有助未来 feature flag 拆分

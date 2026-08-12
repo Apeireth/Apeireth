@@ -556,7 +556,7 @@ VCP 的 **folder 字段** (指定存储目录) 是值得保留的工程细节 - 
 
 #### 必要性: 必做 (但要重新定位)
 
-主人已明确: **Apeireth 不是 VCP 仿写, 是让 VCP 生态跑在 Apeireth 上的兼容平台**。 这意味着 apeireth-vcp-bridge 不是模仿 VCP, 而是提供 VCP plugin manifest 解析 + VCP 协议兼容层。
+主人已明确: **Apeireth 不是 VCP 仿写, 是让 VCP 生态跑在 Apeireth 上的兼容平台**。 这意味着 apeireth-protocol-bridge 不是模仿 VCP, 而是提供 VCP plugin manifest 解析 + VCP 协议兼容层。
 
 #### 优雅性: 一般 (定位混乱)
 
@@ -581,7 +581,7 @@ VCP 的 **folder 字段** (指定存储目录) 是值得保留的工程细节 - 
 
 #### 借鉴而上升 - 我们的方案
 
-**a) 定位重塑**: apeireth-vcp-bridge 不是 plugin, 是 **apeireth-api 的网关层**, 提供:
+**a) 定位重塑**: apeireth-protocol-bridge 不是 plugin, 是 **apeireth-api 的网关层**, 提供:
    - 协议转换网关: OpenAI/Anthropic/Gemini 4 协议 <-> Apeireth 内部协议
    - VCP plugin manifest 解析: 动态加载 .json, 转 apeireth Tool wrapper
    - 双向兼容: Apeireth Tool 可被 VCP 调用, VCP plugin 可被 Apeireth 调用
@@ -594,7 +594,7 @@ VCP 的 **folder 字段** (指定存储目录) 是值得保留的工程细节 - 
 
 #### Rust 实现要点
 
-- apeireth-vcp-bridge 作为 apeireth-api 的子模块
+- apeireth-protocol-bridge 作为 apeireth-api 的子模块
 - 模块: protocol/openai.rs / protocol/anthropic.rs / protocol/gemini.rs / vcp_manifest.rs / proxy.rs / audit.rs
 - 集成 hyper / axum + serde_json + jsonschema (manifest 校验)
 - 与 apeireth-sovereignty 集成: Self-Disable 触发 -> 自动关闭 bridge
@@ -1025,7 +1025,7 @@ Tier 3 在 R137+ 有需求时再启动。 原则: 主人说先冻结, R137 拍�
 | **apeireth-tool-image-gen** | VCP 13 provider 接口清单 | (各 provider API 文档) | ImageGenProvider trait + 13 impl + 统一 LLM schema |
 | **apeireth-tool-image-process** | VCP ImageProcessor 缓存机制 | image/kamadak-exif/tesseract-rs/image-hash/ffmpeg-next (Rust crate 生态) | 多模态路由 + OCR 本地 + 视频关键帧 + 图像 hash |
 | **apeireth-memory-dailynote** | VCP DailyNote folder 字段 + DailyNoteSearcher BM25 | rusqlite/sled/git2/age/tantivy (Rust crate 生态) | 6 subcommand + git 版本 + 加密 + 反向 tag 索引 |
-| **apeireth-vcp-bridge** | VCP 4 协议矩阵转换 | tower middleware stack | 双向兼容 + audit log + rate limit + 不动 System Prompt |
+| **apeireth-protocol-bridge** | VCP 4 协议矩阵转换 | tower middleware stack | 双向兼容 + audit log + rate limit + 不动 System Prompt |
 | **apeireth-memory-lightmemo** | **AgentMemory v2.1.0** (我自己 2026-07-15 开源) + VCP 时间范围过滤 | qdrant-client/tantivy/tch (Rust crate 生态) | AgentMemory Rust 化 (28 模块) + peer-aware 多视角 |
 | **apeireth-context-fold** | VCP ContextFoldingV2 激活占位符 | tiktoken-rs (Rust crate) | FoldStrategy + 可展开 marker + 跨 session 累计 |
 
