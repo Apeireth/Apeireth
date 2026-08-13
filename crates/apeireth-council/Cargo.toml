@@ -23,6 +23,8 @@ parking_lot = "0.12"
 sha2 = "0.10"
 hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
+# R159: council 接 g5 substrate (第 3 个生产调用方, 继 tool-runtime R132.4 + chat pipeline R157)
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 
 [lib]
 name = "apeireth_council"
