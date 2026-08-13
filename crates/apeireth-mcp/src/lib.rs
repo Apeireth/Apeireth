@@ -63,7 +63,7 @@ use serde_json::{json, Value};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::protocol::{Id, JsonRpcError, JsonRpcRequest, JsonRpcResponse, JSON_RPC_VERSION};
+use crate::protocol::{Id, JsonRpcBatch, JsonRpcError, JsonRpcRequest, JsonRpcResponse, JSON_RPC_VERSION};
 use crate::tool_bridge::{
     bridge_handler_from_registry, invoke_via_registry, list_tools as list_tools_via_bridge,
 };
@@ -281,6 +281,45 @@ impl McpClient {
     }
 
     /// **调工具** — `name` + `args`, 返回工具结果 Value
+    /// **send_batch — JSON-RPC 2.0 §6 Batch 调用**
+    ///
+    /// **设计**: 把多个 request 编为 JSON 数组, 一次性发送, 期望收到 array of responses.
+    /// **不假装**: 严格 §6 — 空 batch 视为 Invalid Request (服务端应回单个 error response).
+    pub async fn send_batch(
+        &self,
+        mut requests: Vec<JsonRpcRequest>,
+    ) -> Result<Vec<JsonRpcResponse>, McpError> {
+        self.ensure_initialized()?;
+        if requests.is_empty() {
+            return Err(McpError::Rpc(JsonRpcError::new(
+                JsonRpcError::CODE_INVALID_REQUEST,
+                "empty batch is invalid request",
+            )));
+        }
+        // 给没 id 的 request 分配 id (batch 内 id 互不重复即可)
+        let mut counter: i64 = {
+            let mut g = self.next_id.lock().expect("next_id mutex poisoned");
+            let cur = *g;
+            *g += requests.len() as i64;
+            cur
+        };
+        for req in requests.iter_mut() {
+            if req.id.is_none() {
+                counter += 1;
+                req.id = Some(Id::Num(counter));
+            }
+        }
+        let wire = JsonRpcBatch::Batch(requests);
+        let line = serde_json::to_string(&wire)?;
+        let mut t = self.transport.lock().await;
+        t.send(&line).await?;
+        let Some(raw) = t.recv().await? else {
+            return Err(McpError::Transport(TransportError::Closed));
+        };
+        let parsed: JsonRpcBatch<JsonRpcResponse> = serde_json::from_str(&raw)?;
+        Ok(parsed.into_vec())
+    }
+
     pub async fn call_tool(&self, name: &str, args: Value) -> Result<Value, McpError> {
         self.ensure_initialized()?;
         let params = json!({
@@ -473,11 +512,50 @@ impl McpServer {
             if line.is_empty() {
                 continue;
             }
-            // 尝试解析为 request
+            // R224: JSON-RPC 2.0 §6 Batch — wire 启发式
+            if crate::protocol::looks_like_batch(&line) {
+                // batch 形态
+                let batch: JsonRpcBatch<JsonRpcRequest> = match serde_json::from_str(&line) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        tracing::warn!("[mcp-server] batch parse error: {e}");
+                        // §6: 解析失败整体不回 (无法关联) — 仅 warn
+                        continue;
+                    }
+                };
+                if batch.is_empty() {
+                    // §6: 空 batch = Invalid Request, 应回 single error response
+                    let err = JsonRpcResponse::err(
+                        None,
+                        JsonRpcError::new(
+                            JsonRpcError::CODE_INVALID_REQUEST,
+                            "empty batch is invalid request",
+                        ),
+                    );
+                    let resp_line = serde_json::to_string(&err)?;
+                    transport.send(&resp_line).await?;
+                    continue;
+                }
+                let reqs = batch.into_vec();
+                let mut responses = Vec::with_capacity(reqs.len());
+                for req in reqs {
+                    if req.id.is_none() {
+                        // notification: §6 不响应, 但 dispatch 仍调用 (用于可能的副作用)
+                        // 这里保守: 不调用 handler, 直接跳过
+                        continue;
+                    }
+                    responses.push(self.dispatch(req).await);
+                }
+                if !responses.is_empty() {
+                    let resp_line = serde_json::to_string(&responses)?;
+                    transport.send(&resp_line).await?;
+                }
+                continue;
+            }
+            // 单个 request 解析
             let req: JsonRpcRequest = match serde_json::from_str(&line) {
                 Ok(r) => r,
                 Err(e) => {
-                    // parse error 不带 id (无法关联), 不回 response
                     tracing::warn!("[mcp-server] parse error: {e}");
                     continue;
                 }
@@ -488,6 +566,55 @@ impl McpServer {
             transport.send(&resp_line).await?;
         }
         Ok(())
+    }
+
+    /// **handle_line — 单行 request/batch, 端到端 helper**
+    ///
+    /// **用途**: lib_tests 单测 + 未来其他 transport 入口 (e.g. HTTP handler)
+    ///
+    /// **返回**:
+    ///   - `None` 表示全 notification, 服务端不回响应
+    ///   - `Some(line)` 表示应当 send 出去的响应 (单个 object 或数组)
+    pub async fn handle_line(&self, line: &str) -> Result<Option<String>, McpError> {
+        if line.is_empty() {
+            return Ok(None);
+        }
+        if crate::protocol::looks_like_batch(line) {
+            let batch: JsonRpcBatch<JsonRpcRequest> = match serde_json::from_str(line) {
+                Ok(b) => b,
+                Err(e) => {
+                    tracing::warn!("[mcp-server] batch parse error: {e}");
+                    return Ok(None);
+                }
+            };
+            if batch.is_empty() {
+                let err = JsonRpcResponse::err(
+                    None,
+                    JsonRpcError::new(
+                        JsonRpcError::CODE_INVALID_REQUEST,
+                        "empty batch is invalid request",
+                    ),
+                );
+                return Ok(Some(serde_json::to_string(&err)?));
+            }
+            let reqs = batch.into_vec();
+            let mut responses = Vec::with_capacity(reqs.len());
+            for req in reqs {
+                if req.id.is_none() { continue; }
+                responses.push(self.dispatch(req).await);
+            }
+            if responses.is_empty() { return Ok(None); }
+            return Ok(Some(serde_json::to_string(&responses)?));
+        }
+        let req: JsonRpcRequest = match serde_json::from_str(line) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!("[mcp-server] parse error: {e}");
+                return Ok(None);
+            }
+        };
+        let resp = self.dispatch(req).await;
+        Ok(Some(serde_json::to_string(&resp)?))
     }
 
     /// **dispatch 一个请求到 method handler**
@@ -715,6 +842,186 @@ mod lib_tests {
     /// **8 硬墙 #3 verify**: 入口签名 0 改 — 0 改 `apeireth_mcp::server::run()`,
     /// `apeireth_mcp::protocol::Handler`, `apeireth_mcp::McpClient::*`,
     /// `apeireth_mcp::McpServer::*` 等所有 pub fn 签名.
+
+    // ============================================================
+    // JSON-RPC 2.0 §6 Batch — R224 端到端 (8 cases)
+    // ============================================================
+
+    /// **batch end-to-end via memory pipe**
+    #[tokio::test]
+    async fn batch_end_to_end_via_memory_pipe() {
+        let mut server = McpServer::new("test-batch");
+        server.register_tool_from_arc(Arc::new(MockSyncTool {
+            name: "echo".to_string(),
+        }));
+        let (a, b) = tokio::io::duplex(8192);
+        let server_task = tokio::spawn(async move {
+            server.run_with_transport(MemoryTransport::new(a)).await
+        });
+        let mut client = McpClient::with_transport(MemoryTransport::new(b));
+        let _ = client.initialize().await.unwrap();
+
+        // 一次 batch: tools/list + tools/call + tools/call
+        let batch = vec![
+            JsonRpcRequest::new("tools/list", None, Id::Num(100)),
+            JsonRpcRequest::new(
+                "tools/call",
+                Some(json!({"name": "echo", "arguments": {"input": 1}})),
+                Id::Num(101),
+            ),
+            JsonRpcRequest::new(
+                "tools/call",
+                Some(json!({"name": "echo", "arguments": {"input": 2}})),
+                Id::Num(102),
+            ),
+        ];
+        let resps = client.send_batch(batch).await.unwrap();
+        assert_eq!(resps.len(), 3);
+        // order preserved
+        assert_eq!(resps[0].id.as_ref().unwrap(), &Id::Num(100));
+        assert_eq!(resps[1].id.as_ref().unwrap(), &Id::Num(101));
+        assert_eq!(resps[2].id.as_ref().unwrap(), &Id::Num(102));
+        // tools/list 应有 tools 字段
+        assert!(resps[0].result.as_ref().unwrap()["tools"].is_array());
+        // 两个 tools/call 都返回 result (handle_tools_call 包装在 result.result.echo)
+        assert_eq!(
+            resps[1].result.as_ref().unwrap()["result"]["echo"],
+            json!(1)
+        );
+        assert_eq!(
+            resps[2].result.as_ref().unwrap()["result"]["echo"],
+            json!(2)
+        );
+        drop(client);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .expect("server task did not finish in time")
+            .unwrap();
+    }
+
+    /// **batch with one error response**
+    #[tokio::test]
+    async fn batch_with_error_response() {
+        let mut server = McpServer::new("test-batch-err");
+        server.register_tool_from_arc(Arc::new(MockSyncTool {
+            name: "echo".to_string(),
+        }));
+        let (a, b) = tokio::io::duplex(4096);
+        let server_task = tokio::spawn(async move {
+            server.run_with_transport(MemoryTransport::new(a)).await
+        });
+        let mut client = McpClient::with_transport(MemoryTransport::new(b));
+        let _ = client.initialize().await.unwrap();
+
+        // 1 valid + 1 invalid (unknown method)
+        let batch = vec![
+            JsonRpcRequest::new("tools/list", None, Id::Num(1)),
+            JsonRpcRequest::new("nonexistent/method", None, Id::Num(2)),
+        ];
+        let resps = client.send_batch(batch).await.unwrap();
+        assert_eq!(resps.len(), 2);
+        // 第 1 个 success
+        assert!(resps[0].error.is_none());
+        assert!(resps[0].result.is_some());
+        // 第 2 个 error -32601
+        assert!(resps[1].result.is_none());
+        let err = resps[1].error.as_ref().unwrap();
+        assert_eq!(err.code, -32601);
+        assert!(err.message.contains("nonexistent/method"));
+        drop(client);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .expect("server task did not finish")
+            .unwrap();
+    }
+
+    /// **send_batch empty list rejected client-side (§6 invalid request)**
+    #[tokio::test]
+    async fn batch_empty_rejected() {
+        let server = McpServer::new("test-batch-empty");
+        let (a, b) = tokio::io::duplex(64);
+        let server_task = tokio::spawn(async move {
+            server.run_with_transport(MemoryTransport::new(a)).await
+        });
+        let mut client = McpClient::with_transport(MemoryTransport::new(b));
+        let _ = client.initialize().await.unwrap();
+
+        let res = client.send_batch(vec![]).await;
+        assert!(matches!(res, Err(McpError::Rpc(_))));
+        drop(client);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .expect("server task did not finish")
+            .unwrap();
+    }
+
+    /// **send_batch before initialize rejected**
+    #[tokio::test]
+    async fn batch_requires_initialize() {
+        let server = McpServer::new("test");
+        let (a, b) = tokio::io::duplex(64);
+        let server_task = tokio::spawn(async move {
+            server.run_with_transport(MemoryTransport::new(a)).await
+        });
+        let client = McpClient::with_transport(MemoryTransport::new(b));
+        // 注意: 没 initialize
+        let res = client.send_batch(vec![JsonRpcRequest::new(
+            "tools/list",
+            None,
+            Id::Num(1),
+        )])
+        .await;
+        assert!(matches!(res, Err(McpError::NotInitialized)));
+        drop(client);
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
+            .await
+            .expect("server task did not finish")
+            .unwrap();
+    }
+
+    /// **server-side handle_line helper for batch with notification**
+    #[tokio::test]
+    async fn handle_line_batch_with_notification_returns_no_response() {
+        let server = McpServer::new("test-handle-line");
+        let batch_json = r#"[{"jsonrpc":"2.0","method":"notifications/initialized"},{"jsonrpc":"2.0","method":"tools/list","id":7}]"#;
+        let out = server.handle_line(batch_json).await.unwrap();
+        // 1 notification + 1 request → 应只回 1 个 response (array of size 1)
+        let line = out.expect("non-empty response expected");
+        let v: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(v.is_array());
+        assert_eq!(v.as_array().unwrap().len(), 1);
+    }
+
+    /// **handle_line: empty batch returns single error response**
+    #[tokio::test]
+    async fn handle_line_empty_batch_returns_error() {
+        let server = McpServer::new("test-empty-batch");
+        let out = server.handle_line("[]").await.unwrap();
+        let line = out.expect("empty batch must yield single error response");
+        let resp: JsonRpcResponse = serde_json::from_str(&line).unwrap();
+        assert_eq!(resp.error.as_ref().unwrap().code, -32600);
+    }
+
+    /// **handle_line: single request works (no batch)**
+    #[tokio::test]
+    async fn handle_line_single_request() {
+        let server = McpServer::new("test-single");
+        let req = r#"{"jsonrpc":"2.0","method":"tools/list","id":1}"#;
+        let out = server.handle_line(req).await.unwrap();
+        let line = out.unwrap();
+        let resp: JsonRpcResponse = serde_json::from_str(&line).unwrap();
+        assert!(resp.error.is_none());
+        assert!(resp.result.unwrap()["tools"].is_array());
+    }
+
+    /// **handle_line: empty line returns None**
+    #[tokio::test]
+    async fn handle_line_empty_string_returns_none() {
+        let server = McpServer::new("test");
+        let out = server.handle_line("").await.unwrap();
+        assert!(out.is_none());
+    }
+
     #[test]
     fn test_no_public_api_breaks() {
         // 1) 验证 lib.rs 顶层 public items (关键: re-exports + structs)
