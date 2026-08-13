@@ -14,6 +14,7 @@ use std::time::Duration;
 use futures_util::stream::{BoxStream, StreamExt};
 use tokio::sync::{broadcast, RwLock as AsyncRwLock};
 
+use crate::event_log::{EventLog, LoggedEvent};
 use crate::pattern::TopicPattern;
 use crate::{BackpressurePolicy, BusError, BusMessage, BusResult, BusStats};
 
@@ -31,6 +32,8 @@ pub struct L0Bus<T: Clone + Send + Sync + 'static> {
     /// R228: pattern → broadcast::Sender, subscribe_pattern 注册.
     ///   publish 时遍历, 对 TopicPattern::matches(pattern, topic) 命中的也 send.
     pattern_topics: Arc<AsyncRwLock<HashMap<String, broadcast::Sender<BusMessage<T>>>>>,
+    /// R229: append-only event log (None = disabled). with_event_log(cap) 启用.
+    event_log: Option<Arc<EventLog<T>>>,
     stats: Arc<BusStats>,
 }
 
@@ -53,8 +56,26 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
             topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             latest: Arc::new(AsyncRwLock::new(HashMap::new())),
             pattern_topics: Arc::new(AsyncRwLock::new(HashMap::new())),
+            event_log: None,
             stats: BusStats::shared(),
         }
+    }
+
+    /// **R229 — 启用 event log** (append-only, capacity 默认 1024, 满循环覆盖最旧)
+    pub fn with_event_log(mut self) -> Self {
+        self.event_log = Some(Arc::new(EventLog::new()));
+        self
+    }
+
+    /// **R229 — 启用 event log, 自定义 capacity**
+    pub fn with_event_log_capacity(mut self, cap: usize) -> Self {
+        self.event_log = Some(Arc::new(EventLog::with_capacity(cap)));
+        self
+    }
+
+    /// **R229 — 拿 event log 引用** (None 表示未启用)
+    pub fn event_log(&self) -> Option<&Arc<EventLog<T>>> {
+        self.event_log.as_ref()
     }
 
     /// 已注册主题数.
@@ -153,6 +174,14 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
             if let Err(e) = ptx.send(msg_for_patterns.clone()) {
                 eprintln!("[apeireth-bus] pattern send failed: {e}");
             }
+        }
+        // R229: append to event log (if enabled) — 借用 msg (主 publish 已 send, msg_for_patterns 已用)
+        if let Some(log) = &self.event_log {
+            log.append(LoggedEvent {
+                topic: topic.to_string(),
+                timestamp_ms: EventLog::<T>::now_ms(),
+                message: msg_for_patterns,
+            });
         }
         Ok(())
     }
@@ -301,6 +330,7 @@ impl<T: Clone + Send + Sync + 'static> Default for L0Bus<T> {
             topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             latest: Arc::new(AsyncRwLock::new(HashMap::new())),
             pattern_topics: Arc::new(AsyncRwLock::new(HashMap::new())),
+            event_log: None,
             stats: BusStats::shared(),
         }
     }
