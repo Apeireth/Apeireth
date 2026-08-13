@@ -11,7 +11,8 @@ keywords = ["ai", "tool", "fetch", "http", "search", "bilibili", "anime"]
 categories = ["text-processing", "web-programming"]
 
 [dependencies]
-tokio = { workspace = true, features = ["sync", "time"] }
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+async-trait = "0.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -23,6 +24,8 @@ apeireth-http-client = { path = "../apeireth-http-client" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+anyhow = "1.0"
+apeireth-tool-fetch = { path = "." }
 
 [lints]
 workspace = true
