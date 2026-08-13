@@ -211,7 +211,7 @@ pub fn build_router(state: Arc<AppState>) -> Router {
 }
 
 async fn guard_check(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
     Json(req): Json<GuardRequest>,
 ) -> impl IntoResponse {
     // 简化: 直接构造 V2Guard, 不接 sovereignty (0 触碰约束)
@@ -220,7 +220,7 @@ async fn guard_check(
     (StatusCode::OK, Json(resp))
 }
 
-async fn guard_status(State(state): State<Arc<AppState>>) -> impl IntoResponse {
+async fn guard_status(State(_state): State<Arc<AppState>>) -> impl IntoResponse {
     let guard = V2Guard::new();
     let status = guard.status().await;
     (StatusCode::OK, Json(status))
