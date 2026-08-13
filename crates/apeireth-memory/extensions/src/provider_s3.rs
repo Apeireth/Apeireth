@@ -19,7 +19,6 @@
 //! 5. cache_ttl = [0ms, 7d] (0 = 永不过期; S3 lifecycle 策略由服务端配置)
 //! 6. scope = Global (S3 跨 region 共享)
 
-use std::time::Duration;
 
 use async_trait::async_trait;
 use reqwest::Client;
@@ -32,7 +31,7 @@ use crate::memory_provider::{
 
 /// **S3 解析后的元组**: (endpoint, bucket, key_prefix, access_key, secret_key).
 #[derive(Debug, Clone)]
-struct S3ParsedUri {
+pub struct S3ParsedUri {
     /// S3 endpoint (e.g. `https://s3.amazonaws.com`).
     endpoint: String,
     /// bucket 名.
@@ -40,8 +39,10 @@ struct S3ParsedUri {
     /// key prefix (e.g. `apeireth-memory/`).
     key_prefix: String,
     /// access_key (optional, 空 = anonymous).
+    #[allow(dead_code)]
     access_key: Option<String>,
     /// secret_key (optional).
+    #[allow(dead_code)]
     secret_key: Option<String>,
 }
 
@@ -53,6 +54,7 @@ pub struct S3Provider {
     /// reqwest Client (借 workspace 0.12, 0 引 aws-sdk-s3).
     http_client: Client,
     /// 6 K-1 强校验过的 config.
+    #[allow(dead_code)]
     config: ProviderConfig,
 }
 

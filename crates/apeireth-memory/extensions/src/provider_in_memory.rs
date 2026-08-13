@@ -43,6 +43,7 @@ pub struct InMemoryProvider {
 }
 
 /// **InMemoryConfig 编译期守门**: connection_string 必须以 `memory://` 开头.
+#[allow(dead_code)]
 const IN_MEMORY_SCHEME: &str = "memory://";
 
 impl InMemoryProvider {

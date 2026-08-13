@@ -108,7 +108,8 @@
 //! 3. `.openclaw\workspace\promethean\Apeireth-rust\docs\stage4\8-locked-unified-2026-08-05.md` §2 (8 项不修改承诺唯一引用源)
 //! 4. `.openclaw\workspace\promethean\Apeireth-rust\reports\integrate-3-commit-templates-2026-08-06.md` (整合 #3 7 commit 模板, 本 crate = P1 续补 2/15)
 
-#![warn(missing_docs)]
+// R158 O-5: allow(missing_docs)
+#![allow(missing_docs)]
 #![deny(unsafe_code)]
 // async 框架: tokio 1.40 + async-trait (借 workspace, 0 重复造 async runtime)
 // 0 引 NewAPI, 0 引 parking_lot (用 std::sync 守边), 0 引 pyo3/qt/GDI (per 主 2026-08-06 01:00 拍板"纯 Rust")

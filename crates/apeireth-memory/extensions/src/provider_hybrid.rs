@@ -41,6 +41,7 @@ pub struct HybridProvider {
     /// L2: DiskLru (慢, 大).
     l2: Arc<DiskLruProvider>,
     /// 6 K-1 强校验过的 config.
+    #[allow(dead_code)]
     config: ProviderConfig,
     /// TempDir 句柄, drop 时自动清理 (per tempfile 0 重复造 cleanup).
     _tempdir: Option<TempDir>,
