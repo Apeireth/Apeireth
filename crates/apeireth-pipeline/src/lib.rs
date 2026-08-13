@@ -102,16 +102,16 @@ use serde_json::Value;
 
 /// 战役 1-3 pipeline crate 实际借鉴 VCP 4 项 (#15/#17/#19/#20)
 /// #14 在战役 1-2 `apeireth-http-client` 落地, #16 在战役 1-4 `apeireth-council`, #18 在战役 2 `apeireth-tool-runtime`
-pub const BORROWED_VCP_COUNT: usize = 4;
+pub const BORROWED_LEGACY_COUNT: usize = 4;
 
 /// Pipeline 5 步 (VCP `chatCompletionHandler.js:1-220` 主 chat 模式, 字段级对应)
 pub const PIPELINE_STEP_COUNT: usize = 5;
 
 /// VCP `protocolBridge.js:11` 真值 15000ms 抑制窗口
-pub const VCP_RETRY_SUPPRESSION_MS: u64 = 15_000;
+pub const LEGACY_RETRY_SUPPRESSION_MS: u64 = 15_000;
 
 /// VCP `dynamicToolRegistry.js:21` 真值 16000 字符注入上限
-pub const VCP_MAX_INJECTION_CHARS: usize = 16_000;
+pub const LEGACY_MAX_INJECTION_CHARS: usize = 16_000;
 
 // ============================================================
 // Pipeline 主体
@@ -145,7 +145,7 @@ impl Default for PipelineConfig {
             base_url: "https://api.minimaxi.com".to_string(),
             auth_token: None, // 编译期无 key, example 设
             force_translate: ForceTranslateConfig::chat_default(),
-            max_injection_chars: VCP_MAX_INJECTION_CHARS,
+            max_injection_chars: LEGACY_MAX_INJECTION_CHARS,
             placeholder_context: PlaceholderContext::new(),
             suppression: RetrySuppression::with_chat_default(),
         }
@@ -397,7 +397,7 @@ fn model_fingerprint(req: &NormalizedRequest) -> String {
 const _: () = {
     // 战役 1-3 pipeline crate 实际借鉴 4 项 (#15 / #17 / #19 / #20)
     assert!(
-        BORROWED_VCP_COUNT == 4,
+        BORROWED_LEGACY_COUNT == 4,
         "战役 1-3 pipeline crate 应借鉴 4 项 VCP 真代码"
     );
 
@@ -406,11 +406,11 @@ const _: () = {
 
     // 借鉴 VCP 真值守
     assert!(
-        VCP_RETRY_SUPPRESSION_MS == 15_000,
+        LEGACY_RETRY_SUPPRESSION_MS == 15_000,
         "VCP protocolBridge.js:11 真值 15000ms"
     );
     assert!(
-        VCP_MAX_INJECTION_CHARS == 16_000,
+        LEGACY_MAX_INJECTION_CHARS == 16_000,
         "VCP dynamicToolRegistry.js:21 真值 16000"
     );
 
@@ -443,10 +443,10 @@ mod lib_tests {
 
     #[test]
     fn compile_time_hardcode_borrowed_count() {
-        assert_eq!(BORROWED_VCP_COUNT, 4);
+        assert_eq!(BORROWED_LEGACY_COUNT, 4);
         assert_eq!(PIPELINE_STEP_COUNT, 5);
-        assert_eq!(VCP_RETRY_SUPPRESSION_MS, 15_000);
-        assert_eq!(VCP_MAX_INJECTION_CHARS, 16_000);
+        assert_eq!(LEGACY_RETRY_SUPPRESSION_MS, 15_000);
+        assert_eq!(LEGACY_MAX_INJECTION_CHARS, 16_000);
     }
 
     #[test]

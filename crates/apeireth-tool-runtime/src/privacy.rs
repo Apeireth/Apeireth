@@ -38,7 +38,7 @@ use serde_json::Value;
 pub struct PrivacyConfig {
     /// 总开关
     pub enabled: bool,
-    /// 替换字符串 (VCP `[VCP_PRIVACY_REDACTED]`)
+    /// 替换字符串 (VCP `[APEIRETH_PRIVACY_REDACTED]`)
     pub mask: String,
     /// 最大递归深度 (VCP 20, 防止恶意深度数据栈溢出)
     pub max_depth: usize,
@@ -54,7 +54,7 @@ impl Default for PrivacyConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            mask: "[VCP_PRIVACY_REDACTED]".to_string(),
+            mask: "[APEIRETH_PRIVACY_REDACTED]".to_string(),
             max_depth: 20,
             preserve_prefix: 4,
             preserve_suffix: 4,
@@ -408,7 +408,7 @@ mod tests {
         assert!(masked["api_key"]
             .as_str()
             .unwrap()
-            .contains("[VCP_PRIVACY_REDACTED]"));
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
         assert_eq!(masked["name"], "chuling");
     }
 
@@ -427,7 +427,7 @@ mod tests {
         assert!(masked["user"]["password"]
             .as_str()
             .unwrap()
-            .contains("[VCP_PRIVACY_REDACTED]"));
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
     }
 
     #[test]
@@ -443,8 +443,8 @@ mod tests {
         let masked = guard.mask(&input);
         let first = &masked["tokens"][0]["access_token"];
         let second = &masked["tokens"][1]["access_token"];
-        assert!(first.as_str().unwrap().contains("[VCP_PRIVACY_REDACTED]"));
-        assert!(second.as_str().unwrap().contains("[VCP_PRIVACY_REDACTED]"));
+        assert!(first.as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
+        assert!(second.as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
         assert_eq!(masked["tokens"][0]["scope"], "read");
     }
 

@@ -489,7 +489,7 @@ mod tests {
             archery: false,
             archery_no_reply: false,
         };
-        rec.record(&call, &json!({"api_key": "[VCP_PRIVACY_REDACTED]"}), true)
+        rec.record(&call, &json!({"api_key": "[APEIRETH_PRIVACY_REDACTED]"}), true)
             .await
             .expect("record");
 

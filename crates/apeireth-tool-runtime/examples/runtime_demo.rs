@@ -115,7 +115,7 @@ expr:<<<1+1>>>
     assert!(masked["api_key"]
         .as_str()
         .unwrap()
-        .contains("[VCP_PRIVACY_REDACTED]"));
+        .contains("[APEIRETH_PRIVACY_REDACTED]"));
 
     // === 7. record (append-only 到 apeireth-memory action_stream) ===
     let memory_store = Arc::new(SqliteMemoryStore::open_in_memory().expect("memory"));

@@ -101,7 +101,7 @@ pub use web_search::{HttpWebSearch, WebSearch, WebSearchTool};
 
 /// 战役 2-5 实际借鉴 VCP 字段数
 /// (FileOperator.js 5 个: MAX_FILE_SIZE / MAX_DIRECTORY_ITEMS / MAX_SEARCH_RESULTS / 6 命令名 + WebReadFile 模式)
-pub const BORROWED_VCP_FIELDS: usize = 5;
+pub const BORROWED_LEGACY_FIELDS: usize = 5;
 
 /// 5 trait 数 (WebSearch / FileOps / GitOps / CodeExec / ToolResult enum) — 编译期 hardcode
 pub const TRAIT_COUNT: usize = 7;
@@ -124,11 +124,11 @@ pub const REGISTERED_TOOL_COUNT_CONST: usize = REGISTERED_TOOL_COUNT;
 /// 战役 2-5 VCP FileOperator config.env 真值
 /// (FileOperator.js:24-26 默认 20MB / 1000 / 100)
 /// VCP MAX_FILE_SIZE 默认 20MB
-pub const VCP_MAX_FILE_SIZE_BYTES: u64 = MAX_FILE_SIZE;
+pub const LEGACY_MAX_FILE_SIZE_BYTES: u64 = MAX_FILE_SIZE;
 /// VCP MAX_DIRECTORY_ITEMS 默认 1000
-pub const VCP_MAX_DIRECTORY_ITEMS: usize = MAX_DIRECTORY_ITEMS;
+pub const LEGACY_MAX_DIRECTORY_ITEMS: usize = MAX_DIRECTORY_ITEMS;
 /// VCP MAX_SEARCH_RESULTS 默认 100
-pub const VCP_MAX_SEARCH_RESULTS: usize = MAX_SEARCH_RESULTS;
+pub const LEGACY_MAX_SEARCH_RESULTS: usize = MAX_SEARCH_RESULTS;
 
 // ============================================================
 // 编译期断言 (工程铁律: 不假装 + 编译期 hardcode)
@@ -164,8 +164,8 @@ const _: () = {
 
     // VCP 字段 5
     assert!(
-        BORROWED_VCP_FIELDS == 5,
-        "BORROWED_VCP_FIELDS = 5 (VCP FileOperator 字段级)"
+        BORROWED_LEGACY_FIELDS == 5,
+        "BORROWED_LEGACY_FIELDS = 5 (VCP FileOperator 字段级)"
     );
 
     // VCP config.env 真值 1:1
@@ -202,7 +202,7 @@ mod lib_tests {
         assert_eq!(GIT_OPS_OP_COUNT, 3);
         assert_eq!(CODE_EXEC_OP_COUNT, 1);
         assert_eq!(REGISTERED_TOOL_COUNT_CONST, 8);
-        assert_eq!(BORROWED_VCP_FIELDS, 5);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 5);
         assert_eq!(MAX_FILE_SIZE, 20 * 1024 * 1024);
         assert_eq!(MAX_DIRECTORY_ITEMS, 1000);
         assert_eq!(MAX_SEARCH_RESULTS, 100);
@@ -211,7 +211,7 @@ mod lib_tests {
     #[test]
     fn lib_vcp_field_count_breakdown() {
         // 5 = 3 (config.env: MAX_FILE_SIZE / MAX_DIRECTORY_ITEMS / MAX_SEARCH_RESULTS) + 2 (6 命令映射 + WebReadFile 模式)
-        assert_eq!(BORROWED_VCP_FIELDS, 5);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 5);
     }
 
     #[test]

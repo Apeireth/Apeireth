@@ -86,7 +86,7 @@ pub use subagent::{
 /// 战役 2-4 实际借鉴 VCP 字段数
 /// (`agentMap` / `promptCache` / `agentFiles` / `folderStructure` / `loadMap` / `watchFiles` /
 ///  `getAgentPrompt` / `isAgent` / `setAgentDir` = 9 项)
-pub const BORROWED_VCP_FIELDS: usize = 9;
+pub const BORROWED_LEGACY_FIELDS: usize = 9;
 
 /// Agent 字段数 (id / name / aliases / tools / system_prompt / created_at) — 编译期 hardcode
 pub const AGENT_FIELD_COUNT: usize = 6;
@@ -110,8 +110,8 @@ pub const ALIAS_NOT_FOUND_PLACEHOLDER_PREFIX_CONST: &str = ALIAS_NOT_FOUND_PLACE
 const _: () = {
     // 9 字段借鉴 VCP
     assert!(
-        BORROWED_VCP_FIELDS == 9,
-        "BORROWED_VCP_FIELDS = 9 (VCP agentManager.js 字段级引用)"
+        BORROWED_LEGACY_FIELDS == 9,
+        "BORROWED_LEGACY_FIELDS = 9 (VCP agentManager.js 字段级引用)"
     );
     // 6 字段 Agent
     assert!(
@@ -155,7 +155,7 @@ mod lib_tests {
     #[test]
     fn lib_constants_match_vcp() {
         // 编译期 hardcode 已 assert, 这里再 runtime 测一次
-        assert_eq!(BORROWED_VCP_FIELDS, 9);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 9);
         assert_eq!(AGENT_FIELD_COUNT, 6);
         assert_eq!(AGENT_EVENT_VARIANT_COUNT, 4);
         assert_eq!(DEFAULT_CACHE_SIZE_CONST, 64);
@@ -273,7 +273,7 @@ mod lib_tests {
         //   或: 6 + 1 + 1 + 1 (agentMap / promptCache / watchFiles)
         // 真要算 VCP 字段: agentMap (1) + promptCache (1) + agentFiles (1) + folderStructure (1)
         //   + loadMap (1) + watchFiles (1) + getAgentPrompt (1) + isAgent (1) + setAgentDir (1) = 9
-        assert_eq!(BORROWED_VCP_FIELDS, 9);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 9);
     }
 
     #[test]

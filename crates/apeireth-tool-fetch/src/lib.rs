@@ -72,7 +72,7 @@ pub use search_aggregator::{SearchAggregator, SearchSource, SearchHit, Aggregate
 pub use anime::{AnimeFinder, AnimeInfo, AnimeError};
 
 /// R149 实际吸收 VCP plugin 数 (UrlFetch + TavilySearch + AnySearch + VSearch(合) + FlashDeepSearch + BilibiliFetch + AnimeFinder)
-pub const ABSORBED_VCP_PLUGINS: usize = 6;
+pub const ABSORBED_LEGACY_PLUGINS: usize = 6;
 
 /// 模块数 (engine + http_fetch + html_extract + search_aggregator + deep + bilibili + anime + cache + config)
 pub const MODULE_COUNT: usize = 9;
