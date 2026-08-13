@@ -550,6 +550,7 @@ mod tests {
 /// lightmemo: VCP production V3 拓扑简化 (R142-R143)
 pub mod dailynote;
 pub mod lightmemo;
+pub mod g5_memory_bridge; // R161: memory insert/retrieve 5 步 -> g5 substrate (5th caller)
 
 /// 编译期守门 (per O-5 不假装)
 pub const MEMORY_SUBMODULE_COUNT: usize = 2;
