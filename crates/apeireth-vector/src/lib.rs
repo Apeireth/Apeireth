@@ -29,6 +29,7 @@ mod sqlite_backend;
 mod traits;
 // R150 P1 #6: Qdrant HTTP 协议兼容层 (借鉴 qdrant/qdrant REST API v1.7+)
 pub mod qdrant_compat;
+pub mod distance;  // R206: vector distance utilities (std + auto-vectorization, 0 新依赖)
 
 pub use error::VectorError;
 pub use sqlite_backend::SqliteVecBackend;
