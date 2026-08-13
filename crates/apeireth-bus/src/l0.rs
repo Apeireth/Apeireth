@@ -14,6 +14,7 @@ use std::time::Duration;
 use futures_util::stream::{BoxStream, StreamExt};
 use tokio::sync::{broadcast, RwLock as AsyncRwLock};
 
+use crate::pattern::TopicPattern;
 use crate::{BackpressurePolicy, BusError, BusMessage, BusResult, BusStats};
 
 /// L0 payload 别名 (避免在每个函数签名写泛型).
@@ -27,6 +28,9 @@ pub struct L0Bus<T: Clone + Send + Sync + 'static> {
     topics: Arc<AsyncRwLock<HashMap<String, broadcast::Sender<BusMessage<T>>>>>,
     /// 主题 → 最新值 (watch_set/get 用). tokio broadcast 没有原生 latest 语义.
     latest: Arc<AsyncRwLock<HashMap<String, T>>>,
+    /// R228: pattern → broadcast::Sender, subscribe_pattern 注册.
+    ///   publish 时遍历, 对 TopicPattern::matches(pattern, topic) 命中的也 send.
+    pattern_topics: Arc<AsyncRwLock<HashMap<String, broadcast::Sender<BusMessage<T>>>>>,
     stats: Arc<BusStats>,
 }
 
@@ -48,6 +52,7 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
             policy,
             topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             latest: Arc::new(AsyncRwLock::new(HashMap::new())),
+            pattern_topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             stats: BusStats::shared(),
         }
     }
@@ -65,19 +70,21 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                 .or_insert_with(|| broadcast::channel(self.capacity).0)
                 .clone()
         };
-        // 策略
-        match self.policy {
+        // R228: 为 pattern fan-out 预留副本 (msg 会被 tx.send move 走)
+        let msg_for_patterns = msg.clone();
+        // 策略 — 每个 arm 返回 Ok(()) (publish 不可能失败); 整 match 丢弃
+        let _ = match self.policy {
             BackpressurePolicy::Block => {
                 match tx.send(msg) {
                     Ok(_) => {
                         self.stats.sent.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                     // 没有 active receiver: 当作"drop" (无消费者) — 但仍计 sent
                     Err(_e) => {
                         self.stats.sent.fetch_add(1, Ordering::Relaxed);
                         self.stats.dropped.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                 }
             }
@@ -86,11 +93,11 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                 match tx.send(msg) {
                     Ok(_) => {
                         self.stats.sent.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                     Err(_) => {
                         self.stats.dropped.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                 }
             }
@@ -99,16 +106,16 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                 let recv_count = tx.receiver_count();
                 if recv_count == 0 {
                     self.stats.dropped.fetch_add(1, Ordering::Relaxed);
-                    Ok(())
+                    Ok::<(), BusError>(())
                 } else {
                     match tx.send(msg) {
                         Ok(_) => {
                             self.stats.sent.fetch_add(1, Ordering::Relaxed);
-                            Ok(())
+                            Ok::<(), BusError>(())
                         }
                         Err(_) => {
                             self.stats.dropped.fetch_add(1, Ordering::Relaxed);
-                            Ok(())
+                            Ok::<(), BusError>(())
                         }
                     }
                 }
@@ -120,17 +127,83 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                 match tx.send(msg) {
                     Ok(_) => {
                         self.stats.sent.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                     Err(_e) => {
                         // 0 receiver — 跟 Block 一样记 sent + dropped
                         self.stats.sent.fetch_add(1, Ordering::Relaxed);
                         self.stats.dropped.fetch_add(1, Ordering::Relaxed);
-                        Ok(())
+                        Ok::<(), BusError>(())
                     }
                 }
             }
+        };
+
+        // R228: pattern fan-out — 遍历 pattern_topics, 对 TopicPattern::matches 命中的也 send
+        //   pattern 失败不阻塞主 publish (best-effort)
+        let pattern_txs: Vec<broadcast::Sender<BusMessage<T>>> = {
+            let map = self.pattern_topics.read().await;
+            map.iter()
+                .filter(|(p, _)| TopicPattern::parse(p).matches(topic))
+                .map(|(_, tx)| tx.clone())
+                .collect()
+        };
+        for ptx in pattern_txs {
+            // best-effort, 不阻断 — pattern 失败只 warn
+            if let Err(e) = ptx.send(msg_for_patterns.clone()) {
+                eprintln!("[apeireth-bus] pattern send failed: {e}");
+            }
         }
+        Ok(())
+    }
+
+    /// **R228 — 订阅 pattern (wildcard)** — 返回 stream, 接收所有匹配 topic 的消息
+    ///
+    /// **pattern 语法**: `*` 单段, `#` 多段, 其他字面. 详见 `crate::pattern::TopicPattern`.
+    ///
+    /// **不假装**: pattern subscriber 与 exact subscriber 共享同一 bus, publish 时同时 fan-out.
+    ///   同一个 pattern 多次调用 — 最后一次创建新 sender, 之前的流会停止接收新消息
+    ///   (因为 broadcast::Sender 被替换).
+    pub async fn subscribe_pattern(
+        &self,
+        pattern: &str,
+    ) -> BusResult<BoxStream<'static, BusResult<BusMessage<T>>>> {
+        let tx = {
+            let mut map = self.pattern_topics.write().await;
+            // 用 pattern 作为 key, 同 pattern 多次 subscribe 时覆盖 (last-wins)
+            let (tx, _rx_drop) = broadcast::channel(self.capacity);
+            map.insert(pattern.to_string(), tx.clone());
+            tx
+        };
+        let rx = tx.subscribe();
+        let stats = self.stats.clone();
+        let stream = futures_util::stream::unfold(rx, move |mut rx| {
+            let stats = stats.clone();
+            async move {
+                loop {
+                    match rx.recv().await {
+                        Ok(msg) => {
+                            stats.received.fetch_add(1, Ordering::Relaxed);
+                            return Some((Ok(msg), rx));
+                        }
+                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Closed) => return None,
+                    }
+                }
+            }
+        });
+        Ok(Box::pin(stream))
+    }
+
+    /// **R228 — 注销 pattern** — 移除 pattern_topics 中的 entry, 后续 publish 不再 fan-out
+    pub async fn unsubscribe_pattern(&self, pattern: &str) -> bool {
+        let mut map = self.pattern_topics.write().await;
+        map.remove(pattern).is_some()
+    }
+
+    /// **R228 — pattern 订阅数**
+    pub async fn pattern_count(&self) -> usize {
+        self.pattern_topics.read().await.len()
     }
 
     /// 订阅主题 — 返回 stream.
@@ -227,6 +300,7 @@ impl<T: Clone + Send + Sync + 'static> Default for L0Bus<T> {
             policy: BackpressurePolicy::Block,
             topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             latest: Arc::new(AsyncRwLock::new(HashMap::new())),
+            pattern_topics: Arc::new(AsyncRwLock::new(HashMap::new())),
             stats: BusStats::shared(),
         }
     }
