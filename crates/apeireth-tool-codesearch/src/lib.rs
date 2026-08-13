@@ -55,3 +55,4 @@ pub const R140_DELIVERABLES: usize = 8;
 
 /// Languages with regex-based symbol extraction (vs full AST).
 pub const SUPPORTED_LANGS: &[&str] = &["rust", "python", "javascript", "typescript", "go"];
+pub mod pure_pattern;  // R251: in-process pure Rust pattern matcher (0 ast-grep CLI dep)
