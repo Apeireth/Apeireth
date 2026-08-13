@@ -45,7 +45,8 @@ use apeireth_tool_registry::{AsyncTaskStore, NotifyChannel, TaskId, TaskStatus};
 use apeireth_tool_search::{Document, SearchEngine};
 use parking_lot::Mutex;
 use apeireth_supervisor::otel_metrics::{
-    Counter, Gauge, Histogram, MetricEntry, MetricsRegistry,
+    Counter, Gauge, Histogram, MetricEntry, MetricsRegistry, SupervisorMetrics,
+    supervisor_default_metrics,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -321,10 +322,14 @@ mod llm_worker_tests {
 
 pub struct LivingCycleHeartbeat {
     runtime: Arc<Runtime>,
+    // R250: linkup to supervisor metrics (heartbeat_count + tick_duration)
+    supervisor_metrics: SupervisorMetrics,
 }
 
 impl LivingCycleHeartbeat {
-    pub fn new(runtime: Arc<Runtime>) -> Self { Self { runtime } }
+    pub fn new(runtime: Arc<Runtime>, supervisor_metrics: SupervisorMetrics) -> Self {
+        Self { runtime, supervisor_metrics }
+    }
 }
 
 #[async_trait::async_trait]
@@ -335,15 +340,25 @@ impl Heartbeat for LivingCycleHeartbeat {
         vec![WakeupSource::Time, WakeupSource::Event, WakeupSource::User]
     }
     async fn on_tick(&self, _ctx: &WakeupContext) -> apeireth_supervisor::HeartbeatResult<()> {
+        // R250: inc heartbeat + measure tick duration
+        self.supervisor_metrics.heartbeat_count.inc();
+        let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
+        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
     async fn on_event(&self, _ctx: &WakeupContext) -> apeireth_supervisor::HeartbeatResult<()> {
+        self.supervisor_metrics.heartbeat_count.inc();
+        let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
+        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
     async fn on_user(&self, _ctx: &WakeupContext) -> apeireth_supervisor::HeartbeatResult<()> {
+        self.supervisor_metrics.heartbeat_count.inc();
+        let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
+        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
 }
@@ -368,6 +383,8 @@ pub struct Runtime {
     // R240 -- lifecycle counters (inc on start/shutdown)
     pub lifecycle_started_total: Arc<Counter>,
     pub lifecycle_shutdown_total: Arc<Counter>,
+    // R250: supervisor metrics linkup (heartbeat_count + tick_duration wired to LivingCycleHeartbeat)
+    pub supervisor_metrics: SupervisorMetrics,
 }
 
 impl Runtime {
@@ -428,6 +445,8 @@ impl Runtime {
             pending_tasks,
             lifecycle_started_total,
             lifecycle_shutdown_total,
+            // R250: supervisor metrics linkup (heartbeat_count + tick_duration)
+            supervisor_metrics: supervisor_default_metrics().1,
         }
     }
 
@@ -664,7 +683,7 @@ impl Runtime {
         self.bootstrap()?;
         // R240: register lifecycle + emit bus event
         self.lifecycle_started_total.inc();
-        let hb = LivingCycleHeartbeat::new(self.clone());
+        let hb = LivingCycleHeartbeat::new(self.clone(), self.supervisor_metrics.clone());
         self.scheduler
             .register_interval(hb, Schedule::every(self.config.tick_interval))
             .await
@@ -1097,4 +1116,45 @@ pub struct CycleLatencySummary {
         assert_eq!(rt.cycle_total.get(), 3);
         let s = rt.cycle_latency_summary();
         assert_eq!(s.count, 3);
+    }
+
+
+    // R250 -- supervisor metrics linkup
+
+    #[tokio::test]
+    async fn r250_01_supervisor_metrics_initial_zero() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 0);
+        assert_eq!(rt.supervisor_metrics.tick_duration.count(), 0);
+    }
+
+    #[tokio::test]
+    async fn r250_02_heartbeat_count_can_be_inc() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let before = rt.supervisor_metrics.heartbeat_count.get();
+        rt.supervisor_metrics.heartbeat_count.inc();
+        rt.supervisor_metrics.heartbeat_count.inc();
+        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), before + 2);
+    }
+
+    #[tokio::test]
+    async fn r250_03_tick_duration_observe_records_values() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.supervisor_metrics.tick_duration.observe(5.0);
+        rt.supervisor_metrics.tick_duration.observe(15.0);
+        assert_eq!(rt.supervisor_metrics.tick_duration.count(), 2);
+        assert!((rt.supervisor_metrics.tick_duration.sum() - 20.0).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn r250_04_runtime_text_export_still_works_after_linkup() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.supervisor_metrics.heartbeat_count.inc();
+        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 1);
+        let text = rt.metrics_text();
+        assert!(text.contains("runtime_cycle_total"), "runtime_cycle_total must appear");
     }
