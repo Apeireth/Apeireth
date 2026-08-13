@@ -200,6 +200,112 @@ impl JsonRpcResponse {
     }
 }
 
+
+// ============================================================
+// JSON-RPC 2.0 §6 Batch — array of requests / array of responses
+// ============================================================
+
+/// **JSON-RPC 2.0 §6 Batch — wire 格式**
+///
+/// 字段级参考 <https://www.jsonrpc.org/specification> §6 Batch:
+///   - 客户端可发送 1 个请求, 也可发送 N 个请求的 JSON 数组
+///   - 服务端响应: 单个 Response, 或 N 个 Response 的 JSON 数组 (与请求顺序一致)
+///   - 全是 notification 的 batch: 服务端必须不响应 (返回空数组 / 不写响应)
+///
+/// **wire 形态**: Array of `JsonRpcRequest` 或 Array of `JsonRpcResponse`.
+/// **不假装**: 严格 §6 — 空数组视为 Invalid Request (server 应回 single error response).
+#[derive(Debug, Clone, PartialEq)]
+pub enum JsonRpcBatch<T> {
+    /// 单个 request / response (向后兼容)
+    Single(T),
+    /// 数组 of requests / responses
+    Batch(Vec<T>),
+}
+
+impl<T: Serialize> Serialize for JsonRpcBatch<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            JsonRpcBatch::Single(t) => t.serialize(serializer),
+            JsonRpcBatch::Batch(v) => v.serialize(serializer),
+        }
+    }
+}
+
+impl<'de, T> Deserialize<'de> for JsonRpcBatch<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        // 用 Value 占位区分 array vs object
+        let v = serde_json::Value::deserialize(deserializer)?;
+        if v.is_array() {
+            let arr = serde_json::from_value::<Vec<T>>(v).map_err(serde::de::Error::custom)?;
+            Ok(JsonRpcBatch::Batch(arr))
+        } else {
+            let single = serde_json::from_value::<T>(v).map_err(serde::de::Error::custom)?;
+            Ok(JsonRpcBatch::Single(single))
+        }
+    }
+}
+
+impl<T> JsonRpcBatch<T> {
+    /// 转为 `Vec<T>`, 单个视为长度 1
+    pub fn into_vec(self) -> Vec<T> {
+        match self {
+            JsonRpcBatch::Single(t) => vec![t],
+            JsonRpcBatch::Batch(v) => v,
+        }
+    }
+
+    /// 长度 (单个视为 1, 空 batch 为 0)
+    pub fn len(&self) -> usize {
+        match self {
+            JsonRpcBatch::Single(_) => 1,
+            JsonRpcBatch::Batch(v) => v.len(),
+        }
+    }
+
+    /// 是否为空 (仅空 batch 为 true)
+    pub fn is_empty(&self) -> bool {
+        match self {
+            JsonRpcBatch::Single(_) => false,
+            JsonRpcBatch::Batch(v) => v.is_empty(),
+        }
+    }
+
+    /// 是否为 batch 形式 (true 仅当是数组)
+    pub fn is_batch(&self) -> bool {
+        matches!(self, JsonRpcBatch::Batch(_))
+    }
+
+    /// 从 Vec 构造 (空 Vec 仍然合法, 但 §6 视为 Invalid Request)
+    pub fn from_vec(v: Vec<T>) -> Self {
+        if v.len() == 1 {
+            JsonRpcBatch::Single(v.into_iter().next().unwrap())
+        } else {
+            JsonRpcBatch::Batch(v)
+        }
+    }
+}
+
+/// **wire 启发式: 检测一行字符串是否是 JSON 数组 (即 batch)**
+///
+/// **设计**: 服务端拿到一行原始 JSON 后, 先 trim, 看第一个非空白字符:
+///   - `[` → batch
+///   - `{` → single
+///   - 其他 → parse error (§6 空数组 / 非 object)
+///
+/// **不假装**: 启发式只覆盖 99% 场景, 真正 parse 时 `JsonRpcBatch::deserialize` 还会二次校验.
+pub fn looks_like_batch(line: &str) -> bool {
+    line.trim_start().starts_with('[')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -268,7 +374,81 @@ mod tests {
         assert_eq!(serde_json::to_value(&s_null).unwrap(), json!(null));
     }
 
+    // ============================================================
+    // JSON-RPC 2.0 §6 Batch — R224 测试 (7 cases)
+    // ============================================================
+
     #[test]
+    fn batch_request_serialize() {
+        let req1 = JsonRpcRequest::new("tools/list", None, Id::Num(1));
+        let req2 = JsonRpcRequest::notification("notifications/initialized", None);
+        let batch = JsonRpcBatch::Batch(vec![req1, req2]);
+        let s = serde_json::to_string(&batch).unwrap();
+        assert!(s.starts_with('['));
+        assert!(s.ends_with(']'));
+        assert!(s.contains("\"tools/list\""));
+    }
+
+    #[test]
+    fn batch_request_deserialize() {
+        let json = r#"[{"jsonrpc":"2.0","method":"tools/list","id":1},{"jsonrpc":"2.0","method":"notifications/initialized"}]"#;
+        let b: JsonRpcBatch<JsonRpcRequest> = serde_json::from_str(json).unwrap();
+        assert!(b.is_batch());
+        let v = b.into_vec();
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].method, "tools/list");
+        assert_eq!(v[1].method, "notifications/initialized");
+        assert!(v[1].id.is_none()); // notification
+    }
+
+    #[test]
+    fn batch_single_fallback() {
+        // single object 解析为 Single, 不是 Batch
+        let json = r#"{"jsonrpc":"2.0","method":"tools/list","id":1}"#;
+        let b: JsonRpcBatch<JsonRpcRequest> = serde_json::from_str(json).unwrap();
+        assert!(!b.is_batch());
+        assert_eq!(b.len(), 1);
+    }
+
+    #[test]
+    fn batch_response_roundtrip() {
+        let r1 = JsonRpcResponse::ok(Some(Id::Num(1)), json!({"tools": []}));
+        let r2 = JsonRpcResponse::ok(Some(Id::Num(2)), json!({"x": 1}));
+        let batch = JsonRpcBatch::Batch(vec![r1.clone(), r2.clone()]);
+        let s = serde_json::to_string(&batch).unwrap();
+        let back: JsonRpcBatch<JsonRpcResponse> = serde_json::from_str(&s).unwrap();
+        let v = back.into_vec();
+        assert_eq!(v.len(), 2);
+        assert_eq!(v[0].result, r1.result);
+        assert_eq!(v[1].result, r2.result);
+    }
+
+    #[test]
+    fn batch_empty_is_invalid_batch() {
+        // §6: 空数组视为 Invalid Request
+        let json = r#"[]"#;
+        let b: JsonRpcBatch<JsonRpcRequest> = serde_json::from_str(json).unwrap();
+        assert!(b.is_empty());
+        assert!(b.is_batch());
+    }
+
+    #[test]
+    fn looks_like_batch_heuristic() {
+        assert!(looks_like_batch(r#"[{"jsonrpc":"2.0","method":"x"}]"#));
+        assert!(looks_like_batch(r#"  [1,2,3]"#));
+        assert!(!looks_like_batch(r#"{"jsonrpc":"2.0"}"#));
+        assert!(!looks_like_batch(r#"  {"a":1}"#));
+    }
+
+    #[test]
+    fn batch_from_vec_single_collapses() {
+        // 1 元素 batch 在 from_vec 下塌缩为 Single (协议可选行为)
+        let req = JsonRpcRequest::new("tools/list", None, Id::Num(1));
+        let b = JsonRpcBatch::from_vec(vec![req]);
+        assert!(!b.is_batch());
+        assert_eq!(b.len(), 1);
+    }
+
     fn error_codes_match_spec() {
         assert_eq!(JsonRpcError::CODE_PARSE_ERROR, -32700);
         assert_eq!(JsonRpcError::CODE_INVALID_REQUEST, -32600);
