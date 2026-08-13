@@ -2218,7 +2218,7 @@ pub const RELEASE_CAMPAIGNS: &[&str] = &[
 
 /// 借鉴 VCP 真代码文件数 (R17 累计, 字段级引用, 不靠猜)
 /// 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
-pub const VCP_BORROWED_FILE_COUNT: usize = 19;
+pub const BORROWED_LEGACY_FILE_COUNT: usize = 19;
 
 /// 1.0 release 收官统计 (编译期 hardcode, 跟实测对齐 HEAD `3cab8f32`)
 /// - workspace members: 39 (含 1 DEPRECATED `apeireth-philosophy`)
@@ -2347,8 +2347,8 @@ mod release_manifest_tests {
         // R17 借鉴 VCP 真代码 19 个文件 (字段级引用, 不靠猜)
         // 详见 `reports/r17-1.0-release-2026-08-04.md` §借鉴 VCP 真代码 19 文件清单
         assert_eq!(
-            VCP_BORROWED_FILE_COUNT, 19,
-            "VCP_BORROWED_FILE_COUNT must be 19 (R17 战役 0-4 累计, 字段级引用)"
+            BORROWED_LEGACY_FILE_COUNT, 19,
+            "BORROWED_LEGACY_FILE_COUNT must be 19 (R17 战役 0-4 累计, 字段级引用)"
         );
     }
 

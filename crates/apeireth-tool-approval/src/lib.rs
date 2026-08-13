@@ -88,7 +88,7 @@ pub use rule_trait::ApprovalRule;
 
 /// 战役 2-3 实际借鉴 VCP 5 个真字段
 /// (`enabled` / `timeoutMinutes` / `approveAll` / `approvalList` / `fuzzyToolMatching` / `SilentReject`)
-pub const BORROWED_VCP_FIELDS: usize = 6;
+pub const BORROWED_LEGACY_FIELDS: usize = 6;
 
 /// 5 规则 (Trust / Risk / Frequency / Whitelist / Blacklist) — 编译期 hardcode
 pub const RULE_COUNT: usize = 5;
@@ -122,8 +122,8 @@ const _: () = {
         "RULE_COUNT = 5 (Trust / Risk / Frequency / Whitelist / Blacklist)"
     );
     assert!(
-        BORROWED_VCP_FIELDS == 6,
-        "BORROWED_VCP_FIELDS = 6 (VCP toolApprovalManager 字段)"
+        BORROWED_LEGACY_FIELDS == 6,
+        "BORROWED_LEGACY_FIELDS = 6 (VCP toolApprovalManager 字段)"
     );
 
     // 5min 窗口 = VCP 真值
@@ -170,7 +170,7 @@ mod lib_tests {
     fn lib_constants_match_vcp() {
         // 编译期 hardcode 已 assert, 这里再 runtime 测一次
         assert_eq!(RULE_COUNT, 5);
-        assert_eq!(BORROWED_VCP_FIELDS, 6);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 6);
         assert_eq!(APPROVAL_TIMEOUT_MS_CONST, 300_000);
         assert_eq!(APPROVAL_TIMEOUT_MS, 300_000);
         assert_eq!(FREQUENCY_WINDOW_MS, 60_000);

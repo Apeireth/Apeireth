@@ -52,13 +52,13 @@ use std::sync::Arc;
 /// - 真实仓库 sha: ac9cd950ffdc8aa668e64424bbfa14af6d5658eb (per github API 2026-08-10)
 /// - 真实文件 size: 2741 bytes
 /// - **不漂移承诺**: 借鉴源 hash/size 变了, 这里必须改 (per 工程哲学铁律 #2 "不漂移")
-pub const VCP_SEMANTIC_MODEL_ROUTER_BYTES: usize = 2741;
+pub const LEGACY_SEMANTIC_MODEL_ROUTER_BYTES: usize = 2741;
 
 /// VCP `matchThreshold: 0.18` hardcode (VCP 真值, per `SemanticModelRouter.json:5`)
 /// - 借鉴字段: `matchThreshold: 0.18` (fuzzy threshold)
 /// - 0 装 1:1 (V2.1 P1): 我用 case-insensitive substring, 0 装 fuzzy
 /// - 此常量作为 keyword match 的最小关键词数下限 (保留 VCP 阈值字段语义)
-pub const VCP_MATCH_THRESHOLD: f32 = 0.18;
+pub const LEGACY_MATCH_THRESHOLD: f32 = 0.18;
 
 // ============================================================
 // RoutingCondition (5 variants, 借鉴 VCP 5 路由场景 + 1 扩展)
@@ -761,8 +761,8 @@ rules:
     #[test]
     fn compile_time_hardcode_vcp_source_size() {
         // VCP SemanticModelRouter.json 真实文件大小 (per github API 2026-08-10 sha ac9cd950ffdc8aa668e64424bbfa14af6d5658eb)
-        assert_eq!(VCP_SEMANTIC_MODEL_ROUTER_BYTES, 2741);
+        assert_eq!(LEGACY_SEMANTIC_MODEL_ROUTER_BYTES, 2741);
         // VCP matchThreshold: 0.18 (per SemanticModelRouter.json:5)
-        assert!((VCP_MATCH_THRESHOLD - 0.18).abs() < f32::EPSILON);
+        assert!((LEGACY_MATCH_THRESHOLD - 0.18).abs() < f32::EPSILON);
     }
 }
