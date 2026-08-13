@@ -2,6 +2,9 @@
 
 **R149** - URL fetch + search + aggregation toolkit.
 
+
+> **R174 LIVE (2026-08-13)**: `HttpFetcher::fetch` 真接 `apeireth-http-client` (reqwest + 5 keep-alive 字段). R149 baseline 是 trait stub (status=0, 空 body), R174 修 doc/code 不一致. LIVE 验证 example.com 200/559B + iana.org 200/6253B. See `docs/r174/r174-http-fetch-live.md`.
+
 ## Responsibilities
 
 Web data acquisition for LLM consumption:
