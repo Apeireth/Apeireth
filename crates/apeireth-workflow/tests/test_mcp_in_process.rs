@@ -1,39 +1,133 @@
-//! Fixture 5: in-process Workflow 验证调用 (per RIVAL 蓝图 §3.7 缺口 5)
+//! **R225 — in-process Workflow 验证调用** (per 蓝图 §3.7 缺口 5)
 //!
-//! 测 3 件事 (in-process, 不走 stdio / HTTP, 直接调 lib API):
-//! 1. `Workflow::new` 构造 + 空状态 (node_count=0, is_empty=true)
-//! 2. `DefaultWorkflowValidator::validate` 接受空 workflow
-//! 3. `DefaultWorkflowValidator::topological_order` 接受空 workflow
+//! **背景**: R152 的早期测试引用了尚未落地的 API (`DefaultWorkflowValidator` 等),
+//!   长期未跑, 编译失败. R225 把它改成调用真实存在的 API:
+//!   `WorkflowRunner::register_workflow` + `register_activity` + `run` + `get_history`.
 //!
-//! 注: workflow crate 自含 `DefaultWorkflowValidator` (m3 防御模式已在, 跳过 TOOL_WHITELIST 嵌入).
-//! 5 P0 crate 共享同一 fixture 模式, 避免重复造轮子 (per 蓝图 §3.7 缺口 5).
+//! **3 测试**:
+//! 1. `WorkflowRunner::new()` 初始为空 (list_workflows == 0, total_runs == 0)
+//! 2. 注册 workflow + activity + run → history 记录 EventKind::WorkflowStarted
+//! 3. Activity 错误传播到 workflow run 输出
+//!
+//! **不假装**: 用 lib 现有方法, 0 编造 API.
 
-use apeireth_workflow::{DefaultWorkflowValidator, Workflow, WorkflowValidator};
+use apeireth_workflow::{Activity, ActivityInput, ActivityOutput, Workflow, WorkflowContext, WorkflowResult, WorkflowRunner};
+use serde_json::json;
+use std::sync::Arc;
 
-#[test]
-fn test_workflow_new_creates_empty_state() {
-    let wf = Workflow::new("test-wf", "fixture 5 test workflow");
-    assert_eq!(wf.node_count(), 0, "新构造 workflow 应无节点");
-    assert_eq!(wf.edge_count(), 0, "新构造 workflow 应无边");
-    assert!(wf.is_empty(), "新构造 workflow 应 is_empty");
-    assert_eq!(wf.name, "test-wf");
-    assert_eq!(wf.description, "fixture 5 test workflow");
+// ============================================================
+// §1 测试活动 — 真实现, 不 stub
+// ============================================================
+
+struct EchoActivity;
+
+impl Activity for EchoActivity {
+    fn execute(&self, input: &ActivityInput) -> Result<ActivityOutput, String> {
+        Ok(input.clone())
+    }
 }
 
-#[test]
-fn test_workflow_validator_accepts_empty_workflow() {
-    let wf = Workflow::new("empty", "no nodes");
-    let validator = DefaultWorkflowValidator;
-    let result = validator.validate(&wf);
-    assert!(result.is_ok(), "空 workflow 应通过 validate: {result:?}");
+struct FailingActivity;
+
+impl Activity for FailingActivity {
+    fn execute(&self, _input: &ActivityInput) -> Result<ActivityOutput, String> {
+        Err("activity failed by design".to_string())
+    }
 }
 
+// ============================================================
+// §2 测试 workflow — 调 Activity 后返 output
+// ============================================================
+
+struct EchoWorkflow;
+
+impl Workflow for EchoWorkflow {
+    fn id(&self) -> &str { "EchoWorkflow" }
+    fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+        // 调一次 echo activity
+        let out = ctx.execute_activity("echo", input.clone())?;
+        Ok(out)
+    }
+}
+
+struct FailingWorkflow;
+
+impl Workflow for FailingWorkflow {
+    fn id(&self) -> &str { "FailingWorkflow" }
+    fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+        // 调一次 failing activity, 错误传播
+        let _ = ctx.execute_activity("failing", input.clone())?;
+        Ok(json!({"unreachable": true}))
+    }
+}
+
+// ============================================================
+// §3 测试用例 (3 cases, R225)
+// ============================================================
+
+/// **`WorkflowRunner::new()` 初始为空**
 #[test]
-fn test_workflow_validator_topological_order_on_empty() {
-    let wf = Workflow::new("empty", "no nodes");
-    let validator = DefaultWorkflowValidator;
-    let order = validator
-        .topological_order(&wf)
-        .expect("空 workflow 应返回空拓扑序");
-    assert!(order.is_empty(), "空 workflow 拓扑序应为空 vec");
+fn test_workflow_runner_starts_empty() {
+    let runner = WorkflowRunner::new();
+    assert_eq!(runner.list_workflows().len(), 0, "新建 runner 应无 workflow");
+    assert_eq!(runner.total_runs(), 0, "新建 runner 应无 run 历史");
+}
+
+/// **register workflow + activity + run 端到端**
+#[test]
+fn test_workflow_runner_run_end_to_end() {
+    let mut runner = WorkflowRunner::new();
+    runner.register_activity("echo", Arc::new(EchoActivity));
+    runner.register_workflow(Arc::new(EchoWorkflow));
+
+    // run with input
+    let input = json!({"hello": "world"});
+    let result = runner.run("EchoWorkflow", &input).expect("run failed");
+    assert_eq!(result, json!({"hello": "world"}));
+
+    // history 应有 WorkflowStarted + ActivityScheduled + ActivityCompleted + WorkflowCompleted
+    let history = runner
+        .get_history("EchoWorkflow")
+        .expect("history missing");
+    assert!(
+        history.iter().any(|e| format!("{:?}", e.kind).contains("WorkflowStarted")),
+        "history 应有 WorkflowStarted: {history:?}"
+    );
+    assert!(
+        history.iter().any(|e| format!("{:?}", e.kind).contains("ActivityCompleted")),
+        "history 应有 ActivityCompleted: {history:?}"
+    );
+    assert!(
+        history.iter().any(|e| format!("{:?}", e.kind).contains("WorkflowCompleted")),
+        "history 应有 WorkflowCompleted: {history:?}"
+    );
+
+    assert_eq!(runner.total_runs(), 1);
+}
+
+/// **activity 失败传播到 workflow run 输出**
+#[test]
+fn test_workflow_propagates_activity_failure() {
+    let mut runner = WorkflowRunner::new();
+    runner.register_activity("failing", Arc::new(FailingActivity));
+    runner.register_workflow(Arc::new(FailingWorkflow));
+
+    let input = json!({"x": 1});
+    let res = runner.run("FailingWorkflow", &input);
+    assert!(res.is_err(), "workflow 应 propagate activity 错误, got: {res:?}");
+    let err = res.unwrap_err();
+    let err_str = format!("{err}");
+    assert!(
+        err_str.contains("activity failed"),
+        "错误应含 activity failed, got: {err_str}"
+    );
+
+    // history 应有 ActivityFailed
+    let history = runner
+        .get_history("FailingWorkflow")
+        .expect("history missing");
+    assert!(
+        history.iter().any(|e| format!("{:?}", e.kind).contains("ActivityFailed")),
+        "history 应有 ActivityFailed: {history:?}"
+    );
 }
