@@ -46,6 +46,7 @@ pub struct SqliteProvider {
     /// 内部 `Arc<Mutex<Connection>>` (跨线程共享, 0 引 tokio::sync::Mutex).
     inner: Arc<Mutex<Connection>>,
     /// 6 K-1 强校验过的 config.
+    #[allow(dead_code)]
     config: ProviderConfig,
 }
 
