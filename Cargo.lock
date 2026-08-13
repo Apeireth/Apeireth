@@ -1128,6 +1128,7 @@ dependencies = [
  "chrono",
  "globset",
  "ignore",
+ "lru 0.16.4",
  "regex",
  "rusqlite",
  "serde",

@@ -15,7 +15,6 @@
 
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
-use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -205,7 +204,7 @@ impl CachedUnifiedIntelligence {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
+
 
     #[test]
     fn t01_new_defaults() {
