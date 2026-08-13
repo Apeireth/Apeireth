@@ -256,3 +256,108 @@ async fn r226_08_adaptive_policy_publishes() {
     let s = bus.stats();
     assert_eq!(s.sent, 1, "Adaptive 应记 1 sent");
 }
+
+
+// ============================================================
+// R228 — subscribe_pattern 集成 (8 cases)
+// ============================================================
+
+#[tokio::test]
+async fn r228_01_subscribe_pattern_receives_matching() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut stream = bus.subscribe_pattern("agent.*").await.unwrap();
+    bus.publish("agent.bob", BusMessage::new("hello".to_string())).await.unwrap();
+    let msg = stream.next().await;
+    let item = msg.expect("expected Some(msg)").expect("expected Ok");
+    assert_eq!(item.payload, "hello");
+}
+
+#[tokio::test]
+async fn r228_02_subscribe_pattern_no_match_doesnt_receive() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut stream = bus.subscribe_pattern("agent.*").await.unwrap();
+    bus.publish("system.cpu", BusMessage::new("x".to_string())).await.unwrap();
+    // 用 timeout 验证 100ms 内不收到
+    let res = tokio::time::timeout(std::time::Duration::from_millis(100), stream.next()).await;
+    assert!(res.is_err(), "agent.* 不应匹配 system.cpu");
+}
+
+#[tokio::test]
+async fn r228_03_multi_wildcard_matches_multi_segments() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut stream = bus.subscribe_pattern("agent.#").await.unwrap();
+    bus.publish("agent.team.lead", BusMessage::new("y".to_string())).await.unwrap();
+    let msg = stream.next().await.expect("Some").expect("Ok");
+    assert_eq!(msg.payload, "y");
+}
+
+#[tokio::test]
+async fn r228_04_pure_multi_wildcard_receives_all() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut stream = bus.subscribe_pattern("#").await.unwrap();
+    bus.publish("foo", BusMessage::new("a".to_string())).await.unwrap();
+    let msg = stream.next().await.expect("Some").expect("Ok");
+    assert_eq!(msg.payload, "a");
+    bus.publish("foo.bar", BusMessage::new("b".to_string())).await.unwrap();
+    let msg = stream.next().await.expect("Some").expect("Ok");
+    assert_eq!(msg.payload, "b");
+}
+
+#[tokio::test]
+async fn r228_05_publish_fans_out_to_multiple_patterns() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut s1 = bus.subscribe_pattern("agent.*").await.unwrap();
+    let mut s2 = bus.subscribe_pattern("*.bob").await.unwrap();
+    bus.publish("agent.bob", BusMessage::new("z".to_string())).await.unwrap();
+    // s1 (agent.*) 应收到
+    let m1 = s1.next().await.expect("s1 Some").expect("s1 Ok");
+    assert_eq!(m1.payload, "z");
+    // s2 (*.bob) 应收到
+    let m2 = s2.next().await.expect("s2 Some").expect("s2 Ok");
+    assert_eq!(m2.payload, "z");
+}
+
+#[tokio::test]
+async fn r228_06_pattern_count_tracks() {
+    let bus: L0Bus<String> = L0Bus::new();
+    assert_eq!(bus.pattern_count().await, 0);
+    let _s1 = bus.subscribe_pattern("a.*").await.unwrap();
+    assert_eq!(bus.pattern_count().await, 1);
+    let _s2 = bus.subscribe_pattern("b.#").await.unwrap();
+    assert_eq!(bus.pattern_count().await, 2);
+    assert!(bus.unsubscribe_pattern("a.*").await);
+    assert_eq!(bus.pattern_count().await, 1);
+    assert!(!bus.unsubscribe_pattern("nonexistent").await);
+}
+
+#[tokio::test]
+async fn r228_07_unsubscribe_pattern_stops_delivery() {
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut stream = bus.subscribe_pattern("x.*").await.unwrap();
+    bus.publish("x.foo", BusMessage::new("1".to_string())).await.unwrap();
+    let m1 = stream.next().await.expect("first Some").expect("first Ok");
+    assert_eq!(m1.payload, "1");
+    assert!(bus.unsubscribe_pattern("x.*").await);
+    // 再 publish — stream 应已 close (Sender 被 drop, Receiver 收到 Closed)
+    bus.publish("x.bar", BusMessage::new("2".to_string())).await.unwrap();
+    // 用短 timeout 验证 stream 已结束 (None) 而非阻塞
+    let res = tokio::time::timeout(std::time::Duration::from_millis(100), stream.next()).await;
+    match res {
+        Ok(None) => {} // 预期: stream 已 close, next() 立即返 None
+        Ok(Some(_)) => panic!("unsubscribe 后 stream 不应再产生消息"),
+        Err(_) => panic!("unsubscribe 后 stream 应立即返 None, 不应 timeout"),
+    }
+}
+
+#[tokio::test]
+async fn r228_08_exact_and_pattern_both_receive() {
+    // 同一 topic 既被 exact subscribe 又被 pattern subscribe — 都应收到
+    let bus: L0Bus<String> = L0Bus::new();
+    let mut exact = bus.subscribe("agent.bob").await.unwrap();
+    let mut pat = bus.subscribe_pattern("agent.*").await.unwrap();
+    bus.publish("agent.bob", BusMessage::new("dual".to_string())).await.unwrap();
+    let m1 = exact.next().await.expect("exact Some").expect("exact Ok");
+    let m2 = pat.next().await.expect("pat Some").expect("pat Ok");
+    assert_eq!(m1.payload, "dual");
+    assert_eq!(m2.payload, "dual");
+}
