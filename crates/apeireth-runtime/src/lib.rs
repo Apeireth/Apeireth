@@ -30,6 +30,8 @@
 
 #![deny(unsafe_code)]
 
+pub mod g5_runtime_bridge; // R160: runtime task lifecycle 5 stages -> g5 substrate (4th caller)
+
 use std::sync::Arc;
 use std::time::Duration;
 
