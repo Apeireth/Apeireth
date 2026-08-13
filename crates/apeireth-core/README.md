@@ -52,3 +52,6 @@ apeireth-core → std + serde + chrono + uuid + thiserror (5 核心库)
 - [Self-Disable](../apeireth-sovereignty/src/self_disable.rs)
 - [13 键 verdict cache 规范](../../docs/conventions/10-locked.md)
 - [13 键 + PHL-07 decision-130](../../reports/decision-130-12-15-tick-owner-3-q-a-6-b-phl-07-b-integrate-5-1-commit-execute-2026-08-11.md)
+## R166 public API deep cleanup
+
+`VCP_BORROWED_FILE_COUNT` -> `BORROWED_LEGACY_FILE_COUNT` (1 const + 2 hardcode asserts). 32 tests pass.
