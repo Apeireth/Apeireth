@@ -1142,7 +1142,10 @@ dependencies = [
 name = "apeireth-tool-fetch"
 version = "1.2.0"
 dependencies = [
+ "anyhow",
  "apeireth-http-client",
+ "apeireth-tool-fetch",
+ "async-trait",
  "parking_lot",
  "regex",
  "serde",
