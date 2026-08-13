@@ -190,7 +190,7 @@ impl ToolRegistry {
                 self.categories.write().insert(name.clone(), *cat);
                 debug!(
                     "[ToolRegistry] registered: {name_for_log} → category: {}",
-                    cat.as_vcp_name()
+                    cat.as_legacy_name()
                 );
             }
             Err(ClassifyError::NoMatch { .. }) => {

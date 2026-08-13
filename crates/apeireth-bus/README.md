@@ -22,3 +22,6 @@ Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
 ---
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+## R164 public API cleanup
+
+Channel::as_vcp_str -> as_legacy_str. 1 source + 1 test update. 24 tests pass.

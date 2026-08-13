@@ -37,7 +37,7 @@ pub enum CompatCommand {
     Unknown,
 }
 
-pub const VCP_COMMAND_COUNT: usize = 18;
+pub const LEGACY_COMMAND_COUNT: usize = 18;
 
 impl CompatCommand {
     pub fn from_str(s: &str) -> Self {
@@ -86,7 +86,7 @@ pub struct CompatRouter;
 
 impl CompatRouter {
     pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { VCP_COMMAND_COUNT }
+    pub fn command_count() -> usize { LEGACY_COMMAND_COUNT }
 }
 
 impl Default for CompatRouter {
@@ -107,7 +107,7 @@ mod tests {
         for s in cmds {
             assert_ne!(CompatCommand::from_str(s), CompatCommand::Unknown, "command `{s}` not parsed");
         }
-        assert_eq!(VCP_COMMAND_COUNT, 18);
+        assert_eq!(LEGACY_COMMAND_COUNT, 18);
     }
 
     #[test]
