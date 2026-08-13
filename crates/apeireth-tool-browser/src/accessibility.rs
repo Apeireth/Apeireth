@@ -20,6 +20,7 @@
 //! - `<main>` → role=main
 //! - `role="..."` attr → use that role verbatim
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 
 /// ARIA role subset (full WAI-ARIA has ~80 roles; we cover the common 20).

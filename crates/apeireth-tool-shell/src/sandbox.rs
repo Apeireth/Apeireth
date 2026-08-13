@@ -13,6 +13,7 @@
 //! **Honest upgrade path**: real process_group isolation deferred to R139+
 //! (requires unsafe_code, denied by this crate's `#![deny(unsafe_code)]`).
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

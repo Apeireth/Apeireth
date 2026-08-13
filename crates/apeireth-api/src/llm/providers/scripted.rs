@@ -6,6 +6,7 @@
 //! **设计**: 维护 (关键词 → 响应) 列表, 按 prompt 中是否含关键词匹配第一个命中
 //! **不调外部**: 纯 Rust, 无 IO, 无 HTTP
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 
 use async_trait::async_trait;

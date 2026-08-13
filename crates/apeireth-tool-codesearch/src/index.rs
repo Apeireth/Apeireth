@@ -11,6 +11,7 @@
 //! - FTS5 virtual table NOT enabled (would need rusqlite feature flag);
 //!   full-text search uses in-memory Aho-Corasick on indexed files instead.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use rusqlite::{params, Connection};
 use std::path::Path;
 use thiserror::Error;

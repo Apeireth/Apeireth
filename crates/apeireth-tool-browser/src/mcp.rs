@@ -11,6 +11,7 @@
 //! - `browser_snapshot` — params: { kind?: "full"|"text"|"refs" }
 //! - `browser_extract`  — params: {}
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
