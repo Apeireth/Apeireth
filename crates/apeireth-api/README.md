@@ -99,6 +99,10 @@ cargo run -p apeireth-api --example openai_chat    # 真接 minimax
 
 - [minimax 4 协议验证报告](../../reports/minimax-end-to-end-r128-2026-08-12.md)
 
+## R164 public API cleanup
+
+Caller sites MessageRole::from_vcp / ContentPart::from_vcp -> from_legacy_str / from_legacy_value (4 sites). 335 tests pass.
+
 ## R162 lint cleanup
 
 129 -> 0 warnings. `tui-dashboard` feature properly declared (gates ratatui/crossterm deps). 2 irrefutable-let warnings fixed on single-variant GeminiPart. Unused `headers` param prefixed `_headers`.

@@ -57,7 +57,7 @@ async fn main() {
         let names = by_kind.get(kind).cloned().unwrap_or_default();
         println!(
             "    {} ({:?}) → {} 个工具: {:?}",
-            kind.as_vcp_str(),
+            kind.as_legacy_str(),
             kind,
             names.len(),
             names

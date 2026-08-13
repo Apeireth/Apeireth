@@ -84,7 +84,7 @@ fn integration_category_count_is_9_and_vcp_aligned() {
     let mut apeireth_7: Vec<&str> = Category::all()
         .iter()
         .filter(|c| !matches!(c, Category::Safety | Category::LongRunning))
-        .map(|c| c.as_vcp_name())
+        .map(|c| c.as_legacy_name())
         .collect();
     apeireth_7.sort();
     let mut sorted_vcp = vcp_7.clone();
@@ -92,8 +92,8 @@ fn integration_category_count_is_9_and_vcp_aligned() {
     assert_eq!(apeireth_7, sorted_vcp, "VCP 7 类 1:1 镜像");
 
     // 验证 Apeireth 独有 2 类
-    assert_eq!(Category::Safety.as_vcp_name(), "safety");
-    assert_eq!(Category::LongRunning.as_vcp_name(), "long_running");
+    assert_eq!(Category::Safety.as_legacy_name(), "safety");
+    assert_eq!(Category::LongRunning.as_legacy_name(), "long_running");
 }
 
 // =====================================================================

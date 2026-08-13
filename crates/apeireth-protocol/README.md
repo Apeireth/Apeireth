@@ -23,3 +23,6 @@ Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
 ---
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+## R164 public API cleanup
+
+MessageRole::from_vcp -> from_legacy_str; ContentPart::from_vcp -> from_legacy_value. 13 test fns + 3 caller sites updated (apeireth-api, router_demo example). 96 tests still pass.
