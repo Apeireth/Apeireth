@@ -20,6 +20,8 @@ apeireth-tool-search = { path = "../apeireth-tool-search" }
 apeireth-council = { path = "../apeireth-council" }
 apeireth-consciousness = { path = "../apeireth-consciousness" }
 apeireth-http-client = { path = "../apeireth-http-client" }
+# R160: runtime 接 g5 substrate (第 4 个生产调用方)
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 
 # Workspace deps
 tokio = { workspace = true, features = ["full"] }
