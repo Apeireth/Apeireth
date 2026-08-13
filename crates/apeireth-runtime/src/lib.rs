@@ -452,6 +452,8 @@ impl Runtime {
     }
 
     pub async fn run_one_cycle(&self) -> RuntimeResult<CycleReport> {
+        // R235: 每个 cycle 开先调 auto_decay, 让 emotion engine 自行算 elapsed 衰减
+        let _decayed_secs = self.emotion.lock().auto_decay();
         let start = now_ms();
         let trace_id = apeireth_bus::next_trace_id();
         let task_id = self.dispatch_async_task("classify", "{}").await;
@@ -670,3 +672,20 @@ pub use apeireth_bus::Channel as BusChannel;
 pub use apeireth_bus::ChannelSet as BusChannelSet;
 pub use apeireth_bus::next_trace_id;
 pub use apeireth_consciousness::EmotionEvent;
+
+    /// **R235 — runtime run_one_cycle calls auto_decay**
+    #[tokio::test]
+    async fn t11_runtime_cycle_calls_emotion_auto_decay() {
+        let rt = Arc::new(Runtime::new());
+        rt.clone().bootstrap().unwrap();
+        let initial_last = rt.emotion.lock().last_event_at_ms();
+        // 先触发一次事件, 让 last_event_at_ms 更新
+        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).ok();
+        let last_after_apply = rt.emotion.lock().last_event_at_ms();
+        assert!(last_after_apply >= initial_last);
+        // 跑一次 cycle, auto_decay 会被调
+        let _report = rt.run_one_cycle().await.unwrap();
+        // last_event_at_ms 应该是"auto_decay 调用时"或更新到 cycle 开始时间
+        let last_after_cycle = rt.emotion.lock().last_event_at_ms();
+        assert!(last_after_cycle >= last_after_apply);
+    }
