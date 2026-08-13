@@ -2,6 +2,11 @@
 
 > Apeireth voice subsystem — wake word detection, audio capture, TTS, STT, voiceprint, and the OpenAI Realtime API protocol schema.
 
+
+> **R172 LIVE (2026-08-13)**: New `MiniMaxLive` module + `voice_minimax_live_demo` — direct MiniMax production HTTP, real MP3 audio (111KB EN + 118KB ZH, ID3 header confirmed). See `docs/r172/r172-minimax-live-voice.md`. 0 引外部 dep, 0 触碰 3 不可变脊柱.
+>
+> **R153 LIVE (2024-12 GA)**: OpenAI Realtime API protocol schema (3 models, 128K context, ephemeral tokens, VAD, function calling, multimodal image). See `realtime` module.
+
 ## Three-layer architecture (R153 unified)
 
 | Layer | Module | Purpose |
@@ -9,6 +14,28 @@
 | STUB facade | `src/lib.rs` | Porcupine + pvrecorder-style API surface (8 tools). Compile-time `STUB_MODE = true` guard returns `NotImplemented` for all 8 tools. Designed for downstream wiring once picovoice SDK is added. |
 | Real HTTP client | `src/real.rs` | `VoiceRealImpl` — TTS / STT / wake-word / voiceprint over `reqwest` HTTP. Wiremock-tested. |
 | Realtime protocol | `src/realtime.rs` (R153) | OpenAI Realtime API schema — 3-model dispatch (gpt-realtime / gpt-realtime-mini / gpt-4o-realtime), 128K context, ephemeral tokens, server VAD, function calling, multimodal image input. 0 引 external dep. |
+| **MiniMax LIVE** (R172) | `src/minimax_live.rs` | **Production MiniMax API client** — TTS via `/v1/t2a_v2` returning hex-encoded MP3. 11 unit tests. Live demo: `cargo run -p apeireth-voice --example voice_minimax_live_demo` (writes real MP3 to disk). 0 引 external dep. |
+
+## Quick start: MiniMax LIVE (R172)
+
+```rust
+use apeireth_voice::minimax_live::MiniMaxLive;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    // Reads APEIRETH_API_KEY env or openclaw file
+    let client = MiniMaxLive::from_env()?;
+    let mp3_bytes = client.text_to_speech(
+        "hello apeireth, this is R172 LIVE MiniMax TTS",
+        None,  // default model: speech-2.6-hd
+        None,  // default voice: male-qn-qingse
+    ).await?;
+    std::fs::write("output.mp3", mp3_bytes)?;
+    Ok(())
+}
+```
+
+Production endpoint: `https://api.minimaxi.com/v1/t2a_v2` (hex-encoded MP3 audio).
 
 ## Borrowed upstream references (per O-5)
 
