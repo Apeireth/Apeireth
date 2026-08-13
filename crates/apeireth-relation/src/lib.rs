@@ -457,3 +457,5 @@ mod tests {
     }
 }
 
+// R214: 高级图算法 (pathfinding / cycle detect / topological sort / connected components)
+pub mod pathfinding;
