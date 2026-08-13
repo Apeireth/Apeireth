@@ -226,3 +226,6 @@ mod tests {
         let _: UpgradeResult<OtaState> = Ok(OtaState::Idle);
     }
 }
+
+// R223: 实际二进制自更新 (backup + atomic swap + verify + rollback)
+pub mod self_update;
