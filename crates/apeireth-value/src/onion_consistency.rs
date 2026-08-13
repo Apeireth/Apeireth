@@ -9,6 +9,7 @@
 //! - `OnionLayerStance` — 单层姿态 (Aligned/Conflicted/Underspecified)
 //! - `OnionValueMapping` — 价值标签 → 5 层姿态的映射表 (默认实现 + 自定义接口)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
@@ -177,7 +178,9 @@ pub fn diff_consistency(
             .get(&dim)
             .copied()
             .unwrap_or(OnionLayerStance::Underspecified);
-        let cmp = match (sa, sb) {
+        // R163: each match arm returns/continues, so the match itself is the statement.
+        // No need to bind the result to `cmp` then discard via `let _ = cmp;`.
+        match (sa, sb) {
             (OnionLayerStance::Aligned, OnionLayerStance::Aligned) => continue,
             (OnionLayerStance::Underspecified, OnionLayerStance::Underspecified) => continue,
             (OnionLayerStance::Aligned, _) => return Some((dim, ValueComparison::Higher)),
@@ -190,7 +193,6 @@ pub fn diff_consistency(
             }
             (OnionLayerStance::Conflicted, OnionLayerStance::Conflicted) => continue,
         };
-        let _ = cmp;
     }
     None
 }

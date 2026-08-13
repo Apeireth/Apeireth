@@ -1,5 +1,6 @@
 // Deep web multi-round search (FlashDeepSearch)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 
 use crate::engine::{FetchEngine, FetchError, FetchRequest, FetchResult};

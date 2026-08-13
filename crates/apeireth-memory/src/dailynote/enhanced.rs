@@ -1,5 +1,6 @@
 //! EnhancedDailyNote composed entry.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use super::mcp::{DailyNoteMcp, McpRequest, McpResponse};
 use super::note::DailyNote;
 use super::store::DailyNoteStore;
@@ -24,7 +25,7 @@ impl EnhancedDailyNote {
     pub fn search(&self, query: &str, tag: Option<&str>) -> Result<Vec<super::note::DailyNote>, super::store::DailyNoteError> {
         let mut notes = Vec::new();
         let ids = self.store.list_by_tag(tag.unwrap_or("")).unwrap_or_default();
-        if let Some(t) = tag {
+        if let Some(_t) = tag {
             for id in &ids {
                 if let Ok(n) = self.store.get(id) { notes.push(n); }
             }

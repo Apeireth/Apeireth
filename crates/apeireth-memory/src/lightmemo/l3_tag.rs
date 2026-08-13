@@ -1,5 +1,6 @@
 //! L3: Tag inverted index.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::{HashMap, HashSet};
 
 pub struct TagIndex {

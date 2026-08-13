@@ -38,6 +38,7 @@
 //! S-1 北极星 / S-2 实事求是 / S-3 质量工程化 / O-1 安全优先 / O-2 走在前人肩上 /
 //! O-3 干到底 / O-4 任何人都能接手 / O-5 不假装.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 
 use crate::class::V05Spec;

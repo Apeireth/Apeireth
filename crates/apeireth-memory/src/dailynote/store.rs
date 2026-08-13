@@ -1,5 +1,6 @@
 //! SQLite-backed daily note store.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::Path;

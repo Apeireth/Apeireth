@@ -5,6 +5,7 @@
 //! **R20 阶段 4 历史**: 1:1 翻译 @google/gemini-cli 0.9.21 (8 工具 + 3 ModelKind + Embedding).
 //! R35 阶段 1: 只 Provider struct stub. R21+ 真接 SDK.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![allow(dead_code)]
 
 /// R35: GeminiCliProvider struct (R20 阶段 4 1:1 字段名)

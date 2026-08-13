@@ -145,7 +145,7 @@ impl ThreeDomainEnforcer {
     }
 
     /// 域路由 — 根据 request.domain 选择对应 gate
-    pub fn enforce(&mut self, request: &DecisionRequest, now_ms: i64) -> DomainCheckResult {
+    pub fn enforce(&mut self, request: &DecisionRequest, _now_ms: i64) -> DomainCheckResult {
         // 强制点完整性校验
         if let Some(v) = self.check_completeness() {
             self.violations.push(v.clone());

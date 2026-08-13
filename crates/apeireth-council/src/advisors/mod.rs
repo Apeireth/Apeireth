@@ -9,6 +9,7 @@
 //! - ❌ 外部 LLM HTTP 调用
 //! - ❌ 文件系统 / 网络 / unsafe
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 pub mod ethics;
 pub mod history;
 pub mod legal;
