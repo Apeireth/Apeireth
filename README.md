@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R161 (2026-08-13)**: `apeireth-memory x apeireth-pipeline-g5` 一体化集成 - new module `g5_memory_bridge.rs` (167 lines) wraps memory insert/retrieve as g5 5-stage Stage<I, O> impls (MemoryDispatchStage / MemoryNormalizeStage / MemoryPolicyStage / MemoryReliabilityStage / MemoryThrottleStage) + MemoryPipelineBuilder. apeireth-pipeline-g5 现在有 5 个生产调用方 (tool-runtime R132.4 + chat R157 + council R159 + runtime R160 + memory R161). Tests: 10 new bridge pass, 0 触碰 3 不可变脊柱. See `docs/r161/r161-g5-memory-bridge.md`.
+
 > **R160 (2026-08-13)**: `apeireth-runtime x apeireth-pipeline-g5` 一体化集成 - new module `g5_runtime_bridge.rs` (122 lines) wraps runtime task lifecycle as g5 5-stage Stage<I, O> impls (RuntimeDispatchStage / RuntimeNormalizeStage / RuntimePolicyStage / RuntimeReliabilityStage / RuntimeThrottleStage) + RuntimePipelineBuilder. apeireth-pipeline-g5 现在有 4 个生产调用方. Tests: 14 pre-existing + 9 new bridge = 23 total pass, 0 触碰 3 不可变脊柱. See `docs/r160/r160-g5-runtime-bridge.md`.
 
 > **R159 (2026-08-13)**: `apeireth-council x apeireth-pipeline-g5` 一体化集成 - new module `g5_council_bridge.rs` (248 lines) wraps council 5 concerns as g5 5-stage Stage<I, O> impls (CouncilDispatchStage / CouncilNormalizeStage / CouncilPolicyStage / CouncilReliabilityStage / CouncilThrottleStage) + CouncilPipelineBuilder. apeireth-pipeline-g5 现在有 3 个生产调用方 (tool-runtime R132.4 + chat pipeline R157 + council R159). Tests: 13 new bridge + 35 advisors + 17 session_capture pass. 0 触碰 3 不可变脊柱, 0 改动现有 deliberation.rs. See `docs/r159/r159-g5-council-bridge.md`.

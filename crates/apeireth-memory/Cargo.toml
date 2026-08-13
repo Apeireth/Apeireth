@@ -24,6 +24,8 @@ apeireth-vector = { path = "../apeireth-vector", optional = true }
 apeireth-memory-extensions = { path = "extensions" }
 # R37-2: 9 organ 部分合并 — life_force → memory 透明 re-export (workspace member 真删)
 apeireth-life-force = { path = "../apeireth-life-force" }
+# R161: memory 接 g5 substrate (第 5 个生产调用方)
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 
 [features]
 # R19 P2 战区 4: 默认开 semantic feature, 让 SqliteMemoryStore::semantic_search + extract_user_profile
