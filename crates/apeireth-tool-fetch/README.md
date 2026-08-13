@@ -3,6 +3,8 @@
 **R149** - URL fetch + search + aggregation toolkit.
 
 
+> **R176 LIVE (2026-08-13)**: `AnySearchClient` 真接 AnySearch MCP server (`https://api.anysearch.com/mcp`). 17 vertical domains + 4 commands (search/get_sub_domains/batch_search/extract). LIVE 验证: search 35469 chars / 10 results / 61ms; aggregator 解析 5 hits; extract rust-lang.org 3193 chars Markdown. See `docs/r176/r176-anysearch-live.md`.
+
 > **R174 LIVE (2026-08-13)**: `HttpFetcher::fetch` 真接 `apeireth-http-client` (reqwest + 5 keep-alive 字段). R149 baseline 是 trait stub (status=0, 空 body), R174 修 doc/code 不一致. LIVE 验证 example.com 200/559B + iana.org 200/6253B. See `docs/r174/r174-http-fetch-live.md`.
 
 ## Responsibilities
