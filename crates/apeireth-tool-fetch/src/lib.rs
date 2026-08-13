@@ -51,6 +51,7 @@
 
 use std::sync::Arc;
 
+pub mod anysearch;
 pub mod bilibili;
 pub mod cache;
 pub mod config;
@@ -68,6 +69,7 @@ pub use deep::{DeepSearcher, DeepRound, DeepResult};
 pub use engine::{Fetcher, FetchEngine, FetchRequest, FetchResponse, FetchError, FetchResult};
 pub use html_extract::{extract_text, extract_links, extract_title, HtmlExtractError};
 pub use http_fetch::{HttpFetcher, HttpMethod};
+pub use anysearch::{AnySearchClient, AnySearchError, AnySearchResult, ANYSEARCH_DOMAINS, ANYSEARCH_METHODS, ANYSEARCH_ENDPOINT};
 pub use search_aggregator::{SearchAggregator, SearchSource, SearchHit, AggregatedResults};
 pub use anime::{AnimeFinder, AnimeInfo, AnimeError};
 
