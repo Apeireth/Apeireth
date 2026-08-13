@@ -190,3 +190,69 @@ async fn r216_14_channel_count_constant() {
     assert_eq!(Channel::COUNT, 3);
     assert_eq!(Channel::ALL.len(), 3);
 }
+
+
+// ============================================================
+// R226 — BackpressurePolicy 补全 (Coalesce + Adaptive) — 7 cases
+// ============================================================
+
+#[test]
+fn r226_01_policy_name_block() {
+    assert_eq!(BackpressurePolicy::Block.name(), "Block");
+}
+
+#[test]
+fn r226_02_policy_name_drop_oldest() {
+    assert_eq!(BackpressurePolicy::DropOldest.name(), "DropOldest");
+}
+
+#[test]
+fn r226_03_policy_name_drop_newest() {
+    assert_eq!(BackpressurePolicy::DropNewest.name(), "DropNewest");
+}
+
+#[test]
+fn r226_04_policy_name_drop() {
+    assert_eq!(BackpressurePolicy::Drop.name(), "Drop");
+}
+
+#[test]
+fn r226_05_policy_name_coalesce() {
+    assert_eq!(
+        BackpressurePolicy::Coalesce { ttl_ms: 100 }.name(),
+        "Coalesce"
+    );
+}
+
+#[test]
+fn r226_06_policy_name_adaptive() {
+    assert_eq!(
+        BackpressurePolicy::Adaptive {
+            initial: Box::new(BackpressurePolicy::Block),
+            drop_threshold: 0.5,
+        }
+        .name(),
+        "Adaptive"
+    );
+}
+
+#[tokio::test]
+async fn r226_07_coalesce_policy_publishes() {
+    // Coalesce 走 Block 行为 (intent-only)
+    let bus: L0Bus<u32> = L0Bus::with_capacity_and_policy(8, BackpressurePolicy::Coalesce { ttl_ms: 100 });
+    let _ = bus.publish("topic", BusMessage::new(42)).await;
+    let s = bus.stats();
+    assert_eq!(s.sent, 1, "Coalesce 应记 1 sent");
+}
+
+#[tokio::test]
+async fn r226_08_adaptive_policy_publishes() {
+    // Adaptive 走 Block 行为 (intent-only)
+    let bus: L0Bus<u32> = L0Bus::with_capacity_and_policy(8, BackpressurePolicy::Adaptive {
+        initial: Box::new(BackpressurePolicy::DropOldest),
+        drop_threshold: 0.3,
+    });
+    let _ = bus.publish("topic", BusMessage::new(99)).await;
+    let s = bus.stats();
+    assert_eq!(s.sent, 1, "Adaptive 应记 1 sent");
+}
