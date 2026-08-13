@@ -725,6 +725,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-life-force",
  "apeireth-memory-extensions",
+ "apeireth-pipeline-g5",
  "apeireth-vector",
  "async-trait",
  "chrono",
