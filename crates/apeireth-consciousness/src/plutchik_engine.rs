@@ -304,6 +304,38 @@ impl ExtendedEmotionEngine {
     pub fn history(&self) -> Vec<PlutchikEmotion> {
         self.history.iter().copied().collect()
     }
+
+    /// R248 -- manually set intensity (None guard via enum exhaustiveness).
+    pub fn set_intensity(&mut self, intensity: PlutchikIntensity) {
+        self.current_intensity = intensity;
+    }
+
+    /// R248 -- bump intensity by delta (clamped within valid level bounds).
+    /// Returns the new intensity.
+    pub fn bump_intensity(&mut self, delta: i32) -> PlutchikIntensity {
+        let ordered = PlutchikIntensity::ordered_levels();
+        let cur = ordered.iter().position(|x| *x == self.current_intensity).unwrap_or(0) as i32;
+        let new = (cur + delta).clamp(0, ordered.len() as i32 - 1);
+        let next = ordered[new as usize];
+        self.current_intensity = next;
+        next
+    }
+
+    /// R248 -- last N history entries (most recent first).
+    pub fn history_recent(&self, limit: usize) -> Vec<PlutchikEmotion> {
+        self.history.iter().rev().take(limit).copied().collect()
+    }
+
+    /// R248 -- filter history by minimum intensity (chronological).
+    pub fn history_min_intensity(&self, min: PlutchikIntensity) -> Vec<PlutchikEmotion> {
+        let min_idx = PlutchikIntensity::ordered_levels()
+            .iter().position(|x| *x == min).unwrap_or(0);
+        self.history.iter().filter(|e| {
+            let idx = PlutchikIntensity::ordered_levels()
+                .iter().position(|x| *x == e.intensity()).unwrap_or(0);
+            idx >= min_idx
+        }).copied().collect()
+    }
 }
 
 impl Default for ExtendedEmotionEngine {
@@ -446,5 +478,82 @@ mod tests {
         assert!(BaseEmotion::ALL.contains(&ek));
         // 同时 Plutchik 状态也正确
         assert_eq!(eng.current_basic(), PlutchikBasic::Anger);
+    }
+
+    // R248 -- intensity adjustment + filtered history views
+
+    #[test]
+    fn r248_01_set_intensity_updates_current_intensity() {
+        let mut eng = ExtendedEmotionEngine::new();
+        assert_eq!(eng.current_intensity(), PlutchikIntensity::Mild);
+        eng.set_intensity(PlutchikIntensity::Extreme);
+        assert_eq!(eng.current_intensity(), PlutchikIntensity::Extreme);
+        eng.set_intensity(PlutchikIntensity::Moderate);
+        assert_eq!(eng.current_intensity(), PlutchikIntensity::Moderate);
+    }
+
+    #[test]
+    fn r248_02_bump_intensity_clamps_within_bounds() {
+        let mut eng = ExtendedEmotionEngine::new();
+        // start Mild (idx 0)
+        assert_eq!(eng.current_intensity(), PlutchikIntensity::Mild);
+        // +1 -> Moderate
+        assert_eq!(eng.bump_intensity(1), PlutchikIntensity::Moderate);
+        // +1 -> Strong
+        assert_eq!(eng.bump_intensity(1), PlutchikIntensity::Strong);
+        // +10 clamps to Extreme
+        assert_eq!(eng.bump_intensity(10), PlutchikIntensity::Extreme);
+        // +1 still Extreme (clamped)
+        assert_eq!(eng.bump_intensity(1), PlutchikIntensity::Extreme);
+        // -10 clamps to Mild
+        assert_eq!(eng.bump_intensity(-10), PlutchikIntensity::Mild);
+        // -1 still Mild (clamped)
+        assert_eq!(eng.bump_intensity(-1), PlutchikIntensity::Mild);
+    }
+
+    #[test]
+    fn r248_03_history_recent_returns_n_latest_in_reverse_order() {
+        let mut eng = ExtendedEmotionEngine::new();
+        eng.apply(PlutchikEvent::Joy).unwrap();
+        eng.apply(PlutchikEvent::Trust).unwrap();
+        eng.apply(PlutchikEvent::Fear).unwrap();
+        // 3 events: Joy, Trust, Fear
+        let recent_all = eng.history_recent(10);
+        assert_eq!(recent_all.len(), 3);
+        // most recent first
+        assert!(matches!(recent_all[0], PlutchikEmotion::Basic(PlutchikBasic::Fear, _)));
+        assert!(matches!(recent_all[1], PlutchikEmotion::Basic(PlutchikBasic::Trust, _)));
+        assert!(matches!(recent_all[2], PlutchikEmotion::Basic(PlutchikBasic::Joy, _)));
+        // limit 2 -> only last 2 in reverse
+        let recent_2 = eng.history_recent(2);
+        assert_eq!(recent_2.len(), 2);
+        assert!(matches!(recent_2[0], PlutchikEmotion::Basic(PlutchikBasic::Fear, _)));
+        assert!(matches!(recent_2[1], PlutchikEmotion::Basic(PlutchikBasic::Trust, _)));
+        // limit 0 -> empty
+        assert!(eng.history_recent(0).is_empty());
+    }
+
+    #[test]
+    fn r248_04_history_min_intensity_filters_by_level() {
+        // PlutchikEvent::emotion() always encodes Moderate (constant intensity).
+        // So apply() pushes entries with intensity=Moderate regardless of current_intensity.
+        let mut eng = ExtendedEmotionEngine::new();
+        eng.apply(PlutchikEvent::Joy).unwrap();
+        eng.apply(PlutchikEvent::Trust).unwrap();
+        eng.apply(PlutchikEvent::Fear).unwrap();
+        eng.apply(PlutchikEvent::Anger).unwrap();
+        // All 4 in history, all Moderate
+        assert_eq!(eng.history().len(), 4);
+        for e in eng.history() {
+            assert_eq!(e.intensity(), PlutchikIntensity::Moderate);
+        }
+        // Mild -> all 4 (Moderate >= Mild)
+        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Mild).len(), 4);
+        // Moderate -> all 4 (Moderate >= Moderate)
+        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Moderate).len(), 4);
+        // Strong -> 0 (Moderate < Strong)
+        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Strong).len(), 0);
+        // Extreme -> 0
+        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Extreme).len(), 0);
     }
 }
