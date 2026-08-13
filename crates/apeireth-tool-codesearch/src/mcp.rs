@@ -23,6 +23,7 @@ use crate::search::{CodeSearcher, SearchKind, SearchOptions};
 use crate::files::{FileFinder, FindOptions};
 use crate::symbols::{extract_symbols, detect_language, supported_languages};
 use crate::graph::KnowledgeGraph;
+use crate::ast_grep::AstSearcher;
 use crate::index::CodeIndex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,6 +63,8 @@ pub enum McpTool {
     TraceImports,
     FindCallers,
     ProjectOverview,
+    /// R201: AST-level search via ast-grep CLI (R181/R193 推荐短期路径)
+    AstGrepSearch,
 }
 
 impl McpTool {
@@ -77,6 +80,7 @@ impl McpTool {
             McpTool::TraceImports => "trace_imports",
             McpTool::FindCallers => "find_callers",
             McpTool::ProjectOverview => "project_overview",
+                McpTool::AstGrepSearch => "ast_grep_search",
         }
     }
 
@@ -92,12 +96,13 @@ impl McpTool {
             McpTool::TraceImports,
             McpTool::FindCallers,
             McpTool::ProjectOverview,
+            McpTool::AstGrepSearch,
         ]
     }
 }
 
 /// Number of MCP tools exposed.
-pub const MCP_TOOL_COUNT: usize = 10;
+pub const MCP_TOOL_COUNT: usize = 11;
 
 pub struct CodeSearchMcp {
     graph: std::sync::Mutex<KnowledgeGraph>,
@@ -138,6 +143,7 @@ impl CodeSearchMcp {
                         McpTool::TraceImports => "Trace imports for a file via knowledge graph",
                         McpTool::FindCallers => "Find callers of a symbol (knowledge graph)",
                         McpTool::ProjectOverview => "Get project structure overview",
+                    McpTool::AstGrepSearch => "AST-level search via ast-grep CLI (requires ast-grep binary)",
                     }
                 })).collect();
                 McpResponse {
@@ -359,6 +365,32 @@ impl CodeSearchMcp {
                             error: None,
                         }
                     }
+                    "ast_grep_search" => {
+                        let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+                        let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                        let lang = args.get("lang").and_then(|v| v.as_str());
+                        let searcher = crate::ast_grep::AstGrepSearcher::new();
+                        match searcher.search(std::path::Path::new(path), pattern, lang) {
+                            Ok(matches) => {
+                                let list: Vec<String> = matches.iter()
+                                    .map(|m| format!("{}:{}:{}-{} {}", m.file.display(), m.start_line, m.start_line, m.end_line, m.text.lines().next().unwrap_or("")))
+                                    .collect();
+                                let text = if list.is_empty() { "(no matches or ast-grep unavailable)".to_string() } else { list.join("\n") };
+                                McpResponse {
+                                    jsonrpc: "2.0".to_string(),
+                                    id: req.id,
+                                    result: Some(json!({"content": [{"type": "text", "text": text}], "isError": false})),
+                                    error: None,
+                                }
+                            }
+                            Err(e) => McpResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: req.id,
+                                result: Some(json!({"content": [{"type": "text", "text": format!("ast-grep error: {}", e)}], "isError": true})),
+                                error: None,
+                            },
+                        }
+                    }
                     other => McpResponse {
                         jsonrpc: "2.0".to_string(),
                         id: req.id,
@@ -389,8 +421,8 @@ mod tests {
 
     #[test]
     fn tool_count_is_10() {
-        assert_eq!(MCP_TOOL_COUNT, 10);
-        assert_eq!(McpTool::all().len(), 10);
+        assert_eq!(MCP_TOOL_COUNT, 11);
+        assert_eq!(McpTool::all().len(), 11);
     }
 
     #[test]
@@ -409,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_returns_10() {
+    fn tools_list_returns_11() {
         let mcp = CodeSearchMcp::new_in_memory();
         let req = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -419,7 +451,7 @@ mod tests {
         };
         let resp = mcp.handle(req);
         let tools = resp.result.unwrap()["tools"].as_array().unwrap().clone();
-        assert_eq!(tools.len(), 10);
+        assert_eq!(tools.len(), 11);
     }
 
     #[test]
@@ -465,5 +497,22 @@ mod tests {
         };
         let resp = mcp.handle(req);
         assert!(resp.error.is_some());
+    }
+    #[test]
+    fn ast_grep_search_handles_missing_binary() {
+        // R201: ast_grep_search MCP tool — verifies graceful handling when ast-grep unavailable
+        let mcp = CodeSearchMcp::new_in_memory();
+        let req = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(6)),
+            method: "tools/call".to_string(),
+            params: json!({"name": "ast_grep_search", "arguments": {"pattern": "fn ()", "path": "."}}),
+        };
+        let resp = mcp.handle(req);
+        // Either gracefully returns "(no matches or ast-grep unavailable)" or error message — never panics
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(!text.is_empty());
     }
 }
