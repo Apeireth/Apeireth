@@ -1,5 +1,6 @@
 // HTTP fetcher (synchronous blocking wrapper)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::time::Instant;
 
 use crate::config::FetchConfig;

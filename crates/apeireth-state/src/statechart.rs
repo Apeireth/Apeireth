@@ -15,6 +15,7 @@
 //! **不假装**: 真 transition 执行, 真 guard 通过, 真 action 调用.
 //! 0 装"全 XState 兼容", 仅覆盖子集 (per ponytail ceiling).
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 use std::sync::Arc;
 

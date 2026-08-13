@@ -22,3 +22,7 @@ Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
 ---
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+
+## R163 lint cleanup
+
+6 -> 0 warnings. `#![allow(non_snake_case)]` per JSON-RPC spec (camelCase fields: protocolVersion / serverInfo / listChanged / inputSchema / clientInfo).

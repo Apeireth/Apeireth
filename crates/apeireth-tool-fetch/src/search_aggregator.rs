@@ -1,5 +1,6 @@
 // Search aggregator (multi-source: Tavily/AnySearch/DuckDuckGo placeholder)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};

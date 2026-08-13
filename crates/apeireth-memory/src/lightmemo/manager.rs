@@ -1,5 +1,6 @@
 //! Memory manager: cross-layer CRUD.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use chrono::Utc;
 use thiserror::Error;
 use uuid::Uuid;

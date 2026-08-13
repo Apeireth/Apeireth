@@ -4,6 +4,7 @@
 //! **可选 LLM 后端**: 可挂载 [`MockLlmProvider`] 处理复杂推理
 //! **风险关键词**: deceive / pretend / fake / 不假装 / 撒谎 / 假装 / cover up
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use super::{default_lifecycle, make_opinion};
 use crate::advisor::{
     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,

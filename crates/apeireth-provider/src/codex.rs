@@ -6,6 +6,7 @@
 //! **R20 阶段 4 历史**: 1:1 翻译 @openai/codex 0.9.21 (8 工具 + 4 ModelKind + 3 SandboxType).
 //! R35 阶段 1: 只 1 个 Provider struct + 8 工具 + 4 ModelKind. R21+ 真接 SDK.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![allow(dead_code)]
 
 /// R35: CodexProvider struct (R20 阶段 4 1:1 字段名)

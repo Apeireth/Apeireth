@@ -127,7 +127,7 @@ impl HAMode {
     /// 人类总数
     pub fn human_count(&self) -> usize {
         match self {
-            Self::SingleHuman(p) => 1,
+            Self::SingleHuman(_p) => 1,
             Self::MultiHuman(p) => p.signatories.len(),
             Self::Offline => 0,
         }
@@ -491,7 +491,7 @@ pub struct HumanAuthority {
 
 impl HumanAuthority {
     /// 新建单人模式 (1 of 1, threshold=100)
-    pub fn single(human_id: impl Into<String>, name: impl Into<String>) -> Self {
+    pub fn single(_human_id: impl Into<String>, name: impl Into<String>) -> Self {
         Self {
             authority_id: "ha-single".into(),
             name: name.into(),
@@ -683,7 +683,7 @@ impl MultiSigPolicy {
         request: &crate::owner::OwnerRequest,
         collected_signatures: &[String],
         authority: &HumanAuthority,
-        now_ms: i64,
+        _now_ms: i64,
     ) -> AuthorityMultisigOutcome {
         // Step 1: ReadOnly token 检查
         if !request.token.can_attempt_core_rule() && request.touches_e_layer() {

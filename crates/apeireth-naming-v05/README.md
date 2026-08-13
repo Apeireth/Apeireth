@@ -113,3 +113,7 @@ cargo test -p apeireth-naming-v05
 # 跑示例
 cargo run -p apeireth-naming-v05 --example naming_v05_demo
 ```
+
+## R163 lint cleanup
+
+12 -> 0 warnings. extension.rs `#![allow(missing_docs)]`.

@@ -5,6 +5,7 @@
 //!
 //! 提供 [`ScriptedMockLlm`] 默认实现 — 按 prompt 关键词匹配脚本响应。
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 use std::sync::Mutex;
 

@@ -104,7 +104,7 @@ impl SynthesisReport {
 /// 3. 计算加权总分
 /// 4. 归一化 → 映射到 StanceKind
 /// 5. 评估按住
-pub fn synthesize(opinions: &[AdvisorOpinion], weights: &SynthesisWeights) -> SynthesisReport {
+pub fn synthesize(opinions: &[AdvisorOpinion], _weights: &SynthesisWeights) -> SynthesisReport {
     // Step 1: 注入权重 + 过滤弃权
     let mut weighted: Vec<&AdvisorOpinion> = Vec::new();
     let mut sum_weighted_score = 0.0_f64;

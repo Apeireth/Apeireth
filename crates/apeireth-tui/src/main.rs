@@ -1100,7 +1100,7 @@ fn chat_line_idx(app: &App, mx: u16, my: u16, chat_rect: Rect) -> Option<(usize,
     if line_idx >= total {
         line_idx = total - 1;
     }
-    let prefix_cols = app.chat_line_map.get(line_idx).map(|i| i.prefix_cols as u16).unwrap_or(0);
+    let prefix_cols = app.chat_line_map.get(line_idx).map(|i| i.prefix_cols).unwrap_or(0);
     let inner_x = chat_rect.x + 1;
     let col_in_text = if mx > inner_x + prefix_cols { (mx - inner_x - prefix_cols) as usize } else { 0 };
     let char_off = display_col_to_char_offset(app, line_idx, col_in_text);

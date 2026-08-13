@@ -104,7 +104,7 @@ pub fn render(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
     ];
 
     // R26: 5 项从 chunks[1] 开始 (顶部已用 chunks[0] 作 RGB 预览)
-    for (i, (key, val, desc, enabled)) in items.iter().enumerate() {
+    for (i, (key, val, desc, _enabled)) in items.iter().enumerate() {
         let chunk_idx = i + 1; // 跳过 chunks[0] RGB 预览
         // chunks: [0]=RGB, [1..6]=5/6 items, [7]=hint
         // 6 items now (mode/theme/splash/breath/language/输出上限), so chunks needed: 1..7
