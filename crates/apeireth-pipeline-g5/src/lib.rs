@@ -21,6 +21,7 @@ pub mod normalize;
 pub mod pipeline;
 pub mod policy;
 pub mod reliability;
+pub mod circuit_breaker;  // R198: 真 Circuit Breaker (替换 reliability.rs 的 stub)
 pub mod stage;
 pub mod throttle;
 
