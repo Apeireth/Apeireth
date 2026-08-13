@@ -219,3 +219,6 @@ mod lib_tests {
         assert_eq!(kinds.len(), 4);
     }
 }
+
+// R219: /v1/guard 端点 (policy check)
+pub mod guard_endpoint;
