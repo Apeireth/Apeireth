@@ -119,6 +119,59 @@ impl fmt::Display for CouncilVerdict {
     }
 }
 
+/// R249 -- streaming deliberation event.
+///
+/// 由 [Council::deliberate_streaming] 在审议的关键节点回调, 供上层 (TUI / bus /
+/// mcp-bridge / 监控) 实时订阅进度, 而不必等 verdict 整个完成.
+#[derive(Debug, Clone)]
+pub enum DeliberationStreamEvent {
+    /// Deliberation 已启动
+    Started {
+        session_id: String,
+        query_id: String,
+        started_at_ms: u64,
+    },
+    /// 某个 advisor 给出 opinion (按 council.advisors() 顺序)
+    OpinionIssued {
+        session_id: String,
+        opinion: AdvisorOpinion,
+    },
+    /// Hold 触发 (None 表示未触发)
+    HoldTriggered {
+        session_id: String,
+        trigger: Option<HoldTrigger>,
+    },
+    /// Synthesis 完成
+    Synthesized {
+        session_id: String,
+        weighted_score: f64,
+        confidence: f64,
+        opinion_count: usize,
+    },
+    /// Deliberation 终结
+    Completed {
+        session_id: String,
+        elapsed_ms: u64,
+        held: bool,
+    },
+}
+impl fmt::Display for DeliberationStreamEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Started { session_id, query_id, started_at_ms } =>
+                write!(f, "DeliberationStream::Started(session={}, query={}, t={})", session_id, query_id, started_at_ms),
+            Self::OpinionIssued { session_id, opinion } =>
+                write!(f, "DeliberationStream::Opinion(session={}, advisor={})", session_id, opinion.advisor_id.0),
+            Self::HoldTriggered { session_id, trigger } =>
+                write!(f, "DeliberationStream::Hold(session={}, triggered={})", session_id, trigger.is_some()),
+            Self::Synthesized { session_id, weighted_score, confidence, opinion_count } =>
+                write!(f, "DeliberationStream::Synth(session={}, score={:.2}, conf={:.2}, n={})", session_id, weighted_score, confidence, opinion_count),
+            Self::Completed { session_id, elapsed_ms, held } =>
+                write!(f, "DeliberationStream::Done(session={}, held={}, elapsed={}ms)", session_id, held, elapsed_ms),
+        }
+    }
+}
+
 /// 智囊团 — 召集 + 审议 + synthesis + 按住 + sovereignty hook 调度.
 pub struct Council {
     /// 召集的 advisors
@@ -391,6 +444,113 @@ impl Council {
         }
     }
 
+    /// R249 -- 流式审议: 与 [Council::deliberate] 同流程, 但在每个关键节点回调.
+    ///
+    /// 适用场景: TUI 实时渲查进度 / bus 发布 / mcp-bridge / 监控.
+    ///
+    /// 回调在 5 个节点被调用: Started / OpinionIssued / HoldTriggered / Synthesized / Completed.
+    pub fn deliberate_streaming<F>(&mut self, query: CouncilQuery, mut on_event: F) -> CouncilVerdict
+    where
+        F: FnMut(&DeliberationStreamEvent),
+    {
+        let session_id = self.alloc_session_id();
+        let started_at_ms = query.started_at_ms;
+
+        // 1. Started
+        on_event(&DeliberationStreamEvent::Started {
+            session_id: session_id.clone(),
+            query_id: query.query_id.clone(),
+            started_at_ms: started_at_ms as u64,
+        });
+        self.emit_event(&CouncilEvent::DeliberationStarted {
+            session_id: session_id.clone(),
+            query_id: query.query_id.clone(),
+            started_at_ms,
+        });
+
+        // 2. Collect opinions
+        let mut opinions = Vec::new();
+        let mut ctx = DeliberationContext::new(started_at_ms);
+
+        for advisor in &self.advisors {
+            match advisor.deliberate(&query, &mut ctx) {
+                Ok(outcome) => {
+                    let opinion = outcome.opinion.clone();
+                    let weighted = opinion.with_weight(self.weights.for_domain(advisor.domain()));
+                    on_event(&DeliberationStreamEvent::OpinionIssued {
+                        session_id: session_id.clone(),
+                        opinion: weighted.clone(),
+                    });
+                    self.emit_event(&CouncilEvent::OpinionIssued {
+                        session_id: session_id.clone(),
+                        opinion: weighted.clone(),
+                    });
+                    opinions.push(weighted);
+                }
+                Err(err) => {
+                    eprintln!("advisor {} error: {}", advisor.id(), err);
+                }
+            }
+        }
+
+        // 3. Hold trigger
+        let hold_trigger = HoldTrigger::evaluate(&opinions);
+        on_event(&DeliberationStreamEvent::HoldTriggered {
+            session_id: session_id.clone(),
+            trigger: hold_trigger.clone(),
+        });
+        if let Some(trigger) = &hold_trigger {
+            self.emit_event(&CouncilEvent::HoldTriggered {
+                session_id: session_id.clone(),
+                trigger: trigger.clone(),
+            });
+        }
+
+        // 4. Synthesize
+        let report = synthesize(&opinions, &self.weights);
+        on_event(&DeliberationStreamEvent::Synthesized {
+            session_id: session_id.clone(),
+            weighted_score: report.weighted_score,
+            confidence: report.confidence,
+            opinion_count: report.opinion_count,
+        });
+
+        // 5. Held + outcome
+        let held = report.is_held();
+        let hold_outcome = if held {
+            Some(HoldOutcome::ReflectionStarted {
+                reason: format!("hold: {:?}", hold_trigger.unwrap().threshold),
+                started_at_ms,
+            })
+        } else {
+            None
+        };
+
+        // 6. Elapsed
+        let elapsed_ms = (current_time_ms() - started_at_ms).max(0) as u64;
+
+        // 7. Completed
+        on_event(&DeliberationStreamEvent::Completed {
+            session_id: session_id.clone(),
+            elapsed_ms,
+            held,
+        });
+        self.emit_event(&CouncilEvent::DeliberationCompleted {
+            session_id: session_id.clone(),
+            report: report.clone(),
+            elapsed_ms,
+        });
+
+        CouncilVerdict {
+            query_id: query.query_id,
+            session_id,
+            report,
+            elapsed_ms,
+            held,
+            hold_outcome,
+        }
+    }
+
     /// 触发主权 hook 事件 (供外部主权主动调用).
     pub fn emit_event(&self, event: &CouncilEvent) {
         for hook in &self.hooks {
@@ -572,4 +732,81 @@ mod collect_opinions_tests {
         assert_eq!(ops.len(), 1);
         // 仅 collect, 不调用 deliberate / synthesize / hold
     }
+
+#[cfg(test)]
+mod streaming_tests {
+    use super::*;
+    use crate::advisor::AdvisorOpinion;
+
+    fn setup_council_with_advisor(stance: Stance) -> Council {
+        let mut council = Council::new();
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("safety".to_string()),
+            domain: AdvisorDomain::Safety,
+            stance,
+        }));
+        council
+    }
+
+    fn make_query() -> CouncilQuery {
+        CouncilQuery::new("q-stream", "streaming test", 5000)
+    }
+
+    #[test]
+    fn r249_01_streaming_emits_started_opinion_synth_completed() {
+        // 1 advisor approve -> expect Started, OpinionIssued, HoldTriggered(None), Synthesized, Completed
+        let mut council = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+        assert!(!verdict.held, "no hold should be triggered");
+        assert_eq!(events.len(), 5, "should emit 5 events");
+        assert!(matches!(events[0], DeliberationStreamEvent::Started { .. }));
+        assert!(matches!(events[1], DeliberationStreamEvent::OpinionIssued { .. }));
+        assert!(matches!(events[2], DeliberationStreamEvent::HoldTriggered { trigger: None, .. }));
+        assert!(matches!(events[3], DeliberationStreamEvent::Synthesized { opinion_count: 1, .. }));
+        assert!(matches!(events[4], DeliberationStreamEvent::Completed { held: false, .. }));
+    }
+
+    #[test]
+    fn r249_02_streaming_emits_hold_triggered_when_30pct_strong_disapprove() {
+        // 1 advisor strong disapprove (confidence 0.9 in FixedAdvisor) -> hold
+        let mut council = setup_council_with_advisor(Stance::new(StanceKind::StrongDisapprove, "block"));
+        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+        assert!(verdict.held, "strong disapprove triggers hold");
+        assert!(matches!(events[2], DeliberationStreamEvent::HoldTriggered { trigger: Some(_), .. }));
+        assert!(matches!(events[4], DeliberationStreamEvent::Completed { held: true, .. }));
+    }
+
+    #[test]
+    fn r249_03_streaming_empty_council_emits_synth_and_completed() {
+        // 0 advisors -> no Opinion events, but Started/HoldTriggered/Synthesized/Completed still fire
+        let mut council = Council::new();
+        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+        assert!(!verdict.held);
+        assert_eq!(events.len(), 4, "should emit 4 events (no Opinion)");
+        // Synthesized opinion_count should be 0
+        if let DeliberationStreamEvent::Synthesized { opinion_count, .. } = &events[2] {
+            assert_eq!(*opinion_count, 0usize);
+        } else {
+            panic!("expected Synthesized event at index 2");
+        }
+    }
+
+    #[test]
+    fn r249_04_streaming_verdict_equals_deliberate_verdict_for_same_query() {
+        // deliberate_streaming should produce equivalent verdict (same session structure)
+        let mut c1 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+        let mut c2 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+        let v1 = c1.deliberate(make_query());
+        let mut events2 = Vec::new();
+        let v2 = c2.deliberate_streaming(make_query(), |e| events2.push(e.clone()));
+        assert_eq!(v1.held, v2.held);
+        assert_eq!(v1.report.opinion_count, v2.report.opinion_count);
+        assert!(!v1.query_id.is_empty());
+        assert!(!v2.session_id.is_empty());
+        assert!(!events2.is_empty());
+    }
+}
 }
