@@ -218,9 +218,9 @@ fn truncate_to_token_budget_min_two_when_budget_zero() {
 
 #[test]
 fn tool_kind_all_returns_six_vcp_strings() {
-    // 6 类 as_vcp_str 应返 VCP 真值字符串 (字段级引用)
+    // 6 类 as_legacy_str 应返 VCP 真值字符串 (字段级引用)
     let kinds = ToolKind::all();
-    let strings: Vec<&str> = kinds.iter().map(|k| k.as_vcp_str()).collect();
+    let strings: Vec<&str> = kinds.iter().map(|k| k.as_legacy_str()).collect();
     assert_eq!(strings.len(), 6);
     assert!(strings.contains(&"synchronous"));
     assert!(strings.contains(&"asynchronous"));
@@ -231,16 +231,16 @@ fn tool_kind_all_returns_six_vcp_strings() {
 }
 
 #[test]
-fn tool_kind_from_vcp_str_round_trip() {
-    // 6 类往返解析: as_vcp_str → from_vcp_str → 同一 variant
+fn tool_kind_from_legacy_str_round_trip() {
+    // 6 类往返解析: as_legacy_str → from_legacy_str → 同一 variant
     for k in ToolKind::all() {
-        let s = k.as_vcp_str();
-        let back = ToolKind::from_vcp_str(s);
+        let s = k.as_legacy_str();
+        let back = ToolKind::from_legacy_str(s);
         assert_eq!(back, Some(k), "{s} 应能 round-trip 回 {k:?}");
     }
     // 未知字符串返 None
-    assert_eq!(ToolKind::from_vcp_str("nonsense"), None);
-    assert_eq!(ToolKind::from_vcp_str(""), None);
+    assert_eq!(ToolKind::from_legacy_str("nonsense"), None);
+    assert_eq!(ToolKind::from_legacy_str(""), None);
 }
 
 // =====================================================================

@@ -262,9 +262,9 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
         .iter()
         .map(|m| {
             // 借鉴 VCP protocolBridge.js:47-52 normalizeMessageRole
-            let role = MessageRole::from_vcp(&m.role);
+            let role = MessageRole::from_legacy_value(&m.role);
             // 借鉴 VCP protocolBridge.js:21-42 normalizeTextContent
-            let content = ContentPart::from_vcp(&m.content);
+            let content = ContentPart::from_legacy_value(&m.content);
             NormalizedMessage {
                 role,
                 content,
@@ -382,10 +382,10 @@ pub fn openai_responses_to_normalized(req: &OpenAiResponsesRequest) -> Normalize
         for item in arr {
             if let Some(obj) = item.as_object() {
                 let role_str = obj.get("role").and_then(|v| v.as_str()).unwrap_or("user");
-                let role = MessageRole::from_vcp(role_str);
+                let role = MessageRole::from_legacy_value(role_str);
                 let content = obj
                     .get("content")
-                    .map(ContentPart::from_vcp)
+                    .map(ContentPart::from_legacy_value)
                     .unwrap_or_default();
                 messages.push(NormalizedMessage {
                     role,
@@ -517,7 +517,7 @@ pub fn anthropic_to_normalized(req: &AnthropicRequest) -> NormalizedRequest {
 
     // 2. messages 数组
     for m in &req.messages {
-        let role = MessageRole::from_vcp(&m.role);
+        let role = MessageRole::from_legacy_value(&m.role);
         let content = if let Some(s) = m.content.as_str() {
             // 简单字符串 content
             vec![ContentPart::Text {

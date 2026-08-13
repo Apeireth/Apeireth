@@ -40,7 +40,7 @@ pub enum MessageRole {
 
 impl MessageRole {
     /// 从字符串归一化 (借鉴 `protocolBridge.js:47-52`)
-    pub fn from_vcp(s: &str) -> Self {
+    pub fn from_legacy_value(s: &str) -> Self {
         match s {
             "system" | "developer" => Self::System,
             "user" => Self::User,
@@ -87,7 +87,7 @@ impl ContentPart {
     }
 
     /// 从 VCP 风格 raw content (string or array) 归一化
-    pub fn from_vcp(raw: &serde_json::Value) -> Vec<Self> {
+    pub fn from_legacy_value(raw: &serde_json::Value) -> Vec<Self> {
         if let Some(s) = raw.as_str() {
             return vec![Self::Text {
                 text: s.to_string(),
@@ -579,47 +579,47 @@ mod tests {
     use super::*;
 
     #[test]
-    fn message_role_from_vcp_developer_to_system() {
+    fn message_role_from_legacy_value_developer_to_system() {
         // 借鉴 VCP protocolBridge.js:47-52: developer → system
-        assert_eq!(MessageRole::from_vcp("developer"), MessageRole::System);
-        assert_eq!(MessageRole::from_vcp("system"), MessageRole::System);
-        assert_eq!(MessageRole::from_vcp("user"), MessageRole::User);
-        assert_eq!(MessageRole::from_vcp("assistant"), MessageRole::Assistant);
-        assert_eq!(MessageRole::from_vcp("tool"), MessageRole::Tool);
-        assert_eq!(MessageRole::from_vcp("function"), MessageRole::Tool);
-        assert_eq!(MessageRole::from_vcp("unknown"), MessageRole::User);
+        assert_eq!(MessageRole::from_legacy_value("developer"), MessageRole::System);
+        assert_eq!(MessageRole::from_legacy_value("system"), MessageRole::System);
+        assert_eq!(MessageRole::from_legacy_value("user"), MessageRole::User);
+        assert_eq!(MessageRole::from_legacy_value("assistant"), MessageRole::Assistant);
+        assert_eq!(MessageRole::from_legacy_value("tool"), MessageRole::Tool);
+        assert_eq!(MessageRole::from_legacy_value("function"), MessageRole::Tool);
+        assert_eq!(MessageRole::from_legacy_value("unknown"), MessageRole::User);
     }
 
     #[test]
-    fn content_part_from_vcp_string() {
+    fn content_part_from_legacy_string() {
         // 借鉴 VCP protocolBridge.js:21-42: string 原样
         let raw = serde_json::json!("Hello");
-        let parts = ContentPart::from_vcp(&raw);
+        let parts = ContentPart::from_legacy_value(&raw);
         assert_eq!(parts.len(), 1);
         assert_eq!(ContentPart::join_text(&parts), "Hello");
     }
 
     #[test]
-    fn content_part_from_vcp_array_text_types() {
+    fn content_part_from_legacy_value_array_text_types() {
         // 借鉴 VCP protocolBridge.js:31-34: text / input_text / output_text 都归一化
         let raw = serde_json::json!([
             {"type": "text", "text": "A"},
             {"type": "input_text", "text": "B"},
             {"type": "output_text", "text": "C"},
         ]);
-        let parts = ContentPart::from_vcp(&raw);
+        let parts = ContentPart::from_legacy_value(&raw);
         assert_eq!(parts.len(), 3);
         assert_eq!(ContentPart::join_text(&parts), "A\nB\nC");
     }
 
     #[test]
-    fn content_part_from_vcp_image_url() {
+    fn content_part_from_legacy_value_image_url() {
         // 借鉴 VCP: image_url 单独处理
         let raw = serde_json::json!([
             {"type": "text", "text": "see "},
             {"type": "image_url", "image_url": {"url": "https://x.com/a.png", "detail": "high"}},
         ]);
-        let parts = ContentPart::from_vcp(&raw);
+        let parts = ContentPart::from_legacy_value(&raw);
         assert_eq!(parts.len(), 2);
         match &parts[1] {
             ContentPart::ImageUrl { url, detail } => {
@@ -631,12 +631,12 @@ mod tests {
     }
 
     #[test]
-    fn content_part_from_vcp_empty() {
+    fn content_part_from_legacy_value_empty() {
         let raw = serde_json::json!(null);
-        let parts = ContentPart::from_vcp(&raw);
+        let parts = ContentPart::from_legacy_value(&raw);
         assert!(parts.is_empty());
         let raw = serde_json::json!({"type": "unknown"});
-        let parts = ContentPart::from_vcp(&raw);
+        let parts = ContentPart::from_legacy_value(&raw);
         assert!(parts.is_empty());
     }
 

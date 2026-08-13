@@ -93,7 +93,7 @@ async fn main() {
     println!("[1] 准备 {} 个 mock tool:", tools.len());
     for (name, expected) in &tools {
         let exp_str = expected
-            .map(|c| c.as_vcp_name())
+            .map(|c| c.as_legacy_name())
             .unwrap_or("(unclassified)");
         println!("    - {name:20} → {exp_str}");
     }
@@ -136,9 +136,9 @@ async fn main() {
         let elapsed = start.elapsed();
         heuristic_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_vcp_name().to_string(), exp.as_vcp_name().to_string()),
-            (Ok(cat), None) => (cat.as_vcp_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_vcp_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
+            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -165,9 +165,9 @@ async fn main() {
         let elapsed = start.elapsed();
         embedding_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_vcp_name().to_string(), exp.as_vcp_name().to_string()),
-            (Ok(cat), None) => (cat.as_vcp_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_vcp_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
+            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -194,9 +194,9 @@ async fn main() {
         let elapsed = start.elapsed();
         llm_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_vcp_name().to_string(), exp.as_vcp_name().to_string()),
-            (Ok(cat), None) => (cat.as_vcp_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_vcp_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
+            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -241,7 +241,7 @@ async fn main() {
     let summary = registry.category_summary();
     for (cat, names) in summary.iter() {
         if !names.is_empty() {
-            println!("    {:<18} → {} 个: {:?}", cat.as_vcp_name(), names.len(), names);
+            println!("    {:<18} → {} 个: {:?}", cat.as_legacy_name(), names.len(), names);
         }
     }
     println!();
