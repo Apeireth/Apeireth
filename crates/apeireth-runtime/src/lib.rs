@@ -37,6 +37,7 @@ use std::time::Duration;
 
 use apeireth_arbitration::{ArbitrationLog, EventSource};
 use apeireth_consciousness::{BaseEmotion, EmotionEngine, EmotionSnapshot, Pad};
+use apeireth_consciousness::DecaySnapshot;  // R237: decay snapshot import
 use apeireth_council::group_chat::{ChatMessage, GroupChat, Participant, ParticipantRole, TurnPolicy};
 use apeireth_bus::{BusMessage, ChanneledBus, ChannelSet};
 use apeireth_supervisor::{Heartbeat, HeartbeatPriority, HeartbeatScheduler, Schedule, WakeupContext, WakeupSource};
@@ -118,6 +119,12 @@ pub struct RuntimeConfig {
     pub arbitration_path: Option<std::path::PathBuf>,
     pub emit_bus: bool,
     pub room_capacity: usize,
+    /// R237: 是否将 auto_decay 结果 publish 到 bus topic "emotion.decay".
+    pub emit_decay_bus: bool,
+    /// R237: decay snapshot 达到此 elapsed_secs 才发布 (秒).
+    pub decay_emit_min_elapsed_secs: f32,
+    /// R237: PAD drift 超过此阈值才算"显著" (3D distance).
+    pub decay_emit_min_drift: f32,
 }
 
 impl Default for RuntimeConfig {
@@ -129,6 +136,9 @@ impl Default for RuntimeConfig {
             arbitration_path: None,
             emit_bus: true,
             room_capacity: DEFAULT_ROOM_CAPACITY,
+            emit_decay_bus: true,
+            decay_emit_min_elapsed_secs: 1.0,
+            decay_emit_min_drift: 0.01,
         }
     }
 }
@@ -452,8 +462,28 @@ impl Runtime {
     }
 
     pub async fn run_one_cycle(&self) -> RuntimeResult<CycleReport> {
-        // R235: 每个 cycle 开先调 auto_decay, 让 emotion engine 自行算 elapsed 衰减
-        let _decayed_secs = self.emotion.lock().auto_decay();
+        // R237: 拿 auto_decay + snapshot; 满足 emit_decay_bus + 阈值 / 显著阈值 => publish
+        let decay_snap: Option<DecaySnapshot> = {
+            let mut eng = self.emotion.lock();
+            eng.auto_decay();
+            eng.take_decay_snapshot()
+        };
+        if let (true, Some(snap)) = (self.config.emit_decay_bus, decay_snap.as_ref()) {
+            if snap.elapsed_secs >= self.config.decay_emit_min_elapsed_secs
+                && snap.is_significant(self.config.decay_emit_min_drift)
+            {
+                let payload = serde_json::to_string(snap).unwrap_or_default();
+                let event = RuntimeEvent::new(
+                    apeireth_bus::next_trace_id(),
+                    None,
+                    "apeireth-consciousness",
+                    "emotion.decay",
+                    payload,
+                );
+                let msg = BusMessage::new(event);
+                let _ = self.bus.publish_multi(ChannelSet::BOTH, "emotion.decay", msg).await;
+            }
+        }
         let start = now_ms();
         let trace_id = apeireth_bus::next_trace_id();
         let task_id = self.dispatch_async_task("classify", "{}").await;
@@ -688,4 +718,44 @@ pub use apeireth_consciousness::EmotionEvent;
         // last_event_at_ms 应该是"auto_decay 调用时"或更新到 cycle 开始时间
         let last_after_cycle = rt.emotion.lock().last_event_at_ms();
         assert!(last_after_cycle >= last_after_apply);
+    }
+
+    // R237 -- emotion_decay -> bus closed loop (3 cases)
+    #[tokio::test]
+    async fn r237_01_runtime_publishes_emotion_decay_to_bus_when_significant() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+        let _ = rt.run_one_cycle().await.unwrap();
+        assert!(rt.emotion.lock().last_decay().is_some());
+    }
+
+    #[tokio::test]
+    async fn r237_02_runtime_does_not_publish_when_decay_below_threshold() {
+        let mut cfg = RuntimeConfig::default();
+        cfg.decay_emit_min_elapsed_secs = 999.0;
+        let rt = Runtime::with_config(cfg);
+        rt.bootstrap().unwrap();
+        let _ = rt.run_one_cycle().await.unwrap();
+        let _ = rt.bus.stats();
+    }
+
+    #[tokio::test]
+    async fn r237_03_significant_decay_produces_snap_with_drift() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+        let _ = rt.run_one_cycle().await.unwrap();
+        let snap = rt.emotion.lock().take_decay_snapshot().unwrap();
+        assert!(snap.drift() > 0.0);
+    }
+
+    #[test]
+    fn r237_04_runtime_config_decay_fields_have_defaults() {
+        let c = RuntimeConfig::default();
+        assert!(c.emit_decay_bus);
+        assert!(c.decay_emit_min_elapsed_secs > 0.0);
+        assert!(c.decay_emit_min_drift > 0.0);
     }
