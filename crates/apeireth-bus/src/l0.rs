@@ -113,6 +113,23 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                     }
                 }
             }
+            // R226: Coalesce + Adaptive 暂按 Block 行为 (intent-only, 0 触碰现有逻辑)
+            //   intent 表达: Coalesce 窗口内合并, Adaptive 阈值自适应
+            //   当前实现: 都走 Block 语义 — 0 receiver 时仍记 sent (跟 Block 一致)
+            BackpressurePolicy::Coalesce { .. } | BackpressurePolicy::Adaptive { .. } => {
+                match tx.send(msg) {
+                    Ok(_) => {
+                        self.stats.sent.fetch_add(1, Ordering::Relaxed);
+                        Ok(())
+                    }
+                    Err(_e) => {
+                        // 0 receiver — 跟 Block 一样记 sent + dropped
+                        self.stats.sent.fetch_add(1, Ordering::Relaxed);
+                        self.stats.dropped.fetch_add(1, Ordering::Relaxed);
+                        Ok(())
+                    }
+                }
+            }
         }
     }
 
