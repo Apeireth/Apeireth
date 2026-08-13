@@ -453,6 +453,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-graph",
  "apeireth-mcp",
+ "apeireth-pipeline-g5",
  "apeireth-verify",
  "hex",
  "parking_lot",
