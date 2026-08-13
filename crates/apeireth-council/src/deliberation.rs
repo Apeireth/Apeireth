@@ -193,6 +193,32 @@ impl Council {
     /// 6. 评估按住 + 触发 HoldTriggered 事件 (若按住)
     /// 7. synthesis 出报告
     /// 8. 触发 DeliberationCompleted 事件
+    /// **R232 — collect opinions 显式 API** — 召集每个 advisor, 返回 Vec<(opinion, weight)>
+    ///
+    /// **用途**: 让 caller 不经 synthesis 就能拿到 per-advisor 意见 + 各自权重,
+    ///   用于 per-advisor 调试 / 日志 / 审计 / 决策追溯.
+    ///
+    /// **不假装**: 跟 deliberate 走同一 path (每个 advisor 调 `advisor.deliberate`),
+    ///   错误 advisor 跳过 (eprintln), 0 编造.
+    ///
+    /// **不触碰**: synthesize / hold 评估 / sovereignty hook — 留给 deliberate.
+    pub fn collect_opinions(&mut self, query: CouncilQuery) -> Vec<(crate::advisor::AdvisorOpinion, f64)> {
+        let mut ctx = crate::advisor::DeliberationContext::new(query.started_at_ms);
+        let mut result = Vec::new();
+        for advisor in &self.advisors {
+            match advisor.deliberate(&query, &mut ctx) {
+                Ok(outcome) => {
+                    let opinion = outcome.opinion.with_weight(self.weights.for_domain(advisor.domain()));
+                    result.push((opinion, self.weights.for_domain(advisor.domain())));
+                }
+                Err(err) => {
+                    eprintln!("advisor {} error: {}", advisor.id(), err);
+                }
+            }
+        }
+        result
+    }
+
     pub fn deliberate(&mut self, query: CouncilQuery) -> CouncilVerdict {
         let session_id = self.alloc_session_id();
         let started_at_ms = query.started_at_ms;
@@ -402,4 +428,148 @@ fn current_time_ms() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+
+// ============================================================
+// R232 — collect_opinions 集成 (6 cases)
+// ============================================================
+
+#[cfg(test)]
+mod collect_opinions_tests {
+    use super::*;
+    use crate::advisor::{
+        Advisor, AdvisorDomain, AdvisorId, AdvisorOpinion, DeliberationContext, DeliberationOutcome,
+        Stance, StanceKind,
+    };
+    use crate::lifecycle::AdvisorLifecycle;
+
+    struct FixedAdvisor {
+        id: AdvisorId,
+        domain: AdvisorDomain,
+        stance: Stance,
+    }
+
+    impl Advisor for FixedAdvisor {
+        fn id(&self) -> AdvisorId { self.id.clone() }
+        fn domain(&self) -> AdvisorDomain { self.domain }
+        fn lifecycle(&self) -> AdvisorLifecycle {
+            AdvisorLifecycle::Ephemeral
+        }
+        fn deliberate(
+            &self,
+            _query: &CouncilQuery,
+            _ctx: &mut DeliberationContext,
+        ) -> Result<DeliberationOutcome, crate::advisor::AdvisorError> {
+            Ok(DeliberationOutcome {
+                opinion: AdvisorOpinion {
+                    advisor_id: self.id.clone(),
+                    stance: self.stance.clone(),
+                    confidence: 0.9,
+                    weight: 0.0,
+                    reasoning: format!("{} says {:?}", self.id.0, self.stance.kind),
+                    references: vec![],
+                    timestamp_ms: 0,
+                },
+                needs_rebuttal: false,
+            })
+        }
+    }
+
+    fn make_query() -> CouncilQuery {
+        CouncilQuery::new("q-1", "test query", 1000)
+    }
+
+    fn stance_approve() -> Stance { Stance::new(StanceKind::Approve, "approve") }
+    fn stance_disapprove() -> Stance { Stance::new(StanceKind::Disapprove, "disapprove") }
+
+    #[test]
+    fn collect_opinions_empty_council() {
+        let mut council = Council::new();
+        let ops = council.collect_opinions(make_query());
+        assert!(ops.is_empty());
+    }
+
+    #[test]
+    fn collect_opinions_single_advisor() {
+        let mut council = Council::new();
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("safety".to_string()),
+            domain: AdvisorDomain::Safety,
+            stance: stance_approve(),
+        }));
+        let ops = council.collect_opinions(make_query());
+        assert_eq!(ops.len(), 1);
+        assert_eq!(ops[0].0.advisor_id.0, "safety");
+    }
+
+    #[test]
+    fn collect_opinions_7_advisors() {
+        let mut council = Council::new();
+        for (i, domain) in AdvisorDomain::ALL.iter().enumerate() {
+            council.recruit(Box::new(FixedAdvisor {
+                id: AdvisorId(format!("advisor-{i}")),
+                domain: *domain,
+                stance: if i % 2 == 0 { stance_approve() } else { stance_disapprove() },
+            }));
+        }
+        let ops = council.collect_opinions(make_query());
+        assert_eq!(ops.len(), 7);
+        for (i, (opinion, _weight)) in ops.iter().enumerate() {
+            assert_eq!(opinion.advisor_id.0, format!("advisor-{i}"));
+        }
+    }
+
+    #[test]
+    fn collect_opinions_includes_weight() {
+        let mut council = Council::new();
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("safety".to_string()),
+            domain: AdvisorDomain::Safety, // default_weight = 1.00
+            stance: stance_approve(),
+        }));
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("history".to_string()),
+            domain: AdvisorDomain::History, // default_weight = 0.55
+            stance: stance_approve(),
+        }));
+        let ops = council.collect_opinions(make_query());
+        assert_eq!(ops.len(), 2);
+        let safety_weight = ops.iter().find(|(o, _)| o.advisor_id.0 == "safety").unwrap().1;
+        let history_weight = ops.iter().find(|(o, _)| o.advisor_id.0 == "history").unwrap().1;
+        assert_eq!(safety_weight, 1.00);
+        assert_eq!(history_weight, 0.55);
+    }
+
+    #[test]
+    fn collect_opinions_custom_weights() {
+        let mut council = Council::new();
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("safety".to_string()),
+            domain: AdvisorDomain::Safety,
+            stance: stance_approve(),
+        }));
+        // 自定义权重: safety = 0.5 (覆盖默认 1.00)
+        use crate::synthesis::SynthesisWeights;
+        let sw = SynthesisWeights::default()
+            .with_domain(AdvisorDomain::Safety, 0.5);
+        council.set_weights(sw);
+        let ops = council.collect_opinions(make_query());
+        let (_, w) = &ops[0];
+        assert_eq!(*w, 0.5, "自定义权重应生效");
+    }
+
+    #[test]
+    fn collect_opinions_does_not_synthesize() {
+        // collect_opinions 不应触发 synthesis / hold — 仅返回 opinions
+        let mut council = Council::new();
+        council.recruit(Box::new(FixedAdvisor {
+            id: AdvisorId("philosophy".to_string()),
+            domain: AdvisorDomain::Philosophy,
+            stance: stance_disapprove(),  // 即使全 reject 也不应触发 hold
+        }));
+        let ops = council.collect_opinions(make_query());
+        assert_eq!(ops.len(), 1);
+        // 仅 collect, 不调用 deliberate / synthesize / hold
+    }
 }
