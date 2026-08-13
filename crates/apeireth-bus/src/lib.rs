@@ -54,6 +54,17 @@ pub fn next_trace_id() -> u64 {
 /// crate 版本 (与 workspace.version 同步)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// === R245 Message Priority ===
+
+/// R245 message priority tag (separate from BackpressurePolicy).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
+pub enum MessagePriority {
+    High,
+    #[default]
+    Normal,
+    Low,
+}
+
 // === 核心消息 ===
 
 /// 跨所有层的统一消息结构: `trace_id` + `payload`.
@@ -65,6 +76,8 @@ pub struct BusMessage<T> {
     pub payload: T,
     /// 创建时间戳 (epoch millis) — 调试时可视化跳数
     pub created_at_ms: i64,
+    /// R245: priority tag (High / Normal / Low). Default Normal.
+    pub priority: MessagePriority,
 }
 
 impl<T> BusMessage<T> {
@@ -74,6 +87,7 @@ impl<T> BusMessage<T> {
             trace_id: next_trace_id(),
             payload,
             created_at_ms: now_ms(),
+            priority: MessagePriority::default(),
         }
     }
 
@@ -83,6 +97,7 @@ impl<T> BusMessage<T> {
             trace_id,
             payload,
             created_at_ms: now_ms(),
+            priority: MessagePriority::default(),
         }
     }
 
@@ -92,7 +107,14 @@ impl<T> BusMessage<T> {
             trace_id: self.trace_id,
             payload: f(self.payload),
             created_at_ms: self.created_at_ms,
+            priority: self.priority,
         }
+    }
+
+    /// R245 -- set message priority (builder).
+    pub fn with_priority(mut self, priority: MessagePriority) -> Self {
+        self.priority = priority;
+        self
     }
 }
 
@@ -166,6 +188,10 @@ pub struct BusStats {
     pub received: AtomicU64,
     /// 跨层重传次数 (用于可靠性分析)
     pub retransmit: AtomicU64,
+    /// R245 -- priority High/Normal/Low 计数器 (按 priority 分桶).
+    pub high_priority: AtomicU64,
+    pub normal_priority: AtomicU64,
+    pub low_priority: AtomicU64,
 }
 
 impl BusStats {
@@ -186,6 +212,9 @@ impl BusStats {
             dropped: self.dropped.load(Ordering::Relaxed),
             received: self.received.load(Ordering::Relaxed),
             retransmit: self.retransmit.load(Ordering::Relaxed),
+            high_priority: self.high_priority.load(Ordering::Relaxed),
+            normal_priority: self.normal_priority.load(Ordering::Relaxed),
+            low_priority: self.low_priority.load(Ordering::Relaxed),
         }
     }
 }
@@ -201,6 +230,10 @@ pub struct BusStatsSnapshot {
     pub received: u64,
     /// 重传
     pub retransmit: u64,
+    /// R245: 按 priority 分桶的发出计数.
+    pub high_priority: u64,
+    pub normal_priority: u64,
+    pub low_priority: u64,
 }
 
 // === Bus 错误 ===
@@ -459,5 +492,36 @@ mod tests {
             let snap = bus.stats();
             assert!(snap.sent + snap.dropped > 0);
         }
+    }
+
+    // R245 -- priority tag (3 cases)
+    #[test]
+    fn r245_01_message_priority_default_is_normal() {
+        let m: BusMessage<u32> = BusMessage::new(1);
+        assert_eq!(m.priority, MessagePriority::Normal);
+    }
+
+    #[test]
+    fn r245_02_with_priority_builder_sets_priority() {
+        let m: BusMessage<u32> = BusMessage::new(1).with_priority(MessagePriority::High);
+        assert_eq!(m.priority, MessagePriority::High);
+        let m2 = m.with_priority(MessagePriority::Low);
+        assert_eq!(m2.priority, MessagePriority::Low);
+    }
+
+    #[tokio::test]
+    async fn r245_03_publish_counts_priority_buckets() {
+        let bus = L0Bus::<u32>::new();
+        // publish 1 high, 2 normal, 3 low
+        bus.publish("p", BusMessage::new(1).with_priority(MessagePriority::High)).await.unwrap();
+        bus.publish("p", BusMessage::new(2)).await.unwrap();
+        bus.publish("p", BusMessage::new(3)).await.unwrap();
+        bus.publish("p", BusMessage::new(4).with_priority(MessagePriority::Low)).await.unwrap();
+        bus.publish("p", BusMessage::new(5).with_priority(MessagePriority::Low)).await.unwrap();
+        bus.publish("p", BusMessage::new(6).with_priority(MessagePriority::Low)).await.unwrap();
+        let snap = bus.stats();
+        assert_eq!(snap.high_priority, 1);
+        assert_eq!(snap.normal_priority, 2);
+        assert_eq!(snap.low_priority, 3);
     }
 }
