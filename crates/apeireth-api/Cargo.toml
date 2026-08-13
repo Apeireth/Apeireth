@@ -57,6 +57,18 @@ lru = "0.16"
 sha2 = "0.10"
 hex = "0.4"
 
+# R162: tui-dashboard feature - gates ratatui/crossterm deps for dashboard.rs::run()
+# Default off to avoid forcing terminal UI deps on consumers (e.g. TUI integration).
+ratatui = { version = "0.29", optional = true }
+crossterm = { version = "0.28", optional = true }
+
+[features]
+# R162: enable with cargo build -p apeireth-api --features tui-dashboard
+# Pulls in ratatui 0.29 + crossterm 0.28 for the live TUI dashboard in
+# src/observability/dashboard.rs. Default-off to keep non-TUI consumers slim.
+default = []
+tui-dashboard = ["dep:ratatui", "dep:crossterm"]
+
 [dev-dependencies]
 tracing-subscriber = "0.3"
 tokio = { version = "1.40", features = ["full", "test-util", "macros"] }

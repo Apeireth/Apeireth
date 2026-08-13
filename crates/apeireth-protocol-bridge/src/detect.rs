@@ -1,5 +1,6 @@
 //! Protocol detection from URL/path/headers.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use crate::protocol::{ProtocolHints, CompatProtocol};
 
 /// Detect protocol from hints. Honest heuristic — not perfect for edge cases.

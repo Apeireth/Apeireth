@@ -3,6 +3,7 @@
 //! Composes search + files + symbols + graph + index + MCP. This is what
 //! `apeireth-tools` registers as a single Tool entry.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use thiserror::Error;
 
 use crate::graph::KnowledgeGraph;

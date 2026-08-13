@@ -7,6 +7,7 @@
 //! - Uses rusqlite with bundled sqlite (workspace dep).
 //! - Real schema migration on first run; idempotent.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::Path;
 use std::time::Duration;
 use chrono::{DateTime, Utc};

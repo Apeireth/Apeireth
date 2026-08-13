@@ -15,6 +15,7 @@
 //! 9. `find_callers`       — knowledge graph: who calls symbol X
 //! 10. `project_overview`  — top-level project structure summary
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
