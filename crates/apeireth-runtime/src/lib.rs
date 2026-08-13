@@ -362,6 +362,9 @@ pub struct Runtime {
     pub decay_emit_total: Arc<Counter>,
     pub cycle_duration_ms: Arc<Histogram>,
     pub pending_tasks: Arc<Gauge>,
+    // R240 -- lifecycle counters (inc on start/shutdown)
+    pub lifecycle_started_total: Arc<Counter>,
+    pub lifecycle_shutdown_total: Arc<Counter>,
 }
 
 impl Runtime {
@@ -392,6 +395,14 @@ impl Runtime {
             "runtime_total_tasks",
             "total async tasks tracked by runtime store",
         ));
+        let lifecycle_started_total = metrics_registry.register_counter(Counter::new(
+            "runtime_lifecycle_started_total",
+            "runtime start() invocations",
+        ));
+        let lifecycle_shutdown_total = metrics_registry.register_counter(Counter::new(
+            "runtime_lifecycle_shutdown_total",
+            "runtime shutdown() invocations",
+        ));
         let arbitration = match &config.arbitration_path {
             Some(p) => ArbitrationLog::open(p).expect("open arbitration log"),
             None => ArbitrationLog::open_in_memory().expect("open in-memory arbitration"),
@@ -412,6 +423,8 @@ impl Runtime {
             decay_emit_total,
             cycle_duration_ms,
             pending_tasks,
+            lifecycle_started_total,
+            lifecycle_shutdown_total,
         }
     }
 
@@ -603,6 +616,8 @@ impl Runtime {
             return Err(RuntimeError::AlreadyStarted);
         }
         self.bootstrap()?;
+        // R240: register lifecycle + emit bus event
+        self.lifecycle_started_total.inc();
         let hb = LivingCycleHeartbeat::new(self.clone());
         self.scheduler
             .register_interval(hb, Schedule::every(self.config.tick_interval))
@@ -612,11 +627,41 @@ impl Runtime {
             .start()
             .await
             .map_err(|e| RuntimeError::Task(e.to_string()))?;
+        // R240: publish runtime.started to bus
+        let payload = serde_json::to_string(&serde_json::json!({
+            "event": "started",
+            "tick_interval_secs": self.config.tick_interval.as_secs(),
+            "total_tasks": self.pending_tasks.get(),
+        })).unwrap_or_default();
+        let event = RuntimeEvent::new(
+            apeireth_bus::next_trace_id(),
+            None,
+            "apeireth-runtime",
+            "runtime.started",
+            payload,
+        );
+        let _ = self.bus.publish_multi(ChannelSet::BOTH, "runtime.started", BusMessage::new(event)).await;
         *self.started.lock() = true;
         Ok(())
     }
 
     pub async fn shutdown(self: Arc<Self>) -> RuntimeResult<()> {
+        // R240: register lifecycle + emit bus event
+        self.lifecycle_shutdown_total.inc();
+        // publish before stopping scheduler so subscribers get the event
+        let payload = serde_json::to_string(&serde_json::json!({
+            "event": "shutdown",
+            "cycle_total": self.cycle_total.get(),
+            "decay_emit_total": self.decay_emit_total.get(),
+        })).unwrap_or_default();
+        let event = RuntimeEvent::new(
+            apeireth_bus::next_trace_id(),
+            None,
+            "apeireth-runtime",
+            "runtime.shutdown",
+            payload,
+        );
+        let _ = self.bus.publish_multi(ChannelSet::BOTH, "runtime.shutdown", BusMessage::new(event)).await;
         self.scheduler
             .stop()
             .await
@@ -861,4 +906,32 @@ pub use apeireth_consciousness::EmotionEvent;
         // inc via the registry pointer, see same effect
         counter_via_lookup.inc_by(7);
         assert_eq!(rt.cycle_total.get(), 7);
+    }
+
+    // R240 -- lifecycle event emission (3 cases)
+    #[tokio::test]
+    async fn r240_01_runtime_start_increments_lifecycle_counter() {
+        let rt = Arc::new(Runtime::new());
+        assert_eq!(rt.lifecycle_started_total.get(), 0);
+        rt.clone().start().await.unwrap();
+        assert_eq!(rt.lifecycle_started_total.get(), 1);
+        rt.clone().shutdown().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn r240_02_runtime_shutdown_increments_lifecycle_counter() {
+        let rt = Arc::new(Runtime::new());
+        rt.clone().start().await.unwrap();
+        assert_eq!(rt.lifecycle_shutdown_total.get(), 0);
+        rt.clone().shutdown().await.unwrap();
+        assert_eq!(rt.lifecycle_shutdown_total.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn r240_03_runtime_lifecycle_metrics_text_export_includes_lifecycle() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let text = rt.metrics_text();
+        assert!(text.contains("runtime_lifecycle_started_total"), "missing started_total");
+        assert!(text.contains("runtime_lifecycle_shutdown_total"), "missing shutdown_total");
     }
