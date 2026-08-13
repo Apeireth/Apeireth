@@ -436,6 +436,15 @@ impl Runtime {
         self.metrics_registry.export_prometheus_text()
     }
 
+    /// R246 -- cycle latency summary (count, sum, mean).
+    pub fn cycle_latency_summary(&self) -> CycleLatencySummary {
+        CycleLatencySummary {
+            count: self.cycle_duration_ms.count(),
+            sum_ms: self.cycle_duration_ms.sum(),
+            mean_ms: self.cycle_duration_ms.mean(),
+        }
+    }
+
     pub fn bootstrap(&self) -> RuntimeResult<String> {
         let room_id = self.group_chat.create_room(
             self.config.room_name.clone(),
@@ -826,6 +835,14 @@ pub use apeireth_bus::ChannelSet as BusChannelSet;
 pub use apeireth_bus::next_trace_id;
 pub use apeireth_consciousness::EmotionEvent;
 
+/// R246 -- cycle latency summary (count, sum, mean).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CycleLatencySummary {
+    pub count: u64,
+    pub sum_ms: f64,
+    pub mean_ms: f64,
+}
+
     /// **R235 — runtime run_one_cycle calls auto_decay**
     #[tokio::test]
     async fn t11_runtime_cycle_calls_emotion_auto_decay() {
@@ -1017,4 +1034,36 @@ pub use apeireth_consciousness::EmotionEvent;
         // With publish on, bus.sent must increase.
         assert!(sent_after > sent_before, "publish should increment bus.sent");
         assert!(rt.config.publish_cycle_report);
+        drop(sent_before); drop(sent_after);
+    }
+
+    // R246 -- cycle latency summary (3 cases)
+    #[tokio::test]
+    async fn r246_01_cycle_latency_summary_initial_zeros() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let s = rt.cycle_latency_summary();
+        assert_eq!(s.count, 0);
+        assert_eq!(s.sum_ms, 0.0);
+        assert_eq!(s.mean_ms, 0.0);
+    }
+
+    #[tokio::test]
+    async fn r246_02_cycle_latency_summary_updates_after_cycle() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        assert_eq!(rt.cycle_latency_summary().count, 0);
+        let _ = rt.run_one_cycle().await.unwrap();
+        let s_after = rt.cycle_latency_summary();
+        assert_eq!(s_after.count, 1);
+        assert!(s_after.sum_ms >= 0.0);
+        let expected_mean = s_after.sum_ms / s_after.count as f64;
+        assert!((s_after.mean_ms - expected_mean).abs() < 1e-6);
+    }
+
+    #[test]
+    fn r246_03_cycle_latency_summary_equality() {
+        let s1 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
+        let s2 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
+        assert_eq!(s1, s2);
     }
