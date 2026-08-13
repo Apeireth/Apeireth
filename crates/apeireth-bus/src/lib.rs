@@ -18,6 +18,8 @@ use thiserror::Error;
 
 pub mod l0;
 pub mod channel;
+#[cfg(test)]
+pub mod r216_tests;  // R216: 三套通知 + 4 BackpressurePolicy 测试覆盖
 #[cfg(unix)]
 pub mod l1;
 #[cfg(unix)]
