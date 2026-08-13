@@ -408,6 +408,7 @@ mod tests {
 
 
 pub use crate::emotion::{BaseEmotion, EmError, EmResult, EmotionEngine, EmotionEvent, EmotionSnapshot, Pad, ResponseStyle};
+pub use crate::emotion::DecaySnapshot;  // R237
 pub use crate::transfer_monitor::{
     CognitiveDreamMonitor, CycleInfo, MonitorError, RateLimitError, TransferSnapshot,
 };
