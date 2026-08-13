@@ -25,3 +25,7 @@ _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git
 ## R164 public API cleanup
 
 ToolKind::as_vcp_str -> as_legacy_str; ToolKind::from_vcp_str -> from_legacy_str; Category::from_vcp_name -> from_legacy_name. 3 test fn names updated. 100 tests pass.
+## R166 public API deep cleanup
+
+`BORROWED_VCP_COUNT` -> `BORROWED_LEGACY_COUNT`. 100 tests pass.
+

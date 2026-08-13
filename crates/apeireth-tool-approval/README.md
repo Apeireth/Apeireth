@@ -22,3 +22,6 @@ Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
 ---
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+## R166 public API deep cleanup
+
+`BORROWED_VCP_FIELDS` -> `BORROWED_LEGACY_FIELDS`. 62 tests pass.
