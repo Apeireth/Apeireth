@@ -33,7 +33,8 @@ pub mod index;
 pub mod mcp;
 pub mod compat;
 pub mod enhanced;
-pub mod ast_grep;  // R193: ast-grep CLI 包装 (R181 调研短期方案)
+pub mod ast_grep;  // R193
+pub mod unified;  // R202: 6 维 code intelligence unified facade: ast-grep CLI 包装 (R181 调研短期方案)
 
 pub use search::{CodeSearcher, SearchMatch, SearchKind, SearchOptions};
 pub use files::{FileFinder, FindOptions, FileEntry};
