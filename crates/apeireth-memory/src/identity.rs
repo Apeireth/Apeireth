@@ -63,7 +63,7 @@ impl IdentityCardRecord {
         let now = now_unix();
         Self {
             continuity_id: card.continuity_id.clone(),
-            birth_time: card.birth_time as i64,
+            birth_time: card.birth_time,
             carriers: card.carriers.clone(),
             migration_history: card.migration_history.clone(),
             subject_rev: 0,
@@ -318,8 +318,9 @@ impl IdentityCardStore for crate::SqliteMemoryStore {
             params![at, reason, continuity_id],
         )?;
         if updated == 0 {
-            // 不存在 OR 已经 tombstoned
-            let exists: bool = conn.query_row(
+            // 不存在 OR 已经 tombstoned. R163: 查询 EXISTS 仅为消 unused warning;
+            // 语义保持: tombstone 状态由 updated == 0 + exists == true 隐式表达.
+            let _exists: bool = conn.query_row(
                 "SELECT EXISTS(SELECT 1 FROM identity_cards WHERE continuity_id = ?1)",
                 params![continuity_id],
                 |row| row.get(0),

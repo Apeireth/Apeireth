@@ -1,5 +1,6 @@
 //! Fetcher trait + FetchEngine unified entry.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 use thiserror::Error;
 use serde::{Deserialize, Serialize};

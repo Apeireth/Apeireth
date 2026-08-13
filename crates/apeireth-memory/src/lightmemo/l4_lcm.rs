@@ -3,6 +3,7 @@
 //! Chunks long content into smaller pieces + optional summarization via
 //! user-supplied callback.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]

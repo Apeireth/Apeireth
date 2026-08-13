@@ -69,3 +69,7 @@ apeireth-memory-extensions (sub-crate) → apeireth-life-force + apeireth-asi �
 
 - [minimax 真端到端 example](../../reports/minimax-end-to-end-r128-2026-08-12.md)
 - [3-layer memory spec (R30 U9)](../../docs/conventions/)
+
+## R163 lint cleanup
+
+232 -> 0 warnings. 23 source files (lightmemo/* + dailynote/* + identity + dream + user_profile). 4 bugs fixed (trivial cast, unused var, pattern unused binding, conditional binding).

@@ -16,6 +16,7 @@
 //! - ✅ inputSchema 真按 JSON Schema 7 子集构造 (type=object + properties)
 //! - ❌ 不假装"完整 JSON Schema 校验", 只构造骨架 (properties 来自 6 类 hardcode 默认)
 
+#![allow(non_snake_case)] // R163: MCP JSON-RPC wire protocol requires camelCase field names per JSON-RPC spec
 use std::collections::HashMap;
 use std::sync::Arc;
 

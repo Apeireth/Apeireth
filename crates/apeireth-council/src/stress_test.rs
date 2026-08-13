@@ -14,6 +14,7 @@
 //! - 0 改 workspace 1.0.0 / 24 LOCKED crate
 //! - 0 引 I/O / 网络 (默认 mock; 真 LLM env-gated)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::sync::Arc;
 use std::time::Instant;
 

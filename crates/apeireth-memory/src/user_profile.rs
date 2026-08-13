@@ -116,7 +116,7 @@ impl ProfileExtractor {
             .map(|(_, v)| *v)
             .sum();
         let communication_style = match (user_count, assistant_count, other_count) {
-            (u, a, o) if u + a == 0 => "未知".to_string(),
+            (u, a, _o) if u + a == 0 => "未知".to_string(),
             (u, a, _) if u > a * 2 => "用户主导".to_string(),
             (u, a, _) if a > u * 2 => "助手主导".to_string(),
             (u, a, o) if o > (u + a) / 2 => format!("混合 (含 {} 条 system/tool)", o),
