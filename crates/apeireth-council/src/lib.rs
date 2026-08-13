@@ -39,6 +39,7 @@ pub mod council_member_deliberation;  // R33-4-1: CouncilMember 多轮协商 del
 pub mod council_member_persona_combo;  // R33-4-2: CouncilMember + Persona 组合 (per AutoGen ConversableAgent.system_message 借鉴)
 pub mod deliberation;
 pub mod checkpoint;  // R212: Council deliberation checkpoint (LangGraph style)
+pub mod checkpoint_integration;  // R218 followup: 集成 checkpoint 到 Council (run_with_checkpoints / resume_with_checkpoints)
 pub mod hold;
 pub mod lifecycle;
 pub mod mock_llm;
