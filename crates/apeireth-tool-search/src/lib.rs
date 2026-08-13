@@ -269,6 +269,34 @@ impl SearchEngine {
     }
 
     /// 全文搜索 + 字段过滤
+    /// **R236 — batch search** — 多个 query 合并执行, 按 doc id 去重 (高分优先)
+    ///
+    /// **用途**: 一次调多次搜, 省多次 search() 开销
+    /// **不假装**: 复用 search_with_filter 路径, 不编造结果
+    /// **去重**: 同一 doc 可能被多次 query 命中, 按 id 去重, 保留高分
+    pub fn search_batch(
+        &self,
+        queries: &[&str],
+        limit: usize,
+    ) -> SearchResult<Vec<RankedDoc>> {
+        let mut best: std::collections::HashMap<u64, RankedDoc> = std::collections::HashMap::new();
+        for q in queries {
+            for hit in self.search(q, limit)? {
+                match best.get(&hit.doc.id) {
+                    None => { best.insert(hit.doc.id, hit); }
+                    Some(existing) if existing.score < hit.score => {
+                        best.insert(hit.doc.id, hit);
+                    }
+                    Some(_) => {} // 已有更高分, 跳过
+                }
+            }
+        }
+        let mut results: Vec<RankedDoc> = best.into_values().collect();
+        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.truncate(limit);
+        Ok(results)
+    }
+
     pub fn search_with_filter(
         &self,
         query: &str,
@@ -520,3 +548,67 @@ mod tests {
         assert_eq!(r[0].doc.tags[0].1, "alice");
     }
 }
+
+    // ============================================================
+    // R236 — search_batch (6 cases)
+    // ============================================================
+
+    #[test]
+    fn t13_search_batch_empty_returns_empty() {
+        let engine = SearchEngine::new();
+        let res = engine.search_batch(&[], 10).unwrap();
+        assert!(res.is_empty());
+    }
+
+    #[test]
+    fn t14_search_batch_single_query_matches_search() {
+        let engine = SearchEngine::new();
+        engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
+        let batch = engine.search_batch(&["hello"], 10).unwrap();
+        let single = engine.search("hello", 10).unwrap();
+        assert_eq!(batch.len(), single.len());
+    }
+
+    #[test]
+    fn t15_search_batch_dedupes_same_doc_across_queries() {
+        let engine = SearchEngine::new();
+        engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
+        // 两个 query 都命中 doc 1 — 应只返一次
+        let res = engine.search_batch(&["hello", "fn"], 10).unwrap();
+        assert_eq!(res.len(), 1, "doc 1 被两次命中, 应去重");
+        assert_eq!(res[0].doc.id, 1);
+    }
+
+    #[test]
+    fn t16_search_batch_keeps_highest_score() {
+        let engine = SearchEngine::new();
+        engine.index(Document::new(1, "a", "t", "hello world"));
+        engine.index(Document::new(2, "b", "t", "hello there"));
+        let res = engine.search_batch(&["hello world", "hello"], 10).unwrap();
+        // doc 1 在 "hello world" 命中更高分, 应排前
+        assert_eq!(res[0].doc.id, 1, "doc 1 应有更高综合分");
+    }
+
+    #[test]
+    fn t17_search_batch_respects_limit() {
+        let engine = SearchEngine::new();
+        for i in 0..20 {
+            engine.index(Document::new(i, "src", "rust", format!("fn test_{}()", i)));
+        }
+        let res = engine.search_batch(&["fn", "test"], 5).unwrap();
+        assert!(res.len() <= 5, "limit=5 应至多 5 条");
+    }
+
+    #[test]
+    fn t18_search_batch_sorted_by_score_desc() {
+        let engine = SearchEngine::new();
+        engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
+        engine.index(Document::new(2, "b", "t", "alpha"));
+        engine.index(Document::new(3, "c", "t", "alpha beta"));
+        let res = engine.search_batch(&["alpha", "beta"], 10).unwrap();
+        // 验证按分降序 (不指定具体 id, 因 ranking 取决于 score 函数实现)
+        for i in 1..res.len() {
+            assert!(res[i - 1].score >= res[i].score, "结果应按分降序: {} >= {}", res[i - 1].score, res[i].score);
+        }
+        assert!(!res.is_empty());
+    }
