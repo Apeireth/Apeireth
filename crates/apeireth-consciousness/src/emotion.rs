@@ -492,6 +492,28 @@ impl EmotionEngine {
     pub fn event_count(&self) -> u64 { self.event_count }
 
     pub fn current_pad(&self) -> Pad { self.pad }
+
+    /// R244 -- apply a batch of events sequentially in one call.
+    /// Stops on the first Err and returns how many were applied.
+    pub fn apply_batch(&mut self, events: &[EmotionEvent]) -> EmResult<usize> {
+        let mut count = 0;
+        for e in events {
+            self.apply(*e)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+
+    /// R244 -- apply a batch and sum intensities, returning total resonance added.
+    pub fn apply_batch_sum(&mut self, events: &[EmotionEvent]) -> f32 {
+        let mut sum = 0.0;
+        for e in events {
+            if self.apply(*e).is_ok() {
+                sum += e.resonance();
+            }
+        }
+        sum
+    }
 }
 
 /// 情感响应风格 (LLM tone 指南)
@@ -859,4 +881,38 @@ mod tests {
         let all = engine.history();
         assert_eq!(all.len(), 2);
         assert!(all[0].timestamp_ms <= all[1].timestamp_ms);
+    }
+
+    // R244 -- batch apply API (3 cases)
+    #[test]
+    fn r244_01_apply_batch_applies_all_events() {
+        let mut engine = EmotionEngine::new();
+        let count = engine.apply_batch(&[
+            EmotionEvent::UserPraise,
+            EmotionEvent::UserPraise,
+            EmotionEvent::TaskSuccess,
+        ]).unwrap();
+        assert_eq!(count, 3);
+        assert_eq!(engine.event_count(), 3);
+    }
+
+    #[test]
+    fn r244_02_apply_batch_empty_returns_zero() {
+        let mut engine = EmotionEngine::new();
+        let count = engine.apply_batch(&[]).unwrap();
+        assert_eq!(count, 0);
+        assert_eq!(engine.event_count(), 0);
+    }
+
+    #[test]
+    fn r244_03_apply_batch_sum_returns_total_resonance() {
+        let mut engine = EmotionEngine::new();
+        let before = engine.event_count();
+        let sum = engine.apply_batch_sum(&[
+            EmotionEvent::UserPraise,
+            EmotionEvent::UserCritique,
+        ]);
+        // UserPraise + UserCritique both have resonance > 0
+        assert!(sum > 0.0);
+        assert_eq!(engine.event_count(), before + 2);
     }
