@@ -249,6 +249,29 @@ impl EmotionSnapshot {
 }
 
 // ============================================================================
+// R237 -- DecaySnapshot (auto_decay output, for runtime clients to publish to bus)
+// ============================================================================
+
+/// R237: atomic output of one auto_decay call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DecaySnapshot {
+    pub timestamp_ms: i64,
+    pub elapsed_secs: f32,
+    pub pad_before: Pad,
+    pub pad_after: Pad,
+}
+
+impl DecaySnapshot {
+    pub fn drift(&self) -> f32 {
+        self.pad_before.distance(&self.pad_after)
+    }
+
+    pub fn is_significant(&self, min_drift: f32) -> bool {
+        self.drift() > min_drift
+    }
+}
+
+// ============================================================================
 // EmotionEngine
 // ============================================================================
 
@@ -263,6 +286,7 @@ pub struct EmotionEngine {
     event_count: u64,
     /// R234: 上次事件时间戳 (epoch ms) — 用于 auto-decay 计算 elapsed
     last_event_at_ms: i64,
+    last_decay: Option<DecaySnapshot>,
 }
 
 impl EmotionEngine {
@@ -275,6 +299,7 @@ impl EmotionEngine {
             history_capacity: 64,
             event_count: 0,
             last_event_at_ms: now_ms(),
+            last_decay: None,
         }
     }
 
@@ -330,6 +355,7 @@ impl EmotionEngine {
     /// **用途**: 不依赖外部调度, engine 自身"知道"该衰减多少.
     ///   上层 (pipeline / runtime) 周期性调一次即可.
     pub fn auto_decay(&mut self) -> f32 {
+        let pad_before = self.pad;
         let now = now_ms();
         let elapsed_ms = (now - self.last_event_at_ms).max(0);
         let elapsed_secs = elapsed_ms as f32 / 1000.0;
@@ -338,23 +364,44 @@ impl EmotionEngine {
             // 更新 last_event_at_ms, 下次基于新基准
             self.last_event_at_ms = now;
         }
+        self.last_decay = Some(DecaySnapshot {
+            timestamp_ms: now,
+            elapsed_secs,
+            pad_before,
+            pad_after: self.pad,
+        });
         elapsed_secs
     }
 
     /// **R234 — auto_decay_at(now_ms)** — 测试友好版本 (传显式时间戳)
     pub fn auto_decay_at(&mut self, now_ms_value: i64) -> f32 {
+        let pad_before = self.pad;
         let elapsed_ms = (now_ms_value - self.last_event_at_ms).max(0);
         let elapsed_secs = elapsed_ms as f32 / 1000.0;
         if elapsed_secs > 0.0 {
             self.decay(elapsed_secs);
             self.last_event_at_ms = now_ms_value;
         }
+        self.last_decay = Some(DecaySnapshot {
+            timestamp_ms: now_ms_value,
+            elapsed_secs,
+            pad_before,
+            pad_after: self.pad,
+        });
         elapsed_secs
     }
 
     /// **R234 — last_event_at_ms** — accessor for last event timestamp
     pub fn last_event_at_ms(&self) -> i64 {
         self.last_event_at_ms
+    }
+
+    pub fn last_decay(&self) -> Option<&DecaySnapshot> {
+        self.last_decay.as_ref()
+    }
+
+    pub fn take_decay_snapshot(&mut self) -> Option<DecaySnapshot> {
+        self.last_decay.clone()
     }
 
     /// 衰减向 baseline (每秒调用, dt_secs 是流逝秒数)
@@ -640,4 +687,89 @@ mod tests {
         engine.auto_decay_at(t1 + 5000);
         let t2 = engine.last_event_at_ms();
         assert_eq!(t2, t1 + 5000, "auto_decay_at 应更新 last_event_at_ms");
+    }
+
+    // R237 -- DecaySnapshot + take_decay_snapshot (6 cases)
+    #[test]
+    fn r237_01_decay_snapshot_records_pad_before_and_after() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap(); // pad = +0.3P/0 ...
+        let t0 = engine.last_event_at_ms();
+        let _ = engine.auto_decay_at(t0 + 3_000); // 3s elapsed
+        let snap = engine.take_decay_snapshot().expect("snapshot must exist");
+        // snap.timestamp_ms == t0 + 3_000
+        assert_eq!(snap.timestamp_ms, t0 + 3_000);
+        assert!((snap.elapsed_secs - 3.0).abs() < 1e-3, "elapsed_secs should be ~3.0");
+        // Before != After (decay pulls toward baseline)
+        assert!(snap.drift() >= 0.0);
+        assert!(snap.pad_before.p > snap.pad_after.p, "pleasure should decay toward 0");
+    }
+
+    #[test]
+    fn r237_02_decay_snapshot_zero_elapsed_marks_noop() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t0 = engine.last_event_at_ms();
+        let _ = engine.auto_decay_at(t0); // 0 elapsed -> no decay
+        let snap = engine.take_decay_snapshot().unwrap();
+        assert_eq!(snap.elapsed_secs, 0.0);
+        assert_eq!(snap.drift(), 0.0, "no-op should have 0 drift");
+        assert!(!snap.is_significant(0.001));
+    }
+
+    #[test]
+    fn r237_03_decay_snapshot_is_significant_threshold() {
+        let mut engine = EmotionEngine::new().with_decay_rate(0.5); // strong decay
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t0 = engine.last_event_at_ms();
+        let _ = engine.auto_decay_at(t0 + 10_000); // 10s
+        let snap = engine.take_decay_snapshot().unwrap();
+        // With strong decay over 10s, drift should be notable
+        assert!(snap.drift() > 0.05, "10s with 0.5 rate should drift > 0.05");
+        assert!(snap.is_significant(0.01));
+    }
+
+    #[test]
+    fn r237_04_take_decay_snapshot_does_not_clear_internal() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t0 = engine.last_event_at_ms();
+        engine.auto_decay_at(t0 + 2_000);
+        let snap1 = engine.take_decay_snapshot().unwrap();
+        let snap2 = engine.take_decay_snapshot().expect("take should not clear");
+        // Both should carry same elapsed_secs / timestamp (latest snapshot only)
+        assert_eq!(snap1.elapsed_secs, snap2.elapsed_secs);
+        assert_eq!(snap1.timestamp_ms, snap2.timestamp_ms);
+    }
+
+    #[test]
+    fn r237_05_last_decay_accessor_peeks_without_take() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t0 = engine.last_event_at_ms();
+        engine.auto_decay_at(t0 + 1_000);
+        // peek
+        let peek1 = engine.last_decay().expect("peek").clone();
+        // peek again, same value
+        let peek2 = engine.last_decay().expect("peek").clone();
+        assert_eq!(peek1.timestamp_ms, peek2.timestamp_ms);
+        assert_eq!(peek1.elapsed_secs, peek2.elapsed_secs);
+        // take
+        let taken = engine.take_decay_snapshot().unwrap();
+        assert_eq!(taken.timestamp_ms, peek1.timestamp_ms);
+    }
+
+    #[test]
+    fn r237_06_decay_snapshot_serde_roundtrip() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserCritique).unwrap();
+        let t0 = engine.last_event_at_ms();
+        engine.auto_decay_at(t0 + 1_234);
+        let snap = engine.take_decay_snapshot().unwrap();
+        let json = serde_json::to_string(&snap).unwrap();
+        let back: DecaySnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.timestamp_ms, snap.timestamp_ms);
+        assert!((back.elapsed_secs - snap.elapsed_secs).abs() < 1e-6);
+        // Pad is a Copy type, exact equality
+        assert_eq!(back.pad_before.p, snap.pad_before.p);
     }
