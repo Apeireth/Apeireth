@@ -61,3 +61,6 @@ pub use crate::strategy::{affected_indices, should_restart};
 pub fn __register_all_asserts() {
     // no-op by design
 }
+
+// R222: OTel-style metrics (counter / gauge / histogram) + Prometheus text export
+pub mod otel_metrics;
