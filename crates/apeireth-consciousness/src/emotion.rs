@@ -465,6 +465,30 @@ impl EmotionEngine {
         self.history.iter().cloned().collect()
     }
 
+    /// R243 -- last N emotion snapshots (most recent first).
+    pub fn history_recent(&self, limit: usize) -> Vec<EmotionSnapshot> {
+        self.history.iter().rev().take(limit).cloned().collect()
+    }
+
+    /// R243 -- snapshots whose timestamp_ms >= since (chronological order).
+    pub fn history_since(&self, since_ms: i64) -> Vec<EmotionSnapshot> {
+        self.history
+            .iter()
+            .filter(|s| s.timestamp_ms >= since_ms)
+            .cloned()
+            .collect()
+    }
+
+    /// R243 -- clear history (testing / reset path).
+    pub fn history_clear(&mut self) {
+        self.history.clear();
+    }
+
+    /// R243 -- current history depth.
+    pub fn history_len(&self) -> usize {
+        self.history.len()
+    }
+
     pub fn event_count(&self) -> u64 { self.event_count }
 
     pub fn current_pad(&self) -> Pad { self.pad }
@@ -772,4 +796,67 @@ mod tests {
         assert!((back.elapsed_secs - snap.elapsed_secs).abs() < 1e-6);
         // Pad is a Copy type, exact equality
         assert_eq!(back.pad_before.p, snap.pad_before.p);
+    }
+
+    // R243 -- history accessors (5 cases)
+    #[test]
+    fn r243_01_history_recent_returns_n_latest_in_reverse_order() {
+        let mut engine = EmotionEngine::new();
+        for _ in 0..5 {
+            engine.apply(EmotionEvent::UserPraise).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        let recent = engine.history_recent(3);
+        assert_eq!(recent.len(), 3);
+        for w in recent.windows(2) {
+            assert!(w[0].timestamp_ms >= w[1].timestamp_ms);
+        }
+    }
+
+    #[test]
+    fn r243_02_history_since_filters_by_timestamp_threshold() {
+        let mut engine = EmotionEngine::new();
+        let before = now_ms();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        engine.apply(EmotionEvent::UserCritique).unwrap();
+        let after_all = now_ms();
+        let recent = engine.history_since(before);
+        assert!(recent.len() >= 2, "should include both events, got {}", recent.len());
+        for s in &recent {
+            assert!(s.timestamp_ms >= before);
+        }
+        let future = engine.history_since(after_all + 10_000);
+        assert!(future.is_empty(), "future timestamp should yield empty");
+    }
+
+    #[test]
+    fn r243_03_history_clear_empties_history() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        engine.apply(EmotionEvent::ToolError).unwrap();
+        assert!(engine.history_len() >= 2);
+        engine.history_clear();
+        assert_eq!(engine.history_len(), 0);
+        assert!(engine.history().is_empty());
+    }
+
+    #[test]
+    fn r243_04_history_recent_zero_or_overflow() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        assert_eq!(engine.history_recent(0).len(), 0);
+        assert_eq!(engine.history_recent(100).len(), 1);
+    }
+
+    #[test]
+    fn r243_05_history_full_returns_chronological_order() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        engine.apply(EmotionEvent::UserCritique).unwrap();
+        let all = engine.history();
+        assert_eq!(all.len(), 2);
+        assert!(all[0].timestamp_ms <= all[1].timestamp_ms);
     }
