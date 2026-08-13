@@ -177,7 +177,9 @@ impl AnySearchClient {
         queries: &[&str],
         domain: Option<&str>,
     ) -> AnySearchResult<String> {
-        let mut args = json!({ "queries": queries });
+        // R176+1 fix: batch_search expects `queries: [{query: "..."}]` (objects), not strings
+        let query_objects: Vec<Value> = queries.iter().map(|q| json!({ "query": q })).collect();
+        let mut args = json!({ "queries": query_objects });
         if let Some(d) = domain { args["domain"] = json!(d); }
         let r = self.call("batch_search", args).await?;
         extract_content(&r).ok_or(AnySearchError::Empty)
