@@ -39,6 +39,9 @@ pub mod perf_guardianship;
 // R129-4 ASI Python 整合 Stage 4 自治 - D2 反思自循环 (per decision-61 §3.1 R129-4)
 pub mod reflection_self_loop;
 pub mod r11_compat;
+// R220: tokio::spawn_blocking 包装 sync Python 为 async (0 引 pyo3-asyncio)
+#[cfg(feature = "python-ext")]
+pub mod async_wrapper;
 // R129-5 ASI Python 整合 Stage 5 治理 — G1 资源治理 (per decision-61 §3.1 R129-5)
 pub mod resource_governance;
 pub mod security_guardianship;
