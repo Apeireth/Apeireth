@@ -52,12 +52,13 @@ pub struct DiskLruProvider {
 
 /// **DiskLruEntry**: 单 entry (value + 写入时间 for TTL).
 #[derive(Debug, Clone)]
-struct DiskLruEntry {
+pub struct DiskLruEntry {
     /// 序列化后的 value.
     value: Vec<u8>,
     /// 写入时间 (用于 TTL 校验).
     inserted_at: Instant,
     /// value 在 disk 的相对路径 (file_name).
+    #[allow(dead_code)]
     disk_filename: String,
 }
 

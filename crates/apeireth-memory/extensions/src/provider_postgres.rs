@@ -41,6 +41,7 @@ pub struct PostgresProvider {
     /// tokio-postgres connection config (借 0.7 业界标准).
     pg_config: tokio_postgres::Config,
     /// 6 K-1 强校验过的 config.
+    #[allow(dead_code)]
     config: ProviderConfig,
 }
 
