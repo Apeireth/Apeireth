@@ -65,6 +65,8 @@ pub enum McpTool {
     ProjectOverview,
     /// R201: AST-level search via ast-grep CLI (R181/R193 推荐短期路径)
     AstGrepSearch,
+    /// R203: Unified 6-dim code intelligence query (R202 facade)
+    UnifiedQuery,
 }
 
 impl McpTool {
@@ -81,6 +83,7 @@ impl McpTool {
             McpTool::FindCallers => "find_callers",
             McpTool::ProjectOverview => "project_overview",
                 McpTool::AstGrepSearch => "ast_grep_search",
+                McpTool::UnifiedQuery => "unified_query",
         }
     }
 
@@ -97,12 +100,13 @@ impl McpTool {
             McpTool::FindCallers,
             McpTool::ProjectOverview,
             McpTool::AstGrepSearch,
+            McpTool::UnifiedQuery,
         ]
     }
 }
 
 /// Number of MCP tools exposed.
-pub const MCP_TOOL_COUNT: usize = 11;
+pub const MCP_TOOL_COUNT: usize = 12;
 
 pub struct CodeSearchMcp {
     graph: std::sync::Mutex<KnowledgeGraph>,
@@ -144,6 +148,7 @@ impl CodeSearchMcp {
                         McpTool::FindCallers => "Find callers of a symbol (knowledge graph)",
                         McpTool::ProjectOverview => "Get project structure overview",
                     McpTool::AstGrepSearch => "AST-level search via ast-grep CLI (requires ast-grep binary)",
+                    McpTool::UnifiedQuery => "Unified 6-dim code intelligence query (text/file/symbol/graph/index/ast)",
                     }
                 })).collect();
                 McpResponse {
@@ -365,6 +370,55 @@ impl CodeSearchMcp {
                             error: None,
                         }
                     }
+                    "unified_query" => {
+                        let kind_str = args.get("kind").and_then(|v| v.as_str()).unwrap_or("text");
+                        let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
+                        let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
+                        let lang = args.get("lang").and_then(|v| v.as_str());
+                        let kind = match kind_str {
+                            "file" => crate::unified::IntelligenceKind::File,
+                            "symbol" => crate::unified::IntelligenceKind::Symbol,
+                            "graph" => crate::unified::IntelligenceKind::Graph,
+                            "index" => crate::unified::IntelligenceKind::Index,
+                            "ast" => crate::unified::IntelligenceKind::Ast,
+                            _ => crate::unified::IntelligenceKind::Text,
+                        };
+                        let mut q = crate::unified::UnifiedQuery::new(kind, pattern, path);
+                        if let Some(l) = lang { q = q.with_lang(l); }
+                        let u = crate::unified::UnifiedCodeIntelligence::new_in_memory();
+                        match u.query(&q) {
+                            Ok(hits) => {
+                                let text = if hits.is_empty() {
+                                    "(no matches)".to_string()
+                                } else {
+                                    hits.iter().take(100).enumerate().map(|(i, h)| {
+                                        let k = h.kind().as_str();
+                                        format!("[{}] {}: {}", i, k, match h {
+                                            crate::unified::IntelligenceHit::Text { file, line, column, text } =>
+                                                format!("{}:{}:{} {}", file.display(), line, column, text.trim()),
+                                            crate::unified::IntelligenceHit::File(f) => f.path.clone(),
+                                            crate::unified::IntelligenceHit::Symbol(s) => format!("{} {} (line {})", s.kind.as_str(), s.name, s.line),
+                                            crate::unified::IntelligenceHit::Graph(n) => format!("{} #{}", n.label, n.id),
+                                            crate::unified::IntelligenceHit::Index(e) => format!("{} (id={})", e.path, e.id),
+                                            crate::unified::IntelligenceHit::Ast(m) => format!("{}:{}:{} {}", m.file.display(), m.start_line, m.end_line, m.text.lines().next().unwrap_or("")),
+                                        })
+                                    }).collect::<Vec<_>>().join("\n")
+                                };
+                                McpResponse {
+                                    jsonrpc: "2.0".to_string(),
+                                    id: req.id,
+                                    result: Some(json!({"content": [{"type": "text", "text": text}], "isError": false})),
+                                    error: None,
+                                }
+                            }
+                            Err(e) => McpResponse {
+                                jsonrpc: "2.0".to_string(),
+                                id: req.id,
+                                result: Some(json!({"content": [{"type": "text", "text": format!("unified query error: {}", e)}], "isError": true})),
+                                error: None,
+                            },
+                        }
+                    }
                     "ast_grep_search" => {
                         let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
                         let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
@@ -421,8 +475,8 @@ mod tests {
 
     #[test]
     fn tool_count_is_10() {
-        assert_eq!(MCP_TOOL_COUNT, 11);
-        assert_eq!(McpTool::all().len(), 11);
+        assert_eq!(MCP_TOOL_COUNT, 12);
+        assert_eq!(McpTool::all().len(), 12);
     }
 
     #[test]
@@ -441,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    fn tools_list_returns_11() {
+    fn tools_list_returns_12() {
         let mcp = CodeSearchMcp::new_in_memory();
         let req = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -451,7 +505,7 @@ mod tests {
         };
         let resp = mcp.handle(req);
         let tools = resp.result.unwrap()["tools"].as_array().unwrap().clone();
-        assert_eq!(tools.len(), 11);
+        assert_eq!(tools.len(), 12);
     }
 
     #[test]
@@ -510,6 +564,22 @@ mod tests {
         };
         let resp = mcp.handle(req);
         // Either gracefully returns "(no matches or ast-grep unavailable)" or error message — never panics
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(!text.is_empty());
+    }
+    #[test]
+    fn unified_query_handles_graceful() {
+        // R203: unified_query MCP tool — verifies graceful handling
+        let mcp = CodeSearchMcp::new_in_memory();
+        let req = McpRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(json!(7)),
+            method: "tools/call".to_string(),
+            params: json!({"name": "unified_query", "arguments": {"kind": "text", "pattern": "fn", "path": "./nonexistent_xyz"}}),
+        };
+        let resp = mcp.handle(req);
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
         let text = result["content"][0]["text"].as_str().unwrap();
