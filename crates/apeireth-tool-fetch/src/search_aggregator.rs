@@ -11,6 +11,8 @@ pub enum SearchSource {
     AnySearch,
     DuckDuckGo,
     SearXng,
+    Brave,
+    Serper,
 }
 
 impl SearchSource {
@@ -20,6 +22,8 @@ impl SearchSource {
             Self::AnySearch => "anysearch",
             Self::DuckDuckGo => "duckduckgo",
             Self::SearXng => "searxng",
+            Self::Brave => "brave",
+            Self::Serper => "serper",
         }
     }
 }
