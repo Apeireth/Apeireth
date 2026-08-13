@@ -167,6 +167,21 @@ impl Council {
         self.advisors.len()
     }
 
+    /// 迭代 advisors (按召集顺序). R218 followup 用: checkpoint 集成.
+    pub fn advisors_iter(&self) -> std::slice::Iter<'_, Box<dyn Advisor>> {
+        self.advisors.iter()
+    }
+
+    /// 取指定 domain 的 synthesis 权重. R218 followup 用.
+    pub fn weights_for(&self, domain: crate::advisor::AdvisorDomain) -> f64 {
+        self.weights.for_domain(domain)
+    }
+
+    /// 复制当前 weights. R218 followup 用: checkpoint 集成需要 synthesis.
+    pub fn weights_clone(&self) -> crate::synthesis::SynthesisWeights {
+        self.weights.clone()
+    }
+
     /// 审议入口 — 单轮 (非拟人化).
     ///
     /// **流程**:
