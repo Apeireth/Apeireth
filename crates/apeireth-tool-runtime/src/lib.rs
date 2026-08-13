@@ -19,7 +19,7 @@
 //! **不假装** (主哲学锚 #1 不漂移):
 //! - ✅ 4 模块真实现 (parser 字段扫描 + fuzzy DP + executor tokio timeout + privacy regex 真跑 + record apeireth-memory 真写)
 //! - ✅ 13 类敏感键 + 7 类 high-confidence token (VCP 真字段级)
-//! - ✅ 编译期 hardcode (`BORROWED_VCP_COUNT = 5` 等)
+//! - ✅ 编译期 hardcode (`BORROWED_LEGACY_COUNT = 5` 等)
 //! - ✅ unit tests ≥ 25 (按 DoD)
 //!
 //! **不修改承诺** (R17 finalize 8 项不修改承诺):
@@ -74,7 +74,7 @@ pub use record::{RecordStore, ToolCallRecord, RECORD_PAYLOAD_VERSION};
 // ============================================================
 
 /// 战役 2-2 实际借鉴 VCP 5 个真文件 (per §6.2.2 #18 + 战役 2 plan)
-pub const BORROWED_VCP_COUNT: usize = 5;
+pub const BORROWED_LEGACY_COUNT: usize = 5;
 
 /// 4 模块 (parser / fuzzy / executor / privacy / record) — 实际是 5 模块 (含 fuzzy)
 pub const MODULE_COUNT: usize = 5;
@@ -105,8 +105,8 @@ const _: () = {
         "MODULE_COUNT = 5 (parser / fuzzy / executor / privacy / record)"
     );
     assert!(
-        BORROWED_VCP_COUNT == 5,
-        "BORROWED_VCP_COUNT = 5 (5 个 VCP 真文件)"
+        BORROWED_LEGACY_COUNT == 5,
+        "BORROWED_LEGACY_COUNT = 5 (5 个 VCP 真文件)"
     );
 
     // 超时 30s
@@ -159,7 +159,7 @@ mod lib_tests {
     fn lib_constants_match_vcp() {
         // 编译期 hardcode 已 assert, 这里再 runtime 测一次
         assert_eq!(MODULE_COUNT, 5);
-        assert_eq!(BORROWED_VCP_COUNT, 5);
+        assert_eq!(BORROWED_LEGACY_COUNT, 5);
         assert_eq!(DEFAULT_TIMEOUT_MS, 30_000);
         assert_eq!(MAX_FUZZY_DISTANCE, 2);
         assert_eq!(SENSITIVE_KEY_COUNT, 13);
@@ -253,7 +253,7 @@ input:<<<2+3>>>
         assert!(masked["api_key"]
             .as_str()
             .unwrap()
-            .contains("[VCP_PRIVACY_REDACTED]"));
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
         assert_eq!(masked["api_key"], masked["api_key"]);
 
         // 4. record

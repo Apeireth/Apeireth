@@ -15,7 +15,7 @@ pub enum ShellCommand {
     Unknown,
 }
 
-pub const VCP_SHELL_COMMAND_COUNT: usize = 3;
+pub const LEGACY_SHELL_COMMAND_COUNT: usize = 3;
 
 impl ShellCommand {
     pub fn from_str(s: &str) -> Self {
@@ -35,7 +35,7 @@ impl ShellCompatRouter {
         Self
     }
     pub fn command_count() -> usize {
-        VCP_SHELL_COMMAND_COUNT
+        LEGACY_SHELL_COMMAND_COUNT
     }
 }
 
@@ -53,7 +53,7 @@ mod tests {
         for s in ["LinuxShellExecutor", "PowerShellExecutor", "SciCalculator"] {
             assert_ne!(ShellCommand::from_str(s), ShellCommand::Unknown);
         }
-        assert_eq!(VCP_SHELL_COMMAND_COUNT, 3);
+        assert_eq!(LEGACY_SHELL_COMMAND_COUNT, 3);
     }
 
     #[test]
