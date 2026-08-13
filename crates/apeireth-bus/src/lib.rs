@@ -105,7 +105,7 @@ pub fn now_ms() -> i64 {
 // === 反背压 / 丢弃策略 ===
 
 /// Bounded channel 满时的反背压策略.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum BackpressurePolicy {
     /// 发送方 await 直到有空间 (默认).
     Block,
@@ -115,6 +115,34 @@ pub enum BackpressurePolicy {
     DropNewest,
     /// 直接丢弃 (用于遥测等低优先).
     Drop,
+    /// **R226 — 合并 (coalesce)**: 同 topic+ttl_ms 窗口内的连续消息合并为最新一条,
+    ///   中间消息直接丢弃. 适合 telemetry / metrics 高频上报.
+    ///   语义: `Coalesce { ttl_ms: 1000 }` 表示 1s 内重复消息只保留最后一条.
+    Coalesce { ttl_ms: u64 },
+    /// **R226 — 自适应 (adaptive)**: 起始按 `initial` 行为; 当 dropped / sent 比率超过
+    ///   `drop_threshold` (0.0-1.0) 时, 自动切换到 `DropOldest` 缓解.
+    ///   适合流量波动大、不想硬编码策略的场景.
+    Adaptive {
+        initial: Box<BackpressurePolicy>,
+        drop_threshold: f64,
+    },
+}
+
+impl BackpressurePolicy {
+    /// 编译期 hardcode — 当前支持的策略数
+    pub const VARIANT_COUNT: usize = 6;
+
+    /// 策略名 (调试/日志用)
+    pub fn name(&self) -> &'static str {
+        match self {
+            BackpressurePolicy::Block => "Block",
+            BackpressurePolicy::DropOldest => "DropOldest",
+            BackpressurePolicy::DropNewest => "DropNewest",
+            BackpressurePolicy::Drop => "Drop",
+            BackpressurePolicy::Coalesce { .. } => "Coalesce",
+            BackpressurePolicy::Adaptive { .. } => "Adaptive",
+        }
+    }
 }
 
 impl Default for BackpressurePolicy {
