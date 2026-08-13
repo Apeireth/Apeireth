@@ -72,7 +72,7 @@ members = [
     "crates/apeireth-tool-codesearch",
     "crates/apeireth-tool-image-gen",
     "crates/apeireth-tool-image-process",
-    "crates/apeireth-protocol-bridge",
+    # R165: apeireth-protocol-bridge -> _archived/apeireth-protocol-bridge (0 业务调用者, 死码归档)
     "crates/apeireth-context-fold",
     "crates/apeireth-tool-approval",
     "crates/apeireth-agent",
@@ -85,7 +85,7 @@ members = [
     # V2 战区 1/4/5 — multi-language SDK (docs/v2-strategy/05 §Step 1.4, R-Cycle v2-strategy)
     "crates/apeireth-sdk",
     # V2 战区 5 — formal verification (docs/v2-strategy/03 §4A, R-Cycle v2-strategy)
-    "crates/apeireth-formal",
+    # R165: apeireth-formal -> _archived/apeireth-formal (0 外部依赖; apeireth-library-governance::formal_proof 承担生产路径)
     # 5 P0 crate skeleton (per v09021-rust-translation-blueprint-RIVAL §5.1, R20 阶段 1)
     "crates/apeireth-workflow",
     "crates/apeireth-team-lead",

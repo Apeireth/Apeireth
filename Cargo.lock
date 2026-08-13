@@ -523,15 +523,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "apeireth-formal"
-version = "1.2.0"
-dependencies = [
- "criterion",
- "kani",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "apeireth-graph"
 version = "1.2.0"
 dependencies = [
@@ -851,27 +842,6 @@ version = "1.2.0"
 dependencies = [
  "async-trait",
  "reqwest",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
-]
-
-[[package]]
-name = "apeireth-protocol-bridge"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-api",
- "apeireth-core",
- "apeireth-protocol",
- "apeireth-sovereignty",
- "apeireth-tool-approval",
- "apeireth-tool-registry",
- "apeireth-tool-runtime",
- "apeireth-tools",
- "async-trait",
- "chrono",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -4065,12 +4035,6 @@ dependencies = [
  "serde_json",
  "simple_asn1",
 ]
-
-[[package]]
-name = "kani"
-version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4b7234edbef8bfed0dd44c39b0cd344d4ef7fa2bcb5dec3c9c334874ed8744"
 
 [[package]]
 name = "kasuari"
