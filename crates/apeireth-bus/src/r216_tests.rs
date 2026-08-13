@@ -361,3 +361,80 @@ async fn r228_08_exact_and_pattern_both_receive() {
     assert_eq!(m1.payload, "dual");
     assert_eq!(m2.payload, "dual");
 }
+
+
+// ============================================================
+// R229 — L0Bus event log 集成 (6 cases)
+// ============================================================
+
+#[tokio::test]
+async fn r229_01_publish_records_to_event_log() {
+    let bus: L0Bus<u32> = L0Bus::new().with_event_log_capacity(10);
+    assert!(bus.event_log().is_some());
+    bus.publish("a", BusMessage::new(1)).await.unwrap();
+    bus.publish("b", BusMessage::new(2)).await.unwrap();
+    let log = bus.event_log().unwrap();
+    assert_eq!(log.len(), 2);
+    let all = log.all();
+    assert_eq!(all[0].topic, "a");
+    assert_eq!(all[0].message.payload, 1);
+    assert_eq!(all[1].topic, "b");
+    assert_eq!(all[1].message.payload, 2);
+}
+
+#[tokio::test]
+async fn r229_02_no_event_log_by_default() {
+    let bus: L0Bus<u32> = L0Bus::new();
+    assert!(bus.event_log().is_none());
+    bus.publish("a", BusMessage::new(1)).await.unwrap();
+    // 没 event_log, 不抛错
+}
+
+#[tokio::test]
+async fn r229_03_replay_topic_returns_matching() {
+    let bus: L0Bus<u32> = L0Bus::new().with_event_log_capacity(10);
+    bus.publish("agent.bob", BusMessage::new(1)).await.unwrap();
+    bus.publish("system.cpu", BusMessage::new(2)).await.unwrap();
+    bus.publish("agent.bob", BusMessage::new(3)).await.unwrap();
+    let log = bus.event_log().unwrap();
+    let bob_events = log.replay_topic("agent.bob");
+    assert_eq!(bob_events.len(), 2);
+    assert_eq!(bob_events[0].message.payload, 1);
+    assert_eq!(bob_events[1].message.payload, 3);
+}
+
+#[tokio::test]
+async fn r229_04_replay_pattern_with_wildcard() {
+    let bus: L0Bus<u32> = L0Bus::new().with_event_log_capacity(10);
+    bus.publish("agent.bob", BusMessage::new(1)).await.unwrap();
+    bus.publish("agent.alice", BusMessage::new(2)).await.unwrap();
+    bus.publish("system.cpu", BusMessage::new(3)).await.unwrap();
+    let log = bus.event_log().unwrap();
+    let matched = log.replay_pattern("agent.*");
+    assert_eq!(matched.len(), 2);
+}
+
+#[tokio::test]
+async fn r229_05_event_log_overflows_at_capacity() {
+    let bus: L0Bus<u32> = L0Bus::new().with_event_log_capacity(3);
+    for i in 0..5 {
+        bus.publish("t", BusMessage::new(i)).await.unwrap();
+    }
+    let log = bus.event_log().unwrap();
+    assert_eq!(log.len(), 3, "capacity=3 满后保持 3 条");
+    let all = log.all();
+    assert_eq!(all[0].message.payload, 2, "最旧 2 条被覆盖");
+}
+
+#[tokio::test]
+async fn r229_06_last_n_reverses_order() {
+    let bus: L0Bus<u32> = L0Bus::new().with_event_log_capacity(10);
+    for i in 0..5 {
+        bus.publish("t", BusMessage::new(i)).await.unwrap();
+    }
+    let log = bus.event_log().unwrap();
+    let last2 = log.last_n(2);
+    assert_eq!(last2.len(), 2);
+    assert_eq!(last2[0].message.payload, 4, "最新在前");
+    assert_eq!(last2[1].message.payload, 3);
+}
