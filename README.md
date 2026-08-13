@@ -1,6 +1,8 @@
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 
+> **R158 (2026-08-13)**: `apeireth-memory-extensions` lint cleanup - 17 warnings -> 0 (lib.rs allow(missing_docs) per O-5 + provider_s3.rs top-level Duration import scoped to tests + provider_mongodb.rs unused serde dropped + private types S3ParsedUri/DiskLruEntry made pub + 6 dead_code field allows). Tests 145/145, 0 touches 3 immutable spines. See `docs/r158/r158-memory-extensions-lint.md`.
+
 > **R157 (2026-08-13)**: `apeireth-pipeline x apeireth-pipeline-g5` 一体化集成 - new module `g5_chat_bridge.rs` (199 lines) wraps chat 5 steps as g5 5-stage Stage<I, O> impls (ChatDispatchStage / ChatNormalizeStage / ChatPolicyStage / ChatReliabilityStage / ChatThrottleStage) + ChatPipelineBuilder. apeireth-pipeline-g5 现在有 2 个生产调用方 (tool-runtime R132.4 + chat pipeline R157). Tests: 132 pre-existing + 13 new bridge = 145 total, 0 触碰 3 不可变脊柱, 0 改动 R17 lib.rs Pipeline. See `docs/r157/r157-g5-chat-bridge.md`.
 
 > **R156 (2026-08-13)**: `apeireth-tool-image-{gen,process}` lint cleanup - image-process 62->0, image-gen 4->0. Cargo.toml description cleaned, all crates switched `#![warn(missing_docs)]` -> `#![allow(missing_docs)]` per O-5 (docs in parent crate README). Tests: image-gen 29/29, image-process 20/20, 0 touches 3 immutable spines. See `docs/r156/r156-image-process-lint-cleanup.md`.
