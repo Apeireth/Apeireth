@@ -261,6 +261,8 @@ pub struct EmotionEngine {
     decay_rate: f32,
     history_capacity: usize,
     event_count: u64,
+    /// R234: 上次事件时间戳 (epoch ms) — 用于 auto-decay 计算 elapsed
+    last_event_at_ms: i64,
 }
 
 impl EmotionEngine {
@@ -272,6 +274,7 @@ impl EmotionEngine {
             decay_rate: 0.05, // 每秒衰减 5%
             history_capacity: 64,
             event_count: 0,
+            last_event_at_ms: now_ms(),
         }
     }
 
@@ -305,15 +308,53 @@ impl EmotionEngine {
         self.pad.d += delta.d * resonance;
         self.pad.clamp();
 
+        let now = now_ms();
         let snapshot = EmotionSnapshot {
             pad: self.pad,
             dominant: event.primary_emotion(),
             intensity,
-            timestamp_ms: now_ms(),
+            timestamp_ms: now,
         };
         self.push_history(snapshot);
         self.event_count += 1;
+        // R234: 记录 last_event_at_ms 给 auto_decay 用
+        self.last_event_at_ms = now;
         Ok(())
+    }
+
+    /// **R234 — auto_decay** — 基于 wallclock 自动衰减
+    ///
+    /// **设计**: 计算距上次事件 elapsed_secs, 调 decay(elapsed).
+    ///   若 elapsed > 0 则衰减, 否则 no-op.
+    ///
+    /// **用途**: 不依赖外部调度, engine 自身"知道"该衰减多少.
+    ///   上层 (pipeline / runtime) 周期性调一次即可.
+    pub fn auto_decay(&mut self) -> f32 {
+        let now = now_ms();
+        let elapsed_ms = (now - self.last_event_at_ms).max(0);
+        let elapsed_secs = elapsed_ms as f32 / 1000.0;
+        if elapsed_secs > 0.0 {
+            self.decay(elapsed_secs);
+            // 更新 last_event_at_ms, 下次基于新基准
+            self.last_event_at_ms = now;
+        }
+        elapsed_secs
+    }
+
+    /// **R234 — auto_decay_at(now_ms)** — 测试友好版本 (传显式时间戳)
+    pub fn auto_decay_at(&mut self, now_ms_value: i64) -> f32 {
+        let elapsed_ms = (now_ms_value - self.last_event_at_ms).max(0);
+        let elapsed_secs = elapsed_ms as f32 / 1000.0;
+        if elapsed_secs > 0.0 {
+            self.decay(elapsed_secs);
+            self.last_event_at_ms = now_ms_value;
+        }
+        elapsed_secs
+    }
+
+    /// **R234 — last_event_at_ms** — accessor for last event timestamp
+    pub fn last_event_at_ms(&self) -> i64 {
+        self.last_event_at_ms
     }
 
     /// 衰减向 baseline (每秒调用, dt_secs 是流逝秒数)
@@ -529,3 +570,74 @@ mod tests {
         assert_eq!(s.dominant, BaseEmotion::Sadness);
     }
 }
+
+    // ============================================================
+    // R234 — auto_decay (6 cases)
+    // ============================================================
+
+    #[test]
+    fn r234_01_last_event_at_ms_init_to_now() {
+        let engine = EmotionEngine::new();
+        let t1 = engine.last_event_at_ms();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let t2 = engine.last_event_at_ms();
+        // init 时记录 now(), 之后不变
+        assert_eq!(t1, t2);
+    }
+
+    #[test]
+    fn r234_02_apply_updates_last_event_at_ms() {
+        let mut engine = EmotionEngine::new();
+        let t_before = engine.last_event_at_ms();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t_after = engine.last_event_at_ms();
+        assert!(t_after > t_before, "apply 后应更新 last_event_at_ms");
+    }
+
+    #[test]
+    fn r234_03_auto_decay_returns_elapsed_secs() {
+        let mut engine = EmotionEngine::new();
+        let p_before = engine.current_pad().p;
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let p_after_apply = engine.current_pad().p;
+        assert!(p_after_apply > p_before, "praise 应提高 pleasure: {p_before} → {p_after_apply}");
+        // auto_decay 立即调用 (elapsed 接近 0)
+        let elapsed = engine.auto_decay();
+        assert!(elapsed >= 0.0);
+    }
+
+    #[test]
+    fn r234_04_auto_decay_at_explicit_time() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let p_after = engine.current_pad().p;
+        // 模拟 10 秒后
+        let elapsed = engine.auto_decay_at(engine.last_event_at_ms() + 10_000);
+        assert_eq!(elapsed, 10.0, "应传 10s elapsed");
+        // 衰减应让 pad.p 趋近 baseline (0.0)
+        let p_now = engine.current_pad().p;
+        assert!(p_now < p_after, "10s 衰减后 pad.p 应下降: {p_after} → {p_now}");
+    }
+
+    #[test]
+    fn r234_05_auto_decay_at_zero_elapsed_noop() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let p_before = engine.current_pad().p;
+        let elapsed = engine.auto_decay_at(engine.last_event_at_ms());
+        assert_eq!(elapsed, 0.0);
+        // 0 elapsed — pad.p 不变 (f=1)
+        let p_after = engine.current_pad().p;
+        assert!((p_before - p_after).abs() < 1e-5, "0 elapsed 时 pad.p 应不变: {p_before} vs {p_after}");
+    }
+
+    #[test]
+    fn r234_06_auto_decay_updates_last_event_at_ms() {
+        let mut engine = EmotionEngine::new();
+        engine.apply(EmotionEvent::UserPraise).unwrap();
+        let t1 = engine.last_event_at_ms();
+        engine.auto_decay_at(t1 + 5000);
+        let t2 = engine.last_event_at_ms();
+        assert_eq!(t2, t1 + 5000, "auto_decay_at 应更新 last_event_at_ms");
+    }
