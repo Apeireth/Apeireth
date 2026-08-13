@@ -1,3 +1,5 @@
+> **R167 (2026-08-13)**: Session summary + ultimate-goal progress checkpoint. R164-R166 净影响: 公开 API 中 VCP 命名 100% 清理 (8 方法 + 21 常量 = 29 identifier), workspace 78 → 76 active crates, 0 errors / 0 actionable warnings, 5618 cumulative tests pass. 终极目标进度: P0 5/5 + P1 7/7 全闭环, P2 0/3 待 R168+ (Hyperlight micro-VM / SurrealDB 后端 / voice GPT-Realtime-2 真接). 详见 `docs/r167/r167-session-summary.md`.
+
 > **R166 (2026-08-13)**: Public API deep cleanup pass — 21 VCP-named public constants renamed to LEGACY_* / BORROWED_LEGACY_* / ABSORBED_LEGACY_* / APEIRETH_PRIVACY_REDACTED. 11 crates affected, 697 tests pass cumulative, 0 errors. Final pass eliminates all VCP naming from public API surface. See `docs/r166/r166-public-api-deep-cleanup.md`.
 
 > **R165 (2026-08-13)**: Architecture audit + dead code archive. Identified 2 dead crates via cross-crate reference scan: apeireth-protocol-bridge (0 callers) -> _archived/, apeireth-formal (0 external deps; governance::formal_proof is production canonical) -> _archived/. workspace 78 -> 76 members. cargo check --workspace 0 errors / 0 actionable. See `docs/r165/r165-architecture-audit-and-deadcode-archive.md`.
