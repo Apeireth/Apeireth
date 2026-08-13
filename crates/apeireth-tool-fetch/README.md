@@ -41,3 +41,6 @@ Engine      -> engine.rs (top-level dispatcher)
 
 - 0 touches workspace.version (1.2.0)
 - 0 引外部 dep
+## R166 public API deep cleanup
+
+`ABSORBED_VCP_PLUGINS` -> `ABSORBED_LEGACY_PLUGINS`. 44 tests pass.

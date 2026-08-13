@@ -90,3 +90,6 @@ tempfile = "3"
 ---
 
 _主哲学 anchor: 主 19:33 走在前人经验上 (VCP FileOperator 字段级复刻) + 主 17:43 实事求是 (5 trait 真实现, 不只 mock) + 主 17:58 不漂移 (LOCKED 全保) + 主 23:44 干到底 (5 trait + 4 impl + 4 适配器 + 57 tests + 端到端 example)._
+## R166 public API deep cleanup
+
+4 VCP-named constants cleaned: `LEGACY_MAX_FILE_SIZE_BYTES`, `LEGACY_MAX_DIRECTORY_ITEMS`, `LEGACY_MAX_SEARCH_RESULTS`, `BORROWED_LEGACY_FIELDS`. 122 tests pass.

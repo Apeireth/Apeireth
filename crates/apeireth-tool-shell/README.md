@@ -25,3 +25,6 @@ VCP 六层"安全" = 字符串黑名单 → 我们真沙箱 (process::Command + 
 ## R162 lint cleanup
 
 61 -> 0 warnings. Test-only SandboxMode import moved into tests mod.
+## R166 public API deep cleanup
+
+`VCP_SHELL_COMMAND_COUNT` -> `LEGACY_SHELL_COMMAND_COUNT`. 19 tests pass.

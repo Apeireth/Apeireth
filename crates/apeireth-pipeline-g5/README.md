@@ -56,3 +56,6 @@ cargo test -p apeireth-pipeline-g5
 
 - [Golutra 借鉴映射](../../reports/)
 - [整合 #5.1 commit (src/)](https://github.com/apeireth/apeireth-rust/commit/3598d336)
+## R166 public API deep cleanup
+
+(R164/R166 cleanup affected upstream types; pipeline-g5 confirmed healthy post-cleanup).
