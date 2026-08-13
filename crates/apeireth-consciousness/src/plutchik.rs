@@ -152,6 +152,9 @@ pub enum PlutchikIntensity {
 }
 
 impl PlutchikIntensity {
+    pub const fn ordered_levels() -> [PlutchikIntensity; 4] {
+        [Self::Mild, Self::Moderate, Self::Strong, Self::Extreme]
+    }
     pub const fn as_str(&self) -> &'static str {
         match self {
             Self::Mild => "mild",
@@ -170,6 +173,12 @@ pub enum PlutchikEmotion {
 }
 
 impl PlutchikEmotion {
+    pub const fn intensity(&self) -> PlutchikIntensity {
+        match self {
+            Self::Basic(_, i) => *i,
+            Self::Advanced(_, i) => *i,
+        }
+    }
     pub fn basic(emotion: PlutchikBasic, intensity: PlutchikIntensity) -> Self {
         Self::Basic(emotion, intensity)
     }
