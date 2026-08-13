@@ -213,3 +213,6 @@ apeireth_verify::register_all_in_crate!(
     __APEIRETH_REG_APEIRETH_EVOLUTION_A,
     __APEIRETH_REG_APEIRETH_EVOLUTION_B
 );
+
+// R215: Voyager 风格持续学习 facade (skill library + retrieve → use → feedback)
+pub mod voyager_api;
