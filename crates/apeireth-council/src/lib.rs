@@ -62,7 +62,7 @@ pub use advisor::{
     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
     DeliberationOutcome, Stance, StanceKind, DEFAULT_DEBATE_ROUNDS,
 };
-pub use deliberation::{Council, CouncilQuery, CouncilVerdict, DEFAULT_DELIBERATION_TIMEOUT_MS};
+pub use deliberation::{Council, CouncilQuery, CouncilVerdict, DEFAULT_DELIBERATION_TIMEOUT_MS, DeliberationStreamEvent};
 pub use hold::{HoldDecision, HoldOutcome, HoldThreshold, HoldTrigger};
 pub use lifecycle::{AdvisorLifecycle, LifecycleManager, LifecycleStats};
 pub use mock_llm::{MockLlmProvider, MockLlmResponse, ScriptedMockLlm};
