@@ -82,7 +82,7 @@ pub use types::{
 // ============================================================
 
 /// 战役 2-1 实际借鉴 VCP 4 项 (#12 / #13 / #15 / agentManager.js chokidar 借鉴)
-pub const BORROWED_VCP_COUNT: usize = 4;
+pub const BORROWED_LEGACY_COUNT: usize = 4;
 
 /// 6 类 enum 总数 (编译期 hardcode, 跟 VCP §6.2.1 #12 一致)
 pub const TOOL_KIND_COUNT: usize = 6;
@@ -159,7 +159,7 @@ mod lib_tests {
         assert_eq!(DEFAULT_BRIEF_TOKEN_BUDGET, 6);
         assert_eq!(MIN_BRIEF_TOKEN_BUDGET, 3);
         assert_eq!(MAX_INJECTION_CHARS, 16_000);
-        assert_eq!(BORROWED_VCP_COUNT, 4);
+        assert_eq!(BORROWED_LEGACY_COUNT, 4);
     }
 
     #[test]

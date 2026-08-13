@@ -37,16 +37,16 @@ use tiktoken_rs::{cl100k_base, o200k_base, p50k_base, r50k_base, CoreBPE};
 // ============================================================
 
 /// VCP `finalContextStore.js` 真实文件大小 (bytes, per stat 2026-08-10)
-pub const VCP_FINAL_CONTEXT_STORE_BYTES: usize = 11_559;
+pub const LEGACY_FINAL_CONTEXT_STORE_BYTES: usize = 11_559;
 
 /// VCP `finalContextStore.js:11 TOKENIZER_NAME`
-pub const VCP_TOKENIZER_NAME: &str = "cl100k_base";
+pub const LEGACY_TOKENIZER_NAME: &str = "cl100k_base";
 
 /// VCP `finalContextStore.js:12 TOKENIZER_METHOD`
-pub const VCP_TOKENIZER_METHOD: &str = "@dqbd/tiktoken:cl100k_base";
+pub const LEGACY_TOKENIZER_METHOD: &str = "@dqbd/tiktoken:cl100k_base";
 
 /// VCP `finalContextStore.js:21 MAX_SNAPSHOTS` (**0 装**)
-pub const VCP_MAX_SNAPSHOTS: usize = 5;
+pub const LEGACY_MAX_SNAPSHOTS: usize = 5;
 
 // ============================================================
 // TokenModel enum (5 variants)
@@ -392,11 +392,11 @@ mod tiktoken_counter_tests {
 
     #[test]
     fn compile_time_hardcode_vcp_source_size() {
-        assert_eq!(VCP_FINAL_CONTEXT_STORE_BYTES, 11_559);
+        assert_eq!(LEGACY_FINAL_CONTEXT_STORE_BYTES, 11_559);
         // 用 str::eq 替代 ==, 兼容 rustc 1.80 const stable string eq
-        assert!(str::eq(VCP_TOKENIZER_NAME, "cl100k_base"));
-        assert!(str::eq(VCP_TOKENIZER_METHOD, "@dqbd/tiktoken:cl100k_base"));
-        assert_eq!(VCP_MAX_SNAPSHOTS, 5);
+        assert!(str::eq(LEGACY_TOKENIZER_NAME, "cl100k_base"));
+        assert!(str::eq(LEGACY_TOKENIZER_METHOD, "@dqbd/tiktoken:cl100k_base"));
+        assert_eq!(LEGACY_MAX_SNAPSHOTS, 5);
     }
 
     // ====== 9. 5 model 各自构造 (排除单 model 偶然过) ======
