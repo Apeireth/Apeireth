@@ -13,6 +13,7 @@
 //! VCP `WebReadFile` (3KB) features we keep:
 //! - WebReadFile(url) — HTTP GET + return body
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use crate::browser::BrowserMode;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -21,3 +21,7 @@
 ## 0 假装
 
 ✅ 47 单元测试 | ⚠️ tree-sitter AST 在 feature flag 下
+
+## R162 lint cleanup
+
+128 -> 0 warnings (per O-5: internal helpers allow(missing_docs); public API in lib.rs).

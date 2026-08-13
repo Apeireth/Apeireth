@@ -8,5 +8,6 @@
 //! The `CdpBrowser::connect()` returns an honest error rather than faking
 //! Chrome presence (per O-5 不假装).
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[cfg(feature = "cdp")]
 pub mod cdp_impl;

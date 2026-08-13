@@ -17,3 +17,7 @@ VCP FileOperator 70KB 5 职责塞一进程 → 我们 9 模块分离, 单一职�
 ## 0 假装
 
 ✅ 10 单元测试 | ✅ fsnotify 真实集成 | ✅ sandbox 路径校验
+
+## R162 lint cleanup
+
+88 -> 0 warnings. Unused `PathBuf` import removed from lock.rs.

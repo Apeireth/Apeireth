@@ -7,6 +7,7 @@
 //! 4. calculator (evaluate_expression)
 //! 5. multi-sig sensitive ops (via apeireth-sovereignty physical_multisig.rs)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
@@ -16,7 +17,7 @@ use tokio::process::Command;
 
 use crate::calculator::{evaluate_expression, CalcError};
 use crate::persist::PersistentTaskStore;
-use crate::sandbox::{apply_sandbox, SandboxPolicy, SandboxMode};
+use crate::sandbox::{apply_sandbox, SandboxPolicy};
 use crate::streaming::collect_stdout;
 
 #[derive(Debug, Error)]
@@ -127,6 +128,7 @@ fn build_command(cmd: &str) -> Result<Command, ShellError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sandbox::SandboxMode;
     #[tokio::test]
     async fn enhanced_calc_works() {
         let s = EnhancedShell::new(":memory:".into()).unwrap_or_else(|_| {

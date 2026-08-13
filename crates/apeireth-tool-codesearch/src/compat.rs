@@ -4,6 +4,7 @@
 //! multiple plugins) 1:1 mapping. We provide a router that classifies
 //! commands and dispatches to MCP tool equivalents.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use crate::mcp::McpTool;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

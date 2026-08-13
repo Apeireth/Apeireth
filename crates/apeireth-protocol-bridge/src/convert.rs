@@ -1,5 +1,6 @@
 //! Request/response conversion between protocols.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde_json::{json, Value};
 
 use crate::protocol::CompatProtocol;

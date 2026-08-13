@@ -1,5 +1,6 @@
 //! EnhancedCompatBridge composed entry.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use crate::bridge::CompatBridge;
 use crate::mcp::{CompatBridgeMcp, McpRequest, McpResponse};
 use crate::protocol::{ProtocolHints, CompatProtocol};

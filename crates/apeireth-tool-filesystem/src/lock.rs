@@ -6,8 +6,9 @@
 //! that holds the file handle. For real coordination across processes,
 //! wrap with explicit RwLock usage at call site.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::fs::{File, OpenOptions};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -44,6 +45,7 @@ impl FileLock {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use super::*;
     #[test]
     fn lock_can_be_acquired() {

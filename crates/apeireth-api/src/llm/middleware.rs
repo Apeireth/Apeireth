@@ -9,6 +9,7 @@
 //! - `CacheMiddleware` — 同请求复用响应
 //! - `RateLimitMiddleware` — 限流 (token bucket)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::sync::Arc;
 
 use async_trait::async_trait;

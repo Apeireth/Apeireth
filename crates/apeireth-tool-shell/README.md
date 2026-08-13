@@ -21,3 +21,7 @@ VCP 六层"安全" = 字符串黑名单 → 我们真沙箱 (process::Command + 
 ## 0 假装
 
 ✅ 19 单元测试 | ✅ 真 sandbox 路径 | ⚠️ 真 seccomp 需 Linux
+
+## R162 lint cleanup
+
+61 -> 0 warnings. Test-only SandboxMode import moved into tests mod.
