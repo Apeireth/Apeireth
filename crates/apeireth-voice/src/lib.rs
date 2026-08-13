@@ -115,6 +115,7 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), V
 //   the 3 immutable spines remain — Self-Disable / L0 HA / 13-key verdict cache)
 // - 0 touches workspace version (1.2.0) or existing 23 fixture + 23 tests
 pub mod real;
+pub mod minimax_live;
 
 // ============================================================================
 // §0.6 R153 新增: `realtime` 模块 (OpenAI Realtime API 协议支持)
