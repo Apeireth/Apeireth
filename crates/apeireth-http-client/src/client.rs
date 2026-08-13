@@ -67,6 +67,18 @@ impl Response {
     pub fn elapsed_ms(&self) -> u64 {
         self.elapsed.as_millis() as u64
     }
+
+    /// 获取 content-type header (e.g. "text/html; charset=utf-8")
+    ///
+    /// R174: apeireth-tool-fetch 的 HttpFetcher 用它判断要不要走 HTML extract_text 路径.
+    pub fn content_type(&self) -> String {
+        self.inner
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("application/octet-stream")
+            .to_string()
+    }
 }
 
 /// HTTP 客户端主体 — 复刻 VCP `agentOptions` 5 字段
