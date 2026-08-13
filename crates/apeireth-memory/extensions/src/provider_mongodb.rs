@@ -20,7 +20,7 @@
 //! 6. scope = Global (MongoDB 集群共享)
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
+
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
 use crate::memory_provider::{
