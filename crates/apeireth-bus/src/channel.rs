@@ -58,7 +58,7 @@ impl Channel {
     pub const COUNT: usize = 3;
 
     /// 返 VCP 原字符串 (字段级引用 VCP 文档: "AI 通知栏" / "VCPLog" / "VCPInfo")
-    pub const fn as_vcp_str(&self) -> &'static str {
+    pub const fn as_legacy_str(&self) -> &'static str {
         match self {
             Self::Ai => "ai_notification",
             Self::Human => "vcp_log",
@@ -238,9 +238,9 @@ mod tests {
 
     #[test]
     fn channel_vcp_str() {
-        assert_eq!(Channel::Ai.as_vcp_str(), "ai_notification");
-        assert_eq!(Channel::Human.as_vcp_str(), "vcp_log");
-        assert_eq!(Channel::Both.as_vcp_str(), "vcp_info");
+        assert_eq!(Channel::Ai.as_legacy_str(), "ai_notification");
+        assert_eq!(Channel::Human.as_legacy_str(), "vcp_log");
+        assert_eq!(Channel::Both.as_legacy_str(), "vcp_info");
         assert_eq!(Channel::COUNT, 3);
     }
 

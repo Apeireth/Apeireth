@@ -241,7 +241,7 @@ mod tests {
     #[tokio::test]
     async fn handler_from_fn_basic() {
         let h = handler_from_fn(|args| async move {
-            Ok(json!({"echo": args, "kind": ToolKind::Sync.as_vcp_str()}))
+            Ok(json!({"echo": args, "kind": ToolKind::Sync.as_legacy_str()}))
         });
         let out = h(json!({"x": 1})).await.unwrap();
         assert_eq!(out["echo"], json!({"x": 1}));

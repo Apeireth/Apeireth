@@ -54,6 +54,10 @@ let deliberator = CouncilMemberDeliberator::new(members)
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
 
+## R164 public API cleanup
+
+MockLlmProvider trait deprecation removed (R163 had 30 actionable warnings; now 0). Doc banner updated to mark trait as mock/test-only + point to LlmAdvisorBackend for production paths. O-5 unchanged.
+
 ## R163 lint cleanup
 
 24 -> 0 warnings. 9 files cleaned. 1 unused param fixed in synthesis.rs.

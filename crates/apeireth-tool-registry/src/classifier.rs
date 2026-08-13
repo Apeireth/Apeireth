@@ -126,7 +126,7 @@ impl Category {
     /// 返 VCP 字段名 (1:1 对照 `dynamicToolRegistry.js:40-80 CATEGORY_RULES`)
     ///
     /// **Apeireth 独有类别** (Safety / LongRunning) 不在 VCP 7 类, 用 snake_case 自创名
-    pub const fn as_vcp_name(&self) -> &'static str {
+    pub const fn as_legacy_name(&self) -> &'static str {
         match self {
             Self::Search => "search",
             Self::FileCode => "file_code",
@@ -141,7 +141,7 @@ impl Category {
     }
 
     /// 从 VCP 字段名解析 (供加载 manifest 用)
-    pub fn from_vcp_name(s: &str) -> Option<Self> {
+    pub fn from_legacy_name(s: &str) -> Option<Self> {
         match s {
             "search" => Some(Self::Search),
             "file_code" => Some(Self::FileCode),
@@ -601,7 +601,7 @@ impl EmbeddingClassifier {
             let vec = self.embed_fn.embed(&text);
             if vec.len() != self.embed_fn.dim() {
                 return Err(ClassifyError::EmbeddingError {
-                    name: format!("center:{}", cat.as_vcp_name()),
+                    name: format!("center:{}", cat.as_legacy_name()),
                     reason: format!(
                         "embed dim mismatch: expected {}, got {}",
                         self.embed_fn.dim(),
@@ -770,7 +770,7 @@ impl LlmClassifier {
     #[allow(dead_code)]
     fn build_user_prompt(tool: &dyn Tool) -> String {
         use crate::token_budget::{DEFAULT_BRIEF_TOKEN_BUDGET, LIGHT_LIST_TOKEN_BUDGET};
-        let kind = tool.kind().as_vcp_str();
+        let kind = tool.kind().as_legacy_str();
         format!(
             "Classify this VCP plugin into concise semantic categories.\n\
              Return strict JSON: {{\"brief\": \"...\", \"categories\": [\"...\"], \"keywords\": [\"...\"], \"confidence\": 0.0}}.\n\
@@ -907,7 +907,7 @@ mod tests {
         let all = Category::all();
         assert_eq!(all.len(), 9);
         let mut unique = all.to_vec();
-        unique.sort_by_key(|c| c.as_vcp_name());
+        unique.sort_by_key(|c| c.as_legacy_name());
         unique.dedup();
         assert_eq!(unique.len(), 9, "9 类别必须 9 个唯一名");
     }
@@ -915,24 +915,24 @@ mod tests {
     #[test]
     fn category_vcp_name_roundtrip() {
         // VCP 7 类 1:1
-        assert_eq!(Category::Search.as_vcp_name(), "search");
-        assert_eq!(Category::FileCode.as_vcp_name(), "file_code");
-        assert_eq!(Category::ImageMedia.as_vcp_name(), "image_media");
-        assert_eq!(Category::MemoryKnowledge.as_vcp_name(), "memory_knowledge");
-        assert_eq!(Category::AgentTask.as_vcp_name(), "agent_task");
-        assert_eq!(Category::Communication.as_vcp_name(), "communication");
-        assert_eq!(Category::Data.as_vcp_name(), "data");
+        assert_eq!(Category::Search.as_legacy_name(), "search");
+        assert_eq!(Category::FileCode.as_legacy_name(), "file_code");
+        assert_eq!(Category::ImageMedia.as_legacy_name(), "image_media");
+        assert_eq!(Category::MemoryKnowledge.as_legacy_name(), "memory_knowledge");
+        assert_eq!(Category::AgentTask.as_legacy_name(), "agent_task");
+        assert_eq!(Category::Communication.as_legacy_name(), "communication");
+        assert_eq!(Category::Data.as_legacy_name(), "data");
         // Apeireth 独有 2 类
-        assert_eq!(Category::Safety.as_vcp_name(), "safety");
-        assert_eq!(Category::LongRunning.as_vcp_name(), "long_running");
+        assert_eq!(Category::Safety.as_legacy_name(), "safety");
+        assert_eq!(Category::LongRunning.as_legacy_name(), "long_running");
         // 反向解析
-        assert_eq!(Category::from_vcp_name("search"), Some(Category::Search));
-        assert_eq!(Category::from_vcp_name("safety"), Some(Category::Safety));
+        assert_eq!(Category::from_legacy_name("search"), Some(Category::Search));
+        assert_eq!(Category::from_legacy_name("safety"), Some(Category::Safety));
         assert_eq!(
-            Category::from_vcp_name("long_running"),
+            Category::from_legacy_name("long_running"),
             Some(Category::LongRunning)
         );
-        assert_eq!(Category::from_vcp_name("unknown"), None);
+        assert_eq!(Category::from_legacy_name("unknown"), None);
     }
 
     #[test]

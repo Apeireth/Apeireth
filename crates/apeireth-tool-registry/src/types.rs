@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 /// **真值来源**: `research/source/vcptoolbox/Plugin.js:232,379,607-608,1075`
 /// + `Plugin/AgentMessage/plugin-manifest.json:8` (synchronous 真值)
 ///
-/// 6 variant 严格对应 VCP `pluginType` 字段真值, 通过 `as_vcp_str()` 返 VCP 原字符串
+/// 6 variant 严格对应 VCP `pluginType` 字段真值, 通过 `as_legacy_str()` 返 VCP 原字符串
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ToolKind {
     /// **VCP `synchronous`** (Plugin.js:232 `plugin.pluginType !== 'static'` 分支前置)
@@ -70,7 +70,7 @@ impl ToolKind {
     pub const COUNT: usize = 6;
 
     /// 返 VCP 真值字符串 (字段级引用 `Plugin.js:607-608` 等)
-    pub const fn as_vcp_str(&self) -> &'static str {
+    pub const fn as_legacy_str(&self) -> &'static str {
         match self {
             Self::Sync => "synchronous",
             Self::Async => "asynchronous",
@@ -94,7 +94,7 @@ impl ToolKind {
     }
 
     /// 从 VCP 真值字符串解析 (供加载 manifest 用)
-    pub fn from_vcp_str(s: &str) -> Option<Self> {
+    pub fn from_legacy_str(s: &str) -> Option<Self> {
         match s {
             "synchronous" => Some(Self::Sync),
             "asynchronous" => Some(Self::Async),
@@ -278,7 +278,7 @@ const _: () = {
     assert!(AXIS_COUNT == 5, "5 轴正交: 触发/等待/驻留/传输/输出");
     assert!(AXIS_COMBINATION_COUNT == 243, "3^5 = 243 组合, 编译期守门");
 
-    // 6 类 as_vcp_str 真值 (VCP §6.2.1 #12 字段级引用)
+    // 6 类 as_legacy_str 真值 (VCP §6.2.1 #12 字段级引用)
     // 编译期 hardcode: 字节级比较 (PartialEq 在 const 上下文里还不稳定)
     // const fn 返 &str, 字符串字面量在 .rodata, 编译期同地址 = 同值
     // 详见 runtime test `tool_kind_vcp_string_roundtrip`
@@ -299,43 +299,43 @@ mod tests {
     #[test]
     fn tool_kind_vcp_string_roundtrip() {
         // 6 类 1:1 对应 VCP 真值
-        assert_eq!(ToolKind::Sync.as_vcp_str(), "synchronous");
-        assert_eq!(ToolKind::Async.as_vcp_str(), "asynchronous");
-        assert_eq!(ToolKind::Static.as_vcp_str(), "static");
-        assert_eq!(ToolKind::Service.as_vcp_str(), "service");
+        assert_eq!(ToolKind::Sync.as_legacy_str(), "synchronous");
+        assert_eq!(ToolKind::Async.as_legacy_str(), "asynchronous");
+        assert_eq!(ToolKind::Static.as_legacy_str(), "static");
+        assert_eq!(ToolKind::Service.as_legacy_str(), "service");
         assert_eq!(
-            ToolKind::MessagePreprocessor.as_vcp_str(),
+            ToolKind::MessagePreprocessor.as_legacy_str(),
             "messagePreprocessor"
         );
-        assert_eq!(ToolKind::Hybridservice.as_vcp_str(), "hybridservice");
+        assert_eq!(ToolKind::Hybridservice.as_legacy_str(), "hybridservice");
     }
 
     #[test]
-    fn tool_kind_from_vcp_str_all_six() {
+    fn tool_kind_from_legacy_str_all_six() {
         // 反向解析
-        assert_eq!(ToolKind::from_vcp_str("synchronous"), Some(ToolKind::Sync));
+        assert_eq!(ToolKind::from_legacy_str("synchronous"), Some(ToolKind::Sync));
         assert_eq!(
-            ToolKind::from_vcp_str("asynchronous"),
+            ToolKind::from_legacy_str("asynchronous"),
             Some(ToolKind::Async)
         );
-        assert_eq!(ToolKind::from_vcp_str("static"), Some(ToolKind::Static));
-        assert_eq!(ToolKind::from_vcp_str("service"), Some(ToolKind::Service));
+        assert_eq!(ToolKind::from_legacy_str("static"), Some(ToolKind::Static));
+        assert_eq!(ToolKind::from_legacy_str("service"), Some(ToolKind::Service));
         assert_eq!(
-            ToolKind::from_vcp_str("messagePreprocessor"),
+            ToolKind::from_legacy_str("messagePreprocessor"),
             Some(ToolKind::MessagePreprocessor)
         );
         assert_eq!(
-            ToolKind::from_vcp_str("hybridservice"),
+            ToolKind::from_legacy_str("hybridservice"),
             Some(ToolKind::Hybridservice)
         );
     }
 
     #[test]
-    fn tool_kind_from_vcp_str_unknown_returns_none() {
+    fn tool_kind_from_legacy_str_unknown_returns_none() {
         // 未知 pluginType 返 None (VCP 真代码用 if/else 链, 我们用 Option)
-        assert_eq!(ToolKind::from_vcp_str("unknown"), None);
-        assert_eq!(ToolKind::from_vcp_str(""), None);
-        assert_eq!(ToolKind::from_vcp_str("hybrid"), None); // 简化名不接受
+        assert_eq!(ToolKind::from_legacy_str("unknown"), None);
+        assert_eq!(ToolKind::from_legacy_str(""), None);
+        assert_eq!(ToolKind::from_legacy_str("hybrid"), None); // 简化名不接受
     }
 
     #[test]
@@ -344,7 +344,7 @@ mod tests {
         let all = ToolKind::all();
         assert_eq!(all.len(), 6);
         let mut unique: Vec<ToolKind> = all.to_vec();
-        unique.sort_by_key(|k| k.as_vcp_str());
+        unique.sort_by_key(|k| k.as_legacy_str());
         unique.dedup();
         assert_eq!(unique.len(), 6);
     }
