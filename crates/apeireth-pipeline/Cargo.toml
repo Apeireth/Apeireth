@@ -23,6 +23,8 @@ serde_yaml = "0.9"
 # R122-3-retry: 借鉴 VCP finalContextStore.js, 精确 token 计数 (tiktoken Rust 绑定)
 tiktoken-rs = { workspace = true }
 thiserror = { workspace = true }
+# R157: pipeline (chat-specific) 用 pipeline-g5 (generic 5-stage substrate) 作为 g5_chat_bridge 集成基底
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 tracing = "0.1"
 regex = "1.10"
 parking_lot = "0.12"
