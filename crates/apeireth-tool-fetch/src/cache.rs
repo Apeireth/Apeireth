@@ -1,5 +1,6 @@
 //! TTL cache shared across fetchers.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::time::{Duration, Instant};

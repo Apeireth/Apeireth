@@ -59,3 +59,7 @@ A11.3 — R14 Phase 4 落地（qa_engineer, 2026-08-01）
 - 下游: A13 (apeireth-life-force), A20 (apeireth-central)
 
 v0.14.0-R14 — Apeireth R14 启动版
+
+## R163 lint cleanup
+
+2 -> 0 warnings. unreachable statement removed (onion_consistency.rs:193), redundant cmp binding restructured.

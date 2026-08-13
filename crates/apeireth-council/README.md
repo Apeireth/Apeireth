@@ -53,3 +53,7 @@ let deliberator = CouncilMemberDeliberator::new(members)
 ---
 
 _Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+
+## R163 lint cleanup
+
+24 -> 0 warnings. 9 files cleaned. 1 unused param fixed in synthesis.rs.

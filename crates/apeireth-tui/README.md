@@ -60,3 +60,7 @@ cargo check -p apeireth-tui    # 0 errors, 4 历史 warnings (deprecated ratatui
 
 - [TUI 在 5 页面架构规范](src/pages/)
 - [R30 U15 tool-policy 热加载 spec](../../docs/conventions/)
+
+## R163 lint cleanup
+
+3 -> 1 warnings (1 remaining is unused_var in backend.rs chat()). 3 trivial casts removed (main.rs:1103, settings.rs:107, backend.rs:1682 unused store in chat() fn).

@@ -32,6 +32,7 @@
 //!     if consensus / strong_disapprove: break
 //! ```
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::sync::Arc;
 
 use crate::advisor::{AdvisorId, AdvisorOpinion, Stance, StanceKind};

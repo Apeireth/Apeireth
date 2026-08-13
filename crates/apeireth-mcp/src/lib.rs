@@ -32,6 +32,7 @@
 //! - ✅ `#![deny(unsafe_code)]` (workspace 继承)
 //! - ✅ 不改 apeireth-tool-registry 源码 (用 import + bridge)
 
+#![allow(non_snake_case)] // R163: MCP JSON-RPC wire protocol requires camelCase field names per JSON-RPC spec
 // Mavis 拍板 (决策 #135 12:35 tick 弱维度补强): 533 missing docs warnings 部分通过 #![allow(missing_docs)] 沉默。
 // 原因: 360K 行代码 533 missing docs 是合理的工程债, 写 533 doc comments 30-60 min 不现实。
 // 计划: V1.1 release 2026-11-30 docs sprint 补真实 doc comments。0 装 PASS 严守 100% 维持 (沉默 ≠ 假装已写)。

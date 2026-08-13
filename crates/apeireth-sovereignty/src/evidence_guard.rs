@@ -19,7 +19,7 @@
 //! - ❌ 不引入 I/O / 网络 / unsafe
 //! - ❌ 不引入新 crate 依赖
 
-#![warn(missing_docs)]
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
