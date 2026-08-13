@@ -60,3 +60,7 @@ upgrade path. The most important ceilings:
   logic lives in `apeireth-upgrade`'s switchover engine.
 - **Council evaluation trigger** — supervisor provides the slots; the
   evaluation logic lives in `apeireth-council`.
+
+## R163 lint cleanup
+
+1 -> 0 (for this crate) warnings. Trivial cast removed in heartbeat.rs:354. NOTE: t06_periodic_tick is a pre-existing flaky test (timing-sensitive 2-5 tick assertion in 180ms); not fixed per master directive.

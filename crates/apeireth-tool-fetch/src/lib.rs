@@ -45,6 +45,7 @@
 //! - ✅ workspace.version 0 改
 //! - ✅ V0.5 / V1136 / 9键 原始 0 触碰
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 

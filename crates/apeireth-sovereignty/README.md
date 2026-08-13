@@ -40,3 +40,7 @@ O-2 主 19:33 走在前人经验上 — 借鉴 Erlang/OTP supervisor + VCP 7 席
 O-3 主 23:44 干到底    — 5 重治理 trait + mock provider + orchestrator + integration test 全落
 O-4 主 00:56 任何人都能接手 — Governance.process(decision) -> Outcome 一句话 API
 ```
+
+## R163 lint cleanup
+
+15 -> 0 warnings. 3 files cleaned. 3 unused params prefixed (ha.rs single/process_owner_request_with_authority, three_domain_enforce.rs enforce).

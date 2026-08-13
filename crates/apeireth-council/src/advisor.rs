@@ -4,6 +4,7 @@
 //! trait 内部使用 [`MockLlmProvider`] (Rust 内 trait) 作为可选推理后端;
 //! 7 强制 advisor 使用硬编码 prompt script, 不依赖外部 LLM HTTP / PyO3。
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use crate::lifecycle::AdvisorLifecycle;
 use crate::mock_llm::MockLlmProvider;
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,6 @@
 // Bilibili video fetcher (BV/AV -> metadata + subtitle)
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -70,7 +71,7 @@ impl BilibiliFetcher {
 
     /// AV 号解析 (旧版)
     pub fn fetch_by_aid(&self, aid: u64) -> Result<BilibiliInfo, BilibiliError> {
-        let url = format!("{}/x/web-interface/view?aid={}", self.api_base, aid);
+        let _url = format!("{}/x/web-interface/view?aid={}", self.api_base, aid);
         // 占位
         Ok(BilibiliInfo {
             bvid: String::new(),

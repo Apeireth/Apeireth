@@ -1,5 +1,6 @@
 //! VCP LightMemo compatibility (1 router).
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum LightMemoCommand {
     LightMemo,

@@ -1679,7 +1679,7 @@ pub async fn process_stream_to_reply(
 ///  5. LLM 失败: **不写** assistant (但 user 已写, 历史能看到用户问过)
 ///  全部到 `session_id = "tui-session"`, 让历史页 6 流 tui-session 这一流有数据.
 pub fn chat(input: &str, history: &[ChatMessage]) -> String {
-    let store = match memory_store() {
+    let _store = match memory_store() {
         Ok(s) => s,
         Err(e) => {
             // memory store 初始化失败 → 不写 episode, 仅跑 LLM (兜底, 不让 UI 卡)

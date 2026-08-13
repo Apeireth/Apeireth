@@ -1,5 +1,6 @@
 //! DailyNote + NoteId types.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

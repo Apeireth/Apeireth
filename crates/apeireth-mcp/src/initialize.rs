@@ -24,6 +24,7 @@
 //! - LSP `initialize` (protocolVersion + capabilities + clientInfo + serverInfo 4 字段同形)
 //! - JSON-RPC 2.0 §4 Request object (params 必填, 无 id 不算 request)
 
+#![allow(non_snake_case)] // R163: MCP JSON-RPC wire protocol requires camelCase field names per JSON-RPC spec
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

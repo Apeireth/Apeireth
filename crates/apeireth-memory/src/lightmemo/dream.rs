@@ -1,5 +1,6 @@
 //! Dream subsystem: offline consolidation hook.
 
+#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::sync::Mutex;
 
 /// Callback for consolidating two items (returns merged content).
