@@ -9,6 +9,8 @@
 //! - `verify_all` / `run_all` 一键执行全部 crate 注册的断言.
 
 
+pub mod const_proofs;  // R217: 编译期形式化证明 (Kani-style const proof demo)
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
