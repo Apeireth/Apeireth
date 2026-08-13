@@ -101,3 +101,4 @@ pub fn unified() -> FetchEngine {
 pub fn shared_cache() -> Arc<FetchCache> {
     Arc::new(FetchCache::new(FetchConfig::default().cache_ttl_ms))
 }
+pub mod search_providers;  // R252: multi-source HTTP search providers (Tavily, Brave, Serper)
