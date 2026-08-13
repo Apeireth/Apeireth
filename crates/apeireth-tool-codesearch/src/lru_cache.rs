@@ -252,6 +252,7 @@ impl CachedUnifiedLru {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn t01_new_defaults() {
