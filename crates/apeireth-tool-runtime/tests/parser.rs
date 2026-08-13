@@ -204,7 +204,7 @@ fn privacy_masks_api_key_field() {
     });
     let out = g.mask(&input);
     let masked = out["api_key"].as_str().unwrap();
-    assert!(masked.contains("[VCP_PRIVACY_REDACTED]"),
+    assert!(masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
         "api_key 应被 mask, 实际: {masked}");
     // 普通字段不动
     assert_eq!(out["result"], "ok");
@@ -219,8 +219,8 @@ fn privacy_masks_password_and_token() {
         "token": "verylongtokenvalue123456789012345",
     });
     let out = g.mask(&input);
-    assert!(out["password"].as_str().unwrap().contains("[VCP_PRIVACY_REDACTED]"));
-    assert!(out["token"].as_str().unwrap().contains("[VCP_PRIVACY_REDACTED]"));
+    assert!(out["password"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
+    assert!(out["token"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
 }
 
 #[test]
@@ -235,7 +235,7 @@ fn privacy_masks_high_confidence_github_token() {
     let s = out["text"].as_str().unwrap();
     assert!(!s.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
         "ghp_ token 应被 mask, 实际: {s}");
-    assert!(s.contains("[VCP_PRIVACY_REDACTED]"));
+    assert!(s.contains("[APEIRETH_PRIVACY_REDACTED]"));
 }
 
 #[test]
@@ -252,7 +252,7 @@ fn privacy_masks_nested_object() {
     });
     let out = g.mask(&input);
     let masked = out["outer"]["inner"]["api_key"].as_str().unwrap();
-    assert!(masked.contains("[VCP_PRIVACY_REDACTED]"),
+    assert!(masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
         "嵌套 api_key 应被 mask, 实际: {masked}");
 }
 
@@ -296,6 +296,6 @@ fn privacy_masks_array_of_secrets() {
     let out = g.mask(&input);
     let arr = out["secrets"].as_array().unwrap();
     for s in arr {
-        assert!(s["password"].as_str().unwrap().contains("[VCP_PRIVACY_REDACTED]"));
+        assert!(s["password"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
     }
 }

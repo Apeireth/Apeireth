@@ -73,14 +73,14 @@ use std::fmt;
 /// - 真实仓库 sha: ac9cd950ffdc8aa668e64424bbfa14af6d5658eb (per github API 2026-08-10)
 /// - 真实文件 size: 16413 bytes (per `wc -c` 本地测量, 16.4KB)
 /// - **不漂移承诺**: 借鉴源 hash/size 变了, 这里必须改 (per 工程哲学铁律 #2 "不漂移")
-pub const VCP_ROLE_DIVIDER_BYTES: usize = 16_413;
+pub const LEGACY_ROLE_DIVIDER_BYTES: usize = 16_413;
 
 /// VCP `roleDivider.js:13` 真值 `TAGS.SYSTEM.START = "<<<[ROLE_DIVIDE_SYSTEM]>>>"` 长度 24
 /// (VCP 真值守门, per 工程哲学铁律 #2 "不漂移")
-pub const VCP_TAG_START_LEN: usize = 24;
+pub const LEGACY_TAG_START_LEN: usize = 24;
 
 /// VCP `roleDivider.js:14` 真值 `TAGS.SYSTEM.END = "<<<[END_ROLE_DIVIDE_SYSTEM]>>>"` 长度 28
-pub const VCP_TAG_END_LEN: usize = 28;
+pub const LEGACY_TAG_END_LEN: usize = 28;
 
 // ============================================================
 // Role enum (6 variants, 借鉴 VCP 3 role + 扩展 3 role)
@@ -414,9 +414,9 @@ mod role_divider_tests {
 
         // 编译期 hardcode 守门: VCP 真值 24/28 字符
         // (Apeireth 简化版 22/23 字符, 但 VCP 真值仍 hardcode 守)
-        assert_eq!(VCP_TAG_START_LEN, 24);
-        assert_eq!(VCP_TAG_END_LEN, 28);
-        assert_eq!(VCP_ROLE_DIVIDER_BYTES, 16_413);
+        assert_eq!(LEGACY_TAG_START_LEN, 24);
+        assert_eq!(LEGACY_TAG_END_LEN, 28);
+        assert_eq!(LEGACY_ROLE_DIVIDER_BYTES, 16_413);
     }
 
     #[test]
