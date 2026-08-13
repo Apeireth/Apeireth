@@ -61,6 +61,7 @@ pub mod html_extract;
 pub mod http_fetch;
 pub mod search_aggregator;
 pub mod anime;
+pub mod rate_limit;  // R230 — per-host sliding window rate limit
 
 pub use bilibili::{BilibiliFetcher, BilibiliInfo, BilibiliError};
 pub use cache::{FetchCache, CacheStats};
@@ -72,6 +73,7 @@ pub use http_fetch::{HttpFetcher, HttpMethod};
 pub use anysearch::{AnySearchClient, AnySearchError, AnySearchResult, ANYSEARCH_DOMAINS, ANYSEARCH_METHODS, ANYSEARCH_ENDPOINT};
 pub use search_aggregator::{SearchAggregator, SearchSource, SearchHit, AggregatedResults};
 pub use anime::{AnimeFinder, AnimeInfo, AnimeError};
+pub use rate_limit::{RateLimiter, shared_rate_limiter};
 
 /// R149 实际吸收 VCP plugin 数 (UrlFetch + TavilySearch + AnySearch + VSearch(合) + FlashDeepSearch + BilibiliFetch + AnimeFinder)
 pub const ABSORBED_LEGACY_PLUGINS: usize = 6;
