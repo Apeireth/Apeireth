@@ -60,3 +60,6 @@ cargo run -p apeireth-pipeline --example provider_registry_demo  # 多 provider 
 
 - [VCP 借鉴映射 (decision-130 §3.5)](../../reports/decision-130-12-15-tick-owner-3-q-a-6-b-phl-07-b-integrate-5-1-commit-execute-2026-08-11.md)
 - [通用 5 阶段 framework](../apeireth-pipeline-g5/)
+## R166 public API deep cleanup
+
+10 VCP-named constants cleaned: `LEGACY_RETRY_SUPPRESSION_MS`, `LEGACY_MAX_INJECTION_CHARS`, `LEGACY_SEMANTIC_MODEL_ROUTER_BYTES`, `LEGACY_MATCH_THRESHOLD`, `LEGACY_ROLE_DIVIDER_BYTES`, `LEGACY_TAG_START_LEN`, `LEGACY_TAG_END_LEN`, `LEGACY_TOKENIZER_NAME`, `LEGACY_FINAL_CONTEXT_STORE_BYTES`, `LEGACY_TOKENIZER_METHOD`, `LEGACY_MAX_SNAPSHOTS`, `BORROWED_LEGACY_COUNT`. 145 tests pass.
