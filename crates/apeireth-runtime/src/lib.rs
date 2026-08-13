@@ -445,6 +445,16 @@ impl Runtime {
         }
     }
 
+    /// R247 -- run n cycles in a row, returning all reports.
+    /// Useful for tests / batch simulations that don't want to spin up a scheduler.
+    pub async fn run_cycles(&self, n: usize) -> RuntimeResult<Vec<CycleReport>> {
+        let mut reports = Vec::with_capacity(n);
+        for _ in 0..n {
+            reports.push(self.run_one_cycle().await?);
+        }
+        Ok(reports)
+    }
+
     pub fn bootstrap(&self) -> RuntimeResult<String> {
         let room_id = self.group_chat.create_room(
             self.config.room_name.clone(),
@@ -1066,4 +1076,25 @@ pub struct CycleLatencySummary {
         let s1 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
         let s2 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
         assert_eq!(s1, s2);
+    }
+
+    // R247 -- run_cycles batch API (2 cases)
+    #[tokio::test]
+    async fn r247_01_run_cycles_zero_returns_empty() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let reports = rt.run_cycles(0).await.unwrap();
+        assert_eq!(reports.len(), 0);
+        assert_eq!(rt.cycle_total.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn r247_02_run_cycles_n_increments_metrics() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let reports = rt.run_cycles(3).await.unwrap();
+        assert_eq!(reports.len(), 3);
+        assert_eq!(rt.cycle_total.get(), 3);
+        let s = rt.cycle_latency_summary();
+        assert_eq!(s.count, 3);
     }
