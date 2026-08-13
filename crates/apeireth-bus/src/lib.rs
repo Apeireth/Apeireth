@@ -28,6 +28,7 @@ pub mod l2;
 pub mod l3;
 #[cfg(feature = "full-bus")]
 pub mod l4;
+pub mod pattern;  // R227 — topic wildcard matching
 
 pub use l0::L0Bus;
 pub use channel::{Channel, ChannelSet, ChanneledBus};
