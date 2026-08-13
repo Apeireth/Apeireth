@@ -351,7 +351,8 @@ impl HeartbeatScheduler {
                                 let mut h = DefaultHasher::new();
                                 item.id.hash(&mut h);
                                 let n = h.finish();
-                                let j = n % item.schedule.jitter.as_millis() as u64;
+                                let jm = item.schedule.jitter.as_millis() as u64;
+                                let j = if jm == 0 { 0 } else { n % jm };
                                 Duration::from_millis(j)
                             };
                             item.next_tick = Instant::now() + item.schedule.interval + jitter;
