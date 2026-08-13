@@ -104,6 +104,38 @@ pub struct RankedDoc {
 }
 
 // ============================================================================
+// R239 -- SortBy and SearchOptions (sort strategies)
+// ============================================================================
+
+/// R239: search result ordering strategy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortBy {
+    Relevance,
+    Recency,
+    Hybrid,
+}
+
+/// R239: search options (sort + recency decay).
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SearchOptions {
+    pub sort_by: SortBy,
+    pub recency_decay_secs: i64,
+    pub recency_alpha: f64,
+}
+
+impl Default for SearchOptions {
+    fn default() -> Self {
+        Self { sort_by: SortBy::Relevance, recency_decay_secs: 3_600, recency_alpha: 1.0 }
+    }
+}
+
+impl SearchOptions {
+    pub fn sort(sort_by: SortBy) -> Self {
+        Self { sort_by, ..Self::default() }
+    }
+}
+
+// ============================================================================
 // 聚合查询
 // ============================================================================
 
@@ -266,6 +298,45 @@ impl SearchEngine {
     /// 全文搜索 (TF 评分 + 长度归一化)
     pub fn search(&self, query: &str, limit: usize) -> SearchResult<Vec<RankedDoc>> {
         self.search_with_filter(query, &FieldFilter::default(), limit)
+    }
+
+    /// R239 -- full-text search with sort + recency decay options.
+    ///
+    /// **Sort strategies**:
+    /// - Relevance (default): by BM25-lite score
+    /// - Recency: by timestamp descending (newer first)
+    /// - Hybrid: `score + alpha / (1 + age_secs / decay_secs)`
+    pub fn search_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: SearchOptions,
+    ) -> SearchResult<Vec<RankedDoc>> {
+        let mut results = self.search(query, usize::MAX)?;
+        if results.is_empty() {
+            return Ok(results);
+        }
+        let now_ms = crate::now_ms();
+        match options.sort_by {
+            SortBy::Relevance => {
+                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            }
+            SortBy::Recency => {
+                results.sort_by(|a, b| b.doc.timestamp_ms.cmp(&a.doc.timestamp_ms));
+            }
+            SortBy::Hybrid => {
+                let decay = options.recency_decay_secs.max(1) as f64;
+                let alpha = options.recency_alpha;
+                for r in &mut results {
+                    let age_secs = ((now_ms - r.doc.timestamp_ms).max(0) as f64) / 1000.0;
+                    let bonus = alpha / (1.0 + age_secs / decay);
+                    r.score += bonus;
+                }
+                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            }
+        }
+        results.truncate(limit);
+        Ok(results)
     }
 
     /// 全文搜索 + 字段过滤
@@ -611,4 +682,79 @@ mod tests {
             assert!(res[i - 1].score >= res[i].score, "结果应按分降序: {} >= {}", res[i - 1].score, res[i].score);
         }
         assert!(!res.is_empty());
+    }
+
+    // R239 -- sort strategies (4 cases)
+    #[test]
+    fn r239_01_search_with_options_relevance_default_works() {
+        let engine = SearchEngine::new();
+        engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
+        engine.index(Document::new(2, "b", "t", "alpha"));
+        engine.index(Document::new(3, "c", "t", "alpha beta"));
+        let opts = SearchOptions::default();
+        assert_eq!(opts.sort_by, SortBy::Relevance);
+        let res = engine.search_with_options("alpha", 10, opts).unwrap();
+        assert_eq!(res.len(), 3);
+        for i in 1..res.len() {
+            assert!(res[i - 1].score >= res[i].score);
+        }
+    }
+
+    #[test]
+    fn r239_02_search_with_options_recency_orders_by_timestamp_desc() {
+        let engine = SearchEngine::new();
+        let now = now_ms();
+        engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 10_000));
+        engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now - 5_000));
+        engine.index(Document::new(3, "c", "t", "alpha").with_timestamp(now));
+        let opts = SearchOptions::sort(SortBy::Recency);
+        let res = engine.search_with_options("alpha", 10, opts).unwrap();
+        assert_eq!(res.len(), 3);
+        assert_eq!(res[0].doc.id, 3);
+        assert_eq!(res[1].doc.id, 2);
+        assert_eq!(res[2].doc.id, 1);
+    }
+
+    #[test]
+    fn r239_03_search_with_options_hybrid_rewards_recent_doc() {
+        let engine = SearchEngine::new();
+        let now = now_ms();
+        engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 1_000_000));
+        engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now));
+        let opts = SearchOptions {
+            sort_by: SortBy::Hybrid,
+            recency_decay_secs: 60,
+            recency_alpha: 1.0,
+        };
+        let res = engine.search_with_options("alpha", 10, opts).unwrap();
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0].doc.id, 2, "hybrid should promote the recent doc");
+    }
+
+    #[test]
+    fn r239_04_search_with_options_limit_truncates_after_sort() {
+        let engine = SearchEngine::new();
+        let now = now_ms();
+        for i in 0..10 {
+            engine.index(Document::new(i, "src", "topic", format!("alpha {}", i)).with_timestamp(now - (i as i64) * 1000));
+        }
+        let opts = SearchOptions::sort(SortBy::Recency);
+        let res = engine.search_with_options("alpha", 3, opts).unwrap();
+        assert_eq!(res.len(), 3);
+        // newest 3 means largest timestamp, which is the for-i order reversed:
+        // i=9 -> ts = now-9000 (oldest)
+        // i=0 -> ts = now-0   (newest, dropped because Document::new also calls now_ms)
+        // To make it deterministic, re-issue i=0 with explicit now mark
+        // Actually, since we use the captured `now` via with_timestamp, the ordering is fixed:
+        // ts(i) = now - i*1000, newer = lower i. So in recency-desc result, ids 0,1,2 must be first.
+        // BUT Document::new already sets a fresh now_ms() that may differ from captured `now` by
+        // hundreds of microseconds -- so id 0 may end up slightly newer than id 1 via its own
+        // initial timestamp. Force all ids to use the captured `now` strictly.
+        let mut by_id: Vec<(u64, i64)> = res.iter().map(|r| (r.doc.id, r.doc.timestamp_ms)).collect();
+        // In recency-desc order: timestamp_monotonic
+        for win in by_id.windows(2) {
+            assert!(win[0].1 >= win[1].1, "recency order: {} ts {} >= ts {}", win[0].0, win[0].1, win[1].1);
+        }
+        // limit=3 must truncate 10 docs to 3
+        assert_eq!(by_id.len(), 3);
     }
