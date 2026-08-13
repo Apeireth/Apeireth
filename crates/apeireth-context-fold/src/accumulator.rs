@@ -1,5 +1,6 @@
 //! Cross-session token accumulator.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 
 /// Approximate token count: chars / 4 (no tiktoken dep, per honest scope).

@@ -698,9 +698,9 @@ pub fn gemini_to_normalized(req: &GeminiRequest) -> NormalizedRequest {
     // 借鉴 VCP gemini adapter.adapt_request:64-82
     if let Some(si) = &req.system_instruction {
         for part in &si.parts {
-            if let GeminiPart::Text { text } = part {
-                messages.push(NormalizedMessage::system(text.clone()));
-            }
+            // GeminiPart is single-variant (Text only). Use destructure.
+            let GeminiPart::Text { text } = part;
+            messages.push(NormalizedMessage::system(text.clone()));
         }
     }
 
@@ -717,12 +717,12 @@ pub fn gemini_to_normalized(req: &GeminiRequest) -> NormalizedRequest {
         // 收集 text parts
         let mut text = String::new();
         for part in &c.parts {
-            if let GeminiPart::Text { text: t } = part {
-                if !text.is_empty() {
-                    text.push('\n');
-                }
-                text.push_str(t);
+            // GeminiPart is single-variant (Text only). Use destructure.
+            let GeminiPart::Text { text: t } = part;
+            if !text.is_empty() {
+                text.push('\n');
             }
+            text.push_str(t);
         }
 
         messages.push(NormalizedMessage {

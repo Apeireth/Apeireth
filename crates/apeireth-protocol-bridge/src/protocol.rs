@@ -1,5 +1,6 @@
 //! VCP protocol enum + detection hints.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CompatProtocol {
     OpenAIChatCompletions,

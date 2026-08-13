@@ -14,6 +14,7 @@
 //! ```
 //! 终止条件: `data: [DONE]` 行. 解析失败行跳过 (不假装失败).
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;

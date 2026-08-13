@@ -592,7 +592,7 @@ struct AdvisorOpinion {
 
 async fn council_advise(
     State(state): State<SharedState>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     Json(req): Json<CouncilAdviseRequest>,
 ) -> Result<Json<CouncilAdviseResponse>, (StatusCode, String)> {
     // R120 (B4 战区 2): 关键路径 span

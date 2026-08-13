@@ -20,3 +20,7 @@ claude-mem / Letta 的两级 memory 设计.
 ## 0 假装
 
 ✅ 摘要结构化输出 | ✅ 折叠前后可比对 | 17 单元测试
+
+## R162 lint cleanup
+
+23 -> 0 warnings (per O-5: internal helpers allow(missing_docs); public API in lib.rs).

@@ -15,6 +15,7 @@
 //! - `APEIRETH_ANTHROPIC_URL` — base_url (默认 `https://api.minimaxi.com/anthropic`)
 //! - `APEIRETH_ANTHROPIC_MODELS` — 支持的 model 列表 (逗号分隔, 默认 `MiniMax-M3`)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;

@@ -1,5 +1,6 @@
 //! File finder: walkdir + globset + .gitignore-style ignore patterns.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::Path;
 use thiserror::Error;
 use walkdir::WalkDir;

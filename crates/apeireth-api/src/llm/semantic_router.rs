@@ -20,6 +20,7 @@
 //! - context_weights: [last_user, global] 配比 (VCP [0.7, 0.3])
 //! - chokidar/notify 热加载 (VCP 工程惯例, 留接口 TODO)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 

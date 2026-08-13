@@ -1,5 +1,6 @@
 //! VCP FileOperator commands compatibility layer.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 

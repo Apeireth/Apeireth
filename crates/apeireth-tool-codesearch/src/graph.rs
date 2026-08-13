@@ -10,6 +10,7 @@
 //! - Edges: File→Symbol (defined_in), Symbol→Symbol (imports/calls),
 //!   File→File (imports)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;
 use crate::symbols::Symbol;
 
