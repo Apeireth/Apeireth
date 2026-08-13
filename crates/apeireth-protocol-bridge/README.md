@@ -20,3 +20,7 @@ crate 名含 "vcp" 是因为这件事的本质是 "兼容 VCP 协议". 内部实
 ## 0 假装
 
 ✅ 27 单元测试 | ✅ 50 命令路由真接
+
+## R162 lint cleanup
+
+70 -> 0 warnings (per O-5: internal helpers allow(missing_docs); public API in lib.rs).

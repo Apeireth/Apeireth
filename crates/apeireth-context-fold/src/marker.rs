@@ -1,5 +1,6 @@
 //! FoldMarker: placeholder format for unfolded content.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MarkerKind {
     /// Full content replaced

@@ -9,6 +9,7 @@
 //! - Falls back gracefully when JS is required (just returns raw HTML in
 //!   `raw_html` field; agent can decide what to do)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use async_trait::async_trait;
 use std::sync::Mutex;
 

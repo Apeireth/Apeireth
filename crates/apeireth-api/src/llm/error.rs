@@ -1,5 +1,6 @@
 //! LLM 错误类型 (统一异常分类 + retryable 区分)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]

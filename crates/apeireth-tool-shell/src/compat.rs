@@ -3,6 +3,7 @@
 //! Maps VCP `LinuxShellExecutor` + `PowerShellExecutor` plugin manifest
 //! command names to Rust types. Real execution routes through EnhancedShell.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ShellCommand {
     /// VCP LinuxShellExecutor (113KB, 六层安全)

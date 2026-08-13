@@ -3,6 +3,7 @@
 //! Defines the unified interface that all browser modes (HTTP fetch, CDP)
 //! implement. The trait stays minimal so unit tests don't require Chrome.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use thiserror::Error;
 use crate::accessibility::AccessibilityTree;
 

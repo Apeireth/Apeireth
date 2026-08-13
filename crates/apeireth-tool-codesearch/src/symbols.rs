@@ -10,6 +10,7 @@
 //! 6768 tests, arXiv paper) design but implement in Rust regex (lighter).
 //! Adding a language requires a new entry in `extract_symbols`.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use regex::Regex;
 use std::path::Path;
 

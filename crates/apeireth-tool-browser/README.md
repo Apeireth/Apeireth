@@ -25,3 +25,7 @@ VCP v1.1 `ChromeBridge V3`.
 ## 0 假装
 
 ✅ 48 单元测试 | ⚠️ 真 browser 启动需 feature-gated chromiumoxide
+
+## R162 lint cleanup
+
+86 -> 0 warnings (per O-5: internal helpers allow(missing_docs); public API in lib.rs).

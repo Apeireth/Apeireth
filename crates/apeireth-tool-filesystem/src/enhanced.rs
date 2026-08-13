@@ -1,5 +1,6 @@
 //! EnhancedFileOps - R137 5-dimension extension entrypoint.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::{Path, PathBuf};
 use apeireth_tools::{StdFileOps, FileOps};
 use crate::{atomic, lock, sandbox};

@@ -1,5 +1,6 @@
 //! MCP server for vcp-bridge (2 tools).
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 

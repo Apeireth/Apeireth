@@ -1,5 +1,6 @@
 //! fsnotify watcher (notify 6.x).
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};

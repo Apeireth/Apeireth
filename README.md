@@ -1,3 +1,5 @@
+> **R162 (2026-08-13)**: Lint cleanup batch - 7 crates (apeireth-tool-codesearch / -browser / -shell / -protocol-bridge / -context-fold / -tool-filesystem / -api) **585 warnings -> 0**. Approach per O-5: `#![allow(missing_docs)]` on internal helper files (docs in lib.rs), real docs on lib.rs exports, MCP camelCase fields kept per JSON spec, `tui-dashboard` properly declared as feature in apeireth-api. 4 bugs fixed (2 irrefutable let on single-variant GeminiPart, 1 unused headers param, 1 test-only SandboxMode import). Tests unchanged (no test code touched), 0 touches 3 immutable spines. See `docs/r162/r162-lint-cleanup-batch.md`.
+
 ﻿# Apeireth — AGI 操作系统 (Rust 重写, VCP 全栈)
 
 

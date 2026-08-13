@@ -11,6 +11,7 @@
 //!   russh::client::connect — kept off the default build path so the crate
 //!   compiles without a live SSH target.
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::path::PathBuf;
 use std::time::Duration;
 use thiserror::Error;

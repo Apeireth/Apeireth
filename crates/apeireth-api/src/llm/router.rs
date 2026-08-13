@@ -6,6 +6,7 @@
 //! - retryable 错误触发 fallback, 不可重试错误直接返回
 //! - 健康检查 (Week 2+)
 
+#![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::sync::Arc;
 
 use async_trait::async_trait;
