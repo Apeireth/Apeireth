@@ -4,8 +4,10 @@
 use std::collections::HashMap;
 use thiserror::Error;
 use serde::{Deserialize, Serialize};
+use async_trait::async_trait;
 
 use crate::config::FetchConfig;
+use crate::http_fetch::HttpFetcher;
 use crate::html_extract::extract_text;
 
 #[derive(Debug, Error)]
@@ -65,9 +67,10 @@ impl FetchResponse {
     }
 }
 
+#[async_trait]
 pub trait Fetcher: Send + Sync {
     fn name(&self) -> &'static str;
-    fn fetch(&self, req: &FetchRequest, cfg: &FetchConfig) -> FetchResult<FetchResponse>;
+    async fn fetch(&self, req: &FetchRequest, cfg: &FetchConfig) -> FetchResult<FetchResponse>;
 }
 
 pub struct FetchEngine {
@@ -79,25 +82,17 @@ impl FetchEngine {
     pub fn with_config(cfg: FetchConfig) -> Self { Self { cfg } }
     pub fn config(&self) -> &FetchConfig { &self.cfg }
 
-    pub fn fetch(&self, req: &FetchRequest) -> FetchResult<FetchResponse> {
+    pub async fn fetch(&self, req: &FetchRequest) -> FetchResult<FetchResponse> {
+        // R174 K-1 强校验: URL 校验先做, 返语义化错误, 再委派 HttpFetcher 真接
         if req.url.trim().is_empty() {
             return Err(FetchError::EmptyUrl);
         }
         if url::Url::parse(&req.url).is_err() {
             return Err(FetchError::InvalidUrl(req.url.clone()));
         }
-        // 不假装: 调用方应通过 HttpFetcher / HttpClient 注入真实 fetch
-        // 这里只做 URL 校验 + extract_text_only 包装
-        let body = if req.extract_text_only { String::new() } else { req.body.clone().unwrap_or_default() };
-        Ok(FetchResponse {
-            url: req.url.clone(),
-            final_url: req.url.clone(),
-            status: 0,
-            content_type: "application/octet-stream".into(),
-            body,
-            bytes_received: 0,
-            elapsed_ms: 0,
-        })
+        // 真接 apeireth-http-client
+        let fetcher = HttpFetcher::new();
+        fetcher.fetch(req, &self.cfg).await
     }
 
     /// 用已 fetch 的 raw response 提取 text (供 HttpClient 调用)
@@ -119,24 +114,24 @@ impl Default for FetchEngine {
 mod tests {
     use super::*;
 
-    #[test]
-    fn engine_validates_empty_url() {
+    #[tokio::test]
+    async fn engine_validates_empty_url() {
         let e = FetchEngine::new();
-        let r = e.fetch(&FetchRequest::get(""));
+        let r = e.fetch(&FetchRequest::get("")).await;
         assert!(matches!(r, Err(FetchError::EmptyUrl)));
     }
 
-    #[test]
-    fn engine_validates_invalid_url() {
+    #[tokio::test]
+    async fn engine_validates_invalid_url() {
         let e = FetchEngine::new();
-        let r = e.fetch(&FetchRequest::get("not a url"));
+        let r = e.fetch(&FetchRequest::get("not a url")).await;
         assert!(matches!(r, Err(FetchError::InvalidUrl(_))));
     }
 
-    #[test]
-    fn engine_accepts_valid_url() {
+    #[tokio::test]
+    async fn engine_accepts_valid_url() {
         let e = FetchEngine::new();
-        let r = e.fetch(&FetchRequest::get("https://example.com"));
+        let r = e.fetch(&FetchRequest::get("https://example.com")).await;
         assert!(r.is_ok());
     }
 
