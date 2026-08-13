@@ -174,15 +174,15 @@ mod lib_tests {
     #[test]
     fn six_tool_kinds_have_vcp_strings() {
         // 6 类 1:1 对应 VCP pluginType 真值
-        assert_eq!(ToolKind::Sync.as_vcp_str(), "synchronous");
-        assert_eq!(ToolKind::Async.as_vcp_str(), "asynchronous");
-        assert_eq!(ToolKind::Static.as_vcp_str(), "static");
-        assert_eq!(ToolKind::Service.as_vcp_str(), "service");
+        assert_eq!(ToolKind::Sync.as_legacy_str(), "synchronous");
+        assert_eq!(ToolKind::Async.as_legacy_str(), "asynchronous");
+        assert_eq!(ToolKind::Static.as_legacy_str(), "static");
+        assert_eq!(ToolKind::Service.as_legacy_str(), "service");
         assert_eq!(
-            ToolKind::MessagePreprocessor.as_vcp_str(),
+            ToolKind::MessagePreprocessor.as_legacy_str(),
             "messagePreprocessor"
         );
-        assert_eq!(ToolKind::Hybridservice.as_vcp_str(), "hybridservice");
+        assert_eq!(ToolKind::Hybridservice.as_legacy_str(), "hybridservice");
     }
 
     #[test]

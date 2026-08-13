@@ -241,8 +241,8 @@ fn main() {
     println!();
     println!("| 借鉴点                  | VCP 真文件 + 行号                  | 借鉴落地                    |");
     println!("|-------------------------|------------------------------------|------------------------------|");
-    println!("| 归一化 message role     | protocolBridge.js:47-52             | MessageRole::from_vcp()      |");
-    println!("| 归一化 content          | protocolBridge.js:21-42             | ContentPart::from_vcp()      |");
+    println!("| 归一化 message role     | protocolBridge.js:47-52             | MessageRole::from_legacy_value()      |");
+    println!("| 归一化 content          | protocolBridge.js:21-42             | ContentPart::from_legacy_value()      |");
     println!("| 归一化 tool 3 步判定    | protocolBridge.js:63-89             | NormalizedTool 构造          |");
     println!("| 归一化 tool_choice      | protocolBridge.js:120-156           | NormalizedToolChoice 枚举    |");
     println!("| Gemini functionDecl.    | protocolBridge.js:91-118            | GeminiAdapter.build_tools    |");

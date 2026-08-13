@@ -121,7 +121,7 @@ impl NotifyChannel {
     pub const COUNT: usize = 3;
     pub const ALL: [NotifyChannel; 3] = [Self::Ai, Self::Human, Self::Both];
 
-    pub const fn as_vcp_str(&self) -> &'static str {
+    pub const fn as_legacy_str(&self) -> &'static str {
         match self {
             Self::Ai => "ai_notification",
             Self::Human => "vcp_log",
@@ -486,9 +486,9 @@ mod tests {
 
     #[test]
     fn t10_notify_channel_vcp_str() {
-        assert_eq!(NotifyChannel::Ai.as_vcp_str(), "ai_notification");
-        assert_eq!(NotifyChannel::Human.as_vcp_str(), "vcp_log");
-        assert_eq!(NotifyChannel::Both.as_vcp_str(), "vcp_info");
+        assert_eq!(NotifyChannel::Ai.as_legacy_str(), "ai_notification");
+        assert_eq!(NotifyChannel::Human.as_legacy_str(), "vcp_log");
+        assert_eq!(NotifyChannel::Both.as_legacy_str(), "vcp_info");
         assert_eq!(NotifyChannel::COUNT, 3);
     }
 }

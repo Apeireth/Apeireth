@@ -802,7 +802,7 @@ fn render_input(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
     // focus 时 OS 光标可见 (默认 ratatui 设过), 失焦时仍 set 位置但前端不渲染
     let cursor_x = inner.x + 2 + unicode_width::UnicodeWidthStr::width(before) as u16;
     let cursor_y = inner.y;
-    f.set_cursor(cursor_x, cursor_y);
+    f.set_cursor_position((cursor_x, cursor_y));
 }
 
 /// 过滤掉 `` 标签 (return (think, rest_without_think))
