@@ -955,6 +955,7 @@ dependencies = [
  "apeireth-consciousness",
  "apeireth-council",
  "apeireth-http-client",
+ "apeireth-pipeline-g5",
  "apeireth-supervisor",
  "apeireth-tool-registry",
  "apeireth-tool-search",
