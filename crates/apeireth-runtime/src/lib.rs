@@ -44,6 +44,9 @@ use apeireth_supervisor::{Heartbeat, HeartbeatPriority, HeartbeatScheduler, Sche
 use apeireth_tool_registry::{AsyncTaskStore, NotifyChannel, TaskId, TaskStatus};
 use apeireth_tool_search::{Document, SearchEngine};
 use parking_lot::Mutex;
+use apeireth_supervisor::otel_metrics::{
+    Counter, Gauge, Histogram, MetricEntry, MetricsRegistry,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::time::sleep;
@@ -352,6 +355,13 @@ pub struct Runtime {
     pub emotion: Arc<Mutex<EmotionEngine>>,
     pub config: RuntimeConfig,
     started: Arc<Mutex<bool>>,
+    // R238: OTel metrics registry + handles (Arc so callers can share)
+    pub metrics_registry: Arc<MetricsRegistry>,
+    pub cycle_total: Arc<Counter>,
+    pub cycle_failures_total: Arc<Counter>,
+    pub decay_emit_total: Arc<Counter>,
+    pub cycle_duration_ms: Arc<Histogram>,
+    pub pending_tasks: Arc<Gauge>,
 }
 
 impl Runtime {
@@ -360,6 +370,28 @@ impl Runtime {
     }
 
     pub fn with_config(config: RuntimeConfig) -> Self {
+        // R238: register default runtime metrics
+        let metrics_registry = Arc::new(MetricsRegistry::new());
+        let cycle_total = metrics_registry.register_counter(Counter::new(
+            "runtime_cycle_total",
+            "runtime.run_one_cycle total invocations",
+        ));
+        let cycle_failures_total = metrics_registry.register_counter(Counter::new(
+            "runtime_cycle_failures_total",
+            "runtime.run_one_cycle errors",
+        ));
+        let decay_emit_total = metrics_registry.register_counter(Counter::new(
+            "runtime_decay_emit_total",
+            "emotion.decay events published to bus",
+        ));
+        let cycle_duration_ms = metrics_registry.register_histogram(Histogram::new_ms(
+            "runtime_cycle_duration_ms",
+            "runtime.run_one_cycle wallclock duration",
+        ));
+        let pending_tasks = metrics_registry.register_gauge(Gauge::new(
+            "runtime_total_tasks",
+            "total async tasks tracked by runtime store",
+        ));
         let arbitration = match &config.arbitration_path {
             Some(p) => ArbitrationLog::open(p).expect("open arbitration log"),
             None => ArbitrationLog::open_in_memory().expect("open in-memory arbitration"),
@@ -374,7 +406,18 @@ impl Runtime {
             emotion: Arc::new(Mutex::new(EmotionEngine::new())),
             config,
             started: Arc::new(Mutex::new(false)),
+            metrics_registry,
+            cycle_total,
+            cycle_failures_total,
+            decay_emit_total,
+            cycle_duration_ms,
+            pending_tasks,
         }
+    }
+
+    /// R238: export metrics in Prometheus text exposition format.
+    pub fn metrics_text(&self) -> String {
+        self.metrics_registry.export_prometheus_text()
     }
 
     pub fn bootstrap(&self) -> RuntimeResult<String> {
@@ -462,6 +505,8 @@ impl Runtime {
     }
 
     pub async fn run_one_cycle(&self) -> RuntimeResult<CycleReport> {
+        // R238: count attempts before any work
+        self.cycle_total.inc();
         // R237: 拿 auto_decay + snapshot; 满足 emit_decay_bus + 阈值 / 显著阈值 => publish
         let decay_snap: Option<DecaySnapshot> = {
             let mut eng = self.emotion.lock();
@@ -482,6 +527,8 @@ impl Runtime {
                 );
                 let msg = BusMessage::new(event);
                 let _ = self.bus.publish_multi(ChannelSet::BOTH, "emotion.decay", msg).await;
+                // R238: count successful decays published
+                self.decay_emit_total.inc();
             }
         }
         let start = now_ms();
@@ -526,6 +573,10 @@ impl Runtime {
         self.emotion.lock().apply(event).ok();
         let snap = self.emotion.lock().snapshot();
         let elapsed_ms = (now_ms() - start) as u64;
+        self.cycle_duration_ms.observe(elapsed_ms as f64);
+        // R238: refresh total-tasks gauge
+        let pending = self.task_store.len().await as i64;
+        self.pending_tasks.set(pending);
         Ok(CycleReport {
             trace_id,
             task_id,
@@ -758,4 +809,56 @@ pub use apeireth_consciousness::EmotionEvent;
         assert!(c.emit_decay_bus);
         assert!(c.decay_emit_min_elapsed_secs > 0.0);
         assert!(c.decay_emit_min_drift > 0.0);
+    }
+
+    // R238 -- OTel metrics integration (4 cases)
+    #[test]
+    fn r238_01_runtime_registers_default_metrics() {
+        let rt = Runtime::new();
+        assert_eq!(rt.cycle_total.get(), 0);
+        assert_eq!(rt.cycle_failures_total.get(), 0);
+        assert_eq!(rt.decay_emit_total.get(), 0);
+        assert_eq!(rt.cycle_duration_ms.count(), 0);
+        assert_eq!(rt.pending_tasks.get(), 0);
+    }
+
+    #[tokio::test]
+    async fn r238_02_runtime_cycle_increments_total_and_observes_duration() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let _ = rt.run_one_cycle().await.unwrap();
+        assert_eq!(rt.cycle_total.get(), 1);
+        assert_eq!(rt.cycle_failures_total.get(), 0);
+        // duration observed exactly once
+        assert_eq!(rt.cycle_duration_ms.count(), 1);
+        assert!(rt.cycle_duration_ms.mean() >= 0.0);
+        // total tasks count should be at least 1 (the cycle's own task)
+        assert!(rt.pending_tasks.get() >= 1, "expected total_tasks >= 1, got {}", rt.pending_tasks.get());
+    }
+
+    #[tokio::test]
+    async fn r238_03_runtime_metrics_text_export_contains_all_names() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let _ = rt.run_one_cycle().await.unwrap();
+        let text = rt.metrics_text();
+        // Prometheus exposition format: each metric should appear
+        assert!(text.contains("runtime_cycle_total"), "missing cycle_total in metrics_text");
+        assert!(text.contains("runtime_cycle_failures_total"), "missing failures_total");
+        assert!(text.contains("runtime_decay_emit_total"), "missing decay_emit_total");
+        assert!(text.contains("runtime_cycle_duration_ms"), "missing duration_ms");
+        assert!(text.contains("runtime_total_tasks"), "missing total_tasks");
+    }
+
+    #[tokio::test]
+    async fn r238_04_runtime_metrics_registry_arc_shares_across_callers() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let reg1 = rt.metrics_registry.clone();
+        let counter_via_lookup = reg1.counter("runtime_cycle_total").expect("counter missing");
+        // Verify the registry's counter IS the same Arc we have a reference to.
+        assert!(Arc::ptr_eq(&counter_via_lookup, &rt.cycle_total));
+        // inc via the registry pointer, see same effect
+        counter_via_lookup.inc_by(7);
+        assert_eq!(rt.cycle_total.get(), 7);
     }
