@@ -27,6 +27,7 @@ thiserror = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 regex = "1.10"
+lru = { workspace = true }
 tempfile = "3.10"
 aho-corasick = "1.1"
 globset = "0.4"
