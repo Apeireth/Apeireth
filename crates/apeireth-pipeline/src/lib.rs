@@ -64,6 +64,7 @@ pub mod role_divider; // R122-2-retry: 借鉴 VCP roleDivider.js (R122-2-retry-V
 pub mod streaming;
 pub mod token_budget;
 pub mod tool_loop; // R32-2: 借鉴 LangGraph state machine + conditional edge
+pub mod g5_chat_bridge; // R157: chat 5-step -> g5 5-stage substrate 集成 (第 2 个 g5 生产调用方)
 
 pub use force_translate::{
     force_translate_if_needed, is_text_only_model_by_tag, messages_contain_base64_media,

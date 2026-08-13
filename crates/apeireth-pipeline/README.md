@@ -25,6 +25,22 @@
 - `apeireth-pipeline-g5` — 通用 5 阶段框架 (Dispatch → Normalize → Policy → Reliability → Throttle), 借鉴 Golutra v0.1.0
 - 两个不重复, 互补: pipeline 走 chat, pipeline-g5 走通用
 
+### R157: chat 接入 g5 substrate (`g5_chat_bridge.rs`)
+
+R157 把 chat pipeline 5 步映射到 g5 5 阶段, 用 `apeireth_pipeline_g5::Pipeline<T, I, O>` 当载体:
+
+| g5 阶段 | chat 概念 | bridge struct |
+|---------|---------|-------------|
+| Dispatch | 写 kind (默认 chat) | `ChatDispatchStage` |
+| Normalize | placeholder 递归解析 | `ChatNormalizeStage` |
+| Policy | token 预算截断 | `ChatPolicyStage` |
+| Reliability | 15s 抑制窗口 | `ChatReliabilityStage` |
+| Throttle | 当前 0 限流 | `ChatThrottleStage` |
+
+Builder: `ChatPipelineBuilder::new("chat-default").with_placeholder(ctx).build()` 拿 `Pipeline<ChatPipeline, PipelineMessage, PipelineMessage>`.
+
+13 bridge tests: dispatch (2) + normalize (3) + policy (2) + reliability (2) + throttle (1) + full pipeline (3).
+
 ## 依赖
 
 - `apeireth-protocol` (4 协议归一化)
