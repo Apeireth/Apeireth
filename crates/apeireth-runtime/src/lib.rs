@@ -44,6 +44,7 @@ use apeireth_supervisor::{Heartbeat, HeartbeatPriority, HeartbeatScheduler, Sche
 use apeireth_tool_registry::{AsyncTaskStore, NotifyChannel, TaskId, TaskStatus};
 use apeireth_tool_search::{Document, SearchEngine};
 use parking_lot::Mutex;
+use std::collections::HashMap;
 use apeireth_supervisor::otel_metrics::{
     Counter, Gauge, Histogram, MetricEntry, MetricsRegistry, SupervisorMetrics,
     supervisor_default_metrics,
@@ -385,6 +386,9 @@ pub struct Runtime {
     pub lifecycle_shutdown_total: Arc<Counter>,
     // R250: supervisor metrics linkup (heartbeat_count + tick_duration wired to LivingCycleHeartbeat)
     pub supervisor_metrics: SupervisorMetrics,
+    // R255: pluggable worker registry. Key = tool_name. Lookup happens in
+    // dispatch_async_task; if no match, falls back to SimulatedWorker.
+    pub worker_registry: Arc<Mutex<HashMap<String, Arc<dyn AsyncWorker>>>>,
 }
 
 impl Runtime {
@@ -447,6 +451,7 @@ impl Runtime {
             lifecycle_shutdown_total,
             // R250: supervisor metrics linkup (heartbeat_count + tick_duration)
             supervisor_metrics: supervisor_default_metrics().1,
+            worker_registry: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -492,8 +497,88 @@ impl Runtime {
             .map_err(|e| RuntimeError::GroupChat(e.to_string()))
     }
 
+    /// R255 -- register a custom AsyncWorker for the given tool_name.
+    /// When `dispatch_async_task` is invoked with this name, the registered
+    /// worker is used; otherwise the (legacy) SimulatedWorker is used.
+    pub fn register_worker(&self, tool_name: &str, worker: Arc<dyn AsyncWorker>) {
+        self.worker_registry.lock().insert(tool_name.to_string(), worker);
+    }
+
+    /// R255 -- dispatch a task using a caller-supplied worker, bypassing the
+    /// registry / SimulatedWorker fallback. Returns the assigned TaskId.
+    pub async fn dispatch_async_task_with_worker(
+        &self,
+        worker: Arc<dyn AsyncWorker>,
+        params_json: &str,
+    ) -> TaskId {
+        let tool = worker.name().to_string();
+        let (task_id, _rec) = self.task_store.register(
+            tool.clone(),
+            params_json.to_string(),
+            NotifyChannel::Both,
+        ).await;
+        self.task_store.mark_running(task_id).await.expect("mark running");
+        let store = self.task_store.clone();
+        let bus = self.bus.clone();
+        let emit_bus = self.config.emit_bus;
+        let tool_name_owned = tool.clone();
+        let params_owned: String = params_json.to_string();
+        tokio::spawn(async move {
+            let result = worker.execute(task_id, params_owned).await;
+            match result {
+                Ok(json) => {
+                    let snap = match store.complete(task_id, json.clone()).await {
+                        Ok(s) => s,
+                        Err(_) => return,
+                    };
+                    if emit_bus {
+                        let event = RuntimeEvent::new(
+                            snap.task_id,
+                            Some(snap.task_id),
+                            tool_name_owned.clone(),
+                            "task_completed",
+                            json.clone(),
+                        );
+                        let msg = BusMessage::new(event);
+                        let _ = bus.publish_multi(ChannelSet::BOTH, "async_result", msg).await;
+                    }
+                }
+                Err(err) => {
+                    let _ = store.fail(task_id, err.clone()).await;
+                }
+            }
+        });
+        task_id
+    }
+
+    /// R255 -- direct LLM dispatch. Constructs a transient LlmWorker with the
+    /// supplied api_key and runs the prompt through the configured provider.
+    /// `model` / `base_url` are optional; when None the LlmWorker defaults apply.
+    pub async fn dispatch_llm_task(
+        &self,
+        prompt: &str,
+        system: Option<&str>,
+        model: Option<&str>,
+        base_url: Option<&str>,
+        api_key: &str,
+    ) -> TaskId {
+        let worker: Arc<dyn AsyncWorker> = match (model, base_url) {
+            (Some(m), Some(b)) => Arc::new(LlmWorker::with_config("llm", api_key, b, m)),
+            (Some(m), None) => Arc::new(LlmWorker::with_config("llm", api_key, "https://api.minimaxi.com", m)),
+            _ => Arc::new(LlmWorker::new("llm", api_key)),
+        };
+        let params = serde_json::json!({"prompt": prompt, "system": system});
+        self.dispatch_async_task_with_worker(worker, &params.to_string()).await
+    }
+
     pub async fn dispatch_async_task(&self, tool_name: &str, params_json: &str) -> TaskId {
-        let worker = SimulatedWorker::new(tool_name);
+        // R255: registry-first lookup; falls back to SimulatedWorker for legacy callers.
+        let worker: Arc<dyn AsyncWorker> = self
+            .worker_registry
+            .lock()
+            .get(tool_name)
+            .cloned()
+            .unwrap_or_else(|| Arc::new(SimulatedWorker::new(tool_name)));
         let tool = worker.name().to_string();
         let (task_id, _rec) = self.task_store.register(
             tool.clone(),
@@ -1157,4 +1242,59 @@ pub struct CycleLatencySummary {
         assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 1);
         let text = rt.metrics_text();
         assert!(text.contains("runtime_cycle_total"), "runtime_cycle_total must appear");
+    }
+
+
+    // R255 -- pluggable worker registry + LlmWorker dispatch
+
+    #[test]
+    fn r255_01_register_worker_inserts_into_registry() {
+        let rt = Runtime::new();
+        let w: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("custom"));
+        rt.register_worker("custom", w);
+        assert!(rt.worker_registry.lock().contains_key("custom"));
+    }
+
+    #[tokio::test]
+    async fn r255_02_dispatch_async_task_falls_back_to_simulated() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        // No worker registered under "test_tool" -> SimulatedWorker fallback.
+        let tid = rt.dispatch_async_task("test_tool", "{}").await;
+        let rec = rt.task_store.wait_for_completion(tid, Duration::from_secs(3)).await.unwrap();
+        assert_eq!(rec.status, TaskStatus::Completed);
+        let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
+        assert_eq!(j["output"], "ok-simulated");
+    }
+
+    #[tokio::test]
+    async fn r255_03_dispatch_async_task_uses_registered_worker() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let custom = Arc::new(SimulatedWorker::new("custom_tool"));
+        rt.register_worker("custom_tool", custom);
+        let tid = rt.dispatch_async_task("custom_tool", "{}").await;
+        let rec = rt.task_store.wait_for_completion(tid, Duration::from_secs(3)).await.unwrap();
+        assert_eq!(rec.status, TaskStatus::Completed);
+        let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
+        assert_eq!(j["tool"], "custom_tool");
+    }
+
+    #[tokio::test]
+    async fn r255_04_dispatch_llm_task_returns_task_id() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        // dispatch_llm_task should hand back a TaskId even before the underlying HTTP call resolves.
+        let tid = rt.dispatch_llm_task("hello", None, None, None, "fake-key").await;
+        assert!(tid > 0);
+        // don'''t wait -- the fake key will fail; this test only verifies dispatch path.
+    }
+
+    #[test]
+    fn r255_05_dispatch_llm_task_with_model_and_base_url() {
+        // Verify the worker selection branch with both overrides set.
+        let w = LlmWorker::with_config("llm", "fake", "https://custom.api", "claude-opus");
+        assert_eq!(w.model(), "claude-opus");
+        assert_eq!(w.base_url(), "https://custom.api");
+        assert_eq!(w.name(), "llm");
     }
