@@ -24,6 +24,8 @@ apeireth-consciousness = { path = "../apeireth-consciousness" }
 apeireth-http-client = { path = "../apeireth-http-client" }
 # R160: runtime 接 g5 substrate (第 4 个生产调用方)
 apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
+# R263: apeireth-workflow runtime integration (AsyncWorker adapter)
+apeireth-workflow = { path = "../apeireth-workflow" }
 
 # Workspace deps
 tokio = { workspace = true, features = ["full"] }
