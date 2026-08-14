@@ -1,5 +1,36 @@
 # apeireth-council
 
+## R269: MultiModelAdvisorBackend (跨多 LLM 决策聚合)
+
+`MultiModelAdvisorBackend` 让 council 7 advisor 同时调多个 LLM provider, 用 `AggregationStrategy` 聚合:
+
+| Strategy | 行为 |
+|----------|------|
+| `FirstNonEmpty` (默认) | 第一个非空响应 (fallback chain) |
+| `Longest` | 最长 text 的响应 (信息量最大) |
+| `ConcatAll` | 拼接所有非空响应, `
+--
+` 分隔 |
+
+复用 `MockLlmProvider` trait (跟 `LlmAdvisorBackend` 一致), council 直接接.
+
+```rust
+use apeireth_api::llm::LlmProvider;
+use apeireth_council::multi_model_backend::{MultiModelAdvisorBackend, AggregationStrategy};
+
+let backends: Vec<Arc<dyn LlmProvider>> = vec![
+    Arc::new(openai_backend),
+    Arc::new(anthropic_backend),
+    Arc::new(minimax_backend),
+];
+let m = MultiModelAdvisorBackend::with_strategy(backends, AggregationStrategy::Longest);
+// 接到 council: council_member.with_llm_provider(Arc::new(m));
+```
+
+failed backend 自动跳过 (graceful degradation), 全部失败时返 placeholder.
+
+
+
 > Apeireth 智囊团 7 强制 Advisor + 按住机制 + 拟人化 synthesis + **真 LLM 后端** (R131 验证) — R14 Phase 5 P22.
 
 ## Status

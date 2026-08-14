@@ -55,6 +55,28 @@ enum EventKind {
 }
 \`\`\`
 
+## R263: WorkflowWorker — 接到 runtime AsyncWorker
+
+`WorkflowWorker` adapter 让 `apeireth-runtime` 的 `AsyncWorker` trait 能 dispatch workflow.
+WorkflowRunner::run 是 sync, 用 `tokio::task::spawn_blocking` 包成 async.
+
+```rust
+use apeireth_workflow::WorkflowWorker;
+use std::sync::Arc;
+
+let mut runner = WorkflowRunner::new();
+runner.register_activity("add", Arc::new(AddActivity));
+runner.register_workflow(Arc::new(AddWorkflow));
+let runner = Arc::new(runner);
+
+let worker = WorkflowWorker::new(runner.clone(), "add");
+// 在 apeireth-runtime 侧: runtime.register_worker("workflow.add", Arc::new(worker));
+// 然后: runtime.dispatch_async_task("workflow.add", r#"{"a":3,"b":5}"#).await
+```
+
+`#[derive(Clone)]` 让 `WorkflowWorker` 满足 `'static` (Arc<WorkflowRunner> + String),
+满足 `AsyncWorker::execute` 在 spawn_blocking 里的 `'static` 要求.
+
 ## 借鉴来源
 
 | ID | 来源 | 模式 |

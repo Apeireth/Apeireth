@@ -44,3 +44,23 @@ O-4 主 00:56 任何人都能接手 — Governance.process(decision) -> Outcome 
 ## R163 lint cleanup
 
 15 -> 0 warnings. 3 files cleaned. 3 unused params prefixed (ha.rs single/process_owner_request_with_authority, three_domain_enforce.rs enforce).
+
+
+## R268: Kani proofs 扩展 (实战触发链)
+
+`crates/apeireth-sovereignty/src/kani_proofs.rs` 加 4 properties:
+
+- **P4**: disarmed guard never records anything
+- **P5**: rearm after disarm restores armed=true
+- **P6**: pass path never increments record_count
+- **P7**: trigger_id uniqueness across many triggers
+- **P8**: 5 mechanism IDs are stable (1, 2, 3, 4, 5)
+
+cargo mirrors: `cargo test -p apeireth-sovereignty --lib kani_proofs` → 9/9 pass (R253 旧 4 + R268 新 5).
+
+Kani CBMC proofs (cfg(kani) gated):
+```bash
+cargo kani --features kani -p apeireth-sovereignty
+```
+
+7 proofs total (3 R253 + 4 R268).
