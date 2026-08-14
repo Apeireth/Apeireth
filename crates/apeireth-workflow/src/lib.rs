@@ -321,6 +321,40 @@ impl WorkflowRunner {
     }
 }
 
+// ============================================================
+// R263: WorkflowWorker adapter — connects workflow to runtime AsyncWorker
+// ============================================================
+
+/// R263: Workflow-as-Worker adapter.
+///
+/// 持有 shared WorkflowRunner + 一个 workflow_id, 让 apeireth-runtime 的
+/// AsyncWorker trait 能 dispatch 到 workflow. WorkflowRunner::run 是 sync,
+/// runtime caller 用 spawn_blocking 包成 async.
+#[derive(Clone)]
+pub struct WorkflowWorker {
+    runner: Arc<WorkflowRunner>,
+    workflow_id: String,
+}
+
+impl WorkflowWorker {
+    pub fn new(runner: Arc<WorkflowRunner>, workflow_id: impl Into<String>) -> Self {
+        Self {
+            runner,
+            workflow_id: workflow_id.into(),
+        }
+    }
+    pub fn workflow_id(&self) -> &str { &self.workflow_id }
+    pub fn runner(&self) -> &Arc<WorkflowRunner> { &self.runner }
+    pub fn name(&self) -> &str { &self.workflow_id }
+    pub fn execute_with_input(&self, input_json: &str) -> Result<String, String> {
+        let value: serde_json::Value = serde_json::from_str(input_json)
+            .map_err(|e| format!("input parse: {}", e))?;
+        let result = self.runner.run(&self.workflow_id, &value)
+            .map_err(|e| e.to_string())?;
+        serde_json::to_string(&result).map_err(|e| format!("output serialize: {}", e))
+    }
+}
+
 impl Default for WorkflowRunner {
     fn default() -> Self {
         Self::new()
@@ -332,6 +366,86 @@ fn current_epoch_ms() -> i64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
         .unwrap_or(0)
+}
+
+// ============================================================
+// R263: WorkflowWorker unit tests
+// ============================================================
+
+#[cfg(test)]
+mod workflow_worker_tests {
+    use super::*;
+
+    struct AddActivity;
+    impl Activity for AddActivity {
+        fn execute(&self, input: &ActivityInput) -> Result<ActivityOutput, String> {
+            let a = input.get("a").and_then(|v| v.as_i64()).unwrap_or(0);
+            let b = input.get("b").and_then(|v| v.as_i64()).unwrap_or(0);
+            Ok(serde_json::json!({"sum": a + b}))
+        }
+    }
+
+    struct SumWorkflow;
+    impl Workflow for SumWorkflow {
+        fn id(&self) -> &str { "sum" }
+        fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value)
+            -> WorkflowResult<serde_json::Value> {
+            let result = ctx.execute_activity("add", input.clone())?;
+            Ok(result)
+        }
+    }
+
+    fn build_runner() -> Arc<WorkflowRunner> {
+        let mut r = WorkflowRunner::new();
+        r.register_activity("add", Arc::new(AddActivity));
+        r.register_workflow(Arc::new(SumWorkflow));
+        Arc::new(r)
+    }
+
+    #[test]
+    fn r263_01_worker_name_matches_workflow_id() {
+        let runner = build_runner();
+        let w = WorkflowWorker::new(runner.clone(), "sum");
+        assert_eq!(w.name(), "sum");
+        assert_eq!(w.workflow_id(), "sum");
+    }
+
+    #[test]
+    fn r263_02_worker_executes_workflow() {
+        let runner = build_runner();
+        let w = WorkflowWorker::new(runner, "sum");
+        let out = w.execute_with_input(r#"{"a":3,"b":5}"#).expect("ok");
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["sum"], 8);
+    }
+
+    #[test]
+    fn r263_03_worker_records_event_history() {
+        let runner = build_runner();
+        let w = WorkflowWorker::new(runner.clone(), "sum");
+        let _ = w.execute_with_input(r#"{"a":1,"b":2}"#).unwrap();
+        let hist = runner.get_history("sum").expect("history");
+        assert!(hist.len() >= 4, "expected at least 4 events (started+scheduled+completed+workflowCompleted), got {}", hist.len());
+        assert_eq!(hist[0].kind, EventKind::WorkflowStarted);
+        assert_eq!(hist.last().unwrap().kind, EventKind::WorkflowCompleted);
+    }
+
+    #[test]
+    fn r263_04_worker_bad_json_returns_err() {
+        let runner = build_runner();
+        let w = WorkflowWorker::new(runner, "sum");
+        let r = w.execute_with_input("not json");
+        assert!(r.is_err());
+        assert!(r.err().unwrap().contains("input parse"));
+    }
+
+    #[test]
+    fn r263_05_worker_unknown_workflow_returns_err() {
+        let runner = build_runner();
+        let w = WorkflowWorker::new(runner, "nope");
+        let r = w.execute_with_input("{}");
+        assert!(r.is_err());
+    }
 }
 
 // ============================================================
