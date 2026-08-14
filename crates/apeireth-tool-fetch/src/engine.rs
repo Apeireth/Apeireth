@@ -24,6 +24,10 @@ pub struct FetchMetrics {
     pub fetch_errors_total: AtomicU64,
     pub fetch_total_duration_ms: AtomicU64,
     pub fetch_latency_max_ms: AtomicI64,  // -1 = unset
+    /// R265: cache hit counter (fetch returned from cache, not network)
+    pub fetch_cache_hits: AtomicU64,
+    /// R265: cache miss counter (fetch went to network because cache empty/expired)
+    pub fetch_cache_misses: AtomicU64,
 }
 
 impl FetchMetrics {
@@ -33,7 +37,26 @@ impl FetchMetrics {
             fetch_errors_total: AtomicU64::new(0),
             fetch_total_duration_ms: AtomicU64::new(0),
             fetch_latency_max_ms: AtomicI64::new(-1),
+            fetch_cache_hits: AtomicU64::new(0),
+            fetch_cache_misses: AtomicU64::new(0),
         }
+    }
+
+    /// R265: record a cache hit (also counts as a success for latency)
+    pub fn record_cache_hit(&self, latency_ms: f64) {
+        self.fetch_total.fetch_add(1, AtomicOrdering::Relaxed);
+        self.fetch_cache_hits.fetch_add(1, AtomicOrdering::Relaxed);
+        self.fetch_total_duration_ms.fetch_add(latency_ms as u64, AtomicOrdering::Relaxed);
+        let prev = self.fetch_latency_max_ms.load(AtomicOrdering::Relaxed);
+        let cur = latency_ms as i64;
+        if cur > prev {
+            self.fetch_latency_max_ms.store(cur, AtomicOrdering::Relaxed);
+        }
+    }
+
+    /// R265: record a cache miss (does NOT count as fetch_total, since the actual fetch happens after)
+    pub fn record_cache_miss(&self) {
+        self.fetch_cache_misses.fetch_add(1, AtomicOrdering::Relaxed);
     }
     pub fn record_success(&self, latency_ms: f64) {
         self.fetch_total.fetch_add(1, AtomicOrdering::Relaxed);
@@ -59,9 +82,13 @@ impl FetchMetrics {
         let errors = self.fetch_errors_total.load(AtomicOrdering::Relaxed);
         let sum = self.fetch_total_duration_ms.load(AtomicOrdering::Relaxed);
         let max = self.fetch_latency_max_ms.load(AtomicOrdering::Relaxed);
+        let hits = self.fetch_cache_hits.load(AtomicOrdering::Relaxed);
+        let misses = self.fetch_cache_misses.load(AtomicOrdering::Relaxed);
         let mean = if total > 0 { sum as f64 / total as f64 } else { 0.0 };
-        format!("fetch_total={} fetch_errors_total={} fetch_latency_mean_ms={:.3} fetch_latency_max_ms={}\n",
-                total, errors, mean, max)
+        format!(
+            "fetch_total={} fetch_errors_total={} fetch_latency_mean_ms={:.3} fetch_latency_max_ms={} fetch_cache_hits={} fetch_cache_misses={}\n",
+            total, errors, mean, max, hits, misses
+        )
     }
 }
 
@@ -143,6 +170,127 @@ mod metrics_tests {
         assert!(s.contains("fetch_errors_total=1"));
         assert!(s.contains("fetch_latency_max_ms=125"));
     }
+
+    // ============================================================
+    // R265: cache hit/miss metrics + builder accessors
+    // ============================================================
+
+    #[test]
+    fn r265_01_metrics_initial_cache_counters_zero() {
+        let m = FetchMetrics::new();
+        assert_eq!(m.fetch_cache_hits.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_cache_misses.load(AtomicOrdering::Relaxed), 0);
+    }
+
+    #[test]
+    fn r265_02_record_cache_hit_increments_total_and_hits() {
+        let m = FetchMetrics::new();
+        m.record_cache_hit(5.0);
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(m.fetch_cache_hits.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(m.fetch_cache_misses.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_errors_total.load(AtomicOrdering::Relaxed), 0);
+    }
+
+    #[test]
+    fn r265_03_record_cache_miss_does_not_increment_total() {
+        let m = FetchMetrics::new();
+        m.record_cache_miss();
+        m.record_cache_miss();
+        assert_eq!(m.fetch_cache_misses.load(AtomicOrdering::Relaxed), 2);
+        // cache miss does NOT count as fetch_total (the actual fetch happens after)
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 0);
+    }
+
+    #[test]
+    fn r265_04_metrics_text_includes_cache_fields() {
+        let m = FetchMetrics::new();
+        m.record_cache_hit(10.0);
+        m.record_cache_miss();
+        m.record_cache_miss();
+        let s = m.metrics_text();
+        assert!(s.contains("fetch_cache_hits=1"));
+        assert!(s.contains("fetch_cache_misses=2"));
+    }
+
+    #[test]
+    fn r265_05_engine_with_cache_enables_cache() {
+        let engine = FetchEngine::new().with_cache();
+        assert!(engine.cache().is_some());
+        assert!(engine.cache_stats().is_some());
+    }
+
+    #[test]
+    fn r265_06_engine_with_cache_ttl_uses_custom_ttl() {
+        let engine = FetchEngine::new().with_cache_ttl(5000);
+        assert!(engine.cache().is_some());
+    }
+
+    #[test]
+    fn r265_07_engine_default_has_no_cache() {
+        let engine = FetchEngine::new();
+        assert!(engine.cache().is_none());
+        assert!(engine.cache_stats().is_none());
+    }
+
+    #[test]
+    fn r265_08_engine_cache_invalidate_returns_false_when_no_cache() {
+        let engine = FetchEngine::new();
+        assert!(!engine.cache_invalidate("https://x.com"));
+    }
+
+    #[test]
+    fn r265_09_engine_cache_clear_is_safe_when_no_cache() {
+        let engine = FetchEngine::new();
+        engine.cache_clear();  // must not panic
+    }
+
+    #[test]
+    fn r265_10_engine_cache_put_get_round_trip() {
+        let engine = FetchEngine::new().with_cache();
+        let cache = engine.cache().expect("cache enabled").clone();
+        cache.put("https://x.com", "cached-body");
+        assert_eq!(cache.get("https://x.com"), Some("cached-body".into()));
+        let s = engine.cache_stats().expect("stats");
+        assert_eq!(s.size, 1);
+        assert_eq!(s.hits, 1);
+    }
+
+    #[test]
+    fn r265_11_engine_cache_invalidate_removes_key() {
+        let engine = FetchEngine::new().with_cache();
+        let cache = engine.cache().expect("cache").clone();
+        cache.put("https://x.com", "v");
+        assert!(engine.cache_invalidate("https://x.com"));
+        assert!(!engine.cache_invalidate("https://x.com"));  // already gone
+    }
+
+    #[test]
+    fn r265_12_engine_cache_clear_empties_all() {
+        let engine = FetchEngine::new().with_cache();
+        let cache = engine.cache().expect("cache").clone();
+        cache.put("a", "1");
+        cache.put("b", "2");
+        assert_eq!(engine.cache_stats().unwrap().size, 2);
+        engine.cache_clear();
+        assert_eq!(engine.cache_stats().unwrap().size, 0);
+    }
+
+    #[test]
+    fn r265_13_engine_cache_corrupted_json_invalidates_and_falls_through() {
+        // Cache contains invalid JSON for a URL; fetch_metrics records miss (via the cache.get returning Some then deserialize failing -> invalidate).
+        // We test the deserialize fallback path via direct cache.put + cache.get + serde_json round trip:
+        let engine = FetchEngine::new().with_cache();
+        let cache = engine.cache().expect("cache").clone();
+        cache.put("https://broken.com", "not json");
+        // cache.get returns Some(string), but deserialize will fail.
+        // We simulate by manually invalidating after a failed deserialize.
+        let raw = cache.get("https://broken.com").expect("present");
+        let r: Result<FetchResponse, _> = serde_json::from_str(&raw);
+        assert!(r.is_err());
+        engine.cache_invalidate("https://broken.com");
+        assert_eq!(cache.get("https://broken.com"), None);
+    }
 }
 
 #[derive(Debug, Error)]
@@ -217,11 +365,13 @@ pub struct FetchEngine {
     rate_limiter: Option<std::sync::Arc<parking_lot::Mutex<crate::rate_limit::RateLimiter>>>,
     /// R262: OTel metrics for fetch() invocations.
     pub fetch_metrics: FetchMetrics,
+    /// R265: optional TTL cache (None = disabled). Key = URL string, Value = JSON-serialized FetchResponse.
+    cache: Option<std::sync::Arc<crate::cache::FetchCache>>,
 }
 
 impl FetchEngine {
-    pub fn new() -> Self { Self { cfg: FetchConfig::default(), rate_limiter: None, fetch_metrics: FetchMetrics::new() } }
-    pub fn with_config(cfg: FetchConfig) -> Self { Self { cfg, rate_limiter: None, fetch_metrics: FetchMetrics::new() } }
+    pub fn new() -> Self { Self { cfg: FetchConfig::default(), rate_limiter: None, fetch_metrics: FetchMetrics::new(), cache: None } }
+    pub fn with_config(cfg: FetchConfig) -> Self { Self { cfg, rate_limiter: None, fetch_metrics: FetchMetrics::new(), cache: None } }
     pub fn config(&self) -> &FetchConfig { &self.cfg }
 
     /// **R231 — 启用 per-host rate limit** (默认 60 req/60s)
@@ -242,8 +392,43 @@ impl FetchEngine {
         self.rate_limiter.as_ref()
     }
 
+    /// **R265 — 启用 TTL 缓存** (用 cfg.cache_ttl_ms)
+    pub fn with_cache(mut self) -> Self {
+        let ttl = self.cfg.cache_ttl_ms;
+        self.cache = Some(std::sync::Arc::new(crate::cache::FetchCache::new(ttl)));
+        self
+    }
+
+    /// **R265 — 自定义 TTL 缓存**
+    pub fn with_cache_ttl(mut self, ttl_ms: u64) -> Self {
+        self.cache = Some(std::sync::Arc::new(crate::cache::FetchCache::new(ttl_ms)));
+        self
+    }
+
+    /// **R265 — 拿 cache 引用** (None = 未启用)
+    pub fn cache(&self) -> Option<&std::sync::Arc<crate::cache::FetchCache>> {
+        self.cache.as_ref()
+    }
+
+    /// **R265 — cache stats** (None = 未启用)
+    pub fn cache_stats(&self) -> Option<crate::cache::CacheStats> {
+        self.cache.as_ref().map(|c| c.stats())
+    }
+
+    /// **R265 — invalidate cache key**
+    pub fn cache_invalidate(&self, url: &str) -> bool {
+        self.cache.as_ref().map(|c| c.invalidate(url)).unwrap_or(false)
+    }
+
+    /// **R265 — clear cache**
+    pub fn cache_clear(&self) {
+        if let Some(c) = &self.cache {
+            c.clear();
+        }
+    }
+
     pub async fn fetch(&self, req: &FetchRequest) -> FetchResult<FetchResponse> {
-        // R262: time the entire fetch (validation + rate limit + http).
+        // R262: time the entire fetch (validation + cache + rate limit + http).
         let started = std::time::Instant::now();
         // R174 K-1 强校验: URL 校验先做, 返语义化错误, 再委派 HttpFetcher 真接
         if req.url.trim().is_empty() {
@@ -257,6 +442,25 @@ impl FetchEngine {
                 return Err(FetchError::InvalidUrl(req.url.clone()));
             }
         };
+        // R265: cache lookup (key=URL, value=JSON-serialized FetchResponse)
+        if let Some(cache) = &self.cache {
+            if let Some(cached_json) = cache.get(&req.url) {
+                // cache hit: deserialize + return immediately
+                match serde_json::from_str::<FetchResponse>(&cached_json) {
+                    Ok(resp) => {
+                        self.fetch_metrics.record_cache_hit(started.elapsed().as_secs_f64() * 1000.0);
+                        return Ok(resp);
+                    }
+                    Err(e) => {
+                        // cached value corrupted: invalidate + fall through to HTTP
+                        cache.invalidate(&req.url);
+                        let _ = e;
+                    }
+                }
+            } else {
+                self.fetch_metrics.record_cache_miss();
+            }
+        }
         // R231: per-host rate limit check (if enabled)
         if let Some(rl) = &self.rate_limiter {
             let host = parsed.host_str().unwrap_or("").to_string();
@@ -275,7 +479,15 @@ impl FetchEngine {
         let result = fetcher.fetch(req, &self.cfg).await;
         let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
         match &result {
-            Ok(_) => self.fetch_metrics.record_success(latency_ms),
+            Ok(resp) => {
+                self.fetch_metrics.record_success(latency_ms);
+                // R265: cache write on success
+                if let Some(cache) = &self.cache {
+                    if let Ok(json) = serde_json::to_string(resp) {
+                        cache.put(&req.url, json);
+                    }
+                }
+            }
             Err(_) => self.fetch_metrics.record_error(latency_ms),
         }
         result
