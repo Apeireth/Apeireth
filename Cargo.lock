@@ -457,6 +457,7 @@ dependencies = [
  "apeireth-mcp",
  "apeireth-pipeline-g5",
  "apeireth-verify",
+ "async-trait",
  "hex",
  "parking_lot",
  "serde",
