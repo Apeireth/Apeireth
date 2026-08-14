@@ -11,6 +11,140 @@ use crate::http_fetch::HttpFetcher;
 use crate::rate_limit::RateLimiter;
 use crate::html_extract::extract_text;
 
+// ============================================================================
+// R262: FetchMetrics -- stdlib-only OTel metrics for FetchEngine.fetch()
+// (counter + errors counter + duration sum + max latency). Self-contained,
+// uses AtomicU64/AtomicI64 (0 new external dep).
+// ============================================================================
+use std::sync::atomic::{AtomicI64, AtomicU64, Ordering as AtomicOrdering};
+
+#[derive(Debug, Default)]
+pub struct FetchMetrics {
+    pub fetch_total: AtomicU64,
+    pub fetch_errors_total: AtomicU64,
+    pub fetch_total_duration_ms: AtomicU64,
+    pub fetch_latency_max_ms: AtomicI64,  // -1 = unset
+}
+
+impl FetchMetrics {
+    pub fn new() -> Self {
+        Self {
+            fetch_total: AtomicU64::new(0),
+            fetch_errors_total: AtomicU64::new(0),
+            fetch_total_duration_ms: AtomicU64::new(0),
+            fetch_latency_max_ms: AtomicI64::new(-1),
+        }
+    }
+    pub fn record_success(&self, latency_ms: f64) {
+        self.fetch_total.fetch_add(1, AtomicOrdering::Relaxed);
+        self.fetch_total_duration_ms.fetch_add(latency_ms as u64, AtomicOrdering::Relaxed);
+        let prev = self.fetch_latency_max_ms.load(AtomicOrdering::Relaxed);
+        let cur = latency_ms as i64;
+        if cur > prev {
+            self.fetch_latency_max_ms.store(cur, AtomicOrdering::Relaxed);
+        }
+    }
+    pub fn record_error(&self, latency_ms: f64) {
+        self.fetch_total.fetch_add(1, AtomicOrdering::Relaxed);
+        self.fetch_errors_total.fetch_add(1, AtomicOrdering::Relaxed);
+        self.fetch_total_duration_ms.fetch_add(latency_ms as u64, AtomicOrdering::Relaxed);
+        let prev = self.fetch_latency_max_ms.load(AtomicOrdering::Relaxed);
+        let cur = latency_ms as i64;
+        if cur > prev {
+            self.fetch_latency_max_ms.store(cur, AtomicOrdering::Relaxed);
+        }
+    }
+    pub fn metrics_text(&self) -> String {
+        let total = self.fetch_total.load(AtomicOrdering::Relaxed);
+        let errors = self.fetch_errors_total.load(AtomicOrdering::Relaxed);
+        let sum = self.fetch_total_duration_ms.load(AtomicOrdering::Relaxed);
+        let max = self.fetch_latency_max_ms.load(AtomicOrdering::Relaxed);
+        let mean = if total > 0 { sum as f64 / total as f64 } else { 0.0 };
+        format!("fetch_total={} fetch_errors_total={} fetch_latency_mean_ms={:.3} fetch_latency_max_ms={}\n",
+                total, errors, mean, max)
+    }
+}
+
+#[cfg(test)]
+mod metrics_tests {
+    use super::*;
+    #[test]
+    fn r262_01_initial_zero() {
+        let m = FetchMetrics::new();
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_errors_total.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_total_duration_ms.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_latency_max_ms.load(AtomicOrdering::Relaxed), -1);
+    }
+    #[test]
+    fn r262_02_record_success_increments_total_and_updates_max() {
+        let m = FetchMetrics::new();
+        m.record_success(50.0);
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(m.fetch_errors_total.load(AtomicOrdering::Relaxed), 0);
+        assert_eq!(m.fetch_latency_max_ms.load(AtomicOrdering::Relaxed), 50);
+        m.record_success(100.0);
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 2);
+        assert_eq!(m.fetch_latency_max_ms.load(AtomicOrdering::Relaxed), 100);
+        m.record_success(10.0);
+        assert_eq!(m.fetch_latency_max_ms.load(AtomicOrdering::Relaxed), 100);
+    }
+    #[test]
+    fn r262_03_record_error_increments_both() {
+        let m = FetchMetrics::new();
+        m.record_error(20.0);
+        assert_eq!(m.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(m.fetch_errors_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(m.fetch_total_duration_ms.load(AtomicOrdering::Relaxed), 20);
+        assert_eq!(m.fetch_latency_max_ms.load(AtomicOrdering::Relaxed), 20);
+    }
+    #[test]
+    fn r262_04_metrics_text_format() {
+        let m = FetchMetrics::new();
+        m.record_success(50.0);
+        m.record_success(150.0);
+        let s = m.metrics_text();
+        assert!(s.contains("fetch_total=2"));
+        assert!(s.contains("fetch_errors_total=0"));
+        assert!(s.contains("fetch_latency_mean_ms=100.000"));
+        assert!(s.contains("fetch_latency_max_ms=150"));
+    }
+    #[tokio::test]
+    async fn r262_05_fetch_engine_records_metrics_on_empty_url() {
+        let e = FetchEngine::new();
+        let r = e.fetch(&FetchRequest::get("")).await;
+        assert!(r.is_err());
+        assert_eq!(e.fetch_metrics.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(e.fetch_metrics.fetch_errors_total.load(AtomicOrdering::Relaxed), 1);
+    }
+    #[tokio::test]
+    async fn r262_06_fetch_engine_records_metrics_on_success() {
+        let e = FetchEngine::new();
+        let r = e.fetch(&FetchRequest::get("https://example.com")).await;
+        assert!(r.is_ok(), "expected ok, got {:?}", r.err());
+        assert_eq!(e.fetch_metrics.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(e.fetch_metrics.fetch_errors_total.load(AtomicOrdering::Relaxed), 0);
+    }
+    #[tokio::test]
+    async fn r262_07_fetch_engine_records_metrics_on_invalid_url() {
+        let e = FetchEngine::new();
+        let r = e.fetch(&FetchRequest::get("not a url")).await;
+        assert!(r.is_err());
+        assert_eq!(e.fetch_metrics.fetch_total.load(AtomicOrdering::Relaxed), 1);
+        assert_eq!(e.fetch_metrics.fetch_errors_total.load(AtomicOrdering::Relaxed), 1);
+    }
+    #[test]
+    fn r262_08_metrics_text_after_real_calls() {
+        let m = FetchMetrics::new();
+        m.record_success(75.0);
+        m.record_error(125.0);
+        let s = m.metrics_text();
+        assert!(s.contains("fetch_total=2"));
+        assert!(s.contains("fetch_errors_total=1"));
+        assert!(s.contains("fetch_latency_max_ms=125"));
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum FetchError {
     #[error("empty URL")]
@@ -81,11 +215,13 @@ pub struct FetchEngine {
     cfg: FetchConfig,
     /// R231 — per-host rate limiter (None = disabled)
     rate_limiter: Option<std::sync::Arc<parking_lot::Mutex<crate::rate_limit::RateLimiter>>>,
+    /// R262: OTel metrics for fetch() invocations.
+    pub fetch_metrics: FetchMetrics,
 }
 
 impl FetchEngine {
-    pub fn new() -> Self { Self { cfg: FetchConfig::default(), rate_limiter: None } }
-    pub fn with_config(cfg: FetchConfig) -> Self { Self { cfg, rate_limiter: None } }
+    pub fn new() -> Self { Self { cfg: FetchConfig::default(), rate_limiter: None, fetch_metrics: FetchMetrics::new() } }
+    pub fn with_config(cfg: FetchConfig) -> Self { Self { cfg, rate_limiter: None, fetch_metrics: FetchMetrics::new() } }
     pub fn config(&self) -> &FetchConfig { &self.cfg }
 
     /// **R231 — 启用 per-host rate limit** (默认 60 req/60s)
@@ -107,18 +243,27 @@ impl FetchEngine {
     }
 
     pub async fn fetch(&self, req: &FetchRequest) -> FetchResult<FetchResponse> {
+        // R262: time the entire fetch (validation + rate limit + http).
+        let started = std::time::Instant::now();
         // R174 K-1 强校验: URL 校验先做, 返语义化错误, 再委派 HttpFetcher 真接
         if req.url.trim().is_empty() {
+            self.fetch_metrics.record_error(started.elapsed().as_secs_f64() * 1000.0);
             return Err(FetchError::EmptyUrl);
         }
-        let parsed = url::Url::parse(&req.url)
-            .map_err(|_| FetchError::InvalidUrl(req.url.clone()))?;
+        let parsed = match url::Url::parse(&req.url) {
+            Ok(u) => u,
+            Err(_) => {
+                self.fetch_metrics.record_error(started.elapsed().as_secs_f64() * 1000.0);
+                return Err(FetchError::InvalidUrl(req.url.clone()));
+            }
+        };
         // R231: per-host rate limit check (if enabled)
         if let Some(rl) = &self.rate_limiter {
             let host = parsed.host_str().unwrap_or("").to_string();
             if !host.is_empty() {
                 let allowed = rl.lock().check(&host);
                 if !allowed {
+                    self.fetch_metrics.record_error(started.elapsed().as_secs_f64() * 1000.0);
                     return Err(FetchError::RateLimited(host));
                 }
                 // 记录本次请求 (在 HTTP 调用前, 因为可能失败; 反正已占用配额)
@@ -127,7 +272,13 @@ impl FetchEngine {
         }
         // 真接 apeireth-http-client
         let fetcher = HttpFetcher::new();
-        fetcher.fetch(req, &self.cfg).await
+        let result = fetcher.fetch(req, &self.cfg).await;
+        let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+        match &result {
+            Ok(_) => self.fetch_metrics.record_success(latency_ms),
+            Err(_) => self.fetch_metrics.record_error(latency_ms),
+        }
+        result
     }
 
     /// 用已 fetch 的 raw response 提取 text (供 HttpClient 调用)
