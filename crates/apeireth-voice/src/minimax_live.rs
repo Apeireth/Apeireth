@@ -235,6 +235,7 @@ pub struct BaseResp {
 /// ## TTS 真接 (R172 LIVE 验证过, 122KB MP3 ID3 header 确认)
 ///
 /// ```no_run
+/// # use apeireth_voice::minimax_live::MiniMaxLive;
 /// # async fn tts_demo(client: MiniMaxLive) -> Result<(), Box<dyn std::error::Error>> {
 /// let audio = client.text_to_speech(
 ///     "hello apeireth this is a LIVE MiniMax TTS test",
