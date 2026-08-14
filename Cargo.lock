@@ -932,6 +932,7 @@ dependencies = [
  "apeireth-supervisor",
  "apeireth-tool-registry",
  "apeireth-tool-search",
+ "apeireth-workflow",
  "async-trait",
  "parking_lot",
  "reqwest",
