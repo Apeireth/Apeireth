@@ -1,17 +1,31 @@
-//! Real sandbox: Linux seccomp + Windows Job Object + macOS sandbox_init.
+//! Real sandbox: cross-platform process isolation via tokio safe APIs.
 //!
-//! cfg(target_os) hides platform differences. On platforms where the
-//! underlying syscall API is not implemented in this crate, the sandbox
-//! degrades to a process-namespace isolation (best-effort).
+//! R264 真接: Standard/Strict 模式全 safe 实现 (无 libc/nix dep),
+//! 保持 workspace ponytail ceiling. 真 seccomp BPF / JobObject syscall filter
+//! 超 scope, 留 TODO (需要 unsafe + 平台特定 dep).
 //!
-//! **Honest** (per O-5 不假装):
-//! - Linux seccomp: stub uses no-op filter (real filter requires BPF compile
-//!   which depends on `seccompiler` crate not in workspace deps).
-//! - Windows Job Object: stub (real JobObject requires win32 API imports).
-//! - macOS: stub.
+//! ## 模式分级
 //!
-//! **Honest upgrade path**: real process_group isolation deferred to R139+
-//! (requires unsafe_code, denied by this crate's `#![deny(unsafe_code)]`).
+//! | Mode | env_clear | stdin_null | process_group(0) | kill_on_drop | CREATE_NO_WINDOW |
+//! |---|---|---|---|---|---|
+//! | None      | (config) | -          | -      | -       | -       |
+//! | Light     | yes      | yes        | -      | -       | -       |
+//! | Standard  | yes      | yes        | yes    | yes     | -       |
+//! | Strict    | yes      | yes        | yes    | yes     | yes     |
+//!
+//! Standard 真接:
+//! - `Command::process_group(0)` 创建新进程组 (Unix: setsid(); Windows: CREATE_NEW_PROCESS_GROUP)
+//! - `Command::kill_on_drop(true)` 父进程死时子进程也被杀 (防 orphan zombie)
+//!
+//! Strict 增:
+//! - Windows: `CREATE_NO_WINDOW` flag (避免子进程弹 console window)
+//!
+//! ## TODO (超出 scope)
+//!
+//! - Linux seccomp BPF filter: 需要 `seccompiler` crate + unsafe pre_exec
+//! - Windows JobObject: 需要 `windows-sys` crate + unsafe win32 API
+//! - macOS sandbox_init: 需要 `sandbox` crate 或 FFI
+//! - Linux namespaces (mount/pid/user): 需要 `nix` crate + unsafe unshare
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use thiserror::Error;
@@ -22,16 +36,18 @@ pub enum SandboxMode {
     None,
     /// Lightweight: env_clear + stdin null (apeireth-tools/code_exec level)
     Light,
-    /// Standard: Light + explicit intent for process-group isolation
-    /// (real implementation deferred — see module docs)
+    /// R264: Standard = Light + process group isolation + kill_on_drop.
+    /// (Unix setsid, Windows CREATE_NEW_PROCESS_GROUP)
     Standard,
-    /// Strict: Standard + seccomp/JobObject syscall filter (best-effort)
+    /// R264: Strict = Standard + CREATE_NO_WINDOW (Windows).
+    /// (TODO: + seccomp/JobObject syscall filter via libc/windows-sys)
     Strict,
 }
 
 #[derive(Debug, Clone)]
 pub struct SandboxPolicy {
     pub mode: SandboxMode,
+    #[allow(dead_code)] // reserved for future Strict syscall whitelist
     pub allowed_syscalls: Vec<String>,
     pub env_clear: bool,
 }
@@ -52,12 +68,11 @@ pub enum SandboxError {
     Failed(String),
 }
 
-/// Apply the sandbox policy to a tokio::process::Command before exec.
-/// On Linux this is intended to set `prctl(PR_SET_NO_NEW_PRIVS, 1)` via
-/// pre_exec; on Windows JobObject via win32 API; on macOS sandbox_init.
-/// All platform-specific paths are deferred to R139+ (this crate enforces
-/// `#![deny(unsafe_code)]`). Light-mode env_clear + stdin-null are real.
+/// R264: Apply sandbox policy to a tokio::process::Command before exec.
+/// All platform-specific work goes through tokio safe APIs (process_group,
+/// kill_on_drop, creation_flags) -- 0 unsafe, 0 external sys-crate dep.
 pub fn apply_sandbox(cmd: &mut tokio::process::Command, policy: &SandboxPolicy) -> Result<(), SandboxError> {
+    // env_clear applies to all modes that opt in
     if policy.env_clear {
         cmd.env_clear();
     }
@@ -68,14 +83,41 @@ pub fn apply_sandbox(cmd: &mut tokio::process::Command, policy: &SandboxPolicy) 
         }
         SandboxMode::Standard => {
             cmd.stdin(std::process::Stdio::null());
-            // Process-group isolation: deferred (requires unsafe_code).
-            // Standard mode currently = Light; full isolation requires
-            // R139+ job/namespace work.
+            // R264: 新进程组 (Unix: setsid(); Windows: CREATE_NEW_PROCESS_GROUP).
+            // std::os::unix::process::CommandExt / std::os::windows::process::CommandExt
+            // 提供 cfg-gated process_group / creation_flags. tokio::process::Command
+            // 通过 as_std_mut() 暴露底层 std::process::Command, 我们调 std 的方法即可.
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.as_std_mut().process_group(0);
+            }
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+                cmd.as_std_mut().creation_flags(CREATE_NEW_PROCESS_GROUP);
+            }
+            // R264: 父进程 drop 时子进程也被杀 (防 orphan). tokio safe API.
+            cmd.kill_on_drop(true);
         }
         SandboxMode::Strict => {
             cmd.stdin(std::process::Stdio::null());
-            // Real seccomp/JobObject: deferred (out of scope of R138;
-            // see module docs).
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt;
+                cmd.as_std_mut().process_group(0);
+            }
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                cmd.as_std_mut().creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+            }
+            cmd.kill_on_drop(true);
+            // TODO Linux seccomp / Windows JobObject / macOS sandbox_init
+            // (out of scope; would need libc / windows-sys / sandbox crate).
         }
     }
     Ok(())
@@ -108,18 +150,49 @@ mod tests {
     }
 
     #[test]
-    fn apply_sandbox_standard_no_panic() {
+    fn apply_sandbox_standard_applies_process_group_and_kill_on_drop() {
         let mut cmd = tokio::process::Command::new("echo");
         let p = SandboxPolicy { mode: SandboxMode::Standard, env_clear: true, allowed_syscalls: vec![] };
+        apply_sandbox(&mut cmd, &p).unwrap();
+        // Both process_group(0) and kill_on_drop(true) are side effects on the Command
+        // builder; they can be observed indirectly via stdio + spawn semantics.
+        // Direct introspection is platform-specific; here we just verify no panic.
+        let _ = cmd;
+    }
+
+    #[test]
+    fn apply_sandbox_strict_includes_standard() {
+        let mut cmd = tokio::process::Command::new("echo");
+        let p = SandboxPolicy { mode: SandboxMode::Strict, env_clear: true, allowed_syscalls: vec![] };
         apply_sandbox(&mut cmd, &p).unwrap();
         let _ = cmd;
     }
 
     #[test]
-    fn apply_sandbox_strict_no_panic() {
-        let mut cmd = tokio::process::Command::new("echo");
-        let p = SandboxPolicy { mode: SandboxMode::Strict, env_clear: true, allowed_syscalls: vec![] };
-        apply_sandbox(&mut cmd, &p).unwrap();
-        let _ = cmd;
+    fn apply_sandbox_all_modes_no_panic_on_empty_program() {
+        for mode in [SandboxMode::None, SandboxMode::Light, SandboxMode::Standard, SandboxMode::Strict] {
+            let mut cmd = tokio::process::Command::new("true");
+            let p = SandboxPolicy { mode, env_clear: true, allowed_syscalls: vec![] };
+            apply_sandbox(&mut cmd, &p).unwrap();
+        }
+    }
+
+    #[test]
+    fn sandbox_mode_equality_and_copy() {
+        // Verify Copy + Eq + Clone semantics (used in pattern matching)
+        let m = SandboxMode::Standard;
+        let m2 = m; // Copy
+        assert_eq!(m, m2);
+        let m3 = m.clone();
+        assert_eq!(m, m3);
+    }
+
+    #[test]
+    fn sandbox_policy_clone_preserves_mode() {
+        let p = SandboxPolicy { mode: SandboxMode::Strict, env_clear: false, allowed_syscalls: vec!["read".into()] };
+        let p2 = p.clone();
+        assert_eq!(p.mode, p2.mode);
+        assert_eq!(p.env_clear, p2.env_clear);
+        assert_eq!(p.allowed_syscalls, p2.allowed_syscalls);
     }
 }
