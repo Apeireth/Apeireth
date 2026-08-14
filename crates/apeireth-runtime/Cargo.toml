@@ -11,6 +11,8 @@ keywords = ["ai", "agent", "runtime", "orchestration", "autopoietic", "living-da
 categories = ["asynchronous", "asynchronous"]
 
 [dependencies]
+# R257: reqwest for LlmWorker Bearer auth header (raw client, not via HttpClient)
+reqwest = { workspace = true }
 # 7 orchestration core crates (per R147 design)
 apeireth-supervisor = { path = "../apeireth-supervisor" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
@@ -38,6 +40,10 @@ tempfile = "3"
 [[example]]
 name = "r147_full_chain"
 path = "examples/r147_full_chain.rs"
+
+[[example]]
+name = "r257_minimax_real_api"
+path = "examples/r257_minimax_real_api.rs"
 
 [lints]
 workspace = true

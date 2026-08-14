@@ -243,13 +243,32 @@ impl LlmWorker {
             "temperature": 0.7,
         });
         let url = format!("{}/v1/chat/completions", self.base_url);
-        let client = apeireth_http_client::HttpClient::with_chat_defaults()
+        // R257: build a raw reqwest::Client so we can attach the Bearer Authorization
+        // header. The shared HttpClient::post_json does not auto-inject auth, and the
+        // MiniMax API rejects requests without one (returns 401).
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
             .map_err(|e| format!("http client init: {e}"))?;
-        let resp = client.post_json(&url, body).await
+        let resp = client
+            .post(&url)
+            .bearer_auth(&self.api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
             .map_err(|e| format!("post: {e}"))?;
         let status = resp.status();
         if !status.is_success() {
-            return Err(format!("LLM API {} returned {}", url, status.as_u16()));
+            // Capture the response body for diagnosis (truncated to 1 KiB).
+            let body = resp.text().await.unwrap_or_default();
+            let preview = if body.len() > 1024 { &body[..1024] } else { &body };
+            return Err(format!(
+                "LLM API {} returned {}: {}",
+                url,
+                status.as_u16(),
+                preview
+            ));
         }
         let v: serde_json::Value = resp.json().await
             .map_err(|e| format!("json parse: {e}"))?;
@@ -259,7 +278,7 @@ impl LlmWorker {
             .and_then(|c| c.get("message"))
             .and_then(|m| m.get("content"))
             .and_then(|c| c.as_str())
-            .ok_or_else(|| "missing choices[0].message.content".to_string())?;
+            .ok_or_else(|| format!("missing choices[0].message.content in {}", v))?;
         Ok(content.to_string())
     }
 }
