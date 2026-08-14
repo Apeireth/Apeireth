@@ -67,6 +67,7 @@ pub use hold::{HoldDecision, HoldOutcome, HoldThreshold, HoldTrigger};
 pub use lifecycle::{AdvisorLifecycle, LifecycleManager, LifecycleStats};
 pub use mock_llm::{MockLlmProvider, MockLlmResponse, ScriptedMockLlm};
 pub mod llm_backend;
+pub mod multi_model_backend; // R269: multi-model advisor backend (cross-model aggregation)
 pub mod g5_council_bridge; // R159: council 5-step -> g5 5-stage substrate 集成 (第 3 个 g5 生产调用方)
 pub use council_member::{CouncilMember, is_valid_provider, SUPPORTED_PROVIDERS};  // R33-4: AutoGen 借鉴 (4 字段 1:1 re-export)
 pub use council_member_deliberation::{

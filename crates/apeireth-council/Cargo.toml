@@ -21,6 +21,10 @@ thiserror = { workspace = true }
 tokio = { workspace = true }
 parking_lot = "0.12"
 sha2 = "0.10"
+
+[dev-dependencies]
+# R269: MultiModelAdvisorBackend tests impl LlmProvider trait (defined with #[async_trait])
+async-trait = { workspace = true }
 hex = "0.4"
 uuid = { version = "1", features = ["v4"] }
 # R159: council 接 g5 substrate (第 3 个生产调用方, 继 tool-runtime R132.4 + chat pipeline R157)
