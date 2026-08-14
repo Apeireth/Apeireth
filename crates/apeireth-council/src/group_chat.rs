@@ -540,11 +540,12 @@ mod tests {
 
     #[test]
     fn t11_content_hash_deterministic() {
+        // sha256 hex = 64 chars; timestamp differs => hash differs.
         let m1 = ChatMessage::new("r1", "a", "hello");
-        let m2 = ChatMessage::new("r1", "a", "hello");
-        // hash 包含 timestamp_ms, 不同时刻不同
-        assert_ne!(m1.content_hash, m2.content_hash);
         assert_eq!(m1.content_hash.len(), 64);
+        std::thread::sleep(std::time::Duration::from_millis(2));
+        let m2 = ChatMessage::new("r1", "a", "hello");
+        assert_ne!(m1.content_hash, m2.content_hash);
     }
 
     #[test]
@@ -552,11 +553,16 @@ mod tests {
         let gc = GroupChat::new();
         let id = gc.create_room("evening", "chat", TurnPolicy::Free);
         gc.close_room(&id).unwrap();
-        let room = gc.get(&id).unwrap();
-        assert_eq!(room.room().status, RoomStatus::Closed);
+        // GroupRoomRef carries MutexGuard; scope-limit so guard drops before next lock.
+        {
+            let room = gc.get(&id).unwrap();
+            assert_eq!(room.room().status, RoomStatus::Closed);
+        }
         gc.archive_room(&id).unwrap();
-        let room = gc.get(&id).unwrap();
-        assert_eq!(room.room().status, RoomStatus::Archived);
+        {
+            let room = gc.get(&id).unwrap();
+            assert_eq!(room.room().status, RoomStatus::Archived);
+        }
     }
 
     #[test]
