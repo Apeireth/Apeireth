@@ -41,6 +41,7 @@ use apeireth_consciousness::DecaySnapshot;  // R237: decay snapshot import
 use apeireth_council::group_chat::{ChatMessage, GroupChat, Participant, ParticipantRole, TurnPolicy};
 use apeireth_bus::{BusMessage, ChanneledBus, ChannelSet};
 use apeireth_supervisor::{Heartbeat, HeartbeatPriority, HeartbeatScheduler, Schedule, WakeupContext, WakeupSource};
+use apeireth_supervisor::span::{SpanEvent, SpanId, SpanStatus, SpanTracker};  // R259: cycle span tracker
 use apeireth_tool_registry::{AsyncTaskStore, NotifyChannel, TaskId, TaskStatus};
 use apeireth_tool_search::{Document, SearchEngine};
 use parking_lot::Mutex;
@@ -114,6 +115,10 @@ pub struct CycleReport {
     pub emotion_dominant: BaseEmotion,
     pub emotion_intensity: f32,
     pub elapsed_ms: u64,
+    /// R259: OTel-style spans produced during this cycle (parent-child tree).
+    /// #[serde(default)] keeps wire-compat with pre-R259 cycle reports.
+    #[serde(default)]
+    pub spans: Vec<SpanEvent>,
 }
 
 #[derive(Debug, Clone)]
@@ -408,6 +413,9 @@ pub struct Runtime {
     // R255: pluggable worker registry. Key = tool_name. Lookup happens in
     // dispatch_async_task; if no match, falls back to SimulatedWorker.
     pub worker_registry: Arc<Mutex<HashMap<String, Arc<dyn AsyncWorker>>>>,
+    // R259: OTel-style span tracker; run_one_cycle opens a root span + child task spans,
+    // take_completed() drains into CycleReport.spans at end of cycle.
+    pub span_tracker: Arc<SpanTracker>,
 }
 
 impl Runtime {
@@ -471,6 +479,7 @@ impl Runtime {
             // R250: supervisor metrics linkup (heartbeat_count + tick_duration)
             supervisor_metrics: supervisor_default_metrics().1,
             worker_registry: Arc::new(Mutex::new(HashMap::new())),
+            span_tracker: Arc::new(SpanTracker::new()),
         }
     }
 
@@ -676,8 +685,16 @@ impl Runtime {
     }
 
     /// R241 -- internal cycle body, separated so failures can be counted.
+    /// R241 -- internal cycle body, separated so failures can be counted.
+    ///
+    /// R259: opens a root span (`runtime.cycle`) + 4 child spans (task.dispatch /
+    /// task.complete / search.index / emotion.apply). Spans are drained into
+    /// `CycleReport.spans` at the end of each cycle via `span_tracker.take_completed()`.
+    /// Root span is inserted at index 0; children follow in start-time order.
     async fn run_one_cycle_inner(&self) -> RuntimeResult<CycleReport> {
-        // R237: 拿 auto_decay + snapshot; 满足 emit_decay_bus + 阈值 / 显著阈值 => publish
+        // R259: open root span. Errors below must still end this span (Ok or Err).
+        let cycle_span = self.span_tracker.start_span(None, "runtime.cycle");
+        // R237: auto_decay + snapshot; emit bus event when above thresholds.
         let decay_snap: Option<DecaySnapshot> = {
             let mut eng = self.emotion.lock();
             eng.auto_decay();
@@ -697,18 +714,33 @@ impl Runtime {
                 );
                 let msg = BusMessage::new(event);
                 let _ = self.bus.publish_multi(ChannelSet::BOTH, "emotion.decay", msg).await;
-                // R238: count successful decays published
                 self.decay_emit_total.inc();
             }
         }
         let start = now_ms();
         let trace_id = apeireth_bus::next_trace_id();
+        // R259: child span -- task dispatch (worker selection + spawn).
+        let dispatch_span = self.span_tracker.start_span(cycle_span, "task.dispatch");
         let task_id = self.dispatch_async_task("classify", "{}").await;
+        if let Some(sid) = dispatch_span {
+            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
+                ("task_id".into(), format!("{}", task_id)),
+            ]);
+        }
         let task = self
             .task_store
             .wait_for_completion(task_id, Duration::from_secs(5))
             .await
             .map_err(|e| RuntimeError::Task(e.to_string()))?;
+        // R259: child span -- task completion status.
+        let complete_span = self.span_tracker.start_span(cycle_span, "task.complete");
+        if let Some(sid) = complete_span {
+            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
+                ("task_id".into(), format!("{}", task_id)),
+                ("status".into(), task.status.as_str().to_string()),
+                ("tool".into(), task.tool_name.clone()),
+            ]);
+        }
         let arb_event = self.arbitration.append(
             EventSource::AgentComm,
             "runtime",
@@ -721,7 +753,14 @@ impl Runtime {
             &task.tool_name,
             &format!("{} {}", task.params_json, task.result_json.clone().unwrap_or_default()),
         );
+        // R259: child span -- search index write.
+        let search_span = self.span_tracker.start_span(cycle_span, "search.index");
         let doc_id = self.search.index(doc);
+        if let Some(sid) = search_span {
+            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
+                ("doc_id".into(), format!("{}", doc_id)),
+            ]);
+        }
         let room_id = self
             .group_chat
             .list_rooms()
@@ -740,13 +779,31 @@ impl Runtime {
             TaskStatus::Failed => EmotionEvent::TaskFailure,
             _ => EmotionEvent::ToolOk,
         };
+        // R259: child span -- emotion apply (PAD shift recording).
+        let emotion_span = self.span_tracker.start_span(cycle_span, "emotion.apply");
         self.emotion.lock().apply(event).ok();
         let snap = self.emotion.lock().snapshot();
+        if let Some(sid) = emotion_span {
+            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
+                ("dominant".into(), format!("{:?}", snap.dominant)),
+                ("intensity".into(), format!("{:.3}", snap.intensity)),
+            ]);
+        }
         let elapsed_ms = (now_ms() - start) as u64;
         self.cycle_duration_ms.observe(elapsed_ms as f64);
-        // R238: refresh total-tasks gauge
         let pending = self.task_store.len().await as i64;
         self.pending_tasks.set(pending);
+        // R259: drain child spans first, then close root span and PREPEND it to list.
+        let mut spans = self.span_tracker.take_completed();
+        if let Some(sid) = cycle_span {
+            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
+                ("trace_id".into(), format!("{}", trace_id)),
+                ("elapsed_ms".into(), format!("{}", elapsed_ms)),
+            ]);
+            if let Some(root_event) = self.span_tracker.take_completed().into_iter().next() {
+                spans.insert(0, root_event);
+            }
+        }
         let report = CycleReport {
             trace_id,
             task_id,
@@ -756,6 +813,7 @@ impl Runtime {
             emotion_dominant: snap.dominant,
             emotion_intensity: snap.intensity,
             elapsed_ms,
+            spans,
         };
         if self.config.publish_cycle_report {
             let payload = serde_json::to_string(&report).unwrap_or_default();
@@ -1317,3 +1375,67 @@ pub struct CycleLatencySummary {
         assert_eq!(w.base_url(), "https://custom.api");
         assert_eq!(w.name(), "llm");
     }
+
+    // R259 -- CycleReport.spans populated by run_one_cycle (5 cases)
+
+    #[tokio::test]
+    async fn r259_01_cycle_report_spans_populated() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let report = rt.run_one_cycle().await.unwrap();
+        // Should have 5 spans: cycle_root + task.dispatch + task.complete + search.index + emotion.apply
+        assert!(report.spans.len() >= 5, "expected >=5 spans, got {}", report.spans.len());
+        // Root span must be at index 0 and named "runtime.cycle".
+        assert_eq!(report.spans[0].name, "runtime.cycle");
+        assert!(report.spans[0].parent.is_none(), "root span must have no parent");
+        assert_eq!(report.spans[0].status, SpanStatus::Ok);
+    }
+
+    #[tokio::test]
+    async fn r259_02_spans_form_parent_child_tree() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let report = rt.run_one_cycle().await.unwrap();
+        let root_id = report.spans[0].span_id;
+        // All non-root spans must have parent = Some(root_id).
+        for s in &report.spans[1..] {
+            assert_eq!(s.parent, Some(root_id), "child span {} parent mismatch", s.name);
+        }
+    }
+
+    #[tokio::test]
+    async fn r259_03_span_attributes_record_metadata() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let report = rt.run_one_cycle().await.unwrap();
+        let complete_span = report.spans.iter().find(|s| s.name == "task.complete")
+            .expect("task.complete span must exist");
+        assert_eq!(complete_span.attr("status"), Some("completed"));
+        assert!(complete_span.attr("tool").is_some());
+        let emotion_span = report.spans.iter().find(|s| s.name == "emotion.apply")
+            .expect("emotion.apply span must exist");
+        assert!(emotion_span.attr("dominant").is_some());
+    }
+
+    #[test]
+    fn r259_04_cycle_report_legacy_serde_compat() {
+        // Pre-R259 cycle reports serialized without "spans" must still deserialize
+        // (#[serde(default)] on the field gives Vec::new()).
+        let legacy_json = r#"{"trace_id":1,"task_id":1,"arbitration_seq":1,"search_doc_id":1,"group_chat_message_id":"x","emotion_dominant":"Joy","emotion_intensity":0.5,"elapsed_ms":1}"#;
+        let report: CycleReport = serde_json::from_str(legacy_json).expect("legacy deserialize");
+        assert_eq!(report.spans.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn r259_05_spans_have_nonzero_elapsed_when_completed() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let report = rt.run_one_cycle().await.unwrap();
+        // Each ended span has end_unix_ms > 0 (end_span was called).
+        for s in &report.spans {
+            assert_eq!(s.status, SpanStatus::Ok);
+            assert!(s.end_unix_ms > 0, "span {} end_unix_ms must be set", s.name);
+            assert!(s.start_unix_ms <= s.end_unix_ms, "span {} inverted time", s.name);
+        }
+    }
+
