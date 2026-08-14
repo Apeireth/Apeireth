@@ -387,3 +387,4 @@ apeireth_verify::register_all_in_crate!(
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_A,
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_B
 );
+pub mod kani_proofs;  // R253: Kani formal proofs for Self-Disable guards
