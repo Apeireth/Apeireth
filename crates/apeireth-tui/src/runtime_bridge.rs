@@ -310,9 +310,62 @@ impl RuntimeBridge {
             .map_err(|e| e.to_string())
     }
 
+    /// R256 -- expose Prometheus text metrics from the underlying runtime.
+    /// The TUI status bar calls this; pages render it as a multi-line block.
+    pub fn metrics_text(&self) -> String {
+        self.runtime.metrics_text()
+    }
+
+    /// R256 -- last cycle latency summary (count, sum, mean) computed by the runtime.
+    pub fn cycle_latency_summary(&self) -> apeireth_runtime::CycleLatencySummary {
+        self.runtime.cycle_latency_summary()
+    }
+
+    /// R256 -- supervisor metrics linkup (heartbeat_count + tick_duration).
+    pub fn supervisor_heartbeat_count(&self) -> u64 {
+        self.runtime.supervisor_metrics.heartbeat_count.get()
+    }
+
+    /// R256 -- supervisor tick_duration observation count.
+    pub fn supervisor_tick_duration_count(&self) -> u64 {
+        self.runtime.supervisor_metrics.tick_duration.count()
+    }
+
+    /// R256 -- direct LLM dispatch via the runtime. Same shape as Runtime::dispatch_llm_task.
+    /// Returns the assigned TaskId.
+    pub async fn dispatch_llm_task(
+        &self,
+        prompt: &str,
+        system: Option<&str>,
+        model: Option<&str>,
+        base_url: Option<&str>,
+        api_key: &str,
+    ) -> apeireth_tool_registry::TaskId {
+        self.runtime.dispatch_llm_task(prompt, system, model, base_url, api_key).await
+    }
+
+    /// R256 -- register a custom AsyncWorker for the given tool_name.
+    pub fn register_worker(
+        &self,
+        tool_name: &str,
+        worker: std::sync::Arc<dyn apeireth_runtime::AsyncWorker>,
+    ) {
+        self.runtime.register_worker(tool_name, worker);
+    }
+
+    /// R256 -- dispatch a task through a custom worker (bypass registry lookup).
+    pub async fn dispatch_task_with_worker(
+        &self,
+        worker: std::sync::Arc<dyn apeireth_runtime::AsyncWorker>,
+        params_json: &str,
+    ) -> apeireth_tool_registry::TaskId {
+        self.runtime.dispatch_async_task_with_worker(worker, params_json).await
+    }
+
     /// Get the bridge state as a JSON-serializable snapshot (for telemetry).
     pub fn snapshot_json(&self) -> serde_json::Value {
         let state = self.state.lock();
+        let s = self.runtime.cycle_latency_summary();
         serde_json::json!({
             "cycle_count": state.cycle_count,
             "recent_task_count": state.recent_task_ids.len(),
@@ -320,6 +373,12 @@ impl RuntimeBridge {
             "recent_chat_count": state.recent_chat_messages.len(),
             "has_emotion": state.emotion.is_some(),
             "last_event_topic": state.last_event_topic,
+            "cycle_latency_count": s.count,
+            "cycle_latency_sum_ms": s.sum_ms,
+            "supervisor_heartbeat_count": self.runtime.supervisor_metrics.heartbeat_count.get(),
+            "supervisor_tick_duration_count": self.runtime.supervisor_metrics.tick_duration.count(),
+            "runtime_cycle_total": self.runtime.cycle_total.get(),
+            "runtime_cycle_failures_total": self.runtime.cycle_failures_total.get(),
         })
     }
 }
@@ -444,5 +503,60 @@ mod tests {
         assert!(BridgeState::MAX_TRACKED_MESSAGES > 0);
         assert!(BridgeState::MAX_TRACKED_TASKS <= 256);
         assert!(BridgeState::MAX_TRACKED_MESSAGES <= 256);
+    }
+    // R256 -- runtime metrics + LLM dispatch bridge plumbing
+
+    #[test]
+    fn r256_01_metrics_text_returns_runtime_text() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        let text = bridge.metrics_text();
+        // runtime_cycle_total is always registered.
+        assert!(text.contains("runtime_cycle_total"), "got: {}", text);
+    }
+
+    #[tokio::test]
+    async fn r256_02_cycle_latency_summary_has_zero_count() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        let s = bridge.cycle_latency_summary();
+        assert_eq!(s.count, 0);
+        assert!((s.sum_ms - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn r256_03_supervisor_metrics_accessors() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        assert_eq!(bridge.supervisor_heartbeat_count(), 0);
+        assert_eq!(bridge.supervisor_tick_duration_count(), 0);
+    }
+
+    #[tokio::test]
+    async fn r256_04_dispatch_llm_task_returns_task_id() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        let tid = bridge.dispatch_llm_task("hello", None, None, None, "fake-key").await;
+        assert!(tid > 0);
+    }
+
+    #[test]
+    fn r256_05_register_worker_propagates_to_runtime() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        let w: std::sync::Arc<dyn apeireth_runtime::AsyncWorker> =
+            std::sync::Arc::new(apeireth_runtime::SimulatedWorker::new("probe"));
+        bridge.register_worker("probe", w);
+        assert!(bridge.runtime.worker_registry.lock().contains_key("probe"));
+    }
+
+    #[test]
+    fn r256_06_snapshot_json_includes_metrics() {
+        let bridge = bridge_with_default();
+        bridge.bootstrap().unwrap();
+        let snap = bridge.snapshot_json();
+        assert!(snap.get("cycle_latency_count").is_some());
+        assert!(snap.get("supervisor_heartbeat_count").is_some());
+        assert!(snap.get("runtime_cycle_total").is_some());
     }
 }
