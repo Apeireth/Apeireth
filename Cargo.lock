@@ -934,6 +934,7 @@ dependencies = [
  "apeireth-tool-search",
  "async-trait",
  "parking_lot",
+ "reqwest",
  "serde",
  "serde_json",
  "tempfile",
