@@ -388,6 +388,50 @@ impl Heartbeat for LivingCycleHeartbeat {
     }
 }
 
+
+// ============================================================================
+// R260: LlmMetrics -- self-contained OTel metrics for LlmWorker calls
+// (latency histogram + requests/errors counters). Uses its own MetricsRegistry,
+// merged into runtime.metrics_text() output.
+// ============================================================================
+
+#[derive(Clone)]
+pub struct LlmMetrics {
+    pub registry: Arc<MetricsRegistry>,
+    pub requests_total: Arc<Counter>,
+    pub errors_total: Arc<Counter>,
+    pub latency_ms: Arc<Histogram>,
+}
+
+impl LlmMetrics {
+    pub fn new() -> Self {
+        let registry = Arc::new(MetricsRegistry::new());
+        let requests_total = registry.register_counter(Counter::new(
+            "runtime_llm_requests_total",
+            "total LLM dispatch invocations (incl. errors)",
+        ));
+        let errors_total = registry.register_counter(Counter::new(
+            "runtime_llm_errors_total",
+            "LLM dispatch invocations that returned Err",
+        ));
+        let latency_ms = registry.register_histogram(Histogram::new_ms(
+            "runtime_llm_latency_ms",
+            "end-to-end LLM dispatch wallclock latency",
+        ));
+        Self { registry, requests_total, errors_total, latency_ms }
+    }
+
+    pub fn record_success(&self, latency_ms: f64) {
+        self.requests_total.inc();
+        self.latency_ms.observe(latency_ms);
+    }
+
+    pub fn record_error(&self, latency_ms: f64) {
+        self.requests_total.inc();
+        self.errors_total.inc();
+        self.latency_ms.observe(latency_ms);
+    }
+}
 pub struct Runtime {
     pub scheduler: HeartbeatScheduler,
     pub task_store: AsyncTaskStore,
@@ -416,6 +460,8 @@ pub struct Runtime {
     // R259: OTel-style span tracker; run_one_cycle opens a root span + child task spans,
     // take_completed() drains into CycleReport.spans at end of cycle.
     pub span_tracker: Arc<SpanTracker>,
+    // R260: OTel metrics for LlmWorker dispatch (latency + errors).
+    pub llm_metrics: LlmMetrics,
 }
 
 impl Runtime {
@@ -480,12 +526,16 @@ impl Runtime {
             supervisor_metrics: supervisor_default_metrics().1,
             worker_registry: Arc::new(Mutex::new(HashMap::new())),
             span_tracker: Arc::new(SpanTracker::new()),
+            llm_metrics: LlmMetrics::new(),
         }
     }
 
     /// R238: export metrics in Prometheus text exposition format.
     pub fn metrics_text(&self) -> String {
-        self.metrics_registry.export_prometheus_text()
+        // R260: merge runtime + llm metrics text exports.
+        let mut text = self.metrics_registry.export_prometheus_text();
+        text.push_str(&self.llm_metrics.registry.export_prometheus_text());
+        text
     }
 
     /// R246 -- cycle latency summary (count, sum, mean).
@@ -590,13 +640,28 @@ impl Runtime {
         base_url: Option<&str>,
         api_key: &str,
     ) -> TaskId {
+        // R260: start latency timer for metric recording.
+        let started = std::time::Instant::now();
         let worker: Arc<dyn AsyncWorker> = match (model, base_url) {
             (Some(m), Some(b)) => Arc::new(LlmWorker::with_config("llm", api_key, b, m)),
             (Some(m), None) => Arc::new(LlmWorker::with_config("llm", api_key, "https://api.minimaxi.com", m)),
             _ => Arc::new(LlmWorker::new("llm", api_key)),
         };
         let params = serde_json::json!({"prompt": prompt, "system": system});
-        self.dispatch_async_task_with_worker(worker, &params.to_string()).await
+        let task_id = self.dispatch_async_task_with_worker(worker, &params.to_string()).await;
+        // R260: detached spawn records latency after task completes (or fails/times out).
+        let store = self.task_store.clone();
+        let metrics = self.llm_metrics.clone();
+        tokio::spawn(async move {
+            let result = store.wait_for_completion(task_id, std::time::Duration::from_secs(120)).await;
+            let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+            match result {
+                Ok(rec) if rec.status == TaskStatus::Failed => metrics.record_error(latency_ms),
+                Ok(_) => metrics.record_success(latency_ms),
+                Err(_) => metrics.record_error(latency_ms),
+            }
+        });
+        task_id
     }
 
     pub async fn dispatch_async_task(&self, tool_name: &str, params_json: &str) -> TaskId {
@@ -1437,5 +1502,72 @@ pub struct CycleLatencySummary {
             assert!(s.end_unix_ms > 0, "span {} end_unix_ms must be set", s.name);
             assert!(s.start_unix_ms <= s.end_unix_ms, "span {} inverted time", s.name);
         }
+    }
+
+    // R260 -- LlmMetrics: registry + counters + histogram + dispatch wiring
+
+    #[test]
+    fn r260_01_llm_metrics_initial_zero() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        assert_eq!(rt.llm_metrics.requests_total.get(), 0);
+        assert_eq!(rt.llm_metrics.errors_total.get(), 0);
+        assert_eq!(rt.llm_metrics.latency_ms.count(), 0);
+    }
+
+    #[test]
+    fn r260_02_metrics_text_includes_llm_counters() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let text = rt.metrics_text();
+        assert!(text.contains("runtime_llm_requests_total"),
+                "runtime_llm_requests_total must appear in metrics_text");
+        assert!(text.contains("runtime_llm_errors_total"),
+                "runtime_llm_errors_total must appear in metrics_text");
+        assert!(text.contains("runtime_llm_latency_ms"),
+                "runtime_llm_latency_ms must appear in metrics_text");
+    }
+
+    #[test]
+    fn r260_03_record_success_increments_request_and_observes_latency() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.llm_metrics.record_success(42.5);
+        assert_eq!(rt.llm_metrics.requests_total.get(), 1);
+        assert_eq!(rt.llm_metrics.errors_total.get(), 0);
+        assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
+        assert!((rt.llm_metrics.latency_ms.sum() - 42.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn r260_04_record_error_increments_both_counters() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.llm_metrics.record_error(100.0);
+        assert_eq!(rt.llm_metrics.requests_total.get(), 1);
+        assert_eq!(rt.llm_metrics.errors_total.get(), 1);
+        assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
+    }
+
+    #[test]
+    fn r260_05_llm_metrics_clone_shares_state() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let m2 = rt.llm_metrics.clone();
+        rt.llm_metrics.record_success(10.0);
+        // m2 shares Arc handles, counts must sync
+        assert_eq!(m2.requests_total.get(), 1);
+    }
+
+    #[tokio::test]
+    async fn r260_06_dispatch_llm_task_records_after_completion() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let _tid = rt.dispatch_llm_task("hello", None, None, None, "fake-key").await;
+        // wait for spawned recorder
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+        // fake-key => API fails => record_error path => requests_total == 1
+        assert_eq!(rt.llm_metrics.requests_total.get(), 1,
+                 "requests_total must increment after dispatch_llm_task");
     }
 
