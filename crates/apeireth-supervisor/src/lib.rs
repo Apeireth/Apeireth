@@ -18,6 +18,7 @@ pub mod heartbeat;
 pub mod pid_one;
 pub mod strategy;
 pub mod supervisor;
+pub mod span;  // R259: OTel-style span tracker
 
 pub use actor::{spawn_actor, Actor, ActorRef, ActorState};
 pub use child::ChildSpec;
