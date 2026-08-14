@@ -1,4 +1,4 @@
-﻿//! `apeireth-runtime` - **Apeireth R147 end-to-end runtime orchestration**
+//! `apeireth-runtime` - **Apeireth R147 end-to-end runtime orchestration**
 //!
 //! **Goal**: Unify 7 critical modules into a single living runtime. Before R147 each
 //! module had rich standalone semantics but no end-to-end driver. This crate is the
@@ -432,6 +432,49 @@ impl LlmMetrics {
         self.latency_ms.observe(latency_ms);
     }
 }
+
+// ============================================================================
+// R261: DispatchMetrics -- tracks every dispatch_async_task invocation
+// (counter + latency histogram + errors counter). Self-contained MetricsRegistry.
+// ============================================================================
+
+#[derive(Clone)]
+pub struct DispatchMetrics {
+    pub registry: Arc<MetricsRegistry>,
+    pub dispatch_total: Arc<Counter>,
+    pub dispatch_errors_total: Arc<Counter>,
+    pub dispatch_latency_ms: Arc<Histogram>,
+}
+
+impl DispatchMetrics {
+    pub fn new() -> Self {
+        let registry = Arc::new(MetricsRegistry::new());
+        let dispatch_total = registry.register_counter(Counter::new(
+            "runtime_dispatch_total",
+            "total dispatch_async_task invocations across all workers",
+        ));
+        let dispatch_errors_total = registry.register_counter(Counter::new(
+            "runtime_dispatch_errors_total",
+            "dispatch_async_task invocations where the worker returned Err",
+        ));
+        let dispatch_latency_ms = registry.register_histogram(Histogram::new_ms(
+            "runtime_dispatch_latency_ms",
+            "end-to-end dispatch_async_task wallclock latency (worker.execute)",
+        ));
+        Self { registry, dispatch_total, dispatch_errors_total, dispatch_latency_ms }
+    }
+
+    pub fn record_success(&self, latency_ms: f64) {
+        self.dispatch_total.inc();
+        self.dispatch_latency_ms.observe(latency_ms);
+    }
+
+    pub fn record_error(&self, latency_ms: f64) {
+        self.dispatch_total.inc();
+        self.dispatch_errors_total.inc();
+        self.dispatch_latency_ms.observe(latency_ms);
+    }
+}
 pub struct Runtime {
     pub scheduler: HeartbeatScheduler,
     pub task_store: AsyncTaskStore,
@@ -462,6 +505,8 @@ pub struct Runtime {
     pub span_tracker: Arc<SpanTracker>,
     // R260: OTel metrics for LlmWorker dispatch (latency + errors).
     pub llm_metrics: LlmMetrics,
+    // R261: OTel metrics for every dispatch_async_task (counter + latency histogram).
+    pub dispatch_metrics: DispatchMetrics,
 }
 
 impl Runtime {
@@ -527,14 +572,16 @@ impl Runtime {
             worker_registry: Arc::new(Mutex::new(HashMap::new())),
             span_tracker: Arc::new(SpanTracker::new()),
             llm_metrics: LlmMetrics::new(),
+            dispatch_metrics: DispatchMetrics::new(),
         }
     }
 
     /// R238: export metrics in Prometheus text exposition format.
     pub fn metrics_text(&self) -> String {
-        // R260: merge runtime + llm metrics text exports.
+        // R260+R261: merge runtime + llm + dispatch metrics text exports.
         let mut text = self.metrics_registry.export_prometheus_text();
         text.push_str(&self.llm_metrics.registry.export_prometheus_text());
+        text.push_str(&self.dispatch_metrics.registry.export_prometheus_text());
         text
     }
 
@@ -589,6 +636,9 @@ impl Runtime {
         worker: Arc<dyn AsyncWorker>,
         params_json: &str,
     ) -> TaskId {
+        // R261: start latency timer + count dispatch.
+        let started = std::time::Instant::now();
+        self.dispatch_metrics.dispatch_total.inc();
         let tool = worker.name().to_string();
         let (task_id, _rec) = self.task_store.register(
             tool.clone(),
@@ -601,10 +651,14 @@ impl Runtime {
         let emit_bus = self.config.emit_bus;
         let tool_name_owned = tool.clone();
         let params_owned: String = params_json.to_string();
+        // R261: clone metrics handles for the spawn.
+        let metrics = self.dispatch_metrics.clone();
         tokio::spawn(async move {
             let result = worker.execute(task_id, params_owned).await;
-            match result {
+            let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
+            match &result {
                 Ok(json) => {
+                    metrics.record_success(latency_ms);
                     let snap = match store.complete(task_id, json.clone()).await {
                         Ok(s) => s,
                         Err(_) => return,
@@ -622,6 +676,7 @@ impl Runtime {
                     }
                 }
                 Err(err) => {
+                    metrics.record_error(latency_ms);
                     let _ = store.fail(task_id, err.clone()).await;
                 }
             }
@@ -1569,5 +1624,63 @@ pub struct CycleLatencySummary {
         // fake-key => API fails => record_error path => requests_total == 1
         assert_eq!(rt.llm_metrics.requests_total.get(), 1,
                  "requests_total must increment after dispatch_llm_task");
+    }
+
+    // R261 -- DispatchMetrics: counter + latency for all dispatch_async_task calls
+
+    #[test]
+    fn r261_01_dispatch_metrics_initial_zero() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 0);
+        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
+        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 0);
+    }
+
+    #[test]
+    fn r261_02_metrics_text_includes_dispatch_counters() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let text = rt.metrics_text();
+        assert!(text.contains("runtime_dispatch_total"),
+                "runtime_dispatch_total must appear in metrics_text");
+        assert!(text.contains("runtime_dispatch_errors_total"),
+                "runtime_dispatch_errors_total must appear in metrics_text");
+        assert!(text.contains("runtime_dispatch_latency_ms"),
+                "runtime_dispatch_latency_ms must appear in metrics_text");
+    }
+
+    #[tokio::test]
+    async fn r261_03_dispatch_async_task_increments_total_and_observes_latency() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        let worker: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("sim"));
+        let _tid = rt.dispatch_async_task_with_worker(worker, "{}").await;
+        // detached metric recorder runs after worker.execute completes
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        assert!(rt.dispatch_metrics.dispatch_total.get() >= 1,
+                "dispatch_total must increment after dispatch");
+        assert!(rt.dispatch_metrics.dispatch_latency_ms.count() >= 1,
+                "dispatch_latency must record at least one observation");
+    }
+
+    #[test]
+    fn r261_04_record_success_increments_total() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.dispatch_metrics.record_success(15.0);
+        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
+        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
+        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
+    }
+
+    #[test]
+    fn r261_05_record_error_increments_both_counters() {
+        let rt = Runtime::new();
+        rt.bootstrap().unwrap();
+        rt.dispatch_metrics.record_error(20.0);
+        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
+        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 1);
+        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
     }
 
