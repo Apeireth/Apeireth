@@ -207,3 +207,147 @@ fn r253_04_integration_all_three_properties_hold() {
     assert_eq!(guard.record_count(), 2);
     assert!(guard.has_triggered());
 }
+
+
+// ============================================================================
+// R268: 实战触发链 3 proof — disarm/pass/serialization invariants
+// ============================================================================
+
+/// R268 Property 4: disarmed guard never records anything.
+#[cfg(kani)]
+#[kani::proof]
+fn proof_disarmed_blocks_all_triggers() {
+    let mut guard = SelfDisableGuard::new();
+    guard.disarm();
+    assert!(!guard.is_armed, "after disarm must be disarmed");
+
+    // 5 大机制都应返 Pass, 0 record
+    let _ = guard.check_no_degrade("high", "low", "ctx", 0);
+    let _ = guard.check_no_patch("principle_keys_count", 0, "ctx", 1);
+    let _ = guard.check_no_bypass("master", false, "ctx", 2);
+    let _ = guard.check_no_reverse("x", "ctx", 3);
+    let _ = guard.check_no_hide("w1", "ctx", 4);
+    assert_eq!(guard.record_count(), 0, "disarmed guard must record 0 events");
+}
+
+/// cargo test 镜像.
+#[test]
+fn r268_01_disarmed_blocks_all_triggers() {
+    let mut guard = SelfDisableGuard::new();
+    guard.disarm();
+
+    let mut any_triggered = false;
+    for i in 0..10 {
+        if let super::self_disable::SelfDisableCheck::Triggered(_) =
+            guard.check_no_degrade("high", "low", "ctx", i) {
+            any_triggered = true;
+            break;
+        }
+    }
+    assert!(!any_triggered, "disarmed guard must never trigger");
+    assert_eq!(guard.record_count(), 0);
+}
+
+/// R268 Property 5: rearm after disarm restores armed=true.
+#[cfg(kani)]
+#[kani::proof]
+fn proof_rearm_restores_armed() {
+    let mut guard = SelfDisableGuard::new();
+    guard.disarm();
+    assert!(!guard.is_armed);
+    guard.rearm();
+    assert!(guard.is_armed, "rearm must restore armed=true");
+    // 重新 armed 后, 触发应记录
+    let _ = guard.check_no_degrade("high", "low", "ctx", 0);
+    assert!(guard.has_triggered(), "re-armed guard must trigger");
+}
+
+/// cargo test 镜像.
+#[test]
+fn r268_02_rearm_restores_armed() {
+    let mut guard = SelfDisableGuard::new();
+    guard.disarm();
+    assert!(!guard.is_armed);
+
+    guard.rearm();
+    assert!(guard.is_armed, "rearm must restore armed=true");
+
+    let r = guard.check_no_degrade("high", "low", "ctx", 0);
+    assert!(matches!(r, super::self_disable::SelfDisableCheck::Triggered(_)));
+}
+
+/// R268 Property 6: pass path never increments record_count.
+#[cfg(kani)]
+#[kani::proof]
+fn proof_pass_path_no_record() {
+    let mut guard = SelfDisableGuard::new();
+    let before = guard.record_count();
+
+    // check_no_degrade with same risk_level = Pass (not violation)
+    let _ = guard.check_no_degrade("high", "high", "ctx", 0);
+    let _ = guard.check_no_degrade("low", "high", "ctx", 1);  // upgrade OK
+    let _ = guard.check_no_degrade("medium", "medium", "ctx", 2);
+
+    assert_eq!(guard.record_count(), before, "Pass path must not record");
+    assert!(!guard.has_triggered(), "Pass path must not mark triggered");
+}
+
+/// cargo test 镜像.
+#[test]
+fn r268_03_pass_path_no_record() {
+    let mut guard = SelfDisableGuard::new();
+    let before = guard.record_count();
+
+    let r1 = guard.check_no_degrade("high", "high", "same level", 0);
+    let r2 = guard.check_no_degrade("low", "high", "upgrade", 1);
+    let r3 = guard.check_no_degrade("medium", "medium", "same", 2);
+
+    assert!(matches!(r1, super::self_disable::SelfDisableCheck::Pass));
+    assert!(matches!(r2, super::self_disable::SelfDisableCheck::Pass));
+    assert!(matches!(r3, super::self_disable::SelfDisableCheck::Pass));
+    assert_eq!(guard.record_count(), before);
+    assert!(!guard.has_triggered());
+}
+
+/// R268 Property 7: trigger_id uniqueness across many triggers.
+#[cfg(kani)]
+#[kani::proof]
+fn proof_trigger_id_uniqueness() {
+    let mut guard = SelfDisableGuard::new();
+    let mut ids = std::collections::HashSet::new();
+
+    for i in 0..5 {
+        let r = guard.check_no_degrade("high", "low", "ctx", i);
+        if let super::self_disable::SelfDisableCheck::Triggered(rec) = r {
+            assert!(!ids.contains(&rec.trigger_id), "trigger_id must be unique: {}", rec.trigger_id);
+            ids.insert(rec.trigger_id);
+        }
+    }
+    assert_eq!(ids.len(), 5);
+}
+
+/// cargo test 镜像.
+#[test]
+fn r268_04_trigger_id_uniqueness() {
+    let mut guard = SelfDisableGuard::new();
+    let mut ids = std::collections::HashSet::new();
+
+    for i in 0..20 {
+        if let super::self_disable::SelfDisableCheck::Triggered(rec) =
+            guard.check_no_degrade("high", "low", &format!("ctx-{}", i), i) {
+            assert!(!ids.contains(&rec.trigger_id), "duplicate trigger_id: {}", rec.trigger_id);
+            ids.insert(rec.trigger_id);
+        }
+    }
+    assert_eq!(ids.len(), 20, "20 unique trigger_ids expected");
+}
+
+/// R268 Property 8: 5 大 mechanism IDs are stable (1, 2, 3, 4, 5).
+#[test]
+fn r268_05_mechanism_ids_are_stable() {
+    assert_eq!(trigger_no_degrade().mechanism_id(), 1);
+    assert_eq!(trigger_no_patch().mechanism_id(), 2);
+    assert_eq!(trigger_no_bypass().mechanism_id(), 3);
+    assert_eq!(trigger_no_reverse().mechanism_id(), 4);
+    assert_eq!(trigger_no_hide().mechanism_id(), 5);
+}
