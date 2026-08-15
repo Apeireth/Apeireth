@@ -19,6 +19,8 @@
 #![allow(missing_docs)]
 
 pub mod hash;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod exif;
 pub mod ocr;
 pub mod router;

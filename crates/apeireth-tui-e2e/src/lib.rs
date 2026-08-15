@@ -77,6 +77,8 @@ use std::time::Instant;
 use crossterm::event::KeyCode;
 
 pub mod backend;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod error;
 pub mod harness;
 pub mod nav_e2e;

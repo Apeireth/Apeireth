@@ -23,6 +23,12 @@ pub mod codex;
 pub mod copilot;
 pub mod gemini_cli;
 pub mod opencode;
+// R177: provider invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
+// R176: LlmFacade trait 统一接入 (per ADR-0033)
+pub mod facade_impls;
+// R176: HTTP 统一调度 (真接 6 Provider)
+pub mod http_dispatch;
 pub mod minimax;  // R128: 6th provider (MiniMax-M3 family)
 
 /// R35: 5 provider name 1:1 对应, 启动时配置用

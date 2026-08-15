@@ -16,6 +16,8 @@
 /// 包含 `TaskInstance` / `RunReport` / `Executor` trait / `Runner` / `Summary` 等,
 /// 并提供一个 deterministic 内联 sample (`sample_task()`)。
 pub mod swe_bench;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 /// AgentBench 子集 stub。
 ///

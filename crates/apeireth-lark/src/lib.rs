@@ -54,6 +54,8 @@ use tracing::{debug, info};
 // - 0 改 24 LOCKED crate, 0 改 workspace version (1.0.0)
 // - 0 改现有 5 fixture + 5 K-1 强校验测试 (test_lark_stub_in_process.rs 不动)
 pub mod real;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 // 便捷 re-exports (调用方少打 crate 名)
 pub use real::{msg_type_to_str, LarkApiResponse, LarkRealImpl, SendMessageResponse, TenantTokenResponse};

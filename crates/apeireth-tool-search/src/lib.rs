@@ -758,3 +758,6 @@ mod tests {
         // limit=3 must truncate 10 docs to 3
         assert_eq!(by_id.len(), 3);
     }
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

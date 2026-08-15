@@ -206,6 +206,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-host",
  "apeireth-http-client",
+ "apeireth-llm-iface",
  "apeireth-pipeline",
  "apeireth-protocol",
  "apeireth-telemetry",
@@ -375,8 +376,39 @@ version = "1.2.0"
 dependencies = [
  "anyhow",
  "apeireth-asi",
+ "apeireth-consciousness",
  "apeireth-core",
  "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "apeireth-companion"
+version = "1.2.0"
+dependencies = [
+ "anyhow",
+ "apeireth-api",
+ "apeireth-asi",
+ "apeireth-consciousness",
+ "apeireth-core",
+ "apeireth-council",
+ "apeireth-evolution",
+ "apeireth-graph-primitive",
+ "apeireth-guard",
+ "apeireth-lark",
+ "apeireth-memory",
+ "apeireth-sovereignty",
+ "apeireth-tool-approval",
+ "apeireth-tool-registry",
+ "apeireth-tool-runtime",
+ "apeireth-tools",
+ "async-trait",
+ "chrono",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -479,6 +511,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-environment"
+version = "1.2.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "apeireth-eval"
 version = "1.2.0"
 dependencies = [
@@ -508,6 +554,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-experience"
+version = "1.2.0"
+dependencies = [
+ "chrono",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "uuid",
+]
+
+[[package]]
 name = "apeireth-extension"
 version = "1.2.0"
 dependencies = [
@@ -520,6 +579,26 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml 0.8.23",
+ "uuid",
+]
+
+[[package]]
+name = "apeireth-gateway"
+version = "1.2.0"
+dependencies = [
+ "apeireth-bus",
+ "apeireth-guard",
+ "apeireth-rate-limiter",
+ "apeireth-runtime",
+ "apeireth-tool-registry",
+ "async-trait",
+ "chrono",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
  "uuid",
 ]
 
@@ -539,6 +618,35 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "apeireth-graph-primitive"
+version = "1.2.0"
+dependencies = [
+ "anyhow",
+ "apeireth-core",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "apeireth-guard"
+version = "1.2.0"
+dependencies = [
+ "once_cell",
+ "parking_lot",
+ "regex",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tracing",
 ]
 
 [[package]]
@@ -663,6 +771,7 @@ dependencies = [
 name = "apeireth-life-force"
 version = "1.2.0"
 dependencies = [
+ "apeireth-consciousness",
  "apeireth-core",
  "chrono",
  "serde",
@@ -692,6 +801,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-llm-iface"
+version = "1.2.0"
+dependencies = [
+ "async-trait",
+ "futures",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-mcp"
 version = "1.2.0"
 dependencies = [
@@ -715,9 +836,9 @@ name = "apeireth-memory"
 version = "1.2.0"
 dependencies = [
  "anyhow",
- "apeireth-api",
  "apeireth-core",
  "apeireth-life-force",
+ "apeireth-llm-iface",
  "apeireth-memory-extensions",
  "apeireth-pipeline-g5",
  "apeireth-vector",
@@ -755,7 +876,9 @@ name = "apeireth-motivation"
 version = "1.2.0"
 dependencies = [
  "anyhow",
+ "apeireth-consciousness",
  "apeireth-core",
+ "apeireth-life-force",
  "apeireth-value",
  "chrono",
  "serde",
@@ -853,7 +976,8 @@ dependencies = [
 name = "apeireth-provider"
 version = "1.2.0"
 dependencies = [
- "async-trait",
+ "apeireth-acp",
+ "apeireth-http-client",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -888,20 +1012,6 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
-]
-
-[[package]]
-name = "apeireth-relation"
-version = "1.2.0"
-dependencies = [
- "anyhow",
- "apeireth-core",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tokio",
- "uuid",
 ]
 
 [[package]]
@@ -975,6 +1085,7 @@ name = "apeireth-skills"
 version = "1.2.0"
 dependencies = [
  "apeireth-mcp",
+ "apeireth-sovereignty",
  "parking_lot",
  "serde",
  "serde_json",
@@ -993,6 +1104,7 @@ dependencies = [
  "chrono",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "tokio",
 ]
@@ -1341,13 +1453,13 @@ dependencies = [
  "apeireth-core",
  "apeireth-council",
  "apeireth-graph",
+ "apeireth-graph-primitive",
  "apeireth-i18n",
  "apeireth-life-force",
  "apeireth-memory",
  "apeireth-motivation",
  "apeireth-perception",
  "apeireth-pipeline",
- "apeireth-relation",
  "apeireth-runtime",
  "apeireth-sovereignty",
  "apeireth-supervisor",
@@ -1454,6 +1566,8 @@ name = "apeireth-voice"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "apeireth-companion",
+ "apeireth-consciousness",
  "async-trait",
  "chrono",
  "criterion",

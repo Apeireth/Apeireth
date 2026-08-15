@@ -186,3 +186,6 @@ mod tests {
         assert_eq!(m, 0, "next trigger minute should be 0 (per expr `0 * * * *`)");
     }
 }
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

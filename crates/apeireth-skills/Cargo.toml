@@ -16,6 +16,8 @@ parking_lot = "0.12"
 thiserror = { workspace = true }
 walkdir = "2.5"
 apeireth-mcp = { path = "../apeireth-mcp" }
+# R174 stage 6: WASM skill bridge (WasmSkillExecutor + WasmSkillDescriptor)
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
 [lints]
 workspace = true
 # R125-19 (per decision-51 §1.4 P3-2): 加 skill_executor_demo example

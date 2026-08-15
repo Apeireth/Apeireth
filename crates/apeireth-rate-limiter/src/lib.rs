@@ -87,6 +87,8 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 pub mod config;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod error;
 pub mod fixed_window;
 pub mod leaky_bucket;

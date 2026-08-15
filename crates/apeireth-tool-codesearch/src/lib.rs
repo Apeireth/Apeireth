@@ -26,6 +26,8 @@
 #![warn(missing_docs)]
 
 pub mod search;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod files;
 pub mod symbols;
 pub mod graph;

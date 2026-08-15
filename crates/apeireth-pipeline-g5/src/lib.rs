@@ -25,6 +25,8 @@ pub mod circuit_breaker;  // R198
 pub mod bounded_reliability;  // R204: DefaultReliability + CircuitBreaker 集成: 真 Circuit Breaker (替换 reliability.rs 的 stub)
 pub mod stage;
 pub mod throttle;
+// R177: pipeline-g5 invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 
 /// 5 阶段 pipeline 名称 (R21 G-2 真实 enum, K-1 强校验).
 pub const FIVE_STAGES: [&str; 5] = [

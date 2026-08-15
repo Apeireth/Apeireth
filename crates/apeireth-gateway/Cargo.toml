@@ -1,0 +1,39 @@
+[package]
+name = "apeireth-gateway"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth OpenClaw-mode gateway: single long-lived daemon hosting multiple Node adapters (TUI/HTTP/Desktop/Mobile/CLI), Agent workspace, Skills, and DM access security. Borrows the 'single process, multi-LLM, multi-channel' architecture from OpenClaw, lifted to Rust with compile-time-guaranteed single-instance mode."
+keywords = ["ai", "gateway", "openclaw", "multi-channel", "single-process"]
+categories = ["api-bindings"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
+# R174 stage 6: Privacy Guard integration — PII detection + redaction at the gateway boundary
+apeireth-guard = { path = "../apeireth-guard" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+# R174 integration: gateway drive runtime cycles via AsyncWorker
+apeireth-runtime = { path = "../apeireth-runtime" }
+apeireth-bus = { path = "../apeireth-bus" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+
+[lib]
+name = "apeireth_gateway"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

@@ -30,6 +30,8 @@
 #![warn(missing_docs)]
 
 pub mod browser;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod accessibility;
 pub mod fetch;
 pub mod cli;
