@@ -58,6 +58,8 @@ pub const LOCKED_CRATES: &[&str] = &[
 /// R121 续 (V2-5 战区 2.5): 改承载到实际存在的 docs/{conventions,glossary,stage4} LOCKED 源
 /// (原 R11 baseline 文件 APEIRETH-* / FINISH-* / START-* 在 R20 阶段 5 已演化为 docs/ 下结构)
 /// **0 漂移概念**: 8 项不修改承诺 (6 哲学锚 / 5 重守门 / 双洋葱 / 9 器官) 1:1 改承载文件
+/// **2026-08-15 docs 归位**: stage4 历史文档随 document-relocation-map.md 进 `_history/audits-reviews/`,
+/// 本常量同步更新 (归位只动位置与索引, 索引在此).
 pub const EIGHT_PROMISES_SOURCE_FILES: &[&str] = &[
     "docs/conventions/10-locked.md",                  // 1:1 替代 APEIRETH-CONVENTIONS.md
     "docs/conventions/09-anchor.md",                  // 6 哲学锚
@@ -66,7 +68,7 @@ pub const EIGHT_PROMISES_SOURCE_FILES: &[&str] = &[
     "docs/glossary/01-north-star.md",                 // S-1 北极星
     "docs/glossary/02-double-onion.md",               // 双洋葱
     "docs/glossary/15-9-phase-lifecycle.md",          // 9 器官 (替代 START-CONSTRUCTION.md)
-    "docs/stage4/8-locked-unified-2026-08-05.md",     // 8 项统一文档
+    "docs/stage4/_history/audits-reviews/8-locked-unified-2026-08-05.md", // 8 项统一文档 (归位后)
 ];
 
 /// 期望 workspace version
