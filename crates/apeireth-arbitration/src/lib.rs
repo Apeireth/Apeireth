@@ -416,7 +416,9 @@ mod tests {
 
     #[test]
     fn t08_canonical_order_deterministic_across_logs() {
-        // 同一组事件, 顺序插入应得到相同 canonical order
+        // 同一组事件, 顺序插入应得到相同 canonical order.
+        // 诚实修正: content_hash 含 timestamp_ms — 两个日志 append 时刻不同 → hash 必然不同;
+        // 确定性语义是「排序模式一致」: (source, source_id, topic) 序列应相同.
         let log1 = ArbitrationLog::open_in_memory().unwrap();
         let log2 = ArbitrationLog::open_in_memory().unwrap();
 
@@ -435,9 +437,12 @@ mod tests {
         let e1 = log1.canonical_order(10).unwrap();
         let e2 = log2.canonical_order(10).unwrap();
         assert_eq!(e1.len(), e2.len());
-        for (a, b) in e1.iter().zip(e2.iter()) {
-            assert_eq!(a.content_hash, b.content_hash);
-        }
+        let mode = |evts: &[ArbitrationEvent]| -> Vec<(String, String, String)> {
+            evts.iter()
+                .map(|e| (e.source.as_str().to_string(), e.source_id.clone(), e.topic.clone()))
+                .collect()
+        };
+        assert_eq!(mode(&e1), mode(&e2), "canonical 排序模式应跨日志确定");
     }
 }
 
