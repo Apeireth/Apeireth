@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 // R131 架构债清理: 拆 lib.rs 108KB → 5 submodules
 // 0 触碰公开签名 — `use apeireth_core::Episode` 等不破坏.
 pub mod memory;
+// 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
+pub mod clock;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 pub use memory::*;

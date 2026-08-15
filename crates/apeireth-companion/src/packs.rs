@@ -169,6 +169,16 @@ impl PackRegistry {
             .collect()
     }
 
+    /// 覆盖该工具且带路径约束 (paths 非空) 的活跃包路径列表.
+    /// 供执行器做**执行级路径校验** (权限包 paths 不只是元数据).
+    pub fn paths_for(&self, tool: &str, now_ms: i64) -> Option<Vec<String>> {
+        let packs = self.inner.lock().unwrap();
+        packs
+            .iter()
+            .find(|p| !p.is_expired(now_ms) && p.covers(tool) && !p.paths.is_empty())
+            .map(|p| p.paths.clone())
+    }
+
     pub fn active_count(&self, now_ms: i64) -> usize {
         self.inner
             .lock()
