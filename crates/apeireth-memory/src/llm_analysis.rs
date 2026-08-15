@@ -5,7 +5,7 @@
 //!
 //! 用法:
 //! ```ignore
-//! use apeireth_api::llm::{ApeirethApiConfig, ApeirethApiProvider, LlmProvider};
+//! use apeireth_llm_iface::{ChatMessage, LlmProvider, LlmRequest};  // R179 P0-3: 走 iface 不再 dep apeireth-api
 //! use apeireth_core::Episode;
 //! use apeireth_memory::llm_analysis::{analyze_episode, AnalysisKind};
 //!
@@ -16,7 +16,7 @@
 
 use std::sync::Arc;
 
-use apeireth_api::llm::{ChatMessage, LlmProvider, LlmRequest};
+use apeireth_llm_iface::{ChatMessage, LlmProvider, LlmRequest};  // R179 P0-3: 拆 memory <-> api 编译期边
 use apeireth_core::Episode;
 use serde::{Deserialize, Serialize};
 

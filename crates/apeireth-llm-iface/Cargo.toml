@@ -1,0 +1,25 @@
+[package]
+name = "apeireth-llm-iface"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "R179 P0-3: LLM 抽象接口 (ChatMessage / LlmRequest / LlmProvider / LlmError). 拆 apeireth-memory <-> apeireth-api 编译期边."
+
+[dependencies]
+async-trait = { workspace = true }
+futures = "0.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_llm_iface"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

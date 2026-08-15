@@ -13,6 +13,8 @@ path = "src/lib.rs"
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
+# R179 P0-3: thin re-export (LLM 抽象类型位于本 crate 说明在 traits.rs / error.rs 头部注释)
+apeireth-llm-iface = { path = "../apeireth-llm-iface" }
 # R17 战役 1-1: 4 协议归一化 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini)
 apeireth-protocol = { path = "../apeireth-protocol" }
 # R17 战役 1-2: Keep-Alive LIFO 5 字段 (VCP chatCompletionHandler.js:22-28 字段级借鉴)
