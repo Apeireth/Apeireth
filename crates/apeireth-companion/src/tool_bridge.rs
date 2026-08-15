@@ -175,46 +175,52 @@ impl ToolBridge {
                 duration_ms: 0,
             };
         }
-        // 权限包检查: 被活跃包覆盖 → 免现场审批 (责任自负 + 监督兜底), 记账
-        let pack_authorized = self.packs.check_and_consume(&call.tool_name, chrono::Utc::now().timestamp_millis());
-        match self.approval.check(call) {
-            ApprovalDecision::Allow => {
-                let _ = pack_authorized; // 包授权 = 已记账, 这里无需额外动作 (记录在 §监督)
-                self.records.record(call, &serde_json::json!(null), false).await.ok();
-                let r = self.executor.execute(call).await;
-                // 监督机制: 每次工具调用 append-only 记录 (含结果, 出站隐私脱敏后存)
-                let serialized = serde_json::to_string(&r.output).unwrap_or_default();
-                let pii = apeireth_guard::detect_pii(&serialized);
-                let masked_output = if pii.is_empty() {
-                    r.output.clone()
-                } else {
-                    serde_json::Value::String(apeireth_guard::redact_text(
-                        &serialized,
-                        &pii,
-                        apeireth_guard::RedactionStrategy::Mask,
-                    ))
-                };
-                let _ = self
-                    .records
-                    .record(call, &masked_output, !pii.is_empty())
-                    .await;
-                r
+        // 权限包检查: 被活跃包覆盖 → 免现场审批直接执行 (责任自负 + 监督兜底)
+        let pack_authorized = self
+            .packs
+            .check_and_consume(&call.tool_name, chrono::Utc::now().timestamp_millis());
+        let r = if pack_authorized {
+            self.executor.execute(call).await
+        } else {
+            match self.approval.check(call) {
+                ApprovalDecision::Allow => self.executor.execute(call).await,
+                ApprovalDecision::RequireApproval { .. } => {
+                    return ExecutionResult {
+                        tool_name: call.tool_name.clone(),
+                        success: false,
+                        output: json!(null),
+                        error: Some("该工具是高风险操作且未被权限包覆盖, 需要主人批准".to_string()),
+                        duration_ms: 0,
+                    }
+                }
+                _ => {
+                    return ExecutionResult {
+                        tool_name: call.tool_name.clone(),
+                        success: false,
+                        output: json!(null),
+                        error: Some("审批拒绝".to_string()),
+                        duration_ms: 0,
+                    }
+                }
             }
-            ApprovalDecision::RequireApproval { .. } => ExecutionResult {
-                tool_name: call.tool_name.clone(),
-                success: false,
-                output: json!(null),
-                error: Some("该工具是高风险操作, 需要主人批准, 我不能自主执行".to_string()),
-                duration_ms: 0,
-            },
-            _ => ExecutionResult {
-                tool_name: call.tool_name.clone(),
-                success: false,
-                output: json!(null),
-                error: Some("审批拒绝".to_string()),
-                duration_ms: 0,
-            },
-        }
+        };
+        // 监督机制: 每次工具调用 append-only 记录 (含结果, 出站隐私脱敏后存)
+        let serialized = serde_json::to_string(&r.output).unwrap_or_default();
+        let pii = apeireth_guard::detect_pii(&serialized);
+        let masked_output = if pii.is_empty() {
+            r.output.clone()
+        } else {
+            serde_json::Value::String(apeireth_guard::redact_text(
+                &serialized,
+                &pii,
+                apeireth_guard::RedactionStrategy::Mask,
+            ))
+        };
+        let _ = self
+            .records
+            .record(call, &masked_output, !pii.is_empty())
+            .await;
+        r
     }
 
     /// 给住客 AI 的工具调用格式说明 (注入 LLM system prompt).
