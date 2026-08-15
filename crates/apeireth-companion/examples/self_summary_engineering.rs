@@ -272,7 +272,7 @@ async fn main() {
     let shell_blocked = !r.success && r.error.as_deref().unwrap_or("").contains("主人批准");
     println!("[3a] ShellExec 无包 → {} ({:?})", if shell_blocked { "✅ 被拦: 需要主人批准" } else { "❌ 未被拦!" }, r.error);
 
-    // 3b. FileOperator 写权限包 paths 之外 → 实测路径约束是否执行
+    // 3b. FileOperator 写权限包 paths 之外 → 执行级路径约束应拦 (2026-08-16 补的洞)
     let outside = std::env::temp_dir().join("apeireth-paths-block-test.txt");
     let out_call = ParsedToolCall {
         tool_name: "FileOperator".into(),
@@ -283,10 +283,26 @@ async fn main() {
     };
     let r = bridge.execute_if_allowed(&out_call).await;
     if r.success {
-        println!("[3b] FileOperator 写 paths 之外 → ⚠️ 竟然成功 (权限包 paths 是元数据, 执行级未约束 — 待补的洞)");
+        println!("[3b] FileOperator 写 paths 之外 → ❌ 竟然成功 (路径约束失效!)");
         let _ = std::fs::remove_file(&outside);
     } else {
-        println!("[3b] FileOperator 写 paths 之外 → ✅ 被拦: {:?}", r.error);
+        println!("[3b] FileOperator 写 paths 之外 → ✅ 被拦 (执行级路径约束已生效): {}", r.error.as_deref().unwrap_or(""));
+        // `..` 穿越也验一下
+        let escape = workdir.join("..").join("escape-../../x.txt");
+        let esc_call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "write", "path": escape.to_string_lossy().to_string(), "content": "x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r2 = bridge.execute_if_allowed(&esc_call).await;
+        if r2.success {
+            println!("[3b] `..` 穿越 → ❌ 竟然成功");
+            let _ = std::fs::remove_file(&escape);
+        } else {
+            println!("[3b] `..` 穿越 → ✅ 被拦");
+        }
     }
 
     // ---------- 汇报 ----------
