@@ -23,6 +23,29 @@ use serde_json::{json, Value};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
 
+/// 路径前缀白名单校验 (执行级, 防越权写盘 + `..` 穿越).
+///
+/// 规则: 规范化 (Windows 分隔符/大小写统一) 后, `path` 必须等于 `base` 或位于
+/// `base/` 之下. 目标文件可能不存在 → canonicalize 父目录 + 文件名再比 (`..` 被解析).
+fn path_within(path: &str, base: &str) -> bool {
+    use std::path::Path;
+    let norm = |p: &std::path::PathBuf| -> String {
+        p.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_lowercase()
+    };
+    let base_p = Path::new(base);
+    let base_c = std::fs::canonicalize(base_p).unwrap_or_else(|_| base_p.to_path_buf());
+    let path_p = Path::new(path);
+    let path_c = match std::fs::canonicalize(path_p) {
+        Ok(c) => c,
+        Err(_) => match path_p.parent().and_then(|pa| std::fs::canonicalize(pa).ok()) {
+            Some(cp) => cp.join(path_p.file_name().unwrap_or_default()),
+            None => path_p.to_path_buf(),
+        },
+    };
+    let (b, p) = (norm(&base_c), norm(&path_c));
+    p == b || p.starts_with(&format!("{b}/"))
+}
+
 /// 「回忆记忆」工具 — 基地给住客 AI 的第一个自研工具 (只读, 最安全).
 pub struct RecallMemoryTool {
     store: Arc<SqliteMemoryStore>,
@@ -243,6 +266,33 @@ impl ToolBridge {
         let pack_authorized = self
             .packs
             .check_and_consume(&call.tool_name, chrono::Utc::now().timestamp_millis());
+        // 执行级路径校验: 权限包 paths 约束 (FileOperator 等文件类工具, 防越权写盘 / `..` 穿越)
+        if pack_authorized {
+            if let Some(paths) =
+                self.packs
+                    .paths_for(&call.tool_name, chrono::Utc::now().timestamp_millis())
+            {
+                if let Some(p) = call
+                    .args
+                    .get("path")
+                    .and_then(|v| v.as_str())
+                    .filter(|s| !s.is_empty())
+                {
+                    if !paths.iter().any(|base| path_within(p, base)) {
+                        return ExecutionResult {
+                            tool_name: call.tool_name.clone(),
+                            success: false,
+                            output: json!(null),
+                            error: Some(format!(
+                                "权限包路径约束拒绝: {p} 不在获准路径 [{}] 内",
+                                paths.join(", ")
+                            )),
+                            duration_ms: 0,
+                        };
+                    }
+                }
+            }
+        }
         let r = if pack_authorized {
             self.executor.execute(call).await
         } else {
@@ -362,6 +412,46 @@ mod tests {
         };
         let r = bridge.execute_if_allowed(&bad).await;
         assert!(!r.success);
+    }
+
+    #[tokio::test]
+    async fn pack_path_constraint_blocks_outside_write() {
+        use crate::packs::PermissionPack;
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let workdir = std::env::temp_dir().join(format!("apeireth-path-test-{}", std::process::id()));
+        std::fs::create_dir_all(&workdir).unwrap();
+        bridge.packs.grant(
+            PermissionPack::timed("路径测试", vec!["FileOperator".to_string()], 1, Some(10))
+                .with_paths(vec![workdir.to_string_lossy().to_string()]),
+        );
+        let mk = |path: String| ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "write", "path": path, "content": "x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        // 包内写 → 允许
+        let ok = mk(workdir.join("ok.txt").to_string_lossy().to_string());
+        let r = bridge.execute_if_allowed(&ok).await;
+        assert!(r.success, "包内写应成功: {:?}", r.error);
+        // 包外写 → 拦 (执行级路径约束)
+        let outside = std::env::temp_dir().join("apeireth-outside-test.txt");
+        let bad = mk(outside.to_string_lossy().to_string());
+        let r = bridge.execute_if_allowed(&bad).await;
+        assert!(!r.success, "包外写应被拦");
+        assert!(
+            r.error.as_deref().unwrap_or("").contains("路径约束"),
+            "err={:?}",
+            r.error
+        );
+        // `..` 穿越 → 拦 (canonicalize 解析后落在包外)
+        let escape = workdir.join("..").join("escape.txt");
+        let bad2 = mk(escape.to_string_lossy().to_string());
+        let r = bridge.execute_if_allowed(&bad2).await;
+        assert!(!r.success, "`..` 穿越应被拦: {:?}", r.error);
+        let _ = std::fs::remove_dir_all(&workdir);
     }
 
     #[tokio::test]
