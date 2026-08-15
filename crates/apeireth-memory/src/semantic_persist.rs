@@ -36,7 +36,7 @@ use apeireth_core::Episode;
 use apeireth_vector::{SqliteVecBackend, VectorStore};
 
 use crate::episode::EpisodeStore;
-use crate::semantic::{episode_uuid, EmbedFn};
+use crate::semantic::{episode_uuid, EmbedderIdentity, EmbedFn};
 use crate::user_profile::UserProfile;
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
@@ -62,7 +62,15 @@ pub struct PersistentSemanticIndex {
     vector: Arc<Mutex<SqliteVecBackend>>,
     /// 共享 embedder (跨 daemon 重新注入, 不存).
     embedder: Arc<dyn EmbedFn>,
+    /// P0-5: Embedder 身份 (model_name + dimension).
+    /// 持久化到 sidecar 文件 `<vector_path>.embedder.json`.
+    embedder_identity: EmbedderIdentity,
+    /// P0-6: 当前 schema 版本.
+    schema_version: u32,
 }
+
+/// P0-6: 当前 schema 版本.
+pub const CURRENT_SCHEMA_VERSION: u32 = 1;
 
 impl PersistentSemanticIndex {
     /// 打开 (或新建) 一个 long-term semantic index.
@@ -96,12 +104,48 @@ impl PersistentSemanticIndex {
                 backend.dimension()
             )));
         }
+        // P0-5: 校验 stored embedder identity (per RFC 001)
+        let stored = read_embedder_sidecar(&vector_path);
+        let current = embedder.identity();
+        if !stored.is_unknown() && !current.is_unknown() && stored != current {
+            return Err(MemoryError::Other(format!(
+                "embedder identity mismatch: stored={stored} current={current}"
+            )));
+        }
+        let embedder_identity = if stored.is_unknown() { current } else { stored };
+
+        // P0-6: 校验 stored schema version
+        let stored_schema = read_schema_sidecar(&vector_path);
+        let schema_version = if stored_schema == 0 {
+            CURRENT_SCHEMA_VERSION
+        } else if stored_schema > CURRENT_SCHEMA_VERSION {
+            return Err(MemoryError::Other(format!(
+                "schema version on disk ({stored_schema}) > current code ({CURRENT_SCHEMA_VERSION})"
+            )));
+        } else if stored_schema < CURRENT_SCHEMA_VERSION {
+            CURRENT_SCHEMA_VERSION
+        } else {
+            stored_schema
+        };
+
         Ok(Self {
             memory,
             vector_path,
             vector: Arc::new(Mutex::new(backend)),
             embedder,
+            embedder_identity,
+            schema_version,
         })
+    }
+
+    /// P0-5: 取当前 embedder 身份.
+    pub fn embedder_identity(&self) -> &EmbedderIdentity {
+        &self.embedder_identity
+    }
+
+    /// P0-6: 取当前 schema 版本.
+    pub fn schema_version(&self) -> u32 {
+        self.schema_version
     }
 
     /// 显式 no-op flush — 留作公开 API 当 caller 想"心理 flush"时用.
@@ -133,6 +177,10 @@ impl PersistentSemanticIndex {
         guard
             .upsert(&v)
             .map_err(|e| MemoryError::Other(format!("vector upsert failed: {e}")))?;
+        drop(guard);
+        // P0-5 + P0-6: 落盘 sidecar
+        self.persist_embedder_sidecar()?;
+        self.persist_schema_sidecar()?;
         Ok(())
     }
 
@@ -277,6 +325,74 @@ impl PersistentSemanticIndex {
             ),
         };
         crate::semantic::SemanticIndex::new(memory, boxed, Arc::clone(&self.embedder))
+    }
+}
+
+// ============================================================
+// P0-5 + P0-6: Sidecar helpers + impl methods
+// ============================================================
+const EMBEDDER_SIDECAR_SUFFIX: &str = ".embedder.json";
+const SCHEMA_SIDECAR_SUFFIX: &str = ".schema.json";
+
+fn embedder_sidecar_path(vector_path: &Path) -> PathBuf {
+    let mut p = vector_path.to_path_buf();
+    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    p.set_file_name(format!("{original}{EMBEDDER_SIDECAR_SUFFIX}"));
+    p
+}
+
+fn schema_sidecar_path(vector_path: &Path) -> PathBuf {
+    let mut p = vector_path.to_path_buf();
+    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    p.set_file_name(format!("{original}{SCHEMA_SIDECAR_SUFFIX}"));
+    p
+}
+
+fn read_embedder_sidecar(vector_path: &Path) -> EmbedderIdentity {
+    let path = embedder_sidecar_path(vector_path);
+    match std::fs::read_to_string(&path) {
+        Ok(s) => serde_json::from_str(&s).unwrap_or_else(|_| EmbedderIdentity::unknown()),
+        Err(_) => EmbedderIdentity::unknown(),
+    }
+}
+
+fn read_schema_sidecar(vector_path: &Path) -> u32 {
+    let path = schema_sidecar_path(vector_path);
+    match std::fs::read_to_string(&path) {
+        Ok(s) => s.trim().parse::<u32>().unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+fn persist_embedder_sidecar_impl(vector_path: &Path, identity: &EmbedderIdentity) -> std::io::Result<()> {
+    let path = embedder_sidecar_path(vector_path);
+    let tmp = path.with_extension("embedder.json.tmp");
+    let json = serde_json::to_string(identity).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    std::fs::write(&tmp, json)?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+fn persist_schema_sidecar_impl(vector_path: &Path, version: u32) -> std::io::Result<()> {
+    let path = schema_sidecar_path(vector_path);
+    let tmp = path.with_extension("schema.json.tmp");
+    std::fs::write(&tmp, version.to_string())?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
+impl PersistentSemanticIndex {
+    fn persist_embedder_sidecar(&self) -> MemoryResult<()> {
+        let id = self.embedder.identity();
+        persist_embedder_sidecar_impl(&self.vector_path, &id)
+            .map_err(|e| MemoryError::Other(format!("embedder sidecar write: {e}")))?;
+        Ok(())
+    }
+
+    fn persist_schema_sidecar(&self) -> MemoryResult<()> {
+        persist_schema_sidecar_impl(&self.vector_path, self.schema_version)
+            .map_err(|e| MemoryError::Other(format!("schema sidecar write: {e}")))?;
+        Ok(())
     }
 }
 
@@ -607,6 +723,186 @@ mod tests {
         assert!(!hits.is_empty());
         cleanup(&path);
     }
+
+    // =====================================================================
+    // P0-5: Embedder 身份持久化 (per RFC 001)
+    // =====================================================================
+
+    struct AltEmbedder {
+        dim: usize,
+        model: String,
+    }
+    impl crate::semantic::EmbedFn for AltEmbedder {
+        fn dim(&self) -> usize { self.dim }
+        fn embed(&self, _text: &str) -> Vec<f32> { vec![0.0; self.dim] }
+        fn identity(&self) -> crate::semantic::EmbedderIdentity {
+            crate::semantic::EmbedderIdentity::new(self.model.clone(), self.dim)
+        }
+    }
+
+    #[test]
+    fn p05_sidecar_written_on_first_index() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let e = fresh_embedder();
+        let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
+        let _ = std::fs::remove_file(&sidecar);
+        {
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let ep = make_episode("e1", 1, "x");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        assert!(sidecar.exists(), "sidecar 应被写出");
+        let content = std::fs::read_to_string(&sidecar).unwrap();
+        assert!(content.contains("apeireth/hash-fnva-1a/v1"), "model_name 应被持久化");
+        assert!(content.contains("32"), "dimension 应被持久化");
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn p05_reopen_same_embedder_ok() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let e = fresh_embedder();
+        {
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let ep = make_episode("e1", 1, "x");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        let e2 = fresh_embedder();
+        let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e2).unwrap();
+        assert_eq!(idx2.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(idx2.embedder_identity().dimension, 32);
+        cleanup(&path);
+        let _ = std::fs::remove_file(format!("{}.embedder.json", path.display()));
+    }
+
+    #[test]
+    fn p05_reopen_model_name_change_errors() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        {
+            let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder { dim: 32, model: "alpha".into() });
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e).unwrap();
+            let ep = make_episode("e1", 1, "x");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder { dim: 32, model: "beta".into() });
+        let result = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e);
+        assert!(result.is_err(), "model_name 改应报错");
+        cleanup(&path);
+        let _ = std::fs::remove_file(format!("{}.embedder.json", path.display()));
+    }
+
+    #[test]
+    fn p05_legacy_no_sidecar_adopts_current() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
+        let _ = std::fs::remove_file(&sidecar);
+        let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
+        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn p05_corrupt_sidecar_falls_back_to_legacy() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
+        std::fs::write(&sidecar, "not valid json {[").unwrap();
+        let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
+        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    // =====================================================================
+    // P0-6: Schema 版本 (per CURRENT_SCHEMA_VERSION)
+    // =====================================================================
+
+    #[test]
+    fn p06_current_schema_version_is_1() {
+        assert_eq!(CURRENT_SCHEMA_VERSION, 1);
+    }
+
+    #[test]
+    fn p06_open_default_schema_version() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.schema.json", path.display()));
+        let _ = std::fs::remove_file(&sidecar);
+        let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
+        assert_eq!(idx.schema_version(), CURRENT_SCHEMA_VERSION);
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn p06_schema_sidecar_written_on_first_index() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.schema.json", path.display()));
+        let _ = std::fs::remove_file(&sidecar);
+        {
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let ep = make_episode("e1", 1, "x");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        assert!(sidecar.exists(), "schema sidecar 应被写出");
+        let content = std::fs::read_to_string(&sidecar).unwrap();
+        assert_eq!(content.trim(), CURRENT_SCHEMA_VERSION.to_string());
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn p06_reopen_same_version_ok() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        {
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let ep = make_episode("e1", 1, "x");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+        assert_eq!(idx2.schema_version(), CURRENT_SCHEMA_VERSION);
+        cleanup(&path);
+        let _ = std::fs::remove_file(format!("{}.schema.json", path.display()));
+        let _ = std::fs::remove_file(format!("{}.embedder.json", path.display()));
+    }
+
+    #[test]
+    fn p06_legacy_no_sidecar_adopts_current() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.schema.json", path.display()));
+        let _ = std::fs::remove_file(&sidecar);
+        let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
+        assert_eq!(idx.schema_version(), CURRENT_SCHEMA_VERSION);
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
+    #[test]
+    fn p06_disk_schema_higher_than_current_errors() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let sidecar = std::path::PathBuf::from(format!("{}.schema.json", path.display()));
+        std::fs::write(&sidecar, (CURRENT_SCHEMA_VERSION + 1).to_string()).unwrap();
+        let result = PersistentSemanticIndex::open(mem, &path, fresh_embedder());
+        assert!(result.is_err(), "disk schema 比 current 新应报错");
+        cleanup(&path);
+        let _ = std::fs::remove_file(&sidecar);
+    }
+
 }
 
 // 内部 helper: 让 unit test 能拿到 self.memory 写 episode (不走 public API 暴露)
