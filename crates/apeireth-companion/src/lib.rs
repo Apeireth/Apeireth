@@ -52,6 +52,7 @@ pub mod organs;
 pub mod daemon;
 pub mod judicator;
 pub mod dream;
+pub mod exec_worker;
 pub mod simulation;
 pub mod actions;
 pub mod tool_bridge;
