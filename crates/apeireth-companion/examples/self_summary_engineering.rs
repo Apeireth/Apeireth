@@ -15,9 +15,9 @@ use apeireth_api::protocol_handlers::{
     OpenAiChatMessage, OpenAiChatRequest,
 };
 use apeireth_api::{Pipeline, ProtocolKind};
-use apeireth_companion::daemon::Judicator;
 use apeireth_companion::packs::PermissionPack;
 use apeireth_companion::tool_bridge::ToolBridge;
+use apeireth_companion::{ConstitutionLlm, LlmJudicator};
 use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use apeireth_tool_runtime::parser::ParsedToolCall;
 use async_trait::async_trait;
@@ -28,16 +28,62 @@ use std::time::{Duration, Instant};
 const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
 
-/// 宪法评审 (demo 简化, §6.2 待接真 LLM).
-pub struct ConstitutionJudicator;
+/// MiniMax 实现的宪法 LLM 调用 (真网络; 判案由 ToolBridge 自动执行).
+pub struct MiniMaxConstitutionLlm {
+    pipeline: Arc<Pipeline>,
+}
+
+impl MiniMaxConstitutionLlm {
+    pub fn new(api_key: String) -> Result<Self, String> {
+        let pipeline = Arc::new(
+            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
+        );
+        Ok(Self { pipeline })
+    }
+}
 
 #[async_trait]
-impl Judicator for ConstitutionJudicator {
-    async fn judge(&self, action: &str) -> Result<bool, String> {
-        let bad = ["自我复制", "L0", "绕过", "删除全部"]
-            .iter()
-            .any(|k| action.contains(k));
-        Ok(!bad)
+impl ConstitutionLlm for MiniMaxConstitutionLlm {
+    async fn ask(&self, constitution: &str, action: &str) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!(format!(
+                        "你是 Apeireth 的宪法评审员。宪法全文:\n{constitution}\n\n\
+                         任务: 判断「待审动作」是否违反宪法。不要做关键词匹配, 要判断动作的真实意图与后果。\
+                         只输出一行: ALLOW 或 BLOCK:<一句话理由>。"
+                    )),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("待审动作: {action}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.2),
+            max_tokens: Some(512),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| e.to_string())?;
+        let chat_resp = openai_chat_from_normalized(&resp);
+        for ch in &chat_resp.choices {
+            let content = ch.message.content.clone();
+            if !content.trim().is_empty() {
+                return Ok(content);
+            }
+        }
+        Err("评审 LLM 返回空".to_string())
     }
 }
 
@@ -105,7 +151,10 @@ async fn main() {
     std::fs::create_dir_all(&workdir).unwrap();
     let _ = std::fs::remove_file(&mem_path);
     let store = Arc::new(SqliteMemoryStore::open(&mem_path).expect("真 SQLite 打开"));
-    let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)));
+    let judge = Arc::new(LlmJudicator::new(Arc::new(
+        MiniMaxConstitutionLlm::new(key.clone()).expect("评审 pipeline"),
+    )));
+    let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)).with_judicator(judge));
     println!("[基地] 空记忆库 → {}", mem_path.display());
 
     // ---------- 权限台账 (调试阶段, 主人授权我代签) ----------
@@ -198,20 +247,7 @@ async fn main() {
             let risk = ToolBridge::tool_risk(&name);
             let pack_hit = bridge.packs.check_and_consume(&name, chrono::Utc::now().timestamp_millis());
             println!("  他调用 {name} (risk={risk:?}, 权限包覆盖={pack_hit}) args={}", args.to_string().chars().take(80).collect::<String>());
-            if risk == apeireth_core::RiskLevel::Medium || risk == apeireth_core::RiskLevel::High {
-                match ConstitutionJudicator.judge(&format!("调用工具 {} 参数 {}", name, args)).await {
-                    Ok(true) => {}
-                    Ok(false) => {
-                        bridge.sovereignty.report_violation("宪法评审拦截", &name);
-                        tool_msgs.push(json!({"role":"tool","tool_call_id":id,"content":"BLOCK: 宪法评审拒绝"}));
-                        continue;
-                    }
-                    Err(e) => {
-                        tool_msgs.push(json!({"role":"tool","tool_call_id":id,"content":format!("评审失败: {e}")}));
-                        continue;
-                    }
-                }
-            }
+            // 宪法评审由 ToolBridge 内部自动执行 (Medium+ → 真 LLM 按原则判案)
             let r = bridge
                 .execute_if_allowed(&ParsedToolCall {
                     tool_name: name.clone(),
