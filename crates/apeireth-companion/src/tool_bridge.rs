@@ -20,6 +20,7 @@ use apeireth_tool_runtime::parser::ParsedToolCall;
 use apeireth_tool_runtime::record::RecordStore;
 use serde_json::{json, Value};
 
+use crate::daemon::{Judicator, requires_llm_review};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
 
@@ -169,6 +170,8 @@ pub struct ToolBridge {
     pub sovereignty: SovereigntyGate,
     pub records: RecordStore,
     pub packs: PackRegistry,
+    /// 宪法评审者 (真 LLM, 可选): 配置后 Medium+ 风险自动按原则判案.
+    judicator: Option<Arc<dyn Judicator>>,
 }
 
 impl ToolBridge {
@@ -219,7 +222,15 @@ impl ToolBridge {
             sovereignty: SovereigntyGate::default(),
             records,
             packs,
+            judicator: None,
         }
+    }
+
+    /// 接宪法评审者 (真 LLM): Medium+ 风险动作执行前自动按原则判案.
+    /// BLOCK → sovereignty 记录 + 拒绝; 评审失败 → 保守拒绝 (0 装 PASS, 不放过).
+    pub fn with_judicator(mut self, judge: Arc<dyn Judicator>) -> Self {
+        self.judicator = Some(judge);
+        self
     }
 
     /// 工具风险映射 (对齐基地 8 工具真名): ShellExec → High;
@@ -261,6 +272,36 @@ impl ToolBridge {
                 error: Some(err),
                 duration_ms: 0,
             };
+        }
+        // 宪法评审 (真 LLM, 按原则判案): Medium+ 风险且配置了评审者 → 自动评审.
+        // 只审动作摘要 (action + tool + args), 不审对话/记忆自由文本.
+        if requires_llm_review(Self::tool_risk(&call.tool_name)) {
+            if let Some(judge) = &self.judicator {
+                let desc = format!("调用工具 {} 参数 {}", call.tool_name, call.args);
+                match judge.judge(&desc).await {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        self.sovereignty.report_violation("宪法评审拦截", &call.tool_name);
+                        return ExecutionResult {
+                            tool_name: call.tool_name.clone(),
+                            success: false,
+                            output: json!(null),
+                            error: Some("BLOCK: 宪法评审拒绝 (按原则判案, 非关键词)".to_string()),
+                            duration_ms: 0,
+                        };
+                    }
+                    Err(e) => {
+                        // 评审失败 → 保守拒绝 (不放过未审动作)
+                        return ExecutionResult {
+                            tool_name: call.tool_name.clone(),
+                            success: false,
+                            output: json!(null),
+                            error: Some(format!("宪法评审失败, 保守拒绝: {e}")),
+                            duration_ms: 0,
+                        };
+                    }
+                }
+            }
         }
         // 权限包检查: 被活跃包覆盖 → 免现场审批直接执行 (责任自负 + 监督兜底)
         let pack_authorized = self
@@ -452,6 +493,94 @@ mod tests {
         let r = bridge.execute_if_allowed(&bad2).await;
         assert!(!r.success, "`..` 穿越应被拦: {:?}", r.error);
         let _ = std::fs::remove_dir_all(&workdir);
+    }
+
+    #[tokio::test]
+    async fn constitution_judicator_blocks_medium_risk() {
+        use crate::daemon::Judicator;
+        struct BlockAll;
+        #[async_trait::async_trait]
+        impl Judicator for BlockAll {
+            async fn judge(&self, _a: &str) -> Result<bool, String> {
+                Ok(false)
+            }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_judicator(Arc::new(BlockAll));
+        // FileOperator (Medium) → 宪法评审 BLOCK → 拒绝
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "read", "path": "C:/x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(!r.success, "评审 BLOCK 应拒绝");
+        assert!(
+            r.error.as_deref().unwrap_or("").contains("宪法评审"),
+            "err={:?}",
+            r.error
+        );
+        // sovereignty 已记录 violation (熔断演示: 越界触碰)
+        assert!(bridge.sovereignty.is_frozen(), "BLOCK 后应触发主权熔断");
+    }
+
+    #[tokio::test]
+    async fn constitution_judicator_allows_when_judge_approves() {
+        use crate::daemon::Judicator;
+        use crate::packs::PermissionPack;
+        struct AllowAll;
+        #[async_trait::async_trait]
+        impl Judicator for AllowAll {
+            async fn judge(&self, _a: &str) -> Result<bool, String> {
+                Ok(true)
+            }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store)
+            .with_judicator(Arc::new(AllowAll));
+        bridge.packs.grant(
+            PermissionPack::timed("评审测试包", vec!["FileOperator".to_string()], 1, Some(5)),
+        );
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "write", "path": std::env::temp_dir().join("apeireth-judge-allow.txt").to_string_lossy().to_string(), "content": "x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "评审 ALLOW + 包覆盖应放行: {:?}", r.error);
+        let _ = std::fs::remove_file(std::env::temp_dir().join("apeireth-judge-allow.txt"));
+    }
+
+    #[tokio::test]
+    async fn constitution_judicator_failure_is_conservative() {
+        use crate::daemon::Judicator;
+        struct ErrJudge;
+        #[async_trait::async_trait]
+        impl Judicator for ErrJudge {
+            async fn judge(&self, _a: &str) -> Result<bool, String> {
+                Err("MiniMax suppressed".into())
+            }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_judicator(Arc::new(ErrJudge));
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "read", "path": "C:/x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(!r.success, "评审失败应保守拒绝");
+        assert!(
+            r.error.as_deref().unwrap_or("").contains("保守拒绝"),
+            "err={:?}",
+            r.error
+        );
     }
 
     #[tokio::test]
