@@ -380,7 +380,7 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
         let now = Utc::now();
         // 做梦检查 (0 阻塞: 不触发则立即返回)
         if let Some(d) = &self.dream {
-            let n = d.tick();
+            let n = d.tick().await;
             if n > 0 {
                 eprintln!("[daemon] 做梦周期: 合并写回 {n} 条记忆");
             }
@@ -393,9 +393,12 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
         }
     }
 
-    /// 一次用户交互 (任何消息): 喂节律 + 刷新最后接触.
+    /// 一次用户交互 (任何消息): 喂节律 + 刷新最后接触 + 重置做梦安静期.
     pub fn on_user_message(&mut self, at: DateTime<Utc>) {
         self.awake.observe_interaction(at);
+        if let Some(d) = &self.dream {
+            d.record_activity();
+        }
     }
 
     /// 用户对上次主动的明确反馈 (回了 / 没回).
@@ -405,6 +408,9 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
         } else {
             Feedback::Ignored
         };
+        if let Some(d) = &self.dream {
+            d.record_activity();
+        }
         self.awake.apply_feedback(f, at)
     }
 
@@ -609,6 +615,59 @@ mod tests {
             EmptyContext,
             "x",
             Duration::from_secs(1),
+        );
+    }
+
+    #[tokio::test]
+    async fn daemon_dream_resets_quiet_on_user_activity() {
+        use crate::dream::DreamScheduler;
+        use apeireth_core::clock::VirtualClock;
+        use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
+        use chrono::TimeZone;
+
+        let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap());
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        for (i, c) in ["线代: 特征值卡住", "高数: 换元忘换 dx"].iter().enumerate() {
+            store
+                .put_episode(&CoreEpisode {
+                    id: format!("mem-{i}").into(),
+                    timestamp: 1 + i as i64,
+                    role: "assistant".into(),
+                    content: c.to_string(),
+                    session_id: "me".into(),
+                })
+                .unwrap();
+        }
+        let dream = DreamScheduler::new(Arc::clone(&store), Arc::new(vc.clone()))
+            .with_quiet_threshold(Duration::from_secs(3600)); // 1h 安静才做梦
+        let mut d = CompanionDaemon::new(
+            Bond::new(),
+            Boundaries::default(),
+            NoopDelivery,
+            EmptyContext,
+            "me",
+            Duration::from_secs(60),
+        )
+        .with_dream(dream);
+
+        // 30 分钟后用户活动 → 重置安静期; 再过 30min step → 不做梦 (quiet 只过了 30min < 1h)
+        vc.advance(chrono::Duration::minutes(30));
+        d.on_user_message(vc.current());
+        vc.advance(chrono::Duration::minutes(30));
+        d.step().await;
+        let eps = store.recent_episodes("me", 100).unwrap();
+        assert!(
+            !eps.iter().any(|e| e.id.starts_with("mem-dream-")),
+            "用户活动应重置做梦安静期, 30min 后不应做梦"
+        );
+
+        // 不活动 61min → 做梦 (合并写回 1 条)
+        vc.advance(chrono::Duration::minutes(61));
+        d.step().await;
+        let eps = store.recent_episodes("me", 100).unwrap();
+        assert!(
+            eps.iter().any(|e| e.id.starts_with("mem-dream-")),
+            "长时间无互动应触发做梦"
         );
     }
 }

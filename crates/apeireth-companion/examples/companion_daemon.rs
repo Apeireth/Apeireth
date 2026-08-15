@@ -13,6 +13,7 @@
 //!   APEIRETH_LARK_APP_SECRET      (APEIRETH_SINK=lark) 飞书应用 App Secret
 //!   APEIRETH_LARK_RECEIVE_ID      (APEIRETH_SINK=lark) 会话/用户 open_id
 //!   APEIRETH_LARK_BASE_URL        (可选, 默认 https://open.feishu.cn/open-apis)
+//!   APEIRETH_DREAM=1              开启做梦: 6h 无互动触发合并+LLM 摘要 (需真 LLM)
 //!
 //! stdin: 任意内容 = 一次用户交互; "r" = 回应上次主动; "quit" = 退出.
 
@@ -25,6 +26,7 @@ use apeireth_companion::daemon::{
     CompanionDaemon, CompanionDelivery, ConsoleSink, LarkSink, ThrottledUtterance,
     UtteranceGenerator, open_memory_store,
 };
+use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
 use apeireth_companion::emergence::{Boundaries, Delivery, Initiative, LoopConfig};
 use apeireth_companion::proactive::MemoryContextSource;
 use apeireth_companion::{AwakeCompanion, Bond, BondStage};
@@ -33,6 +35,57 @@ use chrono::Utc;
 use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
+
+/// 做梦摘要器 (真 MiniMax): 把合并记忆提炼成一条 50 字内摘要.
+pub struct MiniMaxDreamSummarizer {
+    pipeline: Arc<Pipeline>,
+}
+
+#[async_trait]
+impl DreamSummarizer for MiniMaxDreamSummarizer {
+    async fn summarize(&self, merged: &str) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("你是阿佩瑞斯的记忆整理员。把「做梦合并」的记忆提炼成一条简洁摘要 (<= 50 字), 只输出摘要正文。"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("合并内容: {merged}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.4),
+            max_tokens: Some(128),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| e.to_string())?;
+        let chat_resp = openai_chat_from_normalized(&resp);
+        for ch in &chat_resp.choices {
+            let content = ch.message.content.clone();
+            if let Some(idx) = content.find("</think>") {
+                let c = content[idx + "</think>".len()..].trim().to_string();
+                if !c.is_empty() {
+                    return Ok(c);
+                }
+            } else if !content.trim().is_empty() {
+                return Ok(content.trim().to_string());
+            }
+        }
+        Err("摘要 LLM 返回空".to_string())
+    }
+}
 
 const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
@@ -125,7 +178,7 @@ async fn main() {
 
     // 生产记忆: 真 SQLite 路径 (APEIRETH_MEMORY_PATH 或默认用户数据目录), 空库从零开始长
     let store = open_memory_store().expect("打开生产记忆库失败");
-    let context = MemoryContextSource::new(store);
+    let context = MemoryContextSource::new(Arc::clone(&store));
     let subject = std::env::var("APEIRETH_SUBJECT")
         .ok()
         .filter(|s| !s.trim().is_empty())
@@ -163,8 +216,22 @@ async fn main() {
         context,
         subject,
         tick_interval: Duration::from_secs(tick_secs),
-        dream: None, // 做梦调度需注入时钟的 store, 生产 daemon 下一轮接
+        dream: None,
     };
+
+    // 做梦 (可选): APEIRETH_DREAM=1 → 6h 无互动触发合并 + LLM 摘要写回真库
+    if std::env::var("APEIRETH_DREAM").is_ok() {
+        let summarizer = Arc::new(MiniMaxDreamSummarizer {
+            pipeline: Arc::new(
+                build_pipeline(BASE_URL.to_string(), Some(load_key().expect("key"))).expect("pipeline"),
+            ),
+        });
+        let dream = DreamScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock())
+            .with_quiet_threshold(Duration::from_secs(6 * 3600))
+            .with_summarizer(summarizer);
+        daemon = daemon.with_dream(dream);
+        println!("[daemon] 做梦已开启: 6h 无互动 → 合并+LLM 摘要写回真库");
+    }
 
     // demo 种子 (诚实: 预填 7 天「现在这个时刻」的作息, 让演示立刻能看到主动)
     if std::env::var("APEIRETH_SEED_DEMO").is_ok() {
