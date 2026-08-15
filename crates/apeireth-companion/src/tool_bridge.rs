@@ -12,7 +12,7 @@
 use std::sync::Arc;
 
 use apeireth_core::{ActionTarget, ActionVerdict, RiskLevel};
-use apeireth_memory::{EpisodeQuery, EpisodeStore, SqliteMemoryStore};
+use apeireth_memory::{CoreEpisode, EpisodeQuery, EpisodeStore, SqliteMemoryStore};
 use apeireth_tool_approval::{ApprovalManager, ApprovalDecision, BlacklistRule, RiskRule, WhitelistRule};
 use apeireth_tool_registry::{Tool, ToolAxes, ToolKind, ToolRegistry};
 use apeireth_tool_runtime::executor::{ExecutionResult, ToolExecutor};
@@ -80,6 +80,63 @@ impl Tool for RecallMemoryTool {
     }
 }
 
+/// 「沉淀记忆」工具 — 基地给住客 AI 的记忆写入口 (append-only, 低危).
+///
+/// 用途: AI 自己总结对话/经历后, 主动把值得长期记住的事实写回真 SQLite.
+/// 约束: 单条 <= 500 字; 只能追加 (SQLite append-only, 无覆盖/删除).
+pub struct SaveMemoryTool {
+    store: Arc<SqliteMemoryStore>,
+}
+
+impl SaveMemoryTool {
+    pub fn new(store: Arc<SqliteMemoryStore>) -> Self {
+        Self { store }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for SaveMemoryTool {
+    fn name(&self) -> &str {
+        "save_memory"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default()
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        let content = args
+            .get("content")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "content 不能为空".to_string())?;
+        if content.chars().count() > 500 {
+            return Err("记忆内容过长 (单条 <= 500 字)".to_string());
+        }
+        let session_id = args
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or("me");
+        let ep = CoreEpisode {
+            id: format!("mem-{}", uuid::Uuid::new_v4()),
+            timestamp: chrono::Utc::now().timestamp(),
+            role: "assistant".into(),
+            content: content.to_string(),
+            session_id: session_id.to_string(),
+        };
+        self.store.put_episode(&ep).map_err(|e| e.to_string())?;
+        let preview: String = content.chars().take(40).collect();
+        Ok(json!({
+            "ok": true,
+            "id": ep.id,
+            "saved": format!("{preview}…"),
+        }))
+    }
+}
+
 /// 工具桥: 注册中心 + 洋葱门 + 审批 (黑/白/风险规则) + 执行器.
 pub struct ToolBridge {
     pub registry: Arc<ToolRegistry>,
@@ -102,15 +159,22 @@ impl ToolBridge {
         }
         registry.register(
             "recall_memory".to_string(),
-            Arc::new(RecallMemoryTool::new(store)),
+            Arc::new(RecallMemoryTool::new(Arc::clone(&store))),
+        );
+        registry.register(
+            "save_memory".to_string(),
+            Arc::new(SaveMemoryTool::new(Arc::clone(&store))),
         );
         let executor = ToolExecutor::new(registry.clone());
-        // 权限包: 默认日常包 (永久, 只读工具; 主人可 grant 自定义包扩权)
+        // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
         let packs = PackRegistry::new();
         packs.grant(PackRegistry::default_daily_pack());
         let approval = ApprovalManager::with_rules(vec![
             Box::new(BlacklistRule::with_blacklist(Vec::<String>::new(), false)),
-            Box::new(WhitelistRule::with_whitelist(["recall_memory".to_string()])),
+            Box::new(WhitelistRule::with_whitelist([
+                "recall_memory".to_string(),
+                "save_memory".to_string(),
+            ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
                 [
@@ -266,7 +330,38 @@ mod tests {
         let bridge = ToolBridge::new(store);
         let names = bridge.registry.list();
         assert!(names.iter().any(|n| n == "recall_memory"));
-        assert!(names.len() >= 5, "应含 4 真工具 + recall_memory, 实际 {}: {:?}", names.len(), names);
+        assert!(names.iter().any(|n| n == "save_memory"));
+        assert!(names.len() >= 6, "应含 4 真工具 + recall_memory + save_memory, 实际 {}: {:?}", names.len(), names);
+    }
+
+    #[tokio::test]
+    async fn save_memory_then_recall_finds_it() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(Arc::clone(&store));
+        let call = ParsedToolCall {
+            tool_name: "save_memory".into(),
+            args: json!({"content": "AI 自己总结: 主人明天要交线代作业, 矩阵的秩那节还没做完", "session_id": "me"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "err = {:?}", r.error);
+        assert_eq!(r.output["ok"], json!(true));
+        // 写进去的能被 recall 捞到 (append-only 真库)
+        let eps = store.recent_episodes("me", 10).unwrap();
+        assert_eq!(eps.len(), 1);
+        assert!(eps[0].content.contains("线代作业"));
+        // 空 content 被拒
+        let bad = ParsedToolCall {
+            tool_name: "save_memory".into(),
+            args: json!({"content": ""}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&bad).await;
+        assert!(!r.success);
     }
 
     #[tokio::test]
