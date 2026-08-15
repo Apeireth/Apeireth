@@ -75,7 +75,7 @@ pub use packs::{PackExpiry, PackRegistry, PermissionPack};
 pub use proactive::{ContextSource, EmptyContext, LarkDelivery, MemoryContextSource, ProactiveDriver};
 pub use organs::AwakeCompanion;
 pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
-pub use daemon::{CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, NoopJudicator, PlainUtterance, Sink, UtteranceGenerator, requires_llm_review};
+pub use daemon::{CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
 
 /// 伙伴器官根类型 —— 全部关系状态的持有者
 ///
