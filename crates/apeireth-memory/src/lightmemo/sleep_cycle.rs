@@ -61,6 +61,11 @@ impl SleepCycle {
         *self.last_activity.lock().expect("poisoned") = self.clock.now();
     }
 
+    /// 覆盖安静期阈值 (运行期可调, daemon 接做梦时用于「夜间」语义).
+    pub fn set_quiet_threshold(&mut self, quiet: Duration) {
+        self.config.quiet_threshold = quiet;
+    }
+
     /// Record an item addition.
     pub fn record_item_added(&self) {
         *self.items_since_last_cycle.lock().expect("poisoned") += 1;

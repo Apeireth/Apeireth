@@ -56,6 +56,13 @@ impl DreamScheduler {
         self
     }
 
+    /// 覆盖安静期阈值 (默认 60s). daemon 场景建议调大 (如 6h) — 「睡觉」语义:
+    /// 长时间无互动才做梦, 用户活动会重置安静期.
+    pub fn with_quiet_threshold(mut self, quiet: std::time::Duration) -> Self {
+        self.sleep.set_quiet_threshold(quiet);
+        self
+    }
+
     /// 覆盖记忆 session (默认 "me").
     pub fn with_session(mut self, session: impl Into<String>) -> Self {
         self.session = session.into();
