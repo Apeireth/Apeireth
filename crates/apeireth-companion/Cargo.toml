@@ -34,6 +34,7 @@ apeireth-sovereignty = { path = "../apeireth-sovereignty" }
 [dev-dependencies]
 tokio = { workspace = true }
 apeireth-api = { path = "../apeireth-api" }
+reqwest = { workspace = true }
 
 [lib]
 name = "apeireth_companion"
