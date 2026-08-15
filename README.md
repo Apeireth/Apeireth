@@ -1,3 +1,12 @@
+> **R178 (2026-08-15)**: 后端完工补丁 - 修 2 阻断 (apeireth-evolution lib.rs 218 行重复 mod + integration-e2e LOCKED_CRATES relation→graph-primitive) + 加 `GET /health/deps` 端点 (5 deps + 8 tests) + ADR-0028/0029/0030 命名/observability/version 治理. **workspace 22404 cargo tests PASS / 0 failed / 70 ignored**. 0 触摸 24 LOCKED crate + workspace version 1.2.0. 详见 `docs/r178/r178-backend-completion-2026-08-15.md` + `scripts/save_handover.py` §24.
+> **R177 (2026-08-15)**: 形式化加深 V3 — 79 crates 加 organ_kani_proofs.rs (5 cargo tests + 2 Kani proofs), **518 tests PASS** total, 0 workspace 回退. 详见 docs/r177/r177-v3-w6-w12.md + scripts/save_handover.py §23.
+> **R176 (2026-08-15)**: 后端终极目标 4 阶段推进 — anysearch 真接 LIVE + LlmFacade 统一接入 + http_dispatch 6 Provider 统一调度. 详见 docs/r176/r176-ultimate-goal-4-phases.md.
+> **R175 (2026-08-13)**: R170-R174 终极目标进度盘点 + 5 P0 fix 闭环 (ADR-0028 命名桥接 / ADR-0030 version 治理 / ADR-0031 evolution 限制 / ADR-0033 LlmFacade facade). 详见 docs/r175/r175-session-summary.md.
+> **R174 (2026-08-14)**: 后端综合审计 + 7 大文档漂移 + 5 P0 修法 (ADR-0028/0029/0030/0031/0033) + bridge_table.rs (8 tests) + 4 件后端集成完比. **1009 tests PASS**. 详见 `docs/audit/R174-comprehensive-audit.md` + `scripts/save_handover.py` §18.
+> **R173 (2026-08-14)**: "放最后" 模块接口盘点 (4 模块: STT/声纹/唤醒词/生图) + 7 条桥全部落地 (74 tests PASS: consciousness→cognition/life-force/motivation/voice/companion + life-force→motivation + memory→consciousness + companion→voice). 详见 `docs/r173/r173-deferred-interfaces-audit.md`.
+> **R172 (2026-08-13)**: apeireth-voice MiniMax LIVE TTS 真接 (122KB MP3 ID3 header 确认). 详见 `docs/r172/r172-minimax-live-voice.md`.
+> **R171 (2026-08-13)**: SurrealDB 多模型后端调研 (research-only, 30K+ stars, doc+graph+vector+time-series+full-text, embedded 模式可作 lib 直链). 结论: 调研保留作 P2 选项, R172+ 优先 MiniMax LIVE. 详见 `docs/r171/r171-surrealdb-research.md`.
+> **R170 (2026-08-13)**: followup-checkpoint integration. 详见 `docs/session/checkpoint-2026-08-14.md`.
 > **R169 (2026-08-13)**: 41 e2e tests all pass with LIVE apikey. `cargo run -p apeireth-integration-e2e --example integration_e2e_demo` -> 41/41 (workspace 5/5 + API 21/21 + TUI 15/15). Full backend chain validated. See `docs/r169/r169-e2e-demo-all-41-pass.md`.
 
 > **R168 (2026-08-13)**: LIVE MiniMax-M3 end-to-end verification. Tested `cargo run -p apeireth-cli --example minimax_chat` with apikey from `.openclaw\apikey.txt` (minimax provider). HTTP 200, 5.5s latency / 680 tokens total (cold), 1.1s / 211 tokens (warm). Confirms full backend chain (pipeline + Keep-Alive LIFO + 4-protocol dispatch + reqwest + MinimaxProvider descriptor) works against live provider. Also added R166 banner section to 10 affected crates READMEs. See `docs/r168/r168-live-verification-and-doc-consistency.md`.
@@ -44,7 +53,7 @@
 
 > **R148 (2026-08-13)**: 24 LOCKED 形式撤销扫尾. Cargo.toml metadata + `docs/conventions/10-locked.md` + `docs/omnibus/24-locked-crates.md` 全部标记 R148 状态 (`0 约束力`, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache). 修 3 个 pre-existing test bugs: `apeireth-bus::ChannelSet::to_vec` bit-based 重写 (旧 `contains(Both)` 对 `BOTH = 0b011` 返回 true, 重复加入 Both), `apeireth-consciousness::EmotionEngine::response_style` 改用 `history.back()` 而非 PAD 距离重算 (避免中性偏置下 dominant 错位), `apeireth-council::group_chat::tests::t01_role_count` 改用 `Participant::new(..., role).can_speak()` (`can_speak` 是 Participant 的方法不是 ParticipantRole). 累计验证: `cargo test -p apeireth-runtime` 10/10, `apeireth-bus` 24/24, `apeireth-consciousness` 31/31.
 
-> **R147 (2026-08-13)**: 新增 `apeireth-runtime` crate — 7 模块 (HeartbeatScheduler / AsyncTaskStore / ChanneledBus / ArbitrationLog / SearchEngine / GroupChat / EmotionEngine) 端到端 orchestration 串成单一可运行 runtime. 10 单元测试全过, 8 stage demo <1s 跑通. `MODULES_ORCHESTRATED = 7` 编译期守门. LivingCycleHeartbeat 自动驱动 scheduler → AsyncTask → Bus publish → 仲裁 → 搜索 → 群聊 → 情感 闭环. 非破坏增强: GroupChat `+#[derive(Clone)]` + 2 helper fn; consciousness `emotion::*` 8 项顶层 re-export; EmotionEngine `set_baseline()` 运行时改 baseline. 见 `crates/apeireth-runtime/README.md` + `docs/architecture-v4-2-r145-modules/`.
+> **R147 (2026-08-13)**: 新增 `apeireth-runtime` crate — 7 模块 (HeartbeatScheduler / AsyncTaskStore / ChanneledBus / ArbitrationLog / SearchEngine / GroupChat / EmotionEngine) 端到端 orchestration 串成单一可运行 runtime. 10 单元测试全过, 8 stage demo <1s 跑通. `MODULES_ORCHESTRATED = 7` 编译期守门. LivingCycleHeartbeat 自动驱动 scheduler → AsyncTask → Bus publish → 仲裁 → 搜索 → 群聊 → 情感 闭环. 非破坏增强: GroupChat `+#[derive(Clone)]` + 2 helper fn; consciousness `emotion::*` 8 项顶层 re-export; EmotionEngine `set_baseline()` 运行时改 baseline. 见 `crates/apeireth-runtime/README.md` + `docs/stage2/architecture-v4-2-r145-modules/`.
 
 > **R146 (2026-08-12)**: 优雅化总修复. `apeireth-vcp-bridge` → `apeireth-protocol-bridge` (去竞品名). 5 SDK → 1 `apeireth-sdk` (feature flags). 3 内存 → 1 `apeireth-memory` (dailynote/lightmemo 子模块). tauri-stub 冻结. 12 缺 README 补. V0.5 30→24 维修正. v4.2 哲学文档 8 文件. 9-锚映射 + 16-crate-merge-policy §6/§7.
 > **R145 (2026-08-12)**: VCP 终极差距补弱完工. 7 模块 (3 新 crate + 4 扩模块) 全部 0 errors, 67+ 单元测试. 涵盖三套通知系统 / 异步任务推送 / HASH-SQL 仲裁 / AI 自驱心跳 / VSearch 全文聚合 / OpenHer 情感引擎 / 跨 Agent 群聊. 详单 `temp/r145_final_report.md`.
@@ -346,8 +355,8 @@ https://api.minimaxi.com/anthropic/v1/messages
 | 指标 | 值 |
 |---|---|
 | workspace.version | 1.2.0 (semver 严守) |
-| active crate | 75 (R146 进一步收敛, 5 SDK + 3 内存合并) |
-| archived/frozen | 18 (`crates/_frozen/` 13 + `crates/_archived/` 5) |
+| active crate | 81 (80 顶层 + apeireth-memory/extensions 嵌套成员, 无孤儿) |
+| archived/frozen | 27 (`crates/_frozen/` 13 + `crates/_archived/` 14) |
 | tests | 4921 passed / 88 suites / 0 failed |
 | 24 LOCKED | 入口签名冻结降级为历史 (R128), 仅保 3 项不可变脊柱 |
 | 13 键 verdict cache | 12 + PHL-07 = 13, 编译期 hardcode |
@@ -380,6 +389,10 @@ https://api.minimaxi.com/anthropic/v1/messages
 - 合并策略: [`docs/conventions/16-crate-merge-policy.md`](docs/conventions/16-crate-merge-policy.md)
 - 端到端: [`reports/minimax-end-to-end-r128-2026-08-12.md`](reports/minimax-end-to-end-r128-2026-08-12.md)
 - 决策链: [`reports/decision-*.md`](reports/) (37 个决策, decision-22 ~ decision-130+)
+- 灵魂 (顶层 + 产品设计): [`docs/stage1/README.md`](docs/stage1/README.md) — 哲学 / 愿景 / 洋葱 / 器官 / 产品闭环
+- 决策 (具体想法): [`docs/stage2/README.md`](docs/stage2/README.md) — 架构决策 / 调研 / 模块设计
+- 产品闭环设计: [`docs/stage1/product-loop-design.md`](docs/stage1/product-loop-design.md)
+- 文档归位映射: [`docs/document-relocation-map.md`](docs/document-relocation-map.md)
 
 ---
 
@@ -1520,7 +1533,7 @@ Total: 20599 passed, 0 failed
 
 **不假装**: R135 阶段 0 触碰 TUI 代码, 仅写 1 份 design doc 阐明 TUI 如何接入已就绪后端.
 
-**design doc 位置**: `docs/tui-r135-integration-design.md` (~3.5KB)
+**design doc 位置**: `docs/stage2/tui-r135-integration-design.md` (~3.5KB)
 
 **TUI 接入清单**:
 
@@ -1556,7 +1569,7 @@ Total: 20599 passed, 0 failed
 - [x] cargo test --workspace 20599/20599 PASS, 0 失败
 - [x] 5 战区 e2e 5/5 (R131.7 + R132.6)
 - [x] 11 R133 e2e + 30+ unit + 441 telemetry + 40 SDK + 5 R134 = **527+ 测试 PASS**
-- [x] TUI 接入 design doc (`docs/tui-r135-integration-design.md`)
+- [x] TUI 接入 design doc (`docs/stage2/tui-r135-integration-design.md`)
 - [ ] TUI 接入 R135+ (等主人拍板 8 处 UI 改动优先级)
 - [ ] R135+ commit + tag (等主人执行)
 

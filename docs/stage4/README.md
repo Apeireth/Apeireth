@@ -94,3 +94,13 @@ _🟡 辅助 = 4 个 patches / 灵感 / 思考文档._
 _🔴 替代 = architecture-stage4-engineering-landing.md（已被 v2 修订替代，保留作历史）._
 _§"关键诚实"明确 crates/ 未落地，sketch ≠ 实现._
 _主哲学 6 锚穿透. 任何接手者能查._
+
+---
+
+## 🆕 归位整理 (2026-08-15)
+
+**本目录已整理** (主人拍板, 详见 `docs/document-relocation-map.md`):
+
+- **根目录保留 5 份核心 + README**: stage4-runtime-architecture-revised / stage4-external-feedback-and-revisions / architecture-stage4-engineering-landing / stage4-patches-v2-crate-correction / architecture-stage4-patches。
+- **4 份顶层/产品设计 → docs/stage1/**: architecture-frontend-design-proposal / global-architecture-map-2026-08-05 / architecture-stage4-inspiration-supplements / stage4-thinking-document。
+- **47 份施工历史 → `_history/` (6 桶)**: corrections(13) / r19-r20-integration(9) / spectrai(4) / audits-reviews(12) / blueprints-guides(6) / sop-governance(3)。
