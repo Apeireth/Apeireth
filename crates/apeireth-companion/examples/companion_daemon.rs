@@ -163,6 +163,7 @@ async fn main() {
         context,
         subject,
         tick_interval: Duration::from_secs(tick_secs),
+        dream: None, // 做梦调度需注入时钟的 store, 生产 daemon 下一轮接
     };
 
     // demo 种子 (诚实: 预填 7 天「现在这个时刻」的作息, 让演示立刻能看到主动)

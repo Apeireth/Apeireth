@@ -10,9 +10,10 @@
 
 use apeireth_companion::emergence::RhythmEstimator;
 use apeireth_companion::packs::{PackExpiry, PackRegistry, PermissionPack};
+use apeireth_companion::DreamScheduler;
 use apeireth_core::clock::{Clock, VirtualClock};
 use apeireth_memory::lightmemo::{DreamSubsystem, SleepConfig, SleepCycle};
-use apeireth_memory::{ReflectionCycleScheduler, ReflectionPhase};
+use apeireth_memory::{CoreEpisode, EpisodeStore, ReflectionCycleScheduler, ReflectionPhase, SqliteMemoryStore};
 use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
@@ -31,7 +32,7 @@ fn main() {
     println!("══════════════════════════════════════════════════════\n");
 
     // ---------- 1. 做梦机制 ----------
-    println!("【做梦机制】SleepCycle 安静期触发 → DreamSubsystem 合并");
+    println!("【做梦机制】SleepCycle 安静期触发 → DreamSubsystem 合并 → 写回真库");
     let sleep = SleepCycle::with_config_and_clock(
         SleepConfig {
             quiet_threshold: std::time::Duration::from_secs(60),
@@ -67,6 +68,31 @@ fn main() {
     check("重置后不触发", !sleep.should_consolidate(), "reset_after_cycle 清零".to_string());
     vc.advance(chrono::Duration::seconds(61));
     check("第二夜再触发", sleep.should_consolidate(), "advance 61s 后再做梦".to_string());
+
+    // 端到端: DreamScheduler 合并写回真 SQLite (虚拟时钟驱动)
+    println!("\n  -- DreamScheduler 端到端: 合并写回真库 --");
+    let dream_store = Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap());
+    for (i, c) in items.iter().enumerate() {
+        dream_store
+            .put_episode(&apeireth_memory::CoreEpisode {
+                id: format!("mem-{i}"),
+                timestamp: i as i64,
+                role: "assistant".into(),
+                content: c.clone(),
+                session_id: "me".into(),
+            })
+            .unwrap();
+    }
+    let sched = DreamScheduler::new(Arc::clone(&dream_store), Arc::new(vc.clone()));
+    vc.advance(chrono::Duration::seconds(61));
+    let merged_n = sched.tick();
+    let eps = dream_store.recent_episodes("me", 100).unwrap();
+    let dream_eps: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+    check(
+        "DreamScheduler 合并写回真库",
+        merged_n == 2 && dream_eps.len() == 2 && dream_eps[0].content.contains("◆"),
+        format!("合并 {merged_n} 条 → 写回 {} 条 (content 含 ◆)", dream_eps.len()),
+    );
     println!();
 
     // ---------- 2. 权限包时间 ----------

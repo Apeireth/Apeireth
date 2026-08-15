@@ -51,6 +51,7 @@ pub mod proactive;
 pub mod organs;
 pub mod daemon;
 pub mod judicator;
+pub mod dream;
 pub mod simulation;
 pub mod actions;
 pub mod tool_bridge;
@@ -78,6 +79,7 @@ pub use organs::AwakeCompanion;
 pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
 pub use daemon::{CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
 pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
+pub use dream::DreamScheduler;
 
 /// 伙伴器官根类型 —— 全部关系状态的持有者
 ///
