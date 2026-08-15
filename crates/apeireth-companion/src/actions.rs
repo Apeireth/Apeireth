@@ -49,7 +49,7 @@ impl Action {
 pub struct CapabilityCatalog;
 
 impl CapabilityCatalog {
-    /// 基地自述 (注入 LLM 上下文; 诚实标注「已接入动作空间」vs「工具待接入」).
+    /// 基地自述 (注入 LLM 上下文; 诚实列出已接工具).
     pub fn describe() -> String {
         let mut s = String::new();
         s.push_str("你的基地 (Apeireth) 给了你这些能力:\n");
@@ -57,7 +57,14 @@ impl CapabilityCatalog {
         s.push_str("- 询问进展: 记得用户正在做的事, 问问他进度\n");
         s.push_str("- 提议帮助: 用户在学数学/搞工程时, 主动提出帮忙\n");
         s.push_str("- 提醒: 从长期记忆里捞出用户可能忘掉的事\n");
-        s.push_str("- (下一步接入) 真工具: 基地还有搜索/文件/浏览器等工具, 接入后你可以直接调用它们帮用户干活");
+        s.push_str("- 真工具 (已接入, 可直接调用帮用户干活):\n");
+        s.push_str("  - recall_memory: 检索用户的长期记忆 (按关键词)\n");
+        s.push_str("  - save_memory: 把值得长期记住的事实自己总结后写入记忆 (append-only)\n");
+        s.push_str("  - WebSearch / WebFetch: 联网搜索与抓取\n");
+        s.push_str("  - FileOperator: 文件读写 (受权限包约束, 只写获准的路径)\n");
+        s.push_str("  - Git: 版本库操作 (受审批)\n");
+        s.push_str("  - Grep: 代码/文本搜索 (限定项目根)\n");
+        s.push_str("- 安全: 所有工具调用过洋葱门 + 权限包 + 审批 + 审计留痕; 高危动作(执行代码/改仓库)需要主人批准\n");
         s
     }
 
