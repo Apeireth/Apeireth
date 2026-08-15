@@ -9,7 +9,9 @@
 //!
 //! 诚实: 审批的「需主人批准」在主动循环里 = 「不自主执行, 如实告诉住客 AI 需要主人」.
 
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
 use apeireth_core::{ActionTarget, ActionVerdict, RiskLevel};
 use apeireth_memory::{CoreEpisode, EpisodeQuery, EpisodeStore, SqliteMemoryStore};
@@ -172,6 +174,8 @@ pub struct ToolBridge {
     pub packs: PackRegistry,
     /// 宪法评审者 (真 LLM, 可选): 配置后 Medium+ 风险自动按原则判案.
     judicator: Option<Arc<dyn Judicator>>,
+    /// 执行体隔离: worker 可执行文件路径 (None = 不隔离, 宿主内执行).
+    worker: Option<PathBuf>,
 }
 
 impl ToolBridge {
@@ -223,6 +227,7 @@ impl ToolBridge {
             records,
             packs,
             judicator: None,
+            worker: None,
         }
     }
 
@@ -230,6 +235,14 @@ impl ToolBridge {
     /// BLOCK → sovereignty 记录 + 拒绝; 评审失败 → 保守拒绝 (0 装 PASS, 不放过).
     pub fn with_judicator(mut self, judge: Arc<dyn Judicator>) -> Self {
         self.judicator = Some(judge);
+        self
+    }
+
+    /// 开启执行体隔离: MOVE 类工具 (文件/进程/代码等有副作用) 剥离到 per-call 子进程执行.
+    /// `worker_bin` = `exec_worker` 可执行文件路径 (测试用 `env!("CARGO_BIN_EXE_exec_worker")`).
+    /// 安全判断 (洋葱门/宪法评审/权限包/路径约束) 仍在宿主完成, 子进程只执行已批准操作.
+    pub fn with_isolation(mut self, worker_bin: impl Into<PathBuf>) -> Self {
+        self.worker = Some(worker_bin.into());
         self
     }
 
@@ -335,10 +348,10 @@ impl ToolBridge {
             }
         }
         let r = if pack_authorized {
-            self.executor.execute(call).await
+            self.run_executor(call).await
         } else {
             match self.approval.check(call) {
-                ApprovalDecision::Allow => self.executor.execute(call).await,
+                ApprovalDecision::Allow => self.run_executor(call).await,
                 ApprovalDecision::RequireApproval { .. } => {
                     return ExecutionResult {
                         tool_name: call.tool_name.clone(),
@@ -376,6 +389,97 @@ impl ToolBridge {
             .record(call, &masked_output, !pii.is_empty())
             .await;
         r
+    }
+
+    /// 执行器入口: 隔离模式 + MOVE 工具 → per-call 子进程; 否则宿主执行器.
+    async fn run_executor(&self, call: &ParsedToolCall) -> ExecutionResult {
+        if let Some(worker) = &self.worker {
+            if crate::exec_worker::should_isolate(&call.tool_name) {
+                return self.execute_isolated(worker, call).await;
+            }
+        }
+        self.executor.execute(call).await
+    }
+
+    /// per-call 子进程执行: 一行 JSON 请求 → 一行响应, 30s 超时 kill.
+    async fn execute_isolated(&self, worker: &PathBuf, call: &ParsedToolCall) -> ExecutionResult {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+        let start = std::time::Instant::now();
+        let err_res = |msg: String, start: std::time::Instant| ExecutionResult {
+            tool_name: call.tool_name.clone(),
+            success: false,
+            output: json!(null),
+            error: Some(msg),
+            duration_ms: start.elapsed().as_millis() as u64,
+        };
+        let mut child = match tokio::process::Command::new(worker)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
+            .spawn()
+        {
+            Ok(c) => c,
+            Err(e) => return err_res(format!("worker spawn 失败: {e}"), start),
+        };
+        let mut stdin = match child.stdin.take() {
+            Some(s) => s,
+            None => return err_res("worker stdin 不可用".into(), start),
+        };
+        let req = format!("{}\n", json!({"tool": call.tool_name, "args": call.args}));
+        if let Err(e) = stdin.write_all(req.as_bytes()).await {
+            let _ = child.kill().await;
+            return err_res(format!("写 worker 请求失败: {e}"), start);
+        }
+        drop(stdin);
+        let stdout = match child.stdout.take() {
+            Some(s) => s,
+            None => return err_res("worker stdout 不可用".into(), start),
+        };
+        let line = match tokio::time::timeout(Duration::from_secs(30), async {
+            let mut r = tokio::io::BufReader::new(stdout);
+            r.lines().next_line().await
+        })
+        .await
+        {
+            Ok(Ok(Some(l))) => l,
+            Ok(Ok(None)) => {
+                let _ = child.kill().await;
+                return err_res("worker 无响应 (提前退出)".into(), start);
+            }
+            Ok(Err(e)) => {
+                let _ = child.kill().await;
+                return err_res(format!("读 worker 响应失败: {e}"), start);
+            }
+            Err(_) => {
+                let _ = child.kill().await;
+                return err_res("worker 超时 (30s), 已 kill".into(), start);
+            }
+        };
+        let _ = child.wait().await;
+        let resp: serde_json::Value = serde_json::from_str(&line)
+            .unwrap_or(json!({"ok": false, "error": format!("worker 响应非法: {line}")}));
+        let dur = start.elapsed().as_millis() as u64;
+        if resp["ok"] == json!(true) {
+            ExecutionResult {
+                tool_name: call.tool_name.clone(),
+                success: true,
+                output: resp["output"].clone(),
+                error: None,
+                duration_ms: dur,
+            }
+        } else {
+            ExecutionResult {
+                tool_name: call.tool_name.clone(),
+                success: false,
+                output: json!(null),
+                error: resp
+                    .get("error")
+                    .and_then(|e| e.as_str())
+                    .map(|s| s.to_string())
+                    .or_else(|| Some("worker 返回失败".to_string())),
+                duration_ms: dur,
+            }
+        }
     }
 
     /// 给住客 AI 的工具调用格式说明 (注入 LLM system prompt).
