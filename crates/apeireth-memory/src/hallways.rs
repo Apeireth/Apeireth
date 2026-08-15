@@ -28,7 +28,10 @@
 //! ## 用法
 //! ```rust,no_run
 //! use apeireth_memory::hallways::{compute_hallways_for_wing, list_hallways};
+//! use apeireth_memory::SqliteMemoryStore;
+//! use std::sync::Arc;
 //!
+//! let store = Arc::new(SqliteMemoryStore::open_in_memory()?);
 //! let created = compute_hallways_for_wing(&store, "memory-palace", 2)?;
 //! println!("created {} new hallways", created.len());
 //! let all = list_hallways(&store, None)?;

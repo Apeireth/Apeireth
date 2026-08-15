@@ -19,12 +19,15 @@
 //! ## 用法
 //! ```rust,no_run
 //! use apeireth_memory::dedup::{dedup_session, default_threshold};
-//! use apeireth_memory::semantic::HashEmbedder;
+//! use apeireth_memory::semantic::{EmbedFn, HashEmbedder};
+//! use apeireth_memory::SqliteMemoryStore;
 //! use std::sync::Arc;
 //!
+//! let store = Arc::new(SqliteMemoryStore::open_in_memory()?);
 //! let embedder: Arc<dyn EmbedFn> = Arc::new(HashEmbedder::new(64));
 //! let report = dedup_session(&store, "session-1", default_threshold(), embedder)?;
 //! println!("kept {} deleted {}", report.kept.len(), report.deleted.len());
+//! # Ok::<(), apeireth_memory::MemoryError>(())
 //! ```
 
 use std::sync::Arc;
