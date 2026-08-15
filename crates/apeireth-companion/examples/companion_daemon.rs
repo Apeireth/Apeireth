@@ -1,10 +1,18 @@
-//! companion_daemon — 总装: 全器官 + 真 MiniMax 渲染 + 控制台通道, 常驻运行.
+//! companion_daemon — 总装: 全器官 + 真 MiniMax 渲染 + 生产记忆 (真 SQLite) + 通道, 常驻运行.
 //!
 //! 环境变量:
-//!   APEIRETH_API_KEY      MiniMax key (或读 apikey-ultra.txt)
-//!   APEIRETH_TICK_SECS    心跳间隔秒 (默认 60)
-//!   APEIRETH_MAX_TICKS    跑 N 轮后退出 (默认无限)
-//!   APEIRETH_SEED_DEMO=1  demo 种子: 预填最近 7 天「现在这个时刻」的作息观察 (诚实标注)
+//!   APEIRETH_API_KEY              MiniMax key (或读 apikey-ultra.txt)
+//!   APEIRETH_TICK_SECS            心跳间隔秒 (默认 60)
+//!   APEIRETH_MAX_TICKS            跑 N 轮后退出 (默认无限)
+//!   APEIRETH_SEED_DEMO=1          demo 种子: 预填最近 7 天「现在这个时刻」的作息观察 (诚实标注)
+//!   APEIRETH_MEMORY_PATH          记忆库 SQLite 路径 (默认 %APPDATA%\apeireth\memory.sqlite)
+//!   APEIRETH_SUBJECT              记忆检索用的 continuity/session id (默认 "me")
+//!   APEIRETH_MIN_LLM_INTERVAL_SECS 两次主动 (LLM 渲染) 最短间隔秒 (默认 60)
+//!   APEIRETH_SINK=lark            送达通道: lark → 飞书 (需 APEIRETH_LARK_* 凭据), 默认 console
+//!   APEIRETH_LARK_APP_ID          (APEIRETH_SINK=lark) 飞书应用 App ID
+//!   APEIRETH_LARK_APP_SECRET      (APEIRETH_SINK=lark) 飞书应用 App Secret
+//!   APEIRETH_LARK_RECEIVE_ID      (APEIRETH_SINK=lark) 会话/用户 open_id
+//!   APEIRETH_LARK_BASE_URL        (可选, 默认 https://open.feishu.cn/open-apis)
 //!
 //! stdin: 任意内容 = 一次用户交互; "r" = 回应上次主动; "quit" = 退出.
 
@@ -14,11 +22,12 @@ use apeireth_api::protocol_handlers::{
 };
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, ConsoleSink, UtteranceGenerator,
+    CompanionDaemon, CompanionDelivery, ConsoleSink, LarkSink, ThrottledUtterance,
+    UtteranceGenerator, open_memory_store,
 };
-use apeireth_companion::emergence::{Boundaries, Initiative};
-use apeireth_companion::proactive::EmptyContext;
-use apeireth_companion::{Bond, BondStage};
+use apeireth_companion::emergence::{Boundaries, Delivery, Initiative, LoopConfig};
+use apeireth_companion::proactive::MemoryContextSource;
+use apeireth_companion::{AwakeCompanion, Bond, BondStage};
 use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::json;
@@ -113,16 +122,48 @@ async fn main() {
 
     let mut bond = Bond::new();
     bond.evolve(BondStage::Trusted, 0.6);
-    let utter = MiniMaxUtterance::new(load_key().expect("需要 API key")).expect("build pipeline");
-    let delivery = CompanionDelivery::new(utter, ConsoleSink);
-    let mut daemon = CompanionDaemon::new(
-        bond,
-        Boundaries::default(),
-        delivery,
-        EmptyContext,
-        "me",
-        Duration::from_secs(tick_secs),
+
+    // 生产记忆: 真 SQLite 路径 (APEIRETH_MEMORY_PATH 或默认用户数据目录), 空库从零开始长
+    let store = open_memory_store().expect("打开生产记忆库失败");
+    let context = MemoryContextSource::new(store);
+    let subject = std::env::var("APEIRETH_SUBJECT")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "me".to_string());
+
+    // LLM 节流: 机制层门禁 (LoopConfig.min_llm_interval) + 渲染层退避 (ThrottledUtterance)
+    // —— MiniMax 对连续调用限流 (suppressed, 2026-08-15 生产力实测), 双层防护
+    let min_llm_interval = Duration::from_secs(
+        std::env::var("APEIRETH_MIN_LLM_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(60),
     );
+    let mut config = LoopConfig::default();
+    config.min_llm_interval = min_llm_interval;
+    let awake = AwakeCompanion::new(bond, Boundaries::default()).with_config(config);
+
+    let utter = MiniMaxUtterance::new(load_key().expect("需要 API key")).expect("build pipeline");
+    let utter = ThrottledUtterance::new(utter, min_llm_interval);
+
+    // 通道: APEIRETH_SINK=lark → 真飞书 (需凭据); 默认 console
+    let sink_mode = std::env::var("APEIRETH_SINK").unwrap_or_default();
+    let delivery: Box<dyn Delivery> = if sink_mode.trim() == "lark" {
+        let sink = LarkSink::from_env().expect(
+            "APEIRETH_SINK=lark 需要 APEIRETH_LARK_APP_ID / APEIRETH_LARK_APP_SECRET / APEIRETH_LARK_RECEIVE_ID",
+        );
+        Box::new(CompanionDelivery::new(utter, sink))
+    } else {
+        Box::new(CompanionDelivery::new(utter, ConsoleSink))
+    };
+
+    let mut daemon = CompanionDaemon {
+        awake,
+        delivery,
+        context,
+        subject,
+        tick_interval: Duration::from_secs(tick_secs),
+    };
 
     // demo 种子 (诚实: 预填 7 天「现在这个时刻」的作息, 让演示立刻能看到主动)
     if std::env::var("APEIRETH_SEED_DEMO").is_ok() {
