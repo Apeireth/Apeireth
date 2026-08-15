@@ -40,6 +40,11 @@ reqwest = { workspace = true }
 name = "apeireth_companion"
 path = "src/lib.rs"
 
+# 执行体隔离 worker: 高危工具 per-call 子进程 (被 ToolBridge 隔离模式 spawn)
+[[bin]]
+name = "exec_worker"
+path = "src/bin/exec_worker.rs"
+
 [[example]]
 name = "companion_demo"
 path = "examples/companion_demo.rs"
