@@ -121,12 +121,13 @@ impl PackRegistry {
         }
     }
 
-    /// 默认日常包 (永久, 只读工具集; 主人可自定义扩权).
+    /// 默认日常包 (永久, 只读工具集 + 记忆写; 主人可自定义扩权).
     pub fn default_daily_pack() -> PermissionPack {
         PermissionPack::permanent(
             "日常包",
             vec![
                 "recall_memory".to_string(),
+                "save_memory".to_string(),
                 "WebSearch".to_string(),
                 "Grep".to_string(),
                 "WebFetch".to_string(),
