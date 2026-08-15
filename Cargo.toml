@@ -1,8 +1,9 @@
-﻿[workspace]
+[workspace]
 resolver = "2"
 members = [
     "crates/apeireth-core",
     "crates/apeireth-memory",
+    "crates/apeireth-llm-iface",  # R179 P0-3: LLM iface (拆 memory<->api 编译期边)
     "crates/apeireth-asi",
     "crates/apeireth-telemetry",  # R35: observability 4 umbrella (cache/observability/metrics/tracing facade)
     "crates/apeireth-provider",  # R35+R36: 5 Provider 真合并, 5 老 crate (.bak) 已删
@@ -16,12 +17,16 @@ members = [
     "crates/apeireth-central",
     "crates/apeireth-value",       # R37-2: transparent re-export 到 motivation
     "crates/apeireth-consciousness", # R37-2: transparent re-export 到 perception
-    "crates/apeireth-relation",
+    "crates/apeireth-graph-primitive",
+    "crates/apeireth-companion",
     "crates/apeireth-skills",
     "crates/apeireth-acp",
     "crates/apeireth-cron",
     "crates/apeireth-test",
     "crates/apeireth-eval",
+    "crates/apeireth-experience",  # R173 stage2 §3: experience layer
+    "crates/apeireth-gateway",  # R174 stage 6 §3: OpenClaw-mode single long-lived gateway
+    "crates/apeireth-environment",  # R173 stage2 §3: 6 terminal backends
     "crates/apeireth-config",
     "crates/apeireth-motivation",
     "crates/apeireth-perception",
@@ -75,6 +80,7 @@ members = [
     # R165: apeireth-protocol-bridge -> _archived/apeireth-protocol-bridge (0 业务调用者, 死码归档)
     "crates/apeireth-context-fold",
     "crates/apeireth-tool-approval",
+    "crates/apeireth-guard",  # R173 VCP-3: Privacy Guard
     "crates/apeireth-agent",
     # V2 战区 5 — MCP skeleton (docs/v2-strategy/05 §Step 2, R-Cycle v2-strategy)
     "crates/apeireth-mcp",
@@ -477,5 +483,7 @@ needless_continue = 'warn'
 ptr_as_ptr = 'warn'
 ref_option_ref = 'warn'
 needless_pass_by_ref_mut = 'warn'
+
+
 
 
