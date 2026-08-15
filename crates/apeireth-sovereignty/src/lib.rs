@@ -82,6 +82,9 @@ pub mod flow_executor;
 // 8 硬墙 0 越界: 0 改 Governance.process / SkillRegistry / SkillGuard / ActionRail / ActionKind 公开签名
 pub mod evidence_guard;
 
+// R174: WASM sandbox runtime (trait + stub + policy, no wasmtime dep yet)
+pub mod wasm_runtime;
+
 // ============================================================
 // 公共 re-export — 让 `use apeireth_sovereignty::*;` 拿到常用 API
 // ============================================================
@@ -387,4 +390,7 @@ apeireth_verify::register_all_in_crate!(
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_A,
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_B
 );
-pub mod kani_proofs;  // R253: Kani formal proofs for Self-Disable guards
+pub mod kani_proofs;  // R253
+// R177: sovereignty organ invariants
+mod organ_kani_proofs;
+// R177: sovereignty organ invariants

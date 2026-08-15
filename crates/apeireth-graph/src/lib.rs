@@ -11,6 +11,8 @@ use std::fmt;
 use thiserror::Error;
 
 pub mod checkpoint;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod conditional;
 pub mod executor;
 pub mod mcp_resource;  // R89: CognitionGraph → MCP ResourceServer (graph state 暴露为 MCP resources)

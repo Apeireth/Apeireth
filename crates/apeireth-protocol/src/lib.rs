@@ -198,6 +198,8 @@ const _: () = {
 };
 
 #[cfg(test)]
+// R177: protocol invariants
+mod organ_kani_proofs;
 mod lib_tests {
     use super::*;
 

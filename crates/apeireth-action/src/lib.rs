@@ -175,6 +175,8 @@ pub fn new_tx_id() -> TxId {
 }
 
 #[cfg(test)]
+// R177: action invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 mod tests {
     use super::*;
     use apeireth_core::ActionTarget;

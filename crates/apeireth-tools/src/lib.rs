@@ -71,6 +71,8 @@
 // ============================================================
 
 pub mod code_exec;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod long_task;
 pub mod classifier;  // R30 U5: tool classifier (8 类 keyword routing)
 pub mod web_fetch;  // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager

@@ -25,6 +25,8 @@
 
 
 pub mod audit;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod error;
 pub mod manifest;
 pub mod plugins;

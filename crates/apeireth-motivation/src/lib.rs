@@ -31,6 +31,14 @@ use uuid::Uuid;
 // R37-2: 9 organ 部分合并 — value → motivation 透明 re-export (workspace member 真删)
 // 下游调用方 `use apeireth_value::X` 仍能用 (R37-2 后 0 breaking)
 pub use apeireth_value::*;
+// R173 ST-B3.1 — bridge 3: consciousness -> motivation
+pub mod consciousness_bridge;
+// R173 ST-B6.1 — bridge 6: life-force -> motivation
+pub mod life_force_bridge;
+// R176: bridges 3+6 Kani proofs
+mod bridge_kani_proofs;
+// R177: organ invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 
 // ============================================
 // 1. 错误类型
@@ -957,4 +965,5 @@ mod tests {
         assert_eq!(auditor.history_failed_count(), 1);
     }
 }
+
 

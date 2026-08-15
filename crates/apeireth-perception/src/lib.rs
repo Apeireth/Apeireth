@@ -26,6 +26,8 @@ use thiserror::Error;
 mod attention;
 mod channel;
 mod input;
+// R177: organ invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 
 pub use attention::{threshold_filter, top_k_filter, Attention, ThresholdAttention, TopKAttention};
 pub use channel::{

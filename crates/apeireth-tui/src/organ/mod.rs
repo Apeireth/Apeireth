@@ -40,6 +40,8 @@ pub mod heart;
 pub mod memory;
 pub mod mind;
 pub mod voice;
+// ADR-0028: 9 organ naming bridge table (TUI 旧名 ↔ crate 新名)
+pub mod bridge_table;
 
 use apeireth_i18n::{TranslationArgs, Translator};
 use ratatui::layout::Rect;

@@ -9,6 +9,8 @@ description = "Apeireth 生命力维 (A13 落点 — R14 Phase 4 维度 1 穿透
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
+# R173 bridge 2: consciousness -> life-force
+apeireth-consciousness = { path = "../apeireth-consciousness" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -28,3 +30,4 @@ path = "examples/life_force_demo.rs"
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
+

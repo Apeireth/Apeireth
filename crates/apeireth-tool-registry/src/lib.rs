@@ -57,6 +57,8 @@ pub mod token_budget;
 pub mod trait_def;
 pub mod types;
 pub mod vcp_category;  // R208: VCP 5 类高层分类 (基于 6 类 ToolKind, R185 调研)
+// R177: tool registry invariants
+mod organ_kani_proofs;
 
 pub use async_task::{AsyncTaskError, AsyncTaskResult, AsyncTaskStore, NotifyChannel, TaskId, TaskRecord, TaskStatus, next_task_id};
 pub use classifier::{

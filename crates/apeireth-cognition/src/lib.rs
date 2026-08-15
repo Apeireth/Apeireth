@@ -25,6 +25,11 @@ use thiserror::Error;
 use uuid::Uuid;
 
 mod decision;
+pub mod consciousness_bridge;  // R172: bridge 1 of 7
+// R176: bridge 1 Kani proofs
+mod bridge_kani_proofs;
+// R177: organ invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 mod reflection;
 mod scoring;
 

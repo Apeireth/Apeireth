@@ -41,6 +41,8 @@
 #![deny(unsafe_code)]
 
 pub mod protocol;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod resources;  // R33-3: MCP resources protocol
 pub mod resource_servers;  // R33-3-1: 3 真接 ResourceServer impl (File / Organ / Convention) + Composite router (resources/list + resources/read)
 pub mod subscriptions;  // R72: MCP subscribe push mode (resources/subscribe + notifications/resources/updated)

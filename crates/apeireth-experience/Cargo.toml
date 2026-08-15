@@ -1,0 +1,25 @@
+[package]
+name = "apeireth-experience"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth experience layer (R173/Stage2 §3): LLM Wiki + Knowledge Graph + VCP association network"
+keywords = ["ai", "knowledge", "graph", "wiki", "experience"]
+categories = ["data-structures"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+parking_lot = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

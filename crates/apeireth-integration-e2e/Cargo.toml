@@ -64,6 +64,7 @@ apeireth-tools = { path = "../apeireth-tools" }
 # Lints — 复用 parent workspace 风格 (qdrant/wasmtime 精选, missing_docs allow)
 # 不继承 `workspace = true` (sub-workspace 没继承)
 [lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_extern_crates = "warn"
 trivial_numeric_casts = "warn"
 unstable_features = "warn"

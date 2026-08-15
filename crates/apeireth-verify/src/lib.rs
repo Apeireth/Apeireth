@@ -10,6 +10,8 @@
 
 
 pub mod const_proofs;  // R217: 编译期形式化证明 (Kani-style const proof demo)
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;

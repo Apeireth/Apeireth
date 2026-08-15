@@ -20,6 +20,8 @@ pub mod l0;
 pub mod channel;
 #[cfg(test)]
 pub mod r216_tests;  // R216: 三套通知 + 4 BackpressurePolicy 测试覆盖
+// R177: bus invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 #[cfg(unix)]
 pub mod l1;
 #[cfg(unix)]

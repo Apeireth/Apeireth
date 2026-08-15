@@ -18,6 +18,10 @@ chrono = { workspace = true }
 uuid = { workspace = true }
 # R37-2: 9 organ 部分合并 — value → motivation 透明 re-export
 apeireth-value = { path = "../apeireth-value" }
+# R173 bridge 3: consciousness -> motivation
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+# R173 bridge 6: life-force -> motivation
+apeireth-life-force = { path = "../apeireth-life-force" }
 
 [dev-dependencies]
 tokio = { workspace = true }
