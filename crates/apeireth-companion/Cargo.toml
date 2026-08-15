@@ -44,5 +44,11 @@ path = "src/lib.rs"
 name = "companion_demo"
 path = "examples/companion_demo.rs"
 
+# R131.4 memory analyze_episode 真 LLM 实证 (R179 拆边后搬到 companion:
+# memory 不能 dep apeireth-api, companion 有 memory 依赖 + api dev-依赖, 两边都够得着)
+[[example]]
+name = "r131_memory_analyze"
+path = "examples/r131_memory_analyze.rs"
+
 [lints]
 workspace = true

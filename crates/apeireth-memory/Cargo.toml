@@ -61,8 +61,3 @@ required-features = ["semantic"]
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
 [lints]
 workspace = true
-
-# R131.4 memory analyze_episode 真 LLM 实证
-[[example]]
-name = "r131_memory_analyze"
-path = "examples/r131_memory_analyze.rs"
