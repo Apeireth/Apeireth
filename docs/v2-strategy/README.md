@@ -1,3 +1,6 @@
+> ⚠️ **已归位 (2026-08-15)**: 本目录的 00-VISION / 08-FRONTEND 已移入 `docs/stage1/` (顶层+产品设计); 01-07 已移入 `docs/stage2/` (具体想法)。本 README 仅保留历史索引。详见 `docs/document-relocation-map.md`。
+
+---
 [Document-Meta]
 Document: README.md
 Version: 2.0.0-V2
@@ -104,7 +107,7 @@ Author: Codex (策略分析)
 
 - **战区 1** (1): tui
 - **战区 2** (5): api, protocol, http-client, pipeline, extension
-- **战区 3** (10): council, supervisor, **graph(新)**, evolution, central, perception, cognition, consciousness, motivation, life-force
+- **战区 3** (10): council, supervisor, **graph(新)**, evolution, central, perception, cognition, consciousness, motivation, life-force, **companion(A12.5 2026-08-14 主人拍板新增)**
 - **战区 4** (3): memory, bus, **vector(新)**
 - **战区 5** (8): tools, tool-runtime, tool-approval, tool-registry, sovereignty, constraint, **mcp(新)**, **formal(新)**
 - **L0 HA** (3): core, onion, action
