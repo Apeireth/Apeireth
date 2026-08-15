@@ -17,7 +17,8 @@ use apeireth_memory::{CoreEpisode, EpisodeStore, ReflectionCycleScheduler, Refle
 use chrono::{TimeZone, Utc};
 use std::sync::Arc;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let t0 = std::time::Instant::now();
     let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap());
     let mut pass = 0u32;
@@ -85,7 +86,7 @@ fn main() {
     }
     let sched = DreamScheduler::new(Arc::clone(&dream_store), Arc::new(vc.clone()));
     vc.advance(chrono::Duration::seconds(61));
-    let merged_n = sched.tick();
+    let merged_n = sched.tick().await;
     let eps = dream_store.recent_episodes("me", 100).unwrap();
     let dream_eps: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
     check(
