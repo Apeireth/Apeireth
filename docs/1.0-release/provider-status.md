@@ -28,7 +28,7 @@ Originated:     主人 2026-08-05 21:18 拍板"cpu 9955hx 内存 32G, 还能派�
 
 ## §0. TL;DR
 
-**Provider 状态** ✅。1 Provider 已真接 (claude-code) + 4 Provider 估补中 (codex / copilot / gemini-cli / opencode), 5/5 Provider 1:1 翻译 v0.9.21 商业版。
+**Provider 状态** ✅。1.5 Provider 已真接 (claude-code per R168 LIVE + minimax per R168/R267 LIVE) + 3.5 Provider 估补中 (codex / copilot / gemini-cli / opencode 仅 skeleton stub 47-62 行), 5/5 Provider 1:1 翻译 v0.9.21 商业版。
 
 | # | Provider | 状态 | 关键 commit / 估补 |
 |---:|----------|:---:|---|

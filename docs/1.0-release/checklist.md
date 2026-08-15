@@ -1,5 +1,8 @@
 # 1.0 release 12 项 checklist 100% 状态总表
 
+> [架构遗迹]: 上一行是老版本 v1.0.0 考古路线 (写于 2026-08-05). 实际 workspace version 为 1.2.0 (per [ADR-0030](adr/0030-version-policy.md)). 本文件作为历史记录, 不代表当前状态.
+
+
 ```
 [Document-Meta]
 Document:       docs/1.0-release/checklist.md
