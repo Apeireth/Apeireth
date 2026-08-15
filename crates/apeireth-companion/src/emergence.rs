@@ -20,6 +20,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Timelike, Utc};
 use std::collections::{HashSet, VecDeque};
+use std::time::Duration;
 
 use crate::actions::{select_action, Action};
 use crate::Bond;
@@ -113,6 +114,10 @@ pub struct LoopConfig {
     pub rhythm_veto_probability: f64,
     /// 置信度饱和天数: days/14 → 置信度 (默认 14, 待拟合)
     pub rhythm_confidence_days: f64,
+    /// 两次主动之间的最短间隔 (LLM 成本预算): 生产渲染走真 LLM, 连续开口会触发
+    /// MiniMax 限流 (suppressed, 2026-08-15 生产力实测) — 机制层保证两次主动
+    /// >= 此间隔, 给 LLM 留恢复时间 (默认 60s, 待拟合)
+    pub min_llm_interval: Duration,
 }
 
 impl Default for LoopConfig {
@@ -131,6 +136,7 @@ impl Default for LoopConfig {
             rhythm_active_probability: 0.5,
             rhythm_veto_probability: 0.2,
             rhythm_confidence_days: 14.0,
+            min_llm_interval: Duration::from_secs(60),
         }
     }
 }
@@ -444,6 +450,16 @@ impl<R: RelationshipState> EmergenceLoop<R> {
         if self.initiatives_today >= self.boundaries.max_initiatives_per_day {
             return None;
         }
+        // 门禁 2.5 (LLM 成本预算): 距上次主动不足 min_llm_interval → 保持安静.
+        // 生产渲染走真 LLM, 连续开口会触发 MiniMax 限流 (suppressed, 2026-08-15 实测).
+        if let Some(last) = self.last_initiative {
+            let since = now.signed_duration_since(last);
+            let min = chrono::Duration::from_std(self.config.min_llm_interval)
+                .unwrap_or(chrono::Duration::zero());
+            if since < min {
+                return None;
+            }
+        }
         // 门禁 3: 关系深度不够
         let depth = self.relationship.depth();
         if depth < self.boundaries.min_depth {
@@ -629,6 +645,24 @@ mod tests {
         }
         assert!(l.tick(at(16, 8, 40), None).is_some());
         assert!(l.tick(at(16, 8, 41), None).is_none());
+    }
+
+    #[test]
+    fn min_llm_interval_blocks_back_to_back_initiatives() {
+        let mut config = LoopConfig::default();
+        config.min_llm_interval = Duration::from_secs(3600); // 1h: 演示 1 分钟内的第二次主动必被拦
+        let mut l = EmergenceLoop::new(LocalRelationship::new(0.8), Boundaries::default())
+            .with_config(config);
+        // 学会两个活跃时段: 早 8:40 + 下午 16:10 (同一 16:00-16:30 桶)
+        for d in 9..=15 {
+            l.observe_interaction(at(d, 8, 40));
+            l.observe_interaction(at(d, 16, 10));
+        }
+        assert!(l.tick(at(16, 8, 40), None).is_some());
+        // 1 分钟后仍在 min_llm_interval 内 → 保持安静 (LLM 成本预算门禁)
+        assert!(l.tick(at(16, 8, 41), None).is_none());
+        // 超过间隔且仍在活跃时段 (16:00-16:30 桶) → 恢复主动
+        assert!(l.tick(at(16, 16, 10), None).is_some());
     }
 
     #[test]
