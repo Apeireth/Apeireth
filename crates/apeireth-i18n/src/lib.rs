@@ -699,3 +699,6 @@ mod tests {
 
 // §7 m3 防御 (TOOL_WHITELIST + validate_tool_call) — 已在上文硬编码
 // (per m3-hallucination-defense-2026-08-05.md §2.4)
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

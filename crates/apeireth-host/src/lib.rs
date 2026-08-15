@@ -8,6 +8,8 @@
 
 /// Secure OS keyring and encrypted-file fallback.
 pub mod keyring;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 /// Cross-platform machine identity providers and detection.
 pub mod machine_id;
 

@@ -16,6 +16,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 pub mod descriptor;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod mcp_bridge;
 pub mod semver_strict;
 pub mod eval_bridge;  // R110: Skill descriptor → eval scenario 桥接
@@ -23,6 +25,7 @@ pub mod watcher;  // R109: 文件 watcher 热加载 (polling-based, 0 新 dep)  
 pub mod file_loader;
 pub mod skill_executor;  // R125-19: Skill execution layer (5 phase state machines, superpowers 14 → 5 patterns)
 pub mod library_stage6_guardianship;
+pub mod wasm_bridge;  // R174: WASM skill executor (uses apeireth-sovereignty::wasm_runtime)
 pub mod anthropic_skills;  // R149: Anthropic Skills 模式 (SKILL.md + 3 层加载)
   // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
 

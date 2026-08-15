@@ -621,6 +621,8 @@ pub fn default_test_double_onion() -> DefaultDoubleOnion {
 // ============================================================
 
 #[cfg(test)]
+// R177: onion invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 mod tests {
     use super::*;
 

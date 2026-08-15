@@ -36,6 +36,12 @@ use thiserror::Error;
 pub mod reflection_cycle;
 // R22 ST-A2.3 — 涌现能力识别 (Emergence Detection)
 pub mod emergence;
+// R173 ST-B2.1 — bridge 2: consciousness -> life-force
+pub mod consciousness_bridge;
+// R176: bridge 2 Kani proofs
+mod bridge_kani_proofs;
+// R177: organ invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 
 // ============================================
 // 1. SGI (SelfGrowthIndicator) — 单字段目标身份
@@ -500,3 +506,4 @@ pub use crate::{
         ReflectionPhase,
     },
 };
+

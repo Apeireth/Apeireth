@@ -40,6 +40,8 @@ use thiserror::Error;
 /// 深度实装模块 — round8-05 阶段 5 §2/§3/§4 12 键 O(1) + Council 7 + V1+V2+V3 AND.
 /// 详见 `deep_impl.rs` 顶部文档.
 pub mod deep_impl;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 // ============================================
 // 1. PhilosophyKey trait — 12 键 verdict cache

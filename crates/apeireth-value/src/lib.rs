@@ -33,6 +33,8 @@ use uuid::Uuid;
 
 pub mod evaluation;
 pub mod onion_consistency;
+// R177: organ invariants
+mod organ_kani_proofs;
 pub mod prioritization;
 
 pub use evaluation::{

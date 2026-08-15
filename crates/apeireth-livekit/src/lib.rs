@@ -67,6 +67,8 @@ use serde::{Deserialize, Serialize};
 // ============================================================================
 
 pub mod real;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 // ============================================================================
 // §1 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)

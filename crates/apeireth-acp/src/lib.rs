@@ -116,6 +116,10 @@ pub fn from_json_string(s: &str) -> AcpResult<Envelope> {
     Ok(env)
 }
 
+pub mod llm_facade;
+// R177: acp facade invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
+
 #[cfg(test)]
 mod tests {
     use super::*;

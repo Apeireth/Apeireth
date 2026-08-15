@@ -47,6 +47,7 @@ path = "examples/blueprint_impl_demo.rs"
 # R19 第 0 阶段: skeleton 阶段不强求 workspace lint 同步, 避免 noise (跟 keyring / team-lead 同款)
 # 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
 [lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_imports = "allow"
 dead_code = "allow"
 missing_docs = "allow"

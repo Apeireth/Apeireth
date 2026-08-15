@@ -20,6 +20,8 @@
 
 /// 1.1 cache module - LRU/LFU/FIFO/ARC/TinyLFU + 4 backend (1:1 from apeireth-cache)
 pub mod cache;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 
 // 1.1 兼容层 (R128 续): 过洋 doctests 参考老 crate 名.
 // R35+1.1 合并 apeireth-{cache,metrics,tracing,observability} 到 telemetry/src.

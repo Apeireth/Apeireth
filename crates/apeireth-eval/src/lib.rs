@@ -11,6 +11,8 @@
 use serde::{Deserialize, Serialize};
 
 pub mod cross_model_benchmark;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod mcp_bridge;  // R114: EvalScenario → MCP ToolServer 桥接
 pub mod real_llm_smoke;
 pub mod smoke_task;

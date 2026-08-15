@@ -94,11 +94,11 @@ impl ProviderKind {
     /// 是否在 R20 完整实现 (InMemory / Sqlite / Hybrid).
     pub const fn is_implemented(&self) -> bool {
         match self {
-            ProviderKind::InMemory | ProviderKind::Sqlite | ProviderKind::Hybrid => true,
+            // R178: DiskLru 从 R21 stub 升级为实现 (无外部 SDK, 本地 fs LRU)
+            ProviderKind::InMemory | ProviderKind::Sqlite | ProviderKind::Hybrid | ProviderKind::DiskLru => true,
             ProviderKind::Redis
             | ProviderKind::Postgres
-            | ProviderKind::S3
-            | ProviderKind::DiskLru => false,
+            | ProviderKind::S3 => false,
         }
     }
 
@@ -180,29 +180,29 @@ mod tests {
         assert_eq!(ProviderKind::Hybrid.as_str(), "HYBRID");
     }
 
-    /// 守门 #3: R20 完整实现 = 3 (InMemory / Sqlite / Hybrid), R21 stub = 4.
+    /// 守门 #3: R178 中 4 实现 (InMemory / Sqlite / Hybrid / DiskLru) + 3 stub (Redis / Postgres / S3).
     #[test]
-    fn three_implemented_four_stub() {
+    fn four_implemented_three_stub() {
         assert!(ProviderKind::InMemory.is_implemented());
         assert!(ProviderKind::Sqlite.is_implemented());
         assert!(ProviderKind::Hybrid.is_implemented());
+        assert!(ProviderKind::DiskLru.is_implemented(), "R178 DiskLru 实现");
         assert!(!ProviderKind::Redis.is_implemented());
         assert!(!ProviderKind::Postgres.is_implemented());
         assert!(!ProviderKind::S3.is_implemented());
-        assert!(!ProviderKind::DiskLru.is_implemented());
     }
 
-    /// 守门 #4: 4 stub 全部返 BackendNotImplemented.
+    /// 守门 #4: 3 stub 全部返 BackendNotImplemented.
     #[test]
-    fn four_stubs_return_not_implemented() {
+    fn three_stubs_return_not_implemented() {
         assert!(ProviderKind::InMemory.check_implemented().is_ok());
         assert!(ProviderKind::Sqlite.check_implemented().is_ok());
         assert!(ProviderKind::Hybrid.check_implemented().is_ok());
+        assert!(ProviderKind::DiskLru.check_implemented().is_ok(), "R178 DiskLru 不再报错");
         for stub in [
             ProviderKind::Redis,
             ProviderKind::Postgres,
             ProviderKind::S3,
-            ProviderKind::DiskLru,
         ] {
             let err = stub.check_implemented().unwrap_err();
             assert!(matches!(err, MemoryProviderError::BackendNotImplemented(_)));

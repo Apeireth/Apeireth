@@ -62,6 +62,7 @@ all-sdk = ["lark", "livekit", "sandbox", "voice"]
 
 [lints.rust]
 # R19 阶段 0 模式
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_extern_crates = "warn"
 trivial_numeric_casts = "warn"
 unstable_features = "warn"

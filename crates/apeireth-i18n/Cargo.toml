@@ -49,5 +49,6 @@ path = "examples/i18n_demo.rs"
 # 4. workspace Cargo.toml members 加 `crates/apeireth-i18n` ⏳ 整合 #2 时
 # 当前 lints 留空, 不强求跟外层 workspace 同步, 避免 noise
 [lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_imports = "allow"
 dead_code = "allow"
