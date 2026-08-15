@@ -164,6 +164,12 @@ impl Tool for SaveMemoryTool {
     }
 }
 
+/// post-execute 钩子: 工具结果产出后、审计前执行 (可替换/拦截结果).
+/// 三段瀑布 (吸收 DSH #2): pre(洋葱门→宪法评审→权限→路径) → execute(宿主/worker) → post(钩子链→spill→审计).
+pub trait PostExecuteHook: Send + Sync {
+    fn apply(&self, call: &ParsedToolCall, result: &ExecutionResult) -> ExecutionResult;
+}
+
 /// 工具桥: 注册中心 + 洋葱门 + 审批 (黑/白/风险规则) + 执行器.
 pub struct ToolBridge {
     pub registry: Arc<ToolRegistry>,
@@ -179,6 +185,8 @@ pub struct ToolBridge {
     worker: Option<PathBuf>,
     /// 结果溢出存储 (可选): 超大工具输出 spill 到会话私有文件, messages 只留定位.
     spill: Option<SpillStore>,
+    /// post-execute 钩子链 (顺序执行, 审计前).
+    post_hooks: Vec<Arc<dyn PostExecuteHook>>,
 }
 
 impl ToolBridge {
@@ -232,6 +240,7 @@ impl ToolBridge {
             judicator: None,
             worker: None,
             spill: None,
+            post_hooks: Vec::new(),
         }
     }
 
@@ -253,6 +262,12 @@ impl ToolBridge {
     /// 开启结果溢出: 工具输出超过阈值 → spill 到会话私有文件, messages 只留定位+提示.
     pub fn with_spill(mut self, spill: SpillStore) -> Self {
         self.spill = Some(spill);
+        self
+    }
+
+    /// 注册 post-execute 钩子 (结果产出后、审计前执行; 可替换/拦截).
+    pub fn with_post_hook(mut self, hook: Arc<dyn PostExecuteHook>) -> Self {
+        self.post_hooks.push(hook);
         self
     }
 
@@ -414,6 +429,11 @@ impl ToolBridge {
         } else {
             r
         };
+        // post-execute 钩子链 (结果产出后、审计前; 可替换/拦截)
+        let mut r = r;
+        for h in &self.post_hooks {
+            r = h.apply(call, &r);
+        }
         // 监督机制: 每次工具调用 append-only 记录 (含结果, 出站隐私脱敏后存)
         let serialized = serde_json::to_string(&r.output).unwrap_or_default();
         let pii = apeireth_guard::detect_pii(&serialized);
@@ -773,6 +793,94 @@ mod tests {
         assert_eq!(r2.output["spilled"], json!(null), "小结果不应溢出");
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&spill_root);
+    }
+
+    #[tokio::test]
+    async fn post_execute_hook_can_replace_or_block_result() {
+        use crate::packs::PermissionPack;
+        // 替换钩子: 把成功结果包一层 "via_hook"
+        struct WrapHook;
+        impl PostExecuteHook for WrapHook {
+            fn apply(&self, _call: &ParsedToolCall, r: &ExecutionResult) -> ExecutionResult {
+                if r.success {
+                    ExecutionResult {
+                        tool_name: r.tool_name.clone(),
+                        success: true,
+                        output: json!({"via_hook": true, "inner": r.output}),
+                        error: None,
+                        duration_ms: r.duration_ms,
+                    }
+                } else {
+                    r.clone()
+                }
+            }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_post_hook(Arc::new(WrapHook));
+        let dir = std::env::temp_dir().join(format!("apeireth-hook-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("ok.txt");
+        bridge.packs.grant(
+            PermissionPack::timed("钩子测试", vec!["FileOperator".to_string()], 1, Some(5))
+                .with_paths(vec![dir.to_string_lossy().to_string()]),
+        );
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "write", "path": target.to_string_lossy().to_string(), "content": "x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "钩子不应拦截成功: {:?}", r.error);
+        assert_eq!(r.output["via_hook"], json!(true), "post 钩子应替换结果: {}", r.output);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn post_execute_hook_can_block() {
+        use crate::daemon::Judicator;
+        use crate::packs::PermissionPack;
+        struct AllowAll;
+        #[async_trait::async_trait]
+        impl Judicator for AllowAll {
+            async fn judge(&self, _a: &str) -> Result<bool, String> {
+                Ok(true)
+            }
+        }
+        struct BlockHook;
+        impl PostExecuteHook for BlockHook {
+            fn apply(&self, _call: &ParsedToolCall, r: &ExecutionResult) -> ExecutionResult {
+                ExecutionResult {
+                    tool_name: r.tool_name.clone(),
+                    success: false,
+                    output: json!(null),
+                    error: Some("post 拦截: 结果不符合出站策略".to_string()),
+                    duration_ms: r.duration_ms,
+                }
+            }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store)
+            .with_judicator(Arc::new(AllowAll))
+            .with_post_hook(Arc::new(BlockHook));
+        let dir = std::env::temp_dir().join(format!("apeireth-hook-block-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        bridge.packs.grant(
+            PermissionPack::timed("钩子拦截", vec!["FileOperator".to_string()], 1, Some(5))
+                .with_paths(vec![dir.to_string_lossy().to_string()]),
+        );
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "write", "path": dir.join("x.txt").to_string_lossy().to_string(), "content": "x"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(!r.success, "post 钩子应能拦截");
+        assert!(r.error.as_deref().unwrap_or("").contains("post 拦截"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
