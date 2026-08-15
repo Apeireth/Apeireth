@@ -9,7 +9,8 @@ description = "Apeireth 记忆子系统 (Episode/Note/Session SQLite 存储 + BM
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
-apeireth-api = { path = "../apeireth-api" }
+# R179 P0-3: 拆 memory <-> api 编译期边, 不再 dep apeireth-api (3 类型走 apeireth-llm-iface)
+apeireth-llm-iface = { path = "../apeireth-llm-iface" }
 async-trait = { workspace = true }
 tokio = { workspace = true }
 serde = { workspace = true }
