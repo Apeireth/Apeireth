@@ -217,7 +217,19 @@ async fn main() {
         subject,
         tick_interval: Duration::from_secs(tick_secs),
         dream: None,
+        reflection: None,
     };
+
+    // 反思周期 (可选): APEIRETH_REFLECT=1 → 24h 一轮, 反思记录写回真库
+    if std::env::var("APEIRETH_REFLECT").is_ok() {
+        let reflect = apeireth_companion::ReflectionScheduler::new(
+            Arc::clone(&store),
+            apeireth_core::clock::system_clock(),
+            "companion-main",
+        );
+        daemon = daemon.with_reflection(reflect);
+        println!("[daemon] 反思周期已开启: 24h 一轮 → 写回真库");
+    }
 
     // 做梦 (可选): APEIRETH_DREAM=1 → 6h 无互动触发合并 + LLM 摘要写回真库
     if std::env::var("APEIRETH_DREAM").is_ok() {

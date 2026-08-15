@@ -157,6 +157,8 @@ impl AwakeCompanion {
             },
             at.timestamp(),
         ));
+        // 诚实: ASI 深度校准 (CalibrationLoop/AdaptiveBaseline) 走完整 24 维测量管线
+        // (DimensionTrace::from_sample), 单点反馈不喂 — 待 asi 子系统测量调度接入 (handover §6 标注)
         match feedback {
             Feedback::Responded => self.consecutive_ignores = 0,
             Feedback::Ignored => {

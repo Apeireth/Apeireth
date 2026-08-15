@@ -21,6 +21,7 @@ use crate::organs::AwakeCompanion;
 use crate::proactive::ContextSource;
 use crate::Bond;
 use crate::dream::DreamScheduler;
+use crate::reflection::ReflectionScheduler;
 use apeireth_core::RiskLevel;
 
 // ============================================================
@@ -348,6 +349,8 @@ pub struct CompanionDaemon<D: Delivery, C: ContextSource> {
     pub tick_interval: Duration,
     /// 做梦调度器 (可选): 每 tick 检查, 该做梦 → 合并记忆写回真库.
     pub dream: Option<DreamScheduler>,
+    /// 反思周期调度器 (可选): 周期到 → 4 阶段反思 → 写回真库.
+    pub reflection: Option<ReflectionScheduler>,
 }
 
 impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
@@ -366,6 +369,7 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
             subject: subject.into(),
             tick_interval,
             dream: None,
+            reflection: None,
         }
     }
 
@@ -375,9 +379,22 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
         self
     }
 
-    /// 一轮心跳: 记忆检索 → 全器官决策 → 渲染送达 (+ 做梦检查).
+    /// 接反思周期调度器 (周期反思写回真库).
+    pub fn with_reflection(mut self, reflection: ReflectionScheduler) -> Self {
+        self.reflection = Some(reflection);
+        self
+    }
+
+    /// 一轮心跳: 反思检查 → 做梦检查 → 记忆检索 → 全器官决策 → 渲染送达.
     pub async fn step(&mut self) {
         let now = Utc::now();
+        // 反思周期检查 (0 阻塞: 周期未到立即返回)
+        if let Some(r) = &mut self.reflection {
+            let n = r.tick();
+            if n > 0 {
+                eprintln!("[daemon] 反思周期: 完成 {n} 轮 (累计 {})", r.cycles_completed());
+            }
+        }
         // 做梦检查 (0 阻塞: 不触发则立即返回)
         if let Some(d) = &self.dream {
             let n = d.tick().await;
