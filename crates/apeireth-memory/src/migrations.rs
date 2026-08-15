@@ -23,11 +23,44 @@ pub struct Migration {
 /// 全部已实装 migrations.
 ///
 /// ⚠️ Append-only: 不要修改既有 entry, 只能追加新 entry.
-pub const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "V1__init_six_history_streams",
-    sql: INIT_SQL,
-}];
+pub const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "V1__init_six_history_streams",
+        sql: INIT_SQL,
+    },
+    // R179 P1-10: Hallway 表 (wing 内 entity-pair co-occurrence)
+    // 跟 6 历史流不一样: 不加 append-only trigger, 允许 recompute 时 UPSERT
+    // (mempalace "preserve L7 dynamics" — strength/stability 必须跨 recompute 保留).
+    Migration {
+        version: 2,
+        name: "V2__hallways_for_wings",
+        sql: HALLWAYS_SQL,
+    },
+];
+
+const HALLWAYS_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS hallways (
+    id                 TEXT PRIMARY KEY,
+    wing               TEXT NOT NULL,
+    entity_a           TEXT NOT NULL,
+    entity_b           TEXT NOT NULL,
+    co_occurrence_count INTEGER NOT NULL,
+    created_at         INTEGER NOT NULL,
+    updated_at         INTEGER NOT NULL,
+    -- L7 dynamics (mempalace preserve-on-recompute)
+    strength           REAL NOT NULL DEFAULT 1.0,
+    stability          REAL NOT NULL DEFAULT 1.0,
+    last_activated     INTEGER,
+    access_count       INTEGER NOT NULL DEFAULT 0,
+    tombstoned_at      INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_hallways_wing ON hallways(wing);
+CREATE INDEX IF NOT EXISTS idx_hallways_pair ON hallways(entity_a, entity_b);
+CREATE INDEX IF NOT EXISTS idx_hallways_entity_a ON hallways(entity_a);
+CREATE INDEX IF NOT EXISTS idx_hallways_entity_b ON hallways(entity_b);
+"#;
 
 const INIT_SQL: &str = r#"
 -- === A4 主目标: 6 历史流 Append-only Log ===
