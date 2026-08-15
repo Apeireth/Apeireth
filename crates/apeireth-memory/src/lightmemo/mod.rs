@@ -30,6 +30,7 @@ pub mod l1_file;
 pub mod l2_vector;
 pub mod l3_tag;
 pub mod l4_lcm;
+pub mod progression; // R179 P1-11: 4-layer progressive
 pub mod manager;
 pub mod decay;
 pub mod dream;
@@ -46,6 +47,8 @@ pub use l1_file::{L1FileStore, FileEntry as L1Entry};
 pub use l2_vector::{L2VectorStore, VectorEntry};
 pub use l3_tag::TagIndex;
 pub use l4_lcm::{L4LcmCompressor, LcmChunk, LcmCallback};
+// R179 P1-11: 4 层渐进
+pub use progression::{Layer, LayerProgression};
 pub use manager::{MemoryManager, MemoryItem, MemoryError};
 pub use decay::{DecayEngine, DecayConfig};
 pub use dream::{DreamSubsystem, DreamCallback};

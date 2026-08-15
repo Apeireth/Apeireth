@@ -35,6 +35,10 @@ mod migrations;
 pub mod semantic;
 // R19 P2 战区 4 续 (A-3): 公开 semantic_persist 模块 (跨 daemon 持久化路径)
 pub mod semantic_persist;
+// R179 P1-9: Episode Dedup (借鉴 mempalace dedup.py — session 内近重复检测)
+pub mod dedup;
+// R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
+pub mod hallways;
 mod session_note;
 mod streams;
 mod three_layer;  // R30 U9: claude-mem 3 层 facade
@@ -66,6 +70,8 @@ pub use user_profile::{ProfileEmbedder, ProfileExtractor, UserProfile};
 
 /// 重新导出 `apeireth_core::Episode` 方便下游不必记多个导入路径.
 pub use apeireth_core::Episode as CoreEpisode;
+// R177: organ invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 // R23 #6 派工: 从 extensions/ 子 crate re-export 3 Provider (in_memory / file / mongodb).
 // 透明登记: 此处 +1 行 (pub use), 不动 LOCKED 9 文件 (append_only / identity / migrations /
 // episode / session_note / streams / history_streams / continuity_link / llm_analysis).
