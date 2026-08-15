@@ -20,6 +20,7 @@ use crate::emergence::{Boundaries, Delivery, Feedback, Initiative, SelfScore};
 use crate::organs::AwakeCompanion;
 use crate::proactive::ContextSource;
 use crate::Bond;
+use crate::dream::DreamScheduler;
 use apeireth_core::RiskLevel;
 
 // ============================================================
@@ -345,6 +346,8 @@ pub struct CompanionDaemon<D: Delivery, C: ContextSource> {
     pub context: C,
     pub subject: String,
     pub tick_interval: Duration,
+    /// 做梦调度器 (可选): 每 tick 检查, 该做梦 → 合并记忆写回真库.
+    pub dream: Option<DreamScheduler>,
 }
 
 impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
@@ -362,12 +365,26 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
             context,
             subject: subject.into(),
             tick_interval,
+            dream: None,
         }
     }
 
-    /// 一轮心跳: 记忆检索 → 全器官决策 → 渲染送达.
+    /// 接做梦调度器 (合并记忆写回真库).
+    pub fn with_dream(mut self, dream: DreamScheduler) -> Self {
+        self.dream = Some(dream);
+        self
+    }
+
+    /// 一轮心跳: 记忆检索 → 全器官决策 → 渲染送达 (+ 做梦检查).
     pub async fn step(&mut self) {
         let now = Utc::now();
+        // 做梦检查 (0 阻塞: 不触发则立即返回)
+        if let Some(d) = &self.dream {
+            let n = d.tick();
+            if n > 0 {
+                eprintln!("[daemon] 做梦周期: 合并写回 {n} 条记忆");
+            }
+        }
         let hint = self.context.context_for(&self.subject);
         if let Some(init) = self.awake.tick(now, hint) {
             if let Err(e) = self.delivery.deliver(&init).await {
