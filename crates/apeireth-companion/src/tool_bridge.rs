@@ -25,6 +25,7 @@ use serde_json::{json, Value};
 use crate::daemon::{Judicator, requires_llm_review};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
+use crate::spill::{SpillStore, SPILL_THRESHOLD_CHARS};
 
 /// 路径前缀白名单校验 (执行级, 防越权写盘 + `..` 穿越).
 ///
@@ -176,6 +177,8 @@ pub struct ToolBridge {
     judicator: Option<Arc<dyn Judicator>>,
     /// 执行体隔离: worker 可执行文件路径 (None = 不隔离, 宿主内执行).
     worker: Option<PathBuf>,
+    /// 结果溢出存储 (可选): 超大工具输出 spill 到会话私有文件, messages 只留定位.
+    spill: Option<SpillStore>,
 }
 
 impl ToolBridge {
@@ -228,6 +231,7 @@ impl ToolBridge {
             packs,
             judicator: None,
             worker: None,
+            spill: None,
         }
     }
 
@@ -243,6 +247,12 @@ impl ToolBridge {
     /// 安全判断 (洋葱门/宪法评审/权限包/路径约束) 仍在宿主完成, 子进程只执行已批准操作.
     pub fn with_isolation(mut self, worker_bin: impl Into<PathBuf>) -> Self {
         self.worker = Some(worker_bin.into());
+        self
+    }
+
+    /// 开启结果溢出: 工具输出超过阈值 → spill 到会话私有文件, messages 只留定位+提示.
+    pub fn with_spill(mut self, spill: SpillStore) -> Self {
+        self.spill = Some(spill);
         self
     }
 
@@ -371,6 +381,38 @@ impl ToolBridge {
                     }
                 }
             }
+        };
+        // 结果溢出: 超大输出 spill 到会话私有文件, messages 只留定位 (防撑爆上下文)
+        let r = if let Some(spill) = &self.spill {
+            if r.success {
+                let ser = serde_json::to_string(&r.output).unwrap_or_default();
+                if ser.chars().count() > SPILL_THRESHOLD_CHARS {
+                    match spill.spill("me", "tool_result.txt", &ser) {
+                        Ok(path) => ExecutionResult {
+                            tool_name: r.tool_name.clone(),
+                            success: true,
+                            output: json!({
+                                "spilled": true,
+                                "path": path,
+                                "bytes": ser.len(),
+                                "hint": "结果过大已溢出到会话私有文件; 需要时用 FileOperator(op=read) 读取"
+                            }),
+                            error: None,
+                            duration_ms: r.duration_ms,
+                        },
+                        Err(e) => {
+                            eprintln!("[spill] 溢出失败: {e}");
+                            r
+                        }
+                    }
+                } else {
+                    r
+                }
+            } else {
+                r
+            }
+        } else {
+            r
         };
         // 监督机制: 每次工具调用 append-only 记录 (含结果, 出站隐私脱敏后存)
         let serialized = serde_json::to_string(&r.output).unwrap_or_default();
@@ -685,6 +727,52 @@ mod tests {
             "err={:?}",
             r.error
         );
+    }
+
+    #[tokio::test]
+    async fn oversized_tool_result_spills_to_private_file() {
+        let spill_root = std::env::temp_dir().join(format!("apeireth-spill-bridge-{}", std::process::id()));
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_spill(SpillStore::with_root(&spill_root));
+        let dir = std::env::temp_dir().join(format!("apeireth-spill-src-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let big = "y".repeat(3000);
+        std::fs::write(dir.join("big.txt"), &big).unwrap();
+        bridge.packs.grant(
+            crate::packs::PermissionPack::timed("溢出测试", vec!["FileOperator".to_string()], 1, Some(5))
+                .with_paths(vec![dir.to_string_lossy().to_string()]),
+        );
+        let call = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "read", "path": dir.join("big.txt").to_string_lossy().to_string()}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "read 应成功: {:?}", r.error);
+        assert_eq!(r.output["spilled"], json!(true), "超大结果应溢出: {}", r.output);
+        let path = r.output["path"].as_str().unwrap().to_string();
+        let read_back = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(
+            read_back.matches('y').count(),
+            3000,
+            "溢出文件应含完整 3000 字符内容"
+        );
+        // 小结果不溢出
+        let small_file = dir.join("small.txt");
+        std::fs::write(&small_file, "ok").unwrap();
+        let call2 = ParsedToolCall {
+            tool_name: "FileOperator".into(),
+            args: json!({"op": "read", "path": small_file.to_string_lossy().to_string()}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r2 = bridge.execute_if_allowed(&call2).await;
+        assert_eq!(r2.output["spilled"], json!(null), "小结果不应溢出");
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&spill_root);
     }
 
     #[tokio::test]

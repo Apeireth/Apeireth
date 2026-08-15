@@ -55,6 +55,7 @@ pub mod dream;
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;
+pub mod spill;
 pub mod simulation;
 pub mod actions;
 pub mod tool_bridge;
@@ -85,6 +86,7 @@ pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
 pub use dream::{DreamScheduler, DreamSummarizer};
 pub use continuation::{ContinuationSnapshot, ContinuationStore, PendingToolCall};
 pub use prompt_cache::build_messages;
+pub use spill::{SpillStore, SPILL_THRESHOLD_CHARS};
 
 /// 伙伴器官根类型 —— 全部关系状态的持有者
 ///
