@@ -113,6 +113,8 @@
 
 /// 9 器官 enum + 9 OrganStub 类型 (编译期 hardcode).
 pub mod organ;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 /// 错误类型 (5 variant StateError + 序列化摘要 StateErrorKind).
 pub mod error;
 /// SharedState trait + SharedStateMode (3 变体) — 3 模式抽象.

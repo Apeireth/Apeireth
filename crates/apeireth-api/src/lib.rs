@@ -97,6 +97,8 @@
 #![allow(missing_docs)]
 
 pub mod llm;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod protocol_handlers;
 pub mod server;
 /// R120 (B2 战区 2): Response replay cache — 重复 query 命中 LRU, 不打上游

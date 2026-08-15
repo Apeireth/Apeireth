@@ -40,7 +40,7 @@ use apeireth_memory::{EpisodeQuery, EpisodeStore, IdentityCardStore, SqliteMemor
 use apeireth_motivation::{
     motivation_score, AutonomyConsistency, IntrinsicIntensity, ValueStability,
 };
-use apeireth_relations::Relation;
+use apeireth_graph_primitive::Relation;
 use apeireth_sovereignty::self_disable::SelfDisableGuard;
 use apeireth_supervisor::{PidOneSupervisor, RestartStrategy, SubSupervisorKind};
 use apeireth_value::ValueDimension;

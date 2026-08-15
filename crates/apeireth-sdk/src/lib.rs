@@ -78,6 +78,8 @@
 #![deny(unsafe_code)]
 
 pub mod abi;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod error;
 pub mod version;
 pub mod wire;

@@ -705,3 +705,6 @@ mod tests {
         );
     }
 }
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

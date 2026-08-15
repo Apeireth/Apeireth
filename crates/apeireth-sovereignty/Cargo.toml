@@ -17,6 +17,8 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
+# R174: WASM sandbox runtime — sha2 for module content hash, stdlib-only runtime
+sha2 = "0.10"
 
 [lib]
 name = "apeireth_sovereignty"

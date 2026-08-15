@@ -52,6 +52,8 @@
 use std::sync::Arc;
 
 pub mod anysearch;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod bilibili;
 pub mod cache;
 pub mod config;

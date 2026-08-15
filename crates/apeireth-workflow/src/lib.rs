@@ -662,3 +662,6 @@ mod tests {
         assert_eq!(r1, r2, "deterministic: same input → same output");
     }
 }
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

@@ -31,6 +31,8 @@
 #![deny(unsafe_code)]
 
 pub mod g5_runtime_bridge; // R160: runtime task lifecycle 5 stages -> g5 substrate (4th caller)
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod workflow_worker; // R263: apeireth-workflow AsyncWorker adapter (workflow dispatch via runtime)
 
 use std::sync::Arc;

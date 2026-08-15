@@ -28,6 +28,7 @@ tempfile = "3"
 
 [lints.rust]
 # 复用 parent workspace lints 配置（避免 R18-R20 warning 噪声）
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_extern_crates = 'warn'
 trivial_numeric_casts = 'warn'
 unstable_features = 'warn'

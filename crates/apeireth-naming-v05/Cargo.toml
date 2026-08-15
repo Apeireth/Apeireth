@@ -45,6 +45,7 @@ path = "examples/v05_30_demo.rs"
 # (跟 i18n / observability / lark / voice / keyring / machine-id / tree-sitter 同款)
 # 整合时 (Mavis 整合 commit) 改为 [lints] workspace = true
 [lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_imports = "allow"
 dead_code = "allow"
 missing_docs = "allow"
