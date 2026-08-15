@@ -1,4 +1,4 @@
-﻿# ROADMAP — Apeireth (1.0 → 2.0)
+# ROADMAP — Apeireth (1.0 → 2.0)
 
 ```
 [Document-Meta]
@@ -284,7 +284,7 @@ master HEAD:     abf12243 (整合 #4 commit done 2026-08-10 19:41, per 决策 #4
 | 9 organ 文件名 + 入口签名 0 改 (内部 fn 借 OpenCode, 199KB → 120KB, -40%) | TUI 9 organ | 🔒 LOCKED (内部可改) | 决策 #22 §2.7 B7 |
 | R11 baseline 3 值 (0.8682/0.8532/0.9063) 数字严守 | R11 ASI R-Measure | 🔒 LOCKED (A1 严守) | 决策 #22 §2.8 A1 |
 
-详见 [`docs/v2-strategy/00-VISION.md`](docs/v2-strategy/00-VISION.md) + [`docs/conventions/09-anchor.md`](docs/conventions/09-anchor.md) + [`docs/conventions/11-baseline.md`](docs/conventions/11-baseline.md) + [`docs/glossary/17-4-gates-permission.md`](docs/glossary/17-4-gates-permission.md) + [`docs/conventions/10-locked.md`](docs/conventions/10-locked.md)。
+详见 [`docs/stage1/00-VISION.md`](docs/stage1/00-VISION.md) + [`docs/conventions/09-anchor.md`](docs/conventions/09-anchor.md) + [`docs/conventions/11-baseline.md`](docs/conventions/11-baseline.md) + [`docs/glossary/17-4-gates-permission.md`](docs/glossary/17-4-gates-permission.md) + [`docs/conventions/10-locked.md`](docs/conventions/10-locked.md)。
 
 ---
 

@@ -9,10 +9,10 @@
 |---|---:|---:|---:|---:|
 | `apeireth-motivation` | 705 | 0 | 23 | 1 |
 | `apeireth-consciousness` | 173+ | 0 | 9（+ `pub mod transfer_monitor`） | 2 |
-| `apeireth-relation` | 280+ | 0 | 9 | 1 |
+| `apeireth-graph-primitive` | 280+ | 0 | 9 | 1 |
 | `apeireth-life-force` | 327+ | 0 | 14（+ `pub mod reflection_cycle` / `pub mod emergence`） | 3 |
 
-注意：`apeireth-relations` 不存在，正确名字是 `apeireth-relation`。
+注意：`apeireth-graph-primitives` 不存在，正确名字是 `apeireth-graph-primitive`。
 
 ## 2. 公开表面节选（per lib.rs 顶部 `pub` 项）
 
@@ -25,7 +25,7 @@
 - 函数：`legal_targets`、`can_transition`
 - 新增 mod（路线 A2.2）：`transfer_monitor`
 
-### apeireth-relation
+### apeireth-graph-primitive
 - 类型：`RelationKind`、`Relation`、`RelationError`、`RelationDecision`、`RelationRegistry`
 - 函数：`classify`、`classify_pair`
 
@@ -55,7 +55,7 @@ pub use crate::{
 };
 ```
 
-### apeireth-relation
+### apeireth-graph-primitive
 ```rust
 pub use crate::{
     Relation, RelationDecision, RelationError, RelationKind, RelationRegistry,
