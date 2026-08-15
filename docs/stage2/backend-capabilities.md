@@ -121,7 +121,8 @@ export APEIRETH_PORT=8080
 - ✅ 多 LLM 协议 (4 个) + 上游代理
 - ✅ 流式 SSE 直通 (R25 修)
 - ✅ R19 认知循环 (Council + Verdict)
-- ✅ 9 器官系统 (5 senses + 4 actors)
+- ✅ 9 organ system (按 spirit 蓝图 v1: consciousness/perception/cognition/motivation/life-force/memory/value/graph-primitive/companion, R23+ 鲜本实装; 3 crate 是 transparent re-export 到 perception/memory/motivation per ADR-0031)
+- ✅ TUI 9 organ (R11 LOCKED 旧名: heart/brain/hand/eye/ear/memory/voice/body/mind, ASCII 艺术 + i18n key 0 可改; 桥接表见 `crates/apeireth-tui/src/organ/bridge_table.rs` + ADR-0028)
 - ✅ ASI 哲学层 (5 Gap 闭环, V1324)
 - ✅ Memory (S3 / MongoDB / Disk LRU provider)
 - ✅ TUI (ratatui, 5 nav, char-level 选区)

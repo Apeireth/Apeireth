@@ -1,0 +1,42 @@
+# observability 命名 cheat sheet
+
+> **目的**: 你看到 X 名 → 实际对应 Y
+> **权威 ADR**: [ADR-0029](adr/0029-observability-naming.md)
+
+## 1. 一图看懂 (4 \u5c42\u540d)
+
+```
+\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510
+\u2502 \u5c42          \u2502 \u6743\u5a01\u540d                          \u2502
+\u251c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524
+\u2502 crate        \u2502 apeireth-telemetry (Cargo.toml [package] name) \u2502
+\u2502 Rust mod     \u2502 apeireth_telemetry::observability              \u2502
+\u2502 HTTP URL     \u2502 /v1/observability/{metrics,health,status}      \u2502
+\u2502 env var      \u2502 APEIRETH_TELEMETRY_* (\u672a\u8d77, \u73b0\u5728\u7a7a\u4f4d)        \u2502
+\u2502 log target   \u2502 telemetry::* (tracing target)                  \u2502
+\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518
+```
+
+## 2. \u4f60\u770b\u5230 X \u540d \u2192 \u5b9e\u9645 Y
+
+| \u4f60\u770b\u5230 | \u5b9e\u9645 | \u600e\u4e48\u627e |
+|----------|------|------|
+| `apeireth-telemetry` (Rust import) | crate \u540d | `use apeireth_telemetry::*` |
+| `apeireth-observability` (\u8001\u6587\u6863) | **\u540c\u4e0a** (R22 \u91cd\u547d\u540d) | \u67e5 `crates/apeireth-telemetry/` |
+| `apeireth_observability::*` (snake_case) | **\u540c\u4e0a** | \u67e5 `crates/apeireth-telemetry/src/lib.rs` |
+| `observability::metrics` | mod path | \u67e5 `crates/apeireth-telemetry/src/observability/mod.rs` |
+| `apeireth_api::observability::*` | api crate \u5185\u90e8 mod | \u67e5 `crates/apeireth-api/src/observability/` |
+| `/v1/observability/*` (URL) | HTTP path | \u67e5 `crates/apeireth-api/src/server.rs` |
+| `apeireth-otel` (\u672a\u51fa\u73b0) | \u672a\u5b9e\u88c5 | (\u4ec5\u8d44\u6e90\u9879) |
+| `APEIRETH_TELEMETRY_URL` (\u672a\u8d77) | \u73af\u5883\u53d8\u91cf\u540d\u9884\u7559 | (\u672a\u521d\u59cb\u5316) |
+
+## 3. \u4e0d\u8981\u88ab\u8bef\u5bfc\u7684\u5730\u65b9
+
+- \u26a0\ufe0f `docs/observability/*` (\u8001\u8def\u5f84) \u662f R22 \u91cd\u547d\u540d\u524d\u7684\u6587\u6863, **\u4ecd\u53ef\u8bfb** \u4f46 **\u4e0d\u662f\u5f53\u524d\u4ee3\u7801\u8def\u5f84**
+- \u26a0\ufe0f `apeireth-otel` / `apeireth-observatory` (\u672a\u51fa\u73b0) \u662f\u521d\u59cb\u53d6\u540d\u8003\u8651\u9879, **\u672a\u5b9e\u88c5**
+
+## 4. \u53c2\u8003
+
+- [ADR-0029](adr/0029-observability-naming.md) (\u6743\u5a01\u51b3\u7b56)
+- [R174 \u5ba1\u8ba1](audit/R174-comprehensive-audit.md) \u00a7Drift 2
+- [R177 \u5f62\u5f0f\u5316\u6df1\u5316](r177/r177-formalization-deepening.md) \u00a7W11

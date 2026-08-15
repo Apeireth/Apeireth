@@ -1,14 +1,14 @@
 # 阶段 1 — 灵感（inspiration-stage1-2026-07-30）
 
-> **当前采用** 🟢 = inspiration-stage1-2026-07-30.md（2201 行 LOCKED）
+> **当前采用** 🟢 = inspiration-stage1-2026-07-30.md（**2026-08-14 清晰版** LOCKED，5 处补充）
 > **本文档状态**: 🟢 **当前活跃**
-> **写作时间**: 2026-07-30 → 2026-07-31（D1-D8 精化追加）
+> **写作时间**: 2026-07-30 → 2026-07-31（D1-D8 精化追加）→ 2026-08-14（清晰版 5 处补充，重新 LOCKED）
 
 ## 📋 1 个文档
 
 | # | 文档 | 行数 | 状态 | 用途 |
 |---|---|---|---|---|
-| 1 | **inspiration-stage1-2026-07-30.md** | 2201 行 | 🟢 **LOCKED** | 灵感全沉淀（22 大类 / §1-§21）|
+| 1 | **inspiration-stage1-2026-07-30.md** | 2201 → 2196 行 (+澄清) | 🟢 **LOCKED** | 灵感全沉淀（22 大类 / §1-§21，2026-08-14 清晰版 5 处补充）|
 
 ## 🎯 阶段 1 在 R14 中的位置
 
@@ -69,7 +69,7 @@
 2. §2 城堡底线（主人明确的硬约束）
 
 ### 🕐 30 分钟 — "灵感核心"
-1. §2.B 13 项生物特征（理解 Apeireth 作为"生命系统"的基础）
+1. §2.B 13 项生物特征（理解 Apeireth 作为 LLM 基地**支持**这些特征）
 2. §3 原则洋葱 v3.0（E/S/A/M/O 5 层）
 3. §10 哲学守门 9 键 + 5 项不假装
 
@@ -98,3 +98,38 @@ _🟢 当前活跃 = inspiration-stage1-2026-07-30.md（2201 行 LOCKED）._
 _§与后续阶段衔接表格明确阶段 1 的 7 处关键引用._
 _§关键诚实明确 LOCKED 不修改 + 原因._
 _主哲学 6 锚穿透. 任何接手者能查._
+
+---
+
+## 🆕 归位新增 (2026-08-15, 主人拍板)
+
+**原则**: stage1 = 顶层设计 + 产品设计 (是什么 / 为什么 / 长成什么样)。以下文档按此原则归位 (原文不动, 仅移动位置):
+
+| 文档 | 来源 | 归类 |
+|---|---|---|
+| product-loop-design.md | docs/ (新建) | 产品设计 (产品闭环) |
+| 阿佩瑞斯-未来愿景小说.txt | Desktop/youyou/ | 愿景 (产品) |
+| Apeireth的未来哲学杂谈1.txt | Desktop/youyou/ | 哲学/愿景 (伙伴) |
+| 00-VISION.md | docs/v2-strategy/ | 顶层愿景 |
+| 08-MULTIPARADIGM-FRONTEND-AND-SECURITY-VISION.md | docs/v2-strategy/ | 产品设计 (前端形态) |
+| design-v2-v4-v4.1-v6.md | docs/omnibus/ | 顶层设计汇总 |
+| philosophy-core.md | docs/omnibus/ | 哲学核心 |
+| 9-organs.md | docs/omnibus/ | 9 organ 顶层 |
+| architecture-v3-aircraft-carrier.md | docs/ | 顶层架构 (航母) |
+| architecture-v4-living-intelligence.md | docs/ | 顶层架构 (生命) |
+| architecture-v4-1-living-intelligence-update.md | docs/ | 顶层架构 (生命更新) |
+| onion-wall-architecture-2026-07-31.md | docs/ | 顶层 (洋葱墙) |
+| r14-design-philosophy-2026-07-30.md | docs/r14-design/ | 哲学 (8 原则) |
+| philosophy-traits-2026-07-30.md | docs/r14-design/ | 哲学 (trait 框架) |
+| rust-traits-spec-2026-07-30.md | docs/r14-design/ | 哲学/规格 |
+
+归位映射表: `docs/document-relocation-map.md`
+
+### 追加 (2026-08-15, 来自 stage4)
+
+| 文档 | 来源 | 归类 |
+|---|---|---|
+| architecture-frontend-design-proposal.md | docs/stage4/ | 产品设计 (前端) |
+| global-architecture-map-2026-08-05.md | docs/stage4/ | 顶层架构 (全局图) |
+| architecture-stage4-inspiration-supplements.md | docs/stage4/ | 顶层 (灵感补充) |
+| stage4-thinking-document.md | docs/stage4/ | 顶层 (第一性原理) |

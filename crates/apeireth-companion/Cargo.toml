@@ -1,0 +1,47 @@
+[package]
+name = "apeireth-companion"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth companion organ (A12.5) - 长期跨 session 用户关系器官, 承载''用户是 AI 伙伴'' 语义. 基于 apeireth-graph-primitive, 提供 Partner / Bond / Milestone / Timeline / Companion 核心类型."
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-graph-primitive = { path = "../apeireth-graph-primitive" }
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+async-trait = { workspace = true }
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-lark = { path = "../apeireth-lark" }
+apeireth-asi = { path = "../apeireth-asi" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-evolution = { path = "../apeireth-evolution" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-guard = { path = "../apeireth-guard" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+
+[dev-dependencies]
+tokio = { workspace = true }
+apeireth-api = { path = "../apeireth-api" }
+
+[lib]
+name = "apeireth_companion"
+path = "src/lib.rs"
+
+[[example]]
+name = "companion_demo"
+path = "examples/companion_demo.rs"
+
+[lints]
+workspace = true

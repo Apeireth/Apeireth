@@ -122,3 +122,24 @@ _🟢 当前活跃 = 19 份 stage2-decisions-*.md（含 D2 增补）._
 _§与后续阶段衔接表格明确阶段 2 的 6 处关键引用._
 _§关键诚实明确 LOCKED 不修改 + 原因._
 _主哲学 6 锚穿透. 任何接手者能查._
+
+---
+
+## 🆕 归位新增 (2026-08-15, 主人拍板)
+
+**原则**: stage2 = 具体想法 (怎么做)。以下文档按此原则归位 (原文不动, 仅移动位置):
+
+| 文档 | 来源 | 归类 |
+|---|---|---|
+| 01-INDUSTRY-LANDSCAPE.md ~ 07-VCP-GAP-UPGRADE-PLAN.md (7 份) | docs/v2-strategy/ | 调研/计划/路线 |
+| 17-APEIRETH-VS-VCP-CONSUMER-PLAN.md | docs/ | 竞品/消费计划 |
+| 18-VCP-BORROW-RETROSPECTIVE.md | docs/ | 借鉴回顾 |
+| Apeireth-v2.1-Industry-Top-Backend-Roadmap.md | docs/ | 行业后端路线 |
+| competitive-analysis-2026-08-05.md | docs/ | 竞品分析 |
+| backend-capabilities.md | docs/ | 能力清单 |
+| tech-review-2026-08-05.md | docs/ | 技术审查 |
+| tui-r135-integration-design.md | docs/ | 集成设计 |
+| 9-organ-integration-blueprint.md | docs/spirit/ | 集成蓝图 |
+| architecture-v4-2-r145-modules/ (7 模块) | docs/ | 模块具体设计 |
+
+归位映射表: `docs/document-relocation-map.md`
