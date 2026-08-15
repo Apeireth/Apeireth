@@ -45,7 +45,8 @@
 use apeireth_pipeline::Pipeline;
 use apeireth_protocol::{
     decode_for_kind, encode_for_kind, ContentPart, MessageRole, NormalizedMessage,
-    NormalizedRequest, NormalizedResponse, ProtocolError, ProtocolKind,
+    NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedToolChoice,
+    ProtocolError, ProtocolKind, ToolCall,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -246,6 +247,8 @@ pub struct OpenAiChatChoice {
 pub struct OpenAiChatMessageOut {
     pub role: &'static str,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<Value>>,
 }
 
 #[derive(Debug, Serialize, Clone)]
@@ -265,15 +268,72 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
             let role = MessageRole::from_legacy_value(&m.role);
             // 借鉴 VCP protocolBridge.js:21-42 normalizeTextContent
             let content = ContentPart::from_legacy_value(&m.content);
+            // 战役 2 补: assistant 消息的 tool_calls 透传 (原「简化」留白)
+            let tool_calls: Vec<ToolCall> = m
+                .tool_calls
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|v| ToolCall {
+                    id: v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                    name: v
+                        .get("function")
+                        .and_then(|f| f.get("name"))
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    arguments: v
+                        .get("function")
+                        .and_then(|f| f.get("arguments"))
+                        .and_then(|x| x.as_str())
+                        .and_then(|s| serde_json::from_str(s).ok())
+                        .unwrap_or(Value::Null),
+                })
+                .collect();
             NormalizedMessage {
                 role,
                 content,
-                tool_calls: Vec::new(), // 简化: tool_calls 解析留给战役 2 tool_runtime
+                tool_calls,
                 tool_call_id: m.tool_call_id.clone(),
                 name: None,
             }
         })
         .collect();
+
+    // 战役 2 补: tools 定义透传 (原「简化」留白)
+    let tools: Vec<NormalizedTool> = req
+        .tools
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| {
+            let f = v.get("function")?;
+            let name = f.get("name")?.as_str()?.to_string();
+            let desc = f.get("description").and_then(|x| x.as_str()).unwrap_or("");
+            let params = f
+                .get("parameters")
+                .and_then(|p| p.as_object())
+                .cloned()
+                .unwrap_or_default();
+            Some(NormalizedTool::new(name).with_description(desc).with_parameters(params))
+        })
+        .collect();
+
+    let tool_choice: Option<NormalizedToolChoice> = req.tool_choice.clone().and_then(|v| {
+        if let Some(s) = v.as_str() {
+            match s {
+                "auto" => Some(NormalizedToolChoice::Auto),
+                "none" => Some(NormalizedToolChoice::None),
+                "required" => Some(NormalizedToolChoice::Required),
+                _ => None,
+            }
+        } else {
+            v.get("function")
+                .and_then(|f| f.get("name"))
+                .and_then(|n| n.as_str())
+                .map(|n| NormalizedToolChoice::Specific { name: n.to_string() })
+        }
+    });
 
     NormalizedRequest {
         model: req.model.clone(),
@@ -282,8 +342,8 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
         max_tokens: req.max_tokens,
         stream: req.stream,
         stop: req.stop.clone().unwrap_or_default(),
-        tools: Vec::new(), // 简化
-        tool_choice: None,
+        tools,
+        tool_choice,
         metadata: Default::default(),
     }
 }
@@ -305,6 +365,26 @@ pub fn openai_chat_from_normalized(resp: &NormalizedResponse) -> OpenAiChatRespo
             message: OpenAiChatMessageOut {
                 role: "assistant",
                 content: resp.content.clone(),
+                tool_calls: if resp.tool_calls.is_empty() {
+                    None
+                } else {
+                    Some(
+                        resp.tool_calls
+                            .iter()
+                            .map(|tc| {
+                                json!({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.name,
+                                        "arguments": serde_json::to_string(&tc.arguments)
+                                            .unwrap_or_else(|_| "{}".to_string())
+                                    }
+                                })
+                            })
+                            .collect(),
+                    )
+                },
             },
             finish_reason,
         }],

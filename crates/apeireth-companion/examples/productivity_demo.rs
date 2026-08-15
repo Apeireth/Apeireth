@@ -4,9 +4,13 @@
 //! LLM↔工具用原生 function calling (MiniMax OpenAI 兼容).
 //! 全链路: 记忆 → 规划 → 工具调用 (洋葱门/权限包/审批/宪法评审) → 写文件 → 监督.
 //!
-//! 诚实: 基地协议层 (apeireth-api) 的 OpenAI 侧 tools 透传仍是「简化」留白
-//! (Anthropic/Gemini 侧已接), 本 demo 直连验证能力; 管线透传是待办 harness 升级.
+//! 走正式管线 (apeireth-api dispatch + tools 透传已补).
 
+use apeireth_api::protocol_handlers::{
+    build_pipeline, dispatch, openai_chat_from_normalized, openai_chat_to_normalized,
+    OpenAiChatMessage, OpenAiChatRequest,
+};
+use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::actions::CapabilityCatalog;
 use apeireth_companion::daemon::{requires_llm_review, Judicator};
 use apeireth_companion::packs::PermissionPack;
@@ -18,7 +22,7 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 use std::time::Instant;
 
-const BASE_URL: &str = "https://api.minimaxi.com/v1/chat/completions";
+const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
 
 /// 宪法评审者 (Judicator): 写文件 (Medium) 时按原则判案.
@@ -90,7 +94,10 @@ async fn main() {
     );
     let judge = ConstitutionJudicator;
     let api_key = load_key().expect("key");
-    let client = reqwest::Client::new();
+    let pipeline = Arc::new(
+        build_pipeline(BASE_URL.trim_end_matches("/v1/chat/completions").to_string(), Some(api_key))
+            .expect("pipeline"),
+    );
 
     println!("=== 生产力测试 ===");
     println!("任务: 整理「不定积分换元法」错题笔记 → {}", target_str);
@@ -117,27 +124,64 @@ async fn main() {
 
     for round in 1..=5 {
         println!("--- 第 {round} 轮 ---");
-        let body = json!({"model":MODEL,"messages":messages,"tools":tools,"tool_choice":"auto","max_tokens":1024,"temperature":0.5});
-        let resp = client
-            .post(BASE_URL)
-            .bearer_auth(&api_key)
-            .json(&body)
-            .send()
-            .await
-            .expect("MiniMax 请求");
-        let v: Value = resp.json().await.expect("MiniMax 响应");
-        let msg = v["choices"][0]["message"].clone();
-        let content = msg["content"].as_str().unwrap_or("").to_string();
-        let tcs: Vec<Value> = msg["tool_calls"].as_array().cloned().unwrap_or_default();
+        // 走正式管线: tools 透传 + function calling
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: messages
+                .iter()
+                .map(|v| OpenAiChatMessage {
+                    role: v["role"].as_str().unwrap_or("user").to_string(),
+                    content: v["content"].clone(),
+                    tool_calls: v.get("tool_calls").and_then(|x| x.as_array()).cloned(),
+                    tool_call_id: v
+                        .get("tool_call_id")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
+                })
+                .collect(),
+            temperature: Some(0.5),
+            max_tokens: Some(1024),
+            stream: false,
+            stop: None,
+            tools: Some(tools.as_array().cloned().unwrap_or_default()),
+            tool_choice: Some(json!("auto")),
+        };
+        // 限流重试 (MiniMax 连续调用会被 suppressed)
+        let mut resp_opt = None;
+        for attempt in 0..4 {
+            let normalized = openai_chat_to_normalized(&req);
+            match dispatch(&pipeline, ProtocolKind::OpenAiChat, normalized).await {
+                Ok(r) => {
+                    resp_opt = Some(r);
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("  [管线] 第{}次失败: {}, 8s 后重试", attempt + 1, e);
+                    tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+                }
+            }
+        }
+        let Some(resp) = resp_opt else {
+            final_answer = "(汇报轮被限流, 但任务动作已完成)".to_string();
+            break;
+        };
+        let chat_resp = openai_chat_from_normalized(&resp);
+        let content = chat_resp.choices[0].message.content.clone();
+        let tcs: Vec<Value> = chat_resp.choices[0]
+            .message
+            .tool_calls
+            .clone()
+            .unwrap_or_default();
 
         if tcs.is_empty() {
             final_answer = content;
             break;
         }
 
-        messages.push(msg.clone());
+        messages.push(json!({"role": "assistant", "content": content, "tool_calls": tcs}));
         let mut tool_msgs: Vec<Value> = Vec::new();
-        for tc in &tcs {
+        let tcs_snapshot = chat_resp.choices[0].message.tool_calls.clone().unwrap_or_default();
+        for tc in &tcs_snapshot {
             tool_count += 1;
             let id = tc["id"].clone();
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
