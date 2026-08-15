@@ -67,6 +67,8 @@
 
 pub mod decision;
 pub mod fuzzy_bridge;
+// R177: tool approval invariants
+mod organ_kani_proofs;
 pub mod history;
 pub mod manager;
 pub mod rule;

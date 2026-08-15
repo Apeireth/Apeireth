@@ -24,6 +24,8 @@
 #![allow(missing_docs)]
 
 pub mod provider;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod generators;
 pub mod params;
 pub mod result;

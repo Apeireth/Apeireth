@@ -22,3 +22,6 @@ async-trait = { workspace = true }
 
 [lib]
 path = "src/lib.rs"
+# R179 P0#X (warnings cleanup): 加 [lints] section 继承 workspace (含 unexpected_cfgs.check-cfg = ['cfg(kani)'])
+[lints]
+workspace = true

@@ -267,6 +267,8 @@ pub fn placeholder() -> &'static str {
     "apeireth-cli R14 skeleton"
 }
 pub mod commands;  // R116: skills/eval/council subcommand set
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 // R127-2 P9-1: clap ValueEnum 借鉴 (Stage 2 借脑 1.0, per decision-56 §2.4)
 pub mod output_format;
 

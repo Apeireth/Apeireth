@@ -35,6 +35,8 @@
 #![deny(unsafe_code)]
 
 pub mod consistency;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod formal_proof;
 pub mod invariants;
 pub mod strategy;

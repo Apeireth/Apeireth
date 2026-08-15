@@ -51,7 +51,7 @@ apeireth-consciousness = { path = "../apeireth-consciousness" }
 apeireth-life-force = { path = "../apeireth-life-force" }
 apeireth-motivation = { path = "../apeireth-motivation" }
 apeireth-value = { path = "../apeireth-value" }
-apeireth-relation = { path = "../apeireth-relation" }
+apeireth-graph-primitive = { path = "../apeireth-graph-primitive" }
 apeireth-action = { path = "../apeireth-action" }
 apeireth-perception = { path = "../apeireth-perception" }
 apeireth-central = { path = "../apeireth-central" }

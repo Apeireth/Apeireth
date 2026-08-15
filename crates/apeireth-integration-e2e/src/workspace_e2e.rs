@@ -13,7 +13,7 @@
 //! apeireth-core / apeireth-memory / apeireth-asi / apeireth-tools / apeireth-cli /
 //! apeireth-bench / apeireth-cognition / apeireth-action / apeireth-life-force /
 //! apeireth-constraint / apeireth-central / apeireth-value / apeireth-consciousness /
-//! apeireth-relation / apeireth-motivation / apeireth-perception / apeireth-upgrade /
+//! apeireth-graph-primitive / apeireth-motivation / apeireth-perception / apeireth-upgrade /
 //! apeireth-onion / apeireth-council / apeireth-sovereignty / apeireth-supervisor /
 //! apeireth-pybridge / apeireth-verify / apeireth-extension
 //!
@@ -40,7 +40,7 @@ pub const LOCKED_CRATES: &[&str] = &[
     "apeireth-central",
     "apeireth-value",
     "apeireth-consciousness",
-    "apeireth-relation",
+    "apeireth-graph-primitive",
     "apeireth-motivation",
     "apeireth-perception",
     "apeireth-upgrade",

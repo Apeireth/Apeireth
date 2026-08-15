@@ -33,6 +33,11 @@ pub mod plutchik;  // R218
 pub mod plutchik_integration;  // R209: Plutchik <-> BaseEmotion 6 桥接: Plutchik 8 基础 + 8 高级情绪 (R187 调研推荐)
 pub mod plutchik_engine;  // R211: ExtendedEmotionEngine — Plutchik emotion engine 集成
 pub mod transfer_monitor;
+// R173 ST-B7.1 — bridge 7: memory -> consciousness
+pub mod memory_bridge;
+// R176: bridge 7 Kani proofs
+mod memory_kani_proofs;
+mod organ_kani_proofs;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -412,4 +417,5 @@ pub use crate::emotion::DecaySnapshot;  // R237
 pub use crate::transfer_monitor::{
     CognitiveDreamMonitor, CycleInfo, MonitorError, RateLimitError, TransferSnapshot,
 };
+
 

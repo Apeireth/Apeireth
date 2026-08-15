@@ -31,6 +31,10 @@
 #![deny(unsafe_code)]
 
 pub mod advisor;
+// R177: council invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
+// R176: 7×7=49 agent delegation paths test matrix
+pub mod delegation_matrix;
 pub mod bus_bridge;  // R111: Council deliberation event → bus 真接
 pub mod graph_bridge;  // R113: cognition summary → council deliberation context 真接
 pub mod mcp_bridge;  // R115: CouncilMember → MCP Prompt/ResourceServer 桥接

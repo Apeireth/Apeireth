@@ -54,5 +54,6 @@ path = "examples/team_lead_demo.rs"
 # 整合其他 5 P0 crate 时一起 rebase 回归 workspace members)
 # 当前 lints 设置, 不强求跟着 workspace 同步, 减少 noise
 [lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
 unused_imports = "allow"
 dead_code = "allow"

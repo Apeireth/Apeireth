@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use apeireth_core::Episode;
 use apeireth_vector::{SearchHit, Vector, VectorStore};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::episode::EpisodeStore;
@@ -38,6 +39,89 @@ pub fn episode_uuid(episode_id: &str) -> Uuid {
     Uuid::new_v5(&EPISODE_NS, episode_id.as_bytes())
 }
 
+/// Embedder 身份 (RFC 001 移植 from mempalace `backends/base.py::EmbedderIdentity`).
+///
+/// ## 目的
+/// 防止"静默降级"bug: 当 embedder 升级 (e.g. FNV-1a 改 FNV-1a-v2, 或换真 LLM)
+/// 时, 旧 index 里的向量用新 embedder 检索会全错. 持久化 `model_name` 后,
+/// 启动时 mismatch 立即报错, 而不是悄悄返回乱序结果.
+///
+/// ## 字段
+/// - `model_name`: 稳定标识 (e.g. `"apeireth/hash-fnva-1a/v1"`).
+///   **不可含版本号以外的运行时信息** (e.g. 路径 / hash / 时间), 否则
+///   同一 embedder 在不同部署会判 mismatch.
+/// - `dimension`: 向量维度. `0` = unknown (mempalace 同语义:
+///   "no dimension signal", 跳过 dim 比对, 只比 model_name).
+///
+/// ## 协议 (RFC 001)
+/// 1. 首次写入: 把当前 embedder identity 持久化到 vector store metadata.
+/// 2. 后续打开: 读 stored identity, 比对 model_name + dimension.
+/// 3. Legacy vector store (无 identity metadata): 报 `IdentityUnknown`
+///    warning (per mempalace `EmbedderIdentityUnknownWarning`), 写入后
+///    自动补登, 后续 open 转 strict.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EmbedderIdentity {
+    /// 稳定模型标识.
+    pub model_name: String,
+    /// 向量维度. 0 = unknown (legacy).
+    pub dimension: usize,
+}
+
+impl EmbedderIdentity {
+    /// 构造一个 identity.
+    pub fn new(model_name: impl Into<String>, dimension: usize) -> Self {
+        Self {
+            model_name: model_name.into(),
+            dimension,
+        }
+    }
+
+    /// 未知 / legacy identity (dimension = 0 信号).
+    pub fn unknown() -> Self {
+        Self {
+            model_name: String::new(),
+            dimension: 0,
+        }
+    }
+
+    /// 是否标记为 legacy / unknown.
+    pub fn is_unknown(&self) -> bool {
+        self.model_name.is_empty() || self.dimension == 0
+    }
+
+    /// 严格匹配 (model_name + dim 都非空 + 一致).
+    pub fn matches(&self, other: &EmbedderIdentity) -> bool {
+        if self.is_unknown() || other.is_unknown() {
+            // Legacy 兼容: 任一 unknown 视为相等 (mempalace 同语义).
+            return true;
+        }
+        self.model_name == other.model_name && self.dimension == other.dimension
+    }
+}
+
+impl std::fmt::Display for EmbedderIdentity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_unknown() {
+            write!(f, "<unknown embedder>")
+        } else {
+            write!(f, "{}@{}d", self.model_name, self.dimension)
+        }
+    }
+}
+
+impl EmbedderIdentity {
+    /// Builder: 设 dimension (keep model_name).
+    pub fn with_dim(mut self, dim: usize) -> Self {
+        self.dimension = dim;
+        self
+    }
+
+    /// Trait-default helper (use_unknown + set dim).
+    fn tap_dim(self, dim: usize) -> Self {
+        self.with_dim(dim)
+    }
+}
+
 /// 文本 → 向量 trait.
 ///
 /// ## 实现选择
@@ -49,6 +133,13 @@ pub trait EmbedFn: Send + Sync {
     fn dim(&self) -> usize;
     /// 把一段文本编码成 dim 维 f32 向量.
     fn embed(&self, text: &str) -> Vec<f32>;
+    /// 返回 embedder 身份 (RFC 001). 默认 unknown + self.dim().
+    ///
+    /// 实现方**应该**override 此方法返回稳定 model_name + dimension.
+    /// 不 override = 不参与身份校验 (warning 而非 error).
+    fn identity(&self) -> EmbedderIdentity {
+        EmbedderIdentity::unknown().tap_dim(self.dim())
+    }
 }
 
 /// 确定性 FNV-1a hash-based embedder (测试 / 本地 dev 用).
@@ -75,6 +166,16 @@ impl HashEmbedder {
 }
 
 impl EmbedFn for HashEmbedder {
+    /// RFC 001 身份: FNV-1a hash embedder, 语义版本 v1.
+    ///
+    /// ## 命名约定 (apeireth namespace)
+    /// - `apeireth/<algo>/<version>`
+    /// - algo: 算法名 (`hash-fnva-1a` = FNV-1a 64-bit hash)
+    /// - version: 实现版本 (改 hash 函数 / dim 行为时 bump)
+    fn identity(&self) -> EmbedderIdentity {
+        EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", self.dim)
+    }
+
     fn dim(&self) -> usize {
         self.dim
     }
@@ -102,24 +203,74 @@ impl EmbedFn for HashEmbedder {
 ///
 /// `&'m SqliteMemoryStore` 借用保证内存 store 不会在 index 期间被释放.
 /// `Box<dyn VectorStore>` 因为 trait object 持有所有权.
+///
+/// ## P0-5 (RFC 001 移植)
+/// 持有 `embedder_identity`, 在每次 `index_episode` 时:
+/// - 跟当前 embedder 的 identity 比对
+/// - mismatch → `MemoryError::Other("embedder identity mismatch: stored=X@Yd current=Z@Wd")`
+/// - 跟 unknown (legacy) 比对 → 写入当前 identity (per RFC 001 §3 warn-then-strict)
 pub struct SemanticIndex<'m> {
     memory: &'m SqliteMemoryStore,
     vector: Mutex<Box<dyn VectorStore>>,
     embedder: Arc<dyn EmbedFn>,
+    /// Embedder 身份 (RFC 001).
+    ///
+    /// 默认 = `embedder.identity()` (从 trait 取).
+    /// 旧 vector store 加载时 = stored identity (从 metadata 读).
+    embedder_identity: EmbedderIdentity,
 }
 
 impl<'m> SemanticIndex<'m> {
     /// 构造一个 SemanticIndex.
+    ///
+    /// ## P0-5
+    /// 从 `embedder.identity()` 取身份, 存进 `embedder_identity` 字段.
+    /// 后续 `index_episode` 时用这个 stored identity 跟当前 embedder 比对.
     pub fn new(
         memory: &'m SqliteMemoryStore,
         vector: Box<dyn VectorStore>,
         embedder: Arc<dyn EmbedFn>,
     ) -> Self {
+        let identity = embedder.identity();
         Self {
             memory,
             vector: Mutex::new(vector),
             embedder,
+            embedder_identity: identity,
         }
+    }
+
+    /// 构造并显式指定 stored identity (用于从旧 vector store 加载).
+    ///
+    /// 比对规则 (per RFC 001 §3):
+    /// - stored == unknown: 自动采用 embedder 当前 identity (warn-then-strict)
+    /// - stored matches embedder: 通过
+    /// - stored mismatch embedder: `MemoryError::Other("embedder identity mismatch: ...")`
+    pub fn with_stored_identity(
+        memory: &'m SqliteMemoryStore,
+        vector: Box<dyn VectorStore>,
+        embedder: Arc<dyn EmbedFn>,
+        stored: EmbedderIdentity,
+    ) -> MemoryResult<Self> {
+        let current = embedder.identity();
+        if !stored.is_unknown() && !current.is_unknown() && stored != current {
+            return Err(MemoryError::Other(format!(
+                "embedder identity mismatch: stored={} current={}",
+                stored, current
+            )));
+        }
+        // stored unknown OR matches: 采用 current (warn-then-strict)
+        Ok(Self {
+            memory,
+            vector: Mutex::new(vector),
+            embedder,
+            embedder_identity: if stored.is_unknown() { current } else { stored },
+        })
+    }
+
+    /// 取 stored embedder identity.
+    pub fn embedder_identity(&self) -> &EmbedderIdentity {
+        &self.embedder_identity
     }
 
     /// 取出底层 vector store (供 caller 配置 dim / 查询).
@@ -133,10 +284,19 @@ impl<'m> SemanticIndex<'m> {
     }
 
     /// 把一条 episode 写入 index:
-    /// 1. embed episode.content
-    /// 2. upsert 到 vec0
-    /// 3. (内存存储) 不动, episode 已经在 `SqliteMemoryStore` 里
+    /// 1. **P0-5 校验**: 当前 embedder 身份 == stored identity? mismatch → error
+    /// 2. embed episode.content
+    /// 3. upsert 到 vec0
+    /// 4. (内存存储) 不动, episode 已经在 `SqliteMemoryStore` 里
     pub fn index_episode(&self, ep: &Episode) -> MemoryResult<()> {
+        // P0-5: identity check (per RFC 001)
+        let current = self.embedder.identity();
+        if !self.embedder_identity.matches(&current) {
+            return Err(MemoryError::Other(format!(
+                "embedder identity mismatch: stored={} current={}",
+                self.embedder_identity, current
+            )));
+        }
         let vec = self.embedder.embed(&ep.content);
         let v = Vector::new(episode_uuid(&ep.id), vec);
         let mut guard = self.vector.lock().expect("vector mutex");
@@ -342,5 +502,123 @@ mod tests {
         idx.index_episode(&ep).unwrap();
         // 现在 dim 应该是 64
         assert_eq!(idx.vector().dimension(), 64);
+    }
+
+    // =====================================================================
+    // P0-5: Embedder \xe6\x8a\x80\xe6\x9c\xaf\xe6\xa0\x87\xe8\xaf\x86\xe6\xa0\xa1\xe9\xaa\x8c (RFC 001 \xe7\xa7\xbb\xe6\xa4\x8d from mempalace)
+    // =====================================================================
+
+    /// 1. EmbedderIdentity \xe5\x9f\xba\xe7\xa1\x80\xe6\x9e\x84\xe9\x80\xa0 + Display
+    #[test]
+    fn embedder_identity_display_format() {
+        let id = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        assert_eq!(format!("{id}"), "apeireth/hash-fnva-1a/v1@64d");
+        let unk = EmbedderIdentity::unknown();
+        assert_eq!(format!("{unk}"), "<unknown embedder>");
+        assert!(unk.is_unknown());
+        assert!(!id.is_unknown());
+    }
+
+    /// 2. matches() \xe8\xa7\x84\xe5\x88\x99: \xe5\x90\x8c model_name + dim -> true
+    #[test]
+    fn embedder_identity_matches_same_identity() {
+        let a = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        let b = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        assert!(a.matches(&b));
+    }
+
+    /// 3. matches() \xe8\xa7\x84\xe5\x88\x99: model_name \xe4\xb8\x8d\xe5\x90\x8c -> false
+    #[test]
+    fn embedder_identity_mismatch_model_name() {
+        let a = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        let b = EmbedderIdentity::new("apeireth/hash-fnva-1a/v2", 64);
+        assert!(!a.matches(&b));
+    }
+
+    /// 4. matches() \xe8\xa7\x84\xe5\x88\x99: dim \xe4\xb8\x8d\xe5\x90\x8c -> false
+    #[test]
+    fn embedder_identity_mismatch_dimension() {
+        let a = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        let b = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 128);
+        assert!(!a.matches(&b));
+    }
+
+    /// 5. matches() \xe8\xa7\x84\xe5\x88\x99: legacy \xe5\x85\xbc\xe5\xae\xb9 - \xe4\xbb\xbb\xe4\xb8\x80 unknown -> true (RFC 001 \xc2\xa73 warn-then-strict)
+    #[test]
+    fn embedder_identity_legacy_unknown_matches() {
+        let known = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 64);
+        let unknown = EmbedderIdentity::unknown();
+        assert!(known.matches(&unknown));
+        assert!(unknown.matches(&known));
+    }
+
+    /// 6. HashEmbedder::identity() \xe8\xbf\x94\xe5\x9b\x9e RFC 001 \xe6\xa0\x87\xe8\xaf\x86
+    #[test]
+    fn hash_embedder_identity_is_rfc001() {
+        let e = HashEmbedder::new(64);
+        let id = e.identity();
+        assert_eq!(id.model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(id.dimension, 64);
+        assert!(!id.is_unknown());
+    }
+
+    /// 7. SemanticIndex::new() \xe8\x87\xaa\xe5\x8a\xa8\xe4\xbb\x8e embedder \xe5\x8f\x96 identity
+    #[test]
+    fn semantic_index_new_captures_embedder_identity() {
+        let mem = fresh();
+        let idx = fresh_index(&mem, 32);
+        let id = idx.embedder_identity();
+        assert_eq!(id.model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(id.dimension, 32);
+    }
+
+    /// 8. SemanticIndex \xe9\xbb\x98\xe8\xae\xa4\xe6\x9e\x84\xe9\x80\xa0 + \xe5\x90\x8c embedder -> index_episode \xe9\x80\x9a\xe8\xbf\x87
+    #[test]
+    fn semantic_index_identity_check_passes_same_embedder() {
+        let mem = fresh();
+        let idx = fresh_index(&mem, 32);
+        let ep = make_episode("ep-p0-5-1", "s", 1, "user", "hello");
+        idx.index_episode(&ep).expect("same embedder, should pass");
+        assert_eq!(idx.len().unwrap(), 1);
+    }
+
+    /// 9. SemanticIndex with_stored_identity + \xe4\xb8\x8d\xe5\x90\x8c model_name -> error
+    #[test]
+    fn semantic_index_with_stored_identity_mismatch_errors() {
+        let mem = fresh();
+        let backend = SqliteVecBackend::open_in_memory().expect("open vec");
+        let embedder: Arc<dyn EmbedFn> = Arc::new(HashEmbedder::new(32));
+        let stored = EmbedderIdentity::new("apeireth/hash-fnva-1a/v2", 32);
+        let res = SemanticIndex::with_stored_identity(&mem, Box::new(backend), embedder, stored);
+        assert!(res.is_err(), "mismatch should error");
+        let err = res.err().unwrap();
+        let msg = format!("{err:?}");
+        assert!(msg.contains("embedder identity mismatch"), "msg: {msg}");
+    }
+
+    /// 10. SemanticIndex with_stored_identity + stored unknown -> \xe6\x8e\xa5\xe5\x8f\x97 (RFC 001 \xc2\xa73)
+    #[test]
+    fn semantic_index_with_stored_identity_unknown_accepts() {
+        let mem = fresh();
+        let backend = SqliteVecBackend::open_in_memory().expect("open vec");
+        let embedder: Arc<dyn EmbedFn> = Arc::new(HashEmbedder::new(32));
+        let stored = EmbedderIdentity::unknown();
+        let idx = SemanticIndex::with_stored_identity(&mem, Box::new(backend), embedder, stored)
+            .expect("unknown stored should accept (legacy compat)");
+        let id = idx.embedder_identity();
+        assert_eq!(id.model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(id.dimension, 32);
+    }
+
+    /// 11. SemanticIndex with_stored_identity + same identity -> \xe6\x8e\xa5\xe5\x8f\x97
+    #[test]
+    fn semantic_index_with_stored_identity_same_accepts() {
+        let mem = fresh();
+        let backend = SqliteVecBackend::open_in_memory().expect("open vec");
+        let embedder: Arc<dyn EmbedFn> = Arc::new(HashEmbedder::new(32));
+        let stored = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 32);
+        let idx = SemanticIndex::with_stored_identity(&mem, Box::new(backend), embedder, stored)
+            .expect("same identity should accept");
+        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
     }
 }

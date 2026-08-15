@@ -71,3 +71,6 @@ pub use runtime_bridge::{BridgeState, RuntimeBridge};
 // 0 触碰 LOCKED (24 LOCKED): cognition / core / sovereignty / formal / asi / memory / onion / bus /
 // verify / extension / evolution / perception / motivation / supervisor / pybridge / config /
 // naming-v05 / cron / life-force / value / consciousness / relation / action 全部 untouched
+
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;

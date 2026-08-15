@@ -54,6 +54,8 @@ use std::error::Error;
 use std::fmt;
 
 pub mod skill_companion;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod skill_execution;
 pub mod skill_frontmatter;
 pub mod skill_prompt;

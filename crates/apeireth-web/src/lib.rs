@@ -11,6 +11,8 @@
 //! - `templates` — 共享 HTML 模板 helpers (html_escape, render_error_page)
 
 pub mod api;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 #[cfg(feature = "ssr")]
 pub mod api_endpoints;
 pub mod app;

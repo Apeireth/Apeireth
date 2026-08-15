@@ -48,6 +48,8 @@
 // ============================================================
 
 pub mod executor;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod fuzzy;
 // R127-2 P6-2: opencode 子代理 重试 — MCP 协议 (servers 175 cloned 借脑)
 pub mod mcp_protocol;

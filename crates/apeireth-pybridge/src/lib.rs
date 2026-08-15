@@ -19,6 +19,8 @@
 
 
 pub mod asi_modules;
+// R177: organ invariants (5 tests + 2 Kani)
+mod organ_kani_proofs;
 pub mod bridge;
 pub mod bridge_pool;
 // R129-4 ASI Python 整合 Stage 4 自治 - D4 决策自循环 (per decision-61 §3.1 R129-4)

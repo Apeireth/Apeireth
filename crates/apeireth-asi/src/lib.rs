@@ -23,6 +23,8 @@ pub mod scheduler;
 pub mod tokenizer;
 /// R207: ASI 高级统计 utilities (std + auto-vectorization, 0 新依赖)
 pub mod stats;
+// R177: asi invariants (10 tests + 2 Kani proofs)
+mod organ_kani_proofs;
 
 pub use calibration::{
     AdaptiveBaseline, CalibrationCoefficients, CalibrationLoop, Coeff, LinearCalibration,

@@ -1,0 +1,27 @@
+[package]
+name = "apeireth-guard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth Privacy Guard (VCP 模式 3/8): PII 检测 + 脱敏 + 审计"
+keywords = ["ai", "privacy", "pii", "redaction", "vcp"]
+categories = ["data-structures"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = "0.1"
+regex = "1.10"
+once_cell = "1.20"
+sha2 = "0.10"
+parking_lot = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

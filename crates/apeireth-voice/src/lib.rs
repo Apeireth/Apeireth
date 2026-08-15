@@ -115,6 +115,14 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> Result<(), V
 //   the 3 immutable spines remain — Self-Disable / L0 HA / 13-key verdict cache)
 // - 0 touches workspace version (1.2.0) or existing 23 fixture + 23 tests
 pub mod real;
+// R173 ST-B4.0 — Tone 抽象 (桥 4 / 桥 8 共享)
+pub mod tone;
+// R173 ST-B4.1 — bridge 4: consciousness -> voice
+pub mod consciousness_bridge;
+// R173 ST-B8.1 — bridge 8: companion -> voice
+pub mod companion_bridge;
+// R176: bridges 4+8 Kani proofs
+mod bridge_kani_proofs;
 pub mod minimax_live;
 
 // ============================================================================
@@ -832,3 +840,5 @@ mod tests {
         assert!(status.stub_mode);
     }
 }
+
+
