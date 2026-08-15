@@ -461,7 +461,13 @@ pub fn snapshot_consciousness() -> OrganStatus {
 /// - 100+ episode = 1.0 (满血)
 /// - primary/secondary/tertiary 全部从 MEMORY_STORE 真查 (web-session / council-history / identity)
 pub fn snapshot_memory() -> Result<OrganStatus, String> {
-    let s = memory_store()?;
+    snapshot_memory_with(&memory_store()?)
+}
+
+/// 真后端 health 计算 (注入 store, 测试确定性; 生产用 [`snapshot_memory`] 走全局).
+/// 抽出独立函数: 全局 `MEMORY_STORE` 在并行测试下可能被其它测试先设, 或共享真文件
+/// 锁竞争导致 `open` 失败 — 测试直接注入自己的 store, 0 依赖全局.
+fn snapshot_memory_with(s: &Arc<SqliteMemoryStore>) -> Result<OrganStatus, String> {
     let total = s
         .query(&EpisodeQuery::new().limit(i64::MAX as usize))
         .map(|v| v.len() as u64)
@@ -3617,9 +3623,9 @@ mod organs_real_backend_tests {
         let expected_health = (10.0_f64 / 100.0).clamp(0.0, 1.0);
         assert!((expected_health - 0.1).abs() < 1e-9);
 
-        // 全局 snapshot_memory 用的是全局 MEMORY_STORE, 不一定是这个 in-memory store
-        // 但 health 公式一致: episode_count / 100, 验证 health ∈ [0, 1] 即可
-        let organ = snapshot_memory().expect("snapshot_memory ok");
+        // 直接用注入 store 的确定性版本 (不碰全局 MEMORY_STORE: 并行测试下可能被
+        // 其它测试先设, 或共享真文件锁竞争) — health 公式 + primary 格式不变
+        let organ = snapshot_memory_with(&s).expect("snapshot_memory ok");
         assert_eq!(organ.name, "memory");
         assert_health_in_range(&organ);
         assert_primary_nonempty(&organ);
