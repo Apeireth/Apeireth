@@ -95,7 +95,10 @@ impl Auth for InMemoryAuth {
                 reason: "empty scope".into(),
             });
         }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         let value = format!("tk-{now}-{}", rand_suffix());
         let refresh = format!("rf-{now}-{}", rand_suffix());
         let tok = AuthToken {
@@ -143,7 +146,10 @@ impl Auth for InMemoryAuth {
                 ttl_seconds: 0,
             });
         }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         if now >= token.expires_at_ms {
             return Err(BlueprintError::D03WsAuthFailed {
                 reason: format!("token expired at {}", token.expires_at_ms),
@@ -211,7 +217,10 @@ struct TokenBucketState {
 
 impl TokenBucket {
     pub fn new(capacity: u32, refill_interval: Duration) -> Self {
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         Self {
             capacity,
             refill_interval,
@@ -225,11 +234,17 @@ impl TokenBucket {
 
 impl RateLimit for TokenBucket {
     fn try_acquire(&self) -> BlueprintResult<()> {
-        let mut s = self.state.lock().map_err(|_| BlueprintError::D04RateLimitExceeded {
-            bucket: "mutex".into(),
-            retry_after_ms: 0,
-        })?;
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let mut s = self
+            .state
+            .lock()
+            .map_err(|_| BlueprintError::D04RateLimitExceeded {
+                bucket: "mutex".into(),
+                retry_after_ms: 0,
+            })?;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         let elapsed_ms = now.saturating_sub(s.last_refill_ms);
         let refill_ms = self.refill_interval.as_millis() as u64;
         if refill_ms > 0 {
@@ -406,14 +421,16 @@ impl EnvFileConfig {
     }
 
     pub fn with_file(mut self, path: &std::path::Path) -> BlueprintResult<Self> {
-        let content = std::fs::read_to_string(path).map_err(|e| BlueprintError::Io(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(path).map_err(|e| BlueprintError::Io(e.to_string()))?;
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
             if let Some((k, v)) = line.split_once('=') {
-                self.file_values.insert(k.trim().to_string(), v.trim().to_string());
+                self.file_values
+                    .insert(k.trim().to_string(), v.trim().to_string());
             }
         }
         Ok(self)
@@ -552,7 +569,10 @@ mod tests {
     #[test]
     fn template_a_verify_rejects_expired() {
         // 直接构造过期 token
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
         let tok = AuthToken {
             value: "x".into(),
             issued_at_ms: now - 1000,
@@ -600,19 +620,17 @@ mod tests {
     #[test]
     fn template_c_user_error_classification() {
         let mapper = DefaultErrorMapper;
-        assert!(mapper.is_user_error(
-            &BlueprintError::K1StrongValidationFailed {
+        assert!(
+            mapper.is_user_error(&BlueprintError::K1StrongValidationFailed {
                 field: "f".into(),
                 value: "v".into(),
                 reason: "r".into(),
-            }
-        ));
-        assert!(!mapper.is_user_error(
-            &BlueprintError::K3AuditFailed {
-                channel: "c".into(),
-                reason: "r".into(),
-            }
-        ));
+            })
+        );
+        assert!(!mapper.is_user_error(&BlueprintError::K3AuditFailed {
+            channel: "c".into(),
+            reason: "r".into(),
+        }));
     }
 
     // --- D ---

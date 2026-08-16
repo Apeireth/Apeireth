@@ -17,7 +17,9 @@
 #![deny(unsafe_code)]
 
 use apeireth_central::skill_registry::{SkillRegistry, SkillSummary};
-use apeireth_central::skill_trait::{BrainstormingSkill, Skill, SkillId, TestDrivenDevelopmentSkill};
+use apeireth_central::skill_trait::{
+    BrainstormingSkill, Skill, SkillId, TestDrivenDevelopmentSkill,
+};
 
 #[test]
 fn test_skill_registry_has_14_skills() {
@@ -108,7 +110,11 @@ fn test_summarize_covers_all_skills() {
     let summaries: Vec<SkillSummary> = registry.summarize();
     assert_eq!(summaries.len(), 14);
     for summary in &summaries {
-        assert!(summary.step_count >= 3, "skill {} too few steps", summary.name);
+        assert!(
+            summary.step_count >= 3,
+            "skill {} too few steps",
+            summary.name
+        );
     }
     // summary 按 SkillId::Ord 排序
     for i in 1..summaries.len() {
@@ -125,7 +131,10 @@ fn test_steps_match_skill_spec() {
         brainstorming.steps().len() >= 3,
         "brainstorming skill should have >= 3 steps"
     );
-    assert!(brainstorming.tdd_required(), "brainstorming should require TDD");
+    assert!(
+        brainstorming.tdd_required(),
+        "brainstorming should require TDD"
+    );
 
     // registry 也应该能查到
     let step_count = registry.step_count(SkillId::Brainstorming);

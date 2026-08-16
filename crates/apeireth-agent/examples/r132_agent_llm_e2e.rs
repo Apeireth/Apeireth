@@ -53,22 +53,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let web_search = Arc::new(MockStaticTool {
         name: "WebSearch".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "search", "tool": "WebSearch", "results": ["doc1", "doc2"]}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "search", "tool": "WebSearch", "results": ["doc1", "doc2"]}),
+        )?,
     });
     let note_store = Arc::new(MockStaticTool {
         name: "NoteStore".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "store", "tool": "NoteStore", "stored_id": "note-r132-001"}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "store", "tool": "NoteStore", "stored_id": "note-r132-001"}),
+        )?,
     });
     registry.register("WebSearch".to_string(), web_search);
     registry.register("NoteStore".to_string(), note_store);
     mgr.register(researcher.clone())?;
 
-    println!("[setup] agent: {} (aliases: {:?})", researcher.id, researcher.aliases);
+    println!(
+        "[setup] agent: {} (aliases: {:?})",
+        researcher.id, researcher.aliases
+    );
     println!("[setup] tools: {:?}\n", registry.list());
 
     // ===== 2. resolve agent via alias =====
     let resolved = mgr.resolve("@researcher").expect("alias should resolve");
-    println!("[agent.resolve] @researcher -> {} ({})\n", resolved.id, resolved.name);
+    println!(
+        "[agent.resolve] @researcher -> {} ({})\n",
+        resolved.id, resolved.name
+    );
 
     // ===== 3. 构造 5 阶段 pipeline (R132.4) =====
     let pipeline = ToolCallPipeline::new(Arc::new(registry), 30_000);
@@ -77,7 +87,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ===== 4. LLM 决策 plan (用 agent.system_prompt) =====
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let provider = Arc::new(AnthropicCompatibleProvider::new(cfg)?);
@@ -93,7 +104,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ).with_max_tokens(200))
         .await?;
     let plan_ms = llm_start.elapsed().as_millis();
-    println!("[llm.plan] {}ms (using agent.system_prompt)\n{}", plan_ms, r.content);
+    println!(
+        "[llm.plan] {}ms (using agent.system_prompt)\n{}",
+        plan_ms, r.content
+    );
 
     // ===== 5. 解析 + 走 5 阶段执行 =====
     let plan_lines: Vec<&str> = r.content.lines().filter(|l| l.contains("|")).collect();
@@ -103,15 +117,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_success = 0usize;
     for (i, line) in plan_lines.iter().take(3).enumerate() {
         let parts: Vec<&str> = line.splitn(2, '|').collect();
-        if parts.len() != 2 { continue; }
+        if parts.len() != 2 {
+            continue;
+        }
         let tool_name = parts[0].trim();
         let args_str = parts[1].trim();
-        let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
+        let args: Value =
+            serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
         println!("  [{}] tool={} args={}", i + 1, tool_name, args);
 
         // 验证 tool 在 agent.tools 白名单 (VCP agentManager.js:323 isAgent 守门)
         if !resolved.tools.iter().any(|t| t == tool_name) {
-            println!("    → tool '{}' not in agent.tools whitelist, skip", tool_name);
+            println!(
+                "    → tool '{}' not in agent.tools whitelist, skip",
+                tool_name
+            );
             continue;
         }
 
@@ -133,14 +153,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 );
             }
             Err(e) => {
-                println!("    → 5-stage FAIL in {}ms: {}", call_start.elapsed().as_millis(), e);
+                println!(
+                    "    → 5-stage FAIL in {}ms: {}",
+                    call_start.elapsed().as_millis(),
+                    e
+                );
             }
         }
     }
     let total_ms = exec_start.elapsed().as_millis();
     println!(
         "\n[summary] plan {}ms, pipeline 5-stage exec {}ms, {}/{} calls success",
-        plan_ms, total_ms, total_success, plan_lines.len().min(3)
+        plan_ms,
+        total_ms,
+        total_success,
+        plan_lines.len().min(3)
     );
 
     if total_success == plan_lines.len().min(3) && total_success > 0 {

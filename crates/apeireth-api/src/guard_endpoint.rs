@@ -127,7 +127,10 @@ impl V2Guard {
             }
         }
 
-        if req.resource.starts_with("/etc") || req.resource.starts_with("/root") || req.resource.starts_with("/sys") {
+        if req.resource.starts_with("/etc")
+            || req.resource.starts_with("/root")
+            || req.resource.starts_with("/sys")
+        {
             triggered.push("system_path_protected".to_string());
             score = score.min(-0.5);
             reasoning.push_str("系统路径受保护; ");
@@ -195,7 +198,7 @@ fn now_ms() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
-    .unwrap_or(0)
+        .unwrap_or(0)
 }
 
 // ============================================================================
@@ -284,7 +287,9 @@ mod tests {
         };
         let r = g.check(req).await;
         assert!(r.score < 0.0);
-        assert!(r.triggered_policies.contains(&"system_path_protected".to_string()));
+        assert!(r
+            .triggered_policies
+            .contains(&"system_path_protected".to_string()));
     }
 
     #[tokio::test]

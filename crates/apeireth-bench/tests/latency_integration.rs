@@ -8,8 +8,8 @@
 //! - 跑 4 协议 × 3 场景 = 12 result, 输出 P50/P99 报告
 
 use apeireth_bench::latency_bench::{
-    compute_percentiles, LatencyConfig, LatencyResult, LatencyRunner, LatencyScenario,
-    MiniCache, MiniRetryPolicy, Protocol,
+    compute_percentiles, LatencyConfig, LatencyResult, LatencyRunner, LatencyScenario, MiniCache,
+    MiniRetryPolicy, Protocol,
 };
 
 // =====================================================================
@@ -19,11 +19,8 @@ use apeireth_bench::latency_bench::{
 #[test]
 fn integration_cache_hit_returns_30_samples() {
     let cache = MiniCache::new(16);
-    let samples = apeireth_bench::latency_bench::run_cache_hit_scenario(
-        &cache,
-        Protocol::OpenAiChat,
-        30,
-    );
+    let samples =
+        apeireth_bench::latency_bench::run_cache_hit_scenario(&cache, Protocol::OpenAiChat, 30);
     assert_eq!(samples.len(), 30);
     // 全部 cache hit 应 < 1ms (LRU 命中, 0 网络)
     for &s in &samples {
@@ -48,7 +45,11 @@ async fn integration_cache_miss_smoke_4_protocols() {
                 .await;
         assert_eq!(samples.len(), 1);
         // wiremock 0 网络 + 本机: < 100ms
-        assert!(samples[0] < 100_000_000, "wiremock hit 应 < 100ms, got {} ns", samples[0]);
+        assert!(
+            samples[0] < 100_000_000,
+            "wiremock hit 应 < 100ms, got {} ns",
+            samples[0]
+        );
     }
 }
 
@@ -62,11 +63,14 @@ async fn integration_retry_smoke_4_protocols() {
         Protocol::Gemini,
     ] {
         let samples =
-            apeireth_bench::latency_bench::run_retry_scenario(&_server.uri(), protocol, 1, 2)
-                .await;
+            apeireth_bench::latency_bench::run_retry_scenario(&_server.uri(), protocol, 1, 2).await;
         assert_eq!(samples.len(), 1);
         // retry 走完 1+3 ms 退避 + HTTP ~1ms = > 4ms
-        assert!(samples[0] > 4_000_000, "retry 应 > 4ms (1+3ms 退避), got {} ns", samples[0]);
+        assert!(
+            samples[0] > 4_000_000,
+            "retry 应 > 4ms (1+3ms 退避), got {} ns",
+            samples[0]
+        );
     }
 }
 
@@ -77,7 +81,7 @@ async fn integration_retry_smoke_4_protocols() {
 #[tokio::test]
 async fn integration_runner_run_all_12_results() {
     let runner = LatencyRunner::new(LatencyConfig {
-        samples: 5,  // 5 sample 加速 (30 太慢)
+        samples: 5, // 5 sample 加速 (30 太慢)
         use_wiremock: true,
         retry_fail_first_n: 2,
     });
@@ -86,7 +90,13 @@ async fn integration_runner_run_all_12_results() {
 
     // 每个 result 应有 5 sample
     for r in &report.results {
-        assert_eq!(r.samples, 5, "{} {} 应有 5 sample", r.protocol.label(), r.scenario.label());
+        assert_eq!(
+            r.samples,
+            5,
+            "{} {} 应有 5 sample",
+            r.protocol.label(),
+            r.scenario.label()
+        );
     }
 }
 
@@ -116,7 +126,7 @@ async fn integration_runner_cache_hit_fastest() {
     for &hit in &cache_hit_p99 {
         for &miss in &cache_miss_p99 {
             assert!(
-                hit < miss * 100,  // 100x 余量 (cache miss 含 wiremock 启 + HTTP)
+                hit < miss * 100, // 100x 余量 (cache miss 含 wiremock 启 + HTTP)
                 "cache hit p99 {hit} 应 < cache miss p99 {miss} * 100"
             );
         }
@@ -182,8 +192,8 @@ fn integration_mini_retry_policy_patient_tiers_match_apeireth_api() {
     // 比例 1:1000 验证
     assert_eq!(tiers[0].as_millis() * 1000, 1000); // 1ms × 1000 = 1s
     assert_eq!(tiers[5].as_millis() * 100, 10000); // 100ms × 100 = 10s (注意 10m 才是最后档)
-    // 注: smoke 压缩 1ms/3ms/10ms/30ms/60ms/100ms 不严格 1:1000 (60/100),
-    // 是 B-2 选 smoke-friendly 比例
+                                                   // 注: smoke 压缩 1ms/3ms/10ms/30ms/60ms/100ms 不严格 1:1000 (60/100),
+                                                   // 是 B-2 选 smoke-friendly 比例
 }
 
 // =====================================================================
@@ -218,11 +228,11 @@ fn integration_latency_result_format_complete() {
         protocol: Protocol::OpenAiChat,
         scenario: LatencyScenario::CacheMiss,
         samples: 30,
-        p50_ns: 200_000,    // 0.2ms
-        p95_ns: 500_000,    // 0.5ms
-        p99_ns: 1_000_000,  // 1ms
-        max_ns: 2_000_000,  // 2ms
-        mean_ns: 300_000,   // 0.3ms
+        p50_ns: 200_000,   // 0.2ms
+        p95_ns: 500_000,   // 0.5ms
+        p99_ns: 1_000_000, // 1ms
+        max_ns: 2_000_000, // 2ms
+        mean_ns: 300_000,  // 0.3ms
         total_attempts: 30,
     };
     let s = r.format();

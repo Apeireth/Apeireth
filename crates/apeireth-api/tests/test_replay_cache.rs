@@ -17,7 +17,7 @@
 //! - 0 触碰 protocol_handlers (那个在 unit test 测)
 
 use apeireth_api::replay_cache::{
-    global, hash_request, ResponsePayload, ResponseReplayCache, ReplayStats,
+    global, hash_request, ReplayStats, ResponsePayload, ResponseReplayCache,
 };
 use std::time::Duration;
 
@@ -69,7 +69,10 @@ fn integration_replay_cache_hit_path_returns_same_response() {
     // 5. 第三次 lookup → hit_count = 2
     let got2 = cache.lookup(&hash1).unwrap();
     assert_eq!(got2.hit_count, 2, "second hit should +1 hit_count");
-    assert_eq!(got2.response.content, "hello back", "content must be 1:1 same");
+    assert_eq!(
+        got2.response.content, "hello back",
+        "content must be 1:1 same"
+    );
 
     // 6. stats 跟踪正确
     let stats: ReplayStats = cache.stats();
@@ -91,8 +94,16 @@ fn integration_replay_cache_miss_path_isolates_different_requests() {
     let body2 = br#"{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}"#;
     let body3 = br#"{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hi"}]}"#;
 
-    let hash1 = hash_request("POST", "https://api.minimaxi.com/v1/chat/completions", body1);
-    let hash2 = hash_request("POST", "https://api.minimaxi.com/v1/chat/completions", body2);
+    let hash1 = hash_request(
+        "POST",
+        "https://api.minimaxi.com/v1/chat/completions",
+        body1,
+    );
+    let hash2 = hash_request(
+        "POST",
+        "https://api.minimaxi.com/v1/chat/completions",
+        body2,
+    );
     let hash3 = hash_request("POST", "https://api.minimaxi.com/v1/messages", body3);
     let hash4 = hash_request("GET", "https://api.minimaxi.com/v1/chat/completions", body1); // GET 跟 POST 不同
 

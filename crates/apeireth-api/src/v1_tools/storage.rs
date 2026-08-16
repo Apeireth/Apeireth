@@ -199,12 +199,10 @@ where
 
     async fn get(&self, id: &str) -> StorageResult<T> {
         let g = self.inner.lock();
-        g.get(id)
-            .cloned()
-            .ok_or_else(|| StorageError::NotFound {
-                entity_id: id.to_string(),
-                store: self.name.to_string(),
-            })
+        g.get(id).cloned().ok_or_else(|| StorageError::NotFound {
+            entity_id: id.to_string(),
+            store: self.name.to_string(),
+        })
     }
 
     async fn list(&self) -> StorageResult<Vec<T>> {
@@ -262,12 +260,12 @@ where
     /// 父目录不存在会自动创建
     pub async fn new(name: &'static str, path: PathBuf) -> StorageResult<Self> {
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await.map_err(|e| {
-                StorageError::IoFailed {
+            fs::create_dir_all(parent)
+                .await
+                .map_err(|e| StorageError::IoFailed {
                     reason: format!("create_dir_all {}: {}", parent.display(), e),
                     store: name.to_string(),
-                }
-            })?;
+                })?;
         }
         let initial: HashMap<String, T> = if path.exists() {
             let bytes = fs::read(&path).await.map_err(|e| StorageError::IoFailed {
@@ -304,14 +302,23 @@ where
         })?;
         // 写临时文件 + rename 原子替换 (防半写)
         let tmp_path = self.path.with_extension("json.tmp");
-        fs::write(&tmp_path, &bytes).await.map_err(|e| StorageError::IoFailed {
-            reason: format!("write tmp {}: {}", tmp_path.display(), e),
-            store: self.name.to_string(),
-        })?;
-        fs::rename(&tmp_path, &self.path).await.map_err(|e| StorageError::IoFailed {
-            reason: format!("rename {} -> {}: {}", tmp_path.display(), self.path.display(), e),
-            store: self.name.to_string(),
-        })?;
+        fs::write(&tmp_path, &bytes)
+            .await
+            .map_err(|e| StorageError::IoFailed {
+                reason: format!("write tmp {}: {}", tmp_path.display(), e),
+                store: self.name.to_string(),
+            })?;
+        fs::rename(&tmp_path, &self.path)
+            .await
+            .map_err(|e| StorageError::IoFailed {
+                reason: format!(
+                    "rename {} -> {}: {}",
+                    tmp_path.display(),
+                    self.path.display(),
+                    e
+                ),
+                store: self.name.to_string(),
+            })?;
         Ok(())
     }
 
@@ -342,12 +349,10 @@ where
 
     async fn get(&self, id: &str) -> StorageResult<T> {
         let g = self.inner.lock();
-        g.get(id)
-            .cloned()
-            .ok_or_else(|| StorageError::NotFound {
-                entity_id: id.to_string(),
-                store: self.name.to_string(),
-            })
+        g.get(id).cloned().ok_or_else(|| StorageError::NotFound {
+            entity_id: id.to_string(),
+            store: self.name.to_string(),
+        })
     }
 
     async fn list(&self) -> StorageResult<Vec<T>> {
@@ -460,7 +465,10 @@ where
 pub const STORAGE_BACKEND_COUNT: usize = 3;
 
 const _: () = {
-    assert!(STORAGE_BACKEND_COUNT == 3, "3 backend: InMemory / JsonFile / Sqlite");
+    assert!(
+        STORAGE_BACKEND_COUNT == 3,
+        "3 backend: InMemory / JsonFile / Sqlite"
+    );
 };
 
 // ============================================================
@@ -562,8 +570,9 @@ mod storage_tests {
 
         // 第 1 阶段: 创 + 改
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 1");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 1");
             assert!(s.is_empty());
             s.upsert(TestEntity {
                 id: "f1".to_string(),
@@ -584,8 +593,9 @@ mod storage_tests {
 
         // 第 2 阶段: 重新打开, 应能读到
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 2 (reload)");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 2 (reload)");
             assert_eq!(s.len(), 2);
             let got = s.get("f1").await.expect("get f1");
             assert_eq!(got.name, "file-alpha");
@@ -596,15 +606,17 @@ mod storage_tests {
 
         // 第 3 阶段: 删 + 重新打开应为空
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 3 (post-delete)");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 3 (post-delete)");
             let removed = s.delete("f1").await.expect("delete f1");
             assert!(removed);
             assert_eq!(s.len(), 1);
         }
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 4");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 4");
             assert_eq!(s.len(), 1, "删后持久化应只剩 1");
             assert!(s.get("f1").await.is_err());
         }
@@ -627,7 +639,9 @@ mod storage_tests {
         struct BadEntity {
             name: String,
         }
-        let bad = BadEntity { name: "no_id".to_string() };
+        let bad = BadEntity {
+            name: "no_id".to_string(),
+        };
         let s2: InMemoryStorage<BadEntity> = InMemoryStorage::new("test-bad");
         let r = s2.upsert(bad).await;
         assert!(matches!(r, Err(StorageError::SerializationFailed { .. })));
@@ -660,12 +674,13 @@ mod storage_tests {
         assert!(matches!(r, Err(StorageError::NotImplemented { .. })));
         let r = s.list().await;
         assert!(matches!(r, Err(StorageError::NotImplemented { .. })));
-        let r = s.upsert(TestEntity {
-            id: "x".to_string(),
-            name: "y".to_string(),
-            value: 0,
-        })
-        .await;
+        let r = s
+            .upsert(TestEntity {
+                id: "x".to_string(),
+                name: "y".to_string(),
+                value: 0,
+            })
+            .await;
         assert!(matches!(r, Err(StorageError::NotImplemented { .. })));
         let r = s.delete("x").await;
         assert!(matches!(r, Err(StorageError::NotImplemented { .. })));

@@ -70,7 +70,8 @@ fn recal_scheduled_every_m_measurements() {
     let mut fire_count = 0usize;
 
     for seq in 1..=50 {
-        let report = scheduler.observe(&trace_uniform(0.5), &mut baseline, &cal, i64::from(seq), 25);
+        let report =
+            scheduler.observe(&trace_uniform(0.5), &mut baseline, &cal, i64::from(seq), 25);
         if report.is_some() {
             fire_count += 1;
         }

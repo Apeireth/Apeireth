@@ -17,18 +17,25 @@ fn make_state() -> Arc<V2State> {
     state
 }
 
-fn app(state: Arc<V2State>) -> axum::Router { build_router(state) }
+fn app(state: Arc<V2State>) -> axum::Router {
+    build_router(state)
+}
 
 #[tokio::test]
 async fn web_search_invoke_returns_results_with_meta() {
     let state = make_state();
     let body = json!({ "args": { "query": "rust async trait" } });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/web_search/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/web_search/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK, "web_search happy 200");
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();
@@ -43,11 +50,16 @@ async fn web_search_invoke_returns_results_with_meta() {
 async fn web_search_unknown_tool_returns_404() {
     let state = make_state();
     let body = json!({ "args": {} });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/no_such_tool/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/no_such_tool/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::NOT_FOUND);
 }

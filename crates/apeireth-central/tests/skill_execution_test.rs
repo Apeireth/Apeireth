@@ -37,9 +37,13 @@
 
 #![deny(unsafe_code)]
 
-use apeireth_central::skill_companion::{companions_for_skill, total_companion_count, SkillCompanionKind};
-use apeireth_central::skill_execution::{ExecutionError, SkillExecutor, SkillExecutionStatus};
-use apeireth_central::skill_frontmatter::{is_known_skill_name, parse_frontmatter, strip_frontmatter, FrontmatterError};
+use apeireth_central::skill_companion::{
+    companions_for_skill, total_companion_count, SkillCompanionKind,
+};
+use apeireth_central::skill_execution::{ExecutionError, SkillExecutionStatus, SkillExecutor};
+use apeireth_central::skill_frontmatter::{
+    is_known_skill_name, parse_frontmatter, strip_frontmatter, FrontmatterError,
+};
 use apeireth_central::skill_prompt::{
     apeireth_tool_mapping, render_steps, SkillPrompt, SkillPromptCache, BOOTSTRAP_MARKER,
     EXTREMELY_IMPORTANT_MARKER,
@@ -197,7 +201,12 @@ fn test_validate_registry_all_14_skills_valid() {
     let reports = validate_registry(&registry);
     assert_eq!(reports.len(), 14);
     for r in &reports {
-        assert!(r.is_valid(), "{} should be valid: {:?}", r.skill_name, r.errors);
+        assert!(
+            r.is_valid(),
+            "{} should be valid: {:?}",
+            r.skill_name,
+            r.errors
+        );
     }
 }
 
@@ -206,7 +215,10 @@ fn test_validity_ratio_for_14_valid_skills_is_1() {
     let registry = SkillRegistry::new();
     let reports = validate_registry(&registry);
     let ratio = registry_validity_ratio(&reports);
-    assert!((ratio - 1.0).abs() < 1e-9, "ratio should be 1.0, got {ratio}");
+    assert!(
+        (ratio - 1.0).abs() < 1e-9,
+        "ratio should be 1.0, got {ratio}"
+    );
     // MIN_STEP_COUNT 常量 verify
     assert_eq!(MIN_STEP_COUNT, 3);
 }
@@ -232,12 +244,17 @@ fn test_total_companion_count_sums_6_across_4_skills() {
     let id = executor.start(SkillId::SystematicDebugging, 1000);
     let skill = SystematicDebuggingSkill;
     for i in 1..=5 {
-        executor.advance_step(id, &skill, 1000 + i as u64).expect("advance");
+        executor
+            .advance_step(id, &skill, 1000 + i as u64)
+            .expect("advance");
     }
     let inv = executor.get(id).expect("inv");
     assert_eq!(inv.step_history.len(), 5);
     // 5 步推进后 status 应该是 InProgress, 不是 Pending
-    assert!(matches!(inv.status, SkillExecutionStatus::InProgress { .. }));
+    assert!(matches!(
+        inv.status,
+        SkillExecutionStatus::InProgress { .. }
+    ));
 }
 
 // ============================================================================
@@ -268,5 +285,8 @@ fn test_parse_frontmatter_extracts_name_and_description() {
         id: apeireth_central::skill_execution::InvocationId(0),
         reason: "TDD skill first step must be Red".to_string(),
     };
-    assert!(matches!(tdd_violation, ExecutionError::TddOrderViolation { .. }));
+    assert!(matches!(
+        tdd_violation,
+        ExecutionError::TddOrderViolation { .. }
+    ));
 }
