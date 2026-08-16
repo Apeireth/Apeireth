@@ -68,6 +68,8 @@
 | 能力演化回路 | 🟢 机制回路六段闭环 (提案→生成*→验证→部署→监控→回滚): 部署通道 mock (真执行体=DeployChannel 挂 exec_worker/sandbox 未接), *生成段=LLM 未机制化 — 均如实标注 | `capability.rs` / `evolution_gate.rs` / `deploy.rs` |
 | **C3 v2 alpha 遗留盘点** (2026-08-17) | ✅ **22 项重核实完成** (不信任旧标注, 逐项取证): 12 项达成/已解决 (graph/sdk 空壳消除, vector MUST FIX 已修, TUI 6 类端点, TUI E2E + web, Self-Disable 20 case 真实现, bench 112KB, CI workspace 全覆盖替代 5 yml; formal R165 有意归档; deploy 演进为真流水线) + 7 项 ❌ 产物失传 (v2 era 验收报告/09-ADDENDUM/V2-INDEX/07-BASELINE 从未入 git 历史, 0 装 PASS 不重建) + 1 项 ⚪ 不可核实 (T10 全量测试实跑/ASI V0.5); 上轮自检 21 报告吸收为台账编号 25-47 (P0=46/47) | `reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md` + `docs/backlog.md` §A4 |
 
+| GUI 包·Web 面板 v2 (B1, 2026-08-17) | ✅ **静态多页面板落地**: 会话管理(时间线)/记忆浏览(6 流+搜索)/图谱可视化(原生 SVG)/授权中心(只读+走已有 grant)/审计视图; 后端 7 个只读端点 `/v1/panel/*` (panel_readonly.rs, 9 单测) + 8 静态资产 (assets/panel/, include_str! 内嵌, 无 Node 构建链); 升级点如实标注: N2 OneRing 会话账本 / GraphBackend 结构化; 桌面托盘+每日摘要 UI 未做 (GUI 包其余项) | `crates/apeireth-api/src/panel_readonly.rs` + `crates/apeireth-companion/assets/panel/` + companion_serve `/panel` |
+
 ## 五、发布 checklist
 - [x] 本体核心闭环（production_daemon 全集成验收）
 - [x] 装配层（SuiteCatalog + install_with_plugins + 插件生命周期）

@@ -83,6 +83,7 @@
 | experience.rs | 自成长 Level 0/1: 经验库 (场景/做法/结果/验证计数/EMA) + 达标促能力提案 (versioned chain, rev 单调) | save/list/verify_experience 工具 |
 | principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
+| panel_readonly.rs (apeireth-api crate) + assets/panel/ (companion) | **B1 Web 面板 v2**: 7 个只读面板端点 `panel_router(store)` (sessions/sessions:id/timeline/memory/streams/memory/episodes/graph/approvals/audit, 数据全真接 SqliteMemoryStore: 会话表/6 历史流/factg-图/link-链/apreq-授权/action_stream 审计) + 静态多页面板 (总览/会话/记忆/图谱 SVG/授权/审计, 原生 JS 无构建链, include_str! 内嵌) | companion_serve `/panel*` (静态) + `/v1/panel/*` (nest, 只读); 批准走已有 /v1/apeireth/grant, 0 新安全口; 升级点: N2 OneRing (会话) / GraphBackend 结构化 (图) |
 | memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
 | memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + N6 Intrinsic Residual 锚增益 (实体逆频特异性×importance 组合排序, GraphRankConfig 权重可配; crawl 字符集残差锚增益; entity_counts 增量维护) + 注入【事实图】 | graph 三元组 + crawl 注入 |
 | semantic_persist.rs (memory) | N5 artifact_sig 内容寻址缓存门禁 (VCP 吸收): SHA-256 内容签名 (纯手写, NIST 向量锚定) + 五条失效规则 (无记录/内容变/normalize stale/schema stale→重算, 全匹配→Hit 复用) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch 防脏读) | PersistentSemanticIndex::check_artifact / reindex_all + .artifact_sig.json sidecar |
@@ -121,7 +122,7 @@
 
 | 示例 | 用途 |
 |---|---|
-| companion_serve | **伙伴端点 (主入口)**: OpenAI 兼容 + 状态感知 + 记忆生命周期 + 目标/自成长/SSE 主动送达 |
+| companion_serve | **伙伴端点 (主入口)**: OpenAI 兼容 + 状态感知 + 记忆生命周期 + 目标/自成长/SSE 主动送达 + `/panel` Web 面板 v2 (B1, 会话/记忆/图谱/授权/审计) |
 | companion_daemon | 常驻主动问候 (env: TICK/MAX_TICKS/MEMORY_PATH/SUBJECT/MIN_LLM_INTERVAL/SINK/LARK_*/DREAM/REFLECT/SEED_DEMO) |
 | production_daemon | 全机制集成验收 (宪法评审+隔离+spill+日志+goal+做梦+反思+每日摘要) |
 | release_acceptance | AI 自己长能力端到端 (提案→评审→激活→干活) |
