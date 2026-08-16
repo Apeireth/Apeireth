@@ -193,7 +193,7 @@
 
 ## 8. 附：VCP 新版调研（2026-08-16）
 
-> 新版 VCPToolBox（源码 Downloads\VCPToolBox-rust\VCPToolBox-main）：
+> 新版 VCPToolBox（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
 > Node.js 核心（server.js/Plugin.js/WebSocketServer.js/KnowledgeBaseManager.js + 20+ modules）+ **Rust N-API 记忆层（rust-vexus-lite：RiverMemo Topology V3）** + **84 插件**。
 > 本章节由 subagent 深挖后补充完整（Rust 记忆层机制 / 84 插件分类表 / 核心模块对照）。
 
