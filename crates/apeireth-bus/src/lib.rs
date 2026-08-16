@@ -32,9 +32,11 @@ pub mod l3;
 pub mod l4;
 pub mod pattern;  // R227 — topic wildcard matching
 pub mod event_log;  // R229 — append-only event log + filter replay
+pub mod lifecycle;  // A1#5 — 5 lifecycle hooks (UserPromptSubmit/SessionStart/SessionEnd/PostToolUse/Stop)
 
 pub use l0::L0Bus;
 pub use channel::{Channel, ChannelSet, ChanneledBus};
+pub use lifecycle::{LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook, LifecycleMessage};
 #[cfg(unix)]
 pub use l1::{L1Client, L1Server};
 #[cfg(unix)]
