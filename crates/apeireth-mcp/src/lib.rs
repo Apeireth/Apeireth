@@ -1,22 +1,31 @@
-//! **apeireth-mcp — Model Context Protocol skeleton (Apeireth v2.0 战区 5 P0)**
+//! **apeireth-mcp — Model Context Protocol 实现 crate (Apeireth v2.0 战区 5 P0)**
 //!
-//! **依据**: docs/v2-strategy/05 §Step 2 (`cargo run -p apeireth-mcp --example hello` 跑通)
+//! > 文档对齐 (2026-08-17, 任务 cc83773e #30, 仅注释 0 行为改动): 原 skeleton 期描述已过时——
+//! > 本 crate 现已全建 (16 模块 + conformance/multi_transport 集成测试); 标题与清单按实况更正。
 //!
-//! **架构位置**:
+//! **依据**: docs/stage2/05-EXECUTION-NOW.md §Step 2 (`cargo run -p apeireth-mcp --example hello` 跑通)
+//!
+//! **架构位置** (2026-08-17 按实况更正; 原 skeleton 期 7 文件清单已过时):
 //! ```text
 //!   apeireth-api / apeireth-pipeline / 未来消费者
 //!          ↓
 //!      apeireth-mcp (本 crate)
-//!      ├── lib.rs            : McpClient / McpServer / ServerInfo
-//!      ├── protocol.rs       : JSON-RPC 2.0 基础类型
-//!      ├── transport/mod.rs  : Transport trait + MemoryTransport (example 用)
-//!      ├── transport/stdio.rs: StdioTransport (current / spawn_child)
-//!      ├── transport/sse.rs  : SseTransport (skeleton, Week 1 后实现)
-//!      ├── tool_bridge.rs    : apeireth-tool-registry 桥接
-//!      └── examples/hello.rs : client + server 互调示例
+//!      ├── lib.rs              : McpClient / McpServer / ServerInfo
+//!      ├── protocol.rs         : JSON-RPC 2.0 基础类型
+//!      ├── initialize.rs       : MCP initialize 握手 (protocolVersion + capabilities + clientInfo 协商)
+//!      ├── tools/ + tool_bridge.rs + tool_subscriptions.rs : tools 协议 + registry 桥接 + tools/subscribe 双向 push
+//!      ├── resources.rs + resource_servers.rs + subscriptions.rs : resources 协议 + 3 真接 ResourceServer + resources/subscribe
+//!      ├── prompts.rs          : prompts 协议 (prompts/list + prompts/get)
+//!      ├── transport/          : stdio / sse (真实现, 字段级对齐 VCP claude-code SSE) / http_streamable
+//!      ├── primitives.rs       : MCP primitive namespace enum
+//!      ├── multimodal.rs       : multimodal dispatcher (9 Gen plugins + 6 output formats)
+//!      ├── telemetry_bridge.rs : handler 调用 metrics (atomic-based)
+//!      ├── macros.rs           : JSON-RPC envelope macro
+//!      ├── organ_kani_proofs.rs: organ invariants (5 tests + 2 Kani)
+//!      └── examples/hello.rs   : client + server 互调示例
 //! ```
 //!
-//! **MCP 方法实现清单** (字段级参考 <MCP 2025-03-26> 规范):
+//! **MCP 方法实现清单** (字段级参考 <MCP 2025-03-26> 规范; 2026-08-17 按实况扩充):
 //! - `initialize` — 握手, 返回 ServerInfo
 //! - `tools/list` — 返回 Vec<ToolDef>
 //! - `tools/call` — 调注册工具, 返回 Value (或错误)
@@ -25,8 +34,8 @@
 //! - ✅ 协议层真跑 (JSON-RPC 2.0 + 行帧化 stdio)
 //! - ✅ 工具桥接真跑 (apeireth-tool-registry Tool trait 真调用)
 //! - ✅ example 端到端真跑 (client → server → bridge → registry tool → client)
-//! - � SSE 真实实现未做 (skeleton, 已在 v2-strategy/05 排进 Week 1 后队列)
-//! - ❌ 不假装"完整 MCP 规范" (sampling / resources / prompts 等未实现)
+//! - ✅ SSE 真实实现已做 (transport/sse.rs 字段级对齐 VCP claude-code SSE; 另 transport/http_streamable.rs; 2026-08-17 按实况更正)
+//! - ❌ 不假装"完整 MCP 规范" (sampling / logging 未实现; resources / prompts / subscriptions 已实现)
 //!
 //! **不修改承诺**:
 //! - ✅ `#![deny(unsafe_code)]` (workspace 继承)
