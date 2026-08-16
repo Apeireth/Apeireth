@@ -109,7 +109,7 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
-                    content: json!("你是阿佩瑞斯的记忆提炼员。从对话/记忆中提炼「值得长期记住」的信息, 只输出 JSON: {\"facts\": [{\"content\": \"事实\", \"importance\": 1-10}], \"preferences\": [{\"content\": \"主人偏好(审美/风格/语气/交互)\", \"importance\": 1-10}], \"commitments\": [{\"content\": \"约定/承诺\", \"importance\": 1-10}], \"emotional\": \"情绪信号一句或 null\"}。importance 打分: 1=琐碎 5=普通 10=深刻重要。原则: 只提炼新信息, 宁缺毋滥, 没把握就留空数组。"),
+                    content: json!("你是阿佩瑞斯的记忆提炼员。从对话/记忆中提炼「值得长期记住」的信息, 只输出 JSON: {\"facts\": [{\"content\": \"事实\", \"importance\": 1-10}], \"preferences\": [{\"content\": \"主人偏好(审美/风格/语气/交互)\", \"importance\": 1-10}], \"commitments\": [{\"content\": \"约定/承诺\", \"importance\": 1-10}], \"emotional\": \"情绪信号一句或 null\", \"graph\": [{\"subject\": \"主体\", \"predicate\": \"关系\", \"object\": \"客体\", \"importance\": 1-10}]}。importance 打分: 1=琐碎 5=普通 10=深刻重要。graph 填可结构化的稳定事实 (如 主人 备考 高数期中), 不填临时状态。原则: 只提炼新信息, 宁缺毋滥, 没把握就留空数组。"),
                     tool_calls: None,
                     tool_call_id: None,
                 },
@@ -513,13 +513,19 @@ impl UtteranceGenerator for TonalUtterance {
     }
 }
 
-/// 记忆 v2 提炼流程: 提炼 → 对账 (Mem0 式) → 应用. 对话后/批量共用.
+/// 记忆 v2 提炼流程: 提炼 → 对账 (Mem0 式) → 应用 + 图谱 (Zep) + 链接 (A-MEM). 对话后/批量共用.
 async fn run_extraction(store: &Arc<SqliteMemoryStore>, pipeline: &Arc<Pipeline>, ctx_len: usize) {
     let svc = MemoryExtractionService::new(Arc::clone(store));
     let ctx = svc.recent_context(ctx_len);
     let extractor = MiniMaxMemoryExtractor { pipeline: Arc::clone(pipeline) };
     match extractor.extract(&ctx).await {
         Ok(ex) if !ex.is_empty() => {
+            // 图谱三元组 (Zep 双时态) + 自动链接 (A-MEM)
+            if !ex.graph.is_empty() {
+                let graph_svc = apeireth_companion::memory_graph::MemoryGraph::new(Arc::clone(store));
+                svc.apply_graph(&ex.graph, &graph_svc);
+                eprintln!("[extract] 图谱写入: {} 条三元组", ex.graph.len());
+            }
             let existing: Vec<String> = svc
                 .active_episodes(30)
                 .iter()
@@ -606,6 +612,35 @@ impl Sink for BroadcastSink {
         println!("[他说] {text}");
         let _ = self.tx.send(format!("[他说] {text}"));
         Ok(())
+    }
+}
+
+/// 多通道送达 (2026-08-16): 广播 (SSE) + 可选 Lark (离线, 需凭据).
+pub struct MultiSink {
+    sinks: Vec<Box<dyn Sink>>,
+}
+
+impl MultiSink {
+    pub fn new() -> Self {
+        Self { sinks: Vec::new() }
+    }
+    pub fn push(mut self, s: Box<dyn Sink>) -> Self {
+        self.sinks.push(s);
+        self
+    }
+}
+
+#[async_trait::async_trait]
+impl Sink for MultiSink {
+    async fn send(&self, text: &str) -> Result<(), String> {
+        let mut last_err = String::new();
+        for s in &self.sinks {
+            if let Err(e) = s.send(text).await {
+                last_err = format!("{e}");
+                eprintln!("[sink] 送达失败: {e}");
+            }
+        }
+        if last_err.is_empty() { Ok(()) } else { Err(last_err) }
     }
 }
 
@@ -797,9 +832,10 @@ async fn inject_memory(
     }
     // 模块 2: 记忆分层排名 (importance + access + recency; 预算内注入) + access 追踪
     // 独立作用域: MutexGuard 在 await 前释放 (axum handler 要求 future Send)
-    let entries: Vec<String> = {
+    let (entries, seed_ids): (Vec<String>, Vec<String>) = {
         let mut access = st_access.lock().unwrap();
-        let ranked = rank_memory_entries(&eps, &access, 12);
+        let ranked = rank_memory_entries(&eps, &access, 10);
+        let seed_ids: Vec<String> = ranked.iter().map(|(id, _)| id.clone()).collect();
         let entries: Vec<String> = ranked.iter().map(|(_, c)| c.clone()).collect();
         // access 刷新 (高频记忆永不冷 — Generative Agents)
         let now = chrono::Utc::now().timestamp();
@@ -808,8 +844,19 @@ async fn inject_memory(
             e.0 += 1;
             e.1 = now;
         }
-        entries
+        (entries, seed_ids)
     };
+    // A-MEM CRAWL: 从选中条目沿链接展开 (预算内, 图检索)
+    let mut entries = entries;
+    if !seed_ids.is_empty() {
+        let graph_svc = apeireth_companion::memory_graph::MemoryGraph::new(Arc::clone(store));
+        let crawled = graph_svc.crawl(&seed_ids, 3);
+        for c in crawled {
+            if !entries.contains(&c) {
+                entries.push(c);
+            }
+        }
+    }
     if want_deep {
         if let Some(p) = pipeline {
             // LLM 推理召回: 按当前问题重排候选, 挑最相关 top 5
@@ -1068,10 +1115,14 @@ async fn chat_completions(
     let today = inject_today(&st.store);
     let growth = inject_growth(&st.store);
     let prefs = MemoryExtractionService::new(Arc::clone(&st.store)).preference_injection();
+    let graph_inj = apeireth_companion::memory_graph::MemoryGraph::new(Arc::clone(&st.store)).graph_injection();
     let mut injections: Vec<String> = Vec::new();
     injections.push(inject_state(&st.store, &st.rhythm, &st.goal));
     if !mem.is_empty() {
         injections.push(mem);
+    }
+    if !graph_inj.is_empty() {
+        injections.push(graph_inj);
     }
     if !prefs.is_empty() {
         injections.push(prefs);
@@ -1405,6 +1456,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         pipeline: Arc::clone(&pipeline),
     }));
     let tone = tone_hint(&apeireth_companion::bond::Bond::new());
+    // 送达通道: 广播 (SSE) 必开; Lark (离线) 有凭据则叠加
+    let mut sink = MultiSink::new().push(Box::new(BroadcastSink { tx: tx_events.clone() }));
+    match apeireth_companion::daemon::LarkSink::from_env() {
+        Ok(lark) => {
+            sink = sink.push(Box::new(lark));
+            println!("[sink] Lark 离线送达已启用 (凭据有效)");
+        }
+        Err(e) => {
+            println!("[sink] Lark 未启用 (需要 APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID): {e}");
+        }
+    }
     let daemon = CompanionDaemon::new(
         apeireth_companion::bond::Bond::new(),
         apeireth_companion::emergence::Boundaries::default(),
@@ -1416,7 +1478,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 Duration::from_secs(30),
             ),
-            BroadcastSink { tx: tx_events.clone() },
+            sink,
         ),
         MemoryContextSource::new(Arc::clone(&store)),
         MEMORY_SESSION.to_string(),
@@ -1488,7 +1550,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// + 自成长延伸: 反思完成→提炼经验入库; 晋级候选自动成文.
 /// 具体类型 (Delivery trait 私有, 不能作泛型约束); daemon 非 Send, 只在同 task 内用.
 type ServeDaemon = CompanionDaemon<
-    CompanionDelivery<ThrottledUtterance<TonalUtterance>, BroadcastSink>,
+    CompanionDelivery<ThrottledUtterance<TonalUtterance>, MultiSink>,
     MemoryContextSource,
 >;
 async fn daemon_loop(

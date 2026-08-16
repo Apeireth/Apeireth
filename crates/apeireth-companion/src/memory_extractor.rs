@@ -38,6 +38,16 @@ impl MemoryItem {
     }
 }
 
+/// 图谱事实三元组 (Zep 吸收, 2026-08-16): LLM 从对话抽取 (s, p, o).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphItem {
+    pub subject: String,
+    pub predicate: String,
+    pub object: String,
+    #[serde(default = "default_importance")]
+    pub importance: u8,
+}
+
 /// 一次提炼的结果 (LLM 输出, JSON 对齐).
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExtractedMemory {
@@ -53,11 +63,15 @@ pub struct ExtractedMemory {
     /// 情绪信号 (一句, 供后续关怀/节律参考).
     #[serde(default)]
     pub emotional: Option<String>,
+    /// 图谱事实三元组 (Zep 双时态边; 写入时序知识图谱).
+    #[serde(default)]
+    pub graph: Vec<GraphItem>,
 }
 
 impl ExtractedMemory {
     pub fn is_empty(&self) -> bool {
-        self.facts.is_empty() && self.preferences.is_empty() && self.commitments.is_empty() && self.emotional.is_none()
+        self.facts.is_empty() && self.preferences.is_empty() && self.commitments.is_empty()
+            && self.emotional.is_none() && self.graph.is_empty()
     }
 }
 
@@ -237,6 +251,22 @@ impl MemoryExtractionService {
         Ok(())
     }
 
+    /// 图谱三元组写入 (Zep 双时态边 + A-MEM 自动链接; 调用方传 graph 服务).
+    pub fn apply_graph(
+        &self,
+        graph: &[GraphItem],
+        graph_svc: &crate::memory_graph::MemoryGraph,
+    ) {
+        for g in graph {
+            if g.subject.trim().is_empty() || g.predicate.trim().is_empty() || g.object.trim().is_empty() {
+                continue;
+            }
+            let id = graph_svc.add_fact(g.subject.trim(), g.predicate.trim(), g.object.trim(), g.importance);
+            // A-MEM: 新事实写入后与既有记忆自动链接 (真实 id)
+            graph_svc.link_on_write(&id, &format!("{} {} {}", g.subject, g.predicate, g.object));
+        }
+    }
+
     /// 提炼输入: 最近对话/记忆拼接 (供 LLM 提炼器).
     pub fn recent_context(&self, n: usize) -> String {
         let eps = self.store.recent_episodes("me", n.max(10)).unwrap_or_default();
@@ -273,6 +303,7 @@ mod tests {
             preferences: vec![MemoryItem::new("唯美写意风格, 深蓝夜空配色", 8), MemoryItem::new("古风韵味", 6)],
             commitments: vec![MemoryItem::new("周六上午整理错题本", 7)],
             emotional: Some("今天有点累但心情平静".into()),
+            graph: vec![],
         };
         s.apply(&ex).unwrap();
         // 偏好注入 (高 importance 在前)
@@ -300,6 +331,7 @@ mod tests {
             preferences: vec![],
             commitments: vec![],
             emotional: None,
+            graph: vec![],
         }).unwrap();
         let old_id = s.store.recent_episodes("me", 10).unwrap().iter().find(|e| e.id.starts_with("mem-ex-")).unwrap().id.clone();
         // 对账: Update 旧事实 + Add 新事实 + Delete 一条
@@ -324,6 +356,7 @@ mod tests {
             preferences: vec![],
             commitments: vec![],
             emotional: None,
+            graph: vec![],
         };
         s.apply(&ex).unwrap();
         let ctx = s.recent_context(5);

@@ -72,6 +72,7 @@ pub mod principles;
 pub mod approval_requests;
 pub mod memory_extractor;
 pub mod goal_tools;
+pub mod memory_graph;
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;

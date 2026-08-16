@@ -105,3 +105,17 @@
 5. **折叠持久化 + 摘要链**: 滚动摘要存 store + 链接上次摘要 (可回溯)
 
 高成本项 (Zep 图谱 / A-MEM 图检索) 记入 backlog, 等基础扎实后再做。
+
+## 五、Backlog 补齐记录（2026-08-16）
+
+当初调研标注未落地 (docs/research/mempalace-vs-apeireth-memory.md 时序三元组借鉴/R179 P2/R186),
+今日全部补齐:
+
+- **Zep 时序知识图谱** (memory_graph.rs): 提炼器输出 graph 三元组 (LLM 抽取) →
+  factg-* 双时态边 (同三元组变化 → 旧边 invalid_at, append-only 留痕, rev 链内单调)
+  → 注入【事实图】; 幻觉校验合并进提炼对账 (Mem0 对账 LLM 判定矛盾)
+- **A-MEM 带权链接 + CRAWL** (memory_graph.rs): 事实写入时与既有记忆文本重叠率 >= 0.3 →
+  自动链接 (link-*); 注入时从选中条目沿链接展开 (预算内图检索)
+  0 假装: v1 链接是规则级 (文本重叠), 非 LLM 语义链接
+- **Lark 离线送达** (MultiSink): 广播 (SSE) + Lark (凭据有效时叠加);
+  无凭据 → 优雅跳过 + 明确提示 (不装已接好)
