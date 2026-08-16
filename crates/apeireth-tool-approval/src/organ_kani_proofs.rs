@@ -16,7 +16,9 @@ fn r177_app_01_allow_helpers() {
 
 #[test]
 fn r177_app_02_require_approval_helpers() {
-    let r = ApprovalDecision::RequireApproval { timeout_ms: 300_000 };
+    let r = ApprovalDecision::RequireApproval {
+        timeout_ms: 300_000,
+    };
     assert!(r.is_require_approval());
     assert!(!r.is_allow());
     assert!(!r.is_deny());
@@ -48,7 +50,10 @@ fn r177_app_04_no_match_helpers() {
 fn r177_app_05_decisions_mutually_exclusive() {
     let a = ApprovalDecision::Allow;
     let r = ApprovalDecision::RequireApproval { timeout_ms: 0 };
-    let d = ApprovalDecision::Deny { reason: "x".into(), silent: true };
+    let d = ApprovalDecision::Deny {
+        reason: "x".into(),
+        silent: true,
+    };
     let n = ApprovalDecision::NoMatch;
 
     assert_ne!(a, r);
@@ -67,11 +72,19 @@ fn r177_app_06_as_str_values() {
         "require_approval"
     );
     assert_eq!(
-        ApprovalDecision::Deny { reason: "x".into(), silent: false }.as_str(),
+        ApprovalDecision::Deny {
+            reason: "x".into(),
+            silent: false
+        }
+        .as_str(),
         "deny"
     );
     assert_eq!(
-        ApprovalDecision::Deny { reason: "x".into(), silent: true }.as_str(),
+        ApprovalDecision::Deny {
+            reason: "x".into(),
+            silent: true
+        }
+        .as_str(),
         "deny_silent"
     );
     assert_eq!(ApprovalDecision::NoMatch.as_str(), "no_match");
@@ -79,7 +92,9 @@ fn r177_app_06_as_str_values() {
 
 #[test]
 fn r177_app_07_5min_default_timeout() {
-    let r = ApprovalDecision::RequireApproval { timeout_ms: 5 * 60 * 1000 };
+    let r = ApprovalDecision::RequireApproval {
+        timeout_ms: 5 * 60 * 1000,
+    };
     assert_eq!(r.as_str(), "require_approval");
     if let ApprovalDecision::RequireApproval { timeout_ms } = r {
         assert_eq!(timeout_ms, 300_000);
@@ -90,8 +105,14 @@ fn r177_app_07_5min_default_timeout() {
 
 #[test]
 fn r177_app_08_deny_silent_field() {
-    let loud = ApprovalDecision::Deny { reason: "x".into(), silent: false };
-    let silent = ApprovalDecision::Deny { reason: "x".into(), silent: true };
+    let loud = ApprovalDecision::Deny {
+        reason: "x".into(),
+        silent: false,
+    };
+    let silent = ApprovalDecision::Deny {
+        reason: "x".into(),
+        silent: true,
+    };
     assert_ne!(loud, silent);
     assert_eq!(loud.as_str(), "deny");
     assert_eq!(silent.as_str(), "deny_silent");
@@ -109,7 +130,10 @@ fn r177_app_10_terminal_count() {
     let decisions = vec![
         ApprovalDecision::Allow,
         ApprovalDecision::RequireApproval { timeout_ms: 0 },
-        ApprovalDecision::Deny { reason: "x".into(), silent: false },
+        ApprovalDecision::Deny {
+            reason: "x".into(),
+            silent: false,
+        },
     ];
     let terminal_count = decisions.iter().filter(|d| d.is_terminal()).count();
     assert_eq!(terminal_count, 3);

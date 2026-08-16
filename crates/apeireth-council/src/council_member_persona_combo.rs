@@ -224,7 +224,11 @@ impl PersonaBoundVerdict {
         vec![
             (
                 "members_recruited",
-                if !self.member_summaries.is_empty() { 1.0 } else { 0.0 },
+                if !self.member_summaries.is_empty() {
+                    1.0
+                } else {
+                    0.0
+                },
             ),
             (
                 "rounds_run",
@@ -249,29 +253,25 @@ impl PersonaBoundVerdict {
             ),
             (
                 "termination_clean",
-                if self.termination_reason == "consensus"
-                    || self.termination_reason == "max_rounds"
+                if self.termination_reason == "consensus" || self.termination_reason == "max_rounds"
                 {
                     1.0
                 } else {
                     0.0
                 },
             ),
-            (
-                "members_aligned",
-                {
-                    let n = self.member_summaries.len() as f64;
-                    if n == 0.0 {
-                        0.0
-                    } else {
-                        self.member_summaries
-                            .iter()
-                            .filter(|m| m.final_stance.score() > 0.0)
-                            .count() as f64
-                            / n
-                    }
-                },
-            ),
+            ("members_aligned", {
+                let n = self.member_summaries.len() as f64;
+                if n == 0.0 {
+                    0.0
+                } else {
+                    self.member_summaries
+                        .iter()
+                        .filter(|m| m.final_stance.score() > 0.0)
+                        .count() as f64
+                        / n
+                }
+            }),
         ]
     }
 }
@@ -344,10 +344,7 @@ impl PersonaBoundDeliberator {
     /// - 2. transcript 加 persona speech
     /// - 3. 复用 R33-4-1 helpers (`parse_stance_from_text` / `compute_consensus_score` /
     ///    `score_to_stance`) 0 改
-    pub fn deliberate(
-        &mut self,
-        query: &crate::deliberation::CouncilQuery,
-    ) -> PersonaBoundVerdict {
+    pub fn deliberate(&mut self, query: &crate::deliberation::CouncilQuery) -> PersonaBoundVerdict {
         let started_at_ms = query.started_at_ms;
         self.next_session_seq += 1;
         let session_id = format!("pbd-session-{:06}", self.next_session_seq);
@@ -612,11 +609,20 @@ mod tests {
     #[test]
     fn persona_bound_member_initial_stance_kind_from_persona() {
         // stance_bias 0.4 → Approve
-        assert_eq!(standard_3_pbm()[0].initial_stance_kind(), StanceKind::Approve);
+        assert_eq!(
+            standard_3_pbm()[0].initial_stance_kind(),
+            StanceKind::Approve
+        );
         // stance_bias 0.1 → Neutral
-        assert_eq!(standard_3_pbm()[1].initial_stance_kind(), StanceKind::Neutral);
+        assert_eq!(
+            standard_3_pbm()[1].initial_stance_kind(),
+            StanceKind::Neutral
+        );
         // stance_bias 0.6 → StrongApprove
-        assert_eq!(standard_3_pbm()[2].initial_stance_kind(), StanceKind::StrongApprove);
+        assert_eq!(
+            standard_3_pbm()[2].initial_stance_kind(),
+            StanceKind::StrongApprove
+        );
     }
 
     #[test]
@@ -645,7 +651,10 @@ mod tests {
         // member_summaries 反映 initial_stance_kind
         assert_eq!(v.member_summaries[0].final_stance, StanceKind::Approve);
         assert_eq!(v.member_summaries[1].final_stance, StanceKind::Neutral);
-        assert_eq!(v.member_summaries[2].final_stance, StanceKind::StrongApprove);
+        assert_eq!(
+            v.member_summaries[2].final_stance,
+            StanceKind::StrongApprove
+        );
         // final_speech 包含 persona name + role
         for s in &v.member_summaries {
             assert!(!s.final_speech.is_empty());

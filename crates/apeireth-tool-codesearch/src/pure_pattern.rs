@@ -68,19 +68,34 @@ pub struct PurePattern {
 impl PurePattern {
     pub fn literal(text: impl Into<String>) -> Self {
         let s: String = text.into();
-        Self { source: s.clone(), kind: PurePatternKind::Literal(s) }
+        Self {
+            source: s.clone(),
+            kind: PurePatternKind::Literal(s),
+        }
     }
 
     pub fn regex(pat: impl AsRef<str>) -> Result<Self, PurePatternError> {
         let s = pat.as_ref();
         let re = Regex::new(s)?;
-        Ok(Self { source: s.to_string(), kind: PurePatternKind::Regex(Arc::new(re)) })
+        Ok(Self {
+            source: s.to_string(),
+            kind: PurePatternKind::Regex(Arc::new(re)),
+        })
     }
 
     pub fn auto(pat: impl AsRef<str>) -> Result<Self, PurePatternError> {
         let s = pat.as_ref();
-        let has_meta = s.chars().any(|c| matches!(c, '*' | '+' | '?' | '|' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '\\'));
-        if has_meta { Self::regex(s) } else { Ok(Self::literal(s)) }
+        let has_meta = s.chars().any(|c| {
+            matches!(
+                c,
+                '*' | '+' | '?' | '|' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '\\'
+            )
+        });
+        if has_meta {
+            Self::regex(s)
+        } else {
+            Ok(Self::literal(s))
+        }
     }
 }
 // ============================================================================
@@ -134,31 +149,46 @@ impl PurePatternSearcher {
         out
     }
 
-    pub fn search_file(&self, path: &Path, pattern: &PurePattern) -> Result<Vec<AstGrepMatch>, PurePatternError> {
+    pub fn search_file(
+        &self,
+        path: &Path,
+        pattern: &PurePattern,
+    ) -> Result<Vec<AstGrepMatch>, PurePatternError> {
         let metadata = fs::metadata(path)?;
         if metadata.len() > self.max_file_size {
             return Ok(Vec::new());
         }
         let content = fs::read_to_string(path)?;
         let line_matches = Self::search_content(&content, pattern);
-        Ok(line_matches.into_iter().map(|(line, text)| AstGrepMatch {
-            file: path.to_path_buf(),
-            start_line: line,
-            end_line: line,
-            text,
-            rule_id: None,
-        }).collect())
+        Ok(line_matches
+            .into_iter()
+            .map(|(line, text)| AstGrepMatch {
+                file: path.to_path_buf(),
+                start_line: line,
+                end_line: line,
+                text,
+                rule_id: None,
+            })
+            .collect())
     }
 
-    pub fn search_dir(&self, root: &Path, pattern: &PurePattern) -> Result<Vec<AstGrepMatch>, PurePatternError> {
+    pub fn search_dir(
+        &self,
+        root: &Path,
+        pattern: &PurePattern,
+    ) -> Result<Vec<AstGrepMatch>, PurePatternError> {
         let mut results = Vec::new();
         let walker = WalkDir::new(root).follow_links(self.follow_symlinks);
         for entry in walker.into_iter().filter_map(|e| e.ok()) {
             let path = entry.path();
-            if !path.is_file() { continue; }
+            if !path.is_file() {
+                continue;
+            }
             if let Some(ext) = &self.extension_filter {
                 let path_ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if path_ext != ext { continue; }
+                if path_ext != ext {
+                    continue;
+                }
             }
             match self.search_file(path, pattern) {
                 Ok(matches) => results.extend(matches),
@@ -170,12 +200,21 @@ impl PurePatternSearcher {
 }
 
 impl AstSearcher for PurePatternSearcher {
-    fn search(&self, root: &Path, pattern: &str, _lang: Option<&str>) -> Result<Vec<AstGrepMatch>, AstGrepError> {
+    fn search(
+        &self,
+        root: &Path,
+        pattern: &str,
+        _lang: Option<&str>,
+    ) -> Result<Vec<AstGrepMatch>, AstGrepError> {
         let pat = PurePattern::auto(pattern).map_err(AstGrepError::from)?;
         self.search_dir(root, &pat).map_err(AstGrepError::from)
     }
 
-    fn search_with_rule(&self, _root: &Path, _rule_file: &Path) -> Result<Vec<AstGrepMatch>, AstGrepError> {
+    fn search_with_rule(
+        &self,
+        _root: &Path,
+        _rule_file: &Path,
+    ) -> Result<Vec<AstGrepMatch>, AstGrepError> {
         Err(AstGrepError::SpawnFailed("PurePatternSearcher does not support YAML rules; install ast-grep binary or use a code-level rule parser".to_string()))
     }
 }

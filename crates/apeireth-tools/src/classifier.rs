@@ -30,9 +30,16 @@ pub enum ToolCategory {
 impl ToolCategory {
     /// 全部 8 个 category
     pub fn all() -> [ToolCategory; 8] {
-        [Self::WebSearch, Self::FileOperator, Self::Git,
-         Self::ShellExec, Self::Grep, Self::ApplyPatch,
-         Self::LongTask, Self::WebFetch]
+        [
+            Self::WebSearch,
+            Self::FileOperator,
+            Self::Git,
+            Self::ShellExec,
+            Self::Grep,
+            Self::ApplyPatch,
+            Self::LongTask,
+            Self::WebFetch,
+        ]
     }
 
     /// 映射到实际 tool 名
@@ -52,14 +59,88 @@ impl ToolCategory {
     /// 该 category 的 keywords
     fn keywords(&self) -> &[&str] {
         match self {
-            Self::WebSearch => &["搜索", "查找", "检索", "上网查", "search", "find", "google", "查"],
-            Self::FileOperator => &["文件", "读取", "写入", "删除", "列目录", "复制", "移动", "file", "read", "write", "delete", "copy", "move", "mkdir"],
-            Self::Git => &["git", "提交", "分支", "历史", "commit", "branch", "log", "diff", "status"],
-            Self::ShellExec => &["运行", "执行", "命令", "shell", "exec", "run", "bash", "cmd", "powershell"],
-            Self::Grep => &["检索", "匹配", "查找", "grep", "regex", "match", "search.*code"],
-            Self::ApplyPatch => &["patch", "diff", "修改", "更新", "补丁", "选项", "表单合并", "edit_block", "replace"],
-            Self::LongTask => &["后台", "异步", "长任务", "async", "background", "long", "schedule", "queue", "任务队列"],
-            Self::WebFetch => &["打开网页", "访问", "http", "url", "fetch", "curl", "wget", "网页", "网址"],
+            Self::WebSearch => &[
+                "搜索",
+                "查找",
+                "检索",
+                "上网查",
+                "search",
+                "find",
+                "google",
+                "查",
+            ],
+            Self::FileOperator => &[
+                "文件",
+                "读取",
+                "写入",
+                "删除",
+                "列目录",
+                "复制",
+                "移动",
+                "file",
+                "read",
+                "write",
+                "delete",
+                "copy",
+                "move",
+                "mkdir",
+            ],
+            Self::Git => &[
+                "git", "提交", "分支", "历史", "commit", "branch", "log", "diff", "status",
+            ],
+            Self::ShellExec => &[
+                "运行",
+                "执行",
+                "命令",
+                "shell",
+                "exec",
+                "run",
+                "bash",
+                "cmd",
+                "powershell",
+            ],
+            Self::Grep => &[
+                "检索",
+                "匹配",
+                "查找",
+                "grep",
+                "regex",
+                "match",
+                "search.*code",
+            ],
+            Self::ApplyPatch => &[
+                "patch",
+                "diff",
+                "修改",
+                "更新",
+                "补丁",
+                "选项",
+                "表单合并",
+                "edit_block",
+                "replace",
+            ],
+            Self::LongTask => &[
+                "后台",
+                "异步",
+                "长任务",
+                "async",
+                "background",
+                "long",
+                "schedule",
+                "queue",
+                "任务队列",
+            ],
+            Self::WebFetch => &[
+                "打开网页",
+                "访问",
+                "http",
+                "url",
+                "fetch",
+                "curl",
+                "wget",
+                "网页",
+                "网址",
+            ],
         }
     }
 }
@@ -76,12 +157,23 @@ pub fn classify(query: &str) -> Vec<Classification> {
     let q = query.to_lowercase();
     let mut results = Vec::new();
     for cat in ToolCategory::all() {
-        let score = cat.keywords().iter().filter(|kw| q.contains(&kw.to_lowercase())).count();
+        let score = cat
+            .keywords()
+            .iter()
+            .filter(|kw| q.contains(&kw.to_lowercase()))
+            .count();
         if score > 0 {
-            results.push(Classification { category: cat, score });
+            results.push(Classification {
+                category: cat,
+                score,
+            });
         }
     }
-    results.sort_by(|a, b| b.score.cmp(&a.score).then_with(|| (a.category as usize).cmp(&(b.category as usize))));
+    results.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| (a.category as usize).cmp(&(b.category as usize)))
+    });
     results
 }
 
@@ -92,7 +184,11 @@ pub fn best_match(query: &str) -> Option<ToolCategory> {
 
 /// R30 U5: 多 category tie-breaking (返前 N)
 pub fn top_n(query: &str, n: usize) -> Vec<ToolCategory> {
-    classify(query).into_iter().take(n).map(|c| c.category).collect()
+    classify(query)
+        .into_iter()
+        .take(n)
+        .map(|c| c.category)
+        .collect()
 }
 
 #[cfg(test)]

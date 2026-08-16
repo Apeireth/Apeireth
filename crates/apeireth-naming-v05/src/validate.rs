@@ -137,7 +137,10 @@ mod tests {
         let spec = default_spec();
         let w = ClassWeights::new(0.50, 0.30, 0.15, 0.10); // sum=1.05
         let err = validate_v05_with_weights(&spec, &w).unwrap_err();
-        assert!(matches!(err, crate::error::NamingError::SumNotEquals1 { .. }));
+        assert!(matches!(
+            err,
+            crate::error::NamingError::SumNotEquals1 { .. }
+        ));
     }
 
     /// 守门 #4: validate_v05_structure OK.

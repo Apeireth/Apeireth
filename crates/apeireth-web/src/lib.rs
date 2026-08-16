@@ -1,4 +1,4 @@
-﻿//! `apeireth-web` 库入口 (R18)
+//! `apeireth-web` 库入口 (R18)
 //!
 //! 提供:
 //! - `api` — Council 7 advisor 数据结构 (跨 SSR/客户端 共享)
@@ -12,7 +12,6 @@
 
 pub mod api;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 #[cfg(feature = "ssr")]
 pub mod api_endpoints;
 pub mod app;
@@ -21,6 +20,7 @@ pub mod asi;
 pub mod council;
 pub mod council_history;
 pub mod memory;
+mod organ_kani_proofs;
 pub mod sovereignty;
 pub mod templates;
 pub mod tool_loop_adapter;

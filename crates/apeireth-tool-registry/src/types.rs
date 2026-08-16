@@ -313,13 +313,19 @@ mod tests {
     #[test]
     fn tool_kind_from_legacy_str_all_six() {
         // 反向解析
-        assert_eq!(ToolKind::from_legacy_str("synchronous"), Some(ToolKind::Sync));
+        assert_eq!(
+            ToolKind::from_legacy_str("synchronous"),
+            Some(ToolKind::Sync)
+        );
         assert_eq!(
             ToolKind::from_legacy_str("asynchronous"),
             Some(ToolKind::Async)
         );
         assert_eq!(ToolKind::from_legacy_str("static"), Some(ToolKind::Static));
-        assert_eq!(ToolKind::from_legacy_str("service"), Some(ToolKind::Service));
+        assert_eq!(
+            ToolKind::from_legacy_str("service"),
+            Some(ToolKind::Service)
+        );
         assert_eq!(
             ToolKind::from_legacy_str("messagePreprocessor"),
             Some(ToolKind::MessagePreprocessor)

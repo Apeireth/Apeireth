@@ -127,25 +127,25 @@ impl ConditionalEdge {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ConditionalError {
     /// Conditional target 节点不在 graph 中
-    MissingTarget {
-        from: NodeId,
-        target: NodeId,
-    },
+    MissingTarget { from: NodeId, target: NodeId },
     /// Conditional cycle 检测 (target 已在 execution set)
-    Cycle {
-        from: NodeId,
-        target: NodeId,
-    },
+    Cycle { from: NodeId, target: NodeId },
 }
 
 impl std::fmt::Display for ConditionalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MissingTarget { from, target } => {
-                write!(f, "conditional edge from `{from}` targets missing node `{target}`")
+                write!(
+                    f,
+                    "conditional edge from `{from}` targets missing node `{target}`"
+                )
             }
             Self::Cycle { from, target } => {
-                write!(f, "conditional edge from `{from}` to `{target}` would create a cycle")
+                write!(
+                    f,
+                    "conditional edge from `{from}` to `{target}` would create a cycle"
+                )
             }
         }
     }
@@ -332,8 +332,8 @@ mod tests {
         assert_eq!(edge.decide(&s).target, Some("end".to_string()));
         // 1st call: counter=1, label="loop" → path_map 空 → default=Some("end")
         // (default 是 target, 不是 END; 这里 test 验证闭包捕获 ok)
-        let _ = edge.decide(&s);  // counter=2
-        let d3 = edge.decide(&s);  // counter=3, label=END → target=None
+        let _ = edge.decide(&s); // counter=2
+        let d3 = edge.decide(&s); // counter=3, label=END → target=None
         assert_eq!(d3.target, None);
         assert_eq!(*counter.lock().unwrap(), 3);
     }

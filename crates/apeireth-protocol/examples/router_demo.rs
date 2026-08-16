@@ -16,10 +16,10 @@
 //! - 终点: 总结 4 协议字段差异 + VCP 借鉴映射
 
 use apeireth_protocol::{
-    is_tool_result_error, NormalizedFinishReason, NormalizedMessage, NormalizedRequest,
-    NormalizedTool, NormalizedToolChoice, ProtocolKind, decode_for_kind, encode_for_kind,
-    endpoint_path_for_kind, AnthropicMessagesBridge, GeminiBridge, OpenAiChatBridge,
-    OpenAiResponsesBridge, ProtocolBridge,
+    decode_for_kind, encode_for_kind, endpoint_path_for_kind, is_tool_result_error,
+    AnthropicMessagesBridge, GeminiBridge, NormalizedFinishReason, NormalizedMessage,
+    NormalizedRequest, NormalizedTool, NormalizedToolChoice, OpenAiChatBridge,
+    OpenAiResponsesBridge, ProtocolBridge, ProtocolKind,
 };
 use serde_json::json;
 
@@ -178,18 +178,14 @@ fn main() {
             ProtocolKind::AnthropicMessages => AnthropicMessagesBridge::name(),
             ProtocolKind::Gemini => GeminiBridge::name(),
             // 3 non-HTTP kind 不走本 bridge facade
-            ProtocolKind::Acp | ProtocolKind::Mcp | ProtocolKind::OpenClawGateway => "non-http-bridge",
-
+            ProtocolKind::Acp | ProtocolKind::Mcp | ProtocolKind::OpenClawGateway => {
+                "non-http-bridge"
+            }
         };
         let endpoint = endpoint_path_for_kind(*kind).expect("4 HTTP kind always Some");
         match encode_for_kind(*kind, &req) {
             Ok(v) => {
-                println!(
-                    "\n[{}] {} (POST {})",
-                    kind.as_str(),
-                    name,
-                    endpoint
-                );
+                println!("\n[{}] {} (POST {})", kind.as_str(), name, endpoint);
                 println!("{}", serde_json::to_string_pretty(&v).unwrap());
             }
             Err(e) => {
@@ -201,7 +197,9 @@ fn main() {
     // ============================================================
     // 第 2 步: 4 协议 fake JSON → NormalizedResponse
     // ============================================================
-    print_section("2. 4 协议 fake JSON → NormalizedResponse (R37-1 ProtocolBridge::decode_for_kind)");
+    print_section(
+        "2. 4 协议 fake JSON → NormalizedResponse (R37-1 ProtocolBridge::decode_for_kind)",
+    );
 
     for kind in &kinds {
         let fake = make_fake_response(*kind);

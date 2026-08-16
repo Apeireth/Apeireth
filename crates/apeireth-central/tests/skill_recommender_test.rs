@@ -16,7 +16,7 @@
 
 #![deny(unsafe_code)]
 
-use apeireth_central::skill_recommender::{SkillRecommender, ScoredSkill};
+use apeireth_central::skill_recommender::{ScoredSkill, SkillRecommender};
 use apeireth_central::skill_registry::SkillRegistry;
 use apeireth_central::skill_trait::SkillId;
 

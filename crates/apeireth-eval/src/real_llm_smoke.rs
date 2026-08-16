@@ -134,12 +134,27 @@ impl RealLlmSmokeReport {
     pub fn to_eval_scores(&self) -> Vec<crate::EvalScore> {
         vec![
             crate::EvalScore::new("apikey_loaded", if self.apikey_loaded { 1.0 } else { 0.0 }),
-            crate::EvalScore::new("conventions_scanned", if self.conventions_scanned { 1.0 } else { 0.0 }),
+            crate::EvalScore::new(
+                "conventions_scanned",
+                if self.conventions_scanned { 1.0 } else { 0.0 },
+            ),
             crate::EvalScore::new("prompt_built", if self.prompt_built { 1.0 } else { 0.0 }),
-            crate::EvalScore::new("http_request_ok", if self.http_request_ok { 1.0 } else { 0.0 }),
-            crate::EvalScore::new("response_shape_valid", if self.response_shape_valid { 1.0 } else { 0.0 }),
-            crate::EvalScore::new("content_non_empty", if self.content_non_empty { 1.0 } else { 0.0 }),
-            crate::EvalScore::new("token_usage_recorded", if self.token_usage_recorded { 1.0 } else { 0.0 }),
+            crate::EvalScore::new(
+                "http_request_ok",
+                if self.http_request_ok { 1.0 } else { 0.0 },
+            ),
+            crate::EvalScore::new(
+                "response_shape_valid",
+                if self.response_shape_valid { 1.0 } else { 0.0 },
+            ),
+            crate::EvalScore::new(
+                "content_non_empty",
+                if self.content_non_empty { 1.0 } else { 0.0 },
+            ),
+            crate::EvalScore::new(
+                "token_usage_recorded",
+                if self.token_usage_recorded { 1.0 } else { 0.0 },
+            ),
         ]
     }
 
@@ -287,7 +302,8 @@ impl Default for RealLlmConfig {
             temperature: Some(1.0),
             messages_path: ANTHROPIC_MESSAGES_PATH.to_string(),
             timeout: Duration::from_secs(30),
-            system_prefix: "You are a helpful assistant. Answer concisely (1 sentence max).".to_string(),
+            system_prefix: "You are a helpful assistant. Answer concisely (1 sentence max)."
+                .to_string(),
             user_message: DEFAULT_USER_MESSAGE.to_string(),
         }
     }
@@ -431,7 +447,10 @@ pub async fn run_real_llm_smoke(
         report.error = Some(format!(
             "response_shape_valid: content.len()={}, usage={:?}, model={:?}, stop_reason={:?}",
             parsed.content.len(),
-            parsed.usage.as_ref().map(|u| (u.input_tokens, u.output_tokens)),
+            parsed
+                .usage
+                .as_ref()
+                .map(|u| (u.input_tokens, u.output_tokens)),
             parsed.model,
             parsed.stop_reason
         ));
@@ -456,7 +475,9 @@ pub async fn run_real_llm_smoke(
                 .iter()
                 .map(|b| (
                     b.kind.as_str(),
-                    b.text.as_deref().map(|t| t.chars().take(50).collect::<String>())
+                    b.text
+                        .as_deref()
+                        .map(|t| t.chars().take(50).collect::<String>())
                 ))
                 .collect::<Vec<_>>()
         ));
@@ -574,7 +595,11 @@ mod real_llm_smoke_tests {
         });
         let parsed: AnthropicMessagesResponse = serde_json::from_value(body).unwrap();
         assert_eq!(parsed.content.len(), 2);
-        let texts: Vec<_> = parsed.content.iter().filter_map(|b| b.text.clone()).collect();
+        let texts: Vec<_> = parsed
+            .content
+            .iter()
+            .filter_map(|b| b.text.clone())
+            .collect();
         assert_eq!(texts, vec!["answer".to_string()]);
     }
 
@@ -611,7 +636,10 @@ mod real_llm_smoke_tests {
         let parsed: AnthropicMessagesResponse = serde_json::from_value(body).unwrap();
         assert_eq!(parsed.stop_reason.as_deref(), Some("tool_use"));
         // text block is first
-        assert_eq!(parsed.content[0].text.as_deref(), Some("let me call a tool"));
+        assert_eq!(
+            parsed.content[0].text.as_deref(),
+            Some("let me call a tool")
+        );
     }
 
     // ---- eval scores ----

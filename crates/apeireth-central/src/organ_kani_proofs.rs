@@ -26,7 +26,8 @@ fn r177_cen_04_v05_threshold() {
 
 #[test]
 fn r177_cen_05_central_new() {
-    let c = ApeirethCentral::default(); let _: String = format!("{:?}", c);
+    let c = ApeirethCentral::default();
+    let _: String = format!("{:?}", c);
 }
 
 #[cfg(kani)]
@@ -40,4 +41,3 @@ fn r177_cen_kani_01_threshold_invariant() {
 fn r177_cen_kani_02_components_invariant() {
     assert!(COMPONENT_COUNT == 17);
 }
-

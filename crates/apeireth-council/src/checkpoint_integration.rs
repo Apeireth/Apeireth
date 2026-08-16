@@ -144,7 +144,7 @@ pub fn resume_with_checkpoints(
     let resume_from = last.next_step();
 
     let mut ctx = crate::advisor::DeliberationContext::new(started_at_ms);
-    ctx.current_round = 0;  // 续时不累计轮次
+    ctx.current_round = 0; // 续时不累计轮次
     ctx.prior_opinions = opinions.clone();
 
     for (step, advisor) in council.advisors_iter().enumerate().skip(resume_from) {
@@ -215,7 +215,10 @@ fn unique_session_seq() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::advisor::{Advisor, AdvisorDomain, AdvisorId, AdvisorOpinion, DeliberationContext, DeliberationOutcome, Stance, StanceKind};
+    use crate::advisor::{
+        Advisor, AdvisorDomain, AdvisorId, AdvisorOpinion, DeliberationContext,
+        DeliberationOutcome, Stance, StanceKind,
+    };
     use crate::checkpoint::MemoryCheckpointStore;
     use crate::deliberation::QueryContext;
     use crate::hold::HoldTrigger;
@@ -240,13 +243,26 @@ mod tests {
     }
 
     impl Advisor for TestAdvisor {
-    fn lifecycle(&self) -> crate::lifecycle::AdvisorLifecycle { crate::lifecycle::AdvisorLifecycle::Persistent }
-    fn id(&self) -> AdvisorId { self.id.clone() }
-        fn domain(&self) -> AdvisorDomain { self.domain }
-        fn deliberate(&self, _q: &CouncilQuery, _ctx: &mut DeliberationContext) -> Result<DeliberationOutcome, crate::advisor::AdvisorError> {
+        fn lifecycle(&self) -> crate::lifecycle::AdvisorLifecycle {
+            crate::lifecycle::AdvisorLifecycle::Persistent
+        }
+        fn id(&self) -> AdvisorId {
+            self.id.clone()
+        }
+        fn domain(&self) -> AdvisorDomain {
+            self.domain
+        }
+        fn deliberate(
+            &self,
+            _q: &CouncilQuery,
+            _ctx: &mut DeliberationContext,
+        ) -> Result<DeliberationOutcome, crate::advisor::AdvisorError> {
             let stance = Stance::new(self.stance, "test");
             let op = AdvisorOpinion::new(self.id.clone(), stance, 0.8, "r", 1_000_000);
-            Ok(DeliberationOutcome { opinion: op, needs_rebuttal: false })
+            Ok(DeliberationOutcome {
+                opinion: op,
+                needs_rebuttal: false,
+            })
         }
     }
 
@@ -263,12 +279,20 @@ mod tests {
     #[test]
     fn t01_run_writes_checkpoints() {
         let mut council = Council::new();
-        council.recruit(Box::new(TestAdvisor::new("s1", AdvisorDomain::Safety, StanceKind::Approve)));
-        council.recruit(Box::new(TestAdvisor::new("p1", AdvisorDomain::Performance, StanceKind::Approve)));
+        council.recruit(Box::new(TestAdvisor::new(
+            "s1",
+            AdvisorDomain::Safety,
+            StanceKind::Approve,
+        )));
+        council.recruit(Box::new(TestAdvisor::new(
+            "p1",
+            AdvisorDomain::Performance,
+            StanceKind::Approve,
+        )));
         let store = MemoryCheckpointStore::new();
         let q = mk_query();
         let v = run_with_checkpoints(&mut council, &store, q);
-        assert_eq!(store.total_checkpoints(), 3);  // 2 step + 1 final
+        assert_eq!(store.total_checkpoints(), 3); // 2 step + 1 final
         assert!(!v.held);
     }
 
@@ -277,12 +301,16 @@ mod tests {
         let mut council = Council::new();
         for i in 0..5 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
-        assert_eq!(store.total_checkpoints(), 6);  // 5 step + 1 final
-        // last checkpoint should be complete
+        assert_eq!(store.total_checkpoints(), 6); // 5 step + 1 final
+                                                  // last checkpoint should be complete
         let cps = store.list(&v.session_id).unwrap();
         let last = cps.last().unwrap();
         assert!(last.is_complete());
@@ -293,7 +321,11 @@ mod tests {
         let mut council = Council::new();
         for i in 0..5 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
@@ -333,7 +365,11 @@ mod tests {
         let mut council = Council::new();
         for i in 0..3 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
@@ -347,7 +383,11 @@ mod tests {
     #[test]
     fn t05_session_id_unique() {
         let mut council = Council::new();
-        council.recruit(Box::new(TestAdvisor::new("a1", AdvisorDomain::Safety, StanceKind::Approve)));
+        council.recruit(Box::new(TestAdvisor::new(
+            "a1",
+            AdvisorDomain::Safety,
+            StanceKind::Approve,
+        )));
         let store = MemoryCheckpointStore::new();
         let v1 = run_with_checkpoints(&mut council, &store, mk_query());
         let v2 = run_with_checkpoints(&mut council, &store, mk_query());
@@ -359,7 +399,11 @@ mod tests {
         let mut council = Council::new();
         for i in 0..4 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
@@ -375,7 +419,11 @@ mod tests {
         let mut council = Council::new();
         for i in 0..3 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
@@ -403,8 +451,16 @@ mod tests {
     #[test]
     fn t09_hold_trigger_with_strong_disapprove() {
         let mut council = Council::new();
-        council.recruit(Box::new(TestAdvisor::new("s1", AdvisorDomain::Safety, StanceKind::StrongDisapprove)));
-        council.recruit(Box::new(TestAdvisor::new("p1", AdvisorDomain::Performance, StanceKind::Approve)));
+        council.recruit(Box::new(TestAdvisor::new(
+            "s1",
+            AdvisorDomain::Safety,
+            StanceKind::StrongDisapprove,
+        )));
+        council.recruit(Box::new(TestAdvisor::new(
+            "p1",
+            AdvisorDomain::Performance,
+            StanceKind::Approve,
+        )));
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());
         assert!(v.held);
@@ -416,7 +472,11 @@ mod tests {
         let mut council = Council::new();
         for i in 0..3 {
             let d = AdvisorDomain::ALL[i % AdvisorDomain::ALL.len()];
-            council.recruit(Box::new(TestAdvisor::new(&format!("a{i}"), d, StanceKind::Approve)));
+            council.recruit(Box::new(TestAdvisor::new(
+                &format!("a{i}"),
+                d,
+                StanceKind::Approve,
+            )));
         }
         let store = MemoryCheckpointStore::new();
         let v = run_with_checkpoints(&mut council, &store, mk_query());

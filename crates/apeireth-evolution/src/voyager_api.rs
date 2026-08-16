@@ -47,7 +47,13 @@ pub struct Skill {
 }
 
 impl Skill {
-    pub fn new(name: impl Into<String>, description: impl Into<String>, code: impl Into<String>, query_keywords: impl Into<String>, now_ms: i64) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        description: impl Into<String>,
+        code: impl Into<String>,
+        query_keywords: impl Into<String>,
+        now_ms: i64,
+    ) -> Self {
         Self {
             name: name.into(),
             description: description.into(),
@@ -118,10 +124,20 @@ impl SkillLibrary {
     /// 按关键词检索 (name + description 子串匹配).
     pub fn search(&self, query: &str) -> Vec<&Skill> {
         let q = query.to_lowercase();
-        let mut hits: Vec<&Skill> = self.skills.values()
-            .filter(|s| s.name.to_lowercase().contains(&q) || s.description.to_lowercase().contains(&q) || s.query_keywords.to_lowercase().contains(&q))
+        let mut hits: Vec<&Skill> = self
+            .skills
+            .values()
+            .filter(|s| {
+                s.name.to_lowercase().contains(&q)
+                    || s.description.to_lowercase().contains(&q)
+                    || s.query_keywords.to_lowercase().contains(&q)
+            })
             .collect();
-        hits.sort_by(|a, b| b.success_rate().partial_cmp(&a.success_rate()).unwrap_or(std::cmp::Ordering::Equal));
+        hits.sort_by(|a, b| {
+            b.success_rate()
+                .partial_cmp(&a.success_rate())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         hits
     }
 }
@@ -189,7 +205,8 @@ impl Voyager {
         Self {
             library: SkillLibrary::new(),
             history: Vec::new(),
-            auto_skill_template: "// auto-generated skill stub\nfn main() { /* TODO */ }".to_string(),
+            auto_skill_template: "// auto-generated skill stub\nfn main() { /* TODO */ }"
+                .to_string(),
         }
     }
 
@@ -204,7 +221,12 @@ impl Voyager {
     /// 2. if found, use it
     /// 3. if not, auto-generate stub skill
     /// 4. record outcome + update success/failure count
-    pub fn run_task(&mut self, task: VoyagerTask, outcome: TaskOutcome, now_ms: i64) -> VoyagerResult {
+    pub fn run_task(
+        &mut self,
+        task: VoyagerTask,
+        outcome: TaskOutcome,
+        now_ms: i64,
+    ) -> VoyagerResult {
         let candidates = self.library.search(&task.query);
         let (skill_used, skill_created) = if let Some(s) = candidates.first() {
             (Some(s.name.clone()), false)
@@ -262,7 +284,11 @@ impl Voyager {
     /// 统计: 成功 / 失败 / 总数.
     pub fn stats(&self) -> VoyagerStats {
         let total = self.history.len();
-        let success = self.history.iter().filter(|r| r.outcome == TaskOutcome::Success).count();
+        let success = self
+            .history
+            .iter()
+            .filter(|r| r.outcome == TaskOutcome::Success)
+            .count();
         VoyagerStats {
             total_tasks: total,
             success_tasks: success,
@@ -334,8 +360,20 @@ mod tests {
     #[test]
     fn t05_skill_library_search() {
         let mut lib = SkillLibrary::new();
-        lib.add(Skill::new("fix_loop", "fix import loop", "code", "kw_fix", 0));
-        lib.add(Skill::new("optimize", "optimize query", "code", "kw_opt", 0));
+        lib.add(Skill::new(
+            "fix_loop",
+            "fix import loop",
+            "code",
+            "kw_fix",
+            0,
+        ));
+        lib.add(Skill::new(
+            "optimize",
+            "optimize query",
+            "code",
+            "kw_opt",
+            0,
+        ));
         let hits = lib.search("fix");
         assert_eq!(hits.len(), 1);
         assert_eq!(hits[0].name, "fix_loop");

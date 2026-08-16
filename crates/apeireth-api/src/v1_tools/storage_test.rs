@@ -63,8 +63,8 @@ mod _storage_src;
 /// 会冲突, 所以这里用普通 `pub async fn`, 由 caller 包 `#[tokio::test]`.
 pub mod entries {
     use super::_storage_src::{
-        EntityStorage, InMemoryStorage, JsonFileStorage, SqliteStorage, StorageError,
-        extract_id, validate_id, STORAGE_BACKEND_COUNT,
+        extract_id, validate_id, EntityStorage, InMemoryStorage, JsonFileStorage, SqliteStorage,
+        StorageError, STORAGE_BACKEND_COUNT,
     };
     use serde::{Deserialize, Serialize};
     use serde_json::Value;
@@ -139,8 +139,9 @@ pub mod entries {
 
         // 第 1 阶段: 创 + 改
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 1");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 1");
             assert!(s.is_empty(), "新 JsonFileStorage 应空");
             assert_eq!(s.len(), 0);
 
@@ -163,8 +164,9 @@ pub mod entries {
 
         // 第 2 阶段: 重新打开 (模拟重启), 应能读到
         {
-            let s: JsonFileStorage<TestEntity> =
-                JsonFileStorage::new("test", path.clone()).await.expect("open 2 (reload)");
+            let s: JsonFileStorage<TestEntity> = JsonFileStorage::new("test", path.clone())
+                .await
+                .expect("open 2 (reload)");
             assert_eq!(s.len(), 2, "重启后应 2 个实体");
             let got = s.get("f1").await.expect("get f1 after reload");
             assert_eq!(got.name, "file-alpha");
@@ -187,10 +189,7 @@ pub mod entries {
                 .await
                 .expect("open 4 (verify persistence)");
             assert_eq!(s.len(), 1, "删后持久化应只剩 1 (fsync 已写)");
-            assert!(
-                s.get("f1").await.is_err(),
-                "f1 已删, get 应 Err (NotFound)"
-            );
+            assert!(s.get("f1").await.is_err(), "f1 已删, get 应 Err (NotFound)");
             let got = s.get("f2").await.expect("f2 应仍存");
             assert_eq!(got.name, "file-beta");
         }
@@ -240,16 +239,10 @@ pub mod entries {
         assert!(validate_id("ok").is_ok(), "正常 id 应 Ok");
         // validate_id: 超长 → Err
         let long = "x".repeat(257);
-        assert!(
-            validate_id(&long).is_err(),
-            "超长 id 应 Err (> 256)"
-        );
+        assert!(validate_id(&long).is_err(), "超长 id 应 Err (> 256)");
         // validate_id: 边界 256 通过
         let boundary = "x".repeat(256);
-        assert!(
-            validate_id(&boundary).is_ok(),
-            "边界 256 应 Ok"
-        );
+        assert!(validate_id(&boundary).is_ok(), "边界 256 应 Ok");
 
         // extract_id: 缺 id → Err
         let v: Value = serde_json::json!({"name": "x"});
@@ -315,11 +308,7 @@ pub mod entries {
             h.await.expect("join");
         }
         let all = s.list().await.expect("list post-delete");
-        assert_eq!(
-            all.len(),
-            8 * 50,
-            "8 worker × 50 = 400 个剩余 (无残留)"
-        );
+        assert_eq!(all.len(), 8 * 50, "8 worker × 50 = 400 个剩余 (无残留)");
     }
 
     /// **附: 3 backend 编译期 hardcode + SqliteStorage NotImplemented**

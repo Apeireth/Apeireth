@@ -21,12 +21,17 @@ use apeireth_central::skill_recommender::SkillRecommender;
 use apeireth_central::skill_registry::SkillRegistry;
 
 fn main() {
-    println!("=== R125-16 升级 demo: 借鉴 obra/superpowers Skill Recommender (recommender 层) ===\n");
+    println!(
+        "=== R125-16 升级 demo: 借鉴 obra/superpowers Skill Recommender (recommender 层) ===\n"
+    );
 
     let registry = SkillRegistry::new();
     let rec = SkillRecommender::new(&registry);
     println!("registry.count() = {} (跟 R125-15e 1:1)", registry.count());
-    println!("total_keywords() = {} (14 skill 关键词总数)\n", SkillRecommender::total_keywords());
+    println!(
+        "total_keywords() = {} (14 skill 关键词总数)\n",
+        SkillRecommender::total_keywords()
+    );
 
     // ---- 演示 1: TDD task ----
     println!("1. TDD task: \"I need to write a failing test first\"");
@@ -34,9 +39,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 
@@ -46,9 +49,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 
@@ -58,9 +59,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 
@@ -70,9 +69,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 
@@ -82,9 +79,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 
@@ -92,7 +87,9 @@ fn main() {
     println!("\n6. 0 匹配 task: \"xyzqwertynonsense\"");
     let recs = rec.recommend("xyzqwertynonsense", 3);
     if recs.is_empty() {
-        println!("   0 推荐 (0 关键词匹配, 跟 superpowers 公开 README \"Mandatory workflows\" 1:1)");
+        println!(
+            "   0 推荐 (0 关键词匹配, 跟 superpowers 公开 README \"Mandatory workflows\" 1:1)"
+        );
     } else {
         println!("   unexpected: {recs:?}");
     }
@@ -103,9 +100,7 @@ fn main() {
     for (i, r) in recs.iter().enumerate() {
         println!(
             "   #{i}: {} ({} 分, 匹配关键词 {:?})",
-            r.skill_id,
-            r.score,
-            r.matched_keywords
+            r.skill_id, r.score, r.matched_keywords
         );
     }
 

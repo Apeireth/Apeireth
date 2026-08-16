@@ -269,8 +269,12 @@ pub fn detect_platform() -> Platform {
     return Platform::Bsd;
     // 估缺平台默认 Bsd (走加密文件 fallback)
     #[cfg(not(any(
-        target_os = "windows", target_os = "macos", target_os = "linux",
-        target_os = "freebsd", target_os = "openbsd", target_os = "netbsd",
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
         target_os = "dragonfly"
     )))]
     return Platform::Bsd;
@@ -461,7 +465,11 @@ pub struct TokenEntry {
 
 impl TokenEntry {
     /// 构造新 TokenEntry.
-    pub fn new(service: impl Into<String>, account: impl Into<String>, token_type: TokenType) -> Self {
+    pub fn new(
+        service: impl Into<String>,
+        account: impl Into<String>,
+        token_type: TokenType,
+    ) -> Self {
         let now = chrono::Utc::now();
         Self {
             service: service.into(),
@@ -560,11 +568,12 @@ impl KeyringAdapter for KeyringCrateAdapter {
         if token.len() > TOKEN_MAX_LENGTH {
             return Err(KeyringError::TokenTooLong(token.len()));
         }
-        let entry = keyring::Entry::new(service, account)
-            .map_err(|e| KeyringError::BackendUnavailable {
+        let entry = keyring::Entry::new(service, account).map_err(|e| {
+            KeyringError::BackendUnavailable {
                 platform: self.platform,
                 reason: format!("entry create: {e}"),
-            })?;
+            }
+        })?;
         // keyring 3.x 用 blocking set_password; 走 spawn_blocking 防阻塞 async runtime
         let svc = service.to_string();
         let acc = account.to_string();
@@ -582,11 +591,12 @@ impl KeyringAdapter for KeyringCrateAdapter {
 
     #[instrument(skip(self))]
     async fn get(&self, service: &str, account: &str) -> KeyringResult<SecretBytes> {
-        let entry = keyring::Entry::new(service, account)
-            .map_err(|e| KeyringError::BackendUnavailable {
+        let entry = keyring::Entry::new(service, account).map_err(|e| {
+            KeyringError::BackendUnavailable {
                 platform: self.platform,
                 reason: format!("entry create: {e}"),
-            })?;
+            }
+        })?;
         let svc = service.to_string();
         let acc = account.to_string();
         let pw = tokio::task::spawn_blocking(move || entry.get_password())
@@ -607,11 +617,12 @@ impl KeyringAdapter for KeyringCrateAdapter {
 
     #[instrument(skip(self))]
     async fn delete(&self, service: &str, account: &str) -> KeyringResult<()> {
-        let entry = keyring::Entry::new(service, account)
-            .map_err(|e| KeyringError::BackendUnavailable {
+        let entry = keyring::Entry::new(service, account).map_err(|e| {
+            KeyringError::BackendUnavailable {
                 platform: self.platform,
                 reason: format!("entry create: {e}"),
-            })?;
+            }
+        })?;
         let svc = service.to_string();
         let acc = account.to_string();
         tokio::task::spawn_blocking(move || entry.delete_credential())
@@ -781,7 +792,10 @@ impl EncryptedFileStore {
         cipher
             .decrypt(
                 Nonce::from_slice(&nonce),
-                Payload { msg: &tag_and_ct, aad: b"apeireth-keyring-v1" },
+                Payload {
+                    msg: &tag_and_ct,
+                    aad: b"apeireth-keyring-v1",
+                },
             )
             .map_err(|_| KeyringError::InvalidPassphrase)?;
         Ok(())
@@ -864,7 +878,12 @@ impl KeyringStore {
 
     /// 设置凭证 (优先 OS keyring, 失败 → fallback).
     #[instrument(skip(self, token))]
-    pub async fn set(&self, service: &str, account: &str, token: &SecretBytes) -> KeyringResult<()> {
+    pub async fn set(
+        &self,
+        service: &str,
+        account: &str,
+        token: &SecretBytes,
+    ) -> KeyringResult<()> {
         if token.len() > TOKEN_MAX_LENGTH {
             return Err(KeyringError::TokenTooLong(token.len()));
         }
@@ -872,7 +891,10 @@ impl KeyringStore {
         match self.primary.set(service, account, token).await {
             Ok(()) => {
                 let entry = TokenEntry::new(service, account, infer_token_type(service));
-                self.entries.write().await.insert((service.into(), account.into()), entry);
+                self.entries
+                    .write()
+                    .await
+                    .insert((service.into(), account.into()), entry);
                 return Ok(());
             }
             Err(e) => {
@@ -881,14 +903,19 @@ impl KeyringStore {
         }
         // Fallback
         let fallback = self.fallback.read().await;
-        let fb = fallback.as_ref().ok_or_else(|| KeyringError::Other("fallback disabled".to_string()))?;
+        let fb = fallback
+            .as_ref()
+            .ok_or_else(|| KeyringError::Other("fallback disabled".to_string()))?;
         if !fb.is_unlocked().await {
             return Err(KeyringError::Locked);
         }
         // 真实写入留 R20 阶段 2 (依赖 unlock 后 derived_key)
         // skeleton 阶段仅记 entries, 写盘估补
         let entry = TokenEntry::new(service, account, infer_token_type(service));
-        self.entries.write().await.insert((service.into(), account.into()), entry);
+        self.entries
+            .write()
+            .await
+            .insert((service.into(), account.into()), entry);
         Ok(())
     }
 
@@ -917,7 +944,10 @@ impl KeyringStore {
     pub async fn delete(&self, service: &str, account: &str) -> KeyringResult<()> {
         match self.primary.delete(service, account).await {
             Ok(()) => {
-                self.entries.write().await.remove(&(service.into(), account.into()));
+                self.entries
+                    .write()
+                    .await
+                    .remove(&(service.into(), account.into()));
                 return Ok(());
             }
             Err(KeyringError::NotFound { .. }) => {
@@ -927,7 +957,10 @@ impl KeyringStore {
                 warn!(error = %e, "OS keyring delete 失败");
             }
         }
-        self.entries.write().await.remove(&(service.into(), account.into()));
+        self.entries
+            .write()
+            .await
+            .remove(&(service.into(), account.into()));
         Ok(())
     }
 
@@ -1080,7 +1113,8 @@ impl RateLimit {
 
 /// Per-key rate limit tracker (key → RateLimit).
 /// 用 `HashMap` + `Mutex` 保护并发, 防止 m3 爆破 (defense #5).
-pub type RateLimitMap = std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, RateLimit>>>;
+pub type RateLimitMap =
+    std::sync::Arc<tokio::sync::Mutex<std::collections::HashMap<String, RateLimit>>>;
 
 /// 新建 per-key rate limit map.
 #[must_use]
@@ -1145,7 +1179,12 @@ pub fn verify_hmac_file_integrity(file_bytes: &[u8], salt: &[u8], expected: &str
 impl EncryptedFileStore {
     /// 真实 set: 加密 + 写文件 + 更新 HMAC.
     #[instrument(skip(self, token))]
-    pub async fn set(&self, service: &str, account: &str, token: &SecretBytes) -> KeyringResult<()> {
+    pub async fn set(
+        &self,
+        service: &str,
+        account: &str,
+        token: &SecretBytes,
+    ) -> KeyringResult<()> {
         if !*self.unlocked.read().await {
             return Err(KeyringError::Locked);
         }
@@ -1172,14 +1211,18 @@ impl EncryptedFileStore {
         let ciphertext = cipher
             .encrypt(
                 Nonce::from_slice(&nonce),
-                Payload { msg: &plaintext, aad: b"apeireth-keyring-v1" },
+                Payload {
+                    msg: &plaintext,
+                    aad: b"apeireth-keyring-v1",
+                },
             )
             .map_err(|e| KeyringError::FallbackCrypto(format!("encrypt: {e}")))?;
 
         // 写文件: salt(16) + nonce(12) + ciphertext + hmac(64)
         let salt = self.read_salt().unwrap_or([0u8; FALLBACK_SALT_LEN]);
         let hmac = hmac_file_integrity(&ciphertext, &salt);
-        let mut buf = Vec::with_capacity(FALLBACK_SALT_LEN + FALLBACK_NONCE_LEN + ciphertext.len() + 64);
+        let mut buf =
+            Vec::with_capacity(FALLBACK_SALT_LEN + FALLBACK_NONCE_LEN + ciphertext.len() + 64);
         buf.extend_from_slice(&salt);
         buf.extend_from_slice(&nonce);
         buf.extend_from_slice(&ciphertext);
@@ -1224,7 +1267,10 @@ impl EncryptedFileStore {
         let composite_key = format!("{service}\x00{account}");
         let token_b64 = entries
             .get(&composite_key)
-            .ok_or_else(|| KeyringError::NotFound { service: service.to_string(), account: account.to_string() })?;
+            .ok_or_else(|| KeyringError::NotFound {
+                service: service.to_string(),
+                account: account.to_string(),
+            })?;
         let token_bytes = base64_simple_decode(token_b64)
             .ok_or_else(|| KeyringError::FallbackCrypto("base64 decode".to_string()))?;
         Ok(SecretBytes::new(token_bytes))
@@ -1247,7 +1293,10 @@ impl EncryptedFileStore {
         let composite_key = format!("{service}\x00{account}");
         let removed = entries.remove(&composite_key).is_some();
         if !removed {
-            return Err(KeyringError::NotFound { service: service.to_string(), account: account.to_string() });
+            return Err(KeyringError::NotFound {
+                service: service.to_string(),
+                account: account.to_string(),
+            });
         }
 
         // 重写文件
@@ -1258,13 +1307,17 @@ impl EncryptedFileStore {
         let ciphertext = cipher
             .encrypt(
                 Nonce::from_slice(&nonce),
-                Payload { msg: &plaintext, aad: b"apeireth-keyring-v1" },
+                Payload {
+                    msg: &plaintext,
+                    aad: b"apeireth-keyring-v1",
+                },
             )
             .map_err(|e| KeyringError::FallbackCrypto(format!("encrypt: {e}")))?;
 
         let salt = self.read_salt().unwrap_or([0u8; FALLBACK_SALT_LEN]);
         let hmac = hmac_file_integrity(&ciphertext, &salt);
-        let mut buf = Vec::with_capacity(FALLBACK_SALT_LEN + FALLBACK_NONCE_LEN + ciphertext.len() + 64);
+        let mut buf =
+            Vec::with_capacity(FALLBACK_SALT_LEN + FALLBACK_NONCE_LEN + ciphertext.len() + 64);
         buf.extend_from_slice(&salt);
         buf.extend_from_slice(&nonce);
         buf.extend_from_slice(&ciphertext);
@@ -1323,22 +1376,30 @@ impl EncryptedFileStore {
         let mut rest = Vec::new();
         f.read_to_end(&mut rest)?;
         if rest.len() < 64 {
-            return Err(KeyringError::FallbackCrypto("file truncated (missing HMAC)".to_string()));
+            return Err(KeyringError::FallbackCrypto(
+                "file truncated (missing HMAC)".to_string(),
+            ));
         }
         let (ciphertext, hmac_bytes) = rest.split_at(rest.len() - 64);
         let hmac_hex = std::str::from_utf8(hmac_bytes)
             .map_err(|e| KeyringError::FallbackCrypto(format!("hmac utf8: {e}")))?;
         if !verify_hmac_file_integrity(ciphertext, &salt, hmac_hex) {
-            return Err(KeyringError::FallbackCrypto("HMAC 校验失败 (文件被改?)".to_string()));
+            return Err(KeyringError::FallbackCrypto(
+                "HMAC 校验失败 (文件被改?)".to_string(),
+            ));
         }
         let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
         let plaintext = cipher
             .decrypt(
                 Nonce::from_slice(&nonce),
-                Payload { msg: ciphertext, aad: b"apeireth-keyring-v1" },
+                Payload {
+                    msg: ciphertext,
+                    aad: b"apeireth-keyring-v1",
+                },
             )
             .map_err(|e| KeyringError::FallbackCrypto(format!("decrypt: {e}")))?;
-        let entries: HashMap<String, String> = serde_json::from_slice(&plaintext).map_err(KeyringError::Json)?;
+        let entries: HashMap<String, String> =
+            serde_json::from_slice(&plaintext).map_err(KeyringError::Json)?;
         Ok(entries)
     }
 }
@@ -1442,35 +1503,45 @@ async fn global_store() -> tokio::sync::MutexGuard<'static, Option<KeyringStore>
 /// 顶层: `get(key)` → `Result<SecretString, _>` (1:1 翻译商业版 5 主入口).
 pub async fn get(key: &str) -> Result<SecretString, KeyringError> {
     let guard = global_store().await;
-    let store = guard.as_ref().ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
+    let store = guard
+        .as_ref()
+        .ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
     store.get_key(key).await
 }
 
 /// 顶层: `set(key, value)` → `Result<(), _>`.
 pub async fn set(key: &str, value: &SecretString) -> Result<(), KeyringError> {
     let guard = global_store().await;
-    let store = guard.as_ref().ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
+    let store = guard
+        .as_ref()
+        .ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
     store.set_key(key, value).await
 }
 
 /// 顶层: `delete(key)` → `Result<(), _>`.
 pub async fn delete(key: &str) -> Result<(), KeyringError> {
     let guard = global_store().await;
-    let store = guard.as_ref().ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
+    let store = guard
+        .as_ref()
+        .ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
     store.delete_key(key).await
 }
 
 /// 顶层: `list()` → `Result<Vec<String>, _>` (所有 key 名).
 pub async fn list() -> Result<Vec<String>, KeyringError> {
     let guard = global_store().await;
-    let store = guard.as_ref().ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
+    let store = guard
+        .as_ref()
+        .ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
     store.list_keys().await
 }
 
 /// 顶层: `rotate(key)` → `Result<(), _>` (regenerate underlying crypto material).
 pub async fn rotate(key: &str) -> Result<(), KeyringError> {
     let guard = global_store().await;
-    let store = guard.as_ref().ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
+    let store = guard
+        .as_ref()
+        .ok_or_else(|| KeyringError::Other("store not initialized".to_string()))?;
     store.rotate_key(key).await
 }
 
@@ -1532,8 +1603,16 @@ pub(crate) fn base64_simple_decode(s: &str) -> Option<Vec<u8>> {
     while i < bytes.len() {
         let a = val(bytes[i])?;
         let b = val(bytes[i + 1])?;
-        let c = if bytes[i + 2] == b'=' { 0 } else { val(bytes[i + 2])? };
-        let d = if bytes[i + 3] == b'=' { 0 } else { val(bytes[i + 3])? };
+        let c = if bytes[i + 2] == b'=' {
+            0
+        } else {
+            val(bytes[i + 2])?
+        };
+        let d = if bytes[i + 3] == b'=' {
+            0
+        } else {
+            val(bytes[i + 3])?
+        };
         out.push(((a << 2) | (b >> 4)) as u8);
         if bytes[i + 2] != b'=' {
             out.push((((b & 0xF) << 4) | (c >> 2)) as u8);
@@ -1621,15 +1700,13 @@ pub enum ProviderError {
 impl From<ProviderError> for KeyringError {
     fn from(e: ProviderError) -> Self {
         match e {
-            ProviderError::Unavailable { platform, reason, .. } => {
-                KeyringError::BackendUnavailable { platform, reason }
-            }
+            ProviderError::Unavailable {
+                platform, reason, ..
+            } => KeyringError::BackendUnavailable { platform, reason },
             ProviderError::Io { source, .. } => KeyringError::FallbackIo(source),
             ProviderError::Crypto { reason, .. } => KeyringError::FallbackCrypto(reason),
             ProviderError::Format { reason, .. } => KeyringError::Other(reason),
-            ProviderError::Disabled { .. } => {
-                KeyringError::Other("provider disabled".to_string())
-            }
+            ProviderError::Disabled { .. } => KeyringError::Other("provider disabled".to_string()),
             ProviderError::Unsupported { platform, .. } => {
                 KeyringError::UnsupportedPlatform(platform)
             }
@@ -1752,7 +1829,9 @@ impl KeyringAdapter for EncryptedFileAdapter {
         let pairs = self.inner.list().await?;
         Ok(pairs
             .into_iter()
-            .map(|(service, account)| TokenEntry::new(&service, account, infer_token_type(&service)))
+            .map(|(service, account)| {
+                TokenEntry::new(&service, account, infer_token_type(&service))
+            })
             .collect())
     }
 
@@ -2300,7 +2379,10 @@ mod tests {
     fn k1_tool_whitelist_has_8_entries() {
         assert_eq!(TOOL_WHITELIST.len(), 8);
         for tool in TOOL_WHITELIST {
-            assert!(tool.starts_with("apeireth_keyring_"), "tool {tool} 缺 apeireth_keyring_ 前缀");
+            assert!(
+                tool.starts_with("apeireth_keyring_"),
+                "tool {tool} 缺 apeireth_keyring_ 前缀"
+            );
         }
         // 5 K-1 字样
         let body = TOOL_WHITELIST.join(",");
@@ -2314,7 +2396,10 @@ mod tests {
     /// K-1 fixture #4: 4 防御常量 (PBKDF2_ITER / AES_KEY / NONCE / FALLBACK_FILE)
     #[test]
     fn k1_defense_constants_hardcoded() {
-        assert_eq!(FALLBACK_PBKDF2_ITERATIONS, 600_000, "PBKDF2 iterations 必须 OWASP 2023 ≥ 600_000");
+        assert_eq!(
+            FALLBACK_PBKDF2_ITERATIONS, 600_000,
+            "PBKDF2 iterations 必须 OWASP 2023 ≥ 600_000"
+        );
         assert_eq!(FALLBACK_AES_KEY_LEN, 32, "AES key 必须 32 字节 = AES-256");
         assert_eq!(FALLBACK_NONCE_LEN, 12, "GCM nonce 必须 12 字节");
         assert_eq!(FALLBACK_FILE_NAME, "apeireth-keyring-fallback.bin");
@@ -2327,17 +2412,32 @@ mod tests {
         let secret = SecretBytes::new(b"sk-cp-kug0t7Jik3-test-key");
         let json = serde_json::to_string(&secret).unwrap();
         assert!(json.contains("***REDACTED***"));
-        assert!(!json.contains("sk-cp-"), "明文 token 不允许出现在序列化输出");
+        assert!(
+            !json.contains("sk-cp-"),
+            "明文 token 不允许出现在序列化输出"
+        );
 
         // 2) FALLBACK_FILE_NAME 走 .apeireth 子目录 (隐藏), 不在 cwd
-        assert!(FALLBACK_FILE_NAME.contains("apeireth"), "fallback 文件名必须含 apeireth 前缀");
-        assert!(!FALLBACK_FILE_NAME.ends_with(".json"), "fallback 严禁 .json 明文");
-        assert!(!FALLBACK_FILE_NAME.ends_with(".txt"), "fallback 严禁 .txt 明文");
+        assert!(
+            FALLBACK_FILE_NAME.contains("apeireth"),
+            "fallback 文件名必须含 apeireth 前缀"
+        );
+        assert!(
+            !FALLBACK_FILE_NAME.ends_with(".json"),
+            "fallback 严禁 .json 明文"
+        );
+        assert!(
+            !FALLBACK_FILE_NAME.ends_with(".txt"),
+            "fallback 严禁 .txt 明文"
+        );
 
         // 3) TokenEntry Debug 也不能泄露 token
         let entry = TokenEntry::new("apeireth-anthropic", "chuling@local", TokenType::Anthropic);
         let dbg = format!("{entry:?}");
-        assert!(!dbg.contains("sk-cp-"), "TokenEntry Debug 不含密文 (它本身没存 token, 这里冗余校验)");
+        assert!(
+            !dbg.contains("sk-cp-"),
+            "TokenEntry Debug 不含密文 (它本身没存 token, 这里冗余校验)"
+        );
     }
 
     // ── 辅助 trait: bool.not() ──
@@ -2381,14 +2481,20 @@ mod tests {
         let mut rl = RateLimit::new(5, 10);
         // burst 10: 10 个 token 立即可用
         for i in 0..10 {
-            assert!(rl.try_acquire(&format!("k{i}")).is_ok(), "burst {i}/10 应通过");
+            assert!(
+                rl.try_acquire(&format!("k{i}")).is_ok(),
+                "burst {i}/10 应通过"
+            );
         }
         // 第 11 个应被拒
         assert!(rl.try_acquire("k11").is_err(), "burst 用完后必须 throttle");
         // 等 1 秒, refill 5 个
         tokio::time::sleep(std::time::Duration::from_millis(1100)).await;
         for i in 0..5 {
-            assert!(rl.try_acquire(&format!("r{i}")).is_ok(), "refill 后 {i}/5 应通过");
+            assert!(
+                rl.try_acquire(&format!("r{i}")).is_ok(),
+                "refill 后 {i}/5 应通过"
+            );
         }
     }
 
@@ -2404,7 +2510,10 @@ mod tests {
         // 改 1 字节 → 不一致
         let mut modified = content.to_vec();
         modified[0] ^= 0xFF;
-        assert!(!verify_hmac_file_integrity(&modified, &salt, &h1), "改 1 字节必须失败");
+        assert!(
+            !verify_hmac_file_integrity(&modified, &salt, &h1),
+            "改 1 字节必须失败"
+        );
     }
 
     /// flesh out #4: base64 编解码 (无外部 dep, 自写).
@@ -2422,7 +2531,12 @@ mod tests {
         for input in inputs {
             let encoded = base64_simple_encode(&input);
             let decoded = base64_simple_decode(&encoded).expect("decode must succeed");
-            assert_eq!(decoded, input, "base64 roundtrip failed for {} bytes", input.len());
+            assert_eq!(
+                decoded,
+                input,
+                "base64 roundtrip failed for {} bytes",
+                input.len()
+            );
         }
     }
 
@@ -2487,7 +2601,10 @@ mod tests {
             platform: Platform::Bsd,
         };
         let k5: KeyringError = e5.into();
-        assert!(matches!(k5, KeyringError::UnsupportedPlatform(Platform::Bsd)));
+        assert!(matches!(
+            k5,
+            KeyringError::UnsupportedPlatform(Platform::Bsd)
+        ));
     }
 
     /// flesh out #7: ConfigError 5 变体 + KeyringConfig::validate 守门.
@@ -2504,7 +2621,10 @@ mod tests {
         // 2) SchemaMismatch
         let mut cfg = KeyringConfig::default();
         cfg.schema_version = "999".to_string();
-        assert!(matches!(cfg.validate(), Err(ConfigError::SchemaMismatch { .. })));
+        assert!(matches!(
+            cfg.validate(),
+            Err(ConfigError::SchemaMismatch { .. })
+        ));
 
         // 3) OK default
         let cfg = KeyringConfig::default();
@@ -2594,7 +2714,10 @@ mod tests {
         let start = std::time::Instant::now();
         p.set(svc, acc, &token).await.unwrap();
         let elapsed = start.elapsed();
-        assert!(elapsed >= std::time::Duration::from_millis(90), "latency ≥ 90ms, got {elapsed:?}");
+        assert!(
+            elapsed >= std::time::Duration::from_millis(90),
+            "latency ≥ 90ms, got {elapsed:?}"
+        );
     }
 
     /// flesh out #10: DisabledAdapter 5 方法全 fail.
@@ -2644,7 +2767,10 @@ mod tests {
 
         // unsupported 平台 (用 Bsd 模拟 + crash)
         let u = mock_backend_unsupported();
-        assert!(u.check_health().is_err(), "unsupported 必须 fail health check");
+        assert!(
+            u.check_health().is_err(),
+            "unsupported 必须 fail health check"
+        );
 
         // crash + recover
         let l = mock_backend_linux();

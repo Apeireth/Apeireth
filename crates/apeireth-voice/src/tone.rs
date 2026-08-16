@@ -117,7 +117,13 @@ impl Tone {
     }
 
     /// 构造 + 校验 (speed/pitch 在 [0.5, 2.0], volume 在 [0.0, 1.0]).
-    pub fn new(speed: f64, pitch: f64, volume: f64, emotion_tone: EmotionTone, prosody: Prosody) -> Self {
+    pub fn new(
+        speed: f64,
+        pitch: f64,
+        volume: f64,
+        emotion_tone: EmotionTone,
+        prosody: Prosody,
+    ) -> Self {
         Self {
             speed: speed.clamp(0.5, 2.0),
             pitch: pitch.clamp(0.5, 2.0),
@@ -152,9 +158,21 @@ mod tests {
     #[test]
     fn new_clamps_speed_pitch_volume() {
         let t = Tone::new(3.0, 0.1, 1.5, EmotionTone::Joyful, Prosody::Expressive);
-        assert!((t.speed - 2.0).abs() < 1e-9, "speed must clamp to 2.0, got {}", t.speed);
-        assert!((t.pitch - 0.5).abs() < 1e-9, "pitch must clamp to 0.5, got {}", t.pitch);
-        assert!((t.volume - 1.0).abs() < 1e-9, "volume must clamp to 1.0, got {}", t.volume);
+        assert!(
+            (t.speed - 2.0).abs() < 1e-9,
+            "speed must clamp to 2.0, got {}",
+            t.speed
+        );
+        assert!(
+            (t.pitch - 0.5).abs() < 1e-9,
+            "pitch must clamp to 0.5, got {}",
+            t.pitch
+        );
+        assert!(
+            (t.volume - 1.0).abs() < 1e-9,
+            "volume must clamp to 1.0, got {}",
+            t.volume
+        );
     }
 
     #[test]

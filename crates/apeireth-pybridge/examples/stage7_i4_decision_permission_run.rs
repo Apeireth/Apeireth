@@ -22,19 +22,39 @@ fn main() {
     println!("\n[2] decide 演示 (不同 policy → 不同 rule)");
 
     // 2.1 Conservative → deny
-    let r = c.decide(1, DecisionPolicy::Conservative, PermissionLayer::L1TypeCheck, &ctx);
+    let r = c.decide(
+        1,
+        DecisionPolicy::Conservative,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
     println!("    Conservative + L1TypeCheck → {r}");
 
     // 2.2 Cautious → audit_required
-    let r = c.decide(2, DecisionPolicy::Cautious, PermissionLayer::L1TypeCheck, &ctx);
+    let r = c.decide(
+        2,
+        DecisionPolicy::Cautious,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
     println!("    Cautious + L1TypeCheck → {r}");
 
     // 2.3 Balanced → allow
-    let r = c.decide(3, DecisionPolicy::Balanced, PermissionLayer::L1TypeCheck, &ctx);
+    let r = c.decide(
+        3,
+        DecisionPolicy::Balanced,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
     println!("    Balanced + L1TypeCheck → {r}");
 
     // 2.4 Aggressive → allow
-    let r = c.decide(4, DecisionPolicy::Aggressive, PermissionLayer::L6ProvenanceCheck, &ctx);
+    let r = c.decide(
+        4,
+        DecisionPolicy::Aggressive,
+        PermissionLayer::L6ProvenanceCheck,
+        &ctx,
+    );
     println!("    Aggressive + L6ProvenanceCheck → {r}");
 
     println!("\n[3] 报告统计");

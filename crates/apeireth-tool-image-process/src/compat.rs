@@ -26,12 +26,18 @@ impl ImageProcessCommand {
 pub struct ImageProcessCompatRouter;
 
 impl ImageProcessCompatRouter {
-    pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { IMAGEPROC_COMMAND_COUNT }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn command_count() -> usize {
+        IMAGEPROC_COMMAND_COUNT
+    }
 }
 
 impl Default for ImageProcessCompatRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -40,14 +46,20 @@ mod tests {
     #[test]
     fn parse_3_commands() {
         for s in ["ImageProcessor", "ImageHasher", "ImageOcrTool"] {
-            assert_ne!(ImageProcessCommand::from_str(s), ImageProcessCommand::Unknown);
+            assert_ne!(
+                ImageProcessCommand::from_str(s),
+                ImageProcessCommand::Unknown
+            );
         }
         assert_eq!(IMAGEPROC_COMMAND_COUNT, 3);
     }
 
     #[test]
     fn unknown_maps() {
-        assert_eq!(ImageProcessCommand::from_str("xyz"), ImageProcessCommand::Unknown);
+        assert_eq!(
+            ImageProcessCommand::from_str("xyz"),
+            ImageProcessCommand::Unknown
+        );
     }
 
     #[test]

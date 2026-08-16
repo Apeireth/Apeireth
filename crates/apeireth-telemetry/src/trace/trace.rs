@@ -117,17 +117,13 @@ impl Trace {
         kind: SpanKind,
     ) -> TracingResult<&Span> {
         if self.root_span_id.is_some() {
-            return Err(TracingError::Internal(
-                "root span already started".into(),
-            ));
+            return Err(TracingError::Internal("root span already started".into()));
         }
         let span_id = generate_span_id();
         let ctx = TraceContext::new(self.trace_id.clone(), span_id.clone(), self.sampled);
         let mut span = Span::new(name, kind, ctx)?;
-        span.attributes.insert(
-            "service.name".to_string(),
-            self.config.service.name.clone(),
-        );
+        span.attributes
+            .insert("service.name".to_string(), self.config.service.name.clone());
         self.root_span_id = Some(span_id);
         self.spans.push(span);
         Ok(self.spans.last().unwrap())
@@ -248,8 +244,8 @@ pub const SPAN_ID_LEN: usize = 16;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::sampler::AlwaysOnSampler;
+    use super::*;
     use tempfile::NamedTempFile;
 
     fn test_config_file(path: std::path::PathBuf) -> TracingConfig {

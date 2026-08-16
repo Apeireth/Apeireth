@@ -55,11 +55,17 @@ fn main() {
     // 6) 验证每 category 都有 4 case
     for (cat, total, pass) in &summary.by_category {
         assert_eq!(*total, 4, "{cat:?} 应 = 4 case");
-        assert_eq!(*pass, 4, "{cat:?} 应 smoke 全 pass (默认 20 case 全期望被拦)");
+        assert_eq!(
+            *pass, 4,
+            "{cat:?} 应 smoke 全 pass (默认 20 case 全期望被拦)"
+        );
     }
 
     println!();
-    println!("✅ self_disable_smoke 跑通 — 20 case 全 smoke pass, ≥ 5 验收门槛 (got {})", summary.smoke_pass);
+    println!(
+        "✅ self_disable_smoke 跑通 — 20 case 全 smoke pass, ≥ 5 验收门槛 (got {})",
+        summary.smoke_pass
+    );
     println!("⚠️  smoke 级守门: 纯文本 pattern, R121+ 接真守门 (24 LOCKED crate)");
     println!("⏭  不假装 'production ready': 真实 LLM / Evolution 接入留 R121+");
 }

@@ -18,7 +18,9 @@ use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use crate::unified::{IntelligenceHit, IntelligenceKind, UnifiedCodeIntelligence, UnifiedError, UnifiedQuery};
+use crate::unified::{
+    IntelligenceHit, IntelligenceKind, UnifiedCodeIntelligence, UnifiedError, UnifiedQuery,
+};
 
 /// Cache key (kind, pattern, path, lang) hash.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -93,9 +95,11 @@ impl QueryCache {
                 return Some(entry.hits.clone());
             }
             g.remove(&key);
-            self.evictions.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.evictions
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
-        self.misses.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.misses
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         None
     }
 
@@ -115,12 +119,16 @@ impl QueryCache {
             for k in keys {
                 g.remove(&k);
             }
-            self.evictions.fetch_add(to_remove as u64, std::sync::atomic::Ordering::SeqCst);
+            self.evictions
+                .fetch_add(to_remove as u64, std::sync::atomic::Ordering::SeqCst);
         }
-        g.insert(key, CacheEntry {
-            hits,
-            expires: Instant::now() + self.ttl,
-        });
+        g.insert(
+            key,
+            CacheEntry {
+                hits,
+                expires: Instant::now() + self.ttl,
+            },
+        );
     }
 
     /// Invalidate a specific key.
@@ -150,7 +158,9 @@ impl QueryCache {
 }
 
 impl Default for QueryCache {
-    fn default() -> Self { Self::with_defaults() }
+    fn default() -> Self {
+        Self::with_defaults()
+    }
 }
 
 /// Cached facade: QueryCache + UnifiedCodeIntelligence 集成.
@@ -184,9 +194,15 @@ impl CachedUnifiedIntelligence {
         Ok(hits)
     }
 
-    pub fn stats(&self) -> QueryCacheStats { self.cache.stats() }
-    pub fn clear(&self) { self.cache.clear(); }
-    pub fn invalidate(&self, q: &UnifiedQuery) -> bool { self.cache.invalidate(q) }
+    pub fn stats(&self) -> QueryCacheStats {
+        self.cache.stats()
+    }
+    pub fn clear(&self) {
+        self.cache.clear();
+    }
+    pub fn invalidate(&self, q: &UnifiedQuery) -> bool {
+        self.cache.invalidate(q)
+    }
     pub fn index_file(&self, path: &str) -> Result<(), UnifiedError> {
         self.inner.index_file(path)?;
         // index_file 改了状态, 失效所有 cache
@@ -194,7 +210,9 @@ impl CachedUnifiedIntelligence {
         Ok(())
     }
     pub fn path_only_invalidated<F>(&self, path_contains: F)
-    where F: Fn(&str) -> bool {
+    where
+        F: Fn(&str) -> bool,
+    {
         // 简化: 全清 (避免扫描 key)
         let _ = path_contains;
         self.cache.clear();
@@ -204,7 +222,6 @@ impl CachedUnifiedIntelligence {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn t01_new_defaults() {
@@ -231,7 +248,7 @@ mod tests {
         assert_eq!(s.size, 1);
         let cached = c.get(&q);
         assert!(cached.is_some());
-        assert_eq!(s.hits, 0);  // hits 是 get 命中时 +1
+        assert_eq!(s.hits, 0); // hits 是 get 命中时 +1
         let s2 = c.stats();
         assert_eq!(s2.hits, 1);
     }
@@ -266,7 +283,7 @@ mod tests {
 
     #[test]
     fn t07_ttl_expiry() {
-        let c = QueryCache::new(50, 100);  // 50ms TTL
+        let c = QueryCache::new(50, 100); // 50ms TTL
         let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", ".");
         c.put(&q, vec![]);
         assert!(c.get(&q).is_some());
@@ -276,9 +293,12 @@ mod tests {
 
     #[test]
     fn t08_max_entries_evicts() {
-        let c = QueryCache::new(60_000, 4);  // max 4
+        let c = QueryCache::new(60_000, 4); // max 4
         for i in 0..10 {
-            c.put(&UnifiedQuery::new(IntelligenceKind::Text, &format!("p{i}"), "."), vec![]);
+            c.put(
+                &UnifiedQuery::new(IntelligenceKind::Text, &format!("p{i}"), "."),
+                vec![],
+            );
         }
         // 超过 max_entries 触发 eviction
         assert!(c.stats().evictions > 0);

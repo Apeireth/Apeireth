@@ -2,8 +2,10 @@
 
 #![allow(missing_docs)]
 
+use crate::pipeline::{
+    PipelineConfig, PIPELINE_MAX_STAGES, PIPELINE_MIN_STAGES, PIPELINE_STAGE_NAME_MAX_LEN,
+};
 use crate::stage::{StageKind, STAGE_KIND_COUNT, STAGE_ORDER};
-use crate::pipeline::{PipelineConfig, PIPELINE_MAX_STAGES, PIPELINE_MIN_STAGES, PIPELINE_STAGE_NAME_MAX_LEN};
 
 #[test]
 fn r177_pg_01_stage_kind_count_5() {

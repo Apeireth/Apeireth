@@ -40,4 +40,3 @@ fn r177_i18_kani_01_max_key_len() {
 fn r177_i18_kani_02_max_nesting() {
     assert!(MAX_NESTING_DEPTH >= 1);
 }
-

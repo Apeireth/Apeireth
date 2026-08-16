@@ -11,14 +11,10 @@ use crate::result::{GeneratedImage, ImageGenResult};
 
 /// A 1x1 transparent PNG (89 bytes).
 const PLACEHOLDER_PNG: &[u8] = &[
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+    0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
     0x42, 0x60, 0x82,
 ];
 
@@ -26,27 +22,35 @@ const PLACEHOLDER_PNG: &[u8] = &[
 pub struct MockProvider;
 
 impl MockProvider {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Default for MockProvider {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl ImageGenProvider for MockProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::Mock }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::Mock
+    }
 
     async fn generate(&self, params: &ImageGenParams) -> Result<ImageGenResult, ProviderError> {
         let (w, h) = params.size.dimensions();
-        let images = (0..params.count).map(|i| GeneratedImage {
-            data: PLACEHOLDER_PNG.to_vec(),
-            mime: "image/png".to_string(),
-            width: w,
-            height: h,
-            url: None,
-            seed: params.seed.map(|s| s + i as u64),
-        }).collect();
+        let images = (0..params.count)
+            .map(|i| GeneratedImage {
+                data: PLACEHOLDER_PNG.to_vec(),
+                mime: "image/png".to_string(),
+                width: w,
+                height: h,
+                url: None,
+                seed: params.seed.map(|s| s + i as u64),
+            })
+            .collect();
         Ok(ImageGenResult {
             provider: self.name().to_string(),
             model: "mock-v1".to_string(),
@@ -63,17 +67,27 @@ pub struct OpenAiDallEProvider {
 }
 
 impl OpenAiDallEProvider {
-    pub fn new() -> Self { Self { api_key: None } }
-    pub fn with_api_key(key: impl Into<String>) -> Self { Self { api_key: Some(key.into()) } }
+    pub fn new() -> Self {
+        Self { api_key: None }
+    }
+    pub fn with_api_key(key: impl Into<String>) -> Self {
+        Self {
+            api_key: Some(key.into()),
+        }
+    }
 }
 
 impl Default for OpenAiDallEProvider {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl ImageGenProvider for OpenAiDallEProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::OpenAiDallE }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::OpenAiDallE
+    }
 
     async fn generate(&self, params: &ImageGenParams) -> Result<ImageGenResult, ProviderError> {
         if self.api_key.is_none() {
@@ -82,14 +96,16 @@ impl ImageGenProvider for OpenAiDallEProvider {
         // Real impl would POST to https://api.openai.com/v1/images/generations
         // and parse the response. For now, return a placeholder (honest stub).
         let (w, h) = params.size.dimensions();
-        let images = (0..params.count).map(|i| GeneratedImage {
-            data: PLACEHOLDER_PNG.to_vec(),
-            mime: "image/png".to_string(),
-            width: w,
-            height: h,
-            url: None,
-            seed: params.seed.map(|s| s + i as u64),
-        }).collect();
+        let images = (0..params.count)
+            .map(|i| GeneratedImage {
+                data: PLACEHOLDER_PNG.to_vec(),
+                mime: "image/png".to_string(),
+                width: w,
+                height: h,
+                url: None,
+                seed: params.seed.map(|s| s + i as u64),
+            })
+            .collect();
         Ok(ImageGenResult {
             provider: self.name().to_string(),
             model: "dall-e-3".to_string(),
@@ -106,31 +122,43 @@ pub struct StabilityAiProvider {
 }
 
 impl StabilityAiProvider {
-    pub fn new() -> Self { Self { api_key: None } }
-    pub fn with_api_key(key: impl Into<String>) -> Self { Self { api_key: Some(key.into()) } }
+    pub fn new() -> Self {
+        Self { api_key: None }
+    }
+    pub fn with_api_key(key: impl Into<String>) -> Self {
+        Self {
+            api_key: Some(key.into()),
+        }
+    }
 }
 
 impl Default for StabilityAiProvider {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl ImageGenProvider for StabilityAiProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::StabilityAi }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::StabilityAi
+    }
 
     async fn generate(&self, params: &ImageGenParams) -> Result<ImageGenResult, ProviderError> {
         if self.api_key.is_none() {
             return Err(ProviderError::MissingApiKey(self.name().to_string()));
         }
         let (w, h) = params.size.dimensions();
-        let images = (0..params.count).map(|i| GeneratedImage {
-            data: PLACEHOLDER_PNG.to_vec(),
-            mime: "image/png".to_string(),
-            width: w,
-            height: h,
-            url: None,
-            seed: params.seed.map(|s| s + i as u64),
-        }).collect();
+        let images = (0..params.count)
+            .map(|i| GeneratedImage {
+                data: PLACEHOLDER_PNG.to_vec(),
+                mime: "image/png".to_string(),
+                width: w,
+                height: h,
+                url: None,
+                seed: params.seed.map(|s| s + i as u64),
+            })
+            .collect();
         Ok(ImageGenResult {
             provider: self.name().to_string(),
             model: "stable-diffusion-xl".to_string(),
@@ -148,17 +176,27 @@ pub struct MiniMaxImageProvider {
 }
 
 impl MiniMaxImageProvider {
-    pub fn new() -> Self { Self { api_key: None } }
-    pub fn with_api_key(key: impl Into<String>) -> Self { Self { api_key: Some(key.into()) } }
+    pub fn new() -> Self {
+        Self { api_key: None }
+    }
+    pub fn with_api_key(key: impl Into<String>) -> Self {
+        Self {
+            api_key: Some(key.into()),
+        }
+    }
 }
 
 impl Default for MiniMaxImageProvider {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl ImageGenProvider for MiniMaxImageProvider {
-    fn kind(&self) -> ProviderKind { ProviderKind::MiniMaxImage }
+    fn kind(&self) -> ProviderKind {
+        ProviderKind::MiniMaxImage
+    }
 
     async fn generate(&self, params: &ImageGenParams) -> Result<ImageGenResult, ProviderError> {
         if self.api_key.is_none() {
@@ -166,14 +204,16 @@ impl ImageGenProvider for MiniMaxImageProvider {
         }
         // Real impl would POST to MiniMax image endpoint.
         let (w, h) = params.size.dimensions();
-        let images = (0..params.count).map(|i| GeneratedImage {
-            data: PLACEHOLDER_PNG.to_vec(),
-            mime: "image/png".to_string(),
-            width: w,
-            height: h,
-            url: None,
-            seed: params.seed.map(|s| s + i as u64),
-        }).collect();
+        let images = (0..params.count)
+            .map(|i| GeneratedImage {
+                data: PLACEHOLDER_PNG.to_vec(),
+                mime: "image/png".to_string(),
+                width: w,
+                height: h,
+                url: None,
+                seed: params.seed.map(|s| s + i as u64),
+            })
+            .collect();
         Ok(ImageGenResult {
             provider: self.name().to_string(),
             model: "minimax-image-v1".to_string(),

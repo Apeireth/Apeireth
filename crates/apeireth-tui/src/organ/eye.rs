@@ -145,7 +145,11 @@ pub fn render(area: Rect) -> String {
     ));
     out.push_str(&format!(
         "  上次输入:        {}  ({})\n",
-        if s.last_input_unix_ms == 0 { 0 } else { s.last_input_unix_ms },
+        if s.last_input_unix_ms == 0 {
+            0
+        } else {
+            s.last_input_unix_ms
+        },
         age_phrase(s.now_unix_ms, s.last_input_unix_ms)
     ));
     out.push_str("  [partial] 1/4 真接 (按键), 其余 3 项 R25.3 计划接\n");
@@ -190,8 +194,14 @@ mod tests {
         // R22 ST-A1.2: 1/4 真接, 标 partial 而非 ok / stub
         let _g = TEST_LOCK.lock().unwrap();
         let out = render(Rect::new(0, 0, 80, 24));
-        assert!(out.contains("[partial]"), "eye 1/4 真接, 必须标 partial: {out}");
-        assert!(!out.contains("[stub]"), "eye 不再是 stub (ST-A1.2 升级): {out}");
+        assert!(
+            out.contains("[partial]"),
+            "eye 1/4 真接, 必须标 partial: {out}"
+        );
+        assert!(
+            !out.contains("[stub]"),
+            "eye 不再是 stub (ST-A1.2 升级): {out}"
+        );
     }
 
     #[test]
@@ -200,7 +210,10 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap();
         let out = render(Rect::new(0, 0, 80, 24));
         assert!(out.contains("鼠标点击:"), "got: {out}");
-        assert!(out.contains("[stub"), "mouse / voice / focus 字段级标 stub: {out}");
+        assert!(
+            out.contains("[stub"),
+            "mouse / voice / focus 字段级标 stub: {out}"
+        );
     }
 
     #[test]
@@ -210,7 +223,10 @@ mod tests {
         eye_stats::EYE_LAST_INPUT_MS.store(0, Ordering::Relaxed);
 
         let out = render(Rect::new(0, 0, 80, 24));
-        assert!(out.contains("今日按键: 42"), "keystrokes 真接计数渲染: {out}");
+        assert!(
+            out.contains("今日按键: 42"),
+            "keystrokes 真接计数渲染: {out}"
+        );
     }
 
     #[test]
@@ -227,7 +243,10 @@ mod tests {
         let after_last = eye_stats::EYE_LAST_INPUT_MS.load(Ordering::Relaxed);
 
         assert_eq!(after_ks, before_ks + 1, "record_keystroke 必须 +1");
-        assert!(after_last > before_last, "record_keystroke 必须更新 last_input_ms");
+        assert!(
+            after_last > before_last,
+            "record_keystroke 必须更新 last_input_ms"
+        );
     }
 
     #[test]
@@ -239,7 +258,11 @@ mod tests {
         record_mouse_click();
         let after = eye_stats::EYE_MOUSE_CLICKS_TOTAL.load(Ordering::Relaxed);
 
-        assert_eq!(after, before + 1, "record_mouse_click 必须 +1 (即使 stub 也走 atomic)");
+        assert_eq!(
+            after,
+            before + 1,
+            "record_mouse_click 必须 +1 (即使 stub 也走 atomic)"
+        );
     }
 
     #[test]
@@ -251,7 +274,11 @@ mod tests {
         record_voice_input();
         let after = eye_stats::EYE_VOICE_INPUTS_TOTAL.load(Ordering::Relaxed);
 
-        assert_eq!(after, before + 1, "record_voice_input 必须 +1 (即使 stub 也走 atomic)");
+        assert_eq!(
+            after,
+            before + 1,
+            "record_voice_input 必须 +1 (即使 stub 也走 atomic)"
+        );
     }
 
     #[test]

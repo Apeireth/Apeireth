@@ -20,16 +20,16 @@
 //! - Persistence / SQLite (`apeireth-vector`).
 //! - Skills registry (`apeireth-skills`).
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::Arc;
-use parking_lot::{Mutex, RwLock};
-use uuid::Uuid;
 use crate::auth::{AccessPolicy, AuthDecision, AuthError, AuthResult, DmScope};
 use crate::node::{NodeId, NodeKind, NodeRecord, NodeRegistry};
 use crate::session::{Session, SessionId, SessionRegistry};
-use crate::transport::{Transport, TransportRegistry, InMemoryTransport};
+use crate::transport::{InMemoryTransport, Transport, TransportRegistry};
 use crate::workspace::AgentWorkspace;
+use parking_lot::{Mutex, RwLock};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+use uuid::Uuid;
 
 pub const MAX_GATEWAY_NODES: usize = 1024;
 pub const MAX_GATEWAY_SESSIONS: usize = 4096;
@@ -193,10 +193,19 @@ impl Gateway {
     }
 
     pub fn workspace_for(&self, node_id: NodeId, kind: NodeKind) -> Option<AgentWorkspace> {
-        self.workspace_root.as_ref().map(|r| AgentWorkspace::new(r.clone(), node_id, kind))
+        self.workspace_root
+            .as_ref()
+            .map(|r| AgentWorkspace::new(r.clone(), node_id, kind))
     }
 
-    pub fn register_key(&self, key: impl Into<String>, owner: impl Into<String>, label: impl Into<String>, scope: DmScope, now: i64) {
+    pub fn register_key(
+        &self,
+        key: impl Into<String>,
+        owner: impl Into<String>,
+        label: impl Into<String>,
+        scope: DmScope,
+        now: i64,
+    ) {
         let api_key = crate::auth::ApiKey::new(key, owner, label, now);
         self.policy.register_key(api_key, scope);
     }
@@ -228,7 +237,9 @@ impl Gateway {
             let mut rl = self.rate_limits.lock();
             let state = rl.entry(api_key.to_string()).or_default();
             if !state.allow(now) {
-                return Err(GatewayError::Auth(AuthError::RateLimited(decision.owner.clone())));
+                return Err(GatewayError::Auth(AuthError::RateLimited(
+                    decision.owner.clone(),
+                )));
             }
         }
         // 3. register node
@@ -325,7 +336,9 @@ mod tests {
     fn gateway_register_key_and_admit_node() {
         let g = Gateway::open(GatewayMode::SingleProcess, "t", 0);
         g.register_key("k1", "alice", "primary", DmScope::All, 0);
-        let a = g.admit_node(NodeKind::Tui, "tui-1", "alice", "k1", 100).unwrap();
+        let a = g
+            .admit_node(NodeKind::Tui, "tui-1", "alice", "k1", 100)
+            .unwrap();
         assert_eq!(a.owner, "alice");
         assert_eq!(a.node_kind, NodeKind::Tui);
         assert_eq!(g.nodes().len(), 1);
@@ -409,7 +422,9 @@ mod tests {
         // MAX_GATEWAY_NODES is 1024; bound the test to 3 to keep it fast.
         // We bypass the limit by direct registry push for the first 3 nodes.
         for _ in 0..3 {
-            let _ = g.nodes().register(crate::node::NodeRecord::new(NodeKind::Cli, "x", "u", 0));
+            let _ = g
+                .nodes()
+                .register(crate::node::NodeRecord::new(NodeKind::Cli, "x", "u", 0));
         }
         // Now admit a real one through the auth path — succeeds (4 total).
         let _ = g.admit_node(NodeKind::Cli, "x", "u", "k1", 0).unwrap();
@@ -471,7 +486,9 @@ mod tests {
     #[test]
     fn gateway_admit_node_as_auto_registers() {
         let g = Gateway::open(GatewayMode::SingleProcess, "t", 0);
-        let a = g.admit_node_as(NodeKind::Tui, "auto", "bob", "k1", DmScope::All, 0).unwrap();
+        let a = g
+            .admit_node_as(NodeKind::Tui, "auto", "bob", "k1", DmScope::All, 0)
+            .unwrap();
         assert_eq!(a.owner, "bob");
         assert_eq!(g.policy().active_key_count(), 1);
     }

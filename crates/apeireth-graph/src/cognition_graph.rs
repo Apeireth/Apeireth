@@ -1,7 +1,7 @@
 //! B8: apeireth-graph 接 cognition 24 维节点 (APEIRETH-1.1)
 #![allow(dead_code)]
 
-use apeireth_asi::{V05_DIM_COUNT, V05_DIMENSION_NAMES};
+use apeireth_asi::{V05_DIMENSION_NAMES, V05_DIM_COUNT};
 use apeireth_cognition::{run_cycle, CognitiveInput, CognitiveOutput};
 use apeireth_core::ActionTarget;
 use serde_json::{json, Value};
@@ -27,18 +27,24 @@ pub struct CognitionSummary {
     pub node_count: u32,
 }
 
-
 pub fn build_cognition_graph() -> Graph {
     let mut graph = Graph::new();
     for (i, name) in V05_DIMENSION_NAMES.iter().enumerate() {
-        graph.add_node(DimensionNode { id: format!("dim_{:02}_{}", i, name), dim_index: i });
+        graph.add_node(DimensionNode {
+            id: format!("dim_{:02}_{}", i, name),
+            dim_index: i,
+        });
     }
     for i in 0..V05_DIMENSION_NAMES.len().saturating_sub(1) {
         let from = format!("dim_{:02}_{}", i, V05_DIMENSION_NAMES[i]);
         let to = format!("dim_{:02}_{}", i + 1, V05_DIMENSION_NAMES[i + 1]);
         graph.add_edge(from, to);
     }
-    let last_dim = format!("dim_{:02}_{}", V05_DIMENSION_NAMES.len() - 1, V05_DIMENSION_NAMES[V05_DIMENSION_NAMES.len() - 1]);
+    let last_dim = format!(
+        "dim_{:02}_{}",
+        V05_DIMENSION_NAMES.len() - 1,
+        V05_DIMENSION_NAMES[V05_DIMENSION_NAMES.len() - 1]
+    );
     graph.add_node(AsiSummaryNode);
     graph.add_edge(last_dim, "asi_summary");
     graph.add_node(CognitiveDecideNode);
@@ -46,14 +52,22 @@ pub fn build_cognition_graph() -> Graph {
     graph
 }
 
-struct DimensionNode { id: String, dim_index: usize }
+struct DimensionNode {
+    id: String,
+    dim_index: usize,
+}
 impl Node for DimensionNode {
-    fn id(&self) -> NodeId { self.id.clone() }
+    fn id(&self) -> NodeId {
+        self.id.clone()
+    }
     fn run(&self, state: &mut State) -> Result<NodeOutput> {
         let dim_name = V05_DIMENSION_NAMES[self.dim_index];
-        let v = state.get("v05_dims").and_then(|v| v.as_array())
+        let v = state
+            .get("v05_dims")
+            .and_then(|v| v.as_array())
             .and_then(|arr| arr.get(self.dim_index))
-            .and_then(|v| v.as_f64()).unwrap_or(0.0);
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         state.insert(format!("dim_{:02}_value", self.dim_index), json!(v));
         Ok(NodeOutput::new(self.id.clone()).with_message(format!("{dim_name}={v:.3}")))
     }
@@ -61,17 +75,28 @@ impl Node for DimensionNode {
 
 struct AsiSummaryNode;
 impl Node for AsiSummaryNode {
-    fn id(&self) -> NodeId { "asi_summary".to_string() }
+    fn id(&self) -> NodeId {
+        "asi_summary".to_string()
+    }
     fn run(&self, state: &mut State) -> Result<NodeOutput> {
-        let dims: Vec<f64> = state.get("v05_dims").and_then(|v| v.as_array())
-            .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect()).unwrap_or_default();
+        let dims: Vec<f64> = state
+            .get("v05_dims")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+            .unwrap_or_default();
         if dims.is_empty() {
-            state.insert("asi_summary".to_string(), json!({"mean": 0.0, "min": 0.0, "max": 0.0, "dim_count": 0}));
+            state.insert(
+                "asi_summary".to_string(),
+                json!({"mean": 0.0, "min": 0.0, "max": 0.0, "dim_count": 0}),
+            );
         } else {
             let mean = dims.iter().sum::<f64>() / dims.len() as f64;
             let min = dims.iter().cloned().fold(f64::INFINITY, f64::min);
             let max = dims.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
-            state.insert("asi_summary".to_string(), json!({"mean": mean, "min": min, "max": max, "dim_count": dims.len()}));
+            state.insert(
+                "asi_summary".to_string(),
+                json!({"mean": mean, "min": min, "max": max, "dim_count": dims.len()}),
+            );
         }
         Ok(NodeOutput::new("asi_summary"))
     }
@@ -79,10 +104,15 @@ impl Node for AsiSummaryNode {
 
 struct CognitiveDecideNode;
 impl Node for CognitiveDecideNode {
-    fn id(&self) -> NodeId { "cog_decide".to_string() }
+    fn id(&self) -> NodeId {
+        "cog_decide".to_string()
+    }
     fn run(&self, state: &mut State) -> Result<NodeOutput> {
-        let target_name = state.get("target_name").and_then(|v| v.as_str())
-            .unwrap_or("graph_default").to_string();
+        let target_name = state
+            .get("target_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("graph_default")
+            .to_string();
         let target = ActionTarget::NormalAction(target_name);
         let input = CognitiveInput::new(vec![target], "cognition_graph");
         match run_cycle(input) {
@@ -123,7 +153,10 @@ mod tests {
         state.insert("target_name".to_string(), json!("test_action"));
         let final_state = g.execute(state).await.unwrap();
         let summary = final_state.get("asi_summary").expect("summary must be set");
-        let dim_count = summary.get("dim_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        let dim_count = summary
+            .get("dim_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
         assert_eq!(dim_count, 24, "summary must process all 24 dims");
     }
 
@@ -135,7 +168,10 @@ mod tests {
         let order = &final_state.execution_order;
         for (i, name) in order.iter().take(V05_DIM_COUNT).enumerate() {
             let expected = format!("dim_{:02}_", i);
-            assert!(name.starts_with(&expected), "node {i} ({name}) should start with {expected}");
+            assert!(
+                name.starts_with(&expected),
+                "node {i} ({name}) should start with {expected}"
+            );
         }
     }
 
@@ -146,14 +182,23 @@ mod tests {
         let dims: Vec<f64> = (0..V05_DIM_COUNT).map(|i| (i as f64) * 0.04).collect();
         state.insert("v05_dims".to_string(), json!(dims));
         let final_state = g.execute(state).await.unwrap();
-        let v3 = final_state.get("dim_03_value").and_then(|v| v.as_f64()).unwrap_or(0.0);
+        let v3 = final_state
+            .get("dim_03_value")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
         assert!((v3 - 0.12).abs() < 0.001, "dim_03 should be 0.12, got {v3}");
     }
 
     #[test]
     fn cognition_summary_struct_default_zero() {
         // R47 B8 data plumbing: summary struct partial-pretty-fallible
-        let sum = CognitionSummary { mean: 0.0, min: 0.0, max: 0.0, verdict_approve: true, node_count: 26 };
+        let sum = CognitionSummary {
+            mean: 0.0,
+            min: 0.0,
+            max: 0.0,
+            verdict_approve: true,
+            node_count: 26,
+        };
         assert_eq!(sum.node_count, 26);
         assert!(sum.verdict_approve);
     }
@@ -163,9 +208,21 @@ mod tests {
         let dims: [f64; V05_DIM_COUNT] = [0.5; V05_DIM_COUNT];
         let sum = run_cognition_graph_sync(&dims, "approved_action").await;
         assert_eq!(sum.node_count as usize, COGNITION_GRAPH_NODE_COUNT);
-        assert!((sum.mean - 0.5).abs() < 1e-6, "mean should be ~0.5, got {}", sum.mean);
-        assert!((sum.min - 0.5).abs() < 1e-6, "min should be ~0.5, got {}", sum.min);
-        assert!((sum.max - 0.5).abs() < 1e-6, "max should be ~0.5, got {}", sum.max);
+        assert!(
+            (sum.mean - 0.5).abs() < 1e-6,
+            "mean should be ~0.5, got {}",
+            sum.mean
+        );
+        assert!(
+            (sum.min - 0.5).abs() < 1e-6,
+            "min should be ~0.5, got {}",
+            sum.min
+        );
+        assert!(
+            (sum.max - 0.5).abs() < 1e-6,
+            "max should be ~0.5, got {}",
+            sum.max
+        );
     }
 
     #[tokio::test]
@@ -176,7 +233,10 @@ mod tests {
         state.insert("v05_dims".to_string(), json!(dims));
         state.insert("target_name".to_string(), json!("approved_action"));
         let final_state = g.execute(state).await.unwrap();
-        let verdict = final_state.get("cog_verdict").and_then(|v| v.as_str()).unwrap_or("");
+        let verdict = final_state
+            .get("cog_verdict")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         assert!(!verdict.is_empty(), "cog_verdict must be set");
     }
 }
@@ -184,7 +244,10 @@ mod tests {
 /// R47 B8: synchronous helper that builds + executes cognition graph and
 /// returns a structured summary. Pure (no side effects), so it's cheap to
 /// call from any context (e.g. TUI backend after each chat cycle).
-pub async fn run_cognition_graph_sync(dims: &[f64; V05_DIM_COUNT], target_name: &str) -> CognitionSummary {
+pub async fn run_cognition_graph_sync(
+    dims: &[f64; V05_DIM_COUNT],
+    target_name: &str,
+) -> CognitionSummary {
     let g = build_cognition_graph();
     let mut state = State::new();
     state.insert("v05_dims".to_string(), json!(dims.to_vec()));
@@ -218,7 +281,6 @@ pub async fn run_cognition_graph_sync(dims: &[f64; V05_DIM_COUNT], target_name: 
         node_count: COGNITION_GRAPH_NODE_COUNT as u32,
     }
 }
-
 
 // ============================================================
 // R64: cognition_graph checkpoint persistence (LangGraph memory_saver 1:1 借鉴)
@@ -270,7 +332,13 @@ pub struct CognitionCheckpointPayload {
 
 impl CognitionCheckpointPayload {
     /// 跑 cognition_graph 后立即 pack payload (1:1 from run_cognition_graph_sync result)
-    pub fn from_summary(dims: &[f64; V05_DIM_COUNT], target: &str, summary: &CognitionSummary, verdict: &str, is_allowed: bool) -> Self {
+    pub fn from_summary(
+        dims: &[f64; V05_DIM_COUNT],
+        target: &str,
+        summary: &CognitionSummary,
+        verdict: &str,
+        is_allowed: bool,
+    ) -> Self {
         Self {
             v05_dims: dims.to_vec(),
             target_name: target.to_string(),
@@ -305,23 +373,43 @@ impl CognitionCheckpointPayload {
     pub fn from_json(v: &serde_json::Value) -> std::result::Result<Self, String> {
         let schema = v.get("schema").and_then(|s| s.as_str()).unwrap_or("");
         if schema != "cognition_checkpoint_v1" {
-            return Err(format!("unsupported cognition checkpoint schema: {schema:?}"));
+            return Err(format!(
+                "unsupported cognition checkpoint schema: {schema:?}"
+            ));
         }
-        let v05_dims: Vec<f64> = serde_json::from_value(
-            v.get("v05_dims").cloned().ok_or("missing v05_dims")?
-        ).map_err(|e| format!("v05_dims parse: {e}"))?;
+        let v05_dims: Vec<f64> =
+            serde_json::from_value(v.get("v05_dims").cloned().ok_or("missing v05_dims")?)
+                .map_err(|e| format!("v05_dims parse: {e}"))?;
         if v05_dims.len() != V05_DIM_COUNT {
-            return Err(format!("v05_dims len != {V05_DIM_COUNT} (got {})", v05_dims.len()));
+            return Err(format!(
+                "v05_dims len != {V05_DIM_COUNT} (got {})",
+                v05_dims.len()
+            ));
         }
         Ok(Self {
             v05_dims,
-            target_name: v.get("target_name").and_then(|s| s.as_str()).unwrap_or("").to_string(),
+            target_name: v
+                .get("target_name")
+                .and_then(|s| s.as_str())
+                .unwrap_or("")
+                .to_string(),
             mean: v.get("mean").and_then(|m| m.as_f64()).unwrap_or(0.0),
             min: v.get("min").and_then(|m| m.as_f64()).unwrap_or(0.0),
             max: v.get("max").and_then(|m| m.as_f64()).unwrap_or(0.0),
-            verdict: v.get("verdict").and_then(|s| s.as_str()).unwrap_or("approve").to_string(),
-            is_allowed: v.get("is_allowed").and_then(|b| b.as_bool()).unwrap_or(true),
-            saved_at_unix_ms: v.get("saved_at_unix_ms").and_then(|m| m.as_u64()).map(u128::from).unwrap_or(0),
+            verdict: v
+                .get("verdict")
+                .and_then(|s| s.as_str())
+                .unwrap_or("approve")
+                .to_string(),
+            is_allowed: v
+                .get("is_allowed")
+                .and_then(|b| b.as_bool())
+                .unwrap_or(true),
+            saved_at_unix_ms: v
+                .get("saved_at_unix_ms")
+                .and_then(|m| m.as_u64())
+                .map(u128::from)
+                .unwrap_or(0),
         })
     }
 
@@ -335,19 +423,28 @@ impl CognitionCheckpointPayload {
     }
 }
 
-
 /// R64: 把 payload 塞到 Checkpoint 的 state 里 (复用 R-Cycle Checkpoint::new, 同 crate 0 跨边界)
-pub fn build_checkpoint_from_payload(graph: &Graph, payload: &CognitionCheckpointPayload) -> Result<Checkpoint> {
+pub fn build_checkpoint_from_payload(
+    graph: &Graph,
+    payload: &CognitionCheckpointPayload,
+) -> Result<Checkpoint> {
     let mut state = State::new();
     state.insert("cognition_payload".to_string(), payload.to_json());
-    let node_ids: Vec<NodeId> = (0..graph.node_count()).map(|i| format!("node_{i}")).collect::<Vec<_>>();
+    let node_ids: Vec<NodeId> = (0..graph.node_count())
+        .map(|i| format!("node_{i}"))
+        .collect::<Vec<_>>();
     Checkpoint::new(node_ids, state)
 }
 
 /// R64: 从 Checkpoint 还原 payload (读 .json 后 extract cognition_payload)
-pub async fn load_payload_from_checkpoint(path: impl AsRef<std::path::Path>) -> std::result::Result<CognitionCheckpointPayload, String> {
-    let cp = Checkpoint::read_from(path).await.map_err(|e| format!("read checkpoint: {e}"))?;
-    let payload_value = cp.state
+pub async fn load_payload_from_checkpoint(
+    path: impl AsRef<std::path::Path>,
+) -> std::result::Result<CognitionCheckpointPayload, String> {
+    let cp = Checkpoint::read_from(path)
+        .await
+        .map_err(|e| format!("read checkpoint: {e}"))?;
+    let payload_value = cp
+        .state
         .get("cognition_payload")
         .cloned()
         .ok_or_else(|| "missing cognition_payload in checkpoint state".to_string())?;
@@ -372,13 +469,26 @@ mod r64_tests {
     fn payload_pack_unpack() {
         let dims = [0.5; V05_DIM_COUNT];
         let summary = CognitionSummary {
-            mean: 0.5, min: 0.5, max: 0.5, verdict_approve: true, node_count: 26,
+            mean: 0.5,
+            min: 0.5,
+            max: 0.5,
+            verdict_approve: true,
+            node_count: 26,
         };
-        let p = CognitionCheckpointPayload::from_summary(&dims, "test_target", &summary, "approve", true);
+        let p = CognitionCheckpointPayload::from_summary(
+            &dims,
+            "test_target",
+            &summary,
+            "approve",
+            true,
+        );
         assert_eq!(p.target_name, "test_target");
         assert!((p.mean - 0.5).abs() < 1e-6);
         let json = p.to_json();
-        assert_eq!(json.get("schema").and_then(|s| s.as_str()), Some("cognition_checkpoint_v1"));
+        assert_eq!(
+            json.get("schema").and_then(|s| s.as_str()),
+            Some("cognition_checkpoint_v1")
+        );
         let restored = CognitionCheckpointPayload::from_json(&json).unwrap();
         assert_eq!(restored.target_name, "test_target");
         assert_eq!(restored.verdict, "approve");
@@ -406,7 +516,9 @@ mod r64_tests {
         let p = CognitionCheckpointPayload {
             v05_dims: vec![0.1; V05_DIM_COUNT],
             target_name: "x".into(),
-            mean: 0.1, min: 0.1, max: 0.1,
+            mean: 0.1,
+            min: 0.1,
+            max: 0.1,
             verdict: "approve".into(),
             is_allowed: true,
             saved_at_unix_ms: 0,
@@ -420,10 +532,15 @@ mod r64_tests {
     async fn rerun_from_payload_round_trip() {
         let dims: [f64; V05_DIM_COUNT] = [0.42; V05_DIM_COUNT];
         let sum = run_cognition_graph_sync(&dims, "rerun_test").await;
-        let payload = CognitionCheckpointPayload::from_summary(&dims, "rerun_test", &sum, "approve", true);
+        let payload =
+            CognitionCheckpointPayload::from_summary(&dims, "rerun_test", &sum, "approve", true);
         // 还原后 re-run 应得一致 mean (因 dims 是 0.42 均匀)
         let rerun_sum = rerun_from_payload(&payload).await;
-        assert!((rerun_sum.mean - 0.42).abs() < 1e-6, "rerun mean should be 0.42, got {}", rerun_sum.mean);
+        assert!(
+            (rerun_sum.mean - 0.42).abs() < 1e-6,
+            "rerun mean should be 0.42, got {}",
+            rerun_sum.mean
+        );
         assert_eq!(rerun_sum.node_count as usize, COGNITION_GRAPH_NODE_COUNT);
     }
 
@@ -431,7 +548,13 @@ mod r64_tests {
     async fn checkpoint_file_round_trip() {
         let dims: [f64; V05_DIM_COUNT] = [0.7; V05_DIM_COUNT];
         let sum = run_cognition_graph_sync(&dims, "file_round_trip").await;
-        let payload = CognitionCheckpointPayload::from_summary(&dims, "file_round_trip", &sum, "approve", true);
+        let payload = CognitionCheckpointPayload::from_summary(
+            &dims,
+            "file_round_trip",
+            &sum,
+            "approve",
+            true,
+        );
         let g = build_cognition_graph();
         let cp = build_checkpoint_from_payload(&g, &payload).unwrap();
         let path = std::env::temp_dir().join(format!("{}.json", cp.id));
@@ -442,8 +565,3 @@ mod r64_tests {
         assert!((restored.mean - 0.7).abs() < 1e-6);
     }
 }
-
-
-
-
-

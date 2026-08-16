@@ -225,5 +225,8 @@ fn d3_15_with_plan_version() {
     let l = MemorySelfLoop::with_plan_version("custom-v1");
     // plan_version 字段是 private, 通过 summary 验证
     let s = l.summary();
-    assert!(s.contains("plan_version=") || s.contains("custom-v1"), "plan_version 必 = custom-v1, got: {s}");
+    assert!(
+        s.contains("plan_version=") || s.contains("custom-v1"),
+        "plan_version 必 = custom-v1, got: {s}"
+    );
 }

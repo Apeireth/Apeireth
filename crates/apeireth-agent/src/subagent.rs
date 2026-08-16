@@ -457,9 +457,7 @@ impl AgentRouter {
 
     /// 加 1 个 organ → expert 路由
     pub fn add_organ_route(&self, organ: impl Into<String>, expert: ExpertRole) {
-        self.organ_to_expert
-            .write()
-            .insert(organ.into(), expert);
+        self.organ_to_expert.write().insert(organ.into(), expert);
     }
 
     /// 路由 organ → expert (未命中返 None, 跟 langgraph `MissingNode` 1:1)
@@ -544,7 +542,10 @@ mod tests {
     #[tokio::test]
     async fn oracle_invoke_basic() {
         let oracle = OracleSubAgent;
-        let out = oracle.invoke("审阅 Cargo.toml", "workspace context").await.unwrap();
+        let out = oracle
+            .invoke("审阅 Cargo.toml", "workspace context")
+            .await
+            .unwrap();
         assert!(out.contains("[oracle]"));
         assert!(out.contains("架构审阅任务"));
     }
@@ -562,8 +563,16 @@ mod tests {
         let registry = SubAgentRegistry::with_default_experts();
         assert_eq!(registry.len(), 4);
 
-        for role in [ExpertRole::Oracle, ExpertRole::Librarian, ExpertRole::Explore, ExpertRole::Frontend] {
-            let out = registry.dispatch(role, "test task", "test context").await.unwrap();
+        for role in [
+            ExpertRole::Oracle,
+            ExpertRole::Librarian,
+            ExpertRole::Explore,
+            ExpertRole::Frontend,
+        ] {
+            let out = registry
+                .dispatch(role, "test task", "test context")
+                .await
+                .unwrap();
             assert!(out.contains(&format!("[{role}]")));
         }
     }
@@ -571,14 +580,23 @@ mod tests {
     #[tokio::test]
     async fn registry_dispatch_unknown_role_errors() {
         let registry = SubAgentRegistry::new(); // 空 registry
-        let err = registry.dispatch(ExpertRole::Oracle, "task", "ctx").await.unwrap_err();
-        assert!(matches!(err, SubAgentError::UnknownRole(ExpertRole::Oracle)));
+        let err = registry
+            .dispatch(ExpertRole::Oracle, "task", "ctx")
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err,
+            SubAgentError::UnknownRole(ExpertRole::Oracle)
+        ));
     }
 
     #[tokio::test]
     async fn registry_dispatch_empty_context_errors() {
         let registry = SubAgentRegistry::with_default_experts();
-        let err = registry.dispatch(ExpertRole::Oracle, "task", "").await.unwrap_err();
+        let err = registry
+            .dispatch(ExpertRole::Oracle, "task", "")
+            .await
+            .unwrap_err();
         assert!(matches!(err, SubAgentError::EmptyContext));
     }
 
@@ -588,10 +606,18 @@ mod tests {
         assert_eq!(router.organ_route_count(), 9);
 
         // 9 organ 各路由到 1 个专家
-        for organ in ["heart", "brain", "hand", "eye", "ear", "memory", "voice", "body", "mind"] {
+        for organ in [
+            "heart", "brain", "hand", "eye", "ear", "memory", "voice", "body", "mind",
+        ] {
             let expert = router.route_organ_to_expert(organ).expect(organ);
             assert!(
-                matches!(expert, ExpertRole::Oracle | ExpertRole::Librarian | ExpertRole::Explore | ExpertRole::Frontend),
+                matches!(
+                    expert,
+                    ExpertRole::Oracle
+                        | ExpertRole::Librarian
+                        | ExpertRole::Explore
+                        | ExpertRole::Frontend
+                ),
                 "{organ} 应路由到 4 专家之一"
             );
         }

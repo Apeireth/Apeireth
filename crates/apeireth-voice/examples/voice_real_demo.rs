@@ -55,11 +55,17 @@ async fn main() -> anyhow::Result<()> {
     // 2) 演示 唤醒词 (STUB, 0 网络调用, 必 Ok)
     let audio_1s = AudioBuffer::from_samples(vec![0i16; VOICE_SAMPLE_RATE_HZ as usize]);
     let r1 = real.detect_wake_word(&audio_1s).await;
-    println!("[voice_real_demo] detect_wake_word (STUB) -> {:?}", short_res(&r1));
+    println!(
+        "[voice_real_demo] detect_wake_word (STUB) -> {:?}",
+        short_res(&r1)
+    );
 
     // 3) 演示 TTS (无 env 时会 401 / network error, 实事求是)
     let r2 = real
-        .text_to_speech("hello apeireth, this is a TTS test", VoiceKind::ApeirethMale)
+        .text_to_speech(
+            "hello apeireth, this is a TTS test",
+            VoiceKind::ApeirethMale,
+        )
         .await;
     println!("[voice_real_demo] text_to_speech -> {:?}", short_res(&r2));
 
@@ -68,9 +74,7 @@ async fn main() -> anyhow::Result<()> {
     println!("[voice_real_demo] speech_to_text -> {:?}", short_res(&r3));
 
     // 5) 演示 声纹
-    let r4 = real
-        .voiceprint_match(&audio_1s, "u_apeireth_demo")
-        .await;
+    let r4 = real.voiceprint_match(&audio_1s, "u_apeireth_demo").await;
     println!("[voice_real_demo] voiceprint_match -> {:?}", short_res(&r4));
 
     // 6) 演示 TTS too long (K-1 强校验, 不发 HTTP)
@@ -78,16 +82,25 @@ async fn main() -> anyhow::Result<()> {
     let r5 = real
         .text_to_speech(&big_text, VoiceKind::ApeirethFemale)
         .await;
-    println!("[voice_real_demo] text_to_speech (too long) -> {:?}", short_res(&r5));
+    println!(
+        "[voice_real_demo] text_to_speech (too long) -> {:?}",
+        short_res(&r5)
+    );
 
     // 7) 演示 STT empty audio
     let empty = AudioBuffer::from_samples(vec![]);
     let r6 = real.speech_to_text(&empty, Lang::En).await;
-    println!("[voice_real_demo] speech_to_text (empty) -> {:?}", short_res(&r6));
+    println!(
+        "[voice_real_demo] speech_to_text (empty) -> {:?}",
+        short_res(&r6)
+    );
 
     // 8) 演示 声纹 empty claimed_id
     let r7 = real.voiceprint_match(&audio_1s, "").await;
-    println!("[voice_real_demo] voiceprint_match (empty id) -> {:?}", short_res(&r7));
+    println!(
+        "[voice_real_demo] voiceprint_match (empty id) -> {:?}",
+        short_res(&r7)
+    );
 
     println!(
         "[voice_real_demo] 演示完成 (R20 阶段 6 flesh out 真接实现已 ready, Mavis 整合 #3 拍板后切 STUB_MODE=false)"

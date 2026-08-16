@@ -40,4 +40,3 @@ fn r177_tl_kani_01_orchestrator_invariant() {
 fn r177_tl_kani_02_scheduling_invariant() {
     assert_eq!(SCHEDULING_TOOL_COUNT, 8);
 }
-

@@ -6,9 +6,9 @@
 //! 不假装 (O-5): in-memory 真实现 (无 SQLite/PG 依赖), 序列化真用 serde,
 //! 升级点: 现有 Checkpoint + CheckpointStore 基础上加 thread index.
 
-use std::collections::HashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::checkpoint::{Checkpoint, CheckpointStore};
 
@@ -22,7 +22,11 @@ pub struct ThreadHistory {
 
 impl ThreadHistory {
     pub fn new(thread_id: impl Into<String>) -> Self {
-        Self { thread_id: thread_id.into(), checkpoints: Vec::new(), current_index: 0 }
+        Self {
+            thread_id: thread_id.into(),
+            checkpoints: Vec::new(),
+            current_index: 0,
+        }
     }
 
     pub fn push(&mut self, cp: Checkpoint) {
@@ -34,16 +38,22 @@ impl ThreadHistory {
         self.checkpoints.get(self.current_index)
     }
 
-    pub fn len(&self) -> usize { self.checkpoints.len() }
+    pub fn len(&self) -> usize {
+        self.checkpoints.len()
+    }
 
-    pub fn is_empty(&self) -> bool { self.checkpoints.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.checkpoints.is_empty()
+    }
 
     /// 回到上一个 checkpoint (LangGraph get_state(history=...))
     pub fn rewind(&mut self) -> Option<&Checkpoint> {
         if self.current_index > 0 {
             self.current_index -= 1;
             self.current()
-        } else { None }
+        } else {
+            None
+        }
     }
 
     /// 前进到下一个 checkpoint (resume)
@@ -51,7 +61,9 @@ impl ThreadHistory {
         if self.current_index + 1 < self.checkpoints.len() {
             self.current_index += 1;
             self.current()
-        } else { None }
+        } else {
+            None
+        }
     }
 
     /// 获取指定 index 的 checkpoint
@@ -74,11 +86,17 @@ struct Inner {
 
 impl ThreadCheckpointStore {
     pub fn new_in_memory() -> Self {
-        Self { inner: RwLock::new(Inner::default()), file_store: None }
+        Self {
+            inner: RwLock::new(Inner::default()),
+            file_store: None,
+        }
     }
 
     pub fn with_persistence(store: CheckpointStore) -> Self {
-        Self { inner: RwLock::new(Inner::default()), file_store: Some(store) }
+        Self {
+            inner: RwLock::new(Inner::default()),
+            file_store: Some(store),
+        }
     }
 
     /// Append a checkpoint to a thread (creates thread if absent)
@@ -86,20 +104,32 @@ impl ThreadCheckpointStore {
         let tid = thread_id.into();
         let mut g = self.inner.write();
         g.checkpoint_to_thread.insert(cp.id.clone(), tid.clone());
-        let history = g.threads.entry(tid).or_insert_with(|| ThreadHistory::new(""));
+        let history = g
+            .threads
+            .entry(tid)
+            .or_insert_with(|| ThreadHistory::new(""));
         history.push(cp);
     }
 
     /// Get the latest checkpoint for a thread (LangGraph get_state)
     pub fn get(&self, thread_id: &str) -> Option<Checkpoint> {
-        self.inner.read().threads.get(thread_id).and_then(|h| h.current().cloned())
+        self.inner
+            .read()
+            .threads
+            .get(thread_id)
+            .and_then(|h| h.current().cloned())
     }
 
     /// Get a specific checkpoint by ID (across all threads)
     pub fn get_by_checkpoint_id(&self, checkpoint_id: &str) -> Option<Checkpoint> {
         let g = self.inner.read();
         let tid = g.checkpoint_to_thread.get(checkpoint_id)?;
-        g.threads.get(tid).and_then(|h| h.checkpoints.iter().find(|c| c.id == checkpoint_id).cloned())
+        g.threads.get(tid).and_then(|h| {
+            h.checkpoints
+                .iter()
+                .find(|c| c.id == checkpoint_id)
+                .cloned()
+        })
     }
 
     /// Get full thread history (for inspection / debug)
@@ -119,7 +149,12 @@ impl ThreadCheckpointStore {
 
     /// Get the latest checkpoint index for a thread (0-based)
     pub fn current_index(&self, thread_id: &str) -> usize {
-        self.inner.read().threads.get(thread_id).map(|h| h.current_index).unwrap_or(0)
+        self.inner
+            .read()
+            .threads
+            .get(thread_id)
+            .map(|h| h.current_index)
+            .unwrap_or(0)
     }
 
     /// Rewind a thread to previous checkpoint (returns checkpoint if successful)
@@ -130,7 +165,9 @@ impl ThreadCheckpointStore {
         if idx > 0 {
             history.current_index -= 1;
             history.current().cloned()
-        } else { None }
+        } else {
+            None
+        }
     }
 
     /// Drop a thread entirely (LangGraph delete_thread)
@@ -141,12 +178,16 @@ impl ThreadCheckpointStore {
                 g.checkpoint_to_thread.remove(&cp.id);
             }
             true
-        } else { false }
+        } else {
+            false
+        }
     }
 }
 
 impl Default for ThreadCheckpointStore {
-    fn default() -> Self { Self::new_in_memory() }
+    fn default() -> Self {
+        Self::new_in_memory()
+    }
 }
 
 #[cfg(test)]

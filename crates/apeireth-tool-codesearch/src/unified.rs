@@ -26,7 +26,7 @@ use crate::files::{FileEntry, FileFinder, FindOptions};
 use crate::graph::GraphNode;
 use crate::index::IndexEntry;
 use crate::search::{CodeSearcher, SearchKind, SearchOptions};
-use crate::symbols::{extract_symbols, detect_language, Symbol};
+use crate::symbols::{detect_language, extract_symbols, Symbol};
 
 /// 6 维 code intelligence 种类.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -48,7 +48,12 @@ pub enum IntelligenceKind {
 impl IntelligenceKind {
     /// 全部 6 维 (iter helper)
     pub const ALL: [IntelligenceKind; 6] = [
-        Self::Text, Self::File, Self::Symbol, Self::Graph, Self::Index, Self::Ast,
+        Self::Text,
+        Self::File,
+        Self::Symbol,
+        Self::Graph,
+        Self::Index,
+        Self::Ast,
     ];
 
     pub const fn as_str(&self) -> &'static str {
@@ -64,7 +69,9 @@ impl IntelligenceKind {
 }
 
 impl Default for IntelligenceKind {
-    fn default() -> Self { Self::Text }
+    fn default() -> Self {
+        Self::Text
+    }
 }
 
 /// 统一查询.
@@ -80,7 +87,11 @@ pub struct UnifiedQuery {
 }
 
 impl UnifiedQuery {
-    pub fn new(kind: IntelligenceKind, pattern: impl Into<String>, path: impl Into<PathBuf>) -> Self {
+    pub fn new(
+        kind: IntelligenceKind,
+        pattern: impl Into<String>,
+        path: impl Into<PathBuf>,
+    ) -> Self {
         Self {
             kind,
             pattern: pattern.into(),
@@ -151,16 +162,24 @@ impl std::fmt::Display for UnifiedError {
 impl std::error::Error for UnifiedError {}
 
 impl From<std::io::Error> for UnifiedError {
-    fn from(e: std::io::Error) -> Self { Self::Io(e) }
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
+    }
 }
 impl From<crate::ast_grep::AstGrepError> for UnifiedError {
-    fn from(e: crate::ast_grep::AstGrepError) -> Self { Self::AstGrep(e) }
+    fn from(e: crate::ast_grep::AstGrepError) -> Self {
+        Self::AstGrep(e)
+    }
 }
 impl From<crate::search::SearchError> for UnifiedError {
-    fn from(e: crate::search::SearchError) -> Self { Self::Search(e) }
+    fn from(e: crate::search::SearchError) -> Self {
+        Self::Search(e)
+    }
 }
 impl From<crate::files::FileFinderError> for UnifiedError {
-    fn from(e: crate::files::FileFinderError) -> Self { Self::FileFinder(e) }
+    fn from(e: crate::files::FileFinderError) -> Self {
+        Self::FileFinder(e)
+    }
 }
 
 /// Unified code intelligence facade.
@@ -195,7 +214,10 @@ impl UnifiedCodeIntelligence {
     ///
     /// **用途**: 一次调多次搜, 省下多次 query() 开销
     /// **不假装**: 复用 query() 路径, 不编造结果
-    pub fn query_batch(&self, queries: &[UnifiedQuery]) -> Result<Vec<IntelligenceHit>, UnifiedError> {
+    pub fn query_batch(
+        &self,
+        queries: &[UnifiedQuery],
+    ) -> Result<Vec<IntelligenceHit>, UnifiedError> {
         let mut seen = std::collections::HashSet::new();
         let mut results = Vec::new();
         for q in queries {
@@ -238,16 +260,25 @@ impl UnifiedCodeIntelligence {
                 Ok(files.into_iter().map(IntelligenceHit::File).collect())
             }
             IntelligenceKind::Symbol => {
-                let lang = q.lang.clone().or_else(|| {
-                    if q.path.is_file() { detect_language(&q.path).map(String::from) } else { None }
-                }).unwrap_or_default();
+                let lang = q
+                    .lang
+                    .clone()
+                    .or_else(|| {
+                        if q.path.is_file() {
+                            detect_language(&q.path).map(String::from)
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_default();
                 let content = std::fs::read_to_string(&q.path).unwrap_or_default();
                 let symbols = extract_symbols(&content, &lang);
                 Ok(symbols.into_iter().map(IntelligenceHit::Symbol).collect())
             }
             IntelligenceKind::Graph => {
                 let graph = self.graph.lock().expect("poisoned");
-                let nodes: Vec<GraphNode> = graph.nodes()
+                let nodes: Vec<GraphNode> = graph
+                    .nodes()
                     .filter(|n| n.label.contains(&q.pattern))
                     .cloned()
                     .collect();
@@ -255,7 +286,9 @@ impl UnifiedCodeIntelligence {
             }
             IntelligenceKind::Index => {
                 let idx = self.index.lock().expect("poisoned");
-                let entries = idx.lookup_symbols_by_name(&q.pattern).map_err(|e| UnifiedError::Index(e.to_string()))?;
+                let entries = idx
+                    .lookup_symbols_by_name(&q.pattern)
+                    .map_err(|e| UnifiedError::Index(e.to_string()))?;
                 Ok(entries.into_iter().map(IntelligenceHit::Index).collect())
             }
             IntelligenceKind::Ast => {
@@ -272,7 +305,9 @@ impl UnifiedCodeIntelligence {
         let content = std::fs::read_to_string(path)?;
         let symbols = extract_symbols(&content, lang);
         let idx = self.index.lock().expect("poisoned");
-        let file_id = idx.upsert_file(path).map_err(|e| UnifiedError::Index(e.to_string()))?;
+        let file_id = idx
+            .upsert_file(path)
+            .map_err(|e| UnifiedError::Index(e.to_string()))?;
         for s in &symbols {
             let _ = idx.insert_symbol(file_id, s);
         }
@@ -322,8 +357,7 @@ mod tests {
 
     #[test]
     fn t05_unified_query_with_lang() {
-        let q = UnifiedQuery::new(IntelligenceKind::Ast, "fn ()", ".")
-            .with_lang("rust");
+        let q = UnifiedQuery::new(IntelligenceKind::Ast, "fn ()", ".").with_lang("rust");
         assert_eq!(q.lang, Some("rust".to_string()));
     }
 
@@ -369,8 +403,7 @@ mod tests {
 
     #[test]
     fn t10_query_ast_kind_handles_missing_binary() {
-        let u = UnifiedCodeIntelligence::new_in_memory()
-            .with_ast_binary("/nonexistent/ast-grep");
+        let u = UnifiedCodeIntelligence::new_in_memory().with_ast_binary("/nonexistent/ast-grep");
         let q = UnifiedQuery::new(IntelligenceKind::Ast, "fn ()", ".");
         let r = u.query(&q);
         // ast-grep binary not found should not panic
@@ -378,52 +411,64 @@ mod tests {
     }
 }
 
-    // ============================================================
-    // R233 — query_batch (5 cases)
-    // ============================================================
+// ============================================================
+// R233 — query_batch (5 cases)
+// ============================================================
 
-    #[test]
-    fn t11_query_batch_empty_queries_returns_empty() {
-        let u = UnifiedCodeIntelligence::new_in_memory();
-        let res = u.query_batch(&[]).unwrap();
-        assert!(res.is_empty());
-    }
+#[test]
+fn t11_query_batch_empty_queries_returns_empty() {
+    let u = UnifiedCodeIntelligence::new_in_memory();
+    let res = u.query_batch(&[]).unwrap();
+    assert!(res.is_empty());
+}
 
-    #[test]
-    fn t12_query_batch_single_query_matches_query() {
-        let u = UnifiedCodeIntelligence::new_in_memory();
-        let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", std::path::PathBuf::from("."));
-        let batch = u.query_batch(&[q.clone()]).unwrap();
-        let single = u.query(&q).unwrap();
-        assert_eq!(batch.len(), single.len());
-    }
+#[test]
+fn t12_query_batch_single_query_matches_query() {
+    let u = UnifiedCodeIntelligence::new_in_memory();
+    let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", std::path::PathBuf::from("."));
+    let batch = u.query_batch(&[q.clone()]).unwrap();
+    let single = u.query(&q).unwrap();
+    assert_eq!(batch.len(), single.len());
+}
 
-    #[test]
-    fn t13_query_batch_multiple_kinds() {
-        let u = UnifiedCodeIntelligence::new_in_memory();
-        let q1 = UnifiedQuery::new(IntelligenceKind::Text, "fn", std::path::PathBuf::from("."));
-        let q2 = UnifiedQuery::new(IntelligenceKind::File, "*.rs", std::path::PathBuf::from("."));
-        let res = u.query_batch(&[q1, q2]).unwrap();
-        // 不强行断言数量 (依赖文件系统), 但应 0 failed
-    }
+#[test]
+fn t13_query_batch_multiple_kinds() {
+    let u = UnifiedCodeIntelligence::new_in_memory();
+    let q1 = UnifiedQuery::new(IntelligenceKind::Text, "fn", std::path::PathBuf::from("."));
+    let q2 = UnifiedQuery::new(
+        IntelligenceKind::File,
+        "*.rs",
+        std::path::PathBuf::from("."),
+    );
+    let res = u.query_batch(&[q1, q2]).unwrap();
+    // 不强行断言数量 (依赖文件系统), 但应 0 failed
+}
 
-    #[test]
-    fn t14_query_batch_dedupes_overlapping_results() {
-        // 同一 query 多次出现应被去重
-        let u = UnifiedCodeIntelligence::new_in_memory();
-        let q = UnifiedQuery::new(IntelligenceKind::File, "*.rs", std::path::PathBuf::from("."));
-        let res = u.query_batch(&[q.clone(), q.clone(), q.clone()]).unwrap();
-        let single = u.query(&q).unwrap();
-        assert_eq!(res.len(), single.len(), "重复 query 应被去重");
-    }
+#[test]
+fn t14_query_batch_dedupes_overlapping_results() {
+    // 同一 query 多次出现应被去重
+    let u = UnifiedCodeIntelligence::new_in_memory();
+    let q = UnifiedQuery::new(
+        IntelligenceKind::File,
+        "*.rs",
+        std::path::PathBuf::from("."),
+    );
+    let res = u.query_batch(&[q.clone(), q.clone(), q.clone()]).unwrap();
+    let single = u.query(&q).unwrap();
+    assert_eq!(res.len(), single.len(), "重复 query 应被去重");
+}
 
-    #[test]
-    fn t15_query_batch_propagates_errors() {
-        // query() 内部返 Err → batch 也应 Err
-        let u = UnifiedCodeIntelligence::new_in_memory();
-        // kind 未启用会返 Ok (skeleton), 所以这里测 kind 未支持场景略复杂
-        // 改为: 传 path 不存在不应 panic (行为取决于实现)
-        let q = UnifiedQuery::new(IntelligenceKind::Text, "x", std::path::PathBuf::from("/nonexistent/path/abcxyz"));
-        let res = u.query_batch(&[q]);
-        assert!(res.is_ok(), "路径不存在应不 panic");
-    }
+#[test]
+fn t15_query_batch_propagates_errors() {
+    // query() 内部返 Err → batch 也应 Err
+    let u = UnifiedCodeIntelligence::new_in_memory();
+    // kind 未启用会返 Ok (skeleton), 所以这里测 kind 未支持场景略复杂
+    // 改为: 传 path 不存在不应 panic (行为取决于实现)
+    let q = UnifiedQuery::new(
+        IntelligenceKind::Text,
+        "x",
+        std::path::PathBuf::from("/nonexistent/path/abcxyz"),
+    );
+    let res = u.query_batch(&[q]);
+    assert!(res.is_ok(), "路径不存在应不 panic");
+}

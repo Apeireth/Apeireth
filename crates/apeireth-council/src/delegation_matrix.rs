@@ -1,4 +1,3 @@
-
 //! R176 Agent delegation 7×7=49 paths test matrix
 //!
 //! **\u80cc\u666f**: 7 AdvisorDomain (\u5b89\u5168/\u6027\u80fd/\u54f2\u5b66/\u5386\u53f2/\u7b56\u7565/\u4f26\u7406/\u6cd5\u5f8b) \u53ef\u4ee5\u4e92\u76f8\u59d4\u6258.
@@ -19,8 +18,12 @@ use crate::advisor::AdvisorDomain;
 pub struct DelegationPath(pub AdvisorDomain, pub AdvisorDomain);
 
 impl DelegationPath {
-    pub fn from(&self) -> AdvisorDomain { self.0 }
-    pub fn to(&self) -> AdvisorDomain { self.1 }
+    pub fn from(&self) -> AdvisorDomain {
+        self.0
+    }
+    pub fn to(&self) -> AdvisorDomain {
+        self.1
+    }
     pub fn name(&self) -> String {
         format!("{:?} → {:?}", self.0, self.1)
     }
@@ -88,12 +91,15 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
 
 /// \u68c0\u67e5\u59d4\u6258\u662f\u5426\u5408\u6cd5\u8bed\u4e49 (\u672c\u8d33 49 \u8def\u5f84\u90fd\u5408\u6cd5)
 pub fn is_valid_delegation(path: &DelegationPath) -> bool {
-    DELEGATION_PATHS.iter().any(|&(f, t)| f == path.0 && t == path.1)
+    DELEGATION_PATHS
+        .iter()
+        .any(|&(f, t)| f == path.0 && t == path.1)
 }
 
 /// 7 \u81ea\u59d4\u6258\u8def\u5f84 (\u4e00\u4e2a advisor \u59d4\u6258\u7ed9\u81ea\u5df1)
 pub fn self_delegations() -> Vec<DelegationPath> {
-    DELEGATION_PATHS.iter()
+    DELEGATION_PATHS
+        .iter()
         .filter(|(f, t)| f == t)
         .map(|(f, t)| DelegationPath(*f, *t))
         .collect()
@@ -101,7 +107,8 @@ pub fn self_delegations() -> Vec<DelegationPath> {
 
 /// \u4ece\u67d0\u4e2a advisor \u53d1\u51fa\u7684\u59d4\u6258\u5217\u8868
 pub fn delegations_from(from: AdvisorDomain) -> Vec<DelegationPath> {
-    DELEGATION_PATHS.iter()
+    DELEGATION_PATHS
+        .iter()
         .filter(|(f, _)| *f == from)
         .map(|(f, t)| DelegationPath(*f, *t))
         .collect()
@@ -109,7 +116,8 @@ pub fn delegations_from(from: AdvisorDomain) -> Vec<DelegationPath> {
 
 /// \u67d0\u4e2a advisor \u63a5\u6536\u7684\u59d4\u6258\u5217\u8868
 pub fn delegations_to(to: AdvisorDomain) -> Vec<DelegationPath> {
-    DELEGATION_PATHS.iter()
+    DELEGATION_PATHS
+        .iter()
         .filter(|(_, t)| *t == to)
         .map(|(f, t)| DelegationPath(*f, *t))
         .collect()
@@ -135,9 +143,15 @@ mod delegation_matrix_tests {
 
     #[test]
     fn delegations_from_returns_7() {
-        for from in [AdvisorDomain::Safety, AdvisorDomain::Performance, AdvisorDomain::Philosophy,
-                     AdvisorDomain::History, AdvisorDomain::Strategy, AdvisorDomain::Ethics,
-                     AdvisorDomain::Legal] {
+        for from in [
+            AdvisorDomain::Safety,
+            AdvisorDomain::Performance,
+            AdvisorDomain::Philosophy,
+            AdvisorDomain::History,
+            AdvisorDomain::Strategy,
+            AdvisorDomain::Ethics,
+            AdvisorDomain::Legal,
+        ] {
             let paths = delegations_from(from);
             assert_eq!(paths.len(), 7, "{:?} should have 7 delegations", from);
         }
@@ -145,9 +159,15 @@ mod delegation_matrix_tests {
 
     #[test]
     fn delegations_to_returns_7() {
-        for to in [AdvisorDomain::Safety, AdvisorDomain::Performance, AdvisorDomain::Philosophy,
-                   AdvisorDomain::History, AdvisorDomain::Strategy, AdvisorDomain::Ethics,
-                   AdvisorDomain::Legal] {
+        for to in [
+            AdvisorDomain::Safety,
+            AdvisorDomain::Performance,
+            AdvisorDomain::Philosophy,
+            AdvisorDomain::History,
+            AdvisorDomain::Strategy,
+            AdvisorDomain::Ethics,
+            AdvisorDomain::Legal,
+        ] {
             let paths = delegations_to(to);
             assert_eq!(paths.len(), 7, "{:?} should receive 7 delegations", to);
         }
@@ -195,8 +215,12 @@ mod delegation_matrix_tests {
     fn delegation_matrix_covers_all_pairs() {
         // Every (from, to) combination must exist
         use std::collections::HashSet;
-        let actual: HashSet<(u8, u8)> = DELEGATION_PATHS.iter().map(|(f, t)| (*f as u8, *t as u8)).collect();
-        let expected: HashSet<(u8, u8)> = (0..7).flat_map(|f| (0..7).map(move |t| (f, t))).collect();
+        let actual: HashSet<(u8, u8)> = DELEGATION_PATHS
+            .iter()
+            .map(|(f, t)| (*f as u8, *t as u8))
+            .collect();
+        let expected: HashSet<(u8, u8)> =
+            (0..7).flat_map(|f| (0..7).map(move |t| (f, t))).collect();
         assert_eq!(actual, expected, "matrix should be complete 7x7 grid");
     }
 }

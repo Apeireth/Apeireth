@@ -22,7 +22,9 @@ use apeireth_eval::real_llm_smoke::{
 async fn main() {
     if std::env::var("APEIRETH_EVAL_LIVE").ok().as_deref() != Some("1") {
         eprintln!("R70 LIVE example: skip (set APEIRETH_EVAL_LIVE=1 to enable real MiniMax calls)");
-        eprintln!("Note: this hits https://api.minimaxi.com with x-api-key from openclaw/apikey.txt");
+        eprintln!(
+            "Note: this hits https://api.minimaxi.com with x-api-key from openclaw/apikey.txt"
+        );
         std::process::exit(0);
     }
 
@@ -46,7 +48,11 @@ async fn main() {
         "R70 LIVE: base={} path={} version={} apikey_source={}",
         MINIMAX_BASE_URL, ANTHROPIC_MESSAGES_PATH, ANTHROPIC_VERSION, apikey_source
     );
-    eprintln!("R70 LIVE: running {} models: {:?}", all_models.len(), all_models);
+    eprintln!(
+        "R70 LIVE: running {} models: {:?}",
+        all_models.len(),
+        all_models
+    );
 
     let cfg = BenchmarkConfig {
         models: all_models.clone(),

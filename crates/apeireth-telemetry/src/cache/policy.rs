@@ -161,9 +161,18 @@ mod tests {
     /// 守门 #5: FromStr 解析.
     #[test]
     fn eviction_policy_from_str_works() {
-        assert_eq!("LRU".parse::<EvictionPolicy>().unwrap(), EvictionPolicy::Lru);
-        assert_eq!("lru".parse::<EvictionPolicy>().unwrap(), EvictionPolicy::Lru);
-        assert_eq!("TINY_LFU".parse::<EvictionPolicy>().unwrap(), EvictionPolicy::TinyLfu);
+        assert_eq!(
+            "LRU".parse::<EvictionPolicy>().unwrap(),
+            EvictionPolicy::Lru
+        );
+        assert_eq!(
+            "lru".parse::<EvictionPolicy>().unwrap(),
+            EvictionPolicy::Lru
+        );
+        assert_eq!(
+            "TINY_LFU".parse::<EvictionPolicy>().unwrap(),
+            EvictionPolicy::TinyLfu
+        );
         assert!("NOPE".parse::<EvictionPolicy>().is_err());
     }
 }

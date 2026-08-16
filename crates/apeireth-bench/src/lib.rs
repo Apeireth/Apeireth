@@ -10,7 +10,6 @@
 //! - `swe_bench`:SWE-bench Verified runner 框架 + 1 内联 sample (`examples/swe_bench_smoke.rs` 跑通)
 //! - `agent_bench`:AgentBench 子集 stub(占位,真实 executor 留 P1+)
 
-
 /// SWE-bench Verified runner 框架.
 ///
 /// 包含 `TaskInstance` / `RunReport` / `Executor` trait / `Runner` / `Summary` 等,

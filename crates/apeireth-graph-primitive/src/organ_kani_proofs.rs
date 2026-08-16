@@ -2,9 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::{
-    classify, classify_pair, Relation, RelationDecision, RelationKind, RelationRegistry,
-};
+use crate::{classify, classify_pair, Relation, RelationDecision, RelationKind, RelationRegistry};
 
 #[test]
 fn r177_gp_01_relation_kind_all_4() {
@@ -68,7 +66,9 @@ fn r177_gp_08_involved_parties_two() {
 
 #[test]
 fn r177_gp_09_with_note() {
-    let r = Relation::new_symbiosis("a", "b").unwrap().with_note("test note");
+    let r = Relation::new_symbiosis("a", "b")
+        .unwrap()
+        .with_note("test note");
     assert_eq!(r.note, Some("test note".to_string()));
 }
 

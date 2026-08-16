@@ -74,9 +74,9 @@ pub async fn invoke_by_name() -> Result<(), String> {
 /// 通过 `#[tokio::test]` 调每个入口.
 pub mod entries {
     use super::_search_src::{
-        SafeSearchLevel, SearchAction, SearchInput, SearchTool,
-        validate_language, validate_max_results, validate_region, validate_safe_search,
-        SEARCH_ACTIONS, SEARCH_K1_CHECKS, parse_input,
+        parse_input, validate_language, validate_max_results, validate_region,
+        validate_safe_search, SafeSearchLevel, SearchAction, SearchInput, SearchTool,
+        SEARCH_ACTIONS, SEARCH_K1_CHECKS,
     };
     // Tool trait 必须 in scope, 否则 SearchTool::call 方法找不到
     use apeireth_tool_registry::Tool;
@@ -97,10 +97,7 @@ pub mod entries {
                 }))
                 .await;
             // 占位: 引擎层 NotImplemented, 返 Err
-            assert!(
-                r.is_err(),
-                "SearchTool {action} 当前应 NotImplemented"
-            );
+            assert!(r.is_err(), "SearchTool {action} 当前应 NotImplemented");
             let err = r.unwrap_err();
             assert!(
                 err.contains("not implemented")
@@ -142,9 +139,15 @@ pub mod entries {
         // max_results=0 → Err (K-1-2 下界)
         assert!(validate_max_results(0).is_err(), "max_results=0 应 Err");
         // max_results=1 → Ok
-        assert!(validate_max_results(1).is_ok(), "max_results=1 应 Ok (下界)");
+        assert!(
+            validate_max_results(1).is_ok(),
+            "max_results=1 应 Ok (下界)"
+        );
         // max_results=100 → Ok (上界)
-        assert!(validate_max_results(100).is_ok(), "max_results=100 应 Ok (上界)");
+        assert!(
+            validate_max_results(100).is_ok(),
+            "max_results=100 应 Ok (上界)"
+        );
         // max_results=101 → Err (上界+1)
         assert!(validate_max_results(101).is_err(), "max_results=101 应 Err");
         // max_results=-1 → Err (负)
@@ -169,11 +172,20 @@ pub mod entries {
         assert!(validate_language("eng").is_ok(), "language 'eng' 应 Ok");
         assert!(validate_language("zho").is_ok(), "language 'zho' 应 Ok");
         // language: 1 字母 Err
-        assert!(validate_language("e").is_err(), "language 'e' 应 Err (len 1)");
+        assert!(
+            validate_language("e").is_err(),
+            "language 'e' 应 Err (len 1)"
+        );
         // language: 4 字母 Err
-        assert!(validate_language("enUS").is_err(), "language 'enUS' 应 Err (len 4)");
+        assert!(
+            validate_language("enUS").is_err(),
+            "language 'enUS' 应 Err (len 4)"
+        );
         // language: 大写 Err (守 2 字母小写简化版)
-        assert!(validate_language("EN").is_err(), "language 'EN' 应 Err (大写)");
+        assert!(
+            validate_language("EN").is_err(),
+            "language 'EN' 应 Err (大写)"
+        );
         // language: 含特殊字符 Err
         assert!(validate_language("e!").is_err(), "language 'e!' 应 Err");
         // language: 空 → Err
@@ -186,11 +198,17 @@ pub mod entries {
         // region: 1 字母 Err
         assert!(validate_region("U").is_err(), "region 'U' 应 Err (len 1)");
         // region: 3 字母 Err
-        assert!(validate_region("USA").is_err(), "region 'USA' 应 Err (len 3)");
+        assert!(
+            validate_region("USA").is_err(),
+            "region 'USA' 应 Err (len 3)"
+        );
         // region: 小写 Err
         assert!(validate_region("us").is_err(), "region 'us' 应 Err (小写)");
         // region: 含数字 Err
-        assert!(validate_region("U1").is_err(), "region 'U1' 应 Err (含数字)");
+        assert!(
+            validate_region("U1").is_err(),
+            "region 'U1' 应 Err (含数字)"
+        );
         // region: 空 → Err
         assert!(validate_region("").is_err(), "空 region 应 Err");
 
@@ -208,18 +226,39 @@ pub mod entries {
     /// 4. K-1-5 safe_search enum + 错误路径
     pub async fn search_k1_safe_search_and_errors() {
         // safe_search: 3 值 ok
-        assert!(validate_safe_search("off").is_ok(), "safe_search 'off' 应 Ok");
-        assert!(validate_safe_search("moderate").is_ok(), "safe_search 'moderate' 应 Ok");
-        assert!(validate_safe_search("strict").is_ok(), "safe_search 'strict' 应 Ok");
+        assert!(
+            validate_safe_search("off").is_ok(),
+            "safe_search 'off' 应 Ok"
+        );
+        assert!(
+            validate_safe_search("moderate").is_ok(),
+            "safe_search 'moderate' 应 Ok"
+        );
+        assert!(
+            validate_safe_search("strict").is_ok(),
+            "safe_search 'strict' 应 Ok"
+        );
         // safe_search: 错值 Err
-        assert!(validate_safe_search("none").is_err(), "safe_search 'none' 应 Err");
+        assert!(
+            validate_safe_search("none").is_err(),
+            "safe_search 'none' 应 Err"
+        );
         assert!(validate_safe_search("").is_err(), "空 safe_search 应 Err");
-        assert!(validate_safe_search("OFF").is_err(), "safe_search 'OFF' 应 Err (大小写)");
+        assert!(
+            validate_safe_search("OFF").is_err(),
+            "safe_search 'OFF' 应 Err (大小写)"
+        );
 
         // SafeSearchLevel 枚举值对齐
         assert_eq!(SafeSearchLevel::from_str("off"), Some(SafeSearchLevel::Off));
-        assert_eq!(SafeSearchLevel::from_str("moderate"), Some(SafeSearchLevel::Moderate));
-        assert_eq!(SafeSearchLevel::from_str("strict"), Some(SafeSearchLevel::Strict));
+        assert_eq!(
+            SafeSearchLevel::from_str("moderate"),
+            Some(SafeSearchLevel::Moderate)
+        );
+        assert_eq!(
+            SafeSearchLevel::from_str("strict"),
+            Some(SafeSearchLevel::Strict)
+        );
         assert_eq!(SafeSearchLevel::from_str("weird"), None);
 
         // SearchAction 4 值对齐

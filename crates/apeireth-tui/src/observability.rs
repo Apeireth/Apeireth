@@ -78,11 +78,11 @@ pub const OBS_ORGAN_COUNT: usize = 9;
 ///
 /// 仪表盘顶部显示当前 nav.
 pub const OBS_FIVE_NAV: [&str; 5] = [
-    "0 舰桥 Bridge",     // ΣΚΟΠΗ
-    "1 对话 Dialogue",   // ΔΙΑΛΟΓΟΣ
-    "2 生长 Growth",     // ΑΥΞΗΣΙΣ
-    "3 历史 History",    // ΙΣΤΟΡΙΑ
-    "4 设置 Settings",   // ΤΑΞΙΣ
+    "0 舰桥 Bridge",   // ΣΚΟΠΗ
+    "1 对话 Dialogue", // ΔΙΑΛΟΓΟΣ
+    "2 生长 Growth",   // ΑΥΞΗΣΙΣ
+    "3 历史 History",  // ΙΣΤΟΡΙΑ
+    "4 设置 Settings", // ΤΑΞΙΣ
 ];
 
 /// 6 哲学锚 hardcode (per 主人 R19 锚定 + sister #1 报告 `mind::SIX_ANCHORS`,
@@ -214,8 +214,15 @@ impl Organ {
     /// 全部 9 器官 (按索引顺序 0-8, 给仪表盘 render 用).
     pub fn all() -> [Organ; OBS_ORGAN_COUNT] {
         [
-            Self::Heart, Self::Brain, Self::Hand, Self::Eye, Self::Ear,
-            Self::Memory, Self::Voice, Self::Body, Self::Mind,
+            Self::Heart,
+            Self::Brain,
+            Self::Hand,
+            Self::Eye,
+            Self::Ear,
+            Self::Memory,
+            Self::Voice,
+            Self::Body,
+            Self::Mind,
         ]
     }
 
@@ -372,7 +379,12 @@ impl TuiOrganState {
 
     /// 标 partial (部分真接).
     pub fn partial(organ: Organ) -> Self {
-        Self::new(organ, Readiness::Partial, 0.0, "partial: 0/9 字段真接 (R25.3+ 续)")
+        Self::new(
+            organ,
+            Readiness::Partial,
+            0.0,
+            "partial: 0/9 字段真接 (R25.3+ 续)",
+        )
     }
 
     /// 标 ok (真接).
@@ -585,10 +597,7 @@ pub fn render_dashboard(dashboard: &TuiDashboard) -> String {
 
     // Current nav
     let nav_idx = dashboard.current_nav as usize;
-    let nav_str = OBS_FIVE_NAV
-        .get(nav_idx)
-        .copied()
-        .unwrap_or("? unknown");
+    let nav_str = OBS_FIVE_NAV.get(nav_idx).copied().unwrap_or("? unknown");
     out.push_str(&format!("nav: {nav_str}  (current: {nav_idx})\n"));
 
     // 9 器官
@@ -697,7 +706,10 @@ mod tests {
         let mut d = TuiDashboard::new();
         d.register_tui_organ_state(Organ::Heart, TuiOrganState::ok(Organ::Heart, 75.0, "75Hz"));
         assert_eq!(d.organs[Organ::Heart.as_u8() as usize].value, 75.0);
-        assert_eq!(d.organs[Organ::Heart.as_u8() as usize].readiness, Readiness::Ok);
+        assert_eq!(
+            d.organs[Organ::Heart.as_u8() as usize].readiness,
+            Readiness::Ok
+        );
     }
 
     #[test]
@@ -706,7 +718,11 @@ mod tests {
         for organ in Organ::all() {
             d.register_tui_organ_state(
                 organ,
-                TuiOrganState::ok(organ, f64::from(organ.as_u8()), format!("{}_ok", organ.ascii_char())),
+                TuiOrganState::ok(
+                    organ,
+                    f64::from(organ.as_u8()),
+                    format!("{}_ok", organ.ascii_char()),
+                ),
             );
         }
         for organ in Organ::all() {
@@ -733,8 +749,16 @@ mod tests {
         }
         for organ in Organ::all() {
             let s = render_organ_widget(organ, &d.organs[organ.as_u8() as usize]);
-            assert!(s.contains(organ.ascii_char()), "must contain ascii char: {}", organ.ascii_char());
-            assert!(s.contains(organ.name_zh()), "must contain zh name: {}", organ.name_zh());
+            assert!(
+                s.contains(organ.ascii_char()),
+                "must contain ascii char: {}",
+                organ.ascii_char()
+            );
+            assert!(
+                s.contains(organ.name_zh()),
+                "must contain zh name: {}",
+                organ.name_zh()
+            );
         }
     }
 
@@ -743,7 +767,11 @@ mod tests {
         let d = TuiDashboard::new();
         let s = render_organ_widget(Organ::Mind, &d.organs[Organ::Mind.as_u8() as usize]);
         for anchor in OBS_SIX_ANCHORS {
-            assert!(s.contains(anchor), "mind widget must include anchor: {}", anchor);
+            assert!(
+                s.contains(anchor),
+                "mind widget must include anchor: {}",
+                anchor
+            );
         }
     }
 
@@ -764,12 +792,23 @@ mod tests {
     fn organ_9_enum_cover_sister_9_organ_set_1_to_1() {
         // 验证 TUI 端 9 器官跟 sister #1 + sister #6 1:1 同步.
         let all_9 = [
-            Organ::Heart, Organ::Brain, Organ::Hand, Organ::Eye, Organ::Ear,
-            Organ::Memory, Organ::Voice, Organ::Body, Organ::Mind,
+            Organ::Heart,
+            Organ::Brain,
+            Organ::Hand,
+            Organ::Eye,
+            Organ::Ear,
+            Organ::Memory,
+            Organ::Voice,
+            Organ::Body,
+            Organ::Mind,
         ];
         assert_eq!(all_9.len(), OBS_ORGAN_COUNT);
         for (i, organ) in all_9.iter().enumerate() {
-            assert_eq!(organ.as_u8(), i as u8, "TUI 9 organ enum 0-8 跟 sister 同步");
+            assert_eq!(
+                organ.as_u8(),
+                i as u8,
+                "TUI 9 organ enum 0-8 跟 sister 同步"
+            );
         }
     }
 
@@ -780,7 +819,7 @@ mod tests {
 
     /// 27 测试 helper: 测 1 个 organ × 1 个 async fn, 5 Locale 翻译全非空
     async fn assert_organ_async_fn_5_locales_translated(organ: Organ, method: &str) {
-        use apeireth_i18n::{SUPPORTED_LOCALES, TranslatorImpl};
+        use apeireth_i18n::{TranslatorImpl, SUPPORTED_LOCALES};
         let tr = TranslatorImpl::new().unwrap();
         for &locale in SUPPORTED_LOCALES {
             tr.set_locale(locale).await.unwrap();
@@ -798,89 +837,116 @@ mod tests {
     }
 
     // Group 1: Organ::name(tr) — 9 organ
-    #[tokio::test] async fn obs_organ_heart_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_heart_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Heart, "name").await;
     }
-    #[tokio::test] async fn obs_organ_brain_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_brain_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Brain, "name").await;
     }
-    #[tokio::test] async fn obs_organ_hand_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_hand_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Hand, "name").await;
     }
-    #[tokio::test] async fn obs_organ_eye_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_eye_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Eye, "name").await;
     }
-    #[tokio::test] async fn obs_organ_ear_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_ear_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Ear, "name").await;
     }
-    #[tokio::test] async fn obs_organ_memory_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_memory_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Memory, "name").await;
     }
-    #[tokio::test] async fn obs_organ_voice_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_voice_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Voice, "name").await;
     }
-    #[tokio::test] async fn obs_organ_body_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_body_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Body, "name").await;
     }
-    #[tokio::test] async fn obs_organ_mind_name_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_mind_name_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Mind, "name").await;
     }
 
     // Group 2: Organ::desc(tr) — 9 organ
-    #[tokio::test] async fn obs_organ_heart_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_heart_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Heart, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_brain_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_brain_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Brain, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_hand_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_hand_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Hand, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_eye_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_eye_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Eye, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_ear_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_ear_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Ear, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_memory_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_memory_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Memory, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_voice_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_voice_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Voice, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_body_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_body_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Body, "desc").await;
     }
-    #[tokio::test] async fn obs_organ_mind_desc_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_mind_desc_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Mind, "desc").await;
     }
 
     // Group 3: Organ::readiness_label(tr) — 9 organ (走 Readiness::label)
-    #[tokio::test] async fn obs_organ_heart_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_heart_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Heart, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_brain_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_brain_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Brain, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_hand_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_hand_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Hand, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_eye_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_eye_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Eye, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_ear_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_ear_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Ear, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_memory_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_memory_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Memory, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_voice_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_voice_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Voice, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_body_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_body_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Body, "readiness_label").await;
     }
-    #[tokio::test] async fn obs_organ_mind_readiness_label_5_locales_translated() {
+    #[tokio::test]
+    async fn obs_organ_mind_readiness_label_5_locales_translated() {
         assert_organ_async_fn_5_locales_translated(Organ::Mind, "readiness_label").await;
     }
 
@@ -890,13 +956,16 @@ mod tests {
         const N_ORGANS: usize = 9;
         const N_ASYNC_FN_PER_ORGAN: usize = 3;
         const N_TOTAL_WRAPPERS: usize = N_ORGANS * N_ASYNC_FN_PER_ORGAN;
-        assert_eq!(N_TOTAL_WRAPPERS, 27, "9 organ × 3 异步 fn = 27 异步 fn 包装 (R21 G-2 守门, observability 镜像 sister #1)");
+        assert_eq!(
+            N_TOTAL_WRAPPERS, 27,
+            "9 organ × 3 异步 fn = 27 异步 fn 包装 (R21 G-2 守门, observability 镜像 sister #1)"
+        );
     }
 
     // Readiness::label(tr) 守门: 3 readiness × 5 Locale = 15 翻译点
     #[tokio::test]
     async fn obs_readiness_3_levels_5_locales_translated_and_distinct() {
-        use apeireth_i18n::{SUPPORTED_LOCALES, TranslatorImpl};
+        use apeireth_i18n::{TranslatorImpl, SUPPORTED_LOCALES};
         let tr = TranslatorImpl::new().unwrap();
         for &locale in SUPPORTED_LOCALES {
             tr.set_locale(locale).await.unwrap();

@@ -25,8 +25,8 @@
 //! - **Cost tracking 演示**: 2 calls 累计 cost + per-provider 聚合
 
 use apeireth_pipeline::{
-    CostTracker, FallbackChain, ProviderCapability, ProviderRegistry, ProviderSpec, SelectionStrategy,
-    UsageRecord,
+    CostTracker, FallbackChain, ProviderCapability, ProviderRegistry, ProviderSpec,
+    SelectionStrategy, UsageRecord,
 };
 
 fn main() {
@@ -85,22 +85,31 @@ fn main() {
     registry.register(anthropic).expect("register anthropic");
     registry.register(google).expect("register google");
     registry.register(cohere).expect("register cohere");
-    println!("[1] 4 Provider 全部 register OK (count = {})\n", registry.len());
+    println!(
+        "[1] 4 Provider 全部 register OK (count = {})\n",
+        registry.len()
+    );
 
     // 2. RoundRobin 选择 (3 次 → openai, anthropic, google)
     println!("[2] RoundRobin 选择 (Chat capability):");
     let caps = vec![ProviderCapability::Chat];
     let p0_name = registry
         .select(SelectionStrategy::RoundRobin, &caps)
-        .expect("select 0").name.clone();
+        .expect("select 0")
+        .name
+        .clone();
     registry.advance_round_robin();
     let p1_name = registry
         .select(SelectionStrategy::RoundRobin, &caps)
-        .expect("select 1").name.clone();
+        .expect("select 1")
+        .name
+        .clone();
     registry.advance_round_robin();
     let p2_name = registry
         .select(SelectionStrategy::RoundRobin, &caps)
-        .expect("select 2").name.clone();
+        .expect("select 2")
+        .name
+        .clone();
     println!("    select 0/1/2: {p0_name} / {p1_name} / {p2_name}\n");
 
     // 3. LowestCost 选择 (Chat + Vision → google 最便宜)
@@ -124,17 +133,12 @@ fn main() {
 
     // 5. by_model 查询
     println!("[5] by_model 查询:");
-    let p = registry
-        .by_model("gpt-4o")
-        .expect("gpt-4o 应找到 openai");
+    let p = registry.by_model("gpt-4o").expect("gpt-4o 应找到 openai");
     println!("    gpt-4o → {} ({})", p.name, p.base_url);
     let p = registry
         .by_model("claude-3-5-sonnet")
         .expect("claude-3-5-sonnet 应找到 anthropic");
-    println!(
-        "    claude-3-5-sonnet → {} ({})\n",
-        p.name, p.base_url
-    );
+    println!("    claude-3-5-sonnet → {} ({})\n", p.name, p.base_url);
 
     // 6. estimate_cost 演示 (openai 1000 input + 500 output)
     println!("[6] estimate_cost 演示 (openai 1000 input + 500 output):");
@@ -150,8 +154,12 @@ fn main() {
     println!("    chain: {:?}", chain.chain_names());
     let (used, val): (String, &str) = chain
         .execute(|spec| {
-            if spec.name == "openai" { return Err("rate limited"); }
-            if spec.name == "google" { return Err("5xx"); }
+            if spec.name == "openai" {
+                return Err("rate limited");
+            }
+            if spec.name == "google" {
+                return Err("5xx");
+            }
             Ok::<&str, &str>("ok")
         })
         .expect("anthropic 应该成功");
@@ -166,16 +174,14 @@ fn main() {
     let (in_t, out_t, lat) = (1000u64, 500u64, 250u64);
     let cost = spec.estimate_cost(in_t, out_t);
     tracker.record(UsageRecord::new(
-        1_000_000, "openai", "gpt-4o",
-        in_t, out_t, cost, lat, true,
+        1_000_000, "openai", "gpt-4o", in_t, out_t, cost, lat, true,
     ));
 
     // 8.2 openai call 2
     let (in_t, out_t, lat) = (2000u64, 1000u64, 300u64);
     let cost = spec.estimate_cost(in_t, out_t);
     tracker.record(UsageRecord::new(
-        1_001_000, "openai", "gpt-4o",
-        in_t, out_t, cost, lat, true,
+        1_001_000, "openai", "gpt-4o", in_t, out_t, cost, lat, true,
     ));
 
     // 8.3 anthropic call 1
@@ -183,16 +189,34 @@ fn main() {
     let (in_t, out_t, lat) = (1500u64, 800u64, 400u64);
     let cost = spec.estimate_cost(in_t, out_t);
     tracker.record(UsageRecord::new(
-        1_002_000, "anthropic", "claude-3-5-sonnet",
-        in_t, out_t, cost, lat, true,
+        1_002_000,
+        "anthropic",
+        "claude-3-5-sonnet",
+        in_t,
+        out_t,
+        cost,
+        lat,
+        true,
     ));
 
     println!("    total cost: ${:.4} USD", tracker.total_cost());
-    println!("    openai: ${:.4} USD ({} calls)", tracker.cost_by_provider("openai"), tracker.calls_by_provider("openai"));
-    println!("    anthropic: ${:.4} USD ({} calls)", tracker.cost_by_provider("anthropic"), tracker.calls_by_provider("anthropic"));
+    println!(
+        "    openai: ${:.4} USD ({} calls)",
+        tracker.cost_by_provider("openai"),
+        tracker.calls_by_provider("openai")
+    );
+    println!(
+        "    anthropic: ${:.4} USD ({} calls)",
+        tracker.cost_by_provider("anthropic"),
+        tracker.calls_by_provider("anthropic")
+    );
     println!("    total input: {} tokens", tracker.total_input_tokens());
     println!("    total output: {} tokens", tracker.total_output_tokens());
-    println!("    avg latency: {:.1} ms, p50: {} ms", tracker.avg_latency_ms(), tracker.p50_latency_ms());
+    println!(
+        "    avg latency: {:.1} ms, p50: {} ms",
+        tracker.avg_latency_ms(),
+        tracker.p50_latency_ms()
+    );
     println!("    success rate: {:.1}%", tracker.success_rate() * 100.0);
     println!();
 

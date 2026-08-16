@@ -17,8 +17,8 @@
 #![allow(clippy::all)]
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use std::sync::Mutex;
@@ -42,11 +42,21 @@ impl Counter {
             help: help.into(),
         }
     }
-    pub fn inc(&self) { self.inc_by(1); }
-    pub fn inc_by(&self, n: u64) { self.value.fetch_add(n, Ordering::Relaxed); }
-    pub fn get(&self) -> u64 { self.value.load(Ordering::Relaxed) }
-    pub fn name(&self) -> &str { &self.name }
-    pub fn help(&self) -> &str { &self.help }
+    pub fn inc(&self) {
+        self.inc_by(1);
+    }
+    pub fn inc_by(&self, n: u64) {
+        self.value.fetch_add(n, Ordering::Relaxed);
+    }
+    pub fn get(&self) -> u64 {
+        self.value.load(Ordering::Relaxed)
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn help(&self) -> &str {
+        &self.help
+    }
 }
 
 // ============================================================================
@@ -68,12 +78,24 @@ impl Gauge {
             help: help.into(),
         }
     }
-    pub fn set(&self, v: i64) { self.value.store(v, Ordering::Relaxed); }
-    pub fn inc(&self) { self.value.fetch_add(1, Ordering::Relaxed); }
-    pub fn dec(&self) { self.value.fetch_sub(1, Ordering::Relaxed); }
-    pub fn get(&self) -> i64 { self.value.load(Ordering::Relaxed) }
-    pub fn name(&self) -> &str { &self.name }
-    pub fn help(&self) -> &str { &self.help }
+    pub fn set(&self, v: i64) {
+        self.value.store(v, Ordering::Relaxed);
+    }
+    pub fn inc(&self) {
+        self.value.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn dec(&self) {
+        self.value.fetch_sub(1, Ordering::Relaxed);
+    }
+    pub fn get(&self) -> i64 {
+        self.value.load(Ordering::Relaxed)
+    }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn help(&self) -> &str {
+        &self.help
+    }
 }
 
 // ============================================================================
@@ -96,8 +118,16 @@ impl Histogram {
     /// 默认 11 桶 (ms): 0.1, 0.5, 1, 5, 10, 50, 100, 500, 1000, 5000, +Inf
     pub fn new_ms(name: impl Into<String>, help: impl Into<String>) -> Self {
         let buckets = vec![
-            (0.1, 0u64), (0.5, 0), (1.0, 0), (5.0, 0), (10.0, 0),
-            (50.0, 0), (100.0, 0), (500.0, 0), (1000.0, 0), (5000.0, 0),
+            (0.1, 0u64),
+            (0.5, 0),
+            (1.0, 0),
+            (5.0, 0),
+            (10.0, 0),
+            (50.0, 0),
+            (100.0, 0),
+            (500.0, 0),
+            (1000.0, 0),
+            (5000.0, 0),
         ];
         Self {
             name: name.into(),
@@ -129,14 +159,26 @@ impl Histogram {
         r
     }
 
-    pub fn count(&self) -> u64 { self.count.load(Ordering::Relaxed) }
-    pub fn sum(&self) -> f64 { *self.sum.lock().expect("poisoned") }
+    pub fn count(&self) -> u64 {
+        self.count.load(Ordering::Relaxed)
+    }
+    pub fn sum(&self) -> f64 {
+        *self.sum.lock().expect("poisoned")
+    }
     pub fn mean(&self) -> f64 {
         let c = self.count();
-        if c == 0 { 0.0 } else { self.sum() / c as f64 }
+        if c == 0 {
+            0.0
+        } else {
+            self.sum() / c as f64
+        }
     }
-    pub fn name(&self) -> &str { &self.name }
-    pub fn help(&self) -> &str { &self.help }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    pub fn help(&self) -> &str {
+        &self.help
+    }
 }
 
 // ============================================================================
@@ -159,23 +201,34 @@ pub struct MetricsRegistry {
 }
 
 impl MetricsRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register_counter(&self, c: Counter) -> Arc<Counter> {
         let arc = Arc::new(c);
-        self.counters.lock().expect("poisoned").insert(arc.name().to_string(), arc.clone());
+        self.counters
+            .lock()
+            .expect("poisoned")
+            .insert(arc.name().to_string(), arc.clone());
         arc
     }
 
     pub fn register_gauge(&self, g: Gauge) -> Arc<Gauge> {
         let arc = Arc::new(g);
-        self.gauges.lock().expect("poisoned").insert(arc.name().to_string(), arc.clone());
+        self.gauges
+            .lock()
+            .expect("poisoned")
+            .insert(arc.name().to_string(), arc.clone());
         arc
     }
 
     pub fn register_histogram(&self, h: Histogram) -> Arc<Histogram> {
         let arc = Arc::new(h);
-        self.histograms.lock().expect("poisoned").insert(arc.name().to_string(), arc.clone());
+        self.histograms
+            .lock()
+            .expect("poisoned")
+            .insert(arc.name().to_string(), arc.clone());
         arc
     }
 
@@ -214,7 +267,12 @@ impl MetricsRegistry {
             out.push_str(&format!("{}_sum {}\n", h.name(), h.sum()));
             let bs = h.buckets.lock().expect("poisoned");
             for (upper, count) in bs.iter() {
-                out.push_str(&format!("{}_bucket{{le=\"{}\"}} {}\n", h.name(), upper, count));
+                out.push_str(&format!(
+                    "{}_bucket{{le=\"{}\"}} {}\n",
+                    h.name(),
+                    upper,
+                    count
+                ));
             }
         }
         out
@@ -236,10 +294,8 @@ pub fn supervisor_default_metrics() -> (MetricsRegistry, SupervisorMetrics) {
         "supervisor_heartbeat_count",
         "heartbeat 调度器 tick 总数",
     ));
-    let panic_count = reg.register_counter(Counter::new(
-        "supervisor_panic_count",
-        "child panic 次数",
-    ));
+    let panic_count =
+        reg.register_counter(Counter::new("supervisor_panic_count", "child panic 次数"));
     let active_children = reg.register_gauge(Gauge::new(
         "supervisor_active_children",
         "当前 active child 数",
@@ -319,7 +375,7 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(2));
         });
         assert_eq!(h.count(), 1);
-        assert!(h.sum() > 1.0);  // 至少 1ms
+        assert!(h.sum() > 1.0); // 至少 1ms
     }
 
     #[test]
@@ -358,10 +414,10 @@ mod tests {
     #[test]
     fn t08_histogram_buckets() {
         let h = Histogram::new_ms("h", "h");
-        h.observe(0.05);  // <= 0.1
-        h.observe(2.0);   // <= 5
+        h.observe(0.05); // <= 0.1
+        h.observe(2.0); // <= 5
         h.observe(200.0); // <= 500
-        // 全部 3 观察应累加到 buckets
+                          // 全部 3 观察应累加到 buckets
         let bs = h.buckets.lock().expect("poisoned");
         // 第一个桶 <= 0.1: 1 个
         assert_eq!(bs[0].1, 1);

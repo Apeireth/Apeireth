@@ -21,12 +21,14 @@ fn r177_arb_03_event_source_as_str() {
 
 #[test]
 fn r177_arb_04_in_memory_log() {
-    let l = ArbitrationLog::open_in_memory(); assert!(l.is_ok());
+    let l = ArbitrationLog::open_in_memory();
+    assert!(l.is_ok());
 }
 
 #[test]
 fn r177_arb_05_log_is_empty() {
-    let l = ArbitrationLog::open_in_memory().unwrap(); assert!(l.is_empty().unwrap());
+    let l = ArbitrationLog::open_in_memory().unwrap();
+    assert!(l.is_empty().unwrap());
 }
 
 #[cfg(kani)]
@@ -40,4 +42,3 @@ fn r177_arb_kani_01_event_source_count_invariant() {
 fn r177_arb_kani_02_now_ms_positive() {
     assert!(ArbitrationLog::now_ms() > 0);
 }
-

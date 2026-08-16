@@ -78,12 +78,12 @@ pub async fn invoke_by_name() -> Result<(), String> {
 /// **6 测试函数总入口** — 由 `tests/test_v1_tools_unit_in_process.rs` 注入后
 /// 通过 `#[tokio::test]` 调每个入口.
 pub mod entries {
-    #[allow(unused_imports)]
-    use super::storage; // 让 _task_src 内 `super::storage` 引用可见
     use super::_task_src::{
         validate_due_date, validate_email, validate_priority, validate_status, Task, TaskStatus,
         TaskTool, TASK_ACTIONS, TASK_K1_CHECKS,
     };
+    #[allow(unused_imports)]
+    use super::storage; // 让 _task_src 内 `super::storage` 引用可见
     // Tool trait 必须 in scope, 否则 TaskTool::call 方法找不到
     use apeireth_tool_registry::Tool;
     use serde_json::json;
@@ -177,12 +177,16 @@ pub mod entries {
         assert!(r.is_err(), "delete 后 get 应 Err (NotFound)");
 
         // 1.8 delete 不存在 id 应 Err
-        let r = t.call(json!({"action": "delete", "id": "nonexistent"})).await;
+        let r = t
+            .call(json!({"action": "delete", "id": "nonexistent"}))
+            .await;
         assert!(r.is_err(), "delete 不存在应 Err");
         assert!(r.unwrap_err().contains("not found"));
 
         // 1.9 complete 不存在 id 应 Err
-        let r = t.call(json!({"action": "complete", "id": "nonexistent"})).await;
+        let r = t
+            .call(json!({"action": "complete", "id": "nonexistent"}))
+            .await;
         assert!(r.is_err(), "complete 不存在应 Err");
     }
 
@@ -508,18 +512,36 @@ pub mod entries {
             .await
             .expect("get after undo");
         assert_eq!(r["task"]["status"], "in_progress");
-        assert!(
-            r["task"]["done_at"].is_null(),
-            "in_progress 应清空 done_at"
-        );
+        assert!(r["task"]["done_at"].is_null(), "in_progress 应清空 done_at");
 
         // 错误路径
         assert!(t.call(json!({})).await.is_err(), "缺 action 应 Err");
-        assert!(t.call(json!({"action": "unknown"})).await.is_err(), "错 action 应 Err");
-        assert!(t.call(json!({"action": "get"})).await.is_err(), "get 缺 id 应 Err");
-        assert!(t.call(json!({"action": "update", "title": "x"})).await.is_err(), "update 缺 id 应 Err");
-        assert!(t.call(json!({"action": "delete", "id": "x"})).await.is_err(), "delete 不存在应 Err");
-        assert!(t.call(json!({"action": "complete", "id": "x"})).await.is_err(), "complete 不存在应 Err");
+        assert!(
+            t.call(json!({"action": "unknown"})).await.is_err(),
+            "错 action 应 Err"
+        );
+        assert!(
+            t.call(json!({"action": "get"})).await.is_err(),
+            "get 缺 id 应 Err"
+        );
+        assert!(
+            t.call(json!({"action": "update", "title": "x"}))
+                .await
+                .is_err(),
+            "update 缺 id 应 Err"
+        );
+        assert!(
+            t.call(json!({"action": "delete", "id": "x"}))
+                .await
+                .is_err(),
+            "delete 不存在应 Err"
+        );
+        assert!(
+            t.call(json!({"action": "complete", "id": "x"}))
+                .await
+                .is_err(),
+            "complete 不存在应 Err"
+        );
 
         // 编译期 hardcode
         assert_eq!(TASK_ACTIONS.len(), 6, "6 actions");

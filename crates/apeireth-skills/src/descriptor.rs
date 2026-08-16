@@ -13,8 +13,8 @@
 //! **借鉴锚 (S-1)**: VCP `vcptoolbox/modules/<name>/index.js` 的 5 字段 metadata 模式
 //! (name / description / dependencies / env / handler)
 
-use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 use crate::{Registry, Skill, SkillResult};
 
@@ -86,7 +86,14 @@ impl DescriptorRegistry {
     pub fn register_pair(&mut self, skill: Skill, descriptor: SkillDescriptor) -> SkillResult<()> {
         skill.validate()?;
         self.inner.register(skill)?;
-        if descriptor.id != self.inner.ids().last().map(|s| (*s).to_string()).unwrap_or_default() {
+        if descriptor.id
+            != self
+                .inner
+                .ids()
+                .last()
+                .map(|s| (*s).to_string())
+                .unwrap_or_default()
+        {
             // 由于 Registry register 内部 sort, 我们要按 inner.get 找 id
             let _ = self.inner.get(&descriptor.id)?;
         }
@@ -102,10 +109,7 @@ impl DescriptorRegistry {
 
     /// 通过 tag 路由 — 给动态运营层 select 用
     pub fn select_by_tag(&self, tag: &str) -> Vec<&SkillDescriptor> {
-        self.descriptors
-            .iter()
-            .filter(|d| d.has_tag(tag))
-            .collect()
+        self.descriptors.iter().filter(|d| d.has_tag(tag)).collect()
     }
 
     /// 通过 source 路由
@@ -190,15 +194,24 @@ mod tests {
         r.register_pair(
             Skill::new("a", "1.0.0", "{}", "{}"),
             SkillDescriptor::new("a", "1.0.0", "a", vec!["x".to_string()], "local"),
-        ).unwrap();
+        )
+        .unwrap();
         r.register_pair(
             Skill::new("b", "1.0.0", "{}", "{}"),
             SkillDescriptor::new("b", "1.0.0", "b", vec!["y".to_string()], "local"),
-        ).unwrap();
+        )
+        .unwrap();
         r.register_pair(
             Skill::new("c", "1.0.0", "{}", "{}"),
-            SkillDescriptor::new("c", "1.0.0", "c", vec!["x".to_string(), "y".to_string()], "vcptoolbox"),
-        ).unwrap();
+            SkillDescriptor::new(
+                "c",
+                "1.0.0",
+                "c",
+                vec!["x".to_string(), "y".to_string()],
+                "vcptoolbox",
+            ),
+        )
+        .unwrap();
         assert_eq!(r.select_by_tag("x").len(), 2);
         assert_eq!(r.select_by_tag("y").len(), 2);
         assert_eq!(r.select_by_source("local").len(), 2);
@@ -208,7 +221,8 @@ mod tests {
     #[test]
     fn registry_duplicate_rejected() {
         let mut r = DescriptorRegistry::new();
-        r.register_pair(Skill::new("a", "1.0.0", "{}", "{}"), desc("a")).unwrap();
+        r.register_pair(Skill::new("a", "1.0.0", "{}", "{}"), desc("a"))
+            .unwrap();
         let result = r.register_pair(Skill::new("a", "1.0.0", "{}", "{}"), desc("a"));
         assert!(result.is_err());
     }

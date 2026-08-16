@@ -384,13 +384,21 @@ pub struct V05Spec30 {
 impl V05Spec30 {
     /// 构造新 V05Spec30.
     pub const fn new(spec: V05Spec, meta: MetaDims, overall: MetaOverall) -> Self {
-        Self { spec, meta, overall }
+        Self {
+            spec,
+            meta,
+            overall,
+        }
     }
 
     /// 自动构造: 派生 overall = 5 meta-dim 平均.
     pub fn from_spec_and_meta(spec: V05Spec, meta: MetaDims) -> Self {
         let overall = MetaOverall::from_meta_dims(&meta);
-        Self { spec, meta, overall }
+        Self {
+            spec,
+            meta,
+            overall,
+        }
     }
 }
 
@@ -400,7 +408,11 @@ impl Default for V05Spec30 {
         let spec = crate::default_v05_spec();
         let meta = MetaDims::default();
         let overall = MetaOverall::from_meta_dims(&meta);
-        Self { spec, meta, overall }
+        Self {
+            spec,
+            meta,
+            overall,
+        }
     }
 }
 
@@ -412,9 +424,7 @@ impl Default for V05Spec30 {
 mod tests {
     use super::*;
     use crate::class::ClassDims;
-    use crate::dimension::{
-        Completeness, DimensionSet, Domain, Level, Lineage, Modality, Safety,
-    };
+    use crate::dimension::{Completeness, DimensionSet, Domain, Level, Lineage, Modality, Safety};
     use crate::sum_guard::DEFAULT_WEIGHTS;
 
     // --------------------------------------------------------------------
@@ -782,7 +792,10 @@ mod tests {
         // 4 大类权重 sum=1.0 守门 (per V05Spec DEFAULT_WEIGHTS)
         let s30 = test_spec30();
         let sum: f32 = DEFAULT_WEIGHTS.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-6, "4 大类权重 sum 必须 = 1.00, 实际 {sum}");
+        assert!(
+            (sum - 1.0).abs() < 1e-6,
+            "4 大类权重 sum 必须 = 1.00, 实际 {sum}"
+        );
     }
 
     #[test]
@@ -795,7 +808,10 @@ mod tests {
     #[test]
     fn v05_spec30_total_dims_constant_is_30() {
         assert_eq!(V05_30_TOTAL_DIMS, 30);
-        assert_eq!(BASE_CLASS_COUNT * BASE_DIM_COUNT + META_DIM_COUNT + OVERALL_DIM_COUNT, 30);
+        assert_eq!(
+            BASE_CLASS_COUNT * BASE_DIM_COUNT + META_DIM_COUNT + OVERALL_DIM_COUNT,
+            30
+        );
     }
 
     #[test]
@@ -907,7 +923,11 @@ mod tests {
                 VerifierConsistency::from_f32_unchecked(input[4]),
             );
             let o = MetaOverall::from_meta_dims(&m);
-            assert!((o.as_f32() - expected).abs() < 1e-6, "input {input:?} → expected {expected}, got {}", o.as_f32());
+            assert!(
+                (o.as_f32() - expected).abs() < 1e-6,
+                "input {input:?} → expected {expected}, got {}",
+                o.as_f32()
+            );
         }
     }
 

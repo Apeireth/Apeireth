@@ -202,10 +202,14 @@ mod tests {
 
     #[test]
     fn three_states_distinct() {
-        let labels: Vec<&str> = [MonitorState::Idle, MonitorState::Watching, MonitorState::Paused]
-            .iter()
-            .map(|s| s.label())
-            .collect();
+        let labels: Vec<&str> = [
+            MonitorState::Idle,
+            MonitorState::Watching,
+            MonitorState::Paused,
+        ]
+        .iter()
+        .map(|s| s.label())
+        .collect();
         let unique: std::collections::HashSet<&str> = labels.iter().copied().collect();
         assert_eq!(unique.len(), 3, "3 态状态机编译期 hardcode");
     }
@@ -225,7 +229,13 @@ mod tests {
     fn watch_input_rejects_zero_sample() {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::WatchInput { sample_ms: 0 });
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "WatchInput", .. })));
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "WatchInput",
+                ..
+            })
+        ));
     }
 
     // ---- Pause/Resume ----

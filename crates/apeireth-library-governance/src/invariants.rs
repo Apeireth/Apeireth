@@ -15,9 +15,9 @@
 //! - 0 改 apeireth-formal 任何文件
 //! - 自带 6 不变量 + sanity_check, 1:1 跟 Stage 5 8 硬墙对应
 
-use crate::consistency::{ConsistencyReport, CheckStatus};
-use crate::strategy::{DecisionTree, GovernanceContext, GovernanceAction, PolicyKind};
-use crate::verification::{Boundary, VerificationSubject, invariants as ver_inv};
+use crate::consistency::{CheckStatus, ConsistencyReport};
+use crate::strategy::{DecisionTree, GovernanceAction, GovernanceContext, PolicyKind};
+use crate::verification::{invariants as ver_inv, Boundary, VerificationSubject};
 
 /// Stage 5 不变量 1: workspace.version 1.2.0 严守 (B2, 整合 #4 commit abf12243).
 ///

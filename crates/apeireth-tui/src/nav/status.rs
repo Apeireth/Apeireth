@@ -149,7 +149,9 @@ mod tests {
         // 诚实标缺 — 不能假装接了真实 HTTP
         let area = Rect::new(0, 0, 80, 24);
         let out = render(area);
-        assert!(out.contains("[partial]") || out.contains("partial"),
-            "render 应明确标 partial, 不假装接 HTTP: {out}");
+        assert!(
+            out.contains("[partial]") || out.contains("partial"),
+            "render 应明确标 partial, 不假装接 HTTP: {out}"
+        );
     }
 }

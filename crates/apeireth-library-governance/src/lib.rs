@@ -36,9 +36,9 @@
 
 pub mod consistency;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod formal_proof;
 pub mod invariants;
+mod organ_kani_proofs;
 pub mod strategy;
 pub mod verification;
 
@@ -49,9 +49,7 @@ pub use crate::formal_proof::{
     run_all_as_report, Invariant, LockedSignature, ProofHarness, ProofKind, ProofReport,
     ProofResult, ProofRunner, Stage5Token,
 };
-pub use crate::strategy::{
-    DecisionTree, GovernanceAction, GovernanceContext, PolicyKind,
-};
+pub use crate::strategy::{DecisionTree, GovernanceAction, GovernanceContext, PolicyKind};
 pub use crate::verification::{Boundary, VerificationSubject};
 
 /// Library Stage 5 治理决策 (类似 clap `ArgMatches` 的扁平化).
@@ -152,7 +150,10 @@ pub fn run_all() -> bool {
 
 /// 同 [`run_all`], 但 panic-first (CI 友好).
 pub fn verify() {
-    assert!(run_all(), "apeireth-library-governance: at least one gate failed");
+    assert!(
+        run_all(),
+        "apeireth-library-governance: at least one gate failed"
+    );
 }
 
 #[cfg(test)]
@@ -173,7 +174,10 @@ mod lib_tests {
     fn engine_default_matches_new() {
         let a = GovernanceEngine::new();
         let b = GovernanceEngine::default();
-        assert_eq!(a.evaluate(&GovernanceContext::safe_default()), b.evaluate(&GovernanceContext::safe_default()));
+        assert_eq!(
+            a.evaluate(&GovernanceContext::safe_default()),
+            b.evaluate(&GovernanceContext::safe_default())
+        );
     }
 
     #[test]

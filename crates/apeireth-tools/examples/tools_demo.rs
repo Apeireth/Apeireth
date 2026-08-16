@@ -69,7 +69,9 @@ async fn main() {
     let local_addr = listener.local_addr().expect("addr");
     let server_task = tokio::spawn(async move {
         loop {
-            let Ok((mut socket, _)) = listener.accept().await else { break };
+            let Ok((mut socket, _)) = listener.accept().await else {
+                break;
+            };
             tokio::spawn(async move {
                 let mut buf = [0u8; 4096];
                 if socket.read(&mut buf).await.is_err() {

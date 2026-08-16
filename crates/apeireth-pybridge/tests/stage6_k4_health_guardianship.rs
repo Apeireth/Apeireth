@@ -3,8 +3,8 @@
 //! per decision-61 §3.1 R129-6 — Stage 6 守护 K4 维度 (5 维度 ASI 自检)
 
 use apeireth_pybridge::{
-    stage6_health_check, stage6_health_healthy, stage6_health_summary, HealthCheck, HealthDimension,
-    HealthGuard, HealthReport, HealthStatus,
+    stage6_health_check, stage6_health_healthy, stage6_health_summary, HealthCheck,
+    HealthDimension, HealthGuard, HealthReport, HealthStatus,
 };
 
 #[test]

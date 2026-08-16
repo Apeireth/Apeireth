@@ -100,11 +100,12 @@ use tracing::{debug, info, warn};
 
 use crate::{
     validate_api_key, validate_participant_identity, validate_room_name, validate_server_url,
-    validate_track_sid, CreateRoomRequest, DeleteRoomRequest, DeleteRoomResponse, LiveKitConfig,
-    LiveKitError, LiveKitResult, ListParticipantsRequest, ListParticipantsResponse,
-    ListRoomsResponse, MuteTrackRequest, MuteTrackResponse, ParticipantInfo, RemoveParticipantRequest,
-    RemoveParticipantResponse, Room, WebhookEvent, DEFAULT_LIVEKIT_SERVER_URL,
-    DEFAULT_TOKEN_TTL_SECONDS, LIVEKIT_TWIRP_PREFIX, MAX_TOKEN_TTL_SECONDS, PLATFORM_NAME,
+    validate_track_sid, CreateRoomRequest, DeleteRoomRequest, DeleteRoomResponse,
+    ListParticipantsRequest, ListParticipantsResponse, ListRoomsResponse, LiveKitConfig,
+    LiveKitError, LiveKitResult, MuteTrackRequest, MuteTrackResponse, ParticipantInfo,
+    RemoveParticipantRequest, RemoveParticipantResponse, Room, WebhookEvent,
+    DEFAULT_LIVEKIT_SERVER_URL, DEFAULT_TOKEN_TTL_SECONDS, LIVEKIT_TWIRP_PREFIX,
+    MAX_TOKEN_TTL_SECONDS, PLATFORM_NAME,
 };
 
 // ============================================================================
@@ -206,7 +207,9 @@ impl LiveKitRealImpl {
         // K-1 强校验 #2: api_key
         validate_api_key(&key)?;
         if secret.is_empty() {
-            return Err(LiveKitError::InvalidConfig("api_secret 不能为空".to_string()));
+            return Err(LiveKitError::InvalidConfig(
+                "api_secret 不能为空".to_string(),
+            ));
         }
 
         let mut cfg = config;
@@ -357,9 +360,7 @@ impl LiveKitRealImpl {
                 .json(body)
                 .send()
                 .await
-                .map_err(|e| {
-                    LiveKitError::ServerCallFailed(format!("twirp_post network: {e}"))
-                })?;
+                .map_err(|e| LiveKitError::ServerCallFailed(format!("twirp_post network: {e}")))?;
 
             let status = resp.status();
             if status == StatusCode::UNAUTHORIZED {
@@ -638,16 +639,32 @@ mod tests {
     #[test]
     fn livekit_real_impl_rejects_empty_server_url() {
         let cfg = LiveKitConfig::default();
-        let r = LiveKitRealImpl::new(cfg, "", "APIabc123def456ghi789", "secret_xxx_32_chars_xxxxx");
-        assert!(matches!(r, Err(LiveKitError::InvalidConfig(_))), "got: {r:?}");
+        let r = LiveKitRealImpl::new(
+            cfg,
+            "",
+            "APIabc123def456ghi789",
+            "secret_xxx_32_chars_xxxxx",
+        );
+        assert!(
+            matches!(r, Err(LiveKitError::InvalidConfig(_))),
+            "got: {r:?}"
+        );
     }
 
     /// LiveKitRealImpl::new 拒绝太短 api_key
     #[test]
     fn livekit_real_impl_rejects_short_api_key() {
         let cfg = LiveKitConfig::default();
-        let r = LiveKitRealImpl::new(cfg, "https://livekit.example.com", "short", "secret_xxx_32_chars_xxxxx");
-        assert!(matches!(r, Err(LiveKitError::InvalidConfig(_))), "got: {r:?}");
+        let r = LiveKitRealImpl::new(
+            cfg,
+            "https://livekit.example.com",
+            "short",
+            "secret_xxx_32_chars_xxxxx",
+        );
+        assert!(
+            matches!(r, Err(LiveKitError::InvalidConfig(_))),
+            "got: {r:?}"
+        );
     }
 
     /// LiveKitRealImpl::new 接受默认 server_url + api_key

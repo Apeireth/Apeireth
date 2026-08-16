@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 5 nav × Settings 单元测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试范围**:
@@ -14,25 +20,33 @@
 /// - O-4 任何人都能接手: 字段名清楚
 /// - O-5 不假装: 编辑/持久化待 R25.3 接
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 
 /// **8 项承诺**: 全部遵守
-
 mod test_common;
 
 use ratatui::layout::Rect;
@@ -45,7 +59,11 @@ use test_common::{FIVE_AUTH, FIVE_PROVIDER, FOUR_SDK};
 #[test]
 fn five_auth_correct_count_and_synced() {
     assert_eq!(nav::settings::FIVE_AUTH.len(), 5);
-    assert_eq!(nav::settings::FIVE_AUTH, FIVE_AUTH, "FIVE_AUTH 跟 test_common 同步");
+    assert_eq!(
+        nav::settings::FIVE_AUTH,
+        FIVE_AUTH,
+        "FIVE_AUTH 跟 test_common 同步"
+    );
     assert!(nav::settings::FIVE_AUTH.contains(&"auth_token"));
     assert!(nav::settings::FIVE_AUTH.contains(&"refresh_token"));
 }
@@ -58,7 +76,8 @@ fn five_auth_correct_count_and_synced() {
 fn five_provider_correct_count_and_synced() {
     assert_eq!(nav::settings::FIVE_PROVIDER.len(), 5);
     assert_eq!(
-        nav::settings::FIVE_PROVIDER, FIVE_PROVIDER,
+        nav::settings::FIVE_PROVIDER,
+        FIVE_PROVIDER,
         "FIVE_PROVIDER 跟 test_common 同步"
     );
     assert!(nav::settings::FIVE_PROVIDER.contains(&"provider_primary"));
@@ -72,7 +91,11 @@ fn five_provider_correct_count_and_synced() {
 #[test]
 fn four_sdk_correct_count_and_synced() {
     assert_eq!(nav::settings::FOUR_SDK.len(), 4);
-    assert_eq!(nav::settings::FOUR_SDK, FOUR_SDK, "FOUR_SDK 跟 test_common 同步");
+    assert_eq!(
+        nav::settings::FOUR_SDK,
+        FOUR_SDK,
+        "FOUR_SDK 跟 test_common 同步"
+    );
     assert!(nav::settings::FOUR_SDK.contains(&"sdk_sandbox"));
     assert!(nav::settings::FOUR_SDK.contains(&"sdk_protocol"));
 }
@@ -112,4 +135,3 @@ fn render_lists_all_14_keys_and_marks_partial() {
         "Settings render 应标 partial, 不假装接 persistence: {out}"
     );
 }
-

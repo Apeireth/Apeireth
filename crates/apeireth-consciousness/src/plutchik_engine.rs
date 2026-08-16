@@ -22,7 +22,7 @@ use std::collections::VecDeque;
 
 use serde::{Deserialize, Serialize};
 
-use crate::emotion::{BaseEmotion, EmotionEngine, EmotionEvent, EmResult, Pad};
+use crate::emotion::{BaseEmotion, EmResult, EmotionEngine, EmotionEvent, Pad};
 use crate::plutchik::{PlutchikAdvanced, PlutchikBasic, PlutchikEmotion, PlutchikIntensity};
 use crate::plutchik_integration::plutchik_pad_center;
 
@@ -49,21 +49,21 @@ pub type ExtResult<T> = Result<T, ExtendedEmotionError>;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PlutchikEvent {
     // 8 基础
-    Joy,              // 喜
-    Trust,            // 信 (6 Ekman 无, Plutchik 独有)
-    Fear,             // 惧
-    Surprise,         // 讶
-    Sadness,          // 悲
-    Disgust,          // 厌
-    Anger,            // 怒
-    Anticipation,     // 盼 (6 Ekman 无, Plutchik 独有)
+    Joy,          // 喜
+    Trust,        // 信 (6 Ekman 无, Plutchik 独有)
+    Fear,         // 惧
+    Surprise,     // 讶
+    Sadness,      // 悲
+    Disgust,      // 厌
+    Anger,        // 怒
+    Anticipation, // 盼 (6 Ekman 无, Plutchik 独有)
     // 6 高级
-    Love,             // 爱 (Joy + Trust)
-    Optimism,         // 乐 (Anticipation + Joy, wrap)
-    Remorse,          // 懊 (Sadness + Disgust)
-    Contempt,         // 蔑 (Disgust + Anger)
-    Awe,              // 畏 (Fear + Surprise)
-    Aggressiveness,   // 攻 (Anger + Anticipation)
+    Love,           // 爱 (Joy + Trust)
+    Optimism,       // 乐 (Anticipation + Joy, wrap)
+    Remorse,        // 懊 (Sadness + Disgust)
+    Contempt,       // 蔑 (Disgust + Anger)
+    Awe,            // 畏 (Fear + Surprise)
+    Aggressiveness, // 攻 (Anger + Anticipation)
 }
 
 impl PlutchikEvent {
@@ -92,19 +92,44 @@ impl PlutchikEvent {
     pub const fn emotion(&self) -> PlutchikEmotion {
         match self {
             Self::Joy => PlutchikEmotion::Basic(PlutchikBasic::Joy, PlutchikIntensity::Moderate),
-            Self::Trust => PlutchikEmotion::Basic(PlutchikBasic::Trust, PlutchikIntensity::Moderate),
+            Self::Trust => {
+                PlutchikEmotion::Basic(PlutchikBasic::Trust, PlutchikIntensity::Moderate)
+            }
             Self::Fear => PlutchikEmotion::Basic(PlutchikBasic::Fear, PlutchikIntensity::Moderate),
-            Self::Surprise => PlutchikEmotion::Basic(PlutchikBasic::Surprise, PlutchikIntensity::Moderate),
-            Self::Sadness => PlutchikEmotion::Basic(PlutchikBasic::Sadness, PlutchikIntensity::Moderate),
-            Self::Disgust => PlutchikEmotion::Basic(PlutchikBasic::Disgust, PlutchikIntensity::Moderate),
-            Self::Anger => PlutchikEmotion::Basic(PlutchikBasic::Anger, PlutchikIntensity::Moderate),
-            Self::Anticipation => PlutchikEmotion::Basic(PlutchikBasic::Anticipation, PlutchikIntensity::Moderate),
-            Self::Love => PlutchikEmotion::Advanced(PlutchikAdvanced::Love, PlutchikIntensity::Moderate),
-            Self::Optimism => PlutchikEmotion::Advanced(PlutchikAdvanced::Optimism, PlutchikIntensity::Moderate),
-            Self::Remorse => PlutchikEmotion::Advanced(PlutchikAdvanced::Remorse, PlutchikIntensity::Moderate),
-            Self::Contempt => PlutchikEmotion::Advanced(PlutchikAdvanced::Contempt, PlutchikIntensity::Moderate),
-            Self::Awe => PlutchikEmotion::Advanced(PlutchikAdvanced::Awe, PlutchikIntensity::Moderate),
-            Self::Aggressiveness => PlutchikEmotion::Advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Moderate),
+            Self::Surprise => {
+                PlutchikEmotion::Basic(PlutchikBasic::Surprise, PlutchikIntensity::Moderate)
+            }
+            Self::Sadness => {
+                PlutchikEmotion::Basic(PlutchikBasic::Sadness, PlutchikIntensity::Moderate)
+            }
+            Self::Disgust => {
+                PlutchikEmotion::Basic(PlutchikBasic::Disgust, PlutchikIntensity::Moderate)
+            }
+            Self::Anger => {
+                PlutchikEmotion::Basic(PlutchikBasic::Anger, PlutchikIntensity::Moderate)
+            }
+            Self::Anticipation => {
+                PlutchikEmotion::Basic(PlutchikBasic::Anticipation, PlutchikIntensity::Moderate)
+            }
+            Self::Love => {
+                PlutchikEmotion::Advanced(PlutchikAdvanced::Love, PlutchikIntensity::Moderate)
+            }
+            Self::Optimism => {
+                PlutchikEmotion::Advanced(PlutchikAdvanced::Optimism, PlutchikIntensity::Moderate)
+            }
+            Self::Remorse => {
+                PlutchikEmotion::Advanced(PlutchikAdvanced::Remorse, PlutchikIntensity::Moderate)
+            }
+            Self::Contempt => {
+                PlutchikEmotion::Advanced(PlutchikAdvanced::Contempt, PlutchikIntensity::Moderate)
+            }
+            Self::Awe => {
+                PlutchikEmotion::Advanced(PlutchikAdvanced::Awe, PlutchikIntensity::Moderate)
+            }
+            Self::Aggressiveness => PlutchikEmotion::Advanced(
+                PlutchikAdvanced::Aggressiveness,
+                PlutchikIntensity::Moderate,
+            ),
         }
     }
 
@@ -275,10 +300,18 @@ impl ExtendedEmotionEngine {
         }
     }
 
-    pub fn current_basic(&self) -> PlutchikBasic { self.current_basic }
-    pub fn current_advanced(&self) -> Option<PlutchikAdvanced> { self.current_advanced }
-    pub fn current_intensity(&self) -> PlutchikIntensity { self.current_intensity }
-    pub fn event_count(&self) -> u64 { self.event_count }
+    pub fn current_basic(&self) -> PlutchikBasic {
+        self.current_basic
+    }
+    pub fn current_advanced(&self) -> Option<PlutchikAdvanced> {
+        self.current_advanced
+    }
+    pub fn current_intensity(&self) -> PlutchikIntensity {
+        self.current_intensity
+    }
+    pub fn event_count(&self) -> u64 {
+        self.event_count
+    }
 
     /// 推断与当前 PAD 最接近的 Plutchik 基础情绪 (用于 PAD → Plutchik 转换).
     pub fn closest_basic_from_pad(&self, pad: Pad) -> PlutchikBasic {
@@ -295,11 +328,17 @@ impl ExtendedEmotionEngine {
     }
 
     /// 访问内部 Ekman EmotionEngine (向后兼容, 让外部能拿到 6 Ekman 推断).
-    pub fn ekman_engine(&self) -> &EmotionEngine { &self.ekman }
-    pub fn ekman_engine_mut(&mut self) -> &mut EmotionEngine { &mut self.ekman }
+    pub fn ekman_engine(&self) -> &EmotionEngine {
+        &self.ekman
+    }
+    pub fn ekman_engine_mut(&mut self) -> &mut EmotionEngine {
+        &mut self.ekman
+    }
 
     /// 推断与当前 PAD 最接近的 6 Ekman 基础情绪.
-    pub fn closest_ekman(&self) -> BaseEmotion { self.ekman.dominant_emotion() }
+    pub fn closest_ekman(&self) -> BaseEmotion {
+        self.ekman.dominant_emotion()
+    }
 
     pub fn history(&self) -> Vec<PlutchikEmotion> {
         self.history.iter().copied().collect()
@@ -314,7 +353,10 @@ impl ExtendedEmotionEngine {
     /// Returns the new intensity.
     pub fn bump_intensity(&mut self, delta: i32) -> PlutchikIntensity {
         let ordered = PlutchikIntensity::ordered_levels();
-        let cur = ordered.iter().position(|x| *x == self.current_intensity).unwrap_or(0) as i32;
+        let cur = ordered
+            .iter()
+            .position(|x| *x == self.current_intensity)
+            .unwrap_or(0) as i32;
         let new = (cur + delta).clamp(0, ordered.len() as i32 - 1);
         let next = ordered[new as usize];
         self.current_intensity = next;
@@ -329,17 +371,27 @@ impl ExtendedEmotionEngine {
     /// R248 -- filter history by minimum intensity (chronological).
     pub fn history_min_intensity(&self, min: PlutchikIntensity) -> Vec<PlutchikEmotion> {
         let min_idx = PlutchikIntensity::ordered_levels()
-            .iter().position(|x| *x == min).unwrap_or(0);
-        self.history.iter().filter(|e| {
-            let idx = PlutchikIntensity::ordered_levels()
-                .iter().position(|x| *x == e.intensity()).unwrap_or(0);
-            idx >= min_idx
-        }).copied().collect()
+            .iter()
+            .position(|x| *x == min)
+            .unwrap_or(0);
+        self.history
+            .iter()
+            .filter(|e| {
+                let idx = PlutchikIntensity::ordered_levels()
+                    .iter()
+                    .position(|x| *x == e.intensity())
+                    .unwrap_or(0);
+                idx >= min_idx
+            })
+            .copied()
+            .collect()
     }
 }
 
 impl Default for ExtendedEmotionEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -420,11 +472,11 @@ mod tests {
     #[test]
     fn t09_intensity_escalation() {
         let mut eng = ExtendedEmotionEngine::new();
-        eng.apply(PlutchikEvent::Anger).unwrap();    // r=0.9
-        // Mild + r=0.9 → Moderate
+        eng.apply(PlutchikEvent::Anger).unwrap(); // r=0.9
+                                                  // Mild + r=0.9 → Moderate
         assert_eq!(eng.current_intensity(), PlutchikIntensity::Moderate);
-        eng.apply(PlutchikEvent::Anger).unwrap();    // r=0.9 again
-        // Moderate + r=0.9 → Strong
+        eng.apply(PlutchikEvent::Anger).unwrap(); // r=0.9 again
+                                                  // Moderate + r=0.9 → Strong
         assert_eq!(eng.current_intensity(), PlutchikIntensity::Strong);
     }
 
@@ -521,14 +573,29 @@ mod tests {
         let recent_all = eng.history_recent(10);
         assert_eq!(recent_all.len(), 3);
         // most recent first
-        assert!(matches!(recent_all[0], PlutchikEmotion::Basic(PlutchikBasic::Fear, _)));
-        assert!(matches!(recent_all[1], PlutchikEmotion::Basic(PlutchikBasic::Trust, _)));
-        assert!(matches!(recent_all[2], PlutchikEmotion::Basic(PlutchikBasic::Joy, _)));
+        assert!(matches!(
+            recent_all[0],
+            PlutchikEmotion::Basic(PlutchikBasic::Fear, _)
+        ));
+        assert!(matches!(
+            recent_all[1],
+            PlutchikEmotion::Basic(PlutchikBasic::Trust, _)
+        ));
+        assert!(matches!(
+            recent_all[2],
+            PlutchikEmotion::Basic(PlutchikBasic::Joy, _)
+        ));
         // limit 2 -> only last 2 in reverse
         let recent_2 = eng.history_recent(2);
         assert_eq!(recent_2.len(), 2);
-        assert!(matches!(recent_2[0], PlutchikEmotion::Basic(PlutchikBasic::Fear, _)));
-        assert!(matches!(recent_2[1], PlutchikEmotion::Basic(PlutchikBasic::Trust, _)));
+        assert!(matches!(
+            recent_2[0],
+            PlutchikEmotion::Basic(PlutchikBasic::Fear, _)
+        ));
+        assert!(matches!(
+            recent_2[1],
+            PlutchikEmotion::Basic(PlutchikBasic::Trust, _)
+        ));
         // limit 0 -> empty
         assert!(eng.history_recent(0).is_empty());
     }
@@ -550,10 +617,19 @@ mod tests {
         // Mild -> all 4 (Moderate >= Mild)
         assert_eq!(eng.history_min_intensity(PlutchikIntensity::Mild).len(), 4);
         // Moderate -> all 4 (Moderate >= Moderate)
-        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Moderate).len(), 4);
+        assert_eq!(
+            eng.history_min_intensity(PlutchikIntensity::Moderate).len(),
+            4
+        );
         // Strong -> 0 (Moderate < Strong)
-        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Strong).len(), 0);
+        assert_eq!(
+            eng.history_min_intensity(PlutchikIntensity::Strong).len(),
+            0
+        );
         // Extreme -> 0
-        assert_eq!(eng.history_min_intensity(PlutchikIntensity::Extreme).len(), 0);
+        assert_eq!(
+            eng.history_min_intensity(PlutchikIntensity::Extreme).len(),
+            0
+        );
     }
 }

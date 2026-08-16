@@ -196,7 +196,10 @@ impl RelationGraph {
         let to = edge.to.clone();
         let kind = edge.kind;
         self.edges.insert(edge_id.clone(), edge);
-        self.out_edges.entry(from).or_default().insert(edge_id.clone());
+        self.out_edges
+            .entry(from)
+            .or_default()
+            .insert(edge_id.clone());
         self.in_edges.entry(to).or_default().insert(edge_id.clone());
         self.edges_by_kind.entry(kind).or_default().insert(edge_id);
         Ok(())
@@ -376,7 +379,6 @@ impl From<&RelationRegistry> for RelationGraph {
 
 // Note: the public API of these types is exposed via `lib.rs` re-exports.
 
-
 // ============================================================================
 // §6 Tests
 // ============================================================================
@@ -388,13 +390,19 @@ mod tests {
 
     fn sample_graph() -> RelationGraph {
         let mut g = RelationGraph::new();
-        g.insert_node(GraphNode::with_kind("alice", "agent")).unwrap();
+        g.insert_node(GraphNode::with_kind("alice", "agent"))
+            .unwrap();
         g.insert_node(GraphNode::with_kind("bob", "agent")).unwrap();
-        g.insert_node(GraphNode::with_kind("carol", "agent")).unwrap();
-        g.insert_node(GraphNode::with_kind("tools", "concept")).unwrap();
-        g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob")).unwrap();
-        g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol")).unwrap();
-        g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "tools")).unwrap();
+        g.insert_node(GraphNode::with_kind("carol", "agent"))
+            .unwrap();
+        g.insert_node(GraphNode::with_kind("tools", "concept"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "tools"))
+            .unwrap();
         g
     }
 
@@ -417,7 +425,9 @@ mod tests {
     fn test_insert_edge_requires_existing_nodes() {
         let mut g = RelationGraph::new();
         g.insert_node(GraphNode::new("a")).unwrap();
-        let err = g.insert_edge(GraphEdge::new("a", RelationKind::Symbiosis, "ghost")).unwrap_err();
+        let err = g
+            .insert_edge(GraphEdge::new("a", RelationKind::Symbiosis, "ghost"))
+            .unwrap_err();
         assert!(matches!(err, GraphError::InvalidEdgeEndpoint(_)));
     }
 
@@ -486,8 +496,10 @@ mod tests {
         g.insert_node(GraphNode::new("a")).unwrap();
         g.insert_node(GraphNode::new("b")).unwrap();
         g.insert_node(GraphNode::new("c")).unwrap();
-        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b")).unwrap();
-        g.insert_edge(GraphEdge::new("b", RelationKind::Coordination, "c")).unwrap();
+        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("b", RelationKind::Coordination, "c"))
+            .unwrap();
         let path = g.shortest_path("a", "c").unwrap();
         assert_eq!(path.len(), 3);
         assert_eq!(path[0], "a");

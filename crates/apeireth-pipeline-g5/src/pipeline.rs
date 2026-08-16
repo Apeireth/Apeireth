@@ -225,7 +225,11 @@ where
         // 守门 2: 最多 5 stage (Hardcode #2, 跟 STAGE_KIND_COUNT 对齐)
         if self.stages.len() > PIPELINE_MAX_STAGES {
             return Err(PipelineError::InvalidStageOrder {
-                got: self.stages.last().map(|s| s.kind()).unwrap_or(StageKind::Dispatch),
+                got: self
+                    .stages
+                    .last()
+                    .map(|s| s.kind())
+                    .unwrap_or(StageKind::Dispatch),
                 want: STAGE_ORDER[STAGE_KIND_COUNT - 1],
             });
         }
@@ -258,10 +262,13 @@ where
         }
 
         // 守门 4: 最后 downcast 到 O
-        let result: Box<O> = current.downcast::<O>().map_err(|_| PipelineError::StageTypeMismatch {
-            expected: std::any::type_name::<O>(),
-            actual: "last stage output (type-erased)".to_string(),
-        })?;
+        let result: Box<O> =
+            current
+                .downcast::<O>()
+                .map_err(|_| PipelineError::StageTypeMismatch {
+                    expected: std::any::type_name::<O>(),
+                    actual: "last stage output (type-erased)".to_string(),
+                })?;
         Ok(*result)
     }
 
@@ -272,15 +279,16 @@ where
     pub fn run_with_trace(&self, input: I) -> (Result<O, PipelineError>, PipelineTrace) {
         let mut trace = PipelineTrace::new(self.config.name.clone());
         if self.stages.is_empty() {
-            return (
-                Err(PipelineError::EmptyPipeline),
-                trace,
-            );
+            return (Err(PipelineError::EmptyPipeline), trace);
         }
         if self.stages.len() > PIPELINE_MAX_STAGES {
             return (
                 Err(PipelineError::InvalidStageOrder {
-                    got: self.stages.last().map(|s| s.kind()).unwrap_or(StageKind::Dispatch),
+                    got: self
+                        .stages
+                        .last()
+                        .map(|s| s.kind())
+                        .unwrap_or(StageKind::Dispatch),
                     want: STAGE_ORDER[STAGE_KIND_COUNT - 1],
                 }),
                 trace,
