@@ -88,10 +88,10 @@ use std::time::{Duration, Instant};
 
 pub mod config;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod error;
 pub mod fixed_window;
 pub mod leaky_bucket;
+mod organ_kani_proofs;
 pub mod sliding_window;
 pub mod storage;
 pub mod token_bucket;
@@ -438,9 +438,7 @@ impl RateLimiterImpl {
             let new_state = self.create_state()?;
             map.insert(key.to_string(), new_state);
         }
-        let state = map
-            .get_mut(key)
-            .expect("just inserted or already present");
+        let state = map.get_mut(key).expect("just inserted or already present");
         Ok(f(state))
     }
 
@@ -454,20 +452,18 @@ impl RateLimiterImpl {
                 Ok(PerKeyState::Token(tb))
             }
             StrategyKind::LeakyBucket => {
-                let overflow = strategy.overflow_policy.unwrap_or(LeakyBucketOverflow::Drop);
+                let overflow = strategy
+                    .overflow_policy
+                    .unwrap_or(LeakyBucketOverflow::Drop);
                 let lb = LeakyBucket::new(bucket, overflow)?;
                 Ok(PerKeyState::Leaky(lb))
             }
             StrategyKind::FixedWindow => {
-                let ws = strategy
-                    .window_size
-                    .ok_or_else(|| RateLimiterError::InvalidParameter(
-                        "FixedWindow needs window_size".to_string(),
-                    ))?;
+                let ws = strategy.window_size.ok_or_else(|| {
+                    RateLimiterError::InvalidParameter("FixedWindow needs window_size".to_string())
+                })?;
                 let mr = strategy.max_requests.ok_or_else(|| {
-                    RateLimiterError::InvalidParameter(
-                        "FixedWindow needs max_requests".to_string(),
-                    )
+                    RateLimiterError::InvalidParameter("FixedWindow needs max_requests".to_string())
                 })?;
                 let reset = strategy
                     .reset_strategy
@@ -553,9 +549,10 @@ impl RateLimiter for RateLimiterImpl {
 
         // 3. 记录 wait 时长
         let wait = start.elapsed();
-        self.inner
-            .total_wait_ms
-            .fetch_add(wait.as_millis() as u64, std::sync::atomic::Ordering::Relaxed);
+        self.inner.total_wait_ms.fetch_add(
+            wait.as_millis() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         if acquired {
             self.inner
                 .hits
@@ -567,7 +564,9 @@ impl RateLimiter for RateLimiterImpl {
         }
 
         if !acquired {
-            return Err(RateLimiterError::MaxWaitExceeded { key: key.to_string() });
+            return Err(RateLimiterError::MaxWaitExceeded {
+                key: key.to_string(),
+            });
         }
 
         // 4. 返 RAII permit, 共享同一份 InnerState (Arc clone)
@@ -614,12 +613,7 @@ impl RateLimiter for RateLimiterImpl {
 
 impl RateLimiterImpl {
     /// 阻塞 acquire — 在 max_wait 内循环 try + sleep。
-    async fn acquire_blocking(
-        &self,
-        key: &str,
-        cost: u32,
-        max_wait: Duration,
-    ) -> Result<bool> {
+    async fn acquire_blocking(&self, key: &str, cost: u32, max_wait: Duration) -> Result<bool> {
         let start = Instant::now();
         // 步长不能比 max_wait 大, 否则 sleep 完已经超时
         // 用 max_wait/4 保证至少 4 次唤醒机会
@@ -640,12 +634,13 @@ impl RateLimiterImpl {
             }
             // 看 strategy 是否要等（leaky block / token 默认等）
             let should_block = match self.config.strategy.kind {
-                StrategyKind::LeakyBucket => self
-                    .config
-                    .strategy
-                    .overflow_policy
-                    .unwrap_or(LeakyBucketOverflow::Drop)
-                    == LeakyBucketOverflow::Block,
+                StrategyKind::LeakyBucket => {
+                    self.config
+                        .strategy
+                        .overflow_policy
+                        .unwrap_or(LeakyBucketOverflow::Drop)
+                        == LeakyBucketOverflow::Block
+                }
                 _ => true,
             };
             if !should_block {
@@ -732,10 +727,7 @@ pub fn leaky_bucket_in_memory(
 }
 
 /// 便捷构造: 固定窗口 + in-memory。
-pub fn fixed_window_in_memory(
-    window_size: Duration,
-    max_requests: u32,
-) -> Result<RateLimiterImpl> {
+pub fn fixed_window_in_memory(window_size: Duration, max_requests: u32) -> Result<RateLimiterImpl> {
     let cfg = RateLimiterConfig {
         bucket: BucketConfig {
             // 桶配置对 fixed window 不重要, 但 rate 必须 > 0
@@ -820,9 +812,8 @@ mod lib_tests {
 
     #[tokio::test]
     async fn sliding_window_log_basic() {
-        let l =
-            sliding_window_in_memory(Duration::from_secs(10), 3, SlidingWindowPrecision::Log)
-                .unwrap();
+        let l = sliding_window_in_memory(Duration::from_secs(10), 3, SlidingWindowPrecision::Log)
+            .unwrap();
         for _ in 0..3 {
             assert!(l.try_acquire("k", 1).await.unwrap());
         }

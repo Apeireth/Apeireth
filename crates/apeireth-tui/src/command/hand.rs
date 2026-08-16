@@ -30,14 +30,7 @@ use super::error::OrganError;
 /// 6 工具白名单 (编译期 hardcode, 跟 `src/error.rs::TOOL_WHITELIST` 同步 — 不 import
 /// 是因为 organ/command/* 通过 `#[path]` 被 tests/ 加载时, 父 crate root 不一定有
 /// `mod error;`. 重复定义 = 业界 OK 模式 (per O-2 走在前人经验上 — 借已有沉淀)
-pub const TOOL_WHITELIST: &[&str] = &[
-    "calendar",
-    "message",
-    "contact",
-    "task",
-    "search",
-    "drive",
-];
+pub const TOOL_WHITELIST: &[&str] = &["calendar", "message", "contact", "task", "search", "drive"];
 
 /// 单次工具调用记录
 #[derive(Debug, Clone, PartialEq)]
@@ -197,7 +190,10 @@ mod tests {
 
     #[test]
     fn six_commands_constructible() {
-        let _ = Command::InvokeTool { name: "calendar".into(), args: json!({}) };
+        let _ = Command::InvokeTool {
+            name: "calendar".into(),
+            args: json!({}),
+        };
         let _ = Command::GetRecentCalls { limit: 10 };
         let _ = Command::GetWhitelist;
         let _ = Command::GetCallCount;
@@ -226,7 +222,7 @@ mod tests {
                 name: "calendar".into(),
                 args: json!({"date": "2026-08-06"}),
             },
-            );
+        );
         assert!(r.is_ok());
         assert_eq!(state.call_count, 1);
         assert_eq!(state.history.len(), 1);
@@ -237,9 +233,18 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::InvokeTool { name: "unknown-tool".into(), args: json!({}) },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "InvokeTool", .. })));
+            Command::InvokeTool {
+                name: "unknown-tool".into(),
+                args: json!({}),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "InvokeTool",
+                ..
+            })
+        ));
         // last_error 被记录
         assert!(state.last_error.is_some());
     }
@@ -253,8 +258,14 @@ mod tests {
                 name: "calendar".into(),
                 args: json!(["array", "not", "object"]),
             },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "InvokeTool", .. })));
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "InvokeTool",
+                ..
+            })
+        ));
     }
 
     // ---- GetRecentCalls ----
@@ -265,8 +276,11 @@ mod tests {
         for name in TOOL_WHITELIST.iter().take(4) {
             let _ = handle(
                 &mut state,
-                Command::InvokeTool { name: (*name).to_string(), args: json!({}) },
-                    );
+                Command::InvokeTool {
+                    name: (*name).to_string(),
+                    args: json!({}),
+                },
+            );
         }
         let r = handle(&mut state, Command::GetRecentCalls { limit: 2 }).unwrap();
         match r {
@@ -303,8 +317,11 @@ mod tests {
         let mut state = fresh_state();
         let _ = handle(
             &mut state,
-            Command::InvokeTool { name: "search".into(), args: json!({}) },
-            );
+            Command::InvokeTool {
+                name: "search".into(),
+                args: json!({}),
+            },
+        );
         let _ = handle(&mut state, Command::ClearHistory).unwrap();
         assert!(state.history.is_empty());
         assert!(state.last_error.is_none());

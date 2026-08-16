@@ -75,7 +75,8 @@ fn backend_upsert_overwrites_same_id() {
     b.set_dimension(3).expect("set dim 3");
     let id = Uuid::new_v4();
     b.upsert(&vec(id, vec![1.0, 0.0, 0.0])).expect("upsert 1");
-    b.upsert(&vec(id, vec![0.0, 1.0, 0.0])).expect("upsert 2 (overwrite)");
+    b.upsert(&vec(id, vec![0.0, 1.0, 0.0]))
+        .expect("upsert 2 (overwrite)");
     assert_eq!(b.len().expect("len"), 1); // still 1, overwritten
 }
 
@@ -106,7 +107,8 @@ fn backend_search_respects_k_limit() {
     let mut b = backend();
     b.set_dimension(2).expect("set dim");
     for _ in 0..5 {
-        b.upsert(&vec(Uuid::new_v4(), vec![1.0, 0.0])).expect("upsert");
+        b.upsert(&vec(Uuid::new_v4(), vec![1.0, 0.0]))
+            .expect("upsert");
     }
     let hits = b.search(&[1.0, 0.0], 3).expect("search k=3");
     assert_eq!(hits.len(), 3, "should return at most k hits");
@@ -137,7 +139,8 @@ fn backend_clear_empties_all() {
     let mut b = backend();
     b.set_dimension(2).expect("set dim");
     for _ in 0..5 {
-        b.upsert(&vec(Uuid::new_v4(), vec![1.0, 0.0])).expect("upsert");
+        b.upsert(&vec(Uuid::new_v4(), vec![1.0, 0.0]))
+            .expect("upsert");
     }
     assert_eq!(b.len().expect("len"), 5);
     let cleared = b.clear().expect("clear");

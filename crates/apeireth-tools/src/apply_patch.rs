@@ -67,9 +67,16 @@ pub enum PatchError {
     /// 路径为空
     EmptyPath,
     /// 旧行在文件中找不到 (0 matches)
-    OldNotFound { path: PathBuf, old_lines: Vec<String> },
+    OldNotFound {
+        path: PathBuf,
+        old_lines: Vec<String>,
+    },
     /// 旧行在文件中匹配多次 (>1)
-    AmbiguousMatch { path: PathBuf, occurrences: usize, old_lines: Vec<String> },
+    AmbiguousMatch {
+        path: PathBuf,
+        occurrences: usize,
+        old_lines: Vec<String>,
+    },
     /// IO 错误
     IoError(String),
 }
@@ -103,7 +110,7 @@ pub fn parse_patch(input: &str) -> PatchResult<Vec<PatchOp>> {
     let begin = lines.iter().position(|l| l.trim() == "*** Begin Patch");
     let end = lines.iter().rposition(|l| l.trim() == "*** End Patch");
     match (begin, end) {
-        (Some(b), Some(e)) if b < e => {},
+        (Some(b), Some(e)) if b < e => {}
         _ => return Err(PatchError::MissingMarkers),
     }
     // 内容行: begin+1 ..= end-1
@@ -116,15 +123,19 @@ pub fn parse_patch(input: &str) -> PatchResult<Vec<PatchOp>> {
         let trimmed = line.trim_start();
         if let Some(rest) = trimmed.strip_prefix("*** Update File:") {
             let path = rest.trim();
-            if path.is_empty() { return Err(PatchError::EmptyPath); }
+            if path.is_empty() {
+                return Err(PatchError::EmptyPath);
+            }
             // 收集 hunks 直到下一个 *** 开新 op 或到达 body 末尾
             let mut hunks = Vec::new();
             i += 1;
             while i < body.len() {
                 let hl = body[i];
                 let ht = hl.trim_start();
-                if ht.starts_with("*** ") { break; } // 新 op 开始
-                // hunk 头: @@ (可选 anchor)
+                if ht.starts_with("*** ") {
+                    break;
+                } // 新 op 开始
+                  // hunk 头: @@ (可选 anchor)
                 let anchor = if ht.starts_with("@@") {
                     let a = ht.strip_prefix("@@").unwrap().trim().to_string();
                     i += 1;
@@ -137,7 +148,9 @@ pub fn parse_patch(input: &str) -> PatchResult<Vec<PatchOp>> {
                 while i < body.len() {
                     let bl = body[i];
                     let bt = bl.trim_start();
-                    if bt.starts_with("*** ") || bt.starts_with("@@") { break; }
+                    if bt.starts_with("*** ") || bt.starts_with("@@") {
+                        break;
+                    }
                     if bt.starts_with("-") {
                         old_lines.push(bt.strip_prefix("-").unwrap().to_string());
                         i += 1;
@@ -169,31 +182,41 @@ pub fn parse_patch(input: &str) -> PatchResult<Vec<PatchOp>> {
             });
         } else if let Some(rest) = trimmed.strip_prefix("*** Add File:") {
             let path = rest.trim();
-            if path.is_empty() { return Err(PatchError::EmptyPath); }
+            if path.is_empty() {
+                return Err(PatchError::EmptyPath);
+            }
             i += 1;
             let mut content_lines = Vec::new();
             while i < body.len() {
                 let bl = body[i];
                 let bt = bl.trim_start();
-                if bt.starts_with("*** ") { break; }
+                if bt.starts_with("*** ") {
+                    break;
+                }
                 if let Some(rest) = bt.strip_prefix("+") {
                     content_lines.push(rest.to_string());
                 } else {
-                    return Err(PatchError::InvalidHeader(
-                        format!("Add File body must start with +, got: {bl}")
-                    ));
+                    return Err(PatchError::InvalidHeader(format!(
+                        "Add File body must start with +, got: {bl}"
+                    )));
                 }
                 i += 1;
             }
             ops.push(PatchOp::AddFile {
                 path: PathBuf::from(path),
-                content: content_lines.join("
-"),
+                content: content_lines.join(
+                    "
+",
+                ),
             });
         } else if let Some(rest) = trimmed.strip_prefix("*** Delete File:") {
             let path = rest.trim();
-            if path.is_empty() { return Err(PatchError::EmptyPath); }
-            ops.push(PatchOp::DeleteFile { path: PathBuf::from(path) });
+            if path.is_empty() {
+                return Err(PatchError::EmptyPath);
+            }
+            ops.push(PatchOp::DeleteFile {
+                path: PathBuf::from(path),
+            });
             i += 1;
         } else if trimmed.is_empty() {
             i += 1;
@@ -220,7 +243,11 @@ pub async fn apply_patch(input: &str, base_dir: &Path) -> PatchResult<Vec<String
             PatchOp::UpdateFile { path, .. } => {
                 let abs = resolve(base_dir, path);
                 let orig = if abs.exists() {
-                    Some(fs::read_to_string(&abs).await.map_err(|e| PatchError::IoError(format!("{e}")))?)
+                    Some(
+                        fs::read_to_string(&abs)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("{e}")))?,
+                    )
                 } else {
                     None
                 };
@@ -229,7 +256,11 @@ pub async fn apply_patch(input: &str, base_dir: &Path) -> PatchResult<Vec<String
             PatchOp::DeleteFile { path } => {
                 let abs = resolve(base_dir, path);
                 let bytes = if abs.exists() {
-                    Some(fs::read(&abs).await.map_err(|e| PatchError::IoError(format!("{e}")))?)
+                    Some(
+                        fs::read(&abs)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("{e}")))?,
+                    )
                 } else {
                     None
                 };
@@ -246,7 +277,9 @@ pub async fn apply_patch(input: &str, base_dir: &Path) -> PatchResult<Vec<String
             PatchOp::UpdateFile { path, hunks } => {
                 let abs = resolve(base_dir, path);
                 let mut content = if abs.exists() {
-                    fs::read_to_string(&abs).await.map_err(|e| PatchError::IoError(format!("read {abs:?}: {e}")))?
+                    fs::read_to_string(&abs)
+                        .await
+                        .map_err(|e| PatchError::IoError(format!("read {abs:?}: {e}")))?
                 } else {
                     String::new()
                 };
@@ -256,30 +289,44 @@ pub async fn apply_patch(input: &str, base_dir: &Path) -> PatchResult<Vec<String
                 // 父目录自动建
                 if let Some(parent) = abs.parent() {
                     if !parent.as_os_str().is_empty() && !parent.exists() {
-                        fs::create_dir_all(parent).await.map_err(|e| PatchError::IoError(format!("mkdir {parent:?}: {e}")))?;
+                        fs::create_dir_all(parent)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("mkdir {parent:?}: {e}")))?;
                     }
                 }
-                fs::write(&abs, &content).await.map_err(|e| PatchError::IoError(format!("write {abs:?}: {e}")))?;
+                fs::write(&abs, &content)
+                    .await
+                    .map_err(|e| PatchError::IoError(format!("write {abs:?}: {e}")))?;
                 touched.push(abs.to_string_lossy().to_string());
             }
             PatchOp::AddFile { path, content } => {
                 let abs = resolve(base_dir, path);
                 if let Some(parent) = abs.parent() {
                     if !parent.as_os_str().is_empty() && !parent.exists() {
-                        fs::create_dir_all(parent).await.map_err(|e| PatchError::IoError(format!("mkdir {parent:?}: {e}")))?;
+                        fs::create_dir_all(parent)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("mkdir {parent:?}: {e}")))?;
                     }
                 }
-                fs::write(&abs, content).await.map_err(|e| PatchError::IoError(format!("write {abs:?}: {e}")))?;
+                fs::write(&abs, content)
+                    .await
+                    .map_err(|e| PatchError::IoError(format!("write {abs:?}: {e}")))?;
                 touched.push(abs.to_string_lossy().to_string());
             }
             PatchOp::DeleteFile { path } => {
                 let abs = resolve(base_dir, path);
                 if abs.exists() {
-                    let meta = fs::metadata(&abs).await.map_err(|e| PatchError::IoError(format!("stat {abs:?}: {e}")))?;
+                    let meta = fs::metadata(&abs)
+                        .await
+                        .map_err(|e| PatchError::IoError(format!("stat {abs:?}: {e}")))?;
                     if meta.is_dir() {
-                        fs::remove_dir(&abs).await.map_err(|e| PatchError::IoError(format!("rmdir {abs:?}: {e}")))?;
+                        fs::remove_dir(&abs)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("rmdir {abs:?}: {e}")))?;
                     } else {
-                        fs::remove_file(&abs).await.map_err(|e| PatchError::IoError(format!("rm {abs:?}: {e}")))?;
+                        fs::remove_file(&abs)
+                            .await
+                            .map_err(|e| PatchError::IoError(format!("rm {abs:?}: {e}")))?;
                     }
                     touched.push(abs.to_string_lossy().to_string());
                 }
@@ -339,7 +386,9 @@ pub struct ApplyPatchTool {
 
 impl ApplyPatchTool {
     pub fn new() -> Self {
-        Self { name: "ApplyPatch".to_string() }
+        Self {
+            name: "ApplyPatch".to_string(),
+        }
     }
     pub fn with_name(name: impl Into<String>) -> Self {
         Self { name: name.into() }
@@ -347,12 +396,16 @@ impl ApplyPatchTool {
 }
 
 impl Default for ApplyPatchTool {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait::async_trait]
 impl apeireth_tool_registry::Tool for ApplyPatchTool {
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> &str {
+        &self.name
+    }
     fn kind(&self) -> apeireth_tool_registry::ToolKind {
         // 多文件 IO 操作, Async
         apeireth_tool_registry::ToolKind::Async
@@ -367,10 +420,12 @@ impl apeireth_tool_registry::Tool for ApplyPatchTool {
         }
     }
     async fn call(&self, args: serde_json::Value) -> Result<serde_json::Value, String> {
-        let patch = args.get("patch")
+        let patch = args
+            .get("patch")
             .and_then(|v| v.as_str())
             .ok_or_else(|| "missing 'patch' string".to_string())?;
-        let base_dir = args.get("base_dir")
+        let base_dir = args
+            .get("base_dir")
             .and_then(|v| v.as_str())
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|| std::path::PathBuf::from("."));
@@ -404,7 +459,10 @@ mod tests2 {
         let r = tool.call(args).await.expect("call");
         assert_eq!(r["ok"], true);
         assert_eq!(r["count"], 1);
-        assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).unwrap(), "bar");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "bar"
+        );
     }
 
     #[tokio::test]
@@ -552,8 +610,14 @@ mod tests {
         let patch = "*** Begin Patch\n*** Update File: a.txt\n@@\n-foo\n+bar\n*** Add File: b.txt\n+bcontent\n*** Delete File: c.txt\n*** End Patch\n";
         let touched = apply_patch(patch, dir.path()).await.unwrap();
         assert_eq!(touched.len(), 3);
-        assert_eq!(std::fs::read_to_string(dir.path().join("a.txt")).unwrap(), "bar");
-        assert_eq!(std::fs::read_to_string(dir.path().join("b.txt")).unwrap(), "bcontent");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "bar"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("b.txt")).unwrap(),
+            "bcontent"
+        );
         assert!(!dir.path().join("c.txt").exists());
     }
 

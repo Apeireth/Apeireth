@@ -75,7 +75,10 @@ async fn auth_frame_with_valid_token_passes() {
     // 4. JSON 编解码 round-trip (跟 `protocol::ws_v1::WsFrame::Auth` 1:1)
     let frame = WsFrame::Auth(auth_frame);
     let json_str = serde_json::to_string(&frame).expect("serialize");
-    assert!(json_str.contains("\"type\":\"auth\""), "JSON 顶层 type=auth");
+    assert!(
+        json_str.contains("\"type\":\"auth\""),
+        "JSON 顶层 type=auth"
+    );
     let back: WsFrame = serde_json::from_str(&json_str).expect("deserialize");
     assert!(matches!(back, WsFrame::Auth(_)));
 }
@@ -171,11 +174,7 @@ async fn tool_invoke_frame_dispatches_to_web_search_handler() {
 
     // 4. 审计日志验证: 1 invoke 1 行 (per 蓝图 §2.4 组件 4)
     let pipeline = make_pipeline();
-    let p = Principal::from_api_key(
-        "sk-cp-test-tool-invoke-12345678",
-        API_KEY_SERVICE,
-        true,
-    );
+    let p = Principal::from_api_key("sk-cp-test-tool-invoke-12345678", API_KEY_SERVICE, true);
     pipeline.audit_invoke(
         &p,
         WS_PATH,
@@ -261,11 +260,7 @@ async fn stream_chunk_frame_accumulates_until_stream_end() {
 async fn error_frame_on_quota_check_returns_501_stub() {
     // 1. 走 AuthPipeline.check_quota (per D-05, 永远返 501, 0 假装)
     let pipeline = make_pipeline();
-    let p = Principal::from_api_key(
-        "sk-cp-test-quota-stub-12345678",
-        API_KEY_SERVICE,
-        false,
-    );
+    let p = Principal::from_api_key("sk-cp-test-quota-stub-12345678", API_KEY_SERVICE, false);
     let result = pipeline._test_check_quota(&p);
     assert!(result.is_err(), "D-05 stub 永远返 501");
     let err = result.err().unwrap();

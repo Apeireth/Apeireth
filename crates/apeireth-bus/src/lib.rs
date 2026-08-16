@@ -10,18 +10,17 @@
 //! | L3 | gRPC (tonic) | protobuf | 跨机器 RPC | tonic / prost |
 //! | L4 | WebSocket (async-tungstenite) | JSON Schema | 浏览器 / WS 客户端 | async-tungstenite / jsonschema |
 
-
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-pub mod l0;
 pub mod channel;
+pub mod l0;
 #[cfg(test)]
-pub mod r216_tests;  // R216: 三套通知 + 4 BackpressurePolicy 测试覆盖
-// R177: bus invariants (10 tests + 2 Kani proofs)
-mod organ_kani_proofs;
+pub mod r216_tests; // R216: 三套通知 + 4 BackpressurePolicy 测试覆盖
+                    // R177: bus invariants (10 tests + 2 Kani proofs)
+pub mod event_log; // R229 — append-only event log + filter replay
 #[cfg(unix)]
 pub mod l1;
 #[cfg(unix)]
@@ -30,13 +29,12 @@ pub mod l2;
 pub mod l3;
 #[cfg(feature = "full-bus")]
 pub mod l4;
-pub mod pattern;  // R227 — topic wildcard matching
-pub mod event_log;  // R229 — append-only event log + filter replay
-pub mod lifecycle;  // A1#5 — 5 lifecycle hooks (UserPromptSubmit/SessionStart/SessionEnd/PostToolUse/Stop)
+pub mod lifecycle;
+mod organ_kani_proofs;
+pub mod pattern; // R227 — topic wildcard matching // A1#5 — 5 lifecycle hooks (UserPromptSubmit/SessionStart/SessionEnd/PostToolUse/Stop)
 
-pub use l0::L0Bus;
 pub use channel::{Channel, ChannelSet, ChanneledBus};
-pub use lifecycle::{LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook, LifecycleMessage};
+pub use l0::L0Bus;
 #[cfg(unix)]
 pub use l1::{L1Client, L1Server};
 #[cfg(unix)]
@@ -45,6 +43,9 @@ pub use l2::{L2Config, L2Transport, PipeCodec};
 pub use l3::L3Bus;
 #[cfg(feature = "full-bus")]
 pub use l4::L4Bus;
+pub use lifecycle::{
+    LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook, LifecycleMessage,
+};
 
 // === 全局 trace_id 分配器 ===
 
@@ -517,12 +518,20 @@ mod tests {
     async fn r245_03_publish_counts_priority_buckets() {
         let bus = L0Bus::<u32>::new();
         // publish 1 high, 2 normal, 3 low
-        bus.publish("p", BusMessage::new(1).with_priority(MessagePriority::High)).await.unwrap();
+        bus.publish("p", BusMessage::new(1).with_priority(MessagePriority::High))
+            .await
+            .unwrap();
         bus.publish("p", BusMessage::new(2)).await.unwrap();
         bus.publish("p", BusMessage::new(3)).await.unwrap();
-        bus.publish("p", BusMessage::new(4).with_priority(MessagePriority::Low)).await.unwrap();
-        bus.publish("p", BusMessage::new(5).with_priority(MessagePriority::Low)).await.unwrap();
-        bus.publish("p", BusMessage::new(6).with_priority(MessagePriority::Low)).await.unwrap();
+        bus.publish("p", BusMessage::new(4).with_priority(MessagePriority::Low))
+            .await
+            .unwrap();
+        bus.publish("p", BusMessage::new(5).with_priority(MessagePriority::Low))
+            .await
+            .unwrap();
+        bus.publish("p", BusMessage::new(6).with_priority(MessagePriority::Low))
+            .await
+            .unwrap();
         let snap = bus.stats();
         assert_eq!(snap.high_priority, 1);
         assert_eq!(snap.normal_priority, 2);

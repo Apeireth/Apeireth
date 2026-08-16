@@ -64,7 +64,20 @@ fn chrono_like_now_short() -> String {
         year += 1;
     }
     let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-    let months = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month = 1u32;
     for &md in &months {
         if d < md {

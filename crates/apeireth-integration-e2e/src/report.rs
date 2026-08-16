@@ -73,11 +73,7 @@ impl TestResult {
     }
 
     /// 构造一个跳过的测试结果
-    pub fn skip(
-        name: impl Into<String>,
-        layer: E2eLayer,
-        reason: impl Into<String>,
-    ) -> Self {
+    pub fn skip(name: impl Into<String>, layer: E2eLayer, reason: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             layer,
@@ -226,16 +222,9 @@ pub fn format_human_readable(report: &E2eReport) -> String {
     s.push_str("=== Apeireth 集成测试 e2e 报告 ===\n");
     s.push_str(&format!(
         "总测试: {} | 通过: {} | 失败: {} | 跳过: {} | 耗时: {} ms\n",
-        report.total_tests,
-        report.passed,
-        report.failed,
-        report.skipped,
-        report.total_elapsed_ms
+        report.total_tests, report.passed, report.failed, report.skipped, report.total_elapsed_ms
     ));
-    s.push_str(&format!(
-        "通过率: {:.1}%\n",
-        report.pass_rate() * 100.0
-    ));
+    s.push_str(&format!("通过率: {:.1}%\n", report.pass_rate() * 100.0));
     s.push_str("\n--- 按层 ---\n");
     for layer in E2eLayer::ALL.iter() {
         let lr = report.by_layer.get(layer).cloned().unwrap_or_default();
@@ -259,7 +248,14 @@ pub fn format_human_readable(report: &E2eReport) -> String {
             s.push_str(&format!("  ✗ {name}: {reason}\n"));
         }
     }
-    s.push_str(&format!("\n结果: {}\n", if report.all_passed() { "✓ 全部通过" } else { "✗ 有失败" }));
+    s.push_str(&format!(
+        "\n结果: {}\n",
+        if report.all_passed() {
+            "✓ 全部通过"
+        } else {
+            "✗ 有失败"
+        }
+    ));
     s
 }
 
@@ -298,10 +294,7 @@ pub fn assert_all_passed(report: &E2eReport) -> E2EResult<()> {
     if report.all_passed() {
         Ok(())
     } else {
-        let mut msg = format!(
-            "e2e {} 测试中 {} 失败: ",
-            report.total_tests, report.failed
-        );
+        let mut msg = format!("e2e {} 测试中 {} 失败: ", report.total_tests, report.failed);
         for (i, (name, reason)) in report
             .by_layer
             .values()

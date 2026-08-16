@@ -17,7 +17,10 @@ fn r177_tui_02_app_new() {
 
 #[test]
 fn r177_tui_03_chat_message() {
-    let m = ChatMessage { role: "user".into(), content: "hi".into() };
+    let m = ChatMessage {
+        role: "user".into(),
+        content: "hi".into(),
+    };
     assert_eq!(m.role, "user");
 }
 

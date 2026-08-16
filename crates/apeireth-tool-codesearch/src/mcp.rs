@@ -19,12 +19,12 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-use crate::search::{CodeSearcher, SearchKind, SearchOptions};
-use crate::files::{FileFinder, FindOptions};
-use crate::symbols::{extract_symbols, detect_language, supported_languages};
-use crate::graph::KnowledgeGraph;
 use crate::ast_grep::AstSearcher;
+use crate::files::{FileFinder, FindOptions};
+use crate::graph::KnowledgeGraph;
 use crate::index::CodeIndex;
+use crate::search::{CodeSearcher, SearchKind, SearchOptions};
+use crate::symbols::{detect_language, extract_symbols, supported_languages};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpRequest {
@@ -82,8 +82,8 @@ impl McpTool {
             McpTool::TraceImports => "trace_imports",
             McpTool::FindCallers => "find_callers",
             McpTool::ProjectOverview => "project_overview",
-                McpTool::AstGrepSearch => "ast_grep_search",
-                McpTool::UnifiedQuery => "unified_query",
+            McpTool::AstGrepSearch => "ast_grep_search",
+            McpTool::UnifiedQuery => "unified_query",
         }
     }
 
@@ -159,7 +159,11 @@ impl CodeSearchMcp {
                 }
             }
             "tools/call" => {
-                let tool_name = req.params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let tool_name = req
+                    .params
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let args = req.params.get("arguments").cloned().unwrap_or(json!({}));
                 match tool_name {
                     "list_languages" => McpResponse {
@@ -187,7 +191,10 @@ impl CodeSearchMcp {
                     }
                     "search_text" => {
                         let pattern = args.get("pattern").and_then(|v| v.as_str()).unwrap_or("");
-                        let kind_str = args.get("kind").and_then(|v| v.as_str()).unwrap_or("literal");
+                        let kind_str = args
+                            .get("kind")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("literal");
                         let path = args.get("path").and_then(|v| v.as_str()).unwrap_or(".");
                         let kind = match kind_str {
                             "regex" => SearchKind::Regex,
@@ -209,7 +216,13 @@ impl CodeSearchMcp {
                                 &SearchOptions::default(),
                             ) {
                                 for m in matches {
-                                    all_matches.push(format!("{}:{}:{} {}", m.file, m.line, m.column, m.text.trim()));
+                                    all_matches.push(format!(
+                                        "{}:{}:{} {}",
+                                        m.file,
+                                        m.line,
+                                        m.column,
+                                        m.text.trim()
+                                    ));
                                 }
                             }
                         }
@@ -229,9 +242,15 @@ impl CodeSearchMcp {
                         let finder = FileFinder::new();
                         let entries = match ext {
                             Some(e) => finder.find_with_extension(path, e).unwrap_or_default(),
-                            None => finder.find(path, &FindOptions::default()).unwrap_or_default(),
+                            None => finder
+                                .find(path, &FindOptions::default())
+                                .unwrap_or_default(),
                         };
-                        let list: Vec<String> = entries.iter().filter(|e| !e.is_dir).map(|e| e.path.clone()).collect();
+                        let list: Vec<String> = entries
+                            .iter()
+                            .filter(|e| !e.is_dir)
+                            .map(|e| e.path.clone())
+                            .collect();
                         McpResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -248,8 +267,11 @@ impl CodeSearchMcp {
                         let lang = detect_language(path_obj).unwrap_or("");
                         let content = std::fs::read_to_string(path).unwrap_or_default();
                         let symbols = extract_symbols(&content, lang);
-                        let summary: Vec<String> = symbols.iter()
-                            .map(|s| format!("{} {}:{} {}", s.kind.as_str(), s.line, s.column, s.name))
+                        let summary: Vec<String> = symbols
+                            .iter()
+                            .map(|s| {
+                                format!("{} {}:{} {}", s.kind.as_str(), s.line, s.column, s.name)
+                            })
                             .collect();
                         McpResponse {
                             jsonrpc: "2.0".to_string(),
@@ -265,7 +287,10 @@ impl CodeSearchMcp {
                         let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
                         let idx = self.index.lock().expect("poisoned");
                         let entries = idx.lookup_symbols_by_name(name).unwrap_or_default();
-                        let list: Vec<String> = entries.iter().map(|e| format!("{} (id={})", e.path, e.id)).collect();
+                        let list: Vec<String> = entries
+                            .iter()
+                            .map(|e| format!("{} (id={})", e.path, e.id))
+                            .collect();
                         McpResponse {
                             jsonrpc: "2.0".to_string(),
                             id: req.id,
@@ -315,8 +340,12 @@ impl CodeSearchMcp {
                     "trace_imports" => {
                         let path = args.get("path").and_then(|v| v.as_str()).unwrap_or("");
                         let graph = self.graph.lock().expect("poisoned");
-                        let imports: Vec<String> = graph.edges()
-                            .filter(|(from, edge, _)| from == &format!("file:{}", path) && *edge == crate::graph::GraphEdge::Imports)
+                        let imports: Vec<String> = graph
+                            .edges()
+                            .filter(|(from, edge, _)| {
+                                from == &format!("file:{}", path)
+                                    && *edge == crate::graph::GraphEdge::Imports
+                            })
                             .map(|(_, _, to)| to.clone())
                             .collect();
                         McpResponse {
@@ -333,12 +362,18 @@ impl CodeSearchMcp {
                         let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("");
                         let graph = self.graph.lock().expect("poisoned");
                         // Find symbols named `name` and list files referencing them via imports
-                        let sym_ids: Vec<String> = graph.nodes()
-                            .filter(|n| n.kind == crate::graph::NodeKind::Symbol && n.label.contains(name))
+                        let sym_ids: Vec<String> = graph
+                            .nodes()
+                            .filter(|n| {
+                                n.kind == crate::graph::NodeKind::Symbol && n.label.contains(name)
+                            })
                             .map(|n| n.id.clone())
                             .collect();
-                        let callers: Vec<String> = graph.edges()
-                            .filter(|(_, edge, to)| *edge == crate::graph::GraphEdge::Imports && sym_ids.contains(to))
+                        let callers: Vec<String> = graph
+                            .edges()
+                            .filter(|(_, edge, to)| {
+                                *edge == crate::graph::GraphEdge::Imports && sym_ids.contains(to)
+                            })
                             .map(|(from, _, _)| from.clone())
                             .collect();
                         McpResponse {
@@ -358,7 +393,10 @@ impl CodeSearchMcp {
                         let s = idx.symbol_count().unwrap_or(0);
                         let summary = format!(
                             "files={} symbols={} graph_nodes={} graph_edges={}",
-                            f, s, graph.node_count(), graph.edge_count()
+                            f,
+                            s,
+                            graph.node_count(),
+                            graph.edge_count()
                         );
                         McpResponse {
                             jsonrpc: "2.0".to_string(),
@@ -384,37 +422,79 @@ impl CodeSearchMcp {
                             _ => crate::unified::IntelligenceKind::Text,
                         };
                         let mut q = crate::unified::UnifiedQuery::new(kind, pattern, path);
-                        if let Some(l) = lang { q = q.with_lang(l); }
+                        if let Some(l) = lang {
+                            q = q.with_lang(l);
+                        }
                         let u = crate::unified::UnifiedCodeIntelligence::new_in_memory();
                         match u.query(&q) {
                             Ok(hits) => {
                                 let text = if hits.is_empty() {
                                     "(no matches)".to_string()
                                 } else {
-                                    hits.iter().take(100).enumerate().map(|(i, h)| {
-                                        let k = h.kind().as_str();
-                                        format!("[{}] {}: {}", i, k, match h {
-                                            crate::unified::IntelligenceHit::Text { file, line, column, text } =>
-                                                format!("{}:{}:{} {}", file.display(), line, column, text.trim()),
-                                            crate::unified::IntelligenceHit::File(f) => f.path.clone(),
-                                            crate::unified::IntelligenceHit::Symbol(s) => format!("{} {} (line {})", s.kind.as_str(), s.name, s.line),
-                                            crate::unified::IntelligenceHit::Graph(n) => format!("{} #{}", n.label, n.id),
-                                            crate::unified::IntelligenceHit::Index(e) => format!("{} (id={})", e.path, e.id),
-                                            crate::unified::IntelligenceHit::Ast(m) => format!("{}:{}:{} {}", m.file.display(), m.start_line, m.end_line, m.text.lines().next().unwrap_or("")),
+                                    hits.iter()
+                                        .take(100)
+                                        .enumerate()
+                                        .map(|(i, h)| {
+                                            let k = h.kind().as_str();
+                                            format!(
+                                                "[{}] {}: {}",
+                                                i,
+                                                k,
+                                                match h {
+                                                    crate::unified::IntelligenceHit::Text {
+                                                        file,
+                                                        line,
+                                                        column,
+                                                        text,
+                                                    } => format!(
+                                                        "{}:{}:{} {}",
+                                                        file.display(),
+                                                        line,
+                                                        column,
+                                                        text.trim()
+                                                    ),
+                                                    crate::unified::IntelligenceHit::File(f) =>
+                                                        f.path.clone(),
+                                                    crate::unified::IntelligenceHit::Symbol(s) =>
+                                                        format!(
+                                                            "{} {} (line {})",
+                                                            s.kind.as_str(),
+                                                            s.name,
+                                                            s.line
+                                                        ),
+                                                    crate::unified::IntelligenceHit::Graph(n) =>
+                                                        format!("{} #{}", n.label, n.id),
+                                                    crate::unified::IntelligenceHit::Index(e) =>
+                                                        format!("{} (id={})", e.path, e.id),
+                                                    crate::unified::IntelligenceHit::Ast(m) =>
+                                                        format!(
+                                                            "{}:{}:{} {}",
+                                                            m.file.display(),
+                                                            m.start_line,
+                                                            m.end_line,
+                                                            m.text.lines().next().unwrap_or("")
+                                                        ),
+                                                }
+                                            )
                                         })
-                                    }).collect::<Vec<_>>().join("\n")
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
                                 };
                                 McpResponse {
                                     jsonrpc: "2.0".to_string(),
                                     id: req.id,
-                                    result: Some(json!({"content": [{"type": "text", "text": text}], "isError": false})),
+                                    result: Some(
+                                        json!({"content": [{"type": "text", "text": text}], "isError": false}),
+                                    ),
                                     error: None,
                                 }
                             }
                             Err(e) => McpResponse {
                                 jsonrpc: "2.0".to_string(),
                                 id: req.id,
-                                result: Some(json!({"content": [{"type": "text", "text": format!("unified query error: {}", e)}], "isError": true})),
+                                result: Some(
+                                    json!({"content": [{"type": "text", "text": format!("unified query error: {}", e)}], "isError": true}),
+                                ),
                                 error: None,
                             },
                         }
@@ -426,21 +506,39 @@ impl CodeSearchMcp {
                         let searcher = crate::ast_grep::AstGrepSearcher::new();
                         match searcher.search(std::path::Path::new(path), pattern, lang) {
                             Ok(matches) => {
-                                let list: Vec<String> = matches.iter()
-                                    .map(|m| format!("{}:{}:{}-{} {}", m.file.display(), m.start_line, m.start_line, m.end_line, m.text.lines().next().unwrap_or("")))
+                                let list: Vec<String> = matches
+                                    .iter()
+                                    .map(|m| {
+                                        format!(
+                                            "{}:{}:{}-{} {}",
+                                            m.file.display(),
+                                            m.start_line,
+                                            m.start_line,
+                                            m.end_line,
+                                            m.text.lines().next().unwrap_or("")
+                                        )
+                                    })
                                     .collect();
-                                let text = if list.is_empty() { "(no matches or ast-grep unavailable)".to_string() } else { list.join("\n") };
+                                let text = if list.is_empty() {
+                                    "(no matches or ast-grep unavailable)".to_string()
+                                } else {
+                                    list.join("\n")
+                                };
                                 McpResponse {
                                     jsonrpc: "2.0".to_string(),
                                     id: req.id,
-                                    result: Some(json!({"content": [{"type": "text", "text": text}], "isError": false})),
+                                    result: Some(
+                                        json!({"content": [{"type": "text", "text": text}], "isError": false}),
+                                    ),
                                     error: None,
                                 }
                             }
                             Err(e) => McpResponse {
                                 jsonrpc: "2.0".to_string(),
                                 id: req.id,
-                                result: Some(json!({"content": [{"type": "text", "text": format!("ast-grep error: {}", e)}], "isError": true})),
+                                result: Some(
+                                    json!({"content": [{"type": "text", "text": format!("ast-grep error: {}", e)}], "isError": true}),
+                                ),
                                 error: None,
                             },
                         }
@@ -449,7 +547,10 @@ impl CodeSearchMcp {
                         jsonrpc: "2.0".to_string(),
                         id: req.id,
                         result: None,
-                        error: Some(McpError { code: -32602, message: format!("unknown tool: {}", other) }),
+                        error: Some(McpError {
+                            code: -32602,
+                            message: format!("unknown tool: {}", other),
+                        }),
                     },
                 }
             }
@@ -463,7 +564,10 @@ impl CodeSearchMcp {
                 jsonrpc: "2.0".to_string(),
                 id: req.id,
                 result: None,
-                error: Some(McpError { code: -32601, message: format!("method not found: {}", other) }),
+                error: Some(McpError {
+                    code: -32601,
+                    message: format!("method not found: {}", other),
+                }),
             },
         }
     }

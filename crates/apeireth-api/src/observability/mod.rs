@@ -49,10 +49,10 @@ use axum::Router;
 use parking_lot::RwLock;
 use serde::Serialize;
 
+pub mod dashboard;
 pub mod health;
 pub mod metrics;
 pub mod status;
-pub mod dashboard;
 
 // ============================================================================
 // 编译期 hardcode 常量 (per K-1 强校验 — 跟 `apeireth-observability` 同模式)
@@ -324,14 +324,49 @@ fn init_default_metrics() -> std::collections::HashMap<String, MetricSnapshot> {
 
     // 8 Counter
     let counters = [
-        ("http_requests_total", "counter", 0.0, vec![("method", "all")]),
-        ("http_errors_total", "counter", 0.0, vec![("status_class", "5xx")]),
-        ("llm_requests_total", "counter", 0.0, vec![("protocol", "all")]),
+        (
+            "http_requests_total",
+            "counter",
+            0.0,
+            vec![("method", "all")],
+        ),
+        (
+            "http_errors_total",
+            "counter",
+            0.0,
+            vec![("status_class", "5xx")],
+        ),
+        (
+            "llm_requests_total",
+            "counter",
+            0.0,
+            vec![("protocol", "all")],
+        ),
         ("llm_tokens_total", "counter", 0.0, vec![("type", "all")]),
-        ("llm_errors_total", "counter", 0.0, vec![("protocol", "all")]),
-        ("ratelimit_hits_total", "counter", 0.0, vec![("scope", "all")]),
-        ("ws_connections_total", "counter", 0.0, vec![("direction", "all")]),
-        ("observability_scrapes_total", "counter", 0.0, vec![("endpoint", "all")]),
+        (
+            "llm_errors_total",
+            "counter",
+            0.0,
+            vec![("protocol", "all")],
+        ),
+        (
+            "ratelimit_hits_total",
+            "counter",
+            0.0,
+            vec![("scope", "all")],
+        ),
+        (
+            "ws_connections_total",
+            "counter",
+            0.0,
+            vec![("direction", "all")],
+        ),
+        (
+            "observability_scrapes_total",
+            "counter",
+            0.0,
+            vec![("endpoint", "all")],
+        ),
     ];
     for (name, kind, value, labels) in counters {
         let mut l = HashMap::new();
@@ -358,7 +393,12 @@ fn init_default_metrics() -> std::collections::HashMap<String, MetricSnapshot> {
         ("disk_free_bytes", "gauge", 0.0, vec![("mount", "/")]),
         ("uptime_seconds", "gauge", 0.0, vec![]),
         ("last_request_latency_ms", "gauge", 0.0, vec![]),
-        ("llm_provider_health", "gauge", 1.0, vec![("provider", "minimaxi")]),
+        (
+            "llm_provider_health",
+            "gauge",
+            1.0,
+            vec![("provider", "minimaxi")],
+        ),
     ];
     for (name, kind, value, labels) in gauges {
         let mut l = HashMap::new();
@@ -378,8 +418,18 @@ fn init_default_metrics() -> std::collections::HashMap<String, MetricSnapshot> {
 
     // 2 Histogram (R20 阶段 6 只存 last value, R20 阶段 3 续 bucket 累加)
     let histograms = [
-        ("request_latency_seconds", "histogram", 0.0, vec![("endpoint", "all")]),
-        ("token_usage_per_request", "histogram", 0.0, vec![("protocol", "all")]),
+        (
+            "request_latency_seconds",
+            "histogram",
+            0.0,
+            vec![("endpoint", "all")],
+        ),
+        (
+            "token_usage_per_request",
+            "histogram",
+            0.0,
+            vec![("protocol", "all")],
+        ),
     ];
     for (name, kind, value, labels) in histograms {
         let mut l = HashMap::new();
@@ -546,17 +596,9 @@ mod tests {
         // 8 counter + 8 gauge + 2 histogram = 18
         let s = ObsState::new();
         assert_eq!(s.metrics.len(), 18);
-        let counters = s
-            .metrics
-            .values()
-            .filter(|m| m.kind == "counter")
-            .count();
+        let counters = s.metrics.values().filter(|m| m.kind == "counter").count();
         let gauges = s.metrics.values().filter(|m| m.kind == "gauge").count();
-        let histograms = s
-            .metrics
-            .values()
-            .filter(|m| m.kind == "histogram")
-            .count();
+        let histograms = s.metrics.values().filter(|m| m.kind == "histogram").count();
         assert_eq!(counters, 8, "8 counter metric");
         assert_eq!(gauges, 8, "8 gauge metric");
         assert_eq!(histograms, 2, "2 histogram metric");
@@ -567,7 +609,11 @@ mod tests {
         let s = ObsState::new();
         assert_eq!(s.r_measures.len(), 5);
         for r in R_MEASURES {
-            assert_eq!(s.r_measures.get(*r), Some(&0.0), "R-Measure {r} default 0.0");
+            assert_eq!(
+                s.r_measures.get(*r),
+                Some(&0.0),
+                "R-Measure {r} default 0.0"
+            );
         }
     }
 

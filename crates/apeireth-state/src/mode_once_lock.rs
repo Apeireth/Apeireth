@@ -30,9 +30,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{StateError, StateErrorKind};
 use crate::organ::Organ;
-use crate::shared_state::{
-    SharedState, SharedStateMode, StateReadGuard, StateWriteGuard,
-};
+use crate::shared_state::{SharedState, SharedStateMode, StateReadGuard, StateWriteGuard};
 
 /// **模式 1: OnceLockState 进程全局 lazy init** (per 借鉴 Golutra `OnceLock<Arc<T>>`).
 ///
@@ -256,7 +254,9 @@ mod tests {
     fn get_unwrap_after_init_returns_value() {
         let state: OnceLockState<TestValue> = OnceLockState::new();
         state.init(TestValue { counter: 7 }).unwrap();
-        let arc = state.get_unwrap(Organ::Mind).expect("should be Some after init");
+        let arc = state
+            .get_unwrap(Organ::Mind)
+            .expect("should be Some after init");
         assert_eq!(arc.counter, 7);
     }
 

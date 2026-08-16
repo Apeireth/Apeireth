@@ -141,15 +141,15 @@ impl Organ {
     /// 实接度 (诚实标缺)
     pub fn readiness(self) -> Readiness {
         match self {
-            Self::Heart => Readiness::Ok,  // R22 ST-A1.6: 真接 backend atomics + main.rs tick
-            Self::Brain => Readiness::Ok,  // R22 ST-A1.1: 真接 backend atomics
+            Self::Heart => Readiness::Ok, // R22 ST-A1.6: 真接 backend atomics + main.rs tick
+            Self::Brain => Readiness::Ok, // R22 ST-A1.1: 真接 backend atomics
             Self::Hand => Readiness::Ok,  // R22 ST-A1.5: 真接 http.rs::invoke_tool success/failure
-            Self::Eye => Readiness::Partial,  // R22 ST-A1.2: 1/4 真接 (keystrokes)
-            Self::Ear => Readiness::Partial,  // R22 ST-A1.3: 3/4 真接 (user/llm/system)
+            Self::Eye => Readiness::Partial, // R22 ST-A1.2: 1/4 真接 (keystrokes)
+            Self::Ear => Readiness::Partial, // R22 ST-A1.3: 3/4 真接 (user/llm/system)
             Self::Memory => Readiness::Partial,
-            Self::Voice => Readiness::Partial,  // R22 ST-A1.4: 有结构 + record API, 但 0 调用
+            Self::Voice => Readiness::Partial, // R22 ST-A1.4: 有结构 + record API, 但 0 调用
             Self::Body => Readiness::Partial,
-            Self::Mind => Readiness::Ok,  // R22 ST-A1.9: 真接 backend::compute_life_stage + asi_v05
+            Self::Mind => Readiness::Ok, // R22 ST-A1.9: 真接 backend::compute_life_stage + asi_v05
         }
     }
 }
@@ -176,7 +176,7 @@ pub fn dispatch_render(organ: Organ, area: Rect) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_i18n::{Locale, SUPPORTED_LOCALES, TranslatorImpl};
+    use apeireth_i18n::{Locale, TranslatorImpl, SUPPORTED_LOCALES};
 
     #[test]
     fn nine_organ_variants_constructible() {
@@ -203,7 +203,9 @@ mod tests {
 
     #[test]
     fn nine_organ_ascii_chars_distinct() {
-        let chars: Vec<&str> = (0..=8u8).map(|n| Organ::from_u8(n).unwrap().ascii_char()).collect();
+        let chars: Vec<&str> = (0..=8u8)
+            .map(|n| Organ::from_u8(n).unwrap().ascii_char())
+            .collect();
         let unique: std::collections::HashSet<&str> = chars.iter().copied().collect();
         assert_eq!(unique.len(), 9, "9 器官 ASCII 字符应互不相同");
     }

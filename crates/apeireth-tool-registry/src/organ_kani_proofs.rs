@@ -16,7 +16,9 @@ fn r177_reg_01_new_empty() {
 #[test]
 fn r177_reg_02_register_get() {
     let reg = ToolRegistry::new();
-    let t = Arc::new(MockSyncTool { name: "echo".into() });
+    let t = Arc::new(MockSyncTool {
+        name: "echo".into(),
+    });
     reg.register("echo".into(), t.clone());
     assert_eq!(reg.len(), 1);
     let got = reg.get("echo");
@@ -44,7 +46,12 @@ fn r177_reg_04_unregister_nonexistent() {
 fn r177_reg_05_register_overwrite() {
     let reg = ToolRegistry::new();
     reg.register("a".into(), Arc::new(MockSyncTool { name: "a".into() }));
-    reg.register("a".into(), Arc::new(MockSyncTool { name: "a-v2".into() }));
+    reg.register(
+        "a".into(),
+        Arc::new(MockSyncTool {
+            name: "a-v2".into(),
+        }),
+    );
     assert_eq!(reg.len(), 1, "同名注册应覆盖 (size 不变)");
 }
 

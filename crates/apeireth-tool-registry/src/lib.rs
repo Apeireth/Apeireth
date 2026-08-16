@@ -58,14 +58,17 @@ pub mod registry;
 pub mod token_budget;
 pub mod trait_def;
 pub mod types;
-pub mod vcp_category;  // R208: VCP 5 类高层分类 (基于 6 类 ToolKind, R185 调研)
-// R177: tool registry invariants
+pub mod vcp_category; // R208: VCP 5 类高层分类 (基于 6 类 ToolKind, R185 调研)
+                      // R177: tool registry invariants
 mod organ_kani_proofs;
 
-pub use async_task::{AsyncTaskError, AsyncTaskResult, AsyncTaskStore, NotifyChannel, TaskId, TaskRecord, TaskStatus, next_task_id};
-pub use chain::{CHAIN_LEVELS, ClassifyChain, ClassifyOutcome, ClassifyStage, CustomMapClassifier};
+pub use async_task::{
+    next_task_id, AsyncTaskError, AsyncTaskResult, AsyncTaskStore, NotifyChannel, TaskId,
+    TaskRecord, TaskStatus,
+};
+pub use chain::{ClassifyChain, ClassifyOutcome, ClassifyStage, CustomMapClassifier, CHAIN_LEVELS};
 pub use classifier::{
-    cosine_similarity, Category, ClassifyError, Classifier, EmbeddingClassifier, EmbedFn,
+    cosine_similarity, Category, Classifier, ClassifyError, EmbedFn, EmbeddingClassifier,
     HeuristicClassifier, LlmClassifier, MockHashEmbedFn, CATEGORY_COUNT,
 };
 pub use injection::{
@@ -149,7 +152,10 @@ const _: () = {
     assert!(CATEGORY_COUNT == 9, "classifier::CATEGORY_COUNT must be 9");
 
     // VCP 吸收 (team-work-doc §8.4 P1): 分类四级降级链 (自定义→小模型→RAG→关键词)
-    assert!(CHAIN_LEVELS == 4, "CHAIN_LEVELS must be 4 (VCP _classifyRecord)");
+    assert!(
+        CHAIN_LEVELS == 4,
+        "CHAIN_LEVELS must be 4 (VCP _classifyRecord)"
+    );
 };
 
 // ============================================================

@@ -27,7 +27,8 @@
 //! - ❌ 不引入新 crate 依赖 (仅 serde + thiserror + workspace 已有)
 //! - ❌ 不引入 `unsafe`
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 
 use crate::action_rail::{ActionContext, ActionDispatcher, ActionId, ActionOutcome};
@@ -147,10 +148,22 @@ impl FlowStep {
     pub const COUNT: usize = 17;
     /// ALL 数组
     pub const ALL: [FlowStep; 17] = [
-        FlowStep::UserSay, FlowStep::BotSay, FlowStep::When, FlowStep::ElseWhen,
-        FlowStep::If, FlowStep::Else, FlowStep::Goto, FlowStep::Run,
-        FlowStep::Do, FlowStep::Set, FlowStep::Allow, FlowStep::Disallow,
-        FlowStep::Stop, FlowStep::Abort, FlowStep::Return, FlowStep::Pass,
+        FlowStep::UserSay,
+        FlowStep::BotSay,
+        FlowStep::When,
+        FlowStep::ElseWhen,
+        FlowStep::If,
+        FlowStep::Else,
+        FlowStep::Goto,
+        FlowStep::Run,
+        FlowStep::Do,
+        FlowStep::Set,
+        FlowStep::Allow,
+        FlowStep::Disallow,
+        FlowStep::Stop,
+        FlowStep::Abort,
+        FlowStep::Return,
+        FlowStep::Pass,
         FlowStep::Log,
     ];
 }
@@ -230,10 +243,7 @@ pub enum FlowError {
     UnknownFlow(String),
     /// 步骤执行失败
     #[error("Step execution failed at {step:?}: {reason}")]
-    StepFailed {
-        step: FlowStep,
-        reason: String,
-    },
+    StepFailed { step: FlowStep, reason: String },
 }
 
 // ============================================================
@@ -302,7 +312,10 @@ impl<'a> FlowRunner<'a> {
             .ok_or_else(|| FlowError::UnknownFlow(flow_name.to_string()))?;
 
         if flow_struct.elements.is_empty() {
-            return Err(FlowError::EmptyFile(format!("flow '{}' has no elements", flow_name)));
+            return Err(FlowError::EmptyFile(format!(
+                "flow '{}' has no elements",
+                flow_name
+            )));
         }
 
         // state transition: Idle → Running
@@ -356,7 +369,8 @@ impl<'a> FlowRunner<'a> {
 
             // Run / Do 步骤触发 Action 调度
             if matches!(step, FlowStep::Run | FlowStep::Do) {
-                let ctx = ActionContext::new(format!("flow:{}:step#{}", flow_name, self.step_count));
+                let ctx =
+                    ActionContext::new(format!("flow:{}:step#{}", flow_name, self.step_count));
                 let outcomes = self.dispatcher.run_five_rails(&ctx);
                 action_outcomes.extend(outcomes);
             }
@@ -490,7 +504,10 @@ mod tests {
             Some(FlowStep::UserSay)
         );
         // DefineUser → None (不映射到 FlowStep)
-        assert_eq!(FlowStep::from_colang_kind(ColangElementKind::DefineUser), None);
+        assert_eq!(
+            FlowStep::from_colang_kind(ColangElementKind::DefineUser),
+            None
+        );
     }
 
     /// 简单 Colang file 跑通 verify
@@ -612,8 +629,11 @@ define flow farewell
         assert_eq!(FlowStep::ALL.len(), 17);
         // 5 FlowState 严守
         let _states = [
-            FlowState::Idle, FlowState::Running, FlowState::Paused,
-            FlowState::Done, FlowState::Failed,
+            FlowState::Idle,
+            FlowState::Running,
+            FlowState::Paused,
+            FlowState::Done,
+            FlowState::Failed,
         ];
         assert_eq!(_states.len(), 5);
     }

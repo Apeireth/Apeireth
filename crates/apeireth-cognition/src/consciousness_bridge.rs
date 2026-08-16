@@ -28,7 +28,14 @@ pub struct DecisionBias {
 }
 
 impl Default for DecisionBias {
-    fn default() -> Self { Self { creativity: 0.5, caution: 0.5, cooperation: 0.5, exploration: 0.5 } }
+    fn default() -> Self {
+        Self {
+            creativity: 0.5,
+            caution: 0.5,
+            cooperation: 0.5,
+            exploration: 0.5,
+        }
+    }
 }
 
 fn intensity_weight(intensity: PlutchikIntensity) -> f64 {
@@ -57,27 +64,75 @@ pub fn plutchik_to_decision_bias(e: &PlutchikEmotion) -> DecisionBias {
 
 fn apply_basic(b: &PlutchikBasic, bias: &mut DecisionBias, intensity: f64) {
     match b {
-        PlutchikBasic::Joy => { bias.creativity += 0.3 * intensity; bias.exploration += 0.2 * intensity; }
-        PlutchikBasic::Trust => { bias.cooperation += 0.4 * intensity; bias.caution -= 0.1 * intensity; }
-        PlutchikBasic::Fear => { bias.caution += 0.4 * intensity; bias.exploration -= 0.2 * intensity; }
-        PlutchikBasic::Surprise => { bias.exploration += 0.3 * intensity; bias.creativity += 0.2 * intensity; }
-        PlutchikBasic::Sadness => { bias.caution += 0.2 * intensity; bias.creativity -= 0.1 * intensity; }
-        PlutchikBasic::Disgust => { bias.cooperation -= 0.3 * intensity; bias.caution += 0.2 * intensity; }
-        PlutchikBasic::Anger => { bias.caution -= 0.2 * intensity; bias.creativity += 0.1 * intensity; }
-        PlutchikBasic::Anticipation => { bias.exploration += 0.3 * intensity; bias.creativity += 0.1 * intensity; }
+        PlutchikBasic::Joy => {
+            bias.creativity += 0.3 * intensity;
+            bias.exploration += 0.2 * intensity;
+        }
+        PlutchikBasic::Trust => {
+            bias.cooperation += 0.4 * intensity;
+            bias.caution -= 0.1 * intensity;
+        }
+        PlutchikBasic::Fear => {
+            bias.caution += 0.4 * intensity;
+            bias.exploration -= 0.2 * intensity;
+        }
+        PlutchikBasic::Surprise => {
+            bias.exploration += 0.3 * intensity;
+            bias.creativity += 0.2 * intensity;
+        }
+        PlutchikBasic::Sadness => {
+            bias.caution += 0.2 * intensity;
+            bias.creativity -= 0.1 * intensity;
+        }
+        PlutchikBasic::Disgust => {
+            bias.cooperation -= 0.3 * intensity;
+            bias.caution += 0.2 * intensity;
+        }
+        PlutchikBasic::Anger => {
+            bias.caution -= 0.2 * intensity;
+            bias.creativity += 0.1 * intensity;
+        }
+        PlutchikBasic::Anticipation => {
+            bias.exploration += 0.3 * intensity;
+            bias.creativity += 0.1 * intensity;
+        }
     }
 }
 
 fn apply_advanced(a: &PlutchikAdvanced, bias: &mut DecisionBias, intensity: f64) {
     match a {
-        PlutchikAdvanced::Love => { bias.creativity += 0.2 * intensity; bias.cooperation += 0.4 * intensity; }
-        PlutchikAdvanced::Submission => { bias.cooperation += 0.3 * intensity; bias.caution += 0.2 * intensity; }
-        PlutchikAdvanced::Awe => { bias.caution += 0.3 * intensity; bias.exploration += 0.2 * intensity; }
-        PlutchikAdvanced::Disapproval => { bias.caution += 0.2 * intensity; bias.cooperation -= 0.2 * intensity; }
-        PlutchikAdvanced::Remorse => { bias.caution += 0.3 * intensity; bias.creativity -= 0.2 * intensity; }
-        PlutchikAdvanced::Contempt => { bias.cooperation -= 0.4 * intensity; bias.caution += 0.1 * intensity; }
-        PlutchikAdvanced::Aggressiveness => { bias.caution -= 0.3 * intensity; bias.creativity += 0.2 * intensity; }
-        PlutchikAdvanced::Optimism => { bias.exploration += 0.3 * intensity; bias.creativity += 0.2 * intensity; }
+        PlutchikAdvanced::Love => {
+            bias.creativity += 0.2 * intensity;
+            bias.cooperation += 0.4 * intensity;
+        }
+        PlutchikAdvanced::Submission => {
+            bias.cooperation += 0.3 * intensity;
+            bias.caution += 0.2 * intensity;
+        }
+        PlutchikAdvanced::Awe => {
+            bias.caution += 0.3 * intensity;
+            bias.exploration += 0.2 * intensity;
+        }
+        PlutchikAdvanced::Disapproval => {
+            bias.caution += 0.2 * intensity;
+            bias.cooperation -= 0.2 * intensity;
+        }
+        PlutchikAdvanced::Remorse => {
+            bias.caution += 0.3 * intensity;
+            bias.creativity -= 0.2 * intensity;
+        }
+        PlutchikAdvanced::Contempt => {
+            bias.cooperation -= 0.4 * intensity;
+            bias.caution += 0.1 * intensity;
+        }
+        PlutchikAdvanced::Aggressiveness => {
+            bias.caution -= 0.3 * intensity;
+            bias.creativity += 0.2 * intensity;
+        }
+        PlutchikAdvanced::Optimism => {
+            bias.exploration += 0.3 * intensity;
+            bias.creativity += 0.2 * intensity;
+        }
     }
 }
 
@@ -157,7 +212,10 @@ mod tests {
     fn t07_accumulate_averages() {
         let e1 = PlutchikEmotion::basic(PlutchikBasic::Joy, PlutchikIntensity::Strong);
         let e2 = PlutchikEmotion::basic(PlutchikBasic::Sadness, PlutchikIntensity::Strong);
-        let biases = vec![plutchik_to_decision_bias(&e1), plutchik_to_decision_bias(&e2)];
+        let biases = vec![
+            plutchik_to_decision_bias(&e1),
+            plutchik_to_decision_bias(&e2),
+        ];
         let acc = accumulate_biases(&biases);
         assert!((acc.creativity - 0.5).abs() < 0.1);
     }
@@ -170,5 +228,3 @@ mod tests {
         assert!(b.creativity >= 0.0);
     }
 }
-
-

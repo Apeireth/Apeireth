@@ -637,7 +637,10 @@ mod tests {
         // `ls` 对不存在的路径会写 stderr 但 exit 2
         // `cmd /c echo error 1>&2` exit 0
         let _ = code;
-        assert!(out.contains("error") || out.contains("No such"), "stderr 应被捕获, 实际: {out:?}");
+        assert!(
+            out.contains("error") || out.contains("No such"),
+            "stderr 应被捕获, 实际: {out:?}"
+        );
     }
 
     #[tokio::test]

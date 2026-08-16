@@ -1,11 +1,9 @@
-
 #![warn(missing_docs)]
 #![allow(clippy::all)]
 
 // ============================================================================
 // 模块声明
 // ============================================================================
-
 
 // ============================================================================
 // Re-export (主入口便捷)
@@ -14,7 +12,7 @@
 pub use super::backend::{BackendKind, BACKEND_KIND_VARIANT_COUNT};
 pub use super::config::CacheConfig;
 pub use super::error::{CacheError, CacheResult, CACHE_ERROR_VARIANT_COUNT};
-pub use super::lru::{LruImpl, LruCrateLru, HashMapVecDequeLru, IndexMapLru, QuickCacheStub};
+pub use super::lru::{HashMapVecDequeLru, IndexMapLru, LruCrateLru, LruImpl, QuickCacheStub};
 // R20 借鉴 Golutra #4: memory provider 主入口 re-export
 pub use super::memory_provider::{
     build_provider as build_memory_provider, DiskLruProvider, HybridProvider, InMemoryProvider,
@@ -24,7 +22,7 @@ pub use super::memory_provider::{
 };
 pub use super::policy::{EvictionPolicy, EVICTION_POLICY_VARIANT_COUNT};
 pub use super::shard::{
-    ShardRouter, ShardedMap, validate_shard_count, SHARD_DEFAULT, SHARD_MAX, SHARD_MIN,
+    validate_shard_count, ShardRouter, ShardedMap, SHARD_DEFAULT, SHARD_MAX, SHARD_MIN,
 };
 pub use super::stats::{CacheStats, CacheStatsSnapshot};
 pub use super::ttl::{TtlEntry, TtlMode, TtlPolicy};
@@ -207,7 +205,8 @@ where
             let evicted = self.shards.pop_by_min_score(|v| {
                 let inst = v.inserted_at();
                 let dur = std::time::Instant::now().saturating_duration_since(inst);
-                let elapsed_ns = (dur.as_secs() as u128) * 1_000_000_000 + (dur.subsec_nanos() as u128);
+                let elapsed_ns =
+                    (dur.as_secs() as u128) * 1_000_000_000 + (dur.subsec_nanos() as u128);
                 u128::MAX - elapsed_ns
             });
             if evicted.is_some() {
@@ -280,7 +279,9 @@ impl StubCache {
         backend.check_implemented()?;
         // 这里 check_implemented 必然返 Err (Memory 才会返 Ok), 所以上面 if
         // 实际上不会到这里. 但保留逻辑以防御 future Memory stub.
-        Err(CacheError::BackendNotImplemented(backend.as_str().to_string()))
+        Err(CacheError::BackendNotImplemented(
+            backend.as_str().to_string(),
+        ))
     }
 }
 
@@ -291,19 +292,27 @@ where
     V: Send + Sync + 'static,
 {
     async fn get(&self, _key: &K) -> CacheResult<Option<V>> {
-        Err(CacheError::BackendNotImplemented(self.backend.as_str().to_string()))
+        Err(CacheError::BackendNotImplemented(
+            self.backend.as_str().to_string(),
+        ))
     }
 
     async fn put(&self, _key: K, _value: V, _ttl: Duration) -> CacheResult<()> {
-        Err(CacheError::BackendNotImplemented(self.backend.as_str().to_string()))
+        Err(CacheError::BackendNotImplemented(
+            self.backend.as_str().to_string(),
+        ))
     }
 
     async fn remove(&self, _key: &K) -> CacheResult<Option<V>> {
-        Err(CacheError::BackendNotImplemented(self.backend.as_str().to_string()))
+        Err(CacheError::BackendNotImplemented(
+            self.backend.as_str().to_string(),
+        ))
     }
 
     async fn clear(&self) -> CacheResult<()> {
-        Err(CacheError::BackendNotImplemented(self.backend.as_str().to_string()))
+        Err(CacheError::BackendNotImplemented(
+            self.backend.as_str().to_string(),
+        ))
     }
 
     async fn len(&self) -> usize {
@@ -325,9 +334,7 @@ where
 /// - Disk/Redis/Memcached: 返 Err(BackendNotImplemented) (R20 阶段 6 stub)
 ///
 /// 用 Arc<dyn Cache<K, V>> 屏蔽具体 backend 类型.
-pub async fn build_cache<K, V>(
-    config: CacheConfig,
-) -> CacheResult<std::sync::Arc<dyn Cache<K, V>>>
+pub async fn build_cache<K, V>(config: CacheConfig) -> CacheResult<std::sync::Arc<dyn Cache<K, V>>>
 where
     K: std::hash::Hash + Eq + Clone + Send + Sync + 'static,
     V: Clone + Send + Sync + 'static,
@@ -339,9 +346,7 @@ where
         }
         BackendKind::Disk => Err(CacheError::BackendNotImplemented("DISK".to_string())),
         BackendKind::Redis => Err(CacheError::BackendNotImplemented("REDIS".to_string())),
-        BackendKind::Memcached => Err(CacheError::BackendNotImplemented(
-            "MEMCACHED".to_string(),
-        )),
+        BackendKind::Memcached => Err(CacheError::BackendNotImplemented("MEMCACHED".to_string())),
     }
 }
 
@@ -535,10 +540,7 @@ mod tests {
     /// 守门 #5: MemoryCache 构造合法.
     #[test]
     fn memory_cache_construct_ok() {
-        let config = CacheBuilder::new()
-            .max_size(100)
-            .shards(32)
-            .build();
+        let config = CacheBuilder::new().max_size(100).shards(32).build();
         let cache: MemoryCache<String, i32> = MemoryCache::new(config).unwrap();
         assert_eq!(cache.config().max_size, 100);
     }
@@ -546,9 +548,7 @@ mod tests {
     /// 守门 #6: MemoryCache K-1 max_size=0 返 InvalidMaxSize.
     #[test]
     fn k1_max_size_zero_rejected() {
-        let config = CacheBuilder::new()
-            .max_size(0)
-            .build();
+        let config = CacheBuilder::new().max_size(0).build();
         let r: CacheResult<MemoryCache<String, i32>> = MemoryCache::new(config);
         assert!(matches!(r, Err(CacheError::InvalidMaxSize(0))));
     }
@@ -556,10 +556,7 @@ mod tests {
     /// 守门 #7: MemoryCache K-1 shards 不在 16..=256 返 InvalidShardCount.
     #[test]
     fn k1_shards_8_rejected() {
-        let config = CacheBuilder::new()
-            .max_size(100)
-            .shards(8)
-            .build();
+        let config = CacheBuilder::new().max_size(100).shards(8).build();
         let r: CacheResult<MemoryCache<String, i32>> = MemoryCache::new(config);
         assert!(matches!(r, Err(CacheError::InvalidShardCount(8))));
     }

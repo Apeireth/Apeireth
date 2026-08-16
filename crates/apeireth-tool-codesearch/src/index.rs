@@ -90,11 +90,11 @@ impl CodeIndex {
             "UPDATE files SET indexed_at = ?1 WHERE path = ?2",
             params![now, path],
         )?;
-        let id: i64 = self.conn.query_row(
-            "SELECT id FROM files WHERE path = ?1",
-            params![path],
-            |r| r.get(0),
-        )?;
+        let id: i64 =
+            self.conn
+                .query_row("SELECT id FROM files WHERE path = ?1", params![path], |r| {
+                    r.get(0)
+                })?;
         Ok(id)
     }
 
@@ -123,12 +123,16 @@ impl CodeIndex {
     }
 
     pub fn symbol_count(&self) -> Result<i64, IndexError> {
-        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM symbols", [], |r| r.get(0))?;
         Ok(n)
     }
 
     pub fn file_count(&self) -> Result<i64, IndexError> {
-        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
         Ok(n)
     }
 
@@ -140,7 +144,10 @@ impl CodeIndex {
              WHERE s.name = ?1",
         )?;
         let rows = stmt.query_map(params![name], |r| {
-            Ok(IndexEntry { id: r.get(0)?, path: r.get(1)? })
+            Ok(IndexEntry {
+                id: r.get(0)?,
+                path: r.get(1)?,
+            })
         })?;
         let mut out = Vec::new();
         for row in rows {

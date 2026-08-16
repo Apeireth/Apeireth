@@ -190,7 +190,10 @@ mod tests {
             }
         }
         let m = StubMetric;
-        assert_eq!(m.full_name("apeireth", "agent"), "apeireth_agent_requests_total");
+        assert_eq!(
+            m.full_name("apeireth", "agent"),
+            "apeireth_agent_requests_total"
+        );
         // 空 namespace + subsystem: format!("{}_{}_{}", "", "", "requests_total") = "__requests_total"
         assert_eq!(m.full_name("", ""), "__requests_total");
     }

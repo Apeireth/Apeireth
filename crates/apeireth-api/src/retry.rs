@@ -87,8 +87,8 @@ impl BackoffPolicy {
                 Duration::from_secs(3),
                 Duration::from_secs(10),
                 Duration::from_secs(30),
-                Duration::from_secs(120),  // 2m
-                Duration::from_secs(600),  // 10m
+                Duration::from_secs(120), // 2m
+                Duration::from_secs(600), // 10m
             ],
             BackoffPolicy::Custom(d) => d.clone(),
             // R122-4 续: WithJitter 透传 inner policy 的 durations (jitter 只影响 sleep 不改 tier 数)
@@ -395,10 +395,7 @@ mod tests {
 
     #[test]
     fn backoff_custom_user_defined() {
-        let d = BackoffPolicy::Custom(vec![
-            Duration::from_millis(500),
-            Duration::from_secs(2),
-        ]);
+        let d = BackoffPolicy::Custom(vec![Duration::from_millis(500), Duration::from_secs(2)]);
         assert_eq!(d.tier_count(), 2);
         let v = d.to_durations();
         assert_eq!(v[0], Duration::from_millis(500));
@@ -422,11 +419,14 @@ mod tests {
     fn backoff_aggressive_preserves_1_0_behavior() {
         // 0 漂移 1.0 行为: Aggressive = 当前 1s/3s/10s 1:1
         let d = BackoffPolicy::Aggressive.to_durations();
-        assert_eq!(d, vec![
-            Duration::from_secs(1),
-            Duration::from_secs(3),
-            Duration::from_secs(10),
-        ]);
+        assert_eq!(
+            d,
+            vec![
+                Duration::from_secs(1),
+                Duration::from_secs(3),
+                Duration::from_secs(10),
+            ]
+        );
     }
 
     #[test]
@@ -527,8 +527,14 @@ mod tests {
     fn retry_stats_counters_have_required_names() {
         let s = RetryStats::new().unwrap();
         assert_eq!(s.retry_count().name(), "apeireth_api_retry_count_total");
-        assert_eq!(s.retry_exhausted().name(), "apeireth_api_retry_exhausted_total");
-        assert_eq!(s.retry_success_after().name(), "apeireth_api_retry_success_after_total");
+        assert_eq!(
+            s.retry_exhausted().name(),
+            "apeireth_api_retry_exhausted_total"
+        );
+        assert_eq!(
+            s.retry_success_after().name(),
+            "apeireth_api_retry_success_after_total"
+        );
         // K-1 强校验: help 必填
         assert!(!s.retry_count().help().is_empty());
         assert!(!s.retry_exhausted().help().is_empty());
@@ -629,7 +635,10 @@ mod tests {
     fn jitter_none_equals_base() {
         // 0 漂移 1.0 行为: None 跟 base 1:1
         let base = Duration::from_secs(5);
-        assert_eq!(jittered_sleep(base, JitterMode::None, None, Duration::from_secs(60)), base);
+        assert_eq!(
+            jittered_sleep(base, JitterMode::None, None, Duration::from_secs(60)),
+            base
+        );
     }
 
     #[test]
@@ -683,9 +692,33 @@ mod tests {
     #[test]
     fn jitter_zero_base_returns_zero() {
         // base=0 边界: 4 mode 都返 0 (0 假装"硬解析")
-        assert_eq!(jittered_sleep(Duration::ZERO, JitterMode::None, None, Duration::from_secs(60)), Duration::ZERO);
-        assert_eq!(jittered_sleep(Duration::ZERO, JitterMode::Full, None, Duration::from_secs(60)), Duration::ZERO);
-        assert_eq!(jittered_sleep(Duration::ZERO, JitterMode::Equal, None, Duration::from_secs(60)), Duration::ZERO);
+        assert_eq!(
+            jittered_sleep(
+                Duration::ZERO,
+                JitterMode::None,
+                None,
+                Duration::from_secs(60)
+            ),
+            Duration::ZERO
+        );
+        assert_eq!(
+            jittered_sleep(
+                Duration::ZERO,
+                JitterMode::Full,
+                None,
+                Duration::from_secs(60)
+            ),
+            Duration::ZERO
+        );
+        assert_eq!(
+            jittered_sleep(
+                Duration::ZERO,
+                JitterMode::Equal,
+                None,
+                Duration::from_secs(60)
+            ),
+            Duration::ZERO
+        );
     }
 
     #[test]
@@ -733,7 +766,11 @@ mod tests {
             p_patient.to_durations(),
             "WithJitter 透传 inner policy 的 durations"
         );
-        assert_eq!(p_wrapped.tier_count(), 6, "Patient 6 档, WithJitter 仍是 6 档");
+        assert_eq!(
+            p_wrapped.tier_count(),
+            6,
+            "Patient 6 档, WithJitter 仍是 6 档"
+        );
 
         let p_aggr = BackoffPolicy::Aggressive;
         let p_wrapped_aggr = p_aggr.clone().with_jitter(JitterMode::Decorrelated);

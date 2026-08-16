@@ -151,7 +151,10 @@ mod tests {
             shards: 8,
             backend: BackendKind::Memory,
         };
-        assert!(matches!(c.validate(), Err(CacheError::InvalidShardCount(8))));
+        assert!(matches!(
+            c.validate(),
+            Err(CacheError::InvalidShardCount(8))
+        ));
     }
 
     /// 守门 #6: shards 257 (> 256) 拒.
@@ -164,7 +167,10 @@ mod tests {
             shards: 257,
             backend: BackendKind::Memory,
         };
-        assert!(matches!(c.validate(), Err(CacheError::InvalidShardCount(257))));
+        assert!(matches!(
+            c.validate(),
+            Err(CacheError::InvalidShardCount(257))
+        ));
     }
 
     /// 守门 #7: 5 policy 都能作为 CacheConfig.policy.

@@ -93,7 +93,11 @@ mod tests {
     #[test]
     fn virtual_clock_set() {
         let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().unwrap());
-        vc.set(Utc.with_ymd_and_hms(2026, 8, 15, 22, 36, 0).single().unwrap());
+        vc.set(
+            Utc.with_ymd_and_hms(2026, 8, 15, 22, 36, 0)
+                .single()
+                .unwrap(),
+        );
         assert_eq!(vc.current().year(), 2026);
         assert_eq!(vc.current().month(), 8);
         assert_eq!(vc.current().day(), 15);

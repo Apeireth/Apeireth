@@ -435,8 +435,8 @@ mod provider_registry_tests {
             "openai",
             "https://api.openai.com",
             "gpt-4o",
-            0.005,  // 1k input
-            0.015,  // 1k output
+            0.005, // 1k input
+            0.015, // 1k output
             vec![
                 ProviderCapability::Chat,
                 ProviderCapability::Tool,
@@ -551,11 +551,23 @@ mod provider_registry_tests {
         // 修复 R126 老 borrow conflict: select() 返 &ProviderSpec 借用 r, 0 能在借用时 advance_round_robin
         // 解决: 立即 clone name, 然后 drop 借用, 再 advance
         let caps = vec![ProviderCapability::Chat];
-        let p0 = r.select(SelectionStrategy::RoundRobin, &caps).unwrap().name.clone();
+        let p0 = r
+            .select(SelectionStrategy::RoundRobin, &caps)
+            .unwrap()
+            .name
+            .clone();
         r.advance_round_robin();
-        let p1 = r.select(SelectionStrategy::RoundRobin, &caps).unwrap().name.clone();
+        let p1 = r
+            .select(SelectionStrategy::RoundRobin, &caps)
+            .unwrap()
+            .name
+            .clone();
         r.advance_round_robin();
-        let p2 = r.select(SelectionStrategy::RoundRobin, &caps).unwrap().name.clone();
+        let p2 = r
+            .select(SelectionStrategy::RoundRobin, &caps)
+            .unwrap()
+            .name
+            .clone();
 
         let names: Vec<&str> = vec![p0.as_str(), p1.as_str(), p2.as_str()];
         assert!(names.contains(&"openai"));
@@ -786,8 +798,7 @@ mod provider_registry_tests {
         r.register(spec_openai()).unwrap();
         r.register(spec_anthropic()).unwrap();
 
-        let chain = FallbackChain::new("openai", &r)
-            .with_fallback("anthropic");
+        let chain = FallbackChain::new("openai", &r).with_fallback("anthropic");
 
         let (provider_used, result): (String, &str) = chain
             .execute(|_spec| Ok::<&str, &str>("ok"))
@@ -812,8 +823,12 @@ mod provider_registry_tests {
         // primary openai 失败, anthropic 成功
         let (provider_used, result): (String, &str) = chain
             .execute(|spec| {
-                if spec.name == "openai" { return Err("rate limited"); }
-                if spec.name == "google" { return Err("5xx"); }
+                if spec.name == "openai" {
+                    return Err("rate limited");
+                }
+                if spec.name == "google" {
+                    return Err("5xx");
+                }
                 Ok::<&str, &str>("ok")
             })
             .expect("anthropic 应该成功");
@@ -829,11 +844,10 @@ mod provider_registry_tests {
         r.register(spec_openai()).unwrap();
         r.register(spec_anthropic()).unwrap();
 
-        let chain = FallbackChain::new("openai", &r)
-            .with_fallback("anthropic");
+        let chain = FallbackChain::new("openai", &r).with_fallback("anthropic");
 
-        let result: Result<(String, &str), FallbackError> = chain
-            .execute(|spec| Err::<&str, _>(format!("{} down", spec.name)));
+        let result: Result<(String, &str), FallbackError> =
+            chain.execute(|spec| Err::<&str, _>(format!("{} down", spec.name)));
         assert!(matches!(result, Err(FallbackError::AllFailed { .. })));
     }
 
@@ -844,8 +858,11 @@ mod provider_registry_tests {
         let r = ProviderRegistry::new();
         // primary 不在 registry
         let chain = FallbackChain::new("nonexistent", &r);
-        let result: Result<(String, &str), FallbackError> = chain.execute(|_| Ok::<&str, &str>("ok"));
-        assert!(matches!(result, Err(FallbackError::UnknownProvider(name)) if name == "nonexistent"));
+        let result: Result<(String, &str), FallbackError> =
+            chain.execute(|_| Ok::<&str, &str>("ok"));
+        assert!(
+            matches!(result, Err(FallbackError::UnknownProvider(name)) if name == "nonexistent")
+        );
     }
 
     // ---------- Test 19: FallbackChain::len + chain_names + 整合 CostTracker ----------
@@ -869,7 +886,9 @@ mod provider_registry_tests {
             // primary 失败, anthropic 成功
             let (used, (input, output, latency_ms)): (String, (u64, u64, u64)) = chain
                 .execute(|spec| {
-                    if spec.name == "openai" { return Err("down"); }
+                    if spec.name == "openai" {
+                        return Err("down");
+                    }
                     Ok((1500u64, 800u64, 250u64))
                 })
                 .expect("anthropic 应该成功");

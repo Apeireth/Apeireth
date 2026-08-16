@@ -23,9 +23,7 @@ fn now_ms() -> i64 {
 #[ignore = "requires APEIRETH_MINIMAX_LIVE_TEST=1 + APEIRETH_MINIMAX_API_KEY + network"]
 fn live_minimax_3_persona_bound_3_round_deliberation() {
     if std::env::var("APEIRETH_MINIMAX_LIVE_TEST").unwrap_or_default() != "1" {
-        eprintln!(
-            "SKIP: APEIRETH_MINIMAX_LIVE_TEST != 1, run with `cargo test -- --ignored`"
-        );
+        eprintln!("SKIP: APEIRETH_MINIMAX_LIVE_TEST != 1, run with `cargo test -- --ignored`");
         return;
     }
     let api_key = std::env::var("APEIRETH_MINIMAX_API_KEY").unwrap_or_default();
@@ -86,7 +84,12 @@ fn live_minimax_3_persona_bound_3_round_deliberation() {
         v.member_summaries
     );
     for r in &v.rounds {
-        eprintln!("  Round {}: score={:.3} transcript={}", r.round + 1, r.consensus_score, r.transcript);
+        eprintln!(
+            "  Round {}: score={:.3} transcript={}",
+            r.round + 1,
+            r.consensus_score,
+            r.transcript
+        );
         for (i, speech) in r.speeches.iter().enumerate() {
             eprintln!("    speech #{}: {}", i, speech);
         }

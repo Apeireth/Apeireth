@@ -289,10 +289,7 @@ mod tiktoken_counter_tests {
         let counter = TiktokenCounter::new(TokenModel::Cl100KBase).unwrap();
         // 4 个 CJK chars "你好世界" 在 cl100k_base 应 > 4 (每个 char ≈ 1.x token, BPE 拆分)
         let n = counter.count_tokens("你好世界");
-        assert!(
-            n > 4,
-            "4 CJK chars 应 > 4 tokens (BPE 拆分), got {n}"
-        );
+        assert!(n > 4, "4 CJK chars 应 > 4 tokens (BPE 拆分), got {n}");
         // 同时不应过分大 (粗略上限: 4 chars * 3 = 12, cl100k_base 实测约 4-8)
         assert!(n <= 16, "4 CJK chars 应 <= 16 tokens, got {n}");
     }
@@ -330,7 +327,10 @@ mod tiktoken_counter_tests {
         // 20+ 词的输入, 实测 cl100k_base ~20 tokens
         let long_text = "the quick brown fox jumps over the lazy dog the cat the bird the fish the rabbit and the horse";
         let original_count = counter.count_tokens(long_text);
-        assert!(original_count > 10, "long text 应 > 10 tokens, got {original_count}");
+        assert!(
+            original_count > 10,
+            "long text 应 > 10 tokens, got {original_count}"
+        );
 
         // 截断到 5 tokens
         let truncated = counter.truncate_to_tokens(long_text, 5);
@@ -365,10 +365,7 @@ mod tiktoken_counter_tests {
         // V2.2 续 (等 tiktoken-rs 0.8+ 公开 decode 或改用 byte_pair_split 手动实现)
         let counter = TiktokenCounter::new(TokenModel::Cl100KBase).unwrap();
         let result = counter.decode(&[1, 2, 3]);
-        assert!(
-            result.is_err(),
-            "decode 0 装, 应返 Err, got {result:?}"
-        );
+        assert!(result.is_err(), "decode 0 装, 应返 Err, got {result:?}");
         // encode 仍正常 (1:1 借鉴 VCP `encoding.encode(text)`)
         let tokens = counter.encode("hello");
         assert!(!tokens.is_empty(), "encode 应返非空 token 列表");
@@ -379,7 +376,12 @@ mod tiktoken_counter_tests {
     #[test]
     fn available_models_returns_5() {
         let models = TiktokenCounter::available_models();
-        assert_eq!(models.len(), 5, "应 5 model, got {}: {models:?}", models.len());
+        assert_eq!(
+            models.len(),
+            5,
+            "应 5 model, got {}: {models:?}",
+            models.len()
+        );
         // 顺序核验
         assert_eq!(models[0], TokenModel::Cl100KBase);
         assert_eq!(models[1], TokenModel::O200KBase);
@@ -395,7 +397,10 @@ mod tiktoken_counter_tests {
         assert_eq!(LEGACY_FINAL_CONTEXT_STORE_BYTES, 11_559);
         // 用 str::eq 替代 ==, 兼容 rustc 1.80 const stable string eq
         assert!(str::eq(LEGACY_TOKENIZER_NAME, "cl100k_base"));
-        assert!(str::eq(LEGACY_TOKENIZER_METHOD, "@dqbd/tiktoken:cl100k_base"));
+        assert!(str::eq(
+            LEGACY_TOKENIZER_METHOD,
+            "@dqbd/tiktoken:cl100k_base"
+        ));
         assert_eq!(LEGACY_MAX_SNAPSHOTS, 5);
     }
 

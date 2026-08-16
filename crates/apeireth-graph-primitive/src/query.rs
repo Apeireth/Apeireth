@@ -256,9 +256,7 @@ impl CombinedQuery {
         if self.restrict_to_nodes {
             let node_ids: std::collections::HashSet<String> =
                 nodes.iter().map(|n| n.id.clone()).collect();
-            edges.retain(|e| {
-                node_ids.contains(&e.from) || node_ids.contains(&e.to)
-            });
+            edges.retain(|e| node_ids.contains(&e.from) || node_ids.contains(&e.to));
         }
 
         (nodes, edges)
@@ -291,17 +289,25 @@ mod tests {
 
     fn populated_graph() -> RelationGraph {
         let mut g = RelationGraph::new();
-        g.insert_node(GraphNode::with_kind("alice", "agent")
-            .with_properties(serde_json::json!({"role": "assistant", "level": 5})))
+        g.insert_node(
+            GraphNode::with_kind("alice", "agent")
+                .with_properties(serde_json::json!({"role": "assistant", "level": 5})),
+        )
+        .unwrap();
+        g.insert_node(
+            GraphNode::with_kind("bob", "agent")
+                .with_properties(serde_json::json!({"role": "user", "level": 3})),
+        )
+        .unwrap();
+        g.insert_node(
+            GraphNode::with_kind("carol", "tool")
+                .with_properties(serde_json::json!({"category": "compute"})),
+        )
+        .unwrap();
+        g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob"))
             .unwrap();
-        g.insert_node(GraphNode::with_kind("bob", "agent")
-            .with_properties(serde_json::json!({"role": "user", "level": 3})))
+        g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol"))
             .unwrap();
-        g.insert_node(GraphNode::with_kind("carol", "tool")
-            .with_properties(serde_json::json!({"category": "compute"})))
-            .unwrap();
-        g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob")).unwrap();
-        g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol")).unwrap();
         g
     }
 
@@ -380,10 +386,7 @@ mod tests {
     #[test]
     fn test_edge_query_endpoint() {
         let g = populated_graph();
-        let results = EdgeQuery::new()
-            .from("alice")
-            .to("carol")
-            .execute(&g);
+        let results = EdgeQuery::new().from("alice").to("carol").execute(&g);
         assert_eq!(results.len(), 1);
     }
 

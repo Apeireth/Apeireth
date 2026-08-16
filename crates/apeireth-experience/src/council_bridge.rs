@@ -42,7 +42,11 @@ pub fn wiki_to_context_block(entry: &WikiEntry) -> String {
 - content: {}",
         entry.title,
         entry.confidence,
-        if entry.tags.is_empty() { "(none)".to_string() } else { entry.tags.join(", ") },
+        if entry.tags.is_empty() {
+            "(none)".to_string()
+        } else {
+            entry.tags.join(", ")
+        },
         entry.promotion_count,
         entry.content
     )
@@ -51,10 +55,16 @@ pub fn wiki_to_context_block(entry: &WikiEntry) -> String {
 /// KG summary -> context block (top N nodes by confidence).
 pub fn kg_to_context_block(kg: &KnowledgeGraph, max_nodes: usize) -> String {
     let mut nodes: Vec<&KnowledgeNode> = kg.all_nodes();
-    nodes.sort_by(|a, b| b.confidence.partial_cmp(&a.confidence).unwrap_or(std::cmp::Ordering::Equal));
+    nodes.sort_by(|a, b| {
+        b.confidence
+            .partial_cmp(&a.confidence)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     let taken = nodes.into_iter().take(max_nodes);
-    let mut out = String::from("# Knowledge Graph (top by confidence)
-");
+    let mut out = String::from(
+        "# Knowledge Graph (top by confidence)
+",
+    );
     for n in taken {
         let kind = match n.kind {
             crate::graph::NodeKind::Extracted => "EX",
@@ -71,14 +81,19 @@ pub fn kg_to_context_block(kg: &KnowledgeGraph, max_nodes: usize) -> String {
         *rel_counts.entry(e.kind).or_insert(0) += 1;
     }
     if !rel_counts.is_empty() {
-        out.push_str("
+        out.push_str(
+            "
 # Edges by relation
-");
+",
+        );
         let mut sorted: Vec<(RelationKind, usize)> = rel_counts.into_iter().collect();
         sorted.sort_by(|a, b| b.1.cmp(&a.1));
         for (k, c) in sorted {
-            out.push_str(&format!("- {:?}: {}
-", k, c));
+            out.push_str(&format!(
+                "- {:?}: {}
+",
+                k, c
+            ));
         }
     }
     out
@@ -93,13 +108,20 @@ pub fn association_to_context_block(
     let neighbours = net.associate(seed, depth);
     if neighbours.is_empty() {
         return "# Association: (no neighbours)
-".into();
+"
+        .into();
     }
-    let mut out = format!("# Association from node {} (depth {})
-", seed, depth);
+    let mut out = format!(
+        "# Association from node {} (depth {})
+",
+        seed, depth
+    );
     for (id, label, score) in neighbours {
-        out.push_str(&format!("- {} ({}) score={:.3}
-", label, id, score));
+        out.push_str(&format!(
+            "- {} ({}) score={:.3}
+",
+            label, id, score
+        ));
     }
     out
 }
@@ -112,7 +134,11 @@ pub fn bundle_to_history_refs(
     depth: usize,
 ) -> Vec<String> {
     let mut refs: Vec<String> = wiki.iter().map(|w| wiki_to_history_ref(w)).collect();
-    refs.push(format!("kg:nodes={},edges={}", kg.node_count(), kg.edge_count()));
+    refs.push(format!(
+        "kg:nodes={},edges={}",
+        kg.node_count(),
+        kg.edge_count()
+    ));
     refs.push(format!("association:seed={},depth={}", seed_node, depth));
     refs
 }
@@ -147,10 +173,21 @@ mod tests {
     #[test]
     fn kg_to_context_block_ranks_top_nodes() {
         let mut kg = KnowledgeGraph::new();
-        let a = kg.add_node(KnowledgeNode::new("alpha", NodeKind::Extracted, 0.9, "ep-1"));
+        let a = kg.add_node(KnowledgeNode::new(
+            "alpha",
+            NodeKind::Extracted,
+            0.9,
+            "ep-1",
+        ));
         let b = kg.add_node(KnowledgeNode::new("beta", NodeKind::Inferred, 0.7, "ep-1"));
-        let _c = kg.add_node(KnowledgeNode::new("gamma", NodeKind::Extracted, 0.5, "ep-1"));
-        kg.add_edge(KnowledgeEdge::new(a, b, RelationKind::Coordination, 0.8)).unwrap();
+        let _c = kg.add_node(KnowledgeNode::new(
+            "gamma",
+            NodeKind::Extracted,
+            0.5,
+            "ep-1",
+        ));
+        kg.add_edge(KnowledgeEdge::new(a, b, RelationKind::Coordination, 0.8))
+            .unwrap();
         let s = kg_to_context_block(&kg, 2);
         assert!(s.contains("alpha"));
         assert!(s.contains("beta"));

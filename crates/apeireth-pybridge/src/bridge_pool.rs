@@ -110,7 +110,9 @@ impl BridgeModulePool {
         {
             let mut cache = self.cache.lock().expect("BridgeModulePool cache mutex");
             let now = self.now_secs();
-            cache.retain(|_, v| now.saturating_sub(v.last_used_secs) < self.config.idle_timeout_secs);
+            cache.retain(|_, v| {
+                now.saturating_sub(v.last_used_secs) < self.config.idle_timeout_secs
+            });
             if let Some(cached) = cache.get_mut(module_name) {
                 cached.last_used_secs = now;
                 let mut stats = self.stats.lock().expect("stats mutex");

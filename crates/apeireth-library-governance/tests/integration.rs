@@ -10,22 +10,20 @@
 //! 7. API 锁定: 5 编译期 hardcode 严守
 //! 8. 0 越界 8 硬墙: 8 通道全 Pass
 
-use apeireth_library_governance::{
-    evaluate, run_all, run_all_formal_proofs, run_all_8_harnesses, verify, Boundary,
-    CheckStatus, ConsistencyReport, DecisionTree, GovernanceAction, GovernanceContext,
-    GovernanceDecision, GovernanceEngine, Invariant, LockedSignature, PolicyKind, ProofHarness,
-    ProofKind, ProofReport, ProofResult, ProofRunner, Stage5Token, VerificationSubject,
-};
 use apeireth_library_governance::consistency::{
-    ANCHOR_COUNT, BASELINE_VALUE_1_X1000, BASELINE_VALUE_2_X1000, BASELINE_VALUE_3_X1000,
-    GATE_LAYERS, LOCKED_CRATE_COUNT, WORKSPACE_VERSION_MAJOR, WORKSPACE_VERSION_MINOR,
-    api_lock, checks, tokens_locked,
+    api_lock, checks, tokens_locked, ANCHOR_COUNT, BASELINE_VALUE_1_X1000, BASELINE_VALUE_2_X1000,
+    BASELINE_VALUE_3_X1000, GATE_LAYERS, LOCKED_CRATE_COUNT, WORKSPACE_VERSION_MAJOR,
+    WORKSPACE_VERSION_MINOR,
 };
 use apeireth_library_governance::proof_harnesses;
-use apeireth_library_governance::strategy::{
-    REQUIRED_TOKEN_COUNT, required_tokens_present,
-};
+use apeireth_library_governance::strategy::{required_tokens_present, REQUIRED_TOKEN_COUNT};
 use apeireth_library_governance::verification::invariants as ver_inv;
+use apeireth_library_governance::{
+    evaluate, run_all, run_all_8_harnesses, run_all_formal_proofs, verify, Boundary, CheckStatus,
+    ConsistencyReport, DecisionTree, GovernanceAction, GovernanceContext, GovernanceDecision,
+    GovernanceEngine, Invariant, LockedSignature, PolicyKind, ProofHarness, ProofKind, ProofReport,
+    ProofResult, ProofRunner, Stage5Token, VerificationSubject,
+};
 
 #[test]
 fn integration_strategy_dispatch_5_known_allow() {
@@ -154,14 +152,34 @@ fn integration_zero_violation_8_hard_walls() {
 fn integration_decision_round_trip_via_evaluate() {
     // 完整 round-trip: context → evaluate → decision → action
     let cases = [
-        (GovernanceContext::version(), PolicyKind::Version, GovernanceAction::Allow),
-        (GovernanceContext::baseline(), PolicyKind::Baseline, GovernanceAction::Allow),
-        (GovernanceContext::anchor(), PolicyKind::Anchor, GovernanceAction::Allow),
-        (GovernanceContext::gate(), PolicyKind::Gate, GovernanceAction::Allow),
+        (
+            GovernanceContext::version(),
+            PolicyKind::Version,
+            GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::baseline(),
+            PolicyKind::Baseline,
+            GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::anchor(),
+            PolicyKind::Anchor,
+            GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::gate(),
+            PolicyKind::Gate,
+            GovernanceAction::Allow,
+        ),
     ];
     for (ctx, expected_policy, expected_action) in &cases {
         let decision: GovernanceDecision = evaluate(ctx);
-        assert_eq!(decision.policy, *expected_policy, "ctx.policy={}", ctx.policy);
+        assert_eq!(
+            decision.policy, *expected_policy,
+            "ctx.policy={}",
+            ctx.policy
+        );
         assert_eq!(decision.action, *expected_action);
     }
 }
@@ -233,28 +251,46 @@ fn integration_formal_proof_defensive_proof_macro() {
 fn integration_formal_proof_trivial_invariant_15_primitive_types() {
     // Stage 5.1: trivial_invariant! 宏 15 原生类型 impl (Kani 1:1)
     use apeireth_library_governance::formal_proof::Invariant as _;
-    let v: u8 = 42; assert!(v.is_safe());
-    let v: u16 = u16::MAX; assert!(v.is_safe());
-    let v: u32 = u32::MAX; assert!(v.is_safe());
-    let v: u64 = u64::MAX; assert!(v.is_safe());
-    let v: u128 = u128::MAX; assert!(v.is_safe());
-    let v: usize = usize::MAX; assert!(v.is_safe());
-    let v: i8 = i8::MIN; assert!(v.is_safe());
-    let v: i16 = i16::MIN; assert!(v.is_safe());
-    let v: i32 = i32::MIN; assert!(v.is_safe());
-    let v: i64 = i64::MIN; assert!(v.is_safe());
-    let v: i128 = i128::MIN; assert!(v.is_safe());
-    let v: isize = isize::MIN; assert!(v.is_safe());
-    let v: () = (); assert!(v.is_safe());
-    let v: bool = true; assert!(v.is_safe());
-    let v: char = '🦀'; assert!(v.is_safe());
+    let v: u8 = 42;
+    assert!(v.is_safe());
+    let v: u16 = u16::MAX;
+    assert!(v.is_safe());
+    let v: u32 = u32::MAX;
+    assert!(v.is_safe());
+    let v: u64 = u64::MAX;
+    assert!(v.is_safe());
+    let v: u128 = u128::MAX;
+    assert!(v.is_safe());
+    let v: usize = usize::MAX;
+    assert!(v.is_safe());
+    let v: i8 = i8::MIN;
+    assert!(v.is_safe());
+    let v: i16 = i16::MIN;
+    assert!(v.is_safe());
+    let v: i32 = i32::MIN;
+    assert!(v.is_safe());
+    let v: i64 = i64::MIN;
+    assert!(v.is_safe());
+    let v: i128 = i128::MIN;
+    assert!(v.is_safe());
+    let v: isize = isize::MIN;
+    assert!(v.is_safe());
+    let v: () = ();
+    assert!(v.is_safe());
+    let v: bool = true;
+    assert!(v.is_safe());
+    let v: char = '🦀';
+    assert!(v.is_safe());
 }
 
 #[test]
 fn integration_formal_proof_proof_kind_serialization_3_variants() {
     // Stage 5.1: ProofKind 3 变体 Kani 序列化字符串 (#[kani::proof] / proof_for_contract / test)
     assert_eq!(ProofKind::Proof.as_str(), "#[kani::proof]");
-    assert_eq!(ProofKind::ProofForContract.as_str(), "#[kani::proof_for_contract]");
+    assert_eq!(
+        ProofKind::ProofForContract.as_str(),
+        "#[kani::proof_for_contract]"
+    );
     assert_eq!(ProofKind::Test.as_str(), "#[test]");
 }
 
@@ -284,8 +320,17 @@ fn integration_formal_proof_report_pass_fail_skipped_count() {
     let mut r = ProofReport::new();
     r.record(ProofHarness::proof("a", "f", 1), ProofResult::Success);
     r.record(ProofHarness::proof("b", "f", 2), ProofResult::Success);
-    r.record(ProofHarness::proof("c", "f", 3), ProofResult::Failure { harness: "c", message: "m" });
-    r.record(ProofHarness::test("d", "f", 4), ProofResult::Skipped { reason: "r" });
+    r.record(
+        ProofHarness::proof("c", "f", 3),
+        ProofResult::Failure {
+            harness: "c",
+            message: "m",
+        },
+    );
+    r.record(
+        ProofHarness::test("d", "f", 4),
+        ProofResult::Skipped { reason: "r" },
+    );
     assert_eq!(r.total(), 4);
     assert_eq!(r.pass_count(), 2);
     assert_eq!(r.fail_count(), 1);
@@ -305,15 +350,24 @@ fn integration_formal_proof_cross_module_8_hard_walls_via_8_harnesses() {
     // 3. A1 R11 baseline index (0)
     assert_eq!(proof_harnesses::ALL[2].name, "proof_baseline_index_is_r11");
     // 4. B1 24 LOCKED signatures intact
-    assert_eq!(proof_harnesses::ALL[3].name, "proof_locked_signatures_intact");
+    assert_eq!(
+        proof_harnesses::ALL[3].name,
+        "proof_locked_signatures_intact"
+    );
     // 5. B5 8 哲学锚
     assert_eq!(proof_harnesses::ALL[4].name, "proof_anchor_count_is_eight");
     // 6. B4 6 重守门 v7
     assert_eq!(proof_harnesses::ALL[5].name, "proof_gate_layers_is_six");
     // 7. Stage 5.1 NEW: Stage5Token::is_safe (Kani MyDate 1:1)
-    assert_eq!(proof_harnesses::ALL[6].name, "proof_stage5_token_safe_default_holds");
+    assert_eq!(
+        proof_harnesses::ALL[6].name,
+        "proof_stage5_token_safe_default_holds"
+    );
     // 8. Stage 5.1 NEW: LockedSignature::is_safe (B1 1:1)
-    assert_eq!(proof_harnesses::ALL[7].name, "proof_locked_signature_safe_default_holds");
+    assert_eq!(
+        proof_harnesses::ALL[7].name,
+        "proof_locked_signature_safe_default_holds"
+    );
 }
 
 #[test]
@@ -361,11 +415,12 @@ fn integration_formal_proof_token_construction_matches_compile_time_hardcodes() 
     let t = Stage5Token::try_new(
         WORKSPACE_VERSION_MAJOR,
         WORKSPACE_VERSION_MINOR,
-        0, // baseline_index = 0 = R11
-        true, // B1 严守
+        0,            // baseline_index = 0 = R11
+        true,         // B1 严守
         ANCHOR_COUNT, // 8 哲学锚
-        GATE_LAYERS, // 6 重 v7
-    ).unwrap();
+        GATE_LAYERS,  // 6 重 v7
+    )
+    .unwrap();
     assert!(t.is_safe());
     // 一致性: t 跟 VerificationSubject safe_default 1:1 对齐
     let s = VerificationSubject::safe_default();

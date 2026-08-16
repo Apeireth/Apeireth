@@ -64,7 +64,7 @@
 use std::time::Duration;
 
 use crate::observability::{
-    ComponentHealth, HEALTH_COMPONENTS, ObsState, PHILOSOPHY_ANCHORS, RequestLogEntry, R_MEASURES,
+    ComponentHealth, ObsState, RequestLogEntry, HEALTH_COMPONENTS, PHILOSOPHY_ANCHORS, R_MEASURES,
 };
 
 // ============================================================
@@ -238,7 +238,10 @@ impl DashboardData {
         out.push_str("\n");
 
         // Panel 3: 最近 10 request log
-        out.push_str(&format!("[3] recent {} requests (newest first):\n", self.recent_requests.len()));
+        out.push_str(&format!(
+            "[3] recent {} requests (newest first):\n",
+            self.recent_requests.len()
+        ));
         for r in &self.recent_requests {
             out.push_str(&format!(
                 "  {} {} {} -> {} ({}ms) [{}]\n",
@@ -347,7 +350,10 @@ impl Dashboard {
     /// **退出**: 收到 `q` 键 OR `Ctrl+C`
     /// **错误**: 终端初始化失败返 `Err(String)`, caller 决定 fallback
     #[cfg(feature = "tui-dashboard")]
-    pub fn run(&mut self, state: std::sync::Arc<parking_lot::RwLock<ObsState>>) -> Result<(), String> {
+    pub fn run(
+        &mut self,
+        state: std::sync::Arc<parking_lot::RwLock<ObsState>>,
+    ) -> Result<(), String> {
         use crossterm::event::{Event, KeyCode, KeyEventKind};
         use crossterm::execute;
         use crossterm::terminal::{
@@ -371,7 +377,9 @@ impl Dashboard {
         disable_raw_mode().map_err(|e| format!("disable_raw_mode: {e}"))?;
         execute!(terminal.backend_mut(), LeaveAlternateScreen)
             .map_err(|e| format!("LeaveAlternateScreen: {e}"))?;
-        terminal.show_cursor().map_err(|e| format!("show_cursor: {e}"))?;
+        terminal
+            .show_cursor()
+            .map_err(|e| format!("show_cursor: {e}"))?;
 
         res
     }
@@ -511,7 +519,10 @@ impl Dashboard {
             .gauge_style(Style::default().fg(Color::Cyan));
         let disk_g = Gauge::default()
             .block(Block::default().borders(Borders::ALL).title("disk free"))
-            .percent(((self.data.disk_free_bytes as f64 / 107_374_182_400.0) * 100.0).clamp(0.0, 100.0) as u16)
+            .percent(
+                ((self.data.disk_free_bytes as f64 / 107_374_182_400.0) * 100.0).clamp(0.0, 100.0)
+                    as u16,
+            )
             .gauge_style(Style::default().fg(Color::Green));
         f.render_widget(cpu_g, right_chunks[0]);
         f.render_widget(mem_g, right_chunks[1]);
@@ -522,9 +533,7 @@ impl Dashboard {
             .data
             .r_measures
             .iter()
-            .map(|(name, val)| {
-                Line::from(format!("  {}: {:.3} (stub)", name, val))
-            })
+            .map(|(name, val)| Line::from(format!("  {}: {:.3} (stub)", name, val)))
             .collect();
         let anchor_lines: Vec<Line> = PHILOSOPHY_ANCHORS
             .iter()
@@ -571,7 +580,8 @@ impl Dashboard {
         } else {
             "recent 10 requests"
         };
-        let req_list = List::new(req_items).block(Block::default().borders(Borders::ALL).title(title));
+        let req_list =
+            List::new(req_items).block(Block::default().borders(Borders::ALL).title(title));
         f.render_widget(req_list, col_chunks[2]);
 
         // 底部快捷键

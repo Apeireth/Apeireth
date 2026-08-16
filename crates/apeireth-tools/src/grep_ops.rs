@@ -55,7 +55,9 @@ pub struct RipgrepGrepOps {
 
 impl RipgrepGrepOps {
     pub fn new() -> Self {
-        Self { name: "Grep".to_string() }
+        Self {
+            name: "Grep".to_string(),
+        }
     }
     pub fn with_name(name: impl Into<String>) -> Self {
         Self { name: name.into() }
@@ -77,9 +79,12 @@ impl GrepOps for RipgrepGrepOps {
         glob: Option<&str>,
         max_results: usize,
     ) -> Result<Vec<GrepHit>, String> {
-        let re = Regex::new(pattern)
-            .map_err(|e| format!("regex compile: {e}"))?;
-        let limit = if max_results == 0 { MAX_SEARCH_RESULTS } else { max_results.min(MAX_SEARCH_RESULTS) };
+        let re = Regex::new(pattern).map_err(|e| format!("regex compile: {e}"))?;
+        let limit = if max_results == 0 {
+            MAX_SEARCH_RESULTS
+        } else {
+            max_results.min(MAX_SEARCH_RESULTS)
+        };
 
         let mut hits = Vec::new();
         for entry in WalkDir::new(path).follow_links(false).into_iter().flatten() {
@@ -97,7 +102,9 @@ impl GrepOps for RipgrepGrepOps {
                     continue;
                 }
             }
-            let Ok(content) = tokio::fs::read_to_string(p).await else { continue }; // binary / 权限不够 / 大文件 → 跳过
+            let Ok(content) = tokio::fs::read_to_string(p).await else {
+                continue;
+            }; // binary / 权限不够 / 大文件 → 跳过
             for (idx, line) in content.lines().enumerate() {
                 if re.is_match(line) {
                     hits.push(GrepHit {
@@ -158,8 +165,12 @@ impl GrepTool {
 
 #[async_trait]
 impl apeireth_tool_registry::Tool for GrepTool {
-    fn name(&self) -> &str { self.inner.name() }
-    fn kind(&self) -> ToolKind { ToolKind::Async }
+    fn name(&self) -> &str {
+        self.inner.name()
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Async
+    }
     fn axes(&self) -> apeireth_tool_registry::ToolAxes {
         apeireth_tool_registry::ToolAxes {
             trigger: apeireth_tool_registry::TriggerAxis::OnDemand,
@@ -170,16 +181,24 @@ impl apeireth_tool_registry::Tool for GrepTool {
         }
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let pattern = args.get("pattern").and_then(|v| v.as_str())
+        let pattern = args
+            .get("pattern")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing 'pattern' string".to_string())?;
-        let path_str = args.get("path").and_then(|v| v.as_str())
+        let path_str = args
+            .get("path")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing 'path' string".to_string())?;
         let path = PathBuf::from(path_str);
         let glob = args.get("glob").and_then(|v| v.as_str());
-        let max = args.get("max_results").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
+        let max = args
+            .get("max_results")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as usize;
         let hits = self.inner.search(pattern, &path, glob, max).await?;
         let total = hits.len();
-        let lines: Vec<String> = hits.into_iter()
+        let lines: Vec<String> = hits
+            .into_iter()
             .map(|h| format!("{}:{}:{}", h.path.display(), h.line_no, h.line))
             .collect();
         Ok(json!({
@@ -209,12 +228,19 @@ mod tests {
     #[tokio::test]
     async fn search_finds_matches_with_glob() {
         let dir = TempDir::new().expect("tempdir");
-        std::fs::write(dir.path().join("a.rs"), "fn main() {\n    println!(\"hi\");\n}\n").unwrap();
+        std::fs::write(
+            dir.path().join("a.rs"),
+            "fn main() {\n    println!(\"hi\");\n}\n",
+        )
+        .unwrap();
         std::fs::write(dir.path().join("b.py"), "def main():\n    print('hi')\n").unwrap();
         std::fs::write(dir.path().join("c.txt"), "just a note\n").unwrap();
 
         let g = RipgrepGrepOps::new();
-        let hits = g.search("println", dir.path(), Some("*.rs"), 10).await.expect("search");
+        let hits = g
+            .search("println", dir.path(), Some("*.rs"), 10)
+            .await
+            .expect("search");
         assert_eq!(hits.len(), 1, "only a.rs matches");
         assert!(hits[0].path.ends_with("a.rs"));
         assert_eq!(hits[0].line_no, 2);
@@ -227,7 +253,10 @@ mod tests {
             std::fs::write(dir.path().join(format!("f{i}.txt")), "match\n").unwrap();
         }
         let g = RipgrepGrepOps::new();
-        let hits = g.search("match", dir.path(), None, 3).await.expect("search");
+        let hits = g
+            .search("match", dir.path(), None, 3)
+            .await
+            .expect("search");
         assert_eq!(hits.len(), 3);
     }
 
@@ -245,11 +274,14 @@ mod tests {
         let dir = TempDir::new().expect("tempdir");
         std::fs::write(dir.path().join("x.rs"), "// TODO: refactor\nfn real() {}\n").unwrap();
         let tool = GrepTool::new(Arc::new(RipgrepGrepOps::new()));
-        let r = tool.call(json!({
-            "pattern": "TODO",
-            "path": dir.path().to_string_lossy(),
-            "glob": "*.rs"
-        })).await.expect("call");
+        let r = tool
+            .call(json!({
+                "pattern": "TODO",
+                "path": dir.path().to_string_lossy(),
+                "glob": "*.rs"
+            }))
+            .await
+            .expect("call");
         assert_eq!(r["matches"], 1);
         let lines = r["lines"].as_array().unwrap();
         assert!(lines[0].as_str().unwrap().contains("TODO"));

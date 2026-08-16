@@ -129,10 +129,7 @@ impl ResponsePayload {
     /// 从 NormalizedResponse 构造 (集成 helper, protocol_handlers 集成用)
     ///
     /// **不漂移**: `serde_json::to_value` 失败 → body 退化为 Null (fail-soft)
-    pub fn from_response(
-        resp: &apeireth_protocol::NormalizedResponse,
-        status: u16,
-    ) -> Self {
+    pub fn from_response(resp: &apeireth_protocol::NormalizedResponse, status: u16) -> Self {
         Self {
             body: serde_json::to_value(resp).unwrap_or(serde_json::Value::Null),
             content: resp.content.clone(),
@@ -339,11 +336,17 @@ impl ResponseReplayCache {
     /// **行为**: 遍历 entries, 移除 `now - created_at > ttl` 的, 返 count
     /// **fail-soft**: lock poisoned → 返 0
     pub fn evict_expired(&self, now: SystemTime) -> usize {
-        let Ok(mut entries) = self.entries.write() else { return 0 };
+        let Ok(mut entries) = self.entries.write() else {
+            return 0;
+        };
         let expired_keys: Vec<String> = entries
             .iter()
             .filter_map(|(k, e)| {
-                if now.duration_since(e.created_at).map(|d| d > self.ttl).unwrap_or(false) {
+                if now
+                    .duration_since(e.created_at)
+                    .map(|d| d > self.ttl)
+                    .unwrap_or(false)
+                {
                     Some(k.clone())
                 } else {
                     None
@@ -370,7 +373,9 @@ impl ResponseReplayCache {
     /// **行为**: `to_evict = len - max`, 取最早 `to_evict` 个, 返 count
     /// **fail-soft**: lock poisoned → 返 0
     pub fn evict_lru(&self, max: usize) -> usize {
-        let Ok(mut entries) = self.entries.write() else { return 0 };
+        let Ok(mut entries) = self.entries.write() else {
+            return 0;
+        };
         let to_evict = entries.len().saturating_sub(max);
         if to_evict == 0 {
             return 0;
@@ -491,7 +496,9 @@ pub fn global() -> Arc<ResponseReplayCache> {
 #[cfg(test)]
 mod replay_cache_tests {
     use super::*;
-    use apeireth_protocol::{NormalizedResponse, NormalizedFinishReason, normalized::NormalizedUsage};
+    use apeireth_protocol::{
+        normalized::NormalizedUsage, NormalizedFinishReason, NormalizedResponse,
+    };
     use std::sync::Arc;
 
     // ---------- 测试辅助 ----------
@@ -531,7 +538,10 @@ mod replay_cache_tests {
         let entry = cache.lookup("hash1").expect("should hit");
         assert_eq!(entry.request_hash, "hash1");
         assert_eq!(entry.response.content, "hello");
-        assert_eq!(entry.hit_count, 1, "first lookup should bump hit_count to 1");
+        assert_eq!(
+            entry.hit_count, 1,
+            "first lookup should bump hit_count to 1"
+        );
         assert_eq!(cache.len(), 1);
     }
 
@@ -571,7 +581,10 @@ mod replay_cache_tests {
         assert_eq!(cache.len(), 0, "len should be 0 after evict_expired");
 
         let stats = cache.stats();
-        assert_eq!(stats.evictions, 2, "stats.evictions should reflect 2 evictions");
+        assert_eq!(
+            stats.evictions, 2,
+            "stats.evictions should reflect 2 evictions"
+        );
     }
 
     // ---------- Test 4: evict_lru when over capacity (任务 spec 明列) ----------
@@ -595,7 +608,10 @@ mod replay_cache_tests {
         assert_eq!(cache.len(), 2);
         assert!(cache.lookup("k1").is_none(), "k1 should be auto-evicted");
         assert!(cache.lookup("k2").is_some(), "k2 should still be present");
-        assert!(cache.lookup("k3").is_some(), "k3 should be present (just added)");
+        assert!(
+            cache.lookup("k3").is_some(),
+            "k3 should be present (just added)"
+        );
 
         // 显式 evict_lru(1) 再 evict 1 oldest
         let initial_stats = cache.stats();
@@ -631,7 +647,10 @@ mod replay_cache_tests {
         let stats = cache.stats();
         assert_eq!(stats.misses, 3, "3 misses should bump stats.misses to 3");
         assert_eq!(stats.hits, 2, "2 hits should bump stats.hits to 2");
-        assert_eq!(stats.evictions, 0, "no eviction should bump stats.evictions");
+        assert_eq!(
+            stats.evictions, 0,
+            "no eviction should bump stats.evictions"
+        );
     }
 
     // ---------- Test 6: hash_request is deterministic (任务 spec 明列) ----------
@@ -671,9 +690,17 @@ mod replay_cache_tests {
     fn default_config_is_1000_entries_1h_ttl() {
         let cache = ResponseReplayCache::default();
         assert_eq!(cache.max_entries(), DEFAULT_MAX_ENTRIES);
-        assert_eq!(cache.max_entries(), 1000, "Default max_entries must be 1000 per spec");
+        assert_eq!(
+            cache.max_entries(),
+            1000,
+            "Default max_entries must be 1000 per spec"
+        );
         assert_eq!(cache.ttl(), DEFAULT_TTL);
-        assert_eq!(cache.ttl(), Duration::from_secs(3600), "Default TTL must be 1h per spec");
+        assert_eq!(
+            cache.ttl(),
+            Duration::from_secs(3600),
+            "Default TTL must be 1h per spec"
+        );
     }
 
     // ---------- Test 9 (bonus): lookup expired entry treated as miss (lazy eviction) ----------
@@ -701,9 +728,19 @@ mod replay_cache_tests {
         assert!(result.is_none(), "expired lookup should return None");
         let stats_after_expired = cache.stats();
         assert_eq!(stats_after_expired.hits, 1, "hit count stays at 1");
-        assert_eq!(stats_after_expired.misses, 1, "expired lookup counts as miss");
-        assert_eq!(stats_after_expired.evictions, 1, "expired entry counted as eviction");
-        assert_eq!(cache.len(), 0, "expired entry should be removed from entries");
+        assert_eq!(
+            stats_after_expired.misses, 1,
+            "expired lookup counts as miss"
+        );
+        assert_eq!(
+            stats_after_expired.evictions, 1,
+            "expired entry counted as eviction"
+        );
+        assert_eq!(
+            cache.len(),
+            0,
+            "expired entry should be removed from entries"
+        );
     }
 
     // ---------- Test 10 (bonus): global() returns same Arc ----------
@@ -712,7 +749,10 @@ mod replay_cache_tests {
     fn global_singleton_returns_same_arc() {
         let g1 = global();
         let g2 = global();
-        assert!(Arc::ptr_eq(&g1, &g2), "global() should return the same Arc instance");
+        assert!(
+            Arc::ptr_eq(&g1, &g2),
+            "global() should return the same Arc instance"
+        );
     }
 
     // ---------- Test 11 (bonus): ResponsePayload from_response / to_response roundtrip ----------
@@ -727,7 +767,10 @@ mod replay_cache_tests {
         assert_eq!(restored.content, resp.content);
         assert_eq!(restored.model, resp.model);
         assert_eq!(restored.usage.prompt_tokens, resp.usage.prompt_tokens);
-        assert_eq!(restored.usage.completion_tokens, resp.usage.completion_tokens);
+        assert_eq!(
+            restored.usage.completion_tokens,
+            resp.usage.completion_tokens
+        );
         assert_eq!(restored.usage.total_tokens, resp.usage.total_tokens);
     }
 

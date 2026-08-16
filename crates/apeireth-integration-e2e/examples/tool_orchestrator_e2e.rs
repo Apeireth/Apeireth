@@ -19,8 +19,8 @@ use std::sync::Arc;
 
 use apeireth_memory::SqliteMemoryStore;
 use apeireth_tool_approval::{
-    ApprovalDecision, ApprovalManager, AutoApproveHandler, BlacklistRule, FrequencyRule,
-    RiskRule, TrustRule, WhitelistRule,
+    ApprovalDecision, ApprovalManager, AutoApproveHandler, BlacklistRule, FrequencyRule, RiskRule,
+    TrustRule, WhitelistRule,
 };
 use apeireth_tool_registry::ToolRegistry;
 use apeireth_tool_runtime::{RecordStore, ToolCallParser, ToolExecutor};
@@ -29,7 +29,6 @@ use tempfile::tempdir;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     println!("=== Apeireth Tool Orchestrator E2E ===");
     println!();
 
@@ -66,7 +65,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Box::new(WhitelistRule::new()),
     ]);
     approval_mgr.set_handler(Arc::new(AutoApproveHandler));
-    println!("[3] ApprovalManager: {} rules + AutoApproveHandler", approval_mgr.rule_count());
+    println!(
+        "[3] ApprovalManager: {} rules + AutoApproveHandler",
+        approval_mgr.rule_count()
+    );
     println!();
 
     // ----------------------------------------------------------------
@@ -97,7 +99,10 @@ timeout_ms:<<<5000>>>
 "#;
 
     let parsed = ToolCallParser::parse(llm_output).expect("parse llm output");
-    println!("[5] Parser: parsed {} tool calls from LLM output", parsed.len());
+    println!(
+        "[5] Parser: parsed {} tool calls from LLM output",
+        parsed.len()
+    );
     for (i, call) in parsed.iter().enumerate() {
         println!("    [{}] tool_name={}", i, call.tool_name);
     }
@@ -131,7 +136,11 @@ timeout_ms:<<<5000>>>
                     .await
                     .map_err(|e| format!("record: {}", e))?;
                 total_recorded += 1;
-                println!("    record:  id={} status={}", recorded_id, if result.success { "success" } else { "failure" });
+                println!(
+                    "    record:  id={} status={}",
+                    recorded_id,
+                    if result.success { "success" } else { "failure" }
+                );
                 total_executed += 1;
             }
             ApprovalDecision::RequireApproval { timeout_ms: _ } => {
@@ -144,7 +153,11 @@ timeout_ms:<<<5000>>>
                         .await
                         .map_err(|e| format!("record: {}", e))?;
                     total_recorded += 1;
-                    println!("    record:  id={} status={}", recorded_id, if result.success { "success" } else { "failure" });
+                    println!(
+                        "    record:  id={} status={}",
+                        recorded_id,
+                        if result.success { "success" } else { "failure" }
+                    );
                     total_executed += 1;
                 } else {
                     total_denied += 1;
@@ -174,7 +187,9 @@ timeout_ms:<<<5000>>>
     let snapshot = approval_mgr.snapshot_history();
     println!("[7] Approval history: {} entries", snapshot.len());
 
-    let recorded_for_file_op = record_store.list_for_tool("FileOperator").unwrap_or_default();
+    let recorded_for_file_op = record_store
+        .list_for_tool("FileOperator")
+        .unwrap_or_default();
     let recorded_for_shell = record_store.list_for_tool("ShellExec").unwrap_or_default();
     println!(
         "    RecordStore: {} FileOperator + {} ShellExec records",
@@ -198,4 +213,3 @@ timeout_ms:<<<5000>>>
     // dir cleanup happens on drop
     Ok(())
 }
-

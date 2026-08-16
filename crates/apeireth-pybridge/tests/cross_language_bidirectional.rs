@@ -38,9 +38,10 @@
 //!   B4 6 重 v7 / A3 13 键 / C1 0 commit — 全守
 
 use apeireth_pybridge::{
-    call_python_function, call_python_function_kw, cross_language_smoke_check, eval_python_expression,
-    is_module_available, python_ext_enabled, python_is_available, r11_compat_version,
-    r11_module_count, BridgeError, R11_COMPAT_VERSION, R11_MODULE_COUNT, SuggestedAction,
+    call_python_function, call_python_function_kw, cross_language_smoke_check,
+    eval_python_expression, is_module_available, python_ext_enabled, python_is_available,
+    r11_compat_version, r11_module_count, BridgeError, SuggestedAction, R11_COMPAT_VERSION,
+    R11_MODULE_COUNT,
 };
 
 // 1. Stage 2 cross_language_smoke_check bidirectional_ok cfg 一致 (0 装 PASS 严守)
@@ -49,7 +50,10 @@ fn stage2_xlang_smoke_bidirectional_cfg_consistent() {
     let s = cross_language_smoke_check();
     // 默认 build 下 python_ext_active = false → bidirectional_ok 必 = false
     if !s.python_ext_active {
-        assert!(!s.bidirectional_ok, "默认 build 0 装: bidirectional_ok 必 = false");
+        assert!(
+            !s.bidirectional_ok,
+            "默认 build 0 装: bidirectional_ok 必 = false"
+        );
     }
     // r11 跨 build 严守
     assert_eq!(s.r11_module_count, 1103);
@@ -76,12 +80,7 @@ fn stage2_xlang_rust_to_python_default_build_degrades() {
 #[test]
 fn stage2_xlang_rust_to_python_kw_default_build_degrades() {
     if !python_ext_enabled() {
-        let r = call_python_function_kw(
-            "json",
-            "dumps",
-            &["x"],
-            &[("ensure_ascii", "false")],
-        );
+        let r = call_python_function_kw("json", "dumps", &["x"], &[("ensure_ascii", "false")]);
         assert!(r.is_err());
         assert_eq!(r.unwrap_err().suggested_action(), SuggestedAction::Degrade);
     }
@@ -182,7 +181,10 @@ fn stage2_xlang_bidirectional_integration_full() {
 
     // 双向 OK 守门: 默认 build = false, python-ext + 解释器可用 + math/json 可用 = true
     if !smoke.python_ext_active {
-        assert!(!smoke.bidirectional_ok, "默认 build 0 装 PASS 严守: bidirectional_ok = false");
+        assert!(
+            !smoke.bidirectional_ok,
+            "默认 build 0 装 PASS 严守: bidirectional_ok = false"
+        );
     } else {
         // python-ext: 双向 OK 取决于运行时 Python 解释器
         let _ = smoke.bidirectional_ok; // 不假设值, 0 装
@@ -202,7 +204,10 @@ fn stage2_xlang_zero_drama_honest_disclosure() {
     // Stage 2 0 装诚实: 默认 build 下双向 OK 必 = false
     // python-ext build 双向 OK = 取决于运行时 Python 解释器 (Stage 1 8 errors 已知, 不归 P10-2 修)
     if !python_ext_enabled() {
-        assert!(!smoke.bidirectional_ok, "Stage 2 0 装诚实: 默认 build bidirectional_ok = false");
+        assert!(
+            !smoke.bidirectional_ok,
+            "Stage 2 0 装诚实: 默认 build bidirectional_ok = false"
+        );
     }
     // 0 假装"双向已通", 0 假装"python-ext 已实施", 0 装 PASS 严守
     let _: bool = smoke.python_ext_active;

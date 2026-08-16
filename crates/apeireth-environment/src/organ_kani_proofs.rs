@@ -40,4 +40,3 @@ fn r177_env_kani_01_backend_local() {
 fn r177_env_kani_02_backend_not_local() {
     assert!(!BackendKind::Docker.is_local());
 }
-

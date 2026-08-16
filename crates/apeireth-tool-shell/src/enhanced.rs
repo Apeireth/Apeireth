@@ -59,11 +59,16 @@ impl EnhancedShell {
     /// Run a command with sandbox applied. Uses apeireth-tools::CodeExec
     /// (which already enforces whitelist + env_clear + stdin null).
     /// We additionally apply our sandbox policy on top.
-    pub async fn exec_sandboxed(&self, cmd: &str, timeout_ms: u64) -> Result<(i32, String), ShellError> {
+    pub async fn exec_sandboxed(
+        &self,
+        cmd: &str,
+        timeout_ms: u64,
+    ) -> Result<(i32, String), ShellError> {
         // Pre-validate via existing impl (whitelist check happens inside)
         // Then run our own sandboxed variant for the streaming/audit path.
         let mut command = build_command(cmd)?;
-        apply_sandbox(&mut command, &self.sandbox).map_err(|e| ShellError::Sandbox(e.to_string()))?;
+        apply_sandbox(&mut command, &self.sandbox)
+            .map_err(|e| ShellError::Sandbox(e.to_string()))?;
 
         let output = tokio::time::timeout(
             Duration::from_millis(if timeout_ms == 0 { 30_000 } else { timeout_ms }),
@@ -80,17 +85,26 @@ impl EnhancedShell {
     }
 
     /// Run with persistent task tracking.
-    pub async fn exec_persistent(&self, cmd: &str, timeout_ms: u64) -> Result<(i32, String), ShellError> {
-        let rec = self.persistent.insert(cmd).map_err(|e| ShellError::Task(e.to_string()))?;
+    pub async fn exec_persistent(
+        &self,
+        cmd: &str,
+        timeout_ms: u64,
+    ) -> Result<(i32, String), ShellError> {
+        let rec = self
+            .persistent
+            .insert(cmd)
+            .map_err(|e| ShellError::Task(e.to_string()))?;
         let started = std::time::Instant::now();
         let result = self.exec_sandboxed(cmd, timeout_ms).await;
         match &result {
             Ok(_) => {
-                self.persistent.complete(&rec.task_id, started.elapsed())
+                self.persistent
+                    .complete(&rec.task_id, started.elapsed())
                     .map_err(|e| ShellError::Task(e.to_string()))?;
             }
             Err(e) => {
-                self.persistent.fail(&rec.task_id, &e.to_string())
+                self.persistent
+                    .fail(&rec.task_id, &e.to_string())
                     .map_err(|e2| ShellError::Task(e2.to_string()))?;
             }
         }
@@ -105,8 +119,12 @@ impl EnhancedShell {
     /// Streaming variant: returns lines as they arrive (Vec<String>).
     pub async fn exec_streaming(&self, cmd: &str) -> Result<Vec<String>, ShellError> {
         let mut command = build_command(cmd)?;
-        apply_sandbox(&mut command, &self.sandbox).map_err(|e| ShellError::Sandbox(e.to_string()))?;
-        let mut child = command.stdout(Stdio::piped()).spawn().map_err(ShellError::Io)?;
+        apply_sandbox(&mut command, &self.sandbox)
+            .map_err(|e| ShellError::Sandbox(e.to_string()))?;
+        let mut child = command
+            .stdout(Stdio::piped())
+            .spawn()
+            .map_err(ShellError::Io)?;
         let lines = collect_stdout(&mut child).await;
         Ok(lines)
     }
@@ -142,13 +160,23 @@ mod tests {
     async fn enhanced_exec_sandboxed_runs() {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("tasks.db");
-        let s = EnhancedShell::new(db).unwrap()
-            .with_sandbox(SandboxPolicy { mode: SandboxMode::Light, env_clear: false, allowed_syscalls: vec![] });
+        let s = EnhancedShell::new(db).unwrap().with_sandbox(SandboxPolicy {
+            mode: SandboxMode::Light,
+            env_clear: false,
+            allowed_syscalls: vec![],
+        });
         // `echo` is a cmd.exe builtin on Windows; use cmd /c.
-        let cmd = if cfg!(windows) { "cmd /c echo hi" } else { "echo hi" };
+        let cmd = if cfg!(windows) {
+            "cmd /c echo hi"
+        } else {
+            "echo hi"
+        };
         let (code, out) = s.exec_sandboxed(cmd, 5000).await.unwrap();
         assert_eq!(code, 0);
-        assert!(out.contains("hi"), "stdout should contain `hi`, got: `{out}`");
+        assert!(
+            out.contains("hi"),
+            "stdout should contain `hi`, got: `{out}`"
+        );
     }
 
     #[tokio::test]
@@ -156,7 +184,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let db = tmp.path().join("tasks.db");
         let s = EnhancedShell::new(db.clone()).unwrap();
-        let cmd = if cfg!(windows) { "cmd /c echo persist" } else { "echo persist" };
+        let cmd = if cfg!(windows) {
+            "cmd /c echo persist"
+        } else {
+            "echo persist"
+        };
         let (_code, _out) = s.exec_persistent(cmd, 5000).await.unwrap();
         assert!(s.persistent.count().unwrap() >= 1);
     }

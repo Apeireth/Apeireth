@@ -14,7 +14,10 @@ fn main() {
     println!("=== R129-6 Stage 6 K3 安全守护 (anyone-can-run) ===\n");
 
     // 1. 6+1 重门 baseline 严守 verify (B4 6 重 v7 严守 + G7 跨语言 K3 创新)
-    println!("  B4 6-fold v7 baseline intact: {}", stage6_security_baseline_intact());
+    println!(
+        "  B4 6-fold v7 baseline intact: {}",
+        stage6_security_baseline_intact()
+    );
     assert_eq!(SecurityGate::N_GATES, 7);
     assert!(stage6_security_baseline_intact());
 

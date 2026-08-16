@@ -31,11 +31,11 @@ use std::fmt::Write;
 use std::sync::Arc;
 
 use super::counter::Counter;
+use super::error::{MetricsError, MetricsResult};
 use super::gauge::Gauge;
 use super::histogram::Histogram;
 use super::label::labels_to_prometheus_sorted;
 use super::summary::Summary;
-use super::error::{MetricsError, MetricsResult};
 use super::{Metric, MetricValue};
 
 // ============================================================================
@@ -153,8 +153,7 @@ pub fn encode_metric_with_labels(
         MetricValue::Histogram { .. } | MetricValue::Summary { .. } => {
             // 带 labels 的 histogram / summary 走更细的 encode_histogram / encode_summary
             return Err(MetricsError::EncodeError(
-                "histogram/summary with labels: use encode_histogram / encode_summary"
-                    .to_string(),
+                "histogram/summary with labels: use encode_histogram / encode_summary".to_string(),
             ));
         }
     }
@@ -294,7 +293,11 @@ fn format_float(f: f64) -> String {
         return "NaN".to_string();
     }
     if f.is_infinite() {
-        return if f > 0.0 { "+Inf".to_string() } else { "-Inf".to_string() };
+        return if f > 0.0 {
+            "+Inf".to_string()
+        } else {
+            "-Inf".to_string()
+        };
     }
     if f == 0.0 {
         return "0".to_string();

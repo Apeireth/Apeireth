@@ -100,7 +100,6 @@ mod tests {
     }
 
     #[test]
-
     #[test]
     fn state_returns_body_state_with_8_fields() {
         let s = state();
@@ -141,8 +140,12 @@ mod tests {
             let cu = c as u32;
             assert!(
                 c.is_ascii()
-                    || c == '═' || c == '—' || c == '─' || c == '│'
-                    || c == '█' || c == '░'
+                    || c == '═'
+                    || c == '—'
+                    || c == '─'
+                    || c == '│'
+                    || c == '█'
+                    || c == '░'
                     || (cu > 0x4e00 && cu < 0x9fff), // CJK (中文 label "进程 + 资源")
                 "body 不应含非 ASCII 字符 {c:?}"
             );

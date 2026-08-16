@@ -1,9 +1,9 @@
 // Search aggregator (multi-source: Tavily/AnySearch/DuckDuckGo placeholder)
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use std::collections::HashMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SearchSource {
@@ -58,7 +58,11 @@ impl AggregatedResults {
         for (_, (_, h)) in seen {
             out.push(h);
         }
-        out.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        out.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         self.hits = out;
     }
 }
@@ -115,7 +119,9 @@ impl SearchAggregator {
 }
 
 impl Default for SearchAggregator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -123,7 +129,13 @@ mod tests {
     use super::*;
 
     fn hit(url: &str, score: f64) -> SearchHit {
-        SearchHit { title: url.into(), url: url.into(), snippet: String::new(), source: SearchSource::DuckDuckGo, score }
+        SearchHit {
+            title: url.into(),
+            url: url.into(),
+            snippet: String::new(),
+            source: SearchSource::DuckDuckGo,
+            score,
+        }
     }
 
     #[test]
@@ -141,7 +153,14 @@ mod tests {
     #[test]
     fn aggregate_truncates() {
         let agg = SearchAggregator::new();
-        agg.add_hits(SearchSource::DuckDuckGo, vec![hit("https://a", 0.9), hit("https://b", 0.7), hit("https://c", 0.5)]);
+        agg.add_hits(
+            SearchSource::DuckDuckGo,
+            vec![
+                hit("https://a", 0.9),
+                hit("https://b", 0.7),
+                hit("https://c", 0.5),
+            ],
+        );
         let r = agg.aggregate("test", 2);
         assert_eq!(r.hits.len(), 2);
         assert_eq!(r.hits[0].url, "https://a");

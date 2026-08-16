@@ -47,8 +47,7 @@ pub const STAGE7_I2_NODE_COUNT: usize = REFLECTION_GRAPH_NODE_COUNT;
 pub const STAGE7_I2_ERROR_KIND_COUNT: usize = 4;
 
 /// I2 反思 × 错误 绑定数 (8 × 4 = 32, 编译期 hardcode)
-pub const STAGE7_I2_BINDING_COUNT: usize =
-    REFLECTION_GRAPH_NODE_COUNT * STAGE7_I2_ERROR_KIND_COUNT;
+pub const STAGE7_I2_BINDING_COUNT: usize = REFLECTION_GRAPH_NODE_COUNT * STAGE7_I2_ERROR_KIND_COUNT;
 
 // =============================================================================
 // ReflectionErrorBinding — 1 反思节点 × 1 错误类型
@@ -365,7 +364,8 @@ mod tests {
 
     #[test]
     fn i2_09_audit_event_fields() {
-        let e = ReflectionErrorAuditEvent::new(123, "reflect", ErrorKind::Contract, "auto_retry", true);
+        let e =
+            ReflectionErrorAuditEvent::new(123, "reflect", ErrorKind::Contract, "auto_retry", true);
         assert_eq!(e.timestamp, 123);
         assert!(e.recovery_success);
     }

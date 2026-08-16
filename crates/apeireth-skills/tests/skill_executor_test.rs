@@ -16,9 +16,9 @@
 //! 10. `test_all_5_patterns_have_phase_machines` — 5 pattern 都有可工作 state machine
 
 use apeireth_skills::skill_executor::{
-    categories_in_pattern, category_to_pattern, ExecutionPattern, MetaCycle, ParallelCycle,
-    PlanExecuteVerifyCycle, ReviewCycle, SkillCategory, TddCycle, TddPhase, pattern_step_count,
-    pattern_steps,
+    categories_in_pattern, category_to_pattern, pattern_step_count, pattern_steps,
+    ExecutionPattern, MetaCycle, ParallelCycle, PlanExecuteVerifyCycle, ReviewCycle, SkillCategory,
+    TddCycle, TddPhase,
 };
 
 // 1. 14 categories 严守
@@ -50,7 +50,11 @@ fn test_category_to_pattern_14_to_5_total() {
         let idx = ExecutionPattern::ALL.iter().position(|x| *x == p).unwrap();
         counts[idx] += 1;
     }
-    assert_eq!(counts, [2, 3, 2, 2, 5], "Tdd=2 + PlanExecuteVerify=3 + Parallel=2 + Review=2 + Meta=5 = 14");
+    assert_eq!(
+        counts,
+        [2, 3, 2, 2, 5],
+        "Tdd=2 + PlanExecuteVerify=3 + Parallel=2 + Review=2 + Meta=5 = 14"
+    );
     // 总数
     let total: usize = counts.iter().sum();
     assert_eq!(total, 14);
@@ -80,7 +84,12 @@ fn test_tdd_cycle_full_workflow() {
     assert_eq!(cycle.history_len(), 4);
     assert_eq!(
         cycle.history,
-        vec![TddPhase::Red, TddPhase::Green, TddPhase::Refactor, TddPhase::Done]
+        vec![
+            TddPhase::Red,
+            TddPhase::Green,
+            TddPhase::Refactor,
+            TddPhase::Done
+        ]
     );
 }
 
@@ -113,7 +122,7 @@ fn test_plan_execute_verify_iterate_then_pass() {
     // Iterate → Execute
     cycle.advance();
     cycle.advance(); // → Verify
-    // 第二次 pass
+                     // 第二次 pass
     cycle.record_verify_outcome(true);
     assert!(cycle.is_done());
     assert_eq!(cycle.verify_outcomes, vec![false, true]);

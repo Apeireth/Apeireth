@@ -132,7 +132,11 @@ fn d4_11_revisit_max_guard() {
     assert!(r1.is_some());
     assert!(r2.is_some());
     assert!(r3.is_some());
-    assert!(r4.is_none(), "第 4 次 revisit 必 None (DECISION_MAX_REVISIT={} 守门)", DECISION_MAX_REVISIT);
+    assert!(
+        r4.is_none(),
+        "第 4 次 revisit 必 None (DECISION_MAX_REVISIT={} 守门)",
+        DECISION_MAX_REVISIT
+    );
 }
 
 // 12. D4 reset_revisits

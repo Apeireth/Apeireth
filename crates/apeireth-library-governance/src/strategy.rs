@@ -107,8 +107,8 @@ impl GovernanceContext {
             policy: 0,
             value: 0,
             audit: false,
-            version_major: 1,        // B2 1.2.0 严守
-            baseline_index: 0,       // A1 R11 baseline 严守
+            version_major: 1,  // B2 1.2.0 严守
+            baseline_index: 0, // A1 R11 baseline 严守
             locked_index: 0,
         }
     }
@@ -117,7 +117,7 @@ impl GovernanceContext {
     pub const fn version() -> Self {
         Self {
             policy: 0,
-            value: 2,                // 1.2.0 minor = 2
+            value: 2, // 1.2.0 minor = 2
             audit: true,
             version_major: 1,
             baseline_index: 0,
@@ -129,7 +129,7 @@ impl GovernanceContext {
     pub const fn baseline() -> Self {
         Self {
             policy: 1,
-            value: 0,                // R11
+            value: 0, // R11
             audit: true,
             version_major: 1,
             baseline_index: 0,
@@ -153,7 +153,7 @@ impl GovernanceContext {
     pub const fn anchor() -> Self {
         Self {
             policy: 3,
-            value: 8,                // 8 哲学锚
+            value: 8, // 8 哲学锚
             audit: true,
             version_major: 1,
             baseline_index: 0,
@@ -165,7 +165,7 @@ impl GovernanceContext {
     pub const fn gate() -> Self {
         Self {
             policy: 4,
-            value: 7,                // v7
+            value: 7, // v7
             audit: true,
             version_major: 1,
             baseline_index: 0,
@@ -252,7 +252,9 @@ impl DecisionTree {
         let action = self.action();
         let requires_audit = self.audit || matches!(action, GovernanceAction::Audit);
         match action {
-            GovernanceAction::Allow if !requires_audit => crate::GovernanceDecision::allow(self.policy, action),
+            GovernanceAction::Allow if !requires_audit => {
+                crate::GovernanceDecision::allow(self.policy, action)
+            }
             _ => crate::GovernanceDecision::audit(self.policy, action),
         }
     }
@@ -365,7 +367,14 @@ mod tests {
 
     #[test]
     fn other_policy_always_rejects() {
-        let ctx = GovernanceContext { policy: 100, value: 0, audit: false, version_major: 1, baseline_index: 0, locked_index: 0 };
+        let ctx = GovernanceContext {
+            policy: 100,
+            value: 0,
+            audit: false,
+            version_major: 1,
+            baseline_index: 0,
+            locked_index: 0,
+        };
         let tree = DecisionTree::from_context(&ctx);
         assert_eq!(tree.action(), GovernanceAction::Reject);
     }

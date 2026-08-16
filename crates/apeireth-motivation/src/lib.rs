@@ -965,5 +965,3 @@ mod tests {
         assert_eq!(auditor.history_failed_count(), 1);
     }
 }
-
-

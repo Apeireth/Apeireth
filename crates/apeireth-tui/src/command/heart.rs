@@ -206,7 +206,13 @@ mod tests {
     fn set_bpm_out_of_range_rejected() {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::SetBpm(0));
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "SetBpm", .. })));
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "SetBpm",
+                ..
+            })
+        ));
         let r = handle(&mut state, Command::SetBpm(BPM_MIN - 1));
         assert!(matches!(r, Err(OrganError::InvalidArg { .. })));
         let r = handle(&mut state, Command::SetBpm(BPM_MAX + 1));
@@ -242,7 +248,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::CpuSnapshot).unwrap();
         match r {
-            Response::CpuSnapshot { cpu_pct, is_placeholder } => {
+            Response::CpuSnapshot {
+                cpu_pct,
+                is_placeholder,
+            } => {
                 assert!(is_placeholder, "R25.2 must mark placeholder honestly");
                 assert!(cpu_pct > 0.0);
             }

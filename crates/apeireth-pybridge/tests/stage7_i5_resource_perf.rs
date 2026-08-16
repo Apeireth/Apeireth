@@ -5,11 +5,11 @@
 //! **目标**: 验证 G1 资源治理跟 K2 性能守护跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i5_healthy, stage7_i5_summary, stage7_i5_to_g1_consistency,
-    stage7_i5_to_k2_consistency, ResourcePerfAuditEvent, ResourcePerfBinding,
-    ResourcePerfCoordinator, ResourcePerfMatrix, ResourcePerfReport, PerfKind, ResourceDimension,
-    STAGE7_I5_BINDING_COUNT, STAGE7_I5_DIMENSION_COUNT, STAGE7_I5_PERF_KIND_COUNT,
-    STAGE7_I5_RESOURCE_DIM_COUNT, STAGE7_I5_VERSION,
+    stage7_i5_healthy, stage7_i5_summary, stage7_i5_to_g1_consistency, stage7_i5_to_k2_consistency,
+    PerfKind, ResourceDimension, ResourcePerfAuditEvent, ResourcePerfBinding,
+    ResourcePerfCoordinator, ResourcePerfMatrix, ResourcePerfReport, STAGE7_I5_BINDING_COUNT,
+    STAGE7_I5_DIMENSION_COUNT, STAGE7_I5_PERF_KIND_COUNT, STAGE7_I5_RESOURCE_DIM_COUNT,
+    STAGE7_I5_VERSION,
 };
 
 // 1. I5 编译期常数
@@ -91,7 +91,10 @@ fn i5_09_all_5_kinds() {
         PerfKind::Call,
     ];
     for k in &kinds {
-        assert!(m.get(ResourceDimension::Rate, *k).is_some(), "kind {k:?} 缺");
+        assert!(
+            m.get(ResourceDimension::Rate, *k).is_some(),
+            "kind {k:?} 缺"
+        );
     }
 }
 

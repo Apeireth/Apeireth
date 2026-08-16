@@ -27,7 +27,11 @@ pub fn perceptual_hash(data: &[u8]) -> ImageHash {
             bits |= 1u64 << i;
         }
     }
-    ImageHash { bits, width: 8, height: 8 }
+    ImageHash {
+        bits,
+        width: 8,
+        height: 8,
+    }
 }
 
 #[cfg(test)]

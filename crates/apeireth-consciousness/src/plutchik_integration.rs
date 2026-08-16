@@ -13,21 +13,53 @@
 #![allow(missing_docs)] // R209: 0 触碰现有 API 文档
 
 use crate::emotion::{BaseEmotion, Pad};
-use crate::plutchik::{PlutchikBasic, PlutchikAdvanced};
+use crate::plutchik::{PlutchikAdvanced, PlutchikBasic};
 
 /// Plutchik 8 基础情绪 PAD 中心 (经典 Plutchik 1980 + PAD 转换)
 ///
 /// 数值来源: Plutchik 1980 心理学标准, 与 R187 调研一致
 pub fn plutchik_pad_center(basic: PlutchikBasic) -> Pad {
     match basic {
-        PlutchikBasic::Joy => Pad { p: 0.6, a: 0.5, d: 0.4 },
-        PlutchikBasic::Trust => Pad { p: 0.4, a: 0.2, d: 0.3 },
-        PlutchikBasic::Fear => Pad { p: -0.6, a: 0.7, d: -0.6 },
-        PlutchikBasic::Surprise => Pad { p: 0.1, a: 0.8, d: 0.0 },
-        PlutchikBasic::Sadness => Pad { p: -0.4, a: -0.2, d: -0.5 },
-        PlutchikBasic::Disgust => Pad { p: -0.6, a: 0.0, d: 0.2 },
-        PlutchikBasic::Anger => Pad { p: -0.5, a: 0.6, d: 0.5 },
-        PlutchikBasic::Anticipation => Pad { p: 0.3, a: 0.4, d: 0.2 },
+        PlutchikBasic::Joy => Pad {
+            p: 0.6,
+            a: 0.5,
+            d: 0.4,
+        },
+        PlutchikBasic::Trust => Pad {
+            p: 0.4,
+            a: 0.2,
+            d: 0.3,
+        },
+        PlutchikBasic::Fear => Pad {
+            p: -0.6,
+            a: 0.7,
+            d: -0.6,
+        },
+        PlutchikBasic::Surprise => Pad {
+            p: 0.1,
+            a: 0.8,
+            d: 0.0,
+        },
+        PlutchikBasic::Sadness => Pad {
+            p: -0.4,
+            a: -0.2,
+            d: -0.5,
+        },
+        PlutchikBasic::Disgust => Pad {
+            p: -0.6,
+            a: 0.0,
+            d: 0.2,
+        },
+        PlutchikBasic::Anger => Pad {
+            p: -0.5,
+            a: 0.6,
+            d: 0.5,
+        },
+        PlutchikBasic::Anticipation => Pad {
+            p: 0.3,
+            a: 0.4,
+            d: 0.2,
+        },
     }
 }
 
@@ -47,13 +79,13 @@ pub fn base_to_plutchik(base: BaseEmotion) -> PlutchikBasic {
 pub fn plutchik_to_base(basic: PlutchikBasic) -> Option<BaseEmotion> {
     match basic {
         PlutchikBasic::Joy => Some(BaseEmotion::Joy),
-        PlutchikBasic::Trust => None,            // Plutchik 独有
+        PlutchikBasic::Trust => None, // Plutchik 独有
         PlutchikBasic::Fear => Some(BaseEmotion::Fear),
         PlutchikBasic::Surprise => Some(BaseEmotion::Surprise),
         PlutchikBasic::Sadness => Some(BaseEmotion::Sadness),
         PlutchikBasic::Disgust => Some(BaseEmotion::Disgust),
         PlutchikBasic::Anger => Some(BaseEmotion::Anger),
-        PlutchikBasic::Anticipation => None,     // Plutchik 独有
+        PlutchikBasic::Anticipation => None, // Plutchik 独有
     }
 }
 
@@ -118,7 +150,10 @@ mod tests {
         assert_eq!(base_to_plutchik(BaseEmotion::Joy), PlutchikBasic::Joy);
         assert_eq!(base_to_plutchik(BaseEmotion::Fear), PlutchikBasic::Fear);
         assert_eq!(base_to_plutchik(BaseEmotion::Anger), PlutchikBasic::Anger);
-        assert_eq!(base_to_plutchik(BaseEmotion::Sadness), PlutchikBasic::Sadness);
+        assert_eq!(
+            base_to_plutchik(BaseEmotion::Sadness),
+            PlutchikBasic::Sadness
+        );
     }
 
     #[test]
@@ -131,15 +166,29 @@ mod tests {
     #[test]
     fn t03_plutchik_to_base_4_match() {
         assert_eq!(plutchik_to_base(PlutchikBasic::Joy), Some(BaseEmotion::Joy));
-        assert_eq!(plutchik_to_base(PlutchikBasic::Fear), Some(BaseEmotion::Fear));
-        assert_eq!(plutchik_to_base(PlutchikBasic::Anger), Some(BaseEmotion::Anger));
-        assert_eq!(plutchik_to_base(PlutchikBasic::Sadness), Some(BaseEmotion::Sadness));
+        assert_eq!(
+            plutchik_to_base(PlutchikBasic::Fear),
+            Some(BaseEmotion::Fear)
+        );
+        assert_eq!(
+            plutchik_to_base(PlutchikBasic::Anger),
+            Some(BaseEmotion::Anger)
+        );
+        assert_eq!(
+            plutchik_to_base(PlutchikBasic::Sadness),
+            Some(BaseEmotion::Sadness)
+        );
     }
 
     #[test]
     fn t04_roundtrip_4() {
         // 4 个有对应的情绪应该 roundtrip
-        for &base in &[BaseEmotion::Joy, BaseEmotion::Fear, BaseEmotion::Anger, BaseEmotion::Sadness] {
+        for &base in &[
+            BaseEmotion::Joy,
+            BaseEmotion::Fear,
+            BaseEmotion::Anger,
+            BaseEmotion::Sadness,
+        ] {
             let plutchik = base_to_plutchik(base);
             let back = plutchik_to_base(plutchik);
             assert_eq!(back, Some(base));
@@ -148,8 +197,14 @@ mod tests {
 
     #[test]
     fn t05_plutchik_advanced_to_base() {
-        assert_eq!(plutchik_advanced_to_base(PlutchikAdvanced::Love), Some(BaseEmotion::Joy));
-        assert_eq!(plutchik_advanced_to_base(PlutchikAdvanced::Aggressiveness), Some(BaseEmotion::Anger));
+        assert_eq!(
+            plutchik_advanced_to_base(PlutchikAdvanced::Love),
+            Some(BaseEmotion::Joy)
+        );
+        assert_eq!(
+            plutchik_advanced_to_base(PlutchikAdvanced::Aggressiveness),
+            Some(BaseEmotion::Anger)
+        );
     }
 
     #[test]

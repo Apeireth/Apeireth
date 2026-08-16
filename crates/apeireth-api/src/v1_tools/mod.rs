@@ -99,14 +99,12 @@ pub async fn invoke_by_name(
     let trace_id = make_trace_id();
     let tool_name_for_meta = tool_name.clone();
 
-    let reg = state
-        .tools_registry()
-        .ok_or_else(|| {
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                "tools service not initialized".to_string(),
-            )
-        })?;
+    let reg = state.tools_registry().ok_or_else(|| {
+        (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "tools service not initialized".to_string(),
+        )
+    })?;
 
     let registry_name = url_to_registry_name(&tool_name).ok_or_else(|| {
         (
@@ -188,7 +186,10 @@ pub fn build_full_registry() -> Arc<apeireth_tool_registry::ToolRegistry> {
     use apeireth_tool_registry::ToolRegistry;
     let registry = Arc::new(ToolRegistry::new());
     apeireth_tools::register_all(&registry).expect("register_all 4 真接");
-    registry.register("Calendar".to_string(), Arc::new(calendar::CalendarTool::new()));
+    registry.register(
+        "Calendar".to_string(),
+        Arc::new(calendar::CalendarTool::new()),
+    );
     registry.register("Message".to_string(), Arc::new(message::MessageTool::new()));
     registry
 }
@@ -247,9 +248,15 @@ mod v1_tools_tests {
     struct MockEchoTool;
     #[async_trait]
     impl Tool for MockEchoTool {
-        fn name(&self) -> &str { "Calendar" }
-        fn kind(&self) -> apeireth_tool_registry::ToolKind { apeireth_tool_registry::ToolKind::Sync }
-        fn axes(&self) -> apeireth_tool_registry::ToolAxes { apeireth_tool_registry::ToolAxes::default() }
+        fn name(&self) -> &str {
+            "Calendar"
+        }
+        fn kind(&self) -> apeireth_tool_registry::ToolKind {
+            apeireth_tool_registry::ToolKind::Sync
+        }
+        fn axes(&self) -> apeireth_tool_registry::ToolAxes {
+            apeireth_tool_registry::ToolAxes::default()
+        }
         async fn call(&self, args: Value) -> Result<Value, String> {
             Ok(json!({"echoed": args}))
         }
