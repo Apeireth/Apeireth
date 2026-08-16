@@ -69,6 +69,7 @@ impl PermissionPack {
             tools,
             paths: Vec::new(),
             expiry: PackExpiry::Hours(hours),
+            sandbox: None,
             op_budget: budget,
             used_ops: 0,
             spend_budget: None,
@@ -79,6 +80,12 @@ impl PermissionPack {
     }
 
     /// 设花费上限 (花钱类工具: 模型调用/付费 API 等).
+    /// B3 沙盒参数口: 给包附沙盒限额配置 (覆盖该工具时用此配置, 否则桥级默认).
+    pub fn with_sandbox(mut self, cfg: crate::sandbox::SandboxConfig) -> Self {
+        self.sandbox = Some(cfg);
+        self
+    }
+
     pub fn with_spend_budget(mut self, budget: u64) -> Self {
         self.spend_budget = Some(budget);
         self
@@ -214,6 +221,16 @@ impl PackRegistry {
             .map(|p| p.paths.clone())
     }
 
+    /// B3 沙盒参数口: 覆盖该工具且带沙盒限额的活跃包配置 (无 = 用桥级默认).
+    /// 语义对齐 `paths_for`: 权限包不只授权, 还可携带执行期资源参数.
+    pub fn sandbox_for(&self, tool: &str, now_ms: i64) -> Option<crate::sandbox::SandboxConfig> {
+        let packs = self.inner.lock().unwrap();
+        packs
+            .iter()
+            .find(|p| !p.is_expired(now_ms) && p.covers(tool) && p.sandbox.is_some())
+            .and_then(|p| p.sandbox.clone())
+    }
+
     pub fn active_count(&self, now_ms: i64) -> usize {
         self.inner
             .lock()
@@ -271,5 +288,25 @@ mod tests {
         p.created_at_ms = 0;
         assert!(p.needs_renewal_reminder(91 * 24 * 3600_000));
         assert!(!p.needs_renewal_reminder(89 * 24 * 3600_000));
+    }
+
+    #[test]
+    fn sandbox_config_lookup_by_covered_tool() {
+        // B3 参数口: 包级沙盒配置按覆盖工具可查 (无配置包 → None → 桥级默认)
+        let r = PackRegistry::new();
+        r.grant(
+            PermissionPack::permanent("沙盒包", vec!["ShellExec".into()])
+                .with_sandbox(crate::sandbox::SandboxConfig {
+                    memory_limit_mb: Some(256),
+                    timeout_secs: 60,
+                    ..crate::sandbox::SandboxConfig::default()
+                }),
+        );
+        r.grant(PackRegistry::default_daily_pack());
+        let cfg = r.sandbox_for("ShellExec", now_ms()).expect("应有包级沙盒配置");
+        assert_eq!(cfg.memory_limit_mb, Some(256));
+        assert_eq!(cfg.timeout_secs, 60);
+        // WebSearch 只被无沙盒配置的日常包覆盖 → None
+        assert!(r.sandbox_for("WebSearch", now_ms()).is_none());
     }
 }
