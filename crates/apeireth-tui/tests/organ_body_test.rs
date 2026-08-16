@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 9 器官 × Body (体) 单元测试
 ///
 /// **测试范围**:
@@ -14,28 +20,34 @@
 ///
 /// **8 项承诺**: 全部遵守
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **保守原则**: 不加 sysinfo 依赖 (会动 Cargo.toml = LOCKED),
 // 用占位数据 + ASCII progress bar (跟 nav/status.rs 复用 █ / ░).
-
-
-
 mod test_common;
 
 use ratatui::layout::Rect;
@@ -84,8 +96,11 @@ fn render_uses_ascii_progress_bars() {
         let cu = c as u32;
         assert!(
             c.is_ascii()
-                || c == '─' || c == '│' || c == '—'
-                || c == '█' || c == '░'
+                || c == '─'
+                || c == '│'
+                || c == '—'
+                || c == '█'
+                || c == '░'
                 || (cu > 0x4e00 && cu < 0x9fff),
             "body 不应含非 ASCII 字符 {c:?}"
         );
@@ -105,4 +120,3 @@ fn render_marks_partial_honestly() {
         "body 必须标 partial, 不假装接 sysinfo (LOCKED Cargo.toml): {out}"
     );
 }
-

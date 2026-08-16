@@ -35,7 +35,7 @@ use crossterm::event::KeyCode;
 pub async fn test_nav_status_renders_5_components() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
     h.app.nav = NavPage::Bridge; // 跟 tui 一样, Status 在 sub_nav 不在主 nav
-    // 走 render_4_panel 验证 buffer 里有 cycle / token / 5self (status bar 紧凑形式)
+                                 // 走 render_4_panel 验证 buffer 里有 cycle / token / 5self (status bar 紧凑形式)
     h.render_4_panel()?;
     let snap = h.snapshot();
     // 5 大 status 组件标记 (status bar 紧凑形式: c= / t= / 5s= / R5: / 当前 nav)
@@ -78,10 +78,7 @@ pub async fn test_nav_tools_shows_6_tools() -> TuiE2EResult<()> {
     let snap = h.snapshot();
     for tool in &six_tools {
         // system 消息会以 [system] 前缀渲染
-        assert!(
-            snap.contains(tool),
-            "应渲染工具 {tool}"
-        );
+        assert!(snap.contains(tool), "应渲染工具 {tool}");
     }
     Ok(())
 }
@@ -95,10 +92,7 @@ pub async fn test_nav_settings_shows_5_providers() -> TuiE2EResult<()> {
     // 5 Provider (claude-code / gemini-cli / codex / copilot / opencode)
     let five_providers = ["claude-code", "gemini-cli", "codex", "copilot", "opencode"];
     for p in &five_providers {
-        assert!(
-            snap.contains(p),
-            "Settings 应显 5 Provider 之一: {p}"
-        );
+        assert!(snap.contains(p), "Settings 应显 5 Provider 之一: {p}");
     }
     // 5 权限
     for scope in ["read", "write", "admin", "owner", "root"] {
@@ -114,10 +108,7 @@ pub async fn test_nav_help_shows_6_philosophy_anchors() -> TuiE2EResult<()> {
     h.render_4_panel()?;
     let snap = h.snapshot();
     for (id, _, _) in crate::SIX_PHI_ANCHORS.iter() {
-        assert!(
-            snap.contains(id),
-            "Help nav 应渲染哲学锚 {id}"
-        );
+        assert!(snap.contains(id), "Help nav 应渲染哲学锚 {id}");
     }
     Ok(())
 }

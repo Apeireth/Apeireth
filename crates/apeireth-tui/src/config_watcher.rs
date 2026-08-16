@@ -25,12 +25,16 @@ pub struct ConfigWatcher {
 impl ConfigWatcher {
     /// 新建 (指定目录)
     pub fn new(dir: impl Into<PathBuf>) -> Self {
-        Self { dir: dir.into(), callbacks: HashMap::new() }
+        Self {
+            dir: dir.into(),
+            callbacks: HashMap::new(),
+        }
     }
 
     /// 注册文件 basename (e.g. "settings.json") -> callback
     pub fn watch<F>(mut self, filename: &str, cb: F) -> Self
-    where F: Fn() + Send + Sync + 'static
+    where
+        F: Fn() + Send + Sync + 'static,
     {
         self.callbacks.insert(filename.to_string(), Box::new(cb));
         self
@@ -47,27 +51,30 @@ impl ConfigWatcher {
         let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
         let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
             let _ = tx.send(res);
-        }).ok()?;
+        })
+        .ok()?;
         if watcher.watch(&dir, RecursiveMode::NonRecursive).is_err() {
             return None;
         }
-        Some(std::thread::Builder::new()
-            .name("apeireth-config-watcher".into())
-            .spawn(move || {
-                let _hold = watcher; // 保持 alive
-                for res in rx {
-                    if let Ok(ev) = res {
-                        for path in &ev.paths {
-                            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                if let Some(cb) = callbacks.get(name) {
-                                    cb();
+        Some(
+            std::thread::Builder::new()
+                .name("apeireth-config-watcher".into())
+                .spawn(move || {
+                    let _hold = watcher; // 保持 alive
+                    for res in rx {
+                        if let Ok(ev) = res {
+                            for path in &ev.paths {
+                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if let Some(cb) = callbacks.get(name) {
+                                        cb();
+                                    }
                                 }
                             }
                         }
                     }
-                }
-            })
-            .ok()?)
+                })
+                .ok()?,
+        )
     }
 }
 
@@ -93,10 +100,9 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
-        let watcher = ConfigWatcher::new(dir.path().to_path_buf())
-            .watch("test.json", move || {
-                counter_clone.fetch_add(1, Ordering::SeqCst);
-            });
+        let watcher = ConfigWatcher::new(dir.path().to_path_buf()).watch("test.json", move || {
+            counter_clone.fetch_add(1, Ordering::SeqCst);
+        });
         let _handle = watcher.spawn();
         // Give the watcher a moment to start
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -107,7 +113,11 @@ mod tests {
         std::fs::write(dir.path().join("test.json"), "{\"x\":1}").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(500));
         // At least one event should fire (Create or Modify)
-        assert!(counter.load(Ordering::SeqCst) >= 1, "expected >=1 callback, got {}", counter.load(Ordering::SeqCst));
+        assert!(
+            counter.load(Ordering::SeqCst) >= 1,
+            "expected >=1 callback, got {}",
+            counter.load(Ordering::SeqCst)
+        );
     }
 
     #[test]
@@ -115,8 +125,8 @@ mod tests {
         let dir = tempfile::TempDir::new().unwrap();
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = counter.clone();
-        let watcher = ConfigWatcher::new(dir.path().to_path_buf())
-            .watch("watched.json", move || {
+        let watcher =
+            ConfigWatcher::new(dir.path().to_path_buf()).watch("watched.json", move || {
                 counter_clone.fetch_add(1, Ordering::SeqCst);
             });
         let _handle = watcher.spawn();
@@ -124,7 +134,11 @@ mod tests {
         // Write to UNREGISTERED file
         std::fs::write(dir.path().join("unwatched.json"), "{}").unwrap();
         std::thread::sleep(std::time::Duration::from_millis(500));
-        assert_eq!(counter.load(Ordering::SeqCst), 0, "unregistered file should not fire");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            0,
+            "unregistered file should not fire"
+        );
     }
 
     #[test]

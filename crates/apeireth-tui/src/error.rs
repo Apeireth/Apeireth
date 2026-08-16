@@ -105,14 +105,7 @@ pub fn validate_auth_token(token: &str) -> Result<(), TuiError> {
 /// 6 工具白名单 (per 任务规范: calendar / message / contact / task / search / drive)
 ///
 /// 编译期 hardcode (主人 R22 拍板), 跟 apeireth-api server `/v1/tools/{name}/invoke` 端点对齐
-pub const TOOL_WHITELIST: &[&str] = &[
-    "calendar",
-    "message",
-    "contact",
-    "task",
-    "search",
-    "drive",
-];
+pub const TOOL_WHITELIST: &[&str] = &["calendar", "message", "contact", "task", "search", "drive"];
 
 /// K-1.3: 工具名必须在 6 工具白名单内
 pub fn validate_tool_name(name: &str) -> Result<(), TuiError> {
@@ -155,10 +148,7 @@ mod tests {
 
     #[test]
     fn k1_base_url_empty_rejected() {
-        assert!(matches!(
-            validate_base_url(""),
-            Err(TuiError::BaseUrlEmpty)
-        ));
+        assert!(matches!(validate_base_url(""), Err(TuiError::BaseUrlEmpty)));
     }
 
     #[test]
@@ -281,7 +271,10 @@ mod tests {
             body: "not found".into(),
         };
         let s = format!("{e}");
-        assert!(s.contains("404"), "Api error message 应含 status, 实际: {s}");
+        assert!(
+            s.contains("404"),
+            "Api error message 应含 status, 实际: {s}"
+        );
         assert!(s.contains("not found"), "Api error message 应含 body");
     }
 }

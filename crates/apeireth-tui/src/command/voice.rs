@@ -187,7 +187,9 @@ mod tests {
     fn six_commands_constructible() {
         let _ = Command::Synthesize { text: "hi".into() };
         let _ = Command::GetVoices;
-        let _ = Command::SetVoice { voice_id: "male-qn-qingse".into() };
+        let _ = Command::SetVoice {
+            voice_id: "male-qn-qingse".into(),
+        };
         let _ = Command::GetActiveVoice;
         let _ = Command::GetTtsStatus;
         let _ = Command::Pause;
@@ -207,12 +209,17 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Synthesize { text: "hello world".into() },
+            Command::Synthesize {
+                text: "hello world".into(),
+            },
         );
         // 0 假装: TTS 未接真实现, 必须返 Unsupported 而非 Ok(Unit)
         assert!(matches!(
             r,
-            Err(OrganError::Unsupported { organ: "[VOICE]", command: "Synthesize" })
+            Err(OrganError::Unsupported {
+                organ: "[VOICE]",
+                command: "Synthesize"
+            })
         ));
         assert_eq!(state.synthesize_count, 0, "stub 拒绝时不计数");
         assert_eq!(state.tts_state, TtsState::Idle, "stub 拒绝时不改状态");
@@ -226,14 +233,23 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("[VOICE]"), "错误应含 organ: {msg}");
         assert!(msg.contains("Synthesize"), "错误应含 command: {msg}");
-        assert!(msg.contains("stub") || msg.contains("not ready"), "应诚实标缺: {msg}");
+        assert!(
+            msg.contains("stub") || msg.contains("not ready"),
+            "应诚实标缺: {msg}"
+        );
     }
 
     #[test]
     fn synthesize_rejects_empty_text() {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::Synthesize { text: "".into() });
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "Synthesize", .. })));
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "Synthesize",
+                ..
+            })
+        ));
     }
 
     // ---- SetVoice ----
@@ -243,8 +259,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::SetVoice { voice_id: "female-shaonv".into() },
-            );
+            Command::SetVoice {
+                voice_id: "female-shaonv".into(),
+            },
+        );
         assert!(r.is_ok());
         let r = handle(&mut state, Command::GetActiveVoice).unwrap();
         assert_eq!(r, Response::ActiveVoice("female-shaonv".into()));
@@ -255,9 +273,17 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::SetVoice { voice_id: "fake-voice".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "SetVoice", .. })));
+            Command::SetVoice {
+                voice_id: "fake-voice".into(),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "SetVoice",
+                ..
+            })
+        ));
     }
 
     // ---- 3 态状态机 ----

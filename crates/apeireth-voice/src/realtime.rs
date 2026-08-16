@@ -41,7 +41,6 @@ use std::time::{Duration, SystemTime};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-
 // ============================================================================
 // §1 Compile-time hardcodes
 // ============================================================================
@@ -103,7 +102,6 @@ pub enum RealtimeError {
 }
 
 pub type RealtimeResult<T> = Result<T, RealtimeError>;
-
 
 // ============================================================================
 // §3 Model dispatch (3-model enum)
@@ -577,7 +575,10 @@ pub enum ServerEvent {
     },
     /// Speech started (server VAD detected speech).
     #[serde(rename = "input_audio_buffer.speech_started")]
-    SpeechStarted { item_id: String, audio_start_ms: u32 },
+    SpeechStarted {
+        item_id: String,
+        audio_start_ms: u32,
+    },
     /// Speech stopped (server VAD detected silence).
     #[serde(rename = "input_audio_buffer.speech_stopped")]
     SpeechStopped { item_id: String, audio_end_ms: u32 },
@@ -632,10 +633,7 @@ pub enum ConversationItem {
     /// User text message (per OpenAI Realtime: audio messages go through
     /// `InputAudioBufferAppend` + `ConversationItemCreate`, not a separate type).
     #[serde(rename = "message")]
-    UserMessage {
-        role: String,
-        content: String,
-    },
+    UserMessage { role: String, content: String },
     /// User image input (multimodal, base64 PNG/JPEG).
     #[serde(rename = "conversation.item.input_image")]
     InputImage {
@@ -647,10 +645,7 @@ pub enum ConversationItem {
     },
     /// Function tool call result.
     #[serde(rename = "conversation.item.function_call_output")]
-    FunctionCallOutput {
-        call_id: String,
-        output: String,
-    },
+    FunctionCallOutput { call_id: String, output: String },
 }
 
 // ============================================================================
@@ -766,10 +761,7 @@ mod tests {
     #[test]
     fn test_model_dispatch_strings() {
         assert_eq!(RealtimeModel::GptRealtime.as_str(), "gpt-realtime");
-        assert_eq!(
-            RealtimeModel::GptRealtimeMini.as_str(),
-            "gpt-realtime-mini"
-        );
+        assert_eq!(RealtimeModel::GptRealtimeMini.as_str(), "gpt-realtime-mini");
         assert_eq!(RealtimeModel::Gpt4oRealtime.as_str(), "gpt-4o-realtime");
     }
 
@@ -791,12 +783,9 @@ mod tests {
     fn test_cost_tier_ordering() {
         // mini < 4o < flagship
         assert!(
-            RealtimeModel::GptRealtimeMini.cost_tier()
-                < RealtimeModel::Gpt4oRealtime.cost_tier()
+            RealtimeModel::GptRealtimeMini.cost_tier() < RealtimeModel::Gpt4oRealtime.cost_tier()
         );
-        assert!(
-            RealtimeModel::Gpt4oRealtime.cost_tier() < RealtimeModel::GptRealtime.cost_tier()
-        );
+        assert!(RealtimeModel::Gpt4oRealtime.cost_tier() < RealtimeModel::GptRealtime.cost_tier());
     }
 
     #[test]
@@ -854,8 +843,11 @@ mod tests {
 
     #[test]
     fn test_session_config_validate_ok() {
-        let cfg = RealtimeSessionConfig::new()
-            .add_tool(RealtimeTool::function("test", "test tool", serde_json::json!({})));
+        let cfg = RealtimeSessionConfig::new().add_tool(RealtimeTool::function(
+            "test",
+            "test tool",
+            serde_json::json!({}),
+        ));
         assert!(cfg.validate().is_ok());
     }
 
@@ -909,8 +901,7 @@ mod tests {
 
     #[test]
     fn test_session_ttl_max_cap() {
-        let cfg =
-            RealtimeSessionConfig::new().session_ttl(Duration::from_secs(7 * 60 * 60)); // 7h, exceeds 1h cap
+        let cfg = RealtimeSessionConfig::new().session_ttl(Duration::from_secs(7 * 60 * 60)); // 7h, exceeds 1h cap
         assert!(cfg.session_ttl <= REALTIME_MAX_SESSION_TTL);
     }
 
@@ -992,7 +983,9 @@ mod tests {
     #[test]
     fn test_client_event_session_update_serde() {
         let cfg = RealtimeSessionConfig::new();
-        let ev = ClientEvent::SessionUpdate { config: cfg.clone() };
+        let ev = ClientEvent::SessionUpdate {
+            config: cfg.clone(),
+        };
         let json = serde_json::to_string(&ev).unwrap();
         assert!(json.contains("\"type\":\"session.update\""));
         let parsed: ClientEvent = serde_json::from_str(&json).unwrap();
@@ -1162,4 +1155,3 @@ mod tests {
         assert_eq!(tool.name, "search");
     }
 }
-

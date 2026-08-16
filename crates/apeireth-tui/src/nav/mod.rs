@@ -68,7 +68,11 @@ impl Nav {
 
     /// 反向: 0→4→3→2→1→0
     pub fn prev(self) -> Self {
-        let n = if (self as u8) == 0 { 4 } else { (self as u8) - 1 };
+        let n = if (self as u8) == 0 {
+            4
+        } else {
+            (self as u8) - 1
+        };
         Self::from_u8(n).unwrap()
     }
 
@@ -111,7 +115,7 @@ pub fn dispatch_render(nav: Nav, area: Rect) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_i18n::{Locale, SUPPORTED_LOCALES, TranslatorImpl};
+    use apeireth_i18n::{Locale, TranslatorImpl, SUPPORTED_LOCALES};
 
     #[test]
     fn five_nav_variants_constructible() {

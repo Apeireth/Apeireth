@@ -48,7 +48,9 @@ pub struct State {
 
 impl Default for State {
     fn default() -> Self {
-        Self { entries: Vec::new() }
+        Self {
+            entries: Vec::new(),
+        }
     }
 }
 
@@ -185,9 +187,14 @@ mod tests {
 
     #[test]
     fn six_commands_constructible() {
-        let _ = Command::Append { role: "user".into(), content: "hi".into() };
+        let _ = Command::Append {
+            role: "user".into(),
+            content: "hi".into(),
+        };
         let _ = Command::GetHistory { limit: 10 };
-        let _ = Command::Search { query: "test".into() };
+        let _ = Command::Search {
+            query: "test".into(),
+        };
         let _ = Command::GetCount;
         let _ = Command::Clear;
         let _ = Command::GetConversations;
@@ -210,8 +217,11 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Append { role: "user".into(), content: "hello".into() },
-            );
+            Command::Append {
+                role: "user".into(),
+                content: "hello".into(),
+            },
+        );
         assert!(r.is_ok());
         assert_eq!(state.entries.len(), 1);
     }
@@ -221,9 +231,18 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Append { role: "admin".into(), content: "x".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "Append", .. })));
+            Command::Append {
+                role: "admin".into(),
+                content: "x".into(),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "Append",
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -231,9 +250,18 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Append { role: "user".into(), content: "".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "Append", .. })));
+            Command::Append {
+                role: "user".into(),
+                content: "".into(),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "Append",
+                ..
+            })
+        ));
     }
 
     // ---- GetHistory ----
@@ -248,7 +276,7 @@ mod tests {
                     role: "user".into(),
                     content: format!("msg {i}"),
                 },
-                    );
+            );
         }
         let r = handle(&mut state, Command::GetHistory { limit: 3 }).unwrap();
         match r {
@@ -264,16 +292,24 @@ mod tests {
         let mut state = fresh_state();
         let _ = handle(
             &mut state,
-            Command::Append { role: "user".into(), content: "hello world".into() },
-            );
+            Command::Append {
+                role: "user".into(),
+                content: "hello world".into(),
+            },
+        );
         let _ = handle(
             &mut state,
-            Command::Append { role: "user".into(), content: "goodbye".into() },
-            );
+            Command::Append {
+                role: "user".into(),
+                content: "goodbye".into(),
+            },
+        );
         let r = handle(
             &mut state,
-            Command::Search { query: "hello".into() },
-            )
+            Command::Search {
+                query: "hello".into(),
+            },
+        )
         .unwrap();
         match r {
             Response::SearchHits(v) => assert_eq!(v.len(), 1),
@@ -285,7 +321,13 @@ mod tests {
     fn search_rejects_empty_query() {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::Search { query: "".into() });
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "Search", .. })));
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "Search",
+                ..
+            })
+        ));
     }
 
     // ---- Clear ----
@@ -295,8 +337,11 @@ mod tests {
         let mut state = fresh_state();
         let _ = handle(
             &mut state,
-            Command::Append { role: "user".into(), content: "x".into() },
-            );
+            Command::Append {
+                role: "user".into(),
+                content: "x".into(),
+            },
+        );
         let _ = handle(&mut state, Command::Clear).unwrap();
         assert!(state.entries.is_empty());
     }

@@ -21,32 +21,34 @@
 /// TUI 旧名 → crate 新名 桥接表 (权威, 11 项)
 pub const ORGAN_BRIDGE_TABLE: &[(&str, &str)] = &[
     // TUI 旧名      crate 新名
-    ("heart",         "life_force"),
-    ("brain",         "cognition"),
-    ("hand",          "action"),
-    ("eye",           "perception"),
-    ("ear",           "perception"),
-    ("memory",        "memory"),
-    ("voice",         "voice"),
-    ("body",          "body"),
-    ("mind",          "consciousness"),
+    ("heart", "life_force"),
+    ("brain", "cognition"),
+    ("hand", "action"),
+    ("eye", "perception"),
+    ("ear", "perception"),
+    ("memory", "memory"),
+    ("voice", "voice"),
+    ("body", "body"),
+    ("mind", "consciousness"),
     // crate 新名有但 TUI 旧名无 (NEW crate)
-    ("motivation",    "motivation"),
-    ("value",         "value"),
+    ("motivation", "motivation"),
+    ("value", "value"),
     ("graph_primitive", "graph_primitive"),
-    ("companion",     "companion"),
+    ("companion", "companion"),
 ];
 
 /// TUI 旧名 → crate 新名
 pub fn tui_to_crate(tui: &str) -> Option<&'static str> {
-    ORGAN_BRIDGE_TABLE.iter()
+    ORGAN_BRIDGE_TABLE
+        .iter()
         .find(|(t, _)| *t == tui)
         .map(|(_, c)| *c)
 }
 
 /// crate 新名 → TUI 旧名 (反向, 仅适用于有 TUI 对应的 9 个)
 pub fn crate_to_tui(crate_name: &str) -> Option<&'static str> {
-    ORGAN_BRIDGE_TABLE.iter()
+    ORGAN_BRIDGE_TABLE
+        .iter()
         .find(|(_, c)| *c == crate_name)
         .map(|(t, _)| *t)
 }
@@ -58,8 +60,17 @@ pub const TUI_ORGAN_NAMES: &[&str] = &[
 
 /// crate 新名列表 (R23+ 9+1 organ)
 pub const CRATE_ORGAN_NAMES: &[&str] = &[
-    "consciousness", "perception", "cognition", "motivation", "life_force",
-    "memory", "value", "graph_primitive", "companion", "action", "voice",
+    "consciousness",
+    "perception",
+    "cognition",
+    "motivation",
+    "life_force",
+    "memory",
+    "value",
+    "graph_primitive",
+    "companion",
+    "action",
+    "voice",
 ];
 
 // =====================================================================
@@ -100,7 +111,7 @@ mod tests {
         assert_eq!(crate_to_tui("life_force"), Some("heart"));
         assert_eq!(crate_to_tui("cognition"), Some("brain"));
         assert_eq!(crate_to_tui("action"), Some("hand"));
-        assert_eq!(crate_to_tui("perception"), Some("eye"));  // first match wins (eye before ear)
+        assert_eq!(crate_to_tui("perception"), Some("eye")); // first match wins (eye before ear)
         assert_eq!(crate_to_tui("memory"), Some("memory"));
         assert_eq!(crate_to_tui("voice"), Some("voice"));
         assert_eq!(crate_to_tui("consciousness"), Some("mind"));
@@ -116,7 +127,9 @@ mod tests {
         // R11 LOCKED 9 organ
         assert_eq!(TUI_ORGAN_NAMES.len(), 9);
         // 必须包含全部 9 个
-        for n in &["heart", "brain", "hand", "eye", "ear", "memory", "voice", "body", "mind"] {
+        for n in &[
+            "heart", "brain", "hand", "eye", "ear", "memory", "voice", "body", "mind",
+        ] {
             assert!(TUI_ORGAN_NAMES.contains(n), "TUI missing: {}", n);
         }
     }
@@ -126,8 +139,17 @@ mod tests {
         // R23+ 9+1+1 (action/voice 是额外 organ crate, 不在 9 organ 内)
         assert_eq!(CRATE_ORGAN_NAMES.len(), 11);
         for n in &[
-            "consciousness", "perception", "cognition", "motivation", "life_force",
-            "memory", "value", "graph_primitive", "companion", "action", "voice"
+            "consciousness",
+            "perception",
+            "cognition",
+            "motivation",
+            "life_force",
+            "memory",
+            "value",
+            "graph_primitive",
+            "companion",
+            "action",
+            "voice",
         ] {
             assert!(CRATE_ORGAN_NAMES.contains(n), "Crate missing: {}", n);
         }

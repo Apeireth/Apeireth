@@ -26,14 +26,7 @@
 
 /// 5 工具白名单 (编译期 hardcode 字符串, 跟 src/error.rs TOOL_WHITELIST 同步)
 /// 双重声明是为了不让 _test.rs 跨文件依赖, _test.rs 自包含.
-pub const TOOL_WHITELIST: &[&str] = &[
-    "calendar",
-    "message",
-    "contact",
-    "task",
-    "search",
-    "drive",
-];
+pub const TOOL_WHITELIST: &[&str] = &["calendar", "message", "contact", "task", "search", "drive"];
 
 /// 5 nav 端点路径 (编译期 hardcode, 跟 src/http.rs PATH_* 同步)
 pub const PATH_SESSIONS: &str = "/v1/sessions";

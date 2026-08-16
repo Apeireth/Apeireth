@@ -87,7 +87,7 @@ fn map_to_3_stage(idx: u8) -> &'static str {
         2 => "Bootstrap",
         3 => "Serving",
         4 => "Saturated",
-        _ => "Init",        // 兜底
+        _ => "Init", // 兜底
     }
 }
 

@@ -51,7 +51,9 @@ pub enum OrganError {
     UnknownOrgan(u8),
 
     /// 器官实接度不足 (stub organ 不支持该 command, 诚实标缺)
-    #[error("organ '{organ}' not ready (readiness=stub), command '{command}' denied (S-2 实事求是)")]
+    #[error(
+        "organ '{organ}' not ready (readiness=stub), command '{command}' denied (S-2 实事求是)"
+    )]
     Unsupported {
         /// 器官 ASCII 字符 e.g. `"[EYE]"`
         organ: &'static str,
@@ -91,10 +93,22 @@ pub enum OrganError {
 #[allow(dead_code)]
 const _: fn() = || {
     let _e1 = OrganError::UnknownOrgan(99);
-    let _e2 = OrganError::Unsupported { organ: "[EYE]", command: "WatchInput" };
-    let _e3 = OrganError::InvalidArg { command: "SetBpm", reason: "out of range".into() };
-    let _e4 = OrganError::NotReady { organ: "[BRAIN]", reason: "no provider set".into() };
-    let _e5 = OrganError::CrossNavDenied { from: "Bridge", to: "Settings" };
+    let _e2 = OrganError::Unsupported {
+        organ: "[EYE]",
+        command: "WatchInput",
+    };
+    let _e3 = OrganError::InvalidArg {
+        command: "SetBpm",
+        reason: "out of range".into(),
+    };
+    let _e4 = OrganError::NotReady {
+        organ: "[BRAIN]",
+        reason: "no provider set".into(),
+    };
+    let _e5 = OrganError::CrossNavDenied {
+        from: "Bridge",
+        to: "Settings",
+    };
 };
 
 // =====================================================================
@@ -148,7 +162,10 @@ mod tests {
         assert!(s.contains("[EAR]"), "应含器官 ASCII: {s}");
         assert!(s.contains("Subscribe"), "应含 command 名: {s}");
         // S-2 实事求是 — 错误信息应带诚实标记
-        assert!(s.contains("stub") || s.contains("not ready"), "应诚实标缺: {s}");
+        assert!(
+            s.contains("stub") || s.contains("not ready"),
+            "应诚实标缺: {s}"
+        );
     }
 
     #[test]
@@ -193,9 +210,18 @@ mod tests {
         use OrganError::*;
         let variants: Vec<OrganError> = vec![
             UnknownOrgan(0),
-            Unsupported { organ: "x", command: "y" },
-            InvalidArg { command: "z", reason: "w".into() },
-            NotReady { organ: "v", reason: "u".into() },
+            Unsupported {
+                organ: "x",
+                command: "y",
+            },
+            InvalidArg {
+                command: "z",
+                reason: "w".into(),
+            },
+            NotReady {
+                organ: "v",
+                reason: "u".into(),
+            },
             CrossNavDenied { from: "a", to: "b" },
         ];
         assert_eq!(variants.len(), 5, "5 错误变体 hardcode");

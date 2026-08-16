@@ -14,7 +14,9 @@
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap};
+use ratatui::widgets::{
+    Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap,
+};
 use ratatui::Frame;
 
 use crate::app::App;
@@ -114,8 +116,16 @@ pub fn compute_selection_char_count(app: &App) -> usize {
     let mut total = 0;
     for i in lo_line..=hi_line {
         let total_in_line = chars_in_line(i);
-        let s = if i == lo_line { lo_char.min(total_in_line) } else { 0 };
-        let e = if i == hi_line { hi_char.min(total_in_line) } else { total_in_line };
+        let s = if i == lo_line {
+            lo_char.min(total_in_line)
+        } else {
+            0
+        };
+        let e = if i == hi_line {
+            hi_char.min(total_in_line)
+        } else {
+            total_in_line
+        };
         if e > s {
             total += e - s;
         }
@@ -140,9 +150,21 @@ pub(super) fn selection_char_range_for_line(app: &App, line_idx: usize) -> Optio
     if line_idx < lo_line || line_idx > hi_line {
         return None;
     }
-    let total_chars = app.chat_line_map.get(line_idx).map(|i| i.text.chars().count()).unwrap_or(0);
-    let start = if line_idx == lo_line { lo_char.min(total_chars) } else { 0 };
-    let end = if line_idx == hi_line { hi_char.min(total_chars) } else { total_chars };
+    let total_chars = app
+        .chat_line_map
+        .get(line_idx)
+        .map(|i| i.text.chars().count())
+        .unwrap_or(0);
+    let start = if line_idx == lo_line {
+        lo_char.min(total_chars)
+    } else {
+        0
+    };
+    let end = if line_idx == hi_line {
+        hi_char.min(total_chars)
+    } else {
+        total_chars
+    };
     if end <= start {
         return None;
     }
@@ -153,7 +175,11 @@ pub(super) fn selection_char_range_for_line(app: &App, line_idx: usize) -> Optio
 /// - sel_range = None: 返回 1 段 (整段不加 REVERSED)
 /// - sel_range = Some((s, e)) 且 0<=s<e<=len: 返回 3 段 (before/REVERSED/after)
 /// - 边界 (s==e 或越界): 当 None 处理 (返回 1 段)
-fn styled_with_selection(text: &str, base_style: Style, sel_range: Option<(usize, usize)>) -> Vec<Span<'static>> {
+fn styled_with_selection(
+    text: &str,
+    base_style: Style,
+    sel_range: Option<(usize, usize)>,
+) -> Vec<Span<'static>> {
     let Some((start, end)) = sel_range else {
         return vec![Span::styled(text.to_string(), base_style)];
     };
@@ -171,7 +197,10 @@ fn styled_with_selection(text: &str, base_style: Style, sel_range: Option<(usize
     if !before.is_empty() {
         spans.push(Span::styled(before, base_style));
     }
-    spans.push(Span::styled(middle, base_style.add_modifier(Modifier::REVERSED)));
+    spans.push(Span::styled(
+        middle,
+        base_style.add_modifier(Modifier::REVERSED),
+    ));
     if !after.is_empty() {
         spans.push(Span::styled(after, base_style));
     }
@@ -393,15 +422,13 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                     prefix_cols: unicode_width::UnicodeWidthStr::width(" ❯ ") as u16,
                 });
                 let sel_range = selection_char_range_for_line(app, line_idx);
-                let mut spans = vec![
-                    Span::styled(
-                        " ❯ ",
-                        Style::default()
-                            .fg(style.bg)
-                            .bg(style.primary)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ];
+                let mut spans = vec![Span::styled(
+                    " ❯ ",
+                    Style::default()
+                        .fg(style.bg)
+                        .bg(style.primary)
+                        .add_modifier(Modifier::BOLD),
+                )];
                 let base_text_style = Style::default()
                     .fg(style.primary)
                     .bg(style.bg)
@@ -423,7 +450,8 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                         chat_line_map.push(LineInfo {
                             msg_idx,
                             text: "∴ Thinking".to_string(),
-                            prefix_cols: unicode_width::UnicodeWidthStr::width("   ∴ Thinking ") as u16,
+                            prefix_cols: unicode_width::UnicodeWidthStr::width("   ∴ Thinking ")
+                                as u16,
                         });
                         let sel_range = selection_char_range_for_line(app, line_idx);
                         let base_text_style = Style::default()
@@ -441,7 +469,9 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                         // sel_range 映射到 display: shift by +3 (prefix)
                         let shifted = sel_range.map(|(s, e)| (s + 3, e + 3));
                         let total_d = display_text_chars.len();
-                        let adj = shifted.map(|(s, e)| (s.min(total_d), e.min(total_d))).filter(|&(s, e)| e > s);
+                        let adj = shifted
+                            .map(|(s, e)| (s.min(total_d), e.min(total_d)))
+                            .filter(|&(s, e)| e > s);
                         spans.extend(styled_with_selection(display_text, base_text_style, adj));
                         lines.push(Line::from(spans));
                         for tl in think.lines() {
@@ -460,7 +490,9 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                             let display = format!("     {}", tl);
                             let shifted = sel_range.map(|(s, e)| (s + 5, e + 5));
                             let total_d = display.chars().count();
-                            let adj = shifted.map(|(s, e)| (s.min(total_d), e.min(total_d))).filter(|&(s, e)| e > s);
+                            let adj = shifted
+                                .map(|(s, e)| (s.min(total_d), e.min(total_d)))
+                                .filter(|&(s, e)| e > s);
                             spans.extend(styled_with_selection(&display, base_text_style, adj));
                             lines.push(Line::from(spans));
                         }
@@ -470,7 +502,9 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                         chat_line_map.push(LineInfo {
                             msg_idx,
                             text: "∴ Thinking (折叠)".to_string(),
-                            prefix_cols: unicode_width::UnicodeWidthStr::width("   ∴ Thinking… <Ctrl+O 展开>") as u16,
+                            prefix_cols: unicode_width::UnicodeWidthStr::width(
+                                "   ∴ Thinking… <Ctrl+O 展开>",
+                            ) as u16,
                         });
                         let sel_range = selection_char_range_for_line(app, line_idx);
                         let base_text_style = Style::default()
@@ -484,11 +518,21 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                         let text_len = "∴ Thinking (折叠)".chars().count();
                         let display_text_len = 13; // "∴ Thinking… " 部分
                         let total_d = display.chars().count();
-                        let adj = sel_range.map(|(s, e)| {
-                            let sp = if text_len > 0 { (s * display_text_len / text_len) + 3 } else { 3 };
-                            let ep = if text_len > 0 { (e * display_text_len / text_len) + 3 } else { 3 };
-                            (sp.min(total_d), ep.min(total_d))
-                        }).filter(|&(s, e)| e > s);
+                        let adj = sel_range
+                            .map(|(s, e)| {
+                                let sp = if text_len > 0 {
+                                    (s * display_text_len / text_len) + 3
+                                } else {
+                                    3
+                                };
+                                let ep = if text_len > 0 {
+                                    (e * display_text_len / text_len) + 3
+                                } else {
+                                    3
+                                };
+                                (sp.min(total_d), ep.min(total_d))
+                            })
+                            .filter(|&(s, e)| e > s);
                         let mut spans = Vec::new();
                         spans.extend(styled_with_selection(display, base_text_style, adj));
                         lines.push(Line::from(spans));
@@ -509,14 +553,12 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                         prefix_cols: unicode_width::UnicodeWidthStr::width(" ▌ ") as u16,
                     });
                     let sel_range = selection_char_range_for_line(app, line_idx);
-                    let mut spans = vec![
-                        Span::styled(
-                            " ▌ ",
-                            Style::default()
-                                .fg(style.accent)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ];
+                    let mut spans = vec![Span::styled(
+                        " ▌ ",
+                        Style::default()
+                            .fg(style.accent)
+                            .add_modifier(Modifier::BOLD),
+                    )];
                     let base_text_style = Style::default().fg(style.accent);
                     spans.extend(styled_with_selection(&rl, base_text_style, sel_range));
                     lines.push(Line::from(spans));
@@ -536,8 +578,14 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                 // sel_range 是 raw 维度; display 偏移 +3 (prefix " · ")
                 let shifted = sel_range.map(|(s, e)| (s + 3, e + 3));
                 let total_d = display.chars().count();
-                let adj = shifted.map(|(s, e)| (s.min(total_d), e.min(total_d))).filter(|&(s, e)| e > s);
-                lines.push(Line::from(styled_with_selection(&display, base_text_style, adj)));
+                let adj = shifted
+                    .map(|(s, e)| (s.min(total_d), e.min(total_d)))
+                    .filter(|&(s, e)| e > s);
+                lines.push(Line::from(styled_with_selection(
+                    &display,
+                    base_text_style,
+                    adj,
+                )));
             }
             _ => {
                 // 未知 role, 也直接用 raw
@@ -552,8 +600,14 @@ fn render_history(f: &mut Frame, area: Rect, app: &mut App, style: &ThemeStyle) 
                 let display = format!(" ? {}", raw);
                 let shifted = sel_range.map(|(s, e)| (s + 3, e + 3));
                 let total_d = display.chars().count();
-                let adj = shifted.map(|(s, e)| (s.min(total_d), e.min(total_d))).filter(|&(s, e)| e > s);
-                lines.push(Line::from(styled_with_selection(&display, base_text_style, adj)));
+                let adj = shifted
+                    .map(|(s, e)| (s.min(total_d), e.min(total_d)))
+                    .filter(|&(s, e)| e > s);
+                lines.push(Line::from(styled_with_selection(
+                    &display,
+                    base_text_style,
+                    adj,
+                )));
             }
         }
         // 消息间 1 行空 (借鉴 Claude Code marginTop=1)
@@ -703,11 +757,20 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
         Span::styled("API ", Style::default().fg(style.dim)),
         Span::styled(
             crate::backend::parse_host_port(&app.api_url).unwrap_or_else(|| "-".to_string()),
-            Style::default().fg(if app.api_online { style.accent } else { style.dim }),
+            Style::default().fg(if app.api_online {
+                style.accent
+            } else {
+                style.dim
+            }),
         ),
         Span::styled(
             if app.api_online { " ●" } else { " ✗" },
-            Style::default().fg(if app.api_online { style.accent } else { style.dim })
+            Style::default()
+                .fg(if app.api_online {
+                    style.accent
+                } else {
+                    style.dim
+                })
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -736,13 +799,17 @@ fn render_status_bar(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
     let mut line = line;
     if copy_active {
         let (msg, _) = app.copy_feedback.as_ref().unwrap();
-        line.spans.push(Span::styled("  · ", Style::default().fg(style.dim)));
+        line.spans
+            .push(Span::styled("  · ", Style::default().fg(style.dim)));
         line.spans.push(Span::styled(
             msg.clone(),
-            Style::default().fg(style.primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
         ));
     } else if app.selection.is_some() {
-        line.spans.push(Span::styled("  · ", Style::default().fg(style.dim)));
+        line.spans
+            .push(Span::styled("  · ", Style::default().fg(style.dim)));
         // R28 char-level: 显示实际字符数 (跟 Ctrl+C 复制的一致), 零长度选区也有反馈
         let sel_count = compute_selection_char_count(app);
         line.spans.push(Span::styled(
@@ -789,7 +856,11 @@ fn render_input(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
         .unwrap_or(s.len());
     let (before, after) = s.split_at(byte_cursor);
     // 输入文字颜色: focus 时 accent, 失焦时 dim (提示用户输入不活跃)
-    let text_color = if app.input_focused { style.accent } else { style.dim };
+    let text_color = if app.input_focused {
+        style.accent
+    } else {
+        style.dim
+    };
     let text = vec![Line::from(vec![
         Span::styled(" ▏", Style::default().fg(text_color)),
         Span::styled(before.to_string(), Style::default().fg(text_color)),
@@ -840,13 +911,16 @@ fn strip_r19_meta(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{compute_scroll_y, compute_scrollbar_position, split_think, strip_r19_meta, strip_think_tags_simple};
+    use super::{
+        compute_scroll_y, compute_scrollbar_position, split_think, strip_r19_meta,
+        strip_think_tags_simple,
+    };
     #[test]
     fn compute_scrollbar_position_top_returns_zero() {
         // R26-3-fixes: scroll=0 -> position=0 (thumb 顶)
         assert_eq!(compute_scrollbar_position(0, 70, 100), 0);
-        assert_eq!(compute_scrollbar_position(0, 0, 30), 0);  // max_scroll=0 edge
-        assert_eq!(compute_scrollbar_position(0, 70, 0), 0);  // total=0 edge
+        assert_eq!(compute_scrollbar_position(0, 0, 30), 0); // max_scroll=0 edge
+        assert_eq!(compute_scrollbar_position(0, 70, 0), 0); // total=0 edge
     }
 
     #[test]
@@ -894,8 +968,6 @@ mod tests {
         assert_eq!(compute_scroll_y(false, 200, 100), 0);
         assert_eq!(compute_scroll_y(false, u16::MAX, 100), 0);
     }
-
-
 
     // 2026-08-04 回归测试 (chuling via mavis): char→byte cursor 转换
     //   防止 input_buf 是 Vec<char> 但 s.split_at(byte) 时再次踩 byte index panic.
@@ -991,8 +1063,14 @@ mod tests {
     fn split_think_minimax_real_format() {
         let real_response = "<think>The user said \"hi\" - a simple greeting. I should respond warmly and conversationally.</think>\n\nHi there! \u{1f44b} How can I help you today?";
         let (think, rest) = split_think(real_response);
-        assert!(think.contains("simple greeting"), "think 应含 MiniMax 思考内容, 实际: {think}");
-        assert!(rest.contains("Hi there"), "rest 应含 Hi there, 实际: {rest}");
+        assert!(
+            think.contains("simple greeting"),
+            "think 应含 MiniMax 思考内容, 实际: {think}"
+        );
+        assert!(
+            rest.contains("Hi there"),
+            "rest 应含 Hi there, 实际: {rest}"
+        );
         assert!(!rest.contains("思考"), "rest 不应含思考标签");
     }
 

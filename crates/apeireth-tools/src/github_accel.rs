@@ -29,7 +29,8 @@ use serde_json::{json, Value};
 /// 节点池 API (xiake.pro 聚合).
 pub const POOL_API: &str = "https://xiake.pro/static/node.json";
 /// 探测测试文件 (与 xiake.pro 前端同款: vscode 图标, 小文件).
-pub const PROBE_FILE: &str = "https://raw.githubusercontent.com/microsoft/vscode/main/resources/linux/code.png";
+pub const PROBE_FILE: &str =
+    "https://raw.githubusercontent.com/microsoft/vscode/main/resources/linux/code.png";
 /// 单节点探测超时.
 pub const PROBE_TIMEOUT: Duration = Duration::from_secs(6);
 /// 最大并发探测.
@@ -87,7 +88,10 @@ pub async fn fetch_mirror_pool(client: &reqwest::Client) -> Result<Vec<MirrorNod
     if status != 200 {
         return Err(format!("节点池 API 返回 {status}"));
     }
-    let text = resp.text().await.map_err(|e| format!("读节点池响应失败: {e}"))?;
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| format!("读节点池响应失败: {e}"))?;
     parse_pool(&text)
 }
 
@@ -99,7 +103,8 @@ pub fn parse_pool(text: &str) -> Result<Vec<MirrorNode>, String> {
         #[serde(default)]
         data: Vec<MirrorNode>,
     }
-    let pool: Pool = serde_json::from_str(text).map_err(|e| format!("节点池 JSON 解析失败: {e}"))?;
+    let pool: Pool =
+        serde_json::from_str(text).map_err(|e| format!("节点池 JSON 解析失败: {e}"))?;
     if pool.code != 200 {
         return Err(format!("节点池 code != 200: {}", pool.code));
     }
@@ -164,7 +169,10 @@ pub async fn probe_one(client: &reqwest::Client, node: &MirrorNode) -> ProbeResu
                     let note = if verified {
                         String::new()
                     } else if (200..300).contains(&status) && !is_png {
-                        format!("2xx 但非真实文件 (content-type: {ct}, 前 {} 字节非 PNG)", bytes.len().min(16))
+                        format!(
+                            "2xx 但非真实文件 (content-type: {ct}, 前 {} 字节非 PNG)",
+                            bytes.len().min(16)
+                        )
                     } else {
                         format!("HTTP {status}")
                     };
@@ -233,8 +241,14 @@ impl Tool for GhAccelTool {
         }
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(DEFAULT_PROBE_LIMIT as u64) as usize;
-        let github_url = args.get("github_url").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty());
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(DEFAULT_PROBE_LIMIT as u64) as usize;
+        let github_url = args
+            .get("github_url")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.trim().is_empty());
         let client = reqwest::Client::builder()
             .timeout(PROBE_TIMEOUT)
             .user_agent("Mozilla/5.0 (Apeireth gh_accel)")
@@ -246,9 +260,11 @@ impl Tool for GhAccelTool {
         // 输出排序: 可用优先, 再按实测延迟升序 (最快在最前, 方便人/AI 读表)
         let mut sorted = probes.clone();
         sorted.sort_by(|a, b| {
-            b.ok()
-                .cmp(&a.ok())
-                .then_with(|| a.latency_ms.unwrap_or(u64::MAX).cmp(&b.latency_ms.unwrap_or(u64::MAX)))
+            b.ok().cmp(&a.ok()).then_with(|| {
+                a.latency_ms
+                    .unwrap_or(u64::MAX)
+                    .cmp(&b.latency_ms.unwrap_or(u64::MAX))
+            })
         });
         let mut out = json!({
             "pool_total": pool.len(),
@@ -287,7 +303,10 @@ impl Tool for GhAccelTool {
             }
             None => {
                 out["fastest"] = json!(null);
-                out["note"] = json!(format!("{} 个节点全部不可用 (2xx=可用) — 免费节点池常有死节点, 稍后重试或换源", probes.len()));
+                out["note"] = json!(format!(
+                    "{} 个节点全部不可用 (2xx=可用) — 免费节点池常有死节点, 稍后重试或换源",
+                    probes.len()
+                ));
             }
         }
         Ok(out)
@@ -324,7 +343,10 @@ mod tests {
     fn parse_pool_dedupes_and_sorts() {
         let nodes = parse_pool(FIXTURE).unwrap();
         assert_eq!(nodes.len(), 3, "去重 (gh.a.com ×2) + 只留 http(s)");
-        assert_eq!(nodes[0].url, "https://gh.b.com", "按站侧延迟升序 (100 最前)");
+        assert_eq!(
+            nodes[0].url, "https://gh.b.com",
+            "按站侧延迟升序 (100 最前)"
+        );
     }
 
     #[test]
@@ -337,7 +359,14 @@ mod tests {
     #[test]
     fn pick_fastest_prefers_ok_and_low_latency() {
         let mk = |url: &str, lat: Option<u64>, status: Option<u16>, verified: bool| ProbeResult {
-            node: MirrorNode { url: url.into(), server: String::new(), ip: String::new(), location: String::new(), latency: 0, speed: 0.0 },
+            node: MirrorNode {
+                url: url.into(),
+                server: String::new(),
+                ip: String::new(),
+                location: String::new(),
+                latency: 0,
+                speed: 0.0,
+            },
             latency_ms: lat,
             http_status: status,
             verified,
@@ -346,15 +375,18 @@ mod tests {
         let probes = vec![
             mk("https://a.com", Some(900), Some(200), true),
             mk("https://b.com", Some(300), Some(200), true),
-            mk("https://c.com", Some(50), Some(404), false),   // 404 不可用
-            mk("https://d.com", Some(50), Some(200), false),   // 200 但 HTML 包装页 → 不可用
-            mk("https://e.com", None, None, false),            // 网络失败
+            mk("https://c.com", Some(50), Some(404), false), // 404 不可用
+            mk("https://d.com", Some(50), Some(200), false), // 200 但 HTML 包装页 → 不可用
+            mk("https://e.com", None, None, false),          // 网络失败
         ];
         let best = pick_fastest(&probes).unwrap();
         assert_eq!(best.node.url, "https://b.com");
         assert_eq!(best.latency_ms, Some(300));
         // 全挂 → None
-        let all_dead = vec![mk("https://c.com", Some(50), Some(404), false), mk("https://e.com", None, None, false)];
+        let all_dead = vec![
+            mk("https://c.com", Some(50), Some(404), false),
+            mk("https://e.com", None, None, false),
+        ];
         assert!(pick_fastest(&all_dead).is_none());
     }
 

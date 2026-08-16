@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// TUI i18n 集成测试 (R21 G-1 续补, 1.0 release #10 i18n 100% 收尾)
 ///
 /// **测试目标** (per 主人派活单 2026-08-06):
@@ -14,32 +20,40 @@
 /// - O-4 任何人都能接手: 头部说明 + 测试名清楚 + 85 翻译点 enumerate 显式
 /// - O-5 不假装: 直接走 tr.t() 对比, 不允许 mock, 缺 key 返 key 自身 (i18next 1:1)
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守
 /// **路径说明** (per 团队规范):
 // - 不改 main.rs (LOCKED), 用 `#[path]` 把 nav / organ 源文件拉到 test binary root
 // - 直接调 `Translator::t` 走 i18n 翻译表, 跟 nav/mod.rs / organ/mod.rs 用的同 1 份
-
 mod test_common;
 
 use apeireth_i18n::{
-    Locale, SUPPORTED_LOCALES, TranslationArgs, Translator, TranslatorImpl, PLATFORM_NAME,
+    Locale, TranslationArgs, Translator, TranslatorImpl, PLATFORM_NAME, SUPPORTED_LOCALES,
 };
 use nav::Nav;
 use organ::{Organ, Readiness};
@@ -71,11 +85,7 @@ const NINE_ORGAN_KEYS: &[&str] = &[
 ];
 
 /// 3 readiness 翻译 key (跟 organ/mod.rs::Readiness::label() 1:1)
-const THREE_READINESS_KEYS: &[&str] = &[
-    "readiness.ok",
-    "readiness.partial",
-    "readiness.stub",
-];
+const THREE_READINESS_KEYS: &[&str] = &["readiness.ok", "readiness.partial", "readiness.stub"];
 
 /// 17 keys 总数守门: 5 + 9 + 3 = 17
 #[test]
@@ -321,25 +331,41 @@ async fn translations_have_locale_specific_chars() {
     let zh_has_chinese = samples
         .iter()
         .filter(|(l, _, _)| *l == Locale::ZhCn)
-        .any(|(_, _, v)| v.chars().any(|c| (c as u32) >= 0x4E00 && (c as u32) <= 0x9FFF));
+        .any(|(_, _, v)| {
+            v.chars()
+                .any(|c| (c as u32) >= 0x4E00 && (c as u32) <= 0x9FFF)
+        });
     assert!(zh_has_chinese, "zh-CN 翻译应含汉字");
     // ja: 至少 1 个假名 (hiragana / katakana)
     let ja_has_kana = samples
         .iter()
         .filter(|(l, _, _)| *l == Locale::Ja)
-        .any(|(_, _, v)| v.chars().any(|c| (c as u32) >= 0x3040 && (c as u32) <= 0x30FF));
+        .any(|(_, _, v)| {
+            v.chars()
+                .any(|c| (c as u32) >= 0x3040 && (c as u32) <= 0x30FF)
+        });
     assert!(ja_has_kana, "ja 翻译应含假名 (hiragana/katakana)");
     // fr: 至少 1 个法语特殊字符 (é à ç)
     let fr_has_accent = samples
         .iter()
         .filter(|(l, _, _)| *l == Locale::Fr)
-        .any(|(_, _, v)| v.chars().any(|c| matches!(c, 'é' | 'à' | 'ç' | 'è' | 'ê' | 'ë' | 'î' | 'ï' | 'ô' | 'ù' | 'û')));
+        .any(|(_, _, v)| {
+            v.chars().any(|c| {
+                matches!(
+                    c,
+                    'é' | 'à' | 'ç' | 'è' | 'ê' | 'ë' | 'î' | 'ï' | 'ô' | 'ù' | 'û'
+                )
+            })
+        });
     assert!(fr_has_accent, "fr 翻译应含法语特殊字符 (é à ç 等)");
     // de: 至少 1 个德语特殊字符 (ä ö ü ß)
     let de_has_umlaut = samples
         .iter()
         .filter(|(l, _, _)| *l == Locale::De)
-        .any(|(_, _, v)| v.chars().any(|c| matches!(c, 'ä' | 'ö' | 'ü' | 'ß' | 'Ä' | 'Ö' | 'Ü')));
+        .any(|(_, _, v)| {
+            v.chars()
+                .any(|c| matches!(c, 'ä' | 'ö' | 'ü' | 'ß' | 'Ä' | 'Ö' | 'Ü'))
+        });
     assert!(de_has_umlaut, "de 翻译应含德语特殊字符 (ä ö ü ß 等)");
 }
 
@@ -373,4 +399,3 @@ fn organ_ascii_chars_cross_platform_safe_after_i18n() {
         }
     }
 }
-
