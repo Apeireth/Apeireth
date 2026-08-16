@@ -201,7 +201,10 @@ mod tests {
 
         let out = render(Rect::new(0, 0, 40, 10));
         assert!(out.contains("思考: 完成"));
-        assert!(out.contains("前"), "expected age 'ago' phrasing, got: {out}");
+        assert!(
+            out.contains("前"),
+            "expected age 'ago' phrasing, got: {out}"
+        );
     }
 
     #[test]
@@ -228,7 +231,10 @@ mod tests {
         let after = brain_stats::BRAIN_LAST_CALL_MS.load(Ordering::Relaxed);
         let state = brain_stats::BRAIN_THINKING_STATE.load(Ordering::Relaxed);
 
-        assert!(after > before, "last_call_ms 没前进 before={before} after={after}");
+        assert!(
+            after > before,
+            "last_call_ms 没前进 before={before} after={after}"
+        );
         assert_eq!(state, 2, "成功后 state 必须 = 2 (completed)");
     }
 
@@ -251,7 +257,10 @@ mod tests {
         let _g = TEST_LOCK.lock().unwrap();
         brain_stats::BRAIN_REASONING_QUEUE.store(0, Ordering::Relaxed);
         record_reasoning_queue_depth(7);
-        assert_eq!(brain_stats::BRAIN_REASONING_QUEUE.load(Ordering::Relaxed), 7);
+        assert_eq!(
+            brain_stats::BRAIN_REASONING_QUEUE.load(Ordering::Relaxed),
+            7
+        );
     }
 
     #[test]
@@ -270,20 +279,20 @@ mod tests {
 
     #[test]
     fn age_phrase_variants() {
-assert_eq!(age_phrase(1_000, 0), "无");
-assert_eq!(age_phrase(60_000, 50_000), "10秒前");
-assert_eq!(age_phrase(125_000, 0), "无");
-assert_eq!(age_phrase(125_000, 5_000), "2分0秒前");
-assert_eq!(age_phrase(3_700_000, 0), "无");
-assert_eq!(age_phrase(3_700_000, 100_000), "1时0分前");
+        assert_eq!(age_phrase(1_000, 0), "无");
+        assert_eq!(age_phrase(60_000, 50_000), "10秒前");
+        assert_eq!(age_phrase(125_000, 0), "无");
+        assert_eq!(age_phrase(125_000, 5_000), "2分0秒前");
+        assert_eq!(age_phrase(3_700_000, 0), "无");
+        assert_eq!(age_phrase(3_700_000, 100_000), "1时0分前");
     }
 
     #[test]
     fn describe_state_4_states() {
-assert_eq!(describe_state(0), "空闲");
-assert_eq!(describe_state(1), "流式");
-assert_eq!(describe_state(2), "完成");
-assert_eq!(describe_state(3), "失败");
-assert_eq!(describe_state(99), "未知");
+        assert_eq!(describe_state(0), "空闲");
+        assert_eq!(describe_state(1), "流式");
+        assert_eq!(describe_state(2), "完成");
+        assert_eq!(describe_state(3), "失败");
+        assert_eq!(describe_state(99), "未知");
     }
 }

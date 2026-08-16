@@ -37,21 +37,19 @@ pub fn render(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
 }
 
 fn render_top_status(f: &mut Frame, area: Rect, _app: &App, style: &ThemeStyle) {
-    let status = backend::compute_main_ai_status().unwrap_or_else(|e| {
-        backend::MainAiStatus {
-            asi_v05: 0.0,
-            asi_continuity: 0.0,
-            asi_philosophy: 0.0,
-            life_stage: format!("错误: {e}"),
-            life_stage_idx: 0,
-            reflection_status: "?".into(),
-            endurance: 0.0,
-            episode_count: 0,
-            cycle_count: 0,
-            token_used: 0,
-            token_r19: 0,
-            five_self: "?".into(),
-        }
+    let status = backend::compute_main_ai_status().unwrap_or_else(|e| backend::MainAiStatus {
+        asi_v05: 0.0,
+        asi_continuity: 0.0,
+        asi_philosophy: 0.0,
+        life_stage: format!("错误: {e}"),
+        life_stage_idx: 0,
+        reflection_status: "?".into(),
+        endurance: 0.0,
+        episode_count: 0,
+        cycle_count: 0,
+        token_used: 0,
+        token_r19: 0,
+        five_self: "?".into(),
     });
 
     let block = Block::default()
@@ -71,7 +69,9 @@ fn render_top_status(f: &mut Frame, area: Rect, _app: &App, style: &ThemeStyle) 
             Span::styled("北极星 ", Style::default().fg(style.dim)),
             Span::styled(
                 format!("{:.3}", status.asi_v05),
-                Style::default().fg(style.primary).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(style.primary)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  连续 ", Style::default().fg(style.dim)),
             Span::styled(
@@ -90,7 +90,9 @@ fn render_top_status(f: &mut Frame, area: Rect, _app: &App, style: &ThemeStyle) 
             Span::styled("阶段 ", Style::default().fg(style.dim)),
             Span::styled(
                 format!("{}({})", stage_badge, status.life_stage_idx),
-                Style::default().fg(style.accent).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(style.accent)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled("  反思 ", Style::default().fg(style.dim)),
             Span::styled(

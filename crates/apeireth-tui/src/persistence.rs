@@ -347,7 +347,6 @@ mod tests {
     }
 }
 
-
 // ============================================================
 // 输入历史持久化 (R26-3-fixes)
 // ============================================================
@@ -427,7 +426,6 @@ pub fn push_input_history(mut history: Vec<String>, input: String) -> Vec<String
     }
     history
 }
-
 
 #[cfg(test)]
 mod history_tests {

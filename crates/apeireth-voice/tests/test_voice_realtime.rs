@@ -8,10 +8,10 @@
 //! - Base64 encoder (RFC 4648 §10 canonical fixtures)
 
 use apeireth_voice::realtime::{
-    encode_audio_append, encode_image_input, ClientEvent, ConversationItem,
-    EphemeralTokenRequest, RealtimeAudioFormat, RealtimeModel, RealtimeSessionConfig,
-    RealtimeTool, RealtimeVoice, ServerEvent, TurnDetection, TurnDetectionKind,
-    REALTIME_MAX_AUDIO_BUFFER_BYTES, REALTIME_MAX_IMAGE_BYTES,
+    encode_audio_append, encode_image_input, ClientEvent, ConversationItem, EphemeralTokenRequest,
+    RealtimeAudioFormat, RealtimeModel, RealtimeSessionConfig, RealtimeTool, RealtimeVoice,
+    ServerEvent, TurnDetection, TurnDetectionKind, REALTIME_MAX_AUDIO_BUFFER_BYTES,
+    REALTIME_MAX_IMAGE_BYTES,
 };
 use std::time::{Duration, SystemTime};
 
@@ -40,7 +40,9 @@ fn integration_session_update_event_roundtrip() {
         .model(RealtimeModel::GptRealtimeMini)
         .voice(RealtimeVoice::Echo);
 
-    let event = ClientEvent::SessionUpdate { config: cfg.clone() };
+    let event = ClientEvent::SessionUpdate {
+        config: cfg.clone(),
+    };
     let json = serde_json::to_string(&event).unwrap();
     assert!(json.contains("\"type\":\"session.update\""));
 
@@ -108,7 +110,12 @@ fn integration_input_image_event_roundtrip() {
     assert!(json.contains("\"type\":\"conversation.item.input_image\""));
 
     let parsed: ConversationItem = serde_json::from_str(&json).unwrap();
-    if let ConversationItem::InputImage { image_base64, detail, .. } = parsed {
+    if let ConversationItem::InputImage {
+        image_base64,
+        detail,
+        ..
+    } = parsed
+    {
         assert_eq!(image_base64, png_b64);
         assert_eq!(detail.as_deref(), Some("low"));
     } else {
@@ -147,7 +154,12 @@ fn integration_audio_buffer_size_guard() {
 fn integration_image_input_size_guard() {
     // Valid small image
     let ok = encode_image_input(&vec![0u8; 4096]).expect("small image ok");
-    if let ConversationItem::InputImage { image_base64, detail, .. } = ok {
+    if let ConversationItem::InputImage {
+        image_base64,
+        detail,
+        ..
+    } = ok
+    {
         assert!(!image_base64.is_empty());
         assert_eq!(detail.as_deref(), Some("auto"));
     } else {
@@ -194,8 +206,14 @@ fn integration_session_lifecycle_events() {
 #[test]
 fn integration_default_modalities_audio_plus_text() {
     let cfg = RealtimeSessionConfig::default();
-    assert!(cfg.modalities.input.contains(&apeireth_voice::realtime::RealtimeModality::Audio));
-    assert!(cfg.modalities.output.contains(&apeireth_voice::realtime::RealtimeModality::Audio));
+    assert!(cfg
+        .modalities
+        .input
+        .contains(&apeireth_voice::realtime::RealtimeModality::Audio));
+    assert!(cfg
+        .modalities
+        .output
+        .contains(&apeireth_voice::realtime::RealtimeModality::Audio));
     assert_eq!(cfg.audio_format, RealtimeAudioFormat::Pcm16);
     assert_eq!(cfg.turn_detection.kind, TurnDetectionKind::ServerVad);
 }

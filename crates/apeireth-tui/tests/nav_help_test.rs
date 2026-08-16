@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 5 nav × Help 单元测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试范围**:
@@ -14,25 +20,33 @@
 /// - O-4 任何人都能接手: 锚带时间戳, 全部可追溯
 /// - O-5 不假装: release 文档标 [stub], 不假装路径
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守 (自身是 8 项承诺的载体)
-
 mod test_common;
 
 use ratatui::layout::Rect;
@@ -100,10 +114,7 @@ fn render_lists_all_anchors_and_promises() {
     for (i, _) in nav::help::EIGHT_PROMISES.iter().enumerate() {
         // 不在 assert! msg 里用 format 占位符 (没 args 报错), 改用字面字符串
         let needle = format!("{}.", i + 1);
-        assert!(
-            out.contains(&needle),
-            "render 应含编号 (1.-8.) 开头"
-        );
+        assert!(out.contains(&needle), "render 应含编号 (1.-8.) 开头");
     }
     assert!(out.contains("HELP"), "render 应有 HELP 标题");
     assert!(out.contains("1.0 Release"), "render 应有 1.0 Release 段");
@@ -122,4 +133,3 @@ fn render_marks_release_doc_stub() {
         "release 文档应标 stub, 不假装路径: {out}"
     );
 }
-

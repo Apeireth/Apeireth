@@ -1,4 +1,4 @@
-﻿//! B2: Web 端 tool_loop 适配 (per R32-2 + R35 follow-up)
+//! B2: Web 端 tool_loop 适配 (per R32-2 + R35 follow-up)
 //!
 //! **复用 TUI 同模式**: 把 TUI `chat_with_tool_loop_streaming` 的循环控制权交
 //! `apeireth_pipeline::tool_loop::run_tool_loop`, web 端只注入"调 LLM + 解析 dispatch" 2 步.
@@ -38,7 +38,10 @@ where
 {
     let initial_history: Vec<ToolLoopMessage> = history
         .iter()
-        .map(|(r, c)| ToolLoopMessage { role: r.clone(), content: c.clone() })
+        .map(|(r, c)| ToolLoopMessage {
+            role: r.clone(),
+            content: c.clone(),
+        })
         .collect();
     let state = ToolLoopState::new(input, initial_history, DEFAULT_MAX_TOOL_TURNS);
     let final_state = run_tool_loop(state, |s| {
@@ -119,6 +122,9 @@ mod tests {
             |_reply| (vec!["n".to_string()], "loop".to_string()),
         );
         // 0 改 DEFAULT_MAX_TOOL_TURNS = 3 行为: 3 轮后停
-        assert!(turn_count <= DEFAULT_MAX_TOOL_TURNS, "should cap at MAX_TOOL_TURNS");
+        assert!(
+            turn_count <= DEFAULT_MAX_TOOL_TURNS,
+            "should cap at MAX_TOOL_TURNS"
+        );
     }
 }
