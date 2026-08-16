@@ -48,6 +48,12 @@ futures-util = { version = "0.3", features = ["sink"] }
 once_cell = "1.20"
 parking_lot = "0.12"
 chrono = { workspace = true }
+# ===== 依赖版本决策 (2026-08 审计, P3 有意维持 0.7) =====
+# - axum 保持 0.7 (resolved 0.7.9): 最新是 0.8.9, 但 0.8 是破坏性升级
+#   (路由参数语法 :id → {id} / *rest → {*rest} 等), 需专门迁移 — 有意不做, P3 维持 0.7.
+# - reqwest 保持 0.12 (resolved 0.12.28, 0.12 系最新 patch): 0.13 是 major 破坏性升级, 有意不做.
+# - tower 0.5.3 / tower-http 0.5.2: 已是最新可用 (tower-http 0.6/0.7 为 major, 与 axum 0.7 组合不必要).
+# 详见 crates/apeireth-api/README.md "依赖版本决策" 一节.
 axum = { version = "0.7", features = ["macros", "ws"] }
 http = "1"
 tower = "0.5"
