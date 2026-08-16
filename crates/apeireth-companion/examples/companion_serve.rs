@@ -38,6 +38,7 @@ use apeireth_api::protocol_handlers::{
     OpenAiChatMessage, OpenAiChatRequest,
 };
 use apeireth_api::{Pipeline, ProtocolKind};
+use apeireth_bus::{LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook};
 use apeireth_companion::assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
 use apeireth_companion::daemon::{
     CompanionDaemon, CompanionDelivery, LarkSink, MultiSink, Sink, TelegramSink, ThrottledUtterance,
@@ -336,7 +337,27 @@ struct AppState {
     events: tokio::sync::broadcast::Sender<String>,
     /// 机制装配器 (CompanionApp: 注入管线/提炼/摘要/自成长).
     app: Arc<CompanionApp>,
+    /// 生命周期 hooks (P1#4, A1#5): UserPromptSubmit/PostToolUse 真实时机触发.
+    lifecycle: LifecycleBus,
     subject: String,
+}
+
+/// 生命周期钩子: 日志 hook (P1#4 接线示例; 扩展点 — 审计/遥测/通知可挂同口).
+struct LifecycleLogHook;
+
+#[async_trait::async_trait]
+impl LifecycleHook for LifecycleLogHook {
+    fn watch(&self) -> (LifecycleEvent, Option<String>) {
+        (LifecycleEvent::UserPromptSubmit, None)
+    }
+    async fn on_event(&self, ctx: &LifecycleContext) -> Result<(), String> {
+        eprintln!(
+            "[lifecycle] user_prompt_submit (session: {}): {}",
+            ctx.session_id.as_deref().unwrap_or("-"),
+            ctx.detail.as_deref().unwrap_or("").chars().take(80).collect::<String>()
+        );
+        Ok(())
+    }
 }
 
 fn load_key() -> Result<String, String> {
@@ -815,6 +836,16 @@ async fn chat_completions(
             _ => String::new(),
         })
         .unwrap_or_default();
+    // P1#4 lifecycle: UserPromptSubmit (真实时机 — 主人提交时)
+    if !query.is_empty() {
+        let _ = st
+            .lifecycle
+            .fire(
+                LifecycleEvent::UserPromptSubmit,
+                LifecycleContext::new(&continuity).with_detail(&query),
+            )
+            .await;
+    }
     // 注入管线 (CompanionApp, ContextAssembler 统一预算):
     // identity 块 (L0) → 独立 persona 消息; 其余块 → 合并记忆注入消息
     let blocks = st.app.build_injection(&query).await;
@@ -955,6 +986,15 @@ async fn chat_completions(
             };
             let truncated: String = body.chars().take(4000).collect();
             notes.push(format!("[{name}] 已执行"));
+            // P1#4 lifecycle: PostToolUse (真实时机 — 工具执行后; 不阻断主链路)
+            let _ = st
+                .lifecycle
+                .fire(
+                    LifecycleEvent::PostToolUse,
+                    LifecycleContext::new(&continuity)
+                        .with_detail(format!("{name}: 成功={}", r.success)),
+                )
+                .await;
             tool_msgs.push(OpenAiChatMessage {
                 role: "tool".to_string(),
                 content: json!(truncated),
@@ -1207,6 +1247,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx_interact, rx_interact) = tokio::sync::mpsc::channel::<chrono::DateTime<Utc>>(64);
 
     // ⑤ HTTP 伙伴端点
+    // P1#4 lifecycle: 注册日志 hook + SessionStart (启动时真实触发)
+    let lifecycle = LifecycleBus::new().register(Box::new(LifecycleLogHook));
+    let _ = lifecycle
+        .fire(
+            LifecycleEvent::SessionStart,
+            LifecycleContext::new(&subject).with_detail("companion_serve v4 启动"),
+        )
+        .await;
     let state = Arc::new(AppState {
         bridge,
         store,
@@ -1214,6 +1262,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         interactions: tx_interact,
         events: tx_events,
         app,
+        lifecycle,
         subject,
     });
     let router = Router::new()
