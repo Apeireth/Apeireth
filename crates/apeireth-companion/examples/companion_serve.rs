@@ -68,6 +68,14 @@ const MAX_TOOL_ROUNDS: usize = 5;
 /// 记忆会话 (save_memory 工具缺省写 "me" — 全库一致).
 const MEMORY_SESSION: &str = "me";
 
+/// 人格设定 (主人 2026-08-16 拍板): Apeireth 基地主管 / 最高指挥 / 默认女性 / 沉稳古风 / 自称本座.
+const PERSONA: &str = "你是「阿佩瑞斯」——Apeireth 基地的主管。正在与你对话的这位是基地的最高指挥（主人）。\
+你的默认性别是女性; 说话沉稳扎实, 带古风韵味, 自称「本座」。称呼主人为「主人」或「指挥」, 庄重而不失温度。";
+
+/// 声称约束 (0 装 PASS 延伸): 声称「记住/已记录」前必须实际调用 save_memory.
+const CLAIM_RULE: &str = "追加规则: 你说「记住/已记录」= 必须已经实际调用 save_memory 写入记忆; \
+未写入前不得声称已记住, 应说「本座这就记下」并立即调用工具。";
+
 /// 已知工具的手写 schema (description/parameters); 未列出的工具给通用 schema (能力仍可见).
 fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
     vec![
@@ -101,10 +109,10 @@ fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
         ("Crawl", "爬取多页+链接提取", json!({"type":"object","properties":{"url":{"type":"string"},"max_pages":{"type":"number"}},"required":["url"]})),
         ("Grep", "内容搜索", json!({"type":"object","properties":{"pattern":{"type":"string"},"path":{"type":"string"}},"required":["pattern"]})),
         ("Git", "Git 操作", json!({"type":"object","properties":{"op":{"type":"string"}},"required":["op"]})),
-        ("FileOperator", "文件操作 (read/write/list; 需授权包覆盖路径)", json!({"type":"object","properties":{"op":{"type":"string","enum":["read","write","list"]},"path":{"type":"string"},"content":{"type":"string"}},"required":["op","path"]})),
+        ("FileOperator", "文件操作 (read/write/list; 需主人授权面板批准/权限包覆盖路径)", json!({"type":"object","properties":{"op":{"type":"string","enum":["read","write","list"]},"path":{"type":"string"},"content":{"type":"string"}},"required":["op","path"]})),
         ("gh_accel", "GitHub 加速: 节点池实测选最快", json!({"type":"object","properties":{"limit":{"type":"number"},"github_url":{"type":"string"}}})),
         ("dx_check", "换元法 dx 检查 (忘换 dx/混用/缺微分/根号模式)", json!({"type":"object","properties":{"problem":{"type":"string"},"substitution":{"type":"string"},"after":{"type":"string"}},"required":["problem"]})),
-        ("ShellExec", "执行 shell 命令 (高危, 需主人批准)", json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]})),
+        ("ShellExec", "执行命令 (高危, 需主人在授权面板批准 — 权限洋葱, 本座不接触你的 token); 不走 shell 防注入, Windows 下用 cmd /c 前缀 (如 \"cmd /c echo hi\")", json!({"type":"object","properties":{"cmd":{"type":"string"}},"required":["cmd"]})),
         ("save_experience", "沉淀经验入经验库 (自成长管道): scene+practice+result+outcome", json!({"type":"object","properties":{"scene":{"type":"string"},"practice":{"type":"string"},"result":{"type":"string"},"outcome":{"type":"string","enum":["success","failure","partial"]}},"required":["scene","practice"]})),
         ("list_experience", "查经验库 (自成长管道)", json!({"type":"object","properties":{"scene":{"type":"string"}}})),
         ("verify_experience", "验证经验 (成功/失败) → 计数+评分, 达标促能力提案", json!({"type":"object","properties":{"id":{"type":"string"},"success":{"type":"boolean"}},"required":["id","success"]})),
@@ -476,6 +484,16 @@ async fn chat_completions(
     let _ = st.interactions.send(Utc::now()).await;
 
     let mut messages = req.messages.clone();
+    // 人格设定 + 声称约束 (固定注入, 任何前端统一生效)
+    messages.insert(
+        0,
+        OpenAiChatMessage {
+            role: "system".to_string(),
+            content: json!(format!("{PERSONA}\n{CLAIM_RULE}")),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+    );
     let mem = inject_memory(&st.store);
     let today = inject_today(&st.store);
     let growth = inject_growth(&st.store);
@@ -739,6 +757,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/apeireth/grant", post(grant))
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
@@ -812,6 +831,39 @@ async fn daemon_loop(
             else => break,
         }
     }
+}
+
+/// 主人授权端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
+/// AI 只请求不接触 token. 授权后高危工具在时限内可直接执行.
+async fn grant(
+    State(st): State<Arc<AppState>>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let tool = req.get("tool").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty());
+    let Some(tool) = tool else {
+        return (StatusCode::BAD_REQUEST, Json(json!({"error": "需要 tool (工具名)"}))).into_response();
+    };
+    let hours = req.get("hours").and_then(|v| v.as_u64()).unwrap_or(1).max(1).min(24 * 30);
+    let token = req.get("master_token").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let expected = std::env::var("APEIRETH_MASTER_TOKEN").unwrap_or_default();
+    if expected.is_empty() || token != expected {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "master token 不匹配 (主人授权权在主人手里)"})),
+        )
+            .into_response();
+    }
+    st.bridge.packs.grant(apeireth_companion::packs::PermissionPack::timed(
+        "主人授权",
+        vec![tool.to_string()],
+        hours,
+        None,
+    ));
+    (
+        StatusCode::OK,
+        Json(json!({"ok": true, "tool": tool, "hours": hours, "note": "已按权限洋葱授权 (PermissionPack); 到期自动失效"})),
+    )
+        .into_response()
 }
 
 /// 内置聊天页 (零依赖单文件前端, 浏览器打开即用; 供主人/任何前端先体验).
