@@ -55,3 +55,11 @@ let ok = GetQueuedCompletionStatus(p as HANDLE, ...);  // 线程内转回
 - 做了什么: 定位全部编译错误、put_episode 语义定责 (含类型同一性证据)、job_object Send 修复、多轮复验、WIP 保护、文档登记
 - 没做什么: ① 未跑 companion 完整测试 (lib 测试构建被队友活跃 WIP 阻塞, 非本责); ② SendPort 方案失败的根因未深挖 (换了更稳方案, 不纠结); ③ job_object.rs 未提交 (保护他人 WIP 归属, 文件在工作区, 集成流或作者提交时自动带上)
 - 风险提示: job_object.rs 若被 `git checkout` 或 rebase 丢弃, 本人 3 行修复会一并丢失 — 建议 Leader 提醒 devops_engineer2 尽快提交 B3 WIP (含本修复)
+
+## 6. 追加: rebase 重提交实录 (team_report_idle 要求 rebase 后重新提交)
+
+- `git stash push -u` 保护工作区他人 WIP → rebase 到 integration 分支 (36 commits 重放, 多数 patch already upstream 自动 drop) → 本人 N14 文档提交重放为 **8f9fb765**, backlog N14 ✅ 行与报告完好, 无冲突。
+- stash 恢复过程: `git stash pop/apply` 部分生效 (他人 WIP 文件大部分回来), 但 job_object.rs 与 companion/Cargo.toml 未被恢复 → **手动从 stash@{0} 逐文件恢复** (git show stash@{0}:path > path), 恢复后 cargo check -p apeireth-companion 再次绿 (含 B3 WIP + 本人 usize 修复 + B3 windows-sys features)。
+- **stash@{0} 保留未 drop** (备份他人 WIP, 防恢复不全; 标签 "N14-rebase: 保护他人 WIP") — 建议各文件 Owner 核对自己 WIP 后由 Leader 统一清理。
+- 期间实况: 集成后的 HEAD 一度出现新阻塞 (context.rs 缺 total_budget_chars() getter vs prompt_assembler 调用), 由相关成员并行补上; 终态 cargo check -p apeireth-companion 绿 + guard 59 全绿。
+- 本人无新代码需提交 (job_object/Cargo.toml 修复属他人 WIP 文件, 维持工作区交付, 由 devops 随 B3 提交)。
