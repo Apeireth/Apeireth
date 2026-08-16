@@ -106,7 +106,7 @@ async function send() {
     const r = await fetch('/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: MODEL, messages: messages, max_tokens: 2000 })
+      body: JSON.stringify({ model: MODEL, messages: messages, max_tokens: 8192 })
     });
     const j = await r.json();
     typing.remove();

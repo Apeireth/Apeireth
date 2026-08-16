@@ -65,6 +65,9 @@ use serde_json::{json, Value};
 const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
 const MAX_TOOL_ROUNDS: usize = 5;
+/// 默认单次输出上限 (env APEIRETH_MAX_TOKENS 可覆盖; 客户端请求值优先, 上限保护).
+const DEFAULT_MAX_TOKENS: u32 = 8192;
+const MAX_TOKENS_CAP: u32 = 16384;
 /// 记忆会话 (save_memory 工具缺省写 "me" — 全库一致).
 const MEMORY_SESSION: &str = "me";
 
@@ -528,6 +531,13 @@ async fn chat_completions(
     let tools = tools_schema(&st.bridge.registry);
     let mut final_content: String;
     let mut notes: Vec<String> = Vec::new();
+    // 输出上限: 客户端请求值优先 (VCP 精神: 用户可设), env 默认, 上限保护
+    let env_max = std::env::var("APEIRETH_MAX_TOKENS")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(DEFAULT_MAX_TOKENS)
+        .clamp(256, MAX_TOKENS_CAP);
+    let out_tokens = req.max_tokens.filter(|v| *v > 0).unwrap_or(env_max).clamp(256, MAX_TOKENS_CAP);
     let mut rounds = 0usize;
     loop {
         rounds += 1;
@@ -535,7 +545,7 @@ async fn chat_completions(
             model: MODEL.to_string(),
             messages: messages.clone(),
             temperature: Some(0.6),
-            max_tokens: Some(2000),
+            max_tokens: Some(out_tokens),
             stream: false,
             stop: None,
             tools: Some(tools.clone()),
