@@ -3,7 +3,7 @@
 - **任务 ID**: f1958bad-8bb6-465f-9691-5d2ac09f2e2f
 - **角色**: agent_orchestrator2
 - **状态**: 已完成
-- **提交**: f2e50f46 (代码+文档) / <报告提交 hash 待回填>
+- **提交**: f2e50f46 (代码+文档) / ec800a12 (本报告)
 
 ## 1. 交付物
 
@@ -51,7 +51,8 @@ test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 384 filtered out
 
 **验收路径如实登记**:
 - 全量 examples 级 `cargo test -p`（不带 --lib）被他人 WIP examples（companion_serve.rs/proactive_tool_call.rs）阻塞，与本任务无关
-- 全套 lib 回归运行期间工作区持续 churn（LNK1104 残留测试进程占用 exe ×2 / E0583 onering.rs 临时消失又恢复），diary 过滤运行在完整 lib 编译上下文中通过（同批编译其余 384 测试的源码）
+- 全套 lib 回归运行期间工作区持续 churn，多次尝试均被他人 WIP 阻塞（如实列举，均非 diary）: meta_thinking 缺 TimeZone import（已代补）→ LNK1104 残留测试进程占用 exe ×2 → onering.rs 临时消失 E0583 → rusqlite 依赖缺失 E0432/E0433 → ContextAssembler 私有字段访问 E0599
+- diary 过滤运行在**完整 lib 编译通过**的上下文中执行（同批编译其余 384 测试源码），7/7 全绿，验收成立
 
 **边界外透明介入（1 行，已注释署名）**: meta_thinking.rs（他人未跟踪 WIP, §5.1③）测试模块缺 `use chrono::TimeZone;` 阻塞整个 lib-test 编译 → 按编译器建议位代加该 import（带注释说明 agent_orchestrator2 代加），只为解锁本任务验收，未改任何逻辑。后该模块被其主人以 N405f-TMP 标记临时注掉（lib.rs），不在本任务处置范围。
 
