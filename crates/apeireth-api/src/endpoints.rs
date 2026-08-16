@@ -104,6 +104,14 @@ pub const ENDPOINTS: &[Endpoint] = &[
     Endpoint { path: "/observability/status",                  method: HttpMethod::Get,  handler: "metrics::status_handler",  file: "src/observability/mod.rs:429" },
     // ---- v1_tools/mod.rs (1) ----
     Endpoint { path: "/tools/:name/invoke",                    method: HttpMethod::Post, handler: "v1_tools_invoke",     file: "src/v1_tools/mod.rs:183" },
+    // ---- panel_readonly.rs (7) — B1 Web 面板 v2 只读端点 (nest /v1/panel) ----
+    Endpoint { path: "/panel/sessions",                        method: HttpMethod::Get,  handler: "panel_sessions",        file: "src/panel_readonly.rs:71" },
+    Endpoint { path: "/panel/sessions/:id/timeline",           method: HttpMethod::Get,  handler: "panel_session_timeline", file: "src/panel_readonly.rs:109" },
+    Endpoint { path: "/panel/memory/streams",                  method: HttpMethod::Get,  handler: "panel_memory_streams",  file: "src/panel_readonly.rs:158" },
+    Endpoint { path: "/panel/memory/episodes",                 method: HttpMethod::Get,  handler: "panel_memory_episodes", file: "src/panel_readonly.rs:207" },
+    Endpoint { path: "/panel/graph",                           method: HttpMethod::Get,  handler: "panel_graph",           file: "src/panel_readonly.rs:278" },
+    Endpoint { path: "/panel/approvals",                       method: HttpMethod::Get,  handler: "panel_approvals",       file: "src/panel_readonly.rs:324" },
+    Endpoint { path: "/panel/audit",                           method: HttpMethod::Get,  handler: "panel_audit",           file: "src/panel_readonly.rs:379" },
 ];
 
 /// 编译期 endpoint 数守门.
@@ -112,7 +120,7 @@ pub const ENDPOINTS: &[Endpoint] = &[
 /// 1. 在 ENDPOINTS 数组里 +1
 /// 2. 在 EXPECTED_ENDPOINT_COUNT 改 +1
 /// 3. `cargo test -p apeireth-api --lib audit_endpoints` 通过即视为 hardcode 同步
-pub const EXPECTED_ENDPOINT_COUNT: usize = 30;
+pub const EXPECTED_ENDPOINT_COUNT: usize = 37;
 
 /// PII / 龙骨密钥路径 — 这 4 个路径是 S-2 龙骨 (per docs/01-stage1/S-2 骨骼.md),
 /// 任何 auditor 应优先审计.
