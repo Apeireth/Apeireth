@@ -293,7 +293,7 @@
 | foldProtocol 分级显隐 | context-fold 增强：FoldBlock 数据模型（同文档分级+语义阈值展开） | P1 |
 | semanticModelRouter | gateway 层：语义选模型 + 容灾链 | P1 |
 | reasoningContentAdapter | gateway 层：推理字段归一化（13 别名 → think 块） | P1 |
-| toolApprovalManager 增强 | tool-approval 补命令级粒度+静默拒绝+结构化拒绝 | P1 |
+| toolApprovalManager 增强 | tool-approval 补命令级粒度+静默拒绝+结构化拒绝 | P1 ✅ (任务 fe468acf, backlog N19) |
 | dynamicToolRegistry 预算化 | tool-registry 补注入注意力预算+分类链 ✅ (提交 8b6a825d, backlog N15) | P1 |
 | DigitalOracle 金融源 | 预测机套件旗舰数据源（含预测市场） | P1 |
 | AgentDream 审批门 | 做梦机制补写操作审批门 | P2 |
@@ -335,3 +335,26 @@
 ### 6. 自审报告（交付时填写）
 - 改动文件 / 测试结果 / 集成点说明 / 0 假装标注 / 给守门员的合并提示
 ```
+
+---
+
+## 10. 最后一公里任务包（第一批官方包, 2026-08-17 主人拍板）
+
+> **定位**: 核心机制已齐（90%），这 10 个包把"零件"拼成"能干活的存在"——
+> 装配（TP1/TP2）+ 填空（TP5/TP6/TP7）+ 食粮（TP3）+ 规范（TP9）。
+> Leader 按 §9 模板拆细，边界以本节为准；台账编号 N16-N22 可追溯。
+
+| 包 | 名称 | 挂接机制 | 边界要点（防干偏） | 验收要点 |
+|---|---|---|---|---|
+| TP1 | **团队协作三件套接线**（N16） | apeireth-team-lead + apeireth-agent + apeireth-supervisor → companion（执行体=插件形态） | 只改 companion 装配侧；三 crate 内部签名不改；补 send_to_agent/wait_agent/worktree 占位实现；走 ToolBridge + bus L4 | 调度 8 工具可用 + 执行体生命周期测试 + 跨进程消息测试 |
+| TP2 | **工具装配 9 crate**（N17） | Tool trait + ToolRegistry.register + ToolBridge | **禁止合并大 crate**；**禁止自写调用方式**；每 crate 提供 register 函数统一注册；白名单 + CapabilityCatalog | 9 工具全注册 + 各自测试全绿 + 卸载真清理 |
+| TP3 | **apeireth-credentials**（N21） | 新 crate；衔接权限洋葱 master token | 不存明文到日志；按服务名读写；0 假装"安全存储"边界如实标注 | 读写/未知名报错/脱敏测试 |
+| TP4 | **ShellPreset**（N22） | tool-shell 内 | 预设名展开为完整命令模板；白名单预设；参数走模板防注入 | 预设展开/非法预设拒绝/注入测试 |
+| TP5 | **提示词装配引擎**（N9） | 新 lib 模块（VCP messageProcessor 范式） | 特权角色+单次展开+环检测+分型变量源；挂 CompanionApp 注入链 | 装配/防重复展开/环检测测试 |
+| TP6 | **OneRing 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
+| TP7 | **金融数据源**（N3） | oracle 预测机 | DigitalOracle 精神：宏观/利率/股票/加密/预测市场；mock 先行；可证伪预测自动登记 | mock 全测 + 预测 resolve 闭环 |
+| TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（VCP MemoRuntime 模式） | 缓存命中/代际失效测试 |
+| TP9 | **消费方规范落地**（N18） | maintenance-guide + 孤儿体检脚本 | 新 crate 必须登记消费方；`_scripts/orphan-scan.ps1` 入库为定期检查 | 规范写入 + 扫描脚本可跑 |
+| TP10 | **ThoughtCluster 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
+
+**执行顺序建议**：TP3 → TP2 → TP4（装配主链）；TP1 并行；TP5/TP6/TP8（上下文组）并行；TP7（食粮）与 TP10 靠后；TP9 全程（先立规范再干活）。
