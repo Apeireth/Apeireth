@@ -143,9 +143,15 @@ fn render_timeline(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
     let inner_h = inner.height as usize;
     let total = lines.len();
     let max_scroll = total.saturating_sub(inner_h) as u16;
-    let scroll = if app.scroll_offset > max_scroll { max_scroll } else { app.scroll_offset };
+    let scroll = if app.scroll_offset > max_scroll {
+        max_scroll
+    } else {
+        app.scroll_offset
+    };
     f.render_widget(
-        Paragraph::new(lines).wrap(Wrap { trim: false }).scroll((scroll, 0)),
+        Paragraph::new(lines)
+            .wrap(Wrap { trim: false })
+            .scroll((scroll, 0)),
         inner,
     );
 }

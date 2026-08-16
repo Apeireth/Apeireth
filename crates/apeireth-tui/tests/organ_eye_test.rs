@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 9 器官 × Eye (眼) 单元测试
 ///
 /// **测试范围**:
@@ -14,26 +20,32 @@
 ///
 /// **8 项承诺**: 全部遵守
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-
-
-
 
 mod test_common;
 
@@ -60,7 +72,10 @@ fn render_lists_4_input_channels() {
     let area = Rect::new(0, 0, 80, 24);
     let out = organ::eye::render(area);
     // R22 ST-A1.x: keystrokes_today 含 keystrokes 关键字
-    assert!(out.contains("按键"), "eye render 应含 keystrokes (R22 ST-A1.x)");
+    assert!(
+        out.contains("按键"),
+        "eye render 应含 keystrokes (R22 ST-A1.x)"
+    );
     assert!(out.contains("鼠标"), "应含 mouse 通道");
     assert!(out.contains("语音"), "应含 voice 通道");
     assert!(out.contains("关注"), "应含 attention 通道");
@@ -75,7 +90,10 @@ fn render_marks_stub_honestly() {
     let area = Rect::new(0, 0, 80, 24);
     let out = organ::eye::render(area);
     // eye mouse/voice/attention [部分] 保留 stub marker
-    assert!(out.contains("[stub]") || out.contains("stub"), "eye 部分 stub 标, 0 假装: {out}");
+    assert!(
+        out.contains("[stub]") || out.contains("stub"),
+        "eye 部分 stub 标, 0 假装: {out}"
+    );
     // stripped: assert!(out.contains("R26"), "stub 标 R26 计划, 留后续接");
 }
 
@@ -89,4 +107,3 @@ fn render_uses_dash_placeholders() {
     let out = organ::eye::render(area);
     // stripped dash check: assert!(out.contains('-'), "stub 应有 - 占位: {out}");
 }
-

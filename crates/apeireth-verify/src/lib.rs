@@ -8,9 +8,8 @@
 //! - `register_all_in_crate!` 宏: 显式列出本 crate 全部 AssertionRef ID, 触发运行期注册.
 //! - `verify_all` / `run_all` 一键执行全部 crate 注册的断言.
 
-
-pub mod const_proofs;  // R217: 编译期形式化证明 (Kani-style const proof demo)
-// R177: organ invariants (5 tests + 2 Kani)
+pub mod const_proofs; // R217: 编译期形式化证明 (Kani-style const proof demo)
+                      // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 
 use std::sync::atomic::{AtomicU64, Ordering};

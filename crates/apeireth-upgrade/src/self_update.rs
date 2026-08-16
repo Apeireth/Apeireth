@@ -125,7 +125,7 @@ fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as i64)
-    .unwrap_or(0)
+        .unwrap_or(0)
 }
 
 // ============================================================================
@@ -173,11 +173,12 @@ fn append_suffix(path: &Path, suffix: &str) -> PathBuf {
 /// 的 fs::rename 在 Windows 上 MoveFileEx 已隐含. Unix 上 rename(2) 本就是原子的.
 pub fn atomic_swap(target_path: &Path, new_binary_path: &Path) -> SelfUpdateResult<()> {
     // 验证 new binary
-    let meta = fs::metadata(new_binary_path).map_err(|e| {
-        SelfUpdateError::InvalidBinary(format!("new binary not found: {e}"))
-    })?;
+    let meta = fs::metadata(new_binary_path)
+        .map_err(|e| SelfUpdateError::InvalidBinary(format!("new binary not found: {e}")))?;
     if meta.len() == 0 {
-        return Err(SelfUpdateError::InvalidBinary("new binary is empty".to_string()));
+        return Err(SelfUpdateError::InvalidBinary(
+            "new binary is empty".to_string(),
+        ));
     }
     if target_path == new_binary_path {
         return Err(SelfUpdateError::NewBinarySameAsCurrent);

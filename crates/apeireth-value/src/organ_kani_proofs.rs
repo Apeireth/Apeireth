@@ -2,9 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::{
-    ValueAlignment, ValueCandidate, ValueComparison, ValueDimension, ValuePriorityKind,
-};
+use crate::{ValueAlignment, ValueCandidate, ValueComparison, ValueDimension, ValuePriorityKind};
 
 // ============================================
 // Property 1: ValueDimension 5 层 ALL

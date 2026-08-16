@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 9 器官 × Heart (心) 单元测试
 ///
 /// **测试范围**:
@@ -14,26 +20,32 @@
 ///
 /// **8 项承诺**: 全部遵守
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-
-
-
 
 mod test_common;
 
@@ -62,9 +74,15 @@ fn render_contains_60hz_and_cpu() {
     assert!(out.contains("[HEART]"), "render 应有 [HEART] label");
     assert!(out.contains("心"), "render 应有中文'心'");
     // R22 ST-A1.6: 60Hz → "beats: N ticks", 字段重命名
-    assert!(out.contains("beats"), "heart render 应含 beats (原 60Hz 重命名)");
+    assert!(
+        out.contains("beats"),
+        "heart render 应含 beats (原 60Hz 重命名)"
+    );
     // R22 ST-A1.6: CPU → cycle_count
-    assert!(out.contains("cycle_count"), "heart render 应含 cycle_count (原 CPU 重命名)");
+    assert!(
+        out.contains("cycle_count"),
+        "heart render 应含 cycle_count (原 CPU 重命名)"
+    );
 }
 
 // =====================================================================
@@ -77,7 +95,10 @@ fn render_marks_partial_honestly() {
     let out = organ::heart::render(area);
     // heart R22 ST-A1.6 已真接 /v1/observability/heart (data goes through api),
     // 不再假装为 partial. 验证 render 含 [ok] 或调度信息.
-    assert!(out.contains("[ok]") || out.contains("beats"), "heart render 现以 [ok] / beats 标识真接: {out}");
+    assert!(
+        out.contains("[ok]") || out.contains("beats"),
+        "heart render 现以 [ok] / beats 标识真接: {out}"
+    );
 }
 
 // =====================================================================
@@ -99,4 +120,3 @@ fn render_uses_cross_platform_ascii() {
         );
     }
 }
-

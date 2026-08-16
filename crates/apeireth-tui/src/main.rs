@@ -18,26 +18,26 @@
 //! - `PageUp/PageDown` 滚对话/历史, `Home/End` 跳顶/底 (R26 新增)
 
 // R30 U6: notify multi-config watcher
-mod config_watcher;
-mod cognition_live;
 mod app;
 mod backend;
+mod cognition_live;
+mod config_watcher;
 mod http_llm;
 mod observability;
-mod pages;
 mod organ;
+mod pages;
 
 // sister #1 — 9 器官 × 6 command dispatcher (借鉴 Golutra #1)
 // 0 触碰 organ 子树, 独立登记在 crate 根, 跟 organ/ 同级 (R23 P3 迁移)
 mod command;
 
 // R22 ST-A1.2: eye 真接 keystrokes (handle_key 处 hook)
-use crate::organ::eye;
 use crate::organ::ear;
+use crate::organ::eye;
 use crate::organ::heart;
-mod persistence;
 mod llm_config;
 mod onboarding;
+mod persistence;
 mod theme;
 
 // R155 TUI × runtime bridge
@@ -57,10 +57,10 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
 use ratatui::backend::CrosstermBackend;
+use ratatui::layout::Alignment;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::layout::Alignment;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use ratatui::Terminal;
 
@@ -91,7 +91,6 @@ fn main() -> Result<()> {
         "apeireth-tui v{} (R26-2 全中文化 — 2026-08-07) — 按 q 退出",
         env!("CARGO_PKG_VERSION")
     );
-
 
     // R26-3: 首启 / 无 llm.json → 走 onboarding wizard (纯文本 stdin)
     // setup_terminal 之前 → stdin 是 cooked mode (不会跟 ratatui raw mode 冲突)
@@ -125,7 +124,10 @@ fn main() -> Result<()> {
 /// 5 nav 顺序: 0 舰桥 (Bridge) / 1 对话 (Dialogue) / 2 生长 (Growth) / 3 历史 (History) / 4 设置 (Settings)
 /// 键位: q 退出, 0/1/2/3/4 直接跳, Tab/BackTab 顺序切, i/Enter (舰桥页) → 跳对话
 fn print_help() {
-    println!("apeireth-tui v{} (R139-1-retry 2026-08-11 — 8 步 verify 8/8 全 PASS)", env!("CARGO_PKG_VERSION"));
+    println!(
+        "apeireth-tui v{} (R139-1-retry 2026-08-11 — 8 步 verify 8/8 全 PASS)",
+        env!("CARGO_PKG_VERSION")
+    );
     println!();
     println!("Apeireth Rust TUI — ratatui 终端版, 后端全接 (R19 阶段 4)");
     println!();
@@ -349,8 +351,12 @@ fn run_app(terminal: &mut Tui, app: &mut App) -> Result<()> {
                     Ok(chunk) => {
                         // R30 P4: 检测 ToolCallEvent 前缀, 分流到 tool_events
                         if chunk.starts_with(crate::backend::TOOL_EVT_PREFIX) {
-                            let body = chunk.trim_start_matches(crate::backend::TOOL_EVT_PREFIX).trim();
-                            if let Ok(evt) = serde_json::from_str::<crate::backend::ToolCallEvent>(body) {
+                            let body = chunk
+                                .trim_start_matches(crate::backend::TOOL_EVT_PREFIX)
+                                .trim();
+                            if let Ok(evt) =
+                                serde_json::from_str::<crate::backend::ToolCallEvent>(body)
+                            {
                                 app.tool_events.push(evt);
                             }
                             // tool_event 不进 streaming_message (避免污染 LLM 文本)
@@ -373,7 +379,8 @@ fn run_app(terminal: &mut Tui, app: &mut App) -> Result<()> {
                             }
                         }
                         // R30 P4: commit tool_events → chat_history (作为 system 消息, 灰色行)
-                        let events: Vec<crate::backend::ToolCallEvent> = app.tool_events.drain(..).collect();
+                        let events: Vec<crate::backend::ToolCallEvent> =
+                            app.tool_events.drain(..).collect();
                         for evt in events {
                             let line = crate::backend::format_tool_event(&evt);
                             app.push_system(line);
@@ -423,7 +430,7 @@ fn run_app(terminal: &mut Tui, app: &mut App) -> Result<()> {
                 Event::Key(key) => {
                     if key.kind == KeyEventKind::Press {
                         if handle_key(app, key) {
-                            eye::record_keystroke();  // R22 ST-A1.2 hook: keystrokes counter
+                            eye::record_keystroke(); // R22 ST-A1.2 hook: keystrokes counter
                             return Ok(());
                         }
                     }
@@ -465,8 +472,8 @@ fn run_app(terminal: &mut Tui, app: &mut App) -> Result<()> {
         if last_tick.elapsed() >= tick_rate {
             last_tick = Instant::now();
         }
-            ear::record_system();  // R22 ST-A1.3 hook: system channel (tick)
-            heart::record_heartbeat();  // R22 ST-A1.6 hook: beat tick counter
+        ear::record_system(); // R22 ST-A1.3 hook: system channel (tick)
+        heart::record_heartbeat(); // R22 ST-A1.6 hook: beat tick counter
     }
 }
 
@@ -609,9 +616,9 @@ fn handle_dialogue_key(app: &mut App, key: KeyEvent) {
             let s: String = app.input_buf.iter().collect();
             app.input_buf.clear();
             app.input_cursor = 0;
-            app.history_idx = None;  // R26-3-fixes: 提交后退出历史导航
+            app.history_idx = None; // R26-3-fixes: 提交后退出历史导航
             if s.trim().is_empty() {
-                return;  // 空输入不提交
+                return; // 空输入不提交
             }
             // R26-3-fixes: 提交后 push 到 input_history 并持久化
             app.input_history = crate::persistence::push_input_history(
@@ -638,7 +645,7 @@ fn handle_dialogue_key(app: &mut App, key: KeyEvent) {
             app.selection = None;
             let history: Vec<ChatMessage> = app.chat_history.clone();
             std::thread::spawn(move || {
-                    backend::chat_streaming(&s, &history, &tx);
+                backend::chat_streaming(&s, &history, &tx);
             });
         }
         // R26-3-fixes: ↑/↓ 在 input_history 里导航 (PowerShell / codex 风格)
@@ -659,23 +666,21 @@ fn handle_dialogue_key(app: &mut App, key: KeyEvent) {
             app.input_buf = entry.chars().collect();
             app.input_cursor = app.input_buf.len();
         }
-        KeyCode::Down => {
-            match app.history_idx {
-                None => return,
-                Some(i) if i + 1 >= app.input_history.len() => {
-                    app.history_idx = None;
-                    app.input_buf.clear();
-                    app.input_cursor = 0;
-                }
-                Some(i) => {
-                    let next_idx = i + 1;
-                    app.history_idx = Some(next_idx);
-                    let entry = &app.input_history[next_idx];
-                    app.input_buf = entry.chars().collect();
-                    app.input_cursor = app.input_buf.len();
-                }
+        KeyCode::Down => match app.history_idx {
+            None => return,
+            Some(i) if i + 1 >= app.input_history.len() => {
+                app.history_idx = None;
+                app.input_buf.clear();
+                app.input_cursor = 0;
             }
-        }
+            Some(i) => {
+                let next_idx = i + 1;
+                app.history_idx = Some(next_idx);
+                let entry = &app.input_history[next_idx];
+                app.input_buf = entry.chars().collect();
+                app.input_cursor = app.input_buf.len();
+            }
+        },
         // R26-3-fixes: PageUp/PageDown 滚对话 / 历史页 (锚到底 通过 scroll_to_bottom 标志)
         KeyCode::PageUp => {
             // 向上滚: 看更早内容, 断定锚到底
@@ -830,7 +835,11 @@ fn render_nav_bar(f: &mut ratatui::Frame, area: Rect, app: &App, style: &ThemeSt
     } else {
         0
     };
-    let breath_color = if app.breath_enabled { style.primary } else { style.dim };
+    let breath_color = if app.breath_enabled {
+        style.primary
+    } else {
+        style.dim
+    };
     spans.push(Span::styled(
         format!(" {} ", breath_chars[breath_idx]),
         Style::default().fg(breath_color),
@@ -934,7 +943,6 @@ fn _theme_anchor(t: Theme) -> Theme {
     t
 }
 
-
 // ============================================================
 // R26-3-fixes: 选区复制 (Ctrl+C when selection exists)
 // ============================================================
@@ -974,7 +982,11 @@ pub fn selection_text(app: &App) -> String {
         };
         let total = info.text.chars().count();
         let s = if i == lo_line { lo_char.min(total) } else { 0 };
-        let e = if i == hi_line { hi_char.min(total) } else { total };
+        let e = if i == hi_line {
+            hi_char.min(total)
+        } else {
+            total
+        };
         if i > lo_line {
             out.push('\n');
         }
@@ -1006,10 +1018,7 @@ fn copy_selection_to_clipboard(app: &mut App) {
             }
             Err(e) => {
                 eprintln!("[apeireth-tui] warn: clipboard set_text: {e}");
-                app.copy_feedback = Some((
-                    format!("复制失败: {}", e),
-                    std::time::Instant::now(),
-                ));
+                app.copy_feedback = Some((format!("复制失败: {}", e), std::time::Instant::now()));
             }
         },
         Err(e) => {
@@ -1100,9 +1109,17 @@ fn chat_line_idx(app: &App, mx: u16, my: u16, chat_rect: Rect) -> Option<(usize,
     if line_idx >= total {
         line_idx = total - 1;
     }
-    let prefix_cols = app.chat_line_map.get(line_idx).map(|i| i.prefix_cols).unwrap_or(0);
+    let prefix_cols = app
+        .chat_line_map
+        .get(line_idx)
+        .map(|i| i.prefix_cols)
+        .unwrap_or(0);
     let inner_x = chat_rect.x + 1;
-    let col_in_text = if mx > inner_x + prefix_cols { (mx - inner_x - prefix_cols) as usize } else { 0 };
+    let col_in_text = if mx > inner_x + prefix_cols {
+        (mx - inner_x - prefix_cols) as usize
+    } else {
+        0
+    };
     let char_off = display_col_to_char_offset(app, line_idx, col_in_text);
     Some((line_idx, char_off))
 }
@@ -1173,7 +1190,6 @@ fn handle_dialogue_mouse(app: &mut App, mouse: crossterm::event::MouseEvent, are
         _ => {}
     }
 }
-
 
 // ============================================================
 // R27 C 方案: API 连通性探测 (status_bar 实时显示 ● 或 ✗)

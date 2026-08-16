@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 基础设施 × HTTP 单元测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试范围** (per 主人派活单 2026-08-05):
@@ -14,28 +20,36 @@
 ///
 /// **8 项承诺**: 全部遵守
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 
-
 use error::{
-    TuiError, validate_args_object, validate_auth_token, validate_base_url, validate_timeout,
-    validate_tool_name, TOOL_WHITELIST,
+    validate_args_object, validate_auth_token, validate_base_url, validate_timeout,
+    validate_tool_name, TuiError, TOOL_WHITELIST,
 };
 use http::ApeirethClient;
 use serde_json::json;
@@ -48,10 +62,7 @@ use std::time::Duration;
 #[test]
 fn k1_base_url_validate() {
     // 空拒绝
-    assert!(matches!(
-        validate_base_url(""),
-        Err(TuiError::BaseUrlEmpty)
-    ));
+    assert!(matches!(validate_base_url(""), Err(TuiError::BaseUrlEmpty)));
     // 非空接受 (含 whitespace)
     assert!(validate_base_url("http://localhost:8080").is_ok());
     assert!(validate_base_url("https://api.example.com/v1").is_ok());
@@ -156,9 +167,12 @@ fn k1_timeout_must_be_positive() {
     let r = ApeirethClient::new("http://x", None, Duration::from_secs(0));
     assert!(matches!(r, Err(TuiError::TimeoutInvalid(_))));
     // 全部合法 → Ok
-    let r = ApeirethClient::new("http://localhost:8080/", Some("sk-abc_123.="), Duration::from_secs(30));
+    let r = ApeirethClient::new(
+        "http://localhost:8080/",
+        Some("sk-abc_123.="),
+        Duration::from_secs(30),
+    );
     assert!(r.is_ok());
     let c = r.unwrap();
     assert_eq!(c.base_url(), "http://localhost:8080"); // trailing / 剥掉
 }
-

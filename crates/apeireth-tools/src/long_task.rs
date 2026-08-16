@@ -12,7 +12,9 @@
 //! **不假装**:
 //! - 真用 tokio::spawn + 真 abort (不假装 sync sleep 模拟)
 
-use apeireth_tool_registry::{Tool, ToolAxes, ToolKind, TriggerAxis, AwaitingAxis, ResidentAxis, TransportAxis, OutputAxis};
+use apeireth_tool_registry::{
+    AwaitingAxis, OutputAxis, ResidentAxis, Tool, ToolAxes, ToolKind, TransportAxis, TriggerAxis,
+};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -47,7 +49,9 @@ impl TaskManager {
     /// 全局单例 (OnceLock 懒加载)
     pub fn global() -> &'static Self {
         static MGR: OnceLock<TaskManager> = OnceLock::new();
-        MGR.get_or_init(|| TaskManager { tasks: Mutex::new(HashMap::new()) })
+        MGR.get_or_init(|| TaskManager {
+            tasks: Mutex::new(HashMap::new()),
+        })
     }
 
     /// 提交一个 async future (返回 String, 0 错误即生成 ID)
@@ -59,11 +63,16 @@ impl TaskManager {
         let handle = tokio::spawn(fut);
         let entry = TaskEntry {
             handle,
-            status: TaskStatus::Running { started_at: Instant::now() },
+            status: TaskStatus::Running {
+                started_at: Instant::now(),
+            },
             name: name.into(),
             started_at: Instant::now(),
         };
-        self.tasks.lock().unwrap().insert(id.clone(), Arc::new(Mutex::new(entry)));
+        self.tasks
+            .lock()
+            .unwrap()
+            .insert(id.clone(), Arc::new(Mutex::new(entry)));
         id
     }
 
@@ -109,7 +118,10 @@ impl TaskManager {
         if let Some(arc) = self.tasks.lock().unwrap().get(id).cloned() {
             let mut entry = arc.lock().unwrap();
             let duration_ms = entry.started_at.elapsed().as_millis();
-            entry.status = TaskStatus::Completed { result, duration_ms };
+            entry.status = TaskStatus::Completed {
+                result,
+                duration_ms,
+            };
         }
     }
 
@@ -125,12 +137,21 @@ impl TaskManager {
     pub fn gc(&self, ttl: Duration) -> usize {
         let to_remove: Vec<String> = {
             let tasks = self.tasks.lock().unwrap();
-            tasks.iter()
+            tasks
+                .iter()
                 .filter_map(|(id, arc)| {
                     let entry = arc.lock().unwrap();
-                    let done = matches!(entry.status,
-                        TaskStatus::Completed { .. } | TaskStatus::Failed { .. } | TaskStatus::Cancelled);
-                    if done && entry.started_at.elapsed() > ttl { Some(id.clone()) } else { None }
+                    let done = matches!(
+                        entry.status,
+                        TaskStatus::Completed { .. }
+                            | TaskStatus::Failed { .. }
+                            | TaskStatus::Cancelled
+                    );
+                    if done && entry.started_at.elapsed() > ttl {
+                        Some(id.clone())
+                    } else {
+                        None
+                    }
                 })
                 .collect()
         };
@@ -150,18 +171,30 @@ pub struct LongTaskTool {
 }
 
 impl LongTaskTool {
-    pub fn new() -> Self { Self { name: "LongTask".to_string() } }
-    pub fn with_name(name: impl Into<String>) -> Self { Self { name: name.into() } }
+    pub fn new() -> Self {
+        Self {
+            name: "LongTask".to_string(),
+        }
+    }
+    pub fn with_name(name: impl Into<String>) -> Self {
+        Self { name: name.into() }
+    }
 }
 
 impl Default for LongTaskTool {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl Tool for LongTaskTool {
-    fn name(&self) -> &str { &self.name }
-    fn kind(&self) -> ToolKind { ToolKind::Async }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Async
+    }
     fn axes(&self) -> ToolAxes {
         ToolAxes {
             trigger: TriggerAxis::OnDemand,
@@ -172,14 +205,23 @@ impl Tool for LongTaskTool {
         }
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let op = args.get("op").and_then(|v| v.as_str())
+        let op = args
+            .get("op")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing 'op' string".to_string())?;
         let mgr = TaskManager::global();
         match op {
             "submit" => {
                 // 简单示例: 接受 name + duration_ms, spawn 一个 sleep 任务返回 "done after Xms"
-                let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("anon").to_string();
-                let duration_ms = args.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(100);
+                let name = args
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("anon")
+                    .to_string();
+                let duration_ms = args
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100);
                 let id = mgr.submit(name.clone(), async move {
                     tokio::time::sleep(Duration::from_millis(duration_ms)).await;
                     json!({"slept_ms": duration_ms})
@@ -189,23 +231,39 @@ impl Tool for LongTaskTool {
                 tokio::spawn(async move {
                     // 这里简化: 固定 sleep 后 mark. 真实场景应该用 JoinHandle::await.
                     tokio::time::sleep(Duration::from_millis(duration_ms + 50)).await;
-                    TaskManager::global().mark_completed(&id_for_poller, json!({"slept_ms": duration_ms}));
+                    TaskManager::global()
+                        .mark_completed(&id_for_poller, json!({"slept_ms": duration_ms}));
                 });
                 Ok(json!({"task_id": id, "name": name, "status": "running"}))
             }
             "status" => {
-                let id = args.get("task_id").and_then(|v| v.as_str())
+                let id = args
+                    .get("task_id")
+                    .and_then(|v| v.as_str())
                     .ok_or_else(|| "missing 'task_id'".to_string())?;
                 match mgr.status(id) {
-                    Some(TaskStatus::Running { .. }) => Ok(json!({"task_id": id, "status": "running"})),
-                    Some(TaskStatus::Completed { result, duration_ms }) => Ok(json!({"task_id": id, "status": "completed", "result": result, "duration_ms": duration_ms})),
-                    Some(TaskStatus::Failed { error, duration_ms }) => Ok(json!({"task_id": id, "status": "failed", "error": error, "duration_ms": duration_ms})),
-                    Some(TaskStatus::Cancelled) => Ok(json!({"task_id": id, "status": "cancelled"})),
+                    Some(TaskStatus::Running { .. }) => {
+                        Ok(json!({"task_id": id, "status": "running"}))
+                    }
+                    Some(TaskStatus::Completed {
+                        result,
+                        duration_ms,
+                    }) => Ok(
+                        json!({"task_id": id, "status": "completed", "result": result, "duration_ms": duration_ms}),
+                    ),
+                    Some(TaskStatus::Failed { error, duration_ms }) => Ok(
+                        json!({"task_id": id, "status": "failed", "error": error, "duration_ms": duration_ms}),
+                    ),
+                    Some(TaskStatus::Cancelled) => {
+                        Ok(json!({"task_id": id, "status": "cancelled"}))
+                    }
                     None => Err(format!("task {id} not found")),
                 }
             }
             "cancel" => {
-                let id = args.get("task_id").and_then(|v| v.as_str())
+                let id = args
+                    .get("task_id")
+                    .and_then(|v| v.as_str())
                     .ok_or_else(|| "missing 'task_id'".to_string())?;
                 if mgr.cancel(id) {
                     Ok(json!({"task_id": id, "status": "cancelled"}))
@@ -214,12 +272,16 @@ impl Tool for LongTaskTool {
                 }
             }
             "list" => {
-                let items: Vec<Value> = mgr.list().into_iter().map(|(id, name, st)| {
-                    json!({"task_id": id, "name": name, "status": st})
-                }).collect();
+                let items: Vec<Value> = mgr
+                    .list()
+                    .into_iter()
+                    .map(|(id, name, st)| json!({"task_id": id, "name": name, "status": st}))
+                    .collect();
                 Ok(json!({"tasks": items, "count": items.len()}))
             }
-            other => Err(format!("unknown op '{other}', expected: submit/status/cancel/list")),
+            other => Err(format!(
+                "unknown op '{other}', expected: submit/status/cancel/list"
+            )),
         }
     }
 }
@@ -267,12 +329,18 @@ mod tests {
     #[tokio::test]
     async fn tool_submit_and_status() {
         let tool = LongTaskTool::new();
-        let r = tool.call(json!({"op": "submit", "name": "t1", "duration_ms": 50})).await.unwrap();
+        let r = tool
+            .call(json!({"op": "submit", "name": "t1", "duration_ms": 50}))
+            .await
+            .unwrap();
         assert_eq!(r["status"], "running");
         let task_id = r["task_id"].as_str().unwrap().to_string();
         // 等待 task 完成 (后台 poller 在 duration_ms + 50 后 mark)
         tokio::time::sleep(Duration::from_millis(200)).await;
-        let r = tool.call(json!({"op": "status", "task_id": task_id})).await.unwrap();
+        let r = tool
+            .call(json!({"op": "status", "task_id": task_id}))
+            .await
+            .unwrap();
         assert_eq!(r["status"], "completed");
         assert_eq!(r["result"]["slept_ms"], 50);
     }
@@ -280,7 +348,9 @@ mod tests {
     #[tokio::test]
     async fn tool_list() {
         let tool = LongTaskTool::new();
-        tool.call(json!({"op": "submit", "name": "list_tool", "duration_ms": 10})).await.unwrap();
+        tool.call(json!({"op": "submit", "name": "list_tool", "duration_ms": 10}))
+            .await
+            .unwrap();
         let r = tool.call(json!({"op": "list"})).await.unwrap();
         assert!(r["count"].as_u64().unwrap() >= 1);
     }

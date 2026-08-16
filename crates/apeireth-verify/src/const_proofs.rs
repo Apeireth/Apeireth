@@ -20,7 +20,7 @@
 //! **0 触碰**: apeireth-verify/lib.rs 0 改, 本模块是 additive.
 
 #![allow(missing_docs)] // R217 additive
-#![allow(dead_code)]   // 暴露 const fn 给外部使用
+#![allow(dead_code)] // 暴露 const fn 给外部使用
 #![allow(non_upper_case_globals)] // const_proof! 生成的 const 用小写 (proof 名)
 
 // ============================================================================
@@ -52,10 +52,16 @@ pub const V05_DIMENSION_WEIGHTS: [f64; 6] = [0.20, 0.20, 0.15, 0.15, 0.15, 0.15]
 const fn const_sum(arr: &[f64; 6]) -> f64 {
     let mut s = 0.0;
     let mut i = 0;
-    while i < 6 { s += arr[i]; i += 1; }
+    while i < 6 {
+        s += arr[i];
+        i += 1;
+    }
     s
 }
-const_proof!(v05_sum_invariant, (const_sum(&V05_DIMENSION_WEIGHTS) - 1.0).abs() < 1e-9);
+const_proof!(
+    v05_sum_invariant,
+    (const_sum(&V05_DIMENSION_WEIGHTS) - 1.0).abs() < 1e-9
+);
 
 /// 13 键 verdict cache (SoT 不可变脊柱 #3, 编译期 hardcode).
 pub const VERDICT_CACHE_KEY_COUNT: usize = 13;
@@ -136,14 +142,46 @@ pub struct ProofReport {
 
 /// 列出 8 个 const proofs 的报告.
 pub const ALL_CONST_PROOFS: &[ProofReport] = &[
-    ProofReport { name: "V0.5 30 维权重和=1.0", status: ProofStatus::Proven, description: "ASI V0.5 评估体系编译期守门" },
-    ProofReport { name: "verdict cache 13 键", status: ProofStatus::Proven, description: "SoT 不可变脊柱 #3" },
-    ProofReport { name: "BaseEmotion 6 维", status: ProofStatus::Proven, description: "Ekman 模型" },
-    ProofReport { name: "PlutchikBasic 8 维", status: ProofStatus::Proven, description: "Plutchik 1980 情感轮 (R218)" },
-    ProofReport { name: "PlutchikAdvanced 8 维", status: ProofStatus::Proven, description: "Plutchik 8 dyads (R218)" },
-    ProofReport { name: "PlutchikIntensity 4 档", status: ProofStatus::Proven, description: "Mild/Moderate/Strong/Extreme" },
-    ProofReport { name: "EmotionEvent 12 类", status: ProofStatus::Proven, description: "事件触发器" },
-    ProofReport { name: "AdvisorDomain 7 域", status: ProofStatus::Proven, description: "Council 智囊团" },
+    ProofReport {
+        name: "V0.5 30 维权重和=1.0",
+        status: ProofStatus::Proven,
+        description: "ASI V0.5 评估体系编译期守门",
+    },
+    ProofReport {
+        name: "verdict cache 13 键",
+        status: ProofStatus::Proven,
+        description: "SoT 不可变脊柱 #3",
+    },
+    ProofReport {
+        name: "BaseEmotion 6 维",
+        status: ProofStatus::Proven,
+        description: "Ekman 模型",
+    },
+    ProofReport {
+        name: "PlutchikBasic 8 维",
+        status: ProofStatus::Proven,
+        description: "Plutchik 1980 情感轮 (R218)",
+    },
+    ProofReport {
+        name: "PlutchikAdvanced 8 维",
+        status: ProofStatus::Proven,
+        description: "Plutchik 8 dyads (R218)",
+    },
+    ProofReport {
+        name: "PlutchikIntensity 4 档",
+        status: ProofStatus::Proven,
+        description: "Mild/Moderate/Strong/Extreme",
+    },
+    ProofReport {
+        name: "EmotionEvent 12 类",
+        status: ProofStatus::Proven,
+        description: "事件触发器",
+    },
+    ProofReport {
+        name: "AdvisorDomain 7 域",
+        status: ProofStatus::Proven,
+        description: "Council 智囊团",
+    },
 ];
 
 pub const PROOF_COUNT: usize = 8;
@@ -155,13 +193,16 @@ pub const PROOF_COUNT: usize = 8;
 #[cfg(test)]
 mod tests {
     use super::*;
-// 不依赖 const_panic macro (rust 1.80 stable 限制)
+    // 不依赖 const_panic macro (rust 1.80 stable 限制)
 
     #[test]
     fn t01_v05_weights_sum_to_one() {
         // 编译期已通过 V05_SUM_INVARIANT, 这里验证运行期一致
         let sum: f64 = V05_DIMENSION_WEIGHTS.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-9, "V0.5 weights sum = {sum}, expected 1.0");
+        assert!(
+            (sum - 1.0).abs() < 1e-9,
+            "V0.5 weights sum = {sum}, expected 1.0"
+        );
     }
 
     #[test]
@@ -210,8 +251,8 @@ mod tests {
     #[test]
     fn t10_pad_distance_non_neg_const() {
         // 任何两个 PAD 的距离都非负
-        const D1: bool = pad_distance_non_neg(0.0, 0.0, 0.0, 0.0, 0.0, 0.0);  // 0
-        const D2: bool = pad_distance_non_neg(1.0, 1.0, 1.0, -1.0, -1.0, -1.0);  // sqrt(12)
+        const D1: bool = pad_distance_non_neg(0.0, 0.0, 0.0, 0.0, 0.0, 0.0); // 0
+        const D2: bool = pad_distance_non_neg(1.0, 1.0, 1.0, -1.0, -1.0, -1.0); // sqrt(12)
         const D3: bool = pad_distance_non_neg(0.6, 0.5, 0.4, -0.4, -0.2, -0.5);
         assert!(D1);
         assert!(D2);

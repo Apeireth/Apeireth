@@ -3,8 +3,7 @@
 //! pure schema layer.
 
 use apeireth_voice::realtime::{
-    RealtimeModel, RealtimeSessionConfig, RealtimeTool, RealtimeVoice,
-    ClientEvent,
+    ClientEvent, RealtimeModel, RealtimeSessionConfig, RealtimeTool, RealtimeVoice,
 };
 use serde_json::json;
 
@@ -29,7 +28,9 @@ fn main() {
 
     println!("Config: {:?}", cfg);
 
-    let event = ClientEvent::SessionUpdate { config: cfg.clone() };
+    let event = ClientEvent::SessionUpdate {
+        config: cfg.clone(),
+    };
     let json = serde_json::to_string_pretty(&event).unwrap();
     println!("session.update payload:");
     println!("{}", json);

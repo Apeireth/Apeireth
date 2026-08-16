@@ -91,7 +91,11 @@ pub struct UsageInfo {
 /// - 4xx/5xx → `Err(format!("HTTP {}: {}", status, body))`
 /// - 网络错误 → `Err(format!("network: {}", e))`
 /// - 超时 (30s) → `Err("timeout: ...")`
-pub fn call_llm_http_sync(input: &str, system: &str, history: &[ChatMessage]) -> Result<HttpLlmReply, String> {
+pub fn call_llm_http_sync(
+    input: &str,
+    system: &str,
+    history: &[ChatMessage],
+) -> Result<HttpLlmReply, String> {
     reject_unsupported_provider()?;
     let url = chat_completions_url()?;
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -102,7 +106,12 @@ pub fn call_llm_http_sync(input: &str, system: &str, history: &[ChatMessage]) ->
 }
 
 /// async 内部实现: 可被 `call_llm_http_sync` block_on 包装, 也可被其他路径复用
-async fn call_llm_http_sync_async(url: &str, input: &str, system: &str, history: &[ChatMessage]) -> Result<HttpLlmReply, String> {
+async fn call_llm_http_sync_async(
+    url: &str,
+    input: &str,
+    system: &str,
+    history: &[ChatMessage],
+) -> Result<HttpLlmReply, String> {
     let mut messages = vec![json!({"role": "system", "content": system})];
     for msg in history {
         if msg.role == "user" {
@@ -154,7 +163,9 @@ async fn call_llm_http_sync_async(url: &str, input: &str, system: &str, history:
     // 提取 usage (可能不存在, 缺则 default 0)
     let usage = UsageInfo {
         prompt_tokens: json_body["usage"]["prompt_tokens"].as_u64().unwrap_or(0) as u32,
-        completion_tokens: json_body["usage"]["completion_tokens"].as_u64().unwrap_or(0) as u32,
+        completion_tokens: json_body["usage"]["completion_tokens"]
+            .as_u64()
+            .unwrap_or(0) as u32,
         total_tokens: json_body["usage"]["total_tokens"].as_u64().unwrap_or(0) as u32,
     };
 

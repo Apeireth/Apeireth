@@ -102,10 +102,18 @@ async fn code_exec_echo() {
     let exec = ShellCodeExec::new();
     // Windows: `echo` 是 cmd 内置, 用 cmd /c echo (cmd 在白名单)
     // POSIX: `echo` 是独立 binary, 直接调
-    let cmd = if cfg!(windows) { "cmd /c echo hello" } else { "echo hello" };
+    let cmd = if cfg!(windows) {
+        "cmd /c echo hello"
+    } else {
+        "echo hello"
+    };
     let (exit, output) = exec.exec(cmd, 5000).await.expect("echo should succeed");
     assert_eq!(exit, 0, "echo exit code: got {} (output: {})", exit, output);
-    assert!(output.contains("hello"), "output should contain 'hello': {}", output);
+    assert!(
+        output.contains("hello"),
+        "output should contain 'hello': {}",
+        output
+    );
 }
 
 #[tokio::test]
@@ -113,8 +121,15 @@ async fn code_exec_exit_zero() {
     let exec = ShellCodeExec::new();
     // Windows: 用 `cmd /c exit 0` (cmd 在白名单)
     // POSIX: `true` 在白名单
-    let cmd = if cfg!(windows) { "cmd /c exit 0" } else { "true" };
-    let (exit, _) = exec.exec(cmd, 5000).await.expect("true / exit 0 should succeed");
+    let cmd = if cfg!(windows) {
+        "cmd /c exit 0"
+    } else {
+        "true"
+    };
+    let (exit, _) = exec
+        .exec(cmd, 5000)
+        .await
+        .expect("true / exit 0 should succeed");
     assert_eq!(exit, 0, "expected exit 0, got {}", exit);
 }
 
@@ -123,8 +138,15 @@ async fn code_exec_exit_nonzero() {
     let exec = ShellCodeExec::new();
     // Windows: `cmd /c exit 1`
     // POSIX: `false` 在白名单
-    let cmd = if cfg!(windows) { "cmd /c exit 1" } else { "false" };
-    let (exit, _) = exec.exec(cmd, 5000).await.expect("false / exit 1 should complete");
+    let cmd = if cfg!(windows) {
+        "cmd /c exit 1"
+    } else {
+        "false"
+    };
+    let (exit, _) = exec
+        .exec(cmd, 5000)
+        .await
+        .expect("false / exit 1 should complete");
     assert_eq!(exit, 1, "expected exit 1, got {}", exit);
 }
 
@@ -174,7 +196,11 @@ async fn git_ops_status_after_file_add() {
     std::fs::write(dir.path().join("hello.txt"), "hello").unwrap();
     let ops = GitCliOps::new();
     let status = ops.status(dir.path()).await.unwrap();
-    assert!(status.contains("hello.txt"), "status should mention untracked file: {}", status);
+    assert!(
+        status.contains("hello.txt"),
+        "status should mention untracked file: {}",
+        status
+    );
 }
 
 #[tokio::test]
@@ -233,7 +259,7 @@ fn file_ops_vcp_constants_match() {
     //   MAX_FILE_SIZE = 20 * 1024 * 1024
     //   MAX_DIRECTORY_ITEMS = 1000
     //   MAX_SEARCH_RESULTS = 100
-    use apeireth_tools::file_ops::{MAX_FILE_SIZE, MAX_DIRECTORY_ITEMS, MAX_SEARCH_RESULTS};
+    use apeireth_tools::file_ops::{MAX_DIRECTORY_ITEMS, MAX_FILE_SIZE, MAX_SEARCH_RESULTS};
     assert_eq!(MAX_FILE_SIZE, 20 * 1024 * 1024);
     assert_eq!(MAX_DIRECTORY_ITEMS, 1000);
     assert_eq!(MAX_SEARCH_RESULTS, 100);
@@ -275,7 +301,10 @@ async fn file_ops_edit_unique_replacement() {
     ops.edit(&p, "let x = 1;", "let x = 100;").await.unwrap();
     let got = ops.read(&p).await.unwrap();
     assert!(got.contains("let x = 100;"), "edit should replace: {got}");
-    assert!(got.contains("let y = 2;"), "edit should keep other lines: {got}");
+    assert!(
+        got.contains("let y = 2;"),
+        "edit should keep other lines: {got}"
+    );
 }
 
 #[tokio::test]
@@ -286,7 +315,10 @@ async fn file_ops_edit_zero_match_fails() {
     ops.write(&p, "hello world").await.unwrap();
     let r = ops.edit(&p, "not in file", "anything").await;
     assert!(r.is_err(), "edit should fail on 0 match");
-    assert!(r.unwrap_err().contains("not found"), "err msg should mention 'not found'");
+    assert!(
+        r.unwrap_err().contains("not found"),
+        "err msg should mention 'not found'"
+    );
 }
 
 #[tokio::test]
@@ -299,7 +331,10 @@ async fn file_ops_edit_ambiguous_match_fails() {
     let r = ops.edit(&p, "x =", "y =").await;
     assert!(r.is_err(), "edit should fail on ambiguous match");
     let err = r.unwrap_err();
-    assert!(err.contains("matched") || err.contains("unique"), "err msg: {err}");
+    assert!(
+        err.contains("matched") || err.contains("unique"),
+        "err msg: {err}"
+    );
 }
 
 #[tokio::test]
@@ -400,7 +435,10 @@ async fn apply_patch_ambiguous_match_returns_err() {
                  +y\n\
                  *** End Patch\n";
     let r = apply_patch(patch, dir.path()).await;
-    assert!(matches!(r, Err(PatchError::AmbiguousMatch { .. })), "got: {r:?}");
+    assert!(
+        matches!(r, Err(PatchError::AmbiguousMatch { .. })),
+        "got: {r:?}"
+    );
     // 文件未变 (apply 失败 → 0 落盘)
     let after = std::fs::read_to_string(&target).unwrap();
     assert_eq!(after, "x\nx\nx\n", "file should be untouched on error");
@@ -417,11 +455,19 @@ fn project_conventions_scans_own_workspace_root() {
     // workspace root 是 cwd 的 ../../  (apeireth-tools/src/.. = crates, .. = root)
     let workspace_root = std::path::Path::new("..").join("..");
     let conv = ProjectConventions::scan(&workspace_root);
-    assert!(conv.scan_error.is_none(), "scan should succeed, got: {:?}", conv.scan_error);
+    assert!(
+        conv.scan_error.is_none(),
+        "scan should succeed, got: {:?}",
+        conv.scan_error
+    );
     assert_eq!(conv.edition.as_deref(), Some("2021"));
     assert_eq!(conv.resolver.as_deref(), Some("2"));
     // R128 匕累: 94 → 73 active (+ _frozen + _archived), 期望 ≥ 70 即可.
-    assert!(conv.members_count >= 70, "real workspace has 70+ crates (post-R128 94→73), got {}", conv.members_count);
+    assert!(
+        conv.members_count >= 70,
+        "real workspace has 70+ crates (post-R128 94→73), got {}",
+        conv.members_count
+    );
     // lint 类别应含 rust + clippy (workspace lint)
     assert!(conv.lint_categories.contains(&"rust".to_string()));
     assert!(conv.lint_categories.contains(&"clippy".to_string()));
@@ -435,12 +481,27 @@ fn project_conventions_system_prompt_block_has_key_fields() {
     let conv = ProjectConventions::scan(&workspace_root);
     let block = conv.to_system_prompt_block();
     assert!(block.contains("# 项目约定"), "block should have title");
-    assert!(block.contains("Rust edition: 2021"), "block should have edition: {block}");
-    assert!(block.contains("Cargo resolver: 2"), "block should have resolver");
-    assert!(block.contains("Workspace members:"), "block should have members");
-    assert!(block.contains("# 风格提示"), "block should have hints section");
+    assert!(
+        block.contains("Rust edition: 2021"),
+        "block should have edition: {block}"
+    );
+    assert!(
+        block.contains("Cargo resolver: 2"),
+        "block should have resolver"
+    );
+    assert!(
+        block.contains("Workspace members:"),
+        "block should have members"
+    );
+    assert!(
+        block.contains("# 风格提示"),
+        "block should have hints section"
+    );
     // 关键不漂移提示
-    assert!(block.contains("workspace = true"), "block should mention workspace inherit");
+    assert!(
+        block.contains("workspace = true"),
+        "block should mention workspace inherit"
+    );
 }
 
 #[test]
@@ -450,6 +511,10 @@ fn project_conventions_handles_missing_cargo_toml() {
     let dir = tempfile::tempdir().unwrap();
     let conv = ProjectConventions::scan(dir.path());
     assert!(conv.scan_error.is_some());
-    assert!(conv.scan_error.as_ref().unwrap().contains("Cargo.toml not found"));
+    assert!(conv
+        .scan_error
+        .as_ref()
+        .unwrap()
+        .contains("Cargo.toml not found"));
     assert!(conv.edition.is_none());
 }

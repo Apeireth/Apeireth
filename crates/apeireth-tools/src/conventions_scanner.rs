@@ -92,7 +92,11 @@ impl ProjectConventions {
         }
 
         // [workspace.package] 块
-        if let Some(wp) = root.get("workspace").and_then(|x| x.get("package")).and_then(|x| x.as_table()) {
+        if let Some(wp) = root
+            .get("workspace")
+            .and_then(|x| x.get("package"))
+            .and_then(|x| x.as_table())
+        {
             if let Some(e) = wp.get("edition").and_then(|x| x.as_str()) {
                 self.edition = Some(e.to_string());
             }
@@ -102,7 +106,11 @@ impl ProjectConventions {
         }
 
         // [workspace.dependencies] 块
-        if let Some(wd) = root.get("workspace").and_then(|x| x.get("dependencies")).and_then(|x| x.as_table()) {
+        if let Some(wd) = root
+            .get("workspace")
+            .and_then(|x| x.get("dependencies"))
+            .and_then(|x| x.as_table())
+        {
             self.workspace_deps_count = wd.len();
             // 按字母序前 8 个 key 当 "key deps" 摘要
             let mut keys: Vec<String> = wd.keys().cloned().collect();
@@ -111,7 +119,11 @@ impl ProjectConventions {
         }
 
         // [workspace.lints.{rust,clippy}] 块
-        if let Some(lints) = root.get("workspace").and_then(|x| x.get("lints")).and_then(|x| x.as_table()) {
+        if let Some(lints) = root
+            .get("workspace")
+            .and_then(|x| x.get("lints"))
+            .and_then(|x| x.as_table())
+        {
             for cat in ["rust", "clippy"] {
                 if lints.get(cat).is_some() {
                     self.lint_categories.push(cat.to_string());
@@ -143,7 +155,10 @@ impl ProjectConventions {
         if let Some(r) = &self.resolver {
             s.push_str(&format!("- Cargo resolver: {r}\n"));
         }
-        s.push_str(&format!("- Workspace members: {} 个 crate\n", self.members_count));
+        s.push_str(&format!(
+            "- Workspace members: {} 个 crate\n",
+            self.members_count
+        ));
         s.push_str(&format!(
             "- Workspace deps: {} 个 (key: {})\n",
             self.workspace_deps_count,
@@ -154,16 +169,23 @@ impl ProjectConventions {
             }
         ));
         if !self.lint_categories.is_empty() {
-            s.push_str(&format!("- Lint 类别: {}\n", self.lint_categories.join(", ")));
+            s.push_str(&format!(
+                "- Lint 类别: {}\n",
+                self.lint_categories.join(", ")
+            ));
         }
         if let Some(err) = &self.scan_error {
-            s.push_str(&format!("\n[scan warning] {err} (block 仍可用, 但部分字段可能不准)\n"));
+            s.push_str(&format!(
+                "\n[scan warning] {err} (block 仍可用, 但部分字段可能不准)\n"
+            ));
         }
 
         s.push_str("\n# 风格提示 (Aider-style hint)\n");
         s.push_str("- 写代码时遵循上面抽到的 edition / rust-version / lints\n");
         s.push_str("- 复用 workspace deps 用 `{ workspace = true }`, 不要钉版本\n");
-        s.push_str("- 子 crate Cargo.toml 末尾加 `[lints]\\nworkspace = true` 继承 workspace lint\n");
+        s.push_str(
+            "- 子 crate Cargo.toml 末尾加 `[lints]\\nworkspace = true` 继承 workspace lint\n",
+        );
         s.push_str("- 保持现状 (不漂移): workspace version = 1.0.0 已是 1.0 release 锁版, 勿改\n");
         s
     }
@@ -234,7 +256,10 @@ all = 'warn'
         assert_eq!(c.resolver, Some("2".to_string()));
         assert_eq!(c.members_count, 3);
         assert_eq!(c.workspace_deps_count, 3);
-        assert_eq!(c.lint_categories, vec!["rust".to_string(), "clippy".to_string()]);
+        assert_eq!(
+            c.lint_categories,
+            vec!["rust".to_string(), "clippy".to_string()]
+        );
         // key_deps 前 3 个 (字母序)
         assert!(c.key_deps.contains(&"tokio".to_string()));
         assert!(c.key_deps.contains(&"serde".to_string()));
@@ -247,7 +272,11 @@ all = 'warn'
         let tmp = tempfile::tempdir().unwrap();
         let c = ProjectConventions::scan(tmp.path());
         assert!(c.scan_error.is_some());
-        assert!(c.scan_error.as_ref().unwrap().contains("Cargo.toml not found"));
+        assert!(c
+            .scan_error
+            .as_ref()
+            .unwrap()
+            .contains("Cargo.toml not found"));
         assert!(c.edition.is_none());
     }
 
@@ -277,14 +306,21 @@ all = 'warn'
     fn scan_real_workspace_root_extracts_conventions() {
         // 用项目自己的 workspace root 扫 (向上 2 层: apeireth-tools -> crates -> workspace root)
         let pkg_root = std::env::current_dir().unwrap();
-        let root = pkg_root.parent().and_then(|p| p.parent()).unwrap_or(&pkg_root);
+        let root = pkg_root
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(&pkg_root);
         let c = ProjectConventions::scan(root);
         // 找 workspace root Cargo.toml: 如果 current_dir 是 workspace root, resolver 应该是 "2"
         // (跑 `cargo test -p apeireth-tools` 时 cwd 是 crate root, parent.parent 是 workspace root)
         if c.scan_error.is_none() && c.workspace_deps_count > 0 {
             // 只在真找到 workspace root 时验
             assert_eq!(c.resolver, Some("2".to_string()));
-            assert!(c.members_count > 30, "apeireth workspace > 30 members, got {}", c.members_count);
+            assert!(
+                c.members_count > 30,
+                "apeireth workspace > 30 members, got {}",
+                c.members_count
+            );
             assert!(c.workspace_deps_count > 0);
             assert!(c.lint_categories.contains(&"rust".to_string()));
         }

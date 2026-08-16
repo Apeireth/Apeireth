@@ -22,23 +22,23 @@
 #![allow(missing_docs)]
 
 // R30 U6: notify multi-config watcher
-mod config_watcher;
-mod cognition_live;
 mod app;
 mod backend;
+mod cognition_live;
+mod config_watcher;
 mod http_llm;
 mod observability;
-mod pages;
 mod organ;
+mod pages;
 
 // sister #1 — 9 器官 × 6 command dispatcher (借鉴 Golutra #1)
 // 0 触碰 organ 子树, 独立登记在 crate 根, 跟 organ/ 同级 (R23 P3 迁移)
 mod command;
 
 // R22 ST-A1.2: eye 真接 keystrokes (handle_key 处 hook)
-mod persistence;
 mod llm_config;
 mod onboarding;
+mod persistence;
 mod theme;
 
 // R155 TUI × runtime bridge (per master 后端完全做好了再接 tui)

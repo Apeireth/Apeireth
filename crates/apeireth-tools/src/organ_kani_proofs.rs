@@ -40,4 +40,3 @@ fn r177_ts_kani_01_trait_count_invariant() {
 fn r177_ts_kani_02_impl_count_invariant() {
     assert_eq!(IMPL_COUNT, 6);
 }
-
