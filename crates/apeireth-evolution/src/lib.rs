@@ -73,11 +73,11 @@ pub use poda_cycle::{
 };
 // R127 P5-1 Library Stage 4 自治 re-exports (新增, 0 改原 crate 任何入口签名)
 pub use library_autonomy::{
-    AutonomyError, AutonomyMetrics, AutonomyReport, AutonomyResult, LibraryAutonomy, Skill,
-    SkillRegistry, TddFirstSkill, FailureEvent, FailureEventKind, DeterminismMeta, ObserveSkill,
-    PlanSkill, AdaptSkill, RepairJournal, RepairResult, RepairStrategy, SelfEvolution,
-    SelfEvolutionAction, SelfEvolutionState, SelfRepair, SelfRepairAction, SelfRepairState,
-    SelfUpgrade, SelfUpgradeAction, SelfUpgradeState, UpgradePlan,
+    AdaptSkill, AutonomyError, AutonomyMetrics, AutonomyReport, AutonomyResult, DeterminismMeta,
+    FailureEvent, FailureEventKind, LibraryAutonomy, ObserveSkill, PlanSkill, RepairJournal,
+    RepairResult, RepairStrategy, SelfEvolution, SelfEvolutionAction, SelfEvolutionState,
+    SelfRepair, SelfRepairAction, SelfRepairState, SelfUpgrade, SelfUpgradeAction,
+    SelfUpgradeState, Skill, SkillRegistry, TddFirstSkill, UpgradePlan,
 };
 // R127-2 P8-1 Library Stage 4.1 自治 - 自循环 re-exports (新增, 0 改 P5-1 任何入口签名)
 // 8 类型: AutonomyLoop (顶层) + LoopStage (4 阶段) + FeedbackChannel + FeedbackSignal (3 variant)
@@ -86,7 +86,7 @@ pub use library_autonomy::{
 pub use library_autonomy_loop::{
     AdjustPolicy, AdjustPolicyTrigger, AutonomyLoop, FeedbackChannel, FeedbackSignal, LoopError,
     LoopMetrics, LoopReport, LoopResult, LoopStage, SelfAdjust, SignalPriority, SignalSource,
-    SignalTarget, REPAIR_STORM_THRESHOLD, EVOLUTION_HEALTHY_THRESHOLD,
+    SignalTarget, EVOLUTION_HEALTHY_THRESHOLD, REPAIR_STORM_THRESHOLD,
 };
 pub use state::{EvolutionState, EvolutionStateMachine, StateTransition, TransitionReason};
 pub use traits::{

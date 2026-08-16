@@ -5,10 +5,10 @@
 //! `<workspace_root>/<node_id>/<kind>/...` and the gateway refuses to mount
 //! paths that escape the root (path traversal defense).
 
+use crate::node::NodeKind;
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 use uuid::Uuid;
-use crate::node::NodeKind;
 
 #[derive(Debug, thiserror::Error)]
 pub enum WorkspaceError {
@@ -29,7 +29,10 @@ pub fn safe_join(root: &Path, rel: &str) -> WorkspaceResult<PathBuf> {
         if matches!(c, Component::ParentDir) {
             return Err(WorkspaceError::PathTraversal(rel.into()));
         }
-        if matches!(c, Component::RootDir | Component::Prefix(_) | Component::CurDir) {
+        if matches!(
+            c,
+            Component::RootDir | Component::Prefix(_) | Component::CurDir
+        ) {
             // CurDir is harmless on its own but we reject it for consistency.
             // RootDir + Prefix indicate absolute paths which we must reject.
             return Err(WorkspaceError::PathTraversal(rel.into()));
@@ -49,7 +52,11 @@ pub struct AgentWorkspace {
 
 impl AgentWorkspace {
     pub fn new(root: impl Into<PathBuf>, node_id: Uuid, node_kind: NodeKind) -> Self {
-        Self { root: root.into(), node_id, node_kind }
+        Self {
+            root: root.into(),
+            node_id,
+            node_kind,
+        }
     }
 
     pub fn skills_dir(&self) -> WorkspaceResult<PathBuf> {
@@ -106,14 +113,23 @@ mod tests {
     #[test]
     fn safe_join_rejects_parent_dir() {
         let r = PathBuf::from("/tmp/ws");
-        assert!(matches!(safe_join(&r, "../etc"), Err(WorkspaceError::PathTraversal(_))));
-        assert!(matches!(safe_join(&r, "a/../../b"), Err(WorkspaceError::PathTraversal(_))));
+        assert!(matches!(
+            safe_join(&r, "../etc"),
+            Err(WorkspaceError::PathTraversal(_))
+        ));
+        assert!(matches!(
+            safe_join(&r, "a/../../b"),
+            Err(WorkspaceError::PathTraversal(_))
+        ));
     }
 
     #[test]
     fn safe_join_rejects_absolute() {
         let r = PathBuf::from("/tmp/ws");
-        assert!(matches!(safe_join(&r, "/etc/passwd"), Err(WorkspaceError::PathTraversal(_))));
+        assert!(matches!(
+            safe_join(&r, "/etc/passwd"),
+            Err(WorkspaceError::PathTraversal(_))
+        ));
     }
 
     #[test]

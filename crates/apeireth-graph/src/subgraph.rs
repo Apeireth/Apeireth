@@ -67,7 +67,10 @@ impl Subgraph {
     /// 新建 Subgraph, namespace 必非空 (编译期 assertion 守门)
     pub fn new(namespace: impl Into<String>, graph: Graph) -> Self {
         let ns = namespace.into();
-        assert!(!ns.is_empty(), "Subgraph namespace 必非空 (LangGraph 1:1 模式)");
+        assert!(
+            !ns.is_empty(),
+            "Subgraph namespace 必非空 (LangGraph 1:1 模式)"
+        );
         Self {
             namespace: ns,
             graph,
@@ -167,9 +170,11 @@ impl Node for SubgraphNode {
             let _ = tx.send(result);
         });
 
-        let result = rx
-            .recv()
-            .map_err(|e| GraphError::Node(format!("SubgraphNode {namespace_for_recv}: channel recv failed: {e}")))?;
+        let result = rx.recv().map_err(|e| {
+            GraphError::Node(format!(
+                "SubgraphNode {namespace_for_recv}: channel recv failed: {e}"
+            ))
+        })?;
 
         match result {
             Ok(FinalState {
@@ -185,7 +190,8 @@ impl Node for SubgraphNode {
                 }
                 // 记录子 graph 执行过的节点数 (供父 graph 调试)
                 let child_count = self.graph.node_count();
-                let message = format!("subgraph '{namespace_for_recv}' ran {child_count} child nodes");
+                let message =
+                    format!("subgraph '{namespace_for_recv}' ran {child_count} child nodes");
                 Ok(NodeOutput::new(id).with_message(message))
             }
             Err(e) => Err(e),
@@ -233,9 +239,8 @@ mod subgraph_tests {
         let g = Graph::new();
         // empty namespace 应 panic (LangGraph 1:1 模式)
         // Graph 含 dyn Node / dyn Fn 非 UnwindSafe, 用 AssertUnwindSafe wrap
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            Subgraph::new("", g)
-        }));
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Subgraph::new("", g)));
         assert!(result.is_err(), "empty namespace 必 panic");
     }
 
@@ -344,10 +349,7 @@ mod subgraph_tests {
             Some(&json!("written_by_child"))
         );
         // 父 state 原 key 仍保留
-        assert_eq!(
-            parent_state.get("parent_key"),
-            Some(&json!("parent_value"))
-        );
+        assert_eq!(parent_state.get("parent_key"), Some(&json!("parent_value")));
         // output 带 message
         assert!(output.message.is_some());
     }
@@ -375,7 +377,10 @@ mod subgraph_tests {
         let mut state = State::new();
         // 不在 tokio runtime, SubgraphNode::run 仍 OK (用 std::thread::spawn + 新 runtime)
         let result = sub_node.run(&mut state);
-        assert!(result.is_ok(), "SubgraphNode::run 应在无 tokio runtime 时也成功");
+        assert!(
+            result.is_ok(),
+            "SubgraphNode::run 应在无 tokio runtime 时也成功"
+        );
         // 子 node write 已被合并到 state
         assert_eq!(state.get("k"), Some(&json!("from_inner")));
     }
@@ -425,7 +430,13 @@ mod subgraph_tests {
         assert_eq!(final_state.execution_order[1], "subgraph.auth");
         // 父 state 应有 main + inner1 + inner2 (subgraph.auth 写)
         assert_eq!(final_state.get("main_key"), Some(&json!("main_value")));
-        assert_eq!(final_state.get("inner1_key"), Some(&json!("written_by_inner1")));
-        assert_eq!(final_state.get("inner2_key"), Some(&json!("written_by_inner2")));
+        assert_eq!(
+            final_state.get("inner1_key"),
+            Some(&json!("written_by_inner1"))
+        );
+        assert_eq!(
+            final_state.get("inner2_key"),
+            Some(&json!("written_by_inner2"))
+        );
     }
 }

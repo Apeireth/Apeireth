@@ -75,7 +75,12 @@ pub struct KnowledgeNode {
 }
 
 impl KnowledgeNode {
-    pub fn new(label: impl Into<String>, kind: NodeKind, confidence: f64, source: impl Into<String>) -> Self {
+    pub fn new(
+        label: impl Into<String>,
+        kind: NodeKind,
+        confidence: f64,
+        source: impl Into<String>,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             label: label.into(),
@@ -232,8 +237,20 @@ mod tests {
         let id1 = g.add_node(n1);
         let id2 = g.add_node(n2);
         let id3 = g.add_node(n3);
-        g.add_edge(KnowledgeEdge::new(id1, id2, RelationKind::Coordination, 0.5)).unwrap();
-        g.add_edge(KnowledgeEdge::new(id2, id3, RelationKind::Coordination, 0.5)).unwrap();
+        g.add_edge(KnowledgeEdge::new(
+            id1,
+            id2,
+            RelationKind::Coordination,
+            0.5,
+        ))
+        .unwrap();
+        g.add_edge(KnowledgeEdge::new(
+            id2,
+            id3,
+            RelationKind::Coordination,
+            0.5,
+        ))
+        .unwrap();
         assert_eq!(g.edges_from(id1).len(), 1);
         assert_eq!(g.edges_to(id3).len(), 1);
     }
@@ -247,8 +264,20 @@ mod tests {
         let id1 = g.add_node(n1);
         let id2 = g.add_node(n2);
         let id3 = g.add_node(n3);
-        g.add_edge(KnowledgeEdge::new(id1, id2, RelationKind::Coordination, 0.5)).unwrap();
-        g.add_edge(KnowledgeEdge::new(id2, id3, RelationKind::Coordination, 0.5)).unwrap();
+        g.add_edge(KnowledgeEdge::new(
+            id1,
+            id2,
+            RelationKind::Coordination,
+            0.5,
+        ))
+        .unwrap();
+        g.add_edge(KnowledgeEdge::new(
+            id2,
+            id3,
+            RelationKind::Coordination,
+            0.5,
+        ))
+        .unwrap();
         let reachable = g.bfs_reachable(id1, 1);
         assert_eq!(reachable.len(), 2);
         assert!(reachable.contains(&id1));
@@ -265,8 +294,15 @@ mod tests {
         let n2 = KnowledgeNode::new("b", NodeKind::Extracted, 0.9, "ep-1");
         let id1 = g.add_node(n1);
         let id2 = g.add_node(n2);
-        g.add_edge(KnowledgeEdge::new(id1, id2, RelationKind::Symbiosis, 0.5)).unwrap();
-        g.add_edge(KnowledgeEdge::new(id1, id2, RelationKind::Coordination, 0.5)).unwrap();
+        g.add_edge(KnowledgeEdge::new(id1, id2, RelationKind::Symbiosis, 0.5))
+            .unwrap();
+        g.add_edge(KnowledgeEdge::new(
+            id1,
+            id2,
+            RelationKind::Coordination,
+            0.5,
+        ))
+        .unwrap();
         assert_eq!(g.edges_of_kind(RelationKind::Symbiosis).len(), 1);
         assert_eq!(g.edges_of_kind(RelationKind::Embedding).len(), 0);
     }

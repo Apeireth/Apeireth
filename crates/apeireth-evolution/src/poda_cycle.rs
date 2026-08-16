@@ -84,12 +84,7 @@ pub enum PodaStage {
 
 impl PodaStage {
     /// 全部 4 阶段 (编译时 hardcode 兜底)。
-    pub const ALL: [PodaStage; 4] = [
-        Self::Plan,
-        Self::Observe,
-        Self::Decide,
-        Self::Act,
-    ];
+    pub const ALL: [PodaStage; 4] = [Self::Plan, Self::Observe, Self::Decide, Self::Act];
 
     /// 阶段序号 (用于审计排序)。
     pub const fn order(self) -> u8 {
@@ -176,7 +171,10 @@ impl PodaAction {
 
     /// 是否终止循环 (Done / Retire / Abandon / GuardL0)。
     pub fn is_terminal(&self) -> bool {
-        matches!(self, Self::Done | Self::Retire { .. } | Self::Abandon { .. } | Self::GuardL0 { .. })
+        matches!(
+            self,
+            Self::Done | Self::Retire { .. } | Self::Abandon { .. } | Self::GuardL0 { .. }
+        )
     }
 }
 
@@ -200,10 +198,10 @@ pub struct PodaConfig {
 impl Default for PodaConfig {
     fn default() -> Self {
         Self {
-            tick_interval_ms: 1_000,    // 1 秒/tick (与 DEFAULT_REFLECTION_WINDOW=60s 兼容)
-            max_cycles: 32,            // 32 cycles 上限 (防止失控)
-            auto_activate: false,      // 默认 0 自动激活 (等 council 外部触发)
-            auto_ratify: false,        // 默认 0 自动 mark_ratified (等 council 外部触发)
+            tick_interval_ms: 1_000, // 1 秒/tick (与 DEFAULT_REFLECTION_WINDOW=60s 兼容)
+            max_cycles: 32,          // 32 cycles 上限 (防止失控)
+            auto_activate: false,    // 默认 0 自动激活 (等 council 外部触发)
+            auto_ratify: false,      // 默认 0 自动 mark_ratified (等 council 外部触发)
         }
     }
 }
@@ -412,7 +410,8 @@ impl PodaCycle {
     ) -> Self {
         let proposal_id = proposal_id.into();
         let at_ms = current_time_ms();
-        let engine = EvolutionEngine::with_config(proposal_id.clone(), engine_config, StrictFailPolicy);
+        let engine =
+            EvolutionEngine::with_config(proposal_id.clone(), engine_config, StrictFailPolicy);
         Self {
             engine,
             config: poda_config,
@@ -485,14 +484,12 @@ impl PodaCycle {
         let step_count = self.engine.log().steps.len();
         self.context.current_state = current;
         self.context.at_ms = current_time_ms();
-        self.context.observations.push((
-            "current_state".into(),
-            format!("{:?}", current),
-        ));
-        self.context.observations.push((
-            "log_steps".into(),
-            step_count.to_string(),
-        ));
+        self.context
+            .observations
+            .push(("current_state".into(), format!("{:?}", current)));
+        self.context
+            .observations
+            .push(("log_steps".into(), step_count.to_string()));
         self.context
             .observations
             .push(("retry_count".into(), self.context.retry_count.to_string()));
@@ -822,14 +819,8 @@ mod tests {
     fn poda_action_is_terminal_for_retire_abandon_l0_done() {
         // ✅ 真断言: 终止类动作
         assert!(PodaAction::Done.is_terminal());
-        assert!(PodaAction::Retire {
-            reason: "x".into()
-        }
-        .is_terminal());
-        assert!(PodaAction::Abandon {
-            reason: "x".into()
-        }
-        .is_terminal());
+        assert!(PodaAction::Retire { reason: "x".into() }.is_terminal());
+        assert!(PodaAction::Abandon { reason: "x".into() }.is_terminal());
         assert!(PodaAction::GuardL0 {
             target: "L0".into()
         }
@@ -886,10 +877,7 @@ mod tests {
         cycle.plan().unwrap();
         cycle.observe().unwrap();
         let ctx = cycle.context();
-        let has_current_state = ctx
-            .observations
-            .iter()
-            .any(|(k, _)| k == "current_state");
+        let has_current_state = ctx.observations.iter().any(|(k, _)| k == "current_state");
         assert!(has_current_state, "Observe 应写 current_state 观察信号");
     }
 
@@ -1046,10 +1034,7 @@ mod tests {
     #[test]
     fn poda_outcome_is_terminal_classification() {
         // ✅ 真断言: PodaOutcome 终态分类
-        assert!(PodaOutcome::Retired {
-            reason: "x".into()
-        }
-        .is_terminal());
+        assert!(PodaOutcome::Retired { reason: "x".into() }.is_terminal());
         assert!(PodaOutcome::BudgetExhausted { cycles: 1 }.is_terminal());
         assert!(!PodaOutcome::Held.is_terminal());
         assert!(!PodaOutcome::Advanced {
@@ -1064,6 +1049,9 @@ mod tests {
     fn fail_outcome_retry_to_draft_parsing() {
         // ✅ 真断言: FailOutcome::RetriedToDraft 解析
         let outcome = FailOutcome::RetriedToDraft { attempt: 1 };
-        assert!(matches!(outcome, FailOutcome::RetriedToDraft { attempt: 1 }));
+        assert!(matches!(
+            outcome,
+            FailOutcome::RetriedToDraft { attempt: 1 }
+        ));
     }
 }

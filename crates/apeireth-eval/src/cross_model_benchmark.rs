@@ -375,9 +375,20 @@ pub fn report_to_markdown(report: &CrossModelBenchmarkReport) -> String {
         chrono_like_now()
     ));
     out.push_str(&format!("- **Prompt**: `{}`\n", report.prompt_excerpt));
-    out.push_str(&format!("- **Endpoint**: `{}{}`\n", report.base_url, report.endpoint));
-    out.push_str(&format!("- **Total latency**: {} ms\n", report.total_latency_ms));
-    out.push_str(&format!("- **Pass rate**: {}/{} ({:.0}%)\n\n", report.pass_count, report.total_count, report.pass_rate * 100.0));
+    out.push_str(&format!(
+        "- **Endpoint**: `{}{}`\n",
+        report.base_url, report.endpoint
+    ));
+    out.push_str(&format!(
+        "- **Total latency**: {} ms\n",
+        report.total_latency_ms
+    ));
+    out.push_str(&format!(
+        "- **Pass rate**: {}/{} ({:.0}%)\n\n",
+        report.pass_count,
+        report.total_count,
+        report.pass_rate * 100.0
+    ));
 
     out.push_str("| Model | Status | Latency (ms) | In | Out | Stop | Text excerpt | All pass |\n");
     out.push_str("|-------|--------|--------------|----|----|------|--------------|----------|\n");
@@ -439,7 +450,20 @@ fn days_to_ymd(mut days: i64) -> (i64, u32, u32) {
         year += 1;
     }
     let leap = (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0);
-    let months = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut month = 1u32;
     for &md in &months {
         if days < md {
@@ -583,7 +607,6 @@ mod tests {
     }
 }
 
-
 // ============================================================
 // R67: ModelTier + tier-based model selection (per HELM tier 范式)
 // ============================================================
@@ -713,10 +736,20 @@ mod r67_tests {
     #[test]
     fn select_models_for_tier_dedup() {
         // 同 model 在 DEFAULT_MODELS 和 EXTENDED_MODELS 中可能出现, dedup 后只 1 次
-        for tier in [ModelTier::Frontier, ModelTier::Balanced, ModelTier::Fast, ModelTier::Legacy] {
+        for tier in [
+            ModelTier::Frontier,
+            ModelTier::Balanced,
+            ModelTier::Fast,
+            ModelTier::Legacy,
+        ] {
             let models = select_models_for_tier(tier);
             let unique: std::collections::BTreeSet<_> = models.iter().collect();
-            assert_eq!(unique.len(), models.len(), "tier {:?} should be dedup", tier);
+            assert_eq!(
+                unique.len(),
+                models.len(),
+                "tier {:?} should be dedup",
+                tier
+            );
         }
     }
 
@@ -726,14 +759,23 @@ mod r67_tests {
         let unique: std::collections::BTreeSet<_> = all.iter().collect();
         assert_eq!(unique.len(), all.len(), "all_tiered_models must dedup");
         // 默认 4 + 扩展 6 (去重) = 8 model total
-        assert_eq!(all.len(), 7, "expected 7 unique models (4 default + 3 new extended, with 3 dedup overlaps), got {}", all.len());
+        assert_eq!(
+            all.len(),
+            7,
+            "expected 7 unique models (4 default + 3 new extended, with 3 dedup overlaps), got {}",
+            all.len()
+        );
     }
 
     #[test]
     fn count_by_tier_sums_to_total() {
         let counts = count_by_tier();
         let total: usize = counts.values().sum();
-        assert_eq!(total, 7, "tier counts should sum to 7 unique models, got {}", total);
+        assert_eq!(
+            total, 7,
+            "tier counts should sum to 7 unique models, got {}",
+            total
+        );
         assert_eq!(counts.get("frontier").copied(), Some(1));
         assert_eq!(counts.get("balanced").copied(), Some(2));
         assert_eq!(counts.get("fast").copied(), Some(3));
@@ -742,13 +784,15 @@ mod r67_tests {
 
     #[test]
     fn model_tier_serialize_round_trip() {
-        for tier in [ModelTier::Frontier, ModelTier::Balanced, ModelTier::Fast, ModelTier::Legacy] {
+        for tier in [
+            ModelTier::Frontier,
+            ModelTier::Balanced,
+            ModelTier::Fast,
+            ModelTier::Legacy,
+        ] {
             let json = serde_json::to_string(&tier).unwrap();
             let restored: ModelTier = serde_json::from_str(&json).unwrap();
             assert_eq!(restored, tier);
         }
     }
 }
-
-
-

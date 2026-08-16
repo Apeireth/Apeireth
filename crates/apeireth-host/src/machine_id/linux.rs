@@ -79,15 +79,19 @@ mod tests {
     fn linux_fallback_chain_has_three_sources() {
         // Linux fallback chain: DMI (1st) + DBus (2nd) + ETC (3rd), 3 sources
         let sources = ["dmi", "dbus", "etc"];
-        assert_eq!(sources.len(), 3, "Linux 必须有 3 个 fallback source (防单点失败)");
+        assert_eq!(
+            sources.len(),
+            3,
+            "Linux 必须有 3 个 fallback source (防单点失败)"
+        );
     }
 
     #[test]
     fn linux_fallback_chain_order_is_dmi_dbus_etc() {
         // 验证商业版默认顺序: 主板 SMBIOS → DBus → systemd
         let chain = ["dmi", "dbus", "etc"];
-        assert_eq!(chain[0], "dmi");    // 主板
-        assert_eq!(chain[1], "dbus");   // 容器/无 root
-        assert_eq!(chain[2], "etc");    // 老 distro
+        assert_eq!(chain[0], "dmi"); // 主板
+        assert_eq!(chain[1], "dbus"); // 容器/无 root
+        assert_eq!(chain[2], "etc"); // 老 distro
     }
 }

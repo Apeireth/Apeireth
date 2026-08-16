@@ -117,7 +117,11 @@ impl SweTaskExecutor for StringEqExecutor {
             passed,
             score: if passed { 1.0 } else { 0.0 },
             observed_patch: task.expected_patch.clone(),
-            error: if passed { None } else { Some("verification mismatch".into()) },
+            error: if passed {
+                None
+            } else {
+                Some("verification mismatch".into())
+            },
         }
     }
 }
@@ -160,7 +164,11 @@ impl TaskRunner {
         let total = results.len();
         let passed = results.iter().filter(|r| r.passed).count();
         let failed = total - passed;
-        let pass_rate = if total == 0 { 1.0 } else { passed as f64 / total as f64 };
+        let pass_rate = if total == 0 {
+            1.0
+        } else {
+            passed as f64 / total as f64
+        };
         let mean_score = if total == 0 {
             1.0
         } else {
@@ -212,7 +220,10 @@ impl TaskSummary {
     pub fn to_eval_scores(&self) -> Vec<EvalScore> {
         let mut scores = vec![EvalScore::new("overall_pass_rate", self.pass_rate)];
         for cb in &self.per_category {
-            scores.push(EvalScore::new(format!("category:{}_pass_rate", cb.category), cb.pass_rate));
+            scores.push(EvalScore::new(
+                format!("category:{}_pass_rate", cb.category),
+                cb.pass_rate,
+            ));
         }
         scores
     }
@@ -270,12 +281,20 @@ mod tests {
         assert_eq!(s.total, 3);
         assert_eq!(s.per_category.len(), 2);
 
-        let bf = s.per_category.iter().find(|c| c.category == "bug-fix").unwrap();
+        let bf = s
+            .per_category
+            .iter()
+            .find(|c| c.category == "bug-fix")
+            .unwrap();
         assert_eq!(bf.total, 2);
         assert_eq!(bf.passed, 2);
         assert!((bf.pass_rate - 1.0).abs() < 1e-9);
 
-        let ft = s.per_category.iter().find(|c| c.category == "feat").unwrap();
+        let ft = s
+            .per_category
+            .iter()
+            .find(|c| c.category == "feat")
+            .unwrap();
         assert_eq!(ft.total, 1);
         assert_eq!(ft.passed, 1);
     }
@@ -310,15 +329,15 @@ mod tests {
 
     #[test]
     fn task_summary_to_eval_scores() {
-        let tasks = vec![
-            sample_task("t1", "bug-fix"),
-            sample_task("t2", "feat"),
-        ];
+        let tasks = vec![sample_task("t1", "bug-fix"), sample_task("t2", "feat")];
         let s = TaskRunner::run(&tasks, &IdentityExecutor);
         let scores = s.to_eval_scores();
         // 至少 1 个 overall + 2 个 per-category
         assert!(scores.len() >= 3);
-        let overall = scores.iter().find(|sc| sc.dimension == "overall_pass_rate").unwrap();
+        let overall = scores
+            .iter()
+            .find(|sc| sc.dimension == "overall_pass_rate")
+            .unwrap();
         assert_eq!(overall.value, 1.0);
         // category breakdown 都 valid
         for sc in &scores {

@@ -9,12 +9,12 @@
 /// Secure OS keyring and encrypted-file fallback.
 pub mod keyring;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 /// Cross-platform machine identity providers and detection.
 pub mod machine_id;
+mod organ_kani_proofs;
 
 pub use keyring::*;
 pub use machine_id::{
-    detect as detect_machine_id, derive_id, get_machine_id, hash_machine_id, MachineId,
+    derive_id, detect as detect_machine_id, get_machine_id, hash_machine_id, MachineId,
     MachineIdError, MachineIdExport, MachineIdResult, MachineIdResultStd,
 };
