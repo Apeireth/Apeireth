@@ -735,6 +735,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         subject,
     });
     let app = Router::new()
+        .route("/", get(index))
         .route("/health", get(health))
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
@@ -811,6 +812,11 @@ async fn daemon_loop(
             else => break,
         }
     }
+}
+
+/// 内置聊天页 (零依赖单文件前端, 浏览器打开即用; 供主人/任何前端先体验).
+async fn index() -> impl IntoResponse {
+    axum::response::Html(include_str!("../assets/chat.html").to_string())
 }
 
 async fn health() -> impl IntoResponse {
