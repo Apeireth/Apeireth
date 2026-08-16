@@ -59,11 +59,11 @@ impl PerfKind {
 
     /// 默认阈值 (μs, p95 上限; 借 superpowers 234 verification-before-completion 性能规范)
     pub const DEFAULT_THRESHOLDS_US: [u128; 5] = [
-        500,   // Bridge: 跨 GIL 桥, p95 < 500μs
-        1000,  // Eval: 表达式求值, p95 < 1000μs
-        5000,  // Import: 模块导入, p95 < 5000μs (含首次 import)
-        100,   // Convert: 类型转换, p95 < 100μs (轻量)
-        800,   // Call: 函数调用, p95 < 800μs
+        500,  // Bridge: 跨 GIL 桥, p95 < 500μs
+        1000, // Eval: 表达式求值, p95 < 1000μs
+        5000, // Import: 模块导入, p95 < 5000μs (含首次 import)
+        100,  // Convert: 类型转换, p95 < 100μs (轻量)
+        800,  // Call: 函数调用, p95 < 800μs
     ];
 
     pub fn idx(&self) -> usize {
@@ -162,7 +162,12 @@ impl fmt::Display for PerfSample {
         writeln!(
             f,
             "{} [{}{}] {}: {}μs (threshold={}μs)",
-            mark, self.kind, if self.success { "" } else { "|fail" }, status, self.latency_us, self.threshold_us
+            mark,
+            self.kind,
+            if self.success { "" } else { "|fail" },
+            status,
+            self.latency_us,
+            self.threshold_us
         )
     }
 }
@@ -217,8 +222,12 @@ impl PerfStats {
         let sum: u128 = sorted.iter().sum();
         let mean_us = sum as f64 / count as f64;
         let p50 = sorted[sorted.len() / 2];
-        let p95_idx = ((sorted.len() as f64 * 0.95).ceil() as usize).saturating_sub(1).min(sorted.len() - 1);
-        let p99_idx = ((sorted.len() as f64 * 0.99).ceil() as usize).saturating_sub(1).min(sorted.len() - 1);
+        let p95_idx = ((sorted.len() as f64 * 0.95).ceil() as usize)
+            .saturating_sub(1)
+            .min(sorted.len() - 1);
+        let p99_idx = ((sorted.len() as f64 * 0.99).ceil() as usize)
+            .saturating_sub(1)
+            .min(sorted.len() - 1);
         let p95 = sorted[p95_idx];
         let p99 = sorted[p99_idx];
         let min = *sorted.first().unwrap();
@@ -264,7 +273,13 @@ impl fmt::Display for PerfStats {
         writeln!(
             f,
             "PerfStats: n={} mean={:.2}μs p50={}μs p95={}μs p99={}μs min={}μs max={}μs",
-            self.count, self.mean_us, self.p50_us, self.p95_us, self.p99_us, self.min_us, self.max_us
+            self.count,
+            self.mean_us,
+            self.p50_us,
+            self.p95_us,
+            self.p99_us,
+            self.min_us,
+            self.max_us
         )?;
         writeln!(
             f,
@@ -376,7 +391,10 @@ impl PerfMonitor {
 
     /// 摘要
     pub fn summary(&self) -> String {
-        let mut parts = vec![format!("K2 PerfMonitor: recorded={} dropped={}", self.total_recorded, self.total_dropped)];
+        let mut parts = vec![format!(
+            "K2 PerfMonitor: recorded={} dropped={}",
+            self.total_recorded, self.total_dropped
+        )];
         for (i, s) in self.all_stats().iter().enumerate() {
             if s.count > 0 {
                 let kind = match i {
@@ -386,10 +404,7 @@ impl PerfMonitor {
                     3 => "Convert",
                     _ => "Call",
                 };
-                parts.push(format!(
-                    "{}[n={} p95={}μs]",
-                    kind, s.count, s.p95_us
-                ));
+                parts.push(format!("{}[n={} p95={}μs]", kind, s.count, s.p95_us));
             }
         }
         parts.join(" ")

@@ -5,11 +5,11 @@
 //! **目标**: 验证 G4 演进治理跟 K4 健康守护跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i7_healthy, stage7_i7_summary, stage7_i7_to_g4_consistency,
-    stage7_i7_to_k4_consistency, EvolutionHealthAuditEvent, EvolutionHealthBinding,
-    EvolutionHealthCoordinator, EvolutionHealthMatrix, EvolutionHealthReport, EvolutionKind,
-    HealthDimension, STAGE7_I7_BINDING_COUNT, STAGE7_I7_DIMENSION_COUNT,
-    STAGE7_I7_EVOLUTION_KIND_COUNT, STAGE7_I7_HEALTH_DIM_COUNT, STAGE7_I7_VERSION,
+    stage7_i7_healthy, stage7_i7_summary, stage7_i7_to_g4_consistency, stage7_i7_to_k4_consistency,
+    EvolutionHealthAuditEvent, EvolutionHealthBinding, EvolutionHealthCoordinator,
+    EvolutionHealthMatrix, EvolutionHealthReport, EvolutionKind, HealthDimension,
+    STAGE7_I7_BINDING_COUNT, STAGE7_I7_DIMENSION_COUNT, STAGE7_I7_EVOLUTION_KIND_COUNT,
+    STAGE7_I7_HEALTH_DIM_COUNT, STAGE7_I7_VERSION,
 };
 
 // 1. I7 编译期常数
@@ -40,7 +40,10 @@ fn i7_03_all_4_kinds() {
         EvolutionKind::Retire,
     ];
     for k in &kinds {
-        assert!(m.get(*k, HealthDimension::Security).is_some(), "kind {k:?} 缺");
+        assert!(
+            m.get(*k, HealthDimension::Security).is_some(),
+            "kind {k:?} 缺"
+        );
     }
 }
 
@@ -63,7 +66,9 @@ fn i7_04_all_5_dims() {
 #[test]
 fn i7_05_add_security_positive() {
     let m = EvolutionHealthMatrix::default_matrix();
-    let b = m.get(EvolutionKind::Add, HealthDimension::Security).unwrap();
+    let b = m
+        .get(EvolutionKind::Add, HealthDimension::Security)
+        .unwrap();
     assert_eq!(b.health_impact, "positive");
     assert!(b.requires_health_check);
 }
@@ -72,7 +77,9 @@ fn i7_05_add_security_positive() {
 #[test]
 fn i7_06_downgrade_r11_negative() {
     let m = EvolutionHealthMatrix::default_matrix();
-    let b = m.get(EvolutionKind::Downgrade, HealthDimension::R11Compat).unwrap();
+    let b = m
+        .get(EvolutionKind::Downgrade, HealthDimension::R11Compat)
+        .unwrap();
     assert_eq!(b.health_impact, "negative");
 }
 
@@ -80,7 +87,9 @@ fn i7_06_downgrade_r11_negative() {
 #[test]
 fn i7_07_retire_performance_neutral() {
     let m = EvolutionHealthMatrix::default_matrix();
-    let b = m.get(EvolutionKind::Retire, HealthDimension::Performance).unwrap();
+    let b = m
+        .get(EvolutionKind::Retire, HealthDimension::Performance)
+        .unwrap();
     assert_eq!(b.health_impact, "neutral");
 }
 
@@ -88,7 +97,9 @@ fn i7_07_retire_performance_neutral() {
 #[test]
 fn i7_08_upgrade_asi_positive() {
     let m = EvolutionHealthMatrix::default_matrix();
-    let b = m.get(EvolutionKind::Upgrade, HealthDimension::AsiCritical).unwrap();
+    let b = m
+        .get(EvolutionKind::Upgrade, HealthDimension::AsiCritical)
+        .unwrap();
     assert_eq!(b.health_impact, "positive");
 }
 

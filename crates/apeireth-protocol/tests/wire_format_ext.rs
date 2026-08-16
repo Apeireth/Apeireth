@@ -6,11 +6,11 @@
 //!
 //! **不假装**: 测试是真跑 (`cargo nextest run -p apeireth-protocol --test wire_format_ext`).
 
+use apeireth_protocol::bridge_ext::{BridgeExtError, BridgeKind, ExtendedBridge, QueueBridge};
 use apeireth_protocol::{
     is_tool_result_error, ProtocolError, StreamBridge, StreamChunkFrame, ToolInvokeFrame,
     ToolResultFrame, WsFrame, WS_PROTOCOL_VERSION, WS_TOKEN_DEFAULT_TTL_SECS,
 };
-use apeireth_protocol::bridge_ext::{BridgeExtError, BridgeKind, ExtendedBridge, QueueBridge};
 use serde_json::{json, Value};
 
 // =====================================================================
@@ -40,10 +40,24 @@ fn ws_frame_type_str_returns_8_distinct_strings() {
             done: false,
         }),
         WsFrame::Ping(apeireth_protocol::PingFrame { ts: 0 }),
-        WsFrame::Auth(apeireth_protocol::AuthFrame { token: "t".into(), ws_version: "1".into() }),
-        WsFrame::Close(apeireth_protocol::CloseFrame { reason: "x".into(), code: 1000 }),
-        WsFrame::Error(apeireth_protocol::ErrorFrame { code: "x".into(), message: "m".into(), fatal: false }),
-        WsFrame::StreamEnd(apeireth_protocol::StreamEndFrame { req_id: "r1".into(), total_chunks: 1, total_bytes: 1 }),
+        WsFrame::Auth(apeireth_protocol::AuthFrame {
+            token: "t".into(),
+            ws_version: "1".into(),
+        }),
+        WsFrame::Close(apeireth_protocol::CloseFrame {
+            reason: "x".into(),
+            code: 1000,
+        }),
+        WsFrame::Error(apeireth_protocol::ErrorFrame {
+            code: "x".into(),
+            message: "m".into(),
+            fatal: false,
+        }),
+        WsFrame::StreamEnd(apeireth_protocol::StreamEndFrame {
+            req_id: "r1".into(),
+            total_chunks: 1,
+            total_bytes: 1,
+        }),
     ];
     let types: Vec<&str> = frames.iter().map(|f| f.type_str()).collect();
     let mut unique = types.clone();
@@ -62,7 +76,10 @@ fn ws_frame_tool_invoke_json_roundtrip() {
         args: json!({"query": "rust"}),
     });
     let s = serde_json::to_string(&frame).expect("serialize");
-    assert!(s.contains("\"type\":\"tool_invoke\""), "frame should have type tag: {s}");
+    assert!(
+        s.contains("\"type\":\"tool_invoke\""),
+        "frame should have type tag: {s}"
+    );
     let back: WsFrame = serde_json::from_str(&s).expect("deserialize");
     assert_eq!(back.type_str(), "tool_invoke");
     if let WsFrame::ToolInvoke(inv) = &back {
@@ -136,7 +153,10 @@ fn queue_bridge_capacity_limit() {
     assert!(q.enqueue(1).is_ok());
     assert!(q.enqueue(2).is_ok());
     let r = q.enqueue(3);
-    assert!(matches!(r, Err(BridgeExtError::QueueFull { capacity: 2 })), "got: {r:?}");
+    assert!(
+        matches!(r, Err(BridgeExtError::QueueFull { capacity: 2 })),
+        "got: {r:?}"
+    );
     // dequeue 1 个释放空间 → 下一个能 enqueue
     assert_eq!(q.dequeue(), Some(1));
     assert!(q.enqueue(3).is_ok());

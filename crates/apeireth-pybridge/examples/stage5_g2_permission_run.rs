@@ -47,10 +47,7 @@ fn main() {
         ..PermissionContext::safe_default()
     };
     let d = engine.check(high_resource_ctx);
-    println!(
-        "  high resource (resource=85, threshold 80) → {}",
-        d.name()
-    );
+    println!("  high resource (resource=85, threshold 80) → {}", d.name());
 
     // Invalid module_id → Deny
     let mut engine = PermissionEngine::new();
@@ -59,10 +56,7 @@ fn main() {
         ..PermissionContext::safe_default()
     };
     let d = engine.check(invalid_ctx);
-    println!(
-        "  invalid module (module_id=99, max 6) → {}",
-        d.name()
-    );
+    println!("  invalid module (module_id=99, max 6) → {}", d.name());
     println!();
 
     // 4. Stage 4 严格守门 (R129-4 自治)

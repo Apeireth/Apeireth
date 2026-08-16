@@ -21,7 +21,10 @@ fn main() {
 
     // 2.1 verify 1 个 kind, 应 8 pass
     let passed = c.verify_memory(1, MemoryKind::ToolInvocation);
-    println!("    ToolInvocation: passed={passed}/{}", STAGE7_I3_HARNESS_COUNT);
+    println!(
+        "    ToolInvocation: passed={passed}/{}",
+        STAGE7_I3_HARNESS_COUNT
+    );
 
     // 2.2 verify 多个 kind
     println!("\n[3] verify 多个 kind 演示");

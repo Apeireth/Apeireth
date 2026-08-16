@@ -284,7 +284,10 @@ pub struct ErrorFrame {
 
 const _: () = {
     // WS 协议版本锁 "1" — 用 bytes 长度 + 字节比较 (const string eq 不稳定)
-    assert!(WS_PROTOCOL_VERSION.len() == 1, "WS_PROTOCOL_VERSION must be 1 char long");
+    assert!(
+        WS_PROTOCOL_VERSION.len() == 1,
+        "WS_PROTOCOL_VERSION must be 1 char long"
+    );
     assert!(
         WS_PROTOCOL_VERSION.as_bytes()[0] == b'1',
         "WS_PROTOCOL_VERSION first byte must be '1'"
@@ -471,13 +474,19 @@ mod ws_v1_tests {
     fn serde_tag_uses_type_field() {
         // 验证 JSON 顶层有 "type" 字段
         let json = serde_json::to_string(&WsFrame::Ping(PingFrame { ts: 1 })).unwrap();
-        assert!(json.contains("\"type\":\"ping\""), "JSON must have type tag: {json}");
+        assert!(
+            json.contains("\"type\":\"ping\""),
+            "JSON must have type tag: {json}"
+        );
         let json = serde_json::to_string(&WsFrame::Auth(AuthFrame {
             token: "t".into(),
             ws_version: "1".into(),
         }))
         .unwrap();
-        assert!(json.contains("\"type\":\"auth\""), "JSON must have type tag: {json}");
+        assert!(
+            json.contains("\"type\":\"auth\""),
+            "JSON must have type tag: {json}"
+        );
     }
 
     #[test]
@@ -491,7 +500,10 @@ mod ws_v1_tests {
             meta: serde_json::Value::Null,
         };
         let json = serde_json::to_string(&ok_frame).unwrap();
-        assert!(!json.contains("\"error\""), "error must be skipped when None");
+        assert!(
+            !json.contains("\"error\""),
+            "error must be skipped when None"
+        );
 
         // ok=false: error 字段存在
         let err_frame = ToolResultFrame {
@@ -511,4 +523,3 @@ mod ws_v1_tests {
         assert_eq!(WS_PROTOCOL_VERSION, "1");
     }
 }
-

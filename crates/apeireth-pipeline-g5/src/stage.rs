@@ -213,12 +213,13 @@ where
 
     fn process_op(&self, input: Box<dyn Any + Send>) -> Result<Box<dyn Any + Send>, PipelineError> {
         // downcast 到期望的 I 类型 (上一 stage 的 O)
-        let typed_input: Box<I> = input
-            .downcast::<I>()
-            .map_err(|_| PipelineError::StageTypeMismatch {
-                expected: std::any::type_name::<I>(),
-                actual: "previous stage output (type-erased)".to_string(),
-            })?;
+        let typed_input: Box<I> =
+            input
+                .downcast::<I>()
+                .map_err(|_| PipelineError::StageTypeMismatch {
+                    expected: std::any::type_name::<I>(),
+                    actual: "previous stage output (type-erased)".to_string(),
+                })?;
         let result: O = Stage::process(&*self.inner, *typed_input)?;
         Ok(Box::new(result))
     }

@@ -44,9 +44,7 @@ pub mod py {
 
     /// 任意 Python 对象 → Rust serde JSON 值
     /// 借鉴 PyO3 0.22+ extract 类型链 (conversions/traits.md)
-    pub fn pyany_to_json_value(
-        any: &Bound<'_, PyAny>,
-    ) -> Result<serde_json::Value, BridgeError> {
+    pub fn pyany_to_json_value(any: &Bound<'_, PyAny>) -> Result<serde_json::Value, BridgeError> {
         // 1) None → JSON null (借 pyo3 `is_none()`)
         if any.is_none() {
             return Ok(serde_json::Value::Null);
@@ -69,7 +67,8 @@ pub mod py {
         }
         // 6) list → JSON array (借 pyo3 PyList + PyListMethods::is_instance)
         if any.is_instance_of::<pyo3::types::PyList>() {
-            let list = any.cast::<pyo3::types::PyList>()
+            let list = any
+                .cast::<pyo3::types::PyList>()
                 .map_err(|e| BridgeError::CallFailed(format!("cast PyList: {e}")))?;
             let mut arr = Vec::with_capacity(list.len());
             for item in list.iter() {
@@ -79,7 +78,8 @@ pub mod py {
         }
         // 7) dict → JSON object (借 pyo3 PyDict + PyDictMethods::is_instance)
         if any.is_instance_of::<pyo3::types::PyDict>() {
-            let dict = any.cast::<pyo3::types::PyDict>()
+            let dict = any
+                .cast::<pyo3::types::PyDict>()
                 .map_err(|e| BridgeError::CallFailed(format!("cast PyDict: {e}")))?;
             let mut obj = serde_json::Map::new();
             for (key, value) in dict.iter() {
@@ -152,7 +152,9 @@ pub trait BridgeConvert: Sized + Serialize + DeserializeOwned {
 
     /// Python → Rust (借 pyany_to_json_value + serde_json)
     #[cfg(feature = "python-ext")]
-    fn from_python(any: &pyo3::prelude::Bound<'_, pyo3::prelude::PyAny>) -> Result<Self, BridgeError> {
+    fn from_python(
+        any: &pyo3::prelude::Bound<'_, pyo3::prelude::PyAny>,
+    ) -> Result<Self, BridgeError> {
         let v = py::pyany_to_json_value(any)?;
         serde_json::from_value(v).map_err(|e| BridgeError::InvalidArg(format!("from_python: {e}")))
     }
@@ -185,7 +187,8 @@ pub fn pyany_to_json_string(
     any: &pyo3::prelude::Bound<'_, pyo3::prelude::PyAny>,
 ) -> Result<String, BridgeError> {
     let v = py::pyany_to_json_value(any)?;
-    serde_json::to_string(&v).map_err(|e| BridgeError::CallFailed(format!("pyany_to_json_string: {e}")))
+    serde_json::to_string(&v)
+        .map_err(|e| BridgeError::CallFailed(format!("pyany_to_json_string: {e}")))
 }
 
 /// 双向 Roundtrip 公共 API (cfg-无关, 默认 build 0 体积)

@@ -433,7 +433,10 @@ impl std::fmt::Display for ToolLoopReport {
         writeln!(
             f,
             "[cycle {} stage={}] tool={} sub_calls={}",
-            self.cycle, self.stage.name(), self.tool_id, self.total_sub_calls
+            self.cycle,
+            self.stage.name(),
+            self.tool_id,
+            self.total_sub_calls
         )?;
         write!(f, "{}", self.result)
     }
@@ -562,11 +565,7 @@ impl ToolSelfLoop {
         reports
     }
     /// 跑 1 cycle + 工具 self-loop 调 (tool calls tool within max_depth)
-    pub fn cycle_with_self_call(
-        &mut self,
-        tool_id: &str,
-        prompt: &str,
-    ) -> ToolLoopReport {
+    pub fn cycle_with_self_call(&mut self, tool_id: &str, prompt: &str) -> ToolLoopReport {
         if !self.running {
             self.start();
         }

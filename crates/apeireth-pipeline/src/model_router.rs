@@ -95,9 +95,11 @@ impl std::fmt::Debug for RoutingCondition {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::KeywordMatch(kws) => f.debug_tuple("KeywordMatch").field(kws).finish(),
-            Self::TokenCountRange(min, max) => {
-                f.debug_tuple("TokenCountRange").field(min).field(max).finish()
-            }
+            Self::TokenCountRange(min, max) => f
+                .debug_tuple("TokenCountRange")
+                .field(min)
+                .field(max)
+                .finish(),
             Self::RoleBased(role) => f.debug_tuple("RoleBased").field(role).finish(),
             Self::Complexity(min) => f.debug_tuple("Complexity").field(min).finish(),
             Self::Custom(_) => f.debug_struct("Custom").field("fn", &"<fn>").finish(),
@@ -143,7 +145,11 @@ impl std::fmt::Debug for RoutingRule {
 
 impl RoutingRule {
     /// 便捷构造: keyword match 规则
-    pub fn keyword(name: impl Into<String>, keywords: Vec<String>, target: impl Into<String>) -> Self {
+    pub fn keyword(
+        name: impl Into<String>,
+        keywords: Vec<String>,
+        target: impl Into<String>,
+    ) -> Self {
         Self {
             name: name.into(),
             condition: RoutingCondition::KeywordMatch(keywords),
@@ -168,11 +174,7 @@ impl RoutingRule {
     }
 
     /// 便捷构造: role-based 规则
-    pub fn role(
-        name: impl Into<String>,
-        role: MessageRole,
-        target: impl Into<String>,
-    ) -> Self {
+    pub fn role(name: impl Into<String>, role: MessageRole, target: impl Into<String>) -> Self {
         Self {
             name: name.into(),
             condition: RoutingCondition::RoleBased(role),
@@ -317,7 +319,10 @@ impl SemanticModelRouter {
         RoutingDecision {
             matched_rule: None,
             target_model: self.default_model.clone(),
-            reason: format!("no rule matched; falling back to default_model '{}'", self.default_model),
+            reason: format!(
+                "no rule matched; falling back to default_model '{}'",
+                self.default_model
+            ),
         }
     }
 
@@ -355,15 +360,17 @@ impl SemanticModelRouter {
     /// ```
     pub fn from_yaml(path: &Path) -> Result<Self, ModelRouterError> {
         let content = std::fs::read_to_string(path).map_err(ModelRouterError::Io)?;
-        let config: RouterConfig = serde_yaml::from_str(&content).map_err(ModelRouterError::Yaml)?;
+        let config: RouterConfig =
+            serde_yaml::from_str(&content).map_err(ModelRouterError::Yaml)?;
 
         let mut router = Self::new(config.default_model);
         for rule_cfg in config.rules {
             let condition = match rule_cfg.condition {
                 YamlCondition::Keyword { keywords } => RoutingCondition::KeywordMatch(keywords),
-                YamlCondition::TokenRange { min_tokens, max_tokens } => {
-                    RoutingCondition::TokenCountRange(min_tokens, max_tokens)
-                }
+                YamlCondition::TokenRange {
+                    min_tokens,
+                    max_tokens,
+                } => RoutingCondition::TokenCountRange(min_tokens, max_tokens),
                 YamlCondition::Role { role } => {
                     let role_enum = match role.as_str() {
                         "system" | "developer" => MessageRole::System,
@@ -546,7 +553,11 @@ mod model_router_tests {
         ));
         router.add_rule(RoutingRule::keyword(
             "research_and_coding",
-            vec!["信息检索".to_string(), "debug".to_string(), "代码".to_string()],
+            vec![
+                "信息检索".to_string(),
+                "debug".to_string(),
+                "代码".to_string(),
+            ],
             "gpt-5.5",
         ));
         // 命中 daily_chat
@@ -642,7 +653,10 @@ mod model_router_tests {
         assert_eq!(target, "claude-opus-4-7-thinking");
         // 验证内部排序: high_priority 在前
         let decision = router.explain("please help me with code", None, None);
-        assert_eq!(decision.matched_rule, Some("high_priority_coding".to_string()));
+        assert_eq!(
+            decision.matched_rule,
+            Some("high_priority_coding".to_string())
+        );
     }
 
     // 7. Explain: 返 matched_rule + target_model + reason
@@ -704,8 +718,7 @@ rules:
         let tmp_path = tmp_dir.join("apeireth_model_router_test.yaml");
         std::fs::write(&tmp_path, yaml_content).expect("write yaml");
 
-        let router =
-            SemanticModelRouter::from_yaml(&tmp_path).expect("load yaml");
+        let router = SemanticModelRouter::from_yaml(&tmp_path).expect("load yaml");
         assert_eq!(router.rules_count(), 4);
         assert_eq!(router.rules_count(), 4); // dedup: 4 rules
 
@@ -735,7 +748,8 @@ rules:
     fn model_router_custom_condition_with_arc_dyn_fn() {
         let mut router = SemanticModelRouter::new("default");
         // 自定义闭包: 含 "magic" 才命中
-        let is_magic: Arc<dyn Fn(&str) -> bool + Send + Sync> = Arc::new(|p: &str| p.contains("magic"));
+        let is_magic: Arc<dyn Fn(&str) -> bool + Send + Sync> =
+            Arc::new(|p: &str| p.contains("magic"));
         router.add_rule(RoutingRule {
             name: "magic_word".to_string(),
             condition: RoutingCondition::Custom(is_magic),
