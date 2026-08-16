@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 会话管理</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>会话管理 <span class="sub">GET /v1/panel/sessions（数据源 SessionStore）</span></h2>
+  <div class="note">升级点：现挂 apeireth-memory SessionStore；backlog N2 OneRing 统一上下文账本就绪后，
+    前端换其接口即可（JSON 形状保持 list+count）。</div>
+  <div class="card">
+    <div class="toolbar"><button class="ghost" onclick="loadSessions()">刷新</button><span id="scount" class="dim"></span></div>
+    <table>
+      <thead><tr><th>会话 ID</th><th>开始</th><th>最后活跃</th><th>状态</th><th>条目数</th></tr></thead>
+      <tbody id="srows"><tr><td colspan="5" class="dim">加载中…</td></tr></tbody>
+    </table>
+  </div>
+  <h2>时间线 <span class="sub">GET /v1/panel/sessions/:id/timeline</span></h2>
+  <div class="card" id="timeline"><span class="dim">点击左侧会话查看时间线。</span></div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 会话管理</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("sessions");
+
+async function loadSessions() {
+  const body = document.getElementById("srows");
+  try {
+    const j = await panelFetch("/v1/panel/sessions");
+    document.getElementById("scount").textContent = `共 ${j.count} 个会话`;
+    if (!j.count) { body.innerHTML = `<tr><td colspan="5" class="dim">暂无会话记录。</td></tr>`; return; }
+    body.innerHTML = j.sessions.map(s => `
+      <tr class="clickable" onclick="loadTimeline('${esc(s.id)}')">
+        <td class="mono">${esc(s.id)}</td>
+        <td>${esc(fmtTs(s.started_at))}</td>
+        <td>${esc(fmtTs(s.last_active_at))}</td>
+        <td>${s.closed_at ? '<span class="badge">已关闭</span>' : '<span class="badge ok">进行中</span>'}</td>
+        <td>${esc(s.episode_count)}</td>
+      </tr>`).join("");
+  } catch (e) { body.innerHTML = `<tr><td colspan="5"><div class="errbox">${esc(e.message)}</div></td></tr>`; }
+}
+
+async function loadTimeline(id) {
+  const el = document.getElementById("timeline");
+  el.innerHTML = `<span class="dim">加载 ${esc(id)} 时间线…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/sessions/${encodeURIComponent(id)}/timeline?limit=100`);
+    if (!j.count) { el.innerHTML = `<span class="dim">该会话暂无条目。</span>`; return; }
+    el.innerHTML = `<h3>${esc(id)} <span class="sub">${j.count} 条</span></h3>
+      <table><thead><tr><th style="width:150px">时间</th><th style="width:90px">角色</th><th>内容</th></tr></thead>
+      <tbody>${j.episodes.map(e => `
+        <tr><td>${esc(fmtTs(e.timestamp))}</td>
+        <td>${e.role === "user" ? '<span class="badge info">user</span>' : e.role === "assistant" ? '<span class="badge ok">assistant</span>' : `<span class="badge">${esc(e.role)}</span>`}</td>
+        <td>${esc(trunc(e.content, 500))}</td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { showErr(el, e); }
+}
+
+loadSessions();
+</script>
+</body>
+</html>
