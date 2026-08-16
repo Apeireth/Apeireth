@@ -27,6 +27,8 @@
 | ✅ 上下文滚动摘要 | A2 模块 3 | companion_serve.rs | 提交 |
 | ✅ 深度反思 (ReflectionReflector trait) | A2 模块 5 | reflection.rs | 提交 |
 | ✅ 统一注入管线 ContextAssembler (核心块保护 + 预算截断) | A3 (L0/L1 前置) | context.rs | 提交 986358e + 3 单测 |
+| ✅ CompanionApp 装配器 | A3 审计结论 ★5 | assemble.rs (注入管线/提炼调度/滚动摘要/自成长/3 新 LLM trait) | 提交 cdb6b62 + 7 单测; example 1683→1100 行 |
+| ✅ L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | CompanionApp with_identity (L0) + with_essential_budget (L1, essential-*/高 importance) | 提交 cdb6b62 + 单测 |
 
 ## 待办项 (按优先级)
 
@@ -34,8 +36,8 @@
 
 | # | 项 | 来源 | 说明 | 状态 |
 |---|---|---|---|---|
-| 1 | CompanionApp 装配器 | A3 审计结论 ★5 | companion_serve.rs (~1600 行) 装配逻辑抽进 lib: 注入链/提炼调度/工具桥/多 sink 统一为 CompanionApp::new(...).start(); example 变薄, TUI/CLI 可复用 | ⬜ |
-| 2 | L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | Identity (~100 token) + Essential Story (~500-800 token) 常驻; 与 ContextAssembler core 块天然契合, 挂 context.rs | ⬜ |
+| 1 | CompanionApp 装配器 | A3 审计结论 ★5 | companion_serve.rs (~1600 行) 装配逻辑抽进 lib: 注入链/提炼调度/工具桥/多 sink 统一为 CompanionApp::new(...).start(); example 变薄, TUI/CLI 可复用 | ✅ 提交 cdb6b62 |
+| 2 | L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | Identity (~100 token) + Essential Story (~500-800 token) 常驻; 与 ContextAssembler core 块天然契合, 挂 context.rs | ✅ 提交 cdb6b62 |
 
 ### P1 — 计划内 (成本明确)
 
