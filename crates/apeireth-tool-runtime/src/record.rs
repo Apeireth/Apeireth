@@ -489,9 +489,13 @@ mod tests {
             archery: false,
             archery_no_reply: false,
         };
-        rec.record(&call, &json!({"api_key": "[APEIRETH_PRIVACY_REDACTED]"}), true)
-            .await
-            .expect("record");
+        rec.record(
+            &call,
+            &json!({"api_key": "[APEIRETH_PRIVACY_REDACTED]"}),
+            true,
+        )
+        .await
+        .expect("record");
 
         let records = rec.list_for_tool("T3").expect("list");
         assert!(records[0].masked, "masked=true 应被记录");

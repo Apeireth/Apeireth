@@ -169,7 +169,11 @@ mod tests {
 
         match bridge.check(&call) {
             PolicyVerdict::Deny { reason } => {
-                assert!(reason.contains("bad_tool"), "reason should mention tool name: {}", reason);
+                assert!(
+                    reason.contains("bad_tool"),
+                    "reason should mention tool name: {}",
+                    reason
+                );
             }
             other => panic!("expected Deny, got {:?}", other),
         }

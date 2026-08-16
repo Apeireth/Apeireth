@@ -29,25 +29,40 @@ pub struct EnhancedCodeSearch {
 
 impl EnhancedCodeSearch {
     pub fn new_in_memory() -> Self {
-        Self { mcp: CodeSearchMcp::new_in_memory() }
+        Self {
+            mcp: CodeSearchMcp::new_in_memory(),
+        }
     }
 
     /// Direct text search (bypass MCP, returns Vec<String> summaries).
-    pub fn search_text(&self, root: &str, pattern: &str, kind: SearchKind) -> Result<Vec<String>, EnhancedCodeSearchError> {
+    pub fn search_text(
+        &self,
+        root: &str,
+        pattern: &str,
+        kind: SearchKind,
+    ) -> Result<Vec<String>, EnhancedCodeSearchError> {
         use crate::files::{FileFinder, FindOptions};
         let finder = FileFinder::new();
         let entries = finder.find(root, &FindOptions::default())?;
         let searcher = CodeSearcher::new();
         let mut out = Vec::new();
         for entry in entries.iter().filter(|e| !e.is_dir) {
-            let matches = searcher.search_file(
-                std::path::Path::new(&entry.path),
-                kind,
-                pattern,
-                &SearchOptions::default(),
-            ).map_err(|e| EnhancedCodeSearchError::Search(e.to_string()))?;
+            let matches = searcher
+                .search_file(
+                    std::path::Path::new(&entry.path),
+                    kind,
+                    pattern,
+                    &SearchOptions::default(),
+                )
+                .map_err(|e| EnhancedCodeSearchError::Search(e.to_string()))?;
             for m in matches {
-                out.push(format!("{}:{}:{} {}", m.file, m.line, m.column, m.text.trim()));
+                out.push(format!(
+                    "{}:{}:{} {}",
+                    m.file,
+                    m.line,
+                    m.column,
+                    m.text.trim()
+                ));
             }
         }
         Ok(out)
@@ -88,7 +103,9 @@ mod tests {
         fs::write(tmp.path().join("a.rs"), "fn hello() {}\nfn world() {}\n").unwrap();
         fs::write(tmp.path().join("b.rs"), "fn foo() {}\n").unwrap();
         let e = EnhancedCodeSearch::new_in_memory();
-        let r = e.search_text(tmp.path().to_str().unwrap(), "hello", SearchKind::Literal).unwrap();
+        let r = e
+            .search_text(tmp.path().to_str().unwrap(), "hello", SearchKind::Literal)
+            .unwrap();
         assert!(!r.is_empty());
         assert!(r[0].contains("hello"));
     }
