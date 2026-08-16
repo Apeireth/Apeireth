@@ -82,6 +82,12 @@ const CLAIM_RULE: &str = "追加规则: 需要长期记住的信息, 直接调�
 不要向主人宣告「已写入/这就记下/写入长期记忆」之类的话——自然的记忆不动声色, 对话继续自然进行。\
 但不得声称记得记忆列表之外的事 (编造即违宪)。";
 
+/// 真实授权描述 (2026-08-16 主人反馈: AI 曾虚构「弹窗批准」): 如实描述真实机制, 禁止虚构流程.
+const AUTH_RULE: &str = "关于工具授权, 如实说明 (不要虚构交互流程): \
+高危工具 (FileOperator/ShellExec 等) 被拒时, 系统会生成一条待批授权请求, \
+主人在页面「授权请求」区看到并批准 (或主人用⚙授权面板主动授权)。\
+你不应描述不存在的「弹窗/系统自动弹出」流程; 被拒后如实说「本座已向主人发出授权请求, 主人批准后本座再试」。";
+
 /// 已知工具的手写 schema (description/parameters); 未列出的工具给通用 schema (能力仍可见).
 fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
     vec![
@@ -495,7 +501,7 @@ async fn chat_completions(
         0,
         OpenAiChatMessage {
             role: "system".to_string(),
-            content: json!(format!("{PERSONA}\n{CLAIM_RULE}")),
+            content: json!(format!("{PERSONA}\n{CLAIM_RULE}\n{AUTH_RULE}")),
             tool_calls: None,
             tool_call_id: None,
         },
@@ -771,6 +777,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/apeireth/grant", post(grant))
+        .route("/v1/apeireth/approval-requests", get(approval_requests))
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
@@ -846,7 +853,12 @@ async fn daemon_loop(
     }
 }
 
-/// 主人授权端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
+/// 待批授权请求 (AI 被拒时产生; 前端轮询展示, 主人一键批准 — 权限洋葱真实载体).
+async fn approval_requests(State(st): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(apeireth_companion::approval_requests::pending_json(&st.store))
+}
+
+/// 主人批准端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
 /// AI 只请求不接触 token. 授权后高危工具在时限内可直接执行.
 async fn grant(
     State(st): State<Arc<AppState>>,
