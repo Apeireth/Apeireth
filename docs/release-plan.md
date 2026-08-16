@@ -66,7 +66,7 @@
 | 教育套件 | ✅ **有真内容** (dx_check 规则层检查器 + 真插件) | `education.rs` |
 | 生态插件 (新) | ✅ github-accel (xiake.pro 节点池实测选最快) | `gh_accel.rs` + `github_accel.rs` |
 | 能力演化回路 | 🟢 机制回路六段闭环 (提案→生成*→验证→部署→监控→回滚): 部署通道 mock (真执行体=DeployChannel 挂 exec_worker/sandbox 未接), *生成段=LLM 未机制化 — 均如实标注 | `capability.rs` / `evolution_gate.rs` / `deploy.rs` |
-| **C3 v2 alpha 遗留盘点** (2026-08-17) | ✅ **22 项重核实完成** (不信任旧标注, 逐项取证): 12 项达成/已解决 (graph/sdk 空壳消除, vector MUST FIX 已修, TUI 6 类端点, TUI E2E + web, Self-Disable 20 case 真实现, bench 112KB, CI workspace 全覆盖替代 5 yml; formal R165 有意归档; deploy 演进为真流水线) + 7 项 ❌ 产物失传 (v2 era 验收报告/09-ADDENDUM/V2-INDEX/07-BASELINE 从未入 git 历史, 0 装 PASS 不重建) + 1 项 ⚪ 不可核实 (T10 全量测试实跑/ASI V0.5); 上轮自检 21 报告吸收为台账编号 23-45 | `reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md` + `docs/backlog.md` §A4 |
+| **C3 v2 alpha 遗留盘点** (2026-08-17) | ✅ **22 项重核实完成** (不信任旧标注, 逐项取证): 12 项达成/已解决 (graph/sdk 空壳消除, vector MUST FIX 已修, TUI 6 类端点, TUI E2E + web, Self-Disable 20 case 真实现, bench 112KB, CI workspace 全覆盖替代 5 yml; formal R165 有意归档; deploy 演进为真流水线) + 7 项 ❌ 产物失传 (v2 era 验收报告/09-ADDENDUM/V2-INDEX/07-BASELINE 从未入 git 历史, 0 装 PASS 不重建) + 1 项 ⚪ 不可核实 (T10 全量测试实跑/ASI V0.5); 上轮自检 21 报告吸收为台账编号 25-47 (P0=46/47) | `reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md` + `docs/backlog.md` §A4 |
 
 ## 五、发布 checklist
 - [x] 本体核心闭环（production_daemon 全集成验收）
@@ -80,4 +80,4 @@
 - [ ] 版本号口径统一（RELEASE_NOTES v1.0.0 标题 vs workspace 1.2.0 + CHANGELOG 归条目 + ROADMAP 同步 R178；backlog #26，待 Leader 拍板）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
 - [ ] 发布产物（crate 整理 / README / tgz）
-- [ ] 发布前置门槛（C3/上轮自检证据）：①Dockerfile COPY crates 互覆盖修复验证（DO2 W1，backlog #23）②cargo fmt 全仓修复（QA2 实测 72.7% 不合规，backlog #25）③cosign.pub 生成 + release 工具链预装（backlog #27）④compose 密码外部化（backlog #24）⑤.gitignore 密钥加固（backlog #28）
+- [ ] 发布前置门槛（C3/上轮自检证据）：①Dockerfile COPY crates 互覆盖修复验证（DO2 W1，backlog #46）②cargo fmt 全仓修复（QA2 实测 72.7% 不合规，backlog #25）③cosign.pub 生成 + release 工具链预装（backlog #27）④compose 密码外部化（backlog #47）⑤.gitignore 密钥加固（backlog #28）
