@@ -635,11 +635,19 @@ impl ToolBridge {
             match self.approval.check(call) {
                 ApprovalDecision::Allow => self.run_executor(call).await,
                 ApprovalDecision::RequireApproval { .. } => {
+                    // 授权请求机制 (2026-08-16): 被拒时产生一条「待主人批准」请求,
+                    // 前端轮询展示, 主人一键批准 (权限洋葱的真实载体, 防 AI 虚构交互流程).
+                    crate::approval_requests::record_request(
+                        self.records.store(),
+                        &call.tool_name,
+                        &call.args,
+                        "需要主人批准 (权限洋葱)",
+                    );
                     return ExecutionResult {
                         tool_name: call.tool_name.clone(),
                         success: false,
                         output: json!(null),
-                        error: Some("该工具是高风险操作且未被权限包覆盖, 需要主人批准".to_string()),
+                        error: Some("该工具是高风险操作且未被权限包覆盖, 需要主人批准 (已向主人发出授权请求)".to_string()),
                         duration_ms: 0,
                     }
                 }

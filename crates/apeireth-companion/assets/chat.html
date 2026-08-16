@@ -42,6 +42,12 @@
   #grantpanel input.wide { width: 220px; }
   #grantpanel button { padding: 6px 14px; border-radius: 6px; font-size: 12px; }
   #grantmsg { font-size: 12px; color: #9fe6b8; }
+  #reqbar { display: flex; flex-direction: column; gap: 8px; padding: 0 18px 10px; border-top: 1px solid #1a1e26; }
+  .reqcard { background: #1a2028; border: 1px solid #2c3542; border-radius: 8px; padding: 8px 12px; font-size: 12px; display: flex; align-items: center; gap: 10px; }
+  .reqcard .rtool { color: #ffd166; font-weight: 600; }
+  .reqcard .rargs { color: #8b93a3; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .reqcard button { padding: 4px 12px; border-radius: 6px; font-size: 12px; }
+  .reqcard input { background: #14171d; border: 1px solid #2a303a; color: #e6e6e6; border-radius: 6px; padding: 4px 8px; font-size: 12px; width: 160px; outline: none; }
 </style>
 </head>
 <body>
@@ -67,6 +73,7 @@
   <button id="gdo">授权</button>
   <span id="grantmsg"></span>
 </div>
+<div id="reqbar"></div>
 <div id="inputbar">
   <input id="input" placeholder="和他聊聊…（Enter 发送）" autocomplete="off">
   <button id="grantbtn" title="授权高危工具（主人批准）">⚙ 授权</button>
@@ -162,6 +169,55 @@ document.getElementById('gdo').addEventListener('click', async () => {
     msg.textContent = '网络错误: ' + e.message;
   }
 });
+// 待批授权请求轮询: AI 被拒时产生请求, 主人在此一键批准 (权限洋葱真实载体)
+const TOKEN = (() => { try { return localStorage.getItem('apeireth_token') || ''; } catch { return ''; } })();
+async function pollRequests() {
+  try {
+    const r = await fetch('/v1/apeireth/approval-requests');
+    const j = await r.json();
+    const bar = document.getElementById('reqbar');
+    bar.innerHTML = '';
+    if (!j.count) return;
+    for (const req of j.requests) {
+      const card = document.createElement('div');
+      card.className = 'reqcard';
+      const tok = document.createElement('input');
+      tok.type = 'password';
+      tok.placeholder = 'master token';
+      tok.value = TOKEN;
+      const btn = document.createElement('button');
+      btn.textContent = '批准 ' + req.tool;
+      btn.addEventListener('click', async () => {
+        try {
+          const g = await fetch('/v1/apeireth/grant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tool: req.tool, hours: 1, master_token: tok.value.trim() })
+          });
+          const gj = await g.json();
+          if (g.ok) {
+            try { localStorage.setItem('apeireth_token', tok.value.trim()); } catch {}
+            card.innerHTML = '<span style="color:#9fe6b8">✅ 已授权 ' + req.tool + ' 1h — 对话里让本座重试即可</span>';
+            addMsg('tools', '⚙ 主人已批准 ' + req.tool + '（1h）— 可以告诉本座继续了');
+          } else {
+            card.innerHTML = '<span style="color:#f0a0a0">❌ ' + (gj.error || g.status) + '</span>';
+          }
+        } catch (e) {
+          card.innerHTML = '<span style="color:#f0a0a0">网络错误: ' + e.message + '</span>';
+        }
+        setTimeout(pollRequests, 1500);
+      });
+      card.appendChild(span('rtool', req.tool));
+      card.appendChild(span('rargs', req.args_preview.length > 60 ? req.args_preview.slice(0, 60) + '…' : req.args_preview));
+      card.appendChild(tok);
+      card.appendChild(btn);
+      bar.appendChild(card);
+    }
+  } catch (e) { /* serve 未起时静默 */ }
+}
+function span(cls, text) { const s = document.createElement('span'); s.className = cls; s.textContent = text; return s; }
+setInterval(pollRequests, 3000);
+pollRequests();
 fetch('/health').then(r => r.json()).then(h => {
   if (h.features) document.getElementById('feat').textContent = '· ' + h.features.join(' · ');
 }).catch(() => {});
