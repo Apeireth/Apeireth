@@ -31,10 +31,17 @@ pub struct CallRecord {
     pub decision: ApprovalDecision,
     /// 命中的规则名 (VCP `matchedRule`)
     pub matched_rule: Option<String>,
+    /// 命中的命令级键 (VCP `matchedCommand`; 命令级粒度审批, 无 = None)
+    pub matched_command: Option<String>,
+    /// 拒绝时是否静默 (VCP `notifyAiOnReject == false`; 留痕审计用)
+    pub silent_on_reject: bool,
 }
 
 impl CallRecord {
     /// 构造新记录 (从 ParsedToolCall + decision)
+    ///
+    /// 新增审计字段 (`matched_command` / `silent_on_reject`) 默认空/false,
+    /// 由 `ApprovalManager::check_detailed` 事后填入 (签名保持向后兼容).
     pub fn new(
         call: &ParsedToolCall,
         decision: ApprovalDecision,
@@ -47,6 +54,8 @@ impl CallRecord {
             timestamp_ms: now_ms(),
             decision,
             matched_rule,
+            matched_command: None,
+            silent_on_reject: false,
         }
     }
 }
