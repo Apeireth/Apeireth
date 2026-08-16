@@ -46,7 +46,7 @@
 | 模块 | 职责 | 关键接线 |
 |---|---|---|
 | emergence.rs | 涌现循环: 节律/驱动/门禁/反馈 | AwakeCompanion.loop_ |
-| organs.rs | 全器官: 情绪/审议/演化/主权/洋葱 | daemon.awake |
+| organs.rs | 全器官: 情绪/审议/演化/主权/洋葱; 情绪/审议既门控「是否开口」, 也经 tone() 调制「怎么开口」(情绪→语气、审议→措辞强度) | daemon.awake |
 | actions.rs | 动作空间 + CapabilityCatalog (静态+动态) | 渲染层 |
 | daemon.rs | 总装: 心跳/做梦/反思/送达 | CompanionDaemon |
 | dream.rs | 做梦调度 (SleepCycle+DreamSubsystem+摘要) | daemon.dream |
@@ -60,18 +60,20 @@
 | continuation.rs | 续行快照 (原子写+崩溃恢复) | multi_turn 循环 |
 | session_log.rs | 事件溯源会话 (append-only 日志+surface+崩溃修复) | 多轮循环 |
 | goal.rs | Goal 状态机 (AI 长目标, 严格 fold+持久化) | 独立 |
-| capability.rs | 能力提案 (AI 自己长能力第一段) | propose_capability 工具 |
+| capability.rs | 能力提案状态机 (AI 自己长能力第一段): pending→approved→active→retired/**rolled_back** (部署后差评/失败率回滚留痕) + 回滚收据 | propose_capability 工具 / deploy.rs |
+| deploy.rs | 能力演化回路后半段 (部署→监控→回滚): DeployChannel trait (mock 可测, 真执行体挂 exec_worker/sandbox=接线点) + DeployManager (监控登记: 调用计数/失败率/差评信号 + 预测线期限 VirtualClock) + 越限自动回滚留痕 | capability.rs / evolution_gate.rs LoopAction |
 | plugin.rs | 插件机制 (生态最小单元) | ToolBridge.registry |
 | suites.rs | 三件套目录+装配 (套件=插件组) | install_with_plugins |
 | prompt_cache.rs | Prompt Cache 稳定化 (稳定前缀+动态单点) | 渲染组装 |
-| tone.rs | Bond→语调提示 | 渲染层 |
+| tone.rs | 三层器官语调: Bond 关系基线 + 情绪→语气 (ResponseStyle 7 档确定性映射) + 审议→措辞强度 (加权分/置信度 4 档, 非法输入返 ToneError); ToneRefiner = LLM 措辞注入 trait 口 (实现未接) | 渲染层 / AwakeCompanion::tone() |
 | daily_summary.rs | 每日摘要数据源 | §6.4 UI 后端 |
 | clock.rs (core) | 虚拟时钟 (时间机制快进测试) | 全部时间敏感模块 |
 | constitution_gate.rs | 结构化宪法硬门 (编译期规则表, 零成本, LLM 评审前) | ToolBridge (全风险级别) |
 | memory_injection.rs | 反幻觉记忆注入 (闭世界证据: 编号列表+禁止声称记得) | 渲染层 |
 | confidence.rs | Beta-Binomial 置信度 (数学化自信度) | capability / 自测 |
-| evolution_gate.rs | 验证闸门流水线 (fix loop/no-progress/预算 fail-open/回滚收据) | 能力演化回路 |
+| evolution_gate.rs | 验证闸门流水线 (fix loop/no-progress/预算 fail-open/回滚收据) + LoopAction 回路挂接 (Promoted→部署/Rejected→回滚/fail-open→挂起) | 能力演化回路 → deploy.rs |
 | oracle.rs | 预言机套件核心: WorldState/ScenarioEngine/Forecast+Brier+BetaBinomial 校准/DecisionEngine expectimax/ForecastRegistry | simulate/forecast 工具 |
+| oracle_adapters.rs | 预测机套件数据源适配器 (N3, VCP DigitalOracle 精神): MarketAdapter trait (拉取→规范化→喂 oracle 可证伪预测登记) + CoinGecko 加密/美债 fiscaldata 宏观利率双旗舰 (免费无 key) + MockAdapter/FallbackAdapter 限流降级 + AdapterRegistry 热插拔 + ForecastPipeline (挂 ForecastRegistry, oracle.rs 0 改动, 基线元数据走 adapterfc- 事件) | 待接 ToolBridge (后续任务) |
 | web_crawl.rs (tools) | Crawl v2: 并发 BFS+重试退避+限速 (调研驱动, 实战验证) | Crawl 工具 (9 号) |
 | education.rs | 教育套件真内容: dx_check 规则层检查器 (忘换 dx/混用/缺微分/残留 x/根号模式表) + EducationDxPlugin (注册+授权, 卸载真清理) | dx_check 工具 |
 | pentest.rs | 渗透套件真内容: recon_plan (计划编排+E-1 范围闸) + scan_report (nmap 行解析) + 双插件 (卸载真清理) | recon_plan/scan_report 工具 |
