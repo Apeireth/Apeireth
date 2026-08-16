@@ -60,7 +60,7 @@ use apeireth_memory::{EpisodeStore, SqliteMemoryStore};
 use apeireth_tool_registry::ToolRegistry;
 use apeireth_tool_runtime::parser::ParsedToolCall;
 use axum::{
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{sse::{Event as SseEvent, KeepAlive, Sse}, IntoResponse},
     routing::{get, post},
@@ -1274,10 +1274,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/apeireth/approval-requests", get(approval_requests))
         .route("/v1/apeireth/events", get(events))
         .route("/v1/apeireth/test-event", post(test_event))
+        // B1 Web 面板 v2: 静态面板页 (assets/panel/) + 只读数据端点 (apeireth-api panel_readonly)
+        .route("/panel", get(panel_index))
+        .route("/panel/:asset", get(panel_asset))
+        .nest_service(
+            "/v1/panel",
+            apeireth_api::panel_readonly::panel_router(Arc::clone(&store)),
+        )
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     println!("✅ companion_serve v4 — 伙伴端点全能力版 (CompanionApp 机制装配)");
+    println!("   http://127.0.0.1:{port}/panel  (Web 面板 v2: 会话/记忆/图谱/授权/审计, 只读真接口)");
     println!("   http://127.0.0.1:{port}/v1  (模型 MiniMax-M3, Key 任意非空)");
     println!("   会话标签: X-Apeireth-Continuity (缺省 {}) · 工具: 全部可见, 执行受宪法/权限约束", state.subject.as_str());
     // daemon 循环与 HTTP 同 task 交替 (daemon 内部 RefCell 跨 await → 非 Send, 不能 spawn)
@@ -1407,6 +1415,28 @@ async fn grant(
 /// 内置聊天页 (零依赖单文件前端, 浏览器打开即用; 供主人/任何前端先体验).
 async fn index() -> impl IntoResponse {
     axum::response::Html(include_str!("../assets/chat.html").to_string())
+}
+
+/// B1 Web 面板 v2 入口页 (静态资产 include_str! 编译期内嵌 — 与 chat.html 同形态, 零运行时依赖).
+async fn panel_index() -> impl IntoResponse {
+    axum::response::Html(include_str!("../assets/panel/index.html").to_string())
+}
+
+/// B1 Web 面板 v2 静态资产 (5 页 + css/js; 白名单匹配, 其它一律 404).
+async fn panel_asset(Path(asset): Path<String>) -> axum::response::Response {
+    use axum::http::header::CONTENT_TYPE;
+    let (ctype, body): (&str, &str) = match asset.as_str() {
+        "index.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/index.html")),
+        "sessions.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/sessions.html")),
+        "memory.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/memory.html")),
+        "graph.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/graph.html")),
+        "approvals.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/approvals.html")),
+        "audit.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/audit.html")),
+        "panel.css" => ("text/css; charset=utf-8", include_str!("../assets/panel/panel.css")),
+        "panel.js" => ("application/javascript; charset=utf-8", include_str!("../assets/panel/panel.js")),
+        _ => return StatusCode::NOT_FOUND.into_response(),
+    };
+    ([(CONTENT_TYPE, ctype)], body).into_response()
 }
 
 async fn health() -> impl IntoResponse {

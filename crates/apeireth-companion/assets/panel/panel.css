@@ -1,0 +1,73 @@
+/* Apeireth Web 面板 v2 — 共享样式 (B1; 静态资产优先, 无构建链) */
+:root { color-scheme: dark; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #0f1115; color: #e6e6e6; min-height: 100vh;
+}
+header.topbar {
+  padding: 10px 18px; border-bottom: 1px solid #23272f;
+  display: flex; align-items: center; gap: 14px; background: #14171d;
+  position: sticky; top: 0; z-index: 10;
+}
+header.topbar .dot { width: 10px; height: 10px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 6px #3ddc84; }
+header.topbar h1 { font-size: 15px; font-weight: 600; margin-right: 8px; }
+header.topbar nav { display: flex; gap: 4px; flex-wrap: wrap; }
+header.topbar nav a {
+  color: #9fb3c8; text-decoration: none; font-size: 13px;
+  padding: 4px 10px; border-radius: 6px;
+}
+header.topbar nav a:hover { background: #1c2129; color: #fff; }
+header.topbar nav a.active { background: #2563eb22; color: #7fb2ff; }
+main { padding: 18px; max-width: 1200px; margin: 0 auto; }
+h2 { font-size: 16px; margin: 14px 0 10px; color: #c9d4e3; }
+h2 .sub { font-size: 12px; color: #6b7484; font-weight: 400; margin-left: 8px; }
+.card {
+  background: #161a22; border: 1px solid #23272f; border-radius: 10px;
+  padding: 14px 16px; margin-bottom: 14px;
+}
+.card h3 { font-size: 14px; margin-bottom: 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid #1e232c; vertical-align: top; }
+th { color: #8b93a3; font-weight: 500; font-size: 12px; }
+tr:hover td { background: #1a2028; }
+tr.clickable { cursor: pointer; }
+input, select {
+  background: #14171d; border: 1px solid #2a303a; color: #e6e6e6;
+  border-radius: 6px; padding: 6px 10px; font-size: 13px; outline: none;
+}
+input:focus, select:focus { border-color: #3b82f6; }
+button {
+  background: #2563eb; color: #fff; border: none; border-radius: 6px;
+  padding: 6px 14px; font-size: 13px; cursor: pointer;
+}
+button:hover { background: #1d4ed8; }
+button.ghost { background: #23272f; color: #c9d4e3; }
+button.ghost:hover { background: #2e3440; }
+button.danger { background: #b23b3b; }
+button.danger:hover { background: #8f2f2f; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.badge {
+  display: inline-block; padding: 1px 8px; border-radius: 10px;
+  font-size: 11px; border: 1px solid #2a303a; color: #9fb3c8;
+}
+.badge.ok { color: #9fe6b8; border-color: #2c4433; background: #16211a; }
+.badge.warn { color: #ffd166; border-color: #4a4028; background: #221d10; }
+.badge.err { color: #f0a0a0; border-color: #4a2c2c; background: #241a1a; }
+.badge.info { color: #7fb2ff; border-color: #2b3a55; background: #141c2b; }
+.mono { font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+.dim { color: #6b7484; font-size: 12px; }
+.errbox { background: #241a1a; border: 1px solid #4a2c2c; color: #f0a0a0; border-radius: 8px; padding: 10px 14px; font-size: 13px; margin: 10px 0; }
+.note { background: #141c2b; border: 1px solid #2b3a55; color: #9fc2ff; border-radius: 8px; padding: 8px 12px; font-size: 12px; margin: 10px 0; line-height: 1.6; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.grid2 a.tile {
+  display: block; background: #161a22; border: 1px solid #23272f; border-radius: 10px;
+  padding: 16px; text-decoration: none; color: #e6e6e6; transition: border-color .15s;
+}
+.grid2 a.tile:hover { border-color: #3b82f6; }
+.grid2 a.tile .t { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.grid2 a.tile .d { font-size: 12px; color: #8b93a3; line-height: 1.55; }
+#graphwrap svg { background: #12151b; border: 1px solid #1e232c; border-radius: 8px; width: 100%; }
+.reqcard { background: #1a2028; border: 1px solid #2c3542; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 13px; }
+.reqcard .rtool { color: #ffd166; font-weight: 600; }
+footer.pagefoot { padding: 14px 18px; color: #5c6472; font-size: 11px; border-top: 1px solid #1a1e26; margin-top: 20px; }

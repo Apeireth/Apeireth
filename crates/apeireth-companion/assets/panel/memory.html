@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 记忆浏览</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>历史流 <span class="sub">GET /v1/panel/memory/streams（memory streams, 6 条 append-only 流）</span></h2>
+  <div class="card">
+    <div class="toolbar">
+      <select id="kind">
+        <option value="thought">思想 Thought</option>
+        <option value="proposal">提案 Proposal</option>
+        <option value="action" selected>行动 Action</option>
+        <option value="relation">关系 Relation</option>
+        <option value="evolution">演化 Evolution</option>
+        <option value="reflection">反思 Reflection</option>
+      </select>
+      <input id="subject" value="companion-main" size="18" title="主体 id (APEIRETH_CONTINUITY_ID)">
+      <input id="slimit" type="number" value="50" min="1" max="200" style="width:80px" title="条数上限">
+      <button onclick="loadStream()">查询</button>
+      <span id="streamhint" class="dim"></span>
+    </div>
+    <div id="streambody"><span class="dim">点「查询」加载。</span></div>
+  </div>
+  <h2>记忆条目 <span class="sub">GET /v1/panel/memory/episodes（列表 + 子串搜索）</span></h2>
+  <div class="card">
+    <div class="toolbar">
+      <input id="q" placeholder="内容搜索（可空）" size="24">
+      <input id="esession" placeholder="session 过滤（可空）" size="14">
+      <input id="erole" placeholder="role 过滤（可空）" size="10">
+      <button onclick="loadEpisodes()">搜索</button>
+      <span id="ecount" class="dim"></span>
+    </div>
+    <div id="epbody"><span class="dim">点「搜索」加载（留空即最近条目）。</span></div>
+  </div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 记忆浏览</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("memory");
+
+async function loadStream() {
+  const el = document.getElementById("streambody");
+  const kind = document.getElementById("kind").value;
+  const subject = document.getElementById("subject").value.trim() || "companion-main";
+  const limit = document.getElementById("slimit").value || "50";
+  el.innerHTML = `<span class="dim">加载中…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/memory/streams?kind=${kind}&subject=${encodeURIComponent(subject)}&limit=${limit}`);
+    document.getElementById("streamhint").textContent = `${j.count} 条`;
+    if (!j.count) { el.innerHTML = `<span class="dim">该流暂无条目（subject=${esc(subject)}）。</span>`; return; }
+    el.innerHTML = `<table><thead><tr><th style="width:150px">时间</th><th style="width:170px">主体</th><th>payload</th><th style="width:110px">来源</th></tr></thead>
+      <tbody>${j.entries.map(e => `
+        <tr><td>${esc(fmtTs(e.created_at))}</td>
+        <td class="mono">${esc(trunc(e.subject_id, 24))}</td>
+        <td class="mono">${esc(trunc(JSON.stringify(e.payload), 300))}</td>
+        <td><span class="badge">${esc(e.source)}</span></td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { showErr(el, e); }
+}
+
+async function loadEpisodes() {
+  const el = document.getElementById("epbody");
+  const p = new URLSearchParams();
+  const q = document.getElementById("q").value.trim();
+  const s = document.getElementById("esession").value.trim();
+  const r = document.getElementById("erole").value.trim();
+  if (q) p.set("q", q);
+  if (s) p.set("session", s);
+  if (r) p.set("role", r);
+  p.set("limit", "50");
+  el.innerHTML = `<span class="dim">加载中…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/memory/episodes?${p}`);
+    document.getElementById("ecount").textContent = `${j.count} 条`;
+    if (!j.count) { el.innerHTML = `<span class="dim">无匹配条目。</span>`; return; }
+    el.innerHTML = `<table><thead><tr><th style="width:150px">时间</th><th style="width:80px">角色</th><th style="width:130px">session</th><th>内容</th></tr></thead>
+      <tbody>${j.episodes.map(e => `
+        <tr><td>${esc(fmtTs(e.timestamp))}</td>
+        <td><span class="badge">${esc(e.role)}</span></td>
+        <td class="mono">${esc(trunc(e.session_id, 18))}</td>
+        <td>${esc(trunc(e.content, 400))}</td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { showErr(el, e); }
+}
+
+loadStream();
+</script>
+</body>
+</html>
