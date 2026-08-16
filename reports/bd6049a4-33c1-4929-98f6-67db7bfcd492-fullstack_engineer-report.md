@@ -61,9 +61,24 @@
 
 端点审计表：`cargo test -p apeireth-api --lib audit_` → 12/12 PASS（37 端点计数+唯一性+TIER_0 守门）。
 
-### 4.2 curl 端点验证
+### 4.2 curl 端点验证（已通过 — 真库实测）
 
-（待 companion 编译恢复后补录——阻塞原因见 §5）
+验证方式：companion lib 被他人 WIP 阻塞期间，用一次性验证示例（apeireth-api examples，验证后已删除）打开 **真实记忆库 `%APPDATA%\apeireth\memory.sqlite`**，serve panel_router + 同款 include_str! 静态资产于 :8099，逐项 curl：
+
+| 验证项 | 结果 |
+|---|---|
+| `GET /v1/panel/sessions` | 200 `{"count":0,"sessions":[]}`（真库无 sessions 表记录，如实） |
+| `GET /v1/panel/sessions/me/timeline?limit=2` | 200，2 条真 episodes（slog-* 会话日志） |
+| `GET /v1/panel/memory/streams?kind=action&subject=tool_call:save_memory` | 200，1 条真 ToolCallRecord payload |
+| `GET /v1/panel/memory/episodes?limit=2` | 200，2 条真 episodes |
+| `GET /v1/panel/graph` | 200（真库尚无 factg-*，count 0，如实） |
+| `GET /v1/panel/approvals` | 200，**1 条真 pending 授权请求**（FileOperator, apreq-02078fb4-…, rev1, "权限洋葱"理由） |
+| `GET /v1/panel/audit` | 200，**29 条真审计记录**（save_memory 等） |
+| `GET /v1/panel/audit?tool=save_memory` | 200，工具过滤生效 |
+| `GET /panel` + 5 页 + css/js | 200，content-type 正确（text/html / text/css / application/javascript） |
+| `GET /panel/nope.txt` | 404（白名单生效，防路径穿越） |
+
+注：companion_serve 最终二进制接线（提交 1e5a9a0c）因他人 WIP（diary.rs/N2 OneRing 在途）尚未整体编译验证；接线代码与验证示例同一形态（相同路由+相同 include_str! 白名单），lib 编译恢复后即可用。
 
 ## 5. 并行协作阻塞记录（如实）
 
@@ -77,8 +92,9 @@
 | 提交 | 内容 |
 |---|---|
 | 0913550 | feat(api): B1 面板只读端点 7 件（panel_readonly）+ ENDPOINTS 30→37 + 9 单测 |
-| （待） | feat(web): B1 静态面板 8 资产 + companion_serve /panel 接线 + chat.html 入口 |
-| （待） | docs: B1 文档同步（模块地图 + release-plan GUI 包进度） |
+| 1e5a9a0c | feat(web): B1 静态多页面板 8 资产 + companion_serve /panel 接线 + chat.html 入口 + 文档同步 + 本报告 |
+
+注：期间集成流程曾两次重置未提交的工作区改动（companion_serve/docs），最终交付已全部提交入 git，不受后续重置影响。
 
 ## 7. 0 装 PASS 自查
 
