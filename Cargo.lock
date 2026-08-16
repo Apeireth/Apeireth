@@ -393,6 +393,7 @@ dependencies = [
  "anyhow",
  "apeireth-api",
  "apeireth-asi",
+ "apeireth-bus",
  "apeireth-consciousness",
  "apeireth-core",
  "apeireth-council",
@@ -417,6 +418,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "uuid",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

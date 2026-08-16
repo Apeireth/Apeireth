@@ -19,6 +19,8 @@ thiserror = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 async-trait = { workspace = true }
+# TelegramSink (daemon) 真 HTTP: 复用 workspace reqwest 0.12 + rustls (同 LarkSink 走法).
+reqwest = { workspace = true }
 apeireth-memory = { path = "../apeireth-memory" }
 apeireth-lark = { path = "../apeireth-lark" }
 apeireth-asi = { path = "../apeireth-asi" }
@@ -30,14 +32,25 @@ apeireth-tool-approval = { path = "../apeireth-tool-approval" }
 apeireth-tools = { path = "../apeireth-tools" }
 apeireth-guard = { path = "../apeireth-guard" }
 apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-bus = { path = "../apeireth-bus" }
+
+# P3#16 microsandbox 落地: Windows Job Object 加固 (exec_worker 隔离层)
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true }
 tokio-stream = "0.1"
 futures = "0.3"
 apeireth-api = { path = "../apeireth-api" }
-reqwest = { workspace = true }
 # companion_serve: 伙伴端点 (任何 OpenAI 兼容前端接入 Apeireth 主链路)
+# axum 保持 0.7 (dev-dep, 2026-08 审计): 0.8 是破坏性升级 (路由语法 :id → {id}),
+# P3 有意维持 0.7 — 见 crates/apeireth-api/README.md "依赖版本决策".
 axum = { version = "0.7", features = ["macros"] }
 uuid = { workspace = true }
 chrono = { workspace = true }
