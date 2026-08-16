@@ -22,6 +22,7 @@ use apeireth_tool_runtime::parser::ParsedToolCall;
 use apeireth_tool_runtime::record::RecordStore;
 use serde_json::{json, Value};
 
+use crate::capability::{CapabilityKind, CapabilityRegistry};
 use crate::daemon::{Judicator, requires_llm_review};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
@@ -170,6 +171,46 @@ pub trait PostExecuteHook: Send + Sync {
     fn apply(&self, call: &ParsedToolCall, result: &ExecutionResult) -> ExecutionResult;
 }
 
+/// 「提案能力」工具 — AI 自己长能力的第一条通道 (涌现哲学).
+/// 只登记提案 (pending), 不执行能力 — 激活需宪法评审/主人批准.
+pub struct ProposeCapabilityTool {
+    registry: Arc<CapabilityRegistry>,
+}
+
+impl ProposeCapabilityTool {
+    pub fn new(registry: Arc<CapabilityRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for ProposeCapabilityTool {
+    fn name(&self) -> &str {
+        "propose_capability"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default()
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        let name = args.get("name").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
+            .ok_or_else(|| "name 不能为空".to_string())?;
+        let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
+        let kind = match args.get("kind").and_then(|v| v.as_str()) {
+            Some("action") => CapabilityKind::Action,
+            _ => CapabilityKind::Skill,
+        };
+        let p = self.registry.propose(name, description, kind, "apeireth")?;
+        Ok(json!({
+            "id": p.id,
+            "status": p.status.label(),
+            "note": "已提案待宪法评审/主人批准",
+        }))
+    }
+}
+
 /// 工具桥: 注册中心 + 洋葱门 + 审批 (黑/白/风险规则) + 执行器.
 pub struct ToolBridge {
     pub registry: Arc<ToolRegistry>,
@@ -206,6 +247,13 @@ impl ToolBridge {
             "save_memory".to_string(),
             Arc::new(SaveMemoryTool::new(Arc::clone(&store))),
         );
+        registry.register(
+            "propose_capability".to_string(),
+            Arc::new(ProposeCapabilityTool::new(Arc::new(CapabilityRegistry::new(
+                Arc::clone(&store),
+                "me",
+            )))),
+        );
         let executor = ToolExecutor::new(registry.clone());
         // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
         let packs = PackRegistry::new();
@@ -215,6 +263,7 @@ impl ToolBridge {
             Box::new(WhitelistRule::with_whitelist([
                 "recall_memory".to_string(),
                 "save_memory".to_string(),
+                "propose_capability".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
@@ -588,7 +637,30 @@ mod tests {
         let names = bridge.registry.list();
         assert!(names.iter().any(|n| n == "recall_memory"));
         assert!(names.iter().any(|n| n == "save_memory"));
-        assert!(names.len() >= 6, "应含 4 真工具 + recall_memory + save_memory, 实际 {}: {:?}", names.len(), names);
+        assert!(names.iter().any(|n| n == "propose_capability"));
+        assert!(names.len() >= 7, "应含 4 真工具 + recall/save/propose, 实际 {}: {:?}", names.len(), names);
+    }
+
+    #[tokio::test]
+    async fn propose_capability_tool_registers_proposal() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(Arc::clone(&store));
+        let call = ParsedToolCall {
+            tool_name: "propose_capability".into(),
+            args: json!({"name": "换元检查", "description": "做换元法时自动提醒检查 dx", "kind": "skill"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "提案应成功: {:?}", r.error);
+        assert_eq!(r.output["status"], json!("pending"));
+        // 提案已登记 (pending), 未激活
+        use crate::capability::CapabilityStatus;
+        let reg = crate::capability::CapabilityRegistry::new(store, "me");
+        let list = reg.list(Some(CapabilityStatus::Pending)).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "换元检查");
     }
 
     #[tokio::test]
