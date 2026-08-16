@@ -24,6 +24,7 @@ pub mod streaming;
 pub mod calculator;
 pub mod compat;
 pub mod enhanced;
+pub mod preset; // TP4/N22: ShellPreset 预设命令模板 (白名单 + 参数模板填充防注入, §10 官方包最后一件)
 
 pub use sandbox::{SandboxPolicy, SandboxMode, apply_sandbox};
 pub use ssh::SshClient;
@@ -31,6 +32,7 @@ pub use persist::{PersistentTaskStore, TaskRecord};
 pub use calculator::{evaluate_expression, CalcError};
 pub use compat::{ShellCompatRouter, ShellCommand};
 pub use enhanced::{EnhancedShell, ShellError};
+pub use preset::{ArgSpec, PresetError, PresetRegistry, PresetShell, ShellPreset};
 
 /// R138 deliverables (per 5-dim extension):
 /// - 7 modules (sandbox / ssh / persist / streaming / calculator / compat / enhanced)
