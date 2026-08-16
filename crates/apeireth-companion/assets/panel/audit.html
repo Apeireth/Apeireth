@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 审计视图</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>审计视图 <span class="sub">GET /v1/panel/audit（action_stream 工具调用留痕）</span></h2>
+  <div class="note">数据与 companion <span class="mono">audit_log</span> 工具同源（action_stream 最近 N 条 / 按工具过滤）。
+    masked 记录不还原参数（隐私已脱敏）。</div>
+  <div class="card">
+    <div class="toolbar">
+      <input id="tool" placeholder="按工具名过滤（可空）" size="20">
+      <input id="limit" type="number" value="50" min="1" max="200" style="width:80px" title="条数上限">
+      <button onclick="loadAudit()">查询</button>
+      <span id="acount" class="dim"></span>
+    </div>
+    <div id="abody"><span class="dim">加载中…</span></div>
+  </div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 审计视图</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("audit");
+
+async function loadAudit() {
+  const el = document.getElementById("abody");
+  const p = new URLSearchParams();
+  const t = document.getElementById("tool").value.trim();
+  if (t) p.set("tool", t);
+  p.set("limit", document.getElementById("limit").value || "50");
+  el.innerHTML = `<span class="dim">加载中…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/audit?${p}`);
+    document.getElementById("acount").textContent = `${j.count} 条`;
+    if (!j.count) { el.innerHTML = `<span class="dim">无审计记录${t ? "（工具: " + esc(t) + "）" : ""}。</span>`; return; }
+    el.innerHTML = `<table><thead><tr><th style="width:150px">时间</th><th style="width:120px">工具</th>
+      <th style="width:80px">状态</th><th style="width:70px">耗时</th><th>调用内容</th></tr></thead>
+      <tbody>${j.records.map(r => `
+        <tr><td>${esc(fmtTs(r.started_at_ms))}</td>
+        <td class="mono">${esc(r.tool_name)}</td>
+        <td>${r.success ? '<span class="badge ok">' + esc(r.status) + '</span>' : '<span class="badge err">' + esc(r.status) + '</span>'}</td>
+        <td>${esc(r.duration_ms)}ms</td>
+        <td class="mono">${r.masked ? '<span class="badge warn">masked</span> ' : ''}${esc(trunc(JSON.stringify(r.call_content), 220))}
+          ${r.error_text ? '<div class="dim" style="color:#f0a0a0">' + esc(trunc(r.error_text, 120)) + '</div>' : ''}</td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { showErr(el, e); }
+}
+
+loadAudit();
+</script>
+</body>
+</html>

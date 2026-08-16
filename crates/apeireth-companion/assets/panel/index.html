@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 总览</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>Web 面板 v2 <span class="sub">静态资产 · 数据全部来自 /v1/panel/* 只读真接口</span></h2>
+  <div class="grid2">
+    <a class="tile" href="sessions.html"><div class="t">🗂 会话管理</div><div class="d">会话列表 + 时间线浏览。挂现有 SessionStore；N2 OneRing 统一账本就绪后换源（升级点已标注）。</div></a>
+    <a class="tile" href="memory.html"><div class="t">🧠 记忆浏览</div><div class="d">6 条历史流（思想/提案/行动/关系/演化/反思）+ 记忆条目列表与搜索。</div></a>
+    <a class="tile" href="graph.html"><div class="t">🕸 图谱可视化</div><div class="d">memory_graph 事实/链接 → 原生 SVG 渲染（无重型框架）。</div></a>
+    <a class="tile" href="approvals.html"><div class="t">🔐 授权中心</div><div class="d">待批请求列表；批准走已有 /v1/apeireth/grant（master token）机制，不新建安全口。</div></a>
+    <a class="tile" href="audit.html"><div class="t">📜 审计视图</div><div class="d">工具调用留痕（action_stream）；masked 记录不还原参数。</div></a>
+    <a class="tile" href="/"><div class="t">💬 聊天页</div><div class="d">companion 内置单页 chat.html（OpenAI 兼容对话 + 扩权面板）。</div></a>
+  </div>
+  <h2>服务状态 <span class="sub">GET /health</span></h2>
+  <div class="card" id="health"><span class="dim">加载中…</span></div>
+  <div class="note">
+    <b>面板数据端点（只读）</b>：
+    <span class="mono">/v1/panel/sessions</span> ·
+    <span class="mono">/v1/panel/sessions/:id/timeline</span> ·
+    <span class="mono">/v1/panel/memory/streams</span> ·
+    <span class="mono">/v1/panel/memory/episodes</span> ·
+    <span class="mono">/v1/panel/graph</span> ·
+    <span class="mono">/v1/panel/approvals</span> ·
+    <span class="mono">/v1/panel/audit</span>
+    — 实现：apeireth-api <span class="mono">panel_readonly.rs</span>（B1）。
+  </div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 静态资产优先（R19+ 决策，无 Node 构建链）</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("index");
+(async () => {
+  const el = document.getElementById("health");
+  try {
+    const h = await panelFetch("/health");
+    el.innerHTML = `<span class="badge ok">${esc(h.status || "ok")}</span>
+      <span class="mono" style="margin-left:10px">${esc(h.service || "")} ${esc(h.version || "")}</span>`;
+  } catch (e) { showErr(el, e); }
+})();
+</script>
+</body>
+</html>
