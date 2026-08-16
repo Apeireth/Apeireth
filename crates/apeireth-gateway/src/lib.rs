@@ -31,6 +31,8 @@ mod organ_kani_proofs;
 pub mod guard_bridge;
 pub mod gateway;
 pub mod node;
+// N12: 语义模型路由适配件 (VCP semanticModelRouter 吸收; 虚拟模型名+意图选模型+容灾链)
+pub mod semantic_router;
 pub mod session;
 pub mod transport;
 pub mod workspace;
@@ -39,6 +41,12 @@ pub use auth::{AccessPolicy, ApiKey, AuthDecision, AuthError, AuthResult, DmScop
 pub use guard_bridge::{AuditSummary, GatewayGuard, GuardSide, GuardedFrame};
 pub use gateway::{Admission, Gateway, GatewayError, GatewayMode, GatewayResult, GatewaySnapshot, MAX_GATEWAY_NODES, MAX_GATEWAY_SESSIONS};
 pub use node::{NodeId, NodeKind, NodeRecord, NodeRegistry};
+pub use semantic_router::{
+    build_fallback_plan, cosine_similarity, Embedder, ModelExecutor, Preset, PresetSpec,
+    RouteDecision, RouteReason, RouteSpec, RouterConfig, RouterConfigSpec, RouterError, Route,
+    ScoredRoute, SemanticModelRouter, DEFAULT_AUTO_MODEL_NAME, DEFAULT_CONTEXT_WEIGHTS,
+    DEFAULT_MATCH_THRESHOLD, DEFAULT_PRESET_NAME,
+};
 pub use session::{Session, SessionId, SessionRegistry, SessionState};
 pub use transport::{HttpTransport, InFrame, InMemoryTransport, OutFrame, Transport, TransportError, TransportRegistry, WsTransport};
 pub use workspace::{safe_join, AgentWorkspace, WorkspaceError, WorkspaceResult, WorkspaceSlot};
@@ -50,8 +58,8 @@ pub const MODES_SUPPORTED: usize = 1;
 /// Compile-time guard: 5 Node kinds (OpenClaw taxonomy).
 pub const NODE_KINDS: usize = 5;
 
-/// Compile-time guard: 6 modules exposed by this crate.
-pub const MODULES: usize = 7;
+/// Compile-time guard: 8 modules exposed by this crate.
+pub const MODULES: usize = 8;
 
 #[cfg(test)]
 mod tests {
@@ -61,7 +69,7 @@ mod tests {
     fn compile_time_guards_hold() {
         assert_eq!(MODES_SUPPORTED, 1);
         assert_eq!(NODE_KINDS, 5);
-        assert_eq!(MODULES, 7);
+        assert_eq!(MODULES, 8);
     }
 
     #[test]

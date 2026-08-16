@@ -27,6 +27,10 @@ apeireth-pipeline = { path = "../apeireth-pipeline" }
 #  v2_endpoints.rs 实现自包含 stub, 字段级对齐真 crate 升级路径明确)
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
 apeireth-tools = { path = "../apeireth-tools" }
+# B1 Web 面板 v2 (team-work-doc §4 B1): panel 只读端点直读记忆库.
+# R179 P0-3 已拆 memory→api 编译期边, cargo tree 实测两树均不含 apeireth-api → 无循环.
+apeireth-memory = { path = "../apeireth-memory" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
 # R20 阶段 2: 鉴权 5 组件 — 复用 R20 阶段 1 的 keyring (5 重防御 P0)
 # 不引 apeireth-bus (apeireth-bus → apeireth-extension → apeireth-verify → apeireth-asi → apeireth-api
 # 形成 crate 循环, 跟 v2_endpoints 同样自包含 stub 模式, 走本地 AtomicU64 trace_id 计数器)

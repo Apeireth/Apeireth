@@ -12,9 +12,9 @@
 
 | 设计原意 | 工程现状 | 偏差 |
 |---|---|---|
-| **AI 自己长能力**（涌现核心） | 动作空间 4 个硬编码 + 工具预注册 + CapabilityCatalog 静态 | ❌ **最大一叶障目**：能力生成/演化回路缺失（提案→生成→验证→部署→监控→回滚） |
+| **AI 自己长能力**（涌现核心） | 动作空间 4 个硬编码 + 工具预注册 + CapabilityCatalog 静态 | 🟡 **机制回路已闭环**（提案→生成*→验证→部署→监控→回滚, capability+evolution_gate+deploy）；剩：生成段 LLM 机制化 + 部署真执行体（0 装 PASS 标注） |
 | **continuity_id 作为记录锚点** | `current_session_id()` 无人用；daemon 全用硬编码 `"me"` | ❌ **锚点悬空**（哲学 §18.3 的「记录+迁移」没落地） |
-| 基地 4 动作完整 | 提供/约束/记录/陪伴 各组件存在 | 🟡 9 organ 的「人格模块」完整接入未做（只接了 4 个） |
+| 基地 4 动作完整 | 提供/约束/记录/陪伴 各组件存在 | 🟡 9 organ 的「人格模块」完整接入未做（只接了 4 个）；已接器官的人格化已深化：情绪→语气、审议→措辞（tone.rs 三层确定性映射 + AwakeCompanion::tone(), LLM 措辞 trait 口已留未接） |
 | 能力按需/可选装配（80%→完全体） | 81 crates 天然模块化，**无 feature/suite 装配层** | ❌ 发布形态缺装配器 |
 | 自我状态诚实报告（E-5） | SelfScore/ASI 反馈有 | 🟡 「AI 观察到基地被升级 → 记录+汇报」未机制化（主人最后兴趣点） |
 | 安全经济性 | 宪法评审只 Medium+ 才 LLM 判 ✓ | ✅ 无偏差 |
@@ -45,8 +45,13 @@
 - **feature 裁剪**：核心 crate 加 cargo feature（如 `sandbox`/`channels`/`gui`），`--no-default-features --features` 装配
 - **能力包注册**：ToolBridge 已是 `registry.register` 扩展点 ✓（运行时插件式）；补「包元数据 + 装配校验」
 
-### 5. 能力演化回路（蓝图，发布后第一优先级）
-呼应「AI 自己长能力」：AI 提案新能力 → 登记能力库 → 宪法评审 → 主人批准 → 激活 → 监控 → 差评回滚。本会话已落第一块：`capability` 提案机制件（pending→approved→active 状态机 + 真库登记）。
+### 5. 能力演化回路（机制回路已闭环，真执行体待接）
+呼应「AI 自己长能力」：提案 → 生成 → 验证 → 部署 → 监控 → 回滚。落地分层：
+- `capability.rs`：提案→评审→激活状态机（pending→approved→active→retired/rolled_back，真库 append-only 登记 + 回滚收据留痕）
+- `evolution_gate.rs`：验证闸门（fix loop/no-progress/预算 fail-open）+ `LoopAction` 回路挂接（Promoted→部署 / Rejected→回滚 / fail-open→挂起）
+- `deploy.rs`：部署→监控→回滚机制件（DeployChannel trait 抽象 + MockDeployChannel 可测；监控登记调用计数/失败率/差评信号 + 预测线期限检查 VirtualClock 快进；差评或失败率越限自动回滚 active→rolled_back 留痕）
+
+0 装 PASS 如实标注：部署通道仅 mock（真执行体 = 实现 DeployChannel 挂 exec_worker/sandbox）；「生成」段（LLM 生成能力内容）未机制化；制品形态为文本描述。
 
 ## 四、进度对账（2026-08-16 实况，诚实标注）
 
@@ -60,7 +65,8 @@
 | 预测机套件 | ✅ **有真内容 + 真 LLM 验收全链串联** | `oracle.rs` + oracle_acceptance |
 | 教育套件 | ✅ **有真内容** (dx_check 规则层检查器 + 真插件) | `education.rs` |
 | 生态插件 (新) | ✅ github-accel (xiake.pro 节点池实测选最快) | `gh_accel.rs` + `github_accel.rs` |
-| 能力演化回路 | 🟡 第一块落地 (提案→评审→批准→激活), 生成/验证/部署/监控/回滚未全 | `capability.rs` / `evolution_gate.rs` |
+| 能力演化回路 | 🟢 机制回路六段闭环 (提案→生成*→验证→部署→监控→回滚): 部署通道 mock (真执行体=DeployChannel 挂 exec_worker/sandbox 未接), *生成段=LLM 未机制化 — 均如实标注 | `capability.rs` / `evolution_gate.rs` / `deploy.rs` |
+| **C3 v2 alpha 遗留盘点** (2026-08-17) | ✅ **22 项重核实完成** (不信任旧标注, 逐项取证): 12 项达成/已解决 (graph/sdk 空壳消除, vector MUST FIX 已修, TUI 6 类端点, TUI E2E + web, Self-Disable 20 case 真实现, bench 112KB, CI workspace 全覆盖替代 5 yml; formal R165 有意归档; deploy 演进为真流水线) + 7 项 ❌ 产物失传 (v2 era 验收报告/09-ADDENDUM/V2-INDEX/07-BASELINE 从未入 git 历史, 0 装 PASS 不重建) + 1 项 ⚪ 不可核实 (T10 全量测试实跑/ASI V0.5); 上轮自检 21 报告吸收为台账编号 25-47 (P0=46/47) | `reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md` + `docs/backlog.md` §A4 |
 
 ## 五、发布 checklist
 - [x] 本体核心闭环（production_daemon 全集成验收）
@@ -71,5 +77,7 @@
 - [ ] 扩展包逐个成型（沙盒包物理层 / 多通道 / GUI / 本地智能）
 - [ ] 文档（用户手册/快速开始/能力包说明）
 - [x] 社区插件规范文档（docs/plugin-authoring-guide.md：六节齐全 + 示例摘自真实代码 + adapter 未接如实标注）
+- [ ] 版本号口径统一（RELEASE_NOTES v1.0.0 标题 vs workspace 1.2.0 + CHANGELOG 归条目 + ROADMAP 同步 R178；backlog #26，待 Leader 拍板）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
 - [ ] 发布产物（crate 整理 / README / tgz）
+- [ ] 发布前置门槛（C3/上轮自检证据）：①Dockerfile COPY crates 互覆盖修复验证（DO2 W1，backlog #46）②cargo fmt 全仓修复（QA2 实测 72.7% 不合规，backlog #25）③cosign.pub 生成 + release 工具链预装（backlog #27）④compose 密码外部化（backlog #47）⑤.gitignore 密钥加固（backlog #28）

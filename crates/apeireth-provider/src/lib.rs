@@ -30,6 +30,8 @@ pub mod facade_impls;
 // R176: HTTP 统一调度 (真接 6 Provider)
 pub mod http_dispatch;
 pub mod minimax;  // R128: 6th provider (MiniMax-M3 family)
+// N12: 推理字段归一化适配件 (VCP reasoningContentAdapter 吸收; 12 别名 → think 块)
+pub mod reasoning_adapter;
 
 /// R35: 5 provider name 1:1 对应, 启动时配置用
 pub const ALL_PROVIDERS: [&str; 6] = [
