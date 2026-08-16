@@ -24,7 +24,9 @@ use std::time::{Duration, Instant};
 use apeireth_memory::{CoreEpisode, EpisodeStore, HistoryStream, SqliteMemoryStore};
 
 use crate::context::{ContextAssembler, ContextBlock};
+use crate::cross_diary::{link_core, CrossDiaryIndex};
 use crate::daemon::default_memory_path;
+use crate::diary::DiaryStore;
 use crate::emergence::RhythmEstimate;
 use crate::experience::{Experience, ExperienceStore};
 use crate::goal::GoalService;
@@ -88,6 +90,8 @@ pub struct CompanionApp {
     summarizer: Option<Arc<dyn DialogSummarizer>>,
     refiner: Option<Arc<dyn ExperienceRefiner>>,
     deep_recall: Option<Arc<dyn DeepRecall>>,
+    /// §5.1 收官: 日记本接入 (None = 日记摘要/跨日记关联两源如实缺省, 0 装 PASS)
+    diary: Option<Arc<DiaryStore>>,
 }
 
 impl CompanionApp {
@@ -110,6 +114,7 @@ impl CompanionApp {
             summarizer: None,
             refiner: None,
             deep_recall: None,
+            diary: None,
         }
     }
 
@@ -130,6 +135,12 @@ impl CompanionApp {
     /// 注入管线总预算 (字符, 默认 6000).
     pub fn with_inject_budget(mut self, chars: usize) -> Self {
         self.inject_budget = chars.max(100);
+        self
+    }
+
+    /// §5.1 收官: 日记本接入 — 近 N 日摘要 + 跨日记关联两源启用 (None = 两源缺省).
+    pub fn with_diary(mut self, diary: Arc<DiaryStore>) -> Self {
+        self.diary = Some(diary);
         self
     }
 
@@ -383,12 +394,18 @@ impl CompanionApp {
             if let Some(recall) = &self.deep_recall {
                 let candidates: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
                 if let Ok(selected) = recall.recall(query, &candidates).await {
-                    return memory_block(&selected);
+                    // §5.1 收官: 四源统一注入 (深度路径同享两源)
+                    let diary_summary = self.diary.as_ref().map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET)).unwrap_or_default();
+                    let cross_related = self.cross_related_for_query(query);
+                    return unified_memory_block(&selected, &diary_summary, &cross_related, UNIFIED_MEMORY_BLOCK_BUDGET);
                 }
                 // 失败 → 降级普通注入 (诚实)
             }
         }
-        memory_block(&entries)
+        // §5.1 收官: 四源统一注入 — 主题索引+日记摘要+跨日记关联+记忆证据块 (各自独立预算)
+        let diary_summary = self.diary.as_ref().map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET)).unwrap_or_default();
+        let cross_related = self.cross_related_for_query(query);
+        unified_memory_block(&entries, &diary_summary, &cross_related, UNIFIED_MEMORY_BLOCK_BUDGET)
     }
 
     /// 今日摘要注入.
@@ -576,20 +593,121 @@ impl CompanionApp {
     }
 }
 
-/// **§5.1 记忆注入挂接点** — 主题索引块 + 反幻觉记忆证据块合并 (不另立平行注入系统)
+// ============================================================
+// §5.1 收官: 注入链统一接线 — 四源合并 (topic_groups/diary/cross_diary 三 Injector 归一挂点)
+// ============================================================
+
+/// 日记摘要源预算 (近 N 日; diary.rs recent_injection 自带字符预算, 此处定档)
+pub const DIARY_SUMMARY_DAYS: usize = 3;
+pub const DIARY_SUMMARY_BUDGET: usize = 600;
+/// 跨日记关联片段源预算 (小额: 关联是线索不是正文)
+pub const CROSS_RELATED_MAX_CHARS: usize = 400;
+/// 统一记忆块总长上限 (超出按砍序裁剪; ContextBlock with_cap(3000) 同口径)
+pub const UNIFIED_MEMORY_BLOCK_BUDGET: usize = 3000;
+
+/// **§5.1 收官统一注入块** — 四源合并, 各源独立预算互不侵占
 ///
-/// 主题索引 (topic_groups) 在前给 LLM 版图概览, 记忆证据块在后守闭世界约束;
-/// 主题索引自带字符预算, 空记忆两皆空串.
-fn memory_block(entries: &[String]) -> String {
-    let mem = crate::memory_injection::build_memory_injection(entries);
-    let idx = crate::topic_groups::build_topic_index(
+/// 源序 (块内呈现序): 主题索引 → 日记摘要 → 跨日记关联片段 → 记忆证据块.
+/// 空源 = 空串 = 该块不注入 (诚实, 不注半残块).
+/// **砍序** (总长超 `total_budget` 时): 关联片段 → 日记摘要 → 主题索引 → 记忆证据块
+/// (记忆证据块 = 反幻觉基石, 最后砍; 独存仍超时硬切+TRUNCATION 提示).
+fn unified_memory_block(
+    entries: &[String],
+    diary_summary: &str,
+    cross_related: &str,
+    total_budget: usize,
+) -> String {
+    // 四源各自独立渲染 (各自预算, 互不侵占)
+    let topic = crate::topic_groups::build_topic_index(
         entries,
         crate::topic_groups::TOPIC_INDEX_MAX_CHARS,
     );
-    match (idx.is_empty(), mem.is_empty()) {
-        (_, true) => idx,
-        (true, false) => mem,
-        (false, false) => format!("{idx}\n\n{mem}"),
+    let mem = crate::memory_injection::build_memory_injection(entries);
+    // 按砍序从高到低: 关联(0) → 日记(1) → 主题(2) → 记忆证据(3, 最后砍)
+    let mut blocks: [String; 4] = [
+        cross_related.to_string(),
+        diary_summary.to_string(),
+        topic,
+        mem,
+    ];
+    // 呈现序: 主题 → 日记 → 关联 → 记忆证据
+    let order = [2usize, 1, 0, 3];
+    let total = |b: &[String; 4]| {
+        order.iter().filter(|&&i| !b[i].is_empty()).map(|&i| b[i].chars().count()).sum::<usize>()
+            + order.iter().filter(|&&i| !b[i].is_empty()).count().saturating_sub(1) * 2
+    };
+    // 超预算按砍序丢弃 (0→1→2), 记忆证据块(3)最后; 独存仍超 → 硬切+提示
+    for drop_idx in [0usize, 1, 2] {
+        if total(&blocks) <= total_budget {
+            break;
+        }
+        blocks[drop_idx].clear();
+    }
+    if total(&blocks) > total_budget {
+        let notice = "…[记忆证据块超预算, 已截断]";
+        let keep = total_budget.saturating_sub(notice.chars().count());
+        let truncated: String = blocks[3].chars().take(keep).collect();
+        blocks[3] = format!("{truncated}{notice}");
+    }
+    let parts: Vec<&String> = order.iter().filter(|&&i| !blocks[i].is_empty()).map(|&i| &blocks[i]).collect();
+    parts.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n\n")
+}
+
+/// **兼容挂点** — 两源形态 (主题索引 + 记忆证据块), serve 自由注入路径沿用.
+fn memory_block(entries: &[String]) -> String {
+    unified_memory_block(entries, "", "", usize::MAX)
+}
+
+impl CompanionApp {
+    /// **跨日记关联片段渲染** (§5.1 机制④接注入链): 按查询实体取关联日记片段
+    ///
+    /// 路径: query → topic_tokens 与 active_facts 共享 token 匹配 (link_core, 阈值 2)
+    /// → 命中 fact → CrossDiaryIndex.diary_for_fact 取日记片段 → 去重+预算截断.
+    /// 只经 diary/memory_graph/cross_diary 已有公开接口, 无向量.
+    fn cross_related_for_query(&self, query: &str) -> String {
+        let diary = match &self.diary {
+            Some(d) => d,
+            None => return String::new(),
+        };
+        let graph = MemoryGraph::new(Arc::clone(&self.store));
+        let fact_items: Vec<(String, String)> = graph
+            .active_facts()
+            .into_iter()
+            .map(|f| (f.id, format!("{} {} {}", f.subject, f.predicate, f.object)))
+            .collect();
+        if fact_items.is_empty() {
+            return String::new();
+        }
+        // 查询实体 → 相关记忆节点 (link_core 纯函数, seed 伪条目)
+        let seed_links = link_core(
+            &[("seed".to_string(), 0usize, query.to_string())],
+            &fact_items,
+            2,
+        );
+        if seed_links.is_empty() {
+            return String::new();
+        }
+        // 记忆节点 → 关联日记片段 (去重, 索引序)
+        let idx = CrossDiaryIndex::build(diary, &graph, 2);
+        let mut snippets: Vec<String> = Vec::new();
+        let mut used = 0usize;
+        'outer: for l in &seed_links {
+            for link in idx.diary_for_fact(&l.fact_id) {
+                if snippets.iter().any(|s| s == &link.snippet) {
+                    continue;
+                }
+                let line = format!("• [{}{}] {}", link.diary_date, link.shared_tokens.first().map(|t| format!(" #{t}")).unwrap_or_default(), link.snippet);
+                if used + line.chars().count() > CROSS_RELATED_MAX_CHARS {
+                    break 'outer;
+                }
+                used += line.chars().count();
+                snippets.push(line);
+            }
+        }
+        if snippets.is_empty() {
+            return String::new();
+        }
+        format!("【跨日记关联】\n{}", snippets.join("\n"))
     }
 }
 
@@ -743,4 +861,86 @@ mod tests {
         let rendered = app.inject_today();
         assert!(rendered.contains("今日事件回归"), "今日 episode 应入选今日摘要");
     }
+    // ===== §5.1 收官: 注入链统一接线 (四源合并/独立预算/空路径/砍序) =====
+
+    #[test]
+    fn unified_block_merges_four_sources_in_order() {
+        let entries = vec![
+            "主人喜欢线代复习, 换元法常练".to_string(),
+            "主人爱喝深烘咖啡, 手冲为主".to_string(),
+        ];
+        let diary = "【近3日日记】\n2026-08-16: 今天复习了线代".to_string();
+        let cross = "【跨日记关联】\n• [2026-08-15] 换元法练习记录".to_string();
+        let out = unified_memory_block(&entries, &diary, &cross, usize::MAX);
+        // 四源皆在
+        assert!(out.contains("线代") || out.contains("【记忆索引】"), "主题索引应在");
+        assert!(out.contains("近3日日记"), "日记摘要应在");
+        assert!(out.contains("跨日记关联"), "关联片段应在");
+        assert!(out.contains("记忆证据"), "记忆证据块应在");
+        // 呈现序: 日记摘要在关联片段之前, 记忆证据块最后
+        let p_diary = out.find("近3日日记").unwrap();
+        let p_cross = out.find("跨日记关联").unwrap();
+        let p_mem = out.find("记忆证据").unwrap();
+        assert!(p_diary < p_cross && p_cross < p_mem, "呈现序应为 日记→关联→记忆证据");
+    }
+
+    #[test]
+    fn unified_block_independent_budgets_no_bleed() {
+        let entries = vec!["一条普通记忆".to_string()];
+        let diary_short = "短日记".to_string();
+        let diary_long = format!("【近3日日记】\n{}", "长".repeat(590));
+        let cross = "【跨日记关联】\n• 关联条目".to_string();
+        // 日记源加长不应改变记忆证据块/关联块的渲染内容 (各源独立预算)
+        let out_short = unified_memory_block(&entries, &diary_short, &cross, usize::MAX);
+        let out_long = unified_memory_block(&entries, &diary_long, &cross, usize::MAX);
+        let mem_of = |s: &str| s.split("【记忆证据】").nth(1).unwrap_or("").to_string();
+        assert_eq!(mem_of(&out_short), mem_of(&out_long), "日记加长不应侵蚀记忆证据块");
+        assert!(out_long.contains(&cross), "日记加长不应侵蚀关联块");
+    }
+
+    #[test]
+    fn unified_block_empty_paths_honest() {
+        let entries = vec!["主人喜欢线代".to_string()];
+        // 两源空 → 输出不含半残块 (无空标题/空段)
+        let out = unified_memory_block(&entries, "", "", usize::MAX);
+        assert!(!out.contains("【近3日日记】"), "空日记不应注入半残块");
+        assert!(!out.contains("【跨日记关联】"), "空关联不应注入半残块");
+        // 全空 → 空串
+        assert_eq!(unified_memory_block(&[], "", "", usize::MAX), "");
+        // 只有日记源非空 → 只出日记块
+        let out_diary_only = unified_memory_block(&[], "【近3日日记】\n仅日记", "", usize::MAX);
+        assert_eq!(out_diary_only, "【近3日日记】\n仅日记");
+    }
+
+    #[test]
+    fn unified_block_drop_order_mem_last() {
+        let entries = vec!["主人喜欢线代复习与换元法".to_string()];
+        let diary = format!("【近3日日记】\n{}", "记".repeat(200));
+        let cross = format!("【跨日记关联】\n{}", "关".repeat(200));
+        // 预算紧: 关联与日记必被砍, 记忆证据块独存 (反幻觉基石最后砍)
+        let tight = 400usize;
+        let out = unified_memory_block(&entries, &diary, &cross, tight);
+        assert!(out.contains("记忆证据"), "记忆证据块最后砍");
+        assert!(!out.contains("跨日记关联"), "超预算先砍关联片段");
+        // 预算极小: 记忆证据块硬切+提示
+        let tiny = 100usize;
+        let out_tiny = unified_memory_block(&entries, "", "", tiny);
+        assert!(out_tiny.chars().count() <= tiny, "硬切后不得超总预算");
+        assert!(out_tiny.contains("已截断"), "硬切须留提示");
+        // 宽松预算: 四源全留
+        let loose = unified_memory_block(&entries, &diary, &cross, usize::MAX);
+        assert!(loose.contains("跨日记关联") && loose.contains("近3日日记"));
+    }
+
+    #[test]
+    fn memory_block_compat_two_source() {
+        let entries = vec!["主人喜欢线代复习, 换元法常练".to_string()];
+        let out = memory_block(&entries);
+        // 兼容两源: 无日记/关联块, 主题索引或记忆证据在
+        assert!(!out.contains("近3日日记") && !out.contains("跨日记关联"));
+        assert!(out.contains("线代") || out.contains("记忆索引"), "主题索引或记忆证据应在");
+        // 空条目 → 空串 (与旧行为一致)
+        assert_eq!(memory_block(&[]), "");
+    }
+
 }
