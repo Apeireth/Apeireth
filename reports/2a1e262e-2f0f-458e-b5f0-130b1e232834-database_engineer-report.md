@@ -79,4 +79,4 @@ master 正处于 `Merge branch 'team/.../integration'` 未决状态（UU: backlo
 
 ## 7. 清理说明
 
-- `_workspace/n6-verify` worktree 验证完毕，保留供守门员复核（`git worktree remove` 可清理；目录在 .gitignore 内，不污染仓库）
+- `_workspace/n6-verify` worktree 验证完毕，已 `git worktree remove --force` + prune 清理（用完即删，遵守 _workspace 约定；验证证据留存于本报告 §3）
