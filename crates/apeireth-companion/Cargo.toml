@@ -22,6 +22,8 @@ async-trait = { workspace = true }
 # TelegramSink (daemon) 真 HTTP: 复用 workspace reqwest 0.12 + rustls (同 LarkSink 走法).
 reqwest = { workspace = true }
 apeireth-memory = { path = "../apeireth-memory" }
+# N2 OneRing: 账本表 + 迁移接口直连 SQLite (workspace 锁 0.32 bundled, 同 memory crate)
+rusqlite = { workspace = true }
 apeireth-lark = { path = "../apeireth-lark" }
 apeireth-asi = { path = "../apeireth-asi" }
 apeireth-council = { path = "../apeireth-council" }
@@ -41,6 +43,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_Security",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
+    # B3 沙盒限额留痕: IO completion port (超限消息监听) + JOB_OBJECT_MSG 常量
+    "Win32_System_IO",
+    "Win32_System_SystemServices",
 ] }
 
 [dev-dependencies]

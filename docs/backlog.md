@@ -70,8 +70,8 @@
 
 ### 模块对标调研批 (2026-08-17, 4 subagent web 调研; 主人指示: 团队能干的先安排, 需讨论的明天一起议)
 
-> 来源: 记忆/上下文 (cdfb3e99) + 安全/治理 (2abc77ed) + 自我进化 (261a602c) + Agent 执行 (待收)。
-> 命名: 记忆 M-* / 安全 S-* / 进化 E-*。**团队可干** = 接线/增量类; **待主人议** = 新机制/方向类。
+> 来源: 记忆/上下文 (cdfb3e99) + 安全/治理 (2abc77ed) + 自我进化 (261a602c) + Agent 执行 (a2bf5e5a)。
+> 命名: 记忆 M-* / 安全 S-* / 进化 E-* / Agent A-*。**团队可干** = 接线/增量类; **待主人议** = 新机制/方向类。
 
 | # | 项 | 来源 | 说明 | 状态 |
 |---|---|---|---|---|
@@ -94,6 +94,13 @@
 | E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
 | E5 | **技能生命周期闭环 (Voyager 升级)** | 进化调研 | voyager_api.rs 是 stub: 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 apeireth-skills 注册表 (两技能线打通) | ⬜ 团队可干 (P1, 中-大) |
 | E6 | 顺手修正: critic.rs CRITIC 引用 | 进化调研修正 | 注释写 Wang et al. 实为 Gou et al. (arXiv 2305.11738) | ⬜ 团队可干 (成本 1 分钟) |
+| A1 | **Handoff 委托协议** | Agent 调研 P0 | OpenAI Agents SDK 形态: `transfer_to_<agent>` 工具 + **input_filter 上下文裁剪** (解决转发全部上下文的成本/污染) + on_handoff + 动态启用 → apeireth-team-lead 既有 Orchestrator trait 上加 handoff 语义 (别再平铺 8 个调度工具) | ⬜ 团队可干 (P0) |
+| A2 | **工具输出 schema 校验 + tool guardrails** | Agent 调研 P0 | Tool trait 加输出 schema 声明 + 校验层 (tool-runtime) + 每次调用前后 guardrail/tripwire (tool-approval 复用规则引擎) + 结构化错误回灌 (模型看到错误自我修正, 非盲目重放) — 治"未验证工具结果被当真 = 幻觉传播源头" | ⬜ 团队可干 (P0) |
+| A3 | **Sessions: 会话持久化 + 自动上下文注入 + 中断恢复** | Agent 调研 P1 | run 前取历史/run 后存 items + 审批中断同会话恢复 + 拒绝时保留工具记录供重放 → apeireth-agent (AgentSession) + tool-runtime/record.rs; 与 GoalService 互补 | ⬜ 团队可干 (P1) |
+| A4 | **事件流架构 (action/observation 持久化 + 重放)** | Agent 调研 P1 | OpenHands event stream 精神: 统一 bus/event_log + agent + workflow EventHistory, 打通已有 apeireth-acp (远程 agent 宿主) | ⬜ 团队可干 (P1) |
+| A5 | **A2A 适配层** | Agent 调研 P2 | AgentCard + Task JSON-RPC 最小面 → 新 crate apeireth-a2a 或 mcp 扩展; 自闭环为主则优先级再降 | ⬜ 团队可干 (P2) |
+| A6 | 工具执行结果作记忆候选 + 纯函数工具 TTL 结果缓存 | Agent 调研附加 | 工具结果 (成败/artifact/结论) 喂记忆层 (Mem0 "agent 确认事实"精神); 纯函数工具 TTL 缓存为自研增量 (业界无成熟先例, 如实标注) | ⬜ 团队可干 (P2) |
+| A7 | ACI 工具 UX 原则 | Agent 调研附加 | 分页输出/编辑而非整文件写/结构化错误码 — 推广 spill 截断为工具结果规范 (SWE-agent ACI) | ⬜ 团队可干 (P2) |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
