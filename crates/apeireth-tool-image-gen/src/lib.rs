@@ -25,20 +25,20 @@
 
 pub mod provider;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod generators;
-pub mod params;
-pub mod result;
-pub mod mcp;
 pub mod compat;
 pub mod enhanced;
+pub mod generators;
+pub mod mcp;
+mod organ_kani_proofs;
+pub mod params;
+pub mod result;
 
-pub use provider::{ImageGenProvider, ProviderKind, ProviderRegistry};
-pub use params::{ImageGenParams, ImageSize, ImageQuality, ImageStyle};
-pub use result::{ImageGenResult, GeneratedImage};
-pub use mcp::{ImageGenMcp, ImageMcpTool};
 pub use compat::{ImageGenCommand, ImageGenCompatRouter, IMAGEGEN_COMMAND_COUNT};
 pub use enhanced::EnhancedImageGen;
+pub use mcp::{ImageGenMcp, ImageMcpTool};
+pub use params::{ImageGenParams, ImageQuality, ImageSize, ImageStyle};
+pub use provider::{ImageGenProvider, ProviderKind, ProviderRegistry};
+pub use result::{GeneratedImage, ImageGenResult};
 
 /// R141 deliverables (per v2 plan §9.5):
 /// - 5 modules (provider / generators / params / result / mcp) + compat + enhanced

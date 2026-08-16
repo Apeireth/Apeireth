@@ -443,8 +443,14 @@ mod tests {
         let masked = guard.mask(&input);
         let first = &masked["tokens"][0]["access_token"];
         let second = &masked["tokens"][1]["access_token"];
-        assert!(first.as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
-        assert!(second.as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
+        assert!(first
+            .as_str()
+            .unwrap()
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
+        assert!(second
+            .as_str()
+            .unwrap()
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
         assert_eq!(masked["tokens"][0]["scope"], "read");
     }
 

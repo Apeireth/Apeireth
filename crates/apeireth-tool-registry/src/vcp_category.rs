@@ -35,8 +35,11 @@ impl VcpCategory {
     /// 5 类编译期 hardcode
     pub const COUNT: usize = 5;
     pub const ALL: [VcpCategory; 5] = [
-        Self::Tool, Self::ReactiveIntuition, Self::Service,
-        Self::MessagePreprocessor, Self::MessageDispatcher,
+        Self::Tool,
+        Self::ReactiveIntuition,
+        Self::Service,
+        Self::MessagePreprocessor,
+        Self::MessageDispatcher,
     ];
 
     pub const fn as_str(&self) -> &'static str {
@@ -90,10 +93,19 @@ mod tests {
     #[test]
     fn t02_as_str() {
         assert_eq!(VcpCategory::Tool.as_str(), "tool");
-        assert_eq!(VcpCategory::ReactiveIntuition.as_str(), "reactive_intuition");
+        assert_eq!(
+            VcpCategory::ReactiveIntuition.as_str(),
+            "reactive_intuition"
+        );
         assert_eq!(VcpCategory::Service.as_str(), "service");
-        assert_eq!(VcpCategory::MessagePreprocessor.as_str(), "message_preprocessor");
-        assert_eq!(VcpCategory::MessageDispatcher.as_str(), "message_dispatcher");
+        assert_eq!(
+            VcpCategory::MessagePreprocessor.as_str(),
+            "message_preprocessor"
+        );
+        assert_eq!(
+            VcpCategory::MessageDispatcher.as_str(),
+            "message_dispatcher"
+        );
     }
 
     #[test]
@@ -105,40 +117,57 @@ mod tests {
 
     #[test]
     fn t04_from_tool_kind_sync() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::Sync), VcpCategory::Tool);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::Sync),
+            VcpCategory::Tool
+        );
     }
 
     #[test]
     fn t05_from_tool_kind_async() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::Async), VcpCategory::Tool);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::Async),
+            VcpCategory::Tool
+        );
     }
 
     #[test]
     fn t06_from_tool_kind_static() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::Static), VcpCategory::Tool);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::Static),
+            VcpCategory::Tool
+        );
     }
 
     #[test]
     fn t07_from_tool_kind_service() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::Service), VcpCategory::Service);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::Service),
+            VcpCategory::Service
+        );
     }
 
     #[test]
     fn t08_from_tool_kind_hybrid() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::Hybridservice), VcpCategory::Service);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::Hybridservice),
+            VcpCategory::Service
+        );
     }
 
     #[test]
     fn t09_from_tool_kind_message_preprocessor() {
-        assert_eq!(VcpCategory::from_tool_kind(ToolKind::MessagePreprocessor),
-                   VcpCategory::MessagePreprocessor);
+        assert_eq!(
+            VcpCategory::from_tool_kind(ToolKind::MessagePreprocessor),
+            VcpCategory::MessagePreprocessor
+        );
     }
 
     #[test]
     fn t10_all_categories_distinct() {
         let all = VcpCategory::ALL;
         for i in 0..all.len() {
-            for j in (i+1)..all.len() {
+            for j in (i + 1)..all.len() {
                 assert_ne!(all[i], all[j], "categories {} and {} should differ", i, j);
             }
         }

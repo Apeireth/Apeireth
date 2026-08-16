@@ -82,10 +82,22 @@ impl ImageGenParams {
             seed: None,
         }
     }
-    pub fn with_size(mut self, size: ImageSize) -> Self { self.size = size; self }
-    pub fn with_quality(mut self, q: ImageQuality) -> Self { self.quality = q; self }
-    pub fn with_style(mut self, s: ImageStyle) -> Self { self.style = s; self }
-    pub fn with_count(mut self, n: u8) -> Self { self.count = n; self }
+    pub fn with_size(mut self, size: ImageSize) -> Self {
+        self.size = size;
+        self
+    }
+    pub fn with_quality(mut self, q: ImageQuality) -> Self {
+        self.quality = q;
+        self
+    }
+    pub fn with_style(mut self, s: ImageStyle) -> Self {
+        self.style = s;
+        self
+    }
+    pub fn with_count(mut self, n: u8) -> Self {
+        self.count = n;
+        self
+    }
 }
 
 #[cfg(test)]

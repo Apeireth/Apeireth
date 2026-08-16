@@ -4,8 +4,8 @@
 #![allow(missing_docs)]
 use thiserror::Error;
 
-use crate::hash::perceptual_hash;
 use crate::exif::extract_exif;
+use crate::hash::perceptual_hash;
 use crate::ocr::{ocr_extract, OcrResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -27,9 +27,16 @@ pub enum ProcessError {
 pub struct ImageRouter;
 
 impl ImageRouter {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
     /// Dispatch an op on raw bytes; returns JSON-shaped string for display.
-    pub fn dispatch(&self, op: ProcessOp, data: &[u8], lang: Option<&str>) -> Result<String, ProcessError> {
+    pub fn dispatch(
+        &self,
+        op: ProcessOp,
+        data: &[u8],
+        lang: Option<&str>,
+    ) -> Result<String, ProcessError> {
         match op {
             ProcessOp::Hash => {
                 let h = perceptual_hash(data);
@@ -42,7 +49,10 @@ impl ImageRouter {
             ProcessOp::Ocr => {
                 let lang_str = lang.unwrap_or("eng");
                 let r: OcrResult = ocr_extract(data, lang_str);
-                Ok(format!("ocr lang={} text=\"{}\" confidence={}", lang_str, r.text, r.confidence))
+                Ok(format!(
+                    "ocr lang={} text=\"{}\" confidence={}",
+                    lang_str, r.text, r.confidence
+                ))
             }
             ProcessOp::Thumbnail => {
                 // Stub: just returns size info
@@ -53,7 +63,9 @@ impl ImageRouter {
 }
 
 impl Default for ImageRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -77,7 +89,9 @@ mod tests {
     #[test]
     fn ocr_op() {
         let r = ImageRouter::new();
-        let s = r.dispatch(ProcessOp::Ocr, b"data", Some("chi_sim")).unwrap();
+        let s = r
+            .dispatch(ProcessOp::Ocr, b"data", Some("chi_sim"))
+            .unwrap();
         assert!(s.contains("ocr"));
         assert!(s.contains("chi_sim"));
     }

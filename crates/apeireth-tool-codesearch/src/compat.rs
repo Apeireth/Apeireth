@@ -71,7 +71,10 @@ mod tests {
 
     #[test]
     fn unknown_maps_correctly() {
-        assert_eq!(CodeSearchCommand::from_str("xyz"), CodeSearchCommand::Unknown);
+        assert_eq!(
+            CodeSearchCommand::from_str("xyz"),
+            CodeSearchCommand::Unknown
+        );
     }
 
     #[test]

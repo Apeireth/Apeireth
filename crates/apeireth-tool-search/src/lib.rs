@@ -68,7 +68,12 @@ pub struct Document {
 }
 
 impl Document {
-    pub fn new(id: u64, source: impl Into<String>, topic: impl Into<String>, body: impl Into<String>) -> Self {
+    pub fn new(
+        id: u64,
+        source: impl Into<String>,
+        topic: impl Into<String>,
+        body: impl Into<String>,
+    ) -> Self {
         Self {
             id,
             source: source.into(),
@@ -125,13 +130,20 @@ pub struct SearchOptions {
 
 impl Default for SearchOptions {
     fn default() -> Self {
-        Self { sort_by: SortBy::Relevance, recency_decay_secs: 3_600, recency_alpha: 1.0 }
+        Self {
+            sort_by: SortBy::Relevance,
+            recency_decay_secs: 3_600,
+            recency_alpha: 1.0,
+        }
     }
 }
 
 impl SearchOptions {
     pub fn sort(sort_by: SortBy) -> Self {
-        Self { sort_by, ..Self::default() }
+        Self {
+            sort_by,
+            ..Self::default()
+        }
     }
 }
 
@@ -191,29 +203,45 @@ pub struct FieldFilter {
 
 impl FieldFilter {
     pub fn source(s: impl Into<String>) -> Self {
-        Self { source: Some(s.into()), ..Default::default() }
+        Self {
+            source: Some(s.into()),
+            ..Default::default()
+        }
     }
 
     pub fn topic(s: impl Into<String>) -> Self {
-        Self { topic: Some(s.into()), ..Default::default() }
+        Self {
+            topic: Some(s.into()),
+            ..Default::default()
+        }
     }
 
     pub fn matches(&self, doc: &Document) -> bool {
         if let Some(ref s) = self.source {
-            if &doc.source != s { return false; }
+            if &doc.source != s {
+                return false;
+            }
         }
         if let Some(ref t) = self.topic {
-            if &doc.topic != t { return false; }
+            if &doc.topic != t {
+                return false;
+            }
         }
         if let Some(min) = self.time_min_ms {
-            if doc.timestamp_ms < min { return false; }
+            if doc.timestamp_ms < min {
+                return false;
+            }
         }
         if let Some(max) = self.time_max_ms {
-            if doc.timestamp_ms > max { return false; }
+            if doc.timestamp_ms > max {
+                return false;
+            }
         }
         for (k, v) in &self.tag_equal {
             let hit = doc.tags.iter().any(|(dk, dv)| dk == k && dv == v);
-            if !hit { return false; }
+            if !hit {
+                return false;
+            }
         }
         true
     }
@@ -319,7 +347,11 @@ impl SearchEngine {
         let now_ms = crate::now_ms();
         match options.sort_by {
             SortBy::Relevance => {
-                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                results.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
             SortBy::Recency => {
                 results.sort_by(|a, b| b.doc.timestamp_ms.cmp(&a.doc.timestamp_ms));
@@ -332,7 +364,11 @@ impl SearchEngine {
                     let bonus = alpha / (1.0 + age_secs / decay);
                     r.score += bonus;
                 }
-                results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+                results.sort_by(|a, b| {
+                    b.score
+                        .partial_cmp(&a.score)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                });
             }
         }
         results.truncate(limit);
@@ -345,16 +381,14 @@ impl SearchEngine {
     /// **用途**: 一次调多次搜, 省多次 search() 开销
     /// **不假装**: 复用 search_with_filter 路径, 不编造结果
     /// **去重**: 同一 doc 可能被多次 query 命中, 按 id 去重, 保留高分
-    pub fn search_batch(
-        &self,
-        queries: &[&str],
-        limit: usize,
-    ) -> SearchResult<Vec<RankedDoc>> {
+    pub fn search_batch(&self, queries: &[&str], limit: usize) -> SearchResult<Vec<RankedDoc>> {
         let mut best: std::collections::HashMap<u64, RankedDoc> = std::collections::HashMap::new();
         for q in queries {
             for hit in self.search(q, limit)? {
                 match best.get(&hit.doc.id) {
-                    None => { best.insert(hit.doc.id, hit); }
+                    None => {
+                        best.insert(hit.doc.id, hit);
+                    }
                     Some(existing) if existing.score < hit.score => {
                         best.insert(hit.doc.id, hit);
                     }
@@ -363,7 +397,11 @@ impl SearchEngine {
             }
         }
         let mut results: Vec<RankedDoc> = best.into_values().collect();
-        results.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         results.truncate(limit);
         Ok(results)
     }
@@ -397,7 +435,9 @@ impl SearchEngine {
                 Some(d) => d,
                 None => continue,
             };
-            if !filter.matches(doc) { continue; }
+            if !filter.matches(doc) {
+                continue;
+            }
 
             let doc_terms = tokenize(&doc.body);
             let doc_len = doc_terms.len().max(1);
@@ -409,7 +449,9 @@ impl SearchEngine {
                 if tf > 0 {
                     matched.push(term.clone());
                     // BM25-lite: tf / (tf + 0.5 + 1.5 * (doc_len / avg_doc_len))
-                    let avg_len = if g.docs.is_empty() { 1.0 } else {
+                    let avg_len = if g.docs.is_empty() {
+                        1.0
+                    } else {
                         let total: usize = g.doc_len.values().sum();
                         total as f64 / g.docs.len() as f64
                     };
@@ -418,17 +460,30 @@ impl SearchEngine {
                 }
             }
             if score > 0.0 {
-                scored.push(RankedDoc { doc: doc.clone(), score, matched_terms: matched });
+                scored.push(RankedDoc {
+                    doc: doc.clone(),
+                    score,
+                    matched_terms: matched,
+                });
             }
         }
 
-        scored.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+        scored.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
         scored.truncate(limit);
         Ok(scored)
     }
 
     /// 聚合查询
-    pub fn aggregate(&self, query: &str, by: AggregateBy, filter: &FieldFilter) -> SearchResult<AggregateResult> {
+    pub fn aggregate(
+        &self,
+        query: &str,
+        by: AggregateBy,
+        filter: &FieldFilter,
+    ) -> SearchResult<AggregateResult> {
         let results = self.search_with_filter(query, filter, usize::MAX)?;
         let mut groups: HashMap<String, usize> = HashMap::new();
 
@@ -438,7 +493,11 @@ impl SearchEngine {
                 AggregateBy::Topic => format!("topic:{}", r.doc.topic),
                 AggregateBy::TimeBucket(tb) => {
                     let bucket = tb.bucket_key(r.doc.timestamp_ms);
-                    format!("bucket:{}@{}", bucket, tb.bucket_key(bucket + 1).saturating_sub(bucket))
+                    format!(
+                        "bucket:{}@{}",
+                        bucket,
+                        tb.bucket_key(bucket + 1).saturating_sub(bucket)
+                    )
                 }
             };
             *groups.entry(key).or_insert(0) += 1;
@@ -447,12 +506,17 @@ impl SearchEngine {
         let mut out: Vec<(String, usize)> = groups.into_iter().collect();
         out.sort_by(|a, b| b.1.cmp(&a.1));
 
-        Ok(AggregateResult { count: results.len(), groups: out })
+        Ok(AggregateResult {
+            count: results.len(),
+            groups: out,
+        })
     }
 }
 
 impl Default for SearchEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -461,12 +525,19 @@ impl Default for SearchEngine {
 
 /// 简单分词: 跳过 stop words, 转小写, 标点拆分
 fn tokenize(s: &str) -> Vec<String> {
-    const STOP: &[&str] = &["the", "a", "an", "is", "of", "to", "in", "on", "and", "or", "for", "with", "this", "that", "it", "as", "at", "be"];
+    const STOP: &[&str] = &[
+        "the", "a", "an", "is", "of", "to", "in", "on", "and", "or", "for", "with", "this", "that",
+        "it", "as", "at", "be",
+    ];
     let mut out = Vec::new();
     for word in s.unicode_words() {
         let lower = word.to_lowercase();
-        if lower.len() < 2 { continue; }
-        if STOP.contains(&lower.as_str()) { continue; }
+        if lower.len() < 2 {
+            continue;
+        }
+        if STOP.contains(&lower.as_str()) {
+            continue;
+        }
         out.push(lower);
     }
     out
@@ -506,9 +577,24 @@ mod tests {
     #[test]
     fn t03_index_and_search() {
         let engine = SearchEngine::new();
-        engine.index(Document::new(0, "frontend", "user_message", "I love rust programming"));
-        engine.index(Document::new(0, "memory", "episode", "AI assistant memory system"));
-        engine.index(Document::new(0, "frontend", "user_message", "rust is great for systems"));
+        engine.index(Document::new(
+            0,
+            "frontend",
+            "user_message",
+            "I love rust programming",
+        ));
+        engine.index(Document::new(
+            0,
+            "memory",
+            "episode",
+            "AI assistant memory system",
+        ));
+        engine.index(Document::new(
+            0,
+            "frontend",
+            "user_message",
+            "rust is great for systems",
+        ));
 
         let r = engine.search("rust", 5).unwrap();
         assert_eq!(r.len(), 2);
@@ -521,7 +607,9 @@ mod tests {
         let engine = SearchEngine::new();
         engine.index(Document::new(0, "frontend", "msg", "rust is great"));
         engine.index(Document::new(0, "memory", "ep", "rust in memory"));
-        let r = engine.search_with_filter("rust", &FieldFilter::source("frontend"), 5).unwrap();
+        let r = engine
+            .search_with_filter("rust", &FieldFilter::source("frontend"), 5)
+            .unwrap();
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].doc.source, "frontend");
     }
@@ -531,7 +619,9 @@ mod tests {
         let engine = SearchEngine::new();
         engine.index(Document::new(0, "f", "msg", "rust x"));
         engine.index(Document::new(0, "f", "approval", "rust y"));
-        let r = engine.search_with_filter("rust", &FieldFilter::topic("msg"), 5).unwrap();
+        let r = engine
+            .search_with_filter("rust", &FieldFilter::topic("msg"), 5)
+            .unwrap();
         assert_eq!(r.len(), 1);
     }
 
@@ -541,10 +631,16 @@ mod tests {
         engine.index(Document::new(0, "frontend", "msg", "rust a"));
         engine.index(Document::new(0, "frontend", "msg", "rust b"));
         engine.index(Document::new(0, "memory", "ep", "rust c"));
-        let agg = engine.aggregate("rust", AggregateBy::Source, &FieldFilter::default()).unwrap();
+        let agg = engine
+            .aggregate("rust", AggregateBy::Source, &FieldFilter::default())
+            .unwrap();
         assert_eq!(agg.count, 3);
         assert_eq!(agg.groups.len(), 2);
-        let by_count = agg.groups.iter().find(|(k, _)| k == "source:frontend").unwrap();
+        let by_count = agg
+            .groups
+            .iter()
+            .find(|(k, _)| k == "source:frontend")
+            .unwrap();
         assert_eq!(by_count.1, 2);
     }
 
@@ -554,9 +650,17 @@ mod tests {
         engine.index(Document::new(0, "f", "msg", "rust a"));
         engine.index(Document::new(0, "f", "msg", "rust b"));
         engine.index(Document::new(0, "f", "ep", "rust c"));
-        let agg = engine.aggregate("rust", AggregateBy::Topic, &FieldFilter::default()).unwrap();
-        assert_eq!(agg.groups.iter().find(|(k, _)| k == "topic:msg").unwrap().1, 2);
-        assert_eq!(agg.groups.iter().find(|(k, _)| k == "topic:ep").unwrap().1, 1);
+        let agg = engine
+            .aggregate("rust", AggregateBy::Topic, &FieldFilter::default())
+            .unwrap();
+        assert_eq!(
+            agg.groups.iter().find(|(k, _)| k == "topic:msg").unwrap().1,
+            2
+        );
+        assert_eq!(
+            agg.groups.iter().find(|(k, _)| k == "topic:ep").unwrap().1,
+            1
+        );
     }
 
     #[test]
@@ -586,7 +690,13 @@ mod tests {
         engine.index(Document::new(0, "f", "msg", "rust a").with_timestamp(now - 3 * 86_400_000));
         engine.index(Document::new(0, "f", "msg", "rust b").with_timestamp(now - 2 * 86_400_000));
         engine.index(Document::new(0, "f", "msg", "rust c").with_timestamp(now - 100));
-        let agg = engine.aggregate("rust", AggregateBy::TimeBucket(TimeBucket::Day), &FieldFilter::default()).unwrap();
+        let agg = engine
+            .aggregate(
+                "rust",
+                AggregateBy::TimeBucket(TimeBucket::Day),
+                &FieldFilter::default(),
+            )
+            .unwrap();
         assert_eq!(agg.count, 3);
         assert!(agg.groups.len() >= 2);
     }
@@ -597,21 +707,32 @@ mod tests {
         // a 短文, 命中 1 次
         engine.index(Document::new(0, "f", "msg", "rust"));
         // b 长文, 命中 2 次
-        engine.index(Document::new(0, "f", "msg", "rust is great and rust is awesome"));
+        engine.index(Document::new(
+            0,
+            "f",
+            "msg",
+            "rust is great and rust is awesome",
+        ));
         let r = engine.search("rust", 5).unwrap();
         assert_eq!(r.len(), 2);
         // 长文命中多应排前
         let long_doc = r.iter().find(|x| x.doc.body.contains("awesome")).unwrap();
         let short_doc = r.iter().find(|x| x.doc.body == "rust").unwrap();
-        assert!(long_doc.score > short_doc.score ||
-                long_doc.matched_terms.len() >= short_doc.matched_terms.len());
+        assert!(
+            long_doc.score > short_doc.score
+                || long_doc.matched_terms.len() >= short_doc.matched_terms.len()
+        );
     }
 
     #[test]
     fn t12_tag_filter() {
         let engine = SearchEngine::new();
-        engine.index(Document::new(0, "f", "msg", "rust a").with_tags(vec![("user".into(), "alice".into())]));
-        engine.index(Document::new(0, "f", "msg", "rust b").with_tags(vec![("user".into(), "bob".into())]));
+        engine.index(
+            Document::new(0, "f", "msg", "rust a").with_tags(vec![("user".into(), "alice".into())]),
+        );
+        engine.index(
+            Document::new(0, "f", "msg", "rust b").with_tags(vec![("user".into(), "bob".into())]),
+        );
         let mut f = FieldFilter::default();
         f.tag_equal.push(("user".into(), "alice".into()));
         let r = engine.search_with_filter("rust", &f, 5).unwrap();
@@ -620,144 +741,158 @@ mod tests {
     }
 }
 
-    // ============================================================
-    // R236 — search_batch (6 cases)
-    // ============================================================
+// ============================================================
+// R236 — search_batch (6 cases)
+// ============================================================
 
-    #[test]
-    fn t13_search_batch_empty_returns_empty() {
-        let engine = SearchEngine::new();
-        let res = engine.search_batch(&[], 10).unwrap();
-        assert!(res.is_empty());
-    }
+#[test]
+fn t13_search_batch_empty_returns_empty() {
+    let engine = SearchEngine::new();
+    let res = engine.search_batch(&[], 10).unwrap();
+    assert!(res.is_empty());
+}
 
-    #[test]
-    fn t14_search_batch_single_query_matches_search() {
-        let engine = SearchEngine::new();
-        engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
-        let batch = engine.search_batch(&["hello"], 10).unwrap();
-        let single = engine.search("hello", 10).unwrap();
-        assert_eq!(batch.len(), single.len());
-    }
+#[test]
+fn t14_search_batch_single_query_matches_search() {
+    let engine = SearchEngine::new();
+    engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
+    let batch = engine.search_batch(&["hello"], 10).unwrap();
+    let single = engine.search("hello", 10).unwrap();
+    assert_eq!(batch.len(), single.len());
+}
 
-    #[test]
-    fn t15_search_batch_dedupes_same_doc_across_queries() {
-        let engine = SearchEngine::new();
-        engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
-        // 两个 query 都命中 doc 1 — 应只返一次
-        let res = engine.search_batch(&["hello", "fn"], 10).unwrap();
-        assert_eq!(res.len(), 1, "doc 1 被两次命中, 应去重");
-        assert_eq!(res[0].doc.id, 1);
-    }
+#[test]
+fn t15_search_batch_dedupes_same_doc_across_queries() {
+    let engine = SearchEngine::new();
+    engine.index(Document::new(1, "src", "rust", "fn hello() {}"));
+    // 两个 query 都命中 doc 1 — 应只返一次
+    let res = engine.search_batch(&["hello", "fn"], 10).unwrap();
+    assert_eq!(res.len(), 1, "doc 1 被两次命中, 应去重");
+    assert_eq!(res[0].doc.id, 1);
+}
 
-    #[test]
-    fn t16_search_batch_keeps_highest_score() {
-        let engine = SearchEngine::new();
-        engine.index(Document::new(1, "a", "t", "hello world"));
-        engine.index(Document::new(2, "b", "t", "hello there"));
-        let res = engine.search_batch(&["hello world", "hello"], 10).unwrap();
-        // doc 1 在 "hello world" 命中更高分, 应排前
-        assert_eq!(res[0].doc.id, 1, "doc 1 应有更高综合分");
-    }
+#[test]
+fn t16_search_batch_keeps_highest_score() {
+    let engine = SearchEngine::new();
+    engine.index(Document::new(1, "a", "t", "hello world"));
+    engine.index(Document::new(2, "b", "t", "hello there"));
+    let res = engine.search_batch(&["hello world", "hello"], 10).unwrap();
+    // doc 1 在 "hello world" 命中更高分, 应排前
+    assert_eq!(res[0].doc.id, 1, "doc 1 应有更高综合分");
+}
 
-    #[test]
-    fn t17_search_batch_respects_limit() {
-        let engine = SearchEngine::new();
-        for i in 0..20 {
-            engine.index(Document::new(i, "src", "rust", format!("fn test_{}()", i)));
-        }
-        let res = engine.search_batch(&["fn", "test"], 5).unwrap();
-        assert!(res.len() <= 5, "limit=5 应至多 5 条");
+#[test]
+fn t17_search_batch_respects_limit() {
+    let engine = SearchEngine::new();
+    for i in 0..20 {
+        engine.index(Document::new(i, "src", "rust", format!("fn test_{}()", i)));
     }
+    let res = engine.search_batch(&["fn", "test"], 5).unwrap();
+    assert!(res.len() <= 5, "limit=5 应至多 5 条");
+}
 
-    #[test]
-    fn t18_search_batch_sorted_by_score_desc() {
-        let engine = SearchEngine::new();
-        engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
-        engine.index(Document::new(2, "b", "t", "alpha"));
-        engine.index(Document::new(3, "c", "t", "alpha beta"));
-        let res = engine.search_batch(&["alpha", "beta"], 10).unwrap();
-        // 验证按分降序 (不指定具体 id, 因 ranking 取决于 score 函数实现)
-        for i in 1..res.len() {
-            assert!(res[i - 1].score >= res[i].score, "结果应按分降序: {} >= {}", res[i - 1].score, res[i].score);
-        }
-        assert!(!res.is_empty());
+#[test]
+fn t18_search_batch_sorted_by_score_desc() {
+    let engine = SearchEngine::new();
+    engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
+    engine.index(Document::new(2, "b", "t", "alpha"));
+    engine.index(Document::new(3, "c", "t", "alpha beta"));
+    let res = engine.search_batch(&["alpha", "beta"], 10).unwrap();
+    // 验证按分降序 (不指定具体 id, 因 ranking 取决于 score 函数实现)
+    for i in 1..res.len() {
+        assert!(
+            res[i - 1].score >= res[i].score,
+            "结果应按分降序: {} >= {}",
+            res[i - 1].score,
+            res[i].score
+        );
     }
+    assert!(!res.is_empty());
+}
 
-    // R239 -- sort strategies (4 cases)
-    #[test]
-    fn r239_01_search_with_options_relevance_default_works() {
-        let engine = SearchEngine::new();
-        engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
-        engine.index(Document::new(2, "b", "t", "alpha"));
-        engine.index(Document::new(3, "c", "t", "alpha beta"));
-        let opts = SearchOptions::default();
-        assert_eq!(opts.sort_by, SortBy::Relevance);
-        let res = engine.search_with_options("alpha", 10, opts).unwrap();
-        assert_eq!(res.len(), 3);
-        for i in 1..res.len() {
-            assert!(res[i - 1].score >= res[i].score);
-        }
+// R239 -- sort strategies (4 cases)
+#[test]
+fn r239_01_search_with_options_relevance_default_works() {
+    let engine = SearchEngine::new();
+    engine.index(Document::new(1, "a", "t", "alpha beta gamma"));
+    engine.index(Document::new(2, "b", "t", "alpha"));
+    engine.index(Document::new(3, "c", "t", "alpha beta"));
+    let opts = SearchOptions::default();
+    assert_eq!(opts.sort_by, SortBy::Relevance);
+    let res = engine.search_with_options("alpha", 10, opts).unwrap();
+    assert_eq!(res.len(), 3);
+    for i in 1..res.len() {
+        assert!(res[i - 1].score >= res[i].score);
     }
+}
 
-    #[test]
-    fn r239_02_search_with_options_recency_orders_by_timestamp_desc() {
-        let engine = SearchEngine::new();
-        let now = now_ms();
-        engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 10_000));
-        engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now - 5_000));
-        engine.index(Document::new(3, "c", "t", "alpha").with_timestamp(now));
-        let opts = SearchOptions::sort(SortBy::Recency);
-        let res = engine.search_with_options("alpha", 10, opts).unwrap();
-        assert_eq!(res.len(), 3);
-        assert_eq!(res[0].doc.id, 3);
-        assert_eq!(res[1].doc.id, 2);
-        assert_eq!(res[2].doc.id, 1);
-    }
+#[test]
+fn r239_02_search_with_options_recency_orders_by_timestamp_desc() {
+    let engine = SearchEngine::new();
+    let now = now_ms();
+    engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 10_000));
+    engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now - 5_000));
+    engine.index(Document::new(3, "c", "t", "alpha").with_timestamp(now));
+    let opts = SearchOptions::sort(SortBy::Recency);
+    let res = engine.search_with_options("alpha", 10, opts).unwrap();
+    assert_eq!(res.len(), 3);
+    assert_eq!(res[0].doc.id, 3);
+    assert_eq!(res[1].doc.id, 2);
+    assert_eq!(res[2].doc.id, 1);
+}
 
-    #[test]
-    fn r239_03_search_with_options_hybrid_rewards_recent_doc() {
-        let engine = SearchEngine::new();
-        let now = now_ms();
-        engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 1_000_000));
-        engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now));
-        let opts = SearchOptions {
-            sort_by: SortBy::Hybrid,
-            recency_decay_secs: 60,
-            recency_alpha: 1.0,
-        };
-        let res = engine.search_with_options("alpha", 10, opts).unwrap();
-        assert_eq!(res.len(), 2);
-        assert_eq!(res[0].doc.id, 2, "hybrid should promote the recent doc");
-    }
+#[test]
+fn r239_03_search_with_options_hybrid_rewards_recent_doc() {
+    let engine = SearchEngine::new();
+    let now = now_ms();
+    engine.index(Document::new(1, "a", "t", "alpha").with_timestamp(now - 1_000_000));
+    engine.index(Document::new(2, "b", "t", "alpha").with_timestamp(now));
+    let opts = SearchOptions {
+        sort_by: SortBy::Hybrid,
+        recency_decay_secs: 60,
+        recency_alpha: 1.0,
+    };
+    let res = engine.search_with_options("alpha", 10, opts).unwrap();
+    assert_eq!(res.len(), 2);
+    assert_eq!(res[0].doc.id, 2, "hybrid should promote the recent doc");
+}
 
-    #[test]
-    fn r239_04_search_with_options_limit_truncates_after_sort() {
-        let engine = SearchEngine::new();
-        let now = now_ms();
-        for i in 0..10 {
-            engine.index(Document::new(i, "src", "topic", format!("alpha {}", i)).with_timestamp(now - (i as i64) * 1000));
-        }
-        let opts = SearchOptions::sort(SortBy::Recency);
-        let res = engine.search_with_options("alpha", 3, opts).unwrap();
-        assert_eq!(res.len(), 3);
-        // newest 3 means largest timestamp, which is the for-i order reversed:
-        // i=9 -> ts = now-9000 (oldest)
-        // i=0 -> ts = now-0   (newest, dropped because Document::new also calls now_ms)
-        // To make it deterministic, re-issue i=0 with explicit now mark
-        // Actually, since we use the captured `now` via with_timestamp, the ordering is fixed:
-        // ts(i) = now - i*1000, newer = lower i. So in recency-desc result, ids 0,1,2 must be first.
-        // BUT Document::new already sets a fresh now_ms() that may differ from captured `now` by
-        // hundreds of microseconds -- so id 0 may end up slightly newer than id 1 via its own
-        // initial timestamp. Force all ids to use the captured `now` strictly.
-        let mut by_id: Vec<(u64, i64)> = res.iter().map(|r| (r.doc.id, r.doc.timestamp_ms)).collect();
-        // In recency-desc order: timestamp_monotonic
-        for win in by_id.windows(2) {
-            assert!(win[0].1 >= win[1].1, "recency order: {} ts {} >= ts {}", win[0].0, win[0].1, win[1].1);
-        }
-        // limit=3 must truncate 10 docs to 3
-        assert_eq!(by_id.len(), 3);
+#[test]
+fn r239_04_search_with_options_limit_truncates_after_sort() {
+    let engine = SearchEngine::new();
+    let now = now_ms();
+    for i in 0..10 {
+        engine.index(
+            Document::new(i, "src", "topic", format!("alpha {}", i))
+                .with_timestamp(now - (i as i64) * 1000),
+        );
     }
+    let opts = SearchOptions::sort(SortBy::Recency);
+    let res = engine.search_with_options("alpha", 3, opts).unwrap();
+    assert_eq!(res.len(), 3);
+    // newest 3 means largest timestamp, which is the for-i order reversed:
+    // i=9 -> ts = now-9000 (oldest)
+    // i=0 -> ts = now-0   (newest, dropped because Document::new also calls now_ms)
+    // To make it deterministic, re-issue i=0 with explicit now mark
+    // Actually, since we use the captured `now` via with_timestamp, the ordering is fixed:
+    // ts(i) = now - i*1000, newer = lower i. So in recency-desc result, ids 0,1,2 must be first.
+    // BUT Document::new already sets a fresh now_ms() that may differ from captured `now` by
+    // hundreds of microseconds -- so id 0 may end up slightly newer than id 1 via its own
+    // initial timestamp. Force all ids to use the captured `now` strictly.
+    let mut by_id: Vec<(u64, i64)> = res.iter().map(|r| (r.doc.id, r.doc.timestamp_ms)).collect();
+    // In recency-desc order: timestamp_monotonic
+    for win in by_id.windows(2) {
+        assert!(
+            win[0].1 >= win[1].1,
+            "recency order: {} ts {} >= ts {}",
+            win[0].0,
+            win[0].1,
+            win[1].1
+        );
+    }
+    // limit=3 must truncate 10 docs to 3
+    assert_eq!(by_id.len(), 3);
+}
 
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;

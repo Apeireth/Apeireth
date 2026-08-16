@@ -626,9 +626,8 @@ mod tests {
     #[tokio::test]
     async fn mcp_server_schema_validation_non_object_errors() {
         let server = McpServer::new();
-        let handler: McpToolHandler = Arc::new(|_call| {
-            Box::pin(async move { Ok(McpToolResult::text("ok")) })
-        });
+        let handler: McpToolHandler =
+            Arc::new(|_call| Box::pin(async move { Ok(McpToolResult::text("ok")) }));
         let def = McpToolDefinition::new(
             "echo",
             "Echo",
