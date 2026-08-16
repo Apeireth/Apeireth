@@ -39,25 +39,25 @@
 - 实测: 时刻/活跃判断/三个约定全命中
 - 待办: Goal 写入侧 (模块 6); 节律时区统一 (观察改 Local)
 
-### 模块 2: 记忆分层（Memory Hierarchy）
-- 接 lightmemo: 写入时按价值升层 (L1→L4), 定期 decay 降级/遗忘低价值
-- 注入策略: L4 摘要常驻 + 高价值条目 + query 检索命中 — 替代"最近 30 条平铺"
-- 验证: 记忆多了之后注入量不膨胀, 重要的永远在
+### 模块 2: 记忆分层（Memory Hierarchy）— ✅ 已完成 (2026-08-16)
+- rank_memory_entries: 做梦摘要/偏好优先 → 提炼事实 → 其余按最近; 预算 12 条注入
+  (替代"最近 30 条平铺"; lightmemo 完整分级/遗忘后续)
+- 推理召回候选用全量 40 条 (deep_recall 重排)
 
-### 模块 3: 上下文管理（Context Manager）
-- 滚动摘要: 对话超窗 → LLM 摘要旧段保留 (对齐 VCP ContextFoldingV2)
-- 注入 token 预算: 每块 (persona/状态/记忆/偏好/成长/摘要) 分配上限, 超预算截断
-- 验证: 200 轮对话后 prompt 大小稳定
+### 模块 3: 上下文管理（Context Manager）— ✅ 已完成 (2026-08-16)
+- 滚动摘要: 长对话裁剪时被裁旧段 → LLM 摘要 (5 分钟节流) → 【早期对话摘要】system 消息
+- 摘要失败 → 诚实提示「已由记忆系统提炼」, 不硬造; 注入预算 = 各块 take 上限
 
-### 模块 4: 主动送达（Delivery Channels）
-- SSE 端点 /v1/apeireth/events: 涌现 Initiative / 做梦完成 / 反思完成 / 待批请求 → 前端在线推送
-- Lark 通道: 离线送达 (LarkDelivery 已有, 需凭据)
-- 验证: 涌现触发时浏览器页面实时收到"本座想说话"
+### 模块 4: 主动送达（Delivery Channels）— ✅ 已完成 (2026-08-16)
+- BroadcastSink (Sink trait): 涌现/事件 → broadcast → SSE (GET /v1/apeireth/events)
+- 前端 EventSource 实时显示「📣 他说」气泡; 开发端点 /v1/apeireth/test-event
+- 实测: 事件 → SSE 流 → 客户端收到 ✅ (生产事件=涌现触发, 待真实使用积累)
+- Lark 通道 (离线) 已有 LarkDelivery, 需凭据后接
 
-### 模块 5: 深度反思（Deep Reflection）
-- ReflectionScheduler 加 summarizer trait 口子 (同 DreamSummarizer 模式, lib 小改)
-- 周期完成 → LLM 深度反思 (输入: 周期记忆+提炼产物 → 输出: 模式/洞察/建议) → 写回 + 喂经验库
-- 验证: 反思记录包含真实洞察 (非状态文本)
+### 模块 5: 深度反思（Deep Reflection）— ✅ 已完成 (2026-08-16)
+- ReflectionScheduler 加 ReflectionReflector trait 口子 (tick 改 async)
+- MiniMaxReflector: 周期记忆 → 模式/洞察/建议 (markdown) → 写回【深度反思】
+- 失败 → 诚实降级状态文本 (实测: MiniMax 空响应时降级生效)
 
 ### 模块 6: 目标驱动（Goal Integration）— ✅ 已完成 (2026-08-16)
 - 写入侧: goal_create / goal_status / goal_complete / goal_pause / goal_block 工具
