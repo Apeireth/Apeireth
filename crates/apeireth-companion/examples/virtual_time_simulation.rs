@@ -7,12 +7,14 @@
 //!   4. 反思周期: ReflectionCycleScheduler 4 阶段完整周期 → 自动重触发 (cycles=1)
 //!   5. 能力生命周期: propose → approve → activate → retire (严格状态机)
 //!   6. 套件装配: base/沙盒/教育/渗透 三件套目录装配校验
+//!   7. 提示词装配引擎 (N9): 分型变量源 + AgentGuard 特权守卫 + 虚拟时钟时间变量
 //!
 //! 用 `apeireth_core::clock::VirtualClock` 驱动, 不依赖真实时钟.
 
 use apeireth_companion::capability::{CapabilityKind, CapabilityRegistry, CapabilityStatus};
 use apeireth_companion::emergence::RhythmEstimator;
 use apeireth_companion::packs::{PackExpiry, PackRegistry, PermissionPack};
+use apeireth_companion::prompt_assembler::{AssemblyGuard, AssemblyRole, PromptAssembler, SourceKind, StaticSource, TimeSource};
 use apeireth_companion::suites::SuiteCatalog;
 use apeireth_companion::tool_bridge::ToolBridge;
 use apeireth_companion::DreamScheduler;
@@ -209,6 +211,48 @@ async fn main() {
             && cat.list(apeireth_companion::suites::SuiteKind::UpgradeSuite).len() >= 3,
         "base≥1 / pack≥2 / suite≥3".to_string(),
     );
+    println!();
+
+    // ---------- 7. 提示词装配引擎 (N9) ----------
+    println!("【提示词装配】占位符变量宇宙 (分型变量源 + AgentGuard 特权守卫 + 虚拟时钟时间变量)");
+    let pa_clock: Arc<dyn Clock> = Arc::new(vc.clone());
+    let id_src = StaticSource::new(SourceKind::Identity).set("name", "小夜").unwrap();
+    let assembler = PromptAssembler::new()
+        .with_source(Box::new(id_src))
+        .with_source(Box::new(TimeSource::new(pa_clock)))
+        .with_agent("小夜", "我是{{name}}, 今天是{{date}}")
+        .unwrap()
+        .with_agent("小白", "另一个灵魂")
+        .unwrap();
+    let mut guard_sys = AssemblyGuard::new();
+    let (sys_txt, sys_report) = assembler.expand_text("{{agent:小夜}}", AssemblyRole::System, &mut guard_sys);
+    check(
+        "system 特权展开 (agent 内嵌套变量递归)",
+        sys_txt.starts_with("我是小夜, 今天是 ") && sys_report.expanded.len() == 1,
+        sys_txt.clone(),
+    );
+    let date0 = sys_txt.trim_start_matches("我是小夜, 今天是 ").to_string();
+    let mut guard_user = AssemblyGuard::new();
+    let (user_txt, user_report) = assembler.expand_text("{{agent:小夜}}", AssemblyRole::User, &mut guard_user);
+    check(
+        "user 非特权静默移除 (防注入)",
+        user_txt.is_empty() && user_report.removed.len() == 1 && guard_user.expanded_agent().is_none(),
+        "agent 内容不外泄".to_string(),
+    );
+    let mut guard_second = AssemblyGuard::new();
+    let (_second_txt, second_report) =
+        assembler.expand_text("{{agent:小夜}} 与 {{agent:小白}}", AssemblyRole::System, &mut guard_second);
+    check(
+        "AgentGuard 全上下文单 agent",
+        second_report.expanded.len() == 1 && !second_report.removed.is_empty(),
+        format!("expanded={} removed={}", second_report.expanded.len(), second_report.removed.len()),
+    );
+    // 虚拟时钟快进 1 天 → 时间变量跟随 (0 真等待)
+    vc.advance(chrono::Duration::days(1));
+    let mut guard_ff = AssemblyGuard::new();
+    let (sys_txt2, _) = assembler.expand_text("{{agent:小夜}}", AssemblyRole::System, &mut guard_ff);
+    let date1 = sys_txt2.trim_start_matches("我是小夜, 今天是 ").to_string();
+    check("虚拟时钟快进 → 时间变量变化", date0 != date1 && date1.len() == 10, format!("{date0} → {date1}"));
     println!();
 
     // ---------- 汇总 ----------

@@ -24,7 +24,7 @@ services:
       APEIRETH_LLM_MODEL: ${APEIRETH_LLM_MODEL:-MiniMax-M3}
       APEIRETH_API_KEY: ${APEIRETH_API_KEY:-}
       APEIRETH_DATA_DIR: /var/lib/apeireth
-      APEIRETH_DB_URL: postgresql://apeireth:${POSTGRES_PASSWORD:-secret}@postgres:5432/apeireth
+      APEIRETH_DB_URL: postgresql://apeireth:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置 — 禁止默认弱密码, 请 export POSTGRES_PASSWORD=... 或写入 .env (台账 #47)}@postgres:5432/apeireth
       APEIRETH_REDIS_URL: redis://redis:6379/0
       APEIRETH_METRICS_PORT: 9090
       RUST_LOG: info,apeireth_api=debug
@@ -54,7 +54,9 @@ services:
     environment:
       POSTGRES_DB: apeireth
       POSTGRES_USER: apeireth
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secret}
+      # 台账 #47: 强制外部注入, 无默认值 — POSTGRES_PASSWORD 缺省时 `docker compose up`
+      # 立即报错 (variable is not set), 不留 'secret' 弱默认.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置 — 禁止默认弱密码, 请 export POSTGRES_PASSWORD=... 或写入 .env}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -108,6 +110,8 @@ networks:
       config:
         - subnet: 172.20.0.0/16
 
+# 启动前置 (台账 #47): 必须提供 POSTGRES_PASSWORD (无默认值, 缺省直接报错):
+#   export POSTGRES_PASSWORD='<强密码>'   # 或写入 compose 同目录 .env 文件
 # 启动: docker-compose up -d
 # 健康: docker-compose ps  (期望 3/3 healthy)
 # 验证: curl http://localhost:8080/health  (期望 200)
