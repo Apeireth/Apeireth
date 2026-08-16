@@ -81,7 +81,7 @@
 | M2 | **图社区分层聚合 + 双级检索** | 记忆调研 ⭐ | memory_graph 只有实体链 CRAWL (local): 轻量社区检测 (s/p/o 共现聚簇, 不上 Leiden) + 社区级滚动摘要挂提炼调度 + 检索分诊 (具体问题走实体链/宽泛问题走社区摘要, LightRAG/GraphRAG 精神) | ⬜ 团队可干 (P1) |
 | M3 | **ACT-R 激活衰减 + 存档不删除** | 记忆调研 ⭐ | decay.rs 单点半衰期: 改 ACT-R 激活 A=ln(Σ(t−t_j)^−d)+β (访问次数强化) + 关联扩散 + 遗忘=移入归档层可再激活 (mtrace 参考) | ⬜ 团队可干 (P1) |
 | M4 | **记忆评测闭环** | 记忆调研 ⭐ | apeireth-bench 建 LongMemEval 5 能力评测集 (抽取/多会话推理/时序/知识更新/弃答) — 弃答正好检验对账 DELETE 不输出已删事实 | ✅ 完成 (任务 1c1f3f95, tests/m4_longmemeval_eval.rs 6 用例全绿, 确定性 fixture + HashEmbedder 0 LLM; 对账 DELETE 不输出已删事实 + 库外拒答断言均落地; Note 级有效期过滤留 M5) |
-| M5 | **通用记忆层时间有效性** | 记忆调研 ⭐ | 时间有效性只在图事实 (valid_at/invalid_at): 下沉到普通记忆条目 valid_from/valid_until + 问法感知过滤 (现在/当前 vs 以前/曾经, Mem0 temporal reasoning) | ⬜ 团队可干 (P1) |
+| M5 | **通用记忆层时间有效性** | 记忆调研 ⭐ | 时间有效性只在图事实 (valid_at/invalid_at): 下沉到普通记忆条目 valid_from/valid_until + 问法感知过滤 (现在/当前 vs 以前/曾经, Mem0 temporal reasoning) | ✅ 落地 (提交 52316ba2): notes 表 V3 migration 加 valid_from/valid_until (NULL=永久, 存量零迁移) + NoteQuery validity/as_of 过滤 (半开区间) + validity_from_query_text 确定性关键词规则 (0 LLM: 现在/当前类→CurrentOnly, 历史/中性→All) + 写入侧 put_note_with_validity/set_note_validity 0 装留接口; NoteStore trait/apeireth_core::Note/memory_graph 均未动 (M4 时序用例接口稳定); cargo test -p apeireth-memory 全绿 312 (含 5 新 m5 测试); 升级路径: 表大后可加 valid_until 部分索引, 问法词表可外置 |
 | M6 | prompt drift 管理 | 记忆调研备选 | 提炼器输出 schema 版本化+迁移 (防长跑漂移, 挂 migrations.rs) | ⬜ 团队可干 (P2) |
 | S1 | **Windows 最小权限执行** | 安全调研 | exec_worker 补 Job Object 的权限洞: CreateRestrictedToken 去特权+deny SID + 低完整性级别 + 每工具工作目录 ACL; 高危可选 AppContainer 档 (Chromium 分层模型) | ⬜ 团队可干 (P1, 随 N17 隔离加固) |
 | S2 | **Untrusted 输入标记 + MCP 工具描述投毒防护** | 安全调研 | prompt 组装层外部内容包 untrusted 标记; MCP 新服务器 tool description 过宪法评审 + diff 告警 (OWASP Agentic Top 10 ASI-01) | ⬜ 团队可干 (P1) |
