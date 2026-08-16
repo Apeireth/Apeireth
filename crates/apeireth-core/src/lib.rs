@@ -14,7 +14,6 @@
 //!
 //! 主哲学 anchor 6 全贯穿. 不修改 LOCKED 任何文件.
 
-
 use serde::{Deserialize, Serialize};
 
 // R131 架构债清理: 拆 lib.rs 108KB → 5 submodules
@@ -25,14 +24,14 @@ pub mod clock;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 pub use memory::*;
-pub mod onion;
-pub mod philosophy;
 pub mod gate;
 pub mod lifecycle;
-pub use onion::*;
-pub use philosophy::*;
+pub mod onion;
+pub mod philosophy;
 pub use gate::*;
 pub use lifecycle::*;
+pub use onion::*;
+pub use philosophy::*;
 use std::collections::HashMap;
 
 // ============================================

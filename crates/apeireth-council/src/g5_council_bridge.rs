@@ -6,11 +6,11 @@
 //! O-5: docs in parent crate README, this file is implementation.
 #![allow(missing_docs)]
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use std::hash::{Hash, Hasher};
-use std::collections::hash_map::DefaultHasher;
 
 use apeireth_pipeline_g5::{Pipeline, PipelineConfig, PipelineMessage, Stage, StageKind};
 
@@ -46,7 +46,11 @@ pub struct NormalizeConfig {
 }
 
 impl Default for NormalizeConfig {
-    fn default() -> Self { Self { max_description_len: 4096 } }
+    fn default() -> Self {
+        Self {
+            max_description_len: 4096,
+        }
+    }
 }
 
 /// Throttle config (max deliberations per window).
@@ -57,7 +61,12 @@ pub struct ThrottleConfig {
 }
 
 impl Default for ThrottleConfig {
-    fn default() -> Self { Self { max_per_window: 30, window: Duration::from_secs(60) } }
+    fn default() -> Self {
+        Self {
+            max_per_window: 30,
+            window: Duration::from_secs(60),
+        }
+    }
 }
 
 /// Reliability state (synthesis idempotency + 60s suppression).
@@ -68,16 +77,29 @@ pub struct ReliabilityState {
 }
 
 impl ReliabilityState {
-    pub fn new() -> Self { Self { fingerprints: Mutex::new(HashMap::new()), window: Duration::from_secs(60) } }
+    pub fn new() -> Self {
+        Self {
+            fingerprints: Mutex::new(HashMap::new()),
+            window: Duration::from_secs(60),
+        }
+    }
     pub fn is_suppressed(&self, fp: &str) -> bool {
         let mut m = self.fingerprints.lock().unwrap();
-        if let Some(t) = m.get(fp) { if t.elapsed() < self.window { return true; } }
+        if let Some(t) = m.get(fp) {
+            if t.elapsed() < self.window {
+                return true;
+            }
+        }
         m.insert(fp.to_string(), Instant::now());
         false
     }
 }
 
-impl Default for ReliabilityState { fn default() -> Self { Self::new() } }
+impl Default for ReliabilityState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 /// Throttle state (sliding window counter).
 #[derive(Debug)]
@@ -87,7 +109,12 @@ pub struct ThrottleState {
 }
 
 impl ThrottleState {
-    pub fn new(config: ThrottleConfig) -> Self { Self { timestamps: Mutex::new(Vec::new()), config } }
+    pub fn new(config: ThrottleConfig) -> Self {
+        Self {
+            timestamps: Mutex::new(Vec::new()),
+            config,
+        }
+    }
     pub fn check_and_record(&self) -> bool {
         let now = Instant::now();
         let mut ts = self.timestamps.lock().unwrap();
@@ -105,11 +132,20 @@ impl ThrottleState {
 #[derive(Debug, Clone, Default)]
 pub struct CouncilDispatchStage;
 impl Stage<PipelineMessage, PipelineMessage> for CouncilDispatchStage {
-    fn kind(&self) -> StageKind { StageKind::Dispatch }
-    fn name(&self) -> &str { "council-dispatch" }
-    fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
+    fn kind(&self) -> StageKind {
+        StageKind::Dispatch
+    }
+    fn name(&self) -> &str {
+        "council-dispatch"
+    }
+    fn process(
+        &self,
+        input: PipelineMessage,
+    ) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
         let mut m = input;
-        if m.kind.is_empty() { m.kind = "council-pending".to_string(); }
+        if m.kind.is_empty() {
+            m.kind = "council-pending".to_string();
+        }
         // simple routing by area prefix in payload
         if m.payload.contains("area=L0") || m.payload.contains("area=l0") {
             m.payload = m.payload.replace("area=", "area=L0,");
@@ -120,16 +156,31 @@ impl Stage<PipelineMessage, PipelineMessage> for CouncilDispatchStage {
 
 /// Normalize stage: clamp description length + dedup refs.
 #[derive(Debug, Clone)]
-pub struct CouncilNormalizeStage { pub config: NormalizeConfig }
-impl CouncilNormalizeStage { pub fn new(config: NormalizeConfig) -> Self { Self { config } } }
+pub struct CouncilNormalizeStage {
+    pub config: NormalizeConfig,
+}
+impl CouncilNormalizeStage {
+    pub fn new(config: NormalizeConfig) -> Self {
+        Self { config }
+    }
+}
 impl Stage<PipelineMessage, PipelineMessage> for CouncilNormalizeStage {
-    fn kind(&self) -> StageKind { StageKind::Normalize }
-    fn name(&self) -> &str { "council-normalize" }
-    fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
+    fn kind(&self) -> StageKind {
+        StageKind::Normalize
+    }
+    fn name(&self) -> &str {
+        "council-normalize"
+    }
+    fn process(
+        &self,
+        input: PipelineMessage,
+    ) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
         let mut m = input;
         if m.payload.len() > self.config.max_description_len {
             let mut idx = self.config.max_description_len;
-            while idx > 0 && !m.payload.is_char_boundary(idx) { idx -= 1; }
+            while idx > 0 && !m.payload.is_char_boundary(idx) {
+                idx -= 1;
+            }
             m.payload.truncate(idx);
             m.payload.push_str("...[truncated]");
         }
@@ -141,9 +192,16 @@ impl Stage<PipelineMessage, PipelineMessage> for CouncilNormalizeStage {
 #[derive(Debug, Clone, Default)]
 pub struct CouncilPolicyStage;
 impl Stage<PipelineMessage, PipelineMessage> for CouncilPolicyStage {
-    fn kind(&self) -> StageKind { StageKind::Policy }
-    fn name(&self) -> &str { "council-policy" }
-    fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
+    fn kind(&self) -> StageKind {
+        StageKind::Policy
+    }
+    fn name(&self) -> &str {
+        "council-policy"
+    }
+    fn process(
+        &self,
+        input: PipelineMessage,
+    ) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
         let mut m = input;
         let risk = if m.payload.contains("risk=nuclear") {
             RiskLevel::Nuclear
@@ -164,12 +222,25 @@ impl Stage<PipelineMessage, PipelineMessage> for CouncilPolicyStage {
 }
 
 /// Reliability stage: 60s suppression window + synthesis idempotency.
-pub struct CouncilReliabilityStage { pub state: std::sync::Arc<ReliabilityState> }
-impl CouncilReliabilityStage { pub fn new(state: std::sync::Arc<ReliabilityState>) -> Self { Self { state } } }
+pub struct CouncilReliabilityStage {
+    pub state: std::sync::Arc<ReliabilityState>,
+}
+impl CouncilReliabilityStage {
+    pub fn new(state: std::sync::Arc<ReliabilityState>) -> Self {
+        Self { state }
+    }
+}
 impl Stage<PipelineMessage, PipelineMessage> for CouncilReliabilityStage {
-    fn kind(&self) -> StageKind { StageKind::Reliability }
-    fn name(&self) -> &str { "council-reliability" }
-    fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
+    fn kind(&self) -> StageKind {
+        StageKind::Reliability
+    }
+    fn name(&self) -> &str {
+        "council-reliability"
+    }
+    fn process(
+        &self,
+        input: PipelineMessage,
+    ) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
         let mut m = input;
         let mut h = DefaultHasher::new();
         m.kind.hash(&mut h);
@@ -177,7 +248,10 @@ impl Stage<PipelineMessage, PipelineMessage> for CouncilReliabilityStage {
         let fp = format!("{}|{:x}", m.kind, h.finish());
         if self.state.is_suppressed(&fp) {
             m.attempt += 1;
-            return Err(apeireth_pipeline_g5::PipelineError::Stage { kind: StageKind::Reliability, source: format!("council fingerprint {} suppressed", fp).into() });
+            return Err(apeireth_pipeline_g5::PipelineError::Stage {
+                kind: StageKind::Reliability,
+                source: format!("council fingerprint {} suppressed", fp).into(),
+            });
         }
         m.attempt += 1;
         Ok(m)
@@ -185,15 +259,31 @@ impl Stage<PipelineMessage, PipelineMessage> for CouncilReliabilityStage {
 }
 
 /// Throttle stage: max deliberations per sliding window.
-pub struct CouncilThrottleStage { pub state: std::sync::Arc<ThrottleState> }
-impl CouncilThrottleStage { pub fn new(state: std::sync::Arc<ThrottleState>) -> Self { Self { state } } }
+pub struct CouncilThrottleStage {
+    pub state: std::sync::Arc<ThrottleState>,
+}
+impl CouncilThrottleStage {
+    pub fn new(state: std::sync::Arc<ThrottleState>) -> Self {
+        Self { state }
+    }
+}
 impl Stage<PipelineMessage, PipelineMessage> for CouncilThrottleStage {
-    fn kind(&self) -> StageKind { StageKind::Throttle }
-    fn name(&self) -> &str { "council-throttle" }
-    fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
+    fn kind(&self) -> StageKind {
+        StageKind::Throttle
+    }
+    fn name(&self) -> &str {
+        "council-throttle"
+    }
+    fn process(
+        &self,
+        input: PipelineMessage,
+    ) -> Result<PipelineMessage, apeireth_pipeline_g5::PipelineError> {
         let m = input;
         if !self.state.check_and_record() {
-            return Err(apeireth_pipeline_g5::PipelineError::Stage { kind: StageKind::Throttle, source: "throttle exceeded: rate limit hit".into() });
+            return Err(apeireth_pipeline_g5::PipelineError::Stage {
+                kind: StageKind::Throttle,
+                source: "throttle exceeded: rate limit hit".into(),
+            });
         }
         Ok(m)
     }
@@ -218,9 +308,19 @@ impl CouncilPipelineBuilder {
             throttle_state: std::sync::Arc::new(ThrottleState::new(ThrottleConfig::default())),
         }
     }
-    pub fn with_normalize(mut self, c: NormalizeConfig) -> Self { self.normalize_config = c; self }
-    pub fn with_throttle_config(mut self, c: ThrottleConfig) -> Self { self.throttle_config = c.clone(); self.throttle_state = std::sync::Arc::new(ThrottleState::new(c)); self }
-    pub fn with_reliability_state(mut self, s: std::sync::Arc<ReliabilityState>) -> Self { self.reliability_state = s; self }
+    pub fn with_normalize(mut self, c: NormalizeConfig) -> Self {
+        self.normalize_config = c;
+        self
+    }
+    pub fn with_throttle_config(mut self, c: ThrottleConfig) -> Self {
+        self.throttle_config = c.clone();
+        self.throttle_state = std::sync::Arc::new(ThrottleState::new(c));
+        self
+    }
+    pub fn with_reliability_state(mut self, s: std::sync::Arc<ReliabilityState>) -> Self {
+        self.reliability_state = s;
+        self
+    }
     pub fn build(self) -> Pipeline<CouncilPipeline, PipelineMessage, PipelineMessage> {
         let config = PipelineConfig::new(self.name, "CouncilPipeline");
         Pipeline::new(config)
@@ -235,17 +335,111 @@ impl CouncilPipelineBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test] fn risk_level_parses() { assert_eq!(RiskLevel::from_str("low"), RiskLevel::Low); assert_eq!(RiskLevel::from_str("NUCLEAR"), RiskLevel::Nuclear); assert_eq!(RiskLevel::from_str("?"), RiskLevel::Low); }
-    #[test] fn dispatch_defaults_kind() { let s = CouncilDispatchStage; let m = PipelineMessage::new("", "area=L0;"); let o = s.process(m).unwrap(); assert_eq!(o.kind, "council-pending"); }
-    #[test] fn dispatch_preserves_kind() { let s = CouncilDispatchStage; let m = PipelineMessage::new("council-x", "area=L0;"); let o = s.process(m).unwrap(); assert_eq!(o.kind, "council-x"); assert!(o.payload.contains("area=L0,")); }
-    #[test] fn normalize_truncates_long() { let s = CouncilNormalizeStage::new(NormalizeConfig { max_description_len: 20 }); let m = PipelineMessage::new("council", "a".repeat(100)); let o = s.process(m).unwrap(); assert!(o.payload.starts_with(&"a".repeat(20))); assert!(o.payload.contains("truncated")); }
-    #[test] fn normalize_passes_short() { let s = CouncilNormalizeStage::new(NormalizeConfig::default()); let m = PipelineMessage::new("council", "short"); let o = s.process(m).unwrap(); assert_eq!(o.payload, "short"); }
-    #[test] fn policy_marks_nuclear() { let s = CouncilPolicyStage; let m = PipelineMessage::new("council", "risk=nuclear;"); let o = s.process(m).unwrap(); assert!(o.trace_id.contains(":nuclear")); }
-    #[test] fn policy_low_unchanged() { let s = CouncilPolicyStage; let m = PipelineMessage::new("council", "risk=low;"); let o = s.process(m).unwrap(); assert!(!o.trace_id.contains(":nuclear")); }
-    #[test] fn reliability_first_run() { let s = CouncilReliabilityStage::new(std::sync::Arc::new(ReliabilityState::new())); let m = PipelineMessage::new("council", "unique-1"); let o = s.process(m).unwrap(); assert_eq!(o.attempt, 1); }
-    #[test] fn reliability_suppresses_repeat() { let s = CouncilReliabilityStage::new(std::sync::Arc::new(ReliabilityState::new())); let m = PipelineMessage::new("council", "unique-2"); let _ = s.process(m.clone()).unwrap(); let r = s.process(m); assert!(r.is_err()); }
-    #[test] fn throttle_passes_within_limit() { let ts = std::sync::Arc::new(ThrottleState::new(ThrottleConfig { max_per_window: 3, window: Duration::from_secs(60) })); let s = CouncilThrottleStage::new(ts); assert!(s.process(PipelineMessage::new("c", "a")).is_ok()); assert!(s.process(PipelineMessage::new("c", "b")).is_ok()); assert!(s.process(PipelineMessage::new("c", "c")).is_ok()); }
-    #[test] fn throttle_blocks_over_limit() { let ts = std::sync::Arc::new(ThrottleState::new(ThrottleConfig { max_per_window: 1, window: Duration::from_secs(60) })); let s = CouncilThrottleStage::new(ts); assert!(s.process(PipelineMessage::new("c", "x")).is_ok()); assert!(s.process(PipelineMessage::new("c", "y")).is_err()); }
-    #[test] fn full_council_pipeline_runs() { let p = CouncilPipelineBuilder::new("council-test").build(); let m = PipelineMessage::new("council", "risk=medium; area=L3;"); let r = p.run(m); assert!(r.is_ok(), "should pass: {:?}", r.err()); assert_eq!(r.unwrap().kind, "council"); }
-    #[test] fn council_pipeline_stage_order() { let p = CouncilPipelineBuilder::new("council-order").build(); let k = p.stage_kinds(); assert_eq!(k.len(), 5); assert_eq!(k[0], StageKind::Dispatch); assert_eq!(k[1], StageKind::Normalize); assert_eq!(k[2], StageKind::Policy); assert_eq!(k[3], StageKind::Reliability); assert_eq!(k[4], StageKind::Throttle); }
+    #[test]
+    fn risk_level_parses() {
+        assert_eq!(RiskLevel::from_str("low"), RiskLevel::Low);
+        assert_eq!(RiskLevel::from_str("NUCLEAR"), RiskLevel::Nuclear);
+        assert_eq!(RiskLevel::from_str("?"), RiskLevel::Low);
+    }
+    #[test]
+    fn dispatch_defaults_kind() {
+        let s = CouncilDispatchStage;
+        let m = PipelineMessage::new("", "area=L0;");
+        let o = s.process(m).unwrap();
+        assert_eq!(o.kind, "council-pending");
+    }
+    #[test]
+    fn dispatch_preserves_kind() {
+        let s = CouncilDispatchStage;
+        let m = PipelineMessage::new("council-x", "area=L0;");
+        let o = s.process(m).unwrap();
+        assert_eq!(o.kind, "council-x");
+        assert!(o.payload.contains("area=L0,"));
+    }
+    #[test]
+    fn normalize_truncates_long() {
+        let s = CouncilNormalizeStage::new(NormalizeConfig {
+            max_description_len: 20,
+        });
+        let m = PipelineMessage::new("council", "a".repeat(100));
+        let o = s.process(m).unwrap();
+        assert!(o.payload.starts_with(&"a".repeat(20)));
+        assert!(o.payload.contains("truncated"));
+    }
+    #[test]
+    fn normalize_passes_short() {
+        let s = CouncilNormalizeStage::new(NormalizeConfig::default());
+        let m = PipelineMessage::new("council", "short");
+        let o = s.process(m).unwrap();
+        assert_eq!(o.payload, "short");
+    }
+    #[test]
+    fn policy_marks_nuclear() {
+        let s = CouncilPolicyStage;
+        let m = PipelineMessage::new("council", "risk=nuclear;");
+        let o = s.process(m).unwrap();
+        assert!(o.trace_id.contains(":nuclear"));
+    }
+    #[test]
+    fn policy_low_unchanged() {
+        let s = CouncilPolicyStage;
+        let m = PipelineMessage::new("council", "risk=low;");
+        let o = s.process(m).unwrap();
+        assert!(!o.trace_id.contains(":nuclear"));
+    }
+    #[test]
+    fn reliability_first_run() {
+        let s = CouncilReliabilityStage::new(std::sync::Arc::new(ReliabilityState::new()));
+        let m = PipelineMessage::new("council", "unique-1");
+        let o = s.process(m).unwrap();
+        assert_eq!(o.attempt, 1);
+    }
+    #[test]
+    fn reliability_suppresses_repeat() {
+        let s = CouncilReliabilityStage::new(std::sync::Arc::new(ReliabilityState::new()));
+        let m = PipelineMessage::new("council", "unique-2");
+        let _ = s.process(m.clone()).unwrap();
+        let r = s.process(m);
+        assert!(r.is_err());
+    }
+    #[test]
+    fn throttle_passes_within_limit() {
+        let ts = std::sync::Arc::new(ThrottleState::new(ThrottleConfig {
+            max_per_window: 3,
+            window: Duration::from_secs(60),
+        }));
+        let s = CouncilThrottleStage::new(ts);
+        assert!(s.process(PipelineMessage::new("c", "a")).is_ok());
+        assert!(s.process(PipelineMessage::new("c", "b")).is_ok());
+        assert!(s.process(PipelineMessage::new("c", "c")).is_ok());
+    }
+    #[test]
+    fn throttle_blocks_over_limit() {
+        let ts = std::sync::Arc::new(ThrottleState::new(ThrottleConfig {
+            max_per_window: 1,
+            window: Duration::from_secs(60),
+        }));
+        let s = CouncilThrottleStage::new(ts);
+        assert!(s.process(PipelineMessage::new("c", "x")).is_ok());
+        assert!(s.process(PipelineMessage::new("c", "y")).is_err());
+    }
+    #[test]
+    fn full_council_pipeline_runs() {
+        let p = CouncilPipelineBuilder::new("council-test").build();
+        let m = PipelineMessage::new("council", "risk=medium; area=L3;");
+        let r = p.run(m);
+        assert!(r.is_ok(), "should pass: {:?}", r.err());
+        assert_eq!(r.unwrap().kind, "council");
+    }
+    #[test]
+    fn council_pipeline_stage_order() {
+        let p = CouncilPipelineBuilder::new("council-order").build();
+        let k = p.stage_kinds();
+        assert_eq!(k.len(), 5);
+        assert_eq!(k[0], StageKind::Dispatch);
+        assert_eq!(k[1], StageKind::Normalize);
+        assert_eq!(k[2], StageKind::Policy);
+        assert_eq!(k[3], StageKind::Reliability);
+        assert_eq!(k[4], StageKind::Throttle);
+    }
 }

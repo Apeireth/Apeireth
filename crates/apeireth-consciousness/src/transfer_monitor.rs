@@ -26,7 +26,7 @@
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 
-use super::{CognitiveDreamState, TransitionRecord, TransitionReason};
+use super::{CognitiveDreamState, TransitionReason, TransitionRecord};
 
 /// 默认转移冷却 (同 from-to 对最少 60s)
 pub const DEFAULT_TRANSFER_COOLDOWN_SECS: i64 = 60;
@@ -268,7 +268,11 @@ mod tests {
     fn rate_limit_first_call_ok() {
         let m = CognitiveDreamMonitor::new();
         assert!(m
-            .check_rate_limit(CognitiveDreamState::Awake, CognitiveDreamState::Reflecting, 1000)
+            .check_rate_limit(
+                CognitiveDreamState::Awake,
+                CognitiveDreamState::Reflecting,
+                1000
+            )
             .is_ok());
     }
 
@@ -422,7 +426,7 @@ mod tests {
     fn check_full_combined_rate_and_cycle() {
         let mut m = CognitiveDreamMonitor::new();
         m.cycle_threshold = 2; // 简化阈值
-        // 2 次 Awake -> Reflecting 在 100s 内
+                               // 2 次 Awake -> Reflecting 在 100s 内
         for i in 0..2 {
             let record = TransitionRecord {
                 from: CognitiveDreamState::Awake,
@@ -440,7 +444,10 @@ mod tests {
         );
         // rate_limit cooldown=60s, 1000→1030 是 30s < 60 → RateLimit 触发 (Cycle 在 RateLimit 之前判, 但本 case RateLimit 先触发)
         // 实际: rate_limit cooldown 60s, 1100-1030=70s ≥ 60 → rate_limit pass; cycle window 内 3 次 ≥ threshold 2 → cycle 触发
-        assert!(matches!(res, Err(MonitorError::Cycle(_))), "3rd call within cycle window should hit cycle: {res:?}")
+        assert!(
+            matches!(res, Err(MonitorError::Cycle(_))),
+            "3rd call within cycle window should hit cycle: {res:?}"
+        )
     }
 
     #[test]

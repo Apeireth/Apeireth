@@ -134,7 +134,14 @@ fn classify_text(content: &str) -> Option<TextMatch> {
 
 /// 标签 → 是否反思 (per 标签命中).
 fn tags_trigger_reflection(tags: &[String]) -> Option<&'static str> {
-    let reflect_tags = ["anomaly", "violation", "warning", "error", "regret", "failure"];
+    let reflect_tags = [
+        "anomaly",
+        "violation",
+        "warning",
+        "error",
+        "regret",
+        "failure",
+    ];
     for r in reflect_tags.iter() {
         if tags.iter().any(|t| t.to_lowercase() == *r) {
             return Some("tag-trigger");
@@ -154,7 +161,11 @@ fn role_intensity(role: &str) -> PlutchikIntensity {
 }
 
 fn pick_stronger(a: PlutchikIntensity, b: PlutchikIntensity) -> PlutchikIntensity {
-    if intensity_rank(a) >= intensity_rank(b) { a } else { b }
+    if intensity_rank(a) >= intensity_rank(b) {
+        a
+    } else {
+        b
+    }
 }
 
 // ============================================
@@ -189,7 +200,11 @@ pub fn episode_to_consciousness_adjustment(ep: &Episode) -> MemoryConsciousnessA
     MemoryConsciousnessAdjustment {
         suggested_emotion,
         should_trigger_reflection: should_reflect,
-        reflection_reason: if reason.is_empty() { None } else { Some(reason) },
+        reflection_reason: if reason.is_empty() {
+            None
+        } else {
+            Some(reason)
+        },
     }
 }
 
@@ -212,11 +227,19 @@ pub fn note_to_consciousness_adjustment(note: &Note) -> MemoryConsciousnessAdjus
     let text_reflect = text_match.map(|m| m.should_reflect).unwrap_or(false);
     let text_reason = text_match.map(|m| m.reason).unwrap_or("");
     let final_reflect = tag_reflect.is_some() || text_reflect;
-    let final_reason = tag_reflect.unwrap_or(if text_reason.is_empty() { "" } else { text_reason });
+    let final_reason = tag_reflect.unwrap_or(if text_reason.is_empty() {
+        ""
+    } else {
+        text_reason
+    });
     MemoryConsciousnessAdjustment {
         suggested_emotion: text_emotion,
         should_trigger_reflection: final_reflect,
-        reflection_reason: if final_reason.is_empty() { None } else { Some(final_reason) },
+        reflection_reason: if final_reason.is_empty() {
+            None
+        } else {
+            Some(final_reason)
+        },
     }
 }
 
@@ -324,9 +347,15 @@ mod tests {
         let asst_ep = make_episode("achievement", "assistant");
         let adj_u = episode_to_consciousness_adjustment(&user_ep);
         let adj_a = episode_to_consciousness_adjustment(&asst_ep);
-        if let (Some(PlutchikEmotion::Basic(_, iu)), Some(PlutchikEmotion::Basic(_, ia))) = (adj_u.suggested_emotion, adj_a.suggested_emotion) {
-            assert!(intensity_rank(iu) >= intensity_rank(ia),
-                "user intensity ({:?}) should be >= assistant ({:?})", iu, ia);
+        if let (Some(PlutchikEmotion::Basic(_, iu)), Some(PlutchikEmotion::Basic(_, ia))) =
+            (adj_u.suggested_emotion, adj_a.suggested_emotion)
+        {
+            assert!(
+                intensity_rank(iu) >= intensity_rank(ia),
+                "user intensity ({:?}) should be >= assistant ({:?})",
+                iu,
+                ia
+            );
         } else {
             panic!("both should produce Basic emotion");
         }
@@ -364,7 +393,10 @@ mod tests {
         let ep_lower = make_episode("error detected", "user");
         let adj_u = episode_to_consciousness_adjustment(&ep_upper);
         let adj_l = episode_to_consciousness_adjustment(&ep_lower);
-        assert_eq!(adj_u.should_trigger_reflection, adj_l.should_trigger_reflection);
+        assert_eq!(
+            adj_u.should_trigger_reflection,
+            adj_l.should_trigger_reflection
+        );
         assert_eq!(adj_u.suggested_emotion, adj_l.suggested_emotion);
     }
 
@@ -383,9 +415,15 @@ mod tests {
         let note_high = make_note("achievement", vec![], 0.95);
         let adj_l = note_to_consciousness_adjustment(&note_low);
         let adj_h = note_to_consciousness_adjustment(&note_high);
-        if let (Some(PlutchikEmotion::Basic(_, il)), Some(PlutchikEmotion::Basic(_, ih))) = (adj_l.suggested_emotion, adj_h.suggested_emotion) {
-            assert!(intensity_rank(ih) >= intensity_rank(il),
-                "high confidence ({:?}) should be >= low ({:?})", ih, il);
+        if let (Some(PlutchikEmotion::Basic(_, il)), Some(PlutchikEmotion::Basic(_, ih))) =
+            (adj_l.suggested_emotion, adj_h.suggested_emotion)
+        {
+            assert!(
+                intensity_rank(ih) >= intensity_rank(il),
+                "high confidence ({:?}) should be >= low ({:?})",
+                ih,
+                il
+            );
         } else {
             panic!("both should produce Basic emotion");
         }

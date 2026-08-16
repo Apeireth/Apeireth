@@ -65,13 +65,8 @@ impl CouncilMember {
 }
 
 /// 5 provider 编译期 hardcode (per R35+R36 真合并, 5 provider 走 apeireth-provider 1:1)
-pub const SUPPORTED_PROVIDERS: &[&str] = &[
-    "claude_code",
-    "codex",
-    "copilot",
-    "gemini_cli",
-    "opencode",
-];
+pub const SUPPORTED_PROVIDERS: &[&str] =
+    &["claude_code", "codex", "copilot", "gemini_cli", "opencode"];
 
 /// 校验 provider 在 5 supported 内
 pub fn is_valid_provider(p: &str) -> bool {
@@ -88,12 +83,7 @@ mod council_member_tests {
 
     #[test]
     fn council_member_new_basic() {
-        let m = CouncilMember::new(
-            "architect",
-            "设计稳的架构",
-            "10 年 Rust",
-            "claude_code",
-        );
+        let m = CouncilMember::new("architect", "设计稳的架构", "10 年 Rust", "claude_code");
         assert_eq!(m.role, "architect");
         assert_eq!(m.goal, "设计稳的架构");
         assert_eq!(m.backstory, "10 年 Rust");
@@ -135,7 +125,7 @@ mod council_member_tests {
     fn is_valid_provider_rejects_unknown() {
         assert!(!is_valid_provider("unknown"));
         assert!(!is_valid_provider(""));
-        assert!(!is_valid_provider("gpt-4"));  // 跟 R35+R36 5 provider 不重叠
+        assert!(!is_valid_provider("gpt-4")); // 跟 R35+R36 5 provider 不重叠
     }
 
     #[test]

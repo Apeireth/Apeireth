@@ -74,7 +74,14 @@ pub fn mask_for_display(secret: &str) -> String {
         return "*".repeat(n.max(4));
     }
     let head: String = secret.chars().take(3).collect();
-    let tail: String = secret.chars().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect();
+    let tail: String = secret
+        .chars()
+        .rev()
+        .take(3)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
     format!("{head}…{tail}")
 }
 

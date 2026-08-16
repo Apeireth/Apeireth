@@ -3,8 +3,8 @@
 //!  - argv 解析交给 clap; dispatch + display 保留
 //!  - 0 改 lib.rs CliCommand / AsiSubCommand / GatewaySubCommand / Session flow
 
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CliSubCommand {
@@ -14,19 +14,32 @@ pub enum CliSubCommand {
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum SkillsSubCommand {
-    List { dir: PathBuf }, Show { id: String, dir: PathBuf },
-    Validate { file: PathBuf }, Scenarios { dir: PathBuf }, Watch { dir: PathBuf },
+    List { dir: PathBuf },
+    Show { id: String, dir: PathBuf },
+    Validate { file: PathBuf },
+    Scenarios { dir: PathBuf },
+    Watch { dir: PathBuf },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum EvalSubCommand {
-    ListTools, Scenarios { dir: PathBuf },
-    Smoke { workspace: PathBuf }, MarkdownSnapshot { workspace: PathBuf },
+    ListTools,
+    Scenarios { dir: PathBuf },
+    Smoke { workspace: PathBuf },
+    MarkdownSnapshot { workspace: PathBuf },
 }
 #[derive(Debug, Clone, PartialEq)]
 pub enum CouncilSubCommand {
     ListMembers,
-    AddMember { role: String, goal: String, backstory: String, provider: String },
-    RiskHint, Markdown { query: String },
+    AddMember {
+        role: String,
+        goal: String,
+        backstory: String,
+        provider: String,
+    },
+    RiskHint,
+    Markdown {
+        query: String,
+    },
 }
 
 // Clap derive layer (R125-2)
@@ -40,25 +53,47 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Top {
     /// Skill descriptors and registry management
-    Skills { #[command(subcommand)] action: SkillsCmd },
+    Skills {
+        #[command(subcommand)]
+        action: SkillsCmd,
+    },
     /// Eval scenarios and smoke runs
-    Eval { #[command(subcommand)] action: EvalCmd },
+    Eval {
+        #[command(subcommand)]
+        action: EvalCmd,
+    },
     /// Council members and deliberation
-    Council { #[command(subcommand)] action: CouncilCmd },
+    Council {
+        #[command(subcommand)]
+        action: CouncilCmd,
+    },
 }
 
 #[derive(Subcommand, Debug)]
 enum SkillsCmd {
     /// List skill descriptors in a directory
-    List { #[arg(default_value = ".")] dir: PathBuf },
+    List {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
     /// Show a single skill by id
-    Show { id: String, #[arg(default_value = ".")] dir: PathBuf },
+    Show {
+        id: String,
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
     /// Validate a skill JSON file
     Validate { file: PathBuf },
     /// List eval scenarios derived from skills
-    Scenarios { #[arg(default_value = ".")] dir: PathBuf },
+    Scenarios {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
     /// Watch a skill directory for changes
-    Watch { #[arg(default_value = ".")] dir: PathBuf },
+    Watch {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -66,11 +101,20 @@ enum EvalCmd {
     /// List MCP eval tools
     ListTools,
     /// List eval scenarios (delegates to skills)
-    Scenarios { #[arg(default_value = ".")] dir: PathBuf },
+    Scenarios {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+    },
     /// Run a smoke task against a workspace
-    Smoke { #[arg(default_value = ".")] workspace: PathBuf },
+    Smoke {
+        #[arg(default_value = ".")]
+        workspace: PathBuf,
+    },
     /// Render smoke report as markdown
-    MarkdownSnapshot { #[arg(default_value = ".")] workspace: PathBuf },
+    MarkdownSnapshot {
+        #[arg(default_value = ".")]
+        workspace: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -78,7 +122,12 @@ enum CouncilCmd {
     /// List registered council members
     ListMembers,
     /// Register a new council member
-    AddMember { role: String, goal: String, backstory: String, provider: String },
+    AddMember {
+        role: String,
+        goal: String,
+        backstory: String,
+        provider: String,
+    },
     /// Show the current risk hint
     RiskHint,
     /// Render a deliberation template as markdown
@@ -104,13 +153,23 @@ pub fn parse_subcommand_args(args: &[String]) -> Result<CliSubCommand, String> {
             EvalCmd::ListTools => EvalSubCommand::ListTools,
             EvalCmd::Scenarios { dir } => EvalSubCommand::Scenarios { dir },
             EvalCmd::Smoke { workspace } => EvalSubCommand::Smoke { workspace },
-            EvalCmd::MarkdownSnapshot { workspace } => EvalSubCommand::MarkdownSnapshot { workspace },
+            EvalCmd::MarkdownSnapshot { workspace } => {
+                EvalSubCommand::MarkdownSnapshot { workspace }
+            }
         }),
         Top::Council { action } => CliSubCommand::Council(match action {
             CouncilCmd::ListMembers => CouncilSubCommand::ListMembers,
-            CouncilCmd::AddMember { role, goal, backstory, provider } => {
-                CouncilSubCommand::AddMember { role, goal, backstory, provider }
-            }
+            CouncilCmd::AddMember {
+                role,
+                goal,
+                backstory,
+                provider,
+            } => CouncilSubCommand::AddMember {
+                role,
+                goal,
+                backstory,
+                provider,
+            },
             CouncilCmd::RiskHint => CouncilSubCommand::RiskHint,
             CouncilCmd::Markdown { query } => CouncilSubCommand::Markdown { query },
         }),
@@ -148,9 +207,12 @@ fn dispatch_eval(cmd: EvalSubCommand) -> Result<String, String> {
 fn dispatch_council(cmd: CouncilSubCommand) -> Result<String, String> {
     match cmd {
         CouncilSubCommand::ListMembers => council_list_members(),
-        CouncilSubCommand::AddMember { role, goal, backstory, provider } => {
-            council_add_member(&role, &goal, &backstory, &provider)
-        }
+        CouncilSubCommand::AddMember {
+            role,
+            goal,
+            backstory,
+            provider,
+        } => council_add_member(&role, &goal, &backstory, &provider),
         CouncilSubCommand::RiskHint => council_risk_hint(),
         CouncilSubCommand::Markdown { query } => council_markdown(&query),
     }
@@ -160,15 +222,24 @@ fn dispatch_council(cmd: CouncilSubCommand) -> Result<String, String> {
 fn skills_list(dir: &std::path::Path) -> Result<String, String> {
     use apeireth_skills::file_loader::discover_descriptor_paths;
     let paths = discover_descriptor_paths(dir).map_err(|e| e.to_string())?;
-    let mut s = format!("# Skills in `{}` ({} total)\n\n", dir.display(), paths.len());
-    for p in &paths { s.push_str(&format!("- `{}`\n", p.display())); }
+    let mut s = format!(
+        "# Skills in `{}` ({} total)\n\n",
+        dir.display(),
+        paths.len()
+    );
+    for p in &paths {
+        s.push_str(&format!("- `{}`\n", p.display()));
+    }
     Ok(s)
 }
 
 fn skills_show(id: &str, dir: &std::path::Path) -> Result<String, String> {
     use apeireth_skills::file_loader::load_registry_from_dir;
     let reg = load_registry_from_dir(dir).map_err(|e| e.to_string())?;
-    let desc = reg.0.descriptor(id).ok_or_else(|| format!("skill `{}` not found", id))?;
+    let desc = reg
+        .0
+        .descriptor(id)
+        .ok_or_else(|| format!("skill `{}` not found", id))?;
     Ok(format!(
         "# Skill `{}` v{}\n\n- description: {}\n- source: {}\n- tags: {:?}\n",
         desc.id, desc.version, desc.description, desc.source, desc.tags
@@ -180,7 +251,10 @@ fn skills_validate(file: &std::path::Path) -> Result<String, String> {
     match load_one(file) {
         Ok((skill, descriptor)) => Ok(format!(
             "✅ `{}` valid: id=`{}` v{} source=`{}`\n",
-            file.display(), skill.id, skill.version, descriptor.source
+            file.display(),
+            skill.id,
+            skill.version,
+            descriptor.source
         )),
         Err(e) => Err(format!("❌ `{}` invalid: {}", file.display(), e)),
     }
@@ -191,11 +265,17 @@ fn skills_scenarios(dir: &std::path::Path) -> Result<String, String> {
     use apeireth_skills::eval_bridge::{descriptors_to_eval_scenarios, scenarios_by_source};
     use apeireth_skills::file_loader::load_registry_from_dir;
     let (registry, loaded) = load_registry_from_dir(dir).map_err(|e| e.to_string())?;
-    let descs: Vec<SkillDescriptor> = loaded.iter().filter_map(|ld| ld.descriptor.clone()).collect();
+    let descs: Vec<SkillDescriptor> = loaded
+        .iter()
+        .filter_map(|ld| ld.descriptor.clone())
+        .collect();
     let _ = registry; // 静默 unused
     let scenarios = descriptors_to_eval_scenarios(&descs);
     let grouped = scenarios_by_source(&scenarios);
-    let mut s = format!("# Eval Scenarios ({} total)\n\n## By source\n", scenarios.len());
+    let mut s = format!(
+        "# Eval Scenarios ({} total)\n\n## By source\n",
+        scenarios.len()
+    );
     for (src, count) in &grouped {
         s.push_str(&format!("- `{}`: {}\n", src, count));
     }
@@ -213,7 +293,9 @@ fn skills_watch(dir: &std::path::Path) -> Result<String, String> {
     let events = w.check_for_changes();
     Ok(format!(
         "# Watcher on `{}`\n\n- initial count: {}\n- events (since scan): {}\n",
-        dir.display(), initial, events.len()
+        dir.display(),
+        initial,
+        events.len()
     ))
 }
 
@@ -224,8 +306,11 @@ fn eval_list_tools() -> Result<String, String> {
     let s = EvalToolServer::new();
     let mut out = String::from("# MCP Eval Tools\n\n");
     for t in s.list() {
-        out.push_str(&format!("- `{}` — {}\n",
-            t.name, t.description.as_deref().unwrap_or("(no description)")));
+        out.push_str(&format!(
+            "- `{}` — {}\n",
+            t.name,
+            t.description.as_deref().unwrap_or("(no description)")
+        ));
     }
     Ok(out)
 }
@@ -250,14 +335,24 @@ fn eval_markdown_snapshot(workspace: &std::path::Path) -> Result<String, String>
 
 // Council dispatch impl
 fn council_list_members() -> Result<String, String> {
-    Ok("# Council Members (0 registered)\n\n(none — use `council add-member` to register)\n".to_string())
+    Ok(
+        "# Council Members (0 registered)\n\n(none — use `council add-member` to register)\n"
+            .to_string(),
+    )
 }
 
-fn council_add_member(role: &str, goal: &str, backstory: &str, provider: &str) -> Result<String, String> {
+fn council_add_member(
+    role: &str,
+    goal: &str,
+    backstory: &str,
+    provider: &str,
+) -> Result<String, String> {
     use apeireth_council::council_member::CouncilMember;
     let m = CouncilMember {
-        role: role.to_string(), goal: goal.to_string(),
-        backstory: backstory.to_string(), provider: provider.to_string(),
+        role: role.to_string(),
+        goal: goal.to_string(),
+        backstory: backstory.to_string(),
+        provider: provider.to_string(),
     };
     Ok(format!(
         "✅ Added member: role=`{}` goal=`{}` backstory=`{}` provider=`{}`\n",
@@ -266,17 +361,22 @@ fn council_add_member(role: &str, goal: &str, backstory: &str, provider: &str) -
 }
 
 fn council_risk_hint() -> Result<String, String> {
-    Ok("# Council Risk Hint\n\n- risk: no_members\n- (caller should populate state first)\n".to_string())
+    Ok(
+        "# Council Risk Hint\n\n- risk: no_members\n- (caller should populate state first)\n"
+            .to_string(),
+    )
 }
 
 fn council_markdown(query: &str) -> Result<String, String> {
     use apeireth_council::mcp_bridge::CouncilPromptServer;
     use apeireth_mcp::prompts::PromptServer;
     let s = CouncilPromptServer::with_empty_state();
-    let result = s.get(
-        CouncilPromptServer::PROMPT_DELIBERATE,
-        &serde_json::json!({ "query": query }),
-    ).map_err(|e| e.message)?;
+    let result = s
+        .get(
+            CouncilPromptServer::PROMPT_DELIBERATE,
+            &serde_json::json!({ "query": query }),
+        )
+        .map_err(|e| e.message)?;
     let mut out = format!("# Council Deliberation for `{}`\n\n", query);
     for (i, m) in result.messages.iter().enumerate() {
         let role = match m.role {
