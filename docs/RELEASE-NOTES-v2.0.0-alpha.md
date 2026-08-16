@@ -8,6 +8,8 @@ Author: technical_writer (role: 技术文档, 任务 3cf66d22)
 Review: T13 architect + T14 architect2 评审结论已引用 (`reports/d67aedf7-v2-5-new-crates-design-review.md` + `reports/v2-addendum-final-review.md`)
 Source-Trace: CHANGELOG.md + README.md §Features + docs/V2-INDEX.md + reports/v2-final-summary-2026-08-05.md + docs/v2-strategy/{00-VISION, 03-EXTREME-PLAN, 04-CRATE-CONSOLIDATION, 05-EXECUTION-NOW, 07-V2-BASELINE, 09-PHILOSOPHY-GUARD-ADDENDUM}.md + git log --oneline
 
+> ⚠️ **产物失传/重建标注 (2026-08-17, C3 盘点 + 任务 212699c1)**: 上述 Source-Trace 引用的 `docs/V2-INDEX.md`、`reports/v2-final-summary-2026-08-05.md`、`reports/v2-decision-brief-2026-08-05.md`、`reports/v2-risk-register-2026-08-05.md`、`docs/v2-strategy/07-V2-BASELINE` 及 §1.1/§1.7 引用的 `reports/d67aedf7-*`、`reports/v2-addendum-final-review.md`、`reports/8f689476-*`、`reports/V2-deploy-*`、`reports/v2-integration-status-live.md` **从未进入 git 历史**（C3 盘点经 abf12243 整合树与 integration 分支双重核验，见 backlog #35），引用保留为历史轨迹。其中 `docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md` 已于 2026-08-17 以**重建版**落地（重建版自带出处与丢失边界声明，非原文）。
+
 ---
 
 # Apeireth v2.0.0-alpha — Release Notes (2026-08-05)
@@ -106,6 +108,7 @@ Source-Trace: CHANGELOG.md + README.md §Features + docs/V2-INDEX.md + reports/v
 
 - **V2 战略 10 篇文档**: [`docs/v2-strategy/`](../docs/v2-strategy/README.md) (00-VISION → 09-PHILOSOPHY-GUARD-ADDENDUM)
 - **V2 哲学守门 Addendum** ([`docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md`](../docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md)):
+  - ⚠️ **原稿从未入 git 历史**（C3 盘点 2026-08-17 核实）；**2026-08-17 重建版已落地**（任务 212699c1）——重建版含出处标注与丢失边界声明：守门范围/9 键/5 项不假装/双锁 AND 门/4 重守门 v15/反例清单可从现存材料恢复；5 阶段逐段定义与 22-trait 矩阵明细原稿丢失（如实标注）
   - §A 守约清单: V3 9 键 + 5 项不假装 + 原则洋葱 5 层 + 双洋葱 AND 门 (4 重守门嵌套 v15 LOCKED) + stage6 22 trait 互锁矩阵
   - §B ASI 北极星指标列: 18 月 5 阶段 V0.5 阶梯 (0.86 → 0.87 → 0.89 → 0.92 → 0.98)
   - §C 5 新 crate × 22-trait 互锁 traceback
