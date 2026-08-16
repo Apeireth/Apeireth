@@ -93,3 +93,8 @@
 cargo test -p apeireth-tool-registry -j 4      # 139 + 8 + 20 全绿
 git show 8b6a825d --stat                        # 3 files, +793
 ```
+
+## 附记 — 提交归属说明
+
+- 代码提交 `8b6a825d`（3 files, +793）已验证仍在历史中可达
+- 文档同步提交 `86c1376e`（§8.4 标✅ + 自审报告）；backlog N15 与模块地图行因团队 integration 流水线并发提交/历史重写，blame 归属被并入邻近 docs 提交（staging 竞争），但**内容已全部入库**（grep 验证: backlog 有 N15 行 / maintenance-guide 有 injection.rs+chain.rs 行 / team-work-doc §8.4 已标 ✅ / git status 干净）
