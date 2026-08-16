@@ -1,3 +1,14 @@
+# root-tests（归档：原 workspace 根 tests/）
+
+> **🗄️ 归档说明（2026-08-17, 台账#37, 任务 70282ede）**:
+> 本目录为原 workspace 根 `tests/` 的整体归档（R165 formal 归档同模式: 归档不删除）。
+> 其中 12 个 `.rs`（6 顶层 + integration/ 6 个）不被任何活跃 crate 编译——
+> 纯 virtual workspace 无 root package, 根级 `tests/` 不进任何构建目标。
+> 活跃集成测试在 `crates/<name>/tests/`。归档保留历史（早期 harness/E2E 脚本参考）。
+> 以下为原 README 内容（占位目录自述）。
+
+---
+
 # tests（计划目录）
 
 ```
