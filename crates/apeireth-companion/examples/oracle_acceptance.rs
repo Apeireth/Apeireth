@@ -61,7 +61,7 @@ async fn main() {
     // 工具: 记忆 + oracle (simulate/forecast) + 沉淀
     let tools = json!([
         {"type":"function","function":{"name":"recall_memory","description":"查主人长期记忆","parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}},
-        {"type":"function","function":{"name":"simulate","description":"沙盘推演: 给世界状态 entities(对象{属性:值}) 和事件序列 events([\"id.属性+增量\"]), 返回各步状态","parameters":{"type":"object","properties":{"entities":{"type":"object"},"events":{"type":"array","items":{"type":"string"}},"note":{"type":"string"}},"required":["entities","events"]}}},
+        {"type":"function","function":{"name":"simulate","description":"沙盘推演: entities 给初始世界状态 {实体名: {属性: 数值}} (实体名直接用名字, 如 主人, 不要加编号前缀); events 是事件序列, 每条 \"实体名.属性±增量\" 表示增减, \"实体名.属性=数值\" 表示赋值; 例: \"主人.复习进度+0.3\", \"主人.信心=0.4\", \"错题本A.收录数+5\"; 返回每步状态快照+final","parameters":{"type":"object","properties":{"entities":{"type":"object"},"events":{"type":"array","items":{"type":"string"}},"note":{"type":"string"}},"required":["entities","events"]}}},
         {"type":"function","function":{"name":"forecast","description":"登记可证伪预测: statement(断言)+probability(0..1)+deadline_hours(期限小时)","parameters":{"type":"object","properties":{"statement":{"type":"string"},"probability":{"type":"number"},"deadline_hours":{"type":"number"}},"required":["statement","probability","deadline_hours"]}}},
         {"type":"function","function":{"name":"save_memory","description":"把值得记住的写入记忆","parameters":{"type":"object","properties":{"content":{"type":"string"}},"required":["content"]}}}
     ]);
