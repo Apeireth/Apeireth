@@ -22,6 +22,15 @@ pub enum CapabilityKind {
     Skill,  // 新技能 (工具/流程封装)
 }
 
+impl CapabilityKind {
+    pub fn label_zh(self) -> &'static str {
+        match self {
+            Self::Action => "动作",
+            Self::Skill => "技能",
+        }
+    }
+}
+
 /// 能力状态机.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CapabilityStatus {

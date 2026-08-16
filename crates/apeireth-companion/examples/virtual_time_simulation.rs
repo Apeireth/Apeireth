@@ -5,11 +5,16 @@
 //!   2. 权限包时间: 24h 限时包到期 / 永久包 90 天续签提醒
 //!   3. 节律 28 天淘汰: 30 天观察 → 最老 2 天被淘汰 (虚拟时间逐日推进)
 //!   4. 反思周期: ReflectionCycleScheduler 4 阶段完整周期 → 自动重触发 (cycles=1)
+//!   5. 能力生命周期: propose → approve → activate → retire (严格状态机)
+//!   6. 套件装配: base/沙盒/家教/渗透 三件套目录装配校验
 //!
 //! 用 `apeireth_core::clock::VirtualClock` 驱动, 不依赖真实时钟.
 
+use apeireth_companion::capability::{CapabilityKind, CapabilityRegistry, CapabilityStatus};
 use apeireth_companion::emergence::RhythmEstimator;
 use apeireth_companion::packs::{PackExpiry, PackRegistry, PermissionPack};
+use apeireth_companion::suites::SuiteCatalog;
+use apeireth_companion::tool_bridge::ToolBridge;
 use apeireth_companion::DreamScheduler;
 use apeireth_core::clock::{Clock, VirtualClock};
 use apeireth_memory::lightmemo::{DreamSubsystem, SleepConfig, SleepCycle};
@@ -165,6 +170,44 @@ async fn main() {
         "phase 已持续时长正确",
         sched.current_phase_duration_secs(vc.current().timestamp()) == 0,
         "重触发后 duration 归零".to_string(),
+    );
+    println!();
+
+    // ---------- 5. 能力生命周期 ----------
+    println!("【能力生命周期】propose → approve → activate → retire (严格状态机)");
+    let cap_store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+    let reg = CapabilityRegistry::new(Arc::clone(&cap_store), "me");
+    let p = reg.propose("换元检查", "做换元法时自动提醒检查 dx", CapabilityKind::Skill, "apeireth").unwrap();
+    check("提案 → pending", p.status == CapabilityStatus::Pending, format!("status={:?}", p.status));
+    reg.approve(&p.id).unwrap();
+    reg.activate(&p.id).unwrap();
+    let active = reg.active_capabilities().unwrap();
+    check("批准激活 → active", active.len() == 1 && active[0].name == "换元检查", format!("active={}", active.len()));
+    reg.retire(&p.id).unwrap();
+    check("退役 → active 空", reg.active_capabilities().unwrap().is_empty(), "retire 后清空".to_string());
+    // 非法迁移拒绝
+    let p2 = reg.propose("直接激活", "跳过审批", CapabilityKind::Action, "apeireth").unwrap();
+    check("跳过审批的激活被拒", reg.activate(&p2.id).is_err(), "pending→active 非法".to_string());
+    println!();
+
+    // ---------- 6. 套件装配 ----------
+    println!("【三件套装配】本体 + 能力包 + 升级套件目录校验");
+    let bridge_store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+    let bridge = ToolBridge::new(bridge_store);
+    let cat = SuiteCatalog::builtin();
+    let base_ok = cat.install(&bridge, "base").is_ok();
+    check("本体 base 装配", base_ok, "base 工具已注册 + 权限包".to_string());
+    let sandbox_ok = cat.install(&bridge, "sandbox-pack").is_ok();
+    check("能力包 sandbox-pack 装配", sandbox_ok, "沙盒包".to_string());
+    let tutor_ok = cat.install(&bridge, "tutor-suite").is_ok();
+    check("升级套件 tutor-suite 装配", tutor_ok, "家教套件".to_string());
+    check("未知套件拒绝", cat.install(&bridge, "nope").is_err(), "no-such-suite".to_string());
+    check(
+        "三类齐全",
+        cat.list(apeireth_companion::suites::SuiteKind::Base).len() >= 1
+            && cat.list(apeireth_companion::suites::SuiteKind::CapabilityPack).len() >= 2
+            && cat.list(apeireth_companion::suites::SuiteKind::UpgradeSuite).len() >= 3,
+        "base≥1 / pack≥2 / suite≥3".to_string(),
     );
     println!();
 

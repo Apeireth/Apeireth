@@ -65,6 +65,19 @@ impl CapabilityCatalog {
         s.push_str("  - Git: 版本库操作 (受审批)\n");
         s.push_str("  - Grep: 代码/文本搜索 (限定项目根)\n");
         s.push_str("- 安全: 所有工具调用过洋葱门 + 权限包 + 审批 + 审计留痕; 高危动作(执行代码/改仓库)需要主人批准\n");
+        s.push_str("- 演化: 你可以用 propose_capability 提案你自己长出来的新能力 (待宪法评审/主人批准后激活)\n");
+        s
+    }
+
+    /// 动态自述: 静态目录 + 已激活的演化能力 (AI 自己长出来的).
+    pub fn describe_with(active: &[crate::capability::CapabilityProposal]) -> String {
+        let mut s = Self::describe();
+        if !active.is_empty() {
+            s.push_str("- 你已演化的能力 (可主动使用):\n");
+            for c in active {
+                s.push_str(&format!("  · [{}] {}: {}\n", c.kind.label_zh(), c.name, c.description));
+            }
+        }
         s
     }
 
