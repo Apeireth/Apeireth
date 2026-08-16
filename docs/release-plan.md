@@ -70,5 +70,6 @@
 - [x] 审计能力包真工具（audit_log）
 - [ ] 扩展包逐个成型（沙盒包物理层 / 多通道 / GUI / 本地智能）
 - [ ] 文档（用户手册/快速开始/能力包说明）
+- [x] 社区插件规范文档（docs/plugin-authoring-guide.md：六节齐全 + 示例摘自真实代码 + adapter 未接如实标注）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
 - [ ] 发布产物（crate 整理 / README / tgz）
