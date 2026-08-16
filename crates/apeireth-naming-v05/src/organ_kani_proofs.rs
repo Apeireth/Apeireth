@@ -26,7 +26,8 @@ fn r177_nam_04_prefix() {
 
 #[test]
 fn r177_nam_05_naming_result() {
-    let r: NamingResult<u32> = Ok(1); assert_eq!(r.unwrap(), 1);
+    let r: NamingResult<u32> = Ok(1);
+    assert_eq!(r.unwrap(), 1);
 }
 
 #[cfg(kani)]
@@ -40,4 +41,3 @@ fn r177_nam_kani_01_total_dims() {
 fn r177_nam_kani_02_variant_count() {
     assert!(NAMING_ERROR_VARIANT_COUNT >= 1);
 }
-

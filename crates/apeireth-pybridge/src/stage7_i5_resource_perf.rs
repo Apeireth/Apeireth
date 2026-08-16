@@ -24,9 +24,7 @@
 //! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 / A3 13 键 0 改
 //! - C1 0 主动 commit / C2 0 装 PASS 严守 / 0 主动 push
 
-use crate::perf_guardianship::{
-    stage6_perf_healthy, stage6_perf_summary, PerfKind,
-};
+use crate::perf_guardianship::{stage6_perf_healthy, stage6_perf_summary, PerfKind};
 use crate::resource_governance::{
     resource_governance_summary, ResourceDimension, RESOURCE_GOVERNANCE_DIMENSION_COUNT,
 };
@@ -122,11 +120,7 @@ impl ResourcePerfMatrix {
         self.bindings.is_empty()
     }
 
-    pub fn get(
-        &self,
-        dim: ResourceDimension,
-        kind: PerfKind,
-    ) -> Option<&ResourcePerfBinding> {
+    pub fn get(&self, dim: ResourceDimension, kind: PerfKind) -> Option<&ResourcePerfBinding> {
         self.bindings
             .iter()
             .find(|b| b.dimension == dim && b.perf_kind == kind)
@@ -262,7 +256,8 @@ pub fn stage7_i5_healthy() -> bool {
     c.matrix.len() == STAGE7_I5_BINDING_COUNT
         && g1_ok
         && k2_ok
-        && STAGE7_I5_BINDING_COUNT == RESOURCE_GOVERNANCE_DIMENSION_COUNT * STAGE7_I5_PERF_KIND_COUNT
+        && STAGE7_I5_BINDING_COUNT
+            == RESOURCE_GOVERNANCE_DIMENSION_COUNT * STAGE7_I5_PERF_KIND_COUNT
 }
 
 pub fn stage7_i5_to_g1_consistency() -> bool {
@@ -358,7 +353,14 @@ mod tests {
 
     #[test]
     fn i5_09_audit_event_fields() {
-        let e = ResourcePerfAuditEvent::new(100, ResourceDimension::Count, PerfKind::Call, 800, 1500, true);
+        let e = ResourcePerfAuditEvent::new(
+            100,
+            ResourceDimension::Count,
+            PerfKind::Call,
+            800,
+            1500,
+            true,
+        );
         assert_eq!(e.threshold_us, 800);
         assert_eq!(e.observed_us, 1500);
         assert!(e.over_threshold);

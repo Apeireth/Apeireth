@@ -153,7 +153,10 @@ pub fn probe_bridge_to_r11() -> CrossModuleProbeResult {
         kind: CrossModuleKind::BridgeToR11,
         description: "bridge 与 r11_compat 协同: 1103 R11 模块严守 + 类别查询".to_string(),
         ok,
-        detail: format!("r11_count={} r11_version={} cat(memory.store)={cat:?}", r11_n, r11_v),
+        detail: format!(
+            "r11_count={} r11_version={} cat(memory.store)={cat:?}",
+            r11_n, r11_v
+        ),
     }
 }
 
@@ -174,9 +177,8 @@ pub fn probe_pool_to_type_convert() -> CrossModuleProbeResult {
     let ok = json.is_ok();
     let detail = if let Ok(s) = json {
         // 验证 JSON 包含 "hits" / "misses" / "cached_modules" 字段
-        let contains_all = s.contains("\"hits\"")
-            && s.contains("\"misses\"")
-            && s.contains("\"cached_modules\"");
+        let contains_all =
+            s.contains("\"hits\"") && s.contains("\"misses\"") && s.contains("\"cached_modules\"");
         if contains_all {
             format!("JSON pool_stats: {s}")
         } else {
@@ -206,7 +208,10 @@ pub fn probe_asi_to_r11() -> CrossModuleProbeResult {
         kind: CrossModuleKind::AsiToR11,
         description: "asi_modules 与 r11_compat 协同: 7 关键模块 + 1103 R11 模块锁定".to_string(),
         ok,
-        detail: format!("asi_count={} r11_count={} asi_version={asi_v}", asi_n, r11_n),
+        detail: format!(
+            "asi_count={} r11_count={} asi_version={asi_v}",
+            asi_n, r11_n
+        ),
     }
 }
 
@@ -522,7 +527,10 @@ mod tests {
         let by_version = asi_lookup_by_version("V1077");
         assert!(by_name.is_some());
         assert!(by_version.is_some());
-        assert_eq!(by_name.unwrap().version_tag, by_version.unwrap().version_tag);
+        assert_eq!(
+            by_name.unwrap().version_tag,
+            by_version.unwrap().version_tag
+        );
     }
 
     // 12. P5 core roundtrip 详细 verify (Episode + Session + Note 全字段)

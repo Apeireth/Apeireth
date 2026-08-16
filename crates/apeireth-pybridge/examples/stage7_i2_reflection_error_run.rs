@@ -5,7 +5,7 @@
 //! 演示 I2: 8 reflection node × 4 error kind = 32 绑定 + reflect_and_recover
 
 use apeireth_pybridge::{
-    stage7_i2_healthy, stage7_i2_summary, ReflectionErrorCoordinator, ErrorKind,
+    stage7_i2_healthy, stage7_i2_summary, ErrorKind, ReflectionErrorCoordinator,
 };
 
 fn main() {

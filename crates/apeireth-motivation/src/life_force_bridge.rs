@@ -109,7 +109,10 @@ fn derive_sgi_urgency(endurance: f64, in_reflection: bool) -> SGIUrgency {
 
 /// 纯翻译: LifeForce -> LifeForceMotivationAdjustment.
 /// 0 副作用, 0 改源/目标. 纯函数.
-pub fn life_force_to_motivation_adjustment(life: &LifeForce, now: i64) -> LifeForceMotivationAdjustment {
+pub fn life_force_to_motivation_adjustment(
+    life: &LifeForce,
+    now: i64,
+) -> LifeForceMotivationAdjustment {
     let endurance = life.endurance.clamp(ENDURANCE_MIN, ENDURANCE_MAX);
     let base_multiplier = endurance_to_multiplier(endurance);
     let in_reflection = life.is_in_reflection(now);
@@ -220,8 +223,12 @@ mod tests {
         let life_r = make_life(1.0, true, 1_700_000_000);
         let adj_n = life_force_to_motivation_adjustment(&life_n, 1_700_000_000);
         let adj_r = life_force_to_motivation_adjustment(&life_r, 1_700_000_000);
-        assert!(adj_r.drive_intensity_multiplier < adj_n.drive_intensity_multiplier,
-            "reflection should dampen multiplier, got r={} n={}", adj_r.drive_intensity_multiplier, adj_n.drive_intensity_multiplier);
+        assert!(
+            adj_r.drive_intensity_multiplier < adj_n.drive_intensity_multiplier,
+            "reflection should dampen multiplier, got r={} n={}",
+            adj_r.drive_intensity_multiplier,
+            adj_n.drive_intensity_multiplier
+        );
         assert!(adj_r.in_reflection);
         assert_eq!(adj_r.sgi_urgency, SGIUrgency::Reduced);
     }
@@ -248,10 +255,18 @@ mod tests {
             let endurance = i as f64 / 10.0;
             let life = make_life(endurance, false, 1_700_000_000);
             let adj = life_force_to_motivation_adjustment(&life, 1_700_000_000);
-            assert!(adj.drive_intensity_multiplier >= 0.3 - 1e-9,
-                "endurance={} multiplier {} below 0.3", endurance, adj.drive_intensity_multiplier);
-            assert!(adj.drive_intensity_multiplier <= 1.5 + 1e-9,
-                "endurance={} multiplier {} above 1.5", endurance, adj.drive_intensity_multiplier);
+            assert!(
+                adj.drive_intensity_multiplier >= 0.3 - 1e-9,
+                "endurance={} multiplier {} below 0.3",
+                endurance,
+                adj.drive_intensity_multiplier
+            );
+            assert!(
+                adj.drive_intensity_multiplier <= 1.5 + 1e-9,
+                "endurance={} multiplier {} above 1.5",
+                endurance,
+                adj.drive_intensity_multiplier
+            );
         }
     }
 
@@ -261,7 +276,9 @@ mod tests {
         let life_below = make_life(0.19, false, 1_700_000_000);
         let life_above = make_life(0.21, false, 1_700_000_000);
         assert!(life_force_to_motivation_adjustment(&life_below, 1_700_000_000).exhaustion_warning);
-        assert!(!life_force_to_motivation_adjustment(&life_above, 1_700_000_000).exhaustion_warning);
+        assert!(
+            !life_force_to_motivation_adjustment(&life_above, 1_700_000_000).exhaustion_warning
+        );
     }
 
     // t07: 反思期 SGI 节奏 = Reduced
@@ -280,9 +297,13 @@ mod tests {
             let endurance = i as f64 / 10.0;
             let life = make_life(endurance, false, 1_700_000_000);
             let adj = life_force_to_motivation_adjustment(&life, 1_700_000_000);
-            assert!(adj.drive_intensity_multiplier > last,
+            assert!(
+                adj.drive_intensity_multiplier > last,
                 "endurance={} multiplier {} should exceed previous {}",
-                endurance, adj.drive_intensity_multiplier, last);
+                endurance,
+                adj.drive_intensity_multiplier,
+                last
+            );
             last = adj.drive_intensity_multiplier;
         }
     }
@@ -293,7 +314,11 @@ mod tests {
         let mut drive = InternalDrive::new("self", 1.0);
         let life = make_life(0.0, false, 1_700_000_000); // multiplier = 0.3
         let after = apply_life_force_to_internal_drive(&mut drive, &life, 1_700_000_000);
-        assert!(after < 1.0, "low endurance should reduce drive, got {}", after);
+        assert!(
+            after < 1.0,
+            "low endurance should reduce drive, got {}",
+            after
+        );
         assert!(after >= 0.0);
         assert_eq!(drive.label, "self", "label should not change");
     }

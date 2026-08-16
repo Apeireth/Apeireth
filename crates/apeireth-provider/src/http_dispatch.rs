@@ -1,4 +1,3 @@
-
 //! apeireth-provider::http_dispatch \u2014 6 Provider \u7edf\u4e00 HTTP \u63a5\u5165 (R176)
 //!
 //! **\u80cc\u666f**: R20 \u9636\u6bb5 4 \u4f30\u8865\u7684 5 Provider \u4ec5\u6709 struct descriptor (name + tools + model_kinds).
@@ -25,8 +24,8 @@ use crate::claude_code::ClaudeCodeProvider;
 use crate::codex::CodexProvider;
 use crate::copilot::CopilotProvider;
 use crate::gemini_cli::GeminiCliProvider;
-use crate::opencode::OpencodeProvider;
 use crate::minimax::MinimaxProvider;
+use crate::opencode::OpencodeProvider;
 
 /// Provider \u914d\u7f6e (api_key + base_url + default model)
 #[derive(Debug, Clone)]
@@ -47,11 +46,21 @@ impl ProviderConfig {
         let base_url = std::env::var("APEIRETH_BASE_URL")
             .unwrap_or_else(|_| "https://api.openai.com".to_string());
         let default_model = std::env::var("APEIRETH_MODEL").unwrap_or_default();
-        Ok(Self { provider_name, base_url, api_key, default_model })
+        Ok(Self {
+            provider_name,
+            base_url,
+            api_key,
+            default_model,
+        })
     }
 
     /// Construct with explicit values (for tests)
-    pub fn new(provider_name: &'static str, base_url: impl Into<String>, api_key: impl Into<String>, default_model: impl Into<String>) -> Self {
+    pub fn new(
+        provider_name: &'static str,
+        base_url: impl Into<String>,
+        api_key: impl Into<String>,
+        default_model: impl Into<String>,
+    ) -> Self {
         Self {
             provider_name,
             base_url: base_url.into(),
@@ -79,9 +88,16 @@ pub async fn dispatch_http(
     config: &ProviderConfig,
     request: &LlmRequest,
 ) -> Result<LlmResponse, LlmFacadeError> {
-    let model = if request.model.is_empty() { &config.default_model } else { &request.model };
+    let model = if request.model.is_empty() {
+        &config.default_model
+    } else {
+        &request.model
+    };
     if model.is_empty() {
-        return Err(LlmFacadeError::InvalidModel { provider: config.provider_name.into(), model: "empty".into() });
+        return Err(LlmFacadeError::InvalidModel {
+            provider: config.provider_name.into(),
+            model: "empty".into(),
+        });
     }
     if config.api_key.is_empty() {
         return Err(LlmFacadeError::InvalidAuth);
@@ -101,9 +117,15 @@ pub async fn dispatch_http(
         "stream": false,
     });
 
-    let url = format!("{}/v1/chat/completions", config.base_url.trim_end_matches('/'));
+    let url = format!(
+        "{}/v1/chat/completions",
+        config.base_url.trim_end_matches('/')
+    );
     let start = Instant::now();
-    let resp = client.post_json(&url, body).await.map_err(|e| LlmFacadeError::HttpError(format!("{e}")))?;
+    let resp = client
+        .post_json(&url, body)
+        .await
+        .map_err(|e| LlmFacadeError::HttpError(format!("{e}")))?;
     let status = status_to_llm_status(resp.status().as_u16());
     let elapsed_ms = start.elapsed().as_millis() as u64;
 
@@ -140,7 +162,12 @@ pub async fn dispatch_http(
 
 /// \u6784\u9020 ProviderConfig (\u9ed8\u8ba4 base_url \u4e0e model_kind)
 pub fn config_for_claude_code(api_key: impl Into<String>) -> ProviderConfig {
-    ProviderConfig::new("claude-code", "https://api.anthropic.com", api_key, "claude-sonnet-4-5")
+    ProviderConfig::new(
+        "claude-code",
+        "https://api.anthropic.com",
+        api_key,
+        "claude-sonnet-4-5",
+    )
 }
 pub fn config_for_codex(api_key: impl Into<String>) -> ProviderConfig {
     ProviderConfig::new("codex", "https://api.openai.com", api_key, "codex")
@@ -149,10 +176,20 @@ pub fn config_for_copilot(api_key: impl Into<String>) -> ProviderConfig {
     ProviderConfig::new("copilot", "https://api.github.com", api_key, "gpt-4o")
 }
 pub fn config_for_gemini_cli(api_key: impl Into<String>) -> ProviderConfig {
-    ProviderConfig::new("gemini-cli", "https://generativelanguage.googleapis.com", api_key, "gemini-pro")
+    ProviderConfig::new(
+        "gemini-cli",
+        "https://generativelanguage.googleapis.com",
+        api_key,
+        "gemini-pro",
+    )
 }
 pub fn config_for_opencode(api_key: impl Into<String>) -> ProviderConfig {
-    ProviderConfig::new("opencode", "https://api.opencode.ai", api_key, "opencode-default")
+    ProviderConfig::new(
+        "opencode",
+        "https://api.opencode.ai",
+        api_key,
+        "opencode-default",
+    )
 }
 pub fn config_for_minimax(api_key: impl Into<String>) -> ProviderConfig {
     ProviderConfig::new("minimax", "https://api.minimaxi.com", api_key, "MiniMax-M3")

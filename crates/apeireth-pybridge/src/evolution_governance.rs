@@ -152,8 +152,12 @@ impl EvolutionRule {
     /// 规则描述
     pub fn description(&self) -> &'static str {
         match self {
-            EvolutionRule::R1NewModuleSafe => "新增模块必通过 7 项安全 check (类型/范围/速率/守门/审计/来源/POD)",
-            EvolutionRule::R2UpgradeBackwardCompat => "升级必保持向后兼容 (24 LOCKED 入口签名 0 改)",
+            EvolutionRule::R1NewModuleSafe => {
+                "新增模块必通过 7 项安全 check (类型/范围/速率/守门/审计/来源/POD)"
+            }
+            EvolutionRule::R2UpgradeBackwardCompat => {
+                "升级必保持向后兼容 (24 LOCKED 入口签名 0 改)"
+            }
             EvolutionRule::R3DowngradeJustified => "降级必记录原因 (避免悄悄降级)",
             EvolutionRule::R4RetireConfirmed => "退役必 3 方确认 (Mavis + 主人 + 借鉴 ID)",
         }
@@ -392,18 +396,12 @@ impl EvolutionEngine {
     /// 引导: 7 关键 ASI Python 模块默认 version (借 Stage 1)
     fn bootstrap_asi_modules(&mut self) {
         // Stage 1 ASI Python 关键模块 (per P10-1 §1.2 + asi_modules.rs)
-        self.asi_module_versions.insert(
-            "apeireth.v1077_asi_v04_full_measurement".to_string(),
-            1077,
-        );
-        self.asi_module_versions.insert(
-            "apeireth.v1400_asi_self_framework".to_string(),
-            1400,
-        );
-        self.asi_module_versions.insert(
-            "apeireth.v1447_asi_cross_modular_audit".to_string(),
-            1447,
-        );
+        self.asi_module_versions
+            .insert("apeireth.v1077_asi_v04_full_measurement".to_string(), 1077);
+        self.asi_module_versions
+            .insert("apeireth.v1400_asi_self_framework".to_string(), 1400);
+        self.asi_module_versions
+            .insert("apeireth.v1447_asi_cross_modular_audit".to_string(), 1447);
         self.asi_module_versions.insert(
             "apeireth.v1457_asi_six_deployment_operational_runbook".to_string(),
             1457,
@@ -471,9 +469,8 @@ impl EvolutionEngine {
         ctx: &EvolutionContext,
         new_version: u32,
     ) -> EvolutionOutcome {
-        let is_compat = ctx.current_version > 0
-            && new_version > ctx.current_version
-            && ctx.guard_layers == 6;
+        let is_compat =
+            ctx.current_version > 0 && new_version > ctx.current_version && ctx.guard_layers == 6;
         let outcome = if is_compat {
             EvolutionOutcome::Pass
         } else if new_version <= ctx.current_version {
@@ -534,10 +531,8 @@ impl EvolutionEngine {
         mavis_confirmed: bool,
         master_confirmed: bool,
     ) -> EvolutionOutcome {
-        let is_confirmed = mavis_confirmed
-            && master_confirmed
-            && ctx.borrow_id <= 10
-            && ctx.guard_layers == 6;
+        let is_confirmed =
+            mavis_confirmed && master_confirmed && ctx.borrow_id <= 10 && ctx.guard_layers == 6;
         let outcome = if is_confirmed {
             EvolutionOutcome::Pass
         } else {
@@ -709,7 +704,10 @@ mod tests {
             EvolutionRule::R3DowngradeJustified.name(),
             "R3_downgrade_justified"
         );
-        assert_eq!(EvolutionRule::R4RetireConfirmed.name(), "R4_retire_confirmed");
+        assert_eq!(
+            EvolutionRule::R4RetireConfirmed.name(),
+            "R4_retire_confirmed"
+        );
     }
 
     #[test]
@@ -907,10 +905,7 @@ mod tests {
             by_rule.get(&EvolutionRule::R2UpgradeBackwardCompat),
             Some(&1)
         );
-        assert_eq!(
-            by_rule.get(&EvolutionRule::R3DowngradeJustified),
-            Some(&1)
-        );
+        assert_eq!(by_rule.get(&EvolutionRule::R3DowngradeJustified), Some(&1));
         assert_eq!(by_rule.get(&EvolutionRule::R4RetireConfirmed), Some(&1));
     }
 
@@ -978,10 +973,6 @@ mod tests {
         // G3 形式化: 8 harnesses
         // G4 演进: 4 rules = 4
         // 4+6+8+4 = 22 → ASI Stage 5 治理规模
-        assert_eq!(
-            4 + 6 + 8 + 4,
-            22,
-            "ASI Stage 5 治理规模 = 22 (4+6+8+4)"
-        );
+        assert_eq!(4 + 6 + 8 + 4, 22, "ASI Stage 5 治理规模 = 22 (4+6+8+4)");
     }
 }

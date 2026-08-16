@@ -263,9 +263,10 @@ impl ToolResourceCoordinator {
     ) -> GovernanceAction {
         let binding = self.matrix.get(tool_id, dimension);
         let (action, reason) = match binding {
-            Some(b) if b.quota_label == "default" => {
-                (GovernanceAction::Allow, "default quota 允许调用".to_string())
-            }
+            Some(b) if b.quota_label == "default" => (
+                GovernanceAction::Allow,
+                "default quota 允许调用".to_string(),
+            ),
             Some(b) if b.quota_label == "strict" => {
                 (GovernanceAction::Throttle, "strict quota 限流".to_string())
             }

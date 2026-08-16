@@ -105,9 +105,7 @@ impl DecisionPolicy {
     /// 描述 (借鉴 superpowers "when_to_use")
     pub fn description(&self) -> &'static str {
         match self {
-            DecisionPolicy::Conservative => {
-                "保守: 严守 8 硬墙, 不重做, 1 次 decision = 最终决策"
-            }
+            DecisionPolicy::Conservative => "保守: 严守 8 硬墙, 不重做, 1 次 decision = 最终决策",
             DecisionPolicy::Cautious => "谨慎: 1 次重做, 仅在 hard_walls fail 时",
             DecisionPolicy::Balanced => "平衡: 默认 2 次重做, 兼顾安全 + 进化",
             DecisionPolicy::Progressive => "激进: 3 次重做, 推动决策迭代",

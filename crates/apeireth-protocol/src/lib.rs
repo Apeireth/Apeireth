@@ -71,18 +71,18 @@ pub use adapters::{
 };
 // R37-1: re-export 4 Bridge struct + dispatch helper
 pub use bridge::{
-    encode_for_kind, decode_for_kind, endpoint_path_for_kind, AnthropicMessagesBridge,
+    decode_for_kind, encode_for_kind, endpoint_path_for_kind, AnthropicMessagesBridge,
     GeminiBridge, OpenAiChatBridge, OpenAiResponsesBridge, ProtocolBridge,
 };
 pub use bridge_ext::{
     BridgeExtError, BridgeKind, ExtendedBridge, PassthroughBridge, QueueBridge, StreamBridge,
 };
 pub use error::{is_tool_result_error, ProtocolError};
+pub use gateway::ProtocolKind;
 pub use normalized::{
     ContentPart, MessageRole, NormalizedFinishReason, NormalizedMessage, NormalizedRequest,
     NormalizedResponse, NormalizedTool, NormalizedToolChoice, ToolCall, ToolParameters,
 };
-pub use gateway::ProtocolKind;
 // R20 阶段 2 re-export: WS 8 帧 + 编译期 hardcode 常量
 pub use ws_v1::{
     AuthFrame, CloseFrame, ErrorFrame, PingFrame, StreamChunkFrame, StreamEndFrame,
@@ -217,11 +217,19 @@ mod lib_tests {
     #[test]
     fn protocol_bridge_works_through_lib_api() {
         // R37-1 + R36-2: ProtocolRouter 已删, 验证 ProtocolBridge facade (encode_for_kind / decode_for_kind / endpoint_path_for_kind) 4 协议 dispatch
-        use crate::bridge::{encode_for_kind, decode_for_kind, endpoint_path_for_kind};
+        use crate::bridge::{decode_for_kind, encode_for_kind, endpoint_path_for_kind};
         use crate::normalized::{NormalizedRequest, NormalizedResponse};
         use serde_json::json;
-        for kind in [ProtocolKind::OpenAiChat, ProtocolKind::OpenAiResponses, ProtocolKind::AnthropicMessages, ProtocolKind::Gemini] {
-            assert!(endpoint_path_for_kind(kind).is_some(), "HTTP kind should have endpoint path");
+        for kind in [
+            ProtocolKind::OpenAiChat,
+            ProtocolKind::OpenAiResponses,
+            ProtocolKind::AnthropicMessages,
+            ProtocolKind::Gemini,
+        ] {
+            assert!(
+                endpoint_path_for_kind(kind).is_some(),
+                "HTTP kind should have endpoint path"
+            );
             // encode_for_kind 需要合法 NormalizedRequest; 测 4 种 kind 都能 dispatch 到对应 Bridge (不验证 payload 内容)
             let req = NormalizedRequest::default();
             let _ = encode_for_kind(kind, &req);

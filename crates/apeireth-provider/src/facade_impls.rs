@@ -1,4 +1,3 @@
-
 //! apeireth-provider::facade_impls \u2014 6 Provider \u7edf\u4e00\u5b9e\u73b0 LlmFacade trait
 //!
 //! **\u7edf\u4e00\u63a5\u5165**: claude_code / codex / copilot / gemini_cli / opencode / minimax
@@ -23,15 +22,21 @@ use crate::claude_code::ClaudeCodeProvider;
 use crate::codex::CodexProvider;
 use crate::copilot::CopilotProvider;
 use crate::gemini_cli::GeminiCliProvider;
-use crate::opencode::OpencodeProvider;
 use crate::minimax::MinimaxProvider;
+use crate::opencode::OpencodeProvider;
 
 /// 6 Provider \u90fd implement LlmFacade
 
 impl LlmFacade for ClaudeCodeProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -41,7 +46,10 @@ impl LlmFacade for ClaudeCodeProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,
@@ -50,9 +58,15 @@ impl LlmFacade for ClaudeCodeProvider {
 }
 
 impl LlmFacade for CodexProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -61,7 +75,10 @@ impl LlmFacade for CodexProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,
@@ -70,9 +87,15 @@ impl LlmFacade for CodexProvider {
 }
 
 impl LlmFacade for CopilotProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -81,7 +104,10 @@ impl LlmFacade for CopilotProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,
@@ -90,9 +116,15 @@ impl LlmFacade for CopilotProvider {
 }
 
 impl LlmFacade for GeminiCliProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -101,7 +133,10 @@ impl LlmFacade for GeminiCliProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,
@@ -110,9 +145,15 @@ impl LlmFacade for GeminiCliProvider {
 }
 
 impl LlmFacade for OpencodeProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -121,7 +162,10 @@ impl LlmFacade for OpencodeProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,
@@ -130,9 +174,15 @@ impl LlmFacade for OpencodeProvider {
 }
 
 impl LlmFacade for MinimaxProvider {
-    fn name(&self) -> &'static str { self.name }
-    fn supported_models(&self) -> Vec<&'static str> { self.model_kinds.clone() }
-    fn supported_tools(&self) -> Vec<&'static str> { self.tools.clone() }
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn supported_models(&self) -> Vec<&'static str> {
+        self.model_kinds.clone()
+    }
+    fn supported_tools(&self) -> Vec<&'static str> {
+        self.tools.clone()
+    }
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         if !is_valid_provider(self.name) {
             return Err(LlmFacadeError::UnknownProvider(self.name.into()));
@@ -141,7 +191,10 @@ impl LlmFacade for MinimaxProvider {
             request_id: String::new(),
             provider: self.name.into(),
             model: request.model,
-            text: format!("[descriptor-only] provider {} ready for dispatch", self.name),
+            text: format!(
+                "[descriptor-only] provider {} ready for dispatch",
+                self.name
+            ),
             prompt_tokens: 0,
             completion_tokens: 0,
             status: LlmStatus::Ok,

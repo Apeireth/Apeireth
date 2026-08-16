@@ -167,8 +167,12 @@ mod tests {
     #[test]
     fn sum_1_05_rejected() {
         let bad = ClassWeights::new(0.50, 0.30, 0.15, 0.10); // sum=1.05 (f32 累加 ≈ 1.0500001)
-        // f32 加法有微小浮点误差, 用容差比较
-        assert!((bad.sum() - 1.05).abs() < 1e-5, "sum 应 ≈ 1.05, 实际 {}", bad.sum());
+                                                             // f32 加法有微小浮点误差, 用容差比较
+        assert!(
+            (bad.sum() - 1.05).abs() < 1e-5,
+            "sum 应 ≈ 1.05, 实际 {}",
+            bad.sum()
+        );
         let err = check_sum_equals_1(&bad).unwrap_err();
         match err {
             NamingError::SumNotEquals1 { sum, delta } => {

@@ -12,9 +12,9 @@
 use apeireth_naming_v05::{
     check_sum_equals_1, decode_v05, decode_v05_class, default_v05_spec, encode_v05,
     encode_v05_class, encode_v05_lines, validate_roundtrip, validate_v05, Class, ClassDims,
-    ClassWeights, Completeness, DEFAULT_WEIGHTS, DimensionSet, Domain, Level, Lineage, Modality,
-    Safety, V05Spec, NAMING_ERROR_VARIANT_COUNT, V05_LINE_REGEX, V05_PREFIX, V05_SEGMENT_COUNT,
-    V05_TOTAL_DIMS, CRATE_SEGMENT_COUNT, CRATE_V05_TOTAL_DIMS, V05DimId,
+    ClassWeights, Completeness, DimensionSet, Domain, Level, Lineage, Modality, Safety, V05DimId,
+    V05Spec, CRATE_SEGMENT_COUNT, CRATE_V05_TOTAL_DIMS, DEFAULT_WEIGHTS,
+    NAMING_ERROR_VARIANT_COUNT, V05_LINE_REGEX, V05_PREFIX, V05_SEGMENT_COUNT, V05_TOTAL_DIMS,
 };
 
 // ============================================================================
@@ -35,7 +35,10 @@ fn k1_class_pc_rc_hg_gp_four() {
 fn k1_class_weights_sum_to_1() {
     // 4 大类权重 sum 必须 = 1.00 (守门)
     let sum: f32 = Class::ALL.iter().map(|c| c.weight()).sum();
-    assert!((sum - 1.0).abs() < 1e-6, "4 大类权重 sum 必须 = 1.00, 实际 {sum}");
+    assert!(
+        (sum - 1.0).abs() < 1e-6,
+        "4 大类权重 sum 必须 = 1.00, 实际 {sum}"
+    );
 }
 
 #[test]
@@ -79,8 +82,14 @@ fn k2_level_zero_to_nine() {
 #[test]
 fn k2_level_invalid_rejected() {
     use apeireth_naming_v05::NamingError;
-    assert!(matches!(Level::from_u8(10), Err(NamingError::InvalidLevel(_))));
-    assert!(matches!(Level::from_u8(255), Err(NamingError::InvalidLevel(_))));
+    assert!(matches!(
+        Level::from_u8(10),
+        Err(NamingError::InvalidLevel(_))
+    ));
+    assert!(matches!(
+        Level::from_u8(255),
+        Err(NamingError::InvalidLevel(_))
+    ));
 }
 
 #[test]
@@ -143,7 +152,10 @@ fn k3_v05_total_dims_equals_24() {
 fn k3_v05_dim_id_4_classes_x_6_dims() {
     // 4 大类各 6 维
     for class in Class::ALL {
-        let count = V05DimId::ALL.iter().filter(|id| id.class() == *class).count();
+        let count = V05DimId::ALL
+            .iter()
+            .filter(|id| id.class() == *class)
+            .count();
         assert_eq!(count, 6, "{class:?} 必须 6 维");
     }
 }
@@ -151,7 +163,11 @@ fn k3_v05_dim_id_4_classes_x_6_dims() {
 #[test]
 fn k3_v05_dim_id_offset_in_range() {
     for id in V05DimId::ALL {
-        assert!(id.offset() < 6, "offset 必须 < 6, 实际 {} for {id:?}", id.offset());
+        assert!(
+            id.offset() < 6,
+            "offset 必须 < 6, 实际 {} for {id:?}",
+            id.offset()
+        );
     }
 }
 
@@ -212,7 +228,10 @@ fn k4_encode_v05_full_4_lines() {
             3 => "GP",
             _ => unreachable!(),
         };
-        assert!(line.contains(&format!(".{expected_class}.")), "第 {i} 行应含 .{expected_class}.");
+        assert!(
+            line.contains(&format!(".{expected_class}.")),
+            "第 {i} 行应含 .{expected_class}."
+        );
     }
 }
 

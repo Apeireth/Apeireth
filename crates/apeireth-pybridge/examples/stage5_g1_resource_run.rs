@@ -43,11 +43,7 @@ fn main() {
     // 3. 演示 3 路径 (V1458 ceiling critical strict)
     println!("3 路径演示 (V1458 ceiling_critical strict, rate quota = 10):");
     let v1458 = "apeireth.v1458_asi_north_star_ceiling_chain_audit";
-    for (used, expected) in [
-        (5, "Allow"),
-        (8, "Throttle"),
-        (11, "Reject"),
-    ] {
+    for (used, expected) in [(5, "Allow"), (8, "Throttle"), (11, "Reject")] {
         let action = governor.check(v1458, ResourceDimension::Rate, used);
         println!(
             "  rate used={} → {} (expected {})",
