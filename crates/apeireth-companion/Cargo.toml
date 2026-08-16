@@ -18,6 +18,7 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
+sha2 = "0.10" # S6: session_log 审计哈希链 FNV-1a 64 → SHA-256 (工作区已装版本复用, api/arbitration/keyring 同款)
 async-trait = { workspace = true }
 # TelegramSink (daemon) 真 HTTP: 复用 workspace reqwest 0.12 + rustls (同 LarkSink 走法).
 reqwest = { workspace = true }
