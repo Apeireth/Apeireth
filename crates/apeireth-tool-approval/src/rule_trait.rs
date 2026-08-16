@@ -28,4 +28,25 @@ pub trait ApprovalRule: Send + Sync {
     /// - `Deny { reason, silent }` — 拒绝, 立即生效
     /// - `NoMatch` — 当前规则不判断, 由下条规则接手
     fn check(&self, call: &ParsedToolCall, history: &[CallRecord]) -> ApprovalDecision;
+
+    /// 该规则对此调用的匹配是否"拒绝时静默" (VCP `notifyAiOnReject == false`)
+    ///
+    /// **默认 false** (非静默). 支持 `::SilentReject` 的规则 (BlacklistRule /
+    /// ApprovalListRule) 覆写此方法. `ApprovalManager::check_detailed` 在
+    /// `check` 命中后调用, 填入 `CheckDetail.silent_on_reject`.
+    ///
+    /// **要求**: 与 `check` 保持同调用语义 (同一 call, 规则状态未变时答案一致),
+    /// 纯函数, 无副作用.
+    fn silent_on_reject(&self, _call: &ParsedToolCall) -> bool {
+        false
+    }
+
+    /// 该规则命中的命令级键 (VCP `matchedCommand`, 命令级粒度 `tool:command`)
+    ///
+    /// **默认 None** (工具级规则). 仅命令级规则 (ApprovalListRule) 覆写.
+    /// `ApprovalManager::check_detailed` 在 `check` 命中后调用, 填入
+    /// `CheckDetail.matched_command` 供审计与结构化结果使用.
+    fn matched_command(&self, _call: &ParsedToolCall) -> Option<String> {
+        None
+    }
 }
