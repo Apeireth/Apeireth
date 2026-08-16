@@ -73,6 +73,7 @@ pub mod approval_requests;
 pub mod memory_extractor;
 pub mod goal_tools;
 pub mod memory_graph;
+pub mod morphology;  // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
 pub mod context;
 pub mod assemble;
 pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
@@ -116,6 +117,7 @@ pub use hello::{HelloBound, HelloCapability, detect_hello_capability};
 pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
 pub use constitution_gate::ConstitutionGate;
 pub use memory_injection::build_memory_injection;
+pub use morphology::{MorphologyVerdict, RetrievalMode};
 pub use confidence::{BetaBinomial, Strength};
 pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
 pub use oracle::{Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
