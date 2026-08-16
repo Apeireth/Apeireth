@@ -47,12 +47,16 @@ pub fn render(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
         Span::styled("primary=", Style::default().fg(style.dim)),
         Span::styled(
             primary_rgb.clone(),
-            Style::default().fg(style.primary).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled("  accent=", Style::default().fg(style.dim)),
         Span::styled(
             accent_rgb,
-            Style::default().fg(style.accent).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(style.accent)
+                .add_modifier(Modifier::BOLD),
         ),
     ])];
     f.render_widget(Paragraph::new(rgb_preview), chunks[0]);
@@ -106,8 +110,8 @@ pub fn render(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
     // R26: 5 项从 chunks[1] 开始 (顶部已用 chunks[0] 作 RGB 预览)
     for (i, (key, val, desc, _enabled)) in items.iter().enumerate() {
         let chunk_idx = i + 1; // 跳过 chunks[0] RGB 预览
-        // chunks: [0]=RGB, [1..6]=5/6 items, [7]=hint
-        // 6 items now (mode/theme/splash/breath/language/输出上限), so chunks needed: 1..7
+                               // chunks: [0]=RGB, [1..6]=5/6 items, [7]=hint
+                               // 6 items now (mode/theme/splash/breath/language/输出上限), so chunks needed: 1..7
         if chunk_idx + 1 >= chunks.len() {
             break; // 跳过末尾 hint 区域
         }
@@ -124,11 +128,21 @@ pub fn render(f: &mut Frame, area: Rect, app: &App, style: &ThemeStyle) {
         } else {
             (style.dim, style.dim)
         };
-        let val_modifier = if selected { Modifier::BOLD } else { Modifier::empty() };
+        let val_modifier = if selected {
+            Modifier::BOLD
+        } else {
+            Modifier::empty()
+        };
         let text = vec![Line::from(vec![
-            Span::styled(*key, Style::default().fg(key_color).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                *key,
+                Style::default().fg(key_color).add_modifier(Modifier::BOLD),
+            ),
             Span::styled("  ", Style::default().fg(style.dim)),
-            Span::styled(val.clone(), Style::default().fg(val_color).add_modifier(val_modifier)),
+            Span::styled(
+                val.clone(),
+                Style::default().fg(val_color).add_modifier(val_modifier),
+            ),
             Span::styled("  ", Style::default().fg(style.dim)),
             Span::styled(*desc, Style::default().fg(style.dim)),
         ])];

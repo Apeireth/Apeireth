@@ -475,10 +475,7 @@ impl SnapshotIndex {
 
     /// 列出过期 shadow (per MAX_SHADOW_AGE_DAYS).
     pub fn list_expired(&self) -> Vec<&SnapshotMeta> {
-        self.snapshots
-            .iter()
-            .filter(|s| s.is_expired())
-            .collect()
+        self.snapshots.iter().filter(|s| s.is_expired()).collect()
     }
 
     /// 总大小 (字节).
@@ -644,7 +641,11 @@ impl SnapshotService for DefaultSnapshotService {
             .index
             .find(snapshot_id)
             .ok_or_else(|| RollbackError::SnapshotNotFound(snapshot_id.clone()))?;
-        tracing::info!("[rollback] restore: id={} path={:?}", meta.id, meta.shadow_dir);
+        tracing::info!(
+            "[rollback] restore: id={} path={:?}",
+            meta.id,
+            meta.shadow_dir
+        );
         // skeleton: 不真恢复, 留 R20 阶段 4
         Ok(())
     }
@@ -710,7 +711,9 @@ pub fn check_single_size(size_bytes: u64) -> std::result::Result<(), ShadowQuota
 ///
 /// LRU 策略: 按 timestamp 升序清理最早, 直到 ≤ MAX_TOTAL_SHADOW_SIZE_BYTES.
 /// skeleton 阶段不真清理, 留 R20 阶段 4 walkdir + rm_rf 实装.
-pub fn check_total_size_with_lru(index: &SnapshotIndex) -> std::result::Result<(), ShadowQuotaError> {
+pub fn check_total_size_with_lru(
+    index: &SnapshotIndex,
+) -> std::result::Result<(), ShadowQuotaError> {
     let total = index.total_size();
     if total <= MAX_TOTAL_SHADOW_SIZE_BYTES {
         return Ok(());
@@ -799,21 +802,33 @@ impl GitWrapper {
     /// git diff (per v0.9.21 `gitDiff(c, repoPath, ref)` 1:1).
     pub fn diff(&self, _ref: Option<&str>) -> Result<String> {
         // skeleton: 占位
-        tracing::info!("[rollback] git diff: repo={:?} ref={:?}", self.repo_path, _ref);
+        tracing::info!(
+            "[rollback] git diff: repo={:?} ref={:?}",
+            self.repo_path,
+            _ref
+        );
         Ok(String::new())
     }
 
     /// git stash (per v0.9.21 `gitStash(c, repoPath, message)` 1:1).
     pub fn stash(&self, _message: &str) -> Result<()> {
         // skeleton: 占位
-        tracing::info!("[rollback] git stash: repo={:?} msg={}", self.repo_path, _message);
+        tracing::info!(
+            "[rollback] git stash: repo={:?} msg={}",
+            self.repo_path,
+            _message
+        );
         Ok(())
     }
 
     /// git checkout (per v0.9.21 `gitCheckout(c, repoPath, ref)` 1:1).
     pub fn checkout(&self, _ref: &str) -> Result<()> {
         // skeleton: 占位
-        tracing::info!("[rollback] git checkout: repo={:?} ref={}", self.repo_path, _ref);
+        tracing::info!(
+            "[rollback] git checkout: repo={:?} ref={}",
+            self.repo_path,
+            _ref
+        );
         Ok(())
     }
 }
@@ -935,7 +950,10 @@ mod tests {
             "MAX_TOTAL_SHADOW_SIZE_BYTES = 2 GB"
         );
         assert!(r.hook_startup, "CLEANUP_HOOK_STARTUP = true");
-        assert!(r.hook_before_snapshot, "CLEANUP_HOOK_BEFORE_SNAPSHOT = true");
+        assert!(
+            r.hook_before_snapshot,
+            "CLEANUP_HOOK_BEFORE_SNAPSHOT = true"
+        );
         assert!(r.hook_cron_daily, "CLEANUP_HOOK_CRON_DAILY = true");
     }
 

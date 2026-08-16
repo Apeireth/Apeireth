@@ -78,11 +78,11 @@ use crossterm::event::KeyCode;
 
 pub mod backend;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod error;
 pub mod harness;
 pub mod nav_e2e;
 pub mod organ_e2e;
+mod organ_kani_proofs;
 pub mod render;
 
 // 重导出常用类型, 让外部 `use apeireth_tui_e2e::*;` 即可
@@ -96,9 +96,9 @@ pub mod prelude {
     pub use crate::error::{TuiE2EError, TuiE2EResult};
     pub use crate::harness::TuiHarness;
     pub use crate::{
-        ChatMessage, EIGHT_PROMISES, FIVE_R_MEASURES, Language, Mode, Nav, NavPage, Organ, Theme,
-        TuiApp, EIGHT_PROMISES as PROMISES, SIX_PHI_ANCHORS, R_MEASURE_COUNT, DEFAULT_WIDTH,
-        DEFAULT_HEIGHT, PANEL_HEIGHTS,
+        ChatMessage, Language, Mode, Nav, NavPage, Organ, Theme, TuiApp, DEFAULT_HEIGHT,
+        DEFAULT_WIDTH, EIGHT_PROMISES, EIGHT_PROMISES as PROMISES, FIVE_R_MEASURES, PANEL_HEIGHTS,
+        R_MEASURE_COUNT, SIX_PHI_ANCHORS,
     };
 }
 
@@ -476,11 +476,11 @@ pub const EIGHT_PROMISES: [&str; 8] = [
 ///
 /// R-Measure 是 tui 健康度的 5 个量化指标, 跟 omnibus §6 镜像
 pub const FIVE_R_MEASURES: [&str; 5] = [
-    "R-Coverage",  // 测试覆盖比例 (5 nav × 9 organ = 45 测点)
-    "R-Density",   // 信息密度 (1 屏多卡, 关键数字一眼看完)
-    "R-Cadence",   // 节奏 (60Hz tick / 1s 状态刷新 / 250ms spinner)
-    "R-Anchors",   // 6 哲学锚 + 8 不修改承诺 持续显示
-    "R-Path",      // 0 触碰 LOCKED, 0 改 workspace, 0 假装实缺
+    "R-Coverage", // 测试覆盖比例 (5 nav × 9 organ = 45 测点)
+    "R-Density",  // 信息密度 (1 屏多卡, 关键数字一眼看完)
+    "R-Cadence",  // 节奏 (60Hz tick / 1s 状态刷新 / 250ms spinner)
+    "R-Anchors",  // 6 哲学锚 + 8 不修改承诺 持续显示
+    "R-Path",     // 0 触碰 LOCKED, 0 改 workspace, 0 假装实缺
 ];
 
 // =====================================================================
@@ -783,8 +783,9 @@ mod tests {
 
     #[test]
     fn organ_ascii_all_9_distinct() {
-        let set: std::collections::HashSet<&str> =
-            (0..Organ::COUNT).map(|i| Organ::from_u8(i).unwrap().ascii()).collect();
+        let set: std::collections::HashSet<&str> = (0..Organ::COUNT)
+            .map(|i| Organ::from_u8(i).unwrap().ascii())
+            .collect();
         assert_eq!(set.len(), 9, "9 ASCII 互不相同");
     }
 
@@ -897,7 +898,11 @@ mod tests {
         let s = app.nav_bar_text();
         for n in 0..NavPage::COUNT {
             let page = NavPage::from_u8(n).unwrap();
-            assert!(s.contains(page.label_zh()), "{:?} 应在 nav bar", page.label_zh());
+            assert!(
+                s.contains(page.label_zh()),
+                "{:?} 应在 nav bar",
+                page.label_zh()
+            );
         }
     }
 
@@ -907,7 +912,11 @@ mod tests {
         let s = app.organ_bar_text();
         for i in 0..Organ::COUNT {
             let organ = Organ::from_u8(i).unwrap();
-            assert!(s.contains(organ.ascii()), "{:?} 应在 organ bar", organ.ascii());
+            assert!(
+                s.contains(organ.ascii()),
+                "{:?} 应在 organ bar",
+                organ.ascii()
+            );
         }
     }
 

@@ -11,10 +11,10 @@
 //! ```
 
 use apeireth_voice::{
-    is_stub_mode, validate_tool_call, AudioFrame, StubAudioStream, AudioStreamSource, VoiceConfig,
-    VoiceError, VoiceRecorder, VoiceSdk, VoiceWake, WakeWordType, SUPPORTED_WAKE_WORDS,
-    TOOL_WHITELIST, TOOL_WHITELIST_COUNT, VOICE_DEFAULT_KEYWORD, VOICE_FRAME_LENGTH,
-    VOICE_SAMPLE_RATE_HZ, VOICE_SCHEMA_VERSION, PLATFORM_NAME,
+    is_stub_mode, validate_tool_call, AudioFrame, AudioStreamSource, StubAudioStream, VoiceConfig,
+    VoiceError, VoiceRecorder, VoiceSdk, VoiceWake, WakeWordType, PLATFORM_NAME,
+    SUPPORTED_WAKE_WORDS, TOOL_WHITELIST, TOOL_WHITELIST_COUNT, VOICE_DEFAULT_KEYWORD,
+    VOICE_FRAME_LENGTH, VOICE_SAMPLE_RATE_HZ, VOICE_SCHEMA_VERSION,
 };
 
 #[tokio::main(flavor = "current_thread")]
@@ -58,19 +58,32 @@ async fn main() {
 
     // 5) 8 stub 工具返 NotImplemented
     println!("[§5 8 stub 工具返 NotImplemented]");
-    let mut sdk = VoiceSdk::new(VoiceConfig::default()).expect("VoiceSdk::new must succeed in STUB mode");
+    let mut sdk =
+        VoiceSdk::new(VoiceConfig::default()).expect("VoiceSdk::new must succeed in STUB mode");
     let frame = AudioFrame::new(vec![0i16; VOICE_FRAME_LENGTH as usize]);
 
-    println!("  wake_word_detect : {:?}", sdk.wake_word_detect(&frame).await);
+    println!(
+        "  wake_word_detect : {:?}",
+        sdk.wake_word_detect(&frame).await
+    );
     println!("  record_audio     : {:?}", sdk.record_audio(5).await);
-    println!("  transcribe       : {:?}", sdk.transcribe(&[0i16; 512]).await);
-    println!("  synthesize       : {:?}", sdk.synthesize("hello apeireth").await);
+    println!(
+        "  transcribe       : {:?}",
+        sdk.transcribe(&[0i16; 512]).await
+    );
+    println!(
+        "  synthesize       : {:?}",
+        sdk.synthesize("hello apeireth").await
+    );
     // list_keywords 是编译期常量, 不返 NotImplemented
     match sdk.list_keywords() {
         Ok(kws) => println!("  list_keywords    : Ok({} keywords)", kws.len()),
         Err(e) => println!("  list_keywords    : Err({:?})", e),
     }
-    println!("  load_model       : {:?}", sdk.load_model(WakeWordType::Apeireth).await);
+    println!(
+        "  load_model       : {:?}",
+        sdk.load_model(WakeWordType::Apeireth).await
+    );
     println!("  unload_model     : {:?}", sdk.unload_model().await);
     println!("  audio_stream     : {:?}", sdk.audio_stream().await);
     println!();
@@ -92,10 +105,16 @@ async fn main() {
 
     let mut recorder = VoiceRecorder::new(VoiceConfig::default())
         .expect("VoiceRecorder::new must succeed in STUB mode");
-    println!("  VoiceRecorder::start : {:?}", recorder.start("apeireth").await);
+    println!(
+        "  VoiceRecorder::start : {:?}",
+        recorder.start("apeireth").await
+    );
 
     let mut stream = StubAudioStream::new();
-    println!("  StubAudioStream::next_frame : {:?}", stream.next_frame().await);
+    println!(
+        "  StubAudioStream::next_frame : {:?}",
+        stream.next_frame().await
+    );
     stream.close().await.expect("close must succeed");
     println!();
 

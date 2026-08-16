@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 5 nav × Tools 单元测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试范围**:
@@ -14,25 +20,33 @@
 /// - O-4 任何人都能接手: 工具名 + 中文 label 清楚
 /// - O-5 不假装: 真实 invoke 待 R25.3
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守
-
 mod test_common;
 
 use ratatui::layout::Rect;
@@ -46,7 +60,8 @@ use test_common::TOOL_WHITELIST;
 fn six_tools_match_error_whitelist() {
     assert_eq!(nav::tools::SIX_TOOLS.len(), 6);
     assert_eq!(
-        nav::tools::SIX_TOOLS, error::TOOL_WHITELIST,
+        nav::tools::SIX_TOOLS,
+        error::TOOL_WHITELIST,
         "nav/tools SIX_TOOLS 必须跟 error TOOL_WHITELIST 完全一致, 防漂移"
     );
     // 也跟 test_common::TOOL_WHITELIST 一致
@@ -75,11 +90,23 @@ fn tool_label_zh_6_distinct() {
 
 #[test]
 fn endpoint_path_format() {
-    assert_eq!(nav::tools::endpoint_path("calendar"), "/v1/tools/calendar/invoke");
-    assert_eq!(nav::tools::endpoint_path("message"), "/v1/tools/message/invoke");
-    assert_eq!(nav::tools::endpoint_path("contact"), "/v1/tools/contact/invoke");
+    assert_eq!(
+        nav::tools::endpoint_path("calendar"),
+        "/v1/tools/calendar/invoke"
+    );
+    assert_eq!(
+        nav::tools::endpoint_path("message"),
+        "/v1/tools/message/invoke"
+    );
+    assert_eq!(
+        nav::tools::endpoint_path("contact"),
+        "/v1/tools/contact/invoke"
+    );
     assert_eq!(nav::tools::endpoint_path("task"), "/v1/tools/task/invoke");
-    assert_eq!(nav::tools::endpoint_path("search"), "/v1/tools/search/invoke");
+    assert_eq!(
+        nav::tools::endpoint_path("search"),
+        "/v1/tools/search/invoke"
+    );
     assert_eq!(nav::tools::endpoint_path("drive"), "/v1/tools/drive/invoke");
 }
 
@@ -117,4 +144,3 @@ async fn invoke_partial_returns_placeholder() {
         "占位响应应说明 partial: {s}"
     );
 }
-

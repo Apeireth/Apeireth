@@ -12,7 +12,11 @@ async fn r264_sandbox_standard_command_runs() {
     } else {
         cmd.args(["-c", "echo standard-sandbox-ok"]);
     }
-    let policy = SandboxPolicy { mode: SandboxMode::Standard, env_clear: true, allowed_syscalls: vec![] };
+    let policy = SandboxPolicy {
+        mode: SandboxMode::Standard,
+        env_clear: true,
+        allowed_syscalls: vec![],
+    };
     apply_sandbox(&mut cmd, &policy).unwrap();
     let out = cmd.output().await.expect("run");
     assert!(out.status.success(), "echo should succeed: {:?}", out);
@@ -28,7 +32,11 @@ async fn r264_sandbox_strict_command_runs() {
     } else {
         cmd.args(["-c", "echo strict-sandbox-ok"]);
     }
-    let policy = SandboxPolicy { mode: SandboxMode::Strict, env_clear: true, allowed_syscalls: vec![] };
+    let policy = SandboxPolicy {
+        mode: SandboxMode::Strict,
+        env_clear: true,
+        allowed_syscalls: vec![],
+    };
     apply_sandbox(&mut cmd, &policy).unwrap();
     let out = cmd.output().await.expect("run");
     assert!(out.status.success(), "echo should succeed: {:?}", out);
@@ -45,7 +53,11 @@ async fn r264_sandbox_standard_kill_on_drop_works() {
     } else {
         cmd.args(["60"]);
     }
-    let policy = SandboxPolicy { mode: SandboxMode::Standard, env_clear: true, allowed_syscalls: vec![] };
+    let policy = SandboxPolicy {
+        mode: SandboxMode::Standard,
+        env_clear: true,
+        allowed_syscalls: vec![],
+    };
     apply_sandbox(&mut cmd, &policy).unwrap();
     let child = cmd.spawn().expect("spawn");
     let pid = child.id().expect("pid");
@@ -62,7 +74,11 @@ async fn r264_sandbox_light_no_process_group_change() {
     } else {
         cmd.args(["-c", "echo light-ok"]);
     }
-    let policy = SandboxPolicy { mode: SandboxMode::Light, env_clear: true, allowed_syscalls: vec![] };
+    let policy = SandboxPolicy {
+        mode: SandboxMode::Light,
+        env_clear: true,
+        allowed_syscalls: vec![],
+    };
     apply_sandbox(&mut cmd, &policy).unwrap();
     let out = cmd.output().await.expect("run");
     assert!(out.status.success());

@@ -61,7 +61,11 @@ fn intensity_rank(i: PlutchikIntensity) -> u8 {
 ///
 /// 设计: base > 1.0 → +1 方向 (speed up); base < 1.0 → -1 方向 (slow down); base == 1.0 → 0 方向.
 fn direction_amplify(base: f64, intensity: PlutchikIntensity) -> f64 {
-    let direction = if (base - 1.0).abs() < 1e-9 { 0.0 } else { (base - 1.0).signum() };
+    let direction = if (base - 1.0).abs() < 1e-9 {
+        0.0
+    } else {
+        (base - 1.0).signum()
+    };
     let intensity_scale = intensity_weight(intensity) * 0.4; // ∈ [0.1, 0.4]
     let target = base + direction * intensity_scale;
     target.clamp(0.5, 2.0)
@@ -70,29 +74,59 @@ fn direction_amplify(base: f64, intensity: PlutchikIntensity) -> f64 {
 /// 各类情感的 Tone 映射 (per-emotion).
 ///
 /// 返回: (base_speed, base_pitch, emotion_tone, prosody)
-fn tone_for(
-    e: &PlutchikEmotion,
-) -> (f64, f64, EmotionTone, Prosody) {
+fn tone_for(e: &PlutchikEmotion) -> (f64, f64, EmotionTone, Prosody) {
     match e {
         // 正面 — speed/pitch 偏高
-        PlutchikEmotion::Basic(PlutchikBasic::Joy, _) => (1.1, 1.1, EmotionTone::Joyful, Prosody::Expressive),
-        PlutchikEmotion::Basic(PlutchikBasic::Trust, _) => (1.0, 1.0, EmotionTone::Warm, Prosody::Flat),
-        PlutchikEmotion::Basic(PlutchikBasic::Anticipation, _) => (1.0, 1.1, EmotionTone::Confident, Prosody::Rising),
-        PlutchikEmotion::Basic(PlutchikBasic::Surprise, _) => (1.1, 1.1, EmotionTone::Excited, Prosody::Rising),
+        PlutchikEmotion::Basic(PlutchikBasic::Joy, _) => {
+            (1.1, 1.1, EmotionTone::Joyful, Prosody::Expressive)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Trust, _) => {
+            (1.0, 1.0, EmotionTone::Warm, Prosody::Flat)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Anticipation, _) => {
+            (1.0, 1.1, EmotionTone::Confident, Prosody::Rising)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Surprise, _) => {
+            (1.1, 1.1, EmotionTone::Excited, Prosody::Rising)
+        }
         // 负面 — speed/pitch 偏低
-        PlutchikEmotion::Basic(PlutchikBasic::Sadness, _) => (0.85, 0.9, EmotionTone::Sad, Prosody::Falling),
-        PlutchikEmotion::Basic(PlutchikBasic::Anger, _) => (1.1, 0.9, EmotionTone::Serious, Prosody::Measured),
-        PlutchikEmotion::Basic(PlutchikBasic::Fear, _) => (1.1, 1.1, EmotionTone::Anxious, Prosody::Rising),
-        PlutchikEmotion::Basic(PlutchikBasic::Disgust, _) => (0.95, 0.9, EmotionTone::Cold, Prosody::Falling),
+        PlutchikEmotion::Basic(PlutchikBasic::Sadness, _) => {
+            (0.85, 0.9, EmotionTone::Sad, Prosody::Falling)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Anger, _) => {
+            (1.1, 0.9, EmotionTone::Serious, Prosody::Measured)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Fear, _) => {
+            (1.1, 1.1, EmotionTone::Anxious, Prosody::Rising)
+        }
+        PlutchikEmotion::Basic(PlutchikBasic::Disgust, _) => {
+            (0.95, 0.9, EmotionTone::Cold, Prosody::Falling)
+        }
         // 高级 — 按主轴定基调
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Optimism, _) => (1.1, 1.1, EmotionTone::Joyful, Prosody::Expressive),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Love, _) => (1.0, 1.0, EmotionTone::Warm, Prosody::Expressive),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Awe, _) => (0.95, 1.0, EmotionTone::Calm, Prosody::Measured),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Submission, _) => (0.95, 0.95, EmotionTone::Calm, Prosody::Falling),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Disapproval, _) => (1.0, 0.95, EmotionTone::Cold, Prosody::Falling),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Remorse, _) => (0.85, 0.9, EmotionTone::Sad, Prosody::Falling),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Contempt, _) => (1.0, 0.9, EmotionTone::Cold, Prosody::Measured),
-        PlutchikEmotion::Advanced(PlutchikAdvanced::Aggressiveness, _) => (1.1, 0.9, EmotionTone::Serious, Prosody::Measured),
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Optimism, _) => {
+            (1.1, 1.1, EmotionTone::Joyful, Prosody::Expressive)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Love, _) => {
+            (1.0, 1.0, EmotionTone::Warm, Prosody::Expressive)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Awe, _) => {
+            (0.95, 1.0, EmotionTone::Calm, Prosody::Measured)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Submission, _) => {
+            (0.95, 0.95, EmotionTone::Calm, Prosody::Falling)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Disapproval, _) => {
+            (1.0, 0.95, EmotionTone::Cold, Prosody::Falling)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Remorse, _) => {
+            (0.85, 0.9, EmotionTone::Sad, Prosody::Falling)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Contempt, _) => {
+            (1.0, 0.9, EmotionTone::Cold, Prosody::Measured)
+        }
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Aggressiveness, _) => {
+            (1.1, 0.9, EmotionTone::Serious, Prosody::Measured)
+        }
     }
 }
 
@@ -108,7 +142,7 @@ pub fn plutchik_to_tone(e: &PlutchikEmotion) -> Tone {
     Tone {
         speed,
         pitch,
-        volume: 0.8,                 // 默认音量 (per DEFAULT_TONE)
+        volume: 0.8, // 默认音量 (per DEFAULT_TONE)
         emotion_tone,
         prosody,
     }
@@ -129,8 +163,16 @@ mod tests {
         let t = plutchik_to_tone(&e);
         assert_eq!(t.emotion_tone, EmotionTone::Joyful);
         assert_eq!(t.prosody, Prosody::Expressive);
-        assert!(t.speed >= 1.0, "joy should keep speed >= 1.0, got {}", t.speed);
-        assert!(t.pitch >= 1.0, "joy should keep pitch >= 1.0, got {}", t.pitch);
+        assert!(
+            t.speed >= 1.0,
+            "joy should keep speed >= 1.0, got {}",
+            t.speed
+        );
+        assert!(
+            t.pitch >= 1.0,
+            "joy should keep pitch >= 1.0, got {}",
+            t.pitch
+        );
     }
 
     // t02: sadness strong -> sad tone, falling prosody, slower, lower
@@ -169,16 +211,52 @@ mod tests {
             for basic in PlutchikBasic::ALL {
                 let e = PlutchikEmotion::basic(basic, intensity);
                 let t = plutchik_to_tone(&e);
-                assert!(t.speed >= 0.5 && t.speed <= 2.0, "basic {:?} {:?} speed {}", basic, intensity, t.speed);
-                assert!(t.pitch >= 0.5 && t.pitch <= 2.0, "basic {:?} {:?} pitch {}", basic, intensity, t.pitch);
-                assert!(t.volume >= 0.0 && t.volume <= 1.0, "basic {:?} {:?} volume {}", basic, intensity, t.volume);
+                assert!(
+                    t.speed >= 0.5 && t.speed <= 2.0,
+                    "basic {:?} {:?} speed {}",
+                    basic,
+                    intensity,
+                    t.speed
+                );
+                assert!(
+                    t.pitch >= 0.5 && t.pitch <= 2.0,
+                    "basic {:?} {:?} pitch {}",
+                    basic,
+                    intensity,
+                    t.pitch
+                );
+                assert!(
+                    t.volume >= 0.0 && t.volume <= 1.0,
+                    "basic {:?} {:?} volume {}",
+                    basic,
+                    intensity,
+                    t.volume
+                );
             }
             for adv in PlutchikAdvanced::ALL {
                 let e = PlutchikEmotion::advanced(adv, intensity);
                 let t = plutchik_to_tone(&e);
-                assert!(t.speed >= 0.5 && t.speed <= 2.0, "adv {:?} {:?} speed {}", adv, intensity, t.speed);
-                assert!(t.pitch >= 0.5 && t.pitch <= 2.0, "adv {:?} {:?} pitch {}", adv, intensity, t.pitch);
-                assert!(t.volume >= 0.0 && t.volume <= 1.0, "adv {:?} {:?} volume {}", adv, intensity, t.volume);
+                assert!(
+                    t.speed >= 0.5 && t.speed <= 2.0,
+                    "adv {:?} {:?} speed {}",
+                    adv,
+                    intensity,
+                    t.speed
+                );
+                assert!(
+                    t.pitch >= 0.5 && t.pitch <= 2.0,
+                    "adv {:?} {:?} pitch {}",
+                    adv,
+                    intensity,
+                    t.pitch
+                );
+                assert!(
+                    t.volume >= 0.0 && t.volume <= 1.0,
+                    "adv {:?} {:?} volume {}",
+                    adv,
+                    intensity,
+                    t.volume
+                );
             }
         }
     }
@@ -195,7 +273,8 @@ mod tests {
     // t07: advanced aggressiveness extreme -> serious + measured
     #[test]
     fn t07_advanced_aggressiveness_extreme_yields_serious_measured() {
-        let e = PlutchikEmotion::advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme);
+        let e =
+            PlutchikEmotion::advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme);
         let t = plutchik_to_tone(&e);
         assert_eq!(t.emotion_tone, EmotionTone::Serious);
         assert_eq!(t.prosody, Prosody::Measured);
@@ -208,8 +287,18 @@ mod tests {
         let extreme = PlutchikEmotion::basic(PlutchikBasic::Joy, PlutchikIntensity::Extreme);
         let m = plutchik_to_tone(&mild);
         let e = plutchik_to_tone(&extreme);
-        assert!(e.speed > m.speed, "extreme speed ({}) should exceed mild speed ({})", e.speed, m.speed);
-        assert!(e.pitch > m.pitch, "extreme pitch ({}) should exceed mild pitch ({})", e.pitch, m.pitch);
+        assert!(
+            e.speed > m.speed,
+            "extreme speed ({}) should exceed mild speed ({})",
+            e.speed,
+            m.speed
+        );
+        assert!(
+            e.pitch > m.pitch,
+            "extreme pitch ({}) should exceed mild pitch ({})",
+            e.pitch,
+            m.pitch
+        );
     }
 
     // t09: 8 基础 + 8 高级 × 4 强度 = 64 组合全部产出
@@ -234,7 +323,10 @@ mod tests {
         let t = plutchik_to_tone(&e);
         assert_eq!(t.emotion_tone, EmotionTone::Warm);
         assert_eq!(t.prosody, Prosody::Flat);
-        assert!((t.speed - 1.0).abs() < 1e-9, "trust should stay neutral, got speed {}", t.speed);
+        assert!(
+            (t.speed - 1.0).abs() < 1e-9,
+            "trust should stay neutral, got speed {}",
+            t.speed
+        );
     }
 }
-

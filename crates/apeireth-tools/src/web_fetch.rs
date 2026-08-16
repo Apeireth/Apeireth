@@ -12,7 +12,9 @@
 //! - 真 max_bytes 截断 (不假装无限流)
 //! - 真 text/html 简化 (粗剥 <script>/`style` 块)
 
-use apeireth_tool_registry::{Tool, ToolAxes, ToolKind, TriggerAxis, AwaitingAxis, ResidentAxis, TransportAxis, OutputAxis};
+use apeireth_tool_registry::{
+    AwaitingAxis, OutputAxis, ResidentAxis, Tool, ToolAxes, ToolKind, TransportAxis, TriggerAxis,
+};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -29,7 +31,7 @@ pub struct FetchResult {
     pub status: u16,
     pub content_type: String,
     pub bytes: usize,
-    pub body: String,  // 已简化或截断
+    pub body: String, // 已简化或截断
 }
 
 const DEFAULT_MAX_BYTES: usize = 100 * 1024; // 100KB
@@ -52,18 +54,32 @@ impl ReqwestWebFetch {
 }
 
 impl Default for ReqwestWebFetch {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait::async_trait]
 impl WebFetch for ReqwestWebFetch {
     async fn fetch(&self, url: &str, max_bytes: usize) -> Result<FetchResult, String> {
-        let max = if max_bytes == 0 { DEFAULT_MAX_BYTES } else { max_bytes };
-        let resp = self.client.get(url).send().await
+        let max = if max_bytes == 0 {
+            DEFAULT_MAX_BYTES
+        } else {
+            max_bytes
+        };
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .await
             .map_err(|e| format!("fetch {url}: {e}"))?;
         let status = resp.status().as_u16();
-        let content_type = resp.headers().get("content-type")
-            .and_then(|v| v.to_str().ok()).unwrap_or("text/plain").to_string();
+        let content_type = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("text/plain")
+            .to_string();
         let raw = resp.bytes().await.map_err(|e| format!("read body: {e}"))?;
         let bytes = raw.len();
         let _truncated = bytes > max;
@@ -74,7 +90,13 @@ impl WebFetch for ReqwestWebFetch {
         } else {
             body_str
         };
-        Ok(FetchResult { url: url.to_string(), status, content_type, bytes, body })
+        Ok(FetchResult {
+            url: url.to_string(),
+            status,
+            content_type,
+            bytes,
+            body,
+        })
     }
 }
 
@@ -93,7 +115,11 @@ fn strip_html_noise(html: &str) -> String {
         }
         out.push_str(&rest[..next]);
         // 找对应 </script> 或 </style>
-        let (open_tag, close_tag) = if script_pos < style_pos { ("<script", "</script>") } else { ("<style", "</style>") };
+        let (open_tag, close_tag) = if script_pos < style_pos {
+            ("<script", "</script>")
+        } else {
+            ("<style", "</style>")
+        };
         let close_lower = close_tag.to_lowercase();
         if let Some(rel_close) = lower[next..].find(&close_lower) {
             rest = &rest[next + rel_close + close_tag.len()..];
@@ -114,28 +140,40 @@ pub struct WebFetchTool {
 
 impl WebFetchTool {
     pub fn new(inner: std::sync::Arc<dyn WebFetch>) -> Self {
-        Self { inner, name: "WebFetch".to_string() }
+        Self {
+            inner,
+            name: "WebFetch".to_string(),
+        }
     }
     pub fn with_name(inner: std::sync::Arc<dyn WebFetch>, name: impl Into<String>) -> Self {
-        Self { inner, name: name.into() }
+        Self {
+            inner,
+            name: name.into(),
+        }
     }
 }
 
 #[async_trait]
 impl Tool for WebFetchTool {
-    fn name(&self) -> &str { &self.name }
-    fn kind(&self) -> ToolKind { ToolKind::Async }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Async
+    }
     fn axes(&self) -> ToolAxes {
         ToolAxes {
             trigger: TriggerAxis::OnDemand,
             awaiting: AwaitingAxis::Immediate,
             resident: ResidentAxis::Ephemeral,
-            transport: TransportAxis::Network,  // HTTP 走 Network
+            transport: TransportAxis::Network, // HTTP 走 Network
             output: OutputAxis::SideEffect,
         }
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let url = args.get("url").and_then(|v| v.as_str())
+        let url = args
+            .get("url")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing 'url' string".to_string())?;
         let max_bytes = args.get("max_bytes").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
         let r = self.inner.fetch(url, max_bytes).await?;
@@ -178,7 +216,13 @@ mod tests {
 
     #[test]
     fn fetch_result_serializes_to_json() {
-        let r = FetchResult { url: "x".into(), status: 200, content_type: "text/html".into(), bytes: 100, body: "hello".into() };
+        let r = FetchResult {
+            url: "x".into(),
+            status: 200,
+            content_type: "text/html".into(),
+            bytes: 100,
+            body: "hello".into(),
+        };
         let j = json!({
             "url": r.url, "status": r.status, "content_type": r.content_type, "bytes": r.bytes, "body": r.body,
         });

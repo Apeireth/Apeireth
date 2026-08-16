@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 9 器官 command 模块化 (借鉴 Golutra #1) — 集成测试
 ///
 /// **加载模式** (per `tests/test_common/mod.rs` 团队规范 + `app_test.rs` 现成范式):
@@ -14,35 +20,41 @@
 /// **8 项承诺**: 全部遵守 (尤其 8 项之 8 — 不假装已实现, 标 [partial])
 ///
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 
 /// **借鉴 Golutra #1 (P0)**: 9 organ × 5-8 command 模式 (per `BORROW_FROM_GOLUTRA.md` §2)
-
 // sister #1 R23 P3 迁移: command dispatcher 独立 crate-root 登记
-
 
 // 现在 organ::command::* 全部可访问, inline mod tests 自动跑
 // 这里只写跨器官 integration test, 单元测试在 organ/command/{heart,brain,...}.rs 里
-
 use command::{
-    body, brain, ear, eye, hand, heart, memory, mind, voice, AnyCommand, AnyResponse, Registry,
-    dispatch,
+    body, brain, dispatch, ear, eye, hand, heart, memory, mind, voice, AnyCommand, AnyResponse,
+    Registry,
 };
 
 // =====================================================================
@@ -87,14 +99,28 @@ fn nine_organ_errors_propagate() {
 
     // Heart: SetBpm(0) 越界
     let r = dispatch(AnyCommand::Heart(heart::Command::SetBpm(0)), &mut reg);
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "SetBpm", .. })));
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "SetBpm",
+            ..
+        })
+    ));
 
     // Brain: IncrementCall 用未知 provider
     let r = dispatch(
-        AnyCommand::Brain(brain::Command::IncrementCall { provider: "fake".into() }),
+        AnyCommand::Brain(brain::Command::IncrementCall {
+            provider: "fake".into(),
+        }),
         &mut reg,
     );
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "IncrementCall", .. })));
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "IncrementCall",
+            ..
+        })
+    ));
 
     // Hand: InvokeTool 用未知工具
     let r = dispatch(
@@ -104,32 +130,83 @@ fn nine_organ_errors_propagate() {
         }),
         &mut reg,
     );
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "InvokeTool", .. })));
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "InvokeTool",
+            ..
+        })
+    ));
 
     // Eye: WatchInput(0) 越界
-    let r = dispatch(AnyCommand::Eye(eye::Command::WatchInput { sample_ms: 0 }), &mut reg);
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "WatchInput", .. })));
+    let r = dispatch(
+        AnyCommand::Eye(eye::Command::WatchInput { sample_ms: 0 }),
+        &mut reg,
+    );
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "WatchInput",
+            ..
+        })
+    ));
 
     // Ear: Subscribe("") 越界
-    let r = dispatch(AnyCommand::Ear(ear::Command::Subscribe { topic: "".into() }), &mut reg);
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "Subscribe", .. })));
+    let r = dispatch(
+        AnyCommand::Ear(ear::Command::Subscribe { topic: "".into() }),
+        &mut reg,
+    );
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "Subscribe",
+            ..
+        })
+    ));
 
     // Memory: Append 空 content
     let r = dispatch(
-        AnyCommand::Memory(memory::Command::Append { role: "user".into(), content: "".into() }),
+        AnyCommand::Memory(memory::Command::Append {
+            role: "user".into(),
+            content: "".into(),
+        }),
         &mut reg,
     );
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "Append", .. })));
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "Append",
+            ..
+        })
+    ));
 
     // Voice: Synthesize 空 text
-    let r = dispatch(AnyCommand::Voice(voice::Command::Synthesize { text: "".into() }), &mut reg);
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "Synthesize", .. })));
+    let r = dispatch(
+        AnyCommand::Voice(voice::Command::Synthesize { text: "".into() }),
+        &mut reg,
+    );
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "Synthesize",
+            ..
+        })
+    ));
 
     // Body: 没有错误路径 (全部 PLACEHOLDER), 跳过
 
     // Mind: GetAnchor 未知 id
-    let r = dispatch(AnyCommand::Mind(mind::Command::GetAnchor { id: "S-99".into() }), &mut reg);
-    assert!(matches!(r, Err(command::error::OrganError::InvalidArg { command: "GetAnchor", .. })));
+    let r = dispatch(
+        AnyCommand::Mind(mind::Command::GetAnchor { id: "S-99".into() }),
+        &mut reg,
+    );
+    assert!(matches!(
+        r,
+        Err(command::error::OrganError::InvalidArg {
+            command: "GetAnchor",
+            ..
+        })
+    ));
 }
 
 // =====================================================================
@@ -180,7 +257,13 @@ fn registry_9_states_independent() {
     // 跑一些 command, 验证 State 互不干扰
     let _ = dispatch(AnyCommand::Heart(heart::Command::Tick), &mut reg);
     let _ = dispatch(AnyCommand::Heart(heart::Command::Tick), &mut reg);
-    let _ = dispatch(AnyCommand::Memory(memory::Command::Append { role: "user".into(), content: "x".into() }), &mut reg);
+    let _ = dispatch(
+        AnyCommand::Memory(memory::Command::Append {
+            role: "user".into(),
+            content: "x".into(),
+        }),
+        &mut reg,
+    );
 
     // Heart 改了自己的, Memory 改了自己的, 互不干扰
     assert_eq!(reg.heart.tick_count, 2);
@@ -242,7 +325,11 @@ fn eight_promises_honored() {
 
     // 1. 不假装已实现: Eye/Ear 标 partial 标 stub, 真实数据 R25.3 接
     let mut reg = Registry::new();
-    let r = dispatch(AnyCommand::Eye(eye::Command::GetRecentTokens { limit: 10 }), &mut reg).unwrap();
+    let r = dispatch(
+        AnyCommand::Eye(eye::Command::GetRecentTokens { limit: 10 }),
+        &mut reg,
+    )
+    .unwrap();
     if let AnyResponse::Eye(eye::Response::RecentTokens(v)) = r {
         assert!(v.is_empty(), "eye 是 stub, GetRecentTokens 永远空 (不假装)");
     } else {
@@ -332,7 +419,9 @@ async fn nine_organ_names_zh_cn_match_organ_mod_via_i18n() {
         );
         // 验证 zh-CN 翻译含至少 1 个汉字 (不是 fallback 占位 / 不是英文)
         assert!(
-            translated.chars().any(|c| (c as u32) >= 0x4E00 && (c as u32) <= 0x9FFF),
+            translated
+                .chars()
+                .any(|c| (c as u32) >= 0x4E00 && (c as u32) <= 0x9FFF),
             "zh-CN {key} 翻译应含汉字 (O-5 不假装 0 fallback), 实际: {translated}"
         );
         // 验证 Organ enum 也走 i18n 翻译表 (per R21 G-1 续补 Organ::name())
@@ -357,4 +446,3 @@ async fn nine_organ_names_zh_cn_match_organ_mod_via_i18n() {
         );
     }
 }
-

@@ -33,7 +33,10 @@ fn html_escape_single_quote() {
 
 #[test]
 fn html_escape_combined() {
-    assert_eq!(html_escape("<a href='x&y'>"), "&lt;a href=&#39;x&amp;y&#39;&gt;");
+    assert_eq!(
+        html_escape("<a href='x&y'>"),
+        "&lt;a href=&#39;x&amp;y&#39;&gt;"
+    );
 }
 
 #[test]

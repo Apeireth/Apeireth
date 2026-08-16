@@ -57,8 +57,9 @@ impl TuiHarness {
             });
         }
         let test_backend = TestBackend::new(width, height);
-        let terminal = Terminal::new(test_backend)
-            .map_err(|e| TuiE2EError::HarnessStart { reason: e.to_string() })?;
+        let terminal = Terminal::new(test_backend).map_err(|e| TuiE2EError::HarnessStart {
+            reason: e.to_string(),
+        })?;
         Ok(Self {
             app: TuiApp::new(),
             terminal,
@@ -92,7 +93,9 @@ impl TuiHarness {
             .draw(|f| {
                 let _ = f;
             })
-            .map_err(|e| TuiE2EError::HarnessTick { reason: e.to_string() })?;
+            .map_err(|e| TuiE2EError::HarnessTick {
+                reason: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -112,7 +115,9 @@ impl TuiHarness {
             .draw(|f| {
                 let _ = f;
             })
-            .map_err(|e| TuiE2EError::HarnessKey { reason: e.to_string() })?;
+            .map_err(|e| TuiE2EError::HarnessKey {
+                reason: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -148,7 +153,7 @@ impl TuiHarness {
                         let cp = c as u32;
                         (0x4E00..=0x9FFF).contains(&cp)        // CJK Unified
                             || (0x3000..=0x303F).contains(&cp)  // CJK Punctuation
-                            || (0xFF00..=0xFFEF).contains(&cp)  // Fullwidth
+                            || (0xFF00..=0xFFEF).contains(&cp) // Fullwidth
                     });
                 prev_was_cjk = is_cjk;
                 cells.push_str(sym);
@@ -173,7 +178,9 @@ impl TuiHarness {
             .draw(|f| {
                 render::render_4_panel(f, &mut self.app);
             })
-            .map_err(|e| TuiE2EError::HarnessTick { reason: e.to_string() })?;
+            .map_err(|e| TuiE2EError::HarnessTick {
+                reason: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -263,11 +270,7 @@ mod tests {
 
     #[test]
     fn start_with_chat_inserts_messages() {
-        let h = TuiHarness::start_with_chat(vec![
-            ("user", "hi"),
-            ("assistant", "hello"),
-        ])
-        .unwrap();
+        let h = TuiHarness::start_with_chat(vec![("user", "hi"), ("assistant", "hello")]).unwrap();
         assert_eq!(h.app.chat_history.len(), 2);
         assert_eq!(h.app.chat_history[0].role, "user");
         assert_eq!(h.app.chat_history[1].role, "assistant");

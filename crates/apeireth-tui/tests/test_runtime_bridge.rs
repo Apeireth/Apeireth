@@ -7,8 +7,8 @@
 //! - Snapshot JSON serialization
 //! - Concurrent safe (parking_lot Mutex)
 
-use apeireth_tui::{BridgeState, RuntimeBridge};
 use apeireth_consciousness::EmotionEvent;
+use apeireth_tui::{BridgeState, RuntimeBridge};
 
 #[test]
 fn integration_bridge_full_lifecycle() {
@@ -20,7 +20,9 @@ fn integration_bridge_full_lifecycle() {
     assert_eq!(bridge.cycle_count(), 0);
     assert!(bridge.last_cycle_report().is_none());
     bridge.add_participant("test_user", "Test User").unwrap();
-    bridge.post_message("test_user", "integration hello".to_string()).unwrap();
+    bridge
+        .post_message("test_user", "integration hello".to_string())
+        .unwrap();
     let state = bridge.state();
     assert_eq!(state.cycle_count, 0);
     assert!(!state.recent_chat_messages.is_empty());
@@ -70,7 +72,12 @@ fn integration_bridge_snapshot_json() {
     let bridge = RuntimeBridge::with_config(apeireth_runtime::RuntimeConfig::default());
     bridge.bootstrap().unwrap();
     let json = bridge.snapshot_json();
-    let keys: Vec<&str> = json.as_object().unwrap().keys().map(|s| s.as_str()).collect();
+    let keys: Vec<&str> = json
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|s| s.as_str())
+        .collect();
     assert!(keys.contains(&"cycle_count"));
     assert!(keys.contains(&"recent_task_count"));
     assert!(keys.contains(&"recent_arbitration_count"));
@@ -83,7 +90,9 @@ fn integration_bridge_snapshot_json() {
 fn integration_bridge_state_max_constants() {
     // Ensure capacity bounds are reasonable for TUI consumption
     assert!(BridgeState::MAX_TRACKED_TASKS >= 8 && BridgeState::MAX_TRACKED_TASKS <= 64);
-    assert!(BridgeState::MAX_TRACKED_ARBITRATION >= 8 && BridgeState::MAX_TRACKED_ARBITRATION <= 64);
+    assert!(
+        BridgeState::MAX_TRACKED_ARBITRATION >= 8 && BridgeState::MAX_TRACKED_ARBITRATION <= 64
+    );
     assert!(BridgeState::MAX_TRACKED_MESSAGES >= 4 && BridgeState::MAX_TRACKED_MESSAGES <= 32);
 }
 
