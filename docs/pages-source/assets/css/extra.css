@@ -1,0 +1,4 @@
+/* Apeireth docs — mkdocs extra.css
+ * 台账#38 修复 (2026-08-17): mkdocs.yml extra_css 引用此文件但原不存在,
+ * 导致构建告警。补最小占位样式; 后续按需追加自定义样式即可。
+ */
