@@ -63,6 +63,17 @@ vended/
 # Lock the cosign-keygen scratch directory so private keys never enter the repo
 reports/.tmp-cosign-keygen/
 
+# 台账 #28 加固 (A4 SEC2): 密钥/证书/密钥库类文件通配忽略
+# (此前仅针对性忽略 **/cosign.key, 实测 secret.pem 不被忽略)
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+
+# 台账 #28: 调研记忆目录不进仓库
+_research_mem/
+
 
 # R23 清理: 84+ tmp / audit / check / commit-msg / build / test 一次性文件 (仓库根 + reports/ + scripts/)
 # 历史: codex/hermes R17-R23 期间累积, 全部为 ad-hoc debug, 不再需要.
