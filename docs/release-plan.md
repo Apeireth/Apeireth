@@ -75,7 +75,7 @@
 - [x] 升级套件真内容（教育/渗透/预测机 三件齐）
 - [x] 审计能力包真工具（audit_log）
 - [ ] 扩展包逐个成型（沙盒包物理层 / 多通道 / GUI / 本地智能）
-- [ ] 文档（用户手册/快速开始/能力包说明）
+- [x] 文档（用户手册/快速开始/能力包说明）（docs/user-manual.md + docs/quick-start.md + docs/capability-packs.md：全部从真实代码/env 清单/suites.toml 提取，未接项如实标注）
 - [x] 社区插件规范文档（docs/plugin-authoring-guide.md：六节齐全 + 示例摘自真实代码 + adapter 未接如实标注）
 - [ ] 版本号口径统一（RELEASE_NOTES v1.0.0 标题 vs workspace 1.2.0 + CHANGELOG 归条目 + ROADMAP 同步 R178；backlog #26，待 Leader 拍板）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
