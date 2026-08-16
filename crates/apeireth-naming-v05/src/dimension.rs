@@ -255,12 +255,8 @@ impl Safety {
     }
 
     /// 4 等级全表 (K-1 强校验).
-    pub const ALL: &'static [Safety] = &[
-        Safety::Low,
-        Safety::Medium,
-        Safety::High,
-        Safety::Critical,
-    ];
+    pub const ALL: &'static [Safety] =
+        &[Safety::Low, Safety::Medium, Safety::High, Safety::Critical];
 }
 
 impl std::fmt::Display for Safety {
@@ -421,7 +417,14 @@ impl DimensionSet {
         completeness: Completeness,
         lineage: Lineage,
     ) -> Self {
-        Self { level, domain, modality, safety, completeness, lineage }
+        Self {
+            level,
+            domain,
+            modality,
+            safety,
+            completeness,
+            lineage,
+        }
     }
 
     /// 6 维 → 6 字段字符串 slice (用于 encode).
@@ -583,7 +586,10 @@ mod tests {
     fn completeness_parse_all_four() {
         let all = ["skeleton", "partial", "complete", "production"];
         for s in all {
-            assert!(Completeness::parse(s).is_ok(), "Completeness::parse({s}) 应 OK");
+            assert!(
+                Completeness::parse(s).is_ok(),
+                "Completeness::parse({s}) 应 OK"
+            );
         }
     }
 
@@ -611,7 +617,12 @@ mod tests {
 
     #[test]
     fn lineage_parse_all_four() {
-        let all = ["spectrai-0.9", "apeireth-0.14", "apeireth-1.0", "apeireth-2.0"];
+        let all = [
+            "spectrai-0.9",
+            "apeireth-0.14",
+            "apeireth-1.0",
+            "apeireth-2.0",
+        ];
         for s in all {
             assert!(Lineage::parse(s).is_ok(), "Lineage::parse({s}) 应 OK");
         }

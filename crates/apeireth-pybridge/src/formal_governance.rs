@@ -149,12 +149,7 @@ pub struct ProofHarness {
 
 impl ProofHarness {
     /// 新建 (name + file + line + kind)
-    pub fn new(
-        name: impl Into<String>,
-        file: &'static str,
-        line: u32,
-        kind: ProofKind,
-    ) -> Self {
+    pub fn new(name: impl Into<String>, file: &'static str, line: u32, kind: ProofKind) -> Self {
         Self {
             name: name.into(),
             file,
@@ -371,9 +366,7 @@ impl ProofRunner {
     {
         let result = f();
         self.results.insert(harness.name.clone(), result);
-        self.results
-            .get(&harness.name)
-            .expect("just inserted")
+        self.results.get(&harness.name).expect("just inserted")
     }
 
     /// 取结果
@@ -393,26 +386,17 @@ impl ProofRunner {
 
     /// 全部跑过的 pass count
     pub fn pass_count(&self) -> usize {
-        self.results
-            .values()
-            .filter(|r| r.is_success())
-            .count()
+        self.results.values().filter(|r| r.is_success()).count()
     }
 
     /// 全部跑过的 fail count
     pub fn fail_count(&self) -> usize {
-        self.results
-            .values()
-            .filter(|r| r.is_failure())
-            .count()
+        self.results.values().filter(|r| r.is_failure()).count()
     }
 
     /// 全部跑过的 skipped count
     pub fn skipped_count(&self) -> usize {
-        self.results
-            .values()
-            .filter(|r| r.is_skipped())
-            .count()
+        self.results.values().filter(|r| r.is_skipped()).count()
     }
 }
 
@@ -455,10 +439,7 @@ impl ProofReport {
 
     /// skipped count
     pub fn skipped_count(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|(_, r)| r.is_skipped())
-            .count()
+        self.entries.iter().filter(|(_, r)| r.is_skipped()).count()
     }
 
     /// 全部跑过的 fail
@@ -545,10 +526,7 @@ pub fn run_all_8_harnesses() -> ProofReport {
     } else {
         ProofResult::Failure {
             harness: h2.name.clone(),
-            message: format!(
-                "g1_resource_dims={} expected 4",
-                token1.g1_resource_dims
-            ),
+            message: format!("g1_resource_dims={} expected 4", token1.g1_resource_dims),
         }
     };
     report.record(h2, r2);
@@ -585,10 +563,7 @@ pub fn run_all_8_harnesses() -> ProofReport {
     } else {
         ProofResult::Failure {
             harness: h4.name.clone(),
-            message: format!(
-                "g3_harnesses={} expected 8",
-                token1.g3_harnesses
-            ),
+            message: format!("g3_harnesses={} expected 8", token1.g3_harnesses),
         }
     };
     report.record(h4, r4);

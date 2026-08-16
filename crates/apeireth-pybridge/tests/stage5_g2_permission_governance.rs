@@ -72,7 +72,10 @@ fn g2_l5_audit_check() {
 #[test]
 fn g2_l6_provenance_check() {
     assert_eq!(PermissionLayer::L6ProvenanceCheck.number(), 6);
-    assert_eq!(PermissionLayer::L6ProvenanceCheck.name(), "L6_provenance_check");
+    assert_eq!(
+        PermissionLayer::L6ProvenanceCheck.name(),
+        "L6_provenance_check"
+    );
 }
 
 #[test]

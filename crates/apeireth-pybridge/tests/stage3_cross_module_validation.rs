@@ -14,11 +14,11 @@
 
 use apeireth_pybridge::{
     asi_lookup_by_version, asi_lookup_module, asi_stage1_module_count, asi_stage1_version,
-    list_ceiling_critical_modules, list_asi_stage1_modules_by_category, probe_asi_to_r11,
+    list_asi_stage1_modules_by_category, list_ceiling_critical_modules, probe_asi_to_r11,
     probe_bridge_to_pool, probe_bridge_to_r11, probe_core_to_bridge, probe_pool_to_type_convert,
-    r11_compat_version, r11_module_count, r11_module_category, stage3_cross_module_probes,
-    AsiCategory, BridgeError, CrossModuleKind, CrossModuleReport, HardWallsVerify,
-    R11Category, R11_COMPAT_VERSION, R11_MODULE_COUNT, SuggestedAction,
+    r11_compat_version, r11_module_category, r11_module_count, stage3_cross_module_probes,
+    AsiCategory, BridgeError, CrossModuleKind, CrossModuleReport, HardWallsVerify, R11Category,
+    SuggestedAction, R11_COMPAT_VERSION, R11_MODULE_COUNT,
 };
 
 // 1. 5 探针全部返回 ok (cfg-无关, 默认 build 跑 0 体积)
@@ -189,7 +189,9 @@ fn stage3_xmod_ceiling_critical_v1458() {
 // 14. asi_lookup_by_version / asi_lookup_module 双查
 #[test]
 fn stage3_xmod_asi_lookup_dual_api() {
-    for version in ["V1077", "V1400", "V1447", "V1457", "V1458", "V1467", "V1470"] {
+    for version in [
+        "V1077", "V1400", "V1447", "V1457", "V1458", "V1467", "V1470",
+    ] {
         let by_v = asi_lookup_by_version(version);
         assert!(by_v.is_some(), "V{version} 必须查到");
         let info = by_v.unwrap();
@@ -212,12 +214,30 @@ fn stage3_xmod_r11_count_4_apis() {
 // 16. r11_module_category 严守
 #[test]
 fn stage3_xmod_r11_module_categories() {
-    assert_eq!(r11_module_category("apeireth.memory.store"), R11Category::Memory);
-    assert_eq!(r11_module_category("apeireth.identity.continuity"), R11Category::Identity);
-    assert_eq!(r11_module_category("apeireth.asi.council"), R11Category::Asi);
-    assert_eq!(r11_module_category("apeireth.tools.permissions"), R11Category::Tools);
-    assert_eq!(r11_module_category("apeireth.bridge.compat"), R11Category::Bridge);
-    assert_eq!(r11_module_category("apeireth.unknown.nope"), R11Category::Unknown);
+    assert_eq!(
+        r11_module_category("apeireth.memory.store"),
+        R11Category::Memory
+    );
+    assert_eq!(
+        r11_module_category("apeireth.identity.continuity"),
+        R11Category::Identity
+    );
+    assert_eq!(
+        r11_module_category("apeireth.asi.council"),
+        R11Category::Asi
+    );
+    assert_eq!(
+        r11_module_category("apeireth.tools.permissions"),
+        R11Category::Tools
+    );
+    assert_eq!(
+        r11_module_category("apeireth.bridge.compat"),
+        R11Category::Bridge
+    );
+    assert_eq!(
+        r11_module_category("apeireth.unknown.nope"),
+        R11Category::Unknown
+    );
 }
 
 // 17. BridgeError 4 variant 跨 build 严守 (Stage 1 已锁)
@@ -259,7 +279,11 @@ fn stage3_xmod_6_modules_in_scope() {
     let r = stage3_cross_module_probes();
     assert_eq!(r.modules_in_scope.len(), 6);
     let expected = vec![
-        "bridge", "bridge_pool", "type_convert", "asi_modules", "r11_compat",
+        "bridge",
+        "bridge_pool",
+        "type_convert",
+        "asi_modules",
+        "r11_compat",
         "apeireth-core (cross-crate)",
     ];
     for e in &expected {

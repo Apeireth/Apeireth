@@ -8,9 +8,9 @@
 
 use apeireth_rate_limiter::{
     fixed_window_in_memory, leaky_bucket_in_memory, sliding_window_in_memory,
-    token_bucket_in_memory, FixedWindowReset, LeakyBucketOverflow, RateLimiter,
-    RateLimiterConfig, RateLimiterError, RateLimiterImpl, SlidingWindowPrecision, Storage,
-    StorageConfig, StorageKind, StrategyConfig, StrategyKind,
+    token_bucket_in_memory, FixedWindowReset, LeakyBucketOverflow, RateLimiter, RateLimiterConfig,
+    RateLimiterError, RateLimiterImpl, SlidingWindowPrecision, Storage, StorageConfig, StorageKind,
+    StrategyConfig, StrategyKind,
 };
 use std::sync::Arc;
 use std::time::Duration;
@@ -149,12 +149,8 @@ async fn test_fixed_window_reset() {
 
 #[tokio::test]
 async fn test_sliding_window_log() {
-    let l = sliding_window_in_memory(
-        Duration::from_secs(10),
-        3,
-        SlidingWindowPrecision::Log,
-    )
-    .unwrap();
+    let l =
+        sliding_window_in_memory(Duration::from_secs(10), 3, SlidingWindowPrecision::Log).unwrap();
     for _ in 0..3 {
         assert!(l.try_acquire("k", 1).await.unwrap());
     }
@@ -165,12 +161,8 @@ async fn test_sliding_window_log() {
 
 #[tokio::test]
 async fn test_sliding_window_counter() {
-    let l = sliding_window_in_memory(
-        Duration::from_secs(10),
-        3,
-        SlidingWindowPrecision::Counter,
-    )
-    .unwrap();
+    let l = sliding_window_in_memory(Duration::from_secs(10), 3, SlidingWindowPrecision::Counter)
+        .unwrap();
     for _ in 0..3 {
         assert!(l.try_acquire("k", 1).await.unwrap());
     }
@@ -195,19 +187,31 @@ async fn test_storage_5_kinds() {
 
     // 2: RedisStorage — stub
     let r = RedisStorage::new(None);
-    assert!(matches!(r.get("k").await, Err(RateLimiterError::NotImplemented(_))));
+    assert!(matches!(
+        r.get("k").await,
+        Err(RateLimiterError::NotImplemented(_))
+    ));
 
     // 3: MemcachedStorage — stub
     let m = MemcachedStorage::new(None);
-    assert!(matches!(m.set("k", b"v".to_vec(), None).await, Err(RateLimiterError::NotImplemented(_))));
+    assert!(matches!(
+        m.set("k", b"v".to_vec(), None).await,
+        Err(RateLimiterError::NotImplemented(_))
+    ));
 
     // 4: FileStorage — stub
     let f = FileStorage::new(None);
-    assert!(matches!(f.delete("k").await, Err(RateLimiterError::NotImplemented(_))));
+    assert!(matches!(
+        f.delete("k").await,
+        Err(RateLimiterError::NotImplemented(_))
+    ));
 
     // 5: DistributedStorage — stub
     let d = DistributedStorage::new(None);
-    assert!(matches!(d.get("k").await, Err(RateLimiterError::NotImplemented(_))));
+    assert!(matches!(
+        d.get("k").await,
+        Err(RateLimiterError::NotImplemented(_))
+    ));
 }
 
 #[tokio::test]
@@ -371,8 +375,8 @@ async fn test_permit_drop_returns_oversized_cost() {
     let p = l.acquire("k", 10).await.unwrap();
     assert_eq!(p.cost(), 10);
     drop(p); // 触发 release
-    // 此时桶内应剩 100 tokens (10 释放 + 0 消耗 — 之前 10 是从满桶 100 中扣, 释放后回到 100)
-    // 再 acquire 50 个仍能成功
+             // 此时桶内应剩 100 tokens (10 释放 + 0 消耗 — 之前 10 是从满桶 100 中扣, 释放后回到 100)
+             // 再 acquire 50 个仍能成功
     let p50 = l.acquire("k", 50).await.unwrap();
     assert_eq!(p50.cost(), 50);
     p50.forget();

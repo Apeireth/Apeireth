@@ -81,8 +81,8 @@ fn stage2_e2e_type_convert_roundtrip_json_helper() {
         d: None,
         e: false,
     };
-    let (j, back) = apeireth_pybridge::type_convert::type_convert_roundtrip_json(&s)
-        .expect("roundtrip_json");
+    let (j, back) =
+        apeireth_pybridge::type_convert::type_convert_roundtrip_json(&s).expect("roundtrip_json");
     assert!(j.contains("\"a\":99"));
     assert_eq!(s, back);
 }

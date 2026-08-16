@@ -423,12 +423,7 @@ impl MemorySelfLoop {
         seq
     }
     /// 记 1 条 ObservationRecord
-    pub fn record_observation(
-        &mut self,
-        source: &str,
-        output: &str,
-        result: MemoryResult,
-    ) -> u64 {
+    pub fn record_observation(&mut self, source: &str, output: &str, result: MemoryResult) -> u64 {
         if !self.running {
             self.start();
         }
@@ -444,12 +439,7 @@ impl MemorySelfLoop {
         seq
     }
     /// 记 1 条 AuditCheckpoint (Stage 1+2+3 8 硬墙 verify)
-    pub fn record_audit(
-        &mut self,
-        source: &str,
-        output: &str,
-        result: MemoryResult,
-    ) -> u64 {
+    pub fn record_audit(&mut self, source: &str, output: &str, result: MemoryResult) -> u64 {
         if !self.running {
             self.start();
         }

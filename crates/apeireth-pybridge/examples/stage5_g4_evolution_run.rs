@@ -22,14 +22,24 @@ fn main() {
     // 2. 4 演进类型
     println!("4 演进类型 (借 superpowers Skill lifecycle + langgraph node lifecycle):");
     for kind in EvolutionKind::ALL {
-        println!("  {}: {} (number={})", kind.name(), kind.description(), kind.number());
+        println!(
+            "  {}: {} (number={})",
+            kind.name(),
+            kind.description(),
+            kind.number()
+        );
     }
     println!();
 
     // 3. 4 演进规则
     println!("4 演进规则 (1:1 跟 4 类型):");
     for rule in EvolutionRule::ALL {
-        println!("  {}: {} (number={})", rule.name(), rule.description(), rule.number());
+        println!(
+            "  {}: {} (number={})",
+            rule.name(),
+            rule.description(),
+            rule.number()
+        );
     }
     println!();
 
@@ -40,10 +50,16 @@ fn main() {
         ("apeireth.v1077_asi_v04_full_measurement", 1077),
         ("apeireth.v1400_asi_self_framework", 1400),
         ("apeireth.v1447_asi_cross_modular_audit", 1447),
-        ("apeireth.v1457_asi_six_deployment_operational_runbook", 1457),
+        (
+            "apeireth.v1457_asi_six_deployment_operational_runbook",
+            1457,
+        ),
         ("apeireth.v1458_asi_north_star_ceiling_chain_audit", 1458),
         ("apeireth.v1467_asi_audit_http_gateway_history_diff", 1467),
-        ("apeireth.v1470_asi_v1469_batch_harness_cross_client_equivalence", 1470),
+        (
+            "apeireth.v1470_asi_v1469_batch_harness_cross_client_equivalence",
+            1470,
+        ),
     ] {
         let v = engine.current_version(module);
         println!("  v{} → {}", v, module);
@@ -67,11 +83,17 @@ fn main() {
 
     // R2 Upgrade
     let r2 = engine.check_r2_upgrade_backward_compat(&ctx, 1078);
-    println!("  R2 UpgradeBackwardCompat (Upgrade 1077→1078) → {}", r2.name());
+    println!(
+        "  R2 UpgradeBackwardCompat (Upgrade 1077→1078) → {}",
+        r2.name()
+    );
 
     // R3 Downgrade
     let r3 = engine.check_r3_downgrade_justified(&ctx, 1076, "perf issue");
-    println!("  R3 DowngradeJustified (Downgrade 1077→1076 + reason) → {}", r3.name());
+    println!(
+        "  R3 DowngradeJustified (Downgrade 1077→1076 + reason) → {}",
+        r3.name()
+    );
 
     // R4 Retire
     let r4 = engine.check_r4_retire_confirmed(&ctx, true, true);

@@ -134,7 +134,10 @@ impl Stage<PipelineMessage, PipelineMessage> for DefaultDispatch {
                 kind: StageKind::Dispatch,
                 source: Box::new(DispatchError::KindNotInWhitelist {
                     kind: input.kind.clone(),
-                    allowed: DISPATCH_DEFAULT_KINDS.iter().map(|s| (*s).to_owned()).collect(),
+                    allowed: DISPATCH_DEFAULT_KINDS
+                        .iter()
+                        .map(|s| (*s).to_owned())
+                        .collect(),
                 }),
             });
         }

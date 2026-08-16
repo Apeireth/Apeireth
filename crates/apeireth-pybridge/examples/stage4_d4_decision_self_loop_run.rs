@@ -26,26 +26,30 @@ fn main() {
     // 1. 5 维: 5 policy + 4 stage + 5 trigger + 5 state + max_revisit
     println!(
         "1. 5 维: policies={}, stages={}, triggers={}, states={}, max_revisit={}",
-        DECISION_POLICY_COUNT, DECISION_STAGE_COUNT, DECISION_TRIGGER_COUNT,
-        DECISION_STATE_COUNT, DECISION_MAX_REVISIT
+        DECISION_POLICY_COUNT,
+        DECISION_STAGE_COUNT,
+        DECISION_TRIGGER_COUNT,
+        DECISION_STATE_COUNT,
+        DECISION_MAX_REVISIT
     );
     println!();
 
     // 2. 5 决策策略 weight 0-4
     println!("2. 5 决策策略 (weight 0-4):");
     for p in DecisionPolicy::ALL {
-        println!("   - {} (weight={}): {}", p.name(), p.weight(), p.description());
+        println!(
+            "   - {} (weight={}): {}",
+            p.name(),
+            p.weight(),
+            p.description()
+        );
     }
     println!();
 
     // 3. 5 触发器 + suggested_policy
     println!("3. 5 触发器 + suggested_policy:");
     for t in DecisionTrigger::ALL {
-        println!(
-            "   - {} → {}",
-            t.name(),
-            t.suggested_policy().name()
-        );
+        println!("   - {} → {}", t.name(), t.suggested_policy().name());
     }
     println!();
 

@@ -34,8 +34,7 @@ fn main() {
     // (Dispatch whitelist_disabled 让任意 kind 通过, 给 example 演示通用)
     // ------------------------------------------------------------------
     let pipeline: Pipeline<ChatPipeline, PipelineMessage, PipelineMessage> = Pipeline::new(
-        PipelineConfig::new("chat-default", "ChatPipeline")
-            .with_diagnostics(), // 启用 diagnostics
+        PipelineConfig::new("chat-default", "ChatPipeline").with_diagnostics(), // 启用 diagnostics
     )
     .with_stage(DefaultDispatch::new().with_whitelist_disabled())
     .with_stage(DefaultNormalize::new())
@@ -55,19 +54,26 @@ fn main() {
     // ------------------------------------------------------------------
     println!("--- Example 1: Normal chat message ---");
     let input = PipelineMessage::new("chat", "  Hello World  ").with_trace_id("trace-001");
-    println!("Input: kind={:?}, payload={:?}, attempt={}, trace_id={:?}",
-        input.kind, input.payload, input.attempt, input.trace_id);
+    println!(
+        "Input: kind={:?}, payload={:?}, attempt={}, trace_id={:?}",
+        input.kind, input.payload, input.attempt, input.trace_id
+    );
 
     let (result, trace) = pipeline.run_with_trace(input);
     match result {
         Ok(output) => {
             println!("✓ Success");
-            println!("  Output: kind={:?}, payload={:?}, attempt={}, trace_id={:?}",
-                output.kind, output.payload, output.attempt, output.trace_id);
+            println!(
+                "  Output: kind={:?}, payload={:?}, attempt={}, trace_id={:?}",
+                output.kind, output.payload, output.attempt, output.trace_id
+            );
         }
         Err(e) => println!("✗ Failed: {}", e),
     }
-    println!("  Trace: stages_run={:?}, failed_at={:?}\n", trace.stages_run, trace.failed_at);
+    println!(
+        "  Trace: stages_run={:?}, failed_at={:?}\n",
+        trace.stages_run, trace.failed_at
+    );
 
     // ------------------------------------------------------------------
     // Step 3: 跑 spam message (Policy 拒绝)
@@ -80,11 +86,18 @@ fn main() {
     match result {
         Ok(output) => println!("✓ Success: {:?}", output.payload),
         Err(e) => {
-            println!("✗ Failed: {} (kind={:?}, stage={:?})",
-                e, e.kind(), e.stage_kind());
+            println!(
+                "✗ Failed: {} (kind={:?}, stage={:?})",
+                e,
+                e.kind(),
+                e.stage_kind()
+            );
         }
     }
-    println!("  Trace: stages_run={:?}, failed_at={:?}\n", trace.stages_run, trace.failed_at);
+    println!(
+        "  Trace: stages_run={:?}, failed_at={:?}\n",
+        trace.stages_run, trace.failed_at
+    );
 
     // ------------------------------------------------------------------
     // Step 4: 跑超大 payload (Policy deny by size)
@@ -92,7 +105,11 @@ fn main() {
     println!("--- Example 3: Oversized payload (Policy size limit) ---");
     let big_payload = "a".repeat(MAX_POLICY_PAYLOAD_SIZE + 1); // 16 KiB + 1
     let input = PipelineMessage::new("chat", big_payload).with_trace_id("trace-003");
-    println!("Input: kind={:?}, payload.len()={}", input.kind, input.payload.len());
+    println!(
+        "Input: kind={:?}, payload.len()={}",
+        input.kind,
+        input.payload.len()
+    );
 
     let (result, trace) = pipeline.run_with_trace(input);
     match result {
@@ -101,7 +118,10 @@ fn main() {
             println!("✗ Failed: {} (kind={:?})", e, e.kind());
         }
     }
-    println!("  Trace: stages_run={:?}, failed_at={:?}\n", trace.stages_run, trace.failed_at);
+    println!(
+        "  Trace: stages_run={:?}, failed_at={:?}\n",
+        trace.stages_run, trace.failed_at
+    );
 
     // ------------------------------------------------------------------
     // Step 5: 演示 Normalize 5 步归一化
@@ -138,10 +158,19 @@ fn main() {
     println!("  STAGE_KIND_COUNT = {} (期望 5)", STAGE_KIND_COUNT);
     println!("  STAGE_ORDER[0] = {:?} (期望 Dispatch)", STAGE_ORDER[0]);
     println!("  STAGE_ORDER[4] = {:?} (期望 Throttle)", STAGE_ORDER[4]);
-    println!("  PIPELINE_G5_STAGE_COUNT = {} (期望 5)", PIPELINE_G5_STAGE_COUNT);
-    println!("  PIPELINE_ERROR_VARIANT_COUNT = {} (期望 6)", PIPELINE_ERROR_VARIANT_COUNT);
+    println!(
+        "  PIPELINE_G5_STAGE_COUNT = {} (期望 5)",
+        PIPELINE_G5_STAGE_COUNT
+    );
+    println!(
+        "  PIPELINE_ERROR_VARIANT_COUNT = {} (期望 6)",
+        PIPELINE_ERROR_VARIANT_COUNT
+    );
     println!("  PLATFORM_NAME = {:?} (期望 \"apeireth\")", PLATFORM_NAME);
-    println!("  PIPELINE_G5_SCHEMA_VERSION = {:?} (期望 \"1\")", PIPELINE_G5_SCHEMA_VERSION);
+    println!(
+        "  PIPELINE_G5_SCHEMA_VERSION = {:?} (期望 \"1\")",
+        PIPELINE_G5_SCHEMA_VERSION
+    );
     println!();
 
     println!("===========================================");
