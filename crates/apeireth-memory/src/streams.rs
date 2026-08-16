@@ -18,7 +18,8 @@
 use rusqlite::Connection;
 
 use crate::append_only::{
-    insert_entry, list_for_session, list_for_subject, mark_tombstone, HistoryEntry, HistoryStream,
+    insert_entry, list_for_session, list_for_subject, list_recent_entries, mark_tombstone,
+    HistoryEntry, HistoryStream,
 };
 use crate::{MemoryResult, StreamKind};
 
@@ -94,6 +95,10 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
             include_tombstoned,
         )
     }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Thought.table_name(), limit, include_tombstoned)
+    }
 }
 
 /// 提案流 (立场史 = Stance History, D2 §5.1 #4).
@@ -147,6 +152,10 @@ impl<'a> HistoryStream for ProposalStream<'a> {
             session_id,
             include_tombstoned,
         )
+    }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Proposal.table_name(), limit, include_tombstoned)
     }
 }
 
@@ -204,6 +213,10 @@ impl<'a> HistoryStream for ActionStream<'a> {
             include_tombstoned,
         )
     }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Action.table_name(), limit, include_tombstoned)
+    }
 }
 
 /// 关系流 (关系史 = Relation History, D2 §5.1 #2).
@@ -257,6 +270,10 @@ impl<'a> HistoryStream for RelationStream<'a> {
             session_id,
             include_tombstoned,
         )
+    }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Relation.table_name(), limit, include_tombstoned)
     }
 }
 
@@ -318,6 +335,10 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
             include_tombstoned,
         )
     }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Evolution.table_name(), limit, include_tombstoned)
+    }
 }
 
 /// 反思期流 (Self-Disable §3 "反思期审计"使用, A7 集成).
@@ -377,6 +398,10 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
             session_id,
             include_tombstoned,
         )
+    }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(self.conn, StreamKind::Reflection.table_name(), limit, include_tombstoned)
     }
 }
 
@@ -495,6 +520,17 @@ impl<'a> HistoryStream for StreamHandle<'a> {
             StreamHandle::Relation(s) => s.list_for_session(session_id, include_tombstoned),
             StreamHandle::Evolution(s) => s.list_for_session(session_id, include_tombstoned),
             StreamHandle::Reflection(s) => s.list_for_session(session_id, include_tombstoned),
+        }
+    }
+
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+        match self {
+            StreamHandle::Thought(s) => s.list_recent(limit, include_tombstoned),
+            StreamHandle::Proposal(s) => s.list_recent(limit, include_tombstoned),
+            StreamHandle::Action(s) => s.list_recent(limit, include_tombstoned),
+            StreamHandle::Relation(s) => s.list_recent(limit, include_tombstoned),
+            StreamHandle::Evolution(s) => s.list_recent(limit, include_tombstoned),
+            StreamHandle::Reflection(s) => s.list_recent(limit, include_tombstoned),
         }
     }
 }

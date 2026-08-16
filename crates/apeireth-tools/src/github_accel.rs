@@ -243,11 +243,18 @@ impl Tool for GhAccelTool {
         let pool = fetch_mirror_pool(&client).await?;
         let probes = probe_top(&client, &pool, limit).await;
         let fastest = pick_fastest(&probes);
+        // 输出排序: 可用优先, 再按实测延迟升序 (最快在最前, 方便人/AI 读表)
+        let mut sorted = probes.clone();
+        sorted.sort_by(|a, b| {
+            b.ok()
+                .cmp(&a.ok())
+                .then_with(|| a.latency_ms.unwrap_or(u64::MAX).cmp(&b.latency_ms.unwrap_or(u64::MAX)))
+        });
         let mut out = json!({
             "pool_total": pool.len(),
             "probed": probes.len(),
             "test_file": PROBE_FILE,
-            "results": probes.iter().map(|p| json!({
+            "results": sorted.iter().map(|p| json!({
                 "host": host_of(&p.node.url),
                 "url": p.node.url,
                 "server": p.node.server,
