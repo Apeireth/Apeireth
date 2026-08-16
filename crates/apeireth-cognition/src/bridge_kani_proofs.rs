@@ -1,4 +1,3 @@
-
 //! R176 Bridge 1 Kani proofs: consciousness -> cognition bridge invariants
 //!
 //! **3 properties to prove**:
@@ -41,13 +40,22 @@ fn proof_bridge1_bias_clamped() {
 #[test]
 fn r176_b1_01_all_basic_biases_valid() {
     for b in &[
-        PlutchikBasic::Joy, PlutchikBasic::Trust, PlutchikBasic::Fear,
-        PlutchikBasic::Surprise, PlutchikBasic::Sadness, PlutchikBasic::Disgust,
-        PlutchikBasic::Anger, PlutchikBasic::Anticipation,
+        PlutchikBasic::Joy,
+        PlutchikBasic::Trust,
+        PlutchikBasic::Fear,
+        PlutchikBasic::Surprise,
+        PlutchikBasic::Sadness,
+        PlutchikBasic::Disgust,
+        PlutchikBasic::Anger,
+        PlutchikBasic::Anticipation,
     ] {
         let e = make_basic(*b);
         let bias = plutchik_to_decision_bias(&e);
-        assert!(bias.creativity >= 0.0 && bias.creativity <= 1.0, "creativity out of range for {:?}", b);
+        assert!(
+            bias.creativity >= 0.0 && bias.creativity <= 1.0,
+            "creativity out of range for {:?}",
+            b
+        );
         assert!(bias.caution >= 0.0 && bias.caution <= 1.0);
         assert!(bias.cooperation >= 0.0 && bias.cooperation <= 1.0);
         assert!(bias.exploration >= 0.0 && bias.exploration <= 1.0);
@@ -58,13 +66,22 @@ fn r176_b1_01_all_basic_biases_valid() {
 #[test]
 fn r176_b1_02_all_advanced_biases_valid() {
     for a in &[
-        PlutchikAdvanced::Love, PlutchikAdvanced::Submission, PlutchikAdvanced::Awe,
-        PlutchikAdvanced::Disapproval, PlutchikAdvanced::Remorse, PlutchikAdvanced::Contempt,
-        PlutchikAdvanced::Aggressiveness, PlutchikAdvanced::Optimism,
+        PlutchikAdvanced::Love,
+        PlutchikAdvanced::Submission,
+        PlutchikAdvanced::Awe,
+        PlutchikAdvanced::Disapproval,
+        PlutchikAdvanced::Remorse,
+        PlutchikAdvanced::Contempt,
+        PlutchikAdvanced::Aggressiveness,
+        PlutchikAdvanced::Optimism,
     ] {
         let e = make_advanced(*a);
         let bias = plutchik_to_decision_bias(&e);
-        assert!(bias.creativity >= 0.0 && bias.creativity <= 1.0, "creativity out of range for {:?}", a);
+        assert!(
+            bias.creativity >= 0.0 && bias.creativity <= 1.0,
+            "creativity out of range for {:?}",
+            a
+        );
         assert!(bias.caution >= 0.0 && bias.caution <= 1.0);
         assert!(bias.cooperation >= 0.0 && bias.cooperation <= 1.0);
         assert!(bias.exploration >= 0.0 && bias.exploration <= 1.0);

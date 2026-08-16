@@ -39,10 +39,16 @@ pub struct FoldBlock {
 /// 解析单行标记 → (阈值, 描述); 非标记行返回 None。
 fn parse_marker_line(line: &str) -> Option<(f32, String)> {
     let t = line.trim();
-    let rest = t.strip_prefix(FOLD_MARKER_PREFIX)?.strip_suffix(FOLD_MARKER_SUFFIX)?.trim();
+    let rest = t
+        .strip_prefix(FOLD_MARKER_PREFIX)?
+        .strip_suffix(FOLD_MARKER_SUFFIX)?
+        .trim();
     let body = rest.strip_prefix(FOLD_FIELD)?;
     let (th_part, desc) = match body.find(FOLD_DESC_SEP) {
-        Some(i) => (&body[..i], body[i + FOLD_DESC_SEP.len()..].trim().to_string()),
+        Some(i) => (
+            &body[..i],
+            body[i + FOLD_DESC_SEP.len()..].trim().to_string(),
+        ),
         None => (body, String::new()),
     };
     let threshold: f32 = th_part.trim().parse().ok()?;
@@ -69,7 +75,11 @@ pub fn parse_fold_blocks(content: &str) -> Vec<FoldBlock> {
         if let Some((th, desc)) = parse_marker_line(line) {
             if opened || !buf.is_empty() {
                 let c = buf.join("\n").trim().to_string();
-                blocks.push(FoldBlock { threshold, description, content: c });
+                blocks.push(FoldBlock {
+                    threshold,
+                    description,
+                    content: c,
+                });
             }
             threshold = th;
             description = desc;
@@ -81,7 +91,11 @@ pub fn parse_fold_blocks(content: &str) -> Vec<FoldBlock> {
     }
     if opened || !buf.is_empty() {
         let c = buf.join("\n").trim().to_string();
-        blocks.push(FoldBlock { threshold, description, content: c });
+        blocks.push(FoldBlock {
+            threshold,
+            description,
+            content: c,
+        });
     }
     blocks
 }
@@ -104,18 +118,35 @@ pub struct FoldBlockRender {
 /// 边界语义: 相似度恰好等于阈值 → 展开 (≥ 含等号)。
 /// 非有限相似度 (NaN/inf) 按 0.0 处理。
 pub fn render_fold_blocks(blocks: &[FoldBlock], similarity: f32) -> FoldBlockRender {
-    let sim = if similarity.is_finite() { similarity } else { 0.0 };
+    let sim = if similarity.is_finite() {
+        similarity
+    } else {
+        0.0
+    };
     let expanded_blocks: Vec<&FoldBlock> = blocks.iter().filter(|b| b.threshold <= sim).collect();
     let hidden = blocks.len() - expanded_blocks.len();
-    let stash_hint = if hidden > 0 { format!("[已折叠] 还收纳了 {} 组内容 (相似度未达阈值)", hidden) } else { String::new() };
-    let mut rendered = expanded_blocks.iter().map(|b| b.content.as_str()).collect::<Vec<_>>().join("\n\n");
+    let stash_hint = if hidden > 0 {
+        format!("[已折叠] 还收纳了 {} 组内容 (相似度未达阈值)", hidden)
+    } else {
+        String::new()
+    };
+    let mut rendered = expanded_blocks
+        .iter()
+        .map(|b| b.content.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n");
     if !stash_hint.is_empty() {
         if !rendered.is_empty() {
             rendered.push_str("\n\n");
         }
         rendered.push_str(&stash_hint);
     }
-    FoldBlockRender { rendered, expanded: expanded_blocks.len(), hidden, stash_hint }
+    FoldBlockRender {
+        rendered,
+        expanded: expanded_blocks.len(),
+        hidden,
+        stash_hint,
+    }
 }
 
 #[cfg(test)]
@@ -220,7 +251,11 @@ mod tests {
 
     #[test]
     fn fold_block_serde_roundtrip() {
-        let b = FoldBlock { threshold: 0.5, description: "d".into(), content: "c".into() };
+        let b = FoldBlock {
+            threshold: 0.5,
+            description: "d".into(),
+            content: "c".into(),
+        };
         let s = serde_json::to_string(&b).unwrap();
         let b2: FoldBlock = serde_json::from_str(&s).unwrap();
         assert_eq!(b, b2);
