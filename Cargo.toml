@@ -81,6 +81,7 @@ members = [
     "crates/apeireth-context-fold",
     "crates/apeireth-tool-approval",
     "crates/apeireth-guard",  # R173 VCP-3: Privacy Guard
+    "crates/apeireth-credentials",  # TP3/N21: 统一凭据存取层 (§10 装配主链第一环)
     "crates/apeireth-agent",
     # V2 战区 5 — MCP skeleton (docs/v2-strategy/05 §Step 2, R-Cycle v2-strategy)
     "crates/apeireth-mcp",
