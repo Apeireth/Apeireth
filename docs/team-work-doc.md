@@ -191,6 +191,31 @@
 
 ---
 
-## 8. 附：VCP 新版调研（2026-08-16, 待补充）
+## 8. 附：VCP 新版调研（2026-08-16）
 
-> 新版 VCPToolBox 已用 Rust 重写记忆层（rust-vexus-lite）并新增插件，调研结果将补充于此章节。
+> 新版 VCPToolBox（源码 Downloads\VCPToolBox-rust\VCPToolBox-main）：
+> Node.js 核心（server.js/Plugin.js/WebSocketServer.js/KnowledgeBaseManager.js + 20+ modules）+ **Rust N-API 记忆层（rust-vexus-lite：RiverMemo Topology V3）** + **84 插件**。
+> 本章节由 subagent 深挖后补充完整（Rust 记忆层机制 / 84 插件分类表 / 核心模块对照）。
+
+### 8.1 初步发现（主线程确认）
+
+**OneRing（统一上下文系统）** — 跨前端/群聊/私聊的唯一 Agent 统一时间线：
+- 系统提示词占位符 `[[OneRing::Agent::Frontend]]` 触发
+- SQLite 记录每条 User/Assistant 发言（时间戳 + 来源对象 + 前端来源）
+- fuzzy diff 历史比对更新 + 时间线插入策略（RawClientTimeline / ServerInferredTimeline）
+- 发送时追加/拆分 `[OneRing通知:...]` 来源标记；配置热加载
+- **对 Apeireth 的启示**：A2（continuity 锚点）可升级为"统一上下文账本"——把多前端（SSE/Lark/Telegram/Web）的会话归入同一 Agent 时间线（X-Apeireth-Continuity 已有雏形）
+
+**DigitalOracle（金融数字全球监控）** — 宏观/利率/商品/股票/加密/**预测市场**/期权数据源（SEC EDGAR 等），Python stdio 插件：
+- **对 Apeireth 的启示**：预测机套件（§5.2）的旗舰数据源候选——"预测市场"数据源与 oracle 可证伪预测机制天然契合
+
+**rust-vexus-lite（Rust N-API 记忆层）** — HNSW（usearch）+ SVD（nalgebra）+ rayon 候选级并行 + SQLite + bincode：
+- 模块：memo_sensing / memo_pipeline / memo_dtsc / memo_artifact_builder / rivermemo_topology_v3
+- 详情待 subagent 报告补充
+
+### 8.2 深挖报告（待补充）
+
+- [ ] Rust 记忆层机制详表（sensing/pipeline/DTSC/topology v3 数据流）
+- [ ] 84 插件完整分类表（生图/搜索/记忆/日程/工具/Agent/学术/社区/桥接）
+- [ ] 核心 modules 对照（vcpLoop/chatCompletionHandler 23 步/finalContextStore/dynamicToolRegistry/toolApprovalManager/toolResultPrivacyGuard/foldProtocol 等）
+- [ ] 可吸收清单 → 并入 §4/§5 任务矩阵
