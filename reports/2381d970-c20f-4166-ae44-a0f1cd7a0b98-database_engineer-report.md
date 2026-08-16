@@ -30,11 +30,11 @@
 - **台账 #33 自动对账**：硬编码 12 清单逐项标注现状
 - 支持 `-OutFile` 落盘报告；PS 5.1 UTF-8 编码修复（cargo metadata 中文描述经 ANSI 码页会破坏 JSON → `[Console]::OutputEncoding = UTF8` + 文件 BOM）
 
-## 4. 首次全量扫描结果（reports/orphan-scan-first.md，2026-08-17 01:36）
+## 4. 首次全量扫描结果（reports/orphan-scan-first.md，2026-08-17 01:44 重跑版）
 
-82 成员 / 81 含 lib / 30 零 normal 消费者 = **孤儿 23 + dev-only 4 + bin 终点 3**
+83 成员 / 82 含 lib / 31 零 normal 消费者 = **孤儿 24 + dev-only 4 + bin 终点 3**（01:36 首扫为 82/23，因期间新增 apeireth-credentials 孤儿 +1，01:44 重跑为准）
 
-- **孤儿 23**（待 Leader 处置）：#33 清单 12 项全仍孤儿（provider/cron/experience/environment/config/state/naming-v05/livekit/blueprint-impl/library-governance/voice/context-fold）+ 新发现 11 项同态：upgrade / onion / gateway（无 bin target，"单一长连进程"未装配）/ sdk（对外发布件，0 内部消费者或合理但需显式声明）/ team-lead / repo-tools / tool-shell / tool-fetch / tool-browser / tool-codesearch / tool-image-process（工具家族"翻译了未接线"模式）
+- **孤儿 24**（待 Leader 处置）：#33 清单 12 项全仍孤儿（provider/cron/experience/environment/config/state/naming-v05/livekit/blueprint-impl/library-governance/voice/context-fold）+ 新发现 12 项同态：upgrade / onion / gateway（无 bin target，"单一长连进程"未装配）/ credentials（期间新增）/ sdk（对外发布件，0 内部消费者或合理但需显式声明）/ team-lead / repo-tools / tool-shell / tool-fetch / tool-browser / tool-codesearch / tool-image-process（工具家族"翻译了未接线"模式）
 - **dev-only 4**：bench / test / tui-e2e / integration-e2e（合规）
 - **bin 终点 3**：cli / web / tui（合规）
 - **dev-dep 自引用**：tool-fetch 命中（#33② 复现）
@@ -50,13 +50,15 @@
 
 ## 6. 并发实况记录（0 装）
 
-编写期间 orphan-scan.ps1 曾被并发清理流程删除一次（未入库的 untracked 文件被清扫），已重建并在验证通过后立即 git add 保护。教训与 #46 批一致：共享树上未入库文件不可靠，工具件落地应尽快提交入库。
+① 编写期间 orphan-scan.ps1 曾被并发清理流程删除一次（未入库的 untracked 文件被清扫），重建后立即 git add 保护。
+② 更严重：首次入库提交 b0c093a9（脚本+首扫证据）及规范段所在提交 54a2f13c 均被平台历史重写吞掉（同批被吞的还有 5 个模块文件，见队友恢复提交 100ca5d0）。脚本与证据文件从工作树+HEAD 双双消失。处理：脚本全文重建（上下文留存）→ BOM 恢复 → 重跑生成新版证据（83/24，含新增 credentials）→ maintenance-guide 规范段重插 → 本提交一次性 pathspec 落库。教训：共享树上任何内容在合并进 integration 并稳定前都可能被重写吞掉，交付后必须核验 `git show HEAD:<path>` 并在丢失时快速重建（本次重建耗时 ~3 分钟，内容无损）。
 
 ## 7. 提交清单
 
 | hash | 内容 |
 |---|---|
-| b0c093a9 | feat(TP9/N18) orphan-scan.ps1 正式入库 + 首次全量扫描证据 (reports/orphan-scan-first.md) |
-| （本提交） | docs: backlog N18 划 ✅ + #33 关联更新 + 本报告 |
+| b0c093a9 | feat(TP9/N18) orphan-scan.ps1 + 首扫证据（**已被平台历史重写吞掉, 见 §6②**） |
+| 3aed922b | docs: backlog N18 划 ✅ + #33 首扫对账 + 本报告首版（HEAD 幸存） |
+| （本提交） | 重建落库: 脚本 + 重跑证据 (83/24) + maintenance-guide §三 000 规范段重插 + backlog 数字修正 (83/24 含 credentials) |
 
-**归属实况（0 装）**：maintenance-guide §三 条目 000 规范段的编辑被队友提交 54a2f13c（docs(N4)）的并发清扫意外带入 HEAD——内容完整无误，仅归属混入他人提交，不做历史改写（并发风暴下风险 > 收益，与 #46/#47/#28 批同款判断）。backlog N18/#33 回填曾被并发流程覆盖丢失一次，已重新应用并随本提交入库。
+**归属实况（0 装）**：maintenance-guide §三 条目 000 的首次入库被队友提交 54a2f13c 的并发清扫带入（内容完整，仅归属混入），后随该提交一起被历史重写吞掉；本次重插为本任务的正式归属。backlog N18/#33 回填曾被并发覆盖丢失一次（已重应用，3aed922b 幸存）。
