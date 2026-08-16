@@ -67,10 +67,27 @@ pub struct PersistentSemanticIndex {
     embedder_identity: EmbedderIdentity,
     /// P0-6: 当前 schema 版本.
     schema_version: u32,
+    /// P1#3: 磁盘上的 normalize/chunk 规则版本 (stored; < CURRENT → stale 需重建).
+    normalize_version: u32,
 }
 
 /// P0-6: 当前 schema 版本.
 pub const CURRENT_SCHEMA_VERSION: u32 = 1;
+
+/// P1#3 (审计 A1#2, 2026-08-16): 文本 normalize/chunk 规则版本.
+///
+/// 与 `CURRENT_SCHEMA_VERSION` (向量表 schema) 正交: 本版本标记「喂给 embedder 的
+/// 文本是怎么规范化/切块的」。换 chunk 规则 (如换分隔符/长度策略) 后 bump 本常量,
+/// `open()` 会识别 stale 向量 (`needs_reindex() == true`), 调用方决定重建索引 —
+/// 不自动删, 不假装迁移 (0 装 PASS)。
+pub const CURRENT_NORMALIZE_VERSION: u32 = 1;
+
+/// P1#3: 磁盘版本是否 stale (按旧 chunk 规则生成, 需重建索引).
+/// 注意: `open()` 会把 0 (无 sidecar 记录) 归一化为当前版本 — 因为历史从未
+/// bump 过, 无记录的库 = 当前规则生成 (诚实成立); 未来 bump 后旧库自然 stale.
+pub fn normalize_is_stale(stored: u32) -> bool {
+    stored < CURRENT_NORMALIZE_VERSION
+}
 
 impl PersistentSemanticIndex {
     /// 打开 (或新建) 一个 long-term semantic index.
@@ -128,6 +145,25 @@ impl PersistentSemanticIndex {
             stored_schema
         };
 
+        // P1#3: 校验 stored normalize 版本 (独立于 schema 版本)
+        let stored_norm = read_normalize_sidecar(&vector_path);
+        let normalize_version = if stored_norm == 0 {
+            CURRENT_NORMALIZE_VERSION
+        } else if stored_norm > CURRENT_NORMALIZE_VERSION {
+            return Err(MemoryError::Other(format!(
+                "normalize version on disk ({stored_norm}) > current code ({CURRENT_NORMALIZE_VERSION})"
+            )));
+        } else {
+            stored_norm
+        };
+        if normalize_is_stale(normalize_version) {
+            // 诚实: 不自动重建, 只标记 stale 供调用方决策
+            eprintln!(
+                "[semantic] normalize 版本落后 (disk={normalize_version} code={CURRENT_NORMALIZE_VERSION}): \
+                 向量按旧 chunk 规则生成, needs_reindex()=true — 由调用方决定重建"
+            );
+        }
+
         Ok(Self {
             memory,
             vector_path,
@@ -135,6 +171,7 @@ impl PersistentSemanticIndex {
             embedder,
             embedder_identity,
             schema_version,
+            normalize_version,
         })
     }
 
@@ -146,6 +183,16 @@ impl PersistentSemanticIndex {
     /// P0-6: 取当前 schema 版本.
     pub fn schema_version(&self) -> u32 {
         self.schema_version
+    }
+
+    /// P1#3: 磁盘上的 normalize/chunk 规则版本 (stored).
+    pub fn normalize_version(&self) -> u32 {
+        self.normalize_version
+    }
+
+    /// P1#3: 向量是否按旧 chunk 规则生成 (stored < current → 需重建索引).
+    pub fn needs_reindex(&self) -> bool {
+        self.normalize_version < CURRENT_NORMALIZE_VERSION
     }
 
     /// 显式 no-op flush — 留作公开 API 当 caller 想"心理 flush"时用.
@@ -178,9 +225,10 @@ impl PersistentSemanticIndex {
             .upsert(&v)
             .map_err(|e| MemoryError::Other(format!("vector upsert failed: {e}")))?;
         drop(guard);
-        // P0-5 + P0-6: 落盘 sidecar
+        // P0-5 + P0-6 + P1#3: 落盘 sidecar
         self.persist_embedder_sidecar()?;
         self.persist_schema_sidecar()?;
+        self.persist_normalize_sidecar()?;
         Ok(())
     }
 
@@ -333,6 +381,7 @@ impl PersistentSemanticIndex {
 // ============================================================
 const EMBEDDER_SIDECAR_SUFFIX: &str = ".embedder.json";
 const SCHEMA_SIDECAR_SUFFIX: &str = ".schema.json";
+const NORMALIZE_SIDECAR_SUFFIX: &str = ".normalize.json";
 
 fn embedder_sidecar_path(vector_path: &Path) -> PathBuf {
     let mut p = vector_path.to_path_buf();
@@ -348,6 +397,13 @@ fn schema_sidecar_path(vector_path: &Path) -> PathBuf {
     p
 }
 
+fn normalize_sidecar_path(vector_path: &Path) -> PathBuf {
+    let mut p = vector_path.to_path_buf();
+    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    p.set_file_name(format!("{original}{NORMALIZE_SIDECAR_SUFFIX}"));
+    p
+}
+
 fn read_embedder_sidecar(vector_path: &Path) -> EmbedderIdentity {
     let path = embedder_sidecar_path(vector_path);
     match std::fs::read_to_string(&path) {
@@ -358,6 +414,14 @@ fn read_embedder_sidecar(vector_path: &Path) -> EmbedderIdentity {
 
 fn read_schema_sidecar(vector_path: &Path) -> u32 {
     let path = schema_sidecar_path(vector_path);
+    match std::fs::read_to_string(&path) {
+        Ok(s) => s.trim().parse::<u32>().unwrap_or(0),
+        Err(_) => 0,
+    }
+}
+
+fn read_normalize_sidecar(vector_path: &Path) -> u32 {
+    let path = normalize_sidecar_path(vector_path);
     match std::fs::read_to_string(&path) {
         Ok(s) => s.trim().parse::<u32>().unwrap_or(0),
         Err(_) => 0,
@@ -381,6 +445,14 @@ fn persist_schema_sidecar_impl(vector_path: &Path, version: u32) -> std::io::Res
     Ok(())
 }
 
+fn persist_normalize_sidecar_impl(vector_path: &Path, version: u32) -> std::io::Result<()> {
+    let path = normalize_sidecar_path(vector_path);
+    let tmp = path.with_extension("normalize.json.tmp");
+    std::fs::write(&tmp, version.to_string())?;
+    std::fs::rename(&tmp, &path)?;
+    Ok(())
+}
+
 impl PersistentSemanticIndex {
     fn persist_embedder_sidecar(&self) -> MemoryResult<()> {
         let id = self.embedder.identity();
@@ -392,6 +464,12 @@ impl PersistentSemanticIndex {
     fn persist_schema_sidecar(&self) -> MemoryResult<()> {
         persist_schema_sidecar_impl(&self.vector_path, self.schema_version)
             .map_err(|e| MemoryError::Other(format!("schema sidecar write: {e}")))?;
+        Ok(())
+    }
+
+    fn persist_normalize_sidecar(&self) -> MemoryResult<()> {
+        persist_normalize_sidecar_impl(&self.vector_path, CURRENT_NORMALIZE_VERSION)
+            .map_err(|e| MemoryError::Other(format!("normalize sidecar write: {e}")))?;
         Ok(())
     }
 }
@@ -517,6 +595,68 @@ mod tests {
         // 重开
         let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e).unwrap();
         assert_eq!(idx2.len().unwrap(), 1, "重开应见 1 条");
+    }
+
+    // ---- P1#3: normalize 版本 (审计 A1#2) ----
+
+    #[test]
+    fn fresh_index_has_current_normalize_version() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
+        assert_eq!(idx.normalize_version(), CURRENT_NORMALIZE_VERSION);
+        assert!(!idx.needs_reindex(), "新库不应 stale");
+        // 写一条 → sidecar 落盘
+        let ep = make_episode("n1", 1, "normalize version content");
+        <SqliteMemoryStore as EpisodeStore>::put_episode(&idx.memory, &ep).unwrap();
+        idx.index_episode(&ep).unwrap();
+        assert!(normalize_sidecar_path(&path).exists(), "normalize sidecar 应落盘");
+        let stored = read_normalize_sidecar(&path);
+        assert_eq!(stored, CURRENT_NORMALIZE_VERSION);
+        cleanup(&path);
+        let _ = std::fs::remove_file(normalize_sidecar_path(&path));
+    }
+
+    #[test]
+    fn normalize_version_persists_across_reopen() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        {
+            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let ep = make_episode("n2", 2, "chunk rule content");
+            <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
+            idx.index_episode(&ep).unwrap();
+        }
+        // sidecar 落盘 + 重开版本一致
+        assert!(normalize_sidecar_path(&path).exists(), "normalize sidecar 应落盘");
+        assert_eq!(read_normalize_sidecar(&path), CURRENT_NORMALIZE_VERSION);
+        let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+        assert_eq!(idx2.normalize_version(), CURRENT_NORMALIZE_VERSION);
+        assert!(!idx2.needs_reindex(), "当前版本不 stale");
+        assert_eq!(idx2.len().unwrap(), 1, "重开数据仍在");
+        cleanup(&path);
+        let _ = std::fs::remove_file(normalize_sidecar_path(&path));
+    }
+
+    #[test]
+    fn stale_detection_pure_fn() {
+        // 未来 bump 后, 旧版本库应判 stale (纯函数覆盖判定逻辑)
+        assert!(normalize_is_stale(CURRENT_NORMALIZE_VERSION - 1), "旧版本应判 stale");
+        assert!(!normalize_is_stale(CURRENT_NORMALIZE_VERSION), "当前版本不 stale");
+        assert!(!normalize_is_stale(CURRENT_NORMALIZE_VERSION + 1), "未来版本由 open 拦截, 纯函数不判 stale");
+    }
+
+    #[test]
+    fn newer_normalize_version_on_disk_errors() {
+        let path = temp_vector_path();
+        let mem = fresh_mem();
+        persist_normalize_sidecar_impl(&path, CURRENT_NORMALIZE_VERSION + 1).unwrap();
+        let result = PersistentSemanticIndex::open(mem, &path, fresh_embedder());
+        assert!(result.is_err(), "磁盘版本比代码新应报错 (旧代码别读新库)");
+        let err = format!("{}", result.unwrap_err());
+        assert!(err.contains("normalize"), "错误信息应提 normalize: {err}");
+        cleanup(&path);
+        let _ = std::fs::remove_file(normalize_sidecar_path(&path));
     }
 
     #[test]
