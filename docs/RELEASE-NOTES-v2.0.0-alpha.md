@@ -10,6 +10,11 @@ Source-Trace: CHANGELOG.md + README.md §Features + docs/V2-INDEX.md + reports/v
 
 > ⚠️ **产物失传/重建标注 (2026-08-17, C3 盘点 + 任务 212699c1)**: 上述 Source-Trace 引用的 `docs/V2-INDEX.md`、`reports/v2-final-summary-2026-08-05.md`、`reports/v2-decision-brief-2026-08-05.md`、`reports/v2-risk-register-2026-08-05.md`、`docs/v2-strategy/07-V2-BASELINE` 及 §1.1/§1.7 引用的 `reports/d67aedf7-*`、`reports/v2-addendum-final-review.md`、`reports/8f689476-*`、`reports/V2-deploy-*`、`reports/v2-integration-status-live.md` **从未进入 git 历史**（C3 盘点经 abf12243 整合树与 integration 分支双重核验，见 backlog #35），引用保留为历史轨迹。其中 `docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md` 已于 2026-08-17 以**重建版**落地（重建版自带出处与丢失边界声明，非原文）。
 
+> 📐 **版本口径说明（双轴制, 2026-08-17 Leader 拍板, 台账 #26）**: 本项目并存两条版本轴，**不强改一方、不伪造统一**——代码是真相，文档解释差异：
+> - **产品版本轴**: `v2.0.0-alpha`（本文件）—— 面向发布/里程碑/用户叙事，用于 RELEASE-NOTES、release-plan、对外发布文档；下一发布为 v2.0.0-beta。
+> - **workspace crate 版本轴**: `1.2.0`（`Cargo.toml [workspace.package] version`）—— 面向 cargo 依赖解析/代码演进，semver 严守（B2 硬墙: workspace.version 0 改），用于 Cargo.toml、cargo 命令、crate 间依赖声明。
+> - **为何并存**: 产品节奏（alpha/beta 发布门）与代码演进节奏（minor/patch 依赖兼容）不同步；强制统一会造成一方伪造。见某处版本号与另一轴不符时，先按本节判断属哪一轴，而非视为错误。
+
 ---
 
 # Apeireth v2.0.0-alpha — Release Notes (2026-08-05)
