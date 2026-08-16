@@ -24,6 +24,7 @@ name = "本地智能包"
 feature = "local-intel"                 # apeireth-cli --features local-intel
 forward = "apeireth-memory/onnx"        # 真 cfg 门控: tract-onnx 本地嵌入
 status = "gated"                        # gated = 编译期可裁; declarative = 仅语义标记
+note = "54ed4c7d: apeireth-memory semantic feature (default) 门控向量检索路径 (SemanticIndex/semantic_persist/user_profile + 4 个向量方法); 关闭后纯件 EmbedFn/HashEmbedder/EmbedderIdentity/episode_uuid 仍可用, --no-default-features 可编译 (矩阵 case 5/7 验证)"
 
 [packs.gui]
 name = "GUI 包"

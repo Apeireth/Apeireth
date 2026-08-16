@@ -1,4 +1,6 @@
 //! R19 P2 战区 4: 端到端 semantic search + user profile 集成测试
+// 54ed4c7d: 向量路径集成测试, 挂 semantic feature (no-default 构建下整体跳过)
+#![cfg(feature = "semantic")]
 //!
 //! 演示: write episodes → semantic_search → extract_user_profile, 全程走 vec0 后端.
 //! 跑 `cargo test -p apeireth-memory --test semantic_pipeline_e2e --features semantic`

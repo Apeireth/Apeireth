@@ -16,15 +16,22 @@
 //!   session_note / streams / history_streams / continuity_link / llm_analysis)
 //! - 仅新建 semantic.rs + user_profile.rs + lib.rs re-export (1 行 `pub mod semantic;`)
 
+// 54ed4c7d: 向量路径 imports 挂 semantic feature (关闭时纯件 EmbedFn/HashEmbedder/EmbedderIdentity/episode_uuid 仍可用)
+#[cfg(feature = "semantic")]
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "semantic")]
 use apeireth_core::Episode;
+#[cfg(feature = "semantic")]
 use apeireth_vector::{SearchHit, Vector, VectorStore};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "semantic")]
 use crate::episode::EpisodeStore;
+#[cfg(feature = "semantic")]
 use crate::user_profile::UserProfile;
+#[cfg(feature = "semantic")]
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
 /// 命名空间 UUID (v5), 用于从 `Episode.id` (String) 派生稳定 `Uuid`.
@@ -209,6 +216,7 @@ impl EmbedFn for HashEmbedder {
 /// - 跟当前 embedder 的 identity 比对
 /// - mismatch → `MemoryError::Other("embedder identity mismatch: stored=X@Yd current=Z@Wd")`
 /// - 跟 unknown (legacy) 比对 → 写入当前 identity (per RFC 001 §3 warn-then-strict)
+#[cfg(feature = "semantic")]
 pub struct SemanticIndex<'m> {
     memory: &'m SqliteMemoryStore,
     vector: Mutex<Box<dyn VectorStore>>,
@@ -220,6 +228,7 @@ pub struct SemanticIndex<'m> {
     embedder_identity: EmbedderIdentity,
 }
 
+#[cfg(feature = "semantic")]
 impl<'m> SemanticIndex<'m> {
     /// 构造一个 SemanticIndex.
     ///
@@ -381,7 +390,7 @@ impl<'m> SemanticIndex<'m> {
 // Tests
 // =====================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "semantic"))]
 mod tests {
     use super::*;
     use apeireth_vector::SqliteVecBackend;
