@@ -29,13 +29,15 @@
 //! - 0 主动 push
 
 use crate::asi_modules::{
-    asi_stage1_module_count, asi_stage1_version, list_ceiling_critical_modules,
-    list_asi_stage1_modules_by_category, ASI_STAGE1_MODULE_COUNT, ASI_STAGE1_VERSION,
+    asi_stage1_module_count, asi_stage1_version, list_asi_stage1_modules_by_category,
+    list_ceiling_critical_modules, ASI_STAGE1_MODULE_COUNT, ASI_STAGE1_VERSION,
 };
 use crate::bridge::{is_module_available, python_is_available};
 use crate::bridge_pool::{BridgeModulePool, PoolConfig, PoolStats};
 use crate::python_ext_enabled;
-use crate::r11_compat::{r11_compat_version, r11_module_count, R11_COMPAT_VERSION, R11_MODULE_COUNT};
+use crate::r11_compat::{
+    r11_compat_version, r11_module_count, R11_COMPAT_VERSION, R11_MODULE_COUNT,
+};
 use crate::type_convert::{json_to_rust, rust_to_json};
 
 /// Stage 3 端到端 smoke 结构
@@ -203,7 +205,7 @@ pub fn stage3_cross_module_count() -> (usize, usize) {
     }
     // bridge_pool 子模块
     count += 1; // 池总是可构造
-    // asi_modules 子模块
+                // asi_modules 子模块
     if smoke.asi_module_count == ASI_STAGE1_MODULE_COUNT {
         count += 1;
     }
@@ -275,7 +277,10 @@ mod tests {
         // ceiling_critical 至少有 1 个 (V1458)
         let s = stage3_e2e_smoke();
         assert!(!s.ceiling_critical_modules.is_empty());
-        assert!(s.ceiling_critical_modules.iter().any(|n| n.contains("v1458")));
+        assert!(s
+            .ceiling_critical_modules
+            .iter()
+            .any(|n| n.contains("v1458")));
     }
 
     // 3. 7 类别都有模块 (每类至少 1 个)
@@ -347,7 +352,10 @@ mod tests {
     fn stage3_e2e_pool_config_defaults_locked() {
         let s = stage3_e2e_smoke();
         assert_eq!(s.pool_max_idle, 32, "max_idle default = 32 (Stage 1 严守)");
-        assert_eq!(s.pool_idle_timeout_secs, 90, "idle_timeout default = 90s (Stage 1 严守)");
+        assert_eq!(
+            s.pool_idle_timeout_secs, 90,
+            "idle_timeout default = 90s (Stage 1 严守)"
+        );
     }
 
     // 10. modules_in_scope 6 子模块清单
@@ -381,7 +389,9 @@ mod tests {
         // V1458 是 ceiling_critical
         assert!(V1458_INFO.is_ceiling_critical);
         // 6 其他模块非 ceiling_critical
-        for info in [V1077_INFO, V1400_INFO, V1447_INFO, V1457_INFO, V1467_INFO, V1470_INFO] {
+        for info in [
+            V1077_INFO, V1400_INFO, V1447_INFO, V1457_INFO, V1467_INFO, V1470_INFO,
+        ] {
             assert!(!info.is_ceiling_critical);
         }
     }

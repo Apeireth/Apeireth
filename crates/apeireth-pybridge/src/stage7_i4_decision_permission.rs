@@ -49,7 +49,8 @@ pub const STAGE7_I4_POLICY_COUNT: usize = DECISION_POLICY_COUNT;
 pub const STAGE7_I4_LAYER_COUNT: usize = PERMISSION_GOVERNANCE_LAYER_COUNT;
 
 /// I4 决策 × 权限 绑定数 (5 × 6 = 30, 编译期 hardcode)
-pub const STAGE7_I4_BINDING_COUNT: usize = DECISION_POLICY_COUNT * PERMISSION_GOVERNANCE_LAYER_COUNT;
+pub const STAGE7_I4_BINDING_COUNT: usize =
+    DECISION_POLICY_COUNT * PERMISSION_GOVERNANCE_LAYER_COUNT;
 
 // =============================================================================
 // DecisionPermissionBinding — 1 policy × 1 layer
@@ -246,11 +247,7 @@ impl DecisionPermissionCoordinator {
             .unwrap_or_else(|| "deny".to_string());
         let v7_intact = PERMISSION_GOVERNANCE_LAYER_COUNT == 6;
         self.report.events.push(DecisionPermissionAuditEvent::new(
-            timestamp,
-            policy,
-            layer,
-            &rule,
-            v7_intact,
+            timestamp, policy, layer, &rule, v7_intact,
         ));
         rule
     }
@@ -349,7 +346,11 @@ mod tests {
 
     #[test]
     fn i4_06_binding_fields() {
-        let b = DecisionPermissionBinding::new(DecisionPolicy::Aggressive, PermissionLayer::L6ProvenanceCheck, "allow");
+        let b = DecisionPermissionBinding::new(
+            DecisionPolicy::Aggressive,
+            PermissionLayer::L6ProvenanceCheck,
+            "allow",
+        );
         assert_eq!(b.policy, DecisionPolicy::Aggressive);
         assert_eq!(b.layer, PermissionLayer::L6ProvenanceCheck);
         assert_eq!(b.decision_rule, "allow");
@@ -359,7 +360,12 @@ mod tests {
     fn i4_07_coordinator_decide() {
         let mut c = DecisionPermissionCoordinator::new();
         let ctx = PermissionContext::safe_default();
-        let rule = c.decide(0, DecisionPolicy::Conservative, PermissionLayer::L1TypeCheck, &ctx);
+        let rule = c.decide(
+            0,
+            DecisionPolicy::Conservative,
+            PermissionLayer::L1TypeCheck,
+            &ctx,
+        );
         assert_eq!(rule, "deny");
         assert_eq!(c.report.event_count(), 1);
         assert_eq!(c.report.deny_count(), 1);
@@ -369,14 +375,25 @@ mod tests {
     fn i4_08_coordinator_balanced_allow() {
         let mut c = DecisionPermissionCoordinator::new();
         let ctx = PermissionContext::safe_default();
-        let rule = c.decide(0, DecisionPolicy::Balanced, PermissionLayer::L3RateCheck, &ctx);
+        let rule = c.decide(
+            0,
+            DecisionPolicy::Balanced,
+            PermissionLayer::L3RateCheck,
+            &ctx,
+        );
         assert_eq!(rule, "allow");
         assert_eq!(c.report.allow_count(), 1);
     }
 
     #[test]
     fn i4_09_audit_event_v7_intact() {
-        let e = DecisionPermissionAuditEvent::new(0, DecisionPolicy::Balanced, PermissionLayer::L1TypeCheck, "allow", true);
+        let e = DecisionPermissionAuditEvent::new(
+            0,
+            DecisionPolicy::Balanced,
+            PermissionLayer::L1TypeCheck,
+            "allow",
+            true,
+        );
         assert!(e.v7_baseline_intact);
     }
 

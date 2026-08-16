@@ -93,7 +93,13 @@ fn k3_security_guard_7_gate_isolation() {
         SecurityGate::G6Audit,
         SecurityGate::G7CrossLanguage,
     ] {
-        g.record(SecurityEvent::new(gate, SecurityEventKind::Pass, SecuritySeverity::Low, "x", "x"));
+        g.record(SecurityEvent::new(
+            gate,
+            SecurityEventKind::Pass,
+            SecuritySeverity::Low,
+            "x",
+            "x",
+        ));
     }
     for i in 0..7 {
         assert_eq!(g.gate_counts[i], 1);

@@ -5,12 +5,11 @@
 //! **目标**: 验证 G2 权限治理 (1:1 跟 B4 6 重 v7) 跟 K3 安全守护 (6+1 重门) 跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i6_healthy, stage7_i6_summary, stage7_i6_to_g2_consistency,
-    stage7_i6_to_k3_consistency, PermissionSecurityAuditEvent, PermissionSecurityBinding,
+    stage7_i6_healthy, stage7_i6_summary, stage7_i6_to_g2_consistency, stage7_i6_to_k3_consistency,
+    PermissionLayer, PermissionSecurityAuditEvent, PermissionSecurityBinding,
     PermissionSecurityCoordinator, PermissionSecurityMatrix, PermissionSecurityReport,
-    PermissionLayer, SecurityGate, SecurityVerdict, STAGE7_I6_BINDING_COUNT,
-    STAGE7_I6_DIMENSION_COUNT, STAGE7_I6_PERMISSION_LAYER_COUNT, STAGE7_I6_SECURITY_GATE_COUNT,
-    STAGE7_I6_VERSION,
+    SecurityGate, SecurityVerdict, STAGE7_I6_BINDING_COUNT, STAGE7_I6_DIMENSION_COUNT,
+    STAGE7_I6_PERMISSION_LAYER_COUNT, STAGE7_I6_SECURITY_GATE_COUNT, STAGE7_I6_VERSION,
 };
 
 // 1. I6 编译期常数
@@ -48,7 +47,9 @@ fn i6_04_g7_extension_count() {
 #[test]
 fn i6_05_l1_g1_v7_baseline() {
     let m = PermissionSecurityMatrix::default_matrix();
-    let b = m.get(PermissionLayer::L1TypeCheck, SecurityGate::G1Identity).unwrap();
+    let b = m
+        .get(PermissionLayer::L1TypeCheck, SecurityGate::G1Identity)
+        .unwrap();
     assert!(b.is_v7_baseline);
     assert!(!b.is_g7_extension);
 }
@@ -74,7 +75,9 @@ fn i6_06_g7_extension_binding() {
 #[test]
 fn i6_07_other_combination() {
     let m = PermissionSecurityMatrix::default_matrix();
-    let b = m.get(PermissionLayer::L3RateCheck, SecurityGate::G1Identity).unwrap();
+    let b = m
+        .get(PermissionLayer::L3RateCheck, SecurityGate::G1Identity)
+        .unwrap();
     assert!(!b.is_v7_baseline);
     assert!(!b.is_g7_extension);
 }
@@ -92,7 +95,11 @@ fn i6_08_coordinator_v7_allow() {
 #[test]
 fn i6_09_coordinator_g7_audit() {
     let mut c = PermissionSecurityCoordinator::new();
-    let v = c.check(0, PermissionLayer::L3RateCheck, SecurityGate::G7CrossLanguage);
+    let v = c.check(
+        0,
+        PermissionLayer::L3RateCheck,
+        SecurityGate::G7CrossLanguage,
+    );
     assert!(matches!(v, SecurityVerdict::Audit));
 }
 
@@ -172,10 +179,7 @@ fn i6_17_to_k3() {
 // 18. I6 Binding 字段
 #[test]
 fn i6_18_binding_fields() {
-    let b = PermissionSecurityBinding::new(
-        PermissionLayer::L1TypeCheck,
-        SecurityGate::G1Identity,
-    );
+    let b = PermissionSecurityBinding::new(PermissionLayer::L1TypeCheck, SecurityGate::G1Identity);
     assert_eq!(b.layer, PermissionLayer::L1TypeCheck);
     assert_eq!(b.gate, SecurityGate::G1Identity);
     assert!(b.is_v7_baseline);

@@ -379,11 +379,16 @@ mod tests {
     // 3. ErrorEvent 构造 + with_*
     #[test]
     fn k1_error_event_with_chain() {
-        let ev = ErrorEvent::new(ErrorKind::Bridge, ErrorSeverity::Error, "pybridge.call", "module not found")
-            .with_location("bridge.rs:42")
-            .with_recovery("use Rust fallback")
-            .with_cause("pyo3::PyImportError")
-            .with_timestamp(1_700_000_000);
+        let ev = ErrorEvent::new(
+            ErrorKind::Bridge,
+            ErrorSeverity::Error,
+            "pybridge.call",
+            "module not found",
+        )
+        .with_location("bridge.rs:42")
+        .with_recovery("use Rust fallback")
+        .with_cause("pyo3::PyImportError")
+        .with_timestamp(1_700_000_000);
         assert_eq!(ev.kind, ErrorKind::Bridge);
         assert_eq!(ev.severity, ErrorSeverity::Error);
         assert_eq!(ev.source, "pybridge.call");
@@ -397,9 +402,24 @@ mod tests {
     #[test]
     fn k1_error_guard_record_count() {
         let mut g = ErrorGuard::new(100);
-        g.record(ErrorEvent::new(ErrorKind::Bridge, ErrorSeverity::Error, "a", "b"));
-        g.record(ErrorEvent::new(ErrorKind::Bridge, ErrorSeverity::Warn, "a", "b"));
-        g.record(ErrorEvent::new(ErrorKind::Transport, ErrorSeverity::Critical, "a", "b"));
+        g.record(ErrorEvent::new(
+            ErrorKind::Bridge,
+            ErrorSeverity::Error,
+            "a",
+            "b",
+        ));
+        g.record(ErrorEvent::new(
+            ErrorKind::Bridge,
+            ErrorSeverity::Warn,
+            "a",
+            "b",
+        ));
+        g.record(ErrorEvent::new(
+            ErrorKind::Transport,
+            ErrorSeverity::Critical,
+            "a",
+            "b",
+        ));
         assert_eq!(g.events.len(), 3);
         assert_eq!(g.kind_counts[ErrorKind::Bridge.idx()], 2);
         assert_eq!(g.kind_counts[ErrorKind::Transport.idx()], 1);
@@ -495,12 +515,7 @@ mod tests {
     // 9. stage6_record_error 全局
     #[test]
     fn k1_stage6_record_error_global() {
-        let ev = stage6_record_error(
-            ErrorKind::Contract,
-            ErrorSeverity::Warn,
-            "test",
-            "global",
-        );
+        let ev = stage6_record_error(ErrorKind::Contract, ErrorSeverity::Warn, "test", "global");
         assert_eq!(ev.kind, ErrorKind::Contract);
         let s = stage6_error_summary();
         assert!(s.contains("K1 ErrorGuard"));

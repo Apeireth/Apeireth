@@ -107,12 +107,8 @@ mod tests {
 
     #[test]
     fn counts_within_window() {
-        let mut fw = FixedWindow::new(
-            Duration::from_secs(10),
-            3,
-            FixedWindowReset::OnWindowEnd,
-        )
-        .unwrap();
+        let mut fw =
+            FixedWindow::new(Duration::from_secs(10), 3, FixedWindowReset::OnWindowEnd).unwrap();
         assert!(fw.try_acquire());
         assert!(fw.try_acquire());
         assert!(fw.try_acquire());
@@ -121,12 +117,8 @@ mod tests {
 
     #[test]
     fn reset_clears_counter() {
-        let mut fw = FixedWindow::new(
-            Duration::from_secs(10),
-            2,
-            FixedWindowReset::OnDemand,
-        )
-        .unwrap();
+        let mut fw =
+            FixedWindow::new(Duration::from_secs(10), 2, FixedWindowReset::OnDemand).unwrap();
         assert!(fw.try_acquire());
         assert!(fw.try_acquire());
         assert!(!fw.try_acquire());
@@ -138,16 +130,12 @@ mod tests {
     fn boundary_spike_demonstrates_known_issue() {
         // 边界突刺: 窗口末尾 2 + 新窗口 2 = 4 (max=2, 实际通过 4)
         // 这是 fixed window 的已知缺陷 — 测试明确展示, 不掩盖
-        let mut fw = FixedWindow::new(
-            Duration::from_millis(50),
-            2,
-            FixedWindowReset::OnWindowEnd,
-        )
-        .unwrap();
+        let mut fw =
+            FixedWindow::new(Duration::from_millis(50), 2, FixedWindowReset::OnWindowEnd).unwrap();
         assert!(fw.try_acquire());
         assert!(fw.try_acquire());
         std::thread::sleep(Duration::from_millis(60)); // 窗口过期
-        // 新窗口开始
+                                                       // 新窗口开始
         assert!(fw.try_acquire());
         assert!(fw.try_acquire());
         // 实际通过了 4 个请求, 而 max=2
@@ -156,12 +144,8 @@ mod tests {
 
     #[test]
     fn on_demand_does_not_auto_rotate() {
-        let mut fw = FixedWindow::new(
-            Duration::from_millis(20),
-            1,
-            FixedWindowReset::OnDemand,
-        )
-        .unwrap();
+        let mut fw =
+            FixedWindow::new(Duration::from_millis(20), 1, FixedWindowReset::OnDemand).unwrap();
         assert!(fw.try_acquire());
         assert!(!fw.try_acquire());
         std::thread::sleep(Duration::from_millis(30));
@@ -173,12 +157,8 @@ mod tests {
 
     #[test]
     fn remaining_decreases() {
-        let mut fw = FixedWindow::new(
-            Duration::from_secs(10),
-            3,
-            FixedWindowReset::OnWindowEnd,
-        )
-        .unwrap();
+        let mut fw =
+            FixedWindow::new(Duration::from_secs(10), 3, FixedWindowReset::OnWindowEnd).unwrap();
         assert_eq!(fw.remaining(), 3);
         let _ = fw.try_acquire();
         assert_eq!(fw.remaining(), 2);

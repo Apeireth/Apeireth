@@ -245,22 +245,28 @@ mod tests {
         // "hello world" 在 cl100k_base 应 = 2 tokens
         use crate::tiktoken_counter::TokenModel;
         let n = count_tokens_precise("hello world", TokenModel::Cl100KBase);
-        assert_eq!(n, 2, "\"hello world\" 在 cl100k_base 应 = 2 tokens, got {n}");
+        assert_eq!(
+            n, 2,
+            "\"hello world\" 在 cl100k_base 应 = 2 tokens, got {n}"
+        );
     }
 
     #[test]
     fn count_tokens_precise_heuristic_fallback_consistent_with_r122_5() {
         // 验证 fallback 跟 R122-5 model_router.rs:417 的 chars/4 + 1 一致
         // 这是 R122-3-retry 的关键协调点: 我跟 R122-5 兄弟用同公式
-        let s = "hello world";  // 11 chars
+        let s = "hello world"; // 11 chars
         let n = count_tokens_precise(
             s,
-            crate::tiktoken_counter::TokenModel::Cl100KBase,  // 真路径优先 tiktoken
+            crate::tiktoken_counter::TokenModel::Cl100KBase, // 真路径优先 tiktoken
         );
         // 真值: 2 (cl100k_base "hello" + " world")
         // 跟 R122-5 公式一致: 11/4 + 1 = 3 (chars/4 + 1)
         // 真值 2 跟 fallback 3 都合理 (公式粗估, 0 装 VCP 完整启发式)
-        assert!(n == 2 || n == 3, "应 = 2 (tiktoken) 或 3 (fallback), got {n}");
+        assert!(
+            n == 2 || n == 3,
+            "应 = 2 (tiktoken) 或 3 (fallback), got {n}"
+        );
     }
 
     #[test]

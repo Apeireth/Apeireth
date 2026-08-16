@@ -47,39 +47,45 @@ pub fn decode_v05_class(line: &str) -> NamingResult<(Class, Level, DimensionSet)
     }
 
     // 2) regex 匹配 (宽松, 各段值用 parse 函数细化)
-    let re = regex::Regex::new(V05_LINE_REGEX)
-        .expect("V05_LINE_REGEX 编译期 hardcode, 必须合法");
-    let caps = re.captures(line).ok_or_else(|| {
-        NamingError::MalformedFormat(format!("regex 不匹配: {line}"))
-    })?;
+    let re = regex::Regex::new(V05_LINE_REGEX).expect("V05_LINE_REGEX 编译期 hardcode, 必须合法");
+    let caps = re
+        .captures(line)
+        .ok_or_else(|| NamingError::MalformedFormat(format!("regex 不匹配: {line}")))?;
 
     // 3) 解析 7 段 (level/class/domain/modality/safety/completeness/lineage)
-    let level_str = caps.get(1).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 level 段".to_string())
-    })?.as_str();
-    let class_str = caps.get(2).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 class 段".to_string())
-    })?.as_str();
-    let domain_str = caps.get(3).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 domain 段".to_string())
-    })?.as_str();
-    let modality_str = caps.get(4).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 modality 段".to_string())
-    })?.as_str();
-    let safety_str = caps.get(5).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 safety 段".to_string())
-    })?.as_str();
-    let completeness_str = caps.get(6).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 completeness 段".to_string())
-    })?.as_str();
-    let lineage_str = caps.get(7).ok_or_else(|| {
-        NamingError::MalformedFormat("缺 lineage 段".to_string())
-    })?.as_str();
+    let level_str = caps
+        .get(1)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 level 段".to_string()))?
+        .as_str();
+    let class_str = caps
+        .get(2)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 class 段".to_string()))?
+        .as_str();
+    let domain_str = caps
+        .get(3)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 domain 段".to_string()))?
+        .as_str();
+    let modality_str = caps
+        .get(4)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 modality 段".to_string()))?
+        .as_str();
+    let safety_str = caps
+        .get(5)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 safety 段".to_string()))?
+        .as_str();
+    let completeness_str = caps
+        .get(6)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 completeness 段".to_string()))?
+        .as_str();
+    let lineage_str = caps
+        .get(7)
+        .ok_or_else(|| NamingError::MalformedFormat("缺 lineage 段".to_string()))?
+        .as_str();
 
     // 4) 转 enum (失败的段返对应 NamingError, 不是 MalformedFormat)
-    let level_num: u8 = level_str.parse().map_err(|_| {
-        NamingError::InvalidLevel(level_str.to_string())
-    })?;
+    let level_num: u8 = level_str
+        .parse()
+        .map_err(|_| NamingError::InvalidLevel(level_str.to_string()))?;
     let level = Level::from_u8(level_num)?;
     let class = Class::parse(class_str)?;
     let domain = crate::dimension::Domain::parse(domain_str)?;
@@ -160,21 +166,11 @@ pub fn decode_v05(s: &str) -> NamingResult<V05Spec> {
     }
 
     // 4) 4 大类必须齐全
-    let pc_dim = pc_dim.ok_or_else(|| {
-        NamingError::MalformedFormat("缺 PC 行".to_string())
-    })?;
-    let rc_dim = rc_dim.ok_or_else(|| {
-        NamingError::MalformedFormat("缺 RC 行".to_string())
-    })?;
-    let hg_dim = hg_dim.ok_or_else(|| {
-        NamingError::MalformedFormat("缺 HG 行".to_string())
-    })?;
-    let gp_dim = gp_dim.ok_or_else(|| {
-        NamingError::MalformedFormat("缺 GP 行".to_string())
-    })?;
-    let level = common_level.ok_or_else(|| {
-        NamingError::MalformedFormat("缺 level".to_string())
-    })?;
+    let pc_dim = pc_dim.ok_or_else(|| NamingError::MalformedFormat("缺 PC 行".to_string()))?;
+    let rc_dim = rc_dim.ok_or_else(|| NamingError::MalformedFormat("缺 RC 行".to_string()))?;
+    let hg_dim = hg_dim.ok_or_else(|| NamingError::MalformedFormat("缺 HG 行".to_string()))?;
+    let gp_dim = gp_dim.ok_or_else(|| NamingError::MalformedFormat("缺 GP 行".to_string()))?;
+    let level = common_level.ok_or_else(|| NamingError::MalformedFormat("缺 level".to_string()))?;
 
     let dims = ClassDims::new(pc_dim, rc_dim, hg_dim, gp_dim);
     Ok(V05Spec::new(level, dims))
@@ -207,10 +203,22 @@ mod tests {
     #[test]
     fn decode_v05_class_all_four() {
         for (line, expected) in [
-            ("apeireth:5.PC.code.text.high.complete.apeireth-1.0", Class::Pc),
-            ("apeireth:5.RC.code.text.high.complete.apeireth-1.0", Class::Rc),
-            ("apeireth:5.HG.code.text.high.complete.apeireth-1.0", Class::Hg),
-            ("apeireth:5.GP.code.text.high.complete.apeireth-1.0", Class::Gp),
+            (
+                "apeireth:5.PC.code.text.high.complete.apeireth-1.0",
+                Class::Pc,
+            ),
+            (
+                "apeireth:5.RC.code.text.high.complete.apeireth-1.0",
+                Class::Rc,
+            ),
+            (
+                "apeireth:5.HG.code.text.high.complete.apeireth-1.0",
+                Class::Hg,
+            ),
+            (
+                "apeireth:5.GP.code.text.high.complete.apeireth-1.0",
+                Class::Gp,
+            ),
         ] {
             let (class, _, _) = decode_v05_class(line).unwrap();
             assert_eq!(class, expected);

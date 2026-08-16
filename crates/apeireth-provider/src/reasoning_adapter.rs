@@ -43,7 +43,14 @@ pub const REASONING_ALIASES: [&str; 12] = [
 ];
 
 /// 嵌套对象里视为文本内容的键 (VCP TEXT_VALUE_KEYS)。
-const TEXT_VALUE_KEYS: [&str; 6] = ["text", "content", "summary", "value", "reasoning", "thinking"];
+const TEXT_VALUE_KEYS: [&str; 6] = [
+    "text",
+    "content",
+    "summary",
+    "value",
+    "reasoning",
+    "thinking",
+];
 
 /// 标签归一化: "thinking" (不区分大小写) → `thinking`, 其余一律 `think`。
 pub fn normalize_tag(tag: &str) -> &'static str {
@@ -87,7 +94,9 @@ pub fn value_to_reasoning_text(value: &Value) -> String {
         Value::Object(map) => {
             let mut preferred = Vec::new();
             for (key, nested) in map {
-                if TEXT_VALUE_KEYS.contains(&key.as_str()) || REASONING_ALIASES.contains(&key.as_str()) {
+                if TEXT_VALUE_KEYS.contains(&key.as_str())
+                    || REASONING_ALIASES.contains(&key.as_str())
+                {
                     let text = value_to_reasoning_text(nested);
                     if !text.is_empty() {
                         preferred.push(text);
@@ -194,7 +203,11 @@ impl ReasoningAdapterConfig {
             .filter(|s| !s.is_empty())
             .collect();
         let tag = std::env::var("APEIRETH_REASONING_TAG").unwrap_or_else(|_| "think".into());
-        Self { enabled, model_filters, tag }
+        Self {
+            enabled,
+            model_filters,
+            tag,
+        }
     }
 
     /// 目标模型是否需要推理转换 (VCP shouldConvertReasoningForModel 1:1):
@@ -204,7 +217,9 @@ impl ReasoningAdapterConfig {
             return false;
         }
         let model = model_name.to_ascii_lowercase();
-        self.model_filters.iter().any(|f| model.contains(f.as_str()))
+        self.model_filters
+            .iter()
+            .any(|f| model.contains(f.as_str()))
     }
 }
 
@@ -233,7 +248,11 @@ pub fn build_client_visible_content(
     if reasoning_text.is_empty() {
         return visible;
     }
-    format!("{}{}", wrap_reasoning_text(&reasoning_text, &config.tag), visible)
+    format!(
+        "{}{}",
+        wrap_reasoning_text(&reasoning_text, &config.tag),
+        visible
+    )
 }
 
 /// 便捷入口: 归一化一个完整 Chat Completions JSON 响应体 (非流式)。
@@ -241,7 +260,11 @@ pub fn build_client_visible_content(
 /// 提取 `choices[].message` (+ `choices[].delta`) 的推理字段 → 首条 message 的
 /// 可见内容前置 think 块; 同时把 message/delta 里的别名字段剥离 (0 残留)。
 /// body 不是对象/无 choices → 原样返回 (0 改写)。
-pub fn normalize_chat_completion_body(body: &str, config: &ReasoningAdapterConfig, model_name: &str) -> String {
+pub fn normalize_chat_completion_body(
+    body: &str,
+    config: &ReasoningAdapterConfig,
+    model_name: &str,
+) -> String {
     let mut value: Value = match serde_json::from_str(body) {
         Ok(v) => v,
         Err(_) => return body.to_string(),
@@ -258,8 +281,9 @@ pub fn normalize_chat_completion_body(body: &str, config: &ReasoningAdapterConfi
                 if let Some(delta) = choice.get("delta") {
                     sources.push(delta);
                 }
-                first_visible =
-                    Some(build_client_visible_content(msg, config, model_name, &sources));
+                first_visible = Some(build_client_visible_content(
+                    msg, config, model_name, &sources,
+                ));
             }
         }
         if let Some(msg) = choice.get_mut("message") {
@@ -304,7 +328,11 @@ mod tests {
     fn each_alias_is_extracted() {
         for alias in REASONING_ALIASES {
             let source = json!({ alias: "deep thought" });
-            assert_eq!(extract_reasoning_text(&source), "deep thought", "alias {alias}");
+            assert_eq!(
+                extract_reasoning_text(&source),
+                "deep thought",
+                "alias {alias}"
+            );
         }
         assert_eq!(REASONING_ALIASES.len(), 12);
     }
@@ -367,8 +395,14 @@ mod tests {
 
     #[test]
     fn wrap_adds_newline_before_closing_tag() {
-        assert_eq!(wrap_reasoning_text("abc", "think"), "<think>\nabc\n</think>\n");
-        assert_eq!(wrap_reasoning_text("abc\n", "think"), "<think>\nabc\n</think>\n");
+        assert_eq!(
+            wrap_reasoning_text("abc", "think"),
+            "<think>\nabc\n</think>\n"
+        );
+        assert_eq!(
+            wrap_reasoning_text("abc\n", "think"),
+            "<think>\nabc\n</think>\n"
+        );
         assert_eq!(wrap_reasoning_text("", "think"), "");
     }
 
@@ -378,7 +412,10 @@ mod tests {
         assert_eq!(normalize_tag("THINKING"), "thinking");
         assert_eq!(normalize_tag("weird"), "think");
         assert_eq!(normalize_tag(""), "think");
-        assert_eq!(wrap_reasoning_text("x", "THINKING"), "<thinking>\nx\n</thinking>\n");
+        assert_eq!(
+            wrap_reasoning_text("x", "THINKING"),
+            "<thinking>\nx\n</thinking>\n"
+        );
     }
 
     // ---------- 出向剥离 ----------
@@ -435,14 +472,20 @@ mod tests {
     fn visible_content_untouched_for_unmatched_model() {
         let cfg = enabled_config(&["deepseek"]);
         let msg = json!({ "content": "plain", "reasoning_content": "hidden" });
-        assert_eq!(build_client_visible_content(&msg, &cfg, "gpt-x", &[]), "plain");
+        assert_eq!(
+            build_client_visible_content(&msg, &cfg, "gpt-x", &[]),
+            "plain"
+        );
     }
 
     #[test]
     fn visible_content_no_reasoning_keeps_content() {
         let cfg = enabled_config(&["kimi"]);
         let msg = json!({ "content": "no reasoning here" });
-        assert_eq!(build_client_visible_content(&msg, &cfg, "kimi-k2", &[]), "no reasoning here");
+        assert_eq!(
+            build_client_visible_content(&msg, &cfg, "kimi-k2", &[]),
+            "no reasoning here"
+        );
     }
 
     #[test]
@@ -490,7 +533,10 @@ mod tests {
     #[test]
     fn normalize_body_invalid_json_returns_original() {
         let cfg = enabled_config(&["kimi"]);
-        assert_eq!(normalize_chat_completion_body("not json", &cfg, "kimi"), "not json");
+        assert_eq!(
+            normalize_chat_completion_body("not json", &cfg, "kimi"),
+            "not json"
+        );
     }
 
     #[test]

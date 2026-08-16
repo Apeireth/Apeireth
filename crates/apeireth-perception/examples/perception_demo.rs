@@ -92,7 +92,8 @@ fn main() {
     let ch = TextChannel;
     let inputs: Vec<TextInput> = (0..6)
         .map(|i| {
-            TextInput::new(format!("msg-{}", i), SignalSource::Cli).with_priority(f64::from(i) / 6.0)
+            TextInput::new(format!("msg-{}", i), SignalSource::Cli)
+                .with_priority(f64::from(i) / 6.0)
         })
         .collect();
     let events = batch_process(&ch, inputs.clone());

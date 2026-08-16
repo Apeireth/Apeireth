@@ -5,7 +5,7 @@
 //! 演示 I6: 6 permission layer × 7 security gate (6 重 v7 + G7 跨语言) = 42 绑定
 
 use apeireth_pybridge::{
-    stage7_i6_healthy, stage7_i6_summary, PermissionSecurityCoordinator, PermissionLayer,
+    stage7_i6_healthy, stage7_i6_summary, PermissionLayer, PermissionSecurityCoordinator,
     SecurityGate, SecurityVerdict,
 };
 

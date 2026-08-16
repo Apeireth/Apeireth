@@ -58,17 +58,17 @@ pub mod force_translate;
 pub mod model_router; // R122-5: 借鉴 VCP SemanticModelRouter.json (R122-5-VCP-SemanticModelRouter-2026-08-10)
 pub mod placeholder;
 pub mod provider_registry; // R126-1: 借鉴 LiteLLM Provider Registry 模式 (R126-1-BORROW-BerriAI/litellm-3a8e2c1-2026-08-10, ⏳ 限流 = 准备)
-pub mod tiktoken_counter; // R122-3-retry: 借鉴 VCP finalContextStore.js (R122-3-retry-VCP-FinalContextStore-Tiktoken-2026-08-10)
 pub mod retry_suppression;
 pub mod role_divider; // R122-2-retry: 借鉴 VCP roleDivider.js (R122-2-retry-VCP-RoleDivider-2026-08-10)
 pub mod streaming;
+pub mod tiktoken_counter; // R122-3-retry: 借鉴 VCP finalContextStore.js (R122-3-retry-VCP-FinalContextStore-Tiktoken-2026-08-10)
 pub mod token_budget;
 pub mod tool_loop; // R32-2: 借鉴 LangGraph state machine + conditional edge
-// R177: pipeline invariants (10 tests + 2 Kani proofs)
-// R177: model_router invariants (10 tests + 2 Kani proofs)
+                   // R177: pipeline invariants (10 tests + 2 Kani proofs)
+                   // R177: model_router invariants (10 tests + 2 Kani proofs)
+pub mod g5_chat_bridge;
 mod model_router_kani;
-mod organ_kani_proofs;
-pub mod g5_chat_bridge; // R157: chat 5-step -> g5 5-stage substrate 集成 (第 2 个 g5 生产调用方)
+mod organ_kani_proofs; // R157: chat 5-step -> g5 5-stage substrate 集成 (第 2 个 g5 生产调用方)
 
 pub use force_translate::{
     force_translate_if_needed, is_text_only_model_by_tag, messages_contain_base64_media,
@@ -184,10 +184,7 @@ impl Pipeline {
 
     /// 自定义 config
     pub fn with_config(http: HttpClient, config: PipelineConfig) -> Result<Self, HttpClientError> {
-        Ok(Self {
-            http,
-            config,
-        })
+        Ok(Self { http, config })
     }
 
     /// 获取 HTTP client (测试用)
@@ -245,12 +242,15 @@ impl Pipeline {
             force_translate_if_needed(&req.model, &mut req.messages, &self.config.force_translate);
 
         // 步骤 4: 协议归一化 (R37-1: ProtocolBridge 砍 router 中间层)
-        let body: Value = encode_for_kind(kind, &req).map_err(|e| PipelineError::Protocol(e.to_string()))?;
+        let body: Value =
+            encode_for_kind(kind, &req).map_err(|e| PipelineError::Protocol(e.to_string()))?;
 
         // 步骤 5: HTTP 调用 (调战役 1-2 apeireth-http-client Keep-Alive LIFO)
         // 注: HttpClient::post() 不自动加 Bearer auth, 我们用 reqwest_client() 底层
         // + LIFO 池 permit 显式拿, 这样保留 Keep-Alive LIFO 调度的同时也能加 auth header
-        let endpoint = endpoint_path_for_kind(kind).ok_or_else(|| PipelineError::Protocol(format!("kind {kind:?} has no HTTP endpoint")))?;
+        let endpoint = endpoint_path_for_kind(kind).ok_or_else(|| {
+            PipelineError::Protocol(format!("kind {kind:?} has no HTTP endpoint"))
+        })?;
         let url = format!("{}{}", self.config.base_url, endpoint);
         let _guard = self.http.pool().enter().await;
         let mut req_builder = self.http.reqwest_client().post(&url).json(&body);
@@ -319,10 +319,13 @@ impl Pipeline {
             force_translate_if_needed(&req.model, &mut req.messages, &self.config.force_translate);
 
         // 步骤 4: 协议归一化 (R37-1: ProtocolBridge)
-        let body: Value = encode_for_kind(kind, &req).map_err(|e| PipelineError::Protocol(e.to_string()))?;
+        let body: Value =
+            encode_for_kind(kind, &req).map_err(|e| PipelineError::Protocol(e.to_string()))?;
 
         // 步骤 5: HTTP 调用 + 流式推 (simulate: 按 50 字符一块)
-        let endpoint = endpoint_path_for_kind(kind).ok_or_else(|| PipelineError::Protocol(format!("kind {kind:?} has no HTTP endpoint")))?;
+        let endpoint = endpoint_path_for_kind(kind).ok_or_else(|| {
+            PipelineError::Protocol(format!("kind {kind:?} has no HTTP endpoint"))
+        })?;
         let url = format!("{}{}", self.config.base_url, endpoint);
         let _ = sender.send(StreamChunk::Start);
 

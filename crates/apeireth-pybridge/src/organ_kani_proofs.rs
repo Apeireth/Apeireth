@@ -15,7 +15,7 @@ fn r177_pb_02_string_basic() {
 
 #[test]
 fn r177_pb_03_vec_basic() {
-    let v: Vec<u32> = vec![1,2,3];
+    let v: Vec<u32> = vec![1, 2, 3];
     assert_eq!(v.len(), 3);
 }
 

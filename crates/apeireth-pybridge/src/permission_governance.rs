@@ -302,9 +302,7 @@ impl PermissionReport {
     }
 
     /// 按 layer 统计 (layer -> count)
-    pub fn count_by_layer(
-        &self,
-    ) -> std::collections::HashMap<PermissionLayer, usize> {
+    pub fn count_by_layer(&self) -> std::collections::HashMap<PermissionLayer, usize> {
         let mut map = std::collections::HashMap::new();
         for e in &self.events {
             *map.entry(e.layer).or_insert(0) += 1;
@@ -324,11 +322,7 @@ impl std::fmt::Display for PermissionReport {
             self.audit_count()
         )?;
         for layer in PermissionLayer::ALL {
-            let count = self
-                .events
-                .iter()
-                .filter(|e| e.layer == layer)
-                .count();
+            let count = self.events.iter().filter(|e| e.layer == layer).count();
             if count > 0 {
                 writeln!(f, "  {}: {} events", layer.name(), count)?;
             }
@@ -379,12 +373,13 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Deny
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L1TypeCheck,
-            l1,
-            &context,
-            format!("module_id={} (must be 0..=6)", context.module_id),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L1TypeCheck,
+                l1,
+                &context,
+                format!("module_id={} (must be 0..=6)", context.module_id),
+            ));
 
         // L2 ScopeCheck — asi_stage ∈ [1, 4]
         let l2 = if (1..=PERMISSION_GOVERNANCE_STAGE_COUNT as u8).contains(&context.asi_stage) {
@@ -392,12 +387,13 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Deny
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L2ScopeCheck,
-            l2,
-            &context,
-            format!("asi_stage={} (must be 1..=4)", context.asi_stage),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L2ScopeCheck,
+                l2,
+                &context,
+                format!("asi_stage={} (must be 1..=4)", context.asi_stage),
+            ));
 
         // L3 RateCheck — resource_used ≤ 100 (跟 G1 资源守门 0..100 比例)
         let l3 = if context.resource_used <= 100 {
@@ -409,15 +405,16 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Deny
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L3RateCheck,
-            l3,
-            &context,
-            format!(
-                "resource_used={} (0..=100, 80+ = audit)",
-                context.resource_used
-            ),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L3RateCheck,
+                l3,
+                &context,
+                format!(
+                    "resource_used={} (0..=100, 80+ = audit)",
+                    context.resource_used
+                ),
+            ));
 
         // L4 GuardCheck — 6 重 v7 守门本身 (永远 Allow, 1:1 跟 B4 严守)
         let l4 = if self.stage4_strict && context.asi_stage == 4 {
@@ -430,15 +427,13 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Allow
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L4GuardCheck,
-            l4,
-            &context,
-            format!(
-                "6-fold v7 guard, stage4_strict={}",
-                self.stage4_strict
-            ),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L4GuardCheck,
+                l4,
+                &context,
+                format!("6-fold v7 guard, stage4_strict={}", self.stage4_strict),
+            ));
 
         // L5 AuditCheck — audit_required → AuditRequired
         let l5 = if context.audit_required {
@@ -446,12 +441,13 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Allow
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L5AuditCheck,
-            l5,
-            &context,
-            format!("audit_required={}", context.audit_required),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L5AuditCheck,
+                l5,
+                &context,
+                format!("audit_required={}", context.audit_required),
+            ));
 
         // L6 ProvenanceCheck — source_id ∈ [0, 10] (借鉴 ID 索引)
         let l6 = if context.source_id <= 10 {
@@ -459,12 +455,13 @@ impl PermissionEngine {
         } else {
             PermissionDecision::Deny
         };
-        self.report.record(PermissionDecisionEvent::from_context_ref(
-            PermissionLayer::L6ProvenanceCheck,
-            l6,
-            &context,
-            format!("source_id={} (must be 0..=10)", context.source_id),
-        ));
+        self.report
+            .record(PermissionDecisionEvent::from_context_ref(
+                PermissionLayer::L6ProvenanceCheck,
+                l6,
+                &context,
+                format!("source_id={} (must be 0..=10)", context.source_id),
+            ));
 
         // 6 重聚合: 任何 Deny → Deny, 任何 AuditRequired → AuditRequired, 否则 Allow
         let deny_count = self.report.deny_count();
@@ -700,7 +697,7 @@ mod tests {
         let mut e = PermissionEngine::new().with_stage4_strict();
         let ctx = PermissionContext {
             asi_stage: 4,
-            module_id: 4, // V1458
+            module_id: 4,          // V1458
             audit_required: false, // 没开 audit
             ..PermissionContext::safe_default()
         };
@@ -820,10 +817,7 @@ mod tests {
         assert_eq!(e.report.events[2].layer, PermissionLayer::L3RateCheck);
         assert_eq!(e.report.events[3].layer, PermissionLayer::L4GuardCheck);
         assert_eq!(e.report.events[4].layer, PermissionLayer::L5AuditCheck);
-        assert_eq!(
-            e.report.events[5].layer,
-            PermissionLayer::L6ProvenanceCheck
-        );
+        assert_eq!(e.report.events[5].layer, PermissionLayer::L6ProvenanceCheck);
     }
 
     #[test]

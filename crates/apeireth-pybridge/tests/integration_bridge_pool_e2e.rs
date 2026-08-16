@@ -47,8 +47,14 @@ use apeireth_pybridge::{
 fn stage2_e2e_pool_default_config_dual_build() {
     let pool = BridgeModulePool::new();
     let cfg = pool.config();
-    assert_eq!(cfg.max_idle, 32, "Stage 1 PoolConfig::default max_idle = 32");
-    assert_eq!(cfg.idle_timeout_secs, 90, "Stage 1 PoolConfig::default idle_timeout = 90s");
+    assert_eq!(
+        cfg.max_idle, 32,
+        "Stage 1 PoolConfig::default max_idle = 32"
+    );
+    assert_eq!(
+        cfg.idle_timeout_secs, 90,
+        "Stage 1 PoolConfig::default idle_timeout = 90s"
+    );
 }
 
 // 2. 池 stats 初始全 0 (cfg-无关, 默认 build + python-ext 都满足)
@@ -118,7 +124,10 @@ fn stage2_e2e_pool_with_stage2_smoke_check() {
     let pool = BridgeModulePool::default();
     assert_eq!(pool.stats().cached_modules, smoke.pool_stats.cached_modules);
     assert_eq!(pool.config().max_idle, smoke.pool_max_idle);
-    assert_eq!(pool.config().idle_timeout_secs, smoke.pool_idle_timeout_secs);
+    assert_eq!(
+        pool.config().idle_timeout_secs,
+        smoke.pool_idle_timeout_secs
+    );
     // r11 字段跨 build 一致
     assert_eq!(smoke.r11_module_count, 1103);
     assert!(smoke.r11_compat_version.contains("R14"));
@@ -161,9 +170,15 @@ fn stage2_e2e_pool_display_complete_fields() {
     // Stage 2 新加 BridgePoolSmoke Display 字段
     assert!(out.contains("r11"), "Display 含 r11: {out}");
     assert!(out.contains("pool"), "Display 含 pool: {out}");
-    assert!(out.contains("max_idle=32"), "Display 含 max_idle=32 (Stage 1 default): {out}");
+    assert!(
+        out.contains("max_idle=32"),
+        "Display 含 max_idle=32 (Stage 1 default): {out}"
+    );
     assert!(out.contains("cached="), "Display 含 cached= 字段: {out}");
-    assert!(out.contains("hit_rate="), "Display 含 hit_rate= 字段: {out}");
+    assert!(
+        out.contains("hit_rate="),
+        "Display 含 hit_rate= 字段: {out}"
+    );
 }
 
 // 11. 池 + python_ext 配置 (跨 build 一致, 借 python_ext_enabled + is_module_available)

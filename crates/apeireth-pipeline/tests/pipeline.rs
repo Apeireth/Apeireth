@@ -76,7 +76,10 @@ async fn pipeline_runs_openai_chat() {
 
     let p = make_pipeline_at(&server);
     let req = NormalizedRequest::new("gpt-4o".to_string(), vec![NormalizedMessage::user("hi")]);
-    let resp = p.run(ProtocolKind::OpenAiChat, req).await.expect("pipeline run");
+    let resp = p
+        .run(ProtocolKind::OpenAiChat, req)
+        .await
+        .expect("pipeline run");
     assert_eq!(resp.content, "Mock response");
 }
 
@@ -102,7 +105,10 @@ async fn pipeline_runs_anthropic() {
         vec![NormalizedMessage::user("hi")],
     );
     req.max_tokens = Some(1024);
-    let resp = p.run(ProtocolKind::AnthropicMessages, req).await.expect("pipeline run anthropic");
+    let resp = p
+        .run(ProtocolKind::AnthropicMessages, req)
+        .await
+        .expect("pipeline run anthropic");
     assert_eq!(resp.content, "Anthropic mock");
 }
 
@@ -127,8 +133,14 @@ async fn pipeline_runs_gemini() {
         .await;
 
     let p = make_pipeline_at(&server);
-    let req = NormalizedRequest::new("gemini-1.5-pro".to_string(), vec![NormalizedMessage::user("hi")]);
-    let resp = p.run(ProtocolKind::Gemini, req).await.expect("pipeline run gemini");
+    let req = NormalizedRequest::new(
+        "gemini-1.5-pro".to_string(),
+        vec![NormalizedMessage::user("hi")],
+    );
+    let resp = p
+        .run(ProtocolKind::Gemini, req)
+        .await
+        .expect("pipeline run gemini");
     assert_eq!(resp.content, "Gemini mock");
 }
 
@@ -184,7 +196,10 @@ fn pipeline_truncate_to_max_long_input_truncated() {
     // 应 ≤ 100 chars (truncate_to_max 承诺)
     assert!(char_count <= 100, "应 ≤ 100 chars, got {char_count}");
     // 应有 marker 提示
-    assert!(out.contains("truncated") || out.contains("…"), "应含截断 marker: {out}");
+    assert!(
+        out.contains("truncated") || out.contains("…"),
+        "应含截断 marker: {out}"
+    );
 }
 
 #[test]
@@ -274,7 +289,9 @@ fn pipeline_force_translate_messages_contain_base64() {
 #[test]
 fn pipeline_retry_suppression_first_call_not_suppressed() {
     use apeireth_pipeline::{RetrySuppression, DEFAULT_SUPPRESSION_WINDOW_MS};
-    let s = RetrySuppression::new(std::time::Duration::from_millis(DEFAULT_SUPPRESSION_WINDOW_MS));
+    let s = RetrySuppression::new(std::time::Duration::from_millis(
+        DEFAULT_SUPPRESSION_WINDOW_MS,
+    ));
     // 首次调用应不被抑制
     assert!(!s.should_suppress("key1"));
     assert!(!s.should_suppress("key2"));

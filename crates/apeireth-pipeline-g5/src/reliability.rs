@@ -132,8 +132,7 @@ impl DefaultReliability {
 
     /// 获取当前失败计数.
     pub fn failure_count(&self) -> u32 {
-        self.failure_count
-            .load(std::sync::atomic::Ordering::SeqCst)
+        self.failure_count.load(std::sync::atomic::Ordering::SeqCst)
     }
 
     /// 编译期守门: RETRY_BACKOFF_MS.len() == 4.

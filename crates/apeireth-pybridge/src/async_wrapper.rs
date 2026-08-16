@@ -13,12 +13,14 @@
 //! - 3 不可变脊柱 0 触碰
 
 #![allow(missing_docs)] // R220 additive
-#![cfg(feature = "python-ext")]  // 仅在启用 python-ext 时编译
+#![cfg(feature = "python-ext")] // 仅在启用 python-ext 时编译
 
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::bridge::{call_python_function, call_python_function_kw, eval_python_expression, BridgeError};
+use crate::bridge::{
+    call_python_function, call_python_function_kw, eval_python_expression, BridgeError,
+};
 
 // ============================================================================
 // Async wrapper (tokio::spawn_blocking)
@@ -42,9 +44,11 @@ pub async fn call_python_kw_async(
     args: Vec<String>,
     kwargs: HashMap<String, String>,
 ) -> Result<String, BridgeError> {
-    tokio::task::spawn_blocking(move || call_python_function_kw(&module_name, &func_name, &args, &kwargs))
-        .await
-        .map_err(|e| BridgeError::Internal(format!("spawn_blocking join error: {e}")))?
+    tokio::task::spawn_blocking(move || {
+        call_python_function_kw(&module_name, &func_name, &args, &kwargs)
+    })
+    .await
+    .map_err(|e| BridgeError::Internal(format!("spawn_blocking join error: {e}")))?
 }
 
 /// 异步 eval Python 表达式.
@@ -61,12 +65,7 @@ pub async fn call_python_async_timeout(
     args: Vec<String>,
     timeout: Duration,
 ) -> Result<String, BridgeError> {
-    match tokio::time::timeout(
-        timeout,
-        call_python_async(module_name, func_name, args),
-    )
-    .await
-    {
+    match tokio::time::timeout(timeout, call_python_async(module_name, func_name, args)).await {
         Ok(r) => r,
         Err(_) => Err(BridgeError::Internal(format!(
             "Python call timed out after {}s",
@@ -140,8 +139,16 @@ mod tests {
     #[tokio::test]
     async fn t05_batch_returns_vec() {
         let calls = vec![
-            ("builtins".to_string(), "len".to_string(), vec!["hello".to_string()]),
-            ("builtins".to_string(), "str".to_string(), vec!["42".to_string()]),
+            (
+                "builtins".to_string(),
+                "len".to_string(),
+                vec!["hello".to_string()],
+            ),
+            (
+                "builtins".to_string(),
+                "str".to_string(),
+                vec!["42".to_string()],
+            ),
         ];
         let results = call_python_batch_async(calls).await;
         assert_eq!(results.len(), 2);
@@ -183,6 +190,6 @@ mod tests {
         let elapsed = start.elapsed();
         // 不应超过 timeout 太多
         assert!(elapsed < Duration::from_millis(500));
-        let _ = r;  // 不关心结果
+        let _ = r; // 不关心结果
     }
 }

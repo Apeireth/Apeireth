@@ -22,7 +22,7 @@ use apeireth_consciousness::plutchik::{
     PlutchikAdvanced, PlutchikBasic, PlutchikEmotion, PlutchikIntensity,
 };
 
-use crate::{DriveKind, InternalDrive, SGIEntry, SGIContent, SGIStructured};
+use crate::{DriveKind, InternalDrive, SGIContent, SGIEntry, SGIStructured};
 
 // ============================================
 // 1. 翻译结果 — MotivationAdjustment
@@ -176,10 +176,9 @@ fn should_trigger(e: &PlutchikEmotion) -> Option<&'static str> {
         {
             Some("anger-strong-or-above")
         }
-        PlutchikEmotion::Advanced(
-            PlutchikAdvanced::Aggressiveness,
-            PlutchikIntensity::Extreme,
-        ) => Some("aggressiveness-extreme"),
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme) => {
+            Some("aggressiveness-extreme")
+        }
         _ => None,
     }
 }
@@ -268,10 +267,7 @@ pub fn plutchik_to_motivation_adjustment(e: &PlutchikEmotion) -> MotivationAdjus
 ///
 /// 入口语义: 计算 delta, 校验后累加 (钳位 [0, 1]).
 /// 不修改 `label` —— 桥 3 只调整强度, 不动身份.
-pub fn apply_plutchik_to_internal_drive(
-    drive: &mut InternalDrive,
-    e: &PlutchikEmotion,
-) -> f64 {
+pub fn apply_plutchik_to_internal_drive(drive: &mut InternalDrive, e: &PlutchikEmotion) -> f64 {
     let adj = plutchik_to_motivation_adjustment(e);
     let new_intensity = (drive.intensity + adj.internal_drive_delta).clamp(0.0, 1.0);
     drive.intensity = new_intensity;
@@ -407,10 +403,8 @@ mod tests {
     // t07: advanced aggressiveness extreme -> should_trigger_reflection
     #[test]
     fn t07_advanced_aggressiveness_extreme_triggers_reflection() {
-        let e = PlutchikEmotion::advanced(
-            PlutchikAdvanced::Aggressiveness,
-            PlutchikIntensity::Extreme,
-        );
+        let e =
+            PlutchikEmotion::advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme);
         let adj = plutchik_to_motivation_adjustment(&e);
         assert!(adj.should_trigger_reflection);
         assert!(adj.internal_drive_delta < 0.0);
@@ -461,7 +455,9 @@ mod tests {
     fn t11_sgi_suggestion_for_anticipation_emits_entry() {
         let e = PlutchikEmotion::basic(PlutchikBasic::Anticipation, PlutchikIntensity::Strong);
         let adj = plutchik_to_motivation_adjustment(&e);
-        let sgi = adj.sgi_suggestion.expect("anticipation strong should suggest SGI");
+        let sgi = adj
+            .sgi_suggestion
+            .expect("anticipation strong should suggest SGI");
         assert!(sgi.goal.starts_with("explore-"));
         let entry = sgi_entry_from_suggestion(&sgi);
         assert_eq!(entry.drive_kind, DriveKind::Internal);
@@ -473,6 +469,9 @@ mod tests {
     fn t12_weak_emotion_no_sgi_suggestion() {
         let e = PlutchikEmotion::basic(PlutchikBasic::Anticipation, PlutchikIntensity::Mild);
         let adj = plutchik_to_motivation_adjustment(&e);
-        assert!(adj.sgi_suggestion.is_none(), "mild anticipation should not trigger SGI");
+        assert!(
+            adj.sgi_suggestion.is_none(),
+            "mild anticipation should not trigger SGI"
+        );
     }
 }

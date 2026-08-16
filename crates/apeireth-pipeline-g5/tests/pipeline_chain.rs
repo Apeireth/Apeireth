@@ -55,17 +55,33 @@ fn test_5_stage_chain_success() {
     // 跑链
     let input = PipelineMessage::new("chat", "  Hello World  ");
     let result = pipeline.run(input);
-    assert!(result.is_ok(), "5-stage chain should succeed: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "5-stage chain should succeed: {:?}",
+        result.err()
+    );
 
     let output = result.unwrap();
     // Dispatch 加 "[chat] " 前缀
-    assert!(output.payload.starts_with("[chat] "), "payload should start with [chat], got: {:?}", output.payload);
+    assert!(
+        output.payload.starts_with("[chat] "),
+        "payload should start with [chat], got: {:?}",
+        output.payload
+    );
     // Normalize trim + lowercase
-    assert!(output.payload.contains("hello world"), "payload should be normalized: {:?}", output.payload);
+    assert!(
+        output.payload.contains("hello world"),
+        "payload should be normalized: {:?}",
+        output.payload
+    );
     // Reliability attempt +1
     assert_eq!(output.attempt, 1, "attempt should be 1 after Reliability");
     // Reliability 加 trace_id 前缀 "sandbox-" (R21 续补, per 整合 #3 决策 F-3 sandbox 真接 schema)
-    assert!(output.trace_id.starts_with("sandbox-"), "trace_id should start with sandbox-, got: {:?}", output.trace_id);
+    assert!(
+        output.trace_id.starts_with("sandbox-"),
+        "trace_id should start with sandbox-, got: {:?}",
+        output.trace_id
+    );
 }
 
 // ============================================================================
@@ -151,12 +167,13 @@ fn test_invalid_stage_order() {
 fn test_policy_denied() {
     // 4 阶段链 (关闭 strict_order 因为顺序是 [Dispatch, Normalize, Policy, Throttle], 不严格)
     // 用 Dispatch whitelist_disabled 让 "phishing" 通过
-    let pipeline: Pipeline<ChatPipeline, PipelineMessage, PipelineMessage> =
-        Pipeline::new(PipelineConfig::new("policy-test", "ChatPipeline").with_strict_order_disabled())
-            .with_stage(DefaultDispatch::new().with_whitelist_disabled())
-            .with_stage(DefaultNormalize::new())
-            .with_stage(DefaultPolicy::new())
-            .with_stage(DefaultThrottle::new());
+    let pipeline: Pipeline<ChatPipeline, PipelineMessage, PipelineMessage> = Pipeline::new(
+        PipelineConfig::new("policy-test", "ChatPipeline").with_strict_order_disabled(),
+    )
+    .with_stage(DefaultDispatch::new().with_whitelist_disabled())
+    .with_stage(DefaultNormalize::new())
+    .with_stage(DefaultPolicy::new())
+    .with_stage(DefaultThrottle::new());
 
     let input = PipelineMessage::new("phishing", "phishing attempt");
     let result = pipeline.run(input);
@@ -176,10 +193,11 @@ fn test_throttle_limit() {
     // 单跑 Dispatch + Throttle (2 阶段, 关闭 strict_order)
     // Throttle 检查顺序: max-concurrent (50) → qps-cap (100) → burst (200)
     // MAX_CONCURRENT=50 是最先触发, 跑 60 次期望 50 成功 + 10 限流
-    let pipeline: Pipeline<ChatPipeline, PipelineMessage, PipelineMessage> =
-        Pipeline::new(PipelineConfig::new("throttle-test", "ChatPipeline").with_strict_order_disabled())
-            .with_stage(DefaultDispatch::new().with_whitelist_disabled())
-            .with_stage(DefaultThrottle::new());
+    let pipeline: Pipeline<ChatPipeline, PipelineMessage, PipelineMessage> = Pipeline::new(
+        PipelineConfig::new("throttle-test", "ChatPipeline").with_strict_order_disabled(),
+    )
+    .with_stage(DefaultDispatch::new().with_whitelist_disabled())
+    .with_stage(DefaultThrottle::new());
 
     // 跑 MAX_CONCURRENT + 10 次 (默认 MAX_CONCURRENT = 50, 跑 60 次)
     let mut successes = 0;
@@ -193,9 +211,18 @@ fn test_throttle_limit() {
         }
     }
     // 至少有 1 个被限流 (因为 60 > MAX_CONCURRENT=50)
-    assert!(throttled > 0, "expected at least 1 throttled, got successes={} throttled={}", successes, throttled);
+    assert!(
+        throttled > 0,
+        "expected at least 1 throttled, got successes={} throttled={}",
+        successes,
+        throttled
+    );
     // successes 应该等于 MAX_CONCURRENT
-    assert_eq!(successes, MAX_CONCURRENT, "expected exactly MAX_CONCURRENT successes, got {}", successes);
+    assert_eq!(
+        successes, MAX_CONCURRENT,
+        "expected exactly MAX_CONCURRENT successes, got {}",
+        successes
+    );
 }
 
 // ============================================================================
@@ -272,7 +299,11 @@ fn test_run_with_trace() {
     let input = PipelineMessage::new("exploit", "exploit attempt");
     let (result, trace) = pipeline.run_with_trace(input);
     assert!(result.is_err());
-    assert_eq!(trace.failed_at, Some(2), "Policy 是第 3 个 stage (idx=2), 应该在这失败");
+    assert_eq!(
+        trace.failed_at,
+        Some(2),
+        "Policy 是第 3 个 stage (idx=2), 应该在这失败"
+    );
 }
 
 // ============================================================================

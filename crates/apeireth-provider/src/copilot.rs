@@ -5,7 +5,8 @@
 //! **R20 阶段 4 历史**: 1:1 翻译 @github/copilot-sdk 0.9.21 (8 工具 + 3 ModelKind + OAuth).
 //! R35 阶段 1: 只 Provider struct stub. R21+ 真接 SDK.
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![allow(dead_code)]
 
 /// R35: CopilotProvider struct (R20 阶段 4 1:1 字段名)
@@ -22,7 +23,14 @@ impl CopilotProvider {
         Self {
             name: "copilot",
             tools: vec![
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+                "Read",
+                "Write",
+                "Edit",
+                "Bash",
+                "Glob",
+                "Grep",
+                "WebSearch",
+                "WebFetch",
             ],
             model_kinds: vec!["gpt-4o", "gpt-4o-mini", "claude-3.5-sonnet"],
             oauth_required: true,

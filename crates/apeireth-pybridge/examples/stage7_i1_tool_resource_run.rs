@@ -5,8 +5,8 @@
 //! 演示 I1: 5 default tool × 4 resource dim = 20 绑定 + check_and_call 三种动作 (Allow/Reject/Throttle)
 
 use apeireth_pybridge::{
-    stage7_i1_healthy, stage7_i1_summary, ToolResourceCoordinator, GovernanceAction,
-    ResourceDimension,
+    stage7_i1_healthy, stage7_i1_summary, GovernanceAction, ResourceDimension,
+    ToolResourceCoordinator,
 };
 
 fn main() {
