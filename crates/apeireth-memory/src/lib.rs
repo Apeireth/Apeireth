@@ -32,8 +32,11 @@ mod episode;
 mod identity;
 mod migrations;
 // R19 P2 战区 4: 公开 semantic + user_profile 模块 (bench 依赖)
+// 54ed4c7d: semantic 模块内部分割 — 纯件 (EmbedFn/HashEmbedder/EmbedderIdentity/episode_uuid) 无条件,
+// 向量路径 (SemanticIndex 等) 挂 semantic feature; semantic_persist/user_profile 整模块挂门控.
 pub mod semantic;
 // R19 P2 战区 4 续 (A-3): 公开 semantic_persist 模块 (跨 daemon 持久化路径)
+#[cfg(feature = "semantic")]
 pub mod semantic_persist;
 // P2#12: 本地 ONNX embedding (feature onnx; 关闭时诚实 Err + hash 降级)
 pub mod onnx;
@@ -45,6 +48,7 @@ mod session_note;
 mod streams;
 mod three_layer;  // R30 U9: claude-mem 3 层 facade
 // R19 P2 战区 4: 公开 user_profile 模块 (bench 后续可依赖)
+#[cfg(feature = "semantic")]
 pub mod user_profile;
 
 pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
@@ -59,8 +63,12 @@ pub use llm_analysis::{analyze_episode, AnalysisKind, AnalysisResult};
 pub use migrations::{run_migrations, Migration as SchemaMigration, MIGRATIONS};
 // R19 P2 战区 4: 公开 EmbedFn / SemanticIndex / UserProfile / ProfileExtractor
 // (semantic + user_profile 模块是新文件, 0 触碰 LOCKED 9 文件)
-pub use semantic::{EmbedFn, HashEmbedder, SemanticIndex, episode_uuid};
+// 54ed4c7d: 纯件无条件导出; SemanticIndex/PersistentSemanticIndex/user_profile 挂 semantic feature
+pub use semantic::{EmbedFn, HashEmbedder, episode_uuid};
+#[cfg(feature = "semantic")]
+pub use semantic::SemanticIndex;
 // R19 P2 战区 4 续 (A-3): 公开 PersistentSemanticIndex (跨 daemon 长程索引)
+#[cfg(feature = "semantic")]
 pub use semantic_persist::PersistentSemanticIndex;
 pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
 pub use streams::{
@@ -68,6 +76,7 @@ pub use streams::{
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
 };
 pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY};  // R30 U9
+#[cfg(feature = "semantic")]
 pub use user_profile::{ProfileEmbedder, ProfileExtractor, UserProfile};
 
 /// 重新导出 `apeireth_core::Episode` 方便下游不必记多个导入路径.
@@ -288,6 +297,7 @@ impl SqliteMemoryStore {
     /// 4. 反查 episode 返回
     ///
     /// 返回 episodes 按相似度降序, 长度 <= k.
+    #[cfg(feature = "semantic")]
     pub fn semantic_search(
         &self,
         query: &str,
@@ -326,6 +336,7 @@ impl SqliteMemoryStore {
     ///
     /// 跟 `semantic_search` 一样, 一次性 in-memory index.
     /// 高频场景请自己持 `SemanticIndex` 复用.
+    #[cfg(feature = "semantic")]
     pub fn extract_user_profile(
         &self,
         embedder: Arc<dyn EmbedFn>,
@@ -354,6 +365,7 @@ impl SqliteMemoryStore {
     /// - `as_semantic_index(&mem)` 桥接 A 一次性 API 借用视图
     ///
     /// 用法: daemon 启动时 `open`, 运行时复用, daemon 关闭时 `save` (no-op).
+    #[cfg(feature = "semantic")]
     pub fn open_persistent_semantic_index(
         self: &Arc<Self>,
         vector_path: impl AsRef<std::path::Path>,
@@ -376,6 +388,7 @@ impl SqliteMemoryStore {
     ///
     /// 跟 A 一次性 `semantic_search` 区别: 复用 path-based vec0 db, 跨 daemon
     /// 重启数据不丢. 首次调用会建立空 index; 后续调用累积.
+    #[cfg(feature = "semantic")]
     pub fn semantic_search_persistent(
         self: &Arc<Self>,
         query: &str,

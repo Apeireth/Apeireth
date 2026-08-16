@@ -13,8 +13,9 @@ $cases = @(
     @{ Name = "2-pack-local-intel (档2 本地智能包)"; Args = @("check", "-p", "apeireth-cli", "--no-default-features", "--features", "base,local-intel"); Expect = "pass" },
     @{ Name = "3-pack-gui (档2 GUI包)"; Args = @("check", "-p", "apeireth-cli", "--no-default-features", "--features", "base,gui"); Expect = "pass" },
     @{ Name = "4-all-packs-suites (三档全开)"; Args = @("check", "-p", "apeireth-cli", "--all-features"); Expect = "pass" },
-    @{ Name = "5-memory-no-default (已知欠账: semantic 模块未 cfg 门控, 预期 fail)"; Args = @("check", "-p", "apeireth-memory", "--no-default-features"); Expect = "known-debt" },
-    @{ Name = "6-memory-onnx (本地智能包 crate 级)"; Args = @("check", "-p", "apeireth-memory", "--features", "onnx"); Expect = "pass" }
+    @{ Name = "5-memory-no-default (54ed4c7d: semantic cfg 门控后转 PASS)"; Args = @("check", "-p", "apeireth-memory", "--no-default-features"); Expect = "pass" },
+    @{ Name = "6-memory-onnx (本地智能包 crate 级)"; Args = @("check", "-p", "apeireth-memory", "--features", "onnx"); Expect = "pass" },
+    @{ Name = "7-memory-no-default-with-tests (测试代码 cfg 门控校验)"; Args = @("check", "-p", "apeireth-memory", "--no-default-features", "--tests"); Expect = "pass" }
 )
 
 $summary = @()
