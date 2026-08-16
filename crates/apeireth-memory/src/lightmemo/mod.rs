@@ -42,6 +42,7 @@ pub mod adapter;
 pub mod mcp;
 pub mod compat;
 pub mod enhanced;
+pub mod dual_track; // A1/P2#8: 双轨语义决策 (episodes=事实源, L1-L4=索引补充)
 
 pub use l1_file::{L1FileStore, FileEntry as L1Entry};
 pub use l2_vector::{L2VectorStore, VectorEntry};
@@ -60,6 +61,7 @@ pub use adapter::{AdapterRegistry, MemoryAdapter, MemorySource, SourceKind, Conv
 pub use mcp::{LightMemoMcp, LightMemoTool};
 pub use compat::{LightMemoCommand, LightMemoCompatRouter, LIGHTMEMO_COMMAND_COUNT};
 pub use enhanced::EnhancedLightMemo;
+pub use dual_track::{dual_track_merge, DualTrackHit, HitSource};
 
 /// R142 deliverables (per v2 plan §9.5):
 /// - 11 modules (L1/L2/L3/L4 + manager + decay + dream + search/pipe + mcp + compat + enhanced)
