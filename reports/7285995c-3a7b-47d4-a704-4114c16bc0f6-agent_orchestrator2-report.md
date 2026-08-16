@@ -3,7 +3,7 @@
 - **任务 ID**: 7285995c-3a7b-47d4-a704-4114c16bc0f6
 - **角色**: agent_orchestrator2
 - **状态**: 已完成
-- **提交**: <hash 待回填>
+- **提交**: d8012625 (代码+文档+本报告)
 
 ## 1. 交付物
 
@@ -37,4 +37,12 @@
 
 ## 5. 测试结果
 
-<待回填>
+**验收路径如实登记**:
+- **独立验证 (scratch crate) 5/5 全绿**: 工作区被多人并行重构阻塞期间 (onering/daemon/suites/session_log/assemble-diary 多线在途, lib 反复红), 将 reflexion.rs 原样复制至仓库外隔离 crate (同依赖 serde/serde_json/thiserror) 运行 `cargo test`: record_failure_registers_three_kinds_and_persists / critic_step_generates_structured_reflections_once / retry_injection_prefers_exact_and_truncates_by_budget / empty_store_all_paths_honest_empty / deterministic_same_input_same_output 全部通过。
+- 模块在每次全 crate 编译中均 0 自身错误 (历次编译错误全部来自他人 WIP 文件)。
+- 全 crate lib 测试门运行期间持续被他人 WIP 阻塞 (如实列举): prompt_assembler total_budget_chars 私有字段 (已代补 getter 解锁, 后被 reset 冲掉又恢复) / onering subject() 重构中 / suites.rs sandbox 字段缺失 / session_log verify_events 重构中 / assemble.rs diary 字段接线中。lib 转绿后 QA 复跑可复核 (本模块代码此后零改动)。
+
+## 6. churn 事件记录 (供 Leader 复盘)
+
+- 本轮 lib.rs 注册行被并行操作两次冲掉 (恢复两次); context.rs getter 一次冲掉 (恢复); maintenance-guide 模块地图行一次冲掉 (恢复); 一次 worktree 级 reset 将全部未提交 tracked 文件改动清空 (仅 untracked reflexion.rs 幸存) —— 故采取"恢复即提交"策略, 最终 d8012625 一次性入库。
+- 边界外透明介入 1 处: context.rs 总预算只读 getter (带署名注释), 为解锁 prompt_assembler (N9 主人 WIP) 编译; 仅加法, 无行为改动。
