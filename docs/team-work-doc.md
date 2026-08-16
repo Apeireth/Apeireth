@@ -213,9 +213,36 @@
 - 模块：memo_sensing / memo_pipeline / memo_dtsc / memo_artifact_builder / rivermemo_topology_v3
 - 详情待 subagent 报告补充
 
-### 8.2 深挖报告（待补充）
+### 8.2 深挖报告一：Rust 记忆层（rust-vexus-lite, RiverMemo Topology V3）
 
-- [ ] Rust 记忆层机制详表（sensing/pipeline/DTSC/topology v3 数据流）
+> 来源: subagent 深挖（6 个 Rust 文件 ~11,300 行）。VCP 把整条"Tag 记忆查询链路"下沉 Rust N-API：SQLite 事实层 → 图资产编译器 → MemoRuntime（Arc 快照 + 观测缓存）→ 查询管线（EPA→金字塔→门控→Spike→融合→双场）。
+
+**核心机制**：
+| 机制 | 是什么 | 行号 |
+|---|---|---|
+| 带权有向传输图 | 同文件 tag 两两建边，前向 1.0 / 反向 0.42（阅读方向性），位置权重靠前优先，hub 惩罚压热门节点，虫洞边（锚增益达标升级，传播×1.35 不衰减） | memo_artifact_builder.rs:242-441 |
+| 内容寻址资产 | artifact_sig = graph_generation + provenance_generation + database_generation + config_hash 级联；CSR 压缩 + gzip + SHA256 持久化；签名不变跳过重算 | memo_artifact_builder.rs:662-802 |
+| MemoRuntime | 活动图 Arc 快照（rebuild 不影响在途查询）+ 请求观测缓存（256/TTL 5min + 图代际校验防跨代脏复用） | rivermemo_topology_v3.rs:372-580 |
+| Spike 感应 | 种子能量 hop 传播：动量 2.0、firing 阈值 0.10、回跳抑制 ×0.15、虫洞不耗动量、FIR γ^hop 加权 | memo_sensing.rs:194-530 |
+| Residual Pyramid | Gram-Schmidt 正交化剥离已解释能量 → 残差多层搜索（novelty/coverage 去冗余召回） | memo_pipeline.rs:531-656 |
+| EPA 查询几何 | SVD 主成分 → logic_depth/entropy/resonance，驱动门控增强 | lib.rs:1714-2016 |
+| 双场传播 | local（α=0.15 慢扩散）/ transfer（α=0.55 快迁移）PageRank 式不动点 | memo_pipeline.rs:1131-1247 |
+| DTSC 测地重排 | 候选 chunk 的 tag 序列 = 曲线，查询 Tag 能量 = 场；逐 tag 采样场势 → continuity/direction/closure/vector_lift 评分；三维（direct/structural/thematic）融合 | memo_dtsc.rs:718-1236 |
+| 查询形态学 | 河网 hop 分布/HHI/前向流占比 → softmax 出 atomic/propositional/narrative 查询模式 | rivermemo_topology_v3.rs:1784-2011 |
+| Omega 门控 | 观测不足时 graph_gate=ω^γ 不奖励拓扑（collapsed/sparse/dense 三 regime） | rivermemo_topology_v3.rs:2028-2092 |
+| 条件化创新 bonus | 候选与 top peers 对比，超 mean+z·σ 的部分作为创新奖励 | rivermemo_topology_v3.rs:2128-2228 |
+
+**可吸收清单（对照 Apeireth）**：
+- **P0 高价值低成本**：
+  1. 内容寻址资产缓存（给 semantic/图资产加"内容签名→跳过重算"，省重复 LLM/向量预计算）
+  2. Intrinsic Residual 锚增益（节点"特异性"信号，与 importance 正交，并入 memory_graph 节点权重）
+  3. 查询形态学 softmax（纯函数，驱动 CRAWL 深度/检索模式切换）
+  4. generation 绑定请求观测缓存（查询管线中间产物复用 + 防跨代脏读）
+- **P1 中价值**：Residual Pyramid（30 行数学去冗余召回）/ Spike 感应（查询联想唤醒 + 做梦期巩固复用）/ 双场传播（当前会话场 vs 长期记忆场）/ Topology V3 图对齐（升级 CRAWL 排序）/ DTSC 连续性评分 / 成对相似度预计算
+- **不吸收**：bincode/hashbrown 死依赖（别学）；VCP 自己标注反模式的进程全局缓存
+
+### 8.3 深挖报告二：84 插件扫描 + 核心 modules（待补充）
+
 - [ ] 84 插件完整分类表（生图/搜索/记忆/日程/工具/Agent/学术/社区/桥接）
 - [ ] 核心 modules 对照（vcpLoop/chatCompletionHandler 23 步/finalContextStore/dynamicToolRegistry/toolApprovalManager/toolResultPrivacyGuard/foldProtocol 等）
 - [ ] 可吸收清单 → 并入 §4/§5 任务矩阵
