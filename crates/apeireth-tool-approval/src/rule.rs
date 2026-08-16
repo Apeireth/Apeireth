@@ -463,6 +463,286 @@ impl crate::rule_trait::ApprovalRule for BlacklistRule {
             ApprovalDecision::NoMatch
         }
     }
+
+    fn silent_on_reject(&self, call: &ParsedToolCall) -> bool {
+        // 与 check 同调用语义: 命中黑名单才谈静默
+        self.blacklist.read().contains(&call.tool_name) && self.silent
+    }
+}
+
+// ============================================================
+// 6. ApprovalListRule — VCP approvalList 审批清单 (命令级粒度 + 静默后缀)
+// ============================================================
+
+/// **从工具参数提取命令列表** (命令级粒度审批的输入)
+///
+/// **字段级引用 VCP**: `toolApprovalManager.js:93-115 extractCommands` —
+/// - `toolArgs.command` (string, trim 非空) → 第一条
+/// - `toolArgs.command1 / command2 / ...` (按数字升序) → 依次追加
+/// - 非 string / 空白 → 跳过
+///
+/// 纯函数, 无副作用.
+pub fn extract_commands(args: &serde_json::Value) -> Vec<String> {
+    let mut commands = Vec::new();
+    let Some(obj) = args.as_object() else {
+        return commands;
+    };
+    if let Some(c) = obj.get("command").and_then(|v| v.as_str()) {
+        let t = c.trim();
+        if !t.is_empty() {
+            commands.push(t.to_string());
+        }
+    }
+    // command\d+ 按数字升序 (VCP: Number(a.slice(7)) 排序)
+    let mut numbered: Vec<(u64, &str)> = obj
+        .iter()
+        .filter_map(|(k, v)| {
+            let rest = k.strip_prefix("command")?;
+            if rest.is_empty() || !rest.bytes().all(|b| b.is_ascii_digit()) {
+                return None;
+            }
+            let idx: u64 = rest.parse().ok()?;
+            let s = v.as_str()?;
+            let t = s.trim();
+            if t.is_empty() {
+                return None;
+            }
+            Some((idx, t))
+        })
+        .collect();
+    numbered.sort_by_key(|(idx, _)| *idx);
+    commands.extend(numbered.into_iter().map(|(_, c)| c.to_string()));
+    commands
+}
+
+/// **解析后的审批清单条目** (VCP `parseApprovalRule` 对应物)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedApprovalEntry {
+    /// 原始条目文本 (含后缀, 供 matchedRule 报告)
+    pub raw: String,
+    /// 基础规则: `ToolName` (工具级) 或 `ToolName:command` (命令级)
+    pub base: String,
+    /// 静默拒绝标记 (VCP `::SilentReject` 后缀 → true)
+    pub silent: bool,
+}
+
+/// VCP 静默拒绝后缀 (字段级引用 `toolApprovalManager.js:127`)
+pub const SILENT_REJECT_SUFFIX: &str = "::SilentReject";
+
+/// **解析一条审批清单条目**
+///
+/// **字段级引用 VCP**: `toolApprovalManager.js:117-142 parseApprovalRule` —
+/// - 去 `::SilentReject` 后缀 → `silent = true`
+/// - 空串 / 纯后缀 → `None` (无效条目跳过)
+///
+/// 纯函数.
+pub fn parse_approval_entry(entry: &str) -> Option<ParsedApprovalEntry> {
+    let trimmed = entry.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    let silent = trimmed.ends_with(SILENT_REJECT_SUFFIX);
+    let base = if silent {
+        trimmed[..trimmed.len() - SILENT_REJECT_SUFFIX.len()].trim()
+    } else {
+        trimmed
+    };
+    if base.is_empty() {
+        return None;
+    }
+    Some(ParsedApprovalEntry {
+        raw: trimmed.to_string(),
+        base: base.to_string(),
+        silent,
+    })
+}
+
+/// **战役 2-3 增强 / 规则 #6 — ApprovalListRule (VCP approvalList 语义)**
+///
+/// **字段级引用 VCP**: `toolApprovalManager.js:144-225 getApprovalDecision` —
+/// 清单内条目命中 = **需要主人审批** (`RequireApproval`), 高危操作走
+/// "AI 请求 → 主人批准" 通道 (洋葱安全红线不破).
+///
+/// **命令级粒度** (VCP 新版吸收):
+/// - 条目 `Tool` → 工具级 (specificity 1)
+/// - 条目 `Tool:command` → 命令级 (specificity 2), command 从 `call.args`
+///   的 `command` / `command1..N` 键提取 (`extract_commands`)
+/// - 命令级优先于工具级; 同级并列时静默条目优先 (VCP `considerMatch`)
+///
+/// **静默拒绝** (VCP 新版吸收): 条目带 `::SilentReject` 后缀 →
+/// 命中后若被拒绝, 不通知 AI, 仅留痕审计 (`silent_on_reject` 覆写).
+pub struct ApprovalListRule {
+    /// 解析后的清单条目
+    entries: RwLock<Vec<ParsedApprovalEntry>>,
+    /// 审批超时毫秒 (默认 `APPROVAL_TIMEOUT_MS` = VCP 5min 真值)
+    timeout_ms: u64,
+}
+
+impl Default for ApprovalListRule {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ApprovalListRule {
+    /// 新建空审批清单 (5min 默认窗口)
+    pub fn new() -> Self {
+        Self {
+            entries: RwLock::new(Vec::new()),
+            timeout_ms: crate::manager::APPROVAL_TIMEOUT_MS,
+        }
+    }
+
+    /// 从字符串清单构造 (无效条目自动跳过, 同 VCP `parseApprovalRule` 行为)
+    pub fn with_entries(entries: impl IntoIterator<Item = String>, timeout_ms: u64) -> Self {
+        let parsed: Vec<ParsedApprovalEntry> = entries
+            .into_iter()
+            .filter_map(|e| parse_approval_entry(&e))
+            .collect();
+        Self {
+            entries: RwLock::new(parsed),
+            timeout_ms,
+        }
+    }
+
+    /// 自定义超时 (审批窗口毫秒)
+    pub fn with_timeout(mut self, timeout_ms: u64) -> Self {
+        self.timeout_ms = timeout_ms;
+        self
+    }
+
+    /// 追加一条清单条目; 无效条目返 false
+    pub fn add_entry(&self, entry: &str) -> bool {
+        match parse_approval_entry(entry) {
+            Some(p) => {
+                self.entries.write().push(p);
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// 移除与 raw 完全一致的条目; 返是否移除了至少一条
+    pub fn remove_entry(&self, raw: &str) -> bool {
+        let mut e = self.entries.write();
+        let before = e.len();
+        e.retain(|p| p.raw != raw.trim());
+        e.len() < before
+    }
+
+    /// 当前清单 (raw 文本克隆, 排序)
+    pub fn list(&self) -> Vec<String> {
+        let e = self.entries.read();
+        let mut v: Vec<String> = e.iter().map(|p| p.raw.clone()).collect();
+        v.sort();
+        v
+    }
+
+    /// 条目数
+    pub fn len(&self) -> usize {
+        self.entries.read().len()
+    }
+
+    /// 是否为空
+    pub fn is_empty(&self) -> bool {
+        self.entries.read().is_empty()
+    }
+
+    /// 审批窗口毫秒
+    pub fn timeout_ms(&self) -> u64 {
+        self.timeout_ms
+    }
+
+    /// **考虑一个匹配, 择优更新 best** (VCP `considerMatch` 语义)
+    ///
+    /// specificity 高者胜; 同级并列时静默条目优先.
+    fn consider<'e>(
+        best: &mut Option<(&'e ParsedApprovalEntry, u8, Option<String>)>,
+        entry: &'e ParsedApprovalEntry,
+        specificity: u8,
+        matched_command: Option<String>,
+    ) {
+        let take = match best {
+            None => true,
+            Some((_, s, _)) if specificity > *s => true,
+            Some((best_entry, s, _))
+                if specificity == *s && entry.silent && !best_entry.silent =>
+            {
+                true
+            }
+            _ => false,
+        };
+        if take {
+            *best = Some((entry, specificity, matched_command));
+        }
+    }
+
+    /// **最优匹配** (VCP `considerMatch` 语义, 纯函数)
+    ///
+    /// 返 `(条目, 命中的命令 or None)`; specificity 2 (命令级) > 1 (工具级),
+    /// 同级静默优先.
+    fn best_match<'e>(
+        entries: &'e [ParsedApprovalEntry],
+        tool_name: &str,
+        commands: &[String],
+    ) -> Option<(&'e ParsedApprovalEntry, Option<String>)> {
+        let mut best: Option<(&'e ParsedApprovalEntry, u8, Option<String>)> = None;
+        for entry in entries {
+            if entry.base == tool_name {
+                Self::consider(&mut best, entry, 1, None);
+            }
+            for command in commands {
+                if entry.base == format!("{tool_name}:{command}") {
+                    Self::consider(&mut best, entry, 2, Some(command.clone()));
+                }
+            }
+        }
+        best.map(|(e, _, c)| (e, c))
+    }
+}
+
+impl crate::rule_trait::ApprovalRule for ApprovalListRule {
+    fn name(&self) -> &str {
+        "approval_list"
+    }
+
+    fn check(&self, call: &ParsedToolCall, _history: &[CallRecord]) -> ApprovalDecision {
+        let entries = self.entries.read();
+        if entries.is_empty() {
+            return ApprovalDecision::NoMatch;
+        }
+        let commands = extract_commands(&call.args);
+        match Self::best_match(&entries, &call.tool_name, &commands) {
+            Some((entry, matched_command)) => {
+                let scope = if matched_command.is_some() { "命令级" } else { "工具级" };
+                debug!(
+                    "[ApprovalListRule] 命中{}审批规则 [{}] tool={}{} → 需主人审批",
+                    scope,
+                    entry.raw,
+                    call.tool_name,
+                    if entry.silent { " (拒绝时静默)" } else { "" }
+                );
+                ApprovalDecision::RequireApproval {
+                    timeout_ms: self.timeout_ms,
+                }
+            }
+            None => ApprovalDecision::NoMatch,
+        }
+    }
+
+    fn silent_on_reject(&self, call: &ParsedToolCall) -> bool {
+        let entries = self.entries.read();
+        let commands = extract_commands(&call.args);
+        Self::best_match(&entries, &call.tool_name, &commands)
+            .map(|(e, _)| e.silent)
+            .unwrap_or(false)
+    }
+
+    fn matched_command(&self, call: &ParsedToolCall) -> Option<String> {
+        let entries = self.entries.read();
+        let commands = extract_commands(&call.args);
+        Self::best_match(&entries, &call.tool_name, &commands).and_then(|(_, c)| c)
+    }
 }
 
 // ============================================================
@@ -562,6 +842,8 @@ mod tests {
                 timestamp_ms: now - 100 + i as i64, // 100ms 内 2 次
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
+                matched_command: None,
+                silent_on_reject: false,
             })
             .collect();
         let d = rule.check(&make_call("Spammy"), &history);
@@ -581,6 +863,8 @@ mod tests {
                 timestamp_ms: now - 100 + i as i64,
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
+                matched_command: None,
+                silent_on_reject: false,
             })
             .collect();
         let d = rule.check(&make_call("Normal"), &history);
@@ -600,6 +884,8 @@ mod tests {
                 timestamp_ms: now - 120_000 + i as i64, // 2min 前
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
+                matched_command: None,
+                silent_on_reject: false,
             })
             .collect();
         let d = rule.check(&make_call("OldSpam"), &history);
@@ -619,6 +905,8 @@ mod tests {
                 timestamp_ms: now - 100 + i as i64,
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
+                matched_command: None,
+                silent_on_reject: false,
             })
             .collect();
         let d = rule.check(&make_call("X"), &history);
@@ -641,6 +929,8 @@ mod tests {
                 timestamp_ms: now - 100 + i as i64,
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
+                matched_command: None,
+                silent_on_reject: false,
             })
             .collect();
         let d = rule.check(&make_call("X"), &history);
@@ -718,19 +1008,239 @@ mod tests {
     #[test]
     fn rule_trait_is_object_safe() {
         // 编译期守: ApprovalRule trait 是 dyn-compatible (对象安全)
-        // 5 个不同 rule 类型塞进 Vec<Box<dyn ApprovalRule>>
+        // 6 个不同 rule 类型塞进 Vec<Box<dyn ApprovalRule>>
         let mut rules: Vec<Box<dyn ApprovalRule>> = Vec::new();
         rules.push(Box::new(TrustRule::new()));
         rules.push(Box::new(RiskRule::new(300_000)));
         rules.push(Box::new(FrequencyRule::new()));
         rules.push(Box::new(WhitelistRule::new()));
         rules.push(Box::new(BlacklistRule::new()));
-        assert_eq!(rules.len(), 5);
+        rules.push(Box::new(ApprovalListRule::new()));
+        assert_eq!(rules.len(), 6);
 
         // 每条规则都能调 check (不 panic)
         for r in &rules {
             let _ = r.check(&make_call("test"), &[]);
         }
+    }
+
+    // ====== extract_commands (VCP extractCommands 字段级) ======
+
+    #[test]
+    fn extract_commands_from_command_key() {
+        let args = json!({"command": "ls -la"});
+        assert_eq!(extract_commands(&args), vec!["ls -la".to_string()]);
+    }
+
+    #[test]
+    fn extract_commands_numbered_sorted_and_trimmed() {
+        // command2 写在 command1 前, 仍按数字升序输出 (VCP 行为)
+        let args = json!({"command2": " b ", "command1": "a", "command10": "c10"});
+        assert_eq!(
+            extract_commands(&args),
+            vec!["a".to_string(), "b".to_string(), "c10".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_commands_mixed_plain_and_numbered() {
+        let args = json!({"command": "first", "command1": "second"});
+        assert_eq!(
+            extract_commands(&args),
+            vec!["first".to_string(), "second".to_string()]
+        );
+    }
+
+    #[test]
+    fn extract_commands_skips_non_string_empty_non_object() {
+        assert_eq!(extract_commands(&json!({"command": 42})), Vec::<String>::new());
+        assert_eq!(extract_commands(&json!({"command": "   "})), Vec::<String>::new());
+        assert_eq!(extract_commands(&json!(["command"])), Vec::<String>::new());
+        assert_eq!(extract_commands(&json!(null)), Vec::<String>::new());
+        // commandX (非数字后缀) 不算
+        assert_eq!(
+            extract_commands(&json!({"commandX": "nope"})),
+            Vec::<String>::new()
+        );
+    }
+
+    // ====== parse_approval_entry (VCP parseApprovalRule 字段级) ======
+
+    #[test]
+    fn parse_entry_plain_tool() {
+        let p = parse_approval_entry("PowerShellExecutor").unwrap();
+        assert_eq!(p.base, "PowerShellExecutor");
+        assert!(!p.silent);
+        assert_eq!(p.raw, "PowerShellExecutor");
+    }
+
+    #[test]
+    fn parse_entry_command_level_with_silent_suffix() {
+        let p = parse_approval_entry("FileOperator:delete ::SilentReject").unwrap();
+        assert_eq!(p.base, "FileOperator:delete");
+        assert!(p.silent);
+        assert_eq!(p.raw, "FileOperator:delete ::SilentReject");
+    }
+
+    #[test]
+    fn parse_entry_rejects_empty_and_bare_suffix() {
+        assert!(parse_approval_entry("").is_none());
+        assert!(parse_approval_entry("   ").is_none());
+        assert!(parse_approval_entry("::SilentReject").is_none());
+        assert!(parse_approval_entry("  ::SilentReject  ").is_none());
+    }
+
+    // ====== ApprovalListRule (命令级粒度 + 静默拒绝) ======
+
+    fn make_call_with_args(tool: &str, args: serde_json::Value) -> ParsedToolCall {
+        ParsedToolCall {
+            tool_name: tool.to_string(),
+            args,
+            raw_marker: format!("tool_name:<<<{tool}>>>"),
+            archery: false,
+            archery_no_reply: false,
+        }
+    }
+
+    #[test]
+    fn approval_list_tool_level_requires_approval() {
+        let rule = ApprovalListRule::with_entries(["PowerShellExecutor".to_string()], 300_000);
+        let d = rule.check(&make_call("PowerShellExecutor"), &[]);
+        assert!(d.is_require_approval(), "工具级命中需审批, 实际: {d:?}");
+        assert!(!rule.silent_on_reject(&make_call("PowerShellExecutor")));
+        assert_eq!(rule.matched_command(&make_call("PowerShellExecutor")), None);
+    }
+
+    #[test]
+    fn approval_list_command_level_requires_approval() {
+        let rule = ApprovalListRule::with_entries(
+            ["FileOperator:delete".to_string()],
+            300_000,
+        );
+        let call = make_call_with_args("FileOperator", json!({"command": "delete"}));
+        let d = rule.check(&call, &[]);
+        assert!(d.is_require_approval(), "命令级命中需审批, 实际: {d:?}");
+        assert_eq!(rule.matched_command(&call), Some("delete".to_string()));
+    }
+
+    #[test]
+    fn approval_list_command_must_match_exactly() {
+        let rule = ApprovalListRule::with_entries(
+            ["FileOperator:delete".to_string()],
+            300_000,
+        );
+        // 命令不同 → NoMatch (不误伤其他命令)
+        let call = make_call_with_args("FileOperator", json!({"command": "read"}));
+        assert!(rule.check(&call, &[]).is_no_match());
+        // 工具不同 → NoMatch
+        let call2 = make_call_with_args("OtherTool", json!({"command": "delete"}));
+        assert!(rule.check(&call2, &[]).is_no_match());
+    }
+
+    #[test]
+    fn approval_list_command_beats_tool_specificity() {
+        // 同清单既有工具级 (非静默) 又有命令级 (静默) → 命令级胜 (specificity 2 > 1)
+        let rule = ApprovalListRule::with_entries(
+            [
+                "Shell".to_string(),
+                "Shell:reboot::SilentReject".to_string(),
+            ],
+            300_000,
+        );
+        let call = make_call_with_args("Shell", json!({"command": "reboot"}));
+        assert!(rule.check(&call, &[]).is_require_approval());
+        assert!(rule.silent_on_reject(&call), "命令级静默条目应胜出");
+        assert_eq!(rule.matched_command(&call), Some("reboot".to_string()));
+
+        // 无命令参数 → 落回工具级 (非静默)
+        let call2 = make_call("Shell");
+        assert!(rule.check(&call2, &[]).is_require_approval());
+        assert!(!rule.silent_on_reject(&call2));
+    }
+
+    #[test]
+    fn approval_list_same_specificity_silent_wins() {
+        // VCP considerMatch: specificity 并列时静默条目优先
+        let rule = ApprovalListRule::with_entries(
+            ["Shell".to_string(), "Shell::SilentReject".to_string()],
+            300_000,
+        );
+        let call = make_call("Shell");
+        assert!(rule.check(&call, &[]).is_require_approval());
+        assert!(rule.silent_on_reject(&call), "同级并列静默优先");
+    }
+
+    #[test]
+    fn approval_list_numbered_command_args() {
+        let rule = ApprovalListRule::with_entries(
+            ["Shell:shutdown".to_string()],
+            300_000,
+        );
+        // command2 命中 (批量命令场景, VCP extractCommands 行为)
+        let call = make_call_with_args(
+            "Shell",
+            json!({"command1": "echo hi", "command2": "shutdown"}),
+        );
+        assert!(rule.check(&call, &[]).is_require_approval());
+        assert_eq!(rule.matched_command(&call), Some("shutdown".to_string()));
+    }
+
+    #[test]
+    fn approval_list_no_match_when_empty_or_unlisted() {
+        let rule = ApprovalListRule::new();
+        assert!(rule.is_empty());
+        assert!(rule.check(&make_call("X"), &[]).is_no_match());
+
+        let rule2 = ApprovalListRule::with_entries(["A".to_string()], 300_000);
+        assert!(rule2.check(&make_call("B"), &[]).is_no_match());
+    }
+
+    #[test]
+    fn approval_list_invalid_entries_skipped() {
+        // VCP parseApprovalRule: 无效条目 (空/纯后缀) 跳过不炸
+        let rule = ApprovalListRule::with_entries(
+            [
+                "".to_string(),
+                "::SilentReject".to_string(),
+                "Good".to_string(),
+            ],
+            300_000,
+        );
+        assert_eq!(rule.len(), 1);
+        assert!(rule.check(&make_call("Good"), &[]).is_require_approval());
+    }
+
+    #[test]
+    fn approval_list_add_remove_entry() {
+        let rule = ApprovalListRule::new();
+        assert!(rule.add_entry("Shell:reboot::SilentReject"));
+        assert!(!rule.add_entry("  "));
+        assert_eq!(rule.len(), 1);
+        assert!(rule.remove_entry("Shell:reboot::SilentReject"));
+        assert!(!rule.remove_entry("nope"));
+        assert!(rule.is_empty());
+    }
+
+    #[test]
+    fn approval_list_timeout_is_vcp_5min_by_default() {
+        let rule = ApprovalListRule::new();
+        assert_eq!(rule.timeout_ms(), crate::manager::APPROVAL_TIMEOUT_MS);
+        // 自定义超时真传到 RequireApproval
+        let rule2 = ApprovalListRule::with_entries(["X".to_string()], 1234);
+        match rule2.check(&make_call("X"), &[]) {
+            ApprovalDecision::RequireApproval { timeout_ms } => assert_eq!(timeout_ms, 1234),
+            other => panic!("清单命中应 RequireApproval, 实际: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn blacklist_rule_silent_on_reject_override() {
+        let silent = BlacklistRule::with_blacklist(["Bad".to_string()], true);
+        assert!(silent.silent_on_reject(&make_call("Bad")));
+        assert!(!silent.silent_on_reject(&make_call("Good")));
+
+        let loud = BlacklistRule::with_blacklist(["Bad".to_string()], false);
+        assert!(!loud.silent_on_reject(&make_call("Bad")));
     }
 
     // 测试 Arc 包装 (ApprovalManager 内部用 Arc<dyn ApprovalRule>)
