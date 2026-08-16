@@ -18,8 +18,9 @@
 //! - ❌ 0 真接 9 plugin (R124+ 真接)
 
 use apeireth_mcp::multimodal::{
-    dispatch_multimodal_handler, dispatch_multimodal_handler_async, gen_dispatch, multimodal_tool_def, GenPlugin, GenRequest,
-    OutputFormat, DEFAULT_SIZE, GEN_PLUGIN_COUNT, OUTPUT_FORMAT_COUNT,
+    dispatch_multimodal_handler, dispatch_multimodal_handler_async, gen_dispatch,
+    multimodal_tool_def, GenPlugin, GenRequest, OutputFormat, DEFAULT_SIZE, GEN_PLUGIN_COUNT,
+    OUTPUT_FORMAT_COUNT,
 };
 use apeireth_mcp::tool_bridge::handler_from_fn;
 use apeireth_mcp::transport::MemoryTransport;
@@ -42,7 +43,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     assert_eq!(GEN_PLUGIN_COUNT, 9, "GEN_PLUGIN_COUNT must be 9");
-    println!("  ✓ {} plugins, 0 真接 (template placeholder)\n", GEN_PLUGIN_COUNT);
+    println!(
+        "  ✓ {} plugins, 0 真接 (template placeholder)\n",
+        GEN_PLUGIN_COUNT
+    );
 
     // ----- 2. 演示 6 个 output format + mime type + extension -----
     println!("→ 6 output formats (image 3 + video 1 + web 1 + 3d 1):");
@@ -63,7 +67,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_seed(42)
         .with_size(512, 768)
         .with_output_format(OutputFormat::Webp);
-    println!("  size: {:?} (resolve_size → {:?})", req.size, req.resolve_size());
+    println!(
+        "  size: {:?} (resolve_size → {:?})",
+        req.size,
+        req.resolve_size()
+    );
     let req_json = serde_json::to_string_pretty(&req)?;
     println!("  JSON:\n{req_json}\n");
     assert_eq!(DEFAULT_SIZE, (1024, 1024), "DEFAULT_SIZE must be 1024x1024");
@@ -96,15 +104,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 5.1 initialize
     let info = client.initialize().await?;
-    println!("  ✓ initialize: {} v{}", info.serverInfo.name, info.serverInfo.version);
+    println!(
+        "  ✓ initialize: {} v{}",
+        info.serverInfo.name, info.serverInfo.version
+    );
 
     // 5.2 list_tools — 应该看到 multimodal
     let defs = client.list_tools().await?;
     println!("  ✓ list_tools: {} tool(s) available:", defs.len());
     for d in &defs {
-        println!("    - {} ({})", d.name, &d.description[..60.min(d.description.len())]);
+        println!(
+            "    - {} ({})",
+            d.name,
+            &d.description[..60.min(d.description.len())]
+        );
     }
-    assert!(defs.iter().any(|d| d.name == "multimodal"), "multimodal tool should be listed");
+    assert!(
+        defs.iter().any(|d| d.name == "multimodal"),
+        "multimodal tool should be listed"
+    );
 
     // 5.3 call_tool("multimodal", ...) — 走 dispatch_multimodal_handler, 返 Err
     println!("\n→ call_tool multimodal (Flux, prompt=cyberpunk cat):");

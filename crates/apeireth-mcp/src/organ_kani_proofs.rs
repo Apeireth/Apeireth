@@ -40,4 +40,3 @@ fn r177_mcp_kani_01_methods_positive() {
 fn r177_mcp_kani_02_version_nonempty() {
     assert!(!MCP_PROTOCOL_VERSION.is_empty());
 }
-

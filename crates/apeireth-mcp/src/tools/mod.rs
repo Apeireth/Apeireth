@@ -21,10 +21,10 @@
 //! - 0 引入 I/O / 网络 (server 注入, 0 真接)
 //! - 0 业务耦合 (apeireth-mcp 0 依赖 tui/api, 任意 server impl 都能挂)
 
-pub mod browser;  // R123-3: P2-12 浏览器自动化 skeleton (0 改, R125-4 例外授权)
-pub mod naming;   // R125-4: 拆分自原 mod.rs — `is_valid_tool_name`
-pub mod server;   // R125-4: 拆分自原 mod.rs — `ToolServer` trait + handlers
-pub mod types;    // R125-4: 拆分自原 mod.rs — `Tool` / `ToolContent` / `ToolCallResult` + 错误码
+pub mod browser; // R123-3: P2-12 浏览器自动化 skeleton (0 改, R125-4 例外授权)
+pub mod naming; // R125-4: 拆分自原 mod.rs — `is_valid_tool_name`
+pub mod server; // R125-4: 拆分自原 mod.rs — `ToolServer` trait + handlers
+pub mod types; // R125-4: 拆分自原 mod.rs — `Tool` / `ToolContent` / `ToolCallResult` + 错误码
 
 // ============================================================
 // Re-exports (per 8 硬墙 #3 入口签名 0 改)

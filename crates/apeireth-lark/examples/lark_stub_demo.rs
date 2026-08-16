@@ -36,14 +36,17 @@
 //! - O-4 任何人都能接手: 6 § 结构 + 10 LarkError + 8 工具 + 5 fixture 跟主草稿 1:1
 
 use apeireth_lark::{
-    is_stub_mode, validate_tool_call, LarkClient, LarkClientImpl, LarkConfig, LarkError, MessageType,
-    TOOL_WHITELIST, TOOL_WHITELIST_COUNT,
+    is_stub_mode, validate_tool_call, LarkClient, LarkClientImpl, LarkConfig, LarkError,
+    MessageType, TOOL_WHITELIST, TOOL_WHITELIST_COUNT,
 };
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // 1) 编译期守门: STUB_MODE 必须 == true
-    println!("[lark_stub_demo] STUB_MODE = {} (per 编译期守门)", is_stub_mode());
+    println!(
+        "[lark_stub_demo] STUB_MODE = {} (per 编译期守门)",
+        is_stub_mode()
+    );
     assert!(is_stub_mode(), "STUB_MODE 必须是 true");
 
     // 2) TOOL_WHITELIST 9 项展示 (m3 防御, 8 工具 + 1 stub_status)
@@ -69,7 +72,9 @@ async fn main() -> anyhow::Result<()> {
     // 5) 演示 8 stub 工具返 NotImplemented (逐个手写, 不放 loop 避免 async 闭包)
 
     // 消息 (1)
-    let r = client.send_message("user-1", MessageType::Text, "hello lark").await;
+    let r = client
+        .send_message("user-1", MessageType::Text, "hello lark")
+        .await;
     println!("[lark_stub_demo] send_message -> {:?}", r);
     assert!(matches!(r, Err(LarkError::NotImplemented(_))));
 
@@ -78,7 +83,9 @@ async fn main() -> anyhow::Result<()> {
     println!("[lark_stub_demo] list_calendars -> {:?}", r);
     assert!(matches!(r, Err(LarkError::NotImplemented(_))));
 
-    let r = client.create_event("cal-primary", "team meeting", 0, 0).await;
+    let r = client
+        .create_event("cal-primary", "team meeting", 0, 0)
+        .await;
     println!("[lark_stub_demo] create_event -> {:?}", r);
     assert!(matches!(r, Err(LarkError::NotImplemented(_))));
 
@@ -92,7 +99,9 @@ async fn main() -> anyhow::Result<()> {
     assert!(matches!(r, Err(LarkError::NotImplemented(_))));
 
     // Bitable (2)
-    let r = client.list_bitable_records("app-bitable", "tbl-tasks", 50).await;
+    let r = client
+        .list_bitable_records("app-bitable", "tbl-tasks", 50)
+        .await;
     println!("[lark_stub_demo] list_bitable_records -> {:?}", r);
     assert!(matches!(r, Err(LarkError::NotImplemented(_))));
 

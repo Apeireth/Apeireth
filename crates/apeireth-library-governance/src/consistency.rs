@@ -292,8 +292,14 @@ mod tests {
     #[test]
     fn compile_time_hardcodes_match_documented_values() {
         // 文档化保证: 编译期常量跟决策链记录一致
-        assert_eq!(WORKSPACE_VERSION_MAJOR, 1, "B2 workspace.version major 严守 1");
-        assert_eq!(WORKSPACE_VERSION_MINOR, 2, "B2 workspace.version minor 严守 2 (1.2.0)");
+        assert_eq!(
+            WORKSPACE_VERSION_MAJOR, 1,
+            "B2 workspace.version major 严守 1"
+        );
+        assert_eq!(
+            WORKSPACE_VERSION_MINOR, 2,
+            "B2 workspace.version minor 严守 2 (1.2.0)"
+        );
         assert_eq!(BASELINE_VALUE_1_X1000, 868, "A1 R11 baseline #1 = 0.8682");
         assert_eq!(BASELINE_VALUE_2_X1000, 853, "A1 R11 baseline #2 = 0.8532");
         assert_eq!(BASELINE_VALUE_3_X1000, 906, "A1 R11 baseline #3 = 0.9063");

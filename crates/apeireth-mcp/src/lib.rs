@@ -41,30 +41,30 @@
 //! - ✅ `#![deny(unsafe_code)]` (workspace 继承)
 //! - ✅ 不改 apeireth-tool-registry 源码 (用 import + bridge)
 
-#![allow(non_snake_case)] // R163: MCP JSON-RPC wire protocol requires camelCase field names per JSON-RPC spec
+#![allow(non_snake_case)]
+// R163: MCP JSON-RPC wire protocol requires camelCase field names per JSON-RPC spec
 // Mavis 拍板 (决策 #135 12:35 tick 弱维度补强): 533 missing docs warnings 部分通过 #![allow(missing_docs)] 沉默。
 // 原因: 360K 行代码 533 missing docs 是合理的工程债, 写 533 doc comments 30-60 min 不现实。
 // 计划: V1.1 release 2026-11-30 docs sprint 补真实 doc comments。0 装 PASS 严守 100% 维持 (沉默 ≠ 假装已写)。
 #![allow(missing_docs)]
-
 #![deny(unsafe_code)]
 
 pub mod protocol;
 // R177: organ invariants (5 tests + 2 Kani)
+pub mod initialize; // R84: MCP initialize handshake (protocolVersion + capabilities + clientInfo negotiation)
+pub mod macros;
+pub mod multimodal; // R123-4: multimodal dispatcher (9 Gen plugins + 6 output formats)
 mod organ_kani_proofs;
-pub mod resources;  // R33-3: MCP resources protocol
-pub mod resource_servers;  // R33-3-1: 3 真接 ResourceServer impl (File / Organ / Convention) + Composite router (resources/list + resources/read)
-pub mod subscriptions;  // R72: MCP subscribe push mode (resources/subscribe + notifications/resources/updated)
-pub mod tool_subscriptions;  // R80: MCP tools/subscribe 双向 push
-pub mod tool_bridge;
-pub mod tools;  // R65: MCP tools protocol (tools/list + tools/call) — R125-4 拆 4 子文件
-pub mod initialize;  // R84: MCP initialize handshake (protocolVersion + capabilities + clientInfo negotiation)
+pub mod primitives; // R125-4: MCP primitive namespace enum (借鉴 modelcontextprotocol/servers)
 pub mod prompts;
-pub mod telemetry_bridge;  // R112: MCP handler call metrics (atomic-based, 0 改现有 handler)  // R84: MCP prompts protocol (prompts/list + prompts/get)
-pub mod transport;
-pub mod primitives;  // R125-4: MCP primitive namespace enum (借鉴 modelcontextprotocol/servers)
-pub mod multimodal;  // R123-4: multimodal dispatcher (9 Gen plugins + 6 output formats)
-pub mod macros;  // R125-4: JSON-RPC envelope macro (借鉴 servers dispatch pattern, 减 5+ 处重复)
+pub mod resource_servers; // R33-3-1: 3 真接 ResourceServer impl (File / Organ / Convention) + Composite router (resources/list + resources/read)
+pub mod resources; // R33-3: MCP resources protocol
+pub mod subscriptions; // R72: MCP subscribe push mode (resources/subscribe + notifications/resources/updated)
+pub mod telemetry_bridge; // R112: MCP handler call metrics (atomic-based, 0 改现有 handler)  // R84: MCP prompts protocol (prompts/list + prompts/get)
+pub mod tool_bridge;
+pub mod tool_subscriptions; // R80: MCP tools/subscribe 双向 push
+pub mod tools; // R65: MCP tools protocol (tools/list + tools/call) — R125-4 拆 4 子文件
+pub mod transport; // R125-4: JSON-RPC envelope macro (借鉴 servers dispatch pattern, 减 5+ 处重复)
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -74,7 +74,9 @@ use serde_json::{json, Value};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
-use crate::protocol::{Id, JsonRpcBatch, JsonRpcError, JsonRpcRequest, JsonRpcResponse, JSON_RPC_VERSION};
+use crate::protocol::{
+    Id, JsonRpcBatch, JsonRpcError, JsonRpcRequest, JsonRpcResponse, JSON_RPC_VERSION,
+};
 use crate::tool_bridge::{
     bridge_handler_from_registry, invoke_via_registry, list_tools as list_tools_via_bridge,
 };
@@ -100,7 +102,7 @@ pub const MCP_PROTOCOL_VERSION: &str = "2025-03-26";
 /// **实现的方法数 (initialize + tools/list + tools/call)**
 ///
 /// 编译期 hardcode, 防加 method 忘改 docs
-pub const METHOD_COUNT: usize = 5;  // initialize + tools/list + tools/call + resources/list + resources/read (McpServer::dispatch 内置)
+pub const METHOD_COUNT: usize = 5; // initialize + tools/list + tools/call + resources/list + resources/read (McpServer::dispatch 内置)
 
 // ============================================================
 // 错误
@@ -519,7 +521,9 @@ impl McpServer {
         mut transport: T,
     ) -> Result<(), McpError> {
         loop {
-            let Some(line) = transport.recv().await? else { break }; // EOF
+            let Some(line) = transport.recv().await? else {
+                break;
+            }; // EOF
             if line.is_empty() {
                 continue;
             }
@@ -611,10 +615,14 @@ impl McpServer {
             let reqs = batch.into_vec();
             let mut responses = Vec::with_capacity(reqs.len());
             for req in reqs {
-                if req.id.is_none() { continue; }
+                if req.id.is_none() {
+                    continue;
+                }
                 responses.push(self.dispatch(req).await);
             }
-            if responses.is_empty() { return Ok(None); }
+            if responses.is_empty() {
+                return Ok(None);
+            }
             return Ok(Some(serde_json::to_string(&responses)?));
         }
         let req: JsonRpcRequest = match serde_json::from_str(line) {
@@ -719,7 +727,8 @@ pub const MCP_BORROWED_SPEC_COUNT: usize = 3;
 const _: () = {
     // 防 METHOD_COUNT 与实际方法列表漂移 (硬编码二次守)
     assert!(
-        METHOD_COUNT == 5, "METHOD_COUNT must be 5 (initialize/tools.list/tools.call/resources.list/resources.read)"
+        METHOD_COUNT == 5,
+        "METHOD_COUNT must be 5 (initialize/tools.list/tools.call/resources.list/resources.read)"
     );
     // 字符串字面量 const 比较在 stable 不允许; 字符串相等性已在 #[test] 守
     let _ = JSON_RPC_VERSION;
@@ -866,9 +875,8 @@ mod lib_tests {
             name: "echo".to_string(),
         }));
         let (a, b) = tokio::io::duplex(8192);
-        let server_task = tokio::spawn(async move {
-            server.run_with_transport(MemoryTransport::new(a)).await
-        });
+        let server_task =
+            tokio::spawn(async move { server.run_with_transport(MemoryTransport::new(a)).await });
         let mut client = McpClient::with_transport(MemoryTransport::new(b));
         let _ = client.initialize().await.unwrap();
 
@@ -918,9 +926,8 @@ mod lib_tests {
             name: "echo".to_string(),
         }));
         let (a, b) = tokio::io::duplex(4096);
-        let server_task = tokio::spawn(async move {
-            server.run_with_transport(MemoryTransport::new(a)).await
-        });
+        let server_task =
+            tokio::spawn(async move { server.run_with_transport(MemoryTransport::new(a)).await });
         let mut client = McpClient::with_transport(MemoryTransport::new(b));
         let _ = client.initialize().await.unwrap();
 
@@ -951,9 +958,8 @@ mod lib_tests {
     async fn batch_empty_rejected() {
         let server = McpServer::new("test-batch-empty");
         let (a, b) = tokio::io::duplex(64);
-        let server_task = tokio::spawn(async move {
-            server.run_with_transport(MemoryTransport::new(a)).await
-        });
+        let server_task =
+            tokio::spawn(async move { server.run_with_transport(MemoryTransport::new(a)).await });
         let mut client = McpClient::with_transport(MemoryTransport::new(b));
         let _ = client.initialize().await.unwrap();
 
@@ -971,17 +977,13 @@ mod lib_tests {
     async fn batch_requires_initialize() {
         let server = McpServer::new("test");
         let (a, b) = tokio::io::duplex(64);
-        let server_task = tokio::spawn(async move {
-            server.run_with_transport(MemoryTransport::new(a)).await
-        });
+        let server_task =
+            tokio::spawn(async move { server.run_with_transport(MemoryTransport::new(a)).await });
         let client = McpClient::with_transport(MemoryTransport::new(b));
         // 注意: 没 initialize
-        let res = client.send_batch(vec![JsonRpcRequest::new(
-            "tools/list",
-            None,
-            Id::Num(1),
-        )])
-        .await;
+        let res = client
+            .send_batch(vec![JsonRpcRequest::new("tools/list", None, Id::Num(1))])
+            .await;
         assert!(matches!(res, Err(McpError::NotInitialized)));
         drop(client);
         let _ = tokio::time::timeout(std::time::Duration::from_secs(2), server_task)
@@ -1138,9 +1140,10 @@ mod lib_tests {
         // 7) 验证公共 API 名字数量稳定 (snapshot)
         // expected_top_level 数组元素数 = 19, 是 R125-4 实施前的稳定 baseline
         // 任何 0 改入口签名实施都不应让这个数字增加/减少
-        assert_eq!(expected_top_level.len(), 19, "public API name count snapshot");
+        assert_eq!(
+            expected_top_level.len(),
+            19,
+            "public API name count snapshot"
+        );
     }
 }
-
-
-
