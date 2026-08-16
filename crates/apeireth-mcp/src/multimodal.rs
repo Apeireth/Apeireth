@@ -390,8 +390,8 @@ pub fn gen_dispatch(req: GenRequest) -> Result<GenResponse, String> {
 /// server.register_tool(def, handler);
 /// ```
 pub fn dispatch_multimodal_handler(args: Value) -> Result<Value, String> {
-    let req: GenRequest = serde_json::from_value(args)
-        .map_err(|e| format!("invalid GenRequest JSON: {e}"))?;
+    let req: GenRequest =
+        serde_json::from_value(args).map_err(|e| format!("invalid GenRequest JSON: {e}"))?;
     // 0 真接 — O-5 标缺
     // R124+ 真接时改为: gen_dispatch(req).and_then(|r| serde_json::to_value(r).map_err(|e| e.to_string()))
     Err(format!(
@@ -476,9 +476,17 @@ mod tests {
         // 9 plugin 各自有独立 endpoint (0 重复)
         let endpoints: Vec<&str> = GenPlugin::ALL.iter().map(|p| plugin_endpoint(*p)).collect();
         let unique: std::collections::HashSet<&str> = endpoints.iter().copied().collect();
-        assert_eq!(unique.len(), 9, "9 plugin should have 9 unique endpoints, got {}", endpoints.len());
+        assert_eq!(
+            unique.len(),
+            9,
+            "9 plugin should have 9 unique endpoints, got {}",
+            endpoints.len()
+        );
         for (i, p) in GenPlugin::ALL.iter().enumerate() {
-            assert!(!plugin_endpoint(*p).is_empty(), "endpoint for {p:?} should not be empty");
+            assert!(
+                !plugin_endpoint(*p).is_empty(),
+                "endpoint for {p:?} should not be empty"
+            );
             // 必须是 http:// 或 https://
             let url = plugin_endpoint(*p);
             assert!(
@@ -533,7 +541,10 @@ mod tests {
         let req_none = GenRequest::new(GenPlugin::Doubao, "test");
         assert!(req_none.seed.is_none());
         let v_none = serde_json::to_value(&req_none).unwrap();
-        assert!(v_none.get("seed").is_none(), "None seed should be skipped via skip_serializing_if");
+        assert!(
+            v_none.get("seed").is_none(),
+            "None seed should be skipped via skip_serializing_if"
+        );
         // Some case
         let req_some = GenRequest::new(GenPlugin::Doubao, "test").with_seed(1234567890);
         let v_some = serde_json::to_value(&req_some).unwrap();
@@ -635,8 +646,14 @@ mod tests {
         let v = serde_json::to_value(&resp).unwrap();
         assert_eq!(v["plugin"], "flux");
         assert_eq!(v["image_url"], "https://example.com/flux/abc.png");
-        assert!(v.get("video_url").is_none(), "None video_url should be skipped");
-        assert!(v.get("model_url").is_none(), "None model_url should be skipped");
+        assert!(
+            v.get("video_url").is_none(),
+            "None video_url should be skipped"
+        );
+        assert!(
+            v.get("model_url").is_none(),
+            "None model_url should be skipped"
+        );
         assert_eq!(v["seed_used"], 42);
     }
 
@@ -648,7 +665,11 @@ mod tests {
         let def = multimodal_tool_def();
         assert_eq!(def.name, "multimodal");
         assert!(!def.description.is_empty());
-        assert!(def.description.contains("Flux") || def.description.contains("comfyui") || def.description.contains("doubao"));
+        assert!(
+            def.description.contains("Flux")
+                || def.description.contains("comfyui")
+                || def.description.contains("doubao")
+        );
         // inputSchema 必填 plugin + prompt
         assert_eq!(def.inputSchema["type"], "object");
         assert!(def.inputSchema["properties"]["plugin"].is_object());
@@ -657,7 +678,9 @@ mod tests {
         assert!(required.iter().any(|v| v == "plugin"));
         assert!(required.iter().any(|v| v == "prompt"));
         // plugin enum 9 个
-        let plugin_enum = def.inputSchema["properties"]["plugin"]["enum"].as_array().unwrap();
+        let plugin_enum = def.inputSchema["properties"]["plugin"]["enum"]
+            .as_array()
+            .unwrap();
         assert_eq!(plugin_enum.len(), 9);
     }
 

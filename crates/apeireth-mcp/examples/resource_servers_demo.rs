@@ -15,7 +15,8 @@ use apeireth_mcp::{
 fn main() {
     // 1) 起 3 个 server
     let workspace = std::env::current_dir().expect("current_dir");
-    let file = FileResourceServer::new(&workspace).expect("FileResourceServer 构造 (workspace 必须存在)");
+    let file =
+        FileResourceServer::new(&workspace).expect("FileResourceServer 构造 (workspace 必须存在)");
     let organ = OrganResourceServer::new();
     let conv = ConventionResourceServer::new(&workspace);
     let composite = CompositeResourceServer::new()

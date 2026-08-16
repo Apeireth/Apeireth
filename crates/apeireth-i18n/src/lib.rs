@@ -128,13 +128,8 @@ pub const DEFAULT_LOCALE: Locale = Locale::En;
 
 /// **支持的语言** (K-1 强校验 #2: 5 Locale 枚举, 编译期 hardcode 守门 `len() == 5`).
 /// 1:1 翻译 v0.9.21 商业版 i18next 集成的 5 个主语言 (en / zh-CN / ja / fr / de).
-pub const SUPPORTED_LOCALES: &[Locale] = &[
-    Locale::En,
-    Locale::ZhCn,
-    Locale::Ja,
-    Locale::Fr,
-    Locale::De,
-];
+pub const SUPPORTED_LOCALES: &[Locale] =
+    &[Locale::En, Locale::ZhCn, Locale::Ja, Locale::Fr, Locale::De];
 
 /// 编译期守门: SUPPORTED_LOCALES 长度 == 5 (K-1 强校验 #2).
 const _: () = assert!(SUPPORTED_LOCALES.len() == 5);
@@ -386,10 +381,7 @@ impl TranslatorImpl {
     }
 
     /// 嵌套 key 解析: 把 `nav.home` 拆为 `["nav", "home"]` 后在 `toml::Value` 树里下钻.
-    fn resolve_nested<'a>(
-        table: &'a LocaleTable,
-        key: &str,
-    ) -> Option<&'a toml::Value> {
+    fn resolve_nested<'a>(table: &'a LocaleTable, key: &str) -> Option<&'a toml::Value> {
         // key 长度守门
         if key.len() > MAX_KEY_LENGTH {
             return None;
@@ -636,7 +628,10 @@ mod tests {
         let translator = TranslatorImpl::new().unwrap();
         let rt = tokio::runtime::Runtime::new().unwrap();
         let s = rt.block_on(translator.t("nonexistent.key", &TranslationArgs::new()));
-        assert_eq!(s, "nonexistent.key", "找不到的 key 返自身 (i18next 行为 1:1)");
+        assert_eq!(
+            s, "nonexistent.key",
+            "找不到的 key 返自身 (i18next 行为 1:1)"
+        );
     }
 
     #[test]

@@ -40,4 +40,3 @@ fn r177_lk_kani_01_endpoint_count() {
 fn r177_lk_kani_02_max_token_ttl() {
     assert!(MAX_TOKEN_TTL_SECONDS >= 1);
 }
-

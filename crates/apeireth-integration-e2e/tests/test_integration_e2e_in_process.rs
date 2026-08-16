@@ -93,27 +93,72 @@ macro_rules! api_test {
     };
 }
 
-api_test!(test_api_metrics_integration, test_api_metrics_endpoint_returns_prometheus);
-api_test!(test_api_health_integration, test_api_health_endpoint_5_components);
+api_test!(
+    test_api_metrics_integration,
+    test_api_metrics_endpoint_returns_prometheus
+);
+api_test!(
+    test_api_health_integration,
+    test_api_health_endpoint_5_components
+);
 api_test!(test_api_status_integration, test_api_status_endpoint_uptime);
-api_test!(test_api_tools_list_integration, test_api_tools_calendar_list);
-api_test!(test_api_tools_create_integration, test_api_tools_calendar_create);
+api_test!(
+    test_api_tools_list_integration,
+    test_api_tools_calendar_list
+);
+api_test!(
+    test_api_tools_create_integration,
+    test_api_tools_calendar_create
+);
 api_test!(test_api_tools_get_integration, test_api_tools_calendar_get);
-api_test!(test_api_tools_update_integration, test_api_tools_calendar_update);
-api_test!(test_api_tools_delete_integration, test_api_tools_calendar_delete);
-api_test!(test_api_message_list_integration, test_api_tools_message_list);
-api_test!(test_api_message_send_integration, test_api_tools_message_send);
-api_test!(test_api_contact_list_integration, test_api_tools_contact_list);
-api_test!(test_api_contact_create_integration, test_api_tools_contact_create);
+api_test!(
+    test_api_tools_update_integration,
+    test_api_tools_calendar_update
+);
+api_test!(
+    test_api_tools_delete_integration,
+    test_api_tools_calendar_delete
+);
+api_test!(
+    test_api_message_list_integration,
+    test_api_tools_message_list
+);
+api_test!(
+    test_api_message_send_integration,
+    test_api_tools_message_send
+);
+api_test!(
+    test_api_contact_list_integration,
+    test_api_tools_contact_list
+);
+api_test!(
+    test_api_contact_create_integration,
+    test_api_tools_contact_create
+);
 api_test!(test_api_task_list_integration, test_api_tools_task_list);
-api_test!(test_api_task_complete_integration, test_api_tools_task_complete);
+api_test!(
+    test_api_task_complete_integration,
+    test_api_tools_task_complete
+);
 api_test!(test_api_search_web_integration, test_api_tools_search_web);
 api_test!(test_api_search_code_integration, test_api_tools_search_code);
-api_test!(test_api_unauthorized_401_integration, test_api_unauthorized_returns_401);
-api_test!(test_api_not_found_404_integration, test_api_not_found_returns_404);
-api_test!(test_api_server_500_integration, test_api_server_error_returns_500);
+api_test!(
+    test_api_unauthorized_401_integration,
+    test_api_unauthorized_returns_401
+);
+api_test!(
+    test_api_not_found_404_integration,
+    test_api_not_found_returns_404
+);
+api_test!(
+    test_api_server_500_integration,
+    test_api_server_error_returns_500
+);
 api_test!(test_api_websocket_integration, test_api_websocket_8_frames);
-api_test!(test_api_rate_limit_integration, test_api_rate_limit_enforced);
+api_test!(
+    test_api_rate_limit_integration,
+    test_api_rate_limit_enforced
+);
 
 // ============================================================================
 // 15 TUI 集成测试

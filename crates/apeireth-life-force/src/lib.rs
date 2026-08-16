@@ -495,15 +495,11 @@ mod tests {
     }
 }
 
-
 pub use crate::{
     emergence::{
-        EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal,
-        EmergenceSignalType,
+        EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal, EmergenceSignalType,
     },
     reflection_cycle::{
-        ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler,
-        ReflectionPhase,
+        ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler, ReflectionPhase,
     },
 };
-

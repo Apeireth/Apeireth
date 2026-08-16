@@ -9,9 +9,7 @@
 //!
 //! **基线** (1.0.0): target/criterion/apeireth-lark/bench/
 
-use apeireth_lark::{
-    LarkConfig, MessageType, TOOL_WHITELIST, is_stub_mode, validate_tool_call,
-};
+use apeireth_lark::{is_stub_mode, validate_tool_call, LarkConfig, MessageType, TOOL_WHITELIST};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 fn bench_validate_tool_call_hit(c: &mut Criterion) {
