@@ -75,6 +75,7 @@ pub mod goal_tools;
 pub mod memory_graph;
 pub mod context;
 pub mod assemble;
+pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;
@@ -113,7 +114,7 @@ pub use constitution_gate::ConstitutionGate;
 pub use memory_injection::build_memory_injection;
 pub use confidence::{BetaBinomial, Strength};
 pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
-pub use oracle::{Branch, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
+pub use oracle::{Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
 pub use dream::{DreamScheduler, DreamSummarizer};
 pub use reflection::ReflectionScheduler;
 pub use daily_summary::{DailySummary, build_daily_summary};
