@@ -6,7 +6,7 @@
 | 状态 | 值 |
 |---|---|
 | workspace version | 1.2.0（semver 严守） |
-| active crate | 81（80 顶层 + memory/extensions 嵌套） |
+| active crate | 82（81 顶层 + memory/extensions 嵌套） |
 | 测试 | workspace 全量 `cargo test --workspace -j 4` 全绿（降并行防 Windows 页文件耗尽） |
 | 构建 | `cargo build --workspace` 0 error / 0 warning（仅剩第三方依赖未来兼容提示） |
 | License | Apache-2.0 |
