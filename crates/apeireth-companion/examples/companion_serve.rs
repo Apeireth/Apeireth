@@ -41,8 +41,10 @@ use apeireth_companion::daemon::{
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
 use apeireth_companion::emergence::Initiative;
+use apeireth_companion::experience::ExperienceStore;
 use apeireth_companion::judicator::{ConstitutionLlm, LlmJudicator};
 use apeireth_companion::memory_injection::build_memory_injection;
+use apeireth_companion::principles::PrincipleStore;
 use apeireth_companion::proactive::MemoryContextSource;
 use apeireth_companion::reflection::ReflectionScheduler;
 use apeireth_companion::tone::tone_hint;
@@ -103,6 +105,11 @@ fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
         ("gh_accel", "GitHub 加速: 节点池实测选最快", json!({"type":"object","properties":{"limit":{"type":"number"},"github_url":{"type":"string"}}})),
         ("dx_check", "换元法 dx 检查 (忘换 dx/混用/缺微分/根号模式)", json!({"type":"object","properties":{"problem":{"type":"string"},"substitution":{"type":"string"},"after":{"type":"string"}},"required":["problem"]})),
         ("ShellExec", "执行 shell 命令 (高危, 需主人批准)", json!({"type":"object","properties":{"command":{"type":"string"}},"required":["command"]})),
+        ("save_experience", "沉淀经验入经验库 (自成长管道): scene+practice+result+outcome", json!({"type":"object","properties":{"scene":{"type":"string"},"practice":{"type":"string"},"result":{"type":"string"},"outcome":{"type":"string","enum":["success","failure","partial"]}},"required":["scene","practice"]})),
+        ("list_experience", "查经验库 (自成长管道)", json!({"type":"object","properties":{"scene":{"type":"string"}}})),
+        ("verify_experience", "验证经验 (成功/失败) → 计数+评分, 达标促能力提案", json!({"type":"object","properties":{"id":{"type":"string"},"success":{"type":"boolean"}},"required":["id","success"]})),
+        ("propose_principle", "提案原则候选 (动态原则层/洋葱外层): statement+rationale+source", json!({"type":"object","properties":{"statement":{"type":"string"},"rationale":{"type":"string"},"source":{"type":"string"}},"required":["statement","rationale"]})),
+        ("approve_principle", "主人批准原则 (需 master token; 生效后叠加到工具执行检查)", json!({"type":"object","properties":{"id":{"type":"string"},"master_token":{"type":"string"}},"required":["id","master_token"]})),
     ]
 }
 
@@ -338,6 +345,26 @@ fn inject_today(store: &Arc<SqliteMemoryStore>) -> String {
     build_daily_summary(&today, &pairs, tool_records).render()
 }
 
+/// 预处理链 ③: 自成长管道注入 — 待提案经验 + 待批准原则候选 (Level 1/2 驱动).
+fn inject_growth(store: &Arc<SqliteMemoryStore>) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    // Level 1: 经验达标 → 促能力提案
+    let exp_hint = ExperienceStore::new(Arc::clone(store)).build_promotion_hint();
+    if !exp_hint.is_empty() {
+        parts.push(exp_hint);
+    }
+    // Level 2: pending 原则候选 → 报告主人 (批准权在主人: approve_principle + master token)
+    let pending = PrincipleStore::new(Arc::clone(store)).list(Some("pending"));
+    if !pending.is_empty() {
+        let mut s = String::from("【原则候选】以下原则待主人批准 (主人用 approve_principle 传入 master token 批准; 批准后叠加到工具执行检查):\n");
+        for p in pending.iter().take(5) {
+            s.push_str(&format!("  • {} (来源: {}) — {}\n", p.statement, p.source, p.rationale));
+        }
+        parts.push(s);
+    }
+    parts.join("\n")
+}
+
 /// 伙伴主链路: 喂节律 → 记忆/今日注入 → LLM+工具循环 → OpenAI 兼容响应.
 async fn chat_completions(
     State(st): State<Arc<AppState>>,
@@ -357,12 +384,16 @@ async fn chat_completions(
     let mut messages = req.messages.clone();
     let mem = inject_memory(&st.store);
     let today = inject_today(&st.store);
+    let growth = inject_growth(&st.store);
     let mut injections: Vec<String> = Vec::new();
     if !mem.is_empty() {
         injections.push(mem);
     }
     if !today.is_empty() {
         injections.push(today);
+    }
+    if !growth.is_empty() {
+        injections.push(growth);
     }
     if !injections.is_empty() {
         let block = injections.join("\n");
