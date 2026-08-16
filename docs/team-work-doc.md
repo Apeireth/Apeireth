@@ -271,7 +271,7 @@
 | vcpLoop 三件套 | TOOL_REQUEST 文本协议（`<<<[TOOL_REQUEST]>>>` 始末语法+ESCAPE+archery 异步分离+思考块剥离防潜藏调用）; toolExecutor 含 vref 语义引用（对话压缩加权向量+零额外 API 检索注入）; 模糊标记匹配 | **宽松语法解析层移植**（tool-runtime 增强）; vref 零成本旁路增强 |
 | dynamicToolRegistry | 事件驱动同步（sha256 判变, 下线=状态翻转）; **分类四级降级**（自定义→小模型→RAG→关键词）; **注入预算化**（light list + 仅相关展开, 16000 字符上限） | tool-registry 补"分类责任链 + 注入注意力预算" |
 | toolApprovalManager | 决策器/审批通道解耦（纯函数返回 ApprovalDecision）; 命令级粒度（tool:command）; **静默拒绝**; 结构化拒绝 `{rejected_by_user, error_type}` | tool-approval 补命令级+静默拒绝+结构化拒绝 |
-| toolResultPrivacyGuard | 递归脱敏: 敏感键名/env 赋值行/高置信 token 模式（sk-/ghp_/AKIA）; data:image base64 白名单换出; 首尾保留 4 字符 | guard 已借鉴 → 补 env 行级+sk- 模式 |
+| toolResultPrivacyGuard | 递归脱敏: 敏感键名/env 赋值行/高置信 token 模式（sk-/ghp_/AKIA）; data:image base64 白名单换出; 首尾保留 4 字符 | ✅ env 行级+sk- 模式已落地 apeireth-guard (任务 ae12d9eb, pii.rs SecretToken+EnvSecret; 报告 reports/ae12d9eb-...-security_reviewer2-report.md); tool-runtime 递归版已有 (禁改) |
 | foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（VCP 原创） |
 | messageProcessor | **占位符变量宇宙**: 分型变量源/特权角色（agent/toolbox 只在 system 展开）/AgentGuard 单次展开/ToolboxGuard 每种一次/循环依赖检测/动态折叠加权平均向量 | **提示词装配引擎**——Rust 无对应物, VCP 最强架构级原创, 最高优先 |
 | semanticModelRouter + reasoningContentAdapter | 虚拟模型名+意图嵌入选模型+容灾链（命中→default→fallback）; 13 个别名推理字段归一为 think 块 | 网关层两块适配件（provider/gateway 补） |
