@@ -110,7 +110,7 @@
 | 34 | assemble.rs chrono unwrap DST 修复 | A4 (CR2 03cf86e9) | assemble.rs:399 `and_local_timezone(...).unwrap()` 在 DST/时钟回拨时歧义 panic — 一行改 `.single()`/Option 兜底; 4 处 Mutex poison 风险仅记录不阻塞 | ⬜ P2, 待实施 |
 | 35 | v2 alpha 失传产物诚实标注 | A4 (C3 盘点) | 7 份验收报告 + 09-ADDENDUM + V2-INDEX + 07-V2-BASELINE 从未入 git 历史 (不可恢复, 详见 C3 报告 §二) — 在 RELEASE-NOTES-v2.0.0-alpha 对应位置加注"产物已失传"或 Leader 决策重写; 不重建伪造 (0 装 PASS) | ⬜ P2, 待 Leader 决策 |
 | 36 | round15-03 丢失内容恢复决策 | A4 (MCP2 380a2218) | 嵌套侧 CHANGELOG +28 行 / ROADMAP +43/-5 行未进根版本; blob 9aa1791c/0efb4322 可随时恢复 (commit 8bcad630) — 已通报 Leader | ⬜ P2, 待 Leader 决策 |
-| 37 | 根 tests/ 死代码归档 | A4 (QA1 5c888b1c) | 根 tests/ 12 个 .rs 不被任何活跃 crate 编译 (纯 workspace 无 root package), README 自述占位 — 清理或归档, 防误以为在执行 | ⬜ P2, 待实施 |
+| 37 | 根 tests/ 死代码归档 | A4 (QA1 5c888b1c) | 根 tests/ 12 个 .rs 不被任何活跃 crate 编译 (纯 workspace 无 root package), README 自述占位 — 清理或归档, 防误以为在执行 | ✅ 任务 70282ede: git mv 整体归档 crates/_archived/root-tests/ (R165 模式, 12 .rs + README, 归档说明头), 0 外部引用已核实 |
 
 ### P3 — 归档/低优先 (做了更好, 不做不欠)
 
@@ -124,9 +124,9 @@
 | 20 | self_update OTA | A1 | 发布流程成熟后再做 | ✅ 已实装 (R223): 真实二进制替换 + 备份 + 原子切换 + 回滚; 台账确认完成 |
 | 21 | TUI voice/eye stub | A2 | 前端占位, 不影响机制 | ✅ 修复真 bug: Synthesize 假装成功 → 返回 Unsupported; eye 占位诚实标注; 新测试 |
 | 22 | Windows Hello 真绑 | A2 | 生物识别绑定, 需硬件调研 | ✅ 提交 2d07c604: hello.rs 机制口 (detect_hello_capability reg query NGC + HelloBound trait; 0 装 PASS 不假装已绑定); 3 测试 |
-| 38 | mkdocs extra.css 资产补齐 | A4 (TW1 fba46921) | mkdocs.yml extra_css 引用 docs/pages-source/assets/css/extra.css 不存在; strict:true 构建会告警 — 补最小 extra.css 或删 extra_css 段 | ⬜ P3, 待实施 |
+| 38 | mkdocs extra.css 资产补齐 | A4 (TW1 fba46921) | mkdocs.yml extra_css 引用 docs/pages-source/assets/css/extra.css 不存在; strict:true 构建会告警 — 补最小 extra.css 或删 extra_css 段 | ✅ 任务 70282ede: 补最小 extra.css (docs/pages-source/assets/css/extra.css, 注释占位), mkdocs.yml 0 改动 |
 | 39 | companion 6 clippy 警告 + CI fmt 核对 | A4 (CR1 abf185d2) | cast_lossless×3 (memory_extractor.rs:299/session_log.rs:53/simulation.rs:223) + manual_let_else×3 (session_log.rs:94/tool_bridge.rs:786/796) 机械修; 另核对 CI fmt check 是否真 nightly (否则 tantivy 5 项 nightly-only 规则形同虚设) | ⬜ P3, 待实施 |
-| 40 | deny.toml 过期 skip 清理 | A4 (SEC1 02cd644d) | unnecessary-skip (heck 等已单版本) + unmatched-skip (async-channel 已不在依赖图); 过期 skip 会掩盖未来真实多版本问题 | ⬜ P3, 待实施 |
+| 40 | deny.toml 过期 skip 清理 | A4 (SEC1 02cd644d) | unnecessary-skip (heck 等已单版本) + unmatched-skip (async-channel 已不在依赖图); 过期 skip 会掩盖未来真实多版本问题 | ✅ 任务 70282ede: cargo-deny 0.20.2 实测驱动, 删 19 unnecessary + 12 unmatched (含 async-channel; heck 在 deny 图内确已单版本, 台账判断成立), 保留 windows_x86_64_gnu (实测 3 版本分裂, 误删会被 bans 抓回); cargo deny check bans → bans ok + 0 skip 警告。另发现既有 advisories FAILED (lru unsound, 与本次无关, 留安全团队) |
 | 41 | rust-toolchain.toml pin 版本 | A4 (BE1 5cb3d314) | 现仅 channel=stable 未 pin 具体版本, stable 升级会导致 CI 与本地漂移; 建议 pin 1.97.1 (可重现构建决策需 Leader 拍板) | ⬜ P3, 待决策 |
 | 42 | git 卫生: stash/zombie worktree/log | A4 (DO1 b7f49cfe) | ①29 条历史 stash (round5~R122) 审计清理 ②僵尸 worktree r11-recover 需 `git worktree prune` (写操作待授权) ③reports/*.log 纳入 .gitignore (如 be2-cargo-check.log) | ⬜ P3, 待授权 |
 | 43 | frontend/ 残留骨架清理 | A4 (FS1 c7b06a25) | frontend/ 仅存 tauri-prototype 残留 (砍前端决策的遗留, .gitignore:152 有记载); 清理需主人确认 | ⬜ P3, 待主人确认 |
