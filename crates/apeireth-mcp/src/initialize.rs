@@ -40,10 +40,7 @@ use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse, JSON_RPC_VE
 ///
 /// 兼容策略 (per MCP spec): server 回 client 发的版本; 如果 server 不认识 client 的版本,
 /// 回自己声明的版本 (本 crate 默认 `2025-03-26`).
-pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &[
-    "2025-03-26",
-    "2024-11-05",
-];
+pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2025-03-26", "2024-11-05"];
 
 /// **协议版本不匹配错误码** (server-define 范围 -32000 ~ -32099)
 pub const PROTOCOL_VERSION_MISMATCH: i32 = -32002;
@@ -165,7 +162,8 @@ impl InitializeResult {
     /// - 协议版本用 client 发的 (若兼容) 或 server 默认
     /// - 其他字段透传 server 默认
     pub fn build_from_request(req: &InitializeRequest, default_server_info: ServerInfo) -> Self {
-        let negotiated = negotiate_protocol_version(&req.protocolVersion, &default_server_info.protocolVersion);
+        let negotiated =
+            negotiate_protocol_version(&req.protocolVersion, &default_server_info.protocolVersion);
         let mut info = default_server_info;
         info.protocolVersion = negotiated;
         info
@@ -173,9 +171,9 @@ impl InitializeResult {
 
     /// 把整个 initialize 结果 (含 capabilities 全集) 序列化为 JSON-RPC result Value
     pub fn to_result_value(&self) -> Value {
-        serde_json::to_value(self).unwrap_or_else(|e| {
-            json!({ "error": format!("serialize InitializeResult failed: {}", e) })
-        })
+        serde_json::to_value(self).unwrap_or_else(
+            |e| json!({ "error": format!("serialize InitializeResult failed: {}", e) }),
+        )
     }
 }
 
@@ -234,7 +232,6 @@ mod tests {
     use super::*;
 
     use crate::ServerInfo;
-
 
     #[test]
     fn protocol_versions_compatible_exact() {

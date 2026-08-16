@@ -240,7 +240,10 @@ impl LarkRealImpl {
 
     /// 强制刷新 token (公开, 给 401 重试用).
     async fn auth_refresh_locked(&self) -> LarkResult<TenantAccessToken> {
-        let url = format!("{}/auth/v3/tenant_access_token/internal", self.config.base_url);
+        let url = format!(
+            "{}/auth/v3/tenant_access_token/internal",
+            self.config.base_url
+        );
         let body = serde_json::json!({
             "app_id": self.config.app_id,
             "app_secret": self.config.app_secret,
@@ -271,9 +274,8 @@ impl LarkRealImpl {
         // 飞书 auth endpoint 响应是**平铺结构** (per 官方文档 + 2026 实测),
         // 字段 { code, msg, tenant_access_token, expire } 全部在顶层, 不用 LarkApiResponse 包装.
         // 跟其他 4 端点 (im/calendar/docx/bitable) 不一样.
-        let parsed: TenantTokenResponse = serde_json::from_str(&text).map_err(|e| {
-            LarkError::Other(format!("auth_refresh parse: {e}, body: {text}"))
-        })?;
+        let parsed: TenantTokenResponse = serde_json::from_str(&text)
+            .map_err(|e| LarkError::Other(format!("auth_refresh parse: {e}, body: {text}")))?;
 
         if parsed.code != 0 {
             return Err(LarkError::ApiError {
@@ -411,10 +413,7 @@ impl LarkRealImpl {
     }
 
     /// GET 一次 (强制带 auth).
-    async fn get_json_with_auth(
-        &self,
-        path: &str,
-    ) -> LarkResult<(StatusCode, String)> {
+    async fn get_json_with_auth(&self, path: &str) -> LarkResult<(StatusCode, String)> {
         let url = format!("{}{}", self.config.base_url, path);
         let token = self.ensure_token().await?;
         let mut headers = HeaderMap::new();
@@ -472,9 +471,8 @@ impl LarkRealImpl {
         }
 
         // 2) HTTP 200, 解析外壳
-        let outer: serde_json::Value = serde_json::from_str(&text).map_err(|e| {
-            LarkError::Other(format!("response parse failed: {e}, body: {text}"))
-        })?;
+        let outer: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| LarkError::Other(format!("response parse failed: {e}, body: {text}")))?;
 
         let code = outer
             .get("code")
@@ -638,9 +636,7 @@ impl LarkClient for LarkRealImpl {
         // URL encode query (中文 / 特殊字符)
         let encoded = url::form_urlencoded::byte_serialize(query.as_bytes()).collect::<String>();
         let limit = limit.min(200); // 飞书默认上限 200
-        let path = format!(
-            "/docx/v1/documents?query={encoded}&limit={limit}"
-        );
+        let path = format!("/docx/v1/documents?query={encoded}&limit={limit}");
         self.get_json(&path).await
     }
 
@@ -658,9 +654,7 @@ impl LarkClient for LarkRealImpl {
             ));
         }
         let limit = limit.min(1000); // 飞书默认上限 1000
-        let path = format!(
-            "/bitable/v1/apps/{app_id}/tables/{table_id}/records?limit={limit}"
-        );
+        let path = format!("/bitable/v1/apps/{app_id}/tables/{table_id}/records?limit={limit}");
         self.get_json(&path).await
     }
 

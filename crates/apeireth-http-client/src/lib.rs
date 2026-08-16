@@ -57,10 +57,10 @@
 
 pub mod client;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod config;
 pub mod error;
 pub mod lifo_pool;
+mod organ_kani_proofs;
 // R127-2 P9-1: hyper-util bridge (借脑 1.0, per decision-56 §2.4)
 pub mod hyper_util_bridge;
 

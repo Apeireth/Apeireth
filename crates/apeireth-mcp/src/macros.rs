@@ -88,12 +88,8 @@ mod tests {
     #[test]
     fn test_jsonrpc_macro_generates_correct_envelope() {
         // 1) request (with id)
-        let req: JsonRpcRequest = jsonrpc_envelope!(
-            request,
-            "tools/list",
-            Some(json!({})),
-            Id::Num(1)
-        );
+        let req: JsonRpcRequest =
+            jsonrpc_envelope!(request, "tools/list", Some(json!({})), Id::Num(1));
         assert_eq!(req.jsonrpc, JSON_RPC_VERSION);
         assert_eq!(req.jsonrpc, "2.0");
         assert_eq!(req.method, "tools/list");
@@ -101,22 +97,14 @@ mod tests {
         assert_eq!(req.id, Some(Id::Num(1)));
 
         // 2) notification (no id)
-        let n: JsonRpcRequest = jsonrpc_envelope!(
-            notification,
-            "notifications/initialized",
-            None
-        );
+        let n: JsonRpcRequest = jsonrpc_envelope!(notification, "notifications/initialized", None);
         assert_eq!(n.jsonrpc, "2.0");
         assert_eq!(n.method, "notifications/initialized");
         assert_eq!(n.params, None);
         assert_eq!(n.id, None);
 
         // 3) response ok
-        let resp: JsonRpcResponse = jsonrpc_envelope!(
-            ok,
-            Some(Id::Num(1)),
-            json!({"tools": []})
-        );
+        let resp: JsonRpcResponse = jsonrpc_envelope!(ok, Some(Id::Num(1)), json!({"tools": []}));
         assert_eq!(resp.jsonrpc, "2.0");
         assert!(resp.error.is_none());
         assert_eq!(resp.result, Some(json!({"tools": []})));
@@ -135,10 +123,7 @@ mod tests {
             err_resp.error.as_ref().unwrap().code,
             JsonRpcError::CODE_METHOD_NOT_FOUND
         );
-        assert_eq!(
-            err_resp.error.as_ref().unwrap().message,
-            "Method not found"
-        );
+        assert_eq!(err_resp.error.as_ref().unwrap().message, "Method not found");
         assert_eq!(err_resp.id, Some(Id::Num(2)));
 
         // 5) 序列化验证 (跟手写 `JsonRpcRequest::new` 等价)

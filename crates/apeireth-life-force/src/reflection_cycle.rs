@@ -26,9 +26,9 @@
 //! - history 最大 16 项, 超 LRU  6 弹出, 防止 unbounded growth
 //! - readiness: Ok (现有 reflection_trigger 已真接, 本模块深化)
 
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt;
-use serde::{Deserialize, Serialize};
 
 /// 4 阶段反思期
 ///
@@ -89,10 +89,7 @@ pub enum ReflectionCycleError {
         to: ReflectionPhase,
     },
     /// continuity_id 不一致.
-    ContinuityMismatch {
-        expected: String,
-        actual: String,
-    },
+    ContinuityMismatch { expected: String, actual: String },
 }
 
 impl fmt::Display for ReflectionCycleError {
@@ -153,7 +150,10 @@ impl ReflectionCycleScheduler {
     }
 
     /// 校验 continuity_id 匹配 (防止跨载体串扰).
-    pub fn validate_continuity(&self, identity_continuity_id: &str) -> Result<(), ReflectionCycleError> {
+    pub fn validate_continuity(
+        &self,
+        identity_continuity_id: &str,
+    ) -> Result<(), ReflectionCycleError> {
         if self.continuity_id == identity_continuity_id {
             Ok(())
         } else {
@@ -165,11 +165,7 @@ impl ReflectionCycleScheduler {
     }
 
     /// 状态机转移 (合法转移列表内).
-    pub fn advance(
-        &mut self,
-        to: ReflectionPhase,
-        now: i64,
-    ) -> Result<(), ReflectionCycleError> {
+    pub fn advance(&mut self, to: ReflectionPhase, now: i64) -> Result<(), ReflectionCycleError> {
         let valid = matches!(
             (self.current, to),
             (ReflectionPhase::Triggered, ReflectionPhase::Reflecting)
@@ -284,10 +280,14 @@ mod tests {
     #[test]
     fn advance_rejects_backward_transition() {
         let mut s = ReflectionCycleScheduler::new("did:test-001", 1_700_000_000);
-        s.advance(ReflectionPhase::Reflecting, 1_700_000_001).unwrap();
+        s.advance(ReflectionPhase::Reflecting, 1_700_000_001)
+            .unwrap();
         // Reflecting → Triggered 非法 (不能回退)
         let res = s.advance(ReflectionPhase::Triggered, 1_700_000_002);
-        assert!(matches!(res, Err(ReflectionCycleError::InvalidTransition { .. })));
+        assert!(matches!(
+            res,
+            Err(ReflectionCycleError::InvalidTransition { .. })
+        ));
     }
 
     #[test]
@@ -295,7 +295,10 @@ mod tests {
         let mut s = ReflectionCycleScheduler::new("did:test-001", 1_700_000_000);
         // Triggered → Concluded 非法 (跳级)
         let res = s.advance(ReflectionPhase::Concluded, 1_700_000_001);
-        assert!(matches!(res, Err(ReflectionCycleError::InvalidTransition { .. })));
+        assert!(matches!(
+            res,
+            Err(ReflectionCycleError::InvalidTransition { .. })
+        ));
     }
 
     #[test]
@@ -308,14 +311,17 @@ mod tests {
     fn validate_continuity_mismatch() {
         let s = ReflectionCycleScheduler::new("did:test-001", 0);
         let res = s.validate_continuity("did:other-002");
-        assert!(matches!(res, Err(ReflectionCycleError::ContinuityMismatch { .. })));
+        assert!(matches!(
+            res,
+            Err(ReflectionCycleError::ContinuityMismatch { .. })
+        ));
     }
 
     #[test]
     fn history_lru_eviction_at_max() {
         let mut s = ReflectionCycleScheduler::new("did:test-001", 0);
         s.max_history = 3; // 强制小上限便于测
-        // 已 1 项 (init), 加 3 项 (3 transitions) → 共 4, 超过 max=3 → pop 1
+                           // 已 1 项 (init), 加 3 项 (3 transitions) → 共 4, 超过 max=3 → pop 1
         s.advance(ReflectionPhase::Reflecting, 1).unwrap();
         s.advance(ReflectionPhase::Consolidating, 2).unwrap();
         s.advance(ReflectionPhase::Concluded, 3).unwrap();
@@ -323,7 +329,11 @@ mod tests {
         // 期望: 最旧 1 项被弹出 (init), 但 advance 内部循环 push 触发时也维护 max_history
         // 实际上 Concluded 时 push 2 次: Concluded + auto_retrigger Triggered.
         // 测试聚焦: history 不超过 max_history + 一些 buffer
-        assert!(s.history.len() <= s.max_history + 2, "history overflow: {}", s.history.len());
+        assert!(
+            s.history.len() <= s.max_history + 2,
+            "history overflow: {}",
+            s.history.len()
+        );
     }
 
     #[test]

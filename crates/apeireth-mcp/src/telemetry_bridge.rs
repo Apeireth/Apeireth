@@ -114,7 +114,11 @@ impl PerKindSnapshot {
     fn from_atomic(kind: DispatchKind, c: &PerKindCounters) -> Self {
         let total = c.total.load(Ordering::Relaxed);
         let total_duration_ms = c.total_duration_ms.load(Ordering::Relaxed);
-        let avg_duration_ms = if total > 0 { total_duration_ms / total } else { 0 };
+        let avg_duration_ms = if total > 0 {
+            total_duration_ms / total
+        } else {
+            0
+        };
         Self {
             kind: kind.as_str().to_string(),
             total,
@@ -181,7 +185,13 @@ impl McpMetrics {
     }
 
     /// **record 一次 dispatch** (per method call)
-    pub fn record_dispatch(&self, method: &str, kind: DispatchKind, success: bool, duration: Duration) {
+    pub fn record_dispatch(
+        &self,
+        method: &str,
+        kind: DispatchKind,
+        success: bool,
+        duration: Duration,
+    ) {
         if !self.is_enabled() {
             return;
         }
@@ -190,7 +200,10 @@ impl McpMetrics {
             self.by_kind[kind_idx].record(success, duration);
         }
         // Per-method (BTreeMap guarded by std Mutex, BTreeMap 写慢但 OK for low-frequency)
-        let mut map = self.by_method.lock().expect("apeireth-mcp telemetry by_method mutex poisoned");
+        let mut map = self
+            .by_method
+            .lock()
+            .expect("apeireth-mcp telemetry by_method mutex poisoned");
         map.entry(method.to_string())
             .or_insert_with(PerKindCounters::default)
             .record(success, duration);
@@ -199,20 +212,42 @@ impl McpMetrics {
     /// **拿 snapshot** (per-kind + per-method)
     pub fn snapshot(&self) -> McpMetricsSnapshot {
         let kinds = vec![
-            PerKindSnapshot::from_atomic(DispatchKind::Initialize, &self.by_kind[DispatchKind::Initialize as u8 as usize]),
-            PerKindSnapshot::from_atomic(DispatchKind::Tools, &self.by_kind[DispatchKind::Tools as u8 as usize]),
-            PerKindSnapshot::from_atomic(DispatchKind::Resources, &self.by_kind[DispatchKind::Resources as u8 as usize]),
-            PerKindSnapshot::from_atomic(DispatchKind::Prompts, &self.by_kind[DispatchKind::Prompts as u8 as usize]),
-            PerKindSnapshot::from_atomic(DispatchKind::Other, &self.by_kind[DispatchKind::Other as u8 as usize]),
+            PerKindSnapshot::from_atomic(
+                DispatchKind::Initialize,
+                &self.by_kind[DispatchKind::Initialize as u8 as usize],
+            ),
+            PerKindSnapshot::from_atomic(
+                DispatchKind::Tools,
+                &self.by_kind[DispatchKind::Tools as u8 as usize],
+            ),
+            PerKindSnapshot::from_atomic(
+                DispatchKind::Resources,
+                &self.by_kind[DispatchKind::Resources as u8 as usize],
+            ),
+            PerKindSnapshot::from_atomic(
+                DispatchKind::Prompts,
+                &self.by_kind[DispatchKind::Prompts as u8 as usize],
+            ),
+            PerKindSnapshot::from_atomic(
+                DispatchKind::Other,
+                &self.by_kind[DispatchKind::Other as u8 as usize],
+            ),
         ];
 
-        let methods_map = self.by_method.lock().expect("apeireth-mcp telemetry by_method mutex poisoned");
+        let methods_map = self
+            .by_method
+            .lock()
+            .expect("apeireth-mcp telemetry by_method mutex poisoned");
         let mut methods: Vec<PerMethodSnapshot> = methods_map
             .iter()
             .map(|(name, c)| {
                 let total = c.total.load(Ordering::Relaxed);
                 let total_duration_ms = c.total_duration_ms.load(Ordering::Relaxed);
-                let avg_duration_ms = if total > 0 { total_duration_ms / total } else { 0 };
+                let avg_duration_ms = if total > 0 {
+                    total_duration_ms / total
+                } else {
+                    0
+                };
                 PerMethodSnapshot {
                     method: name.clone(),
                     total,
@@ -237,7 +272,11 @@ impl McpMetrics {
             total_success,
             total_error,
             total_duration_ms,
-            avg_duration_ms: if total_dispatches > 0 { total_duration_ms / total_dispatches } else { 0 },
+            avg_duration_ms: if total_dispatches > 0 {
+                total_duration_ms / total_dispatches
+            } else {
+                0
+            },
             by_kind: kinds,
             by_method: methods,
         }
@@ -251,7 +290,10 @@ impl McpMetrics {
             c.error.store(0, Ordering::Relaxed);
             c.total_duration_ms.store(0, Ordering::Relaxed);
         }
-        self.by_method.lock().expect("apeireth-mcp telemetry by_method mutex poisoned").clear();
+        self.by_method
+            .lock()
+            .expect("apeireth-mcp telemetry by_method mutex poisoned")
+            .clear();
     }
 }
 
@@ -312,8 +354,14 @@ impl McpMetricsSnapshot {
         let _ = writeln!(s, "");
         let _ = writeln!(s, "## Per method");
         let _ = writeln!(s, "");
-        let _ = writeln!(s, "| Method | Total | Success | Error | Total ms | Avg ms |");
-        let _ = writeln!(s, "|--------|-------|---------|-------|----------|--------|");
+        let _ = writeln!(
+            s,
+            "| Method | Total | Success | Error | Total ms | Avg ms |"
+        );
+        let _ = writeln!(
+            s,
+            "|--------|-------|---------|-------|----------|--------|"
+        );
         for m in &self.by_method {
             let _ = writeln!(
                 s,
@@ -348,13 +396,28 @@ mod tests {
 
     #[test]
     fn dispatch_kind_from_method() {
-        assert_eq!(DispatchKind::from_method("initialize"), DispatchKind::Initialize);
+        assert_eq!(
+            DispatchKind::from_method("initialize"),
+            DispatchKind::Initialize
+        );
         assert_eq!(DispatchKind::from_method("tools/list"), DispatchKind::Tools);
         assert_eq!(DispatchKind::from_method("tools/call"), DispatchKind::Tools);
-        assert_eq!(DispatchKind::from_method("resources/list"), DispatchKind::Resources);
-        assert_eq!(DispatchKind::from_method("resources/read"), DispatchKind::Resources);
-        assert_eq!(DispatchKind::from_method("prompts/list"), DispatchKind::Prompts);
-        assert_eq!(DispatchKind::from_method("prompts/get"), DispatchKind::Prompts);
+        assert_eq!(
+            DispatchKind::from_method("resources/list"),
+            DispatchKind::Resources
+        );
+        assert_eq!(
+            DispatchKind::from_method("resources/read"),
+            DispatchKind::Resources
+        );
+        assert_eq!(
+            DispatchKind::from_method("prompts/list"),
+            DispatchKind::Prompts
+        );
+        assert_eq!(
+            DispatchKind::from_method("prompts/get"),
+            DispatchKind::Prompts
+        );
         assert_eq!(DispatchKind::from_method("foo/bar"), DispatchKind::Other);
     }
 
@@ -377,7 +440,12 @@ mod tests {
     fn metrics_disabled_mode() {
         let m = McpMetrics::disabled();
         assert!(!m.is_enabled());
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(10));
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(10),
+        );
         let snap = m.snapshot();
         assert_eq!(snap.total_dispatches, 0);
     }
@@ -385,8 +453,18 @@ mod tests {
     #[test]
     fn record_dispatch_increments_counters() {
         let m = McpMetrics::new();
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(10));
-        m.record_dispatch("tools/call", DispatchKind::Tools, false, Duration::from_millis(20));
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(10),
+        );
+        m.record_dispatch(
+            "tools/call",
+            DispatchKind::Tools,
+            false,
+            Duration::from_millis(20),
+        );
         let snap = m.snapshot();
         assert_eq!(snap.total_dispatches, 2);
         assert_eq!(snap.total_success, 1);
@@ -397,12 +475,36 @@ mod tests {
     #[test]
     fn record_per_kind_aggregation() {
         let m = McpMetrics::new();
-        m.record_dispatch("initialize", DispatchKind::Initialize, true, Duration::from_millis(5));
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(10));
-        m.record_dispatch("resources/list", DispatchKind::Resources, true, Duration::from_millis(15));
-        m.record_dispatch("prompts/list", DispatchKind::Prompts, true, Duration::from_millis(20));
+        m.record_dispatch(
+            "initialize",
+            DispatchKind::Initialize,
+            true,
+            Duration::from_millis(5),
+        );
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(10),
+        );
+        m.record_dispatch(
+            "resources/list",
+            DispatchKind::Resources,
+            true,
+            Duration::from_millis(15),
+        );
+        m.record_dispatch(
+            "prompts/list",
+            DispatchKind::Prompts,
+            true,
+            Duration::from_millis(20),
+        );
         let snap = m.snapshot();
-        let initialize = snap.by_kind.iter().find(|k| k.kind == "initialize").unwrap();
+        let initialize = snap
+            .by_kind
+            .iter()
+            .find(|k| k.kind == "initialize")
+            .unwrap();
         let tools = snap.by_kind.iter().find(|k| k.kind == "tools").unwrap();
         let resources = snap.by_kind.iter().find(|k| k.kind == "resources").unwrap();
         let prompts = snap.by_kind.iter().find(|k| k.kind == "prompts").unwrap();
@@ -415,12 +517,35 @@ mod tests {
     #[test]
     fn record_per_method_aggregation() {
         let m = McpMetrics::new();
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(10));
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(20));
-        m.record_dispatch("tools/call", DispatchKind::Tools, false, Duration::from_millis(30));
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(10),
+        );
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(20),
+        );
+        m.record_dispatch(
+            "tools/call",
+            DispatchKind::Tools,
+            false,
+            Duration::from_millis(30),
+        );
         let snap = m.snapshot();
-        let tools_list = snap.by_method.iter().find(|m| m.method == "tools/list").unwrap();
-        let tools_call = snap.by_method.iter().find(|m| m.method == "tools/call").unwrap();
+        let tools_list = snap
+            .by_method
+            .iter()
+            .find(|m| m.method == "tools/list")
+            .unwrap();
+        let tools_call = snap
+            .by_method
+            .iter()
+            .find(|m| m.method == "tools/call")
+            .unwrap();
         assert_eq!(tools_list.total, 2);
         assert_eq!(tools_list.success, 2);
         assert_eq!(tools_call.total, 1);
@@ -478,7 +603,12 @@ mod tests {
     #[test]
     fn snapshot_to_markdown_basic() {
         let m = McpMetrics::new();
-        m.record_dispatch("tools/list", DispatchKind::Tools, true, Duration::from_millis(10));
+        m.record_dispatch(
+            "tools/list",
+            DispatchKind::Tools,
+            true,
+            Duration::from_millis(10),
+        );
         let snap = m.snapshot();
         let md = snap.to_markdown();
         assert!(md.contains("# MCP Metrics Snapshot"));

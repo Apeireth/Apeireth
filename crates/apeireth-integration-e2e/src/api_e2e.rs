@@ -42,7 +42,9 @@ use crate::harness::IntegrationHarness;
 // =====================================================================
 
 /// 1. GET /metrics 返 Prometheus exposition format
-pub async fn test_api_metrics_endpoint_returns_prometheus(h: &mut IntegrationHarness) -> E2EResult<()> {
+pub async fn test_api_metrics_endpoint_returns_prometheus(
+    h: &mut IntegrationHarness,
+) -> E2EResult<()> {
     Mock::given(method("GET"))
         .and(path("/metrics"))
         .respond_with(ResponseTemplate::new(200).set_body_string(
@@ -94,13 +96,18 @@ pub async fn test_api_health_endpoint_5_components(h: &mut IntegrationHarness) -
     let resp = h.api_get("/health").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/health".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/health".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     let body: serde_json::Value = resp.json().await.map_err(|e| E2EError::ApiJson {
         context: "/health response".into(),
         reason: e.to_string(),
     })?;
-    let components = body.get("components")
+    let components = body
+        .get("components")
         .and_then(|v| v.as_object())
         .ok_or_else(|| E2EError::ApiJson {
             context: "/health components".into(),
@@ -128,7 +135,11 @@ pub async fn test_api_status_endpoint_uptime(h: &mut IntegrationHarness) -> E2ER
     let resp = h.api_get("/status").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/status".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/status".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     let body: serde_json::Value = resp.json().await.map_err(|e| E2EError::ApiJson {
         context: "/status response".into(),
@@ -155,13 +166,18 @@ pub async fn test_api_tools_calendar_list(h: &mut IntegrationHarness) -> E2EResu
     let resp = h.api_get("/v1/tools/list").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/tools/list".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/tools/list".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     let body: serde_json::Value = resp.json().await.map_err(|e| E2EError::ApiJson {
         context: "/v1/tools/list".into(),
         reason: e.to_string(),
     })?;
-    let tools = body.get("tools")
+    let tools = body
+        .get("tools")
         .and_then(|v| v.as_array())
         .ok_or_else(|| E2EError::ApiJson {
             context: "/v1/tools/list".into(),
@@ -187,13 +203,22 @@ pub async fn test_api_tools_calendar_create(h: &mut IntegrationHarness) -> E2ERe
         })))
         .mount(&h.api_server)
         .await;
-    let resp = h.api_post("/v1/tools/invoke", json!({
-        "name": "WebSearch",
-        "args": {"query": "apeireth"}
-    })).await?;
+    let resp = h
+        .api_post(
+            "/v1/tools/invoke",
+            json!({
+                "name": "WebSearch",
+                "args": {"query": "apeireth"}
+            }),
+        )
+        .await?;
     let status = resp.status().as_u16();
     if status != 201 {
-        return Err(E2EError::ApiStatus { url: "/v1/tools/invoke".into(), expected: 201, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/tools/invoke".into(),
+            expected: 201,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -211,7 +236,11 @@ pub async fn test_api_tools_calendar_get(h: &mut IntegrationHarness) -> E2EResul
     let resp = h.api_get("/v1/tools/WebSearch").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/tools/WebSearch".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/tools/WebSearch".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -225,10 +254,16 @@ pub async fn test_api_tools_calendar_update(h: &mut IntegrationHarness) -> E2ERe
         })))
         .mount(&h.api_server)
         .await;
-    let resp = h.api_put("/v1/tools/WebSearch", json!({"enabled": true})).await?;
+    let resp = h
+        .api_put("/v1/tools/WebSearch", json!({"enabled": true}))
+        .await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/tools/WebSearch".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/tools/WebSearch".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -243,7 +278,11 @@ pub async fn test_api_tools_calendar_delete(h: &mut IntegrationHarness) -> E2ERe
     let resp = h.api_delete("/v1/tools/WebSearch").await?;
     let status = resp.status().as_u16();
     if status != 204 {
-        return Err(E2EError::ApiStatus { url: "/v1/tools/WebSearch".into(), expected: 204, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/tools/WebSearch".into(),
+            expected: 204,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -263,13 +302,18 @@ pub async fn test_api_tools_message_list(h: &mut IntegrationHarness) -> E2EResul
     let resp = h.api_get("/v1/memory/episodes").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/memory/episodes".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/memory/episodes".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     let body: serde_json::Value = resp.json().await.map_err(|e| E2EError::ApiJson {
         context: "/v1/memory/episodes".into(),
         reason: e.to_string(),
     })?;
-    let episodes = body.get("episodes")
+    let episodes = body
+        .get("episodes")
         .and_then(|v| v.as_array())
         .ok_or_else(|| E2EError::ApiJson {
             context: "/v1/memory/episodes".into(),
@@ -293,13 +337,22 @@ pub async fn test_api_tools_message_send(h: &mut IntegrationHarness) -> E2EResul
         })))
         .mount(&h.api_server)
         .await;
-    let resp = h.api_post("/v1/memory/append", json!({
-        "role": "user",
-        "content": "test"
-    })).await?;
+    let resp = h
+        .api_post(
+            "/v1/memory/append",
+            json!({
+                "role": "user",
+                "content": "test"
+            }),
+        )
+        .await?;
     let status = resp.status().as_u16();
     if status != 201 {
-        return Err(E2EError::ApiStatus { url: "/v1/memory/append".into(), expected: 201, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/memory/append".into(),
+            expected: 201,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -318,7 +371,11 @@ pub async fn test_api_tools_contact_list(h: &mut IntegrationHarness) -> E2EResul
     let resp = h.api_get("/v1/agent/aliases").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/agent/aliases".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/agent/aliases".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -333,12 +390,21 @@ pub async fn test_api_tools_contact_create(h: &mut IntegrationHarness) -> E2ERes
         })))
         .mount(&h.api_server)
         .await;
-    let resp = h.api_post("/v1/agent/alias", json!({
-        "name": "secondary"
-    })).await?;
+    let resp = h
+        .api_post(
+            "/v1/agent/alias",
+            json!({
+                "name": "secondary"
+            }),
+        )
+        .await?;
     let status = resp.status().as_u16();
     if status != 201 {
-        return Err(E2EError::ApiStatus { url: "/v1/agent/alias".into(), expected: 201, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/agent/alias".into(),
+            expected: 201,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -355,13 +421,18 @@ pub async fn test_api_tools_task_list(h: &mut IntegrationHarness) -> E2EResult<(
     let resp = h.api_get("/v1/organs").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/organs".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/organs".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     let body: serde_json::Value = resp.json().await.map_err(|e| E2EError::ApiJson {
         context: "/v1/organs".into(),
         reason: e.to_string(),
     })?;
-    let organs = body.get("organs")
+    let organs = body
+        .get("organs")
         .and_then(|v| v.as_array())
         .ok_or_else(|| E2EError::ApiJson {
             context: "/v1/organs".into(),
@@ -385,12 +456,21 @@ pub async fn test_api_tools_task_complete(h: &mut IntegrationHarness) -> E2EResu
         })))
         .mount(&h.api_server)
         .await;
-    let resp = h.api_post("/v1/organs/heart/invoke", json!({
-        "action": "pulse_check"
-    })).await?;
+    let resp = h
+        .api_post(
+            "/v1/organs/heart/invoke",
+            json!({
+                "action": "pulse_check"
+            }),
+        )
+        .await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/organs/heart/invoke".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/organs/heart/invoke".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -411,7 +491,11 @@ pub async fn test_api_tools_search_web(h: &mut IntegrationHarness) -> E2EResult<
     let resp = h.api_get("/v1/asi/all").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/asi/all".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/asi/all".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -432,7 +516,11 @@ pub async fn test_api_tools_search_code(h: &mut IntegrationHarness) -> E2EResult
     let resp = h.api_get("/v1/sovereignty/status").await?;
     let status = resp.status().as_u16();
     if status != 200 {
-        return Err(E2EError::ApiStatus { url: "/v1/sovereignty/status".into(), expected: 200, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/sovereignty/status".into(),
+            expected: 200,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -450,7 +538,11 @@ pub async fn test_api_unauthorized_returns_401(h: &mut IntegrationHarness) -> E2
     let resp = h.api_get("/v1/protected").await?;
     let status = resp.status().as_u16();
     if status != 401 {
-        return Err(E2EError::ApiStatus { url: "/v1/protected".into(), expected: 401, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/protected".into(),
+            expected: 401,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -467,7 +559,11 @@ pub async fn test_api_not_found_returns_404(h: &mut IntegrationHarness) -> E2ERe
     let resp = h.api_get("/v1/nonexistent").await?;
     let status = resp.status().as_u16();
     if status != 404 {
-        return Err(E2EError::ApiStatus { url: "/v1/nonexistent".into(), expected: 404, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/nonexistent".into(),
+            expected: 404,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -484,7 +580,11 @@ pub async fn test_api_server_error_returns_500(h: &mut IntegrationHarness) -> E2
     let resp = h.api_get("/v1/crash").await?;
     let status = resp.status().as_u16();
     if status != 500 {
-        return Err(E2EError::ApiStatus { url: "/v1/crash".into(), expected: 500, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/crash".into(),
+            expected: 500,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -506,7 +606,11 @@ pub async fn test_api_websocket_8_frames(h: &mut IntegrationHarness) -> E2EResul
     let resp = h.api_get("/v1/ws").await?;
     let status = resp.status().as_u16();
     if status != 426 {
-        return Err(E2EError::ApiStatus { url: "/v1/ws".into(), expected: 426, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/ws".into(),
+            expected: 426,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -521,7 +625,11 @@ pub async fn test_api_rate_limit_enforced(h: &mut IntegrationHarness) -> E2EResu
     let resp = h.api_get("/v1/rate-limited").await?;
     let status = resp.status().as_u16();
     if status != 429 {
-        return Err(E2EError::ApiStatus { url: "/v1/rate-limited".into(), expected: 429, actual: status });
+        return Err(E2EError::ApiStatus {
+            url: "/v1/rate-limited".into(),
+            expected: 429,
+            actual: status,
+        });
     }
     Ok(())
 }
@@ -538,7 +646,9 @@ mod tests {
     async fn run_all_19_api_e2e() {
         let mut h = IntegrationHarness::start().await.unwrap();
         // 跑全部 19 端点测试
-        test_api_metrics_endpoint_returns_prometheus(&mut h).await.unwrap();
+        test_api_metrics_endpoint_returns_prometheus(&mut h)
+            .await
+            .unwrap();
         test_api_health_endpoint_5_components(&mut h).await.unwrap();
         test_api_status_endpoint_uptime(&mut h).await.unwrap();
         test_api_tools_calendar_list(&mut h).await.unwrap();
@@ -566,7 +676,9 @@ mod tests {
     #[tokio::test]
     async fn test_api_metrics_endpoint_returns_prometheus_run() {
         let mut h = IntegrationHarness::start().await.unwrap();
-        test_api_metrics_endpoint_returns_prometheus(&mut h).await.unwrap();
+        test_api_metrics_endpoint_returns_prometheus(&mut h)
+            .await
+            .unwrap();
         h.shutdown().await.unwrap();
     }
 

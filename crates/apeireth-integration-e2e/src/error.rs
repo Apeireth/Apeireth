@@ -220,7 +220,9 @@ mod tests {
             expected: String::new(),
             actual: String::new(),
         };
-        let _v7 = E2EError::HarnessStart { reason: String::new() };
+        let _v7 = E2EError::HarnessStart {
+            reason: String::new(),
+        };
         let _v8 = E2EError::Other(anyhow::anyhow!("9th variant"));
         // 9 变体 ✓ (8-10 区间)
     }
@@ -313,7 +315,9 @@ mod tests {
 
     #[test]
     fn display_harness_start() {
-        let e = E2EError::HarnessStart { reason: "wiremock fail".into() };
+        let e = E2EError::HarnessStart {
+            reason: "wiremock fail".into(),
+        };
         assert!(e.to_string().contains("wiremock fail"));
     }
 

@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use apeireth_i18n::{
-    Locale, SUPPORTED_LOCALES, TOOL_WHITELIST, TranslatorImpl, render_template, validate_tool_call,
+    render_template, validate_tool_call, Locale, TranslatorImpl, SUPPORTED_LOCALES, TOOL_WHITELIST,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 

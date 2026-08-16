@@ -58,7 +58,9 @@ pub mod real;
 mod organ_kani_proofs;
 
 // 便捷 re-exports (调用方少打 crate 名)
-pub use real::{msg_type_to_str, LarkApiResponse, LarkRealImpl, SendMessageResponse, TenantTokenResponse};
+pub use real::{
+    msg_type_to_str, LarkApiResponse, LarkRealImpl, SendMessageResponse, TenantTokenResponse,
+};
 
 // ============================================================================
 // m3 hallucination 防御 #3 (per m3-hallucination-defense-2026-08-05.md §2.4 + §2.1)
@@ -115,7 +117,10 @@ pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 3)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 3)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 额外 1 守门工具).
 /// **R20 阶段 3 改 `STUB_MODE = false` 时, 本函数返 `false`**; 现阶段恒返 `true`.
@@ -311,7 +316,11 @@ pub trait LarkClient: Send + Sync {
     /// 工具 5: `search_documents` — 搜索文档 (`docx/v1/documents` GET with `query`).
     ///
     /// **STUB**: 返 `LarkError::NotImplemented("search_documents")`.
-    async fn search_documents(&self, query: &str, limit: usize) -> LarkResult<Vec<serde_json::Value>>;
+    async fn search_documents(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> LarkResult<Vec<serde_json::Value>>;
 
     // ---------- Bitable (2) ----------
 
@@ -449,7 +458,9 @@ impl LarkClient for LarkClientImpl {
         _limit: usize,
     ) -> LarkResult<Vec<serde_json::Value>> {
         debug!(target: "apeireth_lark", "list_bitable_records: STUB — NotImplemented");
-        Err(LarkError::NotImplemented("list_bitable_records".to_string()))
+        Err(LarkError::NotImplemented(
+            "list_bitable_records".to_string(),
+        ))
     }
 
     async fn create_bitable_record(
@@ -459,7 +470,9 @@ impl LarkClient for LarkClientImpl {
         _fields: serde_json::Value,
     ) -> LarkResult<String> {
         debug!(target: "apeireth_lark", "create_bitable_record: STUB — NotImplemented");
-        Err(LarkError::NotImplemented("create_bitable_record".to_string()))
+        Err(LarkError::NotImplemented(
+            "create_bitable_record".to_string(),
+        ))
     }
 
     // ---- Auth (1) ----
@@ -526,11 +539,18 @@ mod tests {
     #[test]
     fn compile_time_constants_are_pinned() {
         assert_eq!(LARK_SCHEMA_VERSION, "1");
-        assert_eq!(PLATFORM_NAME, "apeireth", "K-1 强校验 #1: 平台名必须 apeireth");
+        assert_eq!(
+            PLATFORM_NAME, "apeireth",
+            "K-1 强校验 #1: 平台名必须 apeireth"
+        );
         assert_eq!(LARK_API_BASE_URL, "https://open.feishu.cn/open-apis");
         assert_eq!(LARK_TOKEN_CACHE_TTL_SECONDS, 7200);
         assert_eq!(LARK_MAX_MESSAGE_LENGTH, 4096);
-        assert_eq!(SUPPORTED_MESSAGE_TYPES.len(), 5, "K-1 强校验 #2: 5 MessageType");
+        assert_eq!(
+            SUPPORTED_MESSAGE_TYPES.len(),
+            5,
+            "K-1 强校验 #2: 5 MessageType"
+        );
     }
 
     // Fixture 3: TOOL_WHITELIST 9 项 (8 工具 + 1 stub_status, K-1 强校验 #3)
@@ -548,10 +568,7 @@ mod tests {
             "apeireth_lark_auth_refresh",
             "apeireth_lark_stub_status",
         ] {
-            assert!(
-                TOOL_WHITELIST.contains(&tool),
-                "TOOL_WHITELIST 缺: {tool}"
-            );
+            assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST 缺: {tool}");
         }
     }
 
@@ -590,7 +607,10 @@ mod tests {
         let args = serde_json::json!({});
         // 白名单内通过
         for tool in TOOL_WHITELIST {
-            assert!(validate_tool_call(tool, &args).is_ok(), "白名单工具 {tool} 应通过");
+            assert!(
+                validate_tool_call(tool, &args).is_ok(),
+                "白名单工具 {tool} 应通过"
+            );
         }
         // 白名单外拒绝
         let result = validate_tool_call("apeireth_lark_send_email", &args);

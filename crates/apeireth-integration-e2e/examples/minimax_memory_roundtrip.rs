@@ -71,7 +71,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let req = LlmRequest::new(
         MODEL,
         vec![
-            ChatMessage::system("You are a Rust engineering assistant, answer concisely, one sentence max"),
+            ChatMessage::system(
+                "You are a Rust engineering assistant, answer concisely, one sentence max",
+            ),
             ChatMessage::user(user_prompt),
         ],
     )
@@ -83,8 +85,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let elapsed = start.elapsed();
 
     println!("  assistant reply: {}", resp.content);
-    println!("  tokens: prompt={} completion={} total={}",
-        resp.usage.prompt_tokens, resp.usage.completion_tokens, resp.usage.total_tokens);
+    println!(
+        "  tokens: prompt={} completion={} total={}",
+        resp.usage.prompt_tokens, resp.usage.completion_tokens, resp.usage.total_tokens
+    );
     println!("  latency: {}ms", elapsed.as_millis());
     println!();
 
@@ -111,7 +115,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         content: resp.content.clone(),
         session_id: SESSION_ID.into(),
     })?;
-    println!("  wrote ep-asst-1 (assistant reply, {} chars)", resp.content.len());
+    println!(
+        "  wrote ep-asst-1 (assistant reply, {} chars)",
+        resp.content.len()
+    );
 
     drop(store);
     println!("  store dropped (file closed, connection released)");
@@ -124,18 +131,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let store2 = SqliteMemoryStore::open(&tmp_path)?;
     let query = EpisodeQuery::new().for_session(SESSION_ID);
     let episodes = store2.query(&query)?;
-    println!("  session '{SESSION_ID}' contains {} episodes:", episodes.len());
+    println!(
+        "  session '{SESSION_ID}' contains {} episodes:",
+        episodes.len()
+    );
 
     for ep in &episodes {
-        println!("    - [{}] {}: {}", ep.id, ep.role, truncate(&ep.content, 80));
+        println!(
+            "    - [{}] {}: {}",
+            ep.id,
+            ep.role,
+            truncate(&ep.content, 80)
+        );
     }
 
     if episodes.len() != 2 {
-        return Err(format!(
-            "expected 2 episodes in session, got {}",
-            episodes.len()
-        )
-        .into());
+        return Err(format!("expected 2 episodes in session, got {}", episodes.len()).into());
     }
     println!("  2 episodes persisted across drop+reopen");
     println!();
@@ -166,7 +177,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("  - minimax Anthropic protocol real call OK");
     println!("  - SQLite real persistence (file-backed, drop+reopen) OK");
     println!("  - semantic_search retrievable OK");
-    println!("  - tokens real count ({} total) OK", resp.usage.total_tokens);
+    println!(
+        "  - tokens real count ({} total) OK",
+        resp.usage.total_tokens
+    );
 
     Ok(())
 }

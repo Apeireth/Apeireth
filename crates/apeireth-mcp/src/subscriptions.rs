@@ -86,7 +86,10 @@ impl SubscriptionManager {
         if client_id.is_empty() {
             return Err(JsonRpcError::new(SUBSCRIBE_INVALID_URI, "client_id empty"));
         }
-        let mut map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let mut map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         let entry = map.entry(uri.to_string()).or_insert_with(HashSet::new);
         if entry.contains(client_id) {
             return Err(JsonRpcError::new(
@@ -99,7 +102,10 @@ impl SubscriptionManager {
     }
 
     pub fn unsubscribe(&self, uri: &str, client_id: &str) -> Result<(), JsonRpcError> {
-        let mut map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let mut map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         if let Some(entry) = map.get_mut(uri) {
             if entry.remove(client_id) {
                 if entry.is_empty() {
@@ -115,14 +121,20 @@ impl SubscriptionManager {
     }
 
     pub fn subscribers(&self, uri: &str) -> Vec<String> {
-        let map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         map.get(uri)
             .map(|s| s.iter().cloned().collect())
             .unwrap_or_default()
     }
 
     pub fn unsubscribe_client(&self, client_id: &str) -> usize {
-        let mut map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let mut map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         let mut removed = 0;
         let uris: Vec<String> = map.keys().cloned().collect();
         for uri in uris {
@@ -139,17 +151,26 @@ impl SubscriptionManager {
     }
 
     pub fn uri_count(&self) -> usize {
-        let map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         map.len()
     }
 
     pub fn subscription_count(&self) -> usize {
-        let map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         map.values().map(|s| s.len()).sum()
     }
 
     pub fn uris(&self) -> Vec<String> {
-        let map = self.inner.lock().expect("subscription manager mutex poisoned");
+        let map = self
+            .inner
+            .lock()
+            .expect("subscription manager mutex poisoned");
         let mut keys: Vec<String> = map.keys().cloned().collect();
         keys.sort();
         keys
@@ -157,7 +178,10 @@ impl SubscriptionManager {
 }
 
 /// 处理 `resources/subscribe` 请求
-pub fn handle_resources_subscribe(req: &JsonRpcRequest, mgr: &SubscriptionManager) -> JsonRpcResponse {
+pub fn handle_resources_subscribe(
+    req: &JsonRpcRequest,
+    mgr: &SubscriptionManager,
+) -> JsonRpcResponse {
     let Some(params) = req.params.as_ref() else {
         return JsonRpcResponse::err(
             req.id.clone(),
@@ -178,13 +202,19 @@ pub fn handle_resources_subscribe(req: &JsonRpcRequest, mgr: &SubscriptionManage
         None => format!("anon-{}", std::process::id()),
     };
     match mgr.subscribe(&uri, &client_id) {
-        Ok(()) => JsonRpcResponse::ok(req.id.clone(), json!({ "subscribed": true, "uri": uri, "client_id": client_id })),
+        Ok(()) => JsonRpcResponse::ok(
+            req.id.clone(),
+            json!({ "subscribed": true, "uri": uri, "client_id": client_id }),
+        ),
         Err(e) => JsonRpcResponse::err(req.id.clone(), JsonRpcError::new(e.code, e.message)),
     }
 }
 
 /// 处理 `resources/unsubscribe` 请求
-pub fn handle_resources_unsubscribe(req: &JsonRpcRequest, mgr: &SubscriptionManager) -> JsonRpcResponse {
+pub fn handle_resources_unsubscribe(
+    req: &JsonRpcRequest,
+    mgr: &SubscriptionManager,
+) -> JsonRpcResponse {
     let Some(params) = req.params.as_ref() else {
         return JsonRpcResponse::err(
             req.id.clone(),
@@ -205,7 +235,10 @@ pub fn handle_resources_unsubscribe(req: &JsonRpcRequest, mgr: &SubscriptionMana
         None => format!("anon-{}", std::process::id()),
     };
     match mgr.unsubscribe(&uri, &client_id) {
-        Ok(()) => JsonRpcResponse::ok(req.id.clone(), json!({ "unsubscribed": true, "uri": uri, "client_id": client_id })),
+        Ok(()) => JsonRpcResponse::ok(
+            req.id.clone(),
+            json!({ "unsubscribed": true, "uri": uri, "client_id": client_id }),
+        ),
         Err(e) => JsonRpcResponse::err(req.id.clone(), JsonRpcError::new(e.code, e.message)),
     }
 }
@@ -392,7 +425,10 @@ mod tests {
         assert_eq!(n.method, "notifications/resources/updated");
         assert!(n.id.is_none(), "notification must have id = None");
         let params = n.params.expect("params");
-        assert_eq!(params.get("uri").and_then(|v| v.as_str()), Some("file:///a.rs"));
+        assert_eq!(
+            params.get("uri").and_then(|v| v.as_str()),
+            Some("file:///a.rs")
+        );
     }
 
     #[test]
