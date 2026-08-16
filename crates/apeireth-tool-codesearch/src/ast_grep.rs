@@ -49,11 +49,15 @@ pub struct AstGrepSearcher {
 impl AstGrepSearcher {
     /// 默认 binary = 'ast-grep' (从 PATH 查找)
     pub fn new() -> Self {
-        Self { binary: PathBuf::from("ast-grep") }
+        Self {
+            binary: PathBuf::from("ast-grep"),
+        }
     }
 
     pub fn with_binary(binary: impl Into<PathBuf>) -> Self {
-        Self { binary: binary.into() }
+        Self {
+            binary: binary.into(),
+        }
     }
 
     /// 检测 binary 是否可用 (spawn --version)
@@ -67,7 +71,9 @@ impl AstGrepSearcher {
 }
 
 impl Default for AstGrepSearcher {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub trait AstSearcher: Send + Sync {
@@ -97,7 +103,8 @@ impl AstSearcher for AstGrepSearcher {
         // ast-grep run --pattern PATTERN [--lang LANG] --json=stream PATH
         let mut cmd = Command::new(&self.binary);
         cmd.arg("run")
-            .arg("--pattern").arg(pattern)
+            .arg("--pattern")
+            .arg(pattern)
             .arg("--json=stream");
         if let Some(l) = lang {
             cmd.arg("--lang").arg(l);
@@ -114,7 +121,8 @@ impl AstSearcher for AstGrepSearcher {
         // ast-grep scan --rule RULE_FILE --json=stream PATH
         let mut cmd = Command::new(&self.binary);
         cmd.arg("scan")
-            .arg("--rule").arg(rule_file)
+            .arg("--rule")
+            .arg(rule_file)
             .arg("--json=stream")
             .arg(root);
         run_ast_grep(cmd)
@@ -142,7 +150,9 @@ fn run_ast_grep(mut cmd: Command) -> Result<Vec<AstGrepMatch>, AstGrepError> {
     let mut matches = Vec::new();
     for line in stdout.lines() {
         let line = line.trim();
-        if line.is_empty() { continue; }
+        if line.is_empty() {
+            continue;
+        }
         match serde_json::from_str::<AstGrepJsonEntry>(line) {
             Ok(entry) => matches.push(entry.into_match()),
             Err(_) => {

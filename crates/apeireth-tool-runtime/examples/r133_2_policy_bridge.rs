@@ -77,7 +77,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ===== 4. LLM 决策 plan (R131.12 + R132.4 同样 API) =====
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let provider = Arc::new(AnthropicCompatibleProvider::new(cfg)?);
@@ -106,13 +107,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut other_fail = 0usize;
     for (i, line) in plan_lines.iter().take(2).enumerate() {
         let parts: Vec<&str> = line.splitn(2, '|').collect();
-        if parts.len() != 2 { continue; }
+        if parts.len() != 2 {
+            continue;
+        }
         let tool_name = parts[0].trim();
         let args_str = parts[1].trim();
-        let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
+        let args: Value =
+            serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
 
-        let expected = if tool_name == "DangerTool" { "DENY (BlacklistRule)" } else { "ALLOW" };
-        println!("  [{}] tool={} (expected: {}) args={}", i + 1, tool_name, expected, args);
+        let expected = if tool_name == "DangerTool" {
+            "DENY (BlacklistRule)"
+        } else {
+            "ALLOW"
+        };
+        println!(
+            "  [{}] tool={} (expected: {}) args={}",
+            i + 1,
+            tool_name,
+            expected,
+            args
+        );
 
         let parsed = ParsedToolCall {
             tool_name: tool_name.to_string(),
@@ -128,7 +142,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let dur = call_start.elapsed().as_millis();
                 println!(
                     "    → 5-stage OK in {}ms: stages={} (tool={}, allowed=Yes)",
-                    dur, ctx.stage_durations_ms.len(), tool_name
+                    dur,
+                    ctx.stage_durations_ms.len(),
+                    tool_name
                 );
             }
             Err(e) => {
@@ -161,6 +177,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if allow_count + deny_count + other_fail == 0 {
         return Err("R133.2 e2e: no plan lines parsed".into());
     }
-    println!("\nR133.2 ApprovalBridge 注入 pipeline-g5 5 阶段: PASS (allow={} deny={} other={})", allow_count, deny_count, other_fail);
+    println!(
+        "\nR133.2 ApprovalBridge 注入 pipeline-g5 5 阶段: PASS (allow={} deny={} other={})",
+        allow_count, deny_count, other_fail
+    );
     Ok(())
 }

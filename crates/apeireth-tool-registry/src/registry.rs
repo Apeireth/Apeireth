@@ -32,7 +32,7 @@ use parking_lot::RwLock;
 use serde_json::{json, Value};
 use tracing::{debug, info, warn};
 
-use crate::classifier::{Category, ClassifyError, Classifier};
+use crate::classifier::{Category, Classifier, ClassifyError};
 use crate::trait_def::Tool;
 use crate::types::{
     AwaitingAxis, OutputAxis, ResidentAxis, ToolAxes, ToolKind, ToolKind as _K, TransportAxis,
@@ -216,7 +216,13 @@ impl ToolRegistry {
         let cats = self.categories.read();
         let mut names: Vec<String> = cats
             .iter()
-            .filter_map(|(name, cat)| if *cat == category { Some(name.clone()) } else { None })
+            .filter_map(|(name, cat)| {
+                if *cat == category {
+                    Some(name.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
         names.sort();
         names

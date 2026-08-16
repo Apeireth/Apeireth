@@ -56,7 +56,10 @@ async fn approval_bridge_denies_blacklist_in_pipeline() {
     // 3. 调 Echo → 期望 Policy stage 拒 (PipelineError::PolicyDenied)
     let call = make_call("Echo", json!({"x": 1}));
     let result = p.execute(call);
-    assert!(result.is_err(), "BlacklistRule must deny Echo at Policy stage");
+    assert!(
+        result.is_err(),
+        "BlacklistRule must deny Echo at Policy stage"
+    );
     let err_str = format!("{}", result.unwrap_err());
     assert!(
         err_str.contains("Echo") || err_str.contains("denied") || err_str.contains("黑名单"),

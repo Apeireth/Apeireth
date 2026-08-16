@@ -5,11 +5,11 @@
 
 use std::sync::Arc;
 
-use apeireth_tool_approval::{
-    ApprovalDecision, ApprovalListRule, ApprovalManager, ApprovalOutcome, ApprovalRule,
-    BlacklistRule, RejectErrorType, RiskRule, TrustRule, extract_commands, parse_approval_entry,
-};
 use apeireth_tool_approval::manager::ApprovalHandler;
+use apeireth_tool_approval::{
+    extract_commands, parse_approval_entry, ApprovalDecision, ApprovalListRule, ApprovalManager,
+    ApprovalOutcome, ApprovalRule, BlacklistRule, RejectErrorType, RiskRule, TrustRule,
+};
 use apeireth_tool_runtime::parser::ToolCallParser;
 use apeireth_tool_runtime::ParsedToolCall;
 use async_trait::async_trait;
@@ -52,7 +52,10 @@ fn command_level_entry_parses_and_matches() {
         "<<<[TOOL_REQUEST]>>>\ntool_name:<<<FileOperator>>>\ncommand:<<<delete>>>\n<<<[END_TOOL_REQUEST]>>>",
     );
     let commands = extract_commands(&call.args);
-    assert!(commands.contains(&"delete".to_string()), "解析后应提取到 command, 实际: {commands:?}");
+    assert!(
+        commands.contains(&"delete".to_string()),
+        "解析后应提取到 command, 实际: {commands:?}"
+    );
 
     let rule = ApprovalListRule::with_entries(["FileOperator:delete".to_string()], 300_000);
     let d = rule.check(&call, &[]);
@@ -252,9 +255,8 @@ fn check_signature_backcompat() {
         ["X".to_string()],
         300_000,
     )));
-    let call = parse_one(
-        "<<<[TOOL_REQUEST]>>>\ntool_name:<<<X>>>\narg:<<<1>>>\n<<<[END_TOOL_REQUEST]>>>",
-    );
+    let call =
+        parse_one("<<<[TOOL_REQUEST]>>>\ntool_name:<<<X>>>\narg:<<<1>>>\n<<<[END_TOOL_REQUEST]>>>");
     let d: ApprovalDecision = mgr.check(&call);
     assert!(d.is_require_approval());
 }

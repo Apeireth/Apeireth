@@ -20,9 +20,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use apeireth_pipeline_g5::{
-    Pipeline, PipelineConfig, PipelineError, Stage, StageKind,
-};
+use apeireth_pipeline_g5::{Pipeline, PipelineConfig, PipelineError, Stage, StageKind};
 use apeireth_tool_registry::ToolRegistry;
 use serde_json::Value;
 use tracing::{debug, warn};
@@ -47,9 +45,7 @@ use crate::parser::ParsedToolCall;
 // init_tool_metrics(); // 调一次, 之后 5 阶段自动记录
 // ```
 
-use apeireth_telemetry::metric::{
-    counter::Counter, registry::MetricsRegistry,
-};
+use apeireth_telemetry::metric::{counter::Counter, registry::MetricsRegistry};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// R133.5 — 全局 tool pipeline metrics 状态.
@@ -70,13 +66,15 @@ pub struct ToolMetrics {
 impl ToolMetrics {
     /// 5 阶段 = 5 counter (编译期 K-1 守门)
     pub const STAGE_COUNT: usize = 5;
-    pub const STAGE_KINDS: [&str; 5] = ["dispatch", "normalize", "policy", "reliability", "throttle"];
+    pub const STAGE_KINDS: [&str; 5] =
+        ["dispatch", "normalize", "policy", "reliability", "throttle"];
 }
 
 /// 全局 OnceLock 持有 ToolMetrics (R133.5 设计: 进程单例).
 ///
 /// **不假装**: 不可在 test 间共享, 每个 test 调一次 `init_tool_metrics_for_test()` 拿独立 registry.
-static TOOL_METRICS: std::sync::OnceLock<parking_lot::Mutex<ToolMetrics>> = std::sync::OnceLock::new();
+static TOOL_METRICS: std::sync::OnceLock<parking_lot::Mutex<ToolMetrics>> =
+    std::sync::OnceLock::new();
 
 fn metrics() -> &'static parking_lot::Mutex<ToolMetrics> {
     TOOL_METRICS.get_or_init(|| {
@@ -105,9 +103,12 @@ pub fn init_tool_metrics() -> Arc<MetricsRegistry> {
                 name.clone(),
                 format!("Total times tool pipeline {} stage was processed", kind),
                 std::collections::HashMap::new(),
-            ).expect("counter init"),
+            )
+            .expect("counter init"),
         );
-        registry.register_counter(counter).expect("counter register");
+        registry
+            .register_counter(counter)
+            .expect("counter register");
     }
     m.registry = Some(registry.clone());
     registry
@@ -340,7 +341,9 @@ pub struct ToolPolicy {
 
 impl ToolPolicy {
     pub fn new() -> Self {
-        Self { rule: Box::new(AlwaysAllowPolicy) }
+        Self {
+            rule: Box::new(AlwaysAllowPolicy),
+        }
     }
 
     pub fn with_rule<R: ToolPolicyRule + 'static>(mut self, rule: R) -> Self {
@@ -404,7 +407,6 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolPolicy {
         Ok(ctx)
     }
 }
-
 
 /// **阶段 3: Reliability** — `tokio::time::timeout` 包裹 tool.call + R133.3 retry/backoff.
 ///
@@ -517,7 +519,9 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
                     ctx.result = Some(value);
                     debug!(
                         "[Reliability] tool '{}' succeeded on attempt {}/{}",
-                        tool_name, attempt_idx + 1, total_attempts
+                        tool_name,
+                        attempt_idx + 1,
+                        total_attempts
                     );
                     last_err = None;
                     succeeded = true;
@@ -527,7 +531,10 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
                     let msg = e.to_string();
                     debug!(
                         "[Reliability] tool '{}' errored on attempt {}/{}: {}",
-                        tool_name, attempt_idx + 1, total_attempts, msg
+                        tool_name,
+                        attempt_idx + 1,
+                        total_attempts,
+                        msg
                     );
                     last_err = Some(format!("tool error: {msg}"));
                 }
@@ -535,7 +542,9 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
                     let msg = format!("tool timeout after {}ms", self.timeout_ms);
                     debug!(
                         "[Reliability] tool '{}' timed out on attempt {}/{}",
-                        tool_name, attempt_idx + 1, total_attempts
+                        tool_name,
+                        attempt_idx + 1,
+                        total_attempts
                     );
                     last_err = Some(msg);
                 }
@@ -543,15 +552,14 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
             // backoff before next attempt (skip after last)
             if attempt_idx + 1 < total_attempts {
                 let backoff_ms = (self.initial_backoff_ms as f64
-                    * self.backoff_multiplier.powi(attempt_idx as i32)) as u64;
+                    * self.backoff_multiplier.powi(attempt_idx as i32))
+                    as u64;
                 std::thread::sleep(Duration::from_millis(backoff_ms));
             }
         }
 
-        ctx.stage_durations_ms.push((
-            StageKind::Reliability,
-            stage_start.elapsed().as_millis(),
-        ));
+        ctx.stage_durations_ms
+            .push((StageKind::Reliability, stage_start.elapsed().as_millis()));
 
         if !succeeded {
             let msg = last_err.unwrap_or_else(|| "unknown error".to_string());
@@ -635,11 +643,17 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolThrottle {
             });
             match allowed {
                 Ok(true) => {
-                    debug!("[Throttle] tool '{}' acquired 1 token for key '{}'", tool_name, key);
+                    debug!(
+                        "[Throttle] tool '{}' acquired 1 token for key '{}'",
+                        tool_name, key
+                    );
                     ctx.throttle_passed = true;
                 }
                 Ok(false) => {
-                    debug!("[Throttle] tool '{}' rate limited (no tokens) for key '{}'", tool_name, key);
+                    debug!(
+                        "[Throttle] tool '{}' rate limited (no tokens) for key '{}'",
+                        tool_name, key
+                    );
                     ctx.throttle_passed = false;
                     ctx.stage_durations_ms
                         .push((StageKind::Throttle, stage_start.elapsed().as_millis()));
@@ -650,7 +664,10 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolThrottle {
                 }
                 Err(e) => {
                     // rate limiter 内部错 (storage 失败等), 保守 fail-open
-                    warn!("[Throttle] rate limiter err for tool '{}': {}, fail-open", tool_name, e);
+                    warn!(
+                        "[Throttle] rate limiter err for tool '{}': {}, fail-open",
+                        tool_name, e
+                    );
                     ctx.throttle_passed = true;
                 }
             }
@@ -675,7 +692,7 @@ pub struct ToolCallPipelineMarker;
 
 /// Tool LLM 调用的 5 阶段 pipeline 入口.
 ///
-/// **R133.2 设计**: 持有 registry + timeout + 可选 custom_policy, `with_policy()` 
+/// **R133.2 设计**: 持有 registry + timeout + 可选 custom_policy, `with_policy()`
 /// 立即 rebuild inner (消费 self), 让 Policy stage 真的用 custom rule.
 pub struct ToolCallPipeline {
     inner: Pipeline<ToolCallPipelineMarker, ToolCallContext, ToolCallContext>,
@@ -697,12 +714,15 @@ impl ToolCallPipeline {
         registry: Arc<ToolRegistry>,
         timeout_ms: u64,
     ) -> Pipeline<ToolCallPipelineMarker, ToolCallContext, ToolCallContext> {
-        Pipeline::new(PipelineConfig::new("tool-call-default", "ToolCallPipelineMarker"))
-            .with_stage(ToolDispatch::new(registry.clone()))
-            .with_stage(ToolNormalize::new())
-            .with_stage(ToolPolicy::new()) // 默认 AlwaysAllowPolicy
-            .with_stage(ToolReliability::new(registry, timeout_ms))
-            .with_stage(ToolThrottle::new())
+        Pipeline::new(PipelineConfig::new(
+            "tool-call-default",
+            "ToolCallPipelineMarker",
+        ))
+        .with_stage(ToolDispatch::new(registry.clone()))
+        .with_stage(ToolNormalize::new())
+        .with_stage(ToolPolicy::new()) // 默认 AlwaysAllowPolicy
+        .with_stage(ToolReliability::new(registry, timeout_ms))
+        .with_stage(ToolThrottle::new())
     }
 
     /// **R133.2 — 一次性构造带 custom policy 的 pipeline.**
@@ -745,12 +765,15 @@ impl ToolCallPipeline {
         key_prefix: String,
     ) -> Self {
         let inner: Pipeline<ToolCallPipelineMarker, ToolCallContext, ToolCallContext> =
-            Pipeline::new(PipelineConfig::new("tool-call-default", "ToolCallPipelineMarker"))
-                .with_stage(ToolDispatch::new(registry.clone()))
-                .with_stage(ToolNormalize::new())
-                .with_stage(ToolPolicy::new()) // 默认 AlwaysAllowPolicy
-                .with_stage(ToolReliability::new(registry, timeout_ms))
-                .with_stage(ToolThrottle::new().with_limiter(limiter, key_prefix));
+            Pipeline::new(PipelineConfig::new(
+                "tool-call-default",
+                "ToolCallPipelineMarker",
+            ))
+            .with_stage(ToolDispatch::new(registry.clone()))
+            .with_stage(ToolNormalize::new())
+            .with_stage(ToolPolicy::new()) // 默认 AlwaysAllowPolicy
+            .with_stage(ToolReliability::new(registry, timeout_ms))
+            .with_stage(ToolThrottle::new().with_limiter(limiter, key_prefix));
         Self { inner }
     }
 
@@ -763,12 +786,15 @@ impl ToolCallPipeline {
         key_prefix: String,
     ) -> Self {
         let inner: Pipeline<ToolCallPipelineMarker, ToolCallContext, ToolCallContext> =
-            Pipeline::new(PipelineConfig::new("tool-call-default", "ToolCallPipelineMarker"))
-                .with_stage(ToolDispatch::new(registry.clone()))
-                .with_stage(ToolNormalize::new())
-                .with_stage(ToolPolicy::new().with_box_rule(Box::new(policy)))
-                .with_stage(ToolReliability::new(registry, timeout_ms))
-                .with_stage(ToolThrottle::new().with_limiter(limiter, key_prefix));
+            Pipeline::new(PipelineConfig::new(
+                "tool-call-default",
+                "ToolCallPipelineMarker",
+            ))
+            .with_stage(ToolDispatch::new(registry.clone()))
+            .with_stage(ToolNormalize::new())
+            .with_stage(ToolPolicy::new().with_box_rule(Box::new(policy)))
+            .with_stage(ToolReliability::new(registry, timeout_ms))
+            .with_stage(ToolThrottle::new().with_limiter(limiter, key_prefix));
         Self { inner }
     }
 
@@ -778,12 +804,15 @@ impl ToolCallPipeline {
         rule: R,
     ) -> Self {
         let inner: Pipeline<ToolCallPipelineMarker, ToolCallContext, ToolCallContext> =
-            Pipeline::new(PipelineConfig::new("tool-call-default", "ToolCallPipelineMarker"))
-                .with_stage(ToolDispatch::new(registry.clone()))
-                .with_stage(ToolNormalize::new())
-                .with_stage(ToolPolicy::new().with_box_rule(Box::new(rule)))
-                .with_stage(ToolReliability::new(registry, timeout_ms))
-                .with_stage(ToolThrottle::new());
+            Pipeline::new(PipelineConfig::new(
+                "tool-call-default",
+                "ToolCallPipelineMarker",
+            ))
+            .with_stage(ToolDispatch::new(registry.clone()))
+            .with_stage(ToolNormalize::new())
+            .with_stage(ToolPolicy::new().with_box_rule(Box::new(rule)))
+            .with_stage(ToolReliability::new(registry, timeout_ms))
+            .with_stage(ToolThrottle::new());
         Self { inner }
     }
 
@@ -903,7 +932,9 @@ mod tests {
     impl ToolPolicyRule for DenyEchoPolicy {
         fn check(&self, call: &ParsedToolCall) -> PolicyVerdict {
             if call.tool_name == "Echo" {
-                PolicyVerdict::Deny { reason: "stub deny".to_string() }
+                PolicyVerdict::Deny {
+                    reason: "stub deny".to_string(),
+                }
             } else {
                 PolicyVerdict::Allow
             }
@@ -917,10 +948,17 @@ mod tests {
         let p = ToolCallPipeline::new_with_policy(r, 5000, DenyEchoPolicy);
         let call = make_call("Echo", json!({"x": 1}));
         let result = p.execute(call);
-        assert!(result.is_err(), "DenyEchoPolicy should deny Echo at Policy stage");
+        assert!(
+            result.is_err(),
+            "DenyEchoPolicy should deny Echo at Policy stage"
+        );
         let err = result.unwrap_err();
         let err_str = format!("{}", err);
-        assert!(err_str.contains("denied") || err_str.contains("deny"), "got: {}", err_str);
+        assert!(
+            err_str.contains("denied") || err_str.contains("deny"),
+            "got: {}",
+            err_str
+        );
     }
 
     /// R133.2: new_with_policy 注入 AlwaysAllowPolicy 等价于 new() 行为
@@ -954,8 +992,12 @@ mod tests {
 
     #[async_trait]
     impl Tool for FlakyTool {
-        fn name(&self) -> &str { &self.name }
-        fn kind(&self) -> ToolKind { ToolKind::Static }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn kind(&self) -> ToolKind {
+            ToolKind::Static
+        }
         fn axes(&self) -> ToolAxes {
             ToolAxes {
                 trigger: apeireth_tool_registry::TriggerAxis::Periodic,
@@ -998,7 +1040,10 @@ mod tests {
         let ctx = ToolCallContext::new(call);
         let result = stage.process(ctx);
         let ctx = result.expect("FlakyTool should eventually succeed after 2 retries");
-        assert_eq!(ctx.attempts, 3, "should attempt 3 times (1 initial + 2 retries)");
+        assert_eq!(
+            ctx.attempts, 3,
+            "should attempt 3 times (1 initial + 2 retries)"
+        );
         assert!(ctx.result.is_some(), "ctx.result should be set on success");
         let v = ctx.result.unwrap();
         assert_eq!(v["flaky"], "succeeded");
@@ -1041,8 +1086,12 @@ mod tests {
 
     #[async_trait]
     impl Tool for AlwaysFailTool {
-        fn name(&self) -> &str { &self.name }
-        fn kind(&self) -> ToolKind { ToolKind::Static }
+        fn name(&self) -> &str {
+            &self.name
+        }
+        fn kind(&self) -> ToolKind {
+            ToolKind::Static
+        }
         fn axes(&self) -> ToolAxes {
             ToolAxes {
                 trigger: apeireth_tool_registry::TriggerAxis::Periodic,
@@ -1075,16 +1124,13 @@ mod tests {
         let limiter_arc: Arc<dyn RateLimiter> = Arc::new(limiter);
 
         let r = make_registry();
-        let p = ToolCallPipeline::new_with_rate_limit(
-            r,
-            5_000,
-            limiter_arc,
-            "test".to_string(),
-        );
+        let p = ToolCallPipeline::new_with_rate_limit(r, 5_000, limiter_arc, "test".to_string());
 
         // 第 1 次: burst 1 token, 成功
         let call1 = make_call("Echo", json!({"x": 1}));
-        let ctx1 = p.execute(call1).expect("first call should pass (burst token)");
+        let ctx1 = p
+            .execute(call1)
+            .expect("first call should pass (burst token)");
         assert!(ctx1.is_success(), "first call should succeed");
         assert!(ctx1.throttle_passed);
 
@@ -1094,8 +1140,11 @@ mod tests {
         assert!(result2.is_err(), "second call should be throttled");
         let err = result2.unwrap_err();
         let err_str = format!("{}", err);
-        assert!(err_str.contains("throttled") || err_str.contains("Throttled"),
-            "error should be Throttled, got: {}", err_str);
+        assert!(
+            err_str.contains("throttled") || err_str.contains("Throttled"),
+            "error should be Throttled, got: {}",
+            err_str
+        );
     }
 
     /// R133.4: ToolThrottle 默认 (无 limiter) 仍 pass-through (向后兼容)
@@ -1175,11 +1224,31 @@ mod tests {
         // **不假装**: 用 >= 而非 ==, 因为全局 atomic counter 跨 test 共享, 跑 R133.5 时
         //   其他 test (如 test_full_5_stage_pipeline_success) 可能也跑 pipeline. 我们
         //   验证 5 stage counter 都至少 +1, 证明 record_stage 真在 5 阶段 process 入口调用.
-        assert!(after.0 - before.0 >= 1, "dispatch delta should be >= 1, got {}", after.0 - before.0);
-        assert!(after.1 - before.1 >= 1, "normalize delta should be >= 1, got {}", after.1 - before.1);
-        assert!(after.2 - before.2 >= 1, "policy delta should be >= 1, got {}", after.2 - before.2);
-        assert!(after.3 - before.3 >= 1, "reliability delta should be >= 1, got {}", after.3 - before.3);
-        assert!(after.4 - before.4 >= 1, "throttle delta should be >= 1, got {}", after.4 - before.4);
+        assert!(
+            after.0 - before.0 >= 1,
+            "dispatch delta should be >= 1, got {}",
+            after.0 - before.0
+        );
+        assert!(
+            after.1 - before.1 >= 1,
+            "normalize delta should be >= 1, got {}",
+            after.1 - before.1
+        );
+        assert!(
+            after.2 - before.2 >= 1,
+            "policy delta should be >= 1, got {}",
+            after.2 - before.2
+        );
+        assert!(
+            after.3 - before.3 >= 1,
+            "reliability delta should be >= 1, got {}",
+            after.3 - before.3
+        );
+        assert!(
+            after.4 - before.4 >= 1,
+            "throttle delta should be >= 1, got {}",
+            after.4 - before.4
+        );
     }
 
     /// R133.5: 未调 init_tool_metrics() 时, 5 阶段仍跑, counter 通过 atomic 累加
@@ -1201,7 +1270,11 @@ mod tests {
             let m = metrics().lock();
             m.dispatch_total.load(Ordering::Relaxed)
         };
-        assert!(after_dispatch - before_dispatch >= 1, "atomic inc even without init, got {}", after_dispatch - before_dispatch);
+        assert!(
+            after_dispatch - before_dispatch >= 1,
+            "atomic inc even without init, got {}",
+            after_dispatch - before_dispatch
+        );
     }
 
     /// R133.5 — 跨 test 串行化 mutex (避免 R133.5 metric test 并行 race)

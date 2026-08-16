@@ -7,7 +7,7 @@
 //! **VCP 字段级引用**: `dynamicToolRegistry.js:40-80 CATEGORY_RULES` 7 类 + 2 Apeireth 独有
 
 use apeireth_tool_registry::{
-    Category, ClassifyError, Classifier, EmbeddingClassifier, HeuristicClassifier, LlmClassifier,
+    Category, Classifier, ClassifyError, EmbeddingClassifier, HeuristicClassifier, LlmClassifier,
     MockHashEmbedFn, Tool, ToolRegistry, AXIS_COMBINATION_COUNT, CATEGORY_COUNT,
 };
 use async_trait::async_trait;
@@ -130,8 +130,8 @@ fn integration_heuristic_accuracy_on_9_demo_meets_80_percent() {
 
 #[test]
 fn integration_embedding_classifier_runs_and_returns_category() {
-    let classifier = EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new()))
-        .with_threshold(0.0); // 0 阈值 → 永远返 best
+    let classifier =
+        EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new())).with_threshold(0.0); // 0 阈值 → 永远返 best
     let demos = make_9_demo_tools();
     let mut ran = 0;
     for (name, _expected) in &demos {
@@ -140,9 +140,18 @@ fn integration_embedding_classifier_runs_and_returns_category() {
             Ok(cat) => {
                 ran += 1;
                 // 任何 Category 都算跑通 (mock embed 32 维, cosine 准确率不保证 100%)
-                assert!(matches!(cat, Category::Search | Category::FileCode | Category::ImageMedia
-                    | Category::MemoryKnowledge | Category::AgentTask | Category::Communication
-                    | Category::Data | Category::Safety | Category::LongRunning));
+                assert!(matches!(
+                    cat,
+                    Category::Search
+                        | Category::FileCode
+                        | Category::ImageMedia
+                        | Category::MemoryKnowledge
+                        | Category::AgentTask
+                        | Category::Communication
+                        | Category::Data
+                        | Category::Safety
+                        | Category::LongRunning
+                ));
             }
             Err(ClassifyError::NoMatch { .. }) => {
                 // 0 阈值下应该不会 NoMatch, 但兜底记 1 次
@@ -163,8 +172,8 @@ fn integration_three_classifiers_all_run_on_same_tool() {
     let t = tool(name);
 
     let heuristic = HeuristicClassifier::new();
-    let embedding = EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new()))
-        .with_threshold(0.0);
+    let embedding =
+        EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new())).with_threshold(0.0);
     let llm = LlmClassifier::new_mock();
 
     let h = heuristic.classify(t.as_ref()).expect("heuristic ok");
@@ -199,11 +208,8 @@ fn integration_registry_with_classifier_end_to_end() {
 
     // 1. 用 classifier 注册 9 个 tool
     for (name, _expected) in &demos {
-        let result = registry.register_with_classifier(
-            (*name).to_string(),
-            tool(name),
-            &classifier,
-        );
+        let result =
+            registry.register_with_classifier((*name).to_string(), tool(name), &classifier);
         // 9 demo 应该全部成功分类 (heuristic 在 demo 集上 100% 命中)
         assert!(
             result.is_ok(),
@@ -237,7 +243,10 @@ fn integration_registry_with_classifier_end_to_end() {
     // 4. unregister 同步清 categories
     registry.unregister("WebSearch");
     let search_tools_after = registry.tools_by_category(Category::Search);
-    assert!(search_tools_after.is_empty(), "unregister 后 categories 也清");
+    assert!(
+        search_tools_after.is_empty(),
+        "unregister 后 categories 也清"
+    );
 
     // 5. clear 全清
     registry.clear();
@@ -256,7 +265,8 @@ fn integration_registry_no_match_does_not_write_categories() {
     let classifier = HeuristicClassifier::new();
 
     // "XyzQqq" 没有关键词命中
-    let result = registry.register_with_classifier("XyzQqq".to_string(), tool("XyzQqq"), &classifier);
+    let result =
+        registry.register_with_classifier("XyzQqq".to_string(), tool("XyzQqq"), &classifier);
     assert!(matches!(result, Err(ClassifyError::NoMatch { .. })));
 
     // tool 仍写入 (显式 0 假装: 不分就 0 类, 但 tool 仍可用)

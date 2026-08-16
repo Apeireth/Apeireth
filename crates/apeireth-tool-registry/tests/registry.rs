@@ -21,8 +21,12 @@ struct EchoTool;
 
 #[async_trait]
 impl Tool for EchoTool {
-    fn name(&self) -> &str { "echo" }
-    fn kind(&self) -> ToolKind { ToolKind::Sync }
+    fn name(&self) -> &str {
+        "echo"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
     fn axes(&self) -> ToolAxes {
         ToolAxes {
             trigger: TriggerAxis::OnDemand,
@@ -41,8 +45,12 @@ struct FailingTool;
 
 #[async_trait]
 impl Tool for FailingTool {
-    fn name(&self) -> &str { "failing" }
-    fn kind(&self) -> ToolKind { ToolKind::Sync }
+    fn name(&self) -> &str {
+        "failing"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
     fn axes(&self) -> ToolAxes {
         ToolAxes {
             trigger: TriggerAxis::OnDemand,
@@ -120,7 +128,7 @@ fn registry_overwrite_same_name() {
     let r = ToolRegistry::new();
     r.register("tool".to_string(), Arc::new(EchoTool));
     r.register("tool".to_string(), Arc::new(FailingTool)); // overwrite
-    // last one wins
+                                                           // last one wins
     let t = r.get("tool").unwrap();
     assert_eq!(t.name(), "failing");
 }
@@ -196,9 +204,13 @@ fn truncate_to_token_budget_long_input_truncated() {
     use apeireth_tool_registry::token_budget::truncate_to_token_budget;
     let s = "alpha beta gamma delta epsilon zeta eta theta"; // 8 tokens
     let out = truncate_to_token_budget(s, 3); // 限制 3 tokens
-    // 截断应: 保留 2 + 1 marker = 3 tokens (per `truncate_to_token_budget` 实现)
+                                              // 截断应: 保留 2 + 1 marker = 3 tokens (per `truncate_to_token_budget` 实现)
     let pieces: Vec<&str> = out.split_whitespace().collect();
-    assert!(pieces.len() <= 3, "应 ≤ 3 tokens, got {}: {out}", pieces.len());
+    assert!(
+        pieces.len() <= 3,
+        "应 ≤ 3 tokens, got {}: {out}",
+        pieces.len()
+    );
     assert!(out.contains("…"), "应含 ellipsis marker: {out}");
 }
 
@@ -254,10 +266,7 @@ async fn mock_sync_tool_call_returns_args() {
     let tool = MockSyncTool {
         name: "echo".to_string(),
     };
-    let r = tool
-        .call(json!({"input": "hi"}))
-        .await
-        .expect("call ok");
+    let r = tool.call(json!({"input": "hi"})).await.expect("call ok");
     assert_eq!(r["tool"], "echo", "应 echo back tool name");
     assert_eq!(r["echo"], "hi", "应 echo back args.input");
     assert_eq!(r["result"], "processed", "MockSyncTool 应有 result 字段");
@@ -274,8 +283,15 @@ async fn mock_async_tool_call_with_zero_delay() {
     let r = tool.call(json!({})).await.expect("async call");
     let elapsed = start.elapsed();
     // delay_ms=0 应 0 等待 (允许小幅度调度开销)
-    assert!(elapsed.as_millis() < 500, "delay=0 应 0 等待, got {}ms", elapsed.as_millis());
-    assert!(r.is_object() || r.is_string() || r.is_number(), "MockAsyncTool 返值: {r}");
+    assert!(
+        elapsed.as_millis() < 500,
+        "delay=0 应 0 等待, got {}ms",
+        elapsed.as_millis()
+    );
+    assert!(
+        r.is_object() || r.is_string() || r.is_number(),
+        "MockAsyncTool 返值: {r}"
+    );
 }
 
 #[test]

@@ -33,10 +33,14 @@ pub struct AnimeFinder {
 
 impl AnimeFinder {
     pub fn new() -> Self {
-        Self { api_base: "https://api.bgm.tv".into() }
+        Self {
+            api_base: "https://api.bgm.tv".into(),
+        }
     }
     pub fn with_base(api_base: impl Into<String>) -> Self {
-        Self { api_base: api_base.into() }
+        Self {
+            api_base: api_base.into(),
+        }
     }
 
     /// 真接 Bangumi API: /v0/subjects/{id}
@@ -58,7 +62,11 @@ impl AnimeFinder {
 
     /// 搜索: /v0/search/subjects?keyword=...
     pub fn search_url(&self, keyword: &str) -> String {
-        format!("{}/v0/search/subjects?keyword={}", self.api_base, urlencoded(keyword))
+        format!(
+            "{}/v0/search/subjects?keyword={}",
+            self.api_base,
+            urlencoded(keyword)
+        )
     }
 
     pub fn api_url_for_id(&self, id: u64) -> String {
@@ -67,7 +75,9 @@ impl AnimeFinder {
 }
 
 impl Default for AnimeFinder {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn urlencoded(s: &str) -> String {

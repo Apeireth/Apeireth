@@ -27,27 +27,27 @@
 
 pub mod search;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod files;
-pub mod symbols;
-pub mod graph;
-pub mod index;
-pub mod mcp;
+pub mod ast_grep; // R193
+pub mod cache; // R210: TTL-bounded QueryCache + CachedUnifiedIntelligence
 pub mod compat;
 pub mod enhanced;
-pub mod ast_grep;  // R193
-pub mod unified;  // R202
-pub mod cache;  // R210: TTL-bounded QueryCache + CachedUnifiedIntelligence
-pub mod lru_cache;  // R213: 真 LRU (lru crate) + streaming + batch query: 6 维 code intelligence unified facade: ast-grep CLI 包装 (R181 调研短期方案)
+pub mod files;
+pub mod graph;
+pub mod index;
+pub mod lru_cache;
+pub mod mcp;
+mod organ_kani_proofs;
+pub mod symbols;
+pub mod unified; // R202 // R213: 真 LRU (lru crate) + streaming + batch query: 6 维 code intelligence unified facade: ast-grep CLI 包装 (R181 调研短期方案)
 
-pub use search::{CodeSearcher, SearchMatch, SearchKind, SearchOptions};
-pub use files::{FileFinder, FindOptions, FileEntry};
-pub use symbols::{SymbolKind, Symbol, extract_symbols, supported_languages};
-pub use graph::{KnowledgeGraph, GraphNode, GraphEdge, NodeKind};
-pub use index::{CodeIndex, IndexEntry};
-pub use mcp::{CodeSearchMcp, McpTool};
 pub use compat::{CodeSearchCommand, CodeSearchCompatRouter, CODESEARCH_COMMAND_COUNT};
 pub use enhanced::EnhancedCodeSearch;
+pub use files::{FileEntry, FileFinder, FindOptions};
+pub use graph::{GraphEdge, GraphNode, KnowledgeGraph, NodeKind};
+pub use index::{CodeIndex, IndexEntry};
+pub use mcp::{CodeSearchMcp, McpTool};
+pub use search::{CodeSearcher, SearchKind, SearchMatch, SearchOptions};
+pub use symbols::{extract_symbols, supported_languages, Symbol, SymbolKind};
 
 /// R140 deliverables (per v2 plan §9.5):
 /// - 7 modules (search / files / symbols / graph / index / mcp / compat) + enhanced
@@ -57,4 +57,4 @@ pub const R140_DELIVERABLES: usize = 8;
 
 /// Languages with regex-based symbol extraction (vs full AST).
 pub const SUPPORTED_LANGS: &[&str] = &["rust", "python", "javascript", "typescript", "go"];
-pub mod pure_pattern;  // R251: in-process pure Rust pattern matcher (0 ast-grep CLI dep)
+pub mod pure_pattern; // R251: in-process pure Rust pattern matcher (0 ast-grep CLI dep)

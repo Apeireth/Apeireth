@@ -11,8 +11,8 @@
 //!   File→File (imports)
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use std::collections::HashMap;
 use crate::symbols::Symbol;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeKind {
@@ -52,7 +52,10 @@ pub struct KnowledgeGraph {
 
 impl KnowledgeGraph {
     pub fn new() -> Self {
-        Self { nodes: HashMap::new(), edges: Vec::new() }
+        Self {
+            nodes: HashMap::new(),
+            edges: Vec::new(),
+        }
     }
 
     pub fn add_file(&mut self, path: &str) -> String {
@@ -68,19 +71,22 @@ impl KnowledgeGraph {
 
     pub fn add_symbol(&mut self, file_path: &str, sym: &Symbol) -> String {
         let sym_id = format!("sym:{}::{}", file_path, sym.name);
-        self.nodes.entry(sym_id.clone()).or_insert_with(|| GraphNode {
-            id: sym_id.clone(),
-            kind: NodeKind::Symbol,
-            label: format!("{} {}", sym.kind.as_str(), sym.name),
-            metadata: HashMap::from([
-                ("line".to_string(), sym.line.to_string()),
-                ("language".to_string(), sym.language.clone()),
-            ]),
-        });
+        self.nodes
+            .entry(sym_id.clone())
+            .or_insert_with(|| GraphNode {
+                id: sym_id.clone(),
+                kind: NodeKind::Symbol,
+                label: format!("{} {}", sym.kind.as_str(), sym.name),
+                metadata: HashMap::from([
+                    ("line".to_string(), sym.line.to_string()),
+                    ("language".to_string(), sym.language.clone()),
+                ]),
+            });
         // File→Symbol edge (DefinedIn)
         let file_id = format!("file:{}", file_path);
         if self.nodes.contains_key(&file_id) {
-            self.edges.push((file_id, GraphEdge::DefinedIn, sym_id.clone()));
+            self.edges
+                .push((file_id, GraphEdge::DefinedIn, sym_id.clone()));
         }
         sym_id
     }
@@ -114,7 +120,12 @@ impl KnowledgeGraph {
         let edges_vec: Vec<_> = self.edges.iter().collect();
         self.nodes
             .values()
-            .filter(|n| n.kind == NodeKind::Symbol && edges_vec.iter().any(|(from, edge, to)| from == &file_id && *edge == GraphEdge::DefinedIn && *to == n.id))
+            .filter(|n| {
+                n.kind == NodeKind::Symbol
+                    && edges_vec.iter().any(|(from, edge, to)| {
+                        from == &file_id && *edge == GraphEdge::DefinedIn && *to == n.id
+                    })
+            })
             .collect()
     }
 }

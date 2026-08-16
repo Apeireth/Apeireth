@@ -32,9 +32,7 @@ use tracing::{debug, warn};
 use apeireth_tool_runtime::ParsedToolCall;
 use serde::Serialize;
 
-use crate::decision::{
-    ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection,
-};
+use crate::decision::{ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection};
 use crate::history::CallRecord;
 use crate::rule_trait::ApprovalRule;
 
@@ -254,11 +252,7 @@ impl ApprovalManager {
         }
 
         // 记录到 history (不论结果, 供 FrequencyRule 累计 + 审计留痕)
-        let mut record = CallRecord::new(
-            call,
-            final_decision.clone(),
-            detail.matched_rule.clone(),
-        );
+        let mut record = CallRecord::new(call, final_decision.clone(), detail.matched_rule.clone());
         record.matched_command = detail.matched_command.clone();
         record.silent_on_reject = detail.silent_on_reject;
         self.push_history(record);
@@ -364,7 +358,10 @@ impl ApprovalManager {
                         }
                     }
                     Ok(Err(_canceled)) => {
-                        warn!("[ApprovalManager] handler channel 取消, 拒绝: {}", call.tool_name);
+                        warn!(
+                            "[ApprovalManager] handler channel 取消, 拒绝: {}",
+                            call.tool_name
+                        );
                         ApprovalOutcome::Rejected(Rejection {
                             rejected_by_user: false,
                             error_type: RejectErrorType::ChannelUnavailable,
@@ -786,7 +783,9 @@ mod tests {
         mgr.set_handler(Arc::new(RejectWithReasonHandler(
             "风险太高, 先列影响范围".to_string(),
         )));
-        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let o = mgr
+            .wait_for_approval_outcome(&make_call("system.exec"))
+            .await;
         let r = o.rejection().expect("应拒绝");
         assert!(r.rejected_by_user);
         assert_eq!(r.error_type, RejectErrorType::RejectedByUser);
@@ -830,7 +829,9 @@ mod tests {
             delay_ms: 200,
             approve: true,
         }));
-        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let o = mgr
+            .wait_for_approval_outcome(&make_call("system.exec"))
+            .await;
         let r = o.rejection().expect("超时应拒");
         assert!(!r.rejected_by_user, "超时不是主人拒绝");
         assert_eq!(r.error_type, RejectErrorType::ApprovalTimeout);
@@ -841,7 +842,9 @@ mod tests {
         let mut mgr = ApprovalManager::new();
         mgr.add_rule(Box::new(RiskRule::new(300_000)));
         // 不注册 handler
-        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let o = mgr
+            .wait_for_approval_outcome(&make_call("system.exec"))
+            .await;
         let r = o.rejection().expect("无通道应拒");
         assert!(!r.rejected_by_user);
         assert_eq!(r.error_type, RejectErrorType::ChannelUnavailable);
@@ -947,7 +950,9 @@ mod tests {
         let mut mgr = ApprovalManager::new();
         mgr.set_handler(Arc::new(AutoApproveHandler));
         for i in 0..(MAX_AUDIT_LEN + 5) {
-            let _ = mgr.wait_for_approval_outcome(&make_call(&format!("T{i}"))).await;
+            let _ = mgr
+                .wait_for_approval_outcome(&make_call(&format!("T{i}")))
+                .await;
         }
         assert!(
             mgr.audit_len() <= MAX_AUDIT_LEN,
