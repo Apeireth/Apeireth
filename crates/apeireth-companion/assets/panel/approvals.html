@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 授权中心</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>授权中心 <span class="sub">GET /v1/panel/approvals（apreq-* 只读展示）</span></h2>
+  <div class="note">
+    <b>安全边界（0 新建安全口）</b>：本页只读展示授权请求；<b>批准</b>复用已有机制
+    <span class="mono">POST /v1/apeireth/grant</span>（master token + 权限洋葱 PermissionPack, 到期自动失效）。
+    <b>拒绝</b>机制未接线（0 装如实标注）——可在对话中告知忽略，或不予批准即可。
+  </div>
+  <div class="card">
+    <div class="toolbar">
+      <button onclick="loadReq('pending')">待批</button>
+      <button class="ghost" onclick="loadReq('approved')">已批准</button>
+      <button class="ghost" onclick="loadReq('expired')">已过期</button>
+      <button class="ghost" onclick="loadReq('')">全部</button>
+      <span id="rcount" class="dim"></span>
+    </div>
+    <div id="reqbody"><span class="dim">加载中…</span></div>
+  </div>
+  <div class="card" id="grantcard" style="display:none">
+    <h3>批准授权（走已有 /v1/apeireth/grant）</h3>
+    <div class="toolbar">
+      <span class="dim">工具</span><span id="gtool" class="mono" style="color:#ffd166"></span>
+      <span class="dim">时长(h)</span><input id="ghours" type="number" value="1" min="1" max="720" style="width:80px">
+      <input id="gtoken" type="password" placeholder="master token (APEIRETH_MASTER_TOKEN)" size="30">
+      <button onclick="doGrant()">批准</button>
+      <button class="ghost" onclick="hideGrant()">取消</button>
+    </div>
+    <div id="gmsg" class="dim"></div>
+  </div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 授权中心</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("approvals");
+let currentTool = "";
+
+async function loadReq(status) {
+  const el = document.getElementById("reqbody");
+  el.innerHTML = `<span class="dim">加载中…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/approvals${status ? "?status=" + status : ""}`);
+    document.getElementById("rcount").textContent = `${j.count} 条`;
+    if (!j.count) { el.innerHTML = `<span class="dim">无${status ? " " + status : ""} 请求。</span>`; return; }
+    el.innerHTML = j.requests.map(r => `
+      <div class="reqcard">
+        <span class="rtool">${esc(r.tool)}</span>
+        ${r.status === "pending" ? '<span class="badge warn">pending</span>'
+          : r.status === "approved" ? '<span class="badge ok">approved</span>'
+          : '<span class="badge err">' + esc(r.status) + '</span>'}
+        <span class="dim" style="margin-left:8px">${esc(fmtTs(r.created_at))}</span>
+        <div class="mono dim" style="margin-top:6px">参数: ${esc(trunc(r.args_preview, 200))}</div>
+        <div class="dim" style="margin-top:4px">理由: ${esc(trunc(r.reason, 200))}</div>
+        ${r.status === "pending" ? `<div style="margin-top:8px">
+          <button onclick="showGrant('${esc(r.tool).replace(/'/g, "\\'")}')">批准（grant）</button>
+          <span class="dim" style="margin-left:8px">拒绝机制未接线：不予批准即视为拒绝</span></div>` : ""}
+      </div>`).join("");
+  } catch (e) { showErr(el, e); }
+}
+
+function showGrant(tool) {
+  currentTool = tool;
+  document.getElementById("gtool").textContent = tool;
+  document.getElementById("grantcard").style.display = "";
+  document.getElementById("gmsg").textContent = "";
+}
+function hideGrant() { document.getElementById("grantcard").style.display = "none"; }
+
+async function doGrant() {
+  const msg = document.getElementById("gmsg");
+  const hours = parseInt(document.getElementById("ghours").value || "1", 10);
+  const token = document.getElementById("gtoken").value.trim();
+  if (!token) { msg.textContent = "需要 master token（主人授权权在主人手里）。"; return; }
+  msg.textContent = "提交中…";
+  try {
+    const r = await fetch("/v1/apeireth/grant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tool: currentTool, hours, master_token: token }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || ("HTTP " + r.status));
+    msg.innerHTML = `<span class="badge ok">已授权 ${esc(j.tool)} ${esc(j.hours)}h</span>
+      <span class="dim">（到期自动失效；对话中让本座重试即可。面板只读，请求状态随下次对话流转更新。）</span>`;
+    loadReq("pending");
+  } catch (e) { msg.textContent = "授权失败: " + e.message; }
+}
+
+loadReq("pending");
+</script>
+</body>
+</html>
