@@ -1,11 +1,21 @@
 # docs/ — 设计文档索引 (R119 重组后)
 
-> **R119 重构 (2026-08-10)**: 顶层 6 大规范文档 (CONVENTIONS / VERSIONING / GLOSSARY / OMNIBUS / START-CONSTRUCTION / 3 FINAL-CHECK) 全部下沉到 `docs/` 子目录。**当前总文档数**: 顶层 0 LOCKED 主文档 + 27 子目录 (R119-4a 7 README 已写 + R119-3 系列 49 索引文件)。
-> **结构**: 顶层只留入口 (`README.md` / `CHANGELOG.md` / `ROADMAP.md` 各 < 4KB), `docs/` 子目录按"规范/思想/R14 周期/主手册索引/工程/分发"分组。
+> **2026-08-16 追加（当前活文档入口）**：维护与接续优先读以下文档，历史索引见下文各节。
 
----
+### 🔥 当前活文档（2026-08-16）
 
-## 📂 当前 docs/ 子目录 (R119, 按功能分组)
+| 文档 | 内容 |
+|---|---|
+| [`maintenance-guide.md`](maintenance-guide.md) | **维护活文档**：概念词典 / 模块地图 / 加新模块规范 / 基础工具工程原则 |
+| [`session/handover-2026-08-15.md`](session/handover-2026-08-15.md) | **接续者必读**：主人心象原文 / 当前状态 / 挂起项（含 2026-08-16 追加节） |
+| [`release-plan.md`](release-plan.md) | 三件套发布规划 + 进度对账（规划 vs 实况） |
+| [`oracle-suite-design.md`](oracle-suite-design.md) | 预测决策套件设计哲学 + 真 LLM 验收记录 |
+| [`companion-deploy.md`](companion-deploy.md) | companion 部署说明 |
+| [`ref-crawler-research.md`](ref-crawler-research.md) | 爬虫工程调研 + 基础工具原则 |
+| [`ref-gh-accel.md`](ref-gh-accel.md) | GitHub 加速调研（xiake.pro 节点池 + 实测教训） |
+| [`ref-hydra.md`](ref-hydra.md) / [`ref-yoyo-evolve.md`](ref-yoyo-evolve.md) / [`absorb-deepseek-harness.md`](absorb-deepseek-harness.md) | 三方吸收参照（hydra 宪法 / yoyo 演化 / DSH） |
+
+### 📂 当前 docs/ 子目录 (R119, 按功能分组)
 
 ### 规范系统 (R119-3a 下沉)
 
