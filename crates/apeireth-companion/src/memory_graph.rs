@@ -76,30 +76,34 @@ impl MemoryGraph {
         }
     }
 
-    /// 添加事实: 同 (s,p,o) 已有边 → 先无效化旧边 (双时态), 再建新边 (rev 链内最大+1).
+    /// 添加事实: 同 (s,p,o) 已有边 → 先无效化旧边 (双时态), 再建新边.
+    /// rev 单调分配: 无效化版本 = 链内 max+1, 新边 = max+2 (确定性, 防同秒
+    /// 排序抖动导致去重取到旧版 — 2026-08-16 全量测试随机挂根因).
     /// 返回新事实 id (供 A-MEM 链接).
     pub fn add_fact(&self, s: &str, p: &str, o: &str, importance: u8) -> String {
         let now = chrono::Utc::now().timestamp();
         let chain = format!("{s}|{p}|{o}");
-        // 链内当前最大 rev (含已无效版本)
-        let max_rev = self
+        // 链内当前最大 rev (含已无效版本) + 1 = 下一个可用 rev
+        let mut next_rev = self
             .all_chain_versions(&chain)
             .into_iter()
             .map(|v| v.rev)
             .max()
-            .unwrap_or(0);
+            .unwrap_or(0)
+            + 1;
         if let Some(old) = self.valid_for(&chain) {
             let mut inv = old.clone();
             inv.id = format!("factg-{}", uuid::Uuid::new_v4());
-            inv.rev += 1;
+            inv.rev = next_rev;
             inv.invalid_at = Some(now);
             self.save_fact(&inv);
+            next_rev += 1; // 新边必须大于无效化版本
         }
         let id = format!("factg-{}", uuid::Uuid::new_v4());
         self.save_fact(&GraphFact {
             id: id.clone(),
             chain,
-            rev: max_rev + 1, // 必须大于无效化版本, 否则 active_facts 取到旧版
+            rev: next_rev,
             subject: s.to_string(),
             predicate: p.to_string(),
             object: o.to_string(),

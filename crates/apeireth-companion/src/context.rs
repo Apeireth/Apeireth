@@ -63,6 +63,14 @@ impl ContextAssembler {
 
     /// 预算化组装 (不可变): 返回按预算截断后的块列表.
     pub fn assemble_budgeted(&self) -> Vec<String> {
+        self.assemble_budgeted_blocks()
+            .into_iter()
+            .map(|b| b.content)
+            .collect()
+    }
+
+    /// 预算化组装 (不可变, 保留块名): 上层可依 name 分流 (如 identity 独立成消息).
+    pub fn assemble_budgeted_blocks(&self) -> Vec<ContextBlock> {
         // 1. 单块上限
         let mut capped: Vec<String> = self
             .blocks
@@ -91,7 +99,17 @@ impl ContextAssembler {
                 total -= cut;
             }
         }
-        capped.into_iter().filter(|s| !s.trim().is_empty()).collect()
+        self.blocks
+            .iter()
+            .zip(capped)
+            .filter(|(_, s)| !s.trim().is_empty())
+            .map(|(b, s)| ContextBlock {
+                name: b.name,
+                content: s,
+                core: b.core,
+                cap_chars: b.cap_chars,
+            })
+            .collect()
     }
 }
 
