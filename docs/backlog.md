@@ -91,7 +91,7 @@
 | S6 | **审计哈希链换 SHA-256** | 安全调研修正 | session_log FNV-1a 64 非加密可碰撞 → SHA-256 链 + 每 N 条锚定签名 (tamper-evident) | ⬜ 团队可干 (P1, 成本低) |
 | S7 | master token 比对改 constant-time | 安全调研修正 | principles.rs 已自标非恒定时间 → 恒定时间比较 | ⬜ 团队可干 (P1, 成本低) |
 | E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ✅ 完成 (7285995c agent_orchestrator2: reflexion.rs 自包含, 确定性规则版 CRITIC 先行, LLM 口留 trait 0 装, 5 组单测全绿, 实接线留公开口) |
-| E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ⬜ 团队可干 (P1) |
+| E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ✅ 完成 (cc378409 agent_orchestrator2: LlmValueFunction trait LLM 口 0 装 + HeuristicValue 确定性启发式先行 + ReflectionRefiner 复用 E1 反思产物入树 + LatsPlanner max-backup, 骨架签名零改动, 7 组测试) |
 | E3 | **校准诊断 + 集合预报 + 预测市场适配器** | 进化调研 | oracle 补 Brier 分解 (reliability/resolution) + 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器 (oracle_adapters 已有模式) | ⬜ 团队可干 (P1) |
 | E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
 | E5 | **技能生命周期闭环 (Voyager 升级)** | 进化调研 | voyager_api.rs 是 stub: 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 apeireth-skills 注册表 (两技能线打通) | ⬜ 团队可干 (P1, 中-大) |
