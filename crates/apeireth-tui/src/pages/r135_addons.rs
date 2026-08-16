@@ -55,7 +55,12 @@ fn render_pipeline_inspector(f: &mut Frame, area: Rect, _app: &App, style: &Them
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Tool Pipeline (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Tool Pipeline (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -74,11 +79,19 @@ fn render_pipeline_inspector(f: &mut Frame, area: Rect, _app: &App, style: &Them
             Span::styled("(retry+backoff) → ", Style::default().fg(style.dim)),
             Span::styled("5. Throttle ", Style::default().fg(style.primary)),
             Span::styled("(rate-limit) → ", Style::default().fg(style.dim)),
-            Span::styled("exec", Style::default().fg(style.accent).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                "exec",
+                Style::default()
+                    .fg(style.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]),
         Line::from(vec![
             Span::styled(" POST /v1/guard ", Style::default().fg(style.dim)),
-            Span::styled("→ ApprovalBridge + RateLimiter (R133 backend)", Style::default().fg(style.dim)),
+            Span::styled(
+                "→ ApprovalBridge + RateLimiter (R133 backend)",
+                Style::default().fg(style.dim),
+            ),
         ]),
     ];
     f.render_widget(Paragraph::new(lines).wrap(Wrap { trim: true }), inner);
@@ -89,7 +102,12 @@ fn render_approval_rules(f: &mut Frame, area: Rect, _app: &App, style: &ThemeSty
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Approval 5 Rules (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Approval 5 Rules (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -134,7 +152,12 @@ fn render_pipeline_metrics(f: &mut Frame, area: Rect, _app: &App, style: &ThemeS
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Pipeline Metrics (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Pipeline Metrics (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -142,9 +165,15 @@ fn render_pipeline_metrics(f: &mut Frame, area: Rect, _app: &App, style: &ThemeS
     let mut spans: Vec<Span> = Vec::new();
     spans.push(Span::styled(" ", Style::default()));
     for s in stages.iter() {
-        spans.push(Span::styled(format!("{}: 0 ", s), Style::default().fg(style.dim)));
+        spans.push(Span::styled(
+            format!("{}: 0 ", s),
+            Style::default().fg(style.dim),
+        ));
     }
-    spans.push(Span::styled(" | total: 0", Style::default().fg(style.primary)));
+    spans.push(Span::styled(
+        " | total: 0",
+        Style::default().fg(style.primary),
+    ));
     f.render_widget(Paragraph::new(Line::from(spans)), inner);
 }
 
@@ -153,7 +182,12 @@ fn render_rate_limiter_demo(f: &mut Frame, area: Rect, _app: &App, style: &Theme
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Rate Limiter Demo (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Rate Limiter Demo (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -165,7 +199,10 @@ fn render_rate_limiter_demo(f: &mut Frame, area: Rect, _app: &App, style: &Theme
     ];
     let mut spans: Vec<Span> = Vec::new();
     for (name, spec) in algos.iter() {
-        spans.push(Span::styled(format!("[{}]={} ", name, spec), Style::default().fg(style.dim)));
+        spans.push(Span::styled(
+            format!("[{}]={} ", name, spec),
+            Style::default().fg(style.dim),
+        ));
     }
     f.render_widget(Paragraph::new(Line::from(spans)), inner);
 }
@@ -175,17 +212,37 @@ fn render_governance_check(f: &mut Frame, area: Rect, _app: &App, style: &ThemeS
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Governance Check (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Governance Check (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
-    let policies = ["S-1 北极星", "S-2 实事求是", "S-3 质量工程", "O-1 安全优先", "O-5 不假装"];
+    let policies = [
+        "S-1 北极星",
+        "S-2 实事求是",
+        "S-3 质量工程",
+        "O-1 安全优先",
+        "O-5 不假装",
+    ];
     let mut spans: Vec<Span> = Vec::new();
-    spans.push(Span::styled(" 5 policies: ", Style::default().fg(style.dim)));
+    spans.push(Span::styled(
+        " 5 policies: ",
+        Style::default().fg(style.dim),
+    ));
     for p in policies.iter() {
-        spans.push(Span::styled(format!("{} ", p), Style::default().fg(style.primary)));
+        spans.push(Span::styled(
+            format!("{} ", p),
+            Style::default().fg(style.primary),
+        ));
     }
-    f.render_widget(Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }), inner);
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }),
+        inner,
+    );
 }
 
 // =============================================================================
@@ -197,7 +254,12 @@ pub fn render_formal_proofs(f: &mut Frame, area: Rect, _app: &App, style: &Theme
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Formal Proofs (R135 Kani) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Formal Proofs (R135 Kani) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
@@ -212,9 +274,17 @@ pub fn render_formal_proofs(f: &mut Frame, area: Rect, _app: &App, style: &Theme
     spans.push(Span::styled(" ", Style::default()));
     for (name, status) in proofs.iter() {
         spans.push(Span::styled(*name, Style::default().fg(style.dim)));
-        spans.push(Span::styled(format!("[{}] ", status), Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        spans.push(Span::styled(
+            format!("[{}] ", status),
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     }
-    f.render_widget(Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }), inner);
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }),
+        inner,
+    );
 }
 
 // =============================================================================
@@ -226,18 +296,35 @@ pub fn render_repo_scan(f: &mut Frame, area: Rect, _app: &App, style: &ThemeStyl
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(style.accent))
-        .title(Span::styled(" Repo Scan (R135) ", Style::default().fg(style.primary).add_modifier(Modifier::BOLD)));
+        .title(Span::styled(
+            " Repo Scan (R135) ",
+            Style::default()
+                .fg(style.primary)
+                .add_modifier(Modifier::BOLD),
+        ));
     let inner = block.inner(area);
     f.render_widget(block, area);
 
     let apis = ["scan", "stats", "key_files", "git_state"];
     let mut spans: Vec<Span> = Vec::new();
-    spans.push(Span::styled(" apeireth-repo-tools 4 API: ", Style::default().fg(style.dim)));
+    spans.push(Span::styled(
+        " apeireth-repo-tools 4 API: ",
+        Style::default().fg(style.dim),
+    ));
     for a in apis.iter() {
-        spans.push(Span::styled(format!("[{}] ", a), Style::default().fg(style.primary)));
+        spans.push(Span::styled(
+            format!("[{}] ", a),
+            Style::default().fg(style.primary),
+        ));
     }
-    spans.push(Span::styled(" → POST /v1/repo/*", Style::default().fg(style.dim)));
-    f.render_widget(Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }), inner);
+    spans.push(Span::styled(
+        " → POST /v1/repo/*",
+        Style::default().fg(style.dim),
+    ));
+    f.render_widget(
+        Paragraph::new(Line::from(spans)).wrap(Wrap { trim: true }),
+        inner,
+    );
 }
 
 #[cfg(test)]
@@ -272,7 +359,12 @@ mod tests {
 
     #[test]
     fn algos_count_is_4() {
-        let algos = ["token_bucket", "leaky_bucket", "fixed_window", "sliding_log"];
+        let algos = [
+            "token_bucket",
+            "leaky_bucket",
+            "fixed_window",
+            "sliding_log",
+        ];
         assert_eq!(algos.len(), 4);
     }
 

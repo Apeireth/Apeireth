@@ -141,10 +141,7 @@ pub async fn test_organ_mind_6_philosophy_anchors() -> TuiE2EResult<()> {
     assert!(snap.contains("[MIND]"), "Mind organ 应渲染 ASCII");
     assert!(snap.contains("100%"), "Mind 100% health 应渲染");
     for (id, _, _) in crate::SIX_PHI_ANCHORS.iter() {
-        assert!(
-            snap.contains(id),
-            "Mind 应渲染哲学锚 {id}"
-        );
+        assert!(snap.contains(id), "Mind 应渲染哲学锚 {id}");
     }
     Ok(())
 }

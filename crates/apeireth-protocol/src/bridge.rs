@@ -250,7 +250,10 @@ mod bridge_tests {
         let raw = OpenAiChatBridge::encode(&req).unwrap();
         assert!(raw.is_object());
         assert!(raw.get("messages").is_some());
-        assert_eq!(raw.get("model").and_then(|v| v.as_str()), Some("test-model"));
+        assert_eq!(
+            raw.get("model").and_then(|v| v.as_str()),
+            Some("test-model")
+        );
         // decode 模拟响应
         let fake_resp = serde_json::json!({
             "id": "x", "model": "test-model",
@@ -345,7 +348,8 @@ mod bridge_tests {
             ProtocolKind::Gemini,
         ]
         .iter()
-        .filter_map(|k| endpoint_path_for_kind(*k)).collect();
+        .filter_map(|k| endpoint_path_for_kind(*k))
+        .collect();
         let unique: std::collections::HashSet<&str> = paths.iter().copied().collect();
         assert_eq!(unique.len(), 4, "endpoints not unique: {:?}", paths);
     }

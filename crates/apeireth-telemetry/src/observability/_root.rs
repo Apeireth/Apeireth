@@ -1,4 +1,3 @@
-
 #![warn(missing_docs)]
 #![allow(clippy::all)]
 
@@ -378,8 +377,8 @@ impl HealthStatus {
     pub fn http_status_code(&self) -> u16 {
         match self {
             HealthStatus::Healthy => 200,
-            HealthStatus::Degraded => 200,   // 200 + body 表明降级
-            HealthStatus::Unhealthy => 503,  // 503 Service Unavailable
+            HealthStatus::Degraded => 200,  // 200 + body 表明降级
+            HealthStatus::Unhealthy => 503, // 503 Service Unavailable
         }
     }
 
@@ -657,10 +656,9 @@ pub use super::tracing_integration::{next_trace_id, trace_span, TraceContext};
 // R25.2 估补: 9 器官 dashboard 核心类型 re-export (per 1.0 release #8 observability 100%).
 pub use super::tui_dashboard::{
     render_dashboard, render_organ_widget, OrganDashboard, OrganKind, OrganReadiness,
-    TuiOrganState, ORGAN_KIND_COUNT, ORGAN_KIND_NAMES_ZH, ORGAN_KIND_ASCII_CHARS,
-    TUI_DASHBOARD_PLATFORM, TUI_DASHBOARD_SCHEMA_VERSION, SIX_ANCHORS, FIVE_NAV,
-    DASHBOARD_HEALTH_ENDPOINTS,
-    TuiDashboardError, TuiDashboardResult,
+    TuiDashboardError, TuiDashboardResult, TuiOrganState, DASHBOARD_HEALTH_ENDPOINTS, FIVE_NAV,
+    ORGAN_KIND_ASCII_CHARS, ORGAN_KIND_COUNT, ORGAN_KIND_NAMES_ZH, SIX_ANCHORS,
+    TUI_DASHBOARD_PLATFORM, TUI_DASHBOARD_SCHEMA_VERSION,
 };
 
 // ============================================================================
@@ -703,19 +701,25 @@ mod tests {
 
     #[test]
     fn pii_redact_password() {
-        assert_eq!(redact_pii("password=secret123").as_deref(), Some("password=***"));
+        assert_eq!(
+            redact_pii("password=secret123").as_deref(),
+            Some("password=***")
+        );
     }
 
     #[test]
     fn pii_redact_token() {
-        assert_eq!(redact_pii("api_token=abc").as_deref(), Some("api_token=***"));
+        assert_eq!(
+            redact_pii("api_token=abc").as_deref(),
+            Some("api_token=***")
+        );
     }
 
     #[test]
     fn m3_validate_tool_call_rejects_unknown() {
         assert!(validate_tool_call("apeireth_observability_trace", &serde_json::json!({})).is_ok());
-        let err = validate_tool_call("apeireth_observability_evil", &serde_json::json!({}))
-            .unwrap_err();
+        let err =
+            validate_tool_call("apeireth_observability_evil", &serde_json::json!({})).unwrap_err();
         assert!(matches!(err, ObservabilityError::ToolNotWhitelisted(_)));
     }
 

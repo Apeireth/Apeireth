@@ -34,11 +34,19 @@ fn outgoing_neighbors(graph: &RelationGraph, node: &str) -> Vec<NodeId> {
 }
 
 fn outgoing_with_edges(graph: &RelationGraph, node: &str) -> Vec<(NodeId, EdgeId)> {
-    graph.outgoing(node).iter().map(|e| (e.to.clone(), e.id.clone())).collect()
+    graph
+        .outgoing(node)
+        .iter()
+        .map(|e| (e.to.clone(), e.id.clone()))
+        .collect()
 }
 
 fn all_node_ids(graph: &RelationGraph) -> Vec<NodeId> {
-    graph.node_ids().into_iter().map(|s| s.to_string()).collect()
+    graph
+        .node_ids()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect()
 }
 
 fn has_node(graph: &RelationGraph, n: &str) -> bool {
@@ -123,7 +131,16 @@ pub fn all_paths(
     let mut path: Vec<NodeId> = vec![from.clone()];
     let mut visited: HashSet<NodeId> = HashSet::new();
     visited.insert(from.clone());
-    all_paths_dfs(graph, &from, &to, &mut path, &mut visited, &mut result, max_paths, max_depth);
+    all_paths_dfs(
+        graph,
+        &from,
+        &to,
+        &mut path,
+        &mut visited,
+        &mut result,
+        max_paths,
+        max_depth,
+    );
     result
 }
 
@@ -148,7 +165,9 @@ fn all_paths_dfs(
         if !visited.contains(&neighbor) {
             visited.insert(neighbor.clone());
             path.push(neighbor.clone());
-            all_paths_dfs(graph, &neighbor, target, path, visited, result, max_paths, max_depth);
+            all_paths_dfs(
+                graph, &neighbor, target, path, visited, result, max_paths, max_depth,
+            );
             path.pop();
             visited.remove(&neighbor);
         }
@@ -248,7 +267,11 @@ pub fn connected_components(graph: &RelationGraph) -> Vec<Vec<NodeId>> {
                             stack.push(nb);
                         }
                     }
-                    for nb in graph.incoming(&n).iter().map(|e: &&GraphEdge| e.from.clone()) {
+                    for nb in graph
+                        .incoming(&n)
+                        .iter()
+                        .map(|e: &&GraphEdge| e.from.clone())
+                    {
                         if !visited.contains(&nb) {
                             stack.push(nb);
                         }
@@ -278,10 +301,14 @@ mod tests {
         g.insert_node(GraphNode::new("A")).unwrap();
         g.insert_node(GraphNode::new("B")).unwrap();
         g.insert_node(GraphNode::new("C")).unwrap();
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B")).unwrap();
-        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C")).unwrap();
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "C")).unwrap();
-        g.insert_edge(GraphEdge::new("C", RelationKind::Symbiosis, "A")).unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "C"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("C", RelationKind::Symbiosis, "A"))
+            .unwrap();
         g
     }
 
@@ -292,9 +319,12 @@ mod tests {
         g.insert_node(GraphNode::new("B")).unwrap();
         g.insert_node(GraphNode::new("C")).unwrap();
         g.insert_node(GraphNode::new("D")).unwrap();
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B")).unwrap();
-        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C")).unwrap();
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "D")).unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "D"))
+            .unwrap();
         g
     }
 
@@ -303,9 +333,12 @@ mod tests {
         for n in ["A", "B", "C", "D", "E", "F"] {
             g.insert_node(GraphNode::new(n)).unwrap();
         }
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B")).unwrap();
-        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C")).unwrap();
-        g.insert_edge(GraphEdge::new("D", RelationKind::Symbiosis, "E")).unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("D", RelationKind::Symbiosis, "E"))
+            .unwrap();
         // F 孤立
         g
     }
@@ -315,16 +348,20 @@ mod tests {
         for n in ["A", "B", "C"] {
             g.insert_node(GraphNode::new(n)).unwrap();
         }
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B")).unwrap();
-        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C")).unwrap();
-        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "C")).unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "B"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("B", RelationKind::Symbiosis, "C"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("A", RelationKind::Symbiosis, "C"))
+            .unwrap();
         g
     }
 
     #[test]
     fn t01_dijkstra_with_weights() {
         let g = mk_weighted();
-        let (path, _total) = dijkstra_shortest_path(&g, "A".into(), "C".into(), |_eid| 1.0).unwrap();
+        let (path, _total) =
+            dijkstra_shortest_path(&g, "A".into(), "C".into(), |_eid| 1.0).unwrap();
         // 任何 1 边路径都 OK
         assert!(!path.is_empty());
         assert_eq!(path[0], "A");
@@ -342,8 +379,13 @@ mod tests {
             .map(|e| (e.id.clone(), e.from.clone(), e.to.clone(), 1.0))
             .collect();
         let (path, total) = dijkstra_shortest_path(&g, "A".into(), "C".into(), |eid| {
-            edges.iter().find(|(id, _, _, _)| id == eid.as_str()).map(|(_, _, _, w)| *w).unwrap_or(1.0)
-        }).unwrap();
+            edges
+                .iter()
+                .find(|(id, _, _, _)| id == eid.as_str())
+                .map(|(_, _, _, w)| *w)
+                .unwrap_or(1.0)
+        })
+        .unwrap();
         assert_eq!(path[0], "A");
         assert_eq!(path[path.len() - 1], "C");
         assert!(total > 0.0);
@@ -407,9 +449,9 @@ mod tests {
         let comps = connected_components(&g);
         assert_eq!(comps.len(), 3);
         let sizes: Vec<usize> = comps.iter().map(|c| c.len()).collect();
-        assert!(sizes.contains(&3));  // {A,B,C}
-        assert!(sizes.contains(&2));  // {D,E}
-        assert!(sizes.contains(&1));  // {F}
+        assert!(sizes.contains(&3)); // {A,B,C}
+        assert!(sizes.contains(&2)); // {D,E}
+        assert!(sizes.contains(&1)); // {F}
     }
 
     #[test]

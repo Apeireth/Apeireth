@@ -179,7 +179,9 @@ impl<'graph> Executor<'graph> {
             return Ok(());
         }
         if *chain_steps >= max_chain_steps {
-            return Err(GraphError::Cycle { nodes: vec![node_id.clone()] });
+            return Err(GraphError::Cycle {
+                nodes: vec![node_id.clone()],
+            });
         }
         *chain_steps += 1;
 

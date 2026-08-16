@@ -24,9 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::StateError;
 use crate::organ::Organ;
-use crate::shared_state::{
-    SharedState, SharedStateMode, StateReadGuard, StateWriteGuard,
-};
+use crate::shared_state::{SharedState, SharedStateMode, StateReadGuard, StateWriteGuard};
 
 /// **模式 3: RwLockState 跨线程读写锁** (per 借鉴 Golutra `state: tauri::State<RwLock<T>>`).
 ///
@@ -62,32 +60,28 @@ where
 
     /// Try read (非阻塞, 多个 reader 并发).
     pub fn try_read(&self, organ: Organ) -> Result<RwLockReadGuard<'_, T>, StateError> {
-        self.inner
-            .try_read()
-            .map_err(|e| match e {
-                std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
-                    mode: SharedStateMode::RwLock,
-                    organ,
-                },
-                std::sync::TryLockError::WouldBlock => StateError::Other {
-                    msg: "RwLock read would block".to_string(),
-                },
-            })
+        self.inner.try_read().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
+                mode: SharedStateMode::RwLock,
+                organ,
+            },
+            std::sync::TryLockError::WouldBlock => StateError::Other {
+                msg: "RwLock read would block".to_string(),
+            },
+        })
     }
 
     /// Try write (非阻塞, exclusive).
     pub fn try_write(&self, organ: Organ) -> Result<RwLockWriteGuard<'_, T>, StateError> {
-        self.inner
-            .try_write()
-            .map_err(|e| match e {
-                std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
-                    mode: SharedStateMode::RwLock,
-                    organ,
-                },
-                std::sync::TryLockError::WouldBlock => StateError::Other {
-                    msg: "RwLock write would block".to_string(),
-                },
-            })
+        self.inner.try_write().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
+                mode: SharedStateMode::RwLock,
+                organ,
+            },
+            std::sync::TryLockError::WouldBlock => StateError::Other {
+                msg: "RwLock write would block".to_string(),
+            },
+        })
     }
 }
 
@@ -183,7 +177,9 @@ mod tests {
 
     #[test]
     fn new_with_value() {
-        let state = RwLockState::new(TestValue { data: vec![1, 2, 3] });
+        let state = RwLockState::new(TestValue {
+            data: vec![1, 2, 3],
+        });
         let guard = state.read().unwrap();
         assert_eq!(guard.data, vec![1, 2, 3]);
     }
@@ -225,7 +221,9 @@ mod tests {
         // 释放写锁
         drop(_write_guard);
         // 现在 read 应该成功
-        let g = state.try_read(Organ::Memory).expect("read after write release should succeed");
+        let g = state
+            .try_read(Organ::Memory)
+            .expect("read after write release should succeed");
         assert_eq!(g.data, vec![0]);
     }
 
@@ -262,7 +260,9 @@ mod tests {
             let mut g = state.try_write(Organ::Memory).expect("should write");
             g.data.push(99);
         } // g 释放
-        let r = state.read().expect("read after write release should succeed");
+        let r = state
+            .read()
+            .expect("read after write release should succeed");
         assert_eq!(r.data, vec![99]);
     }
 

@@ -61,13 +61,22 @@ pub struct ToolLoopMessage {
 
 impl ToolLoopMessage {
     pub fn user(content: impl Into<String>) -> Self {
-        Self { role: "user".to_string(), content: content.into() }
+        Self {
+            role: "user".to_string(),
+            content: content.into(),
+        }
     }
     pub fn assistant(content: impl Into<String>) -> Self {
-        Self { role: "assistant".to_string(), content: content.into() }
+        Self {
+            role: "assistant".to_string(),
+            content: content.into(),
+        }
     }
     pub fn system(content: impl Into<String>) -> Self {
-        Self { role: "system".to_string(), content: content.into() }
+        Self {
+            role: "system".to_string(),
+            content: content.into(),
+        }
     }
 }
 
@@ -233,7 +242,10 @@ mod tool_loop_tests {
         assert_eq!(final_state.last_reply, "今天晴天 25 度");
         assert!(final_state.error.is_none());
         // history 应该多 1 条 (tool 结果)
-        assert!(final_state.history.iter().any(|m| m.content.contains("工具调用结果")));
+        assert!(final_state
+            .history
+            .iter()
+            .any(|m| m.content.contains("工具调用结果")));
     }
 
     /// run_tool_loop: LLM 首轮就错 → 立即停, 不继续

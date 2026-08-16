@@ -177,7 +177,10 @@ impl SessionCapture {
                 return Some(cur.clone());
             }
         }
-        self.history.iter().find(|s| s.session_id == session_id).cloned()
+        self.history
+            .iter()
+            .find(|s| s.session_id == session_id)
+            .cloned()
     }
 
     /// 跨历史 session 关键词检索 (top-k 简单匹配)
@@ -287,15 +290,23 @@ mod tests {
     fn record_message_assigns_monotonic_seq() {
         let mut c = SessionCapture::new();
         c.start_session("s1");
-        let s1 = c.record_message("a", "assistant", "m1", HashMap::new()).unwrap();
-        let s2 = c.record_message("b", "assistant", "m2", HashMap::new()).unwrap();
-        let s3 = c.record_message("c", "assistant", "m3", HashMap::new()).unwrap();
+        let s1 = c
+            .record_message("a", "assistant", "m1", HashMap::new())
+            .unwrap();
+        let s2 = c
+            .record_message("b", "assistant", "m2", HashMap::new())
+            .unwrap();
+        let s3 = c
+            .record_message("c", "assistant", "m3", HashMap::new())
+            .unwrap();
         assert_eq!(s1, 1);
         assert_eq!(s2, 2);
         assert_eq!(s3, 3);
         // 跨 session 也单调
         c.start_session("s2");
-        let s4 = c.record_message("d", "assistant", "m4", HashMap::new()).unwrap();
+        let s4 = c
+            .record_message("d", "assistant", "m4", HashMap::new())
+            .unwrap();
         assert_eq!(s4, 4);
     }
 
@@ -397,16 +408,28 @@ mod tests {
     fn session_messages_by_advisor() {
         let mut s = CouncilSession::new("s1");
         s.messages.push(SessionMessage {
-            seq: 1, advisor_id: "safety".into(), role: "assistant".into(),
-            content: "a".into(), timestamp_ms: 0, metadata: HashMap::new(),
+            seq: 1,
+            advisor_id: "safety".into(),
+            role: "assistant".into(),
+            content: "a".into(),
+            timestamp_ms: 0,
+            metadata: HashMap::new(),
         });
         s.messages.push(SessionMessage {
-            seq: 2, advisor_id: "safety".into(), role: "assistant".into(),
-            content: "b".into(), timestamp_ms: 0, metadata: HashMap::new(),
+            seq: 2,
+            advisor_id: "safety".into(),
+            role: "assistant".into(),
+            content: "b".into(),
+            timestamp_ms: 0,
+            metadata: HashMap::new(),
         });
         s.messages.push(SessionMessage {
-            seq: 3, advisor_id: "philosophy".into(), role: "assistant".into(),
-            content: "c".into(), timestamp_ms: 0, metadata: HashMap::new(),
+            seq: 3,
+            advisor_id: "philosophy".into(),
+            role: "assistant".into(),
+            content: "c".into(),
+            timestamp_ms: 0,
+            metadata: HashMap::new(),
         });
         let counts = s.messages_by_advisor();
         assert_eq!(counts.get("safety"), Some(&2));

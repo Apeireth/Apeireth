@@ -160,15 +160,27 @@ impl HealthCheck {
         }
     }
 
-    pub fn ok(dimension: HealthDimension, name: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn ok(
+        dimension: HealthDimension,
+        name: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self::new(dimension, name, HealthStatus::Ok, message)
     }
 
-    pub fn warn(dimension: HealthDimension, name: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn warn(
+        dimension: HealthDimension,
+        name: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self::new(dimension, name, HealthStatus::Warn, message)
     }
 
-    pub fn crit(dimension: HealthDimension, name: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn crit(
+        dimension: HealthDimension,
+        name: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self::new(dimension, name, HealthStatus::Crit, message)
     }
 
@@ -199,7 +211,13 @@ impl fmt::Display for HealthCheck {
         writeln!(
             f,
             "{} [{}] {}: {}\n  expected: {:?} actual: {:?} ts: {}",
-            mark, self.dimension, self.name, self.message, self.expected, self.actual, self.timestamp
+            mark,
+            self.dimension,
+            self.name,
+            self.message,
+            self.expected,
+            self.actual,
+            self.timestamp
         )
     }
 }
@@ -329,14 +347,22 @@ impl fmt::Display for HealthReport {
         writeln!(
             f,
             "HealthReport: total={}/{} ({:.1}%) ok={} warn={} crit={} unknown={} all_ok={}",
-            self.total_score, self.max_score, self.score_percent(),
-            self.n_ok, self.n_warn, self.n_crit, self.n_unknown, self.all_ok
+            self.total_score,
+            self.max_score,
+            self.score_percent(),
+            self.n_ok,
+            self.n_warn,
+            self.n_crit,
+            self.n_unknown,
+            self.all_ok
         )?;
         for (i, s) in self.dimension_status.iter().enumerate() {
             writeln!(
                 f,
                 "  [{}] {} score={}/100",
-                s, HealthDimension::DIMENSION_NAMES[i], self.dimension_scores[i]
+                s,
+                HealthDimension::DIMENSION_NAMES[i],
+                self.dimension_scores[i]
             )?;
         }
         Ok(())
@@ -387,13 +413,14 @@ impl HealthGuard {
             .with_expected("1103")
             .with_actual(r.r11_module_count.to_string()),
         );
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::R11Compat,
-                "r11_compat_version",
-                format!("R11 compat version: {}", crate::r11_compat::r11_compat_version()),
+        r.add_check(HealthCheck::ok(
+            HealthDimension::R11Compat,
+            "r11_compat_version",
+            format!(
+                "R11 compat version: {}",
+                crate::r11_compat::r11_compat_version()
             ),
-        );
+        ));
         // R11 baseline 3 值 严守
         r.add_check(HealthCheck::ok(
             HealthDimension::R11Compat,
@@ -411,17 +438,15 @@ impl HealthGuard {
             .with_expected("7")
             .with_actual(r.asi_module_count.to_string()),
         );
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::AsiCritical,
-                "asi_all_invariants_ok",
-                if crate::asi_modules::asi_stage1_all_invariants_ok() {
-                    "all 7 ASI invariants OK"
-                } else {
-                    "ASI invariants NOT OK"
-                },
-            ),
-        );
+        r.add_check(HealthCheck::ok(
+            HealthDimension::AsiCritical,
+            "asi_all_invariants_ok",
+            if crate::asi_modules::asi_stage1_all_invariants_ok() {
+                "all 7 ASI invariants OK"
+            } else {
+                "ASI invariants NOT OK"
+            },
+        ));
 
         // D3 PyBridge
         r.add_check(
@@ -433,38 +458,30 @@ impl HealthGuard {
             .with_expected("any (cfg-gated)")
             .with_actual(r.python_ext_active.to_string()),
         );
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::PyBridge,
-                "bridge_pool_intact",
-                "BridgeModulePool::default() compiles (Stage 1)",
-            ),
-        );
+        r.add_check(HealthCheck::ok(
+            HealthDimension::PyBridge,
+            "bridge_pool_intact",
+            "BridgeModulePool::default() compiles (Stage 1)",
+        ));
 
         // D4 Security (K3 6+1 重门)
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::Security,
-                "v7_baseline_intact",
-                "6-fold v7 baseline intact (B4 严守)",
-            ),
-        );
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::Security,
-                "g7_cross_language_intact",
-                "G7 7 cross-language checks intact (K3 创新, 连接不修改)",
-            ),
-        );
+        r.add_check(HealthCheck::ok(
+            HealthDimension::Security,
+            "v7_baseline_intact",
+            "6-fold v7 baseline intact (B4 严守)",
+        ));
+        r.add_check(HealthCheck::ok(
+            HealthDimension::Security,
+            "g7_cross_language_intact",
+            "G7 7 cross-language checks intact (K3 创新, 连接不修改)",
+        ));
 
         // D5 Performance (K2)
-        r.add_check(
-            HealthCheck::ok(
-                HealthDimension::Performance,
-                "perf_monitor_alive",
-                "PerfMonitor::default() 跑 (K2)",
-            ),
-        );
+        r.add_check(HealthCheck::ok(
+            HealthDimension::Performance,
+            "perf_monitor_alive",
+            "PerfMonitor::default() 跑 (K2)",
+        ));
 
         // 聚合
         r.aggregate();
@@ -562,14 +579,10 @@ mod tests {
     // 3. HealthCheck 构造 + with_*
     #[test]
     fn k4_health_check_with_chain() {
-        let c = HealthCheck::ok(
-            HealthDimension::R11Compat,
-            "r11_count",
-            "OK",
-        )
-        .with_expected("1103")
-        .with_actual("1103")
-        .with_timestamp(42);
+        let c = HealthCheck::ok(HealthDimension::R11Compat, "r11_count", "OK")
+            .with_expected("1103")
+            .with_actual("1103")
+            .with_timestamp(42);
         assert_eq!(c.status, HealthStatus::Ok);
         assert_eq!(c.expected.as_deref(), Some("1103"));
         assert_eq!(c.actual.as_deref(), Some("1103"));
@@ -595,9 +608,18 @@ mod tests {
         r.add_check(HealthCheck::ok(HealthDimension::R11Compat, "b", "b"));
         r.add_check(HealthCheck::warn(HealthDimension::AsiCritical, "c", "c"));
         r.add_check(HealthCheck::crit(HealthDimension::PyBridge, "d", "d"));
-        assert_eq!(r.dimension_status[HealthDimension::R11Compat.idx()], HealthStatus::Ok);
-        assert_eq!(r.dimension_status[HealthDimension::AsiCritical.idx()], HealthStatus::Warn);
-        assert_eq!(r.dimension_status[HealthDimension::PyBridge.idx()], HealthStatus::Crit);
+        assert_eq!(
+            r.dimension_status[HealthDimension::R11Compat.idx()],
+            HealthStatus::Ok
+        );
+        assert_eq!(
+            r.dimension_status[HealthDimension::AsiCritical.idx()],
+            HealthStatus::Warn
+        );
+        assert_eq!(
+            r.dimension_status[HealthDimension::PyBridge.idx()],
+            HealthStatus::Crit
+        );
     }
 
     // 6. HealthReport 计数
@@ -607,7 +629,12 @@ mod tests {
         r.add_check(HealthCheck::ok(HealthDimension::R11Compat, "a", "a"));
         r.add_check(HealthCheck::warn(HealthDimension::R11Compat, "b", "b"));
         r.add_check(HealthCheck::crit(HealthDimension::R11Compat, "c", "c"));
-        r.add_check(HealthCheck::new(HealthDimension::R11Compat, "d", HealthStatus::Unknown, "d"));
+        r.add_check(HealthCheck::new(
+            HealthDimension::R11Compat,
+            "d",
+            HealthStatus::Unknown,
+            "d",
+        ));
         assert_eq!(r.n_ok, 1);
         assert_eq!(r.n_warn, 1);
         assert_eq!(r.n_crit, 1);
@@ -655,7 +682,9 @@ mod tests {
         let s = format!("{r}");
         assert!(s.contains("HealthReport"));
         assert!(s.contains("R11_Compat"));
-        assert!(s.contains("Asi_Critical") || s.contains("ASI_Critical") || s.contains("R11_Compat"));
+        assert!(
+            s.contains("Asi_Critical") || s.contains("ASI_Critical") || s.contains("R11_Compat")
+        );
     }
 
     // 10. HealthCheck Display

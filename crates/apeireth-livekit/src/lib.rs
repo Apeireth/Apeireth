@@ -92,7 +92,10 @@ pub const PLATFORM_NAME: &str = "apeireth";
 pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
 pub fn is_stub_mode() -> bool {
@@ -213,7 +216,8 @@ impl std::str::FromStr for LiveKitEndpoint {
 ///
 /// 字段对应 LiveKit Server API 强制要求: 走 HTTPS (生产) 或 HTTP (localhost/127.0.0.1 dev only).
 /// 本阶段 flesh out 支持 `https://` (生产) + `http://localhost` + `http://127.0.0.1` (dev/mock).
-pub const ALLOWED_SERVER_URL_SCHEMES: &[&str] = &["https://", "http://localhost", "http://127.0.0.1"];
+pub const ALLOWED_SERVER_URL_SCHEMES: &[&str] =
+    &["https://", "http://localhost", "http://127.0.0.1"];
 
 /// Room name 合法字符白名单 (per livekit-server RoomName 约束, K-1 强校验 #3).
 ///
@@ -342,7 +346,9 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> LiveKitResul
 /// K-1 #1: 校验 server URL (必须 `https://` 开头, 或 `http://localhost` / `http://127.0.0.1` dev only).
 pub fn validate_server_url(url: &str) -> LiveKitResult<()> {
     if url.is_empty() {
-        return Err(LiveKitError::InvalidConfig("server_url 不能为空".to_string()));
+        return Err(LiveKitError::InvalidConfig(
+            "server_url 不能为空".to_string(),
+        ));
     }
     // LiveKit Server API 强制 HTTPS (生产), HTTP 仅 localhost/127.0.0.1 dev (per ALLOWED_SERVER_URL_SCHEMES)
     let ok = ALLOWED_SERVER_URL_SCHEMES
@@ -381,7 +387,9 @@ pub fn validate_api_key(api_key: &str) -> LiveKitResult<()> {
 /// K-1 #3: 校验 room name (1..=256 chars, alphanumeric + `-` + `_`).
 pub fn validate_room_name(room: &str) -> LiveKitResult<()> {
     if room.is_empty() {
-        return Err(LiveKitError::RoomNameInvalid("room name 不能为空".to_string()));
+        return Err(LiveKitError::RoomNameInvalid(
+            "room name 不能为空".to_string(),
+        ));
     }
     if room.len() > MAX_ROOM_NAME_LENGTH {
         return Err(LiveKitError::RoomNameInvalid(format!(
@@ -400,14 +408,19 @@ pub fn validate_room_name(room: &str) -> LiveKitResult<()> {
 /// K-1 #4: 校验 track SID (格式 `TR_<alphanumeric>`, per LiveKit track SID 规范).
 pub fn validate_track_sid(track_sid: &str) -> LiveKitResult<()> {
     if track_sid.is_empty() {
-        return Err(LiveKitError::TrackSidInvalid("track_sid 不能为空".to_string()));
+        return Err(LiveKitError::TrackSidInvalid(
+            "track_sid 不能为空".to_string(),
+        ));
     }
     if !track_sid.starts_with("TR_") {
         return Err(LiveKitError::TrackSidInvalid(format!(
             "track_sid must start with `TR_`: got `{track_sid}`"
         )));
     }
-    if !track_sid.chars().all(|c| ALLOWED_TRACK_SID_CHARS.contains(&c)) {
+    if !track_sid
+        .chars()
+        .all(|c| ALLOWED_TRACK_SID_CHARS.contains(&c))
+    {
         return Err(LiveKitError::TrackSidInvalid(format!(
             "track_sid contains invalid chars: `{track_sid}`"
         )));
@@ -860,7 +873,10 @@ mod tests {
 
         // with_credentials K-1
         let cfg3 = cfg
-            .with_credentials("APIabc123def456ghi789", "secret_with_at_least_32_chars_xxxxx")
+            .with_credentials(
+                "APIabc123def456ghi789",
+                "secret_with_at_least_32_chars_xxxxx",
+            )
             .expect("K-1 api_key OK");
         assert_eq!(cfg3.api_key, "APIabc123def456ghi789");
         assert!(cfg3.api_secret.starts_with("secret_"));
@@ -870,16 +886,31 @@ mod tests {
     #[test]
     fn stub_path_unchanged_6_endpoints_return_not_implemented() {
         // STUB_MODE 守门
-        assert!(is_stub_mode(), "STUB_MODE 必须 == true (R20 阶段 6 flesh out 守门)");
+        assert!(
+            is_stub_mode(),
+            "STUB_MODE 必须 == true (R20 阶段 6 flesh out 守门)"
+        );
 
         // 6 端点都走 STUB 守门 (跟 real.rs 同守门)
         // livekit_stub! 宏要求字面参数, 用单独函数包装每个端点
-        fn check_server_url() -> LiveKitResult<()> { livekit_stub!("server_url") }
-        fn check_api_key() -> LiveKitResult<()> { livekit_stub!("api_key") }
-        fn check_room() -> LiveKitResult<()> { livekit_stub!("room") }
-        fn check_track() -> LiveKitResult<()> { livekit_stub!("track") }
-        fn check_participant() -> LiveKitResult<()> { livekit_stub!("participant") }
-        fn check_event() -> LiveKitResult<()> { livekit_stub!("event") }
+        fn check_server_url() -> LiveKitResult<()> {
+            livekit_stub!("server_url")
+        }
+        fn check_api_key() -> LiveKitResult<()> {
+            livekit_stub!("api_key")
+        }
+        fn check_room() -> LiveKitResult<()> {
+            livekit_stub!("room")
+        }
+        fn check_track() -> LiveKitResult<()> {
+            livekit_stub!("track")
+        }
+        fn check_participant() -> LiveKitResult<()> {
+            livekit_stub!("participant")
+        }
+        fn check_event() -> LiveKitResult<()> {
+            livekit_stub!("event")
+        }
 
         for (name, r) in [
             ("server_url", check_server_url()),
@@ -942,8 +973,7 @@ mod tests {
         assert!(RemoveParticipantRequest::new("my-room", "with space").is_err());
 
         // MuteTrackRequest
-        let mt = MuteTrackRequest::new("my-room", "user-1", "TR_abc123", true)
-            .expect("K-1 OK");
+        let mt = MuteTrackRequest::new("my-room", "user-1", "TR_abc123", true).expect("K-1 OK");
         assert_eq!(mt.room, "my-room");
         assert_eq!(mt.identity, "user-1");
         assert_eq!(mt.track_sid, "TR_abc123");
@@ -956,14 +986,8 @@ mod tests {
     fn twirp_prefix_and_default_url() {
         assert_eq!(LIVEKIT_TWIRP_PREFIX, "/twirp");
         assert_eq!(DEFAULT_LIVEKIT_SERVER_URL, "https://livekit.example.com");
-        assert_eq!(
-            LiveKitEndpoint::Room.twirp_service(),
-            "livekit.RoomService"
-        );
-        assert_eq!(
-            LiveKitEndpoint::Event.twirp_service(),
-            "livekit.Webhook"
-        );
+        assert_eq!(LiveKitEndpoint::Room.twirp_service(), "livekit.RoomService");
+        assert_eq!(LiveKitEndpoint::Event.twirp_service(), "livekit.Webhook");
     }
 
     /// ALLOWED_* 编译期白名单守门

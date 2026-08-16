@@ -26,7 +26,7 @@
 //! 10. `auto_retry_on_401`: 第一次返 401, 第二次鉴权后 200 (守 401 重试 1 次)
 
 use apeireth_lark::{
-    LarkClient, LarkConfig, LarkError, LarkRealImpl, LARK_API_BASE_URL, MessageType,
+    LarkClient, LarkConfig, LarkError, LarkRealImpl, MessageType, LARK_API_BASE_URL,
     LARK_MAX_MESSAGE_LENGTH, LARK_TOKEN_CACHE_TTL_SECONDS,
 };
 use serde_json::json;
@@ -225,10 +225,7 @@ async fn create_event_rejects_invalid_time() {
     assert!(matches!(err, LarkError::ConfigInvalid(_)), "got: {err:?}");
 
     // 0 ms 也拒绝
-    let err = real
-        .create_event("cal_x", "zero", 0, 0)
-        .await
-        .unwrap_err();
+    let err = real.create_event("cal_x", "zero", 0, 0).await.unwrap_err();
     assert!(matches!(err, LarkError::ConfigInvalid(_)), "got: {err:?}");
 }
 
@@ -302,7 +299,10 @@ async fn get_document_happy() {
         .mount(&server)
         .await;
 
-    let doc = real.get_document("doc_real").await.expect("get_document 200 OK");
+    let doc = real
+        .get_document("doc_real")
+        .await
+        .expect("get_document 200 OK");
     assert_eq!(doc["document"]["document_id"], "doc_real");
     assert_eq!(doc["document"]["title"], "R20 阶段 6 计划");
 }
@@ -316,7 +316,9 @@ async fn create_bitable_record_happy() {
     let (server, real) = start_mock().await;
     mount_auth_ok(&server, "tok-6", 7200).await;
     Mock::given(method("POST"))
-        .and(path("/bitable/v1/apps/app_bitable/tables/tbl_tasks/records"))
+        .and(path(
+            "/bitable/v1/apps/app_bitable/tables/tbl_tasks/records",
+        ))
         .and(header("authorization", "Bearer tok-6"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "code": 0,
@@ -350,7 +352,9 @@ async fn list_bitable_records_happy() {
     let (server, real) = start_mock().await;
     mount_auth_ok(&server, "tok-7", 7200).await;
     Mock::given(method("GET"))
-        .and(path("/bitable/v1/apps/app_bitable/tables/tbl_tasks/records"))
+        .and(path(
+            "/bitable/v1/apps/app_bitable/tables/tbl_tasks/records",
+        ))
         .and(header("authorization", "Bearer tok-7"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "code": 0,
@@ -397,7 +401,7 @@ async fn auto_retry_on_401_then_success() {
     // 第一次 GET /docx/.../retry_doc 返 401
     Mock::given(method("GET"))
         .and(path("/docx/v1/documents/retry_doc"))
-        .and(header("authorization", "Bearer tok_initial"))  // token 错的
+        .and(header("authorization", "Bearer tok_initial")) // token 错的
         .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
         .up_to_n_times(1)
         .mount(&server)
@@ -442,7 +446,10 @@ async fn auto_retry_on_401_then_success() {
 #[test]
 fn k1_invariants_real_module() {
     // 5 K-1 字样: 跟 STUB 路径同守门
-    assert!(LARK_MAX_MESSAGE_LENGTH == 4096, "K-1: LARK_MAX_MESSAGE_LENGTH hardcode");
+    assert!(
+        LARK_MAX_MESSAGE_LENGTH == 4096,
+        "K-1: LARK_MAX_MESSAGE_LENGTH hardcode"
+    );
     assert_eq!(
         LARK_TOKEN_CACHE_TTL_SECONDS, 7200,
         "K-1: token cache TTL hardcode"

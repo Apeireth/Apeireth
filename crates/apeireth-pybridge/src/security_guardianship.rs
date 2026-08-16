@@ -89,8 +89,15 @@ impl SecurityGate {
     /// 6 重 v7 vs 7 重 (B4 严守 6 重 v7 + G7 跨语言 K3 新增)
     pub fn is_v7_baseline(&self) -> bool {
         // 6 重 v7 = G1-G6, G7 = K3 新增
-        matches!(self, Self::G1Identity | Self::G2Goal | Self::G3Capability
-            | Self::G4Compliance | Self::G5Resource | Self::G6Audit)
+        matches!(
+            self,
+            Self::G1Identity
+                | Self::G2Goal
+                | Self::G3Capability
+                | Self::G4Compliance
+                | Self::G5Resource
+                | Self::G6Audit
+        )
     }
 }
 
@@ -249,7 +256,14 @@ impl fmt::Display for SecurityEvent {
         writeln!(
             f,
             "{} [{}|{}] {} @ {}: {}\n  ctx: {}\n  ts: {}",
-            mark, self.gate, self.event_kind, self.source, "stage6", self.message, ctx, self.timestamp
+            mark,
+            self.gate,
+            self.event_kind,
+            self.source,
+            "stage6",
+            self.message,
+            ctx,
+            self.timestamp
         )
     }
 }
@@ -278,7 +292,12 @@ pub enum V7BaselineCheck {
 impl V7BaselineCheck {
     pub const N_CHECKS: usize = 6;
     pub const CHECK_NAMES: [&'static str; 6] = [
-        "G1_Identity", "G2_Goal", "G3_Capability", "G4_Compliance", "G5_Resource", "G6_Audit",
+        "G1_Identity",
+        "G2_Goal",
+        "G3_Capability",
+        "G4_Compliance",
+        "G5_Resource",
+        "G6_Audit",
     ];
 
     /// 严守 B4: 6 重 v7 全 OK (硬 verify; Stage 6 K3 不允许修改 v7 本身)
@@ -313,8 +332,13 @@ pub enum CrossLanguageCheck {
 impl CrossLanguageCheck {
     pub const N_CHECKS: usize = 7;
     pub const CHECK_NAMES: [&'static str; 7] = [
-        "GilSafe", "LifetimeSafe", "ExceptionSafe", "ConvertSafe",
-        "ImportSafe", "EvalSafe", "CallSafe",
+        "GilSafe",
+        "LifetimeSafe",
+        "ExceptionSafe",
+        "ConvertSafe",
+        "ImportSafe",
+        "EvalSafe",
+        "CallSafe",
     ];
 
     /// 7 项 G7 跨语言 check 全 OK
@@ -365,7 +389,8 @@ impl SecurityGuard {
             gate_events.push(Vec::with_capacity(max_per_gate));
         }
         // 数组初始化: 从 Vec 转换
-        let gate_events: [Vec<SecurityEvent>; SecurityGate::N_GATES] = match gate_events.try_into() {
+        let gate_events: [Vec<SecurityEvent>; SecurityGate::N_GATES] = match gate_events.try_into()
+        {
             Ok(arr) => arr,
             Err(_) => unreachable!("N_GATES = 7, vec len = 7"),
         };
@@ -417,9 +442,15 @@ impl SecurityGuard {
         let events = &self.gate_events[gate.idx()];
         if events.iter().any(|e| e.blocked) {
             SecurityVerdict::Block
-        } else if events.iter().any(|e| matches!(e.event_kind, SecurityEventKind::Warn)) {
+        } else if events
+            .iter()
+            .any(|e| matches!(e.event_kind, SecurityEventKind::Warn))
+        {
             SecurityVerdict::Warn
-        } else if events.iter().any(|e| matches!(e.event_kind, SecurityEventKind::Audit)) {
+        } else if events
+            .iter()
+            .any(|e| matches!(e.event_kind, SecurityEventKind::Audit))
+        {
             SecurityVerdict::Audit
         } else {
             SecurityVerdict::Allow
@@ -456,8 +487,12 @@ impl SecurityGuard {
     pub fn summary(&self) -> String {
         format!(
             "K3 SecurityGuard: events={} blocked={} warn={} audit={} v7_intact={} g7_intact={}",
-            self.total_events, self.total_blocked, self.total_warned, self.total_audited,
-            self.v7_baseline_intact, self.g7_baseline_intact
+            self.total_events,
+            self.total_blocked,
+            self.total_warned,
+            self.total_audited,
+            self.v7_baseline_intact,
+            self.g7_baseline_intact
         )
     }
 }
@@ -534,8 +569,14 @@ mod tests {
     #[test]
     fn k3_v7_baseline_intact() {
         // 6 重 v7: G1-G6
-        for g in [SecurityGate::G1Identity, SecurityGate::G2Goal, SecurityGate::G3Capability,
-                  SecurityGate::G4Compliance, SecurityGate::G5Resource, SecurityGate::G6Audit] {
+        for g in [
+            SecurityGate::G1Identity,
+            SecurityGate::G2Goal,
+            SecurityGate::G3Capability,
+            SecurityGate::G4Compliance,
+            SecurityGate::G5Resource,
+            SecurityGate::G6Audit,
+        ] {
             assert!(g.is_v7_baseline());
         }
         // G7 跨语言: K3 新增
@@ -606,7 +647,13 @@ mod tests {
                 5 => SecurityGate::G6Audit,
                 _ => SecurityGate::G7CrossLanguage,
             };
-            g.record(SecurityEvent::new(gate, SecurityEventKind::Pass, SecuritySeverity::Low, "x", "x"));
+            g.record(SecurityEvent::new(
+                gate,
+                SecurityEventKind::Pass,
+                SecuritySeverity::Low,
+                "x",
+                "x",
+            ));
         }
         for i in 0..7 {
             assert_eq!(g.gate_counts[i], 1);
@@ -731,7 +778,10 @@ mod tests {
     #[test]
     fn k3_security_gate_display() {
         assert_eq!(format!("{}", SecurityGate::G1Identity), "G1_Identity");
-        assert_eq!(format!("{}", SecurityGate::G7CrossLanguage), "G7_CrossLanguage");
+        assert_eq!(
+            format!("{}", SecurityGate::G7CrossLanguage),
+            "G7_CrossLanguage"
+        );
     }
 
     // 17. stage6_record_security + summary 全局

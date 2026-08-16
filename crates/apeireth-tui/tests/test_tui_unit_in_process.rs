@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// TUI unit 集成测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试目标** (per 主人派活单 2026-08-05):
@@ -14,29 +20,37 @@
 /// - O-4 任何人都能接手: 测试名清楚
 /// - O-5 不假装: 集成测试不假装接 HTTP, 只调纯函数 dispatcher
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守
 /// **路径说明** (per 任务诚实标缺):
 // - 任务期望 `tests/test_tui_unit_in_process.rs` — **是** 放 tests/ 下, ✓
 // - bg 任务的 src/ nav/organ 漏了 main.rs 接入 (mod nav; mod organ; 缺失),
 //   本文件用 #[path] include 绕过, 跑 dispatcher 跟单测等价
-
 mod test_common;
 
 use ratatui::layout::Rect;
@@ -52,7 +66,11 @@ fn dispatch_5_nav_all_render_non_empty() {
         let nav_enum = nav::Nav::from_u8(n).expect("0-4 valid");
         let out = nav::dispatch_render(nav_enum, area);
         assert!(!out.is_empty(), "{nav_enum:?} render 应非空");
-        assert!(out.len() > 30, "{nav_enum:?} render 字符数太少: {}", out.len());
+        assert!(
+            out.len() > 30,
+            "{nav_enum:?} render 字符数太少: {}",
+            out.len()
+        );
     }
 }
 
@@ -83,7 +101,11 @@ fn dispatch_9_organ_all_render_non_empty() {
         let organ_enum = organ::Organ::from_u8(n).expect("0-8 valid");
         let out = organ::dispatch_render(organ_enum, area);
         assert!(!out.is_empty(), "{organ_enum:?} render 应非空");
-        assert!(out.len() > 10, "{organ_enum:?} render 字符数太少: {}", out.len());
+        assert!(
+            out.len() > 10,
+            "{organ_enum:?} render 字符数太少: {}",
+            out.len()
+        );
     }
 }
 
@@ -134,4 +156,3 @@ fn cross_nav_organ_14_screens_labels() {
         );
     }
 }
-

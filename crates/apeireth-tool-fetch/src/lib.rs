@@ -45,7 +45,8 @@
 //! - ✅ workspace.version 0 改
 //! - ✅ V0.5 / V1136 / 9键 原始 0 触碰
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
@@ -53,7 +54,7 @@ use std::sync::Arc;
 
 pub mod anysearch;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
+pub mod anime;
 pub mod bilibili;
 pub mod cache;
 pub mod config;
@@ -61,21 +62,24 @@ pub mod deep;
 pub mod engine;
 pub mod html_extract;
 pub mod http_fetch;
-pub mod search_aggregator;
-pub mod anime;
-pub mod rate_limit;  // R230 — per-host sliding window rate limit
+mod organ_kani_proofs;
+pub mod rate_limit;
+pub mod search_aggregator; // R230 — per-host sliding window rate limit
 
-pub use bilibili::{BilibiliFetcher, BilibiliInfo, BilibiliError};
-pub use cache::{FetchCache, CacheStats};
+pub use anime::{AnimeError, AnimeFinder, AnimeInfo};
+pub use anysearch::{
+    AnySearchClient, AnySearchError, AnySearchResult, ANYSEARCH_DOMAINS, ANYSEARCH_ENDPOINT,
+    ANYSEARCH_METHODS,
+};
+pub use bilibili::{BilibiliError, BilibiliFetcher, BilibiliInfo};
+pub use cache::{CacheStats, FetchCache};
 pub use config::FetchConfig;
-pub use deep::{DeepSearcher, DeepRound, DeepResult};
-pub use engine::{Fetcher, FetchEngine, FetchRequest, FetchResponse, FetchError, FetchResult};
-pub use html_extract::{extract_text, extract_links, extract_title, HtmlExtractError};
+pub use deep::{DeepResult, DeepRound, DeepSearcher};
+pub use engine::{FetchEngine, FetchError, FetchRequest, FetchResponse, FetchResult, Fetcher};
+pub use html_extract::{extract_links, extract_text, extract_title, HtmlExtractError};
 pub use http_fetch::{HttpFetcher, HttpMethod};
-pub use anysearch::{AnySearchClient, AnySearchError, AnySearchResult, ANYSEARCH_DOMAINS, ANYSEARCH_METHODS, ANYSEARCH_ENDPOINT};
-pub use search_aggregator::{SearchAggregator, SearchSource, SearchHit, AggregatedResults};
-pub use anime::{AnimeFinder, AnimeInfo, AnimeError};
-pub use rate_limit::{RateLimiter, shared_rate_limiter};
+pub use rate_limit::{shared_rate_limiter, RateLimiter};
+pub use search_aggregator::{AggregatedResults, SearchAggregator, SearchHit, SearchSource};
 
 /// R149 实际吸收 VCP plugin 数 (UrlFetch + TavilySearch + AnySearch + VSearch(合) + FlashDeepSearch + BilibiliFetch + AnimeFinder)
 pub const ABSORBED_LEGACY_PLUGINS: usize = 6;
@@ -103,4 +107,4 @@ pub fn unified() -> FetchEngine {
 pub fn shared_cache() -> Arc<FetchCache> {
     Arc::new(FetchCache::new(FetchConfig::default().cache_ttl_ms))
 }
-pub mod search_providers;  // R252: multi-source HTTP search providers (Tavily, Brave, Serper)
+pub mod search_providers; // R252: multi-source HTTP search providers (Tavily, Brave, Serper)

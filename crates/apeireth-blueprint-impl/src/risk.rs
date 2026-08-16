@@ -224,11 +224,7 @@ impl K2WeakValidate for DefaultK2Guard {
 
         // 2. 试 fallback_chain
         let max = self.max_fallback_layers();
-        let chain: Vec<&String> = input
-            .fallback_chain
-            .iter()
-            .take(max)
-            .collect();
+        let chain: Vec<&String> = input.fallback_chain.iter().take(max).collect();
 
         for (i, candidate) in chain.iter().enumerate() {
             if !candidate.trim().is_empty() && candidate.len() <= 16 * 1024 {
@@ -255,14 +251,19 @@ impl K2WeakValidate for DefaultK2Guard {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditEvent {
     pub timestamp_ms: u64,
-    pub category: String,    // K-1 / K-2 / K-3 / K-4 / D-01..D-04 / TEMPLATE / Q-METRIC
-    pub subject: String,     // 谁 (e.g. "tool:bash", "user:123")
-    pub decision: String,    // "allow" / "deny" / "info" / "warn"
-    pub message: String,     // 详细信息
+    pub category: String, // K-1 / K-2 / K-3 / K-4 / D-01..D-04 / TEMPLATE / Q-METRIC
+    pub subject: String,  // 谁 (e.g. "tool:bash", "user:123")
+    pub decision: String, // "allow" / "deny" / "info" / "warn"
+    pub message: String,  // 详细信息
 }
 
 impl AuditEvent {
-    pub fn now(category: impl Into<String>, subject: impl Into<String>, decision: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn now(
+        category: impl Into<String>,
+        subject: impl Into<String>,
+        decision: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         let timestamp_ms = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -309,12 +310,13 @@ impl Default for InMemoryAudit {
 
 impl K3Audit for InMemoryAudit {
     fn audit(&self, event: &AuditEvent) -> BlueprintResult<()> {
-        let mut buf = self.buffer.lock().map_err(|_| {
-            BlueprintError::K3AuditFailed {
+        let mut buf = self
+            .buffer
+            .lock()
+            .map_err(|_| BlueprintError::K3AuditFailed {
                 channel: "in_memory".into(),
                 reason: "mutex poisoned".into(),
-            }
-        })?;
+            })?;
         if buf.len() >= self.capacity {
             buf.remove(0); // ring buffer: 丢最旧
         }
@@ -323,10 +325,13 @@ impl K3Audit for InMemoryAudit {
     }
 
     fn recent(&self, n: usize) -> BlueprintResult<Vec<AuditEvent>> {
-        let buf = self.buffer.lock().map_err(|_| BlueprintError::K3AuditFailed {
-            channel: "in_memory".into(),
-            reason: "mutex poisoned".into(),
-        })?;
+        let buf = self
+            .buffer
+            .lock()
+            .map_err(|_| BlueprintError::K3AuditFailed {
+                channel: "in_memory".into(),
+                reason: "mutex poisoned".into(),
+            })?;
         let start = buf.len().saturating_sub(n);
         Ok(buf[start..].to_vec())
     }
@@ -404,10 +409,13 @@ impl RuleTableGuard {
 
 impl K4Guard for RuleTableGuard {
     fn decide(&self, subject: &str, action: &str) -> BlueprintResult<GuardDecision> {
-        let rules = self.rules.lock().map_err(|_| BlueprintError::K4GuardDenied {
-            subject: subject.into(),
-            rule: "<mutex poisoned>".into(),
-        })?;
+        let rules = self
+            .rules
+            .lock()
+            .map_err(|_| BlueprintError::K4GuardDenied {
+                subject: subject.into(),
+                rule: "<mutex poisoned>".into(),
+            })?;
 
         for r in rules.iter() {
             if r.subject == subject && r.action == action {
@@ -425,19 +433,19 @@ impl K4Guard for RuleTableGuard {
     }
 
     fn add_rule(&mut self, rule: GuardRule) -> BlueprintResult<()> {
-        let mut rules = self.rules.lock().map_err(|_| BlueprintError::K4GuardDenied {
-            subject: rule.subject.clone(),
-            rule: "<mutex poisoned>".into(),
-        })?;
+        let mut rules = self
+            .rules
+            .lock()
+            .map_err(|_| BlueprintError::K4GuardDenied {
+                subject: rule.subject.clone(),
+                rule: "<mutex poisoned>".into(),
+            })?;
         rules.push(rule);
         Ok(())
     }
 
     fn list_rules(&self) -> Vec<GuardRule> {
-        self.rules
-            .lock()
-            .map(|r| r.clone())
-            .unwrap_or_default()
+        self.rules.lock().map(|r| r.clone()).unwrap_or_default()
     }
 }
 
@@ -473,7 +481,13 @@ where
     }
 
     /// 走完整链条. 任一关失败立即返回 Err, 但 K-3 audit 尽可能记录.
-    pub fn run(&self, k1_input: &K1Input, k2_input: &K2Input, subject: &str, action: &str) -> BlueprintResult<(K2Result, GuardDecision)> {
+    pub fn run(
+        &self,
+        k1_input: &K1Input,
+        k2_input: &K2Input,
+        subject: &str,
+        action: &str,
+    ) -> BlueprintResult<(K2Result, GuardDecision)> {
         // Step 1: K-1
         self.k1.validate(k1_input)?;
 
@@ -692,12 +706,7 @@ mod tests {
             reason: "default-allow".into(),
         })
         .unwrap();
-        let chain = RiskChain::new(
-            DefaultK1Guard,
-            DefaultK2Guard,
-            InMemoryAudit::new(100),
-            g4,
-        );
+        let chain = RiskChain::new(DefaultK1Guard, DefaultK2Guard, InMemoryAudit::new(100), g4);
         let k1 = sample_k1();
         let k2 = K2Input::new("hi", vec![]);
         let (r2, d) = chain.run(&k1, &k2, "tool:bash", "exec").unwrap();

@@ -80,15 +80,9 @@ fn main() {
     // 4. filter_kind + filter_source
     println!("4. filter_kind + filter_source:");
     let tool_only = l.journal().filter_kind(MemoryKind::ToolInvocation);
-    println!(
-        "   ToolInvocation: {} entries",
-        tool_only.len()
-    );
+    println!("   ToolInvocation: {} entries", tool_only.len());
     let executor_only = l.journal().filter_source("executor");
-    println!(
-        "   source=executor: {} entries",
-        executor_only.len()
-    );
+    println!("   source=executor: {} entries", executor_only.len());
     println!();
 
     // 5. 1 条 entry 详情

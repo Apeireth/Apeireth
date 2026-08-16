@@ -40,4 +40,3 @@ fn r177_tui2_kani_01_navpage_count() {
 fn r177_tui2_kani_02_organ_count() {
     assert_eq!(Organ::COUNT, 9);
 }
-

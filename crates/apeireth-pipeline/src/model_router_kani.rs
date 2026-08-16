@@ -2,11 +2,11 @@
 
 #![allow(missing_docs)]
 
-use apeireth_protocol::MessageRole;
 use crate::model_router::{RoutingCondition, RoutingRule};
 use crate::provider_registry::{
-    ALL_PROVIDER_CAPABILITIES, ALL_SELECTION_STRATEGIES, ProviderCapability, SelectionStrategy,
+    ProviderCapability, SelectionStrategy, ALL_PROVIDER_CAPABILITIES, ALL_SELECTION_STRATEGIES,
 };
+use apeireth_protocol::MessageRole;
 
 #[test]
 fn r177_mr_01_routing_condition_5_variants() {

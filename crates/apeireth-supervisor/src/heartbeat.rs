@@ -67,7 +67,13 @@ pub enum WakeupSource {
 
 impl WakeupSource {
     pub const COUNT: usize = 5;
-    pub const ALL: [WakeupSource; 5] = [Self::Time, Self::Event, Self::Agent, Self::User, Self::Async];
+    pub const ALL: [WakeupSource; 5] = [
+        Self::Time,
+        Self::Event,
+        Self::Agent,
+        Self::User,
+        Self::Async,
+    ];
 
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -91,7 +97,9 @@ pub enum HeartbeatPriority {
 }
 
 impl Default for HeartbeatPriority {
-    fn default() -> Self { Self::Normal }
+    fn default() -> Self {
+        Self::Normal
+    }
 }
 
 /// Wakeup 触发上下文
@@ -104,7 +112,11 @@ pub struct WakeupContext {
 }
 
 impl WakeupContext {
-    pub fn new(source: WakeupSource, topic: impl Into<String>, payload_json: impl Into<String>) -> Self {
+    pub fn new(
+        source: WakeupSource,
+        topic: impl Into<String>,
+        payload_json: impl Into<String>,
+    ) -> Self {
         Self {
             source,
             topic: topic.into(),
@@ -123,7 +135,10 @@ pub struct Schedule {
 
 impl Schedule {
     pub fn every(interval: Duration) -> Self {
-        Self { interval, jitter: Duration::ZERO }
+        Self {
+            interval,
+            jitter: Duration::ZERO,
+        }
     }
 
     pub fn with_jitter(mut self, jitter: Duration) -> Self {
@@ -142,10 +157,14 @@ pub trait Heartbeat: Send + Sync + 'static {
     fn id(&self) -> &str;
 
     /// 优先级
-    fn priority(&self) -> HeartbeatPriority { HeartbeatPriority::Normal }
+    fn priority(&self) -> HeartbeatPriority {
+        HeartbeatPriority::Normal
+    }
 
     /// 可被哪些 wakeup 源触发 (默认空, 子类覆盖)
-    fn accepts(&self) -> Vec<WakeupSource> { vec![] }
+    fn accepts(&self) -> Vec<WakeupSource> {
+        vec![]
+    }
 
     /// 时间触发时 (周期性 tick)
     async fn on_tick(&self, _ctx: &WakeupContext) -> HeartbeatResult<()> {
@@ -197,19 +216,25 @@ struct ScheduledItem {
 }
 
 impl PartialEq for ScheduledItem {
-    fn eq(&self, other: &Self) -> bool { self.id == other.id }
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
 }
 
 impl Eq for ScheduledItem {}
 
 impl PartialOrd for ScheduledItem {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> { Some(self.cmp(other)) }
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 impl Ord for ScheduledItem {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // BinaryHeap 是 max-heap, 反向比较: next_tick 越早 + priority 越高 = 越先 pop
-        other.next_tick.cmp(&self.next_tick)
+        other
+            .next_tick
+            .cmp(&self.next_tick)
             .then_with(|| self.priority.cmp(&other.priority))
     }
 }
@@ -305,7 +330,9 @@ impl HeartbeatScheduler {
                 // 等待下一个 tick 或 shutdown
                 let sleep_dur = {
                     let mut state = inner.lock().await;
-                    if !state.running { break; }
+                    if !state.running {
+                        break;
+                    }
                     match state.items.peek() {
                         Some(item) => item.next_tick.saturating_duration_since(Instant::now()),
                         None => Duration::from_secs(3600), // 空堆, 长 sleep
@@ -401,7 +428,9 @@ impl HeartbeatScheduler {
 }
 
 impl Default for HeartbeatScheduler {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -444,10 +473,15 @@ mod tests {
         struct MyHb;
         #[async_trait::async_trait]
         impl Heartbeat for MyHb {
-            fn id(&self) -> &str { "my_hb" }
+            fn id(&self) -> &str {
+                "my_hb"
+            }
         }
         let sched = HeartbeatScheduler::new();
-        sched.register_interval(MyHb, Schedule::every(Duration::from_secs(60))).await.unwrap();
+        sched
+            .register_interval(MyHb, Schedule::every(Duration::from_secs(60)))
+            .await
+            .unwrap();
         assert_eq!(sched.len().await, 1);
     }
 
@@ -456,16 +490,25 @@ mod tests {
         struct MyHb;
         #[async_trait::async_trait]
         impl Heartbeat for MyHb {
-            fn id(&self) -> &str { "dup" }
+            fn id(&self) -> &str {
+                "dup"
+            }
         }
         let sched = HeartbeatScheduler::new();
-        sched.register_interval(MyHb, Schedule::every(Duration::from_secs(60))).await.unwrap();
+        sched
+            .register_interval(MyHb, Schedule::every(Duration::from_secs(60)))
+            .await
+            .unwrap();
         struct MyHb2;
         #[async_trait::async_trait]
         impl Heartbeat for MyHb2 {
-            fn id(&self) -> &str { "dup" }
+            fn id(&self) -> &str {
+                "dup"
+            }
         }
-        let r = sched.register_interval(MyHb2, Schedule::every(Duration::from_secs(60))).await;
+        let r = sched
+            .register_interval(MyHb2, Schedule::every(Duration::from_secs(60)))
+            .await;
         assert!(r.is_err());
     }
 
@@ -476,9 +519,15 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Heartbeat for TickHb {
-        fn id(&self) -> &str { &self.id }
-        fn priority(&self) -> HeartbeatPriority { HeartbeatPriority::High }
-        fn accepts(&self) -> Vec<WakeupSource> { vec![WakeupSource::Time, WakeupSource::User] }
+        fn id(&self) -> &str {
+            &self.id
+        }
+        fn priority(&self) -> HeartbeatPriority {
+            HeartbeatPriority::High
+        }
+        fn accepts(&self) -> Vec<WakeupSource> {
+            vec![WakeupSource::Time, WakeupSource::User]
+        }
         async fn on_tick(&self, _ctx: &WakeupContext) -> HeartbeatResult<()> {
             self.counter.fetch_add(1, AO::Relaxed);
             Ok(())
@@ -492,11 +541,20 @@ mod tests {
     #[tokio::test]
     async fn t05_trigger_event() {
         let counter = Arc::new(AtomicU32::new(0));
-        let hb = TickHb { id: "ev".into(), counter: counter.clone() };
+        let hb = TickHb {
+            id: "ev".into(),
+            counter: counter.clone(),
+        };
         let sched = HeartbeatScheduler::new();
-        sched.register_interval(hb, Schedule::every(Duration::from_secs(60))).await.unwrap();
+        sched
+            .register_interval(hb, Schedule::every(Duration::from_secs(60)))
+            .await
+            .unwrap();
 
-        let fired = sched.trigger(WakeupContext::new(WakeupSource::User, "chat", "{}")).await.unwrap();
+        let fired = sched
+            .trigger(WakeupContext::new(WakeupSource::User, "chat", "{}"))
+            .await
+            .unwrap();
         assert_eq!(fired, 1);
         tokio::time::sleep(Duration::from_millis(50)).await;
         assert_eq!(counter.load(AO::Relaxed), 10);
@@ -505,9 +563,15 @@ mod tests {
     #[tokio::test]
     async fn t06_periodic_tick() {
         let counter = Arc::new(AtomicU32::new(0));
-        let hb = TickHb { id: "tick".into(), counter: counter.clone() };
+        let hb = TickHb {
+            id: "tick".into(),
+            counter: counter.clone(),
+        };
         let sched = HeartbeatScheduler::new();
-        sched.register_interval(hb, Schedule::every(Duration::from_millis(50))).await.unwrap();
+        sched
+            .register_interval(hb, Schedule::every(Duration::from_millis(50)))
+            .await
+            .unwrap();
         sched.start().await.unwrap();
         tokio::time::sleep(Duration::from_millis(180)).await;
         sched.stop().await.unwrap();
@@ -520,10 +584,15 @@ mod tests {
         struct H;
         #[async_trait::async_trait]
         impl Heartbeat for H {
-            fn id(&self) -> &str { "h" }
+            fn id(&self) -> &str {
+                "h"
+            }
         }
         let sched = HeartbeatScheduler::new();
-        sched.register_interval(H, Schedule::every(Duration::from_secs(60))).await.unwrap();
+        sched
+            .register_interval(H, Schedule::every(Duration::from_secs(60)))
+            .await
+            .unwrap();
         sched.start().await.unwrap();
         let r = sched.start().await;
         assert!(r.is_err());

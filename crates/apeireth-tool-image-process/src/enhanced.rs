@@ -2,8 +2,8 @@
 
 // R156 O-5: allow(missing_docs) 同父底
 #![allow(missing_docs)]
-use crate::router::{ImageRouter, ProcessOp};
 use crate::mcp::{ImageProcessMcp, McpRequest, McpResponse};
+use crate::router::{ImageRouter, ProcessOp};
 
 pub struct EnhancedImageProcess {
     router: ImageRouter,
@@ -12,9 +12,17 @@ pub struct EnhancedImageProcess {
 
 impl EnhancedImageProcess {
     pub fn new() -> Self {
-        Self { router: ImageRouter::new(), mcp: ImageProcessMcp::new() }
+        Self {
+            router: ImageRouter::new(),
+            mcp: ImageProcessMcp::new(),
+        }
     }
-    pub fn process(&self, op: ProcessOp, data: &[u8], lang: Option<&str>) -> Result<String, crate::router::ProcessError> {
+    pub fn process(
+        &self,
+        op: ProcessOp,
+        data: &[u8],
+        lang: Option<&str>,
+    ) -> Result<String, crate::router::ProcessError> {
         self.router.dispatch(op, data, lang)
     }
     pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse {
@@ -23,7 +31,9 @@ impl EnhancedImageProcess {
 }
 
 impl Default for EnhancedImageProcess {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

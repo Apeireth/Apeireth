@@ -37,7 +37,7 @@ pub mod memory_stats {
 
 /// R47 B8: cognition graph summary storage (zero UI impact — render() 0 改).
 ///
-/// Data flow: `apeireth-graph::cognition_graph::run_cognition_graph_sync` -> 
+/// Data flow: `apeireth-graph::cognition_graph::run_cognition_graph_sync` ->
 /// TUI backend (after chat cycle) -> `record_cognition_summary` here -> atomic storage.
 /// Snapshot exposed for future UI hooks (locked UI promise kept; no current consumers).
 pub mod cognition_stats {
@@ -61,10 +61,15 @@ pub fn record_cognition_summary(mean: f64, min: f64, max: f64, verdict_approve: 
     entry.insert("mean".to_string(), mean);
     entry.insert("min".to_string(), min);
     entry.insert("max".to_string(), max);
-    entry.insert("verdict_approve".to_string(), if verdict_approve { 1.0 } else { 0.0 });
+    entry.insert(
+        "verdict_approve".to_string(),
+        if verdict_approve { 1.0 } else { 0.0 },
+    );
     if let Ok(mut buf) = cognition_stats::COGNITION_BUFFER.lock() {
         buf.insert(0, entry);
-        if buf.len() > 8 { buf.truncate(8); }
+        if buf.len() > 8 {
+            buf.truncate(8);
+        }
     }
     if verdict_approve {
         cognition_stats::VERDICT_APPROVE_TOTAL.fetch_add(1, Ordering::Relaxed);
@@ -74,7 +79,10 @@ pub fn record_cognition_summary(mean: f64, min: f64, max: f64, verdict_approve: 
 }
 
 pub fn latest_cognition_summary() -> Option<std::collections::HashMap<String, f64>> {
-    cognition_stats::COGNITION_BUFFER.lock().ok().and_then(|b| b.first().cloned())
+    cognition_stats::COGNITION_BUFFER
+        .lock()
+        .ok()
+        .and_then(|b| b.first().cloned())
 }
 
 pub fn cognition_verdict_counts() -> (u64, u64) {
@@ -83,7 +91,6 @@ pub fn cognition_verdict_counts() -> (u64, u64) {
         cognition_stats::VERDICT_BLOCK_TOTAL.load(Ordering::Relaxed),
     )
 }
-
 
 /// backend.rs::snapshot_organ_main 算完 episode_count 后调
 ///
@@ -170,7 +177,9 @@ pub fn render(area: Rect) -> String {
             mean, min, max, verdict_str
         ));
     } else {
-        out.push_str("  cognition:   (no runs, 0 sample)            (R47 hook ready, R57 per-chat-cycle)\n");
+        out.push_str(
+            "  cognition:   (no runs, 0 sample)            (R47 hook ready, R57 per-chat-cycle)\n",
+        );
     }
     out.push_str(&format!(
         "  verdict 累计: approve={} block={}        (per R47 atomic accumulators)\n",
@@ -179,7 +188,6 @@ pub fn render(area: Rect) -> String {
     out.push_str("  [partial] 2/3 真接 (短期/中期 + cognition), 长期 近似 (1.3 路线)\n");
     out
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -210,7 +218,10 @@ mod tests {
     fn render_marks_partial_honestly() {
         let _g = TEST_LOCK.lock().unwrap();
         let out = render(Rect::new(0, 0, 80, 24));
-        assert!(out.contains("[partial]"), "memory 1/3 真接, 标 partial: {out}");
+        assert!(
+            out.contains("[partial]"),
+            "memory 1/3 真接, 标 partial: {out}"
+        );
     }
 
     #[test]
@@ -304,7 +315,11 @@ mod tests {
         let out = render(Rect::new(0, 0, 80, 24));
         assert!(out.contains("[MEM]"));
         assert!(out.contains("[partial]"));
-        assert!(out.lines().count() >= 6, "R78 >= 6 lines, got {}: {out}", out.lines().count());
+        assert!(
+            out.lines().count() >= 6,
+            "R78 >= 6 lines, got {}: {out}",
+            out.lines().count()
+        );
     }
 
     #[test]
@@ -321,5 +336,3 @@ mod tests {
         assert_eq!(s.retention_days, 7);
     }
 }
-
-

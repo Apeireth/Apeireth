@@ -22,8 +22,8 @@ use apeireth_pybridge::{
     episode_to_json, health_check, is_known_r11_module, is_module_available, note_to_json,
     placeholder, python_ext_enabled, python_is_available, python_version_string,
     r11_compat_version, r11_lookup_module, r11_module_category, r11_module_count, session_to_json,
-    try_call_or_degrade, BridgeError, BridgeHealth, R11Category, R11ModuleInfo, R11_COMPAT_VERSION,
-    R11_MODULE_COUNT, SuggestedAction,
+    try_call_or_degrade, BridgeError, BridgeHealth, R11Category, R11ModuleInfo, SuggestedAction,
+    R11_COMPAT_VERSION, R11_MODULE_COUNT,
 };
 
 // 1. placeholder 跨 build 一致 (Stage 1 严守)
@@ -162,7 +162,8 @@ fn stage2_e2e_bridge_apeireth_core_types_roundtrip() {
         last_active_at: 2,
     };
     let s_json = session_to_json(&s).expect("Session serialize");
-    let s_parsed: apeireth_core::Session = serde_json::from_str(&s_json).expect("Session roundtrip");
+    let s_parsed: apeireth_core::Session =
+        serde_json::from_str(&s_json).expect("Session roundtrip");
     assert_eq!(s_parsed.id, "s-stage2");
 
     let n = apeireth_core::Note {
@@ -189,8 +190,7 @@ fn stage2_e2e_bridge_r11_compat_integration() {
         r11_module_category("apeireth.memory.store"),
         R11Category::Memory
     );
-    let info: R11ModuleInfo =
-        r11_lookup_module("apeireth.memory.v1141").expect("baseline module");
+    let info: R11ModuleInfo = r11_lookup_module("apeireth.memory.v1141").expect("baseline module");
     assert!(info.is_baseline);
     assert_eq!(info.category, R11Category::Memory);
     assert_eq!(r11_compat_version(), R11_COMPAT_VERSION);
@@ -254,7 +254,10 @@ fn stage2_e2e_bridge_cross_api_integration_full() {
 
     // pool stats + smoke.pool_stats 跨 API 一致
     assert_eq!(stats.cached_modules, 0);
-    assert_eq!(smoke.pool_max_idle, 32, "smoke 默认 max_idle=32 (跟 BridgeModulePool::default 一致)");
+    assert_eq!(
+        smoke.pool_max_idle, 32,
+        "smoke 默认 max_idle=32 (跟 BridgeModulePool::default 一致)"
+    );
 
     // r11 字段跨 3 API 一致
     assert_eq!(r11_module_count(), 1103);

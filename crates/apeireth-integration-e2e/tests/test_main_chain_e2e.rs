@@ -49,14 +49,12 @@ use tempfile::tempdir;
 
 /// 固定起点虚拟时钟: 2026-08-16 06:00 UTC.
 fn vclock() -> Arc<VirtualClock> {
-    Arc::new(
-        VirtualClock::new(
-            chrono::Utc
-                .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
-                .single()
-                .unwrap(),
-        ),
-    )
+    Arc::new(VirtualClock::new(
+        chrono::Utc
+            .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
+            .single()
+            .unwrap(),
+    ))
 }
 
 /// 构造一条 episode.
@@ -106,10 +104,7 @@ fn run_reflection_cycle(
         .advance(ReflectionPhase::Concluded, base + 3)
         .expect("Consolidating→Concluded 合法转移 (自动重触发)");
     let content = match insight {
-        Some(text) => format!(
-            "【深度反思】第 {} 轮:\n{text}",
-            sched.cycles_completed
-        ),
+        Some(text) => format!("【深度反思】第 {} 轮:\n{text}", sched.cycles_completed),
         None => format!(
             "【反思周期】第 {} 轮完成. 最近事件: {:?}",
             sched.cycles_completed,
@@ -198,7 +193,13 @@ async fn test_s1_memory_write_then_injection_visible_next_round() {
             ))
             .unwrap();
         store
-            .put_episode(&episode("s1-e3", 1_755_300_002, "user", "今天天气真不错", "sess-1"))
+            .put_episode(&episode(
+                "s1-e3",
+                1_755_300_002,
+                "user",
+                "今天天气真不错",
+                "sess-1",
+            ))
             .unwrap();
     } // 关闭库 (模拟本轮结束)
 
@@ -221,12 +222,20 @@ async fn test_s1_memory_write_then_injection_visible_next_round() {
         "查询相关记忆必须出现在注入里: {}",
         outcome.rendered
     );
-    assert!(outcome.kept >= 2, "两条线代相关记忆应保留, kept={}", outcome.kept);
+    assert!(
+        outcome.kept >= 2,
+        "两条线代相关记忆应保留, kept={}",
+        outcome.kept
+    );
     // 低相关记忆折叠收纳 (不丢, 可无损展开)
     assert!(
         outcome.folded.iter().any(|f| f.summary.contains("天气")),
         "低相关记忆应折叠为摘要: {:?}",
-        outcome.folded.iter().map(|f| &f.summary).collect::<Vec<_>>()
+        outcome
+            .folded
+            .iter()
+            .map(|f| &f.summary)
+            .collect::<Vec<_>>()
     );
     // 边界: 空记忆 → 无注入内容
     let empty = fold_segments(&[], "线代作业", &BigramOverlapScorer, &opts, None);
@@ -263,10 +272,21 @@ async fn test_s2_session_restore_across_reopen() {
 
     // 重开 = 会话恢复
     let store = SqliteMemoryStore::open(&db_path).unwrap();
-    assert_eq!(store.count_by_session("alpha").unwrap(), 2, "alpha session 应恢复 2 条");
-    assert_eq!(store.count_by_session("beta").unwrap(), 2, "beta session 应恢复 2 条");
+    assert_eq!(
+        store.count_by_session("alpha").unwrap(),
+        2,
+        "alpha session 应恢复 2 条"
+    );
+    assert_eq!(
+        store.count_by_session("beta").unwrap(),
+        2,
+        "beta session 应恢复 2 条"
+    );
 
-    let got = store.get_episode("s2-alpha-1").unwrap().expect("按 id 恢复");
+    let got = store
+        .get_episode("s2-alpha-1")
+        .unwrap()
+        .expect("按 id 恢复");
     assert_eq!(got.content, "alpha 的第 1 条对话");
     assert_eq!(got.role, "assistant");
 
@@ -300,7 +320,11 @@ async fn test_s3_tool_call_approve_execute_audit() {
     // 1. registry + 真工具
     let registry = Arc::new(ToolRegistry::new());
     register_all(&registry).expect("register_all 8 真工具");
-    assert!(registry.len() >= 8, "应注册 8+ 真工具, 实际 {}", registry.len());
+    assert!(
+        registry.len() >= 8,
+        "应注册 8+ 真工具, 实际 {}",
+        registry.len()
+    );
     assert!(
         registry.list().iter().any(|n| n == "FileOperator"),
         "FileOperator 必须在册: {:?}",
@@ -313,9 +337,10 @@ async fn test_s3_tool_call_approve_execute_audit() {
     let record_store = Arc::new(RecordStore::new(Arc::clone(&store)));
 
     // 3. 审批: 白名单含 FileOperator → 放行
-    let mut approval_mgr = ApprovalManager::with_rules(vec![Box::new(
-        WhitelistRule::with_whitelist(["FileOperator".to_string()]),
-    )]);
+    let mut approval_mgr =
+        ApprovalManager::with_rules(vec![Box::new(WhitelistRule::with_whitelist([
+            "FileOperator".to_string(),
+        ]))]);
     approval_mgr.set_handler(Arc::new(AutoApproveHandler));
 
     // 4. mock LLM 输出 (真 parser 解析 marker)
@@ -344,7 +369,11 @@ async fn test_s3_tool_call_approve_execute_audit() {
 
     let executor = ToolExecutor::with_timeout(Arc::clone(&registry), 10_000);
     let result = executor.execute(call).await;
-    assert!(result.success, "FileOperator read 应成功: {:?}", result.error);
+    assert!(
+        result.success,
+        "FileOperator read 应成功: {:?}",
+        result.error
+    );
     assert!(
         result.output.to_string().contains("S3-E2E-PAYLOAD-12345"),
         "执行输出应含文件内容: {}",
@@ -388,7 +417,10 @@ async fn test_s4_blacklisted_tool_denied_and_audited() {
     match approval_mgr.check(call) {
         ApprovalDecision::Deny { reason, silent } => {
             assert!(!silent, "非静默黑名单");
-            assert!(reason.contains("DangerTool"), "拒绝原因应含工具名: {reason}");
+            assert!(
+                reason.contains("DangerTool"),
+                "拒绝原因应含工具名: {reason}"
+            );
         }
         other => panic!("黑名单工具必须 Deny, 实际: {other:?}"),
     }
@@ -421,10 +453,7 @@ async fn test_s5_reflection_period_trigger_writes_to_disk() {
     let start = vc.now();
 
     // 周期未到 → 不反思 (确定性: 虚拟时钟未动)
-    assert!(
-        vc.now() - start < period,
-        "初始时刻不应到达反思周期"
-    );
+    assert!(vc.now() - start < period, "初始时刻不应到达反思周期");
 
     // 快进 1 天 (0 等待) → 周期到
     vc.advance(period);
@@ -518,7 +547,8 @@ async fn test_s7_mock_llm_injection_persists_artifact() {
         threshold: 0.99, // 故意拉高 → 全部折叠走 summarizer
         summary_chars: 8,
     };
-    let mock_summarizer = |text: &str| format!("【mock摘要】{}", &text.chars().take(4).collect::<String>());
+    let mock_summarizer =
+        |text: &str| format!("【mock摘要】{}", &text.chars().take(4).collect::<String>());
     let outcome = fold_segments(
         &segments,
         "项目汇报",
@@ -527,9 +557,16 @@ async fn test_s7_mock_llm_injection_persists_artifact() {
         Some(&mock_summarizer),
     );
     assert!(
-        outcome.folded.iter().all(|f| f.summary.starts_with("【mock摘要】")),
+        outcome
+            .folded
+            .iter()
+            .all(|f| f.summary.starts_with("【mock摘要】")),
         "summarizer 注入必须真生效: {:?}",
-        outcome.folded.iter().map(|f| &f.summary).collect::<Vec<_>>()
+        outcome
+            .folded
+            .iter()
+            .map(|f| &f.summary)
+            .collect::<Vec<_>>()
     );
 
     // 注入点 2: 深度反思 (mock 洞察) 落盘
@@ -551,7 +588,11 @@ async fn test_s7_mock_llm_injection_persists_artifact() {
         .iter()
         .find(|e| e.id.starts_with("reflect-"))
         .expect("反思落盘");
-    assert!(refl.content.contains("【深度反思】"), "应含深度反思前缀: {}", refl.content);
+    assert!(
+        refl.content.contains("【深度反思】"),
+        "应含深度反思前缀: {}",
+        refl.content
+    );
     assert!(
         refl.content.contains("主人最近压力大"),
         "mock 洞察必须落盘: {}",
@@ -590,8 +631,7 @@ async fn test_s8_multi_sink_fanout_delivers_to_all() {
             r.append(&stream_entry("s8-refl", "deliver:reflection", ts, text))
                 .map_err(|e| e.to_string())
         };
-        let deliverers: [&dyn Fn(&str) -> Result<(), String>; 3] =
-            [&d_thought, &d_action, &d_refl];
+        let deliverers: [&dyn Fn(&str) -> Result<(), String>; 3] = [&d_thought, &d_action, &d_refl];
         fan_out(&deliverers, "你好, 该休息了").expect("全通道成功应 Ok");
     } // 关库
 
@@ -607,7 +647,11 @@ async fn test_s8_multi_sink_fanout_delivers_to_all() {
     let got_refl = ReflectionStream::new(&conn)
         .list_for_subject("deliver:reflection", None, None, false)
         .unwrap();
-    for (name, got) in [("thought", &got_thought), ("action", &got_action), ("reflection", &got_refl)] {
+    for (name, got) in [
+        ("thought", &got_thought),
+        ("action", &got_action),
+        ("reflection", &got_refl),
+    ] {
         assert_eq!(got.len(), 1, "{name} 通道必须收到且仅 1 条");
         assert_eq!(
             got[0].payload,
@@ -705,15 +749,19 @@ async fn test_s10_full_main_chain_memory_to_delivery() {
         summary_chars: 12,
     };
     let injection = fold_segments(&segments, "项目汇报", &BigramOverlapScorer, &opts, None);
-    assert!(injection.rendered.contains("项目汇报"), "注入必须含相关记忆证据");
+    assert!(
+        injection.rendered.contains("项目汇报"),
+        "注入必须含相关记忆证据"
+    );
 
     // ---------- 段 3: 工具调用 → 审批 → 执行 → 审计 ----------
     let registry = Arc::new(ToolRegistry::new());
     register_all(&registry).unwrap();
     let record_store = Arc::new(RecordStore::new(Arc::clone(&store)));
-    let mut approval_mgr = ApprovalManager::with_rules(vec![Box::new(
-        WhitelistRule::with_whitelist(["FileOperator".to_string()]),
-    )]);
+    let mut approval_mgr =
+        ApprovalManager::with_rules(vec![Box::new(WhitelistRule::with_whitelist([
+            "FileOperator".to_string(),
+        ]))]);
     approval_mgr.set_handler(Arc::new(AutoApproveHandler));
 
     let draft_file = dir.path().join("draft.md");
@@ -737,7 +785,11 @@ async fn test_s10_full_main_chain_memory_to_delivery() {
 
     let executor = ToolExecutor::with_timeout(Arc::clone(&registry), 10_000);
     let exec_result = executor.execute(call).await;
-    assert!(exec_result.success, "全链路工具执行应成功: {:?}", exec_result.error);
+    assert!(
+        exec_result.success,
+        "全链路工具执行应成功: {:?}",
+        exec_result.error
+    );
     assert!(
         exec_result.output.to_string().contains("主链路 e2e 全绿"),
         "执行输出应含草稿内容"
@@ -770,12 +822,22 @@ async fn test_s10_full_main_chain_memory_to_delivery() {
         let t = ThoughtStream::new(&conn);
         let a = ActionStream::new(&conn);
         let d_thought = |text: &str| {
-            t.append(&stream_entry("s10-thought", "deliver:thought", 1_755_300_100, text))
-                .map_err(|e| e.to_string())
+            t.append(&stream_entry(
+                "s10-thought",
+                "deliver:thought",
+                1_755_300_100,
+                text,
+            ))
+            .map_err(|e| e.to_string())
         };
         let d_action = |text: &str| {
-            a.append(&stream_entry("s10-action", "deliver:action", 1_755_300_100, text))
-                .map_err(|e| e.to_string())
+            a.append(&stream_entry(
+                "s10-action",
+                "deliver:action",
+                1_755_300_100,
+                text,
+            ))
+            .map_err(|e| e.to_string())
         };
         let deliverers: [&dyn Fn(&str) -> Result<(), String>; 2] = [&d_thought, &d_action];
         fan_out(&deliverers, &delivery_text).expect("全链路送达");
@@ -797,7 +859,9 @@ async fn test_s10_full_main_chain_memory_to_delivery() {
             .any(|e| e.id.starts_with("reflect-") && e.content.contains("汇报临近")),
         "反思洞察跨重启恢复"
     );
-    let audit = RecordStore::new(Arc::clone(&store2)).list_for_tool("FileOperator").unwrap();
+    let audit = RecordStore::new(Arc::clone(&store2))
+        .list_for_tool("FileOperator")
+        .unwrap();
     assert_eq!(audit.len(), 1, "工具审计跨重启恢复");
     let conn = store2.conn().unwrap();
     let delivered = ThoughtStream::new(&conn)

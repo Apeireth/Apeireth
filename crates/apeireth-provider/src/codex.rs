@@ -6,7 +6,8 @@
 //! **R20 阶段 4 历史**: 1:1 翻译 @openai/codex 0.9.21 (8 工具 + 4 ModelKind + 3 SandboxType).
 //! R35 阶段 1: 只 1 个 Provider struct + 8 工具 + 4 ModelKind. R21+ 真接 SDK.
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![allow(dead_code)]
 
 /// R35: CodexProvider struct (R20 阶段 4 1:1 字段名)
@@ -21,7 +22,14 @@ impl CodexProvider {
         Self {
             name: "codex",
             tools: vec![
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+                "Read",
+                "Write",
+                "Edit",
+                "Bash",
+                "Glob",
+                "Grep",
+                "WebSearch",
+                "WebFetch",
             ],
             // 4 ModelKind (per R20 阶段 4 task spec §3, codex 4 vs claude-code 3)
             model_kinds: vec!["codex", "codex-mini", "o3", "o4-mini"],
@@ -36,11 +44,7 @@ impl Default for CodexProvider {
 }
 
 /// R35: 3 SandboxType (per R20 阶段 4 task spec §3 codex 特有)
-pub const SANDBOX_TYPES: [&str; 3] = [
-    "workspace-write",
-    "read-only",
-    "danger-full-access",
-];
+pub const SANDBOX_TYPES: [&str; 3] = ["workspace-write", "read-only", "danger-full-access"];
 
 #[cfg(test)]
 mod codex_tests {

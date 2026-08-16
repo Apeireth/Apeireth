@@ -9,7 +9,6 @@
 //! - [`render`] — ASCII 渲染 (24 维详细表 / sparkline / diagnose)
 //! - [`history`] — TraceRepository (SQLite 持久化, append-only)
 
-
 pub mod calibration;
 /// R22 ST-A3 per-dimension 深化。
 pub mod dim_enhance;
@@ -19,10 +18,10 @@ pub mod llm_judge;
 pub mod measurement;
 pub mod render;
 pub mod scheduler;
-/// R32-1: 真 token 计算 (替换 R19 启发式)
-pub mod tokenizer;
 /// R207: ASI 高级统计 utilities (std + auto-vectorization, 0 新依赖)
 pub mod stats;
+/// R32-1: 真 token 计算 (替换 R19 启发式)
+pub mod tokenizer;
 // R177: asi invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 
@@ -349,4 +348,3 @@ mod tests {
         assert_eq!(subs.transferability_2, [0.8, 0.9]);
     }
 }
-

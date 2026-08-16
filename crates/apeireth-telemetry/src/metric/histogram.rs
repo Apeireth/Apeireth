@@ -131,7 +131,12 @@ impl Histogram {
             let next_bits = next.to_bits();
             if self
                 .sum_bits
-                .compare_exchange_weak(current_bits, next_bits, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(
+                    current_bits,
+                    next_bits,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
                 .is_ok()
             {
                 return;

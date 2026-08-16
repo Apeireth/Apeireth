@@ -12,7 +12,9 @@ pub enum HtmlExtractError {
 }
 
 pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
-    if html.trim().is_empty() { return Err(HtmlExtractError::Empty); }
+    if html.trim().is_empty() {
+        return Err(HtmlExtractError::Empty);
+    }
     let mut out = String::with_capacity(html.len() / 2);
     let mut in_skip: u8 = 0; // 0=normal, 1=script, 2=style, 3=pre
     let mut chars = html.chars().peekable();
@@ -20,31 +22,70 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
         if c == '<' {
             let mut tag = String::new();
             while let Some(&nc) = chars.peek() {
-                if nc == '>' { chars.next(); break; }
+                if nc == '>' {
+                    chars.next();
+                    break;
+                }
                 tag.push(nc);
                 chars.next();
             }
             let tag_lc = tag.trim().to_lowercase();
-            if tag_lc.starts_with("script") { in_skip = 1; continue; }
-            if tag_lc.starts_with("style") { in_skip = 2; continue; }
-            if tag_lc.starts_with("pre") { in_skip = 3; continue; }
-            if tag_lc.starts_with("/script") { in_skip = 0; continue; }
-            if tag_lc.starts_with("/style") { in_skip = 0; continue; }
-            if tag_lc.starts_with("/pre") { in_skip = 0; continue; }
-            if matches!(tag_lc.as_str(),
-                "br" | "br/" | "/p" | "/div" | "/li" | "/h1" | "/h2" | "/h3" | "/h4" | "/h5" | "/h6" | "/tr"
+            if tag_lc.starts_with("script") {
+                in_skip = 1;
+                continue;
+            }
+            if tag_lc.starts_with("style") {
+                in_skip = 2;
+                continue;
+            }
+            if tag_lc.starts_with("pre") {
+                in_skip = 3;
+                continue;
+            }
+            if tag_lc.starts_with("/script") {
+                in_skip = 0;
+                continue;
+            }
+            if tag_lc.starts_with("/style") {
+                in_skip = 0;
+                continue;
+            }
+            if tag_lc.starts_with("/pre") {
+                in_skip = 0;
+                continue;
+            }
+            if matches!(
+                tag_lc.as_str(),
+                "br" | "br/"
+                    | "/p"
+                    | "/div"
+                    | "/li"
+                    | "/h1"
+                    | "/h2"
+                    | "/h3"
+                    | "/h4"
+                    | "/h5"
+                    | "/h6"
+                    | "/tr"
             ) {
                 out.push('\n');
             }
             continue;
         }
-        if in_skip > 0 { continue; }
+        if in_skip > 0 {
+            continue;
+        }
         match c {
             '&' => {
                 let mut ent = String::new();
                 while let Some(&nc) = chars.peek() {
-                    if nc == ';' { chars.next(); break; }
-                    if nc == '&' || nc == '<' { break; }
+                    if nc == ';' {
+                        chars.next();
+                        break;
+                    }
+                    if nc == '&' || nc == '<' {
+                        break;
+                    }
                     ent.push(nc);
                     chars.next();
                 }
@@ -59,8 +100,12 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
                         if other.starts_with('#') && other.len() > 1 {
                             if let Some(d) = other[1..].parse::<u32>().ok() {
                                 char::from_u32(d).unwrap_or('?')
-                            } else { '?' }
-                        } else { '?' }
+                            } else {
+                                '?'
+                            }
+                        } else {
+                            '?'
+                        }
                     }
                 };
                 out.push(decoded);
@@ -69,7 +114,11 @@ pub fn extract_text(html: &str) -> Result<String, HtmlExtractError> {
         }
     }
     let trimmed = out.split_whitespace().collect::<Vec<_>>().join(" ");
-    if trimmed.is_empty() { Err(HtmlExtractError::NoText) } else { Ok(trimmed) }
+    if trimmed.is_empty() {
+        Err(HtmlExtractError::NoText)
+    } else {
+        Ok(trimmed)
+    }
 }
 
 pub fn extract_links(html: &str) -> Vec<(String, String)> {
@@ -77,15 +126,19 @@ pub fn extract_links(html: &str) -> Vec<(String, String)> {
     let bytes = html.as_bytes();
     let mut i = 0usize;
     while i + 6 < bytes.len() {
-        if &bytes[i..i+6] == b"href=\"" {
+        if &bytes[i..i + 6] == b"href=\"" {
             let start = i + 6;
             let mut j = start;
-            while j < bytes.len() && bytes[j] != b'"' { j += 1; }
+            while j < bytes.len() && bytes[j] != b'"' {
+                j += 1;
+            }
             let url = String::from_utf8_lossy(&bytes[start..j]).to_string();
             let mut text_start = j + 1;
             let mut text_end = text_start;
             while text_end + 4 < bytes.len() {
-                if &bytes[text_end..text_end+4] == b"</a>" { break; }
+                if &bytes[text_end..text_end + 4] == b"</a>" {
+                    break;
+                }
                 text_end += 1;
             }
             let text = String::from_utf8_lossy(&bytes[text_start..text_end]).to_string();
@@ -104,10 +157,12 @@ pub fn extract_title(html: &str) -> Option<String> {
     let close = b"</title>";
     let mut i = 0;
     while i + open.len() < bytes.len() {
-        if &bytes[i..i+open.len()] == open {
+        if &bytes[i..i + open.len()] == open {
             let start = i + open.len();
             let mut j = start;
-            while j + close.len() < bytes.len() && &bytes[j..j+close.len()] != close { j += 1; }
+            while j + close.len() < bytes.len() && &bytes[j..j + close.len()] != close {
+                j += 1;
+            }
             return Some(String::from_utf8_lossy(&bytes[start..j]).to_string());
         }
         i += 1;

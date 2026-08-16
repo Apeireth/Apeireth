@@ -30,7 +30,12 @@ fn main() {
     let r = ToolRegistry::with_default_tools();
     for id in r.ids() {
         let tool = r.get(&id).expect("tool");
-        println!("   - {} ({}): {}", tool.id(), tool.name(), tool.when_to_use());
+        println!(
+            "   - {} ({}): {}",
+            tool.id(),
+            tool.name(),
+            tool.when_to_use()
+        );
     }
     println!();
 

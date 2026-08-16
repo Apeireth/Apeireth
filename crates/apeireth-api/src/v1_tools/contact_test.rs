@@ -82,12 +82,12 @@ pub async fn invoke_by_name() -> Result<(), String> {
 /// 通过 `#[tokio::test]` 调每个入口.
 pub mod entries {
     // 显式 use super::storage (虽然本测试不直接用, 但让 _contact_src 内 `super::storage` 引用可见)
-    #[allow(unused_imports)]
-    use super::storage;
     use super::_contact_src::{
         validate_email, validate_phone_e164, validate_tags_unique, Contact, ContactTool,
         CONTACT_ACTIONS, CONTACT_K1_CHECKS,
     };
+    #[allow(unused_imports)]
+    use super::storage;
     // Tool trait 必须 in scope, 否则 ContactTool::call 方法找不到
     use apeireth_tool_registry::Tool;
     use serde_json::json;
@@ -170,7 +170,9 @@ pub mod entries {
         );
 
         // 1.7 delete 不存在 id 应 Err
-        let r = c.call(json!({"action": "delete", "id": "nonexistent"})).await;
+        let r = c
+            .call(json!({"action": "delete", "id": "nonexistent"}))
+            .await;
         assert!(r.is_err(), "delete 不存在应 Err");
         assert!(r.unwrap_err().contains("not found"));
     }
@@ -253,10 +255,7 @@ pub mod entries {
             }))
             .await;
         assert!(r.is_err(), "空 name 应 Err (K-1-1)");
-        assert!(
-            r.unwrap_err().contains("name"),
-            "空 name err 应含 'name'"
-        );
+        assert!(r.unwrap_err().contains("name"), "空 name err 应含 'name'");
 
         // K-1-1: name 缺 → Err
         let r = c
@@ -477,10 +476,7 @@ pub mod entries {
                 "tags": ["VIP", "vip"]
             }))
             .await;
-        assert!(
-            r.is_err(),
-            "tags 大小写不同应视为重复 (K-1-4 简化版)"
-        );
+        assert!(r.is_err(), "tags 大小写不同应视为重复 (K-1-4 简化版)");
 
         // K-1-4: 三重复 → Err
         let r = c
@@ -538,7 +534,9 @@ pub mod entries {
             "get 缺 id 应 Err"
         );
         assert!(
-            c.call(json!({"action": "update", "title": "x"})).await.is_err(),
+            c.call(json!({"action": "update", "title": "x"}))
+                .await
+                .is_err(),
             "update 缺 id 应 Err"
         );
 

@@ -11,9 +11,16 @@
 //! **不假装**: 测试是真跑 (`cargo nextest run -p apeireth-protocol`).
 
 use apeireth_protocol::{
-    endpoint_path_for_kind, AnthropicMessagesAdapter, GeminiAdapter, NormalizedMessage,
-    NormalizedRequest, OpenAiChatAdapter, OpenAiResponsesAdapter, ProtocolAdapter,
-    ProtocolBridge, ProtocolKind,
+    endpoint_path_for_kind,
+    AnthropicMessagesAdapter,
+    GeminiAdapter,
+    NormalizedMessage,
+    NormalizedRequest,
+    OpenAiChatAdapter,
+    OpenAiResponsesAdapter,
+    ProtocolAdapter,
+    ProtocolBridge,
+    ProtocolKind,
     // R37-1: 引入 ProtocolBridge 替 ProtocolRouter
 };
 use serde_json::{json, Value};
@@ -39,15 +46,14 @@ fn openai_chat_request_has_model_and_messages() {
 #[test]
 fn openai_chat_request_with_temperature_and_max_tokens() {
     let adapter = OpenAiChatAdapter::new();
-    let mut req = NormalizedRequest::new(
-        "gpt-4o".to_string(),
-        vec![NormalizedMessage::user("hi")],
-    );
+    let mut req = NormalizedRequest::new("gpt-4o".to_string(), vec![NormalizedMessage::user("hi")]);
     req.temperature = Some(0.7);
     req.max_tokens = Some(512);
     let body = adapter.adapt_request(&req).unwrap();
     // f32 → f64 精度损失 (0.7 → 0.699999988079071), 用 abs 差判断
-    let temp = body["temperature"].as_f64().expect("temperature must be a number");
+    let temp = body["temperature"]
+        .as_f64()
+        .expect("temperature must be a number");
     assert!(
         (temp - 0.7_f64).abs() < 1e-5,
         "temperature drift: {temp} (expected ~0.7)"
@@ -77,10 +83,7 @@ fn openai_chat_response_text_choice() {
 #[test]
 fn openai_chat_empty_model_fails() {
     let adapter = OpenAiChatAdapter::new();
-    let req = NormalizedRequest::new(
-        "".to_string(),
-        vec![NormalizedMessage::user("hi")],
-    );
+    let req = NormalizedRequest::new("".to_string(), vec![NormalizedMessage::user("hi")]);
     assert!(adapter.adapt_request(&req).is_err());
 }
 
@@ -98,13 +101,14 @@ fn openai_chat_empty_messages_fails() {
 #[test]
 fn openai_responses_request_has_input_array() {
     let adapter = OpenAiResponsesAdapter::new();
-    let req = NormalizedRequest::new(
-        "gpt-4o".to_string(),
-        vec![NormalizedMessage::user("hello")],
-    );
+    let req = NormalizedRequest::new("gpt-4o".to_string(), vec![NormalizedMessage::user("hello")]);
     let body = adapter.adapt_request(&req).unwrap();
     assert_eq!(body["model"], "gpt-4o");
-    assert!(body["input"].is_array(), "input should be array, got: {:?}", body);
+    assert!(
+        body["input"].is_array(),
+        "input should be array, got: {:?}",
+        body
+    );
 }
 
 #[test]
@@ -189,7 +193,11 @@ fn gemini_request_has_contents_array() {
         vec![NormalizedMessage::user("hi")],
     );
     let body = adapter.adapt_request(&req).unwrap();
-    assert!(body["contents"].is_array(), "contents should be array: {:?}", body);
+    assert!(
+        body["contents"].is_array(),
+        "contents should be array: {:?}",
+        body
+    );
     assert_eq!(body["contents"][0]["role"], "user");
     assert_eq!(body["contents"][0]["parts"][0]["text"], "hi");
 }
@@ -218,8 +226,14 @@ fn gemini_response_text() {
 fn bridge_dispatch_all_4_protocols() {
     // R37-1: ProtocolBridge trait + 4 Bridge struct, 0 router 中间层
     assert_eq!(apeireth_protocol::OpenAiChatBridge::name(), "openai_chat");
-    assert_eq!(apeireth_protocol::OpenAiResponsesBridge::name(), "openai_responses");
-    assert_eq!(apeireth_protocol::AnthropicMessagesBridge::name(), "anthropic_messages");
+    assert_eq!(
+        apeireth_protocol::OpenAiResponsesBridge::name(),
+        "openai_responses"
+    );
+    assert_eq!(
+        apeireth_protocol::AnthropicMessagesBridge::name(),
+        "anthropic_messages"
+    );
     assert_eq!(apeireth_protocol::GeminiBridge::name(), "gemini");
 }
 
@@ -252,9 +266,18 @@ fn bridge_supports_exactly_4_protocols() {
 
 #[test]
 fn protocol_kind_parse_case_insensitive() {
-    assert_eq!(ProtocolKind::parse("OpenAI"), Some(ProtocolKind::OpenAiChat));
-    assert_eq!(ProtocolKind::parse("OPENAI_RESPONSES"), Some(ProtocolKind::OpenAiResponses));
-    assert_eq!(ProtocolKind::parse("Anthropic"), Some(ProtocolKind::AnthropicMessages));
+    assert_eq!(
+        ProtocolKind::parse("OpenAI"),
+        Some(ProtocolKind::OpenAiChat)
+    );
+    assert_eq!(
+        ProtocolKind::parse("OPENAI_RESPONSES"),
+        Some(ProtocolKind::OpenAiResponses)
+    );
+    assert_eq!(
+        ProtocolKind::parse("Anthropic"),
+        Some(ProtocolKind::AnthropicMessages)
+    );
     assert_eq!(ProtocolKind::parse("GEMINI"), Some(ProtocolKind::Gemini));
 }
 

@@ -5,11 +5,10 @@
 //! **目标**: 验证 D2 反思自循环跟 K1 错误守护跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i2_healthy, stage7_i2_summary, stage7_i2_to_d2_consistency,
-    stage7_i2_to_k1_consistency, ReflectionErrorAuditEvent, ReflectionErrorBinding,
-    ReflectionErrorCoordinator, ReflectionErrorMatrix, ReflectionErrorReport, ErrorKind,
-    STAGE7_I2_BINDING_COUNT, STAGE7_I2_DIMENSION_COUNT, STAGE7_I2_ERROR_KIND_COUNT,
-    STAGE7_I2_NODE_COUNT, STAGE7_I2_VERSION,
+    stage7_i2_healthy, stage7_i2_summary, stage7_i2_to_d2_consistency, stage7_i2_to_k1_consistency,
+    ErrorKind, ReflectionErrorAuditEvent, ReflectionErrorBinding, ReflectionErrorCoordinator,
+    ReflectionErrorMatrix, ReflectionErrorReport, STAGE7_I2_BINDING_COUNT,
+    STAGE7_I2_DIMENSION_COUNT, STAGE7_I2_ERROR_KIND_COUNT, STAGE7_I2_NODE_COUNT, STAGE7_I2_VERSION,
 };
 
 // 1. I2 编译期常数

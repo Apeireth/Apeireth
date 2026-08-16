@@ -40,11 +40,11 @@
 //! final_verdict = synthesize(round_opinions[-1], weights)
 //! ```
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use std::sync::Arc;
 use crate::advisor::{AdvisorId, AdvisorOpinion, Stance, StanceKind};
 use crate::council_member::CouncilMember;
 use crate::mock_llm::MockLlmProvider;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 /// 默认 max_rounds (per `MAX_PERSONA_DEBATE_ROUNDS` lib.rs 常量 1:1)
 pub const DEFAULT_MAX_ROUNDS: u8 = 3;
 /// 共识检测阈值: 所有 non-abstain opinions 都达到此分数及以上 → 共识达成
@@ -121,8 +121,18 @@ impl MultiRoundVerdict {
     /// 7 阶段 metric (1:1 per RealLlmSmokeReport style)
     pub fn to_eval_scores(&self) -> Vec<(&'static str, f64)> {
         vec![
-            ("members_recruited", if !self.member_summaries.is_empty() { 1.0 } else { 0.0 }),
-            ("rounds_run", f64::from(self.rounds_run) / f64::from(DEFAULT_MAX_ROUNDS)),
+            (
+                "members_recruited",
+                if !self.member_summaries.is_empty() {
+                    1.0
+                } else {
+                    0.0
+                },
+            ),
+            (
+                "rounds_run",
+                f64::from(self.rounds_run) / f64::from(DEFAULT_MAX_ROUNDS),
+            ),
             (
                 "consensus_reached",
                 if self.consensus_reached { 1.0 } else { 0.0 },
@@ -141,27 +151,25 @@ impl MultiRoundVerdict {
             ),
             (
                 "termination_clean",
-                if self.termination_reason == "consensus" || self.termination_reason == "max_rounds" {
+                if self.termination_reason == "consensus" || self.termination_reason == "max_rounds"
+                {
                     1.0
                 } else {
                     0.0
                 },
             ),
-            (
-                "members_aligned",
-                {
-                    let n = self.member_summaries.len() as f64;
-                    if n == 0.0 {
-                        0.0
-                    } else {
-                        self.member_summaries
-                            .iter()
-                            .filter(|m| m.final_stance.score() > 0.0)
-                            .count() as f64
-                            / n
-                    }
-                },
-            ),
+            ("members_aligned", {
+                let n = self.member_summaries.len() as f64;
+                if n == 0.0 {
+                    0.0
+                } else {
+                    self.member_summaries
+                        .iter()
+                        .filter(|m| m.final_stance.score() > 0.0)
+                        .count() as f64
+                        / n
+                }
+            }),
         ]
     }
 }
@@ -271,7 +279,12 @@ impl CouncilMemberDeliberator {
                 };
                 let stance = Stance::new(
                     stance_kind,
-                    format!("{:?} (member: {}, round {})", stance_kind, member.role, round + 1),
+                    format!(
+                        "{:?} (member: {}, round {})",
+                        stance_kind,
+                        member.role,
+                        round + 1
+                    ),
                 );
                 let opinion = AdvisorOpinion::new(
                     AdvisorId::new(format!("cm-{}-r{}", member.role, round + 1)),
@@ -379,10 +392,15 @@ pub(crate) fn parse_stance_from_text(text: &str) -> StanceKind {
     let lower = text.to_lowercase();
     // 关键: 必须先匹配 long-keyword (strong_*) 再匹配 short-keyword (disapprove / approve),
     // 否则 "disapprove" 会优先命中 "approve" 误判.
-    if lower.contains("strong_approve") || lower.contains("strong approve") || lower.contains("strongapprove") || lower.contains("强烈赞成") {
+    if lower.contains("strong_approve")
+        || lower.contains("strong approve")
+        || lower.contains("strongapprove")
+        || lower.contains("强烈赞成")
+    {
         StanceKind::StrongApprove
     } else if lower.contains("strong_disapprove")
-        || lower.contains("strong disapprove") || lower.contains("strongdisapprove")
+        || lower.contains("strong disapprove")
+        || lower.contains("strongdisapprove")
         || lower.contains("强烈反对")
         || lower.contains("强反对")
     {
@@ -542,9 +560,8 @@ mod tests {
     #[test]
     fn deliberate_with_mock_llm_scripted_consensus_round_1() {
         // ScriptedMockLlm 永远返 "StrongApprove" → 5 member 都 StrongApprove → 共识 round 1
-        let llm = Arc::new(
-            ScriptedMockLlm::new().with_default(MockLlmResponse::ok("StrongApprove")),
-        );
+        let llm =
+            Arc::new(ScriptedMockLlm::new().with_default(MockLlmResponse::ok("StrongApprove")));
         let mut d = CouncilMemberDeliberator::new(standard_5_members()).with_mock_llm(llm);
         let v = d.deliberate(&q("any query"));
         assert_eq!(v.termination_reason, "consensus");
@@ -557,9 +574,7 @@ mod tests {
     #[test]
     fn deliberate_with_mock_llm_disapprove_runs_all_3_rounds() {
         // 永远返 "Disapprove" → score = 0.2 → 0 共识 → 0 强反对 → 跑满 max_rounds=3
-        let llm = Arc::new(
-            ScriptedMockLlm::new().with_default(MockLlmResponse::ok("Disapprove")),
-        );
+        let llm = Arc::new(ScriptedMockLlm::new().with_default(MockLlmResponse::ok("Disapprove")));
         let mut d = CouncilMemberDeliberator::new(standard_5_members()).with_mock_llm(llm);
         let v = d.deliberate(&q("any query"));
         assert_eq!(v.termination_reason, "max_rounds");
@@ -569,9 +584,7 @@ mod tests {
     #[test]
     fn deliberate_with_max_rounds_1_truncates_correctly() {
         // 永远 Approve → consensus round 1
-        let llm = Arc::new(
-            ScriptedMockLlm::new().with_default(MockLlmResponse::ok("Approve")),
-        );
+        let llm = Arc::new(ScriptedMockLlm::new().with_default(MockLlmResponse::ok("Approve")));
         let mut d = CouncilMemberDeliberator::new(standard_5_members())
             .with_mock_llm(llm)
             .with_max_rounds(1);
@@ -615,11 +628,23 @@ mod tests {
             parse_stance_from_text("Disapprove due to risk"),
             StanceKind::Disapprove
         );
-        assert_eq!(parse_stance_from_text("abstain from vote"), StanceKind::Abstain);
-        assert_eq!(parse_stance_from_text("no clear position"), StanceKind::Neutral);
+        assert_eq!(
+            parse_stance_from_text("abstain from vote"),
+            StanceKind::Abstain
+        );
+        assert_eq!(
+            parse_stance_from_text("no clear position"),
+            StanceKind::Neutral
+        );
         // 中文
-        assert_eq!(parse_stance_from_text("强烈赞成"), StanceKind::StrongApprove);
-        assert_eq!(parse_stance_from_text("强反对"), StanceKind::StrongDisapprove);
+        assert_eq!(
+            parse_stance_from_text("强烈赞成"),
+            StanceKind::StrongApprove
+        );
+        assert_eq!(
+            parse_stance_from_text("强反对"),
+            StanceKind::StrongDisapprove
+        );
     }
     #[test]
     fn keyword_stance_fallback_3_branches() {
@@ -651,7 +676,10 @@ mod tests {
             })
             .collect();
         let s = compute_consensus_score(&o_approve);
-        assert!((s - 1.0).abs() < 0.01, "approve score should be 1.0, got {s}");
+        assert!(
+            (s - 1.0).abs() < 0.01,
+            "approve score should be 1.0, got {s}"
+        );
         // 5 个 Disapprove (score=-0.6) → normalized=0.2, mean=0.2
         let o_dis: Vec<_> = (0..5)
             .map(|i| {
@@ -680,9 +708,8 @@ mod tests {
     #[test]
     fn member_summary_per_round_evolution() {
         // 跑 3 轮, 验证 member_summaries 反映 final round
-        let llm = Arc::new(
-            ScriptedMockLlm::new().with_default(MockLlmResponse::ok("StrongApprove")),
-        );
+        let llm =
+            Arc::new(ScriptedMockLlm::new().with_default(MockLlmResponse::ok("StrongApprove")));
         let mut d = CouncilMemberDeliberator::new(standard_5_members())
             .with_mock_llm(llm)
             .with_max_rounds(3);

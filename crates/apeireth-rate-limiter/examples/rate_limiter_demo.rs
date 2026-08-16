@@ -37,7 +37,10 @@ async fn main() {
             println!("  try_acquire burst drain @ iteration {}", i);
         }
     }
-    println!("  25 次 try_acquire('user:42', 1) -> {} hits (expect ≤ 20)", hits);
+    println!(
+        "  25 次 try_acquire('user:42', 1) -> {} hits (expect ≤ 20)",
+        hits
+    );
 
     // acquire + permit RAII
     {
@@ -92,12 +95,8 @@ async fn main() {
     // 4. Sliding window: 1s 窗口, 3 个, Log 精度
     // -----------------------------------------------------------------
     println!("\n--- 4. Sliding Window (1s 窗口, max 3, Log precision) ---");
-    let sw = sliding_window_in_memory(
-        Duration::from_secs(1),
-        3,
-        SlidingWindowPrecision::Log,
-    )
-    .unwrap();
+    let sw =
+        sliding_window_in_memory(Duration::from_secs(1), 3, SlidingWindowPrecision::Log).unwrap();
     for i in 0..3 {
         assert!(sw.try_acquire("trace:ingest", 1).await.unwrap());
         println!("  try_acquire #{} -> ok", i + 1);
@@ -114,22 +113,10 @@ async fn main() {
         DistributedStorage, FileStorage, MemcachedStorage, RedisStorage,
     };
     for (name, result) in [
-        (
-            "Redis",
-            RedisStorage::new(None).get("k").await,
-        ),
-        (
-            "Memcached",
-            MemcachedStorage::new(None).get("k").await,
-        ),
-        (
-            "File",
-            FileStorage::new(None).get("k").await,
-        ),
-        (
-            "Distributed",
-            DistributedStorage::new(None).get("k").await,
-        ),
+        ("Redis", RedisStorage::new(None).get("k").await),
+        ("Memcached", MemcachedStorage::new(None).get("k").await),
+        ("File", FileStorage::new(None).get("k").await),
+        ("Distributed", DistributedStorage::new(None).get("k").await),
     ] {
         match result {
             Err(e) => println!("  {:>11} -> Err({})", name, e),

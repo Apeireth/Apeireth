@@ -22,25 +22,25 @@ use apeireth_action::DefaultActionEngine;
 // LlmError 保留: process_stream_to_reply (纯函数 helper, test 用) 仍用它签名
 use apeireth_api::LlmError;
 // http_llm 是 R25 新增的 HTTP LLM 客户端 (mod http_llm 在 main.rs 声明)
+use crate::app::ChatMessage;
+use crate::http_llm;
 use crate::organ::brain;
 use crate::organ::ear;
 use crate::organ::memory;
-use crate::app::ChatMessage;
-use crate::http_llm;
 use apeireth_asi::{
     AsiV05Scores, DimensionRegistry, DimensionTrace, MeasurementSample, V05_DIMENSION_NAMES,
 };
 // R54 B8 续: apeireth-graph 接 cognition_graph::run_cognition_graph_sync
-use apeireth_graph::cognition_graph;
 use apeireth_cognition::{run_cycle, CognitiveInput, CognitiveOutput};
 use apeireth_consciousness::CognitiveDreamStateMachine;
 use apeireth_core::{ActionTarget, Episode, IdentityCard, LifeStage};
+use apeireth_graph::cognition_graph;
+use apeireth_graph_primitive::Relation;
 use apeireth_life_force::{exhaustion_check, LifeForce, ENDURANCE_MAX};
 use apeireth_memory::{EpisodeQuery, EpisodeStore, IdentityCardStore, SqliteMemoryStore};
 use apeireth_motivation::{
     motivation_score, AutonomyConsistency, IntrinsicIntensity, ValueStability,
 };
-use apeireth_graph_primitive::Relation;
 use apeireth_sovereignty::self_disable::SelfDisableGuard;
 use apeireth_supervisor::{PidOneSupervisor, RestartStrategy, SubSupervisorKind};
 use apeireth_value::ValueDimension;
@@ -238,10 +238,10 @@ pub fn sovereignty_guard() -> Arc<Mutex<SelfDisableGuard>> {
 /// **R11 LOCKED 边界**: `apeireth-core::LifeStage` 10 变体 enum 0 改, 仅 TUI 层筛选 4 阶段显示.
 fn r19_stage_zh(enum_name: &str) -> Option<(&'static str, &'static str, u8)> {
     match enum_name {
-        "Gestation" => Some(("Init",      "Init",      1)),
-        "Infancy"   => Some(("Bootstrap", "Bootstrap", 2)),
-        "Growth"    => Some(("Serving",   "Serving",   3)),
-        "Maturity"  => Some(("Saturated", "Saturated", 4)),
+        "Gestation" => Some(("Init", "Init", 1)),
+        "Infancy" => Some(("Bootstrap", "Bootstrap", 2)),
+        "Growth" => Some(("Serving", "Serving", 3)),
+        "Maturity" => Some(("Saturated", "Saturated", 4)),
         // 保留: 决策树仍可返 Growth/Maturity 但 UI 只列 4 项
         // 砍: Birth/Reproduction/Migration/Rebirth/Decline/Death -> 不进 UI
         _ => None,
@@ -284,7 +284,7 @@ pub fn compute_main_ai_status() -> Result<MainAiStatus, String> {
         })
         .unwrap_or(0);
 
-    memory::record_short_term_messages(episode_count);  // R22 ST-A1.8 hook
+    memory::record_short_term_messages(episode_count); // R22 ST-A1.8 hook
 
     // R54 B8 续: mid_term + long_term 真接 (per apeireth-memory EpisodeQuery, 0 假装)
     // mid_term = episode count in last 24h (real query, source of truth = SQLite)
@@ -292,9 +292,13 @@ pub fn compute_main_ai_status() -> Result<MainAiStatus, String> {
     let mid_term_count = memory_store()
         .ok()
         .and_then(|s| {
-            s.query(&EpisodeQuery::new().in_range(Some(now_ts - 86_400), None).limit(usize::MAX))
-                .ok()
-                .map(|v| v.len() as u64)
+            s.query(
+                &EpisodeQuery::new()
+                    .in_range(Some(now_ts - 86_400), None)
+                    .limit(usize::MAX),
+            )
+            .ok()
+            .map(|v| v.len() as u64)
         })
         .unwrap_or(0);
     memory::record_mid_term_count(mid_term_count);
@@ -302,9 +306,20 @@ pub fn compute_main_ai_status() -> Result<MainAiStatus, String> {
     memory::record_long_term_count(episode_count.saturating_div(5));
     // R54 B8 续: cognition_graph 真接 — v05 dims -> run_cognition_graph_sync -> record_cognition_summary
     // 走 on_current_thread tokio runtime (跟现有 call_llm_stream_sync 一致模式)
-    if let Ok(rt) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
-        let summary = rt.block_on(apeireth_graph::cognition_graph::run_cognition_graph_sync(&v05_dims, "snapshot_organ_main"));
-        memory::record_cognition_summary(summary.mean, summary.min, summary.max, summary.verdict_approve);
+    if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
+        let summary = rt.block_on(apeireth_graph::cognition_graph::run_cognition_graph_sync(
+            &v05_dims,
+            "snapshot_organ_main",
+        ));
+        memory::record_cognition_summary(
+            summary.mean,
+            summary.min,
+            summary.max,
+            summary.verdict_approve,
+        );
     }
     let cycle_count = CYCLE_COUNT.load(Ordering::Relaxed);
     let token_used = TOKEN_USED.load(Ordering::Relaxed);
@@ -702,7 +717,9 @@ pub fn compute_v05_with_dims() -> (AsiV05Scores, [f64; 24]) {
     let v05_dims_vec = registry.compute_all_dims(&sample);
     let mut dims_arr = [0.0f64; 24];
     for (i, v) in v05_dims_vec.iter().enumerate() {
-        if i >= 24 { break; }
+        if i >= 24 {
+            break;
+        }
         dims_arr[i] = *v;
     }
     let trace = DimensionTrace {
@@ -1013,7 +1030,11 @@ pub fn compute_reflection_progress() -> f64 {
     let now = now_ts();
     let since = now - WINDOW_SECONDS;
     let count: u64 = match memory_store() {
-        Ok(s) => match s.query(&EpisodeQuery::new().in_range(Some(since), None).limit(i64::MAX as usize)) {
+        Ok(s) => match s.query(
+            &EpisodeQuery::new()
+                .in_range(Some(since), None)
+                .limit(i64::MAX as usize),
+        ) {
             Ok(v) => v.len() as u64,
             Err(_) => 0,
         },
@@ -1027,10 +1048,10 @@ pub fn compute_life_stages_info() -> Result<Vec<LifeStageInfo>, String> {
     let mut stages = Vec::new();
     // R26: 仅 4 阶段进入 UI (Init/Bootstrap/Serving/Saturated), R11 LOCKED enum 0 触
     for stage in [
-        LifeStage::Gestation,  // -> Init      (idx 1)
-        LifeStage::Infancy,    // -> Bootstrap (idx 2)
-        LifeStage::Growth,     // -> Serving   (idx 3)
-        LifeStage::Maturity,   // -> Saturated (idx 4)
+        LifeStage::Gestation, // -> Init      (idx 1)
+        LifeStage::Infancy,   // -> Bootstrap (idx 2)
+        LifeStage::Growth,    // -> Serving   (idx 3)
+        LifeStage::Maturity,  // -> Saturated (idx 4)
     ] {
         let enum_name = format!("{:?}", stage);
         if let Some((zh, en, idx)) = r19_stage_zh(&enum_name) {
@@ -1473,7 +1494,11 @@ pub fn split_into_chunks(text: &str, chunk_size: usize) -> Vec<String> {
 /// - `pub fn chat_internal_streaming(input, store, sender)` — testable 入口, 同 module 单元测试用
 /// - `pub fn call_llm_stream_sync(input, sender)` — 同步包装, 主 entry 用
 /// - `pub fn process_stream_to_reply(stream, sender)` — 纯函数, 单元测试用 (吃任何 BoxStream)
-pub fn chat_streaming(input: &str, history: &[ChatMessage], sender: &std::sync::mpsc::Sender<String>) -> String {
+pub fn chat_streaming(
+    input: &str,
+    history: &[ChatMessage],
+    sender: &std::sync::mpsc::Sender<String>,
+) -> String {
     // R30 P4: 走 tool-loop 流式版本 (Call/Result 事件推 sender, TUI 渲染灰色行)
     //
     // episode / R19 cycle / token 累加在这里做, 跟 chat_internal_streaming 行为对齐.
@@ -1505,11 +1530,22 @@ pub fn chat_streaming(input: &str, history: &[ChatMessage], sender: &std::sync::
     // R57 B8 续-1: per-chat-cycle cognition_graph 真接
     // 区别于 snapshot_organ_main (dashboard refresh 触发), 这里每 chat cycle 都跑 cognition_graph
     // 拿 v05 dims + 用户 input 作为 target_name, 跑 26 节点 graph, record_cognition_summary
-    if let Ok(rt2) = tokio::runtime::Builder::new_current_thread().enable_all().build() {
+    if let Ok(rt2) = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+    {
         let dims_arr = compute_v05_with_dims().1;
         let target_str = format!("tui-chat:{}", &input.chars().take(64).collect::<String>());
-        let summary2 = rt2.block_on(apeireth_graph::cognition_graph::run_cognition_graph_sync(&dims_arr, &target_str));
-        memory::record_cognition_summary(summary2.mean, summary2.min, summary2.max, summary2.verdict_approve);
+        let summary2 = rt2.block_on(apeireth_graph::cognition_graph::run_cognition_graph_sync(
+            &dims_arr,
+            &target_str,
+        ));
+        memory::record_cognition_summary(
+            summary2.mean,
+            summary2.min,
+            summary2.max,
+            summary2.verdict_approve,
+        );
     }
 
     let (user_ts, asst_ts) = next_chat_pair_timestamps();
@@ -1562,7 +1598,7 @@ pub fn chat_internal_streaming(
     let (user_ts, asst_ts) = next_chat_pair_timestamps();
     if let Err(e) = write_episode_at(store, input, "user", user_ts) {
         eprintln!("[apeireth-tui] warn: write user episode: {e}");
-            ear::record_user();  // R22 ST-A1.3 hook: user channel
+        ear::record_user(); // R22 ST-A1.3 hook: user channel
     }
 
     // 2. R19 认知循环 (后台跑, 仅 side-effect)
@@ -1576,7 +1612,7 @@ pub fn chat_internal_streaming(
             // 4. 写 assistant episode
             if let Err(e) = write_episode_at(store, &reply.text, "assistant", asst_ts) {
                 eprintln!("[apeireth-tui] warn: write assistant episode: {e}");
-            ear::record_llm();  // R22 ST-A1.3 hook: llm channel
+                ear::record_llm(); // R22 ST-A1.3 hook: llm channel
             }
             // 5. token 累计 (status bar 显示)
             //    流式无 LLM usage 报数 (SSE 没 usage 字段), 只累加 R19 启发式
@@ -1618,7 +1654,12 @@ fn call_llm_stream_sync(
         .enable_all()
         .build()
         .map_err(|e| format!("tokio runtime: {e}"))?;
-    let text = rt.block_on(http_llm::call_llm_http_stream(input, SYSTEM_PROMPT, history, sender))?;
+    let text = rt.block_on(http_llm::call_llm_http_stream(
+        input,
+        SYSTEM_PROMPT,
+        history,
+        sender,
+    ))?;
     Ok(LlmReply {
         text: text.clone(),
         usage: UsageInfo {
@@ -1746,13 +1787,25 @@ impl ToolPolicy {
     fn classify(&self, tool: &str, op: &str) -> ApprovalAction {
         let key = format!("{}.{}", tool, op);
         let tool_only = tool.to_string();
-        if self.auto_approve.iter().any(|r| r == &key || r == &tool_only) {
+        if self
+            .auto_approve
+            .iter()
+            .any(|r| r == &key || r == &tool_only)
+        {
             return ApprovalAction::AutoApprove;
         }
-        if self.silent_reject.iter().any(|r| r == &key || r == &tool_only) {
+        if self
+            .silent_reject
+            .iter()
+            .any(|r| r == &key || r == &tool_only)
+        {
             return ApprovalAction::SilentReject;
         }
-        if self.require_approval.iter().any(|r| r == &key || r == &tool_only) {
+        if self
+            .require_approval
+            .iter()
+            .any(|r| r == &key || r == &tool_only)
+        {
             return ApprovalAction::RequireApproval;
         }
         ApprovalAction::RequireApproval // 默认安全: 需审批
@@ -1762,13 +1815,16 @@ impl ToolPolicy {
     /// 第一次调用会读文件 + spawn notify 监视线程.
     /// 后续调用直返缓存的 Arc (cheap clone).
     pub fn cached() -> Arc<std::sync::RwLock<ToolPolicy>> {
-        static CACHE: std::sync::OnceLock<Arc<std::sync::RwLock<ToolPolicy>>> = std::sync::OnceLock::new();
-        CACHE.get_or_init(|| {
-            let initial = ToolPolicy::load();
-            let arc = Arc::new(std::sync::RwLock::new(initial));
-            spawn_policy_watcher(Arc::clone(&arc));
-            arc
-        }).clone()
+        static CACHE: std::sync::OnceLock<Arc<std::sync::RwLock<ToolPolicy>>> =
+            std::sync::OnceLock::new();
+        CACHE
+            .get_or_init(|| {
+                let initial = ToolPolicy::load();
+                let arc = Arc::new(std::sync::RwLock::new(initial));
+                spawn_policy_watcher(Arc::clone(&arc));
+                arc
+            })
+            .clone()
     }
 
     /// R30 U15: 走缓存的分类接口 (主路径)
@@ -1783,15 +1839,21 @@ impl ToolPolicy {
 fn default_policy() -> ToolPolicy {
     ToolPolicy {
         auto_approve: vec![
-            "FileOperator.read".into(), "FileOperator.list".into(),
-            "FileOperator.mkdir".into(), "Git.status".into(),
-            "Git.log".into(), "Git.diff".into(),
-            "ShellExec.exec".into(), "WebSearch.search".into(),
+            "FileOperator.read".into(),
+            "FileOperator.list".into(),
+            "FileOperator.mkdir".into(),
+            "Git.status".into(),
+            "Git.log".into(),
+            "Git.diff".into(),
+            "ShellExec.exec".into(),
+            "WebSearch.search".into(),
             "Grep.search".into(),
         ],
         require_approval: vec![
-            "FileOperator.write".into(), "FileOperator.edit".into(),
-            "FileOperator.delete".into(), "FileOperator.move".into(),
+            "FileOperator.write".into(),
+            "FileOperator.edit".into(),
+            "FileOperator.delete".into(),
+            "FileOperator.move".into(),
         ],
         silent_reject: vec![],
     }
@@ -1801,25 +1863,41 @@ fn default_policy() -> ToolPolicy {
 fn parse_policy_json(raw: &str) -> Result<ToolPolicy, serde_json::Error> {
     let v: serde_json::Value = serde_json::from_str(raw)?;
     Ok(ToolPolicy {
-        auto_approve: v["auto_approve"].as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        auto_approve: v["auto_approve"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default(),
-        require_approval: v["require_approval"].as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        require_approval: v["require_approval"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default(),
-        silent_reject: v["silent_reject"].as_array()
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+        silent_reject: v["silent_reject"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default(),
     })
 }
 
 /// R30 U15: 返 policy.json 路径
 fn policy_path() -> std::path::PathBuf {
-    std::path::PathBuf::from(
-        std::env::var("APEREIRETH_POLICY")
-            .unwrap_or_else(|_| format!("{}/.apeireth/tool-policy.json",
-                    std::env::var("USERPROFILE").unwrap_or_else(|_| "REDACTED".into()))),
-    )
+    std::path::PathBuf::from(std::env::var("APEREIRETH_POLICY").unwrap_or_else(|_| {
+        format!(
+            "{}/.apeireth/tool-policy.json",
+            std::env::var("USERPROFILE").unwrap_or_else(|_| "REDACTED".into())
+        )
+    }))
 }
 
 /// R30 U15: spawn 一个主线程监视 policy.json, 变动后重读、更新缓存
@@ -1831,7 +1909,10 @@ fn spawn_policy_watcher(arc: Arc<std::sync::RwLock<ToolPolicy>>) {
         .spawn(move || {
             let path = policy_path();
             // 如果文件不在 -> 仅监视父目录 (notify 要求路径存在)
-            let parent = path.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| std::path::PathBuf::from("."));
+            let parent = path
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| std::path::PathBuf::from("."));
             if !parent.exists() {
                 let _ = std::fs::create_dir_all(&parent);
             }
@@ -1856,7 +1937,8 @@ fn spawn_policy_watcher(arc: Arc<std::sync::RwLock<ToolPolicy>>) {
                     Ok(_ev) => {
                         // 重读文件并更新缓存
                         if let Ok(s) = std::fs::read_to_string(&path) {
-                            let new_pol = parse_policy_json(&s).unwrap_or_else(|_| default_policy());
+                            let new_pol =
+                                parse_policy_json(&s).unwrap_or_else(|_| default_policy());
                             if let Ok(mut g) = arc.write() {
                                 *g = new_pol;
                             }
@@ -1870,13 +1952,19 @@ fn spawn_policy_watcher(arc: Arc<std::sync::RwLock<ToolPolicy>>) {
 }
 
 /// R30 P3: 写一条调用记录到 JSONL
-fn audit_append(name: &str, op: &str, args: &serde_json::Value,
-                approved: bool, result_preview: &str) {
-    let path = std::path::PathBuf::from(
-        std::env::var("APEREIRETH_AUDIT")
-            .unwrap_or_else(|_| format!("{}/.apeireth/audit.jsonl",
-                    std::env::var("USERPROFILE").unwrap_or_else(|_| "REDACTED".into()))),
-    );
+fn audit_append(
+    name: &str,
+    op: &str,
+    args: &serde_json::Value,
+    approved: bool,
+    result_preview: &str,
+) {
+    let path = std::path::PathBuf::from(std::env::var("APEREIRETH_AUDIT").unwrap_or_else(|_| {
+        format!(
+            "{}/.apeireth/audit.jsonl",
+            std::env::var("USERPROFILE").unwrap_or_else(|_| "REDACTED".into())
+        )
+    }));
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -1891,7 +1979,10 @@ fn audit_append(name: &str, op: &str, args: &serde_json::Value,
     if let Ok(s) = serde_json::to_string(&entry) {
         use std::io::Write;
         if let Ok(mut f) = std::fs::OpenOptions::new()
-            .create(true).append(true).open(&path) {
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
             let _ = writeln!(f, "{}", s);
         }
     }
@@ -1904,10 +1995,7 @@ fn audit_append(name: &str, op: &str, args: &serde_json::Value,
 /// - 返 (name, ok, result_or_error) 三元组, 供 tool_loop 拼成 system 风格消息喂回 LLM
 /// - 5s 超时 (跟 http_llm 一致)
 /// - 失败返 Ok 但 ok=false (不抛 panic, 不中断对话)
-pub fn dispatch_tool_call(
-    name: &str,
-    args_json: &serde_json::Value,
-) -> (String, bool, String) {
+pub fn dispatch_tool_call(name: &str, args_json: &serde_json::Value) -> (String, bool, String) {
     let op = args_json.get("op").and_then(|v| v.as_str()).unwrap_or("?");
     // R30 U15: 使用缓存分类 (notify watcher 会在后台热更新)
     match ToolPolicy::classify_cached(name, op) {
@@ -1972,16 +2060,17 @@ pub fn dispatch_tool_call(
                     let ok = v["ok"].as_bool().unwrap_or(false);
                     let payload = if ok {
                         serde_json::to_string_pretty(&v["result"])
-                        .unwrap_or_else(|_| "null".to_string())
+                            .unwrap_or_else(|_| "null".to_string())
                     } else {
-                        v["error"]
-                            .as_str()
-                            .unwrap_or("(no error msg)")
-                            .to_string()
+                        v["error"].as_str().unwrap_or("(no error msg)").to_string()
                     };
                     (name.to_string(), ok, payload)
                 }
-                Err(e) => (name.to_string(), false, format!("parse JSON: {e} (raw: {text})")),
+                Err(e) => (
+                    name.to_string(),
+                    false,
+                    format!("parse JSON: {e} (raw: {text})"),
+                ),
             }
         }
         Err(e) => (name.to_string(), false, e),
@@ -2038,13 +2127,26 @@ pub fn format_tool_event(evt: &ToolCallEvent) -> String {
         ToolCallEvent::Call { tool, op, args } => {
             format!("▸ tool: {}.{} {}", tool, op, preview(&args.to_string()))
         }
-        ToolCallEvent::Result { tool, op, ok, payload, dur_ms } => {
+        ToolCallEvent::Result {
+            tool,
+            op,
+            ok,
+            payload,
+            dur_ms,
+        } => {
             let status = if *ok { "✓" } else { "✗" };
             let bytes = payload.len();
             if *ok {
                 format!("{} {}.{} {}ms, {} bytes", status, tool, op, dur_ms, bytes)
             } else {
-                format!("{} {}.{} {}ms — {}", status, tool, op, dur_ms, preview(payload))
+                format!(
+                    "{} {}.{} {}ms — {}",
+                    status,
+                    tool,
+                    op,
+                    dur_ms,
+                    preview(payload)
+                )
             }
         }
     }
@@ -2178,7 +2280,10 @@ pub fn chat_with_tool_loop_streaming(
 
     let initial_history: Vec<ToolLoopMessage> = history
         .iter()
-        .map(|m| ToolLoopMessage { role: m.role.clone(), content: m.content.clone() })
+        .map(|m| ToolLoopMessage {
+            role: m.role.clone(),
+            content: m.content.clone(),
+        })
         .collect();
     // 历史里有 "user/assistant" role 字符串, tool loop 内 view 转换回 ChatMessage 时再回写.
     let state = ToolLoopState::new(input, initial_history, DEFAULT_MAX_TOOL_TURNS);
@@ -2187,7 +2292,10 @@ pub fn chat_with_tool_loop_streaming(
         let chat_history: Vec<crate::app::ChatMessage> = s
             .history
             .iter()
-            .map(|m| crate::app::ChatMessage { role: m.role.clone(), content: m.content.clone() })
+            .map(|m| crate::app::ChatMessage {
+                role: m.role.clone(),
+                content: m.content.clone(),
+            })
             .collect();
         match call_llm_stream_sync(&s.input, &chat_history, sender) {
             Ok(reply) => {
@@ -2263,9 +2371,7 @@ pub fn parse_and_dispatch_tools(reply: &str) -> (Vec<String>, String) {
         let (_name, ok, payload) = dispatch_tool_call(&tool_name, &args_value);
         tool_names.push(tool_name.clone());
         let status = if ok { "OK" } else { "ERROR" };
-        results_text.push_str(&format!(
-            "[{tool_name} {status}]\n{payload}\n---\n"
-        ));
+        results_text.push_str(&format!("[{tool_name} {status}]\n{payload}\n---\n"));
     }
     (tool_names, results_text)
 }
@@ -2287,14 +2393,20 @@ pub fn chat_with_tool_loop(
 
     let initial_history: Vec<ToolLoopMessage> = history
         .iter()
-        .map(|m| ToolLoopMessage { role: m.role.clone(), content: m.content.clone() })
+        .map(|m| ToolLoopMessage {
+            role: m.role.clone(),
+            content: m.content.clone(),
+        })
         .collect();
     let state = ToolLoopState::new(input, initial_history, DEFAULT_MAX_TOOL_TURNS);
     let final_state = run_tool_loop(state, |s| {
         let chat_history: Vec<crate::app::ChatMessage> = s
             .history
             .iter()
-            .map(|m| crate::app::ChatMessage { role: m.role.clone(), content: m.content.clone() })
+            .map(|m| crate::app::ChatMessage {
+                role: m.role.clone(),
+                content: m.content.clone(),
+            })
             .collect();
         match call_llm_stream_sync(&s.input, &chat_history, sender) {
             Ok(reply) => {
@@ -2322,7 +2434,12 @@ pub fn chat_with_tool_loop(
 ///  5. LLM 失败: 不写 assistant, 返 "(LLM 调用失败: ...)"
 ///
 /// 失败语义: episode 写入失败 → eprintln 但不阻塞对话 (跟 spec 一致)
-pub fn chat_internal<F>(input: &str, history: &[ChatMessage], store: &SqliteMemoryStore, llm: F) -> String
+pub fn chat_internal<F>(
+    input: &str,
+    history: &[ChatMessage],
+    store: &SqliteMemoryStore,
+    llm: F,
+) -> String
 where
     F: FnOnce(&str, &[ChatMessage]) -> Result<LlmReply, String>,
 {
@@ -2334,7 +2451,7 @@ where
     let (user_ts, asst_ts) = next_chat_pair_timestamps();
     if let Err(e) = write_episode_at(store, input, "user", user_ts) {
         eprintln!("[apeireth-tui] warn: write user episode: {e}");
-            ear::record_user();  // R22 ST-A1.3 hook: user channel
+        ear::record_user(); // R22 ST-A1.3 hook: user channel
     }
 
     // 2. R19 认知循环 (后台跑, 仅 side-effect)
@@ -2348,7 +2465,7 @@ where
             // 4. 写 assistant episode (ts = asst_ts, 保证 query 时 user 在前)
             if let Err(e) = write_episode_at(store, &reply.text, "assistant", asst_ts) {
                 eprintln!("[apeireth-tui] warn: write assistant episode: {e}");
-            ear::record_llm();  // R22 ST-A1.3 hook: llm channel
+                ear::record_llm(); // R22 ST-A1.3 hook: llm channel
             }
             // 5. token 累计 (status bar 显示)
             //    LLM 报数: `TOKEN_USED` (W2 真接 minimaxi usage.total)
@@ -2598,18 +2715,30 @@ mod p2_policy_tests {
     fn policy_default_is_safe_deny_unknown() {
         let p = ToolPolicy::load();
         // read 是默认 auto_approve
-        assert!(matches!(p.classify("FileOperator", "read"), ApprovalAction::AutoApprove));
+        assert!(matches!(
+            p.classify("FileOperator", "read"),
+            ApprovalAction::AutoApprove
+        ));
         // write 是 require_approval
-        assert!(matches!(p.classify("FileOperator", "write"), ApprovalAction::RequireApproval));
+        assert!(matches!(
+            p.classify("FileOperator", "write"),
+            ApprovalAction::RequireApproval
+        ));
         // 未知工具 -> 默认 RequireApproval (安全默认)
-        assert!(matches!(p.classify("MysteryTool", "frob"), ApprovalAction::RequireApproval));
+        assert!(matches!(
+            p.classify("MysteryTool", "frob"),
+            ApprovalAction::RequireApproval
+        ));
     }
 
     #[test]
     fn policy_tool_only_matches_all_ops() {
         let p = ToolPolicy::load();
         // 在名单里加上 "DangerousTool" → 所有 op 都被 RequireApproval
-        assert!(matches!(p.classify("DangerousTool", "anything"), ApprovalAction::RequireApproval));
+        assert!(matches!(
+            p.classify("DangerousTool", "anything"),
+            ApprovalAction::RequireApproval
+        ));
     }
 }
 
@@ -2628,12 +2757,16 @@ mod tui_session_episode_tests {
     /// 构造一个 LLM stub: 不调网络, 返固定回复 (用于 chat_internal 测试)
     fn stub_llm(reply: &str) -> impl FnOnce(&str, &[ChatMessage]) -> Result<LlmReply, String> {
         let reply = reply.to_string();
-        move |_input: &str, _history: &[ChatMessage]| -> Result<LlmReply, String> { Ok(LlmReply::for_test(reply, 5)) }
+        move |_input: &str, _history: &[ChatMessage]| -> Result<LlmReply, String> {
+            Ok(LlmReply::for_test(reply, 5))
+        }
     }
 
     /// 构造一个失败的 LLM stub: 返 Err
     fn stub_llm_err() -> impl FnOnce(&str, &[ChatMessage]) -> Result<LlmReply, String> {
-        |_input: &str, _history: &[ChatMessage]| -> Result<LlmReply, String> { Err("simulated LLM failure".into()) }
+        |_input: &str, _history: &[ChatMessage]| -> Result<LlmReply, String> {
+            Err("simulated LLM failure".into())
+        }
     }
 
     // --- 编译期 hardcode 验收 ---
@@ -2708,7 +2841,12 @@ mod tui_session_episode_tests {
     fn chat_internal_accumulates_episodes_across_calls() {
         let store = fresh_in_memory_store();
         for i in 1..=3 {
-            let _ = chat_internal(&format!("msg-{i}"), &[], &store, stub_llm(&format!("reply-{i}")));
+            let _ = chat_internal(
+                &format!("msg-{i}"),
+                &[],
+                &store,
+                stub_llm(&format!("reply-{i}")),
+            );
         }
 
         let n =
@@ -4338,8 +4476,15 @@ mod p4_tool_event_tests {
                 });
             }
         }
-        assert_eq!(kinds, vec!["Call", "Result"], "应 1 Call + 1 Result, got {kinds:?}");
-        assert!(results.contains("[FileOperator"), "results 应含工具名, got: {results}");
+        assert_eq!(
+            kinds,
+            vec!["Call", "Result"],
+            "应 1 Call + 1 Result, got {kinds:?}"
+        );
+        assert!(
+            results.contains("[FileOperator"),
+            "results 应含工具名, got: {results}"
+        );
     }
 
     #[test]
@@ -4348,7 +4493,10 @@ mod p4_tool_event_tests {
         let (tx, _rx) = std::sync::mpsc::channel::<String>();
         let reply = "<<<[TOOL_REQUEST]>>>\ntool_name: <<<FileOperator>>>,\nop: <<<write>>>,\npath: <<<a.txt>>>,\ncontent: <<<x>>>,\n<<<[END_TOOL_REQUEST]>>>";
         let (_names, results) = parse_and_dispatch_tools_with_evt(reply, &tx);
-        assert!(results.contains("APPROVAL_REQUIRED"), "应返审批提示, got: {results}");
+        assert!(
+            results.contains("APPROVAL_REQUIRED"),
+            "应返审批提示, got: {results}"
+        );
     }
 
     #[test]
@@ -4404,7 +4552,9 @@ mod p4_tool_event_tests {
 /// **R31 委托**: 原本在 main.rs:1096, 现在 backend.rs 让 tests/ integration test
 /// 也能 include (test scope 没 main.rs).
 pub fn parse_host_port(base_url: &str) -> Option<String> {
-    let s = base_url.trim_start_matches("http://").trim_start_matches("https://");
+    let s = base_url
+        .trim_start_matches("http://")
+        .trim_start_matches("https://");
     let host = s.split('/').next()?;
     if host.is_empty() {
         return None;

@@ -400,7 +400,10 @@ impl SkillRegistry {
 
     /// 按 ID 查找 Skill.
     pub fn get(&self, id: &str) -> Option<&dyn Skill> {
-        self.skills.iter().find(|s| s.id() == id).map(|s| s.as_ref())
+        self.skills
+            .iter()
+            .find(|s| s.id() == id)
+            .map(|s| s.as_ref())
     }
 
     /// 列全部 Skill.
@@ -788,9 +791,7 @@ impl SelfUpgrade {
             (SelfUpgradeState::Detecting, SelfUpgradeAction::VerifyPre) => {
                 SelfUpgradeState::Verifying
             }
-            (SelfUpgradeState::Verifying, SelfUpgradeAction::Apply) => {
-                SelfUpgradeState::Applying
-            }
+            (SelfUpgradeState::Verifying, SelfUpgradeAction::Apply) => SelfUpgradeState::Applying,
             (SelfUpgradeState::Applying, SelfUpgradeAction::VerifyPost) => {
                 SelfUpgradeState::Upgraded
             }
@@ -809,9 +810,7 @@ impl SelfUpgrade {
             self.attempts += 1;
         }
         // 校验: retry budget
-        if matches!(new_state, SelfUpgradeState::Detecting)
-            && self.attempts > plan.retry_budget
-        {
+        if matches!(new_state, SelfUpgradeState::Detecting) && self.attempts > plan.retry_budget {
             return Err(AutonomyError::SelfUpgradeRetryBudgetExhausted {
                 attempts: self.attempts,
                 max: plan.retry_budget,
@@ -1082,7 +1081,10 @@ impl RepairJournal {
 
     /// 按 event_kind 过滤 (借鉴 chidori `filter_kind`).
     pub fn filter_kind(&self, kind: FailureEventKind) -> Vec<&FailureEvent> {
-        self.entries.iter().filter(|e| e.event_kind == kind).collect()
+        self.entries
+            .iter()
+            .filter(|e| e.event_kind == kind)
+            .collect()
     }
 
     /// 按 child_id 过滤 (apeireth 扩展, 借鉴 chidori `filter_child`).
@@ -1207,24 +1209,16 @@ impl SelfRepair {
     /// 单步: 走 1 个动作, 状态机迁移.
     pub fn step(&mut self, action: SelfRepairAction) -> AutonomyResult<SelfRepairState> {
         let new_state = match (self.state, action) {
-            (SelfRepairState::Healthy, SelfRepairAction::HealthCheck) => {
-                SelfRepairState::Healthy
-            }
-            (SelfRepairState::Healthy, SelfRepairAction::Snapshot) => {
-                SelfRepairState::Detected
-            }
+            (SelfRepairState::Healthy, SelfRepairAction::HealthCheck) => SelfRepairState::Healthy,
+            (SelfRepairState::Healthy, SelfRepairAction::Snapshot) => SelfRepairState::Detected,
             (SelfRepairState::Detected, SelfRepairAction::Snapshot) => {
                 SelfRepairState::Snapshotting
             }
             (SelfRepairState::Snapshotting, SelfRepairAction::Diagnose) => {
                 SelfRepairState::Repairing
             }
-            (SelfRepairState::Repairing, SelfRepairAction::Restore) => {
-                SelfRepairState::Repaired
-            }
-            (SelfRepairState::Repairing, SelfRepairAction::Replay) => {
-                SelfRepairState::Repaired
-            }
+            (SelfRepairState::Repairing, SelfRepairAction::Restore) => SelfRepairState::Repaired,
+            (SelfRepairState::Repairing, SelfRepairAction::Replay) => SelfRepairState::Repaired,
             (s, a) => {
                 return Err(AutonomyError::SelfRepairIllegalTransition {
                     from: s,
@@ -1439,7 +1433,10 @@ impl LibraryAutonomy {
             evolution_state: self.evolution.state,
             upgrade_state: self.upgrade.state,
             repair_state: self.repair.state,
-            borrow_ids: AutonomyReport::BORROW_IDS.iter().map(|s| s.to_string()).collect(),
+            borrow_ids: AutonomyReport::BORROW_IDS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             ts: current_unix_ms(),
         }
     }
@@ -1476,7 +1473,11 @@ mod tests {
     fn evo_02_skill_registry_has_4_default_skills() {
         let e = SelfEvolution::new();
         let r = e.skill_registry();
-        assert_eq!(r.len(), 4, "4 default Skill: TddFirst + Observe + Plan + Adapt");
+        assert_eq!(
+            r.len(),
+            4,
+            "4 default Skill: TddFirst + Observe + Plan + Adapt"
+        );
         assert!(!r.is_empty());
     }
 
@@ -1523,7 +1524,11 @@ mod tests {
         let r = e.step(SelfEvolutionAction::Adapt);
         assert!(r.is_err());
         match r.unwrap_err() {
-            AutonomyError::SelfEvolutionIllegalTransition { from, to: _, reason } => {
+            AutonomyError::SelfEvolutionIllegalTransition {
+                from,
+                to: _,
+                reason,
+            } => {
                 assert_eq!(from, SelfEvolutionState::Idle);
                 assert!(reason.contains("Adapt"));
             }
@@ -1693,10 +1698,19 @@ mod tests {
         assert_eq!(FailureEventKind::COUNT, 7);
         // 7 变体: Integrity / Resource / AbnormalExit / Restart / Snapshot / Return / Custom
         assert_eq!(FailureEventKind::Integrity.as_chidori_str(), "Health");
-        assert_eq!(FailureEventKind::Resource.as_chidori_str(), "ResourceRequest");
-        assert_eq!(FailureEventKind::AbnormalExit.as_chidori_str(), "AbnormalExit");
+        assert_eq!(
+            FailureEventKind::Resource.as_chidori_str(),
+            "ResourceRequest"
+        );
+        assert_eq!(
+            FailureEventKind::AbnormalExit.as_chidori_str(),
+            "AbnormalExit"
+        );
         assert_eq!(FailureEventKind::Restart.as_chidori_str(), "RestartRequest");
-        assert_eq!(FailureEventKind::Snapshot.as_chidori_str(), "SnapshotRequest");
+        assert_eq!(
+            FailureEventKind::Snapshot.as_chidori_str(),
+            "SnapshotRequest"
+        );
         assert_eq!(FailureEventKind::Return.as_chidori_str(), "Return");
         assert_eq!(FailureEventKind::Custom.as_chidori_str(), "Custom");
     }
@@ -1730,9 +1744,21 @@ mod tests {
     #[test]
     fn rep_06_repair_journal_filter_kind_and_child() {
         let mut j = RepairJournal::new();
-        j.append(make_failure_event(0, FailureEventKind::Integrity, "child-1"));
-        j.append(make_failure_event(0, FailureEventKind::AbnormalExit, "child-1"));
-        j.append(make_failure_event(0, FailureEventKind::Integrity, "child-2"));
+        j.append(make_failure_event(
+            0,
+            FailureEventKind::Integrity,
+            "child-1",
+        ));
+        j.append(make_failure_event(
+            0,
+            FailureEventKind::AbnormalExit,
+            "child-1",
+        ));
+        j.append(make_failure_event(
+            0,
+            FailureEventKind::Integrity,
+            "child-2",
+        ));
         let by_kind = j.filter_kind(FailureEventKind::Integrity);
         assert_eq!(by_kind.len(), 2);
         let by_child = j.filter_child("child-1");

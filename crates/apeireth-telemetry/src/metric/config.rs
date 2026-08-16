@@ -176,8 +176,6 @@ impl MetricsConfig {
     }
 }
 
-
-
 impl Default for MetricsConfig {
     fn default() -> Self {
         Self::default_config()
@@ -257,7 +255,10 @@ mod tests {
             global_labels: HashMap::new(),
             exporter: ExporterKind::Prometheus,
         };
-        assert_eq!(c.full_name("requests_total"), "apeireth_agent_requests_total");
+        assert_eq!(
+            c.full_name("requests_total"),
+            "apeireth_agent_requests_total"
+        );
     }
 
     /// 守门 #8: 5 ExporterKind 都能作为 config.exporter.
@@ -288,7 +289,8 @@ mod tests {
     #[test]
     fn metrics_config_serde_roundtrip() {
         let mut c = MetricsConfig::default_config();
-        c.global_labels.insert("env".to_string(), "test".to_string());
+        c.global_labels
+            .insert("env".to_string(), "test".to_string());
         c.exporter = ExporterKind::Stdout;
         let s = serde_json::to_string(&c).unwrap();
         let parsed: MetricsConfig = serde_json::from_str(&s).unwrap();
@@ -298,9 +300,18 @@ mod tests {
     /// 守门 #11: ExporterKind FromStr.
     #[test]
     fn exporter_kind_from_str() {
-        assert_eq!("PROMETHEUS".parse::<ExporterKind>().unwrap(), ExporterKind::Prometheus);
-        assert_eq!("prometheus".parse::<ExporterKind>().unwrap(), ExporterKind::Prometheus);
-        assert_eq!("STDOUT".parse::<ExporterKind>().unwrap(), ExporterKind::Stdout);
+        assert_eq!(
+            "PROMETHEUS".parse::<ExporterKind>().unwrap(),
+            ExporterKind::Prometheus
+        );
+        assert_eq!(
+            "prometheus".parse::<ExporterKind>().unwrap(),
+            ExporterKind::Prometheus
+        );
+        assert_eq!(
+            "STDOUT".parse::<ExporterKind>().unwrap(),
+            ExporterKind::Stdout
+        );
         assert!("UNKNOWN".parse::<ExporterKind>().is_err());
     }
 

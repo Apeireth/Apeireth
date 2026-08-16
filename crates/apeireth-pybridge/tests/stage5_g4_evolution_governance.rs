@@ -98,7 +98,10 @@ fn g4_rule_r3_downgrade_justified() {
 
 #[test]
 fn g4_rule_r4_retire_confirmed() {
-    assert_eq!(EvolutionRule::R4RetireConfirmed.name(), "R4_retire_confirmed");
+    assert_eq!(
+        EvolutionRule::R4RetireConfirmed.name(),
+        "R4_retire_confirmed"
+    );
     assert_eq!(EvolutionRule::R4RetireConfirmed.number(), 4);
 }
 
@@ -360,7 +363,10 @@ fn g4_report_count_by_rule() {
     e.audit_default();
     let by_rule = e.report.count_by_rule();
     assert_eq!(by_rule.get(&EvolutionRule::R1NewModuleSafe), Some(&1));
-    assert_eq!(by_rule.get(&EvolutionRule::R2UpgradeBackwardCompat), Some(&1));
+    assert_eq!(
+        by_rule.get(&EvolutionRule::R2UpgradeBackwardCompat),
+        Some(&1)
+    );
     assert_eq!(by_rule.get(&EvolutionRule::R3DowngradeJustified), Some(&1));
     assert_eq!(by_rule.get(&EvolutionRule::R4RetireConfirmed), Some(&1));
 }
@@ -473,7 +479,8 @@ fn g4_e2e_full_lifecycle() {
 #[test]
 fn g4_e2e_v1458_ceiling_critical() {
     let mut e = EvolutionEngine::new();
-    let ctx = EvolutionContext::asi_default("apeireth.v1458_asi_north_star_ceiling_chain_audit", 1458);
+    let ctx =
+        EvolutionContext::asi_default("apeireth.v1458_asi_north_star_ceiling_chain_audit", 1458);
 
     // V1458 = ceiling_critical, 必严格守门
     // 1. R1: V1458 已注册, 必通过

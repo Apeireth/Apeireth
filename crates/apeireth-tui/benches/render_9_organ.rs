@@ -13,9 +13,9 @@
 //! **target P95**: 9 organ < 1 ms / widget (per 1.0 release 12 项 #8)
 
 use apeireth_telemetry::observability::tui_dashboard::{
-    OrganKind, OrganReadiness, TuiOrganState, render_body_widget, render_brain_widget,
-    render_ear_widget, render_eye_widget, render_hand_widget, render_heart_widget,
-    render_memory_widget, render_mind_widget, render_organ_widget, render_voice_widget,
+    render_body_widget, render_brain_widget, render_ear_widget, render_eye_widget,
+    render_hand_widget, render_heart_widget, render_memory_widget, render_mind_widget,
+    render_organ_widget, render_voice_widget, OrganKind, OrganReadiness, TuiOrganState,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ratatui::backend::TestBackend;

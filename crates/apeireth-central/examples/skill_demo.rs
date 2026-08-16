@@ -25,7 +25,9 @@ fn main() {
     println!("1. registry.count() = {}", registry.count());
 
     // 2. 按 id 查询 TDD skill
-    let tdd = registry.get(SkillId::TestDrivenDevelopment).expect("TDD skill");
+    let tdd = registry
+        .get(SkillId::TestDrivenDevelopment)
+        .expect("TDD skill");
     println!("2. tdd.name = {}", tdd.name());
     println!("   tdd.tdd_required = {}", tdd.tdd_required());
 
@@ -34,10 +36,7 @@ fn main() {
     for summary in registry.summarize() {
         println!(
             "   - {} ({}) — {} steps, tdd_required = {}",
-            summary.id,
-            summary.name,
-            summary.step_count,
-            summary.tdd_required,
+            summary.id, summary.name, summary.step_count, summary.tdd_required,
         );
     }
 
@@ -64,9 +63,13 @@ fn main() {
     }
 
     // 7. meta skill 例外
-    println!("\n7. meta skill (UsingSuperpowers) tdd_required = {}",
-        registry.tdd_required(SkillId::UsingSuperpowers));
+    println!(
+        "\n7. meta skill (UsingSuperpowers) tdd_required = {}",
+        registry.tdd_required(SkillId::UsingSuperpowers)
+    );
 
     println!("\n=== demo done. ✅ cloned = 真实施 ===");
-    println!("0 装 PASS 严守: 1:1 映射 superpowers 公开 SKILL.md, 0 装\"已借鉴\"私有 plugin 加载机制.");
+    println!(
+        "0 装 PASS 严守: 1:1 映射 superpowers 公开 SKILL.md, 0 装\"已借鉴\"私有 plugin 加载机制."
+    );
 }

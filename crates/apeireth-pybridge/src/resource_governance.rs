@@ -320,7 +320,9 @@ impl ResourceReport {
 
     /// 报告是否完全允许 (无 Throttle / Reject)
     pub fn is_all_allowed(&self) -> bool {
-        self.events.iter().all(|e| e.action == GovernanceAction::Allow)
+        self.events
+            .iter()
+            .all(|e| e.action == GovernanceAction::Allow)
     }
 
     /// 按维度统计 (dimension -> count)
@@ -784,10 +786,7 @@ mod tests {
         assert_eq!(q.rate_per_sec, ResourceQuota::strict_const().rate_per_sec);
         // V1077 = relaxed (full measurement)
         let q = g.quota_for("apeireth.v1077_asi_v04_full_measurement");
-        assert_eq!(
-            q.rate_per_sec,
-            ResourceQuota::relaxed_const().rate_per_sec
-        );
+        assert_eq!(q.rate_per_sec, ResourceQuota::relaxed_const().rate_per_sec);
     }
 
     #[test]

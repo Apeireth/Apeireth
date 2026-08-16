@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 5 nav × Status 单元测试 (R25.2 partial, 1.0 release 估补)
 ///
 /// **测试范围** (per 主人派活单 2026-08-05):
@@ -14,22 +20,31 @@
 /// - O-4 任何人都能接手: 字段名清楚
 /// - O-5 不假装: 真实数据待 R25.3 接
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守
 /// **路径说明** (per 任务诚实标缺):
@@ -47,7 +62,11 @@ use ratatui::layout::Rect;
 
 #[test]
 fn five_components_hardcoded() {
-    assert_eq!(nav::status::FIVE_COMPONENTS.len(), 5, "5 组件 health 端点对齐");
+    assert_eq!(
+        nav::status::FIVE_COMPONENTS.len(),
+        5,
+        "5 组件 health 端点对齐"
+    );
     assert!(nav::status::FIVE_COMPONENTS.contains(&"core"));
     assert!(nav::status::FIVE_COMPONENTS.contains(&"memory"));
     assert!(nav::status::FIVE_COMPONENTS.contains(&"asi"));
@@ -118,7 +137,12 @@ fn render_progress_bars_in_0_100_range() {
             }
         }
     }
-    assert!(nums.len() >= 4, "应抽到 4 个百分比数字, 实 {} 个: {:?}", nums.len(), nums);
+    assert!(
+        nums.len() >= 4,
+        "应抽到 4 个百分比数字, 实 {} 个: {:?}",
+        nums.len(),
+        nums
+    );
     for n in &nums {
         assert!(*n >= 0.0 && *n <= 100.0, "百分比 {n} 超出 [0, 100]");
     }
@@ -141,4 +165,3 @@ fn render_contains_5_components_and_marks_partial() {
         "render 应明确标 partial, 不假装接 HTTP: {out}"
     );
 }
-

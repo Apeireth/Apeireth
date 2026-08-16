@@ -59,7 +59,7 @@ pub const STAGE7_I6_BINDING_COUNT: usize =
 pub struct PermissionSecurityBinding {
     pub layer: PermissionLayer,
     pub gate: SecurityGate,
-    pub is_v7_baseline: bool, // true if 1:1 跟 B4 6 重 v7
+    pub is_v7_baseline: bool,  // true if 1:1 跟 B4 6 重 v7
     pub is_g7_extension: bool, // true if G7 跨语言 (K3 新增)
 }
 
@@ -256,11 +256,7 @@ impl PermissionSecurityCoordinator {
         };
         let v7_intact = stage6_security_baseline_intact();
         self.report.events.push(PermissionSecurityAuditEvent::new(
-            timestamp,
-            layer,
-            gate,
-            verdict,
-            v7_intact,
+            timestamp, layer, gate, verdict, v7_intact,
         ));
         verdict
     }
@@ -382,7 +378,11 @@ mod tests {
     #[test]
     fn i6_07_coordinator_g7_audit() {
         let mut c = PermissionSecurityCoordinator::new();
-        let v = c.check(0, PermissionLayer::L3RateCheck, SecurityGate::G7CrossLanguage);
+        let v = c.check(
+            0,
+            PermissionLayer::L3RateCheck,
+            SecurityGate::G7CrossLanguage,
+        );
         assert!(matches!(v, SecurityVerdict::Audit));
     }
 
@@ -395,7 +395,13 @@ mod tests {
 
     #[test]
     fn i6_09_audit_event_fields() {
-        let e = PermissionSecurityAuditEvent::new(100, PermissionLayer::L6ProvenanceCheck, SecurityGate::G6Audit, SecurityVerdict::Allow, true);
+        let e = PermissionSecurityAuditEvent::new(
+            100,
+            PermissionLayer::L6ProvenanceCheck,
+            SecurityGate::G6Audit,
+            SecurityVerdict::Allow,
+            true,
+        );
         assert!(e.v7_baseline_intact);
     }
 

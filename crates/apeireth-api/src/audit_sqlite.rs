@@ -42,12 +42,22 @@ impl AuditDb {
             CREATE INDEX IF NOT EXISTS idx_inv_tool ON tool_invocations(tool);
             CREATE INDEX IF NOT EXISTS idx_inv_ok ON tool_invocations(ok);
             CREATE INDEX IF NOT EXISTS idx_inv_ts_tool ON tool_invocations(ts DESC, tool);",
-        ).map_err(|e| format!("sqlite init: {e}"))?;
-        Ok(Self { conn: Arc::new(Mutex::new(conn)) })
+        )
+        .map_err(|e| format!("sqlite init: {e}"))?;
+        Ok(Self {
+            conn: Arc::new(Mutex::new(conn)),
+        })
     }
 
     /// 插一条 audit 记录.
-    pub fn insert(&self, ts: &str, tool: &str, ok: bool, duration_ms: u64, args: &Value) -> Result<(), String> {
+    pub fn insert(
+        &self,
+        ts: &str,
+        tool: &str,
+        ok: bool,
+        duration_ms: u64,
+        args: &Value,
+    ) -> Result<(), String> {
         let conn = self.conn.lock().map_err(|e| format!("lock: {e}"))?;
         let args_str = serde_json::to_string(args).map_err(|e| format!("json: {e}"))?;
         conn.execute(
@@ -63,38 +73,58 @@ impl AuditDb {
         let mut stmt = conn.prepare(
             "SELECT id, ts, tool, ok, duration_ms, args_json FROM tool_invocations ORDER BY ts DESC, id DESC LIMIT ?1"
         ).map_err(|e| format!("prepare recent: {e}"))?;
-        let rows = stmt.query_map(params![limit as i64], |row| {
-            let ok: i32 = row.get(3)?;
-            Ok(json!({
-                "id": row.get::<_, i64>(0)?,
-                "ts": row.get::<_, String>(1)?,
-                "tool": row.get::<_, String>(2)?,
-                "ok": ok != 0,
-                "duration_ms": row.get::<_, i64>(4)?,
-                "args": serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or(Value::Null),
-            }))
-        }).map_err(|e| format!("query recent: {e}"))?;
+        let rows = stmt
+            .query_map(params![limit as i64], |row| {
+                let ok: i32 = row.get(3)?;
+                Ok(json!({
+                    "id": row.get::<_, i64>(0)?,
+                    "ts": row.get::<_, String>(1)?,
+                    "tool": row.get::<_, String>(2)?,
+                    "ok": ok != 0,
+                    "duration_ms": row.get::<_, i64>(4)?,
+                    "args": serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or(Value::Null),
+                }))
+            })
+            .map_err(|e| format!("query recent: {e}"))?;
         let mut items = Vec::new();
-        for r in rows { items.push(r.map_err(|e| format!("row: {e}"))?); }
+        for r in rows {
+            items.push(r.map_err(|e| format!("row: {e}"))?);
+        }
         Ok(Value::Array(items))
     }
 
     /// 取统计: 总数 + 按 tool 分组 + 成功/失败计数.
     pub fn stats(&self) -> Result<Value, String> {
         let conn = self.conn.lock().map_err(|e| format!("lock: {e}"))?;
-        let total: i64 = conn.query_row("SELECT COUNT(*) FROM tool_invocations", [], |r| r.get(0))
+        let total: i64 = conn
+            .query_row("SELECT COUNT(*) FROM tool_invocations", [], |r| r.get(0))
             .map_err(|e| format!("count: {e}"))?;
-        let ok_count: i64 = conn.query_row("SELECT COUNT(*) FROM tool_invocations WHERE ok = 1", [], |r| r.get(0))
+        let ok_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tool_invocations WHERE ok = 1",
+                [],
+                |r| r.get(0),
+            )
             .map_err(|e| format!("count ok: {e}"))?;
-        let fail_count: i64 = conn.query_row("SELECT COUNT(*) FROM tool_invocations WHERE ok = 0", [], |r| r.get(0))
+        let fail_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM tool_invocations WHERE ok = 0",
+                [],
+                |r| r.get(0),
+            )
             .map_err(|e| format!("count fail: {e}"))?;
-        let mut by_tool_stmt = conn.prepare("SELECT tool, COUNT(*) FROM tool_invocations GROUP BY tool ORDER BY 2 DESC")
+        let mut by_tool_stmt = conn
+            .prepare("SELECT tool, COUNT(*) FROM tool_invocations GROUP BY tool ORDER BY 2 DESC")
             .map_err(|e| format!("prep by_tool: {e}"))?;
-        let by_tool_rows = by_tool_stmt.query_map([], |row| {
-            Ok(json!({"tool": row.get::<_, String>(0)?, "count": row.get::<_, i64>(1)?}))
-        }).map_err(|e| format!("query by_tool: {e}"))?;
+        let by_tool_rows = by_tool_stmt
+            .query_map([], |row| {
+                Ok(json!({"tool": row.get::<_, String>(0)?, "count": row.get::<_, i64>(1)?}))
+            })
+            .map_err(|e| format!("query by_tool: {e}"))?;
         let mut by_tool = Vec::new();
-        for r in by_tool_rows { by_tool.push(r.map_err(|e| format!("row: {e}"))?); }
+        for r in by_tool_rows {
+            by_tool.push(r.map_err(|e| format!("row: {e}"))?);
+        }
         Ok(json!({
             "total": total,
             "ok": ok_count,
@@ -116,7 +146,10 @@ mod tests {
             "apeireth_audit_test_{}_{}_{}.sqlite",
             std::process::id(),
             n,
-            std::thread::current().name().unwrap_or("t").replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_"),
+            std::thread::current()
+                .name()
+                .unwrap_or("t")
+                .replace(|c: char| !c.is_alphanumeric() && c != '-' && c != '_', "_"),
         ));
         let _ = std::fs::remove_file(&p);
         AuditDb::open(&p).expect("open")
@@ -127,7 +160,13 @@ mod tests {
         let db = tmp_db();
         let conn = db.conn.lock().unwrap();
         // 验证表存在
-        let cnt: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tool_invocations'", [], |r| r.get(0)).unwrap();
+        let cnt: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='tool_invocations'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
         assert_eq!(cnt, 1);
         // 验证 4 索引存在
         let idx_cnt: i64 = conn.query_row("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND tbl_name='tool_invocations'", [], |r| r.get(0)).unwrap();
@@ -138,7 +177,14 @@ mod tests {
     fn insert_and_recent() {
         let db = tmp_db();
         for i in 0..5 {
-            db.insert(&format!("2026-01-01T00:00:0{i}Z"), "FileOperator", true, 100 + i, &json!({"op": "read"})).unwrap();
+            db.insert(
+                &format!("2026-01-01T00:00:0{i}Z"),
+                "FileOperator",
+                true,
+                100 + i,
+                &json!({"op": "read"}),
+            )
+            .unwrap();
         }
         let r = db.recent(3).unwrap();
         let arr = r.as_array().unwrap();
@@ -150,9 +196,24 @@ mod tests {
     #[test]
     fn stats_counts_correctly() {
         let db = tmp_db();
-        db.insert("2026-01-01T00:00:00Z", "FileOperator", true, 100, &json!({})).unwrap();
-        db.insert("2026-01-01T00:00:01Z", "FileOperator", false, 50, &json!({})).unwrap();
-        db.insert("2026-01-01T00:00:02Z", "Git", true, 30, &json!({})).unwrap();
+        db.insert(
+            "2026-01-01T00:00:00Z",
+            "FileOperator",
+            true,
+            100,
+            &json!({}),
+        )
+        .unwrap();
+        db.insert(
+            "2026-01-01T00:00:01Z",
+            "FileOperator",
+            false,
+            50,
+            &json!({}),
+        )
+        .unwrap();
+        db.insert("2026-01-01T00:00:02Z", "Git", true, 30, &json!({}))
+            .unwrap();
         let s = db.stats().unwrap();
         assert_eq!(s["total"], 3);
         assert_eq!(s["ok"], 2);
@@ -167,7 +228,14 @@ mod tests {
     fn recent_respects_limit() {
         let db = tmp_db();
         for i in 0..10 {
-            db.insert(&format!("2026-01-01T00:00:{:02}Z", i), "X", true, i, &json!({})).unwrap();
+            db.insert(
+                &format!("2026-01-01T00:00:{:02}Z", i),
+                "X",
+                true,
+                i,
+                &json!({}),
+            )
+            .unwrap();
         }
         assert_eq!(db.recent(5).unwrap().as_array().unwrap().len(), 5);
         assert_eq!(db.recent(100).unwrap().as_array().unwrap().len(), 10);

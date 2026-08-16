@@ -24,20 +24,22 @@
 
 pub mod fold;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod marker;
 pub mod accumulator;
-pub mod semantic;
 pub mod fold_block;
+pub mod marker;
+mod organ_kani_proofs;
+pub mod semantic;
 
-pub use fold::{FoldStrategy, FoldResult, fold, unfold};
-pub use marker::{FoldMarker, MarkerKind};
-pub use accumulator::{TokenAccumulator, AccumulatorSnapshot};
-pub use semantic::{
-    BigramOverlapScorer, Embedder, EmbeddingScorer, FoldedSegment, RelevanceScorer,
-    SemanticFoldOptions, SemanticFoldOutcome, cosine, fold_segments, unfold_semantic,
+pub use accumulator::{AccumulatorSnapshot, TokenAccumulator};
+pub use fold::{fold, unfold, FoldResult, FoldStrategy};
+pub use fold_block::{
+    has_fold_markers, parse_fold_blocks, render_fold_blocks, FoldBlock, FoldBlockRender,
 };
-pub use fold_block::{FoldBlock, FoldBlockRender, has_fold_markers, parse_fold_blocks, render_fold_blocks};
+pub use marker::{FoldMarker, MarkerKind};
+pub use semantic::{
+    cosine, fold_segments, unfold_semantic, BigramOverlapScorer, Embedder, EmbeddingScorer,
+    FoldedSegment, RelevanceScorer, SemanticFoldOptions, SemanticFoldOutcome,
+};
 
 /// R144 deliverables (per v2 plan §9.5):
 /// - 3 modules (fold / marker / accumulator)

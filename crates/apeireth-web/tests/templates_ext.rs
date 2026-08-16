@@ -16,7 +16,10 @@ fn xss_script_tag_with_src() {
     // <script src="evil.js"> 注入
     let s = r#"<script src="evil.js"></script>"#;
     let escaped = html_escape(s);
-    assert!(!escaped.contains("<script"), "<script 必须 escape, 实际: {escaped}");
+    assert!(
+        !escaped.contains("<script"),
+        "<script 必须 escape, 实际: {escaped}"
+    );
     assert!(escaped.contains("&lt;script"));
 }
 
@@ -39,7 +42,10 @@ fn xss_javascript_url_in_href() {
     assert!(!escaped.contains("<a"));
     assert!(escaped.contains("&lt;a"));
     // src 用 &quot; 不是 &#34; (per apeireth_web::templates::html_escape 实现)
-    assert!(escaped.contains("href=&quot;javascript"), "引号应 escape 成 &quot;, 实际: {escaped}");
+    assert!(
+        escaped.contains("href=&quot;javascript"),
+        "引号应 escape 成 &quot;, 实际: {escaped}"
+    );
 }
 
 #[test]
@@ -100,12 +106,20 @@ fn html_escape_very_long_string() {
     let long: String = "a&b".repeat(50_000); // 150K chars (3 chars × 50K)
     let escaped = html_escape(&long);
     // escape 后 "a&b" → "a&amp;b" (5 chars), 应比 original 长
-    assert!(escaped.len() > long.len(), "escape 后应更长, got len={} (orig {})", escaped.len(), long.len());
+    assert!(
+        escaped.len() > long.len(),
+        "escape 后应更长, got len={} (orig {})",
+        escaped.len(),
+        long.len()
+    );
     assert!(escaped.contains("&amp;"));
     // 原始字符计数
     let original_amp_count = long.matches('&').count();
     let escaped_amp_count = escaped.matches("&amp;").count();
-    assert_eq!(original_amp_count, escaped_amp_count, "每个 & 应 escape 成 &amp;");
+    assert_eq!(
+        original_amp_count, escaped_amp_count,
+        "每个 & 应 escape 成 &amp;"
+    );
 }
 
 #[test]

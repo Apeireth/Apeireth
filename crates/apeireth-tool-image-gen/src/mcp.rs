@@ -29,7 +29,10 @@ pub struct McpResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpError { pub code: i32, pub message: String }
+pub struct McpError {
+    pub code: i32,
+    pub message: String,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ImageMcpTool {
@@ -57,7 +60,9 @@ pub struct ImageGenMcp {
 
 impl ImageGenMcp {
     pub fn new() -> Self {
-        Self { registry: default_registry() }
+        Self {
+            registry: default_registry(),
+        }
     }
     pub fn with_registry(registry: ProviderRegistry) -> Self {
         Self { registry }
@@ -94,7 +99,11 @@ impl ImageGenMcp {
                 }
             }
             "tools/call" => {
-                let tool_name = req.params.get("name").and_then(|v| v.as_str()).unwrap_or("");
+                let tool_name = req
+                    .params
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 let args = req.params.get("arguments").cloned().unwrap_or(json!({}));
                 match tool_name {
                     "list_providers" => {
@@ -110,16 +119,21 @@ impl ImageGenMcp {
                         }
                     }
                     "image_generate" => {
-                        let prompt = args.get("prompt").and_then(|v| v.as_str()).unwrap_or("untitled");
-                        let provider_name = args.get("provider").and_then(|v| v.as_str()).unwrap_or("mock");
+                        let prompt = args
+                            .get("prompt")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("untitled");
+                        let provider_name = args
+                            .get("provider")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("mock");
                         let params = ImageGenParams::new(prompt);
                         let result = if provider_name == "mock" {
                             // Synchronous mock call wrapped in tokio
                             tokio::task::block_in_place(|| {
                                 let handle = tokio::runtime::Handle::current();
-                                handle.block_on(async {
-                                    MockProvider::new().generate(&params).await
-                                })
+                                handle
+                                    .block_on(async { MockProvider::new().generate(&params).await })
                             })
                         } else {
                             // Other providers require API keys; report honestly
@@ -135,7 +149,12 @@ impl ImageGenMcp {
                         };
                         match result {
                             Ok(r) => {
-                                let summary = format!("provider={} model={} count={}", r.provider, r.model, r.images.len());
+                                let summary = format!(
+                                    "provider={} model={} count={}",
+                                    r.provider,
+                                    r.model,
+                                    r.images.len()
+                                );
                                 McpResponse {
                                     jsonrpc: "2.0".to_string(),
                                     id: req.id,
@@ -161,7 +180,10 @@ impl ImageGenMcp {
                         jsonrpc: "2.0".to_string(),
                         id: req.id,
                         result: None,
-                        error: Some(McpError { code: -32602, message: format!("unknown tool: {}", other) }),
+                        error: Some(McpError {
+                            code: -32602,
+                            message: format!("unknown tool: {}", other),
+                        }),
                     },
                 }
             }
@@ -175,14 +197,19 @@ impl ImageGenMcp {
                 jsonrpc: "2.0".to_string(),
                 id: req.id,
                 result: None,
-                error: Some(McpError { code: -32601, message: format!("method not found: {}", other) }),
+                error: Some(McpError {
+                    code: -32601,
+                    message: format!("method not found: {}", other),
+                }),
             },
         }
     }
 }
 
 impl Default for ImageGenMcp {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -227,7 +254,10 @@ mod tests {
     #[test]
     fn image_generate_mock_succeeds() {
         // mcp tool calls block_in_place which requires multi-thread runtime
-        let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
         rt.block_on(async {
             let mcp = ImageGenMcp::new();
             let req = McpRequest {

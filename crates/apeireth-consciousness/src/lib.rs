@@ -29,9 +29,9 @@ use chrono::{DateTime, Utc};
 
 // R22 ST-A2.2 — Cognitive-Dream 6 状态机深化 (transition_rate_limit + cycle_detector)
 pub mod emotion;
-pub mod plutchik;  // R218
-pub mod plutchik_integration;  // R209: Plutchik <-> BaseEmotion 6 桥接: Plutchik 8 基础 + 8 高级情绪 (R187 调研推荐)
-pub mod plutchik_engine;  // R211: ExtendedEmotionEngine — Plutchik emotion engine 集成
+pub mod plutchik; // R218
+pub mod plutchik_engine; // R211: ExtendedEmotionEngine — Plutchik emotion engine 集成
+pub mod plutchik_integration; // R209: Plutchik <-> BaseEmotion 6 桥接: Plutchik 8 基础 + 8 高级情绪 (R187 调研推荐)
 pub mod transfer_monitor;
 // R173 ST-B7.1 — bridge 7: memory -> consciousness
 pub mod memory_bridge;
@@ -411,11 +411,11 @@ mod tests {
     }
 }
 
-
-pub use crate::emotion::{BaseEmotion, EmError, EmResult, EmotionEngine, EmotionEvent, EmotionSnapshot, Pad, ResponseStyle};
-pub use crate::emotion::DecaySnapshot;  // R237
+pub use crate::emotion::DecaySnapshot; // R237
+pub use crate::emotion::{
+    BaseEmotion, EmError, EmResult, EmotionEngine, EmotionEvent, EmotionSnapshot, Pad,
+    ResponseStyle,
+};
 pub use crate::transfer_monitor::{
     CognitiveDreamMonitor, CycleInfo, MonitorError, RateLimitError, TransferSnapshot,
 };
-
-

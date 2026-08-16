@@ -230,8 +230,15 @@ pub enum OrganMirror {
 impl OrganMirror {
     /// 全部 9 器官
     pub const ALL: [Self; 9] = [
-        Self::Heart, Self::Brain, Self::Hand, Self::Eye, Self::Ear,
-        Self::Memory, Self::Voice, Self::Body, Self::Mind,
+        Self::Heart,
+        Self::Brain,
+        Self::Hand,
+        Self::Eye,
+        Self::Ear,
+        Self::Memory,
+        Self::Voice,
+        Self::Body,
+        Self::Mind,
     ];
 
     /// 中文 label
@@ -328,7 +335,10 @@ pub struct OrganMirrorState {
 
 impl From<OrganMirror> for OrganMirrorState {
     fn from(k: OrganMirror) -> Self {
-        Self { kind: k, active: true }
+        Self {
+            kind: k,
+            active: true,
+        }
     }
 }
 
@@ -368,9 +378,10 @@ impl IntegrationHarness {
             })?;
         let tui_backend = TuiTestBackend::default_24x80()?;
         let backend_for_terminal = TestBackend::new(tui_backend.width, tui_backend.height);
-        let tui_terminal = Terminal::new(backend_for_terminal).map_err(|e| {
-            E2EError::HarnessStart { reason: format!("ratatui terminal: {e}") }
-        })?;
+        let tui_terminal =
+            Terminal::new(backend_for_terminal).map_err(|e| E2EError::HarnessStart {
+                reason: format!("ratatui terminal: {e}"),
+            })?;
         let tui_app = Arc::new(Mutex::new(TuiAppMirror::default()));
         // **不**挂默认 mocks — 让每个 test 自己挂 (避免 wiremock 重复挂相同 path 冲突)
         // mount_default_mocks(&api_server).await?;
@@ -418,7 +429,11 @@ impl IntegrationHarness {
     }
 
     /// POST 端点
-    pub async fn api_post(&self, path: &str, body: serde_json::Value) -> E2EResult<reqwest::Response> {
+    pub async fn api_post(
+        &self,
+        path: &str,
+        body: serde_json::Value,
+    ) -> E2EResult<reqwest::Response> {
         let url = self.api_uri(path);
         self.api_client
             .post(&url)
@@ -432,7 +447,11 @@ impl IntegrationHarness {
     }
 
     /// PUT 端点
-    pub async fn api_put(&self, path: &str, body: serde_json::Value) -> E2EResult<reqwest::Response> {
+    pub async fn api_put(
+        &self,
+        path: &str,
+        body: serde_json::Value,
+    ) -> E2EResult<reqwest::Response> {
         let url = self.api_uri(path);
         self.api_client
             .put(&url)
@@ -495,10 +514,7 @@ impl IntegrationHarness {
                     })
                     .collect::<Vec<_>>()
                     .join(" | ");
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(nav_text),
-                    chunks[0],
-                );
+                f.render_widget(ratatui::widgets::Paragraph::new(nav_text), chunks[0]);
                 // middle: 9 organ (英文 label)
                 let organ_text: String = OrganMirror::ALL
                     .iter()
@@ -514,26 +530,22 @@ impl IntegrationHarness {
                     })
                     .collect::<Vec<_>>()
                     .join(" ");
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(organ_text),
-                    chunks[1],
-                );
+                f.render_widget(ratatui::widgets::Paragraph::new(organ_text), chunks[1]);
                 // content
                 let content = if should_quit {
                     "Bye, Apeireth".to_string()
                 } else {
-                    format!("Current nav: {}\nrender_tick: {}", nav.label_en(), render_tick)
+                    format!(
+                        "Current nav: {}\nrender_tick: {}",
+                        nav.label_en(),
+                        render_tick
+                    )
                 };
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(content),
-                    chunks[2],
-                );
+                f.render_widget(ratatui::widgets::Paragraph::new(content), chunks[2]);
                 // status (英文, 避免 CJK 编码问题)
-                let status = "S-1 Polaris | S-2 Realistic | O-5 Honest | press q to quit".to_string();
-                f.render_widget(
-                    ratatui::widgets::Paragraph::new(status),
-                    chunks[3],
-                );
+                let status =
+                    "S-1 Polaris | S-2 Realistic | O-5 Honest | press q to quit".to_string();
+                f.render_widget(ratatui::widgets::Paragraph::new(status), chunks[3]);
             })
             .map_err(|e| E2EError::TuiRender {
                 width: self.tui_backend.width,
@@ -571,7 +583,11 @@ impl IntegrationHarness {
             return Err(E2EError::TuiAssert {
                 context: "tui_assert_contains".into(),
                 expected: format!("<contains `{needle}`>"),
-                actual: format!("<not found in {w}x{h} buffer>", w = self.tui_backend.width, h = self.tui_backend.height),
+                actual: format!(
+                    "<not found in {w}x{h} buffer>",
+                    w = self.tui_backend.width,
+                    h = self.tui_backend.height
+                ),
             });
         }
         Ok(())

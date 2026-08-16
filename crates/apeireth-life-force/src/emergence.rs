@@ -22,9 +22,9 @@
 //! - in-memory 滑窗, 持久化留给 ST-A2.4 (emergence_stream)
 //! - readiness: Ok (跟 apeireth-life-force 其他模块同水平)
 
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt;
-use serde::{Deserialize, Serialize};
 
 /// 默认涌现阈值 (signal.confidence >= threshold 才报告)
 pub const DEFAULT_EMERGENCE_THRESHOLD: f64 = 0.7;
@@ -204,10 +204,9 @@ impl fmt::Display for EmergenceError {
                 f,
                 "emergence continuity mismatch: expected={expected}, actual={actual}"
             ),
-            Self::ConfidenceOutOfRange(v) => write!(
-                f,
-                "emergence confidence out of [0.0, 1.0]: {v}"
-            ),
+            Self::ConfidenceOutOfRange(v) => {
+                write!(f, "emergence confidence out of [0.0, 1.0]: {v}")
+            }
         }
     }
 }
@@ -298,27 +297,59 @@ mod tests {
     #[test]
     fn detector_record_and_recent() {
         let mut d = EmergenceDetector::new("did:test-001");
-        d.record(sig(EmergenceSignalType::CrossDomainInsight, 0.8, vec!["a", "b"], "did:test-001", 1000)).unwrap();
-        d.record(sig(EmergenceSignalType::AbstractionLevelShift, 0.9, vec!["c", "d", "e"], "did:test-001", 1100)).unwrap();
+        d.record(sig(
+            EmergenceSignalType::CrossDomainInsight,
+            0.8,
+            vec!["a", "b"],
+            "did:test-001",
+            1000,
+        ))
+        .unwrap();
+        d.record(sig(
+            EmergenceSignalType::AbstractionLevelShift,
+            0.9,
+            vec!["c", "d", "e"],
+            "did:test-001",
+            1100,
+        ))
+        .unwrap();
         assert_eq!(d.len(), 2);
         assert_eq!(d.total_recorded, 2);
         let recent = d.recent(1);
         assert_eq!(recent.len(), 1);
-        assert_eq!(recent[0].signal_type, EmergenceSignalType::AbstractionLevelShift);
+        assert_eq!(
+            recent[0].signal_type,
+            EmergenceSignalType::AbstractionLevelShift
+        );
     }
 
     #[test]
     fn detector_rejects_continuity_mismatch() {
         let mut d = EmergenceDetector::new("did:test-001");
-        let bad = sig(EmergenceSignalType::CrossDomainInsight, 0.8, vec!["a", "b"], "did:other-002", 1000);
+        let bad = sig(
+            EmergenceSignalType::CrossDomainInsight,
+            0.8,
+            vec!["a", "b"],
+            "did:other-002",
+            1000,
+        );
         let res = d.record(bad);
-        assert!(matches!(res, Err(EmergenceError::ContinuityMismatch { .. })));
+        assert!(matches!(
+            res,
+            Err(EmergenceError::ContinuityMismatch { .. })
+        ));
     }
 
     #[test]
     fn detector_rejects_confidence_out_of_range() {
         let mut d = EmergenceDetector::new("did:test-001");
-        let bad = sig(EmergenceSignalType::CrossDomainInsight, 1.5, vec!["a", "b"], "did:test-001", 1000);
+        let bad = sig(
+            EmergenceSignalType::CrossDomainInsight,
+            1.5,
+            vec!["a", "b"],
+            "did:test-001",
+            1000,
+        );
         let res = d.record(bad);
         assert!(matches!(res, Err(EmergenceError::ConfidenceOutOfRange(_))));
     }
@@ -326,11 +357,36 @@ mod tests {
     #[test]
     fn detector_snapshot_filters_by_threshold() {
         let mut d = EmergenceDetector::with_threshold("did:test-001", 0.75);
-        d.record(sig(EmergenceSignalType::CrossDomainInsight, 0.5, vec!["a", "b"], "did:test-001", 1000)).unwrap(); // below
-        d.record(sig(EmergenceSignalType::AbstractionLevelShift, 0.8, vec!["c", "d"], "did:test-001", 1100)).unwrap(); // above
-        d.record(sig(EmergenceSignalType::NoveltyConvergence, 0.6, vec!["e", "f"], "did:test-001", 1200)).unwrap(); // below threshold
+        d.record(sig(
+            EmergenceSignalType::CrossDomainInsight,
+            0.5,
+            vec!["a", "b"],
+            "did:test-001",
+            1000,
+        ))
+        .unwrap(); // below
+        d.record(sig(
+            EmergenceSignalType::AbstractionLevelShift,
+            0.8,
+            vec!["c", "d"],
+            "did:test-001",
+            1100,
+        ))
+        .unwrap(); // above
+        d.record(sig(
+            EmergenceSignalType::NoveltyConvergence,
+            0.6,
+            vec!["e", "f"],
+            "did:test-001",
+            1200,
+        ))
+        .unwrap(); // below threshold
         let report = d.snapshot(1300);
-        assert_eq!(report.signals_above_threshold.len(), 1, "0.5 和 0.7 < 0.75 不报, 只有 0.8 ≥ 0.75 报");
+        assert_eq!(
+            report.signals_above_threshold.len(),
+            1,
+            "0.5 和 0.7 < 0.75 不报, 只有 0.8 ≥ 0.75 报"
+        );
         assert_eq!(report.total_signals_recorded, 3);
         assert_eq!(report.threshold, 0.75);
     }
@@ -340,7 +396,14 @@ mod tests {
         let mut d = EmergenceDetector::new("did:test-001");
         d.max_history = 3;
         for i in 0..5 {
-            d.record(sig(EmergenceSignalType::CrossDomainInsight, 0.8, vec!["a", "b"], "did:test-001", 1000 + i)).unwrap();
+            d.record(sig(
+                EmergenceSignalType::CrossDomainInsight,
+                0.8,
+                vec!["a", "b"],
+                "did:test-001",
+                1000 + i,
+            ))
+            .unwrap();
         }
         assert_eq!(d.len(), 3);
         assert_eq!(d.total_recorded, 5);

@@ -14,9 +14,10 @@
 //! 5 P0 crate + P1 SDK stub 共享同一 fixture 模式, 避免重复造轮子 (per 蓝图 §3.7 缺口 5).
 
 use apeireth_lark::{
-    is_stub_mode, validate_tool_call, LarkClient, LarkClientImpl, LarkConfig, LarkError, MessageType,
-    LARK_API_BASE_URL, LARK_MAX_MESSAGE_LENGTH, LARK_SCHEMA_VERSION, LARK_TOKEN_CACHE_TTL_SECONDS,
-    PLATFORM_NAME, STUB_MODE, SUPPORTED_MESSAGE_TYPES, TOOL_WHITELIST, TOOL_WHITELIST_COUNT,
+    is_stub_mode, validate_tool_call, LarkClient, LarkClientImpl, LarkConfig, LarkError,
+    MessageType, LARK_API_BASE_URL, LARK_MAX_MESSAGE_LENGTH, LARK_SCHEMA_VERSION,
+    LARK_TOKEN_CACHE_TTL_SECONDS, PLATFORM_NAME, STUB_MODE, SUPPORTED_MESSAGE_TYPES,
+    TOOL_WHITELIST, TOOL_WHITELIST_COUNT,
 };
 
 // ----- Fixture 1: STUB_MODE 编译期守门 (K-1 强校验 #4) -----
@@ -32,8 +33,14 @@ fn test_stub_mode_compile_time_true() {
 
 #[test]
 fn test_compile_time_constants_pinned() {
-    assert_eq!(LARK_SCHEMA_VERSION, "1", "LARK_SCHEMA_VERSION 编译期 hardcode");
-    assert_eq!(PLATFORM_NAME, "apeireth", "K-1 强校验 #1: 平台名必须 apeireth");
+    assert_eq!(
+        LARK_SCHEMA_VERSION, "1",
+        "LARK_SCHEMA_VERSION 编译期 hardcode"
+    );
+    assert_eq!(
+        PLATFORM_NAME, "apeireth",
+        "K-1 强校验 #1: 平台名必须 apeireth"
+    );
     assert_eq!(
         LARK_API_BASE_URL, "https://open.feishu.cn/open-apis",
         "LARK_API_BASE_URL 1:1 翻译飞书 Open API"
@@ -77,10 +84,7 @@ fn test_whitelist_contains_nine_lark_tools() {
         "apeireth_lark_auth_refresh",
         "apeireth_lark_stub_status",
     ] {
-        assert!(
-            TOOL_WHITELIST.contains(&tool),
-            "TOOL_WHITELIST 缺: {tool}"
-        );
+        assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST 缺: {tool}");
     }
 }
 
@@ -185,7 +189,10 @@ fn test_lark_client_impl_rejects_empty_config() {
 fn test_lark_client_impl_default_token_invalid() {
     let client = LarkClientImpl::new(LarkConfig::default()).unwrap();
     // STUB 模式: token_cache = None, token_valid 必返 false
-    assert!(!client.token_valid(), "STUB 模式 token_cache None, token_valid 应为 false");
+    assert!(
+        !client.token_valid(),
+        "STUB 模式 token_cache None, token_valid 应为 false"
+    );
 }
 
 // ----- Fixture 7: 5 K-1 字样守门 (apeireth / lark / stub / send_message / must-do) + STUB_MODE -----
@@ -197,11 +204,20 @@ fn test_k1_must_do_invariants() {
     assert_eq!(PLATFORM_NAME, "apeireth", "K-1 字样 #1: apeireth");
     // 2) "lark" crate 名
     let crate_name = env!("CARGO_PKG_NAME");
-    assert!(crate_name.contains("lark"), "K-1 字样 #2: lark in crate name ({crate_name})");
+    assert!(
+        crate_name.contains("lark"),
+        "K-1 字样 #2: lark in crate name ({crate_name})"
+    );
     // 3) "stub" 模式守门
     assert!(is_stub_mode(), "K-1 字样 #3: stub 模式");
     // 4) "send_message" 8 工具之一
-    assert!(TOOL_WHITELIST.contains(&"apeireth_lark_send_message"), "K-1 字样 #4: send_message in TOOL_WHITELIST");
+    assert!(
+        TOOL_WHITELIST.contains(&"apeireth_lark_send_message"),
+        "K-1 字样 #4: send_message in TOOL_WHITELIST"
+    );
     // 5) "must-do" R20 阶段 3 必补 (从 STUB_MODE 守门守门)
-    assert!(STUB_MODE, "K-1 字样 #5: must-do (STUB_MODE true 守 R20 阶段 3 必补)");
+    assert!(
+        STUB_MODE,
+        "K-1 字样 #5: must-do (STUB_MODE true 守 R20 阶段 3 必补)"
+    );
 }

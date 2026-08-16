@@ -38,15 +38,15 @@
 
 // R154 modules (graph + traversal + query)
 pub mod graph;
-pub mod traversal;
 pub mod query;
+pub mod traversal;
 // R177: organ invariants
 mod organ_kani_proofs;
 
 // Convenience re-exports (调用方少打路径)
 pub use graph::{EdgeId, GraphEdge, GraphNode, NodeId, RelationGraph};
-pub use traversal::{BfsIter, DfsIter, PathResult, TraversalDirection, shortest_path};
-pub use query::{CombinedQuery, EdgeQuery, NodeQuery, PropertyMatch, count_by_kind};
+pub use query::{count_by_kind, CombinedQuery, EdgeQuery, NodeQuery, PropertyMatch};
+pub use traversal::{shortest_path, BfsIter, DfsIter, PathResult, TraversalDirection};
 
 use chrono::{DateTime, Utc};
 use thiserror::Error;

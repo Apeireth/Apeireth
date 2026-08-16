@@ -46,7 +46,10 @@ fn main() {
     println!();
 
     // 4. max_depth = 5
-    println!("4. max_depth = {} (反思最大深度守门):", REFLECTION_MAX_DEPTH);
+    println!(
+        "4. max_depth = {} (反思最大深度守门):",
+        REFLECTION_MAX_DEPTH
+    );
     println!();
 
     // 5. graph 重置

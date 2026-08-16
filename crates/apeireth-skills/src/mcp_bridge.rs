@@ -175,7 +175,11 @@ pub fn descriptor_to_tool(desc: &SkillDescriptor) -> Tool {
     let description = if desc.tags.is_empty() {
         desc.description.clone()
     } else {
-        format!("{} [tags: {}]", desc.description, desc.tags.iter().cloned().collect::<Vec<_>>().join(", "))
+        format!(
+            "{} [tags: {}]",
+            desc.description,
+            desc.tags.iter().cloned().collect::<Vec<_>>().join(", ")
+        )
     };
     Tool::new(desc.id.clone())
         .with_description(description)
@@ -191,7 +195,13 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    fn make_desc(id: &str, version: &str, description: &str, tags: &[&str], source: &str) -> SkillDescriptor {
+    fn make_desc(
+        id: &str,
+        version: &str,
+        description: &str,
+        tags: &[&str],
+        source: &str,
+    ) -> SkillDescriptor {
         SkillDescriptor::new(
             id,
             version,
@@ -224,7 +234,13 @@ mod tests {
 
     #[test]
     fn descriptor_to_tool_basic() {
-        let desc = make_desc("summarize-text", "1.0.0", "Summarize text", &["summarize", "text"], "vcptoolbox");
+        let desc = make_desc(
+            "summarize-text",
+            "1.0.0",
+            "Summarize text",
+            &["summarize", "text"],
+            "vcptoolbox",
+        );
         let tool = descriptor_to_tool(&desc);
         assert_eq!(tool.name, "summarize-text");
         assert!(tool.description.is_some());
@@ -290,9 +306,8 @@ mod tests {
 
     #[test]
     fn skill_tool_server_metadata_mode_call_returns_output_example() {
-        let server = SkillToolServer::new(vec![
-            make_desc("mock", "1.0.0", "Mock skill", &[], "test"),
-        ]);
+        let server =
+            SkillToolServer::new(vec![make_desc("mock", "1.0.0", "Mock skill", &[], "test")]);
         let result = server.call("mock", &json!({})).unwrap();
         assert!(!result.is_error);
         assert_eq!(result.content.len(), 1);
@@ -307,9 +322,7 @@ mod tests {
 
     #[test]
     fn skill_tool_server_metadata_mode_call_unknown_skill_errors() {
-        let server = SkillToolServer::new(vec![
-            make_desc("known", "1.0.0", "Known", &[], "test"),
-        ]);
+        let server = SkillToolServer::new(vec![make_desc("known", "1.0.0", "Known", &[], "test")]);
         let err = server.call("nope", &json!({})).unwrap_err();
         assert_eq!(err.code, TOOL_NOT_FOUND);
         assert!(err.message.contains("nope"));
@@ -318,7 +331,13 @@ mod tests {
     #[test]
     fn skill_tool_server_with_handler_delegates_call() {
         let server = SkillToolServer::with_handler(
-            vec![make_desc("delegated", "1.0.0", "Delegated skill", &[], "test")],
+            vec![make_desc(
+                "delegated",
+                "1.0.0",
+                "Delegated skill",
+                &[],
+                "test",
+            )],
             Arc::new(EchoHandler),
         );
         let result = server.call("delegated", &json!({"x": 1})).unwrap();
@@ -335,7 +354,13 @@ mod tests {
     #[test]
     fn skill_tool_server_handler_can_fail() {
         let server = SkillToolServer::with_handler(
-            vec![make_desc("always-fail", "1.0.0", "Failing skill", &[], "test")],
+            vec![make_desc(
+                "always-fail",
+                "1.0.0",
+                "Failing skill",
+                &[],
+                "test",
+            )],
             Arc::new(AlwaysFailHandler),
         );
         let err = server.call("always-fail", &json!({})).unwrap_err();

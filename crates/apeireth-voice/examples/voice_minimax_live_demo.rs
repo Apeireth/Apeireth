@@ -42,7 +42,9 @@
 //! - **O-3 干到底**: 1 文件覆盖 TTS 真接 3 用例 (英文 / 中文 / 自定义 voice)
 //! - **O-5 不假装**: 失败路径如实返 `MiniMaxError::*`, 不假装成功
 
-use apeireth_voice::minimax_live::{MiniMaxError, MiniMaxLive, MINIMAX_DEFAULT_TTS_MODEL, MINIMAX_DEFAULT_VOICE_ID};
+use apeireth_voice::minimax_live::{
+    MiniMaxError, MiniMaxLive, MINIMAX_DEFAULT_TTS_MODEL, MINIMAX_DEFAULT_VOICE_ID,
+};
 use std::time::Instant;
 
 #[tokio::main(flavor = "current_thread")]
@@ -121,7 +123,10 @@ async fn main() -> anyhow::Result<()> {
     match audio_empty {
         Ok(_) => println!("--- TTS call #3 (empty) UNEXPECTED OK ---\n"),
         Err(MiniMaxError::InvalidParams(msg)) => {
-            println!("--- TTS call #3 (empty) ===> InvalidParams: {msg} ({} ms)", elapsed_empty.as_millis());
+            println!(
+                "--- TTS call #3 (empty) ===> InvalidParams: {msg} ({} ms)",
+                elapsed_empty.as_millis()
+            );
             println!("(expected: empty text rejected without HTTP call)\n");
         }
         Err(e) => println!("--- TTS call #3 (empty) ===> {:?}\n", e),

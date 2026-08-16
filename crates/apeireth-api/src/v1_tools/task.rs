@@ -70,7 +70,9 @@ pub fn validate_email(email: &str) -> Result<(), String> {
     if email.len() > 254 {
         return Err(format!("email too long ({} > 254)", email.len()));
     }
-    let at_pos = email.find('@').ok_or_else(|| format!("email missing '@': {email}"))?;
+    let at_pos = email
+        .find('@')
+        .ok_or_else(|| format!("email missing '@': {email}"))?;
     if at_pos == 0 {
         return Err(format!("email local part empty: {email}"));
     }
@@ -212,10 +214,14 @@ pub fn validate_due_date(d: &str) -> Result<(), String> {
     let month: u32 = d[5..7].parse().unwrap_or(0);
     let day: u32 = d[8..10].parse().unwrap_or(0);
     if !(1..=12).contains(&month) {
-        return Err(format!("K-1 violation: due_date month {month} not 01-12: '{d}'"));
+        return Err(format!(
+            "K-1 violation: due_date month {month} not 01-12: '{d}'"
+        ));
     }
     if !(1..=31).contains(&day) {
-        return Err(format!("K-1 violation: due_date day {day} not 01-31: '{d}'"));
+        return Err(format!(
+            "K-1 violation: due_date day {day} not 01-31: '{d}'"
+        ));
     }
     Ok(())
 }
@@ -283,7 +289,9 @@ impl TaskTool {
             .iter()
             .filter(|t| {
                 filter_status.map(|s| t.status == s).unwrap_or(true)
-                    && filter_priority.map(|p| i64::from(t.priority) == p).unwrap_or(true)
+                    && filter_priority
+                        .map(|p| i64::from(t.priority) == p)
+                        .unwrap_or(true)
                     && filter_assignee.map(|a| t.assignee == a).unwrap_or(true)
             })
             .collect();
@@ -509,9 +517,7 @@ pub use super::invoke_by_name as invoke;
 // ============================================================
 
 /// **6 actions** (per R20 阶段 4 任务规范)
-pub const TASK_ACTIONS: [&str; 6] = [
-    "list", "create", "update", "delete", "get", "complete",
-];
+pub const TASK_ACTIONS: [&str; 6] = ["list", "create", "update", "delete", "get", "complete"];
 
 /// **5 K-1 强校验** (per R20 阶段 4 任务规范)
 pub const TASK_K1_CHECKS: [&str; 5] = [
@@ -613,17 +619,23 @@ mod task_tests {
         let t = TaskTool::new();
         // title 空
         let r = t.call(json!({"action": "create", "title": ""})).await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("title"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("title"));
         // status 不在枚举
         let r = t
             .call(json!({"action": "create", "title": "x", "status": "weird"}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("status"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("status"));
         // priority 越界
         let r = t
             .call(json!({"action": "create", "title": "x", "priority": 99}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("priority"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("priority"));
         // priority 负
         let r = t
             .call(json!({"action": "create", "title": "x", "priority": -1}))
@@ -639,7 +651,9 @@ mod task_tests {
         let r = t
             .call(json!({"action": "create", "title": "x", "due_date": "20261231"}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("due_date"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("due_date"));
         // 月超界
         let r = t
             .call(json!({"action": "create", "title": "x", "due_date": "2026-13-01"}))
@@ -756,9 +770,18 @@ mod task_tests {
         let t = TaskTool::new();
         assert!(t.call(json!({})).await.is_err());
         assert!(t.call(json!({"action": "get"})).await.is_err());
-        assert!(t.call(json!({"action": "update", "title": "x"})).await.is_err());
-        assert!(t.call(json!({"action": "delete", "id": "x"})).await.is_err());
-        assert!(t.call(json!({"action": "complete", "id": "x"})).await.is_err());
+        assert!(t
+            .call(json!({"action": "update", "title": "x"}))
+            .await
+            .is_err());
+        assert!(t
+            .call(json!({"action": "delete", "id": "x"}))
+            .await
+            .is_err());
+        assert!(t
+            .call(json!({"action": "complete", "id": "x"}))
+            .await
+            .is_err());
 
         // K-1 校验函数
         assert!(validate_status("pending").is_ok());

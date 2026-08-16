@@ -3,8 +3,8 @@
 //! Demonstrates the R154 graph / traversal / query modules of apeireth-graph-primitive.
 
 use apeireth_graph_primitive::{
-    classify, classify_pair, query::count_by_kind, query::NodeQuery,
-    Relation, RelationGraph, RelationKind, RelationRegistry,
+    classify, classify_pair, query::count_by_kind, query::NodeQuery, Relation, RelationGraph,
+    RelationKind, RelationRegistry,
 };
 
 fn main() {
@@ -17,7 +17,9 @@ fn main() {
     registry.register(Relation::new_embedding("consciousness", "reflection").unwrap());
     registry.register(Relation::new_self_relation("agent_main").unwrap());
     registry.register(
-        Relation::new_symbiosis("perception", "memory").unwrap().with_note("shared buffer"),
+        Relation::new_symbiosis("perception", "memory")
+            .unwrap()
+            .with_note("shared buffer"),
     );
 
     println!("Registry has {} relations", registry.len());
@@ -27,7 +29,11 @@ fn main() {
 
     // Step 2: Convert to graph (R154 new feature)
     let graph = RelationGraph::from(&registry);
-    println!("\nGraph has {} nodes, {} edges", graph.node_count(), graph.edge_count());
+    println!(
+        "\nGraph has {} nodes, {} edges",
+        graph.node_count(),
+        graph.edge_count()
+    );
 
     // Step 3: BFS traversal from "perception"
     println!("\nBFS from `perception` (max depth 3):");

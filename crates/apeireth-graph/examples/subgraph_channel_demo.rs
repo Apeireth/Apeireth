@@ -50,13 +50,17 @@ fn demo_channel_4_types() {
     binop.write(json!(20.0)).unwrap();
 
     // 读
+    println!("LastValue: {}", last_value.read().unwrap().unwrap());
     println!(
-        "LastValue: {}",
-        last_value.read().unwrap().unwrap()
+        "Topic: [{}, {}]",
+        topic.read().unwrap().unwrap(),
+        topic.read().unwrap().unwrap()
     );
-    println!("Topic: [{}, {}]", topic.read().unwrap().unwrap(), topic.read().unwrap().unwrap());
     println!("NamedBarrier: {}", barrier.read().unwrap().unwrap());
-    println!("BinaryOperatorValue(Add): {}", binop.read().unwrap().unwrap());
+    println!(
+        "BinaryOperatorValue(Add): {}",
+        binop.read().unwrap().unwrap()
+    );
 
     println!();
 }
@@ -105,7 +109,10 @@ fn demo_subgraph_nested() -> Result<()> {
         .unwrap();
     let final_state = rt.block_on(parent.execute(State::new()));
     let final_state = final_state?;
-    println!("父 graph execution_order: {:?}", final_state.execution_order);
+    println!(
+        "父 graph execution_order: {:?}",
+        final_state.execution_order
+    );
     println!("父 graph trace: {:?}", final_state.get("trace"));
 
     Ok(())

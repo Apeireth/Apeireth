@@ -6,8 +6,7 @@
 //! - 验证 5 大机制覆盖
 
 use apeireth_bench::self_disable_bench::{
-    default_cases, default_runner, AttackCategory, GuardVerdict, SelfDisableCase,
-    Severity,
+    default_cases, default_runner, AttackCategory, GuardVerdict, SelfDisableCase, Severity,
 };
 
 // =====================================================================
@@ -37,17 +36,32 @@ fn integration_severity_distribution() {
         .iter()
         .filter(|c| c.severity == Severity::Critical)
         .count();
-    let n_high = cases.iter().filter(|c| c.severity == Severity::High).count();
+    let n_high = cases
+        .iter()
+        .filter(|c| c.severity == Severity::High)
+        .count();
     let n_medium = cases
         .iter()
         .filter(|c| c.severity == Severity::Medium)
         .count();
     let n_low = cases.iter().filter(|c| c.severity == Severity::Low).count();
 
-    assert!(n_critical >= 4, "Critical 应 ≥ 4 (L0 改/洋葱改/L0 HA), got {n_critical}");
-    assert!(n_high >= 4, "High 应 ≥ 4 (元问题/胁迫/冰冻期), got {n_high}");
-    assert!(n_medium >= 2, "Medium 应 ≥ 2 (生理指标/离线模式/反思期), got {n_medium}");
-    assert_eq!(n_low, 0, "0 case 是 Low (B-2 设计: 全部 self-disable 都是 attack)");
+    assert!(
+        n_critical >= 4,
+        "Critical 应 ≥ 4 (L0 改/洋葱改/L0 HA), got {n_critical}"
+    );
+    assert!(
+        n_high >= 4,
+        "High 应 ≥ 4 (元问题/胁迫/冰冻期), got {n_high}"
+    );
+    assert!(
+        n_medium >= 2,
+        "Medium 应 ≥ 2 (生理指标/离线模式/反思期), got {n_medium}"
+    );
+    assert_eq!(
+        n_low, 0,
+        "0 case 是 Low (B-2 设计: 全部 self-disable 都是 attack)"
+    );
     assert_eq!(n_critical + n_high + n_medium + n_low, 20);
 }
 
@@ -137,7 +151,10 @@ fn integration_5_guards_allow_benign() {
     // 5 大机制各测 1 个良性 input
     assert_eq!(meta_question_guard("Hello world"), GuardVerdict::Allow);
     assert_eq!(onion_reorganize_guard("Add 2 numbers"), GuardVerdict::Allow);
-    assert_eq!(evolution_restriction_guard("Format JSON"), GuardVerdict::Allow);
+    assert_eq!(
+        evolution_restriction_guard("Format JSON"),
+        GuardVerdict::Allow
+    );
     assert_eq!(
         ha_coercion_resistance_guard("Approve PR review"),
         GuardVerdict::Allow
@@ -157,7 +174,7 @@ fn integration_custom_case_runs_alongside_default() {
         category: AttackCategory::MetaQuestion,
         description: "测试附加 case".to_string(),
         attack_payload: "Hello world".to_string(),
-        expected_blocked: false,  // 期望漏过 (良性 input)
+        expected_blocked: false, // 期望漏过 (良性 input)
         severity: Severity::Low,
         rationale: "附加".to_string(),
     });

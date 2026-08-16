@@ -37,10 +37,14 @@ pub struct BilibiliFetcher {
 
 impl BilibiliFetcher {
     pub fn new() -> Self {
-        Self { api_base: "https://api.bilibili.com".into() }
+        Self {
+            api_base: "https://api.bilibili.com".into(),
+        }
     }
     pub fn with_base(api_base: impl Into<String>) -> Self {
-        Self { api_base: api_base.into() }
+        Self {
+            api_base: api_base.into(),
+        }
     }
 
     /// BV 号解析: BV1xx411c7XX -> API 调用 wbi 签名 (真实调用由 host 注入)
@@ -93,7 +97,10 @@ impl BilibiliFetcher {
     }
 
     pub fn api_url_for_bvid(bvid: &str) -> String {
-        format!("https://api.bilibili.com/x/web-interface/view?bvid={}", bvid)
+        format!(
+            "https://api.bilibili.com/x/web-interface/view?bvid={}",
+            bvid
+        )
     }
 
     pub fn short_link_url(bvid: &str) -> String {
@@ -102,7 +109,9 @@ impl BilibiliFetcher {
 }
 
 impl Default for BilibiliFetcher {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// BV 号 -> AV 号 (经典 XOR 算法,2023-03 后变更,留作参考)
@@ -134,7 +143,10 @@ mod tests {
 
     #[test]
     fn short_link_strips_prefix() {
-        assert_eq!(BilibiliFetcher::short_link_url("BV1xx411c7mD"), "https://b23.tv/xx411c7mD");
+        assert_eq!(
+            BilibiliFetcher::short_link_url("BV1xx411c7mD"),
+            "https://b23.tv/xx411c7mD"
+        );
     }
 
     #[test]
@@ -145,8 +157,14 @@ mod tests {
     #[test]
     fn invalid_bvid_rejected() {
         let f = BilibiliFetcher::new();
-        assert!(matches!(f.fetch_info("AV123"), Err(BilibiliError::InvalidId(_))));
-        assert!(matches!(f.fetch_info("BV"), Err(BilibiliError::InvalidId(_))));
+        assert!(matches!(
+            f.fetch_info("AV123"),
+            Err(BilibiliError::InvalidId(_))
+        ));
+        assert!(matches!(
+            f.fetch_info("BV"),
+            Err(BilibiliError::InvalidId(_))
+        ));
     }
 
     #[test]

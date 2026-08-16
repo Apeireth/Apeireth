@@ -61,18 +61,18 @@ pub const LOCKED_CRATES: &[&str] = &[
 /// **2026-08-15 docs 归位**: stage4 历史文档随 document-relocation-map.md 进 `_history/audits-reviews/`,
 /// 本常量同步更新 (归位只动位置与索引, 索引在此).
 pub const EIGHT_PROMISES_SOURCE_FILES: &[&str] = &[
-    "docs/conventions/10-locked.md",                  // 1:1 替代 APEIRETH-CONVENTIONS.md
-    "docs/conventions/09-anchor.md",                  // 6 哲学锚
-    "docs/conventions/11-baseline.md",                // baseline 3 值
-    "docs/glossary/08-5-no-fake.md",                  // 5 不假装 (替代 5-no-fake 占位)
-    "docs/glossary/01-north-star.md",                 // S-1 北极星
-    "docs/glossary/02-double-onion.md",               // 双洋葱
-    "docs/glossary/15-9-phase-lifecycle.md",          // 9 器官 (替代 START-CONSTRUCTION.md)
+    "docs/conventions/10-locked.md",   // 1:1 替代 APEIRETH-CONVENTIONS.md
+    "docs/conventions/09-anchor.md",   // 6 哲学锚
+    "docs/conventions/11-baseline.md", // baseline 3 值
+    "docs/glossary/08-5-no-fake.md",   // 5 不假装 (替代 5-no-fake 占位)
+    "docs/glossary/01-north-star.md",  // S-1 北极星
+    "docs/glossary/02-double-onion.md", // 双洋葱
+    "docs/glossary/15-9-phase-lifecycle.md", // 9 器官 (替代 START-CONSTRUCTION.md)
     "docs/stage4/_history/audits-reviews/8-locked-unified-2026-08-05.md", // 8 项统一文档 (归位后)
 ];
 
 /// 期望 workspace version
-pub const EXPECTED_WORKSPACE_VERSION: &str = "1.2.0";  // R125 B2 1.1.0 → 1.2.0 (per 10-locked.md + decision-22 + decision-33)
+pub const EXPECTED_WORKSPACE_VERSION: &str = "1.2.0"; // R125 B2 1.1.0 → 1.2.0 (per 10-locked.md + decision-22 + decision-33)
 
 /// 错误 sandbox 路径前缀 (per task spec §严禁)
 pub const FORBIDDEN_SANDBOX_PREFIXES: &[&str] = &[
@@ -130,12 +130,13 @@ pub fn test_workspace_no_sandbox_path_writes(workspace_root: &Path) -> E2EResult
     // 验 .gitignore 包含 minimax-agent-cn 排除
     let gitignore = workspace_root.join(".gitignore");
     if gitignore.exists() {
-        let content = std::fs::read_to_string(&gitignore).map_err(|e| E2EError::WorkspaceAudit {
-            dimension: "gitignore_read".into(),
-            expected: "readable".into(),
-            actual: e.to_string(),
-            context: "test_workspace_no_sandbox_path_writes".into(),
-        })?;
+        let content =
+            std::fs::read_to_string(&gitignore).map_err(|e| E2EError::WorkspaceAudit {
+                dimension: "gitignore_read".into(),
+                expected: "readable".into(),
+                actual: e.to_string(),
+                context: "test_workspace_no_sandbox_path_writes".into(),
+            })?;
         for forbidden in FORBIDDEN_SANDBOX_PREFIXES {
             if content.contains(forbidden) {
                 return Err(E2EError::WorkspaceAudit {

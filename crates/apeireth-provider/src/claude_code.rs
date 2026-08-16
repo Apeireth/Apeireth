@@ -25,7 +25,14 @@ impl ClaudeCodeProvider {
         Self {
             name: "claude-code",
             tools: vec![
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+                "Read",
+                "Write",
+                "Edit",
+                "Bash",
+                "Glob",
+                "Grep",
+                "WebSearch",
+                "WebFetch",
             ],
             model_kinds: vec!["claude-opus-4-5", "claude-sonnet-4-5", "claude-haiku-4-5"],
         }
@@ -40,7 +47,14 @@ impl Default for ClaudeCodeProvider {
 
 /// R35: 8 TOOL_WHITELIST (per R20 阶段 4 task spec §3)
 pub const TOOL_WHITELIST: [&str; 8] = [
-    "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Glob",
+    "Grep",
+    "WebSearch",
+    "WebFetch",
 ];
 
 /// R35: 5 K-1 强校验 (per R20 阶段 4 task spec §3)

@@ -222,7 +222,11 @@ pub struct Span {
 
 impl Span {
     /// 构造新 Span (root).
-    pub fn new(name: impl Into<String>, kind: SpanKind, context: TraceContext) -> TracingResult<Self> {
+    pub fn new(
+        name: impl Into<String>,
+        kind: SpanKind,
+        context: TraceContext,
+    ) -> TracingResult<Self> {
         context.validate()?;
         Ok(Self {
             context,
@@ -296,15 +300,11 @@ impl Span {
     /// 结束 span.
     pub fn end(&mut self) -> TracingResult<()> {
         if self.end_time_nanos != 0 {
-            return Err(TracingError::Internal(
-                "span already ended".into(),
-            ));
+            return Err(TracingError::Internal("span already ended".into()));
         }
         self.end_time_nanos = now_nanos();
         if self.end_time_nanos < self.start_time_nanos {
-            return Err(TracingError::Internal(
-                "end_time < start_time".into(),
-            ));
+            return Err(TracingError::Internal("end_time < start_time".into()));
         }
         Ok(())
     }
@@ -320,9 +320,8 @@ impl Span {
 
     /// 序列化为 JSON 字符串 (供 exporter 使用).
     pub fn to_json(&self) -> TracingResult<String> {
-        serde_json::to_string(self).map_err(|e| {
-            TracingError::Internal(format!("span serialize failed: {}", e))
-        })
+        serde_json::to_string(self)
+            .map_err(|e| TracingError::Internal(format!("span serialize failed: {}", e)))
     }
 
     /// 人类可读的起始时间.
@@ -474,7 +473,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(child.context.trace_id, parent.context.trace_id);
-        assert_eq!(child.parent_span_id.as_deref(), Some(parent.context.span_id.as_str()));
+        assert_eq!(
+            child.parent_span_id.as_deref(),
+            Some(parent.context.span_id.as_str())
+        );
     }
 
     #[test]

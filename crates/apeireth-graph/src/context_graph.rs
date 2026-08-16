@@ -218,7 +218,11 @@ impl ContextGraph {
     /// push 1 个 context node (自动 Append 链表尾, phase 升级 Init → Active)
     ///
     /// **0 装**: phase 自动 Init → Active, 跟 langgraph `Pregel` 节点追加 1:1
-    pub fn push(&self, key: impl Into<String>, value: serde_json::Value) -> Result<(), ContextError> {
+    pub fn push(
+        &self,
+        key: impl Into<String>,
+        value: serde_json::Value,
+    ) -> Result<(), ContextError> {
         let key = key.into();
         if self.contains(&key) {
             return Err(ContextError::DuplicateKey(key));
@@ -401,9 +405,13 @@ impl ContextStore for InMemoryContextStore {
             *c += 1;
             *c
         };
-        let id = format!("ctx-{}-{}-{}", snapshot.created_at_ms, snapshot.nodes.len(), counter);
-        write_or_panic(&self.snapshots)
-            .insert(id.clone(), snapshot.clone());
+        let id = format!(
+            "ctx-{}-{}-{}",
+            snapshot.created_at_ms,
+            snapshot.nodes.len(),
+            counter
+        );
+        write_or_panic(&self.snapshots).insert(id.clone(), snapshot.clone());
         Ok(id)
     }
 

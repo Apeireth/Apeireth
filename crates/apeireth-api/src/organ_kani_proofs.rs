@@ -40,4 +40,3 @@ fn r177_api_kani_01_timeout_positive() {
 fn r177_api_kani_02_retries_positive() {
     assert!(DEFAULT_MAX_RETRIES > 0);
 }
-

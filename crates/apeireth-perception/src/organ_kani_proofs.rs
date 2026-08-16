@@ -24,10 +24,18 @@ use crate::{
 fn r177_per_01_priority_clamped() {
     // 高于 1.0 应被 clamp 到 1.0
     let e_hi = PerceptionEvent::new(ChannelKind::Text, SignalSource::Cli, 5.0, "x");
-    assert!(e_hi.priority <= 1.0, "priority > 1.0 not clamped: {}", e_hi.priority);
+    assert!(
+        e_hi.priority <= 1.0,
+        "priority > 1.0 not clamped: {}",
+        e_hi.priority
+    );
     // 低于 0.0 应被 clamp 到 0.0
     let e_lo = PerceptionEvent::new(ChannelKind::Text, SignalSource::Cli, -2.0, "x");
-    assert!(e_lo.priority >= 0.0, "priority < 0.0 not clamped: {}", e_lo.priority);
+    assert!(
+        e_lo.priority >= 0.0,
+        "priority < 0.0 not clamped: {}",
+        e_lo.priority
+    );
     // 边界 0.0 与 1.0 应保持
     let e0 = PerceptionEvent::new(ChannelKind::Text, SignalSource::Cli, 0.0, "x");
     assert!((e0.priority - 0.0).abs() < 1e-9);
@@ -114,13 +122,8 @@ fn r177_per_07_pipeline_filters() {
     let ch = VisionChannel;
     let inputs: Vec<VisionInput> = (0..5)
         .map(|i| {
-            VisionInput::new(
-                100,
-                100,
-                SignalSource::Mcp,
-                Some(format!("ocr-{}", i)),
-            )
-            .with_priority_override(0.3 + 0.15 * i as f64)
+            VisionInput::new(100, 100, SignalSource::Mcp, Some(format!("ocr-{}", i)))
+                .with_priority_override(0.3 + 0.15 * i as f64)
         })
         .collect();
     let events_low = pipeline(&ch, inputs.clone(), 0.0);
@@ -143,11 +146,20 @@ fn r177_per_08_default_constants() {
 fn r177_per_09_all_channels_valid_event() {
     let text_ev = TextChannel.process(&TextInput::new("hi", SignalSource::Cli));
     let voice_ev = VoiceChannel.process(&VoiceInput::new("hi", SignalSource::Http, 0.5));
-    let vision_ev = VisionChannel.process(&VisionInput::new(10, 10, SignalSource::Mcp, Some("o".into())));
+    let vision_ev = VisionChannel.process(&VisionInput::new(
+        10,
+        10,
+        SignalSource::Mcp,
+        Some("o".into()),
+    ));
     let tactile_ev = TactileChannel.process(&TactileInput::new(0.3, SignalSource::Internal));
     let cmd_ev = CommandChannel.process(&CommandInput::new("/x", SignalSource::Cli));
     for ev in [&text_ev, &voice_ev, &vision_ev, &tactile_ev, &cmd_ev] {
-        assert!(validate_event(ev).is_ok(), "{:?} event failed validate", ev.channel);
+        assert!(
+            validate_event(ev).is_ok(),
+            "{:?} event failed validate",
+            ev.channel
+        );
         assert!(!ev.payload.is_empty(), "{:?} payload empty", ev.channel);
         assert!(ev.priority >= 0.0 && ev.priority <= 1.0);
     }
@@ -184,7 +196,12 @@ fn r177_per_kani_02_channel_kinds_distinct() {
     for i in 0..kinds.len() {
         for j in 0..kinds.len() {
             if i != j {
-                assert!(kinds[i] != kinds[j], "channel kinds not distinct at {} {}", i, j);
+                assert!(
+                    kinds[i] != kinds[j],
+                    "channel kinds not distinct at {} {}",
+                    i,
+                    j
+                );
             }
         }
     }

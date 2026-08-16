@@ -40,4 +40,3 @@ fn r177_gw_kani_01_modes_invariant() {
 fn r177_gw_kani_02_modules_invariant() {
     assert!(MODULES >= 1 && MODULES <= 20);
 }
-

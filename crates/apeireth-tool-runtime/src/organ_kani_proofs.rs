@@ -40,4 +40,3 @@ fn r177_tr_kani_01_timeout_positive() {
 fn r177_tr_kani_02_fuzzy_positive() {
     assert!(MAX_FUZZY_DISTANCE > 0);
 }
-

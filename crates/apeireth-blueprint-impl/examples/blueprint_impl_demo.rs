@@ -38,8 +38,8 @@ fn main() {
     // --- 2. risk 4 风险类 ---
     println!("[2/5] risk: K-1..K-4 4 风险类");
     let chain = default_risk_chain();
-    let k1 = K1Input::new("hello world", "sk-test1234", "gpt-4", "read")
-        .expect("K1Input must be valid");
+    let k1 =
+        K1Input::new("hello world", "sk-test1234", "gpt-4", "read").expect("K1Input must be valid");
     let k2 = K2Input::new("hello", vec!["fallback1".into(), "fallback2".into()]);
     let (k2_result, decision) = chain
         .run(&k1, &k2, "tool:bash", "exec")
@@ -71,7 +71,9 @@ fn main() {
 
     // --- 4. R-Measure 5 维 ---
     println!("[4/5] r_measure: R-1..R-5 5 维");
-    let samples = (0..100).map(|_| ActionSample::perfect()).collect::<Vec<_>>();
+    let samples = (0..100)
+        .map(|_| ActionSample::perfect())
+        .collect::<Vec<_>>();
     let r = RMeasureAll::from_samples(&samples);
     r.validate().expect("R-Measure must validate");
     println!("    R-1 直行率:    {}", r.r1_directness);
@@ -113,14 +115,8 @@ fn main() {
 
     // --- 总集成 ---
     println!("=== 总集成 (BlueprintPipeline) ===");
-    let report = run_full_pipeline(
-        decisions,
-        &samples,
-        &tasks,
-        &feedback,
-        &history,
-    )
-    .expect("full pipeline must succeed");
+    let report = run_full_pipeline(decisions, &samples, &tasks, &feedback, &history)
+        .expect("full pipeline must succeed");
     println!("    决策快照:     {}", report.decision_snapshot);
     println!(
         "    R-Measure:    {} (avg)",

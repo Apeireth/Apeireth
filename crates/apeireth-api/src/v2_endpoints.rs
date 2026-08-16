@@ -856,8 +856,9 @@ impl V2AgentManager {
 
     pub fn with_cache_size(cache_size: usize) -> Self {
         // invariant: cache_size.max(1) >= 1, so NonZeroUsize::new returns Some.
-        let cap = NonZeroUsize::new(cache_size.max(1))
-            .expect("invariant: cache_size.max(1) is at least 1, so NonZeroUsize::new returns Some");
+        let cap = NonZeroUsize::new(cache_size.max(1)).expect(
+            "invariant: cache_size.max(1) is at least 1, so NonZeroUsize::new returns Some",
+        );
         Self {
             agents: Mutex::new(HashMap::new()),
             aliases: Mutex::new(HashMap::new()),
@@ -1003,11 +1004,15 @@ impl V2OrgansProvider {
 
 /// R30 U8: SQLite audit 缓存 (lazy-init OnceLock, 多线程安全共享一个连接)
 fn audit_db() -> &'static std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>> {
-    static DB: std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>> = std::sync::OnceLock::new();
-    static CELL: std::sync::OnceLock<std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>>> = std::sync::OnceLock::new();
+    static DB: std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>> =
+        std::sync::OnceLock::new();
+    static CELL: std::sync::OnceLock<
+        std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>>,
+    > = std::sync::OnceLock::new();
     CELL.get_or_init(|| std::sync::OnceLock::new());
     // 上面 CELL 只是占位, 下面 DB 才是真缓存
-    static DB2: std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>> = std::sync::OnceLock::new();
+    static DB2: std::sync::OnceLock<std::sync::Arc<crate::audit_sqlite::AuditDb>> =
+        std::sync::OnceLock::new();
     &DB2
 }
 
@@ -1018,9 +1023,9 @@ fn get_audit_db() -> std::sync::Arc<crate::audit_sqlite::AuditDb> {
             .ok()
             .map(std::path::PathBuf::from)
             .or_else(|| {
-                std::env::var("USERPROFILE")
-                    .ok()
-                    .map(|h| std::path::PathBuf::from(format!("{}/.apeireth/daemon-audit.sqlite", h)))
+                std::env::var("USERPROFILE").ok().map(|h| {
+                    std::path::PathBuf::from(format!("{}/.apeireth/daemon-audit.sqlite", h))
+                })
             })
             .unwrap_or_else(|| std::path::PathBuf::from("/tmp/daemon-audit.sqlite"));
         match crate::audit_sqlite::AuditDb::open(&path) {
@@ -1028,12 +1033,18 @@ fn get_audit_db() -> std::sync::Arc<crate::audit_sqlite::AuditDb> {
             Err(e) => {
                 eprintln!("[apeireth] audit sqlite open failed: {e}, falling back to no-op");
                 // 用 /dev/null 等价 (tempdir 临时文件) 避免再次 open 失败
-                let tmp = std::env::temp_dir().join(format!("apeireth_audit_fallback_{}.sqlite", std::process::id()));
+                let tmp = std::env::temp_dir().join(format!(
+                    "apeireth_audit_fallback_{}.sqlite",
+                    std::process::id()
+                ));
                 let _ = std::fs::remove_file(&tmp);
-                std::sync::Arc::new(crate::audit_sqlite::AuditDb::open(&tmp).expect("fallback open"))
+                std::sync::Arc::new(
+                    crate::audit_sqlite::AuditDb::open(&tmp).expect("fallback open"),
+                )
             }
         }
-    }).clone()
+    })
+    .clone()
 }
 
 fn audit_record(name: &str, args: &serde_json::Value, ok: bool, duration_ms: u128) {
@@ -1042,12 +1053,11 @@ fn audit_record(name: &str, args: &serde_json::Value, ok: bool, duration_ms: u12
     // 写 SQLite (主)
     let _ = get_audit_db().insert(&ts, name, ok, duration_ms as u64, args);
     // 保留 JSONL 写穿 (兼容老 consumer / 备份)
-    let path = std::env::var("APEREIRETH_DAEMON_AUDIT")
-        .unwrap_or_else(|_| {
-            std::env::var("USERPROFILE")
-                .map(|h| format!("{}/.apeireth/daemon-audit.jsonl", h))
-                .unwrap_or_else(|_| "/tmp/daemon-audit.jsonl".into())
-        });
+    let path = std::env::var("APEREIRETH_DAEMON_AUDIT").unwrap_or_else(|_| {
+        std::env::var("USERPROFILE")
+            .map(|h| format!("{}/.apeireth/daemon-audit.jsonl", h))
+            .unwrap_or_else(|_| "/tmp/daemon-audit.jsonl".into())
+    });
     if let Some(parent) = std::path::Path::new(&path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -1059,7 +1069,11 @@ fn audit_record(name: &str, args: &serde_json::Value, ok: bool, duration_ms: u12
         "duration_ms": duration_ms,
     });
     if let Ok(s) = serde_json::to_string(&entry) {
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+        {
             let _ = writeln!(f, "{}", s);
         }
     }
@@ -1072,13 +1086,14 @@ async fn tools_recent() -> Result<Json<Value>, (StatusCode, String)> {
         Ok(arr) if arr.as_array().map(|a| !a.is_empty()).unwrap_or(false) => return Ok(Json(arr)),
         _ => {} // 走 JSONL fallback
     }
-    let path = std::env::var("APEREIRETH_DAEMON_AUDIT")
-        .unwrap_or_else(|_| {
-            std::env::var("USERPROFILE")
-                .map(|h| format!("{}/.apeireth/daemon-audit.jsonl", h))
-                .unwrap_or_else(|_| "/tmp/daemon-audit.jsonl".into())
-        });
-    let Ok(raw) = std::fs::read_to_string(&path) else { return Ok(Json(serde_json::json!([]))) };
+    let path = std::env::var("APEREIRETH_DAEMON_AUDIT").unwrap_or_else(|_| {
+        std::env::var("USERPROFILE")
+            .map(|h| format!("{}/.apeireth/daemon-audit.jsonl", h))
+            .unwrap_or_else(|_| "/tmp/daemon-audit.jsonl".into())
+    });
+    let Ok(raw) = std::fs::read_to_string(&path) else {
+        return Ok(Json(serde_json::json!([])));
+    };
     let mut items: Vec<serde_json::Value> = Vec::new();
     for line in raw.lines().rev().take(20) {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(line) {
@@ -1090,7 +1105,8 @@ async fn tools_recent() -> Result<Json<Value>, (StatusCode, String)> {
 
 /// R30 U8: 审计统计 (total / ok / fail / by_tool)
 async fn audit_stats() -> Result<Json<Value>, (StatusCode, String)> {
-    get_audit_db().stats()
+    get_audit_db()
+        .stats()
         .map(Json)
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))
 }
@@ -1243,7 +1259,8 @@ async fn tools_list(
                 let axes_v = serde_json::to_value(t.axes()).unwrap_or(Value::Null);
                 // R30 U13: 走 apeireth-tool-registry::token_budget 真计算 (替代 len/4 启发式)
                 let axes_str = serde_json::to_string(&axes_v).unwrap_or_default();
-                let tok_est = apeireth_tool_registry::token_budget::estimate_token_count(&axes_str) as usize;
+                let tok_est =
+                    apeireth_tool_registry::token_budget::estimate_token_count(&axes_str) as usize;
                 ToolListItem {
                     name: t.name().to_string(),
                     kind: format!("{:?}", kind),
@@ -1741,9 +1758,12 @@ async fn sovereignty_status(
         .sovereignty
         .get()
         .ok_or_else(|| service_not_ready("sovereignty"))?;
-    let g = guard
-        .lock()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("sovereignty mutex poisoned: {e}")))?;
+    let g = guard.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sovereignty mutex poisoned: {e}"),
+        )
+    })?;
     Ok(Json(SovereigntyStatusResponse {
         is_armed: g.is_armed,
         trigger_count: g.record_count(),
@@ -1773,9 +1793,12 @@ async fn sovereignty_attack(
         .sovereignty
         .get()
         .ok_or_else(|| service_not_ready("sovereignty"))?;
-    let mut g = guard
-        .lock()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("sovereignty mutex poisoned: {e}")))?;
+    let mut g = guard.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sovereignty mutex poisoned: {e}"),
+        )
+    })?;
     let now_ms = chrono::Utc::now().timestamp_millis();
     let ctx = req.context.unwrap_or_else(|| "http-attack".to_string());
     let check = match req.mechanism.as_str() {
@@ -1815,9 +1838,12 @@ async fn sovereignty_rearm(
         .sovereignty
         .get()
         .ok_or_else(|| service_not_ready("sovereignty"))?;
-    let mut g = guard
-        .lock()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("sovereignty mutex poisoned: {e}")))?;
+    let mut g = guard.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sovereignty mutex poisoned: {e}"),
+        )
+    })?;
     let prev = g.is_armed;
     g.rearm();
     Ok(Json(SovereigntyRearmResponse {
@@ -1889,80 +1915,142 @@ pub async fn guard(
         .sovereignty
         .get()
         .ok_or_else(|| service_not_ready("sovereignty"))?;
-    let mut g = guard_arc
-        .lock()
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("sovereignty mutex poisoned: {e}")))?;
+    let mut g = guard_arc.lock().map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("sovereignty mutex poisoned: {e}"),
+        )
+    })?;
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let ctx = req.context.clone().unwrap_or_else(|| format!("guard:{}", req.action));
+    let ctx = req
+        .context
+        .clone()
+        .unwrap_or_else(|| format!("guard:{}", req.action));
     let to_run: Vec<&str> = match req.action.as_str() {
         "tool.invoke:reverse" => vec!["no_reverse"],
         "tool.invoke:bypass" => vec!["no_bypass"],
         "tool.invoke:patch" => vec!["no_patch"],
         "risk:downgrade" => vec!["no_degrade"],
         "audit:hide" => vec!["no_hide"],
-        "*" | "all" => vec!["no_degrade", "no_patch", "no_bypass", "no_reverse", "no_hide"],
+        "*" | "all" => vec![
+            "no_degrade",
+            "no_patch",
+            "no_bypass",
+            "no_reverse",
+            "no_hide",
+        ],
         _ => vec!["no_bypass"],
     };
-    let original = req.params.get("original").and_then(|v| v.as_str()).unwrap_or("low");
-    let proposed = req.params.get("proposed").and_then(|v| v.as_str()).unwrap_or("");
-    let rule = req.params.get("rule").and_then(|v| v.as_str()).unwrap_or("principle_keys_count");
-    let token = req.params.get("token").and_then(|v| v.as_str()).unwrap_or("");
-    let trigger_id = req.params.get("trigger_id").and_then(|v| v.as_str()).unwrap_or("sd-999999");
-    let window_id = req.params.get("window_id").and_then(|v| v.as_str()).unwrap_or("audit-window-001");
+    let original = req
+        .params
+        .get("original")
+        .and_then(|v| v.as_str())
+        .unwrap_or("low");
+    let proposed = req
+        .params
+        .get("proposed")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let rule = req
+        .params
+        .get("rule")
+        .and_then(|v| v.as_str())
+        .unwrap_or("principle_keys_count");
+    let token = req
+        .params
+        .get("token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let trigger_id = req
+        .params
+        .get("trigger_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("sd-999999");
+    let window_id = req
+        .params
+        .get("window_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("audit-window-001");
     let skip = !g.is_armed;
     let mut details = Vec::with_capacity(to_run.len());
     let mut verdict_cache_keys: Vec<String> = Vec::with_capacity(7);
     verdict_cache_keys.push(format!("action={}", req.action));
-    if let Some(t) = &req.target { verdict_cache_keys.push(format!("target={}", t)); }
-    if let Some(a) = &req.actor { verdict_cache_keys.push(format!("actor={}", a)); }
+    if let Some(t) = &req.target {
+        verdict_cache_keys.push(format!("target={}", t));
+    }
+    if let Some(a) = &req.actor {
+        verdict_cache_keys.push(format!("actor={}", a));
+    }
     for m in &to_run {
         let mechanism_id: u8;
         let chinese_name: &str;
         let (result, trigger_id_opt) = match *m {
             "no_degrade" => {
-                mechanism_id = 1; chinese_name = "不可降级";
-                if skip { ("skip".to_string(), None) }
-                else { match g.check_no_degrade(original, proposed, &ctx, now_ms) {
-                    SelfDisableCheck::Pass => ("pass".to_string(), None),
-                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
-                }}
+                mechanism_id = 1;
+                chinese_name = "不可降级";
+                if skip {
+                    ("skip".to_string(), None)
+                } else {
+                    match g.check_no_degrade(original, proposed, &ctx, now_ms) {
+                        SelfDisableCheck::Pass => ("pass".to_string(), None),
+                        SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                    }
+                }
             }
             "no_patch" => {
-                mechanism_id = 2; chinese_name = "不可patch";
-                if skip { ("skip".to_string(), None) }
-                else { match g.check_no_patch(rule, 0, &ctx, now_ms) {
-                    SelfDisableCheck::Pass => ("pass".to_string(), None),
-                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
-                }}
+                mechanism_id = 2;
+                chinese_name = "不可patch";
+                if skip {
+                    ("skip".to_string(), None)
+                } else {
+                    match g.check_no_patch(rule, 0, &ctx, now_ms) {
+                        SelfDisableCheck::Pass => ("pass".to_string(), None),
+                        SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                    }
+                }
             }
             "no_bypass" => {
-                mechanism_id = 3; chinese_name = "不可绕过";
-                if skip { ("skip".to_string(), None) }
-                else { match g.check_no_bypass(token, !token.is_empty(), &ctx, now_ms) {
-                    SelfDisableCheck::Pass => ("pass".to_string(), None),
-                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
-                }}
+                mechanism_id = 3;
+                chinese_name = "不可绕过";
+                if skip {
+                    ("skip".to_string(), None)
+                } else {
+                    match g.check_no_bypass(token, !token.is_empty(), &ctx, now_ms) {
+                        SelfDisableCheck::Pass => ("pass".to_string(), None),
+                        SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                    }
+                }
             }
             "no_reverse" => {
-                mechanism_id = 4; chinese_name = "不可逆转";
-                if skip { ("skip".to_string(), None) }
-                else { match g.check_no_reverse(trigger_id, &ctx, now_ms) {
-                    SelfDisableCheck::Pass => ("pass".to_string(), None),
-                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
-                }}
+                mechanism_id = 4;
+                chinese_name = "不可逆转";
+                if skip {
+                    ("skip".to_string(), None)
+                } else {
+                    match g.check_no_reverse(trigger_id, &ctx, now_ms) {
+                        SelfDisableCheck::Pass => ("pass".to_string(), None),
+                        SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                    }
+                }
             }
             "no_hide" => {
-                mechanism_id = 5; chinese_name = "不可隐藏";
-                if skip { ("skip".to_string(), None) }
-                else { match g.check_no_hide(window_id, &ctx, now_ms) {
-                    SelfDisableCheck::Pass => ("pass".to_string(), None),
-                    SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
-                }}
+                mechanism_id = 5;
+                chinese_name = "不可隐藏";
+                if skip {
+                    ("skip".to_string(), None)
+                } else {
+                    match g.check_no_hide(window_id, &ctx, now_ms) {
+                        SelfDisableCheck::Pass => ("pass".to_string(), None),
+                        SelfDisableCheck::Triggered(r) => ("fail".to_string(), Some(r.trigger_id)),
+                    }
+                }
             }
             _ => return Err((StatusCode::BAD_REQUEST, format!("unknown mechanism '{m}'"))),
         };
         if result == "fail" {
-            if let Some(tid) = &trigger_id_opt { verdict_cache_keys.push(format!("triggered:{tid}")); }
+            if let Some(tid) = &trigger_id_opt {
+                verdict_cache_keys.push(format!("triggered:{tid}"));
+            }
         }
         details.push(GuardCheckDetail {
             mechanism: m.to_string(),
@@ -1977,12 +2065,25 @@ pub async fn guard(
         ("Allow".to_string(), "已解除安装(不可续守)".to_string())
     } else if any_fail {
         let count = details.iter().filter(|d| d.result == "fail").count();
-        ("Deny".to_string(), format!("触发 {count} 个 Self-Disable 机制"))
+        (
+            "Deny".to_string(),
+            format!("触发 {count} 个 Self-Disable 机制"),
+        )
     } else {
-        ("Allow".to_string(), format!("全部 {} 个机制均通过", details.len()))
+        (
+            "Allow".to_string(),
+            format!("全部 {} 个机制均通过", details.len()),
+        )
     };
     let armed = g.is_armed;
-    Ok(Json(GuardResponse { verdict, reason, checks: details, verdict_cache_keys, timestamp_ms: now_ms, armed }))
+    Ok(Json(GuardResponse {
+        verdict,
+        reason,
+        checks: details,
+        verdict_cache_keys,
+        timestamp_ms: now_ms,
+        armed,
+    }))
 }
 
 async fn agent_aliases(
@@ -2643,7 +2744,10 @@ mod tests {
         assert_eq!(r.checks[0].result, "fail");
         assert_eq!(r.checks[0].mechanism_id, 3);
         assert!(r.checks[0].trigger_id.is_some());
-        assert!(r.verdict_cache_keys.iter().any(|k| k.starts_with("triggered:")));
+        assert!(r
+            .verdict_cache_keys
+            .iter()
+            .any(|k| k.starts_with("triggered:")));
     }
 
     #[tokio::test]
@@ -2661,7 +2765,9 @@ mod tests {
         let r = guard(State(Arc::new(state)), Json(req)).await.unwrap().0;
         assert_eq!(r.verdict, "Allow");
         assert_eq!(r.armed, false);
-        for c in &r.checks { assert_eq!(c.result, "skip"); }
+        for c in &r.checks {
+            assert_eq!(c.result, "skip");
+        }
     }
 
     #[tokio::test]
@@ -2686,8 +2792,19 @@ mod tests {
         assert_eq!(r.verdict, "Deny");
         assert_eq!(r.checks.len(), 5);
         let mechanisms: Vec<&str> = r.checks.iter().map(|c| c.mechanism.as_str()).collect();
-        assert_eq!(mechanisms, vec!["no_degrade", "no_patch", "no_bypass", "no_reverse", "no_hide"]);
-        for c in &r.checks { assert_eq!(c.result, "fail"); }
+        assert_eq!(
+            mechanisms,
+            vec![
+                "no_degrade",
+                "no_patch",
+                "no_bypass",
+                "no_reverse",
+                "no_hide"
+            ]
+        );
+        for c in &r.checks {
+            assert_eq!(c.result, "fail");
+        }
     }
 
     #[tokio::test]

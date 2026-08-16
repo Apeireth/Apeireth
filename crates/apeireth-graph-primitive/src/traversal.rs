@@ -98,12 +98,7 @@ impl<'g> BfsIter<'g> {
                     .iter()
                     .map(|e| e.to.clone())
                     .collect();
-                n.extend(
-                    self.graph
-                        .incoming(node_id)
-                        .iter()
-                        .map(|e| e.from.clone()),
-                );
+                n.extend(self.graph.incoming(node_id).iter().map(|e| e.from.clone()));
                 n
             }
         };
@@ -200,12 +195,7 @@ impl<'g> DfsIter<'g> {
                     .iter()
                     .map(|e| e.to.clone())
                     .collect();
-                n.extend(
-                    self.graph
-                        .incoming(node_id)
-                        .iter()
-                        .map(|e| e.from.clone()),
-                );
+                n.extend(self.graph.incoming(node_id).iter().map(|e| e.from.clone()));
                 n
             }
         };
@@ -350,10 +340,14 @@ mod tests {
         for n in &["a", "b", "c", "d", "e"] {
             g.insert_node(GraphNode::new(*n)).unwrap();
         }
-        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b")).unwrap();
-        g.insert_edge(GraphEdge::new("b", RelationKind::Coordination, "c")).unwrap();
-        g.insert_edge(GraphEdge::new("c", RelationKind::Coordination, "d")).unwrap();
-        g.insert_edge(GraphEdge::new("d", RelationKind::Coordination, "e")).unwrap();
+        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("b", RelationKind::Coordination, "c"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("c", RelationKind::Coordination, "d"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("d", RelationKind::Coordination, "e"))
+            .unwrap();
         g
     }
 
@@ -411,8 +405,10 @@ mod tests {
         g.insert_node(GraphNode::new("a")).unwrap();
         g.insert_node(GraphNode::new("b")).unwrap();
         g.insert_node(GraphNode::new("c")).unwrap();
-        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b")).unwrap();
-        g.insert_edge(GraphEdge::new("c", RelationKind::Coordination, "a")).unwrap();
+        g.insert_edge(GraphEdge::new("a", RelationKind::Coordination, "b"))
+            .unwrap();
+        g.insert_edge(GraphEdge::new("c", RelationKind::Coordination, "a"))
+            .unwrap();
         // Outgoing from a only: [b]
         let nodes: Vec<_> = BfsIter::new(&g, "a")
             .with_direction(TraversalDirection::Outgoing)

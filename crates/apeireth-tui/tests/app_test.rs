@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 基础设施 × App 主循环单元测试 (R19, 1.0 release 估补)
 ///
 /// **测试范围** (per 主人派活单 2026-08-05):
@@ -14,27 +20,34 @@
 /// - O-5 不假装: chat 异步 (R19 W2.3), 不假装同步
 ///
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 
 /// **8 项承诺**: 全部遵守
-
-
 use app::{App, ChatMessage, Language, Mode, NavPage};
 use theme::Theme;
 
@@ -82,7 +95,7 @@ fn navpage_5_variants_and_cycle() {
     assert_eq!(Growth.next(), History);
     assert_eq!(History.next(), Settings);
     assert_eq!(Settings.next(), Bridge); // 循环
-    // prev 循环
+                                         // prev 循环
     assert_eq!(Bridge.prev(), Settings);
     assert_eq!(Settings.prev(), History);
     // from_u8
@@ -137,7 +150,7 @@ fn chat_message_push_3_roles() {
     a.push_user_input("   ".to_string());
     a.push_user_input("".to_string());
     assert_eq!(a.chat_history.len(), 5); // 没变
-    // ChatMessage 构造
+                                         // ChatMessage 构造
     let _m = ChatMessage {
         role: "user".into(),
         content: "x".into(),
@@ -167,7 +180,10 @@ fn app_theme_transition_fields() {
     // 所以再 begin(Archaic) 后, a.theme 仍 Era (不切回 Archaic)
     let first_start = a.theme_transition_start;
     a.begin_theme_transition(Theme::Archaic);
-    assert_eq!(a.theme_transition_start, first_start, "已渐变中, start 不变");
+    assert_eq!(
+        a.theme_transition_start, first_start,
+        "已渐变中, start 不变"
+    );
     assert_eq!(a.theme, Theme::Era, "已渐变中, theme 不切 (直接 return)");
     assert_eq!(a.theme_to, Theme::Era, "已渐变中, theme_to 不变");
     // finish 不应清掉 (渐变未结束, elapsed < 200ms)
@@ -180,4 +196,3 @@ fn app_theme_transition_fields() {
     // 颜色 hardcode (RGB)
     assert!(matches!(s.primary, ratatui::style::Color::Rgb(_, _, _)));
 }
-

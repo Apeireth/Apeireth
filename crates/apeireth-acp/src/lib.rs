@@ -1,4 +1,3 @@
-
 //! apeireth-acp — R23 6 module acp 子模块。
 //!
 //! R23 P1 #5 实质化: 加 +7 顶层 pub fn — envelope 完整性 / 路由 / 序列号 / 校验和.
@@ -36,12 +35,29 @@ pub struct Envelope {
 }
 
 impl Envelope {
-    pub fn new(sender: impl Into<String>, recipient: impl Into<String>, kind: impl Into<String>, payload: serde_json::Value) -> Self {
-        Self { sender: sender.into(), recipient: recipient.into(), kind: kind.into(), payload }
+    pub fn new(
+        sender: impl Into<String>,
+        recipient: impl Into<String>,
+        kind: impl Into<String>,
+        payload: serde_json::Value,
+    ) -> Self {
+        Self {
+            sender: sender.into(),
+            recipient: recipient.into(),
+            kind: kind.into(),
+            payload,
+        }
     }
     pub fn validate(&self) -> AcpResult<()> {
-        if self.sender.trim().is_empty() { return Err(AcpError::EmptySender(self.sender.clone())); }
-        if self.recipient.trim().is_empty() { return Err(AcpError::EmptySender(format!("recipient={}", self.recipient))); }
+        if self.sender.trim().is_empty() {
+            return Err(AcpError::EmptySender(self.sender.clone()));
+        }
+        if self.recipient.trim().is_empty() {
+            return Err(AcpError::EmptySender(format!(
+                "recipient={}",
+                self.recipient
+            )));
+        }
         Ok(())
     }
 }
@@ -60,8 +76,8 @@ pub fn checksum(env: &Envelope) -> AcpResult<String> {
         "kind":      env.kind,
         "payload":   env.payload,
     });
-    let mut serialized = serde_json::to_string(&record)
-        .map_err(|e| AcpError::SerializationError(e.to_string()))?;
+    let mut serialized =
+        serde_json::to_string(&record).map_err(|e| AcpError::SerializationError(e.to_string()))?;
     // Seed with type prefix to avoid collisions across envelope types
     serialized.insert(0, 'E');
     let mut hasher = DefaultHasher::new();
@@ -73,16 +89,23 @@ pub fn checksum(env: &Envelope) -> AcpResult<String> {
 pub fn verify(env: &Envelope, expected_hex: &str) -> AcpResult<()> {
     let actual = checksum(env)?;
     if actual != expected_hex {
-        return Err(AcpError::ChecksumMismatch { expected: expected_hex.into(), actual });
+        return Err(AcpError::ChecksumMismatch {
+            expected: expected_hex.into(),
+            actual,
+        });
     }
     Ok(())
 }
 
 /// Whether envelope targets a single recipient (`recipient != "*"`).
-pub fn is_unicast(env: &Envelope) -> bool { env.recipient != "*" && !env.recipient.is_empty() }
+pub fn is_unicast(env: &Envelope) -> bool {
+    env.recipient != "*" && !env.recipient.is_empty()
+}
 
 /// Whether envelope is broadcast (`recipient == "*"`).
-pub fn is_broadcast(env: &Envelope) -> bool { env.recipient == "*" }
+pub fn is_broadcast(env: &Envelope) -> bool {
+    env.recipient == "*"
+}
 
 /// Generate deterministic sequence number from sender + counters in content.
 /// Use case: replace random UUID with deterministic ID for replay scenarios.
@@ -95,7 +118,9 @@ pub fn sequence_number(env: &Envelope, counter: u64) -> AcpResult<u64> {
 }
 
 /// Two envelopes equivalent if their payload equals (sender/recipient/kind may differ).
-pub fn payload_equivalent(a: &Envelope, b: &Envelope) -> bool { a.payload == b.payload }
+pub fn payload_equivalent(a: &Envelope, b: &Envelope) -> bool {
+    a.payload == b.payload
+}
 
 /// Whether envelope matches given (sender, kind) pair.
 pub fn matches_pair(env: &Envelope, sender: &str, kind: &str) -> bool {
@@ -111,7 +136,8 @@ pub fn to_json_string(env: &Envelope) -> AcpResult<String> {
 
 /// Deserialize envelope from JSON string. validate immediately.
 pub fn from_json_string(s: &str) -> AcpResult<Envelope> {
-    let env: Envelope = serde_json::from_str(s).map_err(|e| AcpError::SerializationError(format!("json decode: {e}")))?;
+    let env: Envelope = serde_json::from_str(s)
+        .map_err(|e| AcpError::SerializationError(format!("json decode: {e}")))?;
     env.validate()?;
     Ok(env)
 }
@@ -124,39 +150,46 @@ mod organ_kani_proofs;
 mod tests {
     use super::*;
     use serde_json::json;
-    #[test] fn envelope_roundtrips_through_validate() {
+    #[test]
+    fn envelope_roundtrips_through_validate() {
         let e = Envelope::new("a", "b", "ping", json!({"hi": 1}));
         assert!(e.validate().is_ok());
     }
-    #[test] fn empty_sender_is_rejected() {
+    #[test]
+    fn empty_sender_is_rejected() {
         let e = Envelope::new("", "b", "ping", json!({}));
         assert!(e.validate().is_err());
     }
 
-    #[test] fn checksum_deterministic() {
+    #[test]
+    fn checksum_deterministic() {
         let e = Envelope::new("a", "b", "ping", json!({"x": 1}));
         let h1 = checksum(&e).unwrap();
         let h2 = checksum(&e).unwrap();
         assert_eq!(h1, h2);
-        assert_eq!(h1.len(), 16);  // u64 hex = 16 chars
+        assert_eq!(h1.len(), 16); // u64 hex = 16 chars
     }
-    #[test] fn checksum_different_payload_changes_digest() {
+    #[test]
+    fn checksum_different_payload_changes_digest() {
         let e1 = Envelope::new("a", "b", "ping", json!({"x": 1}));
         let e2 = Envelope::new("a", "b", "ping", json!({"x": 2}));
         assert_ne!(checksum(&e1).unwrap(), checksum(&e2).unwrap());
     }
-    #[test] fn verify_matches_own_checksum() {
+    #[test]
+    fn verify_matches_own_checksum() {
         let e = Envelope::new("a", "b", "ping", json!({}));
         let h = checksum(&e).unwrap();
         assert!(verify(&e, &h).is_ok());
     }
-    #[test] fn verify_rejects_tamper() {
+    #[test]
+    fn verify_rejects_tamper() {
         let e = Envelope::new("a", "b", "ping", json!({}));
         let h = checksum(&e).unwrap();
         let tampered = Envelope::new("a", "b", "PING", json!({}));
         assert!(verify(&tampered, &h).is_err());
     }
-    #[test] fn is_unicast_and_broadcast() {
+    #[test]
+    fn is_unicast_and_broadcast() {
         let u = Envelope::new("a", "b", "ping", json!({}));
         let b = Envelope::new("a", "*", "ping", json!({}));
         assert!(is_unicast(&u));
@@ -164,30 +197,35 @@ mod tests {
         assert!(is_broadcast(&b));
         assert!(!is_unicast(&b));
     }
-    #[test] fn sequence_number_monotonic_per_counter() {
+    #[test]
+    fn sequence_number_monotonic_per_counter() {
         let e = Envelope::new("a", "b", "ping", json!({}));
         let s1 = sequence_number(&e, 1).unwrap();
         let s2 = sequence_number(&e, 2).unwrap();
         // 不保证实际递增 (只要不同即可), 但肯定不等
         assert_ne!(s1, s2);
     }
-    #[test] fn payload_equivalent_basic() {
+    #[test]
+    fn payload_equivalent_basic() {
         let a = Envelope::new("a", "x", "k", json!({"q": 1}));
         let b = Envelope::new("c", "y", "j", json!({"q": 1}));
         assert!(payload_equivalent(&a, &b));
     }
-    #[test] fn matches_pair_basic() {
+    #[test]
+    fn matches_pair_basic() {
         let e = Envelope::new("alice", "bob", "request", json!({}));
         assert!(matches_pair(&e, "alice", "request"));
         assert!(!matches_pair(&e, "bob", "request"));
     }
-    #[test] fn json_roundtrip() {
+    #[test]
+    fn json_roundtrip() {
         let e = Envelope::new("a", "b", "ping", json!({"k": 42}));
         let s = to_json_string(&e).unwrap();
         let decoded = from_json_string(&s).unwrap();
         assert_eq!(decoded, e);
     }
-    #[test] fn json_invalid_input_rejected() {
+    #[test]
+    fn json_invalid_input_rejected() {
         assert!(from_json_string("not json").is_err());
     }
 }

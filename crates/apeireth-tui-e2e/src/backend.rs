@@ -49,12 +49,15 @@ impl TuiTestBackend {
             return Err(TuiE2EError::BackendCreate {
                 width,
                 height,
-                reason: "width / height must be > 0 (K-1 强校验, 跟 tui 0 尺寸拒绝一致)"
-                    .into(),
+                reason: "width / height must be > 0 (K-1 强校验, 跟 tui 0 尺寸拒绝一致)".into(),
             });
         }
         let backend = TestBackend::new(width, height);
-        Ok(Self { backend, width, height })
+        Ok(Self {
+            backend,
+            width,
+            height,
+        })
     }
 
     /// 24×80 默认 (跟 `DEFAULT_WIDTH` / `DEFAULT_HEIGHT` 一致)
@@ -113,7 +116,11 @@ impl TuiTestBackend {
         if !snap.text.contains(text) {
             return Err(TuiE2EError::BufferAssert {
                 expected: text.into(),
-                actual: format!("<not found in buffer {w}x{h}>", w = snap.width, h = snap.height),
+                actual: format!(
+                    "<not found in buffer {w}x{h}>",
+                    w = snap.width,
+                    h = snap.height
+                ),
                 context: "assert_contains".into(),
             });
         }
@@ -126,7 +133,11 @@ impl TuiTestBackend {
         if snap.text.contains(text) {
             Err(TuiE2EError::BufferAssert {
                 expected: format!("<NOT contains `{text}`>"),
-                actual: format!("<contains `{text}` in buffer {w}x{h}>", w = snap.width, h = snap.height),
+                actual: format!(
+                    "<contains `{text}` in buffer {w}x{h}>",
+                    w = snap.width,
+                    h = snap.height
+                ),
                 context: "assert_not_contains".into(),
             })
         } else {
@@ -266,7 +277,11 @@ mod tests {
         let buf = h.buffer();
         for x in 0..20 {
             let cell = &buf[(x, 0)];
-            eprintln!("DEBUG cell[{x}]: symbol={:?} width={}", cell.symbol(), std::str::from_utf8(cell.symbol().as_bytes()).map_or("?", |_| "utf8"));
+            eprintln!(
+                "DEBUG cell[{x}]: symbol={:?} width={}",
+                cell.symbol(),
+                std::str::from_utf8(cell.symbol().as_bytes()).map_or("?", |_| "utf8")
+            );
         }
         // top nav 必有 "桥接" (NavPage::Bridge label_zh)
         h.assert_contains("桥接").unwrap();

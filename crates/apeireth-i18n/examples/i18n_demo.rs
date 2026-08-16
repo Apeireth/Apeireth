@@ -100,28 +100,133 @@ async fn main() -> anyhow::Result<()> {
     // 5) 12 类别覆盖演示 — 每类别在 5 Locale 都非空
     println!("[i18n_demo] --- 12 类别覆盖演示 ---");
     let categories: &[(&str, &[&str])] = &[
-        ("5 nav", &["nav.status", "nav.session", "nav.tools", "nav.settings", "nav.help"]),
-        ("6 tools", &["tools.calendar", "tools.message", "tools.contact", "tools.task", "tools.search", "tools.drive"]),
-        ("9 organs", &["organs.heart", "organs.brain", "organs.hand", "organs.eye", "organs.ear", "organs.memory", "organs.voice", "organs.body", "organs.mind"]),
-        ("5 R-Measure", &["r_measure.r1", "r_measure.r2", "r_measure.r3", "r_measure.r4", "r_measure.r5"]),
-        ("6 哲学锚", &["philosophy.s1", "philosophy.s2", "philosophy.o2", "philosophy.o3", "philosophy.o4", "philosophy.o5"]),
-        ("8 承诺", &["promises.no_pretense", "promises.hardcode", "promises.locked", "promises.version", "promises.six_anchors", "promises.no_newapi", "promises.no_reinvent", "promises.honest_mark_missing"]),
-        ("5 Provider", &["providers.claude_code", "providers.gemini_cli", "providers.codex", "providers.opencode", "providers.copilot"]),
-        ("4 SDK", &["sdks.lark", "sdks.voice", "sdks.livekit", "sdks.sandbox"]),
-        ("3 observability", &["observability.metrics", "observability.health", "observability.status"]),
-        ("5 鉴权", &["auth.token", "auth.refresh", "auth.scope", "auth.expire", "auth.refresh_on_use"]),
-        ("10 通用", &["common.yes", "common.no", "common.ok", "common.cancel", "common.save", "common.delete", "common.edit", "common.add", "common.remove", "common.confirm"]),
-        ("3 readiness", &["readiness.ok", "readiness.partial", "readiness.stub"]),
+        (
+            "5 nav",
+            &[
+                "nav.status",
+                "nav.session",
+                "nav.tools",
+                "nav.settings",
+                "nav.help",
+            ],
+        ),
+        (
+            "6 tools",
+            &[
+                "tools.calendar",
+                "tools.message",
+                "tools.contact",
+                "tools.task",
+                "tools.search",
+                "tools.drive",
+            ],
+        ),
+        (
+            "9 organs",
+            &[
+                "organs.heart",
+                "organs.brain",
+                "organs.hand",
+                "organs.eye",
+                "organs.ear",
+                "organs.memory",
+                "organs.voice",
+                "organs.body",
+                "organs.mind",
+            ],
+        ),
+        (
+            "5 R-Measure",
+            &[
+                "r_measure.r1",
+                "r_measure.r2",
+                "r_measure.r3",
+                "r_measure.r4",
+                "r_measure.r5",
+            ],
+        ),
+        (
+            "6 哲学锚",
+            &[
+                "philosophy.s1",
+                "philosophy.s2",
+                "philosophy.o2",
+                "philosophy.o3",
+                "philosophy.o4",
+                "philosophy.o5",
+            ],
+        ),
+        (
+            "8 承诺",
+            &[
+                "promises.no_pretense",
+                "promises.hardcode",
+                "promises.locked",
+                "promises.version",
+                "promises.six_anchors",
+                "promises.no_newapi",
+                "promises.no_reinvent",
+                "promises.honest_mark_missing",
+            ],
+        ),
+        (
+            "5 Provider",
+            &[
+                "providers.claude_code",
+                "providers.gemini_cli",
+                "providers.codex",
+                "providers.opencode",
+                "providers.copilot",
+            ],
+        ),
+        (
+            "4 SDK",
+            &["sdks.lark", "sdks.voice", "sdks.livekit", "sdks.sandbox"],
+        ),
+        (
+            "3 observability",
+            &[
+                "observability.metrics",
+                "observability.health",
+                "observability.status",
+            ],
+        ),
+        (
+            "5 鉴权",
+            &[
+                "auth.token",
+                "auth.refresh",
+                "auth.scope",
+                "auth.expire",
+                "auth.refresh_on_use",
+            ],
+        ),
+        (
+            "10 通用",
+            &[
+                "common.yes",
+                "common.no",
+                "common.ok",
+                "common.cancel",
+                "common.save",
+                "common.delete",
+                "common.edit",
+                "common.add",
+                "common.remove",
+                "common.confirm",
+            ],
+        ),
+        (
+            "3 readiness",
+            &["readiness.ok", "readiness.partial", "readiness.stub"],
+        ),
     ];
     for (label, keys) in categories {
         for &locale in Locale::all() {
             translator.set_locale(locale).await?;
             for key in *keys {
                 let v = translator.t(key, &args).await;
-                assert!(
-                    !v.is_empty(),
-                    "[{label}] {locale:?} {key} 翻译不能为空"
-                );
+                assert!(!v.is_empty(), "[{label}] {locale:?} {key} 翻译不能为空");
             }
         }
         println!("[i18n_demo] {label} ✓");
@@ -129,14 +234,18 @@ async fn main() -> anyhow::Result<()> {
 
     // 6) try_t 严格模式演示 — 缺 key 返 Err, 找到 key 返 Ok
     println!("[i18n_demo] --- try_t 严格模式演示 ---");
-    let r1 = translator.try_t("nonexistent.key", &TranslationArgs::new()).await;
+    let r1 = translator
+        .try_t("nonexistent.key", &TranslationArgs::new())
+        .await;
     println!(
         "[i18n_demo] try_t(\"nonexistent.key\") -> {:?}",
         r1.as_ref().err()
     );
     assert!(matches!(r1, Err(I18nError::KeyNotFound(_))));
 
-    let r2 = translator.try_t("nav.status", &TranslationArgs::new()).await;
+    let r2 = translator
+        .try_t("nav.status", &TranslationArgs::new())
+        .await;
     println!("[i18n_demo] try_t(\"nav.status\") -> {r2:?}");
     assert_eq!(r2?, "Status");
 

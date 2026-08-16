@@ -40,7 +40,14 @@ impl MinimaxProvider {
         Self {
             name: "minimax",
             tools: vec![
-                "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+                "Read",
+                "Write",
+                "Edit",
+                "Bash",
+                "Glob",
+                "Grep",
+                "WebSearch",
+                "WebFetch",
             ],
             model_kinds: vec![
                 "MiniMax-M3",
@@ -66,19 +73,21 @@ impl Default for MinimaxProvider {
 /// - `openai_chat` -> `POST https://api.minimaxi.com/v1/chat/completions` (Bearer auth)
 /// - `openai_responses` -> `POST https://api.minimaxi.com/v1/responses`
 /// - `gemini` -> (MiniMax supports Gemini-compatible path, less commonly used)
-pub const MINIMAX_PROTOCOLS: [&str; 4] = [
-    "anthropic",
-    "openai_chat",
-    "openai_responses",
-    "gemini",
-];
+pub const MINIMAX_PROTOCOLS: [&str; 4] = ["anthropic", "openai_chat", "openai_responses", "gemini"];
 
 /// R128: default MiniMax base URL.
 pub const MINIMAX_BASE_URL: &str = "https://api.minimaxi.com";
 
 /// R128: MiniMax 8 standard tools whitelist (per apeireth-tool-registry convention).
 pub const TOOL_WHITELIST: [&str; 8] = [
-    "Read", "Write", "Edit", "Bash", "Glob", "Grep", "WebSearch", "WebFetch",
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Glob",
+    "Grep",
+    "WebSearch",
+    "WebFetch",
 ];
 
 #[cfg(test)]
@@ -91,7 +100,10 @@ mod minimax_tests {
         assert_eq!(p.name, "minimax");
         assert_eq!(p.tools.len(), 8);
         // R82 LIVE 7/7 models pass, plus legacy abab series => 7 model kinds in current descriptor
-        assert!(p.model_kinds.len() >= 7, "minimax should have 7+ model kinds");
+        assert!(
+            p.model_kinds.len() >= 7,
+            "minimax should have 7+ model kinds"
+        );
     }
 
     #[test]

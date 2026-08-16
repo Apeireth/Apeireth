@@ -197,7 +197,10 @@ impl ActionGate {
 
     /// 检查请求 — 6 权限层 + 风险等级评估
     pub fn check(&self, request: &DecisionRequest) -> DomainCheckResult {
-        let checkpoints = Self::six_layers().iter().map(|s| (*s).to_string()).collect();
+        let checkpoints = Self::six_layers()
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
 
         // L0 永远需要 HA — 任何 action 必须经过 HA 审查
         // L5 核武器级 — MultiHuman 多签

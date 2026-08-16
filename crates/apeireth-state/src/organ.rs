@@ -157,7 +157,9 @@ macro_rules! define_organ_stub {
     };
 }
 
-define_organ_stub!(HeartStub, BrainStub, HandStub, EyeStub, EarStub, MemoryStub, VoiceStub, BodyStub, MindStub);
+define_organ_stub!(
+    HeartStub, BrainStub, HandStub, EyeStub, EarStub, MemoryStub, VoiceStub, BodyStub, MindStub
+);
 
 // =====================================================================
 // 单元测试 (9 Organ 变体 + 9 OrganStub + 守门 = 15+ 测试)
@@ -211,8 +213,7 @@ mod tests {
 
     #[test]
     fn nine_organ_ascii_chars_distinct() {
-        let unique: std::collections::HashSet<&str> =
-            ORGAN_ASCII_CHARS.iter().copied().collect();
+        let unique: std::collections::HashSet<&str> = ORGAN_ASCII_CHARS.iter().copied().collect();
         assert_eq!(unique.len(), ORGAN_COUNT, "9 器官 ASCII 字符应互不相同");
     }
 
@@ -234,7 +235,9 @@ mod tests {
 
     #[test]
     fn organ_as_str_9_distinct() {
-        let s: Vec<&str> = (0..=8u8).map(|n| Organ::from_u8(n).unwrap().as_str()).collect();
+        let s: Vec<&str> = (0..=8u8)
+            .map(|n| Organ::from_u8(n).unwrap().as_str())
+            .collect();
         let unique: std::collections::HashSet<&str> = s.iter().copied().collect();
         assert_eq!(unique.len(), 9);
     }

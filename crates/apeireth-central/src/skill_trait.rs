@@ -240,7 +240,10 @@ impl Skill for BrainstormingSkill {
 
 static BRAINSTORMING_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"问问题验证用户意图"= 标缺 intent-failure = RED
-    SkillStep::tdd_red(1, "Ask clarifying questions about the user's true intent (RED: 标缺 intent)"),
+    SkillStep::tdd_red(
+        1,
+        "Ask clarifying questions about the user's true intent (RED: 标缺 intent)",
+    ),
     SkillStep::new(2, "Explore the codebase to understand context"),
     SkillStep::new(3, "Propose 2-3 design alternatives with tradeoffs"),
     SkillStep::new(4, "Show spec in chunks short enough to read and digest"),
@@ -266,7 +269,10 @@ impl Skill for TestDrivenDevelopmentSkill {
 }
 
 static TDD_STEPS: [SkillStep; 5] = [
-    SkillStep::tdd_red(1, "RED: write a failing test that captures the new behavior"),
+    SkillStep::tdd_red(
+        1,
+        "RED: write a failing test that captures the new behavior",
+    ),
     SkillStep::new(2, "Verify the test fails for the right reason"),
     SkillStep::new(3, "GREEN: write the minimum code to make the test pass"),
     SkillStep::new(4, "Verify all tests pass (no regressions)"),
@@ -293,8 +299,14 @@ impl Skill for SystematicDebuggingSkill {
 
 static SYSTEMATIC_DEBUGGING_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"写 repro failing test"= 标缺 repro = RED
-    SkillStep::tdd_red(1, "Reproduce the bug with a minimal failing test (RED: 标缺 repro-test)"),
-    SkillStep::tdd_red(2, "If you can't repro, the bug doesn't exist yet — gather more evidence"),
+    SkillStep::tdd_red(
+        1,
+        "Reproduce the bug with a minimal failing test (RED: 标缺 repro-test)",
+    ),
+    SkillStep::tdd_red(
+        2,
+        "If you can't repro, the bug doesn't exist yet — gather more evidence",
+    ),
     SkillStep::new(3, "Find the actual root cause via root-cause tracing"),
     SkillStep::new(4, "Apply defense-in-depth: fix root + add regression tests"),
     SkillStep::new(5, "Verify the fix doesn't break other things"),
@@ -320,7 +332,10 @@ impl Skill for VerificationBeforeCompletionSkill {
 
 static VERIFICATION_BEFORE_COMPLETION_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"写失败 verify test"= 当前 verify 全跑, 标缺 pass = RED
-    SkillStep::tdd_red(1, "Run the full test suite (RED: 标缺 pass 的 test 必跑前 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Run the full test suite (RED: 标缺 pass 的 test 必跑前 fix)",
+    ),
     SkillStep::new(2, "Run `cargo clippy --all-targets -- -D warnings`"),
     SkillStep::new(3, "Run `cargo doc --no-deps` to verify doc compiles"),
     SkillStep::new(4, "Verify against the original task's success criteria"),
@@ -374,11 +389,20 @@ impl Skill for ExecutingPlansSkill {
 
 static EXECUTING_PLANS_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"读 plan 写 failing-test-stub"= 标缺 plan = RED
-    SkillStep::tdd_red(1, "Read the entire plan before starting any task (RED: 标缺 plan-readable 必 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Read the entire plan before starting any task (RED: 标缺 plan-readable 必 fix)",
+    ),
     SkillStep::new(2, "For each task: TDD red-green-refactor (no skipping)"),
-    SkillStep::new(3, "Mark each task done only after Verification Before Completion"),
+    SkillStep::new(
+        3,
+        "Mark each task done only after Verification Before Completion",
+    ),
     SkillStep::new(4, "If a task is harder than 15 min, stop and re-plan"),
-    SkillStep::new(5, "Update the plan as you go (in-place, never silently diverge)"),
+    SkillStep::new(
+        5,
+        "Update the plan as you go (in-place, never silently diverge)",
+    ),
 ];
 
 /// `SubagentDrivenDevelopment` skill — subagent 驱动开发 (借鉴 superpowers subagent-driven-development).
@@ -401,11 +425,23 @@ impl Skill for SubagentDrivenDevelopmentSkill {
 
 static SUBAGENT_DRIVEN_DEVELOPMENT_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"dispatch stub"= 标缺 subagent spec = RED
-    SkillStep::tdd_red(1, "Dispatch each task to a fresh subagent with full context (RED: 标缺 subagent-prompt)"),
+    SkillStep::tdd_red(
+        1,
+        "Dispatch each task to a fresh subagent with full context (RED: 标缺 subagent-prompt)",
+    ),
     SkillStep::new(2, "Use Dispatching Parallel Agents for concurrent tasks"),
-    SkillStep::new(3, "Inspect each subagent's output against the task's success criteria"),
-    SkillStep::new(4, "Re-dispatch failed tasks with concrete feedback (no hand-waving)"),
-    SkillStep::new(5, "Verify the integrated result before marking the plan done"),
+    SkillStep::new(
+        3,
+        "Inspect each subagent's output against the task's success criteria",
+    ),
+    SkillStep::new(
+        4,
+        "Re-dispatch failed tasks with concrete feedback (no hand-waving)",
+    ),
+    SkillStep::new(
+        5,
+        "Verify the integrated result before marking the plan done",
+    ),
 ];
 
 /// `DispatchingParallelAgents` skill — 派并行 agents (借鉴 superpowers dispatching-parallel-agents).
@@ -428,11 +464,20 @@ impl Skill for DispatchingParallelAgentsSkill {
 
 static DISPATCHING_PARALLEL_AGENTS_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"ident 失败 stub"= 标缺 independence-check = RED
-    SkillStep::tdd_red(1, "Identify independent tasks (RED: 标缺 dep-analysis 必 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Identify independent tasks (RED: 标缺 dep-analysis 必 fix)",
+    ),
     SkillStep::new(2, "Write one self-contained dispatch prompt per task"),
-    SkillStep::new(3, "Dispatch in parallel via `dispatch` tool (no serial fallbacks)"),
+    SkillStep::new(
+        3,
+        "Dispatch in parallel via `dispatch` tool (no serial fallbacks)",
+    ),
     SkillStep::new(4, "Track task IDs; never lose a result"),
-    SkillStep::new(5, "Verify all results, then integrate with explicit merge step"),
+    SkillStep::new(
+        5,
+        "Verify all results, then integrate with explicit merge step",
+    ),
 ];
 
 /// `RequestingCodeReview` skill — 申请 code review (借鉴 superpowers requesting-code-review).
@@ -455,11 +500,17 @@ impl Skill for RequestingCodeReviewSkill {
 
 static REQUESTING_CODE_REVIEW_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"self-review 失败 stub"= 标缺 8 硬墙 = RED
-    SkillStep::tdd_red(1, "Self-review the diff first (RED: 标缺 8 硬墙 violations 必 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Self-review the diff first (RED: 标缺 8 硬墙 violations 必 fix)",
+    ),
     SkillStep::new(2, "Write a dispatch prompt with full context + diff"),
     SkillStep::new(3, "Request specific feedback (not just 'any comments?')"),
     SkillStep::new(4, "Wait for review, never assume approval"),
-    SkillStep::new(5, "Address every comment (resolve, rebut with reason, or fix)"),
+    SkillStep::new(
+        5,
+        "Address every comment (resolve, rebut with reason, or fix)",
+    ),
 ];
 
 /// `ReceivingCodeReview` skill — 接收 code review (借鉴 superpowers receiving-code-review).
@@ -482,9 +533,18 @@ impl Skill for ReceivingCodeReviewSkill {
 
 static RECEIVING_CODE_REVIEW_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"read review 失败 stub"= 标缺 review 必 fix = RED
-    SkillStep::tdd_red(1, "Read the entire review before responding to any single point (RED: 标缺 read)"),
-    SkillStep::new(2, "Verify each comment is technically correct before agreeing"),
-    SkillStep::new(3, "Push back with reason if you disagree (no sycophantic agreement)"),
+    SkillStep::tdd_red(
+        1,
+        "Read the entire review before responding to any single point (RED: 标缺 read)",
+    ),
+    SkillStep::new(
+        2,
+        "Verify each comment is technically correct before agreeing",
+    ),
+    SkillStep::new(
+        3,
+        "Push back with reason if you disagree (no sycophantic agreement)",
+    ),
     SkillStep::new(4, "If you agree, fix it — don't just say 'good point'"),
     SkillStep::new(5, "Re-request review if your fix is non-trivial"),
 ];
@@ -509,10 +569,16 @@ impl Skill for UsingGitWorktreesSkill {
 
 static USING_GIT_WORKTREES_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"worktree-setup 失败 stub"= 标缺 worktree-path = RED
-    SkillStep::tdd_red(1, "Each parallel task gets its own worktree (RED: 标缺 worktree-path 必 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Each parallel task gets its own worktree (RED: 标缺 worktree-path 必 fix)",
+    ),
     SkillStep::new(2, "Use a deterministic worktree path (per task ID)"),
     SkillStep::new(3, "Lock 8 硬墙 + Cargo.lock before cross-worktree merge"),
-    SkillStep::new(4, "Merge worktrees via PR, never rebase across active worktrees"),
+    SkillStep::new(
+        4,
+        "Merge worktrees via PR, never rebase across active worktrees",
+    ),
     SkillStep::new(5, "Clean up worktrees after merge (don't leave orphans)"),
 ];
 
@@ -536,9 +602,15 @@ impl Skill for FinishingADevelopmentBranchSkill {
 
 static FINISHING_A_DEVELOPMENT_BRANCH_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"verify-merge 失败 stub"= 标缺 merge-on-master = RED
-    SkillStep::tdd_red(1, "Verify the merge commit is on master (RED: 标缺 merge-on-master 必 fix)"),
+    SkillStep::tdd_red(
+        1,
+        "Verify the merge commit is on master (RED: 标缺 merge-on-master 必 fix)",
+    ),
     SkillStep::new(2, "Delete the local branch (`git branch -d`)"),
-    SkillStep::new(3, "Delete the remote branch if pushed (`git push origin --delete`)"),
+    SkillStep::new(
+        3,
+        "Delete the remote branch if pushed (`git push origin --delete`)",
+    ),
     SkillStep::new(4, "Clean up any worktrees created for this branch"),
     SkillStep::new(5, "Document the merge in CHANGELOG / decision log"),
 ];
@@ -563,8 +635,14 @@ impl Skill for WritingSkillsSkill {
 
 static WRITING_SKILLS_STEPS: [SkillStep; 5] = [
     // step 1 标 tdd_red: 先"pattern 失败 stub"= 标缺 3+ 样本 = RED
-    SkillStep::tdd_red(1, "Extract the pattern from 3+ prior occurrences (RED: 标缺 sample-size 必 fix)"),
-    SkillStep::new(2, "Write SKILL.md with frontmatter: name + description (when to use)"),
+    SkillStep::tdd_red(
+        1,
+        "Extract the pattern from 3+ prior occurrences (RED: 标缺 sample-size 必 fix)",
+    ),
+    SkillStep::new(
+        2,
+        "Write SKILL.md with frontmatter: name + description (when to use)",
+    ),
     SkillStep::new(3, "Use 3rd person, imperative mood, concise steps"),
     SkillStep::new(4, "Embed TDD in step 1 of any code-touching skill"),
     SkillStep::new(5, "Test the skill with a subagent before committing it"),
@@ -596,10 +674,22 @@ impl Skill for UsingSuperpowersSkill {
 
 static USING_SUPERPOWERS_STEPS: [SkillStep; 5] = [
     SkillStep::new(1, "Invoke relevant skills BEFORE any response or action"),
-    SkillStep::new(2, "Announce 'Using [skill] to [purpose]' before following the skill"),
-    SkillStep::new(3, "Process skills come first (set approach), then implementation skills"),
-    SkillStep::new(4, "User instructions (CLAUDE.md / AGENTS.md) take precedence over skills"),
-    SkillStep::new(5, "If you think there's even 1% chance a skill applies, invoke it"),
+    SkillStep::new(
+        2,
+        "Announce 'Using [skill] to [purpose]' before following the skill",
+    ),
+    SkillStep::new(
+        3,
+        "Process skills come first (set approach), then implementation skills",
+    ),
+    SkillStep::new(
+        4,
+        "User instructions (CLAUDE.md / AGENTS.md) take precedence over skills",
+    ),
+    SkillStep::new(
+        5,
+        "If you think there's even 1% chance a skill applies, invoke it",
+    ),
 ];
 
 #[cfg(test)]
@@ -637,13 +727,19 @@ mod tests {
     fn tdd_skill_marks_red_step() {
         let skill = TestDrivenDevelopmentSkill;
         let steps = skill.steps();
-        assert!(steps[0].is_tdd_red, "TDD step 1 should be RED (write failing test)");
+        assert!(
+            steps[0].is_tdd_red,
+            "TDD step 1 should be RED (write failing test)"
+        );
     }
 
     #[test]
     fn meta_skill_overrides_tdd_required_to_false() {
         let meta = UsingSuperpowersSkill;
-        assert!(!meta.tdd_required(), "using-superpowers meta skill should not require TDD");
+        assert!(
+            !meta.tdd_required(),
+            "using-superpowers meta skill should not require TDD"
+        );
     }
 
     #[test]
@@ -664,9 +760,7 @@ mod tests {
                 SkillId::RequestingCodeReview => Box::new(RequestingCodeReviewSkill),
                 SkillId::ReceivingCodeReview => Box::new(ReceivingCodeReviewSkill),
                 SkillId::UsingGitWorktrees => Box::new(UsingGitWorktreesSkill),
-                SkillId::FinishingADevelopmentBranch => {
-                    Box::new(FinishingADevelopmentBranchSkill)
-                }
+                SkillId::FinishingADevelopmentBranch => Box::new(FinishingADevelopmentBranchSkill),
                 SkillId::WritingSkills => Box::new(WritingSkillsSkill),
                 SkillId::UsingSuperpowers => Box::new(UsingSuperpowersSkill),
             };
@@ -695,9 +789,7 @@ mod tests {
                 SkillId::RequestingCodeReview => Box::new(RequestingCodeReviewSkill),
                 SkillId::ReceivingCodeReview => Box::new(ReceivingCodeReviewSkill),
                 SkillId::UsingGitWorktrees => Box::new(UsingGitWorktreesSkill),
-                SkillId::FinishingADevelopmentBranch => {
-                    Box::new(FinishingADevelopmentBranchSkill)
-                }
+                SkillId::FinishingADevelopmentBranch => Box::new(FinishingADevelopmentBranchSkill),
                 SkillId::WritingSkills => Box::new(WritingSkillsSkill),
                 SkillId::UsingSuperpowers => Box::new(UsingSuperpowersSkill),
             };

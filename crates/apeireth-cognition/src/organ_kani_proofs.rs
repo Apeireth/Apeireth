@@ -16,9 +16,7 @@ use apeireth_asi::{AsiV05Scores, V1136Submeasures};
 use apeireth_core::{ActionTarget, PhilosophyKey, PhilosophyVerdict};
 
 use crate::decision::{decide, evaluate_actions};
-use crate::{
-    run_cycle, scoring, CognitiveCycle, CognitiveInput,
-};
+use crate::{run_cycle, scoring, CognitiveCycle, CognitiveInput};
 
 // ============================================
 // Property 1: CognitiveInput::validate 拒绝空 candidates / 空 context_tag
@@ -41,10 +39,7 @@ fn r177_cog_02_run_cycle_rejects_invalid() {
     let bad1 = CognitiveInput::new(vec![], "x");
     assert!(run_cycle(bad1).is_err());
 
-    let bad2 = CognitiveInput::new(
-        vec![ActionTarget::NormalAction("a".into())],
-        "",
-    );
+    let bad2 = CognitiveInput::new(vec![ActionTarget::NormalAction("a".into())], "");
     assert!(run_cycle(bad2).is_err());
 }
 
@@ -105,10 +100,20 @@ fn r177_cog_06_v1136_in_range() {
     let input = CognitiveInput::new(vec![target], "ctx");
     let v1136 = scoring::score_v1136(&input);
     for (i, v) in v1136.continuity_5.iter().enumerate() {
-        assert!((0.0..=1.0).contains(v), "V1136 continuity_5[{}] 越界: {}", i, v);
+        assert!(
+            (0.0..=1.0).contains(v),
+            "V1136 continuity_5[{}] 越界: {}",
+            i,
+            v
+        );
     }
     for (i, v) in v1136.transferability_2.iter().enumerate() {
-        assert!((0.0..=1.0).contains(v), "V1136 transferability_2[{}] 越界: {}", i, v);
+        assert!(
+            (0.0..=1.0).contains(v),
+            "V1136 transferability_2[{}] 越界: {}",
+            i,
+            v
+        );
     }
 }
 

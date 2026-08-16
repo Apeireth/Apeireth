@@ -24,9 +24,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::StateError;
 use crate::organ::Organ;
-use crate::shared_state::{
-    SharedState, SharedStateMode, StateReadGuard, StateWriteGuard,
-};
+use crate::shared_state::{SharedState, SharedStateMode, StateReadGuard, StateWriteGuard};
 
 /// **模式 2: MutexState 跨线程互斥** (per 借鉴 Golutra `state: tauri::State<Mutex<T>>`).
 ///
@@ -66,17 +64,15 @@ where
     /// - 锁被占: 返 `Err(TryLockError::WouldBlock)`, 映射为 `StateError::Other`
     /// - 锁中毒: 返 `Err(TryLockError::Poisoned)`, 映射为 `StateError::Poisoned`
     pub fn try_lock(&self, organ: Organ) -> Result<MutexGuard<'_, T>, StateError> {
-        self.inner
-            .try_lock()
-            .map_err(|e| match e {
-                std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
-                    mode: SharedStateMode::Mutex,
-                    organ,
-                },
-                std::sync::TryLockError::WouldBlock => StateError::Other {
-                    msg: "Mutex would block".to_string(),
-                },
-            })
+        self.inner.try_lock().map_err(|e| match e {
+            std::sync::TryLockError::Poisoned(_) => StateError::Poisoned {
+                mode: SharedStateMode::Mutex,
+                organ,
+            },
+            std::sync::TryLockError::WouldBlock => StateError::Other {
+                msg: "Mutex would block".to_string(),
+            },
+        })
     }
 }
 

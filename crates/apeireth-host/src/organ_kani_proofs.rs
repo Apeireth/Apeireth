@@ -3,8 +3,8 @@
 #![allow(missing_docs)]
 
 use crate::machine_id;
-use uuid::Uuid;
 use crate::{derive_id, hash_machine_id};
+use uuid::Uuid;
 
 #[test]
 fn r177_host_01_module_compiles() {
@@ -46,5 +46,7 @@ fn r177_host_kani_01_uuid_namespace_invariant() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_host_kani_02_validate_uuid() {
-    assert!(machine_id::validate_uuid("00000000-0000-0000-0000-000000000000"));
+    assert!(machine_id::validate_uuid(
+        "00000000-0000-0000-0000-000000000000"
+    ));
 }

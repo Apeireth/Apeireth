@@ -1,11 +1,9 @@
-
 #![warn(missing_docs)]
 #![allow(clippy::all)]
 
 // ============================================================================
 // §0 模块声明 (7 子模块)
 // ============================================================================
-
 
 // ============================================================================
 // §1 Re-exports (常用类型, doctest 友好)
@@ -17,7 +15,7 @@ pub use super::error::{TracingError, TracingResult};
 // --- config ---
 pub use super::config::{
     ExporterConfig, ResourceConfig, SamplerConfig, ServiceConfig, TracingConfig,
-    TracingConfigBuilder, TRACING_CONFIG_SECTION_COUNT, TRACING_CONFIG_SCHEMA_VERSION,
+    TracingConfigBuilder, TRACING_CONFIG_SCHEMA_VERSION, TRACING_CONFIG_SECTION_COUNT,
 };
 
 // --- context ---
@@ -97,9 +95,7 @@ pub const PLATFORM_NAME: &str = "apeireth";
 /// # Ok(())
 /// # }
 /// ```
-pub async fn quick_trace(
-    service_name: &str,
-) -> TracingResult<Trace> {
+pub async fn quick_trace(service_name: &str) -> TracingResult<Trace> {
     let config = TracingConfig::builder()
         .service_name(service_name)
         .build()?;
@@ -108,10 +104,7 @@ pub async fn quick_trace(
 }
 
 /// 快速构造 file trace (持久化用).
-pub async fn quick_file_trace(
-    service_name: &str,
-    output_path: &str,
-) -> TracingResult<Trace> {
+pub async fn quick_file_trace(service_name: &str, output_path: &str) -> TracingResult<Trace> {
     let config = TracingConfig::builder()
         .service_name(service_name)
         .exporter(ExporterKind::File)
@@ -474,7 +467,11 @@ pub trait TracingFacade: Send + Sync {
     async fn end_span(&mut self, name: &str) -> TracingResult<()>;
 
     /// Inject context.
-    async fn inject(&self, ctx: &TraceContext, carrier: &mut std::collections::HashMap<String, String>);
+    async fn inject(
+        &self,
+        ctx: &TraceContext,
+        carrier: &mut std::collections::HashMap<String, String>,
+    );
 
     /// Extract context.
     async fn extract(
@@ -523,7 +520,11 @@ impl TracingFacade for Trace {
         r
     }
 
-    async fn inject(&self, ctx: &TraceContext, carrier: &mut std::collections::HashMap<String, String>) {
+    async fn inject(
+        &self,
+        ctx: &TraceContext,
+        carrier: &mut std::collections::HashMap<String, String>,
+    ) {
         W3CTraceContextPropagator.inject(ctx, carrier).await;
     }
 
@@ -610,7 +611,11 @@ mod lib_tests {
     async fn test_tracer_builder_default() {
         metric_reset();
         let mut t = Tracer::new("apeireth-api").build().await.unwrap();
-        let root = t.trace_mut().start_root("op", SpanKind::Server).await.unwrap();
+        let root = t
+            .trace_mut()
+            .start_root("op", SpanKind::Server)
+            .await
+            .unwrap();
         assert_eq!(root.kind, SpanKind::Server);
         assert!(t.trace().sampled);
     }
@@ -625,7 +630,10 @@ mod lib_tests {
             .build()
             .await
             .unwrap();
-        t.trace_mut().start_root("op", SpanKind::Client).await.unwrap();
+        t.trace_mut()
+            .start_root("op", SpanKind::Client)
+            .await
+            .unwrap();
         t.trace_mut().end_span("op").await.unwrap();
         t.trace().flush().await.unwrap();
         let content = std::fs::read_to_string(&path).unwrap();

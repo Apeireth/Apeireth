@@ -133,7 +133,10 @@ impl SemanticRouter {
     fn select_route(&self, query: &HashSet<String>) -> Option<&Route> {
         if query.is_empty() {
             return self.config.default_route.as_ref().and_then(|n| {
-                self.config.routes.iter().find(|r| r.name == *n && r.enabled)
+                self.config
+                    .routes
+                    .iter()
+                    .find(|r| r.name == *n && r.enabled)
             });
         }
         let mut best: Option<(&Route, f32)> = None;
@@ -141,7 +144,9 @@ impl SemanticRouter {
             if !r.enabled {
                 continue;
             }
-            let Some((tokens, norm)) = self.cache.get(&r.name) else { continue };
+            let Some((tokens, norm)) = self.cache.get(&r.name) else {
+                continue;
+            };
             let score = cosine_sim(query, tokens, *norm);
             if score >= self.config.match_threshold {
                 if best.map_or(true, |(_, s)| score > s) {
@@ -153,10 +158,12 @@ impl SemanticRouter {
             return Some(r);
         }
         // fallback: default_route
-        self.config
-            .default_route
-            .as_ref()
-            .and_then(|n| self.config.routes.iter().find(|r| r.name == *n && r.enabled))
+        self.config.default_route.as_ref().and_then(|n| {
+            self.config
+                .routes
+                .iter()
+                .find(|r| r.name == *n && r.enabled)
+        })
     }
 }
 
@@ -261,7 +268,10 @@ mod tests {
 
     #[test]
     fn cosine_sim_identical() {
-        let a: HashSet<_> = ["code", "review"].iter().map(|s| (*s).to_string()).collect();
+        let a: HashSet<_> = ["code", "review"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
         let b = a.clone();
         let s = cosine_sim(&a, &b, (b.len() as f32).sqrt());
         assert!((s - 1.0).abs() < 1e-6, "identical 应 1.0, got {s}");
@@ -281,7 +291,10 @@ mod tests {
             .iter()
             .map(|s| (*s).to_string())
             .collect();
-        let b: HashSet<_> = ["code", "review"].iter().map(|s| (*s).to_string()).collect();
+        let b: HashSet<_> = ["code", "review"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
         let s = cosine_sim(&a, &b, (b.len() as f32).sqrt());
         assert!(s > 0.0 && s < 1.0, "partial 应 0-1, got {s}");
     }
@@ -359,13 +372,14 @@ mod tests {
         };
         let router = mock_router_with("codex", "code route");
         let sr = SemanticRouter::new(cfg, router);
-        let req = LlmRequest::new(
-            "any",
-            vec![ChatMessage::user("please refactor this code")],
-        );
+        let req = LlmRequest::new("any", vec![ChatMessage::user("please refactor this code")]);
         let resp = sr.complete(req).await.expect("complete");
         assert!(resp.content.contains("code route"), "got: {}", resp.content);
-        assert!(resp.provider.contains("semantic:codex"), "got: {}", resp.provider);
+        assert!(
+            resp.provider.contains("semantic:codex"),
+            "got: {}",
+            resp.provider
+        );
     }
 
     #[test]

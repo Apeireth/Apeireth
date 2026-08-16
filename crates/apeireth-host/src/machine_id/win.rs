@@ -15,7 +15,10 @@
 //!
 //! ## 状态: ⚠️ skeleton (R20 阶段 1 实施, 真实 Windows 调用)
 
-use super::{MachineIdError, MachineIdResultStd, WIN_REG_QUERY_ARGS, WIN_REG_QUERY_COMMAND, WIN_WMI_ARGS, WIN_WMI_COMMAND};
+use super::{
+    MachineIdError, MachineIdResultStd, WIN_REG_QUERY_ARGS, WIN_REG_QUERY_COMMAND, WIN_WMI_ARGS,
+    WIN_WMI_COMMAND,
+};
 
 /// Windows 平台 probe 入口 (per lib.rs `get_machine_id` cfg 路由).
 /// 返 `(raw_uuid, source)` 二元组, 由 `get_machine_id` 统一做 SHA-256 派生.
@@ -25,7 +28,9 @@ pub async fn probe_windows() -> MachineIdResultStd<(String, String)> {
         return Ok((raw, source));
     }
     // 2nd fallback: reg query HKLM Cryptography MachineGuid
-    probe_registry().await.map(|raw| (raw, "registry".to_string()))
+    probe_registry()
+        .await
+        .map(|raw| (raw, "registry".to_string()))
 }
 
 /// 1st fallback: `wmic csproduct get uuid` (per `WIN_WMI_COMMAND` + `WIN_WMI_ARGS` hardcode).

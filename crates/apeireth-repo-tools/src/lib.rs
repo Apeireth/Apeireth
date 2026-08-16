@@ -9,6 +9,6 @@
 /// Filesystem, git-state, sensitive-content, and report scanning.
 pub mod scan;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 /// Technical-debt, complexity, dependency, and security analysis.
 pub mod analyzer;
+mod organ_kani_proofs;

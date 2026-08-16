@@ -24,11 +24,16 @@ fn main() {
     }
 
     // 2. 演示 1 个完整链式 ErrorEvent
-    let ev = ErrorEvent::new(ErrorKind::Bridge, ErrorSeverity::Error, "pybridge.call", "module not found")
-        .with_location("bridge.rs:42")
-        .with_recovery("use Rust fallback")
-        .with_cause("pyo3::PyImportError")
-        .with_timestamp(1_700_000_000);
+    let ev = ErrorEvent::new(
+        ErrorKind::Bridge,
+        ErrorSeverity::Error,
+        "pybridge.call",
+        "module not found",
+    )
+    .with_location("bridge.rs:42")
+    .with_recovery("use Rust fallback")
+    .with_cause("pyo3::PyImportError")
+    .with_timestamp(1_700_000_000);
     println!("\n  chained event:\n{ev}");
 
     // 3. 摘要

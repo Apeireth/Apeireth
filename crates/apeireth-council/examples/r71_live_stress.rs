@@ -20,13 +20,20 @@ use apeireth_council::stress_test::{run_deliberation_stress, StressConfig, Stres
 
 fn main() {
     if std::env::var("APEIRETH_COUNCIL_LIVE").ok().as_deref() != Some("1") {
-        eprintln!("R71 LIVE example: skip (set APEIRETH_COUNCIL_LIVE=1 to enable live deliberation)");
+        eprintln!(
+            "R71 LIVE example: skip (set APEIRETH_COUNCIL_LIVE=1 to enable live deliberation)"
+        );
         eprintln!("Note: this uses ScriptedMockLlm for portability; for real LLM hookup see R33-4-3 follow-up");
         std::process::exit(0);
     }
 
     let members = vec![
-        CouncilMember::new("architect", "find stable rust lock", "10y rust", "claude_code"),
+        CouncilMember::new(
+            "architect",
+            "find stable rust lock",
+            "10y rust",
+            "claude_code",
+        ),
         CouncilMember::new("security_reviewer", "find CVEs", "5y sec", "codex"),
         CouncilMember::new("product_manager", "user value", "5y pm", "gemini_cli"),
     ];
@@ -35,9 +42,7 @@ fn main() {
     let query = CouncilQuery::new("q1", "should we adopt MiniMax M3?", 0);
 
     // LIVE 真接 10 round (CI 友好; 全跑 100 round 估 ~30s)
-    let cfg = StressConfig::default()
-        .with_rounds(10)
-        .with_verbose(false);
+    let cfg = StressConfig::default().with_rounds(10).with_verbose(false);
 
     let report: StressReport = run_deliberation_stress(members, &query, provider, cfg);
 

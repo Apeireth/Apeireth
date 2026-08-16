@@ -134,7 +134,10 @@ mod tests {
     /// 守门 #4: CapacityExceeded 含 value_size + max_size.
     #[test]
     fn capacity_exceeded_error_includes_sizes() {
-        let e = CacheError::CapacityExceeded { value_size: 1024, max_size: 512 };
+        let e = CacheError::CapacityExceeded {
+            value_size: 1024,
+            max_size: 512,
+        };
         let s = format!("{e}");
         assert!(s.contains("1024"));
         assert!(s.contains("512"));

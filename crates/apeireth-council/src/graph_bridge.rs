@@ -35,19 +35,30 @@ pub fn summary_to_context_line(s: &CognitionSummary) -> String {
         s.mean,
         s.min,
         s.max,
-        if s.verdict_approve { "approve" } else { "reject" },
+        if s.verdict_approve {
+            "approve"
+        } else {
+            "reject"
+        },
         s.node_count
     )
 }
 
 /// **CognitionSummary → history ref ID** (per CouncilQuery.history_refs 字段)
 pub fn summary_to_history_ref(s: &CognitionSummary) -> String {
-    format!("cognition_summary:mean={:.3},verdict={}", s.mean, s.verdict_approve)
+    format!(
+        "cognition_summary:mean={:.3},verdict={}",
+        s.mean, s.verdict_approve
+    )
 }
 
 /// **CognitionSummary → 多行 block** (per prompt 注入, 详细)
 pub fn summary_to_context_block(s: &CognitionSummary) -> String {
-    let verdict = if s.verdict_approve { "APPROVE" } else { "REJECT" };
+    let verdict = if s.verdict_approve {
+        "APPROVE"
+    } else {
+        "REJECT"
+    };
     format!(
         "# Cognition Graph State\n\
          - mean: {:.3}\n\
@@ -68,9 +79,17 @@ pub fn summary_to_context_block(s: &CognitionSummary) -> String {
 /// - !verdict_approve + mean < 0.3 -> "nuclear"
 pub fn summary_risk_hint(s: &CognitionSummary) -> &'static str {
     if s.verdict_approve {
-        if s.mean >= 0.5 { "low" } else { "medium" }
+        if s.mean >= 0.5 {
+            "low"
+        } else {
+            "medium"
+        }
     } else {
-        if s.mean >= 0.3 { "high" } else { "nuclear" }
+        if s.mean >= 0.3 {
+            "high"
+        } else {
+            "nuclear"
+        }
     }
 }
 

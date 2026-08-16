@@ -171,7 +171,8 @@ impl WasmModule {
         if &magic != b"\0asm" {
             return Err(WasmError::BadMagic(magic));
         }
-        let version = u32::from_le_bytes([self.bytes[4], self.bytes[5], self.bytes[6], self.bytes[7]]);
+        let version =
+            u32::from_le_bytes([self.bytes[4], self.bytes[5], self.bytes[6], self.bytes[7]]);
         if version != 1 {
             return Err(WasmError::BadVersion(version));
         }
@@ -223,7 +224,14 @@ impl WasmExecution {
 pub trait WasmRuntime: Send + Sync {
     fn name(&self) -> &str;
     fn validate(&self, module: &WasmModule, policy: &WasmPolicy) -> WasmResult<()>;
-    fn execute(&self, module: &WasmModule, policy: &WasmPolicy, entry: &str, args: &[String], now_ms: u64) -> WasmResult<WasmExecution>;
+    fn execute(
+        &self,
+        module: &WasmModule,
+        policy: &WasmPolicy,
+        entry: &str,
+        args: &[String],
+        now_ms: u64,
+    ) -> WasmResult<WasmExecution>;
 }
 
 // ============================================================
@@ -248,7 +256,14 @@ impl WasmRuntime for StubWasmRuntime {
         Ok(())
     }
 
-    fn execute(&self, module: &WasmModule, policy: &WasmPolicy, entry: &str, args: &[String], now_ms: u64) -> WasmResult<WasmExecution> {
+    fn execute(
+        &self,
+        module: &WasmModule,
+        policy: &WasmPolicy,
+        entry: &str,
+        args: &[String],
+        now_ms: u64,
+    ) -> WasmResult<WasmExecution> {
         // Stub: cannot actually run bytecode. We enforce fuel + size + name length
         // as a smoke test and return a deterministic trace.
         if entry.is_empty() {
@@ -256,11 +271,17 @@ impl WasmRuntime for StubWasmRuntime {
         }
         let fuel_spent = (module.len() as u64) + (args.len() as u64) * 7;
         if fuel_spent > policy.fuel_budget {
-            return Err(WasmError::FuelExhausted { spent: fuel_spent, budget: policy.fuel_budget });
+            return Err(WasmError::FuelExhausted {
+                spent: fuel_spent,
+                budget: policy.fuel_budget,
+            });
         }
         let memory_peak = (module.len() / 4).max(1024);
         if memory_peak > policy.memory_limit_bytes {
-            return Err(WasmError::MemoryExceeded { peak: memory_peak, limit: policy.memory_limit_bytes });
+            return Err(WasmError::MemoryExceeded {
+                peak: memory_peak,
+                limit: policy.memory_limit_bytes,
+            });
         }
         Ok(WasmExecution {
             module_hash: module.content_hash.clone(),
@@ -291,7 +312,9 @@ impl Default for WasmRegistry {
 
 impl WasmRegistry {
     pub fn new() -> Self {
-        Self { runtimes: Vec::new() }
+        Self {
+            runtimes: Vec::new(),
+        }
     }
 
     pub fn with_stub() -> Self {
@@ -305,7 +328,10 @@ impl WasmRegistry {
     }
 
     pub fn get(&self, name: &str) -> Option<&dyn WasmRuntime> {
-        self.runtimes.iter().find(|r| r.name() == name).map(|r| r.as_ref())
+        self.runtimes
+            .iter()
+            .find(|r| r.name() == name)
+            .map(|r| r.as_ref())
     }
 
     pub fn names(&self) -> Vec<&str> {
@@ -332,7 +358,10 @@ mod tests {
 
     #[test]
     fn module_rejects_empty() {
-        assert!(matches!(WasmModule::new("x", vec![]), Err(WasmError::EmptyModule)));
+        assert!(matches!(
+            WasmModule::new("x", vec![]),
+            Err(WasmError::EmptyModule)
+        ));
     }
 
     #[test]
@@ -388,7 +417,13 @@ mod tests {
         let mut p = WasmPolicy::strict("t");
         p.allow(WasmCapability::Network);
         p.allow(WasmCapability::Network);
-        assert_eq!(p.capabilities.iter().filter(|c| **c == WasmCapability::Network).count(), 1);
+        assert_eq!(
+            p.capabilities
+                .iter()
+                .filter(|c| **c == WasmCapability::Network)
+                .count(),
+            1
+        );
     }
 
     #[test]
@@ -396,7 +431,10 @@ mod tests {
         let big = vec![0u8; 1024 * 1024]; // 1 MiB
         let m = WasmModule::new("big", big).unwrap();
         let p = WasmPolicy::strict("t");
-        assert!(matches!(StubWasmRuntime.validate(&m, &p), Err(WasmError::ModuleTooLarge { .. })));
+        assert!(matches!(
+            StubWasmRuntime.validate(&m, &p),
+            Err(WasmError::ModuleTooLarge { .. })
+        ));
     }
 
     #[test]
@@ -410,7 +448,9 @@ mod tests {
     fn stub_execute_returns_trace() {
         let m = tiny_module();
         let p = WasmPolicy::strict("t");
-        let exec = StubWasmRuntime.execute(&m, &p, "main", &["a".into(), "b".into()], 100).unwrap();
+        let exec = StubWasmRuntime
+            .execute(&m, &p, "main", &["a".into(), "b".into()], 100)
+            .unwrap();
         assert!(exec.is_ok());
         assert_eq!(exec.module_hash, m.content_hash);
         assert_eq!(exec.policy_name, "t");
@@ -461,9 +501,20 @@ mod tests {
     fn registry_register_extra() {
         struct Dummy(&'static str);
         impl WasmRuntime for Dummy {
-            fn name(&self) -> &str { self.0 }
-            fn validate(&self, _: &WasmModule, _: &WasmPolicy) -> WasmResult<()> { Ok(()) }
-            fn execute(&self, _: &WasmModule, _: &WasmPolicy, _: &str, _: &[String], _: u64) -> WasmResult<WasmExecution> {
+            fn name(&self) -> &str {
+                self.0
+            }
+            fn validate(&self, _: &WasmModule, _: &WasmPolicy) -> WasmResult<()> {
+                Ok(())
+            }
+            fn execute(
+                &self,
+                _: &WasmModule,
+                _: &WasmPolicy,
+                _: &str,
+                _: &[String],
+                _: u64,
+            ) -> WasmResult<WasmExecution> {
                 Ok(WasmExecution {
                     module_hash: String::new(),
                     policy_name: String::new(),

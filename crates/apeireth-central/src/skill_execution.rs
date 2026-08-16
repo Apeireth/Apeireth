@@ -118,22 +118,13 @@ pub struct SkillInvocation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecutionError {
     /// 找不到 invocation_id.
-    UnknownInvocation {
-        id: InvocationId,
-    },
+    UnknownInvocation { id: InvocationId },
     /// invocation 已终止, 0 可再 advance.
-    AlreadyTerminated {
-        id: InvocationId,
-    },
+    AlreadyTerminated { id: InvocationId },
     /// TDD 顺序违例: green 步骤在 red 步骤之前.
-    TddOrderViolation {
-        id: InvocationId,
-        reason: String,
-    },
+    TddOrderViolation { id: InvocationId, reason: String },
     /// 已超最后 1 步.
-    NoMoreSteps {
-        id: InvocationId,
-    },
+    NoMoreSteps { id: InvocationId },
 }
 
 impl fmt::Display for ExecutionError {
@@ -221,12 +212,18 @@ impl SkillExecutor {
         exec.completed_at_unix_ms = Some(at_unix_ms);
         inv.step_history.push(exec);
         inv.status = if inv.step_history.len() == steps.len() {
-            SkillExecutionStatus::InProgress { step_index: next_index }
+            SkillExecutionStatus::InProgress {
+                step_index: next_index,
+            }
         } else if inv.step_history.len() + 1 == steps.len() {
             // 走完最后一步时, 留在 InProgress 让 complete() 终结
-            SkillExecutionStatus::InProgress { step_index: next_index }
+            SkillExecutionStatus::InProgress {
+                step_index: next_index,
+            }
         } else {
-            SkillExecutionStatus::InProgress { step_index: next_index }
+            SkillExecutionStatus::InProgress {
+                step_index: next_index,
+            }
         };
         Ok(next_index + 1)
     }
@@ -332,7 +329,9 @@ mod tests {
         let id = ex.start(SkillId::Brainstorming, 1000);
         let skill = BrainstormingSkill;
         for i in 1..=5 {
-            let idx = ex.advance_step(id, &skill, 1000 + i as u64).expect("advance");
+            let idx = ex
+                .advance_step(id, &skill, 1000 + i as u64)
+                .expect("advance");
             assert_eq!(idx, i);
         }
         let inv = ex.get(id).expect("inv");
@@ -344,10 +343,15 @@ mod tests {
         let mut ex = SkillExecutor::new();
         let id = ex.start(SkillId::TestDrivenDevelopment, 1000);
         let skill = TestDrivenDevelopmentSkill;
-        let idx = ex.advance_step(id, &skill, 1100).expect("advance step 1 (RED)");
+        let idx = ex
+            .advance_step(id, &skill, 1100)
+            .expect("advance step 1 (RED)");
         assert_eq!(idx, 1);
         let inv = ex.get(id).expect("inv");
-        assert!(inv.tdd_red_done, "after step 1 (RED), tdd_red_done must be true");
+        assert!(
+            inv.tdd_red_done,
+            "after step 1 (RED), tdd_red_done must be true"
+        );
     }
 
     #[test]

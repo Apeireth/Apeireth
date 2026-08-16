@@ -65,8 +65,8 @@
 
 pub mod agent;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod manager;
+mod organ_kani_proofs;
 // R127-2 P6-2: opencode 子代理 重试 — 4 专家 + AgentRouter (langgraph 829 cloned 借脑)
 pub mod subagent;
 
@@ -77,7 +77,7 @@ pub use manager::{
 };
 // R127-2 P6-2: re-export subagent 公开 API
 pub use subagent::{
-    AgentRouter, ExpertRole, OracleSubAgent, LibrarianSubAgent, ExploreSubAgent, FrontendSubAgent,
+    AgentRouter, ExpertRole, ExploreSubAgent, FrontendSubAgent, LibrarianSubAgent, OracleSubAgent,
     SubAgent, SubAgentError, SubAgentRegistry, DEFAULT_ORGAN_ROUTE_COUNT, EXPERT_ROLE_COUNT,
 };
 

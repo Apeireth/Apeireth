@@ -439,17 +439,29 @@ fn g1_e2e_mixed_3_paths() {
     let mut g = ResourceGovernor::new();
     // Allow
     assert_eq!(
-        g.check("apeireth.v1077_asi_v04_full_measurement", ResourceDimension::Rate, 100),
+        g.check(
+            "apeireth.v1077_asi_v04_full_measurement",
+            ResourceDimension::Rate,
+            100
+        ),
         GovernanceAction::Allow
     );
     // Throttle
     assert_eq!(
-        g.check("apeireth.v1458_asi_north_star_ceiling_chain_audit", ResourceDimension::Rate, 8),
+        g.check(
+            "apeireth.v1458_asi_north_star_ceiling_chain_audit",
+            ResourceDimension::Rate,
+            8
+        ),
         GovernanceAction::Throttle
     );
     // Reject
     assert_eq!(
-        g.check("apeireth.v1458_asi_north_star_ceiling_chain_audit", ResourceDimension::Rate, 15),
+        g.check(
+            "apeireth.v1458_asi_north_star_ceiling_chain_audit",
+            ResourceDimension::Rate,
+            15
+        ),
         GovernanceAction::Reject
     );
     // 3 events

@@ -97,10 +97,20 @@ impl fmt::Display for StateError {
                 write!(f, "[state not initialized] mode={mode:?}, organ={organ:?}")
             }
             Self::TypeMismatch { expected, actual } => {
-                write!(f, "[state type mismatch] expected={expected:?}, actual={actual:?}")
+                write!(
+                    f,
+                    "[state type mismatch] expected={expected:?}, actual={actual:?}"
+                )
             }
-            Self::Unsupported { mode, organ, reason } => {
-                write!(f, "[state unsupported] mode={mode:?}, organ={organ:?}, reason={reason}")
+            Self::Unsupported {
+                mode,
+                organ,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "[state unsupported] mode={mode:?}, organ={organ:?}, reason={reason}"
+                )
             }
             Self::Other { msg } => write!(f, "[state other] {msg}"),
         }
@@ -172,7 +182,9 @@ mod tests {
             organ: Organ::Mind,
             reason: "test".to_string(),
         };
-        let _ = StateError::Other { msg: "test".to_string() };
+        let _ = StateError::Other {
+            msg: "test".to_string(),
+        };
     }
 
     #[test]
@@ -211,7 +223,9 @@ mod tests {
         };
         assert_eq!(unsupported.kind(), StateErrorKind::Unsupported);
 
-        let other = StateError::Other { msg: "x".to_string() };
+        let other = StateError::Other {
+            msg: "x".to_string(),
+        };
         assert_eq!(other.kind(), StateErrorKind::Other);
     }
 

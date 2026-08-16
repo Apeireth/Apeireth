@@ -23,12 +23,11 @@
 //! - docs/stage4/architecture-*.md (LOCKED)
 //! - docs/stage5/stage5-construction-document.md (LOCKED)
 
-
 pub mod audit;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod error;
 pub mod manifest;
+mod organ_kani_proofs;
 pub mod plugins;
 pub mod registry;
 pub mod sandbox;

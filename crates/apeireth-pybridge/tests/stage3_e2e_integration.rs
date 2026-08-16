@@ -15,8 +15,8 @@
 use apeireth_pybridge::{
     cross_language_smoke_check, end_to_end_smoke_check, is_module_available, python_ext_enabled,
     python_is_available, r11_compat_version, r11_module_count, stage3_cross_module_count,
-    stage3_e2e_smoke, stage3_e2e_summary, BridgeModulePool, PoolConfig, R11_COMPAT_VERSION,
-    R11_MODULE_COUNT, Stage3E2ESmoke,
+    stage3_e2e_smoke, stage3_e2e_summary, BridgeModulePool, PoolConfig, Stage3E2ESmoke,
+    R11_COMPAT_VERSION, R11_MODULE_COUNT,
 };
 
 // 1. Stage 3 端到端 smoke 跨 build 可调用 + Display 含 6 子模块
@@ -37,7 +37,10 @@ fn stage3_e2e_seven_asi_modules_locked() {
     let smoke = stage3_e2e_smoke();
     assert_eq!(smoke.asi_module_count, 7);
     assert!(!smoke.ceiling_critical_modules.is_empty());
-    assert!(smoke.ceiling_critical_modules.iter().any(|n| n.contains("v1458")));
+    assert!(smoke
+        .ceiling_critical_modules
+        .iter()
+        .any(|n| n.contains("v1458")));
 }
 
 // 3. Stage 3 端到端 smoke: R11 1103 模块严守
@@ -168,10 +171,18 @@ fn stage3_e2e_pool_custom_config() {
 fn stage3_e2e_six_modules_in_scope() {
     let smoke: Stage3E2ESmoke = stage3_e2e_smoke();
     let expected = vec![
-        "bridge", "bridge_pool", "asi_modules", "r11_compat", "type_convert", "python_bindings",
+        "bridge",
+        "bridge_pool",
+        "asi_modules",
+        "r11_compat",
+        "type_convert",
+        "python_bindings",
     ];
     for exp in expected {
-        assert!(smoke.modules_in_scope.iter().any(|m| m == exp), "missing: {exp}");
+        assert!(
+            smoke.modules_in_scope.iter().any(|m| m == exp),
+            "missing: {exp}"
+        );
     }
 }
 

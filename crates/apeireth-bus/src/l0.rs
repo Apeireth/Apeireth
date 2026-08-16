@@ -87,9 +87,13 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
     pub async fn publish(&self, topic: &str, msg: BusMessage<T>) -> BusResult<()> {
         // R245: count priority tag once per publish attempt
         match msg.priority {
-            crate::MessagePriority::High => self.stats.high_priority.fetch_add(1, Ordering::Relaxed),
+            crate::MessagePriority::High => {
+                self.stats.high_priority.fetch_add(1, Ordering::Relaxed)
+            }
             crate::MessagePriority::Low => self.stats.low_priority.fetch_add(1, Ordering::Relaxed),
-            crate::MessagePriority::Normal => self.stats.normal_priority.fetch_add(1, Ordering::Relaxed),
+            crate::MessagePriority::Normal => {
+                self.stats.normal_priority.fetch_add(1, Ordering::Relaxed)
+            }
         };
         let tx = {
             let mut map = self.topics.write().await;

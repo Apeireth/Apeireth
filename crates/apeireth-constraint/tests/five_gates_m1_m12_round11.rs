@@ -1,5 +1,6 @@
 //! round11 (round12-02 retry) — FiveGates M1-M12 真实场景 24 测试
-#![allow(deprecated)] // 本测试专门验证 v15 之前 deprecated 的 verify_all_five_gates API, 保留以测试向后兼容
+#![allow(deprecated)]
+// 本测试专门验证 v15 之前 deprecated 的 verify_all_five_gates API, 保留以测试向后兼容
 //!
 //! **目标**: 为 FiveGates trait (v15 deprecated alias = FourGates + PermissionGrant)
 //! 覆盖 12 个真实攻击场景, 每个场景 1 unit + 1 integration = 24 个测试。

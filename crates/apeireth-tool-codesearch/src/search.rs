@@ -93,15 +93,29 @@ impl CodeSearcher {
         options: &SearchOptions,
     ) -> Result<Vec<SearchMatch>, SearchError> {
         let mut matches = Vec::new();
-        let search_content = if options.case_sensitive { content.to_string() } else { content.to_lowercase() };
-        let search_pattern = if options.case_sensitive { pattern.to_string() } else { pattern.to_lowercase() };
+        let search_content = if options.case_sensitive {
+            content.to_string()
+        } else {
+            content.to_lowercase()
+        };
+        let search_pattern = if options.case_sensitive {
+            pattern.to_string()
+        } else {
+            pattern.to_lowercase()
+        };
 
         for (line_idx, line) in content.lines().enumerate() {
-            let search_line = if options.case_sensitive { line.to_string() } else { line.to_lowercase() };
+            let search_line = if options.case_sensitive {
+                line.to_string()
+            } else {
+                line.to_lowercase()
+            };
             let mut start = 0;
             while let Some(pos) = search_line[start..].find(&search_pattern) {
                 let abs = start + pos;
-                if options.word_boundary && !is_word_boundary(content, line_idx, abs, search_pattern.len()) {
+                if options.word_boundary
+                    && !is_word_boundary(content, line_idx, abs, search_pattern.len())
+                {
                     start = abs + 1;
                     continue;
                 }
@@ -141,7 +155,8 @@ impl CodeSearcher {
             for m in re.find_iter(line) {
                 let start = m.start();
                 let end = m.end();
-                if options.word_boundary && !is_word_boundary(content, line_idx, start, end - start) {
+                if options.word_boundary && !is_word_boundary(content, line_idx, start, end - start)
+                {
                     continue;
                 }
                 matches.push(SearchMatch {
@@ -178,7 +193,8 @@ impl CodeSearcher {
                 let pat = patterns[m.pattern().as_usize()];
                 let start = m.start();
                 let end = m.end();
-                if options.word_boundary && !is_word_boundary(content, line_idx, start, end - start) {
+                if options.word_boundary && !is_word_boundary(content, line_idx, start, end - start)
+                {
                     continue;
                 }
                 matches.push(SearchMatch {
@@ -224,7 +240,9 @@ mod tests {
     fn literal_search_finds_matches() {
         let content = "fn hello() {}\nfn world() {}\n";
         let s = CodeSearcher::new();
-        let m = s.search_literal(content, "test.rs", "hello", &SearchOptions::default()).unwrap();
+        let m = s
+            .search_literal(content, "test.rs", "hello", &SearchOptions::default())
+            .unwrap();
         assert_eq!(m.len(), 1);
         assert_eq!(m[0].line, 1);
     }
@@ -233,8 +251,13 @@ mod tests {
     fn case_insensitive_literal() {
         let content = "Hello World\nHELLO AGAIN\n";
         let s = CodeSearcher::new();
-        let opts = SearchOptions { case_sensitive: false, ..Default::default() };
-        let m = s.search_literal(content, "test.rs", "hello", &opts).unwrap();
+        let opts = SearchOptions {
+            case_sensitive: false,
+            ..Default::default()
+        };
+        let m = s
+            .search_literal(content, "test.rs", "hello", &opts)
+            .unwrap();
         assert_eq!(m.len(), 2);
     }
 
@@ -242,7 +265,9 @@ mod tests {
     fn regex_search() {
         let content = "let x = 1;\nlet y = 2;\nconst z = 3;\n";
         let s = CodeSearcher::new();
-        let m = s.search_regex(content, "test.rs", r"^let\s+\w+", &SearchOptions::default()).unwrap();
+        let m = s
+            .search_regex(content, "test.rs", r"^let\s+\w+", &SearchOptions::default())
+            .unwrap();
         assert_eq!(m.len(), 2);
     }
 
@@ -250,7 +275,14 @@ mod tests {
     fn multi_pattern_search() {
         let content = "TODO: fix this\nFIXME: and this\nNOTE: also this\n";
         let s = CodeSearcher::new();
-        let m = s.search_multi(content, "test.rs", &["TODO", "FIXME"], &SearchOptions::default()).unwrap();
+        let m = s
+            .search_multi(
+                content,
+                "test.rs",
+                &["TODO", "FIXME"],
+                &SearchOptions::default(),
+            )
+            .unwrap();
         assert_eq!(m.len(), 2);
     }
 
@@ -258,8 +290,13 @@ mod tests {
     fn word_boundary() {
         let content = "fn helper() {}\nhelpers = [];\n";
         let s = CodeSearcher::new();
-        let opts = SearchOptions { word_boundary: true, ..Default::default() };
-        let m = s.search_literal(content, "test.rs", "helper", &opts).unwrap();
+        let opts = SearchOptions {
+            word_boundary: true,
+            ..Default::default()
+        };
+        let m = s
+            .search_literal(content, "test.rs", "helper", &opts)
+            .unwrap();
         assert_eq!(m.len(), 1, "should match `helper` but not `helpers`");
     }
 
@@ -267,8 +304,13 @@ mod tests {
     fn max_results_caps() {
         let content = "match\n".repeat(100);
         let s = CodeSearcher::new();
-        let opts = SearchOptions { max_results: 5, ..Default::default() };
-        let m = s.search_literal(&content, "test.rs", "match", &opts).unwrap();
+        let opts = SearchOptions {
+            max_results: 5,
+            ..Default::default()
+        };
+        let m = s
+            .search_literal(&content, "test.rs", "match", &opts)
+            .unwrap();
         assert_eq!(m.len(), 5);
     }
 
@@ -278,7 +320,9 @@ mod tests {
         let p = tmp.path().join("test.rs");
         fs::write(&p, "fn main() {}\nfn helper() {}\n").unwrap();
         let s = CodeSearcher::new();
-        let m = s.search_file(&p, SearchKind::Literal, "fn", &SearchOptions::default()).unwrap();
+        let m = s
+            .search_file(&p, SearchKind::Literal, "fn", &SearchOptions::default())
+            .unwrap();
         assert_eq!(m.len(), 2);
     }
 

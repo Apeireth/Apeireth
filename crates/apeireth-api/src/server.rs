@@ -65,10 +65,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
 use http::header::{AUTHORIZATION, CONTENT_TYPE};
 use http::{HeaderMap, Method};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -288,13 +288,13 @@ fn probe_provider_backend(state: &SharedState) -> DepCheckResult {
             "ok",
             format!("pipeline+config ok; api_key env=[{}]", key_set.join(",")),
         ),
-        (true, true) => (
-            "degraded",
-            "pipeline ok but no api_key env set".to_string(),
-        ),
+        (true, true) => ("degraded", "pipeline ok but no api_key env set".to_string()),
         (false, _) => (
             "down",
-            format!("pipeline http config invalid: {:?}", state.pipeline.http().config().validate().err()),
+            format!(
+                "pipeline http config invalid: {:?}",
+                state.pipeline.http().config().validate().err()
+            ),
         ),
     };
 
@@ -327,7 +327,10 @@ fn probe_memory_store() -> DepCheckResult {
                     name: "memory_store".to_string(),
                     status: "ok".to_string(),
                     check_type: "sqlite_open".to_string(),
-                    detail: format!("in-mem sqlite open ok; SELECT 1=1; PRAGMA user_version={}", uv_val),
+                    detail: format!(
+                        "in-mem sqlite open ok; SELECT 1=1; PRAGMA user_version={}",
+                        uv_val
+                    ),
                     elapsed_us: start.elapsed().as_micros() as u64,
                     real: true,
                 },
@@ -351,7 +354,10 @@ fn probe_memory_store() -> DepCheckResult {
                     name: "memory_store".to_string(),
                     status: "degraded".to_string(),
                     check_type: "sqlite_open".to_string(),
-                    detail: format!("SELECT 1 returned {} (expected 1); PRAGMA user_version={}", other, uv),
+                    detail: format!(
+                        "SELECT 1 returned {} (expected 1); PRAGMA user_version={}",
+                        other, uv
+                    ),
                     elapsed_us: start.elapsed().as_micros() as u64,
                     real: true,
                 },
@@ -410,7 +416,10 @@ fn probe_replay_cache(state: &SharedState) -> DepCheckResult {
                 "ResponseCache installed; counters ready (hit/miss/put)".to_string(),
             )
         }
-        None => ("not_initialized", "AppState.response_cache is None".to_string()),
+        None => (
+            "not_initialized",
+            "AppState.response_cache is None".to_string(),
+        ),
     };
     DepCheckResult {
         name: "replay_cache".to_string(),
@@ -538,8 +547,8 @@ async fn chat_completions(
         if let Some(cache) = state.response_cache.as_deref() {
             if let Some(cached) = cache.get(&normalized, kind).await {
                 span.set_cache_status("hit");
-                let resp = Json(protocol_handlers::openai_chat_from_normalized(&cached))
-                    .into_response();
+                let resp =
+                    Json(protocol_handlers::openai_chat_from_normalized(&cached)).into_response();
                 span.end_ok();
                 return resp;
             }
@@ -1005,7 +1014,12 @@ async fn verdict(
     // R120 (B4 战区 2): 关键路径 span
     let _span = {
         let mut s = KeyPathSpan::start(SPAN_VERDICT);
-        s.set_model(&format!("v1={}v2={}v3={}", &req.v1[..req.v1.len().min(20)], &req.v2[..req.v2.len().min(20)], &req.v3[..req.v3.len().min(20)]));
+        s.set_model(&format!(
+            "v1={}v2={}v3={}",
+            &req.v1[..req.v1.len().min(20)],
+            &req.v2[..req.v2.len().min(20)],
+            &req.v3[..req.v3.len().min(20)]
+        ));
         s
     };
     // V1+V2+V3 AND 门
@@ -1098,7 +1112,8 @@ mod tests {
             ("/v1/messages", ProtocolKind::AnthropicMessages),
         ];
         for (path, kind) in paths {
-            let url = protocol_handlers::endpoint_url("https://api.minimaxi.com", kind, "").expect("HTTP kind");
+            let url = protocol_handlers::endpoint_url("https://api.minimaxi.com", kind, "")
+                .expect("HTTP kind");
             assert!(url.ends_with(path), "URL {url} should end with {path}");
         }
     }
@@ -1110,7 +1125,8 @@ mod tests {
             "https://api.minimaxi.com",
             ProtocolKind::Gemini,
             "MiniMax-M3",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(
             url,
             "https://api.minimaxi.com/v1/gemini/v1beta/models/MiniMax-M3:generateContent"

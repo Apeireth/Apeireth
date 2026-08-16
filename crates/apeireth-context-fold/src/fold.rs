@@ -32,35 +32,77 @@ pub enum FoldError {
 }
 
 pub fn fold(content: &str, strategy: FoldStrategy, limit: usize) -> Result<FoldResult, FoldError> {
-    if limit == 0 { return Err(FoldError::InvalidLimit); }
+    if limit == 0 {
+        return Err(FoldError::InvalidLimit);
+    }
     let original_len = content.len();
     if original_len <= limit {
-        return Ok(FoldResult { folded: content.to_string(), markers: Vec::new(), original_len, folded_len: content.len() });
+        return Ok(FoldResult {
+            folded: content.to_string(),
+            markers: Vec::new(),
+            original_len,
+            folded_len: content.len(),
+        });
     }
     match strategy {
         FoldStrategy::Truncate => {
             let mut end = limit;
-            while end > 0 && !content.is_char_boundary(end) { end -= 1; }
-            Ok(FoldResult { folded: content[..end].to_string(), markers: vec![], original_len, folded_len: end })
+            while end > 0 && !content.is_char_boundary(end) {
+                end -= 1;
+            }
+            Ok(FoldResult {
+                folded: content[..end].to_string(),
+                markers: vec![],
+                original_len,
+                folded_len: end,
+            })
         }
         FoldStrategy::HeadTail => {
             let half = limit / 2;
             let head_end = find_boundary(content, half);
             let tail_start = find_boundary_from_end(content, half);
-            let marker = FoldMarker { kind: MarkerKind::HeadTail, payload: content[head_end..tail_start].to_string() };
-            let folded = format!("{}{}{}", &content[..head_end], marker.format_placeholder(), &content[tail_start..]);
-            Ok(FoldResult { folded_len: folded.len(), folded, markers: vec![marker], original_len })
+            let marker = FoldMarker {
+                kind: MarkerKind::HeadTail,
+                payload: content[head_end..tail_start].to_string(),
+            };
+            let folded = format!(
+                "{}{}{}",
+                &content[..head_end],
+                marker.format_placeholder(),
+                &content[tail_start..]
+            );
+            Ok(FoldResult {
+                folded_len: folded.len(),
+                folded,
+                markers: vec![marker],
+                original_len,
+            })
         }
         FoldStrategy::MarkerReplace => {
-            let marker = FoldMarker { kind: MarkerKind::Full, payload: content.to_string() };
+            let marker = FoldMarker {
+                kind: MarkerKind::Full,
+                payload: content.to_string(),
+            };
             let folded = marker.format_placeholder();
-            Ok(FoldResult { folded_len: folded.len(), folded, markers: vec![marker], original_len })
+            Ok(FoldResult {
+                folded_len: folded.len(),
+                folded,
+                markers: vec![marker],
+                original_len,
+            })
         }
         FoldStrategy::Summary => {
             // Honest stub: same as Truncate (no internal LLM)
             let mut end = limit;
-            while end > 0 && !content.is_char_boundary(end) { end -= 1; }
-            Ok(FoldResult { folded: content[..end].to_string(), markers: vec![], original_len, folded_len: end })
+            while end > 0 && !content.is_char_boundary(end) {
+                end -= 1;
+            }
+            Ok(FoldResult {
+                folded: content[..end].to_string(),
+                markers: vec![],
+                original_len,
+                folded_len: end,
+            })
         }
     }
 }
@@ -77,14 +119,18 @@ pub fn unfold(content: &str, markers: &[FoldMarker]) -> String {
 
 fn find_boundary(s: &str, target: usize) -> usize {
     let mut end = target.min(s.len());
-    while end > 0 && !s.is_char_boundary(end) { end -= 1; }
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
     end
 }
 
 fn find_boundary_from_end(s: &str, tail_len: usize) -> usize {
     let start = s.len().saturating_sub(tail_len);
     let mut end = start;
-    while end < s.len() && !s.is_char_boundary(end) { end += 1; }
+    while end < s.len() && !s.is_char_boundary(end) {
+        end += 1;
+    }
     end
 }
 
@@ -107,8 +153,17 @@ mod tests {
 
     #[test]
     fn head_tail_strategy() {
-        let r = fold("hello world this is a long sentence", FoldStrategy::HeadTail, 10).unwrap();
-        assert!(r.folded.contains("HEADTAIL"), "should contain HEADTAIL marker, got: {}", r.folded);
+        let r = fold(
+            "hello world this is a long sentence",
+            FoldStrategy::HeadTail,
+            10,
+        )
+        .unwrap();
+        assert!(
+            r.folded.contains("HEADTAIL"),
+            "should contain HEADTAIL marker, got: {}",
+            r.folded
+        );
         assert!(!r.markers.is_empty());
         // Unfold restores original
         let restored = unfold(&r.folded, &r.markers);
