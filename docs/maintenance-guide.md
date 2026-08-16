@@ -85,6 +85,7 @@
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
 | memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
 | memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
+| semantic_persist.rs (memory) | N5 artifact_sig 内容寻址缓存门禁 (VCP 吸收): SHA-256 内容签名 (纯手写, NIST 向量锚定) + 五条失效规则 (无记录/内容变/normalize stale/schema stale→重算, 全匹配→Hit 复用) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch 防脏读) | PersistentSemanticIndex::check_artifact / reindex_all + .artifact_sig.json sidecar |
 | thought_cluster.rs | 思维簇管理 (N4, VCP ThoughtClusterManager 吸收): AI 思维链文件按主题聚簇落盘 (「簇」后缀目录 + 按日归档 {日期}-{序}.md + 链注册 meta_thinking_chains.json + 确定性编辑/检索) + ThoughtClusterReader trait 口 (元自学习: 反思/做梦回读历史思考链做"思考的再思考") | reflection/dream `with_thought_reader` 注入点; 写入侧 LLM 驱动留部署层 (0 装 PASS) |
 | morphology.rs | 查询形态学 softmax (N7): 确定性文本特征 (长度/实体密度/疑问形态/分句/深度线索) → logits → softmax 分布 → 检索档位 (浅扫 1/标准 3/深爬 6) + CRAWL 期望预算; 纯函数同查询同档位, 温度可配 | assemble.rs inject_memory → crawl 预算 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
