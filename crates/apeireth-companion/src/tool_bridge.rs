@@ -212,24 +212,52 @@ impl Tool for ProposeCapabilityTool {
 }
 
 /// 「沙盘推演」工具 — oracle 套件: 世界状态 + 事件序列 → 规则推演各步状态.
-/// 纯内存推演, 无副作用. 规则语法: "id.key+delta" / "id.key-delta".
+/// 纯内存推演, 无副作用. 事件语法 (宽容, 实测模型书写习惯):
+/// - 增减: "id.key+delta" / "id.key-delta" (如 "主人.复习进度+0.3", "主人.焦虑-0.1")
+/// - 赋值: "id.key=delta" (delta 可带符号, 如 "主人.信心=0.5", "错题本A.收录数=8")
+/// - 编号前缀: "e1.id.key±delta" 自动剥离 "e<数字>." (模型常写 "e1.主人.信心=0.5")
 pub struct SimulateTool;
 
 impl SimulateTool {
-    /// 内置规则 apply: "id.key+delta".
+    /// 内置规则 apply — 宽容解析 (0 假装: 宽容是工程, 不是纵容 — 坏格式仍报错带示例).
     fn apply(state: &mut WorldState, event: &str) -> Result<(), String> {
-        let (path, delta_str) = event
-            .split_once(|c| c == '+' || c == '-')
-            .ok_or_else(|| format!("事件格式应为 id.key+delta: {event}"))?;
-        let delta: f64 = delta_str.parse().map_err(|_| format!("delta 非法: {delta_str}"))?;
-        let (id, key) = path.split_once('.').ok_or_else(|| format!("路径应为 id.key: {path}"))?;
-        let sign = if event.contains('+') { 1.0 } else { -1.0 };
+        let sep_idx = event
+            .find(|c| c == '+' || c == '-' || c == '=')
+            .ok_or_else(|| {
+                format!("事件格式应为 实体.属性±增量 (如 \"主人.复习进度+0.3\" / \"主人.信心=-0.1\"): {event}")
+            })?;
+        let sep = event.as_bytes()[sep_idx];
+        let (path, delta_str) = event.split_at(sep_idx);
+        let delta: f64 = delta_str[1..]
+            .trim()
+            .parse()
+            .map_err(|_| format!("delta 非法: {}", &delta_str[1..]))?;
+        // 语义: "+"/"-" = 增减, "=" = 赋值 (模型自然语义).
+        let is_assign = sep == b'=';
+        let sign = if sep == b'-' { -1.0 } else { 1.0 };
+        // 实体名容忍: "e1.主人.剩余时间h" → 剥离 "e<数字>." 前缀 (模型实测写法).
+        let mut path = path;
+        if let Some(rest) = path.strip_prefix('e') {
+            if let Some(dot) = rest.find('.') {
+                if rest[..dot].chars().all(|c| c.is_ascii_digit()) {
+                    path = &rest[dot + 1..];
+                }
+            }
+        }
+        let (id, key) = path
+            .split_once('.')
+            .ok_or_else(|| format!("路径应为 实体.属性: {path}"))?;
         let e = state
             .entities
             .iter_mut()
             .find(|e| e.id == id)
-            .ok_or_else(|| format!("实体不存在: {id}"))?;
-        *e.props.entry(key.to_string()).or_insert(0.0) += sign * delta;
+            .ok_or_else(|| format!("实体不存在: {id} (entities 的键就是实体名, 直接写名字如 主人)"))?;
+        let slot = e.props.entry(key.to_string()).or_insert(0.0);
+        if is_assign {
+            *slot = delta;
+        } else {
+            *slot += sign * delta;
+        }
         Ok(())
     }
 }
@@ -1124,5 +1152,72 @@ mod tests {
         let r = bridge.execute_if_allowed(&call).await;
         assert!(!r.success);
         assert!(r.error.as_deref().unwrap_or("").contains("主人批准"));
+    }
+
+    #[test]
+    fn simulate_apply_lenient_grammar_matches_model_writing() {
+        use crate::oracle::Entity;
+        use std::collections::HashMap;
+        let mut s = WorldState {
+            entities: vec![
+                Entity {
+                    id: "主人".into(),
+                    name: "主人".into(),
+                    props: HashMap::from([
+                        ("复习进度".into(), 0.3f64),
+                        ("焦虑".into(), 0.6f64),
+                        ("剩余时间h".into(), 48f64),
+                    ]),
+                },
+                Entity {
+                    id: "错题本A".into(),
+                    name: "错题本A".into(),
+                    props: HashMap::from([("收录数".into(), 3f64)]),
+                },
+            ],
+            tick: 0,
+        };
+        // 标准 + / -
+        SimulateTool::apply(&mut s, "主人.复习进度+0.2").unwrap();
+        assert!((s.prop("主人", "复习进度").unwrap() - 0.5).abs() < 1e-9);
+        SimulateTool::apply(&mut s, "主人.焦虑-0.1").unwrap();
+        assert!((s.prop("主人", "焦虑").unwrap() - 0.5).abs() < 1e-9);
+        SimulateTool::apply(&mut s, "主人.剩余时间h-24").unwrap();
+        assert!((s.prop("主人", "剩余时间h").unwrap() - 24.0).abs() < 1e-9, "48-24");
+        // 等号 = 赋值 (验收实况: "delta 非法: =24" — 模型用 = 表示设定)
+        SimulateTool::apply(&mut s, "主人.剩余时间h=48").unwrap();
+        assert!((s.prop("主人", "剩余时间h").unwrap() - 48.0).abs() < 1e-9, "赋值=48");
+        SimulateTool::apply(&mut s, "错题本A.收录数=8").unwrap();
+        assert!((s.prop("错题本A", "收录数").unwrap() - 8.0).abs() < 1e-9, "赋值=8");
+        // 编号前缀 "e1." 剥离 (验收实况: "实体不存在: e1")
+        SimulateTool::apply(&mut s, "e1.主人.信心=0.5").unwrap();
+        assert!((s.prop("主人", "信心").unwrap() - 0.5).abs() < 1e-9);
+        // 坏格式仍报错 (带示例), 未知实体报错带指引
+        assert!(SimulateTool::apply(&mut s, "主人 信心 48").is_err());
+        assert!(SimulateTool::apply(&mut s, "幽灵.复习进度+0.1").is_err());
+    }
+
+    #[tokio::test]
+    async fn simulate_tool_bridge_accepts_lenient_events() {
+        // 桥全链路: simulate 工具调用接受宽容语法 (验收实况复现)
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let call = ParsedToolCall {
+            tool_name: "simulate".into(),
+            args: json!({
+                "entities": {"主人": {"复习进度": 0.3, "信心": 0.2}},
+                "events": ["e1.主人.复习进度+0.3", "主人.信心=0.4", "主人.复习进度-0.1"]
+            }),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(r.success, "宽容语法应全通过: {:?}", r.error);
+        let steps = r.output["steps"].as_array().unwrap();
+        assert_eq!(steps.len(), 3);
+        let fin = &r.output["final"]["entities"]["主人"];
+        assert!((fin["复习进度"].as_f64().unwrap() - 0.5).abs() < 1e-9, "0.3+0.3-0.1");
+        assert!((fin["信心"].as_f64().unwrap() - 0.4).abs() < 1e-9, "=0.4 赋值");
     }
 }
