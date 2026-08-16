@@ -28,7 +28,12 @@ pub struct CacheStats {
 impl FetchCache {
     pub fn new(ttl_ms: u64) -> Self {
         Self {
-            inner: RwLock::new(Inner { entries: HashMap::new(), hits: 0, misses: 0, evictions: 0 }),
+            inner: RwLock::new(Inner {
+                entries: HashMap::new(),
+                hits: 0,
+                misses: 0,
+                evictions: 0,
+            }),
             ttl: Duration::from_millis(ttl_ms),
         }
     }
@@ -49,7 +54,8 @@ impl FetchCache {
 
     pub fn put(&self, key: impl Into<String>, value: impl Into<String>) {
         let mut g = self.inner.write();
-        g.entries.insert(key.into(), (value.into(), Instant::now() + self.ttl));
+        g.entries
+            .insert(key.into(), (value.into(), Instant::now() + self.ttl));
     }
 
     pub fn invalidate(&self, key: &str) -> bool {
@@ -62,12 +68,19 @@ impl FetchCache {
 
     pub fn stats(&self) -> CacheStats {
         let g = self.inner.read();
-        CacheStats { size: g.entries.len(), hits: g.hits, misses: g.misses, evictions: g.evictions }
+        CacheStats {
+            size: g.entries.len(),
+            hits: g.hits,
+            misses: g.misses,
+            evictions: g.evictions,
+        }
     }
 }
 
 impl Default for FetchCache {
-    fn default() -> Self { Self::new(60_000) }
+    fn default() -> Self {
+        Self::new(60_000)
+    }
 }
 
 #[cfg(test)]

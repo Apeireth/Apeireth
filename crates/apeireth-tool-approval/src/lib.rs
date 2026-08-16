@@ -78,16 +78,14 @@
 pub mod decision;
 pub mod fuzzy_bridge;
 // R177: tool approval invariants
-mod organ_kani_proofs;
+pub mod approval_bridge;
 pub mod history;
 pub mod manager;
+mod organ_kani_proofs;
 pub mod rule;
-pub mod approval_bridge;
 pub mod rule_trait;
 
-pub use decision::{
-    ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection,
-};
+pub use decision::{ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection};
 pub use fuzzy_bridge::{match_tool_name, match_tool_name_threshold};
 pub use history::{now_ms, CallRecord};
 pub use manager::{

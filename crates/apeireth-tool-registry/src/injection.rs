@@ -208,9 +208,7 @@ pub fn render_injection(
     let mut truncated = false;
     if char_count(&text) > budget.max_chars {
         truncated = true;
-        let keep = budget
-            .max_chars
-            .saturating_sub(char_count(TRUNCATION_HINT));
+        let keep = budget.max_chars.saturating_sub(char_count(TRUNCATION_HINT));
         let sliced: String = text.chars().take(keep).collect();
         text = format!("{}{}", sliced.trim_end(), TRUNCATION_HINT);
         // 极端小预算: suffix 本身超限 → 硬保 max_chars
@@ -246,9 +244,21 @@ mod tests {
 
     fn entries3() -> Vec<InjectionEntry> {
         vec![
-            entry("WebSearch", "搜索网页", "WebSearch 支持 google/tavily 双源检索, 返 top-k 摘要."),
-            entry("FileOperator", "读写文件", "FileOperator 支持 read/write/patch, 路径白名单内."),
-            entry("NoteRecall", "记忆检索", "NoteRecall 向量召回日记/笔记, 返 top-5 chunk."),
+            entry(
+                "WebSearch",
+                "搜索网页",
+                "WebSearch 支持 google/tavily 双源检索, 返 top-k 摘要.",
+            ),
+            entry(
+                "FileOperator",
+                "读写文件",
+                "FileOperator 支持 read/write/patch, 路径白名单内.",
+            ),
+            entry(
+                "NoteRecall",
+                "记忆检索",
+                "NoteRecall 向量召回日记/笔记, 返 top-5 chunk.",
+            ),
         ]
     }
 
@@ -286,7 +296,10 @@ mod tests {
     fn non_relevant_tool_stays_in_light_list_only() {
         let out = render_injection(&entries3(), &|_| false, &InjectionBudget::default());
         assert!(out.text.contains("FileOperator"), "轻清单仍含名字");
-        assert!(!out.text.contains("Expanded tool usage"), "无相关工具则无展开段");
+        assert!(
+            !out.text.contains("Expanded tool usage"),
+            "无相关工具则无展开段"
+        );
         assert!(out.expanded.is_empty());
         assert!(!out.truncated);
     }
@@ -295,16 +308,13 @@ mod tests {
     fn over_budget_drops_expansions_first_and_truncates_with_hint() {
         // 3 个相关工具各 8000 字符详情 → 总量 24000+ 超 16000
         let fat: Vec<InjectionEntry> = (0..3)
-            .map(|i| {
-                entry(
-                    &format!("BigTool{i}"),
-                    "大工具",
-                    &"详".repeat(8000),
-                )
-            })
+            .map(|i| entry(&format!("BigTool{i}"), "大工具", &"详".repeat(8000)))
             .collect();
         let out = render_injection(&fat, &|_| true, &InjectionBudget::default());
-        assert!(char_count(&out.text) <= MAX_INJECTION_CHARS, "必须 ≤ 16000 字符");
+        assert!(
+            char_count(&out.text) <= MAX_INJECTION_CHARS,
+            "必须 ≤ 16000 字符"
+        );
         // 展开段被预算挤压砍掉部分或全部
         assert!(out.expanded.len() < 3, "超预算应先砍展开段");
         // 若仍超限 → 硬截断 + 提示
@@ -340,7 +350,11 @@ mod tests {
         let many: Vec<InjectionEntry> = (0..50)
             .map(|i| entry(&format!("Tool{i:02}"), "工具描述一行", ""))
             .collect();
-        let out = render_injection(&many, &|_| false, &InjectionBudget::default().with_max_chars(600));
+        let out = render_injection(
+            &many,
+            &|_| false,
+            &InjectionBudget::default().with_max_chars(600),
+        );
         assert!(char_count(&out.text) <= 600);
         assert!(out.hidden_light > 0, "轻清单尾行被砍应计入 hidden_light");
     }
