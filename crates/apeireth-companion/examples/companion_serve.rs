@@ -60,7 +60,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::{Local, Utc};
+use chrono::{Datelike, Local, Utc};
 use serde_json::{json, Value};
 
 const BASE_URL: &str = "https://api.minimaxi.com";
@@ -389,6 +389,14 @@ impl UtteranceGenerator for TonalUtterance {
     }
 }
 
+/// 预处理链 ⓪: 当前时刻注入 (VCP AIMemoPrompt 对齐: 时间推理的绝对基准).
+/// 修复 2026-08-16: 之前不注入时刻 → AI 说「晚上好/周日」是猜的 (时间幻觉).
+fn inject_now() -> String {
+    let now = Local::now();
+    let week = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday().num_days_from_monday() as usize];
+    format!("【当前时刻】{} {} {}:{} (本机时区, 时间推理以此为准)", now.format("%Y-%m-%d"), week, now.format("%H"), now.format("%M"))
+}
+
 /// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 查询记忆会话 "me").
 /// 推理召回 (VCP AIMemoHandler 精神): query 含记忆暗示词且开启 → LLM 从候选重排 top 5.
 async fn inject_memory(
@@ -663,6 +671,7 @@ async fn chat_completions(
     let growth = inject_growth(&st.store);
     let prefs = MemoryExtractionService::new(Arc::clone(&st.store)).preference_injection();
     let mut injections: Vec<String> = Vec::new();
+    injections.push(inject_now());
     if !mem.is_empty() {
         injections.push(mem);
     }
