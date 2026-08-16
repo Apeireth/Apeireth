@@ -84,13 +84,15 @@
 | principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
 | memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
-| memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
+| memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + N6 Intrinsic Residual 锚增益 (实体逆频特异性×importance 组合排序, GraphRankConfig 权重可配; crawl 字符集残差锚增益; entity_counts 增量维护) + 注入【事实图】 | graph 三元组 + crawl 注入 |
 | semantic_persist.rs (memory) | N5 artifact_sig 内容寻址缓存门禁 (VCP 吸收): SHA-256 内容签名 (纯手写, NIST 向量锚定) + 五条失效规则 (无记录/内容变/normalize stale/schema stale→重算, 全匹配→Hit 复用) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch 防脏读) | PersistentSemanticIndex::check_artifact / reindex_all + .artifact_sig.json sidecar |
 | thought_cluster.rs | 思维簇管理 (N4, VCP ThoughtClusterManager 吸收): AI 思维链文件按主题聚簇落盘 (「簇」后缀目录 + 按日归档 {日期}-{序}.md + 链注册 meta_thinking_chains.json + 确定性编辑/检索) + ThoughtClusterReader trait 口 (元自学习: 反思/做梦回读历史思考链做"思考的再思考") | reflection/dream `with_thought_reader` 注入点; 写入侧 LLM 驱动留部署层 (0 装 PASS) |
 | morphology.rs | 查询形态学 softmax (N7): 确定性文本特征 (长度/实体密度/疑问形态/分句/深度线索) → logits → softmax 分布 → 检索档位 (浅扫 1/标准 3/深爬 6) + CRAWL 期望预算; 纯函数同查询同档位, 温度可配 | assemble.rs inject_memory → crawl 预算 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
 | context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) | 注入链统一入口 |
 | assemble.rs | CompanionApp 机制装配器 (审计 P0#1): L0 Identity + L1 Essential Story 常驻 (mempalace §5.6) + 注入管线 + 提炼调度 (run_extraction/extraction_due) + 滚动摘要 (summarize_dialog/summarize_due) + 自成长 (refine_experience/export_promotion_candidates) + LLM 调用点 trait (DeepRecall/DialogSummarizer/ExperienceRefiner) | serve/TUI/CLI 复用 |
+| semantic_router.rs (gateway) | N12①: 语义模型路由适配件 (VCP semanticModelRouter 吸收): 虚拟模型名 (ApeirethModelAuto/预设名) + 意图选模型 (上下文加权向量×route 描述余弦相似度×阈值) + 容灾链 (命中+failoverPool→default→fallback 去重, dispatch 按链容灾); trait 口 Embedder/ModelExecutor (真实现留部署层); 0 假装: 未接 Gateway 帧管线 | gateway lib (N12) |
+| reasoning_adapter.rs (provider) | N12②: 推理字段归一化适配件 (VCP reasoningContentAdapter 吸收): 12 别名递归提取→片段级去重→think 块包装→按模型白名单下发 + 出向剥离; http_dispatch 响应路径已接线 (默认关, env 显式开启) | http_dispatch (N12) |
 | semantic.rs + fold_block.rs (apeireth-context-fold) | 记忆域深化 §5.1 语义折叠 (注入段按相关度评分, 低相关段折叠为摘要占位, 嵌入可 mock+确定性内置评分器, 无损展开) + N11 FoldBlock 分级显隐 (`[===vcp_fold:阈值===]` 行标记, 相似度≥阈值才展开, 未展开留"还收纳了 N 组"提示); VCP ContextFoldingV2/foldProtocol 精神 Rust 原生移植 | 注入段折叠后仍可过 fold() 预算截断, 与 ContextAssembler 协作不冲突 |
 | prompt_assembler.rs | 提示词装配引擎 (占位符变量宇宙, backlog N9, VCP messageProcessor 范式吸收): 分型变量源 (VariableSource trait: identity/state/goals/memory/time) + 特权角色 (agent/toolbox 仅 system 展开, 系统标记 user 可配置) + AgentGuard 全上下文单 agent + ToolboxGuard 每种一次 + 循环依赖检测 (递归栈+深度上限) + assemble() 消费 ContextAssembler (预算→展开→复用预算语义重截断) | ContextAssembler 输出 (接线 serve 链路属后续任务, 0 装 PASS) |
 | pii.rs + redactor.rs (apeireth-guard crate) | PrivacyGuard 文本脱敏: 8 类检测 (Email/Phone/Ssn/CreditCard/Ip/UrlWithCredentials + SecretToken 7 类密钥前缀 sk-/ghp_/AKIA... + EnvSecret 敏感键名 KEY=VALUE/KEY: VALUE 值部) + 4 策略脱敏 + ring buffer 审计; 重叠匹配安全 | tool_bridge.rs / gateway guard_bridge.rs / daemon.rs 出站护栏 |
@@ -135,4 +137,9 @@
 · `APEIRETH_DEEP_RECALL=1` (推理召回) · `APEIRETH_MAX_TOKENS` (输出上限, 默认 8192)
 · `APEIRETH_EXTRACT_INTERVAL_SECONDS` (提炼节流, 默认 600) · `APEIRETH_DREAM_QUIET_SECONDS` (做梦安静期, 默认 6h)
 · `APEIRETH_REFLECT_PERIOD_HOURS` (反思周期, 默认 24h) · `APEIRETH_GRANT` (启动即授权 "工具:小时")
-· `APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID` (离线送达, 可选) · `APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID` (Telegram 离线送达, 可选) · `APEIRETH_SEED_MEMORY` (种子, 演示) · `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
+· `APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID` (离线送达, 可选) · `APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID` (Telegram 离线送达, 可选) · `APEIRETH_SEED_MEMORY` (种子, 演示)
+
+### gateway/provider 适配层环境变量 (N12)
+`APEIRETH_REASONING_ENABLED=1/true` (推理归一化总开关, 默认关, VCP 对齐)
+· `APEIRETH_REASONING_MODEL_FILTERS` (逗号分隔模型子串白名单, 空=不转换任何模型)
+· `APEIRETH_REASONING_TAG` (think 块标签, 默认 think; 仅 think/thinking 两种归一结果) · `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
