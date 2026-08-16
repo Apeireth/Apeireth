@@ -83,6 +83,7 @@ pub mod reflexion;  // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRI
 pub mod topic_groups;  // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
 pub mod cross_diary;  // §5.1④: 跨日记关联 — diary↔memory_graph 确定性联动 (共享token建链+双向查询+注入trait口)
 pub mod context;
+pub mod context_rot; // M1: Context Rot 度量 + compaction 段编辑原语 (rot_score 三因子确定性, LLM 版留 trait 口)
 pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
 pub mod assemble;
 pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
