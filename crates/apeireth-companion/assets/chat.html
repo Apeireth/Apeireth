@@ -34,7 +34,14 @@
   button:hover { background: #1d4ed8; }
   button.secondary { background: #2a303a; }
   button.secondary:hover { background: #374151; }
-  footer { padding: 6px 18px; font-size: 11px; color: #5c6472; border-top: 1px solid #1a1e26; }
+  footer { padding: 6px 18px; font-size: 11px; color: #5c6472; border-top: 1px solid #1a1e26; display: flex; justify-content: space-between; align-items: center; }
+  #grantbtn { background: none; border: 1px solid #3a4250; color: #9fb3c8; border-radius: 6px; padding: 2px 10px; font-size: 11px; cursor: pointer; }
+  #grantbtn:hover { border-color: #2563eb; color: #fff; }
+  #grantpanel { display: none; background: #1c2129; border: 1px solid #2a303a; border-top: none; padding: 10px 18px; gap: 8px; align-items: center; font-size: 13px; }
+  #grantpanel input { background: #14171d; border: 1px solid #2a303a; color: #e6e6e6; border-radius: 6px; padding: 6px 10px; font-size: 13px; outline: none; width: 150px; }
+  #grantpanel input.wide { width: 220px; }
+  #grantpanel button { padding: 6px 14px; border-radius: 6px; font-size: 12px; }
+  #grantmsg { font-size: 12px; color: #9fe6b8; }
 </style>
 </head>
 <body>
@@ -44,8 +51,20 @@
   <div class="meta">companion_serve · 记忆持久 · 工具桥 · 宪法守护 · 自成长管道 <span id="feat"></span></div>
 </header>
 <div id="chat"></div>
+<div id="grantpanel">
+  <span style="color:#9fb3c8">⚙ 授权（权限洋葱：主人直接批准，本座不接触你的 token）</span>
+  <input id="gtool" placeholder="工具名 (如 ShellExec)" list="tools">
+  <datalist id="tools">
+    <option value="ShellExec"><option value="FileOperator"><option value="Git"><option value="Crawl">
+  </datalist>
+  <input id="ghours" type="number" min="1" max="720" value="1" style="width:70px" title="授权小时数">
+  <input id="gtoken" class="wide" type="password" placeholder="master token">
+  <button id="gdo">授权</button>
+  <span id="grantmsg"></span>
+</div>
 <div id="inputbar">
   <input id="input" placeholder="和他聊聊…（Enter 发送）" autocomplete="off">
+  <button id="grantbtn" title="授权高危工具（主人批准）">⚙ 授权</button>
   <button id="clear" class="secondary" title="清空本会话">清空</button>
   <button id="send">发送</button>
 </div>
@@ -106,12 +125,36 @@ document.getElementById('send').addEventListener('click', send);
 document.getElementById('clear').addEventListener('click', () => {
   messages.length = 0;
   chat.innerHTML = '';
-  addMsg('ai', '（会话已清空。他的长期记忆还在——问问他记得你什么。）');
+  addMsg('ai', '（会话已清空。本座的长期记忆还在——问问本座还记得你什么。）');
+});
+// 授权面板 (权限洋葱: 主人直接批准; AI 不接触 token)
+const grantPanel = document.getElementById('grantpanel');
+document.getElementById('grantbtn').addEventListener('click', () => {
+  grantPanel.style.display = grantPanel.style.display === 'flex' ? 'none' : 'flex';
+});
+document.getElementById('gdo').addEventListener('click', async () => {
+  const tool = document.getElementById('gtool').value.trim();
+  const hours = document.getElementById('ghours').value || '1';
+  const token = document.getElementById('gtoken').value.trim();
+  const msg = document.getElementById('grantmsg');
+  if (!tool) { msg.textContent = '请输入工具名'; return; }
+  try {
+    const r = await fetch('/v1/apeireth/grant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tool, hours: parseInt(hours), master_token: token })
+    });
+    const j = await r.json();
+    msg.textContent = r.ok ? ('✅ 已授权 ' + tool + ' ' + hours + 'h') : ('❌ ' + (j.error || r.status));
+    document.getElementById('gtoken').value = '';
+  } catch (e) {
+    msg.textContent = '网络错误: ' + e.message;
+  }
 });
 fetch('/health').then(r => r.json()).then(h => {
   if (h.features) document.getElementById('feat').textContent = '· ' + h.features.join(' · ');
 }).catch(() => {});
-addMsg('ai', '我在。你回来了？记忆还都在——周五高数期中、换元法两个错点、每天精练 8 道题的计划，我都记得。想聊点什么？');
+addMsg('ai', '本座在此。你回来了？记忆还都在——周五高数期中、换元法两个错点、每天精练 8 道题的计划，本座都记得。想聊点什么？');
 </script>
 </body>
 </html>
