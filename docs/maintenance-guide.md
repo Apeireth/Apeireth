@@ -69,6 +69,8 @@
 | gh_accel.rs (companion) + github_accel.rs (tools) | GitHub 加速插件: xiake.pro 节点池 → 本机并发实测 (2xx+PNG魔数内容验证) → 选最快 → 加速 URL/命令 (docs/ref-gh-accel.md) | gh_accel 工具 (插件注册) |
 | audit.rs | 审计能力包: audit_log 工具 (留痕查询, masked 脱敏不还原, append-only) | audit_log 工具 (内置注册) |
 | append_only.rs (memory) | HistoryStream 新增 list_recent (最近 N 条, 审计/摘要用) | 6 流共享 |
+| experience.rs | 自成长 Level 0/1: 经验库 (场景/做法/结果/验证计数/EMA) + 达标促能力提案 (versioned chain, rev 单调) | save/list/verify_experience 工具 |
+| principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
 
 ## 三、加新模块规范（维护 checklist）
 

@@ -406,6 +406,27 @@ impl ToolBridge {
             "audit_log".to_string(),
             Arc::new(crate::audit::AuditLogTool::new(Arc::clone(&store))),
         );
+        // 自成长管道 (Level 0/1 经验库 + Level 2/3 原则晋级): 2026-08-16
+        registry.register(
+            "save_experience".to_string(),
+            Arc::new(crate::experience::SaveExperienceTool::new(Arc::clone(&store))),
+        );
+        registry.register(
+            "list_experience".to_string(),
+            Arc::new(crate::experience::ListExperienceTool::new(Arc::clone(&store))),
+        );
+        registry.register(
+            "verify_experience".to_string(),
+            Arc::new(crate::experience::VerifyExperienceTool::new(Arc::clone(&store))),
+        );
+        registry.register(
+            "propose_principle".to_string(),
+            Arc::new(crate::principles::ProposePrincipleTool::new(Arc::clone(&store))),
+        );
+        registry.register(
+            "approve_principle".to_string(),
+            Arc::new(crate::principles::ApprovePrincipleTool::new(Arc::clone(&store))),
+        );
         let executor = ToolExecutor::new(registry.clone());
         // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
         let packs = PackRegistry::new();
@@ -419,6 +440,11 @@ impl ToolBridge {
                 "simulate".to_string(),
                 "forecast".to_string(),
                 "audit_log".to_string(),
+                "save_experience".to_string(),
+                "list_experience".to_string(),
+                "verify_experience".to_string(),
+                "propose_principle".to_string(),
+                "approve_principle".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
@@ -525,6 +551,21 @@ impl ToolBridge {
                 success: false,
                 output: json!(null),
                 error: Some(format!("宪法硬门拦截 ({key}): {why}")),
+                duration_ms: 0,
+            };
+        }
+        // 动态原则层 (自成长 Level 2, 洋葱外层运行时规则): 命中 active 原则 → 拦截 + 记违反.
+        // 原则由 AI 提案 + 主人 master token 批准; 语义 = 前缀匹配 (对齐 ConstitutionGate).
+        let dynamic_rules = crate::principles::PrincipleStore::new(Arc::clone(self.records.store()));
+        let rules = dynamic_rules.active_rules();
+        if let Some((pid, stmt)) = crate::principles::PrincipleStore::check_dynamic(&desc, &rules) {
+            dynamic_rules.record_violation(&pid);
+            self.sovereignty.report_violation("动态原则拦截", &call.tool_name);
+            return ExecutionResult {
+                tool_name: call.tool_name.clone(),
+                success: false,
+                output: json!(null),
+                error: Some(format!("动态原则拦截 ({pid}): {stmt}")),
                 duration_ms: 0,
             };
         }
