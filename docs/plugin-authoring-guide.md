@@ -84,7 +84,7 @@ pub trait Tool: Send + Sync {
 
 ### 1.3 完整示例：EducationDxPlugin（真代码摘录）
 
-来源：`crates/apeireth-companion/src/education.rs:152-206`（原文摘录，省略号处为工具内部规则逻辑）
+来源：`crates/apeireth-companion/src/education.rs:152-206`（原文摘录；`analyze`/`to_json` 内部规则逻辑见源文件）
 
 ```rust
 #[async_trait::async_trait]
@@ -493,7 +493,7 @@ impl Plugin for WeatherSourcePlugin {
 | `Plugin` trait / `PluginRegistry` | `crates/apeireth-companion/src/plugin.rs:18-26` / `29-90` |
 | `Tool` trait | `crates/apeireth-tool-registry/src/trait_def.rs:27-45` |
 | `ToolKind` 6 类 / `ToolAxes` 5 轴 | `crates/apeireth-tool-registry/src/types.rs:42-66` / 各轴 enum |
-| `ToolBridge`（registry/packs/执行链/审批规则/风险映射） | `crates/apeireth-companion/src/tool_bridge.rs:358-483` / `552-565` / `436-468` / `541-550` |
+| `ToolBridge`（registry/packs/执行链/审批规则/风险映射） | `crates/apeireth-companion/src/tool_bridge.rs:358-483` / `552-699` / `436-468` / `541-550` |
 | `PermissionPack` / `PackRegistry`（日常包/revoke_by_name） | `crates/apeireth-companion/src/packs.rs:27-124` / `141-222` |
 | `ConstitutionGate` 硬门规则表 | `crates/apeireth-companion/src/constitution_gate.rs:14-30` |
 | `SuiteDef` / `SuiteCatalog::install_with_plugins` | `crates/apeireth-companion/src/suites.rs:38-53` / `164-203` |
