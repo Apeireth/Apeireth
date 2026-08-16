@@ -58,6 +58,10 @@
 | tone.rs | Bond→语调提示 | 渲染层 |
 | daily_summary.rs | 每日摘要数据源 | §6.4 UI 后端 |
 | clock.rs (core) | 虚拟时钟 (时间机制快进测试) | 全部时间敏感模块 |
+| constitution_gate.rs | 结构化宪法硬门 (编译期规则表, 零成本, LLM 评审前) | ToolBridge (全风险级别) |
+| memory_injection.rs | 反幻觉记忆注入 (闭世界证据: 编号列表+禁止声称记得) | 渲染层 |
+| confidence.rs | Beta-Binomial 置信度 (数学化自信度) | capability / 自测 |
+| evolution_gate.rs | 验证闸门流水线 (fix loop/no-progress/预算 fail-open/回滚收据) | 能力演化回路 |
 
 ## 三、加新模块规范（维护 checklist）
 
