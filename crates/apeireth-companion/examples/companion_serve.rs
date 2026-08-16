@@ -345,7 +345,7 @@ fn inject_today(store: &Arc<SqliteMemoryStore>) -> String {
     build_daily_summary(&today, &pairs, tool_records).render()
 }
 
-/// 预处理链 ③: 自成长管道注入 — 待提案经验 + 待批准原则候选 (Level 1/2 驱动).
+/// 预处理链 ③: 自成长管道注入 — 待提案经验 + 原则状态 (Level 1/2 驱动).
 fn inject_growth(store: &Arc<SqliteMemoryStore>) -> String {
     let mut parts: Vec<String> = Vec::new();
     // Level 1: 经验达标 → 促能力提案
@@ -353,8 +353,9 @@ fn inject_growth(store: &Arc<SqliteMemoryStore>) -> String {
     if !exp_hint.is_empty() {
         parts.push(exp_hint);
     }
-    // Level 2: pending 原则候选 → 报告主人 (批准权在主人: approve_principle + master token)
-    let pending = PrincipleStore::new(Arc::clone(store)).list(Some("pending"));
+    // Level 2: 原则状态 — pending 待主人批准 + active 生效中 (含违反计数, 审计可见)
+    let ps = PrincipleStore::new(Arc::clone(store));
+    let pending = ps.list(Some("pending"));
     if !pending.is_empty() {
         let mut s = String::from("【原则候选】以下原则待主人批准 (主人用 approve_principle 传入 master token 批准; 批准后叠加到工具执行检查):\n");
         for p in pending.iter().take(5) {
@@ -362,7 +363,100 @@ fn inject_growth(store: &Arc<SqliteMemoryStore>) -> String {
         }
         parts.push(s);
     }
+    let active = ps.active_rules();
+    if !active.is_empty() {
+        let mut s = String::from("【动态原则(生效中)】工具执行检查会拦截违反这些原则的动作:\n");
+        for p in active.iter().take(8) {
+            s.push_str(&format!("  • {} (违反 {} 次)\n", p.statement, p.violations));
+        }
+        parts.push(s);
+    }
     parts.join("\n")
+}
+
+/// 延伸 1: 反思周期完成 → LLM 提炼「可复用经验」 (场景/做法/结果) → 经验库.
+/// 0 假装: 提炼失败/解析失败 → 如实返回 Err, 不硬造经验.
+async fn extract_experience_from_reflection(
+    store: &Arc<SqliteMemoryStore>,
+    pipeline: &Arc<Pipeline>,
+) -> Result<Option<apeireth_companion::experience::Experience>, String> {
+    let eps = store.recent_episodes(MEMORY_SESSION, 100).unwrap_or_default();
+    let reflects: Vec<String> = eps
+        .iter()
+        .filter(|e| e.id.starts_with("reflect-"))
+        .take(3)
+        .map(|e| e.content.clone())
+        .collect();
+    if reflects.is_empty() {
+        return Ok(None);
+    }
+    let req = OpenAiChatRequest {
+        model: MODEL.to_string(),
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system".to_string(),
+                content: json!("你是阿佩瑞斯的经验提炼员。从反思记录中提炼一条可复用经验, 只输出 JSON: {\"scene\": \"触发场景\", \"practice\": \"做法\", \"result\": \"结果\"}。没有可提炼的就输出 {\"scene\": \"\"}。"),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+            OpenAiChatMessage {
+                role: "user".to_string(),
+                content: json!(format!("反思记录:\n{}", reflects.join("\n---\n"))),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+        ],
+        temperature: Some(0.3),
+        max_tokens: Some(300),
+        stream: false,
+        stop: None,
+        tools: None,
+        tool_choice: None,
+    };
+    let normalized = openai_chat_to_normalized(&req);
+    let resp = dispatch(pipeline, ProtocolKind::OpenAiChat, normalized)
+        .await
+        .map_err(|e| format!("提炼 LLM 调用失败: {e}"))?;
+    let chat = openai_chat_from_normalized(&resp);
+    let content = chat
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .unwrap_or_default();
+    // 剥 <think> 后取 JSON 段 (首个 { 到末个 })
+    let text = match content.find("</think>") {
+        Some(i) => content[i + 8..].to_string(),
+        None => content,
+    };
+    let (start, end) = match (text.find('{'), text.rfind('}')) {
+        (Some(a), Some(b)) if b > a => (a, b + 1),
+        _ => return Ok(None),
+    };
+    let parsed: Value = serde_json::from_str(&text[start..end])
+        .map_err(|e| format!("经验 JSON 解析失败 (如实放弃): {e}"))?;
+    let scene = parsed.get("scene").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    if scene.is_empty() {
+        return Ok(None); // LLM 判定无可提炼
+    }
+    let practice = parsed.get("practice").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let result = parsed.get("result").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let now = chrono::Utc::now().timestamp();
+    let id = format!("exp-{}", uuid::Uuid::new_v4());
+    Ok(Some(apeireth_companion::experience::Experience {
+        id: id.clone(),
+        chain: id,
+        rev: 1,
+        scene,
+        practice: if practice.is_empty() { "未提炼出做法".into() } else { practice },
+        result,
+        outcome: "partial".into(),
+        verify_count: 0,
+        score: 0.5,
+        ready: false,
+        proposed: false,
+        created_at: now,
+        updated_at: now,
+    }))
 }
 
 /// 伙伴主链路: 喂节律 → 记忆/今日注入 → LLM+工具循环 → OpenAI 兼容响应.
@@ -596,11 +690,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_summarizer(Arc::new(MiniMaxDreamSummarizer {
             pipeline: Arc::clone(&pipeline),
         }));
+    let reflect_period = std::env::var("APEIRETH_REFLECT_PERIOD_HOURS")
+        .ok()
+        .and_then(|v| v.parse::<f64>().ok())
+        .map(|h| chrono::Duration::milliseconds((h * 3600_000.0) as i64))
+        .unwrap_or(chrono::Duration::days(1));
     let reflect = ReflectionScheduler::new(
         Arc::clone(&store),
         apeireth_core::clock::system_clock(),
         MEMORY_SESSION.to_string(),
-    );
+    )
+    .with_period(reflect_period);
     let tone = tone_hint(&apeireth_companion::bond::Bond::new());
     let daemon = CompanionDaemon::new(
         apeireth_companion::bond::Bond::new(),
@@ -621,7 +721,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_dream(dream)
     .with_reflection(reflect);
-    println!("[daemon] 常驻: 做梦(LLM 摘要, 安静期 {:?}) + 反思(24h) + 涌现(LLM 润色, 30s 节流+退避)", quiet);
+    println!("[daemon] 常驻: 做梦(LLM 摘要, 安静期 {:?}) + 反思({:?} 周期) + 涌现(LLM 润色, 30s 节流+退避)", quiet, reflect_period);
 
     // 互动通知通道: handler 发「主人来消息了」, daemon 喂节律 + 重置做梦安静期
     let (tx_interact, rx_interact) = tokio::sync::mpsc::channel::<chrono::DateTime<Utc>>(64);
@@ -645,14 +745,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   http://127.0.0.1:{port}/v1  (模型 MiniMax-M3, Key 任意非空)");
     println!("   会话标签: X-Apeireth-Continuity (缺省 {}) · 工具: 全部可见, 执行受宪法/权限约束", state.subject.as_str());
     // daemon 循环与 HTTP 同 task 交替 (daemon 内部 RefCell 跨 await → 非 Send, 不能 spawn)
+    let d_store = Arc::clone(&state.store);
+    let d_pipeline = Arc::clone(&state.pipeline);
     tokio::select! {
         r = axum::serve(listener, app) => { r?; }
-        _ = daemon_loop(daemon, rx_interact) => {}
+        _ = daemon_loop(daemon, rx_interact, d_store, d_pipeline) => {}
     }
     Ok(())
 }
 
-/// daemon 常驻循环: 定时 step (做梦/反思/涌现) + 响应互动通知 (喂节律).
+/// daemon 常驻循环: 定时 step (做梦/反思/涌现) + 响应互动通知 (喂节律)
+/// + 自成长延伸: 反思完成→提炼经验入库; 晋级候选自动成文.
 /// 具体类型 (Delivery trait 私有, 不能作泛型约束); daemon 非 Send, 只在同 task 内用.
 type ServeDaemon = CompanionDaemon<
     CompanionDelivery<ThrottledUtterance<TonalUtterance>, ConsoleSink>,
@@ -661,13 +764,47 @@ type ServeDaemon = CompanionDaemon<
 async fn daemon_loop(
     mut daemon: ServeDaemon,
     mut rx: tokio::sync::mpsc::Receiver<chrono::DateTime<Utc>>,
+    store: Arc<SqliteMemoryStore>,
+    pipeline: Arc<Pipeline>,
 ) {
+    let mut last_cycles: u64 = daemon
+        .reflection
+        .as_ref()
+        .map(|r| r.cycles_completed())
+        .unwrap_or(0);
     let mut ticker = tokio::time::interval(Duration::from_secs(60));
     loop {
         tokio::select! {
             _ = ticker.tick() => {
                 let t0 = std::time::Instant::now();
                 daemon.step().await;
+                // 延伸 1: 反思周期完成 → LLM 提炼经验入经验库 (自成长管道 Level 0)
+                let cycles = daemon.reflection.as_ref().map(|r| r.cycles_completed()).unwrap_or(0);
+                if cycles > last_cycles {
+                    eprintln!("[growth] 反思周期完成 (累计 {cycles}), 提炼经验...");
+                    match extract_experience_from_reflection(&store, &pipeline).await {
+                        Ok(Some(exp)) => {
+                            ExperienceStore::new(Arc::clone(&store)).save(&exp)
+                                .map(|_| eprintln!("[growth] 经验入库: {}", exp.scene))
+                                .unwrap_or_else(|e| eprintln!("[growth] 经验入库失败: {e}"));
+                        }
+                        Ok(None) => eprintln!("[growth] 本次反思无可提炼经验"),
+                        Err(e) => eprintln!("[growth] 经验提炼失败: {e}"),
+                    }
+                    last_cycles = cycles;
+                }
+                // 延伸 3: 晋级候选自动成文 (数据目录 promotion-candidates.md; 空则不写)
+                let cands = PrincipleStore::new(Arc::clone(&store)).export_promotion();
+                if !cands.is_empty() {
+                    if let Ok(path) = apeireth_companion::daemon::default_memory_path() {
+                        if let Some(dir) = path.parent() {
+                            let _ = std::fs::create_dir_all(dir);
+                            if std::fs::write(dir.join("promotion-candidates.md"), &cands).is_ok() {
+                                eprintln!("[growth] 晋级候选已成文: {:?}", dir.join("promotion-candidates.md"));
+                            }
+                        }
+                    }
+                }
                 eprintln!("[daemon-loop] tick done in {:?}", t0.elapsed());
             }
             Some(at) = rx.recv() => daemon.on_user_message(at),
