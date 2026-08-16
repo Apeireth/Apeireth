@@ -36,7 +36,7 @@ use apeireth_api::protocol_handlers::{
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::daily_summary::build_daily_summary;
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, ConsoleSink, ThrottledUtterance, UtteranceGenerator,
+    CompanionDaemon, CompanionDelivery, Sink, ThrottledUtterance, UtteranceGenerator,
     continuity_id_from_env, open_memory_store,
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
@@ -48,7 +48,7 @@ use apeireth_companion::memory_extractor::{ExtractedMemory, MemoryExtractionServ
 use apeireth_companion::memory_injection::build_memory_injection;
 use apeireth_companion::principles::PrincipleStore;
 use apeireth_companion::proactive::MemoryContextSource;
-use apeireth_companion::reflection::ReflectionScheduler;
+use apeireth_companion::reflection::{ReflectionReflector, ReflectionScheduler};
 use apeireth_companion::tone::tone_hint;
 use apeireth_companion::tool_bridge::ToolBridge;
 use apeireth_memory::{EpisodeStore, HistoryStream, SqliteMemoryStore};
@@ -57,12 +57,14 @@ use apeireth_tool_runtime::parser::ParsedToolCall;
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{sse::{Event as SseEvent, KeepAlive, Sse}, IntoResponse},
     routing::{get, post},
     Json, Router,
 };
 use chrono::{Datelike, Local, Timelike, Utc};
+use futures::Stream;
 use serde_json::{json, Value};
+use std::convert::Infallible;
 
 const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
@@ -231,6 +233,10 @@ struct AppState {
     rhythm: std::sync::Arc<std::sync::Mutex<Option<RhythmEstimate>>>,
     /// 目标服务 (注入读; 模块 6 将接工具写).
     goal: std::sync::Arc<std::sync::Mutex<GoalService>>,
+    /// 主动送达广播 (模块 4: daemon 涌现/事件 → SSE 推送前端).
+    events: tokio::sync::broadcast::Sender<String>,
+    /// 滚动摘要节流 (模块 3: 裁剪时 LLM 摘要旧段, 5 分钟一次).
+    last_summarize: std::sync::Mutex<std::time::Instant>,
     subject: String,
 }
 
@@ -452,7 +458,157 @@ fn inject_state(
     parts.join("\n")
 }
 
-/// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 查询记忆会话 "me").
+/// 主动送达通道 (模块 4): 涌现/事件 → broadcast → SSE 推送前端 (在线实时).
+/// 同时保留控制台输出 (离线可查日志).
+pub struct BroadcastSink {
+    tx: tokio::sync::broadcast::Sender<String>,
+}
+
+#[async_trait::async_trait]
+impl Sink for BroadcastSink {
+    async fn send(&self, text: &str) -> Result<(), String> {
+        println!("[他说] {text}");
+        let _ = self.tx.send(format!("[他说] {text}"));
+        Ok(())
+    }
+}
+
+/// 深度反思器 (模块 5, 真 MiniMax): 周期记忆 → 洞察/模式/建议 (markdown 文本).
+pub struct MiniMaxReflector {
+    pipeline: Arc<Pipeline>,
+}
+
+#[async_trait::async_trait]
+impl ReflectionReflector for MiniMaxReflector {
+    async fn reflect(&self, context: &str) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("你是阿佩瑞斯, 在做周期自我反思。基于近期记忆与事件, 输出深度反思 (markdown): ① 观察到的模式 (主人的习惯/偏好变化) ② 值得注意的洞察 ③ 对未来的具体建议 (含可执行经验)。不超过 300 字, 真诚不套话。"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("近期记忆:\n{context}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.5),
+            max_tokens: Some(500),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| format!("深度反思 LLM 调用失败: {e}"))?;
+        let chat = openai_chat_from_normalized(&resp);
+        let content = chat
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+        let text = match content.find("</think>") {
+            Some(i) => content[i + 8..].to_string(),
+            None => content,
+        };
+        if text.trim().is_empty() {
+            return Err("深度反思返回空".to_string());
+        }
+        Ok(text.trim().to_string())
+    }
+}
+
+/// 模块 4: 开发用测试事件 (验证 SSE 推送链路; 生产事件 = 涌现/做梦/反思自动推送).
+async fn test_event(State(st): State<Arc<AppState>>) -> impl IntoResponse {
+    let _ = st.events.send("测试事件: 本座在 (SSE 链路验证)".to_string());
+    Json(json!({"ok": true, "note": "已推送测试事件到 SSE"}))
+}
+
+/// 模块 4: SSE 事件流 (主动送达 — 涌现/做梦/反思完成等实时推送).
+async fn events(State(st): State<Arc<AppState>>) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+    let rx = st.events.subscribe();
+    let stream = futures::stream::unfold(rx, |mut rx| async move {
+        loop {
+            match rx.recv().await {
+                Ok(text) => return Some((Ok::<_, Infallible>(SseEvent::default().data(text)), rx)),
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue, // 跳过期消息
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
+            }
+        }
+    });
+    Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+/// 模块 2: 记忆排名 (分层 v1) — 做梦摘要/偏好优先 → 提炼事实 → 其余按最近; 预算内注入.
+fn rank_memory_entries(eps: &[apeireth_memory::CoreEpisode], budget: usize) -> Vec<String> {
+    let mut ranked: Vec<&apeireth_memory::CoreEpisode> = eps.iter().collect();
+    ranked.sort_by(|a, b| {
+        // 组: 0=dream/pref (高价值常驻), 1=mem-ex (提炼事实), 2=其他 (按最近)
+        let g = |id: &str| {
+            if id.starts_with("mem-dream-") || id.starts_with("pref-") {
+                0u8
+            } else if id.starts_with("mem-ex-") || id.starts_with("reflect-") {
+                1
+            } else {
+                2
+            }
+        };
+        let ga = g(&a.id);
+        let gb = g(&b.id);
+        ga.cmp(&gb).then_with(|| b.timestamp.cmp(&a.timestamp))
+    });
+    ranked
+        .iter()
+        .take(budget)
+        .map(|e| e.content.clone())
+        .collect()
+}
+
+/// 模块 3: 滚动摘要 — 被裁对话旧段 → LLM 摘要 (5 分钟节流; 失败 → None 丢弃旧段, 诚实).
+async fn summarize_dialog(pipeline: &Arc<Pipeline>, text: &str) -> Option<String> {
+    let req = OpenAiChatRequest {
+        model: MODEL.to_string(),
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system".to_string(),
+                content: json!("把这段对话压缩成 80 字以内的摘要 (保留关键事实/约定/情绪), 只输出摘要。"),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+            OpenAiChatMessage {
+                role: "user".to_string(),
+                content: json!(format!("对话:\n{}", text.chars().take(3000).collect::<String>())),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+        ],
+        temperature: Some(0.3),
+        max_tokens: Some(150),
+        stream: false,
+        stop: None,
+        tools: None,
+        tool_choice: None,
+    };
+    let normalized = openai_chat_to_normalized(&req);
+    let resp = dispatch(pipeline, ProtocolKind::OpenAiChat, normalized).await.ok()?;
+    let chat = openai_chat_from_normalized(&resp);
+    let content = chat.choices.first().map(|c| c.message.content.clone()).unwrap_or_default();
+    let text = match content.find("</think>") {
+        Some(i) => content[i + 8..].to_string(),
+        None => content,
+    };
+    let t = text.trim();
+    if t.is_empty() { None } else { Some(t.to_string()) }
+}
+
+/// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 模块 2 排名分层 + 推理召回).
 /// 推理召回 (VCP AIMemoHandler 精神): query 含记忆暗示词且开启 → LLM 从候选重排 top 5.
 async fn inject_memory(
     store: &Arc<SqliteMemoryStore>,
@@ -463,15 +619,17 @@ async fn inject_memory(
     const HINT_WORDS: &[&str] = &["记得", "之前", "上次", "我说过", "约定", "还记得", "忘", "以前", "计划", "安排"];
     let want_deep = std::env::var("APEIRETH_DEEP_RECALL").ok().as_deref() == Some("1")
         && HINT_WORDS.iter().any(|w| query.contains(w));
-    let eps = store.recent_episodes(MEMORY_SESSION, 30).unwrap_or_default();
+    let eps = store.recent_episodes(MEMORY_SESSION, 40).unwrap_or_default();
     if eps.is_empty() {
         return String::new();
     }
-    let entries: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
+    // 模块 2: 记忆分层排名 (dream/pref 优先 → 提炼事实 → 最近; 预算内注入)
+    let entries = rank_memory_entries(&eps, 12);
     if want_deep {
         if let Some(p) = pipeline {
             // LLM 推理召回: 按当前问题重排候选, 挑最相关 top 5
-            if let Ok(selected) = deep_recall(p, query, &entries).await {
+            let candidates: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
+            if let Ok(selected) = deep_recall(p, query, &candidates).await {
                 return build_memory_injection(&selected);
             }
             // 失败 → 降级普通注入 (如实)
@@ -753,15 +911,56 @@ async fn chat_completions(
             },
         );
     }
-    // 上下文裁剪 (2026-08-16: 长对话 prompt 无限增长 → MiniMax 处理慢 + 易撞限流):
-    // 保留头部注入区 (persona + 注入块, 全是 system) + 最近 30 条对话
+    // 上下文管理 (模块 3): 长对话 → 滚动摘要 + 保留注入区 + 最近 30 条.
+    // 被裁旧段尝试 LLM 摘要 (5 分钟节流); 失败 → 丢弃 + 诚实提示 (不硬造).
     if messages.len() > 34 {
         let head_end = messages
             .iter()
             .position(|m| m.role != "system")
             .unwrap_or(0);
-        let mut head = messages[..head_end].to_vec();
-        let tail = messages[messages.len().saturating_sub(30)..].to_vec();
+        let overflow: Vec<OpenAiChatMessage> = messages[head_end..messages.len() - 30].to_vec();
+        let tail: Vec<OpenAiChatMessage> = messages[messages.len() - 30..].to_vec();
+        let mut head: Vec<OpenAiChatMessage> = messages[..head_end].to_vec();
+        if !overflow.is_empty() {
+            let due = {
+                let mut last = st.last_summarize.lock().unwrap();
+                if last.elapsed() >= Duration::from_secs(300) {
+                    *last = std::time::Instant::now();
+                    true
+                } else {
+                    false
+                }
+            };
+            if due {
+                let text = overflow
+                    .iter()
+                    .map(|m| format!("[{}] {}", m.role, m.content.as_str().unwrap_or("")))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                if let Some(summary) = summarize_dialog(&st.pipeline, &text).await {
+                    head.push(OpenAiChatMessage {
+                        role: "system".to_string(),
+                        content: json!(format!("【早期对话摘要】{summary}")),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                } else {
+                    head.push(OpenAiChatMessage {
+                        role: "system".to_string(),
+                        content: json!("【早期对话摘要】(摘要失败, 已裁剪 — 细节已由记忆系统提炼)"),
+                        tool_calls: None,
+                        tool_call_id: None,
+                    });
+                }
+            } else {
+                head.push(OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("【早期对话摘要】(已裁剪 — 细节已由记忆系统提炼)"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                });
+            }
+        }
         head.extend(tail);
         messages = head;
     }
@@ -1001,7 +1200,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!("[bridge] 宪法评审 (真 LLM): Medium+ 工具执行前按 E 层判案");
 
-    // ③ daemon 常驻 (做梦 LLM 摘要 + 反思 + 涌现 LLM 润色, 同进程): 记忆会话 "me"
+    // 主动送达广播 (模块 4: daemon 涌现/事件 → SSE 推送)
+    let (tx_events, _) = tokio::sync::broadcast::channel::<String>(64);
+
+    // ③ daemon 常驻 (做梦 LLM 摘要 + 反思 LLM 深度 + 涌现 LLM 润色, 同进程): 记忆会话 "me"
     let quiet = std::env::var("APEIRETH_DREAM_QUIET_SECONDS")
         .ok()
         .and_then(|v| v.parse().ok())
@@ -1023,7 +1225,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         apeireth_core::clock::system_clock(),
         MEMORY_SESSION.to_string(),
     )
-    .with_period(reflect_period);
+    .with_period(reflect_period)
+    .with_reflector(Arc::new(MiniMaxReflector {
+        pipeline: Arc::clone(&pipeline),
+    }));
     let tone = tone_hint(&apeireth_companion::bond::Bond::new());
     let daemon = CompanionDaemon::new(
         apeireth_companion::bond::Bond::new(),
@@ -1036,7 +1241,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
                 Duration::from_secs(30),
             ),
-            ConsoleSink,
+            BroadcastSink { tx: tx_events.clone() },
         ),
         MemoryContextSource::new(Arc::clone(&store)),
         MEMORY_SESSION.to_string(),
@@ -1044,7 +1249,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_dream(dream)
     .with_reflection(reflect);
-    println!("[daemon] 常驻: 做梦(LLM 摘要, 安静期 {:?}) + 反思({:?} 周期) + 涌现(LLM 润色, 30s 节流+退避)", quiet, reflect_period);
+    println!("[daemon] 常驻: 做梦(LLM 摘要, 安静期 {:?}) + 反思({:?}, LLM 深度) + 涌现(LLM 润色, SSE 推送)", quiet, reflect_period);
 
     // 互动通知通道: handler 发「主人来消息了」, daemon 喂节律 + 重置做梦安静期
     let (tx_interact, rx_interact) = tokio::sync::mpsc::channel::<chrono::DateTime<Utc>>(64);
@@ -1073,6 +1278,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         extract_interval,
         rhythm: std::sync::Arc::clone(&rhythm_share),
         goal: std::sync::Arc::clone(&goals_shared),
+        events: tx_events,
+        last_summarize: std::sync::Mutex::new(std::time::Instant::now()),
         subject,
     });
     let app = Router::new()
@@ -1082,6 +1289,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/apeireth/grant", post(grant))
         .route("/v1/apeireth/approval-requests", get(approval_requests))
+        .route("/v1/apeireth/events", get(events))
+        .route("/v1/apeireth/test-event", post(test_event))
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
@@ -1103,7 +1312,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// + 自成长延伸: 反思完成→提炼经验入库; 晋级候选自动成文.
 /// 具体类型 (Delivery trait 私有, 不能作泛型约束); daemon 非 Send, 只在同 task 内用.
 type ServeDaemon = CompanionDaemon<
-    CompanionDelivery<ThrottledUtterance<TonalUtterance>, ConsoleSink>,
+    CompanionDelivery<ThrottledUtterance<TonalUtterance>, BroadcastSink>,
     MemoryContextSource,
 >;
 async fn daemon_loop(
