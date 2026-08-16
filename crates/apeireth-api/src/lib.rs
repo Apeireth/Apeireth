@@ -86,7 +86,6 @@
 
 #![warn(missing_docs)]
 #![deny(unsafe_code)]
-
 // ============================================================
 // 公共模块
 // ============================================================
@@ -98,35 +97,35 @@
 
 pub mod llm;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod protocol_handlers;
-pub mod server;
 /// R120 (B2 战区 2): Response replay cache — 重复 query 命中 LRU, 不打上游
 pub mod cache;
+mod organ_kani_proofs;
+pub mod protocol_handlers;
 /// R122-1-retry (B5 战区 2): VCP 借鉴 ResponseReplayCache — (method, url, body) 三元组 SHA-256 hash, 重复请求命中 fast path
 pub mod replay_cache;
 /// R120 (B3 战区 2): 多层退避重试 — 4xx 不重试 (除 408/425/429), 5xx / network 全重试
 pub mod retry;
 /// R120 (B4 战区 2): 协议路由 header + 关键路径 tracing
 pub mod routing;
+pub mod server;
 /// V2 Step 2: 6 类 JSON HTTP 端点 (tools / memory / organs / asi / sovereignty / agent)
 pub mod v2_endpoints;
 // R30 U8: SQLite audit (4 索引)
 pub mod audit_sqlite;
-/// R20 阶段 6: V2 路由分发目录 (observability 3 端点, 跟 v2_endpoints 平行)
-pub mod v2_routes;
-/// R20 阶段 6: Observability 3 端点 (metrics / health / status) + TUI dashboard
-pub mod observability;
-pub mod endpoints;  // R23 P1 — 30 route 编译期 hardcode
-pub mod v1_tools;
-/// B1 Web 面板 v2 — 7 个只读面板数据端点 (会话/记忆/图谱/授权/审计; 2026-08-17)
-pub mod panel_readonly;
 /// R20 阶段 2: 鉴权 5 组件 (Bearer + keyring + token bucket + audit log + quota stub)
 pub mod auth;
-/// R20 阶段 2: WebSocket 8 帧 handler (`GET /v1/stream`)
-pub mod ws_v1;
+pub mod endpoints; // R23 P1 — 30 route 编译期 hardcode
+/// R20 阶段 6: Observability 3 端点 (metrics / health / status) + TUI dashboard
+pub mod observability;
+/// B1 Web 面板 v2 — 7 个只读面板数据端点 (会话/记忆/图谱/授权/审计; 2026-08-17)
+pub mod panel_readonly;
 /// R123-2: 4 协议 handler 抽 trait 抽象 (`ProtocolHandler` + `HandlerRegistry` + `route_dispatch`)
 pub mod protocol_handler_trait;
+pub mod v1_tools;
+/// R20 阶段 6: V2 路由分发目录 (observability 3 端点, 跟 v2_endpoints 平行)
+pub mod v2_routes;
+/// R20 阶段 2: WebSocket 8 帧 handler (`GET /v1/stream`)
+pub mod ws_v1;
 
 // ============================================================
 // LLM 模块 re-export (R17 战役 0 保留, 战役 1-4 标记 deprecated)

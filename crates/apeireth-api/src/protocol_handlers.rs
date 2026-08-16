@@ -45,16 +45,18 @@
 use apeireth_pipeline::Pipeline;
 use apeireth_protocol::{
     decode_for_kind, encode_for_kind, ContentPart, MessageRole, NormalizedMessage,
-    NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedToolChoice,
-    ProtocolError, ProtocolKind, ToolCall,
+    NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedToolChoice, ProtocolError,
+    ProtocolKind, ToolCall,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
 
 use crate::cache::ResponseCache;
-use crate::replay_cache::{global as replay_cache, hash_request, ResponsePayload, ReplayEntry, DEFAULT_HTTP_METHOD};
-use crate::retry::{jittered_sleep, BackoffPolicy, RetryStats, should_retry_status};
+use crate::replay_cache::{
+    global as replay_cache, hash_request, ReplayEntry, ResponsePayload, DEFAULT_HTTP_METHOD,
+};
+use crate::retry::{jittered_sleep, should_retry_status, BackoffPolicy, RetryStats};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
@@ -125,7 +127,11 @@ pub fn build_pipeline(base_url: String, auth_token: Option<String>) -> Result<Pi
 ///
 /// **minimaxi Gemini 特例**: minimaxi 的 Gemini 端点是 `/v1/gemini/v1beta/models/...`
 /// (跟标准 Google Gemini `/v1beta/models/...` 不同), 自动加 `/v1/gemini/` 前缀
-pub fn endpoint_url(base_url: &str, kind: ProtocolKind, model: &str) -> Result<String, ProtocolError> {
+pub fn endpoint_url(
+    base_url: &str,
+    kind: ProtocolKind,
+    model: &str,
+) -> Result<String, ProtocolError> {
     match kind {
         ProtocolKind::Gemini => {
             // minimaxi: /v1/gemini/v1beta/models/{model}:generateContent
@@ -151,19 +157,21 @@ pub fn endpoint_url(base_url: &str, kind: ProtocolKind, model: &str) -> Result<S
             };
             Ok(format!("{}{}", base_url.trim_end_matches('/'), path))
         }
-        ProtocolKind::OpenAiChat => {
-            Ok(format!("{}{}", base_url.trim_end_matches('/'), OPENAI_CHAT_PATH))
-        }
-        ProtocolKind::OpenAiResponses => {
-            Ok(format!(
-                "{}{}",
-                base_url.trim_end_matches('/'),
-                OPENAI_RESPONSES_PATH
-            ))
-        }
+        ProtocolKind::OpenAiChat => Ok(format!(
+            "{}{}",
+            base_url.trim_end_matches('/'),
+            OPENAI_CHAT_PATH
+        )),
+        ProtocolKind::OpenAiResponses => Ok(format!(
+            "{}{}",
+            base_url.trim_end_matches('/'),
+            OPENAI_RESPONSES_PATH
+        )),
         ProtocolKind::Acp | ProtocolKind::Mcp | ProtocolKind::OpenClawGateway => {
             Err(ProtocolError::Unsupported {
-                feature: format!("endpoint_url 不支持 kind={kind:?}; 走 gateway::ProtocolGateway 异步 dispatch"),
+                feature: format!(
+                    "endpoint_url 不支持 kind={kind:?}; 走 gateway::ProtocolGateway 异步 dispatch"
+                ),
             })
         }
     }
@@ -275,7 +283,11 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|v| ToolCall {
-                    id: v.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                    id: v
+                        .get("id")
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                     name: v
                         .get("function")
                         .and_then(|f| f.get("name"))
@@ -315,7 +327,11 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
                 .and_then(|p| p.as_object())
                 .cloned()
                 .unwrap_or_default();
-            Some(NormalizedTool::new(name).with_description(desc).with_parameters(params))
+            Some(
+                NormalizedTool::new(name)
+                    .with_description(desc)
+                    .with_parameters(params),
+            )
         })
         .collect();
 
@@ -331,7 +347,9 @@ pub fn openai_chat_to_normalized(req: &OpenAiChatRequest) -> NormalizedRequest {
             v.get("function")
                 .and_then(|f| f.get("name"))
                 .and_then(|n| n.as_str())
-                .map(|n| NormalizedToolChoice::Specific { name: n.to_string() })
+                .map(|n| NormalizedToolChoice::Specific {
+                    name: n.to_string(),
+                })
         }
     });
 
@@ -706,9 +724,7 @@ pub struct GeminiContent {
 /// (R131.10 暴露 bug: externally tagged 期望 `{"Text": {"text": "..."}}`)
 #[serde(untagged)]
 pub enum GeminiPart {
-    Text {
-        text: String,
-    },
+    Text { text: String },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -1033,7 +1049,9 @@ fn dispatch_inner_with_status(
     pipeline: &Pipeline,
     kind: ProtocolKind,
     input: NormalizedRequest,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = (u16, Result<NormalizedResponse, String>)> + Send + '_>> {
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = (u16, Result<NormalizedResponse, String>)> + Send + '_>,
+> {
     use apeireth_pipeline::PipelineError;
     let err_map = |e: PipelineError| match e {
         PipelineError::Protocol(s) => format!("protocol: {s}"),
@@ -1051,7 +1069,8 @@ fn dispatch_inner_with_status(
             ProtocolKind::AnthropicMessages => {
                 // minimaxi Anthropic 端点是 /anthropic/v1/messages, 战役 1-3 pipeline 不会自动加
                 if is_minimaxi_anthropic_quirk(&pipeline.config().base_url) {
-                    let (status, result) = run_anthropic_minimaxi_with_status(pipeline, input).await;
+                    let (status, result) =
+                        run_anthropic_minimaxi_with_status(pipeline, input).await;
                     (status, result)
                 } else {
                     let result = pipeline.run(kind, input).await.map_err(err_map);
@@ -1081,7 +1100,9 @@ fn dispatch_inner(
     pipeline: &Pipeline,
     kind: ProtocolKind,
     input: NormalizedRequest,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<NormalizedResponse, String>> + Send + '_>> {
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<NormalizedResponse, String>> + Send + '_>,
+> {
     let cache = replay_cache();
     let is_stream = input.stream;
 
@@ -1106,9 +1127,7 @@ fn dispatch_inner(
     };
 
     // Lookup (fail-soft: lock poisoned / deserialize fail → None → 走原 dispatch)
-    let cache_hit: Option<ReplayEntry> = cache_key
-        .as_ref()
-        .and_then(|k| cache.lookup(k));
+    let cache_hit: Option<ReplayEntry> = cache_key.as_ref().and_then(|k| cache.lookup(k));
 
     Box::pin(async move {
         // Fast path: hit → deserialize + return (skip 5 步管线)
@@ -1179,7 +1198,10 @@ async fn run_gemini_with_status(
     mut input: NormalizedRequest,
 ) -> (u16, Result<NormalizedResponse, String>) {
     if input.model.is_empty() {
-        return (0, Err("gemini: model is empty (must be set by handler from URL path)".into()));
+        return (
+            0,
+            Err("gemini: model is empty (must be set by handler from URL path)".into()),
+        );
     }
 
     let model = input.model.clone();
@@ -1432,7 +1454,8 @@ mod tests {
             "https://api.minimaxi.com",
             ProtocolKind::Gemini,
             "MiniMax-M3",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(
             url,
             "https://api.minimaxi.com/v1/gemini/v1beta/models/MiniMax-M3:generateContent"
@@ -1442,19 +1465,22 @@ mod tests {
     #[test]
     fn endpoint_url_handles_trailing_slash() {
         // base_url 带 / 也要正确
-        let url = endpoint_url("https://api.minimaxi.com/", ProtocolKind::OpenAiChat, "").expect("HTTP kind");
+        let url = endpoint_url("https://api.minimaxi.com/", ProtocolKind::OpenAiChat, "")
+            .expect("HTTP kind");
         assert_eq!(url, "https://api.minimaxi.com/v1/chat/completions");
     }
 
     #[test]
     fn endpoint_url_for_3_other_protocols() {
         // OpenAI Chat / Responses: 端点无占位符
-        let url1 = endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiChat, "").expect("HTTP kind");
+        let url1 = endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiChat, "")
+            .expect("HTTP kind");
         let url2 = endpoint_url(
             "https://api.minimaxi.com",
             ProtocolKind::OpenAiResponses,
             "",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(url1, "https://api.minimaxi.com/v1/chat/completions");
         assert_eq!(url2, "https://api.minimaxi.com/v1/responses");
     }
@@ -1466,7 +1492,8 @@ mod tests {
             "https://api.minimaxi.com",
             ProtocolKind::AnthropicMessages,
             "",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(url, "https://api.minimaxi.com/anthropic/v1/messages");
     }
 
@@ -1477,7 +1504,8 @@ mod tests {
             "https://api.anthropic.com/v1",
             ProtocolKind::AnthropicMessages,
             "",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(url, "https://api.anthropic.com/v1/v1/messages");
     }
 
@@ -1488,7 +1516,8 @@ mod tests {
             "https://api.minimaxi.com/anthropic",
             ProtocolKind::AnthropicMessages,
             "",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(url, "https://api.minimaxi.com/anthropic/v1/messages");
     }
 
@@ -1499,7 +1528,8 @@ mod tests {
             "https://api.minimaxi.com",
             ProtocolKind::Gemini,
             "MiniMax-M3",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(
             url,
             "https://api.minimaxi.com/v1/gemini/v1beta/models/MiniMax-M3:generateContent"
@@ -1513,7 +1543,8 @@ mod tests {
             "https://generativelanguage.googleapis.com",
             ProtocolKind::Gemini,
             "gemini-1.5-pro",
-        ).expect("HTTP kind");
+        )
+        .expect("HTTP kind");
         assert_eq!(url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent");
     }
 
@@ -1797,42 +1828,78 @@ mod stream_forward_tests {
     /// 流式 1:1 翻译: 4 协议 endpoint URL 跟非流式 endpoint_url 1:1
     #[test]
     fn stream_endpoint_url_openai_chat() {
-        let url = endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiChat, "gpt-4o").unwrap();
+        let url = endpoint_url(
+            "https://api.minimaxi.com",
+            ProtocolKind::OpenAiChat,
+            "gpt-4o",
+        )
+        .unwrap();
         assert_eq!(url, "https://api.minimaxi.com/v1/chat/completions");
     }
 
     #[test]
     fn stream_endpoint_url_openai_responses() {
-        let url = endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiResponses, "gpt-4o").unwrap();
+        let url = endpoint_url(
+            "https://api.minimaxi.com",
+            ProtocolKind::OpenAiResponses,
+            "gpt-4o",
+        )
+        .unwrap();
         assert_eq!(url, "https://api.minimaxi.com/v1/responses");
     }
 
     #[test]
     fn stream_endpoint_url_anthropic_minimaxi_quirk() {
         // minimaxi Anthropic 端点是 /anthropic/v1/messages
-        let url = endpoint_url("https://api.minimaxi.com", ProtocolKind::AnthropicMessages, "claude-3").unwrap();
+        let url = endpoint_url(
+            "https://api.minimaxi.com",
+            ProtocolKind::AnthropicMessages,
+            "claude-3",
+        )
+        .unwrap();
         assert_eq!(url, "https://api.minimaxi.com/anthropic/v1/messages");
     }
 
     #[test]
     fn stream_endpoint_url_anthropic_non_minimaxi() {
         // 非 minimaxi (Anthropic direct 等) 走 /v1/messages
-        let url = endpoint_url("https://api.anthropic.com", ProtocolKind::AnthropicMessages, "claude-3").unwrap();
+        let url = endpoint_url(
+            "https://api.anthropic.com",
+            ProtocolKind::AnthropicMessages,
+            "claude-3",
+        )
+        .unwrap();
         assert_eq!(url, "https://api.anthropic.com/v1/messages");
     }
 
     #[test]
     fn stream_endpoint_url_gemini_minimaxi_quirk() {
         // minimaxi Gemini 端点是 /v1/gemini/v1beta/models/{model}:generateContent
-        let url = endpoint_url("https://api.minimaxi.com", ProtocolKind::Gemini, "gemini-pro").unwrap();
-        assert_eq!(url, "https://api.minimaxi.com/v1/gemini/v1beta/models/gemini-pro:generateContent");
+        let url = endpoint_url(
+            "https://api.minimaxi.com",
+            ProtocolKind::Gemini,
+            "gemini-pro",
+        )
+        .unwrap();
+        assert_eq!(
+            url,
+            "https://api.minimaxi.com/v1/gemini/v1beta/models/gemini-pro:generateContent"
+        );
     }
 
     #[test]
     fn stream_endpoint_url_gemini_non_minimaxi() {
         // 非 minimaxi (Google direct) 走 /v1beta/models/{model}:generateContent
-        let url = endpoint_url("https://generativelanguage.googleapis.com", ProtocolKind::Gemini, "gemini-pro").unwrap();
-        assert_eq!(url, "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent");
+        let url = endpoint_url(
+            "https://generativelanguage.googleapis.com",
+            ProtocolKind::Gemini,
+            "gemini-pro",
+        )
+        .unwrap();
+        assert_eq!(
+            url,
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
+        );
     }
 
     /// GeminiRequest stream 字段被 serde 识别 (json test)
@@ -1853,8 +1920,18 @@ mod stream_forward_tests {
     fn stream_endpoint_url_4_protocols_distinct() {
         let urls = [
             endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiChat, "m").unwrap(),
-            endpoint_url("https://api.minimaxi.com", ProtocolKind::OpenAiResponses, "m").unwrap(),
-            endpoint_url("https://api.minimaxi.com", ProtocolKind::AnthropicMessages, "m").unwrap(),
+            endpoint_url(
+                "https://api.minimaxi.com",
+                ProtocolKind::OpenAiResponses,
+                "m",
+            )
+            .unwrap(),
+            endpoint_url(
+                "https://api.minimaxi.com",
+                ProtocolKind::AnthropicMessages,
+                "m",
+            )
+            .unwrap(),
             endpoint_url("https://api.minimaxi.com", ProtocolKind::Gemini, "m").unwrap(),
         ];
         let unique: std::collections::HashSet<&str> = urls.iter().map(|s| s.as_str()).collect();
@@ -1889,8 +1966,8 @@ mod stream_forward_tests {
             ],
             "system_instruction": {"parts": [{"text": "You are a test assistant"}]}
         }"#;
-        let req: GeminiRequest = serde_json::from_str(body)
-            .expect("R132.2: full standard Gemini request should parse");
+        let req: GeminiRequest =
+            serde_json::from_str(body).expect("R132.2: full standard Gemini request should parse");
         assert_eq!(req.contents.len(), 2);
         assert_eq!(req.contents[0].role, "user");
         assert_eq!(req.contents[0].parts.len(), 1);
@@ -1921,8 +1998,6 @@ mod stream_forward_tests {
         // 这个 test 记录"当前不支持多模态 part" 的事实
         assert!(parsed.is_err(), "R132.2 暂不支持多模态 part, 仅 text");
     }
-
-
 }
 
 // ============================================================

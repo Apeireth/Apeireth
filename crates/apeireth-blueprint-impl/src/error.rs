@@ -48,18 +48,12 @@ pub enum BlueprintError {
     // --- D-03 WS 鉴权 = 链接 token 5min TTL ---
     /// D-03 决策 — WS 鉴权失败 (token 过期 / 格式错)
     #[error("D-03 WS auth failed: reason={reason} (ttl_at_failure={ttl_seconds}s)")]
-    D03WsAuthFailed {
-        reason: String,
-        ttl_seconds: i64,
-    },
+    D03WsAuthFailed { reason: String, ttl_seconds: i64 },
 
     // --- D-04 限流 = token bucket 走 apeireth-constraint ---
     /// D-04 决策 — 限流超限 (token bucket 空)
     #[error("D-04 rate limit exceeded: bucket={bucket} (retry_after={retry_after_ms}ms)")]
-    D04RateLimitExceeded {
-        bucket: String,
-        retry_after_ms: u64,
-    },
+    D04RateLimitExceeded { bucket: String, retry_after_ms: u64 },
 
     // --- 模板 / 指标失败 ---
     /// 模板 A-F 实装缺失 (R20 阶段 4 估补时不假装)
@@ -205,7 +199,10 @@ mod tests {
     #[test]
     fn error_category_io_serde_other() {
         assert_eq!(BlueprintError::Io("disk".into()).category(), "IO");
-        assert_eq!(BlueprintError::Serialization("json".into()).category(), "SERIALIZATION");
+        assert_eq!(
+            BlueprintError::Serialization("json".into()).category(),
+            "SERIALIZATION"
+        );
         assert_eq!(BlueprintError::Other("oops".into()).category(), "OTHER");
     }
 

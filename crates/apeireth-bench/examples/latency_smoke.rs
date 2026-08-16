@@ -58,9 +58,7 @@ async fn main() {
     let cache_miss = report
         .results
         .iter()
-        .find(|r| {
-            r.scenario.label() == "cache-miss" && r.protocol.label() == "OpenAI-Chat"
-        })
+        .find(|r| r.scenario.label() == "cache-miss" && r.protocol.label() == "OpenAI-Chat")
         .expect("cache-miss OpenAI-Chat result");
     assert!(
         cache_hit.p99_ns < cache_miss.p99_ns * 10,

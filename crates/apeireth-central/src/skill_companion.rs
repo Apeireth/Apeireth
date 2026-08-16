@@ -57,15 +57,9 @@ impl SkillCompanionKind {
             Self::SpecDocumentReviewerPrompt => {
                 "skills/brainstorming/spec-document-reviewer-prompt.md"
             }
-            Self::CodeReviewerRequestPrompt => {
-                "skills/requesting-code-review/code-reviewer.md"
-            }
-            Self::CodeReviewerReceivePrompt => {
-                "skills/receiving-code-review/code-reviewer.md"
-            }
-            Self::ConditionBasedWaiting => {
-                "skills/systematic-debugging/condition-based-waiting.md"
-            }
+            Self::CodeReviewerRequestPrompt => "skills/requesting-code-review/code-reviewer.md",
+            Self::CodeReviewerReceivePrompt => "skills/receiving-code-review/code-reviewer.md",
+            Self::ConditionBasedWaiting => "skills/systematic-debugging/condition-based-waiting.md",
             Self::CreationLog => "skills/systematic-debugging/CREATION-LOG.md",
             Self::Other => "(other)",
         }

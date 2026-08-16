@@ -17,19 +17,30 @@ fn make_state() -> Arc<V2State> {
     state
 }
 
-fn app(state: Arc<V2State>) -> axum::Router { build_router(state) }
+fn app(state: Arc<V2State>) -> axum::Router {
+    build_router(state)
+}
 
 #[tokio::test]
 async fn code_exec_runs_command_and_captures_stdout() {
     let state = make_state();
-    let cmd = if cfg!(windows) { r#"cmd /c "echo hello-v1-tools""# } else { "echo hello-v1-tools" };
+    let cmd = if cfg!(windows) {
+        r#"cmd /c "echo hello-v1-tools""#
+    } else {
+        "echo hello-v1-tools"
+    };
     let body = json!({ "args": { "cmd": cmd } });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/code_exec/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/code_exec/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();
@@ -41,14 +52,23 @@ async fn code_exec_runs_command_and_captures_stdout() {
 #[tokio::test]
 async fn code_exec_nonzero_exit_returns_ok_false() {
     let state = make_state();
-    let cmd = if cfg!(windows) { "cmd /c exit 1" } else { "false" };
+    let cmd = if cfg!(windows) {
+        "cmd /c exit 1"
+    } else {
+        "false"
+    };
     let body = json!({ "args": { "cmd": cmd } });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/code_exec/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/code_exec/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();
