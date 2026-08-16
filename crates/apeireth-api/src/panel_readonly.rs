@@ -210,7 +210,11 @@ async fn panel_memory_episodes(
 ) -> impl IntoResponse {
     let limit = clamp_limit(p.limit, 50);
     // 带搜索时放大拉取窗口再过滤 (ponytail: 简单可靠, 上限 MAX_LIMIT*5)
-    let fetch = if p.q.is_some() { (limit * 5).min(MAX_LIMIT * 5) } else { limit };
+    let fetch = if p.q.is_some() {
+        (limit * 5).min(MAX_LIMIT * 5)
+    } else {
+        limit
+    };
     let mut q = EpisodeQuery::new().limit(fetch);
     if let Some(s) = &p.session {
         q = q.for_session(s);
@@ -341,8 +345,7 @@ async fn panel_approvals(
             .to_string();
         let rev = e.get("rev").and_then(|v| v.as_u64()).unwrap_or(0);
         match by_chain.get(&chain) {
-            Some(existing)
-                if existing.get("rev").and_then(|v| v.as_u64()).unwrap_or(0) > rev => {}
+            Some(existing) if existing.get("rev").and_then(|v| v.as_u64()).unwrap_or(0) > rev => {}
             _ => {
                 by_chain.insert(chain, e);
             }
@@ -357,7 +360,10 @@ async fn panel_approvals(
         })
         .collect();
     rows.sort_by(|a, b| {
-        b["created_at"].as_i64().unwrap_or(0).cmp(&a["created_at"].as_i64().unwrap_or(0))
+        b["created_at"]
+            .as_i64()
+            .unwrap_or(0)
+            .cmp(&a["created_at"].as_i64().unwrap_or(0))
     });
     (
         StatusCode::OK,
@@ -498,7 +504,8 @@ mod tests {
                 id: "link-1".into(),
                 timestamp: 171,
                 role: "assistant".into(),
-                content: json!({"id":"link-1","from":"factg-1","to":"ep-1","weight":0.9}).to_string(),
+                content: json!({"id":"link-1","from":"factg-1","to":"ep-1","weight":0.9})
+                    .to_string(),
                 session_id: "me".into(),
             })
             .unwrap();
@@ -577,8 +584,11 @@ mod tests {
     #[tokio::test]
     async fn panel_memory_streams_queries_action_stream() {
         // action_stream 的审计条目 subject_id 约定为 tool_call:{工具名}
-        let (status, j) =
-            get_json(seeded_store(), "/memory/streams?kind=action&subject=tool_call:WebSearch").await;
+        let (status, j) = get_json(
+            seeded_store(),
+            "/memory/streams?kind=action&subject=tool_call:WebSearch",
+        )
+        .await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(j["count"], 1);
         assert_eq!(j["entries"][0]["payload"]["tool_name"], "WebSearch");
@@ -667,6 +677,9 @@ mod tests {
             .find(|r| r["id"] == "call-2")
             .unwrap()
             .clone();
-        assert!(masked["call_content"].as_str().unwrap().contains("masked by audit"));
+        assert!(masked["call_content"]
+            .as_str()
+            .unwrap()
+            .contains("masked by audit"));
     }
 }

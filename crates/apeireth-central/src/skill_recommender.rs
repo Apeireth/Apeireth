@@ -76,56 +76,121 @@ impl<'a> SkillRecommender<'a> {
     pub fn skill_keywords(skill_id: SkillId) -> &'static [&'static str] {
         match skill_id {
             SkillId::Brainstorming => &[
-                "brainstorm", "spec", "design", "idea", "explore", "alternative",
-                "intent", "clarify", "validate",
+                "brainstorm",
+                "spec",
+                "design",
+                "idea",
+                "explore",
+                "alternative",
+                "intent",
+                "clarify",
+                "validate",
             ],
             SkillId::TestDrivenDevelopment => &[
-                "test", "tdd", "red", "green", "refactor", "failing", "first",
-                "iron law", "no production",
+                "test",
+                "tdd",
+                "red",
+                "green",
+                "refactor",
+                "failing",
+                "first",
+                "iron law",
+                "no production",
             ],
             SkillId::SystematicDebugging => &[
-                "debug", "bug", "fix", "root cause", "defense in depth", "regression",
-                "systematic", "reproduce",
+                "debug",
+                "bug",
+                "fix",
+                "root cause",
+                "defense in depth",
+                "regression",
+                "systematic",
+                "reproduce",
             ],
             SkillId::VerificationBeforeCompletion => &[
-                "verify", "validate", "complete", "done", "test suite", "clippy",
-                "cargo", "evidence",
+                "verify",
+                "validate",
+                "complete",
+                "done",
+                "test suite",
+                "clippy",
+                "cargo",
+                "evidence",
             ],
             SkillId::WritingPlans => &[
-                "plan", "writing", "task", "junior engineer", "15 min", "dependency",
+                "plan",
+                "writing",
+                "task",
+                "junior engineer",
+                "15 min",
+                "dependency",
                 "implementation",
             ],
             SkillId::ExecutingPlans => &[
-                "execute", "plan", "tdd", "verify", "task", "iterate", "checkpoint",
+                "execute",
+                "plan",
+                "tdd",
+                "verify",
+                "task",
+                "iterate",
+                "checkpoint",
             ],
             SkillId::SubagentDrivenDevelopment => &[
-                "subagent", "dispatch", "parallel", "iterate", "verify", "task",
-                "fresh",
+                "subagent", "dispatch", "parallel", "iterate", "verify", "task", "fresh",
             ],
             SkillId::DispatchingParallelAgents => &[
-                "parallel", "dispatch", "concurrent", "independent", "merge", "task",
+                "parallel",
+                "dispatch",
+                "concurrent",
+                "independent",
+                "merge",
+                "task",
             ],
             SkillId::RequestingCodeReview => &[
-                "review", "code review", "submit", "feedback", "non-trivial", "diff",
+                "review",
+                "code review",
+                "submit",
+                "feedback",
+                "non-trivial",
+                "diff",
                 "human",
             ],
             SkillId::ReceivingCodeReview => &[
-                "review", "feedback", "respond", "push back", "fix", "re-request",
+                "review",
+                "feedback",
+                "respond",
+                "push back",
+                "fix",
+                "re-request",
             ],
             SkillId::UsingGitWorktrees => &[
-                "worktree", "git", "branch", "parallel", "isolation", "subagent",
+                "worktree",
+                "git",
+                "branch",
+                "parallel",
+                "isolation",
+                "subagent",
                 "merge",
             ],
             SkillId::FinishingADevelopmentBranch => &[
-                "finish", "merge", "pr", "pull request", "worktree", "discard",
+                "finish",
+                "merge",
+                "pr",
+                "pull request",
+                "worktree",
+                "discard",
                 "complete",
             ],
             SkillId::WritingSkills => &[
-                "writing skills", "create skill", "best practice", "test", "behavior",
+                "writing skills",
+                "create skill",
+                "best practice",
+                "test",
+                "behavior",
             ],
-            SkillId::UsingSuperpowers => &[
-                "using superpowers", "intro", "meta", "skills", "system",
-            ],
+            SkillId::UsingSuperpowers => {
+                &["using superpowers", "intro", "meta", "skills", "system"]
+            }
         }
     }
 
@@ -149,11 +214,7 @@ impl<'a> SkillRecommender<'a> {
     /// 推荐 top N 个相关 skill, 按分数排序 (从高到低).
     ///
     /// `top_n = 0` 表示返回全部 (但仅返 >0 分的).
-    pub fn recommend(
-        &self,
-        task_description: &str,
-        top_n: usize,
-    ) -> Vec<ScoredSkill> {
+    pub fn recommend(&self, task_description: &str, top_n: usize) -> Vec<ScoredSkill> {
         let mut scored: Vec<ScoredSkill> = SkillId::ALL
             .iter()
             .map(|&id| {

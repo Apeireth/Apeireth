@@ -17,7 +17,13 @@ fn make_agent(id: &str, name: &str, aliases: Vec<&str>, tools: Vec<&str>, sys: &
 
 #[test]
 fn agent_new_with_id_and_name() {
-    let a = make_agent("agent-1", "First Agent", vec![], vec![], "You are an agent.");
+    let a = make_agent(
+        "agent-1",
+        "First Agent",
+        vec![],
+        vec![],
+        "You are an agent.",
+    );
     assert_eq!(a.id, "agent-1");
     assert_eq!(a.name, "First Agent");
     assert_eq!(a.system_prompt, "You are an agent.");
@@ -154,8 +160,21 @@ fn manager_clear_cache() {
 fn agent_has_six_fields() {
     use apeireth_agent::agent::Agent;
     // 6 字段: id / name / aliases / tools / system_prompt / created_at
-    let a = Agent::new("a", "A", vec!["x".into(), "y".into()], vec!["t1".into()], "sys");
-    let _ = (a.id, a.name, a.aliases, a.tools, a.system_prompt, a.created_at);
+    let a = Agent::new(
+        "a",
+        "A",
+        vec!["x".into(), "y".into()],
+        vec!["t1".into()],
+        "sys",
+    );
+    let _ = (
+        a.id,
+        a.name,
+        a.aliases,
+        a.tools,
+        a.system_prompt,
+        a.created_at,
+    );
 }
 
 #[test]
@@ -173,11 +192,18 @@ fn agent_all_aliases_includes_id() {
 #[test]
 fn agent_id_accessor() {
     use apeireth_agent::manager::AgentEvent;
-    let r = AgentEvent::Registered { id: "a1".to_string(), alias_count: 2 };
+    let r = AgentEvent::Registered {
+        id: "a1".to_string(),
+        alias_count: 2,
+    };
     assert_eq!(r.id(), Some("a1"));
-    let u = AgentEvent::Unregistered { id: "a2".to_string() };
+    let u = AgentEvent::Unregistered {
+        id: "a2".to_string(),
+    };
     assert_eq!(u.id(), Some("a2"));
-    let f = AgentEvent::FileChanged { path: std::path::PathBuf::from("/tmp/a") };
+    let f = AgentEvent::FileChanged {
+        path: std::path::PathBuf::from("/tmp/a"),
+    };
     assert!(f.id().is_none(), "FileChanged 不是 agent 级别事件");
 }
 
@@ -194,7 +220,13 @@ fn manager_alias_count_includes_implicit_id_alias() {
 fn manager_list_aliases_sorted() {
     // list_aliases 应按字母序 (实战中 UI 显示)
     let m = AgentManager::new();
-    m.register(make_agent("a1", "A1", vec!["zebra", "alpha", "mike"], vec![], "sys"));
+    m.register(make_agent(
+        "a1",
+        "A1",
+        vec!["zebra", "alpha", "mike"],
+        vec![],
+        "sys",
+    ));
     let aliases = m.list_aliases();
     // 含 id + 3 显式
     assert_eq!(aliases.len(), 4);
@@ -208,7 +240,13 @@ fn manager_list_aliases_sorted() {
 fn manager_register_overwrite_clears_old_aliases() {
     // 实战: 同一 id 重新注册 → 旧 alias 全部清理 (VCP loadMap 行为)
     let m = AgentManager::new();
-    m.register(make_agent("a1", "A1", vec!["@old1", "@old2"], vec![], "sys"));
+    m.register(make_agent(
+        "a1",
+        "A1",
+        vec!["@old1", "@old2"],
+        vec![],
+        "sys",
+    ));
     assert!(m.contains("@old1"));
     // 重新注册, 只用新 alias
     m.register(make_agent("a1", "A1 v2", vec!["@new"], vec![], "sys v2"));
@@ -233,7 +271,11 @@ fn manager_clear_events_resets_log() {
     assert_eq!(m.event_count(), 0, "初始 event_count 应 0");
     m.register(make_agent("a1", "A1", vec![], vec![], "sys"));
     m.register(make_agent("a2", "A2", vec![], vec![], "sys"));
-    assert!(m.event_count() >= 2, "注册 2 个应 ≥ 2 事件, got {}", m.event_count());
+    assert!(
+        m.event_count() >= 2,
+        "注册 2 个应 ≥ 2 事件, got {}",
+        m.event_count()
+    );
     // 验证 peek_events 顺序: 最新的应排在最后
     let events = m.peek_events();
     assert!(!events.is_empty());

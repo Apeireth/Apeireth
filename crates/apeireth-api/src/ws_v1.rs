@@ -143,16 +143,13 @@ async fn handle_ws_session(socket: WebSocket, auth: Arc<AuthPipeline>) -> Result
         };
 
         // 解析 8 帧
-        let frame: WsFrame = serde_json::from_str(&text)
-            .map_err(|e| format!("frame parse: {e}"))?;
+        let frame: WsFrame =
+            serde_json::from_str(&text).map_err(|e| format!("frame parse: {e}"))?;
 
         // 鉴权前只允许 Auth 帧
         if !authenticated && !matches!(frame, WsFrame::Auth(_)) {
             let _ = send_close(&mut sender, "ws_unauthorized", 1008).await;
-            return Err(format!(
-                "non-auth frame before auth: {}",
-                frame.type_str()
-            ));
+            return Err(format!("non-auth frame before auth: {}", frame.type_str()));
         }
 
         match frame {
@@ -177,9 +174,7 @@ async fn handle_ws_session(socket: WebSocket, auth: Arc<AuthPipeline>) -> Result
                 }
                 let _ = sender
                     .send(Message::Text(
-                        serde_json::to_string(&WsFrame::Ping(ping))
-                            .unwrap()
-                            .into(),
+                        serde_json::to_string(&WsFrame::Ping(ping)).unwrap().into(),
                     ))
                     .await;
             }
@@ -191,10 +186,14 @@ async fn handle_ws_session(socket: WebSocket, auth: Arc<AuthPipeline>) -> Result
                     let _ = send_error(
                         &mut sender,
                         e.error_code(),
-                        &format!("rate limited: {} retry after {}s", e, match e {
-                            ApiError::RateLimited { retry_after_secs } => retry_after_secs,
-                            _ => 0,
-                        }),
+                        &format!(
+                            "rate limited: {} retry after {}s",
+                            e,
+                            match e {
+                                ApiError::RateLimited { retry_after_secs } => retry_after_secs,
+                                _ => 0,
+                            }
+                        ),
                         false,
                     )
                     .await;
@@ -260,7 +259,11 @@ async fn handle_auth_frame(
     }
     // 校验 token (走 AuthPipeline::check_bearer)
     let _principal = auth
-        .check_bearer(Some(&format!("Bearer {}", frame.token)), crate::auth::API_KEY_SERVICE, is_p0_endpoint(WS_PATH))
+        .check_bearer(
+            Some(&format!("Bearer {}", frame.token)),
+            crate::auth::API_KEY_SERVICE,
+            is_p0_endpoint(WS_PATH),
+        )
         .await
         .map_err(|e| e.to_string())?;
     *authenticated = true;
@@ -324,7 +327,8 @@ async fn handle_tool_invoke(
         error: None,
         meta,
     });
-    let json = serde_json::to_string(&result_frame).map_err(|e| ApiError::Internal(e.to_string()))?;
+    let json =
+        serde_json::to_string(&result_frame).map_err(|e| ApiError::Internal(e.to_string()))?;
     sender
         .send(Message::Text(json.into()))
         .await
@@ -352,11 +356,7 @@ pub fn next_trace_id_for_test() -> u64 {
 }
 
 /// **stub 工具结果** — 4 真工具的 skeleton 阶段占位.
-async fn stub_tool_result(
-    tool: &str,
-    action: &str,
-    args: &serde_json::Value,
-) -> serde_json::Value {
+async fn stub_tool_result(tool: &str, action: &str, args: &serde_json::Value) -> serde_json::Value {
     json!({
         "tool": tool,
         "action": action,

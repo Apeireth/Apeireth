@@ -268,9 +268,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     let verdict_pass = guard_pass["verdict"].as_str().unwrap_or("");
     let armed_pass = guard_pass["armed"].as_bool().unwrap_or(false);
-    let checks_pass = guard_pass["checks"].as_array().map(|a| a.len()).unwrap_or(0);
+    let checks_pass = guard_pass["checks"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
     println!("  [/v1/guard] tool.invoke:bypass (empty token) verdict={verdict_pass:?} armed={armed_pass} checks={checks_pass}");
-    assert!(verdict_pass == "Allow", "empty-token bypass should Allow (got: {verdict_pass:?})");
+    assert!(
+        verdict_pass == "Allow",
+        "empty-token bypass should Allow (got: {verdict_pass:?})"
+    );
     assert!(armed_pass, "should be armed by default");
 
     // (b) tool.invoke:bypass with "master" token -> Deny (no_bypass trigger)
@@ -286,9 +292,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .json()
         .await?;
     let verdict_deny = guard_deny["verdict"].as_str().unwrap_or("");
-    let cache_keys = guard_deny["verdict_cache_keys"].as_array().map(|a| a.len()).unwrap_or(0);
+    let cache_keys = guard_deny["verdict_cache_keys"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
     println!("  [/v1/guard] tool.invoke:bypass (master token) verdict={verdict_deny:?} verdict_cache_keys={cache_keys}");
-    assert_eq!(verdict_deny, "Deny", "master-token bypass should Deny (got: {verdict_deny:?})");
+    assert_eq!(
+        verdict_deny, "Deny",
+        "master-token bypass should Deny (got: {verdict_deny:?})"
+    );
     assert!(cache_keys >= 1, "should populate verdict_cache_keys");
 
     // (c) wildcard "*" -> runs all 5 mechanisms
@@ -302,7 +314,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let verdict_all = guard_all["verdict"].as_str().unwrap_or("");
     let checks_all = guard_all["checks"].as_array().map(|a| a.len()).unwrap_or(0);
     println!("  [/v1/guard] wildcard action verdict={verdict_all:?} checks={checks_all}");
-    assert_eq!(checks_all, 5, "wildcard should run all 5 mechanisms (got: {checks_all})");
+    assert_eq!(
+        checks_all, 5,
+        "wildcard should run all 5 mechanisms (got: {checks_all})"
+    );
     println!("✅ /v1/guard endpoint HTTP smoke PASS");
 
     // 9. 验证 LLM 端点 (这是验收 "TUI 调 API 收到 LLM reply" 的核心)

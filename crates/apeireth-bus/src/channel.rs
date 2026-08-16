@@ -1,4 +1,4 @@
-﻿//! 三套通知系统 (Three Notification Channels)
+//! 三套通知系统 (Three Notification Channels)
 //!
 //! **源**: VCP v1.1 官网 "三套通知系统" 双盲分桶:
 //! - **AI 通知栏** (Channel::Ai) — 工具调用结果、系统信息、异步任务进度。**仅 AI 可见**。
@@ -94,7 +94,9 @@ impl ChannelSet {
     pub const ALL: Self = Self(0b111);
 
     /// 空集
-    pub const fn empty() -> Self { Self(0) }
+    pub const fn empty() -> Self {
+        Self(0)
+    }
 
     /// 单 channel 构造
     pub const fn from_channel(ch: Channel) -> Self {
@@ -136,21 +138,31 @@ impl ChannelSet {
     }
 
     /// 底层位
-    pub const fn bits(&self) -> u8 { self.0 }
+    pub const fn bits(&self) -> u8 {
+        self.0
+    }
 
     /// 转为 Vec 便于迭代. R148 fix: 用独立 bit 位置提取, 而不是 contains().
     /// ChannelSet::BOTH = 0b011 (= Ai | Human fan-out), 但 contains(Both) 检查 (0b011 & 0b011) == 0b011 = true, 导致 BOTH 也会被加 Both 自己. 现按 bit 0/1/2 拆, 0b100 才是 Both 单独 bit.
     pub fn to_vec(&self) -> Vec<Channel> {
         let mut out = Vec::new();
-        if self.0 & 0b001 != 0 { out.push(Channel::Ai); }
-        if self.0 & 0b010 != 0 { out.push(Channel::Human); }
-        if self.0 & 0b100 != 0 { out.push(Channel::Both); }
+        if self.0 & 0b001 != 0 {
+            out.push(Channel::Ai);
+        }
+        if self.0 & 0b010 != 0 {
+            out.push(Channel::Human);
+        }
+        if self.0 & 0b100 != 0 {
+            out.push(Channel::Both);
+        }
         out
     }
 }
 
 impl Default for ChannelSet {
-    fn default() -> Self { Self::BOTH }
+    fn default() -> Self {
+        Self::BOTH
+    }
 }
 
 // ============================================================================
@@ -165,20 +177,28 @@ pub struct ChanneledBus<T: Clone + Send + Sync + 'static> {
 
 impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> ChanneledBus<T> {
     /// 默认构造 (capacity 32, Block 策略)
-    pub fn new() -> Self { Self::with_capacity(32) }
+    pub fn new() -> Self {
+        Self::with_capacity(32)
+    }
 
     /// 自定义容量
     pub fn with_capacity(cap: usize) -> Self {
-        Self { inner: L0Bus::with_capacity_and_policy(cap, BackpressurePolicy::Block) }
+        Self {
+            inner: L0Bus::with_capacity_and_policy(cap, BackpressurePolicy::Block),
+        }
     }
 
     /// 自定义容量 + 策略
     pub fn with_capacity_and_policy(cap: usize, policy: BackpressurePolicy) -> Self {
-        Self { inner: L0Bus::with_capacity_and_policy(cap, policy) }
+        Self {
+            inner: L0Bus::with_capacity_and_policy(cap, policy),
+        }
     }
 
     /// 底层 L0Bus 引用 (用于跨 channel 调试)
-    pub fn raw(&self) -> &L0Bus<T> { &self.inner }
+    pub fn raw(&self) -> &L0Bus<T> {
+        &self.inner
+    }
 
     /// 内部 topic 加 prefix
     fn scoped_topic(channel: Channel, topic: &str) -> String {
@@ -189,15 +209,26 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> ChanneledBus<T> {
     }
 
     /// 订阅某 channel 上某 topic
-    pub async fn subscribe(&self, channel: Channel, topic: &str)
-        -> BusResult<futures_util::stream::BoxStream<'static, BusResult<BusMessage<T>>>>
-    {
-        self.inner.subscribe(&Self::scoped_topic(channel, topic)).await
+    pub async fn subscribe(
+        &self,
+        channel: Channel,
+        topic: &str,
+    ) -> BusResult<futures_util::stream::BoxStream<'static, BusResult<BusMessage<T>>>> {
+        self.inner
+            .subscribe(&Self::scoped_topic(channel, topic))
+            .await
     }
 
     /// 发送消息到某 channel (单 channel 路由)
-    pub async fn publish(&self, channel: Channel, topic: &str, msg: BusMessage<T>) -> BusResult<()> {
-        self.inner.publish(&Self::scoped_topic(channel, topic), msg).await
+    pub async fn publish(
+        &self,
+        channel: Channel,
+        topic: &str,
+        msg: BusMessage<T>,
+    ) -> BusResult<()> {
+        self.inner
+            .publish(&Self::scoped_topic(channel, topic), msg)
+            .await
     }
 
     /// 发送消息到多 channel (ChannelSet fan-out, 同 trace_id 保证链路可追踪)
@@ -209,21 +240,29 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> ChanneledBus<T> {
     ) -> BusResult<usize> {
         let mut sent = 0usize;
         for ch in channels.to_vec() {
-            self.inner.publish(&Self::scoped_topic(ch, topic), msg.clone()).await?;
+            self.inner
+                .publish(&Self::scoped_topic(ch, topic), msg.clone())
+                .await?;
             sent += 1;
         }
         Ok(sent)
     }
 
     /// 跨 channel 统计 (Ai/Human/Both 各 send + dropped)
-    pub fn stats(&self) -> crate::BusStatsSnapshot { self.inner.stats() }
+    pub fn stats(&self) -> crate::BusStatsSnapshot {
+        self.inner.stats()
+    }
 
     /// 已注册 topic 总数 (跨 channel)
-    pub async fn topic_count(&self) -> usize { self.inner.topic_count().await }
+    pub async fn topic_count(&self) -> usize {
+        self.inner.topic_count().await
+    }
 }
 
 impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> Default for ChanneledBus<T> {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -277,7 +316,10 @@ mod tests {
     fn channel_set_to_vec() {
         assert_eq!(ChannelSet::AI.to_vec(), vec![Channel::Ai]);
         assert_eq!(ChannelSet::BOTH.to_vec(), vec![Channel::Ai, Channel::Human]);
-        assert_eq!(ChannelSet::ALL.to_vec(), vec![Channel::Ai, Channel::Human, Channel::Both]);
+        assert_eq!(
+            ChannelSet::ALL.to_vec(),
+            vec![Channel::Ai, Channel::Human, Channel::Both]
+        );
     }
 
     #[tokio::test]
@@ -286,10 +328,15 @@ mod tests {
         let mut ai_sub = bus.subscribe(Channel::Ai, "tool_call").await.unwrap();
         let mut human_sub = bus.subscribe(Channel::Human, "tool_call").await.unwrap();
 
-        bus.publish(Channel::Ai, "tool_call", BusMessage::new("ai-msg".into())).await.unwrap();
+        bus.publish(Channel::Ai, "tool_call", BusMessage::new("ai-msg".into()))
+            .await
+            .unwrap();
 
         let ai_msg = tokio::time::timeout(Duration::from_millis(200), ai_sub.next())
-            .await.unwrap().unwrap().unwrap();
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         assert_eq!(ai_msg.payload, "ai-msg");
 
         let no_human = tokio::time::timeout(Duration::from_millis(100), human_sub.next()).await;
@@ -303,12 +350,27 @@ mod tests {
         let mut human = bus.subscribe(Channel::Human, "evt").await.unwrap();
         let mut both = bus.subscribe(Channel::Both, "evt").await.unwrap();
 
-        let sent = bus.publish_multi(ChannelSet::ALL, "evt", BusMessage::new("hello".into())).await.unwrap();
+        let sent = bus
+            .publish_multi(ChannelSet::ALL, "evt", BusMessage::new("hello".into()))
+            .await
+            .unwrap();
         assert_eq!(sent, 3);
 
-        let m1 = tokio::time::timeout(Duration::from_millis(200), ai.next()).await.unwrap().unwrap().unwrap();
-        let m2 = tokio::time::timeout(Duration::from_millis(200), human.next()).await.unwrap().unwrap().unwrap();
-        let m3 = tokio::time::timeout(Duration::from_millis(200), both.next()).await.unwrap().unwrap().unwrap();
+        let m1 = tokio::time::timeout(Duration::from_millis(200), ai.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let m2 = tokio::time::timeout(Duration::from_millis(200), human.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let m3 = tokio::time::timeout(Duration::from_millis(200), both.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         assert_eq!(m1.trace_id, m2.trace_id);
         assert_eq!(m2.trace_id, m3.trace_id);
         assert_eq!(m1.payload, "hello");
@@ -320,9 +382,15 @@ mod tests {
         let mut ai = bus.subscribe(Channel::Ai, "progress").await.unwrap();
         let mut both = bus.subscribe(Channel::Both, "progress").await.unwrap();
 
-        bus.publish(Channel::Both, "progress", BusMessage::new("50%".into())).await.unwrap();
+        bus.publish(Channel::Both, "progress", BusMessage::new("50%".into()))
+            .await
+            .unwrap();
 
-        let m = tokio::time::timeout(Duration::from_millis(200), both.next()).await.unwrap().unwrap().unwrap();
+        let m = tokio::time::timeout(Duration::from_millis(200), both.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         assert_eq!(m.payload, "50%");
 
         let no_ai = tokio::time::timeout(Duration::from_millis(100), ai.next()).await;
@@ -335,11 +403,27 @@ mod tests {
         let mut ai = bus.subscribe(Channel::Ai, "audit").await.unwrap();
         let mut human = bus.subscribe(Channel::Human, "audit").await.unwrap();
 
-        bus.publish(Channel::Ai, "audit", BusMessage::new("ai-audit".into())).await.unwrap();
-        bus.publish(Channel::Human, "audit", BusMessage::new("human-audit".into())).await.unwrap();
+        bus.publish(Channel::Ai, "audit", BusMessage::new("ai-audit".into()))
+            .await
+            .unwrap();
+        bus.publish(
+            Channel::Human,
+            "audit",
+            BusMessage::new("human-audit".into()),
+        )
+        .await
+        .unwrap();
 
-        let m_ai = tokio::time::timeout(Duration::from_millis(200), ai.next()).await.unwrap().unwrap().unwrap();
-        let m_h = tokio::time::timeout(Duration::from_millis(200), human.next()).await.unwrap().unwrap().unwrap();
+        let m_ai = tokio::time::timeout(Duration::from_millis(200), ai.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        let m_h = tokio::time::timeout(Duration::from_millis(200), human.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
         assert_eq!(m_ai.payload, "ai-audit");
         assert_eq!(m_h.payload, "human-audit");
     }

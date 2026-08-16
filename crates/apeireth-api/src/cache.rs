@@ -31,10 +31,8 @@
 
 use std::sync::Arc;
 
-use apeireth_telemetry::cache::{
-    build_cache, BackendKind, Cache, CacheConfig, EvictionPolicy,
-};
 use apeireth_protocol::{NormalizedRequest, NormalizedResponse, ProtocolKind};
+use apeireth_telemetry::cache::{build_cache, BackendKind, Cache, CacheConfig, EvictionPolicy};
 use apeireth_telemetry::metric::counter::Counter;
 use apeireth_telemetry::metric::Metric; // 给 Counter::name() / ::help() 用
 use sha2::{Digest, Sha256};
@@ -210,7 +208,11 @@ impl ResponseCache {
     /// 命中查询
     ///
     /// **fail-soft**: cache 内部错误 / 反序列化失败 返 `None` (走原 dispatch)
-    pub async fn get(&self, req: &NormalizedRequest, kind: ProtocolKind) -> Option<NormalizedResponse> {
+    pub async fn get(
+        &self,
+        req: &NormalizedRequest,
+        kind: ProtocolKind,
+    ) -> Option<NormalizedResponse> {
         let key = cache_key(req, kind);
         match self.inner.get(&key).await {
             Ok(Some(bytes)) => {
@@ -241,10 +243,17 @@ impl ResponseCache {
     /// 写入
     ///
     /// **fail-soft**: 容量超限 / IO 错误 返 `Ok(())`, 0 影响主路径
-    pub async fn put(&self, req: &NormalizedRequest, kind: ProtocolKind, resp: &NormalizedResponse) {
+    pub async fn put(
+        &self,
+        req: &NormalizedRequest,
+        kind: ProtocolKind,
+        resp: &NormalizedResponse,
+    ) {
         let key = cache_key(req, kind);
-        let Ok(bytes) = serde_json::to_vec(resp) else { return }; // 序列化失败, 静默跳过
-        // TTL = 默认 60s (跟 apeireth-cache 1:1)
+        let Ok(bytes) = serde_json::to_vec(resp) else {
+            return;
+        }; // 序列化失败, 静默跳过
+           // TTL = 默认 60s (跟 apeireth-cache 1:1)
         let ttl = std::time::Duration::from_secs(DEFAULT_CACHE_TTL_SECS);
         if self.inner.put(key, bytes, ttl).await.is_ok() {
             self.put_counter.inc();
@@ -434,7 +443,11 @@ mod tests {
     #[tokio::test]
     async fn response_cache_new_succeeds() {
         let cache = ResponseCache::new().await;
-        assert!(cache.is_ok(), "ResponseCache::new() should succeed: {:?}", cache.err());
+        assert!(
+            cache.is_ok(),
+            "ResponseCache::new() should succeed: {:?}",
+            cache.err()
+        );
     }
 
     #[tokio::test]
@@ -476,8 +489,12 @@ mod tests {
         let cache = ResponseCache::new().await.unwrap();
         let req = make_req("gpt-4o", "hello");
 
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("v1")).await;
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("v2")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("v1"))
+            .await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("v2"))
+            .await;
 
         let got = cache.get(&req, ProtocolKind::OpenAiChat).await.unwrap();
         assert_eq!(got.content, "v2");
@@ -491,16 +508,28 @@ mod tests {
         let req1 = make_req("gpt-4o", "hello");
         let req2 = make_req("gpt-4o", "world");
 
-        cache.put(&req1, ProtocolKind::OpenAiChat, &make_resp("r1")).await;
-        cache.put(&req2, ProtocolKind::OpenAiChat, &make_resp("r2")).await;
+        cache
+            .put(&req1, ProtocolKind::OpenAiChat, &make_resp("r1"))
+            .await;
+        cache
+            .put(&req2, ProtocolKind::OpenAiChat, &make_resp("r2"))
+            .await;
 
         assert_eq!(cache.len().await, 2);
         assert_eq!(
-            cache.get(&req1, ProtocolKind::OpenAiChat).await.unwrap().content,
+            cache
+                .get(&req1, ProtocolKind::OpenAiChat)
+                .await
+                .unwrap()
+                .content,
             "r1"
         );
         assert_eq!(
-            cache.get(&req2, ProtocolKind::OpenAiChat).await.unwrap().content,
+            cache
+                .get(&req2, ProtocolKind::OpenAiChat)
+                .await
+                .unwrap()
+                .content,
             "r2"
         );
         assert_eq!(cache.hit_counter().get(), 2);
@@ -511,16 +540,28 @@ mod tests {
         let cache = ResponseCache::new().await.unwrap();
         let req = make_req("gpt-4o", "hello");
 
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("chat")).await;
-        cache.put(&req, ProtocolKind::OpenAiResponses, &make_resp("responses")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("chat"))
+            .await;
+        cache
+            .put(&req, ProtocolKind::OpenAiResponses, &make_resp("responses"))
+            .await;
 
         assert_eq!(cache.len().await, 2);
         assert_eq!(
-            cache.get(&req, ProtocolKind::OpenAiChat).await.unwrap().content,
+            cache
+                .get(&req, ProtocolKind::OpenAiChat)
+                .await
+                .unwrap()
+                .content,
             "chat"
         );
         assert_eq!(
-            cache.get(&req, ProtocolKind::OpenAiResponses).await.unwrap().content,
+            cache
+                .get(&req, ProtocolKind::OpenAiResponses)
+                .await
+                .unwrap()
+                .content,
             "responses"
         );
     }
@@ -531,7 +572,9 @@ mod tests {
         // 简化: put 一个 resp, 然后清空再放一个, 模拟损坏
         let cache = ResponseCache::new().await.unwrap();
         let req = make_req("gpt-4o", "hello");
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("ok")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("ok"))
+            .await;
         // 命中 OK
         let got = cache.get(&req, ProtocolKind::OpenAiChat).await;
         assert!(got.is_some());
@@ -552,7 +595,9 @@ mod tests {
     async fn response_cache_multiple_hits_increment_counter() {
         let cache = ResponseCache::new().await.unwrap();
         let req = make_req("gpt-4o", "hello");
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("ok")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("ok"))
+            .await;
         for _ in 0..5 {
             assert!(cache.get(&req, ProtocolKind::OpenAiChat).await.is_some());
         }
@@ -562,8 +607,20 @@ mod tests {
     #[tokio::test]
     async fn response_cache_clear() {
         let cache = ResponseCache::new().await.unwrap();
-        cache.put(&make_req("a", "x"), ProtocolKind::OpenAiChat, &make_resp("r1")).await;
-        cache.put(&make_req("b", "y"), ProtocolKind::OpenAiChat, &make_resp("r2")).await;
+        cache
+            .put(
+                &make_req("a", "x"),
+                ProtocolKind::OpenAiChat,
+                &make_resp("r1"),
+            )
+            .await;
+        cache
+            .put(
+                &make_req("b", "y"),
+                ProtocolKind::OpenAiChat,
+                &make_resp("r2"),
+            )
+            .await;
         assert_eq!(cache.len().await, 2);
 
         // apeireth-cache MemoryCache clear via inner
@@ -582,20 +639,47 @@ mod tests {
         };
         let cache = ResponseCache::with_config(config).await.unwrap();
         // 装 2 个
-        cache.put(&make_req("a", "x"), ProtocolKind::OpenAiChat, &make_resp("r1")).await;
-        cache.put(&make_req("b", "y"), ProtocolKind::OpenAiChat, &make_resp("r2")).await;
+        cache
+            .put(
+                &make_req("a", "x"),
+                ProtocolKind::OpenAiChat,
+                &make_resp("r1"),
+            )
+            .await;
+        cache
+            .put(
+                &make_req("b", "y"),
+                ProtocolKind::OpenAiChat,
+                &make_resp("r2"),
+            )
+            .await;
         assert_eq!(cache.len().await, 2);
         // R121 续 (V2-4 战区 2.5): 第 3 个触发 LRU eviction, 替掉最早 a, len 仍 2
         // (B 留 §5.4 修复: 不再返 CapacityExceeded, 真接 5 policy eviction)
-        cache.put(&make_req("c", "z"), ProtocolKind::OpenAiChat, &make_resp("r3")).await;
+        cache
+            .put(
+                &make_req("c", "z"),
+                ProtocolKind::OpenAiChat,
+                &make_resp("r3"),
+            )
+            .await;
         // 容量稳定在 2 (a 被淘汰, c 加入)
         assert_eq!(cache.len().await, 2);
         // 3 次 put 全部成功 (eviction 后的 put 计入)
         assert_eq!(cache.put_counter().get(), 3);
         // 验证: a 被淘汰, c 命中, b 仍命中
-        assert!(cache.get(&make_req("a", "x"), ProtocolKind::OpenAiChat).await.is_none());
-        assert!(cache.get(&make_req("b", "y"), ProtocolKind::OpenAiChat).await.is_some());
-        assert!(cache.get(&make_req("c", "z"), ProtocolKind::OpenAiChat).await.is_some());
+        assert!(cache
+            .get(&make_req("a", "x"), ProtocolKind::OpenAiChat)
+            .await
+            .is_none());
+        assert!(cache
+            .get(&make_req("b", "y"), ProtocolKind::OpenAiChat)
+            .await
+            .is_some());
+        assert!(cache
+            .get(&make_req("c", "z"), ProtocolKind::OpenAiChat)
+            .await
+            .is_some());
     }
 
     #[tokio::test]
@@ -627,7 +711,8 @@ mod tests {
             let c = cache.clone();
             let req = make_req("gpt-4o", &format!("msg-{i}"));
             handles.push(tokio::spawn(async move {
-                c.put(&req, ProtocolKind::OpenAiChat, &make_resp(&format!("r{i}"))).await;
+                c.put(&req, ProtocolKind::OpenAiChat, &make_resp(&format!("r{i}")))
+                    .await;
                 let got = c.get(&req, ProtocolKind::OpenAiChat).await;
                 assert!(got.is_some());
             }));
@@ -646,7 +731,9 @@ mod tests {
         let cache = ResponseCache::new().await.unwrap();
         let mut req = make_req("gpt-4o", "hi");
         req.stream = true;
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("ok")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("ok"))
+            .await;
         let got = cache.get(&req, ProtocolKind::OpenAiChat).await;
         assert!(got.is_some()); // cache 本身不 skip, 由调用方守门
     }
@@ -661,7 +748,9 @@ mod tests {
         cache.get(&req, ProtocolKind::OpenAiChat).await;
         assert_eq!(cache.miss_counter().get(), 3);
         // put
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("ok")).await;
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("ok"))
+            .await;
         assert_eq!(cache.put_counter().get(), 1);
         // 2 hits
         cache.get(&req, ProtocolKind::OpenAiChat).await;
@@ -704,9 +793,18 @@ mod tests {
     #[tokio::test]
     async fn response_cache_counters_have_required_names() {
         let cache = ResponseCache::new().await.unwrap();
-        assert_eq!(cache.hit_counter().name(), "apeireth_api_response_cache_hits_total");
-        assert_eq!(cache.miss_counter().name(), "apeireth_api_response_cache_misses_total");
-        assert_eq!(cache.put_counter().name(), "apeireth_api_response_cache_puts_total");
+        assert_eq!(
+            cache.hit_counter().name(),
+            "apeireth_api_response_cache_hits_total"
+        );
+        assert_eq!(
+            cache.miss_counter().name(),
+            "apeireth_api_response_cache_misses_total"
+        );
+        assert_eq!(
+            cache.put_counter().name(),
+            "apeireth_api_response_cache_puts_total"
+        );
         // help K-1 强校验非空
         assert!(!cache.hit_counter().help().is_empty());
         assert!(!cache.miss_counter().help().is_empty());
@@ -722,9 +820,18 @@ mod tests {
     #[tokio::test]
     async fn response_cache_default_constants_match_apeireth_cache() {
         // 0 漂移 1.1 baseline
-        assert_eq!(DEFAULT_CACHE_TTL_SECS, apeireth_telemetry::cache::DEFAULT_TTL_SECS);
-        assert_eq!(DEFAULT_CACHE_MAX_SIZE, apeireth_telemetry::cache::DEFAULT_MAX_SIZE);
-        assert_eq!(DEFAULT_CACHE_SHARDS, apeireth_telemetry::cache::DEFAULT_SHARDS);
+        assert_eq!(
+            DEFAULT_CACHE_TTL_SECS,
+            apeireth_telemetry::cache::DEFAULT_TTL_SECS
+        );
+        assert_eq!(
+            DEFAULT_CACHE_MAX_SIZE,
+            apeireth_telemetry::cache::DEFAULT_MAX_SIZE
+        );
+        assert_eq!(
+            DEFAULT_CACHE_SHARDS,
+            apeireth_telemetry::cache::DEFAULT_SHARDS
+        );
     }
 
     // ---------- 集成测试: cache_key 行为 (5 个) ----------
@@ -752,7 +859,9 @@ mod tests {
         let req = make_req("gpt-4o", "hi");
         // miss → put → hit
         cache.get(&req, ProtocolKind::OpenAiChat).await; // miss
-        cache.put(&req, ProtocolKind::OpenAiChat, &make_resp("ok")).await; // put
+        cache
+            .put(&req, ProtocolKind::OpenAiChat, &make_resp("ok"))
+            .await; // put
         cache.get(&req, ProtocolKind::OpenAiChat).await; // hit
         assert_eq!(cache.miss_counter().get(), 1);
         assert_eq!(cache.put_counter().get(), 1);

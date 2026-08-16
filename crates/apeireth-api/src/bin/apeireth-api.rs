@@ -27,7 +27,6 @@ use apeireth_api::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-
     let port: u16 = std::env::var("APEIRETH_PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -41,19 +40,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 2) APEIRETH_LLM_BACKEND=scripted → 单 ScriptedLlmProvider mock
     // 3) 默认 → 单 ApeirethApiProvider (兼容老行为)
     let llm: Arc<dyn LlmProvider> = if let Ok(config_path) = std::env::var("APEIRETH_LLM_CONFIG") {
-        let config = LlmConfig::from_file(&config_path)
-            .map_err(|e| format!("read {config_path}: {e}"))?;
+        let config =
+            LlmConfig::from_file(&config_path).map_err(|e| format!("read {config_path}: {e}"))?;
         if let Some(sr) = config.build_semantic_router()? {
-            tracing::info!("Using SemanticRouter from {config_path} ({} routes)", config.semantic_routes.as_ref().map(|c| c.routes.len()).unwrap_or(0));
-            println!("   llm:      SemanticRouter ({} routes, from {})",
-                     config.semantic_routes.as_ref().map(|c| c.routes.len()).unwrap_or(0),
-                     config_path);
+            tracing::info!(
+                "Using SemanticRouter from {config_path} ({} routes)",
+                config
+                    .semantic_routes
+                    .as_ref()
+                    .map(|c| c.routes.len())
+                    .unwrap_or(0)
+            );
+            println!(
+                "   llm:      SemanticRouter ({} routes, from {})",
+                config
+                    .semantic_routes
+                    .as_ref()
+                    .map(|c| c.routes.len())
+                    .unwrap_or(0),
+                config_path
+            );
             Arc::new(sr) as Arc<dyn LlmProvider>
         } else {
             // 配置了 toml 但没 semantic_routes, fallback 用 build_router
             let router = config.build_router()?;
-            tracing::info!("Using MultiLlmRouter from {config_path} ({} providers)", router.provider_count());
-            println!("   llm:      MultiLlmRouter ({} providers, from {})", router.provider_count(), config_path);
+            tracing::info!(
+                "Using MultiLlmRouter from {config_path} ({} providers)",
+                router.provider_count()
+            );
+            println!(
+                "   llm:      MultiLlmRouter ({} providers, from {})",
+                router.provider_count(),
+                config_path
+            );
             Arc::new(router) as Arc<dyn LlmProvider>
         }
     } else {
@@ -98,7 +117,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(()) => {
                 let names = apeireth_tools::registered_tool_names();
                 tracing::info!(names = ?names, "V2 tools registered");
-                println!("   tools:    {} registered ({})", names.len(), names.join(", "));
+                println!(
+                    "   tools:    {} registered ({})",
+                    names.len(),
+                    names.join(", ")
+                );
                 v2_state.install_tools(registry);
             }
             Err(e) => eprintln!("[apeireth-api] WARN: register_all failed: {e}"),
@@ -112,7 +135,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Apeireth 自研 API 接入平台 HTTP server (R27 C 方案: 独立 daemon)");
     println!("   listen:    http://0.0.0.0:{port}");
     println!("   base_url:  {base_url}");
-    println!("   auth:      {}", if auth_token.is_some() { "Bearer token" } else { "no token" });
+    println!(
+        "   auth:      {}",
+        if auth_token.is_some() {
+            "Bearer token"
+        } else {
+            "no token"
+        }
+    );
     println!();
     println!("   多前端可同时连这个 server (TUI / Web / 桌面 App)");
     println!();
