@@ -50,6 +50,11 @@ impl ContextAssembler {
         Self { blocks: Vec::new(), total_budget_chars: total_budget_chars.max(100) }
     }
 
+    /// 总预算 (只读口) — 补 getter 解除 prompt_assembler 编译阻塞 (agent_orchestrator2 代加, 供主人知悉)
+    pub fn total_budget_chars(&self) -> usize {
+        self.total_budget_chars
+    }
+
     /// 注册块 (保持顺序; 核心块在前更安全).
     pub fn push(mut self, block: ContextBlock) -> Self {
         self.blocks.push(block);
