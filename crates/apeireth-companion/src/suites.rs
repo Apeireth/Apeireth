@@ -121,9 +121,18 @@ impl SuiteCatalog {
                     id: "pentest-suite".into(),
                     name: "渗透测试升级套件".into(),
                     kind: SuiteKind::UpgradeSuite,
-                    description: "渗透专业团队能力: 侦察/扫描/报告 (宪法边界内, 工具实现后续)".into(),
-                    requires_tools: vec!["ShellExec".into(), "WebFetch".into()],
-                    pack_tools: vec!["ShellExec".into()],
+                    description: "渗透专业团队能力: 侦察计划编排(recon_plan, E-1 范围闸) + 扫描结果解析(scan_report) + 工具执行 (宪法边界内)".into(),
+                    requires_tools: vec![
+                        "ShellExec".into(),
+                        "WebFetch".into(),
+                        "recon_plan".into(),
+                        "scan_report".into(),
+                    ],
+                    pack_tools: vec![
+                        "ShellExec".into(),
+                        "recon_plan".into(),
+                        "scan_report".into(),
+                    ],
                     pack_hours: Some(24),
                     plugins: vec!["pentest-recon".into(), "pentest-scan".into()],
                 },
@@ -287,5 +296,25 @@ mod tests {
         assert!(r.contains("1 插件"));
         // 无插件要求的套件不受影响
         assert!(cat.install_with_plugins(&bridge, Some(&reg), "base").is_ok());
+    }
+
+    #[test]
+    fn pentest_suite_installs_with_real_plugins() {
+        use crate::pentest::{PentestReconPlugin, PentestScanPlugin};
+        use crate::plugin::PluginRegistry;
+        use apeireth_memory::SqliteMemoryStore;
+        use std::sync::Arc;
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let cat = SuiteCatalog::builtin();
+        let reg = PluginRegistry::new();
+        // 缺插件 → 拒绝
+        assert!(cat.install_with_plugins(&bridge, Some(&reg), "pentest-suite").is_err());
+        // 两个真插件装齐 → 装配成功 (要求 recon_plan/scan_report 已注册)
+        reg.install(&bridge, Arc::new(PentestReconPlugin)).unwrap();
+        reg.install(&bridge, Arc::new(PentestScanPlugin)).unwrap();
+        let r = cat.install_with_plugins(&bridge, Some(&reg), "pentest-suite").unwrap();
+        assert!(r.contains("渗透测试升级套件"));
+        assert!(r.contains("2 插件"));
     }
 }
