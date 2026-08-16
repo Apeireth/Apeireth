@@ -142,4 +142,7 @@
 ### gateway/provider 适配层环境变量 (N12)
 `APEIRETH_REASONING_ENABLED=1/true` (推理归一化总开关, 默认关, VCP 对齐)
 · `APEIRETH_REASONING_MODEL_FILTERS` (逗号分隔模型子串白名单, 空=不转换任何模型)
-· `APEIRETH_REASONING_TAG` (think 块标签, 默认 think; 仅 think/thinking 两种归一结果) · `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
+· `APEIRETH_REASONING_TAG` (think 块标签, 默认 think; 仅 think/thinking 两种归一结果)
+
+### companion 环境变量（N7 查询形态学）
+`APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
