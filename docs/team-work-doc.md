@@ -131,8 +131,9 @@
 - 记忆主题分组（VCP SemanticGroupManager 精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
 - 元思考递归链（VCP MetaThinkingManager 精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
 - 跨日记联想（VCP associativeDiscovery 精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
-- 日记本中心（VCP RAGDiaryPlugin 精神）→ 按日归档 + 检索 + 注入
+- 日记本中心（VCP RAGDiaryPlugin 精神）→ 按日归档 + 检索 + 注入 ✅ Rust 落点: companion diary.rs (提交 f2e50f46; 按日归档+确定性检索+recent_injection 注入块, DiaryInjector trait 口)
 - **验收**：每个机制 = lib 模块 + trait 口 + 单测 + 注入链可见 + 0 装 PASS 标注
+- **§5.1 收官** ✅ 注入链统一接线完成 (任务 68caf9cb, 提交 cb12b810): assemble.rs unified_memory_block 四源合并 (主题索引+日记摘要+跨日记关联+记忆证据块), 各源独立预算互不侵占, 砍序 关联→日记→主题→记忆证据块(反幻觉基石最后砍), 空源不注半残块; 五机制至此全闭环
 
 ### 5.2 官方套件：预测机套件（挂 oracle 机制）
 - 通用预测框架：数据源 adapter trait + 可证伪预测登记 + Brier 校准（全部挂已有 oracle）
