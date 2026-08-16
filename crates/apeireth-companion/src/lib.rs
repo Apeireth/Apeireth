@@ -63,6 +63,7 @@ pub mod goal;
 pub mod capability;
 pub mod suites;
 pub mod plugin;
+pub mod education;
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;
