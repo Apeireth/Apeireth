@@ -38,9 +38,13 @@ pub trait CredentialsStore {
 
 /// 服务名合法性校验 (防注入/空名/控制字符)。
 ///
-/// 允许: 非空, 仅 `A-Za-z0-9 . _ -`, 长度 ≤ 128。拒绝路径分隔符 (防穿越)。
+/// 允许: 非空, 仅 `A-Za-z0-9 . _ -`, 长度 ≤ 128。拒绝路径分隔符 (防穿越),
+/// 拒绝 `.` / `..` / 点开头 (防路径穿越与隐藏文件)。
 pub fn validate_service_name(service: &str) -> Result<()> {
     if service.is_empty() || service.len() > 128 {
+        return Err(CredentialsError::InvalidServiceName(service.to_string()));
+    }
+    if service == "." || service == ".." || service.starts_with('.') {
         return Err(CredentialsError::InvalidServiceName(service.to_string()));
     }
     let ok = service
@@ -227,7 +231,7 @@ mod tests {
     #[test]
     fn invalid_service_name_rejected() {
         let s = tmp_store("invalid");
-        for bad in ["", "a/b", "a\\b", "a b", "a:b", ".."] {
+        for bad in ["", "a/b", "a\\b", "a b", "a:b", "..", ".", ".hidden"] {
             assert!(
                 s.set(bad, SecretString::new("x")).is_err(),
                 "应拒绝非法名: {bad:?}"
