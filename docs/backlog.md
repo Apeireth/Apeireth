@@ -64,6 +64,8 @@
 | N16 | **团队协作三件套接线 (spectrai 机制落地)** | 主人 2026-08-17 全 workspace 孤儿体检 (0 外部 Cargo 引用) | apeireth-team-lead (Orchestrator 8 调度工具, 13 测试全过) + apeireth-agent (Agent 管理, 87 测试) + apeireth-supervisor (进程监督树, 76 测试) — 翻译完毕但从未被消费: 接进 companion (执行体 = 插件形态, 挂 ToolBridge + apeireth-bus L4 跨进程), 补 send_to_agent/wait_agent/worktree 占位实现; **主人指示: 团队当前批完成后下一批优先干这个** | ⬜ 下一批 P0 (主人拍板) |
 | N17 | **工具子 crate 装配 (9 个 0 引用)** | 同上孤儿体检 | apeireth-tool-shell / tool-fetch / tool-browser / tool-codesearch / tool-image-gen / tool-image-process / tool-search / tool-filesystem 等 — 独立实现齐全但 apeireth-tools::register_all 未装配: 逐个核实能力 → 挂 ToolBridge 注册 + 白名单 + CapabilityCatalog (与 N16 同批)。**边界 (主人 2026-08-17 拍板, 防团队干偏)**: ① 禁止合并成一个大工具 crate (工具=插件单元, 保持独立 crate = 热插拔 + 依赖隔离 + 社区贡献拼积木); ② 装配必须统一走 `Tool trait + ToolRegistry.register + ToolBridge` 三件套, 禁止各工具自写调用/执行方式 (集成而非分立); ③ 每个工具 crate 提供 register 函数, 统一注册进同一 registry | ⬜ 下一批 P0 (随 N16) |
 | N18 | **新 crate 必须声明消费方 (规范)** | 孤儿体检暴露机制漏洞 | 审计搜 TODO 模式抓不到"翻译了未接线"的 crate: maintenance-guide 加规范 — 新建 crate 必须登记消费方 (谁依赖/谁装配), 缺消费方的 crate 在台账显式标注"独立待装配"; 孤儿体检 (0 引用扫描) 纳入定期检查 | ⬜ 随 N16 批次落地 |
+| N21 | **apeireth-credentials (统一 API key 管理)** | 主人 2026-08-17 设计蓝图对照 (R136 计划: "API key 管理统一走 apeireth-credentials crate (已存在)" — 实际不存在) | 各插件/工具目前各读 env: 新建 credentials crate (密钥安全存储/按服务名读写/权限洋葱衔接 master token, 0 假装: 不存明文到日志), 工具装配 (N17) 时统一接入; 与 N17 同批 | ⬜ 下一批 P0 (随 N17) |
+| N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "VCP preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ⬜ 下一批 P0 (随 N17) |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
