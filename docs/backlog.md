@@ -68,6 +68,33 @@
 | N21 | **apeireth-credentials (统一 API key 管理)** | 主人 2026-08-17 设计蓝图对照 (R136 计划: "API key 管理统一走 apeireth-credentials crate (已存在)" — 实际不存在) | 各插件/工具目前各读 env: 新建 credentials crate (密钥安全存储/按服务名读写/权限洋葱衔接 master token, 0 假装: 不存明文到日志), 工具装配 (N17) 时统一接入; 与 N17 同批 | ⬜ 下一批 P0 (随 N17) |
 | N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "VCP preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ⬜ 下一批 P0 (随 N17) |
 
+### 模块对标调研批 (2026-08-17, 4 subagent web 调研; 主人指示: 团队能干的先安排, 需讨论的明天一起议)
+
+> 来源: 记忆/上下文 (cdfb3e99) + 安全/治理 (2abc77ed) + 自我进化 (261a602c) + Agent 执行 (待收)。
+> 命名: 记忆 M-* / 安全 S-* / 进化 E-*。**团队可干** = 接线/增量类; **待主人议** = 新机制/方向类。
+
+| # | 项 | 来源 | 说明 | 状态 |
+|---|---|---|---|---|
+| M1 | **上下文编辑/compaction 原语 + Context Rot 度量** | 记忆调研 ⭐最高 | context.rs 只有尾部截断: 加 rot_score (重复/陈旧/相关性启发式) + compaction 改 LLM 参与的 retain/remove/replace 段编辑 (Anthropic context editing/compaction + Chroma context rot 精神) | ⬜ 团队可干 (P1) |
+| M2 | **图社区分层聚合 + 双级检索** | 记忆调研 ⭐ | memory_graph 只有实体链 CRAWL (local): 轻量社区检测 (s/p/o 共现聚簇, 不上 Leiden) + 社区级滚动摘要挂提炼调度 + 检索分诊 (具体问题走实体链/宽泛问题走社区摘要, LightRAG/GraphRAG 精神) | ⬜ 团队可干 (P1) |
+| M3 | **ACT-R 激活衰减 + 存档不删除** | 记忆调研 ⭐ | decay.rs 单点半衰期: 改 ACT-R 激活 A=ln(Σ(t−t_j)^−d)+β (访问次数强化) + 关联扩散 + 遗忘=移入归档层可再激活 (mtrace 参考) | ⬜ 团队可干 (P1) |
+| M4 | **记忆评测闭环** | 记忆调研 ⭐ | apeireth-bench 建 LongMemEval 5 能力评测集 (抽取/多会话推理/时序/知识更新/弃答) — 弃答正好检验对账 DELETE 不输出已删事实 | ⬜ 团队可干 (P1) |
+| M5 | **通用记忆层时间有效性** | 记忆调研 ⭐ | 时间有效性只在图事实 (valid_at/invalid_at): 下沉到普通记忆条目 valid_from/valid_until + 问法感知过滤 (现在/当前 vs 以前/曾经, Mem0 temporal reasoning) | ⬜ 团队可干 (P1) |
+| M6 | prompt drift 管理 | 记忆调研备选 | 提炼器输出 schema 版本化+迁移 (防长跑漂移, 挂 migrations.rs) | ⬜ 团队可干 (P2) |
+| S1 | **Windows 最小权限执行** | 安全调研 | exec_worker 补 Job Object 的权限洞: CreateRestrictedToken 去特权+deny SID + 低完整性级别 + 每工具工作目录 ACL; 高危可选 AppContainer 档 (Chromium 分层模型) | ⬜ 团队可干 (P1, 随 N17 隔离加固) |
+| S2 | **Untrusted 输入标记 + MCP 工具描述投毒防护** | 安全调研 | prompt 组装层外部内容包 untrusted 标记; MCP 新服务器 tool description 过宪法评审 + diff 告警 (OWASP Agentic Top 10 ASI-01) | ⬜ 团队可干 (P1) |
+| S3 | credentials crate 用 keyring 后端 | 安全调研 | N21 方案升级: 后端 keyring-rs (Windows DPAPI 零依赖) + 按服务最小化 + 读取出口接 guard + 新凭据首次使用审批联动 | ⬜ 并入 N21 |
+| S4 | **出站网络策略** | 安全调研 | gateway 层域名/协议白名单默认拒绝 + 每次外发审计进哈希链 + 与 spend 预算联动 | ⬜ 团队可干 (P1) |
+| S5 | 供应链补强: cargo vet + SBOM | 安全调研 | cargo vet 先覆盖直接依赖 + release workflow 加 CycloneDX 生成 (与 cosign 一体) | ⬜ 团队可干 (P2) |
+| S6 | **审计哈希链换 SHA-256** | 安全调研修正 | session_log FNV-1a 64 非加密可碰撞 → SHA-256 链 + 每 N 条锚定签名 (tamper-evident) | ⬜ 团队可干 (P1, 成本低) |
+| S7 | master token 比对改 constant-time | 安全调研修正 | principles.rs 已自标非恒定时间 → 恒定时间比较 | ⬜ 团队可干 (P1, 成本低) |
+| E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ⬜ 团队可干 (P1) |
+| E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ⬜ 团队可干 (P1) |
+| E3 | **校准诊断 + 集合预报 + 预测市场适配器** | 进化调研 | oracle 补 Brier 分解 (reliability/resolution) + 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器 (oracle_adapters 已有模式) | ⬜ 团队可干 (P1) |
+| E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
+| E5 | **技能生命周期闭环 (Voyager 升级)** | 进化调研 | voyager_api.rs 是 stub: 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 apeireth-skills 注册表 (两技能线打通) | ⬜ 团队可干 (P1, 中-大) |
+| E6 | 顺手修正: critic.rs CRITIC 引用 | 进化调研修正 | 注释写 Wang et al. 实为 Gou et al. (arXiv 2305.11738) | ⬜ 团队可干 (成本 1 分钟) |
+
 ### P0 — 近期做 (机制缺口, 高价值)
 
 | # | 项 | 来源 | 说明 | 状态 |
@@ -108,9 +135,9 @@
 | 32 | 仓库卫生: 误产物 + db 泄漏清理 | A4 (AR1 91bb7d42 + DB1 e5a173c8 + DB2 c7e494b3) | ①`git rm ersXXXApeireth-rust` (11KB ANSI git log 转储, R125 迁仓误产物, 仍被跟踪) ②删 crates/apeireth-memory.db{,-shm,-wal} (486KB WAL 泄漏进源码树, 未跟踪) + .gitignore 补 `crates/*.db*` | ⬜ P2, 待实施 |
 | 33 | 孤儿 crate 确认 + dev-dep 治理 | A4 (AR1 91bb7d42) | ①12 个零内部消费者 lib crate 待负责人确认去留 (provider/cron/experience/environment/config/state/naming-v05/livekit/blueprint-impl/library-governance/voice/context-fold) ②tool-fetch 自引用 dev-dep (Cargo.toml:28) 修复 ③verify/supervisor/sovereignty 三角 + tool-runtime↔tool-approval dev-dep 回环边界腐化, 建议抽公共接口 | ⬜ P2, 待实施 |
 | 34 | assemble.rs chrono unwrap DST 修复 | A4 (CR2 03cf86e9) | assemble.rs:399 `and_local_timezone(...).unwrap()` 在 DST/时钟回拨时歧义 panic — 一行改 `.single()`/Option 兜底; 4 处 Mutex poison 风险仅记录不阻塞 | ⬜ P2, 待实施 |
-| 35 | v2 alpha 失传产物诚实标注 | A4 (C3 盘点) | 7 份验收报告 + 09-ADDENDUM + V2-INDEX + 07-V2-BASELINE 从未入 git 历史 (不可恢复, 详见 C3 报告 §二) — 在 RELEASE-NOTES-v2.0.0-alpha 对应位置加注"产物已失传"或 Leader 决策重写; 不重建伪造 (0 装 PASS) | ⬜ P2, 待 Leader 决策 |
+| 35 | v2 alpha 失传产物诚实标注 | A4 (C3 盘点) | 7 份验收报告 + 09-ADDENDUM + V2-INDEX + 07-V2-BASELINE 从未入 git 历史 (不可恢复, 详见 C3 报告 §二); Leader 拍板: 诚实标注不重写不伪造 (历史验收不可复现, 0 装 PASS) | ✅ 完成 (任务 2926bf6d, 2026-08-17): RELEASE-NOTES §4.1 矩阵后失传标注块 (T3/T13/T14/T15/T17/R3/R4/R5 + T1 重建版替代) + §7 引用清单逐行失传标记 + 头部声明呼应; 自审报告 reports/2926bf6d-…-technical_writer2-report.md |
 | 36 | round15-03 丢失内容恢复决策 | A4 (MCP2 380a2218) | 嵌套侧 CHANGELOG +28 行 / ROADMAP +43/-5 行未进根版本; blob 9aa1791c/0efb4322 可随时恢复 (commit 8bcad630) — 已通报 Leader | ⬜ P2, 待 Leader 决策 |
-| 37 | 根 tests/ 死代码归档 | A4 (QA1 5c888b1c) | 根 tests/ 12 个 .rs 不被任何活跃 crate 编译 (纯 workspace 无 root package), README 自述占位 — 清理或归档, 防误以为在执行 | ⬜ P2, 待实施 |
+| 37 | 根 tests/ 死代码归档 | A4 (QA1 5c888b1c) | 根 tests/ 12 个 .rs 不被任何活跃 crate 编译 (纯 workspace 无 root package), README 自述占位 — 清理或归档, 防误以为在执行 | ✅ 任务 70282ede: git mv 整体归档 crates/_archived/root-tests/ (R165 模式, 12 .rs + README, 归档说明头), 0 外部引用已核实 |
 
 ### P3 — 归档/低优先 (做了更好, 不做不欠)
 
@@ -124,9 +151,9 @@
 | 20 | self_update OTA | A1 | 发布流程成熟后再做 | ✅ 已实装 (R223): 真实二进制替换 + 备份 + 原子切换 + 回滚; 台账确认完成 |
 | 21 | TUI voice/eye stub | A2 | 前端占位, 不影响机制 | ✅ 修复真 bug: Synthesize 假装成功 → 返回 Unsupported; eye 占位诚实标注; 新测试 |
 | 22 | Windows Hello 真绑 | A2 | 生物识别绑定, 需硬件调研 | ✅ 提交 2d07c604: hello.rs 机制口 (detect_hello_capability reg query NGC + HelloBound trait; 0 装 PASS 不假装已绑定); 3 测试 |
-| 38 | mkdocs extra.css 资产补齐 | A4 (TW1 fba46921) | mkdocs.yml extra_css 引用 docs/pages-source/assets/css/extra.css 不存在; strict:true 构建会告警 — 补最小 extra.css 或删 extra_css 段 | ⬜ P3, 待实施 |
+| 38 | mkdocs extra.css 资产补齐 | A4 (TW1 fba46921) | mkdocs.yml extra_css 引用 docs/pages-source/assets/css/extra.css 不存在; strict:true 构建会告警 — 补最小 extra.css 或删 extra_css 段 | ✅ 任务 70282ede: 补最小 extra.css (docs/pages-source/assets/css/extra.css, 注释占位), mkdocs.yml 0 改动 |
 | 39 | companion 6 clippy 警告 + CI fmt 核对 | A4 (CR1 abf185d2) | cast_lossless×3 (memory_extractor.rs:299/session_log.rs:53/simulation.rs:223) + manual_let_else×3 (session_log.rs:94/tool_bridge.rs:786/796) 机械修; 另核对 CI fmt check 是否真 nightly (否则 tantivy 5 项 nightly-only 规则形同虚设) | ⬜ P3, 待实施 |
-| 40 | deny.toml 过期 skip 清理 | A4 (SEC1 02cd644d) | unnecessary-skip (heck 等已单版本) + unmatched-skip (async-channel 已不在依赖图); 过期 skip 会掩盖未来真实多版本问题 | ⬜ P3, 待实施 |
+| 40 | deny.toml 过期 skip 清理 | A4 (SEC1 02cd644d) | unnecessary-skip (heck 等已单版本) + unmatched-skip (async-channel 已不在依赖图); 过期 skip 会掩盖未来真实多版本问题 | ✅ 任务 70282ede: cargo-deny 0.20.2 实测驱动, 删 19 unnecessary + 12 unmatched (含 async-channel; heck 在 deny 图内确已单版本, 台账判断成立), 保留 windows_x86_64_gnu (实测 3 版本分裂, 误删会被 bans 抓回); cargo deny check bans → bans ok + 0 skip 警告。另发现既有 advisories FAILED (lru unsound, 与本次无关, 留安全团队) |
 | 41 | rust-toolchain.toml pin 版本 | A4 (BE1 5cb3d314) | 现仅 channel=stable 未 pin 具体版本, stable 升级会导致 CI 与本地漂移; 建议 pin 1.97.1 (可重现构建决策需 Leader 拍板) | ⬜ P3, 待决策 |
 | 42 | git 卫生: stash/zombie worktree/log | A4 (DO1 b7f49cfe) | ①29 条历史 stash (round5~R122) 审计清理 ②僵尸 worktree r11-recover 需 `git worktree prune` (写操作待授权) ③reports/*.log 纳入 .gitignore (如 be2-cargo-check.log) | ⬜ P3, 待授权 |
 | 43 | frontend/ 残留骨架清理 | A4 (FS1 c7b06a25) | frontend/ 仅存 tauri-prototype 残留 (砍前端决策的遗留, .gitignore:152 有记载); 清理需主人确认 | ⬜ P3, 待主人确认 |
