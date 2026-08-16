@@ -298,7 +298,9 @@ fn scan_fields(block_content: &str) -> Vec<(String, String)> {
 /// 解析字段值
 ///
 /// 启发: `true/false/null` 走 JSON bool/null, 数字走 JSON number, 否则 string
-fn parse_field_value(s: &str) -> serde_json::Value {
+///
+/// N10: `pub(crate)` 供 `text_protocol` 宽松层复用同一类型启发 (行为不变)
+pub(crate) fn parse_field_value(s: &str) -> serde_json::Value {
     let trimmed = s.trim();
     if trimmed == "true" {
         return serde_json::Value::Bool(true);
