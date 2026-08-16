@@ -186,4 +186,26 @@ mod tests {
         g.set_strategy(RedactionStrategy::Hash);
         assert_eq!(g.strategy(), RedactionStrategy::Hash);
     }
+
+    #[test]
+    fn privacy_guard_redacts_env_secret_and_token() {
+        // ae12d9eb 增量: 门面级 env 行级 + 密钥 token 脱敏 (含审计)
+        let g = PrivacyGuard::new();
+        let text = "export OPENAI_API_KEY=sk-1234567890abcdefghijklmnopqrstuv";
+        let r = g.check_and_redact(text, 1_700_000_000);
+        assert!(r.redacted_text.starts_with("export OPENAI_API_KEY="), "KEY= 前缀保留");
+        assert!(!r.redacted_text.contains("1234567890"), "密钥主体不可见: {}", r.redacted_text);
+        assert!(r.matches.iter().any(|m| m.kind == PiiKind::EnvSecret));
+        assert!(g.audit().len() >= 1, "应写审计");
+    }
+
+    #[test]
+    fn privacy_guard_normal_text_not_touched() {
+        // ae12d9eb 增量: 正常文本不误伤 (误报控制证据)
+        let g = PrivacyGuard::new();
+        let text = "LOG_LEVEL=debug\nflask-mode is fine\nthe quick brown fox jumps";
+        let r = g.check_and_redact(text, 1_700_000_000);
+        assert_eq!(r.matches.len(), 0, "正常文本不应检出: {:?}", r.matches);
+        assert_eq!(r.redacted_text, text);
+    }
 }

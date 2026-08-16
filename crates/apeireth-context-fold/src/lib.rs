@@ -8,10 +8,17 @@
 //! 2. **marker** — FoldMarker (可展开 placeholder format)
 //! 3. **accumulator** — 跨 session token 累计 (近似 tiktoken 字符 / 4)
 //!
+//! 记忆域深化 §5.1 / backlog N11 增强 (2 modules):
+//! 4. **semantic** — 语义折叠 (注入段按相关度评分, 低相关段折叠为摘要占位;
+//!    VCP ContextFoldingV2 精神; 嵌入可 mock + 确定性内置评分器)
+//! 5. **fold_block** — FoldBlock 分级显隐 (`[===vcp_fold:阈值===]` 行标记,
+//!    相似度≥阈值才展开, 未展开留"还收纳了 N 组"提示; VCP foldProtocol 精神)
+//!
 //! **Honest** (per O-5 不假装):
 //! - Token counting uses chars/4 approximation (no tiktoken dep)
 //! - Summary strategy requires user-supplied callback (no internal LLM)
 //! - Marker replace preserves original bytes (lossless unfold)
+//! - Semantic fold summary defaults to char truncation (summarizer injectable, no internal LLM)
 
 #![warn(missing_docs)]
 
@@ -20,10 +27,17 @@ pub mod fold;
 mod organ_kani_proofs;
 pub mod marker;
 pub mod accumulator;
+pub mod semantic;
+pub mod fold_block;
 
 pub use fold::{FoldStrategy, FoldResult, fold, unfold};
 pub use marker::{FoldMarker, MarkerKind};
 pub use accumulator::{TokenAccumulator, AccumulatorSnapshot};
+pub use semantic::{
+    BigramOverlapScorer, Embedder, EmbeddingScorer, FoldedSegment, RelevanceScorer,
+    SemanticFoldOptions, SemanticFoldOutcome, cosine, fold_segments, unfold_semantic,
+};
+pub use fold_block::{FoldBlock, FoldBlockRender, has_fold_markers, parse_fold_blocks, render_fold_blocks};
 
 /// R144 deliverables (per v2 plan §9.5):
 /// - 3 modules (fold / marker / accumulator)

@@ -45,12 +45,15 @@
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
 | N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ⬜ P0, 待实施 |
 | N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ⬜ P0, 待实施 |
-| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ⬜ P0, 待实施 |
+| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 <hash 待回填>: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一); env APEIRETH_MORPHOLOGY_TEMPERATURE |
 | N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ⬜ P0, 待实施 |
 | N9 | 提示词装配引擎 (占位符变量宇宙) | N1 发现 (插件扫描) | messageProcessor 范式: 特权角色+单次展开+环检测+分型变量源 — Apeireth 空白区最高价值 | ⬜ P0, 待实施 |
 | N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | vcpLoop TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ⬜ P0, 待实施 |
-| N11 | foldProtocol 分级显隐 | N1 发现 (插件扫描) | context-fold 增强: FoldBlock 数据模型 (同文档分级+语义阈值展开) | ⬜ P1, 待实施 |
+| N11 | foldProtocol 分级显隐 | N1 发现 (插件扫描) | context-fold 增强: FoldBlock 数据模型 (同文档分级+语义阈值展开) | ✅ 提交 1f5d2fd: context-fold 加 fold_block.rs (FoldBlock serde 模型+行标记解析+相似度≥阈值展开+收纳提示) + semantic.rs (语义折叠, 记忆域深化 §5.1); 45 测试全绿; 自审报告 reports/1d7bc7ee-*-code_reviewer-report.md |
 | N12 | 语义模型路由 + 推理归一化 | N1 发现 (插件扫描) | gateway 层: 语义选模型+容灾链; 13 别名推理字段→think 块 | ⬜ P1, 待实施 |
+| N13 | apeireth-guard 补 env 行级 + 密钥 token 模式脱敏 | team-work-doc §8.3 toolResultPrivacyGuard 行 (团队任务 ae12d9eb) | pii.rs 新增 SecretToken (sk-/sk-proj-/xox*/ghp_/github_pat_/glpat-/AKIA 7 类前缀) + EnvSecret (敏感键名 KEY=VALUE/KEY: VALUE 值部); redact_text 修重叠匹配错乱; organ_kani_proofs 6→8 类 | ✅ 完成: cargo test -p apeireth-guard 59 全绿 + gateway 84+7 全绿; 0 新依赖; 报告 reports/ae12d9eb-fe0c-4267-8f23-b225880430d1-security_reviewer2-report.md |
+| N14 | 工作区脏树: apeireth-companion 编译失败 (他人未提交改动) | 安全审查2 任务 ae12d9eb 期间发现 | companion lib 编译错: SqliteMemoryStore 缺 put_episode/recent_episodes 方法 + unstable result_option_map_or_default; 涉及 memory_graph/capability/reflection 未提交改动 (非本任务引入) | ⬜ 待 Leader 指派相关成员处理 |
+| N15 | dynamicToolRegistry 预算化 (注入注意力预算 + 分类四级降级链) | team-work-doc §8.4 P1 可吸收清单 (团队任务 4b2da00a) | apeireth-tool-registry 新增 injection.rs (render_injection: light list 一行式清单 + 仅相关工具展开详情 + 超预算裁剪 展开段→轻清单尾行→硬切留 TRUNCATION_HINT 提示, 16000 字符上限) + chain.rs (ClassifyChain 自定义→小模型→RAG→关键词 四级降级, ClassifyStage 记录决定级; 小模型/RAG 级 Option<Arc<dyn Classifier>> trait 注入口未接真模型如实标注, 关键词级 HeuristicClassifier 实装, CustomMapClassifier 自定义级实装); impl Classifier → 可直接给 register_with_classifier | ✅ 完成: 提交 8b6a825d; cargo test -p apeireth-tool-registry -j 4 全绿 (139 lib 测试, 新增 19: 预算内/超预算/空表/极小预算/仅相关展开/四级降级各路径); 报告 reports/4b2da00a-9556-4d9c-9420-06aa23b91272-mcp_integration_expert2-report.md |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
@@ -93,6 +96,7 @@
 | 20 | self_update OTA | A1 | 发布流程成熟后再做 | ✅ 已实装 (R223): 真实二进制替换 + 备份 + 原子切换 + 回滚; 台账确认完成 |
 | 21 | TUI voice/eye stub | A2 | 前端占位, 不影响机制 | ✅ 修复真 bug: Synthesize 假装成功 → 返回 Unsupported; eye 占位诚实标注; 新测试 |
 | 22 | Windows Hello 真绑 | A2 | 生物识别绑定, 需硬件调研 | ✅ 提交 2d07c604: hello.rs 机制口 (detect_hello_capability reg query NGC + HelloBound trait; 0 装 PASS 不假装已绑定); 3 测试 |
+| 23 | cargo fmt 卫生 (workspace 级在 Windows 不可运行) | C2 压测自检 (QA 2026-08) | 复现: `cargo fmt --check` 工作区级直接报 `文件名或扩展名太长 (os error 206)` (CreateProcess 32k 命令行上限); per-crate 可运行但确有未格式化 diff: apeireth-bench 37 / apeireth-memory 261 / apeireth-companion 533 文件 (仓库共 1603 个 .rs, 与上轮报告 1588 规模吻合). 本任务不改 (跨任务包文件) | ⬜ P3 卫生: 建议 CI 用 per-crate fmt gate (或分片脚本), 另择专项批量 cargo fmt 一次 |
 
 ## 明确不做 (有意决策, 防再调研)
 
