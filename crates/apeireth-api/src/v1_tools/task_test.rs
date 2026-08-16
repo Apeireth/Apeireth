@@ -84,7 +84,7 @@ pub mod entries {
     };
     #[allow(unused_imports)]
     use super::storage; // 让 _task_src 内 `super::storage` 引用可见
-    // Tool trait 必须 in scope, 否则 TaskTool::call 方法找不到
+                        // Tool trait 必须 in scope, 否则 TaskTool::call 方法找不到
     use apeireth_tool_registry::Tool;
     use serde_json::json;
 
