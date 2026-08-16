@@ -47,8 +47,9 @@
 
 use apeireth_livekit::real::LiveKitRealImpl;
 use apeireth_livekit::{
-    CreateRoomRequest, DeleteRoomRequest, ListParticipantsRequest, MuteTrackRequest, RemoveParticipantRequest,
-    Room, WebhookEvent, DEFAULT_LIVEKIT_SERVER_URL, DEFAULT_TOKEN_TTL_SECONDS, PLATFORM_NAME,
+    CreateRoomRequest, DeleteRoomRequest, ListParticipantsRequest, MuteTrackRequest,
+    RemoveParticipantRequest, Room, WebhookEvent, DEFAULT_LIVEKIT_SERVER_URL,
+    DEFAULT_TOKEN_TTL_SECONDS, PLATFORM_NAME,
 };
 
 #[tokio::main]
@@ -96,14 +97,20 @@ async fn main() {
         }
     };
     match real.create_room(cr_req).await {
-        Ok(room) => println!("[livekit_real_demo] create_room -> \"Ok(sid={}, name={})\"", room.sid, room.name),
+        Ok(room) => println!(
+            "[livekit_real_demo] create_room -> \"Ok(sid={}, name={})\"",
+            room.sid, room.name
+        ),
         Err(e) => println!("[livekit_real_demo] create_room -> \"{e}\""),
     }
 
     // 演示 4: room.list (Twirp POST /twirp/livekit.RoomService/ListRooms)
     println!("\n[demo 4/8] room.list (Twirp POST ListRooms)");
     match real.list_rooms().await {
-        Ok(resp) => println!("[livekit_real_demo] list_rooms -> \"Ok(rooms={})\"", resp.rooms.len()),
+        Ok(resp) => println!(
+            "[livekit_real_demo] list_rooms -> \"Ok(rooms={})\"",
+            resp.rooms.len()
+        ),
         Err(e) => println!("[livekit_real_demo] list_rooms -> \"{e}\""),
     }
 
@@ -136,7 +143,9 @@ async fn main() {
     }
 
     // 演示 7: participant.list + participant.remove (Twirp POST)
-    println!("\n[demo 7/8] participant.list + participant.remove (Twirp POST, K-1 强校验 identity)");
+    println!(
+        "\n[demo 7/8] participant.list + participant.remove (Twirp POST, K-1 强校验 identity)"
+    );
     let lp_req = match ListParticipantsRequest::new("demo-room") {
         Ok(r) => r,
         Err(e) => {
@@ -145,7 +154,10 @@ async fn main() {
         }
     };
     match real.list_participants(lp_req).await {
-        Ok(resp) => println!("[livekit_real_demo] list_participants -> \"Ok(participants={})\"", resp.participants.len()),
+        Ok(resp) => println!(
+            "[livekit_real_demo] list_participants -> \"Ok(participants={})\"",
+            resp.participants.len()
+        ),
         Err(e) => println!("[livekit_real_demo] list_participants -> \"{e}\""),
     }
     let rp_req = match RemoveParticipantRequest::new("demo-room", "user-1") {
@@ -172,11 +184,17 @@ async fn main() {
     };
     let evt = WebhookEvent::room_started(room);
     match real.push_event(evt.clone()).await {
-        Ok(_) => println!("[livekit_real_demo] push_event -> \"Ok(event_id={})\"", evt.event_id),
+        Ok(_) => println!(
+            "[livekit_real_demo] push_event -> \"Ok(event_id={})\"",
+            evt.event_id
+        ),
         Err(e) => println!("[livekit_real_demo] push_event -> \"{e}\""),
     }
     match real.drain_events().await {
-        Ok(events) => println!("[livekit_real_demo] drain_events -> \"Ok(drained={})\"", events.len()),
+        Ok(events) => println!(
+            "[livekit_real_demo] drain_events -> \"Ok(drained={})\"",
+            events.len()
+        ),
         Err(e) => println!("[livekit_real_demo] drain_events -> \"{e}\""),
     }
 

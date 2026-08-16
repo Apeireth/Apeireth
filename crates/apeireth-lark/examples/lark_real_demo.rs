@@ -37,7 +37,7 @@
 //! - **O-5**: 缺 app_id/app_secret 时如实 demo 失败, 不假装成功
 
 use apeireth_lark::{
-    LarkClient, LarkConfig, LarkError, LarkRealImpl, LARK_API_BASE_URL, MessageType,
+    LarkClient, LarkConfig, LarkError, LarkRealImpl, MessageType, LARK_API_BASE_URL,
 };
 
 #[tokio::main]
@@ -53,7 +53,10 @@ async fn main() -> anyhow::Result<()> {
         token_cache_ttl_seconds: 7200,
     };
 
-    println!("[lark_real_demo] LarkRealImpl 创建: app_id={} base_url={}", cfg.app_id, cfg.base_url);
+    println!(
+        "[lark_real_demo] LarkRealImpl 创建: app_id={} base_url={}",
+        cfg.app_id, cfg.base_url
+    );
 
     // 2) 创建 LarkRealImpl
     let real = LarkRealImpl::new(cfg)?;
@@ -74,7 +77,10 @@ async fn main() -> anyhow::Result<()> {
 
     // 6) 演示 create_event (start/end = 0 时返 ConfigInvalid, 不发 HTTP)
     let r4 = real.create_event("cal_x", "demo event", 0, 0).await;
-    println!("[lark_real_demo] create_event (start=0) -> {:?}", short_err(&r4));
+    println!(
+        "[lark_real_demo] create_event (start=0) -> {:?}",
+        short_err(&r4)
+    );
 
     // 7) 演示 get_document
     let r5 = real.get_document("doc_demo").await;
@@ -85,10 +91,11 @@ async fn main() -> anyhow::Result<()> {
     println!("[lark_real_demo] search_documents -> {:?}", short_err(&r6));
 
     // 9) 演示 list_bitable_records
-    let r7 = real
-        .list_bitable_records("app_demo", "tbl_demo", 10)
-        .await;
-    println!("[lark_real_demo] list_bitable_records -> {:?}", short_err(&r7));
+    let r7 = real.list_bitable_records("app_demo", "tbl_demo", 10).await;
+    println!(
+        "[lark_real_demo] list_bitable_records -> {:?}",
+        short_err(&r7)
+    );
 
     // 10) 演示 create_bitable_record
     let r8 = real
@@ -98,7 +105,10 @@ async fn main() -> anyhow::Result<()> {
             serde_json::json!({ "title": "demo task", "status": "todo" }),
         )
         .await;
-    println!("[lark_real_demo] create_bitable_record -> {:?}", short_err(&r8));
+    println!(
+        "[lark_real_demo] create_bitable_record -> {:?}",
+        short_err(&r8)
+    );
 
     println!(
         "[lark_real_demo] 演示完成 (R20 阶段 6 flesh out 真接实现已 ready, Mavis 整合 #3 拍板后切 STUB_MODE=false)"

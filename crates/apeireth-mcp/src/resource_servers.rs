@@ -91,9 +91,9 @@ impl FileResourceServer {
     /// 返 `Err(String)` 给 read() 包成 JsonRpcError
     fn extract_path<'a>(&self, uri: &'a str) -> Result<PathBuf, String> {
         let prefix = "file:///";
-        let path_str = uri.strip_prefix(prefix).ok_or_else(|| {
-            format!("URI 必须以 {prefix} 开头, 实际: {uri}")
-        })?;
+        let path_str = uri
+            .strip_prefix(prefix)
+            .ok_or_else(|| format!("URI 必须以 {prefix} 开头, 实际: {uri}"))?;
         // Decode percent-encoding (e.g. %20 → space)
         let decoded = percent_decode(path_str);
         let p = Path::new(&decoded);
@@ -113,12 +113,13 @@ impl FileResourceServer {
     /// 安全解析: 跟 base_dir 拼接 → canonicalize → 校验仍在 base 下
     fn resolve_safe(&self, rel: &Path) -> Result<PathBuf, String> {
         let joined = self.base_dir.join(rel);
-        let canonical = joined.canonicalize().map_err(|e| {
-            format!("canonicalize 失败 ({}): {e}", joined.display())
-        })?;
-        let base_canonical = self.base_dir.canonicalize().map_err(|e| {
-            format!("base canonicalize 失败: {e}")
-        })?;
+        let canonical = joined
+            .canonicalize()
+            .map_err(|e| format!("canonicalize 失败 ({}): {e}", joined.display()))?;
+        let base_canonical = self
+            .base_dir
+            .canonicalize()
+            .map_err(|e| format!("base canonicalize 失败: {e}"))?;
         if !canonical.starts_with(&base_canonical) {
             return Err(format!(
                 "路径越界: {} 不在 {} 下",
@@ -195,9 +196,8 @@ impl ResourceServer for FileResourceServer {
         let canonical = self.resolve_safe(&rel).map_err(|e| {
             JsonRpcError::new(RESOURCE_INVALID_URI, format!("file:// 安全解析失败: {e}"))
         })?;
-        let meta = std::fs::metadata(&canonical).map_err(|e| {
-            JsonRpcError::new(RESOURCE_READ_FAILED, format!("stat 失败: {e}"))
-        })?;
+        let meta = std::fs::metadata(&canonical)
+            .map_err(|e| JsonRpcError::new(RESOURCE_READ_FAILED, format!("stat 失败: {e}")))?;
         if !meta.is_file() {
             return Err(JsonRpcError::new(
                 RESOURCE_READ_FAILED,
@@ -282,15 +282,60 @@ struct OrganMeta {
 
 /// 9 organ 静态列表 (per R37-2 TUI organ/ 真接清单)
 const ORGAN_LIST: &[OrganMeta] = &[
-    OrganMeta { uri_name: "body",    page_label: "BODY",    description: "躯体状态 (生命体征 + energy level)", readiness: "ok" },
-    OrganMeta { uri_name: "brain",   page_label: "BRAIN",   description: "推理中枢 (思考 / 计划 / 元认知)",       readiness: "ok" },
-    OrganMeta { uri_name: "ear",     page_label: "EAR",     description: "听觉 (环境音频 + 输入流)",             readiness: "ok" },
-    OrganMeta { uri_name: "eye",     page_label: "EYE",     description: "视觉 (屏幕 + 鼠标 / 键盘)",            readiness: "ok" },
-    OrganMeta { uri_name: "hand",    page_label: "HAND",    description: "操作 (工具调用记录 + 日历统计)",       readiness: "ok" },
-    OrganMeta { uri_name: "heart",   page_label: "HEART",   description: "情绪 (情绪曲线 + 偏好)",               readiness: "ok" },
-    OrganMeta { uri_name: "memory",  page_label: "MEMORY",  description: "记忆 (3 层状态, R22 ST-A1.8)",         readiness: "partial" },
-    OrganMeta { uri_name: "mind",    page_label: "MIND",    description: "意向 (3 阶段: init / process / serve)", readiness: "ok" },
-    OrganMeta { uri_name: "voice",   page_label: "VOICE",   description: "发声 (TTS + 主动播报)",                readiness: "ok" },
+    OrganMeta {
+        uri_name: "body",
+        page_label: "BODY",
+        description: "躯体状态 (生命体征 + energy level)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "brain",
+        page_label: "BRAIN",
+        description: "推理中枢 (思考 / 计划 / 元认知)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "ear",
+        page_label: "EAR",
+        description: "听觉 (环境音频 + 输入流)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "eye",
+        page_label: "EYE",
+        description: "视觉 (屏幕 + 鼠标 / 键盘)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "hand",
+        page_label: "HAND",
+        description: "操作 (工具调用记录 + 日历统计)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "heart",
+        page_label: "HEART",
+        description: "情绪 (情绪曲线 + 偏好)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "memory",
+        page_label: "MEMORY",
+        description: "记忆 (3 层状态, R22 ST-A1.8)",
+        readiness: "partial",
+    },
+    OrganMeta {
+        uri_name: "mind",
+        page_label: "MIND",
+        description: "意向 (3 阶段: init / process / serve)",
+        readiness: "ok",
+    },
+    OrganMeta {
+        uri_name: "voice",
+        page_label: "VOICE",
+        description: "发声 (TTS + 主动播报)",
+        readiness: "ok",
+    },
 ];
 
 impl Default for OrganResourceServer {
@@ -316,10 +361,7 @@ impl ResourceServer for OrganResourceServer {
                     format!("organ://{}", o.uri_name),
                     format!("{} ({})", o.page_label, o.uri_name),
                 )
-                .with_description(format!(
-                    "{} — readiness: {}",
-                    o.description, o.readiness
-                ))
+                .with_description(format!("{} — readiness: {}", o.description, o.readiness))
                 .with_mime_type("application/json".to_string())
             })
             .collect()
@@ -348,16 +390,27 @@ impl ResourceServer for OrganResourceServer {
                 })
                 .collect();
             let text = serde_json::to_string_pretty(&arr).unwrap_or_else(|_| "[]".to_string());
-            return Ok(ResourceContent::new(uri, text)
-                .with_mime_type("application/json".to_string()));
+            return Ok(
+                ResourceContent::new(uri, text).with_mime_type("application/json".to_string())
+            );
         }
-        let organ = self.organs.iter().find(|o| o.uri_name == name).ok_or_else(|| {
-            JsonRpcError::new(
-                RESOURCE_NOT_FOUND,
-                format!("organ 不存在: {name} (已知: {})",
-                    self.organs.iter().map(|o| o.uri_name).collect::<Vec<_>>().join(", ")),
-            )
-        })?;
+        let organ = self
+            .organs
+            .iter()
+            .find(|o| o.uri_name == name)
+            .ok_or_else(|| {
+                JsonRpcError::new(
+                    RESOURCE_NOT_FOUND,
+                    format!(
+                        "organ 不存在: {name} (已知: {})",
+                        self.organs
+                            .iter()
+                            .map(|o| o.uri_name)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                )
+            })?;
         let text = serde_json::to_string_pretty(&json!({
             "uri_name": organ.uri_name,
             "page_label": organ.page_label,
@@ -399,7 +452,8 @@ impl ConventionResourceServer {
 
     /// 取 / 触发 ProjectConventions::scan
     fn conv(&self) -> &ProjectConventions {
-        self.cached.get_or_init(|| ProjectConventions::scan(&self.workspace_root))
+        self.cached
+            .get_or_init(|| ProjectConventions::scan(&self.workspace_root))
     }
 }
 
@@ -521,20 +575,28 @@ impl ResourceServer for CompositeResourceServer {
 
     fn read(&self, uri: &str) -> Result<ResourceContent, JsonRpcError> {
         if uri.starts_with("file://") {
-            return self.file.as_ref().ok_or_else(|| {
-                JsonRpcError::new(
-                    RESOURCE_INVALID_URI,
-                    "file:// scheme 未注册 (CompositeResourceServer 没配 FileResourceServer)",
-                )
-            })?.read(uri);
+            return self
+                .file
+                .as_ref()
+                .ok_or_else(|| {
+                    JsonRpcError::new(
+                        RESOURCE_INVALID_URI,
+                        "file:// scheme 未注册 (CompositeResourceServer 没配 FileResourceServer)",
+                    )
+                })?
+                .read(uri);
         }
         if uri.starts_with("organ://") {
-            return self.organ.as_ref().ok_or_else(|| {
-                JsonRpcError::new(
-                    RESOURCE_INVALID_URI,
-                    "organ:// scheme 未注册 (CompositeResourceServer 没配 OrganResourceServer)",
-                )
-            })?.read(uri);
+            return self
+                .organ
+                .as_ref()
+                .ok_or_else(|| {
+                    JsonRpcError::new(
+                        RESOURCE_INVALID_URI,
+                        "organ:// scheme 未注册 (CompositeResourceServer 没配 OrganResourceServer)",
+                    )
+                })?
+                .read(uri);
         }
         if uri.starts_with("convention://") {
             return self.convention.as_ref().ok_or_else(|| {
@@ -661,7 +723,9 @@ mod resource_servers_tests {
         let tmp = TempDir::new();
         let big = "x".repeat(2048);
         tmp.write("big.rs", &big);
-        let s = FileResourceServer::new(tmp.path()).unwrap().with_max_file_bytes(100);
+        let s = FileResourceServer::new(tmp.path())
+            .unwrap()
+            .with_max_file_bytes(100);
         let r = s.read("file:///big.rs");
         assert!(r.is_err());
         assert_eq!(r.unwrap_err().code, RESOURCE_READ_FAILED);
@@ -734,7 +798,9 @@ mod resource_servers_tests {
         let list = s.list();
         assert_eq!(list.len(), 3);
         assert!(list.iter().any(|r| r.uri == "convention://_summary"));
-        assert!(list.iter().any(|r| r.uri == "convention://_system_prompt_block"));
+        assert!(list
+            .iter()
+            .any(|r| r.uri == "convention://_system_prompt_block"));
         assert!(list.iter().any(|r| r.uri == "convention://_raw_json"));
     }
 
