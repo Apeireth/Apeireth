@@ -37,6 +37,17 @@ pub const MIGRATIONS: &[Migration] = &[
         name: "V2__hallways_for_wings",
         sql: HALLWAYS_SQL,
     },
+    // M5 (记忆调研批⭐): notes 时间有效性 valid_from/valid_until.
+    // 向后兼容铁律: 两列均 NULLable, 存量行 ALTER 后自动 NULL = 永久有效, 零数据迁移.
+    // SQLite ALTER TABLE 一次只能加一列 → 两条语句. 不加索引: 过滤条件含
+    // "IS NULL OR" 析取本身非 sargable, notes 表规模下全扫足够 (升级路径: 表大后
+    // 可加 valid_until 部分索引, 见 docs/backlog.md M5 记录).
+    Migration {
+        version: 3,
+        name: "V3__notes_validity_window",
+        sql: "ALTER TABLE notes ADD COLUMN valid_from INTEGER;\n\
+              ALTER TABLE notes ADD COLUMN valid_until INTEGER;",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
