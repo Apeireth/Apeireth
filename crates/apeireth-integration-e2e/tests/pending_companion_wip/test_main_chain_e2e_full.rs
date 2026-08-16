@@ -1,8 +1,17 @@
-//! # `tests/test_main_chain_e2e.rs` — C1 跨 crate 主链路 e2e 场景测试 (10 场景)
+//! # `test_main_chain_e2e_full.rs` — C1 跨 crate 主链路 e2e 场景测试 (10 场景·companion 真件版, 待启用)
+//!
+//! **状态**: PENDING — apeireth-companion 并行 WIP (diary.rs:145 BTreeMap 等)
+//! 当前不可编译, 本文件暂存 `tests/pending_companion_wip/` (cargo 不编译此目录).
+//! **启用步骤** (companion 编译恢复后): ① 移回 `tests/` ② Cargo.toml dev-deps
+//! 恢复 `apeireth-companion = { path = "../apeireth-companion" }` ③ 跑
+//! `cargo test -p apeireth-integration-e2e --test test_main_chain_e2e_full`.
 //!
 //! **任务**: 6dec693a (team-work-doc §4 C1 系统性欠账)
 //! **职责**: 端到端验证五段主链路 `记忆 → 注入 → 工具 → 反思 → 送达`
 //! + 关键边界条件, 全部跨 crate 真 API 串联, 0 装 PASS.
+//! **与基线版关系**: `test_main_chain_e2e.rs` 为不依赖 companion 的基线版
+//! (context-fold/历史流机制); 本文件用 companion 真件
+//! (build_memory_injection / ReflectionScheduler / MultiSink). 两版并存互补.
 //!
 //! **场景清单** (覆盖五段主链路):
 //! - S1  记忆写入 → 次轮注入可见 (memory → injection)
@@ -20,7 +29,7 @@
 //! trait 注入) / RecordingSink (内存录音) / tempdir 文件库 (0 污染生产库).
 //! 0 网络 / 0 真实 LLM / 0 sleep 等待.
 //!
-//! **跑法**: `cargo test -p apeireth-integration-e2e -j 4 --test test_main_chain_e2e`
+//! **跑法**: `cargo test -p apeireth-integration-e2e -j 4 --test test_main_chain_e2e_full`
 
 use std::sync::{Arc, Mutex};
 

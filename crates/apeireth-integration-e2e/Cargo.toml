@@ -53,7 +53,7 @@ apeireth-core = { path = "../apeireth-core" }
 # C1 e2e 场景测试 (task 6dec693a): 注入/折叠段真机制
 apeireth-context-fold = { path = "../apeireth-context-fold" }
 # C1 e2e 完整版 (tests/pending_companion_wip/) 待 apeireth-companion 并行 WIP
-# (thought_cluster/onering 等未跟踪文件) 编译修复后恢复:
+# (diary.rs BTreeMap 等) 编译修复后恢复:
 # apeireth-companion = { path = "../apeireth-companion" }
 apeireth-constraint = { path = "../apeireth-constraint" }
 apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
