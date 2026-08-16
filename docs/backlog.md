@@ -39,7 +39,7 @@
 
 | # | 项 | 来源 | 说明 | 状态 |
 |---|---|---|---|---|
-| N1 | VCP 新版调研 (rust-vexus-lite + 84 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 Downloads\VCPToolBox-rust\VCPToolBox-main; Rust 记忆层 (RiverMemo V3) + 84 插件 manifest 已核实; 可吸收清单已并入 team-work-doc §8 | ✅ 调研完成 (team-work-doc §8.2/8.3/8.4); modules 深读待 subagent 报告补 §8.3-J |
+| N1 | VCP 新版调研 (rust-vexus-lite + 89 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 research/source/vcptoolbox (从 Downloads 迁入工作区, git 排除); Rust 记忆层 (RiverMemo V3) + 89 插件 manifest 已核实; 可吸收清单已并入 team-work-doc §8 | ✅ 调研完成 (team-work-doc §8.2/8.3/8.4) |
 | N2 | OneRing 统一上下文账本 | N1 发现 | 跨前端统一时间线 — 并入 A2 (continuity 锚点升级) | ⬜ 并入 §4 A2, 待实施 |
 | N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源) | ⬜ 并入 §5.2, 待实施 |
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
