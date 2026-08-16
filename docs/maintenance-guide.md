@@ -62,6 +62,8 @@
 | memory_injection.rs | 反幻觉记忆注入 (闭世界证据: 编号列表+禁止声称记得) | 渲染层 |
 | confidence.rs | Beta-Binomial 置信度 (数学化自信度) | capability / 自测 |
 | evolution_gate.rs | 验证闸门流水线 (fix loop/no-progress/预算 fail-open/回滚收据) | 能力演化回路 |
+| oracle.rs | 预言机套件核心: WorldState/ScenarioEngine/Forecast+Brier+BetaBinomial 校准/DecisionEngine expectimax/ForecastRegistry | simulate/forecast 工具 |
+| web_crawl.rs (tools) | Crawl v2: 并发 BFS+重试退避+限速 (调研驱动, 实战验证) | Crawl 工具 (9 号) |
 
 ## 三、加新模块规范（维护 checklist）
 
