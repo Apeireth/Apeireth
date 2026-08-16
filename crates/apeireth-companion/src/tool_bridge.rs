@@ -25,6 +25,7 @@ use serde_json::{json, Value};
 use crate::capability::{CapabilityKind, CapabilityRegistry};
 use crate::constitution_gate::ConstitutionGate;
 use crate::daemon::{Judicator, requires_llm_review};
+use crate::oracle::{Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
 use crate::spill::{SpillStore, SPILL_THRESHOLD_CHARS};
@@ -182,9 +183,7 @@ impl ProposeCapabilityTool {
     pub fn new(registry: Arc<CapabilityRegistry>) -> Self {
         Self { registry }
     }
-}
-
-#[async_trait::async_trait]
+}#[async_trait::async_trait]
 impl Tool for ProposeCapabilityTool {
     fn name(&self) -> &str {
         "propose_capability"
@@ -208,6 +207,121 @@ impl Tool for ProposeCapabilityTool {
             "id": p.id,
             "status": p.status.label(),
             "note": "已提案待宪法评审/主人批准",
+        }))
+    }
+}
+
+/// 「沙盘推演」工具 — oracle 套件: 世界状态 + 事件序列 → 规则推演各步状态.
+/// 纯内存推演, 无副作用. 规则语法: "id.key+delta" / "id.key-delta".
+pub struct SimulateTool;
+
+impl SimulateTool {
+    /// 内置规则 apply: "id.key+delta".
+    fn apply(state: &mut WorldState, event: &str) -> Result<(), String> {
+        let (path, delta_str) = event
+            .split_once(|c| c == '+' || c == '-')
+            .ok_or_else(|| format!("事件格式应为 id.key+delta: {event}"))?;
+        let delta: f64 = delta_str.parse().map_err(|_| format!("delta 非法: {delta_str}"))?;
+        let (id, key) = path.split_once('.').ok_or_else(|| format!("路径应为 id.key: {path}"))?;
+        let sign = if event.contains('+') { 1.0 } else { -1.0 };
+        let e = state
+            .entities
+            .iter_mut()
+            .find(|e| e.id == id)
+            .ok_or_else(|| format!("实体不存在: {id}"))?;
+        *e.props.entry(key.to_string()).or_insert(0.0) += sign * delta;
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for SimulateTool {
+    fn name(&self) -> &str {
+        "simulate"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default()
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        let entities = args
+            .get("entities")
+            .and_then(|v| v.as_object())
+            .ok_or_else(|| "entities 应为对象 {id: {属性: 值}}".to_string())?;
+        let mut state = WorldState { entities: Vec::new(), tick: 0 };
+        for (id, props) in entities {
+            let mut e = Entity { id: id.clone(), name: id.clone(), props: std::collections::HashMap::new() };
+            if let Some(p) = props.as_object() {
+                for (k, v) in p {
+                    e.props.insert(k.clone(), v.as_f64().unwrap_or(0.0));
+                }
+            }
+            state.entities.push(e);
+        }
+        let events: Vec<String> = args
+            .get("events")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            .unwrap_or_default();
+        let mut eng = ScenarioEngine::new(state);
+        let apply: crate::oracle::ApplyFn = Box::new(Self::apply);
+        let snaps = eng.simulate(&events, &apply)?;
+        let steps: Vec<Value> = snaps
+            .iter()
+            .map(|s| {
+                let ents: serde_json::Map<String, Value> = s
+                    .entities
+                    .iter()
+                    .map(|e| (e.id.clone(), serde_json::to_value(&e.props).unwrap_or(json!({}))))
+                    .collect();
+                json!({"tick": s.tick, "entities": ents})
+            })
+            .collect();
+        Ok(json!({"steps": steps, "final": steps.last().cloned().unwrap_or(json!(null))}))
+    }
+}
+
+/// 「预测断言」工具 — oracle 套件: 登记可证伪预测 (待对照 resolve).
+pub struct ForecastTool {
+    registry: Arc<ForecastRegistry>,
+}
+
+impl ForecastTool {
+    pub fn new(registry: Arc<ForecastRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for ForecastTool {
+    fn name(&self) -> &str {
+        "forecast"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default()
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        let statement = args
+            .get("statement")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .ok_or_else(|| "statement 不能为空".to_string())?;
+        let probability = args.get("probability").and_then(|v| v.as_f64()).unwrap_or(0.5).clamp(0.0, 1.0);
+        let deadline_hours = args.get("deadline_hours").and_then(|v| v.as_f64()).unwrap_or(24.0);
+        let deadline_ms = chrono::Utc::now().timestamp_millis() + (deadline_hours * 3600_000.0) as i64;
+        let f = Forecast::new(statement, probability, deadline_ms);
+        self.registry.register(&f)?;
+        Ok(json!({
+            "id": f.id,
+            "statement": f.statement,
+            "probability": f.probability,
+            "deadline_ms": f.deadline_ms,
+            "note": "已登记可证伪预测, 到期后对照 resolve"
         }))
     }
 }
@@ -255,6 +369,11 @@ impl ToolBridge {
                 "me",
             )))),
         );
+        registry.register("simulate".to_string(), Arc::new(SimulateTool));
+        registry.register(
+            "forecast".to_string(),
+            Arc::new(ForecastTool::new(Arc::new(ForecastRegistry::new(Arc::clone(&store), "me")))),
+        );
         let executor = ToolExecutor::new(registry.clone());
         // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
         let packs = PackRegistry::new();
@@ -265,6 +384,8 @@ impl ToolBridge {
                 "recall_memory".to_string(),
                 "save_memory".to_string(),
                 "propose_capability".to_string(),
+                "simulate".to_string(),
+                "forecast".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
