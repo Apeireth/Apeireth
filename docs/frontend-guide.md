@@ -56,25 +56,57 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions `
 
 ## 四、"伙伴感"验证清单（产品形态：先验证伙伴感）
 
-按最小前提（「打开就感觉他在、他记得我」）逐项验证：
+按最小前提（「打开就感觉他在、他记得我」）逐项验证（2026-08-16 真机实测）：
 
-- [ ] **P0-1 对话可用**：前端 ↔ serve ↔ MiniMax 真回话（§三）
-- [ ] **P0-2 记忆感**：serve 接入 memory（recall 注入上下文）→ 问"我上次说的高数错点是什么"他能答
-- [ ] **P0-3 今日感**：对话里能问"我今天/昨天干了什么"（daily_summary 数据源已有）
+- [x] **P0-1 对话可用**：前端 ↔ serve ↔ MiniMax 真回话（§三）
+- [x] **P0-2 记忆感**：companion_serve 记忆注入 → 问"我高数换元错在哪" → 准确答出
+      两个错点 + 主动提到周五考试/作息 + 提议帮助 ✅（实测原文见 §六）
+- [x] **P0-4 工具透明**：AI 主动调 simulate ×3 完成沙盘推演并基于结果回答 ✅
+- [ ] **P0-3 今日感**：今日摘要注入已在链路（build_daily_summary），需真实积累一天数据后验证
 - [ ] **P1-1 主动性**：Lark/飞书实发早安 + 每日摘要（通道 B, 需凭据）
 - [ ] **P1-2 记忆可视**：前端侧栏展示"他记得你什么"（路线 C 定制面板）
-- [ ] **P1-3 工具透明**：AI 调工具时前端可见（serve 侧透传 tool_calls, 前端原生支持）
+- [ ] **P1-3 工具透明 UI**：前端展示 tool_calls（前端原生支持, 无需后端改）
 
-## 五、后端待办（serve 升级为"伙伴端点"）
+## 五、后端：companion_serve（伙伴端点, 已完成 2026-08-16）
 
-现状：`serve` 是 **stateless chat**（无记忆/无工具/无涌现）。
-伙伴感要求 serve 升级为 **companion_serve**：CompanionDaemon + ToolBridge 接进 HTTP，
-OpenAI 兼容 + 记忆注入 + 工具桥 + 每日摘要端点。这是路线 C 的前置，也是 P0-2/P0-3 的后端。
+把「任何前端接入 Apeireth」变成现实的主链路。VCP 对齐（`chatCompletionHandler` 主链路 +
+messagePreprocessors 思想），**改进而非照抄**：
 
-```text
-✅ 已完成 (2026-08-16):  /v1/models 静态端点 (OpenAI 兼容前端必需)
-P0-2/P0-3 需要:  memory injection (已有 build_memory_injection)
-                 recall_memory/save_memory (已有)
-                 daily_summary (已有数据源)
-                 → 缺: 把这些接进 serve 的 OpenAI 兼容路径 (companion_serve)
+```powershell
+$env:APEIRETH_API_KEY = (Get-Content apikey-ultra.txt -Raw).Trim()
+$env:APEIRETH_SEED_MEMORY = "可选: 种子记忆;分号分隔"   # 不设则从零积累
+cargo run -p apeireth-companion --example companion_serve   # :8090
 ```
+
+- 端点：`/health` · `/v1/models` · `/v1/chat/completions`（OpenAI 兼容）
+- **预处理链**（对齐 VCP messagePreprocessors）：① 记忆注入（EMI/NEC 反幻觉）
+  ② 今日摘要注入（能答"我今天干了什么"）③ 工具桥（ToolBridge 全链安全）
+- 会话隔离：请求头 `X-Apeireth-Continuity: <id>`（缺省 `me`）
+- 暴露工具白名单（低风险）：recall_memory / save_memory / simulate / forecast / audit_log /
+  WebSearch / WebFetch / Grep / Git（FileOperator/ShellExec 等需显式扩权）
+- 护栏（改进 VCP）：工具循环 ≤5 轮 + 工具结果 4000 字符截断 + 注入标注"以用户当前说法为准"
+
+**对 VCP 的改进点**（VCP 不好的我们改，VCP 没有的我们补）：
+
+| VCP 原设计 | 问题 | companion_serve |
+|---|---|---|
+| chatCompletionHandler 59KB monolith | 不可维护 | 模块化: 注入/摘要/工具各自独立, 机制件在 companion |
+| RAG 注入无反幻觉约束 | AI 可能把注入当事实 | EMI/NEC 编号列表 + 冲突以用户为准标注 |
+| toolApprovalManager 简单审批 | 无宪法/审计 | ToolBridge 全链: 宪法硬门+权限包+留痕 |
+| alias 映射复杂 | 重 | X-Apeireth-Continuity 一行 header |
+| 无防失控 | 工具循环无限 | 5 轮上限 + 结果截断 |
+| 无"今日感" | — | 今日摘要注入（VCP 没有, 我们补） |
+
+## 六、实测记录（2026-08-16, MiniMax-M3 真机）
+
+**记忆注入问答**（无工具, 纯注入）:
+> 用户: 你还记得我高数换元法的问题吗?具体错在哪?
+> AI: 记得的~ 根据记忆里的记录, 你换元法常犯两个错: ①认知漏洞: 根号里带平方的处理
+> ②操作漏洞: 换元后忘记换 dx... 对了, 我记得你周五要考高数期中... 要不要我现在帮你
+> 针对性出几道"根号带平方"的换元题?
+
+**工具桥**（AI 主动调 simulate ×3 后回答）:
+> 用户: 比较策略A(刷30题) vs 策略B(精练8题+套路卡), 推演3步
+> AI: [simulate ×3] → 表格对比 (复习进度 A+24/B+9, 熟练度 A+10/B+23, 信心 A-2/B+19)
+> → 判断选 B + 落地建议 (套 7-10 点高数时间: 8题精练/保温刷/口头复述)
+> x_apeireth: {"tool_rounds":4, "tools_executed":["[simulate] 已执行"×3]}
