@@ -66,6 +66,7 @@
 | web_crawl.rs (tools) | Crawl v2: 并发 BFS+重试退避+限速 (调研驱动, 实战验证) | Crawl 工具 (9 号) |
 | education.rs | 教育套件真内容: dx_check 规则层检查器 (忘换 dx/混用/缺微分/残留 x/根号模式表) + EducationDxPlugin (注册+授权, 卸载真清理) | dx_check 工具 |
 | pentest.rs | 渗透套件真内容: recon_plan (计划编排+E-1 范围闸) + scan_report (nmap 行解析) + 双插件 (卸载真清理) | recon_plan/scan_report 工具 |
+| gh_accel.rs (companion) + github_accel.rs (tools) | GitHub 加速插件: xiake.pro 节点池 → 本机并发实测 (2xx+PNG魔数内容验证) → 选最快 → 加速 URL/命令 (docs/ref-gh-accel.md) | gh_accel 工具 (插件注册) |
 
 ## 三、加新模块规范（维护 checklist）
 
