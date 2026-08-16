@@ -59,10 +59,12 @@
 - 周期完成 → LLM 深度反思 (输入: 周期记忆+提炼产物 → 输出: 模式/洞察/建议) → 写回 + 喂经验库
 - 验证: 反思记录包含真实洞察 (非状态文本)
 
-### 模块 6: 目标驱动（Goal Integration）
-- 注入当前目标 + 工具 goal_create / goal_status (AI 可建目标/报进度)
-- 每日摘要含目标进度; 做梦/反思产物关联目标
-- 验证: 对话中 AI 主动推进目标并汇报
+### 模块 6: 目标驱动（Goal Integration）— ✅ 已完成 (2026-08-16)
+- 写入侧: goal_create / goal_status / goal_complete / goal_pause / goal_block 工具
+  (ToolBridge.with_goals 注入, 与 serve 注入侧共享同一 GoalService 实例)
+- 状态块含当前目标 (模块 1 已接读取); 工具走 GoalService 严格状态机 (revision+1, 非法迁移拒绝)
+- 实测: AI 建目标 (25 轮) + 主动查状态 + 融合记忆/时间 (倒计时 5 天); 完成→建新 受 MiniMax 限流暂缓, 单测覆盖
+- 待办: 目标进度 → 每日摘要; 做梦/反思产物关联目标
 
 ## 三、实施顺序建议
 
