@@ -20,21 +20,21 @@
 
 pub mod hash;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod exif;
-pub mod ocr;
-pub mod router;
-pub mod mcp;
 pub mod compat;
 pub mod enhanced;
+pub mod exif;
+pub mod mcp;
+pub mod ocr;
+mod organ_kani_proofs;
+pub mod router;
 
-pub use hash::{ImageHash, perceptual_hash};
-pub use exif::ExifData;
-pub use ocr::{OcrResult, ocr_extract};
-pub use router::{ImageRouter, ProcessOp};
-pub use mcp::{ImageProcessMcp, ImageProcessTool};
 pub use compat::{ImageProcessCommand, ImageProcessCompatRouter, IMAGEPROC_COMMAND_COUNT};
 pub use enhanced::EnhancedImageProcess;
+pub use exif::ExifData;
+pub use hash::{perceptual_hash, ImageHash};
+pub use mcp::{ImageProcessMcp, ImageProcessTool};
+pub use ocr::{ocr_extract, OcrResult};
+pub use router::{ImageRouter, ProcessOp};
 
 /// R141 deliverables for image-process:
 /// - 5 modules (hash / exif / ocr / router / mcp) + compat + enhanced

@@ -26,7 +26,7 @@
 
 use std::sync::Arc;
 
-use crate::classifier::{Category, ClassifyError, Classifier, HeuristicClassifier};
+use crate::classifier::{Category, Classifier, ClassifyError, HeuristicClassifier};
 use crate::trait_def::Tool;
 
 /// 分类四级降级链级数 (编译期 hardcode)
@@ -208,12 +208,13 @@ impl CustomMapClassifier {
 
 impl Classifier for CustomMapClassifier {
     fn classify(&self, tool: &dyn Tool) -> Result<Category, ClassifyError> {
-        self.map.get(tool.name()).copied().ok_or_else(|| {
-            ClassifyError::NoMatch {
+        self.map
+            .get(tool.name())
+            .copied()
+            .ok_or_else(|| ClassifyError::NoMatch {
                 name: tool.name().to_string(),
                 tried_keywords: 0,
-            }
-        })
+            })
     }
 
     fn confidence(&self, tool: &dyn Tool) -> Result<f32, ClassifyError> {
@@ -235,7 +236,9 @@ impl Classifier for CustomMapClassifier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AwaitingAxis, OutputAxis, ResidentAxis, ToolAxes, ToolKind, TransportAxis, TriggerAxis};
+    use crate::types::{
+        AwaitingAxis, OutputAxis, ResidentAxis, ToolAxes, ToolKind, TransportAxis, TriggerAxis,
+    };
     use serde_json::Value;
 
     /// 测试用工具 (仅 name 有意义, classifier 只用 name)
@@ -285,7 +288,9 @@ mod tests {
     fn keyword_only_chain_classifies_by_heuristic() {
         // 默认链 (0 装): 仅关键词级接入
         let chain = ClassifyChain::new();
-        let out = chain.classify_staged(&TestTool("WebSearch".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("WebSearch".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::Keyword);
         assert_eq!(out.category, Category::Search);
         assert!(out.confidence > 0.0);
@@ -305,7 +310,9 @@ mod tests {
         let mut custom = CustomMapClassifier::new();
         custom.insert("MySpecialTool", Category::Data);
         let chain = ClassifyChain::new().with_custom(Arc::new(custom));
-        let out = chain.classify_staged(&TestTool("MySpecialTool".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("MySpecialTool".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::Custom);
         assert_eq!(out.category, Category::Data);
         assert_eq!(out.confidence, 1.0);
@@ -316,7 +323,9 @@ mod tests {
         // 自定义级未命中 → 降到关键词级
         let custom = CustomMapClassifier::new(); // 空表
         let chain = ClassifyChain::new().with_custom(Arc::new(custom));
-        let out = chain.classify_staged(&TestTool("FileOperator".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("FileOperator".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::Keyword);
         assert_eq!(out.category, Category::FileCode);
     }
@@ -327,7 +336,9 @@ mod tests {
         let chain = ClassifyChain::new()
             .with_custom(Arc::new(CustomMapClassifier::new())) // miss
             .with_small_model(Arc::new(FixedClassifier(Some(Category::ImageMedia))));
-        let out = chain.classify_staged(&TestTool("Whatever".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("Whatever".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::SmallModel);
         assert_eq!(out.category, Category::ImageMedia);
     }
@@ -338,7 +349,9 @@ mod tests {
         let chain = ClassifyChain::new()
             .with_small_model(Arc::new(FixedClassifier(None))) // Err
             .with_rag(Arc::new(FixedClassifier(Some(Category::Communication))));
-        let out = chain.classify_staged(&TestTool("Whatever".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("Whatever".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::Rag);
         assert_eq!(out.category, Category::Communication);
     }
@@ -350,7 +363,9 @@ mod tests {
             .with_custom(Arc::new(FixedClassifier(None)))
             .with_small_model(Arc::new(FixedClassifier(None)))
             .with_rag(Arc::new(FixedClassifier(None)));
-        let out = chain.classify_staged(&TestTool("NoteRecall".to_string())).unwrap();
+        let out = chain
+            .classify_staged(&TestTool("NoteRecall".to_string()))
+            .unwrap();
         assert_eq!(out.stage, ClassifyStage::Keyword);
         // "noterecall" 含 "note"/"recall" → MemoryKnowledge
         assert_eq!(out.category, Category::MemoryKnowledge);

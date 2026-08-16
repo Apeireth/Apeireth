@@ -42,11 +42,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut registry = ToolRegistry::new();
     let echo = Arc::new(MockStaticTool {
         name: "EchoSync".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "sync", "tool": "EchoSync", "echo": "static_value"}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "sync", "tool": "EchoSync", "echo": "static_value"}),
+        )?,
     });
     let config_tool = Arc::new(MockStaticTool {
         name: "ConfigVersion".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "static", "tool": "ConfigVersion", "value": "1.2.0"}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "static", "tool": "ConfigVersion", "value": "1.2.0"}),
+        )?,
     });
     registry.register("EchoSync".to_string(), echo);
     registry.register("ConfigVersion".to_string(), config_tool);
@@ -63,7 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ===== 3. LLM 决策 plan (用 R131.12 同样 API) =====
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let provider = Arc::new(AnthropicCompatibleProvider::new(cfg)?);
@@ -90,10 +95,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_success = 0usize;
     for (i, line) in plan_lines.iter().take(3).enumerate() {
         let parts: Vec<&str> = line.splitn(2, '|').collect();
-        if parts.len() != 2 { continue; }
+        if parts.len() != 2 {
+            continue;
+        }
         let tool_name = parts[0].trim();
         let args_str = parts[1].trim();
-        let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
+        let args: Value =
+            serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
         println!("  [{}] tool={} args={}", i + 1, tool_name, args);
 
         let parsed = ParsedToolCall {
@@ -118,14 +126,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             Err(e) => {
-                println!("    → 5-stage FAIL in {}ms: {}", call_start.elapsed().as_millis(), e);
+                println!(
+                    "    → 5-stage FAIL in {}ms: {}",
+                    call_start.elapsed().as_millis(),
+                    e
+                );
             }
         }
     }
     let total_ms = exec_start.elapsed().as_millis();
     println!(
         "\n[summary] plan {}ms, pipeline-g5 5-stage exec total {}ms, {}/{} calls success",
-        plan_ms, total_ms, total_success, plan_lines.len().min(3)
+        plan_ms,
+        total_ms,
+        total_success,
+        plan_lines.len().min(3)
     );
 
     let tokens = estimate_tool_tokens("EchoSync", "sync primary_db");

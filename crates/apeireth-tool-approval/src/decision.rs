@@ -283,7 +283,10 @@ mod tests {
     #[test]
     fn reject_error_type_as_str_covers_4_codes() {
         assert_eq!(RejectErrorType::RejectedByUser.as_str(), "rejected_by_user");
-        assert_eq!(RejectErrorType::ApprovalTimeout.as_str(), "approval_timeout");
+        assert_eq!(
+            RejectErrorType::ApprovalTimeout.as_str(),
+            "approval_timeout"
+        );
         assert_eq!(RejectErrorType::PolicyDeny.as_str(), "policy_deny");
         assert_eq!(
             RejectErrorType::ChannelUnavailable.as_str(),

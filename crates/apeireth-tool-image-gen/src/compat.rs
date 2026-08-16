@@ -44,12 +44,18 @@ impl ImageGenCommand {
 pub struct ImageGenCompatRouter;
 
 impl ImageGenCompatRouter {
-    pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { IMAGEGEN_COMMAND_COUNT }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn command_count() -> usize {
+        IMAGEGEN_COMMAND_COUNT
+    }
 }
 
 impl Default for ImageGenCompatRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -57,7 +63,20 @@ mod tests {
     use super::*;
     #[test]
     fn parse_12_commands() {
-        let names = ["OpenAiDallE","StabilityAi","Midjourney","MiniMaxImage","GoogleImagen","AdobeFirefly","LeonardoAi","Ideogram","PlaygroundAi","BingImageCreator","Craiyon","Nightcafe"];
+        let names = [
+            "OpenAiDallE",
+            "StabilityAi",
+            "Midjourney",
+            "MiniMaxImage",
+            "GoogleImagen",
+            "AdobeFirefly",
+            "LeonardoAi",
+            "Ideogram",
+            "PlaygroundAi",
+            "BingImageCreator",
+            "Craiyon",
+            "Nightcafe",
+        ];
         for s in names {
             assert_ne!(ImageGenCommand::from_str(s), ImageGenCommand::Unknown);
         }

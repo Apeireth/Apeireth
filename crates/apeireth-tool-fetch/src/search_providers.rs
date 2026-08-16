@@ -76,7 +76,11 @@ impl TavilyProvider {
     }
 
     pub fn anonymous() -> Self {
-        Self { api_key: None, endpoint: "https://api.tavily.com/search".to_string(), max_results: 10 }
+        Self {
+            api_key: None,
+            endpoint: "https://api.tavily.com/search".to_string(),
+            max_results: 10,
+        }
     }
 
     pub fn with_endpoint(mut self, endpoint: impl Into<String>) -> Self {
@@ -91,9 +95,15 @@ impl TavilyProvider {
 }
 
 impl SearchProvider for TavilyProvider {
-    fn source(&self) -> SearchSource { SearchSource::Tavily }
-    fn name(&self) -> &str { "tavily" }
-    fn api_key(&self) -> Option<&str> { self.api_key.as_deref() }
+    fn source(&self) -> SearchSource {
+        SearchSource::Tavily
+    }
+    fn name(&self) -> &str {
+        "tavily"
+    }
+    fn api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
+    }
 }
 
 // Tavily response shapes
@@ -123,22 +133,36 @@ impl TavilyProvider {
     /// Parse a Tavily JSON response into SearchHit vec.
     /// Pure function for testability (no HTTP).
     pub fn parse_response(&self, json: &str, query: &str) -> ProviderResult<Vec<SearchHit>> {
-        let resp: TavilyResponse = serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
-        let hits = resp.results.into_iter().map(|r| SearchHit {
-            title: r.title,
-            url: r.url,
-            snippet: r.content,
-            source: SearchSource::Tavily,
-            score: r.score,
-        }).collect();
+        let resp: TavilyResponse =
+            serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
+        let hits = resp
+            .results
+            .into_iter()
+            .map(|r| SearchHit {
+                title: r.title,
+                url: r.url,
+                snippet: r.content,
+                source: SearchSource::Tavily,
+                score: r.score,
+            })
+            .collect();
         let _ = query;
         Ok(hits)
     }
 
     /// Build request body JSON for tavily API.
     pub fn build_request_body(&self, query: &str) -> ProviderResult<String> {
-        let key = self.api_key.as_deref().ok_or_else(|| ProviderError::MissingApiKey { provider: "tavily".to_string() })?;
-        let req = TavilyRequest { api_key: key, query, max_results: self.max_results };
+        let key = self
+            .api_key
+            .as_deref()
+            .ok_or_else(|| ProviderError::MissingApiKey {
+                provider: "tavily".to_string(),
+            })?;
+        let req = TavilyRequest {
+            api_key: key,
+            query,
+            max_results: self.max_results,
+        };
         serde_json::to_string(&req).map_err(|e| ProviderError::Json(e.to_string()))
     }
 }
@@ -168,16 +192,29 @@ impl BraveProvider {
     }
 
     pub fn anonymous() -> Self {
-        Self { api_key: None, endpoint: "https://api.search.brave.com/res/v1/web/search".to_string(), count: 10 }
+        Self {
+            api_key: None,
+            endpoint: "https://api.search.brave.com/res/v1/web/search".to_string(),
+            count: 10,
+        }
     }
 
-    pub fn with_count(mut self, n: usize) -> Self { self.count = n; self }
+    pub fn with_count(mut self, n: usize) -> Self {
+        self.count = n;
+        self
+    }
 }
 
 impl SearchProvider for BraveProvider {
-    fn source(&self) -> SearchSource { SearchSource::Brave }
-    fn name(&self) -> &str { "brave" }
-    fn api_key(&self) -> Option<&str> { self.api_key.as_deref() }
+    fn source(&self) -> SearchSource {
+        SearchSource::Brave
+    }
+    fn name(&self) -> &str {
+        "brave"
+    }
+    fn api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -201,17 +238,24 @@ struct BraveResult {
 
 impl BraveProvider {
     pub fn parse_response(&self, json: &str, query: &str) -> ProviderResult<Vec<SearchHit>> {
-        let resp: BraveResponse = serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
+        let resp: BraveResponse =
+            serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
         let _ = query;
         // Brave does not return a score; default to 0.5
-        let hits = resp.web.results.into_iter().enumerate().map(|(i, r)| SearchHit {
-            title: r.title,
-            url: r.url,
-            snippet: r.description,
-            source: SearchSource::Brave,
-            // Approximate score by position (top results likely better)
-            score: 1.0 - (i as f64) * 0.05,
-        }).collect();
+        let hits = resp
+            .web
+            .results
+            .into_iter()
+            .enumerate()
+            .map(|(i, r)| SearchHit {
+                title: r.title,
+                url: r.url,
+                snippet: r.description,
+                source: SearchSource::Brave,
+                // Approximate score by position (top results likely better)
+                score: 1.0 - (i as f64) * 0.05,
+            })
+            .collect();
         Ok(hits)
     }
 }
@@ -243,14 +287,24 @@ impl SerperProvider {
     }
 
     pub fn anonymous() -> Self {
-        Self { api_key: None, endpoint: "https://google.serper.dev/search".to_string(), num: 10 }
+        Self {
+            api_key: None,
+            endpoint: "https://google.serper.dev/search".to_string(),
+            num: 10,
+        }
     }
 }
 
 impl SearchProvider for SerperProvider {
-    fn source(&self) -> SearchSource { SearchSource::Serper }
-    fn name(&self) -> &str { "serper" }
-    fn api_key(&self) -> Option<&str> { self.api_key.as_deref() }
+    fn source(&self) -> SearchSource {
+        SearchSource::Serper
+    }
+    fn name(&self) -> &str {
+        "serper"
+    }
+    fn api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -271,14 +325,19 @@ struct SerperResult {
 
 impl SerperProvider {
     pub fn parse_response(&self, json: &str) -> ProviderResult<Vec<SearchHit>> {
-        let resp: SerperResponse = serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
-        let hits = resp.organic.into_iter().map(|r| SearchHit {
-            title: r.title,
-            url: r.link,
-            snippet: r.snippet,
-            source: SearchSource::Serper,
-            score: 1.0 - r.position.unwrap_or(0) as f64 * 0.05,
-        }).collect();
+        let resp: SerperResponse =
+            serde_json::from_str(json).map_err(|e| ProviderError::Json(e.to_string()))?;
+        let hits = resp
+            .organic
+            .into_iter()
+            .map(|r| SearchHit {
+                title: r.title,
+                url: r.link,
+                snippet: r.snippet,
+                source: SearchSource::Serper,
+                score: 1.0 - r.position.unwrap_or(0) as f64 * 0.05,
+            })
+            .collect();
         Ok(hits)
     }
 }
@@ -294,7 +353,9 @@ pub struct ProviderRegistry {
 }
 
 impl ProviderRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     /// Build registry from environment variables:
     /// - TAVILY_API_KEY -> TavilyProvider
@@ -302,9 +363,15 @@ impl ProviderRegistry {
     /// - SERPER_API_KEY -> SerperProvider
     pub fn from_env() -> Self {
         let mut reg = Self::new();
-        if let Ok(k) = std::env::var("TAVILY_API_KEY") { reg.add(Box::new(TavilyProvider::new(k))); }
-        if let Ok(k) = std::env::var("BRAVE_API_KEY") { reg.add(Box::new(BraveProvider::new(k))); }
-        if let Ok(k) = std::env::var("SERPER_API_KEY") { reg.add(Box::new(SerperProvider::new(k))); }
+        if let Ok(k) = std::env::var("TAVILY_API_KEY") {
+            reg.add(Box::new(TavilyProvider::new(k)));
+        }
+        if let Ok(k) = std::env::var("BRAVE_API_KEY") {
+            reg.add(Box::new(BraveProvider::new(k)));
+        }
+        if let Ok(k) = std::env::var("SERPER_API_KEY") {
+            reg.add(Box::new(SerperProvider::new(k)));
+        }
         reg
     }
 
@@ -313,11 +380,19 @@ impl ProviderRegistry {
     }
 
     pub fn providers(&self) -> Vec<String> {
-        self.providers.read().iter().map(|b| b.name().to_string()).collect()
+        self.providers
+            .read()
+            .iter()
+            .map(|b| b.name().to_string())
+            .collect()
     }
 
     pub fn provider_names(&self) -> Vec<String> {
-        self.providers.read().iter().map(|b| b.name().to_string()).collect()
+        self.providers
+            .read()
+            .iter()
+            .map(|b| b.name().to_string())
+            .collect()
     }
 
     pub fn count(&self) -> usize {

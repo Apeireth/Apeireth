@@ -81,7 +81,10 @@ arg:<<<value>>>
     let calls = ToolCallParser::parse(output).expect("parse ok");
     assert_eq!(calls.len(), 1);
     assert!(calls[0].archery, "archery flag should be true");
-    assert!(!calls[0].archery_no_reply, "archery_no_reply should be false");
+    assert!(
+        !calls[0].archery_no_reply,
+        "archery_no_reply should be false"
+    );
 }
 
 #[test]
@@ -155,28 +158,40 @@ fn parser_missing_end_marker_fails_or_skips() {
 #[test]
 fn fuzzy_match_returns_closest_when_multiple_candidates() {
     // 多个候选距离相同 → 取一个 (具体看实现: list() 字典序 → first-found)
-    use apeireth_tool_runtime::FuzzyToolMatcher;
     use apeireth_tool_registry::{MockSyncTool, ToolRegistry};
+    use apeireth_tool_runtime::FuzzyToolMatcher;
     use std::sync::Arc;
     let r = ToolRegistry::new();
     for n in ["abcd", "abce", "wxyz"] {
-        r.register(n.to_string(), Arc::new(MockSyncTool { name: n.to_string() }));
+        r.register(
+            n.to_string(),
+            Arc::new(MockSyncTool {
+                name: n.to_string(),
+            }),
+        );
     }
     // "abcf" 跟 abcd 距离 1, abce 距离 1, wxyz 距离 3
     let m = FuzzyToolMatcher::match_tool("abcf", &r);
     // ToolRegistry::list() 按字典序, abcd 排在 abce 之前
-    assert!(m == Some("abcd".to_string()) || m == Some("abce".to_string()),
-        "应选 abcd 或 abce, 实际: {m:?}");
+    assert!(
+        m == Some("abcd".to_string()) || m == Some("abce".to_string()),
+        "应选 abcd 或 abce, 实际: {m:?}"
+    );
 }
 
 #[test]
 fn fuzzy_match_threshold_one_works() {
     // 阈值 = 1: 距离 1 命中, 距离 2 拒识
-    use apeireth_tool_runtime::FuzzyToolMatcher;
     use apeireth_tool_registry::{MockSyncTool, ToolRegistry};
+    use apeireth_tool_runtime::FuzzyToolMatcher;
     use std::sync::Arc;
     let r = ToolRegistry::new();
-    r.register("read".to_string(), Arc::new(MockSyncTool { name: "read".to_string() }));
+    r.register(
+        "read".to_string(),
+        Arc::new(MockSyncTool {
+            name: "read".to_string(),
+        }),
+    );
     // "red" 距离 "read" = 1 (插 1)
     let m = FuzzyToolMatcher::match_tool_threshold("red", &r, 1);
     assert_eq!(m, Some("read".to_string()));
@@ -204,8 +219,10 @@ fn privacy_masks_api_key_field() {
     });
     let out = g.mask(&input);
     let masked = out["api_key"].as_str().unwrap();
-    assert!(masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
-        "api_key 应被 mask, 实际: {masked}");
+    assert!(
+        masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
+        "api_key 应被 mask, 实际: {masked}"
+    );
     // 普通字段不动
     assert_eq!(out["result"], "ok");
 }
@@ -219,8 +236,14 @@ fn privacy_masks_password_and_token() {
         "token": "verylongtokenvalue123456789012345",
     });
     let out = g.mask(&input);
-    assert!(out["password"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
-    assert!(out["token"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
+    assert!(out["password"]
+        .as_str()
+        .unwrap()
+        .contains("[APEIRETH_PRIVACY_REDACTED]"));
+    assert!(out["token"]
+        .as_str()
+        .unwrap()
+        .contains("[APEIRETH_PRIVACY_REDACTED]"));
 }
 
 #[test]
@@ -233,8 +256,10 @@ fn privacy_masks_high_confidence_github_token() {
     });
     let out = g.mask(&input);
     let s = out["text"].as_str().unwrap();
-    assert!(!s.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
-        "ghp_ token 应被 mask, 实际: {s}");
+    assert!(
+        !s.contains("ghp_abcdefghijklmnopqrstuvwxyz0123456789"),
+        "ghp_ token 应被 mask, 实际: {s}"
+    );
     assert!(s.contains("[APEIRETH_PRIVACY_REDACTED]"));
 }
 
@@ -252,8 +277,10 @@ fn privacy_masks_nested_object() {
     });
     let out = g.mask(&input);
     let masked = out["outer"]["inner"]["api_key"].as_str().unwrap();
-    assert!(masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
-        "嵌套 api_key 应被 mask, 实际: {masked}");
+    assert!(
+        masked.contains("[APEIRETH_PRIVACY_REDACTED]"),
+        "嵌套 api_key 应被 mask, 实际: {masked}"
+    );
 }
 
 #[test]
@@ -266,20 +293,30 @@ fn privacy_short_value_not_masked() {
     });
     let out = g.mask(&input);
     // 长度 3 < min_secret_length=8 → 不 mask
-    assert_eq!(out["api_key"], "abc", "短值应保留原样, 实际: {}", out["api_key"]);
+    assert_eq!(
+        out["api_key"], "abc",
+        "短值应保留原样, 实际: {}",
+        out["api_key"]
+    );
 }
 
 #[test]
 fn privacy_disabled_returns_unchanged() {
     use apeireth_tool_runtime::{PrivacyConfig, PrivacyGuard};
-    let cfg = PrivacyConfig { enabled: false, ..Default::default() };
+    let cfg = PrivacyConfig {
+        enabled: false,
+        ..Default::default()
+    };
     let g = PrivacyGuard::with_config(cfg);
     let input = serde_json::json!({
         "api_key": "sk-verylongsecretvaluethatistoolong1234567890"
     });
     let out = g.mask(&input);
     // enabled=false → 返原值
-    assert_eq!(out["api_key"], "sk-verylongsecretvaluethatistoolong1234567890");
+    assert_eq!(
+        out["api_key"],
+        "sk-verylongsecretvaluethatistoolong1234567890"
+    );
 }
 
 #[test]
@@ -296,6 +333,9 @@ fn privacy_masks_array_of_secrets() {
     let out = g.mask(&input);
     let arr = out["secrets"].as_array().unwrap();
     for s in arr {
-        assert!(s["password"].as_str().unwrap().contains("[APEIRETH_PRIVACY_REDACTED]"));
+        assert!(s["password"]
+            .as_str()
+            .unwrap()
+            .contains("[APEIRETH_PRIVACY_REDACTED]"));
     }
 }

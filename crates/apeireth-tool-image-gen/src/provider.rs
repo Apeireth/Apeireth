@@ -78,7 +78,9 @@ pub enum ProviderError {
 #[async_trait]
 pub trait ImageGenProvider: Send + Sync {
     fn kind(&self) -> ProviderKind;
-    fn name(&self) -> &str { self.kind().name() }
+    fn name(&self) -> &str {
+        self.kind().name()
+    }
     async fn generate(&self, params: &ImageGenParams) -> Result<ImageGenResult, ProviderError>;
 }
 
@@ -89,7 +91,9 @@ pub struct ProviderRegistry {
 
 impl ProviderRegistry {
     pub fn new() -> Self {
-        Self { providers: HashMap::new() }
+        Self {
+            providers: HashMap::new(),
+        }
     }
     pub fn register(&mut self, provider: Box<dyn ImageGenProvider>) {
         self.providers.insert(provider.name().to_string(), provider);

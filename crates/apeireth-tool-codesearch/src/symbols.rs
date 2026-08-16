@@ -95,31 +95,69 @@ pub fn extract_symbols(content: &str, language: &str) -> Vec<Symbol> {
 fn extract_rust(content: &str) -> Vec<Symbol> {
     let mut out = Vec::new();
     let fn_re = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:const\s+|unsafe\s+|extern\s+(?:\x22[^\x22]*\x22\s+)?)?fn\s+([a-zA-Z_][a-zA-Z0-9_]*)").unwrap();
-    let struct_re = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
-    let enum_re = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?enum\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
-    let const_re = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?const\s+([A-Z_][A-Z0-9_]*)").unwrap();
+    let struct_re =
+        Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+    let enum_re =
+        Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?enum\s+([A-Z][a-zA-Z0-9_]*)").unwrap();
+    let const_re =
+        Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?const\s+([A-Z_][A-Z0-9_]*)").unwrap();
     let use_re = Regex::new(r"(?m)^\s*(?:pub(?:\([^)]*\))?\s+)?use\s+([^;]+);").unwrap();
 
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = fn_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Function, line: i + 1, column: 1, language: "rust".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Function,
+                    line: i + 1,
+                    column: 1,
+                    language: "rust".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = struct_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Struct, line: i + 1, column: 1, language: "rust".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Struct,
+                    line: i + 1,
+                    column: 1,
+                    language: "rust".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = enum_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Enum, line: i + 1, column: 1, language: "rust".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Enum,
+                    line: i + 1,
+                    column: 1,
+                    language: "rust".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = const_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Constant, line: i + 1, column: 1, language: "rust".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Constant,
+                    line: i + 1,
+                    column: 1,
+                    language: "rust".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = use_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().trim().to_string(), kind: SymbolKind::Import, line: i + 1, column: 1, language: "rust".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().trim().to_string(),
+                    kind: SymbolKind::Import,
+                    line: i + 1,
+                    column: 1,
+                    language: "rust".to_string(),
+                    signature: line.to_string(),
+                });
             }
         }
     }
@@ -136,19 +174,47 @@ fn extract_python(content: &str) -> Vec<Symbol> {
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = fn_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Function, line: i + 1, column: 1, language: "python".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Function,
+                    line: i + 1,
+                    column: 1,
+                    language: "python".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = class_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Class, line: i + 1, column: 1, language: "python".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Class,
+                    line: i + 1,
+                    column: 1,
+                    language: "python".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = const_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Constant, line: i + 1, column: 1, language: "python".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Constant,
+                    line: i + 1,
+                    column: 1,
+                    language: "python".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = import_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().trim().to_string(), kind: SymbolKind::Import, line: i + 1, column: 1, language: "python".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().trim().to_string(),
+                    kind: SymbolKind::Import,
+                    line: i + 1,
+                    column: 1,
+                    language: "python".to_string(),
+                    signature: line.to_string(),
+                });
             }
         }
     }
@@ -160,27 +226,57 @@ fn extract_javascript(content: &str) -> Vec<Symbol> {
     let fn_re = Regex::new(r"(?m)^\s*(?:async\s+)?function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)").unwrap();
     let class_re = Regex::new(r"(?m)^\s*class\s+([A-Z][a-zA-Z0-9_$]*)").unwrap();
     let const_re = Regex::new(r"(?m)^\s*const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*=").unwrap();
-    let import_re = Regex::new(r#"(?m)^\s*import\s+(?:\{([^}]+)\}\s+from\s+)?['"]([^'"]+)['"]"#).unwrap();
+    let import_re =
+        Regex::new(r#"(?m)^\s*import\s+(?:\{([^}]+)\}\s+from\s+)?['"]([^'"]+)['"]"#).unwrap();
 
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = fn_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Function, line: i + 1, column: 1, language: "javascript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Function,
+                    line: i + 1,
+                    column: 1,
+                    language: "javascript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = class_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Class, line: i + 1, column: 1, language: "javascript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Class,
+                    line: i + 1,
+                    column: 1,
+                    language: "javascript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = const_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Constant, line: i + 1, column: 1, language: "javascript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Constant,
+                    line: i + 1,
+                    column: 1,
+                    language: "javascript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = import_re.captures(line) {
-            let name = c.get(1).map(|m| m.as_str().to_string()).unwrap_or_else(|| {
-                c.get(2).map(|m| m.as_str().to_string()).unwrap_or_default()
-            });
+            let name = c
+                .get(1)
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_else(|| c.get(2).map(|m| m.as_str().to_string()).unwrap_or_default());
             if !name.is_empty() {
-                out.push(Symbol { name, kind: SymbolKind::Import, line: i + 1, column: 1, language: "javascript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name,
+                    kind: SymbolKind::Import,
+                    line: i + 1,
+                    column: 1,
+                    language: "javascript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         }
     }
@@ -189,27 +285,58 @@ fn extract_javascript(content: &str) -> Vec<Symbol> {
 
 fn extract_typescript(content: &str) -> Vec<Symbol> {
     let mut out = Vec::new();
-    let fn_re = Regex::new(r"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)").unwrap();
+    let fn_re =
+        Regex::new(r"(?m)^\s*(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z_$][a-zA-Z0-9_$]*)")
+            .unwrap();
     let class_re = Regex::new(r"(?m)^\s*(?:export\s+)?class\s+([A-Z][a-zA-Z0-9_$]*)").unwrap();
     let iface_re = Regex::new(r"(?m)^\s*(?:export\s+)?interface\s+([A-Z][a-zA-Z0-9_$]*)").unwrap();
-    let const_re = Regex::new(r"(?m)^\s*(?:export\s+)?const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:]").unwrap();
+    let const_re =
+        Regex::new(r"(?m)^\s*(?:export\s+)?const\s+([a-zA-Z_$][a-zA-Z0-9_$]*)\s*[=:]").unwrap();
 
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = fn_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Function, line: i + 1, column: 1, language: "typescript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Function,
+                    line: i + 1,
+                    column: 1,
+                    language: "typescript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = class_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Class, line: i + 1, column: 1, language: "typescript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Class,
+                    line: i + 1,
+                    column: 1,
+                    language: "typescript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = iface_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Interface, line: i + 1, column: 1, language: "typescript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Interface,
+                    line: i + 1,
+                    column: 1,
+                    language: "typescript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = const_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Constant, line: i + 1, column: 1, language: "typescript".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Constant,
+                    line: i + 1,
+                    column: 1,
+                    language: "typescript".to_string(),
+                    signature: line.to_string(),
+                });
             }
         }
     }
@@ -222,29 +349,69 @@ fn extract_go(content: &str) -> Vec<Symbol> {
     let struct_re = Regex::new(r"(?m)^\s*type\s+([A-Z][a-zA-Z0-9_]*)\s+struct").unwrap();
     let iface_re = Regex::new(r"(?m)^\s*type\s+([A-Z][a-zA-Z0-9_]*)\s+interface").unwrap();
     let const_re = Regex::new(r"(?m)^\s*(?:const|var)\s+([A-Z_][A-Z0-9_]*)\s*=").unwrap();
-    let import_re = Regex::new(r#"(?m)^\s*import\s+(?:\(\s*)?(?:[\x22]([^\x22]+)[\x22]|`([^`]+)`)"#).unwrap();
+    let import_re =
+        Regex::new(r#"(?m)^\s*import\s+(?:\(\s*)?(?:[\x22]([^\x22]+)[\x22]|`([^`]+)`)"#).unwrap();
 
     for (i, line) in content.lines().enumerate() {
         if let Some(c) = fn_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Function, line: i + 1, column: 1, language: "go".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Function,
+                    line: i + 1,
+                    column: 1,
+                    language: "go".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = struct_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Struct, line: i + 1, column: 1, language: "go".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Struct,
+                    line: i + 1,
+                    column: 1,
+                    language: "go".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = iface_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Interface, line: i + 1, column: 1, language: "go".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Interface,
+                    line: i + 1,
+                    column: 1,
+                    language: "go".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = const_re.captures(line) {
             if let Some(name) = c.get(1) {
-                out.push(Symbol { name: name.as_str().to_string(), kind: SymbolKind::Constant, line: i + 1, column: 1, language: "go".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name: name.as_str().to_string(),
+                    kind: SymbolKind::Constant,
+                    line: i + 1,
+                    column: 1,
+                    language: "go".to_string(),
+                    signature: line.to_string(),
+                });
             }
         } else if let Some(c) = import_re.captures(line) {
-            let name = c.get(1).or_else(|| c.get(2)).map(|m| m.as_str().to_string()).unwrap_or_default();
+            let name = c
+                .get(1)
+                .or_else(|| c.get(2))
+                .map(|m| m.as_str().to_string())
+                .unwrap_or_default();
             if !name.is_empty() {
-                out.push(Symbol { name, kind: SymbolKind::Import, line: i + 1, column: 1, language: "go".to_string(), signature: line.to_string() });
+                out.push(Symbol {
+                    name,
+                    kind: SymbolKind::Import,
+                    line: i + 1,
+                    column: 1,
+                    language: "go".to_string(),
+                    signature: line.to_string(),
+                });
             }
         }
     }
@@ -269,8 +436,12 @@ mod tests {
     fn rust_fn_extraction() {
         let content = "pub fn hello() {}\nfn world() {}\npub async fn async_fn() {}";
         let s = extract_rust(content);
-        assert!(s.iter().any(|x| x.name == "hello" && x.kind == SymbolKind::Function));
-        assert!(s.iter().any(|x| x.name == "world" && x.kind == SymbolKind::Function));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "hello" && x.kind == SymbolKind::Function));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "world" && x.kind == SymbolKind::Function));
         assert!(s.iter().any(|x| x.name == "async_fn"));
     }
 
@@ -284,10 +455,15 @@ mod tests {
 
     #[test]
     fn python_class_and_def() {
-        let content = "def helper(): pass\nclass MyClass:\n    def method(self): pass\nMY_CONST = 1";
+        let content =
+            "def helper(): pass\nclass MyClass:\n    def method(self): pass\nMY_CONST = 1";
         let s = extract_python(content);
-        assert!(s.iter().any(|x| x.name == "helper" && x.kind == SymbolKind::Function));
-        assert!(s.iter().any(|x| x.name == "MyClass" && x.kind == SymbolKind::Class));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "helper" && x.kind == SymbolKind::Function));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "MyClass" && x.kind == SymbolKind::Class));
         assert!(s.iter().any(|x| x.name == "MY_CONST"));
     }
 
@@ -295,27 +471,43 @@ mod tests {
     fn javascript_class() {
         let content = "class Foo {}\nfunction bar() {}\nconst baz = 1;";
         let s = extract_javascript(content);
-        assert!(s.iter().any(|x| x.name == "Foo" && x.kind == SymbolKind::Class));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "Foo" && x.kind == SymbolKind::Class));
         assert!(s.iter().any(|x| x.name == "bar"));
-        assert!(s.iter().any(|x| x.name == "baz" && x.kind == SymbolKind::Constant));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "baz" && x.kind == SymbolKind::Constant));
     }
 
     #[test]
     fn typescript_interface() {
         let content = "export interface Foo {}\nexport const x: number = 1;";
         let s = extract_typescript(content);
-        assert!(s.iter().any(|x| x.name == "Foo" && x.kind == SymbolKind::Interface));
-        assert!(s.iter().any(|x| x.name == "x" && x.kind == SymbolKind::Constant));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "Foo" && x.kind == SymbolKind::Interface));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "x" && x.kind == SymbolKind::Constant));
     }
 
     #[test]
     fn go_struct() {
         let content = "type Foo struct {}\ntype Bar interface {}\nfunc hello() {}\nconst MAX = 10";
         let s = extract_go(content);
-        assert!(s.iter().any(|x| x.name == "Foo" && x.kind == SymbolKind::Struct));
-        assert!(s.iter().any(|x| x.name == "Bar" && x.kind == SymbolKind::Interface));
-        assert!(s.iter().any(|x| x.name == "hello" && x.kind == SymbolKind::Function));
-        assert!(s.iter().any(|x| x.name == "MAX" && x.kind == SymbolKind::Constant));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "Foo" && x.kind == SymbolKind::Struct));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "Bar" && x.kind == SymbolKind::Interface));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "hello" && x.kind == SymbolKind::Function));
+        assert!(s
+            .iter()
+            .any(|x| x.name == "MAX" && x.kind == SymbolKind::Constant));
     }
 
     #[test]
@@ -388,7 +580,9 @@ pub fn extract_symbols_tree_sitter(content: &str) -> Vec<Symbol> {
         let kind = if kind == SymbolKind::Function {
             let ancestor_impl = node
                 .parent()
-                .map(|p| p.kind() == "impl_item" || p.parent().is_some_and(|g| g.kind() == "impl_item"))
+                .map(|p| {
+                    p.kind() == "impl_item" || p.parent().is_some_and(|g| g.kind() == "impl_item")
+                })
                 .unwrap_or(false);
             if ancestor_impl {
                 SymbolKind::Method
@@ -408,7 +602,10 @@ pub fn extract_symbols_tree_sitter(content: &str) -> Vec<Symbol> {
         let Some(name_node) = name_node else {
             continue;
         };
-        let name = name_node.utf8_text(content.as_bytes()).unwrap_or("").to_string();
+        let name = name_node
+            .utf8_text(content.as_bytes())
+            .unwrap_or("")
+            .to_string();
         if name.trim().is_empty() {
             continue;
         }
@@ -460,14 +657,38 @@ enum Status { Active, Done }
 const MAX_RETRIES: usize = 3;
 "#;
         let s = extract_symbols_tree_sitter(content);
-        assert!(s.iter().any(|x| x.name == "fetch_data" && x.kind == SymbolKind::Function), "fn 应提取");
-        assert!(s.iter().any(|x| x.name == "Config" && x.kind == SymbolKind::Struct), "struct 应提取");
-        assert!(s.iter().any(|x| x.name == "Status" && x.kind == SymbolKind::Enum), "enum 应提取");
-        assert!(s.iter().any(|x| x.name == "MAX_RETRIES" && x.kind == SymbolKind::Constant), "const 应提取");
-        assert!(s.iter().any(|x| x.kind == SymbolKind::Import && x.name.contains("HashMap")), "use 应提取");
+        assert!(
+            s.iter()
+                .any(|x| x.name == "fetch_data" && x.kind == SymbolKind::Function),
+            "fn 应提取"
+        );
+        assert!(
+            s.iter()
+                .any(|x| x.name == "Config" && x.kind == SymbolKind::Struct),
+            "struct 应提取"
+        );
+        assert!(
+            s.iter()
+                .any(|x| x.name == "Status" && x.kind == SymbolKind::Enum),
+            "enum 应提取"
+        );
+        assert!(
+            s.iter()
+                .any(|x| x.name == "MAX_RETRIES" && x.kind == SymbolKind::Constant),
+            "const 应提取"
+        );
+        assert!(
+            s.iter()
+                .any(|x| x.kind == SymbolKind::Import && x.name.contains("HashMap")),
+            "use 应提取"
+        );
         // 跨行签名 (regex 版抓不到的): 函数声明应含参数行
         let fetch = s.iter().find(|x| x.name == "fetch_data").unwrap();
-        assert!(fetch.signature.contains("url: &str"), "tree-sitter 应抓完整签名: {}", fetch.signature);
+        assert!(
+            fetch.signature.contains("url: &str"),
+            "tree-sitter 应抓完整签名: {}",
+            fetch.signature
+        );
     }
 
     #[test]
@@ -479,7 +700,10 @@ let s = "fn fake_in_string() {}";
 "#;
         let s = extract_symbols_tree_sitter(content);
         assert!(s.iter().any(|x| x.name == "real"), "真函数应提取");
-        assert!(!s.iter().any(|x| x.name.starts_with("fake")), "注释/字符串内伪代码不应误报: {s:?}");
+        assert!(
+            !s.iter().any(|x| x.name.starts_with("fake")),
+            "注释/字符串内伪代码不应误报: {s:?}"
+        );
     }
 
     #[test]
@@ -490,7 +714,11 @@ impl Config {
 }
 "#;
         let s = extract_symbols_tree_sitter(content);
-        assert!(s.iter().any(|x| x.name == "new" && x.kind == SymbolKind::Method), "impl 内 fn 应为 Method: {s:?}");
+        assert!(
+            s.iter()
+                .any(|x| x.name == "new" && x.kind == SymbolKind::Method),
+            "impl 内 fn 应为 Method: {s:?}"
+        );
     }
 
     #[test]
