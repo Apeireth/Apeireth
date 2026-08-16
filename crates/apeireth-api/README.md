@@ -95,6 +95,18 @@ cargo check -p apeireth-api          # 0 errors
 cargo run -p apeireth-api --example openai_chat    # 真接 minimax
 ```
 
+## 依赖版本决策 (2026-08 审计)
+
+| Crate | 当前 (resolved) | crates.io 最新 | 决策 |
+|---|---|---|---|
+| `axum` | 0.7.9 | 0.8.9 | **P3 有意维持 0.7** — 0.8 是破坏性升级 (路由参数语法 `:id` → `{id}` / `*rest` → `{*rest}`、部分 API 调整), 升级需专门迁移, 不在本次范围 |
+| `reqwest` | 0.12.28 | 0.13.4 | **有意维持 0.12** — 0.13 是 major 破坏性升级; 0.12.28 已是 0.12 系最新 patch |
+| `tower` | 0.5.3 | 0.5.3 | 已是最新, 无需动作 |
+| `tower-http` | 0.5.2 | 0.7.0 | **有意维持 0.5** — 0.6/0.7 是 major, 与 axum 0.7 组合无必要升级 |
+
+结论: 本次仅文档同步, **0 依赖版本改动**。axum 0.8 / reqwest 0.13 / tower-http 0.7 均列为
+"需专门迁移"的独立任务 (破坏性升级, 影响路由语法与调用面), 不做顺手升级。
+
 ## See also
 
 - [minimax 4 协议验证报告](../../reports/minimax-end-to-end-r128-2026-08-12.md)

@@ -10,8 +10,9 @@
 //! 5. [`Command::GetRecentTokens`] — 读最近 N 个 token
 //! 6. [`Command::GetInputRate`] — 读输入速率 (tokens/sec, R25.2 占位)
 //!
-//! **不假装**:
-//! - eye 在 `organ/mod.rs` 标 `Readiness::Stub` — 5 命令全部标 placeholder
+//! **不假装 (0 假装)**:
+//! - eye 在 `organ/mod.rs` 标 `Readiness::Partial` (R22 ST-A1.2: 1/4 真接, keystrokes);
+//!   命令层监控命令只操作 in-memory 状态机, 不接真实输入流, 数据类命令返空/占位
 //! - 真实 R25.3 接用户输入流 (`crossterm::event` 解析)
 //! - 监控状态机: `Idle` → `Watching` → `Paused` → `Watching` (3 态, 编译期 hardcode)
 //!
@@ -160,7 +161,8 @@ pub fn handle(state: &mut State, cmd: Command) -> Result<Response, OrganError> {
             Ok(Response::RecentTokens(Vec::new()))
         }
         Command::GetInputRate => {
-            // S-2 实事求是: 标 placeholder
+            // S-2 实事求是 (0 假装): placeholder — 返回存储的占位值 (默认 0.0),
+            // 不假装已做真实输入速率测量 (R25.3 真接 crossterm 后放开)
             Ok(Response::InputRate(state.input_rate))
         }
     }
@@ -268,6 +270,17 @@ mod tests {
         match r {
             Response::RecentTokens(v) => assert!(v.is_empty()),
             _ => panic!("expected RecentTokens"),
+        }
+    }
+
+    #[test]
+    fn get_input_rate_is_honest_placeholder() {
+        let mut state = fresh_state();
+        let r = handle(&mut state, Command::GetInputRate).unwrap();
+        // 0 假装: 默认占位 0.0, 不假装真实输入速率测量
+        match r {
+            Response::InputRate(v) => assert_eq!(v, 0.0),
+            _ => panic!("expected InputRate"),
         }
     }
 
