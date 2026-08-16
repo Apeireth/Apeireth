@@ -32,9 +32,11 @@ mod bridge_kani_proofs;
 mod organ_kani_proofs;
 mod reflection;
 mod scoring;
+pub mod planning;  // A1/P2#7: MCTS/LATS 规划搜索机制 (trait 注入, 零 LLM 依赖)
 
 pub use decision::{CognitiveOutput, CognitivePipeline};
 pub use reflection::{ReflectionReport, ReflectionVerdict};
+pub use planning::{MctsConfig, MctsPlanner, SearchAction, SearchResult, SearchState, StateEvaluator};
 pub use scoring::{
     continuity_score, identity_score, philosophy_guard_score, salience_score, transferability_score,
 };
