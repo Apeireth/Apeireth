@@ -136,11 +136,7 @@ pub fn validate_labels(labels: &HashMap<String, String>) -> MetricsResult<()> {
 
 /// Label 转 Prometheus exposition format 字符串片段: `key="escaped_value"`.
 pub fn label_to_prometheus(label: &Label) -> String {
-    format!(
-        "{}=\"{}\"",
-        label.key,
-        escape_label_value(&label.value)
-    )
+    format!("{}=\"{}\"", label.key, escape_label_value(&label.value))
 }
 
 /// Label 集合按 key 排序后拼接 (Prometheus exposition format 要求 label 按 key 排序).

@@ -152,7 +152,8 @@ pub trait Signer: Send + Sync {
     /// 签 payload → Signature (K-1 强校验在内部)
     fn sign(&self, payload: &[u8]) -> Result<Signature, SignatureError>;
     /// 验签 payload + signature → VerificationResult (K-1 强校验在内部)
-    fn verify(&self, payload: &[u8], sig: &Signature) -> Result<VerificationResult, SignatureError>;
+    fn verify(&self, payload: &[u8], sig: &Signature)
+        -> Result<VerificationResult, SignatureError>;
 }
 
 // ============================================================
@@ -204,7 +205,11 @@ impl Signer for Ed25519Signer {
         })
     }
 
-    fn verify(&self, payload: &[u8], sig: &Signature) -> Result<VerificationResult, SignatureError> {
+    fn verify(
+        &self,
+        payload: &[u8],
+        sig: &Signature,
+    ) -> Result<VerificationResult, SignatureError> {
         sig.validate_k1()?;
         if payload.is_empty() {
             return Err(SignatureError::K1PayloadEmpty);
@@ -218,10 +223,7 @@ impl Signer for Ed25519Signer {
         if sig.algorithm != SignatureAlgorithm::Ed25519 {
             return Ok(VerificationResult::Invalid {
                 algorithm: sig.algorithm,
-                reason: format!(
-                    "算法不匹配: 期望 Ed25519, 实际 {:?}",
-                    sig.algorithm
-                ),
+                reason: format!("算法不匹配: 期望 Ed25519, 实际 {:?}", sig.algorithm),
             });
         }
         let expected = self.sign(payload)?;
@@ -277,7 +279,11 @@ impl Signer for Rsa2048Signer {
         })
     }
 
-    fn verify(&self, payload: &[u8], sig: &Signature) -> Result<VerificationResult, SignatureError> {
+    fn verify(
+        &self,
+        payload: &[u8],
+        sig: &Signature,
+    ) -> Result<VerificationResult, SignatureError> {
         sig.validate_k1()?;
         if payload.is_empty() {
             return Err(SignatureError::K1PayloadEmpty);
@@ -285,10 +291,7 @@ impl Signer for Rsa2048Signer {
         if sig.algorithm != SignatureAlgorithm::Rsa2048 {
             return Ok(VerificationResult::Invalid {
                 algorithm: sig.algorithm,
-                reason: format!(
-                    "算法不匹配: 期望 Rsa2048, 实际 {:?}",
-                    sig.algorithm
-                ),
+                reason: format!("算法不匹配: 期望 Rsa2048, 实际 {:?}", sig.algorithm),
             });
         }
         let expected = self.sign(payload)?;
@@ -344,7 +347,11 @@ impl Signer for EcdsaP256Signer {
         })
     }
 
-    fn verify(&self, payload: &[u8], sig: &Signature) -> Result<VerificationResult, SignatureError> {
+    fn verify(
+        &self,
+        payload: &[u8],
+        sig: &Signature,
+    ) -> Result<VerificationResult, SignatureError> {
         sig.validate_k1()?;
         if payload.is_empty() {
             return Err(SignatureError::K1PayloadEmpty);
@@ -352,10 +359,7 @@ impl Signer for EcdsaP256Signer {
         if sig.algorithm != SignatureAlgorithm::EcdsaP256 {
             return Ok(VerificationResult::Invalid {
                 algorithm: sig.algorithm,
-                reason: format!(
-                    "算法不匹配: 期望 EcdsaP256, 实际 {:?}",
-                    sig.algorithm
-                ),
+                reason: format!("算法不匹配: 期望 EcdsaP256, 实际 {:?}", sig.algorithm),
             });
         }
         let expected = self.sign(payload)?;
@@ -410,10 +414,7 @@ mod tests {
 
         // K-1.a — sign/verify 内部
         let signer = Ed25519Signer::new("alice".into());
-        assert_eq!(
-            signer.sign(b""),
-            Err(SignatureError::K1PayloadEmpty)
-        );
+        assert_eq!(signer.sign(b""), Err(SignatureError::K1PayloadEmpty));
     }
 
     #[test]

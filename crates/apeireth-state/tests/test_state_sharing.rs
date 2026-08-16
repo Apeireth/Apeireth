@@ -150,21 +150,41 @@ fn nine_organ_registry_concurrent_reads() {
             let organ = Organ::from_u8(n).expect("0-8 valid");
             // 每器官读 1 次
             match organ {
-                Organ::Heart => { let _ = r.heart.read()?; }
-                Organ::Brain => { let _ = r.brain.read()?; }
-                Organ::Hand => { let _ = r.hand.read()?; }
-                Organ::Eye => { let _ = r.eye.read()?; }
-                Organ::Ear => { let _ = r.ear.read()?; }
-                Organ::Memory => { let _ = r.memory.read()?; }
-                Organ::Voice => { let _ = r.voice.read()?; }
-                Organ::Body => { let _ = r.body.read()?; }
-                Organ::Mind => { let _ = r.mind.read()?; }
+                Organ::Heart => {
+                    let _ = r.heart.read()?;
+                }
+                Organ::Brain => {
+                    let _ = r.brain.read()?;
+                }
+                Organ::Hand => {
+                    let _ = r.hand.read()?;
+                }
+                Organ::Eye => {
+                    let _ = r.eye.read()?;
+                }
+                Organ::Ear => {
+                    let _ = r.ear.read()?;
+                }
+                Organ::Memory => {
+                    let _ = r.memory.read()?;
+                }
+                Organ::Voice => {
+                    let _ = r.voice.read()?;
+                }
+                Organ::Body => {
+                    let _ = r.body.read()?;
+                }
+                Organ::Mind => {
+                    let _ = r.mind.read()?;
+                }
             }
             Ok(())
         }));
     }
     for h in handles {
-        h.join().expect("thread should not panic").expect("read should succeed");
+        h.join()
+            .expect("thread should not panic")
+            .expect("read should succeed");
     }
 }
 
@@ -225,7 +245,9 @@ fn nine_organ_registry_concurrent_writes_different_organs() {
         }));
     }
     for h in handles {
-        h.join().expect("writer thread should not panic").expect("write should succeed");
+        h.join()
+            .expect("writer thread should not panic")
+            .expect("write should succeed");
     }
 
     // 验证 9 器官 _marker 都 = 5
@@ -264,7 +286,11 @@ fn shared_state_trait_dispatch_3_modes() {
     let mutex = MutexState::new(200_u32);
     let rw = RwLockState::new(300_u32);
 
-    let modes = [SharedStateMode::OnceLock, SharedStateMode::Mutex, SharedStateMode::RwLock];
+    let modes = [
+        SharedStateMode::OnceLock,
+        SharedStateMode::Mutex,
+        SharedStateMode::RwLock,
+    ];
     for m in &modes {
         let v: u32 = match m {
             SharedStateMode::OnceLock => *once.read().expect("once read"),
@@ -392,15 +418,33 @@ fn anchor_s1_north_star_9_organ_serves_asi() -> Result<(), StateError> {
     for n in 0..=8u8 {
         let organ = Organ::from_u8(n).unwrap();
         match organ {
-            Organ::Heart => { let _ = reg.heart.read()?; }
-            Organ::Brain => { let _ = reg.brain.read()?; }
-            Organ::Hand => { let _ = reg.hand.read()?; }
-            Organ::Eye => { let _ = reg.eye.read()?; }
-            Organ::Ear => { let _ = reg.ear.read()?; }
-            Organ::Memory => { let _ = reg.memory.read()?; }
-            Organ::Voice => { let _ = reg.voice.read()?; }
-            Organ::Body => { let _ = reg.body.read()?; }
-            Organ::Mind => { let _ = reg.mind.read()?; }
+            Organ::Heart => {
+                let _ = reg.heart.read()?;
+            }
+            Organ::Brain => {
+                let _ = reg.brain.read()?;
+            }
+            Organ::Hand => {
+                let _ = reg.hand.read()?;
+            }
+            Organ::Eye => {
+                let _ = reg.eye.read()?;
+            }
+            Organ::Ear => {
+                let _ = reg.ear.read()?;
+            }
+            Organ::Memory => {
+                let _ = reg.memory.read()?;
+            }
+            Organ::Voice => {
+                let _ = reg.voice.read()?;
+            }
+            Organ::Body => {
+                let _ = reg.body.read()?;
+            }
+            Organ::Mind => {
+                let _ = reg.mind.read()?;
+            }
         }
     }
     Ok(())
@@ -557,10 +601,18 @@ fn registry_concurrent_mixed_read_write_9_organs() {
         handles.push(thread::spawn(move || -> Result<(), StateError> {
             for _ in 0..10 {
                 match organ {
-                    Organ::Memory => { let _ = r.memory.read()?; }
-                    Organ::Voice => { let _ = r.voice.read()?; }
-                    Organ::Body => { let _ = r.body.read()?; }
-                    Organ::Mind => { let _ = r.mind.read()?; }
+                    Organ::Memory => {
+                        let _ = r.memory.read()?;
+                    }
+                    Organ::Voice => {
+                        let _ = r.voice.read()?;
+                    }
+                    Organ::Body => {
+                        let _ = r.body.read()?;
+                    }
+                    Organ::Mind => {
+                        let _ = r.mind.read()?;
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -569,7 +621,9 @@ fn registry_concurrent_mixed_read_write_9_organs() {
     }
 
     for h in handles {
-        h.join().expect("thread should not panic").expect("should succeed");
+        h.join()
+            .expect("thread should not panic")
+            .expect("should succeed");
     }
 
     // 5 writer 器官 _marker 应 = 10
