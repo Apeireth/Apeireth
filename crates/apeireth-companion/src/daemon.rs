@@ -319,6 +319,15 @@ where
     Ok(p)
 }
 
+/// 持久 continuity_id: `APEIRETH_CONTINUITY_ID` 或默认值.
+/// 哲学锚点 (§18.3 记录+迁移): 跨载体/跨重启的稳定身份, 记忆/日志/目标/反思共用.
+pub fn continuity_id_from_env(default: &str) -> String {
+    std::env::var("APEIRETH_CONTINUITY_ID")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| default.to_string())
+}
+
 /// 打开生产记忆库 (真路径, 自动建父目录). 空库可正常打开 — 记忆从零开始长.
 pub fn open_memory_store() -> Result<Arc<SqliteMemoryStore>, String> {
     let path = default_memory_path()?;
