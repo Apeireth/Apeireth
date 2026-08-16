@@ -263,6 +263,18 @@ cargo test --workspace
 | 🔴 **BLOCKED** | **6** | T4 graph 空壳 / T6 sdk 空壳 / T10 baseline / T11 Self-Disable / T16 TUI E2E / R1 MUST FIX | 未交付或评审 BLOCK |
 | ⚪ **TODO** | **1** | R2 T7 跟进 | 已分配未启动 |
 
+> ⚠️ **失传产物标注 (2026-08-17, 台账 #35, Leader 拍板"诚实标注不重写"; 证据链: `reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md` §二)**
+> 以下任务的**验收/评审报告类产物从未入 git 历史**（不可恢复，不重建不伪造——历史验收不可复现；0 装 PASS 红线）：
+> - **T3** mcp 验收报告（`8f689476-…`）— crate 本身已建齐不受影响
+> - **T13** 5-crate 评审报告（`d67aedf7-…`）
+> - **T14** addendum 终审报告（`v2-addendum-final-review.md`）
+> - **T15** 集成快照（`v2-integration-status-live.md`）
+> - **T17** deploy 验收报告（`V2-deploy-…`；deploy 机制后演进为真流水线，原验收不可复现）
+> - **R3** baseline 文档（`07-V2-BASELINE-2026-08.md`）
+> - **R4** 协调续（同 T15 快照机制）/ **R5** final summary（`v2-final-summary-2026-08-05.md`）
+> - **T1** addendum 原稿失传 → ✅ **已由重建版替代**（`docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md`，任务 212699c1，重建版自带出处与丢失边界声明）
+> 头部 Source-Trace 声明（V2-INDEX/决策简报/风险表失传）与本块呼应；逐项引用见 §7 引用清单的失传标记。
+
 **真实 git merge = 0**: 10 任务标 `merged_to_integration` 是软标记, integration worktree HEAD 仍是 Snapshot #1 (`abe0568b`)。主 worktree 25+ 文件 uncommitted。
 
 ### 4.2 Crate 级别未完成
@@ -392,24 +404,24 @@ cargo test --workspace
 
 ## 7. 引用清单
 
-| 引用 | 来源 | 用途 |
-|------|------|------|
-| V2 总报告 | `reports/v2-final-summary-2026-08-05.md` | §1.1 / §4 / §5.1 |
-| V2 文档统一索引 | `docs/V2-INDEX.md` | §1 / §4 |
-| V2 决策简报 | `reports/v2-decision-brief-2026-08-05.md` | §5.3 |
-| V2 风险表 | `reports/v2-risk-register-2026-08-05.md` | §4 / §5.1 / §5.4 |
-| T13 5 new crate 评审 | `reports/d67aedf7-v2-5-new-crates-design-review.md` | §1.1 / §4.2 |
-| T14 addendum 终审 | `reports/v2-addendum-final-review.md` | §1.7 / §4.6 |
+| 引用 | 来源 | 用途 | 产物状态 (2026-08-17 C3 盘点) |
+|------|------|------|------|
+| V2 总报告 | `reports/v2-final-summary-2026-08-05.md` | §1.1 / §4 / §5.1 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| V2 文档统一索引 | `docs/V2-INDEX.md` | §1 / §4 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| V2 决策简报 | `reports/v2-decision-brief-2026-08-05.md` | §5.3 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| V2 风险表 | `reports/v2-risk-register-2026-08-05.md` | §4 / §5.1 / §5.4 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| T13 5 new crate 评审 | `reports/d67aedf7-v2-5-new-crates-design-review.md` | §1.1 / §4.2 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| T14 addendum 终审 | `reports/v2-addendum-final-review.md` | §1.7 / §4.6 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
 | T7 formal 自评 | `reports/a7c5b65b-code-reviewer-apeireth-formal-skeleton.md` | §1.1 |
-| T17 deploy 验收 | `reports/V2-deploy-devops-engineer2-acceptance.md` | (cross-ref) |
-| T3 mcp 验收 | `reports/8f689476-mcp-integration-expert-acceptance.md` | §1.1 |
-| 09-ADDENDUM | `docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md` | §1.7 / §4.6 |
-| 07-V2-BASELINE | `docs/v2-strategy/07-V2-BASELINE-2026-08.md` | §1.4 |
+| T17 deploy 验收 | `reports/V2-deploy-devops-engineer2-acceptance.md` | (cross-ref) | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| T3 mcp 验收 | `reports/8f689476-mcp-integration-expert-acceptance.md` | §1.1 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
+| 09-ADDENDUM | `docs/v2-strategy/09-PHILOSOPHY-GUARD-ADDENDUM.md` | §1.7 / §4.6 | ✅ 原稿失传 → 重建版已落地（任务 212699c1） |
+| 07-V2-BASELINE | `docs/v2-strategy/07-V2-BASELINE-2026-08.md` | §1.4 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
 | 06-TUI-ROADMAP | `docs/v2-strategy/06-TUI-UPGRADE-ROADMAP.md` | §1.2 |
 | 03-EXTREME-PLAN | `docs/v2-strategy/03-EXTREME-PLAN.md` | §1.5 / §5.2 |
 | README Features | `README.md` §Features | §1 (cross-ref) |
 | git log (V2 commits) | `git log --oneline` | §1.1 / §1.2 / §1.6 / §1.8 |
-| Snapshot #2 协调 | `reports/v2-integration-status-live.md` | §4.1 / §5.1 |
+| Snapshot #2 协调 | `reports/v2-integration-status-live.md` | §4.1 / §5.1 | ⚠️ 产物已失传（从未入 git 历史, C3 盘点核实） |
 
 ---
 
