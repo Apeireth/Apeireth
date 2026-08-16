@@ -20,9 +20,9 @@
 
 #![deny(unsafe_code)]
 
+use crate::transport::{InFrame, OutFrame};
 use apeireth_guard::PrivacyGuard;
 use serde_json::Value;
-use crate::transport::{InFrame, OutFrame};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuardSide {
@@ -85,7 +85,11 @@ impl GatewayGuard {
         if redacted {
             self.summary.redactions += 1;
         }
-        GuardedFrame { frame: new_payload, matches, redacted }
+        GuardedFrame {
+            frame: new_payload,
+            matches,
+            redacted,
+        }
     }
 
     /// Redact the payload of an outbound frame (same convention as inbound).
@@ -99,7 +103,11 @@ impl GatewayGuard {
         if redacted {
             self.summary.redactions += 1;
         }
-        GuardedFrame { frame: new_payload, matches, redacted }
+        GuardedFrame {
+            frame: new_payload,
+            matches,
+            redacted,
+        }
     }
 
     pub fn summary(&self) -> &AuditSummary {
@@ -158,7 +166,10 @@ mod tests {
     #[test]
     fn guard_redacts_email_in_outbound() {
         let mut g = GatewayGuard::new();
-        let frame = OutFrame::new("loopback", json!({"text": "contact me at alice@example.com"}));
+        let frame = OutFrame::new(
+            "loopback",
+            json!({"text": "contact me at alice@example.com"}),
+        );
         let out = g.redact_outbound(&frame, 100);
         assert!(out.redacted);
         assert!(out.matches >= 1);
@@ -177,7 +188,11 @@ mod tests {
     #[test]
     fn guard_redacts_inbound() {
         let mut g = GatewayGuard::new();
-        let frame = InFrame::new(Uuid::new_v4(), "loopback", json!({"text": "SSN: 123-45-6789"}));
+        let frame = InFrame::new(
+            Uuid::new_v4(),
+            "loopback",
+            json!({"text": "SSN: 123-45-6789"}),
+        );
         let out = g.redact_inbound(&frame, 0);
         assert!(out.redacted);
         assert!(out.matches >= 1);
@@ -217,7 +232,11 @@ mod tests {
     #[test]
     fn guard_inbound_outbound_separate_counts() {
         let mut g = GatewayGuard::new();
-        let inbound = InFrame::new(Uuid::new_v4(), "loopback", json!({"text": "alice@example.com"}));
+        let inbound = InFrame::new(
+            Uuid::new_v4(),
+            "loopback",
+            json!({"text": "alice@example.com"}),
+        );
         let outbound = OutFrame::new("loopback", json!({"text": "bob@example.com"}));
         let _ = g.redact_inbound(&inbound, 0);
         let _ = g.redact_outbound(&outbound, 0);
@@ -229,7 +248,10 @@ mod tests {
     #[test]
     fn guard_audit_log_records_each_match() {
         let mut g = GatewayGuard::with_audit_capacity(100);
-        let frame = OutFrame::new("loopback", json!({"text": "alice@example.com and bob@example.com"}));
+        let frame = OutFrame::new(
+            "loopback",
+            json!({"text": "alice@example.com and bob@example.com"}),
+        );
         let _ = g.redact_outbound(&frame, 0);
         // Two emails -> two audit events.
         assert!(g.audit_log_len() >= 2);

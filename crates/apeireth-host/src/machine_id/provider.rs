@@ -159,7 +159,9 @@ impl MachineIdProvider for SmBiosDmiProvider {
             if !raw.is_empty() && !raw.contains("None") && !raw.contains("To Be Filled") {
                 return Ok((raw, "dmi".to_string()));
             }
-            return Err(MachineIdError::Other("dmi uuid empty/placeholder".to_string()));
+            return Err(MachineIdError::Other(
+                "dmi uuid empty/placeholder".to_string(),
+            ));
         }
         #[cfg(windows)]
         {
@@ -181,9 +183,16 @@ impl MachineIdProvider for SmBiosDmiProvider {
                     return Ok((trimmed.to_string(), "wmi".to_string()));
                 }
             }
-            return Err(MachineIdError::WmiCommand("no UUID in wmic output".to_string()));
+            return Err(MachineIdError::WmiCommand(
+                "no UUID in wmic output".to_string(),
+            ));
         }
-        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+        #[cfg(any(
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ))]
         {
             let out = tokio::process::Command::new(BSD_KENV_COMMAND)
                 .arg(BSD_KENV_VAR)
@@ -199,9 +208,18 @@ impl MachineIdProvider for SmBiosDmiProvider {
             }
             return Ok((raw, "kenv".to_string()));
         }
-        #[cfg(not(any(target_os = "linux", windows, target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")))]
+        #[cfg(not(any(
+            target_os = "linux",
+            windows,
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        )))]
         {
-            Err(MachineIdError::Other("smbios-dmi not applicable on this platform".to_string()))
+            Err(MachineIdError::Other(
+                "smbios-dmi not applicable on this platform".to_string(),
+            ))
         }
     }
 }
@@ -255,7 +273,9 @@ impl MachineIdProvider for MacHashProvider {
                     }
                 }
             }
-            return Err(MachineIdError::Other("no MAC in /sys/class/net".to_string()));
+            return Err(MachineIdError::Other(
+                "no MAC in /sys/class/net".to_string(),
+            ));
         }
         #[cfg(windows)]
         {
@@ -297,7 +317,12 @@ impl MachineIdProvider for MacHashProvider {
             }
             return Err(MachineIdError::Other("macOS ifconfig failed".to_string()));
         }
-        #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+        #[cfg(any(
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        ))]
         {
             let out = tokio::process::Command::new("ifconfig")
                 .arg(super::BSD_MAC_DEFAULT_IFACE)
@@ -319,9 +344,19 @@ impl MachineIdProvider for MacHashProvider {
             }
             return Err(MachineIdError::Other("BSD ifconfig failed".to_string()));
         }
-        #[cfg(not(any(target_os = "linux", windows, target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")))]
+        #[cfg(not(any(
+            target_os = "linux",
+            windows,
+            target_os = "macos",
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        )))]
         {
-            Err(MachineIdError::Other("mac-hash not applicable on this platform".to_string()))
+            Err(MachineIdError::Other(
+                "mac-hash not applicable on this platform".to_string(),
+            ))
         }
     }
 }
@@ -371,11 +406,15 @@ impl MachineIdProvider for MachineIdFileProvider {
                     return Ok((trimmed.to_string(), "etc".to_string()));
                 }
             }
-            return Err(MachineIdError::Other("linux machine-id files unavailable".to_string()));
+            return Err(MachineIdError::Other(
+                "linux machine-id files unavailable".to_string(),
+            ));
         }
         #[cfg(not(target_os = "linux"))]
         {
-            Err(MachineIdError::Other("machine-id-file only on linux".to_string()))
+            Err(MachineIdError::Other(
+                "machine-id-file only on linux".to_string(),
+            ))
         }
     }
 }
@@ -420,7 +459,10 @@ impl MachineIdProvider for WindowsSidProvider {
                 .await
                 .map_err(|e| MachineIdError::WindowsRegistry(format!("spawn failed: {e}")))?;
             if !out.status.success() {
-                return Err(MachineIdError::WindowsRegistry(format!("exit {}", out.status)));
+                return Err(MachineIdError::WindowsRegistry(format!(
+                    "exit {}",
+                    out.status
+                )));
             }
             let stdout = String::from_utf8_lossy(&out.stdout);
             for line in stdout.lines() {
@@ -434,11 +476,15 @@ impl MachineIdProvider for WindowsSidProvider {
                     }
                 }
             }
-            return Err(MachineIdError::WindowsRegistry("no MachineGuid in reg output".to_string()));
+            return Err(MachineIdError::WindowsRegistry(
+                "no MachineGuid in reg output".to_string(),
+            ));
         }
         #[cfg(not(windows))]
         {
-            Err(MachineIdError::Other("windows-sid only on windows".to_string()))
+            Err(MachineIdError::Other(
+                "windows-sid only on windows".to_string(),
+            ))
         }
     }
 }
@@ -464,7 +510,9 @@ pub struct ProviderChain {
 impl ProviderChain {
     /// 构造空 chain.
     pub fn new() -> Self {
-        Self { providers: Vec::new() }
+        Self {
+            providers: Vec::new(),
+        }
     }
 
     /// 添加 provider (move into chain).
@@ -494,7 +542,9 @@ impl ProviderChain {
                 Err(e) => last_err = Some(e),
             }
         }
-        Err(last_err.unwrap_or_else(|| MachineIdError::Other("no applicable providers in chain".to_string())))
+        Err(last_err.unwrap_or_else(|| {
+            MachineIdError::Other("no applicable providers in chain".to_string())
+        }))
     }
 
     /// 探测 (return all attempts), 给监控 / 审计用.
@@ -510,8 +560,14 @@ impl ProviderChain {
             results.push(ProviderProbeResult {
                 provider_name: provider.name().to_string(),
                 applicable,
-                raw: attempt.as_ref().and_then(|r| r.as_ref().ok()).map(|(r, _)| r.clone()),
-                source: attempt.as_ref().and_then(|r| r.as_ref().ok()).map(|(_, s)| s.clone()),
+                raw: attempt
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .map(|(r, _)| r.clone()),
+                source: attempt
+                    .as_ref()
+                    .and_then(|r| r.as_ref().ok())
+                    .map(|(_, s)| s.clone()),
                 error: attempt.and_then(|r| r.err()).map(|e| e.to_string()),
             });
         }
@@ -538,7 +594,10 @@ impl Default for ProviderChain {
 impl std::fmt::Debug for ProviderChain {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProviderChain")
-            .field("providers", &self.providers.iter().map(|p| p.name()).collect::<Vec<_>>())
+            .field(
+                "providers",
+                &self.providers.iter().map(|p| p.name()).collect::<Vec<_>>(),
+            )
             .finish()
     }
 }
@@ -791,17 +850,27 @@ mod tests {
         let (raw, source) = chain.probe().await.expect("chain probe ok");
         // 首个 mock 返 UUID, source 应含 "smbios-dmi:"
         assert_eq!(raw, "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE");
-        assert!(source.contains("smbios-dmi"), "source 应含 provider name, got {source}");
+        assert!(
+            source.contains("smbios-dmi"),
+            "source 应含 provider name, got {source}"
+        );
     }
 
     /// Fixture 6: chain all-fail 行为 (返最后 Err).
     #[tokio::test]
     async fn fixture_chain_returns_last_error_when_all_fail() {
         let chain = ProviderChain::new()
-            .with(MockFailingProvider { error_msg: "first fail".into() })
-            .with(MockFailingProvider { error_msg: "second fail".into() });
+            .with(MockFailingProvider {
+                error_msg: "first fail".into(),
+            })
+            .with(MockFailingProvider {
+                error_msg: "second fail".into(),
+            });
         let err = chain.probe().await.expect_err("应失败");
-        assert!(err.to_string().contains("second fail"), "应返最后 error, got {err}");
+        assert!(
+            err.to_string().contains("second fail"),
+            "应返最后 error, got {err}"
+        );
     }
 
     /// Fixture 7: chain skip non-applicable 行为.
@@ -819,7 +888,9 @@ mod tests {
     async fn fixture_chain_probe_all_returns_all_attempts() {
         let chain = ProviderChain::new()
             .with(MockSmBiosDmiProvider::default())
-            .with(MockFailingProvider { error_msg: "fail".into() });
+            .with(MockFailingProvider {
+                error_msg: "fail".into(),
+            });
         let results = chain.probe_all().await;
         assert_eq!(results.len(), 2);
         assert_eq!(results[0].provider_name, "mock-smbios-dmi");

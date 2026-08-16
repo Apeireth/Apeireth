@@ -99,7 +99,8 @@ impl PrivacyGuard {
         let matches = detect_pii(text);
         if self.audit_enabled {
             for m in &matches {
-                self.audit.record_match(PrivacyAction::Detected, m, timestamp, "detect-only");
+                self.audit
+                    .record_match(PrivacyAction::Detected, m, timestamp, "detect-only");
             }
         }
         matches
@@ -193,8 +194,15 @@ mod tests {
         let g = PrivacyGuard::new();
         let text = "export OPENAI_API_KEY=sk-1234567890abcdefghijklmnopqrstuv";
         let r = g.check_and_redact(text, 1_700_000_000);
-        assert!(r.redacted_text.starts_with("export OPENAI_API_KEY="), "KEY= 前缀保留");
-        assert!(!r.redacted_text.contains("1234567890"), "密钥主体不可见: {}", r.redacted_text);
+        assert!(
+            r.redacted_text.starts_with("export OPENAI_API_KEY="),
+            "KEY= 前缀保留"
+        );
+        assert!(
+            !r.redacted_text.contains("1234567890"),
+            "密钥主体不可见: {}",
+            r.redacted_text
+        );
         assert!(r.matches.iter().any(|m| m.kind == PiiKind::EnvSecret));
         assert!(g.audit().len() >= 1, "应写审计");
     }

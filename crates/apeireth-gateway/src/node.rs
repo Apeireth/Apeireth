@@ -5,10 +5,10 @@
 //! stable `NodeId` and exposes its `NodeKind` so the daemon can apply the
 //! correct transport + access policy.
 
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 use uuid::Uuid;
 
 /// 5 canonical Node kinds (OpenClaw taxonomy).
@@ -27,7 +27,13 @@ pub enum NodeKind {
 }
 
 impl NodeKind {
-    pub const ALL: [NodeKind; 5] = [Self::Tui, Self::Http, Self::Desktop, Self::Mobile, Self::Cli];
+    pub const ALL: [NodeKind; 5] = [
+        Self::Tui,
+        Self::Http,
+        Self::Desktop,
+        Self::Mobile,
+        Self::Cli,
+    ];
 
     pub const fn as_str(&self) -> &'static str {
         match self {
@@ -64,7 +70,12 @@ pub struct NodeRecord {
 }
 
 impl NodeRecord {
-    pub fn new(kind: NodeKind, label: impl Into<String>, owner: impl Into<String>, now: i64) -> Self {
+    pub fn new(
+        kind: NodeKind,
+        label: impl Into<String>,
+        owner: impl Into<String>,
+        now: i64,
+    ) -> Self {
         Self {
             id: Uuid::new_v4(),
             kind,
@@ -116,7 +127,12 @@ impl NodeRegistry {
     }
 
     pub fn by_kind(&self, kind: NodeKind) -> Vec<NodeRecord> {
-        self.inner.read().values().filter(|r| r.kind == kind).cloned().collect()
+        self.inner
+            .read()
+            .values()
+            .filter(|r| r.kind == kind)
+            .cloned()
+            .collect()
     }
 
     pub fn len(&self) -> usize {

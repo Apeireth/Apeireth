@@ -12,10 +12,10 @@ use thiserror::Error;
 
 pub mod checkpoint;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod conditional;
 pub mod executor;
-pub mod mcp_resource;  // R89: CognitionGraph → MCP ResourceServer (graph state 暴露为 MCP resources)
+pub mod mcp_resource; // R89: CognitionGraph → MCP ResourceServer (graph state 暴露为 MCP resources)
+mod organ_kani_proofs;
 pub mod state;
 // R126-3: Subgraph 抽象 (R125-13 续, langgraph 829 cloned 真实施)
 pub mod subgraph;
@@ -25,29 +25,28 @@ pub mod channel;
 pub mod state_graph;
 // R127-2 P6-2: opencode 子代理 重试 — Context 管理 (langgraph 829 cloned 借脑)
 pub mod context_graph;
-pub mod thread_history;  // R149: LangGraph-style thread-based checkpoint history
+pub mod thread_history; // R149: LangGraph-style thread-based checkpoint history
 
 pub use checkpoint::{Checkpoint, CheckpointStore};
 pub use conditional::{ConditionalDecision, ConditionalEdge, ConditionalError, END_LABEL};
 pub use executor::{Executor, SupervisorSnapshot};
 pub use state::{FinalState, NodeOutput, State};
 // R126-3: Subgraph + Channel re-exports
-pub use subgraph::Subgraph;
 pub use channel::{
-    Channel, ChannelError, ChannelRegistry, ChannelType,
-    LastValue, Topic, NamedBarrier, BinaryOperatorValue, BinaryOperator,
+    BinaryOperator, BinaryOperatorValue, Channel, ChannelError, ChannelRegistry, ChannelType,
+    LastValue, NamedBarrier, Topic,
 };
+pub use subgraph::Subgraph;
 // R127-2 P9-1: StateGraph re-exports (langgraph 借脑 1.0, per decision-56 §2.4)
 pub use state_graph::{
-    StateGraph, StateGraphBuilder, StateGraphConditionalEdge, StateGraphEdge,
-    StateGraphExecutor,
+    StateGraph, StateGraphBuilder, StateGraphConditionalEdge, StateGraphEdge, StateGraphExecutor,
 };
 // R127-2 P6-2: re-export context_graph 公开 API
-pub use thread_history::{ThreadHistory, ThreadCheckpointStore};
 pub use context_graph::{
     ContextError, ContextGraph, ContextNode, ContextPhase, ContextSnapshot, ContextStore,
     InMemoryContextStore, CONTEXT_PHASE_COUNT,
 };
+pub use thread_history::{ThreadCheckpointStore, ThreadHistory};
 
 /// Stable identifier for a graph node.
 pub type NodeId = String;
@@ -317,4 +316,3 @@ mod tests {
 }
 
 pub mod cognition_graph;
-
