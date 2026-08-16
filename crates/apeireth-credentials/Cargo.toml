@@ -1,0 +1,21 @@
+[package]
+name = "apeireth-credentials"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 统一凭据存取层 (TP3/N21): 按服务名读写凭据 (CredentialsStore trait + 文件形态后端) + 权限洋葱衔接 (高危凭据走审批门 trait 口) + 脱敏红线 (明文不入日志/错误). 0 假装'安全存储': 本层是存取抽象, 加密静态存储属后续层"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_credentials"
+path = "src/lib.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+[lints]
+workspace = true
