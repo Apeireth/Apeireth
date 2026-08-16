@@ -28,6 +28,16 @@
 //! - **WhitelistRule 白名单** (VCP 行为是默认 allow, 我们显式 whitelist)
 //! - **BlacklistRule 黑名单** (VCP `::SilentReject` suffix 借鉴, 但用独立 rule)
 //!
+//! **P1 增强 (toolApprovalManager 新版吸收, 2026-08-16)**:
+//! - **命令级粒度**: `ApprovalListRule` 支持 `Tool:command` 审批键 (specificity 2 > 1,
+//!   同级静默优先 — VCP `considerMatch`), 命令从 args `command` / `command1..N` 提取
+//! - **静默拒绝**: `::SilentReject` 条目命中被拒 → `silent = true` (不打扰 AI),
+//!   但照常写入审计台账 (`silent_rejection_audit` 留痕可查)
+//! - **结构化拒绝**: `wait_for_approval_outcome` → `ApprovalOutcome` /
+//!   `Rejection { rejected_by_user, error_type, silent, reason }` (不再裸错误);
+//!   旧 `wait_for_approval` (bool) 保持向后兼容, 内部委托结构化流程
+//! - **洋葱安全红线不破**: 高危仍 `RequireApproval` → 主人批准通道, AI 不接触 master token
+//!
 //! **不假装** (主哲学锚 #1 不漂移):
 //! - ✅ 5 规则各自真实现, 不只 mock
 //! - ✅ FrequencyRule 真用 history + 时间窗 (Wagner-Fischer 风格滑窗)
@@ -75,25 +85,33 @@ pub mod rule;
 pub mod approval_bridge;
 pub mod rule_trait;
 
-pub use decision::ApprovalDecision;
+pub use decision::{
+    ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection,
+};
 pub use fuzzy_bridge::{match_tool_name, match_tool_name_threshold};
 pub use history::{now_ms, CallRecord};
 pub use manager::{
-    ApprovalHandler, ApprovalManager, AutoApproveHandler, DefaultDenyHandler, APPROVAL_TIMEOUT_MS,
+    ApprovalAuditEntry, ApprovalHandler, ApprovalManager, AutoApproveHandler, DefaultDenyHandler,
+    APPROVAL_TIMEOUT_MS, MAX_AUDIT_LEN,
 };
-pub use rule::{BlacklistRule, FrequencyRule, RiskRule, TrustRule, WhitelistRule};
+pub use rule::{
+    extract_commands, parse_approval_entry, ApprovalListRule, BlacklistRule, FrequencyRule,
+    ParsedApprovalEntry, RiskRule, TrustRule, WhitelistRule, SILENT_REJECT_SUFFIX,
+};
 pub use rule_trait::ApprovalRule;
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
 // ============================================================
 
-/// 战役 2-3 实际借鉴 VCP 5 个真字段
-/// (`enabled` / `timeoutMinutes` / `approveAll` / `approvalList` / `fuzzyToolMatching` / `SilentReject`)
-pub const BORROWED_LEGACY_FIELDS: usize = 6;
+/// 战役 2-3 + P1 增强实际借鉴 VCP 8 个真字段
+/// (`enabled` / `timeoutMinutes` / `approveAll` / `approvalList` / `fuzzyToolMatching` /
+///  `SilentReject` / `tool:command 命令级粒度` / `{rejected_by_user, error_type} 结构化拒绝`)
+pub const BORROWED_LEGACY_FIELDS: usize = 8;
 
-/// 5 规则 (Trust / Risk / Frequency / Whitelist / Blacklist) — 编译期 hardcode
-pub const RULE_COUNT: usize = 5;
+/// 6 规则 (Trust / Risk / Frequency / Whitelist / Blacklist / ApprovalList) — 编译期 hardcode
+/// (P1 增强: ApprovalListRule = VCP approvalList 命令级粒度 + 静默拒绝)
+pub const RULE_COUNT: usize = 6;
 
 /// 5 分钟审批窗口毫秒 (VCP `getTimeoutMs` 真值)
 pub const APPROVAL_TIMEOUT_MS_CONST: u64 = 5 * 60 * 1000;
@@ -118,14 +136,14 @@ pub const MAX_HISTORY_LEN: usize = 10_000;
 // ============================================================
 
 const _: () = {
-    // 5 规则
+    // 6 规则 (P1 增强: + ApprovalList 命令级粒度)
     assert!(
-        RULE_COUNT == 5,
-        "RULE_COUNT = 5 (Trust / Risk / Frequency / Whitelist / Blacklist)"
+        RULE_COUNT == 6,
+        "RULE_COUNT = 6 (Trust / Risk / Frequency / Whitelist / Blacklist / ApprovalList)"
     );
     assert!(
-        BORROWED_LEGACY_FIELDS == 6,
-        "BORROWED_LEGACY_FIELDS = 6 (VCP toolApprovalManager 字段)"
+        BORROWED_LEGACY_FIELDS == 8,
+        "BORROWED_LEGACY_FIELDS = 8 (VCP toolApprovalManager 字段, 含 P1 增强)"
     );
 
     // 5min 窗口 = VCP 真值
@@ -171,8 +189,8 @@ mod lib_tests {
     #[test]
     fn lib_constants_match_vcp() {
         // 编译期 hardcode 已 assert, 这里再 runtime 测一次
-        assert_eq!(RULE_COUNT, 5);
-        assert_eq!(BORROWED_LEGACY_FIELDS, 6);
+        assert_eq!(RULE_COUNT, 6);
+        assert_eq!(BORROWED_LEGACY_FIELDS, 8);
         assert_eq!(APPROVAL_TIMEOUT_MS_CONST, 300_000);
         assert_eq!(APPROVAL_TIMEOUT_MS, 300_000);
         assert_eq!(FREQUENCY_WINDOW_MS, 60_000);
@@ -203,22 +221,25 @@ mod lib_tests {
         let _freq = FrequencyRule::new();
         let _white = WhitelistRule::new();
         let _black = BlacklistRule::new();
+        let _list = ApprovalListRule::new();
+        let _detail = CheckDetail::default();
     }
 
     #[test]
-    fn lib_five_rules_unique_names() {
-        // 5 规则 name() 唯一
+    fn lib_six_rules_unique_names() {
+        // 6 规则 name() 唯一 (P1 增强: + ApprovalList)
         let rules: Vec<Box<dyn ApprovalRule>> = vec![
             Box::new(TrustRule::new()),
             Box::new(RiskRule::new(300_000)),
             Box::new(FrequencyRule::new()),
             Box::new(WhitelistRule::new()),
             Box::new(BlacklistRule::new()),
+            Box::new(ApprovalListRule::new()),
         ];
         assert_eq!(rules.len(), RULE_COUNT);
         let names: Vec<&str> = rules.iter().map(|r| r.name()).collect();
         let unique: std::collections::HashSet<&str> = names.iter().copied().collect();
-        assert_eq!(unique.len(), 5, "5 规则 name() 必须唯一, 实际: {names:?}");
+        assert_eq!(unique.len(), 6, "6 规则 name() 必须唯一, 实际: {names:?}");
     }
 
     #[tokio::test]
