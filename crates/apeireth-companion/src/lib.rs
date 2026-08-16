@@ -65,6 +65,7 @@ pub mod suites;
 pub mod plugin;
 pub mod education;
 pub mod pentest;
+pub mod gh_accel;
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;
