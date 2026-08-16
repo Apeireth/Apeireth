@@ -3,6 +3,7 @@
 > **团队作战总纲见 [docs/team-work-doc.md](team-work-doc.md)**（三哲学 + 工程/文档规范 + 工作全景 + 插件生态矩阵）。
 > 本文件是**维护用的活文档**：概念词典、模块地图、加新模块的规范、生命周期接线点。
 > 改代码前先看这里，避免概念混用。
+> **社区插件开发规范见 [docs/plugin-authoring-guide.md](plugin-authoring-guide.md)**（team-work-doc §5.6 官方交付：Plugin trait 用法 / 白名单与日常包 / 测试模板 / 卸载真清理 / 数据源模板 / 发布检查单）。
 
 ## 一、概念词典（澄清易混词）
 
