@@ -409,11 +409,13 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "futures",
  "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "uuid",
 ]
 

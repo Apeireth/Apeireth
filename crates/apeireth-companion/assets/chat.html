@@ -232,6 +232,21 @@ pollRequests();
 fetch('/health').then(r => r.json()).then(h => {
   if (h.features) document.getElementById('feat').textContent = '· ' + h.features.join(' · ');
 }).catch(() => {});
+// 主动送达 (模块 4): SSE 推送 — 他主动想说话/做梦反思完成时实时出现
+try {
+  const es = new EventSource('/v1/apeireth/events');
+  es.onmessage = (e) => {
+    const text = e.data || '';
+    if (!text) return;
+    const div = document.createElement('div');
+    div.className = 'msg ai';
+    div.style.border = '1px solid #3d5a3d';
+    div.textContent = '📣 ' + text;
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  };
+  es.onerror = () => { /* 断线自动重连 (EventSource 原生) */ };
+} catch (e) { /* SSE 不可用时静默 */ }
 </script>
 </body>
 </html>
