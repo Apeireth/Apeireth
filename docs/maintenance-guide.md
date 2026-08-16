@@ -18,6 +18,13 @@
 ```
 **规则**: 对话/文档里「能力」泛指上位; 具体说形态时用 动作/工具/技能; 说生态时用 插件/套件。
 
+### 编译期装配（B2: 三档 cargo feature）
+- 清单: workspace 根 `suites.toml`（本体 crate 组 / 包 feature 映射 / 套件 crate 组）; 装配入口: `apeireth-cli` 的 `[features]`。
+- 档 1 base: `--features base`（default; 核心 crate 无条件编译, 语义标记）。
+- 档 2 capability packs: `local-intel`（→ apeireth-memory/onnx, 真门控）/ `gui`（→ apeireth-api/tui-dashboard, 真门控）; `sandbox` `channels` `audit` 为声明式标记（机制件已无条件编译/独立 crate, 未门控如实标注）。
+- 档 3 upgrade suites: `suite-education` / `suite-pentest` / `suite-oracle`（编译期标记; 运行时走 companion::suites::SuiteCatalog 装配）。
+- 验证: `scripts/check-assembly-matrix.ps1` → 日志 `logs/assembly-matrix.log`。
+
 ### 易混词对
 | 词 | 含义 | 易混对象 |
 |---|---|---|
@@ -75,9 +82,16 @@
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
 | memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
 | memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
+| thought_cluster.rs | 思维簇管理 (N4, VCP ThoughtClusterManager 吸收): AI 思维链文件按主题聚簇落盘 (「簇」后缀目录 + 按日归档 {日期}-{序}.md + 链注册 meta_thinking_chains.json + 确定性编辑/检索) + ThoughtClusterReader trait 口 (元自学习: 反思/做梦回读历史思考链做"思考的再思考") | reflection/dream `with_thought_reader` 注入点; 写入侧 LLM 驱动留部署层 (0 装 PASS) |
+| morphology.rs | 查询形态学 softmax (N7): 确定性文本特征 (长度/实体密度/疑问形态/分句/深度线索) → logits → softmax 分布 → 检索档位 (浅扫 1/标准 3/深爬 6) + CRAWL 期望预算; 纯函数同查询同档位, 温度可配 | assemble.rs inject_memory → crawl 预算 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
 | context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) | 注入链统一入口 |
 | assemble.rs | CompanionApp 机制装配器 (审计 P0#1): L0 Identity + L1 Essential Story 常驻 (mempalace §5.6) + 注入管线 + 提炼调度 (run_extraction/extraction_due) + 滚动摘要 (summarize_dialog/summarize_due) + 自成长 (refine_experience/export_promotion_candidates) + LLM 调用点 trait (DeepRecall/DialogSummarizer/ExperienceRefiner) | serve/TUI/CLI 复用 |
+| semantic.rs + fold_block.rs (apeireth-context-fold) | 记忆域深化 §5.1 语义折叠 (注入段按相关度评分, 低相关段折叠为摘要占位, 嵌入可 mock+确定性内置评分器, 无损展开) + N11 FoldBlock 分级显隐 (`[===vcp_fold:阈值===]` 行标记, 相似度≥阈值才展开, 未展开留"还收纳了 N 组"提示); VCP ContextFoldingV2/foldProtocol 精神 Rust 原生移植 | 注入段折叠后仍可过 fold() 预算截断, 与 ContextAssembler 协作不冲突 |
+| prompt_assembler.rs | 提示词装配引擎 (占位符变量宇宙, backlog N9, VCP messageProcessor 范式吸收): 分型变量源 (VariableSource trait: identity/state/goals/memory/time) + 特权角色 (agent/toolbox 仅 system 展开, 系统标记 user 可配置) + AgentGuard 全上下文单 agent + ToolboxGuard 每种一次 + 循环依赖检测 (递归栈+深度上限) + assemble() 消费 ContextAssembler (预算→展开→复用预算语义重截断) | ContextAssembler 输出 (接线 serve 链路属后续任务, 0 装 PASS) |
+| pii.rs + redactor.rs (apeireth-guard crate) | PrivacyGuard 文本脱敏: 8 类检测 (Email/Phone/Ssn/CreditCard/Ip/UrlWithCredentials + SecretToken 7 类密钥前缀 sk-/ghp_/AKIA... + EnvSecret 敏感键名 KEY=VALUE/KEY: VALUE 值部) + 4 策略脱敏 + ring buffer 审计; 重叠匹配安全 | tool_bridge.rs / gateway guard_bridge.rs / daemon.rs 出站护栏 |
+| text_protocol.rs (apeireth-tool-runtime crate, N10) | 宽松文本工具协议层 (VCP vcpLoop TOOL_REQUEST 移植): 始末语法 `<<<[TOOL_REQUEST]>>>`/`「始」…「末」` + ESCAPE 转义防注入 (块结束扫描跳过 escape 区 + 字面量映射还原) + 模糊标记匹配 (块标记大小写/空白/尖括号数容错, 字段标记 4 括号变体) + 思考块剥离 (think/thinking 大小写/属性/嵌套, 未闭合丢弃尾部防潜藏调用) + archery 分流 (separate → normal/archery) | TextToolProtocol::parse → ToolExecutor::execute_separated (archery fire-and-forget, ArcheryHandle) |
+| injection.rs + chain.rs (apeireth-tool-registry crate, N15) | dynamicToolRegistry 预算化 (VCP 吸收 §8.4 P1): injection.rs 注入注意力预算 — render_injection 三段式 (light list 一行式清单 → 仅相关工具展开详情 → 超预算裁剪: 展开段→轻清单尾行→硬切留 TRUNCATION_HINT, 16000 字符上限), InjectionEntry::from_description(ToolDescription) 为描述注入挂接点; chain.rs 分类四级降级链 — ClassifyChain 自定义→小模型→RAG→关键词 (ClassifyStage 记录决定级, 小模型/RAG 级 Option<Arc<dyn Classifier>> trait 注入口, 未接真模型如实标注 has_small_model/has_rag; CustomMapClassifier 自定义级实装) | render_injection(entries, relevant 闭包, InjectionBudget) → InjectionOutput 拼 system prompt; ClassifyChain impl Classifier → register_with_classifier |
 
 ## 三、加新模块规范（维护 checklist）
 
@@ -117,4 +131,4 @@
 · `APEIRETH_DEEP_RECALL=1` (推理召回) · `APEIRETH_MAX_TOKENS` (输出上限, 默认 8192)
 · `APEIRETH_EXTRACT_INTERVAL_SECONDS` (提炼节流, 默认 600) · `APEIRETH_DREAM_QUIET_SECONDS` (做梦安静期, 默认 6h)
 · `APEIRETH_REFLECT_PERIOD_HOURS` (反思周期, 默认 24h) · `APEIRETH_GRANT` (启动即授权 "工具:小时")
-· `APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID` (离线送达, 可选) · `APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID` (Telegram 离线送达, 可选) · `APEIRETH_SEED_MEMORY` (种子, 演示)
+· `APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID` (离线送达, 可选) · `APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID` (Telegram 离线送达, 可选) · `APEIRETH_SEED_MEMORY` (种子, 演示) · `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)

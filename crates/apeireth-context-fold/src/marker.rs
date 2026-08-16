@@ -7,6 +7,8 @@ pub enum MarkerKind {
     Full,
     /// Head-tail collapse (middle is the payload)
     HeadTail,
+    /// 语义折叠占位 (低相关段整体收纳, payload = 原段全文; 记忆域深化 §5.1)
+    Semantic,
 }
 
 impl MarkerKind {
@@ -14,6 +16,7 @@ impl MarkerKind {
         match self {
             MarkerKind::Full => "<<FOLDED:{}>>",
             MarkerKind::HeadTail => "<<HEADTAIL:{}>>",
+            MarkerKind::Semantic => "<<SEMANTIC:{}>>",
         }
     }
 }
@@ -36,6 +39,7 @@ impl FoldMarker {
         match self.kind {
             MarkerKind::Full => format!("<<FOLDED:{} bytes>>", len),
             MarkerKind::HeadTail => format!("<<HEADTAIL:{} bytes>>", len),
+            MarkerKind::Semantic => format!("<<SEMANTIC:{} bytes>>", len),
         }
     }
 }

@@ -73,6 +73,11 @@ pub fn redact_text(text: &str, matches: &[PiiMatch], strategy: RedactionStrategy
         if m.start >= text.len() || m.end > text.len() {
             continue;
         }
+        // ae12d9eb: 跳过与已脱敏区间重叠的匹配 (如 EnvSecret 值内嵌 SecretToken/Email),
+        // 否则会在 cursor 之前重复拼接脱敏内容造成输出错乱
+        if m.start < cursor || m.end <= cursor {
+            continue;
+        }
         // 追加未匹配部分
         if cursor < m.start {
             out.push_str(&text[cursor..m.start]);
@@ -140,6 +145,20 @@ mod tests {
         let text = "no pii here";
         let out = redact_text(text, &[], RedactionStrategy::Remove);
         assert_eq!(out, text);
+    }
+
+    #[test]
+    fn redact_text_overlapping_matches_no_corruption() {
+        // ae12d9eb: EnvSecret 值内嵌 SecretToken (重叠匹配) — 只脱一次, 输出不错乱
+        use crate::pii::detect_pii;
+        let text = "API_KEY=sk-1234567890abcdefghijklmnopqrstuv";
+        let matches = detect_pii(text);
+        assert!(matches.len() >= 2, "应同时检出 EnvSecret + SecretToken");
+        let out = redact_text(text, &matches, RedactionStrategy::Mask);
+        assert!(out.starts_with("API_KEY=s"), "KEY= 前缀保留, 值部首字符保留: {}", out);
+        assert!(out.ends_with('v'), "值部尾字符保留: {}", out);
+        assert!(!out.contains("1234567890"), "token 主体不应可见: {}", out);
+        assert!(!out.contains("sk-1234"), "token 前缀+主体不应连续可见: {}", out);
     }
 
     #[test]
