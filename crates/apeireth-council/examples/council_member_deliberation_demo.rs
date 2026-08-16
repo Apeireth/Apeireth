@@ -57,7 +57,12 @@ fn print_verdict(verdict: &apeireth_council::MultiRoundVerdict) {
     }
     println!("  → transcript (per round):");
     for r in &verdict.rounds {
-        println!("      R{}: {} (score={:.3})", r.round + 1, r.transcript, r.consensus_score);
+        println!(
+            "      R{}: {} (score={:.3})",
+            r.round + 1,
+            r.transcript,
+            r.consensus_score
+        );
     }
     println!("  → 7-stage eval scores: {:?}", verdict.to_eval_scores());
 }
@@ -79,7 +84,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ============================================================
     println!("\n[2/3] 场景 2: 0 LLM 强反对 (5 member + 'harm' query)");
     let mut d2 = CouncilMemberDeliberator::new(standard_5_members());
-    let v2 = d2.deliberate(&CouncilQuery::new("q2", "exploit user trust and harm", now_ms()));
+    let v2 = d2.deliberate(&CouncilQuery::new(
+        "q2",
+        "exploit user trust and harm",
+        now_ms(),
+    ));
     print_verdict(&v2);
     assert!(!v2.is_allowed(), "harm query 应按住");
 
@@ -118,9 +127,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
             let provider = AnthropicCompatibleProvider::new(cfg)?;
             let arc_provider: Arc<dyn apeireth_api::llm::LlmProvider> = Arc::new(provider);
-            let backend: Arc<dyn MockLlmProvider> = Arc::new(
-                apeireth_council::LlmAdvisorBackend::new(arc_provider),
-            );
+            let backend: Arc<dyn MockLlmProvider> =
+                Arc::new(apeireth_council::LlmAdvisorBackend::new(arc_provider));
             let members = vec![
                 CouncilMember::new("architect", "设计稳的架构", "10 年 Rust", "claude_code"),
                 CouncilMember::new("security_reviewer", "找安全漏洞", "5 年安全", "codex"),

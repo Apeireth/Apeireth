@@ -158,16 +158,51 @@ pub enum DeliberationStreamEvent {
 impl fmt::Display for DeliberationStreamEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Started { session_id, query_id, started_at_ms } =>
-                write!(f, "DeliberationStream::Started(session={}, query={}, t={})", session_id, query_id, started_at_ms),
-            Self::OpinionIssued { session_id, opinion } =>
-                write!(f, "DeliberationStream::Opinion(session={}, advisor={})", session_id, opinion.advisor_id.0),
-            Self::HoldTriggered { session_id, trigger } =>
-                write!(f, "DeliberationStream::Hold(session={}, triggered={})", session_id, trigger.is_some()),
-            Self::Synthesized { session_id, weighted_score, confidence, opinion_count } =>
-                write!(f, "DeliberationStream::Synth(session={}, score={:.2}, conf={:.2}, n={})", session_id, weighted_score, confidence, opinion_count),
-            Self::Completed { session_id, elapsed_ms, held } =>
-                write!(f, "DeliberationStream::Done(session={}, held={}, elapsed={}ms)", session_id, held, elapsed_ms),
+            Self::Started {
+                session_id,
+                query_id,
+                started_at_ms,
+            } => write!(
+                f,
+                "DeliberationStream::Started(session={}, query={}, t={})",
+                session_id, query_id, started_at_ms
+            ),
+            Self::OpinionIssued {
+                session_id,
+                opinion,
+            } => write!(
+                f,
+                "DeliberationStream::Opinion(session={}, advisor={})",
+                session_id, opinion.advisor_id.0
+            ),
+            Self::HoldTriggered {
+                session_id,
+                trigger,
+            } => write!(
+                f,
+                "DeliberationStream::Hold(session={}, triggered={})",
+                session_id,
+                trigger.is_some()
+            ),
+            Self::Synthesized {
+                session_id,
+                weighted_score,
+                confidence,
+                opinion_count,
+            } => write!(
+                f,
+                "DeliberationStream::Synth(session={}, score={:.2}, conf={:.2}, n={})",
+                session_id, weighted_score, confidence, opinion_count
+            ),
+            Self::Completed {
+                session_id,
+                elapsed_ms,
+                held,
+            } => write!(
+                f,
+                "DeliberationStream::Done(session={}, held={}, elapsed={}ms)",
+                session_id, held, elapsed_ms
+            ),
         }
     }
 }
@@ -255,13 +290,18 @@ impl Council {
     ///   错误 advisor 跳过 (eprintln), 0 编造.
     ///
     /// **不触碰**: synthesize / hold 评估 / sovereignty hook — 留给 deliberate.
-    pub fn collect_opinions(&mut self, query: CouncilQuery) -> Vec<(crate::advisor::AdvisorOpinion, f64)> {
+    pub fn collect_opinions(
+        &mut self,
+        query: CouncilQuery,
+    ) -> Vec<(crate::advisor::AdvisorOpinion, f64)> {
         let mut ctx = crate::advisor::DeliberationContext::new(query.started_at_ms);
         let mut result = Vec::new();
         for advisor in &self.advisors {
             match advisor.deliberate(&query, &mut ctx) {
                 Ok(outcome) => {
-                    let opinion = outcome.opinion.with_weight(self.weights.for_domain(advisor.domain()));
+                    let opinion = outcome
+                        .opinion
+                        .with_weight(self.weights.for_domain(advisor.domain()));
                     result.push((opinion, self.weights.for_domain(advisor.domain())));
                 }
                 Err(err) => {
@@ -449,7 +489,11 @@ impl Council {
     /// 适用场景: TUI 实时渲查进度 / bus 发布 / mcp-bridge / 监控.
     ///
     /// 回调在 5 个节点被调用: Started / OpinionIssued / HoldTriggered / Synthesized / Completed.
-    pub fn deliberate_streaming<F>(&mut self, query: CouncilQuery, mut on_event: F) -> CouncilVerdict
+    pub fn deliberate_streaming<F>(
+        &mut self,
+        query: CouncilQuery,
+        mut on_event: F,
+    ) -> CouncilVerdict
     where
         F: FnMut(&DeliberationStreamEvent),
     {
@@ -590,7 +634,6 @@ fn current_time_ms() -> i64 {
         .unwrap_or(0)
 }
 
-
 // ============================================================
 // R232 — collect_opinions 集成 (6 cases)
 // ============================================================
@@ -599,8 +642,8 @@ fn current_time_ms() -> i64 {
 mod collect_opinions_tests {
     use super::*;
     use crate::advisor::{
-        Advisor, AdvisorDomain, AdvisorId, AdvisorOpinion, DeliberationContext, DeliberationOutcome,
-        Stance, StanceKind,
+        Advisor, AdvisorDomain, AdvisorId, AdvisorOpinion, DeliberationContext,
+        DeliberationOutcome, Stance, StanceKind,
     };
     use crate::lifecycle::AdvisorLifecycle;
 
@@ -611,8 +654,12 @@ mod collect_opinions_tests {
     }
 
     impl Advisor for FixedAdvisor {
-        fn id(&self) -> AdvisorId { self.id.clone() }
-        fn domain(&self) -> AdvisorDomain { self.domain }
+        fn id(&self) -> AdvisorId {
+            self.id.clone()
+        }
+        fn domain(&self) -> AdvisorDomain {
+            self.domain
+        }
         fn lifecycle(&self) -> AdvisorLifecycle {
             AdvisorLifecycle::Ephemeral
         }
@@ -640,8 +687,12 @@ mod collect_opinions_tests {
         CouncilQuery::new("q-1", "test query", 1000)
     }
 
-    fn stance_approve() -> Stance { Stance::new(StanceKind::Approve, "approve") }
-    fn stance_disapprove() -> Stance { Stance::new(StanceKind::Disapprove, "disapprove") }
+    fn stance_approve() -> Stance {
+        Stance::new(StanceKind::Approve, "approve")
+    }
+    fn stance_disapprove() -> Stance {
+        Stance::new(StanceKind::Disapprove, "disapprove")
+    }
 
     #[test]
     fn collect_opinions_empty_council() {
@@ -670,7 +721,11 @@ mod collect_opinions_tests {
             council.recruit(Box::new(FixedAdvisor {
                 id: AdvisorId(format!("advisor-{i}")),
                 domain: *domain,
-                stance: if i % 2 == 0 { stance_approve() } else { stance_disapprove() },
+                stance: if i % 2 == 0 {
+                    stance_approve()
+                } else {
+                    stance_disapprove()
+                },
             }));
         }
         let ops = council.collect_opinions(make_query());
@@ -695,8 +750,16 @@ mod collect_opinions_tests {
         }));
         let ops = council.collect_opinions(make_query());
         assert_eq!(ops.len(), 2);
-        let safety_weight = ops.iter().find(|(o, _)| o.advisor_id.0 == "safety").unwrap().1;
-        let history_weight = ops.iter().find(|(o, _)| o.advisor_id.0 == "history").unwrap().1;
+        let safety_weight = ops
+            .iter()
+            .find(|(o, _)| o.advisor_id.0 == "safety")
+            .unwrap()
+            .1;
+        let history_weight = ops
+            .iter()
+            .find(|(o, _)| o.advisor_id.0 == "history")
+            .unwrap()
+            .1;
         assert_eq!(safety_weight, 1.00);
         assert_eq!(history_weight, 0.55);
     }
@@ -711,8 +774,7 @@ mod collect_opinions_tests {
         }));
         // 自定义权重: safety = 0.5 (覆盖默认 1.00)
         use crate::synthesis::SynthesisWeights;
-        let sw = SynthesisWeights::default()
-            .with_domain(AdvisorDomain::Safety, 0.5);
+        let sw = SynthesisWeights::default().with_domain(AdvisorDomain::Safety, 0.5);
         council.set_weights(sw);
         let ops = council.collect_opinions(make_query());
         let (_, w) = &ops[0];
@@ -726,87 +788,112 @@ mod collect_opinions_tests {
         council.recruit(Box::new(FixedAdvisor {
             id: AdvisorId("philosophy".to_string()),
             domain: AdvisorDomain::Philosophy,
-            stance: stance_disapprove(),  // 即使全 reject 也不应触发 hold
+            stance: stance_disapprove(), // 即使全 reject 也不应触发 hold
         }));
         let ops = council.collect_opinions(make_query());
         assert_eq!(ops.len(), 1);
         // 仅 collect, 不调用 deliberate / synthesize / hold
     }
 
-#[cfg(test)]
-mod streaming_tests {
-    use super::*;
-    use crate::advisor::AdvisorOpinion;
+    #[cfg(test)]
+    mod streaming_tests {
+        use super::*;
+        use crate::advisor::AdvisorOpinion;
 
-    fn setup_council_with_advisor(stance: Stance) -> Council {
-        let mut council = Council::new();
-        council.recruit(Box::new(FixedAdvisor {
-            id: AdvisorId("safety".to_string()),
-            domain: AdvisorDomain::Safety,
-            stance,
-        }));
-        council
-    }
+        fn setup_council_with_advisor(stance: Stance) -> Council {
+            let mut council = Council::new();
+            council.recruit(Box::new(FixedAdvisor {
+                id: AdvisorId("safety".to_string()),
+                domain: AdvisorDomain::Safety,
+                stance,
+            }));
+            council
+        }
 
-    fn make_query() -> CouncilQuery {
-        CouncilQuery::new("q-stream", "streaming test", 5000)
-    }
+        fn make_query() -> CouncilQuery {
+            CouncilQuery::new("q-stream", "streaming test", 5000)
+        }
 
-    #[test]
-    fn r249_01_streaming_emits_started_opinion_synth_completed() {
-        // 1 advisor approve -> expect Started, OpinionIssued, HoldTriggered(None), Synthesized, Completed
-        let mut council = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
-        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
-        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
-        assert!(!verdict.held, "no hold should be triggered");
-        assert_eq!(events.len(), 5, "should emit 5 events");
-        assert!(matches!(events[0], DeliberationStreamEvent::Started { .. }));
-        assert!(matches!(events[1], DeliberationStreamEvent::OpinionIssued { .. }));
-        assert!(matches!(events[2], DeliberationStreamEvent::HoldTriggered { trigger: None, .. }));
-        assert!(matches!(events[3], DeliberationStreamEvent::Synthesized { opinion_count: 1, .. }));
-        assert!(matches!(events[4], DeliberationStreamEvent::Completed { held: false, .. }));
-    }
+        #[test]
+        fn r249_01_streaming_emits_started_opinion_synth_completed() {
+            // 1 advisor approve -> expect Started, OpinionIssued, HoldTriggered(None), Synthesized, Completed
+            let mut council = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+            let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+            let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+            assert!(!verdict.held, "no hold should be triggered");
+            assert_eq!(events.len(), 5, "should emit 5 events");
+            assert!(matches!(events[0], DeliberationStreamEvent::Started { .. }));
+            assert!(matches!(
+                events[1],
+                DeliberationStreamEvent::OpinionIssued { .. }
+            ));
+            assert!(matches!(
+                events[2],
+                DeliberationStreamEvent::HoldTriggered { trigger: None, .. }
+            ));
+            assert!(matches!(
+                events[3],
+                DeliberationStreamEvent::Synthesized {
+                    opinion_count: 1,
+                    ..
+                }
+            ));
+            assert!(matches!(
+                events[4],
+                DeliberationStreamEvent::Completed { held: false, .. }
+            ));
+        }
 
-    #[test]
-    fn r249_02_streaming_emits_hold_triggered_when_30pct_strong_disapprove() {
-        // 1 advisor strong disapprove (confidence 0.9 in FixedAdvisor) -> hold
-        let mut council = setup_council_with_advisor(Stance::new(StanceKind::StrongDisapprove, "block"));
-        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
-        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
-        assert!(verdict.held, "strong disapprove triggers hold");
-        assert!(matches!(events[2], DeliberationStreamEvent::HoldTriggered { trigger: Some(_), .. }));
-        assert!(matches!(events[4], DeliberationStreamEvent::Completed { held: true, .. }));
-    }
+        #[test]
+        fn r249_02_streaming_emits_hold_triggered_when_30pct_strong_disapprove() {
+            // 1 advisor strong disapprove (confidence 0.9 in FixedAdvisor) -> hold
+            let mut council =
+                setup_council_with_advisor(Stance::new(StanceKind::StrongDisapprove, "block"));
+            let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+            let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+            assert!(verdict.held, "strong disapprove triggers hold");
+            assert!(matches!(
+                events[2],
+                DeliberationStreamEvent::HoldTriggered {
+                    trigger: Some(_),
+                    ..
+                }
+            ));
+            assert!(matches!(
+                events[4],
+                DeliberationStreamEvent::Completed { held: true, .. }
+            ));
+        }
 
-    #[test]
-    fn r249_03_streaming_empty_council_emits_synth_and_completed() {
-        // 0 advisors -> no Opinion events, but Started/HoldTriggered/Synthesized/Completed still fire
-        let mut council = Council::new();
-        let mut events: Vec<DeliberationStreamEvent> = Vec::new();
-        let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
-        assert!(!verdict.held);
-        assert_eq!(events.len(), 4, "should emit 4 events (no Opinion)");
-        // Synthesized opinion_count should be 0
-        if let DeliberationStreamEvent::Synthesized { opinion_count, .. } = &events[2] {
-            assert_eq!(*opinion_count, 0usize);
-        } else {
-            panic!("expected Synthesized event at index 2");
+        #[test]
+        fn r249_03_streaming_empty_council_emits_synth_and_completed() {
+            // 0 advisors -> no Opinion events, but Started/HoldTriggered/Synthesized/Completed still fire
+            let mut council = Council::new();
+            let mut events: Vec<DeliberationStreamEvent> = Vec::new();
+            let verdict = council.deliberate_streaming(make_query(), |e| events.push(e.clone()));
+            assert!(!verdict.held);
+            assert_eq!(events.len(), 4, "should emit 4 events (no Opinion)");
+            // Synthesized opinion_count should be 0
+            if let DeliberationStreamEvent::Synthesized { opinion_count, .. } = &events[2] {
+                assert_eq!(*opinion_count, 0usize);
+            } else {
+                panic!("expected Synthesized event at index 2");
+            }
+        }
+
+        #[test]
+        fn r249_04_streaming_verdict_equals_deliberate_verdict_for_same_query() {
+            // deliberate_streaming should produce equivalent verdict (same session structure)
+            let mut c1 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+            let mut c2 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
+            let v1 = c1.deliberate(make_query());
+            let mut events2 = Vec::new();
+            let v2 = c2.deliberate_streaming(make_query(), |e| events2.push(e.clone()));
+            assert_eq!(v1.held, v2.held);
+            assert_eq!(v1.report.opinion_count, v2.report.opinion_count);
+            assert!(!v1.query_id.is_empty());
+            assert!(!v2.session_id.is_empty());
+            assert!(!events2.is_empty());
         }
     }
-
-    #[test]
-    fn r249_04_streaming_verdict_equals_deliberate_verdict_for_same_query() {
-        // deliberate_streaming should produce equivalent verdict (same session structure)
-        let mut c1 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
-        let mut c2 = setup_council_with_advisor(Stance::new(StanceKind::Approve, "ok"));
-        let v1 = c1.deliberate(make_query());
-        let mut events2 = Vec::new();
-        let v2 = c2.deliberate_streaming(make_query(), |e| events2.push(e.clone()));
-        assert_eq!(v1.held, v2.held);
-        assert_eq!(v1.report.opinion_count, v2.report.opinion_count);
-        assert!(!v1.query_id.is_empty());
-        assert!(!v2.session_id.is_empty());
-        assert!(!events2.is_empty());
-    }
-}
 }

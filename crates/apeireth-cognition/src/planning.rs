@@ -43,7 +43,11 @@ pub struct MctsConfig {
 
 impl Default for MctsConfig {
     fn default() -> Self {
-        Self { iterations: 200, exploration_c: 1.4142, max_depth: 20 }
+        Self {
+            iterations: 200,
+            exploration_c: 1.4142,
+            max_depth: 20,
+        }
     }
 }
 
@@ -84,7 +88,12 @@ pub struct MctsPlanner<S: SearchState, A: SearchAction<S>, E: StateEvaluator<S>>
 
 impl<S: SearchState, A: SearchAction<S>, E: StateEvaluator<S>> MctsPlanner<S, A, E> {
     pub fn new(config: MctsConfig, evaluator: E) -> Self {
-        Self { config, evaluator, rng_state: Cell::new(0x9E3779B97F4A7C15), _marker: PhantomData }
+        Self {
+            config,
+            evaluator,
+            rng_state: Cell::new(0x9E3779B97F4A7C15),
+            _marker: PhantomData,
+        }
     }
 
     /// 注入确定性种子 (测试可复现).
@@ -109,13 +118,14 @@ impl<S: SearchState, A: SearchAction<S>, E: StateEvaluator<S>> MctsPlanner<S, A,
             return f64::INFINITY; // 未访问子节点优先探索
         }
         let exploitation = child.value_sum / child.visits as f64;
-        let exploration = self.config.exploration_c
-            * ((parent_visits as f64).ln() / child.visits as f64).sqrt();
+        let exploration =
+            self.config.exploration_c * ((parent_visits as f64).ln() / child.visits as f64).sqrt();
         exploitation + exploration
     }
 
     /// 主搜索: 返回最优首动作 (根下访问数最高).
-    pub fn search(&self, root_state: S, actions: &[A]) -> Option<SearchResult<A>> {        if actions.is_empty() {
+    pub fn search(&self, root_state: S, actions: &[A]) -> Option<SearchResult<A>> {
+        if actions.is_empty() {
             return None; // 无可用动作, 如实返回 None
         }
         let mut nodes: Vec<Node<S, A>> = Vec::new();
@@ -175,7 +185,10 @@ impl<S: SearchState, A: SearchAction<S>, E: StateEvaluator<S>> MctsPlanner<S, A,
                 self.evaluator.evaluate(&sim_state)
             };
             while sim_depth < self.config.max_depth && !self.evaluator.is_terminal(&sim_state) {
-                let usable: Vec<&A> = actions.iter().filter(|a| a.apply(&sim_state).is_some()).collect();
+                let usable: Vec<&A> = actions
+                    .iter()
+                    .filter(|a| a.apply(&sim_state).is_some())
+                    .collect();
                 if usable.is_empty() {
                     break;
                 }
@@ -213,7 +226,11 @@ impl<S: SearchState, A: SearchAction<S>, E: StateEvaluator<S>> MctsPlanner<S, A,
         Some(SearchResult {
             best_action: best_node.action.clone()?,
             root_visits: nodes[root_idx].visits,
-            best_value: if best_node.visits > 0 { best_node.value_sum / best_node.visits as f64 } else { 0.0 },
+            best_value: if best_node.visits > 0 {
+                best_node.value_sum / best_node.visits as f64
+            } else {
+                0.0
+            },
             depth: best_node.parent.map(|_| 1).unwrap_or(0),
         })
     }
@@ -243,7 +260,11 @@ mod tests {
     impl StateEvaluator<Pos> for TargetEvaluator {
         fn evaluate(&self, s: &Pos) -> f64 {
             let dist = (s.0 - self.target).unsigned_abs() as f64;
-            if dist == 0.0 { 1.0 } else { 1.0 / (1.0 + dist) }
+            if dist == 0.0 {
+                1.0
+            } else {
+                1.0 / (1.0 + dist)
+            }
         }
         fn is_terminal(&self, s: &Pos) -> bool {
             s.0 == self.target
@@ -252,9 +273,14 @@ mod tests {
 
     #[test]
     fn mcts_finds_forward_action_from_start() {
-        let planner: MctsPlanner<Pos, Step, TargetEvaluator> =
-            MctsPlanner::new(MctsConfig { iterations: 300, ..Default::default() }, TargetEvaluator { target: 10 })
-                .with_seed(42);
+        let planner: MctsPlanner<Pos, Step, TargetEvaluator> = MctsPlanner::new(
+            MctsConfig {
+                iterations: 300,
+                ..Default::default()
+            },
+            TargetEvaluator { target: 10 },
+        )
+        .with_seed(42);
         let actions = vec![Step(1), Step(-1)];
         let result = planner.search(Pos(0), &actions).expect("应有结果");
         assert_eq!(result.best_action.0, 1, "应选前进动作 (从 0 到 10)");
@@ -300,7 +326,9 @@ mod tests {
         }
         let planner: MctsPlanner<St, Act, GoalEval> =
             MctsPlanner::new(MctsConfig::default(), GoalEval).with_seed(7);
-        let result = planner.search(St::Start, &[Act::A, Act::B]).expect("应有结果");
+        let result = planner
+            .search(St::Start, &[Act::A, Act::B])
+            .expect("应有结果");
         assert!(matches!(result.best_action, Act::B), "应选直达目标的动作");
     }
 
@@ -314,25 +342,41 @@ mod tests {
     #[test]
     fn deterministic_seed_gives_same_result() {
         let a = {
-            let p: MctsPlanner<Pos, Step, TargetEvaluator> =
-                MctsPlanner::new(MctsConfig { iterations: 100, ..Default::default() }, TargetEvaluator { target: 10 })
-                    .with_seed(99);
+            let p: MctsPlanner<Pos, Step, TargetEvaluator> = MctsPlanner::new(
+                MctsConfig {
+                    iterations: 100,
+                    ..Default::default()
+                },
+                TargetEvaluator { target: 10 },
+            )
+            .with_seed(99);
             p.search(Pos(0), &[Step(1), Step(-1)])
         };
         let b = {
-            let p: MctsPlanner<Pos, Step, TargetEvaluator> =
-                MctsPlanner::new(MctsConfig { iterations: 100, ..Default::default() }, TargetEvaluator { target: 10 })
-                    .with_seed(99);
+            let p: MctsPlanner<Pos, Step, TargetEvaluator> = MctsPlanner::new(
+                MctsConfig {
+                    iterations: 100,
+                    ..Default::default()
+                },
+                TargetEvaluator { target: 10 },
+            )
+            .with_seed(99);
             p.search(Pos(0), &[Step(1), Step(-1)])
         };
-        assert_eq!(a.map(|r| r.best_action.0), b.map(|r| r.best_action.0), "同种子应可复现");
+        assert_eq!(
+            a.map(|r| r.best_action.0),
+            b.map(|r| r.best_action.0),
+            "同种子应可复现"
+        );
     }
 
     #[test]
     fn terminal_root_returns_first_action() {
         let planner: MctsPlanner<Pos, Step, TargetEvaluator> =
             MctsPlanner::new(MctsConfig::default(), TargetEvaluator { target: 0 });
-        let result = planner.search(Pos(0), &[Step(1), Step(-1)]).expect("根已 terminal 也应有动作");
+        let result = planner
+            .search(Pos(0), &[Step(1), Step(-1)])
+            .expect("根已 terminal 也应有动作");
         assert!(result.root_visits > 0);
     }
 }

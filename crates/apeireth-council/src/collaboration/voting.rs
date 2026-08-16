@@ -84,7 +84,10 @@ impl Voter {
     pub fn to_opinion(&self, started_at_ms: i64) -> AdvisorOpinion {
         let stance = Stance::new(
             self.stance,
-            format!("Voter {} ({}) vote: {:?}", self.voter_id, self.role, self.stance),
+            format!(
+                "Voter {} ({}) vote: {:?}",
+                self.voter_id, self.role, self.stance
+            ),
         );
         AdvisorOpinion::new(
             AdvisorId::new(self.voter_id.clone()),
@@ -259,13 +262,15 @@ mod tests {
 
     #[test]
     fn with_strategy_supermajority() {
-        let vm = VotingMode::new(standard_5_voters_approve()).with_strategy(VotingStrategy::Supermajority);
+        let vm = VotingMode::new(standard_5_voters_approve())
+            .with_strategy(VotingStrategy::Supermajority);
         assert_eq!(vm.strategy(), VotingStrategy::Supermajority);
     }
 
     #[test]
     fn with_strategy_top_scoring() {
-        let vm = VotingMode::new(standard_5_voters_approve()).with_strategy(VotingStrategy::TopScoring);
+        let vm =
+            VotingMode::new(standard_5_voters_approve()).with_strategy(VotingStrategy::TopScoring);
         assert_eq!(vm.strategy(), VotingStrategy::TopScoring);
     }
 
@@ -323,11 +328,7 @@ mod tests {
     #[test]
     fn passes_strategy_weighted_majority_positive() {
         let vm = VotingMode::new(standard_5_voters_approve());
-        let opinions: Vec<AdvisorOpinion> = vm
-            .voters
-            .iter()
-            .map(|v| v.to_opinion(0))
-            .collect();
+        let opinions: Vec<AdvisorOpinion> = vm.voters.iter().map(|v| v.to_opinion(0)).collect();
         let report = synthesize(&opinions, &SynthesisWeights::default());
         assert!(vm.passes_strategy(&opinions, &report));
     }
@@ -339,11 +340,7 @@ mod tests {
             Voter::new("v2", "b", StanceKind::Disapprove, 0.7, "y"),
         ];
         let vm = VotingMode::new(voters);
-        let opinions: Vec<AdvisorOpinion> = vm
-            .voters
-            .iter()
-            .map(|v| v.to_opinion(0))
-            .collect();
+        let opinions: Vec<AdvisorOpinion> = vm.voters.iter().map(|v| v.to_opinion(0)).collect();
         let report = synthesize(&opinions, &SynthesisWeights::default());
         assert!(!vm.passes_strategy(&opinions, &report));
     }
@@ -358,11 +355,7 @@ mod tests {
             Voter::new("v5", "e", StanceKind::Disapprove, 0.8, "no"),
         ];
         let vm = VotingMode::new(voters).with_strategy(VotingStrategy::Supermajority);
-        let opinions: Vec<AdvisorOpinion> = vm
-            .voters
-            .iter()
-            .map(|v| v.to_opinion(0))
-            .collect();
+        let opinions: Vec<AdvisorOpinion> = vm.voters.iter().map(|v| v.to_opinion(0)).collect();
         let report = synthesize(&opinions, &SynthesisWeights::default());
         // 4/5 = 80% > 2/3 = 66.7%
         assert!(vm.passes_strategy(&opinions, &report));
@@ -378,11 +371,7 @@ mod tests {
             Voter::new("v5", "e", StanceKind::Disapprove, 0.8, "no"),
         ];
         let vm = VotingMode::new(voters).with_strategy(VotingStrategy::Supermajority);
-        let opinions: Vec<AdvisorOpinion> = vm
-            .voters
-            .iter()
-            .map(|v| v.to_opinion(0))
-            .collect();
+        let opinions: Vec<AdvisorOpinion> = vm.voters.iter().map(|v| v.to_opinion(0)).collect();
         let report = synthesize(&opinions, &SynthesisWeights::default());
         // 2/5 = 40% < 2/3
         assert!(!vm.passes_strategy(&opinions, &report));
@@ -396,11 +385,7 @@ mod tests {
             Voter::new("v3", "c", StanceKind::Neutral, 0.8, "mid"),
         ];
         let vm = VotingMode::new(voters).with_strategy(VotingStrategy::TopScoring);
-        let opinions: Vec<AdvisorOpinion> = vm
-            .voters
-            .iter()
-            .map(|v| v.to_opinion(0))
-            .collect();
+        let opinions: Vec<AdvisorOpinion> = vm.voters.iter().map(|v| v.to_opinion(0)).collect();
         let report = synthesize(&opinions, &SynthesisWeights::default());
         // 最高 score = Approve (0.6) > 0
         assert!(vm.passes_strategy(&opinions, &report));

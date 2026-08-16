@@ -3,7 +3,7 @@
 #![allow(missing_docs)]
 
 use crate::*;
-use apeireth_core::{Session, PermissionOnion, HumanAuthority, ActionVerdict, RiskLevel, Action};
+use apeireth_core::{Action, ActionVerdict, HumanAuthority, PermissionOnion, RiskLevel, Session};
 
 #[test]
 fn r177_cli_01_classify_risk() {

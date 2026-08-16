@@ -21,12 +21,18 @@ pub struct TokenAccumulator {
 
 impl TokenAccumulator {
     pub fn new() -> Self {
-        Self { snapshot: AccumulatorSnapshot::default() }
+        Self {
+            snapshot: AccumulatorSnapshot::default(),
+        }
     }
 
     /// Record tokens for a session.
     pub fn record_session(&mut self, session_id: &str, tokens: usize) {
-        let entry = self.snapshot.per_session.entry(session_id.to_string()).or_insert(0);
+        let entry = self
+            .snapshot
+            .per_session
+            .entry(session_id.to_string())
+            .or_insert(0);
         *entry += tokens;
         self.snapshot.total_tokens += tokens;
         self.snapshot.session_count = self.snapshot.per_session.len();
@@ -48,7 +54,9 @@ impl TokenAccumulator {
 }
 
 impl Default for TokenAccumulator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

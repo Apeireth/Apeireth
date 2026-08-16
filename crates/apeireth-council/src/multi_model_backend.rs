@@ -43,11 +43,17 @@ pub struct MultiModelAdvisorBackend {
 impl MultiModelAdvisorBackend {
     /// 构造: 默认 FirstNonEmpty 策略
     pub fn new(backends: Vec<Arc<dyn LlmProvider>>) -> Self {
-        Self { backends, strategy: AggregationStrategy::FirstNonEmpty }
+        Self {
+            backends,
+            strategy: AggregationStrategy::FirstNonEmpty,
+        }
     }
 
     /// 构造: 自定义策略
-    pub fn with_strategy(backends: Vec<Arc<dyn LlmProvider>>, strategy: AggregationStrategy) -> Self {
+    pub fn with_strategy(
+        backends: Vec<Arc<dyn LlmProvider>>,
+        strategy: AggregationStrategy,
+    ) -> Self {
         Self { backends, strategy }
     }
 
@@ -72,13 +78,15 @@ impl MultiModelAdvisorBackend {
             };
             let result = match tokio::runtime::Handle::try_current() {
                 Ok(handle) => handle.block_on(async {
-                    backend.complete(LlmRequest::new(
-                        &model,
-                        vec![
-                            ChatMessage::system(system.to_string()),
-                            ChatMessage::user(prompt.to_string()),
-                        ],
-                    )).await
+                    backend
+                        .complete(LlmRequest::new(
+                            &model,
+                            vec![
+                                ChatMessage::system(system.to_string()),
+                                ChatMessage::user(prompt.to_string()),
+                            ],
+                        ))
+                        .await
                 }),
                 Err(_) => {
                     // No tokio runtime: build a one-shot runtime
@@ -87,20 +95,23 @@ impl MultiModelAdvisorBackend {
                         .build()
                         .expect("build runtime");
                     rt.block_on(async {
-                        backend.complete(LlmRequest::new(
-                            &model,
-                            vec![
-                                ChatMessage::system(system.to_string()),
-                                ChatMessage::user(prompt.to_string()),
-                            ],
-                        )).await
+                        backend
+                            .complete(LlmRequest::new(
+                                &model,
+                                vec![
+                                    ChatMessage::system(system.to_string()),
+                                    ChatMessage::user(prompt.to_string()),
+                                ],
+                            ))
+                            .await
                     })
                 }
             };
             match result {
                 Ok(resp) => {
                     let text = resp.content.clone();
-                    let triggers_hold = text.to_lowercase().contains("reject") || text.to_lowercase().contains("hold");
+                    let triggers_hold = text.to_lowercase().contains("reject")
+                        || text.to_lowercase().contains("hold");
                     out.push(MockLlmResponse {
                         text,
                         triggers_hold,
@@ -131,10 +142,16 @@ impl MockLlmProvider for MultiModelAdvisorBackend {
                 responses.into_iter().max_by_key(|r| r.text.len()).unwrap()
             }
             AggregationStrategy::ConcatAll => {
-                let joined: Vec<String> = responses.iter().map(|r| r.text.clone()).filter(|s| !s.is_empty()).collect();
-                let combined = joined.join("
+                let joined: Vec<String> = responses
+                    .iter()
+                    .map(|r| r.text.clone())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                let combined = joined.join(
+                    "
 --
-");
+",
+                );
                 MockLlmResponse::ok(combined)
             }
         }
@@ -160,8 +177,12 @@ mod tests {
     struct EchoBackend(&'static str);
     #[async_trait::async_trait]
     impl LlmProvider for EchoBackend {
-        fn name(&self) -> &str { self.0 }
-        fn supports_model(&self, _model: &str) -> bool { true }
+        fn name(&self) -> &str {
+            self.0
+        }
+        fn supports_model(&self, _model: &str) -> bool {
+            true
+        }
         async fn complete(&self, _req: LlmRequest) -> Result<LlmResponse, LlmError> {
             Ok(make_response(self.0, &format!("[echo:{}] hi", self.0)))
         }
@@ -170,29 +191,41 @@ mod tests {
     struct FailBackend;
     #[async_trait::async_trait]
     impl LlmProvider for FailBackend {
-        fn name(&self) -> &str { "fail" }
-        fn supports_model(&self, _model: &str) -> bool { true }
+        fn name(&self) -> &str {
+            "fail"
+        }
+        fn supports_model(&self, _model: &str) -> bool {
+            true
+        }
         async fn complete(&self, _req: LlmRequest) -> Result<LlmResponse, LlmError> {
-            Err(LlmError::Network { provider: "fail".to_string(), detail: "simulated failure".to_string() })
+            Err(LlmError::Network {
+                provider: "fail".to_string(),
+                detail: "simulated failure".to_string(),
+            })
         }
     }
 
     struct LongBackend;
     #[async_trait::async_trait]
     impl LlmProvider for LongBackend {
-        fn name(&self) -> &str { "long" }
-        fn supports_model(&self, _model: &str) -> bool { true }
+        fn name(&self) -> &str {
+            "long"
+        }
+        fn supports_model(&self, _model: &str) -> bool {
+            true
+        }
         async fn complete(&self, _req: LlmRequest) -> Result<LlmResponse, LlmError> {
-            Ok(make_response("long", "this is a longer response with more info"))
+            Ok(make_response(
+                "long",
+                "this is a longer response with more info",
+            ))
         }
     }
 
     #[test]
     fn r269_01_first_non_empty_strategy_picks_first() {
-        let backends: Vec<Arc<dyn LlmProvider>> = vec![
-            Arc::new(EchoBackend("a")),
-            Arc::new(EchoBackend("b")),
-        ];
+        let backends: Vec<Arc<dyn LlmProvider>> =
+            vec![Arc::new(EchoBackend("a")), Arc::new(EchoBackend("b"))];
         let m = MultiModelAdvisorBackend::new(backends);
         assert_eq!(m.backend_count(), 2);
         let r = m.generate("hello", "be terse");
@@ -202,10 +235,8 @@ mod tests {
 
     #[test]
     fn r269_02_longest_strategy_picks_longest() {
-        let backends: Vec<Arc<dyn LlmProvider>> = vec![
-            Arc::new(EchoBackend("short")),
-            Arc::new(LongBackend),
-        ];
+        let backends: Vec<Arc<dyn LlmProvider>> =
+            vec![Arc::new(EchoBackend("short")), Arc::new(LongBackend)];
         let m = MultiModelAdvisorBackend::with_strategy(backends, AggregationStrategy::Longest);
         let r = m.generate("hello", "be terse");
         assert!(r.text.starts_with("this is"), "got: {}", r.text);
@@ -213,10 +244,8 @@ mod tests {
 
     #[test]
     fn r269_03_concat_all_strategy_joins_with_separator() {
-        let backends: Vec<Arc<dyn LlmProvider>> = vec![
-            Arc::new(EchoBackend("a")),
-            Arc::new(EchoBackend("b")),
-        ];
+        let backends: Vec<Arc<dyn LlmProvider>> =
+            vec![Arc::new(EchoBackend("a")), Arc::new(EchoBackend("b"))];
         let m = MultiModelAdvisorBackend::with_strategy(backends, AggregationStrategy::ConcatAll);
         let r = m.generate("hello", "be terse");
         assert!(r.text.contains("[echo:a]"));
@@ -226,10 +255,8 @@ mod tests {
 
     #[test]
     fn r269_04_failed_backend_skipped_gracefully() {
-        let backends: Vec<Arc<dyn LlmProvider>> = vec![
-            Arc::new(FailBackend),
-            Arc::new(EchoBackend("alive")),
-        ];
+        let backends: Vec<Arc<dyn LlmProvider>> =
+            vec![Arc::new(FailBackend), Arc::new(EchoBackend("alive"))];
         let m = MultiModelAdvisorBackend::new(backends);
         let r = m.generate("hello", "be terse");
         assert!(r.text.contains("[echo:alive]"), "got: {}", r.text);
@@ -237,10 +264,8 @@ mod tests {
 
     #[test]
     fn r269_05_all_failed_returns_placeholder() {
-        let backends: Vec<Arc<dyn LlmProvider>> = vec![
-            Arc::new(FailBackend),
-            Arc::new(FailBackend),
-        ];
+        let backends: Vec<Arc<dyn LlmProvider>> =
+            vec![Arc::new(FailBackend), Arc::new(FailBackend)];
         let m = MultiModelAdvisorBackend::new(backends);
         let r = m.generate("hello", "be terse");
         assert!(r.text.contains("all backends failed"), "got: {}", r.text);
