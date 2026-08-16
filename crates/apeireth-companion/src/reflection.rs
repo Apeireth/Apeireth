@@ -74,11 +74,29 @@ impl ReflectionScheduler {
         self.cycle.cycles_completed
     }
 
-    /// 每 tick 调用: 周期到 → 推进 4 阶段 → 反思记录写回 (含可选深度反思) → 返回完成周期数 (0/1).
+    /// 重要事件积累触发 (Generative Agents: 最近 100 条 importance 和 > 150).
+    fn importance_surge(&self) -> bool {
+        let eps = self.store.recent_episodes(&self.session, 100).unwrap_or_default();
+        let sum: u64 = eps
+            .iter()
+            .filter(|e| !e.id.starts_with("reflect-"))
+            .map(|e| crate::memory_extractor::parse_importance(&e.content) as u64)
+            .sum();
+        sum > 150
+    }
+
+    /// 每 tick 调用: 周期到 或 累计 importance 达阈值 → 推进 4 阶段 → 反思记录写回
+    /// (含可选深度反思) → 返回完成周期数 (0/1).
+    /// 触发条件 (记忆 v2, Generative Agents 吸收): 周期到 OR 最近 100 条 importance 和 > 150.
     pub async fn tick(&mut self) -> usize {
         let now = self.clock.now();
-        if now - self.last_cycle_at < self.period {
+        let period_due = now - self.last_cycle_at >= self.period;
+        let importance_due = self.importance_surge();
+        if !period_due && !importance_due {
             return 0;
+        }
+        if importance_due {
+            eprintln!("[reflection] 重要事件积累触发反思 (importance 阈值)");
         }
         // 快进状态机 (阶段间用周期起点附近的时间戳, 保证单调)
         let base = self.last_cycle_at.timestamp();
