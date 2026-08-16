@@ -50,7 +50,12 @@
   <h1>Apeireth 伙伴</h1>
   <div class="meta">companion_serve · 记忆持久 · 工具桥 · 宪法守护 · 自成长管道 <span id="feat"></span></div>
 </header>
-<div id="chat"></div>
+<div id="chat">
+  <div id="welcome" style="align-self:center; color:#5c6472; font-size:13px; margin-top:40px; text-align:center;">
+    （本座在。主人请讲——）<br>
+    <span style="font-size:11px; color:#454c59">他会记得你，但不会每次都提醒你「我记得」。</span>
+  </div>
+</div>
 <div id="grantpanel">
   <span style="color:#9fb3c8">⚙ 授权（权限洋葱：主人直接批准，本座不接触你的 token）</span>
   <input id="gtool" placeholder="工具名 (如 ShellExec)" list="tools">
@@ -76,6 +81,8 @@ const input = document.getElementById('input');
 const MODEL = 'MiniMax-M3';
 
 function addMsg(role, text) {
+  const welcome = document.getElementById('welcome');
+  if (welcome) welcome.remove();
   const div = document.createElement('div');
   div.className = 'msg ' + role;
   div.textContent = text;
@@ -125,7 +132,11 @@ document.getElementById('send').addEventListener('click', send);
 document.getElementById('clear').addEventListener('click', () => {
   messages.length = 0;
   chat.innerHTML = '';
-  addMsg('ai', '（会话已清空。本座的长期记忆还在——问问本座还记得你什么。）');
+  const w = document.createElement('div');
+  w.id = 'welcome';
+  w.style.cssText = 'align-self:center; color:#5c6472; font-size:13px; margin-top:40px; text-align:center;';
+  w.innerHTML = '（本座在。主人请讲——）';
+  chat.appendChild(w);
 });
 // 授权面板 (权限洋葱: 主人直接批准; AI 不接触 token)
 const grantPanel = document.getElementById('grantpanel');
@@ -154,7 +165,6 @@ document.getElementById('gdo').addEventListener('click', async () => {
 fetch('/health').then(r => r.json()).then(h => {
   if (h.features) document.getElementById('feat').textContent = '· ' + h.features.join(' · ');
 }).catch(() => {});
-addMsg('ai', '本座在此。你回来了？记忆还都在——周五高数期中、换元法两个错点、每天精练 8 道题的计划，本座都记得。想聊点什么？');
 </script>
 </body>
 </html>
