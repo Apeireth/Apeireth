@@ -55,8 +55,6 @@ pub fn dual_track_merge(
             score: 1.0,
         })
         .collect();
-    let episode_ids: std::collections::HashSet<&String> =
-        out.iter().map(|h| &h.id).collect();
 
     // 索引轨道: 去重后补充 (标记 Index; 双轨都有 → 升级 Both + 加分)
     for hit in index_hits {
