@@ -82,17 +82,23 @@ cargo run -p apeireth-companion --example companion_serve   # :8090, daemon 同�
 - **① 持久记忆**：`open_memory_store()` 文件库（%APPDATA%\apeireth\memory.sqlite, 重启不失忆）
 - **② 全工具可见**：schema 由 registry 动态生成（含未手写 schema 的通用兜底）;
   执行由宪法硬门/权限包/主人批准约束（FileOperator 等默认需批准, APEIRETH_GRANT 显式扩权）
-- **③ daemon 常驻**：做梦(6h)/反思(24h)/涌现 同进程 step, 对话自动喂节律(on_user_message)
+- **③ daemon 常驻 v3（全 LLM 接上）**：
+  - 做梦: LLM 摘要器（MiniMaxDreamSummarizer, 合并记忆提炼 ≤50 字, 失败拼接降级）
+    + **增量合并**（只合并上次做梦后的新记忆, 防旧记忆反复合并/摘要嵌套, 实测发现并修复）
+  - 涌现: TonalUtterance LLM 润色（机制事实→自然问候, 30s 节流+退避兜底原文）
+  - 宪法: LlmJudicator 真 LLM 评审（Medium+ 工具执行前按 E 层判案）
+  - 对话自动喂节律（on_user_message）; 做梦安静期 `APEIRETH_DREAM_QUIET_SECONDS` 可调
 - **预处理链**（对齐 VCP messagePreprocessors）：记忆注入（EMI/NEC）+ 今日摘要注入 + 工具桥
 - 会话标签：`X-Apeireth-Continuity`（缺省 companion-main; 记忆本体统一 "me" 会话）
 - 护栏：工具循环 ≤5 轮 + 结果 4000 字符截断 + 注入标注"以用户当前说法为准"
 
-**0 假装**：做梦未接 LLM 摘要器（拼接降级）; 涌现文本=PlainUtterance 机制原文（非 LLM 润色）;
-FileOperator/ShellExec 可见但默认需批准; daemon 内部 RefCell 跨 await 非 Send → 与 HTTP 同 task 交替（select!）。
+**0 假装**：FileOperator/ShellExec 可见但默认需批准; daemon 内部 RefCell 跨 await 非 Send → 与 HTTP 同 task 交替（select!）;
+记忆很多时增量窗口（最近 20 条）可能漏旧条目（后续可做游标式）。
 
-**实测（2026-08-16 v2, MiniMax-M3）**:
-- save_memory 真执行（对话中 AI 主动存"每天精练8道换元题"）
-- **重启后无种子注入 → 仍准确记得该决定 + 两个错点**（持久化 ✅）
+**实测（2026-08-16 v3, MiniMax-M3）**:
+- save_memory 真执行 + **重启后仍记得**（持久化 ✅）
+- **做梦全链路**: daemon tick → 安静期到 → 合并新记忆 → LLM 摘要(1.6s) → 写回【做梦摘要】✅
+- 宪法评审: FileOperator 写文件成功（LLM 评审 ALLOW + 授权包）✅
 
 **对 VCP 的改进点**（VCP 不好的我们改，VCP 没有的我们补）：
 

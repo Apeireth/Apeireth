@@ -16,6 +16,7 @@ use apeireth_core::clock::Clock;
 use apeireth_memory::lightmemo::{DreamSubsystem, SleepCycle};
 use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 
 /// 做梦摘要化 (LLM 提炼): 把合并结果 (拼接) 提炼成一条语义摘要.
 /// lib 不依赖 `apeireth-api`, 真实现由调用方注入 (同 judicator 的 trait 策略).
@@ -35,6 +36,8 @@ pub struct DreamScheduler {
     merge_batch: usize,
     /// 可选摘要器: 配置后合并结果经 LLM 提炼再写回; 未配置保持拼接 (诚实降级).
     summarizer: Option<Arc<dyn DreamSummarizer>>,
+    /// 上次做梦时刻 (增量合并边界: 只合并此后的记忆, 防旧记忆反复合并/摘要嵌套).
+    last_cycle_at: std::sync::Mutex<DateTime<Utc>>,
 }
 
 impl DreamScheduler {
@@ -47,6 +50,7 @@ impl DreamScheduler {
             session: "me".into(),
             merge_batch: 20,
             summarizer: None,
+            last_cycle_at: std::sync::Mutex::new(DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(Utc::now())),
         }
     }
 
@@ -95,7 +99,14 @@ impl DreamScheduler {
             .store
             .recent_episodes(&self.session, self.merge_batch)
             .unwrap_or_default();
-        let items: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
+        // 增量合并: 只合并上次做梦之后的记忆; 且不重复整合旧做梦结果 (防摘要嵌套摘要)
+        let boundary = *self.last_cycle_at.lock().expect("poisoned");
+        let items: Vec<String> = eps
+            .iter()
+            .filter(|e| !e.id.starts_with("mem-dream-"))
+            .filter(|e| chrono::DateTime::<Utc>::from_timestamp(e.timestamp, 0).map_or(true, |t| t >= boundary))
+            .map(|e| e.content.clone())
+            .collect();
         let merged = std::cell::RefCell::new(Vec::new());
         let n = self.dream.dream_cycle(&items, &|a, b| {
             let m = format!("{a} ◆ {b}");
@@ -127,6 +138,7 @@ impl DreamScheduler {
             }
         }
         self.sleep.reset_after_cycle();
+        *self.last_cycle_at.lock().expect("poisoned") = self.clock.now();
         n
     }
 }
@@ -177,9 +189,28 @@ mod tests {
         assert!(dreams[0].content.contains("◆"), "合并应为拼接: {}", dreams[0].content);
         // reset 后不再做
         assert_eq!(sched.tick().await, 0);
-        // 第二夜
+        // 第二夜: 增量合并语义 (2026-08-16) — 无新记忆 → 0 (旧记忆不再反复合并)
         vc.advance(chrono::Duration::seconds(61));
-        assert!(sched.tick().await >= 1);
+        assert_eq!(sched.tick().await, 0, "增量合并: 无新记忆不重复整合");
+    }
+
+    #[tokio::test]
+    async fn dream_skips_old_dream_results() {
+        // 修 bug (2026-08-16 实测发现): 旧做梦结果 mem-dream-* 被再次合并 → 摘要嵌套摘要
+        let store = Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap());
+        seed(&store);
+        let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap());
+        let sched = DreamScheduler::new(Arc::clone(&store), Arc::new(vc.clone()));
+        vc.advance(chrono::Duration::seconds(61));
+        let n1 = sched.tick().await;
+        assert_eq!(n1, 2, "第一次: 4 条 mem-* → 2 对");
+        // 第二夜: 只剩 mem-dream-* (旧做梦结果) 在最近 20 条内 → 应跳过, 不再嵌套合并
+        vc.advance(chrono::Duration::seconds(61));
+        let n2 = sched.tick().await;
+        assert_eq!(n2, 0, "旧做梦结果不应被再次合并 (防摘要嵌套)");
+        let eps = store.recent_episodes("me", 100).unwrap();
+        let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+        assert_eq!(dreams.len(), 2, "做梦结果不增");
     }
 
     struct StubSummarizer;
