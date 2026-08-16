@@ -345,7 +345,10 @@ impl BinaryOperatorValue {
 
     /// 已累积的 values 数量
     pub fn len(&self) -> usize {
-        let guard = self.values.lock().expect("BinaryOperatorValue mutex poisoned");
+        let guard = self
+            .values
+            .lock()
+            .expect("BinaryOperatorValue mutex poisoned");
         guard.len()
     }
 
@@ -353,10 +356,7 @@ impl BinaryOperatorValue {
     fn apply(&self, values: &[Value]) -> Value {
         match self.op {
             BinaryOperator::Add => {
-                let sum: f64 = values
-                    .iter()
-                    .filter_map(|v| v.as_f64())
-                    .sum();
+                let sum: f64 = values.iter().filter_map(|v| v.as_f64()).sum();
                 serde_json::json!(sum)
             }
             BinaryOperator::Concat => {
@@ -380,13 +380,19 @@ impl Channel for BinaryOperatorValue {
     }
 
     fn write(&self, value: Value) -> Result<(), ChannelError> {
-        let mut guard = self.values.lock().expect("BinaryOperatorValue mutex poisoned");
+        let mut guard = self
+            .values
+            .lock()
+            .expect("BinaryOperatorValue mutex poisoned");
         guard.push(value);
         Ok(())
     }
 
     fn read(&self) -> Result<Option<Value>, ChannelError> {
-        let guard = self.values.lock().expect("BinaryOperatorValue mutex poisoned");
+        let guard = self
+            .values
+            .lock()
+            .expect("BinaryOperatorValue mutex poisoned");
         if guard.is_empty() {
             Ok(None)
         } else {
@@ -395,7 +401,10 @@ impl Channel for BinaryOperatorValue {
     }
 
     fn is_empty(&self) -> bool {
-        let guard = self.values.lock().expect("BinaryOperatorValue mutex poisoned");
+        let guard = self
+            .values
+            .lock()
+            .expect("BinaryOperatorValue mutex poisoned");
         guard.is_empty()
     }
 
@@ -573,10 +582,7 @@ mod channel_tests {
         c.write(serde_json::json!([3, 4])).unwrap();
         c.write(serde_json::json!([5])).unwrap();
         let v = c.read().unwrap().unwrap();
-        assert_eq!(
-            v,
-            serde_json::json!([1, 2, 3, 4, 5])
-        );
+        assert_eq!(v, serde_json::json!([1, 2, 3, 4, 5]));
     }
 
     // ---------- Test 7: ChannelRegistry 4 type 都注册 ----------

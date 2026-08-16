@@ -91,7 +91,9 @@ use crate::library_autonomy::{
 #[derive(Debug, Error)]
 pub enum LoopError {
     /// 自反馈失败: signal 队列溢出
-    #[error("self-feedback signal queue overflow: capacity {capacity}, attempted push {attempted}")]
+    #[error(
+        "self-feedback signal queue overflow: capacity {capacity}, attempted push {attempted}"
+    )]
     FeedbackQueueOverflow {
         /// 容量
         capacity: usize,
@@ -142,12 +144,7 @@ pub enum LoopStage {
 
 impl LoopStage {
     /// 全部 4 阶段 (编译期 hardcode 兜底, 跟 PODA 1:1).
-    pub const ALL: [LoopStage; 4] = [
-        Self::Observe,
-        Self::Plan,
-        Self::Decide,
-        Self::Act,
-    ];
+    pub const ALL: [LoopStage; 4] = [Self::Observe, Self::Plan, Self::Decide, Self::Act];
 
     /// 阶段序号 (用于审计排序).
     pub const fn order(self) -> u8 {
@@ -427,7 +424,9 @@ impl FeedbackChannel {
 ///
 /// 借鉴源: superpowers 234 "Skill Priority" 5 层级概念 (process / implementation / domain / etc.),
 /// 1:1 借鉴为自调整 5 policy.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum AdjustPolicy {
     /// 最保守: 严格守门, repair 优先, 0 主动 upgrade / evolution
@@ -843,12 +842,9 @@ impl AutonomyLoop {
         // Stage 3: Decide
         self.stage = LoopStage::Decide;
         // 自调整: 探测 trigger, 切 policy
-        let trigger = self.adjust.detect_trigger(
-            &metrics,
-            evolution_state,
-            upgrade_state,
-            repair_state,
-        );
+        let trigger =
+            self.adjust
+                .detect_trigger(&metrics, evolution_state, upgrade_state, repair_state);
         let _new_policy = self.adjust.tune(trigger)?;
 
         // Stage 4: Act
@@ -933,7 +929,9 @@ impl AutonomyLoop {
             })?;
         }
         // 4. 全部 sub-engine 终态 → Repair 兜底 (即使 0 failure, 仍让 repair 跑 1 healthcheck)
-        if evolution_state.is_terminal() && upgrade_state.is_terminal() && repair_state.is_terminal()
+        if evolution_state.is_terminal()
+            && upgrade_state.is_terminal()
+            && repair_state.is_terminal()
         {
             self.feedback.push(FeedbackSignal::RepairNeeded {
                 source: SignalSource::Observer,
@@ -1020,7 +1018,10 @@ impl AutonomyLoop {
             signals_pending: self.feedback.pending() as u32,
             adjustments: self.adjust.adjustments(),
             current_policy: self.adjust.current_policy(),
-            borrow_ids: LoopReport::BORROW_IDS.iter().map(|s| s.to_string()).collect(),
+            borrow_ids: LoopReport::BORROW_IDS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
         }
     }
 
@@ -1029,7 +1030,10 @@ impl AutonomyLoop {
         LoopReport {
             metrics: self.metrics(),
             stage: self.stage,
-            borrow_ids: LoopReport::BORROW_IDS.iter().map(|s| s.to_string()).collect(),
+            borrow_ids: LoopReport::BORROW_IDS
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
             ts: current_unix_ms(),
         }
     }
@@ -1098,7 +1102,13 @@ mod tests {
         // 3 cycles 后 evolution 状态前进 (Idle → Observing → Planning → Evolving)
         let state = l.autonomy().evolution.state();
         assert!(
-            matches!(state, SelfEvolutionState::Observing | SelfEvolutionState::Planning | SelfEvolutionState::Evolving | SelfEvolutionState::Evolved),
+            matches!(
+                state,
+                SelfEvolutionState::Observing
+                    | SelfEvolutionState::Planning
+                    | SelfEvolutionState::Evolving
+                    | SelfEvolutionState::Evolved
+            ),
             "evolution should advance after 3 cycles, got {:?}",
             state
         );
@@ -1202,7 +1212,10 @@ mod tests {
         });
         assert!(r.is_err());
         match r.unwrap_err() {
-            LoopError::FeedbackQueueOverflow { capacity, attempted: _ } => {
+            LoopError::FeedbackQueueOverflow {
+                capacity,
+                attempted: _,
+            } => {
                 assert_eq!(capacity, 2);
             }
             _ => panic!("期望 FeedbackQueueOverflow"),

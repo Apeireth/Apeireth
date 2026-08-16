@@ -139,11 +139,34 @@ pub fn run_smoke_conventions_tool_loop(workspace_root: &Path) -> SmokeReport {
     report.phase_scores = vec![
         EvalScore::new("setup_ok", if report.setup_ok { 1.0 } else { 0.0 }),
         EvalScore::new("prompt_built", if report.prompt_built { 1.0 } else { 0.0 }),
-        EvalScore::new("tool_loop_init", if report.tool_loop_init { 1.0 } else { 0.0 }),
-        EvalScore::new("tool_call_dispatched", if report.tool_call_dispatched { 1.0 } else { 0.0 }),
-        EvalScore::new("tool_result_digested", if report.tool_result_digested { 1.0 } else { 0.0 }),
-        EvalScore::new("final_reply_correct", if report.final_reply_correct { 1.0 } else { 0.0 }),
-        EvalScore::new("no_regression", if report.no_regression { 1.0 } else { 0.0 }),
+        EvalScore::new(
+            "tool_loop_init",
+            if report.tool_loop_init { 1.0 } else { 0.0 },
+        ),
+        EvalScore::new(
+            "tool_call_dispatched",
+            if report.tool_call_dispatched {
+                1.0
+            } else {
+                0.0
+            },
+        ),
+        EvalScore::new(
+            "tool_result_digested",
+            if report.tool_result_digested {
+                1.0
+            } else {
+                0.0
+            },
+        ),
+        EvalScore::new(
+            "final_reply_correct",
+            if report.final_reply_correct { 1.0 } else { 0.0 },
+        ),
+        EvalScore::new(
+            "no_regression",
+            if report.no_regression { 1.0 } else { 0.0 },
+        ),
     ];
     report
 }
@@ -178,16 +201,38 @@ mod smoke_task_tests {
     fn smoke_task_workspace_root_7_phase_all_pass() {
         // 向上 2 层: apeireth-eval -> crates -> workspace root
         let pkg_root = std::env::current_dir().unwrap();
-        let root = pkg_root.parent().and_then(|p| p.parent()).unwrap_or(&pkg_root);
+        let root = pkg_root
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(&pkg_root);
         let report = run_smoke_conventions_tool_loop(root);
 
         // 7 阶段期望全 pass (conventions 抽到 + tool loop 2 轮 + final reply 匹配)
-        assert!(report.setup_ok, "setup_ok failed: {:?}", report.conventions.as_ref().and_then(|c| c.scan_error.clone()));
-        assert!(report.prompt_built, "prompt_built failed: {}", report.system_block.is_empty());
+        assert!(
+            report.setup_ok,
+            "setup_ok failed: {:?}",
+            report
+                .conventions
+                .as_ref()
+                .and_then(|c| c.scan_error.clone())
+        );
+        assert!(
+            report.prompt_built,
+            "prompt_built failed: {}",
+            report.system_block.is_empty()
+        );
         assert!(report.tool_loop_init);
-        assert!(report.tool_call_dispatched, "turn = {}", report.phase_scores.len());
+        assert!(
+            report.tool_call_dispatched,
+            "turn = {}",
+            report.phase_scores.len()
+        );
         assert!(report.tool_result_digested);
-        assert!(report.final_reply_correct, "final_reply = {}", report.final_reply);
+        assert!(
+            report.final_reply_correct,
+            "final_reply = {}",
+            report.final_reply
+        );
         assert!(report.no_regression);
         assert!(report.all_pass(), "smoke task 7 phase not all pass");
         assert_eq!(report.pass_rate(), 1.0);
@@ -278,7 +323,11 @@ mod smoke_task_tests {
         let tmp = tempfile::tempdir().unwrap();
         // 写 1 个临时 Cargo.toml
         let cargo = tmp.path().join("Cargo.toml");
-        std::fs::write(&cargo, "[workspace]\nmembers = [\"x\"]\n[workspace.package]\nedition = \"2021\"\n").unwrap();
+        std::fs::write(
+            &cargo,
+            "[workspace]\nmembers = [\"x\"]\n[workspace.package]\nedition = \"2021\"\n",
+        )
+        .unwrap();
         let report = run_smoke_conventions_tool_loop(tmp.path());
         assert!(report.setup_ok);
         assert!(report.prompt_built);

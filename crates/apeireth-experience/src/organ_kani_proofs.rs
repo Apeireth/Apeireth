@@ -22,7 +22,9 @@ fn r177_exp_02_wiki_confidence_clamped() {
 
 #[test]
 fn r177_exp_03_wiki_with_tag() {
-    let e = WikiEntry::new("t", "c", 0.5).with_tag("rust").with_source("ep-1");
+    let e = WikiEntry::new("t", "c", 0.5)
+        .with_tag("rust")
+        .with_source("ep-1");
     assert_eq!(e.tags.len(), 1);
     assert_eq!(e.tags[0], "rust");
     assert_eq!(e.source_episode_ids.len(), 1);

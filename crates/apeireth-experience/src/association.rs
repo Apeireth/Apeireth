@@ -42,7 +42,9 @@ pub struct AssociationEdge {
 
 impl AssociationEdge {
     pub fn new(weight: f64) -> Self {
-        Self { weight: weight.clamp(0.0, 1.0) }
+        Self {
+            weight: weight.clamp(0.0, 1.0),
+        }
     }
 }
 
@@ -185,7 +187,11 @@ mod tests {
         net.connect(id1, id2, 1.0);
         net.propagate_step();
         let energy_after = net.node(&id2).unwrap().energy;
-        assert!(energy_after > 0.0, "neighbor should be activated, got {}", energy_after);
+        assert!(
+            energy_after > 0.0,
+            "neighbor should be activated, got {}",
+            energy_after
+        );
     }
 
     #[test]
@@ -200,7 +206,10 @@ mod tests {
         assert_eq!(result.len(), 3);
         assert_eq!(result[0].0, a, "highest energy should be seed");
         for i in 1..result.len() {
-            assert!(result[i - 1].2 >= result[i].2, "result must be sorted by energy");
+            assert!(
+                result[i - 1].2 >= result[i].2,
+                "result must be sorted by energy"
+            );
         }
     }
 

@@ -95,12 +95,14 @@ static EMAIL_RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::ne
 /// - 北美: (XXX) XXX-XXXX, XXX-XXX-XXXX
 /// - 中国: 1XXXXXXXXXX (11 位)
 static PHONE_RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-    regex::Regex::new(r"(?x)
+    regex::Regex::new(
+        r"(?x)
         \+?\d{1,3}[\s\-]?\d{2,4}[\s\-]?\d{3,4}[\s\-]?\d{3,4}
         | \(\d{3}\)\s?\d{3}[\s\-]?\d{4}
         | \d{3}-\d{3}-\d{4}
         | 1[3-9]\d{9}
-    ")
+    ",
+    )
     .expect("phone regex must compile")
 });
 
@@ -184,7 +186,10 @@ fn env_value_maskable(value: &str) -> bool {
         return false;
     }
     let lower = value.to_lowercase();
-    if matches!(lower.as_str(), "true" | "false" | "null" | "undefined" | "none") {
+    if matches!(
+        lower.as_str(),
+        "true" | "false" | "null" | "undefined" | "none"
+    ) {
         return false;
     }
     value.parse::<f64>().is_err()
@@ -253,7 +258,9 @@ pub fn detect_pii(text: &str) -> Vec<PiiMatch> {
     // ae12d9eb 增量: env 赋值行 — 敏感键名 + 值可脱敏 → 只报 value 段 (KEY= 前缀保留)
     for cap in ENV_ASSIGN_RE.captures_iter(text) {
         let key = cap.name("key").map(|m| m.as_str()).unwrap_or("");
-        let Some(value_m) = cap.name("value") else { continue };
+        let Some(value_m) = cap.name("value") else {
+            continue;
+        };
         if !SENSITIVE_KEY_RE.is_match(key) {
             continue;
         }
@@ -299,7 +306,9 @@ mod tests {
     #[test]
     fn detect_ssn() {
         let m = detect_pii("my ssn is 123-45-6789 ok");
-        assert!(m.iter().any(|x| x.kind == PiiKind::Ssn && x.value == "123-45-6789"));
+        assert!(m
+            .iter()
+            .any(|x| x.kind == PiiKind::Ssn && x.value == "123-45-6789"));
     }
 
     #[test]
@@ -311,7 +320,9 @@ mod tests {
     #[test]
     fn detect_ip_v4() {
         let m = detect_pii("server 192.168.1.1 alive");
-        assert!(m.iter().any(|x| x.kind == PiiKind::IpAddress && x.value == "192.168.1.1"));
+        assert!(m
+            .iter()
+            .any(|x| x.kind == PiiKind::IpAddress && x.value == "192.168.1.1"));
     }
 
     #[test]
@@ -331,7 +342,10 @@ mod tests {
         let m = detect_pii("a@b.com and 192.168.1.1");
         assert!(m.len() >= 2);
         for i in 1..m.len() {
-            assert!(m[i - 1].start <= m[i].start, "matches must be sorted by start");
+            assert!(
+                m[i - 1].start <= m[i].start,
+                "matches must be sorted by start"
+            );
         }
     }
 
@@ -369,7 +383,9 @@ mod tests {
     #[test]
     fn detect_secret_token_aws_akia() {
         let m = detect_pii("aws key AKIAIOSFODNN7EXAMPLE here");
-        assert!(m.iter().any(|x| x.kind == PiiKind::SecretToken && x.value == "AKIAIOSFODNN7EXAMPLE"));
+        assert!(m
+            .iter()
+            .any(|x| x.kind == PiiKind::SecretToken && x.value == "AKIAIOSFODNN7EXAMPLE"));
     }
 
     #[test]
@@ -384,7 +400,9 @@ mod tests {
     fn secret_token_short_not_detected() {
         // 短 token (低于最小长度阈值) 不检测 — 误报控制
         assert!(detect_pii("sk-abc").is_empty());
-        assert!(detect_pii("sk-ab 短 token 保留").iter().all(|x| x.kind != PiiKind::SecretToken));
+        assert!(detect_pii("sk-ab 短 token 保留")
+            .iter()
+            .all(|x| x.kind != PiiKind::SecretToken));
     }
 
     // ============================================
@@ -402,7 +420,9 @@ mod tests {
     #[test]
     fn detect_env_secret_colon_form() {
         let m = detect_pii("AUTH_TOKEN: myverylongtoken123");
-        assert!(m.iter().any(|x| x.kind == PiiKind::EnvSecret && x.value == "myverylongtoken123"));
+        assert!(m
+            .iter()
+            .any(|x| x.kind == PiiKind::EnvSecret && x.value == "myverylongtoken123"));
     }
 
     #[test]
@@ -425,18 +445,32 @@ mod tests {
     #[test]
     fn env_secret_non_sensitive_key_not_detected() {
         // 非敏感键名不误伤
-        assert!(detect_pii("HOME=/usr/local/bin").iter().all(|x| x.kind != PiiKind::EnvSecret));
-        assert!(detect_pii("PATH=/usr/bin:/bin").iter().all(|x| x.kind != PiiKind::EnvSecret));
-        assert!(detect_pii("monkey=abc12345678").iter().all(|x| x.kind != PiiKind::EnvSecret));
-        assert!(detect_pii("keyword=abcdefgh").iter().all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("HOME=/usr/local/bin")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("PATH=/usr/bin:/bin")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("monkey=abc12345678")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("keyword=abcdefgh")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
     }
 
     #[test]
     fn env_secret_short_numeric_bool_not_detected() {
         // 值过短 / 纯数字 / 布尔字面量 不检测 — 误报控制
-        assert!(detect_pii("API_KEY=abc").iter().all(|x| x.kind != PiiKind::EnvSecret));
-        assert!(detect_pii("TOKEN_COUNT=42").iter().all(|x| x.kind != PiiKind::EnvSecret));
-        assert!(detect_pii("PASSWORD=123456789").iter().all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("API_KEY=abc")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("TOKEN_COUNT=42")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
+        assert!(detect_pii("PASSWORD=123456789")
+            .iter()
+            .all(|x| x.kind != PiiKind::EnvSecret));
     }
 
     #[test]
