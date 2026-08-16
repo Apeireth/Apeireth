@@ -54,6 +54,8 @@ pub struct DreamScheduler {
     summarizer: Option<Arc<dyn DreamSummarizer>>,
     /// 上次做梦时刻 (增量合并边界: 只合并此后的记忆, 防旧记忆反复合并/摘要嵌套).
     last_cycle_at: std::sync::Mutex<DateTime<Utc>>,
+    /// N4 元自学习读取口 (可选): 真整合夜写【思维链盘点】; 未接 = 不盘点 (诚实降级).
+    thought_reader: Option<Arc<dyn crate::thought_cluster::ThoughtClusterReader>>,
 }
 
 impl DreamScheduler {
@@ -101,6 +103,7 @@ impl DreamScheduler {
             merge_batch: 20,
             summarizer: None,
             last_cycle_at: std::sync::Mutex::new(DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(Utc::now())),
+            thought_reader: None,
         }
     }
 
@@ -126,6 +129,12 @@ impl DreamScheduler {
     /// 覆盖单次最多拉取条目数 (默认 20).
     pub fn with_merge_batch(mut self, n: usize) -> Self {
         self.merge_batch = n.max(2);
+        self
+    }
+
+    /// N4 元自学习读取口: 真整合夜写【思维链盘点】; 未接 = 不盘点 (诚实降级).
+    pub fn with_thought_reader(mut self, r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>) -> Self {
+        self.thought_reader = Some(r);
         self
     }
 
@@ -187,6 +196,29 @@ impl DreamScheduler {
             };
             if let Err(e) = self.store.put_episode(&ep) {
                 eprintln!("[dream] 写回记忆失败: {e}");
+            }
+        }
+        // N4 元自学习: 真整合夜 (n>0) 写一条【思维链盘点】; id 前缀 mem-dream-thought-
+        // → 被上方 `!starts_with("mem-dream-")` 过滤, 天然防盘点被二次整合 (嵌套).
+        if n > 0 {
+            if let Some(tr) = &self.thought_reader {
+                let segs: Vec<String> = tr
+                    .clusters()
+                    .iter()
+                    .map(|c| format!("{c}:{} 篇", tr.read_cluster(c).len()))
+                    .collect();
+                if !segs.is_empty() {
+                    let ep = CoreEpisode {
+                        id: format!("mem-dream-thought-{}", uuid::Uuid::new_v4()),
+                        timestamp: now_ts,
+                        role: "assistant".into(),
+                        content: format!("【思维链盘点】{}", segs.join("; ")),
+                        session_id: self.session.clone(),
+                    };
+                    if let Err(e) = self.store.put_episode(&ep) {
+                        eprintln!("[dream] 思维链盘点写回失败: {e}");
+                    }
+                }
             }
         }
         self.sleep.reset_after_cycle();
@@ -310,6 +342,88 @@ mod tests {
         let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
         // 摘要失败 → 诚实降级为拼接, 不丢内容
         assert!(dreams[0].content.starts_with("【做梦整合】"), "应降级拼接: {}", dreams[0].content);
+    }
+
+    // ---- N4 元自学习注入点测试 ----
+    use crate::thought_cluster::ThoughtFile;
+
+    /// N4 测试用 stub 读取口 (2 簇: 后思维簇 2 篇 / 前思维簇 1 篇).
+    struct StubReader;
+    impl crate::thought_cluster::ThoughtClusterReader for StubReader {
+        fn clusters(&self) -> Vec<String> {
+            vec!["后思维簇".into(), "前思维簇".into()]
+        }
+        fn read_cluster(&self, name: &str) -> Vec<ThoughtFile> {
+            if name == "后思维簇" {
+                vec![
+                    ThoughtFile { name: "a.md".into(), content: "甲".into() },
+                    ThoughtFile { name: "b.md".into(), content: "乙".into() },
+                ]
+            } else {
+                vec![ThoughtFile { name: "a.md".into(), content: "丙".into() }]
+            }
+        }
+        fn read_chain(&self, _name: &str) -> Vec<ThoughtFile> {
+            Vec::new()
+        }
+    }
+
+    #[tokio::test]
+    async fn dream_with_thought_reader_writes_inventory_once() {
+        let store = Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap());
+        seed(&store);
+        let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap());
+        let sched = DreamScheduler::new(Arc::clone(&store), Arc::new(vc.clone()))
+            .with_thought_reader(Arc::new(StubReader));
+        vc.advance(chrono::Duration::seconds(61));
+        assert_eq!(sched.tick().await, 2, "4 条应合并成 2 对");
+        let eps = store.recent_episodes("me", 100).unwrap();
+        let inv: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        assert_eq!(inv.len(), 1, "真整合夜应写一条思维链盘点");
+        assert!(inv[0].content.starts_with("【思维链盘点】"), "应含盘点前缀: {}", inv[0].content);
+        assert!(inv[0].content.contains("后思维簇:2 篇"), "盘点应含簇计数: {}", inv[0].content);
+        // 第二夜无新记忆 → 不整合 → 不重复盘点
+        vc.advance(chrono::Duration::seconds(61));
+        assert_eq!(sched.tick().await, 0, "无新记忆不整合");
+        let eps2 = store.recent_episodes("me", 100).unwrap();
+        let inv2: Vec<_> = eps2.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        assert_eq!(inv2.len(), 1, "不整合则不新增盘点");
+    }
+
+    #[tokio::test]
+    async fn dream_inventory_not_remerged_next_night() {
+        let store = Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap());
+        seed(&store);
+        let vc = VirtualClock::new(Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap());
+        let sched = DreamScheduler::new(Arc::clone(&store), Arc::new(vc.clone()))
+            .with_thought_reader(Arc::new(StubReader));
+        vc.advance(chrono::Duration::seconds(61));
+        sched.tick().await; // 夜 1: 整合 + 写盘点
+        // 加两条新记忆触发夜 2 真整合
+        for (i, c) in ["夜二新记忆甲", "夜二新记忆乙"].iter().enumerate() {
+            store
+                .put_episode(&CoreEpisode {
+                    id: format!("mem-n2-{i}"),
+                    timestamp: vc.now().timestamp(),
+                    role: "assistant".into(),
+                    content: c.to_string(),
+                    session_id: "me".into(),
+                })
+                .unwrap();
+        }
+        vc.advance(chrono::Duration::seconds(61));
+        let n = sched.tick().await;
+        assert!(n <= 1, "夜 2 至多整合一对");
+        let eps = store.recent_episodes("me", 100).unwrap();
+        // 关键不变式: 盘点 episode 不被合并进普通整合结果 (防嵌套)
+        let bad: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-") && !e.id.starts_with("mem-dream-thought-"))
+            .filter(|e| e.content.contains("思维链盘点"))
+            .collect();
+        assert!(bad.is_empty(), "盘点 episode 不应被合并进普通整合结果 (防嵌套)");
+        let inv: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        assert_eq!(inv.len(), 1, "夜 1 的盘点应仍在且仅一条");
     }
 }
 

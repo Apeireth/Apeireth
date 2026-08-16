@@ -155,3 +155,19 @@
 
 ### companion 环境变量（N7 查询形态学）
 `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
+
+## 五、target 构建缓存治理（台账 #50, 2026-08-17 主人指示: 不用的编译产物删掉, 不要无限膨胀）
+
+**基线** (2026-08-17 01:52 实测): target 45.9 万文件 / 269.6 GB, 其中 debug/incremental 105.28 GB (35.3 万文件, 可再生)、debug/deps 133 GB (活跃编译不可动)。
+
+**工具**: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/target-hygiene.ps1`
+- 默认只报告: 总体积 + 子目录分布 + 安全清理候选 (incremental/criterion/tmp/顶层垃圾) 及可回收量
+- `-Apply` 才真删; 测量用 robocopy /L 摘要 (1.1s 全量, Windows 下 du 极慢已弃用)
+
+**时机规则（铁边界）**:
+1. ❌ **禁止在成员活跃编译期全量 cargo clean** —— 会打断在途任务编译
+2. ❌ 脚本不碰 deps/ build/ .fingerprint/ —— 活跃编译正确性依赖
+3. ✅ 何时清: 评审波结束 / N14 类编译阻塞解除后 / 主人指示的静默窗口
+4. ✅ 安全清理项 (脚本候选) 均为可再生缓存, 删除代价 = 下次编译变慢, 无正确性风险
+
+**何时升级手段**: 静默期且 target > 300 GB 时, 可 `cargo clean` 全清后按需重建 (需 Leader 确认全员无在途编译)。

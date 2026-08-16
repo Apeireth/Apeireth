@@ -31,6 +31,8 @@ pub struct ReflectionScheduler {
     session: String,
     /// 深度反思器 (可选): 周期完成时 LLM 提炼洞察; 未接 = 只写状态文本 (诚实降级).
     reflector: Option<Arc<dyn ReflectionReflector>>,
+    /// N4 元自学习读取口 (可选): 反思时回读历史思维簇, 让反思做"思考的再思考"; 未接 = 不附思维链.
+    thought_reader: Option<Arc<dyn crate::thought_cluster::ThoughtClusterReader>>,
 }
 
 impl ReflectionScheduler {
@@ -48,12 +50,19 @@ impl ReflectionScheduler {
             last_cycle_at: now,
             session: "me".into(),
             reflector: None,
+            thought_reader: None,
         }
     }
 
     /// 接深度反思器 (模块 5): 周期完成时 LLM 提炼洞察; 未接 = 状态文本降级.
     pub fn with_reflector(mut self, r: Arc<dyn ReflectionReflector>) -> Self {
         self.reflector = Some(r);
+        self
+    }
+
+    /// N4 元自学习读取口: 反思时附历史思维链 (≤3 簇×最新 1 篇×400 字); 未接 = 不附.
+    pub fn with_thought_reader(mut self, r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>) -> Self {
+        self.thought_reader = Some(r);
         self
     }
 
@@ -117,7 +126,7 @@ impl ReflectionScheduler {
         // 模块 5 深度反思: 周期完成 → LLM 提炼洞察 (失败降级为状态文本, 不丢周期)
         let mut reflect_content = String::new();
         if let Some(r) = &self.reflector {
-            let context = self
+            let mut context = self
                 .store
                 .recent_episodes(&self.session, 40)
                 .unwrap_or_default()
@@ -125,6 +134,19 @@ impl ReflectionScheduler {
                 .map(|e| format!("[{}] {}", e.role, e.content.chars().take(200).collect::<String>()))
                 .collect::<Vec<_>>()
                 .join("\n");
+            // N4 元自学习: 附历史思维链 (≤3 簇×最新 1 篇×400 字, 确定性序), 反思做"思考的再思考"
+            if let Some(tr) = &self.thought_reader {
+                let mut segs: Vec<String> = Vec::new();
+                for c in tr.clusters().into_iter().take(3) {
+                    if let Some(f) = tr.read_cluster(&c).into_iter().last() {
+                        let body: String = f.content.chars().take(400).collect();
+                        segs.push(format!("{}/{}: {body}", c, f.name));
+                    }
+                }
+                if !segs.is_empty() {
+                    context = format!("{context}\n【历史思维链】\n{}", segs.join("\n"));
+                }
+            }
             match r.reflect(&context).await {
                 Ok(insight) if !insight.trim().is_empty() => {
                     reflect_content = format!("【深度反思】第 {} 轮:\n{insight}", self.cycle.cycles_completed);
@@ -204,5 +226,66 @@ mod tests {
         assert_eq!(s.tick().await, 1);
         // Concluded 自动重触发 → 当前应为 Triggered
         assert_eq!(s.cycle.current, ReflectionPhase::Triggered);
+    }
+
+    // ---- N4 元自学习注入点测试 ----
+    use crate::thought_cluster::ThoughtFile;
+
+    /// N4 测试用 stub 读取口 (2 簇, 确定性).
+    struct StubReader;
+    impl crate::thought_cluster::ThoughtClusterReader for StubReader {
+        fn clusters(&self) -> Vec<String> {
+            vec!["甲簇".into(), "乙簇".into()]
+        }
+        fn read_cluster(&self, _name: &str) -> Vec<ThoughtFile> {
+            vec![ThoughtFile {
+                name: "2026-08-16-001.md".into(),
+                content: "一段可供反思回读的历史思考链内容".into(),
+            }]
+        }
+        fn read_chain(&self, _name: &str) -> Vec<ThoughtFile> {
+            Vec::new()
+        }
+    }
+
+    /// 捕获 reflector 收到的 context, 验证历史思维链被附加.
+    struct CaptureReflector(Arc<std::sync::Mutex<Option<String>>>);
+    #[async_trait::async_trait]
+    impl ReflectionReflector for CaptureReflector {
+        async fn reflect(&self, context: &str) -> Result<String, String> {
+            *self.0.lock().unwrap() = Some(context.to_string());
+            Ok("洞察".into())
+        }
+    }
+
+    #[tokio::test]
+    async fn reflection_context_includes_history_thought_chains() {
+        let vc = vclock();
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let captured = Arc::new(std::sync::Mutex::new(None::<String>));
+        let mut s = ReflectionScheduler::new(Arc::clone(&store), Arc::new(vc.clone()), "did-test")
+            .with_period(chrono::Duration::hours(1))
+            .with_reflector(Arc::new(CaptureReflector(Arc::clone(&captured))))
+            .with_thought_reader(Arc::new(StubReader));
+        vc.advance(chrono::Duration::hours(1));
+        assert_eq!(s.tick().await, 1);
+        let ctx = captured.lock().unwrap().clone().expect("reflector 应收到 context");
+        assert!(ctx.contains("【历史思维链】"), "context 应含历史思维链段: {ctx}");
+        assert!(ctx.contains("甲簇/"), "应按簇名序附思维链: {ctx}");
+        assert!(ctx.contains("历史思考链内容"), "应附最新思考文件内容: {ctx}");
+    }
+
+    #[tokio::test]
+    async fn reflection_without_thought_reader_keeps_plain_context() {
+        let vc = vclock();
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let captured = Arc::new(std::sync::Mutex::new(None::<String>));
+        let mut s = ReflectionScheduler::new(Arc::clone(&store), Arc::new(vc.clone()), "did-test")
+            .with_period(chrono::Duration::hours(1))
+            .with_reflector(Arc::new(CaptureReflector(Arc::clone(&captured))));
+        vc.advance(chrono::Duration::hours(1));
+        assert_eq!(s.tick().await, 1);
+        let ctx = captured.lock().unwrap().clone().expect("reflector 应收到 context");
+        assert!(!ctx.contains("【历史思维链】"), "未接读取口不应附思维链: {ctx}");
     }
 }
