@@ -21,7 +21,7 @@ use crate::grep_ops::{GrepOps, GrepTool, RipgrepGrepOps};
 use crate::web_search::{HttpWebSearch, WebSearch, WebSearchTool};
 
 /// 战役 2-5 实际注册 4 个 tool
-pub const REGISTERED_TOOL_COUNT: usize = 8;
+pub const REGISTERED_TOOL_COUNT: usize = 9;
 
 /// 4 impl 名 (VCP 字段级: WebSearch / FileOperator / Git / ShellExec)
 pub const TOOL_NAMES: [&str; REGISTERED_TOOL_COUNT] = [
@@ -33,6 +33,7 @@ pub const TOOL_NAMES: [&str; REGISTERED_TOOL_COUNT] = [
     "ApplyPatch",   // ApplyPatchTool (R30 U1)
     "LongTask",     // LongTaskTool (R30 U11)
     "WebFetch",     // WebFetchTool (R30 U2)
+    "Crawl",        // CrawlTool (R230: 轻量爬虫)
 ];
 
 /// **统一注册: 4 个工具一次性塞进 registry**
@@ -107,6 +108,12 @@ pub fn register_all(registry: &ToolRegistry) -> Result<(), String> {
         Arc::new(WebFetchTool::new(Arc::new(ReqwestWebFetch::new()))),
     );
 
+    // 9. crawl (R230: 轻量爬虫)
+    registry.register(
+        "Crawl".to_string(),
+        Arc::new(crate::web_crawl::CrawlTool::default()),
+    );
+
     Ok(())
 }
 
@@ -126,7 +133,7 @@ mod tests {
     #[test]
     fn tool_names_match_vcp_and_field_count() {
         assert_eq!(TOOL_NAMES.len(), REGISTERED_TOOL_COUNT);
-        assert_eq!(TOOL_NAMES.len(), 8);
+        assert_eq!(TOOL_NAMES.len(), 9);
         // VCP 字段级 4 名
         assert!(TOOL_NAMES.contains(&"WebSearch"));
         assert!(TOOL_NAMES.contains(&"FileOperator"));
@@ -141,12 +148,12 @@ mod tests {
     #[test]
     fn registered_tool_names_static_list() {
         let names = registered_tool_names();
-        assert_eq!(names.len(), 8);
+        assert_eq!(names.len(), 9);
         // 不重复
         let mut sorted = names.clone();
         sorted.sort();
         sorted.dedup();
-        assert_eq!(sorted.len(), 8, "TOOL_NAMES 必须唯一");
+        assert_eq!(sorted.len(), 9, "TOOL_NAMES 必须唯一");
     }
 
     #[test]
@@ -154,7 +161,7 @@ mod tests {
         let registry = ToolRegistry::new();
         assert!(registry.is_empty());
         register_all(&registry).expect("register_all");
-        assert_eq!(registry.len(), 8);
+        assert_eq!(registry.len(), 9);
         // 4 名应都在
         for name in TOOL_NAMES.iter() {
             assert!(registry.get(name).is_some(), "{name} 应在 registry 中");

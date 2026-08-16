@@ -61,6 +61,7 @@ impl CapabilityCatalog {
         s.push_str("  - recall_memory: 检索用户的长期记忆 (按关键词)\n");
         s.push_str("  - save_memory: 把值得长期记住的事实自己总结后写入记忆 (append-only)\n");
         s.push_str("  - WebSearch / WebFetch: 联网搜索与抓取\n");
+        s.push_str("  - Crawl: 轻量爬虫 (抓取多页 + 提取链接, 上限控制)\n");
         s.push_str("  - FileOperator: 文件读写 (受权限包约束, 只写获准的路径)\n");
         s.push_str("  - Git: 版本库操作 (受审批)\n");
         s.push_str("  - Grep: 代码/文本搜索 (限定项目根)\n");
