@@ -32,6 +32,19 @@ pub enum GateDecision {
     UnverifiedAccepted { reason: String },
 }
 
+/// 演化回路动作 (验证闸门 → 部署/回滚的挂接点, 接 deploy 模块; A1 后半段).
+///
+/// 完整回路: 提案 → 生成 → **验证(本模块)** → 部署 → 监控 → 回滚 (后三段见 deploy.rs).
+#[derive(Debug, Clone, PartialEq)]
+pub enum LoopAction {
+    /// 验证通过 → 可部署 (调用 deploy::DeployManager::deploy).
+    Deploy,
+    /// 验证失败 → 回滚 (收据留痕, revert 即学习信号).
+    Rollback { reason: String },
+    /// 预算耗尽 fail-open → 保留待补验证 (不部署也不回滚).
+    HoldUnverified { reason: String },
+}
+
 /// 验证闸门 (纯判定, 可测).
 pub struct EvalGate {
     pub max_fix_attempts: usize,
@@ -101,6 +114,20 @@ impl EvalGate {
                 );
             }
         }
+    }
+
+    /// 闸门决策 → 回路动作 (deploy 模块挂接: Promoted→部署 / Rejected→回滚 / fail-open→挂起).
+    pub fn loop_action(&self, decision: &GateDecision) -> LoopAction {
+        match decision {
+            GateDecision::Promoted => LoopAction::Deploy,
+            GateDecision::Rejected { reason } => LoopAction::Rollback { reason: reason.clone() },
+            GateDecision::UnverifiedAccepted { reason } => LoopAction::HoldUnverified { reason: reason.clone() },
+        }
+    }
+
+    /// 部署收据 (与 rollback_receipt 对称; 部署后进入监控期, 见 deploy 模块).
+    pub fn deploy_receipt(&self, capability: &str) -> String {
+        format!("[agent-deploy] PRE_TASK_SHA={} 能力: {} — 验证通过已部署, 进入监控期", self.pre_sha, capability)
     }
 
     /// 回滚命令骨架 (调用方执行; 返回给演化循环的收据文本).
@@ -184,6 +211,22 @@ mod tests {
             Instant::now(),
         );
         assert!(matches!(d, GateDecision::UnverifiedAccepted { .. }));
+    }
+
+    #[test]
+    fn loop_action_maps_gate_decision_to_deploy_or_rollback() {
+        let g = EvalGate::new("sha1");
+        assert_eq!(g.loop_action(&GateDecision::Promoted), LoopAction::Deploy);
+        assert_eq!(
+            g.loop_action(&GateDecision::Rejected { reason: "no-progress".into() }),
+            LoopAction::Rollback { reason: "no-progress".into() }
+        );
+        assert_eq!(
+            g.loop_action(&GateDecision::UnverifiedAccepted { reason: "预算耗尽".into() }),
+            LoopAction::HoldUnverified { reason: "预算耗尽".into() }
+        );
+        let d = g.deploy_receipt("换元检查");
+        assert!(d.contains("[agent-deploy]") && d.contains("sha1") && d.contains("监控期"));
     }
 
     #[test]

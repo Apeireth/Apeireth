@@ -372,7 +372,8 @@ impl CompanionApp {
         let mut entries = entries;
         if !seed_ids.is_empty() {
             let graph_svc = MemoryGraph::new(Arc::clone(&self.store));
-            for c in graph_svc.crawl(&seed_ids, 3) {
+            // N7: 查询形态学 softmax → CRAWL 预算 (纯函数, 同查询同档位)
+            for c in graph_svc.crawl(&seed_ids, crate::morphology::crawl_budget(query)) {
                 if !entries.contains(&c) {
                     entries.push(c);
                 }
