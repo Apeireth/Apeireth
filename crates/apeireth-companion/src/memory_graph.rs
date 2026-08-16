@@ -46,24 +46,34 @@ pub struct MemoryLink {
     pub weight: f64,
 }
 
-/// 时序图谱服务.
-pub struct MemoryGraph {
+/// 图后端原语 (P1#5 审计 backlog 全清, 2026-08-16).
+///
+/// Kùzu 持久化后端的机制口: `MemoryGraph` 的时序/链接/爬取逻辑留在机制层,
+/// 后端只做「存取原语」。当前默认实现 [`SqliteGraphBackend`] (episode 存储,
+/// 跨重启持久); Kùzu 后端因本机无 cmake 工具链 + GitHub 直连被墙无法构建,
+/// 如实标注: trait 口已备, 环境就绪后实现 `GraphBackend` 即可替换 (0 装 PASS)。
+pub trait GraphBackend: Send + Sync {
+    fn save_fact(&self, f: &GraphFact) -> Result<(), String>;
+    fn load_facts(&self) -> Result<Vec<GraphFact>, String>;
+    fn save_link(&self, l: &MemoryLink) -> Result<(), String>;
+    fn load_links(&self) -> Result<Vec<MemoryLink>, String>;
+    fn load_episodes(&self, session: &str, n: usize) -> Result<Vec<CoreEpisode>, String>;
+}
+
+/// SQLite 后端: factg-*/link-* 以 episode 形态持久化 (现有路径, 跨重启不丢).
+pub struct SqliteGraphBackend {
     store: Arc<SqliteMemoryStore>,
 }
 
-impl MemoryGraph {
+impl SqliteGraphBackend {
     pub fn new(store: Arc<SqliteMemoryStore>) -> Self {
         Self { store }
     }
+}
 
-    fn save_fact(&self, f: &GraphFact) {
-        let content = match serde_json::to_string(f) {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("[graph] 序列化失败: {e}");
-                return;
-            }
-        };
+impl GraphBackend for SqliteGraphBackend {
+    fn save_fact(&self, f: &GraphFact) -> Result<(), String> {
+        let content = serde_json::to_string(f).map_err(|e| format!("序列化失败: {e}"))?;
         let ep = CoreEpisode {
             id: f.id.clone(),
             timestamp: f.valid_at,
@@ -71,8 +81,100 @@ impl MemoryGraph {
             content,
             session_id: "me".into(),
         };
-        if let Err(e) = self.store.put_episode(&ep) {
-            eprintln!("[graph] 写入失败: {e}");
+        self.store
+            .put_episode(&ep)
+            .map_err(|e| format!("写入失败: {e}"))
+    }
+
+    fn load_facts(&self) -> Result<Vec<GraphFact>, String> {
+        let eps = self
+            .store
+            .recent_episodes("me", 500)
+            .map_err(|e| e.to_string())?;
+        Ok(eps
+            .iter()
+            .filter(|e| e.id.starts_with("factg-"))
+            .filter_map(|e| serde_json::from_str::<GraphFact>(&e.content).ok())
+            .collect())
+    }
+
+    fn save_link(&self, l: &MemoryLink) -> Result<(), String> {
+        let content = serde_json::to_string(l).map_err(|e| format!("序列化失败: {e}"))?;
+        let ep = CoreEpisode {
+            id: l.id.clone(),
+            timestamp: chrono::Utc::now().timestamp(),
+            role: "assistant".into(),
+            content,
+            session_id: "me".into(),
+        };
+        self.store
+            .put_episode(&ep)
+            .map_err(|e| format!("写入失败: {e}"))
+    }
+
+    fn load_links(&self) -> Result<Vec<MemoryLink>, String> {
+        let eps = self
+            .store
+            .recent_episodes("me", 500)
+            .map_err(|e| e.to_string())?;
+        Ok(eps
+            .iter()
+            .filter(|e| e.id.starts_with("link-"))
+            .filter_map(|e| serde_json::from_str::<MemoryLink>(&e.content).ok())
+            .collect())
+    }
+
+    fn load_episodes(&self, session: &str, n: usize) -> Result<Vec<CoreEpisode>, String> {
+        self.store
+            .recent_episodes(session, n)
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// 结构化图查询 (Kùzu 式查询语义的 SQLite 版; 过滤当前有效事实).
+#[derive(Debug, Clone, Default)]
+pub struct GraphQuery {
+    pub subject: Option<String>,
+    pub predicate: Option<String>,
+    pub object: Option<String>,
+}
+
+impl GraphQuery {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn subject(mut self, s: impl Into<String>) -> Self {
+        self.subject = Some(s.into());
+        self
+    }
+    pub fn predicate(mut self, p: impl Into<String>) -> Self {
+        self.predicate = Some(p.into());
+        self
+    }
+    pub fn object(mut self, o: impl Into<String>) -> Self {
+        self.object = Some(o.into());
+        self
+    }
+}
+
+/// 时序图谱服务 (机制层; 后端可替换).
+pub struct MemoryGraph {
+    backend: Box<dyn GraphBackend>,
+}
+
+impl MemoryGraph {
+    pub fn new(store: Arc<SqliteMemoryStore>) -> Self {
+        Self { backend: Box::new(SqliteGraphBackend::new(store)) }
+    }
+
+    /// 注入自定义后端 (Kùzu 等; trait 口).
+    pub fn with_backend(backend: Box<dyn GraphBackend>) -> Self {
+        Self { backend }
+    }
+
+    fn save_fact(&self, f: &GraphFact) {
+        if let Err(e) = self.backend.save_fact(f) {
+            eprintln!("[graph] {e}");
         }
     }
 
@@ -116,31 +218,38 @@ impl MemoryGraph {
 
     /// 链全部版本 (含无效).
     fn all_chain_versions(&self, chain: &str) -> Vec<GraphFact> {
-        let eps = self.store.recent_episodes("me", 500).unwrap_or_default();
-        eps.iter()
-            .filter(|e| e.id.starts_with("factg-"))
-            .filter_map(|e| serde_json::from_str::<GraphFact>(&e.content).ok())
+        self.backend
+            .load_facts()
+            .unwrap_or_default()
+            .into_iter()
             .filter(|f| f.chain == chain)
             .collect()
     }
 
     /// 当前有效事实 (按 chain 取最新且 invalid_at 为 None).
     pub fn active_facts(&self) -> Vec<GraphFact> {
-        let eps = self.store.recent_episodes("me", 500).unwrap_or_default();
         let mut by_chain: std::collections::HashMap<String, GraphFact> = std::collections::HashMap::new();
-        for e in eps.iter().filter(|e| e.id.starts_with("factg-")) {
-            if let Ok(f) = serde_json::from_str::<GraphFact>(&e.content) {
-                match by_chain.get(&f.chain) {
-                    Some(existing) if existing.rev >= f.rev => {}
-                    _ => {
-                        by_chain.insert(f.chain.clone(), f);
-                    }
+        for f in self.backend.load_facts().unwrap_or_default() {
+            match by_chain.get(&f.chain) {
+                Some(existing) if existing.rev >= f.rev => {}
+                _ => {
+                    by_chain.insert(f.chain.clone(), f);
                 }
             }
         }
         by_chain
             .into_values()
             .filter(|f| f.invalid_at.is_none())
+            .collect()
+    }
+
+    /// 结构化查询 (P1#5): 按 subject/predicate/object 过滤当前有效事实.
+    pub fn query(&self, q: &GraphQuery) -> Vec<GraphFact> {
+        self.active_facts()
+            .into_iter()
+            .filter(|f| q.subject.as_ref().is_none_or(|s| f.subject == *s))
+            .filter(|f| q.predicate.as_ref().is_none_or(|p| f.predicate == *p))
+            .filter(|f| q.object.as_ref().is_none_or(|o| f.object == *o))
             .collect()
     }
 
@@ -163,8 +272,7 @@ impl MemoryGraph {
 
     /// 写入时自动链接 (A-MEM 规则版): 与既有条目文本重叠率 >= 0.3 → 链接.
     pub fn link_on_write(&self, new_id: &str, new_content: &str) {
-        let eps = self.store.recent_episodes("me", 100).unwrap_or_default();
-        let now = chrono::Utc::now().timestamp();
+        let eps = self.backend.load_episodes("me", 100).unwrap_or_default();
         for e in eps.iter() {
             if e.id == new_id || e.id.starts_with("link-") || e.id.starts_with("tomb-") {
                 continue;
@@ -177,14 +285,8 @@ impl MemoryGraph {
                     to: e.id.clone(),
                     weight: w,
                 };
-                if let Ok(content) = serde_json::to_string(&link) {
-                    let _ = self.store.put_episode(&CoreEpisode {
-                        id: link.id,
-                        timestamp: now,
-                        role: "assistant".into(),
-                        content,
-                        session_id: "me".into(),
-                    });
+                if let Err(err) = self.backend.save_link(&link) {
+                    eprintln!("[graph] 链接写入失败: {err}");
                 }
             }
         }
@@ -192,12 +294,8 @@ impl MemoryGraph {
 
     /// CRAWL (A-MEM): 从种子条目沿链接展开 (权重降序, 预算内).
     pub fn crawl(&self, seeds: &[String], budget: usize) -> Vec<String> {
-        let eps = self.store.recent_episodes("me", 500).unwrap_or_default();
-        let links: Vec<MemoryLink> = eps
-            .iter()
-            .filter(|e| e.id.starts_with("link-"))
-            .filter_map(|e| serde_json::from_str::<MemoryLink>(&e.content).ok())
-            .collect();
+        let eps = self.backend.load_episodes("me", 500).unwrap_or_default();
+        let links = self.backend.load_links().unwrap_or_default();
         let content_of = |id: &str| -> Option<String> {
             eps.iter()
                 .find(|e| e.id == id)
@@ -293,5 +391,66 @@ mod tests {
     fn text_overlap_basic() {
         assert!(text_overlap("abcde", "abcxy") > 0.3);
         assert!(text_overlap("今天天气很好", "主人喜欢深蓝夜空") < 0.3, "无共同字符");
+    }
+
+    #[test]
+    fn structured_query_filters_active_facts() {
+        let g = MemoryGraph::new(store());
+        g.add_fact("主人", "备考", "高数期中", 8);
+        g.add_fact("主人", "喜欢", "烟火", 7);
+        g.add_fact("本座", "负责", "基地", 6);
+        let by_subject = g.query(&GraphQuery::new().subject("主人"));
+        assert_eq!(by_subject.len(), 2, "subject 过滤应命中 2 条");
+        let by_pred = g.query(&GraphQuery::new().predicate("喜欢"));
+        assert_eq!(by_pred.len(), 1);
+        assert_eq!(by_pred[0].object, "烟火");
+        let by_both = g.query(&GraphQuery::new().subject("主人").predicate("备考"));
+        assert_eq!(by_both.len(), 1);
+        let none = g.query(&GraphQuery::new().subject("不存在"));
+        assert!(none.is_empty());
+        // 全空查询 = 全部有效事实
+        assert_eq!(g.query(&GraphQuery::new()).len(), 3);
+    }
+
+    /// 内存假后端: 验证 trait 注入路径 (Kùzu 后端的机制口).
+    struct MemoryBackend {
+        facts: std::sync::Mutex<Vec<GraphFact>>,
+        links: std::sync::Mutex<Vec<MemoryLink>>,
+    }
+
+    impl GraphBackend for MemoryBackend {
+        fn save_fact(&self, f: &GraphFact) -> Result<(), String> {
+            self.facts.lock().unwrap().push(f.clone());
+            Ok(())
+        }
+        fn load_facts(&self) -> Result<Vec<GraphFact>, String> {
+            Ok(self.facts.lock().unwrap().clone())
+        }
+        fn save_link(&self, l: &MemoryLink) -> Result<(), String> {
+            self.links.lock().unwrap().push(l.clone());
+            Ok(())
+        }
+        fn load_links(&self) -> Result<Vec<MemoryLink>, String> {
+            Ok(self.links.lock().unwrap().clone())
+        }
+        fn load_episodes(&self, _session: &str, _n: usize) -> Result<Vec<CoreEpisode>, String> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[test]
+    fn custom_backend_injection_works() {
+        let backend = MemoryBackend {
+            facts: std::sync::Mutex::new(Vec::new()),
+            links: std::sync::Mutex::new(Vec::new()),
+        };
+        let g = MemoryGraph::with_backend(Box::new(backend));
+        g.add_fact("主人", "备考", "高数期中", 8);
+        // 同三元组更新 → 双时态 (旧无效化 + 新边)
+        g.add_fact("主人", "备考", "高数期中", 9);
+        let active = g.active_facts();
+        assert_eq!(active.len(), 1, "后端无关, 时序语义应一致");
+        assert_eq!(active[0].importance, 9);
+        assert_eq!(g.query(&GraphQuery::new().subject("主人")).len(), 1);
     }
 }
