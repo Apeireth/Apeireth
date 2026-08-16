@@ -45,7 +45,7 @@
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
 | N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ⬜ P0, 待实施 |
 | N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ⬜ P0, 待实施 |
-| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 <hash 待回填>: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一); env APEIRETH_MORPHOLOGY_TEMPERATURE |
+| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 08c6f00d: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一, rustc --test 独立全绿; 全 crate 测试被并行 WIP 阻塞, 见报告); env APEIRETH_MORPHOLOGY_TEMPERATURE |
 | N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ⬜ P0, 待实施 |
 | N9 | 提示词装配引擎 (占位符变量宇宙) | N1 发现 (插件扫描) | messageProcessor 范式: 特权角色+单次展开+环检测+分型变量源 — Apeireth 空白区最高价值 | ⬜ P0, 待实施 |
 | N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | vcpLoop TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ⬜ P0, 待实施 |
