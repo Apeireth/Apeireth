@@ -77,6 +77,7 @@ pub mod long_task;
 pub mod classifier;  // R30 U5: tool classifier (8 类 keyword routing)
 pub mod web_fetch;  // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
 pub mod web_crawl;  // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
+pub mod github_accel;  // GitHub 加速节点池 (xiake.pro 聚合, 实测选最快)
 pub mod apply_patch;  // R30 U1: Codex-style apply_patch
 pub mod conventions_scanner;  // R33-1: Aider-style project conventions scanner
 pub mod grep_ops;
@@ -97,6 +98,7 @@ pub use git_ops::{GitCliOps, GitOps, GitOpsTool};
 pub use register::{register_all, registered_tool_names, REGISTERED_TOOL_COUNT, TOOL_NAMES};
 pub use result::ToolResult;
 pub use web_search::{HttpWebSearch, WebSearch, WebSearchTool};
+pub use github_accel::{GhAccelTool, MirrorNode, ProbeResult, accelerate_url, fetch_mirror_pool, pick_fastest, probe_top};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
