@@ -394,10 +394,13 @@ impl CompanionApp {
     /// 今日摘要注入.
     fn inject_today(&self) -> String {
         let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        // 台账 #34: `.unwrap()` 在 DST 回拨/时钟回退时遇 LocalResult::Ambiguous 会 panic
+        // → `.single()` + Option 兜底 0 (退化为"纳入全部 episode", 同 and_hms_opt 失败语义, 非 panic)
         let day_start = chrono::Local::now()
             .date_naive()
             .and_hms_opt(0, 0, 0)
-            .map(|d| d.and_local_timezone(chrono::Local).unwrap().timestamp())
+            .and_then(|d| d.and_local_timezone(chrono::Local).single())
+            .map(|t| t.timestamp())
             .unwrap_or(0);
         let all = self.store.recent_episodes(&self.session, 200).unwrap_or_default();
         let pairs: Vec<(&str, &str)> = all
@@ -710,5 +713,34 @@ mod tests {
         assert!(joined.contains("本座是阿佩瑞斯"), "核心块永不截断");
         let total: usize = out.iter().map(|b| b.content.chars().count()).sum();
         assert!(total <= 800, "总预算应约束, got {total}");
+    }
+
+    #[tokio::test]
+    async fn inject_today_day_start_no_panic_on_ambiguous_local_time() {
+        // 回归测试 (台账 #34): DST 回拨/时钟回退时本地零点可能 LocalResult::Ambiguous,
+        // 旧 `.unwrap()` 会 panic; 改 `.single()` + Option 兜底后必须是非 panic 路径.
+        // ① 直接构造 Ambiguous / None 两变体, 证明 `.single()` 永不 panic 且返 None
+        let now = chrono::Local::now();
+        let ambiguous: chrono::LocalResult<chrono::DateTime<chrono::Local>> =
+            chrono::LocalResult::Ambiguous(now, now);
+        assert!(ambiguous.single().is_none(), "Ambiguous → None, 不 panic");
+        let none: chrono::LocalResult<chrono::DateTime<chrono::Local>> = chrono::LocalResult::None;
+        assert!(none.single().is_none(), "None → None, 不 panic");
+
+        // ② 复刻修复后的表达式 (与 inject_today 同源), 正常机器上应得今日零点戳
+        let day_start = chrono::Local::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .and_then(|d| d.and_local_timezone(chrono::Local).single())
+            .map(|t| t.timestamp())
+            .unwrap_or(0);
+        assert!(day_start <= chrono::Local::now().timestamp(), "今日零点 ≤ 现在");
+
+        // ③ 真实 inject_today 生产路径: 今日 episode 应被纳入且不 panic
+        let store = test_store();
+        put(&store, "ep-today", "今日事件回归", "me");
+        let app = CompanionApp::new(store, "me");
+        let rendered = app.inject_today();
+        assert!(rendered.contains("今日事件回归"), "今日 episode 应入选今日摘要");
     }
 }
