@@ -533,6 +533,18 @@ async fn chat_completions(
             },
         );
     }
+    // 上下文裁剪 (2026-08-16: 长对话 prompt 无限增长 → MiniMax 处理慢 + 易撞限流):
+    // 保留头部注入区 (persona + 注入块, 全是 system) + 最近 30 条对话
+    if messages.len() > 34 {
+        let head_end = messages
+            .iter()
+            .position(|m| m.role != "system")
+            .unwrap_or(0);
+        let mut head = messages[..head_end].to_vec();
+        let tail = messages[messages.len().saturating_sub(30)..].to_vec();
+        head.extend(tail);
+        messages = head;
+    }
 
     let tools = tools_schema(&st.bridge.registry);
     let mut final_content: String;
@@ -559,8 +571,8 @@ async fn chat_completions(
         };
         let Some((content, tcs)) = chat_once(&st.pipeline, &req2, rounds).await else {
             return (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": {"message": "LLM 调用失败 (限流/网络), 请重试"}})),
+                StatusCode::SERVICE_UNAVAILABLE,
+                Json(json!({"error": {"message": "模型服务暂时不可用 (MiniMax 限流) — 本座已尽力, 请过 10-30 秒再试"}})),
             )
                 .into_response();
         };
@@ -637,8 +649,11 @@ async fn chat_once(
     req: &OpenAiChatRequest,
     label: usize,
 ) -> Option<(String, Vec<Value>)> {
-    for attempt in 0..5 {
+    // 限流重试策略 (2026-08-16 实测: MiniMax 限流严重, 5×8s=40s+ 静默等待体感极差):
+    // 最多 3 次 × 6s 退避; 仍失败 → 快速失败 (让用户明确知道限流, 优于无声长等)
+    for attempt in 0..3 {
         let normalized = openai_chat_to_normalized(req);
+        let t0 = std::time::Instant::now();
         match dispatch(pipeline, ProtocolKind::OpenAiChat, normalized).await {
             Ok(r) => {
                 let chat = openai_chat_from_normalized(&r);
@@ -653,11 +668,12 @@ async fn chat_once(
                     .map(|c| c.message.tool_calls.clone())
                     .unwrap_or_default()
                     .unwrap_or_default();
+                eprintln!("[llm] 轮{label} 成功 ({}ms)", t0.elapsed().as_millis());
                 return Some((content, tcs));
             }
             Err(e) => {
-                eprintln!("  [管线] 轮{label} 第{}次失败: {e}, 8s 后重试", attempt + 1);
-                tokio::time::sleep(Duration::from_secs(8)).await;
+                eprintln!("  [管线] 轮{label} 第{}次失败: {e}, 6s 后重试", attempt + 1);
+                tokio::time::sleep(Duration::from_secs(6)).await;
             }
         }
     }
