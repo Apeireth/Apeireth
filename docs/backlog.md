@@ -47,6 +47,10 @@
 | N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ⬜ P0, 待实施 |
 | N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ⬜ P0, 待实施 |
 | N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ⬜ P0, 待实施 |
+| N9 | 提示词装配引擎 (占位符变量宇宙) | N1 发现 (插件扫描) | messageProcessor 范式: 特权角色+单次展开+环检测+分型变量源 — Apeireth 空白区最高价值 | ⬜ P0, 待实施 |
+| N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | vcpLoop TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ⬜ P0, 待实施 |
+| N11 | foldProtocol 分级显隐 | N1 发现 (插件扫描) | context-fold 增强: FoldBlock 数据模型 (同文档分级+语义阈值展开) | ⬜ P1, 待实施 |
+| N12 | 语义模型路由 + 推理归一化 | N1 发现 (插件扫描) | gateway 层: 语义选模型+容灾链; 13 别名推理字段→think 块 | ⬜ P1, 待实施 |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
