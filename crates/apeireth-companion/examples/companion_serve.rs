@@ -40,7 +40,7 @@ use apeireth_api::protocol_handlers::{
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, LarkSink, MultiSink, Sink, ThrottledUtterance,
+    CompanionDaemon, CompanionDelivery, LarkSink, MultiSink, Sink, TelegramSink, ThrottledUtterance,
     UtteranceGenerator, continuity_id_from_env, open_memory_store,
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
@@ -1171,6 +1171,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => {
             println!("[sink] Lark 未启用 (需要 APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID): {e}");
+        }
+    }
+    match TelegramSink::from_env() {
+        Ok(tg) => {
+            sink = sink.push(Box::new(tg));
+            println!("[sink] Telegram 离线送达已启用 (凭据有效)");
+        }
+        Err(e) => {
+            println!("[sink] Telegram 未启用 (需要 APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID): {e}");
         }
     }
     let daemon = CompanionDaemon::new(
