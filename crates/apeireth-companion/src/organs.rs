@@ -1,14 +1,20 @@
 //! `apeireth-companion::organs` — 把其余器官接进主动涌现闭环 (真实 API, 非 stub).
 //!
 //! - **consciousness** (EmotionEngine): 反馈 → 情绪事件 (回了=UserPraise / 没回=UserCritique),
-//!   当前 PAD 愉悦度调制主动意愿 (情绪很低时不出声).
+//!   当前 PAD 愉悦度调制主动意愿 (情绪很低时不出声);
+//!   **情绪风格还调制「怎么开口」** — `tone()` 把 ResponseStyle 映射成语气措辞 (tone::emotion_tone)。
 //! - **asi** (TraceRepository): 每次反馈后把自评写入 24 维真实轨迹历史.
-//! - **council** (Council + 7 强制 Advisor): 每次主动前多视角审议, 裁决拒绝则不开口.
+//! - **council** (Council + 7 强制 Advisor): 每次主动前多视角审议, 裁决拒绝则不开口;
+//!   **审议结果还调制「措辞强度」** — 每次审议的加权分/置信度捕获为 DeliberationEcho,
+//!   `tone()` 据此给出坚定/从容/留余地/克制档 (tone::deliberation_intensity)。
 //! - **evolution** (EvolutionStateMachine): 「主动策略」作为可演化 trait, 连续被忽略则
 //!   退回 Draft (自我修正信号: 我不该这么频繁).
 //!
-//! 诚实: 器官调用是真实的; 但「情绪/审议/演化」目前只调制「是否开口」这一层,
-//! 更深的人格化 (情绪→语气、审议→措辞) 是下一步.
+//! 诚实: 器官调用是真实的。「是否开口」由情绪/审议/演化三层门控;
+//! 「怎么开口」由 `tone()` 三层合成 (关系基线 × 情绪语气 × 审议强度)。
+//! 未做: LLM 措辞 trait 口已留 (tone::ToneRefiner), 实现未接 (本 crate 无 LLM 依赖);
+//! 渲染层示例 (production_daemon/companion_serve) 仍用 Bond 静态语调,
+//! 逐条送达时调用 AwakeCompanion::tone() 的动态注入留待后续任务。
 
 use apeireth_asi::UserFeedback;
 use apeireth_consciousness::emotion::{EmotionEngine, EmotionEvent};
@@ -19,6 +25,7 @@ use chrono::{DateTime, Utc};
 
 use crate::emergence::{Boundaries, EmergenceLoop, Feedback, Initiative, SelfScore};
 use crate::security::{SecurityGate, SovereigntyGate};
+use crate::tone::DeliberationEcho;
 use crate::Bond;
 use apeireth_core::{ActionTarget, ActionVerdict, RiskLevel};
 
@@ -32,6 +39,9 @@ pub struct AwakeCompanion {
     pub gate: SecurityGate,
     pub sovereignty: SovereigntyGate,
     consecutive_ignores: u32,
+    /// 最近一次智囊团审议的回声 (加权分 + 置信度) — 供 tone() 合成措辞强度。
+    /// None = 尚未发生过审议。
+    last_deliberation: Option<DeliberationEcho>,
 }
 
 impl AwakeCompanion {
@@ -50,6 +60,7 @@ impl AwakeCompanion {
             gate: SecurityGate::default(),
             sovereignty: SovereigntyGate::default(),
             consecutive_ignores: 0,
+            last_deliberation: None,
         }
     }
 
@@ -90,6 +101,12 @@ impl AwakeCompanion {
         .with_risk("low")
         .with_area("companion_proactive");
         let verdict = self.council.deliberate(query);
+        // 审议 → 措辞: 捕获审议回声 (加权分/置信度), 供 tone() 合成措辞强度。
+        // 即使本次被拒也如实记录 — 「最后一次审议」是真实状态, 不因拒绝而消失。
+        self.last_deliberation = Some(DeliberationEcho {
+            weighted_score: verdict.report.weighted_score,
+            confidence: verdict.report.confidence,
+        });
         if verdict.is_rejected() {
             return None;
         }
@@ -119,6 +136,22 @@ impl AwakeCompanion {
             }
         }
         Some(init)
+    }
+
+    /// 最近一次审议的回声 (尚未发生过审议 = None)。
+    pub fn last_deliberation(&self) -> Option<&DeliberationEcho> {
+        self.last_deliberation.as_ref()
+    }
+
+    /// 三层器官语调 (确定性合成, 渲染层注入用):
+    /// 关系基线 (Bond) × 情绪风格 (consciousness ResponseStyle) × 审议强度 (council 回声)。
+    /// 情绪事件 (apply_feedback) 与每次审议 (tick) 都会真实改变它的输出。
+    pub fn tone(&self) -> String {
+        crate::tone::organ_tone(
+            &self.loop_.relationship,
+            self.emotion.response_style(),
+            self.last_deliberation.as_ref(),
+        )
     }
 
     /// 带器官的反馈: 情绪事件 + 机制反馈 (Bond 演化) + 策略演化 (连续被忽略 → 退回 Draft).
@@ -268,5 +301,44 @@ mod tests {
         c.observe_interaction(at(17, 8, 40));
         assert!(c.evolution.current.is_active());
         assert!(c.loop_.boundaries.max_initiatives_per_day < before);
+    }
+
+    // ============ A3: 情绪→语气 + 审议→措辞 接线证据 ============
+
+    #[test]
+    fn tone_layers_emotion_and_deliberation() {
+        let mut c = AwakeCompanion::new(trusted_bond(), Boundaries::default());
+        // 1) 尚未审议: 语调只有两层 (关系基线 + 情绪中性 Friendly), 无审议回声
+        assert_eq!(c.last_deliberation(), None);
+        let t0 = c.tone();
+        assert!(t0.contains("轻松友好"), "新伙伴情绪基线应是 Friendly 档: {t0}");
+        assert!(!t0.contains("智囊团"), "审议前不应有强度层: {t0}");
+        // 2) 全器官心跳后: 审议回声被捕获, 语调获得第三层
+        for d in 9..=15 {
+            c.observe_interaction(at(d, 8, 40));
+        }
+        let init = c.tick(at(16, 8, 40), None);
+        assert!(init.is_some());
+        let echo = c.last_deliberation().expect("tick 应捕获审议回声");
+        let t1 = c.tone();
+        assert!(t1.contains("智囊团"), "审议后应有强度层: {t1}");
+        // 3) 审议→措辞强度: 语调强度层与回声的确定性分档一致
+        let expected = crate::tone::deliberation_intensity(echo.weighted_score, echo.confidence)
+            .expect("council 报告应归一化在合法区间");
+        assert!(t1.contains(expected), "强度层应与回声分档一致: {t1} vs {expected}");
+        // 4) 情绪→语气: 没回 (UserCritique → Anger → Diplomatic) 真实改变情绪层
+        c.apply_feedback(Feedback::Ignored, at(16, 9, 0));
+        let t2 = c.tone();
+        assert!(t2.contains("平稳客观"), "被批评后情绪层应转 Diplomatic 档: {t2}");
+        assert_ne!(t1, t2, "情绪事件应真实改变语调");
+    }
+
+    #[test]
+    fn tone_follows_high_intensity_emotion() {
+        let mut c = AwakeCompanion::new(trusted_bond(), Boundaries::default());
+        // 直接用引擎真实 API 驱动情绪: 高唤醒事件 (Intense → Fear, 强度 >0.5) → Cautious 档
+        let _ = c.emotion.apply(EmotionEvent::Intense);
+        let t = c.tone();
+        assert!(t.contains("字斟句酌"), "高强度 Fear 应落 Cautious 档: {t}");
     }
 }
