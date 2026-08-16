@@ -73,8 +73,10 @@
 | principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
 | memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
-| memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
+| memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调+无效化=max+1 新边=max+2) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
+| context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) | 注入链统一入口 |
+| assemble.rs | CompanionApp 机制装配器 (审计 P0#1): L0 Identity + L1 Essential Story 常驻 (mempalace §5.6) + 注入管线 + 提炼调度 (run_extraction/extraction_due) + 滚动摘要 (summarize_dialog/summarize_due) + 自成长 (refine_experience/export_promotion_candidates) + LLM 调用点 trait (DeepRecall/DialogSummarizer/ExperienceRefiner) | serve/TUI/CLI 复用 |
 
 ## 三、加新模块规范（维护 checklist）
 
