@@ -1,4 +1,4 @@
-﻿//! 跨 Agent 群聊 (Cross-Agent Group Chat)
+//! 跨 Agent 群聊 (Cross-Agent Group Chat)
 //!
 //! **源**: VCP v1.1 官网 "通过 AgentAssistant或者VCPGroupChat 与其它 Agent 朋友们围炉夜话".
 //!
@@ -87,7 +87,11 @@ pub struct Participant {
 }
 
 impl Participant {
-    pub fn new(id: impl Into<String>, display_name: impl Into<String>, role: ParticipantRole) -> Self {
+    pub fn new(
+        id: impl Into<String>,
+        display_name: impl Into<String>,
+        role: ParticipantRole,
+    ) -> Self {
         Self {
             id: id.into(),
             display_name: display_name.into(),
@@ -133,7 +137,10 @@ impl ChatMessage {
         let participant_id = participant_id.into();
         let content = content.into();
         let timestamp_ms = now_ms();
-        let content_hash = sha256_hex(&format!("{}|{}|{}|{}", timestamp_ms, room_id, participant_id, content));
+        let content_hash = sha256_hex(&format!(
+            "{}|{}|{}|{}",
+            timestamp_ms, room_id, participant_id, content
+        ));
         Self {
             id: Uuid::new_v4().to_string(),
             room_id,
@@ -251,7 +258,10 @@ impl GroupRoom {
     }
 
     pub fn remove(&mut self, participant_id: &str) -> GroupChatResult<()> {
-        let i = self.participants.iter().position(|p| p.id == participant_id)
+        let i = self
+            .participants
+            .iter()
+            .position(|p| p.id == participant_id)
             .ok_or_else(|| GroupChatError::ParticipantNotInRoom(participant_id.into()))?;
         self.participants.remove(i);
         if self.turn_cursor >= self.participants.len() && !self.participants.is_empty() {
@@ -268,7 +278,8 @@ impl GroupRoom {
         if !self.status.can_post() {
             return Err(GroupChatError::RoomClosed(self.id.clone()));
         }
-        let p = self.participant(&msg.participant_id)
+        let p = self
+            .participant(&msg.participant_id)
             .ok_or_else(|| GroupChatError::ParticipantNotInRoom(msg.participant_id.clone()))?;
         if !p.can_speak() {
             return Err(GroupChatError::ParticipantNotInRoom(p.id.clone()));
@@ -282,19 +293,22 @@ impl GroupRoom {
                 if let Some(last) = self.messages.last() {
                     if last.participant_id == msg.participant_id {
                         return Err(GroupChatError::ParticipantNotInRoom(
-                            "round_robin: wait for next turn".into()
+                            "round_robin: wait for next turn".into(),
                         ));
                     }
                 }
             }
             TurnPolicy::HostDriven => {
                 // 简化: 检查 host 是否在场, 强制 host 批准 (这里用 last 是 host 即可)
-                let host = self.participants.iter().find(|p| p.role == ParticipantRole::Host);
+                let host = self
+                    .participants
+                    .iter()
+                    .find(|p| p.role == ParticipantRole::Host);
                 if let Some(host) = host {
                     if let Some(last) = self.messages.last() {
                         if last.participant_id != host.id && msg.participant_id != host.id {
                             return Err(GroupChatError::ParticipantNotInRoom(
-                                "host_driven: only host or with host approval".into()
+                                "host_driven: only host or with host approval".into(),
                             ));
                         }
                     }
@@ -304,7 +318,11 @@ impl GroupRoom {
 
         self.messages.push(msg);
         // RoundRobin cursor 推进
-        if let Some(i) = self.participants.iter().position(|p| p.id == self.messages.last().unwrap().participant_id) {
+        if let Some(i) = self
+            .participants
+            .iter()
+            .position(|p| p.id == self.messages.last().unwrap().participant_id)
+        {
             self.turn_cursor = (i + 1) % self.participants.len().max(1);
         }
         Ok(())
@@ -343,10 +361,17 @@ pub struct GroupChat {
 
 impl GroupChat {
     pub fn new() -> Self {
-        Self { rooms: Arc::new(Mutex::new(HashMap::new())) }
+        Self {
+            rooms: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
-    pub fn create_room(&self, name: impl Into<String>, topic: impl Into<String>, policy: TurnPolicy) -> String {
+    pub fn create_room(
+        &self,
+        name: impl Into<String>,
+        topic: impl Into<String>,
+        policy: TurnPolicy,
+    ) -> String {
         let room = GroupRoom::new(name, topic, policy);
         let id = room.id.clone();
         self.rooms.lock().insert(id.clone(), room);
@@ -374,14 +399,18 @@ impl GroupChat {
 
     pub fn close_room(&self, room_id: &str) -> GroupChatResult<()> {
         let mut g = self.rooms.lock();
-        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        let r = g
+            .get_mut(room_id)
+            .ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
         r.close();
         Ok(())
     }
 
     pub fn archive_room(&self, room_id: &str) -> GroupChatResult<()> {
         let mut g = self.rooms.lock();
-        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        let r = g
+            .get_mut(room_id)
+            .ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
         r.archive();
         Ok(())
     }
@@ -389,19 +418,25 @@ impl GroupChat {
     // R147: 新增 helper 方法 (不改 LOCKED 入口签名, 仅 +2 fn)
     pub fn add_participant_public(&self, room_id: &str, p: Participant) -> GroupChatResult<()> {
         let mut g = self.rooms.lock();
-        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        let r = g
+            .get_mut(room_id)
+            .ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
         r.add(p)
     }
 
     pub fn post_message_public(&self, room_id: &str, msg: ChatMessage) -> GroupChatResult<()> {
         let mut g = self.rooms.lock();
-        let r = g.get_mut(room_id).ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
+        let r = g
+            .get_mut(room_id)
+            .ok_or_else(|| GroupChatError::RoomNotFound(room_id.into()))?;
         r.post(msg)
     }
 }
 
 impl Default for GroupChat {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Room 借用句柄 (锁住期间不能跨 await)
@@ -468,16 +503,20 @@ mod tests {
     #[test]
     fn t04_add_participants() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("agent_a", "Alice", ParticipantRole::Agent)).unwrap();
-        room.add(Participant::new("agent_b", "Bob", ParticipantRole::Agent)).unwrap();
-        room.add(Participant::new("host_h", "Host", ParticipantRole::Host)).unwrap();
+        room.add(Participant::new("agent_a", "Alice", ParticipantRole::Agent))
+            .unwrap();
+        room.add(Participant::new("agent_b", "Bob", ParticipantRole::Agent))
+            .unwrap();
+        room.add(Participant::new("host_h", "Host", ParticipantRole::Host))
+            .unwrap();
         assert_eq!(room.participant_count(), 3);
     }
 
     #[test]
     fn t05_post_message() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("a", "Alice", ParticipantRole::Agent)).unwrap();
+        room.add(Participant::new("a", "Alice", ParticipantRole::Agent))
+            .unwrap();
         let msg = ChatMessage::new(room.id.clone(), "a", "hello world");
         room.post(msg).unwrap();
         assert_eq!(room.message_count(), 1);
@@ -486,7 +525,8 @@ mod tests {
     #[test]
     fn t06_post_observer_rejected() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("o", "Observer", ParticipantRole::Observer)).unwrap();
+        room.add(Participant::new("o", "Observer", ParticipantRole::Observer))
+            .unwrap();
         let msg = ChatMessage::new(room.id.clone(), "o", "hi");
         let r = room.post(msg);
         assert!(r.is_err());
@@ -495,23 +535,29 @@ mod tests {
     #[test]
     fn t07_round_robin_enforces_turn() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::RoundRobin);
-        room.add(Participant::new("a", "Alice", ParticipantRole::Agent)).unwrap();
-        room.add(Participant::new("b", "Bob", ParticipantRole::Agent)).unwrap();
+        room.add(Participant::new("a", "Alice", ParticipantRole::Agent))
+            .unwrap();
+        room.add(Participant::new("b", "Bob", ParticipantRole::Agent))
+            .unwrap();
 
-        room.post(ChatMessage::new(room.id.clone(), "a", "first")).unwrap();
+        room.post(ChatMessage::new(room.id.clone(), "a", "first"))
+            .unwrap();
         // 不能 a 连续发
         let r = room.post(ChatMessage::new(room.id.clone(), "a", "second"));
         assert!(r.is_err());
         // b 可以发
-        room.post(ChatMessage::new(room.id.clone(), "b", "ok")).unwrap();
+        room.post(ChatMessage::new(room.id.clone(), "b", "ok"))
+            .unwrap();
         assert_eq!(room.message_count(), 2);
     }
 
     #[test]
     fn t08_capacity_limit() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free).with_capacity(2);
-        room.add(Participant::new("a", "A", ParticipantRole::Agent)).unwrap();
-        room.add(Participant::new("b", "B", ParticipantRole::Agent)).unwrap();
+        room.add(Participant::new("a", "A", ParticipantRole::Agent))
+            .unwrap();
+        room.add(Participant::new("b", "B", ParticipantRole::Agent))
+            .unwrap();
         let r = room.add(Participant::new("c", "C", ParticipantRole::Agent));
         assert!(r.is_err());
     }
@@ -519,8 +565,10 @@ mod tests {
     #[test]
     fn t09_close_room_blocks_posts() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("a", "A", ParticipantRole::Agent)).unwrap();
-        room.post(ChatMessage::new(room.id.clone(), "a", "hi")).unwrap();
+        room.add(Participant::new("a", "A", ParticipantRole::Agent))
+            .unwrap();
+        room.post(ChatMessage::new(room.id.clone(), "a", "hi"))
+            .unwrap();
         room.close();
         let r = room.post(ChatMessage::new(room.id.clone(), "a", "second"));
         assert!(r.is_err());
@@ -529,9 +577,11 @@ mod tests {
     #[test]
     fn t10_recent_messages() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("a", "A", ParticipantRole::Agent)).unwrap();
+        room.add(Participant::new("a", "A", ParticipantRole::Agent))
+            .unwrap();
         for i in 0..10 {
-            room.post(ChatMessage::new(room.id.clone(), "a", format!("msg{}", i))).unwrap();
+            room.post(ChatMessage::new(room.id.clone(), "a", format!("msg{}", i)))
+                .unwrap();
         }
         let recent = room.recent(3);
         assert_eq!(recent.len(), 3);
@@ -575,7 +625,8 @@ mod tests {
     #[test]
     fn t14_remove_participant() {
         let mut room = GroupRoom::new("r", "t", TurnPolicy::Free);
-        room.add(Participant::new("a", "A", ParticipantRole::Agent)).unwrap();
+        room.add(Participant::new("a", "A", ParticipantRole::Agent))
+            .unwrap();
         room.remove("a").unwrap();
         assert_eq!(room.participant_count(), 0);
         let r = room.remove("a");

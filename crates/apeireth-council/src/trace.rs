@@ -88,10 +88,7 @@ impl TraceReport {
     /// Pretty-print 人类可读 (per 派活单 "3 advisor 协作任务 + trace 打印")
     pub fn to_pretty_print(&self) -> String {
         let mut out = String::new();
-        out.push_str(&format!(
-            "=== Council Trace: {} ===\n",
-            self.session_id
-        ));
+        out.push_str(&format!("=== Council Trace: {} ===\n", self.session_id));
         out.push_str(&format!(
             "Mode: {}\n",
             pretty_mode_name(self.mode, self.steps.len())
@@ -140,18 +137,16 @@ impl TraceReport {
 
     /// JSON 序列化 (整张 trace report)
     pub fn to_json(&self) -> String {
-        serde_json::to_string_pretty(self).unwrap_or_else(|e| {
-            format!("{{\"error\": \"serialization failed: {e}\"}}")
-        })
+        serde_json::to_string_pretty(self)
+            .unwrap_or_else(|e| format!("{{\"error\": \"serialization failed: {e}\"}}"))
     }
 
     /// JSONL 序列化 (claude_code trace 风格, 每行 1 step)
     pub fn to_step_jsonl(&self) -> String {
         let mut out = String::new();
         for step in &self.steps {
-            let json = serde_json::to_string(step).unwrap_or_else(|e| {
-                format!("{{\"error\": \"step serialization failed: {e}\"}}")
-            });
+            let json = serde_json::to_string(step)
+                .unwrap_or_else(|e| format!("{{\"error\": \"step serialization failed: {e}\"}}"));
             out.push_str(&json);
             out.push('\n');
         }
@@ -462,8 +457,7 @@ mod tests {
     #[test]
     fn trace_report_to_pretty_print_contains_key_fields() {
         let v = verdict_3_steps_approve();
-        let report = TraceReport::from_verdict(&v)
-            .with_query("deploy auth system");
+        let report = TraceReport::from_verdict(&v).with_query("deploy auth system");
         let pp = report.to_pretty_print();
         assert!(pp.contains("Council Trace"));
         assert!(pp.contains("collab-test-000001"));
@@ -506,13 +500,7 @@ mod tests {
     #[test]
     fn trace_step_from_opinion_helper() {
         let op = opinion(StanceKind::Approve, "test reasoning");
-        let step = trace_step_from_opinion(
-            0,
-            CollaborationMode::Voting,
-            "voter.1",
-            "vote",
-            &op,
-        );
+        let step = trace_step_from_opinion(0, CollaborationMode::Voting, "voter.1", "vote", &op);
         assert_eq!(step.step_id, 0);
         assert_eq!(step.actor, "voter.1");
         assert_eq!(step.action, "vote");

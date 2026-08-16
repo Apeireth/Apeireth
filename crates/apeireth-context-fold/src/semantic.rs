@@ -151,7 +151,11 @@ pub fn fold_segments<S: RelevanceScorer>(
     opts: &SemanticFoldOptions,
     summarizer: Option<&dyn Fn(&str) -> String>,
 ) -> SemanticFoldOutcome {
-    let threshold = if opts.threshold.is_finite() { opts.threshold } else { 0.0 };
+    let threshold = if opts.threshold.is_finite() {
+        opts.threshold
+    } else {
+        0.0
+    };
     let mut parts: Vec<String> = Vec::new();
     let mut folded: Vec<FoldedSegment> = Vec::new();
     let mut kept = 0usize;
@@ -178,11 +182,21 @@ pub fn fold_segments<S: RelevanceScorer>(
                 summary,
                 marker.format_placeholder()
             );
-            folded.push(FoldedSegment { index: i, score, summary, marker, placeholder_line });
+            folded.push(FoldedSegment {
+                index: i,
+                score,
+                summary,
+                marker,
+                placeholder_line,
+            });
             parts.push(folded.last().unwrap().placeholder_line.clone());
         }
     }
-    SemanticFoldOutcome { rendered: parts.join("\n\n"), kept, folded }
+    SemanticFoldOutcome {
+        rendered: parts.join("\n\n"),
+        kept,
+        folded,
+    }
 }
 
 /// 无损展开: 把占位行逐一还原为原段全文。
@@ -213,7 +227,10 @@ mod tests {
     }
 
     fn opts() -> SemanticFoldOptions {
-        SemanticFoldOptions { threshold: 0.5, summary_chars: 6 }
+        SemanticFoldOptions {
+            threshold: 0.5,
+            summary_chars: 6,
+        }
     }
 
     #[test]
@@ -322,7 +339,10 @@ mod tests {
         // NaN 阈值 → 按 0.0 处理 → 全部保留 (fail-open)
         let s = EmbeddingScorer::new(MockEmbedder);
         let segs = ["北京天气晴"];
-        let o = SemanticFoldOptions { threshold: f32::NAN, summary_chars: 4 };
+        let o = SemanticFoldOptions {
+            threshold: f32::NAN,
+            summary_chars: 4,
+        };
         let out = fold_segments(&segs, "天气", &s, &o, None);
         assert_eq!(out.kept, 1);
         assert!(out.folded.is_empty());

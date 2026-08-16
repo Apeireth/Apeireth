@@ -1,4 +1,3 @@
-
 //! R176 Bridge 7 Kani proofs: memory -> consciousness bridge invariants
 
 #![allow(missing_docs)]
@@ -47,7 +46,10 @@ fn r176_b7_01_episode_default_adjustment_consistent() {
     if adj.should_trigger_reflection {
         assert!(adj.reflection_reason.is_some(), "triggered but no reason");
     } else {
-        assert!(adj.reflection_reason.is_none(), "not triggered but reason set");
+        assert!(
+            adj.reflection_reason.is_none(),
+            "not triggered but reason set"
+        );
     }
 }
 
@@ -58,7 +60,10 @@ fn r176_b7_02_note_default_adjustment_consistent() {
     if adj.should_trigger_reflection {
         assert!(adj.reflection_reason.is_some(), "triggered but no reason");
     } else {
-        assert!(adj.reflection_reason.is_none(), "not triggered but reason set");
+        assert!(
+            adj.reflection_reason.is_none(),
+            "not triggered but reason set"
+        );
     }
 }
 

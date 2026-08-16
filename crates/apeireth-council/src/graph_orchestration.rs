@@ -219,18 +219,14 @@ impl CollaborationDriver for MockDriver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_graph::State;
     use crate::advisor::StanceKind;
+    use apeireth_graph::State;
 
     #[test]
     fn collaboration_node_new_basic() {
         let driver: Arc<dyn CollaborationDriver> = Arc::new(MockDriver::default());
-        let node = CollaborationNode::new(
-            "node.1",
-            CollaborationMode::Voting,
-            "test query",
-            driver,
-        );
+        let node =
+            CollaborationNode::new("node.1", CollaborationMode::Voting, "test query", driver);
         assert_eq!(node.id(), "node.1");
         assert_eq!(node.query_desc, "test query");
     }
@@ -238,12 +234,8 @@ mod tests {
     #[test]
     fn collaboration_node_run_writes_state() {
         let driver: Arc<dyn CollaborationDriver> = Arc::new(MockDriver::default());
-        let node = CollaborationNode::new(
-            "test.node",
-            CollaborationMode::Voting,
-            "test query",
-            driver,
-        );
+        let node =
+            CollaborationNode::new("test.node", CollaborationMode::Voting, "test query", driver);
         let mut state = State::new();
         state.insert("query_id".to_string(), serde_json::json!("q-graph-test"));
         let result = node.run(&mut state);

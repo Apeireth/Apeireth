@@ -49,7 +49,10 @@ impl DebateMode {
     }
 
     /// 注入 mock LLM (透传到 R33-4-1, chainable)
-    pub fn with_mock_llm(mut self, llm: std::sync::Arc<dyn crate::mock_llm::MockLlmProvider>) -> Self {
+    pub fn with_mock_llm(
+        mut self,
+        llm: std::sync::Arc<dyn crate::mock_llm::MockLlmProvider>,
+    ) -> Self {
         self.deliberator = self.deliberator.with_mock_llm(llm);
         self
     }
@@ -71,10 +74,8 @@ impl DebateMode {
             .collect();
 
         // 复用 R10 synthesize 走全 opinions (跟 Planner+Executor 路径对齐)
-        let report = crate::synthesis::synthesize(
-            &opinions,
-            &crate::synthesis::SynthesisWeights::default(),
-        );
+        let report =
+            crate::synthesis::synthesize(&opinions, &crate::synthesis::SynthesisWeights::default());
 
         let elapsed_ms = (current_time_ms() - started_at_ms).max(0) as u64;
         let steps = u32::from(multi.rounds_run);

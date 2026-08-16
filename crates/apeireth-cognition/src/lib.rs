@@ -24,19 +24,21 @@ use apeireth_core::{verdict_for_target, ActionTarget, PhilosophyVerdict};
 use thiserror::Error;
 use uuid::Uuid;
 
-mod decision;
-pub mod consciousness_bridge;  // R172: bridge 1 of 7
-// R176: bridge 1 Kani proofs
+pub mod consciousness_bridge;
+mod decision; // R172: bridge 1 of 7
+              // R176: bridge 1 Kani proofs
 mod bridge_kani_proofs;
 // R177: organ invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
+pub mod planning;
 mod reflection;
-mod scoring;
-pub mod planning;  // A1/P2#7: MCTS/LATS 规划搜索机制 (trait 注入, 零 LLM 依赖)
+mod scoring; // A1/P2#7: MCTS/LATS 规划搜索机制 (trait 注入, 零 LLM 依赖)
 
 pub use decision::{CognitiveOutput, CognitivePipeline};
+pub use planning::{
+    MctsConfig, MctsPlanner, SearchAction, SearchResult, SearchState, StateEvaluator,
+};
 pub use reflection::{ReflectionReport, ReflectionVerdict};
-pub use planning::{MctsConfig, MctsPlanner, SearchAction, SearchResult, SearchState, StateEvaluator};
 pub use scoring::{
     continuity_score, identity_score, philosophy_guard_score, salience_score, transferability_score,
 };

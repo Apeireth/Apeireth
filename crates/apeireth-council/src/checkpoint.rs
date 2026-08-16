@@ -335,7 +335,9 @@ mod tests {
             checkpoint_id: format!("cp-{session_id}-{step}"),
             session_id: session_id.to_string(),
             query: mk_query(),
-            opinions_so_far: (0..step).map(|i| mk_opinion(i, 1_000_000 + (i as i64) * 100)).collect(),
+            opinions_so_far: (0..step)
+                .map(|i| mk_opinion(i, 1_000_000 + (i as i64) * 100))
+                .collect(),
             current_step: step,
             total_steps: total,
             elapsed_ms_so_far: step as u64 * 50,
@@ -401,10 +403,7 @@ mod tests {
         let store = MemoryCheckpointStore::new();
         store.put(&mk_checkpoint("s1", 1, 5)).unwrap();
         store.delete("s1").unwrap();
-        assert!(matches!(
-            store.get("s1"),
-            Err(CheckpointError::NotFound(_))
-        ));
+        assert!(matches!(store.get("s1"), Err(CheckpointError::NotFound(_))));
     }
 
     #[test]

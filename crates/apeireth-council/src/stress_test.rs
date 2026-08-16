@@ -21,9 +21,7 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 
 use crate::council_member::CouncilMember;
-use crate::council_member_deliberation::{
-    CouncilMemberDeliberator, MultiRoundVerdict,
-};
+use crate::council_member_deliberation::{CouncilMemberDeliberator, MultiRoundVerdict};
 use crate::deliberation::CouncilQuery;
 use crate::mock_llm::{MockLlmProvider, MockLlmResponse};
 
@@ -131,17 +129,35 @@ impl StressReport {
     /// Markdown report (per master 8/9 实拍 markdown 风格)
     pub fn to_markdown(&self) -> String {
         let mut out = String::new();
-        out.push_str(&format!("# Stress Test Report ({})\n\n", chrono_placeholder_iso()));
+        out.push_str(&format!(
+            "# Stress Test Report ({})\n\n",
+            chrono_placeholder_iso()
+        ));
         out.push_str(&format!("- Rounds run: **{}**\n", self.rounds_run));
-        out.push_str(&format!("- Total elapsed: **{} ms**\n", self.total_elapsed_ms));
-        out.push_str(&format!("- Consensus count: **{}**\n", self.consensus_count));
-        out.push_str(&format!("- Consensus rate: **{:.1}%**\n", self.consensus_rate * 100.0));
-        out.push_str(&format!("- Avg consensus score: **{:.3}**\n", self.avg_consensus_score));
+        out.push_str(&format!(
+            "- Total elapsed: **{} ms**\n",
+            self.total_elapsed_ms
+        ));
+        out.push_str(&format!(
+            "- Consensus count: **{}**\n",
+            self.consensus_count
+        ));
+        out.push_str(&format!(
+            "- Consensus rate: **{:.1}%**\n",
+            self.consensus_rate * 100.0
+        ));
+        out.push_str(&format!(
+            "- Avg consensus score: **{:.3}**\n",
+            self.avg_consensus_score
+        ));
         out.push_str(&format!(
             "- Latency p50/p95/p99: **{} / {} / {} ms**\n",
             self.latency_p50_ms, self.latency_p95_ms, self.latency_p99_ms
         ));
-        out.push_str(&format!("- Error rate: **{:.1}%**\n", self.error_rate * 100.0));
+        out.push_str(&format!(
+            "- Error rate: **{:.1}%**\n",
+            self.error_rate * 100.0
+        ));
         out.push_str("\n## Termination histogram\n\n");
         out.push_str("| Reason | Count |\n|---|---|\n");
         for (k, v) in &self.termination_histogram {
@@ -178,7 +194,12 @@ fn reason_label(r: TerminationReason) -> &'static str {
 
 fn extract_verdict_summary(v: &MultiRoundVerdict) -> (bool, f64, String, u8) {
     let stance = format!("{:?}", v.final_stance);
-    (v.consensus_reached, v.final_weighted_score, stance, v.rounds_run)
+    (
+        v.consensus_reached,
+        v.final_weighted_score,
+        stance,
+        v.rounds_run,
+    )
 }
 
 /// R68 真正实现: 用 Arc<dyn MockLlmProvider> (per master 8/9 拍板的 stress 真接 LLM 模式)
@@ -217,7 +238,9 @@ pub fn run_deliberation_stress(
                 } else {
                     TerminationReason::MaxRounds
                 };
-                *term_hist.entry(reason_label(reason).to_string()).or_insert(0) += 1;
+                *term_hist
+                    .entry(reason_label(reason).to_string())
+                    .or_insert(0) += 1;
                 round_results.push(RoundResult {
                     round_index: i,
                     consensus_reached: reached,
@@ -252,8 +275,16 @@ pub fn run_deliberation_stress(
 
     latencies.sort_unstable();
     let n = round_results.len();
-    let consensus_rate = if n > 0 { f64::from(consensus_count) / (n as f64) } else { 0.0 };
-    let error_rate = if n > 0 { f64::from(error_count) / (n as f64) } else { 0.0 };
+    let consensus_rate = if n > 0 {
+        f64::from(consensus_count) / (n as f64)
+    } else {
+        0.0
+    };
+    let error_rate = if n > 0 {
+        f64::from(error_count) / (n as f64)
+    } else {
+        0.0
+    };
 
     StressReport {
         rounds_run: n as u32,
@@ -406,7 +437,3 @@ mod tests {
         assert_eq!(reason_label(TerminationReason::Error), "error");
     }
 }
-
-
-
-

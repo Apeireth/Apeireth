@@ -44,10 +44,10 @@ impl CollaborationMode {
     /// 模式是否多轮 (Planner+Executor 3 steps / Debate 3 rounds / Voting 1 / Hierarchical 1)
     pub const fn is_multi_round(self) -> bool {
         match self {
-            Self::PlannerExecutor => true,  // 3 steps
-            Self::Debate => true,           // 3 rounds
-            Self::Voting => false,          // 1 round
-            Self::Hierarchical => false,    // 1 round (root + 2 sub)
+            Self::PlannerExecutor => true, // 3 steps
+            Self::Debate => true,          // 3 rounds
+            Self::Voting => false,         // 1 round
+            Self::Hierarchical => false,   // 1 round (root + 2 sub)
         }
     }
 }
@@ -116,8 +116,7 @@ pub struct CollaborationVerdict {
 impl CollaborationVerdict {
     /// 是否允许 (per `SynthesisReport` aggregated_stance.score > 0 + 0 strong_disapprove)
     pub fn is_allowed(&self) -> bool {
-        self.report.weighted_score > 0.0
-            && !self.opinions.iter().any(|o| o.triggers_hold())
+        self.report.weighted_score > 0.0 && !self.opinions.iter().any(|o| o.triggers_hold())
     }
 
     /// 是否被按住 (per `SynthesisReport::is_held()`)
@@ -216,7 +215,8 @@ mod tests {
         for m in CollaborationMode::ALL {
             let ctx = CollaborationContext::new(m, q("q"), 42, 0);
             assert!(
-                ctx.session_id.starts_with(&format!("collab-{}-", m.as_str())),
+                ctx.session_id
+                    .starts_with(&format!("collab-{}-", m.as_str())),
                 "session_id {} should start with collab-{}-",
                 ctx.session_id,
                 m.as_str()

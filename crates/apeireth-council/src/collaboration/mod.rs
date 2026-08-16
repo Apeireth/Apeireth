@@ -29,10 +29,10 @@
 
 #![deny(unsafe_code)]
 
-pub mod types;
-pub mod planner_executor;
 pub mod debate;
-pub mod voting;
 pub mod hierarchical;
+pub mod planner_executor;
+pub mod types;
+pub mod voting;
 
 pub use types::{CollaborationContext, CollaborationMode, CollaborationVerdict};

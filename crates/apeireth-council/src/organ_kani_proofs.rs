@@ -67,7 +67,10 @@ fn r177_cou_07_delegations_from_to_consistent() {
 fn r177_cou_08_delegation_hash_eq() {
     use std::collections::HashSet;
     let mut set = HashSet::new();
-    set.insert(DelegationPath(AdvisorDomain::Safety, AdvisorDomain::Performance));
+    set.insert(DelegationPath(
+        AdvisorDomain::Safety,
+        AdvisorDomain::Performance,
+    ));
     assert!(set.contains(&DelegationPath(
         AdvisorDomain::Safety,
         AdvisorDomain::Performance
