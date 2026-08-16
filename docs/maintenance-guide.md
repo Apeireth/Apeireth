@@ -91,6 +91,7 @@
 | thought_cluster.rs | 思维簇管理 (N4, VCP ThoughtClusterManager 吸收): AI 思维链文件按主题聚簇落盘 (「簇」后缀目录 + 按日归档 {日期}-{序}.md + 链注册 meta_thinking_chains.json + 确定性编辑/检索) + ThoughtClusterReader trait 口 (元自学习: 反思/做梦回读历史思考链做"思考的再思考") | reflection/dream `with_thought_reader` 注入点; 写入侧 LLM 驱动留部署层 (0 装 PASS) |
 | morphology.rs | 查询形态学 softmax (N7): 确定性文本特征 (长度/实体密度/疑问形态/分句/深度线索) → logits → softmax 分布 → 检索档位 (浅扫 1/标准 3/深爬 6) + CRAWL 期望预算; 纯函数同查询同档位, 温度可配 | assemble.rs inject_memory → crawl 预算 |
 | diary.rs | 日记本中心 (§5.1 机制⑤, RAGDiaryPlugin 精神): 按日归档 `{YYYY-MM-DD}.json` (root+clock 注入) + 确定性检索 (日期范围/关键词子串) + 注入块 (近 N 日摘要, 预算截断) + DiaryInjector trait 口 (实接线延后 N14) | 注入链挂接待 N14 解锁 |
+| reflexion.rs | 口头强化闭环 (E1, Reflexion 式): 失败轨迹登记 (决策拒绝/验证失败/经验失败三类, seq 序) + CRITIC 反思 (Critic trait LLM 口 0 装, RuleCritic 确定性规则版先行, 事实/教训/重试策略三段模板, reflected_until 水位幂等) + 反思记忆 (task_type 标签) + 同类重试注入 (精确>子串相似度, 预算截断); 实接线留公开口 (不改 reflection.rs 周期本体) | 事件实接线/注入消费侧待后续接线 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
 | context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) | 注入链统一入口 |
 | assemble.rs | CompanionApp 机制装配器 (审计 P0#1): L0 Identity + L1 Essential Story 常驻 (mempalace §5.6) + 注入管线 + 提炼调度 (run_extraction/extraction_due) + 滚动摘要 (summarize_dialog/summarize_due) + 自成长 (refine_experience/export_promotion_candidates) + LLM 调用点 trait (DeepRecall/DialogSummarizer/ExperienceRefiner) | serve/TUI/CLI 复用 |
