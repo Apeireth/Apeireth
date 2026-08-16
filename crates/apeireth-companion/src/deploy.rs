@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use apeireth_core::clock::{Clock, SystemClock};
-use apeireth_memory::{CoreEpisode, SqliteMemoryStore};
+use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use serde::{Deserialize, Serialize};
 
 use crate::capability::{CapabilityError, CapabilityRegistry, CapabilityStatus};
