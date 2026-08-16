@@ -58,3 +58,8 @@
 | 0bc9a8c5 | fix(台账#46) Dockerfile 逐成员 COPY + dummy 占位补全 |
 | caf6fce5 | fix(台账#47) compose 密码强制外部注入 |
 | 4e25da14 | fix(台账#28) .gitignore 密钥类加固 |
+| 558a5f20 | docs: backlog 三项划 ✅ + 本报告 |
+
+## 7. 并发事故实录（0 装如实记录）
+
+共享工作区 index 并发：558a5f20 提交时意外卷入 security_reviewer 已暂存的报告文件 `reports/fe468acf-...-security_reviewer-report.md`（+44 行，内容完好）。尝试 `reset --soft HEAD~1` 剔除时遭遇：① index 被其他并发进程持续改写（staged 清单秒变）② 平台流程将 master HEAD 重置回 558a5f20（同 hash 复活）③ index.lock 被并发进程占用。判断：并发风暴下历史改写风险 > 归属收益 → 停止手术，保留现状。已单独通报 security_reviewer（其提交跳过该文件即可）与 leader。教训：高并发共享树中 commit 应始终用 pathspec 限定（`git commit -- <paths>`），本次后续提交已改用该方式。
