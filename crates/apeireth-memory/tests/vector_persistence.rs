@@ -1,4 +1,6 @@
 //! R19 P2 战区 4 续 (A-3): Vector Long-Term Persistence 跨 daemon 集成测试
+// 54ed4c7d: 向量路径集成测试, 挂 semantic feature (no-default 构建下整体跳过)
+#![cfg(feature = "semantic")]
 //!
 //! ## 验证目标
 //! - **真跨 daemon 持久化**: 写一段 → 关闭 (drop 所有 Arc) → 重开 (新 Arc) → 数据仍在
