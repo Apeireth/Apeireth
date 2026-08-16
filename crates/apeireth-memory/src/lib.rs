@@ -35,6 +35,8 @@ mod migrations;
 pub mod semantic;
 // R19 P2 战区 4 续 (A-3): 公开 semantic_persist 模块 (跨 daemon 持久化路径)
 pub mod semantic_persist;
+// P2#12: 本地 ONNX embedding (feature onnx; 关闭时诚实 Err + hash 降级)
+pub mod onnx;
 // R179 P1-9: Episode Dedup (借鉴 mempalace dedup.py — session 内近重复检测)
 pub mod dedup;
 // R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
