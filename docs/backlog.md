@@ -74,8 +74,8 @@
 |---|---|---|---|---|
 | 1 | CompanionApp 装配器 | A3 审计结论 ★5 | companion_serve.rs (~1600 行) 装配逻辑抽进 lib: 注入链/提炼调度/工具桥/多 sink 统一为 CompanionApp::new(...).start(); example 变薄, TUI/CLI 可复用 | ✅ 提交 cdb6b62 |
 | 2 | L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | Identity (~100 token) + Essential Story (~500-800 token) 常驻; 与 ContextAssembler core 块天然契合, 挂 context.rs | ✅ 提交 cdb6b62 |
-| 46 | Dockerfile COPY crates 互覆盖修复 | A4 (DO2 af2676fa W1) | `COPY crates/apeireth-*/Cargo.toml ./crates/` 同名互覆盖且不建 member 子目录, dummy 依赖缓存 build 大概率失效/失败 — 发布产物阻塞级; 本机无 docker 未实测, 需 buildx/有 docker 环境验证 | ⬜ P0, 待实施 |
-| 47 | compose POSTGRES_PASSWORD 强制外部注入 | A4 (DO2 af2676fa W3) | docker-compose.yml `POSTGRES_PASSWORD:-secret` 默认弱密码且 DB URL 内联, 上线前必须禁止默认值 | ⬜ P0, 待实施 |
+| 46 | Dockerfile COPY crates 互覆盖修复 | A4 (DO2 af2676fa W1) | `COPY crates/apeireth-*/Cargo.toml ./crates/` 同名互覆盖且不建 member 子目录, dummy 依赖缓存 build 大概率失效/失败 — 发布产物阻塞级; 本机无 docker 未实测, 需 buildx/有 docker 环境验证 | ✅ 提交 0bc9a8c5: 82 条逐成员 COPY (cargo metadata 82 包交叉核实+路径全验) + dummy build 全成员占位 src; 0 装 PASS 如实标注"待有 docker 环境验证" (报告 reports/efc31de0-...-database_engineer-report.md) |
+| 47 | compose POSTGRES_PASSWORD 强制外部注入 | A4 (DO2 af2676fa W3) | docker-compose.yml `POSTGRES_PASSWORD:-secret` 默认弱密码且 DB URL 内联, 上线前必须禁止默认值 | ✅ 提交 caf6fce5: 两处插值改 ${POSTGRES_PASSWORD:?...} 缺省即报错 + 启动注释前置说明; PyYAML 解析验证, 无残留 :-secret |
 
 ### P1 — 计划内 (成本明确)
 
@@ -87,7 +87,7 @@
 | 25 | cargo fmt 全仓修复 + nightly 工具链 | A4 (QA2 397a85ec) | cargo fmt --check 不通过: 1154/1588 文件 (72.7%) 不合规 (stable 口径); 先修本机 nightly (`rustup toolchain install nightly --force`), 再 `cargo +nightly fmt --all` 一次性修复; Windows 侧用分批 rustfmt 命令规避 error 206 (命令见 QA2 报告) | ⬜ P1, 待实施 |
 | 26 | 版本号口径统一 (release 前必须) | A4 (TW2 f3f9fa0c + AR2 b74fc48b) | RELEASE_NOTES v1.0.0 标题 ≠ workspace 1.2.0; CHANGELOG 顶部日期条目未归 semver + R131-R178 未归版本条目; RELEASE_NOTES 行号引用漂移 (:246→:224); 11 个活动 crate 硬编码版本; ROADMAP 头部双轨表述未标明 + 进度止于 R127 未同步 R178 — 需 Leader 拍板单一口径 | ⬜ P1, 待 Leader 拍板 |
 | 27 | cosign.pub 生成 + release 工具链预装 | A4 (AO2 b88db7ed) | docs/security/cosign.pub 缺失 → cosign-sign-all.sh/cosign-verify.sh 必失败; 发布环境需预装 cosign/gh/jq (本机均缺) | ⬜ P1, release 前置 |
-| 28 | .gitignore 密钥类加固 | A4 (SEC2 97a4bfce) | 追加 `*.pem` `*.key` `*.p12` `*.pfx` `id_rsa*` (现仅针对性忽略 `**/cosign.key`, 实测 secret.pem 不被忽略) + 补 `_research_mem/` | ⬜ P1, 待实施 |
+| 28 | .gitignore 密钥类加固 | A4 (SEC2 97a4bfce) | 追加 `*.pem` `*.key` `*.p12` `*.pfx` `id_rsa*` (现仅针对性忽略 `**/cosign.key`, 实测 secret.pem 不被忽略) + 补 `_research_mem/` | ✅ 提交 4e25da14: 五通配 + _research_mem/; git check-ignore -v 六样例全命中; 无已跟踪文件受影响 |
 | 29 | README crate 计数修正 | A4 (AR2 b74fc48b) | README 写「81 (80 顶层 + 嵌套)」, 实测 workspace members=82 (81 顶层 + 1 嵌套) | ⬜ P1, 顺手修 |
 
 ### P2 — Backlog (有价值, 时机未到)
