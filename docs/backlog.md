@@ -47,7 +47,7 @@
 | N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源) | ⬜ 并入 §5.2, 待实施 |
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
 | N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ✅ 提交 f8245f28 (流水线整合): semantic_persist.rs — artifact_sig (SHA-256 手写, NIST 向量锚定, 0 新依赖) + artifact_gate_decision 五条失效规则 (无记录/内容变/normalize stale/schema stale/Hit) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch) + .artifact_sig.json sidecar; 8 测试四路径全绿 (cargo test -p apeireth-memory -j 4, 报告 reports/5f492ccb-…-database_engineer2-report.md) |
-| N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ⬜ P0, 待实施 |
+| N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ✅ 提交 ab777c2: memory_graph.rs 实体逆频特异性 + 组合排序权重可配 (GraphRankConfig) + 增量计数维护 + crawl 残差锚增益; 7 单测全绿 (报告 reports/2a1e262e-2f0f-458e-b5f0-130b1e232834-database_engineer-report.md) |
 | N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 08c6f00d: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一, rustc --test 独立全绿; 全 crate 测试被并行 WIP 阻塞, 见报告); env APEIRETH_MORPHOLOGY_TEMPERATURE |
 | N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ⬜ P0, 待实施 |
 | N9 | 提示词装配引擎 (占位符变量宇宙) | N1 发现 (插件扫描) | messageProcessor 范式: 特权角色+单次展开+环检测+分型变量源 — Apeireth 空白区最高价值 | ⬜ P0, 待实施 |
