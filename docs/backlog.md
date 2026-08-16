@@ -53,6 +53,7 @@
 | N12 | 语义模型路由 + 推理归一化 | N1 发现 (插件扫描) | gateway 层: 语义选模型+容灾链; 13 别名推理字段→think 块 | ⬜ P1, 待实施 |
 | N13 | apeireth-guard 补 env 行级 + 密钥 token 模式脱敏 | team-work-doc §8.3 toolResultPrivacyGuard 行 (团队任务 ae12d9eb) | pii.rs 新增 SecretToken (sk-/sk-proj-/xox*/ghp_/github_pat_/glpat-/AKIA 7 类前缀) + EnvSecret (敏感键名 KEY=VALUE/KEY: VALUE 值部); redact_text 修重叠匹配错乱; organ_kani_proofs 6→8 类 | ✅ 完成: cargo test -p apeireth-guard 59 全绿 + gateway 84+7 全绿; 0 新依赖; 报告 reports/ae12d9eb-fe0c-4267-8f23-b225880430d1-security_reviewer2-report.md |
 | N14 | 工作区脏树: apeireth-companion 编译失败 (他人未提交改动) | 安全审查2 任务 ae12d9eb 期间发现 | companion lib 编译错: SqliteMemoryStore 缺 put_episode/recent_episodes 方法 + unstable result_option_map_or_default; 涉及 memory_graph/capability/reflection 未提交改动 (非本任务引入) | ⬜ 待 Leader 指派相关成员处理 |
+| N15 | dynamicToolRegistry 预算化 (注入注意力预算 + 分类四级降级链) | team-work-doc §8.4 P1 可吸收清单 (团队任务 4b2da00a) | apeireth-tool-registry 新增 injection.rs (render_injection: light list 一行式清单 + 仅相关工具展开详情 + 超预算裁剪 展开段→轻清单尾行→硬切留 TRUNCATION_HINT 提示, 16000 字符上限) + chain.rs (ClassifyChain 自定义→小模型→RAG→关键词 四级降级, ClassifyStage 记录决定级; 小模型/RAG 级 Option<Arc<dyn Classifier>> trait 注入口未接真模型如实标注, 关键词级 HeuristicClassifier 实装, CustomMapClassifier 自定义级实装); impl Classifier → 可直接给 register_with_classifier | ✅ 完成: 提交 8b6a825d; cargo test -p apeireth-tool-registry -j 4 全绿 (139 lib 测试, 新增 19: 预算内/超预算/空表/极小预算/仅相关展开/四级降级各路径); 报告 reports/4b2da00a-9556-4d9c-9420-06aa23b91272-mcp_integration_expert2-report.md |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
