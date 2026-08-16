@@ -1,0 +1,73 @@
+# Apeireth 三件套装配清单 (B2, docs/release-plan.md §三.4)
+# 声明「本体 = 哪些 crate, 包 = 哪些 feature, 套件 = 哪些 crate 组」
+# 装配入口: crates/apeireth-cli (cargo build -p apeireth-cli --no-default-features --features ...)
+# 编译验证: scripts/check-assembly-matrix.ps1 (日志 logs/assembly-matrix.log)
+
+schema = 1
+
+# ---- 档 1: base (基地本体, 80% 必要能力, 无条件编译) ----
+[base]
+feature = "base"  # apeireth-cli [features].base, 语义标记
+crates = [
+    "apeireth-core", "apeireth-memory", "apeireth-companion", "apeireth-api",
+    "apeireth-protocol", "apeireth-asi", "apeireth-cognition", "apeireth-action",
+    "apeireth-cli", "apeireth-tools", "apeireth-mcp", "apeireth-skills",
+    "apeireth-council", "apeireth-config",
+    # security 系 (release-plan §三.1): 主权/宪法约束/隐私守卫
+    "apeireth-sovereignty", "apeireth-constraint", "apeireth-guard",
+]
+note = "生命周期 (涌现/做梦/反思/多轮/续传/宪法评审/权限包) + 审计链 (audit_log) 属本体, 不可裁"
+
+# ---- 档 2: capability packs (扩展能力包, 用户自选) ----
+[packs.local-intel]
+name = "本地智能包"
+feature = "local-intel"                 # apeireth-cli --features local-intel
+forward = "apeireth-memory/onnx"        # 真 cfg 门控: tract-onnx 本地嵌入
+status = "gated"                        # gated = 编译期可裁; declarative = 仅语义标记
+
+[packs.gui]
+name = "GUI 包"
+feature = "gui"
+forward = "apeireth-api/tui-dashboard"  # 真 cfg 门控: ratatui TUI 仪表盘
+status = "gated"
+note = "apeireth-web/ssr (Web 面板) 为独立 crate 默认开启, 未纳入 cli 转发链"
+
+[packs.sandbox]
+name = "沙盒能力包"
+feature = "sandbox"
+status = "declarative"  # 机制件 (extension/sandbox.rs + companion/job_object.rs) 无条件编译; 物理层参数化见 B3
+note = "Layer 2 物理隔离已在运行时生效; Sandboxie/landlock 参数口是 B3 任务范围"
+
+[packs.channels]
+name = "多通道包"
+feature = "channels"
+status = "declarative"  # lark/livekit/voice 为独立 workspace crate, 装配=选择是否部署, 非编译裁剪
+crates = ["apeireth-lark", "apeireth-livekit", "apeireth-voice"]
+
+[packs.audit]
+name = "审计能力包"
+feature = "audit"
+status = "declarative"  # audit_log 属 base 主线 (memory action_stream append-only), 不可裁
+
+# ---- 档 3: upgrade suites (升级套件 = 工具组 + 权限预设 + 插件组) ----
+# 运行时装配: companion::suites::SuiteCatalog::install_with_plugins (校验工具已注册 + 登记权限包)
+[suites.education]
+name = "教育升级套件"
+feature = "suite-education"
+suite_id = "education-suite"            # SuiteCatalog 内置 id
+plugins = ["education-dx-check"]
+crates = ["apeireth-skills"]
+
+[suites.pentest]
+name = "渗透测试升级套件"
+feature = "suite-pentest"
+suite_id = "pentest-suite"
+plugins = ["pentest-recon", "pentest-scan"]
+crates = ["apeireth-tool-shell", "apeireth-tool-fetch", "apeireth-skills"]
+
+[suites.oracle]
+name = "预测机核心升级套件"
+feature = "suite-oracle"
+suite_id = "oracle-suite"
+plugins = []
+crates = ["apeireth-skills"]
