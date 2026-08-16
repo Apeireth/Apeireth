@@ -40,4 +40,3 @@ fn r177_tf_kani_01_modules() {
 fn r177_tf_kani_02_absorbed() {
     assert_eq!(ABSORBED_LEGACY_PLUGINS, 6);
 }
-

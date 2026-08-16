@@ -94,7 +94,9 @@ fn resolve_placeholders_inner(
         return template.to_string();
     }
 
-    let Ok(regex) = Regex::new(PLACEHOLDER_REGEX_STR) else { return template.to_string() }; // regex 出错不抛, 兜底
+    let Ok(regex) = Regex::new(PLACEHOLDER_REGEX_STR) else {
+        return template.to_string();
+    }; // regex 出错不抛, 兜底
 
     let mut out = String::with_capacity(template.len());
     let mut last_end = 0;

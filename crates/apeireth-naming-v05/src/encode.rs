@@ -45,11 +45,7 @@ pub const V05_SEGMENT_COUNT: usize = 8;
 /// 格式: `apeireth:{level}.{class}.{domain}.{modality}.{safety}.{completeness}.{lineage}`
 ///
 /// 例: `encode_v05_class(Class::Pc, Level::Mature, dim) → "apeireth:9.PC.code.text.high.complete.apeireth-1.0"`
-pub fn encode_v05_class(
-    class: Class,
-    level: Level,
-    dim: DimensionSet,
-) -> NamingResult<String> {
+pub fn encode_v05_class(class: Class, level: Level, dim: DimensionSet) -> NamingResult<String> {
     let s = format!(
         "{}{}.{}.{}.{}.{}.{}.{}",
         V05_PREFIX,
@@ -172,10 +168,22 @@ mod tests {
         let s = encode_v05(&spec).unwrap();
         let lines: Vec<&str> = s.lines().collect();
         assert_eq!(lines.len(), 4, "24 维 = 4 行");
-        assert_eq!(lines[0], "apeireth:5.PC.code.text.high.complete.apeireth-1.0");
-        assert_eq!(lines[1], "apeireth:5.RC.code.text.high.complete.apeireth-1.0");
-        assert_eq!(lines[2], "apeireth:5.HG.code.text.high.complete.apeireth-1.0");
-        assert_eq!(lines[3], "apeireth:5.GP.code.text.high.complete.apeireth-1.0");
+        assert_eq!(
+            lines[0],
+            "apeireth:5.PC.code.text.high.complete.apeireth-1.0"
+        );
+        assert_eq!(
+            lines[1],
+            "apeireth:5.RC.code.text.high.complete.apeireth-1.0"
+        );
+        assert_eq!(
+            lines[2],
+            "apeireth:5.HG.code.text.high.complete.apeireth-1.0"
+        );
+        assert_eq!(
+            lines[3],
+            "apeireth:5.GP.code.text.high.complete.apeireth-1.0"
+        );
     }
 
     /// 守门 #6: encode_v05_lines 返 4 元素 vec.
@@ -193,8 +201,14 @@ mod tests {
         let spec = V05Spec::new(Level::Expert1, dims);
         let lines = encode_v05_lines(&spec).unwrap();
         assert_eq!(lines.len(), 4);
-        assert_eq!(lines[0], "apeireth:7.PC.tool.multimodal.critical.production.apeireth-2.0");
-        assert_eq!(lines[1], "apeireth:7.RC.tool.multimodal.critical.production.apeireth-2.0");
+        assert_eq!(
+            lines[0],
+            "apeireth:7.PC.tool.multimodal.critical.production.apeireth-2.0"
+        );
+        assert_eq!(
+            lines[1],
+            "apeireth:7.RC.tool.multimodal.critical.production.apeireth-2.0"
+        );
     }
 
     /// 守门 #7: 4 大类不同 dimension 也 OK.
@@ -235,10 +249,22 @@ mod tests {
         let dims = ClassDims::new(pc_dim, rc_dim, hg_dim, gp_dim);
         let spec = V05Spec::new(Level::Mature, dims);
         let lines = encode_v05_lines(&spec).unwrap();
-        assert_eq!(lines[0], "apeireth:9.PC.code.text.high.complete.apeireth-1.0");
-        assert_eq!(lines[1], "apeireth:9.RC.tool.multimodal.critical.production.apeireth-2.0");
-        assert_eq!(lines[2], "apeireth:9.HG.reasoning.text.medium.partial.apeireth-0.14");
-        assert_eq!(lines[3], "apeireth:9.GP.dialogue.audio.low.skeleton.spectrai-0.9");
+        assert_eq!(
+            lines[0],
+            "apeireth:9.PC.code.text.high.complete.apeireth-1.0"
+        );
+        assert_eq!(
+            lines[1],
+            "apeireth:9.RC.tool.multimodal.critical.production.apeireth-2.0"
+        );
+        assert_eq!(
+            lines[2],
+            "apeireth:9.HG.reasoning.text.medium.partial.apeireth-0.14"
+        );
+        assert_eq!(
+            lines[3],
+            "apeireth:9.GP.dialogue.audio.low.skeleton.spectrai-0.9"
+        );
     }
 
     /// 守门 #8: encode 不会引入额外空格.

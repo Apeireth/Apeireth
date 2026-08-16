@@ -73,7 +73,10 @@ pub fn validate_language(lang: &str) -> Result<(), String> {
             lang.len()
         ));
     }
-    if !lang.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()) {
+    if !lang
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
+    {
         return Err(format!(
             "K-1 violation: language must be lowercase ASCII, got '{lang}'"
         ));
@@ -125,9 +128,8 @@ impl SafeSearchLevel {
 
 /// **K-1-5 safe_search enum** — off / moderate / strict
 pub fn validate_safe_search(s: &str) -> Result<SafeSearchLevel, String> {
-    SafeSearchLevel::from_str(s).ok_or_else(|| {
-        format!("K-1 violation: safe_search must be off/moderate/strict, got '{s}'")
-    })
+    SafeSearchLevel::from_str(s)
+        .ok_or_else(|| format!("K-1 violation: safe_search must be off/moderate/strict, got '{s}'"))
 }
 
 /// **SearchAction** — 4 actions 枚举
@@ -188,7 +190,10 @@ pub fn parse_input(args: &Value) -> Result<SearchInput, String> {
         return Err(format!("query too long ({} > 1024)", query.len()));
     }
 
-    let max_results_i = args.get("max_results").and_then(|v| v.as_i64()).unwrap_or(10);
+    let max_results_i = args
+        .get("max_results")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(10);
     // K-1-2: max_results 1-100
     let max_results = validate_max_results(max_results_i)?;
 
@@ -199,10 +204,7 @@ pub fn parse_input(args: &Value) -> Result<SearchInput, String> {
     // K-1-3: language ISO 639
     validate_language(language)?;
 
-    let region = args
-        .get("region")
-        .and_then(|v| v.as_str())
-        .unwrap_or("US");
+    let region = args.get("region").and_then(|v| v.as_str()).unwrap_or("US");
     // K-1-4: region ISO 3166
     validate_region(region)?;
 
@@ -258,7 +260,11 @@ impl SearchTool {
     /// - code → GitHub Search API / Sourcegraph API
     /// - doc → DevDocs / Read the Docs API
     /// - image → Unsplash API / Google Images API
-    async fn call_engine(&self, action: SearchAction, input: &SearchInput) -> Result<Value, String> {
+    async fn call_engine(
+        &self,
+        action: SearchAction,
+        input: &SearchInput,
+    ) -> Result<Value, String> {
         // 显式 NotImplemented, 不假装已实现, 也不假数据
         Err(format!(
             "SearchTool: {action} engine not implemented (R20 阶段 4 估补占位, R21 续真接). K-1 校验已通过: query='{q}', max_results={m}, lang={l}, region={r}, safe_search={s}",
@@ -359,7 +365,9 @@ mod search_tests {
         let s = SearchTool::new();
         // query 空
         let r = s.call(json!({"action": "web", "query": ""})).await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("query"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("query"));
         // query 缺
         let r = s.call(json!({"action": "web"})).await;
         assert!(r.is_err());
@@ -367,7 +375,9 @@ mod search_tests {
         let r = s
             .call(json!({"action": "web", "query": "x", "max_results": 0}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("max_results"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("max_results"));
         // max_results 101
         let r = s
             .call(json!({"action": "web", "query": "x", "max_results": 101}))
@@ -389,7 +399,9 @@ mod search_tests {
         let r = s
             .call(json!({"action": "web", "query": "x", "language": "english"}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("language"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("language"));
         // language 大写 (ISO 639 是小写)
         let r = s
             .call(json!({"action": "web", "query": "x", "language": "EN"}))
@@ -399,7 +411,9 @@ mod search_tests {
         let r = s
             .call(json!({"action": "web", "query": "x", "region": "USA"}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("region"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("region"));
         // region 小写 (ISO 3166 是大写)
         let r = s
             .call(json!({"action": "web", "query": "x", "region": "us"}))
@@ -421,15 +435,19 @@ mod search_tests {
         let r = s
             .call(json!({"action": "web", "query": "x", "safe_search": "extreme"}))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("safe_search"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("safe_search"));
         // action 未知
-        let r = s
-            .call(json!({"action": "video", "query": "x"}))
-            .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("unknown action"));
+        let r = s.call(json!({"action": "video", "query": "x"})).await;
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("unknown action"));
         // 缺 action
         let r = s.call(json!({"query": "x"})).await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("action"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("action"));
         // safe_search 3 档合法 — 3 档都过 K-1 校验, 引擎层 NotImplemented
         for ss in ["off", "moderate", "strict"] {
             let r = s

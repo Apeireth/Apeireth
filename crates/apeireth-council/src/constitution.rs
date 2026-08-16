@@ -37,12 +37,12 @@ use thiserror::Error;
 /// 6 哲学锚 (per v2.0 strategy + Apeireth 主哲学锚)
 /// 编译期 hardcode, 0 改
 pub const PHILOSOPHICAL_ANCHORS: [&str; 6] = [
-    "S-1",  // 走在前人经验上
-    "S-2",  // 实事求是
-    "O-2",  // 走在前人肩上
-    "O-3",  // 干到底
-    "O-4",  // 任何人都能接手
-    "O-5",  // 不假装
+    "S-1", // 走在前人经验上
+    "S-2", // 实事求是
+    "O-2", // 走在前人肩上
+    "O-3", // 干到底
+    "O-4", // 任何人都能接手
+    "O-5", // 不假装
 ];
 
 /// R11 5 重守门 1:1 镜像 — 5 字段
@@ -82,7 +82,10 @@ impl RoleConstitution {
             l0_ha_required: true,
             jurisdiction_bounds: vec!["SOVEREIGN".to_string(), "PRINCIPLE".to_string()],
             compile_time_hardcoded: true,
-            philosophical_anchors: PHILOSOPHICAL_ANCHORS.iter().map(|s| (*s).to_string()).collect(),
+            philosophical_anchors: PHILOSOPHICAL_ANCHORS
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
         }
     }
 
@@ -93,7 +96,10 @@ impl RoleConstitution {
             l0_ha_required: false,
             jurisdiction_bounds: vec!["PRINCIPLE".to_string()],
             compile_time_hardcoded: true,
-            philosophical_anchors: PHILOSOPHICAL_ANCHORS.iter().map(|s| (*s).to_string()).collect(),
+            philosophical_anchors: PHILOSOPHICAL_ANCHORS
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
         }
     }
 
@@ -204,7 +210,9 @@ pub enum ConstitutionViolation {
     L0HaRequired,
 
     /// 司法边界违反 (不在 bounds 内)
-    #[error("jurisdiction violation: opinion tries to access `{tried}` but bounds are `{bounds:?}`")]
+    #[error(
+        "jurisdiction violation: opinion tries to access `{tried}` but bounds are `{bounds:?}`"
+    )]
     JurisdictionBreach {
         /// 尝试访问的 jurisdiction
         tried: String,
@@ -257,7 +265,11 @@ pub trait RoleConstitutionTrait: Send + Sync {
             && !consti.jurisdiction_bounds.iter().any(|b| b == "ANY")
         {
             for reference in &opinion.references {
-                if !consti.jurisdiction_bounds.iter().any(|b| reference.contains(b)) {
+                if !consti
+                    .jurisdiction_bounds
+                    .iter()
+                    .any(|b| reference.contains(b))
+                {
                     return Err(ConstitutionViolation::JurisdictionBreach {
                         tried: reference.clone(),
                         bounds: consti.jurisdiction_bounds.clone(),
@@ -468,7 +480,8 @@ mod tests {
         let result = adv.validate_opinion(&op);
         assert!(matches!(
             result,
-            Err(ConstitutionViolation::PhysicalIsolationRequired) | Err(ConstitutionViolation::L0HaRequired)
+            Err(ConstitutionViolation::PhysicalIsolationRequired)
+                | Err(ConstitutionViolation::L0HaRequired)
         ));
     }
 

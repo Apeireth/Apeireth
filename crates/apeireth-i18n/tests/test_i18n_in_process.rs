@@ -48,18 +48,20 @@ use std::fs;
 
 #[test]
 fn test_compile_time_constants_pinned() {
-    assert_eq!(I18N_SCHEMA_VERSION, "1", "I18N_SCHEMA_VERSION 编译期 hardcode");
-    assert_eq!(PLATFORM_NAME, "apeireth", "K-1 强校验 #1: 平台名必须 apeireth");
+    assert_eq!(
+        I18N_SCHEMA_VERSION, "1",
+        "I18N_SCHEMA_VERSION 编译期 hardcode"
+    );
+    assert_eq!(
+        PLATFORM_NAME, "apeireth",
+        "K-1 强校验 #1: 平台名必须 apeireth"
+    );
     assert_eq!(
         DEFAULT_LOCALE,
         Locale::En,
         "DEFAULT_LOCALE 编译期 hardcode = En"
     );
-    assert_eq!(
-        SUPPORTED_LOCALES.len(),
-        5,
-        "K-1 强校验 #2: 5 Locale 枚举"
-    );
+    assert_eq!(SUPPORTED_LOCALES.len(), 5, "K-1 强校验 #2: 5 Locale 枚举");
     assert_eq!(
         LOCALE_FALLBACK_CHAIN,
         &[Locale::ZhCn, Locale::En],
@@ -78,7 +80,10 @@ fn test_compile_time_constants_pinned() {
 
     // 5 Locale 全部 hardcode 列出
     for l in [Locale::En, Locale::ZhCn, Locale::Ja, Locale::Fr, Locale::De] {
-        assert!(SUPPORTED_LOCALES.contains(&l), "SUPPORTED_LOCALES 缺: {l:?}");
+        assert!(
+            SUPPORTED_LOCALES.contains(&l),
+            "SUPPORTED_LOCALES 缺: {l:?}"
+        );
     }
 }
 
@@ -100,10 +105,7 @@ fn test_whitelist_contains_eight_i18n_tools() {
         "apeireth_i18n_fallback",
         "apeireth_i18n_validate_key",
     ] {
-        assert!(
-            TOOL_WHITELIST.contains(&tool),
-            "TOOL_WHITELIST 缺: {tool}"
-        );
+        assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST 缺: {tool}");
     }
 }
 
@@ -145,7 +147,13 @@ async fn test_five_locales_translate_five_nav() {
 
     for &locale in SUPPORTED_LOCALES {
         translator.set_locale(locale).await.unwrap();
-        for key in ["nav.status", "nav.session", "nav.tools", "nav.settings", "nav.help"] {
+        for key in [
+            "nav.status",
+            "nav.session",
+            "nav.tools",
+            "nav.settings",
+            "nav.help",
+        ] {
             let v = translator.t(key, &args).await;
             assert!(!v.is_empty(), "{locale:?} {key} 不能为空");
         }
@@ -379,7 +387,10 @@ async fn assert_key_translates_in_5_locales(key: &str) {
     for &locale in SUPPORTED_LOCALES {
         translator.set_locale(locale).await.unwrap();
         let v = translator.t(key, &args).await;
-        assert!(!v.is_empty(), "{locale:?} {key} 不能为空 (5 语言 100% 翻译守门)");
+        assert!(
+            !v.is_empty(),
+            "{locale:?} {key} 不能为空 (5 语言 100% 翻译守门)"
+        );
     }
 }
 
@@ -485,12 +496,7 @@ async fn test_translate_5_providers() {
 
 #[tokio::test]
 async fn test_translate_4_sdks() {
-    for key in [
-        "sdks.lark",
-        "sdks.voice",
-        "sdks.livekit",
-        "sdks.sandbox",
-    ] {
+    for key in ["sdks.lark", "sdks.voice", "sdks.livekit", "sdks.sandbox"] {
         assert_key_translates_in_5_locales(key).await;
     }
 }
@@ -549,13 +555,15 @@ fn file_contains_any(path: &str, chars: &[char]) -> bool {
 #[test]
 fn test_zh_cn_chinese_chars() {
     // zh-CN 必须含 CJK 字符 (汉字)
-    let raw = fs::read_to_string("locales/zh-CN.toml")
-        .expect("读 zh-CN.toml 失败");
-    let cjk_count = raw.chars().filter(|c| {
-        let cp = *c as u32;
-        // CJK Unified Ideographs: 0x4E00 - 0x9FFF
-        (0x4E00..=0x9FFF).contains(&cp)
-    }).count();
+    let raw = fs::read_to_string("locales/zh-CN.toml").expect("读 zh-CN.toml 失败");
+    let cjk_count = raw
+        .chars()
+        .filter(|c| {
+            let cp = *c as u32;
+            // CJK Unified Ideographs: 0x4E00 - 0x9FFF
+            (0x4E00..=0x9FFF).contains(&cp)
+        })
+        .count();
     assert!(
         cjk_count > 50,
         "zh-CN 必须含 >50 个 CJK 汉字, 实际 {cjk_count}"
@@ -571,19 +579,22 @@ fn test_ja_japanese_chars() {
     // ja 必须含 日文 (平假名 / 片假名 / 汉字)
     let raw = fs::read_to_string("locales/ja.toml").expect("读 ja.toml 失败");
     // 至少含 20 个片假名 (categories 0x30A0-0x30FF) 或 平假名 (0x3040-0x309F)
-    let jp_count = raw.chars().filter(|c| {
-        let cp = *c as u32;
-        (0x3040..=0x309F).contains(&cp) || (0x30A0..=0x30FF).contains(&cp)
-    }).count();
-    assert!(
-        jp_count > 30,
-        "ja 必须含 >30 个平/片假名, 实际 {jp_count}"
-    );
+    let jp_count = raw
+        .chars()
+        .filter(|c| {
+            let cp = *c as u32;
+            (0x3040..=0x309F).contains(&cp) || (0x30A0..=0x30FF).contains(&cp)
+        })
+        .count();
+    assert!(jp_count > 30, "ja 必须含 >30 个平/片假名, 实际 {jp_count}");
     // 至少 5 个汉字 (CJK)
-    let kanji_count = raw.chars().filter(|c| {
-        let cp = *c as u32;
-        (0x4E00..=0x9FFF).contains(&cp)
-    }).count();
+    let kanji_count = raw
+        .chars()
+        .filter(|c| {
+            let cp = *c as u32;
+            (0x4E00..=0x9FFF).contains(&cp)
+        })
+        .count();
     assert!(kanji_count >= 5, "ja 必须含 >=5 个汉字, 实际 {kanji_count}");
     // 关键字 (ステータス 含 ス テ)
     assert!(
@@ -647,8 +658,8 @@ fn test_locale_format_toml() {
         "locales/de.toml",
     ] {
         let raw = fs::read_to_string(f).unwrap_or_else(|e| panic!("读 {f} 失败: {e}"));
-        let _: toml::Value = toml::from_str(&raw)
-            .unwrap_or_else(|e| panic!("{f} TOML 解析失败: {e}"));
+        let _: toml::Value =
+            toml::from_str(&raw).unwrap_or_else(|e| panic!("{f} TOML 解析失败: {e}"));
     }
 }
 
@@ -663,10 +674,7 @@ async fn test_translate_missing_key_returns_error() {
     let result = translator
         .try_t("nonexistent.deep.key", &TranslationArgs::new())
         .await;
-    assert!(
-        result.is_err(),
-        "缺 key 必须返 Err (不返空, 不返 key 自身)"
-    );
+    assert!(result.is_err(), "缺 key 必须返 Err (不返空, 不返 key 自身)");
     match result.unwrap_err() {
         I18nError::KeyNotFound(k) => {
             assert_eq!(k, "nonexistent.deep.key");
@@ -685,7 +693,9 @@ async fn test_translate_missing_key_returns_error() {
 async fn test_try_t_succeeds_for_existing_key() {
     // try_t 找到 key 应返 Ok(value)
     let translator = TranslatorImpl::new().unwrap();
-    let result = translator.try_t("nav.status", &TranslationArgs::new()).await;
+    let result = translator
+        .try_t("nav.status", &TranslationArgs::new())
+        .await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), "Status");
 }
@@ -712,9 +722,7 @@ async fn test_template_renders_r_measure_r1() {
 async fn test_template_missing_var_keeps_placeholder() {
     // 缺变量时保留 {{count}} 原样 (i18next 1:1)
     let translator = TranslatorImpl::new().unwrap();
-    let s = translator
-        .t("r_measure.r1", &TranslationArgs::new())
-        .await;
+    let s = translator.t("r_measure.r1", &TranslationArgs::new()).await;
     assert!(
         s.contains("{{count}}"),
         "r_measure.r1 缺 {{count}} 变量时保留占位符: {s}"

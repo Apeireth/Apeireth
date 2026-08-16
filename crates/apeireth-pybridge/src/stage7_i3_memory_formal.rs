@@ -221,9 +221,9 @@ impl MemoryFormalCoordinator {
             if ok {
                 passed += 1;
             }
-            self.report
-                .events
-                .push(MemoryFormalAuditEvent::new(timestamp, kind, h as u8, &inv, ok));
+            self.report.events.push(MemoryFormalAuditEvent::new(
+                timestamp, kind, h as u8, &inv, ok,
+            ));
         }
         passed
     }
@@ -340,7 +340,13 @@ mod tests {
 
     #[test]
     fn i3_08_audit_event_fields() {
-        let e = MemoryFormalAuditEvent::new(100, MemoryKind::AuditCheckpoint, 7, "audit_complete", true);
+        let e = MemoryFormalAuditEvent::new(
+            100,
+            MemoryKind::AuditCheckpoint,
+            7,
+            "audit_complete",
+            true,
+        );
         assert_eq!(e.timestamp, 100);
         assert!(e.passed);
     }

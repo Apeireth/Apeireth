@@ -95,9 +95,9 @@ use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
 use crate::{
-    AudioFrame, VoiceConfig, VoiceError, VoiceResult, VoiceSdk, WakeWordType,
-    PLATFORM_NAME, SUPPORTED_WAKE_WORDS, VOICE_DEFAULT_KEYWORD, VOICE_FRAME_LENGTH,
-    VOICE_MAX_AUDIO_SECONDS, VOICE_SAMPLE_RATE_HZ,
+    AudioFrame, VoiceConfig, VoiceError, VoiceResult, VoiceSdk, WakeWordType, PLATFORM_NAME,
+    SUPPORTED_WAKE_WORDS, VOICE_DEFAULT_KEYWORD, VOICE_FRAME_LENGTH, VOICE_MAX_AUDIO_SECONDS,
+    VOICE_SAMPLE_RATE_HZ,
 };
 
 // ============================================================================
@@ -199,13 +199,7 @@ pub enum Lang {
 }
 
 /// 编译期守门: SUPPORTED_LANGS 5 项 (K-1 强校验).
-pub const SUPPORTED_LANGS: &[Lang] = &[
-    Lang::En,
-    Lang::Zh,
-    Lang::Ja,
-    Lang::Ko,
-    Lang::Es,
-];
+pub const SUPPORTED_LANGS: &[Lang] = &[Lang::En, Lang::Zh, Lang::Ja, Lang::Ko, Lang::Es];
 const _: () = assert!(SUPPORTED_LANGS.len() == 5);
 
 impl Lang {
@@ -564,9 +558,8 @@ impl VoiceRealImpl {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {key}")).map_err(|e| {
-                VoiceError::RecordingFailed(format!("auth header invalid: {e}"))
-            })?,
+            HeaderValue::from_str(&format!("Bearer {key}"))
+                .map_err(|e| VoiceError::RecordingFailed(format!("auth header invalid: {e}")))?,
         );
         debug!(
             target: "apeireth_voice_real",
@@ -612,9 +605,8 @@ impl VoiceRealImpl {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {key}")).map_err(|e| {
-                VoiceError::RecordingFailed(format!("auth header invalid: {e}"))
-            })?,
+            HeaderValue::from_str(&format!("Bearer {key}"))
+                .map_err(|e| VoiceError::RecordingFailed(format!("auth header invalid: {e}")))?,
         );
         debug!(
             target: "apeireth_voice_real",
@@ -670,12 +662,9 @@ impl VoiceRealImpl {
             VoiceError::RecordingFailed(format!("response parse failed: {e}, body: {text}"))
         })?;
 
-        let code = outer
-            .get("code")
-            .and_then(|v| v.as_i64())
-            .ok_or_else(|| {
-                VoiceError::RecordingFailed(format!("response missing code field: {text}"))
-            })? as i32;
+        let code = outer.get("code").and_then(|v| v.as_i64()).ok_or_else(|| {
+            VoiceError::RecordingFailed(format!("response missing code field: {text}"))
+        })? as i32;
 
         if code != 0 {
             // rate limit 特殊处理 (42901)
@@ -715,11 +704,7 @@ impl VoiceRealImpl {
     /// K-1 强校验: `VoiceKind` 5 variant 守门 (编译期 hardcode).
     /// K-1 强校验: text 长度 ≤ 4096 chars (per 商业版 SDK 默认上限).
     /// 401 重试: 首次失败 → 清缓存 + refresh api_key → 重试 1 次 (per lark 1:1 模式).
-    pub async fn text_to_speech(
-        &self,
-        text: &str,
-        voice: VoiceKind,
-    ) -> VoiceResult<AudioBuffer> {
+    pub async fn text_to_speech(&self, text: &str, voice: VoiceKind) -> VoiceResult<AudioBuffer> {
         // K-1 强校验 #2: 5 VoiceKind 守门
         if !SUPPORTED_VOICE_KINDS.contains(&voice) {
             return Err(VoiceError::UnsupportedFormat(format!(
@@ -781,9 +766,8 @@ impl VoiceRealImpl {
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {key}")).map_err(|e| {
-                VoiceError::RecordingFailed(format!("auth header invalid: {e}"))
-            })?,
+            HeaderValue::from_str(&format!("Bearer {key}"))
+                .map_err(|e| VoiceError::RecordingFailed(format!("auth header invalid: {e}")))?,
         );
         debug!(
             target: "apeireth_voice_real",
@@ -797,16 +781,12 @@ impl VoiceRealImpl {
             .json(&body)
             .send()
             .await
-            .map_err(|e| {
-                VoiceError::RecordingFailed(format!("text_to_speech network: {e}"))
-            })?;
+            .map_err(|e| VoiceError::RecordingFailed(format!("text_to_speech network: {e}")))?;
 
         let status = resp.status();
         if status == StatusCode::UNAUTHORIZED {
             let text = resp.text().await.unwrap_or_default();
-            return Err(VoiceError::AuthFailed(format!(
-                "TTS 401: {text}"
-            )));
+            return Err(VoiceError::AuthFailed(format!("TTS 401: {text}")));
         }
 
         if !status.is_success() {
@@ -816,9 +796,10 @@ impl VoiceRealImpl {
             )));
         }
 
-        let audio_bytes = resp.bytes().await.map_err(|e| {
-            VoiceError::RecordingFailed(format!("TTS body read: {e}"))
-        })?;
+        let audio_bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| VoiceError::RecordingFailed(format!("TTS body read: {e}")))?;
 
         // 把 raw bytes 转成 AudioBuffer (i16 samples, 16kHz mono, 估 16-bit PCM)
         // 注意: 这是简化处理, 真接时需根据 Content-Type 解析 WAV/MP3 header
@@ -843,11 +824,7 @@ impl VoiceRealImpl {
     /// K-1 强校验: `Lang` 5 variant 守门 (编译期 hardcode).
     /// K-1 强校验: AudioBuffer 长度 ≤ `VOICE_MAX_AUDIO_SECONDS * 1000` ms.
     /// 401 重试: 首次失败 → 清缓存 + refresh api_key → 重试 1 次 (per lark 1:1 模式).
-    pub async fn speech_to_text(
-        &self,
-        audio: &AudioBuffer,
-        lang: Lang,
-    ) -> VoiceResult<String> {
+    pub async fn speech_to_text(&self, audio: &AudioBuffer, lang: Lang) -> VoiceResult<String> {
         // K-1 强校验 #2: 5 Lang 守门
         if !SUPPORTED_LANGS.contains(&lang) {
             return Err(VoiceError::UnsupportedFormat(format!(
@@ -907,17 +884,14 @@ impl VoiceRealImpl {
         let part = reqwest::multipart::Part::bytes(pcm_bytes)
             .file_name("audio.pcm")
             .mime_str("application/octet-stream")
-            .map_err(|e| {
-                VoiceError::RecordingFailed(format!("STT mime invalid: {e}"))
-            })?;
+            .map_err(|e| VoiceError::RecordingFailed(format!("STT mime invalid: {e}")))?;
         form = form.part("file", part);
 
         let mut headers = HeaderMap::new();
         headers.insert(
             AUTHORIZATION,
-            HeaderValue::from_str(&format!("Bearer {key}")).map_err(|e| {
-                VoiceError::RecordingFailed(format!("auth header invalid: {e}"))
-            })?,
+            HeaderValue::from_str(&format!("Bearer {key}"))
+                .map_err(|e| VoiceError::RecordingFailed(format!("auth header invalid: {e}")))?,
         );
         debug!(
             target: "apeireth_voice_real",
@@ -1164,8 +1138,14 @@ mod tests {
     fn wake_word_default_stub_is_apeireth() {
         let w = WakeWord::default_stub();
         assert_eq!(w.keyword, VOICE_DEFAULT_KEYWORD);
-        assert_eq!(w.keyword, "apeireth", "K-1 强校验 #2: 默认唤醒词必须 'apeireth'");
-        assert_eq!(w.model, "stub-default", "R21+ 接 Porcupine 时改 porcupine-v2");
+        assert_eq!(
+            w.keyword, "apeireth",
+            "K-1 强校验 #2: 默认唤醒词必须 'apeireth'"
+        );
+        assert_eq!(
+            w.model, "stub-default",
+            "R21+ 接 Porcupine 时改 porcupine-v2"
+        );
         assert!(w.confidence > 0.0 && w.confidence <= 1.0);
     }
 

@@ -52,8 +52,7 @@ pub const FIELD_END_CANDIDATES: &[&str] = &["「末」", "{末}", "{末」", "�
 fn block_start_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)<{2,4}\s*\[\s*TOOL_REQUEST\s*\]\s*>{2,4}")
-            .expect("block start regex")
+        Regex::new(r"(?i)<{2,4}\s*\[\s*TOOL_REQUEST\s*\]\s*>{2,4}").expect("block start regex")
     })
 }
 
@@ -61,8 +60,7 @@ fn block_start_re() -> &'static Regex {
 fn block_end_re() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
     RE.get_or_init(|| {
-        Regex::new(r"(?i)<{2,4}\s*\[\s*END_TOOL_REQUEST\s*\]\s*>{2,4}")
-            .expect("block end regex")
+        Regex::new(r"(?i)<{2,4}\s*\[\s*END_TOOL_REQUEST\s*\]\s*>{2,4}").expect("block end regex")
     })
 }
 
@@ -105,10 +103,7 @@ pub fn strip_reasoning_blocks(content: &str) -> String {
         if depth == 0 {
             out.push_str(&content[cursor..m.start()]);
         }
-        let is_closing = caps
-            .get(1)
-            .map(|g| g.as_str() == "/")
-            .unwrap_or(false);
+        let is_closing = caps.get(1).map(|g| g.as_str() == "/").unwrap_or(false);
         if is_closing {
             depth = depth.saturating_sub(1);
         } else {
@@ -281,9 +276,7 @@ fn scan_fields(block: &str) -> Vec<(String, String)> {
 
         // 形态 ①: ESCAPE 字段 (VCP getEscapeStartRegex anchored — 必须锚定在值起点)
         // 注: find 可能匹配到后续字段的 ESCAPE 标记, 故只有 start()==0 才走 escape 分支
-        let anchored_escape = escape_start_re()
-            .find(rest)
-            .filter(|e| e.start() == 0);
+        let anchored_escape = escape_start_re().find(rest).filter(|e| e.start() == 0);
         if let Some(e) = anchored_escape {
             let after = cursor + e.end();
             match escape_end_re().find(&block[after..]) {
@@ -576,7 +569,8 @@ mod tests {
     #[test]
     fn unmatched_close_tag_only_removes_itself() {
         // 孤立结束标签只删标签本身, 其后正文保留
-        let input = "前</think>后<<<[TOOL_REQUEST]>>>\ntool_name:「始」T「末」\n<<<[END_TOOL_REQUEST]>>>";
+        let input =
+            "前</think>后<<<[TOOL_REQUEST]>>>\ntool_name:「始」T「末」\n<<<[END_TOOL_REQUEST]>>>";
         let calls = TextToolProtocol::parse(input);
         assert_eq!(calls.len(), 1);
         assert_eq!(strip_reasoning_blocks("前</think>后"), "前后");

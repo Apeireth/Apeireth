@@ -30,8 +30,8 @@
 //! 14. `k1_invariants_real_module`: 5 K-1 字样守门
 
 use apeireth_voice::{
-    AudioBuffer, AudioFormat, AudioFrame, Lang, VoiceConfig, VoiceError, VoiceRealImpl, VoiceSdk,
-    VoiceKind, WakeWord, WakeWordType, PLATFORM_NAME, SUPPORTED_LANGS, SUPPORTED_VOICE_KINDS,
+    AudioBuffer, AudioFormat, AudioFrame, Lang, VoiceConfig, VoiceError, VoiceKind, VoiceRealImpl,
+    VoiceSdk, WakeWord, WakeWordType, PLATFORM_NAME, SUPPORTED_LANGS, SUPPORTED_VOICE_KINDS,
     SUPPORTED_WAKE_WORDS, VOICE_API_BASE_URL, VOICE_DEFAULT_KEYWORD, VOICE_FRAME_LENGTH,
     VOICE_MAX_AUDIO_SECONDS, VOICE_SAMPLE_RATE_HZ,
 };
@@ -110,7 +110,11 @@ async fn tts_happy() {
     assert!(buf.samples.len() > 0, "TTS 应返 non-empty samples");
     assert_eq!(buf.sample_rate, VOICE_SAMPLE_RATE_HZ);
     assert_eq!(buf.format, AudioFormat::Wav);
-    assert!(buf.duration_ms > 0, "duration_ms 应 > 0, got {}", buf.duration_ms);
+    assert!(
+        buf.duration_ms > 0,
+        "duration_ms 应 > 0, got {}",
+        buf.duration_ms
+    );
 }
 
 // ============================================================================
@@ -256,7 +260,10 @@ async fn stt_bad_sample_rate_rejects_before_http() {
     let mut bad = AudioBuffer::from_samples(vec![0i16; 16000]);
     bad.sample_rate = 8000; // 非法, 应 = 16000
     let err = real.speech_to_text(&bad, Lang::Zh).await.unwrap_err();
-    assert!(matches!(err, VoiceError::UnsupportedFormat(_)), "got: {err:?}");
+    assert!(
+        matches!(err, VoiceError::UnsupportedFormat(_)),
+        "got: {err:?}"
+    );
 }
 
 // ============================================================================
@@ -272,9 +279,15 @@ async fn detect_wake_word_stub_default_apeireth() {
         .detect_wake_word(&audio)
         .await
         .expect("detect_wake_word STUB 应返 Ok");
-    assert_eq!(wake.keyword, "apeireth", "K-1 强校验 #2: 默认唤醒词必须 'apeireth'");
+    assert_eq!(
+        wake.keyword, "apeireth",
+        "K-1 强校验 #2: 默认唤醒词必须 'apeireth'"
+    );
     assert_eq!(wake.keyword, VOICE_DEFAULT_KEYWORD);
-    assert_eq!(wake.model, "stub-default", "R21+ 接 Porcupine 时改 porcupine-v2");
+    assert_eq!(
+        wake.model, "stub-default",
+        "R21+ 接 Porcupine 时改 porcupine-v2"
+    );
     assert!(wake.confidence > 0.0 && wake.confidence <= 1.0);
 }
 
@@ -322,7 +335,10 @@ async fn voiceprint_match_happy_verified_true() {
         .expect("声纹 200 OK");
     assert_eq!(m.claimed_id, "u_apeireth_001");
     assert!((m.similarity - 0.92).abs() < 1e-6);
-    assert!(m.verified, "similarity=0.92 >= threshold=0.85 → verified=true");
+    assert!(
+        m.verified,
+        "similarity=0.92 >= threshold=0.85 → verified=true"
+    );
     assert!((m.threshold - 0.85).abs() < 1e-6);
 }
 
@@ -345,7 +361,10 @@ async fn voiceprint_match_low_similarity_verified_false() {
 
     let audio = AudioBuffer::from_samples(vec![100i16; 16000]);
     let m = real.voiceprint_match(&audio, "u_other").await.unwrap();
-    assert!(!m.verified, "similarity=0.50 < threshold=0.85 → verified=false");
+    assert!(
+        !m.verified,
+        "similarity=0.50 < threshold=0.85 → verified=false"
+    );
 }
 
 // ============================================================================
@@ -392,7 +411,10 @@ async fn voiceprint_match_empty_audio_rejects_before_http() {
 
     let empty = AudioBuffer::from_samples(vec![]);
     let err = real.voiceprint_match(&empty, "u_x").await.unwrap_err();
-    assert!(matches!(err, VoiceError::RecordingFailed(_)), "got: {err:?}");
+    assert!(
+        matches!(err, VoiceError::RecordingFailed(_)),
+        "got: {err:?}"
+    );
 }
 
 // ============================================================================
@@ -409,7 +431,10 @@ async fn api_key_env_fallback() {
     // 设置 env 变量 (用 std::env::set_var 是 unsafe 在多线程测试里, 改用 env::set_var 谨慎)
     // 注: 改 env 是进程级, 影响并行测试, 这里用 cfg(windows) 守卫 + serial_test 标记会复杂
     // 简化: 这里仅测 "未传 api_key 时 cache 状态", 401 重试路径测在 tts_401_retry
-    assert!(!real.api_key_cached(), "未传 api_key 时 cache 应空 (lazy load)");
+    assert!(
+        !real.api_key_cached(),
+        "未传 api_key 时 cache 应空 (lazy load)"
+    );
     // mock 1 个 endpoint 验证 401 重试时 refresh_api_key 被调 (虽然会因 env 未设置而 fail)
     Mock::given(method("POST"))
         .and(path("/audio/speech"))
@@ -434,8 +459,14 @@ fn k1_invariants_real_module() {
     // 5 K-1 字样: 跟 STUB 路径同守门
     assert!(VOICE_SAMPLE_RATE_HZ == 16000, "K-1: sample rate hardcode");
     assert_eq!(VOICE_FRAME_LENGTH, 512, "K-1: frame length hardcode");
-    assert_eq!(VOICE_DEFAULT_KEYWORD, "apeireth", "K-1: default keyword hardcode");
-    assert_eq!(VOICE_MAX_AUDIO_SECONDS, 30, "K-1: max audio seconds hardcode");
+    assert_eq!(
+        VOICE_DEFAULT_KEYWORD, "apeireth",
+        "K-1: default keyword hardcode"
+    );
+    assert_eq!(
+        VOICE_MAX_AUDIO_SECONDS, 30,
+        "K-1: max audio seconds hardcode"
+    );
     assert_eq!(PLATFORM_NAME, "apeireth", "K-1: platform name hardcode");
 
     // 编译期 hardcode URL 守门

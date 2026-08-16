@@ -10,7 +10,7 @@
 //! **基线** (1.0.0): target/criterion/apeireth-voice/bench/
 
 use apeireth_voice::{
-    AudioFrame, VoiceConfig, WakeWordType, TOOL_WHITELIST, is_stub_mode, validate_tool_call,
+    is_stub_mode, validate_tool_call, AudioFrame, VoiceConfig, WakeWordType, TOOL_WHITELIST,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 

@@ -132,7 +132,10 @@ fn smoke_v1457_5_stages_30_probes_sum_one() {
     assert_eq!(V1457_N_STAGES, 5);
     assert_eq!(V1457_N_PROBES, 30);
     let sum: f64 = OperationalStage::ALL.iter().map(|s| s.weight()).sum();
-    assert!((sum - 1.0).abs() < V1458_TOLERANCE, "stage weight sum = {sum}");
+    assert!(
+        (sum - 1.0).abs() < V1458_TOLERANCE,
+        "stage weight sum = {sum}"
+    );
     assert!((V1457_STAGE_WEIGHT_SUM - 1.0).abs() < 1e-9);
 }
 
@@ -155,8 +158,14 @@ fn smoke_v1467_6_endpoints() {
     assert_eq!(V1467_N_ENDPOINTS, 6);
     assert_eq!(V1467Endpoint::ALL.len(), 6);
     // 1 POST + 5 GET
-    let n_post = V1467Endpoint::ALL.iter().filter(|e| e.method() == "POST").count();
-    let n_get = V1467Endpoint::ALL.iter().filter(|e| e.method() == "GET").count();
+    let n_post = V1467Endpoint::ALL
+        .iter()
+        .filter(|e| e.method() == "POST")
+        .count();
+    let n_get = V1467Endpoint::ALL
+        .iter()
+        .filter(|e| e.method() == "GET")
+        .count();
     assert_eq!(n_post, 1);
     assert_eq!(n_get, 5);
     // 路径都 /
@@ -406,7 +415,9 @@ fn smoke_stage1_cross_validation_complete() {
 fn smoke_no_unrelated_modules_known() {
     // Stage 1 严格只 7 个, 不混入 R11 1100+ 或 V1471+ 后续模块
     assert_eq!(ASI_STAGE1_MODULE_COUNT, 7);
-    let known = ASI_STAGE1_MODULES.iter().collect::<std::collections::HashSet<_>>();
+    let known = ASI_STAGE1_MODULES
+        .iter()
+        .collect::<std::collections::HashSet<_>>();
     // Stage 1 不含 V1471 (audit monitor daemon)
     let v1471 = "apeireth.v1471_audit_monitor_daemon";
     assert!(!known.contains(&v1471));

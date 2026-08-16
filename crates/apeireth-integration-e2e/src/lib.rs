@@ -191,9 +191,9 @@
 
 pub mod api_e2e;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod error;
 pub mod harness;
+mod organ_kani_proofs;
 pub mod report;
 pub mod tui_e2e;
 pub mod workspace_e2e;
@@ -207,8 +207,8 @@ pub use error::{E2EError, E2EResult};
 
 // Harness 三层
 pub use harness::{
-    IntegrationHarness, ModeMirror, NavPageMirror, OrganMirror, OrganMirrorState,
-    TuiAppMirror, TuiTestBackend,
+    IntegrationHarness, ModeMirror, NavPageMirror, OrganMirror, OrganMirrorState, TuiAppMirror,
+    TuiTestBackend,
 };
 
 // K-1 强校验编译期常量
@@ -220,18 +220,18 @@ pub use harness::{
 // API e2e (19 个测试函数)
 pub use api_e2e::{
     test_api_health_endpoint_5_components, test_api_metrics_endpoint_returns_prometheus,
-    test_api_not_found_returns_404, test_api_rate_limit_enforced, test_api_server_error_returns_500,
-    test_api_status_endpoint_uptime, test_api_tools_calendar_create, test_api_tools_calendar_delete,
-    test_api_tools_calendar_get, test_api_tools_calendar_list, test_api_tools_calendar_update,
-    test_api_tools_contact_create, test_api_tools_contact_list, test_api_tools_message_list,
-    test_api_tools_message_send, test_api_tools_search_code, test_api_tools_search_web,
-    test_api_tools_task_complete, test_api_tools_task_list, test_api_unauthorized_returns_401,
-    test_api_websocket_8_frames,
+    test_api_not_found_returns_404, test_api_rate_limit_enforced,
+    test_api_server_error_returns_500, test_api_status_endpoint_uptime,
+    test_api_tools_calendar_create, test_api_tools_calendar_delete, test_api_tools_calendar_get,
+    test_api_tools_calendar_list, test_api_tools_calendar_update, test_api_tools_contact_create,
+    test_api_tools_contact_list, test_api_tools_message_list, test_api_tools_message_send,
+    test_api_tools_search_code, test_api_tools_search_web, test_api_tools_task_complete,
+    test_api_tools_task_list, test_api_unauthorized_returns_401, test_api_websocket_8_frames,
 };
 
 // TUI e2e (15 个测试函数)
 pub use tui_e2e::{
-    test_tui_help_nav_6_anchors, test_tui_organ_brain_llm, test_tui_organ_body_resources,
+    test_tui_help_nav_6_anchors, test_tui_organ_body_resources, test_tui_organ_brain_llm,
     test_tui_organ_ear_events, test_tui_organ_eye_input, test_tui_organ_hand_tools,
     test_tui_organ_heart_pulse, test_tui_organ_memory_history, test_tui_organ_mind_anchors,
     test_tui_organ_voice_state, test_tui_quit_key_q, test_tui_session_nav_lists,
@@ -260,9 +260,9 @@ pub mod prelude {
     pub use crate::api_e2e::*;
     pub use crate::error::{E2EError, E2EResult};
     pub use crate::harness::{
-        IntegrationHarness, ModeMirror, NavPageMirror, OrganMirror, OrganMirrorState,
-        TuiAppMirror, TuiTestBackend, DEFAULT_HEIGHT, DEFAULT_WIDTH, EIGHT_PROMISES, FIVE_NAV,
-        NINE_ORGANS, SIX_PHI_ANCHORS, V2_ENDPOINT_GROUPS,
+        IntegrationHarness, ModeMirror, NavPageMirror, OrganMirror, OrganMirrorState, TuiAppMirror,
+        TuiTestBackend, DEFAULT_HEIGHT, DEFAULT_WIDTH, EIGHT_PROMISES, FIVE_NAV, NINE_ORGANS,
+        SIX_PHI_ANCHORS, V2_ENDPOINT_GROUPS,
     };
     pub use crate::report::{
         assert_all_passed, format_human_readable, format_json, generate_report, E2eLayer,

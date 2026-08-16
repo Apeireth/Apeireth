@@ -14,8 +14,8 @@
 use crate::{
     check_csgi1_uniqueness, check_csgi5_content_kind, check_csgi6_max_chars,
     check_csgi7_three_required, DriveKind, Evidence, EvidenceKind, ExternalDrive, InternalDrive,
-    Modality, MultimodalIntent, MotivationDrive, SGIContent, SGIStructured, SGI, SGIEntry,
-    SGI_MAX_TEXT_CHARS, MIN_EVIDENCE_KINDS,
+    Modality, MotivationDrive, MultimodalIntent, SGIContent, SGIEntry, SGIStructured,
+    MIN_EVIDENCE_KINDS, SGI, SGI_MAX_TEXT_CHARS,
 };
 use std::collections::HashMap;
 
@@ -60,8 +60,14 @@ fn r177_mot_01_intensity_clamped() {
 // ============================================
 #[test]
 fn r177_mot_02_drive_kind_match() {
-    assert!(matches!(InternalDrive::new("i", 0.5).kind(), DriveKind::Internal));
-    assert!(matches!(ExternalDrive::new("e", 0.5).kind(), DriveKind::External));
+    assert!(matches!(
+        InternalDrive::new("i", 0.5).kind(),
+        DriveKind::Internal
+    ));
+    assert!(matches!(
+        ExternalDrive::new("e", 0.5).kind(),
+        DriveKind::External
+    ));
 }
 
 // ============================================
@@ -119,7 +125,10 @@ fn r177_mot_07_csgi1_uniqueness() {
         sgi_history: vec![entry_a.clone()],
     };
 
-    let entry_same_id = SGIEntry { id: entry_a.id, ..entry_a.clone() };
+    let entry_same_id = SGIEntry {
+        id: entry_a.id,
+        ..entry_a.clone()
+    };
     assert!(check_csgi1_uniqueness(&sgi, &entry_same_id, true).is_err());
 
     let entry_same_content = SGIEntry::new(make_structured("g", "d", "s"), &drive);
@@ -152,7 +161,11 @@ fn r177_mot_08_history_len_monotonic() {
 #[test]
 fn r177_mot_09_min_evidence_kinds() {
     assert_eq!(MIN_EVIDENCE_KINDS, 3);
-    let kinds = [EvidenceKind::Council, EvidenceKind::History, EvidenceKind::Principle];
+    let kinds = [
+        EvidenceKind::Council,
+        EvidenceKind::History,
+        EvidenceKind::Principle,
+    ];
     let evidence: Vec<Evidence> = kinds
         .iter()
         .map(|k| Evidence {

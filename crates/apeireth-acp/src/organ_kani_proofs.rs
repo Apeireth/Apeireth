@@ -50,7 +50,11 @@ fn r177_acp_05_request_validate_empty_prompt() {
 fn r177_acp_06_request_temperature_range() {
     let r = LlmRequest::new("minimax", "s", "u");
     let t = r.temperature();
-    assert!(t >= 0.0 && t <= 2.0, "temperature 应 ∈ [0.0, 2.0], got {}", t);
+    assert!(
+        t >= 0.0 && t <= 2.0,
+        "temperature 应 ∈ [0.0, 2.0], got {}",
+        t
+    );
 }
 
 #[test]

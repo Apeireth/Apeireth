@@ -165,7 +165,7 @@ pub use colang_dsl::{
 };
 pub use seven_fold_guard::{SevenFoldGuardOutcome, SevenFoldGuardRunner};
 pub use skill_guard::{
-    MultiAiGuardSkill, MultiHumanGuardSkill, MewgGuardSkill, ColangDslGuardSkill,
+    ColangDslGuardSkill, MewgGuardSkill, MultiAiGuardSkill, MultiHumanGuardSkill,
     PhysicalMultisigGuardSkill, ReflectionGuardSkill, Skill, SkillError, SkillGuard,
     SkillGuardConfig, SkillGuardOutcome, SkillId, SkillRegistry, SkillStep,
     SuperpowersSkillGuardSkill,
@@ -180,13 +180,11 @@ pub use action_rail::{
     OutputMewgAction, RetrievalReflectionAction, SystemColangCompileAction,
     SystemFlowDispatchAction, SystemSkillInvokeAction,
 };
-pub use flow_executor::{FlowError, FlowExecutor, FlowOutcome, FlowRunner, FlowState, FlowStep};
 pub use evidence_guard::{
     EvidenceCheck, EvidenceEntry, EvidenceGuard, EvidenceKind, EVIDENCE_FOLD_GUARD_COUNT,
     EVIDENCE_FOLD_GUARD_INDEX, NINE_FOLD_GUARDS_HARDCODE,
 };
-
-
+pub use flow_executor::{FlowError, FlowExecutor, FlowOutcome, FlowRunner, FlowState, FlowStep};
 
 /// 7 重守门 v7 严守 (R126-guard-7 B4 升级, 编译期 hardcode).
 ///
@@ -390,7 +388,7 @@ apeireth_verify::register_all_in_crate!(
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_A,
     __APEIRETH_REG_APEIRETH_SOVEREIGNTY_B
 );
-pub mod kani_proofs;  // R253
-// R177: sovereignty organ invariants
+pub mod kani_proofs; // R253
+                     // R177: sovereignty organ invariants
 mod organ_kani_proofs;
 // R177: sovereignty organ invariants

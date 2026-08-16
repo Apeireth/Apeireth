@@ -15,14 +15,13 @@
 //! 11. Cross-module Stage 5.0 + Stage 5.1 联合
 //! 12. 0 装严守 (0 kani dep + 0 cargo kani)
 
-use apeireth_library_governance::{
-    defensive_proof, run_all_formal_proofs, Boundary, CheckStatus, ConsistencyReport,
-    GovernanceContext, Invariant, LockedSignature, ProofHarness, ProofKind, ProofReport,
-    ProofResult, ProofRunner, Stage5Token, VerificationSubject, run_all_as_report,
-    run_all_8_harnesses,
-};
 use apeireth_library_governance::proof_harnesses;
 use apeireth_library_governance::verification::invariants as ver_inv;
+use apeireth_library_governance::{
+    defensive_proof, run_all_8_harnesses, run_all_as_report, run_all_formal_proofs, Boundary,
+    CheckStatus, ConsistencyReport, GovernanceContext, Invariant, LockedSignature, ProofHarness,
+    ProofKind, ProofReport, ProofResult, ProofRunner, Stage5Token, VerificationSubject,
+};
 
 // ============================================================================
 // 通道 1: Invariant trait 15 trivial impls (Kani `tests/kani/Invariant/invariant_impls.rs` 1:1)
@@ -394,10 +393,26 @@ fn integration_stage_5_0_and_5_1_jointly_pass() {
 fn integration_decision_round_trip_5_known_allow() {
     // 跟 P5-2 integration_decision_round_trip_via_evaluate 1:1, Stage 5.1 复用
     let cases = [
-        (GovernanceContext::version(), apeireth_library_governance::PolicyKind::Version, apeireth_library_governance::GovernanceAction::Allow),
-        (GovernanceContext::baseline(), apeireth_library_governance::PolicyKind::Baseline, apeireth_library_governance::GovernanceAction::Allow),
-        (GovernanceContext::anchor(), apeireth_library_governance::PolicyKind::Anchor, apeireth_library_governance::GovernanceAction::Allow),
-        (GovernanceContext::gate(), apeireth_library_governance::PolicyKind::Gate, apeireth_library_governance::GovernanceAction::Allow),
+        (
+            GovernanceContext::version(),
+            apeireth_library_governance::PolicyKind::Version,
+            apeireth_library_governance::GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::baseline(),
+            apeireth_library_governance::PolicyKind::Baseline,
+            apeireth_library_governance::GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::anchor(),
+            apeireth_library_governance::PolicyKind::Anchor,
+            apeireth_library_governance::GovernanceAction::Allow,
+        ),
+        (
+            GovernanceContext::gate(),
+            apeireth_library_governance::PolicyKind::Gate,
+            apeireth_library_governance::GovernanceAction::Allow,
+        ),
     ];
     for (ctx, expected_policy, expected_action) in &cases {
         let decision = apeireth_library_governance::evaluate(ctx);

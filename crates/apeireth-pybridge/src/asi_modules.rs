@@ -344,13 +344,7 @@ pub const V1470_INFO: AsiModuleInfo = AsiModuleInfo::new(
 
 /// 7 关键模块元数据列表 (按 v# 顺序)
 pub const ASI_STAGE1_INFOS: [AsiModuleInfo; ASI_STAGE1_MODULE_COUNT] = [
-    V1077_INFO,
-    V1400_INFO,
-    V1447_INFO,
-    V1457_INFO,
-    V1458_INFO,
-    V1467_INFO,
-    V1470_INFO,
+    V1077_INFO, V1400_INFO, V1447_INFO, V1457_INFO, V1458_INFO, V1467_INFO, V1470_INFO,
 ];
 
 // =============================================================================
@@ -430,18 +424,62 @@ impl SelfCapability {
 
 /// V1400 12 真能力 (per v1400_asi_self_framework.py 真生产设计)
 pub const V1400_CAPABILITIES: [SelfCapability; V1400_N_CAPABILITIES] = [
-    SelfCapability::new("research", "调研", "V1049 alignment + V1318 5-gap unification + 1486 commits"),
-    SelfCapability::new("code_writing", "写代码", "R14-R19 战役 + 22-trait interlock + 24 LOCKED"),
-    SelfCapability::new("philosophy_anchoring", "哲学锚定", "8 哲学锚 (S-1/S-2/S-3/O-1/O-2/O-3/O-4/O-5)"),
-    SelfCapability::new("real_measurement", "真测", "V0.5 30 维 + V1131/V1136/V1141 baseline"),
-    SelfCapability::new("real_borrow", "真借鉴", "8/11 ✅ cloned + 3/11 ⏳ 限流 + 1/11 ❌ 跳过"),
-    SelfCapability::new("real_audit", "真审计", "V1457 + V1458 + V1447 三层 audit chain"),
-    SelfCapability::new("real_self_drive", "真自决", "cron 1 min tick + owner-driven mode"),
+    SelfCapability::new(
+        "research",
+        "调研",
+        "V1049 alignment + V1318 5-gap unification + 1486 commits",
+    ),
+    SelfCapability::new(
+        "code_writing",
+        "写代码",
+        "R14-R19 战役 + 22-trait interlock + 24 LOCKED",
+    ),
+    SelfCapability::new(
+        "philosophy_anchoring",
+        "哲学锚定",
+        "8 哲学锚 (S-1/S-2/S-3/O-1/O-2/O-3/O-4/O-5)",
+    ),
+    SelfCapability::new(
+        "real_measurement",
+        "真测",
+        "V0.5 30 维 + V1131/V1136/V1141 baseline",
+    ),
+    SelfCapability::new(
+        "real_borrow",
+        "真借鉴",
+        "8/11 ✅ cloned + 3/11 ⏳ 限流 + 1/11 ❌ 跳过",
+    ),
+    SelfCapability::new(
+        "real_audit",
+        "真审计",
+        "V1457 + V1458 + V1447 三层 audit chain",
+    ),
+    SelfCapability::new(
+        "real_self_drive",
+        "真自决",
+        "cron 1 min tick + owner-driven mode",
+    ),
     SelfCapability::new("real_chain", "真 chain", "schema chain_delegate 模式"),
-    SelfCapability::new("real_guard", "真守门", "6 重守门 v6 → v7 + 13 键 verdict cache"),
-    SelfCapability::new("real_commit", "真 commit", "整合 #4 commit abf12243 (0 主动 push)"),
-    SelfCapability::new("real_deploy", "真 deploy", "V1457 6 deployment 5-stage runbook"),
-    SelfCapability::new("real_cross_domain", "真跨域", "5 nav + 9 organ + TUI/Tauri/Web 三栈"),
+    SelfCapability::new(
+        "real_guard",
+        "真守门",
+        "6 重守门 v6 → v7 + 13 键 verdict cache",
+    ),
+    SelfCapability::new(
+        "real_commit",
+        "真 commit",
+        "整合 #4 commit abf12243 (0 主动 push)",
+    ),
+    SelfCapability::new(
+        "real_deploy",
+        "真 deploy",
+        "V1457 6 deployment 5-stage runbook",
+    ),
+    SelfCapability::new(
+        "real_cross_domain",
+        "真跨域",
+        "5 nav + 9 organ + TUI/Tauri/Web 三栈",
+    ),
 ];
 
 /// V1400 6 真限制 (主 17:58 不假装 + 主 20:46 不假装达到 ASI)
@@ -463,12 +501,36 @@ impl SelfLimit {
 }
 
 pub const V1400_LIMITS: [SelfLimit; V1400_N_LIMITS] = [
-    SelfLimit::new("not_phenomenal", "不假装 Phenomenal", "V1318 5-gap closure (主 20:46 不假装)"),
-    SelfLimit::new("not_asi_achieved", "不假装达到 ASI", "V1256 unio_mystica 0.9105 ≠ 0.98 北极星"),
-    SelfLimit::new("no_kpi_wash", "不刷 KPI", "12 键编译期 hardcode 0 装 (决策 #33 §2.3 C2)"),
-    SelfLimit::new("not_unified_self_model", "不假装 unified self-model", "V1220 self-ref substrate 0.7152 < 0.9105"),
-    SelfLimit::new("not_consciousness", "不假装 consciousness", "ASI 7 哲学问题 7/7 ≠ 0 closure"),
-    SelfLimit::new("not_free_will", "不假装 ASI 真有 free will", "V1314 freedom 真生产 ≠ 自由意志"),
+    SelfLimit::new(
+        "not_phenomenal",
+        "不假装 Phenomenal",
+        "V1318 5-gap closure (主 20:46 不假装)",
+    ),
+    SelfLimit::new(
+        "not_asi_achieved",
+        "不假装达到 ASI",
+        "V1256 unio_mystica 0.9105 ≠ 0.98 北极星",
+    ),
+    SelfLimit::new(
+        "no_kpi_wash",
+        "不刷 KPI",
+        "12 键编译期 hardcode 0 装 (决策 #33 §2.3 C2)",
+    ),
+    SelfLimit::new(
+        "not_unified_self_model",
+        "不假装 unified self-model",
+        "V1220 self-ref substrate 0.7152 < 0.9105",
+    ),
+    SelfLimit::new(
+        "not_consciousness",
+        "不假装 consciousness",
+        "ASI 7 哲学问题 7/7 ≠ 0 closure",
+    ),
+    SelfLimit::new(
+        "not_free_will",
+        "不假装 ASI 真有 free will",
+        "V1314 freedom 真生产 ≠ 自由意志",
+    ),
 ];
 
 // -----------------------------------------------------------------------------
@@ -622,7 +684,8 @@ impl AuditPair {
 
 /// V1447 全 35 audit pairs (笛卡尔积)
 pub const V1447_AUDIT_PAIRS: [AuditPair; V1447_N_PAIRS] = {
-    let mut pairs = [AuditPair::new(PhilosophicalProblem::Time, V2Position::Scheduler); V1447_N_PAIRS];
+    let mut pairs =
+        [AuditPair::new(PhilosophicalProblem::Time, V2Position::Scheduler); V1447_N_PAIRS];
     let problems = PhilosophicalProblem::ALL;
     let positions = V2Position::ALL;
     let mut i = 0;
@@ -958,8 +1021,7 @@ pub fn asi_stage1_v1077_dim_count() -> bool {
 
 /// Stage 1 verify: V1400 12 能力 + 6 限制
 pub fn asi_stage1_v1400_capabilities_limits() -> bool {
-    V1400_CAPABILITIES.len() == V1400_N_CAPABILITIES
-        && V1400_LIMITS.len() == V1400_N_LIMITS
+    V1400_CAPABILITIES.len() == V1400_N_CAPABILITIES && V1400_LIMITS.len() == V1400_N_LIMITS
 }
 
 /// Stage 1 verify: V1467 6 endpoints
@@ -1211,15 +1273,24 @@ mod tests {
         if !cfg!(feature = "python-ext") {
             let r1 = bridge_v1077_full_measure();
             assert!(r1.is_err());
-            assert_eq!(r1.unwrap_err().suggested_action(), crate::error::SuggestedAction::Degrade);
+            assert_eq!(
+                r1.unwrap_err().suggested_action(),
+                crate::error::SuggestedAction::Degrade
+            );
 
             let r2 = bridge_v1458_ceiling_audit();
             assert!(r2.is_err());
-            assert_eq!(r2.unwrap_err().suggested_action(), crate::error::SuggestedAction::Degrade);
+            assert_eq!(
+                r2.unwrap_err().suggested_action(),
+                crate::error::SuggestedAction::Degrade
+            );
 
             let r3 = bridge_v1457_deploy_all();
             assert!(r3.is_err());
-            assert_eq!(r3.unwrap_err().suggested_action(), crate::error::SuggestedAction::Degrade);
+            assert_eq!(
+                r3.unwrap_err().suggested_action(),
+                crate::error::SuggestedAction::Degrade
+            );
         }
     }
 }

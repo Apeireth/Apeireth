@@ -22,8 +22,7 @@
 use std::sync::Arc;
 
 use apeireth_telemetry::observability::tui_dashboard::{
-    OrganDashboard, OrganKind, OrganReadiness, TuiOrganState, render_dashboard,
-    render_organ_widget,
+    render_dashboard, render_organ_widget, OrganDashboard, OrganKind, OrganReadiness, TuiOrganState,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use ratatui::backend::TestBackend;
@@ -49,14 +48,8 @@ fn setup_dashboard_full() -> (Terminal<TestBackend>, OrganDashboard) {
         OrganKind::Hand,
         TuiOrganState::ok(OrganKind::Hand, 100.0, "tool call"),
     );
-    dash.register_tui_organ_state(
-        OrganKind::Eye,
-        TuiOrganState::partial(OrganKind::Eye),
-    );
-    dash.register_tui_organ_state(
-        OrganKind::Ear,
-        TuiOrganState::partial(OrganKind::Ear),
-    );
+    dash.register_tui_organ_state(OrganKind::Eye, TuiOrganState::partial(OrganKind::Eye));
+    dash.register_tui_organ_state(OrganKind::Ear, TuiOrganState::partial(OrganKind::Ear));
     dash.register_tui_organ_state(
         OrganKind::Memory,
         TuiOrganState::ok(OrganKind::Memory, 100.0, "sqlite"),
@@ -172,12 +165,7 @@ fn bench_render_9_widgets_all_sequential(c: &mut Criterion) {
                 OrganKind::Body,
                 OrganKind::Mind,
             ] {
-                let state = TuiOrganState::new(
-                    organ,
-                    OrganReadiness::Ok,
-                    100.0,
-                    "seq bench",
-                );
+                let state = TuiOrganState::new(organ, OrganReadiness::Ok, 100.0, "seq bench");
                 let s = render_organ_widget(black_box(organ), black_box(&state));
                 render_dashboard_string_to_backend(&mut terminal, black_box(&s));
             }

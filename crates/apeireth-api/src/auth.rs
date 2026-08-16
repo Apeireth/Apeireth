@@ -112,17 +112,35 @@ pub const P0_PATH_PREFIXES: &[&str] = &[
 
 const _: () = {
     // 头名锁 "Authorization"
-    assert!(AUTH_HEADER_NAME.len() == 13, "AUTH_HEADER_NAME must be 13 chars");
-    assert!(AUTH_HEADER_NAME.as_bytes()[0] == b'A', "AUTH_HEADER_NAME must start with 'A'");
+    assert!(
+        AUTH_HEADER_NAME.len() == 13,
+        "AUTH_HEADER_NAME must be 13 chars"
+    );
+    assert!(
+        AUTH_HEADER_NAME.as_bytes()[0] == b'A',
+        "AUTH_HEADER_NAME must start with 'A'"
+    );
     // Bearer 锁
     assert!(AUTH_SCHEME.len() == 6, "AUTH_SCHEME must be 6 chars");
-    assert!(AUTH_SCHEME.as_bytes()[0] == b'B', "AUTH_SCHEME must start with 'B'");
+    assert!(
+        AUTH_SCHEME.as_bytes()[0] == b'B',
+        "AUTH_SCHEME must start with 'B'"
+    );
     // 长度限制
-    assert!(API_KEY_MAX_LENGTH == 4096, "API_KEY_MAX_LENGTH must match keyring");
+    assert!(
+        API_KEY_MAX_LENGTH == 4096,
+        "API_KEY_MAX_LENGTH must match keyring"
+    );
     assert!(API_KEY_MIN_LENGTH >= 16, "API_KEY_MIN_LENGTH must be >= 16");
     // bucket 容量
-    assert!(P0_BUCKET_CAPACITY >= 100.0, "P0 bucket capacity must be >= 100");
-    assert!(NORMAL_BUCKET_CAPACITY >= 10.0, "normal bucket capacity must be >= 10");
+    assert!(
+        P0_BUCKET_CAPACITY >= 100.0,
+        "P0 bucket capacity must be >= 100"
+    );
+    assert!(
+        NORMAL_BUCKET_CAPACITY >= 10.0,
+        "normal bucket capacity must be >= 10"
+    );
     // WS 并发
     assert!(WS_CONCURRENT_LIMIT >= 1, "WS concurrent limit must be >= 1");
 };
@@ -456,7 +474,9 @@ fn default_audit_log_path() -> PathBuf {
     let home = std::env::var("APPDATA").unwrap_or_else(|_| ".".to_string());
     #[cfg(not(target_os = "windows"))]
     let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home).join(".apeireth").join(AUDIT_LOG_FILE_NAME)
+    PathBuf::from(home)
+        .join(".apeireth")
+        .join(AUDIT_LOG_FILE_NAME)
 }
 
 // ============================================================================
@@ -570,7 +590,11 @@ impl AuthPipeline {
 
     /// 内部: get-or-create bucket.
     fn get_or_create_bucket(&self, principal: &Principal, is_p0: bool) -> Arc<Mutex<TokenBucket>> {
-        let key = format!("{}:{}", principal.api_key_hash, if is_p0 { "p0" } else { "normal" });
+        let key = format!(
+            "{}:{}",
+            principal.api_key_hash,
+            if is_p0 { "p0" } else { "normal" }
+        );
         let mut buckets = self.buckets.lock();
         buckets
             .entry(key)
@@ -657,7 +681,9 @@ pub fn parse_bearer_token(header: &str) -> Option<&str> {
 /// 判定 endpoint 是否 P0 (E 急救路径, 软上限不限流, per 蓝图 §2.6).
 #[must_use]
 pub fn is_p0_endpoint(path: &str) -> bool {
-    P0_PATH_PREFIXES.iter().any(|prefix| path.starts_with(prefix))
+    P0_PATH_PREFIXES
+        .iter()
+        .any(|prefix| path.starts_with(prefix))
 }
 
 /// 计算 API key 哈希 (公开, 给 trace / WS 共享).
@@ -689,7 +715,10 @@ mod auth_tests {
             .check_bearer(Some(&format!("Bearer {token}")), API_KEY_SERVICE, false)
             .await;
         // skeleton 阶段: keyring 不可用 warn 但不返错, principal 仍构造成功
-        assert!(result.is_ok(), "valid token should pass (skeleton): {result:?}");
+        assert!(
+            result.is_ok(),
+            "valid token should pass (skeleton): {result:?}"
+        );
         let p = result.unwrap();
         assert!(p.api_key_hash.starts_with("sha256:"));
         assert_eq!(p.service, API_KEY_SERVICE);
@@ -751,7 +780,14 @@ mod auth_tests {
     fn audit_invoke_writes_event_with_trace_id() {
         let pipeline = make_pipeline();
         let p = Principal::from_api_key("sk-cp-test-audit-1234567890", API_KEY_SERVICE, false);
-        pipeline.audit_invoke(&p, "/v1/tools/web_search/invoke", 200, 234, Some("web_search"), Some("search"));
+        pipeline.audit_invoke(
+            &p,
+            "/v1/tools/web_search/invoke",
+            200,
+            234,
+            Some("web_search"),
+            Some("search"),
+        );
         let events = pipeline.audit().snapshot();
         assert_eq!(events.len(), 1);
         let ev = &events[0];
@@ -768,7 +804,10 @@ mod auth_tests {
         let pipeline = make_pipeline();
         let p = Principal::from_api_key("sk-cp-test-quota-1234567890", API_KEY_SERVICE, false);
         let result = pipeline.check_quota(&p);
-        assert!(matches!(result, Err(ApiError::NotImplemented { api: "quota" })));
+        assert!(matches!(
+            result,
+            Err(ApiError::NotImplemented { api: "quota" })
+        ));
         let err = result.err().unwrap();
         assert_eq!(err.status_code(), 501);
         assert_eq!(err.error_code(), "not_implemented");

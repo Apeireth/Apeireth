@@ -17,12 +17,11 @@
 //! R125-9 新增: `call_python_function_kw` / `eval_python_expression` / `py_call_python_with_kwargs` /
 //! `py_eval_expression` 入口, 借鉴 PyO3 0.22+ `python-from-rust/calling-existing-code.md` 模式.
 
-
 pub mod asi_modules;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod bridge;
 pub mod bridge_pool;
+mod organ_kani_proofs;
 // R129-4 ASI Python 整合 Stage 4 自治 - D4 决策自循环 (per decision-61 §3.1 R129-4)
 pub mod decision_self_loop;
 pub mod error;
@@ -36,11 +35,11 @@ pub mod health_guardianship;
 // R129-4 ASI Python 整合 Stage 4 自治 - D3 记忆自循环 (per decision-61 §3.1 R129-4)
 pub mod memory_self_loop;
 // R129-5 ASI Python 整合 Stage 5 治理 — G2 权限治理 (per decision-61 §3.1 R129-5)
-pub mod permission_governance;
 pub mod perf_guardianship;
+pub mod permission_governance;
 // R129-4 ASI Python 整合 Stage 4 自治 - D2 反思自循环 (per decision-61 §3.1 R129-4)
-pub mod reflection_self_loop;
 pub mod r11_compat;
+pub mod reflection_self_loop;
 // R220: tokio::spawn_blocking 包装 sync Python 为 async (0 引 pyo3-asyncio)
 #[cfg(feature = "python-ext")]
 pub mod async_wrapper;
@@ -73,6 +72,29 @@ pub mod type_convert;
 #[cfg(feature = "python-ext")]
 pub mod python_bindings;
 
+pub use asi_modules::{
+    asi_lookup_by_version, asi_lookup_module, asi_stage1_all_invariants_ok,
+    asi_stage1_bridge_health, asi_stage1_ceiling_chain_locked, asi_stage1_health,
+    asi_stage1_module_count, asi_stage1_v1077_dim_count, asi_stage1_v1400_capabilities_limits,
+    asi_stage1_v1447_pair_count, asi_stage1_v1457_weights_sum_one, asi_stage1_v1467_endpoint_count,
+    asi_stage1_v1470_cross_checks, asi_stage1_version, bridge_v1077_full_measure,
+    bridge_v1457_deploy_all, bridge_v1458_ceiling_audit, is_known_asi_stage1_module,
+    list_asi_stage1_modules_by_category, list_ceiling_critical_modules, AsiCategory, AsiModuleInfo,
+    AsiStage1Health, AuditPair, BatchRunStats, CeilingChainLock, ClosureKind, CrossClientCheck,
+    OperationalStage, PhilosophicalProblem, V1467Endpoint, V2Position, ASI_PYTHON_DIR,
+    ASI_STAGE1_INFOS, ASI_STAGE1_MODULES, ASI_STAGE1_MODULE_COUNT, ASI_STAGE1_VERSION, V1077_INFO,
+    V1077_MODULE, V1077_N_DIMENSIONS, V1077_WEIGHT_SUM, V1077_WEIGHT_TOLERANCE, V1400_CAPABILITIES,
+    V1400_INFO, V1400_LIMITS, V1400_MODULE, V1400_N_CAPABILITIES, V1400_N_LIMITS, V1400_N_RULES,
+    V1447_AUDIT_PAIRS, V1447_INFO, V1447_MODULE, V1447_N_CLOSURE_KINDS, V1447_N_COMBINED_PROBES,
+    V1447_N_CROSS_PAIR_LINKS, V1447_N_PAIRS, V1447_N_POSITIONS, V1447_N_PROBLEMS, V1457_INFO,
+    V1457_MODULE, V1457_N_DEPLOYMENTS, V1457_N_PROBES, V1457_N_STAGES, V1457_STAGE_WEIGHT_SUM,
+    V1458_ABSOLUTE_CEILING, V1458_ANCHOR_VALUE, V1458_GAP_TO_CEILING, V1458_GAP_TO_NORTH_STAR,
+    V1458_INFO, V1458_MODULE, V1458_NORTH_STAR_CEILING, V1458_N_BOUNDED_PROBES,
+    V1458_N_CEILING_MODULES, V1458_N_DEPLOYMENT_CUBE_MODULES, V1458_TOLERANCE, V1467_INFO,
+    V1467_MODULE, V1467_N_ENDPOINTS, V1470_DEFAULT_BATCH_N, V1470_INFO, V1470_MIN_BATCH_N,
+    V1470_MODULE, V1470_N_CLIENT_PATHS, V1470_N_CROSS_CHECKS_PER_RUN, V1470_N_CROSS_CHECKS_TOTAL,
+    V1470_N_ENDPOINTS,
+};
 pub use bridge::{
     call_python_builtin, call_python_function, call_python_function_kw, episode_to_json,
     eval_python_expression, get_or_import_via_pool, health_check, is_module_available,
@@ -86,79 +108,57 @@ pub use r11_compat::{
     r11_compat_version, r11_lookup_module, r11_module_category, r11_module_count, R11Category,
     R11ModuleInfo, R11_COMPAT_VERSION, R11_MODULE_COUNT,
 };
-pub use asi_modules::{
-    asi_lookup_by_version, asi_lookup_module, asi_stage1_all_invariants_ok,
-    asi_stage1_bridge_health, asi_stage1_ceiling_chain_locked, asi_stage1_health,
-    asi_stage1_module_count, asi_stage1_v1077_dim_count, asi_stage1_v1400_capabilities_limits,
-    asi_stage1_v1447_pair_count, asi_stage1_v1457_weights_sum_one, asi_stage1_v1467_endpoint_count,
-    asi_stage1_v1470_cross_checks, asi_stage1_version, bridge_v1077_full_measure,
-    bridge_v1457_deploy_all, bridge_v1458_ceiling_audit, is_known_asi_stage1_module,
-    list_asi_stage1_modules_by_category, list_ceiling_critical_modules,
-    AsiCategory, AsiModuleInfo, AsiStage1Health, AuditPair, BatchRunStats, CeilingChainLock,
-    ClosureKind, CrossClientCheck, OperationalStage, PhilosophicalProblem, V1077_INFO,
-    V1077_MODULE, V1077_N_DIMENSIONS, V1077_WEIGHT_SUM, V1077_WEIGHT_TOLERANCE,
-    V1400_CAPABILITIES, V1400_INFO, V1400_LIMITS, V1400_MODULE, V1400_N_CAPABILITIES, V1400_N_LIMITS,
-    V1400_N_RULES, V1447_AUDIT_PAIRS, V1447_INFO, V1447_MODULE, V1447_N_CLOSURE_KINDS, V1447_N_COMBINED_PROBES,
-    V1447_N_CROSS_PAIR_LINKS, V1447_N_PAIRS, V1447_N_POSITIONS, V1447_N_PROBLEMS, V1457_INFO,
-    V1457_MODULE, V1457_N_DEPLOYMENTS, V1457_N_PROBES, V1457_N_STAGES, V1457_STAGE_WEIGHT_SUM,
-    V1458_ABSOLUTE_CEILING, V1458_ANCHOR_VALUE, V1458_GAP_TO_CEILING, V1458_GAP_TO_NORTH_STAR,
-    V1458_INFO, V1458_MODULE, V1458_N_BOUNDED_PROBES, V1458_N_CEILING_MODULES,
-    V1458_N_DEPLOYMENT_CUBE_MODULES, V1458_NORTH_STAR_CEILING, V1458_TOLERANCE, V1467_INFO,
-    V1467_MODULE, V1467_N_ENDPOINTS, V1467Endpoint, V1470_INFO, V1470_MODULE, V1470_N_CLIENT_PATHS,
-    V1470_N_CROSS_CHECKS_PER_RUN, V1470_N_CROSS_CHECKS_TOTAL, V1470_N_ENDPOINTS,
-    V1470_DEFAULT_BATCH_N, V1470_MIN_BATCH_N, V2Position, ASI_PYTHON_DIR,
-    ASI_STAGE1_INFOS, ASI_STAGE1_MODULES, ASI_STAGE1_MODULE_COUNT, ASI_STAGE1_VERSION,
-};
 pub use type_convert::{json_to_rust, rust_to_json, BridgeConvert};
 
 // R129-6 ASI Python 整合 Stage 6 守护 re-export (per decision-61 §3.1 R129-6)
 // K1 错误守护 + K2 性能守护 + K3 安全守护 + K4 健康守护
 pub use error_guardianship::{
-    stage6_error_guard, stage6_error_healthy, stage6_error_summary, stage6_record_error, ErrorEvent,
-    ErrorGuard, ErrorKind, ErrorSeverity,
-};
-pub use perf_guardianship::{
-    stage6_perf_alerts, stage6_perf_healthy, stage6_perf_monitor, stage6_record_perf,
-    stage6_perf_summary, PerfKind, PerfMonitor, PerfSample, PerfStats,
-};
-pub use security_guardianship::{
-    stage6_security_baseline_intact, stage6_security_guard, stage6_security_healthy,
-    stage6_security_summary, stage6_record_security, CrossLanguageCheck, SecurityEvent,
-    SecurityEventKind, SecurityGate, SecurityGuard, SecuritySeverity, SecurityVerdict, V7BaselineCheck,
+    stage6_error_guard, stage6_error_healthy, stage6_error_summary, stage6_record_error,
+    ErrorEvent, ErrorGuard, ErrorKind, ErrorSeverity,
 };
 pub use health_guardianship::{
     stage6_health_check, stage6_health_guard, stage6_health_healthy, stage6_health_summary,
     HealthCheck, HealthDimension, HealthGuard, HealthReport, HealthStatus,
 };
+pub use perf_guardianship::{
+    stage6_perf_alerts, stage6_perf_healthy, stage6_perf_monitor, stage6_perf_summary,
+    stage6_record_perf, PerfKind, PerfMonitor, PerfSample, PerfStats,
+};
+pub use security_guardianship::{
+    stage6_record_security, stage6_security_baseline_intact, stage6_security_guard,
+    stage6_security_healthy, stage6_security_summary, CrossLanguageCheck, SecurityEvent,
+    SecurityEventKind, SecurityGate, SecurityGuard, SecuritySeverity, SecurityVerdict,
+    V7BaselineCheck,
+};
 
 // R129-5 ASI Python 整合 Stage 5 治理 re-export (per decision-61 §3.1 R129-5)
 // 4 维度: G1 资源治理 + G2 权限治理 + G3 形式化治理 + G4 演进治理
-pub use resource_governance::{
-    resource_governance_bootstrap_ok, resource_governance_health, resource_governance_summary,
-    resource_governance_version, GovernanceAction, ResourceAuditEvent, ResourceDimension,
-    ResourceGovernanceHealth, ResourceGovernor, ResourceQuota, ResourceReport,
-    RESOURCE_GOVERNANCE_DIMENSION_COUNT, RESOURCE_GOVERNANCE_MODULE_COUNT,
-    RESOURCE_GOVERNANCE_VERSION,
-};
-pub use permission_governance::{
-    permission_governance_health, permission_governance_layer_count,
-    permission_governance_summary, permission_governance_version, PermissionContext,
-    PermissionDecision, PermissionDecisionEvent, PermissionEngine, PermissionGovernanceHealth,
-    PermissionLayer, PermissionReport, PERMISSION_GOVERNANCE_LAYER_COUNT,
-    PERMISSION_GOVERNANCE_STAGE_COUNT, PERMISSION_GOVERNANCE_VERSION,
-};
-pub use formal_governance::{
-    formal_governance_health, formal_governance_summary, formal_governance_version,
-    AsiStage5Token, FormalGovernanceHealth, Invariant, ProofHarness, ProofKind, ProofReport,
-    ProofResult, ProofRunner, FORMAL_GOVERNANCE_HARNESS_COUNT, FORMAL_GOVERNANCE_STAGE1_MODULES,
-    FORMAL_GOVERNANCE_STAGE_COUNT, FORMAL_GOVERNANCE_TOKEN_FIELDS, FORMAL_GOVERNANCE_VERSION,
-};
 pub use evolution_governance::{
     evolution_governance_health, evolution_governance_summary, evolution_governance_version,
     EvolutionContext, EvolutionEngine, EvolutionEvent, EvolutionGovernanceHealth, EvolutionKind,
     EvolutionOutcome, EvolutionReport, EvolutionRule, EVOLUTION_GOVERNANCE_KIND_COUNT,
     EVOLUTION_GOVERNANCE_RULE_COUNT, EVOLUTION_GOVERNANCE_STAGE_COUNT,
     EVOLUTION_GOVERNANCE_VERSION,
+};
+pub use formal_governance::{
+    formal_governance_health, formal_governance_summary, formal_governance_version, AsiStage5Token,
+    FormalGovernanceHealth, Invariant, ProofHarness, ProofKind, ProofReport, ProofResult,
+    ProofRunner, FORMAL_GOVERNANCE_HARNESS_COUNT, FORMAL_GOVERNANCE_STAGE1_MODULES,
+    FORMAL_GOVERNANCE_STAGE_COUNT, FORMAL_GOVERNANCE_TOKEN_FIELDS, FORMAL_GOVERNANCE_VERSION,
+};
+pub use permission_governance::{
+    permission_governance_health, permission_governance_layer_count, permission_governance_summary,
+    permission_governance_version, PermissionContext, PermissionDecision, PermissionDecisionEvent,
+    PermissionEngine, PermissionGovernanceHealth, PermissionLayer, PermissionReport,
+    PERMISSION_GOVERNANCE_LAYER_COUNT, PERMISSION_GOVERNANCE_STAGE_COUNT,
+    PERMISSION_GOVERNANCE_VERSION,
+};
+pub use resource_governance::{
+    resource_governance_bootstrap_ok, resource_governance_health, resource_governance_summary,
+    resource_governance_version, GovernanceAction, ResourceAuditEvent, ResourceDimension,
+    ResourceGovernanceHealth, ResourceGovernor, ResourceQuota, ResourceReport,
+    RESOURCE_GOVERNANCE_DIMENSION_COUNT, RESOURCE_GOVERNANCE_MODULE_COUNT,
+    RESOURCE_GOVERNANCE_VERSION,
 };
 
 // R128 阶段 A Stage 3 集成验证 re-export (per decision-58 §2.1 P10-3)
@@ -169,8 +169,8 @@ pub use stage3_bench::{
 };
 pub use stage3_cross_module::{
     probe_asi_to_r11, probe_bridge_to_pool, probe_bridge_to_r11, probe_core_to_bridge,
-    probe_pool_to_type_convert, stage3_cross_module_probes, CrossModuleKind, CrossModuleProbeResult,
-    CrossModuleReport, HardWallsVerify,
+    probe_pool_to_type_convert, stage3_cross_module_probes, CrossModuleKind,
+    CrossModuleProbeResult, CrossModuleReport, HardWallsVerify,
 };
 pub use stage3_e2e::{
     stage3_cross_module_count, stage3_e2e_smoke, stage3_e2e_summary, Stage3E2ESmoke,
@@ -186,63 +186,59 @@ pub use decision_self_loop::{
 
 // R129-18 ASI Python 整合 Stage 7 跨模块集成 re-export (per decision-61 §3.1 R129-18)
 // 7 维度: I1 D1+G1 + I2 D2+K1 + I3 D3+G3 + I4 D4+G2 + I5 G1+K2 + I6 G2+K3 + I7 G4+K4
-pub use stage7_i1_tool_resource::{
-    stage7_i1_healthy, stage7_i1_summary, stage7_i1_to_d1_consistency,
-    stage7_i1_to_g1_consistency, ToolResourceAuditEvent, ToolResourceBinding,
-    ToolResourceCoordinator, ToolResourceMatrix, ToolResourceReport, STAGE7_I1_BINDING_COUNT,
-    STAGE7_I1_DEFAULT_QUOTA, STAGE7_I1_DIMENSION_COUNT, STAGE7_I1_VERSION,
-};
-pub use stage7_i2_reflection_error::{
-    stage7_i2_healthy, stage7_i2_summary, stage7_i2_to_d2_consistency,
-    stage7_i2_to_k1_consistency, ReflectionErrorAuditEvent, ReflectionErrorBinding,
-    ReflectionErrorCoordinator, ReflectionErrorMatrix, ReflectionErrorReport, STAGE7_I2_BINDING_COUNT,
-    STAGE7_I2_DIMENSION_COUNT, STAGE7_I2_ERROR_KIND_COUNT, STAGE7_I2_NODE_COUNT, STAGE7_I2_VERSION,
-};
-pub use stage7_i3_memory_formal::{
-    stage7_i3_healthy, stage7_i3_summary, stage7_i3_to_d3_consistency,
-    stage7_i3_to_g3_consistency, MemoryFormalAuditEvent, MemoryFormalBinding,
-    MemoryFormalCoordinator, MemoryFormalMatrix, MemoryFormalReport, STAGE7_I3_BINDING_COUNT,
-    STAGE7_I3_DIMENSION_COUNT, STAGE7_I3_HARNESS_COUNT, STAGE7_I3_MEMORY_KIND_COUNT,
-    STAGE7_I3_VERSION,
-};
-pub use stage7_i4_decision_permission::{
-    stage7_i4_healthy, stage7_i4_summary, stage7_i4_to_d4_consistency,
-    stage7_i4_to_g2_consistency, DecisionPermissionAuditEvent, DecisionPermissionBinding,
-    DecisionPermissionCoordinator, DecisionPermissionMatrix, DecisionPermissionReport,
-    STAGE7_I4_BINDING_COUNT, STAGE7_I4_DIMENSION_COUNT, STAGE7_I4_LAYER_COUNT,
-    STAGE7_I4_POLICY_COUNT, STAGE7_I4_VERSION,
-};
-pub use stage7_i5_resource_perf::{
-    stage7_i5_healthy, stage7_i5_summary, stage7_i5_to_g1_consistency,
-    stage7_i5_to_k2_consistency, ResourcePerfAuditEvent, ResourcePerfBinding,
-    ResourcePerfCoordinator, ResourcePerfMatrix, ResourcePerfReport, STAGE7_I5_BINDING_COUNT,
-    STAGE7_I5_DIMENSION_COUNT, STAGE7_I5_PERF_KIND_COUNT, STAGE7_I5_RESOURCE_DIM_COUNT,
-    STAGE7_I5_VERSION,
-};
-pub use stage7_i6_permission_security::{
-    stage7_i6_healthy, stage7_i6_summary, stage7_i6_to_g2_consistency,
-    stage7_i6_to_k3_consistency, PermissionSecurityAuditEvent, PermissionSecurityBinding,
-    PermissionSecurityCoordinator, PermissionSecurityMatrix, PermissionSecurityReport,
-    STAGE7_I6_BINDING_COUNT, STAGE7_I6_DIMENSION_COUNT, STAGE7_I6_PERMISSION_LAYER_COUNT,
-    STAGE7_I6_SECURITY_GATE_COUNT, STAGE7_I6_VERSION,
-};
-pub use stage7_i7_evolution_health::{
-    stage7_i7_healthy, stage7_i7_summary, stage7_i7_to_g4_consistency,
-    stage7_i7_to_k4_consistency, EvolutionHealthAuditEvent, EvolutionHealthBinding,
-    EvolutionHealthCoordinator, EvolutionHealthMatrix, EvolutionHealthReport,
-    STAGE7_I7_BINDING_COUNT, STAGE7_I7_DIMENSION_COUNT, STAGE7_I7_EVOLUTION_KIND_COUNT,
-    STAGE7_I7_HEALTH_DIM_COUNT, STAGE7_I7_VERSION,
-};
 pub use memory_self_loop::{
     memory_self_loop_summary, DeterminismMeta, MemoryEntry, MemoryJournal, MemoryKind,
-    MemoryResult, MemorySelfLoop, MEMORY_ENTRY_FIELDS, MEMORY_KIND_COUNT,
-    MEMORY_MAX_ENTRIES, MEMORY_RESULT_COUNT,
+    MemoryResult, MemorySelfLoop, MEMORY_ENTRY_FIELDS, MEMORY_KIND_COUNT, MEMORY_MAX_ENTRIES,
+    MEMORY_RESULT_COUNT,
 };
 pub use reflection_self_loop::{
     reflection_self_loop_summary, ReflectionAction, ReflectionGraph, ReflectionLoopStage,
-    ReflectionNode, ReflectionResult, ReflectionSelfLoop, ReflectionState,
-    REFLECTION_ACTION_COUNT, REFLECTION_GRAPH_NODE_COUNT, REFLECTION_MAX_DEPTH,
-    REFLECTION_STATE_COUNT,
+    ReflectionNode, ReflectionResult, ReflectionSelfLoop, ReflectionState, REFLECTION_ACTION_COUNT,
+    REFLECTION_GRAPH_NODE_COUNT, REFLECTION_MAX_DEPTH, REFLECTION_STATE_COUNT,
+};
+pub use stage7_i1_tool_resource::{
+    stage7_i1_healthy, stage7_i1_summary, stage7_i1_to_d1_consistency, stage7_i1_to_g1_consistency,
+    ToolResourceAuditEvent, ToolResourceBinding, ToolResourceCoordinator, ToolResourceMatrix,
+    ToolResourceReport, STAGE7_I1_BINDING_COUNT, STAGE7_I1_DEFAULT_QUOTA,
+    STAGE7_I1_DIMENSION_COUNT, STAGE7_I1_VERSION,
+};
+pub use stage7_i2_reflection_error::{
+    stage7_i2_healthy, stage7_i2_summary, stage7_i2_to_d2_consistency, stage7_i2_to_k1_consistency,
+    ReflectionErrorAuditEvent, ReflectionErrorBinding, ReflectionErrorCoordinator,
+    ReflectionErrorMatrix, ReflectionErrorReport, STAGE7_I2_BINDING_COUNT,
+    STAGE7_I2_DIMENSION_COUNT, STAGE7_I2_ERROR_KIND_COUNT, STAGE7_I2_NODE_COUNT, STAGE7_I2_VERSION,
+};
+pub use stage7_i3_memory_formal::{
+    stage7_i3_healthy, stage7_i3_summary, stage7_i3_to_d3_consistency, stage7_i3_to_g3_consistency,
+    MemoryFormalAuditEvent, MemoryFormalBinding, MemoryFormalCoordinator, MemoryFormalMatrix,
+    MemoryFormalReport, STAGE7_I3_BINDING_COUNT, STAGE7_I3_DIMENSION_COUNT,
+    STAGE7_I3_HARNESS_COUNT, STAGE7_I3_MEMORY_KIND_COUNT, STAGE7_I3_VERSION,
+};
+pub use stage7_i4_decision_permission::{
+    stage7_i4_healthy, stage7_i4_summary, stage7_i4_to_d4_consistency, stage7_i4_to_g2_consistency,
+    DecisionPermissionAuditEvent, DecisionPermissionBinding, DecisionPermissionCoordinator,
+    DecisionPermissionMatrix, DecisionPermissionReport, STAGE7_I4_BINDING_COUNT,
+    STAGE7_I4_DIMENSION_COUNT, STAGE7_I4_LAYER_COUNT, STAGE7_I4_POLICY_COUNT, STAGE7_I4_VERSION,
+};
+pub use stage7_i5_resource_perf::{
+    stage7_i5_healthy, stage7_i5_summary, stage7_i5_to_g1_consistency, stage7_i5_to_k2_consistency,
+    ResourcePerfAuditEvent, ResourcePerfBinding, ResourcePerfCoordinator, ResourcePerfMatrix,
+    ResourcePerfReport, STAGE7_I5_BINDING_COUNT, STAGE7_I5_DIMENSION_COUNT,
+    STAGE7_I5_PERF_KIND_COUNT, STAGE7_I5_RESOURCE_DIM_COUNT, STAGE7_I5_VERSION,
+};
+pub use stage7_i6_permission_security::{
+    stage7_i6_healthy, stage7_i6_summary, stage7_i6_to_g2_consistency, stage7_i6_to_k3_consistency,
+    PermissionSecurityAuditEvent, PermissionSecurityBinding, PermissionSecurityCoordinator,
+    PermissionSecurityMatrix, PermissionSecurityReport, STAGE7_I6_BINDING_COUNT,
+    STAGE7_I6_DIMENSION_COUNT, STAGE7_I6_PERMISSION_LAYER_COUNT, STAGE7_I6_SECURITY_GATE_COUNT,
+    STAGE7_I6_VERSION,
+};
+pub use stage7_i7_evolution_health::{
+    stage7_i7_healthy, stage7_i7_summary, stage7_i7_to_g4_consistency, stage7_i7_to_k4_consistency,
+    EvolutionHealthAuditEvent, EvolutionHealthBinding, EvolutionHealthCoordinator,
+    EvolutionHealthMatrix, EvolutionHealthReport, STAGE7_I7_BINDING_COUNT,
+    STAGE7_I7_DIMENSION_COUNT, STAGE7_I7_EVOLUTION_KIND_COUNT, STAGE7_I7_HEALTH_DIM_COUNT,
+    STAGE7_I7_VERSION,
 };
 pub use tool_self_loop::{
     tool_self_loop_summary, AsiTool, ToolComposer, ToolExecutor, ToolInput, ToolLoopReport,
@@ -567,7 +563,10 @@ mod tests {
         let s = cross_language_smoke_check();
         // 默认 build 下 python_ext_active = false, bidirectional_ok 必 = false
         if !s.python_ext_active {
-            assert!(!s.bidirectional_ok, "默认 build 下 bidirectional_ok 必 = false (0 装 PASS 严守)");
+            assert!(
+                !s.bidirectional_ok,
+                "默认 build 下 bidirectional_ok 必 = false (0 装 PASS 严守)"
+            );
         }
         // python_ext_active 必与 cfg! 一致
         assert_eq!(s.python_ext_active, cfg!(feature = "python-ext"));
@@ -723,7 +722,10 @@ mod tests {
         assert!(r1.is_some());
         assert!(r2.is_some());
         assert!(r3.is_some());
-        assert!(r4.is_none(), "第 4 次 revisit 必 None (DECISION_MAX_REVISIT 守门)");
+        assert!(
+            r4.is_none(),
+            "第 4 次 revisit 必 None (DECISION_MAX_REVISIT 守门)"
+        );
         assert_eq!(DECISION_POLICY_COUNT, 5);
     }
 

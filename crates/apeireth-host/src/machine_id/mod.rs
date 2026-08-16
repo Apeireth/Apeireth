@@ -63,18 +63,23 @@ use uuid::Uuid;
 // 4 平台模块 (per crate 1:1, 4 文件, cfg 路由)
 // ============================================================================
 
-/// Windows 平台: WMI UUID + Registry MachineGuid 双 fallback.
-#[cfg(windows)]
-pub mod win;
+/// BSD 平台: kenv smbios + /etc/hostid 双 fallback.
+#[cfg(any(
+    target_os = "freebsd",
+    target_os = "openbsd",
+    target_os = "netbsd",
+    target_os = "dragonfly"
+))]
+pub mod bsd;
 /// macOS 平台: IOPlatformUUID via ioreg.
 #[cfg(target_os = "macos")]
 pub mod darwin;
 /// Linux 平台: DMI + DBus + /etc/machine-id 三 fallback.
 #[cfg(target_os = "linux")]
 pub mod linux;
-/// BSD 平台: kenv smbios + /etc/hostid 双 fallback.
-#[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
-pub mod bsd;
+/// Windows 平台: WMI UUID + Registry MachineGuid 双 fallback.
+#[cfg(windows)]
+pub mod win;
 
 /// Provider trait + 4 真实 + 6 mock (R20 阶段 6 flesh out #1).
 ///
@@ -84,15 +89,23 @@ pub mod provider;
 
 // Re-export 关键 Provider 类型 (per 主 22:13 拍 "machine-id flesh out 公开 API 易用")
 pub use provider::{
+    MacHashProvider,
+    MachineIdFileProvider,
     // trait
     MachineIdProvider,
-    // 4 真实
-    SmBiosDmiProvider, MacHashProvider, MachineIdFileProvider, WindowsSidProvider,
+    MockEmptyProvider,
+    MockFailingProvider,
+    MockMacHashProvider,
+    MockMachineIdFileProvider,
     // 6 mock
-    MockSmBiosDmiProvider, MockMacHashProvider, MockMachineIdFileProvider,
-    MockWindowsSidProvider, MockFailingProvider, MockEmptyProvider,
+    MockSmBiosDmiProvider,
+    MockWindowsSidProvider,
     // chain + result
-    ProviderChain, ProviderProbeResult,
+    ProviderChain,
+    ProviderProbeResult,
+    // 4 真实
+    SmBiosDmiProvider,
+    WindowsSidProvider,
 };
 
 // ============================================================================
@@ -118,15 +131,32 @@ pub enum Platform {
 impl Platform {
     /// 探测当前运行平台.
     pub fn detect() -> Self {
-        if cfg!(windows) { Platform::Windows }
-        else if cfg!(target_os = "macos") { Platform::Darwin }
-        else if cfg!(target_os = "linux") { Platform::Linux }
-        else if cfg!(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")) { Platform::Bsd }
-        else { Platform::Unsupported }
+        if cfg!(windows) {
+            Platform::Windows
+        } else if cfg!(target_os = "macos") {
+            Platform::Darwin
+        } else if cfg!(target_os = "linux") {
+            Platform::Linux
+        } else if cfg!(any(
+            target_os = "freebsd",
+            target_os = "openbsd",
+            target_os = "netbsd",
+            target_os = "dragonfly"
+        )) {
+            Platform::Bsd
+        } else {
+            Platform::Unsupported
+        }
     }
     /// 平台字符串.
     pub fn as_str(&self) -> &'static str {
-        match self { Self::Windows => "windows", Self::Darwin => "darwin", Self::Linux => "linux", Self::Bsd => "bsd", Self::Unsupported => "unsupported" }
+        match self {
+            Self::Windows => "windows",
+            Self::Darwin => "darwin",
+            Self::Linux => "linux",
+            Self::Bsd => "bsd",
+            Self::Unsupported => "unsupported",
+        }
     }
 }
 
@@ -147,8 +177,19 @@ pub struct MachineIdResult {
 
 impl MachineIdResult {
     /// 构造新结果.
-    pub fn new(raw: impl Into<String>, hashed: impl Into<String>, platform: Platform, source: impl Into<String>) -> Self {
-        Self { raw: raw.into(), hashed: hashed.into(), platform, source: source.into(), detected_at: SystemTime::now() }
+    pub fn new(
+        raw: impl Into<String>,
+        hashed: impl Into<String>,
+        platform: Platform,
+        source: impl Into<String>,
+    ) -> Self {
+        Self {
+            raw: raw.into(),
+            hashed: hashed.into(),
+            platform,
+            source: source.into(),
+            detected_at: SystemTime::now(),
+        }
     }
 }
 
@@ -177,7 +218,12 @@ pub struct MachineId {
 
 impl MachineId {
     /// 构造新 MachineId (per `MachineIdResult` + 派生 UUID + 探测耗时).
-    pub fn from_result(result: MachineIdResult, hostname: Option<String>, mac_address: Option<String>, duration_ms: u64) -> Self {
+    pub fn from_result(
+        result: MachineIdResult,
+        hostname: Option<String>,
+        mac_address: Option<String>,
+        duration_ms: u64,
+    ) -> Self {
         // UUID v5 (namespace = PLATFORM_NAME "apeireth", name = hashed)
         // 1:1 翻译 v0.9.21: 商业版用 crypto.createHash('sha256') + UUID v5
         let namespace = Uuid::new_v5(&Uuid::NAMESPACE_OID, PLATFORM_NAME.as_bytes());
@@ -234,8 +280,7 @@ pub struct MachineIdExport {
 
 impl From<&MachineId> for MachineIdExport {
     fn from(m: &MachineId) -> Self {
-        let detected_at = chrono::DateTime::<chrono::Utc>::from(m.result.detected_at)
-            .to_rfc3339();
+        let detected_at = chrono::DateTime::<chrono::Utc>::from(m.result.detected_at).to_rfc3339();
         Self {
             platform: m.result.platform.as_str().to_string(),
             uuid: m.uuid_string(),
@@ -306,7 +351,12 @@ pub const MACHINE_ID_CACHE_FILE: &str = "machine_id.cache";
 /// 哈希算法 hardcode.
 pub const MACHINE_ID_HASH_ALGO: &str = "sha256";
 /// 支持的 4 平台 1:1 列表 (compile-time 强校验).
-pub const SUPPORTED_PLATFORMS: &[Platform] = &[Platform::Windows, Platform::Darwin, Platform::Linux, Platform::Bsd];
+pub const SUPPORTED_PLATFORMS: &[Platform] = &[
+    Platform::Windows,
+    Platform::Darwin,
+    Platform::Linux,
+    Platform::Bsd,
+];
 
 // --- Windows 4 项 hardcode ---
 /// Windows WMI 命令名.
@@ -316,7 +366,12 @@ pub const WIN_WMI_ARGS: &[&str] = &["csproduct", "get", "uuid"];
 /// Windows reg 命令名 (fallback, Registry MachineGuid).
 pub const WIN_REG_QUERY_COMMAND: &str = "reg";
 /// Windows reg 命令参数 (query HKLM Cryptography MachineGuid).
-pub const WIN_REG_QUERY_ARGS: &[&str] = &["query", r"HKLM\SOFTWARE\Microsoft\Cryptography", "/v", "MachineGuid"];
+pub const WIN_REG_QUERY_ARGS: &[&str] = &[
+    "query",
+    r"HKLM\SOFTWARE\Microsoft\Cryptography",
+    "/v",
+    "MachineGuid",
+];
 
 // --- macOS 2 项 hardcode ---
 /// macOS ioreg 命令名.
@@ -397,7 +452,7 @@ pub const PLATFORM_FIELDS_COUNT: usize = 17;
 #[doc(hidden)]
 #[allow(dead_code)]
 const PLATFORM_FIELDS_TOTAL: usize = 4 + 4 + 5 + 4; // 17
-// 注: const 内不能持有 &str 切片引用, 编译期靠 K-1 fixture 强校验, 此常量作文档化用.
+                                                    // 注: const 内不能持有 &str 切片引用, 编译期靠 K-1 fixture 强校验, 此常量作文档化用.
 
 // ============================================================================
 // §3 m3 防御 #1 — 工具白名单 (6 工具)
@@ -430,20 +485,54 @@ pub async fn get_machine_id() -> MachineIdResultStd<MachineIdResult> {
     let platform = Platform::detect();
     let (raw, source) = match platform {
         Platform::Windows => {
-            #[cfg(windows)] { win::probe_windows().await? }
-            #[cfg(not(windows))] { return Err(MachineIdError::UnsupportedPlatform); }
+            #[cfg(windows)]
+            {
+                win::probe_windows().await?
+            }
+            #[cfg(not(windows))]
+            {
+                return Err(MachineIdError::UnsupportedPlatform);
+            }
         }
         Platform::Darwin => {
-            #[cfg(target_os = "macos")] { darwin::probe_darwin().await? }
-            #[cfg(not(target_os = "macos"))] { return Err(MachineIdError::UnsupportedPlatform); }
+            #[cfg(target_os = "macos")]
+            {
+                darwin::probe_darwin().await?
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                return Err(MachineIdError::UnsupportedPlatform);
+            }
         }
         Platform::Linux => {
-            #[cfg(target_os = "linux")] { linux::probe_linux().await? }
-            #[cfg(not(target_os = "linux"))] { return Err(MachineIdError::UnsupportedPlatform); }
+            #[cfg(target_os = "linux")]
+            {
+                linux::probe_linux().await?
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                return Err(MachineIdError::UnsupportedPlatform);
+            }
         }
         Platform::Bsd => {
-            #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))] { bsd::probe_bsd().await? }
-            #[cfg(not(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly")))] { return Err(MachineIdError::UnsupportedPlatform); }
+            #[cfg(any(
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            ))]
+            {
+                bsd::probe_bsd().await?
+            }
+            #[cfg(not(any(
+                target_os = "freebsd",
+                target_os = "openbsd",
+                target_os = "netbsd",
+                target_os = "dragonfly"
+            )))]
+            {
+                return Err(MachineIdError::UnsupportedPlatform);
+            }
         }
         Platform::Unsupported => return Err(MachineIdError::UnsupportedPlatform),
     };
@@ -492,7 +581,12 @@ pub async fn detect() -> MachineIdResultStd<MachineId> {
         "machine_id detected"
     );
 
-    Ok(MachineId::from_result(result, hostname, mac_address, elapsed))
+    Ok(MachineId::from_result(
+        result,
+        hostname,
+        mac_address,
+        elapsed,
+    ))
 }
 
 /// 派生 UUID v5 (1:1 翻译 v0.9.21 商业版 `crypto.createHash('sha256').digest()`).
@@ -562,7 +656,12 @@ pub async fn detect_hostname() -> MachineIdResultStd<String> {
             }
         }
     }
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     {
         if let Ok(s) = fs_err::read_to_string(BSD_HOSTNAME_FILE) {
             // /etc/hosts 格式: "127.0.0.1 hostname.local hostname"
@@ -635,8 +734,7 @@ pub async fn detect_mac_address() -> MachineIdResultStd<String> {
     #[cfg(target_os = "linux")]
     {
         // 1:1 翻译 v0.9.21: 找第一个非 lo 的网卡
-        let entries = fs_err::read_dir(LINUX_MAC_SYS_CLASS_NET)
-            .map_err(MachineIdError::Io)?;
+        let entries = fs_err::read_dir(LINUX_MAC_SYS_CLASS_NET).map_err(MachineIdError::Io)?;
         for entry in entries {
             let entry = entry.map_err(MachineIdError::Io)?;
             let name = entry.file_name();
@@ -652,9 +750,16 @@ pub async fn detect_mac_address() -> MachineIdResultStd<String> {
                 }
             }
         }
-        return Err(MachineIdError::Other("no MAC in /sys/class/net".to_string()));
+        return Err(MachineIdError::Other(
+            "no MAC in /sys/class/net".to_string(),
+        ));
     }
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     {
         let iface = BSD_MAC_DEFAULT_IFACE;
         let out = tokio::process::Command::new("ifconfig")
@@ -678,11 +783,18 @@ pub async fn detect_mac_address() -> MachineIdResultStd<String> {
         return Err(MachineIdError::Other("BSD ifconfig failed".to_string()));
     }
     #[cfg(not(any(
-        target_os = "windows", target_os = "macos", target_os = "linux",
-        target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"
+        target_os = "windows",
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
     )))]
     {
-        Err(MachineIdError::Other("unsupported platform for MAC".to_string()))
+        Err(MachineIdError::Other(
+            "unsupported platform for MAC".to_string(),
+        ))
     }
 }
 
@@ -694,7 +806,9 @@ pub fn validate_mac_address(mac: &str) -> bool {
     if parts.len() != 6 {
         return false;
     }
-    parts.iter().all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
+    parts
+        .iter()
+        .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_hexdigit()))
 }
 
 /// HMAC-SHA256 稳定派生 (防 SHA-256(raw) 撞库, 加 PLATFORM_NAME 作为 secret).
@@ -903,7 +1017,12 @@ pub async fn detect_all_sources() -> Vec<SourceProbe> {
     }
 
     // BSD 2 sources
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     {
         match bsd::probe_bsd().await {
             Ok((raw, source)) => results.push(SourceProbe {
@@ -1045,7 +1164,12 @@ pub async fn detect_platform_fields() -> PlatformFields {
             }
         }
     }
-    #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "dragonfly"))]
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "openbsd",
+        target_os = "netbsd",
+        target_os = "dragonfly"
+    ))]
     {
         // BSD: kenv smbios.system.serial
         let out = tokio::process::Command::new(BSD_KENV_COMMAND)
@@ -1167,7 +1291,9 @@ pub fn default_cache_path() -> MachineIdResultStd<PathBuf> {
 /// 读缓存.
 pub async fn read_cached() -> MachineIdResultStd<Option<MachineIdResult>> {
     let path = default_cache_path()?;
-    if !path.exists() { return Ok(None); }
+    if !path.exists() {
+        return Ok(None);
+    }
     let s = fs_err::read_to_string(&path).map_err(MachineIdError::Io)?;
     Ok(Some(serde_json::from_str(&s)?))
 }
@@ -1185,7 +1311,9 @@ pub async fn write_cached(result: &MachineIdResult) -> MachineIdResultStd<()> {
 /// 清缓存.
 pub async fn clear_cached() -> MachineIdResultStd<()> {
     let path = default_cache_path()?;
-    if path.exists() { fs_err::remove_file(&path).map_err(MachineIdError::Io)?; }
+    if path.exists() {
+        fs_err::remove_file(&path).map_err(MachineIdError::Io)?;
+    }
     Ok(())
 }
 
@@ -1200,13 +1328,22 @@ mod tests {
     #[test]
     fn platform_detect_returns_one_of_supported() {
         let p = Platform::detect();
-        assert!(matches!(p, Platform::Windows | Platform::Darwin | Platform::Linux | Platform::Bsd | Platform::Unsupported));
+        assert!(matches!(
+            p,
+            Platform::Windows
+                | Platform::Darwin
+                | Platform::Linux
+                | Platform::Bsd
+                | Platform::Unsupported
+        ));
     }
 
     #[test]
     fn supported_platforms_excludes_unsupported() {
         assert_eq!(SUPPORTED_PLATFORMS.len(), 4);
-        for p in SUPPORTED_PLATFORMS { assert_ne!(*p, Platform::Unsupported); }
+        for p in SUPPORTED_PLATFORMS {
+            assert_ne!(*p, Platform::Unsupported);
+        }
     }
 
     #[test]
@@ -1256,7 +1393,11 @@ mod tests {
         let u2 = derive_id(raw).unwrap();
         assert_eq!(u1, u2, "同一 raw 多次派生必须返同一 UUID");
         // uuid crate 1.x Version::Sha1 = v5 (RFC 4122 SHA-1 based, name=NameHash)
-        assert_eq!(u1.get_version(), Some(uuid::Version::Sha1), "UUID 必须是 v5 (RFC 4122)");
+        assert_eq!(
+            u1.get_version(),
+            Some(uuid::Version::Sha1),
+            "UUID 必须是 v5 (RFC 4122)"
+        );
     }
 
     /// flesh out #2: UUID v5 跨平台隔离 (不同平台 namespace 隔离, 避免跨平台冲突).
@@ -1282,7 +1423,10 @@ mod tests {
 
         // 跟普通 hash_machine_id 不同 (HMAC 加 PLATFORM_NAME secret)
         let plain_hash = hash_machine_id("test-raw").unwrap();
-        assert_ne!(h1, plain_hash, "HMAC-SHA256 必须跟 SHA-256 不同 (加了 PLATFORM_NAME secret)");
+        assert_ne!(
+            h1, plain_hash,
+            "HMAC-SHA256 必须跟 SHA-256 不同 (加了 PLATFORM_NAME secret)"
+        );
     }
 
     /// flesh out #4: validate_uuid (RFC 4122 格式校验).
@@ -1310,7 +1454,12 @@ mod tests {
             Platform::Linux,
             "dmi",
         );
-        let id = MachineId::from_result(result, Some("host1".to_string()), Some("aa:bb:cc:dd:ee:ff".to_string()), 42);
+        let id = MachineId::from_result(
+            result,
+            Some("host1".to_string()),
+            Some("aa:bb:cc:dd:ee:ff".to_string()),
+            42,
+        );
         // uuid 必须合法 RFC 4122
         let s = id.uuid_string();
         assert_eq!(s.len(), 36);
@@ -1318,7 +1467,10 @@ mod tests {
         // raw 透传
         assert_eq!(id.raw(), "test-raw");
         // hashed 透传
-        assert_eq!(id.hashed_hex(), "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234");
+        assert_eq!(
+            id.hashed_hex(),
+            "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234"
+        );
         // 元数据透传
         assert_eq!(id.hostname.as_deref(), Some("host1"));
         assert_eq!(id.mac_address.as_deref(), Some("aa:bb:cc:dd:ee:ff"));

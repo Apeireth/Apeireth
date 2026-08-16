@@ -114,19 +114,19 @@
 /// 9 器官 enum + 9 OrganStub 类型 (编译期 hardcode).
 pub mod organ;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 /// 错误类型 (5 variant StateError + 序列化摘要 StateErrorKind).
 pub mod error;
-/// SharedState trait + SharedStateMode (3 变体) — 3 模式抽象.
-pub mod shared_state;
-/// 模式 1: `OnceLockState<T>` 进程全局 lazy init.
-pub mod mode_once_lock;
 /// 模式 2: `MutexState<T>` 跨线程互斥.
 pub mod mode_mutex;
+/// 模式 1: `OnceLockState<T>` 进程全局 lazy init.
+pub mod mode_once_lock;
 /// 模式 3: `RwLockState<T>` 跨线程读写锁.
 pub mod mode_rw_lock;
+mod organ_kani_proofs;
 /// 9 器官 state 共享注册表 (9 字段, 1:1 跟借鉴 #1 sister 报告 9 organ 对齐).
 pub mod registry;
+/// SharedState trait + SharedStateMode (3 变体) — 3 模式抽象.
+pub mod shared_state;
 // R150 P1 #8: XState-style statechart 引擎 (借鉴 statelyco/xstate 28K stars)
 pub mod statechart;
 
@@ -140,11 +140,9 @@ pub use crate::mode_once_lock::{OnceLockState, OnceLockStateInit, OnceLockStateM
 pub use crate::mode_rw_lock::{RwLockState, RwLockStateInit, RwLockStateMode};
 pub use crate::organ::{
     BodyStub, BrainStub, EarStub, EyeStub, HandStub, HeartStub, MemoryStub, MindStub, Organ,
-    ORGAN_ASCII_CHARS, ORGAN_COUNT, ORGAN_NAMES_ZH, VoiceStub,
+    VoiceStub, ORGAN_ASCII_CHARS, ORGAN_COUNT, ORGAN_NAMES_ZH,
 };
-pub use crate::registry::{
-    OrganStateRegistry, OrganStateRegistryBuilder, REGISTRY_ORGAN_COUNT,
-};
+pub use crate::registry::{OrganStateRegistry, OrganStateRegistryBuilder, REGISTRY_ORGAN_COUNT};
 pub use crate::shared_state::{SharedState, SharedStateMode};
 
 // ============================================================================

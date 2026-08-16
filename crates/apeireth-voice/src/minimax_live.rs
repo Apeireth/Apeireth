@@ -98,10 +98,7 @@ pub enum MiniMaxError {
 
     /// MiniMax API 返回非 0 status_code.
     #[error("minimax api error: status_code={status_code}, msg={msg}")]
-    Api {
-        status_code: i64,
-        msg: String,
-    },
+    Api { status_code: i64, msg: String },
 
     /// 响应 JSON 解析失败.
     #[error("minimax response parse error: {0}")]
@@ -267,7 +264,9 @@ impl MiniMaxLive {
     pub fn from_openclaw_file() -> MiniMaxResult<Self> {
         let path = PathBuf::from(r".openclaw\apikey.txt");
         let key = std::fs::read_to_string(&path)
-            .map_err(|e| MiniMaxError::Transport(format!("read openclaw file {}: {}", path.display(), e)))?
+            .map_err(|e| {
+                MiniMaxError::Transport(format!("read openclaw file {}: {}", path.display(), e))
+            })?
             .trim()
             .to_string();
         if key.is_empty() {
@@ -423,7 +422,10 @@ fn hex_nibble(b: u8) -> MiniMaxResult<u8> {
         b'0'..=b'9' => Ok(b - b'0'),
         b'a'..=b'f' => Ok(b - b'a' + 10),
         b'A'..=b'F' => Ok(b - b'A' + 10),
-        _ => Err(MiniMaxError::HexDecode(format!("invalid hex byte 0x{:02x}", b))),
+        _ => Err(MiniMaxError::HexDecode(format!(
+            "invalid hex byte 0x{:02x}",
+            b
+        ))),
     }
 }
 

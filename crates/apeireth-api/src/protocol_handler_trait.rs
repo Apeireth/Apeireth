@@ -313,10 +313,7 @@ mod protocol_handler_trait_tests {
             fn cache_key(&self, _req: &NormalizedRequest) -> String {
                 "k".into()
             }
-            fn dispatch(
-                &self,
-                req: NormalizedRequest,
-            ) -> Result<NormalizedResponse, String> {
+            fn dispatch(&self, req: NormalizedRequest) -> Result<NormalizedResponse, String> {
                 Ok(NormalizedResponse::text("x", req.model, "x"))
             }
             // 不重写 supports_stream → 默 true
@@ -333,10 +330,7 @@ mod protocol_handler_trait_tests {
             fn cache_key(&self, _req: &NormalizedRequest) -> String {
                 "k".into()
             }
-            fn dispatch(
-                &self,
-                req: NormalizedRequest,
-            ) -> Result<NormalizedResponse, String> {
+            fn dispatch(&self, req: NormalizedRequest) -> Result<NormalizedResponse, String> {
                 Ok(NormalizedResponse::text("x", req.model, "x"))
             }
             fn supports_stream(&self) -> bool {
@@ -400,7 +394,10 @@ mod protocol_handler_trait_tests {
         let registered = reg.registered_kinds();
         assert_eq!(registered.len(), 4);
         for &kind in &kinds {
-            assert!(registered.contains(&kind), "kind {kind:?} should be registered");
+            assert!(
+                registered.contains(&kind),
+                "kind {kind:?} should be registered"
+            );
         }
     }
 
@@ -411,10 +408,22 @@ mod protocol_handler_trait_tests {
         let mut reg = HandlerRegistry::new();
 
         let configs: [(ProtocolKind, &str, &str); 4] = [
-            (ProtocolKind::OpenAiChat, "/v1/chat/completions", "openai_chat"),
-            (ProtocolKind::OpenAiResponses, "/v1/responses", "openai_responses"),
+            (
+                ProtocolKind::OpenAiChat,
+                "/v1/chat/completions",
+                "openai_chat",
+            ),
+            (
+                ProtocolKind::OpenAiResponses,
+                "/v1/responses",
+                "openai_responses",
+            ),
             (ProtocolKind::AnthropicMessages, "/v1/messages", "anthropic"),
-            (ProtocolKind::Gemini, "/v1beta/models/{model}:generateContent", "gemini"),
+            (
+                ProtocolKind::Gemini,
+                "/v1beta/models/{model}:generateContent",
+                "gemini",
+            ),
         ];
         for (kind, endpoint, prefix) in configs {
             reg.register(
@@ -430,9 +439,7 @@ mod protocol_handler_trait_tests {
         // 4 协议各 dispatch 1 次, content 不混
         for (kind, _endpoint, prefix) in configs {
             let req = make_request("test-model", 1);
-            let resp = reg
-                .dispatch(kind, req)
-                .expect("dispatch should succeed");
+            let resp = reg.dispatch(kind, req).expect("dispatch should succeed");
             assert!(
                 resp.content.contains(&format!("{prefix} stub")),
                 "kind {kind:?} should dispatch to {prefix}, got: {}",
@@ -447,11 +454,7 @@ mod protocol_handler_trait_tests {
         // 4 协议 content 互相不混 (4 个 prefix 各不同)
         let contents: Vec<String> = configs
             .iter()
-            .map(|&(kind, _, _)| {
-                reg.dispatch(kind, make_request("m", 1))
-                    .unwrap()
-                    .content
-            })
+            .map(|&(kind, _, _)| reg.dispatch(kind, make_request("m", 1)).unwrap().content)
             .collect();
         let unique: std::collections::HashSet<&String> = contents.iter().collect();
         assert_eq!(
@@ -468,7 +471,11 @@ mod protocol_handler_trait_tests {
         let mut reg = HandlerRegistry::new();
         // 仅 register 4 LLM 协议
         for (kind, endpoint, prefix) in [
-            (ProtocolKind::OpenAiChat, "/v1/chat/completions", "openai_chat"),
+            (
+                ProtocolKind::OpenAiChat,
+                "/v1/chat/completions",
+                "openai_chat",
+            ),
             (
                 ProtocolKind::OpenAiResponses,
                 "/v1/responses",

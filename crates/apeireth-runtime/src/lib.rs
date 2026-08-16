@@ -31,7 +31,7 @@
 #![deny(unsafe_code)]
 
 pub mod g5_runtime_bridge; // R160: runtime task lifecycle 5 stages -> g5 substrate (4th caller)
-// R177: organ invariants (5 tests + 2 Kani)
+                           // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 pub mod workflow_worker; // R263: apeireth-workflow AsyncWorker adapter (workflow dispatch via runtime)
 
@@ -39,21 +39,25 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_arbitration::{ArbitrationLog, EventSource};
+use apeireth_bus::{BusMessage, ChannelSet, ChanneledBus};
+use apeireth_consciousness::DecaySnapshot; // R237: decay snapshot import
 use apeireth_consciousness::{BaseEmotion, EmotionEngine, EmotionSnapshot, Pad};
-use apeireth_consciousness::DecaySnapshot;  // R237: decay snapshot import
-use apeireth_council::group_chat::{ChatMessage, GroupChat, Participant, ParticipantRole, TurnPolicy};
-use apeireth_bus::{BusMessage, ChanneledBus, ChannelSet};
-use apeireth_supervisor::{Heartbeat, HeartbeatPriority, HeartbeatScheduler, Schedule, WakeupContext, WakeupSource};
-use apeireth_supervisor::span::{SpanEvent, SpanId, SpanStatus, SpanTracker};  // R259: cycle span tracker
+use apeireth_council::group_chat::{
+    ChatMessage, GroupChat, Participant, ParticipantRole, TurnPolicy,
+};
+use apeireth_supervisor::otel_metrics::{
+    supervisor_default_metrics, Counter, Gauge, Histogram, MetricEntry, MetricsRegistry,
+    SupervisorMetrics,
+};
+use apeireth_supervisor::span::{SpanEvent, SpanId, SpanStatus, SpanTracker}; // R259: cycle span tracker
+use apeireth_supervisor::{
+    Heartbeat, HeartbeatPriority, HeartbeatScheduler, Schedule, WakeupContext, WakeupSource,
+};
 use apeireth_tool_registry::{AsyncTaskStore, NotifyChannel, TaskId, TaskStatus};
 use apeireth_tool_search::{Document, SearchEngine};
 use parking_lot::Mutex;
-use std::collections::HashMap;
-use apeireth_supervisor::otel_metrics::{
-    Counter, Gauge, Histogram, MetricEntry, MetricsRegistry, SupervisorMetrics,
-    supervisor_default_metrics,
-};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
 use tokio::time::sleep;
 
@@ -177,7 +181,9 @@ impl SimulatedWorker {
 
 #[async_trait::async_trait]
 impl AsyncWorker for SimulatedWorker {
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> &str {
+        &self.name
+    }
     async fn execute(&self, task_id: TaskId, params_json: String) -> Result<String, String> {
         sleep(Duration::from_millis(20)).await;
         let result = serde_json::json!({
@@ -190,7 +196,6 @@ impl AsyncWorker for SimulatedWorker {
         serde_json::to_string(&result).map_err(|e| e.to_string())
     }
 }
-
 
 // ============================================================================
 // R149: LlmWorker — 真接 MiniMax API (OpenAI Chat Completions 协议)
@@ -232,8 +237,12 @@ impl LlmWorker {
         }
     }
 
-    pub fn model(&self) -> &str { &self.model }
-    pub fn base_url(&self) -> &str { &self.base_url }
+    pub fn model(&self) -> &str {
+        &self.model
+    }
+    pub fn base_url(&self) -> &str {
+        &self.base_url
+    }
 
     /// 真接 OpenAI Chat Completions 协议
     /// params_json 格式: {"prompt": "user text", "system": "optional sys", "max_tokens": 1024}
@@ -270,7 +279,11 @@ impl LlmWorker {
         if !status.is_success() {
             // Capture the response body for diagnosis (truncated to 1 KiB).
             let body = resp.text().await.unwrap_or_default();
-            let preview = if body.len() > 1024 { &body[..1024] } else { &body };
+            let preview = if body.len() > 1024 {
+                &body[..1024]
+            } else {
+                &body
+            };
             return Err(format!(
                 "LLM API {} returned {}: {}",
                 url,
@@ -278,10 +291,10 @@ impl LlmWorker {
                 preview
             ));
         }
-        let v: serde_json::Value = resp.json().await
-            .map_err(|e| format!("json parse: {e}"))?;
+        let v: serde_json::Value = resp.json().await.map_err(|e| format!("json parse: {e}"))?;
         // OpenAI Chat Completions response: choices[0].message.content
-        let content = v.get("choices")
+        let content = v
+            .get("choices")
             .and_then(|c| c.get(0))
             .and_then(|c| c.get("message"))
             .and_then(|m| m.get("content"))
@@ -293,13 +306,16 @@ impl LlmWorker {
 
 #[async_trait::async_trait]
 impl AsyncWorker for LlmWorker {
-    fn name(&self) -> &str { &self.name }
+    fn name(&self) -> &str {
+        &self.name
+    }
 
     async fn execute(&self, task_id: TaskId, params_json: String) -> Result<String, String> {
         // 解析 params: {"prompt": "...", "system": "..."}
-        let params: serde_json::Value = serde_json::from_str(&params_json)
-            .map_err(|e| format!("invalid params_json: {e}"))?;
-        let prompt = params.get("prompt")
+        let params: serde_json::Value =
+            serde_json::from_str(&params_json).map_err(|e| format!("invalid params_json: {e}"))?;
+        let prompt = params
+            .get("prompt")
             .and_then(|p| p.as_str())
             .ok_or_else(|| "missing `prompt` field".to_string())?;
         let system = params.get("system").and_then(|s| s.as_str());
@@ -308,7 +324,8 @@ impl AsyncWorker for LlmWorker {
             "task_id": task_id,
             "result": result,
             "model": self.model,
-        }).to_string())
+        })
+        .to_string())
     }
 }
 
@@ -356,14 +373,21 @@ pub struct LivingCycleHeartbeat {
 
 impl LivingCycleHeartbeat {
     pub fn new(runtime: Arc<Runtime>, supervisor_metrics: SupervisorMetrics) -> Self {
-        Self { runtime, supervisor_metrics }
+        Self {
+            runtime,
+            supervisor_metrics,
+        }
     }
 }
 
 #[async_trait::async_trait]
 impl Heartbeat for LivingCycleHeartbeat {
-    fn id(&self) -> &str { "living_cycle" }
-    fn priority(&self) -> HeartbeatPriority { HeartbeatPriority::Normal }
+    fn id(&self) -> &str {
+        "living_cycle"
+    }
+    fn priority(&self) -> HeartbeatPriority {
+        HeartbeatPriority::Normal
+    }
     fn accepts(&self) -> Vec<WakeupSource> {
         vec![WakeupSource::Time, WakeupSource::Event, WakeupSource::User]
     }
@@ -372,25 +396,30 @@ impl Heartbeat for LivingCycleHeartbeat {
         self.supervisor_metrics.heartbeat_count.inc();
         let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
-        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
+        self.supervisor_metrics
+            .tick_duration
+            .observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
     async fn on_event(&self, _ctx: &WakeupContext) -> apeireth_supervisor::HeartbeatResult<()> {
         self.supervisor_metrics.heartbeat_count.inc();
         let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
-        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
+        self.supervisor_metrics
+            .tick_duration
+            .observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
     async fn on_user(&self, _ctx: &WakeupContext) -> apeireth_supervisor::HeartbeatResult<()> {
         self.supervisor_metrics.heartbeat_count.inc();
         let start = std::time::Instant::now();
         let _ = self.runtime.run_one_cycle().await;
-        self.supervisor_metrics.tick_duration.observe(start.elapsed().as_secs_f64() * 1000.0);
+        self.supervisor_metrics
+            .tick_duration
+            .observe(start.elapsed().as_secs_f64() * 1000.0);
         Ok(())
     }
 }
-
 
 // ============================================================================
 // R260: LlmMetrics -- self-contained OTel metrics for LlmWorker calls
@@ -421,7 +450,12 @@ impl LlmMetrics {
             "runtime_llm_latency_ms",
             "end-to-end LLM dispatch wallclock latency",
         ));
-        Self { registry, requests_total, errors_total, latency_ms }
+        Self {
+            registry,
+            requests_total,
+            errors_total,
+            latency_ms,
+        }
     }
 
     pub fn record_success(&self, latency_ms: f64) {
@@ -464,7 +498,12 @@ impl DispatchMetrics {
             "runtime_dispatch_latency_ms",
             "end-to-end dispatch_async_task wallclock latency (worker.execute)",
         ));
-        Self { registry, dispatch_total, dispatch_errors_total, dispatch_latency_ms }
+        Self {
+            registry,
+            dispatch_total,
+            dispatch_errors_total,
+            dispatch_latency_ms,
+        }
     }
 
     pub fn record_success(&self, latency_ms: f64) {
@@ -613,9 +652,18 @@ impl Runtime {
             self.config.room_topic.clone(),
             TurnPolicy::Free,
         );
-        self.add_participant(&room_id, Participant::new("host_apeireth", "Apeireth", ParticipantRole::Host))?;
-        self.add_participant(&room_id, Participant::new("agent_classifier", "Classifier", ParticipantRole::Agent))?;
-        self.add_participant(&room_id, Participant::new("agent_searcher", "Searcher", ParticipantRole::Agent))?;
+        self.add_participant(
+            &room_id,
+            Participant::new("host_apeireth", "Apeireth", ParticipantRole::Host),
+        )?;
+        self.add_participant(
+            &room_id,
+            Participant::new("agent_classifier", "Classifier", ParticipantRole::Agent),
+        )?;
+        self.add_participant(
+            &room_id,
+            Participant::new("agent_searcher", "Searcher", ParticipantRole::Agent),
+        )?;
         Ok(room_id)
     }
 
@@ -629,7 +677,9 @@ impl Runtime {
     /// When `dispatch_async_task` is invoked with this name, the registered
     /// worker is used; otherwise the (legacy) SimulatedWorker is used.
     pub fn register_worker(&self, tool_name: &str, worker: Arc<dyn AsyncWorker>) {
-        self.worker_registry.lock().insert(tool_name.to_string(), worker);
+        self.worker_registry
+            .lock()
+            .insert(tool_name.to_string(), worker);
     }
 
     /// R255 -- dispatch a task using a caller-supplied worker, bypassing the
@@ -643,12 +693,14 @@ impl Runtime {
         let started = std::time::Instant::now();
         self.dispatch_metrics.dispatch_total.inc();
         let tool = worker.name().to_string();
-        let (task_id, _rec) = self.task_store.register(
-            tool.clone(),
-            params_json.to_string(),
-            NotifyChannel::Both,
-        ).await;
-        self.task_store.mark_running(task_id).await.expect("mark running");
+        let (task_id, _rec) = self
+            .task_store
+            .register(tool.clone(), params_json.to_string(), NotifyChannel::Both)
+            .await;
+        self.task_store
+            .mark_running(task_id)
+            .await
+            .expect("mark running");
         let store = self.task_store.clone();
         let bus = self.bus.clone();
         let emit_bus = self.config.emit_bus;
@@ -675,7 +727,9 @@ impl Runtime {
                             json.clone(),
                         );
                         let msg = BusMessage::new(event);
-                        let _ = bus.publish_multi(ChannelSet::BOTH, "async_result", msg).await;
+                        let _ = bus
+                            .publish_multi(ChannelSet::BOTH, "async_result", msg)
+                            .await;
                     }
                 }
                 Err(err) => {
@@ -702,16 +756,25 @@ impl Runtime {
         let started = std::time::Instant::now();
         let worker: Arc<dyn AsyncWorker> = match (model, base_url) {
             (Some(m), Some(b)) => Arc::new(LlmWorker::with_config("llm", api_key, b, m)),
-            (Some(m), None) => Arc::new(LlmWorker::with_config("llm", api_key, "https://api.minimaxi.com", m)),
+            (Some(m), None) => Arc::new(LlmWorker::with_config(
+                "llm",
+                api_key,
+                "https://api.minimaxi.com",
+                m,
+            )),
             _ => Arc::new(LlmWorker::new("llm", api_key)),
         };
         let params = serde_json::json!({"prompt": prompt, "system": system});
-        let task_id = self.dispatch_async_task_with_worker(worker, &params.to_string()).await;
+        let task_id = self
+            .dispatch_async_task_with_worker(worker, &params.to_string())
+            .await;
         // R260: detached spawn records latency after task completes (or fails/times out).
         let store = self.task_store.clone();
         let metrics = self.llm_metrics.clone();
         tokio::spawn(async move {
-            let result = store.wait_for_completion(task_id, std::time::Duration::from_secs(120)).await;
+            let result = store
+                .wait_for_completion(task_id, std::time::Duration::from_secs(120))
+                .await;
             let latency_ms = started.elapsed().as_secs_f64() * 1000.0;
             match result {
                 Ok(rec) if rec.status == TaskStatus::Failed => metrics.record_error(latency_ms),
@@ -731,12 +794,14 @@ impl Runtime {
             .cloned()
             .unwrap_or_else(|| Arc::new(SimulatedWorker::new(tool_name)));
         let tool = worker.name().to_string();
-        let (task_id, _rec) = self.task_store.register(
-            tool.clone(),
-            params_json.to_string(),
-            NotifyChannel::Both,
-        ).await;
-        self.task_store.mark_running(task_id).await.expect("mark running");
+        let (task_id, _rec) = self
+            .task_store
+            .register(tool.clone(), params_json.to_string(), NotifyChannel::Both)
+            .await;
+        self.task_store
+            .mark_running(task_id)
+            .await
+            .expect("mark running");
         let store = self.task_store.clone();
         let bus = self.bus.clone();
         let arbitration = self.arbitration.clone();
@@ -763,7 +828,9 @@ impl Runtime {
                             json.clone(),
                         );
                         let msg = BusMessage::new(event);
-                        let _ = bus.publish_multi(ChannelSet::BOTH, "async_result", msg).await;
+                        let _ = bus
+                            .publish_multi(ChannelSet::BOTH, "async_result", msg)
+                            .await;
                     }
                     let _ = arbitration.append(
                         EventSource::AgentComm,
@@ -836,7 +903,10 @@ impl Runtime {
                     payload,
                 );
                 let msg = BusMessage::new(event);
-                let _ = self.bus.publish_multi(ChannelSet::BOTH, "emotion.decay", msg).await;
+                let _ = self
+                    .bus
+                    .publish_multi(ChannelSet::BOTH, "emotion.decay", msg)
+                    .await;
                 self.decay_emit_total.inc();
             }
         }
@@ -846,9 +916,11 @@ impl Runtime {
         let dispatch_span = self.span_tracker.start_span(cycle_span, "task.dispatch");
         let task_id = self.dispatch_async_task("classify", "{}").await;
         if let Some(sid) = dispatch_span {
-            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
-                ("task_id".into(), format!("{}", task_id)),
-            ]);
+            self.span_tracker.end_span(
+                sid,
+                SpanStatus::Ok,
+                vec![("task_id".into(), format!("{}", task_id))],
+            );
         }
         let task = self
             .task_store
@@ -858,11 +930,15 @@ impl Runtime {
         // R259: child span -- task completion status.
         let complete_span = self.span_tracker.start_span(cycle_span, "task.complete");
         if let Some(sid) = complete_span {
-            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
-                ("task_id".into(), format!("{}", task_id)),
-                ("status".into(), task.status.as_str().to_string()),
-                ("tool".into(), task.tool_name.clone()),
-            ]);
+            self.span_tracker.end_span(
+                sid,
+                SpanStatus::Ok,
+                vec![
+                    ("task_id".into(), format!("{}", task_id)),
+                    ("status".into(), task.status.as_str().to_string()),
+                    ("tool".into(), task.tool_name.clone()),
+                ],
+            );
         }
         let arb_event = self.arbitration.append(
             EventSource::AgentComm,
@@ -874,15 +950,21 @@ impl Runtime {
             0,
             "runtime",
             &task.tool_name,
-            &format!("{} {}", task.params_json, task.result_json.clone().unwrap_or_default()),
+            &format!(
+                "{} {}",
+                task.params_json,
+                task.result_json.clone().unwrap_or_default()
+            ),
         );
         // R259: child span -- search index write.
         let search_span = self.span_tracker.start_span(cycle_span, "search.index");
         let doc_id = self.search.index(doc);
         if let Some(sid) = search_span {
-            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
-                ("doc_id".into(), format!("{}", doc_id)),
-            ]);
+            self.span_tracker.end_span(
+                sid,
+                SpanStatus::Ok,
+                vec![("doc_id".into(), format!("{}", doc_id))],
+            );
         }
         let room_id = self
             .group_chat
@@ -896,7 +978,9 @@ impl Runtime {
             format!("[cycle] task #{} status={}", task_id, task.status.as_str()),
         );
         let mid = msg.id.clone();
-        self.group_chat.post_message_public(&room_id, msg).map_err(|e| RuntimeError::GroupChat(e.to_string()))?;
+        self.group_chat
+            .post_message_public(&room_id, msg)
+            .map_err(|e| RuntimeError::GroupChat(e.to_string()))?;
         let event = match task.status {
             TaskStatus::Completed => EmotionEvent::TaskSuccess,
             TaskStatus::Failed => EmotionEvent::TaskFailure,
@@ -907,10 +991,14 @@ impl Runtime {
         self.emotion.lock().apply(event).ok();
         let snap = self.emotion.lock().snapshot();
         if let Some(sid) = emotion_span {
-            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
-                ("dominant".into(), format!("{:?}", snap.dominant)),
-                ("intensity".into(), format!("{:.3}", snap.intensity)),
-            ]);
+            self.span_tracker.end_span(
+                sid,
+                SpanStatus::Ok,
+                vec![
+                    ("dominant".into(), format!("{:?}", snap.dominant)),
+                    ("intensity".into(), format!("{:.3}", snap.intensity)),
+                ],
+            );
         }
         let elapsed_ms = (now_ms() - start) as u64;
         self.cycle_duration_ms.observe(elapsed_ms as f64);
@@ -919,10 +1007,14 @@ impl Runtime {
         // R259: drain child spans first, then close root span and PREPEND it to list.
         let mut spans = self.span_tracker.take_completed();
         if let Some(sid) = cycle_span {
-            self.span_tracker.end_span(sid, SpanStatus::Ok, vec![
-                ("trace_id".into(), format!("{}", trace_id)),
-                ("elapsed_ms".into(), format!("{}", elapsed_ms)),
-            ]);
+            self.span_tracker.end_span(
+                sid,
+                SpanStatus::Ok,
+                vec![
+                    ("trace_id".into(), format!("{}", trace_id)),
+                    ("elapsed_ms".into(), format!("{}", elapsed_ms)),
+                ],
+            );
             if let Some(root_event) = self.span_tracker.take_completed().into_iter().next() {
                 spans.insert(0, root_event);
             }
@@ -947,12 +1039,23 @@ impl Runtime {
                 "runtime.cycle.report",
                 payload,
             );
-            let _ = self.bus.publish_multi(ChannelSet::BOTH, "runtime.cycle.report", BusMessage::new(event)).await;
+            let _ = self
+                .bus
+                .publish_multi(
+                    ChannelSet::BOTH,
+                    "runtime.cycle.report",
+                    BusMessage::new(event),
+                )
+                .await;
         }
         Ok(report)
     }
 
-    pub async fn wake(&self, source: WakeupSource, topic: impl Into<String>) -> RuntimeResult<usize> {
+    pub async fn wake(
+        &self,
+        source: WakeupSource,
+        topic: impl Into<String>,
+    ) -> RuntimeResult<usize> {
         let ctx = WakeupContext::new(source, topic, "{}");
         self.scheduler
             .trigger(ctx)
@@ -982,7 +1085,8 @@ impl Runtime {
             "event": "started",
             "tick_interval_secs": self.config.tick_interval.as_secs(),
             "total_tasks": self.pending_tasks.get(),
-        })).unwrap_or_default();
+        }))
+        .unwrap_or_default();
         let event = RuntimeEvent::new(
             apeireth_bus::next_trace_id(),
             None,
@@ -990,7 +1094,10 @@ impl Runtime {
             "runtime.started",
             payload,
         );
-        let _ = self.bus.publish_multi(ChannelSet::BOTH, "runtime.started", BusMessage::new(event)).await;
+        let _ = self
+            .bus
+            .publish_multi(ChannelSet::BOTH, "runtime.started", BusMessage::new(event))
+            .await;
         *self.started.lock() = true;
         Ok(())
     }
@@ -1003,7 +1110,8 @@ impl Runtime {
             "event": "shutdown",
             "cycle_total": self.cycle_total.get(),
             "decay_emit_total": self.decay_emit_total.get(),
-        })).unwrap_or_default();
+        }))
+        .unwrap_or_default();
         let event = RuntimeEvent::new(
             apeireth_bus::next_trace_id(),
             None,
@@ -1011,7 +1119,10 @@ impl Runtime {
             "runtime.shutdown",
             payload,
         );
-        let _ = self.bus.publish_multi(ChannelSet::BOTH, "runtime.shutdown", BusMessage::new(event)).await;
+        let _ = self
+            .bus
+            .publish_multi(ChannelSet::BOTH, "runtime.shutdown", BusMessage::new(event))
+            .await;
         self.scheduler
             .stop()
             .await
@@ -1038,7 +1149,9 @@ impl Runtime {
 }
 
 impl Default for Runtime {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 pub fn now_ms() -> i64 {
@@ -1061,7 +1174,10 @@ mod tests {
     #[test]
     fn t02_default_config() {
         let c = RuntimeConfig::default();
-        assert_eq!(c.tick_interval, Duration::from_secs(DEFAULT_TICK_INTERVAL_SECS));
+        assert_eq!(
+            c.tick_interval,
+            Duration::from_secs(DEFAULT_TICK_INTERVAL_SECS)
+        );
         assert_eq!(c.room_capacity, DEFAULT_ROOM_CAPACITY);
     }
 
@@ -1091,7 +1207,11 @@ mod tests {
         rt.bootstrap().unwrap();
         let tid = rt.dispatch_async_task("test_tool", "{\"k\":1}").await;
         assert!(tid > 0);
-        let rec = rt.task_store.wait_for_completion(tid, Duration::from_secs(3)).await.unwrap();
+        let rec = rt
+            .task_store
+            .wait_for_completion(tid, Duration::from_secs(3))
+            .await
+            .unwrap();
         assert_eq!(rec.status, TaskStatus::Completed);
         assert!(rec.result_json.is_some());
     }
@@ -1102,7 +1222,10 @@ mod tests {
         rt.bootstrap().unwrap();
         let _ = rt.run_one_cycle().await.unwrap();
         let hits = rt.search.search("simulated", 10).unwrap();
-        assert!(!hits.is_empty(), "search should find simulated worker output");
+        assert!(
+            !hits.is_empty(),
+            "search should find simulated worker output"
+        );
     }
 
     #[tokio::test]
@@ -1144,9 +1267,9 @@ mod tests {
     }
 }
 
+pub use apeireth_bus::next_trace_id;
 pub use apeireth_bus::Channel as BusChannel;
 pub use apeireth_bus::ChannelSet as BusChannelSet;
-pub use apeireth_bus::next_trace_id;
 pub use apeireth_consciousness::EmotionEvent;
 
 /// R246 -- cycle latency summary (count, sum, mean).
@@ -1157,533 +1280,631 @@ pub struct CycleLatencySummary {
     pub mean_ms: f64,
 }
 
-    /// **R235 — runtime run_one_cycle calls auto_decay**
-    #[tokio::test]
-    async fn t11_runtime_cycle_calls_emotion_auto_decay() {
-        let rt = Arc::new(Runtime::new());
-        rt.clone().bootstrap().unwrap();
-        let initial_last = rt.emotion.lock().last_event_at_ms();
-        // 先触发一次事件, 让 last_event_at_ms 更新
-        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).ok();
-        let last_after_apply = rt.emotion.lock().last_event_at_ms();
-        assert!(last_after_apply >= initial_last);
-        // 跑一次 cycle, auto_decay 会被调
-        let _report = rt.run_one_cycle().await.unwrap();
-        // last_event_at_ms 应该是"auto_decay 调用时"或更新到 cycle 开始时间
-        let last_after_cycle = rt.emotion.lock().last_event_at_ms();
-        assert!(last_after_cycle >= last_after_apply);
+/// **R235 — runtime run_one_cycle calls auto_decay**
+#[tokio::test]
+async fn t11_runtime_cycle_calls_emotion_auto_decay() {
+    let rt = Arc::new(Runtime::new());
+    rt.clone().bootstrap().unwrap();
+    let initial_last = rt.emotion.lock().last_event_at_ms();
+    // 先触发一次事件, 让 last_event_at_ms 更新
+    rt.emotion
+        .lock()
+        .apply(apeireth_consciousness::EmotionEvent::UserPraise)
+        .ok();
+    let last_after_apply = rt.emotion.lock().last_event_at_ms();
+    assert!(last_after_apply >= initial_last);
+    // 跑一次 cycle, auto_decay 会被调
+    let _report = rt.run_one_cycle().await.unwrap();
+    // last_event_at_ms 应该是"auto_decay 调用时"或更新到 cycle 开始时间
+    let last_after_cycle = rt.emotion.lock().last_event_at_ms();
+    assert!(last_after_cycle >= last_after_apply);
+}
+
+// R237 -- emotion_decay -> bus closed loop (3 cases)
+#[tokio::test]
+async fn r237_01_runtime_publishes_emotion_decay_to_bus_when_significant() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.emotion
+        .lock()
+        .apply(apeireth_consciousness::EmotionEvent::UserPraise)
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let _ = rt.run_one_cycle().await.unwrap();
+    assert!(rt.emotion.lock().last_decay().is_some());
+}
+
+#[tokio::test]
+async fn r237_02_runtime_does_not_publish_when_decay_below_threshold() {
+    let mut cfg = RuntimeConfig::default();
+    cfg.decay_emit_min_elapsed_secs = 999.0;
+    let rt = Runtime::with_config(cfg);
+    rt.bootstrap().unwrap();
+    let _ = rt.run_one_cycle().await.unwrap();
+    let _ = rt.bus.stats();
+}
+
+#[tokio::test]
+async fn r237_03_significant_decay_produces_snap_with_drift() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.emotion
+        .lock()
+        .apply(apeireth_consciousness::EmotionEvent::UserPraise)
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
+    let _ = rt.run_one_cycle().await.unwrap();
+    let snap = rt.emotion.lock().take_decay_snapshot().unwrap();
+    assert!(snap.drift() > 0.0);
+}
+
+#[test]
+fn r237_04_runtime_config_decay_fields_have_defaults() {
+    let c = RuntimeConfig::default();
+    assert!(c.emit_decay_bus);
+    assert!(c.decay_emit_min_elapsed_secs > 0.0);
+    assert!(c.decay_emit_min_drift > 0.0);
+}
+
+// R238 -- OTel metrics integration (4 cases)
+#[test]
+fn r238_01_runtime_registers_default_metrics() {
+    let rt = Runtime::new();
+    assert_eq!(rt.cycle_total.get(), 0);
+    assert_eq!(rt.cycle_failures_total.get(), 0);
+    assert_eq!(rt.decay_emit_total.get(), 0);
+    assert_eq!(rt.cycle_duration_ms.count(), 0);
+    assert_eq!(rt.pending_tasks.get(), 0);
+}
+
+#[tokio::test]
+async fn r238_02_runtime_cycle_increments_total_and_observes_duration() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let _ = rt.run_one_cycle().await.unwrap();
+    assert_eq!(rt.cycle_total.get(), 1);
+    assert_eq!(rt.cycle_failures_total.get(), 0);
+    // duration observed exactly once
+    assert_eq!(rt.cycle_duration_ms.count(), 1);
+    assert!(rt.cycle_duration_ms.mean() >= 0.0);
+    // total tasks count should be at least 1 (the cycle's own task)
+    assert!(
+        rt.pending_tasks.get() >= 1,
+        "expected total_tasks >= 1, got {}",
+        rt.pending_tasks.get()
+    );
+}
+
+#[tokio::test]
+async fn r238_03_runtime_metrics_text_export_contains_all_names() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let _ = rt.run_one_cycle().await.unwrap();
+    let text = rt.metrics_text();
+    // Prometheus exposition format: each metric should appear
+    assert!(
+        text.contains("runtime_cycle_total"),
+        "missing cycle_total in metrics_text"
+    );
+    assert!(
+        text.contains("runtime_cycle_failures_total"),
+        "missing failures_total"
+    );
+    assert!(
+        text.contains("runtime_decay_emit_total"),
+        "missing decay_emit_total"
+    );
+    assert!(
+        text.contains("runtime_cycle_duration_ms"),
+        "missing duration_ms"
+    );
+    assert!(text.contains("runtime_total_tasks"), "missing total_tasks");
+}
+
+#[tokio::test]
+async fn r238_04_runtime_metrics_registry_arc_shares_across_callers() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let reg1 = rt.metrics_registry.clone();
+    let counter_via_lookup = reg1
+        .counter("runtime_cycle_total")
+        .expect("counter missing");
+    // Verify the registry's counter IS the same Arc we have a reference to.
+    assert!(Arc::ptr_eq(&counter_via_lookup, &rt.cycle_total));
+    // inc via the registry pointer, see same effect
+    counter_via_lookup.inc_by(7);
+    assert_eq!(rt.cycle_total.get(), 7);
+}
+
+// R240 -- lifecycle event emission (3 cases)
+#[tokio::test]
+async fn r240_01_runtime_start_increments_lifecycle_counter() {
+    let rt = Arc::new(Runtime::new());
+    assert_eq!(rt.lifecycle_started_total.get(), 0);
+    rt.clone().start().await.unwrap();
+    assert_eq!(rt.lifecycle_started_total.get(), 1);
+    rt.clone().shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn r240_02_runtime_shutdown_increments_lifecycle_counter() {
+    let rt = Arc::new(Runtime::new());
+    rt.clone().start().await.unwrap();
+    assert_eq!(rt.lifecycle_shutdown_total.get(), 0);
+    rt.clone().shutdown().await.unwrap();
+    assert_eq!(rt.lifecycle_shutdown_total.get(), 1);
+}
+
+#[tokio::test]
+async fn r240_03_runtime_lifecycle_metrics_text_export_includes_lifecycle() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let text = rt.metrics_text();
+    assert!(
+        text.contains("runtime_lifecycle_started_total"),
+        "missing started_total"
+    );
+    assert!(
+        text.contains("runtime_lifecycle_shutdown_total"),
+        "missing shutdown_total"
+    );
+}
+
+// R241 -- failure path counter (2 cases)
+#[tokio::test]
+async fn r241_01_runtime_cycle_failures_counter_initial_zero() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    assert_eq!(rt.cycle_failures_total.get(), 0);
+    let _ = rt.run_one_cycle().await;
+    // default cycle should succeed -> failures still 0
+    assert_eq!(rt.cycle_failures_total.get(), 0);
+}
+
+#[tokio::test]
+async fn r241_02_runtime_cycle_failures_counter_increments_on_failing_tool() {
+    // Use a worker that always errors -- the runtime will catch the failure
+    // and run_one_cycle must still return Ok with task status = Failed (the cycle itself does not Err).
+    // So to actually exercise the failure counter, we'd need an inner failure, but
+    // the cycle absorbs dispatch failures into emotion.apply(ToolError). It only Errs on
+    // arbitration.append error, which requires open(path) failure -- hard to trigger.
+    // Instead, verify the counter is wired (not stuck at 0) by inspecting via metrics_text.
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let text = rt.metrics_text();
+    assert!(text.contains("runtime_cycle_failures_total"));
+}
+
+// R242 -- cycle_report publish (2 cases)
+#[tokio::test]
+async fn r242_01_publish_cycle_report_default_off_no_bus_emission() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    // default publish_cycle_report = false
+    assert!(!rt.config.publish_cycle_report);
+    let sent_before = rt.bus.stats().sent;
+    let _ = rt.run_one_cycle().await;
+    // With publish off, bus.sent should NOT increase for cycle.report
+    // (still might receive internal heartbeat emissions, but cycle.report topic is disabled)
+    assert_eq!(rt.cycle_total.get(), 1);
+    // Since publish is OFF, the bus.sent delta must NOT include any cycle.report-related emits.
+    // We do not assert delta == 0 because the runtime may emit other things; we only assert cycle_total incremented.
+    let _ = sent_before; // silence unused
+}
+
+#[tokio::test]
+async fn r242_02_publish_cycle_report_emits_to_bus_when_enabled() {
+    let mut cfg = RuntimeConfig::default();
+    cfg.publish_cycle_report = true;
+    let rt = Runtime::with_config(cfg);
+    rt.bootstrap().unwrap();
+    let sent_before = rt.bus.stats().sent;
+    let _ = rt.run_one_cycle().await;
+    let sent_after = rt.bus.stats().sent;
+    // With publish on, bus.sent must increase.
+    assert!(
+        sent_after > sent_before,
+        "publish should increment bus.sent"
+    );
+    assert!(rt.config.publish_cycle_report);
+    drop(sent_before);
+    drop(sent_after);
+}
+
+// R246 -- cycle latency summary (3 cases)
+#[tokio::test]
+async fn r246_01_cycle_latency_summary_initial_zeros() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let s = rt.cycle_latency_summary();
+    assert_eq!(s.count, 0);
+    assert_eq!(s.sum_ms, 0.0);
+    assert_eq!(s.mean_ms, 0.0);
+}
+
+#[tokio::test]
+async fn r246_02_cycle_latency_summary_updates_after_cycle() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    assert_eq!(rt.cycle_latency_summary().count, 0);
+    let _ = rt.run_one_cycle().await.unwrap();
+    let s_after = rt.cycle_latency_summary();
+    assert_eq!(s_after.count, 1);
+    assert!(s_after.sum_ms >= 0.0);
+    let expected_mean = s_after.sum_ms / s_after.count as f64;
+    assert!((s_after.mean_ms - expected_mean).abs() < 1e-6);
+}
+
+#[test]
+fn r246_03_cycle_latency_summary_equality() {
+    let s1 = CycleLatencySummary {
+        count: 5,
+        sum_ms: 25.0,
+        mean_ms: 5.0,
+    };
+    let s2 = CycleLatencySummary {
+        count: 5,
+        sum_ms: 25.0,
+        mean_ms: 5.0,
+    };
+    assert_eq!(s1, s2);
+}
+
+// R247 -- run_cycles batch API (2 cases)
+#[tokio::test]
+async fn r247_01_run_cycles_zero_returns_empty() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let reports = rt.run_cycles(0).await.unwrap();
+    assert_eq!(reports.len(), 0);
+    assert_eq!(rt.cycle_total.get(), 0);
+}
+
+#[tokio::test]
+async fn r247_02_run_cycles_n_increments_metrics() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let reports = rt.run_cycles(3).await.unwrap();
+    assert_eq!(reports.len(), 3);
+    assert_eq!(rt.cycle_total.get(), 3);
+    let s = rt.cycle_latency_summary();
+    assert_eq!(s.count, 3);
+}
+
+// R250 -- supervisor metrics linkup
+
+#[tokio::test]
+async fn r250_01_supervisor_metrics_initial_zero() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 0);
+    assert_eq!(rt.supervisor_metrics.tick_duration.count(), 0);
+}
+
+#[tokio::test]
+async fn r250_02_heartbeat_count_can_be_inc() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let before = rt.supervisor_metrics.heartbeat_count.get();
+    rt.supervisor_metrics.heartbeat_count.inc();
+    rt.supervisor_metrics.heartbeat_count.inc();
+    assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), before + 2);
+}
+
+#[tokio::test]
+async fn r250_03_tick_duration_observe_records_values() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.supervisor_metrics.tick_duration.observe(5.0);
+    rt.supervisor_metrics.tick_duration.observe(15.0);
+    assert_eq!(rt.supervisor_metrics.tick_duration.count(), 2);
+    assert!((rt.supervisor_metrics.tick_duration.sum() - 20.0).abs() < 1e-9);
+}
+
+#[tokio::test]
+async fn r250_04_runtime_text_export_still_works_after_linkup() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.supervisor_metrics.heartbeat_count.inc();
+    assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 1);
+    let text = rt.metrics_text();
+    assert!(
+        text.contains("runtime_cycle_total"),
+        "runtime_cycle_total must appear"
+    );
+}
+
+// R255 -- pluggable worker registry + LlmWorker dispatch
+
+#[test]
+fn r255_01_register_worker_inserts_into_registry() {
+    let rt = Runtime::new();
+    let w: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("custom"));
+    rt.register_worker("custom", w);
+    assert!(rt.worker_registry.lock().contains_key("custom"));
+}
+
+#[tokio::test]
+async fn r255_02_dispatch_async_task_falls_back_to_simulated() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    // No worker registered under "test_tool" -> SimulatedWorker fallback.
+    let tid = rt.dispatch_async_task("test_tool", "{}").await;
+    let rec = rt
+        .task_store
+        .wait_for_completion(tid, Duration::from_secs(3))
+        .await
+        .unwrap();
+    assert_eq!(rec.status, TaskStatus::Completed);
+    let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
+    assert_eq!(j["output"], "ok-simulated");
+}
+
+#[tokio::test]
+async fn r255_03_dispatch_async_task_uses_registered_worker() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let custom = Arc::new(SimulatedWorker::new("custom_tool"));
+    rt.register_worker("custom_tool", custom);
+    let tid = rt.dispatch_async_task("custom_tool", "{}").await;
+    let rec = rt
+        .task_store
+        .wait_for_completion(tid, Duration::from_secs(3))
+        .await
+        .unwrap();
+    assert_eq!(rec.status, TaskStatus::Completed);
+    let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
+    assert_eq!(j["tool"], "custom_tool");
+}
+
+#[tokio::test]
+async fn r255_04_dispatch_llm_task_returns_task_id() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    // dispatch_llm_task should hand back a TaskId even before the underlying HTTP call resolves.
+    let tid = rt
+        .dispatch_llm_task("hello", None, None, None, "fake-key")
+        .await;
+    assert!(tid > 0);
+    // don'''t wait -- the fake key will fail; this test only verifies dispatch path.
+}
+
+#[test]
+fn r255_05_dispatch_llm_task_with_model_and_base_url() {
+    // Verify the worker selection branch with both overrides set.
+    let w = LlmWorker::with_config("llm", "fake", "https://custom.api", "claude-opus");
+    assert_eq!(w.model(), "claude-opus");
+    assert_eq!(w.base_url(), "https://custom.api");
+    assert_eq!(w.name(), "llm");
+}
+
+// R259 -- CycleReport.spans populated by run_one_cycle (5 cases)
+
+#[tokio::test]
+async fn r259_01_cycle_report_spans_populated() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let report = rt.run_one_cycle().await.unwrap();
+    // Should have 5 spans: cycle_root + task.dispatch + task.complete + search.index + emotion.apply
+    assert!(
+        report.spans.len() >= 5,
+        "expected >=5 spans, got {}",
+        report.spans.len()
+    );
+    // Root span must be at index 0 and named "runtime.cycle".
+    assert_eq!(report.spans[0].name, "runtime.cycle");
+    assert!(
+        report.spans[0].parent.is_none(),
+        "root span must have no parent"
+    );
+    assert_eq!(report.spans[0].status, SpanStatus::Ok);
+}
+
+#[tokio::test]
+async fn r259_02_spans_form_parent_child_tree() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let report = rt.run_one_cycle().await.unwrap();
+    let root_id = report.spans[0].span_id;
+    // All non-root spans must have parent = Some(root_id).
+    for s in &report.spans[1..] {
+        assert_eq!(
+            s.parent,
+            Some(root_id),
+            "child span {} parent mismatch",
+            s.name
+        );
     }
+}
 
-    // R237 -- emotion_decay -> bus closed loop (3 cases)
-    #[tokio::test]
-    async fn r237_01_runtime_publishes_emotion_decay_to_bus_when_significant() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
-        let _ = rt.run_one_cycle().await.unwrap();
-        assert!(rt.emotion.lock().last_decay().is_some());
+#[tokio::test]
+async fn r259_03_span_attributes_record_metadata() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let report = rt.run_one_cycle().await.unwrap();
+    let complete_span = report
+        .spans
+        .iter()
+        .find(|s| s.name == "task.complete")
+        .expect("task.complete span must exist");
+    assert_eq!(complete_span.attr("status"), Some("completed"));
+    assert!(complete_span.attr("tool").is_some());
+    let emotion_span = report
+        .spans
+        .iter()
+        .find(|s| s.name == "emotion.apply")
+        .expect("emotion.apply span must exist");
+    assert!(emotion_span.attr("dominant").is_some());
+}
+
+#[test]
+fn r259_04_cycle_report_legacy_serde_compat() {
+    // Pre-R259 cycle reports serialized without "spans" must still deserialize
+    // (#[serde(default)] on the field gives Vec::new()).
+    let legacy_json = r#"{"trace_id":1,"task_id":1,"arbitration_seq":1,"search_doc_id":1,"group_chat_message_id":"x","emotion_dominant":"Joy","emotion_intensity":0.5,"elapsed_ms":1}"#;
+    let report: CycleReport = serde_json::from_str(legacy_json).expect("legacy deserialize");
+    assert_eq!(report.spans.len(), 0);
+}
+
+#[tokio::test]
+async fn r259_05_spans_have_nonzero_elapsed_when_completed() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let report = rt.run_one_cycle().await.unwrap();
+    // Each ended span has end_unix_ms > 0 (end_span was called).
+    for s in &report.spans {
+        assert_eq!(s.status, SpanStatus::Ok);
+        assert!(s.end_unix_ms > 0, "span {} end_unix_ms must be set", s.name);
+        assert!(
+            s.start_unix_ms <= s.end_unix_ms,
+            "span {} inverted time",
+            s.name
+        );
     }
+}
 
-    #[tokio::test]
-    async fn r237_02_runtime_does_not_publish_when_decay_below_threshold() {
-        let mut cfg = RuntimeConfig::default();
-        cfg.decay_emit_min_elapsed_secs = 999.0;
-        let rt = Runtime::with_config(cfg);
-        rt.bootstrap().unwrap();
-        let _ = rt.run_one_cycle().await.unwrap();
-        let _ = rt.bus.stats();
-    }
+// R260 -- LlmMetrics: registry + counters + histogram + dispatch wiring
 
-    #[tokio::test]
-    async fn r237_03_significant_decay_produces_snap_with_drift() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.emotion.lock().apply(apeireth_consciousness::EmotionEvent::UserPraise).unwrap();
-        tokio::time::sleep(std::time::Duration::from_millis(1_100)).await;
-        let _ = rt.run_one_cycle().await.unwrap();
-        let snap = rt.emotion.lock().take_decay_snapshot().unwrap();
-        assert!(snap.drift() > 0.0);
-    }
+#[test]
+fn r260_01_llm_metrics_initial_zero() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    assert_eq!(rt.llm_metrics.requests_total.get(), 0);
+    assert_eq!(rt.llm_metrics.errors_total.get(), 0);
+    assert_eq!(rt.llm_metrics.latency_ms.count(), 0);
+}
 
-    #[test]
-    fn r237_04_runtime_config_decay_fields_have_defaults() {
-        let c = RuntimeConfig::default();
-        assert!(c.emit_decay_bus);
-        assert!(c.decay_emit_min_elapsed_secs > 0.0);
-        assert!(c.decay_emit_min_drift > 0.0);
-    }
+#[test]
+fn r260_02_metrics_text_includes_llm_counters() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let text = rt.metrics_text();
+    assert!(
+        text.contains("runtime_llm_requests_total"),
+        "runtime_llm_requests_total must appear in metrics_text"
+    );
+    assert!(
+        text.contains("runtime_llm_errors_total"),
+        "runtime_llm_errors_total must appear in metrics_text"
+    );
+    assert!(
+        text.contains("runtime_llm_latency_ms"),
+        "runtime_llm_latency_ms must appear in metrics_text"
+    );
+}
 
-    // R238 -- OTel metrics integration (4 cases)
-    #[test]
-    fn r238_01_runtime_registers_default_metrics() {
-        let rt = Runtime::new();
-        assert_eq!(rt.cycle_total.get(), 0);
-        assert_eq!(rt.cycle_failures_total.get(), 0);
-        assert_eq!(rt.decay_emit_total.get(), 0);
-        assert_eq!(rt.cycle_duration_ms.count(), 0);
-        assert_eq!(rt.pending_tasks.get(), 0);
-    }
+#[test]
+fn r260_03_record_success_increments_request_and_observes_latency() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.llm_metrics.record_success(42.5);
+    assert_eq!(rt.llm_metrics.requests_total.get(), 1);
+    assert_eq!(rt.llm_metrics.errors_total.get(), 0);
+    assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
+    assert!((rt.llm_metrics.latency_ms.sum() - 42.5).abs() < 1e-9);
+}
 
-    #[tokio::test]
-    async fn r238_02_runtime_cycle_increments_total_and_observes_duration() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let _ = rt.run_one_cycle().await.unwrap();
-        assert_eq!(rt.cycle_total.get(), 1);
-        assert_eq!(rt.cycle_failures_total.get(), 0);
-        // duration observed exactly once
-        assert_eq!(rt.cycle_duration_ms.count(), 1);
-        assert!(rt.cycle_duration_ms.mean() >= 0.0);
-        // total tasks count should be at least 1 (the cycle's own task)
-        assert!(rt.pending_tasks.get() >= 1, "expected total_tasks >= 1, got {}", rt.pending_tasks.get());
-    }
+#[test]
+fn r260_04_record_error_increments_both_counters() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.llm_metrics.record_error(100.0);
+    assert_eq!(rt.llm_metrics.requests_total.get(), 1);
+    assert_eq!(rt.llm_metrics.errors_total.get(), 1);
+    assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
+}
 
-    #[tokio::test]
-    async fn r238_03_runtime_metrics_text_export_contains_all_names() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let _ = rt.run_one_cycle().await.unwrap();
-        let text = rt.metrics_text();
-        // Prometheus exposition format: each metric should appear
-        assert!(text.contains("runtime_cycle_total"), "missing cycle_total in metrics_text");
-        assert!(text.contains("runtime_cycle_failures_total"), "missing failures_total");
-        assert!(text.contains("runtime_decay_emit_total"), "missing decay_emit_total");
-        assert!(text.contains("runtime_cycle_duration_ms"), "missing duration_ms");
-        assert!(text.contains("runtime_total_tasks"), "missing total_tasks");
-    }
+#[test]
+fn r260_05_llm_metrics_clone_shares_state() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let m2 = rt.llm_metrics.clone();
+    rt.llm_metrics.record_success(10.0);
+    // m2 shares Arc handles, counts must sync
+    assert_eq!(m2.requests_total.get(), 1);
+}
 
-    #[tokio::test]
-    async fn r238_04_runtime_metrics_registry_arc_shares_across_callers() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let reg1 = rt.metrics_registry.clone();
-        let counter_via_lookup = reg1.counter("runtime_cycle_total").expect("counter missing");
-        // Verify the registry's counter IS the same Arc we have a reference to.
-        assert!(Arc::ptr_eq(&counter_via_lookup, &rt.cycle_total));
-        // inc via the registry pointer, see same effect
-        counter_via_lookup.inc_by(7);
-        assert_eq!(rt.cycle_total.get(), 7);
-    }
+#[tokio::test]
+async fn r260_06_dispatch_llm_task_records_after_completion() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let _tid = rt
+        .dispatch_llm_task("hello", None, None, None, "fake-key")
+        .await;
+    // wait for spawned recorder
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    // fake-key => API fails => record_error path => requests_total == 1
+    assert_eq!(
+        rt.llm_metrics.requests_total.get(),
+        1,
+        "requests_total must increment after dispatch_llm_task"
+    );
+}
 
-    // R240 -- lifecycle event emission (3 cases)
-    #[tokio::test]
-    async fn r240_01_runtime_start_increments_lifecycle_counter() {
-        let rt = Arc::new(Runtime::new());
-        assert_eq!(rt.lifecycle_started_total.get(), 0);
-        rt.clone().start().await.unwrap();
-        assert_eq!(rt.lifecycle_started_total.get(), 1);
-        rt.clone().shutdown().await.unwrap();
-    }
+// R261 -- DispatchMetrics: counter + latency for all dispatch_async_task calls
 
-    #[tokio::test]
-    async fn r240_02_runtime_shutdown_increments_lifecycle_counter() {
-        let rt = Arc::new(Runtime::new());
-        rt.clone().start().await.unwrap();
-        assert_eq!(rt.lifecycle_shutdown_total.get(), 0);
-        rt.clone().shutdown().await.unwrap();
-        assert_eq!(rt.lifecycle_shutdown_total.get(), 1);
-    }
+#[test]
+fn r261_01_dispatch_metrics_initial_zero() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 0);
+    assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
+    assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 0);
+}
 
-    #[tokio::test]
-    async fn r240_03_runtime_lifecycle_metrics_text_export_includes_lifecycle() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let text = rt.metrics_text();
-        assert!(text.contains("runtime_lifecycle_started_total"), "missing started_total");
-        assert!(text.contains("runtime_lifecycle_shutdown_total"), "missing shutdown_total");
-    }
+#[test]
+fn r261_02_metrics_text_includes_dispatch_counters() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let text = rt.metrics_text();
+    assert!(
+        text.contains("runtime_dispatch_total"),
+        "runtime_dispatch_total must appear in metrics_text"
+    );
+    assert!(
+        text.contains("runtime_dispatch_errors_total"),
+        "runtime_dispatch_errors_total must appear in metrics_text"
+    );
+    assert!(
+        text.contains("runtime_dispatch_latency_ms"),
+        "runtime_dispatch_latency_ms must appear in metrics_text"
+    );
+}
 
-    // R241 -- failure path counter (2 cases)
-    #[tokio::test]
-    async fn r241_01_runtime_cycle_failures_counter_initial_zero() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        assert_eq!(rt.cycle_failures_total.get(), 0);
-        let _ = rt.run_one_cycle().await;
-        // default cycle should succeed -> failures still 0
-        assert_eq!(rt.cycle_failures_total.get(), 0);
-    }
+#[tokio::test]
+async fn r261_03_dispatch_async_task_increments_total_and_observes_latency() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    let worker: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("sim"));
+    let _tid = rt.dispatch_async_task_with_worker(worker, "{}").await;
+    // detached metric recorder runs after worker.execute completes
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert!(
+        rt.dispatch_metrics.dispatch_total.get() >= 1,
+        "dispatch_total must increment after dispatch"
+    );
+    assert!(
+        rt.dispatch_metrics.dispatch_latency_ms.count() >= 1,
+        "dispatch_latency must record at least one observation"
+    );
+}
 
-    #[tokio::test]
-    async fn r241_02_runtime_cycle_failures_counter_increments_on_failing_tool() {
-        // Use a worker that always errors -- the runtime will catch the failure
-        // and run_one_cycle must still return Ok with task status = Failed (the cycle itself does not Err).
-        // So to actually exercise the failure counter, we'd need an inner failure, but
-        // the cycle absorbs dispatch failures into emotion.apply(ToolError). It only Errs on
-        // arbitration.append error, which requires open(path) failure -- hard to trigger.
-        // Instead, verify the counter is wired (not stuck at 0) by inspecting via metrics_text.
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let text = rt.metrics_text();
-        assert!(text.contains("runtime_cycle_failures_total"));
-    }
+#[test]
+fn r261_04_record_success_increments_total() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.dispatch_metrics.record_success(15.0);
+    assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
+    assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
+    assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
+}
 
-    // R242 -- cycle_report publish (2 cases)
-    #[tokio::test]
-    async fn r242_01_publish_cycle_report_default_off_no_bus_emission() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        // default publish_cycle_report = false
-        assert!(!rt.config.publish_cycle_report);
-        let sent_before = rt.bus.stats().sent;
-        let _ = rt.run_one_cycle().await;
-        // With publish off, bus.sent should NOT increase for cycle.report
-        // (still might receive internal heartbeat emissions, but cycle.report topic is disabled)
-        assert_eq!(rt.cycle_total.get(), 1);
-        // Since publish is OFF, the bus.sent delta must NOT include any cycle.report-related emits.
-        // We do not assert delta == 0 because the runtime may emit other things; we only assert cycle_total incremented.
-        let _ = sent_before; // silence unused
-    }
-
-    #[tokio::test]
-    async fn r242_02_publish_cycle_report_emits_to_bus_when_enabled() {
-        let mut cfg = RuntimeConfig::default();
-        cfg.publish_cycle_report = true;
-        let rt = Runtime::with_config(cfg);
-        rt.bootstrap().unwrap();
-        let sent_before = rt.bus.stats().sent;
-        let _ = rt.run_one_cycle().await;
-        let sent_after = rt.bus.stats().sent;
-        // With publish on, bus.sent must increase.
-        assert!(sent_after > sent_before, "publish should increment bus.sent");
-        assert!(rt.config.publish_cycle_report);
-        drop(sent_before); drop(sent_after);
-    }
-
-    // R246 -- cycle latency summary (3 cases)
-    #[tokio::test]
-    async fn r246_01_cycle_latency_summary_initial_zeros() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let s = rt.cycle_latency_summary();
-        assert_eq!(s.count, 0);
-        assert_eq!(s.sum_ms, 0.0);
-        assert_eq!(s.mean_ms, 0.0);
-    }
-
-    #[tokio::test]
-    async fn r246_02_cycle_latency_summary_updates_after_cycle() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        assert_eq!(rt.cycle_latency_summary().count, 0);
-        let _ = rt.run_one_cycle().await.unwrap();
-        let s_after = rt.cycle_latency_summary();
-        assert_eq!(s_after.count, 1);
-        assert!(s_after.sum_ms >= 0.0);
-        let expected_mean = s_after.sum_ms / s_after.count as f64;
-        assert!((s_after.mean_ms - expected_mean).abs() < 1e-6);
-    }
-
-    #[test]
-    fn r246_03_cycle_latency_summary_equality() {
-        let s1 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
-        let s2 = CycleLatencySummary { count: 5, sum_ms: 25.0, mean_ms: 5.0 };
-        assert_eq!(s1, s2);
-    }
-
-    // R247 -- run_cycles batch API (2 cases)
-    #[tokio::test]
-    async fn r247_01_run_cycles_zero_returns_empty() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let reports = rt.run_cycles(0).await.unwrap();
-        assert_eq!(reports.len(), 0);
-        assert_eq!(rt.cycle_total.get(), 0);
-    }
-
-    #[tokio::test]
-    async fn r247_02_run_cycles_n_increments_metrics() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let reports = rt.run_cycles(3).await.unwrap();
-        assert_eq!(reports.len(), 3);
-        assert_eq!(rt.cycle_total.get(), 3);
-        let s = rt.cycle_latency_summary();
-        assert_eq!(s.count, 3);
-    }
-
-
-    // R250 -- supervisor metrics linkup
-
-    #[tokio::test]
-    async fn r250_01_supervisor_metrics_initial_zero() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 0);
-        assert_eq!(rt.supervisor_metrics.tick_duration.count(), 0);
-    }
-
-    #[tokio::test]
-    async fn r250_02_heartbeat_count_can_be_inc() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let before = rt.supervisor_metrics.heartbeat_count.get();
-        rt.supervisor_metrics.heartbeat_count.inc();
-        rt.supervisor_metrics.heartbeat_count.inc();
-        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), before + 2);
-    }
-
-    #[tokio::test]
-    async fn r250_03_tick_duration_observe_records_values() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.supervisor_metrics.tick_duration.observe(5.0);
-        rt.supervisor_metrics.tick_duration.observe(15.0);
-        assert_eq!(rt.supervisor_metrics.tick_duration.count(), 2);
-        assert!((rt.supervisor_metrics.tick_duration.sum() - 20.0).abs() < 1e-9);
-    }
-
-    #[tokio::test]
-    async fn r250_04_runtime_text_export_still_works_after_linkup() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.supervisor_metrics.heartbeat_count.inc();
-        assert_eq!(rt.supervisor_metrics.heartbeat_count.get(), 1);
-        let text = rt.metrics_text();
-        assert!(text.contains("runtime_cycle_total"), "runtime_cycle_total must appear");
-    }
-
-
-    // R255 -- pluggable worker registry + LlmWorker dispatch
-
-    #[test]
-    fn r255_01_register_worker_inserts_into_registry() {
-        let rt = Runtime::new();
-        let w: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("custom"));
-        rt.register_worker("custom", w);
-        assert!(rt.worker_registry.lock().contains_key("custom"));
-    }
-
-    #[tokio::test]
-    async fn r255_02_dispatch_async_task_falls_back_to_simulated() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        // No worker registered under "test_tool" -> SimulatedWorker fallback.
-        let tid = rt.dispatch_async_task("test_tool", "{}").await;
-        let rec = rt.task_store.wait_for_completion(tid, Duration::from_secs(3)).await.unwrap();
-        assert_eq!(rec.status, TaskStatus::Completed);
-        let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
-        assert_eq!(j["output"], "ok-simulated");
-    }
-
-    #[tokio::test]
-    async fn r255_03_dispatch_async_task_uses_registered_worker() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let custom = Arc::new(SimulatedWorker::new("custom_tool"));
-        rt.register_worker("custom_tool", custom);
-        let tid = rt.dispatch_async_task("custom_tool", "{}").await;
-        let rec = rt.task_store.wait_for_completion(tid, Duration::from_secs(3)).await.unwrap();
-        assert_eq!(rec.status, TaskStatus::Completed);
-        let j: serde_json::Value = serde_json::from_str(&rec.result_json.unwrap()).unwrap();
-        assert_eq!(j["tool"], "custom_tool");
-    }
-
-    #[tokio::test]
-    async fn r255_04_dispatch_llm_task_returns_task_id() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        // dispatch_llm_task should hand back a TaskId even before the underlying HTTP call resolves.
-        let tid = rt.dispatch_llm_task("hello", None, None, None, "fake-key").await;
-        assert!(tid > 0);
-        // don'''t wait -- the fake key will fail; this test only verifies dispatch path.
-    }
-
-    #[test]
-    fn r255_05_dispatch_llm_task_with_model_and_base_url() {
-        // Verify the worker selection branch with both overrides set.
-        let w = LlmWorker::with_config("llm", "fake", "https://custom.api", "claude-opus");
-        assert_eq!(w.model(), "claude-opus");
-        assert_eq!(w.base_url(), "https://custom.api");
-        assert_eq!(w.name(), "llm");
-    }
-
-    // R259 -- CycleReport.spans populated by run_one_cycle (5 cases)
-
-    #[tokio::test]
-    async fn r259_01_cycle_report_spans_populated() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let report = rt.run_one_cycle().await.unwrap();
-        // Should have 5 spans: cycle_root + task.dispatch + task.complete + search.index + emotion.apply
-        assert!(report.spans.len() >= 5, "expected >=5 spans, got {}", report.spans.len());
-        // Root span must be at index 0 and named "runtime.cycle".
-        assert_eq!(report.spans[0].name, "runtime.cycle");
-        assert!(report.spans[0].parent.is_none(), "root span must have no parent");
-        assert_eq!(report.spans[0].status, SpanStatus::Ok);
-    }
-
-    #[tokio::test]
-    async fn r259_02_spans_form_parent_child_tree() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let report = rt.run_one_cycle().await.unwrap();
-        let root_id = report.spans[0].span_id;
-        // All non-root spans must have parent = Some(root_id).
-        for s in &report.spans[1..] {
-            assert_eq!(s.parent, Some(root_id), "child span {} parent mismatch", s.name);
-        }
-    }
-
-    #[tokio::test]
-    async fn r259_03_span_attributes_record_metadata() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let report = rt.run_one_cycle().await.unwrap();
-        let complete_span = report.spans.iter().find(|s| s.name == "task.complete")
-            .expect("task.complete span must exist");
-        assert_eq!(complete_span.attr("status"), Some("completed"));
-        assert!(complete_span.attr("tool").is_some());
-        let emotion_span = report.spans.iter().find(|s| s.name == "emotion.apply")
-            .expect("emotion.apply span must exist");
-        assert!(emotion_span.attr("dominant").is_some());
-    }
-
-    #[test]
-    fn r259_04_cycle_report_legacy_serde_compat() {
-        // Pre-R259 cycle reports serialized without "spans" must still deserialize
-        // (#[serde(default)] on the field gives Vec::new()).
-        let legacy_json = r#"{"trace_id":1,"task_id":1,"arbitration_seq":1,"search_doc_id":1,"group_chat_message_id":"x","emotion_dominant":"Joy","emotion_intensity":0.5,"elapsed_ms":1}"#;
-        let report: CycleReport = serde_json::from_str(legacy_json).expect("legacy deserialize");
-        assert_eq!(report.spans.len(), 0);
-    }
-
-    #[tokio::test]
-    async fn r259_05_spans_have_nonzero_elapsed_when_completed() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let report = rt.run_one_cycle().await.unwrap();
-        // Each ended span has end_unix_ms > 0 (end_span was called).
-        for s in &report.spans {
-            assert_eq!(s.status, SpanStatus::Ok);
-            assert!(s.end_unix_ms > 0, "span {} end_unix_ms must be set", s.name);
-            assert!(s.start_unix_ms <= s.end_unix_ms, "span {} inverted time", s.name);
-        }
-    }
-
-    // R260 -- LlmMetrics: registry + counters + histogram + dispatch wiring
-
-    #[test]
-    fn r260_01_llm_metrics_initial_zero() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        assert_eq!(rt.llm_metrics.requests_total.get(), 0);
-        assert_eq!(rt.llm_metrics.errors_total.get(), 0);
-        assert_eq!(rt.llm_metrics.latency_ms.count(), 0);
-    }
-
-    #[test]
-    fn r260_02_metrics_text_includes_llm_counters() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let text = rt.metrics_text();
-        assert!(text.contains("runtime_llm_requests_total"),
-                "runtime_llm_requests_total must appear in metrics_text");
-        assert!(text.contains("runtime_llm_errors_total"),
-                "runtime_llm_errors_total must appear in metrics_text");
-        assert!(text.contains("runtime_llm_latency_ms"),
-                "runtime_llm_latency_ms must appear in metrics_text");
-    }
-
-    #[test]
-    fn r260_03_record_success_increments_request_and_observes_latency() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.llm_metrics.record_success(42.5);
-        assert_eq!(rt.llm_metrics.requests_total.get(), 1);
-        assert_eq!(rt.llm_metrics.errors_total.get(), 0);
-        assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
-        assert!((rt.llm_metrics.latency_ms.sum() - 42.5).abs() < 1e-9);
-    }
-
-    #[test]
-    fn r260_04_record_error_increments_both_counters() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.llm_metrics.record_error(100.0);
-        assert_eq!(rt.llm_metrics.requests_total.get(), 1);
-        assert_eq!(rt.llm_metrics.errors_total.get(), 1);
-        assert_eq!(rt.llm_metrics.latency_ms.count(), 1);
-    }
-
-    #[test]
-    fn r260_05_llm_metrics_clone_shares_state() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let m2 = rt.llm_metrics.clone();
-        rt.llm_metrics.record_success(10.0);
-        // m2 shares Arc handles, counts must sync
-        assert_eq!(m2.requests_total.get(), 1);
-    }
-
-    #[tokio::test]
-    async fn r260_06_dispatch_llm_task_records_after_completion() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let _tid = rt.dispatch_llm_task("hello", None, None, None, "fake-key").await;
-        // wait for spawned recorder
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        // fake-key => API fails => record_error path => requests_total == 1
-        assert_eq!(rt.llm_metrics.requests_total.get(), 1,
-                 "requests_total must increment after dispatch_llm_task");
-    }
-
-    // R261 -- DispatchMetrics: counter + latency for all dispatch_async_task calls
-
-    #[test]
-    fn r261_01_dispatch_metrics_initial_zero() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 0);
-        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
-        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 0);
-    }
-
-    #[test]
-    fn r261_02_metrics_text_includes_dispatch_counters() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let text = rt.metrics_text();
-        assert!(text.contains("runtime_dispatch_total"),
-                "runtime_dispatch_total must appear in metrics_text");
-        assert!(text.contains("runtime_dispatch_errors_total"),
-                "runtime_dispatch_errors_total must appear in metrics_text");
-        assert!(text.contains("runtime_dispatch_latency_ms"),
-                "runtime_dispatch_latency_ms must appear in metrics_text");
-    }
-
-    #[tokio::test]
-    async fn r261_03_dispatch_async_task_increments_total_and_observes_latency() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        let worker: Arc<dyn AsyncWorker> = Arc::new(SimulatedWorker::new("sim"));
-        let _tid = rt.dispatch_async_task_with_worker(worker, "{}").await;
-        // detached metric recorder runs after worker.execute completes
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-        assert!(rt.dispatch_metrics.dispatch_total.get() >= 1,
-                "dispatch_total must increment after dispatch");
-        assert!(rt.dispatch_metrics.dispatch_latency_ms.count() >= 1,
-                "dispatch_latency must record at least one observation");
-    }
-
-    #[test]
-    fn r261_04_record_success_increments_total() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.dispatch_metrics.record_success(15.0);
-        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
-        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 0);
-        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
-    }
-
-    #[test]
-    fn r261_05_record_error_increments_both_counters() {
-        let rt = Runtime::new();
-        rt.bootstrap().unwrap();
-        rt.dispatch_metrics.record_error(20.0);
-        assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
-        assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 1);
-        assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
-    }
-
+#[test]
+fn r261_05_record_error_increments_both_counters() {
+    let rt = Runtime::new();
+    rt.bootstrap().unwrap();
+    rt.dispatch_metrics.record_error(20.0);
+    assert_eq!(rt.dispatch_metrics.dispatch_total.get(), 1);
+    assert_eq!(rt.dispatch_metrics.dispatch_errors_total.get(), 1);
+    assert_eq!(rt.dispatch_metrics.dispatch_latency_ms.count(), 1);
+}

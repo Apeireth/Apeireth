@@ -33,47 +33,77 @@ use std::time::Duration;
 fn test_error_module_category_classification() {
     // 13 variant 都正确分类
     let cases = [
-        (BlueprintError::K1StrongValidationFailed {
-            field: "f".into(),
-            value: "v".into(),
-            reason: "r".into(),
-        }, "K-1"),
-        (BlueprintError::K2WeakValidationFailed {
-            field: "f".into(),
-            reason: "r".into(),
-        }, "K-2"),
-        (BlueprintError::K3AuditFailed {
-            channel: "c".into(),
-            reason: "r".into(),
-        }, "K-3"),
-        (BlueprintError::K4GuardDenied {
-            subject: "s".into(),
-            rule: "r".into(),
-        }, "K-4"),
-        (BlueprintError::D01StubNotImplemented {
-            tool: "t".into(),
-            endpoint: "e".into(),
-        }, "D-01"),
-        (BlueprintError::D02RouteMissing {
-            tool: "t".into(),
-            sub_path: "p".into(),
-        }, "D-02"),
-        (BlueprintError::D03WsAuthFailed {
-            reason: "r".into(),
-            ttl_seconds: 0,
-        }, "D-03"),
-        (BlueprintError::D04RateLimitExceeded {
-            bucket: "b".into(),
-            retry_after_ms: 100,
-        }, "D-04"),
-        (BlueprintError::TemplateNotImplemented {
-            template_id: "A".into(),
-            stage: "R20".into(),
-        }, "TEMPLATE"),
-        (BlueprintError::QMetricOutOfRange {
-            metric: "Q1".into(),
-            value: 1.5,
-        }, "Q-METRIC"),
+        (
+            BlueprintError::K1StrongValidationFailed {
+                field: "f".into(),
+                value: "v".into(),
+                reason: "r".into(),
+            },
+            "K-1",
+        ),
+        (
+            BlueprintError::K2WeakValidationFailed {
+                field: "f".into(),
+                reason: "r".into(),
+            },
+            "K-2",
+        ),
+        (
+            BlueprintError::K3AuditFailed {
+                channel: "c".into(),
+                reason: "r".into(),
+            },
+            "K-3",
+        ),
+        (
+            BlueprintError::K4GuardDenied {
+                subject: "s".into(),
+                rule: "r".into(),
+            },
+            "K-4",
+        ),
+        (
+            BlueprintError::D01StubNotImplemented {
+                tool: "t".into(),
+                endpoint: "e".into(),
+            },
+            "D-01",
+        ),
+        (
+            BlueprintError::D02RouteMissing {
+                tool: "t".into(),
+                sub_path: "p".into(),
+            },
+            "D-02",
+        ),
+        (
+            BlueprintError::D03WsAuthFailed {
+                reason: "r".into(),
+                ttl_seconds: 0,
+            },
+            "D-03",
+        ),
+        (
+            BlueprintError::D04RateLimitExceeded {
+                bucket: "b".into(),
+                retry_after_ms: 100,
+            },
+            "D-04",
+        ),
+        (
+            BlueprintError::TemplateNotImplemented {
+                template_id: "A".into(),
+                stage: "R20".into(),
+            },
+            "TEMPLATE",
+        ),
+        (
+            BlueprintError::QMetricOutOfRange {
+                metric: "Q1".into(),
+                value: 1.5,
+            },
+            "Q-METRIC",
+        ),
         (BlueprintError::Io("e".into()), "IO"),
         (BlueprintError::Serialization("e".into()), "SERIALIZATION"),
         (BlueprintError::Other("e".into()), "OTHER"),
@@ -204,12 +234,7 @@ fn test_risk_module_chain_runs_all_4_stages() {
         reason: "default".into(),
     })
     .unwrap();
-    let chain = RiskChain::new(
-        DefaultK1Guard,
-        DefaultK2Guard,
-        InMemoryAudit::default(),
-        g4,
-    );
+    let chain = RiskChain::new(DefaultK1Guard, DefaultK2Guard, InMemoryAudit::default(), g4);
     let k1 = K1Input::new("hi", "sk-test1234", "gpt-4", "read").unwrap();
     let k2 = K2Input::new("hi", vec![]);
     let r = chain.run(&k1, &k2, "tool:bash", "exec");
@@ -395,7 +420,11 @@ fn test_q_metric_module_q1_clamps_overscore() {
 
 #[test]
 fn test_q_metric_module_q2_satisfaction_5star() {
-    let f = vec![UserFeedback { rating: 5, has_text: false, is_long_term: false }];
+    let f = vec![UserFeedback {
+        rating: 5,
+        has_text: false,
+        is_long_term: false,
+    }];
     assert_eq!(q2_satisfaction(&f), 1.0);
 }
 
@@ -424,7 +453,14 @@ fn test_integration_pipeline_with_perfect_inputs() {
     let decisions = DecisionBundle::default();
     let samples = vec![ActionSample::perfect(); 10];
     let tasks = vec![TaskResult::new(true, 1.0); 5];
-    let feedback = vec![UserFeedback { rating: 5, has_text: true, is_long_term: true }; 3];
+    let feedback = vec![
+        UserFeedback {
+            rating: 5,
+            has_text: true,
+            is_long_term: true
+        };
+        3
+    ];
     let history = vec![
         GrowthSnapshot::new(0, 0.5, 0.5, 0.5),
         GrowthSnapshot::new(1, 0.9, 0.9, 0.9),
@@ -439,7 +475,9 @@ fn test_integration_pipeline_fails_on_invalid_decisions() {
     let bad = DecisionBundle::new(
         D01Impl::default(),
         D02Routing::default(),
-        D03WsAuth::LinkToken { ttl: Duration::from_secs(600) }, // 10min > 5min
+        D03WsAuth::LinkToken {
+            ttl: Duration::from_secs(600),
+        }, // 10min > 5min
         D04RateLimit::default(),
     );
     let r = run_full_pipeline(bad, &[], &[], &[], &[]);
@@ -487,9 +525,15 @@ fn test_integration_5_modules_all_exposed() {
 fn test_integration_six_philosophy_anchors_present() {
     for anchor in PHILOSOPHY_ANCHORS.iter() {
         assert!(!anchor.is_empty());
-        assert!(anchor.contains("主") || anchor.contains("北极星") || anchor.contains("实事求是")
-                || anchor.contains("不假装") || anchor.contains("走在前人经验上")
-                || anchor.contains("干到底") || anchor.contains("任何人都能接手"));
+        assert!(
+            anchor.contains("主")
+                || anchor.contains("北极星")
+                || anchor.contains("实事求是")
+                || anchor.contains("不假装")
+                || anchor.contains("走在前人经验上")
+                || anchor.contains("干到底")
+                || anchor.contains("任何人都能接手")
+        );
     }
 }
 

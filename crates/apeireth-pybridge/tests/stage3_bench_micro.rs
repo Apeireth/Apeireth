@@ -59,11 +59,21 @@ fn stage3_bench_5_target_ids_locked() {
 #[test]
 fn stage3_bench_stats_5_samples() {
     let samples = vec![
-        BenchSample { duration: Duration::from_micros(10) },
-        BenchSample { duration: Duration::from_micros(20) },
-        BenchSample { duration: Duration::from_micros(30) },
-        BenchSample { duration: Duration::from_micros(40) },
-        BenchSample { duration: Duration::from_micros(50) },
+        BenchSample {
+            duration: Duration::from_micros(10),
+        },
+        BenchSample {
+            duration: Duration::from_micros(20),
+        },
+        BenchSample {
+            duration: Duration::from_micros(30),
+        },
+        BenchSample {
+            duration: Duration::from_micros(40),
+        },
+        BenchSample {
+            duration: Duration::from_micros(50),
+        },
     ];
     let s = BenchStats::from_samples(&samples);
     assert_eq!(s.n, 5);
@@ -78,7 +88,9 @@ fn stage3_bench_stats_5_samples() {
 fn stage3_bench_stats_p95_n100() {
     let mut samples = Vec::new();
     for i in 1..=100 {
-        samples.push(BenchSample { duration: Duration::from_micros(i as u64) });
+        samples.push(BenchSample {
+            duration: Duration::from_micros(i as u64),
+        });
     }
     let s = BenchStats::from_samples(&samples);
     assert_eq!(s.n, 100);
@@ -91,7 +103,9 @@ fn stage3_bench_stats_p95_n100() {
 fn stage3_bench_stats_p95_n20() {
     let mut samples = Vec::new();
     for i in 1..=20 {
-        samples.push(BenchSample { duration: Duration::from_micros(i as u64) });
+        samples.push(BenchSample {
+            duration: Duration::from_micros(i as u64),
+        });
     }
     let s = BenchStats::from_samples(&samples);
     assert_eq!(s.n, 20);
@@ -118,7 +132,10 @@ fn stage3_bench_config_default_n100() {
 // 9. BenchConfig 调参 (N=10, warmup=false)
 #[test]
 fn stage3_bench_config_custom() {
-    let cfg = BenchConfig { iterations: 10, warmup: false };
+    let cfg = BenchConfig {
+        iterations: 10,
+        warmup: false,
+    };
     assert_eq!(cfg.iterations, 10);
     assert!(!cfg.warmup);
 }
@@ -135,13 +152,24 @@ fn stage3_bench_runner_default_cfg() {
 // 11. BenchRunner 跑 1 个 target (N=10, warmup=false)
 #[test]
 fn stage3_bench_runner_run_one_n10() {
-    let runner = BenchRunner::with_config(BenchConfig { iterations: 10, warmup: false });
+    let runner = BenchRunner::with_config(BenchConfig {
+        iterations: 10,
+        warmup: false,
+    });
     struct DummyBench;
     impl BenchTarget for DummyBench {
-        fn id(&self) -> &'static str { "dummy" }
-        fn when_to_use(&self) -> &'static str { "test" }
-        fn requires_warmup(&self) -> bool { false }
-        fn run_iteration(&self) -> Duration { Duration::from_nanos(100) }
+        fn id(&self) -> &'static str {
+            "dummy"
+        }
+        fn when_to_use(&self) -> &'static str {
+            "test"
+        }
+        fn requires_warmup(&self) -> bool {
+            false
+        }
+        fn run_iteration(&self) -> Duration {
+            Duration::from_nanos(100)
+        }
     }
     let t = DummyBench;
     let r = runner.run_one(&t);
@@ -179,7 +207,10 @@ fn stage3_bench_report_display() {
 // 14. BenchTargetReport Display 单 target 字段
 #[test]
 fn stage3_bench_target_report_display() {
-    let runner = BenchRunner::with_config(BenchConfig { iterations: 3, warmup: false });
+    let runner = BenchRunner::with_config(BenchConfig {
+        iterations: 3,
+        warmup: false,
+    });
     let t = apeireth_pybridge::BenchR11ModuleCount;
     let r: BenchTargetReport = runner.run_one(&t);
     let display = format!("{r}");
@@ -193,8 +224,12 @@ fn stage3_bench_target_report_display() {
 #[test]
 fn stage3_bench_stats_summary() {
     let samples = vec![
-        BenchSample { duration: Duration::from_micros(10) },
-        BenchSample { duration: Duration::from_micros(20) },
+        BenchSample {
+            duration: Duration::from_micros(10),
+        },
+        BenchSample {
+            duration: Duration::from_micros(20),
+        },
     ];
     let s = BenchStats::from_samples(&samples);
     let out = s.summary();

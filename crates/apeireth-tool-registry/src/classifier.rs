@@ -284,7 +284,7 @@ impl EmbedFn for MockHashEmbedFn {
         for byte in text.as_bytes() {
             hash ^= u64::from(*byte);
             hash = hash.wrapping_mul(0x100_0000_01b3_u64); // FNV prime
-            // 算 char-level 桶 (按 char 而不是 byte, 支持中文)
+                                                           // 算 char-level 桶 (按 char 而不是 byte, 支持中文)
         }
         // 第二轮: 按 char 算 char-level 桶 (FNV-1a 处理)
         for ch in text.chars() {
@@ -368,60 +368,172 @@ impl HeuristicClassifier {
         (
             Category::Search,
             &[
-                "search", "web", "lookup", "query", "retrieval", "google", "tavily", "serp",
-                "url", "paper", "citation", "搜索", "检索", "网页", "查询", "论文", "资料",
-                "find", "搜", "findx", "qdrant", "duckduckgo",
+                "search",
+                "web",
+                "lookup",
+                "query",
+                "retrieval",
+                "google",
+                "tavily",
+                "serp",
+                "url",
+                "paper",
+                "citation",
+                "搜索",
+                "检索",
+                "网页",
+                "查询",
+                "论文",
+                "资料",
+                "find",
+                "搜",
+                "findx",
+                "qdrant",
+                "duckduckgo",
             ],
         ),
         // 2. FileCode (VCP 1:1)
         (
             Category::FileCode,
             &[
-                "file", "code", "read", "write", "edit", "patch", "repo", "git", "directory",
-                "文件", "代码", "仓库", "读取", "写入", "编辑", "copy", "move", "delete",
-                "diff", "ls", "cat", "grep", "rg",
+                "file",
+                "code",
+                "read",
+                "write",
+                "edit",
+                "patch",
+                "repo",
+                "git",
+                "directory",
+                "文件",
+                "代码",
+                "仓库",
+                "读取",
+                "写入",
+                "编辑",
+                "copy",
+                "move",
+                "delete",
+                "diff",
+                "ls",
+                "cat",
+                "grep",
+                "rg",
             ],
         ),
         // 3. ImageMedia (VCP 1:1)
         (
             Category::ImageMedia,
             &[
-                "image", "photo", "picture", "media", "video", "audio", "ocr", "screenshot",
-                "图片", "图像", "视频", "音频", "截图", "tts", "stt", "asr", "transcribe",
-                "generate_image", "imagen",
+                "image",
+                "photo",
+                "picture",
+                "media",
+                "video",
+                "audio",
+                "ocr",
+                "screenshot",
+                "图片",
+                "图像",
+                "视频",
+                "音频",
+                "截图",
+                "tts",
+                "stt",
+                "asr",
+                "transcribe",
+                "generate_image",
+                "imagen",
             ],
         ),
         // 4. MemoryKnowledge (VCP 1:1)
         (
             Category::MemoryKnowledge,
             &[
-                "memory", "knowledge", "rag", "diary", "note", "vector", "context", "知识",
-                "记忆", "日记", "笔记", "向量", "recall", "semantic", "embed", "search_memory",
+                "memory",
+                "knowledge",
+                "rag",
+                "diary",
+                "note",
+                "vector",
+                "context",
+                "知识",
+                "记忆",
+                "日记",
+                "笔记",
+                "向量",
+                "recall",
+                "semantic",
+                "embed",
+                "search_memory",
             ],
         ),
         // 5. AgentTask (VCP 1:1)
         (
             Category::AgentTask,
             &[
-                "agent", "task", "schedule", "plan", "workflow", "assistant", "任务", "计划",
-                "调度", "代理", "orchestrate", "dispatch", "delegate", "协调",
+                "agent",
+                "task",
+                "schedule",
+                "plan",
+                "workflow",
+                "assistant",
+                "任务",
+                "计划",
+                "调度",
+                "代理",
+                "orchestrate",
+                "dispatch",
+                "delegate",
+                "协调",
             ],
         ),
         // 6. Communication (VCP 1:1)
         (
             Category::Communication,
             &[
-                "mail", "email", "message", "notification", "push", "forum", "wechat", "telegram",
-                "邮件", "消息", "通知", "推送", "discord", "slack", "im", "send_message",
-                "chat", "feishu", "lark",
+                "mail",
+                "email",
+                "message",
+                "notification",
+                "push",
+                "forum",
+                "wechat",
+                "telegram",
+                "邮件",
+                "消息",
+                "通知",
+                "推送",
+                "discord",
+                "slack",
+                "im",
+                "send_message",
+                "chat",
+                "feishu",
+                "lark",
             ],
         ),
         // 7. Data (VCP 1:1)
         (
             Category::Data,
             &[
-                "json", "csv", "excel", "sql", "database", "table", "parse", "数据", "表格",
-                "数据库", "解析", "pandas", "dataframe", "export", "import", "sqlite", "psql",
+                "json",
+                "csv",
+                "excel",
+                "sql",
+                "database",
+                "table",
+                "parse",
+                "数据",
+                "表格",
+                "数据库",
+                "解析",
+                "pandas",
+                "dataframe",
+                "export",
+                "import",
+                "sqlite",
+                "psql",
                 "mysql",
             ],
         ),
@@ -429,19 +541,52 @@ impl HeuristicClassifier {
         (
             Category::Safety,
             &[
-                "redteam", "red_team", "红队", "self_disable", "self-disable", "自禁用",
-                "guardrail", "护栏", "safety", "sanitize", "validate", "permission", "权限",
-                "auth", "authorize", "approval", "审批", "jailbreak", "injection", "purify",
-                "denylist", "blocklist",
+                "redteam",
+                "red_team",
+                "红队",
+                "self_disable",
+                "self-disable",
+                "自禁用",
+                "guardrail",
+                "护栏",
+                "safety",
+                "sanitize",
+                "validate",
+                "permission",
+                "权限",
+                "auth",
+                "authorize",
+                "approval",
+                "审批",
+                "jailbreak",
+                "injection",
+                "purify",
+                "denylist",
+                "blocklist",
             ],
         ),
         // 9. LongRunning (Apeireth 独有, 自创)
         (
             Category::LongRunning,
             &[
-                "train", "训练", "index", "索引", "batch", "批处理", "migrate", "迁移",
-                "compile", "编译", "crawl", "爬取", "embedding", "build", "etl", "ingest",
-                "compute", "compute_heavy",
+                "train",
+                "训练",
+                "index",
+                "索引",
+                "batch",
+                "批处理",
+                "migrate",
+                "迁移",
+                "compile",
+                "编译",
+                "crawl",
+                "爬取",
+                "embedding",
+                "build",
+                "etl",
+                "ingest",
+                "compute",
+                "compute_heavy",
             ],
         ),
     ];
@@ -812,7 +957,9 @@ impl Classifier for LlmClassifier {
             // 留接口: 返 ClassifyError::LlmError 提示未实现
             Err(ClassifyError::LlmError(format!(
                 "LlmClassifier 真接模式 R21+ 启用 (endpoint={:?}, model={:?}, tool={})",
-                self.endpoint, self.model, tool.name()
+                self.endpoint,
+                self.model,
+                tool.name()
             )))
         }
     }
@@ -918,7 +1065,10 @@ mod tests {
         assert_eq!(Category::Search.as_legacy_name(), "search");
         assert_eq!(Category::FileCode.as_legacy_name(), "file_code");
         assert_eq!(Category::ImageMedia.as_legacy_name(), "image_media");
-        assert_eq!(Category::MemoryKnowledge.as_legacy_name(), "memory_knowledge");
+        assert_eq!(
+            Category::MemoryKnowledge.as_legacy_name(),
+            "memory_knowledge"
+        );
         assert_eq!(Category::AgentTask.as_legacy_name(), "agent_task");
         assert_eq!(Category::Communication.as_legacy_name(), "communication");
         assert_eq!(Category::Data.as_legacy_name(), "data");
@@ -995,42 +1145,54 @@ mod tests {
     #[test]
     fn heuristic_classify_file_code_tool() {
         let t = mock_tool("FileOperator", ToolKind::Sync);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::FileCode);
     }
 
     #[test]
     fn heuristic_classify_image_media_tool() {
         let t = mock_tool("ImageGenerator", ToolKind::Async);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::ImageMedia);
     }
 
     #[test]
     fn heuristic_classify_memory_tool() {
         let t = mock_tool("MemoryRecall", ToolKind::Sync);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::MemoryKnowledge);
     }
 
     #[test]
     fn heuristic_classify_agent_tool() {
         let t = mock_tool("TaskScheduler", ToolKind::Service);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::AgentTask);
     }
 
     #[test]
     fn heuristic_classify_communication_tool() {
         let t = mock_tool("EmailSender", ToolKind::Async);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::Communication);
     }
 
     #[test]
     fn heuristic_classify_data_tool() {
         let t = mock_tool("JsonParser", ToolKind::Sync);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::Data);
     }
 
@@ -1038,14 +1200,18 @@ mod tests {
     fn heuristic_classify_safety_tool() {
         // Safety 优先 (即使同时含 "permission" + "search", Safety 优先)
         let t = mock_tool("PermissionGuard", ToolKind::Sync);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::Safety);
     }
 
     #[test]
     fn heuristic_classify_long_running_tool() {
         let t = mock_tool("TrainModel", ToolKind::Async);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::LongRunning);
     }
 
@@ -1060,8 +1226,13 @@ mod tests {
     #[test]
     fn heuristic_confidence_in_range() {
         let t = mock_tool("WebSearch", ToolKind::Sync);
-        let conf = HeuristicClassifier::new().confidence(t.as_ref()).expect("conf");
-        assert!((0.0..=1.0).contains(&conf), "置信度必须在 0..1, 实际 {conf}");
+        let conf = HeuristicClassifier::new()
+            .confidence(t.as_ref())
+            .expect("conf");
+        assert!(
+            (0.0..=1.0).contains(&conf),
+            "置信度必须在 0..1, 实际 {conf}"
+        );
     }
 
     #[test]
@@ -1069,7 +1240,9 @@ mod tests {
         // 同一 tool name 同时含 "permission" (Safety) + "search" (Search)
         // Safety 优先 (priority 0 < 5)
         let t = mock_tool("PermissionSearch", ToolKind::Sync);
-        let cat = HeuristicClassifier::new().classify(t.as_ref()).expect("classify");
+        let cat = HeuristicClassifier::new()
+            .classify(t.as_ref())
+            .expect("classify");
         assert_eq!(cat, Category::Safety);
     }
 
@@ -1167,7 +1340,10 @@ mod tests {
         let t = mock_tool("Anything", ToolKind::Sync);
         // 显式用 trait 方法, 不用 impl 方法
         let conf = <LlmClassifier as Classifier>::confidence(&c, t.as_ref()).expect("mock conf");
-        assert!((conf - 0.5).abs() < 1e-6, "mock 置信度应 = 0.5, 实际 {conf}");
+        assert!(
+            (conf - 0.5).abs() < 1e-6,
+            "mock 置信度应 = 0.5, 实际 {conf}"
+        );
     }
 
     #[test]

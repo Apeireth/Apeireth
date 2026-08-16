@@ -20,8 +20,7 @@
 
 use apeireth_state::{
     BodyStub, BrainStub, EarStub, EyeStub, HandStub, HeartStub, MemoryStub, MindStub, MutexState,
-    OnceLockState, Organ, OrganStateRegistry, RwLockState, SharedState, SharedStateMode,
-    VoiceStub,
+    OnceLockState, Organ, OrganStateRegistry, RwLockState, SharedState, SharedStateMode, VoiceStub,
 };
 use std::sync::Arc;
 use std::thread;
@@ -54,7 +53,10 @@ fn main() {
     // ------------------------------------------------------------------
     println!("--- Demo 1: OnceLockState<Config> (模式 1: 进程全局 lazy init) ---");
     let config_state: OnceLockState<AppConfig> = OnceLockState::new();
-    println!("  Before init: is_initialized={}", config_state.is_initialized());
+    println!(
+        "  Before init: is_initialized={}",
+        config_state.is_initialized()
+    );
 
     config_state
         .init(AppConfig {
@@ -63,9 +65,15 @@ fn main() {
         })
         .expect("init should succeed");
 
-    println!("  After init: is_initialized={}", config_state.is_initialized());
+    println!(
+        "  After init: is_initialized={}",
+        config_state.is_initialized()
+    );
     let cfg = config_state.get().expect("get should be Some after init");
-    println!("  Config: platform={}, version={}\n", cfg.platform, cfg.version);
+    println!(
+        "  Config: platform={}, version={}\n",
+        cfg.platform, cfg.version
+    );
 
     // ------------------------------------------------------------------
     // 演示 2: MutexState<Counter> — 跨线程互斥计数器
@@ -88,7 +96,10 @@ fn main() {
         h.join().expect("thread should not panic");
     }
     let g = counter.read().expect("read should succeed");
-    println!("  5 threads +1, final count={}, last_provider={}\n", g.count, g.last_provider);
+    println!(
+        "  5 threads +1, final count={}, last_provider={}\n",
+        g.count, g.last_provider
+    );
 
     // ------------------------------------------------------------------
     // 演示 3: RwLockState<History> — 读多写少
@@ -142,13 +153,7 @@ fn main() {
     println!("  9 器官 (name_zh, ascii, mode):");
     for i in 0..9 {
         let _organ = Organ::from_u8(i as u8).expect("0-8 valid");
-        println!(
-            "    [{}] {} ({}) = {:?}",
-            i,
-            chars[i],
-            names[i],
-            summary[i]
-        );
+        println!("    [{}] {} ({}) = {:?}", i, chars[i], names[i], summary[i]);
     }
     println!();
 
@@ -205,7 +210,11 @@ fn main() {
     let rw_state: RwLockState<u32> = RwLockState::new(789);
 
     // 用 enum dispatch 读 3 个 state
-    let modes = [SharedStateMode::OnceLock, SharedStateMode::Mutex, SharedStateMode::RwLock];
+    let modes = [
+        SharedStateMode::OnceLock,
+        SharedStateMode::Mutex,
+        SharedStateMode::RwLock,
+    ];
     for m in &modes {
         let v: u32 = match m {
             SharedStateMode::OnceLock => *once_state.read().expect("once read"),

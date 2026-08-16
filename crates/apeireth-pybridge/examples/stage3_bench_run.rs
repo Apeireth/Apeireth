@@ -6,7 +6,7 @@
 //! cargo run -p apeireth-pybridge --example stage3_bench_run
 //! ```
 
-use apeireth_pybridge::{stage3_bench_run_default, stage3_bench_targets, BenchRunner, BenchConfig};
+use apeireth_pybridge::{stage3_bench_run_default, stage3_bench_targets, BenchConfig, BenchRunner};
 
 fn main() {
     println!("================================================================");
@@ -30,13 +30,21 @@ fn main() {
     println!();
     println!("--- 详细 per-target mean/p95 ---");
     for tr in &report.target_reports {
-        println!("  [{}] mean={:.2}μs p95={:.2}μs", tr.target_id, tr.stats.mean.as_nanos() as f64 / 1000.0, tr.stats.p95.as_nanos() as f64 / 1000.0);
+        println!(
+            "  [{}] mean={:.2}μs p95={:.2}μs",
+            tr.target_id,
+            tr.stats.mean.as_nanos() as f64 / 1000.0,
+            tr.stats.p95.as_nanos() as f64 / 1000.0
+        );
     }
 
     // 性能总结
     println!();
     println!("--- 性能总结 ---");
-    println!("总 wallclock: {:.2}ms", report.total_wallclock.as_micros() as f64 / 1000.0);
+    println!(
+        "总 wallclock: {:.2}ms",
+        report.total_wallclock.as_micros() as f64 / 1000.0
+    );
     let total_iters: usize = report.target_reports.iter().map(|t| t.stats.n).sum();
     println!("总迭代次数: {total_iters} (5 target × 100 iter)");
     println!(
@@ -47,7 +55,10 @@ fn main() {
     // 跑 1 个 target 详细
     println!();
     println!("--- BenchRunner::run_one 详细 (1 target) ---");
-    let runner = BenchRunner::with_config(BenchConfig { iterations: 50, warmup: true });
+    let runner = BenchRunner::with_config(BenchConfig {
+        iterations: 50,
+        warmup: true,
+    });
     let r = runner.run_one(&apeireth_pybridge::BenchR11ModuleCount);
     println!("{r}");
 

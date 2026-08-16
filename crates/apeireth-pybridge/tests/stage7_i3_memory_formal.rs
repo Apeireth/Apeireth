@@ -5,11 +5,10 @@
 //! **目标**: 验证 D3 记忆自循环跟 G3 形式化治理跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i3_healthy, stage7_i3_summary, stage7_i3_to_d3_consistency,
-    stage7_i3_to_g3_consistency, MemoryFormalAuditEvent, MemoryFormalBinding,
-    MemoryFormalCoordinator, MemoryFormalMatrix, MemoryFormalReport, MemoryKind,
-    STAGE7_I3_BINDING_COUNT, STAGE7_I3_DIMENSION_COUNT, STAGE7_I3_HARNESS_COUNT,
-    STAGE7_I3_MEMORY_KIND_COUNT, STAGE7_I3_VERSION,
+    stage7_i3_healthy, stage7_i3_summary, stage7_i3_to_d3_consistency, stage7_i3_to_g3_consistency,
+    MemoryFormalAuditEvent, MemoryFormalBinding, MemoryFormalCoordinator, MemoryFormalMatrix,
+    MemoryFormalReport, MemoryKind, STAGE7_I3_BINDING_COUNT, STAGE7_I3_DIMENSION_COUNT,
+    STAGE7_I3_HARNESS_COUNT, STAGE7_I3_MEMORY_KIND_COUNT, STAGE7_I3_VERSION,
 };
 
 // 1. I3 编译期常数
@@ -52,7 +51,10 @@ fn i3_03_all_7_kinds() {
 fn i3_04_all_8_harnesses() {
     let m = MemoryFormalMatrix::default_matrix();
     for h in 0..8u8 {
-        assert!(m.get(MemoryKind::ToolInvocation, h).is_some(), "harness {h} 缺");
+        assert!(
+            m.get(MemoryKind::ToolInvocation, h).is_some(),
+            "harness {h} 缺"
+        );
     }
 }
 
@@ -106,7 +108,8 @@ fn i3_08_coordinator_multi_kinds() {
 // 9. I3 AuditEvent 字段
 #[test]
 fn i3_09_audit_event_fields() {
-    let e = MemoryFormalAuditEvent::new(123, MemoryKind::AuditCheckpoint, 7, "audit_complete", true);
+    let e =
+        MemoryFormalAuditEvent::new(123, MemoryKind::AuditCheckpoint, 7, "audit_complete", true);
     assert_eq!(e.timestamp, 123);
     assert!(e.passed);
 }

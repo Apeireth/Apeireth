@@ -665,9 +665,7 @@ impl ApprovalListRule {
         let take = match best {
             None => true,
             Some((_, s, _)) if specificity > *s => true,
-            Some((best_entry, s, _))
-                if specificity == *s && entry.silent && !best_entry.silent =>
-            {
+            Some((best_entry, s, _)) if specificity == *s && entry.silent && !best_entry.silent => {
                 true
             }
             _ => false,
@@ -714,13 +712,21 @@ impl crate::rule_trait::ApprovalRule for ApprovalListRule {
         let commands = extract_commands(&call.args);
         match Self::best_match(&entries, &call.tool_name, &commands) {
             Some((entry, matched_command)) => {
-                let scope = if matched_command.is_some() { "命令级" } else { "工具级" };
+                let scope = if matched_command.is_some() {
+                    "命令级"
+                } else {
+                    "工具级"
+                };
                 debug!(
                     "[ApprovalListRule] 命中{}审批规则 [{}] tool={}{} → 需主人审批",
                     scope,
                     entry.raw,
                     call.tool_name,
-                    if entry.silent { " (拒绝时静默)" } else { "" }
+                    if entry.silent {
+                        " (拒绝时静默)"
+                    } else {
+                        ""
+                    }
                 );
                 ApprovalDecision::RequireApproval {
                     timeout_ms: self.timeout_ms,
@@ -1053,8 +1059,14 @@ mod tests {
 
     #[test]
     fn extract_commands_skips_non_string_empty_non_object() {
-        assert_eq!(extract_commands(&json!({"command": 42})), Vec::<String>::new());
-        assert_eq!(extract_commands(&json!({"command": "   "})), Vec::<String>::new());
+        assert_eq!(
+            extract_commands(&json!({"command": 42})),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            extract_commands(&json!({"command": "   "})),
+            Vec::<String>::new()
+        );
         assert_eq!(extract_commands(&json!(["command"])), Vec::<String>::new());
         assert_eq!(extract_commands(&json!(null)), Vec::<String>::new());
         // commandX (非数字后缀) 不算
@@ -1113,10 +1125,7 @@ mod tests {
 
     #[test]
     fn approval_list_command_level_requires_approval() {
-        let rule = ApprovalListRule::with_entries(
-            ["FileOperator:delete".to_string()],
-            300_000,
-        );
+        let rule = ApprovalListRule::with_entries(["FileOperator:delete".to_string()], 300_000);
         let call = make_call_with_args("FileOperator", json!({"command": "delete"}));
         let d = rule.check(&call, &[]);
         assert!(d.is_require_approval(), "命令级命中需审批, 实际: {d:?}");
@@ -1125,10 +1134,7 @@ mod tests {
 
     #[test]
     fn approval_list_command_must_match_exactly() {
-        let rule = ApprovalListRule::with_entries(
-            ["FileOperator:delete".to_string()],
-            300_000,
-        );
+        let rule = ApprovalListRule::with_entries(["FileOperator:delete".to_string()], 300_000);
         // 命令不同 → NoMatch (不误伤其他命令)
         let call = make_call_with_args("FileOperator", json!({"command": "read"}));
         assert!(rule.check(&call, &[]).is_no_match());
@@ -1172,10 +1178,7 @@ mod tests {
 
     #[test]
     fn approval_list_numbered_command_args() {
-        let rule = ApprovalListRule::with_entries(
-            ["Shell:shutdown".to_string()],
-            300_000,
-        );
+        let rule = ApprovalListRule::with_entries(["Shell:shutdown".to_string()], 300_000);
         // command2 命中 (批量命令场景, VCP extractCommands 行为)
         let call = make_call_with_args(
             "Shell",

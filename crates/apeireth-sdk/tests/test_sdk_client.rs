@@ -68,7 +68,14 @@ fn k1_tool_whitelist_has_6_names() {
     for tool in TOOL_WHITELIST.iter() {
         assert!(TOOL_WHITELIST.contains(tool));
     }
-    let six = ["web_search", "file_ops", "git_ops", "code_exec", "calendar", "message"];
+    let six = [
+        "web_search",
+        "file_ops",
+        "git_ops",
+        "code_exec",
+        "calendar",
+        "message",
+    ];
     for tool in six.iter() {
         assert!(TOOL_WHITELIST.contains(tool), "TOOL_WHITELIST 缺: {tool}");
     }
@@ -119,7 +126,8 @@ fn auth_pipeline_preflight_walks_5_components() {
     assert!(p.bucket.capacity > 0.0);
     assert!(p.audit.is_empty());
     assert_eq!(p.quota.monthly_limit, 0);
-    p.preflight("web_search", "search").expect("preflight should succeed");
+    p.preflight("web_search", "search")
+        .expect("preflight should succeed");
     assert!(p.audit.len() >= 1);
     let err = p.check_quota();
     assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
@@ -283,7 +291,16 @@ fn error_10_variants_all_construct() {
 #[test]
 fn error_code_8_variants_all_directions() {
     use apeireth_sdk::SdkErrorCode::*;
-    let codes = [Unknown, InvalidEnvelope, VersionIncompatible, NotFound, PermissionDenied, ToolNotApproved, Internal, Other("custom".into())];
+    let codes = [
+        Unknown,
+        InvalidEnvelope,
+        VersionIncompatible,
+        NotFound,
+        PermissionDenied,
+        ToolNotApproved,
+        Internal,
+        Other("custom".into()),
+    ];
     assert_eq!(codes.len(), 8);
     for code in &codes {
         let n = code.numeric_code();
@@ -316,7 +333,13 @@ fn error_code_8_variants_all_directions() {
 #[test]
 fn wire_envelope_roundtrip_with_other_kind() {
     use WireKind::*;
-    let kinds = [Chat, ToolCall, MemoryRead, Health, Other("custom_event".into())];
+    let kinds = [
+        Chat,
+        ToolCall,
+        MemoryRead,
+        Health,
+        Other("custom_event".into()),
+    ];
     for k in &kinds {
         let env = Envelope::new(k.clone(), "req-x", serde_json::json!({"x": 1}));
         let line = env.encode().expect("encode ok");
@@ -615,17 +638,23 @@ async fn http_mock_multi_endpoint_concurrent() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/tools/web_search/invoke"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "web_search"})))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "web_search"})),
+        )
         .mount(&server)
         .await;
     Mock::given(method("POST"))
         .and(path("/v1/tools/code_exec/invoke"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "code_exec"})))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "code_exec"})),
+        )
         .mount(&server)
         .await;
     Mock::given(method("POST"))
         .and(path("/v1/tools/git_ops/invoke"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "git_ops"})))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"tool": "git_ops"})),
+        )
         .mount(&server)
         .await;
 

@@ -38,7 +38,9 @@ impl CircuitState {
 }
 
 impl Default for CircuitState {
-    fn default() -> Self { Self::Closed }
+    fn default() -> Self {
+        Self::Closed
+    }
 }
 
 /// 内部状态机
@@ -139,11 +141,16 @@ impl CircuitBreaker {
 
     /// 当前失败计数
     pub fn failure_count(&self) -> u32 {
-        self.inner.lock().expect("circuit breaker poisoned").failure_count
+        self.inner
+            .lock()
+            .expect("circuit breaker poisoned")
+            .failure_count
     }
 
     /// 名称
-    pub fn name(&self) -> &str { &self.name }
+    pub fn name(&self) -> &str {
+        &self.name
+    }
 }
 
 // 编译期守门: 状态 3 个

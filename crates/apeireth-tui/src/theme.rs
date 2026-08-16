@@ -262,9 +262,21 @@ mod tests {
         // primary: (200,134,10) → (143,179,217) 中点 ≈ (172, 156, 113)
         let (r, g, b) = rgb(s.primary).expect("primary is RGB");
         // ±2 容差 (中间值会因 round() 微差, 但不应偏向任何一端)
-        assert!((i32::from(r) - 171).abs() <= 2, "primary.r ≈ 171, got {}", r);
-        assert!((i32::from(g) - 156).abs() <= 2, "primary.g ≈ 156, got {}", g);
-        assert!((i32::from(b) - 113).abs() <= 2, "primary.b ≈ 113, got {}", b);
+        assert!(
+            (i32::from(r) - 171).abs() <= 2,
+            "primary.r ≈ 171, got {}",
+            r
+        );
+        assert!(
+            (i32::from(g) - 156).abs() <= 2,
+            "primary.g ≈ 156, got {}",
+            g
+        );
+        assert!(
+            (i32::from(b) - 113).abs() <= 2,
+            "primary.b ≈ 113, got {}",
+            b
+        );
         // 严格在 from/to 之间 (不偏向任何一端)
         let (rf, gf, bf) = rgb(from.primary).unwrap();
         let (rt, gt, bt) = rgb(to.primary).unwrap();

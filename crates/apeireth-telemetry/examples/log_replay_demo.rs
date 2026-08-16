@@ -38,15 +38,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
     let entries = vec![
-        mk(0, LogLevel::Trace, "apeireth_telemetry::log_replay", "trace event"),
+        mk(
+            0,
+            LogLevel::Trace,
+            "apeireth_telemetry::log_replay",
+            "trace event",
+        ),
         mk(50, LogLevel::Debug, "apeireth_api::server", "debug event"),
         mk(100, LogLevel::Info, "apeireth_api::server", "info event"),
-        mk(150, LogLevel::Warn, "apeireth_pipeline::dispatch", "warn event"),
-        mk(200, LogLevel::Error, "apeireth_memory::sqlite", "error event"),
+        mk(
+            150,
+            LogLevel::Warn,
+            "apeireth_pipeline::dispatch",
+            "warn event",
+        ),
+        mk(
+            200,
+            LogLevel::Error,
+            "apeireth_memory::sqlite",
+            "error event",
+        ),
     ];
     println!("[1/7] 构造 5 条 LogEntry (5 档全展示)");
     for e in &entries {
-        println!("      {:?} {} {} {}", e.level, e.target, e.message, "fields=1");
+        println!(
+            "      {:?} {} {} {}",
+            e.level, e.target, e.message, "fields=1"
+        );
     }
 
     // 2) 写 tempfile (round-trip 0 漂移)
@@ -95,12 +113,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!(
         "      level=Error → {} entries: {:?}",
         errors.len(),
-        errors.entries().iter().map(|e| e.message.as_str()).collect::<Vec<_>>()
+        errors
+            .entries()
+            .iter()
+            .map(|e| e.message.as_str())
+            .collect::<Vec<_>>()
     );
     println!(
         "      level=Warn  → {} entries: {:?}",
         warns.len(),
-        warns.entries().iter().map(|e| e.message.as_str()).collect::<Vec<_>>()
+        warns
+            .entries()
+            .iter()
+            .map(|e| e.message.as_str())
+            .collect::<Vec<_>>()
     );
 
     // 6) replay(Instant) 全量回放

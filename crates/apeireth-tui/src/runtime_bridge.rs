@@ -244,7 +244,10 @@ impl RuntimeBridge {
 
     /// Dispatch an async task via the underlying runtime.
     pub async fn dispatch_task(&self, tool_name: &str, params_json: &str) -> u64 {
-        let task_id = self.runtime.dispatch_async_task(tool_name, params_json).await;
+        let task_id = self
+            .runtime
+            .dispatch_async_task(tool_name, params_json)
+            .await;
         let mut state = self.state.lock();
         state.last_event_topic = Some(format!("task_dispatched:{}", tool_name));
         BridgeState::bounded_push(
@@ -276,7 +279,9 @@ impl RuntimeBridge {
 
     /// Append a chat message to the default room (for TUI-typed input).
     pub fn post_message(&self, sender: &str, content: String) -> Result<String, String> {
-        let rid = self.default_room_id().ok_or_else(|| "no room bootstrapped".to_string())?;
+        let rid = self
+            .default_room_id()
+            .ok_or_else(|| "no room bootstrapped".to_string())?;
         let msg = ChatMessage::new(rid.clone(), sender.to_string(), content);
         let mid = msg.id.clone();
         self.group_chat
@@ -294,12 +299,10 @@ impl RuntimeBridge {
     }
 
     /// Add a participant to the default room (for TUI-typed senders).
-    pub fn add_participant(
-        &self,
-        id: &str,
-        display_name: &str,
-    ) -> Result<(), String> {
-        let rid = self.default_room_id().ok_or_else(|| "no room bootstrapped".to_string())?;
+    pub fn add_participant(&self, id: &str, display_name: &str) -> Result<(), String> {
+        let rid = self
+            .default_room_id()
+            .ok_or_else(|| "no room bootstrapped".to_string())?;
         let participant = apeireth_council::group_chat::Participant::new(
             id,
             display_name,
@@ -341,7 +344,9 @@ impl RuntimeBridge {
         base_url: Option<&str>,
         api_key: &str,
     ) -> apeireth_tool_registry::TaskId {
-        self.runtime.dispatch_llm_task(prompt, system, model, base_url, api_key).await
+        self.runtime
+            .dispatch_llm_task(prompt, system, model, base_url, api_key)
+            .await
     }
 
     /// R256 -- register a custom AsyncWorker for the given tool_name.
@@ -359,7 +364,9 @@ impl RuntimeBridge {
         worker: std::sync::Arc<dyn apeireth_runtime::AsyncWorker>,
         params_json: &str,
     ) -> apeireth_tool_registry::TaskId {
-        self.runtime.dispatch_async_task_with_worker(worker, params_json).await
+        self.runtime
+            .dispatch_async_task_with_worker(worker, params_json)
+            .await
     }
 
     /// Get the bridge state as a JSON-serializable snapshot (for telemetry).
@@ -413,7 +420,10 @@ mod tests {
         let room_id = bridge.bootstrap().expect("bootstrap must succeed");
         assert!(!room_id.is_empty());
         let participants = bridge.participant_count();
-        assert!(participants >= 3, "default bootstrap adds at least 3 participants");
+        assert!(
+            participants >= 3,
+            "default bootstrap adds at least 3 participants"
+        );
     }
 
     #[test]
@@ -421,10 +431,16 @@ mod tests {
         let bridge = bridge_with_default();
         bridge.bootstrap().unwrap();
         bridge.add_participant("test_user", "Test User").unwrap();
-        let _ = bridge.post_message("test_user", "hello".to_string()).unwrap();
+        let _ = bridge
+            .post_message("test_user", "hello".to_string())
+            .unwrap();
         let state = bridge.state();
         assert!(!state.recent_chat_messages.is_empty());
-        assert!(state.last_event_topic.as_deref().unwrap().starts_with("message:"));
+        assert!(state
+            .last_event_topic
+            .as_deref()
+            .unwrap()
+            .starts_with("message:"));
     }
 
     #[test]
@@ -536,7 +552,9 @@ mod tests {
     async fn r256_04_dispatch_llm_task_returns_task_id() {
         let bridge = bridge_with_default();
         bridge.bootstrap().unwrap();
-        let tid = bridge.dispatch_llm_task("hello", None, None, None, "fake-key").await;
+        let tid = bridge
+            .dispatch_llm_task("hello", None, None, None, "fake-key")
+            .await;
         assert!(tid > 0);
     }
 

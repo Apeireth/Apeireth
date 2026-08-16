@@ -40,7 +40,9 @@ use std::time::{Duration, Instant};
 
 use crate::asi_modules::{asi_lookup_module, ASI_STAGE1_INFOS};
 use crate::bridge_pool::PoolStats;
-use crate::r11_compat::{r11_compat_version, r11_module_count, R11_COMPAT_VERSION, R11_MODULE_COUNT};
+use crate::r11_compat::{
+    r11_compat_version, r11_module_count, R11_COMPAT_VERSION, R11_MODULE_COUNT,
+};
 use crate::type_convert::{json_to_rust, rust_to_json};
 
 // =============================================================================
@@ -142,7 +144,10 @@ impl std::fmt::Display for BenchTargetReport {
         writeln!(
             f,
             "  [{}] (warmup={})\n    when: {}\n    {}",
-            self.target_id, self.warmup_run, self.when_to_use, self.stats.summary(),
+            self.target_id,
+            self.warmup_run,
+            self.when_to_use,
+            self.stats.summary(),
         )
     }
 }
@@ -392,11 +397,21 @@ mod tests {
     #[test]
     fn stage3_bench_stats_aggregation() {
         let samples = vec![
-            BenchSample { duration: Duration::from_micros(10) },
-            BenchSample { duration: Duration::from_micros(20) },
-            BenchSample { duration: Duration::from_micros(30) },
-            BenchSample { duration: Duration::from_micros(40) },
-            BenchSample { duration: Duration::from_micros(50) },
+            BenchSample {
+                duration: Duration::from_micros(10),
+            },
+            BenchSample {
+                duration: Duration::from_micros(20),
+            },
+            BenchSample {
+                duration: Duration::from_micros(30),
+            },
+            BenchSample {
+                duration: Duration::from_micros(40),
+            },
+            BenchSample {
+                duration: Duration::from_micros(50),
+            },
         ];
         let s = BenchStats::from_samples(&samples);
         assert_eq!(s.n, 5);
@@ -411,7 +426,9 @@ mod tests {
     fn stage3_bench_stats_p95_index() {
         let mut samples = Vec::new();
         for i in 1..=100 {
-            samples.push(BenchSample { duration: Duration::from_micros(i as u64) });
+            samples.push(BenchSample {
+                duration: Duration::from_micros(i as u64),
+            });
         }
         let s = BenchStats::from_samples(&samples);
         assert_eq!(s.n, 100);
@@ -437,7 +454,10 @@ mod tests {
     // 5. BenchRunner 跑 1 个 target
     #[test]
     fn stage3_bench_runner_run_one() {
-        let runner = BenchRunner::with_config(BenchConfig { iterations: 10, warmup: false });
+        let runner = BenchRunner::with_config(BenchConfig {
+            iterations: 10,
+            warmup: false,
+        });
         let t = BenchR11ModuleCount;
         let r = runner.run_one(&t);
         assert_eq!(r.target_id, "r11_module_count");
@@ -448,7 +468,10 @@ mod tests {
     // 6. BenchRunner 跑多个 target
     #[test]
     fn stage3_bench_runner_run_many() {
-        let runner = BenchRunner::with_config(BenchConfig { iterations: 5, warmup: false });
+        let runner = BenchRunner::with_config(BenchConfig {
+            iterations: 5,
+            warmup: false,
+        });
         let t1 = BenchR11ModuleCount;
         let t2 = BenchR11CompatVersion;
         let report = runner.run_many(&[&t1, &t2]);
@@ -503,7 +526,10 @@ mod tests {
     // 11. BenchTargetReport Display 单 target
     #[test]
     fn stage3_bench_target_report_display() {
-        let runner = BenchRunner::with_config(BenchConfig { iterations: 3, warmup: false });
+        let runner = BenchRunner::with_config(BenchConfig {
+            iterations: 3,
+            warmup: false,
+        });
         let r = runner.run_one(&BenchAsiLookupModule);
         let s = format!("{r}");
         assert!(s.contains("asi_lookup_module"));
@@ -515,8 +541,12 @@ mod tests {
     #[test]
     fn stage3_bench_stats_summary() {
         let samples = vec![
-            BenchSample { duration: Duration::from_micros(10) },
-            BenchSample { duration: Duration::from_micros(20) },
+            BenchSample {
+                duration: Duration::from_micros(10),
+            },
+            BenchSample {
+                duration: Duration::from_micros(20),
+            },
         ];
         let s = BenchStats::from_samples(&samples);
         let out = s.summary();
@@ -528,7 +558,10 @@ mod tests {
     // 13. T3 测 rust_to_json 真实序列化 (测 ≥ 1 个有效样本)
     #[test]
     fn stage3_bench_t3_rust_to_json_real() {
-        let runner = BenchRunner::with_config(BenchConfig { iterations: 5, warmup: true });
+        let runner = BenchRunner::with_config(BenchConfig {
+            iterations: 5,
+            warmup: true,
+        });
         let t = BenchRustToJsonEpisode;
         let r = runner.run_one(&t);
         assert_eq!(r.stats.n, 5);
@@ -539,7 +572,10 @@ mod tests {
     // 14. T4 测 json_to_rust 真实反序列化
     #[test]
     fn stage3_bench_t4_json_to_rust_real() {
-        let runner = BenchRunner::with_config(BenchConfig { iterations: 5, warmup: true });
+        let runner = BenchRunner::with_config(BenchConfig {
+            iterations: 5,
+            warmup: true,
+        });
         let t = BenchJsonToRustEpisode;
         let r = runner.run_one(&t);
         assert_eq!(r.stats.n, 5);
@@ -565,7 +601,11 @@ mod tests {
             // when_to_use 文本不含 python (除 type_convert 桥)
             let when = t.when_to_use();
             // 5 target 都不依赖 Python 运行时
-            assert!(when.contains("编译期 const") || when.contains("serde_json") || when.contains("bridge"));
+            assert!(
+                when.contains("编译期 const")
+                    || when.contains("serde_json")
+                    || when.contains("bridge")
+            );
         }
     }
 }

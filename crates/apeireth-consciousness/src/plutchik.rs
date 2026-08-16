@@ -44,8 +44,14 @@ impl PlutchikBasic {
     /// 8 维编译期 hardcode
     pub const COUNT: usize = 8;
     pub const ALL: [PlutchikBasic; 8] = [
-        Self::Joy, Self::Trust, Self::Fear, Self::Surprise,
-        Self::Sadness, Self::Disgust, Self::Anger, Self::Anticipation,
+        Self::Joy,
+        Self::Trust,
+        Self::Fear,
+        Self::Surprise,
+        Self::Sadness,
+        Self::Disgust,
+        Self::Anger,
+        Self::Anticipation,
     ];
 
     pub const fn as_str(&self) -> &'static str {
@@ -100,8 +106,14 @@ pub enum PlutchikAdvanced {
 impl PlutchikAdvanced {
     pub const COUNT: usize = 8;
     pub const ALL: [PlutchikAdvanced; 8] = [
-        Self::Love, Self::Submission, Self::Awe, Self::Disapproval,
-        Self::Remorse, Self::Contempt, Self::Aggressiveness, Self::Optimism,
+        Self::Love,
+        Self::Submission,
+        Self::Awe,
+        Self::Disapproval,
+        Self::Remorse,
+        Self::Contempt,
+        Self::Aggressiveness,
+        Self::Optimism,
     ];
 
     pub const fn as_str(&self) -> &'static str {
@@ -120,22 +132,28 @@ impl PlutchikAdvanced {
     /// 从两个基础情绪推导高级情绪 (按 Plutchik 规则)
     /// 相邻 (差 1) 或 wrap (差 7) 才返回高级情绪
     pub fn from_pair(a: PlutchikBasic, b: PlutchikBasic) -> Option<Self> {
-        if a == b { return None; }  // 同情绪
+        if a == b {
+            return None;
+        } // 同情绪
         let pos_a = a.wheel_position() as i8;
         let pos_b = b.wheel_position() as i8;
         let diff = (pos_a - pos_b).abs();
         // Plutchik 情感轮是循环的: 0-7 差 1 (相邻) 或 7 (wrap: 7->0)
-        if diff != 1 && diff != 7 { return None; }
+        if diff != 1 && diff != 7 {
+            return None;
+        }
         // wrap 情况: Anticipation(7) + Joy(0) = Optimism
-        if diff == 7 { return Some(Self::Optimism); }
+        if diff == 7 {
+            return Some(Self::Optimism);
+        }
         let start = pos_a.min(pos_b) as u8;
         match start {
-            0 => Some(Self::Love),       // Joy(0) + Trust(1)
-            1 => Some(Self::Submission), // Trust(1) + Fear(2)
-            2 => Some(Self::Awe),        // Fear(2) + Surprise(3)
-            3 => Some(Self::Disapproval),// Surprise(3) + Sadness(4)
-            4 => Some(Self::Remorse),    // Sadness(4) + Disgust(5)
-            5 => Some(Self::Contempt),   // Disgust(5) + Anger(6)
+            0 => Some(Self::Love),           // Joy(0) + Trust(1)
+            1 => Some(Self::Submission),     // Trust(1) + Fear(2)
+            2 => Some(Self::Awe),            // Fear(2) + Surprise(3)
+            3 => Some(Self::Disapproval),    // Surprise(3) + Sadness(4)
+            4 => Some(Self::Remorse),        // Sadness(4) + Disgust(5)
+            5 => Some(Self::Contempt),       // Disgust(5) + Anger(6)
             6 => Some(Self::Aggressiveness), // Anger(6) + Anticipation(7)
             _ => None,
         }
@@ -230,28 +248,46 @@ mod tests {
     #[test]
     fn t05_advanced_from_pair_adjacent() {
         // Joy + Trust = Love
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Trust), Some(PlutchikAdvanced::Love));
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Trust),
+            Some(PlutchikAdvanced::Love)
+        );
         // Anger + Anticipation = Aggressiveness
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Anger, PlutchikBasic::Anticipation), Some(PlutchikAdvanced::Aggressiveness));
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Anger, PlutchikBasic::Anticipation),
+            Some(PlutchikAdvanced::Aggressiveness)
+        );
     }
 
     #[test]
     fn t06_advanced_from_pair_not_adjacent() {
         // Joy + Sadness (差 4) 不相邻
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Sadness), None);
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Sadness),
+            None
+        );
     }
 
     #[test]
     fn t07_advanced_from_same_emotion() {
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Joy), None);
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Joy),
+            None
+        );
     }
 
     #[test]
     fn t08_advanced_from_opposite() {
         // Joy (0) + Sadness (4) 对位
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Sadness), None);
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Joy, PlutchikBasic::Sadness),
+            None
+        );
         // Fear (2) + Anger (6) 对位
-        assert_eq!(PlutchikAdvanced::from_pair(PlutchikBasic::Fear, PlutchikBasic::Anger), None);
+        assert_eq!(
+            PlutchikAdvanced::from_pair(PlutchikBasic::Fear, PlutchikBasic::Anger),
+            None
+        );
     }
 
     #[test]
@@ -278,7 +314,12 @@ mod tests {
         let basics = PlutchikBasic::ALL;
         for window in basics.windows(2) {
             let pair = PlutchikAdvanced::from_pair(window[0], window[1]);
-            assert!(pair.is_some(), "pair {:?} + {:?} should produce advanced emotion", window[0], window[1]);
+            assert!(
+                pair.is_some(),
+                "pair {:?} + {:?} should produce advanced emotion",
+                window[0],
+                window[1]
+            );
         }
         // 最后一对 (Anticipation -> Joy, wrap)
         let wrap = PlutchikAdvanced::from_pair(PlutchikBasic::Anticipation, PlutchikBasic::Joy);

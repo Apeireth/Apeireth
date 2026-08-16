@@ -11,13 +11,13 @@ use std::sync::Arc;
 use apeireth_http_client::HttpClient;
 use apeireth_tool_registry::{Tool, ToolRegistry};
 
+use crate::apply_patch::ApplyPatchTool;
 use crate::code_exec::{CodeExec, CodeExecTool, ShellCodeExec};
 use crate::file_ops::{FileOps, FileOpsTool, StdFileOps};
 use crate::git_ops::{GitCliOps, GitOps, GitOpsTool};
-use crate::apply_patch::ApplyPatchTool;
+use crate::grep_ops::{GrepOps, GrepTool, RipgrepGrepOps};
 use crate::long_task::LongTaskTool;
 use crate::web_fetch::{ReqwestWebFetch, WebFetch, WebFetchTool};
-use crate::grep_ops::{GrepOps, GrepTool, RipgrepGrepOps};
 use crate::web_search::{HttpWebSearch, WebSearch, WebSearchTool};
 
 /// 战役 2-5 实际注册 4 个 tool
@@ -84,10 +84,7 @@ pub fn register_all(registry: &ToolRegistry) -> Result<(), String> {
 
     // 5. grep (R30 P1)
     let grep: Arc<dyn GrepOps> = Arc::new(RipgrepGrepOps::new());
-    registry.register(
-        grep.name().to_string(),
-        Arc::new(GrepTool::new(grep)),
-    );
+    registry.register(grep.name().to_string(), Arc::new(GrepTool::new(grep)));
 
     // 6. apply_patch (R30 U1)
     registry.register(

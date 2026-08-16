@@ -425,7 +425,8 @@ pub const AWARENESS_TOOL_COUNT: usize = 3;
 
 const _: () = {
     assert!(
-        SCHEDULING_TOOL_COUNT + WORKTREE_TOOL_COUNT + AWARENESS_TOOL_COUNT == ORCHESTRATOR_TOOL_COUNT,
+        SCHEDULING_TOOL_COUNT + WORKTREE_TOOL_COUNT + AWARENESS_TOOL_COUNT
+            == ORCHESTRATOR_TOOL_COUNT,
         "8+3+3 = 14 tools (1:1 AgentMCPServer.js Orchestrator)"
     );
 };

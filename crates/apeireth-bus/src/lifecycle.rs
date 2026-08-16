@@ -112,7 +112,10 @@ impl Default for LifecycleBus {
 impl LifecycleBus {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(LifecycleBusInner { hooks: Vec::new(), l0: None }),
+            inner: Arc::new(LifecycleBusInner {
+                hooks: Vec::new(),
+                l0: None,
+            }),
         }
     }
 
@@ -160,7 +163,10 @@ impl LifecycleBus {
         }
         if let Some(l0) = &self.inner.l0 {
             let topic = format!("lifecycle.{}", event.as_str());
-            if let Err(e) = l0.publish(&topic, BusMessage::new(LifecycleMessage { event, ctx })).await {
+            if let Err(e) = l0
+                .publish(&topic, BusMessage::new(LifecycleMessage { event, ctx }))
+                .await
+            {
                 eprintln!("[lifecycle] L0 广播失败 ({topic}): {e}");
             }
         }
@@ -234,18 +240,26 @@ mod tests {
             session: Some("s-target".to_string()),
             count: Arc::clone(&c),
         }));
-        bus.fire(LifecycleEvent::UserPromptSubmit, LifecycleContext::new("s-other"))
-            .await;
+        bus.fire(
+            LifecycleEvent::UserPromptSubmit,
+            LifecycleContext::new("s-other"),
+        )
+        .await;
         assert_eq!(c.load(Ordering::SeqCst), 0, "其他会话不应触发");
-        bus.fire(LifecycleEvent::UserPromptSubmit, LifecycleContext::new("s-target"))
-            .await;
+        bus.fire(
+            LifecycleEvent::UserPromptSubmit,
+            LifecycleContext::new("s-target"),
+        )
+        .await;
         assert_eq!(c.load(Ordering::SeqCst), 1, "目标会话应触发");
     }
 
     #[tokio::test]
     async fn errors_are_collected_not_swallowed() {
         let bus = LifecycleBus::new().register(Box::new(FailingHook));
-        let errs = bus.fire(LifecycleEvent::Stop, LifecycleContext::new("s1")).await;
+        let errs = bus
+            .fire(LifecycleEvent::Stop, LifecycleContext::new("s1"))
+            .await;
         assert_eq!(errs.len(), 1, "hook 错误应收集返回");
         assert!(errs[0].contains("故意失败"));
     }
@@ -253,7 +267,9 @@ mod tests {
     #[tokio::test]
     async fn no_hooks_fire_is_noop() {
         let bus = LifecycleBus::new();
-        let errs = bus.fire(LifecycleEvent::Stop, LifecycleContext::new("s1")).await;
+        let errs = bus
+            .fire(LifecycleEvent::Stop, LifecycleContext::new("s1"))
+            .await;
         assert!(errs.is_empty());
         assert_eq!(bus.hook_count(), 0);
     }
@@ -263,7 +279,8 @@ mod tests {
         let l0: L0Bus<LifecycleMessage> = L0Bus::new();
         let bus = LifecycleBus::new().with_l0(l0.clone());
         let mut sub = l0.subscribe("lifecycle.session_start").await.unwrap();
-        bus.fire(LifecycleEvent::SessionStart, LifecycleContext::new("s1")).await;
+        bus.fire(LifecycleEvent::SessionStart, LifecycleContext::new("s1"))
+            .await;
         let msg = tokio::time::timeout(std::time::Duration::from_secs(2), sub.next())
             .await
             .expect("应有广播")

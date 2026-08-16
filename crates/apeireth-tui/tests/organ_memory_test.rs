@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 9 器官 × Memory (记忆) 单元测试
 ///
 /// **测试范围**:
@@ -14,26 +20,32 @@
 ///
 /// **8 项承诺**: 全部遵守
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-
-
-
 
 mod test_common;
 
@@ -79,7 +91,10 @@ fn render_short_term_real_data_and_long_term_stub() {
     let long_idx = out.find("长期").expect("long_term");
     let between = &out[mid_idx..long_idx.min(mid_idx + 200)];
     // R22 ST-A1.5: mid_term 也是实际 atomics (不再是 " - " 占位), 改验证有项目名即可.
-    assert!(between.contains("中期") || between.contains("episodes"), "mid_term / episodes 字段在: {between}");
+    assert!(
+        between.contains("中期") || between.contains("episodes"),
+        "mid_term / episodes 字段在: {between}"
+    );
 }
 
 // =====================================================================
@@ -92,4 +107,3 @@ fn render_marks_partial_honestly() {
     let out = organ::memory::render(area);
     // stripped [partial] marker (R22 真接后不依赖): assert!(out.contains("[partial]"), "memory 标 partial, 中长期待接: {out}");
 }
-

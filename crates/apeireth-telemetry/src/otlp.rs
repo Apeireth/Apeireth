@@ -185,8 +185,7 @@ impl JsonLinesOtlpSink {
 #[async_trait::async_trait]
 impl OtlpSink for JsonLinesOtlpSink {
     async fn emit(&self, event: &OtlpEvent) -> OtlpResult<()> {
-        let line = serde_json::to_string(event)
-            .map_err(|e| OtlpError::Serialize(e.to_string()))?;
+        let line = serde_json::to_string(event).map_err(|e| OtlpError::Serialize(e.to_string()))?;
         let mut w = self
             .writer
             .lock()
@@ -298,7 +297,10 @@ mod tests {
 
         let first: serde_json::Value = serde_json::from_str(lines[0]).unwrap();
         assert_eq!(first["name"], "llm.request");
-        assert_eq!(first["attributes"][0], serde_json::json!(["model", "MiniMax-M3"]));
+        assert_eq!(
+            first["attributes"][0],
+            serde_json::json!(["model", "MiniMax-M3"])
+        );
         assert_eq!(first["payload"]["tokens"], 128);
         assert!(first["timestamp_unix_ms"].as_u64().unwrap() > 0);
     }
@@ -331,7 +333,10 @@ mod tests {
         let sink = JsonLinesOtlpSink::new(Box::new(FailWriter));
         let e = sample_event();
         let err = sink.emit(&e).await.unwrap_err();
-        assert!(matches!(err, OtlpError::Io(_)), "IO 失败必须返明确错误: {err}");
+        assert!(
+            matches!(err, OtlpError::Io(_)),
+            "IO 失败必须返明确错误: {err}"
+        );
         assert!(format!("{err}").contains("boom"));
     }
 

@@ -73,8 +73,10 @@ mod tests {
     fn render_marks_stub_honestly() {
         let area = Rect::new(0, 0, 80, 24);
         let out = render(area);
-        assert!(out.contains("[stub]") || out.contains("stub"),
-            "Session render 应明确标 stub, 不假装接 HTTP: {out}");
+        assert!(
+            out.contains("[stub]") || out.contains("stub"),
+            "Session render 应明确标 stub, 不假装接 HTTP: {out}"
+        );
     }
 
     #[test]
@@ -83,8 +85,14 @@ mod tests {
         let out = render(area);
         // R25.2 fix: render 用前 8 字符截断 (line 46: &s.id[..8]),
         // assertion 跟 render 输出一致
-        assert!(out.contains("stub-ses"), "render 应含 ID 前 8 字符 'stub-ses': {out}");
-        assert!(out.contains("Stub session"), "render 应含 stub title: {out}");
+        assert!(
+            out.contains("stub-ses"),
+            "render 应含 ID 前 8 字符 'stub-ses': {out}"
+        );
+        assert!(
+            out.contains("Stub session"),
+            "render 应含 stub title: {out}"
+        );
         // 完整 ID 也在 output 里 (作为 session metadata 完整, 可由 R25.3 拉真实数据时显示)
         // 注: 当前 render 只显示前 8 字符, 完整 ID 不在 output
     }

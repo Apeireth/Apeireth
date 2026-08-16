@@ -221,12 +221,27 @@ mod tests {
         // 3) 验证 from_method 反查正确
         assert_eq!(Primitive::from_method("tools/list"), Some(Primitive::Tools));
         assert_eq!(Primitive::from_method("tools/call"), Some(Primitive::Tools));
-        assert_eq!(Primitive::from_method("resources/list"), Some(Primitive::Resources));
-        assert_eq!(Primitive::from_method("prompts/get"), Some(Primitive::Prompts));
-        assert_eq!(Primitive::from_method("initialize"), Some(Primitive::Initialize));
-        assert_eq!(Primitive::from_method("sampling/createMessage"), Some(Primitive::Sampling));
+        assert_eq!(
+            Primitive::from_method("resources/list"),
+            Some(Primitive::Resources)
+        );
+        assert_eq!(
+            Primitive::from_method("prompts/get"),
+            Some(Primitive::Prompts)
+        );
+        assert_eq!(
+            Primitive::from_method("initialize"),
+            Some(Primitive::Initialize)
+        );
+        assert_eq!(
+            Primitive::from_method("sampling/createMessage"),
+            Some(Primitive::Sampling)
+        );
         assert_eq!(Primitive::from_method("roots/list"), Some(Primitive::Roots));
-        assert_eq!(Primitive::from_method("logging/setLevel"), Some(Primitive::Logging));
+        assert_eq!(
+            Primitive::from_method("logging/setLevel"),
+            Some(Primitive::Logging)
+        );
         assert_eq!(Primitive::from_method("unknown/method"), None);
 
         // 4) 验证 total methods = 14 (compile-time 守 + runtime 二次守)
@@ -247,7 +262,10 @@ mod tests {
         // 1) 验证 Primitive 序列化稳定 (serde kebab-case variant)
         let p = Primitive::Tools;
         let json_str = serde_json::to_string(&p).unwrap();
-        assert_eq!(json_str, "\"Tools\"", "Primitive::Tools serializes as `\"Tools\"` (PascalCase variant)");
+        assert_eq!(
+            json_str, "\"Tools\"",
+            "Primitive::Tools serializes as `\"Tools\"` (PascalCase variant)"
+        );
 
         let restored: Primitive = serde_json::from_str(&json_str).unwrap();
         assert_eq!(restored, Primitive::Tools);
@@ -261,11 +279,7 @@ mod tests {
 
         // 3) 验证 Initialize / Sampling / Roots / Logging 4 个 variant
         //    apeireth-mcp 当前不实现, 但 Primitive enum 覆盖 (B1 24 LOCKED 持续更新)
-        let not_implemented = [
-            Primitive::Sampling,
-            Primitive::Roots,
-            Primitive::Logging,
-        ];
+        let not_implemented = [Primitive::Sampling, Primitive::Roots, Primitive::Logging];
         for p in not_implemented {
             assert!(
                 Primitive::from_method(p.methods()[0]).is_some(),

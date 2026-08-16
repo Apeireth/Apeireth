@@ -49,8 +49,8 @@
 
 pub mod executor;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod fuzzy;
+mod organ_kani_proofs;
 // R127-2 P6-2: opencode 子代理 重试 — MCP 协议 (servers 175 cloned 借脑)
 pub mod mcp_protocol;
 pub mod parser;
@@ -64,18 +64,16 @@ pub mod text_protocol;
 pub use executor::{ArcheryHandle, ExecutionResult, ToolExecutor};
 pub use tool_pipeline::{ToolCallContext, ToolCallPipeline, ToolCallPipelineMarker};
 // R127-2 P6-2: re-export mcp_protocol 公开 API
-pub use mcp_protocol::{
-    McpAnnotations, McpContent, McpError, McpServer, McpToolAdapter, McpToolCall, McpToolDefinition,
-    McpToolHandler, McpToolResult, MCP_ANNOTATION_COUNT, MCP_CONTENT_TYPE_COUNT,
-};
 pub use fuzzy::{levenshtein_distance, FuzzyToolMatcher};
+pub use mcp_protocol::{
+    McpAnnotations, McpContent, McpError, McpServer, McpToolAdapter, McpToolCall,
+    McpToolDefinition, McpToolHandler, McpToolResult, MCP_ANNOTATION_COUNT, MCP_CONTENT_TYPE_COUNT,
+};
 pub use parser::{ParseError, ParsedToolCall, ToolCallParser};
 pub use privacy::{PrivacyConfig, PrivacyGuard};
 pub use record::{RecordStore, ToolCallRecord, RECORD_PAYLOAD_VERSION};
 // N10: 宽松文本工具协议层 re-export
-pub use text_protocol::{
-    parse_block, strip_reasoning_blocks, SeparatedCalls, TextToolProtocol,
-};
+pub use text_protocol::{parse_block, strip_reasoning_blocks, SeparatedCalls, TextToolProtocol};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)

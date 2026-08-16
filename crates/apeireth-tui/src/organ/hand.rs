@@ -21,14 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ratatui::layout::Rect;
 
 /// 6 工具名 (编译期 hardcode, 跟 `apeireth-api` `/v1/tools/*` 对齐)
-pub const SIX_TOOLS: &[&str] = &[
-    "calendar",
-    "message",
-    "contact",
-    "task",
-    "search",
-    "drive",
-];
+pub const SIX_TOOLS: &[&str] = &["calendar", "message", "contact", "task", "search", "drive"];
 
 /// 单工具统计 (today + ok + fail, 18 + 4 atomics)
 ///
@@ -80,7 +73,11 @@ fn now_ms() -> u64 {
 
 /// 工具索引 (1-6), 未知工具返 0
 fn tool_index(name: &str) -> u64 {
-    SIX_TOOLS.iter().position(|&t| t == name).map(|i| (i + 1) as u64).unwrap_or(0)
+    SIX_TOOLS
+        .iter()
+        .position(|&t| t == name)
+        .map(|i| (i + 1) as u64)
+        .unwrap_or(0)
 }
 
 /// http.rs::invoke_tool 成功路径调
@@ -399,8 +396,17 @@ mod tests {
 
         let out = render(Rect::new(0, 0, 80, 24));
         let cal_line = out.lines().find(|l| l.contains("calendar")).unwrap();
-        assert!(cal_line.contains("3"), "calendar today 应 = 3, got: {cal_line}");
-        assert!(cal_line.contains("2"), "calendar ok 应 = 2, got: {cal_line}");
-        assert!(cal_line.contains("1"), "calendar fail 应 = 1, got: {cal_line}");
+        assert!(
+            cal_line.contains("3"),
+            "calendar today 应 = 3, got: {cal_line}"
+        );
+        assert!(
+            cal_line.contains("2"),
+            "calendar ok 应 = 2, got: {cal_line}"
+        );
+        assert!(
+            cal_line.contains("1"),
+            "calendar fail 应 = 1, got: {cal_line}"
+        );
     }
 }

@@ -17,22 +17,22 @@
 
 pub mod sandbox;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod ssh;
-pub mod persist;
-pub mod streaming;
 pub mod calculator;
 pub mod compat;
 pub mod enhanced;
-pub mod preset; // TP4/N22: ShellPreset 预设命令模板 (白名单 + 参数模板填充防注入, §10 官方包最后一件)
+mod organ_kani_proofs;
+pub mod persist;
+pub mod preset;
+pub mod ssh;
+pub mod streaming; // TP4/N22: ShellPreset 预设命令模板 (白名单 + 参数模板填充防注入, §10 官方包最后一件)
 
-pub use sandbox::{SandboxPolicy, SandboxMode, apply_sandbox};
-pub use ssh::SshClient;
-pub use persist::{PersistentTaskStore, TaskRecord};
 pub use calculator::{evaluate_expression, CalcError};
-pub use compat::{ShellCompatRouter, ShellCommand};
+pub use compat::{ShellCommand, ShellCompatRouter};
 pub use enhanced::{EnhancedShell, ShellError};
+pub use persist::{PersistentTaskStore, TaskRecord};
 pub use preset::{ArgSpec, PresetError, PresetRegistry, PresetShell, ShellPreset};
+pub use sandbox::{apply_sandbox, SandboxMode, SandboxPolicy};
+pub use ssh::SshClient;
 
 /// R138 deliverables (per 5-dim extension):
 /// - 7 modules (sandbox / ssh / persist / streaming / calculator / compat / enhanced)

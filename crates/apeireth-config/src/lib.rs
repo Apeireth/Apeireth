@@ -1,4 +1,3 @@
-
 //! apeireth-config — R23 6 module config 子模块。
 //!
 //! R23 P1 #5 实质化: 加 +6 顶层 pub fn — 合并 / 校验 / snapshot diff / lookup.
@@ -19,14 +18,24 @@ pub enum ConfigError {
 pub type ConfigResult<T> = Result<T, ConfigError>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ConfigEntry { pub key: String, pub value: String, pub required: bool }
+pub struct ConfigEntry {
+    pub key: String,
+    pub value: String,
+    pub required: bool,
+}
 
 impl ConfigEntry {
     pub fn new(key: impl Into<String>, value: impl Into<String>, required: bool) -> Self {
-        Self { key: key.into(), value: value.into(), required }
+        Self {
+            key: key.into(),
+            value: value.into(),
+            required,
+        }
     }
     pub fn validate(&self) -> ConfigResult<()> {
-        if self.key.trim().is_empty() { return Err(ConfigError::EmptyKey(self.key.clone())); }
+        if self.key.trim().is_empty() {
+            return Err(ConfigError::EmptyKey(self.key.clone()));
+        }
         if self.required && self.value.is_empty() {
             return Err(ConfigError::EmptyKey(format!("required: {}", self.key)));
         }
@@ -40,25 +49,41 @@ impl ConfigEntry {
 
 /// 批量 validate 全 entry. 首个 fail 返 `Err`.
 pub fn validate_all(entries: &[ConfigEntry]) -> ConfigResult<()> {
-    for e in entries { e.validate()?; }
+    for e in entries {
+        e.validate()?;
+    }
     Ok(())
 }
 
 /// 按 key 查 value. 找不到返 None.
 pub fn lookup<'a>(entries: &'a [ConfigEntry], key: &str) -> Option<&'a str> {
-    entries.iter().find(|e| e.key == key).map(|e| e.value.as_str())
+    entries
+        .iter()
+        .find(|e| e.key == key)
+        .map(|e| e.value.as_str())
 }
 
 /// 合并两 slice. 后者覆盖前者 (override semantics). 同 key duplicate 检测 只针对同 slice 内 (不限制 base + overlay 交叉, 那是 override 语义).
 pub fn merge(base: &[ConfigEntry], overlay: &[ConfigEntry]) -> ConfigResult<Vec<ConfigEntry>> {
     let mut seen = std::collections::HashSet::new();
-    for e in base { if !seen.insert(e.key.as_str()) { return Err(ConfigError::DuplicateKey(e.key.clone())); } }
+    for e in base {
+        if !seen.insert(e.key.as_str()) {
+            return Err(ConfigError::DuplicateKey(e.key.clone()));
+        }
+    }
     seen.clear();
-    for e in overlay { if !seen.insert(e.key.as_str()) { return Err(ConfigError::DuplicateKey(e.key.clone())); } }
+    for e in overlay {
+        if !seen.insert(e.key.as_str()) {
+            return Err(ConfigError::DuplicateKey(e.key.clone()));
+        }
+    }
     let mut out: Vec<ConfigEntry> = base.to_vec();
     for ov in overlay {
         match out.iter_mut().find(|e| e.key == ov.key) {
-            Some(existing) => { existing.value = ov.value.clone(); existing.required = ov.required; }
+            Some(existing) => {
+                existing.value = ov.value.clone();
+                existing.required = ov.required;
+            }
             None => out.push(ov.clone()),
         }
     }
@@ -67,14 +92,18 @@ pub fn merge(base: &[ConfigEntry], overlay: &[ConfigEntry]) -> ConfigResult<Vec<
 
 /// 出 required 但 value 为空的 keys — fail-fast 报警用.
 pub fn missing_required(entries: &[ConfigEntry]) -> Vec<&str> {
-    entries.iter()
+    entries
+        .iter()
         .filter(|e| e.required && e.value.is_empty())
         .map(|e| e.key.as_str())
         .collect()
 }
 
 /// 算两组 entry 差异. 返 (added, removed, changed) 三组 key 名.
-pub fn diff<'a>(before: &'a [ConfigEntry], after: &'a [ConfigEntry]) -> (Vec<&'a str>, Vec<&'a str>, Vec<&'a str>) {
+pub fn diff<'a>(
+    before: &'a [ConfigEntry],
+    after: &'a [ConfigEntry],
+) -> (Vec<&'a str>, Vec<&'a str>, Vec<&'a str>) {
     let mut added = Vec::new();
     let mut removed = Vec::new();
     let mut changed = Vec::new();
@@ -82,7 +111,7 @@ pub fn diff<'a>(before: &'a [ConfigEntry], after: &'a [ConfigEntry]) -> (Vec<&'a
         match lookup(before, &e.key) {
             None => added.push(e.key.as_str()),
             Some(v) if v != e.value => changed.push(e.key.as_str()),
-            _ => {},
+            _ => {}
         }
     }
     for e in before {
@@ -95,7 +124,10 @@ pub fn diff<'a>(before: &'a [ConfigEntry], after: &'a [ConfigEntry]) -> (Vec<&'a
 
 /// 校验 key 命名约束 (lowercase alnum + dash + underscore), 不允许空格 / 点 / 特殊符.
 pub fn key_is_valid(key: &str) -> bool {
-    !key.is_empty() && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    !key.is_empty()
+        && key
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// R30 U12: VCP-style 三层配置合并 (DEFAULT -> file -> override).
@@ -132,12 +164,21 @@ pub fn parse_json_layer(raw: &str) -> Vec<ConfigEntry> {
         Ok(v) => v,
         Err(_) => return Vec::new(),
     };
-    let Some(arr) = v.as_array() else { return Vec::new() };
+    let Some(arr) = v.as_array() else {
+        return Vec::new();
+    };
     arr.iter()
         .filter_map(|item| {
             let key = item.get("key").and_then(|x| x.as_str())?.to_string();
-            let value = item.get("value").and_then(|v| v.as_str()).unwrap_or("").to_string();
-            let required = item.get("required").and_then(|v| v.as_bool()).unwrap_or(false);
+            let value = item
+                .get("value")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let required = item
+                .get("required")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             Some(ConfigEntry::new(key, value, required))
         })
         .collect()
@@ -145,43 +186,76 @@ pub fn parse_json_layer(raw: &str) -> Vec<ConfigEntry> {
 
 /// R30 U12: 序列化一层配置到 JSON 字符串 (用于审计 / 持久化 override)
 pub fn to_json_layer(entries: &[ConfigEntry]) -> String {
-    serde_json::json!(entries.iter().map(|e| serde_json::json!({
-        "key": e.key, "value": e.value, "required": e.required
-    })).collect::<Vec<_>>()).to_string()
+    serde_json::json!(entries
+        .iter()
+        .map(|e| serde_json::json!({
+            "key": e.key, "value": e.value, "required": e.required
+        }))
+        .collect::<Vec<_>>())
+    .to_string()
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test] fn optional_entry_passes() { assert!(ConfigEntry::new("mode", "", false).validate().is_ok()); }
-    #[test] fn required_entry_without_value_is_rejected() { assert!(ConfigEntry::new("api_key", "", true).validate().is_err()); }
+    #[test]
+    fn optional_entry_passes() {
+        assert!(ConfigEntry::new("mode", "", false).validate().is_ok());
+    }
+    #[test]
+    fn required_entry_without_value_is_rejected() {
+        assert!(ConfigEntry::new("api_key", "", true).validate().is_err());
+    }
 
-    #[test] fn validate_all_passes_when_all_valid() {
-        let v = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "2", false)];
+    #[test]
+    fn validate_all_passes_when_all_valid() {
+        let v = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "2", false),
+        ];
         assert!(validate_all(&v).is_ok());
     }
-    #[test] fn validate_all_fails_fast() {
-        let v = vec![ConfigEntry::new("ok", "1", true), ConfigEntry::new("", "x", false)];
+    #[test]
+    fn validate_all_fails_fast() {
+        let v = vec![
+            ConfigEntry::new("ok", "1", true),
+            ConfigEntry::new("", "x", false),
+        ];
         assert!(validate_all(&v).is_err());
     }
-    #[test] fn lookup_basic() {
-        let v = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "2", false)];
+    #[test]
+    fn lookup_basic() {
+        let v = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "2", false),
+        ];
         assert_eq!(lookup(&v, "a"), Some("1"));
         assert_eq!(lookup(&v, "missing"), None);
     }
-    #[test] fn merge_overlay_wins() {
-        let base = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "2", false)];
-        let overlay = vec![ConfigEntry::new("b", "NEW", false), ConfigEntry::new("c", "3", false)];
+    #[test]
+    fn merge_overlay_wins() {
+        let base = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "2", false),
+        ];
+        let overlay = vec![
+            ConfigEntry::new("b", "NEW", false),
+            ConfigEntry::new("c", "3", false),
+        ];
         let merged = merge(&base, &overlay).unwrap();
         assert_eq!(merged.iter().find(|e| e.key == "b").unwrap().value, "NEW");
         assert_eq!(merged.len(), 3);
     }
-    #[test] fn merge_dup_base_rejected() {
-        let base = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("a", "2", false)];
+    #[test]
+    fn merge_dup_base_rejected() {
+        let base = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("a", "2", false),
+        ];
         assert!(merge(&base, &[]).is_err());
     }
-    #[test] fn missing_required_finds_them() {
+    #[test]
+    fn missing_required_finds_them() {
         let v = vec![
             ConfigEntry::new("a", "1", false),
             ConfigEntry::new("b", "", true),
@@ -190,19 +264,29 @@ mod tests {
         let m = missing_required(&v);
         assert_eq!(m, vec!["b"]);
     }
-    #[test] fn diff_three_way() {
-        let before = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "2", false), ConfigEntry::new("d", "x", false)];
-        let after = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "NEW", false), ConfigEntry::new("c", "3", false)];
+    #[test]
+    fn diff_three_way() {
+        let before = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "2", false),
+            ConfigEntry::new("d", "x", false),
+        ];
+        let after = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "NEW", false),
+            ConfigEntry::new("c", "3", false),
+        ];
         let (added, removed, changed) = diff(&before, &after);
         assert_eq!(added, vec!["c"]);
         assert_eq!(removed, vec!["d"]);
         assert_eq!(changed, vec!["b"]);
     }
-    #[test] fn key_validation_rules() {
+    #[test]
+    fn key_validation_rules() {
         assert!(key_is_valid("ok"));
         assert!(key_is_valid("with-dash"));
         assert!(key_is_valid("with_underscore"));
-        assert!(key_is_valid("CamelCase"));  // alphanumeric
+        assert!(key_is_valid("CamelCase")); // alphanumeric
         assert!(!key_is_valid(""));
         assert!(!key_is_valid("with space"));
         assert!(!key_is_valid("with.dot"));
@@ -210,8 +294,12 @@ mod tests {
     }
 
     // ==== R30 U12 三层合并测试 ====
-    #[test] fn u12_merge_three_layers_override_wins() {
-        let def = vec![ConfigEntry::new("model", "gpt-4", false), ConfigEntry::new("temp", "0.7", false)];
+    #[test]
+    fn u12_merge_three_layers_override_wins() {
+        let def = vec![
+            ConfigEntry::new("model", "gpt-4", false),
+            ConfigEntry::new("temp", "0.7", false),
+        ];
         let file = vec![ConfigEntry::new("model", "claude", false)];
         let ov = vec![ConfigEntry::new("model", "local-llama", false)];
         let m = merge_three_layers(&def, &file, &ov).unwrap();
@@ -220,16 +308,22 @@ mod tests {
         assert_eq!(m.iter().find(|e| e.key == "temp").unwrap().value, "0.7");
         assert_eq!(m.len(), 2);
     }
-    #[test] fn u12_merge_three_layers_empty_layers_ok() {
+    #[test]
+    fn u12_merge_three_layers_empty_layers_ok() {
         let def = vec![ConfigEntry::new("a", "1", false)];
         let m = merge_three_layers(&def, &[], &[]).unwrap();
         assert_eq!(m.len(), 1);
     }
-    #[test] fn u12_merge_three_layers_duplicate_in_layer_rejected() {
-        let def = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("a", "2", false)];
+    #[test]
+    fn u12_merge_three_layers_duplicate_in_layer_rejected() {
+        let def = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("a", "2", false),
+        ];
         assert!(merge_three_layers(&def, &[], &[]).is_err());
     }
-    #[test] fn u12_parse_json_layer_basic() {
+    #[test]
+    fn u12_parse_json_layer_basic() {
         let json = r#"[{"key":"a","value":"1"},{"key":"b","value":"2","required":true}]"#;
         let v = parse_json_layer(json);
         assert_eq!(v.len(), 2);
@@ -238,7 +332,8 @@ mod tests {
         assert!(!v[0].required);
         assert!(v[1].required);
     }
-    #[test] fn u12_parse_json_layer_optional_fields_default() {
+    #[test]
+    fn u12_parse_json_layer_optional_fields_default() {
         let json = r#"[{"key":"x"}]"#;
         let v = parse_json_layer(json);
         assert_eq!(v.len(), 1);
@@ -246,13 +341,18 @@ mod tests {
         assert_eq!(v[0].value, "");
         assert!(!v[0].required);
     }
-    #[test] fn u12_parse_json_layer_invalid_returns_empty() {
+    #[test]
+    fn u12_parse_json_layer_invalid_returns_empty() {
         let bad = "not json at all";
         let v = parse_json_layer(bad);
         assert!(v.is_empty());
     }
-    #[test] fn u12_to_json_layer_roundtrip() {
-        let v = vec![ConfigEntry::new("a", "1", false), ConfigEntry::new("b", "2", true)];
+    #[test]
+    fn u12_to_json_layer_roundtrip() {
+        let v = vec![
+            ConfigEntry::new("a", "1", false),
+            ConfigEntry::new("b", "2", true),
+        ];
         let s = to_json_layer(&v);
         let parsed = parse_json_layer(&s);
         assert_eq!(parsed.len(), 2);

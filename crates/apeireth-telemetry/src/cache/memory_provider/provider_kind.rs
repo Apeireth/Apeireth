@@ -95,10 +95,11 @@ impl ProviderKind {
     pub const fn is_implemented(&self) -> bool {
         match self {
             // R178: DiskLru 从 R21 stub 升级为实现 (无外部 SDK, 本地 fs LRU)
-            ProviderKind::InMemory | ProviderKind::Sqlite | ProviderKind::Hybrid | ProviderKind::DiskLru => true,
-            ProviderKind::Redis
-            | ProviderKind::Postgres
-            | ProviderKind::S3 => false,
+            ProviderKind::InMemory
+            | ProviderKind::Sqlite
+            | ProviderKind::Hybrid
+            | ProviderKind::DiskLru => true,
+            ProviderKind::Redis | ProviderKind::Postgres | ProviderKind::S3 => false,
         }
     }
 
@@ -198,7 +199,10 @@ mod tests {
         assert!(ProviderKind::InMemory.check_implemented().is_ok());
         assert!(ProviderKind::Sqlite.check_implemented().is_ok());
         assert!(ProviderKind::Hybrid.check_implemented().is_ok());
-        assert!(ProviderKind::DiskLru.check_implemented().is_ok(), "R178 DiskLru 不再报错");
+        assert!(
+            ProviderKind::DiskLru.check_implemented().is_ok(),
+            "R178 DiskLru 不再报错"
+        );
         for stub in [
             ProviderKind::Redis,
             ProviderKind::Postgres,

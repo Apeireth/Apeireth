@@ -59,7 +59,11 @@ fn character_offsets(_c: &BondCharacter) -> (f64, f64) {
 /// 强度方向放大 (per 桥 4 决策).
 fn direction_amplify(base: f64, intensity: f64) -> f64 {
     let deviation = base - 1.0;
-    let direction = if deviation.abs() < 1e-9 { 0.0 } else { deviation.signum() };
+    let direction = if deviation.abs() < 1e-9 {
+        0.0
+    } else {
+        deviation.signum()
+    };
     let intensity_scale = intensity * 0.4;
     let target = base + direction * intensity_scale;
     target.clamp(0.5, 2.0)
@@ -157,7 +161,6 @@ pub fn bond_components_to_tone(
     }
 }
 
-
 // ============================================
 // 3. 单元测试 (8 个 + 2 附加)
 // ============================================
@@ -215,7 +218,11 @@ mod tests {
     fn t05_zero_depth_yields_min_volume() {
         let bond = make_bond(BondStage::Familiar, 0.0, 0.5);
         let t = bond_to_tone(&bond);
-        assert!(t.volume <= 0.5 + 1e-9, "depth 0 should keep volume near 0.5, got {}", t.volume);
+        assert!(
+            t.volume <= 0.5 + 1e-9,
+            "depth 0 should keep volume near 0.5, got {}",
+            t.volume
+        );
     }
 
     // t06: depth 1.0 → volume 最高
@@ -223,7 +230,11 @@ mod tests {
     fn t06_full_depth_yields_high_volume() {
         let bond = make_bond(BondStage::Familiar, 1.0, 0.5);
         let t = bond_to_tone(&bond);
-        assert!(t.volume >= 1.0 - 1e-9, "depth 1.0 should give volume near 1.0, got {}", t.volume);
+        assert!(
+            t.volume >= 1.0 - 1e-9,
+            "depth 1.0 should give volume near 1.0, got {}",
+            t.volume
+        );
     }
 
     // t07: trust 高 → emotion_tone 升级
@@ -258,9 +269,30 @@ mod tests {
                 for &trust in &[0.0, 0.3, 0.5, 0.7, 1.0] {
                     let bond = make_bond(stage, depth, trust);
                     let t = bond_to_tone(&bond);
-                    assert!(t.speed >= 0.5 && t.speed <= 2.0, "stage {:?} depth {} trust {} speed {}", stage, depth, trust, t.speed);
-                    assert!(t.pitch >= 0.5 && t.pitch <= 2.0, "stage {:?} depth {} trust {} pitch {}", stage, depth, trust, t.pitch);
-                    assert!(t.volume >= 0.0 && t.volume <= 1.0, "stage {:?} depth {} trust {} volume {}", stage, depth, trust, t.volume);
+                    assert!(
+                        t.speed >= 0.5 && t.speed <= 2.0,
+                        "stage {:?} depth {} trust {} speed {}",
+                        stage,
+                        depth,
+                        trust,
+                        t.speed
+                    );
+                    assert!(
+                        t.pitch >= 0.5 && t.pitch <= 2.0,
+                        "stage {:?} depth {} trust {} pitch {}",
+                        stage,
+                        depth,
+                        trust,
+                        t.pitch
+                    );
+                    assert!(
+                        t.volume >= 0.0 && t.volume <= 1.0,
+                        "stage {:?} depth {} trust {} volume {}",
+                        stage,
+                        depth,
+                        trust,
+                        t.volume
+                    );
                 }
             }
         }
@@ -279,4 +311,3 @@ mod tests {
         assert_eq!(t1.prosody, t2.prosody);
     }
 }
-

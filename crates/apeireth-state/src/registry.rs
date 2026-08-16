@@ -250,15 +250,33 @@ mod tests {
             let organ = Organ::from_u8(n).unwrap();
             // 编译期守门: 9 State 都能 read (拿到 stub)
             match organ {
-                Organ::Heart => { let _ = reg.heart.read()?; }
-                Organ::Brain => { let _ = reg.brain.read()?; }
-                Organ::Hand => { let _ = reg.hand.read()?; }
-                Organ::Eye => { let _ = reg.eye.read()?; }
-                Organ::Ear => { let _ = reg.ear.read()?; }
-                Organ::Memory => { let _ = reg.memory.read()?; }
-                Organ::Voice => { let _ = reg.voice.read()?; }
-                Organ::Body => { let _ = reg.body.read()?; }
-                Organ::Mind => { let _ = reg.mind.read()?; }
+                Organ::Heart => {
+                    let _ = reg.heart.read()?;
+                }
+                Organ::Brain => {
+                    let _ = reg.brain.read()?;
+                }
+                Organ::Hand => {
+                    let _ = reg.hand.read()?;
+                }
+                Organ::Eye => {
+                    let _ = reg.eye.read()?;
+                }
+                Organ::Ear => {
+                    let _ = reg.ear.read()?;
+                }
+                Organ::Memory => {
+                    let _ = reg.memory.read()?;
+                }
+                Organ::Voice => {
+                    let _ = reg.voice.read()?;
+                }
+                Organ::Body => {
+                    let _ = reg.body.read()?;
+                }
+                Organ::Mind => {
+                    let _ = reg.mind.read()?;
+                }
             }
         }
         Ok(())
@@ -270,15 +288,33 @@ mod tests {
         for n in 0..=8u8 {
             let organ = Organ::from_u8(n).unwrap();
             match organ {
-                Organ::Heart => { let _ = reg.heart.write()?; }
-                Organ::Brain => { let _ = reg.brain.write()?; }
-                Organ::Hand => { let _ = reg.hand.write()?; }
-                Organ::Eye => { let _ = reg.eye.write()?; }
-                Organ::Ear => { let _ = reg.ear.write()?; }
-                Organ::Memory => { let _ = reg.memory.write()?; }
-                Organ::Voice => { let _ = reg.voice.write()?; }
-                Organ::Body => { let _ = reg.body.write()?; }
-                Organ::Mind => { let _ = reg.mind.write()?; }
+                Organ::Heart => {
+                    let _ = reg.heart.write()?;
+                }
+                Organ::Brain => {
+                    let _ = reg.brain.write()?;
+                }
+                Organ::Hand => {
+                    let _ = reg.hand.write()?;
+                }
+                Organ::Eye => {
+                    let _ = reg.eye.write()?;
+                }
+                Organ::Ear => {
+                    let _ = reg.ear.write()?;
+                }
+                Organ::Memory => {
+                    let _ = reg.memory.write()?;
+                }
+                Organ::Voice => {
+                    let _ = reg.voice.write()?;
+                }
+                Organ::Body => {
+                    let _ = reg.body.write()?;
+                }
+                Organ::Mind => {
+                    let _ = reg.mind.write()?;
+                }
             }
         }
         Ok(())
@@ -332,21 +368,41 @@ mod tests {
                 let organ = Organ::from_u8(n as u8).unwrap();
                 // 每器官读 1 次
                 match organ {
-                    Organ::Heart => { let _ = reg_clone.heart.read()?; }
-                    Organ::Brain => { let _ = reg_clone.brain.read()?; }
-                    Organ::Hand => { let _ = reg_clone.hand.read()?; }
-                    Organ::Eye => { let _ = reg_clone.eye.read()?; }
-                    Organ::Ear => { let _ = reg_clone.ear.read()?; }
-                    Organ::Memory => { let _ = reg_clone.memory.read()?; }
-                    Organ::Voice => { let _ = reg_clone.voice.read()?; }
-                    Organ::Body => { let _ = reg_clone.body.read()?; }
-                    Organ::Mind => { let _ = reg_clone.mind.read()?; }
+                    Organ::Heart => {
+                        let _ = reg_clone.heart.read()?;
+                    }
+                    Organ::Brain => {
+                        let _ = reg_clone.brain.read()?;
+                    }
+                    Organ::Hand => {
+                        let _ = reg_clone.hand.read()?;
+                    }
+                    Organ::Eye => {
+                        let _ = reg_clone.eye.read()?;
+                    }
+                    Organ::Ear => {
+                        let _ = reg_clone.ear.read()?;
+                    }
+                    Organ::Memory => {
+                        let _ = reg_clone.memory.read()?;
+                    }
+                    Organ::Voice => {
+                        let _ = reg_clone.voice.read()?;
+                    }
+                    Organ::Body => {
+                        let _ = reg_clone.body.read()?;
+                    }
+                    Organ::Mind => {
+                        let _ = reg_clone.mind.read()?;
+                    }
                 }
                 Ok(())
             }));
         }
         for h in handles {
-            h.join().expect("thread should not panic").expect("read should succeed");
+            h.join()
+                .expect("thread should not panic")
+                .expect("read should succeed");
         }
     }
 

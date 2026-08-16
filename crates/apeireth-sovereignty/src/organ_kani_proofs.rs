@@ -78,8 +78,16 @@ fn r177_sov_07_trigger_id_format() {
     let records = g.records();
     assert!(!records.is_empty());
     let id = &records[0].trigger_id;
-    assert!(id.starts_with("sd-"), "trigger_id 应以 sd- 开头, got {}", id);
-    assert!(id.len() >= 9, "trigger_id 长度应 ≥ 9 (sd-NNNNNN), got {}", id);
+    assert!(
+        id.starts_with("sd-"),
+        "trigger_id 应以 sd- 开头, got {}",
+        id
+    );
+    assert!(
+        id.len() >= 9,
+        "trigger_id 长度应 ≥ 9 (sd-NNNNNN), got {}",
+        id
+    );
 }
 
 #[test]

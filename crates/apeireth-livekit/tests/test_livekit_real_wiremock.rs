@@ -40,7 +40,7 @@
 
 use apeireth_livekit::real::LiveKitRealImpl;
 use apeireth_livekit::{
-    CreateRoomRequest, DeleteRoomRequest, LiveKitConfig, LiveKitError, ListParticipantsRequest,
+    CreateRoomRequest, DeleteRoomRequest, ListParticipantsRequest, LiveKitConfig, LiveKitError,
     MuteTrackRequest, ParticipantInfo, RemoveParticipantRequest, Room, WebhookEvent,
     DEFAULT_LIVEKIT_SERVER_URL, DEFAULT_TOKEN_TTL_SECONDS, LIVEKIT_TWIRP_PREFIX, PLATFORM_NAME,
 };
@@ -97,12 +97,17 @@ async fn create_room_happy() {
     // 简化测试: 只用 path, 不用 header
     Mock::given(method("POST"))
         .and(path("/twirp/livekit.RoomService/CreateRoom"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(room_ok_body("RM_test123", "my-room")))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(room_ok_body("RM_test123", "my-room")),
+        )
         .mount(&server)
         .await;
 
     let req = CreateRoomRequest::new("my-room").expect("K-1 OK");
-    let room = real.create_room(req).await.expect("create_room must succeed");
+    let room = real
+        .create_room(req)
+        .await
+        .expect("create_room must succeed");
     assert_eq!(room.sid, "RM_test123");
     assert_eq!(room.name, "my-room");
     assert_eq!(room.max_participants, 100);
@@ -143,7 +148,9 @@ async fn create_room_invalid_name_rejects_before_http() {
 async fn create_room_twirp_error_returns_server_call_failed() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "CreateRoom").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "CreateRoom").as_str(),
+        ))
         .respond_with(ResponseTemplate::new(400).set_body_json(json!({
             "code": "invalid_argument",
             "msg": "room name contains invalid characters",
@@ -167,7 +174,9 @@ async fn create_room_twirp_error_returns_server_call_failed() {
 async fn list_rooms_happy() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "ListRooms").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "ListRooms").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "rooms": [
@@ -208,14 +217,19 @@ async fn list_rooms_happy() {
 async fn delete_room_happy() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "DeleteRoom").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "DeleteRoom").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&server)
         .await;
 
     let req = DeleteRoomRequest::new("my-room").expect("K-1 OK");
-    let resp = real.delete_room(req).await.expect("delete_room must succeed");
+    let resp = real
+        .delete_room(req)
+        .await
+        .expect("delete_room must succeed");
     let _ = resp; // DeleteRoomResponse is empty {}
 }
 
@@ -246,14 +260,15 @@ async fn delete_room_invalid_name_rejects_before_http() {
 async fn mute_track_happy() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "MutePublishedTrack").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "MutePublishedTrack").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&server)
         .await;
 
-    let req = MuteTrackRequest::new("my-room", "user-1", "TR_abc123def456", true)
-        .expect("K-1 OK");
+    let req = MuteTrackRequest::new("my-room", "user-1", "TR_abc123def456", true).expect("K-1 OK");
     let resp = real.mute_track(req).await.expect("mute_track must succeed");
     let _ = resp;
 }
@@ -288,7 +303,9 @@ async fn mute_track_invalid_track_sid_rejects_before_http() {
 async fn list_participants_happy() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "ListParticipants").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "ListParticipants").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "participants": [
@@ -333,7 +350,9 @@ async fn list_participants_happy() {
 async fn remove_participant_happy() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "RemoveParticipant").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "RemoveParticipant").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({})))
         .mount(&server)
@@ -376,7 +395,9 @@ async fn twirp_401_retry_falls_through_to_auth_failed() {
     let (server, real) = start_mock().await;
     // 第一次 + 第二次 都返 401 → 重试 1 次后仍 401 → 返 AuthFailed
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "ListRooms").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "ListRooms").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(401).set_body_string("Unauthorized"))
         .mount(&server)
@@ -397,7 +418,9 @@ async fn twirp_401_retry_falls_through_to_auth_failed() {
 async fn twirp_500_returns_server_call_failed() {
     let (server, real) = start_mock().await;
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "ListRooms").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "ListRooms").as_str(),
+        ))
         .respond_with(ResponseTemplate::new(500).set_body_string("internal error"))
         .mount(&server)
         .await;
@@ -519,7 +542,9 @@ async fn jwt_cache_reuse_no_refresh() {
     let (server, real) = start_mock().await;
     // 第一次 list_rooms 触发 JWT 生成 + 缓存
     Mock::given(method("POST"))
-        .and(path(twirp_path("livekit.RoomService", "ListRooms").as_str()))
+        .and(path(
+            twirp_path("livekit.RoomService", "ListRooms").as_str(),
+        ))
         .and(header_regex("authorization", "^Bearer .+$"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({"rooms": []})))
         .up_to_n_times(3)
@@ -714,7 +739,9 @@ async fn five_k1_strong_validations_unit() {
     assert!(validate_participant_identity("").is_err());
     assert!(validate_participant_identity("with space").is_err());
     assert!(validate_participant_identity("with/slash").is_err());
-    assert!(validate_participant_identity(&"a".repeat(MAX_PARTICIPANT_IDENTITY_LENGTH + 1)).is_err());
+    assert!(
+        validate_participant_identity(&"a".repeat(MAX_PARTICIPANT_IDENTITY_LENGTH + 1)).is_err()
+    );
 }
 
 // ============================================================================
@@ -738,6 +765,3 @@ async fn compile_time_constants_match_real_module() {
     assert_eq!(LiveKitEndpoint::Participant.as_str(), "participant");
     assert_eq!(LiveKitEndpoint::Event.as_str(), "event");
 }
-
-
-

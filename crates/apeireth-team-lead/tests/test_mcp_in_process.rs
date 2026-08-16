@@ -32,10 +32,7 @@ fn test_whitelist_contains_fourteen_team_lead_tools() {
         "apeireth_team_lead_get_session_summary",
         "apeireth_team_lead_search_sessions",
     ] {
-        assert!(
-            TOOL_WHITELIST.contains(&tool),
-            "TOOL_WHITELIST 缺: {tool}"
-        );
+        assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST 缺: {tool}");
     }
 }
 

@@ -41,11 +41,15 @@ pub struct CalendarTool {
 
 impl CalendarTool {
     pub fn new() -> Self {
-        Self { events: Arc::new(Mutex::new(HashMap::new())) }
+        Self {
+            events: Arc::new(Mutex::new(HashMap::new())),
+        }
     }
 
     async fn dispatch(&self, args: Value) -> Result<Value, String> {
-        let action = args.get("action").and_then(|v| v.as_str())
+        let action = args
+            .get("action")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: action".to_string())?;
         match action {
             "list" => self.action_list().await,
@@ -64,17 +68,32 @@ impl CalendarTool {
     }
 
     async fn action_create(&self, args: Value) -> Result<Value, String> {
-        let event = args.get("event").ok_or_else(|| "missing field: event".to_string())?;
-        let title = event.get("title").and_then(|v| v.as_str())
+        let event = args
+            .get("event")
+            .ok_or_else(|| "missing field: event".to_string())?;
+        let title = event
+            .get("title")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: event.title".to_string())?;
-        let start_ts = event.get("start_ts").and_then(|v| v.as_i64())
+        let start_ts = event
+            .get("start_ts")
+            .and_then(|v| v.as_i64())
             .ok_or_else(|| "missing field: event.start_ts".to_string())?;
         let end_ts = event.get("end_ts").and_then(|v| v.as_i64()).unwrap_or(0);
-        let attendees: Vec<String> = event.get("attendees")
+        let attendees: Vec<String> = event
+            .get("attendees")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default();
-        let notes = event.get("notes").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let notes = event
+            .get("notes")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         let ev = CalendarEvent {
             id: Uuid::new_v4().to_string(),
             title: title.to_string(),
@@ -89,41 +108,72 @@ impl CalendarTool {
     }
 
     async fn action_update(&self, args: Value) -> Result<Value, String> {
-        let id = args.get("id").and_then(|v| v.as_str())
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: id".to_string())?;
         let mut g = self.events.lock();
-        let ev = g.get_mut(id).ok_or_else(|| format!("event not found: {id}"))?;
-        if let Some(title) = args.get("event").and_then(|e| e.get("title")).and_then(|v| v.as_str()) {
+        let ev = g
+            .get_mut(id)
+            .ok_or_else(|| format!("event not found: {id}"))?;
+        if let Some(title) = args
+            .get("event")
+            .and_then(|e| e.get("title"))
+            .and_then(|v| v.as_str())
+        {
             ev.title = title.to_string();
         }
-        if let Some(start_ts) = args.get("event").and_then(|e| e.get("start_ts")).and_then(|v| v.as_i64()) {
+        if let Some(start_ts) = args
+            .get("event")
+            .and_then(|e| e.get("start_ts"))
+            .and_then(|v| v.as_i64())
+        {
             ev.start_ts = start_ts;
         }
-        if let Some(end_ts) = args.get("event").and_then(|e| e.get("end_ts")).and_then(|v| v.as_i64()) {
+        if let Some(end_ts) = args
+            .get("event")
+            .and_then(|e| e.get("end_ts"))
+            .and_then(|v| v.as_i64())
+        {
             ev.end_ts = end_ts;
         }
-        if let Some(notes) = args.get("event").and_then(|e| e.get("notes")).and_then(|v| v.as_str()) {
+        if let Some(notes) = args
+            .get("event")
+            .and_then(|e| e.get("notes"))
+            .and_then(|v| v.as_str())
+        {
             ev.notes = notes.to_string();
         }
         Ok(json!({ "ok": true, "updated": id }))
     }
 
     async fn action_delete(&self, args: Value) -> Result<Value, String> {
-        let id = args.get("id").and_then(|v| v.as_str())
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: id".to_string())?;
         let removed = self.events.lock().remove(id).is_some();
-        if !removed { return Err(format!("event not found: {id}")); }
+        if !removed {
+            return Err(format!("event not found: {id}"));
+        }
         Ok(json!({ "ok": true, "deleted": id }))
     }
 
     async fn action_list_range(&self, args: Value) -> Result<Value, String> {
-        let range = args.get("range").ok_or_else(|| "missing field: range".to_string())?;
-        let from_ts = range.get("from_ts").and_then(|v| v.as_i64())
+        let range = args
+            .get("range")
+            .ok_or_else(|| "missing field: range".to_string())?;
+        let from_ts = range
+            .get("from_ts")
+            .and_then(|v| v.as_i64())
             .ok_or_else(|| "missing field: range.from_ts".to_string())?;
-        let to_ts = range.get("to_ts").and_then(|v| v.as_i64())
+        let to_ts = range
+            .get("to_ts")
+            .and_then(|v| v.as_i64())
             .ok_or_else(|| "missing field: range.to_ts".to_string())?;
         let g = self.events.lock();
-        let events: Vec<&CalendarEvent> = g.values()
+        let events: Vec<&CalendarEvent> = g
+            .values()
             .filter(|e| e.start_ts >= from_ts && e.start_ts <= to_ts)
             .collect();
         Ok(json!({ "events": events, "count": events.len(), "from_ts": from_ts, "to_ts": to_ts }))
@@ -131,15 +181,25 @@ impl CalendarTool {
 }
 
 impl Default for CalendarTool {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl Tool for CalendarTool {
-    fn name(&self) -> &str { "Calendar" }
-    fn kind(&self) -> ToolKind { ToolKind::Sync }
-    fn axes(&self) -> ToolAxes { ToolAxes::default_for_kind(ToolKind::Sync) }
-    async fn call(&self, args: Value) -> Result<Value, String> { self.dispatch(args).await }
+    fn name(&self) -> &str {
+        "Calendar"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default_for_kind(ToolKind::Sync)
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        self.dispatch(args).await
+    }
 }
 
 pub use super::invoke_by_name as invoke;
@@ -167,18 +227,27 @@ mod calendar_tests {
         })).await.expect("create");
         let event_id = r["event_id"].as_str().expect("event_id").to_string();
         // 3. update
-        let r = cal.call(json!({
-            "action": "update", "id": event_id,
-            "event": {"title": "standup (updated)"}
-        })).await.expect("update");
+        let r = cal
+            .call(json!({
+                "action": "update", "id": event_id,
+                "event": {"title": "standup (updated)"}
+            }))
+            .await
+            .expect("update");
         assert_eq!(r["ok"], true);
         // 4. list_range
-        let r = cal.call(json!({
-            "action": "list_range", "range": {"from_ts": 1722931000, "to_ts": 1722932000}
-        })).await.expect("list_range");
+        let r = cal
+            .call(json!({
+                "action": "list_range", "range": {"from_ts": 1722931000, "to_ts": 1722932000}
+            }))
+            .await
+            .expect("list_range");
         assert_eq!(r["count"], 1);
         // 5. delete
-        let r = cal.call(json!({"action": "delete", "id": event_id})).await.expect("delete");
+        let r = cal
+            .call(json!({"action": "delete", "id": event_id}))
+            .await
+            .expect("delete");
         assert_eq!(r["deleted"], event_id);
     }
 }

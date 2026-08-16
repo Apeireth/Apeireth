@@ -40,4 +40,3 @@ fn r177_lark_kani_01_tool_count() {
 fn r177_lark_kani_02_schema_version() {
     assert_eq!(LARK_SCHEMA_VERSION, "1");
 }
-

@@ -11,8 +11,8 @@
 //! 8. Subgraph 嵌套 2 层: 父 → 子1 (子含 2 节点) → 子2 (孙 graph)
 
 use apeireth_graph::{
-    BinaryOperator, BinaryOperatorValue, Channel, ChannelRegistry, Graph, LastValue,
-    NamedBarrier, Node, NodeId, NodeOutput, Result, State, Subgraph, Topic,
+    BinaryOperator, BinaryOperatorValue, Channel, ChannelRegistry, Graph, LastValue, NamedBarrier,
+    Node, NodeId, NodeOutput, Result, State, Subgraph, Topic,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -214,10 +214,7 @@ async fn channel_and_subgraph_combined() {
 
     let final_state = parent.execute(State::new()).await.unwrap();
     // 父跑完, channel 必含子节点的 write
-    assert_eq!(
-        last_value.read().unwrap(),
-        Some(json!("written_by_node"))
-    );
+    assert_eq!(last_value.read().unwrap(), Some(json!("written_by_node")));
     // 父 state 含 trace
     let trace = final_state.get("trace").unwrap().as_array().unwrap();
     assert!(trace.contains(&json!("main_run")));
@@ -365,11 +362,21 @@ async fn channel_registry_all_4_types_round_trip() {
     registry.get("c").unwrap().write(json!(null)).unwrap();
     registry.get("d").unwrap().write(json!(100.0)).unwrap();
 
-    assert_eq!(registry.get("a").unwrap().read().unwrap(), Some(json!("hello")));
+    assert_eq!(
+        registry.get("a").unwrap().read().unwrap(),
+        Some(json!("hello"))
+    );
     assert_eq!(registry.get("b").unwrap().read().unwrap(), Some(json!(42)));
     assert!(registry.get("c").unwrap().read().unwrap().is_some()); // barrier 已放行
     assert_eq!(
-        registry.get("d").unwrap().read().unwrap().unwrap().as_f64().unwrap(),
+        registry
+            .get("d")
+            .unwrap()
+            .read()
+            .unwrap()
+            .unwrap()
+            .as_f64()
+            .unwrap(),
         100.0
     );
 }

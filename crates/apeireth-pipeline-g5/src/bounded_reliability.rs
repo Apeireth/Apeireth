@@ -94,13 +94,19 @@ impl BoundedReliability {
 }
 
 impl Default for BoundedReliability {
-    fn default() -> Self { Self::with_defaults() }
+    fn default() -> Self {
+        Self::with_defaults()
+    }
 }
 
 impl Stage<PipelineMessage, PipelineMessage> for BoundedReliability {
-    fn kind(&self) -> StageKind { StageKind::Reliability }
+    fn kind(&self) -> StageKind {
+        StageKind::Reliability
+    }
 
-    fn name(&self) -> &str { "bounded-reliability" }
+    fn name(&self) -> &str {
+        "bounded-reliability"
+    }
 
     fn process(&self, input: PipelineMessage) -> Result<PipelineMessage, PipelineError> {
         // 新守门 0: circuit_breaker (R204 + R198 真断路)
