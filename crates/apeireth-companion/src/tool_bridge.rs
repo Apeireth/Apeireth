@@ -367,6 +367,8 @@ pub struct ToolBridge {
     judicator: Option<Arc<dyn Judicator>>,
     /// 执行体隔离: worker 可执行文件路径 (None = 不隔离, 宿主内执行).
     worker: Option<PathBuf>,
+    /// B3 沙盒参数 (内存/CPU/超时): 默认不限+30s; 套件清单/权限包可在运行时覆盖.
+    sandbox: std::sync::Arc<std::sync::Mutex<crate::sandbox::SandboxConfig>>,
     /// 结果溢出存储 (可选): 超大工具输出 spill 到会话私有文件, messages 只留定位.
     spill: Option<SpillStore>,
     /// post-execute 钩子链 (顺序执行, 审计前).
@@ -476,6 +478,9 @@ impl ToolBridge {
             packs,
             judicator: None,
             worker: None,
+            sandbox: std::sync::Arc::new(std::sync::Mutex::new(
+                crate::sandbox::SandboxConfig::default(),
+            )),
             spill: None,
             post_hooks: Vec::new(),
             goals: None,
@@ -522,6 +527,35 @@ impl ToolBridge {
     pub fn with_isolation(mut self, worker_bin: impl Into<PathBuf>) -> Self {
         self.worker = Some(worker_bin.into());
         self
+    }
+
+    /// B3 沙盒参数 (构造期): 隔离 worker 的内存/CPU/超时上限.
+    /// 非法值请用 [`crate::sandbox::SandboxConfig::from_json`] 解析 (自动回退默认).
+    pub fn with_sandbox_config(mut self, cfg: crate::sandbox::SandboxConfig) -> Self {
+        self.set_sandbox_config(cfg);
+        self
+    }
+
+    /// B3 沙盒参数 (运行时覆盖): 套件装配 (suites.rs) / 权限包路径调用.
+    pub fn set_sandbox_config(&self, cfg: crate::sandbox::SandboxConfig) {
+        if let Ok(mut g) = self.sandbox.lock() {
+            *g = cfg;
+        }
+    }
+
+    /// 当前桥级沙盒参数 (克隆读取).
+    pub fn sandbox_config(&self) -> crate::sandbox::SandboxConfig {
+        self.sandbox
+            .lock()
+            .map(|g| g.clone())
+            .unwrap_or_default()
+    }
+
+    /// 生效的沙盒参数: 权限包级覆盖优先, 否则桥级默认 (B3 参数口语义).
+    fn effective_sandbox(&self, tool: &str) -> crate::sandbox::SandboxConfig {
+        self.packs
+            .sandbox_for(tool, chrono::Utc::now().timestamp_millis())
+            .unwrap_or_else(|| self.sandbox_config())
     }
 
     /// 开启结果溢出: 工具输出超过阈值 → spill 到会话私有文件, messages 只留定位+提示.
@@ -757,14 +791,24 @@ impl ToolBridge {
     async fn run_executor(&self, call: &ParsedToolCall) -> ExecutionResult {
         if let Some(worker) = &self.worker {
             if crate::exec_worker::should_isolate(&call.tool_name) {
-                return self.execute_isolated(worker, call).await;
+                let cfg = self.effective_sandbox(&call.tool_name);
+                return self.execute_isolated(worker, call, &cfg).await;
             }
         }
         self.executor.execute(call).await
     }
 
-    /// per-call 子进程执行: 一行 JSON 请求 → 一行响应, 30s 超时 kill.
-    async fn execute_isolated(&self, worker: &PathBuf, call: &ParsedToolCall) -> ExecutionResult {
+    /// per-call 子进程执行: 一行 JSON 请求 → 一行响应, 超时 kill (B3: 可配).
+    ///
+    /// 沙盒语义 (B3): Job Object 按 [`crate::sandbox::SandboxConfig`] 设内存/CPU
+    /// 限额; 超限 → 系统终止 worker, guard 留痕并翻译成明确错误 (不静默);
+    /// 加固失败不阻断执行 (如实 eprintln 记录).
+    async fn execute_isolated(
+        &self,
+        worker: &PathBuf,
+        call: &ParsedToolCall,
+        cfg: &crate::sandbox::SandboxConfig,
+    ) -> ExecutionResult {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
         let start = std::time::Instant::now();
         let err_res = |msg: String, start: std::time::Instant| ExecutionResult {
@@ -783,14 +827,30 @@ impl ToolBridge {
             Ok(c) => c,
             Err(e) => return err_res(format!("worker spawn 失败: {e}"), start),
         };
-        // P3#16 microsandbox 加固: Windows Job Object (KILL_ON_JOB_CLOSE — 宿主退出/
-        // 崩溃 → 进程树终止, 防孤儿; 加固失败不阻断执行, 如实记录).
+        // P3#16 microsandbox 加固 + B3 限额: Windows Job Object (KILL_ON_JOB_CLOSE —
+        // 宿主退出/崩溃 → 进程树终止, 防孤儿; 内存/CPU 限额超限 → 系统终止 + 留痕).
+        // ⚠️ guard 必须持有到 worker 结束: 句柄提前关闭会触发 KILL_ON_JOB_CLOSE.
+        let guard = match crate::job_object::JobGuard::with_config(cfg) {
+            Ok(g) => Some(g),
+            Err(e) => {
+                eprintln!("[sandbox] Job Object 加固失败 (不阻断): {e}");
+                None
+            }
+        };
         if let Some(pid) = child.id() {
-            match crate::job_object::JobGuard::new().and_then(|g| g.assign(pid)) {
-                Ok(_) => {}
-                Err(e) => eprintln!("[sandbox] Job Object 加固失败 (不阻断): {e}"),
+            if let Some(g) = &guard {
+                if let Err(e) = g.assign(pid) {
+                    eprintln!("[sandbox] Job Object assign({pid}) 失败 (不阻断): {e}");
+                }
             }
         }
+        // 超限留痕 → 明确错误 (把"worker 提前退出"翻译成具体限额原因, 不静默)
+        let violation_msg = |g: &Option<crate::job_object::JobGuard>, base: &str| {
+            match g.as_ref().and_then(|x| x.violation()) {
+                Some(v) => format!("{base}: 沙盒资源限额终止 — {v}"),
+                None => base.to_string(),
+            }
+        };
         let mut stdin = match child.stdin.take() {
             Some(s) => s,
             None => return err_res("worker stdin 不可用".into(), start),
@@ -805,7 +865,7 @@ impl ToolBridge {
             Some(s) => s,
             None => return err_res("worker stdout 不可用".into(), start),
         };
-        let line = match tokio::time::timeout(Duration::from_secs(30), async {
+        let line = match tokio::time::timeout(Duration::from_secs(cfg.timeout_secs), async {
             let mut r = tokio::io::BufReader::new(stdout);
             r.lines().next_line().await
         })
@@ -813,8 +873,11 @@ impl ToolBridge {
         {
             Ok(Ok(Some(l))) => l,
             Ok(Ok(None)) => {
-                let _ = child.kill().await;
-                return err_res("worker 无响应 (提前退出)".into(), start);
+                let _ = child.wait().await;
+                return err_res(
+                    violation_msg(&guard, "worker 无响应 (提前退出)"),
+                    start,
+                );
             }
             Ok(Err(e)) => {
                 let _ = child.kill().await;
@@ -822,7 +885,10 @@ impl ToolBridge {
             }
             Err(_) => {
                 let _ = child.kill().await;
-                return err_res("worker 超时 (30s), 已 kill".into(), start);
+                return err_res(
+                    violation_msg(&guard, &format!("worker 超时 ({}s), 已 kill", cfg.timeout_secs)),
+                    start,
+                );
             }
         };
         let _ = child.wait().await;
@@ -1317,4 +1383,27 @@ mod tests {
         assert!((fin["复习进度"].as_f64().unwrap() - 0.5).abs() < 1e-9, "0.3+0.3-0.1");
         assert!((fin["信心"].as_f64().unwrap() - 0.4).abs() < 1e-9, "=0.4 赋值");
     }
+
+    // ---- B3 沙盒包参数化 ----
+
+    #[test]
+    fn sandbox_config_invalid_falls_back_not_blocking() {
+        // 参数非法 → 回退默认 (0 阻断); 桥级可正常持有
+        let cfg = crate::sandbox::SandboxConfig::from_json(&serde_json::json!({
+            "memory_limit_mb": -1, "cpu_percent": 999, "timeout_secs": 0
+        }));
+        assert_eq!(cfg, crate::sandbox::SandboxConfig::default());
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_sandbox_config(cfg);
+        assert_eq!(bridge.sandbox_config(), crate::sandbox::SandboxConfig::default());
+        // 运行时覆盖同样可用
+        bridge.set_sandbox_config(crate::sandbox::SandboxConfig {
+            timeout_secs: 90,
+            ..crate::sandbox::SandboxConfig::default()
+        });
+        assert_eq!(bridge.sandbox_config().timeout_secs, 90);
+    }
+
+    // 带真 worker 的沙盒限额 e2e 在 tests/exec_worker_isolation.rs
+    // (CARGO_BIN_EXE_exec_worker 仅集成测试可用).
 }
