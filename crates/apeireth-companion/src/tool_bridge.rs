@@ -371,6 +371,8 @@ pub struct ToolBridge {
     spill: Option<SpillStore>,
     /// post-execute 钩子链 (顺序执行, 审计前).
     post_hooks: Vec<Arc<dyn PostExecuteHook>>,
+    /// 目标服务 (模块 6: with_goals 注入; None = 目标工具不注册).
+    goals: Option<std::sync::Arc<std::sync::Mutex<crate::goal::GoalService>>>,
 }
 
 impl ToolBridge {
@@ -445,6 +447,11 @@ impl ToolBridge {
                 "verify_experience".to_string(),
                 "propose_principle".to_string(),
                 "approve_principle".to_string(),
+                "goal_create".to_string(),
+                "goal_status".to_string(),
+                "goal_complete".to_string(),
+                "goal_pause".to_string(),
+                "goal_block".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
@@ -471,7 +478,35 @@ impl ToolBridge {
             worker: None,
             spill: None,
             post_hooks: Vec::new(),
+            goals: None,
         }
+    }
+
+    /// 接目标服务 (模块 6: 注册 goal_create/status/complete/pause/block 工具).
+    /// 与注入侧共享同一实例 (serve: AppState.goal = 同一 Arc).
+    pub fn with_goals(mut self, goals: std::sync::Arc<std::sync::Mutex<crate::goal::GoalService>>) -> Self {
+        self.goals = Some(std::sync::Arc::clone(&goals));
+        self.registry.register(
+            "goal_create".to_string(),
+            Arc::new(crate::goal_tools::GoalCreateTool::new(std::sync::Arc::clone(&goals))),
+        );
+        self.registry.register(
+            "goal_status".to_string(),
+            Arc::new(crate::goal_tools::GoalStatusTool::new(std::sync::Arc::clone(&goals))),
+        );
+        self.registry.register(
+            "goal_complete".to_string(),
+            Arc::new(crate::goal_tools::GoalCompleteTool::new(std::sync::Arc::clone(&goals))),
+        );
+        self.registry.register(
+            "goal_pause".to_string(),
+            Arc::new(crate::goal_tools::GoalPauseTool::new(std::sync::Arc::clone(&goals))),
+        );
+        self.registry.register(
+            "goal_block".to_string(),
+            Arc::new(crate::goal_tools::GoalBlockTool::new(std::sync::Arc::clone(&goals))),
+        );
+        self
     }
 
     /// 接宪法评审者 (真 LLM): Medium+ 风险动作执行前自动按原则判案.
