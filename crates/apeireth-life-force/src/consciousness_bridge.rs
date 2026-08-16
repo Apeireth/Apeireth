@@ -16,10 +16,10 @@
 
 #![deny(unsafe_code)]
 
+use crate::{reflection_trigger, validate_endurance, LifeForce, LifeForceError, ReflectionTrigger};
 use apeireth_consciousness::plutchik::{
     PlutchikAdvanced, PlutchikBasic, PlutchikEmotion, PlutchikIntensity,
 };
-use crate::{reflection_trigger, validate_endurance, LifeForce, LifeForceError, ReflectionTrigger};
 
 // ============================================
 // 1. 翻译结果 — LifeForceAdjustment
@@ -123,10 +123,9 @@ fn should_trigger(e: &PlutchikEmotion) -> Option<&'static str> {
             Some("anger-strong-or-above")
         }
         // Aggressiveness: 极端才触发 — 攻击性是边界状态
-        PlutchikEmotion::Advanced(
-            PlutchikAdvanced::Aggressiveness,
-            PlutchikIntensity::Extreme,
-        ) => Some("aggressiveness-extreme"),
+        PlutchikEmotion::Advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme) => {
+            Some("aggressiveness-extreme")
+        }
         _ => None,
     }
 }
@@ -290,10 +289,8 @@ mod tests {
     // t07: advanced aggressiveness extreme -> should_trigger_reflection
     #[test]
     fn t07_advanced_aggressiveness_extreme_triggers_reflection() {
-        let e = PlutchikEmotion::advanced(
-            PlutchikAdvanced::Aggressiveness,
-            PlutchikIntensity::Extreme,
-        );
+        let e =
+            PlutchikEmotion::advanced(PlutchikAdvanced::Aggressiveness, PlutchikIntensity::Extreme);
         let adj = plutchik_to_life_force_adjustment(&e);
         assert!(
             adj.should_trigger_reflection,

@@ -33,7 +33,10 @@ fn main() {
 
     // engine.evaluate 等价 evaluate()
     let d2 = engine.evaluate(&GovernanceContext::safe_default());
-    println!("[engine.evaluate] policy={} action={}", d2.policy as u8, d2.action as u8);
+    println!(
+        "[engine.evaluate] policy={} action={}",
+        d2.policy as u8, d2.action as u8
+    );
 
     // ===== 2. verify (形式化 sanity check, 不需 Kani 安装) =====
     let verify_ok = engine.verify();
@@ -52,7 +55,8 @@ fn main() {
     };
     println!(
         "[report]    consistency_ok = {}, invariants_ok = {}",
-        report.consistency.pass_count(), report.invariants_ok
+        report.consistency.pass_count(),
+        report.invariants_ok
     );
 
     println!("\nR134 apeireth-library-governance 真实接入演示: PASS (消除孤岛, 4 个 API 真接可用)");

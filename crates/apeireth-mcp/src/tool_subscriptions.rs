@@ -45,7 +45,11 @@ pub struct ToolEvent {
 }
 
 impl ToolEvent {
-    pub fn new(kind: ToolEventKind, tool_name: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(
+        kind: ToolEventKind,
+        tool_name: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
@@ -129,11 +133,16 @@ impl ToolEventBroker {
             ));
         }
         let mut map = self.inner.lock().expect("tool event broker mutex poisoned");
-        let entry = map.entry(sub.tool_name.clone()).or_insert_with(HashMap::new);
+        let entry = map
+            .entry(sub.tool_name.clone())
+            .or_insert_with(HashMap::new);
         if entry.contains_key(&sub.client_id) {
             return Err(JsonRpcError::new(
                 TOOL_SUBSCRIBE_ALREADY,
-                format!("client `{}` already subscribed to `{}`", sub.client_id, sub.tool_name),
+                format!(
+                    "client `{}` already subscribed to `{}`",
+                    sub.client_id, sub.tool_name
+                ),
             ));
         }
         entry.insert(sub.client_id.clone(), sub);
@@ -196,7 +205,10 @@ pub fn handle_tools_subscribe(req: &JsonRpcRequest, broker: &ToolEventBroker) ->
             JsonRpcError::new(TOOL_SUBSCRIBE_INVALID_NAME, "params missing"),
         );
     };
-    let tool_name = params.get("tool_name").and_then(|v| v.as_str()).unwrap_or("");
+    let tool_name = params
+        .get("tool_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let client_id = match params.get("client_id").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
         None => format!("anon-{}", std::process::id()),
@@ -238,7 +250,10 @@ pub fn handle_tools_unsubscribe(req: &JsonRpcRequest, broker: &ToolEventBroker) 
             JsonRpcError::new(TOOL_SUBSCRIBE_INVALID_NAME, "params missing"),
         );
     };
-    let tool_name = params.get("tool_name").and_then(|v| v.as_str()).unwrap_or("");
+    let tool_name = params
+        .get("tool_name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
     let client_id = match params.get("client_id").and_then(|v| v.as_str()) {
         Some(c) => c.to_string(),
         None => format!("anon-{}", std::process::id()),
@@ -258,13 +273,14 @@ pub fn handle_tools_unsubscribe(req: &JsonRpcRequest, broker: &ToolEventBroker) 
 }
 
 pub fn build_tool_list_changed_notification() -> JsonRpcRequest {
-    JsonRpcRequest::notification(
-        "notifications/tools/list_changed",
-        Some(json!({})),
-    )
+    JsonRpcRequest::notification("notifications/tools/list_changed", Some(json!({})))
 }
 
-pub fn build_tool_progress_notification(tool_name: &str, progress: u8, message: &str) -> JsonRpcRequest {
+pub fn build_tool_progress_notification(
+    tool_name: &str,
+    progress: u8,
+    message: &str,
+) -> JsonRpcRequest {
     JsonRpcRequest::notification(
         "notifications/tools/progress",
         Some(json!({
@@ -291,7 +307,12 @@ mod tests {
 
     #[test]
     fn tool_event_kind_serialize_round_trip() {
-        for kind in [ToolEventKind::ListChanged, ToolEventKind::Progress, ToolEventKind::Completed, ToolEventKind::Failed] {
+        for kind in [
+            ToolEventKind::ListChanged,
+            ToolEventKind::Progress,
+            ToolEventKind::Completed,
+            ToolEventKind::Failed,
+        ] {
             let j = serde_json::to_string(&kind).unwrap();
             let r: ToolEventKind = serde_json::from_str(&j).unwrap();
             assert_eq!(r, kind);
@@ -351,7 +372,8 @@ mod tests {
     #[test]
     fn broker_subscribe_single() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
         assert_eq!(b.uri_count(), 1);
         assert_eq!(b.total_subscriptions(), 1);
     }
@@ -359,8 +381,11 @@ mod tests {
     #[test]
     fn broker_subscribe_duplicate_rejected() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
-        let err = b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap_err();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
+        let err = b
+            .subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap_err();
         assert_eq!(err.code, TOOL_SUBSCRIBE_ALREADY);
     }
 
@@ -374,7 +399,8 @@ mod tests {
     #[test]
     fn broker_unsubscribe_basic() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
         b.unsubscribe("long-task", "c1").unwrap();
         assert_eq!(b.uri_count(), 0);
     }
@@ -399,7 +425,8 @@ mod tests {
     #[test]
     fn broker_dispatch_event_specific_match() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
         let event = ToolEvent::new(ToolEventKind::Progress, "long-task", "running");
         let matched = b.dispatch_event(&event);
         assert_eq!(matched.len(), 1);
@@ -408,7 +435,8 @@ mod tests {
     #[test]
     fn broker_dispatch_event_no_match() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
         let event = ToolEvent::new(ToolEventKind::Progress, "other-task", "running");
         let matched = b.dispatch_event(&event);
         assert!(matched.is_empty());
@@ -418,9 +446,9 @@ mod tests {
     fn broker_dispatch_event_with_filter() {
         let b = ToolEventBroker::new();
         b.subscribe(
-            ToolSubscription::new("long-task", "c1")
-                .with_filter([ToolEventKind::Completed]),
-        ).unwrap();
+            ToolSubscription::new("long-task", "c1").with_filter([ToolEventKind::Completed]),
+        )
+        .unwrap();
         let e_progress = ToolEvent::new(ToolEventKind::Progress, "long-task", "running");
         let e_completed = ToolEvent::new(ToolEventKind::Completed, "long-task", "done");
         assert!(b.dispatch_event(&e_progress).is_empty());
@@ -469,7 +497,8 @@ mod tests {
     #[test]
     fn handle_unsubscribe_basic() {
         let b = ToolEventBroker::new();
-        b.subscribe(ToolSubscription::new("long-task", "c1")).unwrap();
+        b.subscribe(ToolSubscription::new("long-task", "c1"))
+            .unwrap();
         let req = JsonRpcRequest::new(
             "tools/unsubscribe",
             Some(json!({ "tool_name": "long-task", "client_id": "c1" })),
@@ -493,7 +522,10 @@ mod tests {
         assert!(n.id.is_none());
         let p = n.params.expect("params");
         assert_eq!(p.get("progress").and_then(|v| v.as_u64()), Some(50));
-        assert_eq!(p.get("tool_name").and_then(|v| v.as_str()), Some("long-task"));
+        assert_eq!(
+            p.get("tool_name").and_then(|v| v.as_str()),
+            Some("long-task")
+        );
         assert_eq!(p.get("message").and_then(|v| v.as_str()), Some("halfway"));
     }
 
@@ -510,7 +542,13 @@ mod tests {
         assert_eq!(n.method, "notifications/tools/completed");
         assert!(n.id.is_none());
         let p = n.params.expect("params");
-        assert_eq!(p.get("tool_name").and_then(|v| v.as_str()), Some("long-task"));
-        assert_eq!(p.get("result_summary").and_then(|v| v.as_str()), Some("result: 42"));
+        assert_eq!(
+            p.get("tool_name").and_then(|v| v.as_str()),
+            Some("long-task")
+        );
+        assert_eq!(
+            p.get("result_summary").and_then(|v| v.as_str()),
+            Some("result: 42")
+        );
     }
 }

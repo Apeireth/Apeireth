@@ -34,8 +34,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::tool_bridge::handler_from_fn;
-use crate::ToolDef;
 use crate::tool_bridge::ToolHandler;
+use crate::ToolDef;
 
 // ============================================================
 // 错误码 (per MCP 2025-03-26 server-defined -32000 ~ -32099 范围)
@@ -218,8 +218,7 @@ pub struct BrowserRequest {
 impl BrowserRequest {
     /// 从 raw JSON Value 解析 (MCP `tools/call` arguments 直接进来)
     pub fn from_value(v: &Value) -> Result<Self, String> {
-        serde_json::from_value(v.clone())
-            .map_err(|e| format!("BrowserRequest parse failed: {e}"))
+        serde_json::from_value(v.clone()).map_err(|e| format!("BrowserRequest parse failed: {e}"))
     }
 }
 
@@ -240,10 +239,7 @@ impl BrowserRequest {
 /// 2. 走 `McpClient::connect_stdio` + `initialize` + `list_tools` 拿 Playwright MCP tools
 /// 3. 调 `call_tool("browser_navigate", {url})` 转发本 mod 的 `BrowserNavigateParams`
 /// 4. 返 `McpClient::call_tool` 的 result 给 caller
-pub async fn browser_tool_handler(
-    action: BrowserAction,
-    params: Value,
-) -> Result<Value, String> {
+pub async fn browser_tool_handler(action: BrowserAction, params: Value) -> Result<Value, String> {
     // R123-3 skeleton: 仅做参数校验 + 返 "not installed" 错
     // R124+ 真接: 上面 4 步路径, 由 PLAYWRIGHT_MCP_INSTALLED env 守门
     let not_installed_msg = format!(
@@ -314,7 +310,9 @@ pub async fn browser_tool_handler(
             let p: BrowserGetTextParams = serde_json::from_value(params)
                 .map_err(|e| format!("BROWSER_INVALID_PARAMS get_text: {e}"))?;
             if p.selector.is_empty() {
-                return Err("BROWSER_INVALID_PARAMS get_text: selector must be non-empty".to_string());
+                return Err(
+                    "BROWSER_INVALID_PARAMS get_text: selector must be non-empty".to_string(),
+                );
             }
             Ok(json!({
                 "skeleton": true,
@@ -442,8 +440,10 @@ mod browser_tests {
             serde_json::from_value(json!({"url": "", "timeout_ms": 1000})).unwrap();
         assert_eq!(empty.url, "");
         // handler 应拒
-        let r =
-            tokio_test_block_on(browser_tool_handler(BrowserAction::Navigate, json!({"url": ""})));
+        let r = tokio_test_block_on(browser_tool_handler(
+            BrowserAction::Navigate,
+            json!({"url": ""}),
+        ));
         assert!(r.is_err());
         assert!(r.unwrap_err().contains("url must be non-empty"));
     }
@@ -458,7 +458,8 @@ mod browser_tests {
         // 显式传 jpeg
         let p2: BrowserScreenshotParams = serde_json::from_value(json!({
             "format": "jpeg", "full_page": true, "filename": "shot.jpg"
-        })).unwrap();
+        }))
+        .unwrap();
         assert_eq!(p2.format, "jpeg");
         assert!(p2.full_page);
         assert_eq!(p2.filename.as_deref(), Some("shot.jpg"));
@@ -481,9 +482,15 @@ mod browser_tests {
     fn browser_tool_handler_returns_error_when_playwright_not_installed() {
         // O-5 诚实标缺: 任何 action 调用都返 "not installed" 错 (含 note 字段)
         let actions_and_params = vec![
-            (BrowserAction::Navigate, json!({"url": "https://example.com"})),
+            (
+                BrowserAction::Navigate,
+                json!({"url": "https://example.com"}),
+            ),
             (BrowserAction::Click, json!({"selector": "#btn"})),
-            (BrowserAction::Type, json!({"selector": "#in", "text": "hi"})),
+            (
+                BrowserAction::Type,
+                json!({"selector": "#in", "text": "hi"}),
+            ),
             (BrowserAction::Screenshot, json!({})),
             (BrowserAction::GetText, json!({"selector": "h1"})),
             (BrowserAction::Close, json!({})),
@@ -495,19 +502,19 @@ mod browser_tests {
             assert!(r.is_ok(), "action {:?} should return Ok skeleton", a);
             let v = r.unwrap();
             assert_eq!(v["skeleton"], true);
-            assert!(v["note"]
-                .as_str()
-                .unwrap()
-                .contains("not installed"));
+            assert!(v["note"].as_str().unwrap().contains("not installed"));
         }
 
         // 但 browser_tool_handler_fn 走 envelope 解析路径, 真接 R124+
         // 当前 skeleton 也能成功解析 + invoke, 只是返 skeleton=true (不假装真连 Playwright)
         let h = browser_tool_handler_fn();
-        let r = tokio_test_block_on(h2future(h, json!({
-            "action": "navigate",
-            "params": {"url": "https://example.com"}
-        })));
+        let r = tokio_test_block_on(h2future(
+            h,
+            json!({
+                "action": "navigate",
+                "params": {"url": "https://example.com"}
+            }),
+        ));
         assert!(r.is_ok());
         let v = r.unwrap();
         assert_eq!(v["skeleton"], true);

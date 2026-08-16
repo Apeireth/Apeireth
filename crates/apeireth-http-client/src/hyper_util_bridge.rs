@@ -206,8 +206,7 @@ mod hyper_util_bridge_tests {
         let cfg = HyperUtilConfig::from_keep_alive(&ka);
         // 1:1 翻译: max_sockets 跟 pool_max_idle_per_host 一致
         assert_eq!(
-            cfg.pool_max_idle_per_host,
-            ka.max_sockets,
+            cfg.pool_max_idle_per_host, ka.max_sockets,
             "HyperUtilConfig.from_keep_alive: max_sockets 1:1"
         );
         // keep_alive_msecs 跟 keep_alive_timeout 一致

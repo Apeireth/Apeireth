@@ -357,26 +357,17 @@ impl ProofReport {
 
     /// 成功数.
     pub fn pass_count(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|(_, r)| r.is_success())
-            .count()
+        self.entries.iter().filter(|(_, r)| r.is_success()).count()
     }
 
     /// 失败数.
     pub fn fail_count(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|(_, r)| r.is_failure())
-            .count()
+        self.entries.iter().filter(|(_, r)| r.is_failure()).count()
     }
 
     /// 跳过数.
     pub fn skipped_count(&self) -> usize {
-        self.entries
-            .iter()
-            .filter(|(_, r)| r.is_skipped())
-            .count()
+        self.entries.iter().filter(|(_, r)| r.is_skipped()).count()
     }
 
     /// 总数.
@@ -427,10 +418,7 @@ macro_rules! defensive_proof {
         if !$cond {
             $crate::formal_proof::ProofResult::Failure {
                 harness: $harness,
-                message: concat!(
-                    "defensive_proof failed: ",
-                    stringify!($cond),
-                ),
+                message: concat!("defensive_proof failed: ", stringify!($cond),),
             }
         } else {
             $crate::formal_proof::ProofResult::Success
@@ -738,10 +726,7 @@ pub mod harnesses {
     #[cfg_attr(kani, kani::proof)]
     pub fn proof_locked_signature_safe_default_holds() -> ProofResult {
         let sig = LockedSignature::safe_default();
-        ProofRunner::new().check(
-            "proof_locked_signature_safe_default_holds",
-            sig.is_safe(),
-        )
+        ProofRunner::new().check("proof_locked_signature_safe_default_holds", sig.is_safe())
     }
 
     // -------- 8 个 harness 列表 (供 ProofRunner 跑) --------
@@ -756,7 +741,7 @@ pub mod harnesses {
             "proof_version_major_is_one",
             file!(),
             line!(), // 编译期 line!() 不可用, 留 0
-            // ↑ 注: 静态数组不能调 line!() (非常量), 实际 line 在测试里 override
+                     // ↑ 注: 静态数组不能调 line!() (非常量), 实际 line 在测试里 override
         ),
         ProofHarness::proof("proof_version_minor_is_two", file!(), 0),
         ProofHarness::proof("proof_baseline_index_is_r11", file!(), 0),
@@ -764,11 +749,7 @@ pub mod harnesses {
         ProofHarness::proof("proof_anchor_count_is_eight", file!(), 0),
         ProofHarness::proof("proof_gate_layers_is_six", file!(), 0),
         ProofHarness::proof("proof_stage5_token_safe_default_holds", file!(), 0),
-        ProofHarness::proof(
-            "proof_locked_signature_safe_default_holds",
-            file!(),
-            0,
-        ),
+        ProofHarness::proof("proof_locked_signature_safe_default_holds", file!(), 0),
     ];
 }
 
@@ -966,14 +947,20 @@ mod tests {
     fn locked_signature_index_25_violates() {
         let r = LockedSignature::try_new(25, true);
         assert!(r.is_err());
-        assert_eq!(r.unwrap_err(), "index must be 0..=23 (B1 24 LOCKED, 整合 #4 P2-3 verify)");
+        assert_eq!(
+            r.unwrap_err(),
+            "index must be 0..=23 (B1 24 LOCKED, 整合 #4 P2-3 verify)"
+        );
     }
 
     #[test]
     fn locked_signature_broken_intact_violates() {
         let r = LockedSignature::try_new(0, false);
         assert!(r.is_err());
-        assert_eq!(r.unwrap_err(), "signature_intact must be true (B1 24 LOCKED 入口签名 0 改)");
+        assert_eq!(
+            r.unwrap_err(),
+            "signature_intact must be true (B1 24 LOCKED 入口签名 0 改)"
+        );
     }
 
     #[test]
@@ -1032,7 +1019,9 @@ mod tests {
 
     #[test]
     fn proof_result_is_skipped() {
-        let r = ProofResult::Skipped { reason: "kani offline" };
+        let r = ProofResult::Skipped {
+            reason: "kani offline",
+        };
         assert!(r.is_skipped());
         assert!(!r.is_success());
     }
