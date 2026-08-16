@@ -241,50 +241,66 @@
 - **P1 中价值**：Residual Pyramid（30 行数学去冗余召回）/ Spike 感应（查询联想唤醒 + 做梦期巩固复用）/ 双场传播（当前会话场 vs 长期记忆场）/ Topology V3 图对齐（升级 CRAWL 排序）/ DTSC 连续性评分 / 成对相似度预计算
 - **不吸收**：bincode/hashbrown 死依赖（别学）；VCP 自己标注反模式的进程全局缓存
 
-### 8.3 深挖报告二：84 插件扫描（主线程 manifest 批量核实）
+### 8.3 深挖报告二：89 插件扫描 + 核心 modules 深读（subagent 全量核实）
 
-> 分类按功能域；对 Apeireth 的建议 = 官方模块 / 官方套件 / 社区插件 / 不做。
+> **数据修正**: Plugin/ 下实测 **89 个插件**（69 启用 + 20 禁用；pluginType: synchronous 42 / hybridservice 21 / static 14 / service 6 / messagePreprocessor 4 / asynchronous 2）。分类统计: 生图 11 / 工具 11 / 搜索 10 / 记忆 10 / 其他 21 / Agent 6 / 桥接 6 / 日程 4 / 学术 4 / 社区 4 / 视频 2。完整 89 行分类表在 subagent 报告（可随时取用），此处只录分类与关键插件。
 
-**A. 生图/媒体生成（14 个 → 社区）**：AgnesGen/AgnesVideoGen/DMXDoubaoGen/DoubaoGen/FluxGen/GeminiImageGen/GPTImageGen/NanoBananaGen2/QwenImageGen/ZImageGen2/ZImageTurboGen/VideoGenerator/ComfyUIGen/MediaRenderer — 全是厂商 API 差异，社区化（每厂商一个插件）；**MediaRenderer（HTML/SVG 渲染）** 对文档套件 §5.5 有启示。
+**A. 生图/媒体（13 → 社区）**：AgnesGen/AgnesVideoGen/DMXDoubaoGen/DoubaoGen/FluxGen/GeminiImageGen/GPTImageGen/NanoBananaGen2/QwenImageGen/ZImageGen2/ZImageTurboGen/VideoGenerator/ComfyUIGen — 厂商 API 差异，社区化；**MediaRenderer（HTML/SVG 渲染）** 对文档套件 §5.5 有启示。
 
-**B. 搜索/信息获取（10 个 → 官方套件 §5.3 强化 + 社区）**：AnySearch（垂直+并行+正文提取）/VSearch（多后端语义搜索）/TavilySearch/FlashDeepSearch（深度研究：主题→多维关键词扩展→研究报告）/BrowserSearch/UrlFetch/DeepWikiVCP（GitHub 仓库 AI 文档）/BilibiliFetch — AnySearch+FlashDeepSearch 值得官方整合进信息聚合套件；其余社区。
+**B. 搜索/信息获取（10 → 官方套件 §5.3 强化 + 社区）**：AnySearch（垂直+并行+正文提取）/VSearch（多后端语义搜索）/TavilySearch/FlashDeepSearch（深度研究：主题→多维关键词扩展→研究报告）/BrowserSearch/UrlFetch/DeepWikiVCP/BilibiliFetch/AnimeFinder — AnySearch+FlashDeepSearch 官方整合；其余社区。
 
-**C. 学术（4 个 → 社区）**：ArxivDailyPapers/CrossRefDailyPapers/PaperReader/NCBIDatasets。
+**C. 学术（4 → 社区）**：ArxivDailyPapers/CrossRefDailyPapers/PaperReader（Rust 递归阅读器, 禁用态）/NCBIDatasets。
 
-**D. 记忆/日记/上下文（10 个 → 官方模块，核心）**：
-- RAGDiaryPlugin（向量检索注入日记）/ LightMemo（TagMemo V9 + Topology V3）/ DailyNote 三件套 / SemanticGroupEditor — 记忆域深化包 §5.1 已有计划
-- **OneRing（统一上下文账本）** — 已确认 N2，并入 A2（§4）
-- **ThoughtClusterManager（AI 思维链文件创建编辑 = 元自学习）** — 新发现，值得并入记忆域深化（AI 自己写思维链 → 反思/涌现机制可消费）
-- ContextFoldingV2（语义折叠）— §5.1 已有计划
-- **VCPTimeLine（按月时间线 + 一句话摘要）** — 轻量，可并入日记本中心
+**D. 记忆/日记/上下文（10 → 官方模块，核心）**：RAGDiaryPlugin（向量检索注入日记）/LightMemo（TagMemo V9 + Topology V3 + KNN 多构型）/DailyNote 三件套/SemanticGroupEditor（LLM 自维护同义词组）/**OneRing（统一上下文账本, N2）**/**ThoughtClusterManager（AI 思维链 = 元自学习, N4）**/ContextFoldingV2/VCPTimeLine（按月时间线+一句话摘要, 两级记忆带宽）。
 
-**E. 日程/任务/通讯（6 个 → 官方套件 §5.4）**：ScheduleManager/ScheduleBriefing（每小时清理过期+提取下一个日程）/TimedTaskQuery（通用未来工具调用查询）/VCPTaskAssistant（任务派发中心：定时/一次性/指令派发/论坛巡航）/AgentAssistant（"未来电话"定时发送消息）/VCPClawMail（邮箱轮询+收发）— 全部并入日程通讯套件。
+**E. 日程/任务/通讯（5 → 官方套件 §5.4）**：ScheduleManager/ScheduleBriefing（每小时清过期+提取下一日程）/TimedTaskQuery（定时任务, 文件即消息）/VCPTaskAssistant（任务派发中心）/AgentAssistant（"未来电话"定时发送）→ 并入日程通讯套件；**VCPClawMail**（邮箱轮询+收发+新邮件唤醒 Agent）社区。
 
-**F. 工具/执行（8 个 → 官方参考 + 社区）**：FileOperator/PowerShellExecutor/LinuxShellExecutor/SciCalculator（科学计算器→社区）/VCPEverything（Everything 毫秒级文件搜索→Windows 本机可官方）/CodeSearcher/DailyNoteSearcher（Rust 高性能搜索）/FileTreeGenerator/FileListGenerator/EmojiListGenerator（社区）。
+**F. 工具/执行（11 → 官方参考 + 社区）**：FileOperator（19 命令+PDF/Word 提取）/PowerShellExecutor/LinuxShellExecutor/SciCalculator（AST 白名单+sympy→社区）/VCPEverything（毫秒级全盘搜索）/CodeSearcher/DailyNoteSearcher（Rust 高性能搜索）/SSHManagerService（UDS 连接池）/LinuxLogMonitor/ArtistMatcher/EmojiListGenerator。
 
-**G. Agent/智能体（5 个 → 参考）**：MagiAgent（三贤人会议=多视角审议）/AICodeWorker（规范化报告输出：读取文件清单+执行结果摘要锚点）/AgentMessage（WebSocket 格式化消息=主动送达）/OpenHerPersona（人格观测）/AgentDream — 与 Apeireth 涌现/反思/送达机制对照：AgentMessage=我们 MultiSink；MagiAgent=council 审议精神；AICodeWorker 的报告锚点值得工具规范借鉴。
+**G. Agent/智能体（6 → 参考）**：MagiAgent（三贤人会议=多视角审议）/AICodeWorker（报告锚点: 读取文件清单+执行结果摘要）/AgentMessage（WS 格式化消息=主动送达）/OpenHerPersona（人格观测: 向量轴测认知/情感/驱动力）/AgentDream（梦系统+写操作审批门→我们做梦机制的增强点）/DeepWikiVCP。
 
-**H. 桥接/平台（10 个 → 参考）**：VCPToolBridge（VCP 工具向外部导出）/VCPBridgeServer（透明代理拦截 CLI 工具请求注入）/ChromeBridge（AI 操作 Chrome）/DynamicToolBridge（动态工具清单配置入口）/SkillBridge（技能 SKILL.md 目录索引→社区规范可借鉴）/PluginManager/PluginSourceViewer/PlaceholderExplorer（占位符扫描）/SnowBridge/VCPLog（WebSocket 日志推送）/UserAuth（每小时 6 位认证码）/ToolCallRecordQuery（工具调用记录查询=审计）。
+**H. 桥接/平台（6 → 参考）**：VCPToolBridge（工具导出外部）/VCPBridgeServer（透明代理拦截 CLI 注入 System Prompt）/ChromeBridge（操作 Chrome）/DynamicToolBridge/SkillBridge（SKILL.md 目录索引）/SnowBridge。
 
-**I. 金融/天气/娱乐（7 个 → 社区 + 套件数据源）**：DigitalOracle（金融监控→预测机套件旗舰数据源 N3）/WeatherReporter（天气占位符→预测机数据源）/TarotDivination/ArtistMatcher/VCPForum 三件套/VCPTavern（SillyTavern 式上下文注入可视化→Web 面板灵感）。
+**I. 其他/平台件（21）**：PluginManager/PluginSourceViewer/PlaceholderExplorer（占位符扫描）/VCPLog（WS 日志+离线补发）/UserAuth（6 位认证码, 混淆级→不做）/ToolCallRecordQuery（审计）/VCPTavern（SillyTavern 式可视化注入→Web 面板灵感）/WeatherReporter（7 源并行+stale 降级）/ImageProcessor/CapturePreprocessor/MediaRenderer/ImageFileServer/DailyHot/FileListGenerator/FileTreeGenerator/EmojiListGenerator/PlaceholderExplorerCommand/VCPForum 系/TarotDivination。
 
-**J. 核心 modules 深读**（subagent 报告中，待补充）：vcpLoop / chatCompletionHandler 23 步 / finalContextStore / dynamicToolRegistry / toolApprovalManager / toolResultPrivacyGuard / foldProtocol / contextManager / messageProcessor / agentManager / tvsManager / roleDivider / reasoningContentAdapter / captchaDecoder / knowledgeBase / tagmemoV10 / vcpLogReplayManager
+**J. 核心 modules 深读（关键机制与启示）**：
+
+| 模块 | 机制 | 对 Apeireth 的启示 |
+|---|---|---|
+| chatCompletionHandler | **23 步编排**：回放缓存幂等/断联级联中止/模型重定向/占位符扫描/语义路由/变量替换/媒体/预处理器链/OneRing 冻结/重试+模型回退合一"尝试序列"/工具循环深度上限 5 | 管线显式编号阶段; CancellationToken+timeout; 尝试序列模式 |
+| vcpLoop 三件套 | TOOL_REQUEST 文本协议（`<<<[TOOL_REQUEST]>>>` 始末语法+ESCAPE+archery 异步分离+思考块剥离防潜藏调用）; toolExecutor 含 vref 语义引用（对话压缩加权向量+零额外 API 检索注入）; 模糊标记匹配 | **宽松语法解析层移植**（tool-runtime 增强）; vref 零成本旁路增强 |
+| dynamicToolRegistry | 事件驱动同步（sha256 判变, 下线=状态翻转）; **分类四级降级**（自定义→小模型→RAG→关键词）; **注入预算化**（light list + 仅相关展开, 16000 字符上限） | tool-registry 补"分类责任链 + 注入注意力预算" |
+| toolApprovalManager | 决策器/审批通道解耦（纯函数返回 ApprovalDecision）; 命令级粒度（tool:command）; **静默拒绝**; 结构化拒绝 `{rejected_by_user, error_type}` | tool-approval 补命令级+静默拒绝+结构化拒绝 |
+| toolResultPrivacyGuard | 递归脱敏: 敏感键名/env 赋值行/高置信 token 模式（sk-/ghp_/AKIA）; data:image base64 白名单换出; 首尾保留 4 字符 | guard 已借鉴 → 补 env 行级+sk- 模式 |
+| foldProtocol | **同文档分级显隐**: `[===vcp_fold:阈值===]` 行标记, 语义相似度≥阈值才展开, 未展开提示"还隐藏收纳了 N 组" | context-fold 补 FoldBlock 分级显隐（VCP 原创） |
+| messageProcessor | **占位符变量宇宙**: 分型变量源/特权角色（agent/toolbox 只在 system 展开）/AgentGuard 单次展开/ToolboxGuard 每种一次/循环依赖检测/动态折叠加权平均向量 | **提示词装配引擎**——Rust 无对应物, VCP 最强架构级原创, 最高优先 |
+| semanticModelRouter + reasoningContentAdapter | 虚拟模型名+意图嵌入选模型+容灾链（命中→default→fallback）; 13 个别名推理字段归一为 think 块 | 网关层两块适配件（provider/gateway 补） |
+| finalContextStore/contextManager | 5 组滑窗快照+token 估算; 必须保留集合裁剪 | telemetry 小增强 |
+| sensitiveEnv/vcpLogReplayManager | 子进程剥离 IPC 凭据; 离线通知补发（审批请求豁免） | 小工程模式 |
 
 ### 8.4 可吸收清单（VCP 新版 → Apeireth 任务映射）
 
 | 来源 | 吸收为 | 优先级 |
 |---|---|---|
+| **messageProcessor 占位符装配引擎** | 新官方模块：提示词装配（特权角色+单次展开+环检测+分型变量源）——Apeireth 空白区最高价值 | **P0** |
+| **vcpLoop 宽松工具协议层** | tool-runtime 增强：始末语法+ESCAPE+模糊标记+批量后缀+archery+思考块剥离 | **P0** |
 | OneRing 统一上下文 | A2 升级：跨前端统一时间线账本（SSE/Lark/Telegram/Web 归入同一 Agent 时间线） | P0 |
 | ThoughtClusterManager | 记忆域深化包新增：AI 思维链文件 + 元自学习（反思/涌现消费） | P0 |
 | artifact_sig 内容寻址 | semantic/图资产"内容签名→跳过重算"门禁 | P0 |
 | Intrinsic Residual 锚增益 | memory_graph 节点"特异性"信号（与 importance 正交） | P0 |
 | 查询形态学 softmax | 驱动 CRAWL 深度/检索模式切换（纯函数 ~100 行） | P0 |
 | generation 绑定观测缓存 | 查询管线中间产物复用 + 防跨代脏读 | P0 |
-| Residual Pyramid / Spike 感应 / 双场 / 图对齐 / DTSC | 记忆检索增强（P1，随记忆域深化包推进） | P1 |
+| foldProtocol 分级显隐 | context-fold 增强：FoldBlock 数据模型（同文档分级+语义阈值展开） | P1 |
+| semanticModelRouter | gateway 层：语义选模型 + 容灾链 | P1 |
+| reasoningContentAdapter | gateway 层：推理字段归一化（13 别名 → think 块） | P1 |
+| toolApprovalManager 增强 | tool-approval 补命令级粒度+静默拒绝+结构化拒绝 | P1 |
+| dynamicToolRegistry 预算化 | tool-registry 补注入注意力预算+分类链 | P1 |
 | DigitalOracle 金融源 | 预测机套件旗舰数据源（含预测市场） | P1 |
-| VCPTimeLine / ScheduleBriefing / VCPClawMail | 日程通讯套件内容 | P1 |
+| AgentDream 审批门 | 做梦机制补写操作审批门 | P2 |
 | AICodeWorker 报告锚点 | 工具输出规范借鉴（读取清单+结果摘要锚点） | P2 |
-| SkillBridge / PlaceholderExplorer | 社区插件规范借鉴 | P2 |
+| Residual Pyramid / Spike / 双场 / 图对齐 / DTSC | 记忆检索增强（随记忆域深化包推进） | P1 |
+| SkillBridge / PlaceholderExplorer / VCPLog | 社区插件规范借鉴 | P2 |
+| **不做** | captchaDecoder（混淆级安全）; LinuxShellExecutor 八层字符串过滤（我们走真 seccomp）; 进程化插件架构 | — |
 
 ---
 
