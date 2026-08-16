@@ -33,6 +33,34 @@ tower-http = { version = "0.5", features = ["trace"] }
 # R125-2: clap derive macros 替换手写 argv 解析 (commands.rs -55%)
 clap = { workspace = true }
 
+[features]
+# B2 workspace 级装配层 (docs/release-plan.md §三.4): base / capability packs / upgrade suites 三档.
+# 套件清单 (crate 组映射) 见 workspace 根 suites.toml; 编译验证 scripts/check-assembly-matrix.ps1.
+default = ["base"]
+
+# ---- 档 1: base (基地本体) ----
+# 核心 crate 为无条件依赖, 本 feature 是装配语义标记 (cargo build --no-default-features 时显式 opt-out).
+base = []
+
+# ---- 档 2: capability packs (扩展能力包, 80% → 完全体) ----
+# local-intel 本地智能包: 转发 apeireth-memory/onnx (tract-onnx 本地嵌入, 真 cfg 门控).
+local-intel = ["apeireth-memory/onnx"]
+# gui 包: 转发 apeireth-api/tui-dashboard (ratatui TUI 仪表盘, 真 cfg 门控).
+gui = ["apeireth-api/tui-dashboard"]
+# 以下三包编译期未门控 (如实标注, 0 装 PASS):
+# - sandbox: 运行时机制件已在 apeireth-extension/sandbox.rs + companion/job_object.rs, 无条件编译
+# - channels: lark/livekit/voice 是独立 workspace crate, 未收敛为 feature
+# - audit: audit_log 已在核心主线 (memory action_stream), 属 base 不可裁
+sandbox = []
+channels = []
+audit = []
+
+# ---- 档 3: upgrade suites (升级套件 = crate 组 + 运行时 SuiteCatalog 装配) ----
+# 编译期标记; 套件组成见 suites.toml, 运行时装配走 companion::suites::SuiteCatalog.
+suite-education = []
+suite-pentest = []
+suite-oracle = []
+
 [lib]
 name = "apeireth_cli"
 path = "src/lib.rs"
