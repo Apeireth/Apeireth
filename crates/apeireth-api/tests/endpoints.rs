@@ -105,7 +105,9 @@ async fn test_council_advise_endpoint_exists() {
     // 我们只验证 endpoint 存在 (不会 404/405), 具体内容留作 R18 后续
     let status = resp.status();
     assert!(
-        status.is_success() || status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY,
+        status.is_success()
+            || status == StatusCode::BAD_REQUEST
+            || status == StatusCode::UNPROCESSABLE_ENTITY,
         "unexpected status: {status}"
     );
 }
@@ -317,8 +319,7 @@ async fn test_v2_agent_aliases_route_exists() {
 #[tokio::test]
 async fn test_scripted_llm_provider_complete() {
     let llm: Arc<dyn LlmProvider> = Arc::new(
-        ScriptedLlmProvider::new("test")
-            .with_script("hello", ScriptedResponse::new("world")),
+        ScriptedLlmProvider::new("test").with_script("hello", ScriptedResponse::new("world")),
     );
     let req = LlmRequest::new("test", vec![ChatMessage::user("hello")]);
     let resp = llm.complete(req).await.expect("llm complete");

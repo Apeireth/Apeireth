@@ -68,10 +68,10 @@ pub const SPAN_VERDICT: &str = "apeireth.api.verdict";
 /// **K-1 强校验**: 0 假装"任意字符串 OK", 错返 None (跟 1.0 默认行为 0 漂移)
 pub fn parse_protocol_kind(s: &str) -> Option<ProtocolKind> {
     match s.to_ascii_lowercase().as_str() {
-        PROTOCOL_OPENAI => Some(ProtocolKind::OpenAiChat),  // 默认 OpenAI Chat
+        PROTOCOL_OPENAI => Some(ProtocolKind::OpenAiChat), // 默认 OpenAI Chat
         PROTOCOL_ANTHROPIC => Some(ProtocolKind::AnthropicMessages),
         PROTOCOL_GEMINI => Some(ProtocolKind::Gemini),
-        _ => None,  // 0 漂移 1.0 行为
+        _ => None, // 0 漂移 1.0 行为
     }
 }
 
@@ -81,10 +81,7 @@ pub fn parse_protocol_kind(s: &str) -> Option<ProtocolKind> {
 /// - "true" / "1" / "yes" → true
 /// - "false" / "0" / "no" / 其他 → false (默认 0 漂移)
 pub fn parse_force_cache(s: &str) -> bool {
-    matches!(
-        s.to_ascii_lowercase().as_str(),
-        "true" | "1" | "yes"
-    )
+    matches!(s.to_ascii_lowercase().as_str(), "true" | "1" | "yes")
 }
 
 /// 从 HeaderMap 提取 protocol override
@@ -126,11 +123,11 @@ pub fn extract_force_cache(headers: &http::HeaderMap) -> bool {
 /// - 不存在 `traceparent` → None
 /// - 解析失败 → None (跟 propagation 行为一致, fail-soft)
 pub fn parse_traceparent_from_headers(headers: &http::HeaderMap) -> Option<TraceContext> {
-    use apeireth_telemetry::trace::propagation::{W3CTraceContextPropagator, parse_traceparent, parse_kv_list};
+    use apeireth_telemetry::trace::propagation::{
+        parse_kv_list, parse_traceparent, W3CTraceContextPropagator,
+    };
 
-    let traceparent = headers
-        .get("traceparent")
-        .and_then(|v| v.to_str().ok())?;
+    let traceparent = headers.get("traceparent").and_then(|v| v.to_str().ok())?;
 
     // 主路径: 调 telemetry 1.1 W3C propagator (1:1 翻译)
     if let Ok(ctx) = parse_traceparent(traceparent) {
@@ -192,7 +189,10 @@ impl KeyPathSpan {
         let span = Span::new(name_str.clone(), SpanKind::Server, ctx)
             .expect("TraceContext should be valid (K-1 trace_id + span_id hardcode)")
             .set_attribute("apeireth.platform", "apeireth-api");
-        Self { span, name: name_str }
+        Self {
+            span,
+            name: name_str,
+        }
     }
 
     /// 设置 ProtocolKind 属性
@@ -207,19 +207,28 @@ impl KeyPathSpan {
             ProtocolKind::OpenClawGateway => "openclaw_gateway",
         };
         // Span::set_attribute 消费 self, 1 clone + replace
-        let new_span = self.span.clone().set_attribute("apeireth.protocol", kind_str);
+        let new_span = self
+            .span
+            .clone()
+            .set_attribute("apeireth.protocol", kind_str);
         self.span = new_span;
     }
 
     /// 设置 protocol header override 属性 (debug 可见)
     pub fn set_protocol_override(&mut self, header_value: &str) {
-        let new_span = self.span.clone().set_attribute("apeireth.protocol_override", header_value);
+        let new_span = self
+            .span
+            .clone()
+            .set_attribute("apeireth.protocol_override", header_value);
         self.span = new_span;
     }
 
     /// 设置 force cache 标志
     pub fn set_force_cache(&mut self, force: bool) {
-        let new_span = self.span.clone().set_attribute("apeireth.force_cache", if force { "true" } else { "false" });
+        let new_span = self
+            .span
+            .clone()
+            .set_attribute("apeireth.force_cache", if force { "true" } else { "false" });
         self.span = new_span;
     }
 
@@ -308,12 +317,18 @@ mod tests {
 
     #[test]
     fn parse_protocol_openai() {
-        assert_eq!(parse_protocol_kind("openai"), Some(ProtocolKind::OpenAiChat));
+        assert_eq!(
+            parse_protocol_kind("openai"),
+            Some(ProtocolKind::OpenAiChat)
+        );
     }
 
     #[test]
     fn parse_protocol_anthropic() {
-        assert_eq!(parse_protocol_kind("anthropic"), Some(ProtocolKind::AnthropicMessages));
+        assert_eq!(
+            parse_protocol_kind("anthropic"),
+            Some(ProtocolKind::AnthropicMessages)
+        );
     }
 
     #[test]
@@ -323,8 +338,14 @@ mod tests {
 
     #[test]
     fn parse_protocol_case_insensitive() {
-        assert_eq!(parse_protocol_kind("OpenAI"), Some(ProtocolKind::OpenAiChat));
-        assert_eq!(parse_protocol_kind("ANTHROPIC"), Some(ProtocolKind::AnthropicMessages));
+        assert_eq!(
+            parse_protocol_kind("OpenAI"),
+            Some(ProtocolKind::OpenAiChat)
+        );
+        assert_eq!(
+            parse_protocol_kind("ANTHROPIC"),
+            Some(ProtocolKind::AnthropicMessages)
+        );
         assert_eq!(parse_protocol_kind("Gemini"), Some(ProtocolKind::Gemini));
     }
 
@@ -333,8 +354,8 @@ mod tests {
         // K-1 强校验: 0 假装"任意字符串 OK"
         assert_eq!(parse_protocol_kind("cohere"), None);
         assert_eq!(parse_protocol_kind(""), None);
-        assert_eq!(parse_protocol_kind("openai-chat"), None);  // 不要 dash
-        assert_eq!(parse_protocol_kind("openai_chat"), None);  // 不要 underscore
+        assert_eq!(parse_protocol_kind("openai-chat"), None); // 不要 dash
+        assert_eq!(parse_protocol_kind("openai_chat"), None); // 不要 underscore
     }
 
     // ---------- parse_force_cache (3 个) ----------
@@ -403,8 +424,14 @@ mod tests {
         // W3C trace_id 32 hex + span_id 16 hex (K-1 强校验)
         assert_eq!(span.trace_id().len(), 32);
         assert_eq!(span.span_id().len(), 16);
-        assert!(span.trace_id().chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
-        assert!(span.span_id().chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(span
+            .trace_id()
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+        assert!(span
+            .span_id()
+            .chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     }
 
     #[test]
@@ -455,7 +482,10 @@ mod tests {
         let mut headers = HeaderMap::new();
         headers.insert(HEADER_PROTOCOL, HeaderValue::from_static("gemini"));
         headers.insert(HEADER_FORCE_CACHE, HeaderValue::from_static("true"));
-        assert_eq!(extract_protocol_override(&headers), Some(ProtocolKind::Gemini));
+        assert_eq!(
+            extract_protocol_override(&headers),
+            Some(ProtocolKind::Gemini)
+        );
         assert!(extract_force_cache(&headers));
     }
 

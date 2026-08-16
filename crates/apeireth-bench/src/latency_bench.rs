@@ -308,7 +308,10 @@ impl LatencyReport {
         let mut out = String::new();
         out.push_str("=== B-2 latency P50/P99 bench (B 留的 wiremock 4 协议 + 3 场景) ===\n");
         out.push_str(&format!("{}\n", self.wiremock_disclaimer));
-        out.push_str(&format!("results: {} (4 protocol × 3 scenario)\n", self.results.len()));
+        out.push_str(&format!(
+            "results: {} (4 protocol × 3 scenario)\n",
+            self.results.len()
+        ));
         out.push_str("\n");
         for r in &self.results {
             out.push_str(&format!("{}\n", r.format()));
@@ -317,12 +320,15 @@ impl LatencyReport {
         out.push_str("不假装 (主 6 锚 O-5):\n");
         out.push_str("- latency 数字反映 'wiremock 0 网络 + 进程内 LRU + mini retry' 真实开销\n");
         out.push_str("- 0 接真 LLM, 不假装 'production ready P99'\n");
-        out.push_str("- R121+ 替换 mini_* → apeireth-cache::MemoryCache + apeireth-api::BackoffPolicy\n");
+        out.push_str(
+            "- R121+ 替换 mini_* → apeireth-cache::MemoryCache + apeireth-api::BackoffPolicy\n",
+        );
         out
     }
 }
 
-const WIREMOCK_DISCLAIMER: &str = "⚠️  wiremock 0 网络: latency 反映进程内 mock 开销, 不代表真 LLM 性能";
+const WIREMOCK_DISCLAIMER: &str =
+    "⚠️  wiremock 0 网络: latency 反映进程内 mock 开销, 不代表真 LLM 性能";
 
 // =====================================================================
 // Wiremock helpers (4 协议 mock response, 跟 `apeireth-pipeline/tests/pipeline.rs:60-127` 同款)
@@ -454,11 +460,7 @@ pub mod mock {
 ///
 /// 4 协议都用相同 payload (cache hit 不依赖协议语义, 走 LRU 命中),
 /// 这样 3 场景 × 4 协议 = 12 result 对称输出.
-pub fn run_cache_hit_scenario(
-    cache: &MiniCache,
-    protocol: Protocol,
-    samples: usize,
-) -> Vec<u128> {
+pub fn run_cache_hit_scenario(cache: &MiniCache, protocol: Protocol, samples: usize) -> Vec<u128> {
     let key = MiniCache::make_key(protocol, "bench-hit-payload");
     cache.put(key.clone(), "cached-response".to_string());
 
@@ -666,8 +668,7 @@ impl LatencyRunner {
 
         // 1) Cache hit 场景 (4 协议 × samples) — 全部 LRU 命中, 0 网络
         for &protocol in &protocols {
-            let samples_ns =
-                run_cache_hit_scenario(&self.cache, protocol, self.config.samples);
+            let samples_ns = run_cache_hit_scenario(&self.cache, protocol, self.config.samples);
             results.push(compute_percentiles(
                 protocol,
                 LatencyScenario::CacheHit,
@@ -816,9 +817,21 @@ mod tests {
             s.sort_unstable();
             s
         };
-        assert_eq!(percentile(&sorted, 0.50), 50, "nearest-rank p50 = sorted[4] = 50");
-        assert_eq!(percentile(&sorted, 0.95), 100, "ceil(0.95*10)=10 → sorted[9] = 100");
-        assert_eq!(percentile(&sorted, 0.99), 100, "ceil(0.99*10)=10 → sorted[9] = 100");
+        assert_eq!(
+            percentile(&sorted, 0.50),
+            50,
+            "nearest-rank p50 = sorted[4] = 50"
+        );
+        assert_eq!(
+            percentile(&sorted, 0.95),
+            100,
+            "ceil(0.95*10)=10 → sorted[9] = 100"
+        );
+        assert_eq!(
+            percentile(&sorted, 0.99),
+            100,
+            "ceil(0.99*10)=10 → sorted[9] = 100"
+        );
     }
 
     #[test]
@@ -841,7 +854,11 @@ mod tests {
     #[test]
     fn latency_result_format_contains_p50_p99() {
         let samples = vec![1000, 2000, 3000, 4000, 5000_u128];
-        let r = compute_percentiles(Protocol::AnthropicMessages, LatencyScenario::CacheMiss, samples);
+        let r = compute_percentiles(
+            Protocol::AnthropicMessages,
+            LatencyScenario::CacheMiss,
+            samples,
+        );
         let s = r.format();
         assert!(s.contains("p50="));
         assert!(s.contains("p95="));
@@ -863,7 +880,11 @@ mod tests {
 
     #[test]
     fn latency_report_format_contains_disclaimer() {
-        let r = compute_percentiles(Protocol::OpenAiChat, LatencyScenario::CacheHit, vec![100, 200, 300]);
+        let r = compute_percentiles(
+            Protocol::OpenAiChat,
+            LatencyScenario::CacheHit,
+            vec![100, 200, 300],
+        );
         let report = LatencyReport {
             results: vec![r],
             wiremock_disclaimer: WIREMOCK_DISCLAIMER,

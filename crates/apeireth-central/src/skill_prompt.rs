@@ -63,9 +63,7 @@ impl SkillPrompt {
             kebab = skill.id().kebab_name(),
         );
         let body = render_skill_body(skill);
-        let footer = format!(
-            "\n{tool_mapping}\n",
-        );
+        let footer = format!("\n{tool_mapping}\n",);
         Self {
             header,
             body,
@@ -75,9 +73,8 @@ impl SkillPrompt {
 
     /// 完整 prompt 1 字符串拼接 (header + body + footer).
     pub fn to_full_string(&self) -> String {
-        let mut s = String::with_capacity(
-            self.header.len() + self.body.len() + self.footer.len() + 4,
-        );
+        let mut s =
+            String::with_capacity(self.header.len() + self.body.len() + self.footer.len() + 4);
         s.push_str(&self.header);
         s.push_str("\n");
         s.push_str(&self.body);
@@ -103,10 +100,7 @@ pub fn render_skill_body(skill: &dyn Skill) -> String {
     s.push_str("## Steps\n\n");
     for step in skill.steps() {
         let marker = if step.is_tdd_red { "[RED] " } else { "" };
-        s.push_str(&format!(
-            "{}. {}{}\n",
-            step.order, marker, step.description
-        ));
+        s.push_str(&format!("{}. {}{}\n", step.order, marker, step.description));
     }
     s
 }
@@ -136,10 +130,7 @@ pub fn render_steps(skill: &dyn Skill) -> String {
     let mut s = String::new();
     for step in steps {
         let marker = if step.is_tdd_red { "🔴 " } else { "  " };
-        s.push_str(&format!(
-            "{}{}. {}\n",
-            marker, step.order, step.description
-        ));
+        s.push_str(&format!("{}{}. {}\n", marker, step.order, step.description));
     }
     s
 }
@@ -154,9 +145,7 @@ pub fn count_tdd_red_steps(skill: &dyn Skill) -> usize {
 /// 每 session 1 缓存, `cache_get_or_init` 首次调用 render + 缓存, 后续 O(1) 命中.
 #[derive(Debug, Default)]
 pub struct SkillPromptCache {
-    cached: std::sync::Mutex<
-        std::collections::BTreeMap<SkillId, SkillPrompt>,
-    >,
+    cached: std::sync::Mutex<std::collections::BTreeMap<SkillId, SkillPrompt>>,
 }
 
 impl SkillPromptCache {

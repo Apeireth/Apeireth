@@ -3,7 +3,7 @@
 #![allow(missing_docs)]
 
 use crate::silence::SilenceReason;
-use crate::{ActionError, ExpressionChannel, new_tx_id, DefaultActionEngine};
+use crate::{new_tx_id, ActionError, DefaultActionEngine, ExpressionChannel};
 
 #[test]
 fn r177_act_01_silence_reason_6() {

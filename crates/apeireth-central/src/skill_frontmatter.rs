@@ -208,7 +208,10 @@ mod tests {
         assert_eq!(fm.name, "brainstorming");
         assert_eq!(fm.description, "spec design");
         assert_eq!(fm.extra.len(), 2);
-        assert_eq!(fm.extra[0], ("when_to_use".to_string(), "before any feature".to_string()));
+        assert_eq!(
+            fm.extra[0],
+            ("when_to_use".to_string(), "before any feature".to_string())
+        );
         assert_eq!(fm.extra[1], ("version".to_string(), "1.0".to_string()));
     }
 
@@ -288,10 +291,9 @@ mod tests {
     fn frontmatter_error_display_is_human_readable() {
         let e1 = FrontmatterError::MissingOpening;
         assert_eq!(format!("{e1}"), "frontmatter missing opening `---`");
-        let e2 = FrontmatterError::MissingField { field: "name".to_string() };
-        assert_eq!(
-            format!("{e2}"),
-            "frontmatter missing required field: name"
-        );
+        let e2 = FrontmatterError::MissingField {
+            field: "name".to_string(),
+        };
+        assert_eq!(format!("{e2}"), "frontmatter missing required field: name");
     }
 }

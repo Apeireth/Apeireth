@@ -18,7 +18,9 @@ fn make_state() -> Arc<V2State> {
     state
 }
 
-fn app(state: Arc<V2State>) -> axum::Router { build_router(state) }
+fn app(state: Arc<V2State>) -> axum::Router {
+    build_router(state)
+}
 
 #[tokio::test]
 async fn file_ops_write_creates_file() {
@@ -28,12 +30,17 @@ async fn file_ops_write_creates_file() {
     let body = json!({
         "args": { "op": "write", "path": p.to_string_lossy(), "content": "hello v1" }
     });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/file_ops/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/file_ops/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();
@@ -50,12 +57,17 @@ async fn file_ops_read_returns_content() {
     let p = dir.path().join("r.txt");
     std::fs::write(&p, "read-back").expect("seed");
     let body = json!({ "args": { "op": "read", "path": p.to_string_lossy() } });
-    let resp = app(state).oneshot(
-        Request::builder().method("POST").uri("/tools/file_ops/invoke")
-            .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&body).unwrap()))
-            .unwrap(),
-    ).await.unwrap();
+    let resp = app(state)
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/tools/file_ops/invoke")
+                .header("content-type", "application/json")
+                .body(Body::from(serde_json::to_vec(&body).unwrap()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
     let body_bytes = resp.into_body().collect().await.unwrap().to_bytes();
     let json: Value = serde_json::from_slice(&body_bytes).unwrap();

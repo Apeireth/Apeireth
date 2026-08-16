@@ -168,7 +168,9 @@ pub fn validate_skill(skill: &dyn crate::skill_trait::Skill) -> SkillValidationR
 }
 
 /// 批量验证: 跑过 1 个 `SkillRegistry` 全部 14 skill, 返回 14 reports.
-pub fn validate_registry(registry: &crate::skill_registry::SkillRegistry) -> Vec<SkillValidationReport> {
+pub fn validate_registry(
+    registry: &crate::skill_registry::SkillRegistry,
+) -> Vec<SkillValidationReport> {
     registry
         .all()
         .iter()
@@ -193,13 +195,19 @@ pub fn registry_validity_ratio(reports: &[SkillValidationReport]) -> f64 {
 mod tests {
     use super::*;
     use crate::skill_registry::SkillRegistry;
-    use crate::skill_trait::{BrainstormingSkill, TestDrivenDevelopmentSkill, UsingSuperpowersSkill};
+    use crate::skill_trait::{
+        BrainstormingSkill, TestDrivenDevelopmentSkill, UsingSuperpowersSkill,
+    };
 
     #[test]
     fn validate_tdd_skill_passes() {
         let skill = TestDrivenDevelopmentSkill;
         let report = validate_skill(&skill);
-        assert!(report.is_valid(), "TDD should be valid: {:?}", report.errors);
+        assert!(
+            report.is_valid(),
+            "TDD should be valid: {:?}",
+            report.errors
+        );
         assert_eq!(report.skill_id, SkillId::TestDrivenDevelopment);
     }
 
@@ -207,14 +215,22 @@ mod tests {
     fn validate_brainstorming_skill_passes() {
         let skill = BrainstormingSkill;
         let report = validate_skill(&skill);
-        assert!(report.is_valid(), "Brainstorming should be valid: {:?}", report.errors);
+        assert!(
+            report.is_valid(),
+            "Brainstorming should be valid: {:?}",
+            report.errors
+        );
     }
 
     #[test]
     fn validate_meta_skill_using_superpowers_passes() {
         let skill = UsingSuperpowersSkill;
         let report = validate_skill(&skill);
-        assert!(report.is_valid(), "UsingSuperpowers should be valid: {:?}", report.errors);
+        assert!(
+            report.is_valid(),
+            "UsingSuperpowers should be valid: {:?}",
+            report.errors
+        );
     }
 
     #[test]

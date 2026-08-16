@@ -131,7 +131,13 @@ pub struct ArbitrationEvent {
 
 impl ArbitrationEvent {
     /// 计算 content_hash (字段级引用 VCP HASH-SQL 仲裁)
-    pub fn compute_hash(timestamp_ms: i64, source: EventSource, source_id: &str, topic: &str, payload_json: &str) -> String {
+    pub fn compute_hash(
+        timestamp_ms: i64,
+        source: EventSource,
+        source_id: &str,
+        topic: &str,
+        payload_json: &str,
+    ) -> String {
         let mut hasher = Sha256::new();
         hasher.update(timestamp_ms.to_be_bytes());
         hasher.update(source.as_str().as_bytes());
@@ -214,7 +220,8 @@ impl ArbitrationLog {
         let topic = topic.into();
         let payload_json = payload_json.into();
         let timestamp_ms = now_ms();
-        let content_hash = ArbitrationEvent::compute_hash(timestamp_ms, source, &source_id, &topic, &payload_json);
+        let content_hash =
+            ArbitrationEvent::compute_hash(timestamp_ms, source, &source_id, &topic, &payload_json);
 
         let conn = self.inner.lock();
         conn.execute(
@@ -240,11 +247,12 @@ impl ArbitrationLog {
         let conn = self.inner.lock();
         let mut stmt = conn.prepare(
             "SELECT seq, timestamp_ms, source, source_id, topic, payload_json, content_hash
-             FROM events ORDER BY timestamp_ms ASC, content_hash ASC, seq ASC LIMIT ?1"
+             FROM events ORDER BY timestamp_ms ASC, content_hash ASC, seq ASC LIMIT ?1",
         )?;
         let rows = stmt.query_map(rusqlite::params![limit as i64], |row| {
             let source_str: String = row.get(2)?;
-            let source = EventSource::from_str(&source_str).map_err(|_| rusqlite::Error::InvalidQuery)?;
+            let source =
+                EventSource::from_str(&source_str).map_err(|_| rusqlite::Error::InvalidQuery)?;
             Ok(ArbitrationEvent {
                 seq: row.get(0)?,
                 timestamp_ms: row.get(1)?,
@@ -263,25 +271,34 @@ impl ArbitrationLog {
     }
 
     /// 按 source + source_id 过滤
-    pub fn by_source(&self, source: EventSource, source_id: &str, limit: usize) -> ArbResult<Vec<ArbitrationEvent>> {
+    pub fn by_source(
+        &self,
+        source: EventSource,
+        source_id: &str,
+        limit: usize,
+    ) -> ArbResult<Vec<ArbitrationEvent>> {
         let conn = self.inner.lock();
         let mut stmt = conn.prepare(
             "SELECT seq, timestamp_ms, source, source_id, topic, payload_json, content_hash
-             FROM events WHERE source = ?1 AND source_id = ?2 ORDER BY seq ASC LIMIT ?3"
+             FROM events WHERE source = ?1 AND source_id = ?2 ORDER BY seq ASC LIMIT ?3",
         )?;
-        let rows = stmt.query_map(rusqlite::params![source.as_str(), source_id, limit as i64], |row| {
-            let source_str: String = row.get(2)?;
-            let source = EventSource::from_str(&source_str).map_err(|_| rusqlite::Error::InvalidQuery)?;
-            Ok(ArbitrationEvent {
-                seq: row.get(0)?,
-                timestamp_ms: row.get(1)?,
-                source,
-                source_id: row.get(3)?,
-                topic: row.get(4)?,
-                payload_json: row.get(5)?,
-                content_hash: row.get(6)?,
-            })
-        })?;
+        let rows = stmt.query_map(
+            rusqlite::params![source.as_str(), source_id, limit as i64],
+            |row| {
+                let source_str: String = row.get(2)?;
+                let source = EventSource::from_str(&source_str)
+                    .map_err(|_| rusqlite::Error::InvalidQuery)?;
+                Ok(ArbitrationEvent {
+                    seq: row.get(0)?,
+                    timestamp_ms: row.get(1)?,
+                    source,
+                    source_id: row.get(3)?,
+                    topic: row.get(4)?,
+                    payload_json: row.get(5)?,
+                    content_hash: row.get(6)?,
+                })
+            },
+        )?;
         let mut out = Vec::new();
         for r in rows {
             out.push(r?);
@@ -301,7 +318,9 @@ impl ArbitrationLog {
     }
 
     /// 当前路径
-    pub fn path(&self) -> &str { &self.path }
+    pub fn path(&self) -> &str {
+        &self.path
+    }
 }
 
 /// 当前 epoch ms (UTC)
@@ -346,8 +365,10 @@ mod tests {
         let h2 = ArbitrationEvent::compute_hash(1001, EventSource::Frontend, "u1", "msg", "{}");
         let h3 = ArbitrationEvent::compute_hash(1000, EventSource::GroupChat, "u1", "msg", "{}");
         let h4 = ArbitrationEvent::compute_hash(1000, EventSource::Frontend, "u2", "msg", "{}");
-        let h5 = ArbitrationEvent::compute_hash(1000, EventSource::Frontend, "u1", "approval", "{}");
-        let h6 = ArbitrationEvent::compute_hash(1000, EventSource::Frontend, "u1", "msg", "{\"a\":1}");
+        let h5 =
+            ArbitrationEvent::compute_hash(1000, EventSource::Frontend, "u1", "approval", "{}");
+        let h6 =
+            ArbitrationEvent::compute_hash(1000, EventSource::Frontend, "u1", "msg", "{\"a\":1}");
         assert_ne!(h1, h2);
         assert_ne!(h1, h3);
         assert_ne!(h1, h4);
@@ -358,8 +379,22 @@ mod tests {
     #[test]
     fn t04_append_and_query() {
         let log = ArbitrationLog::open_in_memory().unwrap();
-        let e1 = log.append(EventSource::Frontend, "tui", "user_message", "{\"text\":\"hi\"}").unwrap();
-        let e2 = log.append(EventSource::AgentComm, "cat", "tool_call", "{\"name\":\"file_read\"}").unwrap();
+        let e1 = log
+            .append(
+                EventSource::Frontend,
+                "tui",
+                "user_message",
+                "{\"text\":\"hi\"}",
+            )
+            .unwrap();
+        let e2 = log
+            .append(
+                EventSource::AgentComm,
+                "cat",
+                "tool_call",
+                "{\"name\":\"file_read\"}",
+            )
+            .unwrap();
         assert_eq!(e1.seq, 1);
         assert_eq!(e2.seq, 2);
         assert_eq!(log.len().unwrap(), 2);
@@ -384,13 +419,18 @@ mod tests {
     fn t06_by_source_filter() {
         let log = ArbitrationLog::open_in_memory().unwrap();
         log.append(EventSource::Frontend, "tui", "a", "1").unwrap();
-        log.append(EventSource::GroupChat, "family", "msg", "2").unwrap();
-        log.append(EventSource::GroupChat, "family", "msg", "3").unwrap();
-        log.append(EventSource::Email, "inbox", "mail", "4").unwrap();
+        log.append(EventSource::GroupChat, "family", "msg", "2")
+            .unwrap();
+        log.append(EventSource::GroupChat, "family", "msg", "3")
+            .unwrap();
+        log.append(EventSource::Email, "inbox", "mail", "4")
+            .unwrap();
 
         let family = log.by_source(EventSource::GroupChat, "family", 10).unwrap();
         assert_eq!(family.len(), 2);
-        assert!(family.iter().all(|e| e.source == EventSource::GroupChat && e.source_id == "family"));
+        assert!(family
+            .iter()
+            .all(|e| e.source == EventSource::GroupChat && e.source_id == "family"));
 
         let inbox = log.by_source(EventSource::Email, "inbox", 10).unwrap();
         assert_eq!(inbox.len(), 1);
@@ -402,8 +442,10 @@ mod tests {
         let db_path = dir.path().join("events.db");
 
         let log1 = ArbitrationLog::open(&db_path).unwrap();
-        log1.append(EventSource::Frontend, "tui", "msg", "{\"v\":1}").unwrap();
-        log1.append(EventSource::GroupChat, "family", "msg", "{\"v\":2}").unwrap();
+        log1.append(EventSource::Frontend, "tui", "msg", "{\"v\":1}")
+            .unwrap();
+        log1.append(EventSource::GroupChat, "family", "msg", "{\"v\":2}")
+            .unwrap();
         assert_eq!(log1.len().unwrap(), 2);
         drop(log1);
 
@@ -439,7 +481,13 @@ mod tests {
         assert_eq!(e1.len(), e2.len());
         let mode = |evts: &[ArbitrationEvent]| -> Vec<(String, String, String)> {
             evts.iter()
-                .map(|e| (e.source.as_str().to_string(), e.source_id.clone(), e.topic.clone()))
+                .map(|e| {
+                    (
+                        e.source.as_str().to_string(),
+                        e.source_id.clone(),
+                        e.topic.clone(),
+                    )
+                })
                 .collect()
         };
         assert_eq!(mode(&e1), mode(&e2), "canonical 排序模式应跨日志确定");

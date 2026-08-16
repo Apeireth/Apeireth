@@ -228,19 +228,13 @@ mod tests {
 
     #[test]
     fn q1_no_completed_returns_zero() {
-        let tasks = vec![
-            TaskResult::new(false, 0.5),
-            TaskResult::new(false, 0.8),
-        ];
+        let tasks = vec![TaskResult::new(false, 0.5), TaskResult::new(false, 0.8)];
         assert_eq!(q1_quality(&tasks), 0.0);
     }
 
     #[test]
     fn q1_perfect_tasks_is_one() {
-        let tasks = vec![
-            TaskResult::new(true, 1.0),
-            TaskResult::new(true, 1.0),
-        ];
+        let tasks = vec![TaskResult::new(true, 1.0), TaskResult::new(true, 1.0)];
         assert_eq!(q1_quality(&tasks), 1.0);
     }
 
@@ -271,20 +265,36 @@ mod tests {
 
     #[test]
     fn q2_all_5_star_is_one() {
-        let f = vec![UserFeedback { rating: 5, has_text: false, is_long_term: false }];
+        let f = vec![UserFeedback {
+            rating: 5,
+            has_text: false,
+            is_long_term: false,
+        }];
         assert_eq!(q2_satisfaction(&f), 1.0);
     }
 
     #[test]
     fn q2_all_1_star_is_zero_point_two() {
-        let f = vec![UserFeedback { rating: 1, has_text: false, is_long_term: false }];
+        let f = vec![UserFeedback {
+            rating: 1,
+            has_text: false,
+            is_long_term: false,
+        }];
         assert_eq!(q2_satisfaction(&f), 0.2);
     }
 
     #[test]
     fn q2_long_term_user_weighted_higher() {
-        let long = UserFeedback { rating: 5, has_text: false, is_long_term: true };
-        let short = UserFeedback { rating: 5, has_text: false, is_long_term: false };
+        let long = UserFeedback {
+            rating: 5,
+            has_text: false,
+            is_long_term: true,
+        };
+        let short = UserFeedback {
+            rating: 5,
+            has_text: false,
+            is_long_term: false,
+        };
         // long 1.5x, short 1x
         // total = 5/5*1.5 + 5/5*1.0 = 2.5
         // weight = 2.5
@@ -295,8 +305,16 @@ mod tests {
 
     #[test]
     fn q2_text_feedback_weighted_higher() {
-        let f1 = UserFeedback { rating: 5, has_text: true, is_long_term: false };
-        let f2 = UserFeedback { rating: 3, has_text: false, is_long_term: false };
+        let f1 = UserFeedback {
+            rating: 5,
+            has_text: true,
+            is_long_term: false,
+        };
+        let f2 = UserFeedback {
+            rating: 3,
+            has_text: false,
+            is_long_term: false,
+        };
         // f1: 1.0 * 1.2 = 1.2
         // f2: 0.6 * 1.0 = 0.6
         // total = 1.8
@@ -352,7 +370,11 @@ mod tests {
     #[test]
     fn qmetric_all_from_inputs_aggregates() {
         let tasks = vec![TaskResult::new(true, 1.0)];
-        let feedback = vec![UserFeedback { rating: 5, has_text: false, is_long_term: false }];
+        let feedback = vec![UserFeedback {
+            rating: 5,
+            has_text: false,
+            is_long_term: false,
+        }];
         let history = vec![
             GrowthSnapshot::new(0, 0.5, 0.5, 0.5),
             GrowthSnapshot::new(1, 0.8, 0.8, 0.8),

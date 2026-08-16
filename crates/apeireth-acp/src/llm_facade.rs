@@ -1,4 +1,3 @@
-
 //! apeireth-acp::llm_facade \u2014 LLM \u552f\u4e00\u63a5\u5165\u53e3 (per ADR-0033)
 //!
 //! \u300c\u672c\u8d44\u4ea7\u300d: LLM (HTTP / MCP / JSON-RPC \u63a5\u5165) \u552f\u4e00\u80fd\u8c03\u7684\u662f `LlmFacade::dispatch`.
@@ -42,7 +41,11 @@ pub struct LlmRequest {
 
 impl LlmRequest {
     /// \u6784\u9020 \u9ed8\u8ba4\u8bf7\u6c42
-    pub fn new(provider: impl Into<String>, system: impl Into<String>, user: impl Into<String>) -> Self {
+    pub fn new(
+        provider: impl Into<String>,
+        system: impl Into<String>,
+        user: impl Into<String>,
+    ) -> Self {
         Self {
             protocol: "http".into(),
             provider: provider.into(),
@@ -100,7 +103,13 @@ pub struct LlmResponse {
 
 impl LlmResponse {
     /// \u6784\u9020 ok \u54cd\u5e94
-    pub fn ok(provider: impl Into<String>, model: impl Into<String>, text: impl Into<String>, prompt_tokens: u32, completion_tokens: u32) -> Self {
+    pub fn ok(
+        provider: impl Into<String>,
+        model: impl Into<String>,
+        text: impl Into<String>,
+        prompt_tokens: u32,
+        completion_tokens: u32,
+    ) -> Self {
         Self {
             request_id: String::new(),
             provider: provider.into(),
@@ -113,7 +122,11 @@ impl LlmResponse {
     }
 
     /// \u6784\u9020 error \u54cd\u5e94
-    pub fn error(provider: impl Into<String>, model: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn error(
+        provider: impl Into<String>,
+        model: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             request_id: String::new(),
             provider: provider.into(),
@@ -155,7 +168,10 @@ pub enum LlmFacadeError {
     InvalidMaxTokens(u32),
     InvalidTemperature(u16),
     UnknownProvider(String),
-    InvalidModel { provider: String, model: String },
+    InvalidModel {
+        provider: String,
+        model: String,
+    },
     /// Provider config/API key issue (e.g. http_dispatch)
     InvalidAuth,
     /// HTTP error (network/timeout/5xx)
@@ -167,10 +183,18 @@ impl std::fmt::Display for LlmFacadeError {
         match self {
             Self::EmptyProvider => write!(f, "llm_facade: provider is empty"),
             Self::EmptyPrompt => write!(f, "llm_facade: both system and user are empty"),
-            Self::InvalidMaxTokens(n) => write!(f, "llm_facade: invalid max_tokens {n} (must be 1-200000)"),
-            Self::InvalidTemperature(t) => write!(f, "llm_facade: invalid temperature_x100 {t} (must be 0-200)"),
+            Self::InvalidMaxTokens(n) => {
+                write!(f, "llm_facade: invalid max_tokens {n} (must be 1-200000)")
+            }
+            Self::InvalidTemperature(t) => write!(
+                f,
+                "llm_facade: invalid temperature_x100 {t} (must be 0-200)"
+            ),
             Self::UnknownProvider(p) => write!(f, "llm_facade: unknown provider '{p}'"),
-            Self::InvalidModel { provider, model } => write!(f, "llm_facade: model '{model}' not supported by '{provider}'"),
+            Self::InvalidModel { provider, model } => write!(
+                f,
+                "llm_facade: model '{model}' not supported by '{provider}'"
+            ),
             Self::InvalidAuth => write!(f, "llm_facade: invalid API key or auth"),
             Self::HttpError(msg) => write!(f, "llm_facade: HTTP error: {msg}"),
         }
@@ -257,21 +281,30 @@ mod tests {
     fn request_max_tokens_zero_rejected() {
         let mut r = LlmRequest::new("minimax", "hi", "hello");
         r.max_tokens = 0;
-        assert!(matches!(r.validate(), Err(LlmFacadeError::InvalidMaxTokens(_))));
+        assert!(matches!(
+            r.validate(),
+            Err(LlmFacadeError::InvalidMaxTokens(_))
+        ));
     }
 
     #[test]
     fn request_max_tokens_too_large_rejected() {
         let mut r = LlmRequest::new("minimax", "hi", "hello");
         r.max_tokens = 200_001;
-        assert!(matches!(r.validate(), Err(LlmFacadeError::InvalidMaxTokens(_))));
+        assert!(matches!(
+            r.validate(),
+            Err(LlmFacadeError::InvalidMaxTokens(_))
+        ));
     }
 
     #[test]
     fn request_invalid_temperature_rejected() {
         let mut r = LlmRequest::new("minimax", "hi", "hello");
         r.temperature_x100 = 250;
-        assert!(matches!(r.validate(), Err(LlmFacadeError::InvalidTemperature(_))));
+        assert!(matches!(
+            r.validate(),
+            Err(LlmFacadeError::InvalidTemperature(_))
+        ));
     }
 
     #[test]

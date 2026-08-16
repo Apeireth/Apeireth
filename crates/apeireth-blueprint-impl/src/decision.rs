@@ -44,15 +44,9 @@ use std::time::Duration;
 #[non_exhaustive]
 pub enum D01Impl {
     /// 真接到 provider SDK
-    RealConnect {
-        provider: String,
-        endpoint: String,
-    },
+    RealConnect { provider: String, endpoint: String },
     /// Stub 501 (未实装)
-    StubNotImplemented {
-        tool: String,
-        planned_stage: String,
-    },
+    StubNotImplemented { tool: String, planned_stage: String },
 }
 
 impl Default for D01Impl {
@@ -97,7 +91,10 @@ impl D01Impl {
                 }
                 Ok(())
             }
-            Self::StubNotImplemented { tool, planned_stage } => {
+            Self::StubNotImplemented {
+                tool,
+                planned_stage,
+            } => {
                 if tool.trim().is_empty() {
                     return Err(BlueprintError::D01StubNotImplemented {
                         tool: "<empty>".into(),
@@ -119,14 +116,9 @@ impl D01Impl {
 #[non_exhaustive]
 pub enum D02Routing {
     /// 6 工具子路径 (per tool 白名单)
-    SubPath {
-        tool: String,
-        sub_path: String,
-    },
+    SubPath { tool: String, sub_path: String },
     /// 单 endpoint (所有工具走同一路径)
-    SingleEndpoint {
-        endpoint: String,
-    },
+    SingleEndpoint { endpoint: String },
 }
 
 impl Default for D02Routing {
@@ -332,14 +324,21 @@ impl DecisionBundle {
         format!(
             "D-01={} | D-02={} | D-03={} | D-04={}",
             self.d01.tool_name(),
-            if self.d02.is_subpath() { "subpath" } else { "single" },
+            if self.d02.is_subpath() {
+                "subpath"
+            } else {
+                "single"
+            },
             match &self.d03 {
                 D03WsAuth::LinkToken { ttl } => format!("link_token({}s)", ttl.as_secs()),
                 D03WsAuth::QueryParam => "query_param".to_string(),
                 D03WsAuth::None => "none".to_string(),
             },
             match &self.d04 {
-                D04RateLimit::TokenBucket { capacity, refill_interval } => {
+                D04RateLimit::TokenBucket {
+                    capacity,
+                    refill_interval,
+                } => {
                     format!("bucket({}/{}s)", capacity, refill_interval.as_secs())
                 }
                 D04RateLimit::None => "none".to_string(),
@@ -481,7 +480,10 @@ mod tests {
     fn d04_default_is_60_per_sec() {
         let d = D04RateLimit::default();
         match d {
-            D04RateLimit::TokenBucket { capacity, refill_interval } => {
+            D04RateLimit::TokenBucket {
+                capacity,
+                refill_interval,
+            } => {
                 assert_eq!(capacity, 60);
                 assert_eq!(refill_interval, Duration::from_secs(1));
             }

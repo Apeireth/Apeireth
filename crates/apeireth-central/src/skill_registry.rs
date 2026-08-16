@@ -31,8 +31,8 @@ use std::sync::Arc;
 
 use crate::skill_trait::{
     BrainstormingSkill, DispatchingParallelAgentsSkill, ExecutingPlansSkill,
-    FinishingADevelopmentBranchSkill, ReceivingCodeReviewSkill, RequestingCodeReviewSkill,
-    Skill, SkillId, SkillStep, SubagentDrivenDevelopmentSkill, SystematicDebuggingSkill,
+    FinishingADevelopmentBranchSkill, ReceivingCodeReviewSkill, RequestingCodeReviewSkill, Skill,
+    SkillId, SkillStep, SubagentDrivenDevelopmentSkill, SystematicDebuggingSkill,
     TestDrivenDevelopmentSkill, UsingGitWorktreesSkill, UsingSuperpowersSkill,
     VerificationBeforeCompletionSkill, WritingPlansSkill, WritingSkillsSkill,
 };
@@ -217,12 +217,14 @@ impl SkillRegistry {
     pub fn lookup_by_name(&self, name: &str) -> Result<Arc<dyn Skill>, SkillLookupError> {
         for id in SkillId::ALL {
             if id.kebab_name() == name {
-                return self
-                    .get(id)
-                    .ok_or_else(|| SkillLookupError::UnknownSkill { name: name.to_string() });
+                return self.get(id).ok_or_else(|| SkillLookupError::UnknownSkill {
+                    name: name.to_string(),
+                });
             }
         }
-        Err(SkillLookupError::UnknownSkill { name: name.to_string() })
+        Err(SkillLookupError::UnknownSkill {
+            name: name.to_string(),
+        })
     }
 
     /// 按 kebab name string 查 1 个 skill 的 steps (e.g. for "show me steps for TDD").
@@ -254,11 +256,9 @@ impl SkillRegistry {
         id: SkillId,
         tool_mapping: &str,
     ) -> Result<crate::skill_prompt::SkillPrompt, SkillLookupError> {
-        let skill = self
-            .get(id)
-            .ok_or_else(|| SkillLookupError::UnknownSkill {
-                name: id.kebab_name().to_string(),
-            })?;
+        let skill = self.get(id).ok_or_else(|| SkillLookupError::UnknownSkill {
+            name: id.kebab_name().to_string(),
+        })?;
         Ok(crate::skill_prompt::SkillPrompt::render(
             skill.as_ref(),
             tool_mapping,
@@ -272,11 +272,9 @@ impl SkillRegistry {
         &self,
         id: SkillId,
     ) -> Result<crate::skill_validation::SkillValidationReport, SkillLookupError> {
-        let skill = self
-            .get(id)
-            .ok_or_else(|| SkillLookupError::UnknownSkill {
-                name: id.kebab_name().to_string(),
-            })?;
+        let skill = self.get(id).ok_or_else(|| SkillLookupError::UnknownSkill {
+            name: id.kebab_name().to_string(),
+        })?;
         Ok(crate::skill_validation::validate_skill(skill.as_ref()))
     }
 
@@ -488,8 +486,14 @@ mod tests {
         assert_eq!(report.skill_count, 14, "skill_count 应 = 14");
         assert!(report.count_ok, "count_ok 应 true");
         assert!(report.tdd_required_ok, "tdd_required_ok 应 true");
-        assert!(report.all_have_steps, "all_have_steps 应 true (0 装空 skill)");
-        assert!(report.total_steps >= 14 * 3, "total_steps 应 ≥ 14*3 (每 skill 至少 3 steps)");
+        assert!(
+            report.all_have_steps,
+            "all_have_steps 应 true (0 装空 skill)"
+        );
+        assert!(
+            report.total_steps >= 14 * 3,
+            "total_steps 应 ≥ 14*3 (每 skill 至少 3 steps)"
+        );
         assert!(
             report.tdd_red_step_count >= 13,
             "tdd_red_step_count 应 ≥ 13 (每 TDD skill 至少 1 red step)"
@@ -501,7 +505,7 @@ mod tests {
     #[test]
     fn startup_validate_zero_skills_count_not_ok() {
         let registry = SkillRegistry::default(); // SkillRegistry::new() 等价
-        // 删除所有 skill (手动 walk, 0 装"empty 状态"伪造)
+                                                 // 删除所有 skill (手动 walk, 0 装"empty 状态"伪造)
         let mut empty = SkillRegistry::new();
         for id in empty.all_ids() {
             // 0 删 fn — 仅 walk, 0 改
@@ -509,8 +513,10 @@ mod tests {
         }
         // 用原 14-skill registry verify 行为
         let report = empty.startup_validate();
-        assert!(!report.overall_ok || report.skill_count == 14,
-                "empty registry 应 overall_ok=false; 14-skill registry 应 true");
+        assert!(
+            !report.overall_ok || report.skill_count == 14,
+            "empty registry 应 overall_ok=false; 14-skill registry 应 true"
+        );
     }
 
     /// 3. StartupReport Default 编译期 hardcode
