@@ -34,54 +34,56 @@ pub mod advisor;
 // R177: council invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 // R176: 7×7=49 agent delegation paths test matrix
+pub mod bus_bridge; // R111: Council deliberation event → bus 真接
+pub mod checkpoint; // R212: Council deliberation checkpoint (LangGraph style)
+pub mod checkpoint_integration; // R218 followup: 集成 checkpoint 到 Council (run_with_checkpoints / resume_with_checkpoints)
+pub mod council_member; // R33-4: AutoGen 借鉴 (role/goal/backstory/provider)
+pub mod council_member_deliberation; // R33-4-1: CouncilMember 多轮协商 deliberation (per AutoGen GroupChat + VCP vcpLoop)
+pub mod council_member_persona_combo; // R33-4-2: CouncilMember + Persona 组合 (per AutoGen ConversableAgent.system_message 借鉴)
 pub mod delegation_matrix;
-pub mod bus_bridge;  // R111: Council deliberation event → bus 真接
-pub mod graph_bridge;  // R113: cognition summary → council deliberation context 真接
-pub mod mcp_bridge;  // R115: CouncilMember → MCP Prompt/ResourceServer 桥接
-pub mod council_member;  // R33-4: AutoGen 借鉴 (role/goal/backstory/provider)
-pub mod council_member_deliberation;  // R33-4-1: CouncilMember 多轮协商 deliberation (per AutoGen GroupChat + VCP vcpLoop)
-pub mod council_member_persona_combo;  // R33-4-2: CouncilMember + Persona 组合 (per AutoGen ConversableAgent.system_message 借鉴)
 pub mod deliberation;
-pub mod checkpoint;  // R212: Council deliberation checkpoint (LangGraph style)
-pub mod checkpoint_integration;  // R218 followup: 集成 checkpoint 到 Council (run_with_checkpoints / resume_with_checkpoints)
+pub mod graph_bridge; // R113: cognition summary → council deliberation context 真接
 pub mod hold;
 pub mod lifecycle;
+pub mod mcp_bridge; // R115: CouncilMember → MCP Prompt/ResourceServer 桥接
 pub mod mock_llm;
 pub mod persona;
-pub mod session_capture;  // R150 P1 #10: council session 自动捕获 (claude-mem 模式)
+pub mod session_capture; // R150 P1 #10: council session 自动捕获 (claude-mem 模式)
 pub mod sovereignty;
-pub mod stress_test;  // R68: deliberation stress test runner
+pub mod stress_test; // R68: deliberation stress test runner
 pub mod synthesis;
 
 pub mod advisors;
 
 // R25 D-3: 4 协作模式 + 角色宪法 + reasoning trace + 图编排集成
-pub mod collaboration;  // R25 D-3 Stage 2 §2B (4 模式: Planner+Executor / Debate / Voting / Hierarchical)
-pub mod constitution;   // R25 D-3 角色宪法 (5 字段 1:1 镜像 R11 5 重守门)
-pub mod trace;          // R25 D-3 reasoning trace 可视化 (3 输出格式)
+pub mod collaboration; // R25 D-3 Stage 2 §2B (4 模式: Planner+Executor / Debate / Voting / Hierarchical)
+pub mod constitution; // R25 D-3 角色宪法 (5 字段 1:1 镜像 R11 5 重守门)
 pub mod graph_orchestration;
-pub mod group_chat;  // R25 D-3 图编排集成 (4 模式包成 Graph Node)
+pub mod group_chat;
+pub mod trace; // R25 D-3 reasoning trace 可视化 (3 输出格式) // R25 D-3 图编排集成 (4 模式包成 Graph Node)
 
 pub use advisor::{
     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
     DeliberationOutcome, Stance, StanceKind, DEFAULT_DEBATE_ROUNDS,
 };
-pub use deliberation::{Council, CouncilQuery, CouncilVerdict, DEFAULT_DELIBERATION_TIMEOUT_MS, DeliberationStreamEvent};
+pub use deliberation::{
+    Council, CouncilQuery, CouncilVerdict, DeliberationStreamEvent, DEFAULT_DELIBERATION_TIMEOUT_MS,
+};
 pub use hold::{HoldDecision, HoldOutcome, HoldThreshold, HoldTrigger};
 pub use lifecycle::{AdvisorLifecycle, LifecycleManager, LifecycleStats};
 pub use mock_llm::{MockLlmProvider, MockLlmResponse, ScriptedMockLlm};
+pub mod g5_council_bridge;
 pub mod llm_backend;
-pub mod multi_model_backend; // R269: multi-model advisor backend (cross-model aggregation)
-pub mod g5_council_bridge; // R159: council 5-step -> g5 5-stage substrate 集成 (第 3 个 g5 生产调用方)
-pub use council_member::{CouncilMember, is_valid_provider, SUPPORTED_PROVIDERS};  // R33-4: AutoGen 借鉴 (4 字段 1:1 re-export)
+pub mod multi_model_backend; // R269: multi-model advisor backend (cross-model aggregation) // R159: council 5-step -> g5 5-stage substrate 集成 (第 3 个 g5 生产调用方)
+pub use council_member::{is_valid_provider, CouncilMember, SUPPORTED_PROVIDERS}; // R33-4: AutoGen 借鉴 (4 字段 1:1 re-export)
 pub use council_member_deliberation::{
     CouncilMemberDeliberator, MemberSummary, MultiRoundVerdict, RoundSummary,
     CONSENSUS_SCORE_THRESHOLD, DEFAULT_MAX_ROUNDS,
-};  // R33-4-1: 多轮协商 deliberation (per AutoGen GroupChat + VCP vcpLoop)
+}; // R33-4-1: 多轮协商 deliberation (per AutoGen GroupChat + VCP vcpLoop)
 pub use council_member_persona_combo::{
     PersonaBoundDeliberator, PersonaBoundMember, PersonaBoundRound, PersonaBoundSummary,
     PersonaBoundVerdict,
-};  // R33-4-2: CouncilMember + Persona 组合
+}; // R33-4-2: CouncilMember + Persona 组合
 pub use llm_backend::LlmAdvisorBackend;
 pub use persona::{DebateRound, Persona, PersonaSession};
 pub use sovereignty::{CouncilEvent, NoopSovereigntyHook, SovereigntyHook};
@@ -94,11 +96,11 @@ pub use advisors::{
 };
 
 // R25 D-3: 4 协作模式 re-export (per v2.0 strategy §2B)
-pub use collaboration::types::{CollaborationContext, CollaborationMode, CollaborationVerdict};
-pub use collaboration::planner_executor::{PlannerExecutor, SubTask};
 pub use collaboration::debate::DebateMode;
-pub use collaboration::voting::{Voter, VotingMode, VotingStrategy};
 pub use collaboration::hierarchical::{DelegatedTask, HierarchicalMode};
+pub use collaboration::planner_executor::{PlannerExecutor, SubTask};
+pub use collaboration::types::{CollaborationContext, CollaborationMode, CollaborationVerdict};
+pub use collaboration::voting::{Voter, VotingMode, VotingStrategy};
 // R25 D-3: 角色宪法 re-export (per v2.0 strategy §2B "角色宪法")
 pub use constitution::{
     ConstitutionViolation, FiveGuardsSummary, RoleConstitution, RoleConstitutionTrait,
@@ -107,9 +109,7 @@ pub use constitution::{
 // R25 D-3: reasoning trace re-export (per v2.0 strategy §2B "reasoning trace 可视化")
 pub use trace::{trace_from_collaboration, trace_step_from_opinion, TraceReport, TraceStep};
 // R25 D-3: graph orchestration re-export (per v2.0 strategy §2B "加图编排支持")
-pub use graph_orchestration::{
-    CollaborationDriver, CollaborationNode, CouncilGraph, MockDriver,
-};
+pub use graph_orchestration::{CollaborationDriver, CollaborationNode, CouncilGraph, MockDriver};
 
 /// 7 强制 Advisor 数量 (编译时硬编码)。
 pub const SEVEN_MANDATORY_ADVISORS: usize = 7;
@@ -160,6 +160,3 @@ const _: () = {
 pub fn __register_all_asserts() {
     // no-op by design
 }
-
-
-

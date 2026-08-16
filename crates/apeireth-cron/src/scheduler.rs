@@ -291,7 +291,10 @@ mod tests {
     #[test]
     fn remove_unknown_rejected() {
         let mut e = CronEngine::new();
-        assert!(matches!(e.remove("nope"), Err(SchedulerError::UnknownJob(_))));
+        assert!(matches!(
+            e.remove("nope"),
+            Err(SchedulerError::UnknownJob(_))
+        ));
     }
 
     #[test]
@@ -309,7 +312,10 @@ mod tests {
         e.add("a".into(), "* * * * *", cb.clone()).unwrap();
         e.add("m".into(), "* * * * *", cb).unwrap();
         let info = e.list_jobs();
-        assert_eq!(info.iter().map(|j| j.id.as_str()).collect::<Vec<_>>(), vec!["a", "m", "z"]);
+        assert_eq!(
+            info.iter().map(|j| j.id.as_str()).collect::<Vec<_>>(),
+            vec!["a", "m", "z"]
+        );
     }
 
     #[test]

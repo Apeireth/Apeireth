@@ -29,7 +29,10 @@ pub struct FoldMarker {
 
 impl FoldMarker {
     pub fn new(kind: MarkerKind, payload: impl Into<String>) -> Self {
-        Self { kind, payload: payload.into() }
+        Self {
+            kind,
+            payload: payload.into(),
+        }
     }
     /// Format this marker as a placeholder string (suitable for embedding in
     /// folded content).

@@ -165,7 +165,12 @@ impl CouncilBusBridge {
     // ----- publish helpers -----
 
     /// **publish Started 事件** (member list 从 CouncilMember list 抽 role)
-    pub fn publish_started(&self, trace_id: u64, members: &[CouncilMember], topic: impl Into<String>) -> usize {
+    pub fn publish_started(
+        &self,
+        trace_id: u64,
+        members: &[CouncilMember],
+        topic: impl Into<String>,
+    ) -> usize {
         if !self.enabled {
             return 0;
         }
@@ -260,9 +265,24 @@ mod tests {
 
     #[test]
     fn deliberation_event_kind_str() {
-        let s = DeliberationEvent::Started { trace_id: 1, started_at_ms: 0, members: vec![], topic: "t".into() };
-        let r = DeliberationEvent::RoundCompleted { trace_id: 1, round: 1, duration: Duration::from_secs(1), verdicts: vec![] };
-        let c = DeliberationEvent::Completed { trace_id: 1, total_rounds: 1, total_duration: Duration::from_secs(1), final_verdict: "ok".into() };
+        let s = DeliberationEvent::Started {
+            trace_id: 1,
+            started_at_ms: 0,
+            members: vec![],
+            topic: "t".into(),
+        };
+        let r = DeliberationEvent::RoundCompleted {
+            trace_id: 1,
+            round: 1,
+            duration: Duration::from_secs(1),
+            verdicts: vec![],
+        };
+        let c = DeliberationEvent::Completed {
+            trace_id: 1,
+            total_rounds: 1,
+            total_duration: Duration::from_secs(1),
+            final_verdict: "ok".into(),
+        };
         assert_eq!(s.kind_str(), "started");
         assert_eq!(r.kind_str(), "round_completed");
         assert_eq!(c.kind_str(), "completed");
@@ -270,9 +290,24 @@ mod tests {
 
     #[test]
     fn deliberation_event_trace_id() {
-        let s = DeliberationEvent::Started { trace_id: 42, started_at_ms: 0, members: vec![], topic: "t".into() };
-        let r = DeliberationEvent::RoundCompleted { trace_id: 42, round: 1, duration: Duration::from_secs(1), verdicts: vec![] };
-        let c = DeliberationEvent::Completed { trace_id: 42, total_rounds: 1, total_duration: Duration::from_secs(1), final_verdict: "ok".into() };
+        let s = DeliberationEvent::Started {
+            trace_id: 42,
+            started_at_ms: 0,
+            members: vec![],
+            topic: "t".into(),
+        };
+        let r = DeliberationEvent::RoundCompleted {
+            trace_id: 42,
+            round: 1,
+            duration: Duration::from_secs(1),
+            verdicts: vec![],
+        };
+        let c = DeliberationEvent::Completed {
+            trace_id: 42,
+            total_rounds: 1,
+            total_duration: Duration::from_secs(1),
+            final_verdict: "ok".into(),
+        };
         assert_eq!(s.trace_id(), 42);
         assert_eq!(r.trace_id(), 42);
         assert_eq!(c.trace_id(), 42);
@@ -316,7 +351,12 @@ mod tests {
         assert_eq!(n, 1);
         let event = rx.recv().await.unwrap();
         match event {
-            DeliberationEvent::Started { trace_id, members, topic, .. } => {
+            DeliberationEvent::Started {
+                trace_id,
+                members,
+                topic,
+                ..
+            } => {
                 assert_eq!(trace_id, 123);
                 assert_eq!(topic, "test topic");
                 assert_eq!(members.len(), 2);
@@ -339,7 +379,12 @@ mod tests {
         assert_eq!(n, 1);
         let event = rx.recv().await.unwrap();
         match event {
-            DeliberationEvent::RoundCompleted { trace_id, round, duration, verdicts } => {
+            DeliberationEvent::RoundCompleted {
+                trace_id,
+                round,
+                duration,
+                verdicts,
+            } => {
                 assert_eq!(trace_id, 7);
                 assert_eq!(round, 1);
                 assert_eq!(duration, Duration::from_millis(500));
@@ -357,7 +402,12 @@ mod tests {
         assert_eq!(n, 1);
         let event = rx.recv().await.unwrap();
         match event {
-            DeliberationEvent::Completed { trace_id, total_rounds, total_duration, final_verdict } => {
+            DeliberationEvent::Completed {
+                trace_id,
+                total_rounds,
+                total_duration,
+                final_verdict,
+            } => {
                 assert_eq!(trace_id, 99);
                 assert_eq!(total_rounds, 3);
                 assert_eq!(total_duration, Duration::from_secs(10));
@@ -392,9 +442,22 @@ mod tests {
         // 1. Started
         b.publish_started(1, &members, "topic");
         // 2. Round 1
-        b.publish_round_completed(1, 1, Duration::from_millis(100), &[("a".into(), "approve".into())]);
+        b.publish_round_completed(
+            1,
+            1,
+            Duration::from_millis(100),
+            &[("a".into(), "approve".into())],
+        );
         // 3. Round 2
-        b.publish_round_completed(1, 2, Duration::from_millis(200), &[("a".into(), "approve".into()), ("b".into(), "approve".into())]);
+        b.publish_round_completed(
+            1,
+            2,
+            Duration::from_millis(200),
+            &[
+                ("a".into(), "approve".into()),
+                ("b".into(), "approve".into()),
+            ],
+        );
         // 4. Completed
         b.publish_completed(1, 2, Duration::from_millis(300), "approved");
 

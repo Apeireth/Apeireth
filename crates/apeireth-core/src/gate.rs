@@ -4,7 +4,9 @@
 //!
 //! 包含: typedef 本段所有 `pub struct` / `pub enum` / `pub trait` / `pub const`.
 
-use crate::{HAMode, HumanAuthority, PermissionOnion, PhilosophyGuard, PhilosophyKey, PhilosophyVerdict};
+use crate::{
+    HAMode, HumanAuthority, PermissionOnion, PhilosophyGuard, PhilosophyKey, PhilosophyVerdict,
+};
 
 use serde::{Deserialize, Serialize};
 

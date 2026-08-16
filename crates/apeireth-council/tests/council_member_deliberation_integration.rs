@@ -142,7 +142,7 @@ fn multi_llm_scripted_3_member_3_round_no_consensus_runs_max() {
     for r in &v.rounds {
         assert_eq!(r.opinions.len(), 3);
         assert!(r.consensus_score < CONSENSUS_SCORE_THRESHOLD);
-        assert!(!r.has_strong_disapprove());  // Disapprove 不是 StrongDisapprove
+        assert!(!r.has_strong_disapprove()); // Disapprove 不是 StrongDisapprove
     }
 
     // 0 强反对 → is_allowed = false (因 0 consensus_reached)
@@ -164,7 +164,7 @@ fn multi_llm_scripted_strong_disapprove_triggers_hold_round_1() {
     hm.insert("architect", MockLlmResponse::ok("StrongApprove"));
     hm.insert(
         "security_reviewer",
-        MockLlmResponse::reject("StrongDisapprove — violates policy"),  // triggers_hold=true, confidence=0.95
+        MockLlmResponse::reject("StrongDisapprove — violates policy"), // triggers_hold=true, confidence=0.95
     );
     hm.insert("product_manager", MockLlmResponse::ok("StrongApprove"));
     let llm: Arc<dyn MockLlmProvider> = Arc::new(hm);
@@ -253,7 +253,12 @@ fn live_minimax_3_member_3_round_deliberation() {
         v.member_summaries
     );
     for r in &v.rounds {
-        eprintln!("  Round {}: score={:.3} transcript={}", r.round + 1, r.consensus_score, r.transcript);
+        eprintln!(
+            "  Round {}: score={:.3} transcript={}",
+            r.round + 1,
+            r.consensus_score,
+            r.transcript
+        );
     }
     assert!(v.rounds_run >= 1, "至少跑 1 轮");
     assert!(v.rounds_run <= 3, "最多 3 轮");
