@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 伙伴</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #0f1115; color: #e6e6e6;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    padding: 10px 18px; border-bottom: 1px solid #23272f;
+    display: flex; align-items: center; gap: 10px; background: #14171d;
+  }
+  header .dot { width: 10px; height: 10px; border-radius: 50%; background: #3ddc84; box-shadow: 0 0 6px #3ddc84; }
+  header h1 { font-size: 15px; font-weight: 600; }
+  header .meta { font-size: 12px; color: #8b93a3; }
+  header .meta span { color: #3ddc84; }
+  #chat { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+  .msg { max-width: 78%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.65; white-space: pre-wrap; word-break: break-word; }
+  .msg.user { align-self: flex-end; background: #2563eb; color: #fff; }
+  .msg.ai { align-self: flex-start; background: #1c2129; border: 1px solid #2a303a; }
+  .msg.tools { align-self: flex-start; background: #16211a; border: 1px solid #2c4433; color: #9fe6b8; font-size: 12px; padding: 6px 12px; border-radius: 8px; }
+  .msg.err { align-self: flex-start; background: #241a1a; border: 1px solid #4a2c2c; color: #f0a0a0; font-size: 13px; }
+  .typing { align-self: flex-start; color: #8b93a3; font-size: 13px; padding: 4px 8px; }
+  #inputbar { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid #23272f; background: #14171d; }
+  #input { flex: 1; background: #1c2129; border: 1px solid #2a303a; color: #e6e6e6; border-radius: 10px; padding: 12px 14px; font-size: 14px; outline: none; }
+  #input:focus { border-color: #3b82f6; }
+  button { background: #2563eb; color: #fff; border: none; border-radius: 10px; padding: 0 20px; font-size: 14px; cursor: pointer; }
+  button:hover { background: #1d4ed8; }
+  button.secondary { background: #2a303a; }
+  button.secondary:hover { background: #374151; }
+  footer { padding: 6px 18px; font-size: 11px; color: #5c6472; border-top: 1px solid #1a1e26; }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot"></div>
+  <h1>Apeireth 伙伴</h1>
+  <div class="meta">companion_serve · 记忆持久 · 工具桥 · 宪法守护 · 自成长管道 <span id="feat"></span></div>
+</header>
+<div id="chat"></div>
+<div id="inputbar">
+  <input id="input" placeholder="和他聊聊…（Enter 发送）" autocomplete="off">
+  <button id="clear" class="secondary" title="清空本会话">清空</button>
+  <button id="send">发送</button>
+</div>
+<footer>他的记忆是持久的：重启后还记得你 · 工具执行受宪法与你的授权约束 · 原则晋级需你批准</footer>
+<script>
+const messages = [];
+const chat = document.getElementById('chat');
+const input = document.getElementById('input');
+const MODEL = 'MiniMax-M3';
+
+function addMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+async function send() {
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  messages.push({ role: 'user', content: text });
+  addMsg('user', text);
+  const typing = document.createElement('div');
+  typing.className = 'typing';
+  typing.textContent = '他在想…';
+  chat.appendChild(typing);
+  chat.scrollTop = chat.scrollHeight;
+  try {
+    const r = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, messages: messages, max_tokens: 2000 })
+    });
+    const j = await r.json();
+    typing.remove();
+    if (!r.ok) { addMsg('err', '请求失败: ' + (j.error?.message || r.status)); return; }
+    const content = j.choices?.[0]?.message?.content || '(空回复)';
+    addMsg('ai', content);
+    messages.push({ role: 'assistant', content });
+    const x = j.x_apeireth;
+    if (x && x.tools_executed && x.tools_executed.length) {
+      addMsg('tools', '🔧 本轮工具调用: ' + x.tools_executed.join(' · ') + (x.tool_rounds > 1 ? '（' + x.tool_rounds + ' 轮）' : ''));
+    }
+    if (x && x.continuity) {
+      document.querySelector('.meta span') && (document.querySelector('.meta span').textContent = '');
+    }
+  } catch (e) {
+    typing.remove();
+    addMsg('err', '网络错误: ' + e.message + '（确认 serve 在运行）');
+  }
+}
+
+input.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
+document.getElementById('send').addEventListener('click', send);
+document.getElementById('clear').addEventListener('click', () => {
+  messages.length = 0;
+  chat.innerHTML = '';
+  addMsg('ai', '（会话已清空。他的长期记忆还在——问问他记得你什么。）');
+});
+fetch('/health').then(r => r.json()).then(h => {
+  if (h.features) document.getElementById('feat').textContent = '· ' + h.features.join(' · ');
+}).catch(() => {});
+addMsg('ai', '我在。你回来了？记忆还都在——周五高数期中、换元法两个错点、每天精练 8 道题的计划，我都记得。想聊点什么？');
+</script>
+</body>
+</html>
