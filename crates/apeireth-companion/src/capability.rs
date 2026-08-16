@@ -15,6 +15,8 @@ use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+use crate::confidence::BetaBinomial;
+
 /// 能力种类.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CapabilityKind {
@@ -53,6 +55,17 @@ impl CapabilityStatus {
     }
 }
 
+/// 预测行 (对齐 yoyo skill-evolve `expected:`): 激活时的可测预期 — 信号/期限/回退.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExpectedOutcome {
+    /// 可测信号 (如「换元提醒被采用 ≥3 次」).
+    pub signal: String,
+    /// 评估期限 (epoch ms).
+    pub deadline_ms: i64,
+    /// 未达标时的回退动作 (如「retire / 降频」).
+    pub rollback: String,
+}
+
 /// 能力提案 (真库登记项, append-only 版本化).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CapabilityProposal {
@@ -67,6 +80,12 @@ pub struct CapabilityProposal {
     pub proposed_at_ms: i64,
     pub decided_at_ms: Option<i64>,
     pub reject_reason: Option<String>,
+    /// 预测行 (激活时可填): 可测预期, 未达标 → 回退 (revert 即学习信号).
+    pub expected: Option<ExpectedOutcome>,
+    /// EMA 评分 (0..1): record_use 更新, 低分+多观测 → 建议退役.
+    pub ema_score: Option<f64>,
+    /// Beta-Binomial 置信度 (成功/失败观测).
+    pub confidence: Option<BetaBinomial>,
 }
 
 impl CapabilityProposal {
@@ -82,6 +101,32 @@ impl CapabilityProposal {
             proposed_at_ms: chrono::Utc::now().timestamp_millis(),
             decided_at_ms: None,
             reject_reason: None,
+            expected: None,
+            ema_score: None,
+            confidence: None,
+        }
+    }
+
+    /// 带预测行提案 (激活后按预期评估, 未达标回退).
+    pub fn with_expected(mut self, expected: ExpectedOutcome) -> Self {
+        self.expected = Some(expected);
+        self
+    }
+
+    /// 记录一次使用结果 (EMA 评分 + Beta-Binomial 置信度).
+    pub fn record_use(&mut self, success: bool) {
+        let s = self.ema_score.unwrap_or(0.5);
+        self.ema_score = Some(0.3 * (success as u8 as f64) + 0.7 * s);
+        let mut c = self.confidence.unwrap_or_default();
+        c.observe(success);
+        self.confidence = Some(c);
+    }
+
+    /// 是否应退役: EMA 低 + 观测足够 (评分 < 0.35 且 obs ≥ 5).
+    pub fn should_retire(&self) -> bool {
+        match (self.ema_score, self.confidence) {
+            (Some(s), Some(c)) => s < 0.35 && c.observations >= 5,
+            _ => false,
         }
     }
 }
@@ -195,6 +240,52 @@ impl CapabilityRegistry {
     /// AI 可感知的已激活能力 (供 CapabilityCatalog 动态扩展).
     pub fn active_capabilities(&self) -> Result<Vec<CapabilityProposal>, String> {
         self.list(Some(CapabilityStatus::Active))
+    }
+
+    /// 带预测行的提案 (对齐 yoyo expected: 激活后按信号评估, 未达标回退).
+    pub fn propose_with_expected(
+        &self,
+        name: &str,
+        description: &str,
+        kind: CapabilityKind,
+        proposed_by: &str,
+        expected: ExpectedOutcome,
+    ) -> Result<CapabilityProposal, String> {
+        let p = CapabilityProposal::new(name, description, kind, proposed_by).with_expected(expected);
+        self.put(&p)?;
+        Ok(p)
+    }
+
+    /// 记录一次使用结果 (EMA + 置信度; 应退役时返回提示).
+    pub fn record_use(&self, id: &str, success: bool) -> Result<Option<String>, String> {
+        let mut all = self.load_all().map_err(|_| "load".to_string())?;
+        let idx = all.iter().position(|p| p.id == id).ok_or_else(|| format!("能力不存在: {id}"))?;
+        let mut p = all[idx].clone();
+        p.record_use(success);
+        p.rev += 1;
+        let retire_hint = if p.should_retire() {
+            Some(format!("能力 {} 评分偏低 (EMA={:.2}, obs={}), 建议退役或降频", p.name, p.ema_score.unwrap_or(0.0), p.confidence.map(|c| c.observations).unwrap_or(0)))
+        } else {
+            None
+        };
+        self.put(&p)?;
+        Ok(retire_hint)
+    }
+
+    /// 回滚收据 (revert 即学习信号): 被否决/退役的能力 + 原因, 供下一轮提案参考.
+    pub fn revert_receipts(&self) -> Result<Vec<(String, String, String)>, String> {
+        Ok(self
+            .load_all()?
+            .into_iter()
+            .filter(|p| matches!(p.status, CapabilityStatus::Rejected | CapabilityStatus::Retired))
+            .map(|p| {
+                (
+                    p.name.clone(),
+                    p.status.label().to_string(),
+                    p.reject_reason.clone().unwrap_or_else(|| "无记录".to_string()),
+                )
+            })
+            .collect())
     }
 }
 

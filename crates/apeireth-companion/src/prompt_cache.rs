@@ -39,9 +39,112 @@ pub fn build_messages(system: &str, history: &[Value], dynamic_note: Option<&str
     out
 }
 
+/// 提示分层装配 (吸收 hydra Tier 0-7): 按 tier 排序拼接 system 段.
+/// tier 越小越靠前 (0 = 身份/最优先, 记忆在身份之后, 工具/指令靠后).
+pub fn assemble_tiered(parts: &[(u8, &str)]) -> String {
+    let mut sorted = parts.to_vec();
+    sorted.sort_by_key(|(tier, _)| *tier);
+    let mut s = String::new();
+    for (_, content) in sorted {
+        s.push_str(content);
+        s.push('\n');
+    }
+    s
+}
+
+/// 凭据脱敏 (对齐 hydra redact_credentials_in_enrichments): 脱敏常见密钥模式.
+/// 0 假装: 覆盖常见模式 (sk- / Bearer / KEY=), 不保证穷尽 — 出站还有 guard 层.
+pub fn redact_secrets(text: &str) -> String {
+    let mut out = text.to_string();
+    // sk-xxx
+    let mut rest = out.clone();
+    let mut res = String::new();
+    while let Some(idx) = rest.find("sk-") {
+        res.push_str(&rest[..idx]);
+        let tail = &rest[idx + 3..];
+        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').count();
+        if take >= 8 {
+            res.push_str("sk-***");
+            rest = tail.chars().skip(take).collect();
+        } else {
+            res.push_str("sk-");
+            rest = tail.to_string();
+        }
+    }
+    res.push_str(&rest);
+    out = res;
+    // Bearer xxx
+    rest = out.clone();
+    res = String::new();
+    while let Some(idx) = rest.find("Bearer ") {
+        res.push_str(&rest[..idx]);
+        let tail = &rest[idx + 7..];
+        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-').count();
+        if take >= 8 {
+            res.push_str("Bearer ***");
+            rest = tail.chars().skip(take).collect();
+        } else {
+            res.push_str("Bearer ");
+            rest = tail.to_string();
+        }
+    }
+    res.push_str(&rest);
+    // KEY=xxx
+    out = res;
+    rest = out.clone();
+    res = String::new();
+    while let Some(idx) = rest.find("KEY=") {
+        res.push_str(&rest[..idx + 4]);
+        let tail = &rest[idx + 4..];
+        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-').count();
+        if take >= 8 {
+            res.push_str("***");
+            rest = tail.chars().skip(take).collect();
+        } else {
+            rest = tail.to_string();
+        }
+    }
+    res.push_str(&rest);
+    res
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tiered_assembly_orders_by_tier() {
+        let s = assemble_tiered(&[
+            (100, "工具指引\n"),
+            (0, "身份: 阿佩瑞斯\n"),
+            (50, "记忆证据\n"),
+        ]);
+        let i0 = s.find("身份").unwrap();
+        let i1 = s.find("记忆").unwrap();
+        let i2 = s.find("工具").unwrap();
+        assert!(i0 < i1 && i1 < i2, "tier 0 身份应最前: {s}");
+    }
+
+    #[test]
+    fn redact_sk_bearer_and_key() {
+        let s = redact_secrets("key=sk-abcdefghijklmnop Bearer abcdefghijklmnop 其它内容");
+        assert!(!s.contains("sk-abcdef"), "sk- 应脱敏: {s}");
+        assert!(s.contains("sk-***"));
+        assert!(!s.contains("Bearer abcdef"), "Bearer 应脱敏: {s}");
+        assert!(s.contains("Bearer ***"));
+    }
+
+    #[test]
+    fn redact_key_equals() {
+        let s = redact_secrets("API_KEY=abcdefghijklmnop123");
+        assert!(s.contains("API_KEY=***"), "KEY= 应脱敏: {s}");
+    }
+
+    #[test]
+    fn short_tokens_left_alone() {
+        let s = redact_secrets("sk-ab 短 token 保留");
+        assert!(s.contains("sk-ab"), "短 token 不应误脱敏");
+    }
 
     fn history() -> Vec<Value> {
         vec![

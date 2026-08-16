@@ -19,28 +19,45 @@ use std::sync::Arc;
 use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use serde_json::{json, Value};
 
-/// 会话事件 (append-only 日志单元).
+/// 会话事件 (append-only 日志单元, 带哈希链).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SessionEvent {
     pub seq: u64,
     pub kind: String, // "user" | "assistant" | "tool"
     pub payload: Value,
+    /// 前一条事件哈希 (FNV-1a 64, 篡改检测链).
+    pub prev_hash: Option<String>,
 }
 
 impl SessionEvent {
     pub fn user(content: impl Into<String>, seq: u64) -> Self {
-        Self { seq, kind: "user".into(), payload: json!({"content": content.into()}) }
+        Self { seq, kind: "user".into(), payload: json!({"content": content.into()}), prev_hash: None }
     }
     pub fn assistant(content: impl Into<String>, tool_calls: Value, seq: u64) -> Self {
-        Self { seq, kind: "assistant".into(), payload: json!({"content": content.into(), "tool_calls": tool_calls}) }
+        Self { seq, kind: "assistant".into(), payload: json!({"content": content.into(), "tool_calls": tool_calls}), prev_hash: None }
     }
     pub fn tool(tool_call_id: impl Into<String>, result: Value, seq: u64) -> Self {
-        Self { seq, kind: "tool".into(), payload: json!({"tool_call_id": tool_call_id.into(), "result": result}) }
+        Self { seq, kind: "tool".into(), payload: json!({"tool_call_id": tool_call_id.into(), "result": result}), prev_hash: None }
     }
 
     /// 合成闭包事件 (崩溃修复): 该 tool_call 结果未知.
     pub fn tool_outcome_unknown(tool_call_id: impl Into<String>, seq: u64) -> Self {
         Self::tool(tool_call_id, json!({"__outcome__": "TOOL_OUTCOME_UNKNOWN"}), seq)
+    }
+
+    /// FNV-1a 64 哈希 (确定性, 无新依赖): seq|kind|payload|prev_hash.
+    pub fn hash(&self) -> String {
+        fn fnv1a(bytes: &[u8]) -> u64 {
+            let mut h: u64 = 0xcbf29ce484222325;
+            for b in bytes {
+                h ^= *b as u64;
+                h = h.wrapping_mul(0x100000001b3);
+            }
+            h
+        }
+        let prev = self.prev_hash.as_deref().unwrap_or("");
+        let joined = format!("{}|{}|{}|{}", self.seq, self.kind, self.payload, prev);
+        format!("{:016x}", fnv1a(joined.as_bytes()))
     }
 }
 
@@ -58,12 +75,34 @@ impl SessionLog {
         Self { store, session_id: session_id.into() }
     }
 
-    /// 追加一条事件 (seq 自动 = 当前日志长度).
+    /// 追加一条事件 (seq 自动 = 当前日志长度; 哈希链 prev_hash 自动接).
     pub fn append(&self, kind: &str, payload: Value) -> Result<u64, String> {
         let seq = self.len()? as u64;
-        let ev = SessionEvent { seq, kind: kind.into(), payload };
+        let prev_hash = if seq > 0 {
+            self.replay()?.last().map(|e| e.hash())
+        } else {
+            None
+        };
+        let ev = SessionEvent { seq, kind: kind.into(), payload, prev_hash };
         self.put(&ev)?;
         Ok(seq)
+    }
+
+    /// 校验哈希链: 每条事件的 prev_hash 必须等于前一条的 hash.
+    /// 返回 (ok, 损坏位置 Option<seq>).
+    pub fn verify_chain(&self) -> (bool, Option<u64>) {
+        let evs = match self.replay() {
+            Ok(e) => e,
+            Err(_) => return (false, None),
+        };
+        let mut prev_hash: Option<String> = None;
+        for e in &evs {
+            if e.prev_hash != prev_hash {
+                return (false, Some(e.seq));
+            }
+            prev_hash = Some(e.hash());
+        }
+        (true, None)
     }
 
     fn put(&self, ev: &SessionEvent) -> Result<(), String> {

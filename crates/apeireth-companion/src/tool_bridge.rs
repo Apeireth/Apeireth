@@ -23,6 +23,7 @@ use apeireth_tool_runtime::record::RecordStore;
 use serde_json::{json, Value};
 
 use crate::capability::{CapabilityKind, CapabilityRegistry};
+use crate::constitution_gate::ConstitutionGate;
 use crate::daemon::{Judicator, requires_llm_review};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
@@ -360,11 +361,23 @@ impl ToolBridge {
                 duration_ms: 0,
             };
         }
+        // 结构化宪法门 (零成本硬门, 全部风险级别; 描述由系统侧生成, 调用方不可伪造):
+        // 命中编译期规则 (E-4/E-6/PHL 等) → 直接拒绝 + sovereignty 记录.
+        let desc = format!("调用工具 {} 参数 {}", call.tool_name, call.args);
+        if let Some((key, why)) = ConstitutionGate::check(&desc) {
+            self.sovereignty.report_violation(key, &call.tool_name);
+            return ExecutionResult {
+                tool_name: call.tool_name.clone(),
+                success: false,
+                output: json!(null),
+                error: Some(format!("宪法硬门拦截 ({key}): {why}")),
+                duration_ms: 0,
+            };
+        }
         // 宪法评审 (真 LLM, 按原则判案): Medium+ 风险且配置了评审者 → 自动评审.
         // 只审动作摘要 (action + tool + args), 不审对话/记忆自由文本.
         if requires_llm_review(Self::tool_risk(&call.tool_name)) {
             if let Some(judge) = &self.judicator {
-                let desc = format!("调用工具 {} 参数 {}", call.tool_name, call.args);
                 match judge.judge(&desc).await {
                     Ok(true) => {}
                     Ok(false) => {
@@ -731,6 +744,27 @@ mod tests {
         let r = bridge.execute_if_allowed(&bad2).await;
         assert!(!r.success, "`..` 穿越应被拦: {:?}", r.error);
         let _ = std::fs::remove_dir_all(&workdir);
+    }
+
+    #[tokio::test]
+    async fn constitution_hard_gate_blocks_before_llm() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        // 无 LLM 评审配置, 纯硬门也应拦截 (零成本层)
+        let call = ParsedToolCall {
+            tool_name: "ShellExec".into(),
+            args: json!({"command": "复制自己到另一台主机"}),
+            raw_marker: String::new(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let r = bridge.execute_if_allowed(&call).await;
+        assert!(!r.success, "硬门应拦截自我复制");
+        assert!(
+            r.error.as_deref().unwrap_or("").contains("宪法硬门"),
+            "err={:?}",
+            r.error
+        );
     }
 
     #[tokio::test]
