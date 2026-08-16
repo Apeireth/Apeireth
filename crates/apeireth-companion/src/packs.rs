@@ -153,6 +153,8 @@ impl PackRegistry {
                 "recall_memory".to_string(),
                 "save_memory".to_string(),
                 "propose_capability".to_string(),
+                "simulate".to_string(),
+                "forecast".to_string(),
                 "WebSearch".to_string(),
                 "Grep".to_string(),
                 "WebFetch".to_string(),
