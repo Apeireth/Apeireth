@@ -69,22 +69,30 @@ curl -X POST http://127.0.0.1:8080/v1/chat/completions `
 
 ## 五、后端：companion_serve（伙伴端点, 已完成 2026-08-16）
 
-把「任何前端接入 Apeireth」变成现实的主链路。VCP 对齐（`chatCompletionHandler` 主链路 +
-messagePreprocessors 思想），**改进而非照抄**：
+**v2 全能力版**：连上后端 = 前端天然拥有后端全部能力（主人设想落地）。
 
 ```powershell
 $env:APEIRETH_API_KEY = (Get-Content apikey-ultra.txt -Raw).Trim()
-$env:APEIRETH_SEED_MEMORY = "可选: 种子记忆;分号分隔"   # 不设则从零积累
-cargo run -p apeireth-companion --example companion_serve   # :8090
+$env:APEIRETH_SEED_MEMORY = "可选: 种子记忆;分号分隔"   # 演示用, 不设则从零积累
+$env:APEIRETH_GRANT = "FileOperator:24"                 # 可选: 显式扩权 (工具:小时;分号多个)
+cargo run -p apeireth-companion --example companion_serve   # :8090, daemon 同进程常驻
 ```
 
 - 端点：`/health` · `/v1/models` · `/v1/chat/completions`（OpenAI 兼容）
-- **预处理链**（对齐 VCP messagePreprocessors）：① 记忆注入（EMI/NEC 反幻觉）
-  ② 今日摘要注入（能答"我今天干了什么"）③ 工具桥（ToolBridge 全链安全）
-- 会话隔离：请求头 `X-Apeireth-Continuity: <id>`（缺省 `me`）
-- 暴露工具白名单（低风险）：recall_memory / save_memory / simulate / forecast / audit_log /
-  WebSearch / WebFetch / Grep / Git（FileOperator/ShellExec 等需显式扩权）
-- 护栏（改进 VCP）：工具循环 ≤5 轮 + 工具结果 4000 字符截断 + 注入标注"以用户当前说法为准"
+- **① 持久记忆**：`open_memory_store()` 文件库（%APPDATA%\apeireth\memory.sqlite, 重启不失忆）
+- **② 全工具可见**：schema 由 registry 动态生成（含未手写 schema 的通用兜底）;
+  执行由宪法硬门/权限包/主人批准约束（FileOperator 等默认需批准, APEIRETH_GRANT 显式扩权）
+- **③ daemon 常驻**：做梦(6h)/反思(24h)/涌现 同进程 step, 对话自动喂节律(on_user_message)
+- **预处理链**（对齐 VCP messagePreprocessors）：记忆注入（EMI/NEC）+ 今日摘要注入 + 工具桥
+- 会话标签：`X-Apeireth-Continuity`（缺省 companion-main; 记忆本体统一 "me" 会话）
+- 护栏：工具循环 ≤5 轮 + 结果 4000 字符截断 + 注入标注"以用户当前说法为准"
+
+**0 假装**：做梦未接 LLM 摘要器（拼接降级）; 涌现文本=PlainUtterance 机制原文（非 LLM 润色）;
+FileOperator/ShellExec 可见但默认需批准; daemon 内部 RefCell 跨 await 非 Send → 与 HTTP 同 task 交替（select!）。
+
+**实测（2026-08-16 v2, MiniMax-M3）**:
+- save_memory 真执行（对话中 AI 主动存"每天精练8道换元题"）
+- **重启后无种子注入 → 仍准确记得该决定 + 两个错点**（持久化 ✅）
 
 **对 VCP 的改进点**（VCP 不好的我们改，VCP 没有的我们补）：
 
