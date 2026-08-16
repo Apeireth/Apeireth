@@ -294,7 +294,7 @@
 | semanticModelRouter | gateway 层：语义选模型 + 容灾链 | P1 |
 | reasoningContentAdapter | gateway 层：推理字段归一化（13 别名 → think 块） | P1 |
 | toolApprovalManager 增强 | tool-approval 补命令级粒度+静默拒绝+结构化拒绝 | P1 |
-| dynamicToolRegistry 预算化 | tool-registry 补注入注意力预算+分类链 | P1 |
+| dynamicToolRegistry 预算化 | tool-registry 补注入注意力预算+分类链 ✅ (提交 8b6a825d, backlog N15) | P1 |
 | DigitalOracle 金融源 | 预测机套件旗舰数据源（含预测市场） | P1 |
 | AgentDream 审批门 | 做梦机制补写操作审批门 | P2 |
 | AICodeWorker 报告锚点 | 工具输出规范借鉴（读取清单+结果摘要锚点） | P2 |
