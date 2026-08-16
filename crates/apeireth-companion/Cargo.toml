@@ -35,6 +35,10 @@ apeireth-sovereignty = { path = "../apeireth-sovereignty" }
 tokio = { workspace = true }
 apeireth-api = { path = "../apeireth-api" }
 reqwest = { workspace = true }
+# companion_serve: 伙伴端点 (任何 OpenAI 兼容前端接入 Apeireth 主链路)
+axum = { version = "0.7", features = ["macros"] }
+uuid = { workspace = true }
+chrono = { workspace = true }
 
 [lib]
 name = "apeireth_companion"
