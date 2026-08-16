@@ -65,6 +65,37 @@ async fn stay_tool_does_not_spawn_worker() {
 }
 
 #[tokio::test]
+async fn isolated_exec_with_pack_sandbox_config_succeeds() {
+    // B3: 限额不阻断正常执行 (失败不阻断主链) — 权限包级沙盒配置 + 真 worker 隔离写文件
+    let worker = env!("CARGO_BIN_EXE_exec_worker");
+    let dir = std::env::temp_dir().join(format!("apeireth-b3-{}", std::process::id()));
+    let target = dir.join("out.txt");
+    let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+    let bridge = ToolBridge::new(store).with_isolation(worker);
+    bridge.packs.grant(
+        PermissionPack::permanent("沙盒测试包", vec!["FileOperator".to_string()])
+            .with_paths(vec![dir.to_string_lossy().to_string()])
+            .with_sandbox(apeireth_companion::sandbox::SandboxConfig {
+                memory_limit_mb: Some(512),
+                cpu_time_secs: Some(30),
+                timeout_secs: 30,
+                ..apeireth_companion::sandbox::SandboxConfig::default()
+            }),
+    );
+    let call = ParsedToolCall {
+        tool_name: "FileOperator".into(),
+        args: json!({"op": "write", "path": target.to_string_lossy().to_string(), "content": "B3"}),
+        raw_marker: String::new(),
+        archery: false,
+        archery_no_reply: false,
+    };
+    let r = bridge.execute_if_allowed(&call).await;
+    assert!(r.success, "带沙盒限额的隔离执行应成功: {:?}", r.error);
+    assert_eq!(std::fs::read_to_string(&target).unwrap_or_default(), "B3");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[tokio::test]
 async fn isolated_worker_timeout_is_killed_and_reported() {
     let worker = env!("CARGO_BIN_EXE_exec_worker");
     let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
