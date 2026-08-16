@@ -35,6 +35,9 @@ pub struct PermissionPack {
     /// 操作预算 (总次数上限; None = 不限)
     pub op_budget: Option<u32>,
     pub used_ops: u32,
+    /// 花费预算 (对齐 hydra vault access: spend 上限; None = 不限)
+    pub spend_budget: Option<u64>,
+    pub spend_used: u64,
     pub activated_at_ms: i64,
     pub created_at_ms: i64,
 }
@@ -49,6 +52,8 @@ impl PermissionPack {
             expiry: PackExpiry::Permanent,
             op_budget: None,
             used_ops: 0,
+            spend_budget: None,
+            spend_used: 0,
             activated_at_ms: now_ms(),
             created_at_ms: now_ms(),
         }
@@ -63,8 +68,27 @@ impl PermissionPack {
             expiry: PackExpiry::Hours(hours),
             op_budget: budget,
             used_ops: 0,
+            spend_budget: None,
+            spend_used: 0,
             activated_at_ms: now_ms(),
             created_at_ms: now_ms(),
+        }
+    }
+
+    /// 设花费上限 (花钱类工具: 模型调用/付费 API 等).
+    pub fn with_spend_budget(mut self, budget: u64) -> Self {
+        self.spend_budget = Some(budget);
+        self
+    }
+
+    /// 花费一笔: 预算内 → 记账返回 true; 超限 → false (不记账).
+    pub fn try_spend(&mut self, amount: u64) -> bool {
+        match self.spend_budget {
+            Some(b) if self.spend_used + amount > b => false,
+            _ => {
+                self.spend_used += amount;
+                true
+            }
         }
     }
 
