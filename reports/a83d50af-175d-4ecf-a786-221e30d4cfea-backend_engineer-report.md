@@ -60,6 +60,16 @@ research/source/vcptoolbox/modules/messageProcessor.js (只读):
 
 **调试实录 (诚实审计)**: 首轮 15/17, 修复 2 处——① depth_cap 测试的 format! 字符串转义 bug (`{{` 被转义为单花括号, 测试自身问题, 引擎无错); ② toolbox 同文本重复移除未记入报告 → replace_forms 返回移除计数留痕。另自修 Datelike 导入缺失。
 
+### 4.1 全量 lib 套件补充验证 (最终证据)
+
+隔离 target 独立构建后执行 `cargo test -p apeireth-companion --lib -j 4 -- --skip continuity::tests`:
+
+**337 passed / 2 failed** — 其中 prompt_assembler 17/17 全绿含于 337。两处失败**均属他人任务包 WIP**, 与本任务零关联:
+- `thought_cluster::tests::invalid_inputs_rejected` / `read_cluster_sorted_empty_and_missing`: thought_cluster (未跟踪 WIP 模块) 内部不一致 — 其测试期望簇名 `簇X` 合法, 但其自身校验报 `InvalidName("簇X")`
+- `continuity::tests::migrate_*` ×3: 挂起 >60s (疑似等真实 DB/死锁), 故 `--skip` 过滤 (已实测确认是挂起非慢)
+
+0 装 PASS: 全量套件在**当前多成员 WIP 交织的工作区**无法绝对全绿 — 上述 2 失败 + 3 挂起全部归属 thought_cluster/continuity 两个未入库模块; 我的任务包 (prompt_assembler + context.rs getter + 示例第 7 段) 零失败。
+
 ## 5. 0 装 PASS 标注 (没做什么)
 
 - ❌ 未接线 companion_serve / assemble.rs 实际链路 — 本模块为独立机制件; 接线属后续任务 (需与注入链顺序协商)
