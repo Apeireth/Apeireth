@@ -2,7 +2,7 @@
 //!
 //! **要验证的不变量 (VCP 模式 3/8 + 找 bug)**:
 //! 1. detect_pii 找到的 PII 位置 start < end
-//! 2. 5 类 PII 全覆盖 (Email/Phone/Ssn/CreditCard/IpAddress/UrlWithCredentials)
+//! 2. 8 类 PII 全覆盖 (Email/Phone/Ssn/CreditCard/IpAddress/UrlWithCredentials/SecretToken/EnvSecret)
 //! 3. redact 不可逆 (redacted != original)
 //! 4. 4 策略都产生红字输出 (Mask / Hash / Drop / ReplaceLabel)
 //! 5. audit log 不超过 capacity (ring buffer)
@@ -10,7 +10,7 @@
 //! 7. audit_enabled 默认 true
 //! 8. PiiMatch::length == end - start
 //! 9. detect_pii 对纯文本返回空 vec
-//! 10. PiiKind::ALL 6 个 (含 UrlWithCredentials)
+//! 10. PiiKind::ALL 8 个 (含 UrlWithCredentials + ae12d9eb 增量的 SecretToken/EnvSecret)
 
 #![allow(missing_docs)]
 
@@ -33,11 +33,11 @@ fn r177_grd_01_pii_positions_valid() {
 }
 
 // ============================================
-// Property 2: PiiKind 6 类
+// Property 2: PiiKind 8 类 (ae12d9eb: 6 → 8)
 // ============================================
 #[test]
-fn r177_grd_02_pii_kinds_six() {
-    assert_eq!(PiiKind::ALL.len(), 6);
+fn r177_grd_02_pii_kinds_eight() {
+    assert_eq!(PiiKind::ALL.len(), 8);
     let names: Vec<&str> = PiiKind::ALL.iter().map(|k| k.as_str()).collect();
     assert!(names.contains(&"email"));
     assert!(names.contains(&"phone"));
@@ -45,6 +45,8 @@ fn r177_grd_02_pii_kinds_six() {
     assert!(names.contains(&"credit_card"));
     assert!(names.contains(&"ip_address"));
     assert!(names.contains(&"url_with_credentials"));
+    assert!(names.contains(&"secret_token"));
+    assert!(names.contains(&"env_secret"));
 }
 
 // ============================================
@@ -138,7 +140,7 @@ fn r177_grd_09_clean_text_no_pii() {
 }
 
 // ============================================
-// Property 10: PiiKind::as_str 6 个不重不漏
+// Property 10: PiiKind::as_str 8 个不重不漏
 // ============================================
 #[test]
 fn r177_grd_10_pii_kind_str_distinct() {
@@ -192,7 +194,7 @@ fn r177_grd_kani_01_pii_position_invariant() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_grd_kani_02_pii_kinds_complete() {
-    assert_eq!(PiiKind::ALL.len(), 6);
+    assert_eq!(PiiKind::ALL.len(), 8);
 }
 
 #[allow(dead_code)]
