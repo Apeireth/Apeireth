@@ -1,5 +1,47 @@
 # Changelog — Apeireth
 
+## [2026-08-16] R131-R178 历史 banner 归位（从根 README 压缩移入）
+
+> 根 README 顶部曾堆叠 30+ 条 R 系列进度 banner（R128-R178），为可维护性按规范归位至此。
+> 每轮一行摘要；细节见原链接文档。
+
+| R | 摘要 | 文档 |
+|---|---|---|
+| R178 | 后端完工补丁: 2 阻断修复 + GET /health/deps + ADR-0028/29/30; workspace 22404 tests PASS | `docs/r178/r178-backend-completion-2026-08-15.md` |
+| R177 | 形式化加深 V3: 79 crates 加 organ_kani_proofs (5 cargo tests + 2 Kani), 518 tests PASS | `docs/r177/r177-v3-w6-w12.md` |
+| R176 | 后端终极目标 4 阶段: anysearch 真接 LIVE + LlmFacade 统一接入 + http_dispatch 6 Provider | `docs/r176/r176-ultimate-goal-4-phases.md` |
+| R175 | R170-R174 终极目标盘点 + 5 P0 fix 闭环 | `docs/r175/r175-session-summary.md` |
+| R174 | 后端综合审计 + 7 大文档漂移 + 5 P0 修法 + bridge_table; 1009 tests PASS | `docs/audit/R174-comprehensive-audit.md` |
+| R173 | 放最后模块接口盘点 (STT/声纹/唤醒词/生图) + 7 条桥全落地 (74 tests) | `docs/r173/r173-deferred-interfaces-audit.md` |
+| R172 | apeireth-voice MiniMax LIVE TTS 真接 (122KB MP3 确认) | `docs/r172/r172-minimax-live-voice.md` |
+| R171 | SurrealDB 多模型后端调研 (research-only, P2 选项) | `docs/r171/r171-surrealdb-research.md` |
+| R170 | followup-checkpoint integration | `docs/session/checkpoint-2026-08-14.md` |
+| R169 | 41 e2e tests all pass with LIVE apikey | `docs/r169/r169-e2e-demo-all-41-pass.md` |
+| R168 | LIVE MiniMax-M3 e2e 验证 (HTTP 200, 5.5s cold / 1.1s warm) | `docs/r168/r168-live-verification-and-doc-consistency.md` |
+| R167 | 会话总结: VCP 命名 100% 清理, 78→76 active crates, 5618 tests | `docs/r167/r167-session-summary.md` |
+| R166 | Public API deep cleanup: 21 VCP 命名 → LEGACY_*/BORROWED_*/ABSORBED_* | `docs/r166/r166-public-api-deep-cleanup.md` |
+| R165 | 架构审计 + 死代码归档 (2 crate → _archived), 78→76 members | `docs/r165/r165-architecture-audit-and-deadcode-archive.md` |
+| R164 | Public API cleanup + workspace warning zero (858 tests) | `docs/r164/r164-api-cleanup-and-warning-zero.md` |
+| R163 | Lint cleanup batch 2: 475 warnings → 0, 16 bugs fixed | `docs/r163/r163-lint-cleanup-batch-2.md` |
+| R162 | Lint cleanup: 7 crates 585 warnings → 0 | `docs/r162/r162-lint-cleanup-batch.md` |
+| R161 | memory × pipeline-g5 一体化 (g5_memory_bridge) | `docs/r161/r161-g5-memory-bridge.md` |
+| R160 | runtime × pipeline-g5 一体化 (g5_runtime_bridge) | `docs/r160/r160-g5-runtime-bridge.md` |
+| R159 | council × pipeline-g5 一体化 (g5_council_bridge) | `docs/r159/r159-g5-council-bridge.md` |
+| R158 | memory-extensions lint cleanup 17→0 | `docs/r158/r158-memory-extensions-lint.md` |
+| R157 | pipeline × pipeline-g5 一体化 (g5_chat_bridge) | `docs/r157/r157-g5-chat-bridge.md` |
+| R156 | image-{gen,process} lint cleanup 62+4→0 | `docs/r156/r156-image-process-lint-cleanup.md` |
+| R155 | apeireth-tui 加 runtime_bridge (17 tests) | `docs/r155/r155-tui-runtime-bridge.md` |
+| R154 | apeireth-relation 加 graph/traversal/query (45 tests) | `docs/r154/r154-relation-graph-query.md` |
+| R153 | apeireth-voice::realtime OpenAI Realtime 协议 schema + dispatch (44 tests) | `docs/r153/r153-voice-realtime-protocol.md` |
+| R152 | NEW apeireth-workflow (Temporal-style 引擎, 550 行, 13 tests) | `crates/apeireth-workflow/README.md` |
+| R150 | P1 补弱 6/7: vector qdrant_compat / state statechart / cron scheduler / council session_capture / eval swe_bench / test property_tests (+76 tests) | `docs/r150/r150-p1-six-modules.md` |
+| R149 | 终极补弱 5/5: tool-fetch / skills anthropic_skills / runtime LlmWorker / graph ThreadCheckpointStore / formal l0_ha multisig (+78 tests) | `docs/r149/r149-p0-five-modules.md` |
+| R148 | 24 LOCKED 形式撤销扫尾 (仅保 3 项不可变脊柱) + 修 3 个 pre-existing test bugs | `docs/conventions/10-locked.md` |
+| R147 | NEW apeireth-runtime (7 模块端到端 orchestration, 10 tests) | `crates/apeireth-runtime/README.md` |
+| R146 | 优雅化总修复: vcp-bridge→protocol-bridge, 5 SDK→1, 3 内存→1, 12 README 补 | — |
+| R145 | VCP 终极差距补弱完工 (7 模块, 67+ tests) | `temp/r145_final_report.md` |
+| R128 | workspace 收敛 94→55 active, minimax 4 协议真端到端, 0 errors | `reports/minimax-end-to-end-r128-2026-08-12.md` |
+
 ## [Unreleased] — R128 (2026-08-12)
 
 ### Changed — workspace 收敛 94→55
