@@ -110,9 +110,9 @@ pub struct HealthReport {
 /// Heart organ 心跳响应 (60Hz)
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct HeartBeat {
-    pub bpm: f64,       // 跳频率 (Hz * 60)
-    pub cpu_pct: f64,   // 0-100
-    pub tick: u64,      // 递增 tick (单调)
+    pub bpm: f64,     // 跳频率 (Hz * 60)
+    pub cpu_pct: f64, // 0-100
+    pub tick: u64,    // 递增 tick (单调)
 }
 
 // =====================================================================
@@ -135,7 +135,11 @@ pub struct ApeirethClient {
 
 impl ApeirethClient {
     /// 用 base_url 构造, 走 5 K-1 强校验
-    pub fn new(base_url: &str, auth_token: Option<&str>, timeout: Duration) -> Result<Self, TuiError> {
+    pub fn new(
+        base_url: &str,
+        auth_token: Option<&str>,
+        timeout: Duration,
+    ) -> Result<Self, TuiError> {
         // K-1.1
         validate_base_url(base_url)?;
         // K-1.2
@@ -160,13 +164,17 @@ impl ApeirethClient {
 
     /// 用默认 base_url + 默认 timeout 构造
     pub fn default_no_auth() -> Result<Self, TuiError> {
-        Self::new(DEFAULT_BASE_URL, None, Duration::from_secs(DEFAULT_TIMEOUT_SECS))
+        Self::new(
+            DEFAULT_BASE_URL,
+            None,
+            Duration::from_secs(DEFAULT_TIMEOUT_SECS),
+        )
     }
 
     /// 用 env `APEIRETH_API_URL` 覆盖 base_url
     pub fn from_env() -> Result<Self, TuiError> {
-        let base = std::env::var("APEIRETH_API_URL")
-            .unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
+        let base =
+            std::env::var("APEIRETH_API_URL").unwrap_or_else(|_| DEFAULT_BASE_URL.to_string());
         Self::new(&base, None, Duration::from_secs(DEFAULT_TIMEOUT_SECS))
     }
 
@@ -223,7 +231,11 @@ impl ApeirethClient {
         let url = format!("{}/v1/tools/{}/invoke", self.base_url, name);
         let body = json!({ "args": args });
         let resp = self.post(&url, &body).await?;
-        resp.json::<Value>().await.inspect(|_| hand::record_tool_success(name)).inspect_err(|_| hand::record_tool_failure(name)).map_err(TuiError::Network)
+        resp.json::<Value>()
+            .await
+            .inspect(|_| hand::record_tool_success(name))
+            .inspect_err(|_| hand::record_tool_failure(name))
+            .map_err(TuiError::Network)
     }
 
     // ---- 底层 HTTP 帮手 ----
@@ -296,7 +308,11 @@ mod tests {
 
     #[test]
     fn constructor_rejects_invalid_auth_token() {
-        let r = ApeirethClient::new("http://localhost", Some("bad token"), Duration::from_secs(30));
+        let r = ApeirethClient::new(
+            "http://localhost",
+            Some("bad token"),
+            Duration::from_secs(30),
+        );
         assert!(matches!(r, Err(TuiError::AuthTokenInvalid(' '))));
     }
 
@@ -308,8 +324,12 @@ mod tests {
 
     #[test]
     fn constructor_accepts_valid_config() {
-        let c = ApeirethClient::new("http://localhost:8080", Some("sk-abc_123"), Duration::from_secs(30))
-            .expect("valid config");
+        let c = ApeirethClient::new(
+            "http://localhost:8080",
+            Some("sk-abc_123"),
+            Duration::from_secs(30),
+        )
+        .expect("valid config");
         assert_eq!(c.base_url(), "http://localhost:8080");
         assert_eq!(c.timeout(), Duration::from_secs(30));
     }
@@ -347,8 +367,8 @@ mod tests {
                 .header("content-type", "application/json")
                 .body(r#"[{"id":"s1","title":"hi","message_count":3}]"#);
         });
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         let sessions = c.get_sessions().await.expect("sessions");
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].id, "s1");
@@ -365,8 +385,8 @@ mod tests {
                 .header("content-type", "application/json")
                 .body(r#"{"uptime_secs":3600,"version":"0.14.0","environment":"dev","components":[]}"#);
         });
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         let s = c.get_status().await.expect("status");
         assert_eq!(s.uptime_secs, Some(3600));
         assert_eq!(s.version.as_deref(), Some("0.14.0"));
@@ -392,8 +412,8 @@ mod tests {
                 .header("content-type", "application/json")
                 .body(serde_json::to_string(&body).unwrap());
         });
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         let h = c.get_health().await.expect("health");
         assert_eq!(h.overall, "ok");
         assert_eq!(h.components.len(), 5);
@@ -410,8 +430,8 @@ mod tests {
                 .header("content-type", "application/json")
                 .body(r#"{"bpm":60.0,"cpu_pct":12.5,"tick":42}"#);
         });
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         let h = c.get_heart().await.expect("heart");
         assert!((h.bpm - 60.0).abs() < 0.01);
         assert_eq!(h.tick, 42);
@@ -429,8 +449,8 @@ mod tests {
                     .body(r#"{"ok":true,"result":"ok"}"#);
             });
         }
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         for tool in TOOL_WHITELIST_LOCAL {
             let r = c
                 .invoke_tool(tool, json!({"key": "value"}))
@@ -466,8 +486,8 @@ mod tests {
                 .header("content-type", "text/plain")
                 .body("internal server error from mock");
         });
-        let c = ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5))
-            .expect("client");
+        let c =
+            ApeirethClient::new(&server.base_url(), None, Duration::from_secs(5)).expect("client");
         let r = c.get_sessions().await;
         match r {
             Err(TuiError::Api { status, body }) => {
@@ -479,12 +499,6 @@ mod tests {
     }
 
     // 内部: 6 工具白名单 (跟 error.rs TOOL_WHITELIST 同步, 但这里要 path 字符串)
-    const TOOL_WHITELIST_LOCAL: &[&str] = &[
-        "calendar",
-        "message",
-        "contact",
-        "task",
-        "search",
-        "drive",
-    ];
+    const TOOL_WHITELIST_LOCAL: &[&str] =
+        &["calendar", "message", "contact", "task", "search", "drive"];
 }

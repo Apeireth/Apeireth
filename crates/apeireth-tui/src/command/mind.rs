@@ -175,7 +175,8 @@ pub fn handle(state: &mut State, cmd: Command) -> Result<Response, OrganError> {
             })
         }
         Command::GetReflectionLog { limit } => {
-            let capped: Vec<ReflectionLogEntry> = state.reflection_log.iter().take(limit).cloned().collect();
+            let capped: Vec<ReflectionLogEntry> =
+                state.reflection_log.iter().take(limit).cloned().collect();
             Ok(Response::ReflectionLog(capped))
         }
         Command::GetIdentityCard => Ok(Response::IdentityCard(state.identity_card.clone())),
@@ -267,11 +268,7 @@ mod tests {
     #[test]
     fn get_anchor_valid_id() {
         let mut state = fresh_state();
-        let r = handle(
-            &mut state,
-            Command::GetAnchor { id: "S-2".into() },
-            )
-        .unwrap();
+        let r = handle(&mut state, Command::GetAnchor { id: "S-2".into() }).unwrap();
         match r {
             Response::Anchor { id, ts, name } => {
                 assert_eq!(id, "S-2");
@@ -285,11 +282,14 @@ mod tests {
     #[test]
     fn get_anchor_unknown_id_rejected() {
         let mut state = fresh_state();
-        let r = handle(
-            &mut state,
-            Command::GetAnchor { id: "S-99".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "GetAnchor", .. })));
+        let r = handle(&mut state, Command::GetAnchor { id: "S-99".into() });
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "GetAnchor",
+                ..
+            })
+        ));
     }
 
     // ---- 器官元数据 ----

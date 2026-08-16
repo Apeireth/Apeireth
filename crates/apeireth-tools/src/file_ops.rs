@@ -328,7 +328,9 @@ impl apeireth_tool_registry::Tool for FileOpsTool {
                     .iter()
                     .map(|p| p.to_string_lossy().to_string())
                     .collect();
-                Ok(json!({"op": "list", "dir": d.to_string_lossy(), "count": paths.len(), "entries": strs}))
+                Ok(
+                    json!({"op": "list", "dir": d.to_string_lossy(), "count": paths.len(), "entries": strs}),
+                )
             }
             "mkdir" => {
                 let d = path_str("dir")?;
@@ -344,7 +346,9 @@ impl apeireth_tool_registry::Tool for FileOpsTool {
                 let from = path_str("from")?;
                 let to = path_str("to")?;
                 self.inner.move_path(&from, &to).await?;
-                Ok(json!({"op": "move", "from": from.to_string_lossy(), "to": to.to_string_lossy(), "ok": true}))
+                Ok(
+                    json!({"op": "move", "from": from.to_string_lossy(), "to": to.to_string_lossy(), "ok": true}),
+                )
             }
             "edit" => {
                 let p = path_str("path")?;
@@ -359,7 +363,9 @@ impl apeireth_tool_registry::Tool for FileOpsTool {
                 self.inner.edit(&p, old_text, new_text).await?;
                 Ok(json!({"op": "edit", "path": p.to_string_lossy(), "ok": true}))
             }
-            other => Err(format!("unknown op '{other}', expected: read/write/list/mkdir/delete/move/edit")),
+            other => Err(format!(
+                "unknown op '{other}', expected: read/write/list/mkdir/delete/move/edit"
+            )),
         }
     }
 }
@@ -508,7 +514,10 @@ mod tests {
         assert_eq!(MAX_FILE_SIZE, 20 * 1024 * 1024, "VCP FileOperator.js:24");
         assert_eq!(MAX_DIRECTORY_ITEMS, 1000, "VCP FileOperator.js:25");
         assert_eq!(MAX_SEARCH_RESULTS, 100, "VCP FileOperator.js:26");
-        assert_eq!(FILE_OPS_OPERATION_COUNT, 7, "7 ops: read/write/list/mkdir/delete/move/edit");
+        assert_eq!(
+            FILE_OPS_OPERATION_COUNT, 7,
+            "7 ops: read/write/list/mkdir/delete/move/edit"
+        );
     }
 
     #[tokio::test]
@@ -573,12 +582,15 @@ mod tests {
         std::fs::write(&path, "fn main() {\n    old_func();\n}\n").expect("write");
         let f = Arc::new(StdFileOps::new());
         let tool = FileOpsTool::new(f);
-        let r = tool.call(json!({
-            "op": "edit",
-            "path": path.to_string_lossy(),
-            "old_text": "old_func()",
-            "new_text": "new_func()"
-        })).await.expect("edit");
+        let r = tool
+            .call(json!({
+                "op": "edit",
+                "path": path.to_string_lossy(),
+                "old_text": "old_func()",
+                "new_text": "new_func()"
+            }))
+            .await
+            .expect("edit");
         assert_eq!(r["op"], "edit");
         assert_eq!(r["ok"], true);
         let updated = std::fs::read_to_string(&path).expect("read");
@@ -593,12 +605,14 @@ mod tests {
         std::fs::write(&path, "x = 1\nx = 2\n").expect("write");
         let f = Arc::new(StdFileOps::new());
         let tool = FileOpsTool::new(f);
-        let r = tool.call(json!({
-            "op": "edit",
-            "path": path.to_string_lossy(),
-            "old_text": "x = ",
-            "new_text": "y = "
-        })).await;
+        let r = tool
+            .call(json!({
+                "op": "edit",
+                "path": path.to_string_lossy(),
+                "old_text": "x = ",
+                "new_text": "y = "
+            }))
+            .await;
         assert!(r.is_err());
         assert!(r.unwrap_err().contains("matched 2 times"));
     }
@@ -610,12 +624,14 @@ mod tests {
         std::fs::write(&path, "anything").expect("write");
         let f = Arc::new(StdFileOps::new());
         let tool = FileOpsTool::new(f);
-        let r = tool.call(json!({
-            "op": "edit",
-            "path": path.to_string_lossy(),
-            "old_text": "",
-            "new_text": "x"
-        })).await;
+        let r = tool
+            .call(json!({
+                "op": "edit",
+                "path": path.to_string_lossy(),
+                "old_text": "",
+                "new_text": "x"
+            }))
+            .await;
         assert!(r.is_err());
     }
 

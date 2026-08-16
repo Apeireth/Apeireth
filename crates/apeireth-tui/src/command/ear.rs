@@ -28,7 +28,13 @@
 use super::error::OrganError;
 
 /// 已知 topic 编译期 hardcode (5 topic, per 主人 R22 拍板 + L0-L4 bus 命名)
-pub const KNOWN_TOPICS: &[&str] = &["L0.system", "L1.session", "L2.tool", "L3.cognition", "L4.bus"];
+pub const KNOWN_TOPICS: &[&str] = &[
+    "L0.system",
+    "L1.session",
+    "L2.tool",
+    "L3.cognition",
+    "L4.bus",
+];
 
 /// 单个事件记录
 #[derive(Debug, Clone, PartialEq)]
@@ -167,8 +173,12 @@ mod tests {
 
     #[test]
     fn six_commands_constructible() {
-        let _ = Command::Subscribe { topic: "L0.system".into() };
-        let _ = Command::Unsubscribe { topic: "L0.system".into() };
+        let _ = Command::Subscribe {
+            topic: "L0.system".into(),
+        };
+        let _ = Command::Unsubscribe {
+            topic: "L0.system".into(),
+        };
         let _ = Command::GetRecentEvents { limit: 10 };
         let _ = Command::GetSubscribedTopics;
         let _ = Command::GetEventCount;
@@ -180,7 +190,13 @@ mod tests {
     #[test]
     fn five_topics_hardcoded() {
         assert_eq!(KNOWN_TOPICS.len(), 5, "5 known topic 编译期 hardcode");
-        for required in ["L0.system", "L1.session", "L2.tool", "L3.cognition", "L4.bus"] {
+        for required in [
+            "L0.system",
+            "L1.session",
+            "L2.tool",
+            "L3.cognition",
+            "L4.bus",
+        ] {
             assert!(KNOWN_TOPICS.contains(&required), "应含 {required}");
         }
     }
@@ -192,8 +208,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Subscribe { topic: "L0.system".into() },
-            );
+            Command::Subscribe {
+                topic: "L0.system".into(),
+            },
+        );
         assert!(r.is_ok());
         assert!(state.subscribed.contains("L0.system"));
     }
@@ -202,7 +220,13 @@ mod tests {
     fn subscribe_rejects_empty_topic() {
         let mut state = fresh_state();
         let r = handle(&mut state, Command::Subscribe { topic: "".into() });
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "Subscribe", .. })));
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "Subscribe",
+                ..
+            })
+        ));
     }
 
     #[test]
@@ -210,12 +234,16 @@ mod tests {
         let mut state = fresh_state();
         let _ = handle(
             &mut state,
-            Command::Subscribe { topic: "L1.session".into() },
-            );
+            Command::Subscribe {
+                topic: "L1.session".into(),
+            },
+        );
         let r = handle(
             &mut state,
-            Command::Unsubscribe { topic: "L1.session".into() },
-            );
+            Command::Unsubscribe {
+                topic: "L1.session".into(),
+            },
+        );
         assert!(r.is_ok());
         assert!(!state.subscribed.contains("L1.session"));
     }
@@ -225,8 +253,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::Unsubscribe { topic: "L2.tool".into() },
-            );
+            Command::Unsubscribe {
+                topic: "L2.tool".into(),
+            },
+        );
         assert!(matches!(r, Err(OrganError::NotReady { .. })));
     }
 
@@ -237,12 +267,16 @@ mod tests {
         let mut state = fresh_state();
         let _ = handle(
             &mut state,
-            Command::Subscribe { topic: "L4.bus".into() },
-            );
+            Command::Subscribe {
+                topic: "L4.bus".into(),
+            },
+        );
         let _ = handle(
             &mut state,
-            Command::Subscribe { topic: "L0.system".into() },
-            );
+            Command::Subscribe {
+                topic: "L0.system".into(),
+            },
+        );
         let r = handle(&mut state, Command::GetSubscribedTopics).unwrap();
         match r {
             Response::SubscribedTopics(v) => {

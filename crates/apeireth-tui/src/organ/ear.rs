@@ -202,7 +202,11 @@ pub fn render(area: Rect) -> String {
     ));
     out.push_str(&format!(
         "  last_event:    {}  ({})\n",
-        if s.last_event_unix_ms == 0 { 0 } else { s.last_event_unix_ms },
+        if s.last_event_unix_ms == 0 {
+            0
+        } else {
+            s.last_event_unix_ms
+        },
         age_phrase(s.now_unix_ms, s.last_event_unix_ms)
     ));
     out.push_str("  [partial] 3/4 真接 (user/llm/system), tool R25.3 计划接\n");
@@ -247,8 +251,14 @@ mod tests {
     fn render_marks_partial_honestly() {
         let _g = TEST_LOCK.lock().unwrap();
         let out = render(Rect::new(0, 0, 80, 24));
-        assert!(out.contains("[partial]"), "ear 3/4 真接, 必须标 partial: {out}");
-        assert!(!out.contains("[stub]"), "ear 不再是 stub (ST-A1.3 升级): {out}");
+        assert!(
+            out.contains("[partial]"),
+            "ear 3/4 真接, 必须标 partial: {out}"
+        );
+        assert!(
+            !out.contains("[stub]"),
+            "ear 不再是 stub (ST-A1.3 升级): {out}"
+        );
     }
 
     #[test]
@@ -334,7 +344,11 @@ mod tests {
         let before = ear_stats::EAR_TOOL_EVENTS.load(Ordering::Relaxed);
         record_tool();
         let after = ear_stats::EAR_TOOL_EVENTS.load(Ordering::Relaxed);
-        assert_eq!(after, before + 1, "record_tool 必须 +1 (即使 stub 也走 atomic)");
+        assert_eq!(
+            after,
+            before + 1,
+            "record_tool 必须 +1 (即使 stub 也走 atomic)"
+        );
     }
 
     #[test]

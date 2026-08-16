@@ -144,7 +144,11 @@ pub fn render(area: Rect) -> String {
     ));
     out.push_str(&format!(
         "  last_audio:       {}  ({})\n",
-        if s.last_audio_unix_ms == 0 { 0 } else { s.last_audio_unix_ms },
+        if s.last_audio_unix_ms == 0 {
+            0
+        } else {
+            s.last_audio_unix_ms
+        },
         age_phrase(s.now_unix_ms, s.last_audio_unix_ms)
     ));
     out.push_str("  [partial] 有结构 + record API, 但 0 调用 (TUI 不接 mic/speaker)\n");
@@ -229,7 +233,10 @@ mod tests {
 
         assert_eq!(after_tts, before_tts + 1, "record_tts_play 必须 +1");
         assert_eq!(after_stt, before_stt, "record_tts_play 不能动 stt");
-        assert!(after_last > before_last, "record_tts_play 必须更新 last_audio_ms");
+        assert!(
+            after_last > before_last,
+            "record_tts_play 必须更新 last_audio_ms"
+        );
     }
 
     #[test]

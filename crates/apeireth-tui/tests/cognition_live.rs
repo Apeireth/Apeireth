@@ -9,25 +9,38 @@
 //!
 //! **不假装**: 测试是真跑 (`cargo nextest run -p apeireth-tui --test cognition_live`).
 
-#[path = "../src/theme.rs"]
-mod theme;
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
 #[path = "../src/app.rs"]
 mod app;
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
+#[path = "../src/backend.rs"]
+mod backend;
 #[path = "../src/cognition_live.rs"]
 mod cognition_live;
+#[path = "../src/command/mod.rs"]
+mod command;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/nav/mod.rs"]
+mod nav;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
 use cognition_live::{CognitionLiveTracker, LiveEvent};
 use std::collections::HashMap;
@@ -114,8 +127,14 @@ fn live_event_equality_variants() {
         LiveEvent::FirstSeen { summary: s }
     );
     assert_ne!(LiveEvent::NoChange, LiveEvent::Cleared);
-    assert_ne!(LiveEvent::Updated { summary: make_summary(0.5, 0.0, 1.0, true) },
-               LiveEvent::Updated { summary: make_summary(0.3, 0.0, 0.6, true) });
+    assert_ne!(
+        LiveEvent::Updated {
+            summary: make_summary(0.5, 0.0, 1.0, true)
+        },
+        LiveEvent::Updated {
+            summary: make_summary(0.3, 0.0, 0.6, true)
+        }
+    );
 }
 
 #[test]

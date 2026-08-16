@@ -30,10 +30,10 @@ mod traits;
 // R150 P1 #6: Qdrant HTTP 协议兼容层 (借鉴 qdrant/qdrant REST API v1.7+)
 pub mod qdrant_compat;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod distance;  // R206: vector distance utilities (std + auto-vectorization, 0 新依赖)
+pub mod distance;
+mod organ_kani_proofs; // R206: vector distance utilities (std + auto-vectorization, 0 新依赖)
 
 pub use error::VectorError;
+pub use qdrant_compat::{QdrantClient, QdrantDistance, QdrantError, ScoredPoint};
 pub use sqlite_backend::SqliteVecBackend;
 pub use traits::{ScoredId, SearchHit, Vector, VectorStore};
-pub use qdrant_compat::{QdrantClient, QdrantDistance, QdrantError, ScoredPoint};

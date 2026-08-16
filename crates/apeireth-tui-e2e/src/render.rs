@@ -43,10 +43,10 @@ pub fn render_4_panel(f: &mut Frame, app: &mut TuiApp) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),                    // top: 5 nav
-            Constraint::Length(1),                    // middle: 9 organ
-            Constraint::Min(0),                       // content
-            Constraint::Length(1),                    // status
+            Constraint::Length(1), // top: 5 nav
+            Constraint::Length(1), // middle: 9 organ
+            Constraint::Min(0),    // content
+            Constraint::Length(1), // status
         ])
         .split(area);
 
@@ -63,7 +63,9 @@ pub fn render_top_nav(f: &mut Frame, area: Rect, app: &TuiApp) {
         let page = crate::NavPage::from_u8(n).unwrap();
         let marker = if page == app.nav { "▶" } else { " " };
         let style = if page == app.nav {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -131,12 +133,16 @@ fn render_bridge_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● Bridge ({})", app.nav.label_zh()),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "9 器官状态:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     for i in 0..crate::Organ::COUNT {
         let organ = crate::Organ::from_u8(i).unwrap();
@@ -150,14 +156,22 @@ fn render_bridge_content(app: &TuiApp) -> Vec<Line<'_>> {
             Color::Red
         };
         lines.push(Line::from(Span::styled(
-            format!("  {} {:<6} {:>3}%  [{}]", organ.ascii(), organ.name_zh(), pct, organ.readiness()),
+            format!(
+                "  {} {:<6} {:>3}%  [{}]",
+                organ.ascii(),
+                organ.name_zh(),
+                pct,
+                organ.readiness()
+            ),
             Style::default().fg(color),
         )));
     }
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "6 哲学锚:",
-        Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
     )));
     for (id, ts, title) in SIX_PHI_ANCHORS.iter() {
         lines.push(Line::from(Span::styled(
@@ -173,7 +187,9 @@ fn render_dialogue_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● Dialogue ({})", app.nav.label_zh()),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     if app.chat_history.is_empty() {
@@ -202,15 +218,22 @@ fn render_growth_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● Growth ({})", app.nav.label_zh()),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(format!("  cycle = {}", app.cycle_count)));
-    lines.push(Line::from(format!("  启动时间 = {:?}", app.started_at.elapsed())));
+    lines.push(Line::from(format!(
+        "  启动时间 = {:?}",
+        app.started_at.elapsed()
+    )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  3 成长阶段 (per R19 拟人化, AI 只成长不衰老):",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     for (i, stage) in ["seed", "sprout", "tree"].iter().enumerate() {
         let marker = if i == 0 { "▶" } else { " " };
@@ -224,7 +247,9 @@ fn render_history_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● History ({})", app.nav.label_zh()),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     if app.chat_history.is_empty() {
@@ -239,12 +264,7 @@ fn render_history_content(app: &TuiApp) -> Vec<Line<'_>> {
             } else {
                 msg.content.clone()
             };
-            lines.push(Line::from(format!(
-                "  #{} [{}] {}",
-                i + 1,
-                msg.role,
-                short
-            )));
+            lines.push(Line::from(format!("  #{} [{}] {}", i + 1, msg.role, short)));
         }
     }
     lines
@@ -255,7 +275,9 @@ fn render_settings_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● Settings ({})", app.nav.label_zh()),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(format!(
@@ -280,12 +302,18 @@ fn render_settings_content(app: &TuiApp) -> Vec<Line<'_>> {
     )));
     lines.push(Line::from(format!(
         "  thinking  = {} (按 o 切)",
-        if app.thinking_expanded { "expanded" } else { "collapsed" }
+        if app.thinking_expanded {
+            "expanded"
+        } else {
+            "collapsed"
+        }
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  8 不修改承诺:",
-        Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
     )));
     for (i, p) in crate::EIGHT_PROMISES.iter().enumerate() {
         lines.push(Line::from(Span::styled(
@@ -301,7 +329,9 @@ fn render_session_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         format!("● Session ({})", "会话"),
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     if app.chat_history.is_empty() {
@@ -312,7 +342,9 @@ fn render_session_content(app: &TuiApp) -> Vec<Line<'_>> {
     } else {
         lines.push(Line::from(Span::styled(
             "  活跃 session:",
-            Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
         )));
         for (i, msg) in app.chat_history.iter().enumerate() {
             let short = if msg.content.len() > 30 {
@@ -336,12 +368,16 @@ fn render_tools_content(_app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         "● Tools (工具)",
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  6 工具 endpoint:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     let six_tools = [
         ("calendar", "日程 endpoint"),
@@ -365,12 +401,16 @@ fn render_sub_settings_content(_app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         "● Sub Settings (副设置)",
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  5 Provider:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     let providers = ["claude-code", "gemini-cli", "codex", "copilot", "opencode"];
     for (i, p) in providers.iter().enumerate() {
@@ -382,7 +422,9 @@ fn render_sub_settings_content(_app: &TuiApp) -> Vec<Line<'_>> {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  5 权限:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     let scopes = ["read", "write", "admin", "owner", "root"];
     for (i, s) in scopes.iter().enumerate() {
@@ -391,7 +433,9 @@ fn render_sub_settings_content(_app: &TuiApp) -> Vec<Line<'_>> {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  4 SDK:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     let sdks = ["anthropic", "google", "openai", "github"];
     for (i, s) in sdks.iter().enumerate() {
@@ -405,12 +449,16 @@ fn render_help_content(_app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
         "● Help (帮助)",
-        Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  6 哲学锚:",
-        Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::Magenta)
+            .add_modifier(Modifier::BOLD),
     )));
     for (id, ts, title) in SIX_PHI_ANCHORS.iter() {
         lines.push(Line::from(Span::styled(
@@ -421,7 +469,9 @@ fn render_help_content(_app: &TuiApp) -> Vec<Line<'_>> {
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "  5 R-Measure:",
-        Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+        Style::default()
+            .fg(Color::White)
+            .add_modifier(Modifier::BOLD),
     )));
     for m in crate::FIVE_R_MEASURES.iter() {
         lines.push(Line::from(Span::styled(
@@ -439,7 +489,11 @@ fn render_help_content(_app: &TuiApp) -> Vec<Line<'_>> {
 
 /// 渲染 status bar (5 R-Measure 紧凑形式 + cycle / token / 5-self)
 pub fn render_status(f: &mut Frame, area: Rect, app: &TuiApp) {
-    let armed = if app.five_self_armed { "armed" } else { "disarmed" };
+    let armed = if app.five_self_armed {
+        "armed"
+    } else {
+        "disarmed"
+    };
     // 紧凑 R-Measure: 5 字母代码 (Coverage/Density/Cadence/Anchors/Path)
     // 详情见 Help sub-nav 内容 (render_help_content)
     let left = format!(
@@ -486,10 +540,18 @@ mod tests {
     fn render_bridge_lines_have_9_organs() {
         let app = fresh_app();
         let lines = render_bridge_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         for i in 0..crate::Organ::COUNT {
             let organ = crate::Organ::from_u8(i).unwrap();
-            assert!(text.contains(organ.ascii()), "Bridge 应渲染 {}", organ.ascii());
+            assert!(
+                text.contains(organ.ascii()),
+                "Bridge 应渲染 {}",
+                organ.ascii()
+            );
         }
     }
 
@@ -497,7 +559,11 @@ mod tests {
     fn render_bridge_lines_have_6_anchors() {
         let app = fresh_app();
         let lines = render_bridge_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         for (id, _, _) in crate::SIX_PHI_ANCHORS.iter() {
             assert!(text.contains(id), "Bridge 应渲染锚 {id}");
         }
@@ -507,7 +573,11 @@ mod tests {
     fn render_dialogue_empty() {
         let app = fresh_app();
         let lines = render_dialogue_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(text.contains("无对话"));
     }
 
@@ -517,7 +587,11 @@ mod tests {
         app.push_user_input("hi");
         app.push_assistant_reply("hello");
         let lines = render_dialogue_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(text.contains("hi"));
         assert!(text.contains("hello"));
     }
@@ -526,7 +600,11 @@ mod tests {
     fn render_growth_has_3_stages() {
         let app = fresh_app();
         let lines = render_growth_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(text.contains("seed"));
         assert!(text.contains("sprout"));
         assert!(text.contains("tree"));
@@ -536,7 +614,11 @@ mod tests {
     fn render_history_empty() {
         let app = fresh_app();
         let lines = render_history_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(text.contains("无历史"));
     }
 
@@ -544,10 +626,17 @@ mod tests {
     fn render_settings_has_8_promises() {
         let app = fresh_app();
         let lines = render_settings_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         // 8 不修改承诺
         for (i, _) in crate::EIGHT_PROMISES.iter().enumerate() {
-            assert!(text.contains(&format!("{}.", i + 1)), "Settings 应有第 {i} 承诺");
+            assert!(
+                text.contains(&format!("{}.", i + 1)),
+                "Settings 应有第 {i} 承诺"
+            );
         }
     }
 
@@ -624,7 +713,11 @@ mod tests {
         let line0: String = (0..160).map(|x| buf[(x, 0)].symbol().to_string()).collect();
         for i in 0..crate::Organ::COUNT {
             let organ = crate::Organ::from_u8(i).unwrap();
-            assert!(line0.contains(organ.ascii()), "organ bar 应有 {}", organ.ascii());
+            assert!(
+                line0.contains(organ.ascii()),
+                "organ bar 应有 {}",
+                organ.ascii()
+            );
         }
     }
 
@@ -643,7 +736,10 @@ mod tests {
         let line0: String = (0..120).map(|x| buf[(x, 0)].symbol().to_string()).collect();
         // status bar 紧凑形式: "R5:C|D|K|A|P"
         assert!(line0.contains("R5:"), "status bar 应有 R5: 前缀");
-        assert!(line0.contains("C|D|K|A|P"), "status bar 应有 5 R-Measure 紧凑码");
+        assert!(
+            line0.contains("C|D|K|A|P"),
+            "status bar 应有 5 R-Measure 紧凑码"
+        );
     }
 
     #[test]
@@ -651,7 +747,11 @@ mod tests {
         let mut app = fresh_app();
         app.sub_nav = crate::Nav::Help;
         let lines = render_help_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         // Help sub-nav 展开 5 R-Measure 全名
         for m in crate::FIVE_R_MEASURES.iter() {
             assert!(text.contains(m), "Help 应有完整 R-Measure {m}");
@@ -662,7 +762,11 @@ mod tests {
     fn render_tools_sub_nav_6_tools() {
         let app = fresh_app();
         let lines = render_tools_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         for tool in ["calendar", "message", "contact", "task", "search", "drive"] {
             assert!(text.contains(tool), "Tools 应有 6 工具之一: {tool}");
         }
@@ -674,7 +778,11 @@ mod tests {
         app.push_user_input("hi");
         app.push_assistant_reply("hello");
         let lines = render_session_content(&app);
-        let text: String = lines.iter().map(|l| l.to_string()).collect::<Vec<_>>().join("\n");
+        let text: String = lines
+            .iter()
+            .map(|l| l.to_string())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(text.contains("hi"));
         assert!(text.contains("hello"));
     }

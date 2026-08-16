@@ -73,20 +73,30 @@ pub enum PresetError {
 fn validate_arg(name: &str, value: &str, spec: &ArgSpec) -> Result<(), PresetError> {
     match spec {
         ArgSpec::Number { min, max } => {
-            let n: u64 = value
-                .parse()
-                .map_err(|_| PresetError::InvalidArg { name: name.into(), reason: format!("非十进制数字: `{value}`") })?;
+            let n: u64 = value.parse().map_err(|_| PresetError::InvalidArg {
+                name: name.into(),
+                reason: format!("非十进制数字: `{value}`"),
+            })?;
             if !(*min..=*max).contains(&n) {
-                return Err(PresetError::InvalidArg { name: name.into(), reason: format!("{n} 超出范围 [{min}, {max}]") });
+                return Err(PresetError::InvalidArg {
+                    name: name.into(),
+                    reason: format!("{n} 超出范围 [{min}, {max}]"),
+                });
             }
             Ok(())
         }
         ArgSpec::Text { max_len } => {
             if value.len() > *max_len {
-                return Err(PresetError::InvalidArg { name: name.into(), reason: format!("长度 {} 超限 {max_len}", value.len()) });
+                return Err(PresetError::InvalidArg {
+                    name: name.into(),
+                    reason: format!("长度 {} 超限 {max_len}", value.len()),
+                });
             }
             if value.chars().any(|c| c.is_control()) {
-                return Err(PresetError::InvalidArg { name: name.into(), reason: "含控制字符 (换行/回车等)".into() });
+                return Err(PresetError::InvalidArg {
+                    name: name.into(),
+                    reason: "含控制字符 (换行/回车等)".into(),
+                });
             }
             Ok(())
         }
@@ -109,10 +119,16 @@ impl ShellPreset {
                 let inner = seg.strip_prefix('{').and_then(|s| s.strip_suffix('}'));
                 match inner {
                     Some(n) if !n.is_empty() && !declared.contains(&n) => {
-                        return Err(PresetError::InvalidTemplate(format!("占位符引用未声明参数: {seg}")));
+                        return Err(PresetError::InvalidTemplate(format!(
+                            "占位符引用未声明参数: {seg}"
+                        )));
                     }
                     Some(_) => {}
-                    None => return Err(PresetError::InvalidTemplate(format!("占位符必须独占 argv 槽位: `{seg}`"))),
+                    None => {
+                        return Err(PresetError::InvalidTemplate(format!(
+                            "占位符必须独占 argv 槽位: `{seg}`"
+                        )))
+                    }
                 }
             }
         }
@@ -134,7 +150,8 @@ fn valid_preset_name(name: &str) -> bool {
         Some(c) if c.is_ascii_lowercase() => {}
         _ => return false,
     }
-    name.len() <= 64 && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+    name.len() <= 64
+        && cs.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
 /// 预设注册表 (白名单): 显式登记, 非白名单预设名展开即拒.
@@ -145,7 +162,9 @@ pub struct PresetRegistry {
 impl PresetRegistry {
     /// 空注册表.
     pub fn new() -> Self {
-        Self { presets: HashMap::new() }
+        Self {
+            presets: HashMap::new(),
+        }
     }
 
     /// 内置白名单预设.
@@ -155,7 +174,13 @@ impl PresetRegistry {
         r.register(ShellPreset {
             name: "git-log-recent".into(),
             description: "最近 N 条提交一行摘要 (git log --oneline -n {count})".into(),
-            template: vec!["git".into(), "log".into(), "--oneline".into(), "-n".into(), "{count}".into()],
+            template: vec![
+                "git".into(),
+                "log".into(),
+                "--oneline".into(),
+                "-n".into(),
+                "{count}".into(),
+            ],
             args: vec![("count".into(), ArgSpec::Number { min: 1, max: 100 })],
         })
         .expect("builtin git-log-recent 登记");
@@ -202,7 +227,10 @@ impl PresetRegistry {
     /// 执行链 `build_command` 用 `shell_words::split` 解析 — split(quote(x)) == [x]
     /// 往返闭环, 特殊字符 (`;` `&&` `|` `$()` 等) 无法逃逸出参数边界。
     pub fn expand(&self, name: &str, args: &[(&str, &str)]) -> Result<String, PresetError> {
-        let preset = self.presets.get(name).ok_or_else(|| PresetError::UnknownPreset(name.to_string()))?;
+        let preset = self
+            .presets
+            .get(name)
+            .ok_or_else(|| PresetError::UnknownPreset(name.to_string()))?;
         // 参数表校验: 不缺不多
         let spec_of = |n: &str| preset.args.iter().find(|(an, _)| an == n).map(|(_, s)| s);
         let provided: HashMap<&str, &str> = args.iter().cloned().collect();
@@ -258,8 +286,16 @@ impl PresetShell {
     }
 
     /// 执行预设: expand (白名单+校验+quote) → exec_sandboxed (沙箱+argv 直传).
-    pub async fn exec_preset(&self, name: &str, args: &[(&str, &str)], timeout_ms: u64) -> Result<(i32, String), ShellError> {
-        let cmd = self.registry.expand(name, args).map_err(|e| ShellError::Task(e.to_string()))?;
+    pub async fn exec_preset(
+        &self,
+        name: &str,
+        args: &[(&str, &str)],
+        timeout_ms: u64,
+    ) -> Result<(i32, String), ShellError> {
+        let cmd = self
+            .registry
+            .expand(name, args)
+            .map_err(|e| ShellError::Task(e.to_string()))?;
         self.shell.exec_sandboxed(&cmd, timeout_ms).await
     }
 }
@@ -279,32 +315,65 @@ mod tests {
     #[test]
     fn expand_git_log_recent() {
         let r = PresetRegistry::builtin();
-        assert_eq!(r.expand("git-log-recent", &[("count", "10")]).unwrap(), "git log --oneline -n 10");
-        assert_eq!(r.expand("git-status-short", &[]).unwrap(), "git status --short");
+        assert_eq!(
+            r.expand("git-log-recent", &[("count", "10")]).unwrap(),
+            "git log --oneline -n 10"
+        );
+        assert_eq!(
+            r.expand("git-status-short", &[]).unwrap(),
+            "git status --short"
+        );
     }
 
     #[test]
     fn unknown_preset_rejected() {
         let r = PresetRegistry::builtin();
-        assert!(matches!(r.expand("rm-rf-everything", &[]), Err(PresetError::UnknownPreset(_))));
-        assert!(matches!(r.expand("GIT-LOG-RECENT", &[]), Err(PresetError::UnknownPreset(_))));
+        assert!(matches!(
+            r.expand("rm-rf-everything", &[]),
+            Err(PresetError::UnknownPreset(_))
+        ));
+        assert!(matches!(
+            r.expand("GIT-LOG-RECENT", &[]),
+            Err(PresetError::UnknownPreset(_))
+        ));
     }
 
     #[test]
     fn arg_validation_rejects_bad_values() {
         let r = PresetRegistry::builtin();
         // 非数字
-        assert!(matches!(r.expand("git-log-recent", &[("count", "abc")]), Err(PresetError::InvalidArg { .. })));
+        assert!(matches!(
+            r.expand("git-log-recent", &[("count", "abc")]),
+            Err(PresetError::InvalidArg { .. })
+        ));
         // 越界
-        assert!(matches!(r.expand("git-log-recent", &[("count", "200")]), Err(PresetError::InvalidArg { .. })));
-        assert!(matches!(r.expand("git-log-recent", &[("count", "0")]), Err(PresetError::InvalidArg { .. })));
+        assert!(matches!(
+            r.expand("git-log-recent", &[("count", "200")]),
+            Err(PresetError::InvalidArg { .. })
+        ));
+        assert!(matches!(
+            r.expand("git-log-recent", &[("count", "0")]),
+            Err(PresetError::InvalidArg { .. })
+        ));
         // 注入载荷在 Number 槽位直接拒 (非数字)
-        assert!(matches!(r.expand("git-log-recent", &[("count", "10; rm -rf /")]), Err(PresetError::InvalidArg { .. })));
+        assert!(matches!(
+            r.expand("git-log-recent", &[("count", "10; rm -rf /")]),
+            Err(PresetError::InvalidArg { .. })
+        ));
         // 缺参/多参
-        assert!(matches!(r.expand("git-log-recent", &[]), Err(PresetError::MissingArg(_))));
-        assert!(matches!(r.expand("git-status-short", &[("x", "1")]), Err(PresetError::UnexpectedArg(_))));
+        assert!(matches!(
+            r.expand("git-log-recent", &[]),
+            Err(PresetError::MissingArg(_))
+        ));
+        assert!(matches!(
+            r.expand("git-status-short", &[("x", "1")]),
+            Err(PresetError::UnexpectedArg(_))
+        ));
         // 控制字符 (换行) 拒绝
-        assert!(matches!(r.expand("echo-text", &[("text", "a\nb")]), Err(PresetError::InvalidArg { .. })));
+        assert!(matches!(
+            r.expand("echo-text", &[("text", "a\nb")]),
+            Err(PresetError::InvalidArg { .. })
+        ));
     }
 
     /// 注入核心用例: 参数含 `;` `&&` `|` `$()` 反引号 — quote/split 往返闭环,
@@ -324,9 +393,16 @@ mod tests {
             let cmd = r.expand("echo-text", &[("text", payload)]).unwrap();
             // 执行链第一步 build_command 同款解析: split 后 argv 结构不变
             let parts = shell_words::split(&cmd).unwrap();
-            assert_eq!(parts.len(), 2, "payload `{payload}` 不应产生额外 argv: {parts:?}");
+            assert_eq!(
+                parts.len(),
+                2,
+                "payload `{payload}` 不应产生额外 argv: {parts:?}"
+            );
             assert_eq!(parts[0], "echo");
-            assert_eq!(parts[1], payload, "payload `{payload}` 必须原样落在单 token 内");
+            assert_eq!(
+                parts[1], payload,
+                "payload `{payload}` 必须原样落在单 token 内"
+            );
         }
     }
 
@@ -340,7 +416,10 @@ mod tests {
             template: vec!["echo".into(), "prefix-{text}".into()],
             args: vec![("text".into(), ArgSpec::Text { max_len: 10 })],
         };
-        assert!(matches!(r.register(bad), Err(PresetError::InvalidTemplate(_))));
+        assert!(matches!(
+            r.register(bad),
+            Err(PresetError::InvalidTemplate(_))
+        ));
         // 未声明参数 → 拒
         let undeclared = ShellPreset {
             name: "bad-undeclared".into(),
@@ -348,19 +427,45 @@ mod tests {
             template: vec!["echo".into(), "{nope}".into()],
             args: vec![],
         };
-        assert!(matches!(r.register(undeclared), Err(PresetError::InvalidTemplate(_))));
+        assert!(matches!(
+            r.register(undeclared),
+            Err(PresetError::InvalidTemplate(_))
+        ));
     }
 
     #[test]
     fn invalid_or_duplicate_name_rejected() {
         let mut r = PresetRegistry::new();
-        for name in ["Git-Log", "9lives", "", "has space", "UPPER", "x".repeat(65).as_str()] {
-            let p = ShellPreset { name: name.into(), description: "x".into(), template: vec!["echo".into()], args: vec![] };
-            assert!(matches!(r.register(p), Err(PresetError::InvalidName(_))), "名称 `{name}` 应拒");
+        for name in [
+            "Git-Log",
+            "9lives",
+            "",
+            "has space",
+            "UPPER",
+            "x".repeat(65).as_str(),
+        ] {
+            let p = ShellPreset {
+                name: name.into(),
+                description: "x".into(),
+                template: vec!["echo".into()],
+                args: vec![],
+            };
+            assert!(
+                matches!(r.register(p), Err(PresetError::InvalidName(_))),
+                "名称 `{name}` 应拒"
+            );
         }
-        let p = ShellPreset { name: "ok-preset".into(), description: "x".into(), template: vec!["echo".into()], args: vec![] };
+        let p = ShellPreset {
+            name: "ok-preset".into(),
+            description: "x".into(),
+            template: vec!["echo".into()],
+            args: vec![],
+        };
         r.register(p.clone()).unwrap();
-        assert!(matches!(r.register(p), Err(PresetError::DuplicatePreset(_))));
+        assert!(matches!(
+            r.register(p),
+            Err(PresetError::DuplicatePreset(_))
+        ));
     }
 
     #[tokio::test]
@@ -374,13 +479,22 @@ mod tests {
         if cfg!(windows) {
             // Windows 上 `echo` 不是独立可执行文件 — 验证 expand+split 闭环即可,
             // 真执行用既有链路的 cmd /c 形式另测 (见 enhanced 测试模式)
-            let cmd = ps.registry().expand("echo-text", &[("text", payload)]).unwrap();
+            let cmd = ps
+                .registry()
+                .expand("echo-text", &[("text", payload)])
+                .unwrap();
             let parts = shell_words::split(&cmd).unwrap();
             assert_eq!(parts[1], payload);
         } else {
-            let (code, out) = ps.exec_preset("echo-text", &[("text", payload)], 5000).await.unwrap();
+            let (code, out) = ps
+                .exec_preset("echo-text", &[("text", payload)], 5000)
+                .await
+                .unwrap();
             assert_eq!(code, 0);
-            assert!(out.contains("safe$(not_executed)"), "注入载荷必须字面回显, got: `{out}`");
+            assert!(
+                out.contains("safe$(not_executed)"),
+                "注入载荷必须字面回显, got: `{out}`"
+            );
         }
     }
 

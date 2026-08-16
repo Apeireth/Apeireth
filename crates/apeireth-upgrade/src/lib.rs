@@ -29,9 +29,9 @@ mod manifest;
 mod monitor;
 mod multisig;
 mod ota;
-mod sandbox;
 /// Snapshot and rollback service, merged from the former standalone crate.
 pub mod rollback;
+mod sandbox;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 // round10-10: 跨 crate 集成适配层 (pub 以便 integration 测试)

@@ -117,7 +117,9 @@ mod tests {
     fn render_marks_release_doc_stub() {
         let area = Rect::new(0, 0, 80, 50);
         let out = render(area);
-        assert!(out.contains("[stub]") || out.contains("stub"),
-            "release 文档应明确标 stub, 不假装路径");
+        assert!(
+            out.contains("[stub]") || out.contains("stub"),
+            "release 文档应明确标 stub, 不假装路径"
+        );
     }
 }

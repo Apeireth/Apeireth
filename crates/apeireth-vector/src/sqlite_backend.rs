@@ -264,7 +264,10 @@ fn read_meta(conn: &Connection) -> Result<(Option<usize>, DistanceMetric), Vecto
         .query_row(
             "SELECT value FROM vec_meta WHERE key = ?1",
             params![META_DIM],
-            |row| row.get::<_, String>(0).map(|s| s.parse::<i64>().unwrap_or(0)),
+            |row| {
+                row.get::<_, String>(0)
+                    .map(|s| s.parse::<i64>().unwrap_or(0))
+            },
         )
         .optional()?;
     let metric_str: Option<String> = conn
@@ -336,7 +339,9 @@ impl VectorStore for SqliteVecBackend {
                     "CREATE VIRTUAL TABLE {} USING vec0(\
                      embedding float[{}] distance_metric={}, \
                      metadata TEXT)",
-                    table_name, dim, self.metric.as_sql()
+                    table_name,
+                    dim,
+                    self.metric.as_sql()
                 );
                 self.conn.execute_batch(&sql)?;
             }
@@ -360,11 +365,10 @@ impl VectorStore for SqliteVecBackend {
             self.conn
                 .query_row("SELECT COUNT(*) FROM vec_items", [], |row| row.get(0))?
         } else {
-            self.conn.query_row(
-                "SELECT COUNT(*) FROM vec_items_fallback",
-                [],
-                |row| row.get(0),
-            )?
+            self.conn
+                .query_row("SELECT COUNT(*) FROM vec_items_fallback", [], |row| {
+                    row.get(0)
+                })?
         };
         Ok(n as usize)
     }
@@ -394,13 +398,11 @@ impl VectorStore for SqliteVecBackend {
             } else {
                 // 用 sqlite 自增, 简单 SELECT COALESCE(MAX(rowid), 0) + 1.
                 // 注意: 高并发下不安全, 但 trait 本身要求 &mut self, 串行 OK.
-                let next: i64 = self
-                    .conn
-                    .query_row(
-                        "SELECT COALESCE(MAX(rowid), 0) + 1 FROM vec_idmap",
-                        [],
-                        |row| row.get(0),
-                    )?;
+                let next: i64 = self.conn.query_row(
+                    "SELECT COALESCE(MAX(rowid), 0) + 1 FROM vec_idmap",
+                    [],
+                    |row| row.get(0),
+                )?;
                 self.conn.execute(
                     "INSERT INTO vec_idmap(uuid, rowid) VALUES(?1, ?2)",
                     params![id_bytes, next],
@@ -409,10 +411,8 @@ impl VectorStore for SqliteVecBackend {
             };
 
             // 2) vec0 表: 先 DELETE 再 INSERT (vec0 0.1.9 没有 upsert 语义).
-            self.conn.execute(
-                "DELETE FROM vec_items WHERE rowid = ?1",
-                params![rowid],
-            )?;
+            self.conn
+                .execute("DELETE FROM vec_items WHERE rowid = ?1", params![rowid])?;
             // vec0 INSERT 用 `vec_f32(embedding)` 转换; 但 BLOB 形式也接受 (lib 解析).
             // 直接把 f32 slice 序列化 BLOB (little-endian).
             let blob = Self::pack_vec(&v.data);
@@ -609,13 +609,12 @@ impl VectorStore for SqliteVecBackend {
             self.dim = None;
             Ok(n as usize)
         } else {
-            let n: i64 = self.conn.query_row(
-                "SELECT COUNT(*) FROM vec_items_fallback",
-                [],
-                |row| row.get(0),
-            )?;
-            self.conn
-                .execute("DELETE FROM vec_items_fallback", [])?;
+            let n: i64 =
+                self.conn
+                    .query_row("SELECT COUNT(*) FROM vec_items_fallback", [], |row| {
+                        row.get(0)
+                    })?;
+            self.conn.execute("DELETE FROM vec_items_fallback", [])?;
             self.conn.execute("DELETE FROM vec_meta", [])?;
             self.dim = None;
             Ok(n as usize)
@@ -772,7 +771,11 @@ mod tests {
         let mut b = SqliteVecBackend::open_in_memory().unwrap();
         b.set_dimension(2).unwrap();
         let id = Uuid::new_v4();
-        let v = Vector::with_metadata(id, vec![1.0, 0.0], serde_json::json!({"tag": "test", "score": 42}));
+        let v = Vector::with_metadata(
+            id,
+            vec![1.0, 0.0],
+            serde_json::json!({"tag": "test", "score": 42}),
+        );
         b.upsert(&v).unwrap();
         let hits = b.search(&[1.0, 0.0], 1).unwrap();
         assert_eq!(hits[0].id, id);
@@ -822,7 +825,8 @@ mod tests {
         let mut b = SqliteVecBackend::open_in_memory().unwrap();
         b.set_dimension(3).unwrap();
         for _ in 0..5 {
-            b.upsert(&make_vec(Uuid::new_v4(), vec![1.0, 0.5, 0.0])).unwrap();
+            b.upsert(&make_vec(Uuid::new_v4(), vec![1.0, 0.5, 0.0]))
+                .unwrap();
         }
         assert_eq!(b.len().unwrap(), 5);
         let cleared = b.clear().unwrap();
@@ -863,10 +867,14 @@ mod tests {
     fn vec0_search_results_are_score_descending() {
         let mut b = SqliteVecBackend::open_in_memory().unwrap();
         b.set_dimension(3).unwrap();
-        b.upsert(&make_vec(Uuid::new_v4(), vec![1.0, 0.0, 0.0])).unwrap();
-        b.upsert(&make_vec(Uuid::new_v4(), vec![0.9, 0.1, 0.0])).unwrap();
-        b.upsert(&make_vec(Uuid::new_v4(), vec![0.0, 1.0, 0.0])).unwrap();
-        b.upsert(&make_vec(Uuid::new_v4(), vec![0.0, 0.0, 1.0])).unwrap();
+        b.upsert(&make_vec(Uuid::new_v4(), vec![1.0, 0.0, 0.0]))
+            .unwrap();
+        b.upsert(&make_vec(Uuid::new_v4(), vec![0.9, 0.1, 0.0]))
+            .unwrap();
+        b.upsert(&make_vec(Uuid::new_v4(), vec![0.0, 1.0, 0.0]))
+            .unwrap();
+        b.upsert(&make_vec(Uuid::new_v4(), vec![0.0, 0.0, 1.0]))
+            .unwrap();
         let hits = b.search(&[1.0, 0.0, 0.0], 4).unwrap();
         assert_eq!(hits.len(), 4);
         for w in hits.windows(2) {
