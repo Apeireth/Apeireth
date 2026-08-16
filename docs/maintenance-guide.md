@@ -71,6 +71,10 @@
 | append_only.rs (memory) | HistoryStream 新增 list_recent (最近 N 条, 审计/摘要用) | 6 流共享 |
 | experience.rs | 自成长 Level 0/1: 经验库 (场景/做法/结果/验证计数/EMA) + 达标促能力提案 (versioned chain, rev 单调) | save/list/verify_experience 工具 |
 | principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
+| approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
+| memory_extractor.rs | 通用记忆提炼器: LLM 提炼 facts/preferences/commitments/emotional/graph (带 importance) + Mem0 式对账 (ADD/UPDATE/DELETE, tomb 逻辑删除) + 偏好库 (pref-*) + active_episodes 过滤 | 对话后节流 + 6h 批量 |
+| memory_graph.rs | 时序知识图谱 (Zep 双时态边 factg-*, rev 链内单调) + A-MEM 带权链接/CRAWL (link-*, 规则重叠) + 注入【事实图】 | graph 三元组 + crawl 注入 |
+| goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
 
 ## 三、加新模块规范（维护 checklist）
 
@@ -92,6 +96,7 @@
 
 | 示例 | 用途 |
 |---|---|
+| companion_serve | **伙伴端点 (主入口)**: OpenAI 兼容 + 状态感知 + 记忆生命周期 + 目标/自成长/SSE 主动送达 |
 | companion_daemon | 常驻主动问候 (env: TICK/MAX_TICKS/MEMORY_PATH/SUBJECT/MIN_LLM_INTERVAL/SINK/LARK_*/DREAM/REFLECT/SEED_DEMO) |
 | production_daemon | 全机制集成验收 (宪法评审+隔离+spill+日志+goal+做梦+反思+每日摘要) |
 | release_acceptance | AI 自己长能力端到端 (提案→评审→激活→干活) |
@@ -99,6 +104,14 @@
 | full_acceptance / self_summary_engineering | 一期/二期验收 (真 MiniMax) |
 | virtual_time_simulation | 时间机制模拟验收 (23 项, 虚拟时钟) |
 | constitution_demo | 宪法评审真 LLM 判案演示 |
+| education/pentest/gh_accel 各 demo | 三套件+加速插件演示 |
 | exec_worker (bin) | 执行体隔离 worker (被 ToolBridge spawn) |
 
 统一锚点: `APEIRETH_CONTINUITY_ID` (默认 companion-main) — 记忆/日志/目标/反思共用。
+
+### companion_serve 环境变量
+`APEIRETH_API_KEY` (必) · `APEIRETH_MASTER_TOKEN` (主人批准用) · `APEIRETH_PORT`/`PORT` (默认 8090)
+· `APEIRETH_DEEP_RECALL=1` (推理召回) · `APEIRETH_MAX_TOKENS` (输出上限, 默认 8192)
+· `APEIRETH_EXTRACT_INTERVAL_SECONDS` (提炼节流, 默认 600) · `APEIRETH_DREAM_QUIET_SECONDS` (做梦安静期, 默认 6h)
+· `APEIRETH_REFLECT_PERIOD_HOURS` (反思周期, 默认 24h) · `APEIRETH_GRANT` (启动即授权 "工具:小时")
+· `APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID` (离线送达, 可选) · `APEIRETH_SEED_MEMORY` (种子, 演示)
