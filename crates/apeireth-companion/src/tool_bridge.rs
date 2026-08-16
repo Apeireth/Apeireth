@@ -783,6 +783,14 @@ impl ToolBridge {
             Ok(c) => c,
             Err(e) => return err_res(format!("worker spawn 失败: {e}"), start),
         };
+        // P3#16 microsandbox 加固: Windows Job Object (KILL_ON_JOB_CLOSE — 宿主退出/
+        // 崩溃 → 进程树终止, 防孤儿; 加固失败不阻断执行, 如实记录).
+        if let Some(pid) = child.id() {
+            match crate::job_object::JobGuard::new().and_then(|g| g.assign(pid)) {
+                Ok(_) => {}
+                Err(e) => eprintln!("[sandbox] Job Object 加固失败 (不阻断): {e}"),
+            }
+        }
         let mut stdin = match child.stdin.take() {
             Some(s) => s,
             None => return err_res("worker stdin 不可用".into(), start),
