@@ -397,9 +397,9 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
     /// 一轮心跳: 反思检查 → 做梦检查 → 记忆检索 → 全器官决策 → 渲染送达.
     pub async fn step(&mut self) {
         let now = Utc::now();
-        // 反思周期检查 (0 阻塞: 周期未到立即返回)
+        // 反思周期检查 (0 阻塞: 周期未到立即返回; 深度反思可 await)
         if let Some(r) = &mut self.reflection {
-            let n = r.tick();
+            let n = r.tick().await;
             if n > 0 {
                 eprintln!("[daemon] 反思周期: 完成 {n} 轮 (累计 {})", r.cycles_completed());
             }
