@@ -396,6 +396,13 @@ impl MemoryGraph {
         s
     }
 
+    /// M2 双级检索分诊 (社区层): 确定性路由 — Entity 路由返回命中实体 (调用方
+    /// 续走实体链 CRAWL), Broad 路由返回社区摘要 brief. CRAWL 本体评分 0 改动.
+    pub fn triage(&self, query: &str) -> crate::community::TriageResult {
+        let facts = self.active_facts();
+        crate::community::triage(query, &facts, 5, 8)
+    }
+
     /// 写入时自动链接 (A-MEM 规则版): 与既有条目文本重叠率 >= 0.3 → 链接.
     pub fn link_on_write(&self, new_id: &str, new_content: &str) {
         let eps = self.backend.load_episodes("me", 100).unwrap_or_default();
