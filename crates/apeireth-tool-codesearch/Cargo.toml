@@ -35,6 +35,16 @@ walkdir = "2.5"
 ignore = "0.4"
 rusqlite = { workspace = true }
 
+# P2#9 (审计 backlog 全清, 2026-08-16): tree-sitter 精确符号提取 (可选 feature —
+# 默认关, 避免编译成本; 开启后与 regex 版共存, 同一 Symbol API)
+tree-sitter = { version = "0.24", optional = true }
+tree-sitter-rust = { version = "0.23", optional = true }
+
+[features]
+default = []
+# 开启 tree-sitter 精确提取 (Rust 文件; 全语法树, 非正则)
+tree-sitter = ["dep:tree-sitter", "dep:tree-sitter-rust"]
+
 [lib]
 path = "src/lib.rs"
 # R179 P0#X (warnings cleanup): 加 [lints] section 继承 workspace (含 unexpected_cfgs.check-cfg = ['cfg(kani)'])
