@@ -35,7 +35,7 @@ impl SuiteKind {
     }
 }
 
-/// 套件定义: 声明 + 工具要求 + 权限预设.
+/// 套件定义: 声明 + 工具要求 + 权限预设 + 组成插件.
 #[derive(Debug, Clone)]
 pub struct SuiteDef {
     pub id: String,
@@ -48,6 +48,8 @@ pub struct SuiteDef {
     pub pack_tools: Vec<String>,
     /// 安装时长 (小时; None = 永久包).
     pub pack_hours: Option<u64>,
+    /// 组成该套件的插件 id (生态: 套件 = 插件组的官方打包; 需先装插件).
+    pub plugins: Vec<String>,
 }
 
 /// 三件套目录 (内置清单).
@@ -71,6 +73,7 @@ impl SuiteCatalog {
                     ],
                     pack_tools: vec!["recall_memory".into(), "save_memory".into(), "WebSearch".into(), "Grep".into()],
                     pack_hours: None,
+                    plugins: vec![],
                 },
                 // ---- 扩展能力包 ----
                 SuiteDef {
@@ -81,6 +84,7 @@ impl SuiteCatalog {
                     requires_tools: vec!["FileOperator".into(), "ShellExec".into()],
                     pack_tools: vec!["FileOperator".into(), "ShellExec".into()],
                     pack_hours: None,
+                    plugins: vec![],
                 },
                 SuiteDef {
                     id: "audit-pack".into(),
@@ -90,6 +94,7 @@ impl SuiteCatalog {
                     requires_tools: vec![],
                     pack_tools: vec![],
                     pack_hours: None,
+                    plugins: vec![],
                 },
                 // ---- 升级套件 ----
                 SuiteDef {
@@ -100,6 +105,7 @@ impl SuiteCatalog {
                     requires_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
                     pack_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
                     pack_hours: Some(24 * 30),
+                    plugins: vec!["tutor-dx-check".into()],
                 },
                 SuiteDef {
                     id: "pentest-suite".into(),
@@ -109,6 +115,7 @@ impl SuiteCatalog {
                     requires_tools: vec!["ShellExec".into(), "WebFetch".into()],
                     pack_tools: vec!["ShellExec".into()],
                     pack_hours: Some(24),
+                    plugins: vec!["pentest-recon".into(), "pentest-scan".into()],
                 },
                 SuiteDef {
                     id: "oracle-suite".into(),
@@ -118,6 +125,7 @@ impl SuiteCatalog {
                     requires_tools: vec![],
                     pack_tools: vec![],
                     pack_hours: None,
+                    plugins: vec![],
                 },
             ],
         }
@@ -130,7 +138,25 @@ impl SuiteCatalog {
     /// 装配: 校验要求工具已注册 + 登记权限包 (返回装配结果).
     /// 0 假装: 工具注册由外部完成 (ToolBridge::registry); 本处只校验与授权.
     pub fn install(&self, bridge: &ToolBridge, id: &str) -> Result<String, String> {
+        self.install_with_plugins(bridge, None, id)
+    }
+
+    /// 装配 (可选带插件注册表): 校验套件组成插件已安装 + 工具已注册 + 登记权限包.
+    pub fn install_with_plugins(
+        &self,
+        bridge: &ToolBridge,
+        plugins: Option<&crate::plugin::PluginRegistry>,
+        id: &str,
+    ) -> Result<String, String> {
         let def = self.get(id).ok_or_else(|| format!("未知套件: {id}"))?;
+        // 校验组成插件已安装 (生态: 套件 = 插件组官方打包)
+        if let Some(reg) = plugins {
+            for p in &def.plugins {
+                if !reg.is_installed(p) {
+                    return Err(format!("套件 {id} 需要先装插件 {p} (插件是生态最小单元)"));
+                }
+            }
+        }
         // 校验工具已注册
         let registered = bridge.registry.list();
         for t in &def.requires_tools {
@@ -147,12 +173,13 @@ impl SuiteCatalog {
             bridge.packs.grant(pack);
         }
         Ok(format!(
-            "[{}] {} 已装配: {} ({} 工具, {} 权限)",
+            "[{}] {} 已装配: {} ({} 工具, {} 权限, {} 插件)",
             def.kind.label(),
             def.name,
             def.description,
             def.requires_tools.len(),
             def.pack_tools.len(),
+            def.plugins.len(),
         ))
     }
 
@@ -229,5 +256,37 @@ mod tests {
         // 永久包不提示
         let base = c.get("base").unwrap();
         assert!(suite_expiry_check(base, installed, installed + 1000 * 24 * 3600_000).is_none());
+    }
+
+    #[test]
+    fn suite_requires_plugins_before_install() {
+        use crate::plugin::{Plugin, PluginRegistry};
+        use crate::packs::PermissionPack;
+        use apeireth_memory::SqliteMemoryStore;
+        use std::sync::Arc;
+        struct DxPlugin;
+        impl Plugin for DxPlugin {
+            fn id(&self) -> &str { "tutor-dx-check" }
+            fn version(&self) -> &str { "0.1.0" }
+            fn description(&self) -> &str { "换元 dx 检查插件" }
+            fn on_load(&self, b: &ToolBridge) -> Result<(), String> {
+                b.packs.grant(PermissionPack::permanent("dx检查", vec!["recall_memory".into()]));
+                Ok(())
+            }
+            fn on_unload(&self, _b: &ToolBridge) -> Result<(), String> { Ok(()) }
+        }
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let cat = SuiteCatalog::builtin();
+        let reg = PluginRegistry::new();
+        // 未装插件 → 套件装配拒绝
+        assert!(cat.install_with_plugins(&bridge, Some(&reg), "tutor-suite").is_err());
+        // 装插件后 → 装配成功
+        reg.install(&bridge, Arc::new(DxPlugin)).unwrap();
+        let r = cat.install_with_plugins(&bridge, Some(&reg), "tutor-suite").unwrap();
+        assert!(r.contains("家教升级套件"));
+        assert!(r.contains("1 插件"));
+        // 无插件要求的套件不受影响
+        assert!(cat.install_with_plugins(&bridge, Some(&reg), "base").is_ok());
     }
 }
