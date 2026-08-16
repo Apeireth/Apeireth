@@ -129,7 +129,7 @@
 ### 5.1 官方模块扩展：记忆域深化包（核心，进 companion lib）
 - 语义折叠（只折叠低相关段，VCP ContextFoldingV2 精神）
 - 记忆主题分组（VCP SemanticGroupManager 精神）→ 注入"主题索引"块
-- 元思考递归链（VCP MetaThinkingManager 精神）→ 思考→再思考
+- 元思考递归链（VCP MetaThinkingManager 精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
 - 跨日记联想（VCP associativeDiscovery 精神）→ memory_graph 已有底层
 - 日记本中心（VCP RAGDiaryPlugin 精神）→ 按日归档 + 检索 + 注入
 - **验收**：每个机制 = lib 模块 + trait 口 + 单测 + 注入链可见 + 0 装 PASS 标注
