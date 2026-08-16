@@ -30,8 +30,11 @@ use tokio::time::timeout;
 use tracing::{debug, warn};
 
 use apeireth_tool_runtime::ParsedToolCall;
+use serde::Serialize;
 
-use crate::decision::ApprovalDecision;
+use crate::decision::{
+    ApprovalDecision, ApprovalOutcome, CheckDetail, RejectErrorType, Rejection,
+};
 use crate::history::CallRecord;
 use crate::rule_trait::ApprovalRule;
 
@@ -53,6 +56,17 @@ pub trait ApprovalHandler: Send + Sync {
     ///
     /// **超时**: 由 `ApprovalManager::wait_for_approval` 控制在 `timeout_ms` 内
     async fn handle(&self, call: &ParsedToolCall) -> bool;
+
+    /// 处理一个审批请求, 附带主人填写的审核理由 (可选)
+    ///
+    /// **字段级引用 VCP**: `TOOL_APPROVAL_REASON_PROTOCOL.md` — 审批响应可选
+    /// `reason` 字段. 默认实现委托 `handle` 且无理由 (旧 handler 零改动兼容).
+    ///
+    /// **静默约束**: 若命中的规则是静默拒绝 (`::SilentReject`), 即使主人在此
+    /// 填了理由, 上层也**不得**把理由回传给 AI (只留痕审计).
+    async fn handle_with_reason(&self, call: &ParsedToolCall) -> (bool, Option<String>) {
+        (self.handle(call).await, None)
+    }
 }
 
 /// **默认审批 handler — 自动拒绝 (无注册 handler 时用)**
@@ -76,6 +90,35 @@ impl ApprovalHandler for AutoApproveHandler {
     }
 }
 
+/// 审计台账最大长度 (防御性裁剪, 同 history 思路)
+pub const MAX_AUDIT_LEN: usize = 1_000;
+
+/// **审批通道结果审计条目** (静默拒绝"只留痕"的载体)
+///
+/// 每次 `wait_for_approval_outcome` 产生终态 (批准/拒绝) 都追加一条,
+/// 无论是否静默 — 静默拒绝不打扰 AI, 但审计永远可查.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct ApprovalAuditEntry {
+    /// 条目 ID (audit- 前缀)
+    pub id: String,
+    /// 工具名
+    pub tool_name: String,
+    /// 最终是否批准
+    pub approved: bool,
+    /// 是否主人亲自拒绝 (仅拒绝时有意义)
+    pub rejected_by_user: bool,
+    /// 结构化错误码 (批准时 None)
+    pub error_type: Option<RejectErrorType>,
+    /// 静默标记 (true = 该拒绝不通知 AI)
+    pub silent: bool,
+    /// 命中的规则名
+    pub matched_rule: Option<String>,
+    /// 命中的命令级键 (命令级粒度)
+    pub matched_command: Option<String>,
+    /// 时间戳 (unix ms)
+    pub timestamp_ms: i64,
+}
+
 /// **战役 2-3 — 审批管理器**
 ///
 /// **核心字段**:
@@ -84,14 +127,16 @@ impl ApprovalHandler for AutoApproveHandler {
 /// - `history: Mutex<VecDeque<CallRecord>>` — 审批历史 (FrequencyRule 用)
 /// - `handler: Arc<Mutex<Option<Arc<dyn ApprovalHandler>>>>` — 外部审批 handler
 pub struct ApprovalManager {
-    /// 5 规则 (按顺序 check, 第一个非 NoMatch 生效)
+    /// 规则链 (按顺序 check, 第一个非 NoMatch 生效; 核心 5 规则 + 可选 ApprovalListRule)
     rules: Vec<Box<dyn ApprovalRule>>,
     /// 审批超时毫秒 (默认 `APPROVAL_TIMEOUT_MS = 5 * 60 * 1000`)
     approval_timeout_ms: u64,
     /// 审批历史 (滑动窗口, 给 FrequencyRule 用)
     history: Mutex<VecDeque<CallRecord>>,
-    /// 外部审批 handler (默认 `DefaultDenyHandler`)
+    /// 外部审批 handler (无注册 = 通道不可用, 结构化拒绝 ChannelUnavailable)
     handler: Arc<Mutex<Option<Arc<dyn ApprovalHandler>>>>,
+    /// 审批通道结果审计台账 (静默拒绝只留痕的载体, 上限 `MAX_AUDIT_LEN`)
+    audit: Mutex<VecDeque<ApprovalAuditEntry>>,
 }
 
 impl ApprovalManager {
@@ -102,16 +147,18 @@ impl ApprovalManager {
             approval_timeout_ms: APPROVAL_TIMEOUT_MS,
             history: Mutex::new(VecDeque::new()),
             handler: Arc::new(Mutex::new(None)),
+            audit: Mutex::new(VecDeque::new()),
         }
     }
 
-    /// 用 5 规则构造
+    /// 用规则链构造
     pub fn with_rules(rules: Vec<Box<dyn ApprovalRule>>) -> Self {
         Self {
             rules,
             approval_timeout_ms: APPROVAL_TIMEOUT_MS,
             history: Mutex::new(VecDeque::new()),
             handler: Arc::new(Mutex::new(None)),
+            audit: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -166,7 +213,7 @@ impl ApprovalManager {
 
     /// **核心方法 — 检查一个调用**
     ///
-    /// **5 规则按顺序**:
+    /// **规则链按顺序**:
     /// 1. 遍历 rules
     /// 2. 调 `rule.check(call, history_snapshot)`
     /// 3. 第一个非 `NoMatch` 的决策生效
@@ -175,10 +222,24 @@ impl ApprovalManager {
     /// **副作用**: 不论结果都记录到 history (供 FrequencyRule 下次判断)
     ///
     /// **VCP 借鉴**: `toolApprovalManager.js:144-225 getApprovalDecision` 三层判断
+    ///
+    /// 需要匹配明细 (命令级键 / 静默标记) 时用 `check_detailed`.
     pub fn check(&self, call: &ParsedToolCall) -> ApprovalDecision {
+        self.check_detailed(call).0
+    }
+
+    /// **核心方法 — 检查一个调用, 附带匹配明细** (命令级粒度 + 静默标记)
+    ///
+    /// **字段级引用 VCP**: `getApprovalDecision` 返
+    /// `{requiresApproval, notifyAiOnReject, matchedRule, matchedCommand}` →
+    /// 我们返 `(ApprovalDecision, CheckDetail)` (决策器纯函数, 与审批通道解耦).
+    ///
+    /// `CheckDetail` 由命中规则的 `silent_on_reject` / `matched_command` 填充
+    /// (trait 默认实现保证工具级规则返 false / None).
+    pub fn check_detailed(&self, call: &ParsedToolCall) -> (ApprovalDecision, CheckDetail) {
         let history_snapshot = self.snapshot_history();
         let mut final_decision = ApprovalDecision::Allow; // 默认 Allow (VCP 行为)
-        let mut matched_rule: Option<String> = None;
+        let mut detail = CheckDetail::default();
 
         for rule in &self.rules {
             let d = rule.check(call, &history_snapshot);
@@ -186,88 +247,232 @@ impl ApprovalManager {
                 continue;
             }
             final_decision = d;
-            matched_rule = Some(rule.name().to_string());
+            detail.matched_rule = Some(rule.name().to_string());
+            detail.silent_on_reject = rule.silent_on_reject(call);
+            detail.matched_command = rule.matched_command(call);
             break;
         }
 
-        // 记录到 history (不论结果, 供 FrequencyRule 累计)
-        let record = CallRecord::new(call, final_decision.clone(), matched_rule.clone());
+        // 记录到 history (不论结果, 供 FrequencyRule 累计 + 审计留痕)
+        let mut record = CallRecord::new(
+            call,
+            final_decision.clone(),
+            detail.matched_rule.clone(),
+        );
+        record.matched_command = detail.matched_command.clone();
+        record.silent_on_reject = detail.silent_on_reject;
         self.push_history(record);
 
         debug!(
-            "[ApprovalManager] tool={}, decision={:?}, matched_rule={:?}",
-            call.tool_name, final_decision, matched_rule
+            "[ApprovalManager] tool={}, decision={:?}, matched_rule={:?}, matched_command={:?}, silent={}",
+            call.tool_name, final_decision, detail.matched_rule, detail.matched_command,
+            detail.silent_on_reject
         );
-        final_decision
+        (final_decision, detail)
     }
 
-    /// **核心方法 — 等主人审批 (5 分钟窗口)**
+    /// **核心方法 — 等主人审批 (5 分钟窗口), 返回结构化结果**
     ///
-    /// **VCP 借鉴**: `toolApprovalManager.js:231-233 getTimeoutMs()` = 5min
+    /// **VCP 借鉴**: `toolApprovalManager.js getTimeoutMs` (5min) +
+    /// `TOOL_APPROVAL_REASON_PROTOCOL.md` 结构化拒绝 `{rejected_by_user, error_type}`.
     ///
     /// **行为**:
-    /// 1. 先调 `check` 拿决策
-    /// 2. 若决策 = Allow → 直接返 Ok(true) (无需审批)
-    /// 3. 若决策 = Deny → 直接返 Ok(false) (拒绝, 不等)
-    /// 4. 若决策 = RequireApproval → 调外部 handler, 5min 窗口等响应
-    ///    - handler 返 true (批准) → Ok(true)
-    ///    - handler 返 false (拒绝) → Ok(false)
-    ///    - 超时 → Ok(false) (VCP 行为: 超时 = 拒绝)
+    /// 1. `check_detailed` 拿决策 + 明细
+    /// 2. `Allow` → `Approved`
+    /// 3. `Deny` → `Rejected { rejected_by_user: false, error_type: PolicyDeny, silent }`
+    /// 4. `RequireApproval` → 走审批通道 (高危操作"AI 请求 → 主人批准", 洋葱安全):
+    ///    - 无 handler → `Rejected { ChannelUnavailable }`
+    ///    - handler 批准 → `Approved`
+    ///    - handler 拒绝 → `Rejected { rejected_by_user: true, reason: 主人理由 }`
+    ///    - 超时 → `Rejected { ApprovalTimeout }` (VCP: 超时 = 拒绝)
+    ///    - channel 取消 → `Rejected { ChannelUnavailable }`
     ///
-    /// **生产集成**: 实战中 Tauri 主进程 / SSE handler 注册 `ApprovalHandler`,
-    /// 把请求 push 到前端, 主人点批准/拒绝, handler 返 bool.
-    pub async fn wait_for_approval(&self, call: &ParsedToolCall) -> Result<bool, String> {
-        let decision = self.check(call);
-        match decision {
-            ApprovalDecision::Allow => Ok(true),
-            ApprovalDecision::Deny { reason, silent: _ } => {
+    /// **静默拒绝**: 命中静默规则 (`::SilentReject`) 被拒时 `silent = true` —
+    /// 不打扰 AI (上层不得把 `reason` 回传 AI), 但照常写入审计台账.
+    ///
+    /// **副作用**: 每个终态追加一条 `ApprovalAuditEntry` (留痕审计).
+    pub async fn wait_for_approval_outcome(&self, call: &ParsedToolCall) -> ApprovalOutcome {
+        let (decision, detail) = self.check_detailed(call);
+        let outcome = match decision {
+            ApprovalDecision::Allow => ApprovalOutcome::Approved {
+                matched_rule: detail.matched_rule.clone(),
+                matched_command: detail.matched_command.clone(),
+            },
+            ApprovalDecision::Deny { reason, silent } => {
                 warn!(
-                    "[ApprovalManager] 拒绝执行 tool={}, reason={}",
-                    call.tool_name, reason
+                    "[ApprovalManager] 规则直接拒绝 tool={}, reason={}, silent={}",
+                    call.tool_name, reason, silent
                 );
-                Ok(false)
+                ApprovalOutcome::Rejected(Rejection {
+                    rejected_by_user: false,
+                    error_type: RejectErrorType::PolicyDeny,
+                    silent,
+                    reason: Some(reason),
+                    matched_rule: detail.matched_rule.clone(),
+                    matched_command: detail.matched_command.clone(),
+                })
             }
             ApprovalDecision::RequireApproval { timeout_ms } => {
-                let handler = {
-                    let h = self.handler.lock();
-                    h.clone()
-                        .unwrap_or_else(|| Arc::new(DefaultDenyHandler) as Arc<dyn ApprovalHandler>)
+                let handler = match self.handler.lock().clone() {
+                    Some(h) => h,
+                    None => {
+                        warn!(
+                            "[ApprovalManager] 审批通道未注册 (无 handler), 拒绝: {}",
+                            call.tool_name
+                        );
+                        let outcome = ApprovalOutcome::Rejected(Rejection {
+                            rejected_by_user: false,
+                            error_type: RejectErrorType::ChannelUnavailable,
+                            silent: detail.silent_on_reject,
+                            reason: None,
+                            matched_rule: detail.matched_rule.clone(),
+                            matched_command: detail.matched_command.clone(),
+                        });
+                        self.push_audit(call, &outcome);
+                        return outcome;
+                    }
                 };
                 // 用 oneshot 防 handler 内部死锁
-                let (tx, rx) = oneshot::channel::<bool>();
+                let (tx, rx) = oneshot::channel::<(bool, Option<String>)>();
                 let call_clone = call.clone();
-                let handler_clone = handler.clone();
                 tokio::spawn(async move {
-                    let result = handler_clone.handle(&call_clone).await;
+                    let result = handler.handle_with_reason(&call_clone).await;
                     let _ = tx.send(result);
                 });
                 match timeout(Duration::from_millis(timeout_ms), rx).await {
-                    Ok(Ok(approved)) => {
+                    Ok(Ok((approved, user_reason))) => {
                         if approved {
                             debug!("[ApprovalManager] 主人批准: {}", call.tool_name);
+                            ApprovalOutcome::Approved {
+                                matched_rule: detail.matched_rule.clone(),
+                                matched_command: detail.matched_command.clone(),
+                            }
                         } else {
-                            warn!("[ApprovalManager] 主人拒绝: {}", call.tool_name);
+                            warn!(
+                                "[ApprovalManager] 主人拒绝: {} (silent={})",
+                                call.tool_name, detail.silent_on_reject
+                            );
+                            ApprovalOutcome::Rejected(Rejection {
+                                rejected_by_user: true,
+                                error_type: RejectErrorType::RejectedByUser,
+                                silent: detail.silent_on_reject,
+                                // 静默时上层不得把理由回传 AI (此处仅承载供审计)
+                                reason: user_reason,
+                                matched_rule: detail.matched_rule.clone(),
+                                matched_command: detail.matched_command.clone(),
+                            })
                         }
-                        Ok(approved)
                     }
                     Ok(Err(_canceled)) => {
-                        warn!("[ApprovalManager] handler channel 取消, 默认拒绝");
-                        Ok(false)
+                        warn!("[ApprovalManager] handler channel 取消, 拒绝: {}", call.tool_name);
+                        ApprovalOutcome::Rejected(Rejection {
+                            rejected_by_user: false,
+                            error_type: RejectErrorType::ChannelUnavailable,
+                            silent: detail.silent_on_reject,
+                            reason: None,
+                            matched_rule: detail.matched_rule.clone(),
+                            matched_command: detail.matched_command.clone(),
+                        })
                     }
                     Err(_elapsed) => {
                         warn!(
-                            "[ApprovalManager] 审批超时 ({} ms), 默认拒绝: {}",
+                            "[ApprovalManager] 审批超时 ({} ms), 拒绝: {}",
                             timeout_ms, call.tool_name
                         );
-                        Ok(false)
+                        ApprovalOutcome::Rejected(Rejection {
+                            rejected_by_user: false,
+                            error_type: RejectErrorType::ApprovalTimeout,
+                            silent: detail.silent_on_reject,
+                            reason: None,
+                            matched_rule: detail.matched_rule.clone(),
+                            matched_command: detail.matched_command.clone(),
+                        })
                     }
                 }
             }
             ApprovalDecision::NoMatch => {
-                // NoMatch 不应在 check 后出现, 但防御性处理
+                // NoMatch 不应在 check 后出现, 但防御性处理 (与旧行为一致: Allow)
                 warn!("[ApprovalManager] 收到 NoMatch (内部态泄漏), 默认 Allow");
-                Ok(true)
+                ApprovalOutcome::Approved {
+                    matched_rule: None,
+                    matched_command: None,
+                }
             }
+        };
+
+        self.push_audit(call, &outcome);
+        outcome
+    }
+
+    /// **核心方法 — 等主人审批 (5 分钟窗口), 布尔简化版**
+    ///
+    /// **VCP 借鉴**: `toolApprovalManager.js:231-233 getTimeoutMs()` = 5min
+    ///
+    /// 行为与旧版完全一致 (Allow→true / Deny→false / 超时→false / 无 handler→false),
+    /// 内部委托 `wait_for_approval_outcome`. 需要结构化错误码
+    /// (`{rejected_by_user, error_type}`) 时改用 `wait_for_approval_outcome`.
+    ///
+    /// **生产集成**: 实战中 Tauri 主进程 / SSE handler 注册 `ApprovalHandler`,
+    /// 把请求 push 到前端, 主人点批准/拒绝, handler 返 bool.
+    pub async fn wait_for_approval(&self, call: &ParsedToolCall) -> Result<bool, String> {
+        Ok(self.wait_for_approval_outcome(call).await.is_approved())
+    }
+
+    /// 当前审计台账长度
+    pub fn audit_len(&self) -> usize {
+        self.audit.lock().len()
+    }
+
+    /// 审计台账快照 (克隆)
+    pub fn audit_snapshot(&self) -> Vec<ApprovalAuditEntry> {
+        self.audit.lock().iter().cloned().collect()
+    }
+
+    /// **静默拒绝审计视图** — 所有 `silent == true` 的拒绝条目
+    ///
+    /// 静默拒绝不打扰 AI / 主人, 但此视图保证"只留痕审计"可查.
+    pub fn silent_rejection_audit(&self) -> Vec<ApprovalAuditEntry> {
+        self.audit
+            .lock()
+            .iter()
+            .filter(|e| !e.approved && e.silent)
+            .cloned()
+            .collect()
+    }
+
+    /// 追加一条审计记录 (内部, 自动裁剪到 `MAX_AUDIT_LEN`)
+    fn push_audit(&self, call: &ParsedToolCall, outcome: &ApprovalOutcome) {
+        let entry = match outcome {
+            ApprovalOutcome::Approved {
+                matched_rule,
+                matched_command,
+            } => ApprovalAuditEntry {
+                id: format!("audit-{}", uuid::Uuid::new_v4()),
+                tool_name: call.tool_name.clone(),
+                approved: true,
+                rejected_by_user: false,
+                error_type: None,
+                silent: false,
+                matched_rule: matched_rule.clone(),
+                matched_command: matched_command.clone(),
+                timestamp_ms: crate::history::now_ms(),
+            },
+            ApprovalOutcome::Rejected(r) => ApprovalAuditEntry {
+                id: format!("audit-{}", uuid::Uuid::new_v4()),
+                tool_name: call.tool_name.clone(),
+                approved: false,
+                rejected_by_user: r.rejected_by_user,
+                error_type: Some(r.error_type),
+                silent: r.silent,
+                matched_rule: r.matched_rule.clone(),
+                matched_command: r.matched_command.clone(),
+                timestamp_ms: crate::history::now_ms(),
+            },
+        };
+        let mut a = self.audit.lock();
+        a.push_back(entry);
+        while a.len() > MAX_AUDIT_LEN {
+            a.pop_front();
         }
     }
 
@@ -528,7 +733,226 @@ mod tests {
         let mgr = ApprovalManager::new();
         mgr.set_handler(Arc::new(AutoApproveHandler));
         mgr.clear_handler();
-        // 之后 wait_for_approval 会用 DefaultDenyHandler
+        // 之后 wait_for_approval_outcome 返 ChannelUnavailable (无通道 = 拒绝)
         // 我们不直接测, 但验证 clear_handler 不 panic
+    }
+
+    // ====== 结构化结果 (toolApprovalManager 增强 P1) ======
+
+    fn make_call_with_args(tool: &str, args: serde_json::Value) -> ParsedToolCall {
+        ParsedToolCall {
+            tool_name: tool.to_string(),
+            args,
+            raw_marker: format!("tool_name:<<<{tool}>>>"),
+            archery: false,
+            archery_no_reply: false,
+        }
+    }
+
+    /// 拒绝 + 带主人理由的 handler (VCP reason 协议)
+    struct RejectWithReasonHandler(String);
+    #[async_trait]
+    impl ApprovalHandler for RejectWithReasonHandler {
+        async fn handle(&self, _call: &ParsedToolCall) -> bool {
+            false
+        }
+        async fn handle_with_reason(&self, _call: &ParsedToolCall) -> (bool, Option<String>) {
+            (false, Some(self.0.clone()))
+        }
+    }
+
+    #[tokio::test]
+    async fn outcome_approved_carries_matched_rule() {
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(TrustRule::with_trusted(["X".to_string()])));
+        mgr.set_handler(Arc::new(AutoApproveHandler));
+        let o = mgr.wait_for_approval_outcome(&make_call("X")).await;
+        assert!(o.is_approved());
+        if let ApprovalOutcome::Approved {
+            matched_rule,
+            matched_command,
+        } = o
+        {
+            assert_eq!(matched_rule.as_deref(), Some("trust"));
+            assert_eq!(matched_command, None);
+        }
+    }
+
+    #[tokio::test]
+    async fn outcome_user_rejection_structured_with_reason() {
+        // 结构化拒绝: {rejected_by_user: true, error_type: rejected_by_user, reason}
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(RiskRule::new(300_000)));
+        mgr.set_handler(Arc::new(RejectWithReasonHandler(
+            "风险太高, 先列影响范围".to_string(),
+        )));
+        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let r = o.rejection().expect("应拒绝");
+        assert!(r.rejected_by_user);
+        assert_eq!(r.error_type, RejectErrorType::RejectedByUser);
+        assert!(!r.silent);
+        assert_eq!(r.reason.as_deref(), Some("风险太高, 先列影响范围"));
+        assert_eq!(r.matched_rule.as_deref(), Some("risk"));
+    }
+
+    #[tokio::test]
+    async fn outcome_policy_deny_from_blacklist() {
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(BlacklistRule::with_blacklist(
+            ["Bad".to_string()],
+            false,
+        )));
+        mgr.set_handler(Arc::new(AutoApproveHandler)); // 不应走到通道
+        let o = mgr.wait_for_approval_outcome(&make_call("Bad")).await;
+        let r = o.rejection().expect("黑名单应拒");
+        assert!(!r.rejected_by_user, "规则拒绝不是主人拒绝");
+        assert_eq!(r.error_type, RejectErrorType::PolicyDeny);
+        assert!(!r.silent);
+        assert!(r.reason.as_ref().unwrap().contains("Bad"));
+
+        // 静默黑名单 → PolicyDeny + silent=true
+        let mut mgr2 = ApprovalManager::new();
+        mgr2.add_rule(Box::new(BlacklistRule::with_blacklist(
+            ["Bad".to_string()],
+            true,
+        )));
+        let o2 = mgr2.wait_for_approval_outcome(&make_call("Bad")).await;
+        let r2 = o2.rejection().expect("静默黑名单应拒");
+        assert!(r2.silent);
+        assert_eq!(r2.error_type, RejectErrorType::PolicyDeny);
+    }
+
+    #[tokio::test]
+    async fn outcome_timeout_is_structured() {
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(RiskRule::new(20))); // 20ms 极短窗口
+        mgr.set_handler(Arc::new(DelayedHandler {
+            delay_ms: 200,
+            approve: true,
+        }));
+        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let r = o.rejection().expect("超时应拒");
+        assert!(!r.rejected_by_user, "超时不是主人拒绝");
+        assert_eq!(r.error_type, RejectErrorType::ApprovalTimeout);
+    }
+
+    #[tokio::test]
+    async fn outcome_no_handler_is_channel_unavailable() {
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(RiskRule::new(300_000)));
+        // 不注册 handler
+        let o = mgr.wait_for_approval_outcome(&make_call("system.exec")).await;
+        let r = o.rejection().expect("无通道应拒");
+        assert!(!r.rejected_by_user);
+        assert_eq!(r.error_type, RejectErrorType::ChannelUnavailable);
+        // 旧布尔接口行为不变: 无 handler = Ok(false)
+        let b = mgr.wait_for_approval(&make_call("system.exec")).await;
+        assert_eq!(b, Ok(false));
+    }
+
+    #[tokio::test]
+    async fn outcome_silent_rejection_via_command_level_rule() {
+        // 命令级静默条目: 主人拒绝 → silent=true (不打扰 AI), 审计留痕
+        use crate::rule::ApprovalListRule;
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(ApprovalListRule::with_entries(
+            ["Shell:reboot::SilentReject".to_string()],
+            300_000,
+        )));
+        mgr.set_handler(Arc::new(RejectWithReasonHandler("不批".to_string())));
+
+        let call = make_call_with_args("Shell", json!({"command": "reboot"}));
+        let o = mgr.wait_for_approval_outcome(&call).await;
+        assert!(o.is_silent_rejection());
+        let r = o.rejection().unwrap();
+        assert!(r.rejected_by_user);
+        assert!(r.silent, "::SilentReject 条目 → 静默拒绝");
+        assert_eq!(r.matched_command.as_deref(), Some("reboot"));
+        assert_eq!(r.matched_rule.as_deref(), Some("approval_list"));
+        assert_eq!(r.error_type, RejectErrorType::RejectedByUser);
+
+        // 审计视图能查到这条静默拒绝 (留痕)
+        let silent_audit = mgr.silent_rejection_audit();
+        assert_eq!(silent_audit.len(), 1);
+        assert_eq!(silent_audit[0].tool_name, "Shell");
+        assert_eq!(silent_audit[0].matched_command.as_deref(), Some("reboot"));
+        assert!(silent_audit[0].rejected_by_user);
+    }
+
+    #[tokio::test]
+    async fn outcome_non_silent_command_level_rejection_not_in_silent_audit() {
+        use crate::rule::ApprovalListRule;
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(ApprovalListRule::with_entries(
+            ["Shell:reboot".to_string()],
+            300_000,
+        )));
+        mgr.set_handler(Arc::new(RejectWithReasonHandler("不批".to_string())));
+        let call = make_call_with_args("Shell", json!({"command": "reboot"}));
+        let o = mgr.wait_for_approval_outcome(&call).await;
+        assert!(o.is_rejected());
+        assert!(!o.is_silent_rejection());
+        assert!(mgr.silent_rejection_audit().is_empty());
+        // 但普通审计台账有记录
+        assert_eq!(mgr.audit_len(), 1);
+    }
+
+    #[tokio::test]
+    async fn check_detailed_returns_command_and_silent() {
+        use crate::rule::ApprovalListRule;
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(ApprovalListRule::with_entries(
+            ["Shell:reboot::SilentReject".to_string()],
+            300_000,
+        )));
+        let call = make_call_with_args("Shell", json!({"command": "reboot"}));
+        let (decision, detail) = mgr.check_detailed(&call);
+        assert!(decision.is_require_approval());
+        assert_eq!(detail.matched_rule.as_deref(), Some("approval_list"));
+        assert_eq!(detail.matched_command.as_deref(), Some("reboot"));
+        assert!(detail.silent_on_reject);
+
+        // history 记录也带上命令级明细 (留痕)
+        let h = mgr.snapshot_history();
+        assert_eq!(h.len(), 1);
+        assert_eq!(h[0].matched_command.as_deref(), Some("reboot"));
+        assert!(h[0].silent_on_reject);
+
+        // 普通 check 签名不变 (向后兼容)
+        let d2 = mgr.check(&make_call("NoRule"));
+        assert!(d2.is_allow(), "无命中默认 Allow (VCP 行为)");
+    }
+
+    #[tokio::test]
+    async fn wait_for_approval_bool_backcompat() {
+        // 旧接口逐路径回归: Allow→true / Deny→false / 批准→true / 拒绝→false
+        let mut mgr = ApprovalManager::new();
+        mgr.add_rule(Box::new(BlacklistRule::with_blacklist(
+            ["Bad".to_string()],
+            false,
+        )));
+        mgr.add_rule(Box::new(RiskRule::new(300_000)));
+        mgr.set_handler(Arc::new(AutoApproveHandler));
+
+        assert_eq!(mgr.wait_for_approval(&make_call("Safe")).await, Ok(true));
+        assert_eq!(mgr.wait_for_approval(&make_call("Bad")).await, Ok(false));
+        assert_eq!(
+            mgr.wait_for_approval(&make_call("system.exec")).await,
+            Ok(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn audit_capped_at_max_len() {
+        let mut mgr = ApprovalManager::new();
+        mgr.set_handler(Arc::new(AutoApproveHandler));
+        for i in 0..(MAX_AUDIT_LEN + 5) {
+            let _ = mgr.wait_for_approval_outcome(&make_call(&format!("T{i}"))).await;
+        }
+        assert!(
+            mgr.audit_len() <= MAX_AUDIT_LEN,
+            "审计裁剪到 {MAX_AUDIT_LEN}, 实际: {}",
+            mgr.audit_len()
+        );
     }
 }
