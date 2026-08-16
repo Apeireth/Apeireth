@@ -56,11 +56,14 @@ pub mod memory_injection;
 pub mod confidence;
 pub mod evolution_gate;
 pub mod oracle;
+pub mod oracle_adapters;  // N3: 预测机套件数据源适配器 (拉取→规范化→喂 oracle 可证伪预测登记)
 pub mod dream;
 pub mod reflection;
+pub mod thought_cluster;  // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
 pub mod daily_summary;
 pub mod goal;
 pub mod capability;
+pub mod deploy; // A1: 能力演化回路后半段 (部署→监控→回滚机制件, mock 通道可测)
 pub mod suites;
 pub mod plugin;
 pub mod education;
@@ -73,13 +76,18 @@ pub mod approval_requests;
 pub mod memory_extractor;
 pub mod goal_tools;
 pub mod memory_graph;
+pub mod morphology;  // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
 pub mod context;
+pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
 pub mod assemble;
 pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
+pub mod sandbox;  // B3: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + Sandboxie/landlock trait 留口)
 pub mod critic;  // P2#10: CRITIC 反思带工具调用 (声明提取 + 验证 trait + 组合器)
 pub mod hello;  // P3#22: Windows Hello 真绑机制口 (检测 + 绑定 trait, 0 装 PASS)
 pub mod exec_worker;
 pub mod continuation;
+pub mod continuity; // N2 OneRing: continuity 锚点解析 + 迁移接口 (append-only 安全)
+pub mod onering; // N2 OneRing: 统一上下文账本 (跨前端同一时间线, VCP OneRing 对照)
 pub mod prompt_cache;
 pub mod spill;
 pub mod session_log;
@@ -111,25 +119,39 @@ pub use organs::AwakeCompanion;
 pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
 pub use daemon::{BroadcastSink, CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, MultiSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
 pub use assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
+pub use prompt_assembler::{AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind, StaticSource, TimeSource, VariableSource};
 pub use critic::{Claim, ClaimVerifier, CritiqueReport, ReflectionCritic, Verification, extract_claims};
 pub use hello::{HelloBound, HelloCapability, detect_hello_capability};
 pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
 pub use constitution_gate::ConstitutionGate;
 pub use memory_injection::build_memory_injection;
+pub use morphology::{MorphologyVerdict, RetrievalMode};
 pub use confidence::{BetaBinomial, Strength};
 pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
 pub use oracle::{Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
+pub use oracle_adapters::{AdapterError, AdapterForecastMeta, AdapterRegistry, CoinGeckoAdapter, DirectionForecast, FallbackAdapter, ForecastPipeline, MacroRatesAdapter, MarketAdapter, MarketQuote, MockAdapter, RawFetch, ReqwestRawFetch, ResolveOutcome, TREASURY_AVG_RATE};
 pub use dream::{DreamScheduler, DreamSummarizer};
 pub use reflection::ReflectionScheduler;
+pub use thought_cluster::{ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader, ThoughtFile};
 pub use daily_summary::{DailySummary, build_daily_summary};
 pub use goal::{GoalBlock, GoalError, GoalPhase, GoalService, GoalSnapshot, GoalStore};
 pub use capability::{CapabilityError, CapabilityKind, CapabilityProposal, CapabilityRegistry, CapabilityStatus, ExpectedOutcome};
+pub use deploy::{DeployChannel, DeployError, DeployManager, DeployStatus, Deployment, MockDeployChannel, MonitorMetrics, ObserveOutcome};
 pub use suites::{SuiteCatalog, SuiteDef, SuiteKind, suite_expiry_check};
 pub use continuation::{ContinuationSnapshot, ContinuationStore, PendingToolCall};
+pub use continuity::{
+    current_continuity_id, ensure_identity, migrate_subject, normalize_continuity,
+    record_carrier_migration, MigrationReport, CONTINUITY_ENV_VAR, DEFAULT_CONTINUITY_ID,
+    MIGRATED_ID_PREFIX,
+};
+pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
 pub use prompt_cache::{assemble_tiered, build_messages, redact_secrets};
 pub use spill::{SpillStore, SPILL_THRESHOLD_CHARS};
 pub use session_log::{SessionEvent, SessionLog};
-pub use tone::tone_hint;
+pub use tone::{
+    deliberation_intensity, emotion_tone, organ_tone, organ_tone_refined, tone_hint,
+    DeliberationEcho, ToneError, ToneRefiner,
+};
 
 /// 伙伴器官根类型 —— 全部关系状态的持有者
 ///
@@ -272,9 +294,17 @@ impl Default for Companion {
     }
 }
 
-/// 当前 session id (per sovereignty/continuity_id 模式)
+/// 当前进程会话 id (per sovereignty/continuity_id 模式).
+///
+/// **N2 修正 (锚点落地)**: 旧版每次调用返回新随机 v4, 且 0 调用方 = "锚点悬空"
+/// (release-plan 偏差❌). 现语义修正为**进程内稳定**: OnceLock 首次生成后不变,
+/// 供 continuity_link 会话审计登记 / 生命周期日志作为"本进程这一次会话"的稳定标识.
+/// 注意区分两个锚点:
+/// - `continuity_id` (见 `continuity` 模块) = 跨进程/跨载体不变的身份锚点;
+/// - `current_session_id()` = 本进程一次运行期的会话标识 (进程重启即换).
 pub fn current_session_id() -> Uuid {
-    Uuid::new_v4()
+    static SESSION: std::sync::OnceLock<Uuid> = std::sync::OnceLock::new();
+    *SESSION.get_or_init(Uuid::new_v4)
 }
 
 #[cfg(test)]
@@ -328,5 +358,13 @@ mod tests {
         let id = PartnerId::new();
         let res = companion.get_partner(id).await;
         assert!(matches!(res, Err(CompanionError::PartnerNotFound(_))));
+    }
+
+    #[test]
+    fn current_session_id_is_stable_within_process() {
+        // N2: 修正后必须进程内稳定 (不再是每次新随机), 否则锚点悬空.
+        let a = current_session_id();
+        let b = current_session_id();
+        assert_eq!(a, b, "current_session_id 必须进程内稳定");
     }
 }

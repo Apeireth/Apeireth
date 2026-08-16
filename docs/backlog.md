@@ -10,6 +10,7 @@
 | A1 | 代码 TODO 全量审计 (mempalace/VCP/Zep/Mem0 等借鉴点落地核对) | 2026-08-16 | 本节 |
 | A2 | Handoff 交接审计 (docs/CONTEXT-HANDOVER.md 逐项核对) | 2026-08-16 | 本节 |
 | A3 | 记忆域深度调研 (memory-research.md §五 backlog) | 2026-08-16 | 本节 |
+| A4 | C3 v2 alpha 遗留盘点 (22 项核实) + 上轮自检 21 报告吸收 | 2026-08-17 | 本节 (编号 25-47: P1=25-29 / P2=30-37 / P3=38-45 / P0=46-47, 46/47 后置编号因 23/24 已被 C2 压测自检占用; 报告 reports/06da84cc-…-technical_writer2-report.md) |
 
 ## 已完成项 (✅)
 
@@ -29,11 +30,13 @@
 | ✅ 统一注入管线 ContextAssembler (核心块保护 + 预算截断) | A3 (L0/L1 前置) | context.rs | 提交 986358e + 3 单测 |
 | ✅ CompanionApp 装配器 | A3 审计结论 ★5 | assemble.rs (注入管线/提炼调度/滚动摘要/自成长/3 新 LLM trait) | 提交 cdb6b62 + 7 单测; example 1683→1100 行 |
 | ✅ L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | CompanionApp with_identity (L0) + with_essential_budget (L1, essential-*/高 importance) | 提交 cdb6b62 + 单测 |
+| ✅ integration worktree 过期 (落后 1053) | A4 (DO1 b7f49cfe 自检) | C3 盘点复核实: 已与 master 完全同步 | `git rev-list --left-right --count master...team/e8de47ae-…/integration` = 0 0 (2026-08-17) |
 
 ## 待办项 (按优先级)
 
 > **2026-08-16 backlog 全清**: 全部 ⬜ → ✅ (主人拍板"排队的全做了, 全干完")。
 > **2026-08-16 新增**: VCP 新版调研 (Rust 重写 + 84 插件) 进行中 — 可吸收点登记见下。
+> **2026-08-17 新增 (A4)**: C3 v2 alpha 遗留盘点 (22 项重核实: 12 ✅ 达成/已解决 + 7 ❌ 产物失传 + 1 ⚪ 不可核实) + 上轮自检 21 份报告吸收 → 编号 25-47 (P0 两项为 46/47, 因 23/24 已被 C2 压测自检并行占用); 盘点报告 reports/06da84cc-848a-4087-b42f-2679d6c6c4d0-technical_writer2-report.md。
 
 ### 新调研跟踪
 
@@ -43,9 +46,9 @@
 | N2 | OneRing 统一上下文账本 | N1 发现 | 跨前端统一时间线 — 并入 A2 (continuity 锚点升级) | ⬜ 并入 §4 A2, 待实施 |
 | N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源) | ⬜ 并入 §5.2, 待实施 |
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
-| N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ⬜ P0, 待实施 |
+| N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ✅ 提交 f8245f28 (流水线整合): semantic_persist.rs — artifact_sig (SHA-256 手写, NIST 向量锚定, 0 新依赖) + artifact_gate_decision 五条失效规则 (无记录/内容变/normalize stale/schema stale/Hit) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch) + .artifact_sig.json sidecar; 8 测试四路径全绿 (cargo test -p apeireth-memory -j 4, 报告 reports/5f492ccb-…-database_engineer2-report.md) |
 | N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ⬜ P0, 待实施 |
-| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 <hash 待回填>: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一); env APEIRETH_MORPHOLOGY_TEMPERATURE |
+| N7 | 查询形态学 softmax | N1 发现 (Rust 层) | 驱动 CRAWL 深度/检索模式切换 (纯函数) | ✅ 提交 08c6f00d: morphology.rs 纯函数 (特征→softmax→档位/期望预算) + assemble.rs inject_memory 一处挂接; 10 单测 (确定性/空查询/超长/温度/分布归一, rustc --test 独立全绿; 全 crate 测试被并行 WIP 阻塞, 见报告); env APEIRETH_MORPHOLOGY_TEMPERATURE |
 | N8 | generation 绑定观测缓存 | N1 发现 (Rust 层) | 查询管线中间产物复用 + 防跨代脏读 | ⬜ P0, 待实施 |
 | N9 | 提示词装配引擎 (占位符变量宇宙) | N1 发现 (插件扫描) | messageProcessor 范式: 特权角色+单次展开+环检测+分型变量源 — Apeireth 空白区最高价值 | ⬜ P0, 待实施 |
 | N10 | 宽松文本工具协议层 | N1 发现 (插件扫描) | vcpLoop TOOL_REQUEST 语法: 始末/ESCAPE/模糊匹配/archery/思考块剥离 → tool-runtime 增强 | ⬜ P0, 待实施 |
@@ -61,6 +64,8 @@
 |---|---|---|---|---|
 | 1 | CompanionApp 装配器 | A3 审计结论 ★5 | companion_serve.rs (~1600 行) 装配逻辑抽进 lib: 注入链/提炼调度/工具桥/多 sink 统一为 CompanionApp::new(...).start(); example 变薄, TUI/CLI 可复用 | ✅ 提交 cdb6b62 |
 | 2 | L0/L1 always-loaded 渐进加载 | A1 #1 (mempalace §5.6) | Identity (~100 token) + Essential Story (~500-800 token) 常驻; 与 ContextAssembler core 块天然契合, 挂 context.rs | ✅ 提交 cdb6b62 |
+| 46 | Dockerfile COPY crates 互覆盖修复 | A4 (DO2 af2676fa W1) | `COPY crates/apeireth-*/Cargo.toml ./crates/` 同名互覆盖且不建 member 子目录, dummy 依赖缓存 build 大概率失效/失败 — 发布产物阻塞级; 本机无 docker 未实测, 需 buildx/有 docker 环境验证 | ⬜ P0, 待实施 |
+| 47 | compose POSTGRES_PASSWORD 强制外部注入 | A4 (DO2 af2676fa W3) | docker-compose.yml `POSTGRES_PASSWORD:-secret` 默认弱密码且 DB URL 内联, 上线前必须禁止默认值 | ⬜ P0, 待实施 |
 
 ### P1 — 计划内 (成本明确)
 
@@ -69,6 +74,11 @@
 | 3 | Normalize 版本 schema | A1 #2 (~1 天) | semantic_persist 加 SEMANTIC_NORMALIZE_VERSION, 换 chunk 规则后识别 stale 向量 | ✅ 提交 5bd0d4e: CURRENT_NORMALIZE_VERSION + normalize_is_stale + .normalize.json sidecar + needs_reindex; 3 测试 |
 | 4 | 5 lifecycle hooks | A1 #5 | UserPromptSubmit / SessionStart / SessionEnd / PostToolUse / Stop, 挂 apeireth-bus | ✅ 提交 9c7a5cf (bus lifecycle.rs) + 2d07c604 (companion_serve 接线: SessionStart/UserPromptSubmit/PostToolUse 真实时机) |
 | 5 | 图持久化后端 Kùzu | A1 #3 (~1.5 周) | memory_graph 目前进程内存; 换 Kùzu 持久化, trait 接口已备 | ✅ 提交 b8fdd455: GraphBackend trait + SqliteGraphBackend + with_backend 注入 + GraphQuery 结构化查询; Kùzu 物理后端因本机无 cmake + GitHub 墙不可构建, trait 口已备 (0 装 PASS 如实标注) |
+| 25 | cargo fmt 全仓修复 + nightly 工具链 | A4 (QA2 397a85ec) | cargo fmt --check 不通过: 1154/1588 文件 (72.7%) 不合规 (stable 口径); 先修本机 nightly (`rustup toolchain install nightly --force`), 再 `cargo +nightly fmt --all` 一次性修复; Windows 侧用分批 rustfmt 命令规避 error 206 (命令见 QA2 报告) | ⬜ P1, 待实施 |
+| 26 | 版本号口径统一 (release 前必须) | A4 (TW2 f3f9fa0c + AR2 b74fc48b) | RELEASE_NOTES v1.0.0 标题 ≠ workspace 1.2.0; CHANGELOG 顶部日期条目未归 semver + R131-R178 未归版本条目; RELEASE_NOTES 行号引用漂移 (:246→:224); 11 个活动 crate 硬编码版本; ROADMAP 头部双轨表述未标明 + 进度止于 R127 未同步 R178 — 需 Leader 拍板单一口径 | ⬜ P1, 待 Leader 拍板 |
+| 27 | cosign.pub 生成 + release 工具链预装 | A4 (AO2 b88db7ed) | docs/security/cosign.pub 缺失 → cosign-sign-all.sh/cosign-verify.sh 必失败; 发布环境需预装 cosign/gh/jq (本机均缺) | ⬜ P1, release 前置 |
+| 28 | .gitignore 密钥类加固 | A4 (SEC2 97a4bfce) | 追加 `*.pem` `*.key` `*.p12` `*.pfx` `id_rsa*` (现仅针对性忽略 `**/cosign.key`, 实测 secret.pem 不被忽略) + 补 `_research_mem/` | ⬜ P1, 待实施 |
+| 29 | README crate 计数修正 | A4 (AR2 b74fc48b) | README 写「81 (80 顶层 + 嵌套)」, 实测 workspace members=82 (81 顶层 + 1 嵌套) | ⬜ P1, 顺手修 |
 
 ### P2 — Backlog (有价值, 时机未到)
 
@@ -83,6 +93,14 @@
 | 12 | ONNX 本地嵌入 | A1 | 本地 embedding, 去 MiniMax 依赖 | ✅ 提交 b8fdd455: onnx.rs tract 纯 Rust 推理 (feature onnx 默认关) + APEIRETH_LOCAL_EMBEDDER 选择 + hash 降级链; 4 测试双配置 |
 | 13 | UncertaintyResolver 接真 (oracle) | A2 | 目前 stub, oracle-suite 就绪后接线 | ✅ 提交 3e0ab1a6: CalibratedResolver (Brier + BetaBinomial 校准, Wilson 区间, 0 历史→0.5 诚实); 4 测试 |
 | 14 | SDK 三通道 stub | A2 | 主人拍板跳过 Node, 其余通道待定 | ✅ 已实装 (R122-8): python/node/c 三 cfg-gated 桥接均有真函数; 台账确认完成 |
+| 30 | apeireth-mcp 文档对齐 | A4 (MCP1 19809d9e) | ①lib.rs/Cargo.toml 引用 `docs/v2-strategy/05` 悬空 (已迁 docs/stage2/05-EXECUTION-NOW.md) ②lib.rs 头部过时 (称 SSE/resources/prompts 未实现, 实际均已实现且测试通过) — LOCKED crate, 需走对应修改流程 | ⬜ P2, 待实施 |
+| 31 | CODEOWNERS 悬空 crate 清理 | A4 (MCP1 19809d9e) | CODEOWNERS:49-51 声明 apeireth-mcp-ssh/winrm/relay-image 目录不存在 (C3 复核仍在) — 清理条目或补建 crate | ⬜ P2, 待实施 |
+| 32 | 仓库卫生: 误产物 + db 泄漏清理 | A4 (AR1 91bb7d42 + DB1 e5a173c8 + DB2 c7e494b3) | ①`git rm ersXXXApeireth-rust` (11KB ANSI git log 转储, R125 迁仓误产物, 仍被跟踪) ②删 crates/apeireth-memory.db{,-shm,-wal} (486KB WAL 泄漏进源码树, 未跟踪) + .gitignore 补 `crates/*.db*` | ⬜ P2, 待实施 |
+| 33 | 孤儿 crate 确认 + dev-dep 治理 | A4 (AR1 91bb7d42) | ①12 个零内部消费者 lib crate 待负责人确认去留 (provider/cron/experience/environment/config/state/naming-v05/livekit/blueprint-impl/library-governance/voice/context-fold) ②tool-fetch 自引用 dev-dep (Cargo.toml:28) 修复 ③verify/supervisor/sovereignty 三角 + tool-runtime↔tool-approval dev-dep 回环边界腐化, 建议抽公共接口 | ⬜ P2, 待实施 |
+| 34 | assemble.rs chrono unwrap DST 修复 | A4 (CR2 03cf86e9) | assemble.rs:399 `and_local_timezone(...).unwrap()` 在 DST/时钟回拨时歧义 panic — 一行改 `.single()`/Option 兜底; 4 处 Mutex poison 风险仅记录不阻塞 | ⬜ P2, 待实施 |
+| 35 | v2 alpha 失传产物诚实标注 | A4 (C3 盘点) | 7 份验收报告 + 09-ADDENDUM + V2-INDEX + 07-V2-BASELINE 从未入 git 历史 (不可恢复, 详见 C3 报告 §二) — 在 RELEASE-NOTES-v2.0.0-alpha 对应位置加注"产物已失传"或 Leader 决策重写; 不重建伪造 (0 装 PASS) | ⬜ P2, 待 Leader 决策 |
+| 36 | round15-03 丢失内容恢复决策 | A4 (MCP2 380a2218) | 嵌套侧 CHANGELOG +28 行 / ROADMAP +43/-5 行未进根版本; blob 9aa1791c/0efb4322 可随时恢复 (commit 8bcad630) — 已通报 Leader | ⬜ P2, 待 Leader 决策 |
+| 37 | 根 tests/ 死代码归档 | A4 (QA1 5c888b1c) | 根 tests/ 12 个 .rs 不被任何活跃 crate 编译 (纯 workspace 无 root package), README 自述占位 — 清理或归档, 防误以为在执行 | ⬜ P2, 待实施 |
 
 ### P3 — 归档/低优先 (做了更好, 不做不欠)
 
@@ -96,7 +114,16 @@
 | 20 | self_update OTA | A1 | 发布流程成熟后再做 | ✅ 已实装 (R223): 真实二进制替换 + 备份 + 原子切换 + 回滚; 台账确认完成 |
 | 21 | TUI voice/eye stub | A2 | 前端占位, 不影响机制 | ✅ 修复真 bug: Synthesize 假装成功 → 返回 Unsupported; eye 占位诚实标注; 新测试 |
 | 22 | Windows Hello 真绑 | A2 | 生物识别绑定, 需硬件调研 | ✅ 提交 2d07c604: hello.rs 机制口 (detect_hello_capability reg query NGC + HelloBound trait; 0 装 PASS 不假装已绑定); 3 测试 |
+| 38 | mkdocs extra.css 资产补齐 | A4 (TW1 fba46921) | mkdocs.yml extra_css 引用 docs/pages-source/assets/css/extra.css 不存在; strict:true 构建会告警 — 补最小 extra.css 或删 extra_css 段 | ⬜ P3, 待实施 |
+| 39 | companion 6 clippy 警告 + CI fmt 核对 | A4 (CR1 abf185d2) | cast_lossless×3 (memory_extractor.rs:299/session_log.rs:53/simulation.rs:223) + manual_let_else×3 (session_log.rs:94/tool_bridge.rs:786/796) 机械修; 另核对 CI fmt check 是否真 nightly (否则 tantivy 5 项 nightly-only 规则形同虚设) | ⬜ P3, 待实施 |
+| 40 | deny.toml 过期 skip 清理 | A4 (SEC1 02cd644d) | unnecessary-skip (heck 等已单版本) + unmatched-skip (async-channel 已不在依赖图); 过期 skip 会掩盖未来真实多版本问题 | ⬜ P3, 待实施 |
+| 41 | rust-toolchain.toml pin 版本 | A4 (BE1 5cb3d314) | 现仅 channel=stable 未 pin 具体版本, stable 升级会导致 CI 与本地漂移; 建议 pin 1.97.1 (可重现构建决策需 Leader 拍板) | ⬜ P3, 待决策 |
+| 42 | git 卫生: stash/zombie worktree/log | A4 (DO1 b7f49cfe) | ①29 条历史 stash (round5~R122) 审计清理 ②僵尸 worktree r11-recover 需 `git worktree prune` (写操作待授权) ③reports/*.log 纳入 .gitignore (如 be2-cargo-check.log) | ⬜ P3, 待授权 |
+| 43 | frontend/ 残留骨架清理 | A4 (FS1 c7b06a25) | frontend/ 仅存 tauri-prototype 残留 (砍前端决策的遗留, .gitignore:152 有记载); 清理需主人确认 | ⬜ P3, 待主人确认 |
+| 44 | rust-ci.yml 重复 workflow 清理 | A4 (DO2 af2676fa W4) | rust-ci.yml 已标 deprecated 与新 rust.yml 并行浪费 runner; R25 注释"1 周后待主人拍板删" | ⬜ P3, 待主人拍板 |
+| 45 | 数据目录标准化 + migration 口径统一 | A4 (DB1 e5a173c8 + DB2 c7e494b3) | ①数据文件落 crates/apeireth-memory.db 非常规位置, 建议迁标准数据目录 (需兼容旧文件搬迁) ②DB1 称"无 migration 框架"与 DB2 实测矛盾: apeireth-memory/src/migrations.rs 已有版本化迁移 (V1/V2 + schema_migrations), 其余 CREATE TABLE IF NOT EXISTS 散点 (continuity_link/dailynote/lightmemo) 未接入 — 统一口径并评估接入 | ⬜ P3, 待实施 |
 | 23 | cargo fmt 卫生 (workspace 级在 Windows 不可运行) | C2 压测自检 (QA 2026-08) | 复现: `cargo fmt --check` 工作区级直接报 `文件名或扩展名太长 (os error 206)` (CreateProcess 32k 命令行上限); per-crate 可运行但确有未格式化 diff: apeireth-bench 37 / apeireth-memory 261 / apeireth-companion 533 文件 (仓库共 1603 个 .rs, 与上轮报告 1588 规模吻合). 本任务不改 (跨任务包文件) | ⬜ P3 卫生: 建议 CI 用 per-crate fmt gate (或分片脚本), 另择专项批量 cargo fmt 一次 |
+| 24 | 向量检索 100k 语料延迟观察点 | C2 压测基线 (QA 2026-08) | SemanticIndex::search 为暴力线性扫描: 100→168µs, 1k→1.25ms, 10k→12.8ms, 100k→144ms/query (top_k=10, dim=32). 当前规模 (<10k) 无碍; 若单会话语料逼近 10 万条, 单次检索 ~144ms 将进入交互可感知区. 基线证据: reports/eaf24ba8-…-qa_engineer2-evidence/vector-out.txt | ⬜ P3 观察: 语料 >10 万条时评估 ANN/HNSW 索引 (apeireth-vector 已留 qdrant_compat 口), 非当下欠账 |
 
 ## 明确不做 (有意决策, 防再调研)
 

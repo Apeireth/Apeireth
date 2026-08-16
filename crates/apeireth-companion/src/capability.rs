@@ -6,8 +6,8 @@
 //! (pending → approved → active / rejected / retired), 经宪法评审与主人批准后激活,
 //! 激活的能力进入 AI 可感知的能力清单 (下一次自我演化可引用).
 //!
-//! 0 假装: 这是「提案 → 登记 → 审批 → 激活」机制件; 「AI 何时提案/如何生成能力内容」
-//! (LLM 生成 + 验证 + 部署 + 监控回滚) 是演化回路的后半段, 见 docs/release-plan.md 蓝图.
+//! 0 假装: 这是「提案 → 登记 → 审批 → 激活」机制件; 验证见 evolution_gate.rs,
+//! 部署/监控/回滚见 deploy.rs; 仅「AI 何时提案/如何生成能力内容」(LLM 生成) 未机制化.
 
 use std::sync::Arc;
 
@@ -39,8 +39,9 @@ pub enum CapabilityStatus {
     Pending,  // 已提案, 待宪法评审/主人批准
     Approved, // 已批准, 待激活
     Active,   // 已激活, AI 可感知可用
-    Rejected, // 被否决 (提案回退, 记录原因)
-    Retired,  // 已退役 (差评/过时)
+    Rejected,   // 被否决 (提案回退, 记录原因)
+    Retired,    // 已退役 (差评/过时)
+    RolledBack, // 已回滚 (部署后差评/失败率触发, 留痕; A1 演化回路后半段)
 }
 
 impl CapabilityStatus {
@@ -51,6 +52,7 @@ impl CapabilityStatus {
             Self::Active => "active",
             Self::Rejected => "rejected",
             Self::Retired => "retired",
+            Self::RolledBack => "rolled_back",
         }
     }
 }
@@ -80,6 +82,10 @@ pub struct CapabilityProposal {
     pub proposed_at_ms: i64,
     pub decided_at_ms: Option<i64>,
     pub reject_reason: Option<String>,
+    /// 回滚原因 (部署后监控触发回滚时记录, revert 即学习信号).
+    /// serde(default): 兼容旧持久化 episode (无此字段也能重放).
+    #[serde(default)]
+    pub rollback_reason: Option<String>,
     /// 预测行 (激活时可填): 可测预期, 未达标 → 回退 (revert 即学习信号).
     pub expected: Option<ExpectedOutcome>,
     /// EMA 评分 (0..1): record_use 更新, 低分+多观测 → 建议退役.
@@ -101,6 +107,7 @@ impl CapabilityProposal {
             proposed_at_ms: chrono::Utc::now().timestamp_millis(),
             decided_at_ms: None,
             reject_reason: None,
+            rollback_reason: None,
             expected: None,
             ema_score: None,
             confidence: None,
@@ -186,7 +193,7 @@ impl CapabilityRegistry {
         Ok(p)
     }
 
-    fn transition(&self, id: &str, to: CapabilityStatus, decided_at: i64) -> Result<CapabilityProposal, CapabilityError> {
+    fn transition(&self, id: &str, to: CapabilityStatus, decided_at: i64, reason: Option<String>) -> Result<CapabilityProposal, CapabilityError> {
         let mut all = self.load_all().map_err(|_| CapabilityError::NotFound)?;
         let idx = all.iter().position(|p| p.id == id).ok_or(CapabilityError::NotFound)?;
         let mut p = all[idx].clone();
@@ -196,6 +203,7 @@ impl CapabilityRegistry {
                 | (CapabilityStatus::Pending, CapabilityStatus::Rejected)
                 | (CapabilityStatus::Approved, CapabilityStatus::Active)
                 | (CapabilityStatus::Active, CapabilityStatus::Retired)
+                | (CapabilityStatus::Active, CapabilityStatus::RolledBack)
         );
         if !valid {
             return Err(CapabilityError::IllegalTransition { from: p.status, to });
@@ -204,7 +212,10 @@ impl CapabilityRegistry {
         p.status = to;
         p.decided_at_ms = Some(decided_at);
         if to == CapabilityStatus::Rejected {
-            p.reject_reason = Some("宪法评审/主人否决".into());
+            p.reject_reason = reason.clone().or_else(|| Some("宪法评审/主人否决".into()));
+        }
+        if to == CapabilityStatus::RolledBack {
+            p.rollback_reason = reason.clone().or_else(|| Some("监控触发回滚".into()));
         }
         if let Err(e) = self.put(&p) {
             eprintln!("[capability] put 失败: {e}");
@@ -214,22 +225,27 @@ impl CapabilityRegistry {
 
     /// 宪法评审/主人批准 → approved.
     pub fn approve(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Approved, chrono::Utc::now().timestamp_millis())
+        self.transition(id, CapabilityStatus::Approved, chrono::Utc::now().timestamp_millis(), None)
     }
 
     /// 激活 → AI 可感知可用.
     pub fn activate(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Active, chrono::Utc::now().timestamp_millis())
+        self.transition(id, CapabilityStatus::Active, chrono::Utc::now().timestamp_millis(), None)
     }
 
     /// 否决 (记录原因).
     pub fn reject(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Rejected, chrono::Utc::now().timestamp_millis())
+        self.transition(id, CapabilityStatus::Rejected, chrono::Utc::now().timestamp_millis(), None)
     }
 
     /// 退役 (差评/过时).
     pub fn retire(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Retired, chrono::Utc::now().timestamp_millis())
+        self.transition(id, CapabilityStatus::Retired, chrono::Utc::now().timestamp_millis(), None)
+    }
+
+    /// 部署后回滚 (差评/失败率触发): active → rolled_back, 原因留痕 (revert 即学习信号).
+    pub fn rollback(&self, id: &str, reason: &str) -> Result<CapabilityProposal, CapabilityError> {
+        self.transition(id, CapabilityStatus::RolledBack, chrono::Utc::now().timestamp_millis(), Some(reason.to_string()))
     }
 
     /// 全部提案 (按状态过滤可选).
@@ -272,17 +288,20 @@ impl CapabilityRegistry {
         Ok(retire_hint)
     }
 
-    /// 回滚收据 (revert 即学习信号): 被否决/退役的能力 + 原因, 供下一轮提案参考.
+    /// 回滚收据 (revert 即学习信号): 被否决/退役/回滚的能力 + 原因, 供下一轮提案参考.
     pub fn revert_receipts(&self) -> Result<Vec<(String, String, String)>, String> {
         Ok(self
             .load_all()?
             .into_iter()
-            .filter(|p| matches!(p.status, CapabilityStatus::Rejected | CapabilityStatus::Retired))
+            .filter(|p| matches!(p.status, CapabilityStatus::Rejected | CapabilityStatus::Retired | CapabilityStatus::RolledBack))
             .map(|p| {
                 (
                     p.name.clone(),
                     p.status.label().to_string(),
-                    p.reject_reason.clone().unwrap_or_else(|| "无记录".to_string()),
+                    p.rollback_reason
+                        .clone()
+                        .or(p.reject_reason.clone())
+                        .unwrap_or_else(|| "无记录".to_string()),
                 )
             })
             .collect())
@@ -334,6 +353,32 @@ mod tests {
         assert!(matches!(reg.activate(&p.id), Err(CapabilityError::IllegalTransition { .. })));
         // pending 状态不变
         assert_eq!(reg.list(None).unwrap()[0].status, CapabilityStatus::Pending);
+    }
+
+    #[test]
+    fn rollback_flow_and_illegal_transitions() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let reg = CapabilityRegistry::new(store, "me");
+        let p = reg.propose("部署回滚", "演化回路后半段", CapabilityKind::Skill, "apeireth").unwrap();
+        // pending → rolled_back 非法 (跳过审批/激活)
+        assert!(matches!(reg.rollback(&p.id, "x"), Err(CapabilityError::IllegalTransition { .. })));
+        // approved → rolled_back 非法
+        reg.approve(&p.id).unwrap();
+        assert!(matches!(reg.rollback(&p.id, "x"), Err(CapabilityError::IllegalTransition { .. })));
+        // active → rolled_back 合法, 原因留痕
+        reg.activate(&p.id).unwrap();
+        let r = reg.rollback(&p.id, "失败率过高").unwrap();
+        assert_eq!(r.status, CapabilityStatus::RolledBack);
+        assert_eq!(r.rollback_reason.as_deref(), Some("失败率过高"));
+        assert_eq!(r.status.label(), "rolled_back");
+        // rolled_back 是终态: 不能再激活/退役/再次回滚
+        assert!(matches!(reg.activate(&p.id), Err(CapabilityError::IllegalTransition { .. })));
+        assert!(matches!(reg.retire(&p.id), Err(CapabilityError::IllegalTransition { .. })));
+        assert!(matches!(reg.rollback(&p.id, "再次"), Err(CapabilityError::IllegalTransition { .. })));
+        // 回滚收据含 rolled_back 留痕 (revert 即学习信号)
+        assert!(reg.revert_receipts().unwrap().iter().any(|(n, s, reason)| n == "部署回滚" && s == "rolled_back" && reason == "失败率过高"));
+        // rolled_back 不在激活清单
+        assert!(reg.active_capabilities().unwrap().is_empty());
     }
 
     #[test]
