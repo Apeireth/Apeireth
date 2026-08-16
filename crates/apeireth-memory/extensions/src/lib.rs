@@ -62,6 +62,28 @@
 //! | [`provider_disk_lru`] | `DiskLruProvider` / `DiskLruConfigDefault` | 模式 5: 本地 disk + LRU |
 //! | [`provider_hybrid`] | `HybridProvider` / `HybridConfigDefault` | 模式 6: 组合 in_memory + disk_lru |
 //! | [`registry`] | `ProviderRegistry` (7 字段) / `ProviderRegistryBuilder` | 7 provider 聚合容器 |
+//! | [`named_registry`] | `MemoryProviderRegistry` | 按名称注册/查询的接线注册表 (列表/选择/fallback) |
+//! | [`cache_layer`] | `ProviderRole` / `is_persistent` / `CachedMemoryProvider` | "cache 语义" 接线层 (写穿/读填充/失效) |
+//! | [`factory`] | `ProviderFactory` / `ENV_*` | 9 provider 统一构造器 + from_env 接线工厂 |
+//!
+//! ## 接线现状 (telemetry cache 接线派工, 0 假装)
+//!
+//! 9 provider 各自真接 (per 下表), 但**主链路默认不走本 crate** (有意决策):
+//! - `apeireth-memory` 主 store 用自研 SQLite 主链路 (Episode/Note/Session), 仅在
+//!   `crates/apeireth-memory/src/lib.rs` re-export 3 Provider (in_memory/file/mongodb) 作
+//!   API 便利 (pub use 1 行, 0 数据通路).
+//! - `apeireth-telemetry::cache` 有独立 1:1 搬自 `apeireth-cache` 的 memory_provider
+//!   (capture/query/clear 3 流 trait), 0 引用本 crate.
+//! - 因此 9 provider 现为**独立可用单元** (端到端可测 5 个: in_memory/sqlite/disk_lru/
+//!   hybrid/file; 4 个 config 强校验: redis/postgres/s3/mongodb).
+//!
+//! **接线入口 (本次新增, 供 telemetry/cache 或高级用户启用)**:
+//! - [`named_registry::MemoryProviderRegistry`] — 按名称注册/查询/列表/选择/fallback.
+//! - [`factory::ProviderFactory::from_env`] — 从 `APEIRETH_MEMORY_*` env 装配 provider.
+//! - [`cache_layer::CachedMemoryProvider`] — 持久化后端 + 内存 cache 层的写穿/读填充语义.
+//!
+//! 真实消费方 (telemetry cache / memory store 主链路) 接入时, 走上述入口; 接入后本段
+//! 更新为"已接线 provider 清单" (0 假装).
 //!
 //! ## 6 哲学锚穿透 (per APEIRETH-CONVENTIONS §9)
 //!
@@ -98,6 +120,10 @@
 //!
 //! ⚠️ **skeleton (R21 借鉴 Golutra #3 估补, 主 2026-08-06 派活)**.
 //! 7 provider 各自真接 (4 个端到端 + 3 个 config 强校验), 6 K-1 编译期 + 运行时双层强校验.
+//! R23 #6 加 File (真接) + MongoDb (skeleton), provider 9 个.
+//! R-wiring (telemetry cache 接线派工): 提供 `MemoryProviderRegistry` (按名称) +
+//! `ProviderFactory::from_env` + `CachedMemoryProvider` 作为**接线入口**; 主链路默认
+//! 不走 extensions (有意决策, 见 "接线现状" 段), 0 假装已接入生产消费方.
 //! R21+ 续做: Redis/Postgres/S3 配服务端真连测试 + SigV4 签名 + List+BatchDelete for S3 clear/size
 //! + 真实集成 `apeireth-memory` 7 provider 路由 (LOCKED 边界外).
 //!
@@ -142,6 +168,12 @@ pub mod provider_file;
 pub mod provider_mongodb;
 /// 7 provider 聚合注册表 (7 字段, 1:1 跟 Golutra 5 provider 装配对齐).
 pub mod registry;
+/// 按名称注册/查询的接线注册表 (9 provider 列表/选择/fallback, telemetry cache 接线入口).
+pub mod named_registry;
+/// "cache 语义" 接线层 (ProviderRole 能力分类 + CachedMemoryProvider 装饰器).
+pub mod cache_layer;
+/// 9 provider 统一构造器 + from_env 接线工厂 (env 装配, 供 telemetry/cache 选后端).
+pub mod factory;
 
 // ============================================================================
 // 公共 re-export (顶层级 API, 不需要 `apeireth_memory_extensions::provider_in_memory::InMemoryProvider`)
@@ -167,6 +199,15 @@ pub use crate::provider_sqlite::{SqliteConfigDefault, SqliteProvider};
 pub use crate::registry::{
     ProviderRegistry, ProviderRegistryBuilder, REGISTRY_PROVIDER_COUNT,
 };
+// ===== telemetry cache 接线 (R-wiring) re-export =====
+pub use crate::cache_layer::{
+    CachedMemoryProvider, ProviderRole, is_persistent, provider_role,
+};
+pub use crate::factory::{
+    ProviderFactory, ENV_CACHE_TTL_MS, ENV_CONNECTION, ENV_MAX_SIZE, ENV_PERSIST, ENV_PROVIDER,
+    ENV_SCOPE, ENV_TIMEOUT_MS,
+};
+pub use crate::named_registry::MemoryProviderRegistry;
 
 // ============================================================================
 // 编译期 hardcode (7 项, 跨模块共享守门)
