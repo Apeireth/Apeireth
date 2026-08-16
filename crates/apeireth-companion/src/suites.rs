@@ -102,8 +102,18 @@ impl SuiteCatalog {
                     name: "教育升级套件".into(),
                     kind: SuiteKind::UpgradeSuite,
                     description: "数学学习伴侣: 错题分析/学习路径/换元提醒 (主人场景)".into(),
-                    requires_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
-                    pack_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
+                    requires_tools: vec![
+                        "recall_memory".into(),
+                        "save_memory".into(),
+                        "FileOperator".into(),
+                        "dx_check".into(),
+                    ],
+                    pack_tools: vec![
+                        "recall_memory".into(),
+                        "save_memory".into(),
+                        "FileOperator".into(),
+                        "dx_check".into(),
+                    ],
                     pack_hours: Some(24 * 30),
                     plugins: vec!["education-dx-check".into()],
                 },
@@ -260,29 +270,18 @@ mod tests {
 
     #[test]
     fn suite_requires_plugins_before_install() {
-        use crate::plugin::{Plugin, PluginRegistry};
-        use crate::packs::PermissionPack;
+        use crate::education::EducationDxPlugin;
+        use crate::plugin::PluginRegistry;
         use apeireth_memory::SqliteMemoryStore;
         use std::sync::Arc;
-        struct DxPlugin;
-        impl Plugin for DxPlugin {
-            fn id(&self) -> &str { "education-dx-check" }
-            fn version(&self) -> &str { "0.1.0" }
-            fn description(&self) -> &str { "换元 dx 检查插件" }
-            fn on_load(&self, b: &ToolBridge) -> Result<(), String> {
-                b.packs.grant(PermissionPack::permanent("dx检查", vec!["recall_memory".into()]));
-                Ok(())
-            }
-            fn on_unload(&self, _b: &ToolBridge) -> Result<(), String> { Ok(()) }
-        }
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let bridge = ToolBridge::new(store);
         let cat = SuiteCatalog::builtin();
         let reg = PluginRegistry::new();
         // 未装插件 → 套件装配拒绝
         assert!(cat.install_with_plugins(&bridge, Some(&reg), "education-suite").is_err());
-        // 装插件后 → 装配成功
-        reg.install(&bridge, Arc::new(DxPlugin)).unwrap();
+        // 装真插件 (注册 dx_check + 授权) 后 → 装配成功
+        reg.install(&bridge, Arc::new(EducationDxPlugin)).unwrap();
         let r = cat.install_with_plugins(&bridge, Some(&reg), "education-suite").unwrap();
         assert!(r.contains("教育升级套件"));
         assert!(r.contains("1 插件"));
