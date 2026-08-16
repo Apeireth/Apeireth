@@ -1,24 +1,29 @@
-//! companion_serve v2 — 伙伴端点全能力版: **任何 OpenAI 兼容前端 → 天然拥有 Apeireth 全部能力**.
+//! companion_serve v3 — 伙伴端点全能力版: **任何 OpenAI 兼容前端 → 天然拥有 Apeireth 全部能力**.
 //!
 //! 主人设想 (2026-08-16): 「连上后端, 前端就天然拥有后端的所有能力」。
 //! v1 差距修复:
 //!   ① 记忆持久化: open_memory_store() 文件库 (重启不失忆, %APPDATA%\apeireth\memory.sqlite)
 //!   ② 工具全量暴露: schema 由 registry 动态生成 (能力可见), 执行由宪法/权限/批准约束 (能力不失控)
 //!   ③ daemon 常驻: 做梦/反思/涌现同进程运行 — 对话端点 ≠ 伙伴在, 现在伙伴真在
+//! v3 补魂 (主人: 没接到都接):
+//!   ④ 做梦 LLM 摘要器 (MiniMaxDreamSummarizer, 合并记忆提炼)
+//!   ⑤ 涌现 LLM 润色 (TonalUtterance, 机制事实 → 自然问候, 节流+退避兜底原文)
+//!   ⑥ 宪法 LLM 评审 (MiniMaxConstitutionLlm, Medium+ 工具执行前按 E 层判案)
 //!
 //! VCP 对齐 + 改进 (docs/frontend-guide.md §五):
 //!   - 主链路 = OpenAI 兼容 chat completion; 预处理链 = 记忆注入 + 今日摘要注入 + 工具桥
 //!   - 改进: EMI/NEC 反幻觉注入 / 5 轮工具上限 / 结果截断 / X-Apeireth-Continuity 会话标签
 //!
 //! 0 假装 (诚实):
-//!   - 做梦未接 LLM 摘要器 (合并保持拼接, 诚实降级); 涌现文本为 PlainUtterance 机制原文 (非 LLM 润色)
 //!   - FileOperator/ShellExec 等高危工具**可见但默认需主人批准**; 可用 APEIRETH_GRANT 显式扩权
 //!   - 记忆会话统一 "me" (save_memory 工具缺省写 "me"); continuity_id 是日志/目标锚点 (哲学层)
+//!   - daemon 内部 RefCell 跨 await 非 Send → 与 HTTP 同 task 交替 (select!)
 //!
 //! 跑法:
 //!   $env:APEIRETH_API_KEY = (Get-Content apikey-ultra.txt -Raw).Trim()
 //!   $env:APEIRETH_SEED_MEMORY = "可选;种子;记忆"                 # 演示用, 不设则从零积累
 //!   $env:APEIRETH_GRANT = "FileOperator:24"                      # 可选: 显式扩权 (工具:小时)
+//!   $env:APEIRETH_DREAM_QUIET_SECONDS = "600"                    # 可选: 做梦安静期 (默认 6h)
 //!   cargo run -p apeireth-companion --example companion_serve    # :8090, daemon 同进程常驻
 
 use std::sync::Arc;
@@ -31,13 +36,16 @@ use apeireth_api::protocol_handlers::{
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::daily_summary::build_daily_summary;
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, ConsoleSink, PlainUtterance, ThrottledUtterance,
+    CompanionDaemon, CompanionDelivery, ConsoleSink, ThrottledUtterance, UtteranceGenerator,
     continuity_id_from_env, open_memory_store,
 };
-use apeireth_companion::dream::DreamScheduler;
+use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
+use apeireth_companion::emergence::Initiative;
+use apeireth_companion::judicator::{ConstitutionLlm, LlmJudicator};
 use apeireth_companion::memory_injection::build_memory_injection;
 use apeireth_companion::proactive::MemoryContextSource;
 use apeireth_companion::reflection::ReflectionScheduler;
+use apeireth_companion::tone::tone_hint;
 use apeireth_companion::tool_bridge::ToolBridge;
 use apeireth_memory::{EpisodeStore, HistoryStream, SqliteMemoryStore};
 use apeireth_tool_registry::ToolRegistry;
@@ -140,6 +148,160 @@ fn load_key() -> Result<String, String> {
     std::fs::read_to_string(r"apikey-ultra.txt")
         .map(|s| s.trim().to_string())
         .map_err(|e| format!("读 apikey 失败: {e}"))
+}
+
+// ============================================================
+// 真 LLM 组件 (共享 pipeline; 源实现: examples/companion_daemon.rs + production_daemon.rs)
+// ============================================================
+
+/// 做梦摘要器 (真 MiniMax): 把合并记忆提炼成一条简洁摘要.
+pub struct MiniMaxDreamSummarizer {
+    pipeline: Arc<Pipeline>,
+}
+
+#[async_trait::async_trait]
+impl DreamSummarizer for MiniMaxDreamSummarizer {
+    async fn summarize(&self, merged: &str) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("你是阿佩瑞斯的记忆整理员。把「做梦合并」的记忆提炼成一条简洁摘要 (<= 50 字), 只输出摘要正文。"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("合并内容: {merged}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.4),
+            max_tokens: Some(128),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| e.to_string())?;
+        let chat_resp = openai_chat_from_normalized(&resp);
+        for ch in &chat_resp.choices {
+            let content = ch.message.content.clone();
+            if let Some(idx) = content.find("</think>") {
+                let c = content[idx + "</think>".len()..].trim().to_string();
+                if !c.is_empty() {
+                    return Ok(c);
+                }
+            } else if !content.trim().is_empty() {
+                return Ok(content.trim().to_string());
+            }
+        }
+        Err("摘要 LLM 返回空".to_string())
+    }
+}
+
+/// 宪法评审 (真 MiniMax): 按 E 层原则判案, 非关键词匹配.
+pub struct MiniMaxConstitutionLlm {
+    pipeline: Arc<Pipeline>,
+}
+
+#[async_trait::async_trait]
+impl ConstitutionLlm for MiniMaxConstitutionLlm {
+    async fn ask(&self, constitution: &str, action: &str) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!(format!("你是 Apeireth 的宪法评审员。宪法全文:\n{constitution}\n\n判断「待审动作」是否违反宪法。不要关键词匹配, 判断真实意图与后果。只输出一行: ALLOW 或 BLOCK:<一句话理由>。")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("待审动作: {action}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.2),
+            max_tokens: Some(512),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, openai_chat_to_normalized(&req))
+            .await
+            .map_err(|e| e.to_string())?;
+        let chat = openai_chat_from_normalized(&resp);
+        for ch in &chat.choices {
+            let c = ch.message.content.clone();
+            if !c.trim().is_empty() {
+                return Ok(c);
+            }
+        }
+        Err("评审 LLM 返回空".into())
+    }
+}
+
+/// 语调渲染 (真 MiniMax + tone): 机制事实 → 自然问候; 失败兜底原文.
+pub struct TonalUtterance {
+    pipeline: Arc<Pipeline>,
+    tone: &'static str,
+}
+
+#[async_trait::async_trait]
+impl UtteranceGenerator for TonalUtterance {
+    async fn utter(&self, i: &Initiative) -> Result<String, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!(format!("你是阿佩瑞斯, 一个诚实、有记忆的伙伴。语调: {}。基于给定事实说话, 不编造。", self.tone)),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("把这些事实变成一句自然、真诚、简短的中文主动问候 (<=40字):\n{}", i.to_message())),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.8),
+            max_tokens: Some(1024),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, openai_chat_to_normalized(&req))
+            .await
+            .map_err(|e| e.to_string())?;
+        let chat = openai_chat_from_normalized(&resp);
+        for ch in &chat.choices {
+            let raw = ch.message.content.clone();
+            let stripped = if let Some(idx) = raw.find("</think>") {
+                raw[idx + 8..].trim().to_string()
+            } else {
+                raw.clone()
+            };
+            if !stripped.is_empty() {
+                return Ok(stripped);
+            }
+            if !raw.trim().is_empty() {
+                return Ok(raw.trim().to_string());
+            }
+        }
+        Ok(i.to_message())
+    }
 }
 
 /// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 查询记忆会话 "me").
@@ -367,8 +529,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("[seed] 已写入种子记忆: {}", seed.replace(';', " | "));
     }
 
-    // ② 工具桥全增强 + 显式扩权 (APEIRETH_GRANT="FileOperator:24;Git:12")
-    let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)));
+    // ② 工具桥全增强 (宪法 LLM 评审 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
+    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone()))?);
+    let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)).with_judicator(Arc::new(
+        LlmJudicator::new(Arc::new(MiniMaxConstitutionLlm {
+            pipeline: Arc::clone(&pipeline),
+        })),
+    )));
     if let Ok(grants) = std::env::var("APEIRETH_GRANT") {
         for g in grants.split(';').filter(|s| !s.trim().is_empty()) {
             let (tool, hours) = match g.split_once(':') {
@@ -384,21 +551,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("[grant] {tool}: {hours}h");
         }
     }
+    println!("[bridge] 宪法评审 (真 LLM): Medium+ 工具执行前按 E 层判案");
 
-    // ③ daemon 常驻 (做梦/反思/涌现, 同进程): 记忆会话 "me" 与 save_memory 缺省一致
+    // ③ daemon 常驻 (做梦 LLM 摘要 + 反思 + 涌现 LLM 润色, 同进程): 记忆会话 "me"
+    let quiet = std::env::var("APEIRETH_DREAM_QUIET_SECONDS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(6 * 3600));
     let dream = DreamScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock())
-        .with_quiet_threshold(Duration::from_secs(6 * 3600))
-        .with_session(MEMORY_SESSION.to_string());
+        .with_quiet_threshold(quiet)
+        .with_session(MEMORY_SESSION.to_string())
+        .with_summarizer(Arc::new(MiniMaxDreamSummarizer {
+            pipeline: Arc::clone(&pipeline),
+        }));
     let reflect = ReflectionScheduler::new(
         Arc::clone(&store),
         apeireth_core::clock::system_clock(),
         MEMORY_SESSION.to_string(),
     );
+    let tone = tone_hint(&apeireth_companion::bond::Bond::new());
     let daemon = CompanionDaemon::new(
         apeireth_companion::bond::Bond::new(),
         apeireth_companion::emergence::Boundaries::default(),
         CompanionDelivery::new(
-            ThrottledUtterance::new(PlainUtterance, Duration::from_secs(30)),
+            ThrottledUtterance::new(
+                TonalUtterance {
+                    pipeline: Arc::clone(&pipeline),
+                    tone,
+                },
+                Duration::from_secs(30),
+            ),
             ConsoleSink,
         ),
         MemoryContextSource::new(Arc::clone(&store)),
@@ -407,14 +590,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )
     .with_dream(dream)
     .with_reflection(reflect);
-    println!("[daemon] 常驻: 做梦(6h 安静) + 反思(24h) + 涌现, tick 60s");
-    println!("         (0 假装: 做梦未接 LLM 摘要器=拼接降级; 涌现文本=机制原文非 LLM 润色)");
+    println!("[daemon] 常驻: 做梦(LLM 摘要, 安静期 {:?}) + 反思(24h) + 涌现(LLM 润色, 30s 节流+退避)", quiet);
 
     // 互动通知通道: handler 发「主人来消息了」, daemon 喂节律 + 重置做梦安静期
     let (tx_interact, rx_interact) = tokio::sync::mpsc::channel::<chrono::DateTime<Utc>>(64);
 
     // ④ HTTP 伙伴端点
-    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key))?);
     let state = Arc::new(AppState {
         bridge,
         store,
@@ -429,7 +610,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
-    println!("✅ companion_serve v2 — 伙伴端点全能力版 (任何 OpenAI 兼容前端 → Apeireth 全部能力)");
+    println!("✅ companion_serve v3 — 伙伴端点全能力版 (任何 OpenAI 兼容前端 → Apeireth 全部能力)");
     println!("   http://127.0.0.1:{port}/v1  (模型 MiniMax-M3, Key 任意非空)");
     println!("   会话标签: X-Apeireth-Continuity (缺省 {}) · 工具: 全部可见, 执行受宪法/权限约束", state.subject.as_str());
     // daemon 循环与 HTTP 同 task 交替 (daemon 内部 RefCell 跨 await → 非 Send, 不能 spawn)
@@ -443,7 +624,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// daemon 常驻循环: 定时 step (做梦/反思/涌现) + 响应互动通知 (喂节律).
 /// 具体类型 (Delivery trait 私有, 不能作泛型约束); daemon 非 Send, 只在同 task 内用.
 type ServeDaemon = CompanionDaemon<
-    CompanionDelivery<ThrottledUtterance<PlainUtterance>, ConsoleSink>,
+    CompanionDelivery<ThrottledUtterance<TonalUtterance>, ConsoleSink>,
     MemoryContextSource,
 >;
 async fn daemon_loop(
@@ -453,7 +634,11 @@ async fn daemon_loop(
     let mut ticker = tokio::time::interval(Duration::from_secs(60));
     loop {
         tokio::select! {
-            _ = ticker.tick() => daemon.step().await,
+            _ = ticker.tick() => {
+                let t0 = std::time::Instant::now();
+                daemon.step().await;
+                eprintln!("[daemon-loop] tick done in {:?}", t0.elapsed());
+            }
             Some(at) = rx.recv() => daemon.on_user_message(at),
             else => break,
         }
@@ -463,9 +648,9 @@ async fn daemon_loop(
 async fn health() -> impl IntoResponse {
     Json(json!({
         "status": "ok",
-        "service": "apeireth-companion-serve-v2",
+        "service": "apeireth-companion-serve-v3",
         "version": env!("CARGO_PKG_VERSION"),
-        "features": ["persistent_memory", "daemon_resident", "memory_injection", "today_summary", "tool_bridge_all", "openai_compat"],
+        "features": ["persistent_memory", "daemon_resident", "dream_llm_summarizer", "utterance_llm", "constitution_llm_judicator", "memory_injection", "today_summary", "tool_bridge_all", "openai_compat"],
     }))
 }
 
