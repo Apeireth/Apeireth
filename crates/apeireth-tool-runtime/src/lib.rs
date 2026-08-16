@@ -58,8 +58,10 @@ pub mod privacy;
 pub mod record;
 // R132.4: pipeline-g5 接入 tool-runtime 生产路径 (5 阶段: Dispatch → Normalize → Policy → Reliability → Throttle)
 pub mod tool_pipeline;
+// N10: 宽松文本工具协议层 (VCP vcpLoop TOOL_REQUEST 移植: 始末语法/ESCAPE/模糊匹配/archery 分离/思考块剥离)
+pub mod text_protocol;
 
-pub use executor::{ExecutionResult, ToolExecutor};
+pub use executor::{ArcheryHandle, ExecutionResult, ToolExecutor};
 pub use tool_pipeline::{ToolCallContext, ToolCallPipeline, ToolCallPipelineMarker};
 // R127-2 P6-2: re-export mcp_protocol 公开 API
 pub use mcp_protocol::{
@@ -70,6 +72,10 @@ pub use fuzzy::{levenshtein_distance, FuzzyToolMatcher};
 pub use parser::{ParseError, ParsedToolCall, ToolCallParser};
 pub use privacy::{PrivacyConfig, PrivacyGuard};
 pub use record::{RecordStore, ToolCallRecord, RECORD_PAYLOAD_VERSION};
+// N10: 宽松文本工具协议层 re-export
+pub use text_protocol::{
+    parse_block, strip_reasoning_blocks, SeparatedCalls, TextToolProtocol,
+};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)

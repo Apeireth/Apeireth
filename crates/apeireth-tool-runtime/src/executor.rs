@@ -171,6 +171,57 @@ impl ToolExecutor {
         }
         results
     }
+
+    /// **N10 archery 式解析与执行分离** (VCP `toolExecutor.js` archery no-reply 语义)
+    ///
+    /// normal 调用顺序 await, 结果回灌调用方; archery 调用逐条 `tokio::spawn`
+    /// fire-and-forget —— 不阻塞主循环, 调用方拿到 `ArcheryHandle` 仅供观测
+    /// (`no_reply = true` 时结果永不回灌, 与 VCP `__vcpArcheryNoReplySilent` 同义).
+    pub async fn execute_separated(
+        &self,
+        calls: &[ParsedToolCall],
+    ) -> (Vec<ExecutionResult>, Vec<ArcheryHandle>) {
+        let sep = crate::text_protocol::TextToolProtocol::separate(calls);
+
+        let mut results = Vec::with_capacity(sep.normal.len());
+        for call in &sep.normal {
+            results.push(self.execute(call).await);
+        }
+
+        let mut handles = Vec::with_capacity(sep.archery.len());
+        for call in sep.archery {
+            let registry = self.registry.clone();
+            let timeout_ms = self.timeout_ms;
+            let tool_name = call.tool_name.clone();
+            let no_reply = call.archery_no_reply;
+            let join = tokio::spawn(async move {
+                ToolExecutor::with_timeout(registry, timeout_ms)
+                    .execute(&call)
+                    .await
+            });
+            handles.push(ArcheryHandle {
+                tool_name,
+                no_reply,
+                join,
+            });
+        }
+
+        (results, handles)
+    }
+}
+
+/// **N10 — archery 异步分发句柄**
+///
+/// fire-and-forget: 主循环不应 await 它来推进对话 (VCP archery 语义).
+/// `join` 仅供审计/观测侧选择性等待.
+#[derive(Debug)]
+pub struct ArcheryHandle {
+    /// 工具名
+    pub tool_name: String,
+    /// true = 结果永不回灌 (VCP archeryNoReply)
+    pub no_reply: bool,
+    /// 后台任务句柄 (观测用)
+    pub join: tokio::task::JoinHandle<ExecutionResult>,
 }
 
 // ============================================================
@@ -363,5 +414,68 @@ mod tests {
         // duration_ms 应有值 (即使很小)
         // 不严格断言值, 仅断言字段存在且非负
         let _: u64 = r.duration_ms;
+    }
+
+    #[tokio::test]
+    async fn execute_separated_archery_does_not_block() {
+        // N10 archery 式分离: normal 顺序 await, archery spawn fire-and-forget
+        let registry = make_registry_with_sync();
+        let exec = ToolExecutor::new(registry);
+        let calls = vec![
+            ParsedToolCall {
+                tool_name: "EchoSync".to_string(),
+                args: json!({"input": "n"}),
+                raw_marker: "".into(),
+                archery: false,
+                archery_no_reply: false,
+            },
+            ParsedToolCall {
+                tool_name: "SlowAsync".to_string(), // 50ms delay
+                args: json!({"input": "a"}),
+                raw_marker: "".into(),
+                archery: true,
+                archery_no_reply: true,
+            },
+        ];
+
+        let started = std::time::Instant::now();
+        let (results, mut handles) = exec.execute_separated(&calls).await;
+        let elapsed = started.elapsed();
+
+        // normal 结果立即回灌
+        assert_eq!(results.len(), 1);
+        assert!(results[0].success);
+        assert_eq!(results[0].output["echo"], "n");
+
+        // archery 不阻塞主循环: SlowAsync 50ms delay, 但 spawn 立即返回
+        assert!(
+            elapsed < std::time::Duration::from_millis(40),
+            "archery 应 fire-and-forget 不等待, 实际 {:?}",
+            elapsed
+        );
+
+        // 句柄观测侧可选等待, no_reply 标记透传
+        assert_eq!(handles.len(), 1);
+        assert_eq!(handles[0].tool_name, "SlowAsync");
+        assert!(handles[0].no_reply);
+        let bg = handles.remove(0).join.await.expect("join");
+        assert!(bg.success);
+    }
+
+    #[tokio::test]
+    async fn execute_separated_all_normal_empty_archery() {
+        // 全 normal 无 archery → handles 为空
+        let registry = make_registry_with_sync();
+        let exec = ToolExecutor::new(registry);
+        let calls = vec![ParsedToolCall {
+            tool_name: "EchoSync".to_string(),
+            args: json!({"input": "x"}),
+            raw_marker: "".into(),
+            archery: false,
+            archery_no_reply: false,
+        }];
+        let (results, handles) = exec.execute_separated(&calls).await;
+        assert_eq!(results.len(), 1);
+        assert!(handles.is_empty());
     }
 }
