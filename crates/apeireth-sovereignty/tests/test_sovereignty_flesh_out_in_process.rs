@@ -120,12 +120,30 @@ fn integ_audit_record_and_filter() {
     use audit::{AuditLevel, AuditLog, EventKind};
 
     let mut log = AuditLog::new();
-    log.record(EventKind::Access, "alice", "principle_onion", AuditLevel::Owner, "audit")
-        .unwrap();
-    log.record(EventKind::Modify, "bob", "permission_onion.L3", AuditLevel::Admin, "modify L3")
-        .unwrap();
-    log.record(EventKind::Delete, "alice", "audit_log.legacy", AuditLevel::Root, "delete old")
-        .unwrap();
+    log.record(
+        EventKind::Access,
+        "alice",
+        "principle_onion",
+        AuditLevel::Owner,
+        "audit",
+    )
+    .unwrap();
+    log.record(
+        EventKind::Modify,
+        "bob",
+        "permission_onion.L3",
+        AuditLevel::Admin,
+        "modify L3",
+    )
+    .unwrap();
+    log.record(
+        EventKind::Delete,
+        "alice",
+        "audit_log.legacy",
+        AuditLevel::Root,
+        "delete old",
+    )
+    .unwrap();
 
     assert_eq!(log.len(), 3);
     assert_eq!(log.filter_by_actor("alice").len(), 2);
@@ -237,7 +255,12 @@ fn integ_anti_ai_k1_three_failures() {
     assert_eq!(r2.err(), Some(AntiAiError::K1EvidenceEmpty));
 
     // K-1.c
-    let r3 = ThreatSignal::new(ThreatType::AnomalousFrequency, "ai-1", 1.5, vec!["x".into()]);
+    let r3 = ThreatSignal::new(
+        ThreatType::AnomalousFrequency,
+        "ai-1",
+        1.5,
+        vec!["x".into()],
+    );
     assert_eq!(r3.err(), Some(AntiAiError::K1SeverityOutOfRange(1.5)));
 }
 
@@ -250,13 +273,8 @@ fn integ_anti_ai_high_severity_threshold() {
     let mut mon = AntiAiMonitor::new();
     // severity = 0.95 (>= 0.7) → high
     mon.try_emit(
-        anti_ai::ThreatSignal::new(
-            ThreatType::DataExfiltration,
-            "ai-x",
-            0.95,
-            vec!["x".into()],
-        )
-        .unwrap(),
+        anti_ai::ThreatSignal::new(ThreatType::DataExfiltration, "ai-x", 0.95, vec!["x".into()])
+            .unwrap(),
     )
     .unwrap();
     // severity = 0.5 (< 0.7) → not high
@@ -278,9 +296,18 @@ fn integ_anti_ai_threat_type_count_hardcode() {
     use anti_ai::{ThreatType, THREAT_TYPE_COUNT_HARDCODE};
 
     assert_eq!(THREAT_TYPE_COUNT_HARDCODE, 4);
-    assert_eq!(ThreatType::AnomalousFrequency.as_str(), "anomalous_frequency");
-    assert_eq!(ThreatType::AnomalousParameters.as_str(), "anomalous_parameters");
-    assert_eq!(ThreatType::UnauthorizedAccess.as_str(), "unauthorized_access");
+    assert_eq!(
+        ThreatType::AnomalousFrequency.as_str(),
+        "anomalous_frequency"
+    );
+    assert_eq!(
+        ThreatType::AnomalousParameters.as_str(),
+        "anomalous_parameters"
+    );
+    assert_eq!(
+        ThreatType::UnauthorizedAccess.as_str(),
+        "unauthorized_access"
+    );
     assert_eq!(ThreatType::DataExfiltration.as_str(), "data_exfiltration");
 }
 
@@ -301,11 +328,13 @@ fn integ_signature_three_algorithms_sign_and_verify() {
     let ed = Ed25519Signer::new("alice-ed".into());
     assert_eq!(ed.algorithm(), SignatureAlgorithm::Ed25519);
     let ed_sig = ed.sign(payload).unwrap();
-    assert_eq!(ed.verify(payload, &ed_sig).unwrap(),
+    assert_eq!(
+        ed.verify(payload, &ed_sig).unwrap(),
         VerificationResult::Valid {
             algorithm: SignatureAlgorithm::Ed25519,
             key_id: "alice-ed".into(),
-        });
+        }
+    );
 
     // Rsa2048
     let rsa = Rsa2048Signer::new("alice-rsa".into());
@@ -322,9 +351,7 @@ fn integ_signature_three_algorithms_sign_and_verify() {
 
 #[test]
 fn integ_signature_k1_three_failures() {
-    use signature::{
-        Ed25519Signer, Signature, SignatureAlgorithm, SignatureError, Signer,
-    };
+    use signature::{Ed25519Signer, Signature, SignatureAlgorithm, SignatureError, Signer};
 
     // K-1.b: key_id 空
     let sig = Signature {
@@ -417,7 +444,8 @@ fn integ_explain_k1_three_failures() {
 
     // K-1.c
     t2.try_push_stage(StageKind::RequestReceived, "x").unwrap();
-    t2.try_push_stage(StageKind::EvidenceCollected, "x").unwrap();
+    t2.try_push_stage(StageKind::EvidenceCollected, "x")
+        .unwrap();
     let r3 = t2.try_finalize(VerdictOutcome::Approved, "x");
     assert_eq!(
         r3.err(),
@@ -445,8 +473,8 @@ fn integ_explain_stage_kind_count_and_terminal_classification() {
 
 #[test]
 fn integ_full_governance_flow_mewg_audit_anti_ai_signature_explain() {
-    use audit::{AuditLevel, AuditLog, EventKind};
     use anti_ai::{AntiAiMonitor, ThreatType};
+    use audit::{AuditLevel, AuditLog, EventKind};
     use explain::{DecisionTrace, StageKind, VerdictOutcome};
     use signature::{Ed25519Signer, Signer};
 
@@ -487,7 +515,10 @@ fn integ_full_governance_flow_mewg_audit_anti_ai_signature_explain() {
     let mewg_verdict = mewg_auth.evaluate(&mewg_decision, &mewg_evidences).unwrap();
     assert!(matches!(mewg_verdict, MewgVerdict::Approved { .. }));
     trace
-        .try_push_stage(StageKind::EvidenceCollected, "3 evidences (1 human + 1 ai + 1 multisig)")
+        .try_push_stage(
+            StageKind::EvidenceCollected,
+            "3 evidences (1 human + 1 ai + 1 multisig)",
+        )
         .unwrap();
     trace
         .try_push_stage(StageKind::AuthorityConsulted, "MEWG approved weighted 0.78")
@@ -513,11 +544,17 @@ fn integ_full_governance_flow_mewg_audit_anti_ai_signature_explain() {
     let payload = b"dec-e-mod-integ: Approved by MEWG + Council + HA";
     let sig = ed.sign(payload).unwrap();
     let verify = ed.verify(payload, &sig).unwrap();
-    assert!(matches!(verify, signature::VerificationResult::Valid { .. }));
+    assert!(matches!(
+        verify,
+        signature::VerificationResult::Valid { .. }
+    ));
 
     // 6. 完成 trace + rationale
     trace
-        .try_finalize(VerdictOutcome::Approved, "E 层变更经 5 重治理通过, 启动反思期 7 天")
+        .try_finalize(
+            VerdictOutcome::Approved,
+            "E 层变更经 5 重治理通过, 启动反思期 7 天",
+        )
         .unwrap();
     assert!(trace.is_complete());
 

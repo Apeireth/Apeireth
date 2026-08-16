@@ -198,9 +198,9 @@ pub fn parse_prometheus(input: &str) -> ObservabilityResult<Vec<MetricSample>> {
         let (name_and_labels, value_str) = line
             .rsplit_once(' ')
             .ok_or_else(|| ObservabilityError::PrometheusFormat(format!("invalid line: {line}")))?;
-        let value: f64 = value_str.parse().map_err(|e| {
-            ObservabilityError::PrometheusFormat(format!("value parse: {e}"))
-        })?;
+        let value: f64 = value_str
+            .parse()
+            .map_err(|e| ObservabilityError::PrometheusFormat(format!("value parse: {e}")))?;
 
         let (name, labels) = if let Some(idx) = name_and_labels.find('{') {
             let name = &name_and_labels[..idx];
@@ -289,7 +289,10 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].name, "requests_total");
         assert_eq!(parsed[0].value, 42.0);
-        assert_eq!(parsed[0].labels.get("endpoint").map(|s| s.as_str()), Some("/api"));
+        assert_eq!(
+            parsed[0].labels.get("endpoint").map(|s| s.as_str()),
+            Some("/api")
+        );
     }
 
     #[test]
@@ -297,6 +300,9 @@ mod tests {
         let mut labels = HashMap::new();
         labels.insert("path".to_string(), r#"C:\Users"test""#.to_string());
         let text = render_labels(&labels);
-        assert!(text.contains(r#"path="C:\\Users\"test\"""#), "escaped: {text}");
+        assert!(
+            text.contains(r#"path="C:\\Users\"test\"""#),
+            "escaped: {text}"
+        );
     }
 }

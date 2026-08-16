@@ -109,21 +109,13 @@ const _: () = assert!(SUPPORTED_TECH_DEBT.len() == 5);
 pub const MAX_CYCLOMATIC_COMPLEXITY: u32 = 20;
 
 /// 支持的依赖文件格式 (3 种, 1:1 翻译 v0.9.21 估缺 Cargo / npm / PyPI 三大生态).
-pub const SUPPORTED_DEP_FORMATS: &[&str] = &[
-    "Cargo.toml",
-    "package.json",
-    "pyproject.toml",
-];
+pub const SUPPORTED_DEP_FORMATS: &[&str] = &["Cargo.toml", "package.json", "pyproject.toml"];
 
 /// 编译期守门: SUPPORTED_DEP_FORMATS 长度 == 3.
 const _: () = assert!(SUPPORTED_DEP_FORMATS.len() == 3);
 
 /// 支持的报告输出格式 (3 种, 1:1 翻译 v0.9.21 `reportFormats` 字段).
-pub const SUPPORTED_REPORT_FORMATS: &[&str] = &[
-    "json",
-    "markdown",
-    "sarif",
-];
+pub const SUPPORTED_REPORT_FORMATS: &[&str] = &["json", "markdown", "sarif"];
 
 /// 编译期守门: SUPPORTED_REPORT_FORMATS 长度 == 3.
 const _: () = assert!(SUPPORTED_REPORT_FORMATS.len() == 3);
@@ -134,11 +126,11 @@ const _: () = assert!(SUPPORTED_REPORT_FORMATS.len() == 3);
 /// 验证 "apeireth 平台名" + "repo_analyzer 工具前缀" + "analyze 操作动词" +
 /// "complexity 核心指标" + "must-do 设计哲学" 5 条 K-1 不变量.
 pub const K1_INVARIANTS: &[&str] = &[
-    "apeireth",         // 平台名 (1:1 v0.9.21)
-    "repo_analyzer",    // 工具名前缀 (m3 防御)
-    "analyze",          // 操作动词 (1:1 v0.9.21)
-    "complexity",       // 核心指标 (cyclomatic complexity)
-    "must-do",          // 设计哲学 (K-1 强校验: must-do 这 5 条不变量)
+    "apeireth",      // 平台名 (1:1 v0.9.21)
+    "repo_analyzer", // 工具名前缀 (m3 防御)
+    "analyze",       // 操作动词 (1:1 v0.9.21)
+    "complexity",    // 核心指标 (cyclomatic complexity)
+    "must-do",       // 设计哲学 (K-1 强校验: must-do 这 5 条不变量)
 ];
 
 /// 编译期守门: K1_INVARIANTS 长度 == 5.
@@ -315,7 +307,10 @@ impl AnalysisResult {
 
     /// 总结: 超过复杂度阈值的函数数.
     pub fn high_complexity_count(&self) -> usize {
-        self.complexity.iter().filter(|c| c.exceeds_threshold).count()
+        self.complexity
+            .iter()
+            .filter(|c| c.exceeds_threshold)
+            .count()
     }
 
     /// 总结: critical 安全发现数.
@@ -462,10 +457,7 @@ impl QualityAnalyzer {
     /// skeleton 阶段: 根据 `SUPPORTED_DEP_FORMATS` 检测文件后缀,
     /// 返回空 Vec (真解析留 R20 阶段 1 续, 走 `toml` / `serde_json` / `pyproject-toml`).
     pub async fn analyze_deps(&self, file: &Path) -> AnalyzerResult<Vec<DependencyEntry>> {
-        let file_name = file
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("");
+        let file_name = file.file_name().and_then(|n| n.to_str()).unwrap_or("");
         if !SUPPORTED_DEP_FORMATS.contains(&file_name) {
             return Err(AnalyzerError::UnsupportedDepFormat(file_name.to_string()));
         }
@@ -549,13 +541,28 @@ impl ReportGenerator {
         }
         let mut md = String::new();
         md.push_str(&format!("# {} Repo Analysis Report\n\n", PLATFORM_NAME));
-        md.push_str(&format!("- **Repository**: `{}`\n", result.repo_path.display()));
+        md.push_str(&format!(
+            "- **Repository**: `{}`\n",
+            result.repo_path.display()
+        ));
         md.push_str(&format!("- **Total files**: {}\n", result.total_files));
-        md.push_str(&format!("- **Tech debt entries**: {}\n", result.tech_debt_total()));
-        md.push_str(&format!("- **High complexity functions**: {}\n", result.high_complexity_count()));
-        md.push_str(&format!("- **Critical security findings**: {}\n", result.critical_security_count()));
+        md.push_str(&format!(
+            "- **Tech debt entries**: {}\n",
+            result.tech_debt_total()
+        ));
+        md.push_str(&format!(
+            "- **High complexity functions**: {}\n",
+            result.high_complexity_count()
+        ));
+        md.push_str(&format!(
+            "- **Critical security findings**: {}\n",
+            result.critical_security_count()
+        ));
         md.push_str(&format!("- **Platform**: {}\n", result.platform));
-        md.push_str(&format!("- **Schema version**: {}\n\n", result.schema_version));
+        md.push_str(&format!(
+            "- **Schema version**: {}\n\n",
+            result.schema_version
+        ));
 
         md.push_str("## File Statistics\n\n");
         md.push_str("| File | Lines | Functions | Classes | Avg Fn Length |\n");
@@ -745,7 +752,10 @@ fn args_type_name(v: &serde_json::Value) -> &'static str {
 /// 所有 `apeireth_repo_analyzer_*` 工具名必须遵守: `apeireth_` 前缀 + `repo_analyzer` 子命名空间 +
 /// snake_case 操作名. 编译期由 TOOL_WHITELIST 守门, 运行时额外检查 args 字段名是否 snake_case.
 pub fn check_naming_convention(name: &str) -> bool {
-    name.starts_with("apeireth_repo_analyzer_") && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+    name.starts_with("apeireth_repo_analyzer_")
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
 }
 
 // ============================================================================
@@ -831,7 +841,9 @@ mod tests {
     #[test]
     fn naming_convention_enforced() {
         assert!(check_naming_convention("apeireth_repo_analyzer_complexity"));
-        assert!(!check_naming_convention("apeireth_REPO_analyzer_complexity"));
+        assert!(!check_naming_convention(
+            "apeireth_REPO_analyzer_complexity"
+        ));
         assert!(!check_naming_convention("repo_analyzer_complexity")); // 缺前缀
         assert!(!check_naming_convention("apeireth_repo_analyzer_FOO"));
     }

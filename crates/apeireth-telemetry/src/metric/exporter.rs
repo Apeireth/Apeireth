@@ -93,7 +93,11 @@ impl Exporter for PrometheusExporter {
                     out.push_str(&encoder::encode_gauge(&full_name, metric.help(), g)?);
                 }
                 RegisteredMetric::Histogram(h) => {
-                    out.push_str(&encoder::encode_histogram_full(&full_name, metric.help(), h)?);
+                    out.push_str(&encoder::encode_histogram_full(
+                        &full_name,
+                        metric.help(),
+                        h,
+                    )?);
                 }
                 RegisteredMetric::Summary(s) => {
                     out.push_str(&encoder::encode_summary_full(&full_name, metric.help(), s)?);
@@ -368,8 +372,10 @@ mod tests {
             Counter::new("requests_total", "Total", HashMap::new()).unwrap(),
         ))
         .unwrap();
-        r.register_gauge(Arc::new(Gauge::new("memory_bytes", "Memory", HashMap::new()).unwrap()))
-            .unwrap();
+        r.register_gauge(Arc::new(
+            Gauge::new("memory_bytes", "Memory", HashMap::new()).unwrap(),
+        ))
+        .unwrap();
         r.register_histogram(Arc::new(
             Histogram::new("latency", "Latency", HashMap::new()).unwrap(),
         ))
@@ -459,8 +465,14 @@ mod tests {
     /// 守门 #8: 5 Exporter kind 都正确返.
     #[test]
     fn all_5_kinds_kind() {
-        assert_eq!(PrometheusExporter::new("a", "b").kind(), ExporterKind::Prometheus);
-        assert_eq!(PushgatewayExporter::new("u", "j").kind(), ExporterKind::Pushgateway);
+        assert_eq!(
+            PrometheusExporter::new("a", "b").kind(),
+            ExporterKind::Prometheus
+        );
+        assert_eq!(
+            PushgatewayExporter::new("u", "j").kind(),
+            ExporterKind::Pushgateway
+        );
         assert_eq!(OtlpExporter::new("e", "s").kind(), ExporterKind::Otlp);
         assert_eq!(StatsdExporter::new("h", 1234).kind(), ExporterKind::Statsd);
         assert_eq!(StdoutExporter::new().kind(), ExporterKind::Stdout);

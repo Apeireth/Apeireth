@@ -210,9 +210,7 @@ impl DecisionTrace {
         // K-1.c: 最后一个 stage 必须是终止态
         let last_kind = self.stages.last().unwrap().kind;
         if !last_kind.is_terminal() {
-            return Err(ExplainError::K1LastStageNotTerminal {
-                actual: last_kind,
-            });
+            return Err(ExplainError::K1LastStageNotTerminal { actual: last_kind });
         }
         self.verdict = Some(verdict);
         self.rationale = Some(rationale.into());
@@ -247,9 +245,7 @@ impl DecisionTrace {
         }
         let last_kind = self.stages.last().unwrap().kind;
         if !last_kind.is_terminal() {
-            return Err(ExplainError::K1LastStageNotTerminal {
-                actual: last_kind,
-            });
+            return Err(ExplainError::K1LastStageNotTerminal { actual: last_kind });
         }
         Ok(())
     }
@@ -270,7 +266,9 @@ pub enum ExplainError {
         min: usize,
     },
     /// K-1.c 强校验失败 — 最后一个 stage 必须是终止态
-    #[error("K-1.c 强校验失败: 最后一个 stage {actual:?} 不是终止态 (VerdictReached/RationaleStated)")]
+    #[error(
+        "K-1.c 强校验失败: 最后一个 stage {actual:?} 不是终止态 (VerdictReached/RationaleStated)"
+    )]
     K1LastStageNotTerminal {
         /// 实际的最后一个 stage
         actual: StageKind,
@@ -297,7 +295,10 @@ mod tests {
         assert_eq!(STAGE_KIND_COUNT_HARDCODE, 5);
         assert_eq!(StageKind::RequestReceived.as_str(), "request_received");
         assert_eq!(StageKind::EvidenceCollected.as_str(), "evidence_collected");
-        assert_eq!(StageKind::AuthorityConsulted.as_str(), "authority_consulted");
+        assert_eq!(
+            StageKind::AuthorityConsulted.as_str(),
+            "authority_consulted"
+        );
         assert_eq!(StageKind::VerdictReached.as_str(), "verdict_reached");
         assert_eq!(StageKind::RationaleStated.as_str(), "rationale_stated");
 
@@ -321,22 +322,15 @@ mod tests {
         let res2 = t2.try_finalize(VerdictOutcome::Approved, "x");
         assert_eq!(
             res2.err(),
-            Some(ExplainError::K1StagesTooFew {
-                actual: 0,
-                min: 2
-            })
+            Some(ExplainError::K1StagesTooFew { actual: 0, min: 2 })
         );
 
         // K-1.b — stages 只 1 个
-        t2.try_push_stage(StageKind::RequestReceived, "x")
-            .unwrap();
+        t2.try_push_stage(StageKind::RequestReceived, "x").unwrap();
         let res3 = t2.try_finalize(VerdictOutcome::Approved, "x");
         assert_eq!(
             res3.err(),
-            Some(ExplainError::K1StagesTooFew {
-                actual: 1,
-                min: 2
-            })
+            Some(ExplainError::K1StagesTooFew { actual: 1, min: 2 })
         );
 
         // K-1.c — 最后一个 stage 不是终止态
@@ -384,7 +378,10 @@ mod tests {
 
         // finalize
         trace
-            .try_finalize(VerdictOutcome::Approved, "E 层变更经 5 重治理通过, 启动反思期")
+            .try_finalize(
+                VerdictOutcome::Approved,
+                "E 层变更经 5 重治理通过, 启动反思期",
+            )
             .unwrap();
         assert!(trace.is_complete());
         assert_eq!(trace.verdict, Some(VerdictOutcome::Approved));

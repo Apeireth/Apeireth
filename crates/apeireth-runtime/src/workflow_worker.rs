@@ -8,8 +8,8 @@
 
 use std::sync::Arc;
 
-use apeireth_workflow::WorkflowWorker;
 use crate::{AsyncWorker, TaskId};
+use apeireth_workflow::WorkflowWorker;
 
 #[async_trait::async_trait]
 impl AsyncWorker for WorkflowWorker {

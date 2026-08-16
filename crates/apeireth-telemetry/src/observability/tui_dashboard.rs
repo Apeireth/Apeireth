@@ -107,8 +107,8 @@ pub const ORGAN_KIND_ASCII_CHARS: [&str; ORGAN_KIND_COUNT] = [
     "[EAR]",   // Ear = 4
     "[MEM]",   // Memory = 5
     "[VOICE]", // Voice = 6
-    "[BODY]", // Body = 7
-    "[MIND]", // Mind = 8
+    "[BODY]",  // Body = 7
+    "[MIND]",  // Mind = 8
 ];
 
 /// TUI dashboard schema 版本 (向前兼容字段, R25+ 改格式时 bump).
@@ -130,23 +130,23 @@ const _: () = [()][(DASHBOARD_HEALTH_ENDPOINTS.len() > 3) as usize];
 ///
 /// 这 6 锚是 Apeireth 顶层哲学守门, mind 器官 widget 渲染时显式列出.
 pub const SIX_ANCHORS: [&str; 6] = [
-    "S-1 北极星导向",  // 主人 22:13 拍
-    "S-2 实事求是",    // 0 假装已实现
-    "O-2 走在前人肩上", // 借 Golutra / 业界标准
-    "O-3 干到底",      // 9 器官 + 5 nav 全列
+    "S-1 北极星导向",     // 主人 22:13 拍
+    "S-2 实事求是",       // 0 假装已实现
+    "O-2 走在前人肩上",   // 借 Golutra / 业界标准
+    "O-3 干到底",         // 9 器官 + 5 nav 全列
     "O-4 任何人都能接手", // 完整文档 + 测试
-    "O-5 不假装",      // stub / partial 标诚实
+    "O-5 不假装",         // stub / partial 标诚实
 ];
 
 /// 5 nav hardcode (per 主人 R19 决定, 跟 sister #1 报告 `apeireth-tui/src/main.rs` 5 nav 守门).
 ///
 /// 仪表盘顶部显示当前 nav + 9 器官.
 pub const FIVE_NAV: [&str; 5] = [
-    "0 舰桥 Bridge",     // ΣΚΟΠΗ
-    "1 对话 Dialogue",   // ΔΙΑΛΟΓΟΣ
-    "2 生长 Growth",     // ΑΥΞΗΣΙΣ
-    "3 历史 History",    // ΙΣΤΟΡΙΑ
-    "4 设置 Settings",   // ΤΑΞΙΣ
+    "0 舰桥 Bridge",   // ΣΚΟΠΗ
+    "1 对话 Dialogue", // ΔΙΑΛΟΓΟΣ
+    "2 生长 Growth",   // ΑΥΞΗΣΙΣ
+    "3 历史 History",  // ΙΣΤΟΡΙΑ
+    "4 设置 Settings", // ΤΑΞΙΣ
 ];
 
 // ============================================================================
@@ -271,8 +271,15 @@ impl OrganKind {
     #[must_use]
     pub fn all() -> [OrganKind; ORGAN_KIND_COUNT] {
         [
-            Self::Heart, Self::Brain, Self::Hand, Self::Eye, Self::Ear,
-            Self::Memory, Self::Voice, Self::Body, Self::Mind,
+            Self::Heart,
+            Self::Brain,
+            Self::Hand,
+            Self::Eye,
+            Self::Ear,
+            Self::Memory,
+            Self::Voice,
+            Self::Body,
+            Self::Mind,
         ]
     }
 }
@@ -392,7 +399,11 @@ impl fmt::Display for OrganReadiness {
 /// 显示: `[♥] 心 heart    bpm=60.0   OK   `heart 60Hz, 2/9 字段真接``.
 #[must_use]
 pub fn render_heart_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "heart", value = state.value, "tui_dashboard: render heart widget");
+    debug!(
+        organ = "heart",
+        value = state.value,
+        "tui_dashboard: render heart widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  bpm={value:>5.1}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -409,7 +420,11 @@ pub fn render_heart_widget(state: &TuiOrganState) -> String {
 /// 显示: `[BRAIN] 脑 brain    calls=42.0   OK   "active provider: minimax (1/5)"`.
 #[must_use]
 pub fn render_brain_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "brain", value = state.value, "tui_dashboard: render brain widget");
+    debug!(
+        organ = "brain",
+        value = state.value,
+        "tui_dashboard: render brain widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  calls={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -426,7 +441,11 @@ pub fn render_brain_widget(state: &TuiOrganState) -> String {
 /// 显示: `[HAND] 手 hand    invokes=12.0   OK   "last tool: read_file (1/6)"`.
 #[must_use]
 pub fn render_hand_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "hand", value = state.value, "tui_dashboard: render hand widget");
+    debug!(
+        organ = "hand",
+        value = state.value,
+        "tui_dashboard: render hand widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  invokes={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -443,7 +462,11 @@ pub fn render_hand_widget(state: &TuiOrganState) -> String {
 /// 显示: `[EYE] 眼 eye     tokens=0.0    stub  "0 真接 (R25.3 接 crossterm::event)"`.
 #[must_use]
 pub fn render_eye_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "eye", value = state.value, "tui_dashboard: render eye widget");
+    debug!(
+        organ = "eye",
+        value = state.value,
+        "tui_dashboard: render eye widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  tokens={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -460,7 +483,11 @@ pub fn render_eye_widget(state: &TuiOrganState) -> String {
 /// 显示: `[EAR] 耳 ear     events=0.0    stub  "0 真接 (R25.3 接 apeireth-bus L0-L4)"`.
 #[must_use]
 pub fn render_ear_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "ear", value = state.value, "tui_dashboard: render ear widget");
+    debug!(
+        organ = "ear",
+        value = state.value,
+        "tui_dashboard: render ear widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  events={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -477,7 +504,11 @@ pub fn render_ear_widget(state: &TuiOrganState) -> String {
 /// 显示: `[MEM] 记忆 memory  history=24.0   OK   "episodes: 24"`.
 #[must_use]
 pub fn render_memory_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "memory", value = state.value, "tui_dashboard: render memory widget");
+    debug!(
+        organ = "memory",
+        value = state.value,
+        "tui_dashboard: render memory widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  history={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -494,7 +525,11 @@ pub fn render_memory_widget(state: &TuiOrganState) -> String {
 /// 显示: `[VOICE] 声 voice   queue=0.0    stub  "0 真接 (R25.3 接 batch_text_to_audio)"`.
 #[must_use]
 pub fn render_voice_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "voice", value = state.value, "tui_dashboard: render voice widget");
+    debug!(
+        organ = "voice",
+        value = state.value,
+        "tui_dashboard: render voice widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  queue={value:>5.0}   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -511,7 +546,11 @@ pub fn render_voice_widget(state: &TuiOrganState) -> String {
 /// 显示: `[BODY] 体 body    cpu=2.5%     partial  "6/6 字段占位"`.
 #[must_use]
 pub fn render_body_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "body", value = state.value, "tui_dashboard: render body widget");
+    debug!(
+        organ = "body",
+        value = state.value,
+        "tui_dashboard: render body widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  cpu={value:>5.1}%   {readiness:<8}  {msg}",
         ascii = state.organ.ascii_char(),
@@ -528,7 +567,11 @@ pub fn render_body_widget(state: &TuiOrganState) -> String {
 /// 显示: `[MIND] 意 mind    growth=0.85  partial  "seed, 6/9 锚 1:1 镜像"`.
 #[must_use]
 pub fn render_mind_widget(state: &TuiOrganState) -> String {
-    debug!(organ = "mind", value = state.value, "tui_dashboard: render mind widget");
+    debug!(
+        organ = "mind",
+        value = state.value,
+        "tui_dashboard: render mind widget"
+    );
     format!(
         "{ascii} {zh} {en:<6}  growth={value:>5.2}   {readiness:<8}  {msg}\n  6 哲学锚: {anchors}",
         ascii = state.organ.ascii_char(),
@@ -654,29 +697,32 @@ impl OrganDashboard {
     /// 读 9 器官状态全集 (per sister #1 `Registry` 9 State 一次读).
     #[must_use]
     pub fn read_all_organ_states(&self) -> [TuiOrganState; ORGAN_KIND_COUNT] {
-        self.states
-            .lock()
-            .map(|s| s.clone())
-            .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "tui_dashboard: states mutex poisoned, returning stub");
-                [
-                    TuiOrganState::stub(OrganKind::Heart),
-                    TuiOrganState::stub(OrganKind::Brain),
-                    TuiOrganState::stub(OrganKind::Hand),
-                    TuiOrganState::stub(OrganKind::Eye),
-                    TuiOrganState::stub(OrganKind::Ear),
-                    TuiOrganState::stub(OrganKind::Memory),
-                    TuiOrganState::stub(OrganKind::Voice),
-                    TuiOrganState::stub(OrganKind::Body),
-                    TuiOrganState::stub(OrganKind::Mind),
-                ]
-            })
+        self.states.lock().map(|s| s.clone()).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "tui_dashboard: states mutex poisoned, returning stub");
+            [
+                TuiOrganState::stub(OrganKind::Heart),
+                TuiOrganState::stub(OrganKind::Brain),
+                TuiOrganState::stub(OrganKind::Hand),
+                TuiOrganState::stub(OrganKind::Eye),
+                TuiOrganState::stub(OrganKind::Ear),
+                TuiOrganState::stub(OrganKind::Memory),
+                TuiOrganState::stub(OrganKind::Voice),
+                TuiOrganState::stub(OrganKind::Body),
+                TuiOrganState::stub(OrganKind::Mind),
+            ]
+        })
     }
 
     /// 更新 1 端点 health (3 端点之一, 编译期守门).
-    pub fn update_health(&self, endpoint: &str, response: HealthResponse) -> TuiDashboardResult<()> {
+    pub fn update_health(
+        &self,
+        endpoint: &str,
+        response: HealthResponse,
+    ) -> TuiDashboardResult<()> {
         if !HEALTH_ENDPOINTS.contains(&endpoint) {
-            return Err(TuiDashboardError::HealthEndpointUnknown(endpoint.to_string()));
+            return Err(TuiDashboardError::HealthEndpointUnknown(
+                endpoint.to_string(),
+            ));
         }
         let mut health = self
             .health
@@ -729,10 +775,7 @@ impl OrganDashboard {
     /// 读当前 nav (0-4).
     #[must_use]
     pub fn current_nav(&self) -> u8 {
-        self.current_nav
-            .lock()
-            .map(|n| *n)
-            .unwrap_or(0)
+        self.current_nav.lock().map(|n| *n).unwrap_or(0)
     }
 
     /// 读 HealthEndpoint 列表 (3 端点).
@@ -828,7 +871,10 @@ mod tests {
 
     #[test]
     fn k1_organ_count_is_9() {
-        assert_eq!(ORGAN_KIND_COUNT, 9, "ORGAN_KIND_COUNT 必须 = 9 (K-1 强校验 #2)");
+        assert_eq!(
+            ORGAN_KIND_COUNT, 9,
+            "ORGAN_KIND_COUNT 必须 = 9 (K-1 强校验 #2)"
+        );
         assert_eq!(OrganKind::all().len(), 9);
     }
 
@@ -839,7 +885,11 @@ mod tests {
 
     #[test]
     fn k1_five_nav_count() {
-        assert_eq!(FIVE_NAV.len(), 5, "FIVE_NAV 必须 = 5 (K-1 强校验, 主人 R19 决定)");
+        assert_eq!(
+            FIVE_NAV.len(),
+            5,
+            "FIVE_NAV 必须 = 5 (K-1 强校验, 主人 R19 决定)"
+        );
     }
 
     #[test]
@@ -924,7 +974,11 @@ mod tests {
         ];
         for organ in OrganKind::all() {
             let s = render_organ_widget(organ, &states[organ.as_u8() as usize]);
-            assert!(s.contains(organ.as_str()), "{} widget must contain organ name", organ.as_str());
+            assert!(
+                s.contains(organ.as_str()),
+                "{} widget must contain organ name",
+                organ.as_str()
+            );
         }
     }
 
@@ -933,7 +987,11 @@ mod tests {
         let state = TuiOrganState::partial(OrganKind::Mind);
         let s = render_mind_widget(&state);
         for anchor in SIX_ANCHORS {
-            assert!(s.contains(anchor), "mind widget must include anchor: {}", anchor);
+            assert!(
+                s.contains(anchor),
+                "mind widget must include anchor: {}",
+                anchor
+            );
         }
     }
 
@@ -976,8 +1034,8 @@ mod tests {
     #[test]
     fn organ_dashboard_update_and_read_health() {
         let dash = OrganDashboard::new();
-        let resp = HealthResponse::new("/health", HealthStatus::Degraded)
-            .with_detail("reason", "test");
+        let resp =
+            HealthResponse::new("/health", HealthStatus::Degraded).with_detail("reason", "test");
         dash.update_health("/health", resp).expect("update /health");
         let read = dash.read_health("/health").expect("read /health");
         assert_eq!(read.status, HealthStatus::Degraded);
@@ -1010,7 +1068,11 @@ mod tests {
         let s = render_dashboard(&dash);
         // 9 器官
         for organ in OrganKind::all() {
-            assert!(s.contains(organ.as_str()), "dashboard must include {}", organ.as_str());
+            assert!(
+                s.contains(organ.as_str()),
+                "dashboard must include {}",
+                organ.as_str()
+            );
         }
         // 3 端点
         for ep in HEALTH_ENDPOINTS {
@@ -1025,7 +1087,11 @@ mod tests {
         let dash = OrganDashboard::new();
         let s = render_dashboard(&dash);
         for anchor in SIX_ANCHORS {
-            assert!(s.contains(anchor), "dashboard must include anchor: {}", anchor);
+            assert!(
+                s.contains(anchor),
+                "dashboard must include anchor: {}",
+                anchor
+            );
         }
     }
 

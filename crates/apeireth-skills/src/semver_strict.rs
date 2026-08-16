@@ -128,7 +128,10 @@ pub fn parse_strict(v: &str) -> Result<Semver, SemverStrictError> {
             let core = &v[..idx];
             let bm = &v[idx + 1..];
             if bm.is_empty() {
-                return Err(SemverStrictError::InvalidBuildMetadata(v.to_string(), "(empty)".to_string()));
+                return Err(SemverStrictError::InvalidBuildMetadata(
+                    v.to_string(),
+                    "(empty)".to_string(),
+                ));
             }
             (core, Some(bm.to_string()))
         }
@@ -142,7 +145,10 @@ pub fn parse_strict(v: &str) -> Result<Semver, SemverStrictError> {
             let pr = &core[idx + 1..];
             let core = &core[..idx];
             if pr.is_empty() {
-                return Err(SemverStrictError::InvalidPrerelease(v.to_string(), "(empty)".to_string()));
+                return Err(SemverStrictError::InvalidPrerelease(
+                    v.to_string(),
+                    "(empty)".to_string(),
+                ));
             }
             (core, Some(pr.to_string()))
         }
@@ -182,15 +188,22 @@ pub fn parse_strict(v: &str) -> Result<Semver, SemverStrictError> {
 /// **解析一段 (major/minor/patch)**: 必须是 0+, 不允许前导 0 (除 "0" 本身)
 fn parse_numeric_segment(full: &str, idx: usize, seg: &str) -> Result<u32, SemverStrictError> {
     if seg.is_empty() {
-        return Err(SemverStrictError::InvalidSegment(full.to_string(), idx + 1, seg.to_string()));
+        return Err(SemverStrictError::InvalidSegment(
+            full.to_string(),
+            idx + 1,
+            seg.to_string(),
+        ));
     }
     // 不允许前导 0 (除 "0" 本身) — per spec §2: "Numeric identifiers MUST NOT include leading zeroes"
     if seg.len() > 1 && seg.starts_with('0') {
-        return Err(SemverStrictError::InvalidSegment(full.to_string(), idx + 1, seg.to_string()));
+        return Err(SemverStrictError::InvalidSegment(
+            full.to_string(),
+            idx + 1,
+            seg.to_string(),
+        ));
     }
-    seg.parse::<u32>().map_err(|_| {
-        SemverStrictError::InvalidSegment(full.to_string(), idx + 1, seg.to_string())
-    })
+    seg.parse::<u32>()
+        .map_err(|_| SemverStrictError::InvalidSegment(full.to_string(), idx + 1, seg.to_string()))
 }
 
 /// **校验 "." 分隔的标识符** (pre-release 或 build metadata)
@@ -199,7 +212,11 @@ fn parse_numeric_segment(full: &str, idx: usize, seg: &str) -> Result<u32, Semve
 ///        标识符 MUST NOT be empty
 ///        Numeric identifiers MUST NOT include leading zeroes
 /// per §10: 同 §9, 但没有 numeric leading zero 限制
-fn validate_dot_identifier(s: &str, full: &str, is_pre_release: bool) -> Result<(), SemverStrictError> {
+fn validate_dot_identifier(
+    s: &str,
+    full: &str,
+    is_pre_release: bool,
+) -> Result<(), SemverStrictError> {
     for (i, id) in s.split('.').enumerate() {
         if id.is_empty() {
             return Err(if is_pre_release {
@@ -218,8 +235,15 @@ fn validate_dot_identifier(s: &str, full: &str, is_pre_release: bool) -> Result<
             }
         }
         // pre-release numeric 段不允许前导 0 (除 "0" 本身) — per §9
-        if is_pre_release && id.len() > 1 && id.starts_with('0') && id.chars().all(|c| c.is_ascii_digit()) {
-            return Err(SemverStrictError::InvalidPrerelease(full.to_string(), s.to_string()));
+        if is_pre_release
+            && id.len() > 1
+            && id.starts_with('0')
+            && id.chars().all(|c| c.is_ascii_digit())
+        {
+            return Err(SemverStrictError::InvalidPrerelease(
+                full.to_string(),
+                s.to_string(),
+            ));
         }
         // 静默 unused
         let _ = i;
@@ -262,9 +286,9 @@ pub fn compare_strict(a: &Semver, b: &Semver) -> i32 {
 
     // 2. pre-release 优先级
     match (&a.pre_release, &b.pre_release) {
-        (None, None) => 0,            // build metadata 差异忽略
-        (Some(_), None) => -1,         // pre-release < release
-        (None, Some(_)) => 1,          // release > pre-release
+        (None, None) => 0,     // build metadata 差异忽略
+        (Some(_), None) => -1, // pre-release < release
+        (None, Some(_)) => 1,  // release > pre-release
         (Some(apr), Some(bpr)) => compare_prerelease(apr, bpr),
     }
 }
@@ -529,8 +553,14 @@ mod tests {
         // 1.0.0-alpha < 1.0.0-alpha.1 < 1.0.0-alpha.beta < 1.0.0-beta
         //   < 1.0.0-beta.2 < 1.0.0-beta.11 < 1.0.0-rc.1 < 1.0.0
         let versions = vec![
-            "1.0.0-alpha", "1.0.0-alpha.1", "1.0.0-alpha.beta",
-            "1.0.0-beta", "1.0.0-beta.2", "1.0.0-beta.11", "1.0.0-rc.1", "1.0.0",
+            "1.0.0-alpha",
+            "1.0.0-alpha.1",
+            "1.0.0-alpha.beta",
+            "1.0.0-beta",
+            "1.0.0-beta.2",
+            "1.0.0-beta.11",
+            "1.0.0-rc.1",
+            "1.0.0",
         ];
         let semvers: Vec<Semver> = versions.iter().map(|v| parse_strict(v).unwrap()).collect();
         for i in 0..semvers.len() - 1 {
@@ -629,7 +659,10 @@ mod tests {
 
     #[test]
     fn bridge_3seg_works() {
-        assert_eq!(parse_strict_then_compare_3seg("1.0.0", "1.0.1").unwrap(), -1);
+        assert_eq!(
+            parse_strict_then_compare_3seg("1.0.0", "1.0.1").unwrap(),
+            -1
+        );
         assert_eq!(parse_strict_then_compare_3seg("2.0.0", "1.9.9").unwrap(), 1);
         assert_eq!(parse_strict_then_compare_3seg("1.0.0", "1.0.0").unwrap(), 0);
     }
