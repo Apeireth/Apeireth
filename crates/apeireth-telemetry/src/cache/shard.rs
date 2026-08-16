@@ -193,10 +193,7 @@ where
 
     /// 总 size (累加所有 shard, 锁每个 shard).
     pub fn len(&self) -> usize {
-        self.shards
-            .iter()
-            .map(|s| s.lock().len())
-            .sum()
+        self.shards.iter().map(|s| s.lock().len()).sum()
     }
 
     /// 是否空.
@@ -259,8 +256,6 @@ where
             _ => None,
         }
     }
-
-
 
     /// 单 shard size (测试 / 调试用).
     pub fn shard_len(&self, shard_id: usize) -> usize {

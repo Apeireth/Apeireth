@@ -29,10 +29,14 @@ impl SpanId {
     pub const ROOT: SpanId = SpanId(0);
 
     /// Construct a new SpanId from a raw u64 (does NOT validate uniqueness).
-    pub const fn new(raw: u64) -> Self { Self(raw) }
+    pub const fn new(raw: u64) -> Self {
+        Self(raw)
+    }
 
     /// Raw u64 value.
-    pub const fn raw(self) -> u64 { self.0 }
+    pub const fn raw(self) -> u64 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for SpanId {
@@ -53,7 +57,9 @@ pub enum SpanStatus {
 }
 
 impl Default for SpanStatus {
-    fn default() -> Self { SpanStatus::Unset }
+    fn default() -> Self {
+        SpanStatus::Unset
+    }
 }
 
 /// OTel-style span event (single immutable record after span.end()).
@@ -80,7 +86,8 @@ impl SpanEvent {
 
     /// Get an attribute value by key.
     pub fn attr(&self, key: &str) -> Option<&str> {
-        self.attrs.iter()
+        self.attrs
+            .iter()
             .find(|(k, _)| k == key)
             .map(|(_, v)| v.as_str())
     }
@@ -178,7 +185,9 @@ impl SpanTracker {
 }
 
 impl Default for SpanTracker {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 fn unix_ms() -> u64 {
@@ -216,7 +225,9 @@ mod tests {
         let root = t.start_span(None, "root").unwrap();
         let child = t.start_span(Some(root), "child").unwrap();
         assert_eq!(child, SpanId(2));
-        let ev = t.end_span(child, SpanStatus::Ok, std::iter::empty()).unwrap();
+        let ev = t
+            .end_span(child, SpanStatus::Ok, std::iter::empty())
+            .unwrap();
         assert_eq!(ev.parent, Some(root));
     }
 
@@ -224,7 +235,9 @@ mod tests {
     fn t04_end_span_returns_event() {
         let t = SpanTracker::new();
         let id = t.start_span(None, "task").unwrap();
-        let ev = t.end_span(id, SpanStatus::Ok, vec![("key".into(), "val".into())]).unwrap();
+        let ev = t
+            .end_span(id, SpanStatus::Ok, vec![("key".into(), "val".into())])
+            .unwrap();
         assert_eq!(ev.name, "task");
         assert_eq!(ev.status, SpanStatus::Ok);
         assert_eq!(ev.attr("key"), Some("val"));
@@ -237,7 +250,9 @@ mod tests {
     fn t05_end_span_unknown_returns_none() {
         let t = SpanTracker::new();
         let bogus = SpanId::new(9999);
-        assert!(t.end_span(bogus, SpanStatus::Ok, std::iter::empty()).is_none());
+        assert!(t
+            .end_span(bogus, SpanStatus::Ok, std::iter::empty())
+            .is_none());
     }
 
     #[test]
@@ -280,10 +295,16 @@ mod tests {
     fn t09_attrs_extend_on_end() {
         let t = SpanTracker::new();
         let id = t.start_span(None, "llm_call").unwrap();
-        let ev = t.end_span(id, SpanStatus::Ok, vec![
-            ("model".into(), "MiniMax-M3".into()),
-            ("tokens_in".into(), "120".into()),
-        ]).unwrap();
+        let ev = t
+            .end_span(
+                id,
+                SpanStatus::Ok,
+                vec![
+                    ("model".into(), "MiniMax-M3".into()),
+                    ("tokens_in".into(), "120".into()),
+                ],
+            )
+            .unwrap();
         assert_eq!(ev.attr("model"), Some("MiniMax-M3"));
         assert_eq!(ev.attr("tokens_in"), Some("120"));
     }
@@ -322,7 +343,9 @@ mod tests {
                 t2.end_span(id, SpanStatus::Ok, std::iter::empty()).unwrap();
             }));
         }
-        for h in handles { h.join().unwrap(); }
+        for h in handles {
+            h.join().unwrap();
+        }
         assert_eq!(t.active_count(), 0);
         assert_eq!(t.completed_len(), 10);
     }
@@ -341,10 +364,13 @@ mod tests {
     fn t15_attrs_are_keyed_lookup() {
         let t = SpanTracker::new();
         let id = t.start_span(None, "x").unwrap();
-        let ev = t.end_span(id, SpanStatus::Ok, vec![
-            ("a".into(), "1".into()),
-            ("b".into(), "2".into()),
-        ]).unwrap();
+        let ev = t
+            .end_span(
+                id,
+                SpanStatus::Ok,
+                vec![("a".into(), "1".into()), ("b".into(), "2".into())],
+            )
+            .unwrap();
         assert_eq!(ev.attr("a"), Some("1"));
         assert_eq!(ev.attr("b"), Some("2"));
         assert_eq!(ev.attr("c"), None);

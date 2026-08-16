@@ -190,9 +190,7 @@ impl ParentBasedSampler {
 
     /// 用指定的 root sampler 构造.
     pub fn with_root(root: Arc<dyn Sampler>) -> Self {
-        Self {
-            root_sampler: root,
-        }
+        Self { root_sampler: root }
     }
 }
 
@@ -333,7 +331,10 @@ mod tests {
     fn test_kind_as_str() {
         assert_eq!(SamplerKind::AlwaysOn.as_str(), "always_on");
         assert_eq!(SamplerKind::AlwaysOff.as_str(), "always_off");
-        assert_eq!(SamplerKind::TraceIdRatioBased.as_str(), "trace_id_ratio_based");
+        assert_eq!(
+            SamplerKind::TraceIdRatioBased.as_str(),
+            "trace_id_ratio_based"
+        );
         assert_eq!(SamplerKind::ParentBased.as_str(), "parent_based");
     }
 

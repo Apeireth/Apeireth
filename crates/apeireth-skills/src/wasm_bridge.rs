@@ -76,15 +76,23 @@ impl<R: WasmRuntime + ?Sized> WasmSkillExecutor<R> {
         self.runtime.name()
     }
 
-    pub fn execute(&self, descriptor: &WasmSkillDescriptor, now_ms: u64) -> WasmSkillResult<apeireth_sovereignty::wasm_runtime::WasmExecution> {
+    pub fn execute(
+        &self,
+        descriptor: &WasmSkillDescriptor,
+        now_ms: u64,
+    ) -> WasmSkillResult<apeireth_sovereignty::wasm_runtime::WasmExecution> {
         let module = descriptor.to_module()?;
         let policy = descriptor.to_policy();
         self.runtime
             .validate(&module, &policy)
             .map_err(WasmSkillError::Wasm)?;
-        let exec = self
-            .runtime
-            .execute(&module, &policy, &descriptor.entry, &descriptor.args, now_ms)?;
+        let exec = self.runtime.execute(
+            &module,
+            &policy,
+            &descriptor.entry,
+            &descriptor.args,
+            now_ms,
+        )?;
         Ok(exec)
     }
 }
@@ -168,6 +176,9 @@ mod tests {
     fn executor_rejects_empty_bytes() {
         let exec = WasmSkillExecutor::new(Box::new(StubWasmRuntime));
         let d = descriptor(vec![]);
-        assert!(matches!(exec.execute(&d, 0), Err(WasmSkillError::BytesMissing)));
+        assert!(matches!(
+            exec.execute(&d, 0),
+            Err(WasmSkillError::BytesMissing)
+        ));
     }
 }

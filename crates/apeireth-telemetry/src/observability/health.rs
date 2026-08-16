@@ -125,10 +125,7 @@ pub async fn health_check(
             );
             HealthResponse::new(endpoint.as_path(), HealthStatus::Unhealthy)
                 .with_detail("error", "health_check_timeout")
-                .with_detail(
-                    "timeout_ms",
-                    HEALTH_CHECK_TIMEOUT_MS.to_string(),
-                )
+                .with_detail("timeout_ms", HEALTH_CHECK_TIMEOUT_MS.to_string())
         }
     }
 }

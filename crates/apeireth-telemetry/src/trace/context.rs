@@ -107,7 +107,11 @@ impl fmt::Display for TraceContext {
         // 截前 8 字符防 PII 泄露到日志
         let trace_short = &self.trace_id[..8.min(self.trace_id.len())];
         let span_short = &self.span_id[..8.min(self.span_id.len())];
-        write!(f, "trace={} span={} sampled={}", trace_short, span_short, self.sampled)
+        write!(
+            f,
+            "trace={} span={} sampled={}",
+            trace_short, span_short, self.sampled
+        )
     }
 }
 

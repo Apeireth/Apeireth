@@ -75,12 +75,27 @@ fn ref_hash_request_sha256(_method: &str, _url: &str, _body: &[u8]) -> String {
 fn sdk_python_ffi_count_tokens_works() {
     use apeireth_sdk::python::py_count_tokens;
     // 1 fn per language, 1:1 R32-1 算法
-    assert_eq!(py_count_tokens("hello", "cl100k_base").expect("py_count_tokens ok"), 1);
-    assert_eq!(py_count_tokens("hello world", "cl100k_base").expect("py_count_tokens ok"), 3);
-    assert_eq!(py_count_tokens("你好", "cl100k_base").expect("py_count_tokens ok"), 2);
-    assert_eq!(py_count_tokens("", "cl100k_base").expect("py_count_tokens ok"), 0);
+    assert_eq!(
+        py_count_tokens("hello", "cl100k_base").expect("py_count_tokens ok"),
+        1
+    );
+    assert_eq!(
+        py_count_tokens("hello world", "cl100k_base").expect("py_count_tokens ok"),
+        3
+    );
+    assert_eq!(
+        py_count_tokens("你好", "cl100k_base").expect("py_count_tokens ok"),
+        2
+    );
+    assert_eq!(
+        py_count_tokens("", "cl100k_base").expect("py_count_tokens ok"),
+        0
+    );
     // 1:1 跟 ref_count_tokens_heuristic 行为 (R32-1 1:1 port)
-    assert_eq!(py_count_tokens("hello 世界", "cl100k_base").expect("ok"), ref_count_tokens_heuristic("hello 世界"));
+    assert_eq!(
+        py_count_tokens("hello 世界", "cl100k_base").expect("ok"),
+        ref_count_tokens_heuristic("hello 世界")
+    );
 }
 
 // ============================================================================
@@ -92,11 +107,22 @@ fn sdk_python_ffi_count_tokens_works() {
 fn sdk_node_ffi_count_tokens_works() {
     use apeireth_sdk::node::count_tokens;
     // 1:1 跟 python.rs py_count_tokens
-    assert_eq!(count_tokens("hello".to_string(), "cl100k_base".to_string()), 1);
-    assert_eq!(count_tokens("hello world".to_string(), "cl100k_base".to_string()), 3);
-    assert_eq!(count_tokens("你好".to_string(), "cl100k_base".to_string()), 2);
-    assert_eq!(count_tokens("hello 世界".to_string(), "cl100k_base".to_string()),
-               ref_count_tokens_heuristic("hello 世界"));
+    assert_eq!(
+        count_tokens("hello".to_string(), "cl100k_base".to_string()),
+        1
+    );
+    assert_eq!(
+        count_tokens("hello world".to_string(), "cl100k_base".to_string()),
+        3
+    );
+    assert_eq!(
+        count_tokens("你好".to_string(), "cl100k_base".to_string()),
+        2
+    );
+    assert_eq!(
+        count_tokens("hello 世界".to_string(), "cl100k_base".to_string()),
+        ref_count_tokens_heuristic("hello 世界")
+    );
 
     // hash_request 确定性测试 (1:1 跨语言)
     use apeireth_sdk::node::hash_request;
@@ -104,14 +130,25 @@ fn sdk_node_ffi_count_tokens_works() {
     use napi::bindgen_prelude::Buffer;
     // 创建 2 个独立 Buffer (0 clone, 每调用 1 次)
     let body1 = Buffer::from(b"{}".to_vec());
-    let h1 = hash_request("POST".to_string(), "/v1/tools/web_search/invoke".to_string(), body1);
+    let h1 = hash_request(
+        "POST".to_string(),
+        "/v1/tools/web_search/invoke".to_string(),
+        body1,
+    );
 
     let body2 = Buffer::from(b"{}".to_vec());
-    let h2 = hash_request("POST".to_string(), "/v1/tools/web_search/invoke".to_string(), body2);
+    let h2 = hash_request(
+        "POST".to_string(),
+        "/v1/tools/web_search/invoke".to_string(),
+        body2,
+    );
 
     assert_eq!(h1, h2, "同输入 → 同 hash");
     assert_eq!(h1.len(), 64, "SHA-256 hex 长度 = 64");
-    assert_eq!(h1, ref_hash_request_sha256("POST", "/v1/tools/web_search/invoke", b"{}"));
+    assert_eq!(
+        h1,
+        ref_hash_request_sha256("POST", "/v1/tools/web_search/invoke", b"{}")
+    );
 }
 
 // ============================================================================
@@ -165,10 +202,12 @@ fn sdk_c_ffi_version_returns_semver() {
     // 0 改 workspace.version 1.1.0 (per hard-constraint #1)
     // 0 改 SDK_VERSION = 0.1.0 (R20 阶段 6 stub, version.rs:102 LOCKED)
     // version_c 返 SDK_VERSION.as_str() (0.1.0), 跟 workspace.version 1.1.0 解耦
-    let sdk_ver = format!("{}.{}.{}",
+    let sdk_ver = format!(
+        "{}.{}.{}",
         apeireth_sdk::SDK_VERSION.major,
         apeireth_sdk::SDK_VERSION.minor,
-        apeireth_sdk::SDK_VERSION.patch);
+        apeireth_sdk::SDK_VERSION.patch
+    );
     assert_eq!(v_str, sdk_ver, "version_c 返 SDK_VERSION 0 改");
     apeireth_sdk::c::apeireth_sdk_free_string(ptr as *mut _);
 }
@@ -185,13 +224,18 @@ fn sdk_compile_info_includes_features() {
     assert!(!ptr.is_null());
     let info_str = unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str().unwrap();
     // 含 "apeireth-sdk" 标识
-    assert!(info_str.contains("apeireth-sdk"), "compile_info 应含 'apeireth-sdk' 标识");
+    assert!(
+        info_str.contains("apeireth-sdk"),
+        "compile_info 应含 'apeireth-sdk' 标识"
+    );
     // 含当前启用 features (per cfg 编译期守门)
     #[cfg(feature = "c")]
     assert!(info_str.contains("c"), "compile_info 应含 'c' feature");
     // O-5 标识: skeleton 0 假装 100%
-    assert!(info_str.contains("O-5") || info_str.contains("skeleton"),
-            "compile_info 应含 O-5 / skeleton 标识");
+    assert!(
+        info_str.contains("O-5") || info_str.contains("skeleton"),
+        "compile_info 应含 O-5 / skeleton 标识"
+    );
     apeireth_sdk::c::apeireth_sdk_free_string(ptr as *mut _);
 }
 
@@ -205,7 +249,7 @@ fn sdk_default_build_no_bridge_compiles() {
     // default build 0 装 pyo3/napi/cbindgen (O-5 实质守门)
     // 公共 API 顶层 re-export 0 改 (per lib.rs §A 268-279)
     // SDK_VERSION = 0.1.0 (R20 阶段 6 stub, version.rs:102 LOCKED, 0 改)
-    use apeireth_sdk::{SDK_VERSION, STUB_MODE, PLATFORM_NAME};
+    use apeireth_sdk::{PLATFORM_NAME, SDK_VERSION, STUB_MODE};
     assert_eq!(SDK_VERSION.major, 0);
     assert_eq!(SDK_VERSION.minor, 1);
     assert_eq!(SDK_VERSION.patch, 0);

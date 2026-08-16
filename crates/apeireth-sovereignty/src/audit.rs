@@ -144,9 +144,7 @@ pub enum AuditError {
     #[error("K-1.b 强校验失败: resource 字段为空 (审计必须记录动了什么)")]
     K1ResourceEmpty,
     /// K-1.c 强校验失败 — level 不满足事件要求
-    #[error(
-        "K-1.c 强校验失败: 事件 {event:?} 要求至少 {required:?} 级, 实际为 {actual:?}"
-    )]
+    #[error("K-1.c 强校验失败: 事件 {event:?} 要求至少 {required:?} 级, 实际为 {actual:?}")]
     K1LevelInsufficient {
         /// 事件类型
         event: EventKind,
@@ -186,7 +184,10 @@ impl AuditEvent {
         reason: impl Into<String>,
     ) -> Self {
         Self {
-            id: format!("audit-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)),
+            id: format!(
+                "audit-{}",
+                chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
+            ),
             kind,
             actor: actor.into(),
             resource: resource.into(),
@@ -347,12 +348,24 @@ mod tests {
         assert!(log.is_empty());
 
         // 通过 K-1
-        log.record(EventKind::Access, "alice", "principle_onion", AuditLevel::Owner, "audit")
-            .unwrap();
+        log.record(
+            EventKind::Access,
+            "alice",
+            "principle_onion",
+            AuditLevel::Owner,
+            "audit",
+        )
+        .unwrap();
         assert_eq!(log.len(), 1);
 
         // level 不足 (Modify 要求 Write, 给 Read)
-        let res = log.record(EventKind::Modify, "alice", "principle_onion", AuditLevel::Read, "x");
+        let res = log.record(
+            EventKind::Modify,
+            "alice",
+            "principle_onion",
+            AuditLevel::Read,
+            "x",
+        );
         assert!(res.is_err());
         assert_eq!(log.len(), 1); // 未 push
 

@@ -100,7 +100,8 @@ impl Reservoir {
 
     /// 排序后样本.
     fn sorted(&mut self) -> Vec<f64> {
-        self.samples.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        self.samples
+            .sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
         self.samples.clone()
     }
 }
@@ -161,7 +162,12 @@ impl Summary {
             let next_bits = next.to_bits();
             if self
                 .sum_bits
-                .compare_exchange_weak(current_bits, next_bits, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(
+                    current_bits,
+                    next_bits,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
                 .is_ok()
             {
                 return;
@@ -392,7 +398,12 @@ mod tests {
         s.observe(0.5);
         let v = s.value();
         assert!(v.is_summary());
-        if let MetricValue::Summary { count, sum, quantiles } = v {
+        if let MetricValue::Summary {
+            count,
+            sum,
+            quantiles,
+        } = v
+        {
             assert_eq!(count, 2);
             assert!((sum - 0.6).abs() < 1e-9);
             assert_eq!(quantiles.len(), 5);

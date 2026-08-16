@@ -344,8 +344,8 @@ impl<'a> HADeploymentEnforcer<'a> {
         let required = self.authority.required_approvals as usize;
         let base = self.authority.threshold;
         let adjustment = self.context.threshold_adjustment();
-        let adjusted =
-            (i32::from(base) + adjustment).clamp(i32::from(self.context.min_threshold()), 100) as u8;
+        let adjusted = (i32::from(base) + adjustment)
+            .clamp(i32::from(self.context.min_threshold()), 100) as u8;
 
         if valid >= required && pct >= adjusted {
             DeploymentOutcome::ApprovedDynamic {

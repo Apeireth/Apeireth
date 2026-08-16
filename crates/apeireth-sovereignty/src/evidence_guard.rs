@@ -19,7 +19,8 @@
 //! - ❌ 不引入 I/O / 网络 / unsafe
 //! - ❌ 不引入新 crate 依赖
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
@@ -136,19 +137,11 @@ pub enum EvidenceCheck {
         evidence_count: usize,
     },
     /// 通过 — 推理但 confidence < 0.7 (允许)
-    PassInferred {
-        claim_id: String,
-        confidence: f64,
-    },
+    PassInferred { claim_id: String, confidence: f64 },
     /// 失败 — 缺证据 或 推理 confidence 过高
-    Fail {
-        claim_id: String,
-        reason: String,
-    },
+    Fail { claim_id: String, reason: String },
     /// 找不到 claim
-    Missing {
-        claim_id: String,
-    },
+    Missing { claim_id: String },
 }
 
 impl EvidenceCheck {
@@ -283,29 +276,51 @@ mod tests {
     fn record_tool_call_evidence_passes() {
         let mut g = EvidenceGuard::new();
         g.record(EvidenceEntry::from_tool_call(
-            "c1", "read file X", "file_read", "abc123", 0.95, now_ms(), "architect",
+            "c1",
+            "read file X",
+            "file_read",
+            "abc123",
+            0.95,
+            now_ms(),
+            "architect",
         ));
         let r = g.verify("c1");
         assert!(r.is_pass());
-        assert!(matches!(r, EvidenceCheck::Pass { evidence_count: 1, .. }));
+        assert!(matches!(
+            r,
+            EvidenceCheck::Pass {
+                evidence_count: 1,
+                ..
+            }
+        ));
     }
 
     #[test]
     fn record_inference_low_confidence_passes() {
         let mut g = EvidenceGuard::new();
         g.record(EvidenceEntry::from_inference(
-            "c2", "user probably wants X", 0.5, now_ms(), "philosophy",
+            "c2",
+            "user probably wants X",
+            0.5,
+            now_ms(),
+            "philosophy",
         ));
         let r = g.verify("c2");
         assert!(r.is_pass());
-        assert!(matches!(r, EvidenceCheck::PassInferred { confidence, .. } if (confidence - 0.5).abs() < 0.01));
+        assert!(
+            matches!(r, EvidenceCheck::PassInferred { confidence, .. } if (confidence - 0.5).abs() < 0.01)
+        );
     }
 
     #[test]
     fn record_inference_high_confidence_fails() {
         let mut g = EvidenceGuard::new();
         g.record(EvidenceEntry::from_inference(
-            "c3", "I am sure file X exists", 0.9, now_ms(), "architect",
+            "c3",
+            "I am sure file X exists",
+            0.9,
+            now_ms(),
+            "architect",
         ));
         let r = g.verify("c3");
         assert!(r.is_fail());
@@ -326,8 +341,13 @@ mod tests {
             claim_id: "c4".into(),
             claim_text: "multi-source claim".into(),
             evidence: vec![
-                EvidenceKind::ToolCall { tool: "file_read".into(), args_hash: "h1".into() },
-                EvidenceKind::MemoryLookup { episode_id: "ep-1".into() },
+                EvidenceKind::ToolCall {
+                    tool: "file_read".into(),
+                    args_hash: "h1".into(),
+                },
+                EvidenceKind::MemoryLookup {
+                    episode_id: "ep-1".into(),
+                },
             ],
             confidence: 0.9,
             recorded_at_ms: now_ms(),
@@ -335,7 +355,13 @@ mod tests {
         };
         g.record(entry);
         let r = g.verify("c4");
-        assert!(matches!(r, EvidenceCheck::Pass { evidence_count: 2, .. }));
+        assert!(matches!(
+            r,
+            EvidenceCheck::Pass {
+                evidence_count: 2,
+                ..
+            }
+        ));
     }
 
     #[test]

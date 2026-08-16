@@ -112,7 +112,9 @@ pub fn runnable_scenarios(scenarios: &[EvalScenario]) -> Vec<&EvalScenario> {
 }
 
 /// **统计 scenario 来源分布** (返回 {source: count})
-pub fn scenarios_by_source(scenarios: &[EvalScenario]) -> std::collections::BTreeMap<String, usize> {
+pub fn scenarios_by_source(
+    scenarios: &[EvalScenario],
+) -> std::collections::BTreeMap<String, usize> {
     let mut map: std::collections::BTreeMap<String, usize> = std::collections::BTreeMap::new();
     for s in scenarios {
         *map.entry(s.source.clone()).or_insert(0) += 1;
@@ -136,7 +138,10 @@ pub struct EvalScoreMirror {
 
 impl EvalScoreMirror {
     pub fn new(dimension: impl Into<String>, value: f64) -> Self {
-        Self { dimension: dimension.into(), value }
+        Self {
+            dimension: dimension.into(),
+            value,
+        }
     }
     pub fn is_valid(&self) -> bool {
         self.value.is_finite() && (0.0..=1.0).contains(&self.value)
@@ -149,8 +154,12 @@ pub fn scenario_to_eval_score(scenario: &EvalScenario, value: f64) -> EvalScoreM
 }
 
 /// **批量 descriptors → EvalScore mirrors** (全 1.0 表示 "scenario 配出来了", 实际值 caller 算)
-pub fn descriptors_to_eval_score_mirrors(descs: &[SkillDescriptor], default_value: f64) -> Vec<EvalScoreMirror> {
-    descs.iter()
+pub fn descriptors_to_eval_score_mirrors(
+    descs: &[SkillDescriptor],
+    default_value: f64,
+) -> Vec<EvalScoreMirror> {
+    descs
+        .iter()
         .map(|d| EvalScoreMirror::new(d.id.clone(), default_value))
         .collect()
 }
@@ -164,7 +173,13 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    fn make_desc(id: &str, version: &str, description: &str, tags: &[&str], source: &str) -> SkillDescriptor {
+    fn make_desc(
+        id: &str,
+        version: &str,
+        description: &str,
+        tags: &[&str],
+        source: &str,
+    ) -> SkillDescriptor {
         SkillDescriptor::new(
             id,
             version,
@@ -205,7 +220,13 @@ mod tests {
 
     #[test]
     fn descriptor_to_eval_scenario_basic() {
-        let desc = make_desc("summarize-text", "1.5.0", "Summarize a text", &["summarize", "text"], "vcptoolbox");
+        let desc = make_desc(
+            "summarize-text",
+            "1.5.0",
+            "Summarize a text",
+            &["summarize", "text"],
+            "vcptoolbox",
+        );
         let s = descriptor_to_eval_scenario(&desc);
         assert_eq!(s.id, "summarize-text");
         assert_eq!(s.expected, r#"{"output": "ok"}"#);
