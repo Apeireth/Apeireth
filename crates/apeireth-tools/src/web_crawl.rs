@@ -29,7 +29,7 @@ impl Default for CrawlTool {
 }
 
 /// 从 HTML 提取 href 链接 (简单扫描, 免 regex 依赖).
-fn extract_links(body: &str, base: &str) -> Vec<String> {
+pub fn extract_links(body: &str, base: &str) -> Vec<String> {
     let mut links = Vec::new();
     let bytes = body.as_bytes();
     let mut i = 0usize;
@@ -74,7 +74,29 @@ pub fn validate_url(url: &str) -> Result<(), String> {
     }
 }
 
-/// 递归抓取: BFS 深度遍历 (去重 + 上限).
+/// 单页抓取 + 重试退避 (网络失败/限流自动重试; 调研: 可靠爬虫必备).
+async fn fetch_with_retry(fetcher: &dyn WebFetch, url: &str, attempts: usize) -> Result<FetchResult, String> {
+    let mut last_err = "未知错误".to_string();
+    for i in 0..attempts {
+        match fetcher.fetch(url, PAGE_BYTES).await {
+            Ok(p) => return Ok(p),
+            Err(e) => {
+                last_err = e;
+                if i + 1 < attempts {
+                    tokio::time::sleep(std::time::Duration::from_millis(500 * (i as u64 + 1))).await;
+                }
+            }
+        }
+    }
+    Err(last_err)
+}
+
+/// 礼貌延迟 (防被封; 调研: 限速是可靠爬虫核心).
+const POLITE_DELAY_MS: u64 = 50;
+/// 最大并发抓取.
+const MAX_CONCURRENCY: usize = 4;
+
+/// 递归抓取: 并发 BFS 深度遍历 (去重 + 上限 + 重试 + 限速).
 pub async fn crawl(
     fetcher: &dyn WebFetch,
     start_url: &str,
@@ -85,38 +107,49 @@ pub async fn crawl(
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut queue: std::collections::VecDeque<(String, usize)> = std::collections::VecDeque::new();
     queue.push_back((start_url.to_string(), 0));
-    while let Some((url, depth)) = queue.pop_front() {
-        if pages.len() >= max_pages {
-            break;
-        }
-        if !seen.insert(url.clone()) {
-            continue;
-        }
-        let page = match fetcher.fetch(&url, PAGE_BYTES).await {
-            Ok(p) => p,
-            Err(e) => {
-                pages.push(FetchResult {
-                    url: url.clone(),
-                    status: 0,
-                    content_type: String::new(),
-                    bytes: 0,
-                    body: format!("(抓取失败: {e})"),
-                });
+    while !queue.is_empty() && pages.len() < max_pages {
+        // 取一批待抓 (≤ MAX_CONCURRENCY), 并发抓取
+        let batch: Vec<(String, usize)> = queue.drain(..MAX_CONCURRENCY.min(queue.len())).collect();
+        let mut futures = Vec::new();
+        for (url, depth) in &batch {
+            if seen.contains(url) || pages.len() + futures.len() >= max_pages {
                 continue;
             }
-        };
-        let is_html = page.content_type.contains("text/html");
-        if is_html && depth < max_depth {
-            for link in extract_links(&page.body, &url) {
-                if !seen.contains(&link) {
-                    queue.push_back((link, depth + 1));
+            seen.insert(url.clone());
+            futures.push(async move {
+                let r = fetch_with_retry(fetcher, url, 3).await;
+                (url.clone(), depth, r)
+            });
+        }
+        let results = futures::future::join_all(futures).await;
+        for (url, depth, r) in results {
+            match r {
+                Ok(page) => {
+                    let is_html = page.content_type.contains("text/html");
+                    if is_html && *depth < max_depth {
+                        for link in extract_links(&page.body, &url) {
+                            if !seen.contains(&link) {
+                                queue.push_back((link, depth + 1));
+                            }
+                        }
+                    }
+                    pages.push(page);
+                }
+                Err(e) => {
+                    pages.push(FetchResult {
+                        url,
+                        status: 0,
+                        content_type: String::new(),
+                        bytes: 0,
+                        body: format!("(抓取失败: {e})"),
+                    });
                 }
             }
+            if pages.len() >= max_pages {
+                break;
+            }
         }
-        pages.push(page);
-        if pages.len() >= max_pages {
-            break;
-        }
+        tokio::time::sleep(std::time::Duration::from_millis(POLITE_DELAY_MS)).await;
     }
     Ok(pages)
 }
