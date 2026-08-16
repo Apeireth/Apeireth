@@ -38,6 +38,8 @@ pub mod semantic;
 // R19 P2 战区 4 续 (A-3): 公开 semantic_persist 模块 (跨 daemon 持久化路径)
 #[cfg(feature = "semantic")]
 pub mod semantic_persist;
+// N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
+pub mod gen_cache;
 // P2#12: 本地 ONNX embedding (feature onnx; 关闭时诚实 Err + hash 降级)
 pub mod onnx;
 // R179 P1-9: Episode Dedup (借鉴 mempalace dedup.py — session 内近重复检测)
