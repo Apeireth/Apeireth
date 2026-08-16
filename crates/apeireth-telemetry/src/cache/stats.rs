@@ -90,7 +90,8 @@ impl CacheStats {
     #[inline]
     pub fn record_remove(&self, latency_us: u64) {
         self.remove_count.fetch_add(1, Ordering::Relaxed);
-        self.remove_latency_us.fetch_add(latency_us, Ordering::Relaxed);
+        self.remove_latency_us
+            .fetch_add(latency_us, Ordering::Relaxed);
     }
 
     /// 记录 1 次 eviction.

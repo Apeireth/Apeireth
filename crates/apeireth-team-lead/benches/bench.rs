@@ -10,8 +10,8 @@
 //! **基线** (1.0.0): target/criterion/apeireth-team-lead/bench/
 
 use apeireth_team_lead::{
-    AgentStatus, Message, MessageType, TeamConfig, TOOL_WHITELIST,
-    build_supervisor_prompt, validate_tool_call,
+    build_supervisor_prompt, validate_tool_call, AgentStatus, Message, MessageType, TeamConfig,
+    TOOL_WHITELIST,
 };
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 

@@ -73,12 +73,19 @@ impl PropagatorKind {
 #[async_trait]
 pub trait Propagator: Send + Sync {
     /// 把 context 注入到 carrier (header map).
-    async fn inject(&self, ctx: &TraceContext, carrier: &mut std::collections::HashMap<String, String>);
+    async fn inject(
+        &self,
+        ctx: &TraceContext,
+        carrier: &mut std::collections::HashMap<String, String>,
+    );
 
     /// 从 carrier 提取 context.
     ///
     /// 无有效 header 时返 None (不是错误).
-    async fn extract(&self, carrier: &std::collections::HashMap<String, String>) -> Option<TraceContext>;
+    async fn extract(
+        &self,
+        carrier: &std::collections::HashMap<String, String>,
+    ) -> Option<TraceContext>;
 
     /// 字段名 (用于 list_injected_fields).
     fn header_names(&self) -> &[&'static str];
@@ -106,10 +113,7 @@ impl Propagator for W3CTraceContextPropagator {
         carrier: &mut std::collections::HashMap<String, String>,
     ) {
         let flags = if ctx.sampled { "01" } else { "00" };
-        let traceparent = format!(
-            "00-{}-{}-{}",
-            ctx.trace_id, ctx.span_id, flags
-        );
+        let traceparent = format!("00-{}-{}-{}", ctx.trace_id, ctx.span_id, flags);
         carrier.insert("traceparent".to_string(), traceparent);
 
         if !ctx.tracestate.is_empty() {
@@ -190,11 +194,9 @@ pub fn parse_traceparent(s: &str) -> TracingResult<TraceContext> {
             reason: format!("flags must be 2 hex chars, got {}", flags),
         });
     }
-    let sampled_byte = u8::from_str_radix(flags, 16).map_err(|e| {
-        TracingError::InvalidHeader {
-            header: "traceparent".into(),
-            reason: format!("invalid flags hex: {}", e),
-        }
+    let sampled_byte = u8::from_str_radix(flags, 16).map_err(|e| TracingError::InvalidHeader {
+        header: "traceparent".into(),
+        reason: format!("invalid flags hex: {}", e),
     })?;
     let sampled = (sampled_byte & 0x01) == 0x01;
 
@@ -222,12 +224,16 @@ pub fn parse_kv_list(s: &str) -> std::collections::HashMap<String, String> {
 
 /// 验证 trace_id (32 lowercase hex char).
 pub fn is_valid_trace_id(s: &str) -> bool {
-    s.len() == 32 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    s.len() == 32
+        && s.chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
 /// 验证 span_id (16 lowercase hex char).
 pub fn is_valid_span_id(s: &str) -> bool {
-    s.len() == 16 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+    s.len() == 16
+        && s.chars()
+            .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
 }
 
 // ============================================================================

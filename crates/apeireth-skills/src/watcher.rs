@@ -143,7 +143,9 @@ impl SkillWatcher {
 
         // 1. 找 Added / Modified
         for path in &current_files {
-            let Some(current_mtime) = file_mtime_unix(path) else { continue };
+            let Some(current_mtime) = file_mtime_unix(path) else {
+                continue;
+            };
             match self.known.get(path) {
                 None => {
                     events.push(WatchEvent::Added(path.clone()));
@@ -410,5 +412,4 @@ mod tests {
         assert!(s.contains("SkillWatcher"));
         assert!(s.contains("known_count"));
     }
-
 }

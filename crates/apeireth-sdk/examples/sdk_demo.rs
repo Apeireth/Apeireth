@@ -105,7 +105,9 @@ async fn main() {
     }
     match client.calendar_list("2026-08-01..2026-08-31").await {
         Err(SdkClientError::NotImplemented(_)) => {
-            println!("[INFO]   calendar_list(\"2026-08-01..2026-08-31\") → NotImplemented ✓ (D-01 stub)");
+            println!(
+                "[INFO]   calendar_list(\"2026-08-01..2026-08-31\") → NotImplemented ✓ (D-01 stub)"
+            );
         }
         other => println!("[WARN]   calendar_list: {other:?}"),
     }
@@ -148,7 +150,10 @@ async fn main() {
         && must_do.contains("invoke")
         && must_do.contains("must-do");
     let k1_5 = STUB_MODE;
-    println!("[INFO]   K-1 #1: platform name = \"{PLATFORM_NAME}\" {}", if k1_1 { "✓" } else { "✗" });
+    println!(
+        "[INFO]   K-1 #1: platform name = \"{PLATFORM_NAME}\" {}",
+        if k1_1 { "✓" } else { "✗" }
+    );
     println!(
         "[INFO]   K-1 #2: SDK_TOOL_WHITELIST = {} (count = {}) {}",
         SDK_TOOL_WHITELIST.len(),

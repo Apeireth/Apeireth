@@ -256,9 +256,7 @@ impl TracingConfigBuilder {
 
     /// 设置 resource attribute.
     pub fn resource_attribute(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
-        self.resource
-            .attributes
-            .insert(key.into(), value.into());
+        self.resource.attributes.insert(key.into(), value.into());
         self
     }
 

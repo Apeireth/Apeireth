@@ -174,7 +174,8 @@ impl Skill for MultiAiGuardSkill {
             },
             SkillStep {
                 order: 3,
-                description: "Rejected → Blocked at MultiAi, Insufficient → PendingReview".to_string(),
+                description: "Rejected → Blocked at MultiAi, Insufficient → PendingReview"
+                    .to_string(),
                 is_tdd_red: false,
             },
         ]
@@ -232,8 +233,9 @@ impl Skill for PhysicalMultisigGuardSkill {
         vec![
             SkillStep {
                 order: 1,
-                description: "≥2 个不同 kind 物理签名 + ≥1 witness (PhysicalMultisig.collect_signature)"
-                    .to_string(),
+                description:
+                    "≥2 个不同 kind 物理签名 + ≥1 witness (PhysicalMultisig.collect_signature)"
+                        .to_string(),
                 is_tdd_red: false,
             },
             SkillStep {
@@ -272,7 +274,8 @@ impl Skill for ReflectionGuardSkill {
             },
             SkillStep {
                 order: 2,
-                description: "tick 推进到 AwaitingResolution (若 reflection_period > 0)".to_string(),
+                description: "tick 推进到 AwaitingResolution (若 reflection_period > 0)"
+                    .to_string(),
                 is_tdd_red: false,
             },
             SkillStep {
@@ -301,8 +304,9 @@ impl Skill for MewgGuardSkill {
         vec![
             SkillStep {
                 order: 1,
-                description: "4 evidence 累积: ai (0.3) + human (0.3) + physical (0.2) + reflection (0.2)"
-                    .to_string(),
+                description:
+                    "4 evidence 累积: ai (0.3) + human (0.3) + physical (0.2) + reflection (0.2)"
+                        .to_string(),
                 is_tdd_red: false,
             },
             SkillStep {
@@ -313,7 +317,8 @@ impl Skill for MewgGuardSkill {
             },
             SkillStep {
                 order: 3,
-                description: "MewgVerdict::Approved → Approved, Blocked → Blocked at Mewg".to_string(),
+                description: "MewgVerdict::Approved → Approved, Blocked → Blocked at Mewg"
+                    .to_string(),
                 is_tdd_red: false,
             },
         ]
@@ -349,8 +354,9 @@ impl Skill for ColangDslGuardSkill {
             },
             SkillStep {
                 order: 3,
-                description: "ColangDslGuard.check_source (max_lines + max_defines + 黑名单 + 必填)"
-                    .to_string(),
+                description:
+                    "ColangDslGuard.check_source (max_lines + max_defines + 黑名单 + 必填)"
+                        .to_string(),
                 is_tdd_red: false,
             },
         ]
@@ -588,11 +594,7 @@ impl SkillGuard {
     }
 
     /// 检查守门 1-6 已跑 + 守门 7 Skill 严守 + TDD RED 严守
-    pub fn check(
-        &self,
-        six_fold_completed: bool,
-        tdd_red_step_count: usize,
-    ) -> SkillGuardOutcome {
+    pub fn check(&self, six_fold_completed: bool, tdd_red_step_count: usize) -> SkillGuardOutcome {
         if self.config.require_six_before_seven && !six_fold_completed {
             return SkillGuardOutcome::Blocked {
                 reason: "守门 1-6 (v6) 未跑完就跑守门 7 (v7), 严守 6-before-7".to_string(),
@@ -678,7 +680,10 @@ mod tests {
         let guard = SkillGuard::new();
         let out = guard.check(true, 3); // 守门 1-6 已跑, TDD RED = 3
         match out {
-            SkillGuardOutcome::Approved { skill_count, tdd_red_steps } => {
+            SkillGuardOutcome::Approved {
+                skill_count,
+                tdd_red_steps,
+            } => {
                 assert_eq!(skill_count, 7);
                 assert_eq!(tdd_red_steps, 3);
             }
@@ -703,13 +708,20 @@ mod tests {
         let skill = registry.get(SkillId::SuperpowersSkillGuard).expect("ok");
         let steps = skill.steps();
         let tdd_red_count = steps.iter().filter(|s| s.is_tdd_red).count();
-        assert!(tdd_red_count >= 2, "守门 7 应 ≥ 2 步 TDD RED, 实际 {}", tdd_red_count);
+        assert!(
+            tdd_red_count >= 2,
+            "守门 7 应 ≥ 2 步 TDD RED, 实际 {}",
+            tdd_red_count
+        );
     }
 
     /// 借鉴 superpowers 模式: Skill name 跟 superpowers 公开 SKILL.md 1:1 (部分映射)
     #[test]
     fn skill_id_kebab_name_matches_superpowers_convention() {
-        assert_eq!(SkillId::SuperpowersSkillGuard.kebab_name(), "superpowers-skill-guard");
+        assert_eq!(
+            SkillId::SuperpowersSkillGuard.kebab_name(),
+            "superpowers-skill-guard"
+        );
         assert_eq!(SkillId::ColangDslGuard.kebab_name(), "colang-dsl-guard");
         // 5 守门跟 superpowers 公开 kebab-case 模式 1:1 (multi-ai-guard / multi-human-guard / ...)
     }

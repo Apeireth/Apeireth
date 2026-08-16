@@ -74,7 +74,10 @@ impl DiskLruProvider {
         };
         // 启动时加载磁盘上现有的 entry
         if let Err(e) = fs::create_dir_all(&inner.base_dir) {
-            eprintln!("[disk_lru] create_dir_all {} failed: {e}", inner.base_dir.display());
+            eprintln!(
+                "[disk_lru] create_dir_all {} failed: {e}",
+                inner.base_dir.display()
+            );
         }
         if let Ok(entries) = fs::read_dir(&inner.base_dir) {
             for entry in entries.flatten() {
@@ -88,7 +91,9 @@ impl DiskLruProvider {
                 }
             }
         }
-        Self { inner: Arc::new(Mutex::new(inner)) }
+        Self {
+            inner: Arc::new(Mutex::new(inner)),
+        }
     }
 
     /// 获取基目录 (调试 / 运维用).
@@ -122,8 +127,9 @@ impl MemoryProvider for DiskLruProvider {
     async fn capture(&self, entry: MemoryEntry) -> MemoryProviderResult<String> {
         self.kind().check_implemented()?;
         let id = entry.id.clone();
-        let json = serde_json::to_string(&entry)
-            .map_err(|e| MemoryProviderError::SerializationError(format!("disk_lru serialize: {e}")))?;
+        let json = serde_json::to_string(&entry).map_err(|e| {
+            MemoryProviderError::SerializationError(format!("disk_lru serialize: {e}"))
+        })?;
         // 1) 上锁走 LRU 插入 + 检测是否踢出 + 准备要删除的磁盘路径
         let (path, evicted_paths) = {
             let mut inner = self.inner.lock();
@@ -153,7 +159,9 @@ impl MemoryProvider for DiskLruProvider {
                 }
             })
             .await
-            .map_err(|e| MemoryProviderError::BackendIoError(format!("spawn_blocking join evict: {e}")))?;
+            .map_err(|e| {
+                MemoryProviderError::BackendIoError(format!("spawn_blocking join evict: {e}"))
+            })?;
         }
         // 3) 写新的 entry 到磁盘
         let id_clone = id.clone();
@@ -167,7 +175,9 @@ impl MemoryProvider for DiskLruProvider {
     async fn query(&self, q: MemoryQuery) -> MemoryProviderResult<Vec<MemoryEntry>> {
         self.kind().check_implemented()?;
         if !q.has_any_filter() {
-            return Err(MemoryProviderError::InvalidQuery("must provide at least one of id or content_contains".to_string()));
+            return Err(MemoryProviderError::InvalidQuery(
+                "must provide at least one of id or content_contains".to_string(),
+            ));
         }
         let limit = q.effective_limit();
         let base_dir = self.inner.lock().base_dir.clone();
@@ -280,11 +290,22 @@ mod tests {
     #[tokio::test]
     async fn disk_lru_query_by_content_contains() {
         let (p, _tmp) = tmp_provider();
-        p.capture(MemoryEntry::with_id_and_content("a", "alpha")).await.unwrap();
-        p.capture(MemoryEntry::with_id_and_content("b", "beta")).await.unwrap();
-        p.capture(MemoryEntry::with_id_and_content("c", "alpha-backup")).await.unwrap();
-        p.capture(MemoryEntry::with_id_and_content("d", "gamma")).await.unwrap();
-        let results = p.query(MemoryQuery::by_content_contains("alph")).await.unwrap();
+        p.capture(MemoryEntry::with_id_and_content("a", "alpha"))
+            .await
+            .unwrap();
+        p.capture(MemoryEntry::with_id_and_content("b", "beta"))
+            .await
+            .unwrap();
+        p.capture(MemoryEntry::with_id_and_content("c", "alpha-backup"))
+            .await
+            .unwrap();
+        p.capture(MemoryEntry::with_id_and_content("d", "gamma"))
+            .await
+            .unwrap();
+        let results = p
+            .query(MemoryQuery::by_content_contains("alph"))
+            .await
+            .unwrap();
         // "alpha" 和 "alpha-backup" 都含 "alph", "beta"/"gamma" 不含
         let mut ids: Vec<String> = results.iter().map(|e| e.id.clone()).collect();
         ids.sort();
@@ -294,8 +315,12 @@ mod tests {
     #[tokio::test]
     async fn disk_lru_clear_specific_id() {
         let (p, _tmp) = tmp_provider();
-        p.capture(MemoryEntry::with_id_and_content("x", "1")).await.unwrap();
-        p.capture(MemoryEntry::with_id_and_content("y", "2")).await.unwrap();
+        p.capture(MemoryEntry::with_id_and_content("x", "1"))
+            .await
+            .unwrap();
+        p.capture(MemoryEntry::with_id_and_content("y", "2"))
+            .await
+            .unwrap();
         p.clear(Some("x")).await.unwrap();
         let results = p.query(MemoryQuery::by_id("x")).await.unwrap();
         assert_eq!(results.len(), 0);
@@ -306,13 +331,20 @@ mod tests {
     #[tokio::test]
     async fn disk_lru_clear_all() {
         let (p, _tmp) = tmp_provider();
-        p.capture(MemoryEntry::with_id_and_content("a", "1")).await.unwrap();
-        p.capture(MemoryEntry::with_id_and_content("b", "2")).await.unwrap();
+        p.capture(MemoryEntry::with_id_and_content("a", "1"))
+            .await
+            .unwrap();
+        p.capture(MemoryEntry::with_id_and_content("b", "2"))
+            .await
+            .unwrap();
         p.clear(None).await.unwrap();
         let results = p.query(MemoryQuery::by_content_contains("")).await.unwrap();
         // clear all 后, content_contains="" 也该返回空
         // (但 "no filter" 返 InvalidQuery, 所以这里需要个子串过滤)
-        assert!(results.is_empty(), "after clear all, no entries should remain");
+        assert!(
+            results.is_empty(),
+            "after clear all, no entries should remain"
+        );
     }
 
     #[tokio::test]
@@ -320,14 +352,20 @@ mod tests {
         let (p, _tmp) = tmp_provider();
         let err = p.query(MemoryQuery::new()).await.unwrap_err();
         // K-1 守门: 无过滤条件 返 InvalidQuery (本实现走 Other, 同样报错)
-        assert!(matches!(err, MemoryProviderError::InvalidQuery(_) | MemoryProviderError::NotFound(_)));
+        assert!(matches!(
+            err,
+            MemoryProviderError::InvalidQuery(_) | MemoryProviderError::NotFound(_)
+        ));
     }
 
     #[tokio::test]
     async fn disk_lru_clear_nonexistent_returns_error() {
         let (p, _tmp) = tmp_provider();
         let err = p.clear(Some("nope")).await.unwrap_err();
-        assert!(matches!(err, MemoryProviderError::InvalidQuery(_) | MemoryProviderError::NotFound(_)));
+        assert!(matches!(
+            err,
+            MemoryProviderError::InvalidQuery(_) | MemoryProviderError::NotFound(_)
+        ));
     }
 
     #[tokio::test]

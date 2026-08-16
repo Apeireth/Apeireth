@@ -1,4 +1,4 @@
-﻿//! `r147_full_chain` - 端到端跑通 7 模块 orchestration (per `docs/architecture-v4-2-r145-modules/`)
+//! `r147_full_chain` - 端到端跑通 7 模块 orchestration (per `docs/architecture-v4-2-r145-modules/`)
 //!
 //! 运行: `cargo run --example r147_full_chain -p apeireth-runtime`
 //!
@@ -8,7 +8,7 @@
 //! 3. 校验 7 模块都留下数据 (bus events / arbitration seq / search docs / chat msgs / emotion deltas)
 //! 4. 启动 scheduler + 触发 wakeup 验证 heartbeat 自动驱动
 
-use apeireth_runtime::{Runtime, RuntimeConfig, RuntimeError, EmotionEvent};
+use apeireth_runtime::{EmotionEvent, Runtime, RuntimeConfig, RuntimeError};
 use apeireth_supervisor::WakeupSource;
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 2)]
@@ -49,10 +49,16 @@ async fn main() -> Result<(), RuntimeError> {
 
     // ----- Stage 3: search recall -----
     println!("[Stage 3] Search engine recall");
-    let hits = rt.search.search("simulated", 10).map_err(|e| RuntimeError::Search(e.to_string()))?;
+    let hits = rt
+        .search
+        .search("simulated", 10)
+        .map_err(|e| RuntimeError::Search(e.to_string()))?;
     println!("  - search('simulated') returned {} hits", hits.len());
     for h in hits.iter().take(3) {
-        println!("    score={:.3} matched_terms={:?}", h.score, h.matched_terms);
+        println!(
+            "    score={:.3} matched_terms={:?}",
+            h.score, h.matched_terms
+        );
     }
     println!();
 
@@ -61,13 +67,22 @@ async fn main() -> Result<(), RuntimeError> {
     let events = rt.arbitration.canonical_order(10)?;
     println!("  - {} events in canonical order:", events.len());
     for e in events.iter().take(5) {
-        println!("    seq={} ts={} source={} topic={}", e.seq, e.timestamp_ms, e.source.as_str(), e.topic);
+        println!(
+            "    seq={} ts={} source={} topic={}",
+            e.seq,
+            e.timestamp_ms,
+            e.source.as_str(),
+            e.topic
+        );
     }
     println!();
 
     // ----- Stage 5: group chat state -----
     println!("[Stage 5] Group chat state");
-    let chat_room = rt.group_chat.get(&room_id).map_err(|e| RuntimeError::GroupChat(e.to_string()))?;
+    let chat_room = rt
+        .group_chat
+        .get(&room_id)
+        .map_err(|e| RuntimeError::GroupChat(e.to_string()))?;
     println!(
         "  - room '{}' has {} participants and {} messages",
         chat_room.room().name,
@@ -87,7 +102,10 @@ async fn main() -> Result<(), RuntimeError> {
 
     // ----- Stage 7: scheduler tick registration -----
     println!("[Stage 7] Scheduler infrastructure ready (unit test t10 covers full lifecycle)");
-    println!("  - HeartbeatScheduler: {} heartbeats registered", rt.scheduler.len().await);
+    println!(
+        "  - HeartbeatScheduler: {} heartbeats registered",
+        rt.scheduler.len().await
+    );
     println!("  - Scheduler exposes: register_interval / start / stop / trigger / tick_count");
     println!("  - Use rt.clone().start().await to begin auto-driving cycles");
     println!();

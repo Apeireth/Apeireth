@@ -13,8 +13,10 @@ use std::time::Instant;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    println!("=== R134 apeireth-repo-tools 真实接入演示 (消除孤岛) ===
-");
+    println!(
+        "=== R134 apeireth-repo-tools 真实接入演示 (消除孤岛) ===
+"
+    );
 
     let target = std::env::args()
         .nth(1)
@@ -25,8 +27,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("[skip] target {:?} not exists", target);
         return Ok(());
     }
-    println!("[target] scanning {:?}
-", target);
+    println!(
+        "[target] scanning {:?}
+",
+        target
+    );
 
     let scanner = RepoScanner::new(RepoScannerConfig::default());
 
@@ -62,10 +67,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 4. git_state
     if let Ok(git) = scanner.git_state(&target).await {
-        println!("[git_state] branch={:?} commit={:?} dirty={}", git.branch, git.latest_commit, git.dirty_files.len());
+        println!(
+            "[git_state] branch={:?} commit={:?} dirty={}",
+            git.branch,
+            git.latest_commit,
+            git.dirty_files.len()
+        );
     }
 
-    println!("
-R134 apeireth-repo-tools 真实接入演示: PASS (消除孤岛, 4 个 API 真接可用)");
+    println!(
+        "
+R134 apeireth-repo-tools 真实接入演示: PASS (消除孤岛, 4 个 API 真接可用)"
+    );
     Ok(())
 }

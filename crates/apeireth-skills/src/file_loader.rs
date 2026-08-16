@@ -73,14 +73,16 @@ pub enum DescriptorLayout {
 pub fn discover_descriptor_paths(base_dir: impl AsRef<Path>) -> SkillResult<Vec<PathBuf>> {
     let base = base_dir.as_ref();
     if !base.exists() {
-        return Err(crate::SkillError::UnknownSkill(
-            format!("base_dir 不存在: {}", base.display()),
-        ));
+        return Err(crate::SkillError::UnknownSkill(format!(
+            "base_dir 不存在: {}",
+            base.display()
+        )));
     }
     if !base.is_dir() {
-        return Err(crate::SkillError::UnknownSkill(
-            format!("base_dir 不是目录: {}", base.display()),
-        ));
+        return Err(crate::SkillError::UnknownSkill(format!(
+            "base_dir 不是目录: {}",
+            base.display()
+        )));
     }
     let mut paths = Vec::new();
     for entry in WalkDir::new(base)
@@ -93,7 +95,9 @@ pub fn discover_descriptor_paths(base_dir: impl AsRef<Path>) -> SkillResult<Vec<
         if !p.is_file() {
             continue;
         }
-        let Some(name) = p.file_name().and_then(|s| s.to_str()) else { continue };
+        let Some(name) = p.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
         // Nested layout: <base>/<id>/descriptor.json
         if name == DESCRIPTOR_FILE {
             paths.push(p.to_path_buf());
@@ -126,9 +130,8 @@ pub fn detect_layout(path: impl AsRef<Path>, base_dir: impl AsRef<Path>) -> Desc
 /// 从单个 .json 文件 load 一个 SkillDescriptor (含 Skill 派生)
 pub fn load_one(path: impl AsRef<Path>) -> SkillResult<(Skill, SkillDescriptor)> {
     let p = path.as_ref();
-    let meta = fs::metadata(p).map_err(|e| {
-        crate::SkillError::UnknownSkill(format!("stat {}: {}", p.display(), e))
-    })?;
+    let meta = fs::metadata(p)
+        .map_err(|e| crate::SkillError::UnknownSkill(format!("stat {}: {}", p.display(), e)))?;
     if meta.len() > MAX_DESCRIPTOR_BYTES {
         return Err(crate::SkillError::UnknownSkill(format!(
             "descriptor 太大: {} ({} > {})",
@@ -137,12 +140,10 @@ pub fn load_one(path: impl AsRef<Path>) -> SkillResult<(Skill, SkillDescriptor)>
             MAX_DESCRIPTOR_BYTES
         )));
     }
-    let text = fs::read_to_string(p).map_err(|e| {
-        crate::SkillError::UnknownSkill(format!("read {}: {}", p.display(), e))
-    })?;
-    let descriptor: SkillDescriptor = serde_json::from_str(&text).map_err(|e| {
-        crate::SkillError::UnknownSkill(format!("parse {}: {}", p.display(), e))
-    })?;
+    let text = fs::read_to_string(p)
+        .map_err(|e| crate::SkillError::UnknownSkill(format!("read {}: {}", p.display(), e)))?;
+    let descriptor: SkillDescriptor = serde_json::from_str(&text)
+        .map_err(|e| crate::SkillError::UnknownSkill(format!("parse {}: {}", p.display(), e)))?;
     descriptor.validate_for_loader()?;
     let skill = Skill::new(
         descriptor.id.clone(),
@@ -195,7 +196,11 @@ pub fn load_registry_from_dir(
                 entries.push(LoadedDescriptor {
                     path: path.clone(),
                     layout,
-                    descriptor: if reg_result.is_ok() { Some(descriptor) } else { None },
+                    descriptor: if reg_result.is_ok() {
+                        Some(descriptor)
+                    } else {
+                        None
+                    },
                     error: reg_result.err().map(|e| e.to_string()),
                 });
             }
@@ -219,7 +224,10 @@ pub fn report_to_markdown(entries: &[LoadedDescriptor]) -> String {
     let total = entries.len();
     let loaded = entries.iter().filter(|e| e.descriptor.is_some()).count();
     let failed = total - loaded;
-    out.push_str(&format!("- Total: {}\n- Loaded: {}\n- Failed: {}\n\n", total, loaded, failed));
+    out.push_str(&format!(
+        "- Total: {}\n- Loaded: {}\n- Failed: {}\n\n",
+        total, loaded, failed
+    ));
     out.push_str("| Path | Layout | Status | Error |\n");
     out.push_str("|------|--------|--------|-------|\n");
     for e in entries {
@@ -397,5 +405,3 @@ mod tests {
         p
     }
 }
-
-

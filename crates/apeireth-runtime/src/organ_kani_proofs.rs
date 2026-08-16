@@ -40,4 +40,3 @@ fn r177_rt_kani_01_capacity_positive() {
 fn r177_rt_kani_02_tick_positive() {
     assert!(DEFAULT_TICK_INTERVAL_SECS >= 1);
 }
-

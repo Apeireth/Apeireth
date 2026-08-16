@@ -37,7 +37,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         "<too short>".to_string()
     };
-    println!("[1] API key loaded: {} (len={})", key_preview, api_key.len());
+    println!(
+        "[1] API key loaded: {} (len={})",
+        key_preview,
+        api_key.len()
+    );
 
     // 2. Build Runtime + register LlmWorker.
     let mut config = RuntimeConfig::default();
@@ -53,17 +57,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 3. Dispatch a real prompt.
     let prompt = "Reply with exactly: hello from MiniMax";
     let params = serde_json::json!({"prompt": prompt, "system": "be terse"});
-    let task_id = rt
-        .dispatch_async_task("llm", &params.to_string())
-        .await;
-    println!("[3] Dispatched task_id={} with prompt=\"{}\"", task_id, prompt);
+    let task_id = rt.dispatch_async_task("llm", &params.to_string()).await;
+    println!(
+        "[3] Dispatched task_id={} with prompt=\"{}\"",
+        task_id, prompt
+    );
 
     // 4. Wait for completion (or failure).
     let deadline = Duration::from_secs(30);
-    let rec = rt
-        .task_store
-        .wait_for_completion(task_id, deadline)
-        .await?;
+    let rec = rt.task_store.wait_for_completion(task_id, deadline).await?;
     println!("[4] Task status: {:?}", rec.status);
     println!("[4] Task result_json: {:?}", rec.result_json);
     println!("[4] Task error: {:?}", rec.error);

@@ -83,11 +83,7 @@ pub struct LogEntry {
 
 impl LogEntry {
     /// 新建 (PII 自动脱敏 message).
-    pub fn new(
-        level: LogLevel,
-        target: impl Into<String>,
-        message: impl Into<String>,
-    ) -> Self {
+    pub fn new(level: LogLevel, target: impl Into<String>, message: impl Into<String>) -> Self {
         let raw = message.into();
         let redacted = redact_pii(&raw).unwrap_or_else(|| {
             warn!("logging: PII redaction returned None, using original");
@@ -143,11 +139,21 @@ pub fn log_structured(
     // 注意: tracing macro 的 `target` 字段必须是字符串字面值, 不能用变量. 把 target 放 entry 已含.
     let target_owned = target.to_string();
     match level {
-        LogLevel::Debug => info!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log"),
-        LogLevel::Info => info!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log"),
-        LogLevel::Warn => warn!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log"),
-        LogLevel::Error => tracing::error!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log"),
-        LogLevel::Critical => tracing::error!(target = "apeireth_observability", module = %target_owned, critical = true, "structured log"),
+        LogLevel::Debug => {
+            info!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log")
+        }
+        LogLevel::Info => {
+            info!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log")
+        }
+        LogLevel::Warn => {
+            warn!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log")
+        }
+        LogLevel::Error => {
+            tracing::error!(target = "apeireth_observability", module = %target_owned, log_entry = ?entry, "structured log")
+        }
+        LogLevel::Critical => {
+            tracing::error!(target = "apeireth_observability", module = %target_owned, critical = true, "structured log")
+        }
     }
 
     entry
@@ -203,7 +209,10 @@ mod tests {
         let back: LogEntry = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back.level, LogLevel::Warn);
         assert_eq!(back.target, "apeireth_observability::test");
-        assert_eq!(back.trace_id.as_deref(), Some("0af7651916cd43dd8448eb211c80319c"));
+        assert_eq!(
+            back.trace_id.as_deref(),
+            Some("0af7651916cd43dd8448eb211c80319c")
+        );
     }
 
     #[test]

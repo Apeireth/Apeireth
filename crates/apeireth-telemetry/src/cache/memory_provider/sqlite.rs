@@ -61,9 +61,8 @@ impl SqliteProvider {
     ///
     /// K-1 强校验: SQLite I/O 失败返 `BackendIoError`.
     pub fn open<P: AsRef<Path>>(path: P) -> MemoryProviderResult<Self> {
-        let conn = Connection::open(path).map_err(|e| {
-            MemoryProviderError::BackendIoError(format!("sqlite open failed: {e}"))
-        })?;
+        let conn = Connection::open(path)
+            .map_err(|e| MemoryProviderError::BackendIoError(format!("sqlite open failed: {e}")))?;
         Self::init_schema(&conn)?;
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -164,80 +163,88 @@ impl MemoryProvider for SqliteProvider {
         let conn = self.conn.clone();
         let q_id = q.id.clone();
         let q_contains = q.content_contains.clone();
-        let result: Vec<MemoryEntry> = tokio::task::spawn_blocking(move || -> MemoryProviderResult<Vec<MemoryEntry>> {
-            let guard = conn.lock();
-            let mut stmt = guard.prepare(&sql).map_err(|e| {
-                MemoryProviderError::BackendIoError(format!("sqlite prepare failed: {e}"))
-            })?;
-            let rows = match (has_id, has_contains) {
-                (true, true) => stmt
-                    .query_map(
-                        params![q_id.unwrap(), format!("%{}%", q_contains.unwrap())],
-                        row_to_entry,
-                    )
-                    .map_err(|e| {
-                        MemoryProviderError::BackendIoError(format!(
-                            "sqlite query_map failed: {e}"
-                        ))
-                    })?,
-                (true, false) => stmt
-                    .query_map(params![q_id.unwrap()], row_to_entry)
-                    .map_err(|e| {
-                        MemoryProviderError::BackendIoError(format!(
-                            "sqlite query_map failed: {e}"
-                        ))
-                    })?,
-                (false, true) => stmt
-                    .query_map(params![format!("%{}%", q_contains.unwrap())], row_to_entry)
-                    .map_err(|e| {
-                        MemoryProviderError::BackendIoError(format!(
-                            "sqlite query_map failed: {e}"
-                        ))
-                    })?,
-                _ => unreachable!(),
-            };
-            let mut out = Vec::new();
-            for row in rows {
-                let e = row.map_err(|e| {
-                    MemoryProviderError::BackendIoError(format!("sqlite row read failed: {e}"))
+        let result: Vec<MemoryEntry> =
+            tokio::task::spawn_blocking(move || -> MemoryProviderResult<Vec<MemoryEntry>> {
+                let guard = conn.lock();
+                let mut stmt = guard.prepare(&sql).map_err(|e| {
+                    MemoryProviderError::BackendIoError(format!("sqlite prepare failed: {e}"))
                 })?;
-                out.push(e);
-            }
-            Ok(out)
-        })
-        .await
-        .map_err(|e| {
-            MemoryProviderError::BackendIoError(format!("spawn_blocking join failed: {e}"))
-        })??;
+                let rows = match (has_id, has_contains) {
+                    (true, true) => stmt
+                        .query_map(
+                            params![q_id.unwrap(), format!("%{}%", q_contains.unwrap())],
+                            row_to_entry,
+                        )
+                        .map_err(|e| {
+                            MemoryProviderError::BackendIoError(format!(
+                                "sqlite query_map failed: {e}"
+                            ))
+                        })?,
+                    (true, false) => stmt
+                        .query_map(params![q_id.unwrap()], row_to_entry)
+                        .map_err(|e| {
+                            MemoryProviderError::BackendIoError(format!(
+                                "sqlite query_map failed: {e}"
+                            ))
+                        })?,
+                    (false, true) => stmt
+                        .query_map(params![format!("%{}%", q_contains.unwrap())], row_to_entry)
+                        .map_err(|e| {
+                            MemoryProviderError::BackendIoError(format!(
+                                "sqlite query_map failed: {e}"
+                            ))
+                        })?,
+                    _ => unreachable!(),
+                };
+                let mut out = Vec::new();
+                for row in rows {
+                    let e = row.map_err(|e| {
+                        MemoryProviderError::BackendIoError(format!("sqlite row read failed: {e}"))
+                    })?;
+                    out.push(e);
+                }
+                Ok(out)
+            })
+            .await
+            .map_err(|e| {
+                MemoryProviderError::BackendIoError(format!("spawn_blocking join failed: {e}"))
+            })??;
         Ok(result)
     }
 
     async fn clear(&self, id: Option<&str>) -> MemoryProviderResult<()> {
         let conn = self.conn.clone();
         let id_owned = id.map(|s| s.to_string());
-        let affected: usize = tokio::task::spawn_blocking(move || -> MemoryProviderResult<usize> {
-            let guard = conn.lock();
-            match &id_owned {
-                Some(id) => {
-                    let n = guard
-                        .execute("DELETE FROM memory_entries WHERE id = ?1", params![id])
-                        .map_err(|e| {
-                            MemoryProviderError::BackendIoError(format!("sqlite delete failed: {e}"))
-                        })?;
-                    Ok(n)
+        let affected: usize =
+            tokio::task::spawn_blocking(move || -> MemoryProviderResult<usize> {
+                let guard = conn.lock();
+                match &id_owned {
+                    Some(id) => {
+                        let n = guard
+                            .execute("DELETE FROM memory_entries WHERE id = ?1", params![id])
+                            .map_err(|e| {
+                                MemoryProviderError::BackendIoError(format!(
+                                    "sqlite delete failed: {e}"
+                                ))
+                            })?;
+                        Ok(n)
+                    }
+                    None => {
+                        let n = guard
+                            .execute("DELETE FROM memory_entries", [])
+                            .map_err(|e| {
+                                MemoryProviderError::BackendIoError(format!(
+                                    "sqlite delete all failed: {e}"
+                                ))
+                            })?;
+                        Ok(n)
+                    }
                 }
-                None => {
-                    let n = guard.execute("DELETE FROM memory_entries", []).map_err(|e| {
-                        MemoryProviderError::BackendIoError(format!("sqlite delete all failed: {e}"))
-                    })?;
-                    Ok(n)
-                }
-            }
-        })
-        .await
-        .map_err(|e| {
-            MemoryProviderError::BackendIoError(format!("spawn_blocking join failed: {e}"))
-        })??;
+            })
+            .await
+            .map_err(|e| {
+                MemoryProviderError::BackendIoError(format!("spawn_blocking join failed: {e}"))
+            })??;
         if id.is_some() && affected == 0 {
             return Err(MemoryProviderError::NotFound(id.unwrap().to_string()));
         }

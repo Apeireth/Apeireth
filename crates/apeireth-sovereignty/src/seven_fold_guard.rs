@@ -199,11 +199,13 @@ impl<'a> SevenFoldGuardRunner<'a> {
                         dsl: dsl_verdict,
                         skill: skill_outcome,
                     }),
-                    SkillGuardOutcome::Blocked { reason } => Ok(SevenFoldGuardOutcome::BlockedAtSkill {
-                        reason: reason.clone(),
-                        governance: gov_outcome,
-                        dsl: dsl_verdict,
-                    }),
+                    SkillGuardOutcome::Blocked { reason } => {
+                        Ok(SevenFoldGuardOutcome::BlockedAtSkill {
+                            reason: reason.clone(),
+                            governance: gov_outcome,
+                            dsl: dsl_verdict,
+                        })
+                    }
                     SkillGuardOutcome::PendingReview { state } => {
                         Ok(SevenFoldGuardOutcome::PendingReview {
                             state: state.clone(),
@@ -254,7 +256,11 @@ mod tests {
         let governance = Governance::default();
         let runner = SevenFoldGuardRunner::new(&governance);
         for id in SkillId::ALL {
-            assert!(runner.skill_registry.get(id).is_some(), "Skill {:?} 未注册", id);
+            assert!(
+                runner.skill_registry.get(id).is_some(),
+                "Skill {:?} 未注册",
+                id
+            );
         }
     }
 
