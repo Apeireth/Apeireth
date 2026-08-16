@@ -320,9 +320,9 @@ pub const EXPORTER_KIND_COUNT: usize = 4;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::context::TraceContext;
     use super::super::span::SpanKind;
+    use super::*;
 
     fn sample_span() -> Span {
         Span::new(
@@ -380,7 +380,9 @@ mod tests {
     fn test_factory() {
         let _stdout: Box<dyn SpanExporter> = build_exporter(ExporterKind::Stdout, "", "");
         let _file: Box<dyn SpanExporter> = build_exporter(ExporterKind::File, "", "/tmp/x.jsonl");
-        let _otlp: Box<dyn SpanExporter> = build_exporter(ExporterKind::OtlpGrpc, "http://x:4317", "");
-        let _jaeger: Box<dyn SpanExporter> = build_exporter(ExporterKind::Jaeger, "http://x:14268", "");
+        let _otlp: Box<dyn SpanExporter> =
+            build_exporter(ExporterKind::OtlpGrpc, "http://x:4317", "");
+        let _jaeger: Box<dyn SpanExporter> =
+            build_exporter(ExporterKind::Jaeger, "http://x:14268", "");
     }
 }

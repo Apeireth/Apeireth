@@ -186,7 +186,10 @@ mod tests {
     /// 守门 #7: FromStr 解析.
     #[test]
     fn backend_kind_from_str_works() {
-        assert_eq!("MEMORY".parse::<BackendKind>().unwrap(), BackendKind::Memory);
+        assert_eq!(
+            "MEMORY".parse::<BackendKind>().unwrap(),
+            BackendKind::Memory
+        );
         assert_eq!("redis".parse::<BackendKind>().unwrap(), BackendKind::Redis);
         assert!("NOPE".parse::<BackendKind>().is_err());
     }

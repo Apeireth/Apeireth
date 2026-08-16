@@ -10,26 +10,39 @@
 
 #![allow(missing_docs)]
 
-use super::self_disable::{SelfDisableCheck, SelfDisableGuard, SelfDisableRecord, SelfDisableTrigger};
+use super::self_disable::{
+    SelfDisableCheck, SelfDisableGuard, SelfDisableRecord, SelfDisableTrigger,
+};
 
 fn trigger_no_degrade() -> SelfDisableTrigger {
-    SelfDisableTrigger::NoDegradeViolation { from: "high".to_string(), to: "low".to_string() }
+    SelfDisableTrigger::NoDegradeViolation {
+        from: "high".to_string(),
+        to: "low".to_string(),
+    }
 }
 
 fn trigger_no_patch() -> SelfDisableTrigger {
-    SelfDisableTrigger::NoPatchViolation { rule: "principle_keys_count".to_string() }
+    SelfDisableTrigger::NoPatchViolation {
+        rule: "principle_keys_count".to_string(),
+    }
 }
 
 fn trigger_no_bypass() -> SelfDisableTrigger {
-    SelfDisableTrigger::NoBypassViolation { token: "MasterToken".to_string() }
+    SelfDisableTrigger::NoBypassViolation {
+        token: "MasterToken".to_string(),
+    }
 }
 
 fn trigger_no_reverse() -> SelfDisableTrigger {
-    SelfDisableTrigger::NoReverseViolation { trigger_id: "x".to_string() }
+    SelfDisableTrigger::NoReverseViolation {
+        trigger_id: "x".to_string(),
+    }
 }
 
 fn trigger_no_hide() -> SelfDisableTrigger {
-    SelfDisableTrigger::NoHideViolation { window_id: "w1".to_string() }
+    SelfDisableTrigger::NoHideViolation {
+        window_id: "w1".to_string(),
+    }
 }
 
 // ============================================================================
@@ -74,15 +87,27 @@ fn r253_01_no_revoke_when_triggered() {
     // disarm + rearm 不删除
     guard.disarm();
     guard.rearm();
-    assert_eq!(guard.record_count(), 5, "disarm/rearm does not delete records");
+    assert_eq!(
+        guard.record_count(),
+        5,
+        "disarm/rearm does not delete records"
+    );
 
     // has_triggered() 不删
     let _ = guard.has_triggered();
-    assert_eq!(guard.record_count(), 5, "has_triggered() does not delete records");
+    assert_eq!(
+        guard.record_count(),
+        5,
+        "has_triggered() does not delete records"
+    );
 
     // records_by_mechanism() 不删
     let _ = guard.records_by_mechanism(1);
-    assert_eq!(guard.record_count(), 5, "records_by_mechanism() does not delete records");
+    assert_eq!(
+        guard.record_count(),
+        5,
+        "records_by_mechanism() does not delete records"
+    );
 }
 
 // ============================================================================
@@ -101,7 +126,10 @@ fn proof_armed_blocks_all_violations() {
         let _ = guard.check_no_degrade("high", "low", "ctx", i as i64);
     }
 
-    assert!(guard.has_triggered(), "armed guard must have triggered records");
+    assert!(
+        guard.has_triggered(),
+        "armed guard must have triggered records"
+    );
     assert_eq!(guard.record_count(), 3);
 }
 
@@ -120,7 +148,10 @@ fn r253_02_armed_blocks_all_violations() {
 
     // 每条 record 都从 SelfDisableCheck::Triggered 出来
     let _ = SelfDisableCheck::Triggered(SelfDisableRecord::new(
-        "test", 100, trigger_no_patch(), "test",
+        "test",
+        100,
+        trigger_no_patch(),
+        "test",
     ));
 }
 
@@ -140,7 +171,10 @@ fn proof_no_path_disarm_when_triggered() {
     // disarm + rearm 不消除触发状态
     guard.disarm();
     guard.rearm();
-    assert!(guard.has_triggered(), "disarm/rearm must not clear triggered state");
+    assert!(
+        guard.has_triggered(),
+        "disarm/rearm must not clear triggered state"
+    );
 
     // 多次循环 disarm/rearm
     for _ in 0..3 {
@@ -167,7 +201,11 @@ fn r253_03_no_path_disarm_when_triggered() {
     for i in 0..5 {
         guard.disarm();
         guard.rearm();
-        assert!(guard.has_triggered(), "iteration {} must still be triggered", i);
+        assert!(
+            guard.has_triggered(),
+            "iteration {} must still be triggered",
+            i
+        );
     }
 
     // records 计数不变
@@ -208,7 +246,6 @@ fn r253_04_integration_all_three_properties_hold() {
     assert!(guard.has_triggered());
 }
 
-
 // ============================================================================
 // R268: 实战触发链 3 proof — disarm/pass/serialization invariants
 // ============================================================================
@@ -227,7 +264,11 @@ fn proof_disarmed_blocks_all_triggers() {
     let _ = guard.check_no_bypass("master", false, "ctx", 2);
     let _ = guard.check_no_reverse("x", "ctx", 3);
     let _ = guard.check_no_hide("w1", "ctx", 4);
-    assert_eq!(guard.record_count(), 0, "disarmed guard must record 0 events");
+    assert_eq!(
+        guard.record_count(),
+        0,
+        "disarmed guard must record 0 events"
+    );
 }
 
 /// cargo test 镜像.
@@ -239,7 +280,8 @@ fn r268_01_disarmed_blocks_all_triggers() {
     let mut any_triggered = false;
     for i in 0..10 {
         if let super::self_disable::SelfDisableCheck::Triggered(_) =
-            guard.check_no_degrade("high", "low", "ctx", i) {
+            guard.check_no_degrade("high", "low", "ctx", i)
+        {
             any_triggered = true;
             break;
         }
@@ -273,7 +315,10 @@ fn r268_02_rearm_restores_armed() {
     assert!(guard.is_armed, "rearm must restore armed=true");
 
     let r = guard.check_no_degrade("high", "low", "ctx", 0);
-    assert!(matches!(r, super::self_disable::SelfDisableCheck::Triggered(_)));
+    assert!(matches!(
+        r,
+        super::self_disable::SelfDisableCheck::Triggered(_)
+    ));
 }
 
 /// R268 Property 6: pass path never increments record_count.
@@ -285,7 +330,7 @@ fn proof_pass_path_no_record() {
 
     // check_no_degrade with same risk_level = Pass (not violation)
     let _ = guard.check_no_degrade("high", "high", "ctx", 0);
-    let _ = guard.check_no_degrade("low", "high", "ctx", 1);  // upgrade OK
+    let _ = guard.check_no_degrade("low", "high", "ctx", 1); // upgrade OK
     let _ = guard.check_no_degrade("medium", "medium", "ctx", 2);
 
     assert_eq!(guard.record_count(), before, "Pass path must not record");
@@ -319,7 +364,11 @@ fn proof_trigger_id_uniqueness() {
     for i in 0..5 {
         let r = guard.check_no_degrade("high", "low", "ctx", i);
         if let super::self_disable::SelfDisableCheck::Triggered(rec) = r {
-            assert!(!ids.contains(&rec.trigger_id), "trigger_id must be unique: {}", rec.trigger_id);
+            assert!(
+                !ids.contains(&rec.trigger_id),
+                "trigger_id must be unique: {}",
+                rec.trigger_id
+            );
             ids.insert(rec.trigger_id);
         }
     }
@@ -334,8 +383,13 @@ fn r268_04_trigger_id_uniqueness() {
 
     for i in 0..20 {
         if let super::self_disable::SelfDisableCheck::Triggered(rec) =
-            guard.check_no_degrade("high", "low", &format!("ctx-{}", i), i) {
-            assert!(!ids.contains(&rec.trigger_id), "duplicate trigger_id: {}", rec.trigger_id);
+            guard.check_no_degrade("high", "low", &format!("ctx-{}", i), i)
+        {
+            assert!(
+                !ids.contains(&rec.trigger_id),
+                "duplicate trigger_id: {}",
+                rec.trigger_id
+            );
             ids.insert(rec.trigger_id);
         }
     }

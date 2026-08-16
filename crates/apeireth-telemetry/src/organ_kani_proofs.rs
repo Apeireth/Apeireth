@@ -42,4 +42,3 @@ fn r177_tel_kani_01_mods_count() {
 fn r177_tel_kani_02_mods_nonempty() {
     assert!(ALL_MODS.iter().all(|m| !m.is_empty()));
 }
-

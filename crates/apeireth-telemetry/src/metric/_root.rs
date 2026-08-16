@@ -1,11 +1,9 @@
-
 #![warn(missing_docs)]
 #![allow(clippy::all)]
 
 // ============================================================================
 // 模块声明
 // ============================================================================
-
 
 // ============================================================================
 // Re-export (主入口便捷)
@@ -683,14 +681,10 @@ mod tests {
     /// 守门 #32: 4 type 全实现 Metric trait.
     #[test]
     fn all_4_metric_types_implement_trait() {
-        let c: Box<dyn Metric> =
-            Box::new(Counter::new("c", "h", HashMap::new()).unwrap());
-        let g: Box<dyn Metric> =
-            Box::new(Gauge::new("g", "h", HashMap::new()).unwrap());
-        let h: Box<dyn Metric> =
-            Box::new(Histogram::new("h", "h", HashMap::new()).unwrap());
-        let s: Box<dyn Metric> =
-            Box::new(Summary::new("s", "h", HashMap::new()).unwrap());
+        let c: Box<dyn Metric> = Box::new(Counter::new("c", "h", HashMap::new()).unwrap());
+        let g: Box<dyn Metric> = Box::new(Gauge::new("g", "h", HashMap::new()).unwrap());
+        let h: Box<dyn Metric> = Box::new(Histogram::new("h", "h", HashMap::new()).unwrap());
+        let s: Box<dyn Metric> = Box::new(Summary::new("s", "h", HashMap::new()).unwrap());
         assert_eq!(c.type_name(), "counter");
         assert_eq!(g.type_name(), "gauge");
         assert_eq!(h.type_name(), "histogram");

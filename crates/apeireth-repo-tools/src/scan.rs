@@ -167,7 +167,10 @@ impl Language {
     /// 从 shebang 推断语言 (兜底, 估 4 类: sh/python/node/ruby).
     pub fn from_shebang(line: &str) -> Option<Self> {
         let lower = line.to_lowercase();
-        if lower.starts_with("#!/bin/sh") || lower.starts_with("#!/bin/bash") || lower.contains("env bash") {
+        if lower.starts_with("#!/bin/sh")
+            || lower.starts_with("#!/bin/bash")
+            || lower.contains("env bash")
+        {
             Some(Self::Shell)
         } else if lower.starts_with("#!/usr/bin/python") || lower.contains("env python") {
             Some(Self::Python)
@@ -237,7 +240,12 @@ pub struct RepoState {
 
 impl Default for RepoState {
     fn default() -> Self {
-        Self { branch: None, remote: None, latest_commit: None, dirty_files: vec![] }
+        Self {
+            branch: None,
+            remote: None,
+            latest_commit: None,
+            dirty_files: vec![],
+        }
     }
 }
 
@@ -383,7 +391,11 @@ pub trait RepoScannerTrait: Send + Sync {
     /// 清缓存.
     async fn cache_clear(&self, root: &Path) -> RepoScanResult2<()>;
     /// 敏感信息 grep.
-    async fn sensitive_grep(&self, root: &Path, patterns: &[String]) -> RepoScanResult2<Vec<SensitiveHit>>;
+    async fn sensitive_grep(
+        &self,
+        root: &Path,
+        patterns: &[String],
+    ) -> RepoScanResult2<Vec<SensitiveHit>>;
 }
 
 // ============================================================================
@@ -402,13 +414,19 @@ impl ReportGenerator {
     /// 生成 Markdown 报告 (估 5 段: 概览 / 关键文件 / 语言统计 / Git 状态 / 敏感命中).
     pub fn to_markdown(result: &RepoScanResult) -> String {
         let mut out = String::new();
-        out.push_str(&format!("# Repo Scan Report — {}\n\n", result.root_path.display()));
+        out.push_str(&format!(
+            "# Repo Scan Report — {}\n\n",
+            result.root_path.display()
+        ));
         out.push_str(&format!("- Schema version: `{}`\n", result.schema_version));
         out.push_str(&format!("- Scanned at: `{}`\n", result.scanned_at));
         out.push_str(&format!("- Duration: `{}ms`\n", result.duration_ms));
         out.push_str(&format!("- Total files: `{}`\n", result.files.len()));
         out.push_str(&format!("- Key files: `{}`\n", result.key_files.len()));
-        out.push_str(&format!("- Sensitive hits: `{}`\n\n", result.sensitive_hits.len()));
+        out.push_str(&format!(
+            "- Sensitive hits: `{}`\n\n",
+            result.sensitive_hits.len()
+        ));
 
         out.push_str("## Key Files\n\n");
         for kf in &result.key_files {
@@ -420,21 +438,44 @@ impl ReportGenerator {
         for (lang, stats) in &result.language_stats {
             out.push_str(&format!(
                 "| {:?} | {} | {} | {} | {} | {} |\n",
-                lang, stats.file_count, stats.total_loc, stats.total_comment_lines,
-                stats.total_blank_lines, stats.total_bytes
+                lang,
+                stats.file_count,
+                stats.total_loc,
+                stats.total_comment_lines,
+                stats.total_blank_lines,
+                stats.total_bytes
             ));
         }
 
         out.push_str("\n## Git State\n\n");
-        out.push_str(&format!("- Branch: `{}`\n", result.git_state.branch.as_deref().unwrap_or("(none)")));
-        out.push_str(&format!("- Remote: `{}`\n", result.git_state.remote.as_deref().unwrap_or("(none)")));
-        out.push_str(&format!("- Latest commit: `{}`\n", result.git_state.latest_commit.as_deref().unwrap_or("(none)")));
-        out.push_str(&format!("- Dirty files: `{}`\n", result.git_state.dirty_files.len()));
+        out.push_str(&format!(
+            "- Branch: `{}`\n",
+            result.git_state.branch.as_deref().unwrap_or("(none)")
+        ));
+        out.push_str(&format!(
+            "- Remote: `{}`\n",
+            result.git_state.remote.as_deref().unwrap_or("(none)")
+        ));
+        out.push_str(&format!(
+            "- Latest commit: `{}`\n",
+            result
+                .git_state
+                .latest_commit
+                .as_deref()
+                .unwrap_or("(none)")
+        ));
+        out.push_str(&format!(
+            "- Dirty files: `{}`\n",
+            result.git_state.dirty_files.len()
+        ));
 
         if !result.sensitive_hits.is_empty() {
             out.push_str("\n## Sensitive Hits\n\n");
             for hit in &result.sensitive_hits {
-                out.push_str(&format!("- `{}:{}` [{}] {}\n", hit.file, hit.line, hit.pattern, hit.preview));
+                out.push_str(&format!(
+                    "- `{}:{}` [{}] {}\n",
+                    hit.file, hit.line, hit.pattern, hit.preview
+                ));
             }
         }
 
@@ -474,20 +515,28 @@ impl RepoScanCache {
         let key = Self::cache_key(root);
         let path = self.cache_dir.join(format!("{key}.json"));
         if !path.exists() {
-            return Err(RepoScanError::CacheIo(format!("no cache: {}", path.display())));
+            return Err(RepoScanError::CacheIo(format!(
+                "no cache: {}",
+                path.display()
+            )));
         }
-        let content = std::fs::read_to_string(&path).map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
+        let content =
+            std::fs::read_to_string(&path).map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
         let entry: CacheEntry = serde_json::from_str(&content)?;
         let age_days = (Utc::now() - entry.cached_at).num_days().max(0) as u64;
         if age_days > SCAN_CACHE_TTL_DAYS {
-            return Err(RepoScanError::CacheExpired { age_days, ttl_days: SCAN_CACHE_TTL_DAYS });
+            return Err(RepoScanError::CacheExpired {
+                age_days,
+                ttl_days: SCAN_CACHE_TTL_DAYS,
+            });
         }
         Ok(entry)
     }
 
     /// 写缓存.
     pub fn put(&self, root: &Path, result: &RepoScanResult) -> RepoScanResult2<()> {
-        std::fs::create_dir_all(&self.cache_dir).map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
+        std::fs::create_dir_all(&self.cache_dir)
+            .map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
         let key = Self::cache_key(root);
         let path = self.cache_dir.join(format!("{key}.json"));
         let entry = CacheEntry {
@@ -504,7 +553,8 @@ impl RepoScanCache {
     /// 清缓存.
     pub fn clear(&self) -> RepoScanResult2<()> {
         if self.cache_dir.exists() {
-            std::fs::remove_dir_all(&self.cache_dir).map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
+            std::fs::remove_dir_all(&self.cache_dir)
+                .map_err(|e| RepoScanError::CacheIo(e.to_string()))?;
         }
         Ok(())
     }
@@ -581,7 +631,11 @@ impl RepoScannerTrait for RepoScanner {
         Ok(())
     }
 
-    async fn sensitive_grep(&self, root: &Path, _patterns: &[String]) -> RepoScanResult2<Vec<SensitiveHit>> {
+    async fn sensitive_grep(
+        &self,
+        root: &Path,
+        _patterns: &[String],
+    ) -> RepoScanResult2<Vec<SensitiveHit>> {
         let r = self.scan(root).await?;
         Ok(r.sensitive_hits)
     }

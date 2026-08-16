@@ -7,9 +7,9 @@
 //! 7 演示段, 0 装 PASS 严守 (✅ cloned = 真实施).
 
 use apeireth_skills::skill_executor::{
-    categories_in_pattern, category_to_pattern, ExecutionPattern, MetaCycle, MetaPhase,
-    ParallelCycle, ParallelPhase, PlanExecuteVerifyCycle, PlanPhase, ReviewCycle, ReviewPhase,
-    SkillCategory, TddCycle, TddPhase, pattern_step_count, pattern_steps,
+    categories_in_pattern, category_to_pattern, pattern_step_count, pattern_steps,
+    ExecutionPattern, MetaCycle, MetaPhase, ParallelCycle, ParallelPhase, PlanExecuteVerifyCycle,
+    PlanPhase, ReviewCycle, ReviewPhase, SkillCategory, TddCycle, TddPhase,
 };
 
 fn main() {
@@ -55,7 +55,11 @@ fn demo_1_categories_count() {
     assert_eq!(SkillCategory::COUNT, 14);
     assert_eq!(SkillCategory::ALL.len(), 14);
     for cat in SkillCategory::ALL.iter() {
-        println!("  - {:<32} (kebab: {})", format!("{:?}", cat), cat.kebab_name());
+        println!(
+            "  - {:<32} (kebab: {})",
+            format!("{:?}", cat),
+            cat.kebab_name()
+        );
     }
     println!();
 }
@@ -117,11 +121,18 @@ fn demo_4_plan_verify_iterate() {
 fn demo_5_parallel_cycle() {
     println!("--- Demo 5: ParallelCycle (Dispatch → Collect → Merge → Done) ---");
     let mut cycle = ParallelCycle::new(3);
-    println!("初始 phase: {}, task_count = {}", cycle.phase, cycle.task_count);
+    println!(
+        "初始 phase: {}, task_count = {}",
+        cycle.phase, cycle.task_count
+    );
     cycle.advance();
     println!("  → Collect: {}", cycle.phase);
     cycle.record_collected(3);
-    println!("  collected = {}, collection_rate = {}", cycle.collected, cycle.collection_rate());
+    println!(
+        "  collected = {}, collection_rate = {}",
+        cycle.collected,
+        cycle.collection_rate()
+    );
     cycle.advance();
     println!("  → Merge: {}", cycle.phase);
     cycle.record_merged(3);
@@ -157,7 +168,10 @@ fn demo_7_meta_cycle() {
     let mut cycle = MetaCycle::new();
     // 14 选 1: 选 TestDrivenDevelopment 准备写新 skill
     cycle.record_identified(SkillCategory::TestDrivenDevelopment);
-    println!("Identify 阶段: identified_skill = {:?}", cycle.identified_skill);
+    println!(
+        "Identify 阶段: identified_skill = {:?}",
+        cycle.identified_skill
+    );
     cycle.advance();
     println!("  → Author: {}", cycle.phase);
     cycle.record_authored("red-green-refactor-coach");

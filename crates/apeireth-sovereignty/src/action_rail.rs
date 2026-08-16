@@ -32,7 +32,8 @@
 //! - ❌ 不引入新 crate 依赖 (仅 serde + thiserror + workspace 已有)
 //! - ❌ 不引入 `unsafe`
 
-#![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+#![allow(missing_docs)]
+// R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 #![deny(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
@@ -279,10 +280,18 @@ impl ActionContext {
 pub struct InputMultiAiAction;
 
 impl Action for InputMultiAiAction {
-    fn id(&self) -> ActionId { ActionId::InputMultiAi }
-    fn name(&self) -> &str { "input-multi-ai" }
-    fn kind(&self) -> ActionKind { ActionKind::Input }
-    fn description(&self) -> &str { "借鉴 Guardrails Input rails + superpowers verification-before-completion 多源验证" }
+    fn id(&self) -> ActionId {
+        ActionId::InputMultiAi
+    }
+    fn name(&self) -> &str {
+        "input-multi-ai"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::Input
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails Input rails + superpowers verification-before-completion 多源验证"
+    }
     fn execute(&self, ctx: &ActionContext) -> ActionOutcome {
         // 借鉴 Guardrails Input rails reject 模式: 简单 heuristic
         // (真实施多 AI 需要 LLM, 这里仅 sync struct impl, 借鉴公开模式)
@@ -305,12 +314,23 @@ impl Action for InputMultiAiAction {
 pub struct DialogMultiHumanAction;
 
 impl Action for DialogMultiHumanAction {
-    fn id(&self) -> ActionId { ActionId::DialogMultiHuman }
-    fn name(&self) -> &str { "dialog-multi-human" }
-    fn kind(&self) -> ActionKind { ActionKind::Dialog }
-    fn description(&self) -> &str { "借鉴 Guardrails Dialog rails + superpowers using-superpowers 多人共识" }
+    fn id(&self) -> ActionId {
+        ActionId::DialogMultiHuman
+    }
+    fn name(&self) -> &str {
+        "dialog-multi-human"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::Dialog
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails Dialog rails + superpowers using-superpowers 多人共识"
+    }
     fn execute(&self, _ctx: &ActionContext) -> ActionOutcome {
-        ActionOutcome::Pass { id: ActionId::DialogMultiHuman, name: self.name().to_string() }
+        ActionOutcome::Pass {
+            id: ActionId::DialogMultiHuman,
+            name: self.name().to_string(),
+        }
     }
 }
 
@@ -318,17 +338,31 @@ impl Action for DialogMultiHumanAction {
 pub struct ExecutionPhysicalMultisigAction;
 
 impl Action for ExecutionPhysicalMultisigAction {
-    fn id(&self) -> ActionId { ActionId::ExecutionPhysicalMultisig }
-    fn name(&self) -> &str { "execution-physical-multisig" }
-    fn kind(&self) -> ActionKind { ActionKind::Execution }
-    fn description(&self) -> &str { "借鉴 Guardrails Execution rails + superpowers dispatching-parallel-agents 工具多签" }
+    fn id(&self) -> ActionId {
+        ActionId::ExecutionPhysicalMultisig
+    }
+    fn name(&self) -> &str {
+        "execution-physical-multisig"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::Execution
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails Execution rails + superpowers dispatching-parallel-agents 工具多签"
+    }
     fn execute(&self, ctx: &ActionContext) -> ActionOutcome {
         if ctx.tool_call.is_none() {
             // 守门 Execution rails: 没 tool call 时 pass
-            ActionOutcome::Pass { id: ActionId::ExecutionPhysicalMultisig, name: self.name().to_string() }
+            ActionOutcome::Pass {
+                id: ActionId::ExecutionPhysicalMultisig,
+                name: self.name().to_string(),
+            }
         } else {
             // 借鉴 Guardrails Execution rails reject 模式
-            ActionOutcome::Pass { id: ActionId::ExecutionPhysicalMultisig, name: self.name().to_string() }
+            ActionOutcome::Pass {
+                id: ActionId::ExecutionPhysicalMultisig,
+                name: self.name().to_string(),
+            }
         }
     }
 }
@@ -337,21 +371,42 @@ impl Action for ExecutionPhysicalMultisigAction {
 pub struct RetrievalReflectionAction;
 
 impl Action for RetrievalReflectionAction {
-    fn id(&self) -> ActionId { ActionId::RetrievalReflection }
-    fn name(&self) -> &str { "retrieval-reflection" }
-    fn kind(&self) -> ActionKind { ActionKind::Retrieval }
-    fn description(&self) -> &str { "借鉴 Guardrails Retrieval rails + superpowers systematic-debugging 反思期" }
+    fn id(&self) -> ActionId {
+        ActionId::RetrievalReflection
+    }
+    fn name(&self) -> &str {
+        "retrieval-reflection"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::Retrieval
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails Retrieval rails + superpowers systematic-debugging 反思期"
+    }
     fn execute(&self, ctx: &ActionContext) -> ActionOutcome {
         // 借鉴 Guardrails Retrieval rails: 过滤空 chunk
-        let empty_count = ctx.retrieved_chunks.iter().filter(|c| c.trim().is_empty()).count();
+        let empty_count = ctx
+            .retrieved_chunks
+            .iter()
+            .filter(|c| c.trim().is_empty())
+            .count();
         if empty_count > 0 {
             ActionOutcome::Rewrite {
                 id: ActionId::RetrievalReflection,
-                reason: format!("Filtered {} empty chunks (借鉴 Guardrails Retrieval rails)", empty_count),
-                rewritten: format!("{} chunks after filter", ctx.retrieved_chunks.len() - empty_count),
+                reason: format!(
+                    "Filtered {} empty chunks (借鉴 Guardrails Retrieval rails)",
+                    empty_count
+                ),
+                rewritten: format!(
+                    "{} chunks after filter",
+                    ctx.retrieved_chunks.len() - empty_count
+                ),
             }
         } else {
-            ActionOutcome::Pass { id: ActionId::RetrievalReflection, name: self.name().to_string() }
+            ActionOutcome::Pass {
+                id: ActionId::RetrievalReflection,
+                name: self.name().to_string(),
+            }
         }
     }
 }
@@ -360,10 +415,18 @@ impl Action for RetrievalReflectionAction {
 pub struct OutputMewgAction;
 
 impl Action for OutputMewgAction {
-    fn id(&self) -> ActionId { ActionId::OutputMewg }
-    fn name(&self) -> &str { "output-mewg" }
-    fn kind(&self) -> ActionKind { ActionKind::Output }
-    fn description(&self) -> &str { "借鉴 Guardrails Output rails 汇总守门" }
+    fn id(&self) -> ActionId {
+        ActionId::OutputMewg
+    }
+    fn name(&self) -> &str {
+        "output-mewg"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::Output
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails Output rails 汇总守门"
+    }
     fn execute(&self, ctx: &ActionContext) -> ActionOutcome {
         match &ctx.llm_output {
             Some(out) if out.trim().is_empty() => ActionOutcome::Block {
@@ -371,8 +434,14 @@ impl Action for OutputMewgAction {
                 reason: "Output rail: empty LLM output".to_string(),
                 at: Some("llm_output".to_string()),
             },
-            Some(_) => ActionOutcome::Pass { id: ActionId::OutputMewg, name: self.name().to_string() },
-            None => ActionOutcome::Pass { id: ActionId::OutputMewg, name: self.name().to_string() },
+            Some(_) => ActionOutcome::Pass {
+                id: ActionId::OutputMewg,
+                name: self.name().to_string(),
+            },
+            None => ActionOutcome::Pass {
+                id: ActionId::OutputMewg,
+                name: self.name().to_string(),
+            },
         }
     }
 }
@@ -381,12 +450,23 @@ impl Action for OutputMewgAction {
 pub struct SystemColangCompileAction;
 
 impl Action for SystemColangCompileAction {
-    fn id(&self) -> ActionId { ActionId::SystemColangCompile }
-    fn name(&self) -> &str { "system-colang-compile" }
-    fn kind(&self) -> ActionKind { ActionKind::SystemColang }
-    fn description(&self) -> &str { "整合 R125-5 Colang DSL 编译 (0 改入口签名)" }
+    fn id(&self) -> ActionId {
+        ActionId::SystemColangCompile
+    }
+    fn name(&self) -> &str {
+        "system-colang-compile"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::SystemColang
+    }
+    fn description(&self) -> &str {
+        "整合 R125-5 Colang DSL 编译 (0 改入口签名)"
+    }
     fn execute(&self, _ctx: &ActionContext) -> ActionOutcome {
-        ActionOutcome::Pass { id: ActionId::SystemColangCompile, name: self.name().to_string() }
+        ActionOutcome::Pass {
+            id: ActionId::SystemColangCompile,
+            name: self.name().to_string(),
+        }
     }
 }
 
@@ -394,12 +474,23 @@ impl Action for SystemColangCompileAction {
 pub struct SystemSkillInvokeAction;
 
 impl Action for SystemSkillInvokeAction {
-    fn id(&self) -> ActionId { ActionId::SystemSkillInvoke }
-    fn name(&self) -> &str { "system-skill-invoke" }
-    fn kind(&self) -> ActionKind { ActionKind::SystemSkill }
-    fn description(&self) -> &str { "整合 R126-guard-7 Skill 调用 (0 改入口签名)" }
+    fn id(&self) -> ActionId {
+        ActionId::SystemSkillInvoke
+    }
+    fn name(&self) -> &str {
+        "system-skill-invoke"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::SystemSkill
+    }
+    fn description(&self) -> &str {
+        "整合 R126-guard-7 Skill 调用 (0 改入口签名)"
+    }
     fn execute(&self, _ctx: &ActionContext) -> ActionOutcome {
-        ActionOutcome::Pass { id: ActionId::SystemSkillInvoke, name: self.name().to_string() }
+        ActionOutcome::Pass {
+            id: ActionId::SystemSkillInvoke,
+            name: self.name().to_string(),
+        }
     }
 }
 
@@ -407,12 +498,23 @@ impl Action for SystemSkillInvokeAction {
 pub struct SystemFlowDispatchAction;
 
 impl Action for SystemFlowDispatchAction {
-    fn id(&self) -> ActionId { ActionId::SystemFlowDispatch }
-    fn name(&self) -> &str { "system-flow-dispatch" }
-    fn kind(&self) -> ActionKind { ActionKind::SystemFlow }
-    fn description(&self) -> &str { "借鉴 Guardrails run_flows_in_parallel (colang/runtime.py:42)" }
+    fn id(&self) -> ActionId {
+        ActionId::SystemFlowDispatch
+    }
+    fn name(&self) -> &str {
+        "system-flow-dispatch"
+    }
+    fn kind(&self) -> ActionKind {
+        ActionKind::SystemFlow
+    }
+    fn description(&self) -> &str {
+        "借鉴 Guardrails run_flows_in_parallel (colang/runtime.py:42)"
+    }
     fn execute(&self, _ctx: &ActionContext) -> ActionOutcome {
-        ActionOutcome::Pass { id: ActionId::SystemFlowDispatch, name: self.name().to_string() }
+        ActionOutcome::Pass {
+            id: ActionId::SystemFlowDispatch,
+            name: self.name().to_string(),
+        }
     }
 }
 
@@ -443,12 +545,27 @@ impl ActionRegistry {
         let mut actions: BTreeMap<ActionId, Arc<dyn Action>> = BTreeMap::new();
         actions.insert(ActionId::InputMultiAi, Arc::new(InputMultiAiAction));
         actions.insert(ActionId::DialogMultiHuman, Arc::new(DialogMultiHumanAction));
-        actions.insert(ActionId::ExecutionPhysicalMultisig, Arc::new(ExecutionPhysicalMultisigAction));
-        actions.insert(ActionId::RetrievalReflection, Arc::new(RetrievalReflectionAction));
+        actions.insert(
+            ActionId::ExecutionPhysicalMultisig,
+            Arc::new(ExecutionPhysicalMultisigAction),
+        );
+        actions.insert(
+            ActionId::RetrievalReflection,
+            Arc::new(RetrievalReflectionAction),
+        );
         actions.insert(ActionId::OutputMewg, Arc::new(OutputMewgAction));
-        actions.insert(ActionId::SystemColangCompile, Arc::new(SystemColangCompileAction));
-        actions.insert(ActionId::SystemSkillInvoke, Arc::new(SystemSkillInvokeAction));
-        actions.insert(ActionId::SystemFlowDispatch, Arc::new(SystemFlowDispatchAction));
+        actions.insert(
+            ActionId::SystemColangCompile,
+            Arc::new(SystemColangCompileAction),
+        );
+        actions.insert(
+            ActionId::SystemSkillInvoke,
+            Arc::new(SystemSkillInvokeAction),
+        );
+        actions.insert(
+            ActionId::SystemFlowDispatch,
+            Arc::new(SystemFlowDispatchAction),
+        );
         Self { actions }
     }
     /// 注册自定义 action (借鉴 Guardrails `register_action`)
@@ -510,7 +627,9 @@ pub enum ActionError {
 impl ActionDispatcher {
     /// 新建 ActionDispatcher
     pub fn new() -> Self {
-        Self { registry: ActionRegistry::new() }
+        Self {
+            registry: ActionRegistry::new(),
+        }
     }
     /// 自定义 registry
     pub fn with_registry(mut self, registry: ActionRegistry) -> Self {
@@ -637,7 +756,9 @@ mod tests {
         let dispatcher = ActionDispatcher::new();
         let mut ctx = ActionContext::new("query");
         ctx.retrieved_chunks = vec!["".to_string(), "valid chunk".to_string(), "".to_string()];
-        let outcome = dispatcher.execute(ActionId::RetrievalReflection, &ctx).unwrap();
+        let outcome = dispatcher
+            .execute(ActionId::RetrievalReflection, &ctx)
+            .unwrap();
         assert!(matches!(outcome, ActionOutcome::Rewrite { .. }));
     }
 

@@ -40,4 +40,3 @@ fn r177_st_kani_01_modes_positive() {
 fn r177_st_kani_02_errors_positive() {
     assert!(STATE_ERROR_COUNT >= 1);
 }
-

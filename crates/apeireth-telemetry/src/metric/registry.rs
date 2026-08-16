@@ -27,8 +27,8 @@ use super::counter::Counter;
 use super::error::{MetricsError, MetricsResult};
 use super::gauge::Gauge;
 use super::histogram::Histogram;
-use super::Metric;
 use super::summary::Summary;
+use super::Metric;
 
 // ============================================================================
 // §1 RegisteredMetric enum (4 variant)
@@ -148,10 +148,8 @@ impl MetricsRegistry {
     /// 列出全部 (name + metric) 对.
     pub fn list_named(&self) -> Vec<(String, RegisteredMetric)> {
         let guard = self.inner.read();
-        let mut entries: Vec<(String, RegisteredMetric)> = guard
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let mut entries: Vec<(String, RegisteredMetric)> =
+            guard.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
         entries.sort_by(|a, b| a.0.cmp(&b.0));
         entries
     }
@@ -283,10 +281,8 @@ mod tests {
             .unwrap();
         r.register_gauge(Arc::new(Gauge::new("g", "h", HashMap::new()).unwrap()))
             .unwrap();
-        r.register_histogram(Arc::new(
-            Histogram::new("h", "h", HashMap::new()).unwrap(),
-        ))
-        .unwrap();
+        r.register_histogram(Arc::new(Histogram::new("h", "h", HashMap::new()).unwrap()))
+            .unwrap();
         r.register_summary(Arc::new(Summary::new("s", "h", HashMap::new()).unwrap()))
             .unwrap();
         let list = r.list();
@@ -317,10 +313,8 @@ mod tests {
             .unwrap();
         r.register_gauge(Arc::new(Gauge::new("g", "h", HashMap::new()).unwrap()))
             .unwrap();
-        r.register_histogram(Arc::new(
-            Histogram::new("h", "h", HashMap::new()).unwrap(),
-        ))
-        .unwrap();
+        r.register_histogram(Arc::new(Histogram::new("h", "h", HashMap::new()).unwrap()))
+            .unwrap();
         r.register_summary(Arc::new(Summary::new("s", "h", HashMap::new()).unwrap()))
             .unwrap();
         assert_eq!(r.len(), 4);
