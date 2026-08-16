@@ -38,6 +38,8 @@ pub struct PermissionPack {
     /// 花费预算 (对齐 hydra vault access: spend 上限; None = 不限)
     pub spend_budget: Option<u64>,
     pub spend_used: u64,
+    /// B3 沙盒参数口: 本包覆盖的工具执行时使用的资源限额 (None = 用桥级默认).
+    pub sandbox: Option<crate::sandbox::SandboxConfig>,
     pub activated_at_ms: i64,
     pub created_at_ms: i64,
 }
@@ -54,6 +56,7 @@ impl PermissionPack {
             used_ops: 0,
             spend_budget: None,
             spend_used: 0,
+            sandbox: None,
             activated_at_ms: now_ms(),
             created_at_ms: now_ms(),
         }
