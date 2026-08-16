@@ -215,7 +215,7 @@ impl TerminalBackend for LocalBackend {
         for (k, v) in &req.env {
             cmd.env(k, v);
         }
-        if let Some(stdin) = &req.stdin {
+        if req.stdin.is_some() {
             cmd.stdin(std::process::Stdio::piped());
         }
         cmd.stdout(std::process::Stdio::piped());
