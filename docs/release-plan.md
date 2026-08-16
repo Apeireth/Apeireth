@@ -53,6 +53,7 @@
 | 规划项 | 现状 | 证据 |
 |---|---|---|
 | 装配层 | ✅ **已实现** (suite 目录 + 插件组校验 + 权限登记) | `suites.rs` SuiteCatalog::install_with_plugins |
+| 装配层·feature 裁剪 (B2) | ✅ **三档 feature 落地**: base / capability packs / upgrade suites; local-intel→memory/onnx、gui→api/tui-dashboard 真门控; sandbox/channels/audit 声明式 (未门控如实标注); 矩阵脚本+日志 | `suites.toml` + `apeireth-cli [features]` + `scripts/check-assembly-matrix.ps1` → `logs/assembly-matrix.log` |
 | 沙盒包 | 🟡 清单就绪 (Layer 2 描述), 物理隔离 = exec_worker 已有, Sandboxie/landlock 集成未做 | `sandbox-pack` |
 | 审计包 | ✅ **有真工具** (audit_log 查询留痕 + masked 脱敏 + append-only) | `audit.rs` + `list_recent` (memory streams) |
 | 渗透套件 | ✅ **有真内容** (recon_plan E-1 范围闸 + scan_report nmap 解析, 双插件) | `pentest.rs` |
@@ -64,6 +65,7 @@
 ## 五、发布 checklist
 - [x] 本体核心闭环（production_daemon 全集成验收）
 - [x] 装配层（SuiteCatalog + install_with_plugins + 插件生命周期）
+- [x] 装配层 feature 裁剪（B2: base/capability packs/upgrade suites 三档定义 + 编译验证矩阵; local-intel/gui 真门控, 其余声明式如实标注）
 - [x] 升级套件真内容（教育/渗透/预测机 三件齐）
 - [x] 审计能力包真工具（audit_log）
 - [ ] 扩展包逐个成型（沙盒包物理层 / 多通道 / GUI / 本地智能）
