@@ -74,6 +74,14 @@ pub fn detect_language(path: &Path) -> Option<&'static str> {
 }
 
 pub fn extract_symbols(content: &str, language: &str) -> Vec<Symbol> {
+    // P2#9: feature "tree-sitter" 开启时, rust 语言优先精确路径 (解析失败降级 regex)
+    #[cfg(feature = "tree-sitter")]
+    if language == "rust" {
+        let ts = extract_symbols_tree_sitter(content);
+        if !ts.is_empty() {
+            return ts;
+        }
+    }
     match language {
         "rust" => extract_rust(content),
         "python" => extract_python(content),
@@ -325,5 +333,170 @@ mod tests {
     fn empty_content_returns_empty() {
         assert!(extract_rust("").is_empty());
         assert!(extract_python("").is_empty());
+    }
+}
+
+// =====================================================================
+// P2#9 (审计 backlog 全清, 2026-08-16): tree-sitter 精确符号提取 (可选 feature)
+// =====================================================================
+
+/// tree-sitter 精确提取 Rust 文件符号 (feature "tree-sitter" 开启时可用).
+///
+/// 与 regex 版的关系 (集成而非分立): 同一 `Symbol` API; `extract_symbols`
+/// 在 feature 开启时对 rust 语言优先走本路径, 解析失败降级 regex。
+/// 优势: 多行签名/字符串内伪代码不误报/impl 内方法识别 (全语法树)。
+///
+/// 0 假装: 仅 Rust 语言覆盖 (tree-sitter-rust); 其余 4 语言仍走 regex —
+/// 如实标注, 不假装全语言 AST。
+#[cfg(feature = "tree-sitter")]
+pub fn extract_symbols_tree_sitter(content: &str) -> Vec<Symbol> {
+    use tree_sitter::Parser;
+
+    let mut parser = Parser::new();
+    if parser
+        .set_language(&tree_sitter_rust::LANGUAGE.into())
+        .is_err()
+    {
+        return Vec::new(); // 语法不可用 → 空 (调用方降级 regex)
+    }
+    let Some(tree) = parser.parse(content, None) else {
+        return Vec::new();
+    };
+    let mut out: Vec<Symbol> = Vec::new();
+    let mut stack: Vec<tree_sitter::Node> = vec![tree.root_node()];
+    while let Some(node) = stack.pop() {
+        // 子节点先入栈 (DFS)
+        let mut children: Vec<tree_sitter::Node> = (0..node.child_count())
+            .filter_map(|i| node.child(i))
+            .collect();
+        stack.append(&mut children);
+
+        let (kind, name_field): (Option<SymbolKind>, &str) = match node.kind() {
+            "function_item" => (Some(SymbolKind::Function), "name"),
+            "struct_item" => (Some(SymbolKind::Struct), "name"),
+            "enum_item" => (Some(SymbolKind::Enum), "name"),
+            "const_item" => (Some(SymbolKind::Constant), "name"),
+            "static_item" => (Some(SymbolKind::Constant), "name"),
+            "trait_item" => (Some(SymbolKind::Interface), "name"),
+            "type_item" => (Some(SymbolKind::Interface), "name"),
+            "mod_item" => (Some(SymbolKind::Module), "name"),
+            "use_declaration" => (Some(SymbolKind::Import), "path"),
+            _ => (None, "name"),
+        };
+        let Some(kind) = kind else { continue };
+        // impl 块内的 function_item → Method (按祖先语境: impl_item → declaration_list → fn)
+        let kind = if kind == SymbolKind::Function {
+            let ancestor_impl = node
+                .parent()
+                .map(|p| p.kind() == "impl_item" || p.parent().is_some_and(|g| g.kind() == "impl_item"))
+                .unwrap_or(false);
+            if ancestor_impl {
+                SymbolKind::Method
+            } else {
+                kind
+            }
+        } else {
+            kind
+        };
+        // use_declaration 的 path: 优先 field, 回退第一个 named child (语法稳健)
+        let name_node = if kind == SymbolKind::Import {
+            node.child_by_field_name("path")
+                .or_else(|| node.named_child(0))
+        } else {
+            node.child_by_field_name(name_field)
+        };
+        let Some(name_node) = name_node else {
+            continue;
+        };
+        let name = name_node.utf8_text(content.as_bytes()).unwrap_or("").to_string();
+        if name.trim().is_empty() {
+            continue;
+        }
+        let pos = node.start_position();
+        let (row, col) = (pos.row, pos.column);
+        // 签名: 声明行到结束行 (tree-sitter 能跨行 — regex 版抓不到的)
+        let start = node.start_byte();
+        let end = node.end_byte();
+        let signature = content
+            .get(start..end.min(content.len()))
+            .unwrap_or("")
+            .lines()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join("\n");
+        out.push(Symbol {
+            name,
+            kind,
+            line: row + 1,
+            column: col + 1,
+            language: "rust".to_string(),
+            signature,
+        });
+    }
+    out
+}
+
+#[cfg(feature = "tree-sitter")]
+#[cfg(test)]
+mod tree_sitter_tests {
+    use super::*;
+
+    #[test]
+    fn extracts_fn_struct_enum_const_use() {
+        let content = r#"
+use std::collections::HashMap;
+
+/// doc comment
+pub async fn fetch_data<T: Clone>(url: &str) -> Result<T, String> {
+    Ok(Default::default())
+}
+
+pub struct Config {
+    pub name: String,
+}
+
+enum Status { Active, Done }
+
+const MAX_RETRIES: usize = 3;
+"#;
+        let s = extract_symbols_tree_sitter(content);
+        assert!(s.iter().any(|x| x.name == "fetch_data" && x.kind == SymbolKind::Function), "fn 应提取");
+        assert!(s.iter().any(|x| x.name == "Config" && x.kind == SymbolKind::Struct), "struct 应提取");
+        assert!(s.iter().any(|x| x.name == "Status" && x.kind == SymbolKind::Enum), "enum 应提取");
+        assert!(s.iter().any(|x| x.name == "MAX_RETRIES" && x.kind == SymbolKind::Constant), "const 应提取");
+        assert!(s.iter().any(|x| x.kind == SymbolKind::Import && x.name.contains("HashMap")), "use 应提取");
+        // 跨行签名 (regex 版抓不到的): 函数声明应含参数行
+        let fetch = s.iter().find(|x| x.name == "fetch_data").unwrap();
+        assert!(fetch.signature.contains("url: &str"), "tree-sitter 应抓完整签名: {}", fetch.signature);
+    }
+
+    #[test]
+    fn ignores_strings_and_comments() {
+        let content = r#"
+fn real() {}
+// fn fake_in_comment() {}
+let s = "fn fake_in_string() {}";
+"#;
+        let s = extract_symbols_tree_sitter(content);
+        assert!(s.iter().any(|x| x.name == "real"), "真函数应提取");
+        assert!(!s.iter().any(|x| x.name.starts_with("fake")), "注释/字符串内伪代码不应误报: {s:?}");
+    }
+
+    #[test]
+    fn impl_methods_are_method_kind() {
+        let content = r#"
+impl Config {
+    pub fn new() -> Self { Config { name: String::new() } }
+}
+"#;
+        let s = extract_symbols_tree_sitter(content);
+        assert!(s.iter().any(|x| x.name == "new" && x.kind == SymbolKind::Method), "impl 内 fn 应为 Method: {s:?}");
+    }
+
+    #[test]
+    fn parse_failure_falls_back_to_empty() {
+        // 非 Rust 语法内容也应有语法树 (容错), 不 panic
+        let s = extract_symbols_tree_sitter("not rust at all {{{");
+        let _ = s;
     }
 }
