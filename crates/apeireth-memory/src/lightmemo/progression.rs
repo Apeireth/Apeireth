@@ -36,6 +36,8 @@
 //! assert!(!prog.is_in(&id, Layer::L4));
 //! ```
 
+#![allow(missing_docs)] // R163 O-5: 与 lightmemo 兄弟模块一致, 模块头文档即公共说明
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};

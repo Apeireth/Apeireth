@@ -308,8 +308,8 @@ mod tests {
         drop(s1);
         // 重启
         let mut s2 = GoalService::new(&dir);
-        let g = s2.restore("goal-").ok_or("no goal").unwrap_err();
-        // restore 需要真实 id: 从文件列表拿
+        // restore 需要真实 id: 假 id 应返回 None
+        assert!(s2.restore("goal-").is_none(), "restore 需要真实 id");
         let ids: Vec<String> = std::fs::read_dir(&dir)
             .unwrap()
             .filter_map(|e| e.ok())

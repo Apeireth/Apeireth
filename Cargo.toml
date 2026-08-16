@@ -417,6 +417,9 @@ unused_imports = 'allow'
 dead_code = 'allow'
 unused_must_use = 'allow'
 unused_mut = 'allow'
+# Windows MSVC 链接器 stdout 噪音 ("正在创建库 ... .lib 和对象 ... .exp") —
+# 无信息量, 每次构建刷屏, 全局压掉.
+linker_messages = 'allow'
 
 # 允许 apeireth-formal 用 cfg(kani) — kani 自带 cfg, stable rustc 不认识.
 # check-cfg 是「告诉 rustc 这些 cfg 已知, 不要 warn」, 不影响其他 crate.
