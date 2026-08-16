@@ -423,7 +423,7 @@ mod tests {
             .collect();
         assert!(bad.is_empty(), "盘点 episode 不应被合并进普通整合结果 (防嵌套)");
         let inv: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
-        assert_eq!(inv.len(), 1, "夜 1 的盘点应仍在且仅一条");
+        assert_eq!(inv.len(), 2, "每个真整合夜各写一条盘点 (夜1 n=2 + 夜2 n=1)");
     }
 }
 
