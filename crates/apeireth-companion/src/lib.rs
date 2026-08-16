@@ -79,6 +79,7 @@ pub mod goal_tools;
 pub mod memory_graph;
 pub mod morphology;  // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
 pub mod diary;  // §5.1 机制⑤: 日记本中心 (RAGDiaryPlugin 精神, 按日归档+检索+注入 trait 口)
+pub mod reflexion;  // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRITIC 反思→反思记忆→同类重试注入, 确定性规则版先行, LLM 口留 trait)
 pub mod topic_groups;  // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
 pub mod cross_diary;  // §5.1④: 跨日记关联 — diary↔memory_graph 确定性联动 (共享token建链+双向查询+注入trait口)
 pub mod context;
