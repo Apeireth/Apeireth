@@ -27,10 +27,10 @@ use uuid::Uuid;
 
 pub mod auth;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod guard_bridge;
 pub mod gateway;
+pub mod guard_bridge;
 pub mod node;
+mod organ_kani_proofs;
 // N12: 语义模型路由适配件 (VCP semanticModelRouter 吸收; 虚拟模型名+意图选模型+容灾链)
 pub mod semantic_router;
 pub mod session;
@@ -38,17 +38,23 @@ pub mod transport;
 pub mod workspace;
 
 pub use auth::{AccessPolicy, ApiKey, AuthDecision, AuthError, AuthResult, DmScope};
+pub use gateway::{
+    Admission, Gateway, GatewayError, GatewayMode, GatewayResult, GatewaySnapshot,
+    MAX_GATEWAY_NODES, MAX_GATEWAY_SESSIONS,
+};
 pub use guard_bridge::{AuditSummary, GatewayGuard, GuardSide, GuardedFrame};
-pub use gateway::{Admission, Gateway, GatewayError, GatewayMode, GatewayResult, GatewaySnapshot, MAX_GATEWAY_NODES, MAX_GATEWAY_SESSIONS};
 pub use node::{NodeId, NodeKind, NodeRecord, NodeRegistry};
 pub use semantic_router::{
-    build_fallback_plan, cosine_similarity, Embedder, ModelExecutor, Preset, PresetSpec,
-    RouteDecision, RouteReason, RouteSpec, RouterConfig, RouterConfigSpec, RouterError, Route,
+    build_fallback_plan, cosine_similarity, Embedder, ModelExecutor, Preset, PresetSpec, Route,
+    RouteDecision, RouteReason, RouteSpec, RouterConfig, RouterConfigSpec, RouterError,
     ScoredRoute, SemanticModelRouter, DEFAULT_AUTO_MODEL_NAME, DEFAULT_CONTEXT_WEIGHTS,
     DEFAULT_MATCH_THRESHOLD, DEFAULT_PRESET_NAME,
 };
 pub use session::{Session, SessionId, SessionRegistry, SessionState};
-pub use transport::{HttpTransport, InFrame, InMemoryTransport, OutFrame, Transport, TransportError, TransportRegistry, WsTransport};
+pub use transport::{
+    HttpTransport, InFrame, InMemoryTransport, OutFrame, Transport, TransportError,
+    TransportRegistry, WsTransport,
+};
 pub use workspace::{safe_join, AgentWorkspace, WorkspaceError, WorkspaceResult, WorkspaceSlot};
 
 /// Compile-time guard: only `SingleProcess` is shipped. Adding a new mode
@@ -76,7 +82,9 @@ mod tests {
     fn end_to_end_admit_release() {
         let g = Gateway::open(GatewayMode::SingleProcess, "e2e", 0);
         g.register_key("k1", "alice", "primary", DmScope::All, 0);
-        let a = g.admit_node(NodeKind::Tui, "tui-1", "alice", "k1", 100).unwrap();
+        let a = g
+            .admit_node(NodeKind::Tui, "tui-1", "alice", "k1", 100)
+            .unwrap();
         assert_eq!(g.nodes().len(), 1);
         assert_eq!(g.sessions().len(), 1);
         assert!(g.release_node(a.node_id, 200));
@@ -90,7 +98,11 @@ mod tests {
         let custom = Arc::new(InMemoryTransport::new("custom"));
         custom.start().await.unwrap();
         let node_id = Uuid::new_v4();
-        custom.push_inbound(InFrame::new(node_id, "custom", serde_json::json!({"hi": 1})));
+        custom.push_inbound(InFrame::new(
+            node_id,
+            "custom",
+            serde_json::json!({"hi": 1}),
+        ));
         let frame = custom.recv().await.unwrap();
         assert_eq!(frame.payload, serde_json::json!({"hi": 1}));
     }
@@ -100,7 +112,10 @@ mod tests {
         let g = Gateway::open(GatewayMode::SingleProcess, "e2e", 0).with_workspace_root("/tmp/ws");
         let nid = Uuid::new_v4();
         let ws = g.workspace_for(nid, NodeKind::Desktop).unwrap();
-        assert!(ws.skills_dir().unwrap().to_string_lossy().contains("desktop"));
+        assert!(ws
+            .skills_dir()
+            .unwrap()
+            .to_string_lossy()
+            .contains("desktop"));
     }
-
 }

@@ -27,8 +27,8 @@ use std::sync::Arc;
 use apeireth_asi::{V05_DIMENSION_NAMES, V05_DIM_COUNT};
 use apeireth_mcp::protocol::JsonRpcError;
 use apeireth_mcp::resources::{Resource, ResourceContent, ResourceServer, RESOURCE_NOT_FOUND};
-use std::sync::Mutex;
 use serde_json::{json, Value};
+use std::sync::Mutex;
 
 use crate::cognition_graph::{CognitionCheckpointPayload, CognitionSummary};
 
@@ -113,7 +113,10 @@ pub struct CognitionGraphResourceServer {
 
 impl std::fmt::Debug for CognitionGraphResourceServer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = self.snapshot.lock().expect("apeireth-graph mcp_resource snapshot mutex poisoned");
+        let s = self
+            .snapshot
+            .lock()
+            .expect("apeireth-graph mcp_resource snapshot mutex poisoned");
         f.debug_struct("CognitionGraphResourceServer")
             .field("has_summary", &s.last_summary.is_some())
             .field("has_checkpoint", &s.last_checkpoint.is_some())
@@ -161,7 +164,10 @@ impl ResourceServer for CognitionGraphResourceServer {
     }
 
     fn read(&self, uri: &str) -> Result<ResourceContent, JsonRpcError> {
-        let snapshot = self.snapshot.lock().expect("apeireth-graph mcp_resource snapshot mutex poisoned");
+        let snapshot = self
+            .snapshot
+            .lock()
+            .expect("apeireth-graph mcp_resource snapshot mutex poisoned");
         match uri {
             URI_LAST_SUMMARY => {
                 let summary = snapshot.last_summary.as_ref().ok_or_else(|| {
@@ -344,7 +350,10 @@ mod tests {
     fn read_last_summary_with_data() {
         let server = CognitionGraphResourceServer::with_empty_snapshot();
         {
-            let handle = server.snapshot_handle(); let mut snap = handle.lock().expect("apeireth-graph mcp_resource snapshot mutex poisoned");
+            let handle = server.snapshot_handle();
+            let mut snap = handle
+                .lock()
+                .expect("apeireth-graph mcp_resource snapshot mutex poisoned");
             snap.set_summary(make_summary(0.42, 0.1, 0.9, true));
         }
         let c = server.read(URI_LAST_SUMMARY).unwrap();
@@ -368,7 +377,10 @@ mod tests {
         let server = CognitionGraphResourceServer::with_empty_snapshot();
         let dims = make_dims(&[0.5; V05_DIM_COUNT]);
         {
-            let handle = server.snapshot_handle(); let mut snap = handle.lock().expect("apeireth-graph mcp_resource snapshot mutex poisoned");
+            let handle = server.snapshot_handle();
+            let mut snap = handle
+                .lock()
+                .expect("apeireth-graph mcp_resource snapshot mutex poisoned");
             snap.set_dims(dims);
         }
         let c = server.read(URI_DIMENSIONS).unwrap();
@@ -400,7 +412,9 @@ mod tests {
         let server1 = CognitionGraphResourceServer::with_empty_snapshot();
         let handle = server1.snapshot_handle();
         {
-            let mut s = handle.lock().expect("apeireth-graph mcp_resource snapshot mutex poisoned");
+            let mut s = handle
+                .lock()
+                .expect("apeireth-graph mcp_resource snapshot mutex poisoned");
             s.set_summary(make_summary(0.8, 0.0, 1.0, true));
         }
         // server1 直接 read (own snapshot)
