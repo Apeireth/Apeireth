@@ -287,6 +287,39 @@ impl MemoryExtractionService {
     }
 }
 
+/// 记忆分层排名 (模块 2, Generative Agents 式) —
+/// score = importance×3 + access_count×0.3 + 组加成 + recency; 预算内注入.
+/// 返回 (id, content) 供 access 追踪.
+pub fn rank_memory_entries(
+    eps: &[CoreEpisode],
+    access: &std::collections::HashMap<String, (u64, i64)>,
+    budget: usize,
+) -> Vec<(String, String)> {
+    let mut ranked: Vec<(&CoreEpisode, f64)> = eps.iter().map(|e| {
+        let importance = parse_importance(&e.content) as f64;
+        let (count, _) = access.get(&e.id).copied().unwrap_or((0, 0));
+        // 组加成: 0=dream/pref (高价值常驻), 1=mem-ex/reflect, 2=其他
+        let group_bonus = if e.id.starts_with("mem-dream-") || e.id.starts_with("pref-") {
+            4.0
+        } else if e.id.starts_with("mem-ex-") || e.id.starts_with("reflect-") {
+            2.0
+        } else {
+            0.0
+        };
+        // recency: 最近 7 天内线性加成
+        let age_days = (chrono::Utc::now().timestamp() - e.timestamp) as f64 / 86400.0;
+        let recency = if age_days < 7.0 { (7.0 - age_days) / 7.0 } else { 0.0 };
+        let score = importance * 3.0 + count as f64 * 0.3 + group_bonus + recency * 2.0;
+        (e, score)
+    }).collect();
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    ranked
+        .iter()
+        .take(budget)
+        .map(|(e, _)| (e.id.clone(), e.content.clone()))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
