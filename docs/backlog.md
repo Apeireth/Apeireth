@@ -33,6 +33,15 @@
 ## 待办项 (按优先级)
 
 > **2026-08-16 backlog 全清**: 全部 ⬜ → ✅ (主人拍板"排队的全做了, 全干完")。
+> **2026-08-16 新增**: VCP 新版调研 (Rust 重写 + 84 插件) 进行中 — 可吸收点登记见下。
+
+### 新调研跟踪
+
+| # | 项 | 来源 | 说明 | 状态 |
+|---|---|---|---|---|
+| N1 | VCP 新版调研 (rust-vexus-lite + 84 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 Downloads\VCPToolBox-rust\VCPToolBox-main; 已确认新概念: OneRing 统一上下文 / DigitalOracle 金融监控 / RiverMemo Topology V3 (HNSW+SVD+并行); 深挖中 → 可吸收点并入 team-work-doc §4/§5 | 🔄 深挖中 (2 subagent) |
+| N2 | OneRing 统一上下文账本 | N1 发现 | 跨前端统一时间线 (A2 continuity 锚点的升级方向) | ⬜ 待并入 A2 |
+| N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源, 与 oracle 契合) | ⬜ 待并入 §5.2 |
 
 ### P0 — 近期做 (机制缺口, 高价值)
 
