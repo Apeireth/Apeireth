@@ -46,7 +46,7 @@
 |---|---|---|---|---|
 | N1 | VCP 新版调研 (rust-vexus-lite + 89 插件 + 核心 modules) | 主人 2026-08-16 指示 | 源码 research/source/vcptoolbox (从 Downloads 迁入工作区, git 排除); Rust 记忆层 (RiverMemo V3) + 89 插件 manifest 已核实; 可吸收清单已并入 team-work-doc §8 | ✅ 调研完成 (team-work-doc §8.2/8.3/8.4) |
 | N2 | OneRing 统一上下文账本 | N1 发现 | 跨前端统一时间线 — 并入 A2 (continuity 锚点升级) | ⬜ 并入 §4 A2, 待实施 |
-| N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源) | ⬜ 并入 §5.2, 待实施 |
+| N3 | DigitalOracle 金融数据源 | N1 发现 | 预测机套件旗舰数据源候选 (含预测市场源) | ✅ oracle_adapters.rs (01b857b6) — MarketAdapter trait + CoinGecko/宏观利率双旗舰 + Fallback 降级 + ForecastPipeline 挂 ForecastRegistry (oracle.rs 0 改动); 集成验证 4/4 绿 (tests/n3_oracle_adapters_verify.rs, eb0193ca); 全套件绿待并行 WIP 收敛后 QA 复跑 |
 | N4 | ThoughtClusterManager 元自学习 | N1 发现 | AI 思维链文件 + 元自学习 — 并入记忆域深化包 | ⬜ 并入 §5.1, 待实施 |
 | N5 | artifact_sig 内容寻址缓存 | N1 发现 (Rust 层) | semantic/图资产"内容签名→跳过重算"门禁 | ✅ 提交 f8245f28 (流水线整合): semantic_persist.rs — artifact_sig (SHA-256 手写, NIST 向量锚定, 0 新依赖) + artifact_gate_decision 五条失效规则 (无记录/内容变/normalize stale/schema stale/Hit) + reindex_all 门禁全量重建 (clear+set_dim+upsert_batch) + .artifact_sig.json sidecar; 8 测试四路径全绿 (cargo test -p apeireth-memory -j 4, 报告 reports/5f492ccb-…-database_engineer2-report.md) |
 | N6 | Intrinsic Residual 锚增益 | N1 发现 (Rust 层) | memory_graph 节点"特异性"信号 (与 importance 正交) | ✅ 提交 ab777c2: memory_graph.rs 实体逆频特异性 + 组合排序权重可配 (GraphRankConfig) + 增量计数维护 + crawl 残差锚增益; 7 单测全绿 (报告 reports/2a1e262e-2f0f-458e-b5f0-130b1e232834-database_engineer-report.md) |
@@ -66,7 +66,7 @@
 | N17 | **工具子 crate 装配 (9 个 0 引用)** | 同上孤儿体检 | apeireth-tool-shell / tool-fetch / tool-browser / tool-codesearch / tool-image-gen / tool-image-process / tool-search / tool-filesystem 等 — 独立实现齐全但 apeireth-tools::register_all 未装配: 逐个核实能力 → 挂 ToolBridge 注册 + 白名单 + CapabilityCatalog (与 N16 同批)。**边界 (主人 2026-08-17 拍板, 防团队干偏)**: ① 禁止合并成一个大工具 crate (工具=插件单元, 保持独立 crate = 热插拔 + 依赖隔离 + 社区贡献拼积木); ② 装配必须统一走 `Tool trait + ToolRegistry.register + ToolBridge` 三件套, 禁止各工具自写调用/执行方式 (集成而非分立); ③ 每个工具 crate 提供 register 函数, 统一注册进同一 registry | ⬜ 下一批 P0 (随 N16) |
 | N18 | **新 crate 必须声明消费方 (规范)** | 孤儿体检暴露机制漏洞 | 审计搜 TODO 模式抓不到"翻译了未接线"的 crate: maintenance-guide 加规范 — 新建 crate 必须登记消费方 (谁依赖/谁装配), 缺消费方的 crate 在台账显式标注"独立待装配"; 孤儿体检 (0 引用扫描) 纳入定期检查 | ✅ TP9 落地: maintenance-guide §三 条目 000 规范明文 + _scripts/orphan-scan.ps1 正式入库 (提交 b0c093a9, cargo metadata kind 权威判定, 孤儿/dev-only/bin 终点三分类 + dev-dep 自引用/互指环检测 + #33 自动对账); 首次全量扫描证据 reports/orphan-scan-first.md (82 成员: 孤儿 23/dev-only 4/bin 终点 3; #33 清单 12 项全仍孤儿; tool-fetch 自引用命中; dev↔normal 互指环 5 条命中); 孤儿处置待 Leader |
 | N21 | **apeireth-credentials (统一 API key 管理)** | 主人 2026-08-17 设计蓝图对照 (R136 计划: "API key 管理统一走 apeireth-credentials crate (已存在)" — 实际不存在) | 各插件/工具目前各读 env: 新建 credentials crate (密钥安全存储/按服务名读写/权限洋葱衔接 master token, 0 假装: 不存明文到日志), 工具装配 (N17) 时统一接入; 与 N17 同批 | ⬜ 下一批 P0 (随 N17) |
-| N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "VCP preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ⬜ 下一批 P0 (随 N17) |
+| N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "VCP preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ✅ 提交 b48f355 + 7b11738: tool-shell preset.rs (白名单登记 + argv 模板展开 + 参数独立 quote 防注入 + PresetShell 挂 exec_sandboxed 既有链, 注入用例 `;`/`&&`/`|`/`$()`/反引号全测, 9/9 测试全绿) |
 
 ### 模块对标调研批 (2026-08-17, 4 subagent web 调研; 主人指示: 团队能干的先安排, 需讨论的明天一起议)
 
