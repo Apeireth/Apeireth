@@ -120,6 +120,13 @@ pub async fn dispatch_http(
     }
 
     let text = resp.text().await.unwrap_or_default();
+    // N12: 推理字段归一化 (默认配置关闭 → 行为 0 变化; 显式 APEIRETH_REASONING_ENABLED=1
+    // + APEIRETH_REASONING_MODEL_FILTERS 后才把推理别名归一为 think 块, 见 reasoning_adapter)
+    let text = crate::reasoning_adapter::normalize_chat_completion_body(
+        &text,
+        &crate::reasoning_adapter::ReasoningAdapterConfig::from_env(),
+        model,
+    );
     Ok(LlmResponse {
         request_id: format!("req-{}", elapsed_ms),
         provider: config.provider_name.into(),
