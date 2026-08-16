@@ -5,14 +5,17 @@
 //! - 决策 = 分支推演中选优 (期望值 Σ P×V)
 //! - 共用沙盘底座: 虚拟时钟快进分支 + 事件溯源 (SessionLog) + 校准数学 (confidence)
 //!
-//! 0 假装: v1 = 一层决策树 (expectimax-lite) + 规则层 apply; LLM 裁决 (不确定性场景)
-//! 留 `UncertaintyResolver` trait 口子, 未接真; 多轮 MCTS 是下一步.
+//! 0 假装: v1 = 一层决策树 (expectimax-lite) + 规则层 apply; 不确定性裁决已接真
+//! (`CalibratedResolver`: BetaBinomial 校准追踪 + ForecastRegistry 对照), LLM 裁决
+//! 仍留 `UncertaintyResolver` trait 口; 多轮 MCTS 是下一步.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use async_trait::async_trait;
+
+use crate::confidence::BetaBinomial;
 
 // ============================================================
 // 世界状态 + 情景引擎
@@ -45,7 +48,8 @@ impl WorldState {
     }
 }
 
-/// 不确定性裁决 (LLM 口子, 未接真 — 规则层 apply 是 v1 真相).
+/// 不确定性裁决口子: 真实现 [`CalibratedResolver`] (校准数学, 0 LLM 依赖);
+/// 需要语义推理时可在外部注入 LLM 实现 (trait 保持开放).
 #[async_trait]
 pub trait UncertaintyResolver: Send + Sync {
     async fn resolve(&self, state: &WorldState, question: &str) -> Result<f64, String>;
@@ -127,6 +131,7 @@ impl Forecast {
 }
 
 /// 预测登记表 (真库, forecast- 前缀; 校准积累).
+#[derive(Debug, Clone)]
 pub struct ForecastRegistry {
     store: Arc<SqliteMemoryStore>,
     session_id: String,
@@ -208,6 +213,77 @@ impl ForecastRegistry {
             }
         }
         Ok((resolved.len(), mean_brier, hint))
+    }
+}
+
+// ============================================================
+// 不确定性裁决: 校准追踪真实现 (backlog P2#13, oracle-suite 就绪后接线)
+// ============================================================
+
+/// 校准裁决的量化状态: 概率点估计 + 95% 区间 + 证据强度 + 对照规模.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CalibrationStatus {
+    /// 校准后的概率点估计 (0..1).
+    pub probability: f64,
+    /// Wilson 95% 区间 (下, 上).
+    pub interval: (f64, f64),
+    /// 证据强度 (按已对照观测数分档).
+    pub strength: crate::confidence::Strength,
+    /// 已对照预测数.
+    pub resolved_count: usize,
+    /// 平均 Brier score (越低越准).
+    pub mean_brier: f64,
+}
+
+/// 校准裁决器: 用历史已对照预测的 BetaBinomial 追踪, 把不确定性量化为数学化概率.
+///
+/// 原理 (docs/oracle-suite-design.md §三/§四「校准 = Brier + BetaBinomial」):
+/// - 每个已 resolve 的 [`Forecast`] 的真实结果是一条校准观测 (`success = actual`),
+///   累积进 [`BetaBinomial`] (均匀先验 (1,1) 起步) → 后验均值 = 模型「预测成真率」.
+/// - 0 历史 → 0.5 (均匀先验, 诚实「不知道」, 与 `BetaBinomial::default` 同语义).
+/// - 区间 = Wilson 95% (观测越多越窄), strength 按观测数分档.
+///
+/// LLM 语义裁决仍留 [`UncertaintyResolver`] trait 口 (外部可注入真 LLM);
+/// 本实现 0 LLM 依赖、纯确定性、可测试 (与项目「0 装 PASS」风格一致: 留口诚实标注).
+#[derive(Debug, Clone)]
+pub struct CalibratedResolver {
+    registry: ForecastRegistry,
+}
+
+impl CalibratedResolver {
+    pub fn new(registry: ForecastRegistry) -> Self {
+        Self { registry }
+    }
+
+    /// 构建校准 BetaBinomial: 从已对照预测的真实结果累积观测.
+    pub fn calibrated_beta(&self) -> Result<BetaBinomial, String> {
+        let all = self.registry.load_all()?;
+        let mut bb = BetaBinomial::default();
+        for f in all.iter().filter(|f| f.resolved.is_some()) {
+            bb.observe(f.resolved == Some(true));
+        }
+        Ok(bb)
+    }
+
+    /// 校准状态: 概率 + 区间 + 强度 + 已对照数 + 平均 Brier.
+    pub fn status(&self) -> Result<CalibrationStatus, String> {
+        let bb = self.calibrated_beta()?;
+        let (n, mean_brier, _hint) = self.registry.calibration()?;
+        Ok(CalibrationStatus {
+            probability: bb.mean(),
+            interval: bb.interval95(),
+            strength: bb.strength(),
+            resolved_count: n,
+            mean_brier,
+        })
+    }
+}
+
+#[async_trait]
+impl UncertaintyResolver for CalibratedResolver {
+    async fn resolve(&self, _state: &WorldState, _question: &str) -> Result<f64, String> {
+        // 校准概率 = 后验均值 (0 历史 → 0.5 均匀先验, 诚实「不知道」).
+        Ok(self.calibrated_beta()?.mean())
     }
 }
 
@@ -301,6 +377,87 @@ mod tests {
         assert!(hint.contains("实际"), "校准提示含实际发生率: {hint}");
         // 重复 resolve 拒绝
         assert!(reg.resolve(&f1.id, false).is_err());
+    }
+
+    // ---- UncertaintyResolver 接真 (P2#13): CalibratedResolver ----
+
+    fn registry_with(store: Arc<SqliteMemoryStore>) -> ForecastRegistry {
+        ForecastRegistry::new(store, "me")
+    }
+
+    fn seed_resolved(reg: &ForecastRegistry, probabilities: &[f64], outcomes: &[bool]) {
+        for (i, (p, o)) in probabilities.iter().zip(outcomes.iter()).enumerate() {
+            let f = Forecast::new(format!("断言 {i}"), *p, 1_800_000_000_000);
+            reg.register(&f).unwrap();
+            reg.resolve(&f.id, *o).unwrap();
+        }
+    }
+
+    #[test]
+    fn calibrated_resolver_no_history_is_uninformative() {
+        let reg = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
+        let r = CalibratedResolver::new(reg);
+        let st = r.status().unwrap();
+        assert!(
+            (st.probability - 0.5).abs() < 1e-9,
+            "无历史 → 均匀先验 0.5: {}",
+            st.probability
+        );
+        assert_eq!(st.resolved_count, 0);
+        assert_eq!(st.interval, (0.0, 1.0));
+        assert_eq!(st.strength, crate::confidence::Strength::Weak);
+    }
+
+    #[test]
+    fn calibrated_resolver_tracks_forecast_outcomes() {
+        let reg = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
+        // 3 条高概率预测全部成真 → 后验均值 = (1+3)/(2+3) = 0.8
+        seed_resolved(&reg, &[0.8, 0.8, 0.8], &[true, true, true]);
+        let r = CalibratedResolver::new(reg);
+        let st = r.status().unwrap();
+        assert!(
+            (st.probability - 0.8).abs() < 1e-9,
+            "3/3 成真 → 0.8: {}",
+            st.probability
+        );
+        assert_eq!(st.resolved_count, 3);
+        assert_eq!(st.strength, crate::confidence::Strength::Weak);
+        assert!(
+            (st.mean_brier - 0.04).abs() < 1e-9,
+            "Brier=(0.8-1)²=0.04: {}",
+            st.mean_brier
+        );
+        assert!(
+            st.interval.0 < st.probability && st.probability < st.interval.1,
+            "区间应包住点估计: {:?} vs {}",
+            st.interval,
+            st.probability
+        );
+    }
+
+    #[test]
+    fn calibrated_resolver_mixed_outcomes_pull_toward_rate() {
+        let reg = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
+        // 2 真 1 假 → (1+2)/(2+3) = 0.6
+        seed_resolved(&reg, &[0.6, 0.6, 0.6], &[true, true, false]);
+        let r = CalibratedResolver::new(reg);
+        let p = r.calibrated_beta().unwrap().mean();
+        assert!((p - 0.6).abs() < 1e-9, "2/3 成真 → 0.6: {p}");
+    }
+
+    #[tokio::test]
+    async fn calibrated_resolver_implements_uncertainty_resolver_trait() {
+        let reg = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
+        let r = CalibratedResolver::new(reg);
+        // 0 历史 → trait 口返回 0.5
+        let p = r.resolve(&WorldState::default(), "今晚能写完作业吗").await.unwrap();
+        assert!((p - 0.5).abs() < 1e-9, "无历史 → 0.5: {p}");
+        // 有历史 → trait 口返回校准后验均值
+        let reg2 = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
+        seed_resolved(&reg2, &[0.9, 0.9, 0.9, 0.9], &[true, true, true, true]);
+        let r2 = CalibratedResolver::new(reg2);
+        let p2 = r2.resolve(&WorldState::default(), "明天会下雨吗").await.unwrap();
+        assert!((p2 - 5.0 / 6.0).abs() < 1e-9, "4/4 成真 → 5/6: {p2}");
     }
 
     #[test]

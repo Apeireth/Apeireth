@@ -3,7 +3,7 @@
 //! 分层:
 //! - `UtteranceGenerator` — 把 Initiative 的诚实事实渲染成「他的话」(`PlainUtterance` = 原文;
 //!   真 LLM 渲染见 examples/companion_daemon.rs 的 MiniMaxUtterance).
-//! - `Sink` — 通道 (`ConsoleSink` / `LarkSink` 飞书 IM).
+//! - `Sink` — 通道 (`ConsoleSink` / `LarkSink` 飞书 IM / `TelegramSink` Telegram Bot API).
 //! - `CompanionDelivery` — 渲染 → 通道 组合.
 //! - `CompanionDaemon` — 全器官伙伴 + 送达 + 记忆 + 心跳循环.
 
@@ -241,6 +241,145 @@ impl Sink for LarkSink {
             .await
             .map(|_| ())
             .map_err(|e| e.to_string())
+    }
+}
+
+// ============================================================
+// Telegram Bot API 通道 (真 HTTP: POST https://api.telegram.org/bot<TOKEN>/sendMessage)
+// ============================================================
+
+/// Telegram 发送器抽象 (真实现走 reqwest; 注入 fake 可测 send 路径, 不真打网络).
+#[async_trait]
+pub trait TelegramSender: Send + Sync + std::fmt::Debug {
+    /// POST JSON 到给定 URL; 失败返回 Err (带可读原因, 不假装成功).
+    async fn send_message(&self, url: &str, body: &serde_json::Value) -> Result<(), String>;
+}
+
+/// 真 HTTP 发送器: reqwest 0.12 + rustls (跟 `LarkRealImpl` 同款 0 重复造轮子).
+#[derive(Debug, Clone)]
+pub struct ReqwestTelegramSender {
+    client: reqwest::Client,
+}
+
+impl ReqwestTelegramSender {
+    /// 构建客户端 (30s 超时, 同 LarkRealImpl).
+    pub fn new() -> Result<Self, String> {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(30))
+            .build()
+            .map_err(|e| format!("reqwest client build failed: {e}"))?;
+        Ok(Self { client })
+    }
+}
+
+#[async_trait]
+impl TelegramSender for ReqwestTelegramSender {
+    async fn send_message(&self, url: &str, body: &serde_json::Value) -> Result<(), String> {
+        let resp = self
+            .client
+            .post(url)
+            .json(body)
+            .send()
+            .await
+            .map_err(|e| format!("Telegram 网络错误: {e}"))?;
+        let status = resp.status();
+        let text = resp
+            .text()
+            .await
+            .map_err(|e| format!("Telegram 响应读取失败: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("Telegram HTTP {status}: {text}"));
+        }
+        // Bot API 响应: {"ok": true, "result": {...}}; 失败 {"ok": false, "description": "..."}
+        let parsed: serde_json::Value = serde_json::from_str(&text)
+            .map_err(|e| format!("Telegram 响应解析失败: {e}, body: {text}"))?;
+        match parsed.get("ok").and_then(|v| v.as_bool()) {
+            Some(true) => Ok(()),
+            _ => {
+                let desc = parsed
+                    .get("description")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or(text.trim());
+                Err(format!("Telegram API 错误: {desc}"))
+            }
+        }
+    }
+}
+
+/// Telegram IM 通道 (真 HTTP Bot API: `https://api.telegram.org/bot<TOKEN>/sendMessage`).
+#[derive(Debug)]
+pub struct TelegramSink {
+    bot_token: String,
+    chat_id: String,
+    http: Arc<dyn TelegramSender>,
+}
+
+impl TelegramSink {
+    /// 从环境变量读 Telegram 凭据构建:
+    /// - `APEIRETH_TELEGRAM_BOT_TOKEN` (必填, BotFather 发的 token)
+    /// - `APEIRETH_TELEGRAM_CHAT_ID` (必填, 接收会话/用户 chat_id)
+    ///
+    /// 缺任一必填项 → `Err` (带明确提示, 不装「已接好」).
+    pub fn from_env() -> Result<Self, String> {
+        Self::from_env_with(|k| std::env::var(k).ok())
+    }
+
+    /// 测试友好的 env 注入版本 (lookup 代替真实环境).
+    fn from_env_with<F>(lookup: F) -> Result<Self, String>
+    where
+        F: Fn(&str) -> Option<String>,
+    {
+        let missing = |keys: &[&str]| -> String {
+            format!(
+                "Telegram 凭据缺失: {} (设 APEIRETH_TELEGRAM_* 环境变量)",
+                keys.join(" / ")
+            )
+        };
+        let bot_token = lookup("APEIRETH_TELEGRAM_BOT_TOKEN")
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| missing(&["APEIRETH_TELEGRAM_BOT_TOKEN"]))?;
+        let chat_id = lookup("APEIRETH_TELEGRAM_CHAT_ID")
+            .filter(|s| !s.trim().is_empty())
+            .ok_or_else(|| missing(&["APEIRETH_TELEGRAM_CHAT_ID"]))?;
+        let http = Arc::new(ReqwestTelegramSender::new()?);
+        Ok(Self {
+            bot_token,
+            chat_id,
+            http,
+        })
+    }
+
+    /// 测试/注入用: 显式给 token + chat_id + 发送器 (绕过 env + 网络).
+    fn with_sender(
+        bot_token: impl Into<String>,
+        chat_id: impl Into<String>,
+        http: Arc<dyn TelegramSender>,
+    ) -> Self {
+        Self {
+            bot_token: bot_token.into(),
+            chat_id: chat_id.into(),
+            http,
+        }
+    }
+
+    /// 只读暴露 (测试断言).
+    fn fields(&self) -> (&str, &str) {
+        (&self.bot_token, &self.chat_id)
+    }
+}
+
+#[async_trait]
+impl Sink for TelegramSink {
+    async fn send(&self, text: &str) -> Result<(), String> {
+        let url = format!(
+            "https://api.telegram.org/bot{}/sendMessage",
+            self.bot_token
+        );
+        let body = serde_json::json!({
+            "chat_id": self.chat_id,
+            "text": text,
+        });
+        self.http.send_message(&url, &body).await
     }
 }
 
@@ -625,6 +764,99 @@ mod tests {
             sink.client.config().base_url,
             apeireth_lark::LARK_API_BASE_URL
         );
+    }
+
+    // ---- TelegramSink (P2#11) ----
+
+    #[test]
+    fn telegram_sink_from_env_missing_credential_errs() {
+        let r = TelegramSink::from_env_with(|_| None);
+        assert!(r.is_err());
+        let msg = r.unwrap_err();
+        assert!(
+            msg.contains("APEIRETH_TELEGRAM_BOT_TOKEN"),
+            "提示应点名缺的变量: {msg}"
+        );
+    }
+
+    #[test]
+    fn telegram_sink_from_env_complete_ok() {
+        let env = |k: &str| match k {
+            "APEIRETH_TELEGRAM_BOT_TOKEN" => Some("123:abc".into()),
+            "APEIRETH_TELEGRAM_CHAT_ID" => Some("42".into()),
+            _ => None,
+        };
+        let sink = TelegramSink::from_env_with(env).unwrap();
+        assert_eq!(sink.fields(), ("123:abc", "42"));
+    }
+
+    #[test]
+    fn telegram_sink_rejects_empty_token() {
+        let env = |k: &str| match k {
+            "APEIRETH_TELEGRAM_BOT_TOKEN" => Some("   ".into()),
+            "APEIRETH_TELEGRAM_CHAT_ID" => Some("42".into()),
+            _ => None,
+        };
+        assert!(TelegramSink::from_env_with(env).is_err());
+    }
+
+    #[tokio::test]
+    async fn telegram_sink_send_hits_bot_api_endpoint() {
+        #[derive(Debug)]
+        struct FakeSender {
+            url: Arc<Mutex<String>>,
+            body: Arc<Mutex<serde_json::Value>>,
+        }
+        #[async_trait]
+        impl TelegramSender for FakeSender {
+            async fn send_message(
+                &self,
+                url: &str,
+                body: &serde_json::Value,
+            ) -> Result<(), String> {
+                *self.url.lock().unwrap() = url.to_string();
+                *self.body.lock().unwrap() = body.clone();
+                Ok(())
+            }
+        }
+        let url = Arc::new(Mutex::new(String::new()));
+        let body = Arc::new(Mutex::new(serde_json::Value::Null));
+        let sink = TelegramSink::with_sender(
+            "123:abc",
+            "42",
+            Arc::new(FakeSender {
+                url: Arc::clone(&url),
+                body: Arc::clone(&body),
+            }),
+        );
+        sink.send("你好").await.unwrap();
+        assert_eq!(
+            *url.lock().unwrap(),
+            "https://api.telegram.org/bot123:abc/sendMessage"
+        );
+        let b = body.lock().unwrap();
+        assert_eq!(b["chat_id"], "42");
+        assert_eq!(b["text"], "你好");
+    }
+
+    #[tokio::test]
+    async fn telegram_sink_propagates_api_error() {
+        #[derive(Debug)]
+        struct FailingSender;
+        #[async_trait]
+        impl TelegramSender for FailingSender {
+            async fn send_message(
+                &self,
+                _url: &str,
+                _body: &serde_json::Value,
+            ) -> Result<(), String> {
+                Err("Telegram API 错误: Bad Request".into())
+            }
+        }
+        let sink = TelegramSink::with_sender("123:abc", "42", Arc::new(FailingSender));
+        let r = sink.send("hi").await;
+        assert!(r.is_err());
+        assert!(r.unwrap_err().contains("Bad Request"), "错误如实上抛");
     }
 
     #[test]
