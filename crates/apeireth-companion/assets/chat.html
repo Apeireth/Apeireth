@@ -156,6 +156,7 @@ document.getElementById('gdo').addEventListener('click', async () => {
   const token = document.getElementById('gtoken').value.trim();
   const msg = document.getElementById('grantmsg');
   if (!tool) { msg.textContent = '请输入工具名'; return; }
+  if (!token) { msg.textContent = '请输入 master token'; return; }
   try {
     const r = await fetch('/v1/apeireth/grant', {
       method: 'POST',
@@ -163,7 +164,12 @@ document.getElementById('gdo').addEventListener('click', async () => {
       body: JSON.stringify({ tool, hours: parseInt(hours), master_token: token })
     });
     const j = await r.json();
-    msg.textContent = r.ok ? ('✅ 已授权 ' + tool + ' ' + hours + 'h') : ('❌ ' + (j.error || r.status));
+    if (r.ok) {
+      try { localStorage.setItem('apeireth_token', token); } catch {}
+      msg.textContent = '✅ 已授权 ' + tool + ' ' + hours + 'h';
+    } else {
+      msg.textContent = '❌ ' + (j.error || r.status);
+    }
     document.getElementById('gtoken').value = '';
   } catch (e) {
     msg.textContent = '网络错误: ' + e.message;
@@ -184,10 +190,15 @@ async function pollRequests() {
       const tok = document.createElement('input');
       tok.type = 'password';
       tok.placeholder = 'master token';
-      tok.value = TOKEN;
+      tok.value = (() => { try { return localStorage.getItem('apeireth_token') || ''; } catch { return ''; } })();
       const btn = document.createElement('button');
       btn.textContent = '批准 ' + req.tool;
       btn.addEventListener('click', async () => {
+        const t = tok.value.trim();
+        if (!t) {
+          card.innerHTML = '<span style="color:#f0a0a0">❌ 请先在卡片右侧输入 master token（或先用⚙授权面板授权过）</span>';
+          return;
+        }
         try {
           const g = await fetch('/v1/apeireth/grant', {
             method: 'POST',
