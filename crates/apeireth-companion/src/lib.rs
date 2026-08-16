@@ -60,6 +60,7 @@ pub mod oracle_adapters;  // N3: 预测机套件数据源适配器 (拉取→规
 pub mod dream;
 pub mod reflection;
 pub mod thought_cluster;  // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
+pub mod meta_thinking;  // §5.1③: 元思考递归链 (VCP MetaThinkingManager 精神, 思考→再思考, 自包含; reflection 接线待 N14)
 pub mod daily_summary;
 pub mod goal;
 pub mod capability;
@@ -77,6 +78,8 @@ pub mod memory_extractor;
 pub mod goal_tools;
 pub mod memory_graph;
 pub mod morphology;  // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
+pub mod diary;  // §5.1 机制⑤: 日记本中心 (RAGDiaryPlugin 精神, 按日归档+检索+注入 trait 口)
+pub mod topic_groups;  // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
 pub mod context;
 pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
 pub mod assemble;
