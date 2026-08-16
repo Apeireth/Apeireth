@@ -87,6 +87,9 @@ pub trait HistoryStream {
         session_id: &str,
         include_tombstoned: bool,
     ) -> MemoryResult<Vec<HistoryEntry>>;
+
+    /// 取最近 N 条 (审计/摘要用; 时间升序返回, 最新在末尾).
+    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>>;
 }
 
 // ============================================
@@ -263,6 +266,30 @@ pub(crate) fn list_for_session(
     for r in rows {
         out.push(r?);
     }
+    Ok(out)
+}
+
+pub(crate) fn list_recent_entries(
+    conn: &Connection,
+    table: &'static str,
+    limit: usize,
+    include_tombstoned: bool,
+) -> MemoryResult<Vec<HistoryEntry>> {
+    let mut sql = format!(
+        "SELECT id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at
+         FROM {table}"
+    );
+    if !include_tombstoned {
+        sql.push_str(" WHERE tombstoned_at IS NULL");
+    }
+    sql.push_str(" ORDER BY created_at DESC, id DESC LIMIT ?1");
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit as i64], row_mapper(table))?;
+    let mut out = Vec::new();
+    for r in rows {
+        out.push(r?);
+    }
+    out.reverse(); // 时间升序, 最新在末尾 (与其余查询一致)
     Ok(out)
 }
 

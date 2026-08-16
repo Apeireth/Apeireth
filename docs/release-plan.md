@@ -48,10 +48,25 @@
 ### 5. 能力演化回路（蓝图，发布后第一优先级）
 呼应「AI 自己长能力」：AI 提案新能力 → 登记能力库 → 宪法评审 → 主人批准 → 激活 → 监控 → 差评回滚。本会话已落第一块：`capability` 提案机制件（pending→approved→active 状态机 + 真库登记）。
 
-## 四、发布 checklist
+## 四、进度对账（2026-08-16 实况，诚实标注）
+
+| 规划项 | 现状 | 证据 |
+|---|---|---|
+| 装配层 | ✅ **已实现** (suite 目录 + 插件组校验 + 权限登记) | `suites.rs` SuiteCatalog::install_with_plugins |
+| 沙盒包 | 🟡 清单就绪 (Layer 2 描述), 物理隔离 = exec_worker 已有, Sandboxie/landlock 集成未做 | `sandbox-pack` |
+| 审计包 | ✅ **有真工具** (audit_log 查询留痕 + masked 脱敏 + append-only) | `audit.rs` + `list_recent` (memory streams) |
+| 渗透套件 | ✅ **有真内容** (recon_plan E-1 范围闸 + scan_report nmap 解析, 双插件) | `pentest.rs` |
+| 预测机套件 | ✅ **有真内容 + 真 LLM 验收全链串联** | `oracle.rs` + oracle_acceptance |
+| 教育套件 | ✅ **有真内容** (dx_check 规则层检查器 + 真插件) | `education.rs` |
+| 生态插件 (新) | ✅ github-accel (xiake.pro 节点池实测选最快) | `gh_accel.rs` + `github_accel.rs` |
+| 能力演化回路 | 🟡 第一块落地 (提案→评审→批准→激活), 生成/验证/部署/监控/回滚未全 | `capability.rs` / `evolution_gate.rs` |
+
+## 五、发布 checklist
 - [x] 本体核心闭环（production_daemon 全集成验收）
-- [ ] 装配层（feature + suite 清单）
-- [ ] 扩展包逐个成型（沙盒包先行）
-- [ ] 升级套件框架 + 第一个套件
+- [x] 装配层（SuiteCatalog + install_with_plugins + 插件生命周期）
+- [x] 升级套件真内容（教育/渗透/预测机 三件齐）
+- [x] 审计能力包真工具（audit_log）
+- [ ] 扩展包逐个成型（沙盒包物理层 / 多通道 / GUI / 本地智能）
 - [ ] 文档（用户手册/快速开始/能力包说明）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
+- [ ] 发布产物（crate 整理 / README / tgz）
