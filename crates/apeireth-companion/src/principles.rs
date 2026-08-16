@@ -378,4 +378,28 @@ mod tests {
         // 空 statement 拒绝
         assert!(propose.call(json!({"statement": "", "rationale": "x", "source": "y"})).await.is_err());
     }
+
+    // ===== S7: constant-time token 比较 =====
+
+    #[test]
+    fn constant_time_eq_matches_and_rejects() {
+        assert!(constant_time_eq("secret-token", "secret-token"));
+        assert!(constant_time_eq("", ""));
+        assert!(!constant_time_eq("secret-token", "secret-tokem")); // 末位差
+        assert!(!constant_time_eq("secret-token", "secret-toke")); // 长度差 1
+        assert!(!constant_time_eq("secret-token", "secret-token1")); // 长度差 1 (反向)
+        assert!(!constant_time_eq("secret-token", "")); // 空
+        assert!(!constant_time_eq("a", "b"));
+    }
+
+    #[test]
+    fn approve_uses_constant_time_comparison_path() {
+        // 功能回归: constant-time 替换 == 后批准语义不变 (错误 token 拒绝/正确通过)
+        let s = PrincipleStore::with_master_token(store(), "ct-secret");
+        let p = s.propose("ct 回归规则", "r", "s").unwrap();
+        assert!(s.approve(&p.id, "ct-secret-prefix-mismatch").is_err());
+        assert!(s.approve(&p.id, "ct-secrt").is_err());
+        let ok = s.approve(&p.id, "ct-secret").unwrap();
+        assert_eq!(ok.status, "active");
+    }
 }
