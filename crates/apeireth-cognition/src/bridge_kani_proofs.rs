@@ -16,7 +16,7 @@ use apeireth_consciousness::plutchik::{
 
 use crate::consciousness_bridge::{accumulate_biases, plutchik_to_decision_bias, DecisionBias};
 
-fn make_basic(b: PlutchikBasic, intensity: f64) -> PlutchikEmotion {
+fn make_basic(b: PlutchikBasic) -> PlutchikEmotion {
     PlutchikEmotion::Basic(b, PlutchikIntensity::Mild)
 }
 
@@ -28,7 +28,7 @@ fn make_advanced(a: PlutchikAdvanced) -> PlutchikEmotion {
 #[cfg(kani)]
 #[kani::proof]
 fn proof_bridge1_bias_clamped() {
-    let e = make_basic(PlutchikBasic::Joy, 0.5);
+    let e = make_basic(PlutchikBasic::Joy);
     let bias = plutchik_to_decision_bias(&e);
     // All 4 dimensions must be in [0.0, 1.0]
     assert!(bias.creativity >= 0.0 && bias.creativity <= 1.0);
@@ -45,7 +45,7 @@ fn r176_b1_01_all_basic_biases_valid() {
         PlutchikBasic::Surprise, PlutchikBasic::Sadness, PlutchikBasic::Disgust,
         PlutchikBasic::Anger, PlutchikBasic::Anticipation,
     ] {
-        let e = make_basic(*b, 0.5);
+        let e = make_basic(*b);
         let bias = plutchik_to_decision_bias(&e);
         assert!(bias.creativity >= 0.0 && bias.creativity <= 1.0, "creativity out of range for {:?}", b);
         assert!(bias.caution >= 0.0 && bias.caution <= 1.0);
@@ -87,9 +87,9 @@ fn r176_b1_03_accumulate_empty_default() {
 #[test]
 fn r176_b1_04_accumulate_clamped() {
     let biases = vec![
-        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Joy, 0.5)),
-        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Fear, 0.5)),
-        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Anger, 0.5)),
+        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Joy)),
+        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Fear)),
+        plutchik_to_decision_bias(&make_basic(PlutchikBasic::Anger)),
     ];
     let result = accumulate_biases(&biases);
     assert!(result.creativity >= 0.0 && result.creativity <= 1.0);

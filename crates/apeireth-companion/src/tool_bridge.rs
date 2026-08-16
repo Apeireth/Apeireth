@@ -402,6 +402,10 @@ impl ToolBridge {
             "forecast".to_string(),
             Arc::new(ForecastTool::new(Arc::new(ForecastRegistry::new(Arc::clone(&store), "me")))),
         );
+        registry.register(
+            "audit_log".to_string(),
+            Arc::new(crate::audit::AuditLogTool::new(Arc::clone(&store))),
+        );
         let executor = ToolExecutor::new(registry.clone());
         // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
         let packs = PackRegistry::new();
@@ -414,6 +418,7 @@ impl ToolBridge {
                 "propose_capability".to_string(),
                 "simulate".to_string(),
                 "forecast".to_string(),
+                "audit_log".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,

@@ -67,6 +67,8 @@
 | education.rs | 教育套件真内容: dx_check 规则层检查器 (忘换 dx/混用/缺微分/残留 x/根号模式表) + EducationDxPlugin (注册+授权, 卸载真清理) | dx_check 工具 |
 | pentest.rs | 渗透套件真内容: recon_plan (计划编排+E-1 范围闸) + scan_report (nmap 行解析) + 双插件 (卸载真清理) | recon_plan/scan_report 工具 |
 | gh_accel.rs (companion) + github_accel.rs (tools) | GitHub 加速插件: xiake.pro 节点池 → 本机并发实测 (2xx+PNG魔数内容验证) → 选最快 → 加速 URL/命令 (docs/ref-gh-accel.md) | gh_accel 工具 (插件注册) |
+| audit.rs | 审计能力包: audit_log 工具 (留痕查询, masked 脱敏不还原, append-only) | audit_log 工具 (内置注册) |
+| append_only.rs (memory) | HistoryStream 新增 list_recent (最近 N 条, 审计/摘要用) | 6 流共享 |
 
 ## 三、加新模块规范（维护 checklist）
 
