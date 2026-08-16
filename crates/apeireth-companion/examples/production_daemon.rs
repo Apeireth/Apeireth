@@ -139,6 +139,8 @@ async fn main() {
 
     // 1. 真 SQLite 记忆 + 组装
     let store = open_memory_store().expect("真记忆库");
+    // 持久 continuity_id (哲学锚点 §18.3): 跨载体/重启稳定身份, 记忆/日志/目标/反思共用
+    let cid = apeireth_companion::daemon::continuity_id_from_env("companion-main");
     let context = MemoryContextSource::new(Arc::clone(&store));
     let mut bond = Bond::new();
     bond.evolve(BondStage::Trusted, 0.6);
@@ -163,21 +165,22 @@ async fn main() {
     ));
     println!("[2] ToolBridge 全增强: 宪法评审 + 执行体隔离 + spill + post 钩子");
 
-    // 3. 会话日志 + 续传 + Goal
-    let slog = SessionLog::new(Arc::clone(&store), "me");
+    // 3. 会话日志 + 续传 + Goal (统一 continuity_id 锚点)
+    let slog = SessionLog::new(Arc::clone(&store), &cid);
     let snaps = ContinuationStore::new(std::env::temp_dir().join("apeireth-prod-cont"));
     let mut goal = GoalService::new(std::env::temp_dir().join("apeireth-prod-goal"));
     let g = goal.create("辅助主人学习高数/线代", 4).unwrap();
-    println!("[3] SessionLog + ContinuationStore + Goal 就绪 (目标: {})", g.objective);
+    println!("[3] SessionLog + ContinuationStore + Goal 就绪 (目标: {}, cid: {cid})", g.objective);
 
-    // 4. 做梦/反思接 daemon
+    // 4. 做梦/反思接 daemon (统一 continuity_id)
     let dream = DreamScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock())
-        .with_quiet_threshold(Duration::from_secs(6 * 3600));
-    let reflect = ReflectionScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock(), "prod-main");
+        .with_quiet_threshold(Duration::from_secs(6 * 3600))
+        .with_session(cid.clone());
+    let reflect = ReflectionScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock(), cid.clone());
     let mut daemon = CompanionDaemon::new(bond, Boundaries::default(), CompanionDelivery::new(
         ThrottledUtterance::new(TonalUtterance::new(key.clone(), tone).unwrap(), Duration::from_secs(30)),
         ConsoleSink,
-    ), context, "me", Duration::from_secs(60)).with_dream(dream).with_reflection(reflect);
+    ), context, cid.clone(), Duration::from_secs(60)).with_dream(dream).with_reflection(reflect);
     println!("[4] daemon 组装: 做梦(6h) + 反思(24h) 已接 step");
 
     // 5. 主动涌现 (seed 作息 → tick)
