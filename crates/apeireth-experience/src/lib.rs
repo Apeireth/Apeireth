@@ -20,17 +20,17 @@ pub mod association;
 pub mod graph;
 pub mod wiki;
 // R177: experience invariants
-mod organ_kani_proofs;
-pub mod council_bridge;  // R174: experience -> council (wiki + KG + association) bridge
+pub mod council_bridge;
+mod organ_kani_proofs; // R174: experience -> council (wiki + KG + association) bridge
 
 // Re-exports 公共 API
 pub use association::{AssociationEdge, AssociationNetwork, AssociationNode};
-pub use graph::{KnowledgeEdge, KnowledgeGraph, KnowledgeNode, NodeKind, RelationKind};
-pub use wiki::WikiEntry;
 pub use council_bridge::{
     association_to_context_block, bundle_to_history_refs, kg_to_context_block,
     wiki_to_context_block, wiki_to_history_ref,
 };
+pub use graph::{KnowledgeEdge, KnowledgeGraph, KnowledgeNode, NodeKind, RelationKind};
+pub use wiki::WikiEntry;
 
 #[cfg(test)]
 mod tests {
@@ -49,8 +49,19 @@ mod tests {
         // 3. 关联 KG
         let mut kg = KnowledgeGraph::new();
         let n1 = kg.add_node(KnowledgeNode::new("Rust", NodeKind::Extracted, 0.9, "ep-1"));
-        let n2 = kg.add_node(KnowledgeNode::new("Borrow checker", NodeKind::Inferred, 0.7, "ep-1"));
-        kg.add_edge(crate::KnowledgeEdge::new(n1, n2, RelationKind::Coordination, 0.8)).unwrap();
+        let n2 = kg.add_node(KnowledgeNode::new(
+            "Borrow checker",
+            NodeKind::Inferred,
+            0.7,
+            "ep-1",
+        ));
+        kg.add_edge(crate::KnowledgeEdge::new(
+            n1,
+            n2,
+            RelationKind::Coordination,
+            0.8,
+        ))
+        .unwrap();
         assert_eq!(kg.node_count(), 2);
         assert_eq!(kg.edge_count(), 1);
         // 4. 联想

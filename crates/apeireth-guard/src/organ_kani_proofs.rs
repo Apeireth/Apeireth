@@ -15,7 +15,7 @@
 #![allow(missing_docs)]
 
 use crate::pii::{detect_pii, PiiKind, PiiMatch};
-use crate::{PrivacyAction, PrivacyGuard, RedactionStrategy, RedactionResult};
+use crate::{PrivacyAction, PrivacyGuard, RedactionResult, RedactionStrategy};
 
 // ============================================
 // Property 1: PII 位置 start < end
@@ -58,7 +58,10 @@ fn r177_grd_03_redact_irreversible() {
     let original = "alice@example.com and 192.168.1.1";
     let r: RedactionResult = g.check_and_redact(original, 1_700_000_000);
     assert_ne!(r.redacted_text, original, "redact 后应 != original");
-    assert!(!r.redacted_text.contains("alice@example.com"), "email 不应可见");
+    assert!(
+        !r.redacted_text.contains("alice@example.com"),
+        "email 不应可见"
+    );
     assert!(!r.redacted_text.contains("192.168.1.1"), "IP 不应可见");
 }
 
@@ -81,7 +84,11 @@ fn r177_grd_04_four_strategies() {
         outputs.insert(r.redacted_text.clone());
     }
     // 至少 3 种不同输出 (Hash 和 Mask 可能相同情况, 但 ReplaceLabel 必不同)
-    assert!(outputs.len() >= 3, "4 策略应产生至少 3 种不同输出, got {}", outputs.len());
+    assert!(
+        outputs.len() >= 3,
+        "4 策略应产生至少 3 种不同输出, got {}",
+        outputs.len()
+    );
 }
 
 // ============================================
@@ -94,7 +101,11 @@ fn r177_grd_05_audit_ring_buffer() {
         let _ = g.check_and_redact("alice@example.com", 1_700_000_000 + i);
     }
     let count = g.audit().len();
-    assert!(count <= 3, "audit ring buffer 应 ≤ capacity (3), got {}", count);
+    assert!(
+        count <= 3,
+        "audit ring buffer 应 ≤ capacity (3), got {}",
+        count
+    );
 }
 
 // ============================================

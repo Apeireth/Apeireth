@@ -5,12 +5,12 @@
 //! but the root session never dies until the process exits. This is the
 //! OpenClaw "single long-lived" mode.
 
+use crate::node::{NodeId, NodeKind};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
 use uuid::Uuid;
-use crate::node::{NodeId, NodeKind};
 
 /// Stable session identifier.
 pub type SessionId = Uuid;
@@ -152,11 +152,20 @@ impl SessionRegistry {
     }
 
     pub fn list_by_node(&self, node_id: NodeId) -> Vec<Session> {
-        self.inner.read().values().filter(|s| s.node_id == node_id).cloned().collect()
+        self.inner
+            .read()
+            .values()
+            .filter(|s| s.node_id == node_id)
+            .cloned()
+            .collect()
     }
 
     pub fn live_count(&self) -> usize {
-        self.inner.read().values().filter(|s| s.state.is_alive()).count()
+        self.inner
+            .read()
+            .values()
+            .filter(|s| s.state.is_alive())
+            .count()
     }
 
     pub fn len(&self) -> usize {
@@ -168,7 +177,11 @@ impl SessionRegistry {
     }
 
     pub fn root(&self) -> Option<Session> {
-        self.inner.read().values().find(|s| s.is_root() && s.state.is_alive()).cloned()
+        self.inner
+            .read()
+            .values()
+            .find(|s| s.is_root() && s.state.is_alive())
+            .cloned()
     }
 }
 
