@@ -40,8 +40,9 @@ use apeireth_companion::daemon::{
     continuity_id_from_env, open_memory_store,
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
-use apeireth_companion::emergence::Initiative;
+use apeireth_companion::emergence::{Initiative, RhythmEstimate};
 use apeireth_companion::experience::ExperienceStore;
+use apeireth_companion::goal::GoalService;
 use apeireth_companion::judicator::{ConstitutionLlm, LlmJudicator};
 use apeireth_companion::memory_extractor::{ExtractedMemory, MemoryExtractionService, MemoryExtractor};
 use apeireth_companion::memory_injection::build_memory_injection;
@@ -60,7 +61,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use chrono::{Datelike, Local, Utc};
+use chrono::{Datelike, Local, Timelike, Utc};
 use serde_json::{json, Value};
 
 const BASE_URL: &str = "https://api.minimaxi.com";
@@ -221,6 +222,10 @@ struct AppState {
     last_extract: std::sync::Mutex<std::time::Instant>,
     /// 提炼间隔 (env APEIRETH_EXTRACT_INTERVAL_SECONDS 可调, 默认 600s; 验证时可设小).
     extract_interval: std::time::Duration,
+    /// 节律共享状态 (daemon_loop 每 tick 写入; 注入读 — 模块 1 状态感知).
+    rhythm: std::sync::Arc<std::sync::Mutex<Option<RhythmEstimate>>>,
+    /// 目标服务 (注入读; 模块 6 将接工具写).
+    goal: std::sync::Arc<std::sync::Mutex<GoalService>>,
     subject: String,
 }
 
@@ -389,12 +394,57 @@ impl UtteranceGenerator for TonalUtterance {
     }
 }
 
-/// 预处理链 ⓪: 当前时刻注入 (VCP AIMemoPrompt 对齐: 时间推理的绝对基准).
-/// 修复 2026-08-16: 之前不注入时刻 → AI 说「晚上好/周日」是猜的 (时间幻觉).
-fn inject_now() -> String {
+/// 预处理链 ⓪: 状态感知块 (模块 1) — 统一「当前状态」: 时刻+节律+目标+约定+情绪.
+/// 设计 (docs/companion-gaps.md 模块 1): 替代散装注入, 一个状态块喂全.
+fn inject_state(
+    store: &Arc<SqliteMemoryStore>,
+    rhythm: &std::sync::Arc<std::sync::Mutex<Option<RhythmEstimate>>>,
+    goal: &std::sync::Arc<std::sync::Mutex<GoalService>>,
+) -> String {
     let now = Local::now();
     let week = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][now.weekday().num_days_from_monday() as usize];
-    format!("【当前时刻】{} {} {}:{} (本机时区, 时间推理以此为准)", now.format("%Y-%m-%d"), week, now.format("%H"), now.format("%M"))
+    let mut parts: Vec<String> = vec![format!(
+        "【当前状态】{} {} {}:{} (本机时区, 时间推理以此为准)",
+        now.format("%Y-%m-%d"), week, now.format("%H"), now.format("%M")
+    )];
+    // 节律活跃概率 (UTC 坐标, 与观察自洽; 只给概率不给时段, 诚实)
+    if let Ok(r) = rhythm.lock() {
+        if let Some(est) = r.as_ref() {
+            if est.days > 0 {
+                parts.push(format!(
+                    "· 此刻主人活跃概率约 {:.0}% (节律观察 {} 天, 置信 {:.0}%)",
+                    est.active_probability * 100.0, est.days, est.confidence * 100.0
+                ));
+            }
+        }
+    }
+    // 当前目标
+    if let Ok(g) = goal.lock() {
+        if let Some(snap) = g.current() {
+            parts.push(format!(
+                "· 当前目标: {} (阶段 {}, 修订 {})",
+                snap.objective,
+                snap.phase.label(),
+                snap.revision
+            ));
+        }
+    }
+    // 近期约定 + 情绪信号 (提炼器产物; AI 结合时刻自行推算「距 X 还有 N 天」)
+    let eps = store.recent_episodes(MEMORY_SESSION, 100).unwrap_or_default();
+    let commitments: Vec<&String> = eps
+        .iter()
+        .filter(|e| e.content.contains("【约定】"))
+        .take(3)
+        .map(|e| &e.content)
+        .collect();
+    if !commitments.is_empty() {
+        let list = commitments.iter().map(|c| c.chars().take(80).collect::<String>()).collect::<Vec<_>>().join("; ");
+        parts.push(format!("· 近期约定: {list}"));
+    }
+    if let Some(e) = eps.iter().rev().find(|e| e.content.contains("【情绪信号】")) {
+        parts.push(format!("· 主人最近情绪信号: {}", e.content.chars().take(80).collect::<String>()));
+    }
+    parts.join("\n")
 }
 
 /// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 查询记忆会话 "me").
@@ -671,7 +721,7 @@ async fn chat_completions(
     let growth = inject_growth(&st.store);
     let prefs = MemoryExtractionService::new(Arc::clone(&st.store)).preference_injection();
     let mut injections: Vec<String> = Vec::new();
-    injections.push(inject_now());
+    injections.push(inject_state(&st.store, &st.rhythm, &st.goal));
     if !mem.is_empty() {
         injections.push(mem);
     }
@@ -988,6 +1038,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|v| v.parse::<u64>().ok())
         .map(Duration::from_secs)
         .unwrap_or(Duration::from_secs(600));
+    // 目标服务 (持久目录 %APPDATA%\apeireth\goals; 模块 6 将接工具写)
+    let goal_dir = apeireth_companion::daemon::default_memory_path()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| std::env::temp_dir().join("apeireth-goals"))
+        .join("goals");
+    let mut goals = GoalService::new(&goal_dir);
+    goals.restore("goal-main");
+    let rhythm_share = std::sync::Arc::new(std::sync::Mutex::new(None));
     let state = Arc::new(AppState {
         bridge,
         store,
@@ -995,6 +1054,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         interactions: tx_interact,
         last_extract: std::sync::Mutex::new(std::time::Instant::now()),
         extract_interval,
+        rhythm: std::sync::Arc::clone(&rhythm_share),
+        goal: std::sync::Arc::new(std::sync::Mutex::new(goals)),
         subject,
     });
     let app = Router::new()
@@ -1013,9 +1074,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // daemon 循环与 HTTP 同 task 交替 (daemon 内部 RefCell 跨 await → 非 Send, 不能 spawn)
     let d_store = Arc::clone(&state.store);
     let d_pipeline = Arc::clone(&state.pipeline);
+    let d_rhythm = Arc::clone(&state.rhythm);
     tokio::select! {
         r = axum::serve(listener, app) => { r?; }
-        _ = daemon_loop(daemon, rx_interact, d_store, d_pipeline) => {}
+        _ = daemon_loop(daemon, rx_interact, d_store, d_pipeline, d_rhythm) => {}
     }
     Ok(())
 }
@@ -1032,6 +1094,7 @@ async fn daemon_loop(
     mut rx: tokio::sync::mpsc::Receiver<chrono::DateTime<Utc>>,
     store: Arc<SqliteMemoryStore>,
     pipeline: Arc<Pipeline>,
+    rhythm_share: std::sync::Arc<std::sync::Mutex<Option<RhythmEstimate>>>,
 ) {
     let mut last_cycles: u64 = daemon
         .reflection
@@ -1045,6 +1108,15 @@ async fn daemon_loop(
             _ = ticker.tick() => {
                 let t0 = std::time::Instant::now();
                 daemon.step().await;
+                // 节律共享 (模块 1 状态感知): 每 tick 更新活跃概率 (UTC 坐标, 与观察自洽)
+                {
+                    let now = Utc::now();
+                    let mins = now.hour() * 60 + now.minute();
+                    let est = daemon.awake.loop_.rhythm.estimate(mins);
+                    if let Ok(mut share) = rhythm_share.lock() {
+                        *share = Some(est);
+                    }
+                }
                 // 延伸 1: 反思周期完成 → LLM 提炼经验入经验库 (自成长管道 Level 0)
                 let cycles = daemon.reflection.as_ref().map(|r| r.cycles_completed()).unwrap_or(0);
                 if cycles > last_cycles {
