@@ -20,14 +20,18 @@
 
 /// 算术平均 (空 slice 返回 0.0)
 pub fn mean(values: &[f64]) -> f64 {
-    if values.is_empty() { return 0.0; }
+    if values.is_empty() {
+        return 0.0;
+    }
     let sum: f64 = values.iter().sum();
     sum / values.len() as f64
 }
 
 /// 总体方差 (除以 N, 不是 N-1)
 pub fn variance_pop(values: &[f64]) -> f64 {
-    if values.is_empty() { return 0.0; }
+    if values.is_empty() {
+        return 0.0;
+    }
     let m = mean(values);
     let sum_sq: f64 = values.iter().map(|x| (x - m).powi(2)).sum();
     sum_sq / values.len() as f64
@@ -35,7 +39,9 @@ pub fn variance_pop(values: &[f64]) -> f64 {
 
 /// 样本方差 (除以 N-1, Bessel 校正)
 pub fn variance_sample(values: &[f64]) -> f64 {
-    if values.len() < 2 { return 0.0; }
+    if values.len() < 2 {
+        return 0.0;
+    }
     let m = mean(values);
     let sum_sq: f64 = values.iter().map(|x| (x - m).powi(2)).sum();
     sum_sq / (values.len() as f64 - 1.0)
@@ -53,7 +59,9 @@ pub fn stddev_sample(values: &[f64]) -> f64 {
 
 /// 中位数 (P50)
 pub fn median(values: &mut [f64]) -> f64 {
-    if values.is_empty() { return 0.0; }
+    if values.is_empty() {
+        return 0.0;
+    }
     values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     let n = values.len();
     if n % 2 == 1 {
@@ -67,10 +75,14 @@ pub fn median(values: &mut [f64]) -> f64 {
 ///
 /// 用 linear interpolation 方法, R type 7 (Excel QUARTILE 默认).
 pub fn percentile(values: &mut [f64], p: f64) -> f64 {
-    if values.is_empty() { return 0.0; }
+    if values.is_empty() {
+        return 0.0;
+    }
     let p = p.clamp(0.0, 1.0);
     values.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-    if values.len() == 1 { return values[0]; }
+    if values.len() == 1 {
+        return values[0];
+    }
     let n = values.len();
     let rank = p * (n - 1) as f64;
     let lower = rank.floor() as usize;
@@ -95,7 +107,9 @@ pub fn z_score(values: &[f64]) -> Vec<f64> {
 
 /// Min-max 缩放到 [0, 1] (返回新 Vec)
 pub fn min_max_scale(values: &[f64]) -> Vec<f64> {
-    if values.is_empty() { return Vec::new(); }
+    if values.is_empty() {
+        return Vec::new();
+    }
     let min = values.iter().cloned().fold(f64::INFINITY, f64::min);
     let max = values.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
     let range = max - min;
@@ -114,7 +128,11 @@ pub struct Welford {
 
 impl Welford {
     pub fn new() -> Self {
-        Self { count: 0, mean: 0.0, m2: 0.0 }
+        Self {
+            count: 0,
+            mean: 0.0,
+            m2: 0.0,
+        }
     }
 
     /// 添加一个新样本
@@ -126,16 +144,28 @@ impl Welford {
         self.m2 += delta * delta2;
     }
 
-    pub fn count(&self) -> u64 { self.count }
-    pub fn mean(&self) -> f64 { self.mean }
-    pub fn variance(&self) -> f64 {
-        if self.count < 2 { 0.0 } else { self.m2 / (self.count - 1) as f64 }
+    pub fn count(&self) -> u64 {
+        self.count
     }
-    pub fn stddev(&self) -> f64 { self.variance().sqrt() }
+    pub fn mean(&self) -> f64 {
+        self.mean
+    }
+    pub fn variance(&self) -> f64 {
+        if self.count < 2 {
+            0.0
+        } else {
+            self.m2 / (self.count - 1) as f64
+        }
+    }
+    pub fn stddev(&self) -> f64 {
+        self.variance().sqrt()
+    }
 }
 
 impl Default for Welford {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -159,19 +189,31 @@ mod tests {
     #[test]
     fn t03_variance_pop() {
         // [1,2,3,4,5] mean=3, var = ((1-3)^2 + (2-3)^2 + (3-3)^2 + (4-3)^2 + (5-3)^2) / 5 = 10/5 = 2.0
-        assert!(approx_eq(variance_pop(&[1.0, 2.0, 3.0, 4.0, 5.0]), 2.0, 0.001));
+        assert!(approx_eq(
+            variance_pop(&[1.0, 2.0, 3.0, 4.0, 5.0]),
+            2.0,
+            0.001
+        ));
     }
 
     #[test]
     fn t04_variance_sample() {
         // sample var = 10/4 = 2.5
-        assert!(approx_eq(variance_sample(&[1.0, 2.0, 3.0, 4.0, 5.0]), 2.5, 0.001));
+        assert!(approx_eq(
+            variance_sample(&[1.0, 2.0, 3.0, 4.0, 5.0]),
+            2.5,
+            0.001
+        ));
     }
 
     #[test]
     fn t05_stddev_pop() {
         // sqrt(2.0) ~ 1.414
-        assert!(approx_eq(stddev_pop(&[1.0, 2.0, 3.0, 4.0, 5.0]), 1.414, 0.01));
+        assert!(approx_eq(
+            stddev_pop(&[1.0, 2.0, 3.0, 4.0, 5.0]),
+            1.414,
+            0.01
+        ));
     }
 
     #[test]
@@ -204,7 +246,7 @@ mod tests {
     fn t10_z_score() {
         let z = z_score(&[1.0, 2.0, 3.0, 4.0, 5.0]);
         // mean=0, stddev~1
-        assert!(approx_eq(z[2], 0.0, 0.001));  // mean is 3
+        assert!(approx_eq(z[2], 0.0, 0.001)); // mean is 3
     }
 
     #[test]

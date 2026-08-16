@@ -163,10 +163,7 @@ impl PatternRegistry {
 
     /// 当前注册 pattern 数
     pub fn len(&self) -> usize {
-        self.patterns
-            .lock()
-            .expect("patterns lock poisoned")
-            .len()
+        self.patterns.lock().expect("patterns lock poisoned").len()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -204,7 +201,7 @@ mod tests {
         assert!(p.matches("agent.bob"));
         assert!(p.matches("agent.alice"));
         assert!(!p.matches("agent.team.lead")); // 多段
-        assert!(!p.matches("agent"));            // 0 段
+        assert!(!p.matches("agent")); // 0 段
     }
 
     #[test]
@@ -213,7 +210,7 @@ mod tests {
         assert!(p.matches("agent.bob"));
         assert!(p.matches("agent.team.lead"));
         assert!(p.matches("agent.x.y.z"));
-        assert!(!p.matches("agent"));            // # 必须 ≥ 1 段 (因为 agent 是 literal 段)
+        assert!(!p.matches("agent")); // # 必须 ≥ 1 段 (因为 agent 是 literal 段)
     }
 
     #[test]
@@ -221,7 +218,7 @@ mod tests {
         let p = TopicPattern::parse("*");
         assert!(p.matches("foo"));
         assert!(p.matches("bar"));
-        assert!(!p.matches("foo.bar"));         // 多段
+        assert!(!p.matches("foo.bar")); // 多段
     }
 
     #[test]
@@ -237,8 +234,8 @@ mod tests {
         let p = TopicPattern::parse("agent.*.foo");
         assert!(p.matches("agent.bob.foo"));
         assert!(p.matches("agent.alice.foo"));
-        assert!(!p.matches("agent.foo"));       // 段数不够
-        assert!(!p.matches("agent.bob.bar"));   // 末尾不对
+        assert!(!p.matches("agent.foo")); // 段数不够
+        assert!(!p.matches("agent.bob.bar")); // 末尾不对
     }
 
     #[test]

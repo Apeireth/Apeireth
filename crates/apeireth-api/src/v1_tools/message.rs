@@ -35,11 +35,15 @@ pub struct MessageTool {
 
 impl MessageTool {
     pub fn new() -> Self {
-        Self { messages: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            messages: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     async fn dispatch(&self, args: Value) -> Result<Value, String> {
-        let action = args.get("action").and_then(|v| v.as_str())
+        let action = args
+            .get("action")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: action".to_string())?;
         match action {
             "send" => self.action_send(args).await,
@@ -50,10 +54,15 @@ impl MessageTool {
     }
 
     async fn action_send(&self, args: Value) -> Result<Value, String> {
-        let target = args.get("target").and_then(|v| v.as_str())
+        let target = args
+            .get("target")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: target".to_string())?;
-        let sender = args.get("sender").and_then(|v| v.as_str())
-            .unwrap_or("anonymous").to_string();
+        let sender = args
+            .get("sender")
+            .and_then(|v| v.as_str())
+            .unwrap_or("anonymous")
+            .to_string();
         let payload = args.get("payload").cloned().unwrap_or(Value::Null);
         let ts = args.get("ts").and_then(|v| v.as_i64()).unwrap_or_else(|| {
             std::time::SystemTime::now()
@@ -74,12 +83,22 @@ impl MessageTool {
     }
 
     async fn action_list(&self, args: Value) -> Result<Value, String> {
-        let filter_target = args.get("filter").and_then(|f| f.get("target")).and_then(|v| v.as_str());
-        let filter_sender = args.get("filter").and_then(|f| f.get("sender")).and_then(|v| v.as_str());
-        let limit = args.get("filter").and_then(|f| f.get("limit")).and_then(|v| v.as_u64())
+        let filter_target = args
+            .get("filter")
+            .and_then(|f| f.get("target"))
+            .and_then(|v| v.as_str());
+        let filter_sender = args
+            .get("filter")
+            .and_then(|f| f.get("sender"))
+            .and_then(|v| v.as_str());
+        let limit = args
+            .get("filter")
+            .and_then(|f| f.get("limit"))
+            .and_then(|v| v.as_u64())
             .unwrap_or(50) as usize;
         let g = self.messages.lock();
-        let mut msgs: Vec<&Message> = g.iter()
+        let mut msgs: Vec<&Message> = g
+            .iter()
             .filter(|m| {
                 filter_target.map(|t| m.target == t).unwrap_or(true)
                     && filter_sender.map(|s| m.sender == s).unwrap_or(true)
@@ -92,14 +111,20 @@ impl MessageTool {
     }
 
     async fn action_subscribe(&self, args: Value) -> Result<Value, String> {
-        let target = args.get("target").and_then(|v| v.as_str())
+        let target = args
+            .get("target")
+            .and_then(|v| v.as_str())
             .ok_or_else(|| "missing field: target".to_string())?;
         let mut g = self.messages.lock();
         // drain 命中 target 的消息, 其余保留
         let mut mine: Vec<Message> = Vec::new();
         let mut rest: Vec<Message> = Vec::with_capacity(g.len());
         for m in g.drain(..) {
-            if m.target == target { mine.push(m); } else { rest.push(m); }
+            if m.target == target {
+                mine.push(m);
+            } else {
+                rest.push(m);
+            }
         }
         *g = rest;
         let count = mine.len();
@@ -108,15 +133,25 @@ impl MessageTool {
 }
 
 impl Default for MessageTool {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl Tool for MessageTool {
-    fn name(&self) -> &str { "Message" }
-    fn kind(&self) -> ToolKind { ToolKind::Sync }
-    fn axes(&self) -> ToolAxes { ToolAxes::default_for_kind(ToolKind::Sync) }
-    async fn call(&self, args: Value) -> Result<Value, String> { self.dispatch(args).await }
+    fn name(&self) -> &str {
+        "Message"
+    }
+    fn kind(&self) -> ToolKind {
+        ToolKind::Sync
+    }
+    fn axes(&self) -> ToolAxes {
+        ToolAxes::default_for_kind(ToolKind::Sync)
+    }
+    async fn call(&self, args: Value) -> Result<Value, String> {
+        self.dispatch(args).await
+    }
 }
 
 pub use super::invoke_by_name as invoke;
@@ -135,21 +170,30 @@ mod message_tests {
     async fn message_3_actions_e2e() {
         let m = MessageTool::new();
         // 1. send to alice
-        let r = m.call(json!({
-            "action": "send", "target": "alice", "sender": "bob",
-            "payload": {"text": "hello"}
-        })).await.expect("send alice");
+        let r = m
+            .call(json!({
+                "action": "send", "target": "alice", "sender": "bob",
+                "payload": {"text": "hello"}
+            }))
+            .await
+            .expect("send alice");
         assert!(r["message_id"].is_string());
         // 2. send to bob
-        let r = m.call(json!({
-            "action": "send", "target": "bob", "sender": "alice",
-            "payload": {"text": "hi bob"}
-        })).await.expect("send bob");
+        let r = m
+            .call(json!({
+                "action": "send", "target": "bob", "sender": "alice",
+                "payload": {"text": "hi bob"}
+            }))
+            .await
+            .expect("send bob");
         // 3. list
         let r = m.call(json!({"action": "list"})).await.expect("list");
         assert_eq!(r["count"], 2);
         // 4. subscribe alice (drain)
-        let r = m.call(json!({"action": "subscribe", "target": "alice"})).await.expect("sub alice");
+        let r = m
+            .call(json!({"action": "subscribe", "target": "alice"}))
+            .await
+            .expect("sub alice");
         assert_eq!(r["count"], 1);
         // 5. list again (alice 已被 drain, bob 保留)
         let r = m.call(json!({"action": "list"})).await.expect("list 2");

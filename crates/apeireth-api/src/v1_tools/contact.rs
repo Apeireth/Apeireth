@@ -67,7 +67,9 @@ pub fn validate_email(email: &str) -> Result<(), String> {
         return Err(format!("email too long ({} > 254)", email.len()));
     }
     // 必须含 @ 且 @ 不在首尾
-    let at_pos = email.find('@').ok_or_else(|| format!("email missing '@': {email}"))?;
+    let at_pos = email
+        .find('@')
+        .ok_or_else(|| format!("email missing '@': {email}"))?;
     if at_pos == 0 {
         return Err(format!("email local part empty: {email}"));
     }
@@ -76,7 +78,7 @@ pub fn validate_email(email: &str) -> Result<(), String> {
     }
     let (local, domain) = email.split_at(at_pos);
     let domain = &domain[1..]; // 跳过 '@'
-    // local: 非空 + 不含 @
+                               // local: 非空 + 不含 @
     if local.is_empty() || local.contains('@') {
         return Err(format!("email local part invalid: {email}"));
     }
@@ -417,7 +419,10 @@ pub const CONTACT_K1_CHECKS: [&str; 4] = [
 ];
 
 const _: () = {
-    assert!(CONTACT_ACTIONS.len() == 5, "5 actions: list/create/update/delete/get");
+    assert!(
+        CONTACT_ACTIONS.len() == 5,
+        "5 actions: list/create/update/delete/get"
+    );
     assert!(CONTACT_K1_CHECKS.len() == 4, "4 K-1 强校验");
 };
 
@@ -499,7 +504,9 @@ mod contact_tests {
                 "phone": "+8613800138000"
             }))
             .await;
-        assert!(r.is_err()); let err_msg = r.unwrap_err(); assert!(err_msg.contains("name"));
+        assert!(r.is_err());
+        let err_msg = r.unwrap_err();
+        assert!(err_msg.contains("name"));
         // name 缺
         let r = c
             .call(json!({
@@ -657,7 +664,9 @@ mod contact_tests {
         assert!(r.is_err());
         let r = c.call(json!({"action": "get"})).await;
         assert!(r.is_err());
-        let r = c.call(json!({"action": "delete", "id": "nonexistent"})).await;
+        let r = c
+            .call(json!({"action": "delete", "id": "nonexistent"}))
+            .await;
         assert!(r.is_err());
     }
 

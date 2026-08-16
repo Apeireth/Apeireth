@@ -41,10 +41,46 @@ fn r177_asi_04_v1136_sub_names_distinct() {
 fn r177_asi_05_v05_categories() {
     // 5 类 × 5 维 = 25 但 transferability 4 维 = 24
     let names = V05_DIMENSION_NAMES;
-    let continuity_count = names.iter().filter(|n| n.contains("continuity") || n.contains("recall") || n.contains("context_window") || n.contains("session_recovery") || n.contains("identity_persistence")).count();
-    let salience_count = names.iter().filter(|n| n.contains("importance") || n.contains("novelty") || n.contains("actionability") || n.contains("confidence") || n.contains("temporal_relevance")).count();
-    let identity_count = names.iter().filter(|n| n.contains("core_values") || n.contains("voice_") || n.contains("behavioral") || n.contains("role_") || n.contains("philosophy_alignment")).count();
-    let philosophy_count = names.iter().filter(|n| n.starts_with("v1_") || n.starts_with("v2_") || n.starts_with("v3_") || n.contains("cone_of_truth") || n.contains("action_guard")).count();
+    let continuity_count = names
+        .iter()
+        .filter(|n| {
+            n.contains("continuity")
+                || n.contains("recall")
+                || n.contains("context_window")
+                || n.contains("session_recovery")
+                || n.contains("identity_persistence")
+        })
+        .count();
+    let salience_count = names
+        .iter()
+        .filter(|n| {
+            n.contains("importance")
+                || n.contains("novelty")
+                || n.contains("actionability")
+                || n.contains("confidence")
+                || n.contains("temporal_relevance")
+        })
+        .count();
+    let identity_count = names
+        .iter()
+        .filter(|n| {
+            n.contains("core_values")
+                || n.contains("voice_")
+                || n.contains("behavioral")
+                || n.contains("role_")
+                || n.contains("philosophy_alignment")
+        })
+        .count();
+    let philosophy_count = names
+        .iter()
+        .filter(|n| {
+            n.starts_with("v1_")
+                || n.starts_with("v2_")
+                || n.starts_with("v3_")
+                || n.contains("cone_of_truth")
+                || n.contains("action_guard")
+        })
+        .count();
     assert!(continuity_count >= 1);
     assert!(salience_count >= 1);
     assert!(identity_count >= 1);
