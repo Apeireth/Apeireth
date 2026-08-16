@@ -244,6 +244,63 @@ impl Sink for LarkSink {
     }
 }
 
+/// SSE 广播通道 (模块 4 主动送达: 涌现/事件 → 前端实时推送).
+/// 同时保留控制台输出 (离线可查日志).
+#[derive(Debug, Clone)]
+pub struct BroadcastSink {
+    tx: tokio::sync::broadcast::Sender<String>,
+}
+
+impl BroadcastSink {
+    pub fn new(tx: tokio::sync::broadcast::Sender<String>) -> Self {
+        Self { tx }
+    }
+}
+
+#[async_trait]
+impl Sink for BroadcastSink {
+    async fn send(&self, text: &str) -> Result<(), String> {
+        println!("[他说] {text}");
+        let _ = self.tx.send(format!("[他说] {text}"));
+        Ok(())
+    }
+}
+
+/// 多通道送达 (模块 4): 广播 (SSE) + 可选 Lark (离线) 等, 全通道尽力送达.
+/// 任一通道失败只记日志, 不阻断其他通道; 全失败才返回 Err.
+#[derive(Default)]
+pub struct MultiSink {
+    sinks: Vec<Box<dyn Sink>>,
+}
+
+impl MultiSink {
+    pub fn new() -> Self {
+        Self { sinks: Vec::new() }
+    }
+    pub fn push(mut self, s: Box<dyn Sink>) -> Self {
+        self.sinks.push(s);
+        self
+    }
+}
+
+#[async_trait]
+impl Sink for MultiSink {
+    async fn send(&self, text: &str) -> Result<(), String> {
+        let mut last_err = String::new();
+        for s in &self.sinks {
+            if let Err(e) = s.send(text).await {
+                last_err = format!("{e}");
+                eprintln!("[sink] 送达失败: {e}");
+            }
+        }
+        if last_err.is_empty() {
+            Ok(())
+        } else {
+            Err(last_err)
+        }
+    }
+}
+
 // ============================================================
 // 组合送达: 渲染 → 通道
 // ============================================================
