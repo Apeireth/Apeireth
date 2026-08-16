@@ -119,6 +119,8 @@ pub mod v2_routes;
 pub mod observability;
 pub mod endpoints;  // R23 P1 — 30 route 编译期 hardcode
 pub mod v1_tools;
+/// B1 Web 面板 v2 — 7 个只读面板数据端点 (会话/记忆/图谱/授权/审计; 2026-08-17)
+pub mod panel_readonly;
 /// R20 阶段 2: 鉴权 5 组件 (Bearer + keyring + token bucket + audit log + quota stub)
 pub mod auth;
 /// R20 阶段 2: WebSocket 8 帧 handler (`GET /v1/stream`)
