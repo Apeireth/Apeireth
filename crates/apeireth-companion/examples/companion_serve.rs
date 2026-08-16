@@ -44,7 +44,10 @@ use apeireth_companion::emergence::{Initiative, RhythmEstimate};
 use apeireth_companion::experience::ExperienceStore;
 use apeireth_companion::goal::GoalService;
 use apeireth_companion::judicator::{ConstitutionLlm, LlmJudicator};
-use apeireth_companion::memory_extractor::{ExtractedMemory, MemoryExtractionService, MemoryExtractor};
+use apeireth_companion::memory_extractor::{
+    ExtractedMemory, MemoryExtractionService, MemoryExtractor, MemoryItem, ReconcileAction,
+    ReconcileKind,
+};
 use apeireth_companion::memory_injection::build_memory_injection;
 use apeireth_companion::principles::PrincipleStore;
 use apeireth_companion::proactive::MemoryContextSource;
@@ -93,6 +96,7 @@ const AUTH_RULE: &str = "关于工具授权, 如实说明 (不要虚构交互流
 你不应描述不存在的「弹窗/系统自动弹出」流程; 被拒后如实说「本座已向主人发出授权请求, 主人批准后本座再试」。";
 
 /// 通用记忆提炼器 (真 MiniMax): 对话/记忆 → 结构化提炼 (facts/preferences/commitments/emotional).
+/// v2 (2026-08-16): 每条带 importance (1-10, Generative Agents 式 LLM 打分) + Mem0 式对账.
 pub struct MiniMaxMemoryExtractor {
     pipeline: Arc<Pipeline>,
 }
@@ -105,7 +109,7 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
-                    content: json!("你是阿佩瑞斯的记忆提炼员。从对话/记忆中提炼「值得长期记住」的信息, 只输出 JSON: {\"facts\": [事实], \"preferences\": [主人偏好(审美/风格/语气/交互)], \"commitments\": [约定/承诺], \"emotional\": \"情绪信号一句或 null\"}。原则: 只提炼新信息 (已在记忆中的不要重复), 宁缺毋滥, 没把握就留空数组。"),
+                    content: json!("你是阿佩瑞斯的记忆提炼员。从对话/记忆中提炼「值得长期记住」的信息, 只输出 JSON: {\"facts\": [{\"content\": \"事实\", \"importance\": 1-10}], \"preferences\": [{\"content\": \"主人偏好(审美/风格/语气/交互)\", \"importance\": 1-10}], \"commitments\": [{\"content\": \"约定/承诺\", \"importance\": 1-10}], \"emotional\": \"情绪信号一句或 null\"}。importance 打分: 1=琐碎 5=普通 10=深刻重要。原则: 只提炼新信息, 宁缺毋滥, 没把握就留空数组。"),
                     tool_calls: None,
                     tool_call_id: None,
                 },
@@ -117,7 +121,7 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
                 },
             ],
             temperature: Some(0.2),
-            max_tokens: Some(500),
+            max_tokens: Some(600),
             stream: false,
             stop: None,
             tools: None,
@@ -142,6 +146,108 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             _ => return Err("提炼 JSON 解析失败 (如实放弃)".to_string()),
         };
         serde_json::from_str(&text[start..end]).map_err(|e| format!("提炼 JSON 解析失败: {e}"))
+    }
+
+    /// 对账 (Mem0 式): 候选 vs 已有记忆 → LLM 判定 ADD/UPDATE/DELETE.
+    /// 治 append-only「同一事实存七遍/新旧矛盾并存」. existing 格式: "id|内容".
+    async fn reconcile(
+        &self,
+        candidates: &ExtractedMemory,
+        existing: &[String],
+    ) -> Result<Vec<ReconcileAction>, String> {
+        if existing.is_empty() {
+            // 无存量 → 全 Add (诚实)
+            let mut out = Vec::new();
+            for f in &candidates.facts {
+                out.push(ReconcileAction { kind: ReconcileKind::Add, item: f.clone(), target_id: None });
+            }
+            for p in &candidates.preferences {
+                out.push(ReconcileAction { kind: ReconcileKind::Add, item: p.clone(), target_id: None });
+            }
+            for c in &candidates.commitments {
+                out.push(ReconcileAction { kind: ReconcileKind::Add, item: c.clone(), target_id: None });
+            }
+            return Ok(out);
+        }
+        let cand_json = serde_json::to_string(candidates).unwrap_or_default();
+        let list: String = existing
+            .iter()
+            .enumerate()
+            .map(|(i, c)| format!("{i}. {}", c.chars().take(100).collect::<String>()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("你是记忆对账员。候选新记忆 vs 已有记忆, 判定每条的处置, 只输出 JSON 数组: [{\"action\": \"add|update|delete\", \"content\": \"最终内容\", \"importance\": 1-10, \"target_index\": 已有记忆编号或 null}]。规则: 与已有重复/被包含 → update 合并 (target_index 指旧条目); 与旧矛盾 → update 取代; 全新 → add; 无价值 → delete (target_index 可 null)。"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("候选: {cand_json}\n已有记忆:\n{list}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.1),
+            max_tokens: Some(600),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| format!("对账 LLM 调用失败: {e}"))?;
+        let chat = openai_chat_from_normalized(&resp);
+        let content = chat
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+        let text = match content.find("</think>") {
+            Some(i) => content[i + 8..].to_string(),
+            None => content,
+        };
+        let (start, end) = match (text.find('['), text.rfind(']')) {
+            (Some(a), Some(b)) if b > a => (a, b + 1),
+            _ => return Err("对账 JSON 解析失败 (如实放弃)".to_string()),
+        };
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            action: String,
+            #[serde(default)]
+            content: String,
+            #[serde(default)]
+            importance: u8,
+            #[serde(default)]
+            target_index: Option<usize>,
+        }
+        let raws: Vec<Raw> = serde_json::from_str(&text[start..end]).unwrap_or_default();
+        let out: Vec<ReconcileAction> = raws
+            .into_iter()
+            .map(|r| {
+                let kind = match r.action.as_str() {
+                    "update" => ReconcileKind::Update,
+                    "delete" => ReconcileKind::Delete,
+                    _ => ReconcileKind::Add,
+                };
+                let target_id = r.target_index.and_then(|i| existing.get(i).map(|s| {
+                    // existing 格式 "id|内容" → 取 id
+                    s.split('|').next().unwrap_or(s).to_string()
+                }));
+                ReconcileAction {
+                    kind,
+                    item: MemoryItem::new(r.content, r.importance),
+                    target_id,
+                }
+            })
+            .collect();
+        Ok(out)
     }
 }
 
@@ -237,6 +343,8 @@ struct AppState {
     events: tokio::sync::broadcast::Sender<String>,
     /// 滚动摘要节流 (模块 3: 裁剪时 LLM 摘要旧段, 5 分钟一次).
     last_summarize: std::sync::Mutex<std::time::Instant>,
+    /// 记忆 access 追踪 (记忆 v2: id → (count, last_access); 高频记忆永不冷).
+    access: std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (u64, i64)>>>,
     subject: String,
 }
 
@@ -405,6 +513,34 @@ impl UtteranceGenerator for TonalUtterance {
     }
 }
 
+/// 记忆 v2 提炼流程: 提炼 → 对账 (Mem0 式) → 应用. 对话后/批量共用.
+async fn run_extraction(store: &Arc<SqliteMemoryStore>, pipeline: &Arc<Pipeline>, ctx_len: usize) {
+    let svc = MemoryExtractionService::new(Arc::clone(store));
+    let ctx = svc.recent_context(ctx_len);
+    let extractor = MiniMaxMemoryExtractor { pipeline: Arc::clone(pipeline) };
+    match extractor.extract(&ctx).await {
+        Ok(ex) if !ex.is_empty() => {
+            let existing: Vec<String> = svc
+                .active_episodes(30)
+                .iter()
+                .map(|e| format!("{}|{}", e.id, e.content))
+                .collect();
+            match extractor.reconcile(&ex, &existing).await {
+                Ok(actions) => match svc.apply_reconcile(&actions) {
+                    Ok(_) => eprintln!("[extract] 对账完成: {} 动作, 库: {:?}", actions.len(), svc.counts()),
+                    Err(e) => eprintln!("[extract] 对账应用失败: {e}"),
+                },
+                Err(e) => {
+                    eprintln!("[extract] 对账失败 (限流/解析), 降级全量写入: {e}");
+                    let _ = svc.apply(&ex);
+                }
+            }
+        }
+        Ok(_) => eprintln!("[extract] 无新信息可提炼"),
+        Err(e) => eprintln!("[extract] 提炼失败 (限流/解析): {e}"),
+    }
+}
+
 /// 预处理链 ⓪: 状态感知块 (模块 1) — 统一「当前状态」: 时刻+节律+目标+约定+情绪.
 /// 设计 (docs/companion-gaps.md 模块 1): 替代散装注入, 一个状态块喂全.
 fn inject_state(
@@ -546,51 +682,75 @@ async fn events(State(st): State<Arc<AppState>>) -> Sse<impl Stream<Item = Resul
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-/// 模块 2: 记忆排名 (分层 v1) — 做梦摘要/偏好优先 → 提炼事实 → 其余按最近; 预算内注入.
-fn rank_memory_entries(eps: &[apeireth_memory::CoreEpisode], budget: usize) -> Vec<String> {
-    let mut ranked: Vec<&apeireth_memory::CoreEpisode> = eps.iter().collect();
-    ranked.sort_by(|a, b| {
-        // 组: 0=dream/pref (高价值常驻), 1=mem-ex (提炼事实), 2=其他 (按最近)
-        let g = |id: &str| {
-            if id.starts_with("mem-dream-") || id.starts_with("pref-") {
-                0u8
-            } else if id.starts_with("mem-ex-") || id.starts_with("reflect-") {
-                1
-            } else {
-                2
-            }
+/// 模块 2: 记忆排名 (分层 v2, Generative Agents 式) —
+/// score = importance×3 + access_count×0.3 + recency; 预算内注入.
+/// 返回 (id, content) 供 access 追踪.
+fn rank_memory_entries(
+    eps: &[apeireth_memory::CoreEpisode],
+    access: &std::collections::HashMap<String, (u64, i64)>,
+    budget: usize,
+) -> Vec<(String, String)> {
+    let mut ranked: Vec<(&apeireth_memory::CoreEpisode, f64)> = eps.iter().map(|e| {
+        let importance = apeireth_companion::memory_extractor::parse_importance(&e.content) as f64;
+        let (count, _) = access.get(&e.id).copied().unwrap_or((0, 0));
+        // 组加成: 0=dream/pref (高价值常驻), 1=mem-ex/reflect, 2=其他
+        let group_bonus = if e.id.starts_with("mem-dream-") || e.id.starts_with("pref-") {
+            4.0
+        } else if e.id.starts_with("mem-ex-") || e.id.starts_with("reflect-") {
+            2.0
+        } else {
+            0.0
         };
-        let ga = g(&a.id);
-        let gb = g(&b.id);
-        ga.cmp(&gb).then_with(|| b.timestamp.cmp(&a.timestamp))
-    });
+        // recency: 最近 7 天内线性加成
+        let age_days = (chrono::Utc::now().timestamp() - e.timestamp) as f64 / 86400.0;
+        let recency = if age_days < 7.0 { (7.0 - age_days) / 7.0 } else { 0.0 };
+        let score = importance * 3.0 + count as f64 * 0.3 + group_bonus + recency * 2.0;
+        (e, score)
+    }).collect();
+    ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     ranked
         .iter()
         .take(budget)
-        .map(|e| e.content.clone())
+        .map(|(e, _)| (e.id.clone(), e.content.clone()))
         .collect()
 }
 
-/// 模块 3: 滚动摘要 — 被裁对话旧段 → LLM 摘要 (5 分钟节流; 失败 → None 丢弃旧段, 诚实).
-async fn summarize_dialog(pipeline: &Arc<Pipeline>, text: &str) -> Option<String> {
+/// 模块 3+5 记忆 v2: 滚动摘要 — 被裁对话旧段 → LLM 摘要 (5 分钟节流; 失败 → None 丢弃旧段, 诚实).
+/// 摘要链 (Zep episode 树吸收): 输入带上最近摘要 (sum-*), 输出存 store (跨会话可回溯).
+async fn summarize_dialog(
+    pipeline: &Arc<Pipeline>,
+    store: &Arc<SqliteMemoryStore>,
+    text: &str,
+) -> Option<String> {
+    // 摘要链: 最近一条 sum-* 作基线 (链式压缩)
+    let prev = store
+        .recent_episodes(MEMORY_SESSION, 20)
+        .unwrap_or_default()
+        .iter()
+        .find(|e| e.id.starts_with("sum-"))
+        .map(|e| e.content.clone());
+    let base = match prev {
+        Some(p) => format!("【上次摘要】{p}\n\n", ),
+        None => String::new(),
+    };
     let req = OpenAiChatRequest {
         model: MODEL.to_string(),
         messages: vec![
             OpenAiChatMessage {
                 role: "system".to_string(),
-                content: json!("把这段对话压缩成 80 字以内的摘要 (保留关键事实/约定/情绪), 只输出摘要。"),
+                content: json!("把这段对话(含上次摘要基线)压缩成 100 字以内的最新摘要, 保留关键事实/约定/情绪, 只输出摘要。"),
                 tool_calls: None,
                 tool_call_id: None,
             },
             OpenAiChatMessage {
                 role: "user".to_string(),
-                content: json!(format!("对话:\n{}", text.chars().take(3000).collect::<String>())),
+                content: json!(format!("{base}对话:\n{}", text.chars().take(3000).collect::<String>())),
                 tool_calls: None,
                 tool_call_id: None,
             },
         ],
         temperature: Some(0.3),
-        max_tokens: Some(150),
+        max_tokens: Some(200),
         stream: false,
         stop: None,
         tools: None,
@@ -605,7 +765,18 @@ async fn summarize_dialog(pipeline: &Arc<Pipeline>, text: &str) -> Option<String
         None => content,
     };
     let t = text.trim();
-    if t.is_empty() { None } else { Some(t.to_string()) }
+    if t.is_empty() {
+        return None;
+    }
+    // 持久化摘要 (sum-*; 跨会话可回溯链)
+    let _ = store.put_episode(&apeireth_memory::CoreEpisode {
+        id: format!("sum-{}", uuid::Uuid::new_v4()),
+        timestamp: chrono::Utc::now().timestamp(),
+        role: "assistant".into(),
+        content: t.to_string(),
+        session_id: MEMORY_SESSION.to_string(),
+    });
+    Some(t.to_string())
 }
 
 /// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 模块 2 排名分层 + 推理召回).
@@ -614,6 +785,7 @@ async fn inject_memory(
     store: &Arc<SqliteMemoryStore>,
     query: &str,
     pipeline: Option<&Arc<Pipeline>>,
+    st_access: &std::sync::Arc<std::sync::Mutex<std::collections::HashMap<String, (u64, i64)>>>,
 ) -> String {
     // 记忆暗示词 (主人问「记得/之前/上次」时值得深度召回)
     const HINT_WORDS: &[&str] = &["记得", "之前", "上次", "我说过", "约定", "还记得", "忘", "以前", "计划", "安排"];
@@ -623,8 +795,21 @@ async fn inject_memory(
     if eps.is_empty() {
         return String::new();
     }
-    // 模块 2: 记忆分层排名 (dream/pref 优先 → 提炼事实 → 最近; 预算内注入)
-    let entries = rank_memory_entries(&eps, 12);
+    // 模块 2: 记忆分层排名 (importance + access + recency; 预算内注入) + access 追踪
+    // 独立作用域: MutexGuard 在 await 前释放 (axum handler 要求 future Send)
+    let entries: Vec<String> = {
+        let mut access = st_access.lock().unwrap();
+        let ranked = rank_memory_entries(&eps, &access, 12);
+        let entries: Vec<String> = ranked.iter().map(|(_, c)| c.clone()).collect();
+        // access 刷新 (高频记忆永不冷 — Generative Agents)
+        let now = chrono::Utc::now().timestamp();
+        for (id, _) in &ranked {
+            let e = access.entry(id.clone()).or_insert((0, now));
+            e.0 += 1;
+            e.1 = now;
+        }
+        entries
+    };
     if want_deep {
         if let Some(p) = pipeline {
             // LLM 推理召回: 按当前问题重排候选, 挑最相关 top 5
@@ -879,7 +1064,7 @@ async fn chat_completions(
             _ => String::new(),
         })
         .unwrap_or_default();
-    let mem = inject_memory(&st.store, &query, Some(&st.pipeline)).await;
+    let mem = inject_memory(&st.store, &query, Some(&st.pipeline), &st.access).await;
     let today = inject_today(&st.store);
     let growth = inject_growth(&st.store);
     let prefs = MemoryExtractionService::new(Arc::clone(&st.store)).preference_injection();
@@ -937,7 +1122,7 @@ async fn chat_completions(
                     .map(|m| format!("[{}] {}", m.role, m.content.as_str().unwrap_or("")))
                     .collect::<Vec<_>>()
                     .join("\n");
-                if let Some(summary) = summarize_dialog(&st.pipeline, &text).await {
+                if let Some(summary) = summarize_dialog(&st.pipeline, &st.store, &text).await {
                     head.push(OpenAiChatMessage {
                         role: "system".to_string(),
                         content: json!(format!("【早期对话摘要】{summary}")),
@@ -1061,7 +1246,7 @@ async fn chat_completions(
         }
     });
 
-    // 对话后节流提炼 (通用记忆捕获): 距上次 > EXTRACT_INTERVAL → 异步提炼并静默写入.
+    // 对话后节流提炼 (通用记忆捕获): 距上次 > EXTRACT_INTERVAL → 异步提炼并对账写入.
     // fire-and-forget: 不影响响应; 提炼失败只记日志 (限流时放弃, 下个窗口再试).
     {
         let due = {
@@ -1077,17 +1262,7 @@ async fn chat_completions(
             let store = Arc::clone(&st.store);
             let pipeline = Arc::clone(&st.pipeline);
             tokio::spawn(async move {
-                let svc = MemoryExtractionService::new(Arc::clone(&store));
-                let ctx = svc.recent_context(12);
-                let extractor = MiniMaxMemoryExtractor { pipeline };
-                match extractor.extract(&ctx).await {
-                    Ok(ex) if !ex.is_empty() => match svc.apply(&ex) {
-                        Ok(_) => eprintln!("[extract] 已提炼写入: {:?}", svc.counts()),
-                        Err(e) => eprintln!("[extract] 写入失败: {e}"),
-                    },
-                    Ok(_) => eprintln!("[extract] 无新信息可提炼"),
-                    Err(e) => eprintln!("[extract] 提炼失败 (限流/解析): {e}"),
-                }
+                run_extraction(&store, &pipeline, 12).await;
             });
         }
     }
@@ -1280,6 +1455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         goal: std::sync::Arc::clone(&goals_shared),
         events: tx_events,
         last_summarize: std::sync::Mutex::new(std::time::Instant::now()),
+        access: std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashMap::new())),
         subject,
     });
     let app = Router::new()
@@ -1363,17 +1539,7 @@ async fn daemon_loop(
                 if last_batch_extract.elapsed() >= Duration::from_secs(6 * 3600) {
                     last_batch_extract = std::time::Instant::now();
                     eprintln!("[extract] 批量提炼 (6h 周期)...");
-                    let svc = MemoryExtractionService::new(Arc::clone(&store));
-                    let ctx = svc.recent_context(30);
-                    let extractor = MiniMaxMemoryExtractor { pipeline: Arc::clone(&pipeline) };
-                    match extractor.extract(&ctx).await {
-                        Ok(ex) if !ex.is_empty() => match svc.apply(&ex) {
-                            Ok(_) => eprintln!("[extract] 批量提炼已写入: {:?}", svc.counts()),
-                            Err(e) => eprintln!("[extract] 批量写入失败: {e}"),
-                        },
-                        Ok(_) => eprintln!("[extract] 批量提炼无新信息"),
-                        Err(e) => eprintln!("[extract] 批量提炼失败: {e}"),
-                    }
+                    run_extraction(&store, &pipeline, 30).await;
                 }
                 // 延伸 3: 晋级候选自动成文 (数据目录 promotion-candidates.md; 空则不写)
                 let cands = PrincipleStore::new(Arc::clone(&store)).export_promotion();
