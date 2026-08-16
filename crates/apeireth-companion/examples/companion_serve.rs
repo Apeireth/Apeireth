@@ -89,11 +89,6 @@ const AUTH_RULE: &str = "关于工具授权, 如实说明 (不要虚构交互流
 主人在页面「授权请求」区看到并批准 (或主人用⚙授权面板主动授权)。\
 你不应描述不存在的「弹窗/系统自动弹出」流程; 被拒后如实说「本座已向主人发出授权请求, 主人批准后本座再试」。";
 
-/// 审美规则 (主人 2026-08-16 提问: 能否记住审美偏好并跨场景应用):
-/// 机制捕获为主 (MemoryExtractor 自动提炼), 本条规则只做行为引导.
-const STYLE_RULE: &str = "审美规则: 主人表达审美/风格偏好时 (配色/风格/语气/交互/氛围), \
-系统会自动提炼记忆; 你遇到需要审美的场景 (网页/文案/图片/排版), 先回想记忆中的主人偏好再动手, 并自然沿用。";
-
 /// 通用记忆提炼器 (真 MiniMax): 对话/记忆 → 结构化提炼 (facts/preferences/commitments/emotional).
 pub struct MiniMaxMemoryExtractor {
     pipeline: Arc<Pipeline>,
@@ -647,7 +642,7 @@ async fn chat_completions(
         0,
         OpenAiChatMessage {
             role: "system".to_string(),
-            content: json!(format!("{PERSONA}\n{CLAIM_RULE}\n{AUTH_RULE}\n{STYLE_RULE}")),
+            content: json!(format!("{PERSONA}\n{CLAIM_RULE}\n{AUTH_RULE}")),
             tool_calls: None,
             tool_call_id: None,
         },
