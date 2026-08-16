@@ -70,6 +70,7 @@ pub mod audit;
 pub mod experience;
 pub mod principles;
 pub mod approval_requests;
+pub mod memory_extractor;
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;

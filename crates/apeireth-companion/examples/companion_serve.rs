@@ -43,6 +43,7 @@ use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
 use apeireth_companion::emergence::Initiative;
 use apeireth_companion::experience::ExperienceStore;
 use apeireth_companion::judicator::{ConstitutionLlm, LlmJudicator};
+use apeireth_companion::memory_extractor::{ExtractedMemory, MemoryExtractionService, MemoryExtractor};
 use apeireth_companion::memory_injection::build_memory_injection;
 use apeireth_companion::principles::PrincipleStore;
 use apeireth_companion::proactive::MemoryContextSource;
@@ -88,11 +89,63 @@ const AUTH_RULE: &str = "关于工具授权, 如实说明 (不要虚构交互流
 主人在页面「授权请求」区看到并批准 (或主人用⚙授权面板主动授权)。\
 你不应描述不存在的「弹窗/系统自动弹出」流程; 被拒后如实说「本座已向主人发出授权请求, 主人批准后本座再试」。";
 
-/// 审美偏好规则 (主人 2026-08-16 提问: 能否记住审美偏好并跨场景应用):
-/// 主人表达审美/风格偏好时静默记入记忆, 后续类似场景自然沿用 (记忆注入自动带上).
+/// 审美规则 (主人 2026-08-16 提问: 能否记住审美偏好并跨场景应用):
+/// 机制捕获为主 (MemoryExtractor 自动提炼), 本条规则只做行为引导.
 const STYLE_RULE: &str = "审美规则: 主人表达审美/风格偏好时 (配色/风格/语气/交互/氛围), \
-用 save_memory 静默记下 (如「主人偏好唯美写意、深蓝夜空」), 不宣告; \
-之后遇到需要审美的场景 (网页/文案/图片/排版), 先回想记忆中的主人偏好再动手, 并自然沿用。";
+系统会自动提炼记忆; 你遇到需要审美的场景 (网页/文案/图片/排版), 先回想记忆中的主人偏好再动手, 并自然沿用。";
+
+/// 通用记忆提炼器 (真 MiniMax): 对话/记忆 → 结构化提炼 (facts/preferences/commitments/emotional).
+pub struct MiniMaxMemoryExtractor {
+    pipeline: Arc<Pipeline>,
+}
+
+#[async_trait::async_trait]
+impl MemoryExtractor for MiniMaxMemoryExtractor {
+    async fn extract(&self, context: &str) -> Result<ExtractedMemory, String> {
+        let req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: vec![
+                OpenAiChatMessage {
+                    role: "system".to_string(),
+                    content: json!("你是阿佩瑞斯的记忆提炼员。从对话/记忆中提炼「值得长期记住」的信息, 只输出 JSON: {\"facts\": [事实], \"preferences\": [主人偏好(审美/风格/语气/交互)], \"commitments\": [约定/承诺], \"emotional\": \"情绪信号一句或 null\"}。原则: 只提炼新信息 (已在记忆中的不要重复), 宁缺毋滥, 没把握就留空数组。"),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+                OpenAiChatMessage {
+                    role: "user".to_string(),
+                    content: json!(format!("材料:\n{context}")),
+                    tool_calls: None,
+                    tool_call_id: None,
+                },
+            ],
+            temperature: Some(0.2),
+            max_tokens: Some(500),
+            stream: false,
+            stop: None,
+            tools: None,
+            tool_choice: None,
+        };
+        let normalized = openai_chat_to_normalized(&req);
+        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
+            .await
+            .map_err(|e| format!("提炼 LLM 调用失败: {e}"))?;
+        let chat = openai_chat_from_normalized(&resp);
+        let content = chat
+            .choices
+            .first()
+            .map(|c| c.message.content.clone())
+            .unwrap_or_default();
+        let text = match content.find("</think>") {
+            Some(i) => content[i + 8..].to_string(),
+            None => content,
+        };
+        let (start, end) = match (text.find('{'), text.rfind('}')) {
+            (Some(a), Some(b)) if b > a => (a, b + 1),
+            _ => return Err("提炼 JSON 解析失败 (如实放弃)".to_string()),
+        };
+        serde_json::from_str(&text[start..end]).map_err(|e| format!("提炼 JSON 解析失败: {e}"))
+    }
+}
 
 /// 已知工具的手写 schema (description/parameters); 未列出的工具给通用 schema (能力仍可见).
 fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
@@ -169,6 +222,10 @@ struct AppState {
     pipeline: Arc<Pipeline>,
     /// 互动通知通道 (daemon task 持有 daemon, 此处只发「主人来消息了」时刻).
     interactions: tokio::sync::mpsc::Sender<chrono::DateTime<Utc>>,
+    /// 对话后提炼节流 (距上次提炼 < extract_interval 则跳过).
+    last_extract: std::sync::Mutex<std::time::Instant>,
+    /// 提炼间隔 (env APEIRETH_EXTRACT_INTERVAL_SECONDS 可调, 默认 600s; 验证时可设小).
+    extract_interval: std::time::Duration,
     subject: String,
 }
 
@@ -338,10 +395,93 @@ impl UtteranceGenerator for TonalUtterance {
 }
 
 /// 预处理链 ①: 记忆注入 (EMI/NEC 反幻觉; 查询记忆会话 "me").
-fn inject_memory(store: &Arc<SqliteMemoryStore>) -> String {
-    let eps = store.recent_episodes(MEMORY_SESSION, 8).unwrap_or_default();
+/// 推理召回 (VCP AIMemoHandler 精神): query 含记忆暗示词且开启 → LLM 从候选重排 top 5.
+async fn inject_memory(
+    store: &Arc<SqliteMemoryStore>,
+    query: &str,
+    pipeline: Option<&Arc<Pipeline>>,
+) -> String {
+    // 记忆暗示词 (主人问「记得/之前/上次」时值得深度召回)
+    const HINT_WORDS: &[&str] = &["记得", "之前", "上次", "我说过", "约定", "还记得", "忘", "以前", "计划", "安排"];
+    let want_deep = std::env::var("APEIRETH_DEEP_RECALL").ok().as_deref() == Some("1")
+        && HINT_WORDS.iter().any(|w| query.contains(w));
+    let eps = store.recent_episodes(MEMORY_SESSION, 30).unwrap_or_default();
+    if eps.is_empty() {
+        return String::new();
+    }
     let entries: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
+    if want_deep {
+        if let Some(p) = pipeline {
+            // LLM 推理召回: 按当前问题重排候选, 挑最相关 top 5
+            if let Ok(selected) = deep_recall(p, query, &entries).await {
+                return build_memory_injection(&selected);
+            }
+            // 失败 → 降级普通注入 (如实)
+        }
+    }
     build_memory_injection(&entries)
+}
+
+/// 推理召回 (VCP AIMemoHandler 精神): LLM 从候选记忆选与 query 最相关的 top 5.
+async fn deep_recall(pipeline: &Arc<Pipeline>, query: &str, candidates: &[String]) -> Result<Vec<String>, String> {
+    let list: String = candidates
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("{i}. {}", c.chars().take(100).collect::<String>()))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let req = OpenAiChatRequest {
+        model: MODEL.to_string(),
+        messages: vec![
+            OpenAiChatMessage {
+                role: "system".to_string(),
+                content: json!("你是阿佩瑞斯的记忆检索员。根据主人的问题, 从候选记忆里选出最相关的 3-5 条, 只输出 JSON 数组: [编号]。无关则输出 []。"),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+            OpenAiChatMessage {
+                role: "user".to_string(),
+                content: json!(format!("主人问题: {query}\n候选记忆:\n{list}")),
+                tool_calls: None,
+                tool_call_id: None,
+            },
+        ],
+        temperature: Some(0.1),
+        max_tokens: Some(100),
+        stream: false,
+        stop: None,
+        tools: None,
+        tool_choice: None,
+    };
+    let normalized = openai_chat_to_normalized(&req);
+    let resp = dispatch(pipeline, ProtocolKind::OpenAiChat, normalized)
+        .await
+        .map_err(|e| e.to_string())?;
+    let chat = openai_chat_from_normalized(&resp);
+    let content = chat
+        .choices
+        .first()
+        .map(|c| c.message.content.clone())
+        .unwrap_or_default();
+    let text = match content.find("</think>") {
+        Some(i) => content[i + 8..].to_string(),
+        None => content,
+    };
+    let (start, end) = match (text.find('['), text.rfind(']')) {
+        (Some(a), Some(b)) if b > a => (a, b + 1),
+        _ => return Err("召回 JSON 解析失败".to_string()),
+    };
+    let idxs: Vec<usize> = serde_json::from_str(&text[start..end]).unwrap_or_default();
+    let out: Vec<String> = idxs
+        .into_iter()
+        .filter_map(|i| candidates.get(i).cloned())
+        .take(5)
+        .collect();
+    if out.is_empty() {
+        Err("无相关记忆".to_string())
+    } else {
+        Ok(out)
+    }
 }
 
 /// 预处理链 ②: 今日摘要注入.
@@ -512,12 +652,27 @@ async fn chat_completions(
             tool_call_id: None,
         },
     );
-    let mem = inject_memory(&st.store);
+    // 当前问题 (最后一条 user 消息; 供推理召回/提炼)
+    let query = req
+        .messages
+        .iter()
+        .rev()
+        .find(|m| m.role == "user")
+        .map(|m| match &m.content {
+            serde_json::Value::String(s) => s.clone(),
+            _ => String::new(),
+        })
+        .unwrap_or_default();
+    let mem = inject_memory(&st.store, &query, Some(&st.pipeline)).await;
     let today = inject_today(&st.store);
     let growth = inject_growth(&st.store);
+    let prefs = MemoryExtractionService::new(Arc::clone(&st.store)).preference_injection();
     let mut injections: Vec<String> = Vec::new();
     if !mem.is_empty() {
         injections.push(mem);
+    }
+    if !prefs.is_empty() {
+        injections.push(prefs);
     }
     if !today.is_empty() {
         injections.push(today);
@@ -643,10 +798,42 @@ async fn chat_completions(
             "continuity": continuity,
             "tool_rounds": rounds,
             "tools_executed": notes,
-            "features": ["memory_injection", "today_summary", "tool_bridge", "daemon_resident"],
+            "features": ["memory_injection", "today_summary", "tool_bridge", "daemon_resident", "memory_extractor"],
             "note": "Apeireth 伙伴主链路: 记忆+今日摘要注入, 工具桥执行, daemon 同进程常驻"
         }
     });
+
+    // 对话后节流提炼 (通用记忆捕获): 距上次 > EXTRACT_INTERVAL → 异步提炼并静默写入.
+    // fire-and-forget: 不影响响应; 提炼失败只记日志 (限流时放弃, 下个窗口再试).
+    {
+        let due = {
+            let mut last = st.last_extract.lock().unwrap();
+            if last.elapsed() >= st.extract_interval {
+                *last = std::time::Instant::now();
+                true
+            } else {
+                false
+            }
+        };
+        if due {
+            let store = Arc::clone(&st.store);
+            let pipeline = Arc::clone(&st.pipeline);
+            tokio::spawn(async move {
+                let svc = MemoryExtractionService::new(Arc::clone(&store));
+                let ctx = svc.recent_context(12);
+                let extractor = MiniMaxMemoryExtractor { pipeline };
+                match extractor.extract(&ctx).await {
+                    Ok(ex) if !ex.is_empty() => match svc.apply(&ex) {
+                        Ok(_) => eprintln!("[extract] 已提炼写入: {:?}", svc.counts()),
+                        Err(e) => eprintln!("[extract] 写入失败: {e}"),
+                    },
+                    Ok(_) => eprintln!("[extract] 无新信息可提炼"),
+                    Err(e) => eprintln!("[extract] 提炼失败 (限流/解析): {e}"),
+                }
+            });
+        }
+    }
+
     (StatusCode::OK, Json(resp)).into_response()
 }
 
@@ -792,11 +979,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx_interact, rx_interact) = tokio::sync::mpsc::channel::<chrono::DateTime<Utc>>(64);
 
     // ④ HTTP 伙伴端点
+    let extract_interval = std::env::var("APEIRETH_EXTRACT_INTERVAL_SECONDS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .map(Duration::from_secs)
+        .unwrap_or(Duration::from_secs(600));
     let state = Arc::new(AppState {
         bridge,
         store,
         pipeline,
         interactions: tx_interact,
+        last_extract: std::sync::Mutex::new(std::time::Instant::now()),
+        extract_interval,
         subject,
     });
     let app = Router::new()
@@ -840,6 +1034,7 @@ async fn daemon_loop(
         .as_ref()
         .map(|r| r.cycles_completed())
         .unwrap_or(0);
+    let mut last_batch_extract = std::time::Instant::now();
     let mut ticker = tokio::time::interval(Duration::from_secs(60));
     loop {
         tokio::select! {
@@ -860,6 +1055,23 @@ async fn daemon_loop(
                         Err(e) => eprintln!("[growth] 经验提炼失败: {e}"),
                     }
                     last_cycles = cycles;
+                }
+                // 批量记忆提炼 (与做梦同频: 6h 节流; 通用捕获 — 偏好/事实/约定):
+                // 0 假装: 按时间节流而非做梦事件精确绑定 (DreamScheduler 无公开计数器)
+                if last_batch_extract.elapsed() >= Duration::from_secs(6 * 3600) {
+                    last_batch_extract = std::time::Instant::now();
+                    eprintln!("[extract] 批量提炼 (6h 周期)...");
+                    let svc = MemoryExtractionService::new(Arc::clone(&store));
+                    let ctx = svc.recent_context(30);
+                    let extractor = MiniMaxMemoryExtractor { pipeline: Arc::clone(&pipeline) };
+                    match extractor.extract(&ctx).await {
+                        Ok(ex) if !ex.is_empty() => match svc.apply(&ex) {
+                            Ok(_) => eprintln!("[extract] 批量提炼已写入: {:?}", svc.counts()),
+                            Err(e) => eprintln!("[extract] 批量写入失败: {e}"),
+                        },
+                        Ok(_) => eprintln!("[extract] 批量提炼无新信息"),
+                        Err(e) => eprintln!("[extract] 批量提炼失败: {e}"),
+                    }
                 }
                 // 延伸 3: 晋级候选自动成文 (数据目录 promotion-candidates.md; 空则不写)
                 let cands = PrincipleStore::new(Arc::clone(&store)).export_promotion();
