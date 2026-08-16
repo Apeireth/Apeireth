@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apeireth 面板 — 图谱可视化</title>
+<link rel="stylesheet" href="panel.css">
+</head>
+<body>
+<div id="hdr"></div>
+<main>
+  <h2>记忆图谱 <span class="sub">GET /v1/panel/graph（factg-* 事实 / link-* 链接, 原生 SVG）</span></h2>
+  <div class="note">升级点：现直读 factg-*/link-* episodes（companion SqliteGraphBackend 同一持久形态）；
+    图后端换结构化 GraphQuery/Kùzu 后换后端实现即可。渲染为确定性环形布局，无重型框架。</div>
+  <div class="card">
+    <div class="toolbar">
+      <input id="gsubject" placeholder="subject 过滤" size="14">
+      <input id="gpred" placeholder="predicate 过滤" size="14">
+      <input id="gobject" placeholder="object 过滤" size="14">
+      <button onclick="loadGraph()">查询</button>
+      <span id="gcount" class="dim"></span>
+    </div>
+    <div id="graphwrap"><span class="dim">加载中…</span></div>
+  </div>
+  <div class="card">
+    <h3>事实明细 <span class="sub">点击图中节点可按其过滤</span></h3>
+    <table>
+      <thead><tr><th>subject</th><th>predicate</th><th>object</th><th style="width:70px">权重</th><th style="width:150px">时间</th></tr></thead>
+      <tbody id="frows"></tbody>
+    </table>
+  </div>
+</main>
+<footer class="pagefoot">Apeireth Web 面板 v2 · 图谱可视化</footer>
+<script src="panel.js"></script>
+<script>
+document.getElementById("hdr").innerHTML = panelHeader("graph");
+let lastFacts = [];
+
+async function loadGraph() {
+  const wrap = document.getElementById("graphwrap");
+  const p = new URLSearchParams();
+  const s = document.getElementById("gsubject").value.trim();
+  const pr = document.getElementById("gpred").value.trim();
+  const o = document.getElementById("gobject").value.trim();
+  if (s) p.set("subject", s);
+  if (pr) p.set("predicate", pr);
+  if (o) p.set("object", o);
+  p.set("limit", "100");
+  wrap.innerHTML = `<span class="dim">加载中…</span>`;
+  try {
+    const j = await panelFetch(`/v1/panel/graph?${p}`);
+    lastFacts = j.facts || [];
+    document.getElementById("gcount").textContent = `${j.facts_count} 事实 · ${j.links_count} 链接`;
+    renderSvg(lastFacts);
+    renderFactRows(lastFacts);
+  } catch (e) { showErr(wrap, e); }
+}
+
+// 确定性环形布局 SVG 渲染 (无框架)
+function renderSvg(facts) {
+  const wrap = document.getElementById("graphwrap");
+  if (!facts.length) { wrap.innerHTML = `<span class="dim">无图事实（记忆库还没有 factg-* 条目）。</span>`; return; }
+  const names = [];
+  const push = n => { if (n && !names.includes(n)) names.push(n); };
+  facts.forEach(f => { push(f.subject); push(f.object); });
+  const W = 860, H = 540, cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 70;
+  const pos = {};
+  names.forEach((n, i) => {
+    const a = (2 * Math.PI * i) / names.length - Math.PI / 2;
+    pos[n] = [cx + R * Math.cos(a), cy + R * Math.sin(a)];
+  });
+  const edges = facts.map(f => {
+    if (!pos[f.subject] || !pos[f.object]) return "";
+    const [x1, y1] = pos[f.subject], [x2, y2] = pos[f.object];
+    const w = 1 + (Number(f.importance) || 0) / 40;
+    const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#3b4a63" stroke-width="${w.toFixed(1)}" opacity="0.75"/>
+      <text x="${mx}" y="${my - 4}" fill="#8b93a3" font-size="10" text-anchor="middle">${esc(trunc(f.predicate, 12))}</text>`;
+  }).join("");
+  const nodes = names.map(n => {
+    const [x, y] = pos[n];
+    return `<circle cx="${x}" cy="${y}" r="9" fill="#2563eb" stroke="#7fb2ff" style="cursor:pointer"
+        onclick="filterNode('${esc(n).replace(/'/g, "\\'")}')"><title>${esc(n)}</title></circle>
+      <text x="${x}" y="${y - 14}" fill="#c9d4e3" font-size="12" text-anchor="middle">${esc(trunc(n, 14))}</text>`;
+  }).join("");
+  wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}">${edges}${nodes}</svg>`;
+}
+
+function filterNode(name) {
+  document.getElementById("gsubject").value = name;
+  loadGraph();
+}
+
+function renderFactRows(facts) {
+  const body = document.getElementById("frows");
+  if (!facts.length) { body.innerHTML = `<tr><td colspan="5" class="dim">无事实。</td></tr>`; return; }
+  body.innerHTML = facts.map(f => `
+    <tr><td>${esc(f.subject)}</td><td><span class="badge info">${esc(f.predicate)}</span></td>
+    <td>${esc(f.object)}</td><td>${esc(f.importance ?? "—")}</td>
+    <td>${esc(fmtTs(f.valid_at ?? f.created_at))}</td></tr>`).join("");
+}
+
+loadGraph();
+</script>
+</body>
+</html>
