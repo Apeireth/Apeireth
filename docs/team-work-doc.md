@@ -128,9 +128,9 @@
 
 ### 5.1 官方模块扩展：记忆域深化包（核心，进 companion lib）
 - 语义折叠（只折叠低相关段，VCP ContextFoldingV2 精神）
-- 记忆主题分组（VCP SemanticGroupManager 精神）→ 注入"主题索引"块
+- 记忆主题分组（VCP SemanticGroupManager 精神）→ 注入"主题索引"块 ✅ Rust 落点: companion topic_groups.rs (提交 17483af0; assemble.rs memory_block 挂接, 任务 a227fc3f 终验通过)
 - 元思考递归链（VCP MetaThinkingManager 精神）→ 思考→再思考 ✅ Rust 落点: companion meta_thinking.rs (提交 6fcd36c2; reflection 接线待 backlog N15)
-- 跨日记联想（VCP associativeDiscovery 精神）→ memory_graph 已有底层
+- 跨日记联想（VCP associativeDiscovery 精神）→ memory_graph 已有底层 ✅ Rust 落点: companion cross_diary.rs (提交 8e015af0; 确定性共享token建链+双向查询, 注入 trait 口 CrossDiaryInjector 统一接线延后, 0 装 PASS)
 - 日记本中心（VCP RAGDiaryPlugin 精神）→ 按日归档 + 检索 + 注入
 - **验收**：每个机制 = lib 模块 + trait 口 + 单测 + 注入链可见 + 0 装 PASS 标注
 
