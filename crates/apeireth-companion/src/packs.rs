@@ -173,6 +173,11 @@ impl PackRegistry {
         self.inner.lock().unwrap().retain(|p| p.id != id);
     }
 
+    /// 按名撤销 (插件/套件卸载用: 名字是稳定的, UUID 每次生成不同).
+    pub fn revoke_by_name(&self, name: &str) {
+        self.inner.lock().unwrap().retain(|p| p.name != name);
+    }
+
     /// 检查动作是否被某活跃包覆盖; 覆盖则记账并返回 true.
     pub fn check_and_consume(&self, tool: &str, now_ms: i64) -> bool {
         let mut packs = self.inner.lock().unwrap();
