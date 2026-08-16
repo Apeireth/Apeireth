@@ -80,6 +80,7 @@
 | gh_accel.rs (companion) + github_accel.rs (tools) | GitHub 加速插件: xiake.pro 节点池 → 本机并发实测 (2xx+PNG魔数内容验证) → 选最快 → 加速 URL/命令 (docs/ref-gh-accel.md) | gh_accel 工具 (插件注册) |
 | audit.rs | 审计能力包: audit_log 工具 (留痕查询, masked 脱敏不还原, append-only) | audit_log 工具 (内置注册) |
 | append_only.rs (memory) | HistoryStream 新增 list_recent (最近 N 条, 审计/摘要用) | 6 流共享 |
+| preset.rs (tool-shell) | ShellPreset 预设命令模板 (TP4/N22, §10 官方包最后一件): 白名单预设登记 (git-log-recent/git-status-short/echo-text builtin + register 扩展) + argv 模板展开 (占位符 `{arg}` 独占槽位, 嵌入式注册即拒) + 参数独立 shell_words::quote 填充防注入 (split/quote 往返闭环, `;`/`&&`/`|`/`$()` 无法逃逸单 token) + PresetShell 挂既有 exec_sandboxed 执行链 (不自写 shell 调用); 敏感预设审批走既有 tool-approval/guard (不改本体) | PresetShell::exec_preset |
 | experience.rs | 自成长 Level 0/1: 经验库 (场景/做法/结果/验证计数/EMA) + 达标促能力提案 (versioned chain, rev 单调) | save/list/verify_experience 工具 |
 | principles.rs | 自成长 Level 2/3: 动态原则层 (AI 提案→主人 master token 批准→执行检查拦截) + 晋级候选导出 (内层=主人侧工程) | propose/approve_principle 工具 |
 | approval_requests.rs | 授权请求机制: 工具被拒→待批请求 (apreq-*, 同参数去重) → 前端轮询展示+一键批准 (权限洋葱真实载体) | GET /v1/apeireth/approval-requests |
@@ -108,6 +109,8 @@
 0. **基础工具工程原则（强制）**：高可靠性基础工具（爬虫/网络/文件/执行等）**不得独写**——① GitHub 调研同类成熟实现 → ② 吸收先进写法（并发/重试/限速/上限）→ ③ 实战验证（真环境跑通, 如 crawl_probe）→ 才可提交；调研结论记 docs/ref-*.md。
 
 00. **文档同步自觉（强制, 2026-08-16 主人确立）**：**工程有更新, 文档就同步**——新增/修改模块时同步更新: ① 本文件模块地图+概念词典 ② 相关设计/调研文档 (docs/*.md) ③ 接口变更同步示例与 env 清单。**调研了但未落地的项, 必须显式记入 docs/backlog.md 台账** (权威唯一, 防欠账堆积; 完成划 ✅ 并注明提交/文档位置)。
+
+000. **消费方登记规范（强制, 2026-08-17 TP9/N18, "先立规范再干活"）**：新增 workspace crate **必须显式声明消费方**：① 谁依赖（消费方 crate 名 / 宿主进程装配点）② 为何依赖（一句话职责）。**无消费方的 crate 不得以"翻译了未接线"状态静默入 workspace**——必须在 docs/backlog.md 显式登记"独立待装配 + 接线计划"（教训: C3 盘点揪出 12 个零内部消费者孤儿 crate, 台账 #33）。定期检查: `_scripts/orphan-scan.ps1`（数据源 cargo metadata, 依赖 kind=normal/dev 权威判定——孤儿 = 纯 lib 且零内部 normal 消费者; dev-only 专用件与 bin 终点件单列不算孤儿; 含 dev-dep 自引用/双向环/dev↔normal 互指环检测 + #33 清单自动对账）。**建议每次新增 crate 后与 release 前各跑一次, 结果入台账; 孤儿处置决策归 Leader, 工具只报不删**。用法: `powershell -NoProfile -ExecutionPolicy Bypass -File _scripts\orphan-scan.ps1 [-OutFile reports\orphan-scan.md]`。
 
 1. `src/<module>.rs` — 头部写 `//!` 职责 + 0 假装标注 (诚实: 什么没做)
 2. `lib.rs` 注册 `pub mod` + 顶层 `pub use` re-export
