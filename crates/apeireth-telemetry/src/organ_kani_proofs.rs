@@ -6,7 +6,8 @@ use crate::*;
 
 #[test]
 fn r177_tel_01_all_mods() {
-    assert_eq!(ALL_MODS.len(), 5);
+    // 6 module: cache/metric/trace/observability/log_replay/otlp (OTel 审计加 otlp)
+    assert_eq!(ALL_MODS.len(), 6);
 }
 
 #[test]
@@ -32,7 +33,8 @@ fn r177_tel_05_log_replay_mod() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_tel_kani_01_mods_count() {
-    assert_eq!(ALL_MODS.len(), 5);
+    // 6 module: cache/metric/trace/observability/log_replay/otlp (OTel 审计加 otlp)
+    assert_eq!(ALL_MODS.len(), 6);
 }
 
 #[cfg(kani)]

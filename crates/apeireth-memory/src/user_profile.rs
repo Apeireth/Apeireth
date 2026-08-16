@@ -1,4 +1,17 @@
-//! R19 P2 战区 4: 用户画像提取 (UserProfile)
+//! 用户画像提取 (UserProfile) — apeireth-memory 内部统计画像路径
+//!
+//! ## 现状 (2026-08 审计): 仍是有效路径, 但已不是"偏好注入"主路径
+//! - **仍是有效路径**: `UserProfile` / `ProfileExtractor` 是 apeireth-memory
+//!   公开 API 的一部分 (`extract_user_profile`), 由 `semantic.rs` /
+//!   `semantic_persist.rs` 实现, 并有 e2e 集成测试覆盖
+//!   (tests/semantic_pipeline_e2e.rs).
+//! - **已被取代的角色**: 对话偏好注入已由 `apeireth-companion` 的偏好库接管
+//!   (`memory_extractor::preference_injection()` + `pref-*` episodes,
+//!   见 crates/apeireth-companion/src/memory_extractor.rs)。全 workspace grep
+//!   显示**没有任何外部 crate** 引用 `UserProfile` / `ProfileExtractor` /
+//!   `extract_user_profile` — 偏好注入不走本模块。
+//! - 结论: 本模块保留为 memory 层的"画像统计/提取"能力 (mock 提取 + 真 LLM 留接口),
+//!   调用方不应再把它当作"用户偏好唯一来源"。
 //!
 //! ## 设计
 //! - `UserProfile`: 用户画像数据结构 (preferences / recurring_topics /
@@ -7,9 +20,6 @@
 //!   - **mock 路径**: 用 hash embedder 聚类 + role 分布 + 关键词提取
 //!   - **真 LLM 路径**: 留接口 — 调用方实现自己的 `EmbedFn`, 内部走
 //!     `apeireth_api::llm::LlmProvider` 拿更深层画像 (R21+ 续接)
-//!
-//! ## 锁
-//! - 新文件, 0 触碰 LOCKED 9 个 memory 文件.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -21,12 +31,15 @@ use crate::episode::EpisodeStore;
 use crate::semantic::{EmbedFn, SemanticIndex};
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
-/// 用户画像数据结构.
+/// 用户画像数据结构 (memory 层统计画像).
 ///
 /// R19 P2 mock 提取; 真实 LLM 集成留接口.
+/// 注意: `preferences` 是关键词/长度启发式推断, **不是**对话偏好注入的真实来源 —
+/// 生产偏好注入走 `apeireth-companion::memory_extractor::preference_injection` (pref-*).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct UserProfile {
-    /// 用户偏好 (e.g. "简短回答", "代码示例", "中文回复").
+    /// 用户偏好 (启发式推断, e.g. "简短回答", "代码示例", "中文回复").
+    /// ⚠️ 仅统计启发式: 真实偏好注入走 companion pref-* 偏好库 (见模块头).
     pub preferences: Vec<String>,
     /// 反复出现的主题 (从 episodes 内容聚类得到).
     pub recurring_topics: Vec<String>,
@@ -54,7 +67,7 @@ impl UserProfile {
     }
 }
 
-/// 用户画像提取器.
+/// 用户画像提取器 (memory 层统计画像, 非偏好注入主路径 — 见模块头).
 ///
 /// ## 构造
 /// - `ProfileExtractor::new(embedder)`: 给定 embedder, 后续可多次 `extract`

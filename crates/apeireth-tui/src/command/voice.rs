@@ -3,22 +3,24 @@
 //! **借鉴 Golutra #1**: 9 organ × 5-8 command 模式
 //!
 //! **6 命令**:
-//! 1. [`Command::Synthesize`] — TTS 合成 (R25.2 stub)
+//! 1. [`Command::Synthesize`] — TTS 合成 (stub: 返 `Unsupported`, 不假装成功)
 //! 2. [`Command::GetVoices`] — 读可选 voice 列表 (编译期 hardcode)
 //! 3. [`Command::SetVoice`] — 切换 active voice
 //! 4. [`Command::GetActiveVoice`] — 读 active voice
 //! 5. [`Command::GetTtsStatus`] — 读 TTS 状态 (idle / playing / paused)
 //! 6. [`Command::Pause`] — 暂停 TTS
 //!
-//! **不假装**:
-//! - voice 在 `organ/mod.rs` 标 `Readiness::Stub` — 6 命令全部标 placeholder
+//! **不假装 (0 假装)**:
+//! - voice 在 `organ/mod.rs` 标 `Readiness::Partial` (R22 ST-A1.4: 有结构 + record
+//!   API, 但 TUI 未接 mic/speaker); Synthesize 命令层仍是 stub — 返明确错误
+//!   [`OrganError::Unsupported`] 而非假装合成成功 (不计数、不改状态).
 //! - 真实 R25.3 接 `batch_text_to_audio` / `transcribe_audio` 本地 API
 //! - 3 voice 编译期 hardcode (per `get_voice_list()` 实际可用 voice_id)
 //! - 3 态状态机: Idle / Playing / Paused
 //!
 //! **6 哲学锚穿透**:
 //! - S-1 北极星: voice 服务 ASI 输出通道
-//! - S-2 实事求是: stub 标 partial, 3 voice hardcode
+//! - S-2 实事求是: stub 标 partial, 3 voice hardcode, Synthesize 拒绝而非假装
 //! - O-2 走在前人经验上: 借 voice_id 业界模式
 //! - O-3 干到底: 6 命令覆盖 voice 全场景
 //! - O-4 任何人都能接手: State + voice_id 列表全文档化
@@ -62,7 +64,7 @@ pub struct State {
     pub active_voice: String,
     /// TTS 状态
     pub tts_state: TtsState,
-    /// 已合成次数
+    /// 已合成次数 (stub 拒绝时保持 0; R25.3 真接后计数)
     pub synthesize_count: u64,
 }
 
@@ -79,7 +81,7 @@ impl Default for State {
 /// Voice 器官 6 命令
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
-    /// TTS 合成 (R25.2 stub — 不真发声)
+    /// TTS 合成 (stub — 返 Unsupported, 不真发声)
     Synthesize {
         /// 文本
         text: String,
@@ -128,10 +130,12 @@ pub fn handle(state: &mut State, cmd: Command) -> Result<Response, OrganError> {
                     reason: "text 不能为空".into(),
                 });
             }
-            // S-2 实事求是: stub — 不真发声, 仅计数
-            state.synthesize_count = state.synthesize_count.saturating_add(1);
-            state.tts_state = TtsState::Idle; // 立即完成
-            Ok(Response::Unit)
+            // S-2 实事求是 (0 假装): TTS 未接真实现 — 返明确错误而非假装成功.
+            // 不计数、不改 tts_state (stub 保持 Idle), R25.3 接 batch_text_to_audio 后放开.
+            Err(OrganError::Unsupported {
+                organ: ASCII_CHAR,
+                command: "Synthesize",
+            })
         }
         Command::GetVoices => Ok(Response::Voices(VOICES.to_vec())),
         Command::SetVoice { voice_id } => {
@@ -199,14 +203,30 @@ mod tests {
     // ---- Synthesize ----
 
     #[test]
-    fn synthesize_increments_count() {
+    fn synthesize_denied_when_stub() {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
             Command::Synthesize { text: "hello world".into() },
-            );
-        assert!(r.is_ok());
-        assert_eq!(state.synthesize_count, 1);
+        );
+        // 0 假装: TTS 未接真实现, 必须返 Unsupported 而非 Ok(Unit)
+        assert!(matches!(
+            r,
+            Err(OrganError::Unsupported { organ: "[VOICE]", command: "Synthesize" })
+        ));
+        assert_eq!(state.synthesize_count, 0, "stub 拒绝时不计数");
+        assert_eq!(state.tts_state, TtsState::Idle, "stub 拒绝时不改状态");
+    }
+
+    #[test]
+    fn synthesize_stub_error_is_honest_and_actionable() {
+        // 降级行为守门: 错误信息应说明是 stub/未接, 且携带 organ + command 名
+        let mut state = fresh_state();
+        let err = handle(&mut state, Command::Synthesize { text: "hi".into() }).unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("[VOICE]"), "错误应含 organ: {msg}");
+        assert!(msg.contains("Synthesize"), "错误应含 command: {msg}");
+        assert!(msg.contains("stub") || msg.contains("not ready"), "应诚实标缺: {msg}");
     }
 
     #[test]
