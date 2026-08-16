@@ -1,6 +1,6 @@
 //! `apeireth-companion::critic` — CRITIC 反思带工具调用 (审计 P2#10, 2026-08-16).
 //!
-//! CRITIC (Wang et al.) 精神: LLM 自我反思不可靠 → 反思中的**可验证声明**
+//! CRITIC (Gou et al., arXiv 2305.11738) 精神: LLM 自我反思不可靠 → 反思中的**可验证声明**
 //! 交由外部工具核对, 结果回注。本模块是纯机制:
 //!   1. `extract_claims` — 从反思文本提取可验证声明 (启发式: 含推断词/统计性陈述的句子)
 //!   2. `ClaimVerifier` trait — 验证口 (宿主注入; ToolBridge 只读工具实现或轻量规则实现)
