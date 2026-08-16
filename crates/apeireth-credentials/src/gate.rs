@@ -152,8 +152,6 @@ mod tests {
     #[test]
     fn deny_all_gate_blocks_high_risk_read() {
         let store = tmp_store("gate-deny-read");
-        // 预置高危凭据 (经 AllowAll 门写入)
-        GatedCredentialsStore::new(&NoopStore, AllowAllGate);
         store.set("master", SecretString::new("mt-secret")).unwrap();
 
         let gated = GatedCredentialsStore::new(store, DenyAllGate);
@@ -221,25 +219,5 @@ mod tests {
             std::process::id(),
             name
         ))
-    }
-
-    // 占位存储 (仅用于类型检查, 不参与断言)。
-    struct NoopStore;
-    impl CredentialsStore for NoopStore {
-        fn get(&self, _s: &str) -> Result<SecretString> {
-            Err(CredentialsError::UnknownService(_s.into()))
-        }
-        fn set(&self, _s: &str, _v: SecretString) -> Result<()> {
-            Ok(())
-        }
-        fn delete(&self, _s: &str) -> Result<()> {
-            Ok(())
-        }
-        fn list(&self) -> Result<Vec<String>> {
-            Ok(vec![])
-        }
-        fn contains(&self, _s: &str) -> Result<bool> {
-            Ok(false)
-        }
     }
 }
