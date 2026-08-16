@@ -5,11 +5,11 @@
 //! **目标**: 验证 D4 决策自循环跟 G2 权限治理 (1:1 跟 B4 6 重 v7 严守) 跨 stage 集成
 
 use apeireth_pybridge::{
-    stage7_i4_healthy, stage7_i4_summary, stage7_i4_to_d4_consistency,
-    stage7_i4_to_g2_consistency, DecisionPermissionAuditEvent, DecisionPermissionBinding,
-    DecisionPermissionCoordinator, DecisionPermissionMatrix, DecisionPermissionReport,
-    DecisionPolicy, PermissionContext, PermissionLayer, STAGE7_I4_BINDING_COUNT,
-    STAGE7_I4_DIMENSION_COUNT, STAGE7_I4_LAYER_COUNT, STAGE7_I4_POLICY_COUNT, STAGE7_I4_VERSION,
+    stage7_i4_healthy, stage7_i4_summary, stage7_i4_to_d4_consistency, stage7_i4_to_g2_consistency,
+    DecisionPermissionAuditEvent, DecisionPermissionBinding, DecisionPermissionCoordinator,
+    DecisionPermissionMatrix, DecisionPermissionReport, DecisionPolicy, PermissionContext,
+    PermissionLayer, STAGE7_I4_BINDING_COUNT, STAGE7_I4_DIMENSION_COUNT, STAGE7_I4_LAYER_COUNT,
+    STAGE7_I4_POLICY_COUNT, STAGE7_I4_VERSION,
 };
 
 // 1. I4 编译期常数
@@ -41,7 +41,10 @@ fn i4_03_all_5_policies() {
         DecisionPolicy::Aggressive,
     ];
     for p in &policies {
-        assert!(m.get(*p, PermissionLayer::L1TypeCheck).is_some(), "policy {p:?} 缺");
+        assert!(
+            m.get(*p, PermissionLayer::L1TypeCheck).is_some(),
+            "policy {p:?} 缺"
+        );
     }
 }
 
@@ -58,7 +61,10 @@ fn i4_04_all_6_layers() {
         PermissionLayer::L6ProvenanceCheck,
     ];
     for l in &layers {
-        assert!(m.get(DecisionPolicy::Balanced, *l).is_some(), "layer {l:?} 缺");
+        assert!(
+            m.get(DecisionPolicy::Balanced, *l).is_some(),
+            "layer {l:?} 缺"
+        );
     }
 }
 
@@ -100,7 +106,9 @@ fn i4_06_balanced_allow() {
 #[test]
 fn i4_07_cautious_audit() {
     let m = DecisionPermissionMatrix::default_matrix();
-    let b = m.get(DecisionPolicy::Cautious, PermissionLayer::L1TypeCheck).unwrap();
+    let b = m
+        .get(DecisionPolicy::Cautious, PermissionLayer::L1TypeCheck)
+        .unwrap();
     assert_eq!(b.decision_rule, "audit_required");
 }
 
@@ -109,7 +117,12 @@ fn i4_07_cautious_audit() {
 fn i4_08_coordinator_deny() {
     let mut c = DecisionPermissionCoordinator::new();
     let ctx = PermissionContext::safe_default();
-    let rule = c.decide(0, DecisionPolicy::Conservative, PermissionLayer::L1TypeCheck, &ctx);
+    let rule = c.decide(
+        0,
+        DecisionPolicy::Conservative,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
     assert_eq!(rule, "deny");
     assert_eq!(c.report.deny_count(), 1);
 }
@@ -119,7 +132,12 @@ fn i4_08_coordinator_deny() {
 fn i4_09_coordinator_allow() {
     let mut c = DecisionPermissionCoordinator::new();
     let ctx = PermissionContext::safe_default();
-    let rule = c.decide(0, DecisionPolicy::Balanced, PermissionLayer::L3RateCheck, &ctx);
+    let rule = c.decide(
+        0,
+        DecisionPolicy::Balanced,
+        PermissionLayer::L3RateCheck,
+        &ctx,
+    );
     assert_eq!(rule, "allow");
     assert_eq!(c.report.allow_count(), 1);
 }
@@ -129,9 +147,24 @@ fn i4_09_coordinator_allow() {
 fn i4_10_multi_decide() {
     let mut c = DecisionPermissionCoordinator::new();
     let ctx = PermissionContext::safe_default();
-    c.decide(0, DecisionPolicy::Conservative, PermissionLayer::L1TypeCheck, &ctx);
-    c.decide(0, DecisionPolicy::Balanced, PermissionLayer::L1TypeCheck, &ctx);
-    c.decide(0, DecisionPolicy::Aggressive, PermissionLayer::L1TypeCheck, &ctx);
+    c.decide(
+        0,
+        DecisionPolicy::Conservative,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
+    c.decide(
+        0,
+        DecisionPolicy::Balanced,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
+    c.decide(
+        0,
+        DecisionPolicy::Aggressive,
+        PermissionLayer::L1TypeCheck,
+        &ctx,
+    );
     assert_eq!(c.report.event_count(), 3);
 }
 

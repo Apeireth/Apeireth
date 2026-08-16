@@ -77,18 +77,16 @@ pub fn run() -> io::Result<()> {
     let stdin = io::stdin();
     let mut lock = stdin.lock();
 
-    let choice = prompt_with_default(
-        &mut lock,
-        "选 provider [0-5, 默认 0]",
-        |s| match s.trim() {
+    let choice = prompt_with_default(&mut lock, "选 provider [0-5, 默认 0]", |s| {
+        match s.trim() {
             "1" => Some(ProviderChoice::Openai),
             "2" => Some(ProviderChoice::Anthropic),
             "3" => Some(ProviderChoice::Deepseek),
             "4" => Some(ProviderChoice::Ollama),
             "5" => Some(ProviderChoice::Custom),
             _ => Some(ProviderChoice::ServerLocal), // 默认走 [0] (R27 C 推荐)
-        },
-    )?;
+        }
+    })?;
 
     let provider = choice.to_provider();
 
@@ -124,7 +122,10 @@ pub fn run() -> io::Result<()> {
         println!("  (Ollama 本地, 不需 API key, 直接回车)");
         String::new()
     } else {
-        println!("  (API Key 底下会写到 {}, 本提示不回显)", llm_display_path());
+        println!(
+            "  (API Key 底下会写到 {}, 本提示不回显)",
+            llm_display_path()
+        );
         prompt_with_default_str(&mut lock, "API Key", "")?
     };
 
@@ -153,11 +154,7 @@ pub fn run() -> io::Result<()> {
 }
 
 /// 提示一行 + 默认. 返 Result。使用者直接回车采默认。
-fn prompt_with_default<F, T>(
-    lock: &mut impl BufRead,
-    prompt: &str,
-    parse: F,
-) -> io::Result<T>
+fn prompt_with_default<F, T>(lock: &mut impl BufRead, prompt: &str, parse: F) -> io::Result<T>
 where
     F: FnOnce(&str) -> Option<T>,
 {
@@ -166,9 +163,7 @@ where
     let mut buf = String::new();
     let _ = lock.read_line(&mut buf);
     let s = buf;
-    parse(&s).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidInput, format!("解析失败: {s:?}"))
-    })
+    parse(&s).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, format!("解析失败: {s:?}")))
 }
 
 fn prompt_with_default_str(
@@ -181,7 +176,11 @@ fn prompt_with_default_str(
     let mut buf = String::new();
     let _ = lock.read_line(&mut buf);
     let trimmed = buf.trim();
-    Ok(if trimmed.is_empty() { default.to_string() } else { trimmed.to_string() })
+    Ok(if trimmed.is_empty() {
+        default.to_string()
+    } else {
+        trimmed.to_string()
+    })
 }
 
 fn llm_display_path() -> String {

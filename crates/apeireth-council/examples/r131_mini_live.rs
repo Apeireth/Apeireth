@@ -23,7 +23,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let key = std::env::var("APEIRETH_MINIMAX_API_KEY").unwrap_or_default();
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let p = AnthropicCompatibleProvider::new(cfg)?;
@@ -32,10 +33,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== R131.1 mini 5 连发 (async current_thread) ===");
     for i in 0..5 {
         let t0 = Instant::now();
-        let r = p.complete(LlmRequest::new(
-            "MiniMax-M3",
-            vec![ChatMessage::user(prompt.clone())],
-        )).await?;
+        let r = p
+            .complete(LlmRequest::new(
+                "MiniMax-M3",
+                vec![ChatMessage::user(prompt.clone())],
+            ))
+            .await?;
         println!("[{}] {}ms {:?}", i + 1, t0.elapsed().as_millis(), r.content);
     }
     Ok(())

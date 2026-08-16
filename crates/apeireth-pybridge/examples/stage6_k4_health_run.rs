@@ -5,7 +5,8 @@
 //! 演示 K4 健康守护: 5 维度 (R11Compat / AsiCritical / PyBridge / Security / Performance) 自检
 
 use apeireth_pybridge::{
-    stage6_health_check, stage6_health_healthy, stage6_health_summary, HealthDimension, HealthStatus,
+    stage6_health_check, stage6_health_healthy, stage6_health_summary, HealthDimension,
+    HealthStatus,
 };
 
 fn main() {
@@ -43,14 +44,25 @@ fn main() {
     println!("    ASI modules: {}", r.asi_module_count);
     println!("    python_ext: {}", r.python_ext_active);
     println!("    checks: {}", r.checks.len());
-    println!("    score: {}/{} ({:.1}%)", r.total_score, r.max_score, r.score_percent());
+    println!(
+        "    score: {}/{} ({:.1}%)",
+        r.total_score,
+        r.max_score,
+        r.score_percent()
+    );
     println!("    all_ok: {}", r.all_ok);
-    println!("    ok/warn/crit/unknown: {}/{}/{}/{}", r.n_ok, r.n_warn, r.n_crit, r.n_unknown);
+    println!(
+        "    ok/warn/crit/unknown: {}/{}/{}/{}",
+        r.n_ok, r.n_warn, r.n_crit, r.n_unknown
+    );
 
     // 4. 维度聚合
     println!("\n  Per-dimension:");
     for (i, (d, name)) in dims.iter().enumerate() {
-        println!("    {name}: status={} score={}/100", r.dimension_status[i], r.dimension_scores[i]);
+        println!(
+            "    {name}: status={} score={}/100",
+            r.dimension_status[i], r.dimension_scores[i]
+        );
         let _ = d;
     }
 

@@ -4,11 +4,11 @@
 //! AND own a scope that authorizes the requested `NodeKind`. The scope is
 //! granted by `DmScope::grant` and consumed by `AccessPolicy::authorize`.
 
+use crate::node::{NodeId, NodeKind};
+use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::RwLock;
-use crate::node::{NodeId, NodeKind};
 use uuid::Uuid;
 
 #[derive(Debug, thiserror::Error)]
@@ -37,7 +37,12 @@ pub struct ApiKey {
 }
 
 impl ApiKey {
-    pub fn new(key: impl Into<String>, owner: impl Into<String>, label: impl Into<String>, now: i64) -> Self {
+    pub fn new(
+        key: impl Into<String>,
+        owner: impl Into<String>,
+        label: impl Into<String>,
+        now: i64,
+    ) -> Self {
         Self {
             key: key.into(),
             owner: owner.into(),
@@ -86,7 +91,11 @@ pub struct AuthDecision {
 
 impl AuthDecision {
     pub fn new(node_id: NodeId, node_kind: NodeKind, owner: impl Into<String>) -> Self {
-        Self { node_id, node_kind, owner: owner.into() }
+        Self {
+            node_id,
+            node_kind,
+            owner: owner.into(),
+        }
     }
 }
 
@@ -126,14 +135,21 @@ impl AccessPolicy {
         }
     }
 
-    pub fn authorize(&self, key: &str, kind: NodeKind, node_id: NodeId) -> AuthResult<AuthDecision> {
+    pub fn authorize(
+        &self,
+        key: &str,
+        kind: NodeKind,
+        node_id: NodeId,
+    ) -> AuthResult<AuthDecision> {
         let keys = self.keys.read();
         let k = keys.get(key).ok_or(AuthError::UnknownKey)?;
         if !k.is_active() {
             return Err(AuthError::RevokedKey);
         }
         let scopes = self.scopes.read();
-        let scope = scopes.get(key).ok_or(AuthError::NoScope(k.owner.clone(), kind))?;
+        let scope = scopes
+            .get(key)
+            .ok_or(AuthError::NoScope(k.owner.clone(), kind))?;
         if !scope.permits(kind) {
             return Err(AuthError::NoScope(k.owner.clone(), kind));
         }
@@ -207,13 +223,19 @@ mod tests {
         let p = AccessPolicy::new();
         p.register_key(ApiKey::new("k1", "alice", "primary", 0), DmScope::All);
         p.revoke_key("k1");
-        assert!(matches!(p.authorize("k1", NodeKind::Tui, Uuid::new_v4()), Err(AuthError::RevokedKey)));
+        assert!(matches!(
+            p.authorize("k1", NodeKind::Tui, Uuid::new_v4()),
+            Err(AuthError::RevokedKey)
+        ));
     }
 
     #[test]
     fn policy_scope_mismatch_denies() {
         let p = AccessPolicy::new();
-        p.register_key(ApiKey::new("k1", "alice", "primary", 0), DmScope::Single(NodeKind::Http));
+        p.register_key(
+            ApiKey::new("k1", "alice", "primary", 0),
+            DmScope::Single(NodeKind::Http),
+        );
         assert!(matches!(
             p.authorize("k1", NodeKind::Tui, Uuid::new_v4()),
             Err(AuthError::NoScope(_, NodeKind::Tui))
@@ -232,7 +254,10 @@ mod tests {
     #[test]
     fn policy_grant_scope_late() {
         let p = AccessPolicy::new();
-        p.register_key(ApiKey::new("k1", "alice", "primary", 0), DmScope::Single(NodeKind::Http));
+        p.register_key(
+            ApiKey::new("k1", "alice", "primary", 0),
+            DmScope::Single(NodeKind::Http),
+        );
         assert!(p.grant_scope("k1", DmScope::All));
         assert!(p.authorize("k1", NodeKind::Tui, Uuid::new_v4()).is_ok());
     }

@@ -105,12 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cancel_agent({observer_id}) ok");
 
     // 9. 验证 supervisorPrompt 编译期嵌入 (K-1 强校验 per §5.3 supervisor-prompt-818)
-    let prompt = build_supervisor_prompt(&[
-        "claude-code",
-        "gemini-cli",
-        "codex",
-        "opencode",
-    ]);
+    let prompt = build_supervisor_prompt(&["claude-code", "gemini-cli", "codex", "opencode"]);
     println!("supervisor_prompt_size = {} bytes", prompt.len());
     let k1_claude_code = prompt.contains("Claude Code");
     let k1_claude_dash = prompt.contains("claude-code");

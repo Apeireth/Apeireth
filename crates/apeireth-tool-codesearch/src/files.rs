@@ -55,8 +55,21 @@ impl FileFinder {
     }
 
     /// Find files matching the options. Returns absolute paths.
-    pub fn find<P: AsRef<Path>>(&self, root: P, options: &FindOptions) -> Result<Vec<FileEntry>, FileFinderError> {
-        let skip_set: &[&str] = &["target", "node_modules", ".git", "dist", "build", "__pycache__", ".venv", "venv"];
+    pub fn find<P: AsRef<Path>>(
+        &self,
+        root: P,
+        options: &FindOptions,
+    ) -> Result<Vec<FileEntry>, FileFinderError> {
+        let skip_set: &[&str] = &[
+            "target",
+            "node_modules",
+            ".git",
+            "dist",
+            "build",
+            "__pycache__",
+            ".venv",
+            "venv",
+        ];
         // Walk manually so we can prune subtrees. Track ancestor dir names.
         let mut entries = Vec::new();
         let mut walker = WalkDir::new(root.as_ref()).into_iter();
@@ -94,16 +107,24 @@ impl FileFinder {
     }
 
     /// Simple extension-based filter (faster than glob).
-    pub fn find_with_extension<P: AsRef<Path>>(&self, root: P, ext: &str) -> Result<Vec<FileEntry>, FileFinderError> {
+    pub fn find_with_extension<P: AsRef<Path>>(
+        &self,
+        root: P,
+        ext: &str,
+    ) -> Result<Vec<FileEntry>, FileFinderError> {
         let ext = ext.trim_start_matches('.');
         let entries = self.find(root, &FindOptions::default())?;
-        Ok(entries.into_iter().filter(|e| {
-            !e.is_dir && std::path::Path::new(&e.path)
-                .extension()
-                .and_then(|x| x.to_str())
-                .map(|x| x == ext)
-                .unwrap_or(false)
-        }).collect())
+        Ok(entries
+            .into_iter()
+            .filter(|e| {
+                !e.is_dir
+                    && std::path::Path::new(&e.path)
+                        .extension()
+                        .and_then(|x| x.to_str())
+                        .map(|x| x == ext)
+                        .unwrap_or(false)
+            })
+            .collect())
     }
 }
 
@@ -146,7 +167,10 @@ mod tests {
         fs::write(tmp.path().join(".hidden/x.rs"), "").unwrap();
         fs::write(tmp.path().join("visible.rs"), "").unwrap();
         let f = FileFinder::new();
-        let opts = FindOptions { skip_hidden: true, ..Default::default() };
+        let opts = FindOptions {
+            skip_hidden: true,
+            ..Default::default()
+        };
         let r = f.find(tmp.path(), &opts).unwrap();
         // visible.rs yes, .hidden/x.rs no
         let has_visible = r.iter().any(|e| e.path.contains("visible.rs"));
@@ -162,7 +186,10 @@ mod tests {
         fs::write(tmp.path().join("target/x.rs"), "").unwrap();
         fs::write(tmp.path().join("main.rs"), "").unwrap();
         let f = FileFinder::new();
-        let opts = FindOptions { skip_build_dirs: true, ..Default::default() };
+        let opts = FindOptions {
+            skip_build_dirs: true,
+            ..Default::default()
+        };
         let r = f.find(tmp.path(), &opts).unwrap();
         let in_target = r.iter().any(|e| e.path.contains("target"));
         assert!(!in_target, "target should be skipped");
@@ -180,7 +207,7 @@ mod tests {
         let r = f.find(tmp.path(), &opts).unwrap();
         let files: Vec<_> = r.iter().filter(|e| !e.is_dir).collect();
         assert_eq!(files.len(), 3); // main.rs, README.md (md via include), src/lib.rs
-        // wait, README.md is .md not .rs or .toml — should be excluded
+                                    // wait, README.md is .md not .rs or .toml — should be excluded
     }
 
     #[test]

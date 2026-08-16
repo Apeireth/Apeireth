@@ -98,5 +98,8 @@ fn server_info_serialization() {
 fn server_capabilities_without_tools() {
     let caps = ServerCapabilities { tools: None };
     let serialized = serde_json::to_value(&caps).unwrap();
-    assert!(serialized.get("tools").is_none(), "tools field should be skipped when None");
+    assert!(
+        serialized.get("tools").is_none(),
+        "tools field should be skipped when None"
+    );
 }

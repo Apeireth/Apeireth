@@ -108,12 +108,12 @@
 
 pub mod class;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod decode;
 pub mod dimension;
 pub mod encode;
 pub mod error;
 pub mod extension;
+mod organ_kani_proofs;
 pub mod sum_guard;
 pub mod validate;
 
@@ -122,22 +122,26 @@ pub mod validate;
 // ============================================================================
 
 pub use class::{Class, ClassDims, V05Spec};
+pub use decode::{decode_v05, decode_v05_class, V05_LINE_REGEX};
 pub use dimension::{
     Completeness, DimensionSet, Domain, Level, Lineage, Modality, Safety, CLASS_COUNT,
     DIMENSION_COUNT, V05_TOTAL_DIMS,
 };
-pub use encode::{encode_v05, encode_v05_class, encode_v05_lines, V05_PREFIX, V05_SEGMENT_COUNT, V05_SEP};
-pub use decode::{decode_v05, decode_v05_class, V05_LINE_REGEX};
+pub use encode::{
+    encode_v05, encode_v05_class, encode_v05_lines, V05_PREFIX, V05_SEGMENT_COUNT, V05_SEP,
+};
 pub use error::{NamingError, NamingResult, NAMING_ERROR_VARIANT_COUNT};
+pub use extension::{
+    Adversarial, CiPassRate, MetaDims, MetaOverall, Robustness, SelfImprovement, V05Spec30,
+    VerifierConsistency, BASE_CLASS_COUNT, BASE_DIM_COUNT, META_DIM_COUNT, OVERALL_DIM_COUNT,
+    V05_30_TOTAL_DIMS,
+};
 pub use sum_guard::{
     check_sum_equals_1, check_sum_equals_1_default, ClassWeights, DEFAULT_WEIGHTS,
     SUM_GUARD_TOLERANCE,
 };
-pub use validate::{validate_roundtrip, validate_v05, validate_v05_structure, validate_v05_with_weights};
-pub use extension::{
-    Adversarial, CiPassRate, MetaDims, MetaOverall, Robustness, SelfImprovement,
-    V05Spec30, VerifierConsistency, BASE_CLASS_COUNT, BASE_DIM_COUNT, META_DIM_COUNT,
-    OVERALL_DIM_COUNT, V05_30_TOTAL_DIMS,
+pub use validate::{
+    validate_roundtrip, validate_v05, validate_v05_structure, validate_v05_with_weights,
 };
 
 // ============================================================================
@@ -267,14 +271,30 @@ impl V05DimId {
     /// 24 维所属类.
     pub fn class(self) -> Class {
         match self {
-            V05DimId::PcLevel | V05DimId::PcDomain | V05DimId::PcModality
-            | V05DimId::PcSafety | V05DimId::PcCompleteness | V05DimId::PcLineage => Class::Pc,
-            V05DimId::RcLevel | V05DimId::RcDomain | V05DimId::RcModality
-            | V05DimId::RcSafety | V05DimId::RcCompleteness | V05DimId::RcLineage => Class::Rc,
-            V05DimId::HgLevel | V05DimId::HgDomain | V05DimId::HgModality
-            | V05DimId::HgSafety | V05DimId::HgCompleteness | V05DimId::HgLineage => Class::Hg,
-            V05DimId::GpLevel | V05DimId::GpDomain | V05DimId::GpModality
-            | V05DimId::GpSafety | V05DimId::GpCompleteness | V05DimId::GpLineage => Class::Gp,
+            V05DimId::PcLevel
+            | V05DimId::PcDomain
+            | V05DimId::PcModality
+            | V05DimId::PcSafety
+            | V05DimId::PcCompleteness
+            | V05DimId::PcLineage => Class::Pc,
+            V05DimId::RcLevel
+            | V05DimId::RcDomain
+            | V05DimId::RcModality
+            | V05DimId::RcSafety
+            | V05DimId::RcCompleteness
+            | V05DimId::RcLineage => Class::Rc,
+            V05DimId::HgLevel
+            | V05DimId::HgDomain
+            | V05DimId::HgModality
+            | V05DimId::HgSafety
+            | V05DimId::HgCompleteness
+            | V05DimId::HgLineage => Class::Hg,
+            V05DimId::GpLevel
+            | V05DimId::GpDomain
+            | V05DimId::GpModality
+            | V05DimId::GpSafety
+            | V05DimId::GpCompleteness
+            | V05DimId::GpLineage => Class::Gp,
         }
     }
 
@@ -801,7 +821,10 @@ mod tests {
         assert_eq!(spec.get_domain(V05DimId::PcDomain), Domain::Code);
         assert_eq!(spec.get_modality(V05DimId::PcModality), Modality::Text);
         assert_eq!(spec.get_safety(V05DimId::PcSafety), Safety::High);
-        assert_eq!(spec.get_completeness(V05DimId::PcCompleteness), Completeness::Complete);
+        assert_eq!(
+            spec.get_completeness(V05DimId::PcCompleteness),
+            Completeness::Complete
+        );
         assert_eq!(spec.get_lineage(V05DimId::PcLineage), Lineage::Apeireth10);
     }
 

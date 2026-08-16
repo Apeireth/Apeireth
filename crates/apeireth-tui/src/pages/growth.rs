@@ -9,7 +9,6 @@
 //!
 //! **R11 LOCKED 边界**: `apeireth-core::LifeStage` 10 变体 enum 0 触, `LEGAL_TRANSITIONS` 12 条 0 触,
 /// 仅 TUI 层 pages/growth.rs + backend.rs 调整.
-
 use apeireth_value::ValueDimension;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};

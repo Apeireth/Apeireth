@@ -14,6 +14,8 @@
 #![allow(missing_docs)]
 #![allow(dead_code)]
 
+pub mod bounded_reliability; // R204: DefaultReliability + CircuitBreaker 集成: 真 Circuit Breaker (替换 reliability.rs 的 stub)
+pub mod circuit_breaker; // R198
 pub mod dispatch;
 pub mod error;
 pub mod message;
@@ -21,8 +23,6 @@ pub mod normalize;
 pub mod pipeline;
 pub mod policy;
 pub mod reliability;
-pub mod circuit_breaker;  // R198
-pub mod bounded_reliability;  // R204: DefaultReliability + CircuitBreaker 集成: 真 Circuit Breaker (替换 reliability.rs 的 stub)
 pub mod stage;
 pub mod throttle;
 // R177: pipeline-g5 invariants (10 tests + 2 Kani proofs)
@@ -39,11 +39,19 @@ pub const FIVE_STAGES: [&str; 5] = [
 
 pub use dispatch::DefaultDispatch;
 pub use error::{PipelineError, PipelineErrorKind, PIPELINE_ERROR_VARIANT_COUNT};
-pub use message::{MAX_KIND_LEN, MAX_PAYLOAD_LEN, MAX_TRACE_ID_LEN, PipelineMessage};
+pub use message::{PipelineMessage, MAX_KIND_LEN, MAX_PAYLOAD_LEN, MAX_TRACE_ID_LEN};
 pub use normalize::DefaultNormalize;
-pub use pipeline::{Pipeline, PipelineConfig, PIPELINE_MAX_STAGES, PIPELINE_MIN_STAGES, PIPELINE_STAGE_NAME_MAX_LEN};
-pub use policy::{DefaultPolicy, MAX_POLICY_ATTEMPTS, MAX_POLICY_PAYLOAD_SIZE, POLICY_DENY_KINDS, POLICY_REQUIRE_KIND};
-pub use reliability::{DefaultReliability, IDEMPOTENCY_KEY_PREFIX, MAX_RETRY_ATTEMPTS, RETRY_BACKOFF_MS, CIRCUIT_BREAKER_THRESHOLD};
+pub use pipeline::{
+    Pipeline, PipelineConfig, PIPELINE_MAX_STAGES, PIPELINE_MIN_STAGES, PIPELINE_STAGE_NAME_MAX_LEN,
+};
+pub use policy::{
+    DefaultPolicy, MAX_POLICY_ATTEMPTS, MAX_POLICY_PAYLOAD_SIZE, POLICY_DENY_KINDS,
+    POLICY_REQUIRE_KIND,
+};
+pub use reliability::{
+    DefaultReliability, CIRCUIT_BREAKER_THRESHOLD, IDEMPOTENCY_KEY_PREFIX, MAX_RETRY_ATTEMPTS,
+    RETRY_BACKOFF_MS,
+};
 pub use stage::{Stage, StageEntry, StageKind, StageOp, STAGE_KIND_COUNT, STAGE_ORDER};
 pub use throttle::{DefaultThrottle, MAX_BURST, MAX_CONCURRENT, MAX_QPS, TOKEN_BUCKET_REFILL_SECS};
 

@@ -43,8 +43,8 @@ pub mod store;
 
 pub use error::{CredentialsError, Result};
 pub use gate::{
-    AllowAllGate, CredentialGate, CredentialOp, DEFAULT_HIGH_RISK_SERVICES, DenyAllGate,
-    GateDecision, GatedCredentialsStore,
+    AllowAllGate, CredentialGate, CredentialOp, DenyAllGate, GateDecision, GatedCredentialsStore,
+    DEFAULT_HIGH_RISK_SERVICES,
 };
 pub use secret::{mask_for_display, redact_len, SecretString};
 pub use store::{validate_service_name, CredentialsStore, FileCredentialsStore};
@@ -72,14 +72,14 @@ mod tests {
     /// **验收项"读写/未知名报错/脱敏"端到端**: 文件后端 + 审批门 + 脱敏一体冒烟。
     #[test]
     fn end_to_end_smoke() {
-        let dir = std::env::temp_dir().join(format!(
-            "apeireth-credentials-e2e-{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("apeireth-credentials-e2e-{}", std::process::id()));
         let store = FileCredentialsStore::new(dir.join("creds.json")).unwrap();
 
         // 普通凭据: 读写自由
-        store.set("openai", SecretString::new("sk-e2e-001")).unwrap();
+        store
+            .set("openai", SecretString::new("sk-e2e-001"))
+            .unwrap();
         let v = store.get("openai").unwrap();
         assert_eq!(v.expose(), "sk-e2e-001");
         // 脱敏输出不泄漏

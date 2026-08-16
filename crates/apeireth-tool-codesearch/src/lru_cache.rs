@@ -17,7 +17,9 @@ use std::time::{Duration, Instant};
 use lru::LruCache;
 use std::sync::Mutex;
 
-use crate::unified::{IntelligenceHit, IntelligenceKind, UnifiedCodeIntelligence, UnifiedError, UnifiedQuery};
+use crate::unified::{
+    IntelligenceHit, IntelligenceKind, UnifiedCodeIntelligence, UnifiedError, UnifiedQuery,
+};
 
 // ============================================================================
 // 真 LRU QueryCache (用 lru crate)
@@ -80,9 +82,11 @@ impl LruQueryCache {
                 return Some(entry.hits);
             }
             g.pop(&key);
-            self.evictions.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.evictions
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
-        self.misses.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.misses
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         None
     }
 
@@ -97,7 +101,8 @@ impl LruQueryCache {
             },
         );
         if evicted.is_some() {
-            self.evictions.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.evictions
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         }
     }
 
@@ -235,14 +240,25 @@ impl CachedUnifiedLru {
         streaming_query(&self.cache, &self.inner, q, on_hit)
     }
 
-    pub fn batch(&self, queries: &[UnifiedQuery]) -> Vec<Result<Vec<IntelligenceHit>, UnifiedError>> {
+    pub fn batch(
+        &self,
+        queries: &[UnifiedQuery],
+    ) -> Vec<Result<Vec<IntelligenceHit>, UnifiedError>> {
         batch_query(&self.cache, &self.inner, queries)
     }
 
-    pub fn stats(&self) -> LruCacheStats { self.cache.stats() }
-    pub fn clear(&self) { self.cache.clear(); }
-    pub fn invalidate(&self, q: &UnifiedQuery) -> bool { self.cache.invalidate(q) }
-    pub fn inner(&self) -> &UnifiedCodeIntelligence { &self.inner }
+    pub fn stats(&self) -> LruCacheStats {
+        self.cache.stats()
+    }
+    pub fn clear(&self) {
+        self.cache.clear();
+    }
+    pub fn invalidate(&self, q: &UnifiedQuery) -> bool {
+        self.cache.invalidate(q)
+    }
+    pub fn inner(&self) -> &UnifiedCodeIntelligence {
+        &self.inner
+    }
 }
 
 // ============================================================================
@@ -308,7 +324,7 @@ mod tests {
         assert!(s.evictions >= 1);
         // p0 还在
         let _ = c.get(&q0);
-        assert_eq!(c.stats().hits, 2);  // 第 1 次 hits + 第 2 次 hits
+        assert_eq!(c.stats().hits, 2); // 第 1 次 hits + 第 2 次 hits
     }
 
     #[test]
@@ -333,7 +349,7 @@ mod tests {
 
     #[test]
     fn t08_ttl_expiry() {
-        let c = LruQueryCache::new(10, 100);  // 10ms TTL
+        let c = LruQueryCache::new(10, 100); // 10ms TTL
         let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("."));
         c.put(&q, vec![]);
         std::thread::sleep(Duration::from_millis(20));
@@ -345,12 +361,17 @@ mod tests {
         let c = LruQueryCache::with_defaults();
         let inner = UnifiedCodeIntelligence::new_in_memory();
         // 不存在路径, 结果为空, callback 不调
-        let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("./nonexistent_xyz"));
+        let q = UnifiedQuery::new(
+            IntelligenceKind::Text,
+            "fn",
+            PathBuf::from("./nonexistent_xyz"),
+        );
         let mut count = 0u64;
         let n = streaming_query(&c, &inner, &q, |_hit| {
             count += 1;
             true
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(n, 0);
         assert_eq!(count, 0);
     }
@@ -359,7 +380,11 @@ mod tests {
     fn t10_streaming_early_termination() {
         let c = LruQueryCache::with_defaults();
         let inner = UnifiedCodeIntelligence::new_in_memory();
-        let q = UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("./nonexistent_xyz"));
+        let q = UnifiedQuery::new(
+            IntelligenceKind::Text,
+            "fn",
+            PathBuf::from("./nonexistent_xyz"),
+        );
         let mut called = 0;
         let _ = streaming_query(&c, &inner, &q, |_hit| {
             called += 1;
@@ -373,9 +398,21 @@ mod tests {
         let c = LruQueryCache::with_defaults();
         let inner = UnifiedCodeIntelligence::new_in_memory();
         let queries = vec![
-            UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("./nonexistent_xyz")),
-            UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("./nonexistent_xyz")),
-            UnifiedQuery::new(IntelligenceKind::Text, "fn", PathBuf::from("./nonexistent_xyz")),
+            UnifiedQuery::new(
+                IntelligenceKind::Text,
+                "fn",
+                PathBuf::from("./nonexistent_xyz"),
+            ),
+            UnifiedQuery::new(
+                IntelligenceKind::Text,
+                "fn",
+                PathBuf::from("./nonexistent_xyz"),
+            ),
+            UnifiedQuery::new(
+                IntelligenceKind::Text,
+                "fn",
+                PathBuf::from("./nonexistent_xyz"),
+            ),
         ];
         let results = batch_query(&c, &inner, &queries);
         assert_eq!(results.len(), 3);

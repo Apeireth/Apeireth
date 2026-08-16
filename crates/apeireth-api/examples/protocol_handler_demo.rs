@@ -82,7 +82,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // 2. 注册 4 协议 stub handler
     let configs = [
-        (ProtocolKind::OpenAiChat, "/v1/chat/completions", "openai_chat"),
+        (
+            ProtocolKind::OpenAiChat,
+            "/v1/chat/completions",
+            "openai_chat",
+        ),
         (
             ProtocolKind::OpenAiResponses,
             "/v1/responses",
@@ -150,8 +154,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-    println!(
-        "✨ R123-2 demo 验收通过 (4 协议 register + dispatch + 3 gateway Err 0 漂移)"
-    );
+    println!("✨ R123-2 demo 验收通过 (4 协议 register + dispatch + 3 gateway Err 0 漂移)");
     Ok(())
 }

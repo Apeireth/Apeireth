@@ -152,7 +152,10 @@ mod tests {
     /// 守门 #3: SumNotEquals1 含 sum + delta.
     #[test]
     fn sum_not_equals_1_error_includes_sum_and_delta() {
-        let e = NamingError::SumNotEquals1 { sum: 1.05, delta: 0.05 };
+        let e = NamingError::SumNotEquals1 {
+            sum: 1.05,
+            delta: 0.05,
+        };
         let s = format!("{e}");
         assert!(s.contains("1.05"));
         assert!(s.contains("0.05"));

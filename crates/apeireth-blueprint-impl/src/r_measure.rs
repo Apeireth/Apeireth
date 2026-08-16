@@ -227,9 +227,9 @@ impl RMeasureAll {
         RMeasureDrift {
             r1: self.r1_directness - 0.9063,
             r2: self.r2_candor - 0.8532,
-            r3: self.r3_closure,  // R-3 无 baseline LOCKED (留 0)
+            r3: self.r3_closure, // R-3 无 baseline LOCKED (留 0)
             r4: self.r4_promise - 0.8682,
-            r5: self.r5_failure_honesty,  // R-5 期望 1.0
+            r5: self.r5_failure_honesty, // R-5 期望 1.0
         }
     }
 }
@@ -375,7 +375,10 @@ mod tests {
     fn r5_one_dishonest_drops_to_partial() {
         let samples = vec![
             ActionSample::perfect(),
-            ActionSample { failure_honest: false, ..ActionSample::perfect() },
+            ActionSample {
+                failure_honest: false,
+                ..ActionSample::perfect()
+            },
             ActionSample::perfect(),
         ];
         assert_eq!(r5_failure_honesty(&samples), 2.0 / 3.0);
@@ -419,10 +422,10 @@ mod tests {
     #[test]
     fn rmeasure_all_drift_meets_baseline() {
         let all = RMeasureAll {
-            r1_directness: 0.95,    // > 0.9063
-            r2_candor: 0.90,        // > 0.8532
-            r3_closure: 0.85,       // R-3 无 baseline
-            r4_promise: 0.90,       // > 0.8682
+            r1_directness: 0.95, // > 0.9063
+            r2_candor: 0.90,     // > 0.8532
+            r3_closure: 0.85,    // R-3 无 baseline
+            r4_promise: 0.90,    // > 0.8682
             r5_failure_honesty: 1.0,
         };
         let drift = all.drift();
@@ -435,7 +438,7 @@ mod tests {
     #[test]
     fn rmeasure_all_drift_below_baseline() {
         let all = RMeasureAll {
-            r1_directness: 0.5,    // < 0.9063
+            r1_directness: 0.5, // < 0.9063
             r2_candor: 0.5,
             r3_closure: 0.5,
             r4_promise: 0.5,

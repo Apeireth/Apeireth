@@ -120,13 +120,19 @@ impl PromptMessage {
     pub fn user_text(text: impl Into<String>) -> Self {
         Self {
             role: PromptRole::User,
-            content: PromptContent::Text { text: text.into(), mime_type: None },
+            content: PromptContent::Text {
+                text: text.into(),
+                mime_type: None,
+            },
         }
     }
     pub fn assistant_text(text: impl Into<String>) -> Self {
         Self {
             role: PromptRole::Assistant,
-            content: PromptContent::Text { text: text.into(), mime_type: None },
+            content: PromptContent::Text {
+                text: text.into(),
+                mime_type: None,
+            },
         }
     }
 }
@@ -212,10 +218,7 @@ pub trait PromptServer: Send + Sync {
 /// **处理 `prompts/list` 请求** → JSON-RPC 响应
 pub fn handle_prompts_list(req: &JsonRpcRequest, server: &dyn PromptServer) -> JsonRpcResponse {
     let prompts = server.list();
-    JsonRpcResponse::ok(
-        req.id.clone(),
-        json!({ "prompts": prompts }),
-    )
+    JsonRpcResponse::ok(req.id.clone(), json!({ "prompts": prompts }))
 }
 
 /// **处理 `prompts/get` 请求** → JSON-RPC 响应
@@ -281,11 +284,12 @@ mod tests {
                 Prompt::new("summarize")
                     .with_description("Summarize a topic")
                     .with_arguments(vec![
-                        PromptArgument::new("topic").required().with_description("Topic to summarize"),
+                        PromptArgument::new("topic")
+                            .required()
+                            .with_description("Topic to summarize"),
                         PromptArgument::new("max_words").with_description("Max word count"),
                     ]),
-                Prompt::new("greet")
-                    .with_description("Say hello"),
+                Prompt::new("greet").with_description("Say hello"),
             ]
         }
         fn get(&self, name: &str, arguments: &Value) -> Result<GetPromptResult, JsonRpcError> {
@@ -300,16 +304,19 @@ mod tests {
                         .and_then(|v| v.as_i64())
                         .unwrap_or(100);
                     Ok(GetPromptResult::new(vec![
-                        PromptMessage::user_text(format!("Please summarize `{}` in at most {} words.", topic, max)),
-                        PromptMessage::assistant_text("Understood. Here is the summary: ...".to_string()),
+                        PromptMessage::user_text(format!(
+                            "Please summarize `{}` in at most {} words.",
+                            topic, max
+                        )),
+                        PromptMessage::assistant_text(
+                            "Understood. Here is the summary: ...".to_string(),
+                        ),
                     ])
                     .with_description(format!("Rendered summarize for `{}`", topic)))
                 }
-                "greet" => {
-                    Ok(GetPromptResult::new(vec![
-                        PromptMessage::assistant_text("Hello! How can I help?".to_string()),
-                    ]))
-                }
+                "greet" => Ok(GetPromptResult::new(vec![PromptMessage::assistant_text(
+                    "Hello! How can I help?".to_string(),
+                )])),
                 _ => Err(JsonRpcError::new(
                     PROMPT_NOT_FOUND,
                     format!("prompt `{}` not found", name),
@@ -332,7 +339,9 @@ mod tests {
 
     #[test]
     fn prompt_argument_required_and_description() {
-        let a = PromptArgument::new("topic").required().with_description("topic desc");
+        let a = PromptArgument::new("topic")
+            .required()
+            .with_description("topic desc");
         assert_eq!(a.name, "topic");
         assert!(a.required);
         assert_eq!(a.description.as_deref(), Some("topic desc"));
@@ -360,8 +369,14 @@ mod tests {
 
     #[test]
     fn prompt_role_serde_round_trip() {
-        assert_eq!(serde_json::to_value(&PromptRole::User).unwrap(), json!("user"));
-        assert_eq!(serde_json::to_value(&PromptRole::Assistant).unwrap(), json!("assistant"));
+        assert_eq!(
+            serde_json::to_value(&PromptRole::User).unwrap(),
+            json!("user")
+        );
+        assert_eq!(
+            serde_json::to_value(&PromptRole::Assistant).unwrap(),
+            json!("assistant")
+        );
     }
 
     #[test]
@@ -386,11 +401,12 @@ mod tests {
     #[test]
     fn prompt_server_get_summarize_with_args() {
         let s = TestPromptServer;
-        let result = s.get(
-            "summarize",
-            &json!({"topic": "Rust async", "max_words": 50}),
-        )
-        .unwrap();
+        let result = s
+            .get(
+                "summarize",
+                &json!({"topic": "Rust async", "max_words": 50}),
+            )
+            .unwrap();
         assert_eq!(result.messages.len(), 2);
         match &result.messages[0].content {
             PromptContent::Text { text, .. } => {

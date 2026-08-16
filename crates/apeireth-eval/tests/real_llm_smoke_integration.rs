@@ -6,9 +6,7 @@
 //! 2. live env-gated 测试 (APEIRETH_MINIMAX_LIVE_TEST=1), 真调 MiniMax
 //!    (默认 ignored, 需显式 `cargo test -- --ignored` 或 env var 启用)
 
-use apeireth_eval::real_llm_smoke::{
-    load_api_key, run_real_llm_smoke, RealLlmConfig,
-};
+use apeireth_eval::real_llm_smoke::{load_api_key, run_real_llm_smoke, RealLlmConfig};
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -67,27 +65,45 @@ async fn real_llm_smoke_mock_minimax_all_pass() {
         ..Default::default()
     };
 
-    let report = run_real_llm_smoke(
-        workspace.path(),
-        Some("test-key-mock"),
-        Some(cfg),
-    )
-    .await;
+    let report = run_real_llm_smoke(workspace.path(), Some("test-key-mock"), Some(cfg)).await;
 
     assert!(report.apikey_loaded, "apikey_loaded: {:?}", report.error);
-    assert!(report.conventions_scanned, "conventions_scanned: {:?}", report.error);
+    assert!(
+        report.conventions_scanned,
+        "conventions_scanned: {:?}",
+        report.error
+    );
     assert!(report.prompt_built, "prompt_built: {:?}", report.error);
-    assert!(report.http_request_ok, "http_request_ok: status={} error={:?}", report.http_status, report.error);
-    assert!(report.response_shape_valid, "response_shape_valid: {:?}", report.error);
-    assert!(report.content_non_empty, "content_non_empty: text='{}'", report.response_text_excerpt);
-    assert!(report.token_usage_recorded, "token_usage_recorded: in={} out={}", report.input_tokens, report.output_tokens);
+    assert!(
+        report.http_request_ok,
+        "http_request_ok: status={} error={:?}",
+        report.http_status, report.error
+    );
+    assert!(
+        report.response_shape_valid,
+        "response_shape_valid: {:?}",
+        report.error
+    );
+    assert!(
+        report.content_non_empty,
+        "content_non_empty: text='{}'",
+        report.response_text_excerpt
+    );
+    assert!(
+        report.token_usage_recorded,
+        "token_usage_recorded: in={} out={}",
+        report.input_tokens, report.output_tokens
+    );
     assert!(report.all_pass(), "all_pass() returned false");
     assert_eq!(report.pass_rate(), 1.0);
     assert_eq!(report.http_status, 200);
     assert_eq!(report.input_tokens, 142);
     assert_eq!(report.output_tokens, 9);
     assert_eq!(report.stop_reason.as_deref(), Some("end_turn"));
-    assert_eq!(report.response_model.as_deref(), Some("MiniMax-M2.7-highspeed"));
+    assert_eq!(
+        report.response_model.as_deref(),
+        Some("MiniMax-M2.7-highspeed")
+    );
     assert!(report.response_text_excerpt.contains("Confirmed"));
     assert!(report.latency_ms < 30_000);
 }
@@ -172,8 +188,10 @@ async fn real_llm_smoke_apikey_loaded_from_default_path() {
     match result {
         Ok((_k, src)) => {
             // 文件存在 → 应能加载 (不一定存在则看具体机器)
-            assert!(src.starts_with("file:") || src == "env",
-                "expected file or env source, got: {src}");
+            assert!(
+                src.starts_with("file:") || src == "env",
+                "expected file or env source, got: {src}"
+            );
         }
         Err(e) => {
             // 文件不存在 (CI 无该路径) → 应该返 error
@@ -201,7 +219,11 @@ async fn real_llm_smoke_missing_workspace_cargo_fails_at_stage_2() {
 
     assert!(report.apikey_loaded);
     assert!(!report.conventions_scanned, "无 Cargo.toml 应 scan 失败");
-    assert!(report.error.as_ref().unwrap().contains("conventions_scanned"));
+    assert!(report
+        .error
+        .as_ref()
+        .unwrap()
+        .contains("conventions_scanned"));
 }
 
 #[tokio::test]
@@ -298,7 +320,11 @@ async fn live_minimax_smoke_real_call() {
     println!("pass_rate: {}", report.pass_rate());
     println!("error: {:?}", report.error);
 
-    assert!(report.all_pass(), "live MiniMax smoke failed: {:?}", report.error);
+    assert!(
+        report.all_pass(),
+        "live MiniMax smoke failed: {:?}",
+        report.error
+    );
 }
 
 #[tokio::test]
@@ -319,5 +345,9 @@ async fn live_minimax_smoke_with_explicit_key() {
     let workspace_root = here.parent().and_then(|p| p.parent()).unwrap_or(&here);
 
     let report = run_real_llm_smoke(workspace_root, Some(&key), None).await;
-    assert!(report.all_pass(), "live smoke with explicit key failed: {:?}", report.error);
+    assert!(
+        report.all_pass(),
+        "live smoke with explicit key failed: {:?}",
+        report.error
+    );
 }

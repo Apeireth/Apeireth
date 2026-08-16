@@ -9,12 +9,12 @@
 //! tests. Real Telegram/Discord/iOS clients are out of scope for this crate
 //! — they live in their own integration crate (e.g. `apeireth-telegram`).
 
+use crate::node::NodeId;
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use parking_lot::Mutex;
-use crate::node::NodeId;
 use uuid::Uuid;
 
 /// One inbound frame: who sent it, where it came from, what payload.
@@ -27,7 +27,11 @@ pub struct InFrame {
 
 impl InFrame {
     pub fn new(node_id: NodeId, channel: impl Into<String>, payload: serde_json::Value) -> Self {
-        Self { node_id, channel: channel.into(), payload }
+        Self {
+            node_id,
+            channel: channel.into(),
+            payload,
+        }
     }
 }
 
@@ -40,7 +44,10 @@ pub struct OutFrame {
 
 impl OutFrame {
     pub fn new(channel: impl Into<String>, payload: serde_json::Value) -> Self {
-        Self { channel: channel.into(), payload }
+        Self {
+            channel: channel.into(),
+            payload,
+        }
     }
 }
 
@@ -223,7 +230,9 @@ impl Transport for HttpTransport {
             return Err(TransportError::NotStarted);
         }
         // Real impl: forward into axum/hyper server's outbound channel.
-        Err(TransportError::SendFailed("HttpTransport stub is a no-op".into()))
+        Err(TransportError::SendFailed(
+            "HttpTransport stub is a no-op".into(),
+        ))
     }
 
     async fn recv(&self) -> Option<InFrame> {
@@ -281,7 +290,9 @@ impl Transport for WsTransport {
         if !*self.started.lock() {
             return Err(TransportError::NotStarted);
         }
-        Err(TransportError::SendFailed("WsTransport stub is a no-op".into()))
+        Err(TransportError::SendFailed(
+            "WsTransport stub is a no-op".into(),
+        ))
     }
 
     async fn recv(&self) -> Option<InFrame> {
@@ -326,7 +337,10 @@ mod tests {
     async fn in_memory_transport_lifecycle() {
         let t = InMemoryTransport::new("mem");
         assert!(t.start().await.is_ok());
-        assert!(matches!(t.start().await, Err(TransportError::AlreadyStarted)));
+        assert!(matches!(
+            t.start().await,
+            Err(TransportError::AlreadyStarted)
+        ));
         assert!(t.send(OutFrame::new("mem", json!({"k": 1}))).await.is_ok());
         assert_eq!(t.outbound_len(), 1);
         let _ = t.drain_outbound();
@@ -356,7 +370,10 @@ mod tests {
     async fn http_transport_send_stub_returns_err() {
         let t = HttpTransport::default();
         t.start().await.unwrap();
-        assert!(matches!(t.send(OutFrame::new("http", json!({}))).await, Err(TransportError::SendFailed(_))));
+        assert!(matches!(
+            t.send(OutFrame::new("http", json!({}))).await,
+            Err(TransportError::SendFailed(_))
+        ));
     }
 
     #[tokio::test]

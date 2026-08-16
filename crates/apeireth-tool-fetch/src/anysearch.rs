@@ -29,8 +29,8 @@
 #![allow(missing_docs)]
 #![allow(clippy::all)]
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -51,15 +51,27 @@ pub const ANYSEARCH_MCP_METHOD: &str = "tools/call";
 
 /// 17 vertical domains (1:1 翻译 AnySearch.js DOMAINS).
 pub const ANYSEARCH_DOMAINS: &[&str] = &[
-    "general", "resource", "social_media", "finance", "academic", "legal",
-    "health", "business", "security", "ip", "code", "energy",
-    "environment", "agriculture", "travel", "film", "gaming",
+    "general",
+    "resource",
+    "social_media",
+    "finance",
+    "academic",
+    "legal",
+    "health",
+    "business",
+    "security",
+    "ip",
+    "code",
+    "energy",
+    "environment",
+    "agriculture",
+    "travel",
+    "film",
+    "gaming",
 ];
 
 /// 4 tool names (1:1 翻译 AnySearch.js COMMANDS).
-pub const ANYSEARCH_METHODS: &[&str] = &[
-    "search", "get_sub_domains", "batch_search", "extract",
-];
+pub const ANYSEARCH_METHODS: &[&str] = &["search", "get_sub_domains", "batch_search", "extract"];
 
 const _: () = assert!(ANYSEARCH_DOMAINS.len() == 17);
 const _: () = assert!(ANYSEARCH_METHODS.len() == 4);
@@ -98,7 +110,12 @@ pub struct JsonRpcRequest {
 
 impl JsonRpcRequest {
     pub fn new(id: u64, method: impl Into<String>, params: Value) -> Self {
-        Self { jsonrpc: JSONRPC_VERSION, id, method: method.into(), params }
+        Self {
+            jsonrpc: JSONRPC_VERSION,
+            id,
+            method: method.into(),
+            params,
+        }
     }
 }
 
@@ -150,8 +167,12 @@ impl AnySearchClient {
         })
     }
 
-    pub fn key_count(&self) -> usize { self.api_keys.len() }
-    pub fn endpoint(&self) -> &str { &self.endpoint }
+    pub fn key_count(&self) -> usize {
+        self.api_keys.len()
+    }
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
 
     pub async fn search(
         &self,
@@ -161,15 +182,22 @@ impl AnySearchClient {
         sub_params: &str,
     ) -> AnySearchResult<String> {
         let mut args = json!({ "query": query });
-        if let Some(d) = domain { args["domain"] = json!(d); }
-        if let Some(sd) = sub_domain { args["sub_domain"] = json!(sd); }
-        if !sub_params.is_empty() { args["sub_params"] = json!(sub_params); }
+        if let Some(d) = domain {
+            args["domain"] = json!(d);
+        }
+        if let Some(sd) = sub_domain {
+            args["sub_domain"] = json!(sd);
+        }
+        if !sub_params.is_empty() {
+            args["sub_params"] = json!(sub_params);
+        }
         let r = self.call("search", args).await?;
         extract_content(&r).ok_or(AnySearchError::Empty)
     }
 
     pub async fn get_sub_domains(&self, domain: &str) -> AnySearchResult<Value> {
-        self.call("get_sub_domains", json!({ "domain": domain })).await
+        self.call("get_sub_domains", json!({ "domain": domain }))
+            .await
     }
 
     pub async fn batch_search(
@@ -180,7 +208,9 @@ impl AnySearchClient {
         // R176+1 fix: batch_search expects `queries: [{query: "..."}]` (objects), not strings
         let query_objects: Vec<Value> = queries.iter().map(|q| json!({ "query": q })).collect();
         let mut args = json!({ "queries": query_objects });
-        if let Some(d) = domain { args["domain"] = json!(d); }
+        if let Some(d) = domain {
+            args["domain"] = json!(d);
+        }
         let r = self.call("batch_search", args).await?;
         extract_content(&r).ok_or(AnySearchError::Empty)
     }
@@ -200,11 +230,17 @@ impl AnySearchClient {
         let mut current_title: Option<String> = None;
         for line in markdown.lines() {
             let line = line.trim();
-            if line.is_empty() { continue; }
+            if line.is_empty() {
+                continue;
+            }
 
             // 格式 A: "### 1. Title" 抓 title
             if let Some(rest) = line.strip_prefix("###") {
-                let cleaned: String = rest.trim().trim_start_matches(|c: char| c.is_ascii_digit() || c == '.').trim().to_string();
+                let cleaned: String = rest
+                    .trim()
+                    .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.')
+                    .trim()
+                    .to_string();
                 if !cleaned.is_empty() {
                     current_title = Some(cleaned);
                     continue;
@@ -216,11 +252,15 @@ impl AnySearchClient {
                 let url = url_part.trim().to_string();
                 let title = current_title.take().unwrap_or_else(|| query.to_string());
                 hits.push(SearchHit {
-                    title, url, snippet: String::new(),
+                    title,
+                    url,
+                    snippet: String::new(),
                     source: SearchSource::AnySearch,
                     score: 1.0 - (hits.len() as f64 * 0.01),
                 });
-                if hits.len() >= limit { break; }
+                if hits.len() >= limit {
+                    break;
+                }
                 continue;
             }
 
@@ -233,13 +273,19 @@ impl AnySearchClient {
                         let snippet_start = mid + end + 1;
                         let snippet = if snippet_start < line.len() {
                             line[snippet_start..].trim().to_string()
-                        } else { String::new() };
+                        } else {
+                            String::new()
+                        };
                         hits.push(SearchHit {
-                            title, url, snippet,
+                            title,
+                            url,
+                            snippet,
                             source: SearchSource::AnySearch,
                             score: 1.0 - (hits.len() as f64 * 0.01),
                         });
-                        if hits.len() >= limit { break; }
+                        if hits.len() >= limit {
+                            break;
+                        }
                     }
                 }
             }
@@ -259,10 +305,14 @@ impl AnySearchClient {
     async fn call(&self, tool_name: &str, arguments: Value) -> AnySearchResult<Value> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         // MCP tools/call protocol: {name, arguments}
-        let req = JsonRpcRequest::new(id, ANYSEARCH_MCP_METHOD, json!({
-            "name": tool_name,
-            "arguments": arguments,
-        }));
+        let req = JsonRpcRequest::new(
+            id,
+            ANYSEARCH_MCP_METHOD,
+            json!({
+                "name": tool_name,
+                "arguments": arguments,
+            }),
+        );
         let body = serde_json::to_value(&req)?;
 
         let api_key = if self.api_keys.is_empty() {
@@ -282,7 +332,9 @@ impl AnySearchClient {
         builder = builder.header("X-AnySearch-Client", "apeireth-rust/0.1.0");
         builder = builder.timeout(Duration::from_millis(ANYSEARCH_TIMEOUT_MS));
 
-        let response = builder.send().await
+        let response = builder
+            .send()
+            .await
             .map_err(|e| AnySearchError::Transport(format!("send: {e}")))?;
 
         let status = response.status();
@@ -290,18 +342,25 @@ impl AnySearchClient {
             return Err(AnySearchError::Transport(format!("HTTP {status}")));
         }
 
-        let parsed: JsonRpcResponse = response.json().await
+        let parsed: JsonRpcResponse = response
+            .json()
+            .await
             .map_err(|e| AnySearchError::Parse(e.to_string()))?;
 
         if let Some(err) = parsed.error {
-            return Err(AnySearchError::Protocol { code: err.code, msg: err.message });
+            return Err(AnySearchError::Protocol {
+                code: err.code,
+                msg: err.message,
+            });
         }
         parsed.result.ok_or(AnySearchError::Empty)
     }
 }
 
 impl From<serde_json::Error> for AnySearchError {
-    fn from(e: serde_json::Error) -> Self { AnySearchError::Parse(e.to_string()) }
+    fn from(e: serde_json::Error) -> Self {
+        AnySearchError::Parse(e.to_string())
+    }
 }
 
 fn extract_content(result: &Value) -> Option<String> {
@@ -309,11 +368,17 @@ fn extract_content(result: &Value) -> Option<String> {
     let mut out = String::new();
     for item in content {
         if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-            if !out.is_empty() { out.push_str("\n\n"); }
+            if !out.is_empty() {
+                out.push_str("\n\n");
+            }
             out.push_str(text);
         }
     }
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 // ============================================================================
@@ -350,7 +415,8 @@ mod tests {
 
     #[test]
     fn with_keys_client_constructs() {
-        let c = AnySearchClient::with_keys(ANYSEARCH_ENDPOINT, vec!["k1".into(), "k2".into()]).unwrap();
+        let c =
+            AnySearchClient::with_keys(ANYSEARCH_ENDPOINT, vec!["k1".into(), "k2".into()]).unwrap();
         assert_eq!(c.key_count(), 2);
     }
 
@@ -425,7 +491,10 @@ mod tests {
     #[test]
     fn markdown_hits_respects_limit() {
         let c = AnySearchClient::anonymous().unwrap();
-        let md = (0..10).map(|i| format!("### {}. T{}\n- **URL**: https://x.com/{i}", i, i)).collect::<Vec<_>>().join("\n");
+        let md = (0..10)
+            .map(|i| format!("### {}. T{}\n- **URL**: https://x.com/{i}", i, i))
+            .collect::<Vec<_>>()
+            .join("\n");
         let hits = c.markdown_to_hits("test", &md, 3);
         assert_eq!(hits.len(), 3);
     }

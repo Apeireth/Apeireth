@@ -97,16 +97,25 @@ fn r177_csm_05_transition_count_monotonic() {
     // 走一条合法路径: Awake -> Reflecting -> Dreaming -> Meditating -> Recovering -> Awake
     m.enter_reflecting().unwrap();
     let n1 = m.transition_count();
-    assert!(n1 >= initial, "transition_count decreased after enter_reflecting");
+    assert!(
+        n1 >= initial,
+        "transition_count decreased after enter_reflecting"
+    );
     m.enter_dreaming().unwrap();
     let n2 = m.transition_count();
     assert!(n2 >= n1, "transition_count decreased after enter_dreaming");
     m.enter_meditating().unwrap();
     let n3 = m.transition_count();
-    assert!(n3 >= n2, "transition_count decreased after enter_meditating");
+    assert!(
+        n3 >= n2,
+        "transition_count decreased after enter_meditating"
+    );
     m.enter_recovering().unwrap();
     let n4 = m.transition_count();
-    assert!(n4 >= n3, "transition_count decreased after enter_recovering");
+    assert!(
+        n4 >= n3,
+        "transition_count decreased after enter_recovering"
+    );
     m.reset_to_awake().unwrap();
     let n5 = m.transition_count();
     assert!(n5 >= n4, "transition_count decreased after reset_to_awake");
@@ -164,7 +173,8 @@ fn r177_csm_08_illegal_transition_no_op() {
                     probe.transition_count(),
                     probe_initial_count,
                     "非法转换 {:?}->{:?} 不应增加 history",
-                    from, to
+                    from,
+                    to
                 );
                 assert_eq!(
                     probe.current, probe_initial_state,

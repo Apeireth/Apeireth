@@ -123,8 +123,14 @@ mod tests {
     fn redact_one_strategies() {
         let v = "alice@example.com";
         assert!(redact_one(v, PiiKind::Email, RedactionStrategy::Mask).contains('*'));
-        assert_eq!(redact_one(v, PiiKind::Email, RedactionStrategy::Remove), "[REDACTED]");
-        assert_eq!(redact_one(v, PiiKind::Email, RedactionStrategy::ReplaceLabel), "[EMAIL]");
+        assert_eq!(
+            redact_one(v, PiiKind::Email, RedactionStrategy::Remove),
+            "[REDACTED]"
+        );
+        assert_eq!(
+            redact_one(v, PiiKind::Email, RedactionStrategy::ReplaceLabel),
+            "[EMAIL]"
+        );
     }
 
     #[test]
@@ -155,10 +161,18 @@ mod tests {
         let matches = detect_pii(text);
         assert!(matches.len() >= 2, "应同时检出 EnvSecret + SecretToken");
         let out = redact_text(text, &matches, RedactionStrategy::Mask);
-        assert!(out.starts_with("API_KEY=s"), "KEY= 前缀保留, 值部首字符保留: {}", out);
+        assert!(
+            out.starts_with("API_KEY=s"),
+            "KEY= 前缀保留, 值部首字符保留: {}",
+            out
+        );
         assert!(out.ends_with('v'), "值部尾字符保留: {}", out);
         assert!(!out.contains("1234567890"), "token 主体不应可见: {}", out);
-        assert!(!out.contains("sk-1234"), "token 前缀+主体不应连续可见: {}", out);
+        assert!(
+            !out.contains("sk-1234"),
+            "token 前缀+主体不应连续可见: {}",
+            out
+        );
     }
 
     #[test]

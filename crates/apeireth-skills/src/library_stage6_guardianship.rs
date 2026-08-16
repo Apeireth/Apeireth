@@ -160,19 +160,24 @@ struct GuardianInner<T: Guarded> {
 impl<T: Guarded> GuardianPool<T> {
     /// 新建守护池 — 借鉴 hyper `Pool::new(config, executor, timer)`
     pub fn new(config: GuardianConfig) -> Self {
-        Self::with_clock(config, Arc::new(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis() as u64)
-                .unwrap_or(0)
-        }))
+        Self::with_clock(
+            config,
+            Arc::new(|| {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0)
+            }),
+        )
     }
 
     /// 新建带自定义时钟的守护池 (测试用)
     pub fn with_clock(config: GuardianConfig, clock: Arc<dyn Fn() -> u64 + Send + Sync>) -> Self {
         Self {
             config,
-            inner: Arc::new(Mutex::new(GuardianInner { idle: HashMap::new() })),
+            inner: Arc::new(Mutex::new(GuardianInner {
+                idle: HashMap::new(),
+            })),
             clock,
         }
     }
@@ -221,9 +226,15 @@ impl<T: Guarded> GuardianPool<T> {
         let mut inner = self.inner.lock().expect("guardian pool lock poisoned");
         let slots = inner.idle.entry(key.clone()).or_default();
         if slots.len() >= self.config.max_idle_per_key {
-            return Err(GuardianError::RegistryFull(key, self.config.max_idle_per_key));
+            return Err(GuardianError::RegistryFull(
+                key,
+                self.config.max_idle_per_key,
+            ));
         }
-        slots.push(IdleSlot { resource, inserted_at_ms: now });
+        slots.push(IdleSlot {
+            resource,
+            inserted_at_ms: now,
+        });
         Ok(())
     }
 
@@ -391,7 +402,9 @@ impl Default for BridgeRegistry {
 
 impl BridgeRegistry {
     pub fn new() -> Self {
-        Self { bridges: HashMap::new() }
+        Self {
+            bridges: HashMap::new(),
+        }
     }
     /// 注册桥
     pub fn register(&mut self, bridge: Arc<dyn LanguageBridge>) {
@@ -430,7 +443,10 @@ pub struct StubBridge {
 
 impl StubBridge {
     pub fn new(language: &'static str) -> Self {
-        Self { language, available: false }
+        Self {
+            language,
+            available: false,
+        }
     }
 }
 
@@ -442,7 +458,10 @@ impl LanguageBridge for StubBridge {
         self.available
     }
     fn version_string(&self) -> String {
-        format!("{} stub (build with --features {}-ext to embed)", self.language, self.language)
+        format!(
+            "{} stub (build with --features {}-ext to embed)",
+            self.language, self.language
+        )
     }
     fn is_module_available(&self, _module_name: &str) -> bool {
         false
@@ -485,7 +504,11 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(name: impl Into<String>, entity_type: impl Into<String>) -> Self {
-        Self { name: name.into(), entity_type: entity_type.into(), observations: Vec::new() }
+        Self {
+            name: name.into(),
+            entity_type: entity_type.into(),
+            observations: Vec::new(),
+        }
     }
     pub fn with_observations(mut self, obs: Vec<String>) -> Self {
         self.observations = obs;
@@ -502,8 +525,16 @@ pub struct Relation {
 }
 
 impl Relation {
-    pub fn new(from: impl Into<String>, to: impl Into<String>, relation_type: impl Into<String>) -> Self {
-        Self { from: from.into(), to: to.into(), relation_type: relation_type.into() }
+    pub fn new(
+        from: impl Into<String>,
+        to: impl Into<String>,
+        relation_type: impl Into<String>,
+    ) -> Self {
+        Self {
+            from: from.into(),
+            to: to.into(),
+            relation_type: relation_type.into(),
+        }
     }
 }
 
@@ -561,7 +592,10 @@ impl LongTermMemory {
         if name.is_empty() {
             return Err(MemoryError::InvalidName(name.to_string()));
         }
-        if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        if !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(MemoryError::InvalidName(name.to_string()));
         }
         Ok(())
@@ -572,7 +606,10 @@ impl LongTermMemory {
     where
         F: Fn(&str) + Send + Sync + 'static,
     {
-        self.notify_hooks.lock().expect("hooks lock").push(Box::new(hook));
+        self.notify_hooks
+            .lock()
+            .expect("hooks lock")
+            .push(Box::new(hook));
     }
 
     fn emit_notify(&self, event: &str) {
@@ -613,7 +650,10 @@ impl LongTermMemory {
             if !g.entities.iter().any(|x| x.name == r.to) {
                 return Err(MemoryError::EntityNotFound(r.to));
             }
-            if g.relations.iter().any(|x| x.from == r.from && x.to == r.to && x.relation_type == r.relation_type) {
+            if g.relations
+                .iter()
+                .any(|x| x.from == r.from && x.to == r.to && x.relation_type == r.relation_type)
+            {
                 continue; // skip duplicate
             }
             created.push(format!("{}->{}:{}", r.from, r.to, r.relation_type));
@@ -662,7 +702,8 @@ impl LongTermMemory {
         let before = g.entities.len();
         g.entities.retain(|e| !names.contains(&e.name));
         // cascading delete relations
-        g.relations.retain(|r| !names.contains(&r.from) && !names.contains(&r.to));
+        g.relations
+            .retain(|r| !names.contains(&r.from) && !names.contains(&r.to));
         let deleted = before - g.entities.len();
         if deleted > 0 {
             self.emit_notify("delete_entities");
@@ -738,7 +779,10 @@ impl LongTermMemory {
             .filter(|r| matched.contains(&r.from) && matched.contains(&r.to))
             .cloned()
             .collect();
-        KnowledgeGraph { entities, relations }
+        KnowledgeGraph {
+            entities,
+            relations,
+        }
     }
 
     /// 9) open_nodes — 借鉴 servers/memory
@@ -756,7 +800,10 @@ impl LongTermMemory {
             .filter(|r| names.contains(&r.from) && names.contains(&r.to))
             .cloned()
             .collect();
-        KnowledgeGraph { entities, relations }
+        KnowledgeGraph {
+            entities,
+            relations,
+        }
     }
 
     /// 持久化到 JSONL (per servers MEMORY_FILE_PATH)
@@ -802,7 +849,10 @@ impl LongTermMemory {
     /// 图统计
     pub fn stats(&self) -> MemoryStats {
         let g = self.graph.lock().expect("graph lock");
-        MemoryStats { entity_count: g.entities.len(), relation_count: g.relations.len() }
+        MemoryStats {
+            entity_count: g.entities.len(),
+            relation_count: g.relations.len(),
+        }
     }
 }
 
@@ -843,7 +893,10 @@ mod tests {
 
     #[test]
     fn guardian_pool_disabled_when_max_zero() {
-        let pool = GuardianPool::<TestResource>::new(GuardianConfig { max_idle_per_key: 0, idle_timeout_ms: 0 });
+        let pool = GuardianPool::<TestResource>::new(GuardianConfig {
+            max_idle_per_key: 0,
+            idle_timeout_ms: 0,
+        });
         assert!(!pool.is_enabled());
         let res = pool.checkout("host:1");
         assert!(matches!(res, Err(GuardianError::Disabled(_))));
@@ -852,7 +905,10 @@ mod tests {
     #[test]
     fn guardian_pool_checkin_then_checkout_returns_same_resource() {
         let pool = GuardianPool::<TestResource>::new(GuardianConfig::default());
-        let r = TestResource { key: "host:1".to_string(), open: true };
+        let r = TestResource {
+            key: "host:1".to_string(),
+            open: true,
+        };
         pool.checkin(r).unwrap();
         assert_eq!(pool.idle_count("host:1"), 1);
         let reservation = pool.checkout("host:1").unwrap();
@@ -872,7 +928,10 @@ mod tests {
     fn guardian_pool_skips_closed_resources() {
         let pool = GuardianPool::<TestResource>::new(GuardianConfig::default());
         // 注入已关闭资源
-        let r = TestResource { key: "host:1".to_string(), open: false };
+        let r = TestResource {
+            key: "host:1".to_string(),
+            open: false,
+        };
         pool.checkin(r).unwrap();
         // idle 槽已 drop (closed 在 checkin 时 0 归还)
         assert_eq!(pool.idle_count("host:1"), 0);
@@ -880,11 +939,25 @@ mod tests {
 
     #[test]
     fn guardian_pool_registry_full_rejects_extra() {
-        let cfg = GuardianConfig { max_idle_per_key: 2, idle_timeout_ms: 0 };
+        let cfg = GuardianConfig {
+            max_idle_per_key: 2,
+            idle_timeout_ms: 0,
+        };
         let pool = GuardianPool::<TestResource>::new(cfg);
-        pool.checkin(TestResource { key: "host:1".into(), open: true }).unwrap();
-        pool.checkin(TestResource { key: "host:1".into(), open: true }).unwrap();
-        let res = pool.checkin(TestResource { key: "host:1".into(), open: true });
+        pool.checkin(TestResource {
+            key: "host:1".into(),
+            open: true,
+        })
+        .unwrap();
+        pool.checkin(TestResource {
+            key: "host:1".into(),
+            open: true,
+        })
+        .unwrap();
+        let res = pool.checkin(TestResource {
+            key: "host:1".into(),
+            open: true,
+        });
         assert!(matches!(res, Err(GuardianError::RegistryFull(_, 2))));
     }
 
@@ -894,10 +967,17 @@ mod tests {
         let c2 = counter.clone();
         let clock = Arc::new(move || c2.load(Ordering::SeqCst));
         let pool = GuardianPool::<TestResource>::with_clock(
-            GuardianConfig { max_idle_per_key: 5, idle_timeout_ms: 100 },
+            GuardianConfig {
+                max_idle_per_key: 5,
+                idle_timeout_ms: 100,
+            },
             clock,
         );
-        pool.checkin(TestResource { key: "host:1".into(), open: true }).unwrap();
+        pool.checkin(TestResource {
+            key: "host:1".into(),
+            open: true,
+        })
+        .unwrap();
         assert_eq!(pool.idle_count("host:1"), 1);
         // 时间前进 200ms, 超过 idle_timeout 100ms
         counter.store(1200, Ordering::SeqCst);
@@ -908,8 +988,16 @@ mod tests {
     #[test]
     fn guardian_pool_evict_key() {
         let pool = GuardianPool::<TestResource>::new(GuardianConfig::default());
-        pool.checkin(TestResource { key: "host:1".into(), open: true }).unwrap();
-        pool.checkin(TestResource { key: "host:2".into(), open: true }).unwrap();
+        pool.checkin(TestResource {
+            key: "host:1".into(),
+            open: true,
+        })
+        .unwrap();
+        pool.checkin(TestResource {
+            key: "host:2".into(),
+            open: true,
+        })
+        .unwrap();
         let evicted = pool.evict_key("host:1");
         assert_eq!(evicted, 1);
         assert_eq!(pool.total_idle(), 1);
@@ -1002,7 +1090,8 @@ mod tests {
     #[test]
     fn memory_create_relations_validates_entities() {
         let mem = LongTermMemory::new();
-        mem.create_entities(vec![Entity::new("Alice", "person")]).unwrap();
+        mem.create_entities(vec![Entity::new("Alice", "person")])
+            .unwrap();
         let res = mem.create_relations(vec![Relation::new("Alice", "Bob", "knows")]);
         assert!(matches!(res, Err(MemoryError::EntityNotFound(_))));
     }
@@ -1010,7 +1099,8 @@ mod tests {
     #[test]
     fn memory_add_observations() {
         let mem = LongTermMemory::new();
-        mem.create_entities(vec![Entity::new("Alice", "person")]).unwrap();
+        mem.create_entities(vec![Entity::new("Alice", "person")])
+            .unwrap();
         let added = mem
             .add_observations(vec![(
                 "Alice".into(),
@@ -1089,18 +1179,24 @@ mod tests {
         mem.register_notify(move |_event| {
             c2.fetch_add(1, Ordering::SeqCst);
         });
-        mem.create_entities(vec![Entity::new("Alice", "person")]).unwrap();
-        mem.add_observations(vec![("Alice".into(), vec!["fact".into()])]).unwrap();
+        mem.create_entities(vec![Entity::new("Alice", "person")])
+            .unwrap();
+        mem.add_observations(vec![("Alice".into(), vec!["fact".into()])])
+            .unwrap();
         assert_eq!(count.load(Ordering::SeqCst), 2);
     }
 
     #[test]
     fn memory_jsonl_persistence_roundtrip() {
         let mem1 = LongTermMemory::new();
-        mem1.create_entities(vec![Entity::new("Alice", "person").with_observations(vec!["Fact1".into()])])
+        mem1.create_entities(vec![
+            Entity::new("Alice", "person").with_observations(vec!["Fact1".into()])
+        ])
+        .unwrap();
+        mem1.create_entities(vec![Entity::new("Bob", "person")])
             .unwrap();
-        mem1.create_entities(vec![Entity::new("Bob", "person")]).unwrap();
-        mem1.create_relations(vec![Relation::new("Alice", "Bob", "knows")]).unwrap();
+        mem1.create_relations(vec![Relation::new("Alice", "Bob", "knows")])
+            .unwrap();
 
         let mut buf = Vec::new();
         mem1.save_jsonl(&mut buf).unwrap();
@@ -1131,7 +1227,11 @@ mod tests {
         let pool = GuardianPool::<TestResource>::new(GuardianConfig::default());
 
         // 模拟流程: 守护池 checkin, 跨语言桥调用, 长期记忆存结果
-        pool.checkin(TestResource { key: "py-1".into(), open: true }).unwrap();
+        pool.checkin(TestResource {
+            key: "py-1".into(),
+            open: true,
+        })
+        .unwrap();
         assert_eq!(pool.idle_count("py-1"), 1);
         let _reservation = pool.checkout("py-1").unwrap();
 
@@ -1140,7 +1240,8 @@ mod tests {
         assert!(res.is_err()); // stub 不可用
 
         // 长期记忆存调用日志
-        mem.create_entities(vec![Entity::new("call_log_1", "log_entry")]).unwrap();
+        mem.create_entities(vec![Entity::new("call_log_1", "log_entry")])
+            .unwrap();
         mem.add_observations(vec![(
             "call_log_1".into(),
             vec!["called math.sqrt(16), got ModuleNotFound (stub)".into()],

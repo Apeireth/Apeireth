@@ -28,13 +28,7 @@
 use super::error::OrganError;
 
 /// 5 provider 编译期 hardcode (per `apeireth-tui` Cargo.toml dependencies)
-pub const PROVIDERS: &[&str] = &[
-    "claude-code",
-    "codex",
-    "copilot",
-    "gemini-cli",
-    "opencode",
-];
+pub const PROVIDERS: &[&str] = &["claude-code", "codex", "copilot", "gemini-cli", "opencode"];
 
 /// 默认 active provider
 pub const DEFAULT_PROVIDER: &str = "claude-code";
@@ -167,10 +161,14 @@ mod tests {
 
     #[test]
     fn six_commands_constructible() {
-        let _ = Command::IncrementCall { provider: "claude-code".into() };
+        let _ = Command::IncrementCall {
+            provider: "claude-code".into(),
+        };
         let _ = Command::GetCallCount;
         let _ = Command::GetActiveProvider;
-        let _ = Command::SetActiveProvider { provider: "codex".into() };
+        let _ = Command::SetActiveProvider {
+            provider: "codex".into(),
+        };
         let _ = Command::GetModelList;
         let _ = Command::GetLastThinking;
     }
@@ -193,8 +191,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::IncrementCall { provider: "claude-code".into() },
-            );
+            Command::IncrementCall {
+                provider: "claude-code".into(),
+            },
+        );
         assert!(r.is_ok());
         let r = handle(&mut state, Command::GetCallCount).unwrap();
         assert_eq!(r, Response::CallCount(1));
@@ -205,9 +205,17 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::IncrementCall { provider: "fake-llm".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "IncrementCall", .. })));
+            Command::IncrementCall {
+                provider: "fake-llm".into(),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "IncrementCall",
+                ..
+            })
+        ));
     }
 
     // ---- SetActiveProvider ----
@@ -217,8 +225,10 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::SetActiveProvider { provider: "codex".into() },
-            );
+            Command::SetActiveProvider {
+                provider: "codex".into(),
+            },
+        );
         assert!(r.is_ok());
         let r = handle(&mut state, Command::GetActiveProvider).unwrap();
         assert_eq!(r, Response::ActiveProvider("codex".into()));
@@ -229,9 +239,17 @@ mod tests {
         let mut state = fresh_state();
         let r = handle(
             &mut state,
-            Command::SetActiveProvider { provider: "gpt-4".into() },
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "SetActiveProvider", .. })));
+            Command::SetActiveProvider {
+                provider: "gpt-4".into(),
+            },
+        );
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "SetActiveProvider",
+                ..
+            })
+        ));
         // 状态不变
         assert_eq!(state.active_provider, DEFAULT_PROVIDER);
     }

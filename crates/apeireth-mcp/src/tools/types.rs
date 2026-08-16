@@ -84,10 +84,7 @@ pub enum ToolContent {
         mime_type: Option<String>,
     },
     /// 图片块 (per MCP spec, base64)
-    Image {
-        data: String,
-        mime_type: String,
-    },
+    Image { data: String, mime_type: String },
     /// 资源引用块 (per MCP spec, embed resource URI)
     Resource {
         uri: String,
@@ -134,11 +131,17 @@ pub struct ToolCallResult {
 impl ToolCallResult {
     /// 构造成功结果
     pub fn ok(content: Vec<ToolContent>) -> Self {
-        Self { content, is_error: false }
+        Self {
+            content,
+            is_error: false,
+        }
     }
     /// 构造错误结果
     pub fn err(content: Vec<ToolContent>) -> Self {
-        Self { content, is_error: true }
+        Self {
+            content,
+            is_error: true,
+        }
     }
 }
 
@@ -207,8 +210,15 @@ mod tests {
         let cases = vec![
             ToolContent::text("hello"),
             ToolContent::text_with_mime("hello", "text/plain"),
-            ToolContent::Image { data: "AAAA".into(), mime_type: "image/png".into() },
-            ToolContent::Resource { uri: "file:///x.rs".into(), text: Some("hi".into()), mime_type: Some("text/x-rust".into()) },
+            ToolContent::Image {
+                data: "AAAA".into(),
+                mime_type: "image/png".into(),
+            },
+            ToolContent::Resource {
+                uri: "file:///x.rs".into(),
+                text: Some("hi".into()),
+                mime_type: Some("text/x-rust".into()),
+            },
         ];
         for c in cases {
             let json_str = serde_json::to_string(&c).unwrap();

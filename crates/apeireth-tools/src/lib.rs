@@ -72,33 +72,36 @@
 
 pub mod code_exec;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod long_task;
-pub mod classifier;  // R30 U5: tool classifier (8 类 keyword routing)
-pub mod web_fetch;  // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
-pub mod web_crawl;  // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
-pub mod github_accel;  // GitHub 加速节点池 (xiake.pro 聚合, 实测选最快)
-pub mod apply_patch;  // R30 U1: Codex-style apply_patch
-pub mod conventions_scanner;  // R33-1: Aider-style project conventions scanner
-pub mod grep_ops;
+pub mod apply_patch; // R30 U1: Codex-style apply_patch
+pub mod classifier; // R30 U5: tool classifier (8 类 keyword routing)
+pub mod conventions_scanner; // R33-1: Aider-style project conventions scanner
 pub mod file_ops;
 pub mod git_ops;
+pub mod github_accel; // GitHub 加速节点池 (xiake.pro 聚合, 实测选最快)
+pub mod grep_ops;
+pub mod long_task;
+mod organ_kani_proofs;
 pub mod register;
 pub mod result;
+pub mod web_crawl; // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
+pub mod web_fetch; // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
 pub mod web_search;
 
 pub use code_exec::{CodeExec, CodeExecTool, ShellCodeExec};
-pub use conventions_scanner::ProjectConventions;  // R33-1: Aider-style conventions scanner
-pub use grep_ops::{GrepHit, GrepOps, GrepTool, RipgrepGrepOps};
+pub use conventions_scanner::ProjectConventions; // R33-1: Aider-style conventions scanner
 pub use file_ops::{
     FileOps, FileOpsTool, StdFileOps, FILE_OPS_OPERATION_COUNT, MAX_DIRECTORY_ITEMS, MAX_FILE_SIZE,
     MAX_SEARCH_RESULTS,
 };
 pub use git_ops::{GitCliOps, GitOps, GitOpsTool};
+pub use github_accel::{
+    accelerate_url, fetch_mirror_pool, pick_fastest, probe_top, GhAccelTool, MirrorNode,
+    ProbeResult,
+};
+pub use grep_ops::{GrepHit, GrepOps, GrepTool, RipgrepGrepOps};
 pub use register::{register_all, registered_tool_names, REGISTERED_TOOL_COUNT, TOOL_NAMES};
 pub use result::ToolResult;
 pub use web_search::{HttpWebSearch, WebSearch, WebSearchTool};
-pub use github_accel::{GhAccelTool, MirrorNode, ProbeResult, accelerate_url, fetch_mirror_pool, pick_fastest, probe_top};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)
@@ -281,15 +284,18 @@ mod lib_tests {
             // 6 类之一 (Sync / Async / Static / Service / MessagePreprocessor / Hybridservice)
             let k = t.kind();
             assert!(
-                matches!(k,
+                matches!(
+                    k,
                     apeireth_tool_registry::ToolKind::Sync
-                    | apeireth_tool_registry::ToolKind::Async
-                    | apeireth_tool_registry::ToolKind::Static
-                    | apeireth_tool_registry::ToolKind::Service
-                    | apeireth_tool_registry::ToolKind::MessagePreprocessor
-                    | apeireth_tool_registry::ToolKind::Hybridservice
+                        | apeireth_tool_registry::ToolKind::Async
+                        | apeireth_tool_registry::ToolKind::Static
+                        | apeireth_tool_registry::ToolKind::Service
+                        | apeireth_tool_registry::ToolKind::MessagePreprocessor
+                        | apeireth_tool_registry::ToolKind::Hybridservice
                 ),
-                "{} kind 不在 6 类里: {:?}", name, k
+                "{} kind 不在 6 类里: {:?}",
+                name,
+                k
             );
             // 5 轴 (Trigger / Awaiting / Resident / Transport / Output)
             let a = t.axes();

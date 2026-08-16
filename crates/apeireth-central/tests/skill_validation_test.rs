@@ -21,8 +21,8 @@ use apeireth_central::skill_trait::{
     BrainstormingSkill, Skill, SkillId, TestDrivenDevelopmentSkill, UsingSuperpowersSkill,
 };
 use apeireth_central::skill_validation::{
-    registry_validity_ratio, validate_registry, validate_skill, MIN_STEP_COUNT,
-    SkillValidationError, SkillValidationReport,
+    registry_validity_ratio, validate_registry, validate_skill, SkillValidationError,
+    SkillValidationReport, MIN_STEP_COUNT,
 };
 
 #[test]
@@ -70,7 +70,10 @@ fn test_validity_ratio_is_1() {
     let registry = SkillRegistry::new();
     let reports = validate_registry(&registry);
     let ratio = registry_validity_ratio(&reports);
-    assert!((ratio - 1.0).abs() < 1e-9, "ratio should be 1.0, got {ratio}");
+    assert!(
+        (ratio - 1.0).abs() < 1e-9,
+        "ratio should be 1.0, got {ratio}"
+    );
 }
 
 #[test]
@@ -81,10 +84,7 @@ fn test_min_step_count_constant() {
 #[test]
 fn test_error_display_human_readable() {
     let cases: [(SkillValidationError, &str); 4] = [
-        (
-            SkillValidationError::NameEmpty,
-            "skill name is empty",
-        ),
+        (SkillValidationError::NameEmpty, "skill name is empty"),
         (
             SkillValidationError::TooFewSteps { count: 2, min: 3 },
             "skill has 2 steps, minimum is 3",

@@ -24,7 +24,9 @@ pub struct CrawlTool {
 
 impl Default for CrawlTool {
     fn default() -> Self {
-        Self { fetcher: ReqwestWebFetch::new() }
+        Self {
+            fetcher: ReqwestWebFetch::new(),
+        }
     }
 }
 
@@ -56,7 +58,11 @@ pub fn extract_links(body: &str, base: &str) -> Vec<String> {
             // 站内相对链接 → 拼接 base origin (scheme://host)
             if let Some(rest) = base.splitn(3, '/').nth(2) {
                 let host = rest.split('/').next().unwrap_or(rest);
-                let scheme = if base.starts_with("https://") { "https" } else { "http" };
+                let scheme = if base.starts_with("https://") {
+                    "https"
+                } else {
+                    "http"
+                };
                 links.push(format!("{scheme}://{host}{url}"));
             }
         }
@@ -75,7 +81,11 @@ pub fn validate_url(url: &str) -> Result<(), String> {
 }
 
 /// 单页抓取 + 重试退避 (网络失败/限流自动重试; 调研: 可靠爬虫必备).
-async fn fetch_with_retry(fetcher: &dyn WebFetch, url: &str, attempts: usize) -> Result<FetchResult, String> {
+async fn fetch_with_retry(
+    fetcher: &dyn WebFetch,
+    url: &str,
+    attempts: usize,
+) -> Result<FetchResult, String> {
     let mut last_err = "未知错误".to_string();
     for i in 0..attempts {
         match fetcher.fetch(url, PAGE_BYTES).await {
@@ -83,7 +93,8 @@ async fn fetch_with_retry(fetcher: &dyn WebFetch, url: &str, attempts: usize) ->
             Err(e) => {
                 last_err = e;
                 if i + 1 < attempts {
-                    tokio::time::sleep(std::time::Duration::from_millis(500 * (i as u64 + 1))).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(500 * (i as u64 + 1)))
+                        .await;
                 }
             }
         }
@@ -172,17 +183,29 @@ impl Tool for CrawlTool {
             .filter(|s| !s.is_empty())
             .ok_or_else(|| "url 不能为空".to_string())?;
         validate_url(url)?;
-        let max_pages = args.get("max_pages").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(5).min(MAX_PAGES);
-        let max_depth = args.get("max_depth").and_then(|v| v.as_u64()).map(|v| v as usize).unwrap_or(1).min(MAX_DEPTH);
+        let max_pages = args
+            .get("max_pages")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(5)
+            .min(MAX_PAGES);
+        let max_depth = args
+            .get("max_depth")
+            .and_then(|v| v.as_u64())
+            .map(|v| v as usize)
+            .unwrap_or(1)
+            .min(MAX_DEPTH);
         let pages = crawl(&self.fetcher, url, max_pages, max_depth).await?;
         let page_json: Vec<Value> = pages
             .iter()
-            .map(|p| json!({
-                "url": p.url,
-                "status": p.status,
-                "bytes": p.bytes,
-                "content": p.body.chars().take(800).collect::<String>(),
-            }))
+            .map(|p| {
+                json!({
+                    "url": p.url,
+                    "status": p.status,
+                    "bytes": p.bytes,
+                    "content": p.body.chars().take(800).collect::<String>(),
+                })
+            })
             .collect();
         let links: Vec<String> = pages
             .iter()
@@ -208,7 +231,10 @@ mod tests {
         let html = "<a href=\"https://a.com/x\">A</a><a href=\"/y\">B</a><a href=\"#frag\">C</a>";
         let links = extract_links(html, "https://a.com/page");
         assert!(links.contains(&"https://a.com/x".to_string()));
-        assert!(links.contains(&"https://a.com/y".to_string()), "相对链接应拼接 origin");
+        assert!(
+            links.contains(&"https://a.com/y".to_string()),
+            "相对链接应拼接 origin"
+        );
         assert!(!links.iter().any(|l| l.contains("#frag")), "锚点不应算链接");
     }
 
@@ -235,9 +261,15 @@ mod tests {
                 })
             }
         }
-        let pages = crawl(&FakeFetch, "https://x.com/start", 3, 1).await.unwrap();
+        let pages = crawl(&FakeFetch, "https://x.com/start", 3, 1)
+            .await
+            .unwrap();
         assert_eq!(pages.len(), 3, "上限 3 页 (start + 2 链接, dup 去重)");
         let urls: Vec<&str> = pages.iter().map(|p| p.url.as_str()).collect();
-        assert_eq!(urls.iter().filter(|u| **u == "https://x.com/1").count(), 1, "去重");
+        assert_eq!(
+            urls.iter().filter(|u| **u == "https://x.com/1").count(),
+            1,
+            "去重"
+        );
     }
 }

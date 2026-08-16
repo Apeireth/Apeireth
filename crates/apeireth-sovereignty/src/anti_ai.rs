@@ -271,9 +271,18 @@ mod tests {
     #[test]
     fn threat_type_count_is_4() {
         assert_eq!(THREAT_TYPE_COUNT_HARDCODE, 4);
-        assert_eq!(ThreatType::AnomalousFrequency.as_str(), "anomalous_frequency");
-        assert_eq!(ThreatType::AnomalousParameters.as_str(), "anomalous_parameters");
-        assert_eq!(ThreatType::UnauthorizedAccess.as_str(), "unauthorized_access");
+        assert_eq!(
+            ThreatType::AnomalousFrequency.as_str(),
+            "anomalous_frequency"
+        );
+        assert_eq!(
+            ThreatType::AnomalousParameters.as_str(),
+            "anomalous_parameters"
+        );
+        assert_eq!(
+            ThreatType::UnauthorizedAccess.as_str(),
+            "unauthorized_access"
+        );
         assert_eq!(ThreatType::DataExfiltration.as_str(), "data_exfiltration");
     }
 
@@ -293,21 +302,11 @@ mod tests {
     #[test]
     fn k1_strict_checks_three_failures() {
         // K-1.a: subject 空
-        let res1 = ThreatSignal::new(
-            ThreatType::AnomalousFrequency,
-            "",
-            0.5,
-            vec!["x".into()],
-        );
+        let res1 = ThreatSignal::new(ThreatType::AnomalousFrequency, "", 0.5, vec!["x".into()]);
         assert_eq!(res1.err(), Some(AntiAiError::K1SubjectEmpty));
 
         // K-1.b: evidence 空
-        let res2 = ThreatSignal::new(
-            ThreatType::AnomalousFrequency,
-            "ai-1",
-            0.5,
-            vec![],
-        );
+        let res2 = ThreatSignal::new(ThreatType::AnomalousFrequency, "ai-1", 0.5, vec![]);
         assert_eq!(res2.err(), Some(AntiAiError::K1EvidenceEmpty));
 
         // K-1.c: severity 越界
@@ -382,10 +381,7 @@ mod tests {
         assert_eq!(mon.filter_by_subject("ai-2").len(), 1);
 
         // 按 type 过滤
-        assert_eq!(
-            mon.filter_by_type(ThreatType::AnomalousParameters).len(),
-            1
-        );
+        assert_eq!(mon.filter_by_type(ThreatType::AnomalousParameters).len(), 1);
 
         // K-1 失败不入库 — 直接构造一个 subject 为空的 signal (绕过构造函数, 验证 try_emit 拒绝)
         let bad = ThreatSignal {

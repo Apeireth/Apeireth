@@ -13,9 +13,7 @@ use serde_json::{json, Value};
 
 use crate::protocol::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 
-use super::types::{
-    Tool, ToolCallResult, ToolContent, TOOL_INVALID_ARGS, TOOL_NOT_FOUND,
-};
+use super::types::{Tool, ToolCallResult, ToolContent, TOOL_INVALID_ARGS, TOOL_NOT_FOUND};
 
 // ============================================================
 // ToolServer trait
@@ -102,7 +100,10 @@ mod tests {
         }
         fn call(&self, name: &str, arguments: &Value) -> Result<ToolCallResult, JsonRpcError> {
             if name != "echo" {
-                return Err(JsonRpcError::new(TOOL_NOT_FOUND, format!("tool `{name}` not found")));
+                return Err(JsonRpcError::new(
+                    TOOL_NOT_FOUND,
+                    format!("tool `{name}` not found"),
+                ));
             }
             let text = arguments
                 .get("text")
@@ -118,7 +119,11 @@ mod tests {
     }
 
     fn req_call(name: &str, args: Value) -> JsonRpcRequest {
-        JsonRpcRequest::new("tools/call", Some(json!({ "name": name, "arguments": args })), Id::Num(2))
+        JsonRpcRequest::new(
+            "tools/call",
+            Some(json!({ "name": name, "arguments": args })),
+            Id::Num(2),
+        )
     }
 
     #[test]
@@ -127,12 +132,12 @@ mod tests {
         let resp = handle_tools_list(&req, &EchoToolServer);
         assert!(resp.error.is_none());
         let result = resp.result.expect("result present");
-        let tools = result.get("tools").and_then(|v| v.as_array()).expect("tools array");
+        let tools = result
+            .get("tools")
+            .and_then(|v| v.as_array())
+            .expect("tools array");
         assert_eq!(tools.len(), 1);
-        assert_eq!(
-            tools[0].get("name").and_then(|v| v.as_str()),
-            Some("echo")
-        );
+        assert_eq!(tools[0].get("name").and_then(|v| v.as_str()), Some("echo"));
     }
 
     #[test]
@@ -141,7 +146,10 @@ mod tests {
         let resp = handle_tools_call(&req, &EchoToolServer);
         assert!(resp.error.is_none());
         let result = resp.result.expect("result present");
-        let content = result.get("content").and_then(|v| v.as_array()).expect("content array");
+        let content = result
+            .get("content")
+            .and_then(|v| v.as_array())
+            .expect("content array");
         assert_eq!(content.len(), 1);
         assert_eq!(
             content[0].get("type").and_then(|v| v.as_str()),

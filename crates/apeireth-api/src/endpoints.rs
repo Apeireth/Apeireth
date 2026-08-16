@@ -71,47 +71,232 @@ pub struct Endpoint {
 /// | TOTAL                      |  30    |
 pub const ENDPOINTS: &[Endpoint] = &[
     // ---- server.rs (7) ----
-    Endpoint { path: "/health",                                method: HttpMethod::Get,  handler: "health",              file: "src/server.rs:112" },
-    Endpoint { path: "/v1/chat/completions",                   method: HttpMethod::Post, handler: "chat_completions",    file: "src/server.rs:114" },
-    Endpoint { path: "/v1/responses",                          method: HttpMethod::Post, handler: "responses",           file: "src/server.rs:115" },
-    Endpoint { path: "/v1/messages",                           method: HttpMethod::Post, handler: "messages",            file: "src/server.rs:116" },
-    Endpoint { path: "/v1beta/models/:model/generateContent",  method: HttpMethod::Post, handler: "v1beta_generate",     file: "src/server.rs:117" },
-    Endpoint { path: "/council/advise",                        method: HttpMethod::Post, handler: "council_advise",      file: "src/server.rs:122" },
-    Endpoint { path: "/verdict",                               method: HttpMethod::Post, handler: "verdict",             file: "src/server.rs:123" },
+    Endpoint {
+        path: "/health",
+        method: HttpMethod::Get,
+        handler: "health",
+        file: "src/server.rs:112",
+    },
+    Endpoint {
+        path: "/v1/chat/completions",
+        method: HttpMethod::Post,
+        handler: "chat_completions",
+        file: "src/server.rs:114",
+    },
+    Endpoint {
+        path: "/v1/responses",
+        method: HttpMethod::Post,
+        handler: "responses",
+        file: "src/server.rs:115",
+    },
+    Endpoint {
+        path: "/v1/messages",
+        method: HttpMethod::Post,
+        handler: "messages",
+        file: "src/server.rs:116",
+    },
+    Endpoint {
+        path: "/v1beta/models/:model/generateContent",
+        method: HttpMethod::Post,
+        handler: "v1beta_generate",
+        file: "src/server.rs:117",
+    },
+    Endpoint {
+        path: "/council/advise",
+        method: HttpMethod::Post,
+        handler: "council_advise",
+        file: "src/server.rs:122",
+    },
+    Endpoint {
+        path: "/verdict",
+        method: HttpMethod::Post,
+        handler: "verdict",
+        file: "src/server.rs:123",
+    },
     // ---- v2_endpoints.rs (18) ----
-    Endpoint { path: "/health",                                method: HttpMethod::Get,  handler: "v2_health",           file: "src/v2_endpoints.rs:1084" },
-    Endpoint { path: "/tools/list",                            method: HttpMethod::Get,  handler: "tools_list",          file: "src/v2_endpoints.rs:1086" },
-    Endpoint { path: "/tools/invoke",                          method: HttpMethod::Post, handler: "tools_invoke",        file: "src/v2_endpoints.rs:1087" },
-    Endpoint { path: "/memory/episodes",                       method: HttpMethod::Get,  handler: "memory_episodes",     file: "src/v2_endpoints.rs:1089" },
-    Endpoint { path: "/memory/append",                         method: HttpMethod::Post, handler: "memory_append",       file: "src/v2_endpoints.rs:1090" },
-    Endpoint { path: "/memory/identity",                       method: HttpMethod::Get,  handler: "memory_identity",     file: "src/v2_endpoints.rs:1091" },
-    Endpoint { path: "/memory/identity/update",                method: HttpMethod::Post, handler: "memory_identity_update", file: "src/v2_endpoints.rs:1092" },
-    Endpoint { path: "/organs",                                method: HttpMethod::Get,  handler: "organs_list",         file: "src/v2_endpoints.rs:1094" },
-    Endpoint { path: "/organs/:name",                          method: HttpMethod::Get,  handler: "organ_get",           file: "src/v2_endpoints.rs:1095" },
-    Endpoint { path: "/organs/:name/invoke",                   method: HttpMethod::Post, handler: "organ_invoke",        file: "src/v2_endpoints.rs:1096" },
-    Endpoint { path: "/asi/score",                             method: HttpMethod::Get,  handler: "asi_score",           file: "src/v2_endpoints.rs:1098" },
-    Endpoint { path: "/asi/all",                               method: HttpMethod::Get,  handler: "asi_all",             file: "src/v2_endpoints.rs:1099" },
-    Endpoint { path: "/asi/calibrate",                         method: HttpMethod::Post, handler: "asi_calibrate",       file: "src/v2_endpoints.rs:1100" },
-    Endpoint { path: "/sovereignty/status",                    method: HttpMethod::Get,  handler: "sovereignty_status",  file: "src/v2_endpoints.rs:1102" },
-    Endpoint { path: "/sovereignty/attack",                    method: HttpMethod::Post, handler: "sovereignty_attack",  file: "src/v2_endpoints.rs:1103" },
-    Endpoint { path: "/sovereignty/rearm",                     method: HttpMethod::Post, handler: "sovereignty_rearm",   file: "src/v2_endpoints.rs:1104" },
-    Endpoint { path: "/agent/aliases",                         method: HttpMethod::Get,  handler: "agent_aliases",       file: "src/v2_endpoints.rs:1106" },
-    Endpoint { path: "/agent/alias",                           method: HttpMethod::Post, handler: "agent_register_alias", file: "src/v2_endpoints.rs:1107" },
-    Endpoint { path: "/agent/cache",                           method: HttpMethod::Get,  handler: "agent_cache",         file: "src/v2_endpoints.rs:1108" },
+    Endpoint {
+        path: "/health",
+        method: HttpMethod::Get,
+        handler: "v2_health",
+        file: "src/v2_endpoints.rs:1084",
+    },
+    Endpoint {
+        path: "/tools/list",
+        method: HttpMethod::Get,
+        handler: "tools_list",
+        file: "src/v2_endpoints.rs:1086",
+    },
+    Endpoint {
+        path: "/tools/invoke",
+        method: HttpMethod::Post,
+        handler: "tools_invoke",
+        file: "src/v2_endpoints.rs:1087",
+    },
+    Endpoint {
+        path: "/memory/episodes",
+        method: HttpMethod::Get,
+        handler: "memory_episodes",
+        file: "src/v2_endpoints.rs:1089",
+    },
+    Endpoint {
+        path: "/memory/append",
+        method: HttpMethod::Post,
+        handler: "memory_append",
+        file: "src/v2_endpoints.rs:1090",
+    },
+    Endpoint {
+        path: "/memory/identity",
+        method: HttpMethod::Get,
+        handler: "memory_identity",
+        file: "src/v2_endpoints.rs:1091",
+    },
+    Endpoint {
+        path: "/memory/identity/update",
+        method: HttpMethod::Post,
+        handler: "memory_identity_update",
+        file: "src/v2_endpoints.rs:1092",
+    },
+    Endpoint {
+        path: "/organs",
+        method: HttpMethod::Get,
+        handler: "organs_list",
+        file: "src/v2_endpoints.rs:1094",
+    },
+    Endpoint {
+        path: "/organs/:name",
+        method: HttpMethod::Get,
+        handler: "organ_get",
+        file: "src/v2_endpoints.rs:1095",
+    },
+    Endpoint {
+        path: "/organs/:name/invoke",
+        method: HttpMethod::Post,
+        handler: "organ_invoke",
+        file: "src/v2_endpoints.rs:1096",
+    },
+    Endpoint {
+        path: "/asi/score",
+        method: HttpMethod::Get,
+        handler: "asi_score",
+        file: "src/v2_endpoints.rs:1098",
+    },
+    Endpoint {
+        path: "/asi/all",
+        method: HttpMethod::Get,
+        handler: "asi_all",
+        file: "src/v2_endpoints.rs:1099",
+    },
+    Endpoint {
+        path: "/asi/calibrate",
+        method: HttpMethod::Post,
+        handler: "asi_calibrate",
+        file: "src/v2_endpoints.rs:1100",
+    },
+    Endpoint {
+        path: "/sovereignty/status",
+        method: HttpMethod::Get,
+        handler: "sovereignty_status",
+        file: "src/v2_endpoints.rs:1102",
+    },
+    Endpoint {
+        path: "/sovereignty/attack",
+        method: HttpMethod::Post,
+        handler: "sovereignty_attack",
+        file: "src/v2_endpoints.rs:1103",
+    },
+    Endpoint {
+        path: "/sovereignty/rearm",
+        method: HttpMethod::Post,
+        handler: "sovereignty_rearm",
+        file: "src/v2_endpoints.rs:1104",
+    },
+    Endpoint {
+        path: "/agent/aliases",
+        method: HttpMethod::Get,
+        handler: "agent_aliases",
+        file: "src/v2_endpoints.rs:1106",
+    },
+    Endpoint {
+        path: "/agent/alias",
+        method: HttpMethod::Post,
+        handler: "agent_register_alias",
+        file: "src/v2_endpoints.rs:1107",
+    },
+    Endpoint {
+        path: "/agent/cache",
+        method: HttpMethod::Get,
+        handler: "agent_cache",
+        file: "src/v2_endpoints.rs:1108",
+    },
     // ---- observability/mod.rs (3) ----
-    Endpoint { path: "/observability/metrics",                 method: HttpMethod::Get,  handler: "metrics::metrics_handler", file: "src/observability/mod.rs:427" },
-    Endpoint { path: "/observability/health",                  method: HttpMethod::Get,  handler: "metrics::health_handler",  file: "src/observability/mod.rs:428" },
-    Endpoint { path: "/observability/status",                  method: HttpMethod::Get,  handler: "metrics::status_handler",  file: "src/observability/mod.rs:429" },
+    Endpoint {
+        path: "/observability/metrics",
+        method: HttpMethod::Get,
+        handler: "metrics::metrics_handler",
+        file: "src/observability/mod.rs:427",
+    },
+    Endpoint {
+        path: "/observability/health",
+        method: HttpMethod::Get,
+        handler: "metrics::health_handler",
+        file: "src/observability/mod.rs:428",
+    },
+    Endpoint {
+        path: "/observability/status",
+        method: HttpMethod::Get,
+        handler: "metrics::status_handler",
+        file: "src/observability/mod.rs:429",
+    },
     // ---- v1_tools/mod.rs (1) ----
-    Endpoint { path: "/tools/:name/invoke",                    method: HttpMethod::Post, handler: "v1_tools_invoke",     file: "src/v1_tools/mod.rs:183" },
+    Endpoint {
+        path: "/tools/:name/invoke",
+        method: HttpMethod::Post,
+        handler: "v1_tools_invoke",
+        file: "src/v1_tools/mod.rs:183",
+    },
     // ---- panel_readonly.rs (7) — B1 Web 面板 v2 只读端点 (nest /v1/panel) ----
-    Endpoint { path: "/panel/sessions",                        method: HttpMethod::Get,  handler: "panel_sessions",        file: "src/panel_readonly.rs:71" },
-    Endpoint { path: "/panel/sessions/:id/timeline",           method: HttpMethod::Get,  handler: "panel_session_timeline", file: "src/panel_readonly.rs:109" },
-    Endpoint { path: "/panel/memory/streams",                  method: HttpMethod::Get,  handler: "panel_memory_streams",  file: "src/panel_readonly.rs:158" },
-    Endpoint { path: "/panel/memory/episodes",                 method: HttpMethod::Get,  handler: "panel_memory_episodes", file: "src/panel_readonly.rs:207" },
-    Endpoint { path: "/panel/graph",                           method: HttpMethod::Get,  handler: "panel_graph",           file: "src/panel_readonly.rs:278" },
-    Endpoint { path: "/panel/approvals",                       method: HttpMethod::Get,  handler: "panel_approvals",       file: "src/panel_readonly.rs:324" },
-    Endpoint { path: "/panel/audit",                           method: HttpMethod::Get,  handler: "panel_audit",           file: "src/panel_readonly.rs:379" },
+    Endpoint {
+        path: "/panel/sessions",
+        method: HttpMethod::Get,
+        handler: "panel_sessions",
+        file: "src/panel_readonly.rs:71",
+    },
+    Endpoint {
+        path: "/panel/sessions/:id/timeline",
+        method: HttpMethod::Get,
+        handler: "panel_session_timeline",
+        file: "src/panel_readonly.rs:109",
+    },
+    Endpoint {
+        path: "/panel/memory/streams",
+        method: HttpMethod::Get,
+        handler: "panel_memory_streams",
+        file: "src/panel_readonly.rs:158",
+    },
+    Endpoint {
+        path: "/panel/memory/episodes",
+        method: HttpMethod::Get,
+        handler: "panel_memory_episodes",
+        file: "src/panel_readonly.rs:207",
+    },
+    Endpoint {
+        path: "/panel/graph",
+        method: HttpMethod::Get,
+        handler: "panel_graph",
+        file: "src/panel_readonly.rs:278",
+    },
+    Endpoint {
+        path: "/panel/approvals",
+        method: HttpMethod::Get,
+        handler: "panel_approvals",
+        file: "src/panel_readonly.rs:324",
+    },
+    Endpoint {
+        path: "/panel/audit",
+        method: HttpMethod::Get,
+        handler: "panel_audit",
+        file: "src/panel_readonly.rs:379",
+    },
 ];
 
 /// 编译期 endpoint 数守门.
@@ -175,8 +360,10 @@ mod tests {
         for (path, handlers) in paths {
             let unique: std::collections::HashSet<_> = handlers.iter().collect();
             assert_eq!(
-                unique.len(), handlers.len(),
-                "path {path} 注册 {} handler 但有重名: {handlers:?}", handlers.len()
+                unique.len(),
+                handlers.len(),
+                "path {path} 注册 {} handler 但有重名: {handlers:?}",
+                handlers.len()
             );
         }
     }
@@ -185,7 +372,10 @@ mod tests {
     fn audit_tier0_in_endpoints() {
         for tier0 in TIER_0_ENDPOINTS {
             let found = ENDPOINTS.iter().any(|ep| ep.path == *tier0);
-            assert!(found, "TIER_0 端点 {tier0} 必须也在 ENDPOINTS 数组里 (S-2 龙骨锚守门)");
+            assert!(
+                found,
+                "TIER_0 端点 {tier0} 必须也在 ENDPOINTS 数组里 (S-2 龙骨锚守门)"
+            );
         }
     }
 

@@ -9,7 +9,11 @@ use crate::config::FetchConfig;
 use crate::engine::{FetchError, FetchRequest, FetchResponse, FetchResult, Fetcher};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HttpMethod { Get, Post, Head }
+pub enum HttpMethod {
+    Get,
+    Post,
+    Head,
+}
 
 impl HttpMethod {
     pub fn as_str(&self) -> &'static str {
@@ -24,16 +28,22 @@ impl HttpMethod {
 pub struct HttpFetcher;
 
 impl HttpFetcher {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Default for HttpFetcher {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[async_trait]
 impl Fetcher for HttpFetcher {
-    fn name(&self) -> &'static str { "http" }
+    fn name(&self) -> &'static str {
+        "http"
+    }
 
     async fn fetch(&self, req: &FetchRequest, cfg: &FetchConfig) -> FetchResult<FetchResponse> {
         // R174: real HTTP via apeireth-http-client (reqwest + 5 keep-alive fields)
@@ -43,7 +53,9 @@ impl Fetcher for HttpFetcher {
             return Err(FetchError::Http(format!("unsupported method: {method}")));
         }
         if req.body.as_ref().map(|s| s.len()).unwrap_or(0) > cfg.max_response_bytes {
-            return Err(FetchError::TooLarge(req.body.as_ref().map(|s| s.len()).unwrap_or(0)));
+            return Err(FetchError::TooLarge(
+                req.body.as_ref().map(|s| s.len()).unwrap_or(0),
+            ));
         }
 
         let client = apeireth_http_client::HttpClient::with_chat_defaults()
@@ -54,7 +66,7 @@ impl Fetcher for HttpFetcher {
                 let body_val = serde_json::Value::String(req.body.clone().unwrap_or_default());
                 client.post(&req.url, &body_val).await
             }
-            _ => client.get(&req.url).await,  // GET + HEAD via inner reqwest (HEAD 暂走 GET, R175+ 续)
+            _ => client.get(&req.url).await, // GET + HEAD via inner reqwest (HEAD 暂走 GET, R175+ 续)
         }
         .map_err(|e| FetchError::Http(format!("send: {e}")))?;
 
@@ -62,7 +74,9 @@ impl Fetcher for HttpFetcher {
         let final_url = response.url().to_string();
         let content_type = response.content_type();
         let _elapsed_ms = response.elapsed_ms();
-        let body = response.text().await
+        let body = response
+            .text()
+            .await
             .map_err(|e| FetchError::Http(format!("read body: {e}")))?;
         let bytes_received = body.len();
 
@@ -83,8 +97,6 @@ impl Fetcher for HttpFetcher {
             elapsed_ms: start.elapsed().as_millis() as u64,
         })
     }
-
-
 }
 
 #[cfg(test)]

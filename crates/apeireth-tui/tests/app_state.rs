@@ -1,3 +1,31 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/nav/mod.rs"]
+mod nav;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
 /// Integration tests for apeireth-tui (state logic, no ratatui rendering)
 ///
 /// **R18 第 2 阶段 P2 第 2 项**: 测 App 状态机 (chat history / theme / nav)
@@ -8,21 +36,6 @@
 
 #[path = "../src/theme.rs"]
 mod theme;
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
-#[path = "../src/app.rs"]
-mod app;
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
 
 use app::{App, ChatMessage, Language, Mode, NavPage};
 
@@ -52,8 +65,14 @@ fn app_starts_with_splash_and_breath_disabled() {
     // R25.2 fix: tracked src/app.rs:174-175 default = splash_enabled=true / breath_enabled=true
     // (主人 R19 决定: 默认开 splash + breath 动画, 用户按 [s] / [b] 关)
     // assertion 跟 tracked src/app.rs default 对齐
-    assert!(a.splash_enabled, "tracked App::new() default splash_enabled = true");
-    assert!(a.breath_enabled, "tracked App::new() default breath_enabled = true");
+    assert!(
+        a.splash_enabled,
+        "tracked App::new() default splash_enabled = true"
+    );
+    assert!(
+        a.breath_enabled,
+        "tracked App::new() default breath_enabled = true"
+    );
 }
 
 // =====================================================================
@@ -103,7 +122,10 @@ fn chat_history_preserves_order() {
     let dbg = format!("{:?}", a.chat_history);
     let pos_first = dbg.find("first").expect("first in dbg");
     let pos_second = dbg.find("second").expect("second in dbg");
-    assert!(pos_first < pos_second, "first should appear before second in debug output");
+    assert!(
+        pos_first < pos_second,
+        "first should appear before second in debug output"
+    );
 }
 
 // =====================================================================
@@ -136,7 +158,7 @@ fn input_buf_pushes_chars() {
 fn navpage_is_copy() {
     let p1 = NavPage::Dialogue; // 假设 variant
     let p2 = p1; // Copy
-    // 不假设具体 variant 名, 只确保能 Copy
+                 // 不假设具体 variant 名, 只确保能 Copy
     let _ = p2;
 }
 

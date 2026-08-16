@@ -72,8 +72,8 @@
 use apeireth_naming_v05::{
     check_sum_equals_1, decode_v05, default_v05_spec, encode_v05, encode_v05_class,
     encode_v05_lines, validate_roundtrip, validate_v05, validate_v05_with_weights, Class,
-    ClassDims, ClassWeights, Completeness, DEFAULT_WEIGHTS, DimensionSet, Domain, Level, Lineage,
-    Modality, Safety, V05Spec, V05DimId,
+    ClassDims, ClassWeights, Completeness, DimensionSet, Domain, Level, Lineage, Modality, Safety,
+    V05DimId, V05Spec, DEFAULT_WEIGHTS,
 };
 
 fn main() -> anyhow::Result<()> {

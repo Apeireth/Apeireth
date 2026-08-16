@@ -85,10 +85,7 @@ impl ReflectionState {
     }
     /// 是否终态
     pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            ReflectionState::Finalized | ReflectionState::Failed
-        )
+        matches!(self, ReflectionState::Finalized | ReflectionState::Failed)
     }
     /// 反思深度 (距离终态)
     pub fn depth_to_terminal(&self) -> usize {

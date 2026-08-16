@@ -137,11 +137,7 @@ impl HierarchicalMode {
     }
 
     /// **Sub-advisor 跑 1 个 delegated task → 1 opinion**
-    pub fn sub_execute(
-        &self,
-        task: &DelegatedTask,
-        query: &CouncilQuery,
-    ) -> AdvisorOpinion {
+    pub fn sub_execute(&self, task: &DelegatedTask, query: &CouncilQuery) -> AdvisorOpinion {
         let stance_kind = keyword_stance_for_sub(&task.instruction, &query.description);
         let stance = Stance::new(
             stance_kind,
@@ -161,10 +157,7 @@ impl HierarchicalMode {
     }
 
     /// **Root 汇总 sub opinions → final verdict** (复用 R10 `synthesize()`)
-    pub fn aggregate(
-        &self,
-        sub_opinions: &[AdvisorOpinion],
-    ) -> crate::synthesis::SynthesisReport {
+    pub fn aggregate(&self, sub_opinions: &[AdvisorOpinion]) -> crate::synthesis::SynthesisReport {
         synthesize(sub_opinions, &self.weights)
     }
 
@@ -220,14 +213,27 @@ impl HierarchicalMode {
 
 /// Keyword 兜底 stance (per R33-4-1 `keyword_stance_fallback` 1:1 镜像, 0 改 R33-4-1)
 fn keyword_stance_for_sub(instruction: &str, query_desc: &str) -> StanceKind {
-    let combined = format!("{} {}", instruction.to_lowercase(), query_desc.to_lowercase());
+    let combined = format!(
+        "{} {}",
+        instruction.to_lowercase(),
+        query_desc.to_lowercase()
+    );
     let negative = [
-        "harm", "exploit", "manipulate", "dishonest", "unethical", "伤害", "操纵", "不诚实", "剥削",
+        "harm",
+        "exploit",
+        "manipulate",
+        "dishonest",
+        "unethical",
+        "伤害",
+        "操纵",
+        "不诚实",
+        "剥削",
         "违反 asi",
     ];
     if negative.iter().any(|k| combined.contains(k)) {
         StanceKind::StrongDisapprove
-    } else if combined.contains("风险") || combined.contains("risk") || combined.contains("unsafe") {
+    } else if combined.contains("风险") || combined.contains("risk") || combined.contains("unsafe")
+    {
         // 风险评估 sub 看到 risk 关键词 → Disapprove (风险存在)
         StanceKind::Disapprove
     } else {
@@ -337,14 +343,8 @@ mod tests {
     fn aggregate_produces_synthesis_report() {
         let hm = HierarchicalMode::new("cto");
         let opinions: Vec<AdvisorOpinion> = vec![
-            hm.sub_execute(
-                &DelegatedTask::new("sub-1", "a", "do thing"),
-                &q("design"),
-            ),
-            hm.sub_execute(
-                &DelegatedTask::new("sub-2", "b", "evaluate"),
-                &q("design"),
-            ),
+            hm.sub_execute(&DelegatedTask::new("sub-1", "a", "do thing"), &q("design")),
+            hm.sub_execute(&DelegatedTask::new("sub-2", "b", "evaluate"), &q("design")),
         ];
         let report = hm.aggregate(&opinions);
         assert_eq!(report.opinion_count, 2);

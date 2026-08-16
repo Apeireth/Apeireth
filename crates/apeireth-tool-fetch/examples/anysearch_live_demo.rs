@@ -40,12 +40,19 @@ async fn main() -> anyhow::Result<()> {
         .map(|s| s.split(',').map(|k| k.trim().to_string()).collect())
         .unwrap_or_default();
     let client = AnySearchClient::with_keys(ANYSEARCH_ENDPOINT, keys)?;
-    let key_mode = if client.key_count() == 0 { "anonymous" } else { "authenticated" };
+    let key_mode = if client.key_count() == 0 {
+        "anonymous"
+    } else {
+        "authenticated"
+    };
     println!("client: {} ({} keys)\n", key_mode, client.key_count());
 
     // 2) search 命令: 通用搜索
     println!("--- search #1: general 'Rust async programming' ---");
-    match client.search("Rust async programming", Some("general"), None, "").await {
+    match client
+        .search("Rust async programming", Some("general"), None, "")
+        .await
+    {
         Ok(md) => {
             let preview: String = md.chars().take(300).collect();
             println!("OK ({} chars): {}\n", md.len(), preview);
@@ -55,7 +62,10 @@ async fn main() -> anyhow::Result<()> {
 
     // 3) search 命令: code 垂直搜索
     println!("--- search #2: code 'rust tokio runtime' ---");
-    match client.search("rust tokio runtime", Some("code"), None, "").await {
+    match client
+        .search("rust tokio runtime", Some("code"), None, "")
+        .await
+    {
         Ok(md) => {
             let preview: String = md.chars().take(300).collect();
             println!("OK ({} chars): {}\n", md.len(), preview);
@@ -64,7 +74,11 @@ async fn main() -> anyhow::Result<()> {
             let hits = client.markdown_to_hits("rust tokio runtime", &md, 5);
             agg.add_hits(apeireth_tool_fetch::SearchSource::AnySearch, hits);
             let r = agg.aggregate("rust tokio runtime", 5);
-            println!("aggregated: {} hits from {} sources", r.hits.len(), r.total_sources);
+            println!(
+                "aggregated: {} hits from {} sources",
+                r.hits.len(),
+                r.total_sources
+            );
             for (i, h) in r.hits.iter().enumerate() {
                 println!("  [{}] {} -> {}", i + 1, h.title, h.url);
             }
@@ -85,7 +99,10 @@ async fn main() -> anyhow::Result<()> {
 
     // 5) batch_search 命令: 多查询并行
     println!("--- batch_search: ['Rust', 'Tokio', 'async'] ---");
-    match client.batch_search(&["Rust", "Tokio", "async"], Some("general")).await {
+    match client
+        .batch_search(&["Rust", "Tokio", "async"], Some("general"))
+        .await
+    {
         Ok(md) => {
             let preview: String = md.chars().take(300).collect();
             println!("OK ({} chars): {}\n", md.len(), preview);

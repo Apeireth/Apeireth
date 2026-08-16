@@ -5,7 +5,6 @@
 //!
 //! 提供 [`ScriptedMockLlm`] 默认实现 — 按 prompt 关键词匹配脚本响应。
 
-
 // R164: 移除 MockLlmProvider trait 的 #[deprecated] attribute (R163 引入时 30 actionable warnings, O-5 不假装原则不允许默认隐藏). 改为结构化文档 + 推荐 LlmAdvisorBackend 生产路径. 不修改 trait shape, 0 触碰 3 不可变脊柱.
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use std::collections::HashMap;

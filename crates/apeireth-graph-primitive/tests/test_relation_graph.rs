@@ -9,30 +9,46 @@
 
 use apeireth_graph_primitive::{
     query::{count_by_kind, CombinedQuery, EdgeQuery, NodeQuery},
-    BfsIter, DfsIter, GraphEdge, GraphNode, Relation, RelationGraph, RelationKind,
-    RelationRegistry, TraversalDirection, shortest_path,
+    shortest_path, BfsIter, DfsIter, GraphEdge, GraphNode, Relation, RelationGraph, RelationKind,
+    RelationRegistry, TraversalDirection,
 };
 
 fn build_complex_graph() -> RelationGraph {
     let mut g = RelationGraph::new();
     // 6 nodes: 3 agents + 2 tools + 1 concept
-    g.insert_node(GraphNode::with_kind("alice", "agent")
-        .with_properties(serde_json::json!({"role": "assistant"}))).unwrap();
-    g.insert_node(GraphNode::with_kind("bob", "agent")
-        .with_properties(serde_json::json!({"role": "user"}))).unwrap();
-    g.insert_node(GraphNode::with_kind("carol", "agent")
-        .with_properties(serde_json::json!({"role": "supervisor"}))).unwrap();
+    g.insert_node(
+        GraphNode::with_kind("alice", "agent")
+            .with_properties(serde_json::json!({"role": "assistant"})),
+    )
+    .unwrap();
+    g.insert_node(
+        GraphNode::with_kind("bob", "agent").with_properties(serde_json::json!({"role": "user"})),
+    )
+    .unwrap();
+    g.insert_node(
+        GraphNode::with_kind("carol", "agent")
+            .with_properties(serde_json::json!({"role": "supervisor"})),
+    )
+    .unwrap();
     g.insert_node(GraphNode::with_kind("fs", "tool")).unwrap();
     g.insert_node(GraphNode::with_kind("web", "tool")).unwrap();
-    g.insert_node(GraphNode::with_kind("memory", "concept")).unwrap();
+    g.insert_node(GraphNode::with_kind("memory", "concept"))
+        .unwrap();
     // 7 edges
-    g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob")).unwrap();
-    g.insert_edge(GraphEdge::new("bob", RelationKind::Coordination, "carol")).unwrap();
-    g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol")).unwrap();
-    g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "fs")).unwrap();
-    g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "web")).unwrap();
-    g.insert_edge(GraphEdge::new("carol", RelationKind::Embedding, "memory")).unwrap();
-    g.insert_edge(GraphEdge::new("alice", RelationKind::SelfRelation, "alice")).unwrap();
+    g.insert_edge(GraphEdge::new("alice", RelationKind::Symbiosis, "bob"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("bob", RelationKind::Coordination, "carol"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("alice", RelationKind::Coordination, "carol"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "fs"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("alice", RelationKind::Embedding, "web"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("carol", RelationKind::Embedding, "memory"))
+        .unwrap();
+    g.insert_edge(GraphEdge::new("alice", RelationKind::SelfRelation, "alice"))
+        .unwrap();
     g
 }
 
@@ -191,7 +207,7 @@ fn integration_full_lifecycle_query() {
     // 1. total embedding count
     let counts = count_by_kind(&g);
     assert_eq!(counts.2, 3); // alice-fs, alice-web, carol-memory
-    // 2. embedding edges FROM alice only
+                             // 2. embedding edges FROM alice only
     let emb_from_alice: Vec<&GraphEdge> = EdgeQuery::new()
         .from("alice")
         .kind(RelationKind::Embedding)

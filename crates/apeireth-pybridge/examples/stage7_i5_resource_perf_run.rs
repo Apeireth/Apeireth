@@ -5,7 +5,7 @@
 //! 演示 I5: 4 resource dim × 5 perf kind = 20 绑定 + observe 阈值告警
 
 use apeireth_pybridge::{
-    stage7_i5_healthy, stage7_i5_summary, ResourcePerfCoordinator, PerfKind, ResourceDimension,
+    stage7_i5_healthy, stage7_i5_summary, PerfKind, ResourceDimension, ResourcePerfCoordinator,
 };
 
 fn main() {

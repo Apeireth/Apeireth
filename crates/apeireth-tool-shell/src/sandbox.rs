@@ -71,7 +71,10 @@ pub enum SandboxError {
 /// R264: Apply sandbox policy to a tokio::process::Command before exec.
 /// All platform-specific work goes through tokio safe APIs (process_group,
 /// kill_on_drop, creation_flags) -- 0 unsafe, 0 external sys-crate dep.
-pub fn apply_sandbox(cmd: &mut tokio::process::Command, policy: &SandboxPolicy) -> Result<(), SandboxError> {
+pub fn apply_sandbox(
+    cmd: &mut tokio::process::Command,
+    policy: &SandboxPolicy,
+) -> Result<(), SandboxError> {
     // env_clear applies to all modes that opt in
     if policy.env_clear {
         cmd.env_clear();
@@ -113,7 +116,8 @@ pub fn apply_sandbox(cmd: &mut tokio::process::Command, policy: &SandboxPolicy) 
                 use std::os::windows::process::CommandExt;
                 const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
                 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-                cmd.as_std_mut().creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
+                cmd.as_std_mut()
+                    .creation_flags(CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW);
             }
             cmd.kill_on_drop(true);
             // TODO Linux seccomp / Windows JobObject / macOS sandbox_init
@@ -136,7 +140,11 @@ mod tests {
     #[test]
     fn apply_sandbox_light_sets_stdin_null() {
         let mut cmd = tokio::process::Command::new("echo");
-        let p = SandboxPolicy { mode: SandboxMode::Light, env_clear: false, allowed_syscalls: vec![] };
+        let p = SandboxPolicy {
+            mode: SandboxMode::Light,
+            env_clear: false,
+            allowed_syscalls: vec![],
+        };
         apply_sandbox(&mut cmd, &p).unwrap();
         let _ = cmd;
     }
@@ -144,7 +152,11 @@ mod tests {
     #[test]
     fn apply_sandbox_none_noop() {
         let mut cmd = tokio::process::Command::new("echo");
-        let p = SandboxPolicy { mode: SandboxMode::None, env_clear: false, allowed_syscalls: vec![] };
+        let p = SandboxPolicy {
+            mode: SandboxMode::None,
+            env_clear: false,
+            allowed_syscalls: vec![],
+        };
         apply_sandbox(&mut cmd, &p).unwrap();
         let _ = cmd;
     }
@@ -152,7 +164,11 @@ mod tests {
     #[test]
     fn apply_sandbox_standard_applies_process_group_and_kill_on_drop() {
         let mut cmd = tokio::process::Command::new("echo");
-        let p = SandboxPolicy { mode: SandboxMode::Standard, env_clear: true, allowed_syscalls: vec![] };
+        let p = SandboxPolicy {
+            mode: SandboxMode::Standard,
+            env_clear: true,
+            allowed_syscalls: vec![],
+        };
         apply_sandbox(&mut cmd, &p).unwrap();
         // Both process_group(0) and kill_on_drop(true) are side effects on the Command
         // builder; they can be observed indirectly via stdio + spawn semantics.
@@ -163,16 +179,29 @@ mod tests {
     #[test]
     fn apply_sandbox_strict_includes_standard() {
         let mut cmd = tokio::process::Command::new("echo");
-        let p = SandboxPolicy { mode: SandboxMode::Strict, env_clear: true, allowed_syscalls: vec![] };
+        let p = SandboxPolicy {
+            mode: SandboxMode::Strict,
+            env_clear: true,
+            allowed_syscalls: vec![],
+        };
         apply_sandbox(&mut cmd, &p).unwrap();
         let _ = cmd;
     }
 
     #[test]
     fn apply_sandbox_all_modes_no_panic_on_empty_program() {
-        for mode in [SandboxMode::None, SandboxMode::Light, SandboxMode::Standard, SandboxMode::Strict] {
+        for mode in [
+            SandboxMode::None,
+            SandboxMode::Light,
+            SandboxMode::Standard,
+            SandboxMode::Strict,
+        ] {
             let mut cmd = tokio::process::Command::new("true");
-            let p = SandboxPolicy { mode, env_clear: true, allowed_syscalls: vec![] };
+            let p = SandboxPolicy {
+                mode,
+                env_clear: true,
+                allowed_syscalls: vec![],
+            };
             apply_sandbox(&mut cmd, &p).unwrap();
         }
     }
@@ -189,7 +218,11 @@ mod tests {
 
     #[test]
     fn sandbox_policy_clone_preserves_mode() {
-        let p = SandboxPolicy { mode: SandboxMode::Strict, env_clear: false, allowed_syscalls: vec!["read".into()] };
+        let p = SandboxPolicy {
+            mode: SandboxMode::Strict,
+            env_clear: false,
+            allowed_syscalls: vec!["read".into()],
+        };
         let p2 = p.clone();
         assert_eq!(p.mode, p2.mode);
         assert_eq!(p.env_clear, p2.env_clear);

@@ -89,7 +89,12 @@ impl Gauge {
             let next_bits = next.to_bits() as i64;
             if self
                 .bits
-                .compare_exchange_weak(current_bits, next_bits, Ordering::Relaxed, Ordering::Relaxed)
+                .compare_exchange_weak(
+                    current_bits,
+                    next_bits,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
                 .is_ok()
             {
                 return;

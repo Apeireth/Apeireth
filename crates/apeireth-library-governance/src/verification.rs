@@ -250,62 +250,86 @@ mod tests {
 
     #[test]
     fn version_major_one_passes() {
-        assert!(invariants::version_major_is_one(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::version_major_is_one(&VerificationSubject::new(
+            1, 2, 0, true, 8, 6
+        )));
     }
 
     #[test]
     fn version_major_two_violates() {
-        assert!(!invariants::version_major_is_one(&VerificationSubject::new(2, 0, 0, true, 8, 6)));
+        assert!(!invariants::version_major_is_one(
+            &VerificationSubject::new(2, 0, 0, true, 8, 6)
+        ));
     }
 
     #[test]
     fn version_minor_two_passes() {
-        assert!(invariants::version_minor_is_two(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::version_minor_is_two(&VerificationSubject::new(
+            1, 2, 0, true, 8, 6
+        )));
     }
 
     #[test]
     fn version_minor_three_violates() {
-        assert!(!invariants::version_minor_is_two(&VerificationSubject::new(1, 3, 0, true, 8, 6)));
+        assert!(!invariants::version_minor_is_two(
+            &VerificationSubject::new(1, 3, 0, true, 8, 6)
+        ));
     }
 
     #[test]
     fn baseline_index_zero_passes() {
-        assert!(invariants::baseline_index_is_r11(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::baseline_index_is_r11(
+            &VerificationSubject::new(1, 2, 0, true, 8, 6)
+        ));
     }
 
     #[test]
     fn baseline_index_nonzero_violates() {
-        assert!(!invariants::baseline_index_is_r11(&VerificationSubject::new(1, 2, 1, true, 8, 6)));
+        assert!(!invariants::baseline_index_is_r11(
+            &VerificationSubject::new(1, 2, 1, true, 8, 6)
+        ));
     }
 
     #[test]
     fn locked_intact_passes() {
-        assert!(invariants::locked_signatures_intact(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::locked_signatures_intact(
+            &VerificationSubject::new(1, 2, 0, true, 8, 6)
+        ));
     }
 
     #[test]
     fn locked_broken_violates() {
-        assert!(!invariants::locked_signatures_intact(&VerificationSubject::new(1, 2, 0, false, 8, 6)));
+        assert!(!invariants::locked_signatures_intact(
+            &VerificationSubject::new(1, 2, 0, false, 8, 6)
+        ));
     }
 
     #[test]
     fn anchor_eight_passes() {
-        assert!(invariants::anchor_count_is_eight(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::anchor_count_is_eight(
+            &VerificationSubject::new(1, 2, 0, true, 8, 6)
+        ));
     }
 
     #[test]
     fn anchor_seven_violates() {
-        assert!(!invariants::anchor_count_is_eight(&VerificationSubject::new(1, 2, 0, true, 7, 6)));
+        assert!(!invariants::anchor_count_is_eight(
+            &VerificationSubject::new(1, 2, 0, true, 7, 6)
+        ));
     }
 
     #[test]
     fn gate_six_passes() {
-        assert!(invariants::gate_layers_is_six(&VerificationSubject::new(1, 2, 0, true, 8, 6)));
+        assert!(invariants::gate_layers_is_six(&VerificationSubject::new(
+            1, 2, 0, true, 8, 6
+        )));
     }
 
     #[test]
     fn gate_five_violates() {
-        assert!(!invariants::gate_layers_is_six(&VerificationSubject::new(1, 2, 0, true, 8, 5)));
+        assert!(!invariants::gate_layers_is_six(&VerificationSubject::new(
+            1, 2, 0, true, 8, 5
+        )));
     }
 
     #[test]

@@ -113,7 +113,8 @@ pub fn call_python_builtin(
 
 /// apeireth-core Episode 序列化成 Python dict 可消费的 JSON
 pub fn episode_to_json(ep: &apeireth_core::Episode) -> Result<String, BridgeError> {
-    serde_json::to_string(ep).map_err(|e| BridgeError::InvalidArg(format!("Episode serialize: {e}")))
+    serde_json::to_string(ep)
+        .map_err(|e| BridgeError::InvalidArg(format!("Episode serialize: {e}")))
 }
 
 pub fn session_to_json(s: &apeireth_core::Session) -> Result<String, BridgeError> {
@@ -270,8 +271,11 @@ pub fn eval_python_expression(expr: &str) -> Result<String, BridgeError> {
     }
     let raw = with_python(|py| {
         // 用 CString 路径 (避免 &str → &CStr unsafe leak)
-        let c_expr = std::ffi::CString::new(expr)
-            .map_err(|e| pyo3::PyErr::from(pyo3::exceptions::PyValueError::new_err(format!("expr nul byte: {e}"))))?;
+        let c_expr = std::ffi::CString::new(expr).map_err(|e| {
+            pyo3::PyErr::from(pyo3::exceptions::PyValueError::new_err(format!(
+                "expr nul byte: {e}"
+            )))
+        })?;
         let result = py.eval(c_expr.as_c_str(), None, None)?;
         result
             .str()

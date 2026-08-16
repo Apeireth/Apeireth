@@ -190,7 +190,11 @@ impl Machine {
         // clone transitions (现在 Transition 派生 Clone, Arc<dyn Fn> 可 clone)
         let transitions = match self.states.get(&self.current) {
             Some(s) => s.transitions.clone(),
-            None => return TransitionResult::UnhandledEvent { event: event.into() },
+            None => {
+                return TransitionResult::UnhandledEvent {
+                    event: event.into(),
+                }
+            }
         };
 
         // 找 event 匹配 + guard 通过的 transition (按定义顺序, 第一个 wins)
@@ -208,14 +212,14 @@ impl Machine {
             let target = t.target.clone();
             let from = self.current.clone(); // capture BEFORE execute
             self.execute_transition(&target, t.action.clone());
-            return TransitionResult::Transitioned {
-                from,
-                to: target,
-            };
+            return TransitionResult::Transitioned { from, to: target };
         }
 
         TransitionResult::NoTransition {
-            reason: format!("no matching transition for event `{}` in state `{}`", event, self.current),
+            reason: format!(
+                "no matching transition for event `{}` in state `{}`",
+                event, self.current
+            ),
         }
     }
 
@@ -303,7 +307,11 @@ pub fn compound_state(id: impl Into<String>, initial: impl Into<String>) -> Stat
 }
 
 /// 添加 transition 到 state node (consume + return)
-pub fn with_transition(mut state: StateNode, event: impl Into<String>, target: impl Into<String>) -> StateNode {
+pub fn with_transition(
+    mut state: StateNode,
+    event: impl Into<String>,
+    target: impl Into<String>,
+) -> StateNode {
     state.transitions.push(Transition {
         event: event.into(),
         target: target.into(),
@@ -366,7 +374,13 @@ mod tests {
     fn machine_sends_event_transitions() {
         let mut m = Machine::new(build_simple_traffic_light(), "red");
         let r = m.send("NEXT");
-        assert_eq!(r, TransitionResult::Transitioned { from: "red".into(), to: "green".into() });
+        assert_eq!(
+            r,
+            TransitionResult::Transitioned {
+                from: "red".into(),
+                to: "green".into()
+            }
+        );
         assert_eq!(m.current_state(), "green");
         assert_eq!(m.transition_count, 1);
     }
@@ -396,9 +410,8 @@ mod tests {
     fn machine_guard_rejects_transition() {
         let mut states = HashMap::new();
         // red → green 仅当 context.count >= 5
-        let guard: Guard = Arc::new(|ctx| {
-            ctx.data.get("count").and_then(|v| v.as_int()).unwrap_or(0) >= 5
-        });
+        let guard: Guard =
+            Arc::new(|ctx| ctx.data.get("count").and_then(|v| v.as_int()).unwrap_or(0) >= 5);
         states.insert(
             "red".into(),
             with_guarded_transition(atomic_state("red"), "NEXT", "green", guard),
@@ -454,8 +467,12 @@ mod tests {
         let ec = entry_count.clone();
         let xc = exit_count.clone();
 
-        let on_entry: Action = Arc::new(move |_| { ec.fetch_add(1, Ordering::SeqCst); });
-        let on_exit: Action = Arc::new(move |_| { xc.fetch_add(1, Ordering::SeqCst); });
+        let on_entry: Action = Arc::new(move |_| {
+            ec.fetch_add(1, Ordering::SeqCst);
+        });
+        let on_exit: Action = Arc::new(move |_| {
+            xc.fetch_add(1, Ordering::SeqCst);
+        });
 
         let mut states = HashMap::new();
         let mut a = atomic_state("a");
@@ -467,14 +484,25 @@ mod tests {
 
         let mut m = Machine::new(states, "a");
         m.send("GO");
-        assert_eq!(exit_count.load(Ordering::SeqCst), 1, "on_exit of `a` should fire");
-        assert_eq!(entry_count.load(Ordering::SeqCst), 1, "on_entry of `b` should fire");
+        assert_eq!(
+            exit_count.load(Ordering::SeqCst),
+            1,
+            "on_exit of `a` should fire"
+        );
+        assert_eq!(
+            entry_count.load(Ordering::SeqCst),
+            1,
+            "on_entry of `b` should fire"
+        );
     }
 
     #[test]
     fn machine_final_state_terminates() {
         let mut states = HashMap::new();
-        states.insert("a".into(), with_transition(atomic_state("a"), "FINISH", "end"));
+        states.insert(
+            "a".into(),
+            with_transition(atomic_state("a"), "FINISH", "end"),
+        );
         states.insert("end".into(), final_state("end"));
         let mut m = Machine::new(states, "a");
         m.send("FINISH");

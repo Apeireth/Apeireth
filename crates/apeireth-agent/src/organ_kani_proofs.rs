@@ -26,7 +26,8 @@ fn r177_agt_04_default_cache_size() {
 
 #[test]
 fn r177_agt_05_alias_prefix() {
-    let p = ALIAS_NOT_FOUND_PLACEHOLDER_PREFIX_CONST; assert!(!p.is_empty());
+    let p = ALIAS_NOT_FOUND_PLACEHOLDER_PREFIX_CONST;
+    assert!(!p.is_empty());
 }
 
 #[cfg(kani)]
@@ -40,4 +41,3 @@ fn r177_agt_kani_01_field_count_invariant() {
 fn r177_agt_kani_02_event_invariant() {
     assert_eq!(AGENT_EVENT_VARIANT_COUNT, 4);
 }
-

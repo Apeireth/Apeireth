@@ -109,7 +109,9 @@ impl Provider {
     /// → 404. MiniMax 主人 (主人反馈) 这次发现的就是这个 bug.
     pub fn endpoint_path(&self) -> &'static str {
         match self {
-            Self::Openai | Self::Deepseek | Self::Ollama | Self::Custom | Self::Minimax => "/chat/completions",
+            Self::Openai | Self::Deepseek | Self::Ollama | Self::Custom | Self::Minimax => {
+                "/chat/completions"
+            }
             Self::Anthropic => "/v1/messages",
         }
     }
@@ -136,7 +138,13 @@ impl LlmConfig {
         Self::with_max_tokens(provider, base_url, api_key, model, default_max_tokens())
     }
 
-    pub fn with_max_tokens(provider: Provider, base_url: &str, api_key: &str, model: &str, max_tokens: u32) -> Self {
+    pub fn with_max_tokens(
+        provider: Provider,
+        base_url: &str,
+        api_key: &str,
+        model: &str,
+        max_tokens: u32,
+    ) -> Self {
         Self {
             provider,
             base_url: base_url.trim_end_matches('/').to_string(),
@@ -204,9 +212,8 @@ pub fn load() -> Option<LlmConfig> {
 
 /// 写 llm.json (保证父目录). 错误不 panic, 返 Err 给 caller.
 pub fn save(c: &LlmConfig) -> io::Result<()> {
-    let dir = config_dir().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "config dir unresolved")
-    })?;
+    let dir = config_dir()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "config dir unresolved"))?;
     fs::create_dir_all(&dir)?;
     let path = dir.join(LLM_FILE_NAME);
     let s = serde_json::to_string_pretty(c)
@@ -225,7 +232,12 @@ mod tests {
     }
     #[test]
     fn new_trims_trailing_slash() {
-        let c = LlmConfig::new(Provider::Openai, "https://api.openai.com/v1/", "sk", "gpt-4o");
+        let c = LlmConfig::new(
+            Provider::Openai,
+            "https://api.openai.com/v1/",
+            "sk",
+            "gpt-4o",
+        );
         assert_eq!(c.base_url, "https://api.openai.com/v1");
     }
     #[test]

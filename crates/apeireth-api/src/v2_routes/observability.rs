@@ -38,7 +38,9 @@
 use axum::routing::get;
 use axum::Router;
 
-use crate::observability::{health::health_handler, metrics::metrics_handler, status::status_handler};
+use crate::observability::{
+    health::health_handler, metrics::metrics_handler, status::status_handler,
+};
 
 /// **3 端点路径** (per task spec — V2 风格, 跟 v1 旧 `/observability/...` 区分)
 pub const V2_OBSERVABILITY_ENDPOINTS: [&str; 3] = [

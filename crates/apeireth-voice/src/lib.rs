@@ -149,23 +149,21 @@ pub mod realtime;
 // 便捷 re-exports (调用方少打 crate 名)
 // §0.6 R153: 加 realtime 顶层 re-export 块 (10 type alias + 4 常量)
 pub use realtime::{
-    EphemeralToken, EphemeralTokenRequest, RealtimeAudioFormat, RealtimeError,
-    RealtimeModalities, RealtimeModality, RealtimeModel, RealtimeResult,
-    RealtimeSessionConfig, RealtimeTool, RealtimeVoice, ServerEvent, ClientEvent,
-    ConversationItem, TurnDetection, TurnDetectionKind,
-    REALTIME_CONTEXT_WINDOW_TOKENS, REALTIME_DEFAULT_SESSION_TTL,
-    REALTIME_DEFAULT_TOKEN_ENDPOINT, REALTIME_MAX_AUDIO_BUFFER_BYTES,
+    encode_audio_append, encode_image_input, ClientEvent, ConversationItem, EphemeralToken,
+    EphemeralTokenRequest, RealtimeAudioFormat, RealtimeError, RealtimeModalities,
+    RealtimeModality, RealtimeModel, RealtimeResult, RealtimeSessionConfig, RealtimeTool,
+    RealtimeVoice, ServerEvent, TurnDetection, TurnDetectionKind, REALTIME_CONTEXT_WINDOW_TOKENS,
+    REALTIME_DEFAULT_SESSION_TTL, REALTIME_DEFAULT_TOKEN_ENDPOINT, REALTIME_MAX_AUDIO_BUFFER_BYTES,
     REALTIME_MAX_IMAGE_BYTES, REALTIME_MAX_SESSION_TTL, REALTIME_MODEL_COUNT,
     REALTIME_SCHEMA_VERSION, SUPPORTED_REALTIME_MODELS, SUPPORTED_REALTIME_VOICES,
-    encode_audio_append, encode_image_input,
 };
 
 // 便捷 re-exports (调用方少打 crate 名)
 // §0.5 旧块 (real 模块) (调用方少打 crate 名)
 pub use real::{
-    AudioBuffer, AudioFormat, Lang, SUPPORTED_LANGS, SUPPORTED_VOICE_KINDS, VoiceApiResponse,
-    VoiceKind, VoiceRealImpl, VoiceprintMatch, VoiceprintMatchResponse, VOICE_API_BASE_URL,
-    VOICE_API_KEY_CACHE_TTL_SECONDS, VOICE_API_KEY_ENV, WakeWord,
+    AudioBuffer, AudioFormat, Lang, VoiceApiResponse, VoiceKind, VoiceRealImpl, VoiceprintMatch,
+    VoiceprintMatchResponse, WakeWord, SUPPORTED_LANGS, SUPPORTED_VOICE_KINDS, VOICE_API_BASE_URL,
+    VOICE_API_KEY_CACHE_TTL_SECONDS, VOICE_API_KEY_ENV,
 };
 
 // ============================================================================
@@ -186,7 +184,10 @@ pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必为 true (R20 阶段 3 改 false 时同步改本断言).
 /// K-1 强校验 #4: 守 stub 模式不漏防.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE must be true until R20 stage 3");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE must be true until R20 stage 3"
+);
 
 /// 查 STUB_MODE 状态 (m3 防御: 多 1 工具 `apeireth_voice_stub_status`).
 /// R20 阶段 3 真接 picovoice 后, 整个 `STUB_MODE` 块 + `stub_status` 工具删.
@@ -473,7 +474,9 @@ impl VoiceWake {
     pub async fn start(&mut self) -> VoiceResult<()> {
         if STUB_MODE {
             warn!(target: "apeireth_voice", "VoiceWake::start STUB_MODE returning NotImplemented");
-            return Err(VoiceError::NotImplemented("apeireth_voice_wake_word_detect"));
+            return Err(VoiceError::NotImplemented(
+                "apeireth_voice_wake_word_detect",
+            ));
         }
         self.running.store(true, Ordering::SeqCst);
         Ok(())
@@ -589,9 +592,14 @@ impl VoiceSdk {
     }
 
     /// 工具 1: `apeireth_voice_wake_word_detect` (STUB 返 NotImplemented).
-    pub async fn wake_word_detect(&mut self, _audio: &AudioFrame) -> VoiceResult<WakeWordDetection> {
+    pub async fn wake_word_detect(
+        &mut self,
+        _audio: &AudioFrame,
+    ) -> VoiceResult<WakeWordDetection> {
         warn!(target: "apeireth_voice", "wake_word_detect STUB_MODE returning NotImplemented");
-        Err(VoiceError::NotImplemented("apeireth_voice_wake_word_detect"))
+        Err(VoiceError::NotImplemented(
+            "apeireth_voice_wake_word_detect",
+        ))
     }
 
     /// 工具 2: `apeireth_voice_record_audio` (STUB 返 NotImplemented).
@@ -817,22 +825,46 @@ mod tests {
         let frame = AudioFrame::new(vec![0i16; 512]);
 
         // 8 stub 工具必须全部返 VoiceError::NotImplemented
-        assert!(matches!(sdk.wake_word_detect(&frame).await, Err(VoiceError::NotImplemented(_))));
-        assert!(matches!(sdk.record_audio(5).await, Err(VoiceError::NotImplemented(_))));
-        assert!(matches!(sdk.transcribe(&[0i16; 512]).await, Err(VoiceError::NotImplemented(_))));
-        assert!(matches!(sdk.synthesize("hello").await, Err(VoiceError::NotImplemented(_))));
+        assert!(matches!(
+            sdk.wake_word_detect(&frame).await,
+            Err(VoiceError::NotImplemented(_))
+        ));
+        assert!(matches!(
+            sdk.record_audio(5).await,
+            Err(VoiceError::NotImplemented(_))
+        ));
+        assert!(matches!(
+            sdk.transcribe(&[0i16; 512]).await,
+            Err(VoiceError::NotImplemented(_))
+        ));
+        assert!(matches!(
+            sdk.synthesize("hello").await,
+            Err(VoiceError::NotImplemented(_))
+        ));
         // list_keywords 不返 NotImplemented (是编译期常量)
         assert!(sdk.list_keywords().is_ok());
-        assert!(matches!(sdk.load_model(WakeWordType::Apeireth).await, Err(VoiceError::NotImplemented(_))));
-        assert!(matches!(sdk.unload_model().await, Err(VoiceError::NotImplemented(_))));
-        assert!(matches!(sdk.audio_stream().await, Err(VoiceError::NotImplemented(_))));
+        assert!(matches!(
+            sdk.load_model(WakeWordType::Apeireth).await,
+            Err(VoiceError::NotImplemented(_))
+        ));
+        assert!(matches!(
+            sdk.unload_model().await,
+            Err(VoiceError::NotImplemented(_))
+        ));
+        assert!(matches!(
+            sdk.audio_stream().await,
+            Err(VoiceError::NotImplemented(_))
+        ));
     }
 
     // 额外 2: 默认唤醒词 = "apeireth" (1:1 翻译品牌一致)
     #[test]
     fn voice_default_keyword_is_apeireth() {
         assert_eq!(VOICE_DEFAULT_KEYWORD, "apeireth");
-        assert_eq!(VoiceConfig::default().default_keyword, WakeWordType::Apeireth);
+        assert_eq!(
+            VoiceConfig::default().default_keyword,
+            WakeWordType::Apeireth
+        );
         let sdk = VoiceSdk::new(VoiceConfig::default()).unwrap();
         let status = sdk.stub_status().unwrap();
         assert_eq!(status.default_keyword, "apeireth");
@@ -840,5 +872,3 @@ mod tests {
         assert!(status.stub_mode);
     }
 }
-
-

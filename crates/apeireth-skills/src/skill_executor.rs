@@ -239,8 +239,9 @@ pub fn category_to_pattern(cat: SkillCategory) -> ExecutionPattern {
         SkillCategory::WritingPlans
         | SkillCategory::ExecutingPlans
         | SkillCategory::VerificationBeforeCompletion => ExecutionPattern::PlanExecuteVerify,
-        SkillCategory::SubagentDrivenDevelopment
-        | SkillCategory::DispatchingParallelAgents => ExecutionPattern::Parallel,
+        SkillCategory::SubagentDrivenDevelopment | SkillCategory::DispatchingParallelAgents => {
+            ExecutionPattern::Parallel
+        }
         SkillCategory::RequestingCodeReview | SkillCategory::ReceivingCodeReview => {
             ExecutionPattern::Review
         }
@@ -264,11 +265,11 @@ pub fn categories_in_pattern(p: ExecutionPattern) -> Vec<SkillCategory> {
 /// **pattern 步数严守** (compile-time 检查)
 pub fn pattern_step_count(p: ExecutionPattern) -> usize {
     match p {
-        ExecutionPattern::Tdd => 4,             // Red, Green, Refactor, Done
+        ExecutionPattern::Tdd => 4,               // Red, Green, Refactor, Done
         ExecutionPattern::PlanExecuteVerify => 5, // Plan, Execute, Verify, Iterate, Done
-        ExecutionPattern::Parallel => 4,         // Dispatch, Collect, Merge, Done
-        ExecutionPattern::Review => 4,           // Submit, Receive, Apply, Done
-        ExecutionPattern::Meta => 4,             // Identify, Author, Lifecycle, Done
+        ExecutionPattern::Parallel => 4,          // Dispatch, Collect, Merge, Done
+        ExecutionPattern::Review => 4,            // Submit, Receive, Apply, Done
+        ExecutionPattern::Meta => 4,              // Identify, Author, Lifecycle, Done
     }
 }
 
@@ -312,7 +313,12 @@ pub fn pattern_steps(p: ExecutionPattern) -> Vec<ExecutionStep> {
         ExecutionPattern::Tdd => vec![
             ExecutionStep::new(0, "Red", "写失败测试 (failing test, 确认能 fail)", false),
             ExecutionStep::new(1, "Green", "写最少代码让 test pass", false),
-            ExecutionStep::new(2, "Refactor", "在 test pass 前提下重整代码 (0 改 test 行为)", false),
+            ExecutionStep::new(
+                2,
+                "Refactor",
+                "在 test pass 前提下重整代码 (0 改 test 行为)",
+                false,
+            ),
             ExecutionStep::new(3, "Done", "TDD cycle 完成, 提交", true),
         ],
         ExecutionPattern::PlanExecuteVerify => vec![
@@ -331,13 +337,23 @@ pub fn pattern_steps(p: ExecutionPattern) -> Vec<ExecutionStep> {
         ExecutionPattern::Review => vec![
             ExecutionStep::new(0, "Submit", "提交工作给 reviewer", false),
             ExecutionStep::new(1, "Receive", "接收 review 反馈", false),
-            ExecutionStep::new(2, "Apply", "应用 review 改动 (or reject with reason)", false),
+            ExecutionStep::new(
+                2,
+                "Apply",
+                "应用 review 改动 (or reject with reason)",
+                false,
+            ),
             ExecutionStep::new(3, "Done", "Review 周期完成", true),
         ],
         ExecutionPattern::Meta => vec![
             ExecutionStep::new(0, "Identify", "识别用哪个 skill (meta selection)", false),
             ExecutionStep::new(1, "Author", "写新 skill (or 改现有)", false),
-            ExecutionStep::new(2, "Lifecycle", "branch / commit / merge (git worktree)", false),
+            ExecutionStep::new(
+                2,
+                "Lifecycle",
+                "branch / commit / merge (git worktree)",
+                false,
+            ),
             ExecutionStep::new(3, "Done", "Meta 周期完成", true),
         ],
     }
@@ -985,7 +1001,12 @@ mod tests_tdd {
         c.advance();
         assert_eq!(
             c.history,
-            vec![TddPhase::Red, TddPhase::Green, TddPhase::Refactor, TddPhase::Done]
+            vec![
+                TddPhase::Red,
+                TddPhase::Green,
+                TddPhase::Refactor,
+                TddPhase::Done
+            ]
         );
     }
 
@@ -1078,7 +1099,10 @@ mod tests_plan {
     #[test]
     fn plan_cycle_record_verify_only_at_verify_phase() {
         let mut c = PlanExecuteVerifyCycle::new("g");
-        assert!(!c.record_verify_outcome(true), "Plan 阶段 0 应该接受 verify");
+        assert!(
+            !c.record_verify_outcome(true),
+            "Plan 阶段 0 应该接受 verify"
+        );
     }
 
     #[test]
@@ -1241,7 +1265,10 @@ mod tests_meta {
     fn meta_cycle_record_identified_at_identify() {
         let mut c = MetaCycle::new();
         c.record_identified(SkillCategory::TestDrivenDevelopment);
-        assert_eq!(c.identified_skill, Some(SkillCategory::TestDrivenDevelopment));
+        assert_eq!(
+            c.identified_skill,
+            Some(SkillCategory::TestDrivenDevelopment)
+        );
     }
 
     #[test]

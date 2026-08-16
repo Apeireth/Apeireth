@@ -88,30 +88,34 @@
 
 pub mod error;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
-pub mod risk;
 pub mod decision;
-pub mod template;
-pub mod r_measure;
+mod organ_kani_proofs;
 pub mod q_metric;
+pub mod r_measure;
+pub mod risk;
+pub mod template;
 
 // 统一 re-export — 让 `use apeireth_blueprint_impl::*;` 拿到全部 5 估补的 public API
+pub use decision::{D01Impl, D02Routing, D03WsAuth, D04RateLimit, DecisionBundle};
 pub use error::{BlueprintError, BlueprintResult};
+pub use q_metric::{
+    q1_quality, q2_satisfaction, q3_growth, GrowthSnapshot, QMetricAll, TaskResult, UserFeedback,
+};
+pub use r_measure::{
+    r1_directness, r2_candor, r3_closure, r4_promise, r5_failure_honesty, ActionSample,
+    RMeasureAll, RMeasureDrift,
+};
 pub use risk::{
-    K1Input, K1StrongValidate, K2Input, K2Result, K2WeakValidate, K3Audit, K4Guard, AuditEvent,
-    DefaultK1Guard, DefaultK2Guard, InMemoryAudit, BrokenAudit, GuardDecision, GuardRule,
+    AuditEvent, BrokenAudit, DefaultK1Guard, DefaultK2Guard, GuardDecision, GuardRule,
+    InMemoryAudit, K1Input, K1StrongValidate, K2Input, K2Result, K2WeakValidate, K3Audit, K4Guard,
     RiskChain, RuleTableGuard,
 };
-pub use decision::{D01Impl, D02Routing, D03WsAuth, D04RateLimit, DecisionBundle};
 pub use template::{
-    Auth, AuthToken, ConfigLoader, DefaultErrorMapper, EnvFileConfig, InMemoryAuth,
-    Logging, MockAuth, MockAuthImpl, RateLimit, TokenBucket, TracingAuditLog, UnifiedError,
-    AlwaysAllowRateLimit,
-    template_a_auth, template_b_ratelimit, template_c_error, template_d_test,
-    template_e_config, template_f_logging,
+    template_a_auth, template_b_ratelimit, template_c_error, template_d_test, template_e_config,
+    template_f_logging, AlwaysAllowRateLimit, Auth, AuthToken, ConfigLoader, DefaultErrorMapper,
+    EnvFileConfig, InMemoryAuth, Logging, MockAuth, MockAuthImpl, RateLimit, TokenBucket,
+    TracingAuditLog, UnifiedError,
 };
-pub use r_measure::{ActionSample, RMeasureAll, RMeasureDrift, r1_directness, r2_candor, r3_closure, r4_promise, r5_failure_honesty};
-pub use q_metric::{GrowthSnapshot, QMetricAll, TaskResult, UserFeedback, q1_quality, q2_satisfaction, q3_growth};
 
 // ============================================
 // 1. 集成层 — BlueprintPipeline (5 估补项串联)
@@ -221,7 +225,8 @@ impl BlueprintReport {
 // ============================================
 
 /// 模块 1 (risk) 集成 — 默认 K1Guard + K2Guard + InMemoryAudit + RuleTableGuard.
-pub fn default_risk_chain() -> RiskChain<DefaultK1Guard, DefaultK2Guard, InMemoryAudit, RuleTableGuard> {
+pub fn default_risk_chain(
+) -> RiskChain<DefaultK1Guard, DefaultK2Guard, InMemoryAudit, RuleTableGuard> {
     RiskChain::new(
         DefaultK1Guard,
         DefaultK2Guard,
@@ -265,7 +270,12 @@ pub fn demo_risk_chain_with_whitelist() -> BlueprintResult<(K2Result, GuardDecis
         reason: "default-allow".into(),
     })?;
     let chain: RiskChain<WhitelistK1Guard, DefaultK2Guard, InMemoryAudit, RuleTableGuard> =
-        RiskChain::new(WhitelistK1Guard, DefaultK2Guard, InMemoryAudit::default(), g4);
+        RiskChain::new(
+            WhitelistK1Guard,
+            DefaultK2Guard,
+            InMemoryAudit::default(),
+            g4,
+        );
     chain.run(&k1, &k2, "tool:bash", "exec")
 }
 
@@ -361,7 +371,8 @@ where
     pub fn execute(&self, scope: &str, action: &str) -> BlueprintResult<AuthToken> {
         self.rate_limit.try_acquire()?;
         let tok = self.auth.issue(scope)?;
-        self.logging.trace("template_bundle", &format!("issued token for {action}"));
+        self.logging
+            .trace("template_bundle", &format!("issued token for {action}"));
         Ok(tok)
     }
 }
@@ -371,7 +382,11 @@ pub fn demo_template_bundle() -> TemplateBundle<InMemoryAuth, TokenBucket, Traci
     let auth = InMemoryAuth::default();
     let rate_limit = TokenBucket::new(60, std::time::Duration::from_secs(1));
     let logging = TracingAuditLog::default();
-    TemplateBundle { auth, rate_limit, logging }
+    TemplateBundle {
+        auth,
+        rate_limit,
+        logging,
+    }
 }
 
 // ============================================
@@ -380,7 +395,9 @@ pub fn demo_template_bundle() -> TemplateBundle<InMemoryAuth, TokenBucket, Traci
 
 /// 模块 4 (r_measure) 集成演示 — 跑 100 完美样本 + 算 R-Measure 全 5 维.
 pub fn demo_r_measure_100_perfect() -> RMeasureAll {
-    let samples = (0..100).map(|_| ActionSample::perfect()).collect::<Vec<_>>();
+    let samples = (0..100)
+        .map(|_| ActionSample::perfect())
+        .collect::<Vec<_>>();
     RMeasureAll::from_samples(&samples)
 }
 
@@ -404,7 +421,9 @@ pub fn demo_r_measure_100_mixed_above_baseline() -> RMeasureAll {
 
 /// 模块 5 (q_metric) 集成演示 — 10 任务全完美 + 5 用户全 5 星 + 2 成长快照.
 pub fn demo_q_metric_optimal() -> QMetricAll {
-    let tasks = (0..10).map(|_| TaskResult::new(true, 1.0)).collect::<Vec<_>>();
+    let tasks = (0..10)
+        .map(|_| TaskResult::new(true, 1.0))
+        .collect::<Vec<_>>();
     let feedback = (0..5)
         .map(|_| UserFeedback {
             rating: 5,
@@ -566,7 +585,11 @@ mod tests {
         let q = p
             .compute_q_metric(
                 &[TaskResult::new(true, 1.0)],
-                &[UserFeedback { rating: 5, has_text: false, is_long_term: false }],
+                &[UserFeedback {
+                    rating: 5,
+                    has_text: false,
+                    is_long_term: false,
+                }],
                 &[],
             )
             .unwrap();
@@ -591,7 +614,9 @@ mod tests {
     #[test]
     fn whitelist_risk_chain_rejects_gpt() {
         // 用 gpt-4 (非 claude-*) 单独构造 input, 跑白名单 K1Guard → 必然 Err
-        use crate::risk::{K1Input, K2Input, RiskChain, InMemoryAudit, GuardRule, GuardDecision, K1StrongValidate};
+        use crate::risk::{
+            GuardDecision, GuardRule, InMemoryAudit, K1Input, K1StrongValidate, K2Input, RiskChain,
+        };
         struct WhitelistK1;
         impl K1StrongValidate for WhitelistK1 {
             fn validate(&self, input: &K1Input) -> BlueprintResult<()> {
@@ -611,7 +636,8 @@ mod tests {
             action: "exec".into(),
             decision: GuardDecision::Allow,
             reason: "default".into(),
-        }).unwrap();
+        })
+        .unwrap();
         let chain: RiskChain<WhitelistK1, DefaultK2Guard, InMemoryAudit, RuleTableGuard> =
             RiskChain::new(WhitelistK1, DefaultK2Guard, InMemoryAudit::default(), g4);
         let k1 = K1Input::new("hi", "sk-test1234", "gpt-4", "read").unwrap();
@@ -695,7 +721,11 @@ mod tests {
         let decisions = DecisionBundle::default();
         let samples = vec![ActionSample::perfect(), ActionSample::perfect()];
         let tasks = vec![TaskResult::new(true, 1.0)];
-        let feedback = vec![UserFeedback { rating: 5, has_text: true, is_long_term: true }];
+        let feedback = vec![UserFeedback {
+            rating: 5,
+            has_text: true,
+            is_long_term: true,
+        }];
         let history = vec![
             GrowthSnapshot::new(0, 0.5, 0.5, 0.5),
             GrowthSnapshot::new(1, 0.9, 0.9, 0.9),

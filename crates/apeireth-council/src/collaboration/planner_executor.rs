@@ -68,7 +68,11 @@ impl PlannerExecutor {
     pub fn new(planner_role: impl Into<String>) -> Self {
         Self {
             planner_role: planner_role.into(),
-            executor_roles: vec!["design".to_string(), "implement".to_string(), "verify".to_string()],
+            executor_roles: vec![
+                "design".to_string(),
+                "implement".to_string(),
+                "verify".to_string(),
+            ],
             weights: SynthesisWeights::default(),
             next_session_seq: 0,
         }
@@ -171,7 +175,12 @@ impl PlannerExecutor {
         let stance_kind = keyword_stance_for_step(&subtask.description, &query.description);
         let stance = Stance::new(
             stance_kind,
-            format!("Step {}: {} (planner: {})", subtask.step + 1, subtask.role, self.planner_role),
+            format!(
+                "Step {}: {} (planner: {})",
+                subtask.step + 1,
+                subtask.role,
+                self.planner_role
+            ),
         );
         AdvisorOpinion::new(
             AdvisorId::new(format!("pe-{}-s{}", subtask.role, subtask.step)),
@@ -243,7 +252,15 @@ impl PlannerExecutor {
 fn keyword_stance_for_step(step_desc: &str, query_desc: &str) -> StanceKind {
     let combined = format!("{} {}", step_desc.to_lowercase(), query_desc.to_lowercase());
     let negative = [
-        "harm", "exploit", "manipulate", "dishonest", "unethical", "伤害", "操纵", "不诚实", "剥削",
+        "harm",
+        "exploit",
+        "manipulate",
+        "dishonest",
+        "unethical",
+        "伤害",
+        "操纵",
+        "不诚实",
+        "剥削",
         "违反 asi",
     ];
     if negative.iter().any(|k| combined.contains(k)) {
@@ -345,8 +362,11 @@ mod tests {
 
     #[test]
     fn plan_with_custom_executor_roles() {
-        let pe = PlannerExecutor::new("architect")
-            .with_executor_roles(vec!["alpha".to_string(), "beta".to_string(), "gamma".to_string()]);
+        let pe = PlannerExecutor::new("architect").with_executor_roles(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+            "gamma".to_string(),
+        ]);
         let plan = pe.plan(&q("deploy feature"));
         assert_eq!(plan[0].role, "alpha");
         assert_eq!(plan[1].role, "beta");

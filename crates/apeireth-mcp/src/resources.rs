@@ -104,22 +104,13 @@ pub trait ResourceServer: Send + Sync {
 }
 
 /// 处理 `resources/list` 请求 → JSON-RPC 响应
-pub fn handle_resources_list(
-    req: &JsonRpcRequest,
-    server: &dyn ResourceServer,
-) -> JsonRpcResponse {
+pub fn handle_resources_list(req: &JsonRpcRequest, server: &dyn ResourceServer) -> JsonRpcResponse {
     let resources = server.list();
-    JsonRpcResponse::ok(
-        req.id.clone(),
-        json!({ "resources": resources }),
-    )
+    JsonRpcResponse::ok(req.id.clone(), json!({ "resources": resources }))
 }
 
 /// 处理 `resources/read` 请求 → JSON-RPC 响应
-pub fn handle_resources_read(
-    req: &JsonRpcRequest,
-    server: &dyn ResourceServer,
-) -> JsonRpcResponse {
+pub fn handle_resources_read(req: &JsonRpcRequest, server: &dyn ResourceServer) -> JsonRpcResponse {
     // params 必填含 uri
     let uri = match req
         .params
@@ -136,10 +127,7 @@ pub fn handle_resources_read(
         }
     };
     match server.read(&uri) {
-        Ok(content) => JsonRpcResponse::ok(
-            req.id.clone(),
-            json!({ "contents": [content] }),
-        ),
+        Ok(content) => JsonRpcResponse::ok(req.id.clone(), json!({ "contents": [content] })),
         Err(e) => JsonRpcResponse::err(req.id.clone(), e),
     }
 }
@@ -147,10 +135,7 @@ pub fn handle_resources_read(
 /// dispatch helper: 给定 method 路由到对应 handler
 ///
 /// 已知 method 走对应 handler, 未知 method 返 Method not found (-32601 per JSON-RPC 2.0 spec)
-pub fn dispatch(
-    req: &JsonRpcRequest,
-    server: &dyn ResourceServer,
-) -> JsonRpcResponse {
+pub fn dispatch(req: &JsonRpcRequest, server: &dyn ResourceServer) -> JsonRpcResponse {
     match req.method.as_str() {
         "resources/list" => handle_resources_list(req, server),
         "resources/read" => handle_resources_read(req, server),
@@ -189,8 +174,13 @@ impl ResourceServer for StaticResourceServer {
         // 找 matching resource, 返 mock 内容
         for r in &self.resources {
             if r.uri == uri {
-                return Ok(ResourceContent::new(&r.uri, format!("content of {}", r.name))
-                    .with_mime_type(r.mime_type.clone().unwrap_or_else(|| "text/plain".to_string())));
+                return Ok(
+                    ResourceContent::new(&r.uri, format!("content of {}", r.name)).with_mime_type(
+                        r.mime_type
+                            .clone()
+                            .unwrap_or_else(|| "text/plain".to_string()),
+                    ),
+                );
             }
         }
         Err(JsonRpcError::new(
@@ -287,7 +277,10 @@ mod resources_tests {
         let result = resp.into_result().unwrap();
         let contents = result.get("contents").and_then(|v| v.as_array()).unwrap();
         assert_eq!(contents.len(), 1);
-        assert_eq!(contents[0].get("uri").and_then(|v| v.as_str()), Some("file:///x.rs"));
+        assert_eq!(
+            contents[0].get("uri").and_then(|v| v.as_str()),
+            Some("file:///x.rs")
+        );
     }
 
     #[test]
@@ -324,7 +317,7 @@ mod resources_tests {
         let s = test_server();
         let resp = dispatch(&req, &s);
         let err = resp.error.unwrap();
-        assert_eq!(err.code, -32601);  // JSON-RPC 2.0 standard
+        assert_eq!(err.code, -32601); // JSON-RPC 2.0 standard
         assert!(err.message.contains("resources/foo"));
     }
 

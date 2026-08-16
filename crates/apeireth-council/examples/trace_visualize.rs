@@ -11,11 +11,11 @@
 //! - 0 引入 I/O / 网络
 //! - 0 触碰 workspace.version
 
+use apeireth_council::advisor::StanceKind;
 use apeireth_council::{
     CouncilMember, DebateMode, HierarchicalMode, PlannerExecutor, SubTask, TraceReport, Voter,
     VotingMode, VotingStrategy,
 };
-use apeireth_council::advisor::StanceKind;
 
 fn main() {
     println!("=================================================");
@@ -46,9 +46,11 @@ fn main() {
         println!("  - Step {}: {}", st.step + 1, st.role);
     }
     let pe_verdict = pe.run(&query);
-    let pe_trace = TraceReport::from_verdict(&pe_verdict)
-        .with_query(query.description.clone());
-    println!("\n[Planner+Executor Trace - Pretty]\n{}", pe_trace.to_pretty_print());
+    let pe_trace = TraceReport::from_verdict(&pe_verdict).with_query(query.description.clone());
+    println!(
+        "\n[Planner+Executor Trace - Pretty]\n{}",
+        pe_trace.to_pretty_print()
+    );
 
     // ====================================================================
     // Demo 2: Debate 模式 (复用 R33-4-1)
@@ -56,8 +58,7 @@ fn main() {
     println!("--- Demo 2: Debate 模式 (复用 R33-4-1) ---\n");
     let mut dm = DebateMode::new(members.clone());
     let d_verdict = dm.run(&query);
-    let d_trace = TraceReport::from_verdict(&d_verdict)
-        .with_query(query.description.clone());
+    let d_trace = TraceReport::from_verdict(&d_verdict).with_query(query.description.clone());
     println!("[Debate Trace - Pretty]\n{}", d_trace.to_pretty_print());
 
     // ====================================================================
@@ -65,14 +66,31 @@ fn main() {
     // ====================================================================
     println!("--- Demo 3: Voting 模式 ---\n");
     let voters = vec![
-        Voter::new("v1", "architect", StanceKind::Approve, 0.8, "design is sound"),
-        Voter::new("v2", "security_reviewer", StanceKind::Approve, 0.7, "no critical issues"),
-        Voter::new("v3", "product_manager", StanceKind::Approve, 0.9, "user value high"),
+        Voter::new(
+            "v1",
+            "architect",
+            StanceKind::Approve,
+            0.8,
+            "design is sound",
+        ),
+        Voter::new(
+            "v2",
+            "security_reviewer",
+            StanceKind::Approve,
+            0.7,
+            "no critical issues",
+        ),
+        Voter::new(
+            "v3",
+            "product_manager",
+            StanceKind::Approve,
+            0.9,
+            "user value high",
+        ),
     ];
     let mut vm = VotingMode::new(voters).with_strategy(VotingStrategy::WeightedMajority);
     let v_verdict = vm.run(&query);
-    let v_trace = TraceReport::from_verdict(&v_verdict)
-        .with_query(query.description.clone());
+    let v_trace = TraceReport::from_verdict(&v_verdict).with_query(query.description.clone());
     println!("[Voting Trace - Pretty]\n{}", v_trace.to_pretty_print());
 
     // ====================================================================
@@ -81,9 +99,11 @@ fn main() {
     println!("--- Demo 4: Hierarchical 模式 ---\n");
     let mut hm = HierarchicalMode::new("cto");
     let h_verdict = hm.run(&query);
-    let h_trace = TraceReport::from_verdict(&h_verdict)
-        .with_query(query.description.clone());
-    println!("[Hierarchical Trace - Pretty]\n{}", h_trace.to_pretty_print());
+    let h_trace = TraceReport::from_verdict(&h_verdict).with_query(query.description.clone());
+    println!(
+        "[Hierarchical Trace - Pretty]\n{}",
+        h_trace.to_pretty_print()
+    );
 
     // ====================================================================
     // JSON 格式输出 (机器可读)

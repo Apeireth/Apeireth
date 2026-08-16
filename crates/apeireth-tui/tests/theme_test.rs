@@ -1,3 +1,9 @@
+#[path = "../src/app.rs"]
+mod app;
+#[path = "../src/backend.rs"]
+mod backend;
+#[path = "../src/command/mod.rs"]
+mod command;
 /// 基础设施 × Theme 单元测试 (R19 W3.6, 1.0 release 估补)
 ///
 /// **测试范围** (per 主人派活单 2026-08-05):
@@ -14,26 +20,33 @@
 /// - O-4 任何人都能接手: 颜色/边框/bar 字符清楚
 /// - O-5 不假装: 平滑过渡 RGB 插值, 不假装 1 帧到位
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
-#[path = "../src/config_watcher.rs"] mod config_watcher;
-#[path = "../src/app.rs"] mod app;
-#[path = "../src/backend.rs"] mod backend;
-#[path = "../src/http_llm.rs"] mod http_llm;
-#[path = "../src/observability.rs"] mod observability;
-#[path = "../src/pages/mod.rs"] mod pages;
-#[path = "../src/organ/mod.rs"] mod organ;
-#[path = "../src/command/mod.rs"] mod command;
-#[path = "../src/persistence.rs"] mod persistence;
-#[path = "../src/llm_config.rs"] mod llm_config;
-#[path = "../src/onboarding.rs"] mod onboarding;
-#[path = "../src/theme.rs"] mod theme;
+#[path = "../src/config_watcher.rs"]
+mod config_watcher;
+#[path = "../src/http_llm.rs"]
+mod http_llm;
+#[path = "../src/llm_config.rs"]
+mod llm_config;
+#[path = "../src/observability.rs"]
+mod observability;
+#[path = "../src/onboarding.rs"]
+mod onboarding;
+#[path = "../src/organ/mod.rs"]
+mod organ;
+#[path = "../src/pages/mod.rs"]
+mod pages;
+#[path = "../src/persistence.rs"]
+mod persistence;
+#[path = "../src/theme.rs"]
+mod theme;
 
-#[path = "../src/error.rs"] mod error;
-#[path = "../src/http.rs"] mod http;
-#[path = "../src/nav/mod.rs"] mod nav;
+#[path = "../src/error.rs"]
+mod error;
+#[path = "../src/http.rs"]
+mod http;
+#[path = "../src/nav/mod.rs"]
+mod nav;
 // R31 fix: 12 mod 声明 (跟 src/main.rs 顶层 mod 同步, 让 test binary root 解析 crate::xxx)
 /// **8 项承诺**: 全部遵守
-
-
 use ratatui::style::Color;
 use theme::{Theme, ThemeStyle};
 
@@ -76,7 +89,10 @@ fn four_panel_border_attrs() {
     assert!(s.bar_empty == '░');
     // 时代主题 — 细线
     let era = ThemeStyle::of(Theme::Era);
-    assert!(matches!(era.border_type, ratatui::widgets::BorderType::Plain));
+    assert!(matches!(
+        era.border_type,
+        ratatui::widgets::BorderType::Plain
+    ));
     assert!(era.bar_full == '▰');
     assert!(era.bar_empty == '─');
 }
@@ -178,4 +194,3 @@ fn interpolate_clamps_and_9_organ_ascii() {
         }
     }
 }
-

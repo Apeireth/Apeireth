@@ -129,7 +129,7 @@ pub fn distance(a: &[f32], b: &[f32], metric: DistanceMetric) -> f32 {
         DistanceMetric::Euclidean => euclidean_distance(a, b),
         DistanceMetric::EuclideanSquared => euclidean_distance_sq(a, b),
         DistanceMetric::Cosine => cosine_distance(a, b),
-        DistanceMetric::DotProduct => -dot_product(a, b),  // 距离视角: dot 越大越相似, 取负
+        DistanceMetric::DotProduct => -dot_product(a, b), // 距离视角: dot 越大越相似, 取负
         DistanceMetric::Manhattan => manhattan_distance(a, b),
     }
 }
@@ -246,6 +246,10 @@ mod tests {
         let _ = euclidean_distance(&a, &b);
         let elapsed = start.elapsed();
         // std 循环 1000 维 ~ 5us, 加 SIMD 后 ~ 0.5us. 阈值 100us 给余量.
-        assert!(elapsed.as_micros() < 100, "euclidean too slow: {:?}", elapsed);
+        assert!(
+            elapsed.as_micros() < 100,
+            "euclidean too slow: {:?}",
+            elapsed
+        );
     }
 }

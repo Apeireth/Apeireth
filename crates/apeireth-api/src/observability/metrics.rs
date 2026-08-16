@@ -22,7 +22,9 @@ use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use std::collections::HashMap;
 
-use crate::observability::{global_state, MetricSnapshot, OBSERVABILITY_SCHEMA_VERSION, SERVICE_NAME};
+use crate::observability::{
+    global_state, MetricSnapshot, OBSERVABILITY_SCHEMA_VERSION, SERVICE_NAME,
+};
 
 /// `GET /v1/observability/metrics` — Prometheus exposition format.
 ///
@@ -39,7 +41,11 @@ pub async fn metrics_handler() -> Response {
         .values()
         .map(|m| snapshot_to_sample(m))
         .collect();
-    debug_assert_eq!(samples.len(), 18, "18 metric (8 counter + 8 gauge + 2 histogram)");
+    debug_assert_eq!(
+        samples.len(),
+        18,
+        "18 metric (8 counter + 8 gauge + 2 histogram)"
+    );
 
     // 渲染 Prometheus text format (复用 apeireth-observability 公开 API)
     let body = apeireth_telemetry::observability::render_prometheus(&samples);
@@ -95,7 +101,12 @@ mod tests {
                 "histogram" => "histogram",
                 _ => "gauge",
             };
-            assert_eq!(sample.kind.as_str(), kind_str, "kind preserved for {}", m.name);
+            assert_eq!(
+                sample.kind.as_str(),
+                kind_str,
+                "kind preserved for {}",
+                m.name
+            );
         }
     }
 
@@ -117,11 +128,19 @@ mod tests {
     fn snapshot_to_sample_preserves_name_and_value() {
         // 18 metric 全过 (8 counter + 8 gauge + 2 histogram)
         let s = ObsState::new();
-        assert_eq!(s.metrics.len(), 18, "18 metric (8 counter + 8 gauge + 2 histogram)");
+        assert_eq!(
+            s.metrics.len(),
+            18,
+            "18 metric (8 counter + 8 gauge + 2 histogram)"
+        );
         for m in s.metrics.values() {
             let sample = snapshot_to_sample(m);
             assert_eq!(sample.name, m.name, "name preserved for {}", m.name);
-            assert!((sample.value - m.value).abs() < 1e-9, "value preserved for {}", m.name);
+            assert!(
+                (sample.value - m.value).abs() < 1e-9,
+                "value preserved for {}",
+                m.name
+            );
             // 关键 metric 守住 (5 哲学锚穿透)
             for key in [
                 "http_requests_total",

@@ -7,8 +7,8 @@
 //! ```
 
 use apeireth_pybridge::{
-    cross_language_smoke_check, end_to_end_smoke_check, stage3_cross_module_count, stage3_e2e_smoke,
-    stage3_e2e_summary,
+    cross_language_smoke_check, end_to_end_smoke_check, stage3_cross_module_count,
+    stage3_e2e_smoke, stage3_e2e_summary,
 };
 
 fn main() {
@@ -38,7 +38,10 @@ fn main() {
     println!("--- Stage 2 已存 API (per decision-57 §2.1 P10-2) ---");
     println!("end_to_end_smoke_check:");
     let s2_e2e = end_to_end_smoke_check();
-    println!("  r11: {} ({} modules)", s2_e2e.r11_compat_version, s2_e2e.r11_module_count);
+    println!(
+        "  r11: {} ({} modules)",
+        s2_e2e.r11_compat_version, s2_e2e.r11_module_count
+    );
     println!(
         "  pool: max_idle={} idle_timeout={}s",
         s2_e2e.pool_max_idle, s2_e2e.pool_idle_timeout_secs

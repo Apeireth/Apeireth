@@ -478,10 +478,7 @@ impl TerminalBackend for SshBackend {
     }
 
     async fn availability(&self) -> bool {
-        let out = tokio::process::Command::new("ssh")
-            .arg("-V")
-            .output()
-            .await;
+        let out = tokio::process::Command::new("ssh").arg("-V").output().await;
         out.is_ok()
     }
 }
@@ -625,7 +622,10 @@ impl TerminalBackend for SingularityBackend {
             .singularity_path
             .clone()
             .unwrap_or_else(|| "singularity".to_string());
-        let out = tokio::process::Command::new(&sing).arg("--version").output().await;
+        let out = tokio::process::Command::new(&sing)
+            .arg("--version")
+            .output()
+            .await;
         out.is_ok()
     }
 }
@@ -717,7 +717,9 @@ mod tests {
     fn registry_register_multiple_backends() {
         let r = BackendRegistry::new()
             .register(Box::new(LocalBackend))
-            .register(Box::new(DockerBackend::new(DockerConfig::new("ubuntu:22.04"))));
+            .register(Box::new(DockerBackend::new(DockerConfig::new(
+                "ubuntu:22.04",
+            ))));
         assert!(r.get(BackendKind::Local).is_some());
         assert!(r.get(BackendKind::Docker).is_some());
         assert_eq!(r.kinds().len(), 2);
@@ -726,7 +728,9 @@ mod tests {
     #[tokio::test]
     async fn registry_execute_unregistered_returns_error() {
         let r = BackendRegistry::new();
-        let result = r.execute(BackendKind::Docker, &ExecRequest::new("echo hi")).await;
+        let result = r
+            .execute(BackendKind::Docker, &ExecRequest::new("echo hi"))
+            .await;
         assert!(result.is_err());
     }
 
@@ -744,8 +748,7 @@ mod tests {
 
     #[test]
     fn docker_config_builder() {
-        let cfg = DockerConfig::new("ubuntu:22.04")
-            .with_volume("/host", "/container");
+        let cfg = DockerConfig::new("ubuntu:22.04").with_volume("/host", "/container");
         assert_eq!(cfg.image, "ubuntu:22.04");
         assert_eq!(cfg.volumes.len(), 1);
     }
@@ -818,7 +821,10 @@ mod tests {
         });
         let req = ExecRequest::new("echo hi");
         let result = backend.execute(&req).await;
-        assert!(matches!(result, Err(EnvironmentError::DaytonaUnconfigured(_))));
+        assert!(matches!(
+            result,
+            Err(EnvironmentError::DaytonaUnconfigured(_))
+        ));
     }
 
     #[tokio::test]
@@ -829,7 +835,10 @@ mod tests {
         });
         let req = ExecRequest::new("echo hi");
         let result = backend.execute(&req).await;
-        assert!(matches!(result, Err(EnvironmentError::ModalUnconfigured(_))));
+        assert!(matches!(
+            result,
+            Err(EnvironmentError::ModalUnconfigured(_))
+        ));
     }
 
     #[test]

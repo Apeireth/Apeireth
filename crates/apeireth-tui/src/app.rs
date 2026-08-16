@@ -184,7 +184,7 @@ pub struct App {
     pub selection: Option<((usize, usize), (usize, usize))>,
     /// R26-3-fixes: 渲染时计算, 每个 visual line 对应 (msg_idx, 该消息内字符偏移)
     /// 用于选区高亮 (msg_idx + char_idx -> visual line/col)
-    pub chat_line_map: Vec<crate::pages::dialogue::LineInfo>,  // visual_line_index → (msg_idx, text)
+    pub chat_line_map: Vec<crate::pages::dialogue::LineInfo>, // visual_line_index → (msg_idx, text)
 
     /// R26-3-fixes: 复制反馈 ("已复制 N 字符", 0.5s 后清)
     pub copy_feedback: Option<(String, std::time::Instant)>,
@@ -239,23 +239,23 @@ impl App {
             spinner_frame: 0,
             chat_rx: None,
             streaming_message: None,
-            tool_events: Vec::new(),  // R30 P4: 工具事件累积 (灰色行渲染)
-            pending_input: None,  // R26-3-fixes: 预充输入 buffer
+            tool_events: Vec::new(), // R30 P4: 工具事件累积 (灰色行渲染)
+            pending_input: None,     // R26-3-fixes: 预充输入 buffer
             should_quit: false,
             started_at: chrono::Utc::now(),
             render_tick: 0,
             scroll_offset: 0,
-            scroll_to_bottom: true,  // R26-3-fixes: default 锚到底
+            scroll_to_bottom: true, // R26-3-fixes: default 锚到底
             // W3.6: 初始无渐变, theme_to = 当前 theme (R26: theme_from 字段已删)
             theme_to: Theme::Archaic,
             theme_transition_start: None,
-            input_focused: true,  // R26-3-fixes: 进 Dialogue 默认 focus
+            input_focused: true, // R26-3-fixes: 进 Dialogue 默认 focus
             input_history: crate::persistence::load_input_history(),
             history_idx: None,
             selection: None,
             chat_line_map: Vec::new(),
             copy_feedback: None,
-            max_tokens: 8192,  // R26-3-fixes: 默认 8192 (用户可在 Settings 改)
+            max_tokens: 8192, // R26-3-fixes: 默认 8192 (用户可在 Settings 改)
             // R27 C 方案: api_url / api_online 在 main 启动后 health check 填充
             api_url: String::new(),
             api_online: false,
@@ -341,7 +341,6 @@ impl Default for App {
         Self::new()
     }
 }
-
 
 impl Mode {
     /// R26: 中文显示 (UI 用, 不改 canonical label() / 持久化 keys)

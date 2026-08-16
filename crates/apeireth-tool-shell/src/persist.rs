@@ -8,10 +8,10 @@
 //! - Real schema migration on first run; idempotent.
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use std::path::Path;
-use std::time::Duration;
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
+use std::path::Path;
+use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
 
@@ -103,7 +103,9 @@ impl PersistentTaskStore {
     }
 
     pub fn count(&self) -> Result<i64, PersistError> {
-        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
         Ok(n)
     }
 }
@@ -118,7 +120,9 @@ mod tests {
         let rec = store.insert("test_task").unwrap();
         assert_eq!(store.count().unwrap(), 1);
         assert_eq!(rec.status, "Running");
-        store.complete(&rec.task_id, Duration::from_millis(123)).unwrap();
+        store
+            .complete(&rec.task_id, Duration::from_millis(123))
+            .unwrap();
     }
 
     #[test]

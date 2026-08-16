@@ -9,9 +9,7 @@
 //! 6. Conditional + DAG 混合: DAG 节点 + conditional 节点混跑
 //! 7. Tool loop 借鉴 (R32-2 tool_loop 复用 LangGraph pattern): 模拟 max_turns 控制
 
-use apeireth_graph::{
-    Graph, GraphError, Node, NodeId, NodeOutput, Result, State, END_LABEL,
-};
+use apeireth_graph::{Graph, GraphError, Node, NodeId, NodeOutput, Result, State, END_LABEL};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
@@ -23,7 +21,10 @@ struct AppendNode {
 
 impl AppendNode {
     fn new(id: &str, value: &str) -> Self {
-        Self { id: id.to_string(), value: value.to_string() }
+        Self {
+            id: id.to_string(),
+            value: value.to_string(),
+        }
     }
 }
 
@@ -55,13 +56,18 @@ async fn conditional_two_branches_routes_to_target() {
     let mut pm = BTreeMap::new();
     pm.insert("yes".to_string(), "b".to_string());
     pm.insert("no".to_string(), "c".to_string());
-    g.add_conditional_edge("a", pm, None, Arc::new(|s| {
-        if s.get("decision").and_then(|v| v.as_str()) == Some("yes") {
-            "yes".to_string()
-        } else {
-            "no".to_string()
-        }
-    }));
+    g.add_conditional_edge(
+        "a",
+        pm,
+        None,
+        Arc::new(|s| {
+            if s.get("decision").and_then(|v| v.as_str()) == Some("yes") {
+                "yes".to_string()
+            } else {
+                "no".to_string()
+            }
+        }),
+    );
 
     let s_yes = State::with("decision", "yes");
     let f = g.execute(s_yes).await.unwrap();
@@ -80,7 +86,12 @@ async fn conditional_default_fallback_when_label_missing() {
     g.add_node(AppendNode::new("d", "D"));
     let mut pm = BTreeMap::new();
     pm.insert("known".to_string(), "d".to_string());
-    g.add_conditional_edge("a", pm, Some("d".to_string()), Arc::new(|_| "unknown".to_string()));
+    g.add_conditional_edge(
+        "a",
+        pm,
+        Some("d".to_string()),
+        Arc::new(|_| "unknown".to_string()),
+    );
     let f = g.execute(State::new()).await.unwrap();
     assert_eq!(f.execution_order, vec!["a", "d"]);
 }
@@ -135,13 +146,18 @@ async fn conditional_mixed_with_dag() {
     let mut pm = BTreeMap::new();
     pm.insert("c_path".to_string(), "c".to_string());
     pm.insert("d_path".to_string(), "d".to_string());
-    g.add_conditional_edge("b", pm, None, Arc::new(|s| {
-        if s.get("route").and_then(|v| v.as_str()) == Some("d") {
-            "d_path".to_string()
-        } else {
-            "c_path".to_string()
-        }
-    }));
+    g.add_conditional_edge(
+        "b",
+        pm,
+        None,
+        Arc::new(|s| {
+            if s.get("route").and_then(|v| v.as_str()) == Some("d") {
+                "d_path".to_string()
+            } else {
+                "c_path".to_string()
+            }
+        }),
+    );
 
     let s_c = State::with("route", "c");
     let f = g.execute(s_c).await.unwrap();
@@ -172,20 +188,27 @@ async fn conditional_with_state_evolution_max_1_iteration() {
 
     let mut g = Graph::new();
     g.add_node(AppendNode::new("init", "INIT"));
-    g.add_node(LoopStepNode { id: "step".to_string() });
+    g.add_node(LoopStepNode {
+        id: "step".to_string(),
+    });
     let mut pm1 = BTreeMap::new();
     pm1.insert("start".to_string(), "step".to_string());
     g.add_conditional_edge("init", pm1, None, Arc::new(|_| "start".to_string()));
     let mut pm2 = BTreeMap::new();
     pm2.insert("end".to_string(), "init".to_string());
-    g.add_conditional_edge("step", pm2, None, Arc::new(|s| {
-        let turn = state_get_turn(s);
-        if turn >= 1 {
-            END_LABEL.to_string()
-        } else {
-            "end".to_string()
-        }
-    }));
+    g.add_conditional_edge(
+        "step",
+        pm2,
+        None,
+        Arc::new(|s| {
+            let turn = state_get_turn(s);
+            if turn >= 1 {
+                END_LABEL.to_string()
+            } else {
+                "end".to_string()
+            }
+        }),
+    );
 
     let f = g.execute(State::new()).await.unwrap();
     // init -> step (turn=1) -> condition 返 "end" (不在 pm, default=None) -> 终止
@@ -197,9 +220,13 @@ async fn conditional_with_state_evolution_max_1_iteration() {
 async fn conditional_tool_loop_max_2_iterations_clamps() {
     // 工具循环 max_turns 截断: init (entry) -> step -> step (self-loop until turn>=2).
     // step 自己条件控循环, 跑 2 轮后返 END_LABEL, 走 LangGraph 1:1 语义.
-    struct LoopStepNode { id: String }
+    struct LoopStepNode {
+        id: String,
+    }
     impl Node for LoopStepNode {
-        fn id(&self) -> NodeId { self.id.clone() }
+        fn id(&self) -> NodeId {
+            self.id.clone()
+        }
         fn run(&self, state: &mut State) -> Result<NodeOutput> {
             let turn = state.get("turn").and_then(|v| v.as_u64()).unwrap_or(0) + 1;
             state.insert("turn", json!(turn));
@@ -209,21 +236,28 @@ async fn conditional_tool_loop_max_2_iterations_clamps() {
 
     let mut g = Graph::new();
     g.add_node(AppendNode::new("init", "INIT"));
-    g.add_node(LoopStepNode { id: "step".to_string() });
+    g.add_node(LoopStepNode {
+        id: "step".to_string(),
+    });
     let mut pm1 = BTreeMap::new();
     pm1.insert("start".to_string(), "step".to_string());
     g.add_conditional_edge("init", pm1, None, Arc::new(|_| "start".to_string()));
     // step 的 self-loop: turn<2 走 "loop" -> step (再跑一轮), 否则 END_LABEL
     let mut pm2 = BTreeMap::new();
     pm2.insert("loop".to_string(), "step".to_string());
-    g.add_conditional_edge("step", pm2, None, Arc::new(|s| {
-        let turn = state_get_turn(s);
-        if turn >= 2 {
-            END_LABEL.to_string()
-        } else {
-            "loop".to_string()
-        }
-    }));
+    g.add_conditional_edge(
+        "step",
+        pm2,
+        None,
+        Arc::new(|s| {
+            let turn = state_get_turn(s);
+            if turn >= 2 {
+                END_LABEL.to_string()
+            } else {
+                "loop".to_string()
+            }
+        }),
+    );
 
     let f = g.execute(State::new()).await.unwrap();
     // init -> step (turn=1) -> step (turn=2) -> END_LABEL 终止
@@ -251,11 +285,16 @@ async fn conditional_uses_arc_to_capture_external_counter() {
     g.add_node(AppendNode::new("never", "NEVER"));
     let mut pm = BTreeMap::new();
     pm.insert("inc".to_string(), "never".to_string());
-    g.add_conditional_edge("src", pm, None, Arc::new(move |_| {
-        let mut c = counter_for_cond.lock().unwrap();
-        *c += 1;
-        END_LABEL.to_string()
-    }));
+    g.add_conditional_edge(
+        "src",
+        pm,
+        None,
+        Arc::new(move |_| {
+            let mut c = counter_for_cond.lock().unwrap();
+            *c += 1;
+            END_LABEL.to_string()
+        }),
+    );
     let f = g.execute(State::new()).await.unwrap();
     // 1 次 conditional 调用, counter=1, END_LABEL → 终止
     assert_eq!(f.execution_order, vec!["src"]);

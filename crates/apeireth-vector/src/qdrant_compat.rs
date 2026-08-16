@@ -229,7 +229,11 @@ impl QdrantClient {
         // PUT 请求 — Qdrant 创建或更新 collection
         let resp = self
             .http
-            .put_json(&url, serde_json::to_value(&body).map_err(|e| QdrantError::Deserialization(e.to_string()))?)
+            .put_json(
+                &url,
+                serde_json::to_value(&body)
+                    .map_err(|e| QdrantError::Deserialization(e.to_string()))?,
+            )
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
 
@@ -239,10 +243,16 @@ impl QdrantClient {
             Ok(())
         } else if status == 400 {
             // collection 已存在且维度不一致
-            let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+            let body = resp
+                .text()
+                .await
+                .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
             Err(QdrantError::Server { status, body })
         } else {
-            let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+            let body = resp
+                .text()
+                .await
+                .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
             Err(QdrantError::Server { status, body })
         }
     }
@@ -274,20 +284,27 @@ impl QdrantClient {
             .http
             .put_json(
                 &url,
-                serde_json::to_value(&req).map_err(|e| QdrantError::Deserialization(e.to_string()))?,
+                serde_json::to_value(&req)
+                    .map_err(|e| QdrantError::Deserialization(e.to_string()))?,
             )
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
-            let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+            let body = resp
+                .text()
+                .await
+                .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
             return Err(QdrantError::Server { status, body });
         }
         Ok(())
     }
 
     /// 批量 upsert
-    pub async fn upsert_batch(&self, points: Vec<(Uuid, Vec<f32>, Option<serde_json::Value>)>) -> Result<(), QdrantError> {
+    pub async fn upsert_batch(
+        &self,
+        points: Vec<(Uuid, Vec<f32>, Option<serde_json::Value>)>,
+    ) -> Result<(), QdrantError> {
         if points.is_empty() {
             return Ok(());
         }
@@ -315,20 +332,28 @@ impl QdrantClient {
             .http
             .put_json(
                 &url,
-                serde_json::to_value(&req).map_err(|e| QdrantError::Deserialization(e.to_string()))?,
+                serde_json::to_value(&req)
+                    .map_err(|e| QdrantError::Deserialization(e.to_string()))?,
             )
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
-            let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+            let body = resp
+                .text()
+                .await
+                .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
             return Err(QdrantError::Server { status, body });
         }
         Ok(())
     }
 
     /// 搜索 top-k
-    pub async fn search(&self, vector: Vec<f32>, k: usize) -> Result<Vec<ScoredPoint>, QdrantError> {
+    pub async fn search(
+        &self,
+        vector: Vec<f32>,
+        k: usize,
+    ) -> Result<Vec<ScoredPoint>, QdrantError> {
         if let Some(dim) = self.dimension {
             if vector.len() != dim {
                 return Err(QdrantError::DimensionMismatch {
@@ -342,19 +367,30 @@ impl QdrantClient {
             limit: k,
             with_payload: true,
         };
-        let url = format!("{}/collections/{}/points/search", self.base_url, self.collection);
+        let url = format!(
+            "{}/collections/{}/points/search",
+            self.base_url, self.collection
+        );
         let resp = self
             .http
-            .post_json(&url, serde_json::to_value(&req).map_err(|e| QdrantError::Deserialization(e.to_string()))?)
+            .post_json(
+                &url,
+                serde_json::to_value(&req)
+                    .map_err(|e| QdrantError::Deserialization(e.to_string()))?,
+            )
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status().as_u16();
-        let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         if !(200..300).contains(&status) {
             return Err(QdrantError::Server { status, body });
         }
-        let hits: Vec<ScoredPoint> = serde_json::from_str(&body)
-            .map_err(|e| QdrantError::Deserialization(format!("{} (body={})", e, &body[..body.len().min(200)])))?;
+        let hits: Vec<ScoredPoint> = serde_json::from_str(&body).map_err(|e| {
+            QdrantError::Deserialization(format!("{} (body={})", e, &body[..body.len().min(200)]))
+        })?;
         Ok(hits)
     }
 
@@ -371,7 +407,10 @@ impl QdrantClient {
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status().as_u16();
         if !(200..300).contains(&status) {
-            let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+            let body = resp
+                .text()
+                .await
+                .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
             return Err(QdrantError::Server { status, body });
         }
         // Qdrant 返 UpdateResult, 这里简化为 true
@@ -387,15 +426,19 @@ impl QdrantClient {
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status().as_u16();
-        let body = resp.text().await.map_err(|e| QdrantError::HttpClient(e.to_string()))?;
+        let body = resp
+            .text()
+            .await
+            .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         if status == 404 {
             return Err(QdrantError::CollectionNotFound(self.collection.clone()));
         }
         if !(200..300).contains(&status) {
             return Err(QdrantError::Server { status, body });
         }
-        let info: CollectionInfo = serde_json::from_str(&body)
-            .map_err(|e| QdrantError::Deserialization(format!("{} (body={})", e, &body[..body.len().min(200)])))?;
+        let info: CollectionInfo = serde_json::from_str(&body).map_err(|e| {
+            QdrantError::Deserialization(format!("{} (body={})", e, &body[..body.len().min(200)]))
+        })?;
         Ok(info)
     }
 }
@@ -441,7 +484,10 @@ mod tests {
     #[test]
     fn create_collection_request_serializes() {
         let req = CreateCollectionRequest {
-            vectors: VectorParams { size: 768, distance: QdrantDistance::Cosine },
+            vectors: VectorParams {
+                size: 768,
+                distance: QdrantDistance::Cosine,
+            },
             shard_number: None,
         };
         let json = serde_json::to_value(&req).unwrap();
@@ -518,8 +564,8 @@ mod tests {
 
     #[test]
     fn with_distance_overrides() {
-        let c = QdrantClient::new("http://localhost:6333", "test")
-            .with_distance(QdrantDistance::Dot);
+        let c =
+            QdrantClient::new("http://localhost:6333", "test").with_distance(QdrantDistance::Dot);
         assert_eq!(c.distance(), QdrantDistance::Dot);
     }
 
@@ -547,11 +593,17 @@ mod tests {
 
     #[test]
     fn error_display_messages() {
-        let e1 = QdrantError::DimensionMismatch { expected: 768, actual: 512 };
+        let e1 = QdrantError::DimensionMismatch {
+            expected: 768,
+            actual: 512,
+        };
         assert!(e1.to_string().contains("768"));
         assert!(e1.to_string().contains("512"));
 
-        let e2 = QdrantError::Server { status: 400, body: "bad".into() };
+        let e2 = QdrantError::Server {
+            status: 400,
+            body: "bad".into(),
+        };
         assert!(e2.to_string().contains("400"));
 
         let e3 = QdrantError::CollectionNotFound("test_col".into());

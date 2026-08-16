@@ -18,8 +18,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use apeireth_tool_registry::{
-    Category, Classifier, EmbeddingClassifier, HeuristicClassifier, LlmClassifier,
-    MockHashEmbedFn, Tool, ToolRegistry,
+    Category, Classifier, EmbeddingClassifier, HeuristicClassifier, LlmClassifier, MockHashEmbedFn,
+    Tool, ToolRegistry,
 };
 use async_trait::async_trait;
 use serde_json::{json, Value};
@@ -101,8 +101,8 @@ async fn main() {
 
     // === 2. 准备 3 个 classifier ===
     let heuristic = HeuristicClassifier::new();
-    let embedding = EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new()))
-        .with_threshold(0.0); // 0 阈值 → 永远返 best (mock demo 用)
+    let embedding =
+        EmbeddingClassifier::with_embed_fn(Arc::new(MockHashEmbedFn::new())).with_threshold(0.0); // 0 阈值 → 永远返 best (mock demo 用)
     let llm = LlmClassifier::new_mock();
 
     println!("[2] 3 个 classifier 已就位:");
@@ -136,9 +136,17 @@ async fn main() {
         let elapsed = start.elapsed();
         heuristic_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), Some(exp)) => (
+                cat.as_legacy_name().to_string(),
+                exp.as_legacy_name().to_string(),
+            ),
             (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Err(_), _) => (
+                "NoMatch".to_string(),
+                expected
+                    .map(|c| c.as_legacy_name().to_string())
+                    .unwrap_or_else(|| "(none)".into()),
+            ),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -165,9 +173,17 @@ async fn main() {
         let elapsed = start.elapsed();
         embedding_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), Some(exp)) => (
+                cat.as_legacy_name().to_string(),
+                exp.as_legacy_name().to_string(),
+            ),
             (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Err(_), _) => (
+                "NoMatch".to_string(),
+                expected
+                    .map(|c| c.as_legacy_name().to_string())
+                    .unwrap_or_else(|| "(none)".into()),
+            ),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -194,9 +210,17 @@ async fn main() {
         let elapsed = start.elapsed();
         llm_total += elapsed;
         let (cat_str, exp_str) = match (&result, expected) {
-            (Ok(cat), Some(exp)) => (cat.as_legacy_name().to_string(), exp.as_legacy_name().to_string()),
+            (Ok(cat), Some(exp)) => (
+                cat.as_legacy_name().to_string(),
+                exp.as_legacy_name().to_string(),
+            ),
             (Ok(cat), None) => (cat.as_legacy_name().to_string(), "(none)".to_string()),
-            (Err(_), _) => ("NoMatch".to_string(), expected.map(|c| c.as_legacy_name().to_string()).unwrap_or_else(|| "(none)".into())),
+            (Err(_), _) => (
+                "NoMatch".to_string(),
+                expected
+                    .map(|c| c.as_legacy_name().to_string())
+                    .unwrap_or_else(|| "(none)".into()),
+            ),
         };
         println!(
             "    {:<20} | {:<10} | {:<14} | {:<10.3}",
@@ -231,17 +255,18 @@ async fn main() {
     println!("[5] Registry 集成演示 (register_with_classifier + tools_by_category):");
     let registry = ToolRegistry::new();
     for (name, _) in &tools {
-        let _ = registry.register_with_classifier(
-            (*name).to_string(),
-            tool(name),
-            &heuristic,
-        );
+        let _ = registry.register_with_classifier((*name).to_string(), tool(name), &heuristic);
     }
     println!("    registry 9 类别分布:");
     let summary = registry.category_summary();
     for (cat, names) in summary.iter() {
         if !names.is_empty() {
-            println!("    {:<18} → {} 个: {:?}", cat.as_legacy_name(), names.len(), names);
+            println!(
+                "    {:<18} → {} 个: {:?}",
+                cat.as_legacy_name(),
+                names.len(),
+                names
+            );
         }
     }
     println!();

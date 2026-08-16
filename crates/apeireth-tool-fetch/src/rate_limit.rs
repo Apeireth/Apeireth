@@ -47,7 +47,10 @@ impl RateLimiter {
             None => true,
             Some(dq) => {
                 // 清除窗口外的旧记录 (sliding window)
-                let active = dq.iter().filter(|&&t| now.duration_since(t) <= self.window).count();
+                let active = dq
+                    .iter()
+                    .filter(|&&t| now.duration_since(t) <= self.window)
+                    .count();
                 active < self.max_requests
             }
         }
@@ -56,7 +59,10 @@ impl RateLimiter {
     /// **record** — 记录一次请求
     pub fn record(&mut self, host: &str) {
         let now = Instant::now();
-        let dq = self.history.entry(host.to_string()).or_insert_with(VecDeque::new);
+        let dq = self
+            .history
+            .entry(host.to_string())
+            .or_insert_with(VecDeque::new);
         // 清掉窗口外的
         while let Some(&front) = dq.front() {
             if now.duration_since(front) > self.window {
@@ -95,7 +101,10 @@ impl RateLimiter {
         let now = Instant::now();
         match self.history.get(host) {
             None => 0,
-            Some(dq) => dq.iter().filter(|&&t| now.duration_since(t) <= self.window).count(),
+            Some(dq) => dq
+                .iter()
+                .filter(|&&t| now.duration_since(t) <= self.window)
+                .count(),
         }
     }
 

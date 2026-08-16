@@ -139,7 +139,9 @@ impl NotifyChannel {
 }
 
 impl Default for NotifyChannel {
-    fn default() -> Self { Self::Ai }
+    fn default() -> Self {
+        Self::Ai
+    }
 }
 
 /// 异步任务记录
@@ -164,7 +166,12 @@ pub struct TaskRecord {
 }
 
 impl TaskRecord {
-    pub fn new(task_id: TaskId, tool_name: String, params_json: String, notify_channel: NotifyChannel) -> Self {
+    pub fn new(
+        task_id: TaskId,
+        tool_name: String,
+        params_json: String,
+        notify_channel: NotifyChannel,
+    ) -> Self {
         Self {
             task_id,
             tool_name,
@@ -221,9 +228,14 @@ impl AsyncTaskStore {
     /// 标记任务为 Running
     pub async fn mark_running(&self, task_id: TaskId) -> AsyncTaskResult<()> {
         let mut g = self.inner.lock().await;
-        let rec = g.get_mut(&task_id).ok_or(AsyncTaskError::NotFound(task_id))?;
+        let rec = g
+            .get_mut(&task_id)
+            .ok_or(AsyncTaskError::NotFound(task_id))?;
         if rec.status.is_terminal() {
-            return Err(AsyncTaskError::AlreadyTerminal(task_id, rec.status.as_str().into()));
+            return Err(AsyncTaskError::AlreadyTerminal(
+                task_id,
+                rec.status.as_str().into(),
+            ));
         }
         rec.status = TaskStatus::Running;
         rec.started_at_ms = Some(now_ms());
@@ -237,9 +249,14 @@ impl AsyncTaskStore {
         result_json: String,
     ) -> AsyncTaskResult<TaskRecord> {
         let mut g = self.inner.lock().await;
-        let rec = g.get_mut(&task_id).ok_or(AsyncTaskError::NotFound(task_id))?;
+        let rec = g
+            .get_mut(&task_id)
+            .ok_or(AsyncTaskError::NotFound(task_id))?;
         if rec.status.is_terminal() {
-            return Err(AsyncTaskError::AlreadyTerminal(task_id, rec.status.as_str().into()));
+            return Err(AsyncTaskError::AlreadyTerminal(
+                task_id,
+                rec.status.as_str().into(),
+            ));
         }
         rec.status = TaskStatus::Completed;
         rec.completed_at_ms = Some(now_ms());
@@ -256,15 +273,16 @@ impl AsyncTaskStore {
     }
 
     /// 标记任务失败
-    pub async fn fail(
-        &self,
-        task_id: TaskId,
-        error: String,
-    ) -> AsyncTaskResult<TaskRecord> {
+    pub async fn fail(&self, task_id: TaskId, error: String) -> AsyncTaskResult<TaskRecord> {
         let mut g = self.inner.lock().await;
-        let rec = g.get_mut(&task_id).ok_or(AsyncTaskError::NotFound(task_id))?;
+        let rec = g
+            .get_mut(&task_id)
+            .ok_or(AsyncTaskError::NotFound(task_id))?;
         if rec.status.is_terminal() {
-            return Err(AsyncTaskError::AlreadyTerminal(task_id, rec.status.as_str().into()));
+            return Err(AsyncTaskError::AlreadyTerminal(
+                task_id,
+                rec.status.as_str().into(),
+            ));
         }
         rec.status = TaskStatus::Failed;
         rec.completed_at_ms = Some(now_ms());
@@ -281,9 +299,14 @@ impl AsyncTaskStore {
     /// 取消任务
     pub async fn cancel(&self, task_id: TaskId) -> AsyncTaskResult<TaskRecord> {
         let mut g = self.inner.lock().await;
-        let rec = g.get_mut(&task_id).ok_or(AsyncTaskError::NotFound(task_id))?;
+        let rec = g
+            .get_mut(&task_id)
+            .ok_or(AsyncTaskError::NotFound(task_id))?;
         if rec.status.is_terminal() {
-            return Err(AsyncTaskError::AlreadyTerminal(task_id, rec.status.as_str().into()));
+            return Err(AsyncTaskError::AlreadyTerminal(
+                task_id,
+                rec.status.as_str().into(),
+            ));
         }
         rec.status = TaskStatus::Cancelled;
         rec.completed_at_ms = Some(now_ms());
@@ -299,9 +322,14 @@ impl AsyncTaskStore {
     /// 更新进度
     pub async fn update_progress(&self, task_id: TaskId, progress: f32) -> AsyncTaskResult<()> {
         let mut g = self.inner.lock().await;
-        let rec = g.get_mut(&task_id).ok_or(AsyncTaskError::NotFound(task_id))?;
+        let rec = g
+            .get_mut(&task_id)
+            .ok_or(AsyncTaskError::NotFound(task_id))?;
         if rec.status.is_terminal() {
-            return Err(AsyncTaskError::AlreadyTerminal(task_id, rec.status.as_str().into()));
+            return Err(AsyncTaskError::AlreadyTerminal(
+                task_id,
+                rec.status.as_str().into(),
+            ));
         }
         rec.progress = progress.clamp(0.0, 1.0);
         Ok(())
@@ -341,7 +369,9 @@ impl AsyncTaskStore {
             Ok(Err(_)) => Err(AsyncTaskError::ReceiverDropped(task_id)),
             Err(_) => {
                 self.notifiers.lock().await.remove(&task_id);
-                self.get(task_id).await.ok_or(AsyncTaskError::NotFound(task_id))
+                self.get(task_id)
+                    .await
+                    .ok_or(AsyncTaskError::NotFound(task_id))
             }
         }
     }
@@ -365,7 +395,9 @@ impl AsyncTaskStore {
 }
 
 impl Default for AsyncTaskStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // ============================================================================
@@ -388,7 +420,9 @@ mod tests {
     #[tokio::test]
     async fn t02_register_and_get() {
         let store = AsyncTaskStore::new();
-        let (id, rec) = store.register("video_gen".into(), "{}".into(), NotifyChannel::Both).await;
+        let (id, rec) = store
+            .register("video_gen".into(), "{}".into(), NotifyChannel::Both)
+            .await;
         assert_eq!(rec.status, TaskStatus::Pending);
         assert_eq!(rec.tool_name, "video_gen");
         let g = store.get(id).await.unwrap();
@@ -398,7 +432,9 @@ mod tests {
     #[tokio::test]
     async fn t03_full_lifecycle() {
         let store = AsyncTaskStore::new();
-        let (id, _) = store.register("img_gen".into(), "{}".into(), NotifyChannel::Ai).await;
+        let (id, _) = store
+            .register("img_gen".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
 
         store.mark_running(id).await.unwrap();
         let r = store.get(id).await.unwrap();
@@ -408,17 +444,27 @@ mod tests {
         let r = store.get(id).await.unwrap();
         assert!((r.progress - 0.5).abs() < 1e-6);
 
-        let final_rec = store.complete(id, "{\"url\":\"x.png\"}".into()).await.unwrap();
+        let final_rec = store
+            .complete(id, "{\"url\":\"x.png\"}".into())
+            .await
+            .unwrap();
         assert_eq!(final_rec.status, TaskStatus::Completed);
-        assert_eq!(final_rec.result_json.as_deref(), Some("{\"url\":\"x.png\"}"));
+        assert_eq!(
+            final_rec.result_json.as_deref(),
+            Some("{\"url\":\"x.png\"}")
+        );
         assert_eq!(final_rec.progress, 1.0);
     }
 
     #[tokio::test]
     async fn t04_failed_and_cancelled() {
         let store = AsyncTaskStore::new();
-        let (id1, _) = store.register("task1".into(), "{}".into(), NotifyChannel::Ai).await;
-        let (id2, _) = store.register("task2".into(), "{}".into(), NotifyChannel::Human).await;
+        let (id1, _) = store
+            .register("task1".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
+        let (id2, _) = store
+            .register("task2".into(), "{}".into(), NotifyChannel::Human)
+            .await;
 
         let r1 = store.fail(id1, "out of memory".into()).await.unwrap();
         assert_eq!(r1.status, TaskStatus::Failed);
@@ -431,7 +477,9 @@ mod tests {
     #[tokio::test]
     async fn t05_cannot_complete_twice() {
         let store = AsyncTaskStore::new();
-        let (id, _) = store.register("task".into(), "{}".into(), NotifyChannel::Ai).await;
+        let (id, _) = store
+            .register("task".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
         store.complete(id, "ok".into()).await.unwrap();
         let r = store.complete(id, "again".into()).await;
         assert!(r.is_err());
@@ -440,16 +488,23 @@ mod tests {
     #[tokio::test]
     async fn t06_wait_for_completion_fast_path() {
         let store = AsyncTaskStore::new();
-        let (id, _) = store.register("task".into(), "{}".into(), NotifyChannel::Ai).await;
+        let (id, _) = store
+            .register("task".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
         store.complete(id, "ok".into()).await.unwrap();
-        let r = store.wait_for_completion(id, Duration::from_secs(1)).await.unwrap();
+        let r = store
+            .wait_for_completion(id, Duration::from_secs(1))
+            .await
+            .unwrap();
         assert_eq!(r.status, TaskStatus::Completed);
     }
 
     #[tokio::test]
     async fn t07_wait_for_completion_async() {
         let store = AsyncTaskStore::new();
-        let (id, _) = store.register("task".into(), "{}".into(), NotifyChannel::Ai).await;
+        let (id, _) = store
+            .register("task".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
 
         let store2 = store.clone();
         let id2 = id;
@@ -458,7 +513,10 @@ mod tests {
             store2.complete(id2, "{\"res\":42}".into()).await.unwrap();
         });
 
-        let r = store.wait_for_completion(id, Duration::from_secs(1)).await.unwrap();
+        let r = store
+            .wait_for_completion(id, Duration::from_secs(1))
+            .await
+            .unwrap();
         assert_eq!(r.status, TaskStatus::Completed);
         assert_eq!(r.result_json.as_deref(), Some("{\"res\":42}"));
     }
@@ -466,8 +524,12 @@ mod tests {
     #[tokio::test]
     async fn t08_cleanup_terminal() {
         let store = AsyncTaskStore::new();
-        let (id1, _) = store.register("a".into(), "{}".into(), NotifyChannel::Ai).await;
-        let (id2, _) = store.register("b".into(), "{}".into(), NotifyChannel::Ai).await;
+        let (id1, _) = store
+            .register("a".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
+        let (id2, _) = store
+            .register("b".into(), "{}".into(), NotifyChannel::Ai)
+            .await;
         store.complete(id1, "ok".into()).await.unwrap();
         let removed = store.cleanup_terminal().await;
         assert_eq!(removed, 1);

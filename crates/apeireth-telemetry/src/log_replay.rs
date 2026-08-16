@@ -99,7 +99,13 @@ pub enum LogLevel {
 
 impl LogLevel {
     /// 全部 5 variant (1:1 计数, 0 漂移).
-    pub const ALL: [Self; 5] = [Self::Trace, Self::Debug, Self::Info, Self::Warn, Self::Error];
+    pub const ALL: [Self; 5] = [
+        Self::Trace,
+        Self::Debug,
+        Self::Info,
+        Self::Warn,
+        Self::Error,
+    ];
 
     /// 字符串 (per K-1 强校验).
     #[must_use]
@@ -195,8 +201,8 @@ impl LogReplay {
     /// 0 假装 VCP 0 持久化: VCP 内存级 cache, 我们是离线 jsonl load (从磁盘读历史).
     /// 任何 1 行 parse 失败 → 整体 `Err` (0 假装 "best-effort load", 0 假装部分成功).
     pub fn load_from_jsonl(path: &Path) -> Result<Self> {
-        let file = File::open(path)
-            .with_context(|| format!("open jsonl log file: {}", path.display()))?;
+        let file =
+            File::open(path).with_context(|| format!("open jsonl log file: {}", path.display()))?;
         let reader = BufReader::new(file);
         let mut entries = Vec::new();
         for (lineno, line) in reader.lines().enumerate() {
@@ -294,7 +300,12 @@ impl LogReplay {
     /// VCP `_sweep` 60s 后台回收; 我们是 lazy 同步过滤, 0 假装有时序依赖.
     pub fn filter<F: Fn(&LogEntry) -> bool>(&self, predicate: F) -> Self {
         Self {
-            entries: self.entries.iter().filter(|e| predicate(e)).cloned().collect(),
+            entries: self
+                .entries
+                .iter()
+                .filter(|e| predicate(e))
+                .cloned()
+                .collect(),
             cursor: 0,
         }
     }
@@ -376,12 +387,7 @@ mod log_replay_tests {
     use std::time::{Duration, SystemTime};
 
     /// 构造 1 条 LogEntry (测试 helper).
-    fn mk_entry(
-        offset_ms: u64,
-        level: LogLevel,
-        target: &str,
-        message: &str,
-    ) -> LogEntry {
+    fn mk_entry(offset_ms: u64, level: LogLevel, target: &str, message: &str) -> LogEntry {
         let timestamp = UNIX_EPOCH + Duration::from_millis(1_700_000_000_000 + offset_ms);
         let mut fields = BTreeMap::new();
         fields.insert("k".to_string(), Value::String("v".to_string()));
@@ -515,7 +521,10 @@ mod log_replay_tests {
         let replay = LogReplay::load_from_string(content).unwrap();
         let filtered = replay.filter(|e| e.target == "apeireth_api");
         assert_eq!(filtered.len(), 3);
-        assert!(filtered.entries().iter().all(|e| e.target == "apeireth_api"));
+        assert!(filtered
+            .entries()
+            .iter()
+            .all(|e| e.target == "apeireth_api"));
     }
 
     #[test]
@@ -629,6 +638,9 @@ this is not valid json
 {\"timestamp\":1700000002000,\"level\":\"info\",\"target\":\"t\",\"message\":\"c\"}
 ";
         let result = LogReplay::load_from_string(content);
-        assert!(result.is_err(), "malformed line should fail fast, not silently skip");
+        assert!(
+            result.is_err(),
+            "malformed line should fail fast, not silently skip"
+        );
     }
 }

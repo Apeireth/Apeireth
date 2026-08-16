@@ -236,12 +236,8 @@ pub fn dispatch(cmd: AnyCommand, registry: &mut Registry) -> Result<AnyResponse,
         AnyCommand::Hand(c) => hand::handle(&mut registry.hand, c).map(AnyResponse::Hand),
         AnyCommand::Eye(c) => eye::handle(&mut registry.eye, c).map(AnyResponse::Eye),
         AnyCommand::Ear(c) => ear::handle(&mut registry.ear, c).map(AnyResponse::Ear),
-        AnyCommand::Memory(c) => {
-            memory::handle(&mut registry.memory, c).map(AnyResponse::Memory)
-        }
-        AnyCommand::Voice(c) => {
-            voice::handle(&mut registry.voice, c).map(AnyResponse::Voice)
-        }
+        AnyCommand::Memory(c) => memory::handle(&mut registry.memory, c).map(AnyResponse::Memory),
+        AnyCommand::Voice(c) => voice::handle(&mut registry.voice, c).map(AnyResponse::Voice),
         AnyCommand::Body(c) => body::handle(&mut registry.body, c).map(AnyResponse::Body),
         AnyCommand::Mind(c) => mind::handle(&mut registry.mind, c).map(AnyResponse::Mind),
     }
@@ -317,15 +313,39 @@ mod tests {
 
     #[test]
     fn any_command_organ_routes_correctly() {
-        assert_eq!(AnyCommand::Heart(heart::Command::Tick).organ(), Organ::Heart);
-        assert_eq!(AnyCommand::Brain(brain::Command::GetCallCount).organ(), Organ::Brain);
-        assert_eq!(AnyCommand::Hand(hand::Command::GetWhitelist).organ(), Organ::Hand);
+        assert_eq!(
+            AnyCommand::Heart(heart::Command::Tick).organ(),
+            Organ::Heart
+        );
+        assert_eq!(
+            AnyCommand::Brain(brain::Command::GetCallCount).organ(),
+            Organ::Brain
+        );
+        assert_eq!(
+            AnyCommand::Hand(hand::Command::GetWhitelist).organ(),
+            Organ::Hand
+        );
         assert_eq!(AnyCommand::Eye(eye::Command::IsActive).organ(), Organ::Eye);
-        assert_eq!(AnyCommand::Ear(ear::Command::GetEventCount).organ(), Organ::Ear);
-        assert_eq!(AnyCommand::Memory(memory::Command::GetCount).organ(), Organ::Memory);
-        assert_eq!(AnyCommand::Voice(voice::Command::GetTtsStatus).organ(), Organ::Voice);
-        assert_eq!(AnyCommand::Body(body::Command::GetProcessInfo).organ(), Organ::Body);
-        assert_eq!(AnyCommand::Mind(mind::Command::GetAnchors).organ(), Organ::Mind);
+        assert_eq!(
+            AnyCommand::Ear(ear::Command::GetEventCount).organ(),
+            Organ::Ear
+        );
+        assert_eq!(
+            AnyCommand::Memory(memory::Command::GetCount).organ(),
+            Organ::Memory
+        );
+        assert_eq!(
+            AnyCommand::Voice(voice::Command::GetTtsStatus).organ(),
+            Organ::Voice
+        );
+        assert_eq!(
+            AnyCommand::Body(body::Command::GetProcessInfo).organ(),
+            Organ::Body
+        );
+        assert_eq!(
+            AnyCommand::Mind(mind::Command::GetAnchors).organ(),
+            Organ::Mind
+        );
     }
 
     #[test]
@@ -386,7 +406,7 @@ mod tests {
                 provider: "codex".into(),
             }),
             &mut reg,
-            );
+        );
         assert!(r.is_ok());
         assert_eq!(reg.brain.active_provider, "codex");
     }
@@ -405,11 +425,14 @@ mod tests {
     fn dispatch_invalid_arg_propagates() {
         let mut reg = fresh_registry();
         // Heart::SetBpm(0) 越界
-        let r = dispatch(
-            AnyCommand::Heart(heart::Command::SetBpm(0)),
-            &mut reg,
-            );
-        assert!(matches!(r, Err(OrganError::InvalidArg { command: "SetBpm", .. })));
+        let r = dispatch(AnyCommand::Heart(heart::Command::SetBpm(0)), &mut reg);
+        assert!(matches!(
+            r,
+            Err(OrganError::InvalidArg {
+                command: "SetBpm",
+                ..
+            })
+        ));
     }
 
     // ---- handle_organ_command 编译期路由 ----

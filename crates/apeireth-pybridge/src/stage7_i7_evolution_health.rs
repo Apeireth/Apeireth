@@ -27,9 +27,7 @@
 use crate::evolution_governance::{
     evolution_governance_summary, EvolutionKind, EVOLUTION_GOVERNANCE_KIND_COUNT,
 };
-use crate::health_guardianship::{
-    stage6_health_healthy, stage6_health_summary, HealthDimension,
-};
+use crate::health_guardianship::{stage6_health_healthy, stage6_health_summary, HealthDimension};
 
 // =============================================================================
 // I7 集成版本 + 计数
@@ -48,7 +46,8 @@ pub const STAGE7_I7_EVOLUTION_KIND_COUNT: usize = EVOLUTION_GOVERNANCE_KIND_COUN
 pub const STAGE7_I7_HEALTH_DIM_COUNT: usize = 5;
 
 /// I7 演进 × 健康 绑定数 (4 × 5 = 20, 编译期 hardcode)
-pub const STAGE7_I7_BINDING_COUNT: usize = EVOLUTION_GOVERNANCE_KIND_COUNT * STAGE7_I7_HEALTH_DIM_COUNT;
+pub const STAGE7_I7_BINDING_COUNT: usize =
+    EVOLUTION_GOVERNANCE_KIND_COUNT * STAGE7_I7_HEALTH_DIM_COUNT;
 
 // =============================================================================
 // EvolutionHealthBinding — 1 evolution kind × 1 health dim

@@ -4,9 +4,7 @@ use apeireth_api::llm::providers::anthropic_compat::{
     AnthropicCompatibleConfig, AnthropicCompatibleProvider,
 };
 use apeireth_api::llm::{ChatMessage, LlmProvider, LlmRequest};
-use apeireth_tool_registry::{
-token_budget::estimate_tool_tokens, MockStaticTool, ToolRegistry,
-};
+use apeireth_tool_registry::{token_budget::estimate_tool_tokens, MockStaticTool, ToolRegistry};
 use apeireth_tool_runtime::executor::ToolExecutor;
 use apeireth_tool_runtime::parser::ParsedToolCall;
 use serde_json::{json, Value};
@@ -31,11 +29,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut registry = ToolRegistry::new();
     let echo = Arc::new(MockStaticTool {
         name: "EchoSync".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "sync", "tool": "EchoSync", "echo": "static_value"}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "sync", "tool": "EchoSync", "echo": "static_value"}),
+        )?,
     });
     let config = Arc::new(MockStaticTool {
         name: "ConfigVersion".to_string(),
-        static_value: serde_json::to_string(&json!({"kind": "static", "tool": "ConfigVersion", "value": "1.2.0"}))?,
+        static_value: serde_json::to_string(
+            &json!({"kind": "static", "tool": "ConfigVersion", "value": "1.2.0"}),
+        )?,
     });
     registry.register("EchoSync".to_string(), echo);
     registry.register("ConfigVersion".to_string(), config);
@@ -47,7 +49,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ===== 2. LLM 决策 plan =====
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let provider = Arc::new(AnthropicCompatibleProvider::new(cfg)?);
@@ -74,10 +77,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_success = 0usize;
     for (i, line) in plan_lines.iter().take(3).enumerate() {
         let parts: Vec<&str> = line.splitn(2, '|').collect();
-        if parts.len() != 2 { continue; }
+        if parts.len() != 2 {
+            continue;
+        }
         let tool_name = parts[0].trim();
         let args_str = parts[1].trim();
-        let args: Value = serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
+        let args: Value =
+            serde_json::from_str(args_str).unwrap_or_else(|_| json!({"raw": args_str}));
         println!("  [{}] tool={} args={}", i + 1, tool_name, args);
 
         let parsed = ParsedToolCall {
@@ -90,11 +96,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let t0 = Instant::now();
         let result = executor.execute(&parsed).await;
         let exec_ms = t0.elapsed().as_millis();
-        println!("    → success={} duration={}ms output={}", result.success, exec_ms, result.output);
-        if result.success { total_success += 1; }
+        println!(
+            "    → success={} duration={}ms output={}",
+            result.success, exec_ms, result.output
+        );
+        if result.success {
+            total_success += 1;
+        }
     }
     let total_ms = session_start.elapsed().as_millis();
-    println!("\n[summary] plan {}ms, execute total {}ms, {}/{} calls success", plan_ms, total_ms, total_success, plan_lines.len().min(3));
+    println!(
+        "\n[summary] plan {}ms, execute total {}ms, {}/{} calls success",
+        plan_ms,
+        total_ms,
+        total_success,
+        plan_lines.len().min(3)
+    );
 
     let tokens = estimate_tool_tokens("EchoSync", "同步 echo 输入");
     println!("[token_budget] estimate_tool_tokens = {}", tokens);

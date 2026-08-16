@@ -526,7 +526,10 @@ impl ColangParser {
         if code.starts_with('"') {
             let utter = self.parse_quoted_string(code, line_no)?;
             let top = self.define_stack.last_mut().unwrap();
-            if matches!(top_kind, ColangElementKind::DefineUser | ColangElementKind::DefineBot) {
+            if matches!(
+                top_kind,
+                ColangElementKind::DefineUser | ColangElementKind::DefineBot
+            ) {
                 top.utterances.push(utter);
                 top.has_content = true;
             } else {
@@ -542,12 +545,11 @@ impl ColangParser {
 
         // 元素: 分类主 token
         // 计算 kind (不需要 self, 是纯函数)
-        let kind = Self::classify_main_token(code).ok_or_else(|| {
-            ColangParseError::UnknownMainToken {
+        let kind =
+            Self::classify_main_token(code).ok_or_else(|| ColangParseError::UnknownMainToken {
                 line: line_no,
                 token: code.split_whitespace().next().unwrap_or("").to_string(),
-            }
-        })?;
+            })?;
         let top = self.define_stack.last_mut().unwrap();
         top.elements.push(ColangElement {
             kind,
@@ -733,9 +735,7 @@ fn extract_action_name(source: &str, prefix: &str) -> Option<String> {
     let trimmed = source.trim();
     let after = trimmed.strip_prefix(prefix)?.trim_start();
     // 取整行, 遇到 '(' / '"' / 行尾注释 # 停止
-    let end = after
-        .find(['(', '"', '#'])
-        .unwrap_or(after.len());
+    let end = after.find(['(', '"', '#']).unwrap_or(after.len());
     let name = after[..end].trim();
     if name.is_empty() {
         None
@@ -841,7 +841,9 @@ impl ColangDslGuard {
     }
     /// 添加黑名单子串
     pub fn forbid_user_name(mut self, substring: impl Into<String>) -> Self {
-        self.config.forbidden_user_name_substrings.push(substring.into());
+        self.config
+            .forbidden_user_name_substrings
+            .push(substring.into());
         self
     }
     /// 强制要求 user define
@@ -906,12 +908,17 @@ impl ColangDslGuard {
                         self.config.max_utterances_per_define
                     ),
                     line: Some(d.line),
-                    errors: vec![format!("max_utterances_per_define exceeded: {}", d.utterances.len())],
+                    errors: vec![format!(
+                        "max_utterances_per_define exceeded: {}",
+                        d.utterances.len()
+                    )],
                 };
             }
             // 约束 4: flow 子元素数
-            if matches!(d.kind, ColangElementKind::DefineFlow | ColangElementKind::DefineSubflow)
-                && d.elements.len() > self.config.max_elements_per_flow
+            if matches!(
+                d.kind,
+                ColangElementKind::DefineFlow | ColangElementKind::DefineSubflow
+            ) && d.elements.len() > self.config.max_elements_per_flow
             {
                 return ColangGuardOutcome::Blocked {
                     reason: format!(
@@ -922,7 +929,10 @@ impl ColangDslGuard {
                         self.config.max_elements_per_flow
                     ),
                     line: Some(d.line),
-                    errors: vec![format!("max_elements_per_flow exceeded: {}", d.elements.len())],
+                    errors: vec![format!(
+                        "max_elements_per_flow exceeded: {}",
+                        d.elements.len()
+                    )],
                 };
             }
         }
@@ -1063,7 +1073,10 @@ impl DslOnionLayer {
     /// 评估 Colang DSL 源
     pub fn evaluate(&self, source: &str) -> DslOnionVerdict {
         match self.guard.check_source(source) {
-            ColangGuardOutcome::Allowed { define_count, report } => DslOnionVerdict::Pass {
+            ColangGuardOutcome::Allowed {
+                define_count,
+                report,
+            } => DslOnionVerdict::Pass {
                 define_count,
                 report,
             },
@@ -1373,23 +1386,74 @@ define flow
 
     #[test]
     fn classify_main_token_user_say() {
-        assert_eq!(ColangParser::classify_main_token("user X"), Some(ColangElementKind::UserSay));
-        assert_eq!(ColangParser::classify_main_token("bot Y"), Some(ColangElementKind::BotSay));
-        assert_eq!(ColangParser::classify_main_token("event Z"), Some(ColangElementKind::Event));
-        assert_eq!(ColangParser::classify_main_token("when X"), Some(ColangElementKind::When));
-        assert_eq!(ColangParser::classify_main_token("else when X"), Some(ColangElementKind::ElseWhen));
-        assert_eq!(ColangParser::classify_main_token("if cond"), Some(ColangElementKind::If));
-        assert_eq!(ColangParser::classify_main_token("else"), Some(ColangElementKind::Else));
-        assert_eq!(ColangParser::classify_main_token("else if cond"), Some(ColangElementKind::Else));
-        assert_eq!(ColangParser::classify_main_token("goto flow"), Some(ColangElementKind::Goto));
-        assert_eq!(ColangParser::classify_main_token("go to flow"), Some(ColangElementKind::GotoAlias));
-        assert_eq!(ColangParser::classify_main_token("run flow"), Some(ColangElementKind::Run));
-        assert_eq!(ColangParser::classify_main_token("allow"), Some(ColangElementKind::Allow));
-        assert_eq!(ColangParser::classify_main_token("disallow"), Some(ColangElementKind::Disallow));
-        assert_eq!(ColangParser::classify_main_token("stop"), Some(ColangElementKind::Stop));
-        assert_eq!(ColangParser::classify_main_token("abort"), Some(ColangElementKind::Abort));
-        assert_eq!(ColangParser::classify_main_token("return"), Some(ColangElementKind::Return));
-        assert_eq!(ColangParser::classify_main_token("set $x = 1"), Some(ColangElementKind::Set));
+        assert_eq!(
+            ColangParser::classify_main_token("user X"),
+            Some(ColangElementKind::UserSay)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("bot Y"),
+            Some(ColangElementKind::BotSay)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("event Z"),
+            Some(ColangElementKind::Event)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("when X"),
+            Some(ColangElementKind::When)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("else when X"),
+            Some(ColangElementKind::ElseWhen)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("if cond"),
+            Some(ColangElementKind::If)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("else"),
+            Some(ColangElementKind::Else)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("else if cond"),
+            Some(ColangElementKind::Else)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("goto flow"),
+            Some(ColangElementKind::Goto)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("go to flow"),
+            Some(ColangElementKind::GotoAlias)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("run flow"),
+            Some(ColangElementKind::Run)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("allow"),
+            Some(ColangElementKind::Allow)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("disallow"),
+            Some(ColangElementKind::Disallow)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("stop"),
+            Some(ColangElementKind::Stop)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("abort"),
+            Some(ColangElementKind::Abort)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("return"),
+            Some(ColangElementKind::Return)
+        );
+        assert_eq!(
+            ColangParser::classify_main_token("set $x = 1"),
+            Some(ColangElementKind::Set)
+        );
         assert_eq!(ColangParser::classify_main_token("unknown_token"), None);
     }
 
@@ -1405,7 +1469,11 @@ define flow
             .iter()
             .find(|(n, _)| n.starts_with("__anon_flow_"))
             .map(|(n, _)| n.clone());
-        assert!(anon.is_some(), "expected an __anon_flow_ entry, got {:?}", file.flow_defines);
+        assert!(
+            anon.is_some(),
+            "expected an __anon_flow_ entry, got {:?}",
+            file.flow_defines
+        );
         assert!(file.find_flow(&anon.unwrap()).is_some());
         assert!(file.find_user("nope").is_none());
     }

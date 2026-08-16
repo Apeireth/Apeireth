@@ -36,8 +36,8 @@
 
 use apeireth_tui_e2e::prelude::*;
 use apeireth_tui_e2e::{
-    EIGHT_PROMISES, FIVE_R_MEASURES, Nav, NavPage, Organ, SIX_PHI_ANCHORS, TuiApp, TuiHarness,
-    TuiTestBackend,
+    Nav, NavPage, Organ, TuiApp, TuiHarness, TuiTestBackend, EIGHT_PROMISES, FIVE_R_MEASURES,
+    SIX_PHI_ANCHORS,
 };
 use crossterm::event::KeyCode;
 use ratatui::style::Color;
@@ -360,11 +360,9 @@ fn test_k1_zero_size_backend() {
 
 #[test]
 fn test_chat_history_user_assistant() {
-    let mut h = TuiHarness::start_with_chat(vec![
-        ("user", "question 1"),
-        ("assistant", "answer 1"),
-    ])
-    .expect("harness with chat");
+    let mut h =
+        TuiHarness::start_with_chat(vec![("user", "question 1"), ("assistant", "answer 1")])
+            .expect("harness with chat");
     assert_eq!(h.app.chat_history.len(), 2);
     h.app.nav = NavPage::History;
     h.render_4_panel().expect("render");
@@ -399,10 +397,7 @@ fn test_5_r_measures_in_status() {
     h.render_4_panel().expect("render help");
     let snap2 = h.snapshot();
     for m in FIVE_R_MEASURES.iter() {
-        assert!(
-            snap2.contains(m),
-            "Help sub-nav 应有完整 R-Measure {m}"
-        );
+        assert!(snap2.contains(m), "Help sub-nav 应有完整 R-Measure {m}");
     }
 }
 

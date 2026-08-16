@@ -2,8 +2,8 @@
 
 #![allow(missing_docs)]
 
-use crate::traits::{Vector, SearchHit, ScoredId};
 use crate::error::VectorError;
+use crate::traits::{ScoredId, SearchHit, Vector};
 use uuid::Uuid;
 
 #[test]
@@ -21,14 +21,21 @@ fn r177_vec_02_vector_dim() {
 
 #[test]
 fn r177_vec_03_search_hit_basic() {
-    let h = SearchHit { id: Uuid::nil(), score: 0.5, metadata: None };
+    let h = SearchHit {
+        id: Uuid::nil(),
+        score: 0.5,
+        metadata: None,
+    };
     assert_eq!(h.score, 0.5);
     assert!(h.metadata.is_none());
 }
 
 #[test]
 fn r177_vec_04_scored_id_basic() {
-    let s = ScoredId { id: Uuid::nil(), score: 0.99 };
+    let s = ScoredId {
+        id: Uuid::nil(),
+        score: 0.99,
+    };
     assert!(s.score > 0.0);
 }
 
@@ -48,6 +55,9 @@ fn r177_vec_kani_01_vector_dim_invariant() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_vec_kani_02_scored_id_score_bounded() {
-    let s = ScoredId { id: Uuid::nil(), score: 0.5 };
+    let s = ScoredId {
+        id: Uuid::nil(),
+        score: 0.5,
+    };
     assert!(s.score >= 0.0 && s.score <= 1.0);
 }

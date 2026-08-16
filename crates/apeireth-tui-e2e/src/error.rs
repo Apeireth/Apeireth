@@ -103,20 +103,32 @@ pub enum TuiE2EError {
 impl fmt::Display for TuiE2EError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::BackendCreate { width, height, reason } => {
+            Self::BackendCreate {
+                width,
+                height,
+                reason,
+            } => {
                 write!(f, "TestBackend create failed ({width}x{height}): {reason}")
             }
             Self::BufferEmpty { context } => {
                 write!(f, "buffer is empty at `{context}`, cannot assert")
             }
-            Self::BufferAssert { expected, actual, context } => write!(
+            Self::BufferAssert {
+                expected,
+                actual,
+                context,
+            } => write!(
                 f,
                 "buffer assert fail at `{context}`: expected `{expected}`, actual `{actual}`"
             ),
             Self::HarnessStart { reason } => write!(f, "TuiHarness start failed: {reason}"),
             Self::HarnessTick { reason } => write!(f, "TuiHarness tick failed: {reason}"),
             Self::HarnessKey { reason } => write!(f, "TuiHarness send_key failed: {reason}"),
-            Self::RenderMismatch { expected, actual, context } => write!(
+            Self::RenderMismatch {
+                expected,
+                actual,
+                context,
+            } => write!(
                 f,
                 "render mismatch at `{context}`: expected `{expected}`, actual `{actual}`"
             ),
@@ -158,15 +170,23 @@ mod tests {
             height: 0,
             reason: String::new(),
         };
-        let _v1 = TuiE2EError::BufferEmpty { context: String::new() };
+        let _v1 = TuiE2EError::BufferEmpty {
+            context: String::new(),
+        };
         let _v2 = TuiE2EError::BufferAssert {
             expected: String::new(),
             actual: String::new(),
             context: String::new(),
         };
-        let _v3 = TuiE2EError::HarnessStart { reason: String::new() };
-        let _v4 = TuiE2EError::HarnessTick { reason: String::new() };
-        let _v5 = TuiE2EError::HarnessKey { reason: String::new() };
+        let _v3 = TuiE2EError::HarnessStart {
+            reason: String::new(),
+        };
+        let _v4 = TuiE2EError::HarnessTick {
+            reason: String::new(),
+        };
+        let _v5 = TuiE2EError::HarnessKey {
+            reason: String::new(),
+        };
         let _v6 = TuiE2EError::RenderMismatch {
             expected: String::new(),
             actual: String::new(),
@@ -190,7 +210,9 @@ mod tests {
 
     #[test]
     fn display_buffer_empty() {
-        let e = TuiE2EError::BufferEmpty { context: "render".into() };
+        let e = TuiE2EError::BufferEmpty {
+            context: "render".into(),
+        };
         assert!(e.to_string().contains("render"));
     }
 
@@ -209,7 +231,9 @@ mod tests {
 
     #[test]
     fn display_harness_start() {
-        let e = TuiE2EError::HarnessStart { reason: "init".into() };
+        let e = TuiE2EError::HarnessStart {
+            reason: "init".into(),
+        };
         assert!(e.to_string().contains("init"));
     }
 

@@ -41,9 +41,7 @@ use std::fmt;
 
 use serde_json::Value;
 
-use crate::{
-    FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result, State,
-};
+use crate::{FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result, State};
 
 // ============================================================
 // 1. StateGraph — 编译时声明的 state schema + 节点 + 边
@@ -322,9 +320,7 @@ impl StateGraphExecutor {
         // 1) 收集 deterministic 边端点 (借 BTreeMap iteration 顺序)
         let mut adj: BTreeMap<&NodeId, Vec<&NodeId>> = BTreeMap::new();
         for edge in &self.edges {
-            adj.entry(&edge.from)
-                .or_default()
-                .push(&edge.to);
+            adj.entry(&edge.from).or_default().push(&edge.to);
         }
 
         // 2) 模拟 LangGraph 公开 invoke (BFS 顺序, 不"消息传递")
@@ -540,7 +536,14 @@ mod state_graph_tests {
     #[test]
     fn state_graph_compile_fails_without_entry_point() {
         let mut g = StateGraph::new();
-        g.add_node("a", AppendNode { id: "a", key: "x", value: "1" });
+        g.add_node(
+            "a",
+            AppendNode {
+                id: "a",
+                key: "x",
+                value: "1",
+            },
+        );
         let result = g.compile();
         assert!(result.is_err(), "compile without entry_point must fail");
     }
@@ -561,7 +564,14 @@ mod state_graph_tests {
     fn state_graph_invoke_two_node_linear() {
         let mut g = StateGraph::new();
         g.add_channel("x", json!(0));
-        g.add_node("set", AppendNode { id: "set", key: "x", value: "42" });
+        g.add_node(
+            "set",
+            AppendNode {
+                id: "set",
+                key: "x",
+                value: "42",
+            },
+        );
         g.add_node("read", ReadNode { id: "read" });
         g.add_edge("set", "read");
         g.set_entry_point("set");
@@ -583,8 +593,22 @@ mod state_graph_tests {
     fn state_graph_builder_fluent() {
         let exec = StateGraphBuilder::new()
             .with_channel("trace", json!(""))
-            .with_node("a", AppendNode { id: "a", key: "trace", value: "step-a" })
-            .with_node("b", AppendNode { id: "b", key: "trace", value: "step-b" })
+            .with_node(
+                "a",
+                AppendNode {
+                    id: "a",
+                    key: "trace",
+                    value: "step-a",
+                },
+            )
+            .with_node(
+                "b",
+                AppendNode {
+                    id: "b",
+                    key: "trace",
+                    value: "step-b",
+                },
+            )
             .with_edge("a", "b")
             .with_entry_point("a")
             .with_finish_point("b")
@@ -606,9 +630,30 @@ mod state_graph_tests {
     fn state_graph_three_nodes_end_to_end() {
         let mut g = StateGraph::new();
         g.add_channel("counter", json!(0));
-        g.add_node("inc1", AppendNode { id: "inc1", key: "counter", value: "1" });
-        g.add_node("inc2", AppendNode { id: "inc2", key: "counter", value: "2" });
-        g.add_node("inc3", AppendNode { id: "inc3", key: "counter", value: "3" });
+        g.add_node(
+            "inc1",
+            AppendNode {
+                id: "inc1",
+                key: "counter",
+                value: "1",
+            },
+        );
+        g.add_node(
+            "inc2",
+            AppendNode {
+                id: "inc2",
+                key: "counter",
+                value: "2",
+            },
+        );
+        g.add_node(
+            "inc3",
+            AppendNode {
+                id: "inc3",
+                key: "counter",
+                value: "3",
+            },
+        );
         g.add_edge("inc1", "inc2");
         g.add_edge("inc2", "inc3");
         g.set_entry_point("inc1");
@@ -655,7 +700,14 @@ mod state_graph_tests {
         // add_node fn pointer 需要 'static str, 但 test 接收 &str, 改用 closure type check
         let _: fn(&mut StateGraph, &str, &str, &str) -> () = |g, id, k, v| {
             // id 是 owned String, k/v 是 'static literal 限定; AppendNode.id 改用 String 接受任意
-            g.add_node(id.to_string(), AppendNode { id: "x", key: "k", value: "v" });
+            g.add_node(
+                id.to_string(),
+                AppendNode {
+                    id: "x",
+                    key: "k",
+                    value: "v",
+                },
+            );
             let _ = (k, v);
         };
         // 下面 3 个 method 是 generic `impl Into<NodeId>`, fn pointer 不能表达
