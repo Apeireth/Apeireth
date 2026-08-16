@@ -6,10 +6,12 @@
 | 状态 | 值 |
 |---|---|
 | workspace version | 1.2.0（semver 严守） |
-| active crate | 82（81 顶层 + memory/extensions 嵌套） |
+| active crate | 83（82 顶层 + memory/extensions 嵌套；2026-08-17 members 数组实测） |
 | 测试 | workspace 全量 `cargo test --workspace -j 4` 全绿（降并行防 Windows 页文件耗尽） |
 | 构建 | `cargo build --workspace` 0 error / 0 warning（仅剩第三方依赖未来兼容提示） |
 | License | Apache-2.0 |
+
+**版本口径说明（双轴制, 2026-08-17 Leader 拍板, 台账 #26）**：上表 `workspace version = 1.2.0` 是 **workspace crate 版本轴**（Cargo.toml，semver 严守，B2 硬墙 0 改），面向 cargo 依赖解析/代码演进；另有**产品版本轴** `v2.0.0-alpha`（面向发布/里程碑，见 `docs/RELEASE-NOTES-v2.0.0-alpha.md` 与 `docs/release-plan.md`）。两轴并存、不强改一方、不伪造统一——代码是真相，文档解释差异；见两处版本号不一致时先判断属哪一轴。
 
 最新进度对账见 [`docs/release-plan.md`](docs/release-plan.md)（三件套规划 vs 实况）；历史变更见 [`CHANGELOG.md`](CHANGELOG.md)。
 
