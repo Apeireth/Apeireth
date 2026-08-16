@@ -80,7 +80,9 @@ impl ProtocolKind {
         match s.to_lowercase().as_str() {
             "openai-chat" | "openai_chat" | "openai" => Some(Self::OpenAiChat),
             "openai-responses" | "openai_responses" | "responses" => Some(Self::OpenAiResponses),
-            "anthropic-messages" | "anthropic_messages" | "anthropic" => Some(Self::AnthropicMessages),
+            "anthropic-messages" | "anthropic_messages" | "anthropic" => {
+                Some(Self::AnthropicMessages)
+            }
             "gemini" => Some(Self::Gemini),
             "acp" => Some(Self::Acp),
             "mcp" => Some(Self::Mcp),
@@ -253,17 +255,17 @@ mod tests {
     use crate::normalized::NormalizedMessage;
 
     fn dummy_req() -> NormalizedRequest {
-        NormalizedRequest::new(
-            "test",
-            vec![NormalizedMessage::user("hello openclaw")],
-        )
+        NormalizedRequest::new("test", vec![NormalizedMessage::user("hello openclaw")])
     }
 
     #[test]
     fn protocol_kind_as_str_all_seven() {
         assert_eq!(ProtocolKind::OpenAiChat.as_str(), "openai-chat");
         assert_eq!(ProtocolKind::OpenAiResponses.as_str(), "openai-responses");
-        assert_eq!(ProtocolKind::AnthropicMessages.as_str(), "anthropic-messages");
+        assert_eq!(
+            ProtocolKind::AnthropicMessages.as_str(),
+            "anthropic-messages"
+        );
         assert_eq!(ProtocolKind::Gemini.as_str(), "gemini");
         assert_eq!(ProtocolKind::Acp.as_str(), "acp");
         assert_eq!(ProtocolKind::Mcp.as_str(), "mcp");
@@ -273,8 +275,7 @@ mod tests {
 
     #[test]
     fn gateway_register_and_dispatch() {
-        let gw = ProtocolGateway::new()
-            .register(Arc::new(OpenClawGatewayBridge::default()));
+        let gw = ProtocolGateway::new().register(Arc::new(OpenClawGatewayBridge::default()));
         let kinds = gw.registered_kinds();
         assert!(kinds.contains(&ProtocolKind::OpenClawGateway));
         assert!(gw.get(ProtocolKind::Acp).is_none(), "Acp 未注册");
@@ -311,7 +312,10 @@ mod tests {
             fn kinds(&self) -> Vec<ProtocolKind> {
                 vec![ProtocolKind::Acp, ProtocolKind::Mcp]
             }
-            async fn handle(&self, _req: NormalizedRequest) -> Result<NormalizedResponse, ProtocolError> {
+            async fn handle(
+                &self,
+                _req: NormalizedRequest,
+            ) -> Result<NormalizedResponse, ProtocolError> {
                 Ok(NormalizedResponse::new(ProtocolKind::Acp, "ok"))
             }
         }

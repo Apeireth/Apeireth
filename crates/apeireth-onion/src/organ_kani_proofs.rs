@@ -3,8 +3,8 @@
 #![allow(missing_docs)]
 
 use crate::{
-    ElectronicRing, OnionAction, PermissionLayerKind, PrincipleLayerKind,
-    ELECTRONIC_RING_LEN, PERMISSION_LAYERS_OUTER_IN, PRINCIPLE_LAYERS_OUTER_IN,
+    ElectronicRing, OnionAction, PermissionLayerKind, PrincipleLayerKind, ELECTRONIC_RING_LEN,
+    PERMISSION_LAYERS_OUTER_IN, PRINCIPLE_LAYERS_OUTER_IN,
 };
 
 #[test]
@@ -38,7 +38,10 @@ fn r177_oni_04_permission_layers_distinct() {
 #[test]
 fn r177_oni_05_electronic_ring_11() {
     assert_eq!(ELECTRONIC_RING_LEN, 11);
-    assert_eq!(PRINCIPLE_LAYERS_OUTER_IN.len() + PERMISSION_LAYERS_OUTER_IN.len(), 11);
+    assert_eq!(
+        PRINCIPLE_LAYERS_OUTER_IN.len() + PERMISSION_LAYERS_OUTER_IN.len(),
+        11
+    );
 }
 
 #[test]
@@ -100,7 +103,10 @@ fn r177_oni_10_onion_action_touches() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_oni_kani_01_ring_5_plus_6() {
-    assert_eq!(PRINCIPLE_LAYERS_OUTER_IN.len() + PERMISSION_LAYERS_OUTER_IN.len(), 11);
+    assert_eq!(
+        PRINCIPLE_LAYERS_OUTER_IN.len() + PERMISSION_LAYERS_OUTER_IN.len(),
+        11
+    );
     assert_eq!(ELECTRONIC_RING_LEN, 11);
 }
 

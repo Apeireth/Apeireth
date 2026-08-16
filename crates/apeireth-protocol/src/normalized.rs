@@ -581,12 +581,24 @@ mod tests {
     #[test]
     fn message_role_from_legacy_value_developer_to_system() {
         // 借鉴 VCP protocolBridge.js:47-52: developer → system
-        assert_eq!(MessageRole::from_legacy_value("developer"), MessageRole::System);
-        assert_eq!(MessageRole::from_legacy_value("system"), MessageRole::System);
+        assert_eq!(
+            MessageRole::from_legacy_value("developer"),
+            MessageRole::System
+        );
+        assert_eq!(
+            MessageRole::from_legacy_value("system"),
+            MessageRole::System
+        );
         assert_eq!(MessageRole::from_legacy_value("user"), MessageRole::User);
-        assert_eq!(MessageRole::from_legacy_value("assistant"), MessageRole::Assistant);
+        assert_eq!(
+            MessageRole::from_legacy_value("assistant"),
+            MessageRole::Assistant
+        );
         assert_eq!(MessageRole::from_legacy_value("tool"), MessageRole::Tool);
-        assert_eq!(MessageRole::from_legacy_value("function"), MessageRole::Tool);
+        assert_eq!(
+            MessageRole::from_legacy_value("function"),
+            MessageRole::Tool
+        );
         assert_eq!(MessageRole::from_legacy_value("unknown"), MessageRole::User);
     }
 

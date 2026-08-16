@@ -117,7 +117,13 @@ impl DefaultNormalize {
         if self.lowercase_enabled {
             s = s
                 .chars()
-                .map(|c| if c.is_ascii_uppercase() { c.to_ascii_lowercase() } else { c })
+                .map(|c| {
+                    if c.is_ascii_uppercase() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        c
+                    }
+                })
                 .collect();
         }
 

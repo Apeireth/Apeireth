@@ -57,12 +57,12 @@
 //!
 //! `R126-v05-30-BORROW-langchain-ai/langgraph-5f8a3c7-2026-08-10` (per 决策 #36 §1.1 + 决策 #51 §1.2 P1-4)
 
-use apeireth_naming_v05::{
-    check_sum_equals_1, Adversarial, CiPassRate, ClassDims, DimensionSet,
-    Level, Lineage, MetaDims, MetaOverall, Robustness, SelfImprovement, V05Spec, V05Spec30,
-    VerifierConsistency, DEFAULT_WEIGHTS, V05_30_TOTAL_DIMS,
-};
 use apeireth_naming_v05::dimension::{Completeness, Domain, Modality, Safety};
+use apeireth_naming_v05::{
+    check_sum_equals_1, Adversarial, CiPassRate, ClassDims, DimensionSet, Level, Lineage, MetaDims,
+    MetaOverall, Robustness, SelfImprovement, V05Spec, V05Spec30, VerifierConsistency,
+    DEFAULT_WEIGHTS, V05_30_TOTAL_DIMS,
+};
 
 fn main() {
     println!("=== apeireth-naming-v05 v05_30 demo (R126 P1-4) ===");
@@ -97,7 +97,10 @@ fn main() {
     println!("  SelfImprovement: {:.3}", meta.self_improvement.as_f32());
     println!("  Adversarial: {:.3}", meta.adversarial.as_f32());
     println!("  CiPassRate: {:.3}", meta.ci_pass_rate.as_f32());
-    println!("  VerifierConsistency: {:.3}", meta.verifier_consistency.as_f32());
+    println!(
+        "  VerifierConsistency: {:.3}",
+        meta.verifier_consistency.as_f32()
+    );
     println!();
 
     // [3] 派生 MetaOverall (5 维平均)
@@ -115,7 +118,14 @@ fn main() {
     // [5] 4 大类 weight sum=1.0 守门
     println!("[5] 4 大类 weight sum=1.0 守门 (per V0.5)");
     let sum: f32 = DEFAULT_WEIGHTS.iter().sum();
-    println!("  sum: {sum:.1} {}", if (sum - 1.0).abs() < 1e-6 { "✓" } else { "✗" });
+    println!(
+        "  sum: {sum:.1} {}",
+        if (sum - 1.0).abs() < 1e-6 {
+            "✓"
+        } else {
+            "✗"
+        }
+    );
     assert!(check_sum_equals_1(&DEFAULT_WEIGHTS).is_ok());
     println!();
 
@@ -125,7 +135,10 @@ fn main() {
     println!("  SelfImprovement: {:.3} ✓", meta.self_improvement.as_f32());
     println!("  Adversarial: {:.3} ✓", meta.adversarial.as_f32());
     println!("  CiPassRate: {:.3} ✓", meta.ci_pass_rate.as_f32());
-    println!("  VerifierConsistency: {:.3} ✓", meta.verifier_consistency.as_f32());
+    println!(
+        "  VerifierConsistency: {:.3} ✓",
+        meta.verifier_consistency.as_f32()
+    );
     println!();
 
     // [7] serde roundtrip
@@ -145,9 +158,15 @@ fn main() {
     // [9] default V05Spec30
     let default_s30 = V05Spec30::default();
     println!("[9] V05Spec30::default() (per default_v05_spec + 0 meta)");
-    println!("  spec.level: {:?} (expected Mature)", default_s30.spec.level);
+    println!(
+        "  spec.level: {:?} (expected Mature)",
+        default_s30.spec.level
+    );
     println!("  meta.to_f32_array: {:?}", default_s30.meta.to_f32_array());
-    println!("  overall.as_f32: {} (expected 0.0)", default_s30.overall.as_f32());
+    println!(
+        "  overall.as_f32: {} (expected 0.0)",
+        default_s30.overall.as_f32()
+    );
     println!();
 
     println!("=== R126 P1-4 verify done ===");

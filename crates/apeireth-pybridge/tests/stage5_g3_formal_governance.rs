@@ -89,7 +89,11 @@ fn g3_proof_kind_test() {
 
 #[test]
 fn g3_proof_kind_3_variants() {
-    let kinds = [ProofKind::Proof, ProofKind::ProofForContract, ProofKind::Test];
+    let kinds = [
+        ProofKind::Proof,
+        ProofKind::ProofForContract,
+        ProofKind::Test,
+    ];
     assert_eq!(kinds.len(), 3);
 }
 
@@ -282,23 +286,20 @@ fn g3_runner_run_and_get() {
 #[test]
 fn g3_runner_pass_fail_skipped() {
     let mut r = ProofRunner::new();
-    r.run(
-        &ProofHarness::new("p", "f.rs", 1, ProofKind::Proof),
-        || ProofResult::Success,
-    );
-    r.run(
-        &ProofHarness::new("f", "f.rs", 2, ProofKind::Proof),
-        || ProofResult::Failure {
+    r.run(&ProofHarness::new("p", "f.rs", 1, ProofKind::Proof), || {
+        ProofResult::Success
+    });
+    r.run(&ProofHarness::new("f", "f.rs", 2, ProofKind::Proof), || {
+        ProofResult::Failure {
             harness: "f".to_string(),
             message: "m".to_string(),
-        },
-    );
-    r.run(
-        &ProofHarness::new("s", "f.rs", 3, ProofKind::Test),
-        || ProofResult::Skipped {
+        }
+    });
+    r.run(&ProofHarness::new("s", "f.rs", 3, ProofKind::Test), || {
+        ProofResult::Skipped {
             reason: "r".to_string(),
-        },
-    );
+        }
+    });
     assert_eq!(r.pass_count(), 1);
     assert_eq!(r.fail_count(), 1);
     assert_eq!(r.skipped_count(), 1);

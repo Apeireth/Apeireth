@@ -124,13 +124,7 @@ impl Storage for InMemoryStorage {
     async fn set(&self, key: &str, value: Vec<u8>, ttl: Option<Duration>) -> Result<()> {
         let expires_at = ttl.map(|d| Instant::now() + d);
         let mut map = self.inner.lock();
-        map.insert(
-            key.to_string(),
-            Entry {
-                value,
-                expires_at,
-            },
-        );
+        map.insert(key.to_string(), Entry { value, expires_at });
         Ok(())
     }
 
@@ -314,9 +308,7 @@ pub fn build_storage(cfg: &crate::config::StorageConfig) -> Box<dyn Storage> {
     match cfg.kind {
         StorageKind::InMemory => Box::new(InMemoryStorage::new()),
         StorageKind::Redis => Box::new(RedisStorage::new(cfg.connection_string.clone())),
-        StorageKind::Memcached => {
-            Box::new(MemcachedStorage::new(cfg.connection_string.clone()))
-        }
+        StorageKind::Memcached => Box::new(MemcachedStorage::new(cfg.connection_string.clone())),
         StorageKind::File => Box::new(FileStorage::new(cfg.file_path.clone())),
         StorageKind::Distributed => {
             Box::new(DistributedStorage::new(cfg.connection_string.clone()))

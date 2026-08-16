@@ -126,7 +126,12 @@ pub struct ClassDims {
 
 impl ClassDims {
     /// 构造新 24 维.
-    pub const fn new(pc: DimensionSet, rc: DimensionSet, hg: DimensionSet, gp: DimensionSet) -> Self {
+    pub const fn new(
+        pc: DimensionSet,
+        rc: DimensionSet,
+        hg: DimensionSet,
+        gp: DimensionSet,
+    ) -> Self {
         Self { pc, rc, hg, gp }
     }
 
@@ -222,7 +227,10 @@ mod tests {
     #[test]
     fn class_weights_sum_to_1() {
         let sum: f32 = Class::ALL.iter().map(|c| c.weight()).sum();
-        assert!((sum - 1.0).abs() < 1e-6, "4 大类权重 sum 必须 = 1.00, 实际 {sum}");
+        assert!(
+            (sum - 1.0).abs() < 1e-6,
+            "4 大类权重 sum 必须 = 1.00, 实际 {sum}"
+        );
     }
 
     /// 守门 #5: 4 大类权重具体值.

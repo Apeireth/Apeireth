@@ -92,26 +92,23 @@ mod py_impl {
     /// apeireth-core Episode → JSON
     #[pyfunction]
     pub fn py_episode_to_json(ep: &str) -> PyResult<String> {
-        let parsed: apeireth_core::Episode = serde_json::from_str(ep)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        bridge::episode_to_json(&parsed)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        let parsed: apeireth_core::Episode =
+            serde_json::from_str(ep).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        bridge::episode_to_json(&parsed).map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     #[pyfunction]
     pub fn py_session_to_json(s: &str) -> PyResult<String> {
-        let parsed: apeireth_core::Session = serde_json::from_str(s)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        bridge::session_to_json(&parsed)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        let parsed: apeireth_core::Session =
+            serde_json::from_str(s).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        bridge::session_to_json(&parsed).map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     #[pyfunction]
     pub fn py_note_to_json(n: &str) -> PyResult<String> {
-        let parsed: apeireth_core::Note = serde_json::from_str(n)
-            .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        bridge::note_to_json(&parsed)
-            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+        let parsed: apeireth_core::Note =
+            serde_json::from_str(n).map_err(|e| PyValueError::new_err(e.to_string()))?;
+        bridge::note_to_json(&parsed).map_err(|e| PyRuntimeError::new_err(e.to_string()))
     }
 
     #[pyfunction]
@@ -288,20 +285,17 @@ mod tests {
         assert!(r.is_ok(), "json.dumps with kwargs failed: {r:?}");
         let out = r.unwrap();
         // ensure_ascii=False 时 Unicode 字符保留
-        assert!(out.contains("héllo") || out.contains("h\\u00e9llo"),
-                "expected unicode preserved or escaped, got: {out}");
+        assert!(
+            out.contains("héllo") || out.contains("h\\u00e9llo"),
+            "expected unicode preserved or escaped, got: {out}"
+        );
     }
 
     /// `py_call_python_with_kwargs` 错误 module 走 PyRuntimeError (守 R11 行为契约)
     #[cfg(feature = "python-ext")]
     #[test]
     fn r127_2_py_call_python_with_kwargs_invalid_module() {
-        let r = py_call_python_with_kwargs(
-            "not.a.real.module.zzz",
-            "f",
-            vec![],
-            vec![],
-        );
+        let r = py_call_python_with_kwargs("not.a.real.module.zzz", "f", vec![], vec![]);
         assert!(r.is_err());
     }
 

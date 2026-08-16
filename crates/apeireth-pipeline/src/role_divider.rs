@@ -186,10 +186,22 @@ pub const END_ROLE_DIVIDE_DEVELOPER: &str = "</ROLE_DIVIDE_DEVELOPER>";
 const START_TO_END: &[(&str, &str, Role)] = &[
     (ROLE_DIVIDE_SYSTEM, END_ROLE_DIVIDE_SYSTEM, Role::System),
     (ROLE_DIVIDE_USER, END_ROLE_DIVIDE_USER, Role::User),
-    (ROLE_DIVIDE_ASSISTANT, END_ROLE_DIVIDE_ASSISTANT, Role::Assistant),
+    (
+        ROLE_DIVIDE_ASSISTANT,
+        END_ROLE_DIVIDE_ASSISTANT,
+        Role::Assistant,
+    ),
     (ROLE_DIVIDE_TOOL, END_ROLE_DIVIDE_TOOL, Role::Tool),
-    (ROLE_DIVIDE_FUNCTION, END_ROLE_DIVIDE_FUNCTION, Role::Function),
-    (ROLE_DIVIDE_DEVELOPER, END_ROLE_DIVIDE_DEVELOPER, Role::Developer),
+    (
+        ROLE_DIVIDE_FUNCTION,
+        END_ROLE_DIVIDE_FUNCTION,
+        Role::Function,
+    ),
+    (
+        ROLE_DIVIDE_DEVELOPER,
+        END_ROLE_DIVIDE_DEVELOPER,
+        Role::Developer,
+    ),
 ];
 
 // ============================================================
@@ -246,7 +258,9 @@ pub fn parse_typed_message(text: &str) -> Vec<TypedMessage> {
         // 找最近的 START tag (any of 6 roles)
         let next_start = find_next_start(text, cursor);
 
-        let Some((start_idx, start_tag, start_role)) = next_start else { break }; // 找不到更多 START, 退出
+        let Some((start_idx, start_tag, start_role)) = next_start else {
+            break;
+        }; // 找不到更多 START, 退出
 
         // START 之前的 buffer 加不进 out (VCP 把 buffer 归到 baseRole, 我们 0 装 baseRole 简化)
         // 跳过 START 之前的内容, 直接定位 START
@@ -295,7 +309,9 @@ pub fn extract_role_segments(text: &str) -> Vec<(Role, &str)> {
 
     while cursor < text.len() {
         let next_start = find_next_start(text, cursor);
-        let Some((start_idx, start_tag, start_role)) = next_start else { break };
+        let Some((start_idx, start_tag, start_role)) = next_start else {
+            break;
+        };
 
         let content_start = start_idx + start_tag.len();
         let end_tag = end_tag_for(start_role);
@@ -422,7 +438,10 @@ mod role_divider_tests {
     #[test]
     fn role_divide_wrap_with_role_produces_xml_pair() {
         let wrapped = wrap_with_role(Role::System, "You are helpful");
-        assert_eq!(wrapped, "<ROLE_DIVIDE_SYSTEM>You are helpful</ROLE_DIVIDE_SYSTEM>");
+        assert_eq!(
+            wrapped,
+            "<ROLE_DIVIDE_SYSTEM>You are helpful</ROLE_DIVIDE_SYSTEM>"
+        );
 
         let wrapped = wrap_with_role(Role::User, "Hi!");
         assert_eq!(wrapped, "<ROLE_DIVIDE_USER>Hi!</ROLE_DIVIDE_USER>");
@@ -543,8 +562,7 @@ mod role_divider_tests {
     #[test]
     fn role_divide_parse_preserves_content_whitespace() {
         // 保留原文 whitespace (VCP lines 304-306 trim 仅在 resultMessages, 0 装保留)
-        let text =
-            "<ROLE_DIVIDE_SYSTEM>  leading\nand\nmulti-line  </ROLE_DIVIDE_SYSTEM>";
+        let text = "<ROLE_DIVIDE_SYSTEM>  leading\nand\nmulti-line  </ROLE_DIVIDE_SYSTEM>";
         let msgs = parse_typed_message(text);
         assert_eq!(msgs.len(), 1);
         assert_eq!(msgs[0].content, "  leading\nand\nmulti-line  ");

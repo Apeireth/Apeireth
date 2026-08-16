@@ -30,8 +30,22 @@ fn main() {
     println!("--- 综合判定 ---");
     let mut all_pass = walls.all_pass();
     let mut probe_all_ok = report.all_ok;
-    println!("  8 硬墙 (10 项) verify: {}", if all_pass { "✅ ALL PASS" } else { "❌ FAILED" });
-    println!("  5 探针 (跨模块):     {}", if probe_all_ok { "✅ ALL OK" } else { "❌ FAILED" });
+    println!(
+        "  8 硬墙 (10 项) verify: {}",
+        if all_pass {
+            "✅ ALL PASS"
+        } else {
+            "❌ FAILED"
+        }
+    );
+    println!(
+        "  5 探针 (跨模块):     {}",
+        if probe_all_ok {
+            "✅ ALL OK"
+        } else {
+            "❌ FAILED"
+        }
+    );
 
     // Honest disclosure
     if !all_pass || !probe_all_ok {

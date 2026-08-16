@@ -20,9 +20,18 @@ fn main() {
     // 2. AsiStage5Token POD (类比 Kani MyDate)
     println!("AsiStage5Token POD (6 字段, 1:1 跟 Stage 5 治理 6 维度):");
     let token = AsiStage5Token::stage5_default();
-    println!("  stage1_7_modules: {} (V1077..V1470)", token.stage1_7_modules);
-    println!("  g1_resource_dims: {} (rate/memory/time/count)", token.g1_resource_dims);
-    println!("  g2_permission_layers: {} (6-fold v7, 1:1 跟 B4)", token.g2_permission_layers);
+    println!(
+        "  stage1_7_modules: {} (V1077..V1470)",
+        token.stage1_7_modules
+    );
+    println!(
+        "  g1_resource_dims: {} (rate/memory/time/count)",
+        token.g1_resource_dims
+    );
+    println!(
+        "  g2_permission_layers: {} (6-fold v7, 1:1 跟 B4)",
+        token.g2_permission_layers
+    );
     println!("  g3_harnesses: {} (Kani-style)", token.g3_harnesses);
     println!("  g4_evolution_rules: {}", token.g4_evolution_rules);
     println!("  ceiling_critical: {} (V1458)", token.ceiling_critical);
@@ -33,11 +42,18 @@ fn main() {
     let v_u8: Box<dyn Invariant> = Box::new(42u8);
     let v_token: Box<dyn Invariant> = Box::new(token.clone());
     println!("  Box<dyn Invariant>(42u8).is_safe() = {}", v_u8.is_safe());
-    println!("  Box<dyn Invariant>(AsiStage5Token).is_safe() = {}\n", v_token.is_safe());
+    println!(
+        "  Box<dyn Invariant>(AsiStage5Token).is_safe() = {}\n",
+        v_token.is_safe()
+    );
 
     // 4. ProofKind 3 变体 (1:1 翻译 Kani HarnessKind)
     println!("ProofKind 3 变体 (1:1 翻译 Kani kani_metadata::HarnessKind):");
-    for kind in [ProofKind::Proof, ProofKind::ProofForContract, ProofKind::Test] {
+    for kind in [
+        ProofKind::Proof,
+        ProofKind::ProofForContract,
+        ProofKind::Test,
+    ] {
         println!("  ProofKind → as_str() = \"{}\"", kind.as_str());
     }
     println!();
