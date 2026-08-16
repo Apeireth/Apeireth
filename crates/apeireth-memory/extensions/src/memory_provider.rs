@@ -136,6 +136,24 @@ impl ProviderKind {
         }
     }
 
+    /// 按名称解析 (per `as_str()` 1:1 逆映射, 供 factory/registry 按名称选择).
+    ///
+    /// 未知名称返 `None` (调用方决定报错或 fallback).
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "in_memory" => Some(Self::InMemory),
+            "redis" => Some(Self::Redis),
+            "sqlite" => Some(Self::Sqlite),
+            "postgres" => Some(Self::Postgres),
+            "s3" => Some(Self::S3),
+            "disk_lru" => Some(Self::DiskLru),
+            "hybrid" => Some(Self::Hybrid),
+            "file" => Some(Self::File),
+            "mongodb" => Some(Self::MongoDb),
+            _ => None,
+        }
+    }
+
     /// 9 变体全列表 (per 借鉴 #6 sister report 9 organ ALL 模式).
     pub const ALL: [ProviderKind; MEMORY_PROVIDER_KIND_COUNT] = [
         Self::InMemory,
@@ -440,6 +458,22 @@ mod tests {
             .collect();
         let unique: std::collections::HashSet<&str> = s.iter().copied().collect();
         assert_eq!(unique.len(), 9);
+    }
+
+    #[test]
+    fn from_name_round_trips_all_9_kinds() {
+        for kind in ProviderKind::ALL {
+            let name = kind.as_str();
+            assert_eq!(ProviderKind::from_name(name), Some(kind), "{name} should round-trip");
+        }
+    }
+
+    #[test]
+    fn from_name_rejects_unknown_and_case_sensitive() {
+        assert!(ProviderKind::from_name("nonexistent").is_none());
+        assert!(ProviderKind::from_name("").is_none());
+        assert!(ProviderKind::from_name("InMemory").is_none(), "case-sensitive: camel case must not match");
+        assert!(ProviderKind::from_name("IN_MEMORY").is_none());
     }
 
     #[test]
