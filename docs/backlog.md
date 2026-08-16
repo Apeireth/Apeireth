@@ -67,6 +67,7 @@
 | N18 | **新 crate 必须声明消费方 (规范)** | 孤儿体检暴露机制漏洞 | 审计搜 TODO 模式抓不到"翻译了未接线"的 crate: maintenance-guide 加规范 — 新建 crate 必须登记消费方 (谁依赖/谁装配), 缺消费方的 crate 在台账显式标注"独立待装配"; 孤儿体检 (0 引用扫描) 纳入定期检查 | ✅ TP9 落地: maintenance-guide §三 条目 000 规范明文 + _scripts/orphan-scan.ps1 正式入库 (提交 b0c093a9, cargo metadata kind 权威判定, 孤儿/dev-only/bin 终点三分类 + dev-dep 自引用/互指环检测 + #33 自动对账); 首次全量扫描证据 reports/orphan-scan-first.md (83 成员: 孤儿 24/dev-only 4/bin 终点 3; 含新增 apeireth-credentials 同态孤儿; #33 清单 12 项全仍孤儿; tool-fetch 自引用命中; dev↔normal 互指环 5 条命中); 孤儿处置待 Leader |
 | N21 | **apeireth-credentials (统一 API key 管理)** | 主人 2026-08-17 设计蓝图对照 (R136 计划: "API key 管理统一走 apeireth-credentials crate (已存在)" — 实际不存在) | 各插件/工具目前各读 env: 新建 credentials crate (密钥安全存储/按服务名读写/权限洋葱衔接 master token, 0 假装: 不存明文到日志), 工具装配 (N17) 时统一接入; 与 N17 同批 | ✅ 已完成 (任务 d1d53344, 提交 f59ce83f/6ec7995e): 新 crate apeireth-credentials — CredentialsStore trait + 文件后端 (明文静态存储 0 装标注, 权限 600 语义) + SecretString 脱敏 (Debug/Display 恒 REDACTED) + CredentialGate 审批门 trait 口 (高危 fail-closed, 真审批链挂 companion 装配侧) + 25 测全绿 (读写/未知名报错/脱敏/穿越防护) |
 | N22 | **ShellPreset (shell 预设命令机制)** | 主人 2026-08-17 设计蓝图对照 (R136: "VCP preset 机制 (preset:预设名?参数) 值得保留 — 减少 LLM 记忆成本") | tool-shell 无实现: ShellPreset { name, command_template } + 白名单预设 (预设名展开为完整命令, 参数走模板) — 与 N17 装配同批 | ✅ 提交 b48f355 + 7b11738: tool-shell preset.rs (白名单登记 + argv 模板展开 + 参数独立 quote 防注入 + PresetShell 挂 exec_sandboxed 既有链, 注入用例 `;`/`&&`/`|`/`$()`/反引号全测, 9/9 测试全绿) |
+| N23 | §5.1④ 跨日记关联 (diary↔memory_graph 确定性联动) | team-work-doc §5.1 记忆域深化包 机制④ (团队任务 3cd1f8c0) | apeireth-companion 新增 cross_diary.rs (自包含, 只经两模块已有公开接口采集): link_core 纯函数共享 token 建链 (复用 topic_groups::topic_tokens, 0向量0嵌入) + CrossDiaryIndex::build (list_days/read_day + active_facts) + 双向查询 diary_for_fact/facts_for_diary (去重保序) + CrossLink 带 shared_tokens 审计证据 + CrossDiaryInjector trait 注入机制口; 未触碰 diary.rs/memory_graph.rs/assemble.rs 本体 | ✅ 完成: 提交 8e015af0 (2 files); 独立核心脚手架 15/15 全绿 (7 纯逻辑 + 8 topic_groups 复跑); 集成测试源码在位, crate 被他人 WIP 阻塞 (rusqlite 依赖缺失 continuity/onering, N2 领域) 待解锁后跑, 如实标注; 报告 reports/3cd1f8c0-db48-442b-b617-4ac2148ef0af-mcp_integration_expert2-report.md |
 
 ### 模块对标调研批 (2026-08-17, 4 subagent web 调研; 主人指示: 团队能干的先安排, 需讨论的明天一起议)
 
@@ -88,7 +89,7 @@
 | S5 | 供应链补强: cargo vet + SBOM | 安全调研 | cargo vet 先覆盖直接依赖 + release workflow 加 CycloneDX 生成 (与 cosign 一体) | ⬜ 团队可干 (P2) |
 | S6 | **审计哈希链换 SHA-256** | 安全调研修正 | session_log FNV-1a 64 非加密可碰撞 → SHA-256 链 + 每 N 条锚定签名 (tamper-evident) | ⬜ 团队可干 (P1, 成本低) |
 | S7 | master token 比对改 constant-time | 安全调研修正 | principles.rs 已自标非恒定时间 → 恒定时间比较 | ⬜ 团队可干 (P1, 成本低) |
-| E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ⬜ 团队可干 (P1) |
+| E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ✅ 完成 (7285995c agent_orchestrator2: reflexion.rs 自包含, 确定性规则版 CRITIC 先行, LLM 口留 trait 0 装, 5 组单测全绿, 实接线留公开口) |
 | E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ⬜ 团队可干 (P1) |
 | E3 | **校准诊断 + 集合预报 + 预测市场适配器** | 进化调研 | oracle 补 Brier 分解 (reliability/resolution) + 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器 (oracle_adapters 已有模式) | ⬜ 团队可干 (P1) |
 | E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
