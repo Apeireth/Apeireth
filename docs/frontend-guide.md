@@ -95,10 +95,22 @@ cargo run -p apeireth-companion --example companion_serve   # :8090, daemon 同�
 **0 假装**：FileOperator/ShellExec 可见但默认需批准; daemon 内部 RefCell 跨 await 非 Send → 与 HTTP 同 task 交替（select!）;
 记忆很多时增量窗口（最近 20 条）可能漏旧条目（后续可做游标式）。
 
+**自成长管道注入（Level 0-3, 2026-08-16）**：
+- 预处理链含 `inject_growth`: 待提案经验提示 (经验验证达标 → 促能力提案) + 原则状态
+  (pending 待主人批准 / active 生效中含违反计数)
+- 工具: save_experience / list_experience / verify_experience (经验库, 验证 3 次+评分达标 → ready)
+  propose_principle / approve_principle (动态原则层; 批准需 master token = 主人授权)
+- daemon 延伸: 反思周期完成 → LLM 提炼经验入库; 晋级候选自动成文
+  (%APPDATA%\apeireth\promotion-candidates.md, 内层写入=主人侧工程动作)
+- 安全实测: 提案已被编译期宪法覆盖的原则 → 硬门 PHL-01 拦截 + 主权熔断 (分层正确)
+
 **实测（2026-08-16 v3, MiniMax-M3）**:
 - save_memory 真执行 + **重启后仍记得**（持久化 ✅）
 - **做梦全链路**: daemon tick → 安静期到 → 合并新记忆 → LLM 摘要(1.6s) → 写回【做梦摘要】✅
 - 宪法评审: FileOperator 写文件成功（LLM 评审 ALLOW + 授权包）✅
+- **原则全流程**: AI 提案 → 主人 token 批准 → active 即时生效 (AI 行为立即改变) ✅
+  → 晋级候选自动成文 promotion-candidates.md ✅
+- 反思周期完成 → 经验提炼机制触发 ✅ (无可提炼时如实报告, 不硬造)
 
 **对 VCP 的改进点**（VCP 不好的我们改，VCP 没有的我们补）：
 
