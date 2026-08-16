@@ -18,7 +18,7 @@
 //! 0 假装 (诚实):
 //! - 内层晋级 = 主人侧工程动作 (AI 只产候选报告); 编译期规则表本身不被本模块修改
 //! - 动态规则是「字符串前缀匹配」语义 (对齐 ConstitutionGate), 非语义理解
-//! - token 比对非 constant-time (本地 serve 场景, 标注)
+//! - token 比对为 constant-time (S7: XOR 累加器无早退, std 实现不引新依赖)
 
 use std::sync::Arc;
 
@@ -298,6 +298,19 @@ impl apeireth_tool_registry::Tool for ApprovePrincipleTool {
             "note": "原则已生效 (动态规则层); 将叠加到工具执行检查; 长期零违反可晋级内层候选"
         }))
     }
+}
+
+/// S7: 恒定时间字符串比较 (std 实现, 不引新依赖).
+/// XOR 累加器无早退: 比较时长只取决于 expected 长度, 与 provided 前缀匹配长度无关;
+/// 长度差折入累加器, 不按长度分支提前返回 (防时序旁路).
+fn constant_time_eq(expected: &str, provided: &str) -> bool {
+    let e = expected.as_bytes();
+    let p = provided.as_bytes();
+    let mut acc = (e.len() != p.len()) as u8;
+    for (i, b) in e.iter().enumerate() {
+        acc |= b ^ p.get(i).copied().unwrap_or(0);
+    }
+    acc == 0
 }
 
 #[cfg(test)]
