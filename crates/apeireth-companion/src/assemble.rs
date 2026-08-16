@@ -383,12 +383,12 @@ impl CompanionApp {
             if let Some(recall) = &self.deep_recall {
                 let candidates: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
                 if let Ok(selected) = recall.recall(query, &candidates).await {
-                    return crate::memory_injection::build_memory_injection(&selected);
+                    return memory_block(&selected);
                 }
                 // 失败 → 降级普通注入 (诚实)
             }
         }
-        crate::memory_injection::build_memory_injection(&entries)
+        memory_block(&entries)
     }
 
     /// 今日摘要注入.
@@ -570,6 +570,23 @@ impl CompanionApp {
         let out = dir.join("promotion-candidates.md");
         std::fs::write(&out, &cands).ok()?;
         Some(out)
+    }
+}
+
+/// **§5.1 记忆注入挂接点** — 主题索引块 + 反幻觉记忆证据块合并 (不另立平行注入系统)
+///
+/// 主题索引 (topic_groups) 在前给 LLM 版图概览, 记忆证据块在后守闭世界约束;
+/// 主题索引自带字符预算, 空记忆两皆空串.
+fn memory_block(entries: &[String]) -> String {
+    let mem = crate::memory_injection::build_memory_injection(entries);
+    let idx = crate::topic_groups::build_topic_index(
+        entries,
+        crate::topic_groups::TOPIC_INDEX_MAX_CHARS,
+    );
+    match (idx.is_empty(), mem.is_empty()) {
+        (_, true) => idx,
+        (true, false) => mem,
+        (false, false) => format!("{idx}\n\n{mem}"),
     }
 }
 
