@@ -3,7 +3,7 @@
 //! 发布形态 (docs/release-plan.md):
 //! - **本体 (Base)**: 开箱即用核心 (涌现/记忆/安全/工具桥) — 80% 必要能力
 //! - **能力包 (CapabilityPack)**: 装上从 80% → 完全体 (沙盒/审计/多通道/GUI/本地智能)
-//! - **升级套件 (UpgradeSuite)**: 赋予「专业团队能力」(渗透/预测机/家教)
+//! - **升级套件 (UpgradeSuite)**: 赋予「专业团队能力」(渗透/预测机/教育)
 //!
 //! 装配语义:
 //! - 套件 = 一组工具注册要求 + 权限包预设 + 描述; 由 `install` 装配 (校验工具已注册 + 登记权限包)
@@ -98,14 +98,14 @@ impl SuiteCatalog {
                 },
                 // ---- 升级套件 ----
                 SuiteDef {
-                    id: "tutor-suite".into(),
-                    name: "家教升级套件".into(),
+                    id: "education-suite".into(),
+                    name: "教育升级套件".into(),
                     kind: SuiteKind::UpgradeSuite,
                     description: "数学学习伴侣: 错题分析/学习路径/换元提醒 (主人场景)".into(),
                     requires_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
                     pack_tools: vec!["recall_memory".into(), "save_memory".into(), "FileOperator".into()],
                     pack_hours: Some(24 * 30),
-                    plugins: vec!["tutor-dx-check".into()],
+                    plugins: vec!["education-dx-check".into()],
                 },
                 SuiteDef {
                     id: "pentest-suite".into(),
@@ -249,7 +249,7 @@ mod tests {
     #[test]
     fn expiry_check_fires_after_hours() {
         let c = SuiteCatalog::builtin();
-        let tutor = c.get("tutor-suite").unwrap();
+        let tutor = c.get("education-suite").unwrap();
         let installed = 1_700_000_000_000i64;
         assert!(suite_expiry_check(tutor, installed, installed + 29 * 24 * 3600_000).is_none());
         assert!(suite_expiry_check(tutor, installed, installed + 31 * 24 * 3600_000).is_some());
@@ -266,7 +266,7 @@ mod tests {
         use std::sync::Arc;
         struct DxPlugin;
         impl Plugin for DxPlugin {
-            fn id(&self) -> &str { "tutor-dx-check" }
+            fn id(&self) -> &str { "education-dx-check" }
             fn version(&self) -> &str { "0.1.0" }
             fn description(&self) -> &str { "换元 dx 检查插件" }
             fn on_load(&self, b: &ToolBridge) -> Result<(), String> {
@@ -280,11 +280,11 @@ mod tests {
         let cat = SuiteCatalog::builtin();
         let reg = PluginRegistry::new();
         // 未装插件 → 套件装配拒绝
-        assert!(cat.install_with_plugins(&bridge, Some(&reg), "tutor-suite").is_err());
+        assert!(cat.install_with_plugins(&bridge, Some(&reg), "education-suite").is_err());
         // 装插件后 → 装配成功
         reg.install(&bridge, Arc::new(DxPlugin)).unwrap();
-        let r = cat.install_with_plugins(&bridge, Some(&reg), "tutor-suite").unwrap();
-        assert!(r.contains("家教升级套件"));
+        let r = cat.install_with_plugins(&bridge, Some(&reg), "education-suite").unwrap();
+        assert!(r.contains("教育升级套件"));
         assert!(r.contains("1 插件"));
         // 无插件要求的套件不受影响
         assert!(cat.install_with_plugins(&bridge, Some(&reg), "base").is_ok());
