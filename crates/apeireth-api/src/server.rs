@@ -126,6 +126,7 @@ pub fn build_router_with_v2(state: SharedState, v2: crate::v2_endpoints::SharedV
         .route("/health/deps", get(health_deps))
         // R17 战役 1-4: 4 协议端点 (走 Pipeline)
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/v1/models", get(list_models))
         .route("/v1/responses", post(responses))
         .route("/v1/messages", post(messages))
         .route(
@@ -161,6 +162,17 @@ async fn health() -> impl IntoResponse {
         "service": "apeireth-api",
         "version": env!("CARGO_PKG_VERSION"),
         "protocols": ["openai_chat", "openai_responses", "anthropic_messages", "gemini"],
+    }))
+}
+
+/// OpenAI 兼容: 模型列表 (前端对接用 — LobeChat/NextChat/Open WebUI 启动时拉取).
+/// 静态白名单; 0 假装: 只列 catalog 白名单模型, 不动态探测.
+async fn list_models() -> impl IntoResponse {
+    Json(json!({
+        "object": "list",
+        "data": [
+            {"id": "MiniMax-M3", "object": "model", "created": 0, "owned_by": "minimax"}
+        ]
     }))
 }
 
