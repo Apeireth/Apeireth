@@ -10,6 +10,7 @@
 
 | 来源 | 吸收 |
 |---|---|
+| 中科闻歌 [Decitron 决策机](https://finance.sina.cn/tech/2026-06-10/detail-iniavwqe6191213.d.html) / [WAIC 决策AI树](https://w.geekpark.net/news/367520) | 「从生成答案到决策未来」——决策智能产品线; 印证两大支柱: 信息来源 + 决策过程 |
 | 炒股预测圈（[AI4Finance/FinGPT](https://github.com/AI4Finance-Foundation/Awesome_AI4Finance)） | **预测必须可证伪**（「在 T 前 X 发生概率 P」）|
 | [Metaculus 校准分析](https://www.metaculus.com/notebooks/43356/calibration-adjustment-analysis/) / [Calibration is a Skill](https://www.hotmolts.com/post/calibration-is-a-skill-and-agents-should-train-it-55d0b6c5-3d1a-4ef4-859f-4a1cdb4e2191) | **校准度 > 准确度**：说 70% 的事 10 次里该发生 7 次（Brier score）|
 | [arlo learning loop](https://github.com/bedwards/arlo/issues/16) | 预测必须可回放（backtest）、可审计 |
@@ -17,7 +18,20 @@
 | 危机推演（[FALSE FLAG](https://github.com/earlyprototype/false-flag)）/ [Geopol-Modeller](https://github.com/danielrosehill/Geopol-Modeller) | engine-scenario 分离（引擎与场景解耦，正合插件架构）|
 | 社会模拟（[AgentSociety](https://agentsociety.readthedocs.io/zh-cn/latest/index.html)） | 多主体推演（后续）|
 
-## 三、架构（预测决策一体，复用基地机制）
+## 三、两大支柱
+
+**① 信息来源（广度/深度/准确度）**——基地已有并持续补强：
+- WebSearch（搜索）/ WebFetch（单页抓取）/ **Crawl（轻量爬虫: 多页+链接提取+深度控制, R230）**（[实现](../crates/apeireth-tools/src/web_crawl.rs)）
+- FileOperator/Grep（本地信息）/ recall_memory（记忆）/ save_memory（沉淀）
+- 准确度: 来源标注 + 记忆注入反幻觉（EMI/NEC）+ 出站 guard 脱敏
+
+**② 决策过程（算法/工作流）**——本套件研究重点：
+- 情景推演（ScenarioEngine 规则层 + UncertaintyResolver LLM 口子）
+- 分支评估（DecisionEngine 期望值）
+- 校准（Forecast + Brier + BetaBinomial）
+- 验证/回滚（EvalGate）/ 宪法边界（硬门+评审）
+
+## 四、架构（预测决策一体，复用基地机制）
 
 ```
 oracle-suite = 预测决策一体沙盘

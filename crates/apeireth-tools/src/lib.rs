@@ -76,6 +76,7 @@ mod organ_kani_proofs;
 pub mod long_task;
 pub mod classifier;  // R30 U5: tool classifier (8 类 keyword routing)
 pub mod web_fetch;  // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
+pub mod web_crawl;  // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
 pub mod apply_patch;  // R30 U1: Codex-style apply_patch
 pub mod conventions_scanner;  // R33-1: Aider-style project conventions scanner
 pub mod grep_ops;
@@ -160,8 +161,8 @@ const _: () = {
 
     // register_all
     assert!(
-        REGISTERED_TOOL_COUNT_CONST == 8,
-        "REGISTERED_TOOL_COUNT = 8 (8 工具 incl Grep + ApplyPatch + LongTask + WebFetch)"
+        REGISTERED_TOOL_COUNT_CONST == 9,
+        "REGISTERED_TOOL_COUNT = 9 (8 基础 + Crawl)"
     );
 
     // VCP 字段 5
@@ -203,7 +204,7 @@ mod lib_tests {
         assert_eq!(FILE_OPS_OP_COUNT, 7);
         assert_eq!(GIT_OPS_OP_COUNT, 3);
         assert_eq!(CODE_EXEC_OP_COUNT, 1);
-        assert_eq!(REGISTERED_TOOL_COUNT_CONST, 8);
+        assert_eq!(REGISTERED_TOOL_COUNT_CONST, 9);
         assert_eq!(BORROWED_LEGACY_FIELDS, 5);
         assert_eq!(MAX_FILE_SIZE, 20 * 1024 * 1024);
         assert_eq!(MAX_DIRECTORY_ITEMS, 1000);
@@ -262,9 +263,9 @@ mod lib_tests {
         let registry = apeireth_tool_registry::ToolRegistry::new();
         assert!(registry.is_empty());
         register_all(&registry).expect("register_all");
-        assert_eq!(registry.len(), 8);
+        assert_eq!(registry.len(), 9);
         let listed = registry.list();
-        assert_eq!(listed.len(), 8);
+        assert_eq!(listed.len(), 9);
     }
 
     #[test]
