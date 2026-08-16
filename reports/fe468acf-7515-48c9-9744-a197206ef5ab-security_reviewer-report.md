@@ -39,6 +39,6 @@
 
 ## 5. 过程实录 (供 Leader 复盘)
 
-- 在途改动曾被 code_reviewer2 暂存 (`git stash` 验收用, 备份 reports/_wip-backup/tool-approval/), 已从备份恢复并续作; 该 stash 已 drop (内容已全部提交).
+- 在途改动曾被 code_reviewer2 暂存 (`git stash` 验收用, 备份 reports/_wip-backup/tool-approval/), 已从备份恢复并续作; 该 stash (现 stash@{1}) 归属 code_reviewer2, **未越权 drop** — 其内容已全部提交入库, 该 stash 已过时, 由 owner 自行处置.
 - backlog 编号冲突: 我初编 N16/N17 与并行"孤儿 crate 接线批"撞号, 已重编 **N19/N20**.
 - docs 并行混写: maintenance-guide/team-work-doc 中他人未提交行已隔离 (只提交自己的行, 他人行恢复回工作区).
