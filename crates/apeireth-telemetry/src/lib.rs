@@ -67,8 +67,19 @@ pub mod observability;
 pub mod log_replay;
 
 // 1.1 兼容层: 旧 import path 透明 re-export
-/// 1.1: 5 module 名 1:1 对应 (R122-7 加 log_replay)
-pub const ALL_MODS: [&str; 5] = ["cache", "metric", "trace", "observability", "log_replay"];
+/// 1.1: 6 module 名 1:1 对应 (R122-7 加 log_replay; OTel 审计加 otlp)
+pub const ALL_MODS: [&str; 6] = [
+    "cache",
+    "metric",
+    "trace",
+    "observability",
+    "log_replay",
+    "otlp",
+];
+
+/// 可选 OTLP 导出接口 (trait + Noop 默认 + JSON 行实现, 0 opentelemetry 重依赖).
+/// 详见 `crates/apeireth-telemetry/src/otlp.rs` 头部审计结论.
+pub mod otlp;
 
 #[cfg(test)]
 mod r35_umbrella_tests {
@@ -86,11 +97,12 @@ mod r35_umbrella_tests {
     }
     #[test]
     fn r35_facade_reexports_compile() {
-        assert_eq!(ALL_MODS.len(), 5); // R122-7 加 log_replay
+        assert_eq!(ALL_MODS.len(), 6); // R122-7 加 log_replay; OTel 审计加 otlp
         let _ = std::any::type_name::<crate::cache::policy::EvictionPolicy>();
         let _ = std::any::type_name::<crate::metric::config::MetricsConfig>();
         let _ = std::any::type_name::<crate::trace::span::SpanKind>();
         let _ = std::any::type_name::<crate::observability::TuiDashboardError>();
         let _ = std::any::type_name::<crate::log_replay::LogReplay>();
+        let _ = std::any::type_name::<crate::otlp::NoopOtlpSink>();
     }
 }
