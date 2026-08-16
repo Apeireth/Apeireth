@@ -185,6 +185,11 @@ fn known_schemas() -> Vec<(&'static str, &'static str, Value)> {
         ("verify_experience", "验证经验 (成功/失败) → 计数+评分, 达标促能力提案", json!({"type":"object","properties":{"id":{"type":"string"},"success":{"type":"boolean"}},"required":["id","success"]})),
         ("propose_principle", "提案原则候选 (动态原则层/洋葱外层): statement+rationale+source", json!({"type":"object","properties":{"statement":{"type":"string"},"rationale":{"type":"string"},"source":{"type":"string"}},"required":["statement","rationale"]})),
         ("approve_principle", "主人批准原则 (需 master token; 生效后叠加到工具执行检查)", json!({"type":"object","properties":{"id":{"type":"string"},"master_token":{"type":"string"}},"required":["id","master_token"]})),
+        ("goal_create", "建立当前目标 (模块 6): objective+max_rounds; 已有未完成目标则拒绝", json!({"type":"object","properties":{"objective":{"type":"string"},"max_rounds":{"type":"number"}},"required":["objective"]})),
+        ("goal_status", "查询当前目标状态 (phase/revision/rounds/blocked)", json!({"type":"object"})),
+        ("goal_complete", "目标完成 → completed (可建新目标)", json!({"type":"object"})),
+        ("goal_pause", "暂停当前目标 (active → paused)", json!({"type":"object"})),
+        ("goal_block", "报告目标受阻 (active → blocked + 原因)", json!({"type":"object","properties":{"code":{"type":"string"},"message":{"type":"string"}}})),
     ]
 }
 
@@ -960,13 +965,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("[seed] 已写入种子记忆: {}", seed.replace(';', " | "));
     }
 
-    // ② 工具桥全增强 (宪法 LLM 评审 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
+    // 目标服务 (持久目录 %APPDATA%\apeireth\goals; 与工具桥共享同一实例)
+    let goal_dir = apeireth_companion::daemon::default_memory_path()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+        .unwrap_or_else(|| std::env::temp_dir().join("apeireth-goals"))
+        .join("goals");
+    let mut goals = GoalService::new(&goal_dir);
+    goals.restore("goal-main");
+    let goals_shared: std::sync::Arc<std::sync::Mutex<GoalService>> = std::sync::Arc::new(std::sync::Mutex::new(goals));
+
+    // ② 工具桥全增强 (宪法 LLM 评审 + 目标工具 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
     let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone()))?);
-    let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)).with_judicator(Arc::new(
-        LlmJudicator::new(Arc::new(MiniMaxConstitutionLlm {
-            pipeline: Arc::clone(&pipeline),
-        })),
-    )));
+    let bridge = Arc::new(
+        ToolBridge::new(Arc::clone(&store))
+            .with_judicator(Arc::new(LlmJudicator::new(Arc::new(MiniMaxConstitutionLlm {
+                pipeline: Arc::clone(&pipeline),
+            }))))
+            .with_goals(std::sync::Arc::clone(&goals_shared)),
+    );
     if let Ok(grants) = std::env::var("APEIRETH_GRANT") {
         for g in grants.split(';').filter(|s| !s.trim().is_empty()) {
             let (tool, hours) = match g.split_once(':') {
@@ -1055,7 +1072,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         last_extract: std::sync::Mutex::new(std::time::Instant::now()),
         extract_interval,
         rhythm: std::sync::Arc::clone(&rhythm_share),
-        goal: std::sync::Arc::new(std::sync::Mutex::new(goals)),
+        goal: std::sync::Arc::clone(&goals_shared),
         subject,
     });
     let app = Router::new()
