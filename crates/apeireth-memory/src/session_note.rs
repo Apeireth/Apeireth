@@ -194,10 +194,17 @@ pub struct NoteRecord {
     pub confidence: f64,
     /// 标签.
     pub tags: Vec<String>,
+    /// 有效期起点 (epoch seconds; `None` = 无下界, 一直有效). M5.
+    /// `serde(default)`: 旧缓存 JSON (无此字段) 反序列化为 None = 永久有效, 向后兼容.
+    #[serde(default)]
+    pub valid_from: Option<i64>,
+    /// 有效期终点 (epoch seconds; `None` = 永久有效). M5: 存量条目缺省即 None.
+    #[serde(default)]
+    pub valid_until: Option<i64>,
 }
 
 impl NoteRecord {
-    /// 从 `apeireth_core::Note` 构造.
+    /// 从 `apeireth_core::Note` 构造 (核心类型无时间有效性字段 → 缺省永久有效).
     pub fn from_core(n: &Note) -> Self {
         Self {
             id: n.id.clone(),
@@ -206,10 +213,13 @@ impl NoteRecord {
             source_episode_ids: n.source_episode_ids.clone(),
             confidence: n.confidence,
             tags: n.tags.clone(),
+            valid_from: None,
+            valid_until: None,
         }
     }
 
-    /// 转回 `apeireth_core::Note`.
+    /// 转回 `apeireth_core::Note` (核心类型不含有效性窗口, 此处丢弃两字段;
+    /// M5 边界: 不改 apeireth_core, 接口稳定为先).
     pub fn into_core(self) -> Note {
         Note {
             id: self.id,
@@ -220,6 +230,38 @@ impl NoteRecord {
             tags: self.tags,
         }
     }
+}
+
+/// Note 时间有效性过滤模式 (M5).
+///
+/// `None`/缺省 = 永久有效 (向后兼容铁律: 存量条目零迁移).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum ValidityFilter {
+    /// 不过滤有效性: 永久有效 + 未过期 + 已过期 全返回 (缺省, 保守).
+    #[default]
+    All,
+    /// 只返回在 `as_of` 时刻当前有效的条目
+    /// (valid_from IS NULL OR valid_from <= as_of) AND (valid_until IS NULL OR valid_until > as_of).
+    CurrentOnly,
+}
+
+/// 问法感知: 从查询文本推导有效性过滤模式 (M5, 确定性关键词规则, 0 LLM 0 装).
+///
+/// 规则 (先判当前类, 命中即 CurrentOnly; 否则历史类命中 → All 含过期; 都不命中 → All):
+/// - 当前类词: 现在/当前/目前/如今/眼下/此刻/现阶段/近来 → 只要当前有效条目
+/// - 历史类词: 以前/曾经/过去/当时/从前/往昔/昔日/早先 → 含已过期条目
+/// 边界: 两类同时出现以当前类优先 (如 "现在和以前比" 主问在现在);
+/// 关键词为子串匹配, 接受少量误报 (启发式规则, 升级路径: 词表外置/分词, 见台账 M5).
+pub fn validity_from_query_text(text: &str) -> ValidityFilter {
+    const CURRENT_MARKERS: &[&str] = &[
+        "现在", "当前", "目前", "如今", "眼下", "此刻", "现阶段", "近来",
+    ];
+    // 历史类词 (以前/曾经/过去/当时/从前/往昔/昔日/早先) 无需显式匹配:
+    // 其语义 = "含已过期条目", 与缺省 All 一致, 故只对当前类词做判定.
+    if CURRENT_MARKERS.iter().any(|m| text.contains(m)) {
+        return ValidityFilter::CurrentOnly;
+    }
+    ValidityFilter::All
 }
 
 /// Note 复合查询条件.
@@ -235,6 +277,10 @@ pub struct NoteQuery {
     pub tag: Option<String>,
     /// 限制返回条数.
     pub limit: Option<usize>,
+    /// 时间有效性过滤 (M5; 缺省 All 不过滤, 向后兼容).
+    pub validity: ValidityFilter,
+    /// 有效性判定参考时刻 (epoch seconds; `None` = 用当前墙钟). M5.
+    pub as_of: Option<i64>,
 }
 
 impl NoteQuery {
@@ -261,6 +307,21 @@ impl NoteQuery {
     /// 链式: limit.
     pub fn limit(mut self, n: usize) -> Self {
         self.limit = Some(n);
+        self
+    }
+    /// 链式: 时间有效性过滤 (M5).
+    pub fn validity(mut self, v: ValidityFilter) -> Self {
+        self.validity = v;
+        self
+    }
+    /// 链式: 有效性判定参考时刻 (M5, 测试/确定性场景用; 缺省 = 当前墙钟).
+    pub fn as_of(mut self, ts: i64) -> Self {
+        self.as_of = Some(ts);
+        self
+    }
+    /// 链式: 问法感知 (M5) — 用确定性关键词规则从查询文本推导 validity.
+    pub fn with_query_text(mut self, text: &str) -> Self {
+        self.validity = validity_from_query_text(text);
         self
     }
 }
@@ -326,7 +387,8 @@ impl NoteStore for crate::SqliteMemoryStore {
         let conn = self.conn()?;
         let row = conn
             .query_row(
-                "SELECT id, timestamp, content, source_episode_ids_json, confidence, tags_json
+                "SELECT id, timestamp, content, source_episode_ids_json, confidence, tags_json,
+                        valid_from, valid_until
                  FROM notes WHERE id = ?1",
                 params![id],
                 |row| {
@@ -353,6 +415,8 @@ impl NoteStore for crate::SqliteMemoryStore {
                         source_episode_ids: source,
                         confidence: row.get(4)?,
                         tags,
+                        valid_from: row.get(6)?,
+                        valid_until: row.get(7)?,
                     })
                 },
             )
@@ -414,7 +478,8 @@ impl NoteStore for crate::SqliteMemoryStore {
     fn query(&self, q: &NoteQuery) -> MemoryResult<Vec<NoteRecord>> {
         let conn = self.conn()?;
         let mut sql = String::from(
-            "SELECT id, timestamp, content, source_episode_ids_json, confidence, tags_json
+            "SELECT id, timestamp, content, source_episode_ids_json, confidence, tags_json,
+                    valid_from, valid_until
              FROM notes WHERE 1=1",
         );
         let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -433,6 +498,17 @@ impl NoteStore for crate::SqliteMemoryStore {
         if let Some(tag) = &q.tag {
             sql.push_str(" AND tags_json LIKE ?");
             args.push(Box::new(format!("%\"{}\"%", tag)));
+        }
+        // M5 时间有效性过滤: NULL 边界 = 无限制 (存量行两列皆 NULL → 恒通过, 向后兼容).
+        // 半开区间 [valid_from, valid_until): 终点用 > 判定, 过期当刻即不再返回.
+        if q.validity == ValidityFilter::CurrentOnly {
+            let now = q.as_of.unwrap_or_else(now_unix);
+            sql.push_str(
+                " AND (valid_from IS NULL OR valid_from <= ?) \
+                 AND (valid_until IS NULL OR valid_until > ?)",
+            );
+            args.push(Box::new(now));
+            args.push(Box::new(now));
         }
         sql.push_str(" ORDER BY timestamp ASC, id ASC");
         if let Some(n) = q.limit {
@@ -464,6 +540,8 @@ impl NoteStore for crate::SqliteMemoryStore {
                 source_episode_ids: source,
                 confidence: row.get(4)?,
                 tags,
+                valid_from: row.get(6)?,
+                valid_until: row.get(7)?,
             })
         })?;
         let mut out = Vec::new();
@@ -471,6 +549,77 @@ impl NoteStore for crate::SqliteMemoryStore {
             out.push(r?);
         }
         Ok(out)
+    }
+}
+
+impl crate::SqliteMemoryStore {
+    /// M5 写入侧: 带时间有效性窗口写入 Note (提炼/存入时来源可标注有效期则标).
+    ///
+    /// - `valid_from`/`valid_until` 均 `None` = 永久有效 (与 `put_note` 等价, 0 装缺省)
+    /// - 校验: 两者都给时必须 `valid_from <= valid_until` (单点/反向窗口拒绝)
+    /// - 不改 `apeireth_core::Note` (核心类型无此字段, 接口稳定为先)
+    pub fn put_note_with_validity(
+        &self,
+        note: &Note,
+        valid_from: Option<i64>,
+        valid_until: Option<i64>,
+    ) -> MemoryResult<()> {
+        Self::validate_note(note)?;
+        if let (Some(f), Some(u)) = (valid_from, valid_until) {
+            if f > u {
+                return Err(MemoryError::Invalid(format!(
+                    "note validity window reversed: valid_from {f} > valid_until {u}"
+                )));
+            }
+        }
+        let conn = self.conn()?;
+        let source_json = serde_json::to_string(&note.source_episode_ids)?;
+        let tags_json = serde_json::to_string(&note.tags)?;
+        conn.execute(
+            "INSERT INTO notes (id, timestamp, content, source_episode_ids_json, confidence, tags_json, valid_from, valid_until)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                note.id,
+                note.timestamp,
+                note.content,
+                source_json,
+                note.confidence,
+                tags_json,
+                valid_from,
+                valid_until,
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// M5 写入侧: 为已有 Note 设置/更新有效性窗口 (事后得知有效期时用).
+    ///
+    /// 传 `(None, None)` = 恢复永久有效. note 不存在时返回 `Invalid`.
+    pub fn set_note_validity(
+        &self,
+        id: &str,
+        valid_from: Option<i64>,
+        valid_until: Option<i64>,
+    ) -> MemoryResult<()> {
+        if id.trim().is_empty() {
+            return Err(MemoryError::Invalid("note id is empty".into()));
+        }
+        if let (Some(f), Some(u)) = (valid_from, valid_until) {
+            if f > u {
+                return Err(MemoryError::Invalid(format!(
+                    "note validity window reversed: valid_from {f} > valid_until {u}"
+                )));
+            }
+        }
+        let conn = self.conn()?;
+        let updated = conn.execute(
+            "UPDATE notes SET valid_from = ?1, valid_until = ?2 WHERE id = ?3",
+            params![valid_from, valid_until, id],
+        )?;
+        if updated == 0 {
+            return Err(MemoryError::Invalid(format!("note not found: {id}")));
+        }
+        Ok(())
     }
 }
 
@@ -650,6 +799,169 @@ mod tests {
         bad.confidence = 1.5;
         let err = <SqliteMemoryStore as NoteStore>::put_note(&store, &bad).unwrap_err();
         assert!(err.to_string().contains("confidence"));
+    }
+
+    // ===== M5: 通用记忆层时间有效性 (valid_from/valid_until + 问法感知过滤) =====
+
+    const M5_AS_OF: i64 = 2_000_000_000;
+
+    #[test]
+    fn m5_default_permanent_and_legacy_row_compat() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        // 常规写入 → 缺省永久有效 (valid_from/valid_until = None).
+        let n = make_note("perm", "永久事实");
+        <SqliteMemoryStore as NoteStore>::put_note(&store, &n).unwrap();
+        let got = <SqliteMemoryStore as NoteStore>::get_note(&store, "perm")
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.valid_from, None);
+        assert_eq!(got.valid_until, None);
+        // 存量兼容: 旧式 6 列 INSERT (不含 valid_* 列) → 读出仍 None, 零迁移负担.
+        let conn = store.conn().unwrap();
+        conn.execute(
+            "INSERT INTO notes (id, timestamp, content, source_episode_ids_json, confidence, tags_json)
+             VALUES ('legacy-1', 42, '老条目', '[]', 0.5, '[]')",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+        let legacy = <SqliteMemoryStore as NoteStore>::get_note(&store, "legacy-1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(legacy.valid_from, None);
+        assert_eq!(legacy.valid_until, None);
+        // CurrentOnly 过滤下永久条目必须保留.
+        let rows = <SqliteMemoryStore as NoteStore>::query(
+            &store,
+            &NoteQuery::new().validity(ValidityFilter::CurrentOnly).as_of(M5_AS_OF),
+        )
+        .unwrap();
+        assert_eq!(rows.len(), 2);
+        // V3 migration 已应用.
+        assert!(store.applied_migrations().unwrap().contains(&3));
+    }
+
+    #[test]
+    fn m5_current_only_filters_expired_and_future() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        // a) 永久有效 b) 当前有效 c) 已过期 d) 尚未生效
+        store
+            .put_note_with_validity(&make_note("a-perm", "永久"), None, None)
+            .unwrap();
+        store
+            .put_note_with_validity(
+                &make_note("b-active", "当前有效"),
+                Some(M5_AS_OF - 100),
+                Some(M5_AS_OF + 100),
+            )
+            .unwrap();
+        store
+            .put_note_with_validity(
+                &make_note("c-expired", "已过期"),
+                Some(M5_AS_OF - 500),
+                Some(M5_AS_OF - 100),
+            )
+            .unwrap();
+        store
+            .put_note_with_validity(
+                &make_note("d-future", "尚未生效"),
+                Some(M5_AS_OF + 100),
+                None,
+            )
+            .unwrap();
+        let current = <SqliteMemoryStore as NoteStore>::query(
+            &store,
+            &NoteQuery::new().validity(ValidityFilter::CurrentOnly).as_of(M5_AS_OF),
+        )
+        .unwrap();
+        let ids: Vec<&str> = current.iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["a-perm", "b-active"]);
+        // All 模式: 4 条全返回 (缺省行为不变, 向后兼容).
+        let all = <SqliteMemoryStore as NoteStore>::query(&store, &NoteQuery::new()).unwrap();
+        assert_eq!(all.len(), 4);
+        // 半开区间边界: valid_until == as_of 视为已过期 (> 判定).
+        let edge = <SqliteMemoryStore as NoteStore>::query(
+            &store,
+            &NoteQuery::new()
+                .validity(ValidityFilter::CurrentOnly)
+                .as_of(M5_AS_OF + 100),
+        )
+        .unwrap();
+        let edge_ids: Vec<&str> = edge.iter().map(|r| r.id.as_str()).collect();
+        assert!(edge_ids.contains(&"d-future"));
+        assert!(!edge_ids.contains(&"b-active"));
+    }
+
+    #[test]
+    fn m5_write_side_validation_and_update() {
+        let store = SqliteMemoryStore::open_in_memory().unwrap();
+        // 反向窗口拒绝.
+        let err = store
+            .put_note_with_validity(&make_note("bad", "x"), Some(200), Some(100))
+            .unwrap_err();
+        assert!(err.to_string().contains("reversed"));
+        let err2 = store.set_note_validity("bad", Some(200), Some(100)).unwrap_err();
+        assert!(err2.to_string().contains("reversed"));
+        // 正常写入 + 事后更新窗口 + 恢复永久.
+        store
+            .put_note_with_validity(&make_note("w1", "x"), None, None)
+            .unwrap();
+        store
+            .set_note_validity("w1", Some(100), Some(200))
+            .unwrap();
+        let got = <SqliteMemoryStore as NoteStore>::get_note(&store, "w1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(got.valid_from, Some(100));
+        assert_eq!(got.valid_until, Some(200));
+        store.set_note_validity("w1", None, None).unwrap();
+        let got2 = <SqliteMemoryStore as NoteStore>::get_note(&store, "w1")
+            .unwrap()
+            .unwrap();
+        assert_eq!(got2.valid_from, None);
+        assert_eq!(got2.valid_until, None);
+        // 不存在的 note → Invalid.
+        let err3 = store.set_note_validity("ghost", None, None).unwrap_err();
+        assert!(err3.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn m5_query_text_awareness_rules() {
+        // 当前类词 → CurrentOnly.
+        for t in ["现在的偏好", "当前状态", "目前的地址", "如今住哪", "眼下的工作"] {
+            assert_eq!(
+                validity_from_query_text(t),
+                ValidityFilter::CurrentOnly,
+                "should be CurrentOnly: {t}"
+            );
+        }
+        // 历史类词 / 中性 / 空 → All (含已过期, 保守缺省).
+        for t in ["以前喜欢什么", "曾经说过", "过去的住址", "随便聊聊", ""] {
+            assert_eq!(
+                validity_from_query_text(t),
+                ValidityFilter::All,
+                "should be All: {t}"
+            );
+        }
+        // 两类同时出现 → 当前类优先 (主问在现在).
+        assert_eq!(
+            validity_from_query_text("现在和以前的偏好对比"),
+            ValidityFilter::CurrentOnly
+        );
+        // builder 集成: with_query_text.
+        let q = NoteQuery::new().with_query_text("你现在的职业是什么");
+        assert_eq!(q.validity, ValidityFilter::CurrentOnly);
+        let q2 = NoteQuery::new().with_query_text("你以前养过宠物吗");
+        assert_eq!(q2.validity, ValidityFilter::All);
+    }
+
+    #[test]
+    fn m5_serde_default_for_legacy_json() {
+        // 旧缓存 JSON (无 valid_* 字段) 反序列化 → None = 永久有效.
+        let legacy_json = r#"{"id":"x","timestamp":1,"content":"c","source_episode_ids":[],"confidence":0.5,"tags":[]}"#;
+        let rec: NoteRecord = serde_json::from_str(legacy_json).unwrap();
+        assert_eq!(rec.valid_from, None);
+        assert_eq!(rec.valid_until, None);
     }
 
     #[test]
