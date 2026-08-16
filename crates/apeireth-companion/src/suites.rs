@@ -50,6 +50,8 @@ pub struct SuiteDef {
     pub pack_hours: Option<u64>,
     /// 组成该套件的插件 id (生态: 套件 = 插件组的官方打包; 需先装插件).
     pub plugins: Vec<String>,
+    /// B3 沙盒参数口: 装配时写入 ToolBridge 的沙盒限额 (None = 用桥级默认).
+    pub sandbox: Option<crate::sandbox::SandboxConfig>,
 }
 
 /// 三件套目录 (内置清单).
@@ -74,17 +76,25 @@ impl SuiteCatalog {
                     pack_tools: vec!["recall_memory".into(), "save_memory".into(), "WebSearch".into(), "Grep".into()],
                     pack_hours: None,
                     plugins: vec![],
+                    sandbox: None,
                 },
                 // ---- 扩展能力包 ----
                 SuiteDef {
                     id: "sandbox-pack".into(),
                     name: "沙盒能力包".into(),
                     kind: SuiteKind::CapabilityPack,
-                    description: "Layer 2 物理隔离: 高危工具 per-call 子进程 + 超时 kill (Windows 可再叠 Sandboxie)".into(),
+                    description: "Layer 2 物理隔离: 高危工具 per-call 子进程 + 超时 kill + 内存/CPU 限额 (B3 参数化)".into(),
                     requires_tools: vec!["FileOperator".into(), "ShellExec".into()],
                     pack_tools: vec!["FileOperator".into(), "ShellExec".into()],
                     pack_hours: None,
                     plugins: vec![],
+                    // B3: 沙盒包自带限额参数 (内存/CPU/超时); 装配时写入桥级默认.
+                    sandbox: Some(crate::sandbox::SandboxConfig {
+                        memory_limit_mb: Some(1024),
+                        cpu_percent: Some(75),
+                        cpu_time_secs: Some(60),
+                        timeout_secs: 30,
+                    }),
                 },
                 SuiteDef {
                     id: "audit-pack".into(),
@@ -95,6 +105,7 @@ impl SuiteCatalog {
                     pack_tools: vec!["audit_log".into()],
                     pack_hours: None,
                     plugins: vec![],
+                    sandbox: None,
                 },
                 // ---- 升级套件 ----
                 SuiteDef {
@@ -116,6 +127,7 @@ impl SuiteCatalog {
                     ],
                     pack_hours: Some(24 * 30),
                     plugins: vec!["education-dx-check".into()],
+                    sandbox: None,
                 },
                 SuiteDef {
                     id: "pentest-suite".into(),
@@ -135,6 +147,7 @@ impl SuiteCatalog {
                     ],
                     pack_hours: Some(24),
                     plugins: vec!["pentest-recon".into(), "pentest-scan".into()],
+                    sandbox: None,
                 },
                 SuiteDef {
                     id: "oracle-suite".into(),
@@ -145,6 +158,7 @@ impl SuiteCatalog {
                     pack_tools: vec!["simulate".into(), "forecast".into()],
                     pack_hours: None,
                     plugins: vec![],
+                    sandbox: None,
                 },
             ],
         }
@@ -191,14 +205,19 @@ impl SuiteCatalog {
             };
             bridge.packs.grant(pack);
         }
+        // B3 沙盒参数口: 套件清单携带的沙盒限额写入桥级默认 (装配即生效).
+        if let Some(cfg) = &def.sandbox {
+            bridge.set_sandbox_config(cfg.clone());
+        }
         Ok(format!(
-            "[{}] {} 已装配: {} ({} 工具, {} 权限, {} 插件)",
+            "[{}] {} 已装配: {} ({} 工具, {} 权限, {} 插件{})",
             def.kind.label(),
             def.name,
             def.description,
             def.requires_tools.len(),
             def.pack_tools.len(),
             def.plugins.len(),
+            if def.sandbox.is_some() { ", 沙盒限额" } else { "" },
         ))
     }
 
@@ -316,5 +335,24 @@ mod tests {
         let r = cat.install_with_plugins(&bridge, Some(&reg), "pentest-suite").unwrap();
         assert!(r.contains("渗透测试升级套件"));
         assert!(r.contains("2 插件"));
+    }
+
+    #[test]
+    fn install_sandbox_pack_applies_sandbox_config() {
+        // B3 参数口: 沙盒包清单携带限额配置, 装配后写入桥级默认
+        use apeireth_memory::SqliteMemoryStore;
+        use std::sync::Arc;
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let c = SuiteCatalog::builtin();
+        let r = c.install(&bridge, "sandbox-pack").unwrap();
+        assert!(r.contains("沙盒限额"), "装配结果应标注沙盒限额: {r}");
+        let cfg = bridge.sandbox_config();
+        assert_eq!(cfg.memory_limit_mb, Some(1024));
+        assert_eq!(cfg.cpu_percent, Some(75));
+        assert_eq!(cfg.timeout_secs, 30);
+        // 未带沙盒配置的套件不覆盖桥级默认
+        assert!(c.install(&bridge, "base").unwrap().contains("基地本体"));
+        assert_eq!(bridge.sandbox_config().memory_limit_mb, Some(1024));
     }
 }
