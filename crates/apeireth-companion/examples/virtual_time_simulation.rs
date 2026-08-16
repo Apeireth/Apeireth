@@ -6,7 +6,7 @@
 //!   3. 节律 28 天淘汰: 30 天观察 → 最老 2 天被淘汰 (虚拟时间逐日推进)
 //!   4. 反思周期: ReflectionCycleScheduler 4 阶段完整周期 → 自动重触发 (cycles=1)
 //!   5. 能力生命周期: propose → approve → activate → retire (严格状态机)
-//!   6. 套件装配: base/沙盒/家教/渗透 三件套目录装配校验
+//!   6. 套件装配: base/沙盒/教育/渗透 三件套目录装配校验
 //!
 //! 用 `apeireth_core::clock::VirtualClock` 驱动, 不依赖真实时钟.
 
@@ -199,8 +199,8 @@ async fn main() {
     check("本体 base 装配", base_ok, "base 工具已注册 + 权限包".to_string());
     let sandbox_ok = cat.install(&bridge, "sandbox-pack").is_ok();
     check("能力包 sandbox-pack 装配", sandbox_ok, "沙盒包".to_string());
-    let tutor_ok = cat.install(&bridge, "tutor-suite").is_ok();
-    check("升级套件 tutor-suite 装配", tutor_ok, "家教套件".to_string());
+    let tutor_ok = cat.install(&bridge, "education-suite").is_ok();
+    check("升级套件 education-suite 装配", tutor_ok, "教育套件".to_string());
     check("未知套件拒绝", cat.install(&bridge, "nope").is_err(), "no-such-suite".to_string());
     check(
         "三类齐全",

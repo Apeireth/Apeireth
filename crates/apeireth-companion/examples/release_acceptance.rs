@@ -1,6 +1,6 @@
 //! release_acceptance — 发布全流程验收 (真 MiniMax): AI 自己长能力 端到端.
 //!
-//! 链路: 装配(本体+家教套件) → AI 读记忆 → **自己提案新能力** (propose_capability) →
+//! 链路: 装配(本体+教育套件) → AI 读记忆 → **自己提案新能力** (propose_capability) →
 //! 宪法评审 → 主人批准 (approve/activate) → **catalog 动态段出现演化能力** →
 //! AI 用已激活能力干活 (写错题本) → 反馈 (关系加深) → 每日摘要.
 //!
@@ -91,10 +91,10 @@ async fn main() {
     let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
     let bridge = Arc::new(ToolBridge::new(Arc::clone(&store)));
     SuiteCatalog::builtin().install(&bridge, "base").unwrap();
-    SuiteCatalog::builtin().install(&bridge, "tutor-suite").unwrap();
+    SuiteCatalog::builtin().install(&bridge, "education-suite").unwrap();
     bridge.packs.grant(PermissionPack::timed("验收包", vec!["FileOperator".into()], 24, Some(10)));
     let judge = Arc::new(LlmJudicator::new(Arc::new(MiniMaxConstitutionLlm::new(key.clone()).unwrap())));
-    println!("[装配] ToolBridge + 本体/家教套件 + 宪法评审 就绪");
+    println!("[装配] ToolBridge + 本体/教育套件 + 宪法评审 就绪");
 
     // 轮 1: AI 读记忆 → 自己提案新能力
     let tools = json!([
