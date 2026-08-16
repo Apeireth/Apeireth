@@ -27,7 +27,7 @@
 
 ## 4. 观察项（⚠️ 非阻塞，共 2 项）
 1. ⚠️ 运行时 DB 残留: `crates/apeireth-memory.db*`（含 486KB WAL），已被 gitignore；建议本地清理避免误判为夹具。
-2. ⚠️ `companion_serve.exe` 被占用导致全量 `cargo test --list` 失败；CI/自检脚本建议固定加 `--lib --tests` 或先停 daemon。
+2. ⚠️ `companion_serve.exe` 被占用曾导致全量 `cargo test --list` 失败；后续全量命令成功（188s，exit 0，224 lib + 3 integration + 1 doc-test = 228 tests），证实为瞬时文件锁。CI/自检脚本建议固定加 `--lib --tests` 或先停 daemon。
 
 ## 结论
 ✅ **PASS** — 迁移体系（append-only 版本化 + 幂等单测）与测试数据隔离（内存 DB/tempdir，无 git 跟踪夹具）均就绪；companion 测试可枚举（227 个）。DB 层无阻塞问题。
