@@ -77,6 +77,7 @@ pub mod context;
 pub mod assemble;
 pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
 pub mod critic;  // P2#10: CRITIC 反思带工具调用 (声明提取 + 验证 trait + 组合器)
+pub mod hello;  // P3#22: Windows Hello 真绑机制口 (检测 + 绑定 trait, 0 装 PASS)
 pub mod exec_worker;
 pub mod continuation;
 pub mod prompt_cache;
@@ -111,6 +112,7 @@ pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
 pub use daemon::{BroadcastSink, CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, MultiSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
 pub use assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
 pub use critic::{Claim, ClaimVerifier, CritiqueReport, ReflectionCritic, Verification, extract_claims};
+pub use hello::{HelloBound, HelloCapability, detect_hello_capability};
 pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
 pub use constitution_gate::ConstitutionGate;
 pub use memory_injection::build_memory_injection;
