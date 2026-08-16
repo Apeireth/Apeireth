@@ -26,6 +26,22 @@ pub trait DreamSummarizer: Send + Sync {
     async fn summarize(&self, merged: &str) -> Result<String, String>;
 }
 
+/// 文本重叠率 (公共字符比例, 简单近似).
+fn overlap_ratio(a: &str, b: &str) -> f64 {
+    let sa: std::collections::HashSet<char> = a.chars().collect();
+    let sb: std::collections::HashSet<char> = b.chars().collect();
+    if sa.is_empty() || sb.is_empty() {
+        return 0.0;
+    }
+    let inter = sa.intersection(&sb).count();
+    let union = sa.union(&sb).count();
+    if union == 0 {
+        0.0
+    } else {
+        inter as f64 / union as f64
+    }
+}
+
 /// 做梦调度器: 周期触发 → 成对合并记忆 → (可选 LLM 摘要) → 写回真库.
 pub struct DreamScheduler {
     store: Arc<SqliteMemoryStore>,
@@ -41,6 +57,40 @@ pub struct DreamScheduler {
 }
 
 impl DreamScheduler {
+    /// 文本级近重复去重 (记忆 v2, Letta sleep-time 吸收):
+    /// 归一化后相同 / 互为子串 / 长文本重叠率 > 0.8 → 保留较长者.
+    /// 0 假装: 非 embedding 语义去重 (后续可接向量).
+    fn dedup_textual(items: &mut Vec<String>) {
+        let norm = |s: &str| {
+            s.chars()
+                .filter(|c| !c.is_whitespace())
+                .flat_map(char::to_lowercase)
+                .collect::<String>()
+        };
+        let mut i = 0;
+        while i < items.len() {
+            let a = norm(&items[i]);
+            let mut j = i + 1;
+            while j < items.len() {
+                let b = norm(&items[j]);
+                let dup = a == b
+                    || (a.len() >= 20 && b.len() >= 20
+                        && (a.contains(&b) || b.contains(&a) || overlap_ratio(&a, &b) > 0.8));
+                if dup {
+                    // 保留较长者
+                    if items[i].chars().count() >= items[j].chars().count() {
+                        items.remove(j);
+                    } else {
+                        items.remove(i);
+                        break; // i 指向的元素变了, 重新比较
+                    }
+                } else {
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+    }
     pub fn new(store: Arc<SqliteMemoryStore>, clock: Arc<dyn Clock>) -> Self {
         Self {
             store,
@@ -101,12 +151,14 @@ impl DreamScheduler {
             .unwrap_or_default();
         // 增量合并: 只合并上次做梦之后的记忆; 且不重复整合旧做梦结果 (防摘要嵌套摘要)
         let boundary = *self.last_cycle_at.lock().expect("poisoned");
-        let items: Vec<String> = eps
+        let mut items: Vec<String> = eps
             .iter()
             .filter(|e| !e.id.starts_with("mem-dream-"))
             .filter(|e| chrono::DateTime::<Utc>::from_timestamp(e.timestamp, 0).map_or(true, |t| t >= boundary))
             .map(|e| e.content.clone())
             .collect();
+        // 记忆 v2 (Letta sleep-time 吸收): 合并前去重 (文本级近重复, 非 embedding — 诚实)
+        Self::dedup_textual(&mut items);
         let merged = std::cell::RefCell::new(Vec::new());
         let n = self.dream.dream_cycle(&items, &|a, b| {
             let m = format!("{a} ◆ {b}");
