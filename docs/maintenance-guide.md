@@ -158,6 +158,14 @@
 ### companion 环境变量（N7 查询形态学）
 `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
 
+### credentials 环境变量（TP20-S3 keyring 后端）
+`APEIRETH_KEYRING_BACKEND` ∈ {`auto` (默认), `platform`, `encrypted-file`, `in-memory`}
+· `auto`: 启动期探针 — 优先平台 keyring (Linux Secret Service / macOS Keychain / Windows Credential Manager), 不可用降级 `encrypted-file` (chacha20poly1305 + master.key, 目录 `~/.apeireth/keyring/`), IO 失败再降级 `in-memory` 内存 stub (进程内 BTreeMap, **不持久化**).
+· `platform`: 显式平台 keyring, 首次 get/set 失败返 `BackendUnavailable` (fail-loud, 不静默降级).
+· `encrypted-file`: 显式加密文件 (XChaCha20-Poly1305 AEAD, master.key 32B 单独文件 0600 语义), IO 失败返错.
+· `in-memory`: 显式内存 stub — **仅限限流/CI/单测**, 生产勿用 (进程退出即丢).
+· 未知值 → `auto` (fail-closed, 安全默认).
+
 ### context rot / segment editor 环境变量 (TP16 P1)
 （纯启发式 0 LLM, 仅入参化 cfg; 无 env 依赖。如需远程配置 rot 权重/stale 窗口, 后续可加 `APEIRETH_ROT_*` env, 现默认兜底即可。)
 
