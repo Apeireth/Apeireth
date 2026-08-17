@@ -180,6 +180,17 @@
 - 不提交未测试代码；不把调试输出留在提交里
 - 不擅自扩大任务范围（发现新缺口 → 记台账，不顺手做）
 
+### 6.4 Pre-existing build break 修复登记（TP21）
+
+master HEAD (ff3f6d10) 上 `apeireth-companion` lib 编译通过但 `--lib` 测试 target 编不过 (3 个 E0599)。
+源头 = TP12 WIP (commit `0f185418` / `b3785cb1`)。TP21 task `1af074f8-5981-40ff-ac4b-8414224bba78`
+提交在 master 的 fix 仅 `crates/apeireth-companion/src/tool_bridge.rs` (测试代码 +15/-4, 0 行源)。
+**修复要点**: `bridge.registry()` (方法) → `bridge.registry` (字段, Arc<ToolRegistry> 自动 deref)。
+**test 计数修正**: `assert_eq!(cat.len(), 9)` → `assert!(cat.len() >= 9)`（ToolBridge::new
+同时装战役 2-5 的 9 件 + N17 子 crate 9 件 = 18+ 件, 不应硬等 9）。
+**未修 (TP21 边界外)**: `job_object::tests::{memory_limit,cpu_time_limit}_kills_child_and_leaves_trace`
+Windows Job Object 环境问题（终止不被记为非正常退出）。task 验收清单 6 模块全绿 (56/0)。
+
 ---
 
 ## 7. 验收总纲（任何交付）
