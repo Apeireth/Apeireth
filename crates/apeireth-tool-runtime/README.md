@@ -1,27 +1,10 @@
 # apeireth-tool-runtime
 
-> Apeireth R17 鎴樺焦 2-2: 宸ュ叿杩愯鏃?(parser + executor + record + privacy, VCP 鍊熼壌 vcpLoop + toolCallRecordStore + toolResultPrivacyGuard + 搂6.2.2 #18)
+> Apeireth R17 战役 2-2: 工具运行时 (parser + executor + record + privacy, 借鉴开源 runtime loop + toolCallRecordStore + toolResultPrivacyGuard + §6.2.2 #18 (origin: open-source))
 
-## Status
+Apeireth 1.0 工作区 crate。src 模块: executor / fuzzy / lib / mcp_protocol / organ_kani_proofs / parser / privacy / record。测试数(单测标注): 76。
 
-Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
+## 文档
 
-**No-fake**: every public type or trait documented in this crate is real.
-**Run-no-fear**: cargo check --workspace passes (0 errors).
-
-## Where to start
-
-- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
-- src/lib.rs: see top-level doc comment for module-level overview.
-
-## See also
-
-- [Apeireth conventions](../../docs/conventions/README.md)
-- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
-
----
-
-_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
-## R166 public API deep cleanup
-
-`BORROWED_VCP_COUNT` -> `BORROWED_LEGACY_COUNT` + `[VCP_PRIVACY_REDACTED]` mask -> `[APEIRETH_PRIVACY_REDACTED]`. 85 tests pass.
+- 架构: [docs/01-architecture/architecture.md](../../docs/01-architecture/architecture.md)
+- 索引: [docs/03-reference/crates.md](../../docs/03-reference/crates.md)

@@ -1,24 +1,10 @@
 # apeireth-http-client
 
-> Apeireth 鑷爺 HTTP 瀹㈡埛绔?鈥?Keep-Alive LIFO 姹?(澶嶅埢 VCP agentOptions 5 瀛楁, 鎴樺焦 1-2 / 鍊熼壌 搂6.2.2 #14)
+> Apeireth 自研 HTTP 客户端 — Keep-Alive LIFO 池 (复刻开源 agentOptions 5 字段 (战役 1-2 / 借鉴 §6.2.2 #14)
 
-## Status
+Apeireth 1.0 工作区 crate。src 模块: client / config / egress / error / hyper_util_bridge / lib / lifo_pool / organ_kani_proofs。测试数(单测标注): 42。
 
-Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
+## 文档
 
-**No-fake**: every public type or trait documented in this crate is real.
-**Run-no-fear**: cargo check --workspace passes (0 errors).
-
-## Where to start
-
-- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
-- src/lib.rs: see top-level doc comment for module-level overview.
-
-## See also
-
-- [Apeireth conventions](../../docs/conventions/README.md)
-- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
-
----
-
-_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+- 架构: [docs/01-architecture/architecture.md](../../docs/01-architecture/architecture.md)
+- 索引: [docs/03-reference/crates.md](../../docs/03-reference/crates.md)
