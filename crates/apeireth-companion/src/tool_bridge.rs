@@ -687,6 +687,28 @@ impl ToolBridge {
         self
     }
 
+    /// **TP22 (E1+W5, 核心)**: 注册 Observer 捕获钩子 — 工具执行结果即时沉淀候选.
+    ///
+    /// 与 `with_post_hook` 等价, 但接受 `Arc<ExperienceQueue>` 而非裸 hook:
+    /// 内部实例化 `ObserverCaptureHook`, 复用同一条 post_hook 链.
+    /// 顺序: observer hook **插在链尾** (最后执行, 在所有用户 hook 之后, 确保
+    /// 拿到的是「最终态」ExecutionResult, 不是被中间 hook 替换前的中间值).
+    pub fn with_observer_capture(
+        mut self,
+        queue: Arc<crate::observer_capture::ExperienceQueue>,
+    ) -> Self {
+        self.post_hooks
+            .push(Arc::new(crate::observer_capture::ObserverCaptureHook::new(
+                queue,
+            )));
+        self
+    }
+
+    /// 当前注册的 post-hook 数 (测试/调试用).
+    pub fn post_hooks_len(&self) -> usize {
+        self.post_hooks.len()
+    }
+
     /// 工具风险映射 (对齐基地 8 工具真名): ShellExec → High;
     /// FileOperator/ApplyPatch/LongTask → Medium; WebSearch/Grep/Git/WebFetch/recall_memory → Low.
     pub fn tool_risk(tool: &str) -> RiskLevel {
