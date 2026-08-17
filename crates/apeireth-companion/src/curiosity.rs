@@ -161,12 +161,14 @@ impl CuriosityEngine {
         if self.budget_left < self.config.shallow_cost {
             return out;
         }
-        // 候选: 已知回声主题 + 当前深度
+        // 候选: 已知回声主题 + 当前深度. 按主题字典序排序 — HashMap 迭代序随机,
+        // 排序保证同输入同序列 (确定性, 测试可复现).
         let mut candidates: Vec<(String, f64)> = self
             .echoes
             .iter()
             .map(|(t, s)| (t.clone(), *s))
             .collect();
+        candidates.sort_by(|a, b| a.0.cmp(&b.0));
         // 回声 0 的"自由好奇"通道: 每 1000 次采样有 1 次随机冷主题 (确定性 LCG).
         if self.lcg_next() % 1000 == 0 {
             candidates.push(("冷门角落".to_string(), 0.01));
