@@ -1,5 +1,15 @@
 # Changelog — Apeireth
 
+## [2026-08-18] v1.0.0 正式版 (主人拍板: 真正的 1.0)
+
+- 后端机制层收工: 五原型全部有骨架 (世界模型 W1/W2/W3 / 好奇 E4 / 假设检验 F4 / 连续感知地基 A4 / 价值内化 F6)
+- 她本身: 情感记忆 F1 (mood 接线运行时) / 开口策略 E7 / 渐进式披露 TP21 / 主动推销 W4 / Brier 自我诊断 W6
+- 安全: S4 出站默认拒绝 + 审计链 / ApprovalBridge silent 透传 / 历史大 blob 净化 (.git 356MB)
+- 验证: cargo test --workspace 368 组 0 失败 + 真实 LLM 端到端 (companion_serve :8090) 实测通过
+- 文档: 体系规范重构 (01-architecture/02-guides/03-reference/04-internal + archive) + README 中英双语
+
+# Changelog — Apeireth
+
 ## [2026-08-16] R131-R178 历史 banner 归位（从根 README 压缩移入）
 
 > 根 README 顶部曾堆叠 30+ 条 R 系列进度 banner（R128-R178），为可维护性按规范归位至此。
