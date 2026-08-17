@@ -54,6 +54,7 @@ pub mod async_task;
 pub mod catalog; // N17/TP2: 装配能力清单 (从 registry 生成对外可见的只读快照)
 pub mod chain;
 pub mod classifier;
+pub mod handoff; // TP11 (A1, P0): Handoff 委托协议 + transfer_to_<agent> 工具族 (per task §3)
 pub mod injection;
 pub mod registry;
 pub mod token_budget;
@@ -71,6 +72,11 @@ pub use chain::{ClassifyChain, ClassifyOutcome, ClassifyStage, CustomMapClassifi
 pub use classifier::{
     cosine_similarity, Category, Classifier, ClassifyError, EmbedFn, EmbeddingClassifier,
     HeuristicClassifier, LlmClassifier, MockHashEmbedFn, CATEGORY_COUNT,
+};
+pub use handoff::{
+    install_handoff_tools, AgentContext, FnFilter, HandoffError, HandoffOutcome, HandoffRegistry,
+    HandoffRequest, HandoffResult, HandoffTarget, InputFilter, OnHandoff, PassthroughFilter,
+    SyncOnHandoff, TargetSnapshot, TransferTool,
 };
 pub use injection::{
     render_injection, InjectionBudget, InjectionEntry, InjectionOutput, TRUNCATION_HINT,

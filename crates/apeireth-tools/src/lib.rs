@@ -1,4 +1,6 @@
 //! `apeireth-tools` — **Apeireth R17 战役 2-5 工具集成** (5 trait 真实现)
+// TP11 (A1, P0) handoff: HandoffOutcome/HandoffRequest 嵌套 serde + schema 嵌套 Box → 复合 ~3-4 层 derive → 总深度 8192 起步
+#![recursion_limit = "8192"]
 //!
 //! **目标**: 5 trait 完整真实现 (web_search / file_ops / git_ops / code_exec / tool_result) + 端到端真测.
 //!
