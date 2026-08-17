@@ -1,7 +1,7 @@
 # INSTALL.md — Apeireth-rust 安装步骤
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
-> **依据**: 主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.80 stable。
+> **依据**: 主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
 > **commit 锚**: 23513387（v3 修订）。
 
 ---
@@ -16,8 +16,8 @@
 
 | 工具 | 最低版本 | 推荐版本 |
 |---|---|---|
-| **Rust** | 1.80 stable | 1.80 stable（rust-toolchain.toml 锁定）|
-| **Cargo** | 1.80 | 1.80 |
+| **Rust** | 1.97.1 stable | 1.97.1 stable（rust-toolchain.toml 锁定）|
+| **Cargo** | 1.97.1 | 1.97.1 |
 | **Git** | 2.30+ | 2.40+ |
 | **cmake** | 3.20+ | 3.25+（编译 sled）|
 | **Python** | 3.11+ | 3.13（PyO3 桥）|
@@ -33,9 +33,9 @@
 # 下载并安装 rustup-init.exe
 # https://rustup.rs/
 
-# 安装 1.80 stable（与 rust-toolchain.toml 锁定一致）
-rustup install 1.80
-rustup default 1.80
+# 安装 1.97.1 stable（与 rust-toolchain.toml 锁定一致）
+rustup install 1.97.1
+rustup default 1.97.1
 
 # 安装必要组件
 rustup component add rustfmt clippy rust-src
@@ -83,9 +83,9 @@ cargo run --bin apeireth-cli session
 # 安装 rustup
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 安装 1.80 stable
-rustup install 1.80
-rustup default 1.80
+# 安装 1.97.1 stable
+rustup install 1.97.1
+rustup default 1.97.1
 
 # 安装必要组件
 rustup component add rustfmt clippy rust-src
@@ -128,9 +128,9 @@ cargo run --bin apeireth-cli session
 # 安装 rustup
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
-# 安装 1.80 stable
-rustup install 1.80
-rustup default 1.80
+# 安装 1.97.1 stable
+rustup install 1.97.1
+rustup default 1.97.1
 
 # 安装必要组件
 rustup component add rustfmt clippy rust-src
@@ -260,5 +260,5 @@ EOF
 ---
 
 _安装指南 v1 修订版（leader 亲自产出）._
-_依据主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.80 锁定._
+_依据主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
 _主哲学 6 锚穿透._
