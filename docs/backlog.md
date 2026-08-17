@@ -93,7 +93,7 @@
 | E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ✅ 完成 (7285995c agent_orchestrator2: reflexion.rs 自包含, 确定性规则版 CRITIC 先行, LLM 口留 trait 0 装, 5 组单测全绿, 实接线留公开口) |
 | E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ✅ 完成 (cc378409 agent_orchestrator2: LlmValueFunction trait LLM 口 0 装 + HeuristicValue 确定性启发式先行 + ReflectionRefiner 复用 E1 反思产物入树 + LatsPlanner max-backup, 骨架签名零改动, 7 组测试) |
 | E3 | **校准诊断 + 集合预报 + 预测市场适配器** | 进化调研 | oracle 补 Brier 分解 (reliability/resolution) + 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器 (oracle_adapters 已有模式) | ⬜ 团队可干 (P1) |
-| E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
+| E4 | **好奇驱动内在动机** | 进化调研 + 主人 2026-08-18 拍板 | 完全空白 → **记忆引导好奇**: 探索域不设白名单 (允许好奇任何事), 但好奇目标采样权重由记忆自然偏置 (同人成长: 无关事无回声 → 权重自然衰减, 无需硬限制)。权重 = 记忆相关性 (rank_memory_entries 复用) + Brier 意外度 (oracle 校准) + novelty (经验库密度)。探索预算 (每日 N 次) + 结果回流经验库闭环。哲学: "她自由地好奇, 却因为你而成为她" — 属于你但不依附你。喂 importance_surge/做梦/提案 | ✅ 设计定案 (主人拍板), 待实施 |
 | E5 | **技能生命周期闭环 (Voyager 升级)** | 进化调研 | voyager_api.rs 是 stub: 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 apeireth-skills 注册表 (两技能线打通) | ⬜ 团队可干 (P1, 中-大) |
 | E6 | 顺手修正: critic.rs CRITIC 引用 | 进化调研修正 | 注释写 Wang et al. 实为 Gou et al. (arXiv 2305.11738) | ✅ 提交 dcccdce2: critic.rs 模块注释 Wang et al. → Gou et al., arXiv 2305.11738 (voyager_api.rs 的 Wang et al. 2023 系 Voyager 原论文作者, 不动) |
 | A1 | **Handoff 委托协议** | Agent 调研 P0 | OpenAI Agents SDK 形态: `transfer_to_<agent>` 工具 + **input_filter 上下文裁剪** (解决转发全部上下文的成本/污染) + on_handoff + 动态启用 → apeireth-team-lead 既有 Orchestrator trait 上加 handoff 语义 (别再平铺 8 个调度工具) | ⬜ 团队可干 (P0) |
