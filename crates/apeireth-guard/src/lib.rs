@@ -17,11 +17,23 @@ pub mod pii;
 // R177: guard invariants (12 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 pub mod redactor;
+// S2 (OWASP Agentic Top 10 ASI-01): Untrusted 输入标记 + MCP 工具描述投毒防护 (0 装 trait 口)
+pub mod tool_desc_audit;
+pub mod untrusted_mark;
 
 // Re-exports 公共 API
 pub use audit::{hash_value_sha256, AuditLog, PrivacyAction, PrivacyEvent};
 pub use pii::{detect_pii, PiiKind, PiiMatch};
 pub use redactor::{redact_one, redact_text, RedactionStrategy};
+pub use tool_desc_audit::{
+    audit_tool_description, description_changed, DefaultToolDescAuditor, DescAuditRecord,
+    DescAuditReport, DescFinding, DescFindingKind, DescVerdict, ToolDescriptionAuditor,
+    ToolDescAuditLog,
+};
+pub use untrusted_mark::{
+    escape_untrusted_content, wrap_untrusted, DefaultUntrustedMarker, UntrustedMarker,
+    UntrustedSource,
+};
 
 /// 脱敏结果 — PrivacyGuard 入口返回.
 #[derive(Debug, Clone, PartialEq, Eq)]
