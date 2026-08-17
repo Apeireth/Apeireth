@@ -15,7 +15,7 @@ master HEAD:     abf12243 (整合 #4 commit done 2026-08-10 19:41, per 决策 #4
 
 > **R127-2 P7-2 Mavis 重写 (2026-08-10 21:25)**: 顶层 ROADMAP 从 R119-2 3KB 升级到 ~6KB,
 > 反映 1.0 已发布 (R125-R127 整合) + 1.1 短期 + 1.5 中期 + 2.0 长期完整路线图。
-> 详单下沉 `docs/roadmap/` (R119-2 原则严守)。
+> 详单下沉 `docs/archive/roadmap/` (R119-2 原则严守)。
 
 ---
 
@@ -63,7 +63,7 @@ master HEAD:     abf12243 (整合 #4 commit done 2026-08-10 19:41, per 决策 #4
 - ⏳ 整合 #5 commit 待 Mavis 拍板 (R127-1 P4-1 跑中 verify)
 - ⏳ 主人起床后 8 步 verify (cargo build/test/run/audit + 24 LOCKED verify + 8 硬墙 0 越界)
 
-详见: [`docs/roadmap/v1.0-released-r125-r127-2026-08-10.md`](docs/roadmap/v1.0-released-r125-r127-2026-08-10.md)
+详见: [`docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md`](docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md)
 
 ---
 
@@ -262,11 +262,11 @@ master HEAD:     abf12243 (整合 #4 commit done 2026-08-10 19:41, per 决策 #4
 
 ## 11. 详单下沉 (per R119-2 原则)
 
-- [`docs/roadmap/README.md`](docs/roadmap/README.md) — 路线图总览 (R119-4a)
-- [`docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md`](docs/roadmap/v1.0.0-release-roadmap-2026-08-06.md) — 1.0 release 9-30 tag 计划 (R20 阶段 6 总结, 13.6KB)
-- [`docs/roadmap/r20-product-finalize-2026-08-05.md`](docs/roadmap/r20-product-finalize-2026-08-05.md) — R20 product finalize 详细报告 (R20 阶段 6 收尾, 35.2KB)
-- [`docs/roadmap/v1.2-release-plan-2026-08-09.md`](docs/roadmap/v1.2-release-plan-2026-08-09.md) — v1.2 release 计划 (R69 起草, 8.8KB)
-- [`docs/roadmap/v1.0-released-r125-r127-2026-08-10.md`](docs/roadmap/v1.0-released-r125-r127-2026-08-10.md) — **v1.0 已发布详单 (R125-R127 整合)** (R127-2 P7-2 NEW)
+- [`docs/archive/roadmap/README.md`](docs/archive/roadmap/README.md) — 路线图总览 (R119-4a)
+- [`docs/archive/roadmap/v1.0.0-release-roadmap-2026-08-06.md`](docs/archive/roadmap/v1.0.0-release-roadmap-2026-08-06.md) — 1.0 release 9-30 tag 计划 (R20 阶段 6 总结, 13.6KB)
+- [`docs/archive/roadmap/r20-product-finalize-2026-08-05.md`](docs/archive/roadmap/r20-product-finalize-2026-08-05.md) — R20 product finalize 详细报告 (R20 阶段 6 收尾, 35.2KB)
+- [`docs/archive/roadmap/v1.2-release-plan-2026-08-09.md`](docs/archive/roadmap/v1.2-release-plan-2026-08-09.md) — v1.2 release 计划 (R69 起草, 8.8KB)
+- [`docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md`](docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md) — **v1.0 已发布详单 (R125-R127 整合)** (R127-2 P7-2 NEW)
 
 ---
 
@@ -288,8 +288,8 @@ master HEAD:     abf12243 (整合 #4 commit done 2026-08-10 19:41, per 决策 #4
 
 ---
 
-**R127-2 P7-2 Mavis 21:25 状态**: 顶层 ROADMAP 整合 1.0 → 2.0 完整路线图, 4 章节 (v1.0 已发布 + v1.1 短期 + v1.5 中期 + v2.0 长期) + 8 硬墙 + 借鉴 11/11 进度 + Library v1.0 + 决策链 + 风险 + 0 主动 commit/push 严守. 写到主仓 `ROADMAP.md` (覆盖 R119-2 3KB 重写, 反映 1.0 已发布), 详单下沉 `docs/roadmap/v1.0-released-r125-r127-2026-08-10.md` (R127-2 P7-2 NEW). 0 主动 commit 严守, master HEAD = abf12243 严守 (写到主仓 ROADMAP.md 会让 working tree 有 M+??, 等 Mavis 整合 #5 commit 时机拍板). 0 主动 push 严守 (等 1.0 release 配 GitHub remote). 报告 `reports/agent-p7-2-r127-2-roadmap-final-2026-08-10.md` ready. 跑过夜明早 8/11-8/22 done.**
+**R127-2 P7-2 Mavis 21:25 状态**: 顶层 ROADMAP 整合 1.0 → 2.0 完整路线图, 4 章节 (v1.0 已发布 + v1.1 短期 + v1.5 中期 + v2.0 长期) + 8 硬墙 + 借鉴 11/11 进度 + Library v1.0 + 决策链 + 风险 + 0 主动 commit/push 严守. 写到主仓 `ROADMAP.md` (覆盖 R119-2 3KB 重写, 反映 1.0 已发布), 详单下沉 `docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md` (R127-2 P7-2 NEW). 0 主动 commit 严守, master HEAD = abf12243 严守 (写到主仓 ROADMAP.md 会让 working tree 有 M+??, 等 Mavis 整合 #5 commit 时机拍板). 0 主动 push 严守 (等 1.0 release 配 GitHub remote). 报告 `reports/agent-p7-2-r127-2-roadmap-final-2026-08-10.md` ready. 跑过夜明早 8/11-8/22 done.**
 
 ---
 
-_本 ROADMAP 由 Mavis R127-2 P7-2 重写 (2026-08-10 21:25), 顶层 ~7KB 反映 1.0 → 2.0 完整路线图. 详单下沉 `docs/roadmap/v1.0-released-r125-r127-2026-08-10.md`. 思想层 (8 锚 / 13 键 / 7 重 / 三洋葱 / 9 organ / R11 baseline 3 值) 升级版严守, 技术发展史按主人 8 硬墙升级路线 + 主人 17:22 升级授权 + 0 装 PASS 严守 + 整合 #4 commit abf12243 严守 100% 落实._
+_本 ROADMAP 由 Mavis R127-2 P7-2 重写 (2026-08-10 21:25), 顶层 ~7KB 反映 1.0 → 2.0 完整路线图. 详单下沉 `docs/archive/roadmap/v1.0-released-r125-r127-2026-08-10.md`. 思想层 (8 锚 / 13 键 / 7 重 / 三洋葱 / 9 organ / R11 baseline 3 值) 升级版严守, 技术发展史按主人 8 硬墙升级路线 + 主人 17:22 升级授权 + 0 装 PASS 严守 + 整合 #4 commit abf12243 严守 100% 落实._

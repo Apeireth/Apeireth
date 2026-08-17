@@ -13,7 +13,7 @@
 | | |
 |---|---|
 | 版本 | **v1.0.0**（产品轴；workspace crates 1.2.0）|
-| active crates | 84（约 34 万行 Rust）|
+| active crates | 85（约 34 万行 Rust）|
 | 测试 | `cargo test --workspace` **368 组 0 失败**（含真实 API 压测带退避）|
 | 构建 | `cargo check --workspace --all-targets` 干净 |
 | License | Apache-2.0 |

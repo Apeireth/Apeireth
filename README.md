@@ -13,7 +13,7 @@ A Rust-written **AGI operating system** that gives an LLM a **home**: memory, se
 | | |
 |---|---|
 | Version | **v1.0.0** (product axis; workspace crates 1.2.0) |
-| Active crates | 84 (~340K lines of Rust) |
+| Active crates | 85 (~340K lines of Rust) |
 | Tests | `cargo test --workspace` **368 suites, 0 failures** (incl. real-API stress with backoff) |
 | Build | `cargo check --workspace --all-targets` clean |
 | License | Apache-2.0 |
