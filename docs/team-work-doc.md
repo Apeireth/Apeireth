@@ -397,3 +397,12 @@
 | 包 | 名称 | 说明 |
 |---|---|---|
 | TP20 | ACT-R 衰减 + 存档不删除（M3）/ prompt drift（M6）/ keyring 后端（S3）/ 出站网络策略（S4）/ vet+SBOM（S5）/ 工具结果作记忆候选（A6）/ ACI 工具 UX（A7）/ ApprovalBridge 透传（N20） | 每包 1 人, 全小活; 具体边界按台账对应条目 |
+
+**TP20-N20 ApprovalBridge 透传** ✅ 完成 (任务 0d9f14e8-ao2):
+- 新模块 `crates/apeireth-team-lead/src/approval_bridge.rs` (~480 行): `ApprovalRequest`/`ApprovalResponse` (serde snake_case + 未知字段进 `extra` HashMap) + `ApprovalBridge` trait (`dispatch_request`/`dispatch_response`) + `InProcessBridge` 默认实现 (Arc + Mutex + 回调注册)
+- companion 端: `record_request` / `mark_approved` 加 `bridge: Option<&Arc<dyn ApprovalBridge>>` 参数, 透传 + 失败 eprintln 不阻塞主路径 + `apply_wire_response` 把响应写回本地 SQLite (append-only, 同 chain + rev+1)
+- 字段透传保真 / 缺字段默认 reject (`MissingField` Err 不 panic) / 状态双向同步 / 0 装 PASS 全部覆盖
+- 0 新外部依赖 (纯 std + serde)
+- 测试: **17/17 全绿** (team-lead approval_bridge 10 单测 + companion approval_bridge_integration 7 集成测)
+- 不触碰: companion 其他 8 文件 (WIP 锁) / tool-runtime / agent / credentials
+- 报告: `reports/0d9f14e8-89a9-4eb8-9525-bc1ab226a7c0-agent_orchestrator2-report.md`

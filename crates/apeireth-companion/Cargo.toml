@@ -29,6 +29,8 @@ apeireth-lark = { path = "../apeireth-lark" }
 apeireth-asi = { path = "../apeireth-asi" }
 apeireth-council = { path = "../apeireth-council" }
 apeireth-evolution = { path = "../apeireth-evolution" }
+# TP20-N20 ApprovalBridge — 跨 crate 审批透传契约 (companion ↔ team-lead orchestrator)
+apeireth-team-lead = { path = "../apeireth-team-lead" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
 apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
 apeireth-tool-approval = { path = "../apeireth-tool-approval" }

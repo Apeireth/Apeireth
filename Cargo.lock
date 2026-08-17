@@ -418,6 +418,7 @@ dependencies = [
  "apeireth-memory",
  "apeireth-repo-tools",
  "apeireth-sovereignty",
+ "apeireth-team-lead",
  "apeireth-tool-approval",
  "apeireth-tool-browser",
  "apeireth-tool-codesearch",
