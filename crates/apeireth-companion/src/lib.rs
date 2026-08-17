@@ -57,6 +57,7 @@ pub mod confidence;
 pub mod evolution_gate;
 pub mod oracle;
 pub mod oracle_adapters;  // N3: 预测机套件数据源适配器 (拉取→规范化→喂 oracle 可证伪预测登记)
+pub mod world_model;  // TP31/W1: 世界模型第一层 文本模拟器 (LLM 反事实推演链 + oracle Brier 终点校准)
 pub mod dream;
 pub mod reflection;
 pub mod thought_cluster;  // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
@@ -140,6 +141,7 @@ pub use morphology::{MorphologyVerdict, RetrievalMode};
 pub use confidence::{BetaBinomial, Strength};
 pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
 pub use oracle::{Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
+pub use world_model::{CounterfactualChain, MockTimelineLlm, TextualSimulator, TimelineContext, TimelineLlm, TimelineStep};
 pub use oracle_adapters::{AdapterError, AdapterForecastMeta, AdapterRegistry, CoinGeckoAdapter, DirectionForecast, FallbackAdapter, ForecastPipeline, MacroRatesAdapter, MarketAdapter, MarketQuote, MockAdapter, RawFetch, ReqwestRawFetch, ResolveOutcome, TREASURY_AVG_RATE};
 pub use dream::{DreamScheduler, DreamSummarizer};
 pub use reflection::ReflectionScheduler;
