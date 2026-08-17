@@ -733,6 +733,7 @@ impl ToolBridge {
                         &call.tool_name,
                         &call.args,
                         "需要主人批准 (权限洋葱)",
+                        None, // TP20-N20: ToolBridge 暂不持 bridge, 后续 wire 可注入
                     );
                     return ExecutionResult {
                         tool_name: call.tool_name.clone(),
