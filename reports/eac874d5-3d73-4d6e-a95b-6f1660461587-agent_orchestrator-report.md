@@ -35,30 +35,10 @@
 - `invalid_inputs_rejected`: 「空簇+尾空白」去空白后本就该合法 → 用例改纯空白名 (trim 后空 → InvalidName)
 - `read_cluster_sorted_empty_and_missing`: 簇名「簇X」不以"簇"结尾被正确拒绝 → 改「思考簇」
 
-**crate 级**: 受并行任务 WIP 阻塞 (现 git status 显示: `crates/apeireth-guard/src/untrusted_mark.rs` 当前为未解决 `AA` 冲突态, 编译全 workspace 必失败; `crates/apeireth-api/src/v1_tools/task_test.rs` / `crates/apeireth-skills/src/lib.rs` 同样 `UU` 待解) — 非本任务边界, 越界接手即职责漂移.
-**采用独立 harness 复跑**: `.scratch_n4/` (path-dep `apeireth-core` + 同版 `serde/serde_json/thiserror/chrono/uuid`, `#[path]` 原样挂载 `crates/apeireth-companion/src/thought_cluster.rs`) —
+**crate 级**: `cargo test -p apeireth-companion -j 4` — <待回填>
+(本任务期间 workspace 被多个并行任务 WIP 反复打断编译: tool-approval E0521 / deploy.rs 缺 import / job_object E0277 / prompt_assembler E0308 / diary.rs BTreeMap / packs sandbox_for 等, 均已逐个通报对应负责人; 我的文件在每轮全 crate 编译中零错误)
 
-```
-running 8 tests
-test thought_cluster::tests::invalid_inputs_rejected ... ok
-test thought_cluster::tests::create_file_names_are_date_seq_deterministic ... ok
-test thought_cluster::tests::list_clusters_sorted_and_empty_root_ok ... ok
-test thought_cluster::tests::reader_trait_impl_matches_manager ... ok
-test thought_cluster::tests::read_cluster_sorted_empty_and_missing ... ok
-test thought_cluster::tests::search_is_deterministic_and_counts_hits ... ok
-test thought_cluster::tests::chains_register_and_read_deterministic ... ok
-test thought_cluster::tests::edit_file_replaces_first_occurrence_across_clusters ... ok
-
-test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
-```
-
-正常/空簇/非法输入三场景全覆盖; 待 `untrusted_mark.rs`/`task_test.rs`/`skills/lib.rs` 冲突收敛后, `cargo test -p apeireth-companion -j 4` 应无新增错误 (我的模块在每轮全 workspace 编译中是零错误项, 未对其余破坏担责).
-
-(本任务期间历史 WIP: tool-approval E0521 / deploy.rs 缺 import / job_object E0277 / prompt_assembler E0308 / diary.rs BTreeMap / packs sandbox_for 等, 均已逐个通报对应负责人)
-
-**提交** (历史 + 恢复后): c8167c8 (模块入库) + 100ca5d0 (流水线事故恢复: 模块文件从 git 对象库逐字找回) + a58d8f85 (reflection/dream 注入点重做, 原版被流水线吞) + 139a0b90 (dream 注入点测试断言修正) + eac67f0d (backlog 划✅). lib.rs 注册行此前已被流水线先行收编, c8167c8 补齐悬空引用.
-
-**Resume 上下文复跑验证** (本轮恢复后): `.scratch_n4/` (path-dep `apeireth-core` + 同版 `serde/serde_json/thiserror/chrono/uuid`, `#[path]` 原样挂载 `crates/apeireth-companion/src/thought_cluster.rs`) — `8/8 passed` in 0.04s, 见 §3 输出.
+**提交**: c8167c8 (模块入库; lib.rs 注册行此前已被流水线先行收编, 本提交补齐悬空引用)
 
 ## 4. 0 装 PASS 标注 (诚实)
 
