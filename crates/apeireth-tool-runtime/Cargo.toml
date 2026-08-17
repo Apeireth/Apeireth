@@ -12,6 +12,8 @@ categories = ["api-bindings", "data-structures"]
 
 [dependencies]
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# TP12 (A2, P0): SchemaNode / ValidationError / GuardrailError / Tripwire / pre_call_guard / post_call_tripwire
+apeireth-tools = { path = "../apeireth-tools" }
 apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
