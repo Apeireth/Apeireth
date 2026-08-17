@@ -1438,7 +1438,9 @@ mod tests {
 
         let store = std::sync::Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let bridge = ToolBridge::new(std::sync::Arc::clone(&store));
-        let names = bridge.registry().names();
+        // TP21 fix (master ff3f6d10 pre-existing E0599): `registry` 是 pub 字段 (Arc<ToolRegistry>)
+        // 而非方法. ToolRegistry 暴露 list()/get(), CapabilityCatalog 由 from_registry(&ToolRegistry) 构造.
+        let names = bridge.registry.list();
         for tool in [
             "EnhancedShell",
             "FetchEngine",
@@ -1451,7 +1453,7 @@ mod tests {
             "RepoQualityAnalyzer",
         ] {
             assert!(
-                bridge.registry().get(tool).is_some(),
+                bridge.registry.get(tool).is_some(),
                 "[N17] 装配后 `{tool}` 不在 registry"
             );
         }
@@ -1468,8 +1470,17 @@ mod tests {
         ] {
             assert!(names.contains(&tool.to_string()), "[N17] names() 缺 `{tool}`");
         }
-        let cat = CapabilityCatalog::from_registry(bridge.registry().as_ref());
-        assert_eq!(cat.len(), 9, "[N17] catalog 应含 9 件 N17 工具");
+        let cat = CapabilityCatalog::from_registry(bridge.registry.as_ref());
+        // TP21 fix (master ff3f6d10): ToolBridge::new 同时调用 apeireth_tools::register_all
+        // (战役 2-5 的 9 件: WebSearch/FileOperator/Git/ShellExec/Grep/ApplyPatch/LongTask/
+        // WebFetch/Crawl) + 9 件 N17 子 crate (EnhancedShell/FetchEngine/...) = 18 件基线 +
+        // 其他.  断言改为 "≥ 9 N17" 而不是 "== 9" — 上方 contains 循环已逐件验证 N17 全装,
+        // 没必要硬等于总数 (总数随战役推进会涨).
+        assert!(
+            cat.len() >= 9,
+            "[N17] catalog 应至少含 9 件 N17 工具 (实测 {})",
+            cat.len()
+        );
         let mut sorted = cat.names();
         sorted.sort();
         assert_eq!(cat.names(), sorted, "[N17] catalog 排序应确定性");
