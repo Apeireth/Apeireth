@@ -69,6 +69,7 @@ pub mod hyper_util_bridge;
 // ============================================================
 
 pub use client::{HttpClient, Response};
+pub mod egress; // S4: 出站网络策略 (白名单默认拒绝 + 审计哈希链)
 pub use config::{KeepAliveConfig, SchedulingPolicy};
 pub use error::{HttpClientError, Result};
 pub use lifo_pool::{LifoGuard, LifoPool, PoolFull, RequestTicket};
