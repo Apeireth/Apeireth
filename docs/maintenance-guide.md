@@ -57,7 +57,7 @@
 | security.rs | SecurityGate / SovereigntyGate | ToolBridge.gate |
 | exec_worker.rs | 执行体隔离 worker (per-call 子进程) | ToolBridge.with_isolation |
 | spill.rs | 工具结果溢出 (超大输出落私有文件) | ToolBridge.with_spill |
-| continuation.rs | 续行快照 (原子写+崩溃恢复) | multi_turn 循环 |
+| continuation.rs | 续行快照 (原子写+崩溃恢复) + **TP16 段编辑原语 (SegmentEditor + EditAction)**: LLM 用此 `retain(block_id)` / `remove(block_id)` / `replace(block_id, new_content)` 三原语 + `apply(&[EditAction])` 三段式 all-or-nothing (Phase1 冲突预检 → Phase2 dry-check 全部成功 → Phase3 提交; 任一失败整批拒绝, 中间状态不进库) + `EditOutcome { Retained/Removed/Replaced }` 回放 + `EditorError { EmptyBlockId/BlockNotFound/ConflictingActions/EmptyReplaceContent }` 显错 (不假装成功)。`now_ms>0` 时 replace 自动 bump `last_touched_ms` (0 装: now_ms=0 时不 bump, 标"未知时间")。`SegmentEditor` 数据形状复用 `RotBlock`(与 context.rs rot 共用, 注 editor 不反向依赖 context.rs 注入管线) | multi_turn 循环 + rot 触发后 LLM 改上下文 |
 | session_log.rs | 事件溯源会话 (append-only 日志+surface+崩溃修复) | 多轮循环 |
 | goal.rs | Goal 状态机 (AI 长目标, 严格 fold+持久化) | 独立 |
 | capability.rs | 能力提案状态机 (AI 自己长能力第一段): pending→approved→active→retired/**rolled_back** (部署后差评/失败率回滚留痕) + 回滚收据 | propose_capability 工具 / deploy.rs |
@@ -93,7 +93,7 @@
 | diary.rs | 日记本中心 (§5.1 机制⑤, RAGDiaryPlugin 精神): 按日归档 `{YYYY-MM-DD}.json` (root+clock 注入) + 确定性检索 (日期范围/关键词子串) + 注入块 (近 N 日摘要, 预算截断) + DiaryInjector trait 口 (实接线延后 N14) | 注入链挂接待 N14 解锁 |
 | reflexion.rs | 口头强化闭环 (E1, Reflexion 式): 失败轨迹登记 (决策拒绝/验证失败/经验失败三类, seq 序) + CRITIC 反思 (Critic trait LLM 口 0 装, RuleCritic 确定性规则版先行, 事实/教训/重试策略三段模板, reflected_until 水位幂等) + 反思记忆 (task_type 标签) + 同类重试注入 (精确>子串相似度, 预算截断); 实接线留公开口 (不改 reflection.rs 周期本体) | 事件实接线/注入消费侧待后续接线 |
 | goal_tools.rs | 目标驱动 (模块 6): goal_create/status/complete/pause/block (严格状态机) | 5 目标工具 |
-| context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) | 注入链统一入口 |
+| context.rs | 统一注入管线 ContextAssembler: 有序块 + 总预算 + 核心块保护 + 单块 cap (identity/essential 常驻 core) + **TP16 Context Rot 度量 (deterministic 0 LLM, M1 P1)**: `RotBlock { block_id, content, last_touched_ms }` 输入 + `RotWeights { w_duplicate/w_stale/w_irrelevant }` (三项和=1.0) + `RotConfig { now_ms / stale_threshold_ms(默认 30min) / ngram_size(5) / duplicate_threshold(0.6) / trigger_threshold(0.6) / weights / latest_user_message / pinned_block_ids / min_chars_per_block(16) }` + `RotBreakdown { total/duplicate_ratio/stale_ratio/irrelevance/relevance/duplicate_pairs/stale_block_ids/low_relevance_block_ids/eligible_block_count }` 公开明细 + `compute_rot_score(blocks, cfg)` 主入口 (公开公式 `rot = w_dup*dup_ratio + w_stale*stale_ratio + w_irrel*(1-relevance_mean)`) + 三件套启发式 `ngrams` (5-gram 词级 lowercase) / `jaccard` (重复对) / `keyword_overlap` (relevance) + `should_compact(b, cfg)` 触发器 (rot > 0.6 严格触发)。**0 装**: 启发式, 待 A/B 调权; LLM 仅参与段编辑 (continuation.rs SegmentEditor)。pinned_block_ids 排除; 内容 < min_chars 过滤抖 | 注入链统一入口 + rot 触发 → 调 SegmentEditor |
 | assemble.rs | CompanionApp 机制装配器 (审计 P0#1): L0 Identity + L1 Essential Story 常驻 (mempalace §5.6) + 注入管线 + 提炼调度 (run_extraction/extraction_due) + 滚动摘要 (summarize_dialog/summarize_due) + 自成长 (refine_experience/export_promotion_candidates) + LLM 调用点 trait (DeepRecall/DialogSummarizer/ExperienceRefiner); §5.1 收官 unified_memory_block 四源统一注入 (主题索引+日记摘要+跨日记关联+记忆证据块, 独立预算, 砍序关联→日记→主题→记忆证据, CompanionApp.diary 接线, 任务 68caf9cb/cb12b810) | serve/TUI/CLI 复用 |
 | semantic_router.rs (gateway) | N12①: 语义模型路由适配件 (VCP semanticModelRouter 吸收): 虚拟模型名 (ApeirethModelAuto/预设名) + 意图选模型 (上下文加权向量×route 描述余弦相似度×阈值) + 容灾链 (命中+failoverPool→default→fallback 去重, dispatch 按链容灾); trait 口 Embedder/ModelExecutor (真实现留部署层); 0 假装: 未接 Gateway 帧管线 | gateway lib (N12) |
 | reasoning_adapter.rs (provider) | N12②: 推理字段归一化适配件 (VCP reasoningContentAdapter 吸收): 12 别名递归提取→片段级去重→think 块包装→按模型白名单下发 + 出向剥离; http_dispatch 响应路径已接线 (默认关, env 显式开启) | http_dispatch (N12) |
@@ -157,6 +157,9 @@
 
 ### companion 环境变量（N7 查询形态学）
 `APEIRETH_MORPHOLOGY_TEMPERATURE` (N7 查询形态学 softmax 温度, 默认 1.0, 非法回落 1.0)
+
+### context rot / segment editor 环境变量 (TP16 P1)
+（纯启发式 0 LLM, 仅入参化 cfg; 无 env 依赖。如需远程配置 rot 权重/stale 窗口, 后续可加 `APEIRETH_ROT_*` env, 现默认兜底即可。)
 
 ## 五、target 构建缓存治理（台账 #51, 2026-08-17 主人指示: 不用的编译产物删掉, 不要无限膨胀）
 
