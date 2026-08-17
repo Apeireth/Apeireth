@@ -51,6 +51,7 @@
 // ============================================================
 
 pub mod async_task;
+pub mod catalog; // N17/TP2: 装配能力清单 (从 registry 生成对外可见的只读快照)
 pub mod chain;
 pub mod classifier;
 pub mod injection;

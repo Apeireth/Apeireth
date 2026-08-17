@@ -31,6 +31,7 @@ pub mod generators;
 pub mod mcp;
 mod organ_kani_proofs;
 pub mod params;
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 pub mod result;
 
 pub use compat::{ImageGenCommand, ImageGenCompatRouter, IMAGEGEN_COMMAND_COUNT};
