@@ -2,9 +2,9 @@
 name = "apeireth-team-lead"
 version = "1.0.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version.workspace = true
 authors = ["Apeireth Team"]
-license = "Apache-2.0"
+license.workspace = true
 repository = "https://github.com/apeireth/apeireth-rust"
 description = "Apeireth R20 阶段 1: Team Lead (1:1 翻译 v0.9.21 商业版 out/main/agent/AgentMCPServer.js Orchestrator 缺 P0, A 改 13:34 的版本同步)"
 keywords = ["ai", "agent", "team-lead", "supervisor", "multi-agent"]
