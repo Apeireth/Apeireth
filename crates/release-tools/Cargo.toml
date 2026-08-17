@@ -1,0 +1,20 @@
+[package]
+name = "release-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "release-tools — TP20-S5 塞缝批: 发布期供应链验证 (cargo vet/audit/deny + CycloneDX SBOM) 的工程化载体"
+# 发布期工具链载体。0 运行时代码, 仅供 cargo vet 的 publisher / third-party
+# audits 引用, 让 .cargo/vet.toml 的 [[package]] 索引有根。
+# 不引运行时依赖, 编译期 < 1s, workspace member 只为 vet 审计覆盖。
+
+[lib]
+name = "release_tools"
+path = "src/lib.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
