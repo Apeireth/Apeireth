@@ -1,5 +1,13 @@
 # Apeireth 1.0 release CODEOWNERS
 # 主人 2026-08-05 拍板
+# TP13 #27 (backlog #31): 11 悬空 crate 条目清理 (2026-08-18 devops_engineer)
+#  - 移除: apeireth-mcp-ssh / apeireth-mcp-winrm / apeireth-mcp-relay-image
+#          apeireth-image-prompt / apeireth-rollback / apeireth-plugin
+#          apeireth-repo-scan / apeireth-repo-analyzer / apeireth-keyring
+#          apeireth-machine-id / apeireth-observability
+#  - 全部 `crates/<name>/` 目录不存在 (C3 复核 + TP13 实测)
+#  - 恢复路径: git log -- CODEOWNERS + git checkout <commit>^ -- CODEOWNERS
+#  - 后续: 实际 crate 建好后, 由对应 owner 加回
 
 # 顶层
 /CHANGELOG.md          @chuling
@@ -45,26 +53,15 @@
 /crates/apeireth-life-force/   @chuling
 /crates/apeireth-constraint/   @chuling
 
-# 5 P0 MCP (R20 阶段 1)
-/crates/apeireth-mcp-ssh/         @chuling
-/crates/apeireth-mcp-winrm/       @chuling
-/crates/apeireth-mcp-relay-image/ @chuling
+# 实际存在的 P0 MCP + 团队协作 (R20 阶段 1 残留)
 /crates/apeireth-workflow/        @chuling
 /crates/apeireth-team-lead/       @chuling
 
-# 9 skeleton (R20 阶段 1 续)
-/crates/apeireth-image-prompt/    @chuling
-/crates/apeireth-rollback/        @chuling
-/crates/apeireth-plugin/          @chuling
-/crates/apeireth-repo-scan/       @chuling
-/crates/apeireth-repo-analyzer/   @chuling
-/crates/apeireth-keyring/         @chuling
-/crates/apeireth-machine-id/      @chuling
+# 实际存在的 skeleton (R20 阶段 1 续 残留)
 /crates/apeireth-lark/            @chuling
 /crates/apeireth-voice/           @chuling
 
-# 1.0 release 估补
+# 1.0 release 估补 (实际存在的)
 /crates/apeireth-i18n/            @chuling
-/crates/apeireth-observability/   @chuling
 /crates/apeireth-sdk/             @chuling
 /src-tauri/                       @chuling

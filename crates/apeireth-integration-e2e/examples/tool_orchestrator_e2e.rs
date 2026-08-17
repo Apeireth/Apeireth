@@ -85,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 Let me check the file and run the build.
 <<<[TOOL_REQUEST]>>>
 tool_name:<<<FileOperator>>>
-archery:<<<read>>>
+op:<<<read>>>
 path:<<<Apeireth-rust\Cargo.toml>>>
 <<<[END_TOOL_REQUEST]>>>
 

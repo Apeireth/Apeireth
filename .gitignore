@@ -202,3 +202,25 @@ imports.lock
 # TP20-S5: cargo-audit stderr (audit-report.json 走 CI artifact)
 audit-audit.stderr.txt
 sbom-cyclonedx.stderr.txt
+
+# TP13 #31 (backlog #32): crates/apeireth-memory.db{,-shm,-wal} WAL 泄漏 (R15 期间 486KB 进源码树)
+# 未跟踪但防御性 ignore, 防止日后 cargo run/init 误入
+crates/*.db
+crates/*.db-shm
+crates/*.db-wal
+
+# TP13 #42 (backlog #42): .scratch_n4/ 验证 harness 残留 (Cargo.lock + target 巨大)
+# .scratch_n4/n17-tp2-assembly-summary.md 仍 tracked 作为产物, 其他全 ignore
+.scratch_n4/Cargo.lock
+.scratch_n4/Cargo.toml
+.scratch_n4/src/
+.scratch_n4/target/
+
+# TP13 #44 (backlog #28 之外): target/ dist/ build/ coverage/ (重复确认)
+# 顶部已有 target/ + **/target/, 此处加 dist/ build/ coverage/ 跨平台
+dist/
+build/
+coverage/
+**/dist/
+**/build/
+**/coverage/
