@@ -35,6 +35,7 @@ use crate::memory_extractor::{
 };
 use crate::memory_graph::MemoryGraph;
 use crate::principles::PrincipleStore;
+use crate::runtime_brain::RuntimeBrain;
 
 // ============================================================
 // LLM 调用点 trait (策略模式; 实现注入, lib 无 LLM 依赖)
@@ -92,6 +93,8 @@ pub struct CompanionApp {
     deep_recall: Option<Arc<dyn DeepRecall>>,
     /// §5.1 收官: 日记本接入 (None = 日记摘要/跨日记关联两源如实缺省, 0 装 PASS)
     diary: Option<Arc<DiaryStore>>,
+    /// 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录; None = 未接, 0 装).
+    brain: Option<Arc<RuntimeBrain>>,
 }
 
 impl CompanionApp {
@@ -115,10 +118,22 @@ impl CompanionApp {
             refiner: None,
             deep_recall: None,
             diary: None,
+            brain: None,
         }
     }
 
     // ---------- builder ----------
+
+    /// 接入机制件运行时聚合 (E4 好奇/F1 情绪/F4 假设/TP21 目录).
+    pub fn with_brain(mut self, brain: Arc<RuntimeBrain>) -> Self {
+        self.brain = Some(brain);
+        self
+    }
+
+    /// 运行时聚合访问器 (daemon/proactive 循环用; None = 未接).
+    pub fn brain(&self) -> Option<&Arc<RuntimeBrain>> {
+        self.brain.as_ref()
+    }
 
     /// L0: Identity 常驻 (persona 核心; core 块永不截断).
     pub fn with_identity(mut self, identity: impl Into<String>) -> Self {
@@ -216,9 +231,20 @@ impl CompanionApp {
     /// 状态 → 记忆 → 图谱 → 偏好 → 今日 → 成长. 返回预算化后的块 (带 name,
     /// 上层可分流: identity 块作独立 persona 消息, 其余合并为记忆注入消息).
     pub async fn build_injection(&self, query: &str) -> Vec<ContextBlock> {
+        // 机制件运行时: 主人消息进来 → 情绪基线 + 话题回声 (F1/E4, 确定性启发式)
+        if let Some(brain) = &self.brain {
+            brain.on_message(query);
+        }
         let mut asm = ContextAssembler::new(self.inject_budget);
         if let Some(id) = &self.identity {
             asm = asm.push(ContextBlock::new("identity", id.clone()).core(true));
+        }
+        // TP21 渐进式披露: 记忆目录块常驻 (预算内, 按需展开由调用方触发)
+        if let Some(brain) = &self.brain {
+            let catalog = brain.catalog_block();
+            if !catalog.is_empty() {
+                asm = asm.push(ContextBlock::new("catalog", catalog).with_cap(1600));
+            }
         }
         let essential = self.essential_story();
         if !essential.is_empty() {
