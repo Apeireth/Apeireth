@@ -79,6 +79,7 @@ COPY crates/apeireth-sdk/Cargo.toml ./crates/apeireth-sdk/Cargo.toml
 COPY crates/apeireth-skills/Cargo.toml ./crates/apeireth-skills/Cargo.toml
 COPY crates/apeireth-sovereignty/Cargo.toml ./crates/apeireth-sovereignty/Cargo.toml
 COPY crates/apeireth-state/Cargo.toml ./crates/apeireth-state/Cargo.toml
+COPY crates/apeireth-stock/Cargo.toml ./crates/apeireth-stock/Cargo.toml  # TP27: 补 manifest COPY (新增 N3 金融源套件)
 COPY crates/apeireth-supervisor/Cargo.toml ./crates/apeireth-supervisor/Cargo.toml
 COPY crates/apeireth-team-lead/Cargo.toml ./crates/apeireth-team-lead/Cargo.toml
 COPY crates/apeireth-telemetry/Cargo.toml ./crates/apeireth-telemetry/Cargo.toml
