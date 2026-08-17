@@ -52,6 +52,8 @@ apeireth-bus = { path = "../apeireth-bus" }
 windows-sys = { version = "0.59", features = [
     "Win32_Foundation",
     "Win32_Security",
+    # S1: SetEntriesInAclW / EXPLICIT_ACCESS_W / TRUSTEE_W (默认 DACL 放宽)
+    "Win32_Security_Authorization",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
     # B3 沙盒限额留痕: IO completion port (超限消息监听) + JOB_OBJECT_MSG 常量

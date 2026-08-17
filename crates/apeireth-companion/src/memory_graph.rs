@@ -67,20 +67,41 @@ pub trait GraphBackend: Send + Sync {
     fn save_link(&self, l: &MemoryLink) -> Result<(), String>;
     fn load_links(&self) -> Result<Vec<MemoryLink>, String>;
     fn load_episodes(&self, session: &str, n: usize) -> Result<Vec<CoreEpisode>, String>;
+    /// N2 OneRing: continuity 锚点 (消灭 "me" 硬编码). `Box<dyn GraphBackend>` 上层
+    /// (`link_on_write`, `crawl`) 不再硬编码 "me", 改走后端自报 continuity_id.
+    /// 返 `String` 而非 `&str`: trait object (`Box<dyn GraphBackend>`) 无法
+    /// 暴露与 `&self` 同生死的借用, 内存假后端用 Mutex<String> 持有, 复制即出.
+    fn continuity_id(&self) -> String;
 }
 
 /// SQLite 后端: factg-*/link-* 以 episode 形态持久化 (现有路径, 跨重启不丢).
 pub struct SqliteGraphBackend {
     store: Arc<SqliteMemoryStore>,
+    /// N2 OneRing: continuity 锚点 (消灭 "me" 硬编码).
+    continuity_id: String,
 }
 
 impl SqliteGraphBackend {
     pub fn new(store: Arc<SqliteMemoryStore>) -> Self {
-        Self { store }
+        Self {
+            store,
+            continuity_id: crate::continuity::current_continuity_id(),
+        }
+    }
+
+    /// 显式注入 continuity 锚点.
+    pub fn with_continuity(mut self, continuity: impl Into<String>) -> Self {
+        let cid = crate::continuity::normalize_continuity(&continuity.into(), &self.continuity_id);
+        self.continuity_id = cid;
+        self
     }
 }
 
 impl GraphBackend for SqliteGraphBackend {
+    fn continuity_id(&self) -> String {
+        self.continuity_id.clone()
+    }
+
     fn save_fact(&self, f: &GraphFact) -> Result<(), String> {
         let content = serde_json::to_string(f).map_err(|e| format!("序列化失败: {e}"))?;
         let ep = CoreEpisode {
@@ -88,7 +109,7 @@ impl GraphBackend for SqliteGraphBackend {
             timestamp: f.valid_at,
             role: "assistant".into(),
             content,
-            session_id: "me".into(),
+            session_id: self.continuity_id.clone(),
         };
         self.store
             .put_episode(&ep)
@@ -98,7 +119,7 @@ impl GraphBackend for SqliteGraphBackend {
     fn load_facts(&self) -> Result<Vec<GraphFact>, String> {
         let eps = self
             .store
-            .recent_episodes("me", 500)
+            .recent_episodes(&self.continuity_id, 500)
             .map_err(|e| e.to_string())?;
         Ok(eps
             .iter()
@@ -114,7 +135,7 @@ impl GraphBackend for SqliteGraphBackend {
             timestamp: chrono::Utc::now().timestamp(),
             role: "assistant".into(),
             content,
-            session_id: "me".into(),
+            session_id: self.continuity_id.clone(),
         };
         self.store
             .put_episode(&ep)
@@ -124,7 +145,7 @@ impl GraphBackend for SqliteGraphBackend {
     fn load_links(&self) -> Result<Vec<MemoryLink>, String> {
         let eps = self
             .store
-            .recent_episodes("me", 500)
+            .recent_episodes(&self.continuity_id, 500)
             .map_err(|e| e.to_string())?;
         Ok(eps
             .iter()
@@ -405,7 +426,11 @@ impl MemoryGraph {
 
     /// 写入时自动链接 (A-MEM 规则版): 与既有条目文本重叠率 >= 0.3 → 链接.
     pub fn link_on_write(&self, new_id: &str, new_content: &str) {
-        let eps = self.backend.load_episodes("me", 100).unwrap_or_default();
+        let cid = self.backend.continuity_id();
+        let eps = self
+            .backend
+            .load_episodes(&cid, 100)
+            .unwrap_or_default();
         for e in eps.iter() {
             if e.id == new_id || e.id.starts_with("link-") || e.id.starts_with("tomb-") {
                 continue;
@@ -429,7 +454,11 @@ impl MemoryGraph {
     /// N6 锚增益: 扩展优先级 = 链接权重 × (1 + residual_weight × 内容残差) —
     /// 邻居解释不了的独特内容 (高残差) 被锚增益抬升, 与既有链接权重正交相乘.
     pub fn crawl(&self, seeds: &[String], budget: usize) -> Vec<String> {
-        let eps = self.backend.load_episodes("me", 500).unwrap_or_default();
+        let cid = self.backend.continuity_id();
+        let eps = self
+            .backend
+            .load_episodes(&cid, 500)
+            .unwrap_or_default();
         let links = self.backend.load_links().unwrap_or_default();
         let content_of = |id: &str| -> Option<String> {
             eps.iter()
@@ -550,12 +579,13 @@ mod tests {
     #[test]
     fn links_and_crawl() {
         let s = store();
-        let g = MemoryGraph::new(Arc::clone(&s));
+        let g = MemoryGraph::with_backend(Box::new(SqliteGraphBackend::new(Arc::clone(&s))));
         // 写两条相似内容 (重叠率高 → 自动链接)
         let id1 = "mem-ex-a".to_string();
         let id2 = "mem-ex-b".to_string();
-        s.put_episode(&CoreEpisode { id: id1.clone(), timestamp: 1, role: "assistant".into(), content: "主人喜欢水墨画风格".into(), session_id: "me".into() }).unwrap();
-        s.put_episode(&CoreEpisode { id: id2.clone(), timestamp: 2, role: "assistant".into(), content: "主人偏好水墨画风格和深蓝夜空".into(), session_id: "me".into() }).unwrap();
+        let cid = crate::continuity::current_continuity_id();
+        s.put_episode(&CoreEpisode { id: id1.clone(), timestamp: 1, role: "assistant".into(), content: "主人喜欢水墨画风格".into(), session_id: cid.clone() }).unwrap();
+        s.put_episode(&CoreEpisode { id: id2.clone(), timestamp: 2, role: "assistant".into(), content: "主人偏好水墨画风格和深蓝夜空".into(), session_id: cid }).unwrap();
         g.link_on_write(&id2, "主人偏好水墨画风格和深蓝夜空");
         // CRAWL 从 id2 沿链接找 id1
         let crawled = g.crawl(&[id2], 3);
@@ -592,6 +622,8 @@ mod tests {
         facts: std::sync::Mutex<Vec<GraphFact>>,
         links: std::sync::Mutex<Vec<MemoryLink>>,
         eps: std::sync::Mutex<Vec<CoreEpisode>>,
+        /// N2 OneRing: continuity 锚点 (测试 fixture 校验用).
+        continuity_id: std::sync::Mutex<String>,
     }
 
     impl GraphBackend for MemoryBackend {
@@ -620,6 +652,9 @@ mod tests {
                 .cloned()
                 .collect())
         }
+        fn continuity_id(&self) -> String {
+            self.continuity_id.lock().unwrap().clone()
+        }
     }
 
     #[test]
@@ -628,6 +663,7 @@ mod tests {
             facts: std::sync::Mutex::new(Vec::new()),
             links: std::sync::Mutex::new(Vec::new()),
             eps: std::sync::Mutex::new(Vec::new()),
+            continuity_id: std::sync::Mutex::new(crate::continuity::current_continuity_id()),
         };
         let g = MemoryGraph::with_backend(Box::new(backend));
         g.add_fact("主人", "备考", "高数期中", 8);
@@ -748,14 +784,16 @@ mod tests {
 
     #[test]
     fn n6_crawl_anchor_boost_prefers_residual() {
+        let cid = crate::continuity::current_continuity_id();
         let backend = MemoryBackend {
             facts: std::sync::Mutex::new(Vec::new()),
             links: std::sync::Mutex::new(Vec::new()),
             eps: std::sync::Mutex::new(vec![
-                CoreEpisode { id: "mem-seed".into(), timestamp: 1, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: "me".into() },
-                CoreEpisode { id: "mem-dup".into(), timestamp: 2, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: "me".into() },
-                CoreEpisode { id: "mem-uniq".into(), timestamp: 3, role: "assistant".into(), content: "zzzz yyyy".into(), session_id: "me".into() },
+                CoreEpisode { id: "mem-seed".into(), timestamp: 1, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: cid.clone() },
+                CoreEpisode { id: "mem-dup".into(), timestamp: 2, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: cid.clone() },
+                CoreEpisode { id: "mem-uniq".into(), timestamp: 3, role: "assistant".into(), content: "zzzz yyyy".into(), session_id: cid.clone() },
             ]),
+            continuity_id: std::sync::Mutex::new(cid),
         };
         // seed → dup: 高权重但内容被种子完全解释 (残差 0)
         // seed → uniq: 低权重但内容完全独特 (残差 1.0 → 锚增益翻倍)

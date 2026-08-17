@@ -94,6 +94,7 @@ impl SuiteCatalog {
                         cpu_percent: Some(75),
                         cpu_time_secs: Some(60),
                         timeout_secs: 30,
+                        ..Default::default()
                     }),
                 },
                 SuiteDef {
