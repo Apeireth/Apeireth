@@ -25,6 +25,7 @@
 use std::sync::Arc;
 use uuid::Uuid;
 
+pub mod egress; // S4: 出站网络策略 (域名/协议白名单默认拒绝 + 审计哈希链 + 预算联动)
 pub mod auth;
 // R177: organ invariants (5 tests + 2 Kani)
 pub mod gateway;
