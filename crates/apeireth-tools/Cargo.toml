@@ -39,6 +39,8 @@ regex = "1.10"
 walkdir = "2.5"
 # R33-1: Aider-style project conventions scanner (Cargo.toml 真解析, 跟 apeireth-api 0.8 一致)
 toml = "0.8"
+# TP29: 工具声明式配置 (Composio 借鉴) — YAML spec 解析 (沿用 apeireth-pipeline 0.9 +deprecated 警告)
+serde_yaml = "0.9"
 
 [dev-dependencies]
 tempfile = "3"
