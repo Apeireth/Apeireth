@@ -82,4 +82,27 @@
 - [ ] 版本号口径统一（RELEASE_NOTES v1.0.0 标题 vs workspace 1.2.0 + CHANGELOG 归条目 + ROADMAP 同步 R178；backlog #26，待 Leader 拍板）
 - [ ] 许可核对（Apache-2.0 + MIT 吸收部分保留版权头）
 - [ ] 发布产物（crate 整理 / README / tgz）
+- [ ] **世界模型前两层（发布前置, 2026-08-18 主人拍板）**——见 §六
+
+## 六、世界模型前两层（发布前置, 2026-08-18 主人拍板）
+
+> **定位**: 发布前必须完成。世界模型 = 推理链的外挂模拟器（设计意图见 docs/design-intent.md §2）。
+> 第三层（连续世界模型, Genie 3 式）是全体 AI 的墙——跟踪不趟。
+
+### 第一层: 文本世界模拟器（LLM 时间线推演 + oracle 校准）
+- **是什么**: 给定起点状态, LLM 按时间线展开"如果 X 发生→接下来→再接下来"的反事实推演链; oracle Brier 在推演终点校准（防 LLM 编故事）
+- **零件全有**: LLM（推理）+ oracle（Brier/CalibratedResolver）+ 反思（多轮推演）——只差"按时间线展开推演"的编排器
+- **挂接**: companion 新模块（world_model.rs 或 scenario 升级）, 与 E3 校准诊断衔接
+- **验收**: 推演链生成 + Brier 打分 + 校准回流; 反事实剧本 vs 事实对账
+
+### 第二层: 因果结构图推演（memory_graph + 图算法）
+- **是什么**: memory_graph s/p/o 三元组已是半成品因果网（"熬夜→状态差"=一条边）; 缺沿因果链推演——给定起点沿边展开"如果……那么……"路径, MCTS 在因果图上跑, LLM 只在分支点做判断
+- **与 MCTS/LATS 同构**: MCTS 在动作空间推演, 世界模型在因果空间推演——E2 的机制可直接复用
+- **挂接**: memory_graph.rs 扩展 + apeireth-cognition planning.rs 复用
+- **验收**: 因果链展开 + 分支判断 + 推演结果与事实对账
+
+### 依赖关系
+- 第一层依赖: oracle 校准（已有）+ 推演编排器（新）
+- 第二层依赖: memory_graph（已有）+ MCTS（已有）+ 第一层推演编排器（共用）
+- 与批次关系: 文本层可在 TP18（校准诊断）后接; 因果层随记忆域深化推进
 - [ ] 发布前置门槛（C3/上轮自检证据）：①Dockerfile COPY crates 互覆盖修复验证（DO2 W1，backlog #46）②cargo fmt 全仓修复（QA2 实测 72.7% 不合规，backlog #25）③cosign.pub 生成 + release 工具链预装（backlog #27）④compose 密码外部化（backlog #47）⑤.gitignore 密钥加固（backlog #28）
