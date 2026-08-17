@@ -7,23 +7,29 @@
 //! - **CSV 解析容错**: 缺字段空字符串 / Option 列空值 / 非法行跳过 + 计数 (不假成功)
 //! - **SQLite 批量入库**: 单事务包裹, 30 万条 < 5s (per row INSERT 慢)
 //! - **索引**: sector / industry / exchange 各 1 索引, 加速过滤
-//! - **0 装 PASS**: FinanceDatabase 仓库实际未在 `research/source/`（任务包文档 vs 现实偏差, 纪律 #8 诚实标注）,
-//!   本 crate 提供完整基础设施, 运行时数据加载等数据源就绪时再做
+//! - **0 装 PASS**: FinanceDatabase 网络下载 0 装 PASS (避免 reqwest 重依赖),
+//!   缓存命中/local source 路径实测覆盖
 //!
-//! API 边界:
-//! - [`SymbolMeta`] 标的元数据 (10 字段, 与任务 spec 一致)
+//! API 边界 (新 spec `eea4e3dd`):
+//! - [`SymbolMeta`] 标的元数据 (13 字段, 新增 ipo_date/delisted_date)
 //! - [`Provenance`] 数据源标记 (本地枚举, T0 信任等级)
-//! - [`SymbolStore`] SQLite 入库 + 查询 (SqliteMemoryStore 风格)
-//! - [`SymbolCatalog`] trait 查询接口 (per task 验收)
+//! - [`SymbolStore`] SQLite 入库 + 查询 (V6 migration, 加列而非改列)
+//! - [`SymbolCatalog`] trait 查询接口 (旧 + 新 spec 双套 API)
 //! - [`import_from_csv`] 批量导入 (容错 + 计数)
+//! - [`refresh`] 数据刷新 (网络/缓存兜底, per 新 spec 边界 #2/#4)
 
 pub mod catalog;
 pub mod csv;
+pub mod refresh;
 pub mod store;
 pub mod symbol;
 
 pub use catalog::SymbolCatalog;
 pub use csv::{import_from_csv, CsvImportStats};
+pub use refresh::{
+    refresh, refresh_and_import, DataSource, RefreshError, RefreshOutcome,
+    FINANCE_DATABASE_EQUITIES_CSV, FINANCE_DATABASE_RAW_BASE,
+};
 pub use store::{SymbolStore, SymbolStoreError};
 pub use symbol::{Provenance, SymbolMeta};
 
@@ -37,6 +43,7 @@ mod tests {
         let _ = SymbolMeta::default();
         let _ = Provenance::default();
         let _ = CsvImportStats::default();
+        let _ = DataSource::default_equities();
     }
 
     #[test]
@@ -50,6 +57,8 @@ mod tests {
         assert!(m.symbol.is_empty());
         assert!(m.market_cap.is_none());
         assert!(m.ipo_year.is_none());
+        assert!(m.ipo_date.is_none());
+        assert!(m.delisted_date.is_none());
         assert_eq!(m.provenance, Provenance::Manual);
     }
 }

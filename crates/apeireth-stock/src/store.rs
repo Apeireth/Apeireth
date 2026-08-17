@@ -47,7 +47,9 @@ impl SymbolStore {
         Ok(s)
     }
 
-    /// V5 migration: 建 symbols 表 + 3 索引.
+    /// V6 migration: 建 symbols 表 + 3 索引 + 2 新列 (ipo_date/delisted_date).
+    ///
+    /// V6 在 V5 基础上 ALTER ADD COLUMN (向后兼容, 已有库自动迁移).
     fn migrate(&self) -> Result<(), SymbolStoreError> {
         let conn = self.conn()?;
         conn.execute_batch(
@@ -61,6 +63,8 @@ impl SymbolStore {
                 currency TEXT NOT NULL DEFAULT '',
                 market_cap REAL,
                 ipo_year INTEGER,
+                ipo_date TEXT,
+                delisted_date TEXT,
                 provenance TEXT NOT NULL DEFAULT 'manual',
                 last_updated_ms INTEGER NOT NULL DEFAULT 0
             );
@@ -68,6 +72,24 @@ impl SymbolStore {
             CREATE INDEX IF NOT EXISTS idx_symbols_industry ON symbols(industry);
             CREATE INDEX IF NOT EXISTS idx_symbols_exchange ON symbols(exchange);",
         )?;
+        // V5 → V6 增量迁移: 给老库补列 (新装直接由 CREATE TABLE 含).
+        // SQLite ALTER ADD COLUMN 幂等检查: 先探测列是否存在.
+        let has_ipo_date: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='ipo_date'",
+            [],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        if has_ipo_date == 0 {
+            conn.execute("ALTER TABLE symbols ADD COLUMN ipo_date TEXT", [])?;
+        }
+        let has_delisted_date: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='delisted_date'",
+            [],
+            |r| r.get(0),
+        ).unwrap_or(0);
+        if has_delisted_date == 0 {
+            conn.execute("ALTER TABLE symbols ADD COLUMN delisted_date TEXT", [])?;
+        }
         Ok(())
     }
 
@@ -81,8 +103,9 @@ impl SymbolStore {
         conn.execute(
             "INSERT OR REPLACE INTO symbols
              (symbol, name, sector, industry, exchange, country, currency,
-              market_cap, ipo_year, provenance, last_updated_ms)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+              market_cap, ipo_year, ipo_date, delisted_date,
+              provenance, last_updated_ms)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 m.symbol,
                 m.name,
@@ -93,6 +116,8 @@ impl SymbolStore {
                 m.currency,
                 m.market_cap,
                 m.ipo_year,
+                m.ipo_date,
+                m.delisted_date,
                 m.provenance.as_str(),
                 m.last_updated_ms,
             ],
@@ -111,8 +136,9 @@ impl SymbolStore {
             let mut stmt = tx.prepare(
                 "INSERT OR REPLACE INTO symbols
                  (symbol, name, sector, industry, exchange, country, currency,
-                  market_cap, ipo_year, provenance, last_updated_ms)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                  market_cap, ipo_year, ipo_date, delisted_date,
+                  provenance, last_updated_ms)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             )?;
             for m in batch {
                 stmt.execute(params![
@@ -125,6 +151,8 @@ impl SymbolStore {
                     m.currency,
                     m.market_cap,
                     m.ipo_year,
+                    m.ipo_date,
+                    m.delisted_date,
                     m.provenance.as_str(),
                     m.last_updated_ms,
                 ])?;
@@ -139,7 +167,8 @@ impl SymbolStore {
         let conn = self.conn().ok()?;
         conn.query_row(
             "SELECT symbol, name, sector, industry, exchange, country, currency,
-                    market_cap, ipo_year, provenance, last_updated_ms
+                    market_cap, ipo_year, ipo_date, delisted_date,
+                    provenance, last_updated_ms
              FROM symbols WHERE symbol = ?1",
             params![symbol],
             row_to_meta,
@@ -176,7 +205,8 @@ impl SymbolStore {
         // 动态拼 SQL (3 个字段可选), 用 enum 表查询参数绑定
         let mut sql = String::from(
             "SELECT symbol, name, sector, industry, exchange, country, currency,
-                    market_cap, ipo_year, provenance, last_updated_ms
+                    market_cap, ipo_year, ipo_date, delisted_date,
+                    provenance, last_updated_ms
              FROM symbols WHERE 1=1",
         );
         let mut binds: Vec<String> = Vec::new();
@@ -222,6 +252,28 @@ impl SymbolStore {
         conn.execute("DELETE FROM symbols WHERE symbol = ?1", params![symbol])?;
         Ok(())
     }
+
+    // ============ 新 spec API (eea4e3dd 任务包) ============
+
+    /// 按 ticker 查询 (新 spec API, 与 `get` 等价 — `ticker` 是 `symbol` 的 accessor).
+    pub fn get_by_ticker(&self, ticker: &str) -> Option<SymbolMeta> {
+        SymbolStore::get(self, ticker)
+    }
+
+    /// 按行业搜索 (新 spec API, 等价于 `search(None, Some(industry), None, limit)`).
+    pub fn search_by_industry(&self, industry: &str, limit: usize) -> Vec<SymbolMeta> {
+        SymbolStore::search(self, None, Some(industry), None, limit)
+    }
+
+    /// 按交易所列出 (新 spec API, 等价于 `search(None, None, Some(exchange), limit)`).
+    pub fn list_by_exchange(&self, exchange: &str, limit: usize) -> Vec<SymbolMeta> {
+        SymbolStore::search(self, None, None, Some(exchange), limit)
+    }
+
+    /// 标的总数 (新 spec API, 等价于 `count`).
+    pub fn count_all(&self) -> usize {
+        SymbolStore::count(self)
+    }
 }
 
 impl SymbolCatalog for SymbolStore {
@@ -242,10 +294,28 @@ impl SymbolCatalog for SymbolStore {
     fn count(&self) -> usize {
         SymbolStore::count(self)
     }
+
+    // 新 spec API 默认实现 (delegate 给 inherent 方法)
+    fn get_by_ticker(&self, ticker: &str) -> Option<SymbolMeta> {
+        SymbolStore::get_by_ticker(self, ticker)
+    }
+
+    fn search_by_industry(&self, industry: &str, limit: usize) -> Vec<SymbolMeta> {
+        SymbolStore::search_by_industry(self, industry, limit)
+    }
+
+    fn list_by_exchange(&self, exchange: &str, limit: usize) -> Vec<SymbolMeta> {
+        SymbolStore::list_by_exchange(self, exchange, limit)
+    }
+
+    fn count_all(&self) -> usize {
+        SymbolStore::count_all(self)
+    }
 }
 
 fn row_to_meta(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolMeta> {
-    let prov_s: String = row.get(9)?;
+    // 13 列: 0..12 (prov_s=11, last_updated_ms=12)
+    let prov_s: String = row.get(11)?;
     Ok(SymbolMeta {
         symbol: row.get(0)?,
         name: row.get(1)?,
@@ -256,8 +326,10 @@ fn row_to_meta(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolMeta> {
         currency: row.get(6)?,
         market_cap: row.get(7)?,
         ipo_year: row.get(8)?,
+        ipo_date: row.get(9)?,
+        delisted_date: row.get(10)?,
         provenance: Provenance::from_db(&prov_s),
-        last_updated_ms: row.get(10)?,
+        last_updated_ms: row.get(12)?,
     })
 }
 
@@ -280,6 +352,8 @@ mod tests {
             currency: "USD".into(),
             market_cap,
             ipo_year: Some(2000),
+            ipo_date: None,
+            delisted_date: None,
             provenance: Provenance::FinanceDatabase,
             last_updated_ms: 1_700_000_000_000,
         }
@@ -464,5 +538,121 @@ mod tests {
         drop(conn);
         let back = s.get("X").unwrap();
         assert_eq!(back.provenance, Provenance::Manual);
+    }
+
+    // ============ 新 spec (eea4e3dd) 测试 ============
+
+    #[test]
+    fn ipo_date_delisted_date_roundtrip() {
+        let s = store();
+        let mut m = sample("LEHQY", "Financial", Some(0.0));
+        m.ipo_date = Some("1994-09-13".into());
+        m.delisted_date = Some("2008-09-15".into());
+        s.upsert(&m).unwrap();
+        let back = s.get("LEHQY").unwrap();
+        assert_eq!(back.ipo_date, Some("1994-09-13".to_string()));
+        assert_eq!(back.delisted_date, Some("2008-09-15".to_string()));
+    }
+
+    #[test]
+    fn ipo_date_delisted_date_default_null() {
+        let s = store();
+        s.upsert(&sample("ALIVE", "Tech", None)).unwrap();
+        let back = s.get("ALIVE").unwrap();
+        assert!(back.ipo_date.is_none());
+        assert!(back.delisted_date.is_none());
+    }
+
+    #[test]
+    fn v6_migration_adds_columns() {
+        // 模拟 V5 旧库 (无 ipo_date/delisted_date) → V6 自动 ALTER ADD
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("test.db");
+        let conn = rusqlite::Connection::open(&p).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE symbols (
+                symbol TEXT PRIMARY KEY,
+                name TEXT, sector TEXT, industry TEXT, exchange TEXT,
+                country TEXT, currency TEXT, market_cap REAL, ipo_year INTEGER,
+                provenance TEXT, last_updated_ms INTEGER
+            )",
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO symbols VALUES ('OLD', 'Old Co', '', '', '', '', '', NULL, NULL, 'manual', 0)",
+            [],
+        ).unwrap();
+        drop(conn);
+
+        // V6 migrate 应自动 ALTER
+        let s = SymbolStore::open(&p).unwrap();
+        let back = s.get("OLD").unwrap();
+        assert_eq!(back.symbol, "OLD");
+        assert!(back.ipo_date.is_none());
+        assert!(back.delisted_date.is_none());
+    }
+
+    #[test]
+    fn v6_migration_idempotent_on_v6_db() {
+        // V6 已存在的库再次 open 应幂等 (ALTER ADD 探测跳过)
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("test.db");
+        let _ = SymbolStore::open(&p).unwrap();
+        let _ = SymbolStore::open(&p).unwrap();
+        let _ = SymbolStore::open(&p).unwrap();
+    }
+
+    #[test]
+    fn get_by_ticker_delegates_to_get() {
+        let s = store();
+        s.upsert(&sample("AAPL", "Tech", Some(1.0))).unwrap();
+        assert_eq!(s.get_by_ticker("AAPL").unwrap().symbol, "AAPL");
+        assert!(s.get_by_ticker("MISSING").is_none());
+    }
+
+    #[test]
+    fn search_by_industry_delegates() {
+        let s = store();
+        s.upsert(&sample("A", "Tech", None)).unwrap();
+        let mut m = s.get("A").unwrap();
+        m.industry = "Semiconductors".into();
+        s.upsert(&m).unwrap();
+        s.upsert(&sample("B", "Finance", None)).unwrap();
+        let mut m2 = s.get("B").unwrap();
+        m2.industry = "Banks".into();
+        s.upsert(&m2).unwrap();
+
+        let r = s.search_by_industry("Semiconductors", 10);
+        assert_eq!(r.len(), 1);
+        assert_eq!(r[0].symbol, "A");
+    }
+
+    #[test]
+    fn list_by_exchange_delegates() {
+        let s = store();
+        for i in 0..3 {
+            s.upsert(&sample(&format!("S{}", i), "Tech", None)).unwrap();
+            let mut m = s.get(&format!("S{}", i)).unwrap();
+            m.exchange = "NYSE".into();
+            s.upsert(&m).unwrap();
+        }
+        s.upsert(&sample("X", "Tech", None)).unwrap();
+        let mut m = s.get("X").unwrap();
+        m.exchange = "NASDAQ".into();
+        s.upsert(&m).unwrap();
+
+        let r = s.list_by_exchange("NYSE", 10);
+        assert_eq!(r.len(), 3);
+        let r_n = s.list_by_exchange("NASDAQ", 10);
+        assert_eq!(r_n.len(), 1);
+    }
+
+    #[test]
+    fn count_all_delegates_to_count() {
+        let s = store();
+        assert_eq!(s.count_all(), 0);
+        for i in 0..5 {
+            s.upsert(&sample(&format!("S{}", i), "Tech", None)).unwrap();
+        }
+        assert_eq!(s.count_all(), 5);
     }
 }
