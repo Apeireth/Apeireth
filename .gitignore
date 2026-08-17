@@ -182,3 +182,23 @@ crates/apeireth-integration-e2e/.*.log
 # 习惯: .r<round>-<task>-*.<ext> = sub-agent scratch, 0 必进 git (整合 #4 commit 已含 3 实际文件)
 .r[0-9][0-9][0-9]-*-*
 *.py
+
+# TP20-S5 (2026-08-18 主人拍板): 发布期供应链验证工具链
+# 边界: tools/ 是 cargo install --root 落地点 (per crate, 二进制 ~100MB+),
+#       sbom/ 是 cyclonedx 收口的 per-crate SBOM (~5MB * 84 = 400MB+),
+#       supply-chain/ 是 cargo-vet 初始化产物 (782 exemptions + Mozilla 缓存),
+#       3 个目录都不进 git — 重现: `cargo vet init` + `make tools-install`
+# 注: 这些目录必须在 init 之前先 .gitkeep, 否则首次 checkout 后丢失规则
+tools/
+sbom/
+supply-chain/
+
+# TP20-S5 SBOM 主输出文件 (cyclonedx-sbom.json) 走 CI artifact, 不进 git
+cyclonedx-sbom.json
+
+# TP20-S5: cargo-vet init 时输出, 复用策略同 supply-chain/
+imports.lock
+
+# TP20-S5: cargo-audit stderr (audit-report.json 走 CI artifact)
+audit-audit.stderr.txt
+sbom-cyclonedx.stderr.txt

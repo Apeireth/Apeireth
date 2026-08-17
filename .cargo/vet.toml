@@ -1,0 +1,96 @@
+# ============================================================================
+# .cargo/vet.toml — Apeireth 发布期第三方依赖审计配置 (TP20-S5 塞缝批)
+# ============================================================================
+# 文档: https://mozilla.github.io/cargo-vet/format.html
+# 工具: cargo vet (cargo install cargo-vet --locked --root tools/)
+# 哲学: 机制而非补丁 — 把第三方依赖审查做成 first-class CI gate,
+#       不是 release 时才临时人肉跑 `cargo tree` 看依赖。
+#
+# 用法:
+#   cargo vet --manifest-path crates/release-tools/Cargo.toml      # 单 crate
+#   cargo vet                                                # 整个 workspace
+#   cargo vet suggest                                          # 给所有 transitive 建议
+#   cargo vet certify <crate> <version> --criteria safe-to-run  # 手工认证
+#
+# 已知约束 (TP20-S5 主人拍板边界):
+#   - 不审查所有依赖 (只配流程, 真正逐 dep review 是后续任务)
+#   - 不接在线 CVE DB (走 cargo-audit 离线 advisory-db 缓存, 见 scripts/vet.sh)
+#   - 不做 signed SBOM (走 cargo-cyclonedx CycloneDX 1.5, 见 scripts/sbom.sh)
+#
+# 版本: 2026-08-18 (TP20-S5 首版, 后续每个 release 增量加 [[audits]] 项)
+# ============================================================================
+
+# cargo-vet 配置 schema version (写死 1)
+[version]
+version = 1
+
+# ----------------------------------------------------------------------------
+# 默认策略: wildcards (信誉模式)
+# ----------------------------------------------------------------------------
+# 把 *uncommented* 包当 wildcards: 没列在 [[unpublished]] / [[audits]] 也不属于
+# trusted publishers 时, cargo vet 会以 "wildcards" 模式放行 (类似 cargo-deny 的
+# confidence = wildcards)。这是「只配流程不审全部依赖」原则的最弱可执行配置。
+#
+# 风险与缓解: 任何新依赖加入 workspace 时, 默认通过, 由 cargo-audit 离线
+# advisory-db 兜底 (scripts/vet.sh 调用链: vet → audit → deny)。
+#
+# ponytail: 后续若要升级为「逐 dep 手工认证」, 把 [wildcards] 段改成:
+#   [wildcards]
+#   allowed = false
+#   然后用 `cargo vet suggest` 生成 [[audits]] 项, 再 commit。
+# ----------------------------------------------------------------------------
+[wildcards]
+allowed = true
+
+# ----------------------------------------------------------------------------
+# Cargo 包导入 (audits 表)
+# ----------------------------------------------------------------------------
+# 第一个 trusted publisher: Mozilla 官方 audit 缓存
+# cargo-vet 内置会从 https://github.com/mozilla/cargo-vet/main/audits.toml 拉
+# crates.io 上主流 crate 的官方审计记录, 离线时跳过这一段 (见 scripts/vet.sh 头部)
+#
+# 注: cargo-vet 默认就内置 Mozilla + Embark Studios + Google 的 audits, 这里
+# 不显式列 source, 直接靠 CLI 默认行为。
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# 手工审计示例 (TP20-S5 主人拍板: 占位, 真正逐 dep 认证留作后续任务)
+# ----------------------------------------------------------------------------
+# 字段: who = "devops_engineer2@apeireth", criteria = "safe-to-deploy",
+#       version-span = "1.0.0,1.999.999" 表示从此版本起一直认, 直至下一次 review。
+#
+# 验收时 uncomment 这一段示例, 跑 `cargo vet` 期望对发布-1 全 PASS。
+# ----------------------------------------------------------------------------
+
+# [[audits]]
+# who = "devops_engineer2@apeireth"
+# criteria = "safe-to-deploy"
+# version-span = "1.0.0,1.999.999"
+# notes = "TP20-S5 占位审计 — release-tools 自身依赖审计通过 (零运行时依赖)"
+# [audits.versions]
+# release-tools = ["1.2.0"]
+
+# ----------------------------------------------------------------------------
+# 版本映射例外: 把 apeireth-* 私有 crate 当内部审计, 跳过外部 review
+# ----------------------------------------------------------------------------
+# 私有 workspace member 没有 crates.io 发布, cargo vet 默认会按 wildcard 处理。
+# 这里用 [[exemptions]] (老格式) 或 [[audits]] with criteria = "safe-to-run"
+# 给每个内部 crate 一个低开销的自我认证。
+# ----------------------------------------------------------------------------
+
+[[exemptions]]
+crate = "apeireth-*"
+criteria = "safe-to-run"
+
+[[exemptions]]
+crate = "release-tools"
+criteria = "safe-to-run"
+reason = "TP20-S5 内部 crate, 零外部依赖, 不需要外部审计"
+
+# ----------------------------------------------------------------------------
+# 失败时行为 (TP20-S5 主人拍板: hard fail on release, warn on dev)
+# ----------------------------------------------------------------------------
+# 不在 toml 里写 (cargo-vet 通过 CLI flag 控制):
+#   cargo vet --no-fail-on-warnings        # CI 用: warnings 不阻断
+#   cargo vet                              # 本地用: 全阻断
+# scripts/vet.sh 默认不带 --no-fail-on-warnings, 真有漏洞时一定阻断。
