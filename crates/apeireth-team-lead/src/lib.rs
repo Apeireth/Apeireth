@@ -709,3 +709,10 @@ mod tests {
 
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
+
+// TP20-N20 ApprovalBridge — companion ↔ orchestrator 跨 crate 审批透传契约.
+// 详见 src/approval_bridge.rs 模块头 (0 装 PASS / 字段透传保真 / 缺字段默认 reject).
+pub mod approval_bridge;
+pub use approval_bridge::{
+    ApprovalBridge, ApprovalBridgeError, ApprovalRequest, ApprovalResponse, InProcessBridge,
+};
