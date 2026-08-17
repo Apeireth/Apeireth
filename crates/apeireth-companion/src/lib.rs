@@ -115,6 +115,7 @@ pub mod observer_capture; // TP22: 工具执行结果即时沉淀候选 (W5 直�
 pub mod curiosity;  // E4: 好奇驱动引擎 (记忆回声偏置采样 + 浅尝辄止 + 疑问路由, 确定性无 LLM)
 pub mod hypothesis; // F4: 假设检验闭环 (HypothesisStore 状态机 + VerifyPlanner + ReconcileSink 对账口, 确定性无 LLM)
 pub mod emotion_memory; // F1: 情感记忆 (主人情绪时间线 valence/arousal + 加权当前情绪 + 趋势 + 情绪上下文检索, 确定性无 LLM)
+pub mod progressive; // TP21: 渐进式披露 (目录先行→按需展开, claude-mem 借鉴, 预算截断 + 0 装省略标注)
 // R177: organ invariants
 mod organ_kani_proofs;
 
