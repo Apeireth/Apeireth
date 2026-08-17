@@ -4,7 +4,8 @@
 **角色**: backend_engineer2
 **worktree**: `_workspace/tp21-e0599-be2`
 **分支**: `task/tp21-e0599-be2`
-**commits**: `11799234` (fix) + `2256ac0` (docs) — 在 master HEAD `ff3f6d10` 之上
+**commits (rebased)**: `fab85ad4` (fix) + `39fe3946` (docs) + `3d14e747` (reports) — rebase onto integration-tip (ce85e5d0), ff 到 integration (3d14e747 → 后续 TP20-S5 推到 5cb64363, 本次 report update 在 5cb64363 之上的 9d8b... 待生成)
+**原 commit hashes (基于 master ff3f6d10, 已废)**: `11799234` + `2256ac02` + `c52c2a45`
 **报告日期**: 2026-08-17
 
 ---
@@ -286,3 +287,53 @@ ff3f6d10 docs: design-intent 远期愿景 — 物种/传承/跨墙 (主人 2026-
 ```
 
 commits 状态: 工作树干净 (`git status` 无变更)。
+
+---
+
+## 9. 集成 rebase 记录 (2026-08-17 集成协调阶段)
+
+**集成冲突背景**:
+- 系统协调员首次 merge 失败: integration 分支此前已演进到 ce85e5d0 (TP12 → TP20-S3 一系列), 而 TP21 仍基于 master ff3f6d10, 故系统判定冲突重派。
+
+**rebase 操作** (worktree _workspace/tp21-e0599-be2):
+```
+git rebase --onto integration-tip ff3f6d10 task/tp21-e0599-be2
+```
+- replay 3 commits (11799234/2256ac02/c52c2a45) → 新 hashes (fab85ad4/39fe3946/3d14e747)
+- 冲突范围 (2 docs 全文件): `docs/backlog.md` + `docs/maintenance-guide.md`
+- 冲突解法: 取 HEAD 全文 (integration-tip 已有最新审计台账) + 在 tool_bridge 行追加 TP21 备注 + 在 backlog X 段尾追加 X1 行
+- `docs/team-work-doc.md` 自动合并成功 (HEAD 新增 §6.4 Orchestrator 接入面 + 我的 §6.4 重编号 §6.5)
+- `crates/apeireth-companion/src/tool_bridge.rs` 干净 replay (line 985 修复与我的 3 处修复不重叠)
+- `reports/1af074f8...-report.md` 干净 replay (新文件)
+
+**ff merge 到 integration 工作树**:
+```
+git checkout team/e8de47ae-0e59-459d-a763-88e52b7706c8/integration
+git reset --hard integration-tip    # fast-forward 工作树到 ce85e5d0
+git merge task/tp21-e0599-be2        # Fast-forward (无冲突, 因 rebase 已与 integration-tip 对齐)
+# HEAD = 3d14e747
+```
+
+**集成后回归** (`cargo test -p apeireth-companion --lib` 逐模块):
+| 模块              | master HEAD | integration-tip (无 TP21) | integration + TP21 |
+|-------------------|-------------|---------------------------|---------------------|
+| tool_bridge       | E0599       | E0599 (3 errors)          | 18/0 ✅              |
+| context           | 21/0        | (编译不过)                | 47/0 ✅              |
+| continuation      | 4/0         | (编译不过)                | 21/0 ✅              |
+| onering           | 8/0         | (编译不过)                | 8/0 ✅               |
+| memory_extractor  | 3/0         | (编译不过)                | 3/0 ✅               |
+| approval_requests | 2/0         | (编译不过)                | 6/1 ⚠️               |
+| **合计**          | 38/0 (编译阻塞 +38 tests) | 0 (全编译阻塞) | **104/1** ⚠️      |
+
+**已知未修 (TP21 边界外)**:
+- `approval_requests::tests::t13_two_way_sync_mark_approved_dispatches_response` 在 integration 上 FAIL。
+  - **根因 (上游)**: TP20-N20 commit `40b7e434` 重写了 `record_request` 签名 (新增 `bridge: Option<&Arc<dyn ApprovalBridge>>` 参数), 但 t13 的查找逻辑 (list by "approved"/"rejected"/"pending" + find) 假设状态轮转, 在并发测试顺序下找到的可能是 rejected 项, `mark_approved` 拒绝 → unwrap 失败。
+  - **不是 TP21 引入**: 同一 commit 在 master HEAD (ff3f6d10) 的 approval_requests.rs 上不存在, master t13 2/0 PASS。我的 3 处 tool_bridge.rs 修复不涉及 approval_requests。
+  - **不在 TP21 边界**: approval_requests.rs 是禁踩区 (`crates/apeireth-companion/src/` 在 TP21 边界明确排除; task 1.1 仅允许 `crates/apeireth-companion/src/tool_bridge.rs`)。
+  - **建议**: 应由 TP20-N20 同事修 (他引入的回归), 或在新任务 (TP21.1 候选) 中处理。建议 Leader 加 backlog 任务: "approval_requests t13 测试隔离 bug (TP20-N20 副作用)"。
+- `job_object::tests::{memory_limit,cpu_time_limit}_kills_child_and_leaves_trace` FAIL: Windows Job Object 环境问题 (任务终止不被记为非正常退出), master HEAD 即失败, 不在 TP21 范围。
+
+**TP21 实际价值**:
+- 集成前 (integration-tip): 6 个验收模块 0 可跑 (编译阻塞)。
+- 集成后 (integration + TP21): 6 个验收模块 5 全绿 + 1 暴露已有问题 → 守门员/下游 TP14/TP17/TP20 等可正常跑测试。
+- 实际是 TP20-N20 (后合并) + TP21 (本次) 联手让 integration 从"lib test 完全无法跑"变为"5 模块 PASS + 1 模块 1 known issue"。
