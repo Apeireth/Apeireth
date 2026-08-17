@@ -1157,6 +1157,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(Duration::from_secs(600));
     let rhythm_share: std::sync::Arc<std::sync::Mutex<Option<RhythmEstimate>>> =
         std::sync::Arc::new(std::sync::Mutex::new(None));
+    // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录; 目录条目由记忆主题
+    // 构建的调用方负责 — 此处从零开始, 对话积累后由 brain.on_message 喂回声)
+    let brain = Arc::new(apeireth_companion::runtime_brain::RuntimeBrain::new(
+        apeireth_companion::curiosity::CuriosityConfig::default(),
+        apeireth_companion::hypothesis::HypothesisConfig::default(),
+        vec![
+            apeireth_companion::progressive::CatalogEntry::new(
+                "伙伴回忆",
+                "与主人的共同生活记录（对话积累自动生长）",
+                0,
+            ),
+        ],
+    ));
     let app = Arc::new(
         CompanionApp::new(Arc::clone(&store), MEMORY_SESSION)
             // L0: Identity 常驻 (persona + 约束, 永不截断)
@@ -1171,7 +1184,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_refiner(Arc::new(MiniMaxExperienceRefiner { pipeline: Arc::clone(&pipeline) }))
             .with_deep_recall(Arc::new(MiniMaxDeepRecall { pipeline: Arc::clone(&pipeline) }))
             .with_extract_interval(extract_interval)
-            .with_summarize_interval(Duration::from_secs(300)),
+            .with_summarize_interval(Duration::from_secs(300))
+            .with_brain(Arc::clone(&brain)),
     );
     println!("[app] CompanionApp 装配完成: L0 Identity + L1 Essential 常驻, 提炼 {:?} 节流", extract_interval);
 
