@@ -408,6 +408,7 @@ dependencies = [
  "apeireth-api",
  "apeireth-asi",
  "apeireth-bus",
+ "apeireth-cognition",
  "apeireth-consciousness",
  "apeireth-core",
  "apeireth-council",
