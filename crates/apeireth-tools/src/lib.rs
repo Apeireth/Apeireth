@@ -92,6 +92,8 @@ pub mod schema; // TP12: 递归 enum schema + 纯函数 validate()
 pub mod web_crawl; // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
 pub mod web_fetch; // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
 pub mod web_search;
+// TP29 (生态批): 工具声明式配置 (Composio 借鉴, 插件 YAML 声明)
+pub mod yaml_spec;
 
 pub use code_exec::{CodeExec, CodeExecTool, ShellCodeExec};
 pub use conventions_scanner::ProjectConventions; // R33-1: Aider-style conventions scanner
@@ -113,6 +115,12 @@ pub use register::{default_schema_map, register_all, registered_tool_names, REGI
 pub use result::ToolResult;
 pub use schema::{validate, SchemaMap, SchemaNode, ValidationError};
 pub use web_search::{HttpWebSearch, WebSearch, WebSearchTool};
+// TP29: 公开 yaml_spec 导出, 让 tool_bridge/companion 直接消费
+pub use yaml_spec::{
+    load_directory as load_yaml_spec_dir, load_tool_spec, register_yaml_spec, CredentialSpec,
+    ParameterSpec, ParameterType, PermissionSpec, PermissionType, SpecError, SpecPlaceholderTool,
+    StaticToolSpec, ToolSpec, YamlToolSpec,
+};
 
 // ============================================================
 // 编译期 hardcode (平台不变性, 主哲学锚 #1 不漂移 + #6 工程铁律)

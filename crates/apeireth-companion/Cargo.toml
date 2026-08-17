@@ -70,6 +70,8 @@ tokio = { workspace = true }
 tokio-stream = "0.1"
 futures = "0.3"
 apeireth-api = { path = "../apeireth-api" }
+# TP29 (生态批): yaml_spec 与 tool_bridge 衔接测试用
+tempfile = "3"
 # companion_serve: 伙伴端点 (任何 OpenAI 兼容前端接入 Apeireth 主链路)
 # axum 保持 0.7 (dev-dep, 2026-08 审计): 0.8 是破坏性升级 (路由语法 :id → {id}),
 # P3 有意维持 0.7 — 见 crates/apeireth-api/README.md "依赖版本决策".
