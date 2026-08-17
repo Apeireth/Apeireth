@@ -271,6 +271,38 @@ impl ReconcileSink for NoopSink {
     }
 }
 
+/// 真对账: 确认/证伪结果写回 memory_graph 因果边 (W2/W3 输入源, 集成而非分立).
+/// - Confirmed → add_fact("假设", "确认", statement)
+/// - Refuted → add_fact("假设", "证伪", statement)
+/// 0 装 PASS: 写回后记忆图由调用方决定如何使用 (不假装已注入).
+pub struct GraphReconcileSink {
+    pub graph: crate::memory_graph::MemoryGraph,
+}
+
+impl GraphReconcileSink {
+    pub fn new(store: std::sync::Arc<apeireth_memory::SqliteMemoryStore>) -> Self {
+        Self {
+            graph: crate::memory_graph::MemoryGraph::new(store),
+        }
+    }
+}
+
+impl ReconcileSink for GraphReconcileSink {
+    fn write_back(&mut self, h: &Hypothesis) -> Result<(), String> {
+        match h.status {
+            HypothesisStatus::Confirmed => {
+                self.graph.add_fact("假设", "确认", &h.statement, 6);
+                Ok(())
+            }
+            HypothesisStatus::Refuted => {
+                self.graph.add_fact("假设", "证伪", &h.statement, 3);
+                Ok(())
+            }
+            _ => Err(format!("状态 {:?} 未定论, 不对账", h.status)),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
