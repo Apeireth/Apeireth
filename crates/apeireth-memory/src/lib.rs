@@ -59,6 +59,10 @@ pub mod history_streams;
 
 pub mod continuity_link;
 pub use episode::{EpisodeQuery, EpisodeStore};
+// TP24 (M5 + N25): 记忆来源链 + 时间元数据 (episodes 表的 4 列 V4 扩展).
+// 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
+pub mod provenance;
+pub use provenance::{normalize_meta, EpisodeMeta, Provenance, validate_meta};
 pub mod llm_analysis;
 pub use identity::{IdentityCardRecord, IdentityCardStore, IdentityConflict};
 pub use llm_analysis::{analyze_episode, AnalysisKind, AnalysisResult};

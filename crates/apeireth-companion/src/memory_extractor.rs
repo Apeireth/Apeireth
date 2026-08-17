@@ -15,7 +15,7 @@
 
 use std::sync::Arc;
 
-use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
+use apeireth_memory::{CoreEpisode, EpisodeMeta, EpisodeStore, Provenance, SqliteMemoryStore};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -35,6 +35,74 @@ fn default_importance() -> u8 {
 impl MemoryItem {
     pub fn new(content: impl Into<String>, importance: u8) -> Self {
         Self { importance: importance.clamp(1, 10), content: content.into() }
+    }
+}
+
+/// 完整记忆条目 (TP24/M5+N25): 来源链 + 时间元数据.
+///
+/// 字段:
+/// - `id` / `timestamp` / `role` / `content` / `session_id`: 既有字段 (与 `CoreEpisode` 对齐)
+/// - `valid_from_ms` / `valid_until_ms`: 时间有效性窗口 (epoch ms, None = 永久)
+/// - `created_ms`: 创建时间 (epoch ms, 必填, 旧条目兜底 timestamp * 1000)
+/// - `provenance`: 来源 (Dialog/Tool/Reflection/Observation/Manual, 默认 Manual)
+///
+/// 兼容旧条目 (V4 迁移前): 读取时按 [`apeireth_memory::normalize_meta`] 自动填默认.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryEntry {
+    pub id: String,
+    /// 事件时间戳 (epoch seconds, 与 Episode.timestamp 同义, 向后兼容保留).
+    pub timestamp: i64,
+    pub role: String,
+    pub content: String,
+    pub session_id: String,
+    /// 生效起点 (epoch ms). None = 永久生效.
+    #[serde(default)]
+    pub valid_from_ms: Option<i64>,
+    /// 失效时间 (epoch ms). None = 永久有效 (per task 兼容默认).
+    #[serde(default)]
+    pub valid_until_ms: Option<i64>,
+    /// 创建时间 (epoch ms, 必填, 旧条目兜底 timestamp * 1000).
+    pub created_ms: i64,
+    /// 来源 (默认 Manual).
+    #[serde(default)]
+    pub provenance: Provenance,
+}
+
+impl MemoryEntry {
+    /// 从 `CoreEpisode` + `EpisodeMeta` 构造 (新代码路径)。
+    pub fn from_episode(ep: &CoreEpisode, meta: &EpisodeMeta) -> Self {
+        Self {
+            id: ep.id.clone(),
+            timestamp: ep.timestamp,
+            role: ep.role.clone(),
+            content: ep.content.clone(),
+            session_id: ep.session_id.clone(),
+            valid_from_ms: meta.valid_from_ms,
+            valid_until_ms: meta.valid_until_ms,
+            created_ms: meta.created_ms,
+            provenance: meta.provenance,
+        }
+    }
+
+    /// 提取 `EpisodeMeta` (给底层 store 写入用)。
+    pub fn meta(&self) -> EpisodeMeta {
+        EpisodeMeta {
+            valid_from_ms: self.valid_from_ms,
+            valid_until_ms: self.valid_until_ms,
+            created_ms: self.created_ms,
+            provenance: self.provenance,
+        }
+    }
+
+    /// 提取 `CoreEpisode` (给底层 store 写入用, 5 字段子集)。
+    pub fn core(&self) -> CoreEpisode {
+        CoreEpisode {
+            id: self.id.clone(),
+            timestamp: self.timestamp,
+            role: self.role.clone(),
+            content: self.content.clone(),
+            session_id: self.session_id.clone(),
+        }
     }
 }
 
@@ -146,32 +214,55 @@ impl MemoryExtractionService {
 
     /// 把提炼结果静默写入 (facts/commitments → mem-ex-*, preferences → pref-*).
     /// 写入格式带重要性前缀 "【imp:N】" (排序/反思阈值用).
+    /// TP24: 5 种 items 都用 `Provenance::Dialog` (LLM 从对话提炼).
     pub fn apply(&self, ex: &ExtractedMemory) -> Result<(), String> {
         let now = chrono::Utc::now().timestamp();
+        let prov = Provenance::Dialog;
         for f in &ex.facts {
             if !f.content.trim().is_empty() {
-                self.put(format!("mem-ex-{}", uuid::Uuid::new_v4()), now, &format!("{IMP_PREFIX}{}】{}", f.importance, f.content.trim()))?;
+                self.put_with_provenance(
+                    format!("mem-ex-{}", uuid::Uuid::new_v4()),
+                    now,
+                    &format!("{IMP_PREFIX}{}】{}", f.importance, f.content.trim()),
+                    prov,
+                )?;
             }
         }
         for c in &ex.commitments {
             if !c.content.trim().is_empty() {
-                self.put(format!("mem-ex-{}", uuid::Uuid::new_v4()), now, &format!("{IMP_PREFIX}{}】【约定】{}", c.importance, c.content.trim()))?;
+                self.put_with_provenance(
+                    format!("mem-ex-{}", uuid::Uuid::new_v4()),
+                    now,
+                    &format!("{IMP_PREFIX}{}】【约定】{}", c.importance, c.content.trim()),
+                    prov,
+                )?;
             }
         }
         for p in &ex.preferences {
             if !p.content.trim().is_empty() {
-                self.put(format!("pref-{}", uuid::Uuid::new_v4()), now, &format!("{IMP_PREFIX}{}】主人偏好: {}", p.importance, p.content.trim()))?;
+                self.put_with_provenance(
+                    format!("pref-{}", uuid::Uuid::new_v4()),
+                    now,
+                    &format!("{IMP_PREFIX}{}】主人偏好: {}", p.importance, p.content.trim()),
+                    prov,
+                )?;
             }
         }
         if let Some(e) = &ex.emotional {
             if !e.trim().is_empty() {
-                self.put(format!("mem-ex-{}", uuid::Uuid::new_v4()), now, &format!("【情绪信号】{e}"))?;
+                self.put_with_provenance(
+                    format!("mem-ex-{}", uuid::Uuid::new_v4()),
+                    now,
+                    &format!("【情绪信号】{e}"),
+                    prov,
+                )?;
             }
         }
         Ok(())
     }
 
-    /// 静默写入一条 (append-only).
+    /// 静默写入一条 (向后兼容路径: 不带元数据, 4 列均为 NULL → 老条目按 Manual + 永久有效).
+    /// TP24 起, 推荐用 [`put_with_provenance`](Self::put_with_provenance) 或 [`put_with_meta`](Self::put_with_meta).
     fn put(&self, id: String, ts: i64, content: &str) -> Result<(), String> {
         let ep = CoreEpisode {
             id,
@@ -181,6 +272,83 @@ impl MemoryExtractionService {
             session_id: "me".into(),
         };
         self.store.put_episode(&ep).map_err(|e| e.to_string())
+    }
+
+    /// TP24: 写入一条, 显式指定来源 (默认元数据: created_ms=ts*1000, valid_from=created_ms, valid_until=None).
+    pub fn put_with_provenance(
+        &self,
+        id: String,
+        ts: i64,
+        content: &str,
+        provenance: Provenance,
+    ) -> Result<(), String> {
+        let created_ms = ts.saturating_mul(1000);
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(created_ms),
+            valid_until_ms: None,
+            created_ms,
+            provenance,
+        };
+        self.put_with_meta(id, ts, content, &meta)
+    }
+
+    /// TP24: 写入一条, 显式指定完整 `EpisodeMeta` (4 列全控).
+    pub fn put_with_meta(
+        &self,
+        id: String,
+        ts: i64,
+        content: &str,
+        meta: &EpisodeMeta,
+    ) -> Result<(), String> {
+        let ep = CoreEpisode {
+            id,
+            timestamp: ts,
+            role: "assistant".into(),
+            content: content.to_string(),
+            session_id: "me".into(),
+        };
+        self.store.put_episode_full(&ep, meta).map_err(|e| e.to_string())
+    }
+
+    /// TP24: 按时间窗检索 (epoch_ms). 返回 `MemoryEntry` (含 provenance + 4 元数据列).
+    /// 老条目 (4 列 NULL) 读取时按 `normalize_meta` 自动填默认 (Manual + timestamp*1000 + 永久).
+    pub fn query_with_time_range(&self, from_ms: i64, until_ms: i64) -> Vec<MemoryEntry> {
+        let eps = match self.store.query_with_time_range(from_ms, until_ms) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+        eps.into_iter()
+            .map(|ep| {
+                let raw = self.store.read_episode_meta(&ep.id).ok().flatten();
+                // 老条目 created_ms 兜底: raw.created_ms 为 0 (V4 前 NULL 列) → 当 None 处理
+                let (vf, vu, cm, pr) = match raw {
+                    Some(m) => {
+                        let cm_opt = if m.created_ms <= 0 { None } else { Some(m.created_ms) };
+                        apeireth_memory::normalize_meta(
+                            m.valid_from_ms,
+                            m.valid_until_ms,
+                            cm_opt,
+                            Some(m.provenance),
+                            ep.timestamp,
+                        )
+                    }
+                    None => apeireth_memory::normalize_meta(
+                        None, None, None, None, ep.timestamp,
+                    ),
+                };
+                MemoryEntry {
+                    id: ep.id,
+                    timestamp: ep.timestamp,
+                    role: ep.role,
+                    content: ep.content,
+                    session_id: ep.session_id,
+                    valid_from_ms: vf,
+                    valid_until_ms: vu,
+                    created_ms: cm,
+                    provenance: pr,
+                }
+            })
+            .collect()
     }
 
     /// 偏好库 → 「主人偏好画像」注入块 (按 importance 排序, 跨场景自动应用的核心).
@@ -394,5 +562,239 @@ mod tests {
         s.apply(&ex).unwrap();
         let ctx = s.recent_context(5);
         assert!(ctx.contains("assistant"));
+    }
+
+    // === TP24 (M5 + N25): 来源链 + 时间元数据 ===
+
+    /// 验收 #1: 5 种 provenance 都能正确写入 + 读取.
+    #[test]
+    fn provenance_roundtrip_all_five_variants() {
+        let s = MemoryExtractionService::new(store());
+        let provenances = [
+            Provenance::Dialog,
+            Provenance::Tool,
+            Provenance::Reflection,
+            Provenance::Observation,
+            Provenance::Manual,
+        ];
+        for prov in provenances {
+            let id = format!("mem-ex-prov-{:?}", prov);
+            let ts = 1_700_000_000_i64;
+            s.put_with_provenance(id.clone(), ts, &format!("prov={:?}", prov), prov).unwrap();
+            // 读取 raw 4 列元数据
+            let meta = s.store.read_episode_meta(&id).unwrap().expect("just-written");
+            assert_eq!(meta.provenance, prov, "provenance roundtrip failed for {:?}", prov);
+            // created_ms = ts * 1000 (默认)
+            assert_eq!(meta.created_ms, ts * 1000);
+            // valid_from_ms = created_ms (默认), valid_until = None (永久)
+            assert_eq!(meta.valid_from_ms, Some(ts * 1000));
+            assert_eq!(meta.valid_until_ms, None);
+        }
+    }
+
+    /// 验收 #2: 时间元数据边界 (valid_from/until 边界值).
+    #[test]
+    fn timing_metadata_boundaries() {
+        let s = MemoryExtractionService::new(store());
+        let id = "mem-ex-boundary".to_string();
+        let ts = 1_700_000_000_i64;
+        // 显式 meta: valid_from = 0 (epoch), valid_until = i64::MAX (几乎永久)
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(0),
+            valid_until_ms: Some(i64::MAX),
+            created_ms: ts * 1000,
+            provenance: Provenance::Dialog,
+        };
+        s.put_with_meta(id.clone(), ts, "边界条目", &meta).unwrap();
+        let read = s.store.read_episode_meta(&id).unwrap().unwrap();
+        assert_eq!(read.valid_from_ms, Some(0));
+        assert_eq!(read.valid_until_ms, Some(i64::MAX));
+        assert_eq!(read.created_ms, ts * 1000);
+        assert_eq!(read.provenance, Provenance::Dialog);
+
+        // 时间窗过滤: [0, i64::MAX] 应包含
+        let entries = s.query_with_time_range(0, i64::MAX);
+        assert!(entries.iter().any(|e| e.id == id), "边界条目应在时间窗内");
+
+        // 时间窗过滤: [-1, 0] 边界 (from = 0 包含, until = 0 包含到 0)
+        let entries = s.query_with_time_range(0, 0);
+        assert!(entries.iter().any(|e| e.id == id), "valid_from=0 应被 >= 0 过滤命中");
+    }
+
+    /// 验收 #3: query_with_time_range 时间范围检索.
+    #[test]
+    fn query_with_time_range_filters_correctly() {
+        let s = MemoryExtractionService::new(store());
+        // 写入 3 条, ts 100/200/300 (秒) → created_ms 100_000/200_000/300_000
+        // 第 3 条设 valid_until=Some(250_000) → 在 [50_000, 250_000] 仍有效, 之后失效
+        for i in 1..=3 {
+            let id = format!("mem-ex-time-{}", i);
+            let ts = (100 * i) as i64; // 100, 200, 300
+            if i == 3 {
+                let meta = EpisodeMeta {
+                    valid_from_ms: Some(ts * 1000),
+                    valid_until_ms: Some(250_000),
+                    created_ms: ts * 1000,
+                    provenance: Provenance::Dialog,
+                };
+                s.put_with_meta(id, ts, &format!("t={}", ts), &meta).unwrap();
+            } else {
+                s.put_with_provenance(id, ts, &format!("t={}", ts), Provenance::Dialog).unwrap();
+            }
+        }
+
+        // [50_000, 200_000]: t=100 (valid_until null, 永久 ✓) t=200 (created 200k ≥ 50k, vu null ✓) t=300 (valid_until 250k < 200k? 250k≥200k ✓; 但 created 300k≥50k ✓) → 3 都满足
+        // 但 SQL 过滤是 created_ms >= from_ms AND (vu null OR vu >= until_ms), 没有 created_ms <= until_ms 上限
+        // t=300 在 [50_000, 200_000]: created_ms=300_000 ≥ 50_000 ✓, vu=250_000 ≥ 200_000 ✓ → 命中 (永久判定 vs 失效判定都过)
+        let r = s.query_with_time_range(50_000, 200_000);
+        assert_eq!(r.len(), 3, "valid_until=250_000 ≥ until=200_000 应命中");
+        let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
+        assert!(ids.contains(&"mem-ex-time-3".to_string()));
+
+        // [50_000, 200_000] 但 valid_until 改成 150_000 (t=300 失效) → 应只剩 t=100, t=200
+        let st2 = store();
+        let s2 = MemoryExtractionService::new(st2);
+        s2.put_with_provenance("mem-ex-time-1".into(), 100, "t=100", Provenance::Dialog).unwrap();
+        s2.put_with_provenance("mem-ex-time-2".into(), 200, "t=200", Provenance::Dialog).unwrap();
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(300_000),
+            valid_until_ms: Some(150_000), // 150_000 < 200_000 → 在 [50_000, 200_000] 内失效
+            created_ms: 300_000,
+            provenance: Provenance::Dialog,
+        };
+        s2.put_with_meta("mem-ex-time-3".into(), 300, "t=300", &meta).unwrap();
+        let r = s2.query_with_time_range(50_000, 200_000);
+        assert_eq!(r.len(), 2, "t=300 valid_until=150_000 < until=200_000 应被过滤");
+        let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
+        assert!(ids.contains(&"mem-ex-time-1".to_string()));
+        assert!(ids.contains(&"mem-ex-time-2".to_string()));
+        assert!(!ids.contains(&"mem-ex-time-3".to_string()));
+
+        // [400_000, 500_000] → created_ms 全 < 400_000 → 空
+        let r = s2.query_with_time_range(400_000, 500_000);
+        assert!(r.is_empty(), "from_ms 大于所有 created_ms 应返回空");
+
+        // 验证 MemoryEntry 字段都填齐 (provenance + 4 元数据列)
+        for e in &s2.query_with_time_range(0, i64::MAX) {
+            assert!(matches!(e.provenance, Provenance::Dialog | Provenance::Manual | Provenance::Tool | Provenance::Reflection | Provenance::Observation));
+            assert!(e.created_ms > 0);
+        }
+    }
+
+    /// 验收 #3 续: valid_until 失效过滤 (永久 vs 有上限).
+    #[test]
+    fn query_with_time_range_respects_valid_until() {
+        let s = MemoryExtractionService::new(store());
+        let ts = 1_700_000_000_i64;
+
+        // 条目 A: 永久 (valid_until None)
+        s.put_with_provenance("mem-ex-perm".into(), ts, "永久条目", Provenance::Manual).unwrap();
+        // 条目 B: 在 [ts*1000+1000, ts*1000+5000] 有效
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(ts * 1000 + 1000),
+            valid_until_ms: Some(ts * 1000 + 5000),
+            created_ms: ts * 1000,
+            provenance: Provenance::Dialog,
+        };
+        s.put_with_meta("mem-ex-window".into(), ts, "窗口条目", &meta).unwrap();
+
+        // 查询 [0, ts*1000+2000] → A 在 (永久), B 在 (valid_until >= 2_000)
+        let r = s.query_with_time_range(0, ts * 1000 + 2000);
+        let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
+        assert!(ids.contains(&"mem-ex-perm".to_string()), "永久条目应始终命中");
+        assert!(ids.contains(&"mem-ex-window".to_string()), "valid_until 在窗内应命中");
+
+        // 查询 [0, ts*1000+6000] → B 已失效 (valid_until=5000 < until=6000)
+        let r = s.query_with_time_range(0, ts * 1000 + 6000);
+        let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
+        assert!(!ids.contains(&"mem-ex-window".to_string()), "valid_until < until 应被过滤");
+        assert!(ids.contains(&"mem-ex-perm".to_string()), "永久条目仍命中");
+    }
+
+    /// 验收 #4: 兼容测试 (旧条目无 4 列 → 自动填默认).
+    #[test]
+    fn backward_compat_old_entries_get_defaults() {
+        let s = MemoryExtractionService::new(store());
+        // 用 put() (旧 API, 不带元数据, 4 列 NULL)
+        s.put("mem-ex-old".into(), 1_500_000, "老条目").unwrap();
+        // 读取 4 列: 应该都是 NULL
+        let raw = s.store.read_episode_meta("mem-ex-old").unwrap().unwrap();
+        assert_eq!(raw.valid_from_ms, None, "老条目 valid_from_ms 应 NULL");
+        assert_eq!(raw.valid_until_ms, None, "老条目 valid_until_ms 应 NULL");
+        assert_eq!(raw.created_ms, 0, "老条目 created_ms 默认 0 (raw)");
+        assert_eq!(raw.provenance, Provenance::Manual, "老条目 provenance 默认 Manual (raw)");
+
+        // 通过 query_with_time_range 读取 (应用 normalize_meta)
+        let r = s.query_with_time_range(0, i64::MAX);
+        let old = r.iter().find(|e| e.id == "mem-ex-old").expect("应被读到");
+        assert_eq!(old.provenance, Provenance::Manual, "兼容默认 Manual");
+        assert_eq!(old.created_ms, 1_500_000 * 1000, "created_ms 兜底 timestamp*1000");
+        assert_eq!(old.valid_from_ms, Some(1_500_000 * 1000), "valid_from 兜底 created_ms");
+        assert_eq!(old.valid_until_ms, None, "valid_until 永久 (None 保留)");
+
+        // 老条目应在时间窗内 (since created_ms = timestamp*1000)
+        let r = s.query_with_time_range(1_500_000 * 1000, 1_500_000 * 1000);
+        assert!(r.iter().any(|e| e.id == "mem-ex-old"), "老条目应按兜底 created_ms 命中时间窗");
+    }
+
+    /// 验收 #4 续: put() 旧路径写入条目, query_with_time_range 也能读到 (兼容).
+    #[test]
+    fn backward_compat_old_path_visible_in_new_query() {
+        let s = MemoryExtractionService::new(store());
+        s.put("mem-ex-old2".into(), 1_600_000, "老条目 2").unwrap();
+        let r = s.query_with_time_range(0, i64::MAX);
+        assert!(r.iter().any(|e| e.id == "mem-ex-old2"), "旧路径写入应能被新查询读到");
+    }
+
+    /// put_with_meta 显式控制 4 列.
+    #[test]
+    fn put_with_meta_full_control() {
+        let s = MemoryExtractionService::new(store());
+        let meta = EpisodeMeta {
+            valid_from_ms: Some(100_000),
+            valid_until_ms: Some(200_000),
+            created_ms: 150_000,
+            provenance: Provenance::Reflection,
+        };
+        s.put_with_meta("mem-ex-full".into(), 150, "全控条目", &meta).unwrap();
+        let read = s.store.read_episode_meta("mem-ex-full").unwrap().unwrap();
+        assert_eq!(read.valid_from_ms, Some(100_000));
+        assert_eq!(read.valid_until_ms, Some(200_000));
+        assert_eq!(read.created_ms, 150_000);
+        assert_eq!(read.provenance, Provenance::Reflection);
+    }
+
+    /// 迁移 V4 已被应用 (sanity check: V4 加的 4 列存在).
+    #[test]
+    fn migration_v4_columns_exist() {
+        let st = SqliteMemoryStore::open_in_memory().unwrap();
+        let conn = st.conn().unwrap();
+        let mut stmt = conn
+            .prepare("PRAGMA table_info(episodes)")
+            .unwrap();
+        let cols: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect();
+        for col in ["valid_from_ms", "valid_until_ms", "created_ms", "provenance"] {
+            assert!(cols.contains(&col.to_string()), "V4 列 {} 应存在, 实际: {:?}", col, cols);
+        }
+    }
+
+    /// apply() 用 Provenance::Dialog 写入 (per 新设计).
+    #[test]
+    fn apply_uses_dialog_provenance() {
+        let s = MemoryExtractionService::new(store());
+        s.apply(&ExtractedMemory {
+            facts: vec![MemoryItem::new("test", 5)],
+            preferences: vec![],
+            commitments: vec![],
+            emotional: None,
+            graph: vec![],
+        }).unwrap();
+        let r = s.query_with_time_range(0, i64::MAX);
+        assert!(!r.is_empty());
+        assert!(r.iter().all(|e| e.provenance == Provenance::Dialog), "apply 写入应统一为 Dialog 来源");
     }
 }

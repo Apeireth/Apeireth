@@ -48,6 +48,22 @@ pub const MIGRATIONS: &[Migration] = &[
         sql: "ALTER TABLE notes ADD COLUMN valid_from INTEGER;\n\
               ALTER TABLE notes ADD COLUMN valid_until INTEGER;",
     },
+    // TP24 (M5 + N25): episodes 表加 4 列元数据 — 来源链 (provenance) + 时间窗 (ms 精度).
+    // 加列而非改列 (per task 纪律): 存量行 4 列均为 NULL, 读取时按 normalize_meta 兜底:
+    //   provenance NULL → Manual, valid_from NULL → created_ms, valid_until NULL → None (永久),
+    //   created_ms NULL → timestamp * 1000 (s → ms 兜).
+    // 不加索引: V4 查询条件含 "IS NULL OR" 析取本身非 sargable, episodes 表规模下全扫足够.
+    // 升级路径: 表大后可加 created_ms 部分索引 / 表达式索引, 见 docs/backlog.md M5 记录.
+    // SQLite ALTER TABLE 一次一列 → 4 条语句.
+    Migration {
+        version: 4,
+        name: "V4__episodes_provenance_and_timing",
+        sql: "ALTER TABLE episodes ADD COLUMN valid_from_ms INTEGER;\n\
+              ALTER TABLE episodes ADD COLUMN valid_until_ms INTEGER;\n\
+              ALTER TABLE episodes ADD COLUMN created_ms INTEGER;\n\
+              ALTER TABLE episodes ADD COLUMN provenance TEXT;\n\
+              CREATE INDEX IF NOT EXISTS idx_episodes_created_ms ON episodes(created_ms);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
