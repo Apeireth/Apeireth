@@ -80,11 +80,15 @@ pub mod conventions_scanner; // R33-1: Aider-style project conventions scanner
 pub mod file_ops;
 pub mod git_ops;
 pub mod github_accel; // GitHub 加速节点池 (xiake.pro 聚合, 实测选最快)
+// TP12 (A2, P0): 手写 schema + guardrail 三件套 (向后兼容, 工具作者 0 改动即可)
+pub mod guardrail; // TP12: pre_call_guard + post_call_tripwire (通用层)
 pub mod grep_ops;
 pub mod long_task;
 mod organ_kani_proofs;
 pub mod register;
 pub mod result;
+// TP12 (A2, P0): 手写 schema 校验器 (SchemaNode 递归 enum + validate())
+pub mod schema; // TP12: 递归 enum schema + 纯函数 validate()
 pub mod web_crawl; // R230: 轻量爬虫 (抓取+链接提取+深度遍历)
 pub mod web_fetch; // R30 U2: lightweight HTTP fetch  // R30 U11: long-running task manager
 pub mod web_search;
@@ -101,8 +105,13 @@ pub use github_accel::{
     ProbeResult,
 };
 pub use grep_ops::{GrepHit, GrepOps, GrepTool, RipgrepGrepOps};
-pub use register::{register_all, registered_tool_names, REGISTERED_TOOL_COUNT, TOOL_NAMES};
+// TP12 (A2, P0): 公开 re-export, 让 apeireth-tool-runtime 直接消费
+pub use guardrail::{
+    pre_call_guard, post_call_tripwire, GuardrailError, GuardrailKind, Tripwire,
+};
+pub use register::{default_schema_map, register_all, registered_tool_names, REGISTERED_TOOL_COUNT, TOOL_NAMES};
 pub use result::ToolResult;
+pub use schema::{validate, SchemaMap, SchemaNode, ValidationError};
 pub use web_search::{HttpWebSearch, WebSearch, WebSearchTool};
 
 // ============================================================

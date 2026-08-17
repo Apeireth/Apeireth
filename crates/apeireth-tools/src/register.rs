@@ -5,6 +5,13 @@
 //! **不假装**:
 //! - ✅ 真用战役 2-1 `ToolRegistry::register`
 //! - ✅ 端到端真测: register 后能从 registry 真查到 4 个工具 + Tool trait 路由可调
+//!
+//! **TP12 (A2, P0) schema sidecar**:
+//! - `apeireth-tool-registry::Tool` trait 在 N15 已锁定, 不挂 schema 字段
+//! - 本模块不修改注册路径 (`ToolRegistry::register` 调用方式 0 改)
+//! - `default_schema_map()` 返回空 SchemaMap (向后兼容默认 = 全部不校验)
+//! - 工具作者按需扩展: `let mut m = default_schema_map(); m.insert("WebSearch", web_search_schema);`
+//!   然后把 `m` 传给 `ToolExecutor::with_schema_map(...)`
 
 use std::sync::Arc;
 
@@ -117,6 +124,27 @@ pub fn register_all(registry: &ToolRegistry) -> Result<(), String> {
 /// 列出已注册的工具名 (静态, 跟 `TOOL_NAMES` 同源)
 pub fn registered_tool_names() -> Vec<&'static str> {
     TOOL_NAMES.to_vec()
+}
+
+/// **TP12 — 默认空 SchemaMap** (向后兼容默认 = 全部工具不校验)
+///
+/// **用法**:
+/// ```ignore
+/// use apeireth_tools::register::{register_all, default_schema_map};
+/// use apeireth_tools::schema::{SchemaMap, SchemaNode};
+///
+/// let registry = apeireth_tool_registry::ToolRegistry::new();
+/// register_all(&registry).expect("register_all");
+///
+/// let mut schemas = default_schema_map();
+/// // schemas.insert("WebSearch", web_search_schema); // 工具作者按需开
+/// // 然后传给 ToolExecutor::with_schema_map(registry, schemas)
+/// ```
+///
+/// **0 装 PASS**: 返回的 SchemaMap 默认空, 注入到 ToolExecutor 后 = 全部工具不校验,
+/// 行为与 TP12 之前完全一致 (向后兼容).
+pub fn default_schema_map() -> crate::schema::SchemaMap {
+    crate::schema::SchemaMap::new()
 }
 
 #[cfg(test)]

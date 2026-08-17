@@ -15,7 +15,9 @@ use std::time::Duration;
 
 use apeireth_core::{ActionTarget, ActionVerdict, RiskLevel};
 use apeireth_memory::{CoreEpisode, EpisodeQuery, EpisodeStore, SqliteMemoryStore};
-use apeireth_tool_approval::{ApprovalManager, ApprovalDecision, BlacklistRule, RiskRule, WhitelistRule};
+use apeireth_tool_approval::{
+    ApprovalDecision, ApprovalManager, BlacklistRule, RiskRule, WhitelistRule,
+};
 use apeireth_tool_registry::{Tool, ToolAxes, ToolKind, ToolRegistry};
 use apeireth_tool_runtime::executor::{ExecutionResult, ToolExecutor};
 use apeireth_tool_runtime::parser::ParsedToolCall;
@@ -24,7 +26,7 @@ use serde_json::{json, Value};
 
 use crate::capability::{CapabilityKind, CapabilityRegistry};
 use crate::constitution_gate::ConstitutionGate;
-use crate::daemon::{Judicator, requires_llm_review};
+use crate::daemon::{requires_llm_review, Judicator};
 use crate::oracle::{Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState};
 use crate::packs::PackRegistry;
 use crate::security::{SecurityGate, SovereigntyGate};
@@ -37,14 +39,20 @@ use crate::spill::{SpillStore, SPILL_THRESHOLD_CHARS};
 fn path_within(path: &str, base: &str) -> bool {
     use std::path::Path;
     let norm = |p: &std::path::PathBuf| -> String {
-        p.to_string_lossy().replace('\\', "/").trim_end_matches('/').to_lowercase()
+        p.to_string_lossy()
+            .replace('\\', "/")
+            .trim_end_matches('/')
+            .to_lowercase()
     };
     let base_p = Path::new(base);
     let base_c = std::fs::canonicalize(base_p).unwrap_or_else(|_| base_p.to_path_buf());
     let path_p = Path::new(path);
     let path_c = match std::fs::canonicalize(path_p) {
         Ok(c) => c,
-        Err(_) => match path_p.parent().and_then(|pa| std::fs::canonicalize(pa).ok()) {
+        Err(_) => match path_p
+            .parent()
+            .and_then(|pa| std::fs::canonicalize(pa).ok())
+        {
             Some(cp) => cp.join(path_p.file_name().unwrap_or_default()),
             None => path_p.to_path_buf(),
         },
@@ -85,14 +93,19 @@ impl Tool for RecallMemoryTool {
             .query(&EpisodeQuery::new().limit(200))
             .map_err(|e| e.to_string())?;
         let terms: Vec<String> = query
-            .split(|c: char| c.is_whitespace() || matches!(c, '，' | ',' | '、' | '。' | '.' | '?' | '？'))
+            .split(|c: char| {
+                c.is_whitespace() || matches!(c, '，' | ',' | '、' | '。' | '.' | '?' | '？')
+            })
             .filter(|t| !t.is_empty())
             .map(|t| t.to_string())
             .collect();
         let mut scored: Vec<(usize, String)> = eps
             .into_iter()
             .filter_map(|ep| {
-                let n = terms.iter().filter(|t| ep.content.contains(t.as_str())).count();
+                let n = terms
+                    .iter()
+                    .filter(|t| ep.content.contains(t.as_str()))
+                    .count();
                 if n > 0 {
                     Some((n, ep.content))
                 } else {
@@ -183,7 +196,8 @@ impl ProposeCapabilityTool {
     pub fn new(registry: Arc<CapabilityRegistry>) -> Self {
         Self { registry }
     }
-}#[async_trait::async_trait]
+}
+#[async_trait::async_trait]
 impl Tool for ProposeCapabilityTool {
     fn name(&self) -> &str {
         "propose_capability"
@@ -195,9 +209,15 @@ impl Tool for ProposeCapabilityTool {
         ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let name = args.get("name").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
+        let name = args
+            .get("name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| "name 不能为空".to_string())?;
-        let description = args.get("description").and_then(|v| v.as_str()).unwrap_or("");
+        let description = args
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         let kind = match args.get("kind").and_then(|v| v.as_str()) {
             Some("action") => CapabilityKind::Action,
             _ => CapabilityKind::Skill,
@@ -251,7 +271,9 @@ impl SimulateTool {
             .entities
             .iter_mut()
             .find(|e| e.id == id)
-            .ok_or_else(|| format!("实体不存在: {id} (entities 的键就是实体名, 直接写名字如 主人)"))?;
+            .ok_or_else(|| {
+                format!("实体不存在: {id} (entities 的键就是实体名, 直接写名字如 主人)")
+            })?;
         let slot = e.props.entry(key.to_string()).or_insert(0.0);
         if is_assign {
             *slot = delta;
@@ -278,9 +300,16 @@ impl Tool for SimulateTool {
             .get("entities")
             .and_then(|v| v.as_object())
             .ok_or_else(|| "entities 应为对象 {id: {属性: 值}}".to_string())?;
-        let mut state = WorldState { entities: Vec::new(), tick: 0 };
+        let mut state = WorldState {
+            entities: Vec::new(),
+            tick: 0,
+        };
         for (id, props) in entities {
-            let mut e = Entity { id: id.clone(), name: id.clone(), props: std::collections::HashMap::new() };
+            let mut e = Entity {
+                id: id.clone(),
+                name: id.clone(),
+                props: std::collections::HashMap::new(),
+            };
             if let Some(p) = props.as_object() {
                 for (k, v) in p {
                     e.props.insert(k.clone(), v.as_f64().unwrap_or(0.0));
@@ -291,7 +320,11 @@ impl Tool for SimulateTool {
         let events: Vec<String> = args
             .get("events")
             .and_then(|v| v.as_array())
-            .map(|a| a.iter().filter_map(|x| x.as_str().map(|s| s.to_string())).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut eng = ScenarioEngine::new(state);
         let apply: crate::oracle::ApplyFn = Box::new(Self::apply);
@@ -302,7 +335,12 @@ impl Tool for SimulateTool {
                 let ents: serde_json::Map<String, Value> = s
                     .entities
                     .iter()
-                    .map(|e| (e.id.clone(), serde_json::to_value(&e.props).unwrap_or(json!({}))))
+                    .map(|e| {
+                        (
+                            e.id.clone(),
+                            serde_json::to_value(&e.props).unwrap_or(json!({})),
+                        )
+                    })
                     .collect();
                 json!({"tick": s.tick, "entities": ents})
             })
@@ -339,9 +377,17 @@ impl Tool for ForecastTool {
             .and_then(|v| v.as_str())
             .filter(|s| !s.is_empty())
             .ok_or_else(|| "statement 不能为空".to_string())?;
-        let probability = args.get("probability").and_then(|v| v.as_f64()).unwrap_or(0.5).clamp(0.0, 1.0);
-        let deadline_hours = args.get("deadline_hours").and_then(|v| v.as_f64()).unwrap_or(24.0);
-        let deadline_ms = chrono::Utc::now().timestamp_millis() + (deadline_hours * 3600_000.0) as i64;
+        let probability = args
+            .get("probability")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.5)
+            .clamp(0.0, 1.0);
+        let deadline_hours = args
+            .get("deadline_hours")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(24.0);
+        let deadline_ms =
+            chrono::Utc::now().timestamp_millis() + (deadline_hours * 3600_000.0) as i64;
         let f = Forecast::new(statement, probability, deadline_ms);
         self.registry.register(&f)?;
         Ok(json!({
@@ -389,15 +435,42 @@ impl ToolBridge {
         // N17/TP2: 9 工具子 crate 统一装配 (§10 铁边界 ② Tool+ToolRegistry.register+ToolBridge 三件套)
         // 每个 register() 失败如实 eprintln 打点, 不阻断其余装配 (集成而非分立).
         for (label, res) in [
-            ("EnhancedShell", apeireth_tool_shell::register::register(&registry)),
-            ("FetchEngine", apeireth_tool_fetch::register::register(&registry)),
-            ("EnhancedBrowser", apeireth_tool_browser::register::register(&registry)),
-            ("CodeIntelligence", apeireth_tool_codesearch::register::register(&registry)),
-            ("ImageGenEnhanced", apeireth_tool_image_gen::register::register(&registry)),
-            ("ImageProcess", apeireth_tool_image_process::register::register(&registry)),
-            ("VSearch", apeireth_tool_search::register::register(&registry)),
-            ("EnhancedFileOps", apeireth_tool_filesystem::register::register(&registry)),
-            ("RepoQualityAnalyzer", apeireth_repo_tools::register::register(&registry)),
+            (
+                "EnhancedShell",
+                apeireth_tool_shell::register::register(&registry),
+            ),
+            (
+                "FetchEngine",
+                apeireth_tool_fetch::register::register(&registry),
+            ),
+            (
+                "EnhancedBrowser",
+                apeireth_tool_browser::register::register(&registry),
+            ),
+            (
+                "CodeIntelligence",
+                apeireth_tool_codesearch::register::register(&registry),
+            ),
+            (
+                "ImageGenEnhanced",
+                apeireth_tool_image_gen::register::register(&registry),
+            ),
+            (
+                "ImageProcess",
+                apeireth_tool_image_process::register::register(&registry),
+            ),
+            (
+                "VSearch",
+                apeireth_tool_search::register::register(&registry),
+            ),
+            (
+                "EnhancedFileOps",
+                apeireth_tool_filesystem::register::register(&registry),
+            ),
+            (
+                "RepoQualityAnalyzer",
+                apeireth_repo_tools::register::register(&registry),
+            ),
         ] {
             if let Err(e) = res {
                 eprintln!("[bridge] N17 register `{label}` 部分失败: {e}");
@@ -413,15 +486,17 @@ impl ToolBridge {
         );
         registry.register(
             "propose_capability".to_string(),
-            Arc::new(ProposeCapabilityTool::new(Arc::new(CapabilityRegistry::new(
-                Arc::clone(&store),
-                "me",
-            )))),
+            Arc::new(ProposeCapabilityTool::new(Arc::new(
+                CapabilityRegistry::new(Arc::clone(&store), "me"),
+            ))),
         );
         registry.register("simulate".to_string(), Arc::new(SimulateTool));
         registry.register(
             "forecast".to_string(),
-            Arc::new(ForecastTool::new(Arc::new(ForecastRegistry::new(Arc::clone(&store), "me")))),
+            Arc::new(ForecastTool::new(Arc::new(ForecastRegistry::new(
+                Arc::clone(&store),
+                "me",
+            )))),
         );
         registry.register(
             "audit_log".to_string(),
@@ -430,23 +505,33 @@ impl ToolBridge {
         // 自成长管道 (Level 0/1 经验库 + Level 2/3 原则晋级): 2026-08-16
         registry.register(
             "save_experience".to_string(),
-            Arc::new(crate::experience::SaveExperienceTool::new(Arc::clone(&store))),
+            Arc::new(crate::experience::SaveExperienceTool::new(Arc::clone(
+                &store,
+            ))),
         );
         registry.register(
             "list_experience".to_string(),
-            Arc::new(crate::experience::ListExperienceTool::new(Arc::clone(&store))),
+            Arc::new(crate::experience::ListExperienceTool::new(Arc::clone(
+                &store,
+            ))),
         );
         registry.register(
             "verify_experience".to_string(),
-            Arc::new(crate::experience::VerifyExperienceTool::new(Arc::clone(&store))),
+            Arc::new(crate::experience::VerifyExperienceTool::new(Arc::clone(
+                &store,
+            ))),
         );
         registry.register(
             "propose_principle".to_string(),
-            Arc::new(crate::principles::ProposePrincipleTool::new(Arc::clone(&store))),
+            Arc::new(crate::principles::ProposePrincipleTool::new(Arc::clone(
+                &store,
+            ))),
         );
         registry.register(
             "approve_principle".to_string(),
-            Arc::new(crate::principles::ApprovePrincipleTool::new(Arc::clone(&store))),
+            Arc::new(crate::principles::ApprovePrincipleTool::new(Arc::clone(
+                &store,
+            ))),
         );
         let executor = ToolExecutor::new(registry.clone());
         // 权限包: 默认日常包 (永久, 只读工具 + 记忆写; 主人可 grant 自定义包扩权)
@@ -511,27 +596,40 @@ impl ToolBridge {
 
     /// 接目标服务 (模块 6: 注册 goal_create/status/complete/pause/block 工具).
     /// 与注入侧共享同一实例 (serve: AppState.goal = 同一 Arc).
-    pub fn with_goals(mut self, goals: std::sync::Arc<std::sync::Mutex<crate::goal::GoalService>>) -> Self {
+    pub fn with_goals(
+        mut self,
+        goals: std::sync::Arc<std::sync::Mutex<crate::goal::GoalService>>,
+    ) -> Self {
         self.goals = Some(std::sync::Arc::clone(&goals));
         self.registry.register(
             "goal_create".to_string(),
-            Arc::new(crate::goal_tools::GoalCreateTool::new(std::sync::Arc::clone(&goals))),
+            Arc::new(crate::goal_tools::GoalCreateTool::new(
+                std::sync::Arc::clone(&goals),
+            )),
         );
         self.registry.register(
             "goal_status".to_string(),
-            Arc::new(crate::goal_tools::GoalStatusTool::new(std::sync::Arc::clone(&goals))),
+            Arc::new(crate::goal_tools::GoalStatusTool::new(
+                std::sync::Arc::clone(&goals),
+            )),
         );
         self.registry.register(
             "goal_complete".to_string(),
-            Arc::new(crate::goal_tools::GoalCompleteTool::new(std::sync::Arc::clone(&goals))),
+            Arc::new(crate::goal_tools::GoalCompleteTool::new(
+                std::sync::Arc::clone(&goals),
+            )),
         );
         self.registry.register(
             "goal_pause".to_string(),
-            Arc::new(crate::goal_tools::GoalPauseTool::new(std::sync::Arc::clone(&goals))),
+            Arc::new(crate::goal_tools::GoalPauseTool::new(
+                std::sync::Arc::clone(&goals),
+            )),
         );
         self.registry.register(
             "goal_block".to_string(),
-            Arc::new(crate::goal_tools::GoalBlockTool::new(std::sync::Arc::clone(&goals))),
+            Arc::new(crate::goal_tools::GoalBlockTool::new(
+                std::sync::Arc::clone(&goals),
+            )),
         );
         self
     }
@@ -567,10 +665,7 @@ impl ToolBridge {
 
     /// 当前桥级沙盒参数 (克隆读取).
     pub fn sandbox_config(&self) -> crate::sandbox::SandboxConfig {
-        self.sandbox
-            .lock()
-            .map(|g| g.clone())
-            .unwrap_or_default()
+        self.sandbox.lock().map(|g| g.clone()).unwrap_or_default()
     }
 
     /// 生效的沙盒参数: 权限包级覆盖优先, 否则桥级默认 (B3 参数口语义).
@@ -614,6 +709,8 @@ impl ToolBridge {
                 output: json!(null),
                 error: Some("主权熔断: 循环已冻结".to_string()),
                 duration_ms: 0,
+
+                ..Default::default()
             };
         }
         let verdict = self.gate.check(
@@ -630,6 +727,8 @@ impl ToolBridge {
                 output: json!(null),
                 error: Some(err),
                 duration_ms: 0,
+
+                ..Default::default()
             };
         }
         // 结构化宪法门 (零成本硬门, 全部风险级别; 描述由系统侧生成, 调用方不可伪造):
@@ -643,21 +742,27 @@ impl ToolBridge {
                 output: json!(null),
                 error: Some(format!("宪法硬门拦截 ({key}): {why}")),
                 duration_ms: 0,
+
+                ..Default::default()
             };
         }
         // 动态原则层 (自成长 Level 2, 洋葱外层运行时规则): 命中 active 原则 → 拦截 + 记违反.
         // 原则由 AI 提案 + 主人 master token 批准; 语义 = 前缀匹配 (对齐 ConstitutionGate).
-        let dynamic_rules = crate::principles::PrincipleStore::new(Arc::clone(self.records.store()));
+        let dynamic_rules =
+            crate::principles::PrincipleStore::new(Arc::clone(self.records.store()));
         let rules = dynamic_rules.active_rules();
         if let Some((pid, stmt)) = crate::principles::PrincipleStore::check_dynamic(&desc, &rules) {
             dynamic_rules.record_violation(&pid);
-            self.sovereignty.report_violation("动态原则拦截", &call.tool_name);
+            self.sovereignty
+                .report_violation("动态原则拦截", &call.tool_name);
             return ExecutionResult {
                 tool_name: call.tool_name.clone(),
                 success: false,
                 output: json!(null),
                 error: Some(format!("动态原则拦截 ({pid}): {stmt}")),
                 duration_ms: 0,
+
+                ..Default::default()
             };
         }
         // 宪法评审 (真 LLM, 按原则判案): Medium+ 风险且配置了评审者 → 自动评审.
@@ -667,13 +772,16 @@ impl ToolBridge {
                 match judge.judge(&desc).await {
                     Ok(true) => {}
                     Ok(false) => {
-                        self.sovereignty.report_violation("宪法评审拦截", &call.tool_name);
+                        self.sovereignty
+                            .report_violation("宪法评审拦截", &call.tool_name);
                         return ExecutionResult {
                             tool_name: call.tool_name.clone(),
                             success: false,
                             output: json!(null),
                             error: Some("BLOCK: 宪法评审拒绝 (按原则判案, 非关键词)".to_string()),
                             duration_ms: 0,
+
+                            ..Default::default()
                         };
                     }
                     Err(e) => {
@@ -684,6 +792,8 @@ impl ToolBridge {
                             output: json!(null),
                             error: Some(format!("宪法评审失败, 保守拒绝: {e}")),
                             duration_ms: 0,
+
+                            ..Default::default()
                         };
                     }
                 }
@@ -695,9 +805,9 @@ impl ToolBridge {
             .check_and_consume(&call.tool_name, chrono::Utc::now().timestamp_millis());
         // 执行级路径校验: 权限包 paths 约束 (FileOperator 等文件类工具, 防越权写盘 / `..` 穿越)
         if pack_authorized {
-            if let Some(paths) =
-                self.packs
-                    .paths_for(&call.tool_name, chrono::Utc::now().timestamp_millis())
+            if let Some(paths) = self
+                .packs
+                .paths_for(&call.tool_name, chrono::Utc::now().timestamp_millis())
             {
                 if let Some(p) = call
                     .args
@@ -715,6 +825,8 @@ impl ToolBridge {
                                 paths.join(", ")
                             )),
                             duration_ms: 0,
+
+                            ..Default::default()
                         };
                     }
                 }
@@ -741,7 +853,9 @@ impl ToolBridge {
                         output: json!(null),
                         error: Some("该工具是高风险操作且未被权限包覆盖, 需要主人批准 (已向主人发出授权请求)".to_string()),
                         duration_ms: 0,
-                    }
+                    
+..Default::default()
+};
                 }
                 _ => {
                     return ExecutionResult {
@@ -750,6 +864,8 @@ impl ToolBridge {
                         output: json!(null),
                         error: Some("审批拒绝".to_string()),
                         duration_ms: 0,
+
+                        ..Default::default()
                     }
                 }
             }
@@ -771,6 +887,8 @@ impl ToolBridge {
                             }),
                             error: None,
                             duration_ms: r.duration_ms,
+
+                            ..Default::default()
                         },
                         Err(e) => {
                             eprintln!("[spill] 溢出失败: {e}");
@@ -791,6 +909,11 @@ impl ToolBridge {
         for h in &self.post_hooks {
             r = h.apply(call, &r);
         }
+        // **TP12 (A2, P0) 结构化回灌**: 把 guardrail_error / validation_error / tripwire 包装进
+        // r.output 的 `_tp12_report` 子字段. 这样:
+        // 1. 模型在 tool message 里看到结构化 hint (path/expected/hint), 可自修正后重试
+        // 2. 审计 record 也能拿到完整结构 (与 record_execution 的 tp12_report 字段一致)
+        r.output = inject_tp12_into_output(&r);
         // 监督机制: 每次工具调用 append-only 记录 (含结果, 出站隐私脱敏后存)
         let serialized = serde_json::to_string(&r.output).unwrap_or_default();
         let pii = apeireth_guard::detect_pii(&serialized);
@@ -803,9 +926,14 @@ impl ToolBridge {
                 apeireth_guard::RedactionStrategy::Mask,
             ))
         };
+        // **TP12**: 改用 record_execution 而非 record(), 让 audit payload 自动带上
+        // _tp12_report 结构 (guardrail/validation/tripwire). 行为向后兼容:
+        // 干净调用时 record_execution 也不会在 payload 里塞 tp12_report 字段.
+        let mut r_for_record = r.clone();
+        r_for_record.output = masked_output;
         let _ = self
             .records
-            .record(call, &masked_output, !pii.is_empty())
+            .record_execution(call, &r_for_record, !pii.is_empty())
             .await;
         r
     }
@@ -840,6 +968,8 @@ impl ToolBridge {
             output: json!(null),
             error: Some(msg),
             duration_ms: start.elapsed().as_millis() as u64,
+
+            ..Default::default()
         };
         let mut child = match tokio::process::Command::new(worker)
             .stdin(std::process::Stdio::piped())
@@ -868,11 +998,12 @@ impl ToolBridge {
             }
         }
         // 超限留痕 → 明确错误 (把"worker 提前退出"翻译成具体限额原因, 不静默)
-        let violation_msg = |g: &Option<crate::job_object::JobGuard>, base: &str| {
-            match g.as_ref().and_then(|x| x.violation()) {
-                Some(v) => format!("{base}: 沙盒资源限额终止 — {v}"),
-                None => base.to_string(),
-            }
+        let violation_msg = |g: &Option<crate::job_object::JobGuard>, base: &str| match g
+            .as_ref()
+            .and_then(|x| x.violation())
+        {
+            Some(v) => format!("{base}: 沙盒资源限额终止 — {v}"),
+            None => base.to_string(),
         };
         let mut stdin = match child.stdin.take() {
             Some(s) => s,
@@ -897,10 +1028,7 @@ impl ToolBridge {
             Ok(Ok(Some(l))) => l,
             Ok(Ok(None)) => {
                 let _ = child.wait().await;
-                return err_res(
-                    violation_msg(&guard, "worker 无响应 (提前退出)"),
-                    start,
-                );
+                return err_res(violation_msg(&guard, "worker 无响应 (提前退出)"), start);
             }
             Ok(Err(e)) => {
                 let _ = child.kill().await;
@@ -909,7 +1037,10 @@ impl ToolBridge {
             Err(_) => {
                 let _ = child.kill().await;
                 return err_res(
-                    violation_msg(&guard, &format!("worker 超时 ({}s), 已 kill", cfg.timeout_secs)),
+                    violation_msg(
+                        &guard,
+                        &format!("worker 超时 ({}s), 已 kill", cfg.timeout_secs),
+                    ),
                     start,
                 );
             }
@@ -925,6 +1056,8 @@ impl ToolBridge {
                 output: resp["output"].clone(),
                 error: None,
                 duration_ms: dur,
+
+                ..Default::default()
             }
         } else {
             ExecutionResult {
@@ -937,6 +1070,8 @@ impl ToolBridge {
                     .map(|s| s.to_string())
                     .or_else(|| Some("worker 返回失败".to_string())),
                 duration_ms: dur,
+
+                ..Default::default()
             }
         }
     }
@@ -986,7 +1121,12 @@ mod tests {
         assert!(names.iter().any(|n| n == "recall_memory"));
         assert!(names.iter().any(|n| n == "save_memory"));
         assert!(names.iter().any(|n| n == "propose_capability"));
-        assert!(names.len() >= 7, "应含 4 真工具 + recall/save/propose, 实际 {}: {:?}", names.len(), names);
+        assert!(
+            names.len() >= 7,
+            "应含 4 真工具 + recall/save/propose, 实际 {}: {:?}",
+            names.len(),
+            names
+        );
     }
 
     #[tokio::test]
@@ -1046,7 +1186,8 @@ mod tests {
         use crate::packs::PermissionPack;
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let bridge = ToolBridge::new(store);
-        let workdir = std::env::temp_dir().join(format!("apeireth-path-test-{}", std::process::id()));
+        let workdir =
+            std::env::temp_dir().join(format!("apeireth-path-test-{}", std::process::id()));
         std::fs::create_dir_all(&workdir).unwrap();
         bridge.packs.grant(
             PermissionPack::timed("路径测试", vec!["FileOperator".to_string()], 1, Some(10))
@@ -1145,11 +1286,13 @@ mod tests {
             }
         }
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
-        let bridge = ToolBridge::new(store)
-            .with_judicator(Arc::new(AllowAll));
-        bridge.packs.grant(
-            PermissionPack::timed("评审测试包", vec!["FileOperator".to_string()], 1, Some(5)),
-        );
+        let bridge = ToolBridge::new(store).with_judicator(Arc::new(AllowAll));
+        bridge.packs.grant(PermissionPack::timed(
+            "评审测试包",
+            vec!["FileOperator".to_string()],
+            1,
+            Some(5),
+        ));
         let call = ParsedToolCall {
             tool_name: "FileOperator".into(),
             args: json!({"op": "write", "path": std::env::temp_dir().join("apeireth-judge-allow.txt").to_string_lossy().to_string(), "content": "x"}),
@@ -1192,7 +1335,8 @@ mod tests {
 
     #[tokio::test]
     async fn oversized_tool_result_spills_to_private_file() {
-        let spill_root = std::env::temp_dir().join(format!("apeireth-spill-bridge-{}", std::process::id()));
+        let spill_root =
+            std::env::temp_dir().join(format!("apeireth-spill-bridge-{}", std::process::id()));
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let bridge = ToolBridge::new(store).with_spill(SpillStore::with_root(&spill_root));
         let dir = std::env::temp_dir().join(format!("apeireth-spill-src-{}", std::process::id()));
@@ -1200,8 +1344,13 @@ mod tests {
         let big = "y".repeat(3000);
         std::fs::write(dir.join("big.txt"), &big).unwrap();
         bridge.packs.grant(
-            crate::packs::PermissionPack::timed("溢出测试", vec!["FileOperator".to_string()], 1, Some(5))
-                .with_paths(vec![dir.to_string_lossy().to_string()]),
+            crate::packs::PermissionPack::timed(
+                "溢出测试",
+                vec!["FileOperator".to_string()],
+                1,
+                Some(5),
+            )
+            .with_paths(vec![dir.to_string_lossy().to_string()]),
         );
         let call = ParsedToolCall {
             tool_name: "FileOperator".into(),
@@ -1212,7 +1361,12 @@ mod tests {
         };
         let r = bridge.execute_if_allowed(&call).await;
         assert!(r.success, "read 应成功: {:?}", r.error);
-        assert_eq!(r.output["spilled"], json!(true), "超大结果应溢出: {}", r.output);
+        assert_eq!(
+            r.output["spilled"],
+            json!(true),
+            "超大结果应溢出: {}",
+            r.output
+        );
         let path = r.output["path"].as_str().unwrap().to_string();
         let read_back = std::fs::read_to_string(&path).unwrap();
         assert_eq!(
@@ -1250,6 +1404,8 @@ mod tests {
                         output: json!({"via_hook": true, "inner": r.output}),
                         error: None,
                         duration_ms: r.duration_ms,
+
+                        ..Default::default()
                     }
                 } else {
                     r.clone()
@@ -1274,7 +1430,12 @@ mod tests {
         };
         let r = bridge.execute_if_allowed(&call).await;
         assert!(r.success, "钩子不应拦截成功: {:?}", r.error);
-        assert_eq!(r.output["via_hook"], json!(true), "post 钩子应替换结果: {}", r.output);
+        assert_eq!(
+            r.output["via_hook"],
+            json!(true),
+            "post 钩子应替换结果: {}",
+            r.output
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1298,6 +1459,8 @@ mod tests {
                     output: json!(null),
                     error: Some("post 拦截: 结果不符合出站策略".to_string()),
                     duration_ms: r.duration_ms,
+
+                    ..Default::default()
                 }
             }
         }
@@ -1369,12 +1532,21 @@ mod tests {
         SimulateTool::apply(&mut s, "主人.焦虑-0.1").unwrap();
         assert!((s.prop("主人", "焦虑").unwrap() - 0.5).abs() < 1e-9);
         SimulateTool::apply(&mut s, "主人.剩余时间h-24").unwrap();
-        assert!((s.prop("主人", "剩余时间h").unwrap() - 24.0).abs() < 1e-9, "48-24");
+        assert!(
+            (s.prop("主人", "剩余时间h").unwrap() - 24.0).abs() < 1e-9,
+            "48-24"
+        );
         // 等号 = 赋值 (验收实况: "delta 非法: =24" — 模型用 = 表示设定)
         SimulateTool::apply(&mut s, "主人.剩余时间h=48").unwrap();
-        assert!((s.prop("主人", "剩余时间h").unwrap() - 48.0).abs() < 1e-9, "赋值=48");
+        assert!(
+            (s.prop("主人", "剩余时间h").unwrap() - 48.0).abs() < 1e-9,
+            "赋值=48"
+        );
         SimulateTool::apply(&mut s, "错题本A.收录数=8").unwrap();
-        assert!((s.prop("错题本A", "收录数").unwrap() - 8.0).abs() < 1e-9, "赋值=8");
+        assert!(
+            (s.prop("错题本A", "收录数").unwrap() - 8.0).abs() < 1e-9,
+            "赋值=8"
+        );
         // 编号前缀 "e1." 剥离 (验收实况: "实体不存在: e1")
         SimulateTool::apply(&mut s, "e1.主人.信心=0.5").unwrap();
         assert!((s.prop("主人", "信心").unwrap() - 0.5).abs() < 1e-9);
@@ -1403,8 +1575,14 @@ mod tests {
         let steps = r.output["steps"].as_array().unwrap();
         assert_eq!(steps.len(), 3);
         let fin = &r.output["final"]["entities"]["主人"];
-        assert!((fin["复习进度"].as_f64().unwrap() - 0.5).abs() < 1e-9, "0.3+0.3-0.1");
-        assert!((fin["信心"].as_f64().unwrap() - 0.4).abs() < 1e-9, "=0.4 赋值");
+        assert!(
+            (fin["复习进度"].as_f64().unwrap() - 0.5).abs() < 1e-9,
+            "0.3+0.3-0.1"
+        );
+        assert!(
+            (fin["信心"].as_f64().unwrap() - 0.4).abs() < 1e-9,
+            "=0.4 赋值"
+        );
     }
 
     // ---- B3 沙盒包参数化 ----
@@ -1418,7 +1596,10 @@ mod tests {
         assert_eq!(cfg, crate::sandbox::SandboxConfig::default());
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let bridge = ToolBridge::new(store).with_sandbox_config(cfg);
-        assert_eq!(bridge.sandbox_config(), crate::sandbox::SandboxConfig::default());
+        assert_eq!(
+            bridge.sandbox_config(),
+            crate::sandbox::SandboxConfig::default()
+        );
         // 运行时覆盖同样可用
         bridge.set_sandbox_config(crate::sandbox::SandboxConfig {
             timeout_secs: 90,
@@ -1468,7 +1649,10 @@ mod tests {
             "EnhancedFileOps",
             "RepoQualityAnalyzer",
         ] {
-            assert!(names.contains(&tool.to_string()), "[N17] names() 缺 `{tool}`");
+            assert!(
+                names.contains(&tool.to_string()),
+                "[N17] names() 缺 `{tool}`"
+            );
         }
         let cat = CapabilityCatalog::from_registry(bridge.registry.as_ref());
         // TP21 fix (master ff3f6d10): ToolBridge::new 同时调用 apeireth_tools::register_all
@@ -1486,7 +1670,10 @@ mod tests {
         assert_eq!(cat.names(), sorted, "[N17] catalog 排序应确定性");
         let md = cat.render_markdown();
         assert!(md.contains("| EnhancedShell |"), "[N17] markdown 应含首件");
-        assert!(md.contains("| RepoQualityAnalyzer |"), "[N17] markdown 应含末件");
+        assert!(
+            md.contains("| RepoQualityAnalyzer |"),
+            "[N17] markdown 应含末件"
+        );
     }
 
     #[tokio::test]
@@ -1497,26 +1684,244 @@ mod tests {
             fn(&apeireth_tool_registry::ToolRegistry) -> Result<(), String>,
             fn(&apeireth_tool_registry::ToolRegistry) -> bool,
         )> = vec![
-            ("EnhancedShell", apeireth_tool_shell::register::register, apeireth_tool_shell::register::unregister),
-            ("FetchEngine", apeireth_tool_fetch::register::register, apeireth_tool_fetch::register::unregister),
-            ("EnhancedBrowser", apeireth_tool_browser::register::register, apeireth_tool_browser::register::unregister),
-            ("CodeIntelligence", apeireth_tool_codesearch::register::register, apeireth_tool_codesearch::register::unregister),
-            ("ImageGenEnhanced", apeireth_tool_image_gen::register::register, apeireth_tool_image_gen::register::unregister),
-            ("ImageProcess", apeireth_tool_image_process::register::register, apeireth_tool_image_process::register::unregister),
-            ("VSearch", apeireth_tool_search::register::register, apeireth_tool_search::register::unregister),
-            ("EnhancedFileOps", apeireth_tool_filesystem::register::register, apeireth_tool_filesystem::register::unregister),
-            ("RepoQualityAnalyzer", apeireth_repo_tools::register::register, apeireth_repo_tools::register::unregister),
+            (
+                "EnhancedShell",
+                apeireth_tool_shell::register::register,
+                apeireth_tool_shell::register::unregister,
+            ),
+            (
+                "FetchEngine",
+                apeireth_tool_fetch::register::register,
+                apeireth_tool_fetch::register::unregister,
+            ),
+            (
+                "EnhancedBrowser",
+                apeireth_tool_browser::register::register,
+                apeireth_tool_browser::register::unregister,
+            ),
+            (
+                "CodeIntelligence",
+                apeireth_tool_codesearch::register::register,
+                apeireth_tool_codesearch::register::unregister,
+            ),
+            (
+                "ImageGenEnhanced",
+                apeireth_tool_image_gen::register::register,
+                apeireth_tool_image_gen::register::unregister,
+            ),
+            (
+                "ImageProcess",
+                apeireth_tool_image_process::register::register,
+                apeireth_tool_image_process::register::unregister,
+            ),
+            (
+                "VSearch",
+                apeireth_tool_search::register::register,
+                apeireth_tool_search::register::unregister,
+            ),
+            (
+                "EnhancedFileOps",
+                apeireth_tool_filesystem::register::register,
+                apeireth_tool_filesystem::register::unregister,
+            ),
+            (
+                "RepoQualityAnalyzer",
+                apeireth_repo_tools::register::register,
+                apeireth_repo_tools::register::unregister,
+            ),
         ];
         for (name, reg, _) in &nine {
             reg(&registry).unwrap_or_else(|e| panic!("[N17] `{name}` register 失败: {e}"));
-            assert!(registry.get(name).is_some(), "[N17] `{name}` register 后 get 查不到");
+            assert!(
+                registry.get(name).is_some(),
+                "[N17] `{name}` register 后 get 查不到"
+            );
         }
-        assert_eq!(registry.len(), 9, "[N17] 9 件 register 后 registry 应为 9 件");
+        assert_eq!(
+            registry.len(),
+            9,
+            "[N17] 9 件 register 后 registry 应为 9 件"
+        );
         for (name, _, unreg) in &nine {
             assert!(unreg(&registry), "[N17] `{name}` 首次 unregister 应返 true");
-            assert!(registry.get(name).is_none(), "[N17] `{name}` unregister 后残留");
-            assert!(!unreg(&registry), "[N17] `{name}` 重复 unregister 应返 false (幂等)");
+            assert!(
+                registry.get(name).is_none(),
+                "[N17] `{name}` unregister 后残留"
+            );
+            assert!(
+                !unreg(&registry),
+                "[N17] `{name}` 重复 unregister 应返 false (幂等)"
+            );
         }
-        assert_eq!(registry.len(), 0, "[N17] 9 件全卸后 registry 应为 0 件 (0 残留)");
+        assert_eq!(
+            registry.len(),
+            0,
+            "[N17] 9 件全卸后 registry 应为 0 件 (0 残留)"
+        );
+    }
+}
+
+// ============================================================
+// TP12 (A2, P0) 集成测试 — 结构化回灌
+// ============================================================
+
+#[cfg(test)]
+mod tp12_tests {
+    use super::*;
+    use apeireth_tools::{GuardrailError, GuardrailKind, Tripwire};
+
+    /// 干净 ExecutionResult → inject_tp12_into_output 不动 output
+    #[test]
+    fn inject_clean_result_passes_through() {
+        let r = ExecutionResult {
+            tool_name: "X".into(),
+            success: true,
+            output: json!({"ok": true, "n": 42}),
+            error: None,
+            duration_ms: 10,
+            ..Default::default()
+        };
+        let out = inject_tp12_into_output(&r);
+        assert_eq!(out["ok"], json!(true));
+        assert_eq!(out["n"], json!(42));
+        assert!(out.get("_tp12_report").is_none(), "干净调用不应注入");
+    }
+
+    /// guardrail 命中 → output 加 _tp12_report.guardrail_error
+    #[test]
+    fn inject_guardrail_error_adds_report() {
+        let r = ExecutionResult {
+            tool_name: "X".into(),
+            success: false,
+            output: json!("[GuardrailBlocked] path contains .."),
+            error: Some("path_traversal".into()),
+            duration_ms: 1,
+            guardrail_error: Some(GuardrailError {
+                kind: GuardrailKind::PathTraversal,
+                tool_name: "X".into(),
+                field: "$.path".into(),
+                detail: "contains ../".into(),
+                hint: "remove .. segments".into(),
+            }),
+            ..Default::default()
+        };
+        let out = inject_tp12_into_output(&r);
+        let report = out.get("_tp12_report").expect("report missing");
+        let ge = report.get("guardrail_error").expect("guardrail_error missing");
+        assert_eq!(ge["kind"], "path_traversal");
+        assert_eq!(ge["field"], "$.path");
+        assert_eq!(ge["hint"], "remove .. segments");
+    }
+
+    /// tripwire 命中 → output 加 _tp12_report.tripwire
+    #[test]
+    fn inject_tripwire_adds_report() {
+        let r = ExecutionResult {
+            tool_name: "S".into(),
+            success: false,
+            output: json!("[TripwireBlocked] AWS Access Key detected"),
+            error: Some("secret_leak".into()),
+            duration_ms: 1,
+            tripwire: Some(Tripwire {
+                kind: apeireth_tools::GuardrailKind::SecretLeak,
+                tool_name: "S".into(),
+                field: "$.config".into(),
+                detail: "AWS Access Key detected (AKIA prefix)".into(),
+                hint: "redact before re-injection".into(),
+            }),
+            ..Default::default()
+        };
+        let out = inject_tp12_into_output(&r);
+        let report = out.get("_tp12_report").expect("report missing");
+        let tw = report.get("tripwire").expect("tripwire missing");
+        assert_eq!(tw["kind"], "secret_leak");
+        assert_eq!(tw["field"], "$.config");
+    }
+
+    /// 非 object output (string / null) → 包成 {raw, _tp12_report}
+    #[test]
+    fn inject_non_object_output_wraps_in_raw() {
+        let r = ExecutionResult {
+            tool_name: "X".into(),
+            success: false,
+            output: json!("plain string"),
+            error: None,
+            duration_ms: 1,
+            guardrail_error: Some(GuardrailError {
+                kind: GuardrailKind::ShellInjection,
+                tool_name: "X".into(),
+                field: "$.cmd".into(),
+                detail: "contains ;".into(),
+                hint: "remove ; and chain".into(),
+            }),
+            ..Default::default()
+        };
+        let out = inject_tp12_into_output(&r);
+        assert_eq!(out["raw"], "plain string");
+        assert!(out.get("_tp12_report").is_some());
+    }
+}
+
+/// **TP12 — 把 guardrail/validation/tripwire 结构化信息并入 output**
+///
+/// **目的**: 模型在 tool message 里看到原始 `[GuardrailBlocked] xxx` 字符串时,
+/// 只有模糊的 hint; 把结构化字段 (`kind`, `field`, `hint`) 一并塞进 `_tp12_report`,
+/// 模型可以解析后自修正 (e.g. 改 args.path 去掉 `../`, 改 cmd 去掉 `;`).
+///
+/// **0 装 PASS**: 若 ExecutionResult 无任何 TP12 字段, 返回 r.output 原值不变 (向后兼容干净调用).
+///
+/// **结构示例**:
+/// ```json
+/// {
+///   "spilled": true,             // 或其他原始字段
+///   "_tp12_report": {
+///     "guardrail_error": {
+///       "kind": "path_traversal",
+///       "field": "$.path",
+///       "hint": "remove `../` segments"
+///     }
+///   }
+/// }
+/// ```
+fn inject_tp12_into_output(r: &ExecutionResult) -> Value {
+    // 检查是否有任何 TP12 字段
+    let has_guardrail = r.guardrail_error.is_some();
+    let has_validation = r.validation_error.is_some();
+    let has_tripwire = r.tripwire.is_some();
+    if !(has_guardrail || has_validation || has_tripwire) {
+        // 干净调用 → 原值不动 (向后兼容)
+        return r.output.clone();
+    }
+
+    // 构造 _tp12_report 对象
+    let mut report = serde_json::Map::new();
+    if let Some(ge) = &r.guardrail_error {
+        if let Ok(v) = serde_json::to_value(ge) {
+            report.insert("guardrail_error".into(), v);
+        }
+    }
+    if let Some(ve) = &r.validation_error {
+        if let Ok(v) = serde_json::to_value(ve) {
+            report.insert("validation_error".into(), v);
+        }
+    }
+    if let Some(tw) = &r.tripwire {
+        if let Ok(v) = serde_json::to_value(tw) {
+            report.insert("tripwire".into(), v);
+        }
+    }
+
+    // 把 _tp12_report 加进 output (object 形式 → 插入字段; 非 object → 包成 {"raw": <原值>, "_tp12_report": ...})
+    match r.output.clone() {
+        Value::Object(mut obj) => {
+            obj.insert("_tp12_report".into(), Value::Object(report));
+            Value::Object(obj)
+        }
+        other => {
+            let mut obj = serde_json::Map::new();
+            obj.insert("raw".into(), other);
+            obj.insert("_tp12_report".into(), Value::Object(report));
+            Value::Object(obj)
+        }
     }
 }
