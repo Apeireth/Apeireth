@@ -10,6 +10,7 @@ description = "Apeireth 演化器官 — 6 状态机 + trait fail-6 + Learning/A
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
 apeireth-council = { path = "../apeireth-council" }
+apeireth-cognition = { path = "../apeireth-cognition" } # TP18 (E3, P1): Critic 集成 calibration::Observation / decompose
 apeireth-verify = { path = "../apeireth-verify" }
 serde = { workspace = true }
 serde_json = { workspace = true }
