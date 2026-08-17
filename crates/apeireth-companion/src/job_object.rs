@@ -300,6 +300,7 @@ mod tests {
             cpu_percent: Some(50),
             cpu_time_secs: Some(10),
             timeout_secs: 30,
+            ..Default::default()
         };
         let guard = JobGuard::with_config(&cfg);
         assert!(guard.is_ok(), "带限额 job 创建应成功: {guard:?}");
