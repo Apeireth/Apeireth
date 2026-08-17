@@ -396,3 +396,17 @@
 | approval_requests t13 失败 | 测试期望与 t11 冲突: 无回调 bridge 默认 rejected (0 装 PASS 设计), t13 却期望记录保持 pending | 注册 pending 回调 (orchestrator 暂挂不改本地状态), 使 mark_approved 路径可达 | 测试 bug |
 | job_object cpu_time 留痕错 ("job 消息 4") | watcher 覆盖式留痕, 被 ACTIVE_PROCESS_ZERO 等生命周期通知覆盖 | 只留痕超限消息且保留首个; msg_desc 补齐 NEW/EXIT/ZERO 可读 | 真 bug (团队代码) |
 | job_object cpu/memory 测试误报 | ① 子进程命令经 `cmd /c` 嵌套引号解析失效, powershell 从未运行; ② memory 测试误期"进程被终止" — Windows 硬内存限制语义 = 拒绝超限 commit (分配失败/OOM), 不杀进程 (与 CPU 时间限制不同) | ① 直接 spawn powershell (Rust 转义); ② 断言改为分配被拒 (exit 42) | 测试 bug (环境/语义) |
+
+### 五原型续讨论实施项 (2026-08-18 晚, 主人逐条拍板, 设计意图已登记)
+
+> 拍板全文见 docs/design-intent.md §2 "2026-08-18 晚 五原型续讨论"。以下为待实施登记（P 级待主人排期）。
+
+| 项 | 来源 | 说明 | 状态 |
+|---|---|---|---|
+| F1 | **情感记忆 (mood 维度)** | 主人拍板要 | 记忆条目加 mood 字段（输入侧数据: 文本情绪信号/时段/反馈），检索按情绪上下文调用；"像情绪障碍患者一样, 极其理性但一直在尝试理解主人的情感"; 不模拟"她的情感" (0 装 PASS) | ⬜ 待排期 (P1, 挂记忆 v2) |
+| F2 | **连续感知: 事件流 + 麦克风 + 屏幕显著性事件** | 主人拍板方案 | 摄像头不接; 麦克风接 (实时语音链已有); 事件流 (bus + PerceptionGate, 地基 A4); 屏幕流第一版=显著性事件 (窗口切换/聚焦/长时间无操作); 频率可调 + 用户主动开关 | ⬜ 待排期 (P1, 挂 A4/bus) |
+| F3 | **自我改进闭环: smol-vm 微 VM 实验场** | 主人确认要有 | 提案→VM 内构建+测试候选→通过→主人批准→部署; "独立的是实验, 批准的是部署"; 参照 ref-yoyo-evolve 验证闸门+回滚+双层 eval | ⬜ 待排期 (P1, 挂 evolution) |
+| F4 | **假设检验闭环 (HypothesisStore)** | 主人: "非常重要, 有了它她才能闭环想法进步" | 猜想/验证中/确认/证伪 → 验证调度 (低成本观察窗/提问路由) → 对账写回记忆图; W2 被动统计验证的主动版; 四原型串链核心 | ⬜ 待排期 (P1, 挂 W2 同批或后续) |
+| F5 | **Reverse skill 四件套形态吸收** | 主人: "是否能加入工具插件里或哪个套件" | [reverse-skill](https://github.com/zhaoxuya520/reverse-skill) = 逆向/渗透技能路由包 (自动路由+按需自举工具链+自动进化经验库); 归属=**套件级** (08 愿景"AI 安全场景套件"); 吸收形态非内容; [DSH 插件版](https://github.com/dhicoc/dsh-reverse-skill) = 插件生态先行样例 | ⬜ 待排期 (P2, 套件批) |
+| F6 | **价值内化闭环** | 主人确认设计过未实施 | 价值案例库 + 价值冲突裁决记录 + 主人反馈回流 (规则→案例→判断渐进内化); 零件: constitution + constitution_gate + W6; 与情感记忆同一块地 | ⬜ 待排期 (P2) |
+| F7 | **VM 级隔离调研 (smol-vm)** | 主人: "微型沙箱我们安全机制里已经有了? 能参考这个升级吗?" | 现状核实: 进程级 (Job Object) + 权限级 (双洋葱) + 数据级 (guard) 已有, **VM 级空缺** (Hyperlight 是愿景非实施); smol-vm (Rust+libkrun, 亚秒冷启动) 调研吸收 | ⬜ 待排期 (P2, 安全批) |
