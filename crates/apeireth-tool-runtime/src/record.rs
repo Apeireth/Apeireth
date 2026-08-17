@@ -248,6 +248,10 @@ impl RecordStore {
     }
 
     /// **从 ExecutionResult 写记录 (便捷)**
+    ///
+    /// **TP12 (A2, P0) 扩展**: 如果 ExecutionResult 含 guardrail_error / validation_error / tripwire,
+    /// 把它们序列化进 payload 的 `tp12_report` 字段 (per apeireth-tools 公开 serde schema).
+    /// 这样审计端 (apeireth-companion / 外部 BI) 可以直接读结构化信息, 不用 parse error_text 字符串.
     pub async fn record_execution(
         &self,
         call: &ParsedToolCall,
@@ -284,7 +288,17 @@ impl RecordStore {
             masked,
         };
 
-        let payload = serde_json::to_value(&record).map_err(|e| format!("serialize: {e}"))?;
+        let mut payload =
+            serde_json::to_value(&record).map_err(|e| format!("serialize: {e}"))?;
+
+        // TP12: 把结构化错误信息并入 payload (audit 端可直接读)
+        let tp12_report = build_tp12_report(exec);
+        if let Some(report) = tp12_report {
+            if let Some(obj) = payload.as_object_mut() {
+                obj.insert("tp12_report".to_string(), report);
+            }
+        }
+
         let entry = HistoryEntry {
             id: id.clone(),
             subject_id: format!("tool_call:{}", call.tool_name),
@@ -330,6 +344,35 @@ impl RecordStore {
 // ============================================================
 // 内部 helper
 // ============================================================
+
+/// **TP12 — 构造结构化报告 (audit 端 JSON)**
+///
+/// 把 ExecutionResult 中的 guardrail_error / validation_error / tripwire 三个
+/// 可选字段合并为一个 JSON object, 仅在至少有一个字段被设置时才返回 Some.
+/// 空报告 = `None` (向后兼容: 不为干净调用增加 payload 噪音)
+fn build_tp12_report(exec: &ExecutionResult) -> Option<Value> {
+    let mut report = serde_json::Map::new();
+    if let Some(ge) = &exec.guardrail_error {
+        if let Ok(v) = serde_json::to_value(ge) {
+            report.insert("guardrail_error".into(), v);
+        }
+    }
+    if let Some(ve) = &exec.validation_error {
+        if let Ok(v) = serde_json::to_value(ve) {
+            report.insert("validation_error".into(), v);
+        }
+    }
+    if let Some(tw) = &exec.tripwire {
+        if let Ok(v) = serde_json::to_value(tw) {
+            report.insert("tripwire".into(), v);
+        }
+    }
+    if report.is_empty() {
+        None
+    } else {
+        Some(Value::Object(report))
+    }
+}
 
 /// **VCP 字段级引用** `toolCallRecordStore.js:311-317 detectCaller`
 ///
@@ -544,6 +587,7 @@ mod tests {
             error: None,
             duration_ms: 123,
             tool_name: "T5".to_string(),
+            ..Default::default()
         };
         rec.record_execution(&call, &exec, false)
             .await
@@ -552,6 +596,89 @@ mod tests {
         let records = rec.list_for_tool("T5").expect("list");
         assert_eq!(records[0].duration_ms, 123);
         assert!(records[0].success);
+    }
+
+    /// **TP12 — record_execution 把 guardrail_error / tripwire 序列化进 payload.tp12_report**
+    #[tokio::test]
+    async fn record_execution_embeds_tp12_report() {
+        let store = make_store();
+        let rec = RecordStore::new(store.clone());
+
+        let call = ParsedToolCall {
+            tool_name: "Bad".to_string(),
+            args: json!({"path": "../escape"}),
+            raw_marker: "".into(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        // 模拟 executor 返回: guardrail 阻断 + 有 tripwire (为同时测多字段)
+        let exec = ExecutionResult {
+            success: false,
+            output: json!("[GuardrailBlocked] x"),
+            error: Some("[guardrail:path_traversal]".into()),
+            duration_ms: 5,
+            tool_name: "Bad".to_string(),
+            guardrail_error: Some(apeireth_tools::GuardrailError {
+                kind: apeireth_tools::GuardrailKind::PathTraversal,
+                tool_name: "Bad".into(),
+                field: "$.path".into(),
+                detail: "contains traversal".into(),
+                hint: "use absolute paths".into(),
+            }),
+            ..Default::default()
+        };
+        rec.record_execution(&call, &exec, false)
+            .await
+            .expect("record");
+
+        // 直接从 action_stream 读 payload, 验证 tp12_report 字段
+        let conn = store.conn().expect("conn");
+        let stream = ActionStream::new(&conn);
+        let entries = stream
+            .list_for_subject("tool_call:Bad", None, None, false)
+            .expect("list");
+        assert_eq!(entries.len(), 1);
+        let payload = &entries[0].payload;
+        let report = payload.get("tp12_report").expect("tp12_report missing");
+        let ge = report.get("guardrail_error").expect("guardrail_error missing");
+        assert_eq!(ge["tool_name"], "Bad");
+        assert_eq!(ge["kind"], "path_traversal");
+        assert_eq!(ge["field"], "$.path");
+    }
+
+    /// **TP12 — 干净调用不带 tp12_report 字段 (不增加噪音)**
+    #[tokio::test]
+    async fn record_execution_clean_call_omits_tp12_report() {
+        let store = make_store();
+        let rec = RecordStore::new(store.clone());
+
+        let call = ParsedToolCall {
+            tool_name: "Clean".to_string(),
+            args: json!({}),
+            raw_marker: "".into(),
+            archery: false,
+            archery_no_reply: false,
+        };
+        let exec = ExecutionResult {
+            success: true,
+            output: json!({"ok": true}),
+            error: None,
+            duration_ms: 10,
+            tool_name: "Clean".to_string(),
+            ..Default::default()
+        };
+        rec.record_execution(&call, &exec, false)
+            .await
+            .expect("record");
+
+        let conn = store.conn().expect("conn");
+        let stream = ActionStream::new(&conn);
+        let entries = stream
+            .list_for_subject("tool_call:Clean", None, None, false)
+            .expect("list");
+        assert_eq!(entries.len(), 1);
+        let payload = &entries[0].payload;
+        assert!(payload.get("tp12_report").is_none(), "干净调用不应有 tp12_report");
     }
 
     #[tokio::test]
