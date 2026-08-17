@@ -70,6 +70,12 @@ mod imp {
         watcher: Option<std::thread::JoinHandle<()>>,
     }
 
+    // SAFETY: HANDLE 是 Windows 内核对象句柄, CloseHandle 跨线程调用安全;
+    // 本 guard 的句柄引用同一内核对象, drop 可在任意线程执行 (watcher 线程
+    // 内部已用 usize 移交自身句柄副本, 与此处 Send 无关). 无 Send 会让持有
+    // guard 的 async block 无法跨 await (tokio Send 边界), 故显式标注.
+    unsafe impl Send for JobGuard {}
+
     fn os_err() -> i32 {
         std::io::Error::last_os_error().raw_os_error().unwrap_or(-1)
     }
