@@ -71,6 +71,11 @@ fn now_ms() -> u64 {
         .unwrap_or(0)
 }
 
+/// 测试串行锁 (跨 hand.rs/http.rs 测试共享 — 静态计数原子并行写竞态,
+/// 2026-08-18 全量偶发 record_tool_success 计数 +2 修复).
+#[cfg(test)]
+pub static TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// 工具索引 (1-6), 未知工具返 0
 fn tool_index(name: &str) -> u64 {
     SIX_TOOLS
@@ -246,9 +251,9 @@ pub fn render(area: Rect) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex;
 
-    static TEST_LOCK: Mutex<()> = Mutex::new(());
+    // 共享测试锁 (顶层 pub static, http.rs 测试同用 — 静态原子并行写竞态修复)
+    use crate::organ::hand::TEST_LOCK;
 
     fn reset_all() {
         hand_stats::HAND_CALENDAR_TODAY.store(0, Ordering::Relaxed);
