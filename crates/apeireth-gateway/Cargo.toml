@@ -13,7 +13,6 @@ categories = ["api-bindings"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10" # S4: 出站审计哈希链 (SHA-256)
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
 async-trait = { workspace = true }

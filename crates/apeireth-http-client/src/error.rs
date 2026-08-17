@@ -19,6 +19,8 @@ pub enum HttpClientError {
     },
     /// 非法配置 (字段级校验失败, 编译期应挡住, 但运行时兜底)
     InvalidConfig(String),
+    /// 出站策略拒绝 (S4: 白名单外默认拒绝) 或其他内部错误.
+    Other(String),
 }
 
 impl fmt::Display for HttpClientError {
@@ -30,6 +32,7 @@ impl fmt::Display for HttpClientError {
                 write!(f, "LIFO pool exhausted (max_sockets={max})")
             }
             HttpClientError::InvalidConfig(msg) => write!(f, "invalid config: {msg}"),
+            HttpClientError::Other(msg) => write!(f, "other: {msg}"),
         }
     }
 }
