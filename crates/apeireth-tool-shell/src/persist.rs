@@ -63,7 +63,6 @@ impl PersistentTaskStore {
             "CREATE TABLE IF NOT EXISTS tasks (
                 task_id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 duration_ms INTEGER,
                 error TEXT
