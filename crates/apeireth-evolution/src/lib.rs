@@ -65,6 +65,8 @@ pub use council_bridge::{
     CouncilAdapter, CouncilIntegrationConfig, EvolutionOutcome, EvolutionProposal,
     DEFAULT_MAX_RETRY_ROUNDS, DEFAULT_REFLECTION_WINDOW_MS,
 };
+// TP18 (E3, P1) Critic re-exports (新增, 0 改 fail-6 任何入口签名)
+pub use critic::{Critic, CriticConfig, CritiqueAction, CritiqueResult};
 pub use engine::{EvolutionEngine, EvolutionLog, EvolutionStep};
 pub use fail::{FailKind, FailOutcome, FailPolicy, FailRecord};
 // R125-7 PODA cycle re-exports (新增, 0 改原 crate 任何入口签名)
@@ -216,3 +218,6 @@ apeireth_verify::register_all_in_crate!(
 
 // R215: Voyager 风格持续学习 facade (skill library + retrieve → use → feedback)
 pub mod voyager_api;
+// TP18 (E3, P1): Critic — 校准感知批评 (集成 apeireth-cognition::calibration)
+//   E6 reflection layer 顺手深化: 校准诊断 → 推荐 evolution 状态转换
+pub mod critic;
