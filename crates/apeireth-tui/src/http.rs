@@ -438,6 +438,7 @@ mod tests {
     }
 
     #[tokio::test]
+    let _g = crate::organ::hand::TEST_LOCK.lock().unwrap_or_else(|p| p.into_inner());
     async fn invoke_tool_6_whitelist_accepted() {
         use httpmock::prelude::*;
         let server = MockServer::start_async().await;
