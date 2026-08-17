@@ -227,7 +227,7 @@ members = [
 [workspace.package]
 version = "1.2.0"  # B2 upgrade: 1.1.0 → 1.2.0 (R125 末 minor, per 10-locked.md + decision-22 + decision-33)
 edition = "2021"
-rust-version = "1.80"
+rust-version = "1.97"  # 与 rust-toolchain.toml 对齐 (1.97.1), MSRV 诚实声明
 authors = ["Apeireth Team"]
 # 单一 license 来源 (per Apache 2.0 §4(d) NOTICE 条款, 完整文本见 根目录 `LICENSE`)
 # Sub-crate 继承 = `license.workspace = true` (90+ crate 中 65+ 已用, 27 硬编码待 1.0 后清)

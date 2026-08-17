@@ -2,9 +2,9 @@
 name = "apeireth-pipeline-g5"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.80"
+rust-version.workspace = true
 authors = ["Apeireth Team"]
-license = "Apache-2.0"
+license.workspace = true
 description = "R20 阶段 6 估补: 通用 5 阶段 pipeline 框架 (placeholder, 整合 #3 B-7 R21 续补范畴, 真实实现待 R21+ 重建)"
 
 [dependencies]
