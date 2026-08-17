@@ -296,12 +296,128 @@ jobs:
           retention-days: 30
 
   # ==========================================================================
-  # 终极 gate — 5 job 全部 success 才算 1.0 release 5 包齐发
+  # Job 6/6: security-and-sbom — TP20-S5 塞缝批: 发布期供应链验证 + SBOM
+  # ----------------------------------------------------------------------------
+  # 哲学: 机制而非补丁 — 把 vet+audit+deny+SBOM 做成 first-class CI job,
+  #       不是 release 时才临时人肉跑。集成而非分立: 三件套共享 workspace。
+  #       安全底线: 任一失败 hard fail, 不假装。
+  #
+  # 触发: 同 release.yml (push tag v1.0.0* 或 workflow_dispatch)
+  # 入口: scripts/vet.sh + scripts/sbom.sh (与 Makefile 的 `make release-check` 共用)
+  # 输出: cyclonedx-sbom.json (artifact) + reports/tp20-s5-*.txt (日志)
+  #
+  # 8 项不修改承诺 (per 8-locked-unified-2026-08-05.md):
+  #   - 0 改 24 LOCKED crate
+  #   - 0 改 workspace version 1.2.0 (per APEIRETH-VERSIONING §1 + ADR-0005)
+  #   - 0 引 NewAPI (用系统 cargo-vet / cargo-audit / cargo-deny / cargo-cyclonedx)
+  #   - 不假装: 缺工具链时 build fail, 不假装编过
+  #   - 编译期 hardcode: APEIRETH_VERSION=1.2.0 (与 workspace.package.version 对账)
+  #   - 6 哲学锚穿透 (注释在本 job 各 step)
+  #   - 不重复造轮子: 调 scripts/vet.sh + scripts/sbom.sh, 不重写
+  #   - 诚实标缺: 跨平台 build CI 跑, 本地不跑, 标需要 CI 守门
+  #
+  # vs cargo-audit.yml / cargo-deny.yml (已有):
+  #   - 老 workflow: PR 触发 + 单独跑 audit/deny
+  #   - 本 job: release tag 触发 + vet + audit + deny + SBOM 一站式
+  #   - 两者并存: 老 workflow 看 PR 日常, 本 job 看 release 守门
   # ==========================================================================
-  release-gate:
-    name: 5-package release gate (5/5 success)
+  security-and-sbom:
+    name: security-and-sbom (vet + audit + deny + SBOM)
     runs-on: ubuntu-22.04
     needs: [build-deb, build-rpm, build-tarball, build-brew, build-scoop]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust stable + jq
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install jq (SBOM JSON 合法性验证)
+        run: |
+          if command -v jq >/dev/null 2>&1; then
+            echo "✅ jq 已装"
+          else
+            sudo apt-get update -qq && sudo apt-get install -y jq
+          fi
+
+      # === cargo-vet 装到 tools/ (与本地 Makefile 一致) ===
+      - name: Install cargo-vet
+        run: cargo install cargo-vet --locked --root tools/
+
+      # === 三个老工具用 --locked 钉死版本 (R20 阶段 6 已入库) ===
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Install cargo-deny
+        run: cargo install cargo-deny --locked
+
+      - name: Install cargo-cyclonedx
+        run: cargo install cargo-cyclonedx --locked
+
+      # === 编译期 hardcode: VERSION=1.2.0 (与 workspace.package.version 对账) ===
+      - name: Verify workspace version matches release tag
+        env:
+          APEIRETH_VERSION: '1.2.0'
+        run: |
+          ACTUAL="$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)"
+          if [[ "${ACTUAL}" != "${APEIRETH_VERSION}" ]]; then
+            echo "❌ workspace version 不对账: ${ACTUAL} != ${APEIRETH_VERSION}"
+            exit 1
+          fi
+          echo "✅ workspace version 对账: ${ACTUAL}"
+
+      # === 三件套 vet + audit + deny (scripts/vet.sh) ===
+      - name: cargo vet + audit + deny (TP20-S5 三件套)
+        run: |
+          chmod +x scripts/vet.sh
+          bash scripts/vet.sh
+
+      # === CycloneDX 1.5 SBOM (scripts/sbom.sh) ===
+      - name: Generate CycloneDX 1.5 SBOM (TP20-S5)
+        run: |
+          chmod +x scripts/sbom.sh
+          bash scripts/sbom.sh
+
+      # === upload SBOM 作为 release artifact ===
+      - name: Upload SBOM artifact
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-cyclonedx-sbom
+          path: cyclonedx-sbom.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload audit-report.json
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-audit-report
+          path: audit-report.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload vet+audit+deny logs
+        if: ${{ !inputs.skip_upload }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apeireth-tp20-s5-supply-chain-logs
+          path: reports/tp20-s5-cargo-*.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ==========================================================================
+  # 终极 gate — 6 job 全部 success 才算 1.0 release 6 包齐发 + 安全通过
+  # ==========================================================================
+  release-gate:
+    name: 6-package release gate (6/6 success)
+    runs-on: ubuntu-22.04
+    needs: [build-deb, build-rpm, build-tarball, build-brew, build-scoop, security-and-sbom]
     if: always()
     steps:
       # 5 个静态 step check (GHA 表达式不允许 needs.[job].result 动态索引)
@@ -335,15 +451,22 @@ jobs:
           echo "❌ build-scoop failed: ${{ needs.build-scoop.result }}"
           exit 1
 
-      - name: Report 5/5 success
-        if: needs.build-deb.result == 'success' && needs.build-rpm.result == 'success' && needs.build-tarball.result == 'success' && needs.build-brew.result == 'success' && needs.build-scoop.result == 'success'
+      - name: Check security-and-sbom
+        if: needs.security-and-sbom.result != 'success'
+        run: |
+          echo "❌ security-and-sbom failed: ${{ needs.security-and-sbom.result }}"
+          exit 1
+
+      - name: Report 6/6 success
+        if: needs.build-deb.result == 'success' && needs.build-rpm.result == 'success' && needs.build-tarball.result == 'success' && needs.build-brew.result == 'success' && needs.build-scoop.result == 'success' && needs.security-and-sbom.result == 'success'
         run: |
           echo "================================================"
-          echo "  ✅ 1.0 release 5-package gate: 5/5 jobs success"
+          echo "  ✅ 1.0 release 6-package gate: 6/6 jobs success"
           echo "  Version: ${APEIRETH_VERSION}"
           echo "  Ref: ${{ github.ref }}"
           echo "  Tag: ${{ github.ref_name }}"
           echo ""
           echo "  8 项不修改承诺: 0 改 LOCKED, 0 引 NewAPI, 编译期 hardcode, 6 哲学锚穿透"
-          echo "  5 包: deb / rpm / tarball / brew / scoop"
+          echo "  6 包: deb / rpm / tarball / brew / scoop / security+sbom"
+          echo "  TP20-S5 塞缝批: vet + audit + deny + CycloneDX 1.5 SBOM"
           echo "================================================"
