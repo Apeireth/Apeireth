@@ -85,10 +85,9 @@ impl ToolPolicyRule for ApprovalBridge {
                 // 让 stage 自己决定是拒绝还是等待 (R133+ 真接 wait_for_approval)
                 PolicyVerdict::RequireApproval
             }
-            ApprovalDecision::Deny { reason, silent: _ } => {
-                // silent 字段已知丢失, R133+ 计划加 ctx.approval_silent 字段
-                // 让 stage process 决定是否写 ctx.silent_deny
-                PolicyVerdict::Deny { reason }
+            ApprovalDecision::Deny { reason, silent } => {
+                // N20 收尾: silent 透传 (此前已知丢失, 现 PolicyVerdict::Deny 带 silent)
+                PolicyVerdict::Deny { reason, silent }
             }
         }
     }
@@ -168,20 +167,21 @@ mod tests {
         };
 
         match bridge.check(&call) {
-            PolicyVerdict::Deny { reason } => {
+            PolicyVerdict::Deny { reason, silent } => {
                 assert!(
                     reason.contains("bad_tool"),
                     "reason should mention tool name: {}",
                     reason
                 );
+                assert!(!silent, "Blacklist 默认非静默拒绝");
             }
             other => panic!("expected Deny, got {:?}", other),
         }
     }
 
-    /// 测试 Deny 时 silent 字段被丢 (known loss)
+    /// N20 收尾: silent 字段不再丢失 — Deny 透传 silent (原"丢失"测试语义反转)
     #[tokio::test]
-    async fn bridge_deny_silent_field_is_dropped() {
+    async fn bridge_deny_silent_field_is_preserved() {
         let mut manager = ApprovalManager::new();
         // Blacklist 默认 silent=false
         let mut bl = BlacklistRule::new();
@@ -197,13 +197,12 @@ mod tests {
             archery_no_reply: false,
         };
 
-        // 关键: PolicyVerdict::Deny 只有 reason 字段, silent 已被丢
-        // 这里验证类型本身, 编译期就保证 silent 没了
+        // N20 收尾: PolicyVerdict::Deny 带 silent, 透传不再丢失
         let verdict = bridge.check(&call);
-        if let PolicyVerdict::Deny { reason: _ } = verdict {
-            // 通过编译就证明字段对齐
+        if let PolicyVerdict::Deny { silent, .. } = verdict {
+            assert_eq!(silent, false, "Blacklist deny 默认 silent=false 应透传");
         } else {
-            panic!("expected Deny {{ reason }} variant");
+            panic!("expected Deny {{ reason, silent }} variant");
         }
     }
 
