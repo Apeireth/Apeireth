@@ -411,4 +411,21 @@
 | F4 | **假设检验闭环 (HypothesisStore)** | 主人: "非常重要, 有了它她才能闭环想法进步" | 猜想/验证中/确认/证伪 → 验证调度 (低成本观察窗/提问路由) → 对账写回记忆图; W2 被动统计验证的主动版; 四原型串链核心 | ⬜ 待排期 (P1, 挂 W2 同批或后续) |
 | F5 | **Reverse skill 四件套形态吸收** | 主人: "是否能加入工具插件里或哪个套件" | [reverse-skill](https://github.com/zhaoxuya520/reverse-skill) = 逆向/渗透技能路由包 (自动路由+按需自举工具链+自动进化经验库); 归属=**套件级** (08 愿景"AI 安全场景套件"); 吸收形态非内容; [DSH 插件版](https://github.com/dhicoc/dsh-reverse-skill) = 插件生态先行样例 | ⬜ 待排期 (P2, 套件批) |
 | F6 | **价值内化闭环** | 主人确认设计过未实施 | 价值案例库 + 价值冲突裁决记录 + 主人反馈回流 (规则→案例→判断渐进内化); 零件: constitution + constitution_gate + W6; 与情感记忆同一块地 | ⬜ 待排期 (P2) |
+
+### 2026-08-18 深夜 全量复核（主人质疑"开口策略不是干过了吗", 以 integration 树实测修正）
+
+> **教训**: 主线程此前用文档记忆 + git log 判断"哪批做了什么", 未查树的最终状态 → 多处误判。以下为实测修正。
+
+| 项 | 复核前判断 | 实测 (integration HEAD 树) | 修正 |
+|---|---|---|---|
+| TP31 W1 文本模拟器 | "已排期未实施" | **已合入 integration** (world_model.rs: CounterfactualChain/TimelineLlm/Brier 拒绝/CalibratedResolver, commit 3cc77b87+e4056aa0) | ✅ 已完成 (11 测试绿) |
+| TP32 W2+W3 因果推演 | "已排期未实施" | **已合入 integration** (causal_world_model.rs 1020 行: MCTS 跑因果图 + 记忆时间线挖因果边, commit e4056aa0) | ✅ 已完成 (11 测试绿) |
+| E7 开口策略学习器 | "零件在, 本体没做" | **已实施** (emergence.rs 涌现循环: RhythmEstimator 节律学习 + respond_delta/ignored_delta 反馈学习 + Boundaries 门禁 + Initiative 决策 + simulation.rs) | ✅ 已完成 (纠正) |
+| E4 好奇驱动引擎 | "拍板未实施" | 全库宽搜 (Curiosity/novelty/探索目标) 无实现 | ⬜ **真缺** (五原型唯一) |
+| F1 情感记忆 | "零" | 部分: emergence LoopConfig.mood_floor (主人情绪→开口门控) 存在; 记忆 mood 维度/情绪上下文检索无 | ⬜ 部分 (门控有, 记忆维度缺) |
+| F4 假设检验 | "零" | world_model 有"反事实假设"字段; HypothesisStore/验证调度/对账无 | ⬜ 真缺 |
+| F6 价值案例库 | "零" | 无 | ⬜ 真缺 |
+| A4 事件流打通 | "半成品" | 零件齐 (bus event_log + agent AgentEvent + workflow EventHistory); 统一打通 + PerceptionGate 门控无 | ⬜ 缺"打通" |
+| S4 出站网络策略 | "✅ TP20 (划错)" | gateway 实测无域名白名单/出站拒绝 | ⬜ 未实施 (已修正) |
+| 桌宠 / 投资套件主链 | "零" | 零 | ⬜ 真缺 (产品形态/场景) |
 | F7 | **VM 级隔离调研 (smol-vm)** | 主人: "微型沙箱我们安全机制里已经有了? 能参考这个升级吗?" | 现状核实: 进程级 (Job Object) + 权限级 (双洋葱) + 数据级 (guard) 已有, **VM 级空缺** (Hyperlight 是愿景非实施); smol-vm (Rust+libkrun, 亚秒冷启动) 调研吸收 | ⬜ 待排期 (P2, 安全批) |
