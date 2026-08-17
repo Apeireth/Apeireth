@@ -27,7 +27,7 @@ pub mod semver_strict;
 pub mod skill_executor; // R125-19: Skill execution layer (5 phase state machines, superpowers 14 → 5 patterns)
 pub mod wasm_bridge; // R174: WASM skill executor (uses apeireth-sovereignty::wasm_runtime)
 pub mod watcher; // R109: 文件 watcher 热加载 (polling-based, 0 新 dep)  // R107: 严格 semver 2.0.0 (3-segment + pre-release + build metadata)  // R86: Skill → MCP ToolServer 适配器 (SkillDescriptor → Tool, call 走 dispatch) // R149: Anthropic Skills 模式 (SKILL.md + 3 层加载)
-                                                                                                                                                                                                                                 // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
+                 // R127 P5-3: Library Stage 6 守护 (借鉴 hyper 80 + PyO3 928 + servers 175)
 
 #[derive(Debug, Error)]
 pub enum SkillError {

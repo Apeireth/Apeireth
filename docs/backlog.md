@@ -78,24 +78,24 @@
 | # | 项 | 来源 | 说明 | 状态 |
 |---|---|---|---|---|
 | M1 | **上下文编辑/compaction 原语 + Context Rot 度量** | 记忆调研 ⭐最高 | context.rs 只有尾部截断: 加 rot_score (重复/陈旧/相关性启发式) + compaction 改 LLM 参与的 retain/remove/replace 段编辑 (Anthropic context editing/compaction + Chroma context rot 精神) | ⬜ 团队可干 (P1) |
-| M2 | **图社区分层聚合 + 双级检索** | 记忆调研 ⭐ | memory_graph 只有实体链 CRAWL (local): 轻量社区检测 (s/p/o 共现聚簇, 不上 Leiden) + 社区级滚动摘要挂提炼调度 + 检索分诊 (具体问题走实体链/宽泛问题走社区摘要, LightRAG/GraphRAG 精神) | ⬜ 团队可干 (P1) |
+| M2 | **图社区分层聚合 + 双级检索** | 记忆调研 ⭐ | memory_graph 只有实体链 CRAWL (local): 轻量社区检测 (s/p/o 共现聚簇, 不上 Leiden) + 社区级滚动摘要挂提炼调度 + 检索分诊 (具体问题走实体链/宽泛问题走社区摘要, LightRAG/GraphRAG 精神) | ✅ community.rs (26b00c29, 任务 7633bd06, fullstack_engineer2): s/p/o 共现连通分量聚簇 (comm-id 稳定) + 确定性滚动摘要 (高频实体 top-N) + Summarizer trait 提炼口 0 装 + MemoryGraph::triage 分诊小改 (CRAWL 本体 0 改动); scratch 独立验证 6/6 全绿 + cargo check 绿; 正式 lib test 待并行 WIP 收敛后 QA 复跑 |
 | M3 | **ACT-R 激活衰减 + 存档不删除** | 记忆调研 ⭐ | decay.rs 单点半衰期: 改 ACT-R 激活 A=ln(Σ(t−t_j)^−d)+β (访问次数强化) + 关联扩散 + 遗忘=移入归档层可再激活 (mtrace 参考) | ⬜ 团队可干 (P1) |
 | M4 | **记忆评测闭环** | 记忆调研 ⭐ | apeireth-bench 建 LongMemEval 5 能力评测集 (抽取/多会话推理/时序/知识更新/弃答) — 弃答正好检验对账 DELETE 不输出已删事实 | ✅ 完成 (任务 1c1f3f95, tests/m4_longmemeval_eval.rs 6 用例全绿, 确定性 fixture + HashEmbedder 0 LLM; 对账 DELETE 不输出已删事实 + 库外拒答断言均落地; Note 级有效期过滤留 M5) |
-| M5 | **通用记忆层时间有效性** | 记忆调研 ⭐ | 时间有效性只在图事实 (valid_at/invalid_at): 下沉到普通记忆条目 valid_from/valid_until + 问法感知过滤 (现在/当前 vs 以前/曾经, Mem0 temporal reasoning) | ⬜ 团队可干 (P1) |
+| M5 | **通用记忆层时间有效性** | 记忆调研 ⭐ | 时间有效性只在图事实 (valid_at/invalid_at): 下沉到普通记忆条目 valid_from/valid_until + 问法感知过滤 (现在/当前 vs 以前/曾经, Mem0 temporal reasoning) | ✅ 落地 (提交 52316ba2): notes 表 V3 migration 加 valid_from/valid_until (NULL=永久, 存量零迁移) + NoteQuery validity/as_of 过滤 (半开区间) + validity_from_query_text 确定性关键词规则 (0 LLM: 现在/当前类→CurrentOnly, 历史/中性→All) + 写入侧 put_note_with_validity/set_note_validity 0 装留接口; NoteStore trait/apeireth_core::Note/memory_graph 均未动 (M4 时序用例接口稳定); cargo test -p apeireth-memory 全绿 312 (含 5 新 m5 测试); 升级路径: 表大后可加 valid_until 部分索引, 问法词表可外置 |
 | M6 | prompt drift 管理 | 记忆调研备选 | 提炼器输出 schema 版本化+迁移 (防长跑漂移, 挂 migrations.rs) | ⬜ 团队可干 (P2) |
 | S1 | **Windows 最小权限执行** | 安全调研 | exec_worker 补 Job Object 的权限洞: CreateRestrictedToken 去特权+deny SID + 低完整性级别 + 每工具工作目录 ACL; 高危可选 AppContainer 档 (Chromium 分层模型) | ⬜ 团队可干 (P1, 随 N17 隔离加固) |
-| S2 | **Untrusted 输入标记 + MCP 工具描述投毒防护** | 安全调研 | prompt 组装层外部内容包 untrusted 标记; MCP 新服务器 tool description 过宪法评审 + diff 告警 (OWASP Agentic Top 10 ASI-01) | ⬜ 团队可干 (P1) |
+| S2 | **Untrusted 输入标记 + MCP 工具描述投毒防护** | 安全调研 | prompt 组装层外部内容包 untrusted 标记; MCP 新服务器 tool description 过宪法评审 + diff 告警 (OWASP Agentic Top 10 ASI-01)。**落地 (任务 2071b04a)**: apeireth-guard 新增 untrusted_mark.rs (确定性边界包装 `<<<[UNTRUSTED_CONTENT source=…]>>>` + START/END 双前缀逃逸防护 + UntrustedMarker trait 口) + tool_desc_audit.rs (隐藏字符/空描述硬拒 Reject + 指令性词汇/越权话术 Suspect 待复核 + diff 告警 description_changed + ToolDescAuditLog ring buffer 留痕 + ToolDescriptionAuditor trait 口); 82 测全绿; 0 装 PASS (不改 MCP 协议本体/LLM 调用链) | ✅ 2071b04a |
 | S3 | credentials crate 用 keyring 后端 | 安全调研 | N21 方案升级: 后端 keyring-rs (Windows DPAPI 零依赖) + 按服务最小化 + 读取出口接 guard + 新凭据首次使用审批联动 | ⬜ 并入 N21 |
 | S4 | **出站网络策略** | 安全调研 | gateway 层域名/协议白名单默认拒绝 + 每次外发审计进哈希链 + 与 spend 预算联动 | ⬜ 团队可干 (P1) |
 | S5 | 供应链补强: cargo vet + SBOM | 安全调研 | cargo vet 先覆盖直接依赖 + release workflow 加 CycloneDX 生成 (与 cosign 一体) | ⬜ 团队可干 (P2) |
-| S6 | **审计哈希链换 SHA-256** | 安全调研修正 | session_log FNV-1a 64 非加密可碰撞 → SHA-256 链 + 每 N 条锚定签名 (tamper-evident) | ⬜ 团队可干 (P1, 成本低) |
-| S7 | master token 比对改 constant-time | 安全调研修正 | principles.rs 已自标非恒定时间 → 恒定时间比较 | ⬜ 团队可干 (P1, 成本低) |
+| S6 | **审计哈希链换 SHA-256** | 安全调研修正 | session_log FNV-1a 64 非加密可碰撞 → SHA-256 链 + 每 N 条锚定签名 (tamper-evident) | ✅ 提交 a2a705e: session_log SHA-256 链 (hash_era epoch 字段, serde(default) 存量 era=0 兼容) + with_anchor_every(n) 锚定检查点 + verify_events 纯函数 (篡改检测) + 5 新测试。存量策略如实标注: 存量段仍 FNV 强度不追溯重哈希, 重锚定走迁移窗口 (未实现) |
+| S7 | master token 比对改 constant-time | 安全调研修正 | principles.rs 已自标非恒定时间 → 恒定时间比较 | ✅ 提交 fbee593 (+dcccdce2): constant_time_eq XOR 累加器 (std 实现无新依赖, 长度差折入累加器无早退) + approve 接入 + 2 新测试 |
 | E1 | **口头强化闭环 (Reflexion 式)** | 进化调研 | 失败轨迹 (决策拒绝/验证失败/经验失败) → CRITIC 验证后反思文本 → 反思记忆 → 同类任务重试注入 (现在反思有周期无喂回) | ✅ 完成 (7285995c agent_orchestrator2: reflexion.rs 自包含, 确定性规则版 CRITIC 先行, LLM 口留 trait 0 装, 5 组单测全绿, 实接线留公开口) |
-| E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ⬜ 团队可干 (P1) |
+| E2 | **LATS 化 MCTS** | 进化调研 | planning.rs 补: LLM 作 value (StateEvaluator 已有口) + 反思节点 (reflect→refine 入树) + max-backup 替代平均回溯 | ✅ 完成 (cc378409 agent_orchestrator2: LlmValueFunction trait LLM 口 0 装 + HeuristicValue 确定性启发式先行 + ReflectionRefiner 复用 E1 反思产物入树 + LatsPlanner max-backup, 骨架签名零改动, 7 组测试) |
 | E3 | **校准诊断 + 集合预报 + 预测市场适配器** | 进化调研 | oracle 补 Brier 分解 (reliability/resolution) + 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器 (oracle_adapters 已有模式) | ⬜ 团队可干 (P1) |
 | E4 | **好奇驱动内在动机** | 进化调研 | 完全空白: 预测误差 (Brier 意外度) / novelty → 自设学习目标 + 喂 importance_surge/做梦/提案 — **新认知器官级, 需与主人讨论定位** | ⬜ 待主人议 |
 | E5 | **技能生命周期闭环 (Voyager 升级)** | 进化调研 | voyager_api.rs 是 stub: 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 apeireth-skills 注册表 (两技能线打通) | ⬜ 团队可干 (P1, 中-大) |
-| E6 | 顺手修正: critic.rs CRITIC 引用 | 进化调研修正 | 注释写 Wang et al. 实为 Gou et al. (arXiv 2305.11738) | ⬜ 团队可干 (成本 1 分钟) |
+| E6 | 顺手修正: critic.rs CRITIC 引用 | 进化调研修正 | 注释写 Wang et al. 实为 Gou et al. (arXiv 2305.11738) | ✅ 提交 dcccdce2: critic.rs 模块注释 Wang et al. → Gou et al., arXiv 2305.11738 (voyager_api.rs 的 Wang et al. 2023 系 Voyager 原论文作者, 不动) |
 | A1 | **Handoff 委托协议** | Agent 调研 P0 | OpenAI Agents SDK 形态: `transfer_to_<agent>` 工具 + **input_filter 上下文裁剪** (解决转发全部上下文的成本/污染) + on_handoff + 动态启用 → apeireth-team-lead 既有 Orchestrator trait 上加 handoff 语义 (别再平铺 8 个调度工具) | ⬜ 团队可干 (P0) |
 | A2 | **工具输出 schema 校验 + tool guardrails** | Agent 调研 P0 | Tool trait 加输出 schema 声明 + 校验层 (tool-runtime) + 每次调用前后 guardrail/tripwire (tool-approval 复用规则引擎) + 结构化错误回灌 (模型看到错误自我修正, 非盲目重放) — 治"未验证工具结果被当真 = 幻觉传播源头" | ⬜ 团队可干 (P0) |
 | A3 | **Sessions: 会话持久化 + 自动上下文注入 + 中断恢复** | Agent 调研 P1 | run 前取历史/run 后存 items + 审批中断同会话恢复 + 拒绝时保留工具记录供重放 → apeireth-agent (AgentSession) + tool-runtime/record.rs; 与 GoalService 互补 | ⬜ 团队可干 (P1) |
