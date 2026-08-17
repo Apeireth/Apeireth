@@ -591,6 +591,7 @@ dependencies = [
 name = "apeireth-evolution"
 version = "1.2.0"
 dependencies = [
+ "apeireth-cognition",
  "apeireth-core",
  "apeireth-council",
  "apeireth-verify",
@@ -1196,6 +1197,7 @@ dependencies = [
  "apeireth-tool-runtime",
  "async-trait",
  "criterion",
+ "parking_lot",
  "serde",
  "serde_json",
  "tempfile",
@@ -1416,6 +1418,7 @@ dependencies = [
  "apeireth-telemetry",
  "apeireth-tool-approval",
  "apeireth-tool-registry",
+ "apeireth-tools",
  "async-trait",
  "chrono",
  "parking_lot",
