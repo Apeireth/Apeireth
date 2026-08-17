@@ -1,32 +1,5 @@
 # apeireth-mcp
 
-> Apeireth v2.0 鎴樺尯 5 P0: Model Context Protocol skeleton (client/server + JSON-RPC 2.0 + stdio/SSE transport + tool-registry bridge, 瀛楁绾у弬鑰?MCP 2025-03-26 瑙勮寖)
+> Apeireth v2.0 战区 5 P0: Model Context Protocol skeleton (client/server + JSON-RPC 2.0 + stdio/SSE transport + tool-registry bridge, 字段级参考 MCP 2025-03-26 规范)
 
-## Status
-
-Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
-
-**No-fake**: every public type or trait documented in this crate is real.
-**Run-no-fear**: cargo check --workspace passes (0 errors).
-
-## Where to start
-
-- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
-- src/lib.rs: see top-level doc comment for module-level overview.
-
-## See also
-
-- [Apeireth conventions](../../docs/conventions/README.md)
-- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
-
----
-
-_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
-
-## R164 public API cleanup
-
-Caller site ToolKind::as_vcp_str -> as_legacy_str (1 update). 205 tests pass.
-
-## R163 lint cleanup
-
-6 -> 0 warnings. `#![allow(non_snake_case)]` per JSON-RPC spec (camelCase fields: protocolVersion / serverInfo / listChanged / inputSchema / clientInfo).
+apeireth-mcp 是 Apeireth 1.0 (AGI 操作系统) 工作区 crate 之一。完整架构见 [docs/](../../docs/README.md)。

@@ -1,47 +1,30 @@
 # apeireth-companion
 
-> Apeireth 伙伴器官 (A12.5) —— 长期跨 session 用户关系器官, 承载"用户是 AI 伙伴" 语义.
+> Apeireth 伙伴器官（1.0 核心）—— 长期跨 session 用户关系器官，承载"用户是 AI 伙伴"语义。约 25,000 行，644 测试。
 
-## 哲学锚 (per stage1 2026-08-14 清晰版)
+## 能力（对齐实际代码）
 
-- Apeireth = LLM 基地, 不是 AI 本身
-- 陪伴 = 基地提供给 LLM 的关系可能性, 不是我们定义的
-- 用户在关系里, 是 AI 的伙伴, 所以 AI 记住用户
-- 关系 = 可成长的, 跨 session 的, 有情感的, 有记忆的
+| 领域 | 模块 | 说明 |
+|---|---|---|
+| **记忆 v2** | `memory_extractor` / `memory_graph` | 重要性打分、Mem0 式对账（ADD/UPDATE/DELETE+tomb）、排名注入、双时态事实图、版本链 |
+| **世界模型** | `world_model` (W1) / `causal_world_model` (W2+W3) | LLM 反事实时间线推演 + Brier 终点校准；MCTS 因果图推演 + 记忆时间线挖因果边 |
+| **她本身** | `curiosity` (E4) / `hypothesis` (F4) / `emotion_memory` (F1) / `value_cases` (F6) / `emergence` (E7) | 好奇引擎（回声偏置+浅尝辄止+疑问路由）、假设检验闭环、主人情绪时间线、价值案例库、开口策略涌现循环 |
+| **注入管线** | `context` / `assemble` / `progressive` / `proactive_memory` | ContextAssembler（L0/L1 常驻+预算截断）、渐进式披露目录、主动预载 |
+| **工具桥** | `tool_bridge` / `observer_capture` | 工具执行 + 审批桥 + 结果即时沉淀（W5） |
+| **安全** | `job_object` / `sandbox` / `restricted_token` | Windows Job Object 沙箱、限额留痕、受限 token |
+| **daemon** | `daemon` / `dream` / `reflection` | 做梦整合、反思、涌现说话（LLM 节流+退避） |
 
-## 架构位置
+## 运行
 
-新器官 (2026-08-14 主人拍板创建). 底层用 peireth-graph-primitive (R154 property graph), 不重复发明图数据.
+```bash
+cargo run -p apeireth-companion --example companion_serve   # :8090 OpenAI 兼容伙伴端点
+cargo test -p apeireth-companion --lib                        # 644 测试
+cargo run -p apeireth-companion --example tp_acceptance_sim   # TP 验收模拟 4/4
+```
 
-## 核心类型
+环境变量：`APEIRETH_API_KEY`（真 LLM 必需）、`APEIRETH_SEED_MEMORY`、`APEIRETH_GRANT`、`APEIRETH_DREAM_QUIET_SECONDS`。
 
-| 类型 | 作用 |
-|------|------|
-| Partner | 用户作为伙伴 (含 identity, preferences, boundaries) |
-| Bond | 关系本身 (含 stages, depth, character) |
-| Milestone | 关系里程碑 (重要事件) |
-| Timeline | 完整关系轨迹 |
-| Companion | 整个器官的根类型 |
+## 文档
 
-## 7 条桥——companion 接入点
-
-| 方向 | 桥 |
-|------|----|
-| consciousness ↔ companion | 情感进入关系 (Plutchik 状态 → bond.char) |
-| companion → voice | 关系调制表达 (bond.char → 语调选择) |
-| companion → memory | 关系是记忆的一种 (timeline → memory.persist) |
-| companion → graph-primitive | 底层图存储 |
-
-## 与 9 organ 的关系
-
-companion 是 9 organ **之外**的新器官, 因为"用户关系"这个语义不属于任何 9 organ 之一.
-
-## 诚实登记
-
-- 关系不是真实的, 是 LLM 借助这个器官产生的近似 (per 你you 哲学杂谈)
-- 用户的感受是唯一的真理 (用户说"关系在" = 关系在)
-- 这个器官不创造情感, 只承载情感留下的痕迹
-
-## 阶段
-
-A12.5 最小可用落地 (2026-08-14 主人拍板).
+- 架构：[docs/01-architecture/architecture.md](../../docs/01-architecture/architecture.md)
+- 快速开始：[docs/02-guides/quick-start.md](../../docs/02-guides/quick-start.md)
