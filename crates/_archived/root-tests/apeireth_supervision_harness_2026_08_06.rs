@@ -216,6 +216,7 @@ fn test_real_minimax_m2_7_highspeed_1_round() {
 #[test]
 fn test_100_rounds_minimax_stress() {
     // 100 轮 × 14 endpoint 压力测试 (估 5-10 min)
+    // 限流退避: 失败(429/网络)后 sleep 300ms — 连发会被 API 限流自造失败 (2026-08-18 实测 59/100 失败)
     let key = load_minimax_key();
     let start = Instant::now();
     let mut success = 0;
@@ -226,6 +227,7 @@ fn test_100_rounds_minimax_stress() {
             success += 1;
         } else {
             fail += 1;
+            std::thread::sleep(std::time::Duration::from_millis(300));
         }
     }
     let elapsed = start.elapsed();
