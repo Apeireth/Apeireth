@@ -92,6 +92,8 @@ pub struct HttpClient {
     config: KeepAliveConfig,
     /// LIFO/FIFO 请求调度池 + `max_sockets` 限流
     pool: LifoPool,
+    /// S4 出站网络策略 (None = 未接, 0 装: 不检查; Some = 每次出站过白名单 + 审计链).
+    egress: Option<std::sync::Arc<std::sync::Mutex<crate::egress::EgressPolicy>>>,
 }
 
 impl HttpClient {
@@ -141,6 +143,7 @@ impl HttpClient {
             inner,
             config,
             pool,
+            egress: None,
         })
     }
 
@@ -159,10 +162,29 @@ impl HttpClient {
         &self.pool
     }
 
+    /// 接入 S4 出站网络策略 (None = 不检查; 调用方显式接入才启用 — 0 装 PASS).
+    pub fn with_egress(mut self, policy: std::sync::Arc<std::sync::Mutex<crate::egress::EgressPolicy>>) -> Self {
+        self.egress = Some(policy);
+        self
+    }
+
+    /// 出站检查: 每次请求前过 egress 白名单 (默认拒绝) + 审计链.
+    /// 未接策略 → 放行 (0 装: 不假装已检查).
+    fn check_egress(&self, url: &str) -> Result<()> {
+        if let Some(p) = &self.egress {
+            p.lock()
+                .map_err(|_| HttpClientError::Other("egress mutex poisoned".into()))?
+                .check_outbound(url, 1.0)
+                .map_err(|e| HttpClientError::Other(format!("出站策略拒绝: {e:?}")))?;
+        }
+        Ok(())
+    }
+
     /// POST JSON 请求
     ///
     /// 走 LIFO 池调度 + `max_sockets` 限流
     pub async fn post<B: Serialize>(&self, url: &str, body: &B) -> Result<Response> {
+        self.check_egress(url)?;
         let start = std::time::Instant::now();
 
         // 1. 拿 LIFO 池 permit (max_sockets 限流, 满了会等)
@@ -211,6 +233,7 @@ impl HttpClient {
 
     /// DELETE 请求 (per R150 P1 #6 Qdrant compat — Qdrant uses DELETE for point delete)
     pub async fn delete(&self, url: &str) -> Result<Response> {
+        self.check_egress(url)?;
         let start = std::time::Instant::now();
         let _guard = self.pool.enter().await;
         let resp = self.inner.delete(url).send().await?;
@@ -227,6 +250,7 @@ impl HttpClient {
 
     /// GET 请求
     pub async fn get(&self, url: &str) -> Result<Response> {
+        self.check_egress(url)?;
         let start = std::time::Instant::now();
         let _guard = self.pool.enter().await;
         let resp = self.inner.get(url).send().await?;
