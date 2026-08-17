@@ -1255,6 +1255,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             LifecycleContext::new(&subject).with_detail("companion_serve v4 启动"),
         )
         .await;
+    // B1 Web 面板 v2 需要独立 store 引用 (AppState 已 move store, 此处先 clone)
+    let store_for_panel = Arc::clone(&store);
     let state = Arc::new(AppState {
         bridge,
         store,
@@ -1279,7 +1281,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/panel/:asset", get(panel_asset))
         .nest_service(
             "/v1/panel",
-            apeireth_api::panel_readonly::panel_router(Arc::clone(&store)),
+            apeireth_api::panel_readonly::panel_router(store_for_panel),
         )
         .with_state(state.clone());
 
