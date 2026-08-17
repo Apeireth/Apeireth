@@ -23,6 +23,7 @@ pub mod enhanced;
 mod organ_kani_proofs;
 pub mod persist;
 pub mod preset;
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 pub mod ssh;
 pub mod streaming; // TP4/N22: ShellPreset 预设命令模板 (白名单 + 参数模板填充防注入, §10 官方包最后一件)
 
