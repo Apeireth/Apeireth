@@ -64,6 +64,7 @@ pub mod html_extract;
 pub mod http_fetch;
 mod organ_kani_proofs;
 pub mod rate_limit;
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 pub mod search_aggregator; // R230 — per-host sliding window rate limit
 
 pub use anime::{AnimeError, AnimeFinder, AnimeInfo};
