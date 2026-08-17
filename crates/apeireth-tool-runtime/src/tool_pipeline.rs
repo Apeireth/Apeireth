@@ -316,8 +316,9 @@ pub trait ToolPolicyRule: Send + Sync + std::fmt::Debug {
 pub enum PolicyVerdict {
     /// 允许
     Allow,
-    /// 拒绝 (附原因)
-    Deny { reason: String },
+    /// 拒绝 (附原因; silent = 拒绝时不通知 AI, 与 tool-approval `Deny { reason, silent }` 对齐 —
+    /// N20 收尾: silent 不再丢失)
+    Deny { reason: String, silent: bool },
     /// 需主人审批 (R133.2 简化: 视为拒绝, 实际等 handler 留 R133+)
     RequireApproval,
     /// 当前规则不匹配, 下一规则判断
@@ -395,10 +396,15 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolPolicy {
                     reason: format!("tool '{}' requires approval", ctx.call.tool_name).into(),
                 });
             }
-            PolicyVerdict::Deny { reason } => {
+            PolicyVerdict::Deny { reason, silent } => {
+                // N20 收尾: silent 拒绝不通知 AI (VCP SilentReject 语义)
+                let mut msg = format!("tool '{}' denied: {}", ctx.call.tool_name, reason);
+                if silent {
+                    msg = format!("tool '{}' denied (silent)", ctx.call.tool_name);
+                }
                 return Err(PipelineError::PolicyDenied {
                     kind: StageKind::Policy,
-                    reason: format!("tool '{}' denied: {}", ctx.call.tool_name, reason).into(),
+                    reason: msg.into(),
                 });
             }
         }
@@ -934,6 +940,7 @@ mod tests {
             if call.tool_name == "Echo" {
                 PolicyVerdict::Deny {
                     reason: "stub deny".to_string(),
+                    silent: false,
                 }
             } else {
                 PolicyVerdict::Allow
