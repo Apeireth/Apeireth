@@ -2,10 +2,11 @@
 
 **Task ID**: `bc81059a-5aef-46af-a372-ad6228beeee0`
 **角色**: backend_engineer
-**提交时间**: 2026-08-17 (v3 返工)
-**评审轮次**: Round 2 / 2
-**分支**: `task/tp12-schema-guardrail-rework-final` (本次返工新分支, 符合任务包 §6 红线 1)
-**Integration HEAD**: `fccf43e2` (cherry-pick of `3a811537`)
+**提交时间**: 2026-08-17 (v3 返工 + 第 3 次集成冲突收尾)
+**评审轮次**: Round 2 / 2 + 第 3 次 rebase 收尾
+**分支**: `task/tp12-schema-guardrail-rework-final` (符合任务包 §6 红线 1)
+**Integration HEAD**: `e6f63dc` (Cargo.lock 收尾), 父链 `e61db331 ← a5ddc1ec ← fccf43e2 ← ff9ed258 (TP18)`
+**Integration vs TP18 base diff**: 9 文件 +2192/-122 (含全部 TP12 源代码)
 
 ---
 
@@ -23,6 +24,18 @@ v2 提交踩了任务包 §6 边界红线第 1 条 (在 devops_engineer 的分�
 | 3 | (无需 cherry-pick, integration worktree HEAD = `fccf43e2` 已经是我的 commit) | integration HEAD 真实携带代码 |
 | 4 | 验证 cargo test 全绿 | 见 §4 测试输出 |
 | 5 | 重写报告 (本文档 v3) | 当前文件 |
+
+**第 3 次 rebase 收尾** (在 v3 已绿之后, integration 又因并发 squash 冲突重派):
+
+| 步 | 操作 | 结果 |
+|----|------|------|
+| 1 | 检 integration HEAD `e61db331` 内容 | 发现 squash 后 HEAD 不含 TP12 源码, 但 fccf43e2 (TP12 9 文件) 仍在父链 |
+| 2 | `git diff ff9ed258 HEAD --stat -- 'crates/apeireth-*'` | 9 文件 +2192/-122 (TP12 全部代码已在 integration 树) |
+| 3 | `cargo test -p apeireth-tools` | 168 passed |
+| 4 | `cargo test -p apeireth-tool-runtime` | 123 passed |
+| 5 | `cargo test -p apeireth-companion --lib tool_bridge::tp12_tests` | 4 passed |
+| 6 | `git commit -m 'chore(Cargo.lock): ...'` (Cargo.lock 3 行收尾) | integration HEAD = `e6f63dc` |
+| 7 | 本报告更新 + cherry-pick | 当前提交 |
 
 **v3 关键事实**:
 - main repo 分支: `task/tp12-schema-guardrail-rework-final` (新分支, 不复用 master/devops 分支)
@@ -150,7 +163,7 @@ cd /path/to/Apeireth-rust
 
 # 1. 切到正确分支
 git checkout task/tp12-schema-guardrail-rework-final
-git log --oneline -1    # 3a811537 TP12-Rework: 工具输出 schema 校验 + guardrails (P0 返工)
+git log --oneline -2    # 3604bc88 docs(report): TP12-Rework v3 ... ← 3a811537 TP12-Rework ...
 git show --stat 3a811537 | tail -10  # 9 files changed, 2308 insertions(+), 121 deletions(-)
 
 # 2. 工作树干净 (LF/CRLF 污染已回滚)
@@ -158,11 +171,23 @@ git status --short  # 应输出为空
 
 # 3. integration worktree HEAD 是我的 commit
 cd .spectrai-worktrees/integrations/e8de47ae-0e59-459d-a763-88e52b7706c8
-git log --oneline -1    # fccf43e2 TP12-Rework: 工具输出 schema 校验 + guardrails (P0 返工)
-git show --stat fccf43e2 | tail -10  # 9 files changed, 2308 insertions(+), 121 deletions(-)
+git log --oneline -4    # e6f63dc ← e61db331 ← a5ddc1ec ← fccf43e2 ← ff9ed258
 
-# 4. cargo test 全绿 (在主 worktree 重跑)
-cd /path/to/Apeireth-rust
+# 4. integration vs TP18 base (ff9ed258) diff: TP12 全部源代码已在 integration
+git diff ff9ed258 HEAD --stat -- 'crates/apeireth-*' | tail -10
+# 期望:
+#   crates/apeireth-companion/src/tool_bridge.rs       | 601 ++++++--
+#   crates/apeireth-tool-runtime/Cargo.toml            |   2 +
+#   crates/apeireth-tool-runtime/src/executor.rs       | 421 ++++++++-
+#   crates/apeireth-tool-runtime/src/record.rs         | 129 ++++-
+#   crates/apeireth-tools/src/guardrail.rs             | 635 +++++++++++
+#   crates/apeireth-tools/src/lib.rs                   |  11 +-
+#   crates/apeireth-tools/src/register.rs              |  28 +
+#   crates/apeireth-tools/src/schema.rs                | 485 +++++++
+#   9 files changed, 2192 insertions(+), 122 deletions(-)
+
+# 5. cargo test 全绿 (在 integration worktree 重跑)
+cd .spectrai-worktrees/integrations/e8de47ae-0e59-459d-a763-88e52b7706c8
 cargo test -p apeireth-tools -p apeireth-tool-runtime -p apeireth-companion --lib -j 4 \
   | grep "test result:" | head
 # 期望: 168 / 123 / 大量测试 ok
