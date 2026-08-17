@@ -1425,6 +1425,8 @@ dependencies = [
 name = "apeireth-tool-search"
 version = "1.2.0"
 dependencies = [
+ "apeireth-tool-registry",
+ "async-trait",
  "parking_lot",
  "serde",
  "serde_json",
