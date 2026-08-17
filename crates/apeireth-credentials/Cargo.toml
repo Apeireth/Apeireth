@@ -5,12 +5,24 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 统一凭据存取层 (TP3/N21): 按服务名读写凭据 (CredentialsStore trait + 文件形态后端) + 权限洋葱衔接 (高危凭据走审批门 trait 口) + 脱敏红线 (明文不入日志/错误). 0 假装'安全存储': 本层是存取抽象, 加密静态存储属后续层"
+description = "Apeireth 统一凭据存取层 (TP3/N21): 按服务名读写凭据 (CredentialsStore trait + 文件形态后端) + 权限洋葱衔接 (高危凭据走审批门 trait 口) + 脱敏红线 (明文不入日志/错误). TP20-S3 塞缝批: 加 KeyringBackend trait + 平台 keyring 后端 + EncryptedFileBackend fallback (chacha20poly1305) + SecretBuf zeroize + 审计 (name_hash 不含明文)"
 
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+# TP20-S3 (塞缝批, 安全凭证): 平台 keyring 自动选 Linux/macOS/Windows
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+# TP20-S3: SecretBuf Drop 零化 + EncryptedFileBackend master.key 零化
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+# TP20-S3: EncryptedFileBackend 加密原语 (AEAD, 业界标准)
+chacha20poly1305 = "0.10"
+# TP20-S3: master.key / nonce 随机源
+rand = "0.8"
+# TP20-S3: 审计 name_hash (SHA-256, 跟 apeireth-host::keyring 1:1 一致)
+sha2 = "0.10"
+# TP20-S3: name_hash hex 编码
+hex = "0.4"
 
 [lib]
 name = "apeireth_credentials"
