@@ -389,6 +389,7 @@
 
 > **结果**: companion 511/511 全绿 (验收前 1 FAIL + 1 HANG; 修后无挂起无失败)。
 > **提交**: 060bd2a (团队分支 task/tp12-schema-guardrail-rework-final) = b60811f2 (integration, cherry-pick 同内容)。
+> **补测 (2026-08-18 晚)**: 主人追问"模拟测试过吗" → 补全量回归 + 真实路径模拟。`cargo test --workspace` 39 组全绿; 新增 `tp_acceptance_sim` (companion example, 4 场景 4/4 PASS: TP11 handoff / TP12 schema+guardrail / TP18 校准+预报+市场+Critic / TP20 ApprovalBridge); 全量暴露 examples 层 3 处团队遗漏 → 已修 (提交 9aa4e2f = 6523b058)。
 
 | 修复 | 根因 | 修法 | 性质 |
 |---|---|---|---|
