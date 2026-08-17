@@ -46,7 +46,7 @@
 | R152 | NEW apeireth-workflow (Temporal-style 引擎, 550 行, 13 tests) | `crates/apeireth-workflow/README.md` |
 | R150 | P1 补弱 6/7: vector qdrant_compat / state statechart / cron scheduler / council session_capture / eval swe_bench / test property_tests (+76 tests) | `docs/r150/r150-p1-six-modules.md` |
 | R149 | 终极补弱 5/5: tool-fetch / skills anthropic_skills / runtime LlmWorker / graph ThreadCheckpointStore / formal l0_ha multisig (+78 tests) | `docs/r149/r149-p0-five-modules.md` |
-| R148 | 24 LOCKED 形式撤销扫尾 (仅保 3 项不可变脊柱) + 修 3 个 pre-existing test bugs | `docs/conventions/10-locked.md` |
+| R148 | 24 LOCKED 形式撤销扫尾 (仅保 3 项不可变脊柱) + 修 3 个 pre-existing test bugs | `docs/archive/conventions/10-locked.md` |
 | R147 | NEW apeireth-runtime (7 模块端到端 orchestration, 10 tests) | `crates/apeireth-runtime/README.md` |
 | R146 | 优雅化总修复: vcp-bridge→protocol-bridge, 5 SDK→1, 3 内存→1, 12 README 补 | — |
 | R145 | VCP 终极差距补弱完工 (7 模块, 67+ tests) | `temp/r145_final_report.md` |
@@ -76,10 +76,10 @@
 
 ### Added — docs + conventions
 
-- 新建 [`docs/conventions/16-crate-merge-policy.md`](docs/conventions/16-crate-merge-policy.md) (16 子规范, §1-§7: 入口签名冻结降级 / frozen / merge / archive 流程)
-- [`docs/conventions/10-locked.md`](docs/conventions/10-locked.md) 加 R128 段
-- [`docs/CONTEXT-HANDOVER.md`](docs/CONTEXT-HANDOVER.md) §12 R128 补记
-- [`docs/pages-source/roadmap.md`](docs/pages-source/roadmap.md) §3.5 R128 实际执行
+- 新建 [`docs/archive/conventions/16-crate-merge-policy.md`](docs/archive/conventions/16-crate-merge-policy.md) (16 子规范, §1-§7: 入口签名冻结降级 / frozen / merge / archive 流程)
+- [`docs/archive/conventions/10-locked.md`](docs/archive/conventions/10-locked.md) 加 R128 段
+- [`docs/archive/top-level/CONTEXT-HANDOVER.md`](docs/archive/top-level/CONTEXT-HANDOVER.md) §12 R128 补记
+- [`docs/archive/pages-source/roadmap.md`](docs/archive/pages-source/roadmap.md) §3.5 R128 实际执行
 - `Cargo.toml` metadata 加 R128 + decision-130 注释 (B1/A1/A3/B3/B4/B5/C1 解除状态)
 
 ### Added — 51/51 active crate README
