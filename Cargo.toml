@@ -199,6 +199,7 @@ members = [
     # + R11 baseline 3 值 0 删 0 改 (A1 严守) + 8 硬墙 0 越界 + 0 装 PASS 严守.
     # 0 主动 commit (Mavis 整合 #5 拍板) + 0 push (等 1.0 release 配 GitHub remote).
     "crates/apeireth-library-governance",
+    "crates/release-tools",  # TP20-S5 塞缝批: 发布期供应链验证 (vet/audit/deny + SBOM) 的工程化锚点 (零运行时)
 ]
 
 # ============================================================================
