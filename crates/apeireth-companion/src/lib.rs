@@ -89,7 +89,10 @@ pub mod context_rot; // M1: Context Rot 度量 + compaction 段编辑原语 (rot
 pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
 pub mod assemble;
 pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
-pub mod sandbox;  // B3: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + Sandboxie/landlock trait 留口)
+pub mod sandbox;  // B3 + S1: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + 完整性级别 + deny-only SID + 目录 ACL 根 + AppContainer 档 + Sandboxie/landlock trait 留口)
+pub mod restricted_token;  // S1: Windows 受限 token (CreateRestrictedToken + TokenIntegrityLevel + DACL)
+pub mod directory_acl;  // S1: 工具沙盒根目录 read-only DACL (与 APEIRETH_TOOL_FS_ROOTS 协作)
+pub mod app_container;  // S1: AppContainer 档 trait 口 (高危, 0 装 PASS)
 pub mod critic;  // P2#10: CRITIC 反思带工具调用 (声明提取 + 验证 trait + 组合器)
 pub mod hello;  // P3#22: Windows Hello 真绑机制口 (检测 + 绑定 trait, 0 装 PASS)
 pub mod exec_worker;
