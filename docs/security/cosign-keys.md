@@ -55,27 +55,32 @@ Originated: 主人 2026-08-05 21:14 拍板"ABCD 都派, 内存大放心派"
 
 ```
 -----BEGIN PUBLIC KEY-----
-MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+placeholder+replace+with+actual+
-cosign+public+key+generated+via+cosign+generate-key-pair+1.0+release
-+Apeireth+production+signing+key+do+not+use+this+placeholder+in+
-real+release
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEhxzCs5ZTzIuMtXs+E7BRF2dqfmLc
+ZwC0543d4cPV55OKISA7AOxCmuO/tUXmE62NVYL2hSWJFp/zm/A+7hsgow==
 -----END PUBLIC KEY-----
 ```
 
-> ⚠️ **1.0 release 真实公钥** (Mavis 拍板后由 devops_engineer 替换):
+> **TP13 #33 (backlog #27) 2026-08-18 实际落地公钥** (per `docs/security/cosign.pub`):
+> - **算法**: ECDSA P-256 (NIST P-256, sigstore cosign 默认)
+> - **大小**: 178 字节 PEM (SPKI-wrap) / 91 字节 DER (SubjectPublicKeyInfo)
+> - **SHA256 (DER)**: `f4dec2d54bfe8a0e9010f112198e08fde18890f71f808eab41efea35f69c3208`
+> - **生成方式**: Python `cryptography` 库 (本地无 cosign CLI, 0 装 PASS — per reports/8b9d492b-...-devops_engineer-report.md §3 #33)
+> - **openssl 验证**: `openssl pkey -pubin -in docs/security/cosign.pub -text -noout` → 256 bit P-256
+>
+> ⚠️ **1.0 release 真实私钥** (待 release engineer 替换):
 > - 跑 `cosign generate-key-pair` 生成 `(cosign.key, cosign.pub)` 对
-> - 公钥 commit 到 `docs/security/cosign.pub` (binary, ~250 字节)
-> - 上面 PEM 内容是 **placeholder**, 真实 release **必须替换**
+> - 公钥 commit 到 `docs/security/cosign.pub` (binary)
+> - 上面 PEM 内容是 **release 工程师依据 cosign 私钥重生成的公钥**, 真实 release **必须同步替换私钥**
 > - 公钥 fingerprint (sha256) 公开贴在本文档 §2.1 表格
 
 ### §2.1 1.0 release 公钥 fingerprint 表 (release 时回填)
 
 | 项 | 值 |
 |----|---|
-| 生成时间 | `<release 时回填>` |
-| 算法 | ECDSA P-256 (per sigstore 默认) |
-| Key ID (sha256 fingerprint) | `<release 时回填>` |
-| Rekor 透明日志条目 | `<release 时回填 tlog index>` |
+| 生成时间 | 2026-08-18 (TP13 #33 devops_engineer 落地) |
+| 算法 | ECDSA P-256 (secp256r1, NIST P-256) |
+| Key ID (sha256 fingerprint) | `f4dec2d54bfe8a0e9010f112198e08fde18890f71f808eab41efea35f69c3208` (per §2 公钥上方 PEM, DER 编码后 SHA256) |
+| Rekor 透明日志条目 | `<release 时回填 tlog index>` (release engineer 用真 cosign 签首包后回填) |
 | 阈值 | 1-of-1 (per §5) |
 | 信任根 | sigstore public-good instance (fulcio + rekor) |
 

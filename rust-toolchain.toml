@@ -1,4 +1,11 @@
+# TP13 #41 (backlog #41): pin 具体版本 1.97.1
+# 0 装 PASS: 当前本地 rustc --version = 1.97.1 (8bab26f4f 2026-07-14)
+# 升级规则: 升版前由 Leader 拍板 + 配套 CI workflow dtolnay/rust-toolchain@stable 同步改 pinned
+# 改动说明: 原 channel = "stable" (会随时间漂移) → 改为 "1.97.1" (可重现构建)
+# 注意: CI 仍用 dtolnay/rust-toolchain@stable (per .github/workflows/*.yml 33 处),
+#       本文件在 dtolnay 之后被读, 仅影响本地/集成环境; 两者版本一致时最稳
+# 见 reports/8b9d492b-...-devops_engineer-report.md §3 #41 项
 [toolchain]
-channel = "stable"
+channel = "1.97.1"
 components = ["rustfmt", "clippy", "rust-src"]
 profile = "minimal"
