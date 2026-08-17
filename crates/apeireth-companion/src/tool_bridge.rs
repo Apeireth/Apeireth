@@ -386,6 +386,23 @@ impl ToolBridge {
         if let Err(e) = apeireth_tools::register_all(&registry) {
             eprintln!("[bridge] register_all 部分失败: {e}");
         }
+        // N17/TP2: 9 工具子 crate 统一装配 (§10 铁边界 ② Tool+ToolRegistry.register+ToolBridge 三件套)
+        // 每个 register() 失败如实 eprintln 打点, 不阻断其余装配 (集成而非分立).
+        for (label, res) in [
+            ("EnhancedShell", apeireth_tool_shell::register::register(&registry)),
+            ("FetchEngine", apeireth_tool_fetch::register::register(&registry)),
+            ("EnhancedBrowser", apeireth_tool_browser::register::register(&registry)),
+            ("CodeIntelligence", apeireth_tool_codesearch::register::register(&registry)),
+            ("ImageGenEnhanced", apeireth_tool_image_gen::register::register(&registry)),
+            ("ImageProcess", apeireth_tool_image_process::register::register(&registry)),
+            ("VSearch", apeireth_tool_search::register::register(&registry)),
+            ("EnhancedFileOps", apeireth_tool_filesystem::register::register(&registry)),
+            ("RepoQualityAnalyzer", apeireth_repo_tools::register::register(&registry)),
+        ] {
+            if let Err(e) = res {
+                eprintln!("[bridge] N17 register `{label}` 部分失败: {e}");
+            }
+        }
         registry.register(
             "recall_memory".to_string(),
             Arc::new(RecallMemoryTool::new(Arc::clone(&store))),
@@ -454,6 +471,11 @@ impl ToolBridge {
                 "goal_complete".to_string(),
                 "goal_pause".to_string(),
                 "goal_block".to_string(),
+                // N17/TP2: 4 只读 N17 工具扩入日常包白名单 (网络/写盘/执行 5 件仍走 RiskRule 高危分级)
+                "VSearch".to_string(),
+                "CodeIntelligence".to_string(),
+                "RepoQualityAnalyzer".to_string(),
+                "ImageProcess".to_string(),
             ])),
             Box::new(RiskRule::with_categories(
                 5 * 60 * 1000,
@@ -1406,4 +1428,83 @@ mod tests {
 
     // 带真 worker 的沙盒限额 e2e 在 tests/exec_worker_isolation.rs
     // (CARGO_BIN_EXE_exec_worker 仅集成测试可用).
+
+    // ===== N17/TP2: 9 工具子 crate 装配端到端验收 =====
+
+    #[tokio::test]
+    async fn n17_tool_bridge_registers_all_nine_and_catalog_reflects() {
+        use apeireth_tool_registry::catalog::CapabilityCatalog;
+
+        let store = std::sync::Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(std::sync::Arc::clone(&store));
+        let names = bridge.registry().names();
+        for tool in [
+            "EnhancedShell",
+            "FetchEngine",
+            "EnhancedBrowser",
+            "CodeIntelligence",
+            "ImageGenEnhanced",
+            "ImageProcess",
+            "VSearch",
+            "EnhancedFileOps",
+            "RepoQualityAnalyzer",
+        ] {
+            assert!(
+                bridge.registry().get(tool).is_some(),
+                "[N17] 装配后 `{tool}` 不在 registry"
+            );
+        }
+        for tool in [
+            "EnhancedShell",
+            "FetchEngine",
+            "EnhancedBrowser",
+            "CodeIntelligence",
+            "ImageGenEnhanced",
+            "ImageProcess",
+            "VSearch",
+            "EnhancedFileOps",
+            "RepoQualityAnalyzer",
+        ] {
+            assert!(names.contains(&tool.to_string()), "[N17] names() 缺 `{tool}`");
+        }
+        let cat = CapabilityCatalog::from_registry(bridge.registry().as_ref());
+        assert_eq!(cat.len(), 9, "[N17] catalog 应含 9 件 N17 工具");
+        let mut sorted = cat.names();
+        sorted.sort();
+        assert_eq!(cat.names(), sorted, "[N17] catalog 排序应确定性");
+        let md = cat.render_markdown();
+        assert!(md.contains("| EnhancedShell |"), "[N17] markdown 应含首件");
+        assert!(md.contains("| RepoQualityAnalyzer |"), "[N17] markdown 应含末件");
+    }
+
+    #[tokio::test]
+    async fn n17_nine_register_unregister_round_trip_zero_residue() {
+        let registry = apeireth_tool_registry::ToolRegistry::new();
+        let nine: Vec<(
+            &str,
+            fn(&apeireth_tool_registry::ToolRegistry) -> Result<(), String>,
+            fn(&apeireth_tool_registry::ToolRegistry) -> bool,
+        )> = vec![
+            ("EnhancedShell", apeireth_tool_shell::register::register, apeireth_tool_shell::register::unregister),
+            ("FetchEngine", apeireth_tool_fetch::register::register, apeireth_tool_fetch::register::unregister),
+            ("EnhancedBrowser", apeireth_tool_browser::register::register, apeireth_tool_browser::register::unregister),
+            ("CodeIntelligence", apeireth_tool_codesearch::register::register, apeireth_tool_codesearch::register::unregister),
+            ("ImageGenEnhanced", apeireth_tool_image_gen::register::register, apeireth_tool_image_gen::register::unregister),
+            ("ImageProcess", apeireth_tool_image_process::register::register, apeireth_tool_image_process::register::unregister),
+            ("VSearch", apeireth_tool_search::register::register, apeireth_tool_search::register::unregister),
+            ("EnhancedFileOps", apeireth_tool_filesystem::register::register, apeireth_tool_filesystem::register::unregister),
+            ("RepoQualityAnalyzer", apeireth_repo_tools::register::register, apeireth_repo_tools::register::unregister),
+        ];
+        for (name, reg, _) in &nine {
+            reg(&registry).unwrap_or_else(|e| panic!("[N17] `{name}` register 失败: {e}"));
+            assert!(registry.get(name).is_some(), "[N17] `{name}` register 后 get 查不到");
+        }
+        assert_eq!(registry.len(), 9, "[N17] 9 件 register 后 registry 应为 9 件");
+        for (name, _, unreg) in &nine {
+            assert!(unreg(&registry), "[N17] `{name}` 首次 unregister 应返 true");
+            assert!(registry.get(name).is_none(), "[N17] `{name}` unregister 后残留");
+            assert!(!unreg(&registry), "[N17] `{name}` 重复 unregister 应返 false (幂等)");
+        }
+        assert_eq!(registry.len(), 0, "[N17] 9 件全卸后 registry 应为 0 件 (0 残留)");
+    }
 }
