@@ -1,0 +1,28 @@
+[package]
+name = "apeireth-wiki"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "TP28 Markdown 知识库 (llm_wiki 模式, 文件树 + 索引 + 检索)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+parking_lot = "0.12"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lib]
+name = "apeireth_wiki"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

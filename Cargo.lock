@@ -1487,6 +1487,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "serde_yaml",
  "shell-words",
  "tempfile",
  "thiserror 1.0.69",
@@ -1676,6 +1677,21 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "apeireth-wiki"
+version = "1.2.0"
+dependencies = [
+ "anyhow",
+ "apeireth-core",
+ "chrono",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]
