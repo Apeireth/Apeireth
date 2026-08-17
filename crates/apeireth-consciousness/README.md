@@ -1,24 +1,10 @@
 # apeireth-consciousness
 
-> Apeireth 鎰忚瘑瀛愮郴缁?(A12 鈥?Cognitive-Dream 6 鐘舵€佹満: Awake/Reflecting/Dreaming/Meditating/SelfDisabling/Recovering)
+> Apeireth 意识子系统 (A12 — Cognitive-Dream 6 状态机: Awake/Reflecting/Dreaming/Meditating/SelfDisabling/Recovering)
 
-## Status
+Apeireth 1.0 工作区 crate。src 模块: emotion / lib / memory_bridge / memory_kani_proofs / organ_kani_proofs / plutchik_engine / plutchik_integration / plutchik。测试数(单测标注): 115。
 
-Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
+## 文档
 
-**No-fake**: every public type or trait documented in this crate is real.
-**Run-no-fear**: cargo check --workspace passes (0 errors).
-
-## Where to start
-
-- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
-- src/lib.rs: see top-level doc comment for module-level overview.
-
-## See also
-
-- [Apeireth conventions](../../docs/conventions/README.md)
-- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
-
----
-
-_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+- 架构: [docs/01-architecture/architecture.md](../../docs/01-architecture/architecture.md)
+- 索引: [docs/03-reference/crates.md](../../docs/03-reference/crates.md)
