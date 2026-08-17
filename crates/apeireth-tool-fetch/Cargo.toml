@@ -21,6 +21,8 @@ tracing = "0.1"
 url = "2.5"
 regex = "1.10"
 apeireth-http-client = { path = "../apeireth-http-client" }
+# N17/TP2: 装配统一注册件需要 Tool/ToolKind/ToolAxes (register.rs)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
