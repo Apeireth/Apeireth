@@ -359,3 +359,41 @@
 | TP10 | **ThoughtCluster 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
 
 **执行顺序建议**：TP3 → TP2 → TP4（装配主链）；TP1 并行；TP5/TP6/TP8（上下文组）并行；TP7（食粮）与 TP10 靠后；TP9 全程（先立规范再干活）。
+
+---
+
+## 11. 批次任务包：调研吸收批（2026-08-18, 主人拍板交付团队）
+
+> **定位**: 4 路模块对标调研（记忆/安全/进化/Agent）的落地批。台账编号可追溯（M*/S*/E*/A*）。
+> 分工: 批次按依赖分组, 组内可并行; 每包按 §9 模板拆细, 边界以本节为准。
+> **已完成参考**: TP1-TP10 多数已完成 (N16 三件套/N17 工具装配/N21 credentials/N22 ShellPreset 等 ✅)。
+
+### 批次一（立即派, 双 P0 核 + 卫生）
+
+| 包 | 名称 | 挂接机制 | 边界要点 | 验收要点 |
+|---|---|---|---|---|
+| TP11 | **Handoff 委托协议**（A1, P0） | apeireth-team-lead Orchestrator trait 扩展 | `transfer_to_<agent>` 工具语义 + **input_filter 上下文裁剪**（只传必要上下文, 治污染/成本）+ on_handoff + 动态启用; 不新建 crate, 在既有 14 工具白名单上扩展 | handoff 委托/上下文裁剪/动态禁用测试 |
+| TP12 | **工具输出 schema 校验 + guardrails**（A2, P0） | Tool trait + tool-runtime + tool-approval | Tool trait 加输出 schema 声明 + 校验层 + 调用前后 guardrail/tripwire + **结构化错误回灌**（模型见错自修正, 非盲目重放）— 治幻觉传播源头; 禁止引入新框架 | 校验拒绝/guardrail 触发/错误回灌测试 |
+| TP13 | **卫生批清理**（50/27/31/32/33/39/41/42/43/44/45/48） | 仓库卫生 + release 前置 | cosign.pub 生成 / CODEOWNERS 悬空 / 误产物+db 泄漏 / 孤儿确认 / clippy+fmt / rust-toolchain pin / 残留清理 / FileOperator 参数契约修; 1 人专职, 不许碰核心机制文件 | 每项对应台账划 ✅ |
+
+### 批次二（紧接着, 上下文三件套）
+
+| 包 | 名称 | 挂接机制 | 边界要点 | 验收要点 |
+|---|---|---|---|---|
+| TP14 | **Sessions 会话持久化 + 中断恢复**（A3, P1） | apeireth-agent AgentSession + tool-runtime/record | run 前取历史/run 后存 items + 审批中断同会话恢复 + 拒绝保留工具记录供重放; 与 GoalService 互补 | 持久化/恢复/中断重放测试 |
+| TP15 | **OneRing 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本; SQLite 内容寻址 + fuzzy diff 对账; 来源标记 | 多前端同一叙事/来源标记测试 |
+| TP16 | **上下文编辑 + Context Rot 度量**（M1） | context.rs + continuation.rs | rot_score（重复/陈旧/相关性启发式, 确定性 0 LLM 先行）+ compaction 改 LLM 参与的 retain/remove/replace 段编辑; 不另立模块 | 编辑原语/rot 评分/触发策略测试 |
+
+### 批次三（进化链, 顺序执行）
+
+| 包 | 名称 | 挂接机制 | 边界要点 | 验收要点 |
+|---|---|---|---|---|
+| TP17 | **技能生命周期闭环**（E5） | apeireth-evolution voyager_api + apeireth-skills 打通 | 自动课程 + LLM 生成技能 + evolution_gate 可执行验证 + 落 skills 注册表（两技能线合一）; 0 装: LLM 生成失败如实降级 | 技能生成/验证/入库/复用测试 |
+| TP18 | **校准诊断 + 集合预报 + 预测市场**（E3） | oracle + oracle_adapters | Brier 分解（reliability/resolution）+ 校准桶直方图 + log-odds 集成 + Polymarket/Manifold 适配器（mock 先行） | 分解/集成/适配器测试 |
+| TP19 | **开口策略学习器**（E7） | organs.rs 演化门控升级（集成式增量, 不造新模块） | 复用 Feedback/三层门控/安静窗/节律/偏好库/BetaBinomial; 增量 = 开口→反应历史学成动态门控权重; 待 E4 疑问路由架子就绪后实施; 初期高熵试探 + 0 装 PASS 保守 | 权重学习/收敛/降级测试 |
+
+### 塞缝批（小活, 并行收掉）
+
+| 包 | 名称 | 说明 |
+|---|---|---|
+| TP20 | ACT-R 衰减 + 存档不删除（M3）/ prompt drift（M6）/ keyring 后端（S3）/ 出站网络策略（S4）/ vet+SBOM（S5）/ 工具结果作记忆候选（A6）/ ACI 工具 UX（A7）/ ApprovalBridge 透传（N20） | 每包 1 人, 全小活; 具体边界按台账对应条目 |
