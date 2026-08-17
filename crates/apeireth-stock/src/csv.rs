@@ -72,6 +72,8 @@ impl CsvRow {
             currency: self.currency.trim().to_string(),
             market_cap: parse_f64(&self.market_cap),
             ipo_year: parse_i32(&self.ipo_year),
+            ipo_date: None,
+            delisted_date: None,
             provenance: default_provenance,
             last_updated_ms: ts_ms,
         }
