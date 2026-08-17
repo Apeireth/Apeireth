@@ -7,6 +7,8 @@
 //! - [`MockAdapter`] 确定性 mock + [`FallbackAdapter`] 限流/不可达降级 (真 API 限流不阻塞验收)
 //! - [`ForecastPipeline`]: 拉基线 → 登记方向预测进 [`crate::oracle::ForecastRegistry`] → 到期对照
 //!   resolve (Brier 自动入账, 校准走既有 `registry.calibration()`, 0 重写 oracle 核心)
+//! - **[`TimeSeriesPredictor`] (TP25)**: 数字信号时序预测 trait 口 (TimesFM/Kronos 本地小模型可选),
+//!   与 LLM 文本预测经 [`blend_predictions`] 融合进集合预报 (E3 增强, 0 装: 模型未接如实标注)
 //!
 //! 0 假装: 旗舰适配器写真 HTTP (reqwest, 10s 超时, 429→限流/非 200→不可达); 测试全路径走
 //! mock (拉取/规范化/失败降级/到期 resolve), 真 API 可选不阻塞; 语义约定「到期价 > 基线」判
@@ -46,6 +48,8 @@ pub enum AdapterError {
     Parse(String),
     /// 未知 symbol (适配器的能力边界, 直抛).
     Unsupported(String),
+    /// 未接/已降级 (TP25 时序模型未接入等) → 诚实 Err 可降级.
+    Degraded(String),
 }
 
 impl std::fmt::Display for AdapterError {
@@ -55,6 +59,7 @@ impl std::fmt::Display for AdapterError {
             Self::Unreachable(s) => write!(f, "不可达: {s}"),
             Self::Parse(s) => write!(f, "解析失败: {s}"),
             Self::Unsupported(s) => write!(f, "不支持的 symbol: {s}"),
+            Self::Degraded(s) => write!(f, "降级/未接: {s}"),
         }
     }
 }
@@ -62,9 +67,9 @@ impl std::fmt::Display for AdapterError {
 impl std::error::Error for AdapterError {}
 
 impl AdapterError {
-    /// 是否属于可降级错误 (限流/不可达 → 允许切 fallback; 解析/不支持 → 直抛).
+    /// 是否属于可降级错误 (限流/不可达/降级 → 允许切 fallback; 解析/不支持 → 直抛).
     pub fn degradable(&self) -> bool {
-        matches!(self, Self::RateLimited(_) | Self::Unreachable(_))
+        matches!(self, Self::RateLimited(_) | Self::Unreachable(_) | Self::Degraded(_))
     }
 }
 
@@ -766,5 +771,89 @@ mod tests {
         let p2 = ForecastPipeline::new(mock, store, "sess-7");
         let out = p2.resolve_due(&df.forecast_id).await.unwrap();
         assert!(out.actual);
+    }
+}
+
+// ============================================================
+// TP25: 时序预测器 trait 口 (TimesFM/Kronos 本地小模型可选)
+// ============================================================
+
+/// 数字信号时序预测 trait (TP25, E3 增强).
+/// 实现方: TimesFM/Kronos 等本地小模型适配器 — **0 装 PASS: 模型未接, trait 口已备**.
+pub trait TimeSeriesPredictor: Send + Sync {
+    /// 预测: 输入历史序列 (时间序), 输出 horizon 步预测.
+    fn predict(&self, series: &[f64], horizon: usize) -> Result<Vec<f64>, AdapterError>;
+    /// 模型标识 (审计/降级用).
+    fn provider(&self) -> &str;
+}
+
+/// 默认实现: 未接模型 → 诚实 Err (0 装 PASS: 不假装能预测).
+#[derive(Debug, Default)]
+pub struct NoopTimeSeriesPredictor;
+
+impl TimeSeriesPredictor for NoopTimeSeriesPredictor {
+    fn predict(&self, _series: &[f64], _horizon: usize) -> Result<Vec<f64>, AdapterError> {
+        Err(AdapterError::Degraded(
+            "NoopTimeSeriesPredictor: 时序模型未接入 (TP25 trait 口已备, 接 TimesFM/Kronos 时替换)"
+                .into(),
+        ))
+    }
+    fn provider(&self) -> &str {
+        "noop"
+    }
+}
+
+/// 数字预测 + LLM 文本预测融合 (集合预报, E3 增强).
+/// 置信度加权平均: (digital*dc + textual*tc) / (dc+tc).
+/// 双方置信度都为 0 → 退化为 0.5 (无信息先验, 0 装: 不假装有信息).
+pub fn blend_predictions(digital: f64, textual: f64, digital_conf: f64, textual_conf: f64) -> f64 {
+    let dc = digital_conf.max(0.0);
+    let tc = textual_conf.max(0.0);
+    if dc + tc <= 0.0 {
+        return 0.5;
+    }
+    let blended = (digital * dc + textual * tc) / (dc + tc);
+    blended.clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tp25_tests {
+    use super::*;
+
+    #[test]
+    fn noop_predictor_is_honest() {
+        let p = NoopTimeSeriesPredictor;
+        let err = p.predict(&[1.0, 2.0, 3.0], 5).unwrap_err();
+        assert!(matches!(err, AdapterError::Degraded(_)), "{err:?}");
+        assert_eq!(p.provider(), "noop");
+    }
+
+    #[test]
+    fn blend_confidence_weighted() {
+        // 数字高置信 0.7 + 文本低置信 0.5 → 偏向数字
+        let b = blend_predictions(0.7, 0.5, 0.9, 0.1);
+        assert!((b - 0.68).abs() < 1e-9, "b={b} (期望 0.68)");
+        // 双方零置信 → 0.5 无信息先验
+        assert_eq!(blend_predictions(0.9, 0.1, 0.0, 0.0), 0.5);
+        // 等置信 → 平均
+        let eq = blend_predictions(0.8, 0.6, 1.0, 1.0);
+        assert!((eq - 0.7).abs() < 1e-9);
+    }
+
+    #[test]
+    fn mock_predictor_injectable() {
+        struct ConstPredictor(f64);
+        impl TimeSeriesPredictor for ConstPredictor {
+            fn predict(&self, _s: &[f64], horizon: usize) -> Result<Vec<f64>, AdapterError> {
+                Ok(vec![self.0; horizon])
+            }
+            fn provider(&self) -> &str {
+                "const-mock"
+            }
+        }
+        let p = ConstPredictor(0.65);
+        let out = p.predict(&[1.0], 3).unwrap();
+        assert_eq!(out, vec![0.65; 3]);
+        assert_eq!(p.provider(), "const-mock");
     }
 }
