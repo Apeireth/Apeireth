@@ -116,6 +116,7 @@ pub mod curiosity;  // E4: 好奇驱动引擎 (记忆回声偏置采样 + 浅尝
 pub mod hypothesis; // F4: 假设检验闭环 (HypothesisStore 状态机 + VerifyPlanner + ReconcileSink 对账口, 确定性无 LLM)
 pub mod emotion_memory; // F1: 情感记忆 (主人情绪时间线 valence/arousal + 加权当前情绪 + 趋势 + 情绪上下文检索, 确定性无 LLM)
 pub mod progressive; // TP21: 渐进式披露 (目录先行→按需展开, claude-mem 借鉴, 预算截断 + 0 装省略标注)
+pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
 // R177: organ invariants
 mod organ_kani_proofs;
 
