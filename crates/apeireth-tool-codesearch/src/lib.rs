@@ -37,6 +37,7 @@ pub mod index;
 pub mod lru_cache;
 pub mod mcp;
 mod organ_kani_proofs;
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 pub mod symbols;
 pub mod unified; // R202 // R213: 真 LRU (lru crate) + streaming + batch query: 6 维 code intelligence unified facade: ast-grep CLI 包装 (R181 调研短期方案)
 

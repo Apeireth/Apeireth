@@ -32,6 +32,16 @@ apeireth-evolution = { path = "../apeireth-evolution" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
 apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
 apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+# N17/TP2: 9 工具子 crate 装配 (每个 register.rs 暴露统一注册函数)
+apeireth-tool-shell = { path = "../apeireth-tool-shell" }
+apeireth-tool-fetch = { path = "../apeireth-tool-fetch" }
+apeireth-tool-browser = { path = "../apeireth-tool-browser" }
+apeireth-tool-codesearch = { path = "../apeireth-tool-codesearch" }
+apeireth-tool-image-gen = { path = "../apeireth-tool-image-gen" }
+apeireth-tool-image-process = { path = "../apeireth-tool-image-process" }
+apeireth-tool-search = { path = "../apeireth-tool-search" }
+apeireth-tool-filesystem = { path = "../apeireth-tool-filesystem" }
+apeireth-repo-tools = { path = "../apeireth-repo-tools" }
 apeireth-tools = { path = "../apeireth-tools" }
 apeireth-guard = { path = "../apeireth-guard" }
 apeireth-sovereignty = { path = "../apeireth-sovereignty" }
