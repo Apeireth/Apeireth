@@ -681,6 +681,73 @@ impl ToolBridge {
         self
     }
 
+    /// **TP29 (生态批)**: 从 YAML spec 文件注册工具占位 (Composio 借鉴).
+    ///
+    /// **纪律**:
+    /// - 失败不破坏现有 API — 失败时返 `Err(String)`, 调用方 eprintln 处理.
+    /// - 冲突不覆盖 — 同名已注册 → 返 `Err(NameConflict)`, 现有工具链不断.
+    /// - 真实密码不入 yml — 沿用 TP33 纪律: 仅 `${VAR:?msg}` 形式, 由 `CredentialSpec::validate` 兜底.
+    ///
+    /// 真实实现挂接 (`implementation:` 字段) 后续任务做; 当前仅产"声明解析 + 占位 shim".
+    pub fn register_yaml_spec<P: AsRef<std::path::Path>>(&self, path: P) -> Result<String, String> {
+        let path_ref = path.as_ref();
+        match apeireth_tools::register_yaml_spec(&self.registry, path_ref) {
+            Ok(name) => {
+                eprintln!("[bridge] TP29 yaml_spec registered: {name} ← {}", path_ref.display());
+                Ok(name)
+            }
+            Err(e) => {
+                eprintln!(
+                    "[bridge] TP29 yaml_spec skipped ({}): {}",
+                    path_ref.display(),
+                    e
+                );
+                Err(e.to_string())
+            }
+        }
+    }
+
+    /// **TP29 (生态批)**: 批量注册目录下所有 `.yaml` / `.yml` 文件.
+    ///
+    /// 行为:
+    /// - 每个文件独立尝试加载 + 注册; 任一失败 eprintln 但不阻断后续 (granular, 与
+    ///   `load_yaml_spec_dir` 的 transactional 语义不同 — 桥接层优先保证部分可用).
+    /// - 返成功注册的 spec 名称列表 (按文件名字典序).
+    /// - 同名冲突 → 跳过, 不覆盖现有工具.
+    pub fn register_yaml_spec_dir<P: AsRef<std::path::Path>>(&self, dir: P) -> Vec<String> {
+        let dir_ref = dir.as_ref();
+        let mut names = Vec::new();
+        let read_dir = match std::fs::read_dir(dir_ref) {
+            Ok(rd) => rd,
+            Err(e) => {
+                eprintln!(
+                    "[bridge] TP29 yaml_spec_dir read_dir 失败: {}: {e}",
+                    dir_ref.display()
+                );
+                return names;
+            }
+        };
+        let mut entries: Vec<_> = read_dir.filter_map(|e| e.ok()).collect();
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            let path = entry.path();
+            if !path.is_file() {
+                continue;
+            }
+            let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+            if ext != "yaml" && ext != "yml" {
+                continue;
+            }
+            match self.register_yaml_spec(&path) {
+                Ok(name) => names.push(name),
+                Err(_) => {
+                    // register_yaml_spec 内部已 eprintln 详细原因; 这里保持静默即可.
+                }
+            }
+        }
+        names
+    }
+
     /// 注册 post-execute 钩子 (结果产出后、审计前执行; 可替换/拦截).
     pub fn with_post_hook(mut self, hook: Arc<dyn PostExecuteHook>) -> Self {
         self.post_hooks.push(hook);
@@ -1945,5 +2012,97 @@ fn inject_tp12_into_output(r: &ExecutionResult) -> Value {
             obj.insert("_tp12_report".into(), Value::Object(report));
             Value::Object(obj)
         }
+    }
+}
+
+// ============================================================
+// TP29 (生态批) 集成测试 — yaml_spec 与 tool_bridge 衔接
+// ============================================================
+
+#[cfg(test)]
+mod tp29_tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::TempDir;
+
+    /// 合法 YAML → register_yaml_spec 成功 + registry 可查
+    #[test]
+    fn bridge_register_yaml_spec_legal() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("eco_tool.yaml");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(
+            b"name: eco_tool\ndescription: ecological plugin\n\
+              parameters:\n  - name: query\n    type: string\n    description: q\n    required: true\n\
+              permissions:\n  - network:api.example.com\n\
+              credentials:\n  - name: api_key\n    required: false\n    env: ${ECO_API_KEY}\n",
+        )
+        .unwrap();
+        let name = bridge.register_yaml_spec(&path).expect("register ok");
+        assert_eq!(name, "eco_tool");
+        assert!(bridge.registry.get("eco_tool").is_some());
+    }
+
+    /// 非法 YAML (缺 description) → register 失败, registry 数量不变 (fail-safety)
+    #[test]
+    fn bridge_register_yaml_spec_invalid_does_not_corrupt() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let count_before = bridge.registry.len();
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("bad.yaml");
+        std::fs::write(&path, "name: bad\n").unwrap();
+        let res = bridge.register_yaml_spec(&path);
+        assert!(res.is_err(), "非法 YAML 应失败");
+        assert_eq!(bridge.registry.len(), count_before, "失败后 registry 数量应不变");
+        assert!(bridge.registry.get("bad").is_none());
+    }
+
+    /// 同名冲突 → 不覆盖现有 (返回 Err, 原工具仍在)
+    #[test]
+    fn bridge_register_yaml_spec_name_conflict() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("dupe.yaml");
+        std::fs::write(
+            &path,
+            "name: recall_memory\ndescription: clash with existing\n",
+        )
+        .unwrap();
+        // recall_memory 已被 ToolBridge::new 预注册 (apeireth-memory 工具)
+        assert!(bridge.registry.get("recall_memory").is_some());
+        let res = bridge.register_yaml_spec(&path);
+        assert!(res.is_err(), "同名应冲突拒绝");
+        // recall_memory 仍在 (未被 yaml 占位覆盖)
+        assert!(bridge.registry.get("recall_memory").is_some());
+    }
+
+    /// register_yaml_spec_dir 批量注册, 跳过多 / 失败文件, 仅成功入册
+    #[test]
+    fn bridge_register_yaml_spec_dir_mixed() {
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        let dir = TempDir::new().unwrap();
+        // 2 个合法 + 1 个非法
+        std::fs::write(
+            dir.path().join("a.yaml"),
+            "name: y_a\ndescription: a\n",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("b.yml"),
+            "name: y_b\ndescription: b\n",
+        )
+        .unwrap();
+        std::fs::write(dir.path().join("c.yaml"), "name: bad\n").unwrap();
+        let names = bridge.register_yaml_spec_dir(dir.path());
+        // 顺序: a.yaml → b.yml → c.yaml; c 失败被跳过.
+        assert_eq!(names, vec!["y_a".to_string(), "y_b".to_string()]);
+        assert!(bridge.registry.get("y_a").is_some());
+        assert!(bridge.registry.get("y_b").is_some());
+        assert!(bridge.registry.get("bad").is_none());
     }
 }

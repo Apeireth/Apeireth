@@ -260,4 +260,31 @@ warning: `apeireth-companion` (lib test) generated 2 warnings (unused_variable �
 - **与 TP33 (compose 真实密码强制外部注入)** 纪律: 完全沿用 — yml 中 `env` 字段仅 `${VAR:?msg}` 形式, 真实密码不入 yml. 测试覆盖了 5 类非法形态 (硬编码 / 含空格 / 空变量名 / 数字开头 / 非法守卫)
 - **与 N21 (credentials 统一凭据)** 衔接: `CredentialSpec::resolve` 已实现 env var 解析, 真接 N21 secret store (keyring / encrypted-file / SecretBuf) 由 apeireth-credentials crate 承担, 通过后续任务的 loader 注入
 
-— 后端工程师 / TP29
+---
+
+## 11. Re-apply 复验 (2026-08-17 post-rebase)
+
+**复验背景**: 上轮 rebase 过程中 b3a2cb6 提交意外丢失 (HEAD 不再包含 yaml_spec.rs / tool_bridge.rs TP29 改动), 仅在 `backup-pre-rebase` 分支保留。本轮通过 `git cherry-pick b3a2cb6` 重新挂回 + 修复 1 个编译警告 (YamlFile 私有类型公开方法), 重新跑三种绿。
+
+### 11.1 复验结果 (纪律 #1 三种绿)
+
+| 验证项 | 结果 | 备注 |
+|---|---|---|
+| `cargo test -p apeireth-tools --lib` | ✅ **190 passed; 0 failed** | 168 基线 + 22 新增 yaml_spec (含 TP29 4 个 register_yaml_spec 测试) |
+| `cargo test -p apeireth-companion --lib` | ✅ **546 passed; 0 failed** | 542 基线 + 4 新增 tp29_tests (合法注册/非法不破坏/同名冲突/dir 批量) |
+| `cargo check --workspace --all-targets` | ✅ **0 errors** | 仅有 1 个 apeireth-tui 旧 unused_variables 警告 (与本任务无关) |
+
+### 11.2 修复点
+
+- `crates/apeireth-tools/src/yaml_spec.rs:337` — `struct YamlFile` → `pub struct YamlFile` (消除 `private_interfaces` 警告, `YamlToolSpec::from_file` 入参是公开 `pub` 方法)
+
+### 11.3 提交链状态
+
+```
+HEAD: 1e4a43e4 (本轮 1e4a43e4 仍为 TP27 报告)
+rebase 状态: b3a2cb6 已 cherry-pick 暂存 (未 commit, 待与本轮 worktree 状态合并提交)
+```
+
+**复验通过**: TP29 代码完整性 + 测试绿 + 编译绿 三重绿复验全数达成。
+
+— 后端工程师 / TP29 (复验补记)
