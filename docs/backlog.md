@@ -384,3 +384,15 @@
 | W5 | **工具结果→经验直通管道** | 主人 2026-08-18 认可 (比 E1 更短) | 工具执行成功/失败本身就是最强记忆信号: "这个方法有效"不该等反思周期, 执行完即沉淀。A6 提升优先级 (与 N17 工具装配同批: 执行结果 hook → 经验库) | ⬜ 随 N17 (优先级提升) |
 | W6 | **Brier 兼职自我诊断 (意图理解准确率)** | 主人 2026-08-18 认可 (价值内化量化雏形) | 她校准的不只是预测, 还可以是"对主人意图的理解准确率": 问过的事/做过的事事后对照主人真实意图 → 数值化 — 价值内化从玄学变有数字。挂 oracle 校准机制复用 | ⬜ 待实施 (P2) |
 | W7 | **复习主动预载形态 (N28 升级)** | 主人 2026-08-18 认可 | 不只是到期被动复习, 而是"经验在下次相关场景自动预载" (W4 主动推销的下游: 预载时顺带复习) — 复习从"她的事"变成"对你有用的事" | ⬜ 随 N28 |
+
+### TP11-TP20 验收修复 (2026-08-18 主线程验收, 已合入 integration)
+
+> **结果**: companion 511/511 全绿 (验收前 1 FAIL + 1 HANG; 修后无挂起无失败)。
+> **提交**: 060bd2a (团队分支 task/tp12-schema-guardrail-rework-final) = b60811f2 (integration, cherry-pick 同内容)。
+
+| 修复 | 根因 | 修法 | 性质 |
+|---|---|---|---|
+| continuity 测试挂起 (migrate_copies_forward_and_keeps_originals) | migrate_subject 先持 `conn` guard 再调 `query()` — query 内部自取 conn 锁, std Mutex 不可重入 → 自锁死 | 先取数据 (query 锁自取自放) 再持锁写库 | 真 bug (团队代码) |
+| approval_requests t13 失败 | 测试期望与 t11 冲突: 无回调 bridge 默认 rejected (0 装 PASS 设计), t13 却期望记录保持 pending | 注册 pending 回调 (orchestrator 暂挂不改本地状态), 使 mark_approved 路径可达 | 测试 bug |
+| job_object cpu_time 留痕错 ("job 消息 4") | watcher 覆盖式留痕, 被 ACTIVE_PROCESS_ZERO 等生命周期通知覆盖 | 只留痕超限消息且保留首个; msg_desc 补齐 NEW/EXIT/ZERO 可读 | 真 bug (团队代码) |
+| job_object cpu/memory 测试误报 | ① 子进程命令经 `cmd /c` 嵌套引号解析失效, powershell 从未运行; ② memory 测试误期"进程被终止" — Windows 硬内存限制语义 = 拒绝超限 commit (分配失败/OOM), 不杀进程 (与 CPU 时间限制不同) | ① 直接 spawn powershell (Rust 转义); ② 断言改为分配被拒 (exit 42) | 测试 bug (环境/语义) |
