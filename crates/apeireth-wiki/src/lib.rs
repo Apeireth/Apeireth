@@ -373,7 +373,7 @@ fn resolve_path(root: &Path, rel: &str) -> WikiResult<PathBuf> {
 /// markdown 解析: 简化 frontmatter + title + summary + tags + links.
 ///
 /// frontmatter 格式:
-/// ```
+/// ```text
 /// ---
 /// title: ...
 /// tags: [a, b]
