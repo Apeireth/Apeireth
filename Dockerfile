@@ -40,6 +40,7 @@ COPY crates/apeireth-constraint/Cargo.toml ./crates/apeireth-constraint/Cargo.to
 COPY crates/apeireth-context-fold/Cargo.toml ./crates/apeireth-context-fold/Cargo.toml
 COPY crates/apeireth-core/Cargo.toml ./crates/apeireth-core/Cargo.toml
 COPY crates/apeireth-council/Cargo.toml ./crates/apeireth-council/Cargo.toml
+COPY crates/apeireth-credentials/Cargo.toml ./crates/apeireth-credentials/Cargo.toml  # TP33+#46: 补 manifest COPY (0bc9a8c5 后新增成员, 缺则 cargo --workspace 解析失败)
 COPY crates/apeireth-cron/Cargo.toml ./crates/apeireth-cron/Cargo.toml
 COPY crates/apeireth-environment/Cargo.toml ./crates/apeireth-environment/Cargo.toml
 COPY crates/apeireth-eval/Cargo.toml ./crates/apeireth-eval/Cargo.toml
@@ -102,6 +103,7 @@ COPY crates/apeireth-vector/Cargo.toml ./crates/apeireth-vector/Cargo.toml
 COPY crates/apeireth-verify/Cargo.toml ./crates/apeireth-verify/Cargo.toml
 COPY crates/apeireth-voice/Cargo.toml ./crates/apeireth-voice/Cargo.toml
 COPY crates/apeireth-web/Cargo.toml ./crates/apeireth-web/Cargo.toml
+COPY crates/apeireth-wiki/Cargo.toml ./crates/apeireth-wiki/Cargo.toml  # TP33+#46: 补 manifest COPY (TP28 后新增成员, 缺则 cargo --workspace 解析失败)
 COPY crates/apeireth-workflow/Cargo.toml ./crates/apeireth-workflow/Cargo.toml
 
 # 2. dummy build 触发依赖编译 (占位 src, 编译只为了锁住依赖层)
