@@ -31,6 +31,7 @@ members = [
     "crates/apeireth-motivation",
     "crates/apeireth-perception",
     "crates/apeireth-upgrade",
+    "crates/apeireth-wiki",  # TP28: Markdown 知识库 (llm_wiki 模式, 文件树 + 索引 + 检索)
     "crates/apeireth-onion",
     "crates/apeireth-council",
     "crates/apeireth-sovereignty",
