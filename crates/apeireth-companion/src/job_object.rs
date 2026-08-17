@@ -45,9 +45,11 @@ mod imp {
         JOB_OBJECT_LIMIT_PROCESS_TIME, SetInformationJobObject,
     };
     use windows_sys::Win32::System::SystemServices::{
-        JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT, JOB_OBJECT_MSG_END_OF_JOB_TIME,
-        JOB_OBJECT_MSG_END_OF_PROCESS_TIME, JOB_OBJECT_MSG_JOB_MEMORY_LIMIT,
-        JOB_OBJECT_MSG_NOTIFICATION_LIMIT, JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
+        JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT, JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO,
+        JOB_OBJECT_MSG_END_OF_JOB_TIME, JOB_OBJECT_MSG_END_OF_PROCESS_TIME,
+        JOB_OBJECT_MSG_EXIT_PROCESS, JOB_OBJECT_MSG_JOB_MEMORY_LIMIT,
+        JOB_OBJECT_MSG_NEW_PROCESS, JOB_OBJECT_MSG_NOTIFICATION_LIMIT,
+        JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
     };
 
     use crate::sandbox::SandboxConfig;
@@ -72,7 +74,7 @@ mod imp {
         std::io::Error::last_os_error().raw_os_error().unwrap_or(-1)
     }
 
-    /// job 消息 → 人类可读超限原因 (留痕用).
+    /// job 消息 → 人类可读描述 (留痕用; 超限消息带"超限"字样, 供断言区分).
     fn msg_desc(msg: u32) -> String {
         match msg {
             JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT | JOB_OBJECT_MSG_JOB_MEMORY_LIMIT => {
@@ -83,8 +85,24 @@ mod imp {
             }
             JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT => "活跃进程数上限超限".to_string(),
             JOB_OBJECT_MSG_NOTIFICATION_LIMIT => "通知限额触发 (内存/CPU 速率超限)".to_string(),
+            JOB_OBJECT_MSG_NEW_PROCESS => "job 内新进程加入".to_string(),
+            JOB_OBJECT_MSG_EXIT_PROCESS => "job 内进程退出".to_string(),
+            JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO => "job 内进程已清空".to_string(),
             other => format!("job 消息 {other}"),
         }
+    }
+
+    /// 该消息是否代表资源超限 (区别于纯生命周期通知 NEW/EXIT/ACTIVE_PROCESS_ZERO).
+    fn is_violation_msg(msg: u32) -> bool {
+        matches!(
+            msg,
+            JOB_OBJECT_MSG_END_OF_PROCESS_TIME
+                | JOB_OBJECT_MSG_END_OF_JOB_TIME
+                | JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT
+                | JOB_OBJECT_MSG_JOB_MEMORY_LIMIT
+                | JOB_OBJECT_MSG_NOTIFICATION_LIMIT
+                | JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT
+        )
     }
 
     impl JobGuard {
@@ -192,9 +210,15 @@ mod imp {
                                         continue;
                                     }
                                     let desc = msg_desc(code);
-                                    eprintln!("[sandbox] Job Object 超限: {desc} — 系统已终止 job 内进程");
-                                    if let Ok(mut g) = v.lock() {
-                                        *g = Some(desc);
+                                    eprintln!("[sandbox] Job Object 消息: {desc}");
+                                    // 只留痕超限原因, 且保留首个 (退出/新建类
+                                    // 生命周期通知不覆盖超限留痕; 首个超限即终止因).
+                                    if is_violation_msg(code) {
+                                        if let Ok(mut g) = v.lock() {
+                                            if g.is_none() {
+                                                *g = Some(desc);
+                                            }
+                                        }
                                     }
                                 }
                             }));
@@ -333,8 +357,15 @@ mod tests {
         };
         let guard = JobGuard::with_config(&cfg).expect("job 创建");
         let start = std::time::Instant::now();
-        let mut child = std::process::Command::new("cmd")
-            .args(["/c", "powershell -NoProfile -Command \"$s=[Diagnostics.Stopwatch]::StartNew(); while($s.Elapsed.TotalSeconds -lt 60){}\""])
+        // 直接 spawn powershell (不经 cmd /c — cmd 嵌套引号会把含 () {} ; 的
+        // 脚本解析坏, 子进程"正常退出"导致测试误报; Rust Command 的 args 会正确
+        // 转义为带引号的单参数).
+        let mut child = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "$s=[Diagnostics.Stopwatch]::StartNew(); while($s.Elapsed.TotalSeconds -lt 60){}",
+            ])
             .spawn()
             .expect("spawn 子进程");
         guard.assign(child.id()).expect("assign");
@@ -356,16 +387,24 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn memory_limit_kills_child_and_leaves_trace() {
-        // 超限终止 + 留痕: 内存限 300MB, 子进程申请 800MB → 被系统终止
+    fn memory_limit_denies_allocation_and_leaves_trace() {
+        // 超限 + 留痕: 内存限 300MB, 子进程尝试申请 800MB → Windows 硬内存限制
+        // 的语义是**拒绝超限 commit (分配失败/OOM)**, 不是终止进程 (与 CPU 时间
+        // 限制"系统强制终止"不同 — 0 装 PASS, 不假装进程被杀). 脚本 try/catch:
+        // 分配成功 → exit 7 (不应发生); 分配被拒 → exit 42 (限制生效的诚实信号).
         let cfg = SandboxConfig {
             memory_limit_mb: Some(300),
             ..SandboxConfig::default()
         };
         let guard = JobGuard::with_config(&cfg).expect("job 创建");
         let start = std::time::Instant::now();
-        let mut child = std::process::Command::new("cmd")
-            .args(["/c", "powershell -NoProfile -Command \"$b=[byte[]]::new(800MB); Start-Sleep 30\""])
+        // 同上: 不经 cmd, 直接 spawn powershell (Rust 转义保证单参数传递).
+        let mut child = std::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                "try { $b = [byte[]]::new(800MB); exit 7 } catch { exit 42 }",
+            ])
             .spawn()
             .expect("spawn 子进程");
         guard.assign(child.id()).expect("assign");
@@ -373,9 +412,13 @@ mod tests {
         let elapsed = start.elapsed();
         assert!(
             elapsed < std::time::Duration::from_secs(25),
-            "子进程应被内存限额提前终止 (实际 {elapsed:?})"
+            "分配被拒应立即退出 (实际 {elapsed:?})"
         );
-        assert!(!status.success(), "超限终止不应是正常退出");
+        assert_eq!(
+            status.code(),
+            Some(42),
+            "800MB 申请应被 300MB 限额拒绝 (exit 42); 若 exit 7 说明限额未生效"
+        );
         std::thread::sleep(std::time::Duration::from_millis(500));
         let v = guard.violation();
         assert!(
