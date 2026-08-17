@@ -58,6 +58,7 @@ pub mod evolution_gate;
 pub mod oracle;
 pub mod oracle_adapters;  // N3: 预测机套件数据源适配器 (拉取→规范化→喂 oracle 可证伪预测登记)
 pub mod world_model;  // TP31/W1: 世界模型第一层 文本模拟器 (LLM 反事实推演链 + oracle Brier 终点校准)
+pub mod causal_world_model;  // TP32/W2+W3: 世界模型第二层 因果结构图推演 (memory_graph s/p/o 因果网 + MCTS + W3 边挖掘 + LLM 提议边)
 pub mod dream;
 pub mod reflection;
 pub mod thought_cluster;  // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
@@ -109,6 +110,7 @@ pub mod actions;
 pub mod tool_bridge;
 pub mod security;
 pub mod packs;
+pub mod observer_capture; // TP22: 工具执行结果即时沉淀候选 (W5 直通管道, 不等反思周期)
 // R177: organ invariants
 mod organ_kani_proofs;
 
@@ -124,6 +126,10 @@ pub use timeline::{Timeline, TimelineEntry};
 pub use emergence::{Boundaries, ConsoleDelivery, EmergenceLoop, Feedback, Initiative, InitiativeReason, LocalRelationship, NoopDelivery, RelationshipState, RhythmEstimate, RhythmEstimator, SelfScore};
 pub use actions::{select_action, Action, CapabilityCatalog};
 pub use tool_bridge::{RecallMemoryTool, ToolBridge};
+pub use observer_capture::{
+    args_hash, ExperienceCandidate, ExperienceQueue, ExperienceQueueConfig, ExperienceSource,
+    ObserverCaptureHook, Outcome, CANDIDATE_ID_PREFIX, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
+};
 pub use security::SecurityGate;
 pub use packs::{PackExpiry, PackRegistry, PermissionPack};
 pub use proactive::{ContextSource, EmptyContext, LarkDelivery, MemoryContextSource, ProactiveDriver};
