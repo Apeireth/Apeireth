@@ -111,7 +111,7 @@ impl PostExecuteHook for TraceHook {
         if r.success {
             let mut out = r.output.clone();
             if let Some(o) = out.as_object_mut() { o.insert("traced".into(), json!(true)); }
-            ExecutionResult { tool_name: r.tool_name.clone(), success: true, output: out, error: None, duration_ms: r.duration_ms }
+            ExecutionResult { tool_name: r.tool_name.clone(), success: true, output: out, error: None, duration_ms: r.duration_ms, guardrail_error: None, validation_error: None, tripwire: None }
         } else { r.clone() }
     }
 }
