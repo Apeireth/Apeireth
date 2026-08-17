@@ -124,12 +124,15 @@ pub fn migrate_subject(
         return Err(format!("迁移锚点相同 (from == to == {from}), 无需迁移"));
     }
 
-    let conn = store.conn().map_err(|e| e.to_string())?;
-
-    // ① episodes 复制前进 (append-only 安全)
+    // ① 先取数据再持锁: query 内部自取 conn 锁 (std Mutex 不可重入),
+    // 若先持 guard 再 query 会自锁死. 结果 Vec<Episode> 为 owned, 释放锁后仍有效.
     let olds = store
         .query(&EpisodeQuery::new().for_session(&from))
         .map_err(|e| e.to_string())?;
+
+    let conn = store.conn().map_err(|e| e.to_string())?;
+
+    // ② episodes 复制前进 (append-only 安全)
     let mut copied = 0usize;
     let mut skipped = 0usize;
     for ep in &olds {
@@ -154,7 +157,7 @@ pub fn migrate_subject(
         }
     }
 
-    // ② 账本表改键 (表不存在 → 0, 诚实)
+    // ③ 账本表改键 (表不存在 → 0, 诚实)
     let ledger_rekeyed = if table_exists(&conn, "onering_messages") {
         conn.execute(
             "UPDATE onering_messages SET continuity_id = ?1 WHERE continuity_id = ?2",

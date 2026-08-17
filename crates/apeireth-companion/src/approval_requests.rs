@@ -330,6 +330,15 @@ mod tests {
     fn t13_two_way_sync_mark_approved_dispatches_response() {
         let s = store();
         let bridge = Arc::new(InProcessBridge::new());
+        // 回调返回 pending (orchestrator 暂挂): apply_wire_response 不改本地状态,
+        // 记录保持 pending, mark_approved 路径才可达 (无回调默认 rejected, 见 t11).
+        bridge.on_request(|req| WireApprovalResponse {
+            chain: req.chain.clone(),
+            decision: "pending".into(),
+            decided_at: 0,
+            note: "hold".into(),
+            extra: Default::default(),
+        });
         let bridge_ref: Arc<dyn ApprovalBridge> = bridge.clone();
         record_request(
             &s,
@@ -338,13 +347,9 @@ mod tests {
             "需要批准",
             Some(&bridge_ref),
         );
-        let first = list(&s, Some("approved"))
-            .into_iter()
-            .find(|r| r.chain.starts_with("apreq-") || r.tool == "ShellExec")
-            .or_else(|| list(&s, Some("rejected")).into_iter().find(|r| r.tool == "ShellExec"))
-            .or_else(|| list(&s, Some("pending")).into_iter().find(|r| r.tool == "ShellExec"));
-        let first = first.expect("应有 1 条 ShellExec 记录");
-        let chain = first.chain.clone();
+        let pending = list(&s, Some("pending"));
+        assert_eq!(pending.len(), 1, "pending 回调下记录应保持 pending");
+        let chain = pending[0].chain.clone();
 
         // mark_approved 应触发 bridge.dispatch_response
         mark_approved(&s, &chain, Some(&bridge_ref)).unwrap();
