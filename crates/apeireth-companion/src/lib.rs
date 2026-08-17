@@ -48,6 +48,7 @@ pub mod partner;
 pub mod timeline;
 pub mod emergence;
 pub mod proactive;
+pub mod proactive_memory; // W4: 记忆主动推销 (预期话题分类 + 预载检索道 + ProactiveBlock 注入)
 pub mod organs;
 pub mod daemon;
 pub mod judicator;
@@ -133,6 +134,11 @@ pub use observer_capture::{
 pub use security::SecurityGate;
 pub use packs::{PackExpiry, PackRegistry, PermissionPack};
 pub use proactive::{ContextSource, EmptyContext, LarkDelivery, MemoryContextSource, ProactiveDriver};
+pub use proactive_memory::{
+    build_proactive_block, default_composite_channel, predict_topic, recommend_proactive_cap,
+    render_proactive_content, CompositeChannel, ImportanceChannel, KeywordChannel, MemoryCandidate,
+    PreloadChannel, ProactiveBlock, TimeChannel, TopicCue, TopicHint, TopicPrediction,
+};
 pub use organs::AwakeCompanion;
 pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
 pub use daemon::{BroadcastSink, CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, MultiSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
