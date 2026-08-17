@@ -1,26 +1,5 @@
 # apeireth-context-fold
 
-**R144** — 上下文折叠 (Context Folding)
+> Apeireth R144: context folding (FoldStrategy + FoldMarker + cross-session token accumulator), borrows ContextFoldingV2 design (origin: open-source)
 
-## 职责
-
-长上下文智能压缩: 把超出 token 预算的 message history 折叠为摘要 + 关键实体保留.
-
-## 核心能力
-
-- 摘要生成 (LLM 调用)
-- 实体提取与保留
-- 关键引用保留
-- 折叠审计 (折叠了什么, 保留了什么)
-
-## 借鉴
-
-claude-mem / Letta 的两级 memory 设计.
-
-## 0 假装
-
-✅ 摘要结构化输出 | ✅ 折叠前后可比对 | 17 单元测试
-
-## R162 lint cleanup
-
-23 -> 0 warnings (per O-5: internal helpers allow(missing_docs); public API in lib.rs).
+apeireth-context-fold 是 Apeireth 1.0 (AGI 操作系统) 工作区 crate 之一。完整架构见 [docs/](../../docs/README.md)。

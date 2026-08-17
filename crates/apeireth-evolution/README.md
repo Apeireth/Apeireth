@@ -1,24 +1,10 @@
 # apeireth-evolution
 
-> Apeireth 婕斿寲鍣ㄥ畼 鈥?6 鐘舵€佹満 + trait fail-6 + Learning/Abstraction/SelfModification/Extension + 涓?apeireth-council 闆嗘垚 鈥?R14 round5-01 (backend_engineer2)
+> Apeireth 演化器官 — 6 状态机 + trait fail-6 + Learning/Abstraction/SelfModification/Extension + 与 apeireth-council 集成 — R14 round5-01 (backend_engineer2)
 
-## Status
+Apeireth 1.0 工作区 crate。src 模块: council_bridge / critic / engine / fail / lib / library_autonomy_loop / library_autonomy / poda_cycle。测试数(单测标注): 193。
 
-Part of the Apeireth workspace (74 active crate after R128 94鈫?5 merge).
+## 文档
 
-**No-fake**: every public type or trait documented in this crate is real.
-**Run-no-fear**: cargo check --workspace passes (0 errors).
-
-## Where to start
-
-- Cargo.toml: see [dependencies](Cargo.toml) for upstream crate.
-- src/lib.rs: see top-level doc comment for module-level overview.
-
-## See also
-
-- [Apeireth conventions](../../docs/conventions/README.md)
-- [Apeireth roadmap](../../docs/pages-source/roadmap.md)
-
----
-
-_Auto-generated README per R128 batch (2026-08-12). Last-modified tracked in git log._
+- 架构: [docs/01-architecture/architecture.md](../../docs/01-architecture/architecture.md)
+- 索引: [docs/03-reference/crates.md](../../docs/03-reference/crates.md)
