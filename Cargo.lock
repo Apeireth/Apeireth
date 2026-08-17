@@ -429,6 +429,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 1.0.69",
  "tokio",
  "tokio-stream",
@@ -1413,8 +1414,6 @@ dependencies = [
 name = "apeireth-tool-search"
 version = "1.2.0"
 dependencies = [
- "apeireth-tool-registry",
- "async-trait",
  "parking_lot",
  "serde",
  "serde_json",
