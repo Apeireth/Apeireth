@@ -41,6 +41,23 @@ use tracing::{debug, info, instrument, warn};
 use apeireth_agent::{Agent, AgentManager};
 
 // ============================================================================
+// TP11 (A1, P0) Handoff 委托协议 re-export (per team-work-doc §11)
+// ============================================================================
+//
+// **设计决策** (per task §2 边界 + 实际 dep 约束):
+// - Handoff 协议的所有类型实装在 `apeireth-tool-registry::handoff` 模块
+// - 原因: apeireth-team-lead → apeireth-agent → apeireth-api → apeireth-tools
+//   是已存在的依赖链; 若 apeireth-tools → apeireth-team-lead 形成 cycle
+// - 妥协: 在 tool-registry (leaf crate, 0 apeireth-* dep) 实现 handoff, team-lead 透传 re-export
+// - team-lead 仍然是"挂接机制"的核心: Orchestrator 持有 HandoffRegistry
+pub use apeireth_tool_registry::handoff;
+pub use apeireth_tool_registry::handoff::{
+    install_handoff_tools, AgentContext, FnFilter, HandoffError, HandoffOutcome, HandoffRegistry,
+    HandoffRequest, HandoffResult, HandoffTarget, InputFilter, OnHandoff, PassthroughFilter,
+    SyncOnHandoff, TargetSnapshot, TransferTool,
+};
+
+// ============================================================================
 // m3 hallucination 防御 #3 (per m3-hallucination-defense-2026-08-05.md §2.4 + §2.1)
 // WHITELIST 编译期 hardcode, validate_tool_call 在 dispatch 前 schema 校验.
 // 防止 minimax m3 模型幻觉调用不存在的 orchestrator 工具.

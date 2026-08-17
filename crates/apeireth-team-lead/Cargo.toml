@@ -23,6 +23,9 @@ thiserror = "1.0"
 tracing = "0.1"
 # async traits
 async-trait = "0.1"
+# TP11 (A1, P0) Handoff 委托协议: parking_lot::RwLock (per apeireth-tool-registry 风格,
+# 工作区 30+ crates 已用此同步原语, 非"重型框架", 任务包新增依赖限制仅针对 LangGraph-style state machine lib)
+parking_lot = "0.12"
 # shared agent types
 apeireth-agent = { path = "../apeireth-agent" }
 apeireth-council = { path = "../apeireth-council" }
