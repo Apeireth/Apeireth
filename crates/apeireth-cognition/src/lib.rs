@@ -9,6 +9,12 @@
 //! **当前状态**: A10 最小可用落地 (P2 任务 e3523aca by database_engineer).
 //! 本 crate 提供 5+ pub fn + 5+ tests + example, 调用 V0.5/V1136 + 12 键 verdict 守门.
 //!
+//! **TP18 (E3, P1) 增量**: 校准 + 集合预报 + 预测市场
+//! - `calibration` — Brier 评分 + Murphy 单调分解 (reliability / resolution / uncertainty)
+//!   + 10-bin CalibrationBin + Expected Calibration Error
+//! - `forecast` — EnsembleForecast (Bayesian / Mean / Median 聚合, 反方加权) +
+//!   PredictionMarket (Hanson LMSR, 反方 cost subsidy)
+//!
 //! **诚实登记**: 按 handover-final-2026-08-01 §B.4 "5+ pub fn, 5+ tests, 调用 V0.5/V1136 +
 //! 12 键" 简化实现. 完整认知器官 (双洋葱 + Cognitive-Dream 6 状态机) 待 A18/A19 深化.
 //!
@@ -25,16 +31,26 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub mod consciousness_bridge;
+pub mod forecast; // TP18 (E3, P1): EnsembleForecast + PredictionMarket (LMSR)
 mod decision; // R172: bridge 1 of 7
               // R176: bridge 1 Kani proofs
 mod bridge_kani_proofs;
 // R177: organ invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 pub mod planning;
+pub mod calibration; // TP18 (E3, P1): Brier 单调分解 + CalibrationBin
 mod reflection;
 mod scoring; // A1/P2#7: MCTS/LATS 规划搜索机制 (trait 注入, 零 LLM 依赖)
 
 pub use decision::{CognitiveOutput, CognitivePipeline};
+pub use forecast::{
+    AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
+    MarketError, PredictionMarket, TradeReceipt,
+};
+pub use calibration::{
+    brier_score, brier_single, calibration_bins, decompose, expected_calibration_error,
+    BrierDecomposition, CalibrationBin, Observation, DEFAULT_NUM_BINS,
+};
 pub use planning::{
     MctsConfig, MctsPlanner, SearchAction, SearchResult, SearchState, StateEvaluator,
 };
