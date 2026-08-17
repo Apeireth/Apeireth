@@ -29,6 +29,8 @@ apeireth-lark = { path = "../apeireth-lark" }
 apeireth-asi = { path = "../apeireth-asi" }
 apeireth-council = { path = "../apeireth-council" }
 apeireth-evolution = { path = "../apeireth-evolution" }
+# TP18 校准/集合预报/预测市场 (E3 oracle 增强) — 主线程验收模拟直连
+apeireth-cognition = { path = "../apeireth-cognition" }
 # TP20-N20 ApprovalBridge — 跨 crate 审批透传契约 (companion ↔ team-lead orchestrator)
 apeireth-team-lead = { path = "../apeireth-team-lead" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
