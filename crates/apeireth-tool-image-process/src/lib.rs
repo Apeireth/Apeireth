@@ -26,6 +26,7 @@ pub mod exif;
 pub mod mcp;
 pub mod ocr;
 mod organ_kani_proofs;
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 pub mod router;
 
 pub use compat::{ImageProcessCommand, ImageProcessCompatRouter, IMAGEPROC_COMMAND_COUNT};

@@ -12,3 +12,5 @@ pub mod scan;
 /// Technical-debt, complexity, dependency, and security analysis.
 pub mod analyzer;
 mod organ_kani_proofs;
+/// N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
+pub mod register;

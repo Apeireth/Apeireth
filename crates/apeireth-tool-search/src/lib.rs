@@ -27,6 +27,8 @@
 
 #![deny(unsafe_code)]
 
+pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
+
 use std::collections::{HashMap, HashSet};
 
 use parking_lot::RwLock;

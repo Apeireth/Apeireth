@@ -51,8 +51,17 @@ impl EnhancedFileOps for StdEnhancedFileOps {
     }
 
     async fn write_atomic(&self, path: &Path, content: &[u8]) -> Result<(), EnhancedError> {
-        let canonical = self.sandbox.resolve(path).await?;
-        Ok(atomic::atomic_write(&canonical, content).await?)
+        // 写入允许"新建文件", 而 std::fs::canonicalize 对新文件在 Windows 上失败.
+        // 改为解析父目录 (确保父在沙盒允许根) + 拼文件名 — 沙盒语义: 写权限 = 父目录允许根.
+        let canonical_parent = self
+            .sandbox
+            .resolve(path.parent().unwrap_or(Path::new(".")))
+            .await?;
+        let file_name = path
+            .file_name()
+            .ok_or_else(|| EnhancedError::Atomic(AtomicWriteError::ParentNotFound(path.to_path_buf())))?;
+        let target = canonical_parent.join(file_name);
+        Ok(atomic::atomic_write(&target, content).await?)
     }
 
     async fn read_with_lock(&self, path: &Path) -> Result<(String, lock::FileLockGuard), EnhancedError> {

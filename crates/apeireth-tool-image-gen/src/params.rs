@@ -59,7 +59,7 @@ pub enum ImageStyle {
     Cinematic,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)] // N17/TP2: serde_json::from_value 用
 pub struct ImageGenParams {
     pub prompt: String,
     pub negative_prompt: Option<String>,

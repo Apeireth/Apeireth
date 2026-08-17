@@ -11,6 +11,7 @@
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use std::path::Path;
+use std::sync::Mutex; // N17: rusqlite::Connection 是 Send + !Sync, 装进 Mutex 让 PersistentTaskStore: Sync (§10 铁边界 ② Tool: Send+Sync)
 use std::time::Duration;
 use thiserror::Error;
 use uuid::Uuid;
@@ -34,7 +35,7 @@ pub struct TaskRecord {
 }
 
 pub struct PersistentTaskStore {
-    conn: Connection,
+    conn: Mutex<Connection>,
 }
 
 impl PersistentTaskStore {
@@ -51,7 +52,9 @@ impl PersistentTaskStore {
                 error TEXT
             );",
         )?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn open_in_memory() -> Result<Self, PersistError> {
@@ -60,19 +63,21 @@ impl PersistentTaskStore {
             "CREATE TABLE IF NOT EXISTS tasks (
                 task_id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                status TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 duration_ms INTEGER,
                 error TEXT
             );",
         )?;
-        Ok(Self { conn })
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
     pub fn insert(&self, name: &str) -> Result<TaskRecord, PersistError> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        self.conn.execute(
+        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        conn.execute(
             "INSERT INTO tasks (task_id, name, status, created_at) VALUES (?1, ?2, ?3, ?4)",
             params![id, name, "Running", now.to_rfc3339()],
         )?;
@@ -87,7 +92,8 @@ impl PersistentTaskStore {
     }
 
     pub fn complete(&self, task_id: &str, duration: Duration) -> Result<(), PersistError> {
-        self.conn.execute(
+        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        conn.execute(
             "UPDATE tasks SET status = ?1, duration_ms = ?2 WHERE task_id = ?3",
             params!["Completed", duration.as_millis() as u64, task_id],
         )?;
@@ -95,7 +101,8 @@ impl PersistentTaskStore {
     }
 
     pub fn fail(&self, task_id: &str, error: &str) -> Result<(), PersistError> {
-        self.conn.execute(
+        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        conn.execute(
             "UPDATE tasks SET status = ?1, error = ?2 WHERE task_id = ?3",
             params!["Failed", error, task_id],
         )?;
@@ -103,9 +110,8 @@ impl PersistentTaskStore {
     }
 
     pub fn count(&self) -> Result<i64, PersistError> {
-        let n: i64 = self
-            .conn
-            .query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
+        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        let n: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
         Ok(n)
     }
 }
