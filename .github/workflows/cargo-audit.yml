@@ -60,15 +60,17 @@ jobs:
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI
         # CI fix 2026-08: cargo-audit 0.22 默认不读项目 audit.toml (仅 ~/.cargo/audit.toml),
         # 用 --ignore 显式同步 deny.toml 的 unmaintained 清单 (真实漏洞 0 ignore)
-        run: cargo audit --json --deny warnings \
-          --ignore RUSTSEC-2024-0411 --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
-          --ignore RUSTSEC-2024-0414 --ignore RUSTSEC-2024-0415 --ignore RUSTSEC-2024-0416 \
-          --ignore RUSTSEC-2024-0417 --ignore RUSTSEC-2024-0418 --ignore RUSTSEC-2024-0419 \
-          --ignore RUSTSEC-2024-0420 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0370 \
-          --ignore RUSTSEC-2026-0173 --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
-          --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 --ignore RUSTSEC-2025-0100 \
-          --ignore RUSTSEC-2026-0174 --ignore RUSTSEC-2025-0141 \
-          > audit-report.json || echo "audit non-zero exit captured in report"
+        # 注意: run 必须用 | 块标量 (普通标量折叠换行 → `\` 续行失效 → ' --ignore' 变子命令)
+        run: |
+          cargo audit --json --deny warnings \
+            --ignore RUSTSEC-2024-0411 --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
+            --ignore RUSTSEC-2024-0414 --ignore RUSTSEC-2024-0415 --ignore RUSTSEC-2024-0416 \
+            --ignore RUSTSEC-2024-0417 --ignore RUSTSEC-2024-0418 --ignore RUSTSEC-2024-0419 \
+            --ignore RUSTSEC-2024-0420 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0370 \
+            --ignore RUSTSEC-2026-0173 --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
+            --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 --ignore RUSTSEC-2025-0100 \
+            --ignore RUSTSEC-2026-0174 --ignore RUSTSEC-2025-0141 \
+            > audit-report.json || echo "audit non-zero exit captured in report"
 
       - name: Convert JSON report to SARIF (R66)
         # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
