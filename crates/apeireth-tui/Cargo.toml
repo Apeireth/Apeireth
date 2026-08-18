@@ -10,6 +10,9 @@ description = "Apeireth TUI (R19 + R155) - ratatui 终端版, 5 nav 页面 (舰�
 [[bin]]
 name = "apeireth-tui"
 path = "src/main.rs"
+# CI fix 2026-08: bin 默认 bench=true → cargo bench 会把 bin 当 libtest harness
+# bench 跑 (不认 criterion 的 --save-baseline); TUI 无 bench 意图, 显式关掉
+bench = false
 
 # R121 续 (V2-6 战区 2.5): 加 [lib] 段, 让 bench 引用 apeireth_tui::* 替代 #[path] hack
 # 0 改 binary (main.rs 仍走 src/main.rs)
