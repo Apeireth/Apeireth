@@ -10,12 +10,6 @@ use tauri::{
     Manager, WebviewUrl, WebviewWindowBuilder,
 };
 
-/// 主窗口默认尺寸
-const MAIN_W: f64 = 1280.0;
-const MAIN_H: f64 = 820.0;
-const MAIN_MIN_W: f64 = 980.0;
-const MAIN_MIN_H: f64 = 640.0;
-
 #[tauri::command]
 fn ping() -> &'static str {
     "pong"
@@ -47,14 +41,7 @@ pub fn run() {
         .setup(|app| {
             let handle = app.handle().clone();
 
-            // 主窗口
-            let _main = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
-                .title("Apeireth 伙伴")
-                .inner_size(MAIN_W, MAIN_H)
-                .min_inner_size(MAIN_MIN_W, MAIN_MIN_H)
-                .center()
-                .resizable(true)
-                .build()?;
+            // 主窗口由 tauri.conf.json 声明 (app.windows[0] label=main), 这里不再重复创建.
 
             // 快捷窗 (Alt+Space 呼出, 先只建主窗足够; 后续 Phase 2 加 quick window)
             let _ = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html?window=quick".into()))
