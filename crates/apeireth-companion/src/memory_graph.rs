@@ -190,7 +190,7 @@ impl GraphQuery {
 /// 检索排序配置 (N6): importance 与特异性 (intrinsic residual) 的组合权重.
 ///
 /// combined = importance_weight × (importance/10) + residual_weight × specificity;
-/// 两项均 [0,1] 尺度, 权重默认各 1.0, 经 [`MemoryGraph::with_rank_config`] 可配.
+/// 两项均 `[0,1]` 尺度, 权重默认各 1.0, 经 [`MemoryGraph::with_rank_config`] 可配.
 #[derive(Debug, Clone, Copy)]
 pub struct GraphRankConfig {
     pub importance_weight: f64,
@@ -367,7 +367,7 @@ impl MemoryGraph {
         }
     }
 
-    /// N6 特异性 (intrinsic residual, 事实节点): s/p/o 实体逆频稀有度均值, [0,1].
+    /// N6 特异性 (intrinsic residual, 事实节点): s/p/o 实体逆频稀有度均值, `[0,1]`.
     /// 实体出现在越多活跃事实里越不特异; 三实体均全图唯一 → 1.0.
     /// 确定性 (无随机, 同输入同分); 计数未含的新实体按 freq=1 计 (最大特异).
     pub fn specificity(&self, f: &GraphFact) -> f64 {
@@ -382,7 +382,7 @@ impl MemoryGraph {
         (rarity(&f.subject) + rarity(&f.predicate) + rarity(&f.object)) / 3.0
     }
 
-    /// N6 组合分: importance 归一到 [0,1] 与特异性按配置权重组合.
+    /// N6 组合分: importance 归一到 `[0,1]` 与特异性按配置权重组合.
     pub fn combined_score(&self, f: &GraphFact) -> f64 {
         let imp = f64::from(f.importance).min(10.0) / 10.0;
         self.rank_config.importance_weight * imp
@@ -523,7 +523,7 @@ fn text_overlap(a: &str, b: &str) -> f64 {
 }
 
 /// 内容残差 (N6 intrinsic residual, 内容节点): 本节点特异字符中不被邻居字符集
-/// 解释的比例, [0,1]. VCP residual norm 的文本层等价 (向量层 = 邻居基解释不了
+/// 解释的比例, `[0,1]`. VCP residual norm 的文本层等价 (向量层 = 邻居基解释不了
 /// 的分量; 文本层 = 邻居字符集覆盖不了的内容).
 /// 无邻居 → 1.0 (固有最大特异); 空内容 → 0.0. 纯函数, 确定性, 无种子需求.
 fn content_residual(content: &str, neighbors: &[&str]) -> f64 {

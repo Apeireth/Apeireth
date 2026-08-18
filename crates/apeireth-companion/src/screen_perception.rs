@@ -88,7 +88,7 @@ impl ScreenPerception {
         out
     }
 
-    /// 显著性打分 `[0,1]`: 她该多在意这条事件.
+    /// 显著性打分 ``[0,1]``: 她该多在意这条事件.
     /// WindowSwitch 低 (你只是切窗), AppFocus 中, IdleResume 高 (你回来了).
     pub fn significance(&self, e: &ScreenEvent) -> f64 {
         match e.kind {
