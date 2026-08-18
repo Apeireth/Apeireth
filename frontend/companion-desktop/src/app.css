@@ -57,6 +57,31 @@
 .model-chip:hover{border-color:var(--amber-line);color:var(--amber)}
 .conn-status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
 
+/* ---------- Memory / Tools / Organs ---------- */
+.memory-tabs{display:flex;gap:6px;padding:0 42px 12px}
+.memory-tabs button{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);color:var(--muted);padding:7px 13px;font-size:12px}
+.memory-tabs button:hover{border-color:var(--amber-line);color:var(--amber)}
+.memory-tabs button.active{background:var(--amber-wash);color:var(--amber);border-color:var(--amber-line)}
+.memory-appender{max-width:640px;margin:0 42px 16px;display:flex;flex-direction:column;gap:8px;padding:12px 14px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-2)}
+.memory-appender textarea{width:100%;resize:none;border:0;outline:0;background:transparent;color:var(--text);line-height:1.5}
+.memory-appender-row{display:flex;gap:8px;align-items:center}
+.memory-appender-row select{padding:6px 10px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface-2);color:var(--text);outline:0}
+.ok-hint{color:var(--green);font-size:11px;margin:0}
+.memory-list{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:flex;flex-direction:column;gap:8px}
+.memory-item{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.memory-item:hover{border-color:var(--line-strong)}
+.memory-item-meta{display:flex;align-items:center;gap:10px;margin-bottom:6px;color:var(--faint);font-size:11px}
+.memory-item-meta small{font:10px var(--mono)}
+.memory-item p{margin:0;line-height:1.65;color:var(--text)}
+.tool-list{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:flex;flex-direction:column;gap:8px}
+.tool-item{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.tool-item-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.tool-item-head strong{color:var(--amber);font:600 13px var(--mono)}
+.tool-item p{margin:0;color:var(--muted);font-size:12px;line-height:1.6}
+.organ-list{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:flex;flex-direction:column;gap:8px}
+.organ-item{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2)}
+.organ-item pre{margin:8px 0 0;color:var(--muted);font:11px var(--mono);white-space:pre-wrap;word-break:break-all}
+
 /* ---------- Status dot ---------- */
 .status-dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;background:var(--green)}
 .status-dot.off{background:var(--faint)}

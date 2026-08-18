@@ -150,6 +150,55 @@ export function runtimeStatus(baseUrl: string, model?: string): RuntimeStatus {
 }
 
 /**
+ * Apeireth V2 记忆端点 — 记忆可视 (docs/frontend-guide.md P1-2)
+ * GET /v1/memory/episodes?limit=N&session=X → {items: Episode[]}
+ */
+export interface MemoryEpisode {
+  id: string;
+  timestamp: number;
+  role: string;
+  content: string;
+  session_id: string;
+}
+
+export async function fetchEpisodes(config: ApeirethConfig, limit = 50): Promise<MemoryEpisode[]> {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/memory/episodes?limit=${limit}`, {
+    headers: {Authorization: `Bearer ${config.apiKey}`},
+  });
+  const data = await checkJson(response) as {items?: MemoryEpisode[]};
+  return data.items || [];
+}
+
+/**
+ * Apeireth V2 工具端点 — 工具透明 (docs/frontend-guide.md P1-3)
+ * GET /v1/tools/list → 工具注册表
+ */
+export interface ToolInfo {
+  name: string;
+  description?: string;
+  args_schema?: unknown;
+}
+
+export async function fetchTools(config: ApeirethConfig): Promise<ToolInfo[]> {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/tools/list`, {
+    headers: {Authorization: `Bearer ${config.apiKey}`},
+  });
+  const data = await checkJson(response) as {tools?: ToolInfo[]};
+  return data.tools || [];
+}
+
+/**
+ * Apeireth V2 器官端点 — 器官状态
+ * GET /v1/organs → 器官列表
+ */
+export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/organs`, {
+    headers: {Authorization: `Bearer ${config.apiKey}`},
+  });
+  return checkJson(response) as Promise<unknown[]>;
+}
+
+/**
  * 会话持久化 — 存 localStorage (前端侧). Apeireth 后端记忆走 companion memory,
  * 这里只存 UI 会话历史.
  */
