@@ -326,20 +326,11 @@ pub fn prepare_child(cfg: &SandboxConfig) -> Result<PreparedChild, String> {
     if cfg.has_privilege_hardening() {
         return Err("S1 prepare_child: 非 Windows 平台未实现 (0 装 PASS, 走 no-op)".to_string());
     }
+    // 0 装: 无 hardening 时直接 None/None (不调 create_restricted_token — 它在非 Windows
+    // 对空配置返 Ok(()) 会误让 p.token 变 Some, 破坏 no-op 语义)
     Ok(PreparedChild {
-        token: crate::restricted_token::create_restricted_token(
-            &crate::restricted_token::RestrictedTokenConfig {
-                integrity_level: None,
-                deny_only_sids: Vec::new(),
-                default_dacl_open: false,
-                app_container_roots: Vec::new(),
-            },
-        )
-        .ok(),
-        dir_acl: crate::directory_acl::apply_read_only_acl(
-            &crate::directory_acl::DirAclConfig::default(),
-        )
-        .ok(),
+        token: None,
+        dir_acl: None,
     })
 }
 
