@@ -11,6 +11,13 @@ description = "Apeireth 1.0 release 必做 #10: i18n 骨架 (1:1 翻译 v0.9.21 
 keywords = ["i18n", "l10n", "translation", "locale", "agent", "toml"]
 categories = ["localization", "internationalization"]
 
+[lib]
+name = "apeireth_i18n"
+path = "src/lib.rs"
+# CI fix 2026-08: lib 默认 bench=true → cargo bench 无参数/--benches 会把 lib 当
+# libtest harness bench 跑, 不认 criterion 的 --save-baseline → 显式关掉
+bench = false
+
 [dependencies]
 # 异步运行时 (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
 tokio = { version = "1.40", features = ["full"] }
