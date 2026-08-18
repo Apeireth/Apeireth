@@ -6,7 +6,7 @@ use crate::*;
 
 #[test]
 fn r177_tl_01_tool_whitelist() {
-    assert!(TOOL_WHITELIST.len() >= 1);
+    assert!(!TOOL_WHITELIST.is_empty());
 }
 
 #[test]

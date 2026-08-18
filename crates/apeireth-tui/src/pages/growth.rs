@@ -165,7 +165,7 @@ fn render_reflection_ring(f: &mut Frame, area: Rect, style: &ThemeStyle) {
     let h = i32::from(inner.height);
     let cx = w / 2;
     let cy = h / 2 - 2;
-    let radius = (w.min(h) / 2 - 2).max(3) as f64;
+    let radius = f64::from((w.min(h) / 2 - 2).max(3));
 
     let mut lines_buf: Vec<String> = vec![String::new(); h as usize];
     for y in 0..h {

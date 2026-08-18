@@ -298,14 +298,11 @@ pub async fn sovereignty_dashboard_handler() -> impl IntoResponse {
 /// POST /sovereignty/attack — 触发攻击
 #[cfg(feature = "ssr")]
 pub async fn sovereignty_attack_handler(Form(form): Form<AttackForm>) -> impl IntoResponse {
-    let attack_type = match AttackType::from_str(&form.attack_type) {
-        Some(t) => t,
-        None => {
-            return Html(render_error_page(&format!(
-                "未知 attack_type: {} (合法值: downgrade/patch/bypass/reverse/hide)",
-                form.attack_type
-            )));
-        }
+    let Some(attack_type) = AttackType::from_str(&form.attack_type) else {
+        return Html(render_error_page(&format!(
+            "未知 attack_type: {} (合法值: downgrade/patch/bypass/reverse/hide)",
+            form.attack_type
+        )));
     };
 
     let state = sovereignty_state();

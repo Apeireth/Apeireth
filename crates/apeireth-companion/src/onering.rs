@@ -68,7 +68,10 @@ struct LedgerInner {
 
 impl OneRingLedger {
     /// 打开账本 (建表幂等). `continuity` 为锚点; 空锚点 → Err (0 装 PASS).
-    pub fn new(store: Arc<SqliteMemoryStore>, continuity: impl Into<String>) -> Result<Self, String> {
+    pub fn new(
+        store: Arc<SqliteMemoryStore>,
+        continuity: impl Into<String>,
+    ) -> Result<Self, String> {
         let continuity = continuity.into().trim().to_string();
         if continuity.is_empty() {
             return Err("continuity 锚点为空, 无法打开账本".into());
@@ -252,7 +255,8 @@ mod tests {
     fn records_and_replays_in_order() {
         let l = OneRingLedger::new(store(), "c-main").unwrap();
         l.record("user", Some("master"), "web", "你好").unwrap();
-        l.record("assistant", Some("apeireth"), "web", "主人好").unwrap();
+        l.record("assistant", Some("apeireth"), "web", "主人好")
+            .unwrap();
         let evs = l.recent(10).unwrap();
         assert_eq!(evs.len(), 2);
         assert_eq!(evs[0].role, "user");
@@ -268,8 +272,10 @@ mod tests {
         // OneRing 核心: SSE/Lark/Telegram/Web/CLI 归入同一锚点时间线
         let l = OneRingLedger::new(store(), "c-main").unwrap();
         l.record("user", Some("master"), "web", "网页问的").unwrap();
-        l.record("user", Some("master"), "openai-compat", "SSE 问的").unwrap();
-        l.record("assistant", Some("apeireth"), "proactive", "主动问候").unwrap();
+        l.record("user", Some("master"), "openai-compat", "SSE 问的")
+            .unwrap();
+        l.record("assistant", Some("apeireth"), "proactive", "主动问候")
+            .unwrap();
         l.record("user", Some("master"), "cli", "终端问的").unwrap();
         let evs = l.recent(10).unwrap();
         assert_eq!(evs.len(), 4, "四端发言应在同一时间线");
@@ -281,7 +287,8 @@ mod tests {
     fn multi_anchor_isolated() {
         let l = OneRingLedger::new(store(), "c-main").unwrap();
         l.record("user", None, "web", "A 的话").unwrap();
-        l.record_as("c-other", "user", None, "web", "B 的话").unwrap();
+        l.record_as("c-other", "user", None, "web", "B 的话")
+            .unwrap();
         assert_eq!(l.len().unwrap(), 1);
         let evs = l.recent(5).unwrap();
         assert_eq!(evs[0].content, "A 的话");
@@ -305,7 +312,9 @@ mod tests {
 
     #[test]
     fn prunes_to_max_records() {
-        let l = OneRingLedger::new(store(), "c-main").unwrap().with_max_records(3);
+        let l = OneRingLedger::new(store(), "c-main")
+            .unwrap()
+            .with_max_records(3);
         for i in 0..10 {
             l.record("user", None, "web", &format!("第{i}条")).unwrap();
         }
@@ -328,6 +337,10 @@ mod tests {
         let st = store();
         let l = OneRingLedger::new(Arc::clone(&st), "c-main").unwrap();
         l.record("user", None, "web", "账本条目").unwrap();
-        assert_eq!(st.count_by_session("c-main").unwrap(), 0, "账本与记忆管线分流");
+        assert_eq!(
+            st.count_by_session("c-main").unwrap(),
+            0,
+            "账本与记忆管线分流"
+        );
     }
 }

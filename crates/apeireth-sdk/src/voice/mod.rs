@@ -103,20 +103,22 @@ pub mod vad;
 pub mod wake;
 
 // 重新导出 (让外部 crate 一行 import 拿到所有 API, per apeireth-protocol 模式)
-pub use crate::auth::{
-    AccessToken, ApiKeyHolder, DEFAULT_TOKEN_TTL_SECONDS, DEFAULT_VOICE_API_BASE, MAX_TOKEN_TTL_SECONDS,
-    MIN_API_KEY_LENGTH, PLATFORM_NAME, PROVIDER_NAME, TYPICAL_API_KEY_LENGTH, VOICE_SCHEMA_VERSION,
+pub use crate::voice::auth::{
+    AccessToken, ApiKeyHolder, DEFAULT_TOKEN_TTL_SECONDS, DEFAULT_VOICE_API_BASE,
+    MAX_TOKEN_TTL_SECONDS, MIN_API_KEY_LENGTH, PLATFORM_NAME, PROVIDER_NAME,
+    TYPICAL_API_KEY_LENGTH, VOICE_SCHEMA_VERSION,
 };
-pub use crate::config::{
-    AudioConfig, VoiceConfig, DEFAULT_AUDIO_BIT_DEPTH, DEFAULT_AUDIO_CHANNELS, DEFAULT_AUDIO_FORMAT,
-    DEFAULT_AUDIO_LANGUAGE, DEFAULT_AUDIO_SAMPLE_RATE, VOICE_CONFIG_SECTION_COUNT,
+pub use crate::voice::config::{
+    AudioConfig, VoiceConfig, DEFAULT_AUDIO_BIT_DEPTH, DEFAULT_AUDIO_CHANNELS,
+    DEFAULT_AUDIO_FORMAT, DEFAULT_AUDIO_LANGUAGE, DEFAULT_AUDIO_SAMPLE_RATE,
+    VOICE_CONFIG_SECTION_COUNT,
 };
-pub use crate::error::{VoiceError, VoiceResult, VOICE_ERROR_VARIANT_COUNT};
+pub use crate::voice::error::{VoiceError, VoiceResult, VOICE_ERROR_VARIANT_COUNT};
 // voice_stub! 宏由 error.rs #[macro_export] 暴露到 crate 根, 直接用 `apeireth_sdk_voice::voice_stub!` 即可
-pub use crate::stt::{SttModel, SttRequest, Transcription, SUPPORTED_STT_MODELS};
-pub use crate::tts::{Audio, TtsModel, TtsRequest, SUPPORTED_TTS_MODELS};
-pub use crate::vad::{VadAlgorithm, VadConfig, VadResult, SUPPORTED_VAD_ALGORITHMS};
-pub use crate::wake::{
+pub use crate::voice::stt::{SttModel, SttRequest, Transcription, SUPPORTED_STT_MODELS};
+pub use crate::voice::tts::{Audio, TtsModel, TtsRequest, SUPPORTED_TTS_MODELS};
+pub use crate::voice::vad::{VadAlgorithm, VadConfig, VadResult, SUPPORTED_VAD_ALGORITHMS};
+pub use crate::voice::wake::{
     WakeWord, WakeWordCategory, WakeWordDetection, MAX_CUSTOM_WAKE_WORD_LENGTH,
     MIN_WAKE_WORD_LENGTH, SUPPORTED_WAKE_WORD_CATEGORIES, VOICE_DEFAULT_WAKE_WORD,
 };
@@ -135,7 +137,7 @@ use tracing::{debug, info, instrument, warn};
 // ============================================================================
 
 /// Voice SDK schema version (1:1 翻译 @anthropic-ai/voice v0.9.21, per auth 模块).
-pub use crate::auth::VOICE_SCHEMA_VERSION as SCHEMA_VERSION;
+pub use crate::voice::auth::VOICE_SCHEMA_VERSION as SCHEMA_VERSION;
 
 /// 6 核心 API 数量常量 (per task spec §3 + v0.9.21 商业版 1:1).
 pub const CORE_API_COUNT: usize = 6;
@@ -170,7 +172,10 @@ pub const STUB_MODE: bool = true;
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 ///
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 4 续 / R21)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 4 续 / R21)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 额外 1 守门工具).
 ///
@@ -562,14 +567,17 @@ pub fn assert_stub_mode_or_panic(api_name: &'static str) -> VoiceError {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     // Fixture 1: 编译期 hardcode 守门
     #[test]
     fn voice_compile_time_constants_match_k1() {
         assert_eq!(VOICE_SCHEMA_VERSION, "1");
         assert_eq!(PLATFORM_NAME, "apeireth");
-        assert!(STUB_MODE, "STUB_MODE must be true until R20 stage 4 continues / R21");
+        assert!(
+            STUB_MODE,
+            "STUB_MODE must be true until R20 stage 4 continues / R21"
+        );
         assert_eq!(PROVIDER_NAME, "anthropic-voice");
         assert_eq!(DEFAULT_VOICE_API_BASE, "https://api.anthropic.com/v1/voice");
         assert!(DEFAULT_VOICE_API_BASE.starts_with("https://"));
@@ -641,7 +649,10 @@ mod tests {
             "apeireth_voice_stub_status",
         ];
         for tool in expected {
-            assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST must contain {tool}");
+            assert!(
+                TOOL_WHITELIST.contains(&tool),
+                "TOOL_WHITELIST must contain {tool}"
+            );
         }
     }
 
@@ -650,7 +661,9 @@ mod tests {
     fn voice_is_stub_mode_returns_true() {
         assert!(is_stub_mode());
         assert_eq!(is_stub_mode(), STUB_MODE);
-        assert!(assert_stub_mode_or_panic("transcribe").to_string().contains("not implemented"));
+        assert!(assert_stub_mode_or_panic("transcribe")
+            .to_string()
+            .contains("not implemented"));
     }
 
     // Fixture 8: 6 核心 API 全部返 NotImplemented
@@ -852,8 +865,14 @@ mod tests {
         assert_eq!(VoiceClientImpl::list_apis().len(), CORE_API_COUNT);
         assert_eq!(VoiceClientImpl::list_stt_models().len(), STT_MODEL_COUNT);
         assert_eq!(VoiceClientImpl::list_tts_models().len(), TTS_MODEL_COUNT);
-        assert_eq!(VoiceClientImpl::list_wake_word_categories().len(), WAKE_WORD_CATEGORY_COUNT);
-        assert_eq!(VoiceClientImpl::list_vad_algorithms().len(), VAD_ALGORITHM_COUNT);
+        assert_eq!(
+            VoiceClientImpl::list_wake_word_categories().len(),
+            WAKE_WORD_CATEGORY_COUNT
+        );
+        assert_eq!(
+            VoiceClientImpl::list_vad_algorithms().len(),
+            VAD_ALGORITHM_COUNT
+        );
     }
 
     // 额外: health_check 编译期 assert
@@ -866,11 +885,23 @@ mod tests {
     // 额外: 5 K-1 字样守门 (源码含 "apeireth" / "voice" / "stub" / "wake" / "must-do")
     #[test]
     fn voice_5_k1_keywords_in_source() {
-        let source = include_str!("lib.rs");
-        assert!(source.contains("apeireth"), "must-do: 源码必须出现 'apeireth' (K-1 字样 #1)");
-        assert!(source.contains("voice"), "must-do: 源码必须出现 'voice' (K-1 字样 #2)");
-        assert!(source.contains("stub"), "must-do: 源码必须出现 'stub' (K-1 字样 #3)");
-        assert!(source.contains("wake"), "must-do: 源码必须出现 'wake' (K-1 字样 #4)");
+        let source = include_str!("mod.rs");
+        assert!(
+            source.contains("apeireth"),
+            "must-do: 源码必须出现 'apeireth' (K-1 字样 #1)"
+        );
+        assert!(
+            source.contains("voice"),
+            "must-do: 源码必须出现 'voice' (K-1 字样 #2)"
+        );
+        assert!(
+            source.contains("stub"),
+            "must-do: 源码必须出现 'stub' (K-1 字样 #3)"
+        );
+        assert!(
+            source.contains("wake"),
+            "must-do: 源码必须出现 'wake' (K-1 字样 #4)"
+        );
         assert!(
             source.contains("must-do") || source.contains("MUST"),
             "must-do: 源码必须出现 'must-do' 守门字样 (K-1 字样 #5)"
@@ -888,3 +919,5 @@ mod tests {
         assert!(client.config().validate().is_ok());
     }
 }
+
+use crate::voice_stub; // macro_export 宏在 crate 根 (定义在 error.rs), mod.rs 调用点需显式 use

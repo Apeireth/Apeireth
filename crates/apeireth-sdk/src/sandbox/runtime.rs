@@ -7,7 +7,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SandboxError, SandboxResult};
+use crate::sandbox::error::{SandboxError, SandboxResult};
 
 // ============================================================================
 // §1 RuntimeKind (3 variant, K-1 强校验 #2)

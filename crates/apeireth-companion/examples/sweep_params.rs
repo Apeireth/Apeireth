@@ -10,9 +10,28 @@ fn main() {
 
     let configs: Vec<(&str, LoopConfig)> = vec![
         ("default(阈0.45)", LoopConfig::default()),
-        ("conservative(阈0.6)", LoopConfig { drive_threshold: 0.6, ..LoopConfig::default() }),
-        ("eager(阈0.35)", LoopConfig { drive_threshold: 0.35, ..LoopConfig::default() }),
-        ("温和反馈(+0.03/-0.05)", LoopConfig { respond_delta: 0.03, ignored_delta: -0.05, ..LoopConfig::default() }),
+        (
+            "conservative(阈0.6)",
+            LoopConfig {
+                drive_threshold: 0.6,
+                ..LoopConfig::default()
+            },
+        ),
+        (
+            "eager(阈0.35)",
+            LoopConfig {
+                drive_threshold: 0.35,
+                ..LoopConfig::default()
+            },
+        ),
+        (
+            "温和反馈(+0.03/-0.05)",
+            LoopConfig {
+                respond_delta: 0.03,
+                ignored_delta: -0.05,
+                ..LoopConfig::default()
+            },
+        ),
     ];
 
     println!(
@@ -28,10 +47,16 @@ fn main() {
     let mut results = Vec::new();
     for (name, cfg) in &configs {
         let r = run_simulation(name, cfg.clone(), seed, days);
-        let score = r.response_rate - 0.05 * (r.policy_retires as f64) - 0.1 * r.rhythm_mae;
+        let score = r.response_rate - 0.05 * (f64::from(r.policy_retires)) - 0.1 * r.rhythm_mae;
         println!(
             "{:<26} | {:>4} | {:>5.2} | {:>6.3} | {:>6.2} | {:>4} | {:>5.2}",
-            r.name, r.initiatives, r.response_rate, r.rhythm_mae, r.final_bond, r.policy_retires, score
+            r.name,
+            r.initiatives,
+            r.response_rate,
+            r.rhythm_mae,
+            r.final_bond,
+            r.policy_retires,
+            score
         );
         results.push((r, score));
     }
@@ -39,16 +64,31 @@ fn main() {
 
     println!();
     println!("=== default 配置下, 他爱在哪些时段开口 (21 天) ===");
-    for (label, n) in &results.iter().find(|r| r.0.name.contains("default")).unwrap().0.initiatives_by_activity {
+    for (label, n) in &results
+        .iter()
+        .find(|r| r.0.name.contains("default"))
+        .unwrap()
+        .0
+        .initiatives_by_activity
+    {
         println!("  {:>8} 次 | {}", n, label);
     }
     println!();
     println!("=== 他选了哪些动作 (21 天) ===");
-    for (a, n) in &results.iter().find(|r| r.0.name.contains("default")).unwrap().0.initiatives_by_action {
+    for (a, n) in &results
+        .iter()
+        .find(|r| r.0.name.contains("default"))
+        .unwrap()
+        .0
+        .initiatives_by_action
+    {
         println!("  {:>8} 次 | {}", n, a);
     }
 
     println!();
-    println!("=== 推荐: {} (回应率 {:.2}) ===", results[0].0.name, results[0].0.response_rate);
+    println!(
+        "=== 推荐: {} (回应率 {:.2}) ===",
+        results[0].0.name, results[0].0.response_rate
+    );
     println!("注意: 合成用户 ≠ 真人. 此推荐是「经验证于合成用户的先验」, 最终校准需真人实验.");
 }

@@ -177,10 +177,10 @@ impl ResourceQuota {
     /// 该维度的配额值
     pub fn value_for(&self, dim: ResourceDimension) -> u64 {
         match dim {
-            ResourceDimension::Rate => self.rate_per_sec as u64,
+            ResourceDimension::Rate => u64::from(self.rate_per_sec),
             ResourceDimension::Memory => self.memory_bytes,
             ResourceDimension::Time => self.time_ms,
-            ResourceDimension::Count => self.count_max as u64,
+            ResourceDimension::Count => u64::from(self.count_max),
         }
     }
 }

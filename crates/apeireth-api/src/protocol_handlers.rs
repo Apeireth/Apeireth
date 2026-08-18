@@ -1408,9 +1408,7 @@ pub async fn stream_forward(
     let upstream_ct = upstream.headers().get(CONTENT_TYPE).cloned();
 
     let stream = upstream.bytes_stream().map(|chunk| {
-        chunk
-            .map(axum::body::Bytes::from)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+        chunk.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     });
 
     // 4. 构造 axum Response (透传 status + content-type)
@@ -1949,11 +1947,8 @@ mod stream_forward_tests {
         let standard_gemini = r#"{"text": "hi"}"#;
         let parsed: GeminiPart = serde_json::from_str(standard_gemini)
             .expect("R132.2: standard Gemini format should now parse");
-        if let GeminiPart::Text { text } = parsed {
-            assert_eq!(text, "hi");
-        } else {
-            panic!("expected Text variant");
-        }
+        let GeminiPart::Text { text } = parsed;
+        assert_eq!(text, "hi");
     }
 
     #[test]
@@ -1971,19 +1966,13 @@ mod stream_forward_tests {
         assert_eq!(req.contents.len(), 2);
         assert_eq!(req.contents[0].role, "user");
         assert_eq!(req.contents[0].parts.len(), 1);
-        if let GeminiPart::Text { text } = &req.contents[0].parts[0] {
-            assert_eq!(text, "Reply with: GEMINI-ALIVE");
-        } else {
-            panic!("expected Text variant in first part");
-        }
+        let GeminiPart::Text { text } = &req.contents[0].parts[0];
+        assert_eq!(text, "Reply with: GEMINI-ALIVE");
         // 验证 systemInstruction 也接受标准格式
         assert!(req.system_instruction.is_some());
         let si = req.system_instruction.as_ref().unwrap();
-        if let GeminiPart::Text { text } = &si.parts[0] {
-            assert_eq!(text, "You are a test assistant");
-        } else {
-            panic!("expected Text variant in system_instruction");
-        }
+        let GeminiPart::Text { text } = &si.parts[0];
+        assert_eq!(text, "You are a test assistant");
     }
 
     #[test]

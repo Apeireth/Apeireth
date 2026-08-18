@@ -163,7 +163,10 @@ impl HttpClient {
     }
 
     /// 接入 S4 出站网络策略 (None = 不检查; 调用方显式接入才启用 — 0 装 PASS).
-    pub fn with_egress(mut self, policy: std::sync::Arc<std::sync::Mutex<crate::egress::EgressPolicy>>) -> Self {
+    pub fn with_egress(
+        mut self,
+        policy: std::sync::Arc<std::sync::Mutex<crate::egress::EgressPolicy>>,
+    ) -> Self {
         self.egress = Some(policy);
         self
     }

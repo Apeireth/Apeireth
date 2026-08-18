@@ -29,8 +29,8 @@ apeireth-life-force = { path = "../apeireth-life-force" }
 apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
 # P2#12 (审计 backlog 全清, 2026-08-16): 本地 ONNX embedding — tract 纯 Rust 推理
 # (无 runtime 下载, GitHub 被墙可构建); 默认关, 开启后模型文件由主人提供
-tract-onnx = { version = "0.21", optional = true }
-tract-core = { version = "0.21", optional = true }
+tract-onnx = { version = "0.23", optional = true } # 0.21.10 tract-nnef 有 RUSTSEC-2026-0xxx (integer overflow OOB)
+tract-core = { version = "0.23", optional = true }
 
 [features]
 # R19 P2 战区 4: 默认开 semantic feature, 让 SqliteMemoryStore::semantic_search + extract_user_profile

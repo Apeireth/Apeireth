@@ -9,5 +9,5 @@
 //! Chrome presence (per O-5 不假装).
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-#[cfg(feature = "cdp")]
-pub mod cdp_impl;
+                        // CI fix 2026-08: `pub mod cdp_impl;` (cfg cdp) 的 cdp_impl.rs 从未存在 → clippy --all-features
+                        // E0583. CDP 真接 (chromiumoxide) 落地时恢复 (0 装: 不留指向虚无的声明).

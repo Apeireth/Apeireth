@@ -92,20 +92,20 @@ pub mod room;
 pub mod track;
 
 // 重新导出 (让外部 crate 一行 import 拿到所有 API, per apeireth-protocol 模式)
-pub use crate::auth::{
+pub use crate::livekit::auth::{
     AccessToken, ApiKeyHolder, ApiSecretHolder, DEFAULT_LIVEKIT_URL, DEFAULT_TOKEN_TTL_SECONDS,
     LIVEKIT_SCHEMA_VERSION, MAX_TOKEN_TTL_SECONDS, PLATFORM_NAME, PROVIDER_NAME,
 };
-pub use crate::error::LiveKitError;
-pub use crate::event::{EventEmitter, RoomEvent, SharedEmitter, SUPPORTED_ROOM_EVENTS};
-pub use crate::participant::{
+pub use crate::livekit::error::LiveKitError;
+pub use crate::livekit::event::{EventEmitter, RoomEvent, SharedEmitter, SUPPORTED_ROOM_EVENTS};
+pub use crate::livekit::participant::{
     ConnectionQuality, Participant, ParticipantSid, Permission, SUPPORTED_CONNECTION_QUALITIES,
     SUPPORTED_PERMISSIONS,
 };
-pub use crate::room::{Room, RoomOptions, RoomState, SUPPORTED_ROOM_STATES};
-pub use crate::track::{
-    LocalTrack, RemoteTrack, SUPPORTED_TRACK_KINDS, SUPPORTED_TRACK_SOURCES, Track,
-    TrackDimensions, TrackKind, TrackSid, TrackSource,
+pub use crate::livekit::room::{Room, RoomOptions, RoomState, SUPPORTED_ROOM_STATES};
+pub use crate::livekit::track::{
+    LocalTrack, RemoteTrack, Track, TrackDimensions, TrackKind, TrackSid, TrackSource,
+    SUPPORTED_TRACK_KINDS, SUPPORTED_TRACK_SOURCES,
 };
 
 use std::pin::Pin;
@@ -121,7 +121,7 @@ use tracing::{debug, info, instrument, warn};
 // ============================================================================
 
 /// LiveKit SDK schema version (1:1 翻译 livekit-client v0.9.21, per auth 模块).
-pub use crate::auth::LIVEKIT_SCHEMA_VERSION as SCHEMA_VERSION;
+pub use crate::livekit::auth::LIVEKIT_SCHEMA_VERSION as SCHEMA_VERSION;
 
 /// 6 核心 API 数量常量 (per task spec §3 + v0.9.21 商业版 1:1).
 pub const CORE_API_COUNT: usize = 6;
@@ -150,7 +150,10 @@ pub const STUB_MODE: bool = true;
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 ///
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 4 续 / R21)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 4 续 / R21)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 额外 1 守门工具).
 ///
@@ -178,7 +181,7 @@ pub fn is_stub_mode() -> bool {
 #[macro_export]
 macro_rules! livekit_stub {
     ($api_name:literal) => {
-        return Err($crate::LiveKitError::NotImplemented($api_name));
+        return Err($crate::livekit::LiveKitError::NotImplemented($api_name));
     };
 }
 
@@ -475,7 +478,10 @@ impl LiveKitClient for LiveKitClientImpl {
     #[instrument(skip(self, track), fields(track_kind = ?track.kind(), track_source = ?track.source()))]
     async fn publish_track(&self, track: &Track) -> Result<(), LiveKitError> {
         let tool_name = "apeireth_livekit_publish_track";
-        validate_tool_call(tool_name, &serde_json::json!({ "track_kind": track.kind() }))?;
+        validate_tool_call(
+            tool_name,
+            &serde_json::json!({ "track_kind": track.kind() }),
+        )?;
         if !self.connected {
             return Err(LiveKitError::RoomDisconnected(
                 "must call connect() before publish_track".to_string(),
@@ -592,14 +598,17 @@ pub fn assert_stub_mode_or_panic(api_name: &'static str) -> LiveKitError {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     // Fixture 1: 编译期 hardcode 守门
     #[test]
     fn livekit_compile_time_constants_match_k1() {
         assert_eq!(LIVEKIT_SCHEMA_VERSION, "1");
         assert_eq!(PLATFORM_NAME, "apeireth");
-        assert!(STUB_MODE, "STUB_MODE must be true until R20 stage 4 continues / R21");
+        assert!(
+            STUB_MODE,
+            "STUB_MODE must be true until R20 stage 4 continues / R21"
+        );
         assert_eq!(PROVIDER_NAME, "livekit");
         assert_eq!(DEFAULT_LIVEKIT_URL, "wss://livekit.example.com");
         assert!(DEFAULT_LIVEKIT_URL.starts_with("wss://"));
@@ -644,7 +653,10 @@ mod tests {
             "apeireth_livekit_stub_status",
         ];
         for tool in expected {
-            assert!(TOOL_WHITELIST.contains(&tool), "TOOL_WHITELIST must contain {tool}");
+            assert!(
+                TOOL_WHITELIST.contains(&tool),
+                "TOOL_WHITELIST must contain {tool}"
+            );
         }
     }
 
@@ -653,7 +665,9 @@ mod tests {
     fn livekit_is_stub_mode_returns_true() {
         assert!(is_stub_mode());
         assert_eq!(is_stub_mode(), STUB_MODE);
-        assert!(assert_stub_mode_or_panic("connect").to_string().contains("not implemented"));
+        assert!(assert_stub_mode_or_panic("connect")
+            .to_string()
+            .contains("not implemented"));
     }
 
     // 额外 1: 6 核心 API 全部返 NotImplemented
@@ -668,9 +682,7 @@ mod tests {
             .expect("valid api secret");
 
         // 6 核心 API 必须全部返 LiveKitError::NotImplemented
-        let r1 = client
-            .connect(&DEFAULT_LIVEKIT_URL, "stub.jwt.token")
-            .await;
+        let r1 = client.connect(&DEFAULT_LIVEKIT_URL, "stub.jwt.token").await;
         assert!(
             matches!(r1, Err(LiveKitError::NotImplemented("connect"))),
             "connect must return NotImplemented, got {:?}",
@@ -709,7 +721,10 @@ mod tests {
 
         let r6 = client.set_microphone_enabled(false).await;
         assert!(
-            matches!(r6, Err(LiveKitError::NotImplemented("set_microphone_enabled"))),
+            matches!(
+                r6,
+                Err(LiveKitError::NotImplemented("set_microphone_enabled"))
+            ),
             "set_microphone_enabled must return NotImplemented, got {:?}",
             r6
         );
@@ -826,7 +841,10 @@ mod tests {
     #[test]
     fn livekit_list_helpers() {
         assert_eq!(LiveKitClientImpl::list_apis().len(), CORE_API_COUNT);
-        assert_eq!(LiveKitClientImpl::list_room_states().len(), ROOM_STATE_COUNT);
+        assert_eq!(
+            LiveKitClientImpl::list_room_states().len(),
+            ROOM_STATE_COUNT
+        );
         assert_eq!(LiveKitClientImpl::list_events().len(), ROOM_EVENT_COUNT);
     }
 
@@ -842,7 +860,9 @@ mod tests {
     async fn livekit_emit_and_subscribe() {
         let client = LiveKitClientImpl::new();
         let mut rx = client.emitter().subscribe();
-        let event = RoomEvent::Reconnected { disconnected_at: None };
+        let event = RoomEvent::Reconnected {
+            disconnected_at: None,
+        };
         event_publish_stub(&client, event.clone()).expect("emit must succeed");
         let received = rx.try_recv().expect("subscribe must receive");
         assert_eq!(received, event);

@@ -16,8 +16,8 @@
 
 use std::sync::Arc;
 
-use apeireth_llm_iface::{ChatMessage, LlmProvider, LlmRequest};  // R179 P0-3: 拆 memory <-> api 编译期边
 use apeireth_core::Episode;
+use apeireth_llm_iface::{ChatMessage, LlmProvider, LlmRequest}; // R179 P0-3: 拆 memory <-> api 编译期边
 use serde::{Deserialize, Serialize};
 
 /// LLM 分析类型

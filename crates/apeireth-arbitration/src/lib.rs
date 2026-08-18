@@ -492,7 +492,11 @@ mod tests {
         // 确定性: 同一日志重复查询 → 相同排序模式
         let e1a = log1.canonical_order(10).unwrap();
         let e1b = log1.canonical_order(10).unwrap();
-        assert_eq!(mode(&e1a), mode(&e1b), "同日志重复查询 canonical 模式应一致");
+        assert_eq!(
+            mode(&e1a),
+            mode(&e1b),
+            "同日志重复查询 canonical 模式应一致"
+        );
         // 两日志含相同事件集 (各自时间序, 排序后模式集合一致)
         let e2 = log2.canonical_order(10).unwrap();
         assert_eq!(e1a.len(), e2.len());

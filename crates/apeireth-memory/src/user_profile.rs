@@ -139,9 +139,23 @@ impl ProfileExtractor {
         // 4. 关键词提取 (mock) → expertise_areas + preferences
         // 简单规则: content 含特定关键词 → 算 expertise
         const EXPERTISE_KEYWORDS: &[&str] = &[
-            "rust", "python", "javascript", "typescript", "go", "java", "c++",
-            "sql", "database", "vector", "embedding", "machine learning",
-            "算法", "数据库", "向量", "检索", "嵌入",
+            "rust",
+            "python",
+            "javascript",
+            "typescript",
+            "go",
+            "java",
+            "c++",
+            "sql",
+            "database",
+            "vector",
+            "embedding",
+            "machine learning",
+            "算法",
+            "数据库",
+            "向量",
+            "检索",
+            "嵌入",
         ];
         let mut keyword_hits: HashMap<String, usize> = HashMap::new();
         for ep in &eps {
@@ -154,11 +168,8 @@ impl ProfileExtractor {
         }
         let mut expertise_vec: Vec<(String, usize)> = keyword_hits.into_iter().collect();
         expertise_vec.sort_by(|a, b| b.1.cmp(&a.1));
-        let expertise_areas: Vec<String> = expertise_vec
-            .into_iter()
-            .take(5)
-            .map(|(k, _)| k)
-            .collect();
+        let expertise_areas: Vec<String> =
+            expertise_vec.into_iter().take(5).map(|(k, _)| k).collect();
 
         // 5. recurring_topics 用 index 检索代表性 (top_k) episode 的 content 前 30 字
         //    拿"中心向量"附近的 episode, 用其 content 摘要当 topic
@@ -176,9 +187,9 @@ impl ProfileExtractor {
                     .map(|e| e.content.as_str())
                     .collect::<Vec<&str>>()
                     .join(" ");
-                let hits = idx.search(&combined, self.top_k).map_err(|e| {
-                    MemoryError::Other(format!("index search for profile: {e}"))
-                })?;
+                let hits = idx
+                    .search(&combined, self.top_k)
+                    .map_err(|e| MemoryError::Other(format!("index search for profile: {e}")))?;
                 if hits.is_empty() {
                     self.recent_topics(&eps)
                 } else {
@@ -373,7 +384,10 @@ mod tests {
         let mem = fresh();
         // 写一段 > 100 字符的长 user msg, 模拟"用户偏好详细回答"
         let long_msg = "我想深入了解一下 Rust 编程语言中的 borrow checker 是怎么工作的, 它的底层原理是什么, 以及如何在实际项目中避免常见的 use after free 错误, 以及 unsafe 代码块的最佳实践".to_string();
-        assert!(long_msg.chars().count() > 100, "msg should be > 100 chars for test");
+        assert!(
+            long_msg.chars().count() > 100,
+            "msg should be > 100 chars for test"
+        );
         <SqliteMemoryStore as EpisodeStore>::put_episode(
             &mem,
             &make_episode("u1", 100, "user", &long_msg),

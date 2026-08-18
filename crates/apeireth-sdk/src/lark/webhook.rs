@@ -23,8 +23,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::auth::WebhookToken;
-use crate::error::LarkError;
+use crate::lark::auth::WebhookToken;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 EventType (4 variant, 1:1 翻译 v0.9.21 商业版)
@@ -276,7 +276,10 @@ mod tests {
         let wh_token = WebhookToken::new("token_xxx".to_string(), "encrypt_key_xxx".to_string())
             .expect("valid");
         let mut ev = HashMap::new();
-        ev.insert("type".to_string(), serde_json::json!("im.message.receive_v1"));
+        ev.insert(
+            "type".to_string(),
+            serde_json::json!("im.message.receive_v1"),
+        );
         let event = WebhookEvent::new_event_callback(
             "cli_a1b2c3d4e5f6".to_string(),
             "token_xxx".to_string(),

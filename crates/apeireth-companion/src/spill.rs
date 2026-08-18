@@ -46,10 +46,7 @@ fn safe_segment(name: &str) -> String {
 impl SpillStore {
     /// root 默认: 系统临时目录下私有随机子目录 (进程内, 其他用户不可预见).
     pub fn new_private() -> Self {
-        let root = std::env::temp_dir().join(format!(
-            "apeireth-spill-{}",
-            uuid::Uuid::new_v4()
-        ));
+        let root = std::env::temp_dir().join(format!("apeireth-spill-{}", uuid::Uuid::new_v4()));
         Self { root }
     }
 
@@ -63,10 +60,14 @@ impl SpillStore {
     }
 
     /// 溢出写入: 返回落盘路径 (绝对). 独占写, 防 symlink 植入.
-    pub fn spill(&self, session_id: &str, suggested_name: &str, content: &str) -> Result<String, String> {
+    pub fn spill(
+        &self,
+        session_id: &str,
+        suggested_name: &str,
+        content: &str,
+    ) -> Result<String, String> {
         let session_dir = self.root.join(safe_segment(session_id));
-        std::fs::create_dir_all(&session_dir)
-            .map_err(|e| format!("创建溢出目录失败: {e}"))?;
+        std::fs::create_dir_all(&session_dir).map_err(|e| format!("创建溢出目录失败: {e}"))?;
         let file = session_dir.join(format!(
             "{}-{}",
             &uuid::Uuid::new_v4().to_string()[..8],
@@ -98,8 +99,8 @@ impl SpillStore {
         } else {
             self.root.join(p)
         };
-        let p_c = std::fs::canonicalize(&p_abs)
-            .map_err(|e| format!("canonicalize 溢出路径失败: {e}"))?;
+        let p_c =
+            std::fs::canonicalize(&p_abs).map_err(|e| format!("canonicalize 溢出路径失败: {e}"))?;
         if !p_c.starts_with(&root_c) {
             return Err(format!("溢出路径越界: {path}"));
         }
@@ -117,7 +118,8 @@ mod tests {
     use super::*;
 
     fn tmp_root(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir().join(format!("apeireth-spill-test-{tag}-{}", std::process::id()));
+        let d =
+            std::env::temp_dir().join(format!("apeireth-spill-test-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
     }
@@ -162,7 +164,10 @@ mod tests {
         std::fs::write(&p1, "taken").unwrap();
         let mut opts = std::fs::OpenOptions::new();
         opts.write(true).create_new(true);
-        assert!(opts.open(&p1).is_err(), "已存在路径应拒绝 (防 symlink 植入)");
+        assert!(
+            opts.open(&p1).is_err(),
+            "已存在路径应拒绝 (防 symlink 植入)"
+        );
     }
 
     #[test]

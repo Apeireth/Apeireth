@@ -20,7 +20,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LiveKitError;
+use crate::livekit::error::LiveKitError;
 
 // ============================================================================
 // §1 RoomState 5 状态机 (per v0.9.21 商业版 ConnectionState enum 1:1)

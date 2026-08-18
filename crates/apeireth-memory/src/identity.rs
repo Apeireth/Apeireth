@@ -325,9 +325,9 @@ impl IdentityCardStore for crate::SqliteMemoryStore {
                 params![continuity_id],
                 |row| row.get(0),
             )?;
-            return Err(
-                MemoryError::Identity(IdentityConflict::NotFound(continuity_id.into())).into(),
-            );
+            return Err(MemoryError::Identity(IdentityConflict::NotFound(
+                continuity_id.to_string(),
+            )));
         }
         Ok(())
     }

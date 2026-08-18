@@ -16,7 +16,13 @@ fn main() {
     let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let header_path = crate_dir.join("apeireth_sdk.h");
 
-    // cbindgen 0.26 标准 Builder API (不用 Config struct, 0 触碰 private field)
+    // cbindgen 标准 Builder API (不用 Config struct 的 file 形式, 0 触碰 private field)
+    // CI fix 2026-08: R146 合并后 crate 含 lark/livekit/sandbox/voice 子模块,
+    // cbindgen 0.29 解析全模块树会撞子模块语法 (ParseSyntaxError) → 用 parse.include
+    // 只解析 c.rs (C-ABI 5 fn 所在), 0 触碰其余模块.
+    let mut config = cbindgen::Config::default();
+    config.parse.include = Some(vec!["c.rs".to_string()]);
+
     let header_comment = "// apeireth-sdk C-ABI header (R122-8 auto-generated, 0 改 24 LOCKED)\n\
                          // O-5 实质: 0 假装 100% multi-lang, 仅 5 fn demo 桥接.\n\
                          // 0 改 workspace.version 1.1.0, 0 触碰 11 agent 公共 API 签名.\n\
@@ -26,12 +32,13 @@ fn main() {
 
     cbindgen::Builder::new()
         .with_crate(crate_dir.to_str().expect("crate_dir utf-8"))
+        .with_config(config)
         .with_language(cbindgen::Language::C)
         .with_header(header_comment)
         .with_include_guard("APEIRETH_SDK_H")
         .with_pragma_once(true)
         .generate()
-        .expect("cbindgen 0.26 generate 失败 (R122-8 5 fn C-ABI 桥接)")
+        .expect("cbindgen generate 失败 (R122-8 5 fn C-ABI 桥接)")
         .write_to_file(&header_path);
 
     println!("cargo:rerun-if-changed=src/c.rs");

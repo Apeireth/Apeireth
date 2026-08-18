@@ -26,42 +26,44 @@
 
 #![warn(missing_docs)]
 
+pub mod adapter;
+pub mod compat;
+pub mod decay;
+pub mod dream;
+pub mod dual_track;
+pub mod enhanced;
 pub mod l1_file;
 pub mod l2_vector;
 pub mod l3_tag;
 pub mod l4_lcm;
-pub mod progression; // R179 P1-11: 4-layer progressive
-pub mod manager;
-pub mod decay;
-pub mod dream;
-pub mod search;
-pub mod pipe;
-pub mod sleep_cycle;
 pub mod librarian;
-pub mod adapter;
+pub mod manager;
 pub mod mcp;
-pub mod compat;
-pub mod enhanced;
-pub mod dual_track; // A1/P2#8: 双轨语义决策 (episodes=事实源, L1-L4=索引补充)
+pub mod pipe;
+pub mod progression; // R179 P1-11: 4-layer progressive
+pub mod search;
+pub mod sleep_cycle; // A1/P2#8: 双轨语义决策 (episodes=事实源, L1-L4=索引补充)
 
-pub use l1_file::{L1FileStore, FileEntry as L1Entry};
+pub use l1_file::{FileEntry as L1Entry, L1FileStore};
 pub use l2_vector::{L2VectorStore, VectorEntry};
 pub use l3_tag::TagIndex;
-pub use l4_lcm::{L4LcmCompressor, LcmChunk, LcmCallback};
+pub use l4_lcm::{L4LcmCompressor, LcmCallback, LcmChunk};
 // R179 P1-11: 4 层渐进
-pub use progression::{Layer, LayerProgression};
-pub use manager::{MemoryManager, MemoryItem, MemoryError};
-pub use decay::{DecayEngine, DecayConfig};
-pub use dream::{DreamSubsystem, DreamCallback};
-pub use search::{SearchPipeline, SearchHit, SearchMode};
-pub use pipe::{SearchPipe, FusionStrategy};
-pub use sleep_cycle::{SleepCycle, SleepConfig};
-pub use librarian::{Librarian, Category};
-pub use adapter::{AdapterRegistry, MemoryAdapter, MemorySource, SourceKind, ConversationAdapter, FileAdapter};
-pub use mcp::{LightMemoMcp, LightMemoTool};
+pub use adapter::{
+    AdapterRegistry, ConversationAdapter, FileAdapter, MemoryAdapter, MemorySource, SourceKind,
+};
 pub use compat::{LightMemoCommand, LightMemoCompatRouter, LIGHTMEMO_COMMAND_COUNT};
-pub use enhanced::EnhancedLightMemo;
+pub use decay::{DecayConfig, DecayEngine};
+pub use dream::{DreamCallback, DreamSubsystem};
 pub use dual_track::{dual_track_merge, DualTrackHit, HitSource};
+pub use enhanced::EnhancedLightMemo;
+pub use librarian::{Category, Librarian};
+pub use manager::{MemoryError, MemoryItem, MemoryManager};
+pub use mcp::{LightMemoMcp, LightMemoTool};
+pub use pipe::{FusionStrategy, SearchPipe};
+pub use progression::{Layer, LayerProgression};
+pub use search::{SearchHit, SearchMode, SearchPipeline};
+pub use sleep_cycle::{SleepConfig, SleepCycle};
 
 /// R142 deliverables (per v2 plan §9.5):
 /// - 11 modules (L1/L2/L3/L4 + manager + decay + dream + search/pipe + mcp + compat + enhanced)

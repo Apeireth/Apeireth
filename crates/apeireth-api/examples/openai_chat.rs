@@ -117,7 +117,7 @@ struct RoundResult {
 async fn run_round(
     pipeline: &Arc<Pipeline>,
     chat_req: &OpenAiChatRequest,
-    round: u32,
+    _round: u32,
 ) -> Result<RoundResult, Box<dyn std::error::Error>> {
     let normalized = openai_chat_to_normalized(chat_req);
     let start = Instant::now();

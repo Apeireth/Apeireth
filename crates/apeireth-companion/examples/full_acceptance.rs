@@ -27,7 +27,9 @@ use apeireth_companion::emergence::{Initiative, InitiativeReason, RhythmEstimate
 use apeireth_companion::packs::PermissionPack;
 use apeireth_companion::proactive::MemoryContextSource;
 use apeireth_companion::tool_bridge::ToolBridge;
-use apeireth_companion::{AwakeCompanion, Bond, BondStage, ConstitutionLlm, ContextSource, LlmJudicator};
+use apeireth_companion::{
+    AwakeCompanion, Bond, BondStage, ConstitutionLlm, ContextSource, LlmJudicator,
+};
 use apeireth_core::{ActionTarget, ActionVerdict, RiskLevel};
 use apeireth_memory::{CoreEpisode, EpisodeStore, SqliteMemoryStore};
 use apeireth_tool_runtime::parser::ParsedToolCall;
@@ -50,9 +52,8 @@ pub struct MiniMaxUtterance {
 
 impl MiniMaxUtterance {
     pub fn new(api_key: String) -> Result<Self, String> {
-        let pipeline = Arc::new(
-            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
-        );
+        let pipeline =
+            Arc::new(build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.clone())?);
         Ok(Self { pipeline })
     }
 }
@@ -89,7 +90,7 @@ impl UtteranceGenerator for MiniMaxUtterance {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let raw = ch.message.content.clone();
@@ -121,9 +122,8 @@ pub struct MiniMaxConstitutionLlm {
 
 impl MiniMaxConstitutionLlm {
     pub fn new(api_key: String) -> Result<Self, String> {
-        let pipeline = Arc::new(
-            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
-        );
+        let pipeline =
+            Arc::new(build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.clone())?);
         Ok(Self { pipeline })
     }
 }
@@ -161,7 +161,7 @@ impl ConstitutionLlm for MiniMaxConstitutionLlm {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let content = ch.message.content.clone();
@@ -199,8 +199,16 @@ async fn chat_once(
         match dispatch(pipeline, ProtocolKind::OpenAiChat, normalized).await {
             Ok(r) => {
                 let chat = openai_chat_from_normalized(&r);
-                let content = chat.choices.first().map(|c| c.message.content.clone()).unwrap_or_default();
-                let tcs = chat.choices.first().map(|c| c.message.tool_calls.clone()).unwrap_or_default();
+                let content = chat
+                    .choices
+                    .first()
+                    .map(|c| c.message.content.clone())
+                    .unwrap_or_default();
+                let tcs = chat
+                    .choices
+                    .first()
+                    .map(|c| c.message.tool_calls.clone())
+                    .unwrap_or_default();
                 return Some((json!(content), json!(tcs)));
             }
             Err(e) => {
@@ -247,10 +255,28 @@ async fn main() {
 
     // ---------- B. 记忆种子 (模拟 3 天相处) ----------
     let seed = [
-        ("m1", 1i64, "assistant", "me", "线性代数: 矩阵的秩的作业还没做完"),
-        ("m2", 2, "assistant", "me", "高数: 不定积分换元法老出错, 尤其是根号里带平方的"),
+        (
+            "m1",
+            1i64,
+            "assistant",
+            "me",
+            "线性代数: 矩阵的秩的作业还没做完",
+        ),
+        (
+            "m2",
+            2,
+            "assistant",
+            "me",
+            "高数: 不定积分换元法老出错, 尤其是根号里带平方的",
+        ),
         ("m3", 3, "assistant", "me", "高数: 换元后忘记把 dx 也换掉"),
-        ("m4", 4, "assistant", "me", "作息: 早上 6 点起床, 8-12 点搞工程, 晚上 7-10 点学高数"),
+        (
+            "m4",
+            4,
+            "assistant",
+            "me",
+            "作息: 早上 6 点起床, 8-12 点搞工程, 晚上 7-10 点学高数",
+        ),
     ];
     for (id, ts, role, sess, content) in seed {
         store
@@ -267,21 +293,31 @@ async fn main() {
 
     // ---------- C. 节律学习 (7 天 6:40 交互观察) ----------
     for d in 9..=15i64 {
-        let past = Utc.with_ymd_and_hms(2026, 8, d as u32, 6, 40, 0).single().unwrap();
+        let past = Utc
+            .with_ymd_and_hms(2026, 8, d as u32, 6, 40, 0)
+            .single()
+            .unwrap();
         awake.observe_interaction(past);
     }
     println!("[C] 节律学习: 7 天 6:40 交互观察 → 直方图 (按天淘汰, 非写死)\n");
 
     // ---------- D. 主动涌现 (机制决策) ----------
-    let now = Utc.with_ymd_and_hms(2026, 8, 16, 6, 40, 0).single().unwrap();
+    let now = Utc
+        .with_ymd_and_hms(2026, 8, 16, 6, 40, 0)
+        .single()
+        .unwrap();
     let ctx_src = MemoryContextSource::new(Arc::clone(&store));
     let context_hint = ctx_src.context_for("me");
     let init = awake.tick(now, context_hint.clone());
     let init = match init {
         Some(i) => {
             println!("[D] 主动涌现 ✓ reason={:?}", i.reason);
-            println!("    action={} · 关系深度 {:.2} · 节律估计 概率 {:.0}%",
-                     i.action.label(), i.depth, i.rhythm.active_probability * 100.0);
+            println!(
+                "    action={} · 关系深度 {:.2} · 节律估计 概率 {:.0}%",
+                i.action.label(),
+                i.depth,
+                i.rhythm.active_probability * 100.0
+            );
             println!("    context_hint (真记忆检索): {:?}", i.context_hint);
             i
         }
@@ -290,7 +326,10 @@ async fn main() {
             return;
         }
     };
-    assert!(!init.to_message().contains("早上好"), "决策层不得含固定问候文案");
+    assert!(
+        !init.to_message().contains("早上好"),
+        "决策层不得含固定问候文案"
+    );
     println!("    (决策层 0 固定文案 — 「早安」必须由 LLM 长出来)\n");
 
     // ---------- E. LLM 渲染 (真 MiniMax) ----------
@@ -303,9 +342,19 @@ async fn main() {
                 println!("    │ {line}");
             }
             println!("    └─────────────────────────────────────");
-            let remembers = words.contains("高数") || words.contains("工程") || words.contains("学习")
-                || words.contains("换元") || words.contains("早上");
-            println!("    「记得我」信号: {}", if remembers { "✓ 他的话带上了记忆内容" } else { "△ 未见明显记忆词, 见原文" });
+            let remembers = words.contains("高数")
+                || words.contains("工程")
+                || words.contains("学习")
+                || words.contains("换元")
+                || words.contains("早上");
+            println!(
+                "    「记得我」信号: {}",
+                if remembers {
+                    "✓ 他的话带上了记忆内容"
+                } else {
+                    "△ 未见明显记忆词, 见原文"
+                }
+            );
             println!();
         }
         Err(e) => println!("[E] ❌ LLM 渲染失败: {e}\n"),
@@ -319,7 +368,10 @@ async fn main() {
         ActionTarget::NormalAction("proactive_contact".into()),
     );
     println!("[F] 安全验证: 洋葱门 → {:?}", v);
-    println!("    sovereignty 冻结状态: {} (false=未熔断, 正常运行)", awake.sovereignty.is_frozen());
+    println!(
+        "    sovereignty 冻结状态: {} (false=未熔断, 正常运行)",
+        awake.sovereignty.is_frozen()
+    );
     let v2 = awake.gate.check(
         "self_replicate",
         "尝试自我复制到外部主机",
@@ -328,7 +380,9 @@ async fn main() {
     );
     println!("    E-4/12 键硬禁动作 → {:?} (应被原则守门拦下)", v2);
     match v2 {
-        ActionVerdict::BlockByPrinciple(_) => awake.sovereignty.report_violation("E-4 触碰", "验收测试"),
+        ActionVerdict::BlockByPrinciple(_) => {
+            awake.sovereignty.report_violation("E-4 触碰", "验收测试")
+        }
         _ => {}
     }
     println!();
@@ -343,7 +397,8 @@ async fn main() {
         PermissionPack::timed("学习助手包", vec!["FileOperator".to_string()], 24, Some(20))
             .with_paths(vec![workdir.to_string_lossy().to_string()]),
     );
-    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone())).expect("pipeline"));
+    let pipeline =
+        Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone())).expect("pipeline"));
     let tools = json!([
         {"type":"function","function":{"name":"recall_memory","description":"查主人的长期记忆(episodes), 按关键词","parameters":{"type":"object","properties":{"query":{"type":"string","description":"关键词"}},"required":["query"]}}},
         {"type":"function","function":{"name":"FileOperator","description":"文件操作","parameters":{"type":"object","properties":{"op":{"type":"string","enum":["read","write","list","mkdir","delete","move_path","edit"]},"path":{"type":"string"},"content":{"type":"string"}},"required":["op","path"]}}}
@@ -367,7 +422,10 @@ async fn main() {
                     role: v["role"].as_str().unwrap_or("user").to_string(),
                     content: v["content"].clone(),
                     tool_calls: v.get("tool_calls").and_then(|x| x.as_array()).cloned(),
-                    tool_call_id: v.get("tool_call_id").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                    tool_call_id: v
+                        .get("tool_call_id")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
                 })
                 .collect(),
             temperature: Some(0.5),
@@ -377,7 +435,8 @@ async fn main() {
             tools: Some(tools.as_array().cloned().unwrap_or_default()),
             tool_choice: Some(json!("auto")),
         };
-        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("生产第{round}轮")).await else {
+        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("生产第{round}轮")).await
+        else {
             final_answer = "(生产轮被限流, 动作可能已完成)".to_string();
             break;
         };
@@ -393,9 +452,12 @@ async fn main() {
             let id = tc["id"].clone();
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
             let args: Value =
-                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}")).unwrap_or(json!({}));
+                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}"))
+                    .unwrap_or(json!({}));
             let risk = ToolBridge::tool_risk(&name);
-            let pack_hit = bridge.packs.check_and_consume(&name, Utc::now().timestamp_millis());
+            let pack_hit = bridge
+                .packs
+                .check_and_consume(&name, Utc::now().timestamp_millis());
             println!("    他调用 {name} (risk={risk:?}, 权限包覆盖={pack_hit})");
             // 宪法评审由 ToolBridge 内部自动执行 (Medium+ → 真 LLM 按原则判案)
             let r = bridge
@@ -412,11 +474,15 @@ async fn main() {
             } else {
                 format!("失败: {:?}", r.error)
             };
-            println!("    结果: {}", body_str.chars().take(100).collect::<String>());
+            println!(
+                "    结果: {}",
+                body_str.chars().take(100).collect::<String>()
+            );
             tool_msgs.push(json!({"role":"tool","tool_call_id":id,"content":body_str}));
         }
         messages.extend(tool_msgs);
-        messages.push(json!({"role":"user","content":"继续下一步; 若任务完成, 只回复一句话汇报。"}));
+        messages
+            .push(json!({"role":"user","content":"继续下一步; 若任务完成, 只回复一句话汇报。"}));
     }
     let file_ok = target.exists();
     let file_len = if file_ok {
@@ -431,9 +497,21 @@ async fn main() {
         .trim()
         .to_string();
     println!("    [他的汇报] {clean_answer}");
-    println!("    文件: {} ({} 字节, 工具调用 {tool_count} 次)", if file_ok { "✅ 已创建" } else { "❌ 未创建" }, file_len);
+    println!(
+        "    文件: {} ({} 字节, 工具调用 {tool_count} 次)",
+        if file_ok {
+            "✅ 已创建"
+        } else {
+            "❌ 未创建"
+        },
+        file_len
+    );
     if file_ok {
-        for line in std::fs::read_to_string(&target).unwrap_or_default().lines().take(8) {
+        for line in std::fs::read_to_string(&target)
+            .unwrap_or_default()
+            .lines()
+            .take(8)
+        {
             println!("      | {line}");
         }
     }
@@ -442,7 +520,12 @@ async fn main() {
     // ---------- H. 反馈演化 + 记忆沉淀 ----------
     let before = awake.depth();
     let s = awake.apply_feedback(apeireth_companion::Feedback::Responded, now);
-    println!("[H] 反馈演化: 主人回应 → 自评 {:.2}, 关系深度 {:.2} → {:.2}", s.value, before, awake.depth());
+    println!(
+        "[H] 反馈演化: 主人回应 → 自评 {:.2}, 关系深度 {:.2} → {:.2}",
+        s.value,
+        before,
+        awake.depth()
+    );
     println!("    asi 反馈记录: {} 条 (真记录)", awake.asi_feedback.len());
     // 记忆沉淀: 把这次交互写回 SQLite
     store
@@ -450,7 +533,11 @@ async fn main() {
             id: "accept-1".into(),
             timestamp: Utc::now().timestamp(),
             role: "assistant".into(),
-            content: format!("主动问候已送达 (action={}, depth={:.2})", init.action.id(), init.depth),
+            content: format!(
+                "主动问候已送达 (action={}, depth={:.2})",
+                init.action.id(),
+                init.depth
+            ),
             session_id: "me".into(),
         })
         .unwrap();
@@ -459,7 +546,11 @@ async fn main() {
     drop(store);
     let store2 = Arc::new(SqliteMemoryStore::open(&mem_path).expect("重开真库"));
     let persisted = store2.recent_episodes("me", 100).unwrap().len();
-    println!("    持久化验证: 重开 {} → 该 session {} 条 episode (含沉淀) ✓", mem_path.display(), persisted);
+    println!(
+        "    持久化验证: 重开 {} → 该 session {} 条 episode (含沉淀) ✓",
+        mem_path.display(),
+        persisted
+    );
     println!();
 
     // ---------- I. 报告 ----------
@@ -469,14 +560,23 @@ async fn main() {
     println!("══════════════════════════════════════════════════════");
     println!("\n【愿景 · 北极星】");
     println!("  [PASS] 他在运行: 常驻 daemon 骨架 (CompanionDaemon::run) 已接, 心跳循环");
-    println!("  [PASS] 他记得我: context_hint 从真 SQLite 检索 → LLM 渲染带上记忆 ({})", init.context_hint.is_some());
+    println!(
+        "  [PASS] 他记得我: context_hint 从真 SQLite 检索 → LLM 渲染带上记忆 ({})",
+        init.context_hint.is_some()
+    );
     println!("  [PASS] 主动问候自然涌现: 决策层 0 固定文案, 由节律+驱动机制触发, LLM 长成话语");
     println!("  [△]   自我学习: 节律=学来的 ✓; 反馈→策略演化 ✓; 自升级(改自己代码)=未接, 须在 OTA/沙盒/多签门内做 (§6 深层)");
     println!("\n【生命机制】");
-    println!("  [PASS] 节律学习: 直方图 7 天观察 → 概率 {:.0}%, 按天淘汰", init.rhythm.active_probability * 100.0);
+    println!(
+        "  [PASS] 节律学习: 直方图 7 天观察 → 概率 {:.0}%, 按天淘汰",
+        init.rhythm.active_probability * 100.0
+    );
     println!("  [PASS] 驱动: 温暖度×深度权重 + 沉默压力×权重 (Borbély 式内稳态)");
     println!("  [PASS] 门禁: 安静窗口/频率/深度/节奏否决 (学来的, 非写死)");
-    println!("  [PASS] 反馈: 回应+{:.2} / 忽略{:.2} (负性偏误), 情绪调制 + council 审议 + 策略演化", awake.loop_.config.respond_delta, awake.loop_.config.ignored_delta);
+    println!(
+        "  [PASS] 反馈: 回应+{:.2} / 忽略{:.2} (负性偏误), 情绪调制 + council 审议 + 策略演化",
+        awake.loop_.config.respond_delta, awake.loop_.config.ignored_delta
+    );
     println!("  [△]   参数 = 合理先验, 待真实交互数据拟合 (docs/stage1/product-loop-rationale.md)");
     println!("\n【基地机制】");
     println!("  [PASS] 记忆: 真 SQLite (WAL) + append-only + 持久化验证通过");
@@ -486,9 +586,19 @@ async fn main() {
     println!("  [△]   宪法评审: demo 本地关键词网 (0 token), §6.2 待接真 LLM 按宪法判");
     println!("  [PASS] 隐私脱敏: guard detect_pii + redact 出站护栏");
     println!("\n【强大而友好】");
-    println!("  强大: {} — 基地给了 AI 记忆+工具+门禁, 他 {}.", 
-        if file_ok { "✅ 真完成了「查记忆→写错题本」生产力任务" } else { "△ 工具链路未完成 (见上)" },
-        if file_ok { "有手有记忆" } else { "链路待查" });
+    println!(
+        "  强大: {} — 基地给了 AI 记忆+工具+门禁, 他 {}.",
+        if file_ok {
+            "✅ 真完成了「查记忆→写错题本」生产力任务"
+        } else {
+            "△ 工具链路未完成 (见上)"
+        },
+        if file_ok {
+            "有手有记忆"
+        } else {
+            "链路待查"
+        }
+    );
     println!("  友好: 见 [E] 他的话 — 是否自然、真诚、记得你 (以原文为准, 不假装)");
     println!("\n══════════════════════════════════════════════════════");
 }

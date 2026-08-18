@@ -65,7 +65,7 @@ fn percentile(sorted_nanos: &[u128], quantile: f64) -> u128 {
     sorted_nanos[rank.saturating_sub(1).min(sorted_nanos.len() - 1)]
 }
 
-fn print_wallclock_percentiles(index: &mut SemanticIndex<'_>, dataset_size: usize) {
+fn print_wallclock_percentiles(index: &SemanticIndex<'_>, dataset_size: usize) {
     for _ in 0..5 {
         black_box(
             index
@@ -117,7 +117,7 @@ fn memory_vector_semantic_search(c: &mut Criterion) {
             index.index_episode(&item).expect("index episode vector");
         }
 
-        print_wallclock_percentiles(&mut index, dataset_size);
+        print_wallclock_percentiles(&index, dataset_size);
         group.throughput(Throughput::Elements(dataset_size as u64));
         group.bench_with_input(
             BenchmarkId::new("episodes", dataset_size),

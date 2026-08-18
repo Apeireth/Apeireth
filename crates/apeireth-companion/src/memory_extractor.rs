@@ -34,7 +34,10 @@ fn default_importance() -> u8 {
 
 impl MemoryItem {
     pub fn new(content: impl Into<String>, importance: u8) -> Self {
-        Self { importance: importance.clamp(1, 10), content: content.into() }
+        Self {
+            importance: importance.clamp(1, 10),
+            content: content.into(),
+        }
     }
 }
 
@@ -138,8 +141,11 @@ pub struct ExtractedMemory {
 
 impl ExtractedMemory {
     pub fn is_empty(&self) -> bool {
-        self.facts.is_empty() && self.preferences.is_empty() && self.commitments.is_empty()
-            && self.emotional.is_none() && self.graph.is_empty()
+        self.facts.is_empty()
+            && self.preferences.is_empty()
+            && self.commitments.is_empty()
+            && self.emotional.is_none()
+            && self.graph.is_empty()
     }
 }
 
@@ -173,13 +179,25 @@ pub trait MemoryExtractor: Send + Sync {
     ) -> Result<Vec<ReconcileAction>, String> {
         let mut out = Vec::new();
         for f in &candidates.facts {
-            out.push(ReconcileAction { kind: ReconcileKind::Add, item: f.clone(), target_id: None });
+            out.push(ReconcileAction {
+                kind: ReconcileKind::Add,
+                item: f.clone(),
+                target_id: None,
+            });
         }
         for p in &candidates.preferences {
-            out.push(ReconcileAction { kind: ReconcileKind::Add, item: p.clone(), target_id: None });
+            out.push(ReconcileAction {
+                kind: ReconcileKind::Add,
+                item: p.clone(),
+                target_id: None,
+            });
         }
         for c in &candidates.commitments {
-            out.push(ReconcileAction { kind: ReconcileKind::Add, item: c.clone(), target_id: None });
+            out.push(ReconcileAction {
+                kind: ReconcileKind::Add,
+                item: c.clone(),
+                target_id: None,
+            });
         }
         Ok(out)
     }
@@ -243,7 +261,11 @@ impl MemoryExtractionService {
                 self.put_with_provenance(
                     format!("pref-{}", uuid::Uuid::new_v4()),
                     now,
-                    &format!("{IMP_PREFIX}{}】主人偏好: {}", p.importance, p.content.trim()),
+                    &format!(
+                        "{IMP_PREFIX}{}】主人偏好: {}",
+                        p.importance,
+                        p.content.trim()
+                    ),
                     prov,
                 )?;
             }
@@ -307,15 +329,16 @@ impl MemoryExtractionService {
             content: content.to_string(),
             session_id: "me".into(),
         };
-        self.store.put_episode_full(&ep, meta).map_err(|e| e.to_string())
+        self.store
+            .put_episode_full(&ep, meta)
+            .map_err(|e| e.to_string())
     }
 
     /// TP24: 按时间窗检索 (epoch_ms). 返回 `MemoryEntry` (含 provenance + 4 元数据列).
     /// 老条目 (4 列 NULL) 读取时按 `normalize_meta` 自动填默认 (Manual + timestamp*1000 + 永久).
     pub fn query_with_time_range(&self, from_ms: i64, until_ms: i64) -> Vec<MemoryEntry> {
-        let eps = match self.store.query_with_time_range(from_ms, until_ms) {
-            Ok(v) => v,
-            Err(_) => return Vec::new(),
+        let Ok(eps) = self.store.query_with_time_range(from_ms, until_ms) else {
+            return Vec::new();
         };
         eps.into_iter()
             .map(|ep| {
@@ -323,7 +346,11 @@ impl MemoryExtractionService {
                 // 老条目 created_ms 兜底: raw.created_ms 为 0 (V4 前 NULL 列) → 当 None 处理
                 let (vf, vu, cm, pr) = match raw {
                     Some(m) => {
-                        let cm_opt = if m.created_ms <= 0 { None } else { Some(m.created_ms) };
+                        let cm_opt = if m.created_ms <= 0 {
+                            None
+                        } else {
+                            Some(m.created_ms)
+                        };
                         apeireth_memory::normalize_meta(
                             m.valid_from_ms,
                             m.valid_until_ms,
@@ -332,9 +359,7 @@ impl MemoryExtractionService {
                             ep.timestamp,
                         )
                     }
-                    None => apeireth_memory::normalize_meta(
-                        None, None, None, None, ep.timestamp,
-                    ),
+                    None => apeireth_memory::normalize_meta(None, None, None, None, ep.timestamp),
                 };
                 MemoryEntry {
                     id: ep.id,
@@ -364,16 +389,23 @@ impl MemoryExtractionService {
         if prefs.is_empty() {
             return String::new();
         }
-        let mut s = String::from("【主人偏好画像】(来自记忆提炼, 做审美/风格/交互类事情时优先沿用):\n");
+        let mut s =
+            String::from("【主人偏好画像】(来自记忆提炼, 做审美/风格/交互类事情时优先沿用):\n");
         for (_, p) in prefs.iter().take(8) {
-            s.push_str(&format!("  • {}\n", p.chars().take(120).collect::<String>()));
+            s.push_str(&format!(
+                "  • {}\n",
+                p.chars().take(120).collect::<String>()
+            ));
         }
         s
     }
 
     /// 有效记忆条目 (排除已废弃目标 — 对账 Delete/Update 的旧版本).
     pub fn active_episodes(&self, n: usize) -> Vec<CoreEpisode> {
-        let eps = self.store.recent_episodes("me", n.max(50)).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes("me", n.max(50))
+            .unwrap_or_default();
         // 收集废弃目标 id (tomb-* 条目内容含目标 id)
         let tombed: std::collections::HashSet<String> = eps
             .iter()
@@ -400,18 +432,42 @@ impl MemoryExtractionService {
             match a.kind {
                 ReconcileKind::Add => {
                     let id = format!("mem-ex-{}", uuid::Uuid::new_v4());
-                    self.put(id, now, &format!("{IMP_PREFIX}{}】{}", a.item.importance, a.item.content.trim()))?;
+                    self.put(
+                        id,
+                        now,
+                        &format!(
+                            "{IMP_PREFIX}{}】{}",
+                            a.item.importance,
+                            a.item.content.trim()
+                        ),
+                    )?;
                 }
                 ReconcileKind::Update => {
                     if let Some(t) = &a.target_id {
-                        self.put(format!("tomb-{}", uuid::Uuid::new_v4()), now, &format!("【已废弃】{t}"))?;
+                        self.put(
+                            format!("tomb-{}", uuid::Uuid::new_v4()),
+                            now,
+                            &format!("【已废弃】{t}"),
+                        )?;
                     }
                     let id = format!("mem-ex-{}", uuid::Uuid::new_v4());
-                    self.put(id, now, &format!("{IMP_PREFIX}{}】【更新】{}", a.item.importance, a.item.content.trim()))?;
+                    self.put(
+                        id,
+                        now,
+                        &format!(
+                            "{IMP_PREFIX}{}】【更新】{}",
+                            a.item.importance,
+                            a.item.content.trim()
+                        ),
+                    )?;
                 }
                 ReconcileKind::Delete => {
                     if let Some(t) = &a.target_id {
-                        self.put(format!("tomb-{}", uuid::Uuid::new_v4()), now, &format!("【已废弃】{t}"))?;
+                        self.put(
+                            format!("tomb-{}", uuid::Uuid::new_v4()),
+                            now,
+                            &format!("【已废弃】{t}"),
+                        )?;
                     }
                 }
             }
@@ -420,16 +476,20 @@ impl MemoryExtractionService {
     }
 
     /// 图谱三元组写入 (Zep 双时态边 + A-MEM 自动链接; 调用方传 graph 服务).
-    pub fn apply_graph(
-        &self,
-        graph: &[GraphItem],
-        graph_svc: &crate::memory_graph::MemoryGraph,
-    ) {
+    pub fn apply_graph(&self, graph: &[GraphItem], graph_svc: &crate::memory_graph::MemoryGraph) {
         for g in graph {
-            if g.subject.trim().is_empty() || g.predicate.trim().is_empty() || g.object.trim().is_empty() {
+            if g.subject.trim().is_empty()
+                || g.predicate.trim().is_empty()
+                || g.object.trim().is_empty()
+            {
                 continue;
             }
-            let id = graph_svc.add_fact(g.subject.trim(), g.predicate.trim(), g.object.trim(), g.importance);
+            let id = graph_svc.add_fact(
+                g.subject.trim(),
+                g.predicate.trim(),
+                g.object.trim(),
+                g.importance,
+            );
             // A-MEM: 新事实写入后与既有记忆自动链接 (真实 id)
             graph_svc.link_on_write(&id, &format!("{} {} {}", g.subject, g.predicate, g.object));
         }
@@ -437,10 +497,17 @@ impl MemoryExtractionService {
 
     /// 提炼输入: 最近对话/记忆拼接 (供 LLM 提炼器).
     pub fn recent_context(&self, n: usize) -> String {
-        let eps = self.store.recent_episodes("me", n.max(10)).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes("me", n.max(10))
+            .unwrap_or_default();
         let mut parts: Vec<String> = Vec::new();
         for e in eps.iter().rev().take(n) {
-            parts.push(format!("[{}] {}", e.role, e.content.chars().take(300).collect::<String>()));
+            parts.push(format!(
+                "[{}] {}",
+                e.role,
+                e.content.chars().take(300).collect::<String>()
+            ));
         }
         parts.join("\n")
     }
@@ -463,23 +530,30 @@ pub fn rank_memory_entries(
     access: &std::collections::HashMap<String, (u64, i64)>,
     budget: usize,
 ) -> Vec<(String, String)> {
-    let mut ranked: Vec<(&CoreEpisode, f64)> = eps.iter().map(|e| {
-        let importance = parse_importance(&e.content) as f64;
-        let (count, _) = access.get(&e.id).copied().unwrap_or((0, 0));
-        // 组加成: 0=dream/pref (高价值常驻), 1=mem-ex/reflect, 2=其他
-        let group_bonus = if e.id.starts_with("mem-dream-") || e.id.starts_with("pref-") {
-            4.0
-        } else if e.id.starts_with("mem-ex-") || e.id.starts_with("reflect-") {
-            2.0
-        } else {
-            0.0
-        };
-        // recency: 最近 7 天内线性加成
-        let age_days = (chrono::Utc::now().timestamp() - e.timestamp) as f64 / 86400.0;
-        let recency = if age_days < 7.0 { (7.0 - age_days) / 7.0 } else { 0.0 };
-        let score = importance * 3.0 + count as f64 * 0.3 + group_bonus + recency * 2.0;
-        (e, score)
-    }).collect();
+    let mut ranked: Vec<(&CoreEpisode, f64)> = eps
+        .iter()
+        .map(|e| {
+            let importance = f64::from(parse_importance(&e.content));
+            let (count, _) = access.get(&e.id).copied().unwrap_or((0, 0));
+            // 组加成: 0=dream/pref (高价值常驻), 1=mem-ex/reflect, 2=其他
+            let group_bonus = if e.id.starts_with("mem-dream-") || e.id.starts_with("pref-") {
+                4.0
+            } else if e.id.starts_with("mem-ex-") || e.id.starts_with("reflect-") {
+                2.0
+            } else {
+                0.0
+            };
+            // recency: 最近 7 天内线性加成
+            let age_days = (chrono::Utc::now().timestamp() - e.timestamp) as f64 / 86400.0;
+            let recency = if age_days < 7.0 {
+                (7.0 - age_days) / 7.0
+            } else {
+                0.0
+            };
+            let score = importance * 3.0 + count as f64 * 0.3 + group_bonus + recency * 2.0;
+            (e, score)
+        })
+        .collect();
     ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
     ranked
         .iter()
@@ -501,7 +575,10 @@ mod tests {
         let s = MemoryExtractionService::new(store());
         let ex = ExtractedMemory {
             facts: vec![MemoryItem::new("主人周五考高数期中", 9)],
-            preferences: vec![MemoryItem::new("唯美写意风格, 深蓝夜空配色", 8), MemoryItem::new("古风韵味", 6)],
+            preferences: vec![
+                MemoryItem::new("唯美写意风格, 深蓝夜空配色", 8),
+                MemoryItem::new("古风韵味", 6),
+            ],
             commitments: vec![MemoryItem::new("周六上午整理错题本", 7)],
             emotional: Some("今天有点累但心情平静".into()),
             graph: vec![],
@@ -533,19 +610,43 @@ mod tests {
             commitments: vec![],
             emotional: None,
             graph: vec![],
-        }).unwrap();
-        let old_id = s.store.recent_episodes("me", 10).unwrap().iter().find(|e| e.id.starts_with("mem-ex-")).unwrap().id.clone();
+        })
+        .unwrap();
+        let old_id = s
+            .store
+            .recent_episodes("me", 10)
+            .unwrap()
+            .iter()
+            .find(|e| e.id.starts_with("mem-ex-"))
+            .unwrap()
+            .id
+            .clone();
         // 对账: Update 旧事实 + Add 新事实 + Delete 一条
         let actions = vec![
-            ReconcileAction { kind: ReconcileKind::Update, item: MemoryItem::new("新事实 (取代旧)", 8), target_id: Some(old_id.clone()) },
-            ReconcileAction { kind: ReconcileKind::Add, item: MemoryItem::new("全新事实", 6), target_id: None },
-            ReconcileAction { kind: ReconcileKind::Delete, item: MemoryItem::new("", 1), target_id: Some("exp-nonexist".into()) },
+            ReconcileAction {
+                kind: ReconcileKind::Update,
+                item: MemoryItem::new("新事实 (取代旧)", 8),
+                target_id: Some(old_id.clone()),
+            },
+            ReconcileAction {
+                kind: ReconcileKind::Add,
+                item: MemoryItem::new("全新事实", 6),
+                target_id: None,
+            },
+            ReconcileAction {
+                kind: ReconcileKind::Delete,
+                item: MemoryItem::new("", 1),
+                target_id: Some("exp-nonexist".into()),
+            },
         ];
         s.apply_reconcile(&actions).unwrap();
         // 废弃的旧事实被过滤
         let active = s.active_episodes(50);
         assert!(!active.iter().any(|e| e.id == old_id), "旧事实应被废弃过滤");
-        assert!(active.iter().any(|e| e.content.contains("新事实")), "新版应存在");
+        assert!(
+            active.iter().any(|e| e.content.contains("新事实")),
+            "新版应存在"
+        );
         assert!(active.iter().any(|e| e.content.contains("全新事实")));
     }
 
@@ -580,10 +681,19 @@ mod tests {
         for prov in provenances {
             let id = format!("mem-ex-prov-{:?}", prov);
             let ts = 1_700_000_000_i64;
-            s.put_with_provenance(id.clone(), ts, &format!("prov={:?}", prov), prov).unwrap();
+            s.put_with_provenance(id.clone(), ts, &format!("prov={:?}", prov), prov)
+                .unwrap();
             // 读取 raw 4 列元数据
-            let meta = s.store.read_episode_meta(&id).unwrap().expect("just-written");
-            assert_eq!(meta.provenance, prov, "provenance roundtrip failed for {:?}", prov);
+            let meta = s
+                .store
+                .read_episode_meta(&id)
+                .unwrap()
+                .expect("just-written");
+            assert_eq!(
+                meta.provenance, prov,
+                "provenance roundtrip failed for {:?}",
+                prov
+            );
             // created_ms = ts * 1000 (默认)
             assert_eq!(meta.created_ms, ts * 1000);
             // valid_from_ms = created_ms (默认), valid_until = None (永久)
@@ -618,7 +728,10 @@ mod tests {
 
         // 时间窗过滤: [-1, 0] 边界 (from = 0 包含, until = 0 包含到 0)
         let entries = s.query_with_time_range(0, 0);
-        assert!(entries.iter().any(|e| e.id == id), "valid_from=0 应被 >= 0 过滤命中");
+        assert!(
+            entries.iter().any(|e| e.id == id),
+            "valid_from=0 应被 >= 0 过滤命中"
+        );
     }
 
     /// 验收 #3: query_with_time_range 时间范围检索.
@@ -629,7 +742,7 @@ mod tests {
         // 第 3 条设 valid_until=Some(250_000) → 在 [50_000, 250_000] 仍有效, 之后失效
         for i in 1..=3 {
             let id = format!("mem-ex-time-{}", i);
-            let ts = (100 * i) as i64; // 100, 200, 300
+            let ts = i64::from(100 * i); // 100, 200, 300
             if i == 3 {
                 let meta = EpisodeMeta {
                     valid_from_ms: Some(ts * 1000),
@@ -637,9 +750,11 @@ mod tests {
                     created_ms: ts * 1000,
                     provenance: Provenance::Dialog,
                 };
-                s.put_with_meta(id, ts, &format!("t={}", ts), &meta).unwrap();
+                s.put_with_meta(id, ts, &format!("t={}", ts), &meta)
+                    .unwrap();
             } else {
-                s.put_with_provenance(id, ts, &format!("t={}", ts), Provenance::Dialog).unwrap();
+                s.put_with_provenance(id, ts, &format!("t={}", ts), Provenance::Dialog)
+                    .unwrap();
             }
         }
 
@@ -654,17 +769,24 @@ mod tests {
         // [50_000, 200_000] 但 valid_until 改成 150_000 (t=300 失效) → 应只剩 t=100, t=200
         let st2 = store();
         let s2 = MemoryExtractionService::new(st2);
-        s2.put_with_provenance("mem-ex-time-1".into(), 100, "t=100", Provenance::Dialog).unwrap();
-        s2.put_with_provenance("mem-ex-time-2".into(), 200, "t=200", Provenance::Dialog).unwrap();
+        s2.put_with_provenance("mem-ex-time-1".into(), 100, "t=100", Provenance::Dialog)
+            .unwrap();
+        s2.put_with_provenance("mem-ex-time-2".into(), 200, "t=200", Provenance::Dialog)
+            .unwrap();
         let meta = EpisodeMeta {
             valid_from_ms: Some(300_000),
             valid_until_ms: Some(150_000), // 150_000 < 200_000 → 在 [50_000, 200_000] 内失效
             created_ms: 300_000,
             provenance: Provenance::Dialog,
         };
-        s2.put_with_meta("mem-ex-time-3".into(), 300, "t=300", &meta).unwrap();
+        s2.put_with_meta("mem-ex-time-3".into(), 300, "t=300", &meta)
+            .unwrap();
         let r = s2.query_with_time_range(50_000, 200_000);
-        assert_eq!(r.len(), 2, "t=300 valid_until=150_000 < until=200_000 应被过滤");
+        assert_eq!(
+            r.len(),
+            2,
+            "t=300 valid_until=150_000 < until=200_000 应被过滤"
+        );
         let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
         assert!(ids.contains(&"mem-ex-time-1".to_string()));
         assert!(ids.contains(&"mem-ex-time-2".to_string()));
@@ -676,7 +798,14 @@ mod tests {
 
         // 验证 MemoryEntry 字段都填齐 (provenance + 4 元数据列)
         for e in &s2.query_with_time_range(0, i64::MAX) {
-            assert!(matches!(e.provenance, Provenance::Dialog | Provenance::Manual | Provenance::Tool | Provenance::Reflection | Provenance::Observation));
+            assert!(matches!(
+                e.provenance,
+                Provenance::Dialog
+                    | Provenance::Manual
+                    | Provenance::Tool
+                    | Provenance::Reflection
+                    | Provenance::Observation
+            ));
             assert!(e.created_ms > 0);
         }
     }
@@ -688,7 +817,8 @@ mod tests {
         let ts = 1_700_000_000_i64;
 
         // 条目 A: 永久 (valid_until None)
-        s.put_with_provenance("mem-ex-perm".into(), ts, "永久条目", Provenance::Manual).unwrap();
+        s.put_with_provenance("mem-ex-perm".into(), ts, "永久条目", Provenance::Manual)
+            .unwrap();
         // 条目 B: 在 [ts*1000+1000, ts*1000+5000] 有效
         let meta = EpisodeMeta {
             valid_from_ms: Some(ts * 1000 + 1000),
@@ -696,18 +826,28 @@ mod tests {
             created_ms: ts * 1000,
             provenance: Provenance::Dialog,
         };
-        s.put_with_meta("mem-ex-window".into(), ts, "窗口条目", &meta).unwrap();
+        s.put_with_meta("mem-ex-window".into(), ts, "窗口条目", &meta)
+            .unwrap();
 
         // 查询 [0, ts*1000+2000] → A 在 (永久), B 在 (valid_until >= 2_000)
         let r = s.query_with_time_range(0, ts * 1000 + 2000);
         let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
-        assert!(ids.contains(&"mem-ex-perm".to_string()), "永久条目应始终命中");
-        assert!(ids.contains(&"mem-ex-window".to_string()), "valid_until 在窗内应命中");
+        assert!(
+            ids.contains(&"mem-ex-perm".to_string()),
+            "永久条目应始终命中"
+        );
+        assert!(
+            ids.contains(&"mem-ex-window".to_string()),
+            "valid_until 在窗内应命中"
+        );
 
         // 查询 [0, ts*1000+6000] → B 已失效 (valid_until=5000 < until=6000)
         let r = s.query_with_time_range(0, ts * 1000 + 6000);
         let ids: Vec<_> = r.iter().map(|e| e.id.clone()).collect();
-        assert!(!ids.contains(&"mem-ex-window".to_string()), "valid_until < until 应被过滤");
+        assert!(
+            !ids.contains(&"mem-ex-window".to_string()),
+            "valid_until < until 应被过滤"
+        );
         assert!(ids.contains(&"mem-ex-perm".to_string()), "永久条目仍命中");
     }
 
@@ -722,19 +862,34 @@ mod tests {
         assert_eq!(raw.valid_from_ms, None, "老条目 valid_from_ms 应 NULL");
         assert_eq!(raw.valid_until_ms, None, "老条目 valid_until_ms 应 NULL");
         assert_eq!(raw.created_ms, 0, "老条目 created_ms 默认 0 (raw)");
-        assert_eq!(raw.provenance, Provenance::Manual, "老条目 provenance 默认 Manual (raw)");
+        assert_eq!(
+            raw.provenance,
+            Provenance::Manual,
+            "老条目 provenance 默认 Manual (raw)"
+        );
 
         // 通过 query_with_time_range 读取 (应用 normalize_meta)
         let r = s.query_with_time_range(0, i64::MAX);
         let old = r.iter().find(|e| e.id == "mem-ex-old").expect("应被读到");
         assert_eq!(old.provenance, Provenance::Manual, "兼容默认 Manual");
-        assert_eq!(old.created_ms, 1_500_000 * 1000, "created_ms 兜底 timestamp*1000");
-        assert_eq!(old.valid_from_ms, Some(1_500_000 * 1000), "valid_from 兜底 created_ms");
+        assert_eq!(
+            old.created_ms,
+            1_500_000 * 1000,
+            "created_ms 兜底 timestamp*1000"
+        );
+        assert_eq!(
+            old.valid_from_ms,
+            Some(1_500_000 * 1000),
+            "valid_from 兜底 created_ms"
+        );
         assert_eq!(old.valid_until_ms, None, "valid_until 永久 (None 保留)");
 
         // 老条目应在时间窗内 (since created_ms = timestamp*1000)
         let r = s.query_with_time_range(1_500_000 * 1000, 1_500_000 * 1000);
-        assert!(r.iter().any(|e| e.id == "mem-ex-old"), "老条目应按兜底 created_ms 命中时间窗");
+        assert!(
+            r.iter().any(|e| e.id == "mem-ex-old"),
+            "老条目应按兜底 created_ms 命中时间窗"
+        );
     }
 
     /// 验收 #4 续: put() 旧路径写入条目, query_with_time_range 也能读到 (兼容).
@@ -743,7 +898,10 @@ mod tests {
         let s = MemoryExtractionService::new(store());
         s.put("mem-ex-old2".into(), 1_600_000, "老条目 2").unwrap();
         let r = s.query_with_time_range(0, i64::MAX);
-        assert!(r.iter().any(|e| e.id == "mem-ex-old2"), "旧路径写入应能被新查询读到");
+        assert!(
+            r.iter().any(|e| e.id == "mem-ex-old2"),
+            "旧路径写入应能被新查询读到"
+        );
     }
 
     /// put_with_meta 显式控制 4 列.
@@ -756,7 +914,8 @@ mod tests {
             created_ms: 150_000,
             provenance: Provenance::Reflection,
         };
-        s.put_with_meta("mem-ex-full".into(), 150, "全控条目", &meta).unwrap();
+        s.put_with_meta("mem-ex-full".into(), 150, "全控条目", &meta)
+            .unwrap();
         let read = s.store.read_episode_meta("mem-ex-full").unwrap().unwrap();
         assert_eq!(read.valid_from_ms, Some(100_000));
         assert_eq!(read.valid_until_ms, Some(200_000));
@@ -769,16 +928,24 @@ mod tests {
     fn migration_v4_columns_exist() {
         let st = SqliteMemoryStore::open_in_memory().unwrap();
         let conn = st.conn().unwrap();
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(episodes)")
-            .unwrap();
+        let mut stmt = conn.prepare("PRAGMA table_info(episodes)").unwrap();
         let cols: Vec<String> = stmt
             .query_map([], |row| row.get::<_, String>(1))
             .unwrap()
             .filter_map(|r| r.ok())
             .collect();
-        for col in ["valid_from_ms", "valid_until_ms", "created_ms", "provenance"] {
-            assert!(cols.contains(&col.to_string()), "V4 列 {} 应存在, 实际: {:?}", col, cols);
+        for col in [
+            "valid_from_ms",
+            "valid_until_ms",
+            "created_ms",
+            "provenance",
+        ] {
+            assert!(
+                cols.contains(&col.to_string()),
+                "V4 列 {} 应存在, 实际: {:?}",
+                col,
+                cols
+            );
         }
     }
 
@@ -792,9 +959,13 @@ mod tests {
             commitments: vec![],
             emotional: None,
             graph: vec![],
-        }).unwrap();
+        })
+        .unwrap();
         let r = s.query_with_time_range(0, i64::MAX);
         assert!(!r.is_empty());
-        assert!(r.iter().all(|e| e.provenance == Provenance::Dialog), "apply 写入应统一为 Dialog 来源");
+        assert!(
+            r.iter().all(|e| e.provenance == Provenance::Dialog),
+            "apply 写入应统一为 Dialog 来源"
+        );
     }
 }

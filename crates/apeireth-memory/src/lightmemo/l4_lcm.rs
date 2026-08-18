@@ -59,7 +59,10 @@ pub struct L4LcmCompressor {
 
 impl L4LcmCompressor {
     pub fn new() -> Self {
-        Self { chunk_size: 1000, chunk_strategy_version: CURRENT_CHUNK_STRATEGY_VERSION }
+        Self {
+            chunk_size: 1000,
+            chunk_strategy_version: CURRENT_CHUNK_STRATEGY_VERSION,
+        }
     }
     pub fn with_chunk_size(mut self, size: usize) -> Self {
         self.chunk_size = size;
@@ -126,7 +129,9 @@ impl L4LcmCompressor {
 }
 
 impl Default for L4LcmCompressor {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -244,7 +249,10 @@ mod tests {
         let v1_chunks = v1.chunk("hello world");
         assert!(!v1_chunks.is_empty());
         let v2_version = 2;
-        let stale_count = v1_chunks.iter().filter(|ch| ch.is_stale(v2_version)).count();
+        let stale_count = v1_chunks
+            .iter()
+            .filter(|ch| ch.is_stale(v2_version))
+            .count();
         assert_eq!(stale_count, v1_chunks.len());
     }
 

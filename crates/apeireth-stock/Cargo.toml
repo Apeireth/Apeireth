@@ -17,6 +17,8 @@ anyhow = { workspace = true }
 thiserror = { workspace = true }
 tracing = "0.1"
 chrono = { workspace = true }
+# clippy disallowed-methods (clippy.toml): std::fs / Path::metadata 强制走 fs_err
+fs-err = { workspace = true }
 # CSV 解析: 用 csv crate (成熟, 处理引号转义/多行字段/UTF-8 BOM 安全)
 
 [dependencies.csv]

@@ -1,9 +1,9 @@
 //! fsnotify watcher (notify 6.x).
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
-use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc;
 
 #[derive(Debug, Error)]
@@ -42,14 +42,21 @@ pub struct FileWatcher {
 impl FileWatcher {
     pub fn new(path: &Path, recursive: bool) -> Result<Self, WatchError> {
         let (tx, rx) = mpsc::channel(64);
-        let mode = if recursive { RecursiveMode::Recursive } else { RecursiveMode::NonRecursive };
+        let mode = if recursive {
+            RecursiveMode::Recursive
+        } else {
+            RecursiveMode::NonRecursive
+        };
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
                 let _ = tx.blocking_send(WatchEvent::from_notify(&event));
             }
         })?;
         watcher.watch(path, mode)?;
-        Ok(Self { _watcher: watcher, rx })
+        Ok(Self {
+            _watcher: watcher,
+            rx,
+        })
     }
 
     pub async fn next_event(&mut self) -> Option<WatchEvent> {

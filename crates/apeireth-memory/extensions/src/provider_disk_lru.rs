@@ -22,7 +22,6 @@
 //! 5. cache_ttl = [0ms, 7d] (0 = 永不过期; >0 = 启动时清掉过期 entry)
 //! 6. scope = Local (单进程文件目录)
 
-use std::fs;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -33,9 +32,7 @@ use lru::LruCache;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **DiskLruProvider**: 本地 disk + LRU 缓存 provider.
 #[derive(Debug)]
@@ -78,7 +75,7 @@ impl DiskLruProvider {
         let disk_dir = PathBuf::from(path_str);
 
         // 创建目录 (如果不存在)
-        fs::create_dir_all(&disk_dir).map_err(|e| MemoryProviderError::Connection {
+        fs_err::create_dir_all(&disk_dir).map_err(|e| MemoryProviderError::Connection {
             provider: ProviderKind::DiskLru,
             reason: format!("create disk dir failed: {e}"),
         })?;
@@ -115,18 +112,25 @@ impl DiskLruProvider {
 
     /// 从 disk 目录 reload (K-1 #4 persist=true 触发).
     fn reload_from_disk(&self) -> MemoryProviderResult<()> {
-        let entries = fs::read_dir(&self.disk_dir).map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("read_dir failed: {e}"),
-        })?;
-        let mut lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let entries =
+            fs_err::read_dir(&self.disk_dir).map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("read_dir failed: {e}"),
+            })?;
+        let mut lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         for entry in entries {
             let entry = entry.map_err(|e| MemoryProviderError::Backend {
                 provider: ProviderKind::DiskLru,
@@ -142,7 +146,7 @@ impl DiskLruProvider {
             };
             // 从 file_name 解析回 key (per save_to_disk 模式: `<key>.bin`)
             let key = file_name.trim_end_matches(".bin").to_string();
-            let bytes = match fs::read(&path) {
+            let bytes = match fs_err::read(&path) {
                 Ok(b) => b,
                 Err(_) => continue, // 0 假装 — skip 损坏文件
             };
@@ -174,7 +178,7 @@ impl DiskLruProvider {
             .collect();
         let filename = format!("{safe_key}.bin");
         let path = self.disk_dir.join(&filename);
-        fs::write(&path, value).map_err(|e| MemoryProviderError::Backend {
+        fs_err::write(&path, value).map_err(|e| MemoryProviderError::Backend {
             provider: ProviderKind::DiskLru,
             reason: format!("disk write failed: {e}"),
         })?;
@@ -189,14 +193,20 @@ impl MemoryProvider for DiskLruProvider {
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> MemoryProviderResult<()> {
-        let mut lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
 
         // K-1 #3: max_size 校验
         let new_size = *size + value.len() as u64;
@@ -228,10 +238,13 @@ impl MemoryProvider for DiskLruProvider {
     }
 
     async fn get(&self, key: &str) -> MemoryProviderResult<Option<Vec<u8>>> {
-        let mut lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         // K-1 #5: cache_ttl 校验 (0 = 永不过期, >0 检查)
         let ttl = self.config.cache_ttl;
         if let Some(entry) = lru.get(key) {
@@ -246,14 +259,20 @@ impl MemoryProvider for DiskLruProvider {
     }
 
     async fn delete(&self, key: &str) -> MemoryProviderResult<()> {
-        let mut lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         if let Some(old) = lru.pop(key) {
             *size -= old.value.len() as u64;
             // 0 删盘上文件 (持久化场景下可能其他 DiskLruProvider 实例也在读, 0 假装独占)
@@ -262,32 +281,44 @@ impl MemoryProvider for DiskLruProvider {
     }
 
     async fn exists(&self, key: &str) -> MemoryProviderResult<bool> {
-        let lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         Ok(lru.contains(key))
     }
 
     async fn clear(&self) -> MemoryProviderResult<()> {
-        let mut lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         lru.clear();
         *size = 0;
         Ok(())
     }
 
     async fn size(&self) -> MemoryProviderResult<u64> {
-        let lru = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::DiskLru,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let lru = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::DiskLru,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         Ok(lru.len() as u64)
     }
 }
@@ -311,8 +342,8 @@ mod tests {
         ProviderConfig::new(
             format!("file://{}", dir.path().display()),
             Duration::from_secs(5),
-            1024 * 1024, // 1MB
-            true,         // persist=true → reload
+            1024 * 1024,            // 1MB
+            true,                   // persist=true → reload
             Duration::from_secs(0), // 永不过期
             ProviderScope::Local,
         )

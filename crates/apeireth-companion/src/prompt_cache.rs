@@ -62,7 +62,10 @@ pub fn redact_secrets(text: &str) -> String {
     while let Some(idx) = rest.find("sk-") {
         res.push_str(&rest[..idx]);
         let tail = &rest[idx + 3..];
-        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-').count();
+        let take = tail
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+            .count();
         if take >= 8 {
             res.push_str("sk-***");
             rest = tail.chars().skip(take).collect();
@@ -79,7 +82,10 @@ pub fn redact_secrets(text: &str) -> String {
     while let Some(idx) = rest.find("Bearer ") {
         res.push_str(&rest[..idx]);
         let tail = &rest[idx + 7..];
-        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-').count();
+        let take = tail
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
+            .count();
         if take >= 8 {
             res.push_str("Bearer ***");
             rest = tail.chars().skip(take).collect();
@@ -96,7 +102,10 @@ pub fn redact_secrets(text: &str) -> String {
     while let Some(idx) = rest.find("KEY=") {
         res.push_str(&rest[..idx + 4]);
         let tail = &rest[idx + 4..];
-        let take = tail.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-').count();
+        let take = tail
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_' || *c == '-')
+            .count();
         if take >= 8 {
             res.push_str("***");
             rest = tail.chars().skip(take).collect();
@@ -161,7 +170,10 @@ mod tests {
         let a = build_messages("固定系统提示", &h, Some("2026-08-16 06:40"));
         let b = build_messages("固定系统提示", &h, Some("2026-08-17 07:00"));
         // 前缀 (system + 直到最新 user 前的历史) 逐字节相同 — 只有动态注人不同
-        assert_eq!(a[0]["content"], b[0]["content"], "system prompt 必须逐字节稳定");
+        assert_eq!(
+            a[0]["content"], b[0]["content"],
+            "system prompt 必须逐字节稳定"
+        );
         // 动态注人: 位置在最后一个 user 之后 (插在它前面 = history[..=last_user] 后)
         let note_pos_a = a
             .iter()
@@ -171,8 +183,14 @@ mod tests {
             .iter()
             .position(|m| m["content"].as_str().unwrap_or("").contains("[当前状态]"))
             .unwrap();
-        assert_eq!(a[note_pos_a]["content"], json!("[当前状态] 2026-08-16 06:40"));
-        assert_eq!(b[note_pos_b]["content"], json!("[当前状态] 2026-08-17 07:00"));
+        assert_eq!(
+            a[note_pos_a]["content"],
+            json!("[当前状态] 2026-08-16 06:40")
+        );
+        assert_eq!(
+            b[note_pos_b]["content"],
+            json!("[当前状态] 2026-08-17 07:00")
+        );
         // 除动态注人外, 其它消息序列一致
         let mut a2 = a.clone();
         let mut b2 = b.clone();
@@ -204,7 +222,9 @@ mod tests {
         let h = history();
         let msgs = build_messages("sys", &h, None);
         assert_eq!(msgs.len(), 1 + h.len());
-        assert!(msgs.iter().all(|m| !m["content"].as_str().unwrap_or("").contains("[当前状态]")));
+        assert!(msgs
+            .iter()
+            .all(|m| !m["content"].as_str().unwrap_or("").contains("[当前状态]")));
     }
 
     #[test]

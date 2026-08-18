@@ -58,7 +58,10 @@ pub fn record_request(
         .collect();
     let list = list(store, Some("pending"));
     // 同工具同摘要已有 pending → 不重复记录 (防刷屏)
-    if list.iter().any(|r| r.tool == tool && r.args_preview == preview) {
+    if list
+        .iter()
+        .any(|r| r.tool == tool && r.args_preview == preview)
+    {
         return;
     }
     let now = chrono::Utc::now().timestamp();
@@ -93,7 +96,10 @@ pub fn record_request(
                 apply_wire_response(store, &req.chain, resp);
             }
             Err(e) => {
-                eprintln!("[apreq] bridge.dispatch_request 失败 (chain={}): {e}", req.chain);
+                eprintln!(
+                    "[apreq] bridge.dispatch_request 失败 (chain={}): {e}",
+                    req.chain
+                );
                 // 0 装 PASS: 不阻塞主路径, 不假装"已透传"
             }
         }
@@ -124,7 +130,8 @@ fn save(store: &Arc<SqliteMemoryStore>, req: &ApprovalRequest) {
 /// 列出请求 (先按 chain 去重取最新版, 再按 status 过滤 — 顺序关键: 过滤前置会让旧版漏进).
 pub fn list(store: &Arc<SqliteMemoryStore>, status: Option<&str>) -> Vec<ApprovalRequest> {
     let eps = store.recent_episodes("me", 500).unwrap_or_default();
-    let mut by_chain: std::collections::HashMap<String, ApprovalRequest> = std::collections::HashMap::new();
+    let mut by_chain: std::collections::HashMap<String, ApprovalRequest> =
+        std::collections::HashMap::new();
     for e in eps
         .iter()
         .filter(|e| e.id.starts_with("apreq-"))
@@ -178,7 +185,10 @@ pub fn mark_approved(
             extra: Default::default(),
         };
         if let Err(e) = b.dispatch_response(wire) {
-            eprintln!("[apreq] bridge.dispatch_response 失败 (chain={}): {e}", r.chain);
+            eprintln!(
+                "[apreq] bridge.dispatch_response 失败 (chain={}): {e}",
+                r.chain
+            );
         }
     }
     Ok(())
@@ -243,12 +253,30 @@ mod tests {
     #[test]
     fn record_dedupe_and_approve() {
         let s = store();
-        record_request(&s, "FileOperator", &json!({"op": "write", "path": "x"}), "需要主人批准", None);
-        record_request(&s, "FileOperator", &json!({"op": "write", "path": "x"}), "需要主人批准", None);
+        record_request(
+            &s,
+            "FileOperator",
+            &json!({"op": "write", "path": "x"}),
+            "需要主人批准",
+            None,
+        );
+        record_request(
+            &s,
+            "FileOperator",
+            &json!({"op": "write", "path": "x"}),
+            "需要主人批准",
+            None,
+        );
         // 同工具同摘要去重 → 1 条
         assert_eq!(list(&s, Some("pending")).len(), 1);
         // 不同摘要 → 2 条
-        record_request(&s, "FileOperator", &json!({"op": "write", "path": "y"}), "需要主人批准", None);
+        record_request(
+            &s,
+            "FileOperator",
+            &json!({"op": "write", "path": "y"}),
+            "需要主人批准",
+            None,
+        );
         assert_eq!(list(&s, Some("pending")).len(), 2);
         // 批准第一条 → pending 1 条
         let first = list(&s, Some("pending"))[0].clone();
@@ -262,7 +290,13 @@ mod tests {
     #[test]
     fn pending_json_shape() {
         let s = store();
-        record_request(&s, "ShellExec", &json!({"cmd": "dir"}), "需要主人批准", None);
+        record_request(
+            &s,
+            "ShellExec",
+            &json!({"cmd": "dir"}),
+            "需要主人批准",
+            None,
+        );
         let j = pending_json(&s);
         assert_eq!(j["count"], json!(1));
         assert_eq!(j["requests"][0]["tool"], json!("ShellExec"));
@@ -358,7 +392,10 @@ mod tests {
         let mark_resp = responses
             .iter()
             .find(|r| r.chain == chain && r.decision == "approved");
-        assert!(mark_resp.is_some(), "mark_approved 必须 dispatch 1 个 approved 响应");
+        assert!(
+            mark_resp.is_some(),
+            "mark_approved 必须 dispatch 1 个 approved 响应"
+        );
     }
 
     // t14: bridge 传 None 时, 主路径不受影响 (向后兼容老调用点)

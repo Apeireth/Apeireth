@@ -106,8 +106,8 @@ pub use resource::{
     MIN_NET_BANDWIDTH_BPS, MIN_TMP_BYTES,
 };
 pub use runtime::{
-    RuntimeKind, SandboxStatus, IsolationLevel, SUPPORTED_ISOLATION_LEVELS,
-    SUPPORTED_RUNTIME_KINDS, SANDBOX_STATUS_COUNT,
+    IsolationLevel, RuntimeKind, SandboxStatus, SANDBOX_STATUS_COUNT, SUPPORTED_ISOLATION_LEVELS,
+    SUPPORTED_RUNTIME_KINDS,
 };
 
 // ============================================================================
@@ -163,7 +163,10 @@ pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
 /// **R21+ 改 `STUB_MODE = false` 时, 本函数返 `false`**; 现阶段恒返 `true`.
@@ -359,15 +362,15 @@ impl SandboxHandle {
 
     /// 沙箱是否在运行.
     pub fn is_running(&self) -> bool {
-        matches!(self.status, SandboxStatus::Running | SandboxStatus::Creating)
+        matches!(
+            self.status,
+            SandboxStatus::Running | SandboxStatus::Creating
+        )
     }
 
     /// 沙箱是否已完成 (stopped 或 failed).
     pub fn is_finished(&self) -> bool {
-        matches!(
-            self.status,
-            SandboxStatus::Stopped | SandboxStatus::Failed
-        )
+        matches!(self.status, SandboxStatus::Stopped | SandboxStatus::Failed)
     }
 }
 
@@ -491,10 +494,7 @@ impl SandboxSdk {
 
     /// 当前活跃沙箱数.
     pub fn active_sandboxes(&self) -> usize {
-        self.handles
-            .values()
-            .filter(|h| h.is_running())
-            .count()
+        self.handles.values().filter(|h| h.is_running()).count()
     }
 
     /// 查 handle by id.
@@ -547,7 +547,9 @@ impl SandboxSdk {
     /// R21+ 真接: 调 bollard::Docker::inspect_container / firecracker::VM::state / runsc.state.
     pub async fn get_status(&self, _id: &Uuid) -> SandboxResult<SandboxStatus> {
         warn!(target: "apeireth_sdk_sandbox", "get_status STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_get_status"))
+        Err(SandboxError::NotImplemented(
+            "apeireth_sdk_sandbox_get_status",
+        ))
     }
 
     /// 工具 5: `apeireth_sdk_sandbox_stream_logs` (STUB 返 NotImplemented).
@@ -559,7 +561,9 @@ impl SandboxSdk {
         _id: &Uuid,
     ) -> SandboxResult<Pin<Box<dyn Stream<Item = LogStreamEvent> + Send>>> {
         warn!(target: "apeireth_sdk_sandbox", "stream_logs STUB_MODE returning NotImplemented");
-        Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_stream_logs"))
+        Err(SandboxError::NotImplemented(
+            "apeireth_sdk_sandbox_stream_logs",
+        ))
     }
 
     /// 工具 6: `apeireth_sdk_sandbox_cleanup` (STUB 返 NotImplemented).
@@ -583,13 +587,13 @@ impl SandboxSdk {
 #[macro_export]
 macro_rules! sandbox_stub {
     ($api:literal) => {
-        if $crate::STUB_MODE {
+        if $crate::sandbox::STUB_MODE {
             $crate::tracing::warn!(
                 target: "apeireth_sdk_sandbox",
                 concat!($api, " STUB_MODE returning NotImplemented")
             );
             return ::core::result::Result::Err(
-                $crate::SandboxError::NotImplemented(concat!("apeireth_sdk_sandbox_", $api)),
+                $crate::sandbox::SandboxError::NotImplemented(concat!("apeireth_sdk_sandbox_", $api)),
             );
         }
     };
@@ -618,10 +622,7 @@ pub trait SandboxSpawner: Send + Sync {
     /// 沙箱 spawner 类型 (Docker / Firecracker / Gvisor).
     fn kind(&self) -> RuntimeKind;
     /// 实际 spawn (STUB 返 NotImplemented, R21+ 真接 bollard / firecracker / runsc).
-    async fn do_spawn(
-        &self,
-        _config: &SandboxConfig,
-    ) -> SandboxResult<SandboxHandle> {
+    async fn do_spawn(&self, _config: &SandboxConfig) -> SandboxResult<SandboxHandle> {
         Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
     }
     /// 实际 kill (STUB 返 NotImplemented).
@@ -678,7 +679,7 @@ impl SandboxSpawner for StubSandboxSpawner {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
+    use super::*;
 
     // Fixture 1: 编译期 hardcode 守门
     #[test]
@@ -696,8 +697,16 @@ mod tests {
     // Fixture 2: 3 RuntimeKind + 3 IsolationLevel 守门
     #[test]
     fn sandbox_runtime_and_isolation_have_3_each() {
-        assert_eq!(SUPPORTED_RUNTIME_KINDS.len(), 3, "K-1: must be 3 runtime kinds");
-        assert_eq!(SUPPORTED_ISOLATION_LEVELS.len(), 3, "K-1: must be 3 isolation levels");
+        assert_eq!(
+            SUPPORTED_RUNTIME_KINDS.len(),
+            3,
+            "K-1: must be 3 runtime kinds"
+        );
+        assert_eq!(
+            SUPPORTED_ISOLATION_LEVELS.len(),
+            3,
+            "K-1: must be 3 isolation levels"
+        );
         assert_eq!(SUPPORTED_RUNTIME_KINDS[0], RuntimeKind::Docker);
         assert_eq!(SUPPORTED_RUNTIME_KINDS[1], RuntimeKind::Firecracker);
         assert_eq!(SUPPORTED_RUNTIME_KINDS[2], RuntimeKind::Gvisor);
@@ -718,7 +727,11 @@ mod tests {
     // Fixture 3: SANDBOX_TOOL_WHITELIST 6 工具名守门
     #[test]
     fn sandbox_tool_whitelist_has_6_tools() {
-        assert_eq!(SANDBOX_TOOL_WHITELIST.len(), 6, "K-1: must be 6 sandbox tools");
+        assert_eq!(
+            SANDBOX_TOOL_WHITELIST.len(),
+            6,
+            "K-1: must be 6 sandbox tools"
+        );
         assert_eq!(SANDBOX_TOOL_WHITELIST_COUNT, 6);
         let expected = [
             "apeireth_sdk_sandbox_spawn",
@@ -772,28 +785,67 @@ mod tests {
 
         // 6 stub 工具必须全部返 SandboxError::NotImplemented
         let r1 = sdk.spawn(policy).await;
-        assert!(matches!(r1, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))),
-            "spawn must return NotImplemented, got {:?}", r1);
+        assert!(
+            matches!(
+                r1,
+                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_spawn"))
+            ),
+            "spawn must return NotImplemented, got {:?}",
+            r1
+        );
 
         let r2 = sdk.kill(&id, None).await;
-        assert!(matches!(r2, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_kill"))),
-            "kill must return NotImplemented, got {:?}", r2);
+        assert!(
+            matches!(
+                r2,
+                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_kill"))
+            ),
+            "kill must return NotImplemented, got {:?}",
+            r2
+        );
 
         let r3 = sdk.wait(&id, None).await;
-        assert!(matches!(r3, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_wait"))),
-            "wait must return NotImplemented, got {:?}", r3);
+        assert!(
+            matches!(
+                r3,
+                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_wait"))
+            ),
+            "wait must return NotImplemented, got {:?}",
+            r3
+        );
 
         let r4 = sdk.get_status(&id).await;
-        assert!(matches!(r4, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_get_status"))),
-            "get_status must return NotImplemented, got {:?}", r4);
+        assert!(
+            matches!(
+                r4,
+                Err(SandboxError::NotImplemented(
+                    "apeireth_sdk_sandbox_get_status"
+                ))
+            ),
+            "get_status must return NotImplemented, got {:?}",
+            r4
+        );
 
         let r5 = sdk.stream_logs(&id).await;
-        assert!(matches!(r5, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_stream_logs"))),
-            "stream_logs must return NotImplemented (Stream type not Debug)");
+        assert!(
+            matches!(
+                r5,
+                Err(SandboxError::NotImplemented(
+                    "apeireth_sdk_sandbox_stream_logs"
+                ))
+            ),
+            "stream_logs must return NotImplemented (Stream type not Debug)"
+        );
 
         let r6 = sdk.cleanup(&id).await;
-        assert!(matches!(r6, Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_cleanup"))),
-            "cleanup must return NotImplemented, got {:?}", r6);
+        assert!(
+            matches!(
+                r6,
+                Err(SandboxError::NotImplemented("apeireth_sdk_sandbox_cleanup"))
+            ),
+            "cleanup must return NotImplemented, got {:?}",
+            r6
+        );
     }
 
     // 额外 2: SandboxConfig.validate 6 K-1 强校验 1:1 翻译
@@ -811,19 +863,28 @@ mod tests {
         // K-1 强校验 #2: command 空拒绝
         let mut bad = cfg.clone();
         bad.policy.command = vec![];
-        assert!(matches!(bad.validate(), Err(SandboxError::InvalidCommand(_))));
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidCommand(_))
+        ));
 
         // K-1 强校验 #3: user = root 拒绝
         let mut bad = cfg.clone();
         bad.policy.user = "root".to_string();
-        assert!(matches!(bad.validate(), Err(SandboxError::InvalidConfig(_))));
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
 
         // K-1 强校验 #4: env 含 LD_PRELOAD 拒绝
         let mut bad = cfg.clone();
         bad.policy
             .env
             .insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
-        assert!(matches!(bad.validate(), Err(SandboxError::InvalidConfig(_))));
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
 
         // K-1 强校验 #5: container_port = 0 拒绝
         let mut bad = cfg.clone();
@@ -832,7 +893,10 @@ mod tests {
             container_port: 0,
             protocol: PortProtocol::Tcp,
         });
-        assert!(matches!(bad.validate(), Err(SandboxError::InvalidConfig(_))));
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
 
         // K-1 强校验 #6: volume mount 源不在白名单拒绝
         let mut bad = cfg.clone();
@@ -841,7 +905,10 @@ mod tests {
             target: PathBuf::from("/mnt/passwd"),
             read_only: true,
         });
-        assert!(matches!(bad.validate(), Err(SandboxError::InvalidConfig(_))));
+        assert!(matches!(
+            bad.validate(),
+            Err(SandboxError::InvalidConfig(_))
+        ));
     }
 
     // 额外 3: SandboxHandle 状态机判定

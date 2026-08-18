@@ -369,14 +369,14 @@ fn test_smoke_assert_all_passed_when_60plus_ok() {
 
 #[test]
 fn test_k1_integration_five_nav_count() {
-    let h = new_harness_sync();
+    let _h = new_harness_sync();
     assert_eq!(FIVE_NAV, 5);
     assert_eq!(NavPageMirror::ALL.len(), 5);
 }
 
 #[test]
 fn test_k1_integration_nine_organs_count() {
-    let h = new_harness_sync();
+    let _h = new_harness_sync();
     assert_eq!(NINE_ORGANS, 9);
     assert_eq!(OrganMirror::ALL.len(), 9);
 }

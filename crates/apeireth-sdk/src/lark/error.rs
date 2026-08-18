@@ -222,9 +222,15 @@ impl LarkError {
         if domain_parts[domain_parts.len() - 1].len() < 2 {
             return Err(LarkError::EmailInvalid(trimmed.to_string()));
         }
-        // local 段字符校验: 字母数字 + . _ % + - 
+        // local 段字符校验: 字母数字 + . _ % + -
         for c in local.chars() {
-            if !c.is_ascii_alphanumeric() && c != '.' && c != '_' && c != '%' && c != '+' && c != '-' {
+            if !c.is_ascii_alphanumeric()
+                && c != '.'
+                && c != '_'
+                && c != '%'
+                && c != '+'
+                && c != '-'
+            {
                 return Err(LarkError::EmailInvalid(trimmed.to_string()));
             }
         }
@@ -281,8 +287,9 @@ impl LarkError {
 macro_rules! lark_stub {
     // 通用版: 接受类型 + API 名, 编译期类型校验 + tracing log + return Err
     ($api:expr, $ret:ty) => {{
-        $crate::error::tracing_warn_stub($api);
-        let e: $crate::error::LarkError = $crate::error::LarkError::NotImplemented($api);
+        $crate::lark::error::tracing_warn_stub($api);
+        let e: $crate::lark::error::LarkError =
+            $crate::lark::error::LarkError::NotImplemented($api);
         return Err::<_, _>(e);
     }};
 }

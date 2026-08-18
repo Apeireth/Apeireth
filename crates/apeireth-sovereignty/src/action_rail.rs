@@ -659,7 +659,6 @@ impl ActionDispatcher {
                 Ok(outcome) => outcomes.push(outcome),
                 Err(_) => {
                     // 未知 id 跳过, 保持链式执行 (借鉴 Guardrails error tolerance)
-                    continue;
                 }
             }
         }

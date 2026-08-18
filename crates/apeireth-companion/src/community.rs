@@ -152,7 +152,12 @@ pub fn deterministic_summary(c: &Community, top_n: usize) -> String {
 /// - 查询含实体 (任一 s/o 值, 长度≥2, 为查询子串) → Entity (CRAWL 方向);
 /// - 否则 → Broad (社区摘要 brief, 事实数降序 → id 升序).
 /// 空图/空查询安全: 空图 Broad 且 briefs 空, 不 panic.
-pub fn triage(query: &str, facts: &[GraphFact], top_n: usize, max_communities: usize) -> TriageResult {
+pub fn triage(
+    query: &str,
+    facts: &[GraphFact],
+    top_n: usize,
+    max_communities: usize,
+) -> TriageResult {
     let q = query.trim();
     let mut matched: BTreeSet<String> = BTreeSet::new();
     for f in facts {
@@ -235,7 +240,11 @@ mod tests {
         let mut sets: Vec<Vec<String>> = comms.iter().map(|c| c.members.clone()).collect();
         sets.sort();
         let mut expect_a = vec!["喜欢".to_string(), "小明".to_string(), "篮球".to_string()];
-        let mut expect_b = vec!["位于".to_string(), "机房1".to_string(), "服务器A".to_string()];
+        let mut expect_b = vec![
+            "位于".to_string(),
+            "机房1".to_string(),
+            "服务器A".to_string(),
+        ];
         expect_a.sort();
         expect_b.sort();
         let mut expect = vec![expect_a, expect_b];

@@ -661,7 +661,7 @@ impl CacheEntry {
     pub fn is_expired(&self) -> bool {
         self.cached_at
             .elapsed()
-            .map(|d| d.as_millis() > REPO_CACHE_TTL_MS as u128)
+            .map(|d| d.as_millis() > u128::from(REPO_CACHE_TTL_MS))
             .unwrap_or(true)
     }
 }

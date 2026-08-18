@@ -26,7 +26,11 @@ impl DailySummary {
         let mut s = format!("【今日摘要 · {}】\n", self.date);
         s.push_str(&format!(
             "记忆条目 {} · 做梦整合 {} · 反思记录 {} · 工具调用 {} · 总事件 {}\n",
-            self.memory_writes, self.dreams, self.reflections, self.tool_records, self.episode_count
+            self.memory_writes,
+            self.dreams,
+            self.reflections,
+            self.tool_records,
+            self.episode_count
         ));
         if !self.excerpts.is_empty() {
             s.push_str("摘录:\n");
@@ -39,13 +43,23 @@ impl DailySummary {
 }
 
 /// 从 (id, content) 条目构建每日摘要 (纯函数, 可测).
-pub fn build_daily_summary(date: &str, entries: &[(&str, &str)], tool_records: usize) -> DailySummary {
+pub fn build_daily_summary(
+    date: &str,
+    entries: &[(&str, &str)],
+    tool_records: usize,
+) -> DailySummary {
     let memory_writes = entries
         .iter()
         .filter(|(id, _)| id.starts_with("mem-") && !id.starts_with("mem-dream-"))
         .count();
-    let dreams = entries.iter().filter(|(id, _)| id.starts_with("mem-dream-")).count();
-    let reflections = entries.iter().filter(|(id, _)| id.starts_with("reflect-")).count();
+    let dreams = entries
+        .iter()
+        .filter(|(id, _)| id.starts_with("mem-dream-"))
+        .count();
+    let reflections = entries
+        .iter()
+        .filter(|(id, _)| id.starts_with("reflect-"))
+        .count();
     let excerpts: Vec<String> = entries
         .iter()
         .map(|(_, c)| c.chars().take(80).collect())

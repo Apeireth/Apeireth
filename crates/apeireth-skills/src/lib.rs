@@ -328,7 +328,11 @@ impl SkillRegistry {
             return Err(SkillError::DuplicateId(id));
         }
         if self.disciplines.contains_key(&id) {
-            return Err(SkillError::KindMismatch(id, SkillKind::Discipline, SkillKind::Capability));
+            return Err(SkillError::KindMismatch(
+                id,
+                SkillKind::Discipline,
+                SkillKind::Capability,
+            ));
         }
         self.capabilities.insert(id, skill);
         Ok(())
@@ -346,7 +350,11 @@ impl SkillRegistry {
             return Err(SkillError::DuplicateId(id));
         }
         if self.capabilities.contains_key(&id) {
-            return Err(SkillError::KindMismatch(id, SkillKind::Capability, SkillKind::Discipline));
+            return Err(SkillError::KindMismatch(
+                id,
+                SkillKind::Capability,
+                SkillKind::Discipline,
+            ));
         }
         self.disciplines.insert(id.clone(), skill);
         self.checkers.insert(id, checker);
@@ -360,9 +368,7 @@ impl SkillRegistry {
             .checkers
             .get(id)
             .ok_or_else(|| DisciplineError::UnknownDiscipline(id.to_string()))?;
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            checker.check(ctx)
-        }));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| checker.check(ctx)));
         match result {
             Ok(r) => r,
             Err(_) => Err(DisciplineError::CheckerPanic(id.to_string())),
@@ -374,9 +380,8 @@ impl SkillRegistry {
     pub fn check_all(&self, ctx: &DisciplineContext) -> Vec<(String, Result<(), DisciplineError>)> {
         let mut out = Vec::with_capacity(self.checkers.len());
         for (id, checker) in &self.checkers {
-            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                checker.check(ctx)
-            }));
+            let result =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| checker.check(ctx)));
             let r = match result {
                 Ok(r) => r,
                 Err(_) => Err(DisciplineError::CheckerPanic(id.clone())),
@@ -582,7 +587,8 @@ mod tests {
     #[test]
     fn tp23_register_capability_succeeds() {
         let mut reg = SkillRegistry::new();
-        reg.register_capability(cap("summarize-text", "1.0.0")).unwrap();
+        reg.register_capability(cap("summarize-text", "1.0.0"))
+            .unwrap();
         assert_eq!(reg.capability_count(), 1);
         assert_eq!(reg.discipline_count(), 0);
         assert_eq!(reg.len(), 1);
@@ -629,12 +635,27 @@ mod tests {
         reg.register_capability(cap("shared", "1.0.0")).unwrap();
         // 试图把同一 id 注册为 discipline → KindMismatch
         let r = reg.register_discipline(disc("shared", "1.0.0", "x"), Arc::new(AlwaysPass));
-        assert!(matches!(r, Err(SkillError::KindMismatch(_, SkillKind::Capability, SkillKind::Discipline))));
+        assert!(matches!(
+            r,
+            Err(SkillError::KindMismatch(
+                _,
+                SkillKind::Capability,
+                SkillKind::Discipline
+            ))
+        ));
         // 反向
         let mut reg2 = SkillRegistry::new();
-        reg2.register_discipline(disc("shared2", "1.0.0", "x"), Arc::new(AlwaysPass)).unwrap();
+        reg2.register_discipline(disc("shared2", "1.0.0", "x"), Arc::new(AlwaysPass))
+            .unwrap();
         let r2 = reg2.register_capability(cap("shared2", "1.0.0"));
-        assert!(matches!(r2, Err(SkillError::KindMismatch(_, SkillKind::Discipline, SkillKind::Capability))));
+        assert!(matches!(
+            r2,
+            Err(SkillError::KindMismatch(
+                _,
+                SkillKind::Discipline,
+                SkillKind::Capability
+            ))
+        ));
     }
 
     #[test]
@@ -691,7 +712,10 @@ mod tests {
             .unwrap();
         let ctx = DisciplineContext::new("any", "x");
         let r = reg.check("panicker", &ctx);
-        assert!(matches!(r, Err(DisciplineError::CheckerPanic(_))), "panic 应被捕获, 实际 {r:?}");
+        assert!(
+            matches!(r, Err(DisciplineError::CheckerPanic(_))),
+            "panic 应被捕获, 实际 {r:?}"
+        );
     }
 
     #[test]
@@ -707,9 +731,15 @@ mod tests {
         let results = reg.check_all(&ctx);
         assert_eq!(results.len(), 3);
         let by_id: std::collections::HashMap<String, _> = results.into_iter().collect();
-        assert!(matches!(by_id.get("d1").unwrap(), Err(DisciplineError::Violation(_, _))));
+        assert!(matches!(
+            by_id.get("d1").unwrap(),
+            Err(DisciplineError::Violation(_, _))
+        ));
         assert!(matches!(by_id.get("d2").unwrap(), Ok(())));
-        assert!(matches!(by_id.get("d3").unwrap(), Err(DisciplineError::CheckerPanic(_))));
+        assert!(matches!(
+            by_id.get("d3").unwrap(),
+            Err(DisciplineError::CheckerPanic(_))
+        ));
     }
 
     #[test]

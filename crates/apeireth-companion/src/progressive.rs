@@ -92,7 +92,9 @@ impl ProgressiveCatalog {
         let mut used = 0usize;
         let mut n = 0usize;
         for e in &self.entries {
-            let cost = format!("- {}: {} ({}条)", e.topic, e.summary, e.count).chars().count();
+            let cost = format!("- {}: {} ({}条)", e.topic, e.summary, e.count)
+                .chars()
+                .count();
             if used + cost > self.catalog_budget_chars && n > 0 {
                 break;
             }

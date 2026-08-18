@@ -192,7 +192,7 @@ impl PurePatternSearcher {
             }
             match self.search_file(path, pattern) {
                 Ok(matches) => results.extend(matches),
-                Err(_) => continue,
+                Err(_) => {}
             }
         }
         Ok(results)

@@ -27,15 +27,25 @@ use crate::enhanced::{EnhancedShell, ShellError};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ArgSpec {
     /// 数值参数 (十进制数字, 范围 [min, max]).
-    Number { min: u64, max: u64 },
+    Number {
+        /// 最小值 (含).
+        min: u64,
+        /// 最大值 (含).
+        max: u64,
+    },
     /// 文本参数 (禁控制字符, 长度 ≤ max_len).
-    Text { max_len: usize },
+    Text {
+        /// 最大长度.
+        max_len: usize,
+    },
 }
 
 /// 预设定义: 名称 + 描述 + argv 模板 (占位符 `{arg}` 独占槽位).
 #[derive(Debug, Clone)]
 pub struct ShellPreset {
+    /// 预设名 (白名单 key).
     pub name: String,
+    /// 人类可读描述.
     pub description: String,
     /// argv 模板: 每片段是字面量或整槽位占位符 `{arg}`.
     pub template: Vec<String>,
@@ -66,7 +76,12 @@ pub enum PresetError {
     UnexpectedArg(String),
     /// 参数值不合规 (注入防线: 控制字符/超长/越界).
     #[error("参数 `{name}` 不合规: {reason}")]
-    InvalidArg { name: String, reason: String },
+    InvalidArg {
+        /// 参数名.
+        name: String,
+        /// 不合规原因.
+        reason: String,
+    },
 }
 
 /// 参数值校验 (返回校验后的原值; 引号由 expand 统一加).
@@ -277,10 +292,12 @@ pub struct PresetShell {
 }
 
 impl PresetShell {
+    /// 构造 (注入底层 shell 与预设注册表).
     pub fn new(shell: EnhancedShell, registry: PresetRegistry) -> Self {
         Self { shell, registry }
     }
 
+    /// 预设注册表引用.
     pub fn registry(&self) -> &PresetRegistry {
         &self.registry
     }

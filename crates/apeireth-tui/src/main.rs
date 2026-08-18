@@ -976,9 +976,8 @@ pub fn selection_text(app: &App) -> String {
     }
     let mut out = String::new();
     for i in lo_line..=hi_line {
-        let info = match app.chat_line_map.get(i) {
-            Some(info) => info,
-            None => continue,
+        let Some(info) = app.chat_line_map.get(i) else {
+            continue;
         };
         let total = info.text.chars().count();
         let s = if i == lo_line { lo_char.min(total) } else { 0 };

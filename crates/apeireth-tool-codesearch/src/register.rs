@@ -41,13 +41,22 @@ fn parse_kind(s: &str) -> Result<IntelligenceKind, String> {
         "graph" => IntelligenceKind::Graph,
         "index" => IntelligenceKind::Index,
         "ast" => IntelligenceKind::Ast,
-        _ => return Err(format!("unknown kind `{s}` (expected text|file|symbol|graph|index|ast)")),
+        _ => {
+            return Err(format!(
+                "unknown kind `{s}` (expected text|file|symbol|graph|index|ast)"
+            ))
+        }
     })
 }
 
 fn hit_to_json(hit: &IntelligenceHit) -> Value {
     match hit {
-        IntelligenceHit::Text { file, line, column, text } => json!({
+        IntelligenceHit::Text {
+            file,
+            line,
+            column,
+            text,
+        } => json!({
             "kind": "text",
             "file": file.to_string_lossy(),
             "line": line,
@@ -113,7 +122,9 @@ impl Tool for CodeIntelligenceTool {
 pub fn register(registry: &ToolRegistry) -> Result<(), String> {
     registry.register(
         TOOL_NAME.to_string(),
-        Arc::new(CodeIntelligenceTool::new(UnifiedCodeIntelligence::new_in_memory())),
+        Arc::new(CodeIntelligenceTool::new(
+            UnifiedCodeIntelligence::new_in_memory(),
+        )),
     );
     Ok(())
 }
