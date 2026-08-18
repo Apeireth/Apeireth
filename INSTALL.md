@@ -1,7 +1,7 @@
 # INSTALL.md — Apeireth-rust 安装步骤
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
-> **依据**: 主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
+> **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
 > **commit 锚**: 23513387（v3 修订）。
 
 ---
@@ -260,5 +260,5 @@ EOF
 ---
 
 _安装指南 v1 修订版（leader 亲自产出）._
-_依据主人 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
+_依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
 _主哲学 6 锚穿透._

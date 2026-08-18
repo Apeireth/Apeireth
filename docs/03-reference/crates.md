@@ -62,7 +62,7 @@
 | \$n\ | Apeireth R20 阶段 4 估补 (RIVAL §2.4): 蓝图实装 = 4 风险类 (K-1/K-2/K-3/K-4) + 4 决策表 (D-01..D-04) + 6 实战模板 (A-F) + 5 R-Measure (R-1..R-5) + 3 评估指标 (Q1/Q2/Q3). 1 crate 打包, 跟 V0.5 命名 (apeireth-naming-v05) 互不冲突. |
 | \$n\ | Apeireth R20 阶段 4 估补: V0.5 命名规范 (4 类 × 6 维 = 24 维) + R126 P1-4 V0.5.30 扩展 (5 new meta-dim + 1 derived overall = 30 维). 1:1 翻译 v1077 V0.5 17 维 LOCKED 升级到 24 维 v2 命名空间 (per docs/architecture-v4-1-living-intelligence-update §13). 4 大类 (PC 0.40 / RC 0.30 / HG 0.15 / GP 0.15) × 6 维度 (level/domain/modality/safety/completeness/lineage) = 24 base 维 + 5 new meta-dim (Robustness+SelfImprovement+Adversarial+CiPassRate+VerifierConsistency) + 1 derived overall (MetaOverall) = 30 维, sum=1.00 守门, 编译期 hardcode enum, encode/decode/validate/sum_guard 完整. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺. 借鉴 ID: R126-v05-30-BORROW-langchain-ai/langgraph-5f8a3c7-2026-08-10 |
 | \$n\ | Apeireth R20 阶段 5 集成测试 e2e (主仓 + API + TUI 三层端到端, 60+ 测试, 不碰 24 LOCKED) |
-| \$n\ | Apeireth R20 阶段 6 flesh out: Lark/Feishu SDK (1:1 翻译 v0.9.21 商业版 out/main 中 `@larksuiteoapi/node-sdk@^1.59.0` 集成面; STUB 模式 (LarkClientImpl 8 工具返 NotImplemented) + 真接实现 (LarkRealImpl 5 端点 HTTP, reqwest 0.12 + rustls-tls, wiremock 0.6 测); STUB_MODE 编译期 hardcode=true 守门, 切 false 需 6 哲学锚 + 主人审) |
+| \$n\ | Apeireth R20 阶段 6 flesh out: Lark/Feishu SDK (1:1 翻译 v0.9.21 商业版 out/main 中 `@larksuiteoapi/node-sdk@^1.59.0` 集成面; STUB 模式 (LarkClientImpl 8 工具返 NotImplemented) + 真接实现 (LarkRealImpl 5 端点 HTTP, reqwest 0.12 + rustls-tls, wiremock 0.6 测); STUB_MODE 编译期 hardcode=true 守门, 切 false 需 6 哲学锚 + 我们审) |
 | \$n\ | Apeireth R20 阶段 6 flesh out: LiveKit Server SDK 真接实现 (1:1 翻译 livekit-server-sdk 0.6+ Twirp API: server_url / api_key / room / track / participant / event 6 端点, 走 reqwest 0.12 + rustls-tls HTTP, wiremock 0.6 测; STUB 守门 6 核心 API + 5 K-1 强校验 + 8 tool whitelist 编译期 hardcode) |
 | \$n\ | Apeireth R21 借鉴 Golutra #6: 9 Tauri state 模式 (OnceLock + Arc + Mutex) 转 TUI 等价物 (ratatui state 共享框架). 3 模式 (OnceLockState / MutexState / RwLockState) + 9 器官 state 共享 (heart/brain/hand/eye/ear/memory/voice/body/mind) + 1 完整状态共享例子 + 25+ 集成测试. 0 真接 tokio/async, 留 R21 续真接. 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺 |
 | \$n\ | Apeireth R35 telemetry umbrella (cache + metric + trace + observability facade) |
@@ -74,7 +74,7 @@
 | \$n\ | Apeireth v2.0 战区 5 P0: Model Context Protocol skeleton (client/server + JSON-RPC 2.0 + stdio/SSE transport + tool-registry bridge, 字段级参考 MCP 2025-03-26 规范) |
 | \$n\ | Apeireth v2.0 P0 deterministic graph orchestration and checkpoints |
 | \$n\ | Apeireth voice subsystem |
-| \$n\ | Apeireth Web 前端 — Leptos 0.7 SSR + WASM hydration, 让主人能在浏览器真用 Apeireth Council 7 advisor (R18) |
+| \$n\ | Apeireth Web 前端 — Leptos 0.7 SSR + WASM hydration, 让用户能在浏览器真用 Apeireth Council 7 advisor (R18) |
 | \$n\ | apeireth-acp — R23 6 module acp 子模块: Agent Communication Protocol 抽象 + 信封 + 路由 |
 | \$n\ | apeireth-bus — 5 层通信总线 (L0 inproc / L1 UDS / L2 pipe / L3 gRPC / L4 WebSocket) + pub-sub/req-rep/streaming + 反背压 + Trace ID 链路追踪 (round15-02) |
 | \$n\ | apeireth-config — R23 6 module config 子模块: 强类型配置项 |
