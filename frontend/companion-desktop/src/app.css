@@ -1,0 +1,66 @@
+@import './styles.css';
+@import 'katex/dist/katex.min.css';
+
+/* ============================================================
+   Apeireth 桌面伙伴 — 布局样式 (精简自 Pattern)
+   主题变量/组件类来自 styles.css; 本文件只含 shell 布局.
+   ============================================================ */
+
+/* ---------- Shell ---------- */
+.shell{height:100vh;display:flex;background:var(--surface)}
+
+.sidebar{width:220px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--surface)}
+.sidebar-brand{display:flex;align-items:center;gap:9px;padding:16px 18px;border-bottom:1px solid var(--line)}
+.logo-mark{display:grid;place-items:center;width:28px;height:28px;border-radius:8px;background:var(--amber-wash);color:var(--amber);font:700 15px var(--sans)}
+.brand-name{font-size:13px;font-weight:600;color:var(--text)}
+.nav{flex:1;display:flex;flex-direction:column;gap:2px;padding:12px 10px}
+.nav button{display:flex;align-items:center;gap:10px;width:100%;border:0;border-radius:7px;background:transparent;color:var(--muted);padding:9px 12px;text-align:left;font-size:13px}
+.nav button:hover{background:var(--surface-2);color:var(--text)}
+.nav button.active{background:var(--amber-wash);color:var(--amber)}
+.sidebar-footer{padding:12px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.conn-hint{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11px;padding:0 4px}
+
+.main{flex:1;min-width:0;display:flex;min-height:0;background:var(--surface)}
+
+/* ---------- Chat view ---------- */
+.chat-view{flex:1;min-width:0;display:flex;flex-direction:column;min-height:0}
+.chat-header{display:flex;align-items:center;justify-content:space-between;padding:18px 28px 12px;border-bottom:1px solid var(--line)}
+.chat-header h1{margin:0;font-size:18px}
+.chat-header small{color:var(--faint);font-size:11px}
+.chat-header-actions{display:flex;gap:8px}
+.messages{flex:1;min-height:0;overflow:auto;padding:20px max(28px,calc((100% - 820px)/2));display:flex;flex-direction:column;gap:18px}
+.message-row{display:flex;gap:12px;max-width:72%}
+.message-row.user{align-self:flex-end;flex-direction:row-reverse}
+.message-avatar{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--surface-3);color:var(--muted);font-size:12px;font-weight:700}
+.message-row.user .message-avatar{background:var(--amber-wash);color:var(--amber)}
+.message-body{min-width:0}
+.message-row.user .message-body p.user-text{padding:10px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px 8px 2px 8px;margin:0;line-height:1.7}
+.error-banner{margin:0 28px;padding:10px 14px;background:var(--danger);color:#fff;border-radius:6px;font-size:12px}
+
+/* ---------- Composer ---------- */
+.composer{margin:12px max(28px,calc((100% - 870px)/2)) 18px;display:flex;align-items:flex-end;gap:10px;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:10px;padding:12px 14px}
+.composer:focus-within{border-color:var(--amber-line);box-shadow:0 0 0 3px var(--amber-wash)}
+.composer textarea{width:100%;resize:none;border:0;outline:0;background:transparent;color:var(--text);line-height:1.55}
+.send-button{width:34px;height:34px;padding:0;border:0;border-radius:8px;background:var(--amber);color:#19120a;display:grid;place-items:center;flex:none}
+.send-button:disabled{opacity:.4;cursor:default}
+
+/* ---------- Settings ---------- */
+.settings-form{max-width:640px;padding:8px 42px 38px;display:flex;flex-direction:column;gap:16px}
+.settings-form label{display:flex;flex-direction:column;gap:6px}
+.settings-form label>span{color:var(--muted);font-size:12px}
+.settings-form input{padding:9px 12px;border:1px solid var(--line-strong);border-radius:7px;background:var(--surface-2);color:var(--text);outline:0}
+.settings-form input:focus{border-color:var(--amber-line)}
+.model-row{display:flex;gap:8px}
+.model-row input{flex:1}
+.model-list{display:flex;flex-wrap:wrap;gap:6px}
+.model-chip{border:1px solid var(--line);border-radius:999px;background:var(--surface-2);color:var(--muted);padding:4px 10px;font:11px var(--mono)}
+.model-chip:hover{border-color:var(--amber-line);color:var(--amber)}
+.conn-status{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+
+/* ---------- Status dot ---------- */
+.status-dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;background:var(--green)}
+.status-dot.off{background:var(--faint)}
+.status-dot.active{background:var(--amber)}
+.status-dot.tiny{width:8px;height:8px}
+.status-dot.small{width:10px;height:10px}
+.status-dot.large{width:16px;height:16px}

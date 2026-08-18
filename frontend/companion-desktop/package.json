@@ -1,0 +1,33 @@
+{
+  "name": "@apeireth/companion-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Apeireth 桌面伙伴 — Svelte 5 + Tauri 2 对话壳, 对接 apeireth-companion OpenAI 兼容端点",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "tauri": "tauri",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
+    "@tauri-apps/plugin-notification": "^2.3.3",
+    "dompurify": "^3.4.12",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.17.0",
+    "lucide-svelte": "^0.468.0",
+    "marked": "^18.0.6",
+    "svelte": "^5.16.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@tauri-apps/cli": "^2.8.0",
+    "@tsconfig/svelte": "^5.0.4",
+    "svelte-check": "^4.1.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}
