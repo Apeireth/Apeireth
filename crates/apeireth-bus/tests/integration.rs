@@ -83,16 +83,15 @@ async fn l1_uds_reqrep() {
 }
 
 // ---- L2: pipe + JSON / MsgPack ----
+// CI fix 2026-08: echo 子进程用重建的 bus_echo bin (CARGO_BIN_EXE_),
+// 不再 spawn 测试二进制 (nextest/标准测试 main 不解析 --bus-echo-json → 超时)
 
 #[tokio::test]
-#[cfg(unix)]
+#[cfg(all(unix, feature = "full-bus"))]
 async fn l2_pipe_json_roundtrip() {
     use apeireth_bus::l2::{L2Config, L2Transport, PipeCodec};
     let cfg = L2Config {
-        cmd: std::env::current_exe()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned(),
+        cmd: env!("CARGO_BIN_EXE_bus_echo").to_string(),
         args: vec!["--bus-echo-json".into()],
         codec: PipeCodec::Json,
         connect_timeout: Duration::from_secs(2),
@@ -108,14 +107,11 @@ async fn l2_pipe_json_roundtrip() {
 }
 
 #[tokio::test]
-#[cfg(unix)]
+#[cfg(all(unix, feature = "full-bus"))]
 async fn l2_pipe_msgpack_roundtrip() {
     use apeireth_bus::l2::{L2Config, L2Transport, PipeCodec};
     let cfg = L2Config {
-        cmd: std::env::current_exe()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned(),
+        cmd: env!("CARGO_BIN_EXE_bus_echo").to_string(),
         args: vec!["--bus-echo-msgpack".into()],
         codec: PipeCodec::MsgPack,
         connect_timeout: Duration::from_secs(2),
