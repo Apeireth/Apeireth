@@ -127,14 +127,11 @@ async fn l2_pipe_msgpack_roundtrip() {
 }
 
 #[tokio::test]
-#[cfg(unix)]
+#[cfg(all(unix, feature = "full-bus"))]
 async fn l2_pipe_streaming_5() {
     use apeireth_bus::l2::{L2Config, L2Transport, PipeCodec};
     let cfg = L2Config {
-        cmd: std::env::current_exe()
-            .unwrap()
-            .to_string_lossy()
-            .into_owned(),
+        cmd: env!("CARGO_BIN_EXE_bus_echo").to_string(),
         args: vec!["--bus-echo-msgpack".into()],
         codec: PipeCodec::MsgPack,
         connect_timeout: Duration::from_secs(2),
