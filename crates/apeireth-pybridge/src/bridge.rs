@@ -45,8 +45,9 @@ pub fn python_version_string() -> String {
 }
 
 #[cfg(not(feature = "python-ext"))]
-pub fn python_version_string() -> &'static str {
-    "pyo3 disabled (build with --features python-ext to embed Python 3.13.14)"
+pub fn python_version_string() -> String {
+    // 统一返回 String (两种 cfg 类型一致, health_check 无需 to_owned/to_string)
+    "pyo3 disabled (build with --features python-ext to embed Python 3.13.14)".to_string()
 }
 
 /// Python 解释器是否可用
@@ -161,7 +162,7 @@ impl std::fmt::Display for BridgeHealth {
 
 pub fn health_check() -> BridgeHealth {
     BridgeHealth {
-        python_version: python_version_string().to_owned(),
+        python_version: python_version_string(),
         r11_compat_version: r11_compat::r11_compat_version(),
         r11_module_count: r11_compat::r11_module_count(),
         python_available: python_is_available(),
