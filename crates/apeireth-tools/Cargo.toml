@@ -53,11 +53,11 @@ path = "src/lib.rs"
 name = "tools_demo"
 path = "examples/tools_demo.rs"
 
-# R21 监督验证 harness (per 主人 2026-08-06 14:00 拍 B 方案, 真接 MiniMax-M2.7-highspeed)
-# 0 触碰 LOCKED (harness 已随台账#37 归档至 crates/_archived/root-tests/, 0 改 src/)
-[[test]]
-name = "apeireth_supervision_harness_2026_08_06"
-path = "../_archived/root-tests/apeireth_supervision_harness_2026_08_06.rs"
+# R21 监督验证 harness — 已随台账#37 归档至 crates/_archived/root-tests/,
+# CI fix 2026-08: 删除 [[test]] 声明 (归档文件保留, 但不再作为 test target 编译).
+# 原声明会让 nextest 编译运行该 harness, 它需要本地 MINIMAX API key
+# (硬编码 Windows 路径 ...) → CI Linux 必挂
+# (test_100_rounds_minimax_stress: "Failed to read MINIMAX API key").
 
 # R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
