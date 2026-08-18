@@ -13,8 +13,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SandboxError, SandboxResult};
-use crate::runtime::{IsolationLevel, RuntimeKind};
+use crate::sandbox::error::{SandboxError, SandboxResult};
+use crate::sandbox::runtime::{IsolationLevel, RuntimeKind};
 
 /// 隔离策略描述符 (1:1 翻译 @anthropic-ai/sandbox 商业版 `isolationConfig` 字段).
 ///

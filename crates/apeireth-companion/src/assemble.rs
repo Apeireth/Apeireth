@@ -31,7 +31,7 @@ use crate::emergence::RhythmEstimate;
 use crate::experience::{Experience, ExperienceStore};
 use crate::goal::GoalService;
 use crate::memory_extractor::{
-    MemoryExtractionService, MemoryExtractor, parse_importance, rank_memory_entries,
+    parse_importance, rank_memory_entries, MemoryExtractionService, MemoryExtractor,
 };
 use crate::memory_graph::MemoryGraph;
 use crate::principles::PrincipleStore;
@@ -218,7 +218,8 @@ impl CompanionApp {
     /// access 计数快照 (记忆 v2 诊断/测试).
     pub fn access_counts(&self) -> Vec<(String, u64)> {
         let access = self.access.lock().unwrap();
-        let mut out: Vec<(String, u64)> = access.iter().map(|(k, (c, _))| (k.clone(), *c)).collect();
+        let mut out: Vec<(String, u64)> =
+            access.iter().map(|(k, (c, _))| (k.clone(), *c)).collect();
         out.sort_by(|a, b| b.1.cmp(&a.1));
         out
     }
@@ -283,7 +284,10 @@ impl CompanionApp {
         if self.essential_budget == 0 {
             return String::new();
         }
-        let eps = self.store.recent_episodes(&self.session, 200).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes(&self.session, 200)
+            .unwrap_or_default();
         let mut chosen: Vec<String> = Vec::new();
         let mut total = 0usize;
         let mut take = |e: &CoreEpisode, chosen: &mut Vec<String>, total: &mut usize| {
@@ -307,9 +311,7 @@ impl CompanionApp {
                 .iter()
                 .filter(|e| parse_importance(&e.content) >= 8)
                 .collect();
-            high.sort_by(|a, b| {
-                parse_importance(&b.content).cmp(&parse_importance(&a.content))
-            });
+            high.sort_by(|a, b| parse_importance(&b.content).cmp(&parse_importance(&a.content)));
             for e in high {
                 take(e, &mut chosen, &mut total);
             }
@@ -318,7 +320,9 @@ impl CompanionApp {
             String::new()
         } else {
             let body = chosen.join("\n");
-            format!("【长期要事】(常驻) 以下是与主人的长期要事/核心关系信息, 任何时候都应记得:\n{body}")
+            format!(
+                "【长期要事】(常驻) 以下是与主人的长期要事/核心关系信息, 任何时候都应记得:\n{body}"
+            )
         }
     }
 
@@ -330,7 +334,10 @@ impl CompanionApp {
             [now.weekday().num_days_from_monday() as usize];
         let mut parts: Vec<String> = vec![format!(
             "【当前状态】{} {} {}:{} (本机时区, 时间推理以此为准)",
-            now.format("%Y-%m-%d"), week, now.format("%H"), now.format("%M")
+            now.format("%Y-%m-%d"),
+            week,
+            now.format("%H"),
+            now.format("%M")
         )];
         if let Some(rhythm) = &self.rhythm {
             if let Ok(r) = rhythm.lock() {
@@ -338,7 +345,9 @@ impl CompanionApp {
                     if est.days > 0 {
                         parts.push(format!(
                             "· 此刻主人活跃概率约 {:.0}% (节律观察 {} 天, 置信 {:.0}%)",
-                            est.active_probability * 100.0, est.days, est.confidence * 100.0
+                            est.active_probability * 100.0,
+                            est.days,
+                            est.confidence * 100.0
                         ));
                     }
                 }
@@ -356,7 +365,10 @@ impl CompanionApp {
                 }
             }
         }
-        let eps = self.store.recent_episodes(&self.session, 100).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes(&self.session, 100)
+            .unwrap_or_default();
         let commitments: Vec<&String> = eps
             .iter()
             .filter(|e| e.content.contains("【约定】"))
@@ -371,7 +383,11 @@ impl CompanionApp {
                 .join("; ");
             parts.push(format!("· 近期约定: {list}"));
         }
-        if let Some(e) = eps.iter().rev().find(|e| e.content.contains("【情绪信号】")) {
+        if let Some(e) = eps
+            .iter()
+            .rev()
+            .find(|e| e.content.contains("【情绪信号】"))
+        {
             parts.push(format!(
                 "· 主人最近情绪信号: {}",
                 e.content.chars().take(80).collect::<String>()
@@ -384,11 +400,23 @@ impl CompanionApp {
     /// 记忆暗示词 + APEIRETH_DEEP_RECALL=1 → 深度召回 trait).
     async fn inject_memory(&self, query: &str) -> String {
         const HINT_WORDS: &[&str] = &[
-            "记得", "之前", "上次", "我说过", "约定", "还记得", "忘", "以前", "计划", "安排",
+            "记得",
+            "之前",
+            "上次",
+            "我说过",
+            "约定",
+            "还记得",
+            "忘",
+            "以前",
+            "计划",
+            "安排",
         ];
         let want_deep = std::env::var("APEIRETH_DEEP_RECALL").ok().as_deref() == Some("1")
             && HINT_WORDS.iter().any(|w| query.contains(w));
-        let eps = self.store.recent_episodes(&self.session, 40).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes(&self.session, 40)
+            .unwrap_or_default();
         if eps.is_empty() {
             return String::new();
         }
@@ -421,17 +449,35 @@ impl CompanionApp {
                 let candidates: Vec<String> = eps.iter().map(|e| e.content.clone()).collect();
                 if let Ok(selected) = recall.recall(query, &candidates).await {
                     // §5.1 收官: 四源统一注入 (深度路径同享两源)
-                    let diary_summary = self.diary.as_ref().map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET)).unwrap_or_default();
+                    let diary_summary = self
+                        .diary
+                        .as_ref()
+                        .map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET))
+                        .unwrap_or_default();
                     let cross_related = self.cross_related_for_query(query);
-                    return unified_memory_block(&selected, &diary_summary, &cross_related, UNIFIED_MEMORY_BLOCK_BUDGET);
+                    return unified_memory_block(
+                        &selected,
+                        &diary_summary,
+                        &cross_related,
+                        UNIFIED_MEMORY_BLOCK_BUDGET,
+                    );
                 }
                 // 失败 → 降级普通注入 (诚实)
             }
         }
         // §5.1 收官: 四源统一注入 — 主题索引+日记摘要+跨日记关联+记忆证据块 (各自独立预算)
-        let diary_summary = self.diary.as_ref().map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET)).unwrap_or_default();
+        let diary_summary = self
+            .diary
+            .as_ref()
+            .map(|d| d.recent_injection(DIARY_SUMMARY_DAYS, DIARY_SUMMARY_BUDGET))
+            .unwrap_or_default();
         let cross_related = self.cross_related_for_query(query);
-        unified_memory_block(&entries, &diary_summary, &cross_related, UNIFIED_MEMORY_BLOCK_BUDGET)
+        unified_memory_block(
+            &entries,
+            &diary_summary,
+            &cross_related,
+            UNIFIED_MEMORY_BLOCK_BUDGET,
+        )
     }
 
     /// 今日摘要注入.
@@ -445,7 +491,10 @@ impl CompanionApp {
             .and_then(|d| d.and_local_timezone(chrono::Local).single())
             .map(|t| t.timestamp())
             .unwrap_or(0);
-        let all = self.store.recent_episodes(&self.session, 200).unwrap_or_default();
+        let all = self
+            .store
+            .recent_episodes(&self.session, 200)
+            .unwrap_or_default();
         let pairs: Vec<(&str, &str)> = all
             .iter()
             .filter(|e| e.timestamp >= day_start)
@@ -597,7 +646,10 @@ impl CompanionApp {
     // ============================================================
 
     /// 反思记录 → 可复用经验 (无 refiner / 无可提炼 → None).
-    pub async fn refine_experience(&self, reflects: &[String]) -> Result<Option<Experience>, String> {
+    pub async fn refine_experience(
+        &self,
+        reflects: &[String],
+    ) -> Result<Option<Experience>, String> {
         let Some(refiner) = &self.refiner else {
             return Ok(None);
         };
@@ -644,10 +696,8 @@ fn unified_memory_block(
     total_budget: usize,
 ) -> String {
     // 四源各自独立渲染 (各自预算, 互不侵占)
-    let topic = crate::topic_groups::build_topic_index(
-        entries,
-        crate::topic_groups::TOPIC_INDEX_MAX_CHARS,
-    );
+    let topic =
+        crate::topic_groups::build_topic_index(entries, crate::topic_groups::TOPIC_INDEX_MAX_CHARS);
     let mem = crate::memory_injection::build_memory_injection(entries);
     // 按砍序从高到低: 关联(0) → 日记(1) → 主题(2) → 记忆证据(3, 最后砍)
     let mut blocks: [String; 4] = [
@@ -659,8 +709,17 @@ fn unified_memory_block(
     // 呈现序: 主题 → 日记 → 关联 → 记忆证据
     let order = [2usize, 1, 0, 3];
     let total = |b: &[String; 4]| {
-        order.iter().filter(|&&i| !b[i].is_empty()).map(|&i| b[i].chars().count()).sum::<usize>()
-            + order.iter().filter(|&&i| !b[i].is_empty()).count().saturating_sub(1) * 2
+        order
+            .iter()
+            .filter(|&&i| !b[i].is_empty())
+            .map(|&i| b[i].chars().count())
+            .sum::<usize>()
+            + order
+                .iter()
+                .filter(|&&i| !b[i].is_empty())
+                .count()
+                .saturating_sub(1)
+                * 2
     };
     // 超预算按砍序丢弃 (0→1→2), 记忆证据块(3)最后; 独存仍超 → 硬切+提示
     for drop_idx in [0usize, 1, 2] {
@@ -675,8 +734,16 @@ fn unified_memory_block(
         let truncated: String = blocks[3].chars().take(keep).collect();
         blocks[3] = format!("{truncated}{notice}");
     }
-    let parts: Vec<&String> = order.iter().filter(|&&i| !blocks[i].is_empty()).map(|&i| &blocks[i]).collect();
-    parts.iter().map(|s| s.as_str()).collect::<Vec<_>>().join("\n\n")
+    let parts: Vec<&String> = order
+        .iter()
+        .filter(|&&i| !blocks[i].is_empty())
+        .map(|&i| &blocks[i])
+        .collect();
+    parts
+        .iter()
+        .map(|s| s.as_str())
+        .collect::<Vec<_>>()
+        .join("\n\n")
 }
 
 /// **兼容挂点** — 两源形态 (主题索引 + 记忆证据块), serve 自由注入路径沿用.
@@ -691,9 +758,8 @@ impl CompanionApp {
     /// → 命中 fact → CrossDiaryIndex.diary_for_fact 取日记片段 → 去重+预算截断.
     /// 只经 diary/memory_graph/cross_diary 已有公开接口, 无向量.
     fn cross_related_for_query(&self, query: &str) -> String {
-        let diary = match &self.diary {
-            Some(d) => d,
-            None => return String::new(),
+        let Some(diary) = &self.diary else {
+            return String::new();
         };
         let graph = MemoryGraph::new(Arc::clone(&self.store));
         let fact_items: Vec<(String, String)> = graph
@@ -722,7 +788,15 @@ impl CompanionApp {
                 if snippets.iter().any(|s| s == &link.snippet) {
                     continue;
                 }
-                let line = format!("• [{}{}] {}", link.diary_date, link.shared_tokens.first().map(|t| format!(" #{t}")).unwrap_or_default(), link.snippet);
+                let line = format!(
+                    "• [{}{}] {}",
+                    link.diary_date,
+                    link.shared_tokens
+                        .first()
+                        .map(|t| format!(" #{t}"))
+                        .unwrap_or_default(),
+                    link.snippet
+                );
                 if used + line.chars().count() > CROSS_RELATED_MAX_CHARS {
                     break 'outer;
                 }
@@ -759,7 +833,10 @@ mod tests {
     struct EmptyExtractor;
     #[async_trait::async_trait]
     impl MemoryExtractor for EmptyExtractor {
-        async fn extract(&self, _ctx: &str) -> Result<crate::memory_extractor::ExtractedMemory, String> {
+        async fn extract(
+            &self,
+            _ctx: &str,
+        ) -> Result<crate::memory_extractor::ExtractedMemory, String> {
             Ok(crate::memory_extractor::ExtractedMemory::default())
         }
     }
@@ -769,25 +846,40 @@ mod tests {
     #[async_trait::async_trait]
     impl DialogSummarizer for EchoSummarizer {
         async fn summarize(&self, text: &str, _prev: Option<&str>) -> Result<String, String> {
-            Ok(format!("摘要:{}", text.chars().take(20).collect::<String>()))
+            Ok(format!(
+                "摘要:{}",
+                text.chars().take(20).collect::<String>()
+            ))
         }
     }
 
     #[tokio::test]
     async fn injection_contains_identity_and_essential_core_blocks() {
         let store = test_store();
-        put(&store, "essential-1", "【imp:9】主人备考高数期中, 目标是 90 分", "me");
+        put(
+            &store,
+            "essential-1",
+            "【imp:9】主人备考高数期中, 目标是 90 分",
+            "me",
+        );
         put(&store, "mem-ex-1", "【imp:6】主人喜欢深色主题", "me");
         let app = CompanionApp::new(store, "me")
             .with_identity("你是阿佩瑞斯, 沉稳古风, 自称本座")
             .with_essential_budget(500);
         let out = app.build_injection("你好").await;
-        let joined = out.iter().map(|b| b.content.as_str()).collect::<Vec<_>>().join("\n");
+        let joined = out
+            .iter()
+            .map(|b| b.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(joined.contains("沉稳古风"), "L0 Identity 应常驻");
         assert!(joined.contains("【长期要事】"), "L1 Essential 应常驻");
         assert!(joined.contains("备考高数期中"), "essential-* 标记应入选");
         assert!(joined.contains("【当前状态】"), "状态块应注入");
-        assert!(joined.contains("【imp:6】主人喜欢深色主题"), "普通记忆也应注入");
+        assert!(
+            joined.contains("【imp:6】主人喜欢深色主题"),
+            "普通记忆也应注入"
+        );
     }
 
     #[tokio::test]
@@ -798,7 +890,11 @@ mod tests {
         put(&store, "essential-1", "【imp:7】标记为长期要事", "me");
         let app = CompanionApp::new(store, "me").with_essential_budget(80);
         let out = app.build_injection("x").await;
-        let joined = out.iter().map(|b| b.content.as_str()).collect::<Vec<_>>().join("\n");
+        let joined = out
+            .iter()
+            .map(|b| b.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         let ess = joined.split("【长期要事】").nth(1).unwrap_or("");
         assert!(ess.contains("标记为长期要事"), "essential-* 应优先");
         // 预算 80: essential-1 (约 20 字) 后剩余可装 high (约 20 字) — 两者都应出现
@@ -809,7 +905,10 @@ mod tests {
     async fn extraction_due_throttles() {
         let store = test_store();
         let app = CompanionApp::new(store, "me").with_extract_interval(Duration::from_millis(1));
-        assert!(!app.extraction_due(), "启动窗口内不应触发 (与 serve 启动 600s 内不提炼一致)");
+        assert!(
+            !app.extraction_due(),
+            "启动窗口内不应触发 (与 serve 启动 600s 内不提炼一致)"
+        );
         tokio::time::sleep(Duration::from_millis(5)).await;
         assert!(app.extraction_due(), "窗口过期应触发");
         assert!(!app.extraction_due(), "触发后窗口刷新");
@@ -827,7 +926,12 @@ mod tests {
     #[tokio::test]
     async fn summarize_dialog_persists_sum_chain() {
         let store = test_store();
-        put(&store, "mem-1", "【imp:5】一段较长的对话内容, 需要被摘要成一条简洁记录", "me");
+        put(
+            &store,
+            "mem-1",
+            "【imp:5】一段较长的对话内容, 需要被摘要成一条简洁记录",
+            "me",
+        );
         let app = CompanionApp::new(store, "me").with_summarizer(Arc::new(EchoSummarizer));
         let s = app.summarize_dialog("你好, 我是主人, 今天天气不错").await;
         assert!(s.is_some(), "假摘要器应成功");
@@ -841,7 +945,10 @@ mod tests {
     async fn summarize_without_summarizer_returns_none() {
         let store = test_store();
         let app = CompanionApp::new(store, "me");
-        assert!(app.summarize_dialog("hello").await.is_none(), "无 summarizer 如实降级");
+        assert!(
+            app.summarize_dialog("hello").await.is_none(),
+            "无 summarizer 如实降级"
+        );
     }
 
     #[tokio::test]
@@ -853,7 +960,11 @@ mod tests {
             .with_identity("本座是阿佩瑞斯")
             .with_inject_budget(800);
         let out = app.build_injection("x").await;
-        let joined = out.iter().map(|b| b.content.as_str()).collect::<Vec<_>>().join("\n");
+        let joined = out
+            .iter()
+            .map(|b| b.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(joined.contains("本座是阿佩瑞斯"), "核心块永不截断");
         let total: usize = out.iter().map(|b| b.content.chars().count()).sum();
         assert!(total <= 800, "总预算应约束, got {total}");
@@ -878,14 +989,20 @@ mod tests {
             .and_then(|d| d.and_local_timezone(chrono::Local).single())
             .map(|t| t.timestamp())
             .unwrap_or(0);
-        assert!(day_start <= chrono::Local::now().timestamp(), "今日零点 ≤ 现在");
+        assert!(
+            day_start <= chrono::Local::now().timestamp(),
+            "今日零点 ≤ 现在"
+        );
 
         // ③ 真实 inject_today 生产路径: 今日 episode 应被纳入且不 panic
         let store = test_store();
         put(&store, "ep-today", "今日事件回归", "me");
         let app = CompanionApp::new(store, "me");
         let rendered = app.inject_today();
-        assert!(rendered.contains("今日事件回归"), "今日 episode 应入选今日摘要");
+        assert!(
+            rendered.contains("今日事件回归"),
+            "今日 episode 应入选今日摘要"
+        );
     }
     // ===== §5.1 收官: 注入链统一接线 (四源合并/独立预算/空路径/砍序) =====
 
@@ -899,7 +1016,10 @@ mod tests {
         let cross = "【跨日记关联】\n• [2026-08-15] 换元法练习记录".to_string();
         let out = unified_memory_block(&entries, &diary, &cross, usize::MAX);
         // 四源皆在
-        assert!(out.contains("线代") || out.contains("【记忆索引】"), "主题索引应在");
+        assert!(
+            out.contains("线代") || out.contains("【记忆索引】"),
+            "主题索引应在"
+        );
         assert!(out.contains("近3日日记"), "日记摘要应在");
         assert!(out.contains("跨日记关联"), "关联片段应在");
         assert!(out.contains("记忆证据"), "记忆证据块应在");
@@ -907,7 +1027,10 @@ mod tests {
         let p_diary = out.find("近3日日记").unwrap();
         let p_cross = out.find("跨日记关联").unwrap();
         let p_mem = out.find("记忆证据").unwrap();
-        assert!(p_diary < p_cross && p_cross < p_mem, "呈现序应为 日记→关联→记忆证据");
+        assert!(
+            p_diary < p_cross && p_cross < p_mem,
+            "呈现序应为 日记→关联→记忆证据"
+        );
     }
 
     #[test]
@@ -920,7 +1043,11 @@ mod tests {
         let out_short = unified_memory_block(&entries, &diary_short, &cross, usize::MAX);
         let out_long = unified_memory_block(&entries, &diary_long, &cross, usize::MAX);
         let mem_of = |s: &str| s.split("【记忆证据】").nth(1).unwrap_or("").to_string();
-        assert_eq!(mem_of(&out_short), mem_of(&out_long), "日记加长不应侵蚀记忆证据块");
+        assert_eq!(
+            mem_of(&out_short),
+            mem_of(&out_long),
+            "日记加长不应侵蚀记忆证据块"
+        );
         assert!(out_long.contains(&cross), "日记加长不应侵蚀关联块");
     }
 
@@ -964,9 +1091,11 @@ mod tests {
         let out = memory_block(&entries);
         // 兼容两源: 无日记/关联块, 主题索引或记忆证据在
         assert!(!out.contains("近3日日记") && !out.contains("跨日记关联"));
-        assert!(out.contains("线代") || out.contains("记忆索引"), "主题索引或记忆证据应在");
+        assert!(
+            out.contains("线代") || out.contains("记忆索引"),
+            "主题索引或记忆证据应在"
+        );
         // 空条目 → 空串 (与旧行为一致)
         assert_eq!(memory_block(&[]), "");
     }
-
 }

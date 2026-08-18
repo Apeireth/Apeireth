@@ -386,14 +386,13 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolPolicy {
                     reason: format!(
                         "tool '{}' not matched by any policy rule",
                         ctx.call.tool_name
-                    )
-                    .into(),
+                    ),
                 });
             }
             PolicyVerdict::RequireApproval => {
                 return Err(PipelineError::PolicyDenied {
                     kind: StageKind::Policy,
-                    reason: format!("tool '{}' requires approval", ctx.call.tool_name).into(),
+                    reason: format!("tool '{}' requires approval", ctx.call.tool_name),
                 });
             }
             PolicyVerdict::Deny { reason, silent } => {
@@ -404,7 +403,7 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolPolicy {
                 }
                 return Err(PipelineError::PolicyDenied {
                     kind: StageKind::Policy,
-                    reason: msg.into(),
+                    reason: msg,
                 });
             }
         }
@@ -494,14 +493,11 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
         record_stage(3); // R133.5 — reliability counter
         let stage_start = Instant::now();
         let tool_name = ctx.call.tool_name.clone();
-        let tool = match self.registry.get(&tool_name) {
-            Some(t) => t,
-            None => {
-                return Err(PipelineError::Stage {
-                    kind: StageKind::Reliability,
-                    source: format!("tool '{}' vanished mid-pipeline", tool_name).into(),
-                });
-            }
+        let Some(tool) = self.registry.get(&tool_name) else {
+            return Err(PipelineError::Stage {
+                kind: StageKind::Reliability,
+                source: format!("tool '{}' vanished mid-pipeline", tool_name).into(),
+            });
         };
         // R133.3 — retry loop (max_retries + 1 次总尝试)
         //
@@ -534,7 +530,7 @@ impl Stage<ToolCallContext, ToolCallContext> for ToolReliability {
                     break;
                 }
                 Ok(Err(e)) => {
-                    let msg = e.to_string();
+                    let msg = e.clone();
                     debug!(
                         "[Reliability] tool '{}' errored on attempt {}/{}: {}",
                         tool_name,

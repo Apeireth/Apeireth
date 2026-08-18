@@ -77,7 +77,10 @@ impl PersistentTaskStore {
     pub fn insert(&self, name: &str) -> Result<TaskRecord, PersistError> {
         let id = Uuid::new_v4().to_string();
         let now = Utc::now();
-        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        let conn = self
+            .conn
+            .lock()
+            .expect("PersistentTaskStore mutex poisoned");
         conn.execute(
             "INSERT INTO tasks (task_id, name, status, created_at) VALUES (?1, ?2, ?3, ?4)",
             params![id, name, "Running", now.to_rfc3339()],
@@ -93,7 +96,10 @@ impl PersistentTaskStore {
     }
 
     pub fn complete(&self, task_id: &str, duration: Duration) -> Result<(), PersistError> {
-        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        let conn = self
+            .conn
+            .lock()
+            .expect("PersistentTaskStore mutex poisoned");
         conn.execute(
             "UPDATE tasks SET status = ?1, duration_ms = ?2 WHERE task_id = ?3",
             params!["Completed", duration.as_millis() as u64, task_id],
@@ -102,7 +108,10 @@ impl PersistentTaskStore {
     }
 
     pub fn fail(&self, task_id: &str, error: &str) -> Result<(), PersistError> {
-        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        let conn = self
+            .conn
+            .lock()
+            .expect("PersistentTaskStore mutex poisoned");
         conn.execute(
             "UPDATE tasks SET status = ?1, error = ?2 WHERE task_id = ?3",
             params!["Failed", error, task_id],
@@ -111,7 +120,10 @@ impl PersistentTaskStore {
     }
 
     pub fn count(&self) -> Result<i64, PersistError> {
-        let conn = self.conn.lock().expect("PersistentTaskStore mutex poisoned");
+        let conn = self
+            .conn
+            .lock()
+            .expect("PersistentTaskStore mutex poisoned");
         let n: i64 = conn.query_row("SELECT COUNT(*) FROM tasks", [], |r| r.get(0))?;
         Ok(n)
     }

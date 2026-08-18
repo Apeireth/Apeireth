@@ -44,7 +44,11 @@ async fn main() {
         (ProviderKind::InMemory, "memory://", "local"),
         (ProviderKind::Redis, "redis://localhost:6379/0", "global"),
         (ProviderKind::Sqlite, "sqlite://:memory:", "shared"),
-        (ProviderKind::Postgres, "postgres://u:p@localhost/db", "global"),
+        (
+            ProviderKind::Postgres,
+            "postgres://u:p@localhost/db",
+            "global",
+        ),
         (ProviderKind::S3, "s3://bucket/key", "global"),
         (ProviderKind::DiskLru, "file:///tmp/cache", "local"),
         (ProviderKind::Hybrid, "hybrid://memory+disk", "shared"),
@@ -64,7 +68,13 @@ async fn main() {
             },
         );
         let r = cfg.validate(*kind);
-        println!("  [{:?}] conn={} scope={} → validate={}", kind, conn, scope, if r.is_ok() { "OK" } else { "FAIL" });
+        println!(
+            "  [{:?}] conn={} scope={} → validate={}",
+            kind,
+            conn,
+            scope,
+            if r.is_ok() { "OK" } else { "FAIL" }
+        );
     }
     println!();
 
@@ -78,15 +88,22 @@ async fn main() {
             false,
             Duration::from_secs(0),
             ProviderScope::Local,
-        )).unwrap();
+        ))
+        .unwrap();
         p.set("k1", b"v1").await.unwrap();
         p.set("k2", b"v2").await.unwrap();
         p.set("k3", b"v3").await.unwrap();
         println!("  set 3 entries → size={}", p.size().await.unwrap());
         let got = p.get("k2").await.unwrap();
-        println!("  get k2 = {:?}", got.as_ref().map(|v| String::from_utf8_lossy(v).to_string()));
+        println!(
+            "  get k2 = {:?}",
+            got.as_ref().map(|v| String::from_utf8_lossy(v).to_string())
+        );
         p.delete("k1").await.unwrap();
-        println!("  delete k1 → exists k1 = {}", p.exists("k1").await.unwrap());
+        println!(
+            "  delete k1 → exists k1 = {}",
+            p.exists("k1").await.unwrap()
+        );
         p.clear().await.unwrap();
         println!("  clear all → size = {}", p.size().await.unwrap());
     }
@@ -102,15 +119,22 @@ async fn main() {
             false,
             Duration::from_secs(0),
             ProviderScope::Shared,
-        )).unwrap();
+        ))
+        .unwrap();
         p.set("k1", b"v1").await.unwrap();
         p.set("k2", b"v2").await.unwrap();
         p.set("k3", b"v3").await.unwrap();
         println!("  set 3 entries → size={}", p.size().await.unwrap());
         let got = p.get("k2").await.unwrap();
-        println!("  get k2 = {:?}", got.as_ref().map(|v| String::from_utf8_lossy(v).to_string()));
+        println!(
+            "  get k2 = {:?}",
+            got.as_ref().map(|v| String::from_utf8_lossy(v).to_string())
+        );
         p.delete("k1").await.unwrap();
-        println!("  delete k1 → exists k1 = {}", p.exists("k1").await.unwrap());
+        println!(
+            "  delete k1 → exists k1 = {}",
+            p.exists("k1").await.unwrap()
+        );
         p.clear().await.unwrap();
         println!("  clear all → size = {}", p.size().await.unwrap());
     }
@@ -129,7 +153,8 @@ async fn main() {
             true,
             Duration::from_secs(0),
             ProviderScope::Local,
-        )).unwrap();
+        ))
+        .unwrap();
         p1.set("k1", b"v1").await.unwrap();
         p1.set("k2", b"v2").await.unwrap();
         p1.set("k3", b"v3").await.unwrap();
@@ -143,10 +168,14 @@ async fn main() {
             true,
             Duration::from_secs(0),
             ProviderScope::Local,
-        )).unwrap();
+        ))
+        .unwrap();
         println!("  [2] reload from disk → size={}", p2.size().await.unwrap());
         let got = p2.get("k2").await.unwrap();
-        println!("  [2] get k2 = {:?}", got.as_ref().map(|v| String::from_utf8_lossy(v).to_string()));
+        println!(
+            "  [2] get k2 = {:?}",
+            got.as_ref().map(|v| String::from_utf8_lossy(v).to_string())
+        );
     }
     println!();
 
@@ -160,18 +189,27 @@ async fn main() {
             true,
             Duration::from_secs(0),
             ProviderScope::Shared,
-        )).unwrap();
+        ))
+        .unwrap();
         p.set("k1", b"v1").await.unwrap();
         p.set("k2", b"v2").await.unwrap();
-        println!("  set 2 entries → L1 has k1 = {}, L2 has k1 = {}",
-            p.l1().exists("k1").await.unwrap(), p.l2().exists("k1").await.unwrap());
+        println!(
+            "  set 2 entries → L1 has k1 = {}, L2 has k1 = {}",
+            p.l1().exists("k1").await.unwrap(),
+            p.l2().exists("k1").await.unwrap()
+        );
         p.l1().clear().await.unwrap();
-        println!("  clear L1 → L1 has k1 = {}, L2 has k1 = {}",
-            p.l1().exists("k1").await.unwrap(), p.l2().exists("k1").await.unwrap());
+        println!(
+            "  clear L1 → L1 has k1 = {}, L2 has k1 = {}",
+            p.l1().exists("k1").await.unwrap(),
+            p.l2().exists("k1").await.unwrap()
+        );
         let got = p.get("k1").await.unwrap();
-        println!("  get k1 (走 L2 miss → promote) = {:?}, L1 has k1 = {}",
+        println!(
+            "  get k1 (走 L2 miss → promote) = {:?}, L1 has k1 = {}",
             got.as_ref().map(|v| String::from_utf8_lossy(v).to_string()),
-            p.l1().exists("k1").await.unwrap());
+            p.l1().exists("k1").await.unwrap()
+        );
     }
     println!();
 
@@ -186,7 +224,8 @@ async fn main() {
             true,
             Duration::from_secs(60),
             ProviderScope::Global,
-        )).unwrap();
+        ))
+        .unwrap();
         let r = rp.set("k1", b"v1").await;
         println!("  [Redis] 0 server → set err: {}", r.is_err());
     }
@@ -199,7 +238,8 @@ async fn main() {
             true,
             Duration::from_secs(0),
             ProviderScope::Global,
-        )).unwrap();
+        ))
+        .unwrap();
         let r = pgp.set("k1", b"v1").await;
         println!("  [Postgres] 0 server → set err: {}", r.is_err());
     }
@@ -212,12 +252,17 @@ async fn main() {
             true,
             Duration::from_secs(0),
             ProviderScope::Global,
-        )).unwrap();
+        ))
+        .unwrap();
         let r = s3p.set("k1", b"v1").await;
         let rc = s3p.clear().await;
         let rs = s3p.size().await;
-        println!("  [S3] 0 凭据 → set err: {}, clear err: {}, size err: {}",
-            r.is_err(), rc.is_err(), rs.is_err());
+        println!(
+            "  [S3] 0 凭据 → set err: {}, clear err: {}, size err: {}",
+            r.is_err(),
+            rc.is_err(),
+            rs.is_err()
+        );
     }
     println!();
 

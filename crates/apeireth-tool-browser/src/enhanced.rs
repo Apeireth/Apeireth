@@ -45,7 +45,10 @@ impl EnhancedBrowser {
 
     /// Dispatch a CLI command. Returns either a snapshot (for navigate/snapshot)
     /// or a text result (for extract), or an error.
-    pub async fn dispatch_cli(&self, cmd: CliCommand) -> Result<DispatchResult, EnhancedBrowserError> {
+    pub async fn dispatch_cli(
+        &self,
+        cmd: CliCommand,
+    ) -> Result<DispatchResult, EnhancedBrowserError> {
         match cmd {
             CliCommand::Navigate(url) => {
                 let snap = self.inner.navigate(&url).await?;
@@ -55,7 +58,9 @@ impl EnhancedBrowser {
                 let snap = self.inner.snapshot().await?;
                 match kind {
                     SnapshotKind::Full => Ok(DispatchResult::Snapshot(snap)),
-                    SnapshotKind::Text => Ok(DispatchResult::Text(snap.accessibility.to_snapshot())),
+                    SnapshotKind::Text => {
+                        Ok(DispatchResult::Text(snap.accessibility.to_snapshot()))
+                    }
                     SnapshotKind::Refs => {
                         let refs = snap.accessibility.interactive_refs();
                         let formatted = refs

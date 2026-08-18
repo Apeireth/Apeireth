@@ -27,16 +27,24 @@ impl Timeline {
         }
     }
 
-    pub fn partner_id(&self) -> PartnerId { self.partner_id }
+    pub fn partner_id(&self) -> PartnerId {
+        self.partner_id
+    }
 
     pub fn append(&mut self, milestone: Milestone) {
         let at = milestone.at();
         self.entries.push(TimelineEntry { milestone, at });
     }
 
-    pub fn len(&self) -> usize { self.entries.len() }
-    pub fn is_empty(&self) -> bool { self.entries.is_empty() }
-    pub fn entries(&self) -> &[TimelineEntry] { &self.entries }
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+    pub fn entries(&self) -> &[TimelineEntry] {
+        &self.entries
+    }
 
     pub fn iter(&self) -> std::slice::Iter<'_, TimelineEntry> {
         self.entries.iter()
@@ -58,8 +66,14 @@ mod tests {
     #[test]
     fn timeline_appends() {
         let mut tl = Timeline::new(PartnerId::new());
-        tl.append(Milestone::new(MilestoneKind::FirstMeeting, MilestonePayload::Text("hi".into())));
-        tl.append(Milestone::new(MilestoneKind::Decision, MilestonePayload::Text("x".into())));
+        tl.append(Milestone::new(
+            MilestoneKind::FirstMeeting,
+            MilestonePayload::Text("hi".into()),
+        ));
+        tl.append(Milestone::new(
+            MilestoneKind::Decision,
+            MilestonePayload::Text("x".into()),
+        ));
         assert_eq!(tl.len(), 2);
     }
 }

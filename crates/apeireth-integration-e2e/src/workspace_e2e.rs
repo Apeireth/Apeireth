@@ -60,15 +60,17 @@ pub const LOCKED_CRATES: &[&str] = &[
 /// **0 漂移概念**: 8 项不修改承诺 (6 哲学锚 / 5 重守门 / 双洋葱 / 9 器官) 1:1 改承载文件
 /// **2026-08-15 docs 归位**: stage4 历史文档随 document-relocation-map.md 进 `_history/audits-reviews/`,
 /// 本常量同步更新 (归位只动位置与索引, 索引在此).
+/// **2026-08-18 docs(1.0) 重构**: 文档体系规范重构 (bb6978da) 把 conventions/glossary/stage4
+/// 全部归档到 docs/archive/ — 本常量同步指向归档位置 (内容 0 改, 只动路径).
 pub const EIGHT_PROMISES_SOURCE_FILES: &[&str] = &[
-    "docs/conventions/10-locked.md",   // 1:1 替代 APEIRETH-CONVENTIONS.md
-    "docs/conventions/09-anchor.md",   // 6 哲学锚
-    "docs/conventions/11-baseline.md", // baseline 3 值
-    "docs/glossary/08-5-no-fake.md",   // 5 不假装 (替代 5-no-fake 占位)
-    "docs/glossary/01-north-star.md",  // S-1 北极星
-    "docs/glossary/02-double-onion.md", // 双洋葱
-    "docs/glossary/15-9-phase-lifecycle.md", // 9 器官 (替代 START-CONSTRUCTION.md)
-    "docs/stage4/_history/audits-reviews/8-locked-unified-2026-08-05.md", // 8 项统一文档 (归位后)
+    "docs/archive/conventions/10-locked.md", // 1:1 替代 APEIRETH-CONVENTIONS.md
+    "docs/archive/conventions/09-anchor.md", // 6 哲学锚
+    "docs/archive/conventions/11-baseline.md", // baseline 3 值
+    "docs/archive/glossary/08-5-no-fake.md", // 5 不假装 (替代 5-no-fake 占位)
+    "docs/archive/glossary/01-north-star.md", // S-1 北极星
+    "docs/archive/glossary/02-double-onion.md", // 双洋葱
+    "docs/archive/glossary/15-9-phase-lifecycle.md", // 9 器官 (替代 START-CONSTRUCTION.md)
+    "docs/archive/stage4/_history/audits-reviews/8-locked-unified-2026-08-05.md", // 8 项统一文档 (归位后)
 ];
 
 /// 期望 workspace version

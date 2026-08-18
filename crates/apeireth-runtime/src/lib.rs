@@ -714,9 +714,8 @@ impl Runtime {
             match &result {
                 Ok(json) => {
                     metrics.record_success(latency_ms);
-                    let snap = match store.complete(task_id, json.clone()).await {
-                        Ok(s) => s,
-                        Err(_) => return,
+                    let Ok(snap) = store.complete(task_id, json.clone()).await else {
+                        return;
                     };
                     if emit_bus {
                         let event = RuntimeEvent::new(
@@ -815,9 +814,8 @@ impl Runtime {
             let result = worker.execute(task_id, params_owned).await;
             match result {
                 Ok(json) => {
-                    let snap = match store.complete(task_id, json.clone()).await {
-                        Ok(s) => s,
-                        Err(_) => return,
+                    let Ok(snap) = store.complete(task_id, json.clone()).await else {
+                        return;
                     };
                     if emit_bus {
                         let event = RuntimeEvent::new(
@@ -1507,8 +1505,7 @@ async fn r242_02_publish_cycle_report_emits_to_bus_when_enabled() {
         "publish should increment bus.sent"
     );
     assert!(rt.config.publish_cycle_report);
-    drop(sent_before);
-    drop(sent_after);
+    let _ = (sent_before, sent_after);
 }
 
 // R246 -- cycle latency summary (3 cases)

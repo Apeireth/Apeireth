@@ -36,9 +36,9 @@ impl CapabilityKind {
 /// 能力状态机.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CapabilityStatus {
-    Pending,  // 已提案, 待宪法评审/主人批准
-    Approved, // 已批准, 待激活
-    Active,   // 已激活, AI 可感知可用
+    Pending,    // 已提案, 待宪法评审/主人批准
+    Approved,   // 已批准, 待激活
+    Active,     // 已激活, AI 可感知可用
     Rejected,   // 被否决 (提案回退, 记录原因)
     Retired,    // 已退役 (差评/过时)
     RolledBack, // 已回滚 (部署后差评/失败率触发, 留痕; A1 演化回路后半段)
@@ -123,7 +123,7 @@ impl CapabilityProposal {
     /// 记录一次使用结果 (EMA 评分 + Beta-Binomial 置信度).
     pub fn record_use(&mut self, success: bool) {
         let s = self.ema_score.unwrap_or(0.5);
-        self.ema_score = Some(0.3 * (success as u8 as f64) + 0.7 * s);
+        self.ema_score = Some(0.3 * f64::from(u8::from(success)) + 0.7 * s);
         let mut c = self.confidence.unwrap_or_default();
         c.observe(success);
         self.confidence = Some(c);
@@ -148,14 +148,20 @@ pub struct CapabilityRegistry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CapabilityError {
     NotFound,
-    IllegalTransition { from: CapabilityStatus, to: CapabilityStatus },
+    IllegalTransition {
+        from: CapabilityStatus,
+        to: CapabilityStatus,
+    },
 }
 
 const CAP_PREFIX: &str = "cap-";
 
 impl CapabilityRegistry {
     pub fn new(store: Arc<SqliteMemoryStore>, session_id: impl Into<String>) -> Self {
-        Self { store, session_id: session_id.into() }
+        Self {
+            store,
+            session_id: session_id.into(),
+        }
     }
 
     fn put(&self, p: &CapabilityProposal) -> Result<(), String> {
@@ -172,14 +178,22 @@ impl CapabilityRegistry {
 
     /// 重放全部版本, 每条能力取 rev 最大 (最新).
     fn load_all(&self) -> Result<Vec<CapabilityProposal>, String> {
-        let eps = self.store.recent_episodes(&self.session_id, 500).map_err(|e| e.to_string())?;
-        let mut best: std::collections::HashMap<String, CapabilityProposal> = std::collections::HashMap::new();
+        let eps = self
+            .store
+            .recent_episodes(&self.session_id, 500)
+            .map_err(|e| e.to_string())?;
+        let mut best: std::collections::HashMap<String, CapabilityProposal> =
+            std::collections::HashMap::new();
         for e in eps.iter().filter(|e| e.id.starts_with(CAP_PREFIX)) {
             if let Ok(p) = serde_json::from_str::<CapabilityProposal>(&e.content) {
                 match best.get(&p.id) {
-                    Some(existing) if p.rev > existing.rev => { best.insert(p.id.clone(), p); }
+                    Some(existing) if p.rev > existing.rev => {
+                        best.insert(p.id.clone(), p);
+                    }
                     Some(_) => {}
-                    None => { best.insert(p.id.clone(), p); }
+                    None => {
+                        best.insert(p.id.clone(), p);
+                    }
                 }
             }
         }
@@ -187,15 +201,30 @@ impl CapabilityRegistry {
     }
 
     /// AI 提案新能力 (登记 pending).
-    pub fn propose(&self, name: &str, description: &str, kind: CapabilityKind, proposed_by: &str) -> Result<CapabilityProposal, String> {
+    pub fn propose(
+        &self,
+        name: &str,
+        description: &str,
+        kind: CapabilityKind,
+        proposed_by: &str,
+    ) -> Result<CapabilityProposal, String> {
         let p = CapabilityProposal::new(name, description, kind, proposed_by);
         self.put(&p)?;
         Ok(p)
     }
 
-    fn transition(&self, id: &str, to: CapabilityStatus, decided_at: i64, reason: Option<String>) -> Result<CapabilityProposal, CapabilityError> {
+    fn transition(
+        &self,
+        id: &str,
+        to: CapabilityStatus,
+        decided_at: i64,
+        reason: Option<String>,
+    ) -> Result<CapabilityProposal, CapabilityError> {
         let mut all = self.load_all().map_err(|_| CapabilityError::NotFound)?;
-        let idx = all.iter().position(|p| p.id == id).ok_or(CapabilityError::NotFound)?;
+        let idx = all
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or(CapabilityError::NotFound)?;
         let mut p = all[idx].clone();
         let valid = matches!(
             (p.status, to),
@@ -225,32 +254,64 @@ impl CapabilityRegistry {
 
     /// 宪法评审/主人批准 → approved.
     pub fn approve(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Approved, chrono::Utc::now().timestamp_millis(), None)
+        self.transition(
+            id,
+            CapabilityStatus::Approved,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+        )
     }
 
     /// 激活 → AI 可感知可用.
     pub fn activate(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Active, chrono::Utc::now().timestamp_millis(), None)
+        self.transition(
+            id,
+            CapabilityStatus::Active,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+        )
     }
 
     /// 否决 (记录原因).
     pub fn reject(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Rejected, chrono::Utc::now().timestamp_millis(), None)
+        self.transition(
+            id,
+            CapabilityStatus::Rejected,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+        )
     }
 
     /// 退役 (差评/过时).
     pub fn retire(&self, id: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::Retired, chrono::Utc::now().timestamp_millis(), None)
+        self.transition(
+            id,
+            CapabilityStatus::Retired,
+            chrono::Utc::now().timestamp_millis(),
+            None,
+        )
     }
 
     /// 部署后回滚 (差评/失败率触发): active → rolled_back, 原因留痕 (revert 即学习信号).
     pub fn rollback(&self, id: &str, reason: &str) -> Result<CapabilityProposal, CapabilityError> {
-        self.transition(id, CapabilityStatus::RolledBack, chrono::Utc::now().timestamp_millis(), Some(reason.to_string()))
+        self.transition(
+            id,
+            CapabilityStatus::RolledBack,
+            chrono::Utc::now().timestamp_millis(),
+            Some(reason.to_string()),
+        )
     }
 
     /// 全部提案 (按状态过滤可选).
-    pub fn list(&self, status: Option<CapabilityStatus>) -> Result<Vec<CapabilityProposal>, String> {
-        Ok(self.load_all()?.into_iter().filter(|p| status.map_or(true, |s| p.status == s)).collect())
+    pub fn list(
+        &self,
+        status: Option<CapabilityStatus>,
+    ) -> Result<Vec<CapabilityProposal>, String> {
+        Ok(self
+            .load_all()?
+            .into_iter()
+            .filter(|p| status.map_or(true, |s| p.status == s))
+            .collect())
     }
 
     /// AI 可感知的已激活能力 (供 CapabilityCatalog 动态扩展).
@@ -267,7 +328,8 @@ impl CapabilityRegistry {
         proposed_by: &str,
         expected: ExpectedOutcome,
     ) -> Result<CapabilityProposal, String> {
-        let p = CapabilityProposal::new(name, description, kind, proposed_by).with_expected(expected);
+        let p =
+            CapabilityProposal::new(name, description, kind, proposed_by).with_expected(expected);
         self.put(&p)?;
         Ok(p)
     }
@@ -275,12 +337,20 @@ impl CapabilityRegistry {
     /// 记录一次使用结果 (EMA + 置信度; 应退役时返回提示).
     pub fn record_use(&self, id: &str, success: bool) -> Result<Option<String>, String> {
         let mut all = self.load_all().map_err(|_| "load".to_string())?;
-        let idx = all.iter().position(|p| p.id == id).ok_or_else(|| format!("能力不存在: {id}"))?;
+        let idx = all
+            .iter()
+            .position(|p| p.id == id)
+            .ok_or_else(|| format!("能力不存在: {id}"))?;
         let mut p = all[idx].clone();
         p.record_use(success);
         p.rev += 1;
         let retire_hint = if p.should_retire() {
-            Some(format!("能力 {} 评分偏低 (EMA={:.2}, obs={}), 建议退役或降频", p.name, p.ema_score.unwrap_or(0.0), p.confidence.map(|c| c.observations).unwrap_or(0)))
+            Some(format!(
+                "能力 {} 评分偏低 (EMA={:.2}, obs={}), 建议退役或降频",
+                p.name,
+                p.ema_score.unwrap_or(0.0),
+                p.confidence.map(|c| c.observations).unwrap_or(0)
+            ))
         } else {
             None
         };
@@ -293,7 +363,14 @@ impl CapabilityRegistry {
         Ok(self
             .load_all()?
             .into_iter()
-            .filter(|p| matches!(p.status, CapabilityStatus::Rejected | CapabilityStatus::Retired | CapabilityStatus::RolledBack))
+            .filter(|p| {
+                matches!(
+                    p.status,
+                    CapabilityStatus::Rejected
+                        | CapabilityStatus::Retired
+                        | CapabilityStatus::RolledBack
+                )
+            })
             .map(|p| {
                 (
                     p.name.clone(),
@@ -317,7 +394,14 @@ mod tests {
     fn propose_approve_activate_flow() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = CapabilityRegistry::new(store, "me");
-        let p = reg.propose("换元检查", "做换元法时自动提醒检查 dx", CapabilityKind::Skill, "apeireth").unwrap();
+        let p = reg
+            .propose(
+                "换元检查",
+                "做换元法时自动提醒检查 dx",
+                CapabilityKind::Skill,
+                "apeireth",
+            )
+            .unwrap();
         assert_eq!(p.status, CapabilityStatus::Pending);
         let a = reg.approve(&p.id).unwrap();
         assert_eq!(a.status, CapabilityStatus::Approved);
@@ -332,13 +416,25 @@ mod tests {
     fn reject_and_retire_paths() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = CapabilityRegistry::new(store, "me");
-        let p = reg.propose("自我复制", "复制自己到另一台主机", CapabilityKind::Action, "apeireth").unwrap();
+        let p = reg
+            .propose(
+                "自我复制",
+                "复制自己到另一台主机",
+                CapabilityKind::Action,
+                "apeireth",
+            )
+            .unwrap();
         let r = reg.reject(&p.id).unwrap();
         assert_eq!(r.status, CapabilityStatus::Rejected);
         assert!(r.reject_reason.is_some());
         // rejected 不能再 approve
-        assert!(matches!(reg.approve(&p.id), Err(CapabilityError::IllegalTransition { .. })));
-        let p2 = reg.propose("旧技能", "x", CapabilityKind::Skill, "apeireth").unwrap();
+        assert!(matches!(
+            reg.approve(&p.id),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
+        let p2 = reg
+            .propose("旧技能", "x", CapabilityKind::Skill, "apeireth")
+            .unwrap();
         reg.approve(&p2.id).unwrap();
         reg.activate(&p2.id).unwrap();
         let t = reg.retire(&p2.id).unwrap();
@@ -349,8 +445,13 @@ mod tests {
     fn illegal_transition_rejected() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = CapabilityRegistry::new(store, "me");
-        let p = reg.propose("直接激活", "跳过审批", CapabilityKind::Action, "apeireth").unwrap();
-        assert!(matches!(reg.activate(&p.id), Err(CapabilityError::IllegalTransition { .. })));
+        let p = reg
+            .propose("直接激活", "跳过审批", CapabilityKind::Action, "apeireth")
+            .unwrap();
+        assert!(matches!(
+            reg.activate(&p.id),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
         // pending 状态不变
         assert_eq!(reg.list(None).unwrap()[0].status, CapabilityStatus::Pending);
     }
@@ -359,12 +460,25 @@ mod tests {
     fn rollback_flow_and_illegal_transitions() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = CapabilityRegistry::new(store, "me");
-        let p = reg.propose("部署回滚", "演化回路后半段", CapabilityKind::Skill, "apeireth").unwrap();
+        let p = reg
+            .propose(
+                "部署回滚",
+                "演化回路后半段",
+                CapabilityKind::Skill,
+                "apeireth",
+            )
+            .unwrap();
         // pending → rolled_back 非法 (跳过审批/激活)
-        assert!(matches!(reg.rollback(&p.id, "x"), Err(CapabilityError::IllegalTransition { .. })));
+        assert!(matches!(
+            reg.rollback(&p.id, "x"),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
         // approved → rolled_back 非法
         reg.approve(&p.id).unwrap();
-        assert!(matches!(reg.rollback(&p.id, "x"), Err(CapabilityError::IllegalTransition { .. })));
+        assert!(matches!(
+            reg.rollback(&p.id, "x"),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
         // active → rolled_back 合法, 原因留痕
         reg.activate(&p.id).unwrap();
         let r = reg.rollback(&p.id, "失败率过高").unwrap();
@@ -372,11 +486,24 @@ mod tests {
         assert_eq!(r.rollback_reason.as_deref(), Some("失败率过高"));
         assert_eq!(r.status.label(), "rolled_back");
         // rolled_back 是终态: 不能再激活/退役/再次回滚
-        assert!(matches!(reg.activate(&p.id), Err(CapabilityError::IllegalTransition { .. })));
-        assert!(matches!(reg.retire(&p.id), Err(CapabilityError::IllegalTransition { .. })));
-        assert!(matches!(reg.rollback(&p.id, "再次"), Err(CapabilityError::IllegalTransition { .. })));
+        assert!(matches!(
+            reg.activate(&p.id),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
+        assert!(matches!(
+            reg.retire(&p.id),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
+        assert!(matches!(
+            reg.rollback(&p.id, "再次"),
+            Err(CapabilityError::IllegalTransition { .. })
+        ));
         // 回滚收据含 rolled_back 留痕 (revert 即学习信号)
-        assert!(reg.revert_receipts().unwrap().iter().any(|(n, s, reason)| n == "部署回滚" && s == "rolled_back" && reason == "失败率过高"));
+        assert!(reg
+            .revert_receipts()
+            .unwrap()
+            .iter()
+            .any(|(n, s, reason)| n == "部署回滚" && s == "rolled_back" && reason == "失败率过高"));
         // rolled_back 不在激活清单
         assert!(reg.active_capabilities().unwrap().is_empty());
     }
@@ -385,7 +512,9 @@ mod tests {
     fn persistence_survives_reopen() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg1 = CapabilityRegistry::new(Arc::clone(&store), "me");
-        let p = reg1.propose("持久能力", "y", CapabilityKind::Skill, "apeireth").unwrap();
+        let p = reg1
+            .propose("持久能力", "y", CapabilityKind::Skill, "apeireth")
+            .unwrap();
         reg1.approve(&p.id).unwrap();
         reg1.activate(&p.id).unwrap();
         // 重开 registry (同库)

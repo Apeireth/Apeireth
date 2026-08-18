@@ -49,7 +49,9 @@ pub struct LocalRelationship {
 
 impl LocalRelationship {
     pub fn new(depth: f64) -> Self {
-        Self { depth: depth.clamp(0.0, 1.0) }
+        Self {
+            depth: depth.clamp(0.0, 1.0),
+        }
     }
 }
 
@@ -310,7 +312,12 @@ impl Initiative {
                 format!("已经 {:.1} 小时没联系了", since_hours)
             }
         };
-        let mut msg = format!("[动作: {}] {}. {}", self.action.label(), why, self.rhythm.explain());
+        let mut msg = format!(
+            "[动作: {}] {}. {}",
+            self.action.label(),
+            why,
+            self.rhythm.explain()
+        );
         if let Some(h) = &self.context_hint {
             msg.push_str(&format!(" 我记得: {}", h));
         }
@@ -487,7 +494,8 @@ impl<R: RelationshipState> EmergenceLoop<R> {
 
         let warmth = self.relationship.warmth();
         let in_rhythm = rhythm.active_probability >= self.config.rhythm_active_probability;
-        let mut drive = warmth * self.config.depth_weight + silence_pressure * self.config.silence_weight;
+        let mut drive =
+            warmth * self.config.depth_weight + silence_pressure * self.config.silence_weight;
         if in_rhythm {
             drive += self.config.rhythm_boost;
         }
@@ -500,7 +508,9 @@ impl<R: RelationshipState> EmergenceLoop<R> {
             if in_rhythm {
                 InitiativeReason::RhythmMatched { minutes_now }
             } else {
-                InitiativeReason::LongSilence { since_hours: silence_hours }
+                InitiativeReason::LongSilence {
+                    since_hours: silence_hours,
+                }
             }
         } else {
             // 冷启动探针 (RL 探索): 活跃时段且距上次主动 >= probe_hours → 试一次
@@ -553,7 +563,9 @@ mod tests {
     use chrono::TimeZone;
 
     fn at(day: u32, h: u32, m: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 8, day, h, m, 0).single().unwrap()
+        Utc.with_ymd_and_hms(2026, 8, day, h, m, 0)
+            .single()
+            .unwrap()
     }
 
     #[test]
@@ -609,7 +621,10 @@ mod tests {
         let init = l.tick(at(16, 8, 40), hint);
         assert!(init.is_some());
         let init = init.unwrap();
-        assert!(matches!(init.reason, InitiativeReason::RhythmMatched { .. }));
+        assert!(matches!(
+            init.reason,
+            InitiativeReason::RhythmMatched { .. }
+        ));
         assert!(init.context_hint.is_some());
         // 决策层不产生任何固定问候文案
         assert!(!init.context_hint.as_ref().unwrap().contains("早上好"));

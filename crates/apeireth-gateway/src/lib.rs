@@ -94,7 +94,7 @@ mod tests {
 
     #[tokio::test]
     async fn end_to_end_transport_exchange() {
-        let g = Gateway::open(GatewayMode::SingleProcess, "e2e", 0);
+        let _g = Gateway::open(GatewayMode::SingleProcess, "e2e", 0);
         let custom = Arc::new(InMemoryTransport::new("custom"));
         custom.start().await.unwrap();
         let node_id = Uuid::new_v4();

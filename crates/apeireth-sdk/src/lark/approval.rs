@@ -20,7 +20,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 InstanceStatus (5 variant, 1:1 翻译 v0.9.21 商业版)
@@ -160,10 +160,7 @@ pub struct ApprovalFormField {
 
 impl ApprovalInstance {
     /// 创建新审批实例 (STUB 模式不真调飞书 API).
-    pub fn new(
-        approval_code: String,
-        user_open_id: String,
-    ) -> Result<Self, LarkError> {
+    pub fn new(approval_code: String, user_open_id: String) -> Result<Self, LarkError> {
         if approval_code.is_empty() {
             return Err(LarkError::Other("approval_code is empty".to_string()));
         }
@@ -228,10 +225,7 @@ pub struct ApprovalTask {
 
 impl ApprovalTask {
     /// 创建新审批任务.
-    pub fn new(
-        instance_id: String,
-        approver_open_id: String,
-    ) -> Result<Self, LarkError> {
+    pub fn new(instance_id: String, approver_open_id: String) -> Result<Self, LarkError> {
         if instance_id.is_empty() {
             return Err(LarkError::Other("instance_id is empty".to_string()));
         }
@@ -287,19 +281,13 @@ mod tests {
 
     #[test]
     fn approval_instance_reject_empty_approval_code() {
-        let result = ApprovalInstance::new(
-            String::new(),
-            "ou_user1234567890abcdef".to_string(),
-        );
+        let result = ApprovalInstance::new(String::new(), "ou_user1234567890abcdef".to_string());
         assert!(matches!(result, Err(LarkError::Other(_))));
     }
 
     #[test]
     fn approval_instance_reject_invalid_user_open_id() {
-        let result = ApprovalInstance::new(
-            "approval_code_xxx".to_string(),
-            "invalid".to_string(),
-        );
+        let result = ApprovalInstance::new("approval_code_xxx".to_string(), "invalid".to_string());
         assert!(matches!(result, Err(LarkError::OpenIdInvalid(_))));
     }
 
@@ -310,7 +298,11 @@ mod tests {
             "ou_user1234567890abcdef".to_string(),
         )
         .expect("valid")
-        .with_form_field("reason".to_string(), "textarea".to_string(), "出差".to_string());
+        .with_form_field(
+            "reason".to_string(),
+            "textarea".to_string(),
+            "出差".to_string(),
+        );
         assert_eq!(inst.form.len(), 1);
         assert_eq!(inst.form[0].id, "reason");
     }
@@ -327,19 +319,13 @@ mod tests {
 
     #[test]
     fn approval_task_reject_empty_instance_id() {
-        let result = ApprovalTask::new(
-            String::new(),
-            "ou_approver1234567890abcdef".to_string(),
-        );
+        let result = ApprovalTask::new(String::new(), "ou_approver1234567890abcdef".to_string());
         assert!(matches!(result, Err(LarkError::Other(_))));
     }
 
     #[test]
     fn approval_task_reject_invalid_approver_open_id() {
-        let result = ApprovalTask::new(
-            "instance_001".to_string(),
-            "invalid".to_string(),
-        );
+        let result = ApprovalTask::new("instance_001".to_string(), "invalid".to_string());
         assert!(matches!(result, Err(LarkError::OpenIdInvalid(_))));
     }
 

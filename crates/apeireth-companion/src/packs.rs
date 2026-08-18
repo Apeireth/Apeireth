@@ -128,8 +128,7 @@ impl PermissionPack {
 
     /// 是否需 90 天续签提醒 (仅永久包).
     pub fn needs_renewal_reminder(&self, now_ms: i64) -> bool {
-        self.expiry == PackExpiry::Permanent
-            && now_ms >= self.created_at_ms + 90 * 24 * 3600_000
+        self.expiry == PackExpiry::Permanent && now_ms >= self.created_at_ms + 90 * 24 * 3600_000
     }
 }
 
@@ -295,15 +294,18 @@ mod tests {
         // B3 参数口: 包级沙盒配置按覆盖工具可查 (无配置包 → None → 桥级默认)
         let r = PackRegistry::new();
         r.grant(
-            PermissionPack::permanent("沙盒包", vec!["ShellExec".into()])
-                .with_sandbox(crate::sandbox::SandboxConfig {
+            PermissionPack::permanent("沙盒包", vec!["ShellExec".into()]).with_sandbox(
+                crate::sandbox::SandboxConfig {
                     memory_limit_mb: Some(256),
                     timeout_secs: 60,
                     ..crate::sandbox::SandboxConfig::default()
-                }),
+                },
+            ),
         );
         r.grant(PackRegistry::default_daily_pack());
-        let cfg = r.sandbox_for("ShellExec", now_ms()).expect("应有包级沙盒配置");
+        let cfg = r
+            .sandbox_for("ShellExec", now_ms())
+            .expect("应有包级沙盒配置");
         assert_eq!(cfg.memory_limit_mb, Some(256));
         assert_eq!(cfg.timeout_secs, 60);
         // WebSearch 只被无沙盒配置的日常包覆盖 → None

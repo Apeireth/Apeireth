@@ -74,7 +74,10 @@ mod tests {
 
     #[test]
     fn unknown_maps_correctly() {
-        assert_eq!(BrowserCommand::from_str("Nonexistent"), BrowserCommand::Unknown);
+        assert_eq!(
+            BrowserCommand::from_str("Nonexistent"),
+            BrowserCommand::Unknown
+        );
     }
 
     #[test]

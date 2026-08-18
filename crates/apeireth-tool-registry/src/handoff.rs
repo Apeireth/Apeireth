@@ -654,9 +654,7 @@ impl Tool for TransferTool {
         let context = parse_context_from_args(&args)?;
 
         // 4. 在持锁窗口内 borrow filter + callback Arc clone (避免跨 await 持锁)
-        let (filter, on_handoff_cb) = self
-            .registry
-            .borrow_filter_and_callback(&self.agent_name);
+        let (filter, on_handoff_cb) = self.registry.borrow_filter_and_callback(&self.agent_name);
 
         // 5. 应用 input_filter (缺省 = 透传, per task 0 假装标注)
         let filtered_context = if let Some(f) = filter {
@@ -733,9 +731,9 @@ fn parse_context_from_args(args: &Value) -> Result<AgentContext, String> {
     // 接受 2 种格式:
     // 1. {"context": {...}} → 直接用
     // 2. {"messages": [...], "metadata": {...}} → 构造 AgentContext
-    let obj = args.as_object().ok_or_else(|| {
-        format!("args must be JSON object, got: {}", args)
-    })?;
+    let obj = args
+        .as_object()
+        .ok_or_else(|| format!("args must be JSON object, got: {}", args))?;
 
     if let Some(ctx_val) = obj.get("context") {
         // 直接反序列化
@@ -1035,13 +1033,10 @@ mod tests {
         let invoked_clone = invoked.clone();
         reg.set_on_handoff(
             "researcher",
-            Arc::new(SyncOnHandoff::new(
-                "counter",
-                move |_req| {
-                    invoked_clone.fetch_add(1, Ordering::SeqCst);
-                    Ok(())
-                },
-            )),
+            Arc::new(SyncOnHandoff::new("counter", move |_req| {
+                invoked_clone.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            })),
         );
 
         let tool = TransferTool::new("researcher", reg.clone());
@@ -1067,7 +1062,10 @@ mod tests {
         let tool = TransferTool::new("researcher", reg.clone());
         let args = json!({"messages": [], "metadata": {}});
         // panic 必须被隔离, handoff 仍成功
-        let result = tool.call(args).await.expect("call must succeed despite panic");
+        let result = tool
+            .call(args)
+            .await
+            .expect("call must succeed despite panic");
         assert_eq!(result["on_handoff_invoked"], true);
         assert_eq!(result["target_agent"], "researcher");
     }
@@ -1189,10 +1187,16 @@ mod tests {
         // disable researcher → tool_a 返错, tool_b 不受影响
         reg.set_enabled("researcher", false);
 
-        let err_a = tool_a.call(json!({"messages": [], "metadata": {}})).await.unwrap_err();
+        let err_a = tool_a
+            .call(json!({"messages": [], "metadata": {}}))
+            .await
+            .unwrap_err();
         assert!(err_a.contains("DISABLED"));
 
-        let ok_b = tool_b.call(json!({"messages": [], "metadata": {}})).await.unwrap();
+        let ok_b = tool_b
+            .call(json!({"messages": [], "metadata": {}}))
+            .await
+            .unwrap();
         assert_eq!(ok_b["target_agent"], "coder");
     }
 

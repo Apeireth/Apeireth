@@ -144,36 +144,36 @@
 // 子模块 (10 个, 每个 100% 文档化)
 // ============================================================================
 
-/// 错误类型 (7 variant MemoryProviderError + 序列化摘要 MemoryProviderErrorKind).
-pub mod error;
-/// MemoryProvider trait + ProviderKind 7 变体 + ProviderConfig 6 K-1 + ProviderScope 3 变体.
-pub mod memory_provider;
-/// 模式 0: `InMemoryProvider` 进程内 HashMap.
-pub mod provider_in_memory;
-/// 模式 1: `RedisProvider` 外部 Redis server.
-pub mod provider_redis;
-/// 模式 2: `SqliteProvider` 本地 SQLite 文件 / :memory:.
-pub mod provider_sqlite;
-/// 模式 3: `PostgresProvider` 外部 PG server.
-pub mod provider_postgres;
-/// 模式 4: `S3Provider` 外部 S3 (S3-compatible) via reqwest.
-pub mod provider_s3;
-/// 模式 5: `DiskLruProvider` 本地 disk + LRU (借 lru crate).
-pub mod provider_disk_lru;
-/// 模式 6: `HybridProvider` 组合 in_memory + disk_lru 两级.
-pub mod provider_hybrid;
-/// 模式 7: `FileProvider` 本地 JSON-Lines append-only 文件 (per R23 #6 派工, file provider).
-pub mod provider_file;
-/// 模式 8: `MongoDbProvider` 外部 MongoDB skeleton (per R23 #6 派工, mongodb skeleton).
-pub mod provider_mongodb;
-/// 7 provider 聚合注册表 (7 字段, 1:1 跟 Golutra 5 provider 装配对齐).
-pub mod registry;
-/// 按名称注册/查询的接线注册表 (9 provider 列表/选择/fallback, telemetry cache 接线入口).
-pub mod named_registry;
 /// "cache 语义" 接线层 (ProviderRole 能力分类 + CachedMemoryProvider 装饰器).
 pub mod cache_layer;
+/// 错误类型 (7 variant MemoryProviderError + 序列化摘要 MemoryProviderErrorKind).
+pub mod error;
 /// 9 provider 统一构造器 + from_env 接线工厂 (env 装配, 供 telemetry/cache 选后端).
 pub mod factory;
+/// MemoryProvider trait + ProviderKind 7 变体 + ProviderConfig 6 K-1 + ProviderScope 3 变体.
+pub mod memory_provider;
+/// 按名称注册/查询的接线注册表 (9 provider 列表/选择/fallback, telemetry cache 接线入口).
+pub mod named_registry;
+/// 模式 5: `DiskLruProvider` 本地 disk + LRU (借 lru crate).
+pub mod provider_disk_lru;
+/// 模式 7: `FileProvider` 本地 JSON-Lines append-only 文件 (per R23 #6 派工, file provider).
+pub mod provider_file;
+/// 模式 6: `HybridProvider` 组合 in_memory + disk_lru 两级.
+pub mod provider_hybrid;
+/// 模式 0: `InMemoryProvider` 进程内 HashMap.
+pub mod provider_in_memory;
+/// 模式 8: `MongoDbProvider` 外部 MongoDB skeleton (per R23 #6 派工, mongodb skeleton).
+pub mod provider_mongodb;
+/// 模式 3: `PostgresProvider` 外部 PG server.
+pub mod provider_postgres;
+/// 模式 1: `RedisProvider` 外部 Redis server.
+pub mod provider_redis;
+/// 模式 4: `S3Provider` 外部 S3 (S3-compatible) via reqwest.
+pub mod provider_s3;
+/// 模式 2: `SqliteProvider` 本地 SQLite 文件 / :memory:.
+pub mod provider_sqlite;
+/// 7 provider 聚合注册表 (7 字段, 1:1 跟 Golutra 5 provider 装配对齐).
+pub mod registry;
 
 // ============================================================================
 // 公共 re-export (顶层级 API, 不需要 `apeireth_memory_extensions::provider_in_memory::InMemoryProvider`)
@@ -188,21 +188,17 @@ pub use crate::memory_provider::{
     MEMORY_PROVIDER_KIND_COUNT, PROVIDER_CONFIG_K1_FIELDS, PROVIDER_SCOPE_COUNT,
 };
 pub use crate::provider_disk_lru::{DiskLruConfigDefault, DiskLruProvider};
-pub use crate::provider_hybrid::{HybridConfigDefault, HybridProvider};
 pub use crate::provider_file::{FileConfigDefault, FileProvider};
-pub use crate::provider_mongodb::{MongoDbConfigDefault, MongoDbProvider};
+pub use crate::provider_hybrid::{HybridConfigDefault, HybridProvider};
 pub use crate::provider_in_memory::{InMemoryConfigDefault, InMemoryProvider};
+pub use crate::provider_mongodb::{MongoDbConfigDefault, MongoDbProvider};
 pub use crate::provider_postgres::{PostgresConfigDefault, PostgresProvider};
 pub use crate::provider_redis::{RedisConfigDefault, RedisProvider};
 pub use crate::provider_s3::{S3ConfigDefault, S3Provider};
 pub use crate::provider_sqlite::{SqliteConfigDefault, SqliteProvider};
-pub use crate::registry::{
-    ProviderRegistry, ProviderRegistryBuilder, REGISTRY_PROVIDER_COUNT,
-};
+pub use crate::registry::{ProviderRegistry, ProviderRegistryBuilder, REGISTRY_PROVIDER_COUNT};
 // ===== telemetry cache 接线 (R-wiring) re-export =====
-pub use crate::cache_layer::{
-    CachedMemoryProvider, ProviderRole, is_persistent, provider_role,
-};
+pub use crate::cache_layer::{is_persistent, provider_role, CachedMemoryProvider, ProviderRole};
 pub use crate::factory::{
     ProviderFactory, ENV_CACHE_TTL_MS, ENV_CONNECTION, ENV_MAX_SIZE, ENV_PERSIST, ENV_PROVIDER,
     ENV_SCOPE, ENV_TIMEOUT_MS,
@@ -360,14 +356,17 @@ mod tests {
         assert_eq!(r.initialized_count(), 0);
         // builder 7 字段
         let _ = ProviderRegistryBuilder::new()
-            .with_in_memory(Arc::new(InMemoryProvider::new(ProviderConfig::new(
-                "memory://",
-                Duration::from_secs(5),
-                1024 * 1024,
-                false,
-                Duration::from_secs(0),
-                ProviderScope::Local,
-            )).unwrap()) as Arc<dyn MemoryProvider>)
+            .with_in_memory(Arc::new(
+                InMemoryProvider::new(ProviderConfig::new(
+                    "memory://",
+                    Duration::from_secs(5),
+                    1024 * 1024,
+                    false,
+                    Duration::from_secs(0),
+                    ProviderScope::Local,
+                ))
+                .unwrap(),
+            ) as Arc<dyn MemoryProvider>)
             .build();
     }
 }

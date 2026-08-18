@@ -76,7 +76,9 @@ impl SleepCycle {
         let last = *self.last_activity.lock().expect("poisoned");
         let quiet = self.clock.now() - last;
         let items = *self.items_since_last_cycle.lock().expect("poisoned");
-        quiet >= chrono::Duration::from_std(self.config.quiet_threshold).unwrap_or(chrono::Duration::seconds(60))
+        quiet
+            >= chrono::Duration::from_std(self.config.quiet_threshold)
+                .unwrap_or(chrono::Duration::seconds(60))
             || items >= self.config.max_items_before_consolidate
     }
 
@@ -88,7 +90,9 @@ impl SleepCycle {
 }
 
 impl Default for SleepCycle {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

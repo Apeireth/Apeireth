@@ -76,7 +76,8 @@ impl DreamScheduler {
             while j < items.len() {
                 let b = norm(&items[j]);
                 let dup = a == b
-                    || (a.len() >= 20 && b.len() >= 20
+                    || (a.len() >= 20
+                        && b.len() >= 20
                         && (a.contains(&b) || b.contains(&a) || overlap_ratio(&a, &b) > 0.8));
                 if dup {
                     // 保留较长者
@@ -102,7 +103,9 @@ impl DreamScheduler {
             session: "me".into(),
             merge_batch: 20,
             summarizer: None,
-            last_cycle_at: std::sync::Mutex::new(DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(Utc::now())),
+            last_cycle_at: std::sync::Mutex::new(
+                DateTime::<Utc>::from_timestamp(0, 0).unwrap_or(Utc::now()),
+            ),
             thought_reader: None,
         }
     }
@@ -133,7 +136,10 @@ impl DreamScheduler {
     }
 
     /// N4 元自学习读取口: 真整合夜写【思维链盘点】; 未接 = 不盘点 (诚实降级).
-    pub fn with_thought_reader(mut self, r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>) -> Self {
+    pub fn with_thought_reader(
+        mut self,
+        r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>,
+    ) -> Self {
         self.thought_reader = Some(r);
         self
     }
@@ -163,7 +169,10 @@ impl DreamScheduler {
         let mut items: Vec<String> = eps
             .iter()
             .filter(|e| !e.id.starts_with("mem-dream-"))
-            .filter(|e| chrono::DateTime::<Utc>::from_timestamp(e.timestamp, 0).map_or(true, |t| t >= boundary))
+            .filter(|e| {
+                chrono::DateTime::<Utc>::from_timestamp(e.timestamp, 0)
+                    .map_or(true, |t| t >= boundary)
+            })
             .map(|e| e.content.clone())
             .collect();
         // 记忆 v2 (Letta sleep-time 吸收): 合并前去重 (文本级近重复, 非 embedding — 诚实)
@@ -268,9 +277,16 @@ mod tests {
         let n = sched.tick().await;
         assert_eq!(n, 2, "4 条应合并成 2 对");
         let eps = store.recent_episodes("me", 100).unwrap();
-        let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+        let dreams: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-"))
+            .collect();
         assert_eq!(dreams.len(), 2, "合并结果应写回真库");
-        assert!(dreams[0].content.contains("◆"), "合并应为拼接: {}", dreams[0].content);
+        assert!(
+            dreams[0].content.contains("◆"),
+            "合并应为拼接: {}",
+            dreams[0].content
+        );
         // reset 后不再做
         assert_eq!(sched.tick().await, 0);
         // 第二夜: 增量合并语义 (2026-08-16) — 无新记忆 → 0 (旧记忆不再反复合并)
@@ -293,7 +309,10 @@ mod tests {
         let n2 = sched.tick().await;
         assert_eq!(n2, 0, "旧做梦结果不应被再次合并 (防摘要嵌套)");
         let eps = store.recent_episodes("me", 100).unwrap();
-        let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+        let dreams: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-"))
+            .collect();
         assert_eq!(dreams.len(), 2, "做梦结果不增");
     }
 
@@ -324,9 +343,16 @@ mod tests {
         vc.advance(chrono::Duration::seconds(61));
         assert_eq!(sched.tick().await, 2);
         let eps = store.recent_episodes("me", 100).unwrap();
-        let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+        let dreams: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-"))
+            .collect();
         assert_eq!(dreams.len(), 2);
-        assert!(dreams[0].content.starts_with("【做梦摘要】"), "应写摘要: {}", dreams[0].content);
+        assert!(
+            dreams[0].content.starts_with("【做梦摘要】"),
+            "应写摘要: {}",
+            dreams[0].content
+        );
     }
 
     #[tokio::test]
@@ -339,9 +365,16 @@ mod tests {
         vc.advance(chrono::Duration::seconds(61));
         assert_eq!(sched.tick().await, 2);
         let eps = store.recent_episodes("me", 100).unwrap();
-        let dreams: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-")).collect();
+        let dreams: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-"))
+            .collect();
         // 摘要失败 → 诚实降级为拼接, 不丢内容
-        assert!(dreams[0].content.starts_with("【做梦整合】"), "应降级拼接: {}", dreams[0].content);
+        assert!(
+            dreams[0].content.starts_with("【做梦整合】"),
+            "应降级拼接: {}",
+            dreams[0].content
+        );
     }
 
     // ---- N4 元自学习注入点测试 ----
@@ -356,11 +389,20 @@ mod tests {
         fn read_cluster(&self, name: &str) -> Vec<ThoughtFile> {
             if name == "后思维簇" {
                 vec![
-                    ThoughtFile { name: "a.md".into(), content: "甲".into() },
-                    ThoughtFile { name: "b.md".into(), content: "乙".into() },
+                    ThoughtFile {
+                        name: "a.md".into(),
+                        content: "甲".into(),
+                    },
+                    ThoughtFile {
+                        name: "b.md".into(),
+                        content: "乙".into(),
+                    },
                 ]
             } else {
-                vec![ThoughtFile { name: "a.md".into(), content: "丙".into() }]
+                vec![ThoughtFile {
+                    name: "a.md".into(),
+                    content: "丙".into(),
+                }]
             }
         }
         fn read_chain(&self, _name: &str) -> Vec<ThoughtFile> {
@@ -378,15 +420,29 @@ mod tests {
         vc.advance(chrono::Duration::seconds(61));
         assert_eq!(sched.tick().await, 2, "4 条应合并成 2 对");
         let eps = store.recent_episodes("me", 100).unwrap();
-        let inv: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        let inv: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-thought-"))
+            .collect();
         assert_eq!(inv.len(), 1, "真整合夜应写一条思维链盘点");
-        assert!(inv[0].content.starts_with("【思维链盘点】"), "应含盘点前缀: {}", inv[0].content);
-        assert!(inv[0].content.contains("后思维簇:2 篇"), "盘点应含簇计数: {}", inv[0].content);
+        assert!(
+            inv[0].content.starts_with("【思维链盘点】"),
+            "应含盘点前缀: {}",
+            inv[0].content
+        );
+        assert!(
+            inv[0].content.contains("后思维簇:2 篇"),
+            "盘点应含簇计数: {}",
+            inv[0].content
+        );
         // 第二夜无新记忆 → 不整合 → 不重复盘点
         vc.advance(chrono::Duration::seconds(61));
         assert_eq!(sched.tick().await, 0, "无新记忆不整合");
         let eps2 = store.recent_episodes("me", 100).unwrap();
-        let inv2: Vec<_> = eps2.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        let inv2: Vec<_> = eps2
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-thought-"))
+            .collect();
         assert_eq!(inv2.len(), 1, "不整合则不新增盘点");
     }
 
@@ -399,7 +455,7 @@ mod tests {
             .with_thought_reader(Arc::new(StubReader));
         vc.advance(chrono::Duration::seconds(61));
         sched.tick().await; // 夜 1: 整合 + 写盘点
-        // 加两条新记忆触发夜 2 真整合
+                            // 加两条新记忆触发夜 2 真整合
         for (i, c) in ["夜二新记忆甲", "夜二新记忆乙"].iter().enumerate() {
             store
                 .put_episode(&CoreEpisode {
@@ -421,10 +477,14 @@ mod tests {
             .filter(|e| e.id.starts_with("mem-dream-") && !e.id.starts_with("mem-dream-thought-"))
             .filter(|e| e.content.contains("思维链盘点"))
             .collect();
-        assert!(bad.is_empty(), "盘点 episode 不应被合并进普通整合结果 (防嵌套)");
-        let inv: Vec<_> = eps.iter().filter(|e| e.id.starts_with("mem-dream-thought-")).collect();
+        assert!(
+            bad.is_empty(),
+            "盘点 episode 不应被合并进普通整合结果 (防嵌套)"
+        );
+        let inv: Vec<_> = eps
+            .iter()
+            .filter(|e| e.id.starts_with("mem-dream-thought-"))
+            .collect();
         assert_eq!(inv.len(), 2, "每个真整合夜各写一条盘点 (夜1 n=2 + 夜2 n=1)");
     }
 }
-
-

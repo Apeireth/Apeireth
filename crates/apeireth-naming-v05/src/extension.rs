@@ -790,7 +790,7 @@ mod tests {
     #[test]
     fn v05_spec30_base_classes_sum_to_1() {
         // 4 大类权重 sum=1.0 守门 (per V05Spec DEFAULT_WEIGHTS)
-        let s30 = test_spec30();
+        let _s30 = test_spec30();
         let sum: f32 = DEFAULT_WEIGHTS.iter().sum();
         assert!(
             (sum - 1.0).abs() < 1e-6,

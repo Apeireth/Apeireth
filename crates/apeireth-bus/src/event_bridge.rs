@@ -74,7 +74,12 @@ impl EventBridge {
         Self::default()
     }
 
-    pub fn push(&mut self, kind: EventKind, source: impl Into<String>, payload: impl Into<String>) -> &UnifiedEvent {
+    pub fn push(
+        &mut self,
+        kind: EventKind,
+        source: impl Into<String>,
+        payload: impl Into<String>,
+    ) -> &UnifiedEvent {
         let ev = UnifiedEvent {
             id: self.next_id,
             kind,
@@ -222,8 +227,20 @@ mod tests {
             ..Default::default()
         });
         let now = chrono::Utc::now().timestamp_millis();
-        let ev1 = UnifiedEvent { id: 1, kind: EventKind::User, source: "u".into(), payload_json: "{}".into(), at_ms: now - 5000 };
-        let ev2 = UnifiedEvent { id: 2, kind: EventKind::User, source: "u".into(), payload_json: "{}".into(), at_ms: now };
+        let ev1 = UnifiedEvent {
+            id: 1,
+            kind: EventKind::User,
+            source: "u".into(),
+            payload_json: "{}".into(),
+            at_ms: now - 5000,
+        };
+        let ev2 = UnifiedEvent {
+            id: 2,
+            kind: EventKind::User,
+            source: "u".into(),
+            payload_json: "{}".into(),
+            at_ms: now,
+        };
         assert!(!gate.should_perceive(&ev1), "窗口外旧事件不计数");
         assert!(!gate.should_perceive(&ev2), "窗口内仅 1 条 < 阈值 2");
     }

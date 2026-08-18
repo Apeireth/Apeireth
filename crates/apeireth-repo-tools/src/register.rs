@@ -75,16 +75,43 @@ impl Tool for RepoQualityAnalyzerTool {
             "complexity" | "tech_debt" | "deps" | "security" | "functions" => {
                 let file = std::path::Path::new(required(&args, "file")?);
                 let out = match op {
-                    "complexity" => serde_json::to_value(&analyzer.analyze_complexity(file).await.map_err(|e| e.to_string())?),
-                    "tech_debt" => serde_json::to_value(&analyzer.analyze_tech_debt(file).await.map_err(|e| e.to_string())?),
-                    "deps" => serde_json::to_value(&analyzer.analyze_deps(file).await.map_err(|e| e.to_string())?),
-                    "security" => serde_json::to_value(&analyzer.analyze_security(file).await.map_err(|e| e.to_string())?),
-                    _ => serde_json::to_value(&analyzer.analyze_functions(file).await.map_err(|e| e.to_string())?),
+                    "complexity" => serde_json::to_value(
+                        &analyzer
+                            .analyze_complexity(file)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    ),
+                    "tech_debt" => serde_json::to_value(
+                        &analyzer
+                            .analyze_tech_debt(file)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    ),
+                    "deps" => serde_json::to_value(
+                        &analyzer
+                            .analyze_deps(file)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    ),
+                    "security" => serde_json::to_value(
+                        &analyzer
+                            .analyze_security(file)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    ),
+                    _ => serde_json::to_value(
+                        &analyzer
+                            .analyze_functions(file)
+                            .await
+                            .map_err(|e| e.to_string())?,
+                    ),
                 }
                 .map_err(|e| e.to_string())?;
                 Ok(json!({ "op": op, "repo": repo, "file": file.to_string_lossy(), "result": out }))
             }
-            _ => Err(format!("unknown op `{op}` (expected analyze|complexity|tech_debt|deps|security|functions)")),
+            _ => Err(format!(
+                "unknown op `{op}` (expected analyze|complexity|tech_debt|deps|security|functions)"
+            )),
         }
     }
 }

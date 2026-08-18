@@ -25,12 +25,16 @@ async fn main() {
     println!("═══════════ education_suite_demo — 教育升级套件 ═══════════\n");
 
     // 1) 先装插件 (生态最小单元)
-    plugins.install(&bridge, Arc::new(EducationDxPlugin)).unwrap();
+    plugins
+        .install(&bridge, Arc::new(EducationDxPlugin))
+        .unwrap();
     println!("[1] 插件已装: education-dx-check (dx_check 工具已注册)");
 
     // 2) 套件装配 (校验: 插件已装 + 工具已注册 + 授权)
     let cat = SuiteCatalog::builtin();
-    let r = cat.install_with_plugins(&bridge, Some(&plugins), "education-suite").unwrap();
+    let r = cat
+        .install_with_plugins(&bridge, Some(&plugins), "education-suite")
+        .unwrap();
     println!("[2] {r}");
 
     // 3) 真工具调用 — 忘换 dx 场景 (主人两个老毛病之一)
@@ -65,7 +69,9 @@ async fn main() {
 
     // 5) 卸载插件 → 套件应拒绝再装配 (插件是前置条件)
     plugins.uninstall(&bridge, "education-dx-check").unwrap();
-    let err = cat.install_with_plugins(&bridge, Some(&plugins), "education-suite").unwrap_err();
+    let err = cat
+        .install_with_plugins(&bridge, Some(&plugins), "education-suite")
+        .unwrap_err();
     println!("\n[5] 卸载后装配拒绝 (预期): {err}");
     println!("\n═══════════ 演示完成: 教育套件 = 插件组官方打包, 全链路真跑 ═══════════");
 }

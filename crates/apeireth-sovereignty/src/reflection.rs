@@ -147,7 +147,7 @@ impl ReflectionClock for InMemoryReflectionClock {
                 submitted_at: now,
                 deadline_at: now + period_secs,
                 state: ReflectionState::Reflecting,
-                rationale: rationale.into(),
+                rationale,
             },
         );
         Ok(())

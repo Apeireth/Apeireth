@@ -47,18 +47,40 @@ pub struct SessionEvent {
 
 impl SessionEvent {
     pub fn user(content: impl Into<String>, seq: u64) -> Self {
-        Self { seq, kind: "user".into(), payload: json!({"content": content.into()}), prev_hash: None, hash_era: 1 }
+        Self {
+            seq,
+            kind: "user".into(),
+            payload: json!({"content": content.into()}),
+            prev_hash: None,
+            hash_era: 1,
+        }
     }
     pub fn assistant(content: impl Into<String>, tool_calls: Value, seq: u64) -> Self {
-        Self { seq, kind: "assistant".into(), payload: json!({"content": content.into(), "tool_calls": tool_calls}), prev_hash: None, hash_era: 1 }
+        Self {
+            seq,
+            kind: "assistant".into(),
+            payload: json!({"content": content.into(), "tool_calls": tool_calls}),
+            prev_hash: None,
+            hash_era: 1,
+        }
     }
     pub fn tool(tool_call_id: impl Into<String>, result: Value, seq: u64) -> Self {
-        Self { seq, kind: "tool".into(), payload: json!({"tool_call_id": tool_call_id.into(), "result": result}), prev_hash: None, hash_era: 1 }
+        Self {
+            seq,
+            kind: "tool".into(),
+            payload: json!({"tool_call_id": tool_call_id.into(), "result": result}),
+            prev_hash: None,
+            hash_era: 1,
+        }
     }
 
     /// 合成闭包事件 (崩溃修复): 该 tool_call 结果未知.
     pub fn tool_outcome_unknown(tool_call_id: impl Into<String>, seq: u64) -> Self {
-        Self::tool(tool_call_id, json!({"__outcome__": "TOOL_OUTCOME_UNKNOWN"}), seq)
+        Self::tool(
+            tool_call_id,
+            json!({"__outcome__": "TOOL_OUTCOME_UNKNOWN"}),
+            seq,
+        )
     }
 
     /// 事件哈希 (S6 按 hash_era 分派): seq|kind|payload|prev_hash.
@@ -77,7 +99,7 @@ impl SessionEvent {
 fn fnv1a(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in bytes {
-        h ^= *b as u64;
+        h ^= u64::from(*b);
         h = h.wrapping_mul(0x100000001b3);
     }
     h
@@ -105,7 +127,9 @@ pub fn verify_events(evs: &[SessionEvent]) -> (bool, Option<u64>) {
         if e.kind == "anchor" {
             let covers = e.payload.get("covers").and_then(|v| v.as_u64());
             let claimed = e.payload.get("chain_hash").and_then(|v| v.as_str());
-            let actual = covers.and_then(|c| evs.iter().find(|x| x.seq == c)).map(|x| x.hash());
+            let actual = covers
+                .and_then(|c| evs.iter().find(|x| x.seq == c))
+                .map(|x| x.hash());
             if claimed != actual.as_deref() {
                 return (false, Some(e.seq));
             }
@@ -128,7 +152,11 @@ const EVENT_ID_PREFIX: &str = "slog-";
 
 impl SessionLog {
     pub fn new(store: Arc<SqliteMemoryStore>, session_id: impl Into<String>) -> Self {
-        Self { store, session_id: session_id.into(), anchor_every: 0 }
+        Self {
+            store,
+            session_id: session_id.into(),
+            anchor_every: 0,
+        }
     }
 
     /// S6: 每 n 条事件追加锚定检查点 (tamper-evident, 供外部存证).
@@ -159,7 +187,13 @@ impl SessionLog {
         } else {
             None
         };
-        let ev = SessionEvent { seq, kind: kind.into(), payload, prev_hash, hash_era: 1 };
+        let ev = SessionEvent {
+            seq,
+            kind: kind.into(),
+            payload,
+            prev_hash,
+            hash_era: 1,
+        };
         self.put(&ev)?;
         Ok(seq)
     }
@@ -168,9 +202,8 @@ impl SessionLog {
     /// anchor 检查点的 chain_hash 必须与被锚事件的哈希一致.
     /// 返回 (ok, 损坏位置 Option<seq>).
     pub fn verify_chain(&self) -> (bool, Option<u64>) {
-        let evs = match self.replay() {
-            Ok(e) => e,
-            Err(_) => return (false, None),
+        let Ok(evs) = self.replay() else {
+            return (false, None);
         };
         verify_events(&evs)
     }
@@ -192,7 +225,10 @@ impl SessionLog {
             .store
             .recent_episodes(&self.session_id, 1000)
             .map_err(|e| e.to_string())?;
-        Ok(eps.iter().filter(|e| e.id.starts_with(EVENT_ID_PREFIX)).count())
+        Ok(eps
+            .iter()
+            .filter(|e| e.id.starts_with(EVENT_ID_PREFIX))
+            .count())
     }
 
     /// 按 seq 排序重放全部事件 (日志 = 唯一真相).
@@ -281,9 +317,14 @@ mod tests {
     #[test]
     fn append_replay_surface_round_trip() {
         let s = SessionLog::new(store(), "me");
-        s.append("user", json!({"content": "任务: 写错题本"})).unwrap();
+        s.append("user", json!({"content": "任务: 写错题本"}))
+            .unwrap();
         s.append("assistant", json!({"content": "先查记忆", "tool_calls": [{"id": "c1", "function": {"name": "recall_memory", "arguments": "{}"}}]})).unwrap();
-        s.append("tool", json!({"tool_call_id": "c1", "result": {"found": 1}})).unwrap();
+        s.append(
+            "tool",
+            json!({"tool_call_id": "c1", "result": {"found": 1}}),
+        )
+        .unwrap();
         assert_eq!(s.len().unwrap(), 3);
         let surface = s.assemble_surface().unwrap();
         assert_eq!(surface.len(), 3);
@@ -306,7 +347,10 @@ mod tests {
         assert_eq!(n, 1, "应合成 1 个闭包事件");
         let after = s.assemble_surface().unwrap();
         assert_eq!(after.len(), 3, "修复后 surface 应含闭包 tool 事件");
-        assert!(after[2]["content"].as_str().unwrap_or("").contains("TOOL_OUTCOME_UNKNOWN"));
+        assert!(after[2]["content"]
+            .as_str()
+            .unwrap_or("")
+            .contains("TOOL_OUTCOME_UNKNOWN"));
         // 幂等: 再修 0
         assert_eq!(s.repair_interrupted().unwrap(), 0);
     }
@@ -314,8 +358,16 @@ mod tests {
     #[test]
     fn repair_skips_closed_tool_calls() {
         let s = SessionLog::new(store(), "me");
-        s.append("assistant", json!({"content": "调工具", "tool_calls": [{"id": "c1"}]})).unwrap();
-        s.append("tool", json!({"tool_call_id": "c1", "result": {"ok": true}})).unwrap();
+        s.append(
+            "assistant",
+            json!({"content": "调工具", "tool_calls": [{"id": "c1"}]}),
+        )
+        .unwrap();
+        s.append(
+            "tool",
+            json!({"tool_call_id": "c1", "result": {"ok": true}}),
+        )
+        .unwrap();
         assert_eq!(s.repair_interrupted().unwrap(), 0, "已闭合不应修复");
     }
 
@@ -396,13 +448,30 @@ mod tests {
     #[test]
     fn legacy_fnv_epoch_boundary_verified_with_dual_algorithm() {
         // 模拟存量库: era=0 事件按 FNV 链接 (16 hex)
-        let ev0 = SessionEvent { seq: 0, kind: "user".into(), payload: json!({"content": "存量"}), prev_hash: None, hash_era: 0 };
+        let ev0 = SessionEvent {
+            seq: 0,
+            kind: "user".into(),
+            payload: json!({"content": "存量"}),
+            prev_hash: None,
+            hash_era: 0,
+        };
         let legacy_hash = ev0.hash();
         assert_eq!(legacy_hash.len(), 16, "存量 era=0 仍 FNV 16 hex");
-        let ev1 = SessionEvent { seq: 1, kind: "user".into(), payload: json!({"content": "新时代"}), prev_hash: Some(legacy_hash), hash_era: 1 };
-        assert_eq!(verify_events(&[ev0.clone(), ev1.clone()]), (true, None), "epoch 边界链校验通过");
+        let ev1 = SessionEvent {
+            seq: 1,
+            kind: "user".into(),
+            payload: json!({"content": "新时代"}),
+            prev_hash: Some(legacy_hash),
+            hash_era: 1,
+        };
+        assert_eq!(
+            verify_events(&[ev0.clone(), ev1.clone()]),
+            (true, None),
+            "epoch 边界链校验通过"
+        );
         // serde 兼容: 旧库 JSON 无 hash_era 字段 → 默认 era=0
-        let legacy_json = r#"{"seq":0,"kind":"user","payload":{"content":"旧事件"},"prev_hash":null}"#;
+        let legacy_json =
+            r#"{"seq":0,"kind":"user","payload":{"content":"旧事件"},"prev_hash":null}"#;
         let parsed: SessionEvent = serde_json::from_str(legacy_json).unwrap();
         assert_eq!(parsed.hash_era, 0, "缺字段默认存量 era");
         assert_eq!(parsed.hash().len(), 16, "存量事件按 FNV 校验");

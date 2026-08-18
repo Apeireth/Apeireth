@@ -7,7 +7,8 @@ use std::path::PathBuf;
 
 #[test]
 fn r177_fs_01_r137_deliverables() {
-    assert_eq!(R137_DELIVERABLES, 6);
+    // 5 模块 (sandbox/atomic/watch/lock/compat); parse 声明已移除 (parse.rs 从未存在, 0 装)
+    assert_eq!(R137_DELIVERABLES, 5);
 }
 
 #[test]

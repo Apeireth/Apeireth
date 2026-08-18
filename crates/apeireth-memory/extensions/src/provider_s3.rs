@@ -19,15 +19,12 @@
 //! 5. cache_ttl = [0ms, 7d] (0 = 永不过期; S3 lifecycle 策略由服务端配置)
 //! 6. scope = Global (S3 跨 region 共享)
 
-
 use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **S3 解析后的元组**: (endpoint, bucket, key_prefix, access_key, secret_key).
 #[derive(Debug, Clone)]
@@ -89,12 +86,12 @@ impl S3Provider {
 
     /// 解析 s3:// URI 格式: `s3://[user:pass@]bucket[/prefix]`
     fn parse_s3_uri(uri: &str) -> MemoryProviderResult<S3ParsedUri> {
-        let stripped = uri.strip_prefix("s3://").ok_or_else(|| {
-            MemoryProviderError::Config {
+        let stripped = uri
+            .strip_prefix("s3://")
+            .ok_or_else(|| MemoryProviderError::Config {
                 field: crate::memory_provider::ProviderConfigField::ConnectionString,
                 reason: "must start with `s3://`".to_string(),
-            }
-        })?;
+            })?;
 
         // 解析 [user:pass@]bucket[/prefix]
         let (auth_part, bucket_and_prefix) = match stripped.split_once('@') {
@@ -189,15 +186,12 @@ impl MemoryProvider for S3Provider {
             "{}/{}/{}{}",
             self.parsed.endpoint, self.parsed.bucket, self.parsed.key_prefix, key
         );
-        let resp = self
-            .http_client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| MemoryProviderError::Connection {
+        let resp = self.http_client.get(&url).send().await.map_err(|e| {
+            MemoryProviderError::Connection {
                 provider: ProviderKind::S3,
                 reason: format!("GET request failed: {e}"),
-            })?;
+            }
+        })?;
         if resp.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -222,15 +216,12 @@ impl MemoryProvider for S3Provider {
             "{}/{}/{}{}",
             self.parsed.endpoint, self.parsed.bucket, self.parsed.key_prefix, key
         );
-        let resp = self
-            .http_client
-            .delete(&url)
-            .send()
-            .await
-            .map_err(|e| MemoryProviderError::Connection {
+        let resp = self.http_client.delete(&url).send().await.map_err(|e| {
+            MemoryProviderError::Connection {
                 provider: ProviderKind::S3,
                 reason: format!("DELETE request failed: {e}"),
-            })?;
+            }
+        })?;
         if !resp.status().is_success() && resp.status() != reqwest::StatusCode::NOT_FOUND {
             return Err(MemoryProviderError::Backend {
                 provider: ProviderKind::S3,
@@ -245,15 +236,12 @@ impl MemoryProvider for S3Provider {
             "{}/{}/{}{}",
             self.parsed.endpoint, self.parsed.bucket, self.parsed.key_prefix, key
         );
-        let resp = self
-            .http_client
-            .head(&url)
-            .send()
-            .await
-            .map_err(|e| MemoryProviderError::Connection {
+        let resp = self.http_client.head(&url).send().await.map_err(|e| {
+            MemoryProviderError::Connection {
                 provider: ProviderKind::S3,
                 reason: format!("HEAD request failed: {e}"),
-            })?;
+            }
+        })?;
         match resp.status() {
             reqwest::StatusCode::OK | reqwest::StatusCode::NO_CONTENT => Ok(true),
             reqwest::StatusCode::NOT_FOUND => Ok(false),
@@ -419,7 +407,13 @@ mod tests {
     async fn test_10_clear_size_return_not_implemented_error() {
         // S3 clear/size 0 真接 (无 List+Delete batch), 返 Other error
         let p = S3Provider::new(make_config()).unwrap();
-        assert!(matches!(p.clear().await, Err(MemoryProviderError::Other { .. })));
-        assert!(matches!(p.size().await, Err(MemoryProviderError::Other { .. })));
+        assert!(matches!(
+            p.clear().await,
+            Err(MemoryProviderError::Other { .. })
+        ));
+        assert!(matches!(
+            p.size().await,
+            Err(MemoryProviderError::Other { .. })
+        ));
     }
 }

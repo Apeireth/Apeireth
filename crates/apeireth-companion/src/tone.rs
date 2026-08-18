@@ -98,7 +98,10 @@ impl std::error::Error for ToneError {}
 /// 分档: 强共识 (≥0.5 且置信 ≥0.6) → 坚定; 倾向同意 (≥0) → 从容;
 /// 有异议 (>-0.5) → 留余地; 强烈反对 (≤-0.5) → 克制。
 /// 非法输入 (NaN/越界) → Err (0 装 PASS, 由调用方决定降级路径)。
-pub fn deliberation_intensity(weighted_score: f64, confidence: f64) -> Result<&'static str, ToneError> {
+pub fn deliberation_intensity(
+    weighted_score: f64,
+    confidence: f64,
+) -> Result<&'static str, ToneError> {
     if weighted_score.is_nan() || !(-1.0..=1.0).contains(&weighted_score) {
         return Err(ToneError::InvalidScore(weighted_score));
     }
@@ -132,11 +135,12 @@ pub trait ToneRefiner: Send + Sync {
 /// 确定性、纯函数: 同一输入永远产出同一提示。
 /// - `deliberation` 为 None (尚未发生过审议) → 只合成前两层。
 /// - 审议回声分值非法 → 不静默丢弃: 显式降级为「保守克制」档并留痕 (0 装 PASS)。
-pub fn organ_tone(bond: &Bond, style: ResponseStyle, deliberation: Option<&DeliberationEcho>) -> String {
-    let mut parts: Vec<String> = vec![
-        tone_hint(bond).to_string(),
-        emotion_tone(style).to_string(),
-    ];
+pub fn organ_tone(
+    bond: &Bond,
+    style: ResponseStyle,
+    deliberation: Option<&DeliberationEcho>,
+) -> String {
+    let mut parts: Vec<String> = vec![tone_hint(bond).to_string(), emotion_tone(style).to_string()];
     if let Some(d) = deliberation {
         match deliberation_intensity(d.weighted_score, d.confidence) {
             Ok(hint) => parts.push(hint.to_string()),

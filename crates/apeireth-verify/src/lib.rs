@@ -730,7 +730,11 @@ pub const fn trait_name(t: InterlockedTraitKind) -> &'static str {
 /// 依据 docs/stage6/22-trait-interlock.md §3 互锁矩阵 (29 个非对称互锁关系).
 /// 返回 true 表示 A → B 互锁关系存在 (实现 A 必须同时实现 B).
 pub const fn interlock_matrix(a: InterlockedTraitKind, b: InterlockedTraitKind) -> bool {
-    use InterlockedTraitKind::*;
+    use InterlockedTraitKind::{
+        Action, Cognition, Consciousness, Consolidation, Drive, Evolution, Execution, Expression,
+        HumanAuthority, Intuition, Learning, Memory, MetaCognition, Motivation, Perception,
+        Reasoning, Recall, Reflection, SelfAwareness, SelfModification, Signal, Value,
+    };
     matches!(
         (a, b),
         // 感知层

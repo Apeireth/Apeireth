@@ -162,8 +162,7 @@ pub fn pre_call_guard(tool_name: &str, args: &Value) -> Result<(), GuardrailErro
         return Ok(());
     };
 
-    const PATH_KEYS: &[&str] =
-        &["path", "file", "target", "src", "dst", "from", "to"];
+    const PATH_KEYS: &[&str] = &["path", "file", "target", "src", "dst", "from", "to"];
     const CMD_KEYS: &[&str] = &["cmd", "command", "shell", "exec", "script"];
 
     // 1. 路径字段
@@ -242,7 +241,8 @@ fn check_command(tool_name: &str, field: &str, value: &str) -> Result<(), Guardr
                 tool_name: tool_name.into(),
                 field: format!("$.{field}"),
                 detail: format!("command contains injection marker `{marker}`"),
-                hint: "avoid shell metacharacters; pass args via argv array, not shell string".into(),
+                hint: "avoid shell metacharacters; pass args via argv array, not shell string"
+                    .into(),
             });
         }
     }
@@ -269,9 +269,24 @@ fn check_command(tool_name: &str, field: &str, value: &str) -> Result<(), Guardr
 
     // 2. 已知危险命令 (首 token)
     const DANGEROUS_BINS: &[&str] = &[
-        "mkfs", "mkfs.ext4", "mkfs.xfs", "dd", "fdisk", "parted", "shutdown", "reboot",
-        "halt", "poweroff", "init", "iptables", "firewall-cmd", "userdel", "groupdel",
-        "chown", "chmod", "rm", // rm 整体阻断 (实战 rm 误用太多)
+        "mkfs",
+        "mkfs.ext4",
+        "mkfs.xfs",
+        "dd",
+        "fdisk",
+        "parted",
+        "shutdown",
+        "reboot",
+        "halt",
+        "poweroff",
+        "init",
+        "iptables",
+        "firewall-cmd",
+        "userdel",
+        "groupdel",
+        "chown",
+        "chmod",
+        "rm", // rm 整体阻断 (实战 rm 误用太多)
     ];
     let first_token = value.split_whitespace().next().unwrap_or("");
     // 路径前缀剥离 (e.g. `/bin/rm` → `rm`)
@@ -344,7 +359,10 @@ fn detect_secret(tool_name: &str, path: &str, value: &str) -> Option<Tripwire> {
     if let Some(idx) = value.find("AKIA") {
         let tail = &value[idx + 4..];
         if tail.chars().count() >= 16
-            && tail.chars().take(16).all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            && tail
+                .chars()
+                .take(16)
+                .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
         {
             return Some(make_tripwire(
                 tool_name,
@@ -357,9 +375,7 @@ fn detect_secret(tool_name: &str, path: &str, value: &str) -> Option<Tripwire> {
     // 2. GitHub PAT: "ghp_" + 36 位字母数字
     if let Some(idx) = value.find("ghp_") {
         let tail = &value[idx + 4..];
-        if tail.chars().count() >= 36
-            && tail.chars().take(36).all(|c| c.is_ascii_alphanumeric())
-        {
+        if tail.chars().count() >= 36 && tail.chars().take(36).all(|c| c.is_ascii_alphanumeric()) {
             return Some(make_tripwire(
                 tool_name,
                 path,
@@ -371,9 +387,7 @@ fn detect_secret(tool_name: &str, path: &str, value: &str) -> Option<Tripwire> {
     // 3. OpenAI API Key: "sk-" + ≥ 20 位字母数字
     if let Some(idx) = value.find("sk-") {
         let tail = &value[idx + 3..];
-        if tail.chars().count() >= 20
-            && tail.chars().take(20).all(|c| c.is_ascii_alphanumeric())
-        {
+        if tail.chars().count() >= 20 && tail.chars().take(20).all(|c| c.is_ascii_alphanumeric()) {
             return Some(make_tripwire(
                 tool_name,
                 path,

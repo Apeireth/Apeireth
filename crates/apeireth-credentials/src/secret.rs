@@ -193,7 +193,7 @@ mod tests {
         let buf = SecretBuf::new(vec![0xAA; 64]);
         assert_eq!(buf.expose()[0], 0xAA);
         drop(buf); // ZeroizeOnDrop 自动归零 (编译期保证)
-        // 编译过 = 派生生效 (Rust 不允许 drop 后读)
+                   // 编译过 = 派生生效 (Rust 不允许 drop 后读)
     }
 
     #[test]

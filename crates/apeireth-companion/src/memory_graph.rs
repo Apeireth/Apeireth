@@ -199,7 +199,10 @@ pub struct GraphRankConfig {
 
 impl Default for GraphRankConfig {
     fn default() -> Self {
-        Self { importance_weight: 1.0, residual_weight: 1.0 }
+        Self {
+            importance_weight: 1.0,
+            residual_weight: 1.0,
+        }
     }
 }
 
@@ -299,7 +302,8 @@ impl MemoryGraph {
 
     /// 当前有效事实 (按 chain 取最新且 invalid_at 为 None).
     pub fn active_facts(&self) -> Vec<GraphFact> {
-        let mut by_chain: std::collections::HashMap<String, GraphFact> = std::collections::HashMap::new();
+        let mut by_chain: std::collections::HashMap<String, GraphFact> =
+            std::collections::HashMap::new();
         for f in self.backend.load_facts().unwrap_or_default() {
             match by_chain.get(&f.chain) {
                 Some(existing) if existing.rev >= f.rev => {}
@@ -371,7 +375,7 @@ impl MemoryGraph {
         let g = self.entity_counts.lock().unwrap();
         let rarity = |e: &str| -> f64 {
             match g.as_ref().and_then(|m| m.get(e)) {
-                Some(&n) if n > 0 => 1.0 / n as f64,
+                Some(&n) if n > 0 => 1.0 / f64::from(n),
                 _ => 1.0,
             }
         };
@@ -380,7 +384,7 @@ impl MemoryGraph {
 
     /// N6 组合分: importance 归一到 [0,1] 与特异性按配置权重组合.
     pub fn combined_score(&self, f: &GraphFact) -> f64 {
-        let imp = (f.importance as f64).min(10.0) / 10.0;
+        let imp = f64::from(f.importance).min(10.0) / 10.0;
         self.rank_config.importance_weight * imp
             + self.rank_config.residual_weight * self.specificity(f)
     }
@@ -412,7 +416,10 @@ impl MemoryGraph {
         let ranked = self.rank(facts);
         let mut s = String::from("【事实图】(时序知识图谱, 双时态有效事实):\n");
         for f in ranked.iter().take(10) {
-            s.push_str(&format!("  • {} {} {} (有效自 {})\n", f.subject, f.predicate, f.object, f.valid_at));
+            s.push_str(&format!(
+                "  • {} {} {} (有效自 {})\n",
+                f.subject, f.predicate, f.object, f.valid_at
+            ));
         }
         s
     }
@@ -427,10 +434,7 @@ impl MemoryGraph {
     /// 写入时自动链接 (A-MEM 规则版): 与既有条目文本重叠率 >= 0.3 → 链接.
     pub fn link_on_write(&self, new_id: &str, new_content: &str) {
         let cid = self.backend.continuity_id();
-        let eps = self
-            .backend
-            .load_episodes(&cid, 100)
-            .unwrap_or_default();
+        let eps = self.backend.load_episodes(&cid, 100).unwrap_or_default();
         for e in eps.iter() {
             if e.id == new_id || e.id.starts_with("link-") || e.id.starts_with("tomb-") {
                 continue;
@@ -455,21 +459,15 @@ impl MemoryGraph {
     /// 邻居解释不了的独特内容 (高残差) 被锚增益抬升, 与既有链接权重正交相乘.
     pub fn crawl(&self, seeds: &[String], budget: usize) -> Vec<String> {
         let cid = self.backend.continuity_id();
-        let eps = self
-            .backend
-            .load_episodes(&cid, 500)
-            .unwrap_or_default();
+        let eps = self.backend.load_episodes(&cid, 500).unwrap_or_default();
         let links = self.backend.load_links().unwrap_or_default();
         let content_of = |id: &str| -> Option<String> {
-            eps.iter()
-                .find(|e| e.id == id)
-                .map(|e| e.content.clone())
+            eps.iter().find(|e| e.id == id).map(|e| e.content.clone())
         };
         // 内容残差: 本节点字符集中不被任一邻居 (双向链接) 解释的比例.
         let residual_of = |id: &str| -> f64 {
-            let content = match content_of(id) {
-                Some(c) => c,
-                None => return 0.0,
+            let Some(content) = content_of(id) else {
+                return 0.0;
             };
             let neighbor_texts: Vec<String> = links
                 .iter()
@@ -481,10 +479,7 @@ impl MemoryGraph {
         };
         let mut out: Vec<String> = Vec::new();
         let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut queue: Vec<(String, f64)> = seeds
-            .iter()
-            .map(|s| (s.clone(), 1.0))
-            .collect();
+        let mut queue: Vec<(String, f64)> = seeds.iter().map(|s| (s.clone(), 1.0)).collect();
         while !queue.is_empty() && out.len() < budget {
             queue.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             let (id, _) = queue.remove(0);
@@ -496,7 +491,8 @@ impl MemoryGraph {
             }
             for l in links.iter().filter(|l| l.from == id) {
                 if !seen.contains(&l.to) {
-                    let boosted = l.weight * (1.0 + self.rank_config.residual_weight * residual_of(&l.to));
+                    let boosted =
+                        l.weight * (1.0 + self.rank_config.residual_weight * residual_of(&l.to));
                     queue.push((l.to.clone(), boosted));
                 }
             }
@@ -584,18 +580,38 @@ mod tests {
         let id1 = "mem-ex-a".to_string();
         let id2 = "mem-ex-b".to_string();
         let cid = crate::continuity::current_continuity_id();
-        s.put_episode(&CoreEpisode { id: id1.clone(), timestamp: 1, role: "assistant".into(), content: "主人喜欢水墨画风格".into(), session_id: cid.clone() }).unwrap();
-        s.put_episode(&CoreEpisode { id: id2.clone(), timestamp: 2, role: "assistant".into(), content: "主人偏好水墨画风格和深蓝夜空".into(), session_id: cid }).unwrap();
+        s.put_episode(&CoreEpisode {
+            id: id1.clone(),
+            timestamp: 1,
+            role: "assistant".into(),
+            content: "主人喜欢水墨画风格".into(),
+            session_id: cid.clone(),
+        })
+        .unwrap();
+        s.put_episode(&CoreEpisode {
+            id: id2.clone(),
+            timestamp: 2,
+            role: "assistant".into(),
+            content: "主人偏好水墨画风格和深蓝夜空".into(),
+            session_id: cid,
+        })
+        .unwrap();
         g.link_on_write(&id2, "主人偏好水墨画风格和深蓝夜空");
         // CRAWL 从 id2 沿链接找 id1
         let crawled = g.crawl(&[id2], 3);
-        assert!(crawled.iter().any(|c| c.contains("喜欢水墨画")), "沿链接应展开到 id1: {crawled:?}");
+        assert!(
+            crawled.iter().any(|c| c.contains("喜欢水墨画")),
+            "沿链接应展开到 id1: {crawled:?}"
+        );
     }
 
     #[test]
     fn text_overlap_basic() {
         assert!(text_overlap("abcde", "abcxy") > 0.3);
-        assert!(text_overlap("今天天气很好", "主人喜欢深蓝夜空") < 0.3, "无共同字符");
+        assert!(
+            text_overlap("今天天气很好", "主人喜欢深蓝夜空") < 0.3,
+            "无共同字符"
+        );
     }
 
     #[test]
@@ -704,7 +720,10 @@ mod tests {
         // 主人 freq2 → 1/2, 喜欢 freq2 → 1/2, 烟火 freq1 → 1.0
         let s_common = g.specificity(common);
         let expected = (0.5 + 0.5 + 1.0) / 3.0;
-        assert!((s_common - expected).abs() < 1e-9, "got {s_common}, want {expected}");
+        assert!(
+            (s_common - expected).abs() < 1e-9,
+            "got {s_common}, want {expected}"
+        );
         let s_unique = g.specificity(unique);
         assert!((s_unique - 1.0).abs() < 1e-9);
         assert!(s_unique > s_common, "全唯一实体节点应比共享实体节点更特异");
@@ -714,9 +733,18 @@ mod tests {
     fn n6_content_residual_boundary() {
         assert_eq!(content_residual("", &[]), 0.0, "空内容 → 0");
         assert_eq!(content_residual("abc", &[]), 1.0, "无邻居 → 固有最大特异");
-        assert!((content_residual("abc", &["abc"]) - 0.0).abs() < 1e-9, "同内容被邻居完全解释");
-        assert!((content_residual("abc", &["xyz"]) - 1.0).abs() < 1e-9, "不相交 → 完全未解释");
-        assert!((content_residual("abcd", &["ab"]) - 0.5).abs() < 1e-9, "半解释 → 0.5");
+        assert!(
+            (content_residual("abc", &["abc"]) - 0.0).abs() < 1e-9,
+            "同内容被邻居完全解释"
+        );
+        assert!(
+            (content_residual("abc", &["xyz"]) - 1.0).abs() < 1e-9,
+            "不相交 → 完全未解释"
+        );
+        assert!(
+            (content_residual("abcd", &["ab"]) - 0.5).abs() < 1e-9,
+            "半解释 → 0.5"
+        );
     }
 
     #[test]
@@ -733,12 +761,23 @@ mod tests {
             g
         };
         // importance 主导 → 高重要度在前
-        let g_imp = build().with_rank_config(GraphRankConfig { importance_weight: 1.0, residual_weight: 0.0 });
+        let g_imp = build().with_rank_config(GraphRankConfig {
+            importance_weight: 1.0,
+            residual_weight: 0.0,
+        });
         assert_eq!(g_imp.query(&GraphQuery::new())[0].importance, 9);
         // 特异性主导 → 全唯一实体事实 (孤本) 排首
-        let g_res = build().with_rank_config(GraphRankConfig { importance_weight: 0.0, residual_weight: 1.0 });
+        let g_res = build().with_rank_config(GraphRankConfig {
+            importance_weight: 0.0,
+            residual_weight: 1.0,
+        });
         let top = g_res.query(&GraphQuery::new());
-        assert_eq!(top[0].subject, "孤本", "特异性主导排序: {:?}", top.iter().map(|f| f.subject.as_str()).collect::<Vec<_>>());
+        assert_eq!(
+            top[0].subject,
+            "孤本",
+            "特异性主导排序: {:?}",
+            top.iter().map(|f| f.subject.as_str()).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -758,7 +797,10 @@ mod tests {
         assert_eq!(ra.len(), rb.len());
         for (fa, fb) in ra.iter().zip(rb.iter()) {
             assert_eq!(fa.chain, fb.chain, "同输入应同序");
-            assert!((a.combined_score(fa) - b.combined_score(fb)).abs() < 1e-12, "同输入应同分");
+            assert!(
+                (a.combined_score(fa) - b.combined_score(fb)).abs() < 1e-12,
+                "同输入应同分"
+            );
         }
     }
 
@@ -768,7 +810,7 @@ mod tests {
         let g = MemoryGraph::new(Arc::clone(&s));
         g.add_fact("主人", "喜欢", "烟火", 7);
         let _ = g.query(&GraphQuery::new()); // 触发计数 lazy init
-        // init 后: 新三元组增量 +1; 同链替换不改活跃实体集
+                                             // init 后: 新三元组增量 +1; 同链替换不改活跃实体集
         g.add_fact("主人", "备考", "高数期中", 8);
         g.add_fact("主人", "备考", "高数期中", 9); // 替换 → 计数不变
         let g_cold = MemoryGraph::new(Arc::clone(&s)); // 冷启动实例 = 全量扫描基线
@@ -778,7 +820,10 @@ mod tests {
         for f in &active {
             let inc = g.specificity(f);
             let cold = g_cold.specificity(f);
-            assert!((inc - cold).abs() < 1e-12, "增量计数评分应等于冷启动全量评分: {inc} vs {cold}");
+            assert!(
+                (inc - cold).abs() < 1e-12,
+                "增量计数评分应等于冷启动全量评分: {inc} vs {cold}"
+            );
         }
     }
 
@@ -789,20 +834,52 @@ mod tests {
             facts: std::sync::Mutex::new(Vec::new()),
             links: std::sync::Mutex::new(Vec::new()),
             eps: std::sync::Mutex::new(vec![
-                CoreEpisode { id: "mem-seed".into(), timestamp: 1, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: cid.clone() },
-                CoreEpisode { id: "mem-dup".into(), timestamp: 2, role: "assistant".into(), content: "aaaa bbbb".into(), session_id: cid.clone() },
-                CoreEpisode { id: "mem-uniq".into(), timestamp: 3, role: "assistant".into(), content: "zzzz yyyy".into(), session_id: cid.clone() },
+                CoreEpisode {
+                    id: "mem-seed".into(),
+                    timestamp: 1,
+                    role: "assistant".into(),
+                    content: "aaaa bbbb".into(),
+                    session_id: cid.clone(),
+                },
+                CoreEpisode {
+                    id: "mem-dup".into(),
+                    timestamp: 2,
+                    role: "assistant".into(),
+                    content: "aaaa bbbb".into(),
+                    session_id: cid.clone(),
+                },
+                CoreEpisode {
+                    id: "mem-uniq".into(),
+                    timestamp: 3,
+                    role: "assistant".into(),
+                    content: "zzzz yyyy".into(),
+                    session_id: cid.clone(),
+                },
             ]),
             continuity_id: std::sync::Mutex::new(cid),
         };
         // seed → dup: 高权重但内容被种子完全解释 (残差 0)
         // seed → uniq: 低权重但内容完全独特 (残差 1.0 → 锚增益翻倍)
-        backend.links.lock().unwrap().push(MemoryLink { id: "link-1".into(), from: "mem-seed".into(), to: "mem-dup".into(), weight: 0.5 });
-        backend.links.lock().unwrap().push(MemoryLink { id: "link-2".into(), from: "mem-seed".into(), to: "mem-uniq".into(), weight: 0.31 });
+        backend.links.lock().unwrap().push(MemoryLink {
+            id: "link-1".into(),
+            from: "mem-seed".into(),
+            to: "mem-dup".into(),
+            weight: 0.5,
+        });
+        backend.links.lock().unwrap().push(MemoryLink {
+            id: "link-2".into(),
+            from: "mem-seed".into(),
+            to: "mem-uniq".into(),
+            weight: 0.31,
+        });
         let g = MemoryGraph::with_backend(Box::new(backend));
         let out = g.crawl(&["mem-seed".to_string()], 2);
         assert_eq!(out.len(), 2, "种子 + 1 展开");
         assert!(out[0].contains("aaaa"), "种子优先");
-        assert!(out[1].contains("zzzz"), "锚增益应抬升独特内容越过高权重复读: {:?}", out[1]);
+        assert!(
+            out[1].contains("zzzz"),
+            "锚增益应抬升独特内容越过高权重复读: {:?}",
+            out[1]
+        );
     }
 }

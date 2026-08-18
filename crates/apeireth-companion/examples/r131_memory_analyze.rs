@@ -24,12 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let cfg = AnthropicCompatibleConfig::new(
         key,
-        std::env::var("APEIRETH_MINIMAX_URL").unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
+        std::env::var("APEIRETH_MINIMAX_URL")
+            .unwrap_or_else(|_| "https://api.minimaxi.com/anthropic".to_string()),
         vec!["MiniMax-M3".to_string()],
     );
     let provider: Arc<dyn LlmProvider> = Arc::new(AnthropicCompatibleProvider::new(cfg)?);
 
-    let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
 
     let samples = vec![
         Episode {
@@ -59,7 +63,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for ep in &samples {
         println!("\nEpisode id={} role={}", ep.id, ep.role);
         println!("  content: {}", ep.content);
-        for kind in [AnalysisKind::Summary, AnalysisKind::Keywords, AnalysisKind::RiskFlag, AnalysisKind::PhilosophyGate] {
+        for kind in [
+            AnalysisKind::Summary,
+            AnalysisKind::Keywords,
+            AnalysisKind::RiskFlag,
+            AnalysisKind::PhilosophyGate,
+        ] {
             let t0 = Instant::now();
             match analyze_episode(&provider, ep, kind).await {
                 Ok(r) => println!("  [{:?}] {}ms → {}", r.kind, r.latency_ms, r.content),
@@ -68,6 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _ = t0.elapsed();
         }
     }
-    println!("\n=== total elapsed: {}ms ===", session_start.elapsed().as_millis());
+    println!(
+        "\n=== total elapsed: {}ms ===",
+        session_start.elapsed().as_millis()
+    );
     Ok(())
 }

@@ -380,7 +380,10 @@ mod tests {
                 Duration::from_secs(60),
                 ProviderScope::Shared,
             );
-            assert!(cfg.validate(*kind).is_ok(), "{kind:?} should validate {conn}");
+            assert!(
+                cfg.validate(*kind).is_ok(),
+                "{kind:?} should validate {conn}"
+            );
         }
     }
 }

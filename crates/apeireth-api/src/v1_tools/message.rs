@@ -179,7 +179,7 @@ mod message_tests {
             .expect("send alice");
         assert!(r["message_id"].is_string());
         // 2. send to bob
-        let r = m
+        let _r = m
             .call(json!({
                 "action": "send", "target": "bob", "sender": "alice",
                 "payload": {"text": "hi bob"}

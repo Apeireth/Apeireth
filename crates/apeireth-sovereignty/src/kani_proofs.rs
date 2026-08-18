@@ -141,7 +141,7 @@ fn r253_02_armed_blocks_all_violations() {
 
     // 多种违规尝试
     for i in 0..5 {
-        let _ = guard.check_no_degrade("high", "low", &format!("v{}", i), i as i64);
+        let _ = guard.check_no_degrade("high", "low", &format!("v{}", i), i64::from(i));
     }
     assert_eq!(guard.record_count(), 5);
     assert!(guard.has_triggered());

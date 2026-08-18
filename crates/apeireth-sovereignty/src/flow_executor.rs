@@ -324,10 +324,9 @@ impl<'a> FlowRunner<'a> {
 
         // 遍历 flow elements (借鉴 Colang Runtime event loop)
         for element in &flow_struct.elements {
-            let step = match FlowStep::from_colang_kind(element.kind) {
-                Some(s) => s,
+            let Some(step) = FlowStep::from_colang_kind(element.kind) else {
                 // 27 中 10 不映射到 FlowStep (Define*/Event/Meta/Comment 等), 跳过
-                None => continue,
+                continue;
             };
 
             self.step_count += 1;
@@ -440,7 +439,6 @@ impl<'a> FlowExecutor<'a> {
                 }
                 Err(_) => {
                     // 借鉴 Guardrails error tolerance: 跳过错误, 继续
-                    continue;
                 }
             }
         }
@@ -494,7 +492,7 @@ mod tests {
     #[test]
     fn flow_step_from_colang_kind() {
         // 17 映射 OK
-        for kind_idx in 0..27usize {
+        for _kind_idx in 0..27usize {
             // 简化: 测 17 个映射, 10 个不映射
             // (具体哪些不映射, 参见 FlowStep::from_colang_kind 实现)
         }

@@ -34,7 +34,9 @@ impl SymbolStore {
     /// 打开/创建数据库文件.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SymbolStoreError> {
         let conn = Connection::open(path)?;
-        let s = Self { inner: Arc::new(Mutex::new(conn)) };
+        let s = Self {
+            inner: Arc::new(Mutex::new(conn)),
+        };
         s.migrate()?;
         Ok(s)
     }
@@ -42,7 +44,9 @@ impl SymbolStore {
     /// 内存数据库 (测试用).
     pub fn open_in_memory() -> Result<Self, SymbolStoreError> {
         let conn = Connection::open_in_memory()?;
-        let s = Self { inner: Arc::new(Mutex::new(conn)) };
+        let s = Self {
+            inner: Arc::new(Mutex::new(conn)),
+        };
         s.migrate()?;
         Ok(s)
     }
@@ -74,19 +78,23 @@ impl SymbolStore {
         )?;
         // V5 → V6 增量迁移: 给老库补列 (新装直接由 CREATE TABLE 含).
         // SQLite ALTER ADD COLUMN 幂等检查: 先探测列是否存在.
-        let has_ipo_date: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='ipo_date'",
-            [],
-            |r| r.get(0),
-        ).unwrap_or(0);
+        let has_ipo_date: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='ipo_date'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         if has_ipo_date == 0 {
             conn.execute("ALTER TABLE symbols ADD COLUMN ipo_date TEXT", [])?;
         }
-        let has_delisted_date: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='delisted_date'",
-            [],
-            |r| r.get(0),
-        ).unwrap_or(0);
+        let has_delisted_date: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('symbols') WHERE name='delisted_date'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
         if has_delisted_date == 0 {
             conn.execute("ALTER TABLE symbols ADD COLUMN delisted_date TEXT", [])?;
         }
@@ -94,7 +102,9 @@ impl SymbolStore {
     }
 
     fn conn(&self) -> Result<std::sync::MutexGuard<'_, Connection>, SymbolStoreError> {
-        self.inner.lock().map_err(|_| SymbolStoreError::LockPoisoned)
+        self.inner
+            .lock()
+            .map_err(|_| SymbolStoreError::LockPoisoned)
     }
 
     /// 单条 upsert (INSERT OR REPLACE).
@@ -455,7 +465,8 @@ mod tests {
     fn search_limit_truncates() {
         let s = store();
         for i in 0..20 {
-            s.upsert(&sample(&format!("S{:02}", i), "Tech", Some(i as f64))).unwrap();
+            s.upsert(&sample(&format!("S{:02}", i), "Tech", Some(i as f64)))
+                .unwrap();
         }
         let r = s.search(None, None, None, 5);
         assert_eq!(r.len(), 5);
@@ -534,7 +545,8 @@ mod tests {
             "INSERT INTO symbols (symbol, name, provenance, last_updated_ms)
              VALUES ('X', 'X Co', 'unknown_value', 0)",
             [],
-        ).unwrap();
+        )
+        .unwrap();
         drop(conn);
         let back = s.get("X").unwrap();
         assert_eq!(back.provenance, Provenance::Manual);
@@ -576,7 +588,8 @@ mod tests {
                 country TEXT, currency TEXT, market_cap REAL, ipo_year INTEGER,
                 provenance TEXT, last_updated_ms INTEGER
             )",
-        ).unwrap();
+        )
+        .unwrap();
         conn.execute(
             "INSERT INTO symbols VALUES ('OLD', 'Old Co', '', '', '', '', '', NULL, NULL, 'manual', 0)",
             [],

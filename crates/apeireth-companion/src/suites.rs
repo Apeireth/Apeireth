@@ -218,7 +218,11 @@ impl SuiteCatalog {
             def.requires_tools.len(),
             def.pack_tools.len(),
             def.plugins.len(),
-            if def.sandbox.is_some() { ", 沙盒限额" } else { "" },
+            if def.sandbox.is_some() {
+                ", 沙盒限额"
+            } else {
+                ""
+            },
         ))
     }
 
@@ -249,8 +253,14 @@ mod tests {
     fn catalog_has_all_three_kinds() {
         let c = SuiteCatalog::builtin();
         assert!(c.list(SuiteKind::Base).iter().any(|s| s.id == "base"));
-        assert!(c.list(SuiteKind::CapabilityPack).len() >= 2, "能力包至少 2 个");
-        assert!(c.list(SuiteKind::UpgradeSuite).len() >= 3, "升级套件至少 3 个");
+        assert!(
+            c.list(SuiteKind::CapabilityPack).len() >= 2,
+            "能力包至少 2 个"
+        );
+        assert!(
+            c.list(SuiteKind::UpgradeSuite).len() >= 3,
+            "升级套件至少 3 个"
+        );
     }
 
     #[test]
@@ -261,7 +271,9 @@ mod tests {
         let r = c.install(&bridge, "base").unwrap();
         assert!(r.contains("基地本体"));
         // 权限包已登记: recall_memory 被覆盖
-        assert!(bridge.packs.check_and_consume("recall_memory", Utc::now().timestamp_millis()));
+        assert!(bridge
+            .packs
+            .check_and_consume("recall_memory", Utc::now().timestamp_millis()));
     }
 
     #[test]
@@ -308,14 +320,20 @@ mod tests {
         let cat = SuiteCatalog::builtin();
         let reg = PluginRegistry::new();
         // 未装插件 → 套件装配拒绝
-        assert!(cat.install_with_plugins(&bridge, Some(&reg), "education-suite").is_err());
+        assert!(cat
+            .install_with_plugins(&bridge, Some(&reg), "education-suite")
+            .is_err());
         // 装真插件 (注册 dx_check + 授权) 后 → 装配成功
         reg.install(&bridge, Arc::new(EducationDxPlugin)).unwrap();
-        let r = cat.install_with_plugins(&bridge, Some(&reg), "education-suite").unwrap();
+        let r = cat
+            .install_with_plugins(&bridge, Some(&reg), "education-suite")
+            .unwrap();
         assert!(r.contains("教育升级套件"));
         assert!(r.contains("1 插件"));
         // 无插件要求的套件不受影响
-        assert!(cat.install_with_plugins(&bridge, Some(&reg), "base").is_ok());
+        assert!(cat
+            .install_with_plugins(&bridge, Some(&reg), "base")
+            .is_ok());
     }
 
     #[test]
@@ -329,11 +347,15 @@ mod tests {
         let cat = SuiteCatalog::builtin();
         let reg = PluginRegistry::new();
         // 缺插件 → 拒绝
-        assert!(cat.install_with_plugins(&bridge, Some(&reg), "pentest-suite").is_err());
+        assert!(cat
+            .install_with_plugins(&bridge, Some(&reg), "pentest-suite")
+            .is_err());
         // 两个真插件装齐 → 装配成功 (要求 recon_plan/scan_report 已注册)
         reg.install(&bridge, Arc::new(PentestReconPlugin)).unwrap();
         reg.install(&bridge, Arc::new(PentestScanPlugin)).unwrap();
-        let r = cat.install_with_plugins(&bridge, Some(&reg), "pentest-suite").unwrap();
+        let r = cat
+            .install_with_plugins(&bridge, Some(&reg), "pentest-suite")
+            .unwrap();
         assert!(r.contains("渗透测试升级套件"));
         assert!(r.contains("2 插件"));
     }

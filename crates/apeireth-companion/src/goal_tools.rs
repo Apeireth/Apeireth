@@ -46,7 +46,10 @@ impl Tool for GoalCreateTool {
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
             .ok_or_else(|| "objective (目标描述) 不能为空".to_string())?;
-        let max_rounds = args.get("max_rounds").and_then(|v| v.as_u64()).unwrap_or(20);
+        let max_rounds = args
+            .get("max_rounds")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(20);
         let mut goals = self.goals.lock().unwrap();
         match goals.create(objective, max_rounds) {
             Ok(g) => Ok(json!({
@@ -55,8 +58,13 @@ impl Tool for GoalCreateTool {
                 "note": "目标已建立 (active); 完成后 goal_status 报进度"
             })),
             Err(crate::goal::GoalError::AlreadyExists) => {
-                let cur = goals.current().map(|g| g.objective.clone()).unwrap_or_default();
-                Err(format!("已有未完成目标: {cur} — 先完成 (goal_complete) 或暂停 (goal_pause) 再建新目标"))
+                let cur = goals
+                    .current()
+                    .map(|g| g.objective.clone())
+                    .unwrap_or_default();
+                Err(format!(
+                    "已有未完成目标: {cur} — 先完成 (goal_complete) 或暂停 (goal_pause) 再建新目标"
+                ))
             }
             Err(e) => Err(format!("创建目标失败: {e:?}")),
         }
@@ -126,7 +134,9 @@ impl Tool for GoalCompleteTool {
     async fn call(&self, _args: Value) -> Result<Value, String> {
         let mut goals = self.goals.lock().unwrap();
         match goals.complete() {
-            Ok(g) => Ok(json!({"ok": true, "phase": "completed", "objective": g.objective, "note": "目标已完成; 可建立新目标"})),
+            Ok(g) => Ok(
+                json!({"ok": true, "phase": "completed", "objective": g.objective, "note": "目标已完成; 可建立新目标"}),
+            ),
             Err(e) => Err(format!("完成目标失败: {e:?}")),
         }
     }
@@ -186,11 +196,23 @@ impl Tool for GoalBlockTool {
         ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let code = args.get("code").and_then(|v| v.as_str()).unwrap_or("blocked").trim().to_string();
-        let message = args.get("message").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let code = args
+            .get("code")
+            .and_then(|v| v.as_str())
+            .unwrap_or("blocked")
+            .trim()
+            .to_string();
+        let message = args
+            .get("message")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let mut goals = self.goals.lock().unwrap();
         match goals.block(&code, &message) {
-            Ok(g) => Ok(json!({"ok": true, "phase": "blocked", "reason": g.blocked_reason.map(|b| b.message)})),
+            Ok(g) => Ok(
+                json!({"ok": true, "phase": "blocked", "reason": g.blocked_reason.map(|b| b.message)}),
+            ),
             Err(e) => Err(format!("报告阻塞失败: {e:?}")),
         }
     }
@@ -202,14 +224,19 @@ mod tests {
     use apeireth_tool_registry::Tool as _;
 
     fn goals() -> SharedGoals {
-        Arc::new(Mutex::new(GoalService::new(std::env::temp_dir().join(format!("apeireth-goal-test-{}", uuid::Uuid::new_v4())))))
+        Arc::new(Mutex::new(GoalService::new(
+            std::env::temp_dir().join(format!("apeireth-goal-test-{}", uuid::Uuid::new_v4())),
+        )))
     }
 
     #[tokio::test]
     async fn create_status_complete_lifecycle() {
         let g = goals();
         let create = GoalCreateTool::new(Arc::clone(&g));
-        let r = create.call(json!({"objective": "辅助主人通过高数期中"})).await.unwrap();
+        let r = create
+            .call(json!({"objective": "辅助主人通过高数期中"}))
+            .await
+            .unwrap();
         assert_eq!(r["phase"], json!("active"));
         // 重复建 → 拒绝 (已有未完成目标)
         assert!(create.call(json!({"objective": "另一个"})).await.is_err());
@@ -230,12 +257,18 @@ mod tests {
     #[tokio::test]
     async fn pause_and_block() {
         let g = goals();
-        GoalCreateTool::new(Arc::clone(&g)).call(json!({"objective": "x"})).await.unwrap();
+        GoalCreateTool::new(Arc::clone(&g))
+            .call(json!({"objective": "x"}))
+            .await
+            .unwrap();
         let pause = GoalPauseTool::new(Arc::clone(&g));
         let p = pause.call(json!({})).await.unwrap();
         assert_eq!(p["phase"], json!("paused"));
         let block = GoalBlockTool::new(Arc::clone(&g));
-        let b = block.call(json!({"code": "needs_input", "message": "等主人提供资料"})).await.unwrap();
+        let b = block
+            .call(json!({"code": "needs_input", "message": "等主人提供资料"}))
+            .await
+            .unwrap();
         assert_eq!(b["phase"], json!("blocked"));
         // 无目标时完成 → 报错
         let g2 = goals();

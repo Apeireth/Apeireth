@@ -249,7 +249,7 @@ impl ErrorGuard {
         // 计数
         self.kind_counts[ev.kind.idx()] += 1;
         self.severity_counts[ev.severity as usize] += 1;
-        self.total_score += ev.severity.score() as u64;
+        self.total_score += u64::from(ev.severity.score());
         // LRU 滚动
         if self.events.len() >= self.max_events {
             self.events.remove(0);

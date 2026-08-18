@@ -52,6 +52,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # apeireth-tui → apeireth-api → keyring → dbus 链需要系统库
+      - name: Install system deps (Linux: libdbus)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - uses: Swatinem/rust-cache@v2
       - name: Run render benches
         run: |

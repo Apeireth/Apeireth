@@ -227,8 +227,8 @@ impl VoiceError {
 #[macro_export]
 macro_rules! voice_stub {
     ($api:expr) => {{
-        $crate::error::tracing_warn_stub($api);
-        return Err($crate::error::VoiceError::NotImplemented($api));
+        $crate::voice::error::tracing_warn_stub($api);
+        return Err($crate::voice::error::VoiceError::NotImplemented($api));
     }};
 }
 
@@ -423,7 +423,7 @@ mod tests {
         assert!(VoiceError::validate_language("en-US").is_ok()); // 2 chars
         assert!(VoiceError::validate_language("en-USA").is_ok()); // 3 chars
         assert!(VoiceError::validate_language("en-USAA").is_ok()); // 4 chars
-        // 地区段 5 字符非法
+                                                                   // 地区段 5 字符非法
         assert!(matches!(
             VoiceError::validate_language("en-USAAA"),
             Err(VoiceError::LanguageInvalid(_))
@@ -443,6 +443,9 @@ mod tests {
         let result: VoiceResult<()> = (|| {
             voice_stub!("test_api");
         })();
-        assert!(matches!(result, Err(VoiceError::NotImplemented("test_api"))));
+        assert!(matches!(
+            result,
+            Err(VoiceError::NotImplemented("test_api"))
+        ));
     }
 }

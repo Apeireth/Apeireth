@@ -55,14 +55,13 @@ impl ContinuationStore {
 
     /// 原子保存: 先写 tmp, rename 覆盖 (崩溃安全).
     pub fn save(&self, snap: &ContinuationSnapshot) -> Result<(), String> {
-        std::fs::create_dir_all(&self.dir)
-            .map_err(|e| format!("创建快照目录失败: {e}"))?;
-        let tmp = self.dir.join(format!("{}.tmp-{}", snap.id, uuid::Uuid::new_v4()));
-        let bytes = serde_json::to_vec_pretty(snap)
-            .map_err(|e| format!("快照序列化失败: {e}"))?;
+        std::fs::create_dir_all(&self.dir).map_err(|e| format!("创建快照目录失败: {e}"))?;
+        let tmp = self
+            .dir
+            .join(format!("{}.tmp-{}", snap.id, uuid::Uuid::new_v4()));
+        let bytes = serde_json::to_vec_pretty(snap).map_err(|e| format!("快照序列化失败: {e}"))?;
         std::fs::write(&tmp, bytes).map_err(|e| format!("写 tmp 失败: {e}"))?;
-        std::fs::rename(&tmp, self.path_for(&snap.id))
-            .map_err(|e| format!("原子提交失败: {e}"))?;
+        std::fs::rename(&tmp, self.path_for(&snap.id)).map_err(|e| format!("原子提交失败: {e}"))?;
         Ok(())
     }
 
@@ -71,16 +70,15 @@ impl ContinuationStore {
     }
 
     pub fn load(&self, id: &str) -> Result<ContinuationSnapshot, String> {
-        let bytes = std::fs::read(self.path_for(id))
-            .map_err(|e| format!("读快照 {id} 失败: {e}"))?;
+        let bytes =
+            std::fs::read(self.path_for(id)).map_err(|e| format!("读快照 {id} 失败: {e}"))?;
         serde_json::from_slice(&bytes).map_err(|e| format!("解析快照 {id} 失败: {e}"))
     }
 
     /// 消费 (load + 删除): 快照一次性.
     pub fn consume(&self, id: &str) -> Result<ContinuationSnapshot, String> {
         let snap = self.load(id)?;
-        std::fs::remove_file(self.path_for(id))
-            .map_err(|e| format!("删除快照 {id} 失败: {e}"))?;
+        std::fs::remove_file(self.path_for(id)).map_err(|e| format!("删除快照 {id} 失败: {e}"))?;
         Ok(snap)
     }
 
@@ -117,7 +115,10 @@ pub enum EditAction {
     /// 删除 (从 SegmentEditor 移除)
     Remove { block_id: String },
     /// 替换为新内容 (同时 bump last_touched_ms 到 now_ms)
-    Replace { block_id: String, new_content: String },
+    Replace {
+        block_id: String,
+        new_content: String,
+    },
 }
 
 impl EditAction {
@@ -181,7 +182,11 @@ impl SegmentEditor {
 
     /// 带 now_ms 构造
     pub fn with_now_ms(now_ms: i64) -> Self {
-        Self { blocks: BTreeMap::new(), order: Vec::new(), now_ms }
+        Self {
+            blocks: BTreeMap::new(),
+            order: Vec::new(),
+            now_ms,
+        }
     }
 
     /// 从 RotBlock 列表构造 (顺序保留)
@@ -338,7 +343,10 @@ impl SegmentEditor {
                     return Err(EditorError::BlockNotFound(block_id.clone()));
                 }
             }
-            EditAction::Replace { block_id, new_content } => {
+            EditAction::Replace {
+                block_id,
+                new_content,
+            } => {
                 if block_id.trim().is_empty() {
                     return Err(EditorError::EmptyBlockId);
                 }
@@ -363,7 +371,10 @@ impl SegmentEditor {
                 self.remove(&block_id)?;
                 Ok(EditOutcome::Removed(block_id))
             }
-            EditAction::Replace { block_id, new_content } => {
+            EditAction::Replace {
+                block_id,
+                new_content,
+            } => {
                 self.replace(&block_id, new_content)?;
                 Ok(EditOutcome::Replaced(block_id))
             }
@@ -383,7 +394,10 @@ impl SegmentEditor {
         let SegmentEditor { blocks, order, .. } = self;
         // 顺序: order 是 sequence of keys; 用 map 直接 lookup by String
         let map = blocks; // BTreeMap<String, RotBlock>
-        order.into_iter().filter_map(|id| map.get(&id).cloned()).collect()
+        order
+            .into_iter()
+            .filter_map(|id| map.get(&id).cloned())
+            .collect()
     }
 }
 
@@ -410,11 +424,17 @@ mod segment_editor_tests {
     #[test]
     fn edit_action_block_id_extractor() {
         assert_eq!(
-            EditAction::Retain { block_id: "a".into() }.block_id(),
+            EditAction::Retain {
+                block_id: "a".into()
+            }
+            .block_id(),
             "a"
         );
         assert_eq!(
-            EditAction::Remove { block_id: "b".into() }.block_id(),
+            EditAction::Remove {
+                block_id: "b".into()
+            }
+            .block_id(),
             "b"
         );
         assert_eq!(
@@ -430,11 +450,26 @@ mod segment_editor_tests {
     #[test]
     fn from_blocks_preserves_order_and_skips_duplicates_or_empty() {
         let blocks = vec![
-            blk("a", "first long content block for ordering test purposes here"),
-            blk("b", "second long content block for ordering test purposes here"),
-            blk("a", "duplicate should be ignored by from_blocks initial pass"),
-            blk("  ", "block with empty trimmed id should be skipped entirely here"),
-            blk("c", "third long content block for ordering test purposes here also"),
+            blk(
+                "a",
+                "first long content block for ordering test purposes here",
+            ),
+            blk(
+                "b",
+                "second long content block for ordering test purposes here",
+            ),
+            blk(
+                "a",
+                "duplicate should be ignored by from_blocks initial pass",
+            ),
+            blk(
+                "  ",
+                "block with empty trimmed id should be skipped entirely here",
+            ),
+            blk(
+                "c",
+                "third long content block for ordering test purposes here also",
+            ),
         ];
         let ed = SegmentEditor::from_blocks(blocks);
         assert_eq!(ed.len(), 3);
@@ -445,14 +480,28 @@ mod segment_editor_tests {
     #[test]
     fn insert_basic_and_no_op_on_dup() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha long content block for insertion test purposes here")).unwrap();
-        ed.insert(blk("b", "beta long content block for insertion test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha long content block for insertion test purposes here",
+        ))
+        .unwrap();
+        ed.insert(blk(
+            "b",
+            "beta long content block for insertion test purposes here",
+        ))
+        .unwrap();
         // dup insert no-op
-        ed.insert(blk("a", "alpha v2 long content block for insertion test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha v2 long content block for insertion test purposes here",
+        ))
+        .unwrap();
         assert_eq!(ed.len(), 2);
-        assert_eq!(ed.get("a").unwrap().content,
-                   "alpha long content block for insertion test purposes here",
-                   "dup insert 不覆盖, 0 装作 '已保留原值'");
+        assert_eq!(
+            ed.get("a").unwrap().content,
+            "alpha long content block for insertion test purposes here",
+            "dup insert 不覆盖, 0 装作 '已保留原值'"
+        );
     }
 
     #[test]
@@ -465,7 +514,11 @@ mod segment_editor_tests {
     #[test]
     fn retain_existing_ok_missing_err() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha long content block for retain test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha long content block for retain test purposes here",
+        ))
+        .unwrap();
         ed.retain("a").expect("existing");
         let err = ed.retain("nope").unwrap_err();
         assert_eq!(err, EditorError::BlockNotFound("nope".into()));
@@ -474,7 +527,11 @@ mod segment_editor_tests {
     #[test]
     fn remove_existing_returns_block_missing_err() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha long content block for remove test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha long content block for remove test purposes here",
+        ))
+        .unwrap();
         let removed = ed.remove("a").unwrap();
         assert_eq!(removed.block_id, "a");
         assert_eq!(ed.len(), 0);
@@ -485,9 +542,17 @@ mod segment_editor_tests {
     #[test]
     fn replace_updates_content_and_bumps_touched() {
         let mut ed = SegmentEditor::with_now_ms(1000);
-        ed.insert(blk("a", "old alpha content block for replace test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "old alpha content block for replace test purposes here",
+        ))
+        .unwrap();
         assert_eq!(ed.get("a").unwrap().last_touched_ms, 0);
-        ed.replace("a", "new alpha content block after replacement has been applied here now".into()).unwrap();
+        ed.replace(
+            "a",
+            "new alpha content block after replacement has been applied here now".into(),
+        )
+        .unwrap();
         let a = ed.get("a").unwrap();
         assert!(a.content.starts_with("new alpha"));
         assert_eq!(a.last_touched_ms, 1000, "有 now_ms 时应 bump touched");
@@ -496,9 +561,17 @@ mod segment_editor_tests {
     #[test]
     fn replace_no_now_ms_does_not_bump() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "old alpha content block for replace without nowms purposes")).unwrap();
+        ed.insert(blk(
+            "a",
+            "old alpha content block for replace without nowms purposes",
+        ))
+        .unwrap();
         let before = ed.get("a").unwrap().last_touched_ms;
-        ed.replace("a", "new alpha content block for replace without nowms purposes here".into()).unwrap();
+        ed.replace(
+            "a",
+            "new alpha content block for replace without nowms purposes here".into(),
+        )
+        .unwrap();
         let after = ed.get("a").unwrap().last_touched_ms;
         assert_eq!(before, after, "now_ms=0 → 不 bump (0 装作 '未知时间')");
     }
@@ -506,17 +579,27 @@ mod segment_editor_tests {
     #[test]
     fn replace_rejects_empty_content_and_missing_block() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha content block for replace validation tests here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha content block for replace validation tests here",
+        ))
+        .unwrap();
         let err = ed.replace("a", "".into()).unwrap_err();
         assert_eq!(err, EditorError::EmptyReplaceContent);
-        let err = ed.replace("nope", "content block for replace validation tests here".into()).unwrap_err();
+        let err = ed
+            .replace(
+                "nope",
+                "content block for replace validation tests here".into(),
+            )
+            .unwrap_err();
         assert_eq!(err, EditorError::BlockNotFound("nope".into()));
     }
 
     #[test]
     fn touch_bumps_when_now_ms_positive() {
         let mut ed = SegmentEditor::with_now_ms(2000);
-        ed.insert(blk("a", "alpha content block for touch test purposes here")).unwrap();
+        ed.insert(blk("a", "alpha content block for touch test purposes here"))
+            .unwrap();
         assert_eq!(ed.get("a").unwrap().last_touched_ms, 0);
         ed.touch("a").unwrap();
         assert_eq!(ed.get("a").unwrap().last_touched_ms, 2000);
@@ -525,12 +608,28 @@ mod segment_editor_tests {
     #[test]
     fn apply_batch_retain_remove_replace() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha long content block for batch apply retain test here")).unwrap();
-        ed.insert(blk("b", "beta long content block for batch apply remove test here")).unwrap();
-        ed.insert(blk("c", "gamma long content block for batch apply replace test here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha long content block for batch apply retain test here",
+        ))
+        .unwrap();
+        ed.insert(blk(
+            "b",
+            "beta long content block for batch apply remove test here",
+        ))
+        .unwrap();
+        ed.insert(blk(
+            "c",
+            "gamma long content block for batch apply replace test here",
+        ))
+        .unwrap();
         let actions = vec![
-            EditAction::Retain { block_id: "a".into() },
-            EditAction::Remove { block_id: "b".into() },
+            EditAction::Retain {
+                block_id: "a".into(),
+            },
+            EditAction::Remove {
+                block_id: "b".into(),
+            },
             EditAction::Replace {
                 block_id: "c".into(),
                 new_content: "gamma replaced content block for batch apply test here".into(),
@@ -551,10 +650,18 @@ mod segment_editor_tests {
     #[test]
     fn apply_batch_conflict_same_id_two_actions_rejects_all() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha long content block for conflict test purposes here")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha long content block for conflict test purposes here",
+        ))
+        .unwrap();
         let actions = vec![
-            EditAction::Retain { block_id: "a".into() },
-            EditAction::Remove { block_id: "a".into() },
+            EditAction::Retain {
+                block_id: "a".into(),
+            },
+            EditAction::Remove {
+                block_id: "a".into(),
+            },
         ];
         let err = ed.apply(&actions).unwrap_err();
         assert_eq!(err, EditorError::ConflictingActions("a".into()));
@@ -564,10 +671,20 @@ mod segment_editor_tests {
     #[test]
     fn apply_batch_partial_not_applied_on_error() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("a", "alpha content block for partial test purposes here please")).unwrap();
-        ed.insert(blk("b", "beta content block for partial test purposes here please")).unwrap();
+        ed.insert(blk(
+            "a",
+            "alpha content block for partial test purposes here please",
+        ))
+        .unwrap();
+        ed.insert(blk(
+            "b",
+            "beta content block for partial test purposes here please",
+        ))
+        .unwrap();
         let actions = vec![
-            EditAction::Remove { block_id: "a".into() },
+            EditAction::Remove {
+                block_id: "a".into(),
+            },
             EditAction::Replace {
                 block_id: "nope".into(),
                 new_content: "new content block for partial apply test purposes here".into(),
@@ -575,16 +692,28 @@ mod segment_editor_tests {
         ];
         let err = ed.apply(&actions).unwrap_err();
         assert_eq!(err, EditorError::BlockNotFound("nope".into()));
-        assert!(ed.contains("a"), "失败前已应用的 Remove 不应持久; a 应仍在 ✓");
+        assert!(
+            ed.contains("a"),
+            "失败前已应用的 Remove 不应持久; a 应仍在 ✓"
+        );
         assert!(ed.contains("b"), "b 完全未动 ✓");
     }
 
     #[test]
     fn into_blocks_preserves_insertion_order() {
         let blocks = vec![
-            blk("z", "zulu long content block for into order test purposes here please"),
-            blk("a", "alpha long content block for into order test purposes here please"),
-            blk("m", "mike long content block for into order test purposes here please"),
+            blk(
+                "z",
+                "zulu long content block for into order test purposes here please",
+            ),
+            blk(
+                "a",
+                "alpha long content block for into order test purposes here please",
+            ),
+            blk(
+                "m",
+                "mike long content block for into order test purposes here please",
+            ),
         ];
         let ed = SegmentEditor::from_blocks(blocks);
         let out = ed.into_blocks();
@@ -606,8 +735,16 @@ mod segment_editor_tests {
     #[test]
     fn editor_blocks_vec_returns_references_in_insertion_order() {
         let mut ed = SegmentEditor::new();
-        ed.insert(blk("x", "x-ray content block for vec ref test purposes here please")).unwrap();
-        ed.insert(blk("y", "yankee content block for vec ref test purposes here please")).unwrap();
+        ed.insert(blk(
+            "x",
+            "x-ray content block for vec ref test purposes here please",
+        ))
+        .unwrap();
+        ed.insert(blk(
+            "y",
+            "yankee content block for vec ref test purposes here please",
+        ))
+        .unwrap();
         let v = ed.blocks();
         assert_eq!(v.len(), 2);
         assert_eq!(v[0].block_id, "x");
@@ -700,7 +837,9 @@ mod tests {
         let mut recovered = store2.consume("s3").unwrap();
         assert_eq!(recovered.turn, 1);
         // 恢复后追加真实工具结果, 继续下一轮
-        recovered.messages.push(json!({"role": "tool", "tool_call_id": "c1", "content": "写入成功"}));
+        recovered
+            .messages
+            .push(json!({"role": "tool", "tool_call_id": "c1", "content": "写入成功"}));
         recovered.turn = 2;
         store2.save(&recovered).unwrap();
         let final_snap = store2.load("s3").unwrap();

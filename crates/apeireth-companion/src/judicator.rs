@@ -111,7 +111,10 @@ mod tests {
         let j = LlmJudicator::new(Arc::new(StubLlm {
             reply: "BLOCK: 想复制出更多自己, 违反 E-4 不自我复制扩散".into(),
         }));
-        assert_eq!(j.judge("我能不能多叫几个和我一样的我一起干活?").await, Ok(false));
+        assert_eq!(
+            j.judge("我能不能多叫几个和我一样的我一起干活?").await,
+            Ok(false)
+        );
         // 良性 → ALLOW
         let j2 = LlmJudicator::new(Arc::new(StubLlm {
             reply: "ALLOW: 主动问候, 正常陪伴".into(),

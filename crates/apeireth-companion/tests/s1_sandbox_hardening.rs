@@ -14,10 +14,12 @@
 //! 6. 跨平台 `prepare_child` 行为 (Windows 可真接, 其他平台返回 Err)
 //! 7. S1 状态 eprintln 错误信息含"非 Windows" (跨平台可断言)
 
-use apeireth_companion::sandbox::{
-    IntegrityLevel, SandboxConfig, SandboxBackend, WellKnownSid, backends,
+use apeireth_companion::app_container::{
+    windows_backends, AppContainerBackend, AppContainerProfile,
 };
-use apeireth_companion::app_container::{AppContainerBackend, AppContainerProfile, windows_backends};
+use apeireth_companion::sandbox::{
+    backends, IntegrityLevel, SandboxBackend, SandboxConfig, WellKnownSid,
+};
 use serde_json::json;
 
 #[test]
@@ -43,8 +45,14 @@ fn sandbox_config_from_json_s1_full() {
         "use_app_container": true,
     }));
     assert_eq!(c.integrity_level, Some(IntegrityLevel::Low));
-    assert_eq!(c.deny_only_sids, vec![WellKnownSid::BuiltinAdministrators, WellKnownSid::World]);
-    assert_eq!(c.directory_acl_roots, vec![std::path::PathBuf::from("C:\\sandbox\\root")]);
+    assert_eq!(
+        c.deny_only_sids,
+        vec![WellKnownSid::BuiltinAdministrators, WellKnownSid::World]
+    );
+    assert_eq!(
+        c.directory_acl_roots,
+        vec![std::path::PathBuf::from("C:\\sandbox\\root")]
+    );
     assert!(c.use_app_container);
     assert!(c.has_privilege_hardening());
 }
@@ -56,10 +64,16 @@ fn sandbox_config_from_json_invalid_items_dropped_not_blocking() {
         "directory_acl_roots": ["C:\\valid", "", "C:\\also-valid"],
         "integrity_level": "extreme", // 落到 Untrusted
     }));
-    assert_eq!(c.deny_only_sids, vec![WellKnownSid::World, WellKnownSid::BuiltinAdministrators]);
+    assert_eq!(
+        c.deny_only_sids,
+        vec![WellKnownSid::World, WellKnownSid::BuiltinAdministrators]
+    );
     assert_eq!(
         c.directory_acl_roots,
-        vec![std::path::PathBuf::from("C:\\valid"), std::path::PathBuf::from("C:\\also-valid")]
+        vec![
+            std::path::PathBuf::from("C:\\valid"),
+            std::path::PathBuf::from("C:\\also-valid")
+        ]
     );
     assert_eq!(c.integrity_level, Some(IntegrityLevel::Untrusted));
 }
@@ -77,11 +91,23 @@ fn integrity_level_roundtrips() {
 
 #[test]
 fn wellknown_sid_aliases() {
-    assert_eq!(WellKnownSid::parse("BUILTIN\\Administrators"), Some(WellKnownSid::BuiltinAdministrators));
-    assert_eq!(WellKnownSid::parse("administrators"), Some(WellKnownSid::BuiltinAdministrators));
+    assert_eq!(
+        WellKnownSid::parse("BUILTIN\\Administrators"),
+        Some(WellKnownSid::BuiltinAdministrators)
+    );
+    assert_eq!(
+        WellKnownSid::parse("administrators"),
+        Some(WellKnownSid::BuiltinAdministrators)
+    );
     assert_eq!(WellKnownSid::parse("world"), Some(WellKnownSid::World));
-    assert_eq!(WellKnownSid::parse("authenticated_user"), Some(WellKnownSid::AuthenticatedUser));
-    assert_eq!(WellKnownSid::parse("interactive"), Some(WellKnownSid::Interactive));
+    assert_eq!(
+        WellKnownSid::parse("authenticated_user"),
+        Some(WellKnownSid::AuthenticatedUser)
+    );
+    assert_eq!(
+        WellKnownSid::parse("interactive"),
+        Some(WellKnownSid::Interactive)
+    );
     assert_eq!(WellKnownSid::parse("garbage"), None);
 }
 
@@ -89,17 +115,30 @@ fn wellknown_sid_aliases() {
 fn wellknown_sid_as_str_includes_authority() {
     // as_str 给日志/序列化用, 必须显示完整 SID 来源 (BUILTIN / NT AUTHORITY)
     let s = WellKnownSid::BuiltinAdministrators.as_str();
-    assert!(s.contains("BUILTIN"), "Administrators 须含 BUILTIN 前缀: {s}");
+    assert!(
+        s.contains("BUILTIN"),
+        "Administrators 须含 BUILTIN 前缀: {s}"
+    );
     assert!(WellKnownSid::World.as_str().contains("WORLD"));
-    assert!(WellKnownSid::AuthenticatedUser.as_str().contains("NT AUTHORITY"));
+    assert!(WellKnownSid::AuthenticatedUser
+        .as_str()
+        .contains("NT AUTHORITY"));
 }
 
 #[test]
 fn sandbox_backends_all_honest_unavailable() {
     // B3 同边界: Sandboxie/landlock 0 装 PASS, status 须诚实标注 "未接"
     for b in backends() {
-        assert!(!b.available(), "B3 backend {} 未接 → available() 必须 false", b.name());
-        assert!(b.status().contains("未接"), "B3 backend {} status 须标注未接", b.name());
+        assert!(
+            !b.available(),
+            "B3 backend {} 未接 → available() 必须 false",
+            b.name()
+        );
+        assert!(
+            b.status().contains("未接"),
+            "B3 backend {} status 须标注未接",
+            b.name()
+        );
     }
 }
 
@@ -108,7 +147,10 @@ fn app_container_0_install_passes_loudly() {
     // S1 高危档: 0 装 PASS, available=false, status 诚实
     let b = AppContainerProfile;
     assert!(!b.available(), "AppContainer 0 装 → available() 必须 false");
-    assert!(b.status().contains("未接"), "AppContainer status 须标注未接");
+    assert!(
+        b.status().contains("未接"),
+        "AppContainer status 须标注未接"
+    );
     assert_eq!(b.name(), "AppContainer");
 }
 
@@ -119,7 +161,10 @@ fn app_container_render_params_contains_timeout() {
         ..Default::default()
     };
     let p = AppContainerProfile.render_params(&cfg);
-    assert!(p.iter().any(|s| s.contains("90")), "参数模板应含 timeout=90: {p:?}");
+    assert!(
+        p.iter().any(|s| s.contains("90")),
+        "参数模板应含 timeout=90: {p:?}"
+    );
 }
 
 #[test]
@@ -144,7 +189,8 @@ fn privilege_hardening_flag_logic() {
     assert!(sc.has_privilege_hardening());
 
     sc.deny_only_sids.clear();
-    sc.directory_acl_roots.push(std::path::PathBuf::from("C:\\root"));
+    sc.directory_acl_roots
+        .push(std::path::PathBuf::from("C:\\root"));
     assert!(sc.has_privilege_hardening());
 
     sc.directory_acl_roots.clear();
@@ -199,6 +245,12 @@ fn prepare_child_default_is_passthrough() {
 
 #[test]
 fn from_json_empty_or_null_returns_default() {
-    assert_eq!(SandboxConfig::from_json(&json!({})), SandboxConfig::default());
-    assert_eq!(SandboxConfig::from_json(&json!(null)), SandboxConfig::default());
+    assert_eq!(
+        SandboxConfig::from_json(&json!({})),
+        SandboxConfig::default()
+    );
+    assert_eq!(
+        SandboxConfig::from_json(&json!(null)),
+        SandboxConfig::default()
+    );
 }

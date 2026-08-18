@@ -181,8 +181,10 @@ pub fn diff_consistency(
         // R163: each match arm returns/continues, so the match itself is the statement.
         // No need to bind the result to `cmp` then discard via `let _ = cmp;`.
         match (sa, sb) {
-            (OnionLayerStance::Aligned, OnionLayerStance::Aligned) => continue,
-            (OnionLayerStance::Underspecified, OnionLayerStance::Underspecified) => continue,
+            // 相等立场: 不比较 (原 continue 冗余, 等价空分支)
+            (OnionLayerStance::Aligned, OnionLayerStance::Aligned)
+            | (OnionLayerStance::Underspecified, OnionLayerStance::Underspecified)
+            | (OnionLayerStance::Conflicted, OnionLayerStance::Conflicted) => {}
             (OnionLayerStance::Aligned, _) => return Some((dim, ValueComparison::Higher)),
             (_, OnionLayerStance::Aligned) => return Some((dim, ValueComparison::Lower)),
             (OnionLayerStance::Conflicted, OnionLayerStance::Underspecified) => {
@@ -191,7 +193,6 @@ pub fn diff_consistency(
             (OnionLayerStance::Underspecified, OnionLayerStance::Conflicted) => {
                 return Some((dim, ValueComparison::Higher))
             }
-            (OnionLayerStance::Conflicted, OnionLayerStance::Conflicted) => continue,
         };
     }
     None

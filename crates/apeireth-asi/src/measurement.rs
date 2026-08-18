@@ -179,7 +179,7 @@ pub fn compute_dim(name: &str, sample: &MeasurementSample) -> Result<f64, Measur
     let quality = sample.qualities.get(name).copied().unwrap_or(1.0);
 
     // 通用公式: success/attempt × quality_factor
-    let success_rate = success as f64 / attempt as f64;
+    let success_rate = f64::from(success) / f64::from(attempt);
     let latency_factor = match sample.latencies_ms.get(name) {
         Some(&ms) if ms > 0.0 => {
             // 延迟越小越好: 假设 1000ms 为基线, 小于 100ms 得 1.0, 大于 5000ms 得 0.0
@@ -219,7 +219,7 @@ pub fn compute_sub(name: &str, sample: &MeasurementSample) -> Result<f64, Measur
     let success = sample.successes[name];
     let attempt = sample.attempts[name];
     let quality = sample.qualities.get(name).copied().unwrap_or(1.0);
-    let success_rate = success as f64 / attempt as f64;
+    let success_rate = f64::from(success) / f64::from(attempt);
     let score = success_rate * quality;
     Ok(score.clamp(0.0, 1.0))
 }
@@ -507,14 +507,14 @@ mod tests {
         let mut s = MeasurementSample::default();
         for name in V05_DIMENSION_NAMES.iter() {
             s.successes
-                .insert(name.to_string(), (success_rate * n as f64) as u32);
+                .insert(name.to_string(), (success_rate * f64::from(n)) as u32);
             s.attempts.insert(name.to_string(), n);
             s.qualities.insert(name.to_string(), 1.0);
         }
         for name in V1136_SUBMEASURE_NAMES.iter() {
             s.successes
                 .entry(name.to_string())
-                .or_insert((success_rate * n as f64) as u32);
+                .or_insert((success_rate * f64::from(n)) as u32);
             s.attempts.entry(name.to_string()).or_insert(n);
             s.qualities.entry(name.to_string()).or_insert(1.0);
         }
@@ -598,7 +598,7 @@ mod tests {
             let name = V05_DIMENSION_NAMES[i];
             if (15..=19).contains(&i) {
                 let (p, t) = s.philosophy_gate_trials[name];
-                let expected = p as f64 / t as f64;
+                let expected = f64::from(p) / f64::from(t);
                 assert!(
                     (v - expected).abs() < 1e-9,
                     "dim {i} {name}: got {v}, expected {expected}"
@@ -621,7 +621,7 @@ mod tests {
             let name = V1136_SUBMEASURE_NAMES[i];
             if i >= 7 {
                 let (p, t) = s.philosophy_gate_trials[name];
-                let expected = p as f64 / t as f64;
+                let expected = f64::from(p) / f64::from(t);
                 assert!(
                     (v - expected).abs() < 1e-9,
                     "sub {i} {name}: got {v}, expected {expected}"
@@ -681,7 +681,7 @@ mod tests {
     fn default_regression_outlier_fails() {
         let r = DefaultRegressionAssertion::default();
         // 用含方差的 history, 使 std > 0, 否则 z-score 始终 = 0 → 误判通过
-        let history: Vec<f64> = (0..100).map(|i| 0.5 + (i as f64 * 0.001)).collect();
+        let history: Vec<f64> = (0..100).map(|i| 0.5 + (f64::from(i) * 0.001)).collect();
         let result = r.assert_within_range("test_dim", 0.99, &history);
         assert!(
             !result.passed,

@@ -26,6 +26,8 @@
 //!       - cbindgen build.rs → 看到 c.rs 全部 fn (cfg 在 fn 上 cbindgen 仍能读)
 
 #![allow(unsafe_code)]
+// C-ABI 桥接边界: 裸指针参数是设计 (caller 契约在 doc 注释), 0 假装安全 Rust API.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_uint};
@@ -156,7 +158,10 @@ pub extern "C" fn apeireth_sdk_version() -> *const c_char {
     // SDK_VERSION 是 SdkVersion struct, 不是 str. 转 "0.1.0" 字面量 (per R20 阶段 6 stub)
     // 注: SDK_VERSION.major/minor/patch 来自 version.rs:102 LOCKED, 0 重复造轮子.
     // 注: workspace.version 1.1.0 是 workspace 顶层, SDK_VERSION 0.1.0 是 SDK 协议版本 (R20 决策原意)
-    let s = format!("{}.{}.{}", SDK_VERSION.major, SDK_VERSION.minor, SDK_VERSION.patch);
+    let s = format!(
+        "{}.{}.{}",
+        SDK_VERSION.major, SDK_VERSION.minor, SDK_VERSION.patch
+    );
     // 内存: 泄漏但可接受 (process lifetime), 跟 Rust static str 等价
     // R123 切换 static str (0 堆分配)
     match CString::new(s) {

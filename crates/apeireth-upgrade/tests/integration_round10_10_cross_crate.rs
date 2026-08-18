@@ -365,7 +365,7 @@ fn r10_10_full_7_stages_with_cross_crate_calls() {
         target: ActionTarget::NormalAction("ota-patch".into()),
     };
     engine.cache_mut().put(&action.id, PhilosophyVerdict::Allow);
-    let fg_report: SandboxFiveGatesReport = sandbox_with_five_gates(&engine, &action);
+    let _fg_report: SandboxFiveGatesReport = sandbox_with_five_gates(&engine, &action);
     // 用 DefaultSandbox 走 OTA 自有 sandbox (fg_report 仅供审计)
     let sandbox = DefaultSandbox;
     let sandbox_verdict = sandbox.validate(&sample_manifest());

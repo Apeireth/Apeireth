@@ -433,9 +433,8 @@ impl SearchEngine {
         // 过滤 + 评分
         let mut scored: Vec<RankedDoc> = Vec::new();
         for id in candidates {
-            let doc = match g.docs.get(&id) {
-                Some(d) => d,
-                None => continue,
+            let Some(doc) = g.docs.get(&id) else {
+                continue;
             };
             if !filter.matches(doc) {
                 continue;

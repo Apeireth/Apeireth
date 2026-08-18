@@ -41,8 +41,8 @@ use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_bus::{LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook};
 use apeireth_companion::assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, LarkSink, MultiSink, Sink, TelegramSink, ThrottledUtterance,
-    UtteranceGenerator, continuity_id_from_env, open_memory_store,
+    continuity_id_from_env, open_memory_store, CompanionDaemon, CompanionDelivery, LarkSink,
+    MultiSink, Sink, TelegramSink, ThrottledUtterance, UtteranceGenerator,
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
 use apeireth_companion::emergence::{Initiative, RhythmEstimate};
@@ -62,7 +62,10 @@ use apeireth_tool_runtime::parser::ParsedToolCall;
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
-    response::{sse::{Event as SseEvent, KeepAlive, Sse}, IntoResponse},
+    response::{
+        sse::{Event as SseEvent, KeepAlive, Sse},
+        IntoResponse,
+    },
     routing::{get, post},
     Json, Router,
 };
@@ -161,13 +164,25 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             // 无存量 → 全 Add (诚实)
             let mut out = Vec::new();
             for f in &candidates.facts {
-                out.push(ReconcileAction { kind: ReconcileKind::Add, item: f.clone(), target_id: None });
+                out.push(ReconcileAction {
+                    kind: ReconcileKind::Add,
+                    item: f.clone(),
+                    target_id: None,
+                });
             }
             for p in &candidates.preferences {
-                out.push(ReconcileAction { kind: ReconcileKind::Add, item: p.clone(), target_id: None });
+                out.push(ReconcileAction {
+                    kind: ReconcileKind::Add,
+                    item: p.clone(),
+                    target_id: None,
+                });
             }
             for c in &candidates.commitments {
-                out.push(ReconcileAction { kind: ReconcileKind::Add, item: c.clone(), target_id: None });
+                out.push(ReconcileAction {
+                    kind: ReconcileKind::Add,
+                    item: c.clone(),
+                    target_id: None,
+                });
             }
             return Ok(out);
         }
@@ -238,10 +253,12 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
                     "delete" => ReconcileKind::Delete,
                     _ => ReconcileKind::Add,
                 };
-                let target_id = r.target_index.and_then(|i| existing.get(i).map(|s| {
-                    // existing 格式 "id|内容" → 取 id
-                    s.split('|').next().unwrap_or(s).to_string()
-                }));
+                let target_id = r.target_index.and_then(|i| {
+                    existing.get(i).map(|s| {
+                        // existing 格式 "id|内容" → 取 id
+                        s.split('|').next().unwrap_or(s).to_string()
+                    })
+                });
                 ReconcileAction {
                     kind,
                     item: MemoryItem::new(r.content, r.importance),
@@ -354,7 +371,12 @@ impl LifecycleHook for LifecycleLogHook {
         eprintln!(
             "[lifecycle] user_prompt_submit (session: {}): {}",
             ctx.session_id.as_deref().unwrap_or("-"),
-            ctx.detail.as_deref().unwrap_or("").chars().take(80).collect::<String>()
+            ctx.detail
+                .as_deref()
+                .unwrap_or("")
+                .chars()
+                .take(80)
+                .collect::<String>()
         );
         Ok(())
     }
@@ -409,7 +431,7 @@ impl DreamSummarizer for MiniMaxDreamSummarizer {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let content = ch.message.content.clone();
@@ -457,9 +479,13 @@ impl ConstitutionLlm for MiniMaxConstitutionLlm {
             tools: None,
             tool_choice: None,
         };
-        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, openai_chat_to_normalized(&req))
-            .await
-            .map_err(|e| e.to_string())?;
+        let resp = dispatch(
+            &self.pipeline,
+            ProtocolKind::OpenAiChat,
+            openai_chat_to_normalized(&req),
+        )
+        .await
+        .map_err(|e| e.clone())?;
         let chat = openai_chat_from_normalized(&resp);
         for ch in &chat.choices {
             let c = ch.message.content.clone();
@@ -503,9 +529,13 @@ impl UtteranceGenerator for TonalUtterance {
             tools: None,
             tool_choice: None,
         };
-        let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, openai_chat_to_normalized(&req))
-            .await
-            .map_err(|e| e.to_string())?;
+        let resp = dispatch(
+            &self.pipeline,
+            ProtocolKind::OpenAiChat,
+            openai_chat_to_normalized(&req),
+        )
+        .await
+        .map_err(|e| e.clone())?;
         let chat = openai_chat_from_normalized(&resp);
         for ch in &chat.choices {
             let raw = ch.message.content.clone();
@@ -618,7 +648,7 @@ impl DeepRecall for MiniMaxDeepRecall {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat = openai_chat_from_normalized(&resp);
         let content = chat
             .choices
@@ -686,7 +716,7 @@ impl DialogSummarizer for MiniMaxDialogSummarizer {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat = openai_chat_from_normalized(&resp);
         let content = chat
             .choices
@@ -761,12 +791,27 @@ impl ExperienceRefiner for MiniMaxExperienceRefiner {
         };
         let parsed: Value = serde_json::from_str(&text[start..end])
             .map_err(|e| format!("经验 JSON 解析失败 (如实放弃): {e}"))?;
-        let scene = parsed.get("scene").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let scene = parsed
+            .get("scene")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         if scene.is_empty() {
             return Ok(None); // LLM 判定无可提炼
         }
-        let practice = parsed.get("practice").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let result = parsed.get("result").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let practice = parsed
+            .get("practice")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let result = parsed
+            .get("result")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let now = chrono::Utc::now().timestamp();
         let id = format!("exp-{}", uuid::Uuid::new_v4());
         Ok(Some(Experience {
@@ -774,7 +819,11 @@ impl ExperienceRefiner for MiniMaxExperienceRefiner {
             chain: id,
             rev: 1,
             scene,
-            practice: if practice.is_empty() { "未提炼出做法".into() } else { practice },
+            practice: if practice.is_empty() {
+                "未提炼出做法".into()
+            } else {
+                practice
+            },
             result,
             outcome: "partial".into(),
             verify_count: 0,
@@ -789,18 +838,22 @@ impl ExperienceRefiner for MiniMaxExperienceRefiner {
 
 /// 模块 4: 开发用测试事件 (验证 SSE 推送链路; 生产事件 = 涌现/做梦/反思自动推送).
 async fn test_event(State(st): State<Arc<AppState>>) -> impl IntoResponse {
-    let _ = st.events.send("测试事件: 本座在 (SSE 链路验证)".to_string());
+    let _ = st
+        .events
+        .send("测试事件: 本座在 (SSE 链路验证)".to_string());
     Json(json!({"ok": true, "note": "已推送测试事件到 SSE"}))
 }
 
 /// 模块 4: SSE 事件流 (主动送达 — 涌现/做梦/反思完成等实时推送).
-async fn events(State(st): State<Arc<AppState>>) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
+async fn events(
+    State(st): State<Arc<AppState>>,
+) -> Sse<impl Stream<Item = Result<SseEvent, Infallible>>> {
     let rx = st.events.subscribe();
     let stream = futures::stream::unfold(rx, |mut rx| async move {
         loop {
             match rx.recv().await {
                 Ok(text) => return Some((Ok::<_, Infallible>(SseEvent::default().data(text)), rx)),
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => continue, // 跳过期消息
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {} // 跳过期消息
                 Err(tokio::sync::broadcast::error::RecvError::Closed) => return None,
             }
         }
@@ -933,7 +986,11 @@ async fn chat_completions(
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(DEFAULT_MAX_TOKENS)
         .clamp(256, MAX_TOKENS_CAP);
-    let out_tokens = req.max_tokens.filter(|v| *v > 0).unwrap_or(env_max).clamp(256, MAX_TOKENS_CAP);
+    let out_tokens = req
+        .max_tokens
+        .filter(|v| *v > 0)
+        .unwrap_or(env_max)
+        .clamp(256, MAX_TOKENS_CAP);
     let mut rounds = 0usize;
     loop {
         rounds += 1;
@@ -955,7 +1012,12 @@ async fn chat_completions(
                 .into_response();
         };
         if tcs.is_empty() {
-            final_content = content.split("</think>").last().unwrap_or(&content).trim().to_string();
+            final_content = content
+                .split("</think>")
+                .last()
+                .unwrap_or(&content)
+                .trim()
+                .to_string();
             break;
         }
         messages.push(OpenAiChatMessage {
@@ -1118,15 +1180,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .join("goals");
     let mut goals = GoalService::new(&goal_dir);
     goals.restore("goal-main");
-    let goals_shared: std::sync::Arc<std::sync::Mutex<GoalService>> = std::sync::Arc::new(std::sync::Mutex::new(goals));
+    let goals_shared: std::sync::Arc<std::sync::Mutex<GoalService>> =
+        std::sync::Arc::new(std::sync::Mutex::new(goals));
 
     // ② 工具桥全增强 (宪法 LLM 评审 + 目标工具 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
     let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone()))?);
     let bridge = Arc::new(
         ToolBridge::new(Arc::clone(&store))
-            .with_judicator(Arc::new(LlmJudicator::new(Arc::new(MiniMaxConstitutionLlm {
-                pipeline: Arc::clone(&pipeline),
-            }))))
+            .with_judicator(Arc::new(LlmJudicator::new(Arc::new(
+                MiniMaxConstitutionLlm {
+                    pipeline: Arc::clone(&pipeline),
+                },
+            ))))
             .with_goals(std::sync::Arc::clone(&goals_shared)),
     );
     if let Ok(grants) = std::env::var("APEIRETH_GRANT") {
@@ -1135,12 +1200,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Some((t, h)) => (t.trim(), h.trim().parse().unwrap_or(24)),
                 None => (g.trim(), 24),
             };
-            bridge.packs.grant(apeireth_companion::packs::PermissionPack::timed(
-                "serve 显式扩权",
-                vec![tool.to_string()],
-                hours,
-                None,
-            ));
+            bridge
+                .packs
+                .grant(apeireth_companion::packs::PermissionPack::timed(
+                    "serve 显式扩权",
+                    vec![tool.to_string()],
+                    hours,
+                    None,
+                ));
             println!("[grant] {tool}: {hours}h");
         }
     }
@@ -1162,13 +1229,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let brain = Arc::new(apeireth_companion::runtime_brain::RuntimeBrain::new(
         apeireth_companion::curiosity::CuriosityConfig::default(),
         apeireth_companion::hypothesis::HypothesisConfig::default(),
-        vec![
-            apeireth_companion::progressive::CatalogEntry::new(
-                "伙伴回忆",
-                "与主人的共同生活记录（对话积累自动生长）",
-                0,
-            ),
-        ],
+        vec![apeireth_companion::progressive::CatalogEntry::new(
+            "伙伴回忆",
+            "与主人的共同生活记录（对话积累自动生长）",
+            0,
+        )],
     ));
     let app = Arc::new(
         CompanionApp::new(Arc::clone(&store), MEMORY_SESSION)
@@ -1179,15 +1244,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .with_inject_budget(6000)
             .with_rhythm(std::sync::Arc::clone(&rhythm_share))
             .with_goal(std::sync::Arc::clone(&goals_shared))
-            .with_extractor(Arc::new(MiniMaxMemoryExtractor { pipeline: Arc::clone(&pipeline) }))
-            .with_summarizer(Arc::new(MiniMaxDialogSummarizer { pipeline: Arc::clone(&pipeline) }))
-            .with_refiner(Arc::new(MiniMaxExperienceRefiner { pipeline: Arc::clone(&pipeline) }))
-            .with_deep_recall(Arc::new(MiniMaxDeepRecall { pipeline: Arc::clone(&pipeline) }))
+            .with_extractor(Arc::new(MiniMaxMemoryExtractor {
+                pipeline: Arc::clone(&pipeline),
+            }))
+            .with_summarizer(Arc::new(MiniMaxDialogSummarizer {
+                pipeline: Arc::clone(&pipeline),
+            }))
+            .with_refiner(Arc::new(MiniMaxExperienceRefiner {
+                pipeline: Arc::clone(&pipeline),
+            }))
+            .with_deep_recall(Arc::new(MiniMaxDeepRecall {
+                pipeline: Arc::clone(&pipeline),
+            }))
             .with_extract_interval(extract_interval)
             .with_summarize_interval(Duration::from_secs(300))
             .with_brain(Arc::clone(&brain)),
     );
-    println!("[app] CompanionApp 装配完成: L0 Identity + L1 Essential 常驻, 提炼 {:?} 节流", extract_interval);
+    println!(
+        "[app] CompanionApp 装配完成: L0 Identity + L1 Essential 常驻, 提炼 {:?} 节流",
+        extract_interval
+    );
 
     // ④ daemon 常驻 (做梦 LLM 摘要 + 反思 LLM 深度 + 涌现 LLM 润色, 同进程): 记忆会话 "me"
     let quiet = std::env::var("APEIRETH_DREAM_QUIET_SECONDS")
@@ -1217,7 +1293,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }));
     let tone = tone_hint(&apeireth_companion::bond::Bond::new());
     // 送达通道: 广播 (SSE) 必开; Lark (离线) 有凭据则叠加
-    let mut sink = MultiSink::new().push(Box::new(apeireth_companion::daemon::BroadcastSink::new(tx_events.clone())));
+    let mut sink = MultiSink::new().push(Box::new(apeireth_companion::daemon::BroadcastSink::new(
+        tx_events.clone(),
+    )));
     match LarkSink::from_env() {
         Ok(lark) => {
             sink = sink.push(Box::new(lark));
@@ -1301,9 +1379,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
     println!("✅ companion_serve v4 — 伙伴端点全能力版 (CompanionApp 机制装配)");
-    println!("   http://127.0.0.1:{port}/panel  (Web 面板 v2: 会话/记忆/图谱/授权/审计, 只读真接口)");
+    println!(
+        "   http://127.0.0.1:{port}/panel  (Web 面板 v2: 会话/记忆/图谱/授权/审计, 只读真接口)"
+    );
     println!("   http://127.0.0.1:{port}/v1  (模型 MiniMax-M3, Key 任意非空)");
-    println!("   会话标签: X-Apeireth-Continuity (缺省 {}) · 工具: 全部可见, 执行受宪法/权限约束", state.subject.as_str());
+    println!(
+        "   会话标签: X-Apeireth-Continuity (缺省 {}) · 工具: 全部可见, 执行受宪法/权限约束",
+        state.subject.as_str()
+    );
     // daemon 循环与 HTTP 同 task 交替 (daemon 内部 RefCell 跨 await → 非 Send, 不能 spawn)
     let d_app = Arc::clone(&state.app);
     let d_rhythm = rhythm_share;
@@ -1392,21 +1475,38 @@ async fn daemon_loop(
 
 /// 待批授权请求 (AI 被拒时产生; 前端轮询展示, 主人一键批准 — 权限洋葱真实载体).
 async fn approval_requests(State(st): State<Arc<AppState>>) -> impl IntoResponse {
-    Json(apeireth_companion::approval_requests::pending_json(&st.store))
+    Json(apeireth_companion::approval_requests::pending_json(
+        &st.store,
+    ))
 }
 
 /// 主人批准端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
 /// AI 只请求不接触 token. 授权后高危工具在时限内可直接执行.
-async fn grant(
-    State(st): State<Arc<AppState>>,
-    Json(req): Json<Value>,
-) -> impl IntoResponse {
-    let tool = req.get("tool").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty());
+async fn grant(State(st): State<Arc<AppState>>, Json(req): Json<Value>) -> impl IntoResponse {
+    let tool = req
+        .get("tool")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty());
     let Some(tool) = tool else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "需要 tool (工具名)"}))).into_response();
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "需要 tool (工具名)"})),
+        )
+            .into_response();
     };
-    let hours = req.get("hours").and_then(|v| v.as_u64()).unwrap_or(1).max(1).min(24 * 30);
-    let token = req.get("master_token").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+    let hours = req
+        .get("hours")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1)
+        .max(1)
+        .min(24 * 30);
+    let token = req
+        .get("master_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
     let expected = std::env::var("APEIRETH_MASTER_TOKEN").unwrap_or_default();
     if expected.is_empty() || token != expected {
         return (
@@ -1415,12 +1515,14 @@ async fn grant(
         )
             .into_response();
     }
-    st.bridge.packs.grant(apeireth_companion::packs::PermissionPack::timed(
-        "主人授权",
-        vec![tool.to_string()],
-        hours,
-        None,
-    ));
+    st.bridge
+        .packs
+        .grant(apeireth_companion::packs::PermissionPack::timed(
+            "主人授权",
+            vec![tool.to_string()],
+            hours,
+            None,
+        ));
     (
         StatusCode::OK,
         Json(json!({"ok": true, "tool": tool, "hours": hours, "note": "已按权限洋葱授权 (PermissionPack); 到期自动失效"})),
@@ -1442,14 +1544,38 @@ async fn panel_index() -> impl IntoResponse {
 async fn panel_asset(Path(asset): Path<String>) -> axum::response::Response {
     use axum::http::header::CONTENT_TYPE;
     let (ctype, body): (&str, &str) = match asset.as_str() {
-        "index.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/index.html")),
-        "sessions.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/sessions.html")),
-        "memory.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/memory.html")),
-        "graph.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/graph.html")),
-        "approvals.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/approvals.html")),
-        "audit.html" => ("text/html; charset=utf-8", include_str!("../assets/panel/audit.html")),
-        "panel.css" => ("text/css; charset=utf-8", include_str!("../assets/panel/panel.css")),
-        "panel.js" => ("application/javascript; charset=utf-8", include_str!("../assets/panel/panel.js")),
+        "index.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/index.html"),
+        ),
+        "sessions.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/sessions.html"),
+        ),
+        "memory.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/memory.html"),
+        ),
+        "graph.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/graph.html"),
+        ),
+        "approvals.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/approvals.html"),
+        ),
+        "audit.html" => (
+            "text/html; charset=utf-8",
+            include_str!("../assets/panel/audit.html"),
+        ),
+        "panel.css" => (
+            "text/css; charset=utf-8",
+            include_str!("../assets/panel/panel.css"),
+        ),
+        "panel.js" => (
+            "application/javascript; charset=utf-8",
+            include_str!("../assets/panel/panel.js"),
+        ),
         _ => return StatusCode::NOT_FOUND.into_response(),
     };
     ([(CONTENT_TYPE, ctype)], body).into_response()

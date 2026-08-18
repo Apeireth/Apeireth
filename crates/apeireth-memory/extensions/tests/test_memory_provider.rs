@@ -178,12 +178,32 @@ fn integration_6_k1_all_7_providers_all_6_fields() {
     // 7 provider × 6 字段全 validate 通过
     let cases: &[(ProviderKind, &str, ProviderScope)] = &[
         (ProviderKind::InMemory, "memory://", ProviderScope::Local),
-        (ProviderKind::Redis, "redis://localhost:6379/0", ProviderScope::Global),
-        (ProviderKind::Sqlite, "sqlite://:memory:", ProviderScope::Shared),
-        (ProviderKind::Postgres, "postgres://u:p@localhost/db", ProviderScope::Global),
+        (
+            ProviderKind::Redis,
+            "redis://localhost:6379/0",
+            ProviderScope::Global,
+        ),
+        (
+            ProviderKind::Sqlite,
+            "sqlite://:memory:",
+            ProviderScope::Shared,
+        ),
+        (
+            ProviderKind::Postgres,
+            "postgres://u:p@localhost/db",
+            ProviderScope::Global,
+        ),
         (ProviderKind::S3, "s3://bucket/key", ProviderScope::Global),
-        (ProviderKind::DiskLru, "file:///tmp/cache", ProviderScope::Local),
-        (ProviderKind::Hybrid, "hybrid://memory+disk", ProviderScope::Shared),
+        (
+            ProviderKind::DiskLru,
+            "file:///tmp/cache",
+            ProviderScope::Local,
+        ),
+        (
+            ProviderKind::Hybrid,
+            "hybrid://memory+disk",
+            ProviderScope::Shared,
+        ),
     ];
     for (kind, conn, scope) in cases {
         let cfg = ProviderConfig::new(
@@ -218,7 +238,13 @@ fn integration_7_k1_all_6_fields_reject_when_invalid() {
         Duration::from_secs(0),
         ProviderScope::Local,
     );
-    assert!(matches!(bad.validate(ProviderKind::InMemory), Err(MemoryProviderError::Config { field: ProviderConfigField::ConnectionString, .. })));
+    assert!(matches!(
+        bad.validate(ProviderKind::InMemory),
+        Err(MemoryProviderError::Config {
+            field: ProviderConfigField::ConnectionString,
+            ..
+        })
+    ));
 
     // 2. timeout 0
     let bad = ProviderConfig::new(
@@ -229,7 +255,13 @@ fn integration_7_k1_all_6_fields_reject_when_invalid() {
         Duration::from_secs(0),
         ProviderScope::Local,
     );
-    assert!(matches!(bad.validate(ProviderKind::InMemory), Err(MemoryProviderError::Config { field: ProviderConfigField::Timeout, .. })));
+    assert!(matches!(
+        bad.validate(ProviderKind::InMemory),
+        Err(MemoryProviderError::Config {
+            field: ProviderConfigField::Timeout,
+            ..
+        })
+    ));
 
     // 3. max_size 0
     let bad = ProviderConfig::new(
@@ -240,7 +272,13 @@ fn integration_7_k1_all_6_fields_reject_when_invalid() {
         Duration::from_secs(0),
         ProviderScope::Local,
     );
-    assert!(matches!(bad.validate(ProviderKind::InMemory), Err(MemoryProviderError::Config { field: ProviderConfigField::MaxSize, .. })));
+    assert!(matches!(
+        bad.validate(ProviderKind::InMemory),
+        Err(MemoryProviderError::Config {
+            field: ProviderConfigField::MaxSize,
+            ..
+        })
+    ));
 
     // 4. cache_ttl > 7d
     let bad = ProviderConfig::new(
@@ -251,7 +289,13 @@ fn integration_7_k1_all_6_fields_reject_when_invalid() {
         Duration::from_secs(8 * 24 * 3600),
         ProviderScope::Local,
     );
-    assert!(matches!(bad.validate(ProviderKind::InMemory), Err(MemoryProviderError::Config { field: ProviderConfigField::CacheTtl, .. })));
+    assert!(matches!(
+        bad.validate(ProviderKind::InMemory),
+        Err(MemoryProviderError::Config {
+            field: ProviderConfigField::CacheTtl,
+            ..
+        })
+    ));
 
     // 5. connection_string scheme 不匹配
     let bad = ProviderConfig::new(
@@ -262,7 +306,13 @@ fn integration_7_k1_all_6_fields_reject_when_invalid() {
         Duration::from_secs(0),
         ProviderScope::Local,
     );
-    assert!(matches!(bad.validate(ProviderKind::InMemory), Err(MemoryProviderError::Config { field: ProviderConfigField::ConnectionString, .. })));
+    assert!(matches!(
+        bad.validate(ProviderKind::InMemory),
+        Err(MemoryProviderError::Config {
+            field: ProviderConfigField::ConnectionString,
+            ..
+        })
+    ));
 
     // 6. scope 编译期 enum 守门, 0 校验 (无法构造无效 scope)
     // (per ProviderScope 3 变体, 编译期 exhaustive)
@@ -286,15 +336,25 @@ fn integration_8_eight_commitments_locked_unchanged() {
     // R23 #6 重做只动 extensions/ 子 crate + 1 行 lib.rs pub use, LOCKED 9 file 0 碰).
     use apeireth_memory_extensions::{
         APEIRETH_MEMORY_EXTENSIONS_SCHEMA_VERSION, BORROWED_GOLUTRA_PROVIDER_COUNT,
-        IMPLEMENTED_PROVIDER_COUNT, MEMORY_PROVIDER_ERROR_VARIANT_COUNT, MEMORY_PROVIDER_KIND_COUNT,
-        PLATFORM_NAME, PROVIDER_CONFIG_K1_FIELDS, PROVIDER_SCOPE_COUNT, REGISTRY_PROVIDER_COUNT,
+        IMPLEMENTED_PROVIDER_COUNT, MEMORY_PROVIDER_ERROR_VARIANT_COUNT,
+        MEMORY_PROVIDER_KIND_COUNT, PLATFORM_NAME, PROVIDER_CONFIG_K1_FIELDS, PROVIDER_SCOPE_COUNT,
+        REGISTRY_PROVIDER_COUNT,
     };
     assert_eq!(PLATFORM_NAME, "apeireth");
     assert_eq!(APEIRETH_MEMORY_EXTENSIONS_SCHEMA_VERSION, "1");
     assert_eq!(BORROWED_GOLUTRA_PROVIDER_COUNT, 5);
-    assert_eq!(IMPLEMENTED_PROVIDER_COUNT, 9, "R23 #6: IMPLEMENTED 7 → 9 (加 File 真 + MongoDb skeleton), 与 ProviderKind 一致");
-    assert_eq!(MEMORY_PROVIDER_KIND_COUNT, 9, "R23 #6: ProviderKind 7 → 9 (加 File + MongoDb)");
-    assert_eq!(REGISTRY_PROVIDER_COUNT, 9, "R23 #6: registry 7 → 9 (加 File + MongoDb)");
+    assert_eq!(
+        IMPLEMENTED_PROVIDER_COUNT, 9,
+        "R23 #6: IMPLEMENTED 7 → 9 (加 File 真 + MongoDb skeleton), 与 ProviderKind 一致"
+    );
+    assert_eq!(
+        MEMORY_PROVIDER_KIND_COUNT, 9,
+        "R23 #6: ProviderKind 7 → 9 (加 File + MongoDb)"
+    );
+    assert_eq!(
+        REGISTRY_PROVIDER_COUNT, 9,
+        "R23 #6: registry 7 → 9 (加 File + MongoDb)"
+    );
     assert_eq!(MEMORY_PROVIDER_ERROR_VARIANT_COUNT, 7);
     assert_eq!(PROVIDER_CONFIG_K1_FIELDS, 6);
     assert_eq!(PROVIDER_SCOPE_COUNT, 3);
@@ -330,12 +390,20 @@ fn integration_9_six_philosophical_anchors_penetration() {
             true,
             Duration::from_secs(60),
             match kind {
-                ProviderKind::InMemory | ProviderKind::DiskLru | ProviderKind::File => ProviderScope::Local,
+                ProviderKind::InMemory | ProviderKind::DiskLru | ProviderKind::File => {
+                    ProviderScope::Local
+                }
                 ProviderKind::Sqlite | ProviderKind::Hybrid => ProviderScope::Shared,
-                ProviderKind::Redis | ProviderKind::Postgres | ProviderKind::S3 | ProviderKind::MongoDb => ProviderScope::Global,
+                ProviderKind::Redis
+                | ProviderKind::Postgres
+                | ProviderKind::S3
+                | ProviderKind::MongoDb => ProviderScope::Global,
             },
         );
-        assert!(cfg.validate(kind).is_ok(), "6 锚穿透: {kind:?} 应 validate 通过");
+        assert!(
+            cfg.validate(kind).is_ok(),
+            "6 锚穿透: {kind:?} 应 validate 通过"
+        );
     }
 }
 
@@ -345,7 +413,9 @@ fn integration_9_six_philosophical_anchors_penetration() {
 
 #[test]
 fn integration_10_registry_with_4_end_to_end_providers() {
-    use apeireth_memory_extensions::{DiskLruProvider, HybridProvider, InMemoryProvider, SqliteProvider};
+    use apeireth_memory_extensions::{
+        DiskLruProvider, HybridProvider, InMemoryProvider, SqliteProvider,
+    };
     use tempfile::TempDir;
 
     let tmp = TempDir::new().unwrap();
@@ -358,7 +428,8 @@ fn integration_10_registry_with_4_end_to_end_providers() {
         false,
         Duration::from_secs(0),
         ProviderScope::Local,
-    )).unwrap();
+    ))
+    .unwrap();
     let sqlite = SqliteProvider::new(ProviderConfig::new(
         "sqlite://:memory:",
         Duration::from_secs(5),
@@ -366,7 +437,8 @@ fn integration_10_registry_with_4_end_to_end_providers() {
         false,
         Duration::from_secs(0),
         ProviderScope::Shared,
-    )).unwrap();
+    ))
+    .unwrap();
     let disk = DiskLruProvider::new(ProviderConfig::new(
         dir_path,
         Duration::from_secs(5),
@@ -374,7 +446,8 @@ fn integration_10_registry_with_4_end_to_end_providers() {
         true,
         Duration::from_secs(0),
         ProviderScope::Local,
-    )).unwrap();
+    ))
+    .unwrap();
     let hybrid = HybridProvider::new(ProviderConfig::new(
         "hybrid://memory+disk",
         Duration::from_secs(5),
@@ -382,7 +455,8 @@ fn integration_10_registry_with_4_end_to_end_providers() {
         true,
         Duration::from_secs(0),
         ProviderScope::Shared,
-    )).unwrap();
+    ))
+    .unwrap();
 
     let reg = ProviderRegistryBuilder::new()
         .with_in_memory(Arc::new(in_mem) as Arc<dyn MemoryProvider>)

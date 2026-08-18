@@ -12,9 +12,9 @@ use std::time::SystemTime;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-use crate::participant::{Participant, ParticipantSid};
-use crate::room::RoomState;
-use crate::track::{TrackSid, TrackSource};
+use crate::livekit::participant::{Participant, ParticipantSid};
+use crate::livekit::room::RoomState;
+use crate::livekit::track::{TrackSid, TrackSource};
 
 // ============================================================================
 // §1 RoomEvent 8 事件 (per v0.9.21 商业版 RoomEvent enum 1:1)
@@ -202,8 +202,8 @@ pub type SharedEmitter = Arc<EventEmitter>;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::LiveKitError;
-    use crate::track::TrackKind;
+    use crate::livekit::error::LiveKitError;
+    use crate::livekit::track::TrackKind;
 
     fn make_participant() -> Participant {
         Participant::new("user-1").unwrap()
@@ -216,11 +216,17 @@ mod tests {
 
         let p = make_participant();
         assert_eq!(
-            RoomEvent::ParticipantConnected { participant: p.clone() }.type_str(),
+            RoomEvent::ParticipantConnected {
+                participant: p.clone()
+            }
+            .type_str(),
             "participant_connected"
         );
         assert_eq!(
-            RoomEvent::ParticipantDisconnected { participant_sid: "PA_1".to_string() }.type_str(),
+            RoomEvent::ParticipantDisconnected {
+                participant_sid: "PA_1".to_string()
+            }
+            .type_str(),
             "participant_disconnected"
         );
         assert_eq!(
@@ -241,7 +247,10 @@ mod tests {
             "track_unsubscribed"
         );
         assert_eq!(
-            RoomEvent::ActiveSpeakersChanged { speakers: vec!["PA_1".to_string()] }.type_str(),
+            RoomEvent::ActiveSpeakersChanged {
+                speakers: vec!["PA_1".to_string()]
+            }
+            .type_str(),
             "active_speakers_changed"
         );
         assert_eq!(
@@ -262,7 +271,10 @@ mod tests {
             "data_received"
         );
         assert_eq!(
-            RoomEvent::Reconnected { disconnected_at: None }.type_str(),
+            RoomEvent::Reconnected {
+                disconnected_at: None
+            }
+            .type_str(),
             "reconnected"
         );
     }
@@ -270,9 +282,18 @@ mod tests {
     #[test]
     fn room_event_is_participant_event() {
         let p = make_participant();
-        assert!(RoomEvent::ParticipantConnected { participant: p.clone() }.is_participant_event());
-        assert!(RoomEvent::ParticipantDisconnected { participant_sid: "PA_1".to_string() }.is_participant_event());
-        assert!(!RoomEvent::Reconnected { disconnected_at: None }.is_participant_event());
+        assert!(RoomEvent::ParticipantConnected {
+            participant: p.clone()
+        }
+        .is_participant_event());
+        assert!(RoomEvent::ParticipantDisconnected {
+            participant_sid: "PA_1".to_string()
+        }
+        .is_participant_event());
+        assert!(!RoomEvent::Reconnected {
+            disconnected_at: None
+        }
+        .is_participant_event());
     }
 
     #[test]
@@ -288,7 +309,10 @@ mod tests {
             participant_sid: "PA_1".to_string(),
         }
         .is_track_event());
-        assert!(!RoomEvent::Reconnected { disconnected_at: None }.is_track_event());
+        assert!(!RoomEvent::Reconnected {
+            disconnected_at: None
+        }
+        .is_track_event());
     }
 
     #[test]
@@ -298,8 +322,14 @@ mod tests {
             current: RoomState::Connected,
         }
         .is_state_event());
-        assert!(RoomEvent::Reconnected { disconnected_at: None }.is_state_event());
-        assert!(!RoomEvent::ParticipantConnected { participant: make_participant() }.is_state_event());
+        assert!(RoomEvent::Reconnected {
+            disconnected_at: None
+        }
+        .is_state_event());
+        assert!(!RoomEvent::ParticipantConnected {
+            participant: make_participant()
+        }
+        .is_state_event());
     }
 
     #[test]
@@ -314,7 +344,9 @@ mod tests {
         let mut rx = emitter.subscribe();
         assert_eq!(emitter.receiver_count(), 1);
 
-        let event = RoomEvent::Reconnected { disconnected_at: None };
+        let event = RoomEvent::Reconnected {
+            disconnected_at: None,
+        };
         let sent_count = emitter.emit(event.clone()).expect("emit must succeed");
         assert_eq!(sent_count, 1);
 
@@ -329,7 +361,9 @@ mod tests {
         let mut rx2 = emitter.subscribe();
         assert_eq!(emitter.receiver_count(), 2);
 
-        let event = RoomEvent::Reconnected { disconnected_at: None };
+        let event = RoomEvent::Reconnected {
+            disconnected_at: None,
+        };
         emitter.emit(event.clone()).expect("emit must succeed");
 
         let r1 = rx1.try_recv().expect("rx1 must receive");

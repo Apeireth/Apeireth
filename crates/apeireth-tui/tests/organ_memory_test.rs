@@ -104,6 +104,6 @@ fn render_short_term_real_data_and_long_term_stub() {
 #[test]
 fn render_marks_partial_honestly() {
     let area = Rect::new(0, 0, 80, 24);
-    let out = organ::memory::render(area);
+    let _out = organ::memory::render(area);
     // stripped [partial] marker (R22 真接后不依赖): assert!(out.contains("[partial]"), "memory 标 partial, 中长期待接: {out}");
 }

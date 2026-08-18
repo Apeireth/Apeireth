@@ -437,13 +437,11 @@ impl SemanticModelRouter {
         if !self.config.enabled {
             return self.inactive(requested_model, RouteReason::RouterDisabled);
         }
-        let preset_name = match self.resolve_preset_name(&requested_model) {
-            Some(p) => p,
-            None => return self.inactive(requested_model, RouteReason::NotRoutingModel),
+        let Some(preset_name) = self.resolve_preset_name(&requested_model) else {
+            return self.inactive(requested_model, RouteReason::NotRoutingModel);
         };
-        let preset = match self.config.presets.get(&preset_name) {
-            Some(p) => p,
-            None => return self.inactive(requested_model, RouteReason::PresetNotFound),
+        let Some(preset) = self.config.presets.get(&preset_name) else {
+            return self.inactive(requested_model, RouteReason::PresetNotFound);
         };
 
         let user_text = user_text.trim();
@@ -457,27 +455,23 @@ impl SemanticModelRouter {
             );
         }
 
-        let context = match self
+        let Ok(context) = self
             .build_context_vector(user_text, assistant_text, &preset.context_weights)
             .await
-        {
-            Ok(v) => v,
-            Err(_) => {
-                return self.default_plan(
-                    &requested_model,
-                    &preset_name,
-                    preset,
-                    RouteReason::EmbeddingUnavailable,
-                )
-            }
+        else {
+            return self.default_plan(
+                &requested_model,
+                &preset_name,
+                preset,
+                RouteReason::EmbeddingUnavailable,
+            );
         };
 
         // 排位: 每条 route 的 description 向量与上下文向量余弦相似度。
         let mut ranked: Vec<ScoredRoute> = Vec::new();
         for route in &preset.routes {
-            let desc_vec = match self.description_vector(&route.description).await {
-                Ok(v) => v,
-                Err(_) => continue, // 单条路由向量化失败不影响其余路由 (诚实降级)
+            let Ok(desc_vec) = self.description_vector(&route.description).await else {
+                continue; // 单条路由向量化失败不影响其余路由 (诚实降级)
             };
             ranked.push(ScoredRoute {
                 name: route.name.clone(),

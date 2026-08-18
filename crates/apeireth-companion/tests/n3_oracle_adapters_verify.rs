@@ -27,19 +27,31 @@ fn mem() -> Arc<SqliteMemoryStore> {
 #[tokio::test]
 async fn coingecko_and_macro_adapters_via_mock_raw() {
     // 加密: 200 → 规范化报价; 429 → 可降级限流
-    let ok = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch { status: 200, body: r#"{"bitcoin":{"usd":61234.5}}"#.into() }));
+    let ok = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch {
+        status: 200,
+        body: r#"{"bitcoin":{"usd":61234.5}}"#.into(),
+    }));
     let q = ok.fetch_quote("BTC").await.unwrap();
     assert_eq!(q.provider, "coingecko");
     assert_eq!(q.unit, "USD");
     assert!((q.value - 61234.5).abs() < 1e-9);
-    let rl = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch { status: 429, body: "limited".into() }));
+    let rl = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch {
+        status: 429,
+        body: "limited".into(),
+    }));
     assert!(rl.fetch_quote("BTC").await.unwrap_err().degradable());
     // 宏观利率: 200 → %; 未知 symbol → Unsupported
     let body = r#"{"data":[{"attributes":{"avg_interest_rate_amt":"3.51"}}]}"#;
-    let m = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch { status: 200, body: body.into() }));
+    let m = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch {
+        status: 200,
+        body: body.into(),
+    }));
     let q = m.fetch_quote(TREASURY_AVG_RATE).await.unwrap();
     assert_eq!(q.unit, "%");
-    assert_eq!(m.fetch_quote("CPI").await.unwrap_err(), AdapterError::Unsupported("CPI".into()));
+    assert_eq!(
+        m.fetch_quote("CPI").await.unwrap_err(),
+        AdapterError::Unsupported("CPI".into())
+    );
 }
 
 #[tokio::test]
@@ -52,7 +64,10 @@ async fn fallback_degrades_full_pipeline() {
     fallback.set_quote("BTC", 100.0);
     let fa = Arc::new(FallbackAdapter::new(primary.clone(), fallback.clone()));
     // Unsupported 不降级 (能力边界直抛)
-    assert_eq!(fa.fetch_quote("XYZ").await.unwrap_err(), AdapterError::Unsupported("XYZ".into()));
+    assert_eq!(
+        fa.fetch_quote("XYZ").await.unwrap_err(),
+        AdapterError::Unsupported("XYZ".into())
+    );
 
     let p = ForecastPipeline::new(fa, mem(), "sess-n3");
     let df = p.register_direction_forecast("BTC", 0, 0.6).await.unwrap();
@@ -72,15 +87,26 @@ async fn pipeline_edges() {
     mock.set_quote("BTC", 100.0);
     let p = ForecastPipeline::new(mock.clone(), mem(), "sess-n3-2");
     // 未到期
-    let df_future = p.register_direction_forecast("BTC", 60_000, 0.5).await.unwrap();
-    assert!(p.resolve_due(&df_future.forecast_id).await.unwrap_err().contains("未到期"));
+    let df_future = p
+        .register_direction_forecast("BTC", 60_000, 0.5)
+        .await
+        .unwrap();
+    assert!(p
+        .resolve_due(&df_future.forecast_id)
+        .await
+        .unwrap_err()
+        .contains("未到期"));
     // 平盘判未成真
     let df = p.register_direction_forecast("BTC", 0, 0.9).await.unwrap();
     let out = p.resolve_due(&df.forecast_id).await.unwrap();
     assert!(!out.actual);
     assert!((out.brier - 0.81).abs() < 1e-9);
     // 重复 resolve 报错
-    assert!(p.resolve_due(&df.forecast_id).await.unwrap_err().contains("已 resolve"));
+    assert!(p
+        .resolve_due(&df.forecast_id)
+        .await
+        .unwrap_err()
+        .contains("已 resolve"));
     // 登记后涨价 → 对照成真
     let df2 = p.register_direction_forecast("BTC", 0, 0.5).await.unwrap(); // 基线 100
     mock.set_quote("BTC", 130.0);
@@ -92,8 +118,16 @@ async fn pipeline_edges() {
 async fn adapter_registry_hotplug() {
     let mut reg = AdapterRegistry::new();
     reg.register(Arc::new(MockAdapter::new("mock")));
-    reg.register(Arc::new(MacroRatesAdapter::with_raw(Arc::new(MockRawFetch { status: 200, body: r#"{"data":[{"attributes":{"avg_interest_rate_amt":"3.51"}}]}"#.into() }))));
-    assert_eq!(reg.list(), vec!["macro-rates".to_string(), "mock".to_string()]);
+    reg.register(Arc::new(MacroRatesAdapter::with_raw(Arc::new(
+        MockRawFetch {
+            status: 200,
+            body: r#"{"data":[{"attributes":{"avg_interest_rate_amt":"3.51"}}]}"#.into(),
+        },
+    ))));
+    assert_eq!(
+        reg.list(),
+        vec!["macro-rates".to_string(), "mock".to_string()]
+    );
     assert!(reg.get("mock").is_some());
     assert!(reg.get("不存在").is_none());
 }

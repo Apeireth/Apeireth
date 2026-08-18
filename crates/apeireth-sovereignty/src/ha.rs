@@ -522,7 +522,7 @@ impl HumanAuthority {
         let threshold = if n == 0 {
             0
         } else {
-            ((m as u32 * 100) / n as u32) as u8
+            (u32::from(m) * 100 / u32::from(n)) as u8
         };
         Ok(Self {
             authority_id: authority_id.into(),
@@ -584,7 +584,7 @@ impl HumanAuthority {
             return 0;
         }
         let valid = self.valid_approval_count(now_ms) as u32;
-        let pct = (valid * 100) / self.total_signatories as u32;
+        let pct = (valid * 100) / u32::from(self.total_signatories);
         pct.min(100) as u8
     }
 
@@ -903,7 +903,7 @@ mod round6_01_tests {
 
     #[test]
     fn process_request_single_mode_approved() {
-        let policy = MultiSigPolicy::default_2_of_3();
+        let _policy = MultiSigPolicy::default_2_of_3();
         let mut ha = HumanAuthority::single("h-1", "Alice");
         ha.total_signatories = 1; // 单人 N=1
                                   // Override signatories to allow h-1

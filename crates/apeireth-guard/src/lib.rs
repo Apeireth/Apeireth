@@ -27,8 +27,8 @@ pub use pii::{detect_pii, PiiKind, PiiMatch};
 pub use redactor::{redact_one, redact_text, RedactionStrategy};
 pub use tool_desc_audit::{
     audit_tool_description, description_changed, DefaultToolDescAuditor, DescAuditRecord,
-    DescAuditReport, DescFinding, DescFindingKind, DescVerdict, ToolDescriptionAuditor,
-    ToolDescAuditLog,
+    DescAuditReport, DescFinding, DescFindingKind, DescVerdict, ToolDescAuditLog,
+    ToolDescriptionAuditor,
 };
 pub use untrusted_mark::{
     escape_untrusted_content, wrap_untrusted, DefaultUntrustedMarker, UntrustedMarker,

@@ -122,11 +122,7 @@ impl crate::SqliteMemoryStore {
     ///
     /// 与 `EpisodeStore::put_episode(ep)` 不同: 一次性写完 4 个新加列。
     /// append-only trigger 对 INSERT 不拒绝 (仅 BEFORE UPDATE/DELETE), 所以一次 INSERT 安全。
-    pub fn put_episode_full(
-        &self,
-        ep: &Episode,
-        meta: &EpisodeMeta,
-    ) -> MemoryResult<()> {
+    pub fn put_episode_full(&self, ep: &Episode, meta: &EpisodeMeta) -> MemoryResult<()> {
         // 复用 EpisodeStore 的字段校验 (id/session_id/role 非空)
         if ep.id.trim().is_empty() {
             return Err(MemoryError::Invalid("episode id is empty".into()));
@@ -164,11 +160,7 @@ impl crate::SqliteMemoryStore {
     ///
     /// 跨 session 扫全库; 老条目 (4 列 NULL) 的 created_ms 由 timestamp*1000 兜底,
     /// valid_until NULL 视为永久, 自然落入结果集。
-    pub fn query_with_time_range(
-        &self,
-        from_ms: i64,
-        until_ms: i64,
-    ) -> MemoryResult<Vec<Episode>> {
+    pub fn query_with_time_range(&self, from_ms: i64, until_ms: i64) -> MemoryResult<Vec<Episode>> {
         let conn = self.conn()?;
         let mut stmt = conn.prepare(
             "SELECT id, continuity_id, session_id, timestamp, role, content, \
@@ -204,9 +196,8 @@ impl crate::SqliteMemoryStore {
                 },
             )
             .optional()?;
-        let (vf, vu, cm, ps) = match row {
-            Some(t) => t,
-            None => return Ok(None),
+        let Some((vf, vu, cm, ps)) = row else {
+            return Ok(None);
         };
         Ok(Some(EpisodeMeta {
             valid_from_ms: vf,
@@ -222,7 +213,7 @@ impl crate::SqliteMemoryStore {
 fn row_to_episode_v4(row: &rusqlite::Row<'_>) -> rusqlite::Result<Episode> {
     Ok(Episode {
         id: row.get(0)?,
-        timestamp: row.get(3)?,           // SELECT 顺序: id(0), continuity_id(1), session_id(2), timestamp(3), role(4), content(5), ...
+        timestamp: row.get(3)?, // SELECT 顺序: id(0), continuity_id(1), session_id(2), timestamp(3), role(4), content(5), ...
         role: row.get(4)?,
         content: row.get(5)?,
         session_id: row.get(2)?,
@@ -240,7 +231,10 @@ pub fn validate_meta(meta: &EpisodeMeta) -> Result<(), String> {
         }
     }
     if meta.created_ms < 0 {
-        return Err(format!("created_ms ({}) must be non-negative", meta.created_ms));
+        return Err(format!(
+            "created_ms ({}) must be non-negative",
+            meta.created_ms
+        ));
     }
     Ok(())
 }
@@ -277,15 +271,21 @@ mod tests {
     fn normalize_meta_fills_defaults() {
         // 老条目 (全 None, timestamp = 1000s)
         let (vf, vu, cm, pr) = normalize_meta(None, None, None, None, 1000);
-        assert_eq!(vf, Some(1_000_000));  // created_ms 兜底 timestamp*1000
-        assert_eq!(vu, None);              // 永久
+        assert_eq!(vf, Some(1_000_000)); // created_ms 兜底 timestamp*1000
+        assert_eq!(vu, None); // 永久
         assert_eq!(cm, 1_000_000);
         assert_eq!(pr, Provenance::Manual);
 
         // 部分缺失: valid_from None → created_ms 兜
-        let (vf, vu, cm, pr) = normalize_meta(None, Some(2_000_000), Some(1_500_000), Some(Provenance::Dialog), 9999);
-        assert_eq!(vf, Some(1_500_000));  // valid_from 缺失 → created_ms
-        assert_eq!(vu, Some(2_000_000));  // valid_until 保留
+        let (vf, vu, cm, pr) = normalize_meta(
+            None,
+            Some(2_000_000),
+            Some(1_500_000),
+            Some(Provenance::Dialog),
+            9999,
+        );
+        assert_eq!(vf, Some(1_500_000)); // valid_from 缺失 → created_ms
+        assert_eq!(vu, Some(2_000_000)); // valid_until 保留
         assert_eq!(cm, 1_500_000);
         assert_eq!(pr, Provenance::Dialog);
     }

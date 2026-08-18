@@ -96,11 +96,11 @@ impl ToolCallParser {
         let mut tool_calls = Vec::new();
         let mut search_offset = 0;
         while search_offset < content_without_think.len() {
-            let block_info =
-                match Self::extract_next_tool_block(&content_without_think, search_offset) {
-                    Some(b) => b,
-                    None => break,
-                };
+            let Some(block_info) =
+                Self::extract_next_tool_block(&content_without_think, search_offset)
+            else {
+                break;
+            };
             if let Some(parsed) = Self::parse_block(&block_info.content) {
                 tool_calls.push(parsed);
             }
