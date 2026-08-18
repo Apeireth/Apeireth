@@ -37,7 +37,7 @@ pub struct Experience {
     pub outcome: String,
     /// 验证次数 (verify_experience 递增).
     pub verify_count: u64,
-    /// EMA 评分 [0,1].
+    /// EMA 评分 `[0,1]`.
     pub score: f64,
     /// 是否达到提案阈值 (验证次数 + 评分).
     pub ready: bool,

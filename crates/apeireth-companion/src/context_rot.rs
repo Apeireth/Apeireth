@@ -68,13 +68,13 @@ impl Default for RotConfig {
 /// 三因子分解 (诊断/可审计) + 总分.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RotBreakdown {
-    /// 重复度 [0,1]: 1 = 全是重复.
+    /// 重复度 `[0,1]`: 1 = 全是重复.
     pub repetition: f32,
     /// 陈旧度 [0,1): age/(age+half_life).
     pub staleness: f32,
-    /// 无关度 [0,1]: 1 = query 词元全未命中; 无 query 时恒 0 且权重归一化.
+    /// 无关度 `[0,1]`: 1 = query 词元全未命中; 无 query 时恒 0 且权重归一化.
     pub irrelevance: f32,
-    /// 加权总分 [0,1], 越高越"腐烂" (优先压缩候选).
+    /// 加权总分 `[0,1]`, 越高越"腐烂" (优先压缩候选).
     pub score: f32,
 }
 
@@ -173,7 +173,7 @@ pub fn rot_breakdown(seg: &Segment, query: Option<&str>, cfg: &RotConfig) -> Rot
     }
 }
 
-/// rot_score 快捷口 (总分 [0,1], 越高越应优先压缩).
+/// rot_score 快捷口 (总分 `[0,1]`, 越高越应优先压缩).
 pub fn rot_score(seg: &Segment, query: Option<&str>, cfg: &RotConfig) -> f32 {
     rot_breakdown(seg, query, cfg).score
 }

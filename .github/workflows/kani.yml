@@ -53,8 +53,10 @@ jobs:
       # ponytail: 这是验收命令. workspace 其它 crate 不参与 Kani 编译,
       # 只在承载 crate 单跑 (double_onion_sample harness 在 apeireth-library-governance).
       # CI fix 2026-08: 原 -p apeireth-formal 无此 crate (Failed to retrieve information).
+      # kani 自带 nightly (1.93) 落后 workspace MSRV 1.97 → --cargo-arg=--ignore-rust-version 绕过
+      # (kani 验证的是逻辑不变量, rustc 小版本差异不影响 harness 语义)
       - name: Run Kani proof for double_onion_sample
-        run: cargo kani -p apeireth-library-governance --harness double_onion_sample --verbose
+        run: cargo kani -p apeireth-library-governance --harness double_onion_sample --verbose --cargo-arg=--ignore-rust-version
 
       # ponytail: 同时跑 runtime sanity test 作为兜底 (即使 cargo-kani 离线,
       # cargo test 仍能验证不变量在具体输入上不爆).
