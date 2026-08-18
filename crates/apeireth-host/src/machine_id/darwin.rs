@@ -65,9 +65,15 @@ async fn probe_ioreg() -> MachineIdResultStd<(String, String)> {
 }
 
 /// 从 `key = "value"` 形式提取引号内 value (1:1 翻译 v0.9.21 正则).
+///
+/// CI fix 2026-08: 原实现取第一个引号对 → 拿到的是 key ("IOPlatformUUID")
+/// 而非 value (ioreg 行: `"IOPlatformUUID" = "UUID..."`), macOS CI 必挂.
+/// 正确: 找 `= "` 之后的引号对 (key 的引号在 `=` 之前).
 fn extract_quoted_value(line: &str) -> Option<&str> {
-    let start = line.find('"')?;
-    let rest = &line[start + 1..];
+    let eq = line.find('=')?;
+    let rest = &line[eq + 1..];
+    let start = rest.find('"')?;
+    let rest = &rest[start + 1..];
     let end = rest.find('"')?;
     Some(&rest[..end])
 }
