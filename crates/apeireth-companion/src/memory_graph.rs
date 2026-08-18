@@ -70,7 +70,7 @@ pub trait GraphBackend: Send + Sync {
     /// N2 OneRing: continuity 锚点 (消灭 "me" 硬编码). `Box<dyn GraphBackend>` 上层
     /// (`link_on_write`, `crawl`) 不再硬编码 "me", 改走后端自报 continuity_id.
     /// 返 `String` 而非 `&str`: trait object (`Box<dyn GraphBackend>`) 无法
-    /// 暴露与 `&self` 同生死的借用, 内存假后端用 Mutex<String> 持有, 复制即出.
+    /// 暴露与 `&self` 同生死的借用, 内存假后端用 `Mutex<String>` 持有, 复制即出.
     fn continuity_id(&self) -> String;
 }
 

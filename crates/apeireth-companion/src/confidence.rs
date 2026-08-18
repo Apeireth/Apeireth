@@ -4,7 +4,7 @@
 //! 纯 Rust 计算, 不依赖 LLM 自报.
 //!
 //! 模型: 成功数 k / 观察数 n, 先验 (α₀, β₀) = (1, 1) (均匀),
-//! 后验均值 E[θ]=(α₀+k)/(α₀+β₀+n), 区间用 Wilson 近似, strength 按观测数分档.
+//! 后验均值 `E[θ]=(α₀+k)/(α₀+β₀+n)`, 区间用 Wilson 近似, strength 按观测数分档.
 
 /// Beta-Binomial 置信度估计.
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]

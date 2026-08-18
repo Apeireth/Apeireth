@@ -21,7 +21,7 @@
 //! - O-2 走在前人经验上: 借 ratatui + tokio mpsc 模式
 //! - O-3 干到底: 6 命令覆盖 LLM 全场景
 //! - O-4 任何人都能接手: State 字段 + Command 变体全文档化
-//! - O-5 不假装: thinking chain 是 Vec<String> 占位, 标 stub
+//! - O-5 不假装: thinking chain 是 `Vec<String>` 占位, 标 stub
 //!
 //! **8 项承诺**: 全部遵守
 
