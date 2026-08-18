@@ -107,6 +107,11 @@ jobs:
         with:
           cache-bin: ${{ matrix.target != 'docker' }}
 
+      # keyring -> dbus-secret-service -> libdbus-sys needs system libs (cargo build --locked links them)
+      - name: "Install system deps (Linux: libdbus)"
+        if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: cargo build --release --workspace --locked
         run: cargo build --release --workspace --locked
 
