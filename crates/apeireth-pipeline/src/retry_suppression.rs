@@ -196,14 +196,16 @@ mod tests {
 
     #[test]
     fn should_suppress_exact_window_boundary() {
-        // 200ms 窗口 (避免 50ms 边界时序脆弱)
-        let s = RetrySuppression::new(Duration::from_millis(200));
+        // CI fix 2026-08: 原 200ms 窗口 + 150ms sleep 在 macOS nextest 高并发下
+        // 调度延迟可把 150ms 拖到 ≥200ms → 边界断言 flaky. 加大余量:
+        // 500ms 窗口, sleep 300ms (余量 200ms), 再 sleep 300ms (总 600ms > 500ms).
+        let s = RetrySuppression::new(Duration::from_millis(500));
         assert!(!s.should_suppress("k"));
-        std::thread::sleep(Duration::from_millis(150));
-        // 150ms < 200ms → 还抑制
+        std::thread::sleep(Duration::from_millis(300));
+        // 300ms < 500ms → 还抑制
         assert!(s.should_suppress("k"));
-        std::thread::sleep(Duration::from_millis(80));
-        // 总 230ms > 200ms → 过期
+        std::thread::sleep(Duration::from_millis(300));
+        // 总 600ms > 500ms → 过期
         assert!(!s.should_suppress("k"));
     }
 
