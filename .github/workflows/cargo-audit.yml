@@ -58,11 +58,23 @@ jobs:
 
       - name: Run cargo audit (json + exit code)
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI
-        run: cargo audit --json --deny warnings > audit-report.json || echo "audit non-zero exit captured in report"
+        # CI fix 2026-08: cargo-audit 0.22 默认不读项目 audit.toml (仅 ~/.cargo/audit.toml),
+        # 用 --ignore 显式同步 deny.toml 的 unmaintained 清单 (真实漏洞 0 ignore)
+        run: cargo audit --json --deny warnings \
+          --ignore RUSTSEC-2024-0411 --ignore RUSTSEC-2024-0412 --ignore RUSTSEC-2024-0413 \
+          --ignore RUSTSEC-2024-0414 --ignore RUSTSEC-2024-0415 --ignore RUSTSEC-2024-0416 \
+          --ignore RUSTSEC-2024-0417 --ignore RUSTSEC-2024-0418 --ignore RUSTSEC-2024-0419 \
+          --ignore RUSTSEC-2024-0420 --ignore RUSTSEC-2024-0436 --ignore RUSTSEC-2024-0370 \
+          --ignore RUSTSEC-2026-0173 --ignore RUSTSEC-2025-0075 --ignore RUSTSEC-2025-0080 \
+          --ignore RUSTSEC-2025-0081 --ignore RUSTSEC-2025-0098 --ignore RUSTSEC-2025-0100 \
+          --ignore RUSTSEC-2026-0174 --ignore RUSTSEC-2025-0141 \
+          > audit-report.json || echo "audit non-zero exit captured in report"
 
       - name: Convert JSON report to SARIF (R66)
         # 借鉴 GitHub `github/codeql-action` SARIF schema + qdrant-spark audit SARIF 转换模式.
         # 0 引新 dep; 走 python3 (GitHub Actions ubuntu-latest 默认带).
+        # CI fix 2026-08: cargo-audit 0.22 的 vulnerabilities.found 在 0 漏洞时是 false (非 []),
+        # 脚本要 or [] 兜底 (之前 TypeError: 'bool' object is not iterable)
         run: |
           python3 - <<'PYEOF'
           import json, sys, datetime, hashlib
@@ -70,7 +82,8 @@ jobs:
               report = json.load(f)
           findings = []
           vuln_index = {}
-          for v in report.get("vulnerabilities", {}).get("found", []):
+          vulns = report.get("vulnerabilities") or {}
+          for v in (vulns.get("found") or []):
               advisory = v.get("advisory", {})
               aid = advisory.get("id", "UNKNOWN")
               pkg = v.get("package", {})

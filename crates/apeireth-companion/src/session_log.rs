@@ -200,7 +200,7 @@ impl SessionLog {
 
     /// 校验哈希链: 每条事件的 prev_hash 必须等于前一条的 hash (按各自 hash_era 重算),
     /// anchor 检查点的 chain_hash 必须与被锚事件的哈希一致.
-    /// 返回 (ok, 损坏位置 Option<seq>).
+    /// 返回 (ok, 损坏位置 `Option<seq>`).
     pub fn verify_chain(&self) -> (bool, Option<u64>) {
         let Ok(evs) = self.replay() else {
             return (false, None);

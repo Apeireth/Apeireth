@@ -36,6 +36,10 @@ jobs:
         with:
           components: miri, rust-src
 
+      # miri 编译 crate 依赖链 (keyring → dbus-secret-service → libdbus-sys) 需要系统库
+      - name: Install system deps (Linux: libdbus)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: Swatinem/rust-cache@v2
 
       - name: Run miri
