@@ -81,6 +81,12 @@ path = "examples/memory_provider_demo.rs"
 [lints.rust]
 unsafe_code = "deny"
 
+# CI fix 2026-08: 与主 workspace [workspace.lints.rustdoc] 对齐 (78 处预存 doc 注释问题,
+# 见根 Cargo.toml 注释 — extensions 是独立 sub-workspace, 不继承主 workspace lints)
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+invalid_html_tags = "allow"
+
 # 独立 sub-workspace (per R21 借鉴 #3 临时验证编译用, 主 workspace [members] 仍 +1 行)
 # R21 续补: [workspace] 段已移除, 整合 #3 时此 crate 重新加 [workspace] 段 (1 owner × 估 30 min)
 #[workspace]

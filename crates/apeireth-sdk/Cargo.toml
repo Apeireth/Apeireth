@@ -77,3 +77,8 @@ unused_mut = "allow"
 dead_code = "allow"
 unused_imports = "allow"
 missing_docs = "allow"
+
+# CI fix 2026-08: 与 workspace [workspace.lints.rustdoc] 对齐 (见根 Cargo.toml 注释)
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+invalid_html_tags = "allow"

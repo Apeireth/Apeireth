@@ -9,7 +9,7 @@
 //! - `status()` 诚实返回"未接"原因
 //! - `render_params()` 返回一份启动参数模板 (供"真接"时使用)
 //!
-//! **何时升级**: 真接点见 [`crate::restricted_token::win_imp`] (CreateRestrictedToken
+//! **何时升级**: 真接点见 `crate::restricted_token::win_imp` (CreateRestrictedToken
 //! 已支持 AppContainer), 需要补: (1) Profile 注册 (2) Capability 清单 (3) SID 转换.
 //! 属后续高危档任务, 与 team-work-doc §3 后续 N 行一致.
 

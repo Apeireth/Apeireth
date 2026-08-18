@@ -15,7 +15,7 @@
 //! - `event_id` (UUID, R21 真接飞书后才有)
 //! - `calendar_id` (per `calendar_id` 字段)
 //! - `summary` (per `summary` 字段, 非空)
-//! - `start_time` / `end_time` (per `start_time` / `end_time` 字段, chrono::DateTime<Utc>)
+//! - `start_time` / `end_time` (per `start_time` / `end_time` 字段, `chrono::DateTime<Utc>`)
 
 use std::time::SystemTime;
 

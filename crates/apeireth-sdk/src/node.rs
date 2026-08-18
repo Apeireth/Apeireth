@@ -3,7 +3,7 @@
 //! **状态**: skeleton, 2 fn (`count_tokens` + `hash_request`), 0 假装 100% 多语言支持 (O-5).
 //!
 //! **O-5 实质守门**: 仅 `--features node` 启用时编译, 默认 build 0 装 napi-rs.
-//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml [features]).
+//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml `[features]`).
 //! **R122-1 协作**: R122-1 hash_request retry 跑中, R122-8 inline 简版 SHA-256 hex
 //!   (1:1 R122-1 设计, 0 跨 crate dep, R122-1 retry 完成后 R123 切换).
 //!
@@ -25,7 +25,7 @@
 // (per abi.rs 已有模式: extern "C" 桥接局部 #![allow(unsafe_code)])
 #![allow(unsafe_code)]
 
-use napi_derive::napi;
+use napi_derive::napi as napi_attr; // rustdoc: napi crate 名与宏同名冲突, 重命名宏
 
 use sha2::{Digest, Sha256};
 
@@ -95,7 +95,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 
 /// **napi-rs fn #1**: 暴露给 Node.js `countTokens(text, model) => number`.
 /// 1:1 跟 python.rs `py_count_tokens` 算法, 跨语言一致性优先.
-#[napi]
+#[napi_attr]
 pub fn count_tokens(text: String, model: String) -> u32 {
     // model 参数 0 使用 (签名占位, 跨语言 1:1 一致性)
     let _ = model;
@@ -105,10 +105,10 @@ pub fn count_tokens(text: String, model: String) -> u32 {
 /// **napi-rs fn #2**: 暴露给 Node.js `hashRequest(method, url, body) => string`.
 /// 1:1 R122-1 `hash_request`, SHA-256 hex (64 字符).
 ///
-/// **napi 2.16 API**: 用 `napi::bindgen_prelude::Buffer` (#[napi] 标准 buffer 类型,
+/// **napi 2.16 API**: 用 `napi::bindgen_prelude::Buffer` (#[napi_attr] 标准 buffer 类型,
 /// 实现 `From<Vec<u8>>` + `AsRef<[u8]>`, Node 端对应 `Buffer` 类型).
 /// 1:1 task spec 接受 `napi::Buffer` 命名, 实际 2.16 路径是 `napi::bindgen_prelude::Buffer`.
-#[napi]
+#[napi_attr]
 pub fn hash_request(method: String, url: String, body: napi::bindgen_prelude::Buffer) -> String {
     // napi 2.16 Buffer 0 重复造轮子 (per O-2), 直接 as_ref() 取 &[u8]
     hash_request_impl(&method, &url, body.as_ref())

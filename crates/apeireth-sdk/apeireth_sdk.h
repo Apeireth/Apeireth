@@ -523,7 +523,7 @@ const char *apeireth_sdk_version(void);
 /**
  * **C-ABI fn #4**: `apeireth_sdk_compile_info() -> *const c_char`.
  *
- * 返 "rustc X.Y.Z target triple, apeireth-sdk features: [python,node,c,default]" 字面量.
+ * 返 "rustc X.Y.Z target triple, apeireth-sdk features: `[python,node,c,default]`" 字面量.
  * 0 假装实际 rustc version (编译期 hardcode "unknown" + "cfg(apeireth_sdk)" marker).
  */
 const char *apeireth_sdk_compile_info(void);
