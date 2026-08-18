@@ -120,6 +120,19 @@ skip = [
     { name = "strum", reason = "proc macro 决定" },
     { name = "strum_macros", reason = "跟随 strum" },
     { name = "unicode-truncate", reason = "ratatui 决定" },
+    # ---- CI fix 2026-08 (依赖升级后新增多版本, 有理由 skip) ----
+    # crypto 链 (aes/chacha20/cipher/inout): 升级 lopdf 0.44 + keyring 链时 cargo update
+    # 把 crypto 升到新 minor — 0.8/0.9 与 0.4/0.5 API 不兼容, 各自依赖树决定
+    { name = "aes", reason = "0.8 (crypto 旧链) vs 0.9 (新链) — RustCrypto 依赖树决定" },
+    { name = "chacha20", reason = "0.9 vs 0.10 — RustCrypto 依赖树决定" },
+    { name = "cipher", reason = "0.4 vs 0.5 — RustCrypto 依赖树决定" },
+    { name = "inout", reason = "0.1 vs 0.2 — RustCrypto 依赖树决定" },
+    # tract 0.23 升级引入 nom 8 / prost 0.14 (tract-onnx 用); 旧链 (nom 1.x / prost 0.13) 是
+    # 其它依赖 (lopdf 用 nom 7→8? 实为 tract 链) 决定
+    { name = "nom", reason = "1.x vs 8.0 — tract 0.23 引入 nom 8, 旧链保留 1.x" },
+    { name = "prost", reason = "0.13 (tonic 旧) vs 0.14 (tract-onnx 0.23) — 各自依赖决定" },
+    { name = "prost-derive", reason = "跟随 prost 版本" },
+    { name = "weezl", reason = "0.1 (旧) vs 0.2 (lopdf 0.44) — lopdf 决定" },
 ]
 
 # ----------------------------------------------------------------------------
