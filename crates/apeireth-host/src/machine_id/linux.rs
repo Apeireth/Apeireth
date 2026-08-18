@@ -23,6 +23,9 @@ use super::{MachineIdError, MachineIdResultStd, LINUX_DBUS_PATH, LINUX_DMI_PATH,
 
 /// Linux 平台 probe 入口 (per lib.rs `get_machine_id` cfg 路由).
 /// 3 fallback chain, 命中任一返 (raw, source) 二元组, 3 个全失败返 typed error.
+/// unused_assignments: fallback chain 语义 = 只保留最后错误 (前值被覆盖是预期,
+/// RUSTFLAGS=-D warnings 下需显式 allow)
+#[allow(unused_assignments)]
 pub async fn probe_linux() -> MachineIdResultStd<(String, String)> {
     let mut last_err: Option<String> = None;
 
