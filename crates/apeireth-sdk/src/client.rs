@@ -528,7 +528,7 @@ impl AuthPipeline {
 /// - 真 HTTP/WS 调 `apeireth-api` 走 `unimplemented!()` (R21 真接)
 #[derive(Debug, Clone)]
 pub struct ApeirethClient {
-    /// base URL (e.g. "https://api.apeireth.io").
+    /// base URL (e.g. `https://api.apeireth.io`).
     pub base_url: String,
     /// Auth 5 组件.
     pub auth: AuthPipeline,

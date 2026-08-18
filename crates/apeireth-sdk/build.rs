@@ -21,7 +21,8 @@ fn main() {
     // cbindgen 0.29 解析全模块树会撞子模块语法 (ParseSyntaxError) → 用 parse.include
     // 只解析 c.rs (C-ABI 5 fn 所在), 0 触碰其余模块.
     let mut config = cbindgen::Config::default();
-    config.parse.include = Some(vec!["c.rs".to_string()]);
+    // include 相对 crate root 的 glob (src/c.rs 而非 c.rs — 0.29 按文件路径匹配)
+    config.parse.include = Some(vec!["src/c.rs".to_string()]);
 
     let header_comment = "// apeireth-sdk C-ABI header (R122-8 auto-generated, 0 改 24 LOCKED)\n\
                          // O-5 实质: 0 假装 100% multi-lang, 仅 5 fn demo 桥接.\n\

@@ -3,7 +3,7 @@
 //! **状态**: skeleton, 仅 demo 1 fn `py_count_tokens`, 0 假装 100% 多语言支持 (O-5).
 //!
 //! **O-5 实质守门**: 仅 `--features python` 启用时编译, 默认 build 0 装 pyo3.
-//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml [features]).
+//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml `[features]`).
 //! **R122-3 协作**: R122-3 tiktoken_counter retry 跑中, R122-8 inline 简版 count_tokens
 //!   (R32-1 `apeireth-asi::tokenizer::count_tokens` 1:1 port, 0 dep 24 LOCKED apeireth-asi).
 //!   R122-3 retry 完成后 R123 切换到正式 fn.

@@ -92,6 +92,12 @@ missing_docs_in_private_items = "allow"
 needless_raw_string_hashes = "allow"
 unused_async = "allow"
 
+# CI fix 2026-08: 与 workspace [workspace.lints.rustdoc] 对齐 (78 处预存 doc 注释问题,
+# 见根 Cargo.toml 注释 — 本 crate 用显式 lints 段, 不继承 workspace lints)
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+invalid_html_tags = "allow"
+
 [[example]]
 name = "integration_e2e_demo"
 path = "examples/integration_e2e_demo.rs"
