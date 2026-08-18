@@ -180,5 +180,5 @@ jobs:
             <!-- BENCHMARK_TABLE -->
 
             > 守门: >10% 报 warning, >25% 报 error (本 job 仅报告, 不阻塞)
-          env:
-            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
