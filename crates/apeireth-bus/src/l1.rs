@@ -172,7 +172,7 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
             let clients = self.clients.read().await;
             for c in clients.iter() {
                 let mut w = c.lock().await;
-                if write_frame(&mut w, &frame).await.is_err() {
+                if write_frame(&mut *w, &frame).await.is_err() {
                     dead.push(Arc::clone(c));
                 }
             }
@@ -259,7 +259,7 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
     pub async fn publish(&self, topic: &str, msg: BusMessage<T>) -> BusResult<()> {
         let frame = L1Frame::new(topic, msg);
         let mut w = self.writer.lock().await;
-        write_frame(&mut w, &frame).await?;
+        write_frame(&mut *w, &frame).await?;
         self.stats.sent.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
