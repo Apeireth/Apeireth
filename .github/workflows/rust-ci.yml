@@ -68,8 +68,10 @@ jobs:
         run: cargo nextest run --workspace --profile ci --locked
 
       # === TUI 单独跑 (--test-threads=1 避免 stdout 冲突, 抄 R17 原版) ===
-      - name: cargo test -p apeireth-tui --test-threads=1
-        run: cargo test -p apeireth-tui --test-threads=1 -- --nocapture
+      # CI fix 2026-08: --test-threads 是 libtest 参数, 必须放 `--` 之后
+      # (cargo test 不认 → "unexpected argument '--test-threads' found")
+      - name: cargo test -p apeireth-tui (--test-threads=1)
+        run: cargo test -p apeireth-tui -- --test-threads=1 --nocapture
         env:
           CI: "true"
 
