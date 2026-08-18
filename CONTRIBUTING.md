@@ -1,6 +1,6 @@
 # 贡献指南 (Apeireth 1.0)
 
-> Apeireth 是主人的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（6 锚 / 双洋葱 / 0 装 PASS）。
+> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（6 锚 / 双洋葱 / 0 装 PASS）。
 
 ## 必读
 
@@ -8,7 +8,7 @@
 - [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（85 crates 分组）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引
-- [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与主人拍板历史
+- [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与我们拍板历史
 - [docs/04-internal/backlog.md](docs/04-internal/backlog.md) — 台账（完成项 ✅ / 待办 ⬜）
 
 ## 提交前必跑
@@ -36,7 +36,7 @@ cargo fmt --all --check                 # 格式
 
 - 主分支 `master`（发布线）↔ `team/e8de47ae-.../integration`（集成线）
 - 开发在独立分支 → 全量验证 → 合入 integration → 发布时同步 master
-- 禁止直接 force-push 共享分支（历史净化等特殊操作除外，需主人确认）
+- 禁止直接 force-push 共享分支（历史净化等特殊操作除外，需我们确认）
 
 ## License
 
