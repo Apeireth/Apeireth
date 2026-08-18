@@ -26,8 +26,8 @@ jobs:
           # 双洋葱 + L0 HA 核心
           - crate: "apeireth-sovereignty"
           - crate: "apeireth-core"
-          # memory 涉及 SQLite FFI
-          - crate: "apeireth-memory"
+          # apeireth-memory 已移除 (CI fix 2026-08): SQLite FFI (sqlite3_threadsafe 等)
+          # 在 miri 下不可执行 (unsupported operation: can't call foreign function)
     steps:
       - uses: actions/checkout@v4
 

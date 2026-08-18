@@ -40,6 +40,11 @@ jobs:
       # wasmtime 用 `cargo deny check bans licenses` (只跑这 2 项)
       # 我们跑全部 4 项, 因为 deny.toml 配置齐全 (advisories 用 RustSec db 自动)
       # https://embarkstudios.github.io/cargo-deny/checks/advisories/cfg.html
+      # CI fix 2026-08: cargo-deny-action 的 docker 容器 (musl) 会读 rust-toolchain.toml
+      # 但未预装该 toolchain → 删掉 (deny 只扫 lock, 不需要指定 toolchain)
+      - name: Remove rust-toolchain.toml for deny container
+        run: rm -f rust-toolchain.toml
+
       - name: Run cargo deny check (全部 4 类)
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
