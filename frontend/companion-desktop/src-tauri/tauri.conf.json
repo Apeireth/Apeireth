@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Apeireth Companion",
+  "version": "0.1.0",
+  "identifier": "app.apeireth.companion",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Apeireth 伙伴",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 980,
+        "minHeight": 640,
+        "resizable": true,
+        "center": true
+      },
+      {
+        "label": "quick",
+        "title": "Apeireth 快捷",
+        "url": "index.html?window=quick",
+        "width": 440,
+        "height": 390,
+        "minWidth": 380,
+        "minHeight": 260,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "shortDescription": "Apeireth 桌面伙伴",
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/icon.ico",
+      "icons/icon.icns"
+    ],
+    "windows": {
+      "wix": {
+        "language": "zh-CN"
+      }
+    }
+  }
+}
