@@ -212,7 +212,7 @@ mod tests {
         let m = SandboxMode::Standard;
         let m2 = m; // Copy
         assert_eq!(m, m2);
-        let m3 = m.clone();
+        let m3 = m;
         assert_eq!(m, m3);
     }
 

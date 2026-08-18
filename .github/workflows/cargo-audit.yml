@@ -53,8 +53,8 @@ jobs:
             ${{ runner.os }}-cargo-audit-
 
       - name: Install cargo-audit
-        # 版本锁到 1.1.x (跟 RustSec db format 兼容)
-        run: cargo install --locked cargo-audit --version "^1.1"
+        # 2026-08 CI fix: crates.io 无 cargo-audit ^1.1 (最新 0.20.x), 改用 install-action 装最新
+        uses: taiki-e/install-action@cargo-audit
 
       - name: Run cargo audit (json + exit code)
         # 0 vulnerabilities 期望; 有 vuln 时 fails CI

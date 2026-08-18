@@ -49,7 +49,10 @@ pub struct CausalNode {
 
 impl CausalNode {
     pub fn from_fact(f: GraphFact) -> Self {
-        Self { id: f.chain.clone(), fact: f }
+        Self {
+            id: f.chain.clone(),
+            fact: f,
+        }
     }
 }
 
@@ -110,7 +113,10 @@ impl CausalGraph {
 
     pub fn add_edge(&mut self, edge: CausalEdge) {
         let idx = self.edges.len();
-        self.outgoing.entry(edge.from.clone()).or_default().push(idx);
+        self.outgoing
+            .entry(edge.from.clone())
+            .or_default()
+            .push(idx);
         self.incoming.entry(edge.to.clone()).or_default().push(idx);
         self.edges.push(edge);
     }
@@ -240,7 +246,7 @@ impl MineCausalEdges {
         for ((from, to), count) in counts {
             if count >= self.min_evidence {
                 let total = source_matched.get(&from).copied().unwrap_or(1).max(1);
-                let weight = (count as f64 / total as f64).min(1.0);
+                let weight = (f64::from(count) / f64::from(total)).min(1.0);
                 // 谓词: from 的 predicate → to 的 predicate (人类可读).
                 let from_pred = from.split('|').nth(1).unwrap_or("").to_string();
                 let to_pred = to.split('|').nth(1).unwrap_or("").to_string();
@@ -292,10 +298,14 @@ pub struct EdgeProposalResponse {
 #[async_trait]
 pub trait CausalLlm: Send + Sync {
     /// 分支点判断: 给定当前状态 + 候选边, LLM 给 (a) 边的可行性 (b) 走到此边的叙事片段.
-    async fn judge_branch(&self, ctx: &CausalBranchContext) -> Result<CausalBranchJudgment, String>;
+    async fn judge_branch(&self, ctx: &CausalBranchContext)
+        -> Result<CausalBranchJudgment, String>;
 
     /// 提议因果边 (W3 补充路径).
-    async fn propose_edges(&self, req: &EdgeProposalRequest) -> Result<EdgeProposalResponse, String>;
+    async fn propose_edges(
+        &self,
+        req: &EdgeProposalRequest,
+    ) -> Result<EdgeProposalResponse, String>;
 }
 
 /// 分支点上下文: 当前状态 + 候选边 (LLM 选择/评估时用).
@@ -486,7 +496,8 @@ impl CausalSimulator {
         visited.insert(current_node.clone());
 
         for tick in 0..self.max_steps {
-            let candidates: Vec<CausalEdge> = self.graph.outgoing_edges(&current_node).cloned().collect();
+            let candidates: Vec<CausalEdge> =
+                self.graph.outgoing_edges(&current_node).cloned().collect();
             if candidates.is_empty() {
                 // 无出边 → 自然终止.
                 break;
@@ -513,9 +524,8 @@ impl CausalSimulator {
                         .unwrap_or(std::cmp::Ordering::Equal)
                 });
 
-            let (judgment, edge) = match chosen {
-                Some((j, e)) => (j, e),
-                None => break, // LLM 拒绝所有候选 → 链终止.
+            let Some((judgment, edge)) = chosen else {
+                break; // LLM 拒绝所有候选 → 链终止.
             };
 
             let next_node = edge.to.clone();
@@ -558,7 +568,9 @@ impl CausalSimulator {
                 chain.rejected = true;
                 chain.reject_reason = Some(format!(
                     "oracle 历史 Brier {:.3} > 阈值 {:.3} ({n} 次对账)",
-                    status.mean_brier, self.reject_threshold, n = status.resolved_count,
+                    status.mean_brier,
+                    self.reject_threshold,
+                    n = status.resolved_count,
                 ));
             }
         }
@@ -733,7 +745,10 @@ impl Default for MockCausalLlm {
 
 #[async_trait]
 impl CausalLlm for MockCausalLlm {
-    async fn judge_branch(&self, ctx: &CausalBranchContext) -> Result<CausalBranchJudgment, String> {
+    async fn judge_branch(
+        &self,
+        ctx: &CausalBranchContext,
+    ) -> Result<CausalBranchJudgment, String> {
         let judgments = ctx
             .candidates
             .iter()
@@ -748,10 +763,16 @@ impl CausalLlm for MockCausalLlm {
         Ok(CausalBranchJudgment { judgments })
     }
 
-    async fn propose_edges(&self, req: &EdgeProposalRequest) -> Result<EdgeProposalResponse, String> {
+    async fn propose_edges(
+        &self,
+        req: &EdgeProposalRequest,
+    ) -> Result<EdgeProposalResponse, String> {
         // 派生 N 条 (从 facts 中按相邻对取).
         let mut proposals = Vec::new();
-        let n = req.max_proposals.min(req.facts.len().saturating_sub(1)).min(self.max_proposals);
+        let n = req
+            .max_proposals
+            .min(req.facts.len().saturating_sub(1))
+            .min(self.max_proposals);
         for i in 0..n {
             let from = &req.facts[i];
             let to = &req.facts[i + 1];
@@ -843,7 +864,10 @@ mod tests {
 
         // mock take_first=true: 沿第一条出边走, 走完 max_steps=8 或无候选为止.
         assert!(chain.step_count() >= 1, "应至少走 1 步");
-        assert!(chain.step_count() <= 2, "3 节点链, 最多 2 步 (根不计入 steps)");
+        assert!(
+            chain.step_count() <= 2,
+            "3 节点链, 最多 2 步 (根不计入 steps)"
+        );
         assert_eq!(chain.steps[0].from_node, "主人|行为|熬夜");
         assert_eq!(chain.steps[0].to_node, "熬夜|导致|效率低");
         assert!(chain.terminal_node.is_some(), "应到达终点节点");
@@ -905,7 +929,11 @@ mod tests {
         assert_eq!(edge.from, "主人|行为|熬夜");
         assert_eq!(edge.to, "熬夜|导致|效率低");
         assert_eq!(edge.evidence_count, 7, "共现 7 次即边 (主人拍板阈值)");
-        assert_eq!(edge.source, EdgeSource::Statistical, "W3 主路径 = Statistical");
+        assert_eq!(
+            edge.source,
+            EdgeSource::Statistical,
+            "W3 主路径 = Statistical"
+        );
         assert!(edge.weight > 0.0 && edge.weight <= 1.0);
         // 谓词拼接: "行为→导致"
         assert!(edge.predicate.contains("行为") && edge.predicate.contains("导致"));
@@ -931,16 +959,29 @@ mod tests {
     #[tokio::test]
     async fn propose_causal_edges_llm_suggest() {
         let facts = build_chain_facts();
-        let llm = Arc::new(MockCausalLlm { take_first: true, max_proposals: 2 });
+        let llm = Arc::new(MockCausalLlm {
+            take_first: true,
+            max_proposals: 2,
+        });
         let proposer = ProposeCausalEdges::new(llm);
-        let req = EdgeProposalRequest { facts: facts.clone(), max_proposals: 2 };
+        let req = EdgeProposalRequest {
+            facts: facts.clone(),
+            max_proposals: 2,
+        };
         let proposals = proposer.llm_suggest(&req).await.unwrap();
 
         // facts 是 3 条; LLM mock 看 (i, i+1) 对: (0,1): object=熬夜 == subject=熬夜 ✓ → 提议 1 条.
         assert!(!proposals.is_empty(), "至少提议 1 条");
-        assert!(proposals.len() <= req.max_proposals, "不超过 max_proposals 上限");
+        assert!(
+            proposals.len() <= req.max_proposals,
+            "不超过 max_proposals 上限"
+        );
         for e in &proposals {
-            assert_eq!(e.source, EdgeSource::LlmProposed, "LLM 提议边标 LlmProposed");
+            assert_eq!(
+                e.source,
+                EdgeSource::LlmProposed,
+                "LLM 提议边标 LlmProposed"
+            );
             assert!(e.weight > 0.0 && e.weight <= 1.0);
         }
         // 第一条提议应是 主人|行为|熬夜 → 熬夜|导致|效率低 (mock 派生规则).
@@ -974,10 +1015,7 @@ mod tests {
         let graph2 = build_chain_graph();
         let llm2 = Arc::new(MockCausalLlm::default());
         let sim2 = CausalSimulator::new(graph2, llm2).with_threshold(0.3);
-        let mut chain2 = sim2
-            .run("主人|行为|熬夜", "test2")
-            .await
-            .unwrap();
+        let mut chain2 = sim2.run("主人|行为|熬夜", "test2").await.unwrap();
         sim2.reconcile_with_fact(&mut chain2, false).unwrap();
         let brier_false = chain2.calibration_brier.unwrap();
         assert!(
@@ -997,19 +1035,22 @@ mod tests {
         use apeireth_memory::SqliteMemoryStore;
 
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
-        let before = store.recent_episodes("causal-session", 100).map(|v| v.len()).unwrap_or(0);
+        let before = store
+            .recent_episodes("causal-session", 100)
+            .map(|v| v.len())
+            .unwrap_or(0);
         assert_eq!(before, 0, "全新 in-memory store 应为空");
 
         let graph = build_chain_graph();
         let llm = Arc::new(MockCausalLlm::default());
         let sim = CausalSimulator::new(graph, llm);
-        let mut chain = sim
-            .run("主人|行为|熬夜", "test")
-            .await
-            .unwrap();
+        let mut chain = sim.run("主人|行为|熬夜", "test").await.unwrap();
         sim.reconcile_with_fact(&mut chain, true).unwrap();
 
-        let after = store.recent_episodes("causal-session", 100).map(|v| v.len()).unwrap_or(0);
+        let after = store
+            .recent_episodes("causal-session", 100)
+            .map(|v| v.len())
+            .unwrap_or(0);
         assert_eq!(
             before, after,
             "因果推演 + 对账 后内存库不应有任何写入 (0 装 PASS 边界): before={before}, after={after}"

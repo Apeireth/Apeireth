@@ -78,7 +78,7 @@ impl LlmRequest {
 
     /// \u6e29\u5ea6\u8fd4\u56de f64 (temperature_x100 / 100)
     pub fn temperature(&self) -> f64 {
-        self.temperature_x100 as f64 / 100.0
+        f64::from(self.temperature_x100) / 100.0
     }
 }
 

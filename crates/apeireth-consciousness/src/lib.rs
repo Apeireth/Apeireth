@@ -113,7 +113,7 @@ impl CognitiveDreamState {
 /// - **SelfDisabling → Recovering** (唯一出口 — 锁)
 /// - Recovering → Awake (回到常态) / → SelfDisabling (再次停机)
 pub fn legal_targets(from: CognitiveDreamState) -> &'static [CognitiveDreamState] {
-    use CognitiveDreamState::*;
+    use CognitiveDreamState::{Awake, Dreaming, Meditating, Recovering, Reflecting, SelfDisabling};
     match from {
         Awake => &[Reflecting, SelfDisabling],
         Reflecting => &[Awake, Dreaming, Meditating, SelfDisabling],

@@ -91,7 +91,10 @@ impl Browser for FetchBrowser {
             .map_err(|e| BrowserError::Http(e.to_string()))?;
 
         let status = response.status().as_u16();
-        let body = response.text().await.map_err(|e| BrowserError::Http(e.to_string()))?;
+        let body = response
+            .text()
+            .await
+            .map_err(|e| BrowserError::Http(e.to_string()))?;
 
         // Truncate if needed
         let html = if body.len() > self.config.max_response_bytes {

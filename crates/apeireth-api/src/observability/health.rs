@@ -183,5 +183,6 @@ mod tests {
             }
         }
         assert!(failed > 0);
+        let _ = degraded;
     }
 }

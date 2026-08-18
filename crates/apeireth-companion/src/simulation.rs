@@ -162,9 +162,7 @@ pub fn run_simulation_with_user(
                 c.observe_interaction(now);
             }
             // 事实流: 把「你现在在做什么」作为上下文交给机制 (真实 daemon 里来自记忆检索)
-            let hint = user
-                .activity_label(minute)
-                .map(|l| format!("你在{}", l));
+            let hint = user.activity_label(minute).map(|l| format!("你在{}", l));
             if let Some(init) = c.tick(now, hint) {
                 initiatives += 1;
                 let label = user.activity_label(minute).unwrap_or("(时段外)");
@@ -220,7 +218,7 @@ pub fn run_simulation_with_user(
         initiatives,
         responded,
         response_rate: if initiatives > 0 {
-            responded as f64 / initiatives as f64
+            f64::from(responded) / f64::from(initiatives)
         } else {
             0.0
         },

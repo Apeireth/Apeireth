@@ -187,7 +187,7 @@ fn stage2_e2e_pool_with_python_ext_dual_build() {
     let pool = BridgeModulePool::new();
     let _: bool = python_ext_enabled();
     let _: bool = is_module_available("math");
-    let _: &str = python_version_string();
+    let _ = python_version_string();
     // python_ext_enabled 与 cfg! 一致
     assert_eq!(python_ext_enabled(), cfg!(feature = "python-ext"));
     // 池 stats 不依赖 python-ext (cfg-无关)

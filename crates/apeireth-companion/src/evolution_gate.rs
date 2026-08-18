@@ -94,7 +94,10 @@ impl EvalGate {
                 if zero_changes >= self.no_progress_limit {
                     return (
                         GateDecision::Rejected {
-                            reason: format!("no-progress: 连续 {} 次零变化, 停循环", self.no_progress_limit),
+                            reason: format!(
+                                "no-progress: 连续 {} 次零变化, 停循环",
+                                self.no_progress_limit
+                            ),
                         },
                         attempts,
                         elapsed,
@@ -120,14 +123,21 @@ impl EvalGate {
     pub fn loop_action(&self, decision: &GateDecision) -> LoopAction {
         match decision {
             GateDecision::Promoted => LoopAction::Deploy,
-            GateDecision::Rejected { reason } => LoopAction::Rollback { reason: reason.clone() },
-            GateDecision::UnverifiedAccepted { reason } => LoopAction::HoldUnverified { reason: reason.clone() },
+            GateDecision::Rejected { reason } => LoopAction::Rollback {
+                reason: reason.clone(),
+            },
+            GateDecision::UnverifiedAccepted { reason } => LoopAction::HoldUnverified {
+                reason: reason.clone(),
+            },
         }
     }
 
     /// 部署收据 (与 rollback_receipt 对称; 部署后进入监控期, 见 deploy 模块).
     pub fn deploy_receipt(&self, capability: &str) -> String {
-        format!("[agent-deploy] PRE_TASK_SHA={} 能力: {} — 验证通过已部署, 进入监控期", self.pre_sha, capability)
+        format!(
+            "[agent-deploy] PRE_TASK_SHA={} 能力: {} — 验证通过已部署, 进入监控期",
+            self.pre_sha, capability
+        )
     }
 
     /// 回滚命令骨架 (调用方执行; 返回给演化循环的收据文本).
@@ -140,7 +150,10 @@ impl EvalGate {
 
     /// 未验证收据 (fail-open 时).
     pub fn unverified_receipt(&self, reason: &str) -> String {
-        format!("[agent-unverified] PRE_TASK_SHA={} 未解决: {} — 绿态保留, 待补验证", self.pre_sha, reason)
+        format!(
+            "[agent-unverified] PRE_TASK_SHA={} 未解决: {} — 绿态保留, 待补验证",
+            self.pre_sha, reason
+        )
     }
 }
 
@@ -151,7 +164,14 @@ mod tests {
     #[test]
     fn first_round_pass_promotes() {
         let g = EvalGate::new("sha1");
-        let (d, attempts, _) = g.run_until_conclusion(|_| VerifyOutcome { passed: true, changed: true, error: None }, Instant::now());
+        let (d, attempts, _) = g.run_until_conclusion(
+            |_| VerifyOutcome {
+                passed: true,
+                changed: true,
+                error: None,
+            },
+            Instant::now(),
+        );
         assert_eq!(d, GateDecision::Promoted);
         assert_eq!(attempts, 0);
     }
@@ -163,7 +183,11 @@ mod tests {
         let (d, attempts, _) = g.run_until_conclusion(
             |_| {
                 round += 1;
-                VerifyOutcome { passed: round >= 3, changed: true, error: None }
+                VerifyOutcome {
+                    passed: round >= 3,
+                    changed: true,
+                    error: None,
+                }
             },
             Instant::now(),
         );
@@ -175,12 +199,18 @@ mod tests {
     fn no_progress_stops_loop() {
         let g = EvalGate::new("sha1");
         let (d, attempts, _) = g.run_until_conclusion(
-            |_| VerifyOutcome { passed: false, changed: false, error: Some("编译错误".into()) },
+            |_| VerifyOutcome {
+                passed: false,
+                changed: false,
+                error: Some("编译错误".into()),
+            },
             Instant::now(),
         );
         assert_eq!(
             d,
-            GateDecision::Rejected { reason: "no-progress: 连续 2 次零变化, 停循环".into() }
+            GateDecision::Rejected {
+                reason: "no-progress: 连续 2 次零变化, 停循环".into()
+            }
         );
         assert_eq!(attempts, 1, "第 1 次零变化后第 2 次判定停");
     }
@@ -192,7 +222,11 @@ mod tests {
             ..EvalGate::new("sha1")
         };
         let (d, attempts, _) = g.run_until_conclusion(
-            |_| VerifyOutcome { passed: false, changed: true, error: Some("e".into()) },
+            |_| VerifyOutcome {
+                passed: false,
+                changed: true,
+                error: Some("e".into()),
+            },
             Instant::now(),
         );
         assert!(matches!(d, GateDecision::Rejected { .. }));
@@ -207,7 +241,11 @@ mod tests {
             ..EvalGate::new("sha1")
         };
         let (d, _, _) = g.run_until_conclusion(
-            |_| VerifyOutcome { passed: false, changed: false, error: None },
+            |_| VerifyOutcome {
+                passed: false,
+                changed: false,
+                error: None,
+            },
             Instant::now(),
         );
         assert!(matches!(d, GateDecision::UnverifiedAccepted { .. }));
@@ -218,12 +256,20 @@ mod tests {
         let g = EvalGate::new("sha1");
         assert_eq!(g.loop_action(&GateDecision::Promoted), LoopAction::Deploy);
         assert_eq!(
-            g.loop_action(&GateDecision::Rejected { reason: "no-progress".into() }),
-            LoopAction::Rollback { reason: "no-progress".into() }
+            g.loop_action(&GateDecision::Rejected {
+                reason: "no-progress".into()
+            }),
+            LoopAction::Rollback {
+                reason: "no-progress".into()
+            }
         );
         assert_eq!(
-            g.loop_action(&GateDecision::UnverifiedAccepted { reason: "预算耗尽".into() }),
-            LoopAction::HoldUnverified { reason: "预算耗尽".into() }
+            g.loop_action(&GateDecision::UnverifiedAccepted {
+                reason: "预算耗尽".into()
+            }),
+            LoopAction::HoldUnverified {
+                reason: "预算耗尽".into()
+            }
         );
         let d = g.deploy_receipt("换元检查");
         assert!(d.contains("[agent-deploy]") && d.contains("sha1") && d.contains("监控期"));

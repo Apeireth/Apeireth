@@ -35,9 +35,8 @@ pub struct MiniMaxConstitutionLlm {
 
 impl MiniMaxConstitutionLlm {
     pub fn new(api_key: String) -> Result<Self, String> {
-        let pipeline = Arc::new(
-            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
-        );
+        let pipeline =
+            Arc::new(build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.clone())?);
         Ok(Self { pipeline })
     }
 }
@@ -75,7 +74,7 @@ impl ConstitutionLlm for MiniMaxConstitutionLlm {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let content = ch.message.content.clone();
@@ -146,7 +145,9 @@ async fn main() {
     println!("══════════════════════════════════════════════════════\n");
 
     // ---------- 基地装配: 空库 (记忆全靠 AI 自己总结) ----------
-    let mem_path = std::env::temp_dir().join("apeireth-eng").join("memory.sqlite");
+    let mem_path = std::env::temp_dir()
+        .join("apeireth-eng")
+        .join("memory.sqlite");
     let workdir = std::env::temp_dir().join("apeireth-eng");
     std::fs::create_dir_all(&workdir).unwrap();
     let _ = std::fs::remove_file(&mem_path);
@@ -163,8 +164,13 @@ async fn main() {
             .with_paths(vec![workdir.to_string_lossy().to_string()]),
     );
     println!("[权限台账] 我代主人授权 (调试期):");
-    println!("  - 日常包 (默认): recall_memory / save_memory / WebSearch / Grep / WebFetch / Git (永久)");
-    println!("  - 调试工程包: FileOperator (24h, 30 次, paths 元数据={})", workdir.display());
+    println!(
+        "  - 日常包 (默认): recall_memory / save_memory / WebSearch / Grep / WebFetch / Git (永久)"
+    );
+    println!(
+        "  - 调试工程包: FileOperator (24h, 30 次, paths 元数据={})",
+        workdir.display()
+    );
     println!("  - 未授权: ShellExec (留给安全实测)\n");
 
     let report_path = workdir.join("engineering-report.md");
@@ -211,7 +217,10 @@ async fn main() {
                     role: v["role"].as_str().unwrap_or("user").to_string(),
                     content: v["content"].clone(),
                     tool_calls: v.get("tool_calls").and_then(|x| x.as_array()).cloned(),
-                    tool_call_id: v.get("tool_call_id").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                    tool_call_id: v
+                        .get("tool_call_id")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
                 })
                 .collect(),
             temperature: Some(0.5),
@@ -221,12 +230,18 @@ async fn main() {
             tools: Some(tools.as_array().cloned().unwrap_or_default()),
             tool_choice: Some(json!("auto")),
         };
-        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("第{round}轮")).await else {
+        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("第{round}轮")).await
+        else {
             final_answer = "(被限流, 已执行的动作以审计为准)".to_string();
             break;
         };
         if tcs.is_empty() {
-            let answer = content.split("</think>").last().unwrap_or(&content).trim().to_string();
+            let answer = content
+                .split("</think>")
+                .last()
+                .unwrap_or(&content)
+                .trim()
+                .to_string();
             if answer.is_empty() {
                 // 空响应不算完成: 提示后重试 (MiniMax 偶发首轮空响应)
                 eprintln!("  [第{round}轮] ⚠️ 空响应, 提示模型重新开始执行");
@@ -243,10 +258,16 @@ async fn main() {
             let id = tc["id"].clone();
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
             let args: Value =
-                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}")).unwrap_or(json!({}));
+                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}"))
+                    .unwrap_or(json!({}));
             let risk = ToolBridge::tool_risk(&name);
-            let pack_hit = bridge.packs.check_and_consume(&name, chrono::Utc::now().timestamp_millis());
-            println!("  他调用 {name} (risk={risk:?}, 权限包覆盖={pack_hit}) args={}", args.to_string().chars().take(80).collect::<String>());
+            let pack_hit = bridge
+                .packs
+                .check_and_consume(&name, chrono::Utc::now().timestamp_millis());
+            println!(
+                "  他调用 {name} (risk={risk:?}, 权限包覆盖={pack_hit}) args={}",
+                args.to_string().chars().take(80).collect::<String>()
+            );
             // 宪法评审由 ToolBridge 内部自动执行 (Medium+ → 真 LLM 按原则判案)
             let r = bridge
                 .execute_if_allowed(&ParsedToolCall {
@@ -277,10 +298,23 @@ async fn main() {
     for e in ai_written {
         println!("  • {}", e.content.chars().take(90).collect::<String>());
     }
-    let joined: String = eps.iter().map(|e| e.content.clone()).collect::<Vec<_>>().join(" ");
+    let joined: String = eps
+        .iter()
+        .map(|e| e.content.clone())
+        .collect::<Vec<_>>()
+        .join(" ");
     let kw = ["线代", "高数", "council", "工程", "换元", "作业", "特征值"];
-    let hit: Vec<&str> = kw.iter().filter(|k| joined.contains(**k)).copied().collect();
-    println!("关键词覆盖: {}/{} — {}", hit.len(), kw.len(), hit.join(" / "));
+    let hit: Vec<&str> = kw
+        .iter()
+        .filter(|k| joined.contains(**k))
+        .copied()
+        .collect();
+    println!(
+        "关键词覆盖: {}/{} — {}",
+        hit.len(),
+        kw.len(),
+        hit.join(" / ")
+    );
 
     // ---------- 验证 2: 工程报告 ----------
     println!("\n──────── 验证 · 工程能力 ────────");
@@ -306,7 +340,15 @@ async fn main() {
     };
     let r = bridge.execute_if_allowed(&shell_call).await;
     let shell_blocked = !r.success && r.error.as_deref().unwrap_or("").contains("主人批准");
-    println!("[3a] ShellExec 无包 → {} ({:?})", if shell_blocked { "✅ 被拦: 需要主人批准" } else { "❌ 未被拦!" }, r.error);
+    println!(
+        "[3a] ShellExec 无包 → {} ({:?})",
+        if shell_blocked {
+            "✅ 被拦: 需要主人批准"
+        } else {
+            "❌ 未被拦!"
+        },
+        r.error
+    );
 
     // 3b. FileOperator 写权限包 paths 之外 → 执行级路径约束应拦 (2026-08-16 补的洞)
     let outside = std::env::temp_dir().join("apeireth-paths-block-test.txt");
@@ -322,7 +364,10 @@ async fn main() {
         println!("[3b] FileOperator 写 paths 之外 → ❌ 竟然成功 (路径约束失效!)");
         let _ = std::fs::remove_file(&outside);
     } else {
-        println!("[3b] FileOperator 写 paths 之外 → ✅ 被拦 (执行级路径约束已生效): {}", r.error.as_deref().unwrap_or(""));
+        println!(
+            "[3b] FileOperator 写 paths 之外 → ✅ 被拦 (执行级路径约束已生效): {}",
+            r.error.as_deref().unwrap_or("")
+        );
         // `..` 穿越也验一下
         let escape = workdir.join("..").join("escape-../../x.txt");
         let esc_call = ParsedToolCall {
@@ -344,6 +389,9 @@ async fn main() {
     // ---------- 汇报 ----------
     println!("\n[他的汇报] {final_answer}");
     println!("\n══════════════════════════════════════════════════════");
-    println!("二期验收完成 (耗时 {:.1}s, 工具调用 {tool_count} 次)", t0.elapsed().as_secs_f32());
+    println!(
+        "二期验收完成 (耗时 {:.1}s, 工具调用 {tool_count} 次)",
+        t0.elapsed().as_secs_f32()
+    );
     println!("══════════════════════════════════════════════════════");
 }

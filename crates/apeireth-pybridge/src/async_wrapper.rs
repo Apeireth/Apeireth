@@ -18,9 +18,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use crate::bridge::{
-    call_python_function, call_python_function_kw, eval_python_expression, BridgeError,
-};
+use crate::bridge::{call_python_function, call_python_function_kw, eval_python_expression};
+use crate::error::BridgeError;
 
 // ============================================================================
 // Async wrapper (tokio::spawn_blocking)
@@ -32,9 +31,13 @@ pub async fn call_python_async(
     func_name: String,
     args: Vec<String>,
 ) -> Result<String, BridgeError> {
-    tokio::task::spawn_blocking(move || call_python_function(&module_name, &func_name, &args))
-        .await
-        .map_err(|e| BridgeError::Internal(format!("spawn_blocking join error: {e}")))?
+    // bridge API 收 &[&str], 闭包内转换 (借用 move 进来的 args, 生命周期安全)
+    tokio::task::spawn_blocking(move || {
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        call_python_function(&module_name, &func_name, &arg_refs)
+    })
+    .await
+    .map_err(|e| BridgeError::CallFailed(format!("spawn_blocking join error: {e}")))?
 }
 
 /// 异步调用 Python 函数 (带 kwargs).
@@ -44,18 +47,24 @@ pub async fn call_python_kw_async(
     args: Vec<String>,
     kwargs: HashMap<String, String>,
 ) -> Result<String, BridgeError> {
+    // bridge API 收 &[&str] + &[(&str, &str)], 闭包内转换 (借用 move 进来的数据)
     tokio::task::spawn_blocking(move || {
-        call_python_function_kw(&module_name, &func_name, &args, &kwargs)
+        let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+        let kw_refs: Vec<(&str, &str)> = kwargs
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        call_python_function_kw(&module_name, &func_name, &arg_refs, &kw_refs)
     })
     .await
-    .map_err(|e| BridgeError::Internal(format!("spawn_blocking join error: {e}")))?
+    .map_err(|e| BridgeError::CallFailed(format!("spawn_blocking join error: {e}")))?
 }
 
 /// 异步 eval Python 表达式.
 pub async fn eval_python_async(expr: String) -> Result<String, BridgeError> {
     tokio::task::spawn_blocking(move || eval_python_expression(&expr))
         .await
-        .map_err(|e| BridgeError::Internal(format!("spawn_blocking join error: {e}")))?
+        .map_err(|e| BridgeError::CallFailed(format!("spawn_blocking join error: {e}")))?
 }
 
 /// 带 timeout 的 async 调用 (避免 spawn_blocking hang 永远).
@@ -67,7 +76,7 @@ pub async fn call_python_async_timeout(
 ) -> Result<String, BridgeError> {
     match tokio::time::timeout(timeout, call_python_async(module_name, func_name, args)).await {
         Ok(r) => r,
-        Err(_) => Err(BridgeError::Internal(format!(
+        Err(_) => Err(BridgeError::CallFailed(format!(
             "Python call timed out after {}s",
             timeout.as_secs()
         ))),
@@ -93,7 +102,7 @@ pub async fn call_python_batch_async(
     for h in handles {
         match h.await {
             Ok(r) => results.push(r),
-            Err(e) => results.push(Err(BridgeError::Internal(format!("join error: {e}")))),
+            Err(e) => results.push(Err(BridgeError::CallFailed(format!("join error: {e}")))),
         }
     }
     results

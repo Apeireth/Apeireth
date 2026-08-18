@@ -1,4 +1,4 @@
-name: Rust formatter (nightly)
+name: Rust formatter (stable)
 
 # R25 Stage 1 续: 独立 rustfmt 校验 workflow (qdrant 模式)
 # 抄自: qdrant/.github/workflows/rust-lint.yml (其中的 fmt 部分被 qdrant 合并到 lint job)
@@ -12,7 +12,12 @@ name: Rust formatter (nightly)
 #   - 临时重复: 1 周内两处都跑 fmt 检查 (1x rustfmt.yml + 1x rust-lint.yml::rustfmt-nightly)
 #   - R26+ 续: 主人拍板后从 rust-lint.yml 删 rustfmt-nightly job, 单一来源
 #
-# 验收: cargo +nightly fmt --all -- --check exit 0
+# CI fix 2026-08 (R26): nightly → stable
+#   - 原 rustfmt.toml 8 项配置在 stable rustfmt 全部 unstable (被忽略),
+#     nightly 跑则每日漂移 → 门禁从没绿过 (全仓数百文件 diff)。
+#   - 改 stable: 可复现, 不漂移; rustfmt.toml 已清空回默认风格。
+#
+# 验收: cargo fmt --all -- --check exit 0
 
 on:
   push:
@@ -27,22 +32,21 @@ permissions:
   contents: read
 
 jobs:
-  rustfmt-nightly:
-    name: cargo +nightly fmt --check
+  rustfmt-stable:
+    name: cargo fmt --check
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust nightly (for rustfmt)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable (for rustfmt)
+        uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: rustfmt-nightly
+          key: rustfmt-stable
 
-      - name: cargo +nightly fmt --all --check
-        # 8 项 rustfmt.toml 配置 (qdrant 3 + tantivy 5) 强制; nightly 跑 (部分配置 nightly-only)
-        run: cargo +nightly fmt --all -- --check
+      - name: cargo fmt --all --check
+        run: cargo fmt --all -- --check

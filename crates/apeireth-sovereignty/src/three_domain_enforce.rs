@@ -61,7 +61,7 @@ pub struct GateState {
     pub name: String,
     /// 是否启用
     pub enabled: bool,
-    /// 强制点 ID 列表 (e.g. ["E", "S", "A", "M", "O"] for proposal)
+    /// 强制点 ID 列表 (e.g. `["E", "S", "A", "M", "O"]` for proposal)
     pub checkpoints: Vec<String>,
     /// 上次验证时间 (epoch ms)
     pub last_verified_ms: i64,

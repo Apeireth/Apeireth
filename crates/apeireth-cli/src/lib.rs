@@ -547,14 +547,14 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
     let mut s = MeasurementSample::default();
     for name in V05_DIMENSION_NAMES.iter() {
         s.successes
-            .insert((*name).to_string(), (rate * n as f64) as u32);
+            .insert((*name).to_string(), (rate * f64::from(n)) as u32);
         s.attempts.insert((*name).to_string(), n);
         s.qualities.insert((*name).to_string(), 1.0);
     }
     for name in V1136_SUBMEASURE_NAMES.iter() {
         s.successes
             .entry((*name).to_string())
-            .or_insert((rate * n as f64) as u32);
+            .or_insert((rate * f64::from(n)) as u32);
         s.attempts.entry((*name).to_string()).or_insert(n);
         s.qualities.entry((*name).to_string()).or_insert(1.0);
     }

@@ -360,8 +360,8 @@ impl ReflectionMetaThinker for ChainReflectionThinker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::TimeZone; // 补 import 解除 lib-test 编译阻塞 (编译器建议位, agent_orchestrator2 代加, 供主人知悉)
     use crate::thought_cluster::ThoughtFile;
+    use chrono::TimeZone; // 补 import 解除 lib-test 编译阻塞 (编译器建议位, agent_orchestrator2 代加, 供主人知悉)
     use std::sync::Mutex;
 
     // ---------- mock 思考器 ----------
@@ -473,7 +473,10 @@ mod tests {
     #[test]
     fn zero_depth_rejected() {
         let chain = MetaThinkingChain::new(&["a簇"], 0);
-        assert_eq!(chain.run("q", &ConstThinker("t".into())), Err(MetaThinkError::InvalidDepth(0)));
+        assert_eq!(
+            chain.run("q", &ConstThinker("t".into())),
+            Err(MetaThinkError::InvalidDepth(0))
+        );
     }
 
     // ---------- 循环防护 ----------
@@ -512,7 +515,11 @@ mod tests {
         let result = chain.run("q", &thinker).unwrap();
         assert_eq!(result.stop_reason, StopReason::ThinkerHalted);
         assert_eq!(result.stages.len(), 2); // 第 3 段不执行
-        assert!(result.stages[1].error.as_deref().unwrap().contains("上游超时"));
+        assert!(result.stages[1]
+            .error
+            .as_deref()
+            .unwrap()
+            .contains("上游超时"));
         assert_eq!(result.final_thought.as_deref(), Some("t1")); // 熔断前有效产出保留
     }
 
@@ -521,23 +528,30 @@ mod tests {
     #[test]
     fn empty_chain_rejected() {
         let chain = MetaThinkingChain::new(&[], DEFAULT_MAX_DEPTH);
-        assert_eq!(chain.run("q", &ConstThinker("t".into())), Err(MetaThinkError::EmptyChain));
+        assert_eq!(
+            chain.run("q", &ConstThinker("t".into())),
+            Err(MetaThinkError::EmptyChain)
+        );
     }
 
     #[test]
     fn empty_query_rejected() {
         let chain = MetaThinkingChain::new(&["a簇"], DEFAULT_MAX_DEPTH);
-        assert_eq!(chain.run("  ", &ConstThinker("t".into())), Err(MetaThinkError::EmptyQuery));
+        assert_eq!(
+            chain.run("  ", &ConstThinker("t".into())),
+            Err(MetaThinkError::EmptyQuery)
+        );
     }
 
     // ---------- 簇上下文注入 (N4 reader 复用) ----------
 
     #[test]
     fn reader_supplies_cluster_context() {
-        let chain = MetaThinkingChain::new(&["分析簇"], DEFAULT_MAX_DEPTH)
-            .with_reader(Arc::new(StubReader {
+        let chain = MetaThinkingChain::new(&["分析簇"], DEFAULT_MAX_DEPTH).with_reader(Arc::new(
+            StubReader {
                 content: "昨天的思考记录".into(),
-            }));
+            },
+        ));
         let thinker = ScriptedThinker::new(vec![Ok("t1".into())]);
         chain.run("q", &thinker).unwrap();
         assert_eq!(thinker.recorded()[0].cluster_context, "昨天的思考记录");
@@ -561,14 +575,20 @@ mod tests {
 
     #[test]
     fn save_to_cluster_roundtrip() {
-        let dir = std::env::temp_dir().join(format!("apeireth_meta_thinking_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("apeireth_meta_thinking_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let clock = Arc::new(apeireth_core::clock::VirtualClock::new(
-            chrono::Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap(),
+            chrono::Utc
+                .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
+                .single()
+                .unwrap(),
         ));
         let manager = ThoughtClusterManager::new(&dir, clock);
         let chain = MetaThinkingChain::new(&["分析簇"], DEFAULT_MAX_DEPTH);
-        let result = chain.run("q", &ScriptedThinker::new(vec![Ok("t1".into())])).unwrap();
+        let result = chain
+            .run("q", &ScriptedThinker::new(vec![Ok("t1".into())]))
+            .unwrap();
 
         let path = save_to_cluster(&manager, "元思考簇", &result).unwrap();
         assert!(path.exists());
@@ -581,10 +601,14 @@ mod tests {
 
     #[test]
     fn save_to_cluster_rejects_bad_cluster_name() {
-        let dir = std::env::temp_dir().join(format!("apeireth_meta_thinking_bad_{}", std::process::id()));
+        let dir =
+            std::env::temp_dir().join(format!("apeireth_meta_thinking_bad_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let clock = Arc::new(apeireth_core::clock::VirtualClock::new(
-            chrono::Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap(),
+            chrono::Utc
+                .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
+                .single()
+                .unwrap(),
         ));
         let manager = ThoughtClusterManager::new(&dir, clock);
         let result = MetaChainResult {
@@ -603,7 +627,8 @@ mod tests {
     #[test]
     fn chain_reflection_thinker_produces_report() {
         let chain = MetaThinkingChain::new(&["反思簇"], DEFAULT_MAX_DEPTH);
-        let rt = ChainReflectionThinker::new(chain, Arc::new(ConstThinker("对反思的再思考".into())));
+        let rt =
+            ChainReflectionThinker::new(chain, Arc::new(ConstThinker("对反思的再思考".into())));
         let report = rt.meta_reflect("本周反思: 陪伴质量").unwrap();
         assert!(report.contains("对反思的再思考"));
         assert!(report.contains("[--- 元思考链 ---]"));

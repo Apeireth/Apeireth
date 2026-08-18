@@ -238,8 +238,8 @@ pub fn dispatch(cmd: AnyCommand, registry: &mut Registry) -> Result<AnyResponse,
         AnyCommand::Ear(c) => ear::handle(&mut registry.ear, c).map(AnyResponse::Ear),
         AnyCommand::Memory(c) => memory::handle(&mut registry.memory, c).map(AnyResponse::Memory),
         AnyCommand::Voice(c) => voice::handle(&mut registry.voice, c).map(AnyResponse::Voice),
-        AnyCommand::Body(c) => body::handle(&mut registry.body, c).map(AnyResponse::Body),
-        AnyCommand::Mind(c) => mind::handle(&mut registry.mind, c).map(AnyResponse::Mind),
+        AnyCommand::Body(c) => body::handle(&registry.body, c).map(AnyResponse::Body),
+        AnyCommand::Mind(c) => mind::handle(&registry.mind, c).map(AnyResponse::Mind),
     }
 }
 

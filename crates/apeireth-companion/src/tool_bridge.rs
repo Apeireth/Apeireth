@@ -693,7 +693,10 @@ impl ToolBridge {
         let path_ref = path.as_ref();
         match apeireth_tools::register_yaml_spec(&self.registry, path_ref) {
             Ok(name) => {
-                eprintln!("[bridge] TP29 yaml_spec registered: {name} ← {}", path_ref.display());
+                eprintln!(
+                    "[bridge] TP29 yaml_spec registered: {name} ← {}",
+                    path_ref.display()
+                );
                 Ok(name)
             }
             Err(e) => {
@@ -942,9 +945,8 @@ impl ToolBridge {
                         output: json!(null),
                         error: Some("该工具是高风险操作且未被权限包覆盖, 需要主人批准 (已向主人发出授权请求)".to_string()),
                         duration_ms: 0,
-                    
-..Default::default()
-};
+                        ..Default::default()
+                    };
                 }
                 _ => {
                     return ExecutionResult {
@@ -1094,9 +1096,8 @@ impl ToolBridge {
             Some(v) => format!("{base}: 沙盒资源限额终止 — {v}"),
             None => base.to_string(),
         };
-        let mut stdin = match child.stdin.take() {
-            Some(s) => s,
-            None => return err_res("worker stdin 不可用".into(), start),
+        let Some(mut stdin) = child.stdin.take() else {
+            return err_res("worker stdin 不可用".into(), start);
         };
         let req = format!("{}\n", json!({"tool": call.tool_name, "args": call.args}));
         if let Err(e) = stdin.write_all(req.as_bytes()).await {
@@ -1104,9 +1105,8 @@ impl ToolBridge {
             return err_res(format!("写 worker 请求失败: {e}"), start);
         }
         drop(stdin);
-        let stdout = match child.stdout.take() {
-            Some(s) => s,
-            None => return err_res("worker stdout 不可用".into(), start),
+        let Some(stdout) = child.stdout.take() else {
+            return err_res("worker stdout 不可用".into(), start);
         };
         let line = match tokio::time::timeout(Duration::from_secs(cfg.timeout_secs), async {
             let mut r = tokio::io::BufReader::new(stdout);
@@ -1896,7 +1896,9 @@ mod tp12_tests {
         };
         let out = inject_tp12_into_output(&r);
         let report = out.get("_tp12_report").expect("report missing");
-        let ge = report.get("guardrail_error").expect("guardrail_error missing");
+        let ge = report
+            .get("guardrail_error")
+            .expect("guardrail_error missing");
         assert_eq!(ge["kind"], "path_traversal");
         assert_eq!(ge["field"], "$.path");
         assert_eq!(ge["hint"], "remove .. segments");
@@ -2056,7 +2058,11 @@ mod tp29_tests {
         std::fs::write(&path, "name: bad\n").unwrap();
         let res = bridge.register_yaml_spec(&path);
         assert!(res.is_err(), "非法 YAML 应失败");
-        assert_eq!(bridge.registry.len(), count_before, "失败后 registry 数量应不变");
+        assert_eq!(
+            bridge.registry.len(),
+            count_before,
+            "失败后 registry 数量应不变"
+        );
         assert!(bridge.registry.get("bad").is_none());
     }
 
@@ -2087,16 +2093,8 @@ mod tp29_tests {
         let bridge = ToolBridge::new(store);
         let dir = TempDir::new().unwrap();
         // 2 个合法 + 1 个非法
-        std::fs::write(
-            dir.path().join("a.yaml"),
-            "name: y_a\ndescription: a\n",
-        )
-        .unwrap();
-        std::fs::write(
-            dir.path().join("b.yml"),
-            "name: y_b\ndescription: b\n",
-        )
-        .unwrap();
+        std::fs::write(dir.path().join("a.yaml"), "name: y_a\ndescription: a\n").unwrap();
+        std::fs::write(dir.path().join("b.yml"), "name: y_b\ndescription: b\n").unwrap();
         std::fs::write(dir.path().join("c.yaml"), "name: bad\n").unwrap();
         let names = bridge.register_yaml_spec_dir(dir.path());
         // 顺序: a.yaml → b.yml → c.yaml; c 失败被跳过.

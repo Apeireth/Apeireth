@@ -41,7 +41,12 @@ impl Action {
         }
     }
 
-    pub const ALL: [Action; 4] = [Action::Greet, Action::AskProgress, Action::OfferHelp, Action::Remind];
+    pub const ALL: [Action; 4] = [
+        Action::Greet,
+        Action::AskProgress,
+        Action::OfferHelp,
+        Action::Remind,
+    ];
 }
 
 /// 基地能力目录: 基地对住客 AI 的「自描述」.
@@ -76,7 +81,12 @@ impl CapabilityCatalog {
         if !active.is_empty() {
             s.push_str("- 你已演化的能力 (可主动使用):\n");
             for c in active {
-                s.push_str(&format!("  · [{}] {}: {}\n", c.kind.label_zh(), c.name, c.description));
+                s.push_str(&format!(
+                    "  · [{}] {}: {}\n",
+                    c.kind.label_zh(),
+                    c.name,
+                    c.description
+                ));
             }
         }
         s
@@ -100,7 +110,11 @@ pub fn select_action(context: Option<&str>) -> Action {
     let c = context.unwrap_or("");
     if c.contains('学') {
         Action::OfferHelp
-    } else if c.contains("工程") || c.contains("升级") || c.contains("代码") || c.contains("Apeireth") {
+    } else if c.contains("工程")
+        || c.contains("升级")
+        || c.contains("代码")
+        || c.contains("Apeireth")
+    {
         Action::AskProgress
     } else {
         Action::Greet
@@ -119,8 +133,14 @@ mod tests {
 
     #[test]
     fn action_selection_maps_context() {
-        assert_eq!(select_action(Some("你在14-18点在学线性代数")), Action::OfferHelp);
-        assert_eq!(select_action(Some("你在8-12点在搞Apeireth工程(在升级我)")), Action::AskProgress);
+        assert_eq!(
+            select_action(Some("你在14-18点在学线性代数")),
+            Action::OfferHelp
+        );
+        assert_eq!(
+            select_action(Some("你在8-12点在搞Apeireth工程(在升级我)")),
+            Action::AskProgress
+        );
         assert_eq!(select_action(Some("你在6-8点起床吃早饭")), Action::Greet);
         assert_eq!(select_action(None), Action::Greet);
     }

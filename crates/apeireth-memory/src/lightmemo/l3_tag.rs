@@ -12,12 +12,21 @@ pub struct TagIndex {
 
 impl TagIndex {
     pub fn new() -> Self {
-        Self { forward: HashMap::new(), reverse: HashMap::new() }
+        Self {
+            forward: HashMap::new(),
+            reverse: HashMap::new(),
+        }
     }
 
     pub fn add(&mut self, id: &str, tag: &str) {
-        self.forward.entry(tag.to_string()).or_default().insert(id.to_string());
-        self.reverse.entry(id.to_string()).or_default().insert(tag.to_string());
+        self.forward
+            .entry(tag.to_string())
+            .or_default()
+            .insert(id.to_string());
+        self.reverse
+            .entry(id.to_string())
+            .or_default()
+            .insert(tag.to_string());
     }
 
     pub fn remove(&mut self, id: &str) {
@@ -34,11 +43,17 @@ impl TagIndex {
     }
 
     pub fn lookup(&self, tag: &str) -> Vec<String> {
-        self.forward.get(tag).map(|s| s.iter().cloned().collect()).unwrap_or_default()
+        self.forward
+            .get(tag)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn tags_of(&self, id: &str) -> Vec<String> {
-        self.reverse.get(id).map(|s| s.iter().cloned().collect()).unwrap_or_default()
+        self.reverse
+            .get(id)
+            .map(|s| s.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn tag_count(&self) -> usize {
@@ -51,7 +66,9 @@ impl TagIndex {
 }
 
 impl Default for TagIndex {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

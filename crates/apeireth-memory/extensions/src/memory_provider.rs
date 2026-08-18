@@ -90,7 +90,7 @@ pub enum ProviderKind {
     S3 = 4,
     /// 5: 本地 disk + LRU (借 workspace lru + std::fs).
     DiskLru = 5,
-        /// 6: 组合 (in_memory + disk_lru 两级, 0 重复造 tiered cache).
+    /// 6: 组合 (in_memory + disk_lru 两级, 0 重复造 tiered cache).
     Hybrid = 6,
     /// 7: 本地 JSON-Lines append-only 文件 (per R23 #6 派工, file provider).
     File = 7,
@@ -344,10 +344,7 @@ impl ProviderConfig {
         if self.timeout < MIN_TIMEOUT || self.timeout > MAX_TIMEOUT {
             return Err(MemoryProviderError::Config {
                 field: ProviderConfigField::Timeout,
-                reason: format!(
-                    "must be in [1ms, 1h], got {:?}",
-                    self.timeout
-                ),
+                reason: format!("must be in [1ms, 1h], got {:?}", self.timeout),
             });
         }
 
@@ -368,10 +365,7 @@ impl ProviderConfig {
         if self.cache_ttl > MAX_CACHE_TTL {
             return Err(MemoryProviderError::Config {
                 field: ProviderConfigField::CacheTtl,
-                reason: format!(
-                    "must be in [0ms, 7d], got {:?}",
-                    self.cache_ttl
-                ),
+                reason: format!("must be in [0ms, 7d], got {:?}", self.cache_ttl),
             });
         }
 
@@ -464,7 +458,11 @@ mod tests {
     fn from_name_round_trips_all_9_kinds() {
         for kind in ProviderKind::ALL {
             let name = kind.as_str();
-            assert_eq!(ProviderKind::from_name(name), Some(kind), "{name} should round-trip");
+            assert_eq!(
+                ProviderKind::from_name(name),
+                Some(kind),
+                "{name} should round-trip"
+            );
         }
     }
 
@@ -472,7 +470,10 @@ mod tests {
     fn from_name_rejects_unknown_and_case_sensitive() {
         assert!(ProviderKind::from_name("nonexistent").is_none());
         assert!(ProviderKind::from_name("").is_none());
-        assert!(ProviderKind::from_name("InMemory").is_none(), "case-sensitive: camel case must not match");
+        assert!(
+            ProviderKind::from_name("InMemory").is_none(),
+            "case-sensitive: camel case must not match"
+        );
         assert!(ProviderKind::from_name("IN_MEMORY").is_none());
     }
 
@@ -605,7 +606,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::ConnectionString, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::ConnectionString,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -620,7 +627,13 @@ mod tests {
         );
         // redis:// 配 InMemory 期望 memory://, 失败
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::ConnectionString, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::ConnectionString,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -634,7 +647,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::Timeout, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::Timeout,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -648,7 +667,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::Timeout, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::Timeout,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -662,7 +687,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::MaxSize, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::MaxSize,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -676,7 +707,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::MaxSize, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::MaxSize,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -690,7 +727,13 @@ mod tests {
             ProviderScope::Local,
         );
         let err = cfg.validate(ProviderKind::InMemory).unwrap_err();
-        assert!(matches!(err, MemoryProviderError::Config { field: ProviderConfigField::CacheTtl, .. }));
+        assert!(matches!(
+            err,
+            MemoryProviderError::Config {
+                field: ProviderConfigField::CacheTtl,
+                ..
+            }
+        ));
     }
 
     #[test]
@@ -722,7 +765,10 @@ mod tests {
                 Duration::from_secs(0),
                 scope,
             );
-            assert!(cfg.validate(ProviderKind::InMemory).is_ok(), "scope={scope:?} should pass");
+            assert!(
+                cfg.validate(ProviderKind::InMemory).is_ok(),
+                "scope={scope:?} should pass"
+            );
         }
     }
 

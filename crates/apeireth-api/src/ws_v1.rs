@@ -174,7 +174,7 @@ async fn handle_ws_session(socket: WebSocket, auth: Arc<AuthPipeline>) -> Result
                 }
                 let _ = sender
                     .send(Message::Text(
-                        serde_json::to_string(&WsFrame::Ping(ping)).unwrap().into(),
+                        serde_json::to_string(&WsFrame::Ping(ping)).unwrap(),
                     ))
                     .await;
             }
@@ -330,7 +330,7 @@ async fn handle_tool_invoke(
     let json =
         serde_json::to_string(&result_frame).map_err(|e| ApiError::Internal(e.to_string()))?;
     sender
-        .send(Message::Text(json.into()))
+        .send(Message::Text(json))
         .await
         .map_err(|e| ApiError::Internal(format!("ws send: {e}")))?;
 
@@ -342,7 +342,7 @@ async fn handle_tool_invoke(
     });
     let json = serde_json::to_string(&end_frame).map_err(|e| ApiError::Internal(e.to_string()))?;
     sender
-        .send(Message::Text(json.into()))
+        .send(Message::Text(json))
         .await
         .map_err(|e| ApiError::Internal(format!("ws send: {e}")))?;
 
@@ -382,7 +382,7 @@ async fn send_error(
     });
     let json = serde_json::to_string(&frame).map_err(|e| format!("serialize error: {e}"))?;
     sender
-        .send(Message::Text(json.into()))
+        .send(Message::Text(json))
         .await
         .map_err(|e| format!("ws send error: {e}"))?;
     Ok(())
@@ -400,7 +400,7 @@ async fn send_close(
     });
     let json = serde_json::to_string(&frame).map_err(|e| format!("serialize close: {e}"))?;
     sender
-        .send(Message::Text(json.into()))
+        .send(Message::Text(json))
         .await
         .map_err(|e| format!("ws send close: {e}"))?;
     sender

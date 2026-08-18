@@ -1,9 +1,9 @@
 //! EnhancedLightMemo composed entry.
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use super::manager::{MemoryManager, MemoryItem};
 use super::decay::DecayEngine;
 use super::dream::DreamSubsystem;
+use super::manager::{MemoryItem, MemoryManager};
 use super::mcp::{LightMemoMcp, McpRequest, McpResponse};
 
 pub struct EnhancedLightMemo {
@@ -23,7 +23,11 @@ impl EnhancedLightMemo {
         })
     }
 
-    pub fn add_memory(&mut self, content: &str, tags: Vec<String>) -> Result<String, super::manager::MemoryError> {
+    pub fn add_memory(
+        &mut self,
+        content: &str,
+        tags: Vec<String>,
+    ) -> Result<String, super::manager::MemoryError> {
         self.manager.add(MemoryItem {
             id: String::new(),
             content: content.into(),
@@ -32,15 +36,25 @@ impl EnhancedLightMemo {
         })
     }
 
-    pub fn decay(&self) -> &DecayEngine { &self.decay }
-    pub fn dream(&self) -> &DreamSubsystem { &self.dream }
-    pub fn manager(&self) -> &MemoryManager { &self.manager }
+    pub fn decay(&self) -> &DecayEngine {
+        &self.decay
+    }
+    pub fn dream(&self) -> &DreamSubsystem {
+        &self.dream
+    }
+    pub fn manager(&self) -> &MemoryManager {
+        &self.manager
+    }
 
-    pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse { self.mcp.handle(req) }
+    pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse {
+        self.mcp.handle(req)
+    }
 }
 
 impl Default for EnhancedLightMemo {
-    fn default() -> Self { Self::new_in_memory().expect("in-memory") }
+    fn default() -> Self {
+        Self::new_in_memory().expect("in-memory")
+    }
 }
 
 #[cfg(test)]

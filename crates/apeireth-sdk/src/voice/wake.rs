@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
+use crate::voice::error::{VoiceError, VoiceResult};
 
 // ============================================================================
 // §1 编译期 hardcode 常量 (K-1 强校验 #1 品牌一致)
@@ -257,7 +257,10 @@ mod tests {
 
     #[test]
     fn k1_default_wake_word_is_apeireth() {
-        assert_eq!(VOICE_DEFAULT_WAKE_WORD, "apeireth", "K-1 强校验: 默认唤醒词必须是 'apeireth'");
+        assert_eq!(
+            VOICE_DEFAULT_WAKE_WORD, "apeireth",
+            "K-1 强校验: 默认唤醒词必须是 'apeireth'"
+        );
     }
 
     #[test]
@@ -270,7 +273,11 @@ mod tests {
 
     #[test]
     fn k1_wake_word_category_has_4_variants() {
-        assert_eq!(SUPPORTED_WAKE_WORD_CATEGORIES.len(), 4, "K-1 强校验: 必须 4 个类别");
+        assert_eq!(
+            SUPPORTED_WAKE_WORD_CATEGORIES.len(),
+            4,
+            "K-1 强校验: 必须 4 个类别"
+        );
         assert_eq!(WakeWordCategory::COUNT, 4);
         assert_eq!(WakeWordCategory::Hardcoded.as_str(), "hardcoded");
         assert_eq!(WakeWordCategory::Custom.as_str(), "custom");
@@ -286,10 +293,7 @@ mod tests {
 
     #[test]
     fn k1_wake_word_category_default_word() {
-        assert_eq!(
-            WakeWordCategory::Hardcoded.default_word(),
-            Some("apeireth")
-        );
+        assert_eq!(WakeWordCategory::Hardcoded.default_word(), Some("apeireth"));
         assert_eq!(WakeWordCategory::Custom.default_word(), None);
         assert_eq!(WakeWordCategory::Phonetic.default_word(), None);
         assert_eq!(WakeWordCategory::Semantic.default_word(), None);
@@ -376,35 +380,21 @@ mod tests {
 
     #[test]
     fn k1_wake_word_detection_apeireth_check() {
-        let det = WakeWordDetection::new(
-            WakeWordCategory::Hardcoded,
-            "apeireth".to_string(),
-            0.95,
-        );
+        let det = WakeWordDetection::new(WakeWordCategory::Hardcoded, "apeireth".to_string(), 0.95);
         assert!(det.is_apeireth());
 
-        let det_upper = WakeWordDetection::new(
-            WakeWordCategory::Hardcoded,
-            "APEIRETH".to_string(),
-            0.95,
-        );
+        let det_upper =
+            WakeWordDetection::new(WakeWordCategory::Hardcoded, "APEIRETH".to_string(), 0.95);
         assert!(det_upper.is_apeireth());
 
-        let det_other = WakeWordDetection::new(
-            WakeWordCategory::Custom,
-            "hey buddy".to_string(),
-            0.95,
-        );
+        let det_other =
+            WakeWordDetection::new(WakeWordCategory::Custom, "hey buddy".to_string(), 0.95);
         assert!(!det_other.is_apeireth());
     }
 
     #[test]
     fn k1_wake_word_detection_default_confidence() {
-        let det = WakeWordDetection::new(
-            WakeWordCategory::Hardcoded,
-            "apeireth".to_string(),
-            0.5,
-        );
+        let det = WakeWordDetection::new(WakeWordCategory::Hardcoded, "apeireth".to_string(), 0.5);
         assert_eq!(det.category, WakeWordCategory::Hardcoded);
         assert_eq!(det.keyword, "apeireth");
         assert!(det.session_id.is_none());

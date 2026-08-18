@@ -2,7 +2,7 @@
 //!
 //! **目标**: 跟 Skill (R23 LOCKED 4 字段) 正交, 加扩展 metadata 字段:
 //! - `description` — 一句话能力描述
-//! - `tags` — 路由标签 (e.g. ["summarize", "text"])
+//! - `tags` — 路由标签 (e.g. `["summarize", "text"]`)
 //! - `source` — 来源 (`vcptoolbox` / `local` / `user`)
 //! - `input_example` / `output_example` — 示例 payload (JSON 字符串)
 //!

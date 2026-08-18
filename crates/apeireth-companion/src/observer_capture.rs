@@ -228,7 +228,11 @@ impl ExperienceQueue {
 
     /// 当前候选池长度.
     pub fn len(&self) -> usize {
-        self.inner.lock().expect("queue mutex poisoned").pending.len()
+        self.inner
+            .lock()
+            .expect("queue mutex poisoned")
+            .pending
+            .len()
     }
 
     /// 队列是否为空.
@@ -257,17 +261,18 @@ impl ExperienceQueue {
         now_ms: i64,
     ) -> bool {
         let since_ms = now_ms - self.window_ms;
-        let eps = match store.recent_episodes("me", 4096) {
-            Ok(eps) => eps,
-            Err(_) => return false,
+        let Ok(eps) = store.recent_episodes("me", 4096) else {
+            return false;
         };
         eps.iter()
             .filter(|e| e.id.starts_with(CANDIDATE_ID_PREFIX))
             .filter(|e| e.timestamp >= since_ms)
-            .any(|e| match serde_json::from_str::<ExperienceCandidate>(&e.content) {
-                Ok(c) => c.tool == tool && c.args_hash == args_hash,
-                Err(_) => false,
-            })
+            .any(
+                |e| match serde_json::from_str::<ExperienceCandidate>(&e.content) {
+                    Ok(c) => c.tool == tool && c.args_hash == args_hash,
+                    Err(_) => false,
+                },
+            )
     }
 
     /// 把候选写入 sqlite (content=JSON, 复用 episodes 表).
@@ -276,7 +281,8 @@ impl ExperienceQueue {
         store: &SqliteMemoryStore,
         candidate: &ExperienceCandidate,
     ) -> Result<(), String> {
-        let content = serde_json::to_string(candidate).map_err(|e| format!("序列化候选失败: {e}"))?;
+        let content =
+            serde_json::to_string(candidate).map_err(|e| format!("序列化候选失败: {e}"))?;
         let ep = CoreEpisode {
             id: Self::candidate_id(),
             timestamp: candidate.ts_ms / 1000, // CoreEpisode 用秒
@@ -439,7 +445,10 @@ mod tests {
     #[test]
     fn args_hash_is_stable_and_distinguishes_args() {
         // 同 args → 同 hash (跨调用稳定)
-        assert_eq!(args_hash(&json!({"a": 1, "b": 2})), args_hash(&json!({"a": 1, "b": 2})));
+        assert_eq!(
+            args_hash(&json!({"a": 1, "b": 2})),
+            args_hash(&json!({"a": 1, "b": 2}))
+        );
         // 不同 args → 不同 hash
         assert_ne!(args_hash(&json!({"a": 1})), args_hash(&json!({"a": 2})));
         // hash 长度 = 16 字符
@@ -454,7 +463,11 @@ mod tests {
         match o {
             Outcome::Success { summary } => {
                 let s = summary.unwrap();
-                assert!(s.chars().count() <= 201, "应 ≤ 200 字 + 省略号: {}", s.chars().count());
+                assert!(
+                    s.chars().count() <= 201,
+                    "应 ≤ 200 字 + 省略号: {}",
+                    s.chars().count()
+                );
                 assert!(s.ends_with('…'));
             }
             _ => panic!("期望 Success"),
@@ -530,7 +543,9 @@ mod tests {
         let c1 = ExperienceCandidate {
             tool: "t".into(),
             args_hash: "h".into(),
-            outcome: Outcome::Success { summary: Some("a".into()) },
+            outcome: Outcome::Success {
+                summary: Some("a".into()),
+            },
             ts_ms: 1_000_000,
             source: ExperienceSource::ToolExecution,
         };
@@ -540,7 +555,9 @@ mod tests {
         let c3 = ExperienceCandidate {
             tool: "t".into(),
             args_hash: "h".into(),
-            outcome: Outcome::Success { summary: Some("b".into()) },
+            outcome: Outcome::Success {
+                summary: Some("b".into()),
+            },
             ts_ms: 1_000_000 + 1000,
             source: ExperienceSource::ToolExecution,
         };
@@ -549,7 +566,9 @@ mod tests {
         let c4 = ExperienceCandidate {
             tool: "t".into(),
             args_hash: "h".into(),
-            outcome: Outcome::Success { summary: Some("c".into()) },
+            outcome: Outcome::Success {
+                summary: Some("c".into()),
+            },
             ts_ms: 1_000_000 + 24 * 60 * 60 * 1000 + 1,
             source: ExperienceSource::ToolExecution,
         };
@@ -576,14 +595,8 @@ mod tests {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let q1 = Arc::new(ExperienceQueue::with_store(Arc::clone(&store)));
         let hook = ObserverCaptureHook::new(q1.clone());
-        hook.apply(
-            &mk_call("t", json!({"x": 1})),
-            &mk_ok("t", json!({"v": 1})),
-        );
-        hook.apply(
-            &mk_call("t", json!({"x": 2})),
-            &mk_ok("t", json!({"v": 2})),
-        );
+        hook.apply(&mk_call("t", json!({"x": 1})), &mk_ok("t", json!({"v": 1})));
+        hook.apply(&mk_call("t", json!({"x": 2})), &mk_ok("t", json!({"v": 2})));
         assert_eq!(q1.len(), 2);
         // 模拟进程重启: 新建 q2 指向同一 sqlite, rehydrate 应复活
         let q2 = Arc::new(ExperienceQueue::with_store(Arc::clone(&store)));

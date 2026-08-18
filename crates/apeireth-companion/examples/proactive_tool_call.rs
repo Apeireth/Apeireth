@@ -36,9 +36,8 @@ pub struct MiniMaxWithTools {
 
 impl MiniMaxWithTools {
     pub fn new(api_key: String, bridge: Arc<ToolBridge>) -> Result<Self, String> {
-        let pipeline = Arc::new(
-            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
-        );
+        let pipeline =
+            Arc::new(build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.clone())?);
         Ok(Self { pipeline, bridge })
     }
 
@@ -69,7 +68,7 @@ impl MiniMaxWithTools {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let mut content = ch.message.content.clone();
@@ -96,7 +95,15 @@ impl UtteranceGenerator for MiniMaxWithTools {
         );
         let facts = i.to_message();
         // 第一轮: 可以发工具请求
-        let text1 = self.chat(&sys, &format!("把这些事实变成对用户的一句话 (你可以先调工具查记忆):\n{}", facts)).await?;
+        let text1 = self
+            .chat(
+                &sys,
+                &format!(
+                    "把这些事实变成对用户的一句话 (你可以先调工具查记忆):\n{}",
+                    facts
+                ),
+            )
+            .await?;
         // 解析工具请求
         match ToolCallParser::parse(&text1) {
             Ok(calls) if !calls.is_empty() => {
@@ -126,7 +133,9 @@ impl UtteranceGenerator for MiniMaxWithTools {
 }
 
 fn at(day: u32, h: u32, m: u32) -> chrono::DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0).single().unwrap()
+    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0)
+        .single()
+        .unwrap()
 }
 
 fn load_key() -> Result<String, String> {
@@ -174,7 +183,10 @@ async fn main() {
 
     // 3. 心跳: 学习上下文 → 动作「提议帮助」
     let init = c
-        .tick(at(16, 8, 40), Some("你每天 14-18 点学线性代数、19-22 点学高数".into()))
+        .tick(
+            at(16, 8, 40),
+            Some("你每天 14-18 点学线性代数、19-22 点学高数".into()),
+        )
         .expect("应主动");
     println!("[机制] {}\n", init.to_message());
 

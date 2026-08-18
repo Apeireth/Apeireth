@@ -7,7 +7,7 @@
 //! - `search_by_industry` (旧 spec `search` 子集)
 //! - `list_by_exchange` (旧 spec `search` 子集)
 //! - `count_all` (旧 spec `count`)
-//! 旧 spec 方法保留 (向后兼容).
+//! - 旧 spec 方法保留 (向后兼容).
 
 use crate::symbol::SymbolMeta;
 

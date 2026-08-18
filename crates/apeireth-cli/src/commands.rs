@@ -289,7 +289,7 @@ fn skills_scenarios(dir: &std::path::Path) -> Result<String, String> {
 fn skills_watch(dir: &std::path::Path) -> Result<String, String> {
     use apeireth_skills::watcher::SkillWatcher;
     let mut w = SkillWatcher::new(dir);
-    let initial = w.scan_initial().map_err(|e| e.to_string())?;
+    let initial = w.scan_initial().map_err(|e| e.clone())?;
     let events = w.check_for_changes();
     Ok(format!(
         "# Watcher on `{}`\n\n- initial count: {}\n- events (since scan): {}\n",

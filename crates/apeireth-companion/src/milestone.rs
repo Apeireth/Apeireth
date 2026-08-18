@@ -87,11 +87,21 @@ impl Milestone {
         }
     }
 
-    pub fn id(&self) -> Uuid { self.id }
-    pub fn kind(&self) -> MilestoneKind { self.kind }
-    pub fn payload(&self) -> &MilestonePayload { &self.payload }
-    pub fn at(&self) -> DateTime<Utc> { self.at }
-    pub fn note(&self) -> Option<&str> { self.note.as_deref() }
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+    pub fn kind(&self) -> MilestoneKind {
+        self.kind
+    }
+    pub fn payload(&self) -> &MilestonePayload {
+        &self.payload
+    }
+    pub fn at(&self) -> DateTime<Utc> {
+        self.at
+    }
+    pub fn note(&self) -> Option<&str> {
+        self.note.as_deref()
+    }
 
     pub fn with_note(mut self, note: String) -> Self {
         self.note = Some(note);
@@ -105,14 +115,18 @@ mod tests {
 
     #[test]
     fn milestone_creation() {
-        let m = Milestone::new(MilestoneKind::FirstMeeting, MilestonePayload::Text("hi".into()));
+        let m = Milestone::new(
+            MilestoneKind::FirstMeeting,
+            MilestonePayload::Text("hi".into()),
+        );
         assert_eq!(m.kind(), MilestoneKind::FirstMeeting);
         assert!(m.note().is_none());
     }
 
     #[test]
     fn milestone_with_note() {
-        let m = Milestone::new(MilestoneKind::Decision, MilestonePayload::Text("x".into())).with_note("why".into());
+        let m = Milestone::new(MilestoneKind::Decision, MilestonePayload::Text("x".into()))
+            .with_note("why".into());
         assert_eq!(m.note(), Some("why"));
     }
 }

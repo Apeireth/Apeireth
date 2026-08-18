@@ -76,7 +76,11 @@ impl ScenarioEngine {
     }
 
     /// 推演: 依次注入事件序列, 返回每一步后的状态 (快照, 供分支评估).
-    pub fn simulate(&mut self, events: &[String], apply: &ApplyFn) -> Result<Vec<WorldState>, String> {
+    pub fn simulate(
+        &mut self,
+        events: &[String],
+        apply: &ApplyFn,
+    ) -> Result<Vec<WorldState>, String> {
         let mut snaps = Vec::with_capacity(events.len());
         for e in events {
             self.inject(e, apply)?;
@@ -141,7 +145,10 @@ const FORECAST_PREFIX: &str = "forecast-";
 
 impl ForecastRegistry {
     pub fn new(store: Arc<SqliteMemoryStore>, session_id: impl Into<String>) -> Self {
-        Self { store, session_id: session_id.into() }
+        Self {
+            store,
+            session_id: session_id.into(),
+        }
     }
 
     pub fn register(&self, f: &Forecast) -> Result<(), String> {
@@ -156,15 +163,23 @@ impl ForecastRegistry {
     }
 
     fn load_all(&self) -> Result<Vec<Forecast>, String> {
-        let eps = self.store.recent_episodes(&self.session_id, 500).map_err(|e| e.to_string())?;
+        let eps = self
+            .store
+            .recent_episodes(&self.session_id, 500)
+            .map_err(|e| e.to_string())?;
         // 按 forecast.id 分组, 取 rev 最大 (最新版本)
-        let mut best: std::collections::HashMap<String, Forecast> = std::collections::HashMap::new();
+        let mut best: std::collections::HashMap<String, Forecast> =
+            std::collections::HashMap::new();
         for e in eps.iter().filter(|e| e.id.starts_with(FORECAST_PREFIX)) {
             if let Ok(f) = serde_json::from_str::<Forecast>(&e.content) {
                 match best.get(&f.id) {
-                    Some(existing) if f.rev > existing.rev => { best.insert(f.id.clone(), f); }
+                    Some(existing) if f.rev > existing.rev => {
+                        best.insert(f.id.clone(), f);
+                    }
                     Some(_) => {}
-                    None => { best.insert(f.id.clone(), f); }
+                    None => {
+                        best.insert(f.id.clone(), f);
+                    }
                 }
             }
         }
@@ -174,7 +189,10 @@ impl ForecastRegistry {
     /// 对照结果 (更新 + 写回新版本).
     pub fn resolve(&self, id: &str, actual: bool) -> Result<f64, String> {
         let all = self.load_all()?;
-        let idx = all.iter().position(|f| f.id == id).ok_or_else(|| format!("预测不存在: {id}"))?;
+        let idx = all
+            .iter()
+            .position(|f| f.id == id)
+            .ok_or_else(|| format!("预测不存在: {id}"))?;
         let mut f = all[idx].clone();
         if f.resolved.is_some() {
             return Err("预测已 resolve".into());
@@ -201,15 +219,26 @@ impl ForecastRegistry {
         if resolved.is_empty() {
             return Ok((0, 0.0, "暂无已对照预测".into()));
         }
-        let mean_brier: f64 = resolved.iter().filter_map(|f| f.brier).sum::<f64>() / resolved.len() as f64;
+        let mean_brier: f64 =
+            resolved.iter().filter_map(|f| f.brier).sum::<f64>() / resolved.len() as f64;
         // 校准度: 概率 70% 组的实际发生率 vs 70%
         let bands = [(0.6, 0.8), (0.4, 0.6), (0.8, 1.01), (0.0, 0.4)];
         let mut hint = String::new();
         for (lo, hi) in bands {
-            let group: Vec<&Forecast> = resolved.iter().filter(|f| f.probability >= lo && f.probability < hi).copied().collect();
+            let group: Vec<&Forecast> = resolved
+                .iter()
+                .filter(|f| f.probability >= lo && f.probability < hi)
+                .copied()
+                .collect();
             if !group.is_empty() {
-                let actual_rate = group.iter().filter(|f| f.resolved == Some(true)).count() as f64 / group.len() as f64;
-                hint.push_str(&format!("p∈[{:.0}%,{:.0}%) 实际 {:.0}%; ", lo * 100.0, (hi.min(1.01) * 100.0).min(100.0), actual_rate * 100.0));
+                let actual_rate = group.iter().filter(|f| f.resolved == Some(true)).count() as f64
+                    / group.len() as f64;
+                hint.push_str(&format!(
+                    "p∈[{:.0}%,{:.0}%) 实际 {:.0}%; ",
+                    lo * 100.0,
+                    (hi.min(1.01) * 100.0).min(100.0),
+                    actual_rate * 100.0
+                ));
             }
         }
         Ok((resolved.len(), mean_brier, hint))
@@ -312,8 +341,11 @@ impl DecisionEngine {
     /// 选优: 返回期望值最大的分支下标 (空 → None).
     pub fn choose(branches: &[Branch]) -> Option<usize> {
         let ev = |b: &Branch| b.probability * b.value;
-        (0..branches.len())
-            .max_by(|&a, &b| ev(&branches[a]).partial_cmp(&ev(&branches[b])).unwrap_or(std::cmp::Ordering::Equal))
+        (0..branches.len()).max_by(|&a, &b| {
+            ev(&branches[a])
+                .partial_cmp(&ev(&branches[b]))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
     }
 }
 
@@ -337,16 +369,22 @@ mod tests {
         let apply: ApplyFn = Box::new(|s: &mut WorldState, e: &str| {
             if let Some((id, val)) = e.split_once('+') {
                 if let Some(en) = s.entity_mut(id) {
-                    *en.props.entry("进度".into()).or_insert(0.0) += val.parse::<f64>().map_err(|_| "bad".to_string())?;
+                    *en.props.entry("进度".into()).or_insert(0.0) +=
+                        val.parse::<f64>().map_err(|_| "bad".to_string())?;
                 }
             }
             Ok(())
         });
         let mut eng = ScenarioEngine::new(world());
-        let snaps = eng.simulate(&["master+0.2".into(), "master+0.1".into()], &apply).unwrap();
+        let snaps = eng
+            .simulate(&["master+0.2".into(), "master+0.1".into()], &apply)
+            .unwrap();
         assert_eq!(snaps.len(), 2);
         assert_eq!(eng.state.tick, 2);
-        assert!((eng.state.prop("master", "进度").unwrap() - 0.6).abs() < 1e-9, "0.3+0.2+0.1");
+        assert!(
+            (eng.state.prop("master", "进度").unwrap() - 0.6).abs() < 1e-9,
+            "0.3+0.2+0.1"
+        );
     }
 
     #[test]
@@ -355,7 +393,10 @@ mod tests {
         assert!(f.resolved.is_none());
         f.resolve(true);
         assert_eq!(f.resolved, Some(true));
-        assert!((f.brier.unwrap() - 0.09).abs() < 1e-9, "Brier=(0.7-1)²=0.09");
+        assert!(
+            (f.brier.unwrap() - 0.09).abs() < 1e-9,
+            "Brier=(0.7-1)²=0.09"
+        );
         let mut f2 = Forecast::new("x", 0.7, 0);
         f2.resolve(false);
         assert!((f2.brier.unwrap() - 0.49).abs() < 1e-9, "Brier=0.7²=0.49");
@@ -373,7 +414,10 @@ mod tests {
         reg.resolve(&f2.id, true).unwrap();
         let (n, mean_brier, hint) = reg.calibration().unwrap();
         assert_eq!(n, 2);
-        assert!(mean_brier < 0.2, "两个高概率都发生 → Brier 低: {mean_brier}");
+        assert!(
+            mean_brier < 0.2,
+            "两个高概率都发生 → Brier 低: {mean_brier}"
+        );
         assert!(hint.contains("实际"), "校准提示含实际发生率: {hint}");
         // 重复 resolve 拒绝
         assert!(reg.resolve(&f1.id, false).is_err());
@@ -450,30 +494,60 @@ mod tests {
         let reg = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
         let r = CalibratedResolver::new(reg);
         // 0 历史 → trait 口返回 0.5
-        let p = r.resolve(&WorldState::default(), "今晚能写完作业吗").await.unwrap();
+        let p = r
+            .resolve(&WorldState::default(), "今晚能写完作业吗")
+            .await
+            .unwrap();
         assert!((p - 0.5).abs() < 1e-9, "无历史 → 0.5: {p}");
         // 有历史 → trait 口返回校准后验均值
         let reg2 = registry_with(Arc::new(SqliteMemoryStore::open_in_memory().unwrap()));
         seed_resolved(&reg2, &[0.9, 0.9, 0.9, 0.9], &[true, true, true, true]);
         let r2 = CalibratedResolver::new(reg2);
-        let p2 = r2.resolve(&WorldState::default(), "明天会下雨吗").await.unwrap();
+        let p2 = r2
+            .resolve(&WorldState::default(), "明天会下雨吗")
+            .await
+            .unwrap();
         assert!((p2 - 5.0 / 6.0).abs() < 1e-9, "4/4 成真 → 5/6: {p2}");
     }
 
     #[test]
     fn decision_engine_expectimax() {
         let branches = vec![
-            Branch { name: "保守".into(), probability: 0.8, value: 5.0, events: vec![] },
-            Branch { name: "激进".into(), probability: 0.2, value: 30.0, events: vec![] },
+            Branch {
+                name: "保守".into(),
+                probability: 0.8,
+                value: 5.0,
+                events: vec![],
+            },
+            Branch {
+                name: "激进".into(),
+                probability: 0.2,
+                value: 30.0,
+                events: vec![],
+            },
         ];
         // 保守 4.0 vs 激进 6.0 → 激进期望更高
         assert!((DecisionEngine::expected_value(&branches) - 10.0).abs() < 1e-9);
         assert_eq!(DecisionEngine::choose(&branches), Some(1));
         // 低概率高价值 vs 高概率中价值: 0.9*8=7.2 vs 0.1*100=10 → 期望值选「赌」(数学正确)
         let b2 = vec![
-            Branch { name: "稳".into(), probability: 0.9, value: 8.0, events: vec![] },
-            Branch { name: "赌".into(), probability: 0.1, value: 100.0, events: vec![] },
+            Branch {
+                name: "稳".into(),
+                probability: 0.9,
+                value: 8.0,
+                events: vec![],
+            },
+            Branch {
+                name: "赌".into(),
+                probability: 0.1,
+                value: 100.0,
+                events: vec![],
+            },
         ];
-        assert_eq!(DecisionEngine::choose(&b2), Some(1), "期望值 10 > 7.2, 应选赌");
+        assert_eq!(
+            DecisionEngine::choose(&b2),
+            Some(1),
+            "期望值 10 > 7.2, 应选赌"
+        );
     }
 }

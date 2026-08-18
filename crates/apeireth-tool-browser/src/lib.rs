@@ -31,25 +31,25 @@
 
 pub mod browser;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod accessibility;
-pub mod fetch;
 pub mod cli;
-pub mod mcp;
 pub mod compat;
 pub mod enhanced;
+pub mod fetch;
+pub mod mcp;
+mod organ_kani_proofs;
 pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 
 #[cfg(feature = "cdp")]
 pub mod cdp;
 
-pub use browser::{Browser, BrowserMode, BrowserError, PageSnapshot};
-pub use accessibility::{AccessibilityTree, AccessibilityNode, NodeRole, extract_tree};
-pub use fetch::{FetchBrowser, FetchConfig};
-pub use cli::{BrowserCli, CliCommand, parse_command};
-pub use mcp::{McpServer, McpRequest, McpResponse};
+pub use accessibility::{extract_tree, AccessibilityNode, AccessibilityTree, NodeRole};
+pub use browser::{Browser, BrowserError, BrowserMode, PageSnapshot};
+pub use cli::{parse_command, BrowserCli, CliCommand};
 pub use compat::{BrowserCommand, BrowserCompatRouter, BROWSER_COMMAND_COUNT};
 pub use enhanced::EnhancedBrowser;
+pub use fetch::{FetchBrowser, FetchConfig};
+pub use mcp::{McpRequest, McpResponse, McpServer};
 
 /// R139 deliverables (per v2 plan §9.5):
 /// - 6 modules (browser / accessibility / fetch / cli / mcp / compat) + enhanced

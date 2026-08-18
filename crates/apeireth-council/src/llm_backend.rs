@@ -49,12 +49,11 @@ impl MockLlmProvider for LlmAdvisorBackend {
             }),
             Err(_) => {
                 // 没在 tokio runtime 里, 启动临时 runtime
-                let rt = match tokio::runtime::Builder::new_current_thread()
+                let Ok(rt) = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
-                {
-                    Ok(rt) => rt,
-                    Err(_) => return MockLlmResponse::ok(""),
+                else {
+                    return MockLlmResponse::ok("");
                 };
                 rt.block_on(async {
                     let model = if self.llm.name() == "apeireth-api" {

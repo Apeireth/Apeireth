@@ -160,11 +160,7 @@ impl Critic {
     ///
     /// 用于: proposal 有当前预测 (forecast_now), 但 outcome 未发生;
     /// 结合历史做诊断, 输出 (current_risk, recommended_action).
-    pub fn critique_single(
-        &self,
-        forecast_now: f64,
-        history: &[Observation],
-    ) -> CritiqueResult {
+    pub fn critique_single(&self, forecast_now: f64, history: &[Observation]) -> CritiqueResult {
         // 用历史诊断 + 当前 forecast 作为 severity 的 hint
         let mut result = self.critique(history);
 
@@ -249,12 +245,7 @@ mod tests {
     #[test]
     fn critic_recommends_continue_for_perfect_history() {
         // 完美对齐: forecast = outcome (在 bin 中点) → ECE = 0
-        let history = make_obs(&[
-            (0.0, 0.0),
-            (0.0, 0.0),
-            (1.0, 1.0),
-            (1.0, 1.0),
-        ]);
+        let history = make_obs(&[(0.0, 0.0), (0.0, 0.0), (1.0, 1.0), (1.0, 1.0)]);
         let c = Critic::default_critic();
         let r = c.critique(&history);
         assert!(
@@ -271,13 +262,7 @@ mod tests {
     #[test]
     fn critic_recommends_reject_for_miscalibrated_history() {
         // 全部 forecast=0.9 但 outcome=0 (反向)
-        let history = make_obs(&[
-            (0.9, 0.0),
-            (0.8, 0.0),
-            (0.95, 0.0),
-            (0.85, 0.0),
-            (0.7, 0.0),
-        ]);
+        let history = make_obs(&[(0.9, 0.0), (0.8, 0.0), (0.95, 0.0), (0.85, 0.0), (0.7, 0.0)]);
         let c = Critic::default_critic();
         let r = c.critique(&history);
         assert!(
@@ -335,7 +320,7 @@ mod tests {
         let history = make_obs(&[(0.0, 0.0), (1.0, 1.0)]);
         let c = Critic::default_critic();
         let r = c.critique_single(0.5, &history); // current forecast = 0.5 but history is good
-        // severity should reflect HISTORY (good), not current
+                                                  // severity should reflect HISTORY (good), not current
         assert!(
             r.severity < 0.15,
             "single with good history should be low severity, got {} (BS={}, ECE={})",
@@ -409,12 +394,7 @@ mod tests {
 
     #[test]
     fn critic_integration_with_calibration_bins() {
-        let history = make_obs(&[
-            (0.1, 0.0),
-            (0.3, 0.0),
-            (0.7, 1.0),
-            (0.9, 1.0),
-        ]);
+        let history = make_obs(&[(0.1, 0.0), (0.3, 0.0), (0.7, 1.0), (0.9, 1.0)]);
         let c = Critic::default_critic();
         let r = c.critique(&history);
         assert_eq!(r.bins.len(), 10); // default 10 bins
@@ -447,7 +427,8 @@ mod tests {
         let r_lenient = c_lenient.critique(&history);
         // Strict should recommend more severe action
         assert!(
-            format!("{:?}", r_strict.recommended_action) != format!("{:?}", r_lenient.recommended_action)
+            format!("{:?}", r_strict.recommended_action)
+                != format!("{:?}", r_lenient.recommended_action)
                 || r_strict.severity != r_lenient.severity
         );
     }

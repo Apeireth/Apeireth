@@ -52,7 +52,8 @@ impl SdkVersion {
     }
 
     /// 排序: major > minor > patch (返回 Ordering).
-    pub fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+    /// 命名 compare_versions 避免与 std::cmp::Ord::cmp 混淆 (clippy should_implement_trait).
+    pub fn compare_versions(&self, other: &Self) -> std::cmp::Ordering {
         self.major
             .cmp(&other.major)
             .then(self.minor.cmp(&other.minor))
@@ -91,7 +92,7 @@ pub fn negotiate(client: SdkVersion, server: SdkVersion) -> WireCompat {
     if client.major != server.major {
         return WireCompat::Incompatible;
     }
-    match client.cmp(&server) {
+    match client.compare_versions(&server) {
         std::cmp::Ordering::Equal => WireCompat::Exact,
         std::cmp::Ordering::Less => WireCompat::ServerNewer,
         std::cmp::Ordering::Greater => WireCompat::ServerOlder,

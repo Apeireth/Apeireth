@@ -28,7 +28,9 @@ jobs:
           components: llvm-tools-preview
 
       - name: Install cargo-tarpaulin
-        run: pip install cargo-tarpaulin
+        # 2026-08 CI fix: `pip install cargo-tarpaulin` 无此 PyPI 包 (tarpaulin 是 Rust 工具),
+        # 改用 taiki-e/install-action (跟 rust.yml 的 nextest 一致)
+        uses: taiki-e/install-action@cargo-tarpaulin
 
       - uses: Swatinem/rust-cache@v2
 

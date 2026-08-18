@@ -87,14 +87,15 @@ fn cross_daemon_persistence_100_episodes() {
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
         }
         // 打开 persistent index + 索引全部
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         for i in 0..100 {
             let ep = <SqliteMemoryStore as EpisodeStore>::get_episode(&mem, &format!("e{i:03}"))
                 .unwrap()
                 .expect("episode must exist");
             idx.index_episode(&ep).unwrap();
         }
-        idx.save().unwrap();
+        idx.flush_noop().unwrap();
         assert_eq!(idx.len().unwrap(), 100);
 
         // 显式 drop — 模拟 daemon 关闭
@@ -105,7 +106,8 @@ fn cross_daemon_persistence_100_episodes() {
     // ===== 阶段 2: daemon 2 重开, 验证持久化 =====
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         assert_eq!(idx.len().unwrap(), 100, "100 条应跨 daemon 持久");
         // search 仍能命中
         let hits = idx.search("topic", 5).unwrap();
@@ -131,14 +133,15 @@ fn cross_daemon_persistence_1000_episodes() {
             );
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
         }
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         for i in 0..1000 {
             let ep = <SqliteMemoryStore as EpisodeStore>::get_episode(&mem, &format!("k{i:04}"))
                 .unwrap()
                 .expect("must exist");
             idx.index_episode(&ep).unwrap();
         }
-        idx.save().unwrap();
+        idx.flush_noop().unwrap();
         assert_eq!(idx.len().unwrap(), 1000);
         drop(idx);
         drop(mem);
@@ -146,7 +149,8 @@ fn cross_daemon_persistence_1000_episodes() {
 
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         assert_eq!(idx.len().unwrap(), 1000, "1000 条应跨 daemon 持久");
         let hits = idx.search("rust sql", 10).unwrap();
         assert!(!hits.is_empty(), "1000 corpus search 应能命中");
@@ -173,7 +177,8 @@ fn incremental_persistence_two_writes() {
             let ep = make_episode(&format!("i{i}"), i64::from(i), &format!("content {i}"));
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
         }
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         for i in 0..5 {
             let ep = <SqliteMemoryStore as EpisodeStore>::get_episode(&mem, &format!("i{i}"))
                 .unwrap()
@@ -186,7 +191,8 @@ fn incremental_persistence_two_writes() {
     // 阶段 2: 重开, 追加 5 条
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         assert_eq!(idx.len().unwrap(), 5, "阶段 2 重开应见 5 条");
         for i in 5..10 {
             let ep = make_episode(&format!("i{i}"), i64::from(i), &format!("content {i}"));
@@ -202,7 +208,8 @@ fn incremental_persistence_two_writes() {
     // 阶段 3: 再重开, 验证累计 10
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         assert_eq!(idx.len().unwrap(), 10, "阶段 3 累计 10 条");
         let hits = idx.search("content", 5).unwrap();
         assert!(!hits.is_empty());
@@ -224,11 +231,13 @@ fn concurrent_persistent_indexes_dont_conflict() {
     <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
 
     // idx1 + idx2 (不同进程语义: 同 path, 不同 connection, 不同 Arc<Mutex>)
-    let idx1 = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+    let idx1 =
+        PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
     idx1.index_episode(&ep).unwrap();
     assert_eq!(idx1.len().unwrap(), 1);
 
-    let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+    let idx2 =
+        PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
     // idx2 reload 应该看到 idx1 写的 (write-through WAL)
     let n2 = idx2.len().unwrap();
     assert!(n2 >= 1, "idx2 应见 idx1 写入 (>= 1), got {n2}");
@@ -241,7 +250,8 @@ fn concurrent_persistent_indexes_dont_conflict() {
 
     // idx1 reload: 重新打开 → 应见 2 条
     drop(idx1);
-    let idx1_v2 = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+    let idx1_v2 =
+        PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
     assert_eq!(idx1_v2.len().unwrap(), 2, "idx1 重开应见 idx2 写入");
 
     cleanup_pair(&mem_path, &vec_path);
@@ -265,9 +275,10 @@ fn persistent_index_search_after_daemon_restart_preserves_ranking() {
         for ep in &eps {
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, ep).unwrap();
         }
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         idx.index_episodes(&eps).unwrap();
-        idx.save().unwrap();
+        idx.flush_noop().unwrap();
         daemon1_hits = idx
             .search("SQL database query", 3)
             .unwrap()
@@ -279,7 +290,8 @@ fn persistent_index_search_after_daemon_restart_preserves_ranking() {
     let daemon2_hits: Vec<String>;
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         daemon2_hits = idx
             .search("SQL database query", 3)
             .unwrap()
@@ -309,22 +321,31 @@ fn persistent_index_extract_profile_after_restart() {
         let mem = open_mem_arc(&mem_path);
         let eps: Vec<Episode> = (0..10)
             .map(|i| {
-                let ep = make_episode(&format!("p{i}"), i64::from(i), "rust sql database vector topic");
+                let ep = make_episode(
+                    &format!("p{i}"),
+                    i64::from(i),
+                    "rust sql database vector topic",
+                );
                 <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
                 ep
             })
             .collect();
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         idx.index_episodes(&eps).unwrap();
-        idx.save().unwrap();
+        idx.flush_noop().unwrap();
     }
 
     // 阶段 2: 重开 + extract
     {
         let mem = open_mem_arc(&mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder)).unwrap();
+        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder))
+            .unwrap();
         let profile = idx.extract_profile().unwrap();
-        assert!(profile.interaction_count >= 10, "重开 extract 应见 ≥ 10 interaction");
+        assert!(
+            profile.interaction_count >= 10,
+            "重开 extract 应见 ≥ 10 interaction"
+        );
     }
 
     cleanup_pair(&mem_path, &vec_path);
@@ -341,14 +362,17 @@ fn persistent_index_with_different_embedder_dim_rejects() {
     // 阶段 1: 32 维 open + close
     {
         let mem = open_mem_arc(&_mem_path);
-        let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder_32)).unwrap();
+        let idx =
+            PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder_32))
+                .unwrap();
         drop(idx);
     }
 
     // 阶段 2: 64 维 embedder open → 报错
     {
         let mem = open_mem_arc(&_mem_path);
-        let result = PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder_64));
+        let result =
+            PersistentSemanticIndex::open(Arc::clone(&mem), &vec_path, Arc::clone(&embedder_64));
         assert!(result.is_err(), "dim 不一致应报错");
         let err = format!("{}", result.unwrap_err());
         assert!(

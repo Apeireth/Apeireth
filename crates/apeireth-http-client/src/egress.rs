@@ -107,9 +107,15 @@ impl EgressPolicy {
         // URL 解析
         let (scheme, host) = parse_url(url).ok_or_else(|| EgressError::InvalidUrl(url.into()))?;
         // 协议
-        if scheme != "https" && !self.config.allow_http.iter().any(|h| host_matches(h.as_str(), &host)) {
+        if scheme != "https"
+            && !self
+                .config
+                .allow_http
+                .iter()
+                .any(|h| host_matches(h.as_str(), &host))
+        {
             self.audit(url, false, format!("协议 {scheme} 不允许"));
-            return Err(EgressError::ProtocolNotAllowed(scheme.to_string()));
+            return Err(EgressError::ProtocolNotAllowed(scheme.clone()));
         }
         // 域名白名单 (默认拒绝)
         let allowed = self
@@ -119,7 +125,7 @@ impl EgressPolicy {
             .any(|rule| host_matches(rule.as_str(), &host));
         if !allowed {
             self.audit(url, false, format!("域名 {host} 不在白名单 (默认拒绝)"));
-            return Err(EgressError::DomainNotAllowed(host.to_string()));
+            return Err(EgressError::DomainNotAllowed(host.clone()));
         }
         self.audit(url, true, "白名单命中");
         Ok(())
@@ -129,7 +135,11 @@ impl EgressPolicy {
     pub fn audit(&mut self, url: &str, allowed: bool, reason: impl Into<String>) -> &AuditEntry {
         let at_ms = chrono::Utc::now().timestamp_millis();
         let reason = reason.into();
-        let prev_hash = self.chain.last().map(|e| e.hash.clone()).unwrap_or_default();
+        let prev_hash = self
+            .chain
+            .last()
+            .map(|e| e.hash.clone())
+            .unwrap_or_default();
         let raw = format!("{url}|{allowed}|{reason}|{at_ms}|{prev_hash}");
         let hash = sha256_hex(&raw);
         let entry = AuditEntry {
@@ -204,9 +214,15 @@ mod tests {
             allowlist: vec!["api.apeireth.ai".into(), "*.llm.example.com".into()],
             ..Default::default()
         });
-        assert!(p.check_outbound("https://api.apeireth.ai/v1/chat", 1.0).is_ok());
-        assert!(p.check_outbound("https://sub.llm.example.com/x", 1.0).is_ok());
-        let err = p.check_outbound("https://evil.example.org", 1.0).unwrap_err();
+        assert!(p
+            .check_outbound("https://api.apeireth.ai/v1/chat", 1.0)
+            .is_ok());
+        assert!(p
+            .check_outbound("https://sub.llm.example.com/x", 1.0)
+            .is_ok());
+        let err = p
+            .check_outbound("https://evil.example.org", 1.0)
+            .unwrap_err();
         assert!(matches!(err, EgressError::DomainNotAllowed(_)), "{err:?}");
         // 拒绝也留痕
         assert_eq!(p.audit_len(), 3);
@@ -218,7 +234,9 @@ mod tests {
             allowlist: vec!["api.apeireth.ai".into()],
             ..Default::default()
         });
-        let err = p.check_outbound("http://api.apeireth.ai/x", 1.0).unwrap_err();
+        let err = p
+            .check_outbound("http://api.apeireth.ai/x", 1.0)
+            .unwrap_err();
         assert!(matches!(err, EgressError::ProtocolNotAllowed(_)));
         // 显式放行 http
         let mut p2 = EgressPolicy::new(EgressConfig {
@@ -246,7 +264,7 @@ mod tests {
 
     #[test]
     fn budget_hook_blocks() {
-#[derive(Debug)]
+        #[derive(Debug)]
         struct Tight;
         impl BudgetHook for Tight {
             fn check(&self, _url: &str, needed: f64) -> Result<(), EgressError> {
@@ -275,6 +293,9 @@ mod tests {
         });
         assert!(p.check_outbound("https://api.example.com/v1", 1.0).is_ok());
         assert!(p.check_outbound("https://example.com/v1", 1.0).is_ok());
-        assert!(p.check_outbound("https://fakeexample.com/v1", 1.0).is_err(), "fakeexample.com 不应命中 *.example.com");
+        assert!(
+            p.check_outbound("https://fakeexample.com/v1", 1.0).is_err(),
+            "fakeexample.com 不应命中 *.example.com"
+        );
     }
 }

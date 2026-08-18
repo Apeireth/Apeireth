@@ -64,19 +64,19 @@ tower = "0.5"
 tower-http = { version = "0.5", features = ["trace", "cors"] }
 # V2 Step 2 自包含 6 类 stub (EpisodeStore SQLite / ASI Registry / SelfDisableGuard / AgentManager / LRU cache)
 rusqlite = { workspace = true }
-lru = "0.16"
+lru = "0.18" # RUSTSEC-2026-0253 (0.16.4 unsound), 0.18.2 patched
 # R20 阶段 2: API key SHA-256 hash (走 sha2 + hex, 跟 apeireth-keyring 一致)
 sha2 = "0.10"
 hex = "0.4"
 
-# R162: tui-dashboard feature - gates ratatui/crossterm deps for dashboard.rs::run()
-# Default off to avoid forcing terminal UI deps on consumers (e.g. TUI integration).
-ratatui = { version = "0.29", optional = true }
+# R162: tui-dashboard feature - gates ratatui/crossterm deps for src/observability/dashboard.rs::run()
+# ratatui 0.30: 0.29 拉 lru 0.12.5 (RUSTSEC-2026-0253 affected <0.18.2), 0.30 不再依赖 lru 0.12
+ratatui = { version = "0.30", optional = true }
 crossterm = { version = "0.28", optional = true }
 
 [features]
 # R162: enable with cargo build -p apeireth-api --features tui-dashboard
-# Pulls in ratatui 0.29 + crossterm 0.28 for the live TUI dashboard in
+# Pulls in ratatui + crossterm for the live TUI dashboard in
 # src/observability/dashboard.rs. Default-off to keep non-TUI consumers slim.
 default = []
 tui-dashboard = ["dep:ratatui", "dep:crossterm"]

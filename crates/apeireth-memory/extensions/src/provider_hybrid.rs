@@ -27,9 +27,7 @@ use serde::{Deserialize, Serialize};
 use tempfile::TempDir;
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 use crate::provider_disk_lru::DiskLruProvider;
 use crate::provider_in_memory::InMemoryProvider;
 
@@ -195,8 +193,8 @@ mod tests {
         ProviderConfig::new(
             "hybrid://memory+disk",
             Duration::from_secs(5),
-            1024 * 1024, // 1MB
-            true,         // persist=true 透传给 L2
+            1024 * 1024,            // 1MB
+            true,                   // persist=true 透传给 L2
             Duration::from_secs(0), // 永不过期
             ProviderScope::Shared,
         )

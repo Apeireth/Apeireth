@@ -47,6 +47,7 @@ fn wire_to_msg<T: for<'de> Deserialize<'de>>(wire: BusWire) -> BusResult<BusMess
         trace_id: wire.trace_id,
         payload,
         created_at_ms: wire.created_at_ms,
+        priority: crate::MessagePriority::Normal, // R245 字段 (wire 无 priority, 默认 Normal)
     })
 }
 
@@ -139,11 +140,9 @@ impl bus_proto::bus_service_server::BusService for BusServiceImpl {
                                 return Some((Ok::<_, Status>(w), rx));
                             }
                             // Skip non-matching topic; continue looping
-                            continue;
                         }
                         Err(broadcast::error::RecvError::Closed) => return None,
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
-                        Err(e) => return Some((Err(tonic::Status::internal(e.to_string())), rx)),
+                        Err(broadcast::error::RecvError::Lagged(_)) => {}
                     }
                 }
             }
@@ -197,7 +196,7 @@ impl bus_proto::bus_service_server::BusService for BusServiceImpl {
                     st.pending_replies.remove(&trace_id);
                     return Err(Status::unavailable("reply channel closed"));
                 }
-                Err(_) => continue, // time-out loop check above
+                Err(_) => {} // time-out loop check above
             }
         }
     }

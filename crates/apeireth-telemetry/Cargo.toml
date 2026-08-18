@@ -22,7 +22,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json", "fmt"]
 async-trait = "0.1"
 parking_lot = "0.12"
 indexmap = { version = "2", features = ["serde"] }
-lru = "0.16"
+lru = "0.18" # RUSTSEC-2026-0253 (0.16.4 unsound), 0.18.2 patched
 fnv = "1.0"
 uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }

@@ -26,7 +26,12 @@ pub struct ContextBlock {
 
 impl ContextBlock {
     pub fn new(name: &'static str, content: impl Into<String>) -> Self {
-        Self { name, content: content.into(), core: false, cap_chars: None }
+        Self {
+            name,
+            content: content.into(),
+            core: false,
+            cap_chars: None,
+        }
     }
     pub fn core(mut self, core: bool) -> Self {
         self.core = core;
@@ -47,7 +52,10 @@ pub struct ContextAssembler {
 impl ContextAssembler {
     /// 总预算字符数 (默认 6000; 超预算块从尾部截断, 核心块保护).
     pub fn new(total_budget_chars: usize) -> Self {
-        Self { blocks: Vec::new(), total_budget_chars: total_budget_chars.max(100) }
+        Self {
+            blocks: Vec::new(),
+            total_budget_chars: total_budget_chars.max(100),
+        }
     }
 
     /// 总预算 (只读口) — 补 getter 解除 prompt_assembler 编译阻塞 (agent_orchestrator2 代加, 供主人知悉)
@@ -63,7 +71,10 @@ impl ContextAssembler {
 
     /// 预算报告 (诊断): 各块字符数 + 总占用.
     pub fn budget_report(&self) -> Vec<(String, usize)> {
-        self.blocks.iter().map(|b| (b.name.to_string(), b.content.chars().count())).collect()
+        self.blocks
+            .iter()
+            .map(|b| (b.name.to_string(), b.content.chars().count()))
+            .collect()
     }
 
     /// 预算化组装 (不可变): 返回按预算截断后的块列表.
@@ -81,14 +92,20 @@ impl ContextAssembler {
             .blocks
             .iter()
             .map(|b| {
-                let s: String = b.content.chars().take(b.cap_chars.unwrap_or(usize::MAX)).collect();
+                let s: String = b
+                    .content
+                    .chars()
+                    .take(b.cap_chars.unwrap_or(usize::MAX))
+                    .collect();
                 s
             })
             .collect();
         // 2. 总预算超标 → 非核心块按"字符多者优先"截断 (贪心砍大头)
         let mut total: usize = capped.iter().map(|s| s.chars().count()).sum();
         if total > self.total_budget_chars {
-            let mut order: Vec<usize> = (0..self.blocks.len()).filter(|&i| !self.blocks[i].core).collect();
+            let mut order: Vec<usize> = (0..self.blocks.len())
+                .filter(|&i| !self.blocks[i].core)
+                .collect();
             order.sort_by_key(|&i| std::cmp::Reverse(capped[i].chars().count()));
             for i in order {
                 if total <= self.total_budget_chars {
@@ -178,7 +195,11 @@ pub struct RotWeights {
 
 impl Default for RotWeights {
     fn default() -> Self {
-        Self { w_duplicate: 0.4, w_stale: 0.3, w_irrelevant: 0.3 }
+        Self {
+            w_duplicate: 0.4,
+            w_stale: 0.3,
+            w_irrelevant: 0.3,
+        }
     }
 }
 
@@ -261,10 +282,7 @@ pub fn ngrams(s: &str, n: usize) -> HashSet<Vec<String>> {
     if n == 0 {
         return HashSet::new();
     }
-    let words: Vec<String> = s
-        .split_whitespace()
-        .map(|w| w.to_lowercase())
-        .collect();
+    let words: Vec<String> = s.split_whitespace().map(|w| w.to_lowercase()).collect();
     if words.len() < n {
         return HashSet::new();
     }
@@ -342,7 +360,11 @@ pub fn compute_rot_score(blocks: &[RotBlock], cfg: &RotConfig) -> RotBreakdown {
             duplicate_ratio: 0.0,
             stale_ratio: 0.0,
             irrelevance: 0.0,
-            relevance: if cfg.latest_user_message.is_none() { 1.0 } else { 0.0 },
+            relevance: if cfg.latest_user_message.is_none() {
+                1.0
+            } else {
+                0.0
+            },
             duplicate_pairs: Vec::new(),
             stale_block_ids: Vec::new(),
             low_relevance_block_ids: Vec::new(),
@@ -449,7 +471,10 @@ mod tests {
         assert!(total <= 300, "总预算应约束 (核心保护下 total=300)");
         assert!(out[0].contains("核心人格内容"), "核心块应完整保留");
         // 记忆块 (非核心, 最大) 应被截断: 460-300=160 → mem 200 砍 160 → 40
-        assert!(out[1].chars().count() < "记忆内容".repeat(50).chars().count(), "非核心块应被截断");
+        assert!(
+            out[1].chars().count() < "记忆内容".repeat(50).chars().count(),
+            "非核心块应被截断"
+        );
         assert_eq!(out[1].chars().count(), 40, "mem 200 → 砍 160 → 留 40");
     }
 
@@ -490,7 +515,13 @@ mod tests {
         let s = "the quick brown fox jumps over the lazy dog";
         let ng = ngrams(s, 5);
         assert!(!ng.is_empty());
-        assert!(ng.contains(&vec!["the".into(), "quick".into(), "brown".into(), "fox".into(), "jumps".into()]));
+        assert!(ng.contains(&vec![
+            "the".into(),
+            "quick".into(),
+            "brown".into(),
+            "fox".into(),
+            "jumps".into()
+        ]));
     }
 
     #[test]
@@ -540,7 +571,11 @@ mod tests {
 
     #[test]
     fn rot_single_block_zero_rot() {
-        let blocks = vec![mk_block("a", "this is a sufficiently long block of text content here", 0)];
+        let blocks = vec![mk_block(
+            "a",
+            "this is a sufficiently long block of text content here",
+            0,
+        )];
         let b = compute_rot_score(&blocks, &base_cfg(0));
         assert_eq!(b.duplicate_ratio, 0.0);
         assert_eq!(b.stale_ratio, 0.0);
@@ -554,10 +589,7 @@ mod tests {
     fn rot_two_identical_blocks_high_duplicate() {
         let text = "rust language supports zero cost abstractions and ownership model for safety";
         let now = 10_000_000;
-        let blocks = vec![
-            mk_block("a", text, now),
-            mk_block("b", text, now),
-        ];
+        let blocks = vec![mk_block("a", text, now), mk_block("b", text, now)];
         let b = compute_rot_score(&blocks, &base_cfg(now));
         // 2 个块都涉及 → dup_ratio = 2/2 = 1.0
         assert_eq!(b.duplicate_ratio, 1.0, "两个完全相同块应记 100% 重复");
@@ -579,17 +611,33 @@ mod tests {
         ];
         let b = compute_rot_score(&blocks, &base_cfg(1000));
         assert_eq!(b.duplicate_ratio, 1.0);
-        assert!(b.duplicate_pairs.len() == 3, "3 块两两对 = C(3,2)=3 重复对, got {}", b.duplicate_pairs.len());
+        assert!(
+            b.duplicate_pairs.len() == 3,
+            "3 块两两对 = C(3,2)=3 重复对, got {}",
+            b.duplicate_pairs.len()
+        );
     }
 
     #[test]
     fn rot_stale_blocks_detected() {
         let now = 10_000_000; // > 30 min after stale blocks
         let blocks = vec![
-            mk_block("fresh", "this is a fresh block of text content with enough chars", now),
+            mk_block(
+                "fresh",
+                "this is a fresh block of text content with enough chars",
+                now,
+            ),
             // both touched = now - 1h ≈ 3.6M ms ago > 30 min threshold (1.8M)
-            mk_block("stale1", "this is a stale block of text content with old timestamp", now - 3_600_000),
-            mk_block("stale2", "another stale block of text content with old timestamp too", now - 7_200_000),
+            mk_block(
+                "stale1",
+                "this is a stale block of text content with old timestamp",
+                now - 3_600_000,
+            ),
+            mk_block(
+                "stale2",
+                "another stale block of text content with old timestamp too",
+                now - 7_200_000,
+            ),
         ];
         let b = compute_rot_score(&blocks, &base_cfg(now));
         // 3 eligible, 2 stale → stale_ratio ≈ 0.667
@@ -603,8 +651,16 @@ mod tests {
     fn rot_relevance_with_user_message() {
         let msg = "rust async runtime and tokio scheduler";
         let blocks = vec![
-            mk_block("relevant", "discussing rust async runtime with tokio and scheduler design", 1000),
-            mk_block("irrelevant", "completely off topic block about breakfast cereal and coffee types", 1000),
+            mk_block(
+                "relevant",
+                "discussing rust async runtime with tokio and scheduler design",
+                1000,
+            ),
+            mk_block(
+                "irrelevant",
+                "completely off topic block about breakfast cereal and coffee types",
+                1000,
+            ),
         ];
         let mut cfg = base_cfg(1000);
         cfg.latest_user_message = Some(msg.into());
@@ -613,29 +669,35 @@ mod tests {
         assert!(b.relevance < 1.0, "另一条无关, 应 < 1");
         assert!(b.irrelevance > 0.0);
         assert_eq!(b.low_relevance_block_ids.len(), 1, "无关那条应标 low");
-        assert!(b.low_relevance_block_ids.contains(&"irrelevant".to_string()));
+        assert!(b
+            .low_relevance_block_ids
+            .contains(&"irrelevant".to_string()));
     }
 
     #[test]
     fn rot_pinned_blocks_excluded() {
         // 同一内容, 但 pinned → 应被排除, dup=0
         let text = "this is a long block of text to enable ngram computation reliably";
-        let blocks = vec![
-            mk_block("a", text, 1000),
-            mk_block("b", text, 1000),
-        ];
+        let blocks = vec![mk_block("a", text, 1000), mk_block("b", text, 1000)];
         let mut cfg = base_cfg(1000);
         cfg.pinned_block_ids = vec!["a".into()];
         let b = compute_rot_score(&blocks, &cfg);
         assert_eq!(b.eligible_block_count, 1, "pinned 块不计入 eligible");
-        assert_eq!(b.duplicate_ratio, 0.0, "只剩 1 块, 无 pairwise 对 → dup_ratio=0");
+        assert_eq!(
+            b.duplicate_ratio, 0.0,
+            "只剩 1 块, 无 pairwise 对 → dup_ratio=0"
+        );
     }
 
     #[test]
     fn rot_short_blocks_excluded_by_min_chars() {
         // 太短的块不计入 (易抖)
         let blocks = vec![
-            mk_block("a", "this is a long enough block to be counted as eligible", 1000),
+            mk_block(
+                "a",
+                "this is a long enough block to be counted as eligible",
+                1000,
+            ),
             mk_block("b", "tiny", 1000), // < 16 chars (默认)
         ];
         let b = compute_rot_score(&blocks, &base_cfg(1000));
@@ -648,12 +710,20 @@ mod tests {
         let blocks = vec![
             mk_block("a", text, 0),
             mk_block("b", text, 0),
-            mk_block("c", "totally unrelated content like banana coffee breakfast toast", 0),
+            mk_block(
+                "c",
+                "totally unrelated content like banana coffee breakfast toast",
+                0,
+            ),
         ];
         let mut cfg = base_cfg(60 * 60 * 1000); // 60 min later
         cfg.latest_user_message = Some("rust tokio scheduler".into());
         let b = compute_rot_score(&blocks, &cfg);
-        assert!((0.0..=1.0).contains(&b.total), "rot_score 必须 ∈ [0,1], got {}", b.total);
+        assert!(
+            (0.0..=1.0).contains(&b.total),
+            "rot_score 必须 ∈ [0,1], got {}",
+            b.total
+        );
     }
 
     #[test]
@@ -671,7 +741,11 @@ mod tests {
         let b = compute_rot_score(&blocks, &cfg);
         // stale: 3/3=1.0; dup: 3/3=1.0; irrel: 1 - 0 = 1.0
         // total = 0.4*1 + 0.3*1 + 0.3*1 = 1.0
-        assert!((b.total - 1.0).abs() < 1e-4, "高 rot total 应 ≈ 1.0, got {}", b.total);
+        assert!(
+            (b.total - 1.0).abs() < 1e-4,
+            "高 rot total 应 ≈ 1.0, got {}",
+            b.total
+        );
         assert!(should_compact(&b, &cfg), "rot 1.0 > 0.6 应触发 compaction");
     }
 
@@ -760,10 +834,7 @@ mod tests {
         let old_text = "this is a stale block of older content from earlier conversation history";
         let cfg = base_cfg(now);
         // 1 fresh + 1 old
-        let mix1 = vec![
-            mk_block("f1", fresh_text, now),
-            mk_block("o1", old_text, 0),
-        ];
+        let mix1 = vec![mk_block("f1", fresh_text, now), mk_block("o1", old_text, 0)];
         // 1 fresh + 4 old
         let mix2 = vec![
             mk_block("f1", fresh_text, now),
@@ -787,10 +858,7 @@ mod tests {
     #[test]
     fn rot_duplicate_pair_jaccard_recorded() {
         let text = "the rust standard library has a wonderful api for vec slice and string types";
-        let blocks = vec![
-            mk_block("a", text, 1000),
-            mk_block("b", text, 1000),
-        ];
+        let blocks = vec![mk_block("a", text, 1000), mk_block("b", text, 1000)];
         let b = compute_rot_score(&blocks, &base_cfg(1000));
         assert_eq!(b.duplicate_pairs.len(), 1);
         assert_eq!(b.duplicate_pairs[0].a, "a");
@@ -802,11 +870,23 @@ mod tests {
     fn rot_duplicate_below_threshold_ignored() {
         // 完全不同内容 → jaccard 远低于 0.6 → 不应记为重复对
         let blocks = vec![
-            mk_block("a", "completely different first topic about rust systems programming", 1000),
-            mk_block("b", "totally unrelated second topic about coffee breakfast and toast", 1000),
+            mk_block(
+                "a",
+                "completely different first topic about rust systems programming",
+                1000,
+            ),
+            mk_block(
+                "b",
+                "totally unrelated second topic about coffee breakfast and toast",
+                1000,
+            ),
         ];
         let b = compute_rot_score(&blocks, &base_cfg(1000));
-        assert!(b.duplicate_pairs.is_empty(), "无关两块不应记为重复, got {:?}", b.duplicate_pairs);
+        assert!(
+            b.duplicate_pairs.is_empty(),
+            "无关两块不应记为重复, got {:?}",
+            b.duplicate_pairs
+        );
     }
 
     #[test]
@@ -822,7 +902,11 @@ mod tests {
         let text = "this is a long content block for testing custom weights effect on rot";
         let blocks = vec![mk_block("a", text, 0), mk_block("b", text, 0)];
         let mut cfg = base_cfg(0);
-        cfg.weights = RotWeights { w_duplicate: 1.0, w_stale: 0.0, w_irrelevant: 0.0 };
+        cfg.weights = RotWeights {
+            w_duplicate: 1.0,
+            w_stale: 0.0,
+            w_irrelevant: 0.0,
+        };
         let b = compute_rot_score(&blocks, &cfg);
         // dup=1, stale=0, irrel=0 → total = 1.0
         assert!((b.total - 1.0).abs() < 1e-5);

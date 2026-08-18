@@ -19,7 +19,7 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 6 消息类型 enum (K-1 强校验守门, 编译期 hardcode 6 variant)
@@ -307,11 +307,16 @@ pub struct Message {
 
 impl Message {
     /// 构造文本消息.
-    pub fn text(receive_id: String, receive_id_type: ReceiveIdType, text: String) -> Result<Self, LarkError> {
+    pub fn text(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        text: String,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
         let content = TextContent::new(text);
         content.validate()?;
-        let content_json = serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -322,9 +327,14 @@ impl Message {
     }
 
     /// 构造富文本消息.
-    pub fn post(receive_id: String, receive_id_type: ReceiveIdType, post: PostContent) -> Result<Self, LarkError> {
+    pub fn post(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        post: PostContent,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
-        let content_json = serde_json::to_string(&post).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&post).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -335,13 +345,18 @@ impl Message {
     }
 
     /// 构造图片消息.
-    pub fn image(receive_id: String, receive_id_type: ReceiveIdType, image_key: String) -> Result<Self, LarkError> {
+    pub fn image(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        image_key: String,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
         if image_key.is_empty() {
             return Err(LarkError::Other("image_key is empty".to_string()));
         }
         let content = ImageContent { image_key };
-        let content_json = serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -352,13 +367,18 @@ impl Message {
     }
 
     /// 构造文件消息.
-    pub fn file(receive_id: String, receive_id_type: ReceiveIdType, file_key: String) -> Result<Self, LarkError> {
+    pub fn file(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        file_key: String,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
         if file_key.is_empty() {
             return Err(LarkError::Other("file_key is empty".to_string()));
         }
         let content = FileContent { file_key };
-        let content_json = serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&content).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -369,9 +389,14 @@ impl Message {
     }
 
     /// 构造卡片消息 (老版).
-    pub fn card(receive_id: String, receive_id_type: ReceiveIdType, card: CardContent) -> Result<Self, LarkError> {
+    pub fn card(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        card: CardContent,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
-        let content_json = serde_json::to_string(&card).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&card).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -382,9 +407,14 @@ impl Message {
     }
 
     /// 构造 Interactive 消息 (新版).
-    pub fn interactive(receive_id: String, receive_id_type: ReceiveIdType, card: InteractiveContent) -> Result<Self, LarkError> {
+    pub fn interactive(
+        receive_id: String,
+        receive_id_type: ReceiveIdType,
+        card: InteractiveContent,
+    ) -> Result<Self, LarkError> {
         Self::validate_receive_id(receive_id_type, &receive_id)?;
-        let content_json = serde_json::to_string(&card).map_err(|e| LarkError::Other(e.to_string()))?;
+        let content_json =
+            serde_json::to_string(&card).map_err(|e| LarkError::Other(e.to_string()))?;
         Ok(Self {
             receive_id,
             receive_id_type,
@@ -401,7 +431,10 @@ impl Message {
     }
 
     /// 校验 receive_id (per receive_id_type 走 K-1 强校验).
-    fn validate_receive_id(receive_id_type: ReceiveIdType, receive_id: &str) -> Result<(), LarkError> {
+    fn validate_receive_id(
+        receive_id_type: ReceiveIdType,
+        receive_id: &str,
+    ) -> Result<(), LarkError> {
         match receive_id_type {
             ReceiveIdType::ChatId => LarkError::validate_chat_id(receive_id),
             ReceiveIdType::OpenId => LarkError::validate_open_id(receive_id),
@@ -461,7 +494,10 @@ mod tests {
             text: "Hello".to_string(),
             at_open_ids: vec!["invalid".to_string()],
         };
-        assert!(matches!(content.validate(), Err(LarkError::OpenIdInvalid(_))));
+        assert!(matches!(
+            content.validate(),
+            Err(LarkError::OpenIdInvalid(_))
+        ));
     }
 
     #[test]
@@ -494,12 +530,8 @@ mod tests {
             }],
         };
         let post = PostContent::new_zh_cn("通知", vec![para]);
-        let msg = Message::post(
-            "oc_a1b2c3d4e5f6".to_string(),
-            ReceiveIdType::ChatId,
-            post,
-        )
-        .expect("valid");
+        let msg = Message::post("oc_a1b2c3d4e5f6".to_string(), ReceiveIdType::ChatId, post)
+            .expect("valid");
         assert_eq!(msg.msg_type, MessageType::Post);
     }
 
@@ -538,24 +570,16 @@ mod tests {
     #[test]
     fn message_card_construction() {
         let card = CardContent::plain("标题", "正文");
-        let msg = Message::card(
-            "oc_a1b2c3d4e5f6".to_string(),
-            ReceiveIdType::ChatId,
-            card,
-        )
-        .expect("valid");
+        let msg = Message::card("oc_a1b2c3d4e5f6".to_string(), ReceiveIdType::ChatId, card)
+            .expect("valid");
         assert_eq!(msg.msg_type, MessageType::Card);
     }
 
     #[test]
     fn message_interactive_construction() {
         let card = InteractiveContent::plain("标题", "正文");
-        let msg = Message::interactive(
-            "oc_a1b2c3d4e5f6".to_string(),
-            ReceiveIdType::ChatId,
-            card,
-        )
-        .expect("valid");
+        let msg = Message::interactive("oc_a1b2c3d4e5f6".to_string(), ReceiveIdType::ChatId, card)
+            .expect("valid");
         assert_eq!(msg.msg_type, MessageType::Interactive);
     }
 

@@ -98,7 +98,11 @@ impl Tool for EnhancedBrowserTool {
             }
             "extract" => CliCommand::Extract,
             "help" => CliCommand::Help,
-            _ => return Err(format!("unknown op `{op}` (expected navigate|snapshot|click|type|extract|help)")),
+            _ => {
+                return Err(format!(
+                    "unknown op `{op}` (expected navigate|snapshot|click|type|extract|help)"
+                ))
+            }
         };
         let result = self
             .browser
@@ -119,8 +123,12 @@ impl Tool for EnhancedBrowserTool {
 
 /// 统一注册进 registry (§10 铁边界③). 默认 FetchBrowser 内核.
 pub fn register(registry: &ToolRegistry) -> Result<(), String> {
-    let browser = EnhancedBrowser::from_fetch().map_err(|e| format!("EnhancedBrowser::from_fetch: {e}"))?;
-    registry.register(TOOL_NAME.to_string(), Arc::new(EnhancedBrowserTool::new(browser)));
+    let browser =
+        EnhancedBrowser::from_fetch().map_err(|e| format!("EnhancedBrowser::from_fetch: {e}"))?;
+    registry.register(
+        TOOL_NAME.to_string(),
+        Arc::new(EnhancedBrowserTool::new(browser)),
+    );
     Ok(())
 }
 
@@ -165,6 +173,9 @@ mod tests {
         let browser = EnhancedBrowser::from_fetch().expect("browser");
         let tool = EnhancedBrowserTool::new(browser);
         let r = tool.call(json!({"op": "help"})).await.expect("help");
-        assert!(r["text"].as_str().map(str::len).unwrap_or(0) > 0, "help 应返文本");
+        assert!(
+            r["text"].as_str().map(str::len).unwrap_or(0) > 0,
+            "help 应返文本"
+        );
     }
 }

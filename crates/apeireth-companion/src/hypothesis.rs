@@ -99,8 +99,8 @@ pub struct HypothesisConfig {
 impl Default for HypothesisConfig {
     fn default() -> Self {
         Self {
-            confirm_threshold: 2.0,   // 待拟合
-            refute_threshold: -2.0,   // 待拟合
+            confirm_threshold: 2.0,    // 待拟合
+            refute_threshold: -2.0,    // 待拟合
             min_evidence_to_settle: 2, // 待拟合
         }
     }
@@ -157,7 +157,10 @@ impl HypothesisStore {
     /// 返回更新后的状态.
     pub fn add_evidence(&mut self, id: u64, ev: Evidence) -> Result<HypothesisStatus, String> {
         let h = self.items.get_mut(&id).ok_or("假设不存在")?;
-        if matches!(h.status, HypothesisStatus::Confirmed | HypothesisStatus::Refuted) {
+        if matches!(
+            h.status,
+            HypothesisStatus::Confirmed | HypothesisStatus::Refuted
+        ) {
             return Err(format!("假设已定论 ({:?}), 不再接受证据", h.status));
         }
         h.score += ev.weight;
@@ -316,10 +319,24 @@ mod tests {
         assert_eq!(store.get(h.id).unwrap().status, HypothesisStatus::Verifying);
 
         store
-            .add_evidence(h.id, Evidence::supporting(EvidenceSource::Observation, 1.2, "7 次熬夜记录中 5 次效率低"))
+            .add_evidence(
+                h.id,
+                Evidence::supporting(
+                    EvidenceSource::Observation,
+                    1.2,
+                    "7 次熬夜记录中 5 次效率低",
+                ),
+            )
             .unwrap();
         store
-            .add_evidence(h.id, Evidence::supporting(EvidenceSource::MasterAnswer, 1.0, "主人确认: 熬夜后确实没精神"))
+            .add_evidence(
+                h.id,
+                Evidence::supporting(
+                    EvidenceSource::MasterAnswer,
+                    1.0,
+                    "主人确认: 熬夜后确实没精神",
+                ),
+            )
             .unwrap();
         assert_eq!(store.get(h.id).unwrap().status, HypothesisStatus::Confirmed);
     }
@@ -330,10 +347,16 @@ mod tests {
         let h = store.conjecture("雨天 → 主人心情差");
         store.start_verify(h.id).unwrap();
         store
-            .add_evidence(h.id, Evidence::supporting(EvidenceSource::Observation, 1.0, "一次雨天低落"))
+            .add_evidence(
+                h.id,
+                Evidence::supporting(EvidenceSource::Observation, 1.0, "一次雨天低落"),
+            )
             .unwrap();
         store
-            .add_evidence(h.id, Evidence::refuting(EvidenceSource::MasterAnswer, 3.0, "主人: 下雨天其实很舒服"))
+            .add_evidence(
+                h.id,
+                Evidence::refuting(EvidenceSource::MasterAnswer, 3.0, "主人: 下雨天其实很舒服"),
+            )
             .unwrap();
         assert_eq!(store.get(h.id).unwrap().status, HypothesisStatus::Refuted);
     }
@@ -343,12 +366,25 @@ mod tests {
         let mut store = HypothesisStore::new(HypothesisConfig::default());
         let h = store.conjecture("X");
         store.start_verify(h.id).unwrap();
-        store.add_evidence(h.id, Evidence::supporting(EvidenceSource::Observation, 1.5, "a")).unwrap();
-        store.add_evidence(h.id, Evidence::supporting(EvidenceSource::Observation, 1.0, "b")).unwrap();
+        store
+            .add_evidence(
+                h.id,
+                Evidence::supporting(EvidenceSource::Observation, 1.5, "a"),
+            )
+            .unwrap();
+        store
+            .add_evidence(
+                h.id,
+                Evidence::supporting(EvidenceSource::Observation, 1.0, "b"),
+            )
+            .unwrap();
         assert_eq!(store.get(h.id).unwrap().status, HypothesisStatus::Confirmed);
         assert!(
             store
-                .add_evidence(h.id, Evidence::refuting(EvidenceSource::Observation, 5.0, "late"))
+                .add_evidence(
+                    h.id,
+                    Evidence::refuting(EvidenceSource::Observation, 5.0, "late")
+                )
                 .is_err(),
             "已定论假设不接受新证据"
         );
@@ -360,7 +396,12 @@ mod tests {
         let h = store.conjecture("Y");
         store.start_verify(h.id).unwrap();
         // 单条 5.0 支持证据, 但 min_evidence_to_settle=2 → 不能确认
-        store.add_evidence(h.id, Evidence::supporting(EvidenceSource::MasterAnswer, 5.0, "一锤定音")).unwrap();
+        store
+            .add_evidence(
+                h.id,
+                Evidence::supporting(EvidenceSource::MasterAnswer, 5.0, "一锤定音"),
+            )
+            .unwrap();
         assert_ne!(store.get(h.id).unwrap().status, HypothesisStatus::Confirmed);
     }
 

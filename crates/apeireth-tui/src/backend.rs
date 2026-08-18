@@ -1777,9 +1777,8 @@ impl ToolPolicy {
     /// 谁会返一个新的 ToolPolicy (不走缓存)
     fn load() -> Self {
         let path = policy_path();
-        let raw = match std::fs::read_to_string(&path) {
-            Ok(s) => s,
-            Err(_) => return default_policy(),
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            return default_policy();
         };
         parse_policy_json(&raw).unwrap_or_else(|_| default_policy())
     }
@@ -2307,7 +2306,7 @@ pub fn chat_with_tool_loop_streaming(
                     LlmStepResult::with_tool_call(reply_text, results)
                 }
             }
-            Err(e) => LlmStepResult::err(e.to_string(), format!("(LLM 调用失败: {e})")),
+            Err(e) => LlmStepResult::err(e.clone(), format!("(LLM 调用失败: {e})")),
         }
     });
     final_state.last_reply
@@ -2418,7 +2417,7 @@ pub fn chat_with_tool_loop(
                     LlmStepResult::with_tool_call(reply_text, results)
                 }
             }
-            Err(e) => LlmStepResult::err(e.to_string(), format!("(LLM 调用失败: {e})")),
+            Err(e) => LlmStepResult::err(e.clone(), format!("(LLM 调用失败: {e})")),
         }
     });
     final_state.last_reply
@@ -2470,7 +2469,7 @@ where
             // 5. token 累计 (status bar 显示)
             //    LLM 报数: `TOKEN_USED` (W2 真接 minimaxi usage.total)
             //    R19 自研: `R19_TOKEN_USED` (W3.4 启发式, 跟 LLM 独立)
-            TOKEN_USED.fetch_add(reply.usage.total as u64, Ordering::Relaxed);
+            TOKEN_USED.fetch_add(u64::from(reply.usage.total), Ordering::Relaxed);
             brain::record_usage_success(reply.usage.prompt, reply.usage.completion);
             let r19_n = r19_token_compute_v2(input) + r19_token_compute_v2(&reply.text);
             R19_TOKEN_USED.fetch_add(r19_n, Ordering::Relaxed);

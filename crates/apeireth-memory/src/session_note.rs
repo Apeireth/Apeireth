@@ -254,7 +254,14 @@ pub enum ValidityFilter {
 /// 关键词为子串匹配, 接受少量误报 (启发式规则, 升级路径: 词表外置/分词, 见台账 M5).
 pub fn validity_from_query_text(text: &str) -> ValidityFilter {
     const CURRENT_MARKERS: &[&str] = &[
-        "现在", "当前", "目前", "如今", "眼下", "此刻", "现阶段", "近来",
+        "现在",
+        "当前",
+        "目前",
+        "如今",
+        "眼下",
+        "此刻",
+        "现阶段",
+        "近来",
     ];
     // 历史类词 (以前/曾经/过去/当时/从前/往昔/昔日/早先) 无需显式匹配:
     // 其语义 = "含已过期条目", 与缺省 All 一致, 故只对当前类词做判定.
@@ -833,7 +840,9 @@ mod tests {
         // CurrentOnly 过滤下永久条目必须保留.
         let rows = <SqliteMemoryStore as NoteStore>::query(
             &store,
-            &NoteQuery::new().validity(ValidityFilter::CurrentOnly).as_of(M5_AS_OF),
+            &NoteQuery::new()
+                .validity(ValidityFilter::CurrentOnly)
+                .as_of(M5_AS_OF),
         )
         .unwrap();
         assert_eq!(rows.len(), 2);
@@ -871,7 +880,9 @@ mod tests {
             .unwrap();
         let current = <SqliteMemoryStore as NoteStore>::query(
             &store,
-            &NoteQuery::new().validity(ValidityFilter::CurrentOnly).as_of(M5_AS_OF),
+            &NoteQuery::new()
+                .validity(ValidityFilter::CurrentOnly)
+                .as_of(M5_AS_OF),
         )
         .unwrap();
         let ids: Vec<&str> = current.iter().map(|r| r.id.as_str()).collect();
@@ -900,15 +911,15 @@ mod tests {
             .put_note_with_validity(&make_note("bad", "x"), Some(200), Some(100))
             .unwrap_err();
         assert!(err.to_string().contains("reversed"));
-        let err2 = store.set_note_validity("bad", Some(200), Some(100)).unwrap_err();
+        let err2 = store
+            .set_note_validity("bad", Some(200), Some(100))
+            .unwrap_err();
         assert!(err2.to_string().contains("reversed"));
         // 正常写入 + 事后更新窗口 + 恢复永久.
         store
             .put_note_with_validity(&make_note("w1", "x"), None, None)
             .unwrap();
-        store
-            .set_note_validity("w1", Some(100), Some(200))
-            .unwrap();
+        store.set_note_validity("w1", Some(100), Some(200)).unwrap();
         let got = <SqliteMemoryStore as NoteStore>::get_note(&store, "w1")
             .unwrap()
             .unwrap();
@@ -928,7 +939,13 @@ mod tests {
     #[test]
     fn m5_query_text_awareness_rules() {
         // 当前类词 → CurrentOnly.
-        for t in ["现在的偏好", "当前状态", "目前的地址", "如今住哪", "眼下的工作"] {
+        for t in [
+            "现在的偏好",
+            "当前状态",
+            "目前的地址",
+            "如今住哪",
+            "眼下的工作",
+        ] {
             assert_eq!(
                 validity_from_query_text(t),
                 ValidityFilter::CurrentOnly,

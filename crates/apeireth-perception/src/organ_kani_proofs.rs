@@ -123,7 +123,7 @@ fn r177_per_07_pipeline_filters() {
     let inputs: Vec<VisionInput> = (0..5)
         .map(|i| {
             VisionInput::new(100, 100, SignalSource::Mcp, Some(format!("ocr-{}", i)))
-                .with_priority_override(0.3 + 0.15 * i as f64)
+                .with_priority_override(0.3 + 0.15 * f64::from(i))
         })
         .collect();
     let events_low = pipeline(&ch, inputs.clone(), 0.0);

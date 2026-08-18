@@ -12,7 +12,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SandboxError, SandboxResult};
+use crate::sandbox::error::{SandboxError, SandboxResult};
 
 // ============================================================================
 // §1 编译期常量 (K-1 强校验 #1: 5 资源限制上下限)
@@ -69,10 +69,10 @@ impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
             cpu_cores: 1.0,
-            memory_bytes: 512 * 1024 * 1024, // 512 MiB
-            io_bandwidth_bps: 100 * 1024 * 1024, // 100 MiB/s
+            memory_bytes: 512 * 1024 * 1024,          // 512 MiB
+            io_bandwidth_bps: 100 * 1024 * 1024,      // 100 MiB/s
             network_bandwidth_bps: 100 * 1024 * 1024, // 100 MiB/s
-            tmp_bytes: 1024 * 1024 * 1024,   // 1 GiB
+            tmp_bytes: 1024 * 1024 * 1024,            // 1 GiB
         }
     }
 }
@@ -235,6 +235,9 @@ mod tests {
             ..Default::default()
         };
         let s = limits.human_memory();
-        assert!(s.contains("GiB"), "human_memory should contain 'GiB', got {s}");
+        assert!(
+            s.contains("GiB"),
+            "human_memory should contain 'GiB', got {s}"
+        );
     }
 }

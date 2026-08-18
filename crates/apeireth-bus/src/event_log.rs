@@ -182,7 +182,7 @@ mod tests {
     fn capacity_overflow_evicts_oldest() {
         let log = EventLog::with_capacity(3);
         for i in 0..5 {
-            log.append(make_event("t", i as i64, i as u32));
+            log.append(make_event("t", i64::from(i), i as u32));
         }
         assert_eq!(log.len(), 3, "满了应保持 capacity 大小");
         let all = log.all();

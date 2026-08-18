@@ -25,7 +25,9 @@ pub struct SearchHit {
 pub struct SearchPipeline;
 
 impl SearchPipeline {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     /// Keyword search: case-insensitive substring matching.
     /// title/content indexed via simple lowercase contains.
@@ -36,7 +38,8 @@ impl SearchPipeline {
         top_k: usize,
     ) -> Vec<SearchHit> {
         let q = query.to_lowercase();
-        let mut hits: Vec<SearchHit> = items.iter()
+        let mut hits: Vec<SearchHit> = items
+            .iter()
             .filter(|(_, content)| content.to_lowercase().contains(&q))
             .map(|(id, _)| SearchHit {
                 id: id.clone(),
@@ -63,8 +66,14 @@ impl SearchPipeline {
                 }
             }
         }
-        let mut hits: Vec<SearchHit> = all.into_iter().take(top_k)
-            .map(|id| SearchHit { id, score: 1.0, matched_in: vec![SearchMode::Tag] })
+        let mut hits: Vec<SearchHit> = all
+            .into_iter()
+            .take(top_k)
+            .map(|id| SearchHit {
+                id,
+                score: 1.0,
+                matched_in: vec![SearchMode::Tag],
+            })
             .collect();
         hits.truncate(top_k);
         hits
@@ -72,7 +81,9 @@ impl SearchPipeline {
 }
 
 impl Default for SearchPipeline {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -115,7 +126,9 @@ mod tests {
         let p = SearchPipeline::new();
         let mut idx: HashMap<String, HashSet<String>> = HashMap::new();
         for i in 0..10 {
-            idx.entry("t".into()).or_default().insert(format!("item{}", i));
+            idx.entry("t".into())
+                .or_default()
+                .insert(format!("item{}", i));
         }
         let hits = p.tag_search(&idx, &["t".into()], 3);
         assert_eq!(hits.len(), 3);

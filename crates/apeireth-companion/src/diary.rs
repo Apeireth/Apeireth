@@ -90,7 +90,10 @@ pub struct DiaryStore {
 impl DiaryStore {
     /// root = 日记根目录 (注入, 如 `<memory_path>/diary`); clock 注入 → 可测.
     pub fn new(root: impl Into<PathBuf>, clock: Arc<dyn Clock>) -> Self {
-        Self { root: root.into(), clock }
+        Self {
+            root: root.into(),
+            clock,
+        }
     }
 
     fn day_path(&self, date: &str) -> PathBuf {
@@ -118,7 +121,10 @@ impl DiaryStore {
         }
         let path = self.day_path(date);
         let mut page = read_page(&path, date);
-        page.entries.push(DiaryEntry { source: source.to_string(), body: body.to_string() });
+        page.entries.push(DiaryEntry {
+            source: source.to_string(),
+            body: body.to_string(),
+        });
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -137,7 +143,9 @@ impl DiaryStore {
 
     /// 全部有日记的日期 (字典序 = 时间序, 确定性); IO 失败 → 空.
     pub fn list_days(&self) -> Vec<String> {
-        let Ok(rd) = std::fs::read_dir(&self.root) else { return Vec::new() };
+        let Ok(rd) = std::fs::read_dir(&self.root) else {
+            return Vec::new();
+        };
         rd.flatten()
             .filter_map(|e| e.file_name().into_string().ok())
             .filter(|n| n.ends_with(".json") && valid_date(n.trim_end_matches(".json")))
@@ -167,7 +175,10 @@ impl DiaryStore {
                 page.entries
                     .into_iter()
                     .filter(|e| e.body.to_lowercase().contains(&kw))
-                    .map(move |e| DiaryHit { date: d.clone(), entry: e })
+                    .map(move |e| DiaryHit {
+                        date: d.clone(),
+                        entry: e,
+                    })
             })
             .collect()
     }
@@ -249,9 +260,14 @@ impl DiaryInjector for DiaryStore {
 /// 读一日文件; 缺失/损坏 JSON → 空页 (诚实降级, 不 panic).
 fn read_page(path: &Path, date: &str) -> DayPage {
     match std::fs::read(path) {
-        Ok(bytes) => serde_json::from_slice(&bytes)
-            .unwrap_or_else(|_| DayPage { date: date.to_string(), entries: Vec::new() }),
-        Err(_) => DayPage { date: date.to_string(), entries: Vec::new() },
+        Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|_| DayPage {
+            date: date.to_string(),
+            entries: Vec::new(),
+        }),
+        Err(_) => DayPage {
+            date: date.to_string(),
+            entries: Vec::new(),
+        },
     }
 }
 
@@ -280,7 +296,10 @@ mod tests {
 
     fn clock_at(y: i32, m: u32, d: u32) -> Arc<VirtualClock> {
         Arc::new(VirtualClock::new(
-            chrono::Utc.with_ymd_and_hms(y, m, d, 6, 0, 0).single().unwrap(),
+            chrono::Utc
+                .with_ymd_and_hms(y, m, d, 6, 0, 0)
+                .single()
+                .unwrap(),
         ))
     }
 
@@ -307,15 +326,20 @@ mod tests {
         store.append("user", "第二天叙事").unwrap();
         clock.advance(chrono::Duration::days(1));
         store.append("user", "第三天叙事").unwrap();
-        assert_eq!(store.list_days(), vec!["2026-08-16", "2026-08-17", "2026-08-18"]);
+        assert_eq!(
+            store.list_days(),
+            vec!["2026-08-16", "2026-08-17", "2026-08-18"]
+        );
         // 范围过滤 (闭区间)
         let mid = store.search("叙事", Some("2026-08-17"), Some("2026-08-17"));
         assert_eq!(mid.len(), 1);
         assert_eq!(mid[0].date, "2026-08-17");
         // 全量: 日期升序确定性
         let all = store.search("叙事", None, None);
-        assert_eq!(all.iter().map(|h| h.date.as_str()).collect::<Vec<_>>(),
-            vec!["2026-08-16", "2026-08-17", "2026-08-18"]);
+        assert_eq!(
+            all.iter().map(|h| h.date.as_str()).collect::<Vec<_>>(),
+            vec!["2026-08-16", "2026-08-17", "2026-08-18"]
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -326,7 +350,10 @@ mod tests {
         assert!(store.read_day("2026-08-16").is_none(), "空日应为 None");
         assert!(store.list_days().is_empty());
         assert!(store.search("任意", None, None).is_empty());
-        assert!(store.recent_injection(3, 500).is_empty(), "空库注入应为空串");
+        assert!(
+            store.recent_injection(3, 500).is_empty(),
+            "空库注入应为空串"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -339,7 +366,11 @@ mod tests {
         clock.advance(chrono::Duration::days(1));
         store.append("extractor", "rust 工具链升级").unwrap();
         assert_eq!(store.search("RUST", None, None).len(), 2, "大小写不敏感");
-        assert_eq!(store.search("rust", Some("2026-08-17"), None).len(), 1, "范围排除 16 日");
+        assert_eq!(
+            store.search("rust", Some("2026-08-17"), None).len(),
+            1,
+            "范围排除 16 日"
+        );
         assert!(store.search("", None, None).is_empty(), "空关键词不召回");
         assert!(store.search("不存在的词", None, None).is_empty());
         let _ = std::fs::remove_dir_all(&root);
@@ -361,8 +392,15 @@ mod tests {
         assert!(!full.contains(TRUNCATION_MARK), "预算充足不截断");
         let cut = store.recent_injection(3, 80);
         assert!(cut.contains(TRUNCATION_MARK), "预算不足应有截断标记: {cut}");
-        assert!(cut.chars().count() <= 80, "预算硬上限: {}", cut.chars().count());
-        assert!(store.recent_injection(3, 10).is_empty(), "预算过小 → 空串诚实降级");
+        assert!(
+            cut.chars().count() <= 80,
+            "预算硬上限: {}",
+            cut.chars().count()
+        );
+        assert!(
+            store.recent_injection(3, 10).is_empty(),
+            "预算过小 → 空串诚实降级"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -370,8 +408,17 @@ mod tests {
     fn invalid_inputs_rejected() {
         let root = tmp_root();
         let store = DiaryStore::new(&root, clock_at(2026, 8, 16));
-        for bad in ["2026-8-16", "2026/08/16", "2026-13-01", "2026-00-10", "../evil"] {
-            assert!(store.append_to(bad, "x", "y").is_err(), "应拒绝非法日期: {bad}");
+        for bad in [
+            "2026-8-16",
+            "2026/08/16",
+            "2026-13-01",
+            "2026-00-10",
+            "../evil",
+        ] {
+            assert!(
+                store.append_to(bad, "x", "y").is_err(),
+                "应拒绝非法日期: {bad}"
+            );
             assert!(store.read_day(bad).is_none());
         }
         assert!(store.append("user", "   ").is_err(), "空白正文应拒绝");

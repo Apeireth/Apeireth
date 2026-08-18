@@ -27,9 +27,13 @@ pub enum HitSource {
 /// 双轨合并后的命中.
 #[derive(Debug, Clone)]
 pub struct DualTrackHit {
+    /// 命中条目 id (episodes 或索引).
     pub id: String,
+    /// 命中内容.
     pub content: String,
+    /// 来源轨 (Episode / Index / Both).
     pub source: HitSource,
+    /// 合并相关性得分.
     pub score: f32,
 }
 
@@ -111,7 +115,10 @@ mod tests {
         content.insert("e1".to_string(), "索引里的旧内容".to_string());
         let out = dual_track_merge(&episodes, &hits, &content, 10);
         assert_eq!(out.len(), 1, "同 id 应去重");
-        assert_eq!(out[0].content, "主人喜欢深蓝夜空", "episodes 事实源内容优先");
+        assert_eq!(
+            out[0].content, "主人喜欢深蓝夜空",
+            "episodes 事实源内容优先"
+        );
         assert_eq!(out[0].source, HitSource::Both, "双轨都有 → Both");
         assert!(out[0].score > 1.0, "双轨命中应加分");
     }
@@ -139,8 +146,16 @@ mod tests {
     fn multi_mode_hits_score_higher() {
         let episodes: Vec<(String, String)> = Vec::new();
         let hits = vec![
-            SearchHit { id: "a".to_string(), score: 1.0, matched_in: vec![SearchMode::Keyword] },
-            SearchHit { id: "b".to_string(), score: 1.0, matched_in: vec![SearchMode::Keyword, SearchMode::Tag] },
+            SearchHit {
+                id: "a".to_string(),
+                score: 1.0,
+                matched_in: vec![SearchMode::Keyword],
+            },
+            SearchHit {
+                id: "b".to_string(),
+                score: 1.0,
+                matched_in: vec![SearchMode::Keyword, SearchMode::Tag],
+            },
         ];
         let mut content = HashMap::new();
         content.insert("a".to_string(), "单模式".to_string());
@@ -152,7 +167,9 @@ mod tests {
 
     #[test]
     fn top_k_respected() {
-        let episodes: Vec<(String, String)> = (0..5).map(|i| (format!("e{i}"), format!("内容{i}"))).collect();
+        let episodes: Vec<(String, String)> = (0..5)
+            .map(|i| (format!("e{i}"), format!("内容{i}")))
+            .collect();
         let out = dual_track_merge(&episodes, &[], &HashMap::new(), 3);
         assert_eq!(out.len(), 3);
     }
@@ -166,7 +183,11 @@ mod tests {
     #[test]
     fn index_hit_without_content_is_skipped() {
         let episodes: Vec<(String, String)> = Vec::new();
-        let hits = vec![SearchHit { id: "ghost".to_string(), score: 1.0, matched_in: vec![SearchMode::Keyword] }];
+        let hits = vec![SearchHit {
+            id: "ghost".to_string(),
+            score: 1.0,
+            matched_in: vec![SearchMode::Keyword],
+        }];
         let out = dual_track_merge(&episodes, &hits, &HashMap::new(), 10);
         assert!(out.is_empty(), "索引有 id 无内容 → 跳过 (不假装)");
     }

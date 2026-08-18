@@ -28,9 +28,10 @@ impl Plugin for GhAccelPlugin {
         "GitHub 加速: xiake.pro 聚合节点池, 每次本机实测延迟选最快 (返回加速 URL 与 git/curl 命令)"
     }
     fn on_load(&self, bridge: &ToolBridge) -> Result<(), String> {
-        bridge
-            .registry
-            .register("gh_accel".to_string(), Arc::new(apeireth_tools::GhAccelTool));
+        bridge.registry.register(
+            "gh_accel".to_string(),
+            Arc::new(apeireth_tools::GhAccelTool),
+        );
         bridge.packs.grant(crate::packs::PermissionPack::permanent(
             "GitHub加速授权",
             vec!["gh_accel".to_string()],
@@ -58,13 +59,17 @@ mod tests {
         assert!(reg.is_installed("github-accel"));
         assert!(bridge.registry.list().iter().any(|n| n == "gh_accel"));
         // 授权包覆盖 → 免现场审批
-        assert!(bridge.packs.check_and_consume("gh_accel", chrono::Utc::now().timestamp_millis()));
+        assert!(bridge
+            .packs
+            .check_and_consume("gh_accel", chrono::Utc::now().timestamp_millis()));
         // 工具本身 Low 风险 (不含 exec/file 等关键词) — 宪法硬门不拦
         use crate::constitution_gate::ConstitutionGate;
         assert!(ConstitutionGate::check("调用工具 gh_accel 探测 GitHub 加速节点").is_none());
         // 卸载 → 真清理
         reg.uninstall(&bridge, "github-accel").unwrap();
         assert!(!bridge.registry.list().iter().any(|n| n == "gh_accel"));
-        assert!(!bridge.packs.check_and_consume("gh_accel", chrono::Utc::now().timestamp_millis()));
+        assert!(!bridge
+            .packs
+            .check_and_consume("gh_accel", chrono::Utc::now().timestamp_millis()));
     }
 }

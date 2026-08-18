@@ -1,11 +1,11 @@
 //! EnhancedDailyNote composed entry.
 
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
+use super::export::{export_json, export_markdown};
 use super::mcp::{DailyNoteMcp, McpRequest, McpResponse};
 use super::note::DailyNote;
-use super::store::DailyNoteStore;
 use super::search::search_notes;
-use super::export::{export_markdown, export_json};
+use super::store::DailyNoteStore;
 
 pub struct EnhancedDailyNote {
     store: DailyNoteStore,
@@ -22,12 +22,21 @@ impl EnhancedDailyNote {
     pub fn insert(&self, note: &DailyNote) -> Result<(), super::store::DailyNoteError> {
         self.store.insert(note)
     }
-    pub fn search(&self, query: &str, tag: Option<&str>) -> Result<Vec<super::note::DailyNote>, super::store::DailyNoteError> {
+    pub fn search(
+        &self,
+        query: &str,
+        tag: Option<&str>,
+    ) -> Result<Vec<super::note::DailyNote>, super::store::DailyNoteError> {
         let mut notes = Vec::new();
-        let ids = self.store.list_by_tag(tag.unwrap_or("")).unwrap_or_default();
+        let ids = self
+            .store
+            .list_by_tag(tag.unwrap_or(""))
+            .unwrap_or_default();
         if let Some(_t) = tag {
             for id in &ids {
-                if let Ok(n) = self.store.get(id) { notes.push(n); }
+                if let Ok(n) = self.store.get(id) {
+                    notes.push(n);
+                }
             }
         } else {
             // No tag filter: load all (simple impl)
@@ -48,12 +57,22 @@ impl EnhancedDailyNote {
         }
         Ok(out)
     }
-    pub fn export_md(&self, note: &DailyNote) -> String { export_markdown(note) }
-    pub fn export_json(&self, note: &DailyNote) -> String { export_json(note) }
-    pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse { self.mcp.handle(req) }
+    pub fn export_md(&self, note: &DailyNote) -> String {
+        export_markdown(note)
+    }
+    pub fn export_json(&self, note: &DailyNote) -> String {
+        export_json(note)
+    }
+    pub fn dispatch_mcp(&self, req: McpRequest) -> McpResponse {
+        self.mcp.handle(req)
+    }
 }
 
-impl Default for EnhancedDailyNote { fn default() -> Self { Self::new_in_memory() } }
+impl Default for EnhancedDailyNote {
+    fn default() -> Self {
+        Self::new_in_memory()
+    }
+}
 
 #[cfg(test)]
 mod tests {

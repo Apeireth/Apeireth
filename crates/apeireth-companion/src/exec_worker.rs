@@ -119,7 +119,14 @@ mod tests {
 
     #[test]
     fn move_stay_partition_is_explicit() {
-        for t in ["FileOperator", "Git", "ShellExec", "Grep", "ApplyPatch", "code_exec"] {
+        for t in [
+            "FileOperator",
+            "Git",
+            "ShellExec",
+            "Grep",
+            "ApplyPatch",
+            "code_exec",
+        ] {
             assert!(should_isolate(t), "{t} 应为 MOVE (剥离)");
         }
         for t in ["recall_memory", "save_memory", "WebSearch", "WebFetch"] {

@@ -33,23 +33,24 @@ mod imp {
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE, HANDLE, WAIT_TIMEOUT};
-    use windows_sys::Win32::System::IO::{CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED};
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT};
     use windows_sys::Win32::System::JobObjects::{
         AssignProcessToJobObject, CreateJobObjectW, JobObjectAssociateCompletionPortInformation,
         JobObjectCpuRateControlInformation, JobObjectExtendedLimitInformation,
-        JOBOBJECT_ASSOCIATE_COMPLETION_PORT, JOBOBJECT_CPU_RATE_CONTROL_INFORMATION,
-        JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        SetInformationJobObject, JOBOBJECT_ASSOCIATE_COMPLETION_PORT,
+        JOBOBJECT_CPU_RATE_CONTROL_INFORMATION, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
         JOB_OBJECT_CPU_RATE_CONTROL_ENABLE, JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP,
         JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, JOB_OBJECT_LIMIT_PROCESS_MEMORY,
-        JOB_OBJECT_LIMIT_PROCESS_TIME, SetInformationJobObject,
+        JOB_OBJECT_LIMIT_PROCESS_TIME,
     };
     use windows_sys::Win32::System::SystemServices::{
         JOB_OBJECT_MSG_ACTIVE_PROCESS_LIMIT, JOB_OBJECT_MSG_ACTIVE_PROCESS_ZERO,
         JOB_OBJECT_MSG_END_OF_JOB_TIME, JOB_OBJECT_MSG_END_OF_PROCESS_TIME,
-        JOB_OBJECT_MSG_EXIT_PROCESS, JOB_OBJECT_MSG_JOB_MEMORY_LIMIT,
-        JOB_OBJECT_MSG_NEW_PROCESS, JOB_OBJECT_MSG_NOTIFICATION_LIMIT,
-        JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
+        JOB_OBJECT_MSG_EXIT_PROCESS, JOB_OBJECT_MSG_JOB_MEMORY_LIMIT, JOB_OBJECT_MSG_NEW_PROCESS,
+        JOB_OBJECT_MSG_NOTIFICATION_LIMIT, JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT,
+    };
+    use windows_sys::Win32::System::IO::{
+        CreateIoCompletionPort, GetQueuedCompletionStatus, OVERLAPPED,
     };
 
     use crate::sandbox::SandboxConfig;
@@ -147,23 +148,27 @@ mod imp {
                 let ret = SetInformationJobObject(
                     job,
                     JobObjectExtendedLimitInformation,
-                    &info as *const _ as *const _,
+                    (&info as *const JOBOBJECT_EXTENDED_LIMIT_INFORMATION).cast(),
                     std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
                 );
                 if ret == 0 {
                     CloseHandle(job);
-                    return Err(format!("SetInformationJobObject 失败 (错误码 {})", os_err()));
+                    return Err(format!(
+                        "SetInformationJobObject 失败 (错误码 {})",
+                        os_err()
+                    ));
                 }
                 // CPU 限速 (Win8+): best-effort — 失败降级不阻断 (诚实 eprintln).
                 if let Some(pct) = cfg.cpu_percent {
                     let mut cpu: JOBOBJECT_CPU_RATE_CONTROL_INFORMATION = std::mem::zeroed();
-                    cpu.ControlFlags = JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+                    cpu.ControlFlags =
+                        JOB_OBJECT_CPU_RATE_CONTROL_ENABLE | JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
                     // CpuRate: 1/100 百分点 (50% → 5000)
                     cpu.Anonymous.CpuRate = pct * 100;
                     if SetInformationJobObject(
                         job,
                         JobObjectCpuRateControlInformation,
-                        &cpu as *const _ as *const _,
+                        (&cpu as *const JOBOBJECT_CPU_RATE_CONTROL_INFORMATION).cast(),
                         std::mem::size_of::<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>() as u32,
                     ) == 0
                     {
@@ -186,7 +191,7 @@ mod imp {
                         if SetInformationJobObject(
                             job,
                             JobObjectAssociateCompletionPortInformation,
-                            &assoc as *const _ as *const _,
+                            (&assoc as *const JOBOBJECT_ASSOCIATE_COMPLETION_PORT).cast(),
                             std::mem::size_of::<JOBOBJECT_ASSOCIATE_COMPLETION_PORT>() as u32,
                         ) == 0
                         {
@@ -207,11 +212,22 @@ mod imp {
                                     if s.load(Ordering::Relaxed) {
                                         break;
                                     }
-                                    let ok = GetQueuedCompletionStatus(p as HANDLE, &mut code, &mut key, &mut ovl, 100);
+                                    let ok = GetQueuedCompletionStatus(
+                                        p as HANDLE,
+                                        &mut code,
+                                        &mut key,
+                                        &mut ovl,
+                                        100,
+                                    );
                                     if ok == 0 {
-                                        let e = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+                                        let e = std::io::Error::last_os_error()
+                                            .raw_os_error()
+                                            .unwrap_or(0)
+                                            as u32;
                                         if e != WAIT_TIMEOUT && !s.load(Ordering::Relaxed) {
-                                            eprintln!("[sandbox] 超限监听异常 (错误码 {e}), 继续监听");
+                                            eprintln!(
+                                                "[sandbox] 超限监听异常 (错误码 {e}), 继续监听"
+                                            );
                                         }
                                         continue;
                                     }
@@ -256,7 +272,10 @@ mod imp {
                 let ret = AssignProcessToJobObject(self.job, process);
                 CloseHandle(process);
                 if ret == 0 {
-                    return Err(format!("AssignProcessToJobObject({pid}) 失败 (错误码 {})", os_err()));
+                    return Err(format!(
+                        "AssignProcessToJobObject({pid}) 失败 (错误码 {})",
+                        os_err()
+                    ));
                 }
                 Ok(())
             }
@@ -320,7 +339,10 @@ mod tests {
     fn job_guard_constructs() {
         // 非 Windows 也是 Ok (no-op); Windows 上 CreateJobObjectW 应成功
         let guard = JobGuard::new();
-        assert!(guard.is_ok(), "job 创建应成功或为非 Windows no-op: {guard:?}");
+        assert!(
+            guard.is_ok(),
+            "job 创建应成功或为非 Windows no-op: {guard:?}"
+        );
     }
 
     #[test]
@@ -334,7 +356,10 @@ mod tests {
         };
         let guard = JobGuard::with_config(&cfg);
         assert!(guard.is_ok(), "带限额 job 创建应成功: {guard:?}");
-        assert!(guard.unwrap().violation().is_none(), "未跑进程不应有超限记录");
+        assert!(
+            guard.unwrap().violation().is_none(),
+            "未跑进程不应有超限记录"
+        );
     }
 
     #[cfg(windows)]
@@ -348,7 +373,9 @@ mod tests {
             .spawn()
             .expect("spawn 子进程");
         let pid = child.id();
-        guard.assign(pid).expect("assign 子进程应成功 (真实 Windows API)");
+        guard
+            .assign(pid)
+            .expect("assign 子进程应成功 (真实 Windows API)");
         let _ = child.kill();
         let _ = child.wait();
     }

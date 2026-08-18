@@ -490,13 +490,10 @@ impl FetchEngine {
                 .record_error(started.elapsed().as_secs_f64() * 1000.0);
             return Err(FetchError::EmptyUrl);
         }
-        let parsed = match url::Url::parse(&req.url) {
-            Ok(u) => u,
-            Err(_) => {
-                self.fetch_metrics
-                    .record_error(started.elapsed().as_secs_f64() * 1000.0);
-                return Err(FetchError::InvalidUrl(req.url.clone()));
-            }
+        let Ok(parsed) = url::Url::parse(&req.url) else {
+            self.fetch_metrics
+                .record_error(started.elapsed().as_secs_f64() * 1000.0);
+            return Err(FetchError::InvalidUrl(req.url.clone()));
         };
         // R265: cache lookup (key=URL, value=JSON-serialized FetchResponse)
         if let Some(cache) = &self.cache {

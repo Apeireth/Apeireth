@@ -106,10 +106,7 @@ impl WikiIndex {
     pub fn insert(&mut self, entry: WikiEntry) {
         let path = entry.path.clone();
         for tag in &entry.tags {
-            self.tags
-                .entry(tag.clone())
-                .or_default()
-                .push(path.clone());
+            self.tags.entry(tag.clone()).or_default().push(path.clone());
         }
         self.entries.insert(path.clone(), entry);
     }
@@ -233,12 +230,12 @@ impl FilesystemWiki {
         let idx = self.index.read();
         let mut scored: Vec<(i32, WikiEntry)> = Vec::new();
         for entry in idx.entries.values() {
-            let title_hit = entry.title.to_lowercase().contains(&q) as i32;
-            let summary_hit = entry.summary.to_lowercase().contains(&q) as i32;
+            let title_hit = i32::from(entry.title.to_lowercase().contains(&q));
+            let summary_hit = i32::from(entry.summary.to_lowercase().contains(&q));
             // body 命中: 读文件 (I/O 受控; max_results 截断后停止)
             let body_hit = if title_hit + summary_hit == 0 && scored.len() < max_results * 4 {
                 match self.read_file(&entry.path) {
-                    Ok(body) => body.to_lowercase().contains(&q) as i32,
+                    Ok(body) => i32::from(body.to_lowercase().contains(&q)),
                     Err(_) => 0,
                 }
             } else {
@@ -250,7 +247,11 @@ impl FilesystemWiki {
             }
         }
         scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.path.cmp(&b.1.path)));
-        scored.into_iter().take(max_results).map(|(_, e)| e).collect()
+        scored
+            .into_iter()
+            .take(max_results)
+            .map(|(_, e)| e)
+            .collect()
     }
 }
 
@@ -794,7 +795,10 @@ Discussed token budget and incremental disclosure.\n";
             "应触发截断; got: {}",
             block.content
         );
-        assert!(block.content.chars().count() <= 800, "截断后字符数应 ≤ 预算 * 2");
+        assert!(
+            block.content.chars().count() <= 800,
+            "截断后字符数应 ≤ 预算 * 2"
+        );
     }
 
     #[test]

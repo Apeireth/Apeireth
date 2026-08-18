@@ -211,7 +211,6 @@ fn parse_sse_frame(text: &str) -> SseFrame {
         }
         if let Some(rest) = line.strip_prefix("retry:") {
             let _ = rest; // 当前不实现 retry
-            continue;
         }
         // 未知字段, 忽略 (WHATWG: 忽略未知字段名)
     }

@@ -13,7 +13,9 @@ pub struct DreamSubsystem {
 
 impl DreamSubsystem {
     pub fn new() -> Self {
-        Self { operations: Mutex::new(0) }
+        Self {
+            operations: Mutex::new(0),
+        }
     }
 
     /// Run a dream cycle: iterate items and consolidate via callback.
@@ -40,7 +42,9 @@ impl DreamSubsystem {
 }
 
 impl Default for DreamSubsystem {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -57,7 +61,10 @@ mod tests {
     #[test]
     fn pair_consolidation() {
         let d = DreamSubsystem::new();
-        let n = d.dream_cycle(&["hello".into(), "world".into(), "extra".into()], &|a, b| format!("{}{}", a, b));
+        let n = d.dream_cycle(
+            &["hello".into(), "world".into(), "extra".into()],
+            &|a, b| format!("{}{}", a, b),
+        );
         assert_eq!(n, 1, "1 pair (the third 'extra' is unpaired)");
         assert_eq!(d.total_operations(), 1);
     }

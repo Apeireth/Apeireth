@@ -29,7 +29,10 @@ pub struct NoopSpeechInput;
 
 impl SpeechInput for NoopSpeechInput {
     fn listen(&mut self) -> Result<String, String> {
-        Err("NoopSpeechInput: 麦克风未接入 (实现 SpeechInput 时启用; 可接 apeireth-voice STT)".into())
+        Err(
+            "NoopSpeechInput: 麦克风未接入 (实现 SpeechInput 时启用; 可接 apeireth-voice STT)"
+                .into(),
+        )
     }
 }
 
@@ -38,7 +41,10 @@ pub struct NoopSpeechOutput;
 
 impl SpeechOutput for NoopSpeechOutput {
     fn speak(&mut self, _text: &str) -> Result<(), String> {
-        Err("NoopSpeechOutput: 扬声器未接入 (实现 SpeechOutput 时启用; 可接 apeireth-voice TTS)".into())
+        Err(
+            "NoopSpeechOutput: 扬声器未接入 (实现 SpeechOutput 时启用; 可接 apeireth-voice TTS)"
+                .into(),
+        )
     }
 }
 
@@ -117,7 +123,9 @@ mod tests {
 
     #[test]
     fn full_turn_loopback() {
-        let input = Box::new(MockInput { texts: vec!["主人今天好累".into()] });
+        let input = Box::new(MockInput {
+            texts: vec!["主人今天好累".into()],
+        });
         let output = Box::new(MockOutput::default());
         let mut session = VoiceSession::new(input, output);
         let turn = session.turn(&|t| format!("听到你说: {t}")).unwrap();
@@ -159,7 +167,9 @@ mod tests {
                 Err("扬声器故障".into())
             }
         }
-        let input = Box::new(MockInput { texts: vec!["hi".into()] });
+        let input = Box::new(MockInput {
+            texts: vec!["hi".into()],
+        });
         let mut session = VoiceSession::new(input, Box::new(FailOutput));
         let err = session.turn(&|t| t.to_string()).unwrap_err();
         assert!(err.contains("扬声器故障"), "{err}");

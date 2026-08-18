@@ -440,7 +440,7 @@ fn t13_query_batch_multiple_kinds() {
         "*.rs",
         std::path::PathBuf::from("."),
     );
-    let res = u.query_batch(&[q1, q2]).unwrap();
+    let _res = u.query_batch(&[q1, q2]).unwrap();
     // 不强行断言数量 (依赖文件系统), 但应 0 failed
 }
 

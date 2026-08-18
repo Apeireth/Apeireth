@@ -93,7 +93,9 @@ impl GoalStore {
     }
     pub fn save(&self, g: &GoalSnapshot) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("建目录失败: {e}"))?;
-        let tmp = self.dir.join(format!("{}.tmp-{}", g.id, uuid::Uuid::new_v4()));
+        let tmp = self
+            .dir
+            .join(format!("{}.tmp-{}", g.id, uuid::Uuid::new_v4()));
         let bytes = serde_json::to_vec_pretty(g).map_err(|e| e.to_string())?;
         std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, self.path_for(&g.id)).map_err(|e| e.to_string())
@@ -140,7 +142,11 @@ impl GoalService {
     }
 
     /// 创建新目标 (revision 1, active, 0 轮). 已有未完成目标 → 拒绝.
-    pub fn create(&mut self, objective: impl Into<String>, max_rounds: u64) -> Result<GoalSnapshot, GoalError> {
+    pub fn create(
+        &mut self,
+        objective: impl Into<String>,
+        max_rounds: u64,
+    ) -> Result<GoalSnapshot, GoalError> {
         if let Some(g) = &self.current {
             if g.phase != GoalPhase::Completed {
                 return Err(GoalError::AlreadyExists);
@@ -163,7 +169,10 @@ impl GoalService {
     pub fn edit(&mut self, new_objective: impl Into<String>) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if g.phase == GoalPhase::Completed {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: g.phase });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: g.phase,
+            });
         }
         g.objective = new_objective.into();
         g.updated_at_ms = chrono::Utc::now().timestamp_millis();
@@ -174,7 +183,10 @@ impl GoalService {
     pub fn pause(&mut self) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if g.phase != GoalPhase::Active {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: GoalPhase::Paused });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: GoalPhase::Paused,
+            });
         }
         g.phase = GoalPhase::Paused;
         self.commit(g)
@@ -184,7 +196,10 @@ impl GoalService {
     pub fn resume(&mut self) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if !matches!(g.phase, GoalPhase::Paused | GoalPhase::Blocked) {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: GoalPhase::Active });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: GoalPhase::Active,
+            });
         }
         if g.rounds_started >= g.max_goal_rounds {
             return Err(GoalError::NoRoundsRemaining);
@@ -198,7 +213,10 @@ impl GoalService {
     pub fn complete(&mut self) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if g.phase == GoalPhase::Completed {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: GoalPhase::Completed });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: GoalPhase::Completed,
+            });
         }
         g.phase = GoalPhase::Completed;
         g.blocked_reason = None;
@@ -206,13 +224,23 @@ impl GoalService {
     }
 
     /// 阻塞 (active|paused → blocked, 记录 code+message).
-    pub fn block(&mut self, code: impl Into<String>, message: impl Into<String>) -> Result<GoalSnapshot, GoalError> {
+    pub fn block(
+        &mut self,
+        code: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if !matches!(g.phase, GoalPhase::Active | GoalPhase::Paused) {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: GoalPhase::Blocked });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: GoalPhase::Blocked,
+            });
         }
         g.phase = GoalPhase::Blocked;
-        g.blocked_reason = Some(GoalBlock { code: code.into(), message: message.into() });
+        g.blocked_reason = Some(GoalBlock {
+            code: code.into(),
+            message: message.into(),
+        });
         self.commit(g)
     }
 
@@ -220,11 +248,17 @@ impl GoalService {
     pub fn admit_round(&mut self) -> Result<GoalSnapshot, GoalError> {
         let mut g = self.current.clone().ok_or(GoalError::NoGoal)?;
         if g.phase != GoalPhase::Active {
-            return Err(GoalError::IllegalTransition { from: g.phase, to: GoalPhase::Active });
+            return Err(GoalError::IllegalTransition {
+                from: g.phase,
+                to: GoalPhase::Active,
+            });
         }
         if g.rounds_started >= g.max_goal_rounds {
             g.phase = GoalPhase::Blocked;
-            g.blocked_reason = Some(GoalBlock { code: "max-rounds".into(), message: "目标驱动轮数达上限".into() });
+            g.blocked_reason = Some(GoalBlock {
+                code: "max-rounds".into(),
+                message: "目标驱动轮数达上限".into(),
+            });
             self.commit(g)?;
             return Err(GoalError::NoRoundsRemaining);
         }
@@ -272,7 +306,13 @@ mod tests {
         let p = s.pause().unwrap();
         assert_eq!(p.phase, GoalPhase::Paused);
         // paused 不能再 pause
-        assert_eq!(s.pause().unwrap_err(), GoalError::IllegalTransition { from: GoalPhase::Paused, to: GoalPhase::Paused });
+        assert_eq!(
+            s.pause().unwrap_err(),
+            GoalError::IllegalTransition {
+                from: GoalPhase::Paused,
+                to: GoalPhase::Paused
+            }
+        );
         let b = s.block("provider-limit", "限流").unwrap();
         assert_eq!(b.phase, GoalPhase::Blocked);
         assert_eq!(b.blocked_reason.as_ref().unwrap().code, "provider-limit");
@@ -297,7 +337,10 @@ mod tests {
         // 第三轮 → 超上限 → 自动 block + NoRoundsRemaining
         assert_eq!(s.admit_round().unwrap_err(), GoalError::NoRoundsRemaining);
         assert_eq!(s.current().unwrap().phase, GoalPhase::Blocked);
-        assert_eq!(s.current().unwrap().blocked_reason.as_ref().unwrap().code, "max-rounds");
+        assert_eq!(
+            s.current().unwrap().blocked_reason.as_ref().unwrap().code,
+            "max-rounds"
+        );
     }
 
     #[test]
@@ -314,7 +357,9 @@ mod tests {
             .unwrap()
             .filter_map(|e| e.ok())
             .filter_map(|e| {
-                e.path().file_stem().map(|s| s.to_string_lossy().to_string())
+                e.path()
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
             })
             .collect();
         assert_eq!(ids.len(), 1);

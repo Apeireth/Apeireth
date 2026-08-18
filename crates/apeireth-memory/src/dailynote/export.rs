@@ -30,7 +30,8 @@ pub fn export_json(note: &DailyNote) -> String {
         "tags": note.tags,
         "created_at": note.created_at.to_rfc3339(),
         "updated_at": note.updated_at.to_rfc3339(),
-    }).to_string()
+    })
+    .to_string()
 }
 
 #[cfg(test)]

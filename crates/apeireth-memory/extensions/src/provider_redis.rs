@@ -26,9 +26,7 @@ use redis::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **RedisProvider**: 外部 Redis server provider.
 #[derive(Debug, Clone)]
@@ -332,10 +330,25 @@ mod tests {
     async fn test_10_get_delete_exists_clear_size_without_server_returns_connection_error() {
         // 5 个方法 (除 set) 都不依赖 server 也返 Connection 错 (per redis-rs 行为)
         let p = RedisProvider::new(make_config()).unwrap();
-        assert!(matches!(p.get("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.delete("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.exists("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.clear().await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.size().await, Err(MemoryProviderError::Connection { .. })));
+        assert!(matches!(
+            p.get("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.delete("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.exists("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.clear().await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.size().await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
     }
 }

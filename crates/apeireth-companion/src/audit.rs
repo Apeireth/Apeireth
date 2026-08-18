@@ -39,8 +39,15 @@ impl Tool for AuditLogTool {
         ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let tool_name = args.get("tool_name").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
-        let limit = args.get("limit").and_then(|v| v.as_u64()).unwrap_or(10).min(100) as usize;
+        let tool_name = args
+            .get("tool_name")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty());
+        let limit = args
+            .get("limit")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(10)
+            .min(100) as usize;
         let records = apeireth_tool_runtime::record::RecordStore::new(Arc::clone(&self.store));
         let list = match tool_name {
             Some(t) => records.list_for_tool(t)?,
@@ -53,7 +60,10 @@ impl Tool for AuditLogTool {
                     .map_err(|e| format!("list action_stream: {e}"))?;
                 let mut out = Vec::new();
                 for entry in entries {
-                    if let Ok(r) = serde_json::from_value::<apeireth_tool_runtime::record::ToolCallRecord>(entry.payload) {
+                    if let Ok(r) = serde_json::from_value::<
+                        apeireth_tool_runtime::record::ToolCallRecord,
+                    >(entry.payload)
+                    {
                         out.push(r);
                     }
                 }
@@ -111,11 +121,17 @@ mod tests {
                 archery: false,
                 archery_no_reply: false,
             };
-            records.record(&call, &json!({"ok": true}), false).await.unwrap();
+            records
+                .record(&call, &json!({"ok": true}), false)
+                .await
+                .unwrap();
         }
         let tool = AuditLogTool::new(store);
         // 按工具过滤
-        let v = tool.call(json!({"tool_name": "WebSearch", "limit": 3})).await.unwrap();
+        let v = tool
+            .call(json!({"tool_name": "WebSearch", "limit": 3}))
+            .await
+            .unwrap();
         assert_eq!(v["count"], json!(3), "取最近 3 条");
         assert_eq!(v["total_for_filter"], json!(5));
         // 无过滤
@@ -137,12 +153,22 @@ mod tests {
             archery: false,
             archery_no_reply: false,
         };
-        records.record(&call, &json!({"ok": true}), true).await.unwrap();
+        records
+            .record(&call, &json!({"ok": true}), true)
+            .await
+            .unwrap();
         let tool = AuditLogTool::new(store);
         let v = tool.call(json!({"tool_name": "WebFetch"})).await.unwrap();
         assert_eq!(v["records"][0]["masked"], json!(true));
         let args = &v["records"][0]["call"]["arguments"];
-        assert_eq!(args, &json!("[masked by audit] (隐私已脱敏)"), "敏感参数不还原");
-        assert!(!serde_json::to_string(&v).unwrap().contains("abc123"), "密钥不得出现在审计输出");
+        assert_eq!(
+            args,
+            &json!("[masked by audit] (隐私已脱敏)"),
+            "敏感参数不还原"
+        );
+        assert!(
+            !serde_json::to_string(&v).unwrap().contains("abc123"),
+            "密钥不得出现在审计输出"
+        );
     }
 }

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use thiserror::Error;
 
-use crate::runtime::{IsolationLevel, RuntimeKind};
+use crate::sandbox::runtime::{IsolationLevel, RuntimeKind};
 
 /// Sandbox SDK 错误 (10 variant, per mcp-ssh 13 / plugin 12 / voice 10 类比).
 ///

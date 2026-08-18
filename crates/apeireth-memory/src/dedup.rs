@@ -88,8 +88,8 @@ pub fn cosine_distance(a: &[f32], b: &[f32]) -> f32 {
     let mut na = 0.0_f64;
     let mut nb = 0.0_f64;
     for (x, y) in a.iter().zip(b.iter()) {
-        let x = *x as f64;
-        let y = *y as f64;
+        let x = f64::from(*x);
+        let y = f64::from(*y);
         dot += x * y;
         na += x * x;
         nb += y * y;
@@ -316,12 +316,22 @@ mod tests {
         let store = fresh_store();
         <SqliteMemoryStore as EpisodeStore>::put_episode(
             &store,
-            &make_episode("e1", "s1", 1, "alpha beta gamma delta epsilon zeta eta theta"),
+            &make_episode(
+                "e1",
+                "s1",
+                1,
+                "alpha beta gamma delta epsilon zeta eta theta",
+            ),
         )
         .unwrap();
         <SqliteMemoryStore as EpisodeStore>::put_episode(
             &store,
-            &make_episode("e2", "s1", 2, "rust python go javascript typescript cpp java kotlin"),
+            &make_episode(
+                "e2",
+                "s1",
+                2,
+                "rust python go javascript typescript cpp java kotlin",
+            ),
         )
         .unwrap();
         let r = dedup_session(&store, "s1", 0.15, embedder_64()).unwrap();
@@ -372,16 +382,10 @@ mod tests {
         let store = fresh_store();
         let c1 = "this is a long content for the first episode with many words to embed";
         let c2 = "this is a long content for the second episode with many words to embed";
-        <SqliteMemoryStore as EpisodeStore>::put_episode(
-            &store,
-            &make_episode("e1", "s1", 1, c1),
-        )
-        .unwrap();
-        <SqliteMemoryStore as EpisodeStore>::put_episode(
-            &store,
-            &make_episode("e2", "s1", 2, c2),
-        )
-        .unwrap();
+        <SqliteMemoryStore as EpisodeStore>::put_episode(&store, &make_episode("e1", "s1", 1, c1))
+            .unwrap();
+        <SqliteMemoryStore as EpisodeStore>::put_episode(&store, &make_episode("e2", "s1", 2, c2))
+            .unwrap();
         // 默认 0.15: 大概率判重复
         let r_strict = dedup_session(&store, "s1", 0.15, embedder_64()).unwrap();
         // threshold = 0.0001: 极严, 大概率都留

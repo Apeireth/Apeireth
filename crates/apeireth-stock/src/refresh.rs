@@ -58,12 +58,18 @@ pub enum RefreshOutcome {
     /// 缓存命中 (未发起网络请求).
     CacheHit { cache_path: PathBuf },
     /// 网络失败, 缓存存在, fallback 成功.
-    Fallback { cache_path: PathBuf, network_err: String },
+    Fallback {
+        cache_path: PathBuf,
+        network_err: String,
+    },
 }
 
 /// 检查缓存是否可用 (存在 + 非空).
 pub fn cache_exists(cache_path: &Path) -> bool {
-    cache_path.exists() && cache_path.metadata().map(|m| m.len() > 0).unwrap_or(false)
+    cache_path.exists()
+        && fs_err::metadata(cache_path)
+            .map(|m| m.len() > 0)
+            .unwrap_or(false)
 }
 
 /// 网络下载到目标路径 (单次, 不重试; 重试由调用方控制).
@@ -87,10 +93,7 @@ pub fn download_to(url: &str, dest: &Path) -> Result<usize, RefreshError> {
 /// 1. cache 命中 → 返回 CacheHit
 /// 2. cache miss + 网络成功 → 下载到 cache, 返回 Downloaded
 /// 3. cache miss + 网络失败 → 返回 Network error (调用方应预下载或使用 Local source)
-pub fn refresh(
-    source: DataSource,
-    cache_path: &Path,
-) -> Result<RefreshOutcome, RefreshError> {
+pub fn refresh(source: DataSource, cache_path: &Path) -> Result<RefreshOutcome, RefreshError> {
     match source {
         DataSource::Local(p) => {
             if !p.exists() {
@@ -100,8 +103,8 @@ pub fn refresh(
                 )));
             }
             // 复制 local → cache_path (供后续 access 复用)
-            std::fs::copy(&p, cache_path)?;
-            let bytes = cache_path.metadata()?.len() as usize;
+            fs_err::copy(&p, cache_path)?;
+            let bytes = fs_err::metadata(cache_path)?.len() as usize;
             info!(path = %cache_path.display(), bytes, "数据源复制完成 (local)");
             Ok(RefreshOutcome::Downloaded {
                 cache_path: cache_path.to_path_buf(),
@@ -205,10 +208,10 @@ mod tests {
         // 不存在
         assert!(!cache_exists(&p));
         // 空文件
-        std::fs::write(&p, "").unwrap();
+        fs_err::write(&p, "").unwrap();
         assert!(!cache_exists(&p));
         // 有内容
-        std::fs::write(&p, "a,b,c\n1,2,3\n").unwrap();
+        fs_err::write(&p, "a,b,c\n1,2,3\n").unwrap();
         assert!(cache_exists(&p));
     }
 
@@ -217,7 +220,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src.csv");
         let cache = dir.path().join("cache.csv");
-        std::fs::write(&src, "symbol,name\nAAPL,Apple\n").unwrap();
+        fs_err::write(&src, "symbol,name\nAAPL,Apple\n").unwrap();
 
         let outcome = refresh(DataSource::Local(src.clone()), &cache).unwrap();
         match outcome {
@@ -243,12 +246,9 @@ mod tests {
     fn refresh_url_cache_hit_skips_download() {
         let dir = tempfile::tempdir().unwrap();
         let cache = dir.path().join("cache.csv");
-        std::fs::write(&cache, "cached content\n").unwrap();
+        fs_err::write(&cache, "cached content\n").unwrap();
 
-        let outcome = refresh(
-            DataSource::Url("https://example.com/x.csv".into()),
-            &cache,
-        ).unwrap();
+        let outcome = refresh(DataSource::Url("https://example.com/x.csv".into()), &cache).unwrap();
         match outcome {
             RefreshOutcome::CacheHit { cache_path } => {
                 assert_eq!(cache_path, cache);
@@ -262,10 +262,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cache = dir.path().join("cache.csv");
         // cache 不存在, 网络 0 装 PASS → 返回 Network 错
-        let r = refresh(
-            DataSource::Url("https://example.com/x.csv".into()),
-            &cache,
-        );
+        let r = refresh(DataSource::Url("https://example.com/x.csv".into()), &cache);
         assert!(matches!(r, Err(RefreshError::Network(_))));
     }
 
@@ -275,12 +272,13 @@ mod tests {
         let src = dir.path().join("src.csv");
         let cache = dir.path().join("cache.csv");
         // 写合法 FinanceDatabase 格式 CSV (兼容 import_from_csv)
-        std::fs::write(
+        fs_err::write(
             &src,
             "symbol,name,sector,industry,exchange,country,currency,market_cap,ipo_year\n\
              AAPL,Apple Inc.,Technology,CE,NASDAQ,US,USD,2900,1980\n\
              GOOG,Alphabet,Technology,Internet,NASDAQ,US,USD,1800,2004\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let store = SymbolStore::open_in_memory().unwrap();
         let (stats, outcome) = refresh_and_import(
@@ -288,7 +286,8 @@ mod tests {
             DataSource::Local(src),
             &cache,
             crate::symbol::Provenance::FinanceDatabase,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(stats.imported, 2);
         assert!(matches!(outcome, RefreshOutcome::Downloaded { .. }));
         assert_eq!(store.count_all(), 2);
@@ -299,10 +298,7 @@ mod tests {
     fn refresh_and_import_cache_hit_does_not_redo() {
         let dir = tempfile::tempdir().unwrap();
         let cache = dir.path().join("cache.csv");
-        std::fs::write(
-            &cache,
-            "symbol,name\nMSFT,Microsoft\n",
-        ).unwrap();
+        fs_err::write(&cache, "symbol,name\nMSFT,Microsoft\n").unwrap();
 
         let store = SymbolStore::open_in_memory().unwrap();
         let (stats, outcome) = refresh_and_import(
@@ -310,7 +306,8 @@ mod tests {
             DataSource::Url("https://example.com/x.csv".into()),
             &cache,
             crate::symbol::Provenance::FinanceDatabase,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(stats.imported, 1);
         assert!(matches!(outcome, RefreshOutcome::CacheHit { .. }));
         assert_eq!(store.count_all(), 1);

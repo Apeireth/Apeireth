@@ -43,15 +43,30 @@ async fn main() {
     let r = bridge.execute_if_allowed(&call).await;
     assert!(r.success, "gh_accel 应可执行: {:?}", r.error);
     let out = r.output.clone();
-    println!("\n[2] 节点池 {} 个, 实测 {} 个 (耗时 {:?})", out["pool_total"], out["probed"], start.elapsed());
+    println!(
+        "\n[2] 节点池 {} 个, 实测 {} 个 (耗时 {:?})",
+        out["pool_total"],
+        out["probed"],
+        start.elapsed()
+    );
     for row in out["results"].as_array().unwrap() {
         println!(
             "    {:<28} 本站{:>5}ms  实测{:>7}  http {}  {}",
             row["host"].as_str().unwrap_or("?"),
             row["site_latency_ms"].as_u64().unwrap_or(0),
-            row["measured_ms"].as_u64().map(|m| format!("{m}ms")).unwrap_or_else(|| "超时".into()),
-            row["http_status"].as_u64().map(|s| s.to_string()).unwrap_or_else(|| "-".into()),
-            if row["ok"].as_bool().unwrap_or(false) { "✓ 可用" } else { "✗" },
+            row["measured_ms"]
+                .as_u64()
+                .map(|m| format!("{m}ms"))
+                .unwrap_or_else(|| "超时".into()),
+            row["http_status"]
+                .as_u64()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| "-".into()),
+            if row["ok"].as_bool().unwrap_or(false) {
+                "✓ 可用"
+            } else {
+                "✗"
+            },
         );
     }
     println!("\n    最快: {:?}", out["fastest"]);
@@ -74,16 +89,25 @@ async fn main() {
                 let body = resp.bytes().await.unwrap_or_default();
                 let head = String::from_utf8_lossy(&body[..body.len().min(60)]);
                 let is_zip = body.len() >= 2 && body[0] == b'P' && body[1] == b'K';
-                println!("    HTTP {status}, {} bytes, zip魔数={}", body.len(), is_zip);
+                println!(
+                    "    HTTP {status}, {} bytes, zip魔数={}",
+                    body.len(),
+                    is_zip
+                );
                 println!("    开头: {:?}", head);
                 let ok = status == 200 && is_zip;
                 if ok {
                     println!("    ✅ 加速链路真实可用 (GitHub archive 经最快节点抓取成功)");
                 } else {
-                    println!("    ⚠️ 节点可达但内容异常 ({} 节点) — 如实标注, 不以假充真", node);
+                    println!(
+                        "    ⚠️ 节点可达但内容异常 ({} 节点) — 如实标注, 不以假充真",
+                        node
+                    );
                 }
             }
-            Err(e) => println!("    ❌ 验证请求失败: {e} (节点刚测可用仍失败 = 免费节点不稳定, 如实记录)"),
+            Err(e) => {
+                println!("    ❌ 验证请求失败: {e} (节点刚测可用仍失败 = 免费节点不稳定, 如实记录)")
+            }
         }
     } else {
         println!("\n[3] 无可用节点, 跳过真实验证 (免费节点池常有死节点, 稍后重试)");

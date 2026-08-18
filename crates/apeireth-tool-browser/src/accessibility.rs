@@ -108,13 +108,19 @@ impl AccessibilityTree {
 
     /// Count real (non-root) nodes in tree.
     pub fn len(&self) -> usize {
-        if self.nodes.is_empty() { 0 } else { self.nodes.len() - 1 }
+        if self.nodes.is_empty() {
+            0
+        } else {
+            self.nodes.len() - 1
+        }
     }
 
     /// Is the tree empty (no real content nodes)?
     pub fn is_empty(&self) -> bool {
         // Empty if no root OR root has no children
-        if self.nodes.is_empty() { return true; }
+        if self.nodes.is_empty() {
+            return true;
+        }
         self.nodes[self.root].children.is_empty()
     }
 
@@ -141,7 +147,13 @@ impl AccessibilityTree {
             Some(r) => format!(" [ref={}]", r),
             None => String::new(),
         };
-        out.push_str(&format!("{}- {}{}{}\n", indent, node.role.as_str(), name_part, ref_part));
+        out.push_str(&format!(
+            "{}- {}{}{}\n",
+            indent,
+            node.role.as_str(),
+            name_part,
+            ref_part
+        ));
         for child_idx in &node.children {
             self.render_node(*child_idx, depth + 1, out);
         }
@@ -149,7 +161,9 @@ impl AccessibilityTree {
 
     /// Find a node by ref id (e.g. "e5").
     pub fn find_by_ref(&self, ref_id: &str) -> Option<&AccessibilityNode> {
-        self.nodes.iter().find(|n| n.ref_id.as_deref() == Some(ref_id))
+        self.nodes
+            .iter()
+            .find(|n| n.ref_id.as_deref() == Some(ref_id))
     }
 
     /// Extract all interactive node refs (links/buttons/textboxes/etc.)
@@ -158,8 +172,12 @@ impl AccessibilityTree {
         let mut out = Vec::new();
         for node in &self.nodes {
             match &node.role {
-                NodeRole::Link | NodeRole::Button | NodeRole::Textbox
-                | NodeRole::Checkbox | NodeRole::Radio | NodeRole::Combobox => {
+                NodeRole::Link
+                | NodeRole::Button
+                | NodeRole::Textbox
+                | NodeRole::Checkbox
+                | NodeRole::Radio
+                | NodeRole::Combobox => {
                     if let Some(r) = &node.ref_id {
                         out.push((r.clone(), node.role.clone(), node.name.clone()));
                     }
@@ -223,7 +241,7 @@ pub fn extract_tree(html: &str) -> AccessibilityTree {
                 if raw_tag.starts_with('/') {
                     // Closing tag — pop stack, flush text into popped node
                     // Only if name is empty (otherwise it came from aria-label/title/alt)
-                    let tag_name = raw_tag[1..].trim().to_lowercase();
+                    let tag_name = raw_tag.strip_prefix('/').unwrap().trim().to_lowercase();
                     if let Some(node_idx) = stack.pop() {
                         if tree.nodes[node_idx].name.is_empty() && !buf.trim().is_empty() {
                             tree.nodes[node_idx].name.push_str(buf.trim());
@@ -233,7 +251,7 @@ pub fn extract_tree(html: &str) -> AccessibilityTree {
                     let _ = tag_name;
                 } else if raw_tag.ends_with('/') {
                     // Self-closing tag (br, hr, img, input, meta, link)
-                    let tag_content = &raw_tag[..raw_tag.len() - 1];
+                    let tag_content = raw_tag.strip_suffix('/').unwrap();
                     let (tag_name, attrs) = parse_tag_parts(tag_content);
                     let tag_lower = tag_name.to_lowercase();
                     let interactive = matches!(
@@ -332,11 +350,15 @@ fn parse_tag_parts(raw: &str) -> (String, HashMap<String, String>) {
     let rest = &trimmed[i..];
     let mut chars = rest.char_indices().peekable();
     while let Some((_, c)) = chars.next() {
-        if c.is_whitespace() { continue; }
+        if c.is_whitespace() {
+            continue;
+        }
         let mut name = String::new();
         name.push(c);
         while let Some(&(_, nc)) = chars.peek() {
-            if nc == '=' || nc.is_whitespace() { break; }
+            if nc == '=' || nc.is_whitespace() {
+                break;
+            }
             name.push(nc);
             chars.next();
         }
@@ -348,7 +370,9 @@ fn parse_tag_parts(raw: &str) -> (String, HashMap<String, String>) {
                     chars.next();
                     let mut value = String::new();
                     while let Some((_, vc)) = chars.next() {
-                        if vc == quote { break; }
+                        if vc == quote {
+                            break;
+                        }
                         value.push(vc);
                     }
                     attrs.insert(name.to_lowercase(), value);
@@ -356,7 +380,9 @@ fn parse_tag_parts(raw: &str) -> (String, HashMap<String, String>) {
                 _ => {
                     let mut value = String::new();
                     while let Some(&(_, vc)) = chars.peek() {
-                        if vc.is_whitespace() { break; }
+                        if vc.is_whitespace() {
+                            break;
+                        }
                         value.push(vc);
                         chars.next();
                     }
@@ -373,16 +399,31 @@ fn parse_tag_parts(raw: &str) -> (String, HashMap<String, String>) {
 fn is_void(tag: &str) -> bool {
     matches!(
         tag,
-        "br" | "hr" | "img" | "input" | "meta" | "link" | "area" | "base" | "col"
-            | "embed" | "param" | "source" | "track" | "wbr"
+        "br" | "hr"
+            | "img"
+            | "input"
+            | "meta"
+            | "link"
+            | "area"
+            | "base"
+            | "col"
+            | "embed"
+            | "param"
+            | "source"
+            | "track"
+            | "wbr"
     )
 }
 
 fn is_interactive(role: &NodeRole) -> bool {
     matches!(
         role,
-        NodeRole::Link | NodeRole::Button | NodeRole::Textbox
-            | NodeRole::Checkbox | NodeRole::Radio | NodeRole::Combobox
+        NodeRole::Link
+            | NodeRole::Button
+            | NodeRole::Textbox
+            | NodeRole::Checkbox
+            | NodeRole::Radio
+            | NodeRole::Combobox
     )
 }
 
@@ -520,7 +561,10 @@ mod tests {
         let roles: Vec<_> = tree.nodes.iter().map(|n| n.role.clone()).collect();
         assert!(roles.contains(&NodeRole::Heading(1)));
         assert!(roles.contains(&NodeRole::Paragraph));
-        assert!(!roles.contains(&NodeRole::Heading(2)), "h2 inside script should be skipped");
+        assert!(
+            !roles.contains(&NodeRole::Heading(2)),
+            "h2 inside script should be skipped"
+        );
     }
 
     #[test]

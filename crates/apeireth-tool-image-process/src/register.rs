@@ -41,7 +41,11 @@ fn parse_op(s: &str) -> Result<ProcessOp, String> {
         "exif" => ProcessOp::Exif,
         "ocr" => ProcessOp::Ocr,
         "thumbnail" => ProcessOp::Thumbnail,
-        _ => return Err(format!("unknown op `{s}` (expected hash|exif|ocr|thumbnail)")),
+        _ => {
+            return Err(format!(
+                "unknown op `{s}` (expected hash|exif|ocr|thumbnail)"
+            ))
+        }
     })
 }
 

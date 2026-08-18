@@ -11,7 +11,10 @@
 //!
 //! **不假装**: 用 lib 现有方法, 0 编造 API.
 
-use apeireth_workflow::{Activity, ActivityInput, ActivityOutput, Workflow, WorkflowContext, WorkflowResult, WorkflowRunner};
+use apeireth_workflow::{
+    Activity, ActivityInput, ActivityOutput, Workflow, WorkflowContext, WorkflowResult,
+    WorkflowRunner,
+};
 use serde_json::json;
 use std::sync::Arc;
 
@@ -42,8 +45,14 @@ impl Activity for FailingActivity {
 struct EchoWorkflow;
 
 impl Workflow for EchoWorkflow {
-    fn id(&self) -> &str { "EchoWorkflow" }
-    fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+    fn id(&self) -> &str {
+        "EchoWorkflow"
+    }
+    fn run(
+        &self,
+        ctx: &WorkflowContext,
+        input: &serde_json::Value,
+    ) -> WorkflowResult<serde_json::Value> {
         // 调一次 echo activity
         let out = ctx.execute_activity("echo", input.clone())?;
         Ok(out)
@@ -53,8 +62,14 @@ impl Workflow for EchoWorkflow {
 struct FailingWorkflow;
 
 impl Workflow for FailingWorkflow {
-    fn id(&self) -> &str { "FailingWorkflow" }
-    fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+    fn id(&self) -> &str {
+        "FailingWorkflow"
+    }
+    fn run(
+        &self,
+        ctx: &WorkflowContext,
+        input: &serde_json::Value,
+    ) -> WorkflowResult<serde_json::Value> {
         // 调一次 failing activity, 错误传播
         let _ = ctx.execute_activity("failing", input.clone())?;
         Ok(json!({"unreachable": true}))
@@ -69,7 +84,11 @@ impl Workflow for FailingWorkflow {
 #[test]
 fn test_workflow_runner_starts_empty() {
     let runner = WorkflowRunner::new();
-    assert_eq!(runner.list_workflows().len(), 0, "新建 runner 应无 workflow");
+    assert_eq!(
+        runner.list_workflows().len(),
+        0,
+        "新建 runner 应无 workflow"
+    );
     assert_eq!(runner.total_runs(), 0, "新建 runner 应无 run 历史");
 }
 
@@ -86,19 +105,23 @@ fn test_workflow_runner_run_end_to_end() {
     assert_eq!(result, json!({"hello": "world"}));
 
     // history 应有 WorkflowStarted + ActivityScheduled + ActivityCompleted + WorkflowCompleted
-    let history = runner
-        .get_history("EchoWorkflow")
-        .expect("history missing");
+    let history = runner.get_history("EchoWorkflow").expect("history missing");
     assert!(
-        history.iter().any(|e| format!("{:?}", e.kind).contains("WorkflowStarted")),
+        history
+            .iter()
+            .any(|e| format!("{:?}", e.kind).contains("WorkflowStarted")),
         "history 应有 WorkflowStarted: {history:?}"
     );
     assert!(
-        history.iter().any(|e| format!("{:?}", e.kind).contains("ActivityCompleted")),
+        history
+            .iter()
+            .any(|e| format!("{:?}", e.kind).contains("ActivityCompleted")),
         "history 应有 ActivityCompleted: {history:?}"
     );
     assert!(
-        history.iter().any(|e| format!("{:?}", e.kind).contains("WorkflowCompleted")),
+        history
+            .iter()
+            .any(|e| format!("{:?}", e.kind).contains("WorkflowCompleted")),
         "history 应有 WorkflowCompleted: {history:?}"
     );
 
@@ -114,7 +137,10 @@ fn test_workflow_propagates_activity_failure() {
 
     let input = json!({"x": 1});
     let res = runner.run("FailingWorkflow", &input);
-    assert!(res.is_err(), "workflow 应 propagate activity 错误, got: {res:?}");
+    assert!(
+        res.is_err(),
+        "workflow 应 propagate activity 错误, got: {res:?}"
+    );
     let err = res.unwrap_err();
     let err_str = format!("{err}");
     assert!(
@@ -127,7 +153,9 @@ fn test_workflow_propagates_activity_failure() {
         .get_history("FailingWorkflow")
         .expect("history missing");
     assert!(
-        history.iter().any(|e| format!("{:?}", e.kind).contains("ActivityFailed")),
+        history
+            .iter()
+            .any(|e| format!("{:?}", e.kind).contains("ActivityFailed")),
         "history 应有 ActivityFailed: {history:?}"
     );
 }

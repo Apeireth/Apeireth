@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
+use crate::voice::error::{VoiceError, VoiceResult};
 
 // ============================================================================
 // §1 3 VAD 算法 enum (K-1 强校验守门, 编译期 hardcode 3 variant)
@@ -276,7 +276,11 @@ mod tests {
 
     #[test]
     fn k1_vad_algorithm_has_3_variants() {
-        assert_eq!(SUPPORTED_VAD_ALGORITHMS.len(), 3, "K-1 强校验: 必须 3 个 VAD 算法");
+        assert_eq!(
+            SUPPORTED_VAD_ALGORITHMS.len(),
+            3,
+            "K-1 强校验: 必须 3 个 VAD 算法"
+        );
         assert_eq!(VadAlgorithm::COUNT, 3);
         assert_eq!(VadAlgorithm::Energy.as_str(), "energy");
         assert_eq!(VadAlgorithm::Silence.as_str(), "silence");
@@ -342,14 +346,8 @@ mod tests {
 
     #[test]
     fn k1_vad_config_custom_valid() {
-        let config = VadConfig::custom(
-            VadAlgorithm::Energy,
-            0.1,
-            1000,
-            200,
-            20,
-        )
-        .expect("valid custom");
+        let config =
+            VadConfig::custom(VadAlgorithm::Energy, 0.1, 1000, 200, 20).expect("valid custom");
         assert!((config.energy_threshold - 0.1).abs() < 0.001);
     }
 

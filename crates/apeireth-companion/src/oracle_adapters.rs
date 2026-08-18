@@ -69,7 +69,10 @@ impl std::error::Error for AdapterError {}
 impl AdapterError {
     /// 是否属于可降级错误 (限流/不可达/降级 → 允许切 fallback; 解析/不支持 → 直抛).
     pub fn degradable(&self) -> bool {
-        matches!(self, Self::RateLimited(_) | Self::Unreachable(_) | Self::Degraded(_))
+        matches!(
+            self,
+            Self::RateLimited(_) | Self::Unreachable(_) | Self::Degraded(_)
+        )
     }
 }
 
@@ -95,7 +98,11 @@ pub struct MockAdapter {
 
 impl MockAdapter {
     pub fn new(provider: impl Into<String>) -> Self {
-        Self { provider: provider.into(), quotes: Mutex::new(HashMap::new()), failure: Mutex::new(None) }
+        Self {
+            provider: provider.into(),
+            quotes: Mutex::new(HashMap::new()),
+            failure: Mutex::new(None),
+        }
     }
     /// 设置/更新报价 (可随测试推进改值, 模拟行情变动).
     pub fn set_quote(&self, symbol: impl Into<String>, value: f64) {
@@ -255,7 +262,10 @@ impl CoinGeckoAdapter {
     }
     /// 注入原始 GET 口 (测试注 mock, 生产默认 reqwest).
     pub fn with_raw(raw: Arc<dyn RawFetch>) -> Self {
-        Self { raw, base_url: "https://api.coingecko.com/api/v3".into() }
+        Self {
+            raw,
+            base_url: "https://api.coingecko.com/api/v3".into(),
+        }
     }
     /// symbol → CoinGecko coin id (能力边界内的小表, 未知直抛 Unsupported).
     pub fn coin_id(symbol: &str) -> Result<&'static str, AdapterError> {
@@ -291,7 +301,10 @@ impl MarketAdapter for CoinGeckoAdapter {
     }
     async fn fetch_quote(&self, symbol: &str) -> Result<MarketQuote, AdapterError> {
         let coin = Self::coin_id(symbol)?;
-        let url = format!("{}/simple/price?ids={coin}&vs_currencies=usd", self.base_url);
+        let url = format!(
+            "{}/simple/price?ids={coin}&vs_currencies=usd",
+            self.base_url
+        );
         let (status, body) = self.raw.get(&url).await?;
         match status {
             200 => {}
@@ -350,7 +363,9 @@ pub fn parse_fiscaldata_rate(body: &str) -> Result<f64, AdapterError> {
         .and_then(|d| d.as_array())
         .and_then(|a| a.first())
         .and_then(|item| item.pointer("/attributes/avg_interest_rate_amt"))
-        .ok_or_else(|| AdapterError::Parse(format!("响应无 data[0].avg_interest_rate_amt: {body}")))?;
+        .ok_or_else(|| {
+            AdapterError::Parse(format!("响应无 data[0].avg_interest_rate_amt: {body}"))
+        })?;
     amt.as_f64()
         .or_else(|| amt.as_str().and_then(|s| s.parse::<f64>().ok()))
         .ok_or_else(|| AdapterError::Parse(format!("avg_interest_rate_amt 非数值: {amt}")))
@@ -435,7 +450,12 @@ impl ForecastPipeline {
     ) -> Self {
         let session_id = session_id.into();
         let registry = ForecastRegistry::new(store.clone(), session_id.clone());
-        Self { adapter, registry, store, session_id }
+        Self {
+            adapter,
+            registry,
+            store,
+            session_id,
+        }
     }
 
     /// 既有预测登记表入口 (Brier 校准走 `registry().calibration()`, 0 重写).
@@ -508,7 +528,12 @@ impl ForecastPipeline {
             .map_err(|e| format!("对照拉取失败: {e}"))?;
         let actual = current.value > meta.baseline_value;
         let brier = self.registry.resolve(forecast_id, actual)?;
-        Ok(ResolveOutcome { forecast_id: forecast_id.to_string(), actual, brier, current })
+        Ok(ResolveOutcome {
+            forecast_id: forecast_id.to_string(),
+            actual,
+            brier,
+            current,
+        })
     }
 
     /// 从记忆库找回基线元数据 (append-only 扫描 `adapterfc-` 前缀, 同 registry 重放风格).
@@ -569,7 +594,10 @@ mod tests {
         assert_eq!(q.value, 100.0);
         assert_eq!(q.provider, "mock");
         // 未配置 symbol → Unsupported
-        assert_eq!(m.fetch_quote("XYZ").await.unwrap_err(), AdapterError::Unsupported("XYZ".into()));
+        assert_eq!(
+            m.fetch_quote("XYZ").await.unwrap_err(),
+            AdapterError::Unsupported("XYZ".into())
+        );
     }
 
     #[tokio::test]
@@ -577,7 +605,10 @@ mod tests {
         let m = MockAdapter::new("mock");
         m.set_quote("BTC", 100.0);
         m.fail_with(AdapterError::RateLimited("模拟 429".into()));
-        assert!(matches!(m.fetch_quote("BTC").await, Err(AdapterError::RateLimited(_))));
+        assert!(matches!(
+            m.fetch_quote("BTC").await,
+            Err(AdapterError::RateLimited(_))
+        ));
         m.clear_failure();
         assert!(m.fetch_quote("BTC").await.is_ok());
     }
@@ -599,7 +630,10 @@ mod tests {
         assert_eq!(q.value, 42.0);
         assert_eq!(q.provider, "fallback");
         // 主源 Unsupported → 直抛不降级 (不用假数据掩盖能力边界)
-        assert_eq!(fa.fetch_quote("XYZ").await.unwrap_err(), AdapterError::Unsupported("XYZ".into()));
+        assert_eq!(
+            fa.fetch_quote("XYZ").await.unwrap_err(),
+            AdapterError::Unsupported("XYZ".into())
+        );
     }
 
     // ---------- CoinGecko 适配器 ----------
@@ -616,14 +650,23 @@ mod tests {
         let body = r#"{"bitcoin":{"usd":61234.5}}"#;
         assert!((parse_simple_price(body, "bitcoin").unwrap() - 61234.5).abs() < 1e-9);
         // 缺字段 / 非 JSON → Parse (不编数)
-        assert!(matches!(parse_simple_price(body, "ethereum"), Err(AdapterError::Parse(_))));
-        assert!(matches!(parse_simple_price("not json", "bitcoin"), Err(AdapterError::Parse(_))));
+        assert!(matches!(
+            parse_simple_price(body, "ethereum"),
+            Err(AdapterError::Parse(_))
+        ));
+        assert!(matches!(
+            parse_simple_price("not json", "bitcoin"),
+            Err(AdapterError::Parse(_))
+        ));
     }
 
     #[tokio::test]
     async fn coingecko_status_mapping_and_quote() {
         // 200 → 规范化报价
-        let ok = Arc::new(MockRawFetch { status: 200, body: r#"{"bitcoin":{"usd":61234.5}}"#.into() });
+        let ok = Arc::new(MockRawFetch {
+            status: 200,
+            body: r#"{"bitcoin":{"usd":61234.5}}"#.into(),
+        });
         let a = CoinGeckoAdapter::with_raw(ok);
         let q = a.fetch_quote("BTC").await.unwrap();
         assert_eq!(q.provider, "coingecko");
@@ -631,10 +674,16 @@ mod tests {
         assert_eq!(q.unit, "USD");
         assert!((q.value - 61234.5).abs() < 1e-9);
         // 429 → 限流 (可降级)
-        let rl = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch { status: 429, body: "rate limited".into() }));
+        let rl = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch {
+            status: 429,
+            body: "rate limited".into(),
+        }));
         assert!(rl.fetch_quote("BTC").await.unwrap_err().degradable());
         // 500 → 不可达 (可降级)
-        let err500 = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch { status: 500, body: "oops".into() }));
+        let err500 = CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch {
+            status: 500,
+            body: "oops".into(),
+        }));
         assert!(err500.fetch_quote("BTC").await.unwrap_err().degradable());
     }
 
@@ -647,21 +696,40 @@ mod tests {
         // 数值型也收; 空 data / 非 JSON → Parse
         let body_num = r#"{"data":[{"attributes":{"avg_interest_rate_amt":3.25}}]}"#;
         assert!((parse_fiscaldata_rate(body_num).unwrap() - 3.25).abs() < 1e-9);
-        assert!(matches!(parse_fiscaldata_rate(r#"{"data":[]}"#), Err(AdapterError::Parse(_))));
-        assert!(matches!(parse_fiscaldata_rate("x"), Err(AdapterError::Parse(_))));
+        assert!(matches!(
+            parse_fiscaldata_rate(r#"{"data":[]}"#),
+            Err(AdapterError::Parse(_))
+        ));
+        assert!(matches!(
+            parse_fiscaldata_rate("x"),
+            Err(AdapterError::Parse(_))
+        ));
     }
 
     #[tokio::test]
     async fn macro_rates_fetch_and_boundary() {
         let body = r#"{"data":[{"attributes":{"avg_interest_rate_amt":"3.51"}}]}"#;
-        let a = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch { status: 200, body: body.into() }));
+        let a = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch {
+            status: 200,
+            body: body.into(),
+        }));
         let q = a.fetch_quote(TREASURY_AVG_RATE).await.unwrap();
         assert_eq!(q.unit, "%");
         assert!((q.value - 3.51).abs() < 1e-9);
         // 未知 symbol → Unsupported; 429 → 限流
-        assert_eq!(a.fetch_quote("CPI").await.unwrap_err(), AdapterError::Unsupported("CPI".into()));
-        let rl = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch { status: 429, body: "slow down".into() }));
-        assert!(rl.fetch_quote(TREASURY_AVG_RATE).await.unwrap_err().degradable());
+        assert_eq!(
+            a.fetch_quote("CPI").await.unwrap_err(),
+            AdapterError::Unsupported("CPI".into())
+        );
+        let rl = MacroRatesAdapter::with_raw(Arc::new(MockRawFetch {
+            status: 429,
+            body: "slow down".into(),
+        }));
+        assert!(rl
+            .fetch_quote(TREASURY_AVG_RATE)
+            .await
+            .unwrap_err()
+            .degradable());
     }
 
     // ---------- 适配器注册表 (热插拔) ----------
@@ -670,8 +738,16 @@ mod tests {
     async fn adapter_registry_hotplug() {
         let mut reg = AdapterRegistry::new();
         reg.register(Arc::new(MockAdapter::new("mock")));
-        reg.register(Arc::new(CoinGeckoAdapter::with_raw(Arc::new(MockRawFetch { status: 429, body: String::new() }))));
-        assert_eq!(reg.list(), vec!["coingecko".to_string(), "mock".to_string()]);
+        reg.register(Arc::new(CoinGeckoAdapter::with_raw(Arc::new(
+            MockRawFetch {
+                status: 429,
+                body: String::new(),
+            },
+        ))));
+        assert_eq!(
+            reg.list(),
+            vec!["coingecko".to_string(), "mock".to_string()]
+        );
         assert!(reg.get("mock").is_some());
         assert!(reg.get("不存在").is_none());
     }
@@ -685,14 +761,22 @@ mod tests {
         let p = ForecastPipeline::new(mock.clone(), mem(), "sess-1");
         // 登记: horizon=0 即到期, 概率 0.7
         let df = p.register_direction_forecast("BTC", 0, 0.7).await.unwrap();
-        assert!(df.statement.contains("BTC"), "陈述应含 symbol: {}", df.statement);
+        assert!(
+            df.statement.contains("BTC"),
+            "陈述应含 symbol: {}",
+            df.statement
+        );
         assert!((df.probability - 0.7).abs() < 1e-9);
         assert_eq!(df.baseline.value, 100.0);
         // 行情上涨 → 到期对照成真, Brier = (0.7-1)² = 0.09
         mock.set_quote("BTC", 110.0);
         let out = p.resolve_due(&df.forecast_id).await.unwrap();
         assert!(out.actual);
-        assert!((out.brier - 0.09).abs() < 1e-9, "Brier 应 = 0.09: {}", out.brier);
+        assert!(
+            (out.brier - 0.09).abs() < 1e-9,
+            "Brier 应 = 0.09: {}",
+            out.brier
+        );
         // 校准挂接: 既有 registry.calibration() 可见 1 条已对照
         let (n, mean_brier, _hint) = p.registry().calibration().unwrap();
         assert_eq!(n, 1);
@@ -716,7 +800,10 @@ mod tests {
         let mock = Arc::new(MockAdapter::new("mock"));
         mock.set_quote("BTC", 100.0);
         let p = ForecastPipeline::new(mock, mem(), "sess-3");
-        let df = p.register_direction_forecast("BTC", 60_000, 0.5).await.unwrap();
+        let df = p
+            .register_direction_forecast("BTC", 60_000, 0.5)
+            .await
+            .unwrap();
         let err = p.resolve_due(&df.forecast_id).await.unwrap_err();
         assert!(err.contains("未到期"), "应报未到期: {err}");
     }
@@ -737,7 +824,10 @@ mod tests {
     async fn pipeline_unknown_symbol_register_error() {
         let mock = Arc::new(MockAdapter::new("mock"));
         let p = ForecastPipeline::new(mock, mem(), "sess-5");
-        let err = p.register_direction_forecast("XYZ", 0, 0.5).await.unwrap_err();
+        let err = p
+            .register_direction_forecast("XYZ", 0, 0.5)
+            .await
+            .unwrap_err();
         assert!(err.contains("拉取基线失败"), "{err}");
     }
 

@@ -92,7 +92,11 @@ impl ValueCaseStore {
 
     /// 主人反馈回流: Agree → agree_count+1; Disagree → 标记 + 计 0 (不被提升).
     pub fn feedback(&mut self, id: u64, fb: Feedback) -> Result<(), String> {
-        let c = self.cases.iter_mut().find(|c| c.id == id).ok_or("案例不存在")?;
+        let c = self
+            .cases
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or("案例不存在")?;
         c.feedback = Some(fb);
         if fb == Feedback::Agree {
             c.agree_count += 1;
@@ -103,7 +107,8 @@ impl ValueCaseStore {
     /// 提升候选: 同一冲突价值集合的模式, 多次一致 (agree_count ≥ threshold) → 原则候选.
     /// 返回 (冲突集合, 一致裁决, 同意次数) — 提升动作由调用方决定 (0 装).
     pub fn promote_candidates(&self, threshold: usize) -> Vec<(Vec<String>, String, usize)> {
-        let mut groups: std::collections::HashMap<Vec<String>, Vec<&ValueCase>> = Default::default();
+        let mut groups: std::collections::HashMap<Vec<String>, Vec<&ValueCase>> =
+            Default::default();
         for c in &self.cases {
             if c.feedback != Some(Feedback::Disagree) {
                 groups.entry(c.values.clone()).or_default().push(c);
@@ -188,7 +193,10 @@ mod tests {
             DecisionBasis::MasterDecision,
         );
         store.feedback(c.id, Feedback::Disagree).unwrap();
-        assert!(store.promote_candidates(1).is_empty(), "主人不同意 → 不提升");
+        assert!(
+            store.promote_candidates(1).is_empty(),
+            "主人不同意 → 不提升"
+        );
     }
 
     #[test]
@@ -216,6 +224,10 @@ mod tests {
             "d",
             DecisionBasis::ConstitutionRule,
         );
-        assert_eq!(c.values, vec!["a".to_string(), "b".to_string()], "排序 + 去重");
+        assert_eq!(
+            c.values,
+            vec!["a".to_string(), "b".to_string()],
+            "排序 + 去重"
+        );
     }
 }

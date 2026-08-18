@@ -252,7 +252,7 @@ mod tests {
     fn t05_multiplier_clamped_to_valid_range() {
         // 测试 0.0..1.0 全 11 个采样点
         for i in 0..=10 {
-            let endurance = i as f64 / 10.0;
+            let endurance = f64::from(i) / 10.0;
             let life = make_life(endurance, false, 1_700_000_000);
             let adj = life_force_to_motivation_adjustment(&life, 1_700_000_000);
             assert!(
@@ -294,7 +294,7 @@ mod tests {
     fn t08_endurance_monotonic_with_multiplier() {
         let mut last = 0.0_f64;
         for i in 1..=10 {
-            let endurance = i as f64 / 10.0;
+            let endurance = f64::from(i) / 10.0;
             let life = make_life(endurance, false, 1_700_000_000);
             let adj = life_force_to_motivation_adjustment(&life, 1_700_000_000);
             assert!(

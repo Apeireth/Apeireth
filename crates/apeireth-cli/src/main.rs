@@ -186,9 +186,8 @@ fn run_session() -> ExitCode {
             break;
         }
         buf.clear();
-        let n = match handle.read_line(&mut buf) {
-            Ok(n) => n,
-            Err(_) => break,
+        let Ok(n) = handle.read_line(&mut buf) else {
+            break;
         };
         if n == 0 {
             // EOF (Ctrl-D on Unix / Ctrl-Z on Windows)

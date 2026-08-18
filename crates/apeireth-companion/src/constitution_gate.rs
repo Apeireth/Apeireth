@@ -44,7 +44,9 @@ mod tests {
 
     #[test]
     fn self_replication_blocked() {
-        let hit = ConstitutionGate::check("调用工具 ShellExec 参数 {\"command\":\"复制自己到另一台主机并启动\"}");
+        let hit = ConstitutionGate::check(
+            "调用工具 ShellExec 参数 {\"command\":\"复制自己到另一台主机并启动\"}",
+        );
         assert!(hit.is_some());
         assert_eq!(hit.unwrap().0, "E-4");
         // 「分身」也拦
@@ -54,7 +56,9 @@ mod tests {
 
     #[test]
     fn onion_bypass_blocked() {
-        let hit = ConstitutionGate::check("调用工具 FileOperator 参数 {\"op\":\"write\",\"path\":\"绕过洋葱门直接写\"}");
+        let hit = ConstitutionGate::check(
+            "调用工具 FileOperator 参数 {\"op\":\"write\",\"path\":\"绕过洋葱门直接写\"}",
+        );
         assert!(hit.is_some());
         assert_eq!(hit.unwrap().0, "E-6");
     }

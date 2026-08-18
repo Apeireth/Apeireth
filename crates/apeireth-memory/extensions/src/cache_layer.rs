@@ -261,8 +261,8 @@ mod tests {
     async fn set_write_through_writes_both_layers() {
         let c = CachedMemoryProvider::new(in_memory(), sqlite());
         c.set("k1", b"v1").await.unwrap();
-        assert_eq!(c.cache().exists("k1").await.unwrap(), true);
-        assert_eq!(c.backend().exists("k1").await.unwrap(), true);
+        assert!(c.cache().exists("k1").await.unwrap());
+        assert!(c.backend().exists("k1").await.unwrap());
         assert_eq!(c.get("k1").await.unwrap(), Some(b"v1".to_vec()));
     }
 
@@ -311,7 +311,7 @@ mod tests {
         c.set("k", b"v").await.unwrap();
         backend.delete("k").await.unwrap();
         // cache 快路径 → 仍 exists (证明没问后端)
-        assert_eq!(c.exists("k").await.unwrap(), true);
+        assert!(c.exists("k").await.unwrap());
     }
 
     #[tokio::test]

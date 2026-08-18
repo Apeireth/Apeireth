@@ -27,9 +27,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **InMemoryProvider**: 进程内 HashMap 内存 provider.
 #[derive(Debug, Clone)]
@@ -87,14 +85,20 @@ impl MemoryProvider for InMemoryProvider {
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> MemoryProviderResult<()> {
-        let mut map = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut map = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
 
         // K-1 #3: max_size 校验 (capacity check)
         let new_size = *size + value.len() as u64;
@@ -116,22 +120,31 @@ impl MemoryProvider for InMemoryProvider {
     }
 
     async fn get(&self, key: &str) -> MemoryProviderResult<Option<Vec<u8>>> {
-        let map = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let map = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         Ok(map.get(key).cloned())
     }
 
     async fn delete(&self, key: &str) -> MemoryProviderResult<()> {
-        let mut map = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut map = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         if let Some(old) = map.remove(key) {
             *size -= old.len() as u64;
         }
@@ -139,32 +152,44 @@ impl MemoryProvider for InMemoryProvider {
     }
 
     async fn exists(&self, key: &str) -> MemoryProviderResult<bool> {
-        let map = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let map = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         Ok(map.contains_key(key))
     }
 
     async fn clear(&self) -> MemoryProviderResult<()> {
-        let mut map = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let mut map = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         map.clear();
         *size = 0;
         Ok(())
     }
 
     async fn size(&self) -> MemoryProviderResult<u64> {
-        let size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::InMemory,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::InMemory,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         Ok(*size)
     }
 }
@@ -188,8 +213,8 @@ mod tests {
         ProviderConfig::new(
             "memory://test",
             Duration::from_secs(5),
-            1024 * 1024, // 1MB
-            false,        // InMemory 不持久化
+            1024 * 1024,            // 1MB
+            false,                  // InMemory 不持久化
             Duration::from_secs(0), // 永不过期
             ProviderScope::Local,
         )

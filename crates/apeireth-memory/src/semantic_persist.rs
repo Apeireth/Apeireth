@@ -51,7 +51,7 @@ use apeireth_core::Episode;
 use apeireth_vector::{SqliteVecBackend, VectorStore};
 
 use crate::episode::EpisodeStore;
-use crate::semantic::{episode_uuid, EmbedderIdentity, EmbedFn};
+use crate::semantic::{episode_uuid, EmbedFn, EmbedderIdentity};
 use crate::user_profile::UserProfile;
 use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
@@ -67,7 +67,7 @@ use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 /// - 不借用 `SqliteMemoryStore` (改持 `Arc<SqliteMemoryStore>`)
 /// - 内部用 `SqliteVecBackend` 真接 disk (不是 `Box<dyn VectorStore>` 默认 in-memory)
 /// - 整个 struct 是 'static + Send + Sync, 可跨线程 / 跨 daemon 共享
-#[derive(Clone)]  // 内部 Arc 共享, 0 数据复制
+#[derive(Clone)] // 内部 Arc 共享, 0 数据复制
 pub struct PersistentSemanticIndex {
     /// 共享 memory store (跨 daemon 持有).
     memory: Arc<SqliteMemoryStore>,
@@ -122,8 +122,9 @@ impl PersistentSemanticIndex {
         embedder: Arc<dyn EmbedFn>,
     ) -> MemoryResult<Self> {
         let vector_path = vector_path.as_ref().to_path_buf();
-        let mut backend = SqliteVecBackend::open(&vector_path)
-            .map_err(|e| MemoryError::Other(format!("vector open({}): {e}", vector_path.display())))?;
+        let mut backend = SqliteVecBackend::open(&vector_path).map_err(|e| {
+            MemoryError::Other(format!("vector open({}): {e}", vector_path.display()))
+        })?;
         // set_dimension 兼容 reload 路径: 已有 dim 一致就 no-op, 不一致报错
         if backend.dimension() == 0 {
             backend
@@ -383,8 +384,7 @@ impl PersistentSemanticIndex {
                 Box::new(b)
             }
             None => Box::new(
-                SqliteVecBackend::open_in_memory()
-                    .expect("vector in-memory fallback must succeed"),
+                SqliteVecBackend::open_in_memory().expect("vector in-memory fallback must succeed"),
             ),
         };
         crate::semantic::SemanticIndex::new(memory, boxed, Arc::clone(&self.embedder))
@@ -400,21 +400,30 @@ const NORMALIZE_SIDECAR_SUFFIX: &str = ".normalize.json";
 
 fn embedder_sidecar_path(vector_path: &Path) -> PathBuf {
     let mut p = vector_path.to_path_buf();
-    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let original = p
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
     p.set_file_name(format!("{original}{EMBEDDER_SIDECAR_SUFFIX}"));
     p
 }
 
 fn schema_sidecar_path(vector_path: &Path) -> PathBuf {
     let mut p = vector_path.to_path_buf();
-    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let original = p
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
     p.set_file_name(format!("{original}{SCHEMA_SIDECAR_SUFFIX}"));
     p
 }
 
 fn normalize_sidecar_path(vector_path: &Path) -> PathBuf {
     let mut p = vector_path.to_path_buf();
-    let original = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let original = p
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
     p.set_file_name(format!("{original}{NORMALIZE_SIDECAR_SUFFIX}"));
     p
 }
@@ -443,10 +452,14 @@ fn read_normalize_sidecar(vector_path: &Path) -> u32 {
     }
 }
 
-fn persist_embedder_sidecar_impl(vector_path: &Path, identity: &EmbedderIdentity) -> std::io::Result<()> {
+fn persist_embedder_sidecar_impl(
+    vector_path: &Path,
+    identity: &EmbedderIdentity,
+) -> std::io::Result<()> {
     let path = embedder_sidecar_path(vector_path);
     let tmp = path.with_extension("embedder.json.tmp");
-    let json = serde_json::to_string(identity).map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let json = serde_json::to_string(identity)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(&tmp, json)?;
     std::fs::rename(&tmp, &path)?;
     Ok(())
@@ -708,7 +721,10 @@ pub fn read_artifact_record(vector_path: impl AsRef<Path>) -> Option<ArtifactSig
         .and_then(|s| serde_json::from_str(&s).ok())
 }
 
-fn persist_artifact_record_impl(vector_path: &Path, record: &ArtifactSigRecord) -> std::io::Result<()> {
+fn persist_artifact_record_impl(
+    vector_path: &Path,
+    record: &ArtifactSigRecord,
+) -> std::io::Result<()> {
     let path = artifact_sig_sidecar_path(vector_path);
     let tmp = path.with_extension("artifact_sig.json.tmp");
     let json = serde_json::to_string(record)
@@ -721,7 +737,10 @@ fn persist_artifact_record_impl(vector_path: &Path, record: &ArtifactSigRecord) 
 impl PersistentSemanticIndex {
     /// N5: 门禁检查 — 对当前内容签名给出复用/重算决策 (0 副作用).
     pub fn check_artifact(&self, current_sig: &str) -> ArtifactDecision {
-        artifact_gate_decision(read_artifact_record(&self.vector_path).as_ref(), current_sig)
+        artifact_gate_decision(
+            read_artifact_record(&self.vector_path).as_ref(),
+            current_sig,
+        )
     }
 
     /// N5: 重算成功后记录新签名 (写入 CURRENT 版本号).
@@ -853,7 +872,8 @@ mod tests {
         let e = fresh_embedder();
         // 第一次: 写 1 条 → 落盘
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             let ep = make_episode("e1", 1, "first content");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
@@ -872,18 +892,19 @@ mod tests {
         let mem = fresh_mem();
         // 第一次: 32 维
         {
-            let idx =
-                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::new(HashEmbedder::new(32))).unwrap();
+            let idx = PersistentSemanticIndex::open(
+                Arc::clone(&mem),
+                &path,
+                Arc::new(HashEmbedder::new(32)),
+            )
+            .unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
         // 第二次: 64 维 embedder → 报错
-        let result = PersistentSemanticIndex::open(
-            Arc::clone(&mem),
-            &path,
-            Arc::new(HashEmbedder::new(64)),
-        );
+        let result =
+            PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::new(HashEmbedder::new(64)));
         assert!(result.is_err(), "dim 不一致应报错");
         let err = result.unwrap_err();
         let msg = format!("{err}");
@@ -899,11 +920,12 @@ mod tests {
         let mem = fresh_mem();
         let e = fresh_embedder();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             let ep = make_episode("e1", 1, "persistent content");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
-            idx.save().unwrap(); // 显式 save (实际 no-op)
+            idx.flush_noop().unwrap(); // 显式 save (实际 no-op)
         }
         // 重开
         let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e).unwrap();
@@ -923,7 +945,10 @@ mod tests {
         let ep = make_episode("n1", 1, "normalize version content");
         <SqliteMemoryStore as EpisodeStore>::put_episode(&idx.memory, &ep).unwrap();
         idx.index_episode(&ep).unwrap();
-        assert!(normalize_sidecar_path(&path).exists(), "normalize sidecar 应落盘");
+        assert!(
+            normalize_sidecar_path(&path).exists(),
+            "normalize sidecar 应落盘"
+        );
         let stored = read_normalize_sidecar(&path);
         assert_eq!(stored, CURRENT_NORMALIZE_VERSION);
         cleanup(&path);
@@ -935,15 +960,20 @@ mod tests {
         let path = temp_vector_path();
         let mem = fresh_mem();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
             let ep = make_episode("n2", 2, "chunk rule content");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
         // sidecar 落盘 + 重开版本一致
-        assert!(normalize_sidecar_path(&path).exists(), "normalize sidecar 应落盘");
+        assert!(
+            normalize_sidecar_path(&path).exists(),
+            "normalize sidecar 应落盘"
+        );
         assert_eq!(read_normalize_sidecar(&path), CURRENT_NORMALIZE_VERSION);
-        let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+        let idx2 =
+            PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
         assert_eq!(idx2.normalize_version(), CURRENT_NORMALIZE_VERSION);
         assert!(!idx2.needs_reindex(), "当前版本不 stale");
         assert_eq!(idx2.len().unwrap(), 1, "重开数据仍在");
@@ -954,9 +984,18 @@ mod tests {
     #[test]
     fn stale_detection_pure_fn() {
         // 未来 bump 后, 旧版本库应判 stale (纯函数覆盖判定逻辑)
-        assert!(normalize_is_stale(CURRENT_NORMALIZE_VERSION - 1), "旧版本应判 stale");
-        assert!(!normalize_is_stale(CURRENT_NORMALIZE_VERSION), "当前版本不 stale");
-        assert!(!normalize_is_stale(CURRENT_NORMALIZE_VERSION + 1), "未来版本由 open 拦截, 纯函数不判 stale");
+        assert!(
+            normalize_is_stale(CURRENT_NORMALIZE_VERSION - 1),
+            "旧版本应判 stale"
+        );
+        assert!(
+            !normalize_is_stale(CURRENT_NORMALIZE_VERSION),
+            "当前版本不 stale"
+        );
+        assert!(
+            !normalize_is_stale(CURRENT_NORMALIZE_VERSION + 1),
+            "未来版本由 open 拦截, 纯函数不判 stale"
+        );
     }
 
     #[test]
@@ -985,7 +1024,8 @@ mod tests {
             })
             .collect();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             idx.index_episodes(&eps).unwrap();
             assert_eq!(idx.len().unwrap(), 50);
         }
@@ -1007,7 +1047,8 @@ mod tests {
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, ep).unwrap();
         }
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             idx.index_episodes(&eps).unwrap();
         }
         // 重开后 search
@@ -1040,7 +1081,8 @@ mod tests {
         let e = fresh_embedder();
         // 阶段 1: 写 7 条
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             for i in 0..7 {
                 let ep = make_episode(&format!("e{i}"), i64::from(i), &format!("content {i}"));
                 <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
@@ -1050,7 +1092,8 @@ mod tests {
         }
         // 阶段 2: 重开, 再写 3 条 (累计 10)
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             assert_eq!(idx.len().unwrap(), 7, "重开应见 7 条");
             for i in 7..10 {
                 let ep = make_episode(&format!("e{i}"), i64::from(i), &format!("content {i}"));
@@ -1088,7 +1131,7 @@ mod tests {
         let mem = fresh_mem();
         let e = fresh_embedder();
         let idx = PersistentSemanticIndex::open(mem, &path, e).unwrap();
-        assert!(idx.save().is_ok());
+        assert!(idx.flush_noop().is_ok());
     }
 
     #[test]
@@ -1109,7 +1152,8 @@ mod tests {
             })
             .collect();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             idx.index_episodes(&eps).unwrap();
             let p1 = idx.extract_profile().unwrap();
             assert!(p1.interaction_count >= 5);
@@ -1152,7 +1196,8 @@ mod tests {
         let path = temp_vector_path();
         let mem = fresh_mem();
         let e = fresh_embedder();
-        let idx = SqliteMemoryStore::open_persistent_semantic_index(&mem, &path, Arc::clone(&e)).unwrap();
+        let idx =
+            SqliteMemoryStore::open_persistent_semantic_index(&mem, &path, Arc::clone(&e)).unwrap();
         assert_eq!(idx.dim(), 32);
         cleanup(&path);
     }
@@ -1165,14 +1210,9 @@ mod tests {
         let e = fresh_embedder();
         let ep = make_episode("e1", 1, "rust sql database tutorial");
         <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
-        let hits = SqliteMemoryStore::semantic_search_persistent(
-            &mem,
-            "SQL",
-            5,
-            &path,
-            Arc::clone(&e),
-        )
-        .unwrap();
+        let hits =
+            SqliteMemoryStore::semantic_search_persistent(&mem, "SQL", 5, &path, Arc::clone(&e))
+                .unwrap();
         assert!(!hits.is_empty());
         cleanup(&path);
     }
@@ -1186,8 +1226,12 @@ mod tests {
         model: String,
     }
     impl crate::semantic::EmbedFn for AltEmbedder {
-        fn dim(&self) -> usize { self.dim }
-        fn embed(&self, _text: &str) -> Vec<f32> { vec![0.0; self.dim] }
+        fn dim(&self) -> usize {
+            self.dim
+        }
+        fn embed(&self, _text: &str) -> Vec<f32> {
+            vec![0.0; self.dim]
+        }
         fn identity(&self) -> crate::semantic::EmbedderIdentity {
             crate::semantic::EmbedderIdentity::new(self.model.clone(), self.dim)
         }
@@ -1201,14 +1245,18 @@ mod tests {
         let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
         let _ = std::fs::remove_file(&sidecar);
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
         assert!(sidecar.exists(), "sidecar 应被写出");
         let content = std::fs::read_to_string(&sidecar).unwrap();
-        assert!(content.contains("apeireth/hash-fnva-1a/v1"), "model_name 应被持久化");
+        assert!(
+            content.contains("apeireth/hash-fnva-1a/v1"),
+            "model_name 应被持久化"
+        );
         assert!(content.contains("32"), "dimension 应被持久化");
         cleanup(&path);
         let _ = std::fs::remove_file(&sidecar);
@@ -1220,14 +1268,18 @@ mod tests {
         let mem = fresh_mem();
         let e = fresh_embedder();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, Arc::clone(&e)).unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
         let e2 = fresh_embedder();
         let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e2).unwrap();
-        assert_eq!(idx2.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(
+            idx2.embedder_identity().model_name,
+            "apeireth/hash-fnva-1a/v1"
+        );
         assert_eq!(idx2.embedder_identity().dimension, 32);
         cleanup(&path);
         let _ = std::fs::remove_file(format!("{}.embedder.json", path.display()));
@@ -1238,13 +1290,19 @@ mod tests {
         let path = temp_vector_path();
         let mem = fresh_mem();
         {
-            let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder { dim: 32, model: "alpha".into() });
+            let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder {
+                dim: 32,
+                model: "alpha".into(),
+            });
             let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e).unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
-        let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder { dim: 32, model: "beta".into() });
+        let e: Arc<dyn crate::semantic::EmbedFn> = Arc::new(AltEmbedder {
+            dim: 32,
+            model: "beta".into(),
+        });
         let result = PersistentSemanticIndex::open(Arc::clone(&mem), &path, e);
         assert!(result.is_err(), "model_name 改应报错");
         cleanup(&path);
@@ -1258,7 +1316,10 @@ mod tests {
         let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
         let _ = std::fs::remove_file(&sidecar);
         let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
-        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(
+            idx.embedder_identity().model_name,
+            "apeireth/hash-fnva-1a/v1"
+        );
         cleanup(&path);
         let _ = std::fs::remove_file(&sidecar);
     }
@@ -1270,7 +1331,10 @@ mod tests {
         let sidecar = std::path::PathBuf::from(format!("{}.embedder.json", path.display()));
         std::fs::write(&sidecar, "not valid json {[").unwrap();
         let idx = PersistentSemanticIndex::open(mem, &path, fresh_embedder()).unwrap();
-        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(
+            idx.embedder_identity().model_name,
+            "apeireth/hash-fnva-1a/v1"
+        );
         cleanup(&path);
         let _ = std::fs::remove_file(&sidecar);
     }
@@ -1303,7 +1367,8 @@ mod tests {
         let sidecar = std::path::PathBuf::from(format!("{}.schema.json", path.display()));
         let _ = std::fs::remove_file(&sidecar);
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
@@ -1320,12 +1385,14 @@ mod tests {
         let path = temp_vector_path();
         let mem = fresh_mem();
         {
-            let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+            let idx =
+                PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
             let ep = make_episode("e1", 1, "x");
             <SqliteMemoryStore as EpisodeStore>::put_episode(&mem, &ep).unwrap();
             idx.index_episode(&ep).unwrap();
         }
-        let idx2 = PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
+        let idx2 =
+            PersistentSemanticIndex::open(Arc::clone(&mem), &path, fresh_embedder()).unwrap();
         assert_eq!(idx2.schema_version(), CURRENT_SCHEMA_VERSION);
         cleanup(&path);
         let _ = std::fs::remove_file(format!("{}.schema.json", path.display()));
@@ -1414,37 +1481,66 @@ mod tests {
 
     #[test]
     fn n5_artifact_sig_deterministic_and_sensitive() {
-        assert_eq!(artifact_sig("same content"), artifact_sig("same content"), "同内容恒同签名");
-        assert_ne!(artifact_sig("same content"), artifact_sig("same content."), "一字符差 → 签名必变");
+        assert_eq!(
+            artifact_sig("same content"),
+            artifact_sig("same content"),
+            "同内容恒同签名"
+        );
+        assert_ne!(
+            artifact_sig("same content"),
+            artifact_sig("same content."),
+            "一字符差 → 签名必变"
+        );
     }
 
     #[test]
     fn n5_artifact_sig_many_order_invariant_and_boundary_safe() {
         let ab: &[(&str, &str)] = &[("id1", "alpha"), ("id2", "beta")];
         let ba: &[(&str, &str)] = &[("id2", "beta"), ("id1", "alpha")];
-        assert_eq!(artifact_sig_many(ab), artifact_sig_many(ba), "同集合与插入顺序无关");
+        assert_eq!(
+            artifact_sig_many(ab),
+            artifact_sig_many(ba),
+            "同集合与插入顺序无关"
+        );
         let changed: &[(&str, &str)] = &[("id1", "alpha"), ("id2", "beta!")];
-        assert_ne!(artifact_sig_many(ab), artifact_sig_many(changed), "内容微变 → 签名变");
+        assert_ne!(
+            artifact_sig_many(ab),
+            artifact_sig_many(changed),
+            "内容微变 → 签名变"
+        );
         // 边界防拼接歧义: ("ab","c") vs ("a","bc") 不能同签名
         let t1: &[(&str, &str)] = &[("ab", "c")];
         let t2: &[(&str, &str)] = &[("a", "bc")];
-        assert_ne!(artifact_sig_many(t1), artifact_sig_many(t2), "id/content 边界歧义防护");
+        assert_ne!(
+            artifact_sig_many(t1),
+            artifact_sig_many(t2),
+            "id/content 边界歧义防护"
+        );
     }
 
     #[test]
     fn n5_gate_decision_rules_pure() {
         let sig = artifact_sig("content-v1");
         // 1. 无记录 → miss (首次构建)
-        assert_eq!(artifact_gate_decision(None, &sig), ArtifactDecision::MissNoRecord);
+        assert_eq!(
+            artifact_gate_decision(None, &sig),
+            ArtifactDecision::MissNoRecord
+        );
         // 2. 签名匹配 + 版本 current → hit
         let rec_ok = ArtifactSigRecord {
             sig: sig.clone(),
             normalize_version: CURRENT_NORMALIZE_VERSION,
             schema_version: CURRENT_SCHEMA_VERSION,
         };
-        assert_eq!(artifact_gate_decision(Some(&rec_ok), &sig), ArtifactDecision::Hit);
+        assert_eq!(
+            artifact_gate_decision(Some(&rec_ok), &sig),
+            ArtifactDecision::Hit
+        );
         assert!(!ArtifactDecision::Hit.should_recompute(), "Hit 不重算");
-        assert!(ArtifactDecision::MissNoRecord.should_recompute(), "miss/stale 都重算");
+        assert!(
+            ArtifactDecision::MissNoRecord.should_recompute(),
+            "miss/stale 都重算"
+        );
         // 3. 内容变 → 签名变 → 强制重算 (防脏读)
         let sig2 = artifact_sig("content-v2");
         assert_eq!(
@@ -1480,10 +1576,18 @@ mod tests {
             schema_version: CURRENT_SCHEMA_VERSION,
         };
         persist_artifact_record_impl(&path, &rec).unwrap();
-        assert_eq!(read_artifact_record(&path), Some(rec.clone()), "roundtrip 一致");
+        assert_eq!(
+            read_artifact_record(&path),
+            Some(rec.clone()),
+            "roundtrip 一致"
+        );
         // 损坏 JSON → None (= miss 走重算, 0 panic 0 假命中)
         std::fs::write(artifact_sig_sidecar_path(&path), "not-json").unwrap();
-        assert_eq!(read_artifact_record(&path), None, "损坏记录应 miss 不 panic");
+        assert_eq!(
+            read_artifact_record(&path),
+            None,
+            "损坏记录应 miss 不 panic"
+        );
         let _ = std::fs::remove_file(artifact_sig_sidecar_path(&path));
     }
 
@@ -1493,7 +1597,10 @@ mod tests {
         let mem = fresh_mem();
         let (emb, calls) = counting_embedder(32);
         let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, emb).unwrap();
-        let eps = vec![make_episode("e1", 1, "alpha"), make_episode("e2", 2, "beta")];
+        let eps = vec![
+            make_episode("e1", 1, "alpha"),
+            make_episode("e2", 2, "beta"),
+        ];
         // 首次: 无签名记录 → miss → 真重算
         let d1 = idx.reindex_all(&eps).unwrap();
         assert_eq!(d1, ArtifactDecision::MissNoRecord);
@@ -1503,7 +1610,11 @@ mod tests {
         // 二次: 内容不变 → hit → 跳过重算 (embed 计数不增长 = 真跳过)
         let d2 = idx.reindex_all(&eps).unwrap();
         assert_eq!(d2, ArtifactDecision::Hit);
-        assert_eq!(calls.load(Ordering::SeqCst), first_calls, "hit 时跳过 embed 重算");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            first_calls,
+            "hit 时跳过 embed 重算"
+        );
         assert_eq!(idx.len().unwrap(), 2, "hit 复用磁盘资产不丢");
         cleanup(&path);
         remove_artifact_sidecar(&path);
@@ -1515,11 +1626,17 @@ mod tests {
         let mem = fresh_mem();
         let (emb, calls) = counting_embedder(32);
         let idx = PersistentSemanticIndex::open(Arc::clone(&mem), &path, emb).unwrap();
-        let eps = vec![make_episode("e1", 1, "alpha"), make_episode("e2", 2, "beta")];
+        let eps = vec![
+            make_episode("e1", 1, "alpha"),
+            make_episode("e2", 2, "beta"),
+        ];
         idx.reindex_all(&eps).unwrap();
         let before = calls.load(Ordering::SeqCst);
         // 内容微变 (id 不变, e2 内容改一字符) → 防脏读: 强制重算
-        let eps2 = vec![make_episode("e1", 1, "alpha"), make_episode("e2", 2, "beta!")];
+        let eps2 = vec![
+            make_episode("e1", 1, "alpha"),
+            make_episode("e2", 2, "beta!"),
+        ];
         let d = idx.reindex_all(&eps2).unwrap();
         assert_eq!(d, ArtifactDecision::MissContentChanged);
         assert_eq!(
@@ -1530,7 +1647,11 @@ mod tests {
         assert_eq!(idx.len().unwrap(), 2, "clear+rebuild 后条数正确");
         // 新签名已落盘; 再跑同内容 → hit (证明重算后状态一致)
         let rec = read_artifact_record(&path).expect("重算后应有签名记录");
-        assert_ne!(rec.sig, artifact_sig_many(&[("unused", "")]), "签名是真实内容签名");
+        assert_ne!(
+            rec.sig,
+            artifact_sig_many(&[("unused", "")]),
+            "签名是真实内容签名"
+        );
         assert_eq!(idx.reindex_all(&eps2).unwrap(), ArtifactDecision::Hit);
         cleanup(&path);
         remove_artifact_sidecar(&path);
@@ -1558,12 +1679,14 @@ mod tests {
         assert!(calls.load(Ordering::SeqCst) > before, "stale 时真重算");
         // 重算后记录回到 CURRENT 版本 → 立即恢复 hit
         let rec2 = read_artifact_record(&path).unwrap();
-        assert_eq!(rec2.normalize_version, CURRENT_NORMALIZE_VERSION, "重算后版本回 current");
+        assert_eq!(
+            rec2.normalize_version, CURRENT_NORMALIZE_VERSION,
+            "重算后版本回 current"
+        );
         assert_eq!(idx.reindex_all(&eps).unwrap(), ArtifactDecision::Hit);
         cleanup(&path);
         remove_artifact_sidecar(&path);
     }
-
 }
 
 // 内部 helper: 让 unit test 能拿到 self.memory 写 episode (不走 public API 暴露)

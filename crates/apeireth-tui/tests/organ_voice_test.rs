@@ -97,6 +97,6 @@ fn render_marks_stub_honestly() {
 #[test]
 fn render_uses_dash_placeholders() {
     let area = Rect::new(0, 0, 80, 24);
-    let out = organ::voice::render(area);
+    let _out = organ::voice::render(area);
     // stripped dash check: assert!(out.contains('-'), "stub 应有 - 占位");
 }

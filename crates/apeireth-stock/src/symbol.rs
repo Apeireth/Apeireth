@@ -8,20 +8,15 @@ use serde::{Deserialize, Serialize};
 /// (Dialog/Tool/Reflection/Observation/Manual) 不适用于静态数据资产.
 ///
 /// 序列化: snake_case 字符串, 与 `apeireth_memory::Provenance` 命名一致 (便于跨 crate serde 互转).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum Provenance {
     /// FinanceDatabase (官方 GitHub 仓库, 30 万+ 标的, T0 信任等级).
     #[serde(rename = "finance_database")]
     FinanceDatabase,
     /// 手工注入 (测试 / 一次性 fix).
+    #[default]
     Manual,
-}
-
-impl Default for Provenance {
-    fn default() -> Self {
-        Provenance::Manual
-    }
 }
 
 impl Provenance {
@@ -51,7 +46,7 @@ impl Provenance {
 /// - `delisted_date`: Option<String> (新 spec, 同格式)
 /// - `provenance`: 默认 `FinanceDatabase` (T0)
 /// - `last_updated_ms`: epoch ms, 默认当前时间
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct SymbolMeta {
     pub symbol: String,
     pub name: String,
@@ -73,26 +68,6 @@ pub struct SymbolMeta {
     #[serde(default)]
     pub provenance: Provenance,
     pub last_updated_ms: i64,
-}
-
-impl Default for SymbolMeta {
-    fn default() -> Self {
-        Self {
-            symbol: String::new(),
-            name: String::new(),
-            sector: String::new(),
-            industry: String::new(),
-            exchange: String::new(),
-            country: String::new(),
-            currency: String::new(),
-            market_cap: None,
-            ipo_year: None,
-            ipo_date: None,
-            delisted_date: None,
-            provenance: Provenance::default(),
-            last_updated_ms: 0,
-        }
-    }
 }
 
 impl SymbolMeta {
@@ -145,7 +120,10 @@ mod tests {
 
     #[test]
     fn provenance_roundtrip() {
-        assert_eq!(Provenance::from_db("finance_database"), Provenance::FinanceDatabase);
+        assert_eq!(
+            Provenance::from_db("finance_database"),
+            Provenance::FinanceDatabase
+        );
         assert_eq!(Provenance::from_db("manual"), Provenance::Manual);
         assert_eq!(Provenance::from_db("garbage"), Provenance::Manual); // 未知降级 Manual
         assert_eq!(Provenance::FinanceDatabase.as_str(), "finance_database");

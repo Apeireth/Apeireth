@@ -81,13 +81,27 @@ impl Partner {
         }
     }
 
-    pub fn id(&self) -> PartnerId { self.id }
-    pub fn display_name(&self) -> &str { &self.display_name }
-    pub fn preferences(&self) -> &PartnerPreferences { &self.preferences }
-    pub fn bond(&self) -> &Bond { &self.bond }
-    pub fn bond_mut(&mut self) -> &mut Bond { &mut self.bond }
-    pub fn created_at(&self) -> DateTime<Utc> { self.created_at }
-    pub fn last_seen(&self) -> DateTime<Utc> { self.last_seen }
+    pub fn id(&self) -> PartnerId {
+        self.id
+    }
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+    pub fn preferences(&self) -> &PartnerPreferences {
+        &self.preferences
+    }
+    pub fn bond(&self) -> &Bond {
+        &self.bond
+    }
+    pub fn bond_mut(&mut self) -> &mut Bond {
+        &mut self.bond
+    }
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+    pub fn last_seen(&self) -> DateTime<Utc> {
+        self.last_seen
+    }
 
     pub fn touch(&mut self) {
         self.last_seen = Utc::now();
@@ -104,13 +118,21 @@ mod tests {
 
     #[test]
     fn new_partner_has_empty_bond() {
-        let p = Partner::new(PartnerId::new(), "alice".into(), PartnerPreferences::default());
+        let p = Partner::new(
+            PartnerId::new(),
+            "alice".into(),
+            PartnerPreferences::default(),
+        );
         assert_eq!(p.bond().stage(), BondStage::Initial);
     }
 
     #[test]
     fn touch_updates_last_seen() {
-        let mut p = Partner::new(PartnerId::new(), "alice".into(), PartnerPreferences::default());
+        let mut p = Partner::new(
+            PartnerId::new(),
+            "alice".into(),
+            PartnerPreferences::default(),
+        );
         let before = p.last_seen();
         std::thread::sleep(std::time::Duration::from_millis(2));
         p.touch();

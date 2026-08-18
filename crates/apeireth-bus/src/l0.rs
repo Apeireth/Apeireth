@@ -225,7 +225,7 @@ impl<T: Clone + Send + Sync + 'static + std::fmt::Debug> L0Bus<T> {
                             stats.received.fetch_add(1, Ordering::Relaxed);
                             return Some((Ok(msg), rx));
                         }
-                        Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                        Err(broadcast::error::RecvError::Lagged(_)) => {}
                         Err(broadcast::error::RecvError::Closed) => return None,
                     }
                 }

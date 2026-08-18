@@ -307,24 +307,21 @@ impl ApprovalManager {
                 })
             }
             ApprovalDecision::RequireApproval { timeout_ms } => {
-                let handler = match self.handler.lock().clone() {
-                    Some(h) => h,
-                    None => {
-                        warn!(
-                            "[ApprovalManager] 审批通道未注册 (无 handler), 拒绝: {}",
-                            call.tool_name
-                        );
-                        let outcome = ApprovalOutcome::Rejected(Rejection {
-                            rejected_by_user: false,
-                            error_type: RejectErrorType::ChannelUnavailable,
-                            silent: detail.silent_on_reject,
-                            reason: None,
-                            matched_rule: detail.matched_rule.clone(),
-                            matched_command: detail.matched_command.clone(),
-                        });
-                        self.push_audit(call, &outcome);
-                        return outcome;
-                    }
+                let Some(handler) = self.handler.lock().clone() else {
+                    warn!(
+                        "[ApprovalManager] 审批通道未注册 (无 handler), 拒绝: {}",
+                        call.tool_name
+                    );
+                    let outcome = ApprovalOutcome::Rejected(Rejection {
+                        rejected_by_user: false,
+                        error_type: RejectErrorType::ChannelUnavailable,
+                        silent: detail.silent_on_reject,
+                        reason: None,
+                        matched_rule: detail.matched_rule.clone(),
+                        matched_command: detail.matched_command.clone(),
+                    });
+                    self.push_audit(call, &outcome);
+                    return outcome;
                 };
                 // 用 oneshot 防 handler 内部死锁
                 let (tx, rx) = oneshot::channel::<(bool, Option<String>)>();

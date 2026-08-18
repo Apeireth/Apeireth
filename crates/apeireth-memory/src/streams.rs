@@ -96,8 +96,17 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Thought.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Thought.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -154,8 +163,17 @@ impl<'a> HistoryStream for ProposalStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Proposal.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Proposal.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -214,8 +232,17 @@ impl<'a> HistoryStream for ActionStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Action.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Action.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -272,8 +299,17 @@ impl<'a> HistoryStream for RelationStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Relation.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Relation.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -336,8 +372,17 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Evolution.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Evolution.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -400,8 +445,17 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
         )
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
-        list_recent_entries(self.conn, StreamKind::Reflection.table_name(), limit, include_tombstoned)
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+        list_recent_entries(
+            self.conn,
+            StreamKind::Reflection.table_name(),
+            limit,
+            include_tombstoned,
+        )
     }
 }
 
@@ -523,7 +577,11 @@ impl<'a> HistoryStream for StreamHandle<'a> {
         }
     }
 
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>> {
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>> {
         match self {
             StreamHandle::Thought(s) => s.list_recent(limit, include_tombstoned),
             StreamHandle::Proposal(s) => s.list_recent(limit, include_tombstoned),
