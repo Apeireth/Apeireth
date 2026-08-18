@@ -41,6 +41,9 @@ axum = "0.7"
 [lib]
 name = "apeireth_bench"
 path = "src/lib.rs"
+# CI fix 2026-08: lib 默认 bench=true → cargo bench 无参数/--benches 会把 lib 当
+# libtest harness bench 跑, 不认 criterion 的 --save-baseline → 显式关掉
+bench = false
 
 [[example]]
 name = "latency_smoke"

@@ -11,6 +11,13 @@ description = "Apeireth R20 阶段 6 flesh out: Lark/Feishu SDK (1:1 翻译 v0.9
 keywords = ["ai", "lark", "feishu", "sdk", "openapi", "agent"]
 categories = ["api-bindings", "asynchronous", "web-programming"]
 
+[lib]
+name = "apeireth_lark"
+path = "src/lib.rs"
+# CI fix 2026-08: lib 默认 bench=true → cargo bench 无参数/--benches 会把 lib 当
+# libtest harness bench 跑, 不认 criterion 的 --save-baseline → 显式关掉
+bench = false
+
 [dependencies]
 # async runtime (显式版本, 整合 #2 sub-agent 改 `workspace = true`)
 tokio = { version = "1.40", features = ["full"] }
