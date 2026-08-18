@@ -65,11 +65,12 @@ full-bus = []
 name = "apeireth_bus"
 path = "src/lib.rs"
 
-# Note: `bus_echo` bin (src/bin/bus_echo.rs) previously referenced l2.rs; l2 is now
-# `#[cfg(unix)]` and the bin source is not shipped on Windows. Removed the dangling
-# `[[bin]]` stanza in round15-03 to keep `cargo build --workspace` green on Windows.
-# The bin can be reintroduced under `[[bin]] required-features = ["full-bus"]`
-# together with the V28.x-2 bus-5-layer physical-integration work.
+# CI fix 2026-08: 重建 bus_echo bin (round15-03 删除导致 l2 pipe 集成测试失去 echo 子进程).
+# required-features = ["full-bus"] → 0 默认装, 0 影响 Windows/默认构建.
+[[bin]]
+name = "bus_echo"
+path = "src/bin/bus_echo.rs"
+required-features = ["full-bus"]
 
 # R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
 # 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
