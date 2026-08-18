@@ -1,6 +1,6 @@
 # OSS NOTICE — Open-Source Notices & Attributions
 
-**Project**: Apeireth (Greek "试一试" / "to try")
+**Project**: Apeireth (源自古希腊语 Apeiron, '无定形/无限'; 品牌宣言见 docs/01-architecture/brand.md)
 **Version**: 1.2.0 (per `Cargo.toml` `[workspace.package] version`, B2 upgrade from 1.1.0)
 **Edition**: 2021
 **License**: Apache License, Version 2.0
@@ -145,7 +145,7 @@ THIRD-PARTY-NOTICES.md
 
 ## 2. 借鉴源码 3/11 ⏳ 限流持续 (P6-1/2/3 21:18 派, per 决策 #56 §2.1)
 
-**0 装 PASS 严守** (per 决策 #33 §2.3 C2 + 主人 17:22 升级授权 + 主人 20:32 "技术性 locked 都能解锁"):
+**0 装 PASS 严守** (per 决策 #33 §2.3 C2 + 我们 17:22 升级授权 + 我们 20:32 "技术性 locked 都能解锁"):
 借鉴源码 ⏳ 限流中 = **0 装"已实施"** (诚实标 "准备"), 等限流结束后真实施 retry。
 
 | # | 借鉴 | 限流状态 | R125 任务 | 重试 sub-agent | 决策链 |
@@ -176,7 +176,7 @@ THIRD-PARTY-NOTICES.md
 - **Mavis 自主决策 (per 决策 #22 §1 + 决策 #33 §2.2)**: **0 集成, 0 假装 "已借鉴"** (0 装 PASS 严守, O-5 哲学锚 "不假装" 严守)
 
 **未来可能路径 (不在 R128 范围)**:
-- 若主人 1.0 release 后希望借鉴 OpenCog Atomspace/ECAN 思路, 必须 **fork 出独立 AGPL-3.0 实验分支**, 主仓保持 Apache-2.0
+- 若我们 1.0 release 后希望借鉴 OpenCog Atomspace/ECAN 思路, 必须 **fork 出独立 AGPL-3.0 实验分支**, 主仓保持 Apache-2.0
 - 参考借鉴思路: 借鉴 OpenCog 设计原则 (node/atom 抽象, attention allocation 机制), **不抄码, 重新实现**
 
 ---
@@ -227,8 +227,8 @@ THIRD-PARTY-NOTICES.md
 
 | 决策 | 时间 | 关键内容 | 对 OSS_NOTICE 的影响 |
 |------|------|----------|----------------------|
-| **#22** | 2026-08-10 16:35 | 主人 16:31 最高权限 + 24 LOCKED 自主确认 + 9 项实质 locked 升级 + 14 任务派活 spec (R125-1~14) | 借鉴 14 任务派活清单 + 借鉴 ID 命名规范 `R125-N-BORROW-{owner/repo}-{hash}-2026-08-10` |
-| **#33** | 2026-08-10 17:23 | 主人 17:22 升级授权 + 8 硬墙全部重置 + B1-B7 升级路线 + **0 装解除** + 16 派满 | 借鉴 8/11 0 装 PASS 严守 + C2 0 装 (O-5) 解除 |
+| **#22** | 2026-08-10 16:35 | 我们 16:31 最高权限 + 24 LOCKED 自主确认 + 9 项实质 locked 升级 + 14 任务派活 spec (R125-1~14) | 借鉴 14 任务派活清单 + 借鉴 ID 命名规范 `R125-N-BORROW-{owner/repo}-{hash}-2026-08-10` |
+| **#33** | 2026-08-10 17:23 | 我们 17:22 升级授权 + 8 硬墙全部重置 + B1-B7 升级路线 + **0 装解除** + 16 派满 | 借鉴 8/11 0 装 PASS 严守 + C2 0 装 (O-5) 解除 |
 | **#36** | 2026-08-10 17:44 | 借鉴源码 17:44 verify: 7/11 ✅ cloned + 3 MISSING/0-files + 1 跳过 (OpenCog) | OSS_NOTICE §1 §2 §3 借鉴状态基线 |
 | **#47** | 2026-08-10 19:39 | 主仓挪出 + mv .git + git reset done ✅ | 主仓路径确认 `Apeireth-rust/` + master HEAD = abf12243 |
 | **#48** | 2026-08-10 19:41 | 整合 #4 commit **abf12243** done (46752 file changes, 18 决策 #30-#48 + 10 M src + 14 untracked + .gitignore 升级) | 整合 #4 严守, 0 重跑, 0 必重跑 |
@@ -295,9 +295,9 @@ per Apache License 2.0 §4(d):
 ### 8.5 主仓 + 决策链致谢
 
 - **主仓**: Apeireth Team 2026, Apache-2.0, https://github.com/apeireth/apeireth-rust
-- **决策链**: 主人 (楚零) 8 次拍板 (8/10 01:14 + 01:49 + 14:56 + 16:27 + 16:31 + 16:37 + 16:43 + 16:51 + **17:22** 升级授权), Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) 决策 #22-#57
+- **决策链**: 我们 (楚零) 8 次拍板 (8/10 01:14 + 01:49 + 14:56 + 16:27 + 16:31 + 16:37 + 16:43 + 16:51 + **17:22** 升级授权), Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) 决策 #22-#57
 - **整合 #4 commit**: abf12243 (2026-08-10 19:41 done, 46752 file changes, 0 重跑)
-- **整合 #5 commit 时机**: 38 任务 (R125 16 + R126 16 + R127 4 + R127-2 10 + R128 6) 全 done + 0 装 PASS 严守 + 8 硬墙 0 越界 + 24 LOCKED 入口签名 0 改 verify, **Mavis 拍板 OR 主人 8/15 拍板**
+- **整合 #5 commit 时机**: 38 任务 (R125 16 + R126 16 + R127 4 + R127-2 10 + R128 6) 全 done + 0 装 PASS 严守 + 8 硬墙 0 越界 + 24 LOCKED 入口签名 0 改 verify, **Mavis 拍板 OR 我们 8/15 拍板**
 
 ---
 
@@ -310,7 +310,7 @@ per Apache License 2.0 §4(d):
 - ✅ **0 装"已借鉴 OpenCog"**: OpenCog AGPL-3.0 传染性协议与主仓 Apache-2.0 不兼容, 0 假装"已实施" (per O-5)
 - ✅ **决策链完整可追溯**: #22 / #33 / #36 / #47 / #48 / #55 / #56 / #57 全部在 `reports/decision-*.md`, 整合 #4 commit abf12243 严守
 - ✅ **整合 #4 严守**: 0 重跑, 0 必重跑, master HEAD = abf12243, Cargo.toml 1.2.0 严守
-- ✅ **整合 #5 commit 时机诚实标**: 38 任务全 done + 0 装 PASS + 8 硬墙 + 24 LOCKED 入口 verify 全部满足后, Mavis 拍板 OR 主人 8/15 拍板
+- ✅ **整合 #5 commit 时机诚实标**: 38 任务全 done + 0 装 PASS + 8 硬墙 + 24 LOCKED 入口 verify 全部满足后, Mavis 拍板 OR 我们 8/15 拍板
 - ✅ **0 主动 commit 严守**: 本 OSS_NOTICE.md 写到主仓, 0 主动 commit (per 决策 #55 §5 + 决策 #57 §5 C1)
 - ✅ **0 主动 push 严守**: 等 1.0 release 配 GitHub remote (per 决策 #33 §4.2 + 决策 #55 §5)
 
@@ -323,7 +323,7 @@ per Apache License 2.0 §4(d):
 | 借鉴 3 限流结束 (P6-1/2/3 done) | §2 从"占位" → §1 完整致谢 | 决策 #55 §3 + #56 §2.1 |
 | 新增借鉴 (R129+ 阶段) | §1/§2 追加 + §8 致谢追加 | 决策 #55-#57 模式延续 |
 | License 变更 (clap/PyO3/kani dual 切换) | §5 表格更新 | 整合 #5 commit 时 Mavis 自主 |
-| OpenCog 重新评估 (1.0 release 后) | §3 从"永久跳过" → "fork 评估" | **Mavis 不主动提议, 主人主动问** |
+| OpenCog 重新评估 (1.0 release 后) | §3 从"永久跳过" → "fork 评估" | **Mavis 不主动提议, 我们主动问** |
 | 整合 #5 commit 时机成熟 | 本文件 + LICENSE + NOTICE + THIRD-PARTY-NOTICES.md 整体 commit | 决策 #55 §0 + #57 §0 (38 任务全 done) |
 | 1.0 release (v1.0.0) 时 | Cargo.toml version 1.2.0 → 1.0.0, 本文件同步 | 决策 #22 §2.2 B2 release 节奏 |
 
@@ -331,7 +331,7 @@ per Apache License 2.0 §4(d):
 
 ## 11. 联系方式 (Contact, 补全 NOTICE §6)
 
-- **OSS NOTICE 维护**: Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) via 主人 楚零
+- **OSS NOTICE 维护**: Mavis (mvs_47dd64fb4fc24e23b30edd5f649bfebb) via 我们 楚零
 - **仓库**: https://github.com/apeireth/apeireth-rust
 - **借鉴源码本地**: `.openclaw/workspace/borrowed-repos/`
 - **决策链**: `reports/decision-*.md` (本仓 + 跨期)
