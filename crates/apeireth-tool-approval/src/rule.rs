@@ -845,7 +845,7 @@ mod tests {
                 id: format!("r{i}"),
                 tool_name: "Spammy".to_string(),
                 args: json!({}),
-                timestamp_ms: now - 100 + i as i64, // 100ms 内 2 次
+                timestamp_ms: now - 100 + i64::from(i), // 100ms 内 2 次
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
                 matched_command: None,
@@ -866,7 +866,7 @@ mod tests {
                 id: format!("r{i}"),
                 tool_name: "Normal".to_string(),
                 args: json!({}),
-                timestamp_ms: now - 100 + i as i64,
+                timestamp_ms: now - 100 + i64::from(i),
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
                 matched_command: None,
@@ -887,7 +887,7 @@ mod tests {
                 id: format!("r{i}"),
                 tool_name: "OldSpam".to_string(),
                 args: json!({}),
-                timestamp_ms: now - 120_000 + i as i64, // 2min 前
+                timestamp_ms: now - 120_000 + i64::from(i), // 2min 前
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
                 matched_command: None,
@@ -908,7 +908,7 @@ mod tests {
                 id: format!("r{i}"),
                 tool_name: "X".to_string(),
                 args: json!({}),
-                timestamp_ms: now - 100 + i as i64,
+                timestamp_ms: now - 100 + i64::from(i),
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
                 matched_command: None,
@@ -932,7 +932,7 @@ mod tests {
                 id: format!("r{i}"),
                 tool_name: "X".to_string(),
                 args: json!({}),
-                timestamp_ms: now - 100 + i as i64,
+                timestamp_ms: now - 100 + i64::from(i),
                 decision: ApprovalDecision::Allow,
                 matched_rule: None,
                 matched_command: None,

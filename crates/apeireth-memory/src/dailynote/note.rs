@@ -10,11 +10,15 @@ impl NoteId {
     pub fn new() -> Self {
         Self(uuid::Uuid::new_v4().to_string())
     }
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl Default for NoteId {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -41,8 +45,14 @@ impl DailyNote {
             updated_at: now,
         }
     }
-    pub fn with_tags(mut self, tags: Vec<String>) -> Self { self.tags = tags; self }
-    pub fn with_date(mut self, date: DateTime<Utc>) -> Self { self.date = date; self }
+    pub fn with_tags(mut self, tags: Vec<String>) -> Self {
+        self.tags = tags;
+        self
+    }
+    pub fn with_date(mut self, date: DateTime<Utc>) -> Self {
+        self.date = date;
+        self
+    }
 }
 
 #[cfg(test)]

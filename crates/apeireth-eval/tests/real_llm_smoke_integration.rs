@@ -333,12 +333,9 @@ async fn live_minimax_smoke_with_explicit_key() {
     if std::env::var("APEIRETH_MINIMAX_LIVE_TEST").ok().as_deref() != Some("1") {
         return;
     }
-    let key = match std::env::var("APEIRETH_MINIMAX_API_KEY") {
-        Ok(k) => k,
-        Err(_) => {
-            eprintln!("skip: APEIRETH_MINIMAX_API_KEY not set");
-            return;
-        }
+    let Ok(key) = std::env::var("APEIRETH_MINIMAX_API_KEY") else {
+        eprintln!("skip: APEIRETH_MINIMAX_API_KEY not set");
+        return;
     };
 
     let here = std::env::current_dir().unwrap();

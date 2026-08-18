@@ -89,7 +89,11 @@ pub trait HistoryStream {
     ) -> MemoryResult<Vec<HistoryEntry>>;
 
     /// 取最近 N 条 (审计/摘要用; 时间升序返回, 最新在末尾).
-    fn list_recent(&self, limit: usize, include_tombstoned: bool) -> MemoryResult<Vec<HistoryEntry>>;
+    fn list_recent(
+        &self,
+        limit: usize,
+        include_tombstoned: bool,
+    ) -> MemoryResult<Vec<HistoryEntry>>;
 }
 
 // ============================================

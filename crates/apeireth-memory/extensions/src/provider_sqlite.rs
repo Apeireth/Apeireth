@@ -27,9 +27,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **SQLite schema**: 单表 `kv (key TEXT PRIMARY KEY, value BLOB, created_at INTEGER)`.
 const SQLITE_SCHEMA: &str = r#"
@@ -80,12 +78,11 @@ impl SqliteProvider {
         };
 
         // 应用 schema
-        conn.execute_batch(SQLITE_SCHEMA).map_err(|e| {
-            MemoryProviderError::Backend {
+        conn.execute_batch(SQLITE_SCHEMA)
+            .map_err(|e| MemoryProviderError::Backend {
                 provider: ProviderKind::Sqlite,
                 reason: format!("schema apply failed: {e}"),
-            }
-        })?;
+            })?;
 
         Ok(Self {
             inner: Arc::new(Mutex::new(conn)),
@@ -111,10 +108,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn set(&self, key: &str, value: &[u8]) -> MemoryProviderResult<()> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
@@ -131,10 +131,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn get(&self, key: &str) -> MemoryProviderResult<Option<Vec<u8>>> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         let mut stmt = conn
             .prepare("SELECT value FROM kv WHERE key = ?1")
             .map_err(|e| MemoryProviderError::Backend {
@@ -163,10 +166,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn delete(&self, key: &str) -> MemoryProviderResult<()> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         conn.execute("DELETE FROM kv WHERE key = ?1", params![key])
             .map_err(|e| MemoryProviderError::Backend {
                 provider: ProviderKind::Sqlite,
@@ -176,10 +182,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn exists(&self, key: &str) -> MemoryProviderResult<bool> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         let count: i64 = conn
             .query_row(
                 "SELECT COUNT(*) FROM kv WHERE key = ?1",
@@ -194,10 +203,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn clear(&self) -> MemoryProviderResult<()> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         conn.execute("DELETE FROM kv", [])
             .map_err(|e| MemoryProviderError::Backend {
                 provider: ProviderKind::Sqlite,
@@ -207,10 +219,13 @@ impl MemoryProvider for SqliteProvider {
     }
 
     async fn size(&self) -> MemoryProviderResult<u64> {
-        let conn = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::Sqlite,
-            reason: format!("Mutex poisoned: {e}"),
-        })?;
+        let conn = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::Sqlite,
+                reason: format!("Mutex poisoned: {e}"),
+            })?;
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM kv", [], |row| row.get(0))
             .map_err(|e| MemoryProviderError::Backend {

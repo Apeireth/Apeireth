@@ -24,7 +24,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 UserIdType (4 variant, 1:1 翻译 v0.9.21 商业版 `user_id_type` enum)
@@ -295,8 +295,8 @@ mod tests {
 
     #[test]
     fn user_creation_valid() {
-        let user = User::new("ou_user1234567890abcdef".to_string(), "Alice".to_string())
-            .expect("valid");
+        let user =
+            User::new("ou_user1234567890abcdef".to_string(), "Alice".to_string()).expect("valid");
         assert_eq!(user.open_id, "ou_user1234567890abcdef");
         assert_eq!(user.name, "Alice");
         assert!(user.is_activated);
@@ -362,18 +362,14 @@ mod tests {
 
     #[test]
     fn user_query_open_id() {
-        let q = UserQuery::new(
-            "ou_user1234567890abcdef".to_string(),
-            UserIdType::OpenId,
-        )
-        .expect("valid");
+        let q = UserQuery::new("ou_user1234567890abcdef".to_string(), UserIdType::OpenId)
+            .expect("valid");
         assert_eq!(q.user_id_type, UserIdType::OpenId);
     }
 
     #[test]
     fn user_query_email() {
-        let q = UserQuery::new("user@example.com".to_string(), UserIdType::Email)
-            .expect("valid");
+        let q = UserQuery::new("user@example.com".to_string(), UserIdType::Email).expect("valid");
         assert_eq!(q.user_id_type, UserIdType::Email);
     }
 
@@ -403,14 +399,16 @@ mod tests {
 
     #[test]
     fn department_validate_leaders() {
-        let mut dept = Department::new("od_dept123".to_string(), "工程部".to_string()).expect("valid");
+        let mut dept =
+            Department::new("od_dept123".to_string(), "工程部".to_string()).expect("valid");
         dept.leader_open_ids = vec!["ou_leader123".to_string()];
         assert!(dept.validate().is_ok());
     }
 
     #[test]
     fn department_validate_rejects_bad_leader() {
-        let mut dept = Department::new("od_dept123".to_string(), "工程部".to_string()).expect("valid");
+        let mut dept =
+            Department::new("od_dept123".to_string(), "工程部".to_string()).expect("valid");
         dept.leader_open_ids = vec!["invalid".to_string()];
         assert!(matches!(dept.validate(), Err(LarkError::OpenIdInvalid(_))));
     }

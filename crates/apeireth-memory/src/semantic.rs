@@ -37,8 +37,7 @@ use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 /// 命名空间 UUID (v5), 用于从 `Episode.id` (String) 派生稳定 `Uuid`.
 /// NS 值: 固定 16 字节, 跨进程一致 (DCE 1.1 命名空间).
 const EPISODE_NS: Uuid = Uuid::from_bytes([
-    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1,
-    0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
+    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0, 0x4f, 0xd4, 0x30, 0xc8,
 ]);
 
 /// 从 `Episode.id` (String) 派生稳定 `Uuid`.
@@ -411,11 +410,7 @@ mod tests {
 
     fn fresh_index<'m>(mem: &'m SqliteMemoryStore, dim: usize) -> SemanticIndex<'m> {
         let backend = SqliteVecBackend::open_in_memory().expect("open vector");
-        SemanticIndex::new(
-            mem,
-            Box::new(backend),
-            Arc::new(HashEmbedder::new(dim)),
-        )
+        SemanticIndex::new(mem, Box::new(backend), Arc::new(HashEmbedder::new(dim)))
     }
 
     #[test]
@@ -474,9 +469,24 @@ mod tests {
         )
         .unwrap();
 
-        idx.index_episode(&<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e1").unwrap().unwrap()).unwrap();
-        idx.index_episode(&<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e2").unwrap().unwrap()).unwrap();
-        idx.index_episode(&<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e3").unwrap().unwrap()).unwrap();
+        idx.index_episode(
+            &<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e1")
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        idx.index_episode(
+            &<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e2")
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
+        idx.index_episode(
+            &<SqliteMemoryStore as EpisodeStore>::get_episode(&mem, "e3")
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(idx.len().unwrap(), 3);
 
@@ -628,6 +638,9 @@ mod tests {
         let stored = EmbedderIdentity::new("apeireth/hash-fnva-1a/v1", 32);
         let idx = SemanticIndex::with_stored_identity(&mem, Box::new(backend), embedder, stored)
             .expect("same identity should accept");
-        assert_eq!(idx.embedder_identity().model_name, "apeireth/hash-fnva-1a/v1");
+        assert_eq!(
+            idx.embedder_identity().model_name,
+            "apeireth/hash-fnva-1a/v1"
+        );
     }
 }

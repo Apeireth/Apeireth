@@ -1,34 +1,17 @@
 # ============================================================================
-# rustfmt.toml — Apeireth 后端格式化配置 (R18 第 0 阶段第 3 项)
+# rustfmt.toml — Apeireth 后端格式化配置
 # ============================================================================
-# 抄自: qdrant/rustfmt.toml + tantivy/rustfmt.toml
 #
-# qdrant (基础 4 项):
-#   reorder_imports = true
-#   imports_granularity = "Module"
-#   group_imports = "StdExternalCrate"
+# CI fix 2026-08 (R26): 删除原 8 项配置 (qdrant 3 + tantivy 5)。
 #
-# tantivy (额外 5 项):
-#   comment_width = 120
-#   format_strings = true
-#   normalize_comments = true
-#   where_single_line = true
-#   wrap_comments = true
+# 决策链:
+#   - 原配置 (reorder_imports / imports_granularity / group_imports /
+#     comment_width / format_strings / normalize_comments / where_single_line /
+#     wrap_comments) 在**当前 stable rustfmt 全部是 unstable 选项** (rustfmt 明确
+#     warning "unstable features are only available in nightly channel")。
+#   - 因此 CI 之前用 nightly 跑 fmt --check; 但 nightly rustfmt 每日漂移,
+#     2026-08-18 的 nightly 对全仓数百文件产生 diff → 门禁从第一次跑就没绿过。
+#   - 决策: 回到 stable rustfmt + 默认风格 (可复现、不漂移), 全仓按 stable 重格式化。
+#     import 分组等风格细节放弃 nightly-only 配置 (机制稳定性 > 风格偏好)。
 #
-# 验收:
-#   cargo fmt --all                       # 统一格式
-#   cargo +nightly fmt --all -- --check   # CI 强挡
-#
-# 注意: CI 用 nightly 跑 fmt --check, 因为部分选项只在 nightly 生效
-
-# --- 来自 qdrant (基础) ---
-reorder_imports = true
-imports_granularity = "Module"
-group_imports = "StdExternalCrate"
-
-# --- 来自 tantivy (额外) ---
-comment_width = 120
-format_strings = true
-normalize_comments = true
-where_single_line = true
-wrap_comments = true
+# 空文件 = 纯默认 stable 风格。

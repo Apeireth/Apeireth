@@ -40,5 +40,8 @@ jobs:
 
       - name: Run miri
         env:
-          MIRIFLAGS: "-Zmiri-permissive-provenance"
+          # -Zmiri-permissive-provenance: 放行指针 provenance (wasmtime 同款)
+          # -Zmiri-disable-isolation: 测试用 std::time (REALTIME clock_gettime) 在 miri
+          #   隔离模式不可用 (unsupported operation: clock_gettime with REALTIME)
+          MIRIFLAGS: "-Zmiri-permissive-provenance -Zmiri-disable-isolation"
         run: cargo +nightly miri test -p ${{ matrix.crate }} --lib --no-fail-fast

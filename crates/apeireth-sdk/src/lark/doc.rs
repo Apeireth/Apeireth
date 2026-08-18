@@ -17,7 +17,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 DocumentType (3 variant, 1:1 翻译 v0.9.21 商业版)
@@ -92,7 +92,10 @@ pub struct Document {
 
 impl Document {
     /// 创建新 docx 文档.
-    pub fn new_docx(title: impl Into<String>, folder_token: Option<String>) -> Result<Self, LarkError> {
+    pub fn new_docx(
+        title: impl Into<String>,
+        folder_token: Option<String>,
+    ) -> Result<Self, LarkError> {
         let title: String = title.into();
         Self::validate_title(&title)?;
         Ok(Self {
@@ -109,7 +112,10 @@ impl Document {
     }
 
     /// 创建新 spreadsheet.
-    pub fn new_sheet(title: impl Into<String>, folder_token: Option<String>) -> Result<Self, LarkError> {
+    pub fn new_sheet(
+        title: impl Into<String>,
+        folder_token: Option<String>,
+    ) -> Result<Self, LarkError> {
         let title: String = title.into();
         Self::validate_title(&title)?;
         Ok(Self {
@@ -126,7 +132,10 @@ impl Document {
     }
 
     /// 创建新多维表格.
-    pub fn new_bitable(title: impl Into<String>, folder_token: Option<String>) -> Result<Self, LarkError> {
+    pub fn new_bitable(
+        title: impl Into<String>,
+        folder_token: Option<String>,
+    ) -> Result<Self, LarkError> {
         let title: String = title.into();
         Self::validate_title(&title)?;
         Ok(Self {
@@ -291,7 +300,10 @@ mod tests {
             .expect("valid")
             .with_owner("ou_owner1234567890abcdef".to_string())
             .expect("valid owner");
-        assert_eq!(doc.owner_open_id.as_deref(), Some("ou_owner1234567890abcdef"));
+        assert_eq!(
+            doc.owner_open_id.as_deref(),
+            Some("ou_owner1234567890abcdef")
+        );
     }
 
     #[test]

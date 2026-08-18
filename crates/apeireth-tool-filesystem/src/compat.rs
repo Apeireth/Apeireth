@@ -78,19 +78,29 @@ impl CompatManifest {
         serde_json::from_str(json)
     }
     pub fn supported_commands(&self) -> Vec<CompatCommand> {
-        self.commands.iter().map(|s| CompatCommand::from_str(s)).filter(|c| *c != CompatCommand::Unknown).collect()
+        self.commands
+            .iter()
+            .map(|s| CompatCommand::from_str(s))
+            .filter(|c| *c != CompatCommand::Unknown)
+            .collect()
     }
 }
 
 pub struct CompatRouter;
 
 impl CompatRouter {
-    pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { LEGACY_COMMAND_COUNT }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn command_count() -> usize {
+        LEGACY_COMMAND_COUNT
+    }
 }
 
 impl Default for CompatRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -99,13 +109,31 @@ mod tests {
     #[test]
     fn parse_all_18_commands() {
         let cmds = vec![
-            "ReadFile","WebReadFile","FileInfo","WriteFile","WriteEscapedFile",
-            "AppendFile","EditFile","ApplyDiff","ListDirectory","CreateDirectory",
-            "ListAllowedDirectories","CopyFile","MoveFile","RenameFile","DeleteFile",
-            "SearchFiles","DownloadFile","CreateCanvas",
+            "ReadFile",
+            "WebReadFile",
+            "FileInfo",
+            "WriteFile",
+            "WriteEscapedFile",
+            "AppendFile",
+            "EditFile",
+            "ApplyDiff",
+            "ListDirectory",
+            "CreateDirectory",
+            "ListAllowedDirectories",
+            "CopyFile",
+            "MoveFile",
+            "RenameFile",
+            "DeleteFile",
+            "SearchFiles",
+            "DownloadFile",
+            "CreateCanvas",
         ];
         for s in cmds {
-            assert_ne!(CompatCommand::from_str(s), CompatCommand::Unknown, "command `{s}` not parsed");
+            assert_ne!(
+                CompatCommand::from_str(s),
+                CompatCommand::Unknown,
+                "command `{s}` not parsed"
+            );
         }
         assert_eq!(LEGACY_COMMAND_COUNT, 18);
     }

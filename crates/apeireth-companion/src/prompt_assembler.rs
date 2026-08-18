@@ -103,7 +103,10 @@ pub struct StaticSource {
 
 impl StaticSource {
     pub fn new(kind: SourceKind) -> Self {
-        Self { kind, vars: BTreeMap::new() }
+        Self {
+            kind,
+            vars: BTreeMap::new(),
+        }
     }
 
     /// 注入变量; 名字须符合占位符字符集且不含 `:`.
@@ -134,7 +137,10 @@ pub struct TimeSource {
 
 impl TimeSource {
     pub fn new(clock: Arc<dyn apeireth_core::clock::Clock>) -> Self {
-        Self { clock, offset_secs: 8 * 3600 }
+        Self {
+            clock,
+            offset_secs: 8 * 3600,
+        }
     }
 
     /// 自定义报告时区 (小时偏移).
@@ -288,25 +294,46 @@ impl PromptAssembler {
     }
 
     /// 注册 agent 提示词 (特权展开 + AgentGuard 单次守卫).
-    pub fn with_agent(mut self, name: &str, content: impl Into<String>) -> Result<Self, AssemblerError> {
+    pub fn with_agent(
+        mut self,
+        name: &str,
+        content: impl Into<String>,
+    ) -> Result<Self, AssemblerError> {
         validate_name(name)?;
-        if self.agents.insert(name.to_string(), content.into()).is_some() {
+        if self
+            .agents
+            .insert(name.to_string(), content.into())
+            .is_some()
+        {
             return Err(AssemblerError::DuplicateName(name.to_string()));
         }
         Ok(self)
     }
 
     /// 注册 toolbox 内容块 (特权展开 + ToolboxGuard 每种一次).
-    pub fn with_toolbox(mut self, name: &str, content: impl Into<String>) -> Result<Self, AssemblerError> {
+    pub fn with_toolbox(
+        mut self,
+        name: &str,
+        content: impl Into<String>,
+    ) -> Result<Self, AssemblerError> {
         validate_name(name)?;
-        if self.toolboxes.insert(name.to_string(), content.into()).is_some() {
+        if self
+            .toolboxes
+            .insert(name.to_string(), content.into())
+            .is_some()
+        {
             return Err(AssemblerError::DuplicateName(name.to_string()));
         }
         Ok(self)
     }
 
     /// 单文本展开: 返回 (展开后文本, 报告).
-    pub fn expand_text(&self, text: &str, role: AssemblyRole, guard: &mut AssemblyGuard) -> (String, ExpansionReport) {
+    pub fn expand_text(
+        &self,
+        text: &str,
+        role: AssemblyRole,
+        guard: &mut AssemblyGuard,
+    ) -> (String, ExpansionReport) {
         let mut report = ExpansionReport::default();
         let mut stack: Vec<String> = Vec::new();
         let out = self.expand_inner(text, role, guard, &mut stack, 0, &mut report);
@@ -325,7 +352,12 @@ impl PromptAssembler {
         for b in blocks {
             let (content, r) = self.expand_text(&b.content, role, guard);
             report.merge(r);
-            out.push(ContextBlock { name: b.name, content, core: b.core, cap_chars: b.cap_chars });
+            out.push(ContextBlock {
+                name: b.name,
+                content,
+                core: b.core,
+                cap_chars: b.cap_chars,
+            });
         }
         (out, report)
     }
@@ -344,7 +376,12 @@ impl PromptAssembler {
         for b in assembler.assemble_budgeted_blocks() {
             let (content, r) = self.expand_text(&b.content, role, guard);
             report.merge(r);
-            re = re.push(ContextBlock { name: b.name, content, core: b.core, cap_chars: b.cap_chars });
+            re = re.push(ContextBlock {
+                name: b.name,
+                content,
+                core: b.core,
+                cap_chars: b.cap_chars,
+            });
         }
         (re.assemble_budgeted_blocks(), report)
     }
@@ -353,7 +390,11 @@ impl PromptAssembler {
 
     fn is_privileged(&self, text: &str, role: AssemblyRole) -> bool {
         role == AssemblyRole::System
-            || (role == AssemblyRole::User && self.system_markers.iter().any(|m| text.starts_with(m.as_str())))
+            || (role == AssemblyRole::User
+                && self
+                    .system_markers
+                    .iter()
+                    .any(|m| text.starts_with(m.as_str())))
     }
 
     fn expand_inner(
@@ -377,7 +418,17 @@ impl PromptAssembler {
         }
         let mut cur = text.to_string();
         for (prefix, name) in names {
-            cur = self.expand_one(&cur, prefix.as_deref(), &name, privileged, role, guard, stack, depth, report);
+            cur = self.expand_one(
+                &cur,
+                prefix.as_deref(),
+                &name,
+                privileged,
+                role,
+                guard,
+                stack,
+                depth,
+                report,
+            );
         }
         cur
     }
@@ -446,7 +497,14 @@ impl PromptAssembler {
                 if stack.iter().any(|s| s == &key) {
                     let chain = chain_str(stack, &key);
                     report.circular.push(chain.clone());
-                    return replace_forms(cur, name, FormKind::Agent, &format!("[循环变量引用: {chain}]"), false).0;
+                    return replace_forms(
+                        cur,
+                        name,
+                        FormKind::Agent,
+                        &format!("[循环变量引用: {chain}]"),
+                        false,
+                    )
+                    .0;
                 }
                 if depth >= self.max_depth {
                     report.depth_exceeded.push(full);
@@ -482,7 +540,14 @@ impl PromptAssembler {
                 if stack.iter().any(|s| s == &key) {
                     let chain = chain_str(stack, &key);
                     report.circular.push(chain.clone());
-                    return replace_forms(cur, name, FormKind::Toolbox, &format!("[循环变量引用: {chain}]"), false).0;
+                    return replace_forms(
+                        cur,
+                        name,
+                        FormKind::Toolbox,
+                        &format!("[循环变量引用: {chain}]"),
+                        false,
+                    )
+                    .0;
                 }
                 if depth >= self.max_depth {
                     report.depth_exceeded.push(full);
@@ -495,7 +560,8 @@ impl PromptAssembler {
                 guard.expanded_toolboxes.insert(name.to_string());
                 report.expanded.push(full.clone());
                 // 仿 VCP replaceFirstAliasPlaceholder: 首个占位符展开, 其余移除 (重复移除留痕).
-                let (replaced, dropped) = replace_forms(cur, name, FormKind::Toolbox, &expanded, true);
+                let (replaced, dropped) =
+                    replace_forms(cur, name, FormKind::Toolbox, &expanded, true);
                 report.removed.extend(std::iter::repeat(full).take(dropped));
                 replaced
             }
@@ -525,7 +591,12 @@ impl PromptAssembler {
                 if stack.iter().any(|s| s == &key) {
                     let chain = chain_str(stack, &key);
                     report.circular.push(chain.clone());
-                    return replace_source_forms(cur, prefix, name, &format!("[循环变量引用: {chain}]"));
+                    return replace_source_forms(
+                        cur,
+                        prefix,
+                        name,
+                        &format!("[循环变量引用: {chain}]"),
+                    );
                 }
                 if depth >= self.max_depth {
                     report.depth_exceeded.push(full);
@@ -610,7 +681,13 @@ fn format_full(prefix: Option<&str>, name: &str) -> String {
 /// 替换 agent/toolbox 形态: `{{name}}` 与 `{{agent:name}}` (或 toolbox:) 两形同替.
 /// `first_only=true` 时首个替换为 value, 其余替换为空 (仿 VCP replaceFirstAliasPlaceholder);
 /// 返回 (替换后文本, 被移除的重复占位符数) — 供报告留痕 (0 装 PASS).
-fn replace_forms(text: &str, name: &str, kind: FormKind, value: &str, first_only: bool) -> (String, usize) {
+fn replace_forms(
+    text: &str,
+    name: &str,
+    kind: FormKind,
+    value: &str,
+    first_only: bool,
+) -> (String, usize) {
     let want_prefix: &str = match kind {
         FormKind::Agent => "agent",
         FormKind::Toolbox => "toolbox",
@@ -654,11 +731,15 @@ fn replace_source_forms(text: &str, prefix: Option<&str>, name: &str, value: &st
 }
 
 fn has_agent_form(text: &str, name: &str) -> bool {
-    scan_placeholders(text).iter().any(|(_, _, p, n)| n == name && (p.is_none() || p.as_deref() == Some("agent")))
+    scan_placeholders(text)
+        .iter()
+        .any(|(_, _, p, n)| n == name && (p.is_none() || p.as_deref() == Some("agent")))
 }
 
 fn has_toolbox_form(text: &str, name: &str) -> bool {
-    scan_placeholders(text).iter().any(|(_, _, p, n)| n == name && (p.is_none() || p.as_deref() == Some("toolbox")))
+    scan_placeholders(text)
+        .iter()
+        .any(|(_, _, p, n)| n == name && (p.is_none() || p.as_deref() == Some("toolbox")))
 }
 
 fn chain_str(stack: &[String], current: &str) -> String {
@@ -674,10 +755,18 @@ mod tests {
     use chrono::{TimeZone, Utc};
 
     fn base_assembler() -> PromptAssembler {
-        let identity = StaticSource::new(SourceKind::Identity).set("name", "小夜").unwrap();
-        let state = StaticSource::new(SourceKind::State).set("mood", "平静").unwrap();
-        let goals = StaticSource::new(SourceKind::Goals).set("current", "陪伴主人").unwrap();
-        let memory = StaticSource::new(SourceKind::Memory).set("fact", "主人喜欢喝茶").unwrap();
+        let identity = StaticSource::new(SourceKind::Identity)
+            .set("name", "小夜")
+            .unwrap();
+        let state = StaticSource::new(SourceKind::State)
+            .set("mood", "平静")
+            .unwrap();
+        let goals = StaticSource::new(SourceKind::Goals)
+            .set("current", "陪伴主人")
+            .unwrap();
+        let memory = StaticSource::new(SourceKind::Memory)
+            .set("fact", "主人喜欢喝茶")
+            .unwrap();
         PromptAssembler::new()
             .with_source(Box::new(identity))
             .with_source(Box::new(state))
@@ -691,7 +780,11 @@ mod tests {
     fn typed_sources_expand() {
         let a = base_assembler();
         let mut g = AssemblyGuard::new();
-        let (out, r) = a.expand_text("我是{{name}}, 情绪{{mood}}, 目标{{current}}, 记得{{fact}}", AssemblyRole::System, &mut g);
+        let (out, r) = a.expand_text(
+            "我是{{name}}, 情绪{{mood}}, 目标{{current}}, 记得{{fact}}",
+            AssemblyRole::System,
+            &mut g,
+        );
         assert_eq!(out, "我是小夜, 情绪平静, 目标陪伴主人, 记得主人喜欢喝茶");
         assert_eq!(r.expanded.len(), 4);
         assert!(r.undefined.is_empty() && r.circular.is_empty());
@@ -702,7 +795,11 @@ mod tests {
         let a = base_assembler();
         let mut g = AssemblyGuard::new();
         // 类型前缀寻址: state:name 只问 State 源 (name 在 Identity 源, State 源没有 → undefined)
-        let (out, r) = a.expand_text("{{state:name}}/{{identity:name}}", AssemblyRole::System, &mut g);
+        let (out, r) = a.expand_text(
+            "{{state:name}}/{{identity:name}}",
+            AssemblyRole::System,
+            &mut g,
+        );
         assert_eq!(out, "{{state:name}}/小夜");
         assert_eq!(r.undefined, vec!["state:name".to_string()]);
     }
@@ -711,8 +808,10 @@ mod tests {
     fn nested_value_recursion() {
         // 值里的占位符递归展开
         let src = StaticSource::new(SourceKind::State)
-            .set("outer", "A{{inner}}B").unwrap()
-            .set("inner", "!").unwrap();
+            .set("outer", "A{{inner}}B")
+            .unwrap()
+            .set("inner", "!")
+            .unwrap();
         let a = PromptAssembler::new().with_source(Box::new(src));
         let mut g = AssemblyGuard::new();
         let (out, _) = a.expand_text("{{outer}}", AssemblyRole::System, &mut g);
@@ -752,8 +851,10 @@ mod tests {
     #[test]
     fn agent_guard_single_agent_per_context() {
         let a = base_assembler()
-            .with_agent("甲", "甲灵魂").unwrap()
-            .with_agent("乙", "乙灵魂").unwrap();
+            .with_agent("甲", "甲灵魂")
+            .unwrap()
+            .with_agent("乙", "乙灵魂")
+            .unwrap();
         // 同一文本两个 agent: 首现展开, 第二个静默移除
         let mut g = AssemblyGuard::new();
         let (out, r) = a.expand_text("{{agent:甲}} 与 {{agent:乙}}", AssemblyRole::System, &mut g);
@@ -772,13 +873,22 @@ mod tests {
     #[test]
     fn toolbox_guard_once_per_name_first_occurrence() {
         let a = base_assembler()
-            .with_toolbox("检索", "检索工具清单").unwrap()
-            .with_toolbox("写作", "写作工具清单").unwrap();
+            .with_toolbox("检索", "检索工具清单")
+            .unwrap()
+            .with_toolbox("写作", "写作工具清单")
+            .unwrap();
         let mut g = AssemblyGuard::new();
         // 同名 toolbox 出现两次: 首个展开, 其余移除; 不同名正常展开
-        let (out, r) = a.expand_text("{{toolbox:检索}}|{{toolbox:检索}}|{{toolbox:写作}}", AssemblyRole::System, &mut g);
+        let (out, r) = a.expand_text(
+            "{{toolbox:检索}}|{{toolbox:检索}}|{{toolbox:写作}}",
+            AssemblyRole::System,
+            &mut g,
+        );
         assert_eq!(out, "检索工具清单||写作工具清单");
-        assert_eq!(r.expanded, vec!["toolbox:检索".to_string(), "toolbox:写作".to_string()]);
+        assert_eq!(
+            r.expanded,
+            vec!["toolbox:检索".to_string(), "toolbox:写作".to_string()]
+        );
         assert_eq!(r.removed, vec!["toolbox:检索".to_string()]);
         assert_eq!(g.expanded_toolboxes().len(), 2);
 
@@ -817,22 +927,32 @@ mod tests {
     #[test]
     fn circular_dependency_detected() {
         let src = StaticSource::new(SourceKind::Custom)
-            .set("va", "甲{{custom:vb}}").unwrap()
-            .set("vb", "乙{{custom:va}}").unwrap();
+            .set("va", "甲{{custom:vb}}")
+            .unwrap()
+            .set("vb", "乙{{custom:va}}")
+            .unwrap();
         let a = PromptAssembler::new().with_source(Box::new(src));
         let mut g = AssemblyGuard::new();
         let (out, r) = a.expand_text("{{custom:va}}", AssemblyRole::System, &mut g);
-        assert!(out.contains("[循环变量引用: custom:va -> custom:vb -> custom:va]"), "实际: {out}");
+        assert!(
+            out.contains("[循环变量引用: custom:va -> custom:vb -> custom:va]"),
+            "实际: {out}"
+        );
         assert_eq!(r.circular.len(), 1);
     }
 
     #[test]
     fn self_circular_detected() {
-        let src = StaticSource::new(SourceKind::Custom).set("loop", "{{custom:loop}}").unwrap();
+        let src = StaticSource::new(SourceKind::Custom)
+            .set("loop", "{{custom:loop}}")
+            .unwrap();
         let a = PromptAssembler::new().with_source(Box::new(src));
         let mut g = AssemblyGuard::new();
         let (out, r) = a.expand_text("{{custom:loop}}", AssemblyRole::System, &mut g);
-        assert!(out.contains("[循环变量引用: custom:loop -> custom:loop]"), "实际: {out}");
+        assert!(
+            out.contains("[循环变量引用: custom:loop -> custom:loop]"),
+            "实际: {out}"
+        );
         assert_eq!(r.circular.len(), 1);
     }
 
@@ -844,28 +964,53 @@ mod tests {
         // (注意: format! 中 {{ 是转义, 需要 {{{{ 才能生成字面双花括号占位符)
         let mut src = StaticSource::new(SourceKind::Custom);
         for i in 1..=12 {
-            let v = if i == 12 { "END".to_string() } else { format!("{{{{custom:v{}}}}}", i + 1) };
+            let v = if i == 12 {
+                "END".to_string()
+            } else {
+                format!("{{{{custom:v{}}}}}", i + 1)
+            };
             src = src.set(&format!("v{i}"), v).unwrap();
         }
-        let a = PromptAssembler::new().with_source(Box::new(src)).with_max_depth(4).unwrap();
+        let a = PromptAssembler::new()
+            .with_source(Box::new(src))
+            .with_max_depth(4)
+            .unwrap();
         let mut g = AssemblyGuard::new();
         let (out, r) = a.expand_text("{{custom:v1}}", AssemblyRole::System, &mut g);
         assert!(!r.depth_exceeded.is_empty(), "应报告深度超限");
-        assert!(out.contains("{{custom:v"), "超限处占位符应原样保留, 实际: {out}");
+        assert!(
+            out.contains("{{custom:v"),
+            "超限处占位符应原样保留, 实际: {out}"
+        );
         assert!(!out.contains("END"), "深度 4 不应展开到 v12");
     }
 
     #[test]
     fn invalid_registration_rejected() {
         let a = PromptAssembler::new();
-        assert!(matches!(a.with_agent("", "x"), Err(AssemblerError::EmptyName)));
+        assert!(matches!(
+            a.with_agent("", "x"),
+            Err(AssemblerError::EmptyName)
+        ));
         let a = PromptAssembler::new();
-        assert!(matches!(a.with_agent("a b", "x"), Err(AssemblerError::InvalidName(_))));
+        assert!(matches!(
+            a.with_agent("a b", "x"),
+            Err(AssemblerError::InvalidName(_))
+        ));
         let a = PromptAssembler::new();
-        assert!(matches!(a.with_agent("a:b", "x"), Err(AssemblerError::InvalidName(_))));
+        assert!(matches!(
+            a.with_agent("a:b", "x"),
+            Err(AssemblerError::InvalidName(_))
+        ));
         let a = PromptAssembler::new().with_agent("小夜", "1").unwrap();
-        assert!(matches!(a.with_agent("小夜", "2"), Err(AssemblerError::DuplicateName(_))));
-        assert!(matches!(PromptAssembler::new().with_max_depth(0), Err(AssemblerError::InvalidDepth)));
+        assert!(matches!(
+            a.with_agent("小夜", "2"),
+            Err(AssemblerError::DuplicateName(_))
+        ));
+        assert!(matches!(
+            PromptAssembler::new().with_max_depth(0),
+            Err(AssemblerError::InvalidDepth)
+        ));
     }
 
     #[test]
@@ -884,12 +1029,16 @@ mod tests {
     #[test]
     fn assemble_rebudgets_after_expansion_with_core_protection() {
         // 展开会让非核心块膨胀 → assemble 复用 ContextAssembler 预算再截断; 核心块保护
-        let big = StaticSource::new(SourceKind::Memory).set("big", "记".repeat(500)).unwrap();
+        let big = StaticSource::new(SourceKind::Memory)
+            .set("big", "记".repeat(500))
+            .unwrap();
         let a = PromptAssembler::new().with_source(Box::new(big));
         let asm = ContextAssembler::new(200)
             .push(ContextBlock::new("identity", "我是{{core_id}}").core(true))
             .push(ContextBlock::new("mem", "{{big}}"));
-        let id_src = StaticSource::new(SourceKind::Identity).set("core_id", "小夜").unwrap();
+        let id_src = StaticSource::new(SourceKind::Identity)
+            .set("core_id", "小夜")
+            .unwrap();
         let a = a.with_source(Box::new(id_src));
         let mut g = AssemblyGuard::new();
         let (blocks, r) = a.assemble(&asm, AssemblyRole::System, &mut g);
@@ -904,7 +1053,9 @@ mod tests {
         let a = base_assembler();
         let mut g = AssemblyGuard::new();
         let (blocks, _) = a.expand_blocks(
-            vec![ContextBlock::new("state", "{{mood}}").core(true).with_cap(99)],
+            vec![ContextBlock::new("state", "{{mood}}")
+                .core(true)
+                .with_cap(99)],
             AssemblyRole::System,
             &mut g,
         );
@@ -929,7 +1080,11 @@ mod tests {
         // 快进 1 天 (虚拟时间, 0 真等待) → 时间变量跟随
         vc.advance(chrono::Duration::days(1));
         let mut g2 = AssemblyGuard::new();
-        let (out2, _) = a.expand_text("{{time:date}} {{time:today}}", AssemblyRole::System, &mut g2);
+        let (out2, _) = a.expand_text(
+            "{{time:date}} {{time:today}}",
+            AssemblyRole::System,
+            &mut g2,
+        );
         assert_eq!(out2, "2026-08-17 星期一");
     }
 }

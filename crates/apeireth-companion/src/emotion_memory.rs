@@ -82,7 +82,7 @@ impl EmotionMemory {
     pub fn new() -> Self {
         Self {
             records: Vec::new(),
-            decay_half_life_ms: 4 * 3600 * 1000, // 4h
+            decay_half_life_ms: 4 * 3600 * 1000,     // 4h
             recall_window_ms: 30 * 24 * 3600 * 1000, // 30 天
         }
     }
@@ -141,7 +141,12 @@ impl EmotionMemory {
 
     /// 情绪上下文检索: 找与目标情绪相似的记录 (valence 差 ≤ tolerance).
     /// "记得你上次烦的时候" — 伙伴行为的机制.
-    pub fn recall_by_mood(&self, target_valence: f64, tolerance: f64, max: usize) -> Vec<&MoodRecord> {
+    pub fn recall_by_mood(
+        &self,
+        target_valence: f64,
+        tolerance: f64,
+        max: usize,
+    ) -> Vec<&MoodRecord> {
         let now = chrono::Utc::now().timestamp_millis();
         let cutoff = now - self.recall_window_ms;
         let mut out: Vec<&MoodRecord> = self
@@ -167,8 +172,18 @@ mod tests {
     fn record_and_current_mood_weighted() {
         let mut mem = EmotionMemory::new();
         assert_eq!(mem.current_mood().sample_count, 0, "无数据 → 空快照");
-        mem.record(MoodRecord::new(0.5, 0.3, MoodSource::TextSignal, "主人聊得开心"));
-        mem.record(MoodRecord::new(-0.8, 0.6, MoodSource::ExplicitFeedback, "主人说今天很烦"));
+        mem.record(MoodRecord::new(
+            0.5,
+            0.3,
+            MoodSource::TextSignal,
+            "主人聊得开心",
+        ));
+        mem.record(MoodRecord::new(
+            -0.8,
+            0.6,
+            MoodSource::ExplicitFeedback,
+            "主人说今天很烦",
+        ));
         // 最近的记录权重更高 → 当前情绪偏负
         let mood = mem.current_mood();
         assert!(mood.valence < 0.0, "最近记录(烦)应主导: {:?}", mood);
@@ -220,7 +235,11 @@ mod tests {
         // 现在主人很低落 → 检索相似低落时段 (tolerance 0.2)
         let low = mem.recall_by_mood(-0.8, 0.2, 5);
         assert_eq!(low.len(), 1);
-        assert!(low[0].note.contains("项目黄了"), "应找回低落时段: {:?}", low[0].note);
+        assert!(
+            low[0].note.contains("项目黄了"),
+            "应找回低落时段: {:?}",
+            low[0].note
+        );
         // 高情绪检索
         let high = mem.recall_by_mood(0.8, 0.2, 5);
         assert_eq!(high.len(), 1);
@@ -242,7 +261,12 @@ mod tests {
         // 与 emergence::LoopConfig.mood_floor (默认 0.3) 语义衔接:
         // 当前 mood < floor → 门控可读 (emergence 决定不出声/陪伴性开口).
         let mut mem = EmotionMemory::new();
-        mem.record(MoodRecord::new(-0.5, 0.6, MoodSource::ExplicitFeedback, "低落"));
+        mem.record(MoodRecord::new(
+            -0.5,
+            0.6,
+            MoodSource::ExplicitFeedback,
+            "低落",
+        ));
         let mood = mem.current_mood();
         assert!(mood.valence < 0.3, "低落期 valence 低于 mood_floor 0.3");
     }

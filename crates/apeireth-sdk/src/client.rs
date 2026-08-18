@@ -402,12 +402,18 @@ impl AuditLogger {
 
     /// 查审计条数 (测试用).
     pub fn len(&self) -> usize {
-        self.entries.lock().expect("audit entries mutex poisoned").len()
+        self.entries
+            .lock()
+            .expect("audit entries mutex poisoned")
+            .len()
     }
 
     /// 是否空.
     pub fn is_empty(&self) -> bool {
-        self.entries.lock().expect("audit entries mutex poisoned").is_empty()
+        self.entries
+            .lock()
+            .expect("audit entries mutex poisoned")
+            .is_empty()
     }
 }
 
@@ -602,9 +608,8 @@ impl ApeirethClient {
                 serde_json::json!({ "query": query }),
             )
             .await?;
-        serde_json::from_value(result).map_err(|e| {
-            SdkClientError::Other(format!("web_search deserialize error: {e}"))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| SdkClientError::Other(format!("web_search deserialize error: {e}")))
     }
 
     /// **工具 2a: file_ops_read** (HTTP `POST /v1/tools/file_ops/invoke`).
@@ -636,9 +641,8 @@ impl ApeirethClient {
         let result = self
             .invoke_tool("git_ops", "status", serde_json::json!({ "path": path }))
             .await?;
-        serde_json::from_value(result).map_err(|e| {
-            SdkClientError::Other(format!("git_ops_status deserialize error: {e}"))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| SdkClientError::Other(format!("git_ops_status deserialize error: {e}")))
     }
 
     /// **工具 4: code_exec_run** (HTTP `POST /v1/tools/code_exec/invoke`).
@@ -646,9 +650,8 @@ impl ApeirethClient {
         let result = self
             .invoke_tool("code_exec", "run", serde_json::json!({ "cmd": cmd }))
             .await?;
-        serde_json::from_value(result).map_err(|e| {
-            SdkClientError::Other(format!("code_exec_run deserialize error: {e}"))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| SdkClientError::Other(format!("code_exec_run deserialize error: {e}")))
     }
 
     /// **工具 5: calendar_list** (HTTP `POST /v1/tools/calendar/invoke`).
@@ -658,9 +661,8 @@ impl ApeirethClient {
         let result = self
             .invoke_tool("calendar", "list", serde_json::json!({ "range": range }))
             .await?;
-        serde_json::from_value(result).map_err(|e| {
-            SdkClientError::Other(format!("calendar_list deserialize error: {e}"))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| SdkClientError::Other(format!("calendar_list deserialize error: {e}")))
     }
 
     /// **工具 6: message_send** (HTTP `POST /v1/tools/message/invoke`).
@@ -678,9 +680,8 @@ impl ApeirethClient {
                 serde_json::json!({ "target": target, "payload": payload }),
             )
             .await?;
-        serde_json::from_value(result).map_err(|e| {
-            SdkClientError::Other(format!("message_send deserialize error: {e}"))
-        })
+        serde_json::from_value(result)
+            .map_err(|e| SdkClientError::Other(format!("message_send deserialize error: {e}")))
     }
 
     // ========================================================================
@@ -1097,7 +1098,8 @@ mod client_tests {
     fn auth_pipeline_preflight_walks_5_components() {
         let p = AuthPipeline::new("a-valid-api-key-1234567890").unwrap();
         // preflight 走 token bucket + audit (quota 不在 preflight).
-        p.preflight("web_search", "search").expect("preflight should succeed (quota not in preflight)");
+        p.preflight("web_search", "search")
+            .expect("preflight should succeed (quota not in preflight)");
         assert!(p.audit.len() >= 1, "audit 必追加 1 条");
         // 显式 quota check 必返 501.
         let err = p.check_quota();
@@ -1132,8 +1134,8 @@ mod client_tests {
     /// **ApeirethClient invoke_tool stub**: 阶段 6 返 unimplemented.
     #[tokio::test]
     async fn client_invoke_tool_returns_unimplemented_in_stub() {
-        let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890")
-            .unwrap();
+        let c =
+            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
         let err = c
             .invoke_tool("web_search", "search", serde_json::json!({}))
             .await;
@@ -1149,8 +1151,8 @@ mod client_tests {
     /// **ApeirethClient invoke_stream stub**: 阶段 6 返 unimplemented.
     #[tokio::test]
     async fn client_invoke_stream_returns_unimplemented_in_stub() {
-        let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890")
-            .unwrap();
+        let c =
+            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
         let err = c
             .invoke_stream("file_ops", "read", serde_json::json!({}))
             .await;
@@ -1166,8 +1168,8 @@ mod client_tests {
     /// **6 工具 method 验证**: 6 工具 method 各自返 stub unimplemented (阶段 6 守门).
     #[tokio::test]
     async fn client_6_tool_methods_all_stub() {
-        let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890")
-            .unwrap();
+        let c =
+            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
         // 6 工具 method 各自返 unimplemented (R21 真接).
         assert!(c.web_search("test").await.is_err());
         assert!(c.file_ops_read("/tmp/test").await.is_err());
@@ -1183,10 +1185,13 @@ mod client_tests {
     fn m3_defense_six_tools_match_whitelist() {
         // 6 工具 method 内部名 (snake_case 工具名) 必 == TOOL_WHITELIST 6 工具.
         // 这里用 tool_urls 验证 6 工具 method 各自走对 D-02 子路径.
-        let c = ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890")
-            .unwrap();
+        let c =
+            ApeirethClient::new("https://api.apeireth.io", "a-valid-api-key-1234567890").unwrap();
         for tool in TOOL_WHITELIST {
-            assert!(c.tool_url(tool).is_some(), "m3 防御: {tool} 必在 6 工具 method 列表");
+            assert!(
+                c.tool_url(tool).is_some(),
+                "m3 防御: {tool} 必在 6 工具 method 列表"
+            );
         }
     }
 

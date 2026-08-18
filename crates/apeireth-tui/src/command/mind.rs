@@ -159,7 +159,7 @@ pub enum Response {
 ///
 /// **错误**:
 /// - [`OrganError::InvalidArg`] — 锚 ID 不在 6 编译期 hardcode / id 越界
-pub fn handle(state: &mut State, cmd: Command) -> Result<Response, OrganError> {
+pub fn handle(state: &State, cmd: Command) -> Result<Response, OrganError> {
     match cmd {
         Command::GetLifeStage => Ok(Response::LifeStage(state.life_stage.clone())),
         Command::GetAnchors => Ok(Response::Anchors(SIX_ANCHORS.to_vec())),
@@ -246,7 +246,7 @@ mod tests {
     #[test]
     fn get_life_stage_default_seed() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetLifeStage).unwrap();
+        let r = handle(&state, Command::GetLifeStage).unwrap();
         // S-2 实事求是: R25.2 是 stub, 默认 seed
         assert_eq!(r, Response::LifeStage("Init".into()));
     }
@@ -256,7 +256,7 @@ mod tests {
     #[test]
     fn get_anchors_returns_6() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetAnchors).unwrap();
+        let r = handle(&state, Command::GetAnchors).unwrap();
         match r {
             Response::Anchors(v) => assert_eq!(v.len(), 6),
             _ => panic!("expected Anchors"),
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn get_anchor_valid_id() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetAnchor { id: "S-2".into() }).unwrap();
+        let r = handle(&state, Command::GetAnchor { id: "S-2".into() }).unwrap();
         match r {
             Response::Anchor { id, ts, name } => {
                 assert_eq!(id, "S-2");
@@ -282,7 +282,7 @@ mod tests {
     #[test]
     fn get_anchor_unknown_id_rejected() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetAnchor { id: "S-99".into() });
+        let r = handle(&state, Command::GetAnchor { id: "S-99".into() });
         assert!(matches!(
             r,
             Err(OrganError::InvalidArg {

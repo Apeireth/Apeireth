@@ -45,8 +45,8 @@ impl FileLock {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::*;
+    use std::path::PathBuf;
     #[test]
     fn lock_can_be_acquired() {
         let tmp = tempfile::tempdir().unwrap();

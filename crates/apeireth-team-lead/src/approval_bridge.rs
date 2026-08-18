@@ -173,10 +173,7 @@ pub trait ApprovalBridge: Send + Sync {
     ) -> Result<ApprovalResponse, ApprovalBridgeError>;
 
     /// orchestrator → companion: 派发响应 (状态变更/双向同步).
-    fn dispatch_response(
-        &self,
-        resp: ApprovalResponse,
-    ) -> Result<(), ApprovalBridgeError>;
+    fn dispatch_response(&self, resp: ApprovalResponse) -> Result<(), ApprovalBridgeError>;
 }
 
 // ============================================================================
@@ -285,10 +282,7 @@ impl ApprovalBridge for InProcessBridge {
         }
     }
 
-    fn dispatch_response(
-        &self,
-        resp: ApprovalResponse,
-    ) -> Result<(), ApprovalBridgeError> {
+    fn dispatch_response(&self, resp: ApprovalResponse) -> Result<(), ApprovalBridgeError> {
         resp.validate()?;
         let mut g = self.inner.lock().expect("InProcessBridge mutex poisoned");
         g.received_responses.push(resp);
@@ -396,7 +390,10 @@ mod tests {
             "field_b": 99
         }"#;
         let req: ApprovalRequest = serde_json::from_str(json).unwrap();
-        assert_eq!(req.extra.get("field_a").unwrap(), &serde_json::json!("future"));
+        assert_eq!(
+            req.extra.get("field_a").unwrap(),
+            &serde_json::json!("future")
+        );
         assert_eq!(req.extra.get("field_b").unwrap(), &serde_json::json!(99));
     }
 

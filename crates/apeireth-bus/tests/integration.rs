@@ -211,7 +211,7 @@ async fn l3_pubsub_multi_topic() {
 async fn l3_reqrep_with_trace_id() {
     let server = L3Bus::<String>::start_unique().await.unwrap();
     let ep = server.endpoint().to_string();
-    let msg = BusMessage::new("ask".into());
+    let msg = BusMessage::<String>::new("ask".into());
     // 直接 request (server 端 L3Bus.publish 会触发 subscriber; 但这里需 responder)
     // 用 server-side publish 走 broadcast 不进入 Request RPC 的 reply 路径 — 我们另写测试
     // 仅验证 request 路径不 panic 并接收一个 reply (它会回第一条自身 publish 的 message)
@@ -224,7 +224,7 @@ async fn l3_reqrep_with_trace_id() {
         if let Some(Ok(req)) = s.next().await {
             let _ = server_c
                 .request(
-                    &format!("reply-of-{}", req.topic),
+                    "reply-of-rpc", // BusMessage 无 topic 字段 (L3 订阅不携带), 固定回显 topic
                     BusMessage::with_trace_id(req.trace_id, format!("resp:{}", req.payload)),
                     Duration::from_secs(2),
                 )

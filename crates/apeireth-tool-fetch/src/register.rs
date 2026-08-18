@@ -71,11 +71,7 @@ impl Tool for FetchEngineTool {
                 if let Some(t) = args.get("extract_text_only").and_then(Value::as_bool) {
                     req.extract_text_only = t;
                 }
-                let resp = self
-                    .engine
-                    .fetch(&req)
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let resp = self.engine.fetch(&req).await.map_err(|e| e.to_string())?;
                 Ok(json!({
                     "op": "fetch",
                     "url": resp.url,
@@ -124,7 +120,9 @@ mod tests {
     #[tokio::test]
     async fn invalid_url_errors_without_panic() {
         let tool = FetchEngineTool::new(FetchEngine::new());
-        let r = tool.call(json!({"op": "fetch", "url": "not a valid url"})).await;
+        let r = tool
+            .call(json!({"op": "fetch", "url": "not a valid url"}))
+            .await;
         assert!(r.is_err(), "非法 URL 应报错");
     }
 

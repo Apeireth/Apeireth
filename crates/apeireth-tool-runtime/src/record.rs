@@ -288,8 +288,7 @@ impl RecordStore {
             masked,
         };
 
-        let mut payload =
-            serde_json::to_value(&record).map_err(|e| format!("serialize: {e}"))?;
+        let mut payload = serde_json::to_value(&record).map_err(|e| format!("serialize: {e}"))?;
 
         // TP12: 把结构化错误信息并入 payload (audit 端可直接读)
         let tp12_report = build_tp12_report(exec);
@@ -640,7 +639,9 @@ mod tests {
         assert_eq!(entries.len(), 1);
         let payload = &entries[0].payload;
         let report = payload.get("tp12_report").expect("tp12_report missing");
-        let ge = report.get("guardrail_error").expect("guardrail_error missing");
+        let ge = report
+            .get("guardrail_error")
+            .expect("guardrail_error missing");
         assert_eq!(ge["tool_name"], "Bad");
         assert_eq!(ge["kind"], "path_traversal");
         assert_eq!(ge["field"], "$.path");
@@ -678,7 +679,10 @@ mod tests {
             .expect("list");
         assert_eq!(entries.len(), 1);
         let payload = &entries[0].payload;
-        assert!(payload.get("tp12_report").is_none(), "干净调用不应有 tp12_report");
+        assert!(
+            payload.get("tp12_report").is_none(),
+            "干净调用不应有 tp12_report"
+        );
     }
 
     #[tokio::test]

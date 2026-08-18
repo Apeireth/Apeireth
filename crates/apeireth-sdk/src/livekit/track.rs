@@ -12,7 +12,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LiveKitError;
+use crate::livekit::error::LiveKitError;
 
 // ============================================================================
 // §1 TrackKind 2 类型 (per v0.9.21 商业版 Track.Kind enum)
@@ -446,7 +446,8 @@ mod tests {
     fn track_set_dimensions_video_ok() {
         let mut t = Track::new(TrackKind::Video, TrackSource::Camera);
         let new_dims = TrackDimensions::new(1920, 1080);
-        t.set_dimensions(new_dims).expect("video track must accept dimensions");
+        t.set_dimensions(new_dims)
+            .expect("video track must accept dimensions");
         assert_eq!(t.dimensions(), Some(new_dims));
     }
 

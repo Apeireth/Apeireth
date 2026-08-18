@@ -75,7 +75,7 @@ impl RoleConstitution {
         }
     }
 
-    /// Safety advisor 宪法 (强约束: 物理隔离 + L0 HA + 司法边界 ["SOVEREIGN"] + 6 哲学锚穿透)
+    /// Safety advisor 宪法 (强约束: 物理隔离 + L0 HA + 司法边界 `["SOVEREIGN"]` + 6 哲学锚穿透)
     pub fn for_safety_advisor() -> Self {
         Self {
             physical_isolation: true,
@@ -164,7 +164,9 @@ impl RoleConstitution {
 
     /// 7 强制 advisor 宪法 (per AdvisorDomain)
     pub fn for_advisor_domain(domain: crate::advisor::AdvisorDomain) -> Self {
-        use crate::advisor::AdvisorDomain::*;
+        use crate::advisor::AdvisorDomain::{
+            Ethics, History, Legal, Performance, Philosophy, Safety, Strategy,
+        };
         match domain {
             Safety => Self::for_safety_advisor(),
             Philosophy => Self::for_philosophy_advisor(),
@@ -418,7 +420,9 @@ mod tests {
 
     #[test]
     fn for_advisor_domain_7_distinct() {
-        use crate::advisor::AdvisorDomain::*;
+        use crate::advisor::AdvisorDomain::{
+            Ethics, History, Legal, Performance, Philosophy, Safety, Strategy,
+        };
         let s = RoleConstitution::for_advisor_domain(Safety);
         let p = RoleConstitution::for_advisor_domain(Philosophy);
         let e = RoleConstitution::for_advisor_domain(Ethics);

@@ -46,6 +46,11 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      # keyring → dbus-secret-service → libdbus-sys 需要系统库 (仅 Linux)
+      - name: Install system deps (Linux: libdbus)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Install cargo-nextest
         uses: taiki-e/install-action@nextest
 

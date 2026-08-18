@@ -14,10 +14,8 @@
 
 #![deny(unsafe_code)]
 
-use apeireth_consciousness::plutchik::{
-    PlutchikBasic, PlutchikEmotion, PlutchikIntensity,
-};
 use crate::bond::{Bond, BondCharacter};
+use apeireth_consciousness::plutchik::{PlutchikBasic, PlutchikEmotion, PlutchikIntensity};
 
 /// 8 维 Plutchik 基本情感输入 (按 PlutchikBasic::ALL 顺序 + intensity 加权)
 ///
@@ -176,7 +174,10 @@ mod tests {
     fn t04_advanced_emotion_maps_to_zero_inputs() {
         // 高级情绪暂时不出现在 Bond 输入 (设计上: Bond character 反映可观察基本情感)
         // 这一行为的正确性本身就是测试 — 设计延展性
-        let e = PlutchikEmotion::advanced(apeireth_consciousness::plutchik::PlutchikAdvanced::Optimism, PlutchikIntensity::Extreme);
+        let e = PlutchikEmotion::advanced(
+            apeireth_consciousness::plutchik::PlutchikAdvanced::Optimism,
+            PlutchikIntensity::Extreme,
+        );
         let inputs = plutchik_to_bond_emotion(&e);
         assert_eq!(inputs.joy, 0.0);
         assert_eq!(inputs.trust, 0.0);

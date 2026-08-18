@@ -35,6 +35,8 @@ futures = "0.3"
 chrono = { version = "0.4", features = ["serde"] }
 # shared types (K-1 强校验 / R-Measure 复用)
 apeireth-protocol = { path = "../apeireth-protocol" }
+# clippy disallowed-methods (clippy.toml): std::fs::read_to_string 强制走 fs_err
+fs-err = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

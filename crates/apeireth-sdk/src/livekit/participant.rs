@@ -12,8 +12,8 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LiveKitError;
-use crate::track::{TrackSid, TrackSource};
+use crate::livekit::error::LiveKitError;
+use crate::livekit::track::{TrackSid, TrackSource};
 
 // ============================================================================
 // §1 ConnectionQuality 4 等级 (per v0.9.21 商业版 ConnectionQuality enum)
@@ -293,7 +293,10 @@ mod tests {
         for q in SUPPORTED_CONNECTION_QUALITIES {
             assert_eq!(ConnectionQuality::parse(q.as_str()), Some(*q));
         }
-        assert_eq!(ConnectionQuality::parse("unknown"), Some(ConnectionQuality::Unknown));
+        assert_eq!(
+            ConnectionQuality::parse("unknown"),
+            Some(ConnectionQuality::Unknown)
+        );
         assert_eq!(ConnectionQuality::parse("bogus"), None);
     }
 
@@ -314,7 +317,10 @@ mod tests {
         assert_eq!(Permission::CanPublish.as_str(), "can_publish");
         assert_eq!(Permission::CanSubscribe.as_str(), "can_subscribe");
         assert_eq!(Permission::CanPublishData.as_str(), "can_publish_data");
-        assert_eq!(Permission::CanUpdateMetadata.as_str(), "can_update_metadata");
+        assert_eq!(
+            Permission::CanUpdateMetadata.as_str(),
+            "can_update_metadata"
+        );
         assert_eq!(Permission::Hidden.as_str(), "hidden");
     }
 

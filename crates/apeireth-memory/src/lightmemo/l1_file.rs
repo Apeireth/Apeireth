@@ -55,7 +55,12 @@ impl L1FileStore {
     pub fn insert(&self, entry: &FileEntry) -> Result<(), L1Error> {
         self.conn.execute(
             "INSERT OR REPLACE INTO files (id, path, content, created_at) VALUES (?1, ?2, ?3, ?4)",
-            params![entry.id, entry.path, entry.content, entry.created_at.to_rfc3339()],
+            params![
+                entry.id,
+                entry.path,
+                entry.content,
+                entry.created_at.to_rfc3339()
+            ],
         )?;
         Ok(())
     }
@@ -73,7 +78,9 @@ impl L1FileStore {
                     id,
                     path,
                     content,
-                    created_at: DateTime::parse_from_rfc3339(&created_at).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|_| Utc::now()),
+                    created_at: DateTime::parse_from_rfc3339(&created_at)
+                        .map(|d| d.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
                 })
             },
         )?;
@@ -81,7 +88,9 @@ impl L1FileStore {
     }
 
     pub fn count(&self) -> Result<i64, L1Error> {
-        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM files", [], |r| r.get(0))?;
         Ok(n)
     }
 }

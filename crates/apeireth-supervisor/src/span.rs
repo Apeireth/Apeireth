@@ -50,7 +50,7 @@ impl std::fmt::Display for SpanId {
 pub enum SpanStatus {
     /// Span ended without error.
     Ok,
-    /// Span ended with error (use attrs["error"] = message).
+    /// Span ended with error (use `attrs["error"]` = message).
     Err,
     /// Span not yet ended or status unspecified.
     Unset,

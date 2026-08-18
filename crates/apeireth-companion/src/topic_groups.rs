@@ -24,8 +24,8 @@ const COLLAPSE_NOTICE: &str = "…还收纳了 {n} 组主题, 未逐一展开.";
 
 /// **通用词停用表** (确定性聚簇时剔除, 防"主人/明天"类高频通用词把不相关条目并簇)
 const STOPWORDS: &[&str] = &[
-    "主人", "我们", "今天", "明天", "昨天", "时候", "事情", "需要", "一个", "可以", "现在",
-    "主题", "词条",
+    "主人", "我们", "今天", "明天", "昨天", "时候", "事情", "需要", "一个", "可以", "现在", "主题",
+    "词条",
 ];
 
 /// **token 提取** — CJK 连续段取双字组 (bigram), 拉丁/数字连续段取整词 (≥2 字符, 小写)
@@ -162,10 +162,19 @@ pub fn group_topics(entries: &[String]) -> Vec<TopicGroup> {
         }
         let name = counts
             .iter()
-            .max_by_key(|(tok, c)| (*c, std::cmp::Reverse(gtokens.iter().position(|g| g == tok).unwrap_or(usize::MAX))))
+            .max_by_key(|(tok, c)| {
+                (
+                    *c,
+                    std::cmp::Reverse(gtokens.iter().position(|g| g == tok).unwrap_or(usize::MAX)),
+                )
+            })
             .map(|(tok, _)| tok.chars().take(12).collect::<String>())
             .unwrap_or_else(|| "未分类".to_string());
-        group.topic = if name.is_empty() { "未分类".to_string() } else { name };
+        group.topic = if name.is_empty() {
+            "未分类".to_string()
+        } else {
+            name
+        };
     }
     groups
 }
@@ -263,10 +272,7 @@ mod tests {
     #[test]
     fn stopwords_do_not_merge_unrelated() {
         // 仅共享"主人/明天"类通用词 → 不应并簇 (停用词已剔除)
-        let entries: Vec<String> = vec![
-            "主人明天体检要空腹".into(),
-            "主人明天想装新显卡".into(),
-        ];
+        let entries: Vec<String> = vec!["主人明天体检要空腹".into(), "主人明天想装新显卡".into()];
         let groups = group_topics(&entries);
         assert_eq!(groups.len(), 2, "通用词不作为聚簇依据");
     }
@@ -275,12 +281,36 @@ mod tests {
     fn index_renders_budget_and_notice() {
         // 30 个互不相关主题 (语料 0 共享 bigram), 小预算 → 砍尾行 + 收纳提示 + ≤ 预算
         const CORPUS: &[&str] = &[
-            "量子退相干实验", "烘焙发酵温度", "登山路线规划", "钢琴指法练习", "河流水质监测",
-            "星轨摄影参数", "蜜蜂蜂箱检查", "陶土窑变釉色", "滑雪板打蜡", "青铜器除锈",
-            "候鸟迁徙环志", "咖啡萃取压力", "攀岩保护站设置", "宣纸帘纹工艺", "雷达回波解读",
-            "羊毛毡戳刺", "潮汐表推算", "酱油曲霉培养", "滑翔伞气流判断", "漆器荫干湿度",
-            "地震波走时", "竹编经纬起底", "云底高度估测", "黑胶唱针调校", "堆肥碳氮配比",
-            "极光指数预报", "榫卯燕尾角度", "酒花投放时序", "冰川裂隙探路", "苔藓孢蒴观察",
+            "量子退相干实验",
+            "烘焙发酵温度",
+            "登山路线规划",
+            "钢琴指法练习",
+            "河流水质监测",
+            "星轨摄影参数",
+            "蜜蜂蜂箱检查",
+            "陶土窑变釉色",
+            "滑雪板打蜡",
+            "青铜器除锈",
+            "候鸟迁徙环志",
+            "咖啡萃取压力",
+            "攀岩保护站设置",
+            "宣纸帘纹工艺",
+            "雷达回波解读",
+            "羊毛毡戳刺",
+            "潮汐表推算",
+            "酱油曲霉培养",
+            "滑翔伞气流判断",
+            "漆器荫干湿度",
+            "地震波走时",
+            "竹编经纬起底",
+            "云底高度估测",
+            "黑胶唱针调校",
+            "堆肥碳氮配比",
+            "极光指数预报",
+            "榫卯燕尾角度",
+            "酒花投放时序",
+            "冰川裂隙探路",
+            "苔藓孢蒴观察",
         ];
         let entries: Vec<String> = CORPUS.iter().map(|s| s.to_string()).collect();
         assert_eq!(

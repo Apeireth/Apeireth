@@ -84,7 +84,10 @@ pub struct ThoughtClusterManager {
 impl ThoughtClusterManager {
     /// root = 思维簇根目录 (注入, 如 `<memory_path>/thought_clusters`); clock 注入 → 可测.
     pub fn new(root: impl Into<PathBuf>, clock: Arc<dyn Clock>) -> Self {
-        Self { root: root.into(), clock }
+        Self {
+            root: root.into(),
+            clock,
+        }
     }
 
     /// 簇名规范化: 去空白; 拒绝空名/路径分隔符/`..`(防目录穿越)/非「簇」结尾.
@@ -107,7 +110,11 @@ impl ThoughtClusterManager {
 
     /// 新建一个思考文件落盘; 文件名 = `{日期}-{当日序号}.md` (时钟注入 → 确定性).
     /// 簇目录不存在自动创建. 空内容 → Err.
-    pub fn create_file(&self, cluster: &str, content: &str) -> Result<PathBuf, ThoughtClusterError> {
+    pub fn create_file(
+        &self,
+        cluster: &str,
+        content: &str,
+    ) -> Result<PathBuf, ThoughtClusterError> {
         if content.trim().is_empty() {
             return Err(ThoughtClusterError::EmptyContent);
         }
@@ -187,7 +194,11 @@ impl ThoughtClusterManager {
     }
 
     /// 注册一条链 (链名 → 簇列表) 到 meta_thinking_chains.json (BTreeMap → 序列化确定).
-    pub fn register_chain(&self, chain: &str, clusters: &[String]) -> Result<(), ThoughtClusterError> {
+    pub fn register_chain(
+        &self,
+        chain: &str,
+        clusters: &[String],
+    ) -> Result<(), ThoughtClusterError> {
         if chain.trim().is_empty() {
             return Err(ThoughtClusterError::InvalidName(chain.to_string()));
         }
@@ -304,7 +315,12 @@ mod tests {
     use chrono::TimeZone;
 
     fn vclock() -> VirtualClock {
-        VirtualClock::new(chrono::Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap())
+        VirtualClock::new(
+            chrono::Utc
+                .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
+                .single()
+                .unwrap(),
+        )
     }
 
     fn temp_root() -> PathBuf {
@@ -323,7 +339,9 @@ mod tests {
     fn create_file_names_are_date_seq_deterministic() {
         let root = temp_root();
         let m = mgr(&root);
-        let p1 = m.create_file("前思维簇", "【思考模块：模块A】\n触发条件: x").unwrap();
+        let p1 = m
+            .create_file("前思维簇", "【思考模块：模块A】\n触发条件: x")
+            .unwrap();
         let p2 = m.create_file("前思维簇", "第二条思考").unwrap();
         assert_eq!(p1.file_name().unwrap(), "2026-08-16-001.md");
         assert_eq!(p2.file_name().unwrap(), "2026-08-16-002.md", "同日序号递增");
@@ -338,16 +356,39 @@ mod tests {
     fn invalid_inputs_rejected() {
         let root = temp_root();
         let m = mgr(&root);
-        assert!(matches!(m.create_file("名字没后缀", "x"), Err(ThoughtClusterError::InvalidName(_))));
+        assert!(matches!(
+            m.create_file("名字没后缀", "x"),
+            Err(ThoughtClusterError::InvalidName(_))
+        ));
         // 纯空白名去空白后为空 → 非法
-        assert!(matches!(m.create_file("   ", "x"), Err(ThoughtClusterError::InvalidName(_))));
-        assert!(matches!(m.create_file("../逃逸簇", "x"), Err(ThoughtClusterError::InvalidName(_))));
-        assert!(matches!(m.create_file("好簇", "  "), Err(ThoughtClusterError::EmptyContent)));
+        assert!(matches!(
+            m.create_file("   ", "x"),
+            Err(ThoughtClusterError::InvalidName(_))
+        ));
+        assert!(matches!(
+            m.create_file("../逃逸簇", "x"),
+            Err(ThoughtClusterError::InvalidName(_))
+        ));
+        assert!(matches!(
+            m.create_file("好簇", "  "),
+            Err(ThoughtClusterError::EmptyContent)
+        ));
         // 编辑目标过短 (< 15 字符)
-        assert!(matches!(m.edit_file(None, "短文本", "新"), Err(ThoughtClusterError::TargetTooShort(3))));
+        assert!(matches!(
+            m.edit_file(None, "短文本", "新"),
+            Err(ThoughtClusterError::TargetTooShort(3))
+        ));
         // 非法文件内容读回也应拒绝
-        m.create_file("正簇", "一条足够长的思考内容，用于后续编辑测试。").unwrap();
-        assert!(matches!(m.edit_file(Some("bad name"), "一条足够长的思考内容，用于后续编辑测试。", "x"), Err(ThoughtClusterError::InvalidName(_))));
+        m.create_file("正簇", "一条足够长的思考内容，用于后续编辑测试。")
+            .unwrap();
+        assert!(matches!(
+            m.edit_file(
+                Some("bad name"),
+                "一条足够长的思考内容，用于后续编辑测试。",
+                "x"
+            ),
+            Err(ThoughtClusterError::InvalidName(_))
+        ));
         cleanup(&root);
     }
 
@@ -355,13 +396,20 @@ mod tests {
     fn list_clusters_sorted_and_empty_root_ok() {
         let root = temp_root();
         let m = mgr(&root);
-        assert_eq!(m.list_clusters().unwrap(), Vec::<String>::new(), "root 不存在 = 空, 不报错");
+        assert_eq!(
+            m.list_clusters().unwrap(),
+            Vec::<String>::new(),
+            "root 不存在 = 空, 不报错"
+        );
         m.create_file("乙簇", "b").unwrap();
         m.create_file("甲簇", "a").unwrap();
         std::fs::create_dir_all(root.join("不是簇的目录")).unwrap();
         std::fs::write(root.join("散文件.md"), "x").unwrap();
         // 字典序: 乙(U+4E59) < 甲(U+7532); 非簇目录与散文件不计入
-        assert_eq!(m.list_clusters().unwrap(), vec!["乙簇".to_string(), "甲簇".to_string()]);
+        assert_eq!(
+            m.list_clusters().unwrap(),
+            vec!["乙簇".to_string(), "甲簇".to_string()]
+        );
         cleanup(&root);
     }
 
@@ -369,14 +417,20 @@ mod tests {
     fn read_cluster_sorted_empty_and_missing() {
         let root = temp_root();
         let m = mgr(&root);
-        assert!(m.read_cluster("不存在簇").unwrap().is_empty(), "不存在 → 空");
+        assert!(
+            m.read_cluster("不存在簇").unwrap().is_empty(),
+            "不存在 → 空"
+        );
         m.create_file("思考簇", "第一条").unwrap();
         m.create_file("思考簇", "第二条").unwrap();
         std::fs::write(root.join("思考簇").join("README.md"), "手册").unwrap();
         std::fs::write(root.join("思考簇").join("ignore.bin"), "非文本").unwrap();
         let files = m.read_cluster("思考簇").unwrap();
         let names: Vec<_> = files.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, vec!["2026-08-16-001.md", "2026-08-16-002.md", "README.md"]);
+        assert_eq!(
+            names,
+            vec!["2026-08-16-001.md", "2026-08-16-002.md", "README.md"]
+        );
         // 空簇 (目录在但无文件)
         std::fs::create_dir_all(root.join("空簇")).unwrap();
         assert!(m.read_cluster("空簇").unwrap().is_empty());
@@ -390,11 +444,17 @@ mod tests {
         m.create_file("前思维簇", "前置思考链内容").unwrap();
         m.create_file("后思维簇", "后置思考链内容").unwrap();
         // 注册时乱序 + 重复 → 落盘排序去重 (确定)
-        m.register_chain("coding", &["后思维簇".into(), "前思维簇".into(), "后思维簇".into()])
-            .unwrap();
+        m.register_chain(
+            "coding",
+            &["后思维簇".into(), "前思维簇".into(), "后思维簇".into()],
+        )
+        .unwrap();
         let files = m.read_chain("coding").unwrap();
         let names: Vec<_> = files.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, vec!["前思维簇/2026-08-16-001.md", "后思维簇/2026-08-16-001.md"]);
+        assert_eq!(
+            names,
+            vec!["前思维簇/2026-08-16-001.md", "后思维簇/2026-08-16-001.md"]
+        );
         // 链不存在 → 空; 非法簇名入链 → Err; 空链名 → Err
         assert!(m.read_chain("nope").unwrap().is_empty());
         assert!(m.register_chain("bad", &["无后缀".into()]).is_err());
@@ -406,10 +466,13 @@ mod tests {
     fn edit_file_replaces_first_occurrence_across_clusters() {
         let root = temp_root();
         let m = mgr(&root);
-        m.create_file("甲簇", "旧思考内容甲，一共十五个字以上。").unwrap();
+        m.create_file("甲簇", "旧思考内容甲，一共十五个字以上。")
+            .unwrap();
         m.create_file("乙簇", "无关内容").unwrap();
         let target = "旧思考内容甲，一共十五个字以上。";
-        let path = m.edit_file(None, target, "新思考内容甲（已修订）。").unwrap();
+        let path = m
+            .edit_file(None, target, "新思考内容甲（已修订）。")
+            .unwrap();
         assert!(path.starts_with(root.join("甲簇")));
         let edited = std::fs::read_to_string(&path).unwrap();
         assert!(edited.contains("新思考内容甲（已修订）。"));
@@ -445,7 +508,8 @@ mod tests {
     fn reader_trait_impl_matches_manager() {
         let root = temp_root();
         let m = mgr(&root);
-        let r: Arc<dyn ThoughtClusterReader> = Arc::new(ThoughtClusterManager::new(root.clone(), Arc::new(vclock())));
+        let r: Arc<dyn ThoughtClusterReader> =
+            Arc::new(ThoughtClusterManager::new(root.clone(), Arc::new(vclock())));
         m.create_file("思簇", "思考一条").unwrap();
         m.register_chain("c", &["思簇".into()]).unwrap();
         assert_eq!(r.clusters(), vec!["思簇".to_string()]);

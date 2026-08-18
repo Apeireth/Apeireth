@@ -209,12 +209,11 @@ impl TextualSimulator {
 
         // 3. oracle 历史校准 (若配置): 高 mean_brier → 拒绝整条链.
         if let Some(cal) = &self.calibrator {
-            let status = cal
-                .status()
-                .map_err(|e| format!("oracle 校准失败: {e}"))?;
+            let status = cal.status().map_err(|e| format!("oracle 校准失败: {e}"))?;
             if status.resolved_count > 0 && status.mean_brier > self.reject_threshold {
                 chain.rejected = true;
-                chain.reject_reason = Some(format!(
+                chain.reject_reason =
+                    Some(format!(
                     "oracle 历史 Brier {:.3} > 阈值 {:.3} ({n} 次对账, LLM 历史偏倚 → 本次拒绝)",
                     status.mean_brier, self.reject_threshold, n = status.resolved_count,
                 ));
@@ -295,8 +294,8 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
-    use apeireth_memory::SqliteMemoryStore;
     use apeireth_memory::EpisodeStore;
+    use apeireth_memory::SqliteMemoryStore;
 
     use crate::oracle::{Entity, WorldState};
 
@@ -305,10 +304,7 @@ mod tests {
             entities: vec![Entity {
                 id: "master".into(),
                 name: "主人".into(),
-                props: HashMap::from([
-                    ("进度".into(), 0.3f64),
-                    ("焦虑".into(), 0.6f64),
-                ]),
+                props: HashMap::from([("进度".into(), 0.3f64), ("焦虑".into(), 0.6f64)]),
             }],
             tick: 0,
         }
@@ -324,10 +320,7 @@ mod tests {
                     entities: vec![Entity {
                         id: "master".into(),
                         name: "主人".into(),
-                        props: HashMap::from([(
-                            "进度".into(),
-                            0.3 + (i as f64) * 0.1,
-                        )]),
+                        props: HashMap::from([("进度".into(), 0.3 + (i as f64) * 0.1)]),
                     }],
                     tick: (i + 1) as u64,
                 },
@@ -343,10 +336,7 @@ mod tests {
     async fn textual_simulator_generates_chain() {
         let llm = mock_with_steps(3, 0.7);
         let sim = TextualSimulator::new(llm);
-        let chain = sim
-            .run(start_state(), "如果主人今晚熬夜...")
-            .await
-            .unwrap();
+        let chain = sim.run(start_state(), "如果主人今晚熬夜...").await.unwrap();
 
         // 验收点 1: 推演链生成
         assert_eq!(chain.step_count(), 3, "mock 3 步脚本 → chain 3 步");
@@ -356,7 +346,10 @@ mod tests {
         );
         assert!(!chain.rejected, "p=0.7 未超阈值, 不应拒绝");
         assert!(chain.reject_reason.is_none());
-        assert!(chain.calibration_brier.is_none(), "未 calibrate, Brier 留 None");
+        assert!(
+            chain.calibration_brier.is_none(),
+            "未 calibrate, Brier 留 None"
+        );
 
         // 叙事从第 1 步起累积
         assert!(chain.steps[0].narrative.contains("第 1 步"));
@@ -370,9 +363,7 @@ mod tests {
         let llm = mock_with_steps(3, 0.7);
         let sim = TextualSimulator::new(llm);
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut chain = rt.block_on(async {
-            sim.run(start_state(), "test").await.unwrap()
-        });
+        let mut chain = rt.block_on(async { sim.run(start_state(), "test").await.unwrap() });
 
         // outcome = true → Brier = (0.7 - 1)² = 0.09
         sim.calibrate(&mut chain, true).unwrap();
@@ -386,9 +377,7 @@ mod tests {
         // outcome = false → Brier = 0.7² = 0.49
         let llm2 = mock_with_steps(2, 0.7);
         let sim2 = TextualSimulator::new(llm2);
-        let mut chain2 = rt.block_on(async {
-            sim2.run(start_state(), "test2").await.unwrap()
-        });
+        let mut chain2 = rt.block_on(async { sim2.run(start_state(), "test2").await.unwrap() });
         sim2.calibrate(&mut chain2, false).unwrap();
         let brier_false = chain2.calibration_brier.unwrap();
         assert!(
@@ -403,9 +392,7 @@ mod tests {
         let llm = mock_with_steps(2, 0.9);
         let sim = TextualSimulator::new(llm).with_threshold(0.3);
         let rt = tokio::runtime::Runtime::new().unwrap();
-        let mut chain = rt.block_on(async {
-            sim.run(start_state(), "test").await.unwrap()
-        });
+        let mut chain = rt.block_on(async { sim.run(start_state(), "test").await.unwrap() });
 
         // p=0.9, actual=false → Brier = 0.9² = 0.81 > 0.3 → 拒绝
         sim.calibrate(&mut chain, false).unwrap();
@@ -415,10 +402,7 @@ mod tests {
             "p=0.9, actual=false → Brier=0.81 (got {brier})"
         );
         assert!(chain.rejected, "Brier=0.81 > 阈值 0.3 → rejected=true");
-        let reason = chain
-            .reject_reason
-            .as_ref()
-            .expect("拒绝时必须有原因");
+        let reason = chain.reject_reason.as_ref().expect("拒绝时必须有原因");
         assert!(
             reason.contains("Brier") && reason.contains("0.3"),
             "拒绝原因应含 Brier + 阈值: {reason}"
@@ -437,10 +421,7 @@ mod tests {
 
         let llm = mock_with_steps(3, 0.7);
         let sim = TextualSimulator::new(llm);
-        let chain = sim
-            .run(start_state(), "如果主人今晚熬夜...")
-            .await
-            .unwrap();
+        let chain = sim.run(start_state(), "如果主人今晚熬夜...").await.unwrap();
         // calibrate 也不入库 (校验用)
         let mut chain = chain;
         sim.calibrate(&mut chain, true).unwrap();

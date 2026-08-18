@@ -146,7 +146,10 @@ pub struct ReflexionStore {
 impl ReflexionStore {
     /// root = 反思根目录 (如 `<memory_path>/reflexion`); critic 注入 (可换 LLM 版).
     pub fn new(root: impl Into<PathBuf>, critic: Arc<dyn Critic>) -> Self {
-        Self { root: root.into(), critic }
+        Self {
+            root: root.into(),
+            critic,
+        }
     }
 
     /// 默认确定性规则版 CRITIC 便捷构造.
@@ -326,9 +329,27 @@ mod tests {
     fn record_failure_registers_three_kinds_and_persists() {
         let root = tmp_root();
         let store = ReflexionStore::with_rule_critic(&root);
-        let s0 = store.record_failure(FailureKind::DecisionRejected, "deploy", "方案被否: 未给回滚预案").unwrap();
-        let s1 = store.record_failure(FailureKind::ValidationFailed, "deploy", "验收第 3 项断言失败").unwrap();
-        let s2 = store.record_failure(FailureKind::ExperienceFailed, "refactor", "旧迁移经验不适用新 schema").unwrap();
+        let s0 = store
+            .record_failure(
+                FailureKind::DecisionRejected,
+                "deploy",
+                "方案被否: 未给回滚预案",
+            )
+            .unwrap();
+        let s1 = store
+            .record_failure(
+                FailureKind::ValidationFailed,
+                "deploy",
+                "验收第 3 项断言失败",
+            )
+            .unwrap();
+        let s2 = store
+            .record_failure(
+                FailureKind::ExperienceFailed,
+                "refactor",
+                "旧迁移经验不适用新 schema",
+            )
+            .unwrap();
         assert_eq!((s0, s1, s2), (0, 1, 2), "seq 按到达序分配");
         // 新实例重读 → 持久化成立
         let store2 = ReflexionStore::with_rule_critic(&root);
@@ -337,8 +358,12 @@ mod tests {
         assert_eq!(fs[1].kind, FailureKind::ValidationFailed);
         assert_eq!(fs[2].task_type, "refactor");
         // 空输入显式拒绝
-        assert!(store.record_failure(FailureKind::ValidationFailed, "", "x").is_err());
-        assert!(store.record_failure(FailureKind::ValidationFailed, "t", "  ").is_err());
+        assert!(store
+            .record_failure(FailureKind::ValidationFailed, "", "x")
+            .is_err());
+        assert!(store
+            .record_failure(FailureKind::ValidationFailed, "t", "  ")
+            .is_err());
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -346,17 +371,31 @@ mod tests {
     fn critic_step_generates_structured_reflections_once() {
         let root = tmp_root();
         let store = ReflexionStore::with_rule_critic(&root);
-        store.record_failure(FailureKind::ValidationFailed, "deploy", "测试红: 超时断言").unwrap();
-        store.record_failure(FailureKind::ExperienceFailed, "deploy", "缓存经验不适配").unwrap();
+        store
+            .record_failure(FailureKind::ValidationFailed, "deploy", "测试红: 超时断言")
+            .unwrap();
+        store
+            .record_failure(FailureKind::ExperienceFailed, "deploy", "缓存经验不适配")
+            .unwrap();
         assert_eq!(store.critic_step().unwrap(), 2, "首次反思两条");
         assert_eq!(store.critic_step().unwrap(), 0, "无未反思记录 → 0 (幂等)");
         let rs = store.reflections();
         assert_eq!(rs.len(), 2);
-        assert!(rs[0].text.contains("验证失败"), "反思含类型标签: {}", rs[0].text);
-        assert!(rs[0].text.contains("task_type=deploy"), "反思含任务类型: {}", rs[0].text);
+        assert!(
+            rs[0].text.contains("验证失败"),
+            "反思含类型标签: {}",
+            rs[0].text
+        );
+        assert!(
+            rs[0].text.contains("task_type=deploy"),
+            "反思含任务类型: {}",
+            rs[0].text
+        );
         assert!(rs[0].text.contains("重试策略"), "反思含重试策略段");
         // 新增失败 → 增量反思
-        store.record_failure(FailureKind::DecisionRejected, "deploy", "被否: 依据不足").unwrap();
+        store
+            .record_failure(FailureKind::DecisionRejected, "deploy", "被否: 依据不足")
+            .unwrap();
         assert_eq!(store.critic_step().unwrap(), 1, "增量反思一条");
         assert_eq!(store.reflections().len(), 3);
         let _ = std::fs::remove_dir_all(&root);
@@ -366,9 +405,15 @@ mod tests {
     fn retry_injection_prefers_exact_and_truncates_by_budget() {
         let root = tmp_root();
         let store = ReflexionStore::with_rule_critic(&root);
-        store.record_failure(FailureKind::ValidationFailed, "deploy-flow", "子串相关经验").unwrap();
-        store.record_failure(FailureKind::DecisionRejected, "deploy", "精确相关经验").unwrap();
-        store.record_failure(FailureKind::ExperienceFailed, "cooking", "无关经验").unwrap();
+        store
+            .record_failure(FailureKind::ValidationFailed, "deploy-flow", "子串相关经验")
+            .unwrap();
+        store
+            .record_failure(FailureKind::DecisionRejected, "deploy", "精确相关经验")
+            .unwrap();
+        store
+            .record_failure(FailureKind::ExperienceFailed, "cooking", "无关经验")
+            .unwrap();
         store.critic_step().unwrap();
         let full = store.retry_injection("deploy", 2000);
         assert!(full.starts_with("【反思强化】"), "块头: {full}");
@@ -382,7 +427,11 @@ mod tests {
         // 预算截断
         let cut = store.retry_injection("deploy", 240);
         assert!(cut.contains(TRUNCATION_MARK), "预算不足应有截断标记: {cut}");
-        assert!(cut.chars().count() <= 240, "预算硬上限: {}", cut.chars().count());
+        assert!(
+            cut.chars().count() <= 240,
+            "预算硬上限: {}",
+            cut.chars().count()
+        );
         // 预算过小 → 空串诚实降级
         assert!(store.retry_injection("deploy", 20).is_empty());
         let _ = std::fs::remove_dir_all(&root);
@@ -395,8 +444,14 @@ mod tests {
         assert!(store.failures().is_empty());
         assert!(store.reflections().is_empty());
         assert_eq!(store.critic_step().unwrap(), 0, "空失败 → 反思 0 条");
-        assert!(store.retry_injection("deploy", 500).is_empty(), "空记忆 → 注入空串");
-        assert!(store.retry_injection("", 500).is_empty(), "空 task_type → 空串");
+        assert!(
+            store.retry_injection("deploy", 500).is_empty(),
+            "空记忆 → 注入空串"
+        );
+        assert!(
+            store.retry_injection("", 500).is_empty(),
+            "空 task_type → 空串"
+        );
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -417,8 +472,10 @@ mod tests {
         let (r1, r2) = (tmp_root(), tmp_root());
         for root in [&r1, &r2] {
             let s = ReflexionStore::with_rule_critic(root);
-            s.record_failure(FailureKind::DecisionRejected, "deploy", "输入甲").unwrap();
-            s.record_failure(FailureKind::ExperienceFailed, "deploy-x", "输入乙").unwrap();
+            s.record_failure(FailureKind::DecisionRejected, "deploy", "输入甲")
+                .unwrap();
+            s.record_failure(FailureKind::ExperienceFailed, "deploy-x", "输入乙")
+                .unwrap();
             s.critic_step().unwrap();
         }
         let s1 = ReflexionStore::with_rule_critic(&r1);
@@ -429,7 +486,10 @@ mod tests {
             "同操作序列同输出"
         );
         for _ in 0..3 {
-            assert_eq!(s1.retry_injection("deploy", 1000), s1.retry_injection("deploy", 1000));
+            assert_eq!(
+                s1.retry_injection("deploy", 1000),
+                s1.retry_injection("deploy", 1000)
+            );
         }
         let _ = std::fs::remove_dir_all(&r1);
         let _ = std::fs::remove_dir_all(&r2);

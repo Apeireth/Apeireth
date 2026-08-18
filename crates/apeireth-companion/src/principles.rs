@@ -68,7 +68,9 @@ impl PrincipleStore {
     pub fn new(store: Arc<SqliteMemoryStore>) -> Self {
         Self {
             store,
-            master_token: std::env::var("APEIRETH_MASTER_TOKEN").ok().filter(|s| !s.is_empty()),
+            master_token: std::env::var("APEIRETH_MASTER_TOKEN")
+                .ok()
+                .filter(|s| !s.is_empty()),
         }
     }
 
@@ -95,7 +97,8 @@ impl PrincipleStore {
     /// 列出原则 (按 chain 去重取最新版; status 过滤可选).
     pub fn list(&self, status: Option<&str>) -> Vec<DynamicPrinciple> {
         let eps = self.store.recent_episodes("me", 500).unwrap_or_default();
-        let mut by_chain: std::collections::HashMap<String, DynamicPrinciple> = std::collections::HashMap::new();
+        let mut by_chain: std::collections::HashMap<String, DynamicPrinciple> =
+            std::collections::HashMap::new();
         for p in eps
             .iter()
             .filter(|e| e.id.starts_with("princ-"))
@@ -116,7 +119,12 @@ impl PrincipleStore {
     }
 
     /// AI 提案原则候选 (pending; 需主人批准才生效).
-    pub fn propose(&self, statement: &str, rationale: &str, source: &str) -> Result<DynamicPrinciple, String> {
+    pub fn propose(
+        &self,
+        statement: &str,
+        rationale: &str,
+        source: &str,
+    ) -> Result<DynamicPrinciple, String> {
         let now = chrono::Utc::now().timestamp();
         let id = format!("princ-{}", uuid::Uuid::new_v4());
         let p = DynamicPrinciple {
@@ -140,11 +148,14 @@ impl PrincipleStore {
 
     /// 主人批准 (master token 比对; 不落日志).
     /// append-only 语义: 状态变更 = 新 id + 同 chain.
-    pub fn approve(&self, chain_or_id: &str, master_token: &str) -> Result<DynamicPrinciple, String> {
-        let expected = self
-            .master_token
-            .as_deref()
-            .ok_or_else(|| "serve 未配置 APEIRETH_MASTER_TOKEN, 无法批准 (主人侧设置)".to_string())?;
+    pub fn approve(
+        &self,
+        chain_or_id: &str,
+        master_token: &str,
+    ) -> Result<DynamicPrinciple, String> {
+        let expected = self.master_token.as_deref().ok_or_else(|| {
+            "serve 未配置 APEIRETH_MASTER_TOKEN, 无法批准 (主人侧设置)".to_string()
+        })?;
         if master_token != expected {
             return Err("master token 不匹配 (主人批准权在主人手里)".to_string());
         }
@@ -181,12 +192,11 @@ impl PrincipleStore {
     /// 记录违反 (active 原则被命中 → violations++; append-only: 新 id + 同 chain).
     pub fn record_violation(&self, chain_or_id: &str) {
         let mut list = self.list(None);
-        let idx = match list
+        let Some(idx) = list
             .iter()
             .position(|p| p.chain == chain_or_id || p.id == chain_or_id)
-        {
-            Some(i) => i,
-            None => return,
+        else {
+            return;
         };
         let mut p = list.swap_remove(idx);
         p.violations += 1;
@@ -216,7 +226,9 @@ impl PrincipleStore {
             return String::new();
         }
         let mut s = String::from("# 原则晋级候选 (Level 3 → 洋葱内层)\n\n");
-        s.push_str("> 以下动态原则长期生效且零违反。内层写入是主人侧工程动作; 本文件是候选清单。\n\n");
+        s.push_str(
+            "> 以下动态原则长期生效且零违反。内层写入是主人侧工程动作; 本文件是候选清单。\n\n",
+        );
         for c in cands {
             s.push_str(&format!(
                 "## {}\n- 准则: {}\n- 理由: {}\n- 来源: {}\n- 生效 {} 天, 违反 0 次\n- 建议: 加入 constitution_gate RULES / judicator CONSTITUTION / 13 键扩展 (主人拍板)\n\n",
@@ -254,9 +266,24 @@ impl apeireth_tool_registry::Tool for ProposePrincipleTool {
         apeireth_tool_registry::ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let statement = args.get("statement").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let rationale = args.get("rationale").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let source = args.get("source").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let statement = args
+            .get("statement")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let rationale = args
+            .get("rationale")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let source = args
+            .get("source")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let store = PrincipleStore::new(Arc::clone(&self.store));
         let p = store.propose(&statement, &rationale, &source)?;
         Ok(json!({
@@ -289,8 +316,18 @@ impl apeireth_tool_registry::Tool for ApprovePrincipleTool {
         apeireth_tool_registry::ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let token = args.get("master_token").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let token = args
+            .get("master_token")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
         let store = PrincipleStore::new(Arc::clone(&self.store));
         let p = store.approve(&id, &token)?;
         Ok(json!({
@@ -306,7 +343,7 @@ impl apeireth_tool_registry::Tool for ApprovePrincipleTool {
 fn constant_time_eq(expected: &str, provided: &str) -> bool {
     let e = expected.as_bytes();
     let p = provided.as_bytes();
-    let mut acc = (e.len() != p.len()) as u8;
+    let mut acc = u8::from(e.len() != p.len());
     for (i, b) in e.iter().enumerate() {
         acc |= b ^ p.get(i).copied().unwrap_or(0);
     }
@@ -325,7 +362,9 @@ mod tests {
     #[test]
     fn propose_approve_lifecycle() {
         let s = PrincipleStore::with_master_token(store(), "secret-1");
-        let p = s.propose("不假装任务完成", "PHL-01 哲学键的运行时延伸", "exp-1").unwrap();
+        let p = s
+            .propose("不假装任务完成", "PHL-01 哲学键的运行时延伸", "exp-1")
+            .unwrap();
         assert_eq!(p.status, "pending");
         // 无 token 配置的 store → 拒绝
         let s2 = PrincipleStore::new(store());
@@ -343,7 +382,9 @@ mod tests {
     #[test]
     fn dynamic_rule_blocks_and_counts_violation() {
         let s = PrincipleStore::with_master_token(store(), "t");
-        let p = s.propose("假装测试通过", "0 装 PASS 延伸", "exp-2").unwrap();
+        let p = s
+            .propose("假装测试通过", "0 装 PASS 延伸", "exp-2")
+            .unwrap();
         s.approve(&p.id, "t").unwrap();
         let rules = s.active_rules();
         // 命中 → 拦截
@@ -362,11 +403,16 @@ mod tests {
     #[test]
     fn zero_violation_promotes_candidate() {
         let s = PrincipleStore::with_master_token(store(), "t");
-        let p = s.propose("给主人的提醒要具体", "陪伴质量延伸", "exp-3").unwrap();
+        let p = s
+            .propose("给主人的提醒要具体", "陪伴质量延伸", "exp-3")
+            .unwrap();
         s.approve(&p.id, "t").unwrap();
         let cands = s.promotion_candidates();
         assert_eq!(cands.len(), 1);
-        assert_eq!(cands[0].principle.chain, p.id, "chain 是逻辑原则标识 (id 会随版本变化)");
+        assert_eq!(
+            cands[0].principle.chain, p.id,
+            "chain 是逻辑原则标识 (id 会随版本变化)"
+        );
         let export = s.export_promotion();
         assert!(export.contains("主人侧工程动作"));
         assert!(export.contains(&p.statement));
@@ -378,18 +424,32 @@ mod tests {
         std::env::set_var("APEIRETH_MASTER_TOKEN", "tok");
         let st = store();
         let propose = ProposePrincipleTool::new(Arc::clone(&st));
-        let r = propose.call(json!({"statement": "不编造记忆内容", "rationale": "EMI 延伸", "source": "exp-x"})).await.unwrap();
+        let r = propose
+            .call(
+                json!({"statement": "不编造记忆内容", "rationale": "EMI 延伸", "source": "exp-x"}),
+            )
+            .await
+            .unwrap();
         let id = r["id"].as_str().unwrap().to_string();
         assert_eq!(r["status"], json!("pending"));
         // 错误 token → 拒绝
         let approve = ApprovePrincipleTool::new(Arc::clone(&st));
-        assert!(approve.call(json!({"id": id, "master_token": "x"})).await.is_err());
+        assert!(approve
+            .call(json!({"id": id, "master_token": "x"}))
+            .await
+            .is_err());
         // 正确 token → 生效
-        let ok = approve.call(json!({"id": id, "master_token": "tok"})).await.unwrap();
+        let ok = approve
+            .call(json!({"id": id, "master_token": "tok"}))
+            .await
+            .unwrap();
         assert_eq!(ok["status"], json!("active"));
         std::env::remove_var("APEIRETH_MASTER_TOKEN");
         // 空 statement 拒绝
-        assert!(propose.call(json!({"statement": "", "rationale": "x", "source": "y"})).await.is_err());
+        assert!(propose
+            .call(json!({"statement": "", "rationale": "x", "source": "y"}))
+            .await
+            .is_err());
     }
 
     // ===== S7: constant-time token 比较 =====

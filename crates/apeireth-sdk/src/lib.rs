@@ -79,8 +79,8 @@
 
 pub mod abi;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod error;
+mod organ_kani_proofs;
 pub mod version;
 pub mod wire;
 // R20 阶段 6: 1.0 release #13 sdk — 客户 SDK client stub (per 蓝图 §3.5)
@@ -92,11 +92,11 @@ pub mod client;
 // per lib.rs §A O-5 段尾 R122-8 段 + R119 8 项形式撤销后 R122 路线图新决策
 // 注: 3 个 mod 无 file-level cfg-gate, 0 启用 feature 时 fn cfg-gate 0 编
 //     (允许 cbindgen 0.26 在 build.rs 看到 fn 生成 .h, cargo build 0 link)
-#[cfg(feature = "python")]
-pub mod python;
+pub mod c;
 #[cfg(feature = "node")]
 pub mod node;
-pub mod c;
+#[cfg(feature = "python")]
+pub mod python;
 
 // ============================================================================
 // §A 顶层 re-export (4 类核心类型, 让客户用 `apeireth_sdk::Type` 即可)
@@ -109,10 +109,10 @@ pub use wire::{Envelope, WireKind};
 // R20 阶段 6: 客户 SDK client 公共 API 顶层 re-export
 // (per 任务稿 "8 TOOL_WHITELIST + 4 K-1 强校验", 公开 method 名字面量必含 'apeireth_sdk_' 前缀)
 pub use client::{
-    ApeirethClient, AuthPipeline, AuditEntry, AuditLogger, ClientConfig, KeyringRef, QuotaStub,
-    SdkClientError, TokenBucket, MUST_DO_INVOKE, PLATFORM_NAME, SDK_TOOL_WHITELIST,
-    SDK_TOOL_WHITELIST_COUNT, STUB_MODE, TOOL_PATHS, TOOL_WHITELIST, WS_PATH,
-    validate_sdk_method, validate_tool_call,
+    validate_sdk_method, validate_tool_call, ApeirethClient, AuditEntry, AuditLogger, AuthPipeline,
+    ClientConfig, KeyringRef, QuotaStub, SdkClientError, TokenBucket, MUST_DO_INVOKE,
+    PLATFORM_NAME, SDK_TOOL_WHITELIST, SDK_TOOL_WHITELIST_COUNT, STUB_MODE, TOOL_PATHS,
+    TOOL_WHITELIST, WS_PATH,
 };
 
 // ============================================================================
@@ -190,7 +190,6 @@ const _MODULE_COUNT: usize = {
     count
 };
 
-
 // ============================================================================
 // §E 跨语言 WireFormat 兼容表 (Python / Node / Go / Rust 客户期望一致)
 // ============================================================================
@@ -252,14 +251,11 @@ const _MODULE_COUNT: usize = {
 // */
 // **不漂移**: 错误码表变更是 breaking change, 必走 RFC + 跨 4 语言同时更新.
 
-
-
 // ============================================================================
 // §G 跨语言 WireFormat RFC 流程 (per 8 项承诺 #1 + #6)
 // ============================================================================
 //
 // **背景**: R25 纯 Rust 重写后, 4 语言 (Python / Node / Go / Rust) 客户仍期望
-
 
 // =============================================================================
 // R146: 5 SDK -> 1 apeireth-sdk (feature flags)
@@ -278,13 +274,26 @@ pub mod sandbox;
 pub mod voice;
 
 // 编译期 feature 守门 (per [11-baseline.md] R11 baseline)
-#[cfg(any(feature = "lark", feature = "livekit", feature = "sandbox", feature = "voice"))]
+#[cfg(any(
+    feature = "lark",
+    feature = "livekit",
+    feature = "sandbox",
+    feature = "voice"
+))]
 pub const SDK_SUBMODULES_ENABLED: usize = {
     let mut n = 0;
-    if cfg!(feature = "lark") { n += 1; }
-    if cfg!(feature = "livekit") { n += 1; }
-    if cfg!(feature = "sandbox") { n += 1; }
-    if cfg!(feature = "voice") { n += 1; }
+    if cfg!(feature = "lark") {
+        n += 1;
+    }
+    if cfg!(feature = "livekit") {
+        n += 1;
+    }
+    if cfg!(feature = "sandbox") {
+        n += 1;
+    }
+    if cfg!(feature = "voice") {
+        n += 1;
+    }
     n
 };
 

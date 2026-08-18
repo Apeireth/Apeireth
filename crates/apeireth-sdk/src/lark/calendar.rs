@@ -22,7 +22,7 @@ use std::time::SystemTime;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 EventStatus (5 variant, 1:1 翻译 v0.9.21 商业版)
@@ -162,9 +162,7 @@ impl CalendarEvent {
             return Err(LarkError::Other("summary is empty".to_string()));
         }
         if self.end_time <= self.start_time {
-            return Err(LarkError::Other(format!(
-                "end_time must be > start_time"
-            )));
+            return Err(LarkError::Other(format!("end_time must be > start_time")));
         }
         for attendee in &self.attendees {
             LarkError::validate_open_id(attendee)?;
@@ -205,7 +203,9 @@ impl CalendarEventQuery {
             return Err(LarkError::Other("calendar_id is empty".to_string()));
         }
         if self.end_time <= self.start_time {
-            return Err(LarkError::Other("end_time must be > start_time".to_string()));
+            return Err(LarkError::Other(
+                "end_time must be > start_time".to_string(),
+            ));
         }
         if self.page_size == 0 || self.page_size > 1000 {
             return Err(LarkError::Other(format!(

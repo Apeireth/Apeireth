@@ -100,7 +100,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn state_returns_body_state_with_8_fields() {
         let s = state();
         assert_eq!(s.pid, PLACEHOLDER_PID);

@@ -48,17 +48,18 @@ impl RuntimeBrain {
     /// 主人消息进来: 情绪基线记录 (确定性文本启发式) + 回声喂好奇.
     pub fn on_message(&self, text: &str) {
         let valence = heuristic_valence(text);
-        self.emotions
-            .lock()
-            .unwrap()
-            .record(MoodRecord::new(valence, 0.3, MoodSource::TextSignal, "对话进行中"));
+        self.emotions.lock().unwrap().record(MoodRecord::new(
+            valence,
+            0.3,
+            MoodSource::TextSignal,
+            "对话进行中",
+        ));
         // 话题回声: 取文本前 12 字作主题种子 (浅回声, 多轮积累才强)
         let topic: String = text.chars().take(12).collect();
-        self.curiosity.lock().unwrap().feed_echoes([Echo::new(
-            topic,
-            0.2,
-            EchoSource::Memory,
-        )]);
+        self.curiosity
+            .lock()
+            .unwrap()
+            .feed_echoes([Echo::new(topic, 0.2, EchoSource::Memory)]);
     }
 
     /// 主人显式情绪反馈 (F1 高置信来源).
@@ -101,7 +102,10 @@ impl RuntimeBrain {
     }
 
     /// 假设列表 (F4 输出).
-    pub fn hypotheses_list(&self, status: Option<HypothesisStatus>) -> Vec<crate::hypothesis::Hypothesis> {
+    pub fn hypotheses_list(
+        &self,
+        status: Option<HypothesisStatus>,
+    ) -> Vec<crate::hypothesis::Hypothesis> {
         self.hypotheses
             .lock()
             .unwrap()
@@ -121,9 +125,14 @@ impl RuntimeBrain {
 /// 0 装 PASS: 关键词/标点/长度, 不假装 LLM 情绪分析.
 pub fn heuristic_valence(text: &str) -> f64 {
     let t = text.to_lowercase();
-    let neg_words = ["烦", "累", "难过", "气", "讨厌", "糟糕", "崩溃", "焦虑", "失望", "sad", "tired", "angry", "hate"];
+    let neg_words = [
+        "烦", "累", "难过", "气", "讨厌", "糟糕", "崩溃", "焦虑", "失望", "sad", "tired", "angry",
+        "hate",
+    ];
     // 注意: 不用单字"好" — "好烦"里是程度副词, 误判积极 (启发式诚实: 宁缺勿错).
-    let pos_words = ["开心", "高兴", "棒", "爽", "爱", "喜欢", "顺利", "nice", "great", "happy", "love"];
+    let pos_words = [
+        "开心", "高兴", "棒", "爽", "爱", "喜欢", "顺利", "nice", "great", "happy", "love",
+    ];
     let mut v: f64 = 0.0;
     for w in neg_words {
         if t.contains(w) {
@@ -148,7 +157,11 @@ mod tests {
     use crate::hypothesis::EvidenceSource;
 
     fn brain() -> RuntimeBrain {
-        RuntimeBrain::new(CuriosityConfig::default(), HypothesisConfig::default(), vec![])
+        RuntimeBrain::new(
+            CuriosityConfig::default(),
+            HypothesisConfig::default(),
+            vec![],
+        )
     }
 
     #[test]
@@ -159,7 +172,13 @@ mod tests {
         assert!(mood.valence < -0.2, "负面文本 → 负 valence: {:?}", mood);
         assert!(mood.sample_count >= 1);
         // 回声已喂 (主题 = 前 12 字)
-        assert!(b.curiosity.lock().unwrap().echo_of("我今天好烦，项目又黄了") > 0.0);
+        assert!(
+            b.curiosity
+                .lock()
+                .unwrap()
+                .echo_of("我今天好烦，项目又黄了")
+                > 0.0
+        );
     }
 
     #[test]
@@ -186,11 +205,20 @@ mod tests {
         let h = b.conjecture("主人熬夜后效率低");
         assert_eq!(h.status, HypothesisStatus::Conjecture);
         b.hypotheses.lock().unwrap().start_verify(h.id).unwrap();
-        b.add_evidence(h.id, crate::hypothesis::Evidence::supporting(EvidenceSource::Observation, 1.2, "观察 7 次"))
-            .unwrap();
-        b.add_evidence(h.id, crate::hypothesis::Evidence::supporting(EvidenceSource::MasterAnswer, 1.0, "主人确认"))
-            .unwrap();
-        assert_eq!(b.hypotheses_list(None)[0].status, HypothesisStatus::Confirmed);
+        b.add_evidence(
+            h.id,
+            crate::hypothesis::Evidence::supporting(EvidenceSource::Observation, 1.2, "观察 7 次"),
+        )
+        .unwrap();
+        b.add_evidence(
+            h.id,
+            crate::hypothesis::Evidence::supporting(EvidenceSource::MasterAnswer, 1.0, "主人确认"),
+        )
+        .unwrap();
+        assert_eq!(
+            b.hypotheses_list(None)[0].status,
+            HypothesisStatus::Confirmed
+        );
     }
 
     #[test]

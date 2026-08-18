@@ -413,9 +413,8 @@ impl Council {
         for (advisor, persona_session) in self.advisors.iter().zip(personas.iter_mut()) {
             // 多轮辩论
             while persona_session.can_debate() {
-                let outcome = match advisor.deliberate(&query, &mut ctx) {
-                    Ok(o) => o,
-                    Err(_) => continue,
+                let Ok(outcome) = advisor.deliberate(&query, &mut ctx) else {
+                    continue;
                 };
 
                 // Craft persona speech

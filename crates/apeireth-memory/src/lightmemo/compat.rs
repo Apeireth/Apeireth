@@ -23,12 +23,18 @@ impl LightMemoCommand {
 pub struct LightMemoCompatRouter;
 
 impl LightMemoCompatRouter {
-    pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { LIGHTMEMO_COMMAND_COUNT }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn command_count() -> usize {
+        LIGHTMEMO_COMMAND_COUNT
+    }
 }
 
 impl Default for LightMemoCompatRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -46,5 +52,7 @@ mod tests {
         assert_eq!(LightMemoCommand::from_str("xyz"), LightMemoCommand::Unknown);
     }
     #[test]
-    fn router_count() { assert_eq!(LightMemoCompatRouter::command_count(), 2); }
+    fn router_count() {
+        assert_eq!(LightMemoCompatRouter::command_count(), 2);
+    }
 }

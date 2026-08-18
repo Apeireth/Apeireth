@@ -23,8 +23,8 @@ use apeireth_api::protocol_handlers::{
 };
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_companion::daemon::{
-    CompanionDaemon, CompanionDelivery, ConsoleSink, LarkSink, ThrottledUtterance,
-    UtteranceGenerator, open_memory_store,
+    open_memory_store, CompanionDaemon, CompanionDelivery, ConsoleSink, LarkSink,
+    ThrottledUtterance, UtteranceGenerator,
 };
 use apeireth_companion::dream::{DreamScheduler, DreamSummarizer};
 use apeireth_companion::emergence::{Boundaries, Delivery, Initiative, LoopConfig};
@@ -70,7 +70,7 @@ impl DreamSummarizer for MiniMaxDreamSummarizer {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let content = ch.message.content.clone();
@@ -97,9 +97,8 @@ pub struct MiniMaxUtterance {
 
 impl MiniMaxUtterance {
     pub fn new(api_key: String) -> Result<Self, String> {
-        let pipeline = Arc::new(
-            build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.to_string())?,
-        );
+        let pipeline =
+            Arc::new(build_pipeline(BASE_URL.to_string(), Some(api_key)).map_err(|e| e.clone())?);
         Ok(Self { pipeline })
     }
 }
@@ -136,7 +135,7 @@ impl UtteranceGenerator for MiniMaxUtterance {
         let normalized = openai_chat_to_normalized(&req);
         let resp = dispatch(&self.pipeline, ProtocolKind::OpenAiChat, normalized)
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| e.clone())?;
         let chat_resp = openai_chat_from_normalized(&resp);
         for ch in &chat_resp.choices {
             let mut content = ch.message.content.clone();
@@ -235,7 +234,8 @@ async fn main() {
     if std::env::var("APEIRETH_DREAM").is_ok() {
         let summarizer = Arc::new(MiniMaxDreamSummarizer {
             pipeline: Arc::new(
-                build_pipeline(BASE_URL.to_string(), Some(load_key().expect("key"))).expect("pipeline"),
+                build_pipeline(BASE_URL.to_string(), Some(load_key().expect("key")))
+                    .expect("pipeline"),
             ),
         });
         let dream = DreamScheduler::new(Arc::clone(&store), apeireth_core::clock::system_clock())

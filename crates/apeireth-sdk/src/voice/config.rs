@@ -11,11 +11,11 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
-use crate::stt::SttModel;
-use crate::tts::TtsModel;
-use crate::vad::{VadAlgorithm, VadConfig};
-use crate::wake::{WakeWord, WakeWordCategory, VOICE_DEFAULT_WAKE_WORD};
+use crate::voice::error::{VoiceError, VoiceResult};
+use crate::voice::stt::SttModel;
+use crate::voice::tts::TtsModel;
+use crate::voice::vad::{VadAlgorithm, VadConfig};
+use crate::voice::wake::{WakeWord, WakeWordCategory, VOICE_DEFAULT_WAKE_WORD};
 
 // ============================================================================
 // §1 编译期 hardcode 常量
@@ -160,7 +160,10 @@ impl VoiceConfig {
     /// 检查默认唤醒词是 `"apeireth"` (per R20 设计拍板).
     pub fn is_default_apeireth(&self) -> bool {
         self.wake.category == WakeWordCategory::Hardcoded
-            && self.wake.keyword.eq_ignore_ascii_case(VOICE_DEFAULT_WAKE_WORD)
+            && self
+                .wake
+                .keyword
+                .eq_ignore_ascii_case(VOICE_DEFAULT_WAKE_WORD)
     }
 }
 
@@ -204,14 +207,8 @@ mod tests {
 
     #[test]
     fn k1_audio_config_custom_valid() {
-        let audio = AudioConfig::custom(
-            "mp3".to_string(),
-            44100,
-            16,
-            2,
-            "zh-CN".to_string(),
-        )
-        .expect("valid audio config");
+        let audio = AudioConfig::custom("mp3".to_string(), 44100, 16, 2, "zh-CN".to_string())
+            .expect("valid audio config");
         assert_eq!(audio.format, "mp3");
         assert_eq!(audio.sample_rate, 44100);
     }

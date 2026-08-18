@@ -16,7 +16,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{SandboxError, SandboxResult};
+use crate::sandbox::error::{SandboxError, SandboxResult};
 
 // ============================================================================
 // §1 编译期常量 (K-1 强校验)
@@ -370,11 +370,7 @@ mod tests {
     /// K-1 强校验 #2: 命令空拒绝.
     #[test]
     fn policy_k1_command_empty_rejected() {
-        let p = SecurityPolicy::new(
-            "docker.io/library/alpine:3.19",
-            vec![],
-            "apeireth",
-        );
+        let p = SecurityPolicy::new("docker.io/library/alpine:3.19", vec![], "apeireth");
         assert!(matches!(p.validate(), Err(SandboxError::InvalidCommand(_))));
     }
 
@@ -383,7 +379,11 @@ mod tests {
     fn policy_k1_command_shell_injection_rejected() {
         let p = SecurityPolicy::new(
             "docker.io/library/alpine:3.19",
-            vec!["/bin/sh".to_string(), "-c".to_string(), "echo; rm -rf /".to_string()],
+            vec![
+                "/bin/sh".to_string(),
+                "-c".to_string(),
+                "echo; rm -rf /".to_string(),
+            ],
             "apeireth",
         );
         assert!(matches!(p.validate(), Err(SandboxError::InvalidCommand(_))));
@@ -419,7 +419,8 @@ mod tests {
             vec!["/bin/sh".to_string()],
             "apeireth",
         );
-        p.env.insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
+        p.env
+            .insert("LD_PRELOAD".to_string(), "/tmp/evil.so".to_string());
         assert!(matches!(p.validate(), Err(SandboxError::InvalidConfig(_))));
     }
 

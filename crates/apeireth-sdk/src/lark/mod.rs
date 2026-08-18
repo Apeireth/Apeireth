@@ -120,64 +120,63 @@ use tracing::info;
 
 // 注: 所有 4 实体 / 6 消息 / 5 鉴权 / 6 K-1 类型都通过下面的 `pub use` re-export 同时
 // 暴露给 crate 内部和外部. 不要重复 `use crate::X::Y` 避免 E0252 冲突.
-pub use crate::approval::{
+pub use crate::lark::approval::{
     ApprovalFormField, ApprovalInstance, ApprovalTask, InstanceStatus, TaskStatus,
     TASK_STATUS_COUNT, TASK_STATUS_PENDING,
 };
-pub use crate::auth::{
+pub use crate::lark::auth::{
     AppIdHolder, AppSecretHolder, TenantAccessToken, UserAccessToken, WebhookToken,
     DEFAULT_LARK_API_BASE, DEFAULT_TENANT_TOKEN_TTL_SECONDS, DEFAULT_USER_TOKEN_TTL_SECONDS,
     LARK_SCHEMA_VERSION, MAX_TOKEN_TTL_SECONDS, MIN_APP_ID_LENGTH, MIN_APP_SECRET_LENGTH,
     PLATFORM_NAME, PROVIDER_NAME, TYPICAL_APP_SECRET_LENGTH,
 };
-pub use crate::calendar::{CalendarEvent, CalendarEventQuery, EventStatus, FreeBusySlot};
-pub use crate::contact::{Department, User, UserIdType, UserQuery};
-pub use crate::doc::{BitableField, BitableMeta, Document, DocumentType, SheetMeta};
-pub use crate::error::{LarkError, LarkResult, LARK_ERROR_VARIANT_COUNT, tracing_warn_stub};
-pub use crate::message::{
-    CardContent, FileContent, ImageContent, InteractiveContent, Message, MessageType,
-    PostContent, PostElement, PostLocale, PostParagraph, ReceiveIdType, TextContent,
-    SUPPORTED_MESSAGE_TYPES,
+pub use crate::lark::calendar::{CalendarEvent, CalendarEventQuery, EventStatus, FreeBusySlot};
+pub use crate::lark::contact::{Department, User, UserIdType, UserQuery};
+pub use crate::lark::doc::{BitableField, BitableMeta, Document, DocumentType, SheetMeta};
+pub use crate::lark::error::{tracing_warn_stub, LarkError, LarkResult, LARK_ERROR_VARIANT_COUNT};
+pub use crate::lark::message::{
+    CardContent, FileContent, ImageContent, InteractiveContent, Message, MessageType, PostContent,
+    PostElement, PostLocale, PostParagraph, ReceiveIdType, TextContent, SUPPORTED_MESSAGE_TYPES,
 };
-pub use crate::webhook::{
-    verify_webhook_event as lark_verify_webhook, WebhookEvent, WebhookVerifyResult,
-    EventType as WebhookEventType,
+pub use crate::lark::webhook::{
+    verify_webhook_event as lark_verify_webhook, EventType as WebhookEventType, WebhookEvent,
+    WebhookVerifyResult,
 };
 
 // 兼容导出: Lark 前缀 alias (跟 livekit / sandbox 1:1 风格, 防跟外部 crate 冲突)
-pub use crate::approval::{
-    ApprovalInstance as LarkApprovalInstance, ApprovalTask as LarkApprovalTask,
-    ApprovalFormField as LarkApprovalFormField, InstanceStatus as LarkInstanceStatus,
+pub use crate::lark::approval::{
+    ApprovalFormField as LarkApprovalFormField, ApprovalInstance as LarkApprovalInstance,
+    ApprovalTask as LarkApprovalTask, InstanceStatus as LarkInstanceStatus,
     TaskStatus as LarkTaskStatus,
 };
-pub use crate::auth::{
+pub use crate::lark::auth::{
     AppIdHolder as LarkAppIdHolder, AppSecretHolder as LarkAppSecretHolder,
     TenantAccessToken as LarkTenantAccessToken, UserAccessToken as LarkUserAccessToken,
     WebhookToken as LarkWebhookToken,
 };
-pub use crate::calendar::{
+pub use crate::lark::calendar::{
     CalendarEvent as LarkCalendarEvent, CalendarEventQuery as LarkCalendarEventQuery,
     EventStatus as LarkEventStatus, FreeBusySlot as LarkFreeBusySlot,
 };
-pub use crate::contact::{
+pub use crate::lark::contact::{
     Department as LarkDepartment, User as LarkUser, UserQuery as LarkUserQuery,
 };
-pub use crate::doc::{
+pub use crate::lark::doc::{
     Document as LarkDocument, DocumentType as LarkDocumentType, SheetMeta as LarkSheetMeta,
 };
-pub use crate::error::{
+pub use crate::lark::error::{
     LarkError as LarkErrorReexport, LarkResult as LarkResultReexport,
     LARK_ERROR_VARIANT_COUNT as LARK_ERROR_COUNT,
 };
-pub use crate::message::{
-    Message as LarkMessage, MessageType as LarkMessageType,
-    ReceiveIdType as LarkReceiveIdType, TextContent as LarkTextContent,
-    PostContent as LarkPostContent, PostElement as LarkPostElement, PostLocale as LarkPostLocale,
-    PostParagraph as LarkPostParagraph, CardContent as LarkCardContent,
-    ImageContent as LarkImageContent, FileContent as LarkFileContent,
-    InteractiveContent as LarkInteractiveContent,
+pub use crate::lark::message::{
+    CardContent as LarkCardContent, FileContent as LarkFileContent,
+    ImageContent as LarkImageContent, InteractiveContent as LarkInteractiveContent,
+    Message as LarkMessage, MessageType as LarkMessageType, PostContent as LarkPostContent,
+    PostElement as LarkPostElement, PostLocale as LarkPostLocale,
+    PostParagraph as LarkPostParagraph, ReceiveIdType as LarkReceiveIdType,
+    TextContent as LarkTextContent,
 };
-pub use crate::webhook::{
+pub use crate::lark::webhook::{
     WebhookEvent as LarkWebhookEvent, WebhookVerifyResult as LarkWebhookVerifyResult,
 };
 
@@ -242,7 +241,10 @@ pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
-const _: () = assert!(STUB_MODE == true, "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)");
+const _: () = assert!(
+    STUB_MODE == true,
+    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)"
+);
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
 /// **R21+ 改 `STUB_MODE = false` 时, 本函数返 `false`**; 现阶段恒返 `true`.
@@ -554,9 +556,9 @@ impl LarkClientImpl {
 
 #[cfg(test)]
 mod tests {
-    use crate::*;
-    use crate::auth::WebhookToken;
-    use crate::message::{ReceiveIdType, TextContent};
+    use super::*;
+    use crate::lark::auth::WebhookToken;
+    use crate::lark::message::{ReceiveIdType, TextContent};
 
     /// 6 哲学锚 + 8 项承诺: STUB_MODE 必须为 true.
     #[test]
@@ -697,7 +699,7 @@ mod tests {
         let r = client.send_message(&msg).await;
         assert!(matches!(r, Err(LarkError::NotImplemented("send_message"))));
         let _ = text; // 防止 unused warning
-        // 2. list_calendar_events
+                      // 2. list_calendar_events
         use chrono::Utc;
         let query = CalendarEventQuery {
             calendar_id: "cal_xxx".to_string(),
@@ -712,11 +714,8 @@ mod tests {
             Err(LarkError::NotImplemented("list_calendar_events"))
         ));
         // 3. get_user
-        let query = UserQuery::new(
-            "ou_user1234567890abcdef".to_string(),
-            UserIdType::OpenId,
-        )
-        .expect("valid");
+        let query = UserQuery::new("ou_user1234567890abcdef".to_string(), UserIdType::OpenId)
+            .expect("valid");
         let r = client.get_user(&query).await;
         assert!(matches!(r, Err(LarkError::NotImplemented("get_user"))));
         // 4. get_department
@@ -744,7 +743,10 @@ mod tests {
             .expect("valid");
         let event = WebhookEvent::new_url_verification("challenge".to_string());
         let r = client.verify_webhook(&event, &wh_token).await;
-        assert!(matches!(r, Err(LarkError::NotImplemented("verify_webhook"))));
+        assert!(matches!(
+            r,
+            Err(LarkError::NotImplemented("verify_webhook"))
+        ));
     }
 
     /// 5 鉴权 演示 (per 任务规范 §3)
@@ -763,12 +765,9 @@ mod tests {
             .expect("valid");
         assert!(secret_holder.is_set());
         // 3. tenant_access_token
-        let t = TenantAccessToken::new(
-            "cli_a1b2c3d4e5f6".to_string(),
-            "t-abc123".to_string(),
-            7200,
-        )
-        .expect("valid");
+        let t =
+            TenantAccessToken::new("cli_a1b2c3d4e5f6".to_string(), "t-abc123".to_string(), 7200)
+                .expect("valid");
         assert!(!t.is_expired());
         // 4. user_access_token
         let u = UserAccessToken::new(
@@ -801,15 +800,11 @@ mod tests {
         use chrono::Utc;
         let start = Utc::now();
         let end = start + chrono::Duration::hours(1);
-        let event =
-            CalendarEvent::new("cal_xxx", "会议", start, end).expect("valid");
+        let event = CalendarEvent::new("cal_xxx", "会议", start, end).expect("valid");
         assert_eq!(event.summary, "会议");
         // 3. User
-        let user = User::new(
-            "ou_user1234567890abcdef".to_string(),
-            "Alice".to_string(),
-        )
-        .expect("valid");
+        let user =
+            User::new("ou_user1234567890abcdef".to_string(), "Alice".to_string()).expect("valid");
         assert_eq!(user.name, "Alice");
         // 4. Document
         let doc = Document::new_docx("title".to_string(), None).expect("valid");
@@ -844,3 +839,5 @@ mod tests {
         assert_eq!(meta.sheet_id, "sheet_001");
     }
 }
+
+use crate::lark_stub; // macro_export 宏在 crate 根 (定义在 error.rs), mod.rs 调用点需显式 use

@@ -48,8 +48,8 @@ pub mod dedup;
 pub mod hallways;
 mod session_note;
 mod streams;
-mod three_layer;  // R30 U9: claude-mem 3 层 facade
-// R19 P2 战区 4: 公开 user_profile 模块 (bench 后续可依赖)
+mod three_layer; // R30 U9: claude-mem 3 层 facade
+                 // R19 P2 战区 4: 公开 user_profile 模块 (bench 后续可依赖)
 #[cfg(feature = "semantic")]
 pub mod user_profile;
 
@@ -62,7 +62,7 @@ pub use episode::{EpisodeQuery, EpisodeStore};
 // TP24 (M5 + N25): 记忆来源链 + 时间元数据 (episodes 表的 4 列 V4 扩展).
 // 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
 pub mod provenance;
-pub use provenance::{normalize_meta, EpisodeMeta, Provenance, validate_meta};
+pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
 pub mod llm_analysis;
 pub use identity::{IdentityCardRecord, IdentityCardStore, IdentityConflict};
 pub use llm_analysis::{analyze_episode, AnalysisKind, AnalysisResult};
@@ -70,9 +70,9 @@ pub use migrations::{run_migrations, Migration as SchemaMigration, MIGRATIONS};
 // R19 P2 战区 4: 公开 EmbedFn / SemanticIndex / UserProfile / ProfileExtractor
 // (semantic + user_profile 模块是新文件, 0 触碰 LOCKED 9 文件)
 // 54ed4c7d: 纯件无条件导出; SemanticIndex/PersistentSemanticIndex/user_profile 挂 semantic feature
-pub use semantic::{EmbedFn, HashEmbedder, episode_uuid};
 #[cfg(feature = "semantic")]
 pub use semantic::SemanticIndex;
+pub use semantic::{episode_uuid, EmbedFn, HashEmbedder};
 // R19 P2 战区 4 续 (A-3): 公开 PersistentSemanticIndex (跨 daemon 长程索引)
 #[cfg(feature = "semantic")]
 pub use semantic_persist::PersistentSemanticIndex;
@@ -81,7 +81,7 @@ pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
 };
-pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY};  // R30 U9
+pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY}; // R30 U9
 #[cfg(feature = "semantic")]
 pub use user_profile::{ProfileEmbedder, ProfileExtractor, UserProfile};
 
@@ -93,8 +93,7 @@ mod organ_kani_proofs;
 // 透明登记: 此处 +1 行 (pub use), 不动 LOCKED 9 文件 (append_only / identity / migrations /
 // episode / session_note / streams / history_streams / continuity_link / llm_analysis).
 pub use apeireth_memory_extensions::{
-    provider_in_memory::InMemoryProvider,
-    provider_file::FileProvider,
+    provider_file::FileProvider, provider_in_memory::InMemoryProvider,
     provider_mongodb::MongoDbProvider,
 };
 // R37-2: 9 organ 部分合并 — life_force 透明 re-export 到 memory.
@@ -102,18 +101,33 @@ pub use apeireth_memory_extensions::{
 // (path dep 在 Cargo.toml:93), re-export 仅为 API 便利, 0 breaking.
 // 显式列出导出 (避免 `pub use ...::*` 隐藏依赖关系).
 pub use apeireth_life_force::{
-    // 核心类型
-    SelfGrowthIndicator, ReflectionPeriod, ReflectionPeriodState, StandardReflectionPeriod,
-    ReflectionTrigger, LifeForce, LifeForceError,
-    // 触发函数
-    reflection_trigger, exhaustion_check, recovery_start, validate_endurance, reflection_progress,
-    // 常量
-    ENDURANCE_MIN, ENDURANCE_MAX, ENDURANCE_EXHAUSTION_THRESHOLD, ENDURANCE_RECOVERY_TARGET,
     // 子模块 re-export
-    emergence::{EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal, EmergenceSignalType},
-    reflection_cycle::{ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler, ReflectionPhase},
+    emergence::{
+        EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal, EmergenceSignalType,
+    },
+    exhaustion_check,
+    recovery_start,
+    reflection_cycle::{
+        ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler, ReflectionPhase,
+    },
+    reflection_progress,
+    // 触发函数
+    reflection_trigger,
+    validate_endurance,
+    LifeForce,
+    LifeForceError,
+    ReflectionPeriod,
+    ReflectionPeriodState,
+    ReflectionTrigger,
+    // 核心类型
+    SelfGrowthIndicator,
+    StandardReflectionPeriod,
+    ENDURANCE_EXHAUSTION_THRESHOLD,
+    ENDURANCE_MAX,
+    // 常量
+    ENDURANCE_MIN,
+    ENDURANCE_RECOVERY_TARGET,
 };
-
 
 /// 顶层错误: 所有 memory 子系统的 fallback error.
 #[derive(Debug, Error)]
@@ -317,10 +331,7 @@ impl SqliteMemoryStore {
         }
 
         // 1. 拉所有 episodes.
-        let eps = <Self as EpisodeStore>::query(
-            self,
-            &EpisodeQuery::new().limit(100_000),
-        )?;
+        let eps = <Self as EpisodeStore>::query(self, &EpisodeQuery::new().limit(100_000))?;
         if eps.is_empty() {
             return Ok(Vec::new());
         }
@@ -343,10 +354,7 @@ impl SqliteMemoryStore {
     /// 跟 `semantic_search` 一样, 一次性 in-memory index.
     /// 高频场景请自己持 `SemanticIndex` 复用.
     #[cfg(feature = "semantic")]
-    pub fn extract_user_profile(
-        &self,
-        embedder: Arc<dyn EmbedFn>,
-    ) -> MemoryResult<UserProfile> {
+    pub fn extract_user_profile(&self, embedder: Arc<dyn EmbedFn>) -> MemoryResult<UserProfile> {
         use apeireth_vector::SqliteVecBackend;
 
         let backend = SqliteVecBackend::open_in_memory()
@@ -406,10 +414,7 @@ impl SqliteMemoryStore {
             return Ok(Vec::new());
         }
         // 1. 拉所有 episodes.
-        let eps = <Self as EpisodeStore>::query(
-            self,
-            &EpisodeQuery::new().limit(100_000),
-        )?;
+        let eps = <Self as EpisodeStore>::query(self, &EpisodeQuery::new().limit(100_000))?;
         if eps.is_empty() {
             return Ok(Vec::new());
         }
@@ -569,15 +574,13 @@ mod tests {
     }
 }
 
-
-
 /// R146: 3 memory crate -> 1 apeireth-memory (子模块)
 ///
 /// dailynote: 按日期分区存储 (R141)
 /// lightmemo: VCP production V3 拓扑简化 (R142-R143)
 pub mod dailynote;
-pub mod lightmemo;
-pub mod g5_memory_bridge; // R161: memory insert/retrieve 5 步 -> g5 substrate (5th caller)
+pub mod g5_memory_bridge;
+pub mod lightmemo; // R161: memory insert/retrieve 5 步 -> g5 substrate (5th caller)
 
 /// 编译期守门 (per O-5 不假装)
 pub const MEMORY_SUBMODULE_COUNT: usize = 2;

@@ -164,7 +164,7 @@ impl<B: BiometricProvider + 'static> SovereigntyEngine<B> {
 
         for sig in signatures {
             match self.biometric.authenticate(sig) {
-                BiometricResult::Authenticated { .. } => continue,
+                BiometricResult::Authenticated { .. } => {}
                 BiometricResult::CoercionDetected { stress_level, .. } => {
                     eprintln!("HA 胁迫检测: sig={} stress={:.2}", sig, stress_level);
                     return Err(SovereigntyError::HACoercionDetected);

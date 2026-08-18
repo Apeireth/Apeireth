@@ -42,11 +42,7 @@ fn outgoing_with_edges(graph: &RelationGraph, node: &str) -> Vec<(NodeId, EdgeId
 }
 
 fn all_node_ids(graph: &RelationGraph) -> Vec<NodeId> {
-    graph
-        .node_ids()
-        .into_iter()
-        .map(|s| s.to_string())
-        .collect()
+    graph.node_ids().into_iter().map(|s| s.clone()).collect()
 }
 
 fn has_node(graph: &RelationGraph, n: &str) -> bool {

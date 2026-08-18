@@ -19,6 +19,10 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls-tls"] }
 url = "2"
+# CI fix 2026-08: lark/voice/sandbox 子 SDK 合并残留 — calendar.rs/resource.rs 用 chrono,
+# sandbox/mod.rs 用 uuid (合并前是各子 crate 自己的依赖, 合并后漏补)
+chrono = { workspace = true }
+uuid = { workspace = true }
 apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-host = { path = "../apeireth-host" }
 
@@ -41,7 +45,7 @@ wiremock = "0.6"
 # R122-8 build-dep: cbindgen 仅在 c feature 启用时跑 (build.rs 守门)
 # 0 启用 c feature 时 build.rs 0 生成 header, 0 编译 cbindgen 0 装
 [build-dependencies]
-cbindgen = { version = "0.26", optional = true }
+cbindgen = { version = "0.29", optional = true } # 0.26 拉 clap 3 → atty (unmaintained); 0.27+ 换 clap 4
 
 # R122-8 cfg-gated features
 # 0 装原则: default = [] (0 装 pyo3/napi/cbindgen), 跨语言客户按需启用

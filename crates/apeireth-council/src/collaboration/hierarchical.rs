@@ -52,7 +52,7 @@ impl DelegatedTask {
 pub struct HierarchicalMode {
     /// root advisor role
     root_role: String,
-    /// 2 sub-advisor roles (per 派活单决策权: 默认 ["技术方案", "风险评估"])
+    /// 2 sub-advisor roles (per 派活单决策权: 默认 `["技术方案", "风险评估"]`)
     sub_roles: Vec<String>,
     /// synthesis 权重
     weights: SynthesisWeights,
@@ -61,7 +61,7 @@ pub struct HierarchicalMode {
 }
 
 impl HierarchicalMode {
-    /// 构造 (默认 2 sub_roles = ["技术方案", "风险评估"], 跟 v2.0 strategy §2B 决策对齐)
+    /// 构造 (默认 2 sub_roles = `["技术方案", "风险评估"]`, 跟 v2.0 strategy §2B 决策对齐)
     pub fn new(root_role: impl Into<String>) -> Self {
         Self {
             root_role: root_role.into(),

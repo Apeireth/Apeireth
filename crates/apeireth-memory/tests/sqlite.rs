@@ -24,7 +24,11 @@ fn store_runs_at_least_one_migration() {
 fn store_export_streams_jsonl_empty() {
     let s = store();
     let entries = s.export_streams_jsonl().expect("export_streams_jsonl");
-    assert!(entries.is_empty(), "expected 0 history entries in fresh DB, got {}", entries.len());
+    assert!(
+        entries.is_empty(),
+        "expected 0 history entries in fresh DB, got {}",
+        entries.len()
+    );
 }
 
 #[test]

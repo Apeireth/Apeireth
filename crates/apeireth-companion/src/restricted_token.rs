@@ -123,8 +123,9 @@ pub struct RestrictedToken {
 pub fn create_restricted_token(cfg: &RestrictedTokenConfig) -> Result<RestrictedToken, String> {
     use windows_sys::Win32::Foundation::HANDLE;
     use windows_sys::Win32::Security::{
-        CreateRestrictedToken, DISABLE_MAX_PRIVILEGE, LUA_TOKEN, SID_AND_ATTRIBUTES, TOKEN_ADJUST_DEFAULT,
-        TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE, TOKEN_QUERY,
+        CreateRestrictedToken, DISABLE_MAX_PRIVILEGE, LUA_TOKEN, SID_AND_ATTRIBUTES,
+        TOKEN_ADJUST_DEFAULT, TOKEN_ADJUST_SESSIONID, TOKEN_ASSIGN_PRIMARY, TOKEN_DUPLICATE,
+        TOKEN_QUERY,
     };
     use windows_sys::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
@@ -195,7 +196,9 @@ pub fn create_restricted_token(cfg: &RestrictedTokenConfig) -> Result<Restricted
         if let Some(level) = cfg.integrity_level {
             if let Err(e) = apply_integrity_level(&mut token, level) {
                 // 完整性设失败 → 关闭并返回 (不阻断 spawn, 调用方会降级无 integrity)
-                return Err(format!("SetTokenInformation(TokenIntegrityLevel) 失败: {e}"));
+                return Err(format!(
+                    "SetTokenInformation(TokenIntegrityLevel) 失败: {e}"
+                ));
             }
         }
 
@@ -203,7 +206,9 @@ pub fn create_restricted_token(cfg: &RestrictedTokenConfig) -> Result<Restricted
         if cfg.default_dacl_open {
             if let Err(e) = apply_open_default_dacl(&token) {
                 // 非关键: 失败降级 (受限进程可能仍能 spawn, 只是不能建 pipes)
-                eprintln!("[sandbox] SetTokenInformation(TokenDefaultDacl) 失败 (降级为拒所有): {e}");
+                eprintln!(
+                    "[sandbox] SetTokenInformation(TokenDefaultDacl) 失败 (降级为拒所有): {e}"
+                );
             }
         }
 
@@ -229,7 +234,9 @@ pub fn create_restricted_token(cfg: &RestrictedTokenConfig) -> Result<Restricted
 /// `TOKEN_MANDATORY_LABEL` = `SID_AND_ATTRIBUTES` (mandatory label SID)。
 #[cfg(windows)]
 fn apply_integrity_level(token: &mut RestrictedToken, level: IntegrityLevel) -> Result<(), String> {
-    use windows_sys::Win32::Security::{SetTokenInformation, TokenIntegrityLevel, SID_AND_ATTRIBUTES, TOKEN_MANDATORY_LABEL};
+    use windows_sys::Win32::Security::{
+        SetTokenInformation, TokenIntegrityLevel, SID_AND_ATTRIBUTES, TOKEN_MANDATORY_LABEL,
+    };
 
     // 完整性级别 RID.
     let rid: i32 = match level {
@@ -252,7 +259,7 @@ fn apply_integrity_level(token: &mut RestrictedToken, level: IntegrityLevel) -> 
         let ok = SetTokenInformation(
             token.handle,
             TokenIntegrityLevel,
-            &label as *const _ as *const _,
+            (&label as *const TOKEN_MANDATORY_LABEL).cast(),
             std::mem::size_of::<TOKEN_MANDATORY_LABEL>() as u32,
         );
         if ok == 0 {
@@ -269,12 +276,13 @@ fn apply_integrity_level(token: &mut RestrictedToken, level: IntegrityLevel) -> 
 #[cfg(windows)]
 fn apply_open_default_dacl(token: &RestrictedToken) -> Result<(), String> {
     use windows_sys::Win32::Foundation::HLOCAL;
-    use windows_sys::Win32::Security::ACL;
     use windows_sys::Win32::Security::Authorization::{
-        SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+        SetEntriesInAclW, EXPLICIT_ACCESS_W, GRANT_ACCESS, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN,
+        TRUSTEE_W,
     };
     use windows_sys::Win32::Security::SetTokenInformation;
     use windows_sys::Win32::Security::TokenDefaultDacl;
+    use windows_sys::Win32::Security::ACL;
 
     // 1. 取 World SID 作为 trustee.
     let world_sid = win_imp::lookup_well_known_sid(WellKnownSid::World)
@@ -290,14 +298,19 @@ fn apply_open_default_dacl(token: &RestrictedToken) -> Result<(), String> {
             MultipleTrusteeOperation: 0,
             TrusteeForm: TRUSTEE_IS_SID,
             TrusteeType: TRUSTEE_IS_UNKNOWN,
-            ptstrName: world_sid.as_ptr() as *mut u16,
+            ptstrName: world_sid.as_ptr().cast::<u16>(),
         },
     }];
 
     // 3. SetEntriesInAclW → new DACL.
     let mut new_dacl: *mut ACL = ptr::null_mut();
     unsafe {
-        let res = SetEntriesInAclW(entries.len() as u32, entries.as_ptr(), ptr::null(), &mut new_dacl);
+        let res = SetEntriesInAclW(
+            entries.len() as u32,
+            entries.as_ptr(),
+            ptr::null(),
+            &mut new_dacl,
+        );
         if res != 0 {
             return Err(format!("SetEntriesInAclW 失败 (错误码 {res})"));
         }
@@ -308,11 +321,13 @@ fn apply_open_default_dacl(token: &RestrictedToken) -> Result<(), String> {
         struct TokenDefaultDaclInfo {
             default_dacl: *mut ACL,
         }
-        let mut info = TokenDefaultDaclInfo { default_dacl: new_dacl };
+        let mut info = TokenDefaultDaclInfo {
+            default_dacl: new_dacl,
+        };
         let ok = SetTokenInformation(
             token.handle,
             TokenDefaultDacl,
-            &mut info as *mut _ as *mut _,
+            (&mut info as *mut TokenDefaultDaclInfo).cast(),
             std::mem::size_of::<TokenDefaultDaclInfo>() as u32,
         );
         if ok == 0 {
@@ -320,7 +335,9 @@ fn apply_open_default_dacl(token: &RestrictedToken) -> Result<(), String> {
             if !new_dacl.is_null() {
                 windows_sys::Win32::Foundation::LocalFree(new_dacl as HLOCAL);
             }
-            return Err(format!("SetTokenInformation(TokenDefaultDacl) 失败 (错误码 {err})"));
+            return Err(format!(
+                "SetTokenInformation(TokenDefaultDacl) 失败 (错误码 {err})"
+            ));
         }
         // 成功: SetTokenInformation 接管 DACL, 不需要 LocalFree
     }
@@ -334,7 +351,10 @@ fn apply_open_default_dacl(token: &RestrictedToken) -> Result<(), String> {
 pub(crate) mod win_imp {
     use std::ptr;
 
-    use windows_sys::Win32::Security::{CreateWellKnownSid, FreeSid, GetSidLengthRequired, InitializeSid, SID, SID_IDENTIFIER_AUTHORITY};
+    use windows_sys::Win32::Security::{
+        CreateWellKnownSid, FreeSid, GetSidLengthRequired, InitializeSid, SID,
+        SID_IDENTIFIER_AUTHORITY,
+    };
 
     use crate::sandbox::WellKnownSid;
 
@@ -346,14 +366,14 @@ pub(crate) mod win_imp {
     impl Psid {
         /// 取 PSID (PSID = *mut c_void). Windows API 期望 PSID, 直接传 `*mut SID` 会类型不匹配.
         pub fn as_ptr(&self) -> *mut std::ffi::c_void {
-            self.ptr as *mut std::ffi::c_void
+            self.ptr.cast::<std::ffi::c_void>()
         }
     }
 
     impl Drop for Psid {
         fn drop(&mut self) {
             if !self.ptr.is_null() {
-                unsafe { FreeSid(self.ptr as *mut _) };
+                unsafe { FreeSid(self.ptr.cast()) };
             }
         }
     }
@@ -380,19 +400,21 @@ pub(crate) mod win_imp {
                 return None;
             }
             let mut buf = vec![0u8; size as usize];
-            let ptr = buf.as_mut_ptr() as *mut SID;
-            let ok = CreateWellKnownSid(wksid, ptr::null_mut(), ptr as *mut _, &mut size);
+            let ptr = buf.as_mut_ptr().cast::<SID>();
+            let ok = CreateWellKnownSid(wksid, ptr::null_mut(), ptr.cast(), &mut size);
             if ok == 0 {
                 return None;
             }
             // 防止 buf 释放 (CreateWellKnownSid 把 SID 直接写入我们的 buf).
             // 改方案: 复制 SID 到一个独立 alloc (SID 结构简单的 u8 数组), 让 buf release.
-            let layout = std::alloc::Layout::from_size_align(size as usize, std::mem::align_of::<SID>()).ok()?;
-            let new_ptr = std::alloc::alloc(layout) as *mut SID;
+            let layout =
+                std::alloc::Layout::from_size_align(size as usize, std::mem::align_of::<SID>())
+                    .ok()?;
+            let new_ptr = std::alloc::alloc(layout).cast::<SID>();
             if new_ptr.is_null() {
                 return None;
             }
-            std::ptr::copy_nonoverlapping(ptr as *const u8, new_ptr as *mut u8, size as usize);
+            std::ptr::copy_nonoverlapping(ptr.cast::<u8>(), new_ptr.cast::<u8>(), size as usize);
             // buf 离开作用域, 自动释放 (vec Drop).
             Some(Psid { ptr: new_ptr })
         }
@@ -407,19 +429,21 @@ pub(crate) mod win_imp {
                 Value: [0, 0, 0, 0, 0, 16],
             };
             let size = GetSidLengthRequired(1);
-            let layout = std::alloc::Layout::from_size_align(size as usize, std::mem::align_of::<SID>()).ok()?;
-            let ptr = std::alloc::alloc(layout) as *mut SID;
+            let layout =
+                std::alloc::Layout::from_size_align(size as usize, std::mem::align_of::<SID>())
+                    .ok()?;
+            let ptr = std::alloc::alloc(layout).cast::<SID>();
             if ptr.is_null() {
                 return None;
             }
-            let ok = InitializeSid(ptr as *mut _, &auth, 1);
+            let ok = InitializeSid(ptr.cast(), &auth, 1);
             if ok == 0 {
-                std::alloc::dealloc(ptr as *mut u8, layout);
+                std::alloc::dealloc(ptr.cast::<u8>(), layout);
                 return None;
             }
             // SID 头部: {u8 Revision, u8 SubAuthorityCount, SID_IDENTIFIER_AUTHORITY IdentifierAuthority, [u32 SubAuthority]}
             // SubAuthority[0] 在 IdentifierAuthority 之后 (6 bytes).
-            let sub_ptr = (ptr as *mut u8).add(std::mem::size_of::<u8>() * 2 + 6) as *mut u32;
+            let sub_ptr = (ptr.cast::<u8>().add(std::mem::size_of::<u8>() * 2 + 6)).cast::<u32>();
             *sub_ptr = rid as u32;
             Some(Psid { ptr })
         }
@@ -454,13 +478,16 @@ mod tests {
         #[cfg(not(windows))]
         {
             let r = create_restricted_token(&c);
-            assert!(r.is_ok(), "non-Windows 上无 hardening 应返回 Ok 占位: {r:?}");
+            assert!(
+                r.is_ok(),
+                "non-Windows 上无 hardening 应返回 Ok 占位: {r:?}"
+            );
         }
     }
 
     #[test]
     fn hardening_request_fails_honestly_off_windows() {
-        let c = RestrictedTokenConfig {
+        let _c = RestrictedTokenConfig {
             integrity_level: Some(IntegrityLevel::Low),
             deny_only_sids: vec![WellKnownSid::BuiltinAdministrators],
             default_dacl_open: true,

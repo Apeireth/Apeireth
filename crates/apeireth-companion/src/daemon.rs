@@ -16,12 +16,12 @@ use apeireth_memory::SqliteMemoryStore;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 
+use crate::dream::DreamScheduler;
 use crate::emergence::{Boundaries, Delivery, Feedback, Initiative, SelfScore};
 use crate::organs::AwakeCompanion;
 use crate::proactive::ContextSource;
-use crate::Bond;
-use crate::dream::DreamScheduler;
 use crate::reflection::ReflectionScheduler;
+use crate::Bond;
 use apeireth_core::RiskLevel;
 
 // ============================================================
@@ -208,7 +208,10 @@ impl LarkSink {
         F: Fn(&str) -> Option<String>,
     {
         let missing = |keys: &[&str]| -> String {
-            format!("飞书凭据缺失: {} (设 APEIRETH_LARK_* 环境变量)", keys.join(" / "))
+            format!(
+                "飞书凭据缺失: {} (设 APEIRETH_LARK_* 环境变量)",
+                keys.join(" / ")
+            )
         };
         let app_id = lookup("APEIRETH_LARK_APP_ID")
             .filter(|s| !s.trim().is_empty())
@@ -371,10 +374,7 @@ impl TelegramSink {
 #[async_trait]
 impl Sink for TelegramSink {
     async fn send(&self, text: &str) -> Result<(), String> {
-        let url = format!(
-            "https://api.telegram.org/bot{}/sendMessage",
-            self.bot_token
-        );
+        let url = format!("https://api.telegram.org/bot{}/sendMessage", self.bot_token);
         let body = serde_json::json!({
             "chat_id": self.chat_id,
             "text": text,
@@ -597,7 +597,10 @@ impl<D: Delivery, C: ContextSource> CompanionDaemon<D, C> {
         if let Some(r) = &mut self.reflection {
             let n = r.tick().await;
             if n > 0 {
-                eprintln!("[daemon] 反思周期: 完成 {n} 轮 (累计 {})", r.cycles_completed());
+                eprintln!(
+                    "[daemon] 反思周期: 完成 {n} 轮 (累计 {})",
+                    r.cycles_completed()
+                );
             }
         }
         // 做梦检查 (0 阻塞: 不触发则立即返回)
@@ -746,7 +749,10 @@ mod tests {
         let r = LarkSink::from_env_with(|_| None);
         assert!(r.is_err());
         let msg = r.unwrap_err();
-        assert!(msg.contains("APEIRETH_LARK_APP_ID"), "提示应点名缺的变量: {msg}");
+        assert!(
+            msg.contains("APEIRETH_LARK_APP_ID"),
+            "提示应点名缺的变量: {msg}"
+        );
     }
 
     #[test]
@@ -893,7 +899,10 @@ mod tests {
             }
         })
         .unwrap();
-        assert_eq!(p, PathBuf::from("/home/u/.local/share/apeireth/memory.sqlite"));
+        assert_eq!(
+            p,
+            PathBuf::from("/home/u/.local/share/apeireth/memory.sqlite")
+        );
         // 全缺 → Err
         assert!(memory_path_from(|_| None).is_err());
     }
@@ -945,7 +954,7 @@ mod tests {
         for (i, c) in ["线代: 特征值卡住", "高数: 换元忘换 dx"].iter().enumerate() {
             store
                 .put_episode(&CoreEpisode {
-                    id: format!("mem-{i}").into(),
+                    id: format!("mem-{i}"),
                     timestamp: 1 + i as i64,
                     role: "assistant".into(),
                     content: c.to_string(),

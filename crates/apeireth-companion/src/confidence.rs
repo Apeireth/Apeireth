@@ -17,7 +17,12 @@ pub struct BetaBinomial {
 
 impl Default for BetaBinomial {
     fn default() -> Self {
-        Self { alpha0: 1.0, beta0: 1.0, successes: 0, observations: 0 }
+        Self {
+            alpha0: 1.0,
+            beta0: 1.0,
+            successes: 0,
+            observations: 0,
+        }
     }
 }
 
@@ -43,7 +48,12 @@ impl Strength {
 
 impl BetaBinomial {
     pub fn new(alpha0: f64, beta0: f64) -> Self {
-        Self { alpha0: alpha0.max(0.001), beta0: beta0.max(0.001), successes: 0, observations: 0 }
+        Self {
+            alpha0: alpha0.max(0.001),
+            beta0: beta0.max(0.001),
+            successes: 0,
+            observations: 0,
+        }
     }
 
     /// 记录一次结果 (成功/失败).
@@ -118,7 +128,11 @@ mod tests {
         }
         b.observe(false);
         // 均匀先验拉偏: E[θ] = (1+9)/(2+10) = 0.833
-        assert!((b.mean() - 10.0 / 12.0).abs() < 0.01, "9/10 成功 → ≈0.833: {}", b.mean());
+        assert!(
+            (b.mean() - 10.0 / 12.0).abs() < 0.01,
+            "9/10 成功 → ≈0.833: {}",
+            b.mean()
+        );
         assert_eq!(b.strength(), Strength::Moderate);
         // 大样本下趋近真实值
         let mut many = BetaBinomial::default();
@@ -126,7 +140,11 @@ mod tests {
             many.observe(true);
         }
         many.observe(false);
-        assert!((many.mean() - 0.98).abs() < 0.01, "99/100 → ≈0.98: {}", many.mean());
+        assert!(
+            (many.mean() - 0.98).abs() < 0.01,
+            "99/100 → ≈0.98: {}",
+            many.mean()
+        );
     }
 
     #[test]

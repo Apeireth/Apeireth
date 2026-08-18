@@ -73,7 +73,10 @@ impl DailyNoteStore {
             ],
         )?;
         // Refresh tag index
-        self.conn.execute("DELETE FROM note_tags WHERE note_id = ?1", params![note.id.0])?;
+        self.conn.execute(
+            "DELETE FROM note_tags WHERE note_id = ?1",
+            params![note.id.0],
+        )?;
         for tag in &note.tags {
             self.conn.execute(
                 "INSERT OR IGNORE INTO note_tags (note_id, tag) VALUES (?1, ?2)",
@@ -93,22 +96,34 @@ impl DailyNoteStore {
             let tags: String = r.get(4)?;
             let created_at: String = r.get(5)?;
             let updated_at: String = r.get(6)?;
-            let tags_vec: Vec<String> = if tags.is_empty() { Vec::new() } else { tags.split(',').map(String::from).collect() };
+            let tags_vec: Vec<String> = if tags.is_empty() {
+                Vec::new()
+            } else {
+                tags.split(',').map(String::from).collect()
+            };
             Ok(DailyNote {
                 id: NoteId(id),
-                date: DateTime::parse_from_rfc3339(&date).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|_| Utc::now()),
+                date: DateTime::parse_from_rfc3339(&date)
+                    .map(|d| d.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
                 title,
                 content,
                 tags: tags_vec,
-                created_at: DateTime::parse_from_rfc3339(&created_at).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|_| Utc::now()),
-                updated_at: DateTime::parse_from_rfc3339(&updated_at).map(|d| d.with_timezone(&Utc)).unwrap_or_else(|_| Utc::now()),
+                created_at: DateTime::parse_from_rfc3339(&created_at)
+                    .map(|d| d.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
+                updated_at: DateTime::parse_from_rfc3339(&updated_at)
+                    .map(|d| d.with_timezone(&Utc))
+                    .unwrap_or_else(|_| Utc::now()),
             })
         })?;
         Ok(note)
     }
 
     pub fn delete(&self, id: &NoteId) -> Result<(), DailyNoteError> {
-        let n = self.conn.execute("DELETE FROM notes WHERE id = ?1", params![id.0])?;
+        let n = self
+            .conn
+            .execute("DELETE FROM notes WHERE id = ?1", params![id.0])?;
         if n == 0 {
             return Err(DailyNoteError::NotFound(id.0.clone()));
         }
@@ -116,13 +131,17 @@ impl DailyNoteStore {
     }
 
     pub fn count(&self) -> Result<i64, DailyNoteError> {
-        let n: i64 = self.conn.query_row("SELECT COUNT(*) FROM notes", [], |r| r.get(0))?;
+        let n: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM notes", [], |r| r.get(0))?;
         Ok(n)
     }
 
     /// List notes with a given tag.
     pub fn list_by_tag(&self, tag: &str) -> Result<Vec<NoteId>, DailyNoteError> {
-        let mut stmt = self.conn.prepare("SELECT note_id FROM note_tags WHERE tag = ?1 ORDER BY note_id")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT note_id FROM note_tags WHERE tag = ?1 ORDER BY note_id")?;
         let rows = stmt.query_map(params![tag], |r| r.get::<_, String>(0))?;
         let mut out = Vec::new();
         for row in rows {

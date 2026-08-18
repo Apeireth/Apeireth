@@ -569,7 +569,11 @@ impl<S: SearchState, A: SearchAction<S>, V: LlmValueFunction<S>> LatsPlanner<S, 
                 }
                 if depth >= 1 {
                     if let Some(refiner) = &self.refiner {
-                        for text in self.reflections.iter().take(self.config.reflections_per_node) {
+                        for text in self
+                            .reflections
+                            .iter()
+                            .take(self.config.reflections_per_node)
+                        {
                             if let Some(refined) = refiner.refine(&leaf_state, text) {
                                 let idx = nodes.len();
                                 nodes[cur].children.push(idx);
@@ -644,7 +648,11 @@ mod lats_tests {
     fn proximity_to(target: i64) -> Arc<dyn Fn(&Pos) -> f64 + Send + Sync> {
         Arc::new(move |p: &Pos| {
             let dist = (p.0 - target).unsigned_abs() as f64;
-            if dist == 0.0 { 1.0 } else { 1.0 / (1.0 + dist) }
+            if dist == 0.0 {
+                1.0
+            } else {
+                1.0 / (1.0 + dist)
+            }
         })
     }
 
@@ -715,8 +723,14 @@ mod lats_tests {
     fn llm_value_trait_slot_pluggable() {
         let planner: LatsPlanner<Pos, Step, ConstValue> =
             LatsPlanner::new(LatsConfig::default(), ConstValue(0.7));
-        let r = planner.search(Pos(0), &[Step(1), Step(-1)]).expect("应有结果");
-        assert!((r.best_value - 0.7).abs() < 1e-9, "trait 口 value 直通: {}", r.best_value);
+        let r = planner
+            .search(Pos(0), &[Step(1), Step(-1)])
+            .expect("应有结果");
+        assert!(
+            (r.best_value - 0.7).abs() < 1e-9,
+            "trait 口 value 直通: {}",
+            r.best_value
+        );
         assert!(r.root_visits > 0);
     }
 
@@ -725,12 +739,21 @@ mod lats_tests {
         // 动作 Step(0)=原地 (子树里混有高值分支), Step(-1)=远离.
         // max-backup: Step(0) 子树含 value=1.0 路径 → 其 best_value 应为 1.0 (平均回溯则 < 1).
         let planner: LatsPlanner<Pos, Step, HeuristicValue<Pos>> = LatsPlanner::new(
-            LatsConfig { iterations: 400, ..Default::default() },
+            LatsConfig {
+                iterations: 400,
+                ..Default::default()
+            },
             heuristic(10),
         );
-        let r = planner.search(Pos(0), &[Step(1), Step(-1)]).expect("应有结果");
+        let r = planner
+            .search(Pos(0), &[Step(1), Step(-1)])
+            .expect("应有结果");
         // Step(1) 方向逼近目标, 深路径中 proximity 递增, max-backup 应捕捉子树最大值
-        assert!(r.best_value > 0.4, "max-backup 应传播子树高值: {}", r.best_value);
+        assert!(
+            r.best_value > 0.4,
+            "max-backup 应传播子树高值: {}",
+            r.best_value
+        );
         assert!(matches!(r.best_action, Step(1)), "应选前进方向");
     }
 
@@ -738,18 +761,29 @@ mod lats_tests {
     fn reflection_node_enters_tree_and_lifts_value() {
         // 对照组: 无反思
         let base: LatsPlanner<Pos, Step, HeuristicValue<Pos>> = LatsPlanner::new(
-            LatsConfig { iterations: 300, max_depth: 4, ..Default::default() },
+            LatsConfig {
+                iterations: 300,
+                max_depth: 4,
+                ..Default::default()
+            },
             heuristic(10),
         );
         let base_r = base.search(Pos(0), &[Step(1)]).expect("对照应有结果");
         // 实验组: 注入 E1 形态反思文本 + refiner (refine 到目标附近)
         let lats: LatsPlanner<Pos, Step, HeuristicValue<Pos>> = LatsPlanner::new(
-            LatsConfig { iterations: 300, max_depth: 4, ..Default::default() },
+            LatsConfig {
+                iterations: 300,
+                max_depth: 4,
+                ..Default::default()
+            },
             heuristic(10),
         )
         .with_refiner(
             Arc::new(JumpRefiner { target: 10 }),
-            vec!["[反思·验证失败] task_type=navigate | 教训: 验收未达成 | 重试策略: 直奔目标附近".to_string()],
+            vec![
+                "[反思·验证失败] task_type=navigate | 教训: 验收未达成 | 重试策略: 直奔目标附近"
+                    .to_string(),
+            ],
         );
         let r = lats.search(Pos(0), &[Step(1)]).expect("应有结果");
         assert!(
@@ -758,17 +792,27 @@ mod lats_tests {
             r.best_value,
             base_r.best_value
         );
-        assert!(r.best_value >= 0.4, "refine 到目标附近应有高值: {}", r.best_value);
+        assert!(
+            r.best_value >= 0.4,
+            "refine 到目标附近应有高值: {}",
+            r.best_value
+        );
     }
 
     #[test]
     fn non_reflection_text_not_refined() {
         // 非 E1 反思形态文本 → refiner 返回 None → 不产生反思节点 (诚实)
         let lats: LatsPlanner<Pos, Step, HeuristicValue<Pos>> = LatsPlanner::new(
-            LatsConfig { iterations: 100, ..Default::default() },
+            LatsConfig {
+                iterations: 100,
+                ..Default::default()
+            },
             heuristic(10),
         )
-        .with_refiner(Arc::new(JumpRefiner { target: 10 }), vec!["随便的文本".to_string()]);
+        .with_refiner(
+            Arc::new(JumpRefiner { target: 10 }),
+            vec!["随便的文本".to_string()],
+        );
         let r = lats.search(Pos(0), &[Step(1)]).expect("应有结果");
         assert!(r.root_visits > 0, "无有效反思文本仍正常搜索");
     }
@@ -777,10 +821,14 @@ mod lats_tests {
     fn lats_deterministic_same_input_same_output() {
         let run = || {
             let p: LatsPlanner<Pos, Step, HeuristicValue<Pos>> = LatsPlanner::new(
-                LatsConfig { iterations: 150, ..Default::default() },
+                LatsConfig {
+                    iterations: 150,
+                    ..Default::default()
+                },
                 heuristic(10),
             );
-            p.search(Pos(0), &[Step(1), Step(-1)]).map(|r| (r.best_action.0, r.best_value, r.root_visits))
+            p.search(Pos(0), &[Step(1), Step(-1)])
+                .map(|r| (r.best_action.0, r.best_value, r.root_visits))
         };
         let a = run();
         for _ in 0..3 {

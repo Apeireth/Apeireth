@@ -38,7 +38,9 @@ impl Default for PluginRegistry {
 
 impl PluginRegistry {
     pub fn new() -> Self {
-        Self { inner: Mutex::new(Vec::new()) }
+        Self {
+            inner: Mutex::new(Vec::new()),
+        }
     }
 
     /// 安装插件: 调 on_load, 成功才登记; 失败回滚 (不登记, 0 装 PASS).
@@ -55,7 +57,10 @@ impl PluginRegistry {
     /// 卸载插件 (幂等).
     pub fn uninstall(&self, bridge: &ToolBridge, id: &str) -> Result<(), String> {
         let mut list = self.inner.lock().unwrap();
-        let idx = list.iter().position(|p| p.id() == id).ok_or_else(|| format!("插件未安装: {id}"))?;
+        let idx = list
+            .iter()
+            .position(|p| p.id() == id)
+            .ok_or_else(|| format!("插件未安装: {id}"))?;
         let p = list.remove(idx);
         p.on_unload(bridge)?;
         Ok(())
@@ -66,15 +71,29 @@ impl PluginRegistry {
     }
 
     pub fn list(&self) -> Vec<String> {
-        self.inner.lock().unwrap().iter().map(|p| p.id().to_string()).collect()
+        self.inner
+            .lock()
+            .unwrap()
+            .iter()
+            .map(|p| p.id().to_string())
+            .collect()
     }
 
     pub fn get(&self, id: &str) -> Option<Arc<dyn Plugin>> {
-        self.inner.lock().unwrap().iter().find(|p| p.id() == id).cloned()
+        self.inner
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|p| p.id() == id)
+            .cloned()
     }
 
     /// 批量安装一组插件 (套件装配用): 全部成功才整体生效, 任一失败回滚已装的.
-    pub fn install_all(&self, bridge: &ToolBridge, plugins: &[Arc<dyn Plugin>]) -> Result<(), String> {
+    pub fn install_all(
+        &self,
+        bridge: &ToolBridge,
+        plugins: &[Arc<dyn Plugin>],
+    ) -> Result<(), String> {
         let mut installed: Vec<Arc<dyn Plugin>> = Vec::new();
         for p in plugins {
             if let Err(e) = self.install(bridge, Arc::clone(p)) {
@@ -97,12 +116,19 @@ mod tests {
     /// 测试插件: 加载时给 packs 授权一个工具, 卸载时撤销 (校验生命周期真跑).
     struct TestPlugin;
     impl Plugin for TestPlugin {
-        fn id(&self) -> &str { "test-dx-check" }
-        fn version(&self) -> &str { "0.1.0" }
-        fn description(&self) -> &str { "测试插件: 换元 dx 检查" }
+        fn id(&self) -> &str {
+            "test-dx-check"
+        }
+        fn version(&self) -> &str {
+            "0.1.0"
+        }
+        fn description(&self) -> &str {
+            "测试插件: 换元 dx 检查"
+        }
         fn on_load(&self, bridge: &ToolBridge) -> Result<(), String> {
             bridge.packs.grant(crate::packs::PermissionPack::permanent(
-                "插件授权", vec!["recall_memory".into(), "save_memory".into()],
+                "插件授权",
+                vec!["recall_memory".into(), "save_memory".into()],
             ));
             Ok(())
         }
@@ -114,13 +140,21 @@ mod tests {
     /// 加载失败的插件 (on_load 报错 → 安装拒绝).
     struct BadPlugin;
     impl Plugin for BadPlugin {
-        fn id(&self) -> &str { "bad-plugin" }
-        fn version(&self) -> &str { "0.0.1" }
-        fn description(&self) -> &str { "加载必失败" }
+        fn id(&self) -> &str {
+            "bad-plugin"
+        }
+        fn version(&self) -> &str {
+            "0.0.1"
+        }
+        fn description(&self) -> &str {
+            "加载必失败"
+        }
         fn on_load(&self, _bridge: &ToolBridge) -> Result<(), String> {
             Err("加载失败: 缺依赖".into())
         }
-        fn on_unload(&self, _bridge: &ToolBridge) -> Result<(), String> { Ok(()) }
+        fn on_unload(&self, _bridge: &ToolBridge) -> Result<(), String> {
+            Ok(())
+        }
     }
 
     #[test]
@@ -131,7 +165,9 @@ mod tests {
         reg.install(&bridge, Arc::new(TestPlugin)).unwrap();
         assert!(reg.is_installed("test-dx-check"));
         // 权限包已授权
-        assert!(bridge.packs.check_and_consume("recall_memory", chrono::Utc::now().timestamp_millis()));
+        assert!(bridge
+            .packs
+            .check_and_consume("recall_memory", chrono::Utc::now().timestamp_millis()));
         // 重复安装拒绝
         assert!(reg.install(&bridge, Arc::new(TestPlugin)).is_err());
         reg.uninstall(&bridge, "test-dx-check").unwrap();

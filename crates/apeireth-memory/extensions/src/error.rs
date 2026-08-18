@@ -125,18 +125,28 @@ impl fmt::Display for MemoryProviderError {
                 write!(f, "[config invalid] field={field:?}, reason={reason}")
             }
             Self::Connection { provider, reason } => {
-                write!(f, "[connection failed] provider={provider:?}, reason={reason}")
+                write!(
+                    f,
+                    "[connection failed] provider={provider:?}, reason={reason}"
+                )
             }
             Self::NotFound { provider, key } => {
                 write!(f, "[not found] provider={provider:?}, key={key}")
             }
             Self::Serialization { provider, reason } => {
-                write!(f, "[serialization failed] provider={provider:?}, reason={reason}")
+                write!(
+                    f,
+                    "[serialization failed] provider={provider:?}, reason={reason}"
+                )
             }
             Self::Backend { provider, reason } => {
                 write!(f, "[backend error] provider={provider:?}, reason={reason}")
             }
-            Self::Capacity { provider, max_size, current } => {
+            Self::Capacity {
+                provider,
+                max_size,
+                current,
+            } => {
                 write!(
                     f,
                     "[capacity exceeded] provider={provider:?}, max_size={max_size}, current={current}"
@@ -319,7 +329,9 @@ mod tests {
         };
         assert_eq!(config.provider(), None);
 
-        let other = MemoryProviderError::Other { msg: "x".to_string() };
+        let other = MemoryProviderError::Other {
+            msg: "x".to_string(),
+        };
         assert_eq!(other.provider(), None);
     }
 

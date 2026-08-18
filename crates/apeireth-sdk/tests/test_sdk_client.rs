@@ -128,7 +128,7 @@ fn auth_pipeline_preflight_walks_5_components() {
     assert_eq!(p.quota.monthly_limit, 0);
     p.preflight("web_search", "search")
         .expect("preflight should succeed");
-    assert!(p.audit.len() >= 1);
+    assert!(!p.audit.is_empty());
     let err = p.check_quota();
     assert!(matches!(err, Err(SdkClientError::QuotaExceeded(_))));
 }

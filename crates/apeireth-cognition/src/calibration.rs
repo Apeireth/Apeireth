@@ -165,7 +165,10 @@ pub fn brier_score(obs: &[Observation]) -> f64 {
     if obs.is_empty() {
         return 0.0;
     }
-    let sum: f64 = obs.iter().map(|o| brier_single(o.forecast, o.outcome)).sum();
+    let sum: f64 = obs
+        .iter()
+        .map(|o| brier_single(o.forecast, o.outcome))
+        .sum();
     sum / obs.len() as f64
 }
 
@@ -324,11 +327,11 @@ mod tests {
         ];
         // 让所有 forecast 都"完美" + bin-aligned (单 forecast per bin → refinement = 0):
         let perfect: Vec<Observation> = vec![
-            Observation::new(0.05, 0.0),   // 偏左 bin
-            Observation::new(0.15, 0.0),   // 偏右 bin (单独, refinement = 0)
-            Observation::new(0.95, 1.0),   // 偏右 bin (单独)
-            Observation::new(0.85, 1.0),   // 偏左 bin
-            Observation::new(0.25, 0.0),   // 中 bin (单独)
+            Observation::new(0.05, 0.0), // 偏左 bin
+            Observation::new(0.15, 0.0), // 偏右 bin (单独, refinement = 0)
+            Observation::new(0.95, 1.0), // 偏右 bin (单独)
+            Observation::new(0.85, 1.0), // 偏左 bin
+            Observation::new(0.25, 0.0), // 中 bin (单独)
         ];
         let decomp = decompose(&perfect, DEFAULT_NUM_BINS);
         assert!(
@@ -342,7 +345,11 @@ mod tests {
             "bin-aligned perfect forecaster: residual should be ~0, got {}",
             decomp.monotonic_residual()
         );
-        assert!(decomp.reliability < 0.05, "perfect forecaster reliability close to 0, got {}", decomp.reliability);
+        assert!(
+            decomp.reliability < 0.05,
+            "perfect forecaster reliability close to 0, got {}",
+            decomp.reliability
+        );
         assert!(decomp.brier_score < 0.05);
     }
 
@@ -350,16 +357,25 @@ mod tests {
     fn monotonic_decomposition_random_forecaster() {
         // 随机 forecast: BS ≈ 0.25 (worst), reliability ≈ uncertainty, resolution ≈ 0
         let obs: Vec<Observation> = (0..100)
-            .map(|i| Observation::new(0.5, (i % 2) as f64))
+            .map(|i| Observation::new(0.5, f64::from(i % 2)))
             .collect();
         let decomp = decompose(&obs, DEFAULT_NUM_BINS);
-        assert!(decomp.is_monotonic(), "monotonic must hold: BS={}, decomp={:?}", decomp.brier_score, decomp);
+        assert!(
+            decomp.is_monotonic(),
+            "monotonic must hold: BS={}, decomp={:?}",
+            decomp.brier_score,
+            decomp
+        );
         assert!(decomp.brier_in_unit_range());
         assert!(decomp.reliability_non_negative());
         assert!(decomp.resolution_non_negative());
         assert!(decomp.uncertainty_in_range());
         // 随机 baseline: BS ≈ 0.25
-        assert!((decomp.brier_score - 0.25).abs() < 0.05, "BS should be ~0.25 for random, got {}", decomp.brier_score);
+        assert!(
+            (decomp.brier_score - 0.25).abs() < 0.05,
+            "BS should be ~0.25 for random, got {}",
+            decomp.brier_score
+        );
     }
 
     #[test]
@@ -372,8 +388,17 @@ mod tests {
         }
         let decomp = decompose(&obs, DEFAULT_NUM_BINS);
         assert!(decomp.is_monotonic());
-        assert!(decomp.brier_score < 0.1, "skilled forecaster BS should be small, got {}", decomp.brier_score);
-        assert!(decomp.resolution > decomp.reliability, "skilled: resolution > reliability, got rel={} res={}", decomp.reliability, decomp.resolution);
+        assert!(
+            decomp.brier_score < 0.1,
+            "skilled forecaster BS should be small, got {}",
+            decomp.brier_score
+        );
+        assert!(
+            decomp.resolution > decomp.reliability,
+            "skilled: resolution > reliability, got rel={} res={}",
+            decomp.reliability,
+            decomp.resolution
+        );
     }
 
     #[test]
@@ -391,7 +416,7 @@ mod tests {
     #[test]
     fn bins_partition_correctly_10() {
         let obs: Vec<Observation> = (0..10)
-            .map(|i| Observation::new(i as f64 / 10.0 + 0.05, (i % 2) as f64))
+            .map(|i| Observation::new(f64::from(i) / 10.0 + 0.05, f64::from(i % 2)))
             .collect();
         let bins = calibration_bins(&obs, 10);
         assert_eq!(bins.len(), 10);
@@ -406,7 +431,10 @@ mod tests {
     fn bins_handle_forecast_one_in_last_bin() {
         let obs = vec![Observation::new(1.0, 1.0)];
         let bins = calibration_bins(&obs, 10);
-        assert_eq!(bins[9].count, 1, "forecast=1.0 should land in last bin (closed)");
+        assert_eq!(
+            bins[9].count, 1,
+            "forecast=1.0 should land in last bin (closed)"
+        );
     }
 
     #[test]
@@ -420,8 +448,8 @@ mod tests {
     fn bins_compute_mean_forecast_and_outcome() {
         let obs = vec![
             Observation::new(0.05, 0.0),
-            Observation::new(0.15, 1.0),  // bin 1
-            Observation::new(0.15, 1.0),  // bin 1
+            Observation::new(0.15, 1.0), // bin 1
+            Observation::new(0.15, 1.0), // bin 1
         ];
         let bins = calibration_bins(&obs, 10);
         // bin 1 = [0.1, 0.2)
@@ -434,12 +462,16 @@ mod tests {
     fn bin_calibration_gap_perfect_forecaster_is_zero() {
         // 完美对齐: forecast = outcome (在 bin 边界 → bin 内 0 variance)
         let obs = vec![
-            Observation::new(0.0, 0.0),   // bin 0 (单独, gap = 0)
-            Observation::new(1.0, 1.0),   // bin 9 (单独, gap = 0)
+            Observation::new(0.0, 0.0), // bin 0 (单独, gap = 0)
+            Observation::new(1.0, 1.0), // bin 9 (单独, gap = 0)
         ];
         let bins = calibration_bins(&obs, 10);
         for bin in bins.iter().filter(|b| b.count > 0) {
-            assert!(bin.calibration_gap() < 0.01, "gap = {}", bin.calibration_gap());
+            assert!(
+                bin.calibration_gap() < 0.01,
+                "gap = {}",
+                bin.calibration_gap()
+            );
         }
     }
 
@@ -469,7 +501,11 @@ mod tests {
         ];
         let bins = calibration_bins(&obs, 10);
         let ece = expected_calibration_error(&bins);
-        assert!(ece > 0.5, "ECE for miscalibrated should be high, got {}", ece);
+        assert!(
+            ece > 0.5,
+            "ECE for miscalibrated should be high, got {}",
+            ece
+        );
     }
 
     #[test]
@@ -491,10 +527,14 @@ mod tests {
             let mut obs = Vec::new();
             for _ in 0..50 {
                 // 简单 LCG
-                state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
                 let p = (state as f64 / u64::MAX as f64).abs();
-                state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-                let y = ((state as f64 / u64::MAX as f64) > 0.5) as u32 as f64;
+                state = state
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let y = f64::from(u32::from((state as f64 / u64::MAX as f64) > 0.5));
                 obs.push(Observation::new(p, y));
             }
             let decomp = decompose(&obs, DEFAULT_NUM_BINS);

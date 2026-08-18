@@ -118,7 +118,7 @@ impl SkillWatcher {
 
     /// **首次扫描** — 填充 baseline mtime, 不发事件
     pub fn scan_initial(&mut self) -> Result<usize, String> {
-        let files = self.discover_files().map_err(|e| e.to_string())?;
+        let files = self.discover_files().map_err(|e| e.clone())?;
         let mut count = 0;
         for path in files {
             if let Some(mtime) = file_mtime_unix(&path) {

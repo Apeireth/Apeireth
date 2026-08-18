@@ -28,7 +28,12 @@ pub struct Segment {
 
 impl Segment {
     pub fn new(name: &'static str, content: impl Into<String>, age_turns: usize) -> Self {
-        Self { name, content: content.into(), core: false, age_turns }
+        Self {
+            name,
+            content: content.into(),
+            core: false,
+            age_turns,
+        }
     }
     pub fn core(mut self, core: bool) -> Self {
         self.core = core;
@@ -51,7 +56,12 @@ pub struct RotConfig {
 
 impl Default for RotConfig {
     fn default() -> Self {
-        Self { w_repetition: 0.4, w_staleness: 0.3, w_relevance: 0.3, stale_half_life_turns: 20.0 }
+        Self {
+            w_repetition: 0.4,
+            w_staleness: 0.3,
+            w_relevance: 0.3,
+            stale_half_life_turns: 20.0,
+        }
     }
 }
 
@@ -155,7 +165,12 @@ pub fn rot_breakdown(seg: &Segment, query: Option<&str>, cfg: &RotConfig) -> Rot
             / w_sum)
             .clamp(0.0, 1.0)
     };
-    RotBreakdown { repetition, staleness, irrelevance, score }
+    RotBreakdown {
+        repetition,
+        staleness,
+        irrelevance,
+        score,
+    }
 }
 
 /// rot_score 快捷口 (总分 [0,1], 越高越应优先压缩).
@@ -195,7 +210,11 @@ pub struct DeterministicCompactor {
 
 impl Default for DeterministicCompactor {
     fn default() -> Self {
-        Self { threshold: 0.6, summary_chars: 120, rot: RotConfig::default() }
+        Self {
+            threshold: 0.6,
+            summary_chars: 120,
+            rot: RotConfig::default(),
+        }
     }
 }
 
@@ -249,7 +268,10 @@ pub fn apply_ops(segments: &[Segment], ops: &[CompactionOp]) -> Vec<Segment> {
         .filter_map(|(s, op)| match op {
             CompactionOp::Retain => Some(s.clone()),
             CompactionOp::Remove => None,
-            CompactionOp::Replace(text) => Some(Segment { content: text.clone(), ..s.clone() }),
+            CompactionOp::Replace(text) => Some(Segment {
+                content: text.clone(),
+                ..s.clone()
+            }),
         })
         .collect()
 }
@@ -268,7 +290,12 @@ pub fn compact_then_budget<C: Compactor>(
     let edited = apply_ops(segments, &ops);
     let mut asm = ContextAssembler::new(total_budget_chars);
     for s in edited {
-        asm = asm.push(ContextBlock { name: s.name, content: s.content, core: s.core, cap_chars: None });
+        asm = asm.push(ContextBlock {
+            name: s.name,
+            content: s.content,
+            core: s.core,
+            cap_chars: None,
+        });
     }
     asm.assemble_budgeted_blocks()
 }
@@ -289,8 +316,16 @@ mod tests {
         let uniq = Segment::new("mem", "甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳午未申酉戌亥", 0);
         let b_rep = rot_breakdown(&rep, None, &cfg());
         let b_uniq = rot_breakdown(&uniq, None, &cfg());
-        assert!(b_rep.repetition > 0.8, "高重复行级因子应近 1, got {}", b_rep.repetition);
-        assert!(b_uniq.repetition < 0.2, "唯一内容因子应低, got {}", b_uniq.repetition);
+        assert!(
+            b_rep.repetition > 0.8,
+            "高重复行级因子应近 1, got {}",
+            b_rep.repetition
+        );
+        assert!(
+            b_uniq.repetition < 0.2,
+            "唯一内容因子应低, got {}",
+            b_uniq.repetition
+        );
         assert!(b_rep.score > b_uniq.score, "重复段总分应更高");
     }
 
@@ -312,7 +347,10 @@ mod tests {
         let irr = Segment::new("mem", "完全不相干的天气记录", 5);
         let b_rel = rot_breakdown(&rel, Some("乌龙茶偏好"), &cfg());
         let b_irr = rot_breakdown(&irr, Some("乌龙茶偏好"), &cfg());
-        assert!(b_rel.irrelevance < b_irr.irrelevance, "命中 query → 无关度更低");
+        assert!(
+            b_rel.irrelevance < b_irr.irrelevance,
+            "命中 query → 无关度更低"
+        );
         assert!(b_rel.score < b_irr.score, "相关段总分应更低 (更该保留)");
     }
 
@@ -336,13 +374,22 @@ mod tests {
         let rotten = Segment::new("mem", "旧事重提\n".repeat(20), 80); // 高重复+高陈旧 → 超阈
         let healthy = Segment::new("mem", "新鲜独有内容一条", 0);
         let c = DeterministicCompactor::default();
-        assert!(rot_score(&rotten, None, &c.rot) >= c.threshold, "腐烂段应超阈值");
-        assert!(rot_score(&healthy, None, &c.rot) < c.threshold, "健康段应低于阈值");
+        assert!(
+            rot_score(&rotten, None, &c.rot) >= c.threshold,
+            "腐烂段应超阈值"
+        );
+        assert!(
+            rot_score(&healthy, None, &c.rot) < c.threshold,
+            "健康段应低于阈值"
+        );
         let ops = c.decide(&[rotten.clone(), healthy], None);
         match &ops[0] {
             CompactionOp::Replace(s) => {
                 assert!(s.chars().count() <= c.summary_chars, "摘要受上限约束");
-                assert!(s.chars().count() < rotten.content.chars().count(), "摘要应短于原文");
+                assert!(
+                    s.chars().count() < rotten.content.chars().count(),
+                    "摘要应短于原文"
+                );
                 assert!(s.contains("旧事重提"), "抽取式摘要保留原内容代表行");
             }
             other => panic!("超阈值段应 Replace, got {other:?}"),
@@ -361,7 +408,10 @@ mod tests {
     fn remove_when_nothing_to_summarize() {
         let blank_rotten = Segment::new("mem", "\n\n   \n", 999);
         // 全空白段: 超阈 (陈旧度≈1) 且抽取式摘要为空 → Remove
-        let c = DeterministicCompactor { threshold: 0.5, ..DeterministicCompactor::default() };
+        let c = DeterministicCompactor {
+            threshold: 0.5,
+            ..DeterministicCompactor::default()
+        };
         assert!(rot_score(&blank_rotten, None, &c.rot) >= c.threshold);
         let ops = c.decide(&[blank_rotten], None);
         assert_eq!(ops[0], CompactionOp::Remove, "无可摘要内容 → Remove");
@@ -398,7 +448,12 @@ mod tests {
             }
         }
         let segs = vec![Segment::new("x", "原文", 0)];
-        let out = compact_then_budget(&segs, &Scripted(vec![CompactionOp::Replace("脚本摘要".into())]), None, 1000);
+        let out = compact_then_budget(
+            &segs,
+            &Scripted(vec![CompactionOp::Replace("脚本摘要".into())]),
+            None,
+            1000,
+        );
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].content, "脚本摘要");
     }
@@ -416,19 +471,30 @@ mod tests {
         // 盲截尾 (context.rs 现状行为直跑): 大头先砍, 不辨价值
         let mut blind = ContextAssembler::new(budget);
         for s in &segs {
-            blind = blind.push(ContextBlock { name: s.name, content: s.content.clone(), core: s.core, cap_chars: None });
+            blind = blind.push(ContextBlock {
+                name: s.name,
+                content: s.content.clone(),
+                core: s.core,
+                cap_chars: None,
+            });
         }
         let blind_out = blind.assemble_budgeted_blocks();
 
         // rot 驱动选择性压缩 + 截尾兜底
-        let smart_out =
-            compact_then_budget(&segs, &DeterministicCompactor::default(), Some("乌龙茶"), budget);
+        let smart_out = compact_then_budget(
+            &segs,
+            &DeterministicCompactor::default(),
+            Some("乌龙茶"),
+            budget,
+        );
 
         let smart_total: usize = smart_out.iter().map(|b| b.content.chars().count()).sum();
         assert!(smart_total <= budget, "协作后仍受预算约束");
         // 智能版: 高价值段完整保留
         assert!(
-            smart_out.iter().any(|b| b.content.contains("用户今天说喜欢乌龙茶")),
+            smart_out
+                .iter()
+                .any(|b| b.content.contains("用户今天说喜欢乌龙茶")),
             "rot 驱动应完整保留高价值段"
         );
         // 盲截尾对照: 腐烂大头被砍但高价值段也可能受累 — 智能版不劣于盲截尾的价值保留
@@ -442,13 +508,19 @@ mod tests {
             .filter(|b| b.content.contains("用户今天说喜欢乌龙茶"))
             .map(|b| b.content.chars().count())
             .sum();
-        assert!(smart_valuable >= blind_valuable, "选择性压缩保留的高价值内容不少于盲截尾");
+        assert!(
+            smart_valuable >= blind_valuable,
+            "选择性压缩保留的高价值内容不少于盲截尾"
+        );
         // 腐烂段在智能版中被摘要化或移除, 不再占据大头
         let smart_rotten: usize = smart_out
             .iter()
             .filter(|b| b.content.contains("陈年旧事复读机"))
             .map(|b| b.content.chars().count())
             .sum();
-        assert!(smart_rotten <= DeterministicCompactor::default().summary_chars, "腐烂段应被压缩到摘要上限内");
+        assert!(
+            smart_rotten <= DeterministicCompactor::default().summary_chars,
+            "腐烂段应被压缩到摘要上限内"
+        );
     }
 }

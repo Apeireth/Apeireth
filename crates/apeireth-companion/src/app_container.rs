@@ -88,8 +88,15 @@ mod tests {
     fn app_container_0_install_honest() {
         // 0 装 PASS: available 必须 false, status 必须诚实标注未接.
         let b = AppContainerProfile;
-        assert!(!b.available(), "AppContainer 0 装 PASS: available 必须 false");
-        assert!(b.status().contains("未接"), "status 必须诚实标注未接: {}", b.status());
+        assert!(
+            !b.available(),
+            "AppContainer 0 装 PASS: available 必须 false"
+        );
+        assert!(
+            b.status().contains("未接"),
+            "status 必须诚实标注未接: {}",
+            b.status()
+        );
     }
 
     #[test]
@@ -104,7 +111,10 @@ mod tests {
             ..Default::default()
         };
         let p = AppContainerProfile.render_params(&cfg);
-        assert!(p.iter().any(|s| s.contains("90")), "参数模板应含 timeout=90: {p:?}");
+        assert!(
+            p.iter().any(|s| s.contains("90")),
+            "参数模板应含 timeout=90: {p:?}"
+        );
     }
 
     #[test]
