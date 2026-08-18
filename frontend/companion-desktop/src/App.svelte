@@ -9,12 +9,12 @@
   import type {ApeirethConfig, ChatMessage, Conversation, ViewId} from './lib/types';
   import {
     checkHealth,
+    createAgentRuntime,
     listModels,
     loadConfig,
     loadConversations,
     saveConfig,
     saveConversations,
-    streamChat,
   } from './lib/runtime';
 
   const nav = [
@@ -32,7 +32,8 @@
   let busy = $state(false);
   let connected = $state(false);
   let error = $state('');
-  let abortController = $state<AbortController | null>(null);
+  // runtime 绑定当前配置; config 变更时在 saveSettings 重建
+  let agentRuntime = $state(createAgentRuntime(loadConfig()));
 
   // 设置视图临时值 (初始从持久化配置读取, 编辑期间独立)
   let editBaseUrl = $state(loadConfig().baseUrl);
@@ -113,20 +114,25 @@
       updateConversation(conversationId, {title: text.slice(0, 24)});
     }
 
-    abortController = new AbortController();
     try {
-      const full = await streamChat(
-        config,
-        [...history, {role: 'user', content: text}],
-        (delta) => {
-          const current = conversations.find((item) => item.id === conversationId);
-          if (current) {
-            updateConversation(conversationId, {
-              messages: current.messages.map((m) => m.id === assistantMessage.id ? {...m, text: m.text + delta} : m),
-            });
+      // UI 只面对 Agent Runtime Contract (§15) — 事件流驱动更新, 不裸碰 HTTP
+      const full = await agentRuntime.run(
+        {
+          messages: [...history, {role: 'user', content: text}],
+          model: {id: config.model, provider: 'apeireth'},
+          sessionId: conversationId,
+          context: {user: '主人'},
+        },
+        (event) => {
+          if (event.type === 'text-delta') {
+            const current = conversations.find((item) => item.id === conversationId);
+            if (current) {
+              updateConversation(conversationId, {
+                messages: current.messages.map((m) => m.id === assistantMessage.id ? {...m, text: m.text + event.text} : m),
+              });
+            }
           }
         },
-        abortController.signal,
       );
       updateMessage(conversationId, assistantMessage.id, {text: full || '(空响应)', streaming: false});
     } catch (caught) {
@@ -135,12 +141,11 @@
       updateMessage(conversationId, assistantMessage.id, {text: '', streaming: false, error: message});
     } finally {
       busy = false;
-      abortController = null;
     }
   }
 
   function stop(): void {
-    abortController?.abort();
+    agentRuntime.abort();
   }
 
   function newConversation(): void {
@@ -178,6 +183,8 @@
   async function saveSettings(): Promise<void> {
     config = {...config, baseUrl: editBaseUrl.trim(), apiKey: editApiKey.trim(), model: editModel.trim()};
     saveConfig(config);
+    // 重建 runtime 以使用新配置 (§15 contract 实例绑定 config)
+    agentRuntime = createAgentRuntime(config);
     connected = await checkHealth(config.baseUrl);
     if (connected) {
       try {
