@@ -216,6 +216,8 @@ const ALLOWED_EXECUTABLES: &[&str] = &[
     "true",
     "false",
     "test",
+    // CI fix 2026-08: sleep (无副作用, 仅挂起; exec 有 timeout 兜底) — 超时测试依赖
+    "sleep",
     "env",
     "which",
     "where",
