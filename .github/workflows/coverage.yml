@@ -32,6 +32,10 @@ jobs:
         # 改用 taiki-e/install-action (跟 rust.yml 的 nextest 一致)
         uses: taiki-e/install-action@cargo-tarpaulin
 
+      # tarpaulin 编译 workspace (keyring → dbus-secret-service → libdbus-sys) 需要系统库
+      - name: "Install system deps (Linux: libdbus)"
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - uses: Swatinem/rust-cache@v2
 
       - name: cargo tarpaulin
