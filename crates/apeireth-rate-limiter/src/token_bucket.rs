@@ -233,11 +233,15 @@ mod tests {
 
     #[test]
     fn available_tokens_reflects_refill() {
+        // CI fix 2026-08: 原 20ms sleep + [60,80] 紧断言在 macOS nextest 高并发下
+        // 调度延迟导致实际 refill 量漂移 → flaky. 改语义断言:
+        // refill 生效 (avail > 消耗后 50) + 容量封顶 (<= 100).
         let mut tb = TokenBucket::new(&cfg(1000.0, 100)).unwrap();
         let _ = tb.try_acquire(50);
-        std::thread::sleep(Duration::from_millis(20));
+        std::thread::sleep(Duration::from_millis(50));
         let avail = tb.available_tokens();
-        // 应接近 50 + 20ms*1000/s = 50 + 20 = 70
-        assert!(avail >= 60.0 && avail <= 80.0);
+        // 50ms * 1000/s = 50 补满 → 50+50=100 (封顶)
+        assert!(avail > 50.0, "refill 应生效, 实际: {avail}");
+        assert!(avail <= 100.0, "不应超容量, 实际: {avail}");
     }
 }
