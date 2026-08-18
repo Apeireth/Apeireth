@@ -73,9 +73,13 @@ jobs:
       - name: cargo bench (--baseline main)
         # push 模式: 跟自己上次 main 对比
         # PR 模式: 跟 base ref 对比
+        # 只跑 criterion (harness=false) bench 的 crate:
+        #   cargo bench --workspace 会给无 [[bench]] 的 crate 生成默认 libtest harness bench,
+        #   它不认 --save-baseline → "Unrecognized option: 'save-baseline'"
+        #   (apeireth-acp 等 77 个纯库 crate 都中招, 故显式枚举, 不用 --workspace)
         run: |
-          echo ">>> cargo bench --workspace -- --save-baseline pr-${{ github.event.pull_request.number || github.run_number }}"
-          cargo bench --workspace -- --save-baseline "pr-${{ github.event.pull_request.number || github.run_number }}"
+          echo ">>> cargo bench (criterion crates) -- --save-baseline pr-${{ github.event.pull_request.number || github.run_number }}"
+          cargo bench -p apeireth-bench -p apeireth-graph -p apeireth-i18n -p apeireth-lark -p apeireth-memory -p apeireth-team-lead -p apeireth-tui -p apeireth-voice -- --save-baseline "pr-${{ github.event.pull_request.number || github.run_number }}"
 
       # === 拉 1.0.0 baseline (从上次 release artifact) ===
       - name: Download 1.0.0 baseline (if exists)

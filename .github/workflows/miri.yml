@@ -43,6 +43,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
 
       - name: Run miri
+        # CI fix 2026-08: sovereignty 的 miri 在 Run miri 挂起 >2.5h (某测试在 miri 解释器下
+        # 死循环/等待, 待调查) → step 级 timeout 20 分钟 (job timeout 30 分钟兜底)
+        timeout-minutes: 20
         env:
           # -Zmiri-permissive-provenance: 放行指针 provenance (wasmtime 同款)
           # -Zmiri-disable-isolation: 测试用 std::time (REALTIME clock_gettime) 在 miri
