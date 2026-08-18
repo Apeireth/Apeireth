@@ -222,9 +222,8 @@ pub fn echo_server_main(codec: PipeCodec) -> std::io::Result<()> {
         if sin.read_exact(&mut tag_buf).is_err() {
             return Ok(()); // EOF
         }
-        let got_codec = match PipeCodec::from_tag(tag_buf[0]) {
-            Ok(c) => c,
-            Err(_) => return Ok(()),
+        let Ok(got_codec) = PipeCodec::from_tag(tag_buf[0]) else {
+            return Ok(());
         };
         if got_codec != codec {
             // 不同 codec 不互通; 简单退出

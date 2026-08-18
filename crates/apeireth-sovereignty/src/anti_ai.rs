@@ -57,7 +57,7 @@ use thiserror::Error;
 /// 检测类型数 (编译时硬编码: AnomalousFrequency / AnomalousParameters / UnauthorizedAccess / DataExfiltration = 4)
 pub const THREAT_TYPE_COUNT_HARDCODE: usize = 4;
 
-/// K-1 强校验数 (编译时硬编码: subject 非空 / evidence ≥ 1 / severity ∈ [0,1] = 3)
+/// K-1 强校验数 (编译时硬编码: subject 非空 / evidence ≥ 1 / severity ∈ `[0,1]` = 3)
 pub const K1_STRICT_CHECK_COUNT_HARDCODE: usize = 3;
 
 /// 高严重度阈值 (>= 此值的 signal 需立即处置)
