@@ -162,7 +162,7 @@ pub type ParticipantSid = String;
 /// - `metadata` (per 自定义 metadata, 可选)
 /// - `is_speaking` (per 当前是否在说话, active speakers 用)
 /// - `connection_quality` (per ConnectionQuality 5 等级)
-/// - `permissions` (per Vec<Permission> 5 权限位)
+/// - `permissions` (per `Vec<Permission>` 5 权限位)
 /// - `joined_at` (per 加入时间戳)
 /// - `track_publications` (per HashMap<TrackSid, TrackPublication>, R21 续)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
