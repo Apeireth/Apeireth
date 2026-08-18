@@ -1,7 +1,7 @@
 // Apeireth 桌面伙伴 — 共享类型 (从 Pattern apps/desktop 移植, 精简)
 // 已移除 Computer Use / AgentOS 残留字段 (recovery/screenshotPath/steps[].tier)
 
-export type ViewId = 'chat' | 'conversations' | 'settings';
+export type ViewId = 'chat' | 'conversations' | 'memory' | 'settings';
 export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper';
 export type MemoryCategory = '事实' | '偏好' | '事件' | '反馈' | '参考';
 export type ConversationScope = 'global' | 'project';
