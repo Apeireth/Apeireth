@@ -153,7 +153,7 @@ const _: () = assert!(SUPPORTED_ROOM_EVENTS.len() == 8);
 /// 事件发射器 (per v0.9.21 商业版 `EventEmitter` 1:1 翻译, 用 tokio::broadcast 实现).
 ///
 /// 字段对应 v0.9.21 商业版 Room 内部 emitter:
-/// - `tx` (per tokio::broadcast::Sender<RoomEvent>, 8 事件共享一个 channel)
+/// - `tx` (per `tokio::broadcast::Sender<RoomEvent>`, 8 事件共享一个 channel)
 /// - `capacity` (per 100 条 buffer, R21 续可配)
 #[derive(Debug, Clone)]
 pub struct EventEmitter {

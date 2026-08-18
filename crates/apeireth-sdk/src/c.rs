@@ -4,7 +4,7 @@
 //!   / `compile_info_c` / `free_string_c`), 0 假装 100% 多语言支持 (O-5).
 //!
 //! **O-5 实质守门**: 仅 `--features c` 启用时编译, 默认 build 0 装 cbindgen.
-//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml [features]).
+//! **R122-8 决策**: cfg-gated features 隔离 (per lib.rs §A R122-8 段 + Cargo.toml `[features]`).
 //!
 //! **C-ABI 5 fn** (per task spec, cbindgen auto-generate `apeireth_sdk.h`):
 //! 1. `uint32_t apeireth_sdk_count_tokens(const char* text)` — R32-1 启发式
@@ -172,7 +172,7 @@ pub extern "C" fn apeireth_sdk_version() -> *const c_char {
 
 /// **C-ABI fn #4**: `apeireth_sdk_compile_info() -> *const c_char`.
 ///
-/// 返 "rustc X.Y.Z target triple, apeireth-sdk features: [python,node,c,default]" 字面量.
+/// 返 "rustc X.Y.Z target triple, apeireth-sdk features: `[python,node,c,default]`" 字面量.
 /// 0 假装实际 rustc version (编译期 hardcode "unknown" + "cfg(apeireth_sdk)" marker).
 #[cfg(feature = "c")]
 #[no_mangle]

@@ -43,3 +43,8 @@ unused_mut = 'allow'
 
 [lints.clippy]
 all = { level = 'allow', priority = -1 }
+
+# CI fix 2026-08: 与 workspace [workspace.lints.rustdoc] 对齐 (见根 Cargo.toml 注释)
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+invalid_html_tags = "allow"

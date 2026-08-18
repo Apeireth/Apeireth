@@ -536,12 +536,12 @@ mod tests {
 
     #[test]
     fn prepare_child_with_hardening_fails_off_windows() {
-        let _cfg = SandboxConfig {
-            integrity_level: Some(IntegrityLevel::Low),
-            ..Default::default()
-        };
         #[cfg(not(windows))]
         {
+            let cfg = SandboxConfig {
+                integrity_level: Some(IntegrityLevel::Low),
+                ..Default::default()
+            };
             let r = prepare_child(&cfg);
             assert!(r.is_err(), "非 Windows 平台请求 hardening 应诚实返 Err");
             let err = r.unwrap_err();
