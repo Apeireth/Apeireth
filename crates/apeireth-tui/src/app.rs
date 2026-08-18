@@ -128,7 +128,7 @@ pub struct App {
     pub splash_enabled: bool,
     pub breath_enabled: bool,
     /// R26-2: settings 页内选项光标 (0..5, 0=mode 1=theme 2=splash 3=breath 4=language)
-    /// [j][k] / [Up]/[Down] 切换; 被选中项在 settings 页里金色高亮
+    /// `[j]`/`[k]` / `[Up]`/`[Down]` 切换; 被选中项在 settings 页里金色高亮
     pub settings_cursor: u8,
     /// R26-2: 启动 splash 是否正在显示 (按 splash_enabled 初始化, 按任意键退出)
     /// (运行时状态, 不持久化; 启动时 from settings.splash_enabled)
@@ -173,7 +173,7 @@ pub struct App {
     pub input_history: Vec<String>,
     /// R26-3-fixes: 当前在 input_history 的导航位置
     /// - None: 不在导航 (正常输入)
-    /// - Some(idx): 正显示 input_history[idx]
+    /// - Some(idx): 正显示 `input_history[idx]`
     pub history_idx: Option<usize>,
     /// R26-3-fixes: TUI 内置选区 (chat 历史拖拽选, 按视觉行粒度)
     /// - None: 无选区

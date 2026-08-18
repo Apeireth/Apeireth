@@ -27,8 +27,8 @@ jobs:
   protocol-e2e:
     name: 4 协议 e2e (minimaxi)
     runs-on: ubuntu-latest
-    # 主人 apikey 存在时跑, 缺失时跳过 (fork PR 不会暴露 secret)
-    if: ${{ env.APEIRETH_API_KEY != '' }}
+    # CI fix 2026-08: job-level if 不能读 env 上下文 (Unrecognized named-value: 'env')
+    # → 各协议步骤用 step-level if: env.APEIRETH_API_KEY (step 级 env 可用)
     steps:
       - uses: actions/checkout@v4
 
@@ -56,6 +56,7 @@ jobs:
 
       # === 步骤 2: OpenAI Chat Completions 真接 minimaxi ===
       - name: "协议 1/4 - OpenAI Chat Completions (/v1/chat/completions)"
+        if: env.APEIRETH_API_KEY != ''
         run: cargo run --release -p apeireth-api --example openai_chat
         env:
           APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
@@ -63,6 +64,7 @@ jobs:
 
       # === 步骤 3: OpenAI Responses API 真接 minimaxi ===
       - name: "协议 2/4 - OpenAI Responses API (/v1/responses)"
+        if: env.APEIRETH_API_KEY != ''
         run: cargo run --release -p apeireth-api --example openai_responses
         env:
           APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
@@ -70,6 +72,7 @@ jobs:
 
       # === 步骤 4: Anthropic Messages 真接 minimaxi ===
       - name: "协议 3/4 - Anthropic Messages (/v1/messages)"
+        if: env.APEIRETH_API_KEY != ''
         run: cargo run --release -p apeireth-api --example anthropic
         env:
           APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
@@ -77,6 +80,7 @@ jobs:
 
       # === 步骤 5: Google Gemini GenerateContent 真接 minimaxi ===
       - name: "协议 4/4 - Google Gemini (generateContent)"
+        if: env.APEIRETH_API_KEY != ''
         run: cargo run --release -p apeireth-api --example gemini
         env:
           APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
@@ -88,10 +92,10 @@ jobs:
   skipped-notice:
     name: 4 协议 e2e (skipped - 无 APEIRETH_API_KEY)
     runs-on: ubuntu-latest
-    # 主人 apikey 不存在时跑 (提示性 job)
-    if: ${{ env.APEIRETH_API_KEY == '' }}
+    # CI fix 2026-08: job-level if 不能读 env → step 级 if
     steps:
       - name: Notice
+        if: env.APEIRETH_API_KEY == ''
         run: |
           echo "⚠️ APEIRETH_API_KEY secret 未配置, 4 协议 e2e 跳过."
           echo "   在 Settings → Secrets → Actions 配置 APEIRETH_API_KEY 后重跑."
