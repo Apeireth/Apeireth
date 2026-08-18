@@ -97,9 +97,6 @@
       wait: '等待',
       done: '完成',
       fail: '失败',
-      computer_use: 'Computer Use',
-      'desktop.computer_use': 'Computer Use',
-      'desktop.launch': '启动应用',
       catalog: '工具目录',
     };
     return map[action] || action;
