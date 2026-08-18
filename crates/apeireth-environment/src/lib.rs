@@ -771,7 +771,10 @@ mod tests {
         let req = ExecRequest::new(if cfg!(target_os = "windows") {
             "cmd /c echo hello"
         } else {
-            "sh -c echo hello"
+            // CI fix 2026-08: 不能用 `sh -c echo hello` — POSIX 里 -c 只取 `echo`
+            // 当命令串, `hello` 变成 $0 → stdout 空行, contains("hello") 必挂.
+            // 用 printf (无引号歧义, split_whitespace 拆 argv 后透传).
+            "printf hello"
         })
         .with_timeout(5);
         let result = backend.execute(&req).await;
