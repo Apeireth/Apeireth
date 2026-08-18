@@ -74,7 +74,8 @@ pub struct ToolRegistry {
     watched_dir: parking_lot::Mutex<Option<PathBuf>>,
     /// **可选**: 通知事件回调 (add/change/unlink → 用户处理)
     /// **Apeireth 简化**: 简化版, watcher 只记录事件到 trace log
-    notify_events: parking_lot::Mutex<Vec<PathBuf>>,
+    /// **Arc**: watch 闭包 (move) 需要独立所有权写入, 与 take_notify_events 共享
+    notify_events: Arc<parking_lot::Mutex<Vec<PathBuf>>>,
 }
 
 impl Default for ToolRegistry {
@@ -91,7 +92,7 @@ impl ToolRegistry {
             categories: RwLock::new(HashMap::new()),
             notify_watcher: parking_lot::Mutex::new(None),
             watched_dir: parking_lot::Mutex::new(None),
-            notify_events: parking_lot::Mutex::new(Vec::new()),
+            notify_events: Arc::new(parking_lot::Mutex::new(Vec::new())),
         }
     }
 
@@ -274,9 +275,8 @@ impl ToolRegistry {
             return Err(format!("not a directory: {}", dir.display()));
         }
 
-        let events: Arc<parking_lot::Mutex<Vec<PathBuf>>> =
-            Arc::new(parking_lot::Mutex::new(Vec::new()));
-        let events_clone = Arc::clone(&events);
+        // 事件队列共享给 watch 闭包 (move 闭包不能借用 &self, 用 Arc)
+        let events = Arc::clone(&self.notify_events);
 
         let mut watcher: RecommendedWatcher =
             notify::recommended_watcher(move |res: notify::Result<Event>| match res {
@@ -287,7 +287,7 @@ impl ToolRegistry {
                     ) {
                         for path in event.paths {
                             debug!("[ToolRegistry] notify event: {:?}", path);
-                            events_clone.lock().push(path);
+                            events.lock().push(path);
                         }
                     }
                 }
