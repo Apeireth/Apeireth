@@ -109,9 +109,8 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
         // 后台 accept loop — 把每条收到的 frame fan-out 到 topic subscribers
         tokio::spawn(async move {
             loop {
-                let (mut stream, _addr) = match listener.accept().await {
-                    Ok(x) => x,
-                    Err(_) => continue,
+                let Ok((mut stream, _addr)) = listener.accept().await else {
+                    continue;
                 };
                 let topics = topics.clone();
                 let stats = stats.clone();

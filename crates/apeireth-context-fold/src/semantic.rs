@@ -212,7 +212,7 @@ pub fn unfold_semantic(rendered: &str, outcome: &SemanticFoldOutcome) -> String 
 mod tests {
     use super::*;
 
-    /// 确定性 mock 嵌入: "天气"→[1,0], "代码"→[0,1], 其余混合。
+    /// 确定性 mock 嵌入: "天气"→[1,0], "代码"→`[0,1]`, 其余混合。
     struct MockEmbedder;
     impl Embedder for MockEmbedder {
         fn embed(&self, text: &str) -> Vec<f32> {
