@@ -41,7 +41,7 @@ impl SdkVersion {
         })
     }
 
-    /// 字符串化 (无前缀, 与 [parse] 对应).
+    /// 字符串化 (无前缀, 与 `[parse]` 对应).
     pub fn as_str(&self) -> String {
         format!("{}.{}.{}", self.major, self.minor, self.patch)
     }

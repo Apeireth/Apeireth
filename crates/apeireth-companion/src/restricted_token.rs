@@ -487,14 +487,14 @@ mod tests {
 
     #[test]
     fn hardening_request_fails_honestly_off_windows() {
-        let _c = RestrictedTokenConfig {
-            integrity_level: Some(IntegrityLevel::Low),
-            deny_only_sids: vec![WellKnownSid::BuiltinAdministrators],
-            default_dacl_open: true,
-            app_container_roots: Vec::new(),
-        };
         #[cfg(not(windows))]
         {
+            let c = RestrictedTokenConfig {
+                integrity_level: Some(IntegrityLevel::Low),
+                deny_only_sids: vec![WellKnownSid::BuiltinAdministrators],
+                default_dacl_open: true,
+                app_container_roots: Vec::new(),
+            };
             let r = create_restricted_token(&c);
             assert!(r.is_err(), "非 Windows 平台请求真硬化应诚实返 Err");
             let err = r.unwrap_err();
