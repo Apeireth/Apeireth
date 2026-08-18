@@ -117,6 +117,9 @@ pub mod hypothesis; // F4: 假设检验闭环 (HypothesisStore 状态机 + Verif
 pub mod emotion_memory; // F1: 情感记忆 (主人情绪时间线 valence/arousal + 加权当前情绪 + 趋势 + 情绪上下文检索, 确定性无 LLM)
 pub mod progressive; // TP21: 渐进式披露 (目录先行→按需展开, claude-mem 借鉴, 预算截断 + 0 装省略标注)
 pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
+pub mod experiment_field; // 自我改进缺环: VM 实验场 (提案→实验→通过→批准→部署) + 回滚学习信号
+pub mod voice_session; // 连续感知①: 麦克风实时语音会话桥 (STT→对话→TTS 编排, SpeechIO trait 口)
+pub mod screen_perception; // 连续感知②: 屏幕显著性事件 (窗口切换/聚焦/空闲, ScreenEventSource trait 口)
 pub mod runtime_brain; // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录, CompanionApp 接线层)
 // R177: organ invariants
 mod organ_kani_proofs;
