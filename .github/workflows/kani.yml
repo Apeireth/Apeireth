@@ -47,9 +47,10 @@ jobs:
         run: cargo kani --version
 
       # ponytail: 这是验收命令. workspace 其它 crate 不参与 Kani 编译,
-      # 只在 apeireth-formal 单 crate 跑. 若失败 = 验收失败.
+      # 只在承载 crate 单跑 (double_onion_sample harness 在 apeireth-library-governance).
+      # CI fix 2026-08: 原 -p apeireth-formal 无此 crate (Failed to retrieve information).
       - name: Run Kani proof for double_onion_sample
-        run: cargo kani -p apeireth-formal --harness double_onion_sample --verbose
+        run: cargo kani -p apeireth-library-governance --harness double_onion_sample --verbose
 
       # ponytail: 同时跑 runtime sanity test 作为兜底 (即使 cargo-kani 离线,
       # cargo test 仍能验证不变量在具体输入上不爆).

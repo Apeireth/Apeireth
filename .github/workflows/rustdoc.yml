@@ -28,7 +28,7 @@ jobs:
           components: rust-src
 
       # keyring → dbus-secret-service → libdbus-sys 需要系统库 (--all-features 编译全链)
-      - name: Install system deps (Linux: libdbus)
+      - name: "Install system deps (Linux: libdbus)"
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - uses: Swatinem/rust-cache@v2

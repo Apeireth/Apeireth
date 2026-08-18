@@ -1,0 +1,35 @@
+# ============================================================================
+# audit.toml — cargo-audit ignore 配置 (CI fix 2026-08)
+# ============================================================================
+# 与 deny.toml [advisories].ignore 同步 (两处检查都跑, ignore 理由一致)。
+# 全部为 unmaintained 类 (0 直接业务依赖或已记录替代路径), 真实漏洞 0 ignore:
+# - gtk-rs (RUSTSEC-2024-0411..0420): apeireth-integration-r20-stage4 gtk test / webkit2gtk 链
+# - paste / proc-macro-error / proc-macro-error2: proc macro 链 (anyhow/thiserror 间接)
+# - unic-* (RUSTSEC-2025-0075/0080/0081/0098/0100): url / idna 间接
+# - Authorization (RUSTSEC-2026-0174): http crate 已知
+# - bincode (RUSTSEC-2025-0141): unmaintained (doxxing incident, 1.3.3/2.0.1 视为 complete,
+#   等 apeireth-bus 升替代实现)
+
+[advisories]
+ignore = [
+    "RUSTSEC-2024-0411",
+    "RUSTSEC-2024-0412",
+    "RUSTSEC-2024-0413",
+    "RUSTSEC-2024-0414",
+    "RUSTSEC-2024-0415",
+    "RUSTSEC-2024-0416",
+    "RUSTSEC-2024-0417",
+    "RUSTSEC-2024-0418",
+    "RUSTSEC-2024-0419",
+    "RUSTSEC-2024-0420",
+    "RUSTSEC-2024-0436",
+    "RUSTSEC-2024-0370",
+    "RUSTSEC-2026-0173",
+    "RUSTSEC-2025-0075",
+    "RUSTSEC-2025-0080",
+    "RUSTSEC-2025-0081",
+    "RUSTSEC-2025-0098",
+    "RUSTSEC-2025-0100",
+    "RUSTSEC-2026-0174",
+    "RUSTSEC-2025-0141",
+]
