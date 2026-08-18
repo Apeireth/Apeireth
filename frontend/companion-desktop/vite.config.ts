@@ -17,5 +17,15 @@ export default defineConfig({
   build: {
     target: 'chrome105',
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // 重量级第三方拆独立 vendor chunk (katex/hljs 是 markdown 渲染大头)
+          'vendor-markdown': ['marked', 'dompurify', 'highlight.js', 'katex'],
+          'vendor-svelte': ['svelte'],
+          'vendor-lucide': ['lucide-svelte'],
+        },
+      },
+    },
   },
 });
