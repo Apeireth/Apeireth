@@ -20,20 +20,6 @@
         "minHeight": 640,
         "resizable": true,
         "center": true
-      },
-      {
-        "label": "quick",
-        "title": "Apeireth 快捷",
-        "url": "index.html?window=quick",
-        "width": 440,
-        "height": 390,
-        "minWidth": 380,
-        "minHeight": 260,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "visible": false,
-        "skipTaskbar": true
       }
     ],
     "security": {
