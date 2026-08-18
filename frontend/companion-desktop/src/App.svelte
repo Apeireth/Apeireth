@@ -1,8 +1,9 @@
 <script lang="ts">
   import {onMount} from 'svelte';
-  import {MessageCircleMore, Settings, MessagesSquare, Send, Plus, ArrowUp, Trash2, Loader2, Plug} from 'lucide-svelte';
+  import {MessageCircleMore, Settings, MessagesSquare, Layers3, Plus, ArrowUp, Trash2, Loader2, Plug} from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import ConversationsView from './lib/ConversationsView.svelte';
+  import MemoryView from './lib/MemoryView.svelte';
   import PageHeader from './lib/PageHeader.svelte';
   import StatusDot from './lib/StatusDot.svelte';
   import type {ApeirethConfig, ChatMessage, Conversation, ViewId} from './lib/types';
@@ -19,6 +20,7 @@
   const nav = [
     {id: 'chat', label: '对话', icon: MessageCircleMore},
     {id: 'conversations', label: '会话', icon: MessagesSquare},
+    {id: 'memory', label: '记忆', icon: Layers3},
     {id: 'settings', label: '设置', icon: Settings},
   ] as const;
 
@@ -289,6 +291,8 @@
         onArchive={archiveConversation}
         onDelete={deleteConversation}
       />
+    {:else if activeView === 'memory'}
+      <MemoryView {config} />
     {:else}
       <section class="view">
         <PageHeader eyebrow="配置" title="后端连接" subtitle="连接 Apeireth 的 OpenAI 兼容端点 (companion_serve :8090 或 apeireth-api :8080)。">
