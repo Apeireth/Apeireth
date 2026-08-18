@@ -221,7 +221,7 @@ mod tests {
         let mut t = trace_with(0.5);
         t.v1136_subs[0] = 0.95;
         t.v05_dims[0] = 0.95;
-        let a = det.observe(&t, &baseline);
+        let _a = det.observe(&t, &baseline);
         let _ = det.observe(&t, &baseline);
         let a = det.observe(&t, &baseline);
         // 第 3 次后两个维度都应告警

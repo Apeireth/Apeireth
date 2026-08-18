@@ -347,7 +347,7 @@ impl StateGraphExecutor {
                 // 沿 deterministic 边前进
                 if let Some(nexts) = adj.get(&current) {
                     if let Some(next) = nexts.first() {
-                        current = (*next).to_string();
+                        current = (*next).clone();
                     } else {
                         break;
                     }

@@ -43,7 +43,9 @@ async-trait = "0.1"
 # SQLite provider (借 workspace rusqlite, in-memory DB 测试)
 rusqlite = { version = "0.32", features = ["bundled"] }
 # LRU cache + disk persistence (借 workspace lru + std::fs)
-lru = "0.16"
+lru = "0.18" # RUSTSEC-2026-0253 (0.16.4 unsound), 0.18.2 patched
+# clippy disallowed-methods (clippy.toml): std::fs::create_dir_all 强制走 fs_err (包名 fs-err)
+fs-err = "3.0" # extensions 是独立 workspace, 不能用 workspace = true
 # S3 provider (用 reqwest + S3 REST API, 借 workspace reqwest 0.12, 避免 aws-sdk-s3 重量级)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # 时间 (ProviderConfig.timeout / cache_ttl 用 Duration, std 直接 OK; 0 引 chrono)

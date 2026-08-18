@@ -42,86 +42,86 @@
 pub mod bond;
 pub mod consciousness_bridge;
 // R176: bridge 5 Kani proofs
-mod bridge_kani_proofs;  // R173 bridge 5 of 7
-pub mod milestone;
-pub mod partner;
-pub mod timeline;
+pub mod approval_requests;
+pub mod audit;
+mod bridge_kani_proofs; // R173 bridge 5 of 7
+pub mod capability;
+pub mod causal_world_model; // TP32/W2+W3: 世界模型第二层 因果结构图推演 (memory_graph s/p/o 因果网 + MCTS + W3 边挖掘 + LLM 提议边)
+pub mod confidence;
+pub mod constitution_gate;
+pub mod daemon;
+pub mod daily_summary;
+pub mod deploy; // A1: 能力演化回路后半段 (部署→监控→回滚机制件, mock 通道可测)
+pub mod dream;
+pub mod education;
 pub mod emergence;
+pub mod evolution_gate;
+pub mod experience;
+pub mod gh_accel;
+pub mod goal;
+pub mod goal_tools;
+pub mod judicator;
+pub mod memory_extractor;
+pub mod memory_graph;
+pub mod memory_injection;
+pub mod meta_thinking; // §5.1③: 元思考递归链 (VCP MetaThinkingManager 精神, 思考→再思考, 自包含; reflection 接线待 N14)
+pub mod milestone;
+pub mod oracle;
+pub mod oracle_adapters; // N3: 预测机套件数据源适配器 (拉取→规范化→喂 oracle 可证伪预测登记)
+pub mod organs;
+pub mod partner;
+pub mod pentest;
+pub mod plugin;
+pub mod principles;
 pub mod proactive;
 pub mod proactive_memory; // W4: 记忆主动推销 (预期话题分类 + 预载检索道 + ProactiveBlock 注入)
-pub mod organs;
-pub mod daemon;
-pub mod judicator;
-pub mod constitution_gate;
-pub mod memory_injection;
-pub mod confidence;
-pub mod evolution_gate;
-pub mod oracle;
-pub mod oracle_adapters;  // N3: 预测机套件数据源适配器 (拉取→规范化→喂 oracle 可证伪预测登记)
-pub mod world_model;  // TP31/W1: 世界模型第一层 文本模拟器 (LLM 反事实推演链 + oracle Brier 终点校准)
-pub mod causal_world_model;  // TP32/W2+W3: 世界模型第二层 因果结构图推演 (memory_graph s/p/o 因果网 + MCTS + W3 边挖掘 + LLM 提议边)
-pub mod dream;
 pub mod reflection;
-pub mod thought_cluster;  // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
-pub mod meta_thinking;  // §5.1③: 元思考递归链 (VCP MetaThinkingManager 精神, 思考→再思考, 自包含; reflection 接线待 N14)
-pub mod daily_summary;
-pub mod goal;
-pub mod capability;
-pub mod deploy; // A1: 能力演化回路后半段 (部署→监控→回滚机制件, mock 通道可测)
 pub mod suites;
-pub mod plugin;
-pub mod education;
-pub mod pentest;
-pub mod gh_accel;
-pub mod audit;
-pub mod experience;
-pub mod principles;
-pub mod approval_requests;
-pub mod memory_extractor;
-pub mod goal_tools;
-pub mod memory_graph;
-// M2: 图社区分层聚合 + 双级检索分诊 (LightRAG/GraphRAG 精神, 轻量确定性, CRAWL 本体 0 改动)
+pub mod thought_cluster; // N4: ThoughtClusterManager 思维簇管理 + 元自学习读取口
+pub mod timeline;
+pub mod world_model; // TP31/W1: 世界模型第一层 文本模拟器 (LLM 反事实推演链 + oracle Brier 终点校准)
+                     // M2: 图社区分层聚合 + 双级检索分诊 (LightRAG/GraphRAG 精神, 轻量确定性, CRAWL 本体 0 改动)
+pub mod actions;
+pub mod app_container; // S1: AppContainer 档 trait 口 (高危, 0 装 PASS)
+pub mod assemble;
 pub mod community;
-pub mod morphology;  // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
-pub mod diary;  // §5.1 机制⑤: 日记本中心 (RAGDiaryPlugin 精神, 按日归档+检索+注入 trait 口)
-pub mod reflexion;  // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRITIC 反思→反思记忆→同类重试注入, 确定性规则版先行, LLM 口留 trait)
-pub mod topic_groups;  // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
-pub mod cross_diary;  // §5.1④: 跨日记关联 — diary↔memory_graph 确定性联动 (共享token建链+双向查询+注入trait口)
 pub mod context;
 pub mod context_rot; // M1: Context Rot 度量 + compaction 段编辑原语 (rot_score 三因子确定性, LLM 版留 trait 口)
-pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
-pub mod assemble;
-pub mod job_object;  // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
-pub mod sandbox;  // B3 + S1: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + 完整性级别 + deny-only SID + 目录 ACL 根 + AppContainer 档 + Sandboxie/landlock trait 留口)
-pub mod restricted_token;  // S1: Windows 受限 token (CreateRestrictedToken + TokenIntegrityLevel + DACL)
-pub mod directory_acl;  // S1: 工具沙盒根目录 read-only DACL (与 APEIRETH_TOOL_FS_ROOTS 协作)
-pub mod app_container;  // S1: AppContainer 档 trait 口 (高危, 0 装 PASS)
-pub mod critic;  // P2#10: CRITIC 反思带工具调用 (声明提取 + 验证 trait + 组合器)
-pub mod hello;  // P3#22: Windows Hello 真绑机制口 (检测 + 绑定 trait, 0 装 PASS)
-pub mod exec_worker;
 pub mod continuation;
 pub mod continuity; // N2 OneRing: continuity 锚点解析 + 迁移接口 (append-only 安全)
-pub mod onering; // N2 OneRing: 统一上下文账本 (跨前端同一时间线, VCP OneRing 对照)
-pub mod prompt_cache;
-pub mod spill;
-pub mod session_log;
-pub mod tone;
-pub mod simulation;
-pub mod actions;
-pub mod tool_bridge;
-pub mod security;
-pub mod packs;
-pub mod observer_capture; // TP22: 工具执行结果即时沉淀候选 (W5 直通管道, 不等反思周期)
-pub mod curiosity;  // E4: 好奇驱动引擎 (记忆回声偏置采样 + 浅尝辄止 + 疑问路由, 确定性无 LLM)
-pub mod hypothesis; // F4: 假设检验闭环 (HypothesisStore 状态机 + VerifyPlanner + ReconcileSink 对账口, 确定性无 LLM)
+pub mod critic; // P2#10: CRITIC 反思带工具调用 (声明提取 + 验证 trait + 组合器)
+pub mod cross_diary; // §5.1④: 跨日记关联 — diary↔memory_graph 确定性联动 (共享token建链+双向查询+注入trait口)
+pub mod curiosity; // E4: 好奇驱动引擎 (记忆回声偏置采样 + 浅尝辄止 + 疑问路由, 确定性无 LLM)
+pub mod diary; // §5.1 机制⑤: 日记本中心 (RAGDiaryPlugin 精神, 按日归档+检索+注入 trait 口)
+pub mod directory_acl; // S1: 工具沙盒根目录 read-only DACL (与 APEIRETH_TOOL_FS_ROOTS 协作)
 pub mod emotion_memory; // F1: 情感记忆 (主人情绪时间线 valence/arousal + 加权当前情绪 + 趋势 + 情绪上下文检索, 确定性无 LLM)
-pub mod progressive; // TP21: 渐进式披露 (目录先行→按需展开, claude-mem 借鉴, 预算截断 + 0 装省略标注)
-pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
+pub mod exec_worker;
 pub mod experiment_field; // 自我改进缺环: VM 实验场 (提案→实验→通过→批准→部署) + 回滚学习信号
-pub mod voice_session; // 连续感知①: 麦克风实时语音会话桥 (STT→对话→TTS 编排, SpeechIO trait 口)
+pub mod hello; // P3#22: Windows Hello 真绑机制口 (检测 + 绑定 trait, 0 装 PASS)
+pub mod hypothesis; // F4: 假设检验闭环 (HypothesisStore 状态机 + VerifyPlanner + ReconcileSink 对账口, 确定性无 LLM)
+pub mod job_object; // P3#16: Windows Job Object 沙箱加固 (exec_worker 隔离层)
+pub mod morphology; // N7: 查询形态学 softmax (CRAWL 深度/检索模式切换, 纯函数)
+pub mod observer_capture; // TP22: 工具执行结果即时沉淀候选 (W5 直通管道, 不等反思周期)
+pub mod onering; // N2 OneRing: 统一上下文账本 (跨前端同一时间线, VCP OneRing 对照)
+pub mod packs;
+pub mod progressive; // TP21: 渐进式披露 (目录先行→按需展开, claude-mem 借鉴, 预算截断 + 0 装省略标注)
+pub mod prompt_assembler; // N9: 提示词装配引擎 (占位符变量宇宙, VCP messageProcessor 范式吸收)
+pub mod prompt_cache;
+pub mod reflexion; // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRITIC 反思→反思记忆→同类重试注入, 确定性规则版先行, LLM 口留 trait)
+pub mod restricted_token; // S1: Windows 受限 token (CreateRestrictedToken + TokenIntegrityLevel + DACL)
+pub mod runtime_brain;
+pub mod sandbox; // B3 + S1: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + 完整性级别 + deny-only SID + 目录 ACL 根 + AppContainer 档 + Sandboxie/landlock trait 留口)
 pub mod screen_perception; // 连续感知②: 屏幕显著性事件 (窗口切换/聚焦/空闲, ScreenEventSource trait 口)
-pub mod runtime_brain; // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录, CompanionApp 接线层)
-// R177: organ invariants
+pub mod security;
+pub mod session_log;
+pub mod simulation;
+pub mod spill;
+pub mod tone;
+pub mod tool_bridge;
+pub mod topic_groups; // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
+pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
+pub mod voice_session; // 连续感知①: 麦克风实时语音会话桥 (STT→对话→TTS 编排, SpeechIO trait 口) // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录, CompanionApp 接线层)
+                       // R177: organ invariants
 mod organ_kani_proofs;
 
 use std::sync::Arc;
@@ -129,62 +129,94 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
-pub use bond::{Bond, BondCharacter, BondDepth, BondStage};
-pub use milestone::{Milestone, MilestoneKind, MilestonePayload};
-pub use partner::{Partner, PartnerId, PartnerPreferences};
-pub use timeline::{Timeline, TimelineEntry};
-pub use emergence::{Boundaries, ConsoleDelivery, EmergenceLoop, Feedback, Initiative, InitiativeReason, LocalRelationship, NoopDelivery, RelationshipState, RhythmEstimate, RhythmEstimator, SelfScore};
 pub use actions::{select_action, Action, CapabilityCatalog};
-pub use tool_bridge::{RecallMemoryTool, ToolBridge};
-pub use observer_capture::{
-    args_hash, ExperienceCandidate, ExperienceQueue, ExperienceQueueConfig, ExperienceSource,
-    ObserverCaptureHook, Outcome, CANDIDATE_ID_PREFIX, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
-};
-pub use security::SecurityGate;
-pub use packs::{PackExpiry, PackRegistry, PermissionPack};
-pub use proactive::{ContextSource, EmptyContext, LarkDelivery, MemoryContextSource, ProactiveDriver};
-pub use proactive_memory::{
-    build_proactive_block, default_composite_channel, predict_topic, recommend_proactive_cap,
-    render_proactive_content, CompositeChannel, ImportanceChannel, KeywordChannel, MemoryCandidate,
-    PreloadChannel, ProactiveBlock, TimeChannel, TopicCue, TopicHint, TopicPrediction,
-};
-pub use organs::AwakeCompanion;
-pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
-pub use daemon::{BroadcastSink, CompanionDaemon, CompanionDelivery, ConsoleSink, Judicator, LarkSink, MultiSink, NoopJudicator, PlainUtterance, Sink, ThrottledUtterance, UtteranceGenerator, default_memory_path, open_memory_store, requires_llm_review};
 pub use assemble::{CompanionApp, DeepRecall, DialogSummarizer, ExperienceRefiner};
-pub use prompt_assembler::{AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind, StaticSource, TimeSource, VariableSource};
-pub use critic::{Claim, ClaimVerifier, CritiqueReport, ReflectionCritic, Verification, extract_claims};
-pub use hello::{HelloBound, HelloCapability, detect_hello_capability};
-pub use judicator::{ConstitutionLlm, CONSTITUTION, LlmJudicator, parse_verdict};
-pub use constitution_gate::ConstitutionGate;
-pub use memory_injection::build_memory_injection;
-pub use morphology::{MorphologyVerdict, RetrievalMode};
+pub use bond::{Bond, BondCharacter, BondDepth, BondStage};
+pub use capability::{
+    CapabilityError, CapabilityKind, CapabilityProposal, CapabilityRegistry, CapabilityStatus,
+    ExpectedOutcome,
+};
 pub use confidence::{BetaBinomial, Strength};
-pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
-pub use oracle::{Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast, ForecastRegistry, ScenarioEngine, WorldState, UncertaintyResolver};
-pub use world_model::{CounterfactualChain, MockTimelineLlm, TextualSimulator, TimelineContext, TimelineLlm, TimelineStep};
-pub use oracle_adapters::{AdapterError, AdapterForecastMeta, AdapterRegistry, CoinGeckoAdapter, DirectionForecast, FallbackAdapter, ForecastPipeline, MacroRatesAdapter, MarketAdapter, MarketQuote, MockAdapter, RawFetch, ReqwestRawFetch, ResolveOutcome, TREASURY_AVG_RATE};
-pub use dream::{DreamScheduler, DreamSummarizer};
-pub use reflection::ReflectionScheduler;
-pub use thought_cluster::{ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader, ThoughtFile};
-pub use daily_summary::{DailySummary, build_daily_summary};
-pub use goal::{GoalBlock, GoalError, GoalPhase, GoalService, GoalSnapshot, GoalStore};
-pub use capability::{CapabilityError, CapabilityKind, CapabilityProposal, CapabilityRegistry, CapabilityStatus, ExpectedOutcome};
-pub use deploy::{DeployChannel, DeployError, DeployManager, DeployStatus, Deployment, MockDeployChannel, MonitorMetrics, ObserveOutcome};
-pub use suites::{SuiteCatalog, SuiteDef, SuiteKind, suite_expiry_check};
+pub use constitution_gate::ConstitutionGate;
 pub use continuation::{ContinuationSnapshot, ContinuationStore, PendingToolCall};
 pub use continuity::{
     current_continuity_id, ensure_identity, migrate_subject, normalize_continuity,
     record_carrier_migration, MigrationReport, CONTINUITY_ENV_VAR, DEFAULT_CONTINUITY_ID,
     MIGRATED_ID_PREFIX,
 };
+pub use critic::{
+    extract_claims, Claim, ClaimVerifier, CritiqueReport, ReflectionCritic, Verification,
+};
+pub use daemon::{
+    default_memory_path, open_memory_store, requires_llm_review, BroadcastSink, CompanionDaemon,
+    CompanionDelivery, ConsoleSink, Judicator, LarkSink, MultiSink, NoopJudicator, PlainUtterance,
+    Sink, ThrottledUtterance, UtteranceGenerator,
+};
+pub use daily_summary::{build_daily_summary, DailySummary};
+pub use deploy::{
+    DeployChannel, DeployError, DeployManager, DeployStatus, Deployment, MockDeployChannel,
+    MonitorMetrics, ObserveOutcome,
+};
+pub use dream::{DreamScheduler, DreamSummarizer};
+pub use emergence::{
+    Boundaries, ConsoleDelivery, EmergenceLoop, Feedback, Initiative, InitiativeReason,
+    LocalRelationship, NoopDelivery, RelationshipState, RhythmEstimate, RhythmEstimator, SelfScore,
+};
+pub use evolution_gate::{EvalGate, GateDecision, VerifyOutcome};
+pub use goal::{GoalBlock, GoalError, GoalPhase, GoalService, GoalSnapshot, GoalStore};
+pub use hello::{detect_hello_capability, HelloBound, HelloCapability};
+pub use judicator::{parse_verdict, ConstitutionLlm, LlmJudicator, CONSTITUTION};
+pub use memory_injection::build_memory_injection;
+pub use milestone::{Milestone, MilestoneKind, MilestonePayload};
+pub use morphology::{MorphologyVerdict, RetrievalMode};
+pub use observer_capture::{
+    args_hash, ExperienceCandidate, ExperienceQueue, ExperienceQueueConfig, ExperienceSource,
+    ObserverCaptureHook, Outcome, CANDIDATE_ID_PREFIX, DEFAULT_DEDUP_WINDOW_MS, DEFAULT_LRU_CAP,
+};
 pub use onering::{LedgerEntry, OneRingLedger, DEFAULT_MAX_RECORDS, ROLE_ASSISTANT, ROLE_USER};
+pub use oracle::{
+    Branch, CalibratedResolver, CalibrationStatus, DecisionEngine, Entity, Forecast,
+    ForecastRegistry, ScenarioEngine, UncertaintyResolver, WorldState,
+};
+pub use oracle_adapters::{
+    AdapterError, AdapterForecastMeta, AdapterRegistry, CoinGeckoAdapter, DirectionForecast,
+    FallbackAdapter, ForecastPipeline, MacroRatesAdapter, MarketAdapter, MarketQuote, MockAdapter,
+    RawFetch, ReqwestRawFetch, ResolveOutcome, TREASURY_AVG_RATE,
+};
+pub use organs::AwakeCompanion;
+pub use packs::{PackExpiry, PackRegistry, PermissionPack};
+pub use partner::{Partner, PartnerId, PartnerPreferences};
+pub use proactive::{
+    ContextSource, EmptyContext, LarkDelivery, MemoryContextSource, ProactiveDriver,
+};
+pub use proactive_memory::{
+    build_proactive_block, default_composite_channel, predict_topic, recommend_proactive_cap,
+    render_proactive_content, CompositeChannel, ImportanceChannel, KeywordChannel, MemoryCandidate,
+    PreloadChannel, ProactiveBlock, TimeChannel, TopicCue, TopicHint, TopicPrediction,
+};
+pub use prompt_assembler::{
+    AssemblerError, AssemblyGuard, AssemblyRole, ExpansionReport, PromptAssembler, SourceKind,
+    StaticSource, TimeSource, VariableSource,
+};
 pub use prompt_cache::{assemble_tiered, build_messages, redact_secrets};
-pub use spill::{SpillStore, SPILL_THRESHOLD_CHARS};
+pub use reflection::ReflectionScheduler;
+pub use security::SecurityGate;
 pub use session_log::{SessionEvent, SessionLog};
+pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
+pub use spill::{SpillStore, SPILL_THRESHOLD_CHARS};
+pub use suites::{suite_expiry_check, SuiteCatalog, SuiteDef, SuiteKind};
+pub use thought_cluster::{
+    ThoughtClusterError, ThoughtClusterManager, ThoughtClusterReader, ThoughtFile,
+};
+pub use timeline::{Timeline, TimelineEntry};
 pub use tone::{
     deliberation_intensity, emotion_tone, organ_tone, organ_tone_refined, tone_hint,
     DeliberationEcho, ToneError, ToneRefiner,
+};
+pub use tool_bridge::{RecallMemoryTool, ToolBridge};
+pub use world_model::{
+    CounterfactualChain, MockTimelineLlm, TextualSimulator, TimelineContext, TimelineLlm,
+    TimelineStep,
 };
 
 /// 伙伴器官根类型 —— 全部关系状态的持有者
@@ -275,7 +307,9 @@ impl Companion {
             return Err(CompanionError::PartnerAlreadyExists(id));
         }
         if partners.len() >= self.inner.config.max_partners {
-            return Err(CompanionError::MaxPartnersReached(self.inner.config.max_partners));
+            return Err(CompanionError::MaxPartnersReached(
+                self.inner.config.max_partners,
+            ));
         }
         let partner = Partner::new(id, display_name, preferences);
         partners.insert(id, partner.clone());
@@ -285,7 +319,13 @@ impl Companion {
     }
 
     pub async fn get_partner(&self, id: PartnerId) -> CompanionResult<Partner> {
-        self.inner.partners.read().await.get(&id).cloned().ok_or(CompanionError::PartnerNotFound(id))
+        self.inner
+            .partners
+            .read()
+            .await
+            .get(&id)
+            .cloned()
+            .ok_or(CompanionError::PartnerNotFound(id))
     }
 
     pub async fn record_milestone(
@@ -295,14 +335,22 @@ impl Companion {
         payload: MilestonePayload,
     ) -> CompanionResult<Milestone> {
         let mut timelines = self.inner.timelines.write().await;
-        let timeline = timelines.get_mut(&id).ok_or(CompanionError::PartnerNotFound(id))?;
+        let timeline = timelines
+            .get_mut(&id)
+            .ok_or(CompanionError::PartnerNotFound(id))?;
         let milestone = Milestone::new(kind, payload);
         timeline.append(milestone.clone());
         Ok(milestone)
     }
 
     pub async fn get_timeline(&self, id: PartnerId) -> CompanionResult<Timeline> {
-        self.inner.timelines.read().await.get(&id).cloned().ok_or(CompanionError::PartnerNotFound(id))
+        self.inner
+            .timelines
+            .read()
+            .await
+            .get(&id)
+            .cloned()
+            .ok_or(CompanionError::PartnerNotFound(id))
     }
 
     pub async fn evolve_bond(
@@ -312,7 +360,9 @@ impl Companion {
         delta_depth: f64,
     ) -> CompanionResult<Bond> {
         let mut partners = self.inner.partners.write().await;
-        let partner = partners.get_mut(&id).ok_or(CompanionError::PartnerNotFound(id))?;
+        let partner = partners
+            .get_mut(&id)
+            .ok_or(CompanionError::PartnerNotFound(id))?;
         partner.bond_mut().evolve(new_stage, delta_depth);
         Ok(partner.bond().clone())
     }
@@ -350,7 +400,10 @@ mod tests {
         let companion = Companion::new();
         let id = PartnerId::new();
         let prefs = PartnerPreferences::default();
-        let p = companion.register_partner(id, "测试".to_string(), prefs).await.unwrap();
+        let p = companion
+            .register_partner(id, "测试".to_string(), prefs)
+            .await
+            .unwrap();
         assert_eq!(p.id(), id);
         let got = companion.get_partner(id).await.unwrap();
         assert_eq!(got.display_name(), "测试");
@@ -360,8 +413,18 @@ mod tests {
     async fn record_and_get_milestone() {
         let companion = Companion::new();
         let id = PartnerId::new();
-        companion.register_partner(id, "测试".to_string(), PartnerPreferences::default()).await.unwrap();
-        let m = companion.record_milestone(id, MilestoneKind::FirstMeeting, MilestonePayload::Text("hello".into())).await.unwrap();
+        companion
+            .register_partner(id, "测试".to_string(), PartnerPreferences::default())
+            .await
+            .unwrap();
+        let m = companion
+            .record_milestone(
+                id,
+                MilestoneKind::FirstMeeting,
+                MilestonePayload::Text("hello".into()),
+            )
+            .await
+            .unwrap();
         let timeline = companion.get_timeline(id).await.unwrap();
         assert_eq!(timeline.len(), 1);
         assert_eq!(timeline.entries()[0].milestone, m);
@@ -371,8 +434,14 @@ mod tests {
     async fn evolve_bond() {
         let companion = Companion::new();
         let id = PartnerId::new();
-        companion.register_partner(id, "测试".to_string(), PartnerPreferences::default()).await.unwrap();
-        let bond = companion.evolve_bond(id, BondStage::Trusted, 0.3).await.unwrap();
+        companion
+            .register_partner(id, "测试".to_string(), PartnerPreferences::default())
+            .await
+            .unwrap();
+        let bond = companion
+            .evolve_bond(id, BondStage::Trusted, 0.3)
+            .await
+            .unwrap();
         assert_eq!(bond.stage(), BondStage::Trusted);
         assert!(bond.depth().value() > 0.0);
     }
@@ -381,8 +450,13 @@ mod tests {
     async fn duplicate_register_fails() {
         let companion = Companion::new();
         let id = PartnerId::new();
-        companion.register_partner(id, "A".to_string(), PartnerPreferences::default()).await.unwrap();
-        let res = companion.register_partner(id, "B".to_string(), PartnerPreferences::default()).await;
+        companion
+            .register_partner(id, "A".to_string(), PartnerPreferences::default())
+            .await
+            .unwrap();
+        let res = companion
+            .register_partner(id, "B".to_string(), PartnerPreferences::default())
+            .await;
         assert!(matches!(res, Err(CompanionError::PartnerAlreadyExists(_))));
     }
 

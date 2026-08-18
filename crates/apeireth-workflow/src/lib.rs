@@ -212,7 +212,11 @@ pub trait Workflow: Send + Sync {
     fn id(&self) -> &str;
 
     /// Run workflow, ctx.execute_activity(...) 调 activity
-    fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value>;
+    fn run(
+        &self,
+        ctx: &WorkflowContext,
+        input: &serde_json::Value,
+    ) -> WorkflowResult<serde_json::Value>;
 }
 
 // ============================================================
@@ -241,7 +245,9 @@ impl WorkflowRunner {
     }
 
     pub fn register_activity(&mut self, id: impl Into<String>, activity: Arc<dyn Activity>) {
-        Arc::get_mut(&mut self.activities).unwrap().insert(id.into(), activity);
+        Arc::get_mut(&mut self.activities)
+            .unwrap()
+            .insert(id.into(), activity);
     }
 
     /// 跑 workflow, input → output + 持久化 history
@@ -298,7 +304,9 @@ impl WorkflowRunner {
 
         // 持久化到 store
         let final_history = history.lock().clone();
-        self.history_store.lock().insert(workflow_id.into(), final_history);
+        self.history_store
+            .lock()
+            .insert(workflow_id.into(), final_history);
 
         result
     }
@@ -343,13 +351,21 @@ impl WorkflowWorker {
             workflow_id: workflow_id.into(),
         }
     }
-    pub fn workflow_id(&self) -> &str { &self.workflow_id }
-    pub fn runner(&self) -> &Arc<WorkflowRunner> { &self.runner }
-    pub fn name(&self) -> &str { &self.workflow_id }
+    pub fn workflow_id(&self) -> &str {
+        &self.workflow_id
+    }
+    pub fn runner(&self) -> &Arc<WorkflowRunner> {
+        &self.runner
+    }
+    pub fn name(&self) -> &str {
+        &self.workflow_id
+    }
     pub fn execute_with_input(&self, input_json: &str) -> Result<String, String> {
-        let value: serde_json::Value = serde_json::from_str(input_json)
-            .map_err(|e| format!("input parse: {}", e))?;
-        let result = self.runner.run(&self.workflow_id, &value)
+        let value: serde_json::Value =
+            serde_json::from_str(input_json).map_err(|e| format!("input parse: {}", e))?;
+        let result = self
+            .runner
+            .run(&self.workflow_id, &value)
             .map_err(|e| e.to_string())?;
         serde_json::to_string(&result).map_err(|e| format!("output serialize: {}", e))
     }
@@ -387,9 +403,14 @@ mod workflow_worker_tests {
 
     struct SumWorkflow;
     impl Workflow for SumWorkflow {
-        fn id(&self) -> &str { "sum" }
-        fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value)
-            -> WorkflowResult<serde_json::Value> {
+        fn id(&self) -> &str {
+            "sum"
+        }
+        fn run(
+            &self,
+            ctx: &WorkflowContext,
+            input: &serde_json::Value,
+        ) -> WorkflowResult<serde_json::Value> {
             let result = ctx.execute_activity("add", input.clone())?;
             Ok(result)
         }
@@ -425,7 +446,11 @@ mod workflow_worker_tests {
         let w = WorkflowWorker::new(runner.clone(), "sum");
         let _ = w.execute_with_input(r#"{"a":1,"b":2}"#).unwrap();
         let hist = runner.get_history("sum").expect("history");
-        assert!(hist.len() >= 4, "expected at least 4 events (started+scheduled+completed+workflowCompleted), got {}", hist.len());
+        assert!(
+            hist.len() >= 4,
+            "expected at least 4 events (started+scheduled+completed+workflowCompleted), got {}",
+            hist.len()
+        );
         assert_eq!(hist[0].kind, EventKind::WorkflowStarted);
         assert_eq!(hist.last().unwrap().kind, EventKind::WorkflowCompleted);
     }
@@ -486,11 +511,17 @@ mod tests {
         fn id(&self) -> &str {
             "sum_workflow"
         }
-        fn run(&self, ctx: &WorkflowContext, input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+        fn run(
+            &self,
+            ctx: &WorkflowContext,
+            input: &serde_json::Value,
+        ) -> WorkflowResult<serde_json::Value> {
             // 调两次 activity: a + b (用 ? 传播 Err)
             let a = ctx.execute_activity("echo", serde_json::json!(1))?;
             let b = ctx.execute_activity("echo", serde_json::json!(2))?;
-            Ok(serde_json::json!({"sum": a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0), "input": input}))
+            Ok(
+                serde_json::json!({"sum": a.as_i64().unwrap_or(0) + b.as_i64().unwrap_or(0), "input": input}),
+            )
         }
     }
 
@@ -499,7 +530,11 @@ mod tests {
         fn id(&self) -> &str {
             "fail_workflow"
         }
-        fn run(&self, ctx: &WorkflowContext, _input: &serde_json::Value) -> WorkflowResult<serde_json::Value> {
+        fn run(
+            &self,
+            ctx: &WorkflowContext,
+            _input: &serde_json::Value,
+        ) -> WorkflowResult<serde_json::Value> {
             let _ = ctx.execute_activity("failing", serde_json::json!(null));
             Ok(serde_json::json!(null))
         }
@@ -562,7 +597,10 @@ mod tests {
         // 这是允许的, 但 history 应记录 ActivityFailed
         let _ = r.run("fail_workflow", &serde_json::json!({}));
         let history = r.get_history("fail_workflow").unwrap();
-        let activity_failed_count = history.iter().filter(|e| e.kind == EventKind::ActivityFailed).count();
+        let activity_failed_count = history
+            .iter()
+            .filter(|e| e.kind == EventKind::ActivityFailed)
+            .count();
         assert_eq!(activity_failed_count, 1);
     }
 
@@ -589,15 +627,21 @@ mod tests {
     #[test]
     fn activity_counted_correctly() {
         let counter = Arc::new(AtomicU32::new(0));
-        let activity = Arc::new(CountingActivity { counter: counter.clone() });
+        let activity = Arc::new(CountingActivity {
+            counter: counter.clone(),
+        });
 
         let mut r = WorkflowRunner::new();
         r.register_activity("count", activity);
-        r.register_workflow(Arc::new(SumWorkflow));  // 用 sum_workflow 跑
+        r.register_workflow(Arc::new(SumWorkflow)); // 用 sum_workflow 跑
 
         // SumWorkflow 调 echo (未注册) — 跳过 workflow run
         let _ = r.run("sum_workflow", &serde_json::json!({}));
-        assert_eq!(counter.load(Ordering::SeqCst), 0, "SumWorkflow 调 echo (未注册), count 不应增加");
+        assert_eq!(
+            counter.load(Ordering::SeqCst),
+            0,
+            "SumWorkflow 调 echo (未注册), count 不应增加"
+        );
     }
 
     #[test]
@@ -611,12 +655,30 @@ mod tests {
     #[test]
     fn event_kind_serialization() {
         // snake_case 序列化
-        assert_eq!(serde_json::to_value(EventKind::WorkflowStarted).unwrap(), serde_json::json!("workflow_started"));
-        assert_eq!(serde_json::to_value(EventKind::ActivityScheduled).unwrap(), serde_json::json!("activity_scheduled"));
-        assert_eq!(serde_json::to_value(EventKind::ActivityCompleted).unwrap(), serde_json::json!("activity_completed"));
-        assert_eq!(serde_json::to_value(EventKind::ActivityFailed).unwrap(), serde_json::json!("activity_failed"));
-        assert_eq!(serde_json::to_value(EventKind::WorkflowCompleted).unwrap(), serde_json::json!("workflow_completed"));
-        assert_eq!(serde_json::to_value(EventKind::WorkflowFailed).unwrap(), serde_json::json!("workflow_failed"));
+        assert_eq!(
+            serde_json::to_value(EventKind::WorkflowStarted).unwrap(),
+            serde_json::json!("workflow_started")
+        );
+        assert_eq!(
+            serde_json::to_value(EventKind::ActivityScheduled).unwrap(),
+            serde_json::json!("activity_scheduled")
+        );
+        assert_eq!(
+            serde_json::to_value(EventKind::ActivityCompleted).unwrap(),
+            serde_json::json!("activity_completed")
+        );
+        assert_eq!(
+            serde_json::to_value(EventKind::ActivityFailed).unwrap(),
+            serde_json::json!("activity_failed")
+        );
+        assert_eq!(
+            serde_json::to_value(EventKind::WorkflowCompleted).unwrap(),
+            serde_json::json!("workflow_completed")
+        );
+        assert_eq!(
+            serde_json::to_value(EventKind::WorkflowFailed).unwrap(),
+            serde_json::json!("workflow_failed")
+        );
     }
 
     #[test]
@@ -646,7 +708,11 @@ mod tests {
         // History 应覆盖 (只保留最新一次)
         let history = r.get_history("sum_workflow").unwrap();
         assert_eq!(history.len(), 6);
-        assert_eq!(r.total_runs(), 1, "history_store 用 workflow_id 作 key, 同 id 覆盖");
+        assert_eq!(
+            r.total_runs(),
+            1,
+            "history_store 用 workflow_id 作 key, 同 id 覆盖"
+        );
     }
 
     #[test]

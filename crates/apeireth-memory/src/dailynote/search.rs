@@ -37,10 +37,18 @@ pub fn search_notes(notes: &[DailyNote], query: &str, tag_filter: Option<&str>) 
             }
         }
         if score > 0.0 {
-            hits.push(SearchHit { note_id: note.id.clone(), score, matched_in });
+            hits.push(SearchHit {
+                note_id: note.id.clone(),
+                score,
+                matched_in,
+            });
         }
     }
-    hits.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+    hits.sort_by(|a, b| {
+        b.score
+            .partial_cmp(&a.score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
     hits
 }
 

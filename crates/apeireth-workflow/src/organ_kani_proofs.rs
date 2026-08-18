@@ -3,8 +3,8 @@
 #![allow(missing_docs)]
 
 use crate::*;
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 #[test]
 fn r177_wf_01_event_kind_workflow_started() {

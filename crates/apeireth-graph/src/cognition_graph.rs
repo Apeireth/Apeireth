@@ -252,18 +252,15 @@ pub async fn run_cognition_graph_sync(
     let mut state = State::new();
     state.insert("v05_dims".to_string(), json!(dims.to_vec()));
     state.insert("target_name".to_string(), json!(target_name));
-    let final_state = match g.execute(state).await {
-        Ok(s) => s,
-        Err(_) => {
-            // 0 假装 — hardcode 0/zero defaults
-            return CognitionSummary {
-                mean: 0.0,
-                min: 0.0,
-                max: 0.0,
-                verdict_approve: true,
-                node_count: COGNITION_GRAPH_NODE_COUNT as u32,
-            };
-        }
+    let Ok(final_state) = g.execute(state).await else {
+        // 0 假装 — hardcode 0/zero defaults
+        return CognitionSummary {
+            mean: 0.0,
+            min: 0.0,
+            max: 0.0,
+            verdict_approve: true,
+            node_count: COGNITION_GRAPH_NODE_COUNT as u32,
+        };
     };
     let summary = final_state.get("asi_summary").cloned().unwrap_or(json!({}));
     let mean = summary.get("mean").and_then(|v| v.as_f64()).unwrap_or(0.0);

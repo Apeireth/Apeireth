@@ -40,7 +40,7 @@ fn ref_count_tokens_heuristic(text: &str) -> u32 {
     tokens
 }
 
-fn ref_hash_request_sha256(_method: &str, _url: &str, _body: &[u8]) -> String {
+fn ref_hash_request_sha256(method: &str, url: &str, body: &[u8]) -> String {
     // 跨 features 工作: 优先用 cfg c 的 sha2 (已 optional dep), 否则 Python 1:1 内联 hex
     #[cfg(any(feature = "c", feature = "node"))]
     {

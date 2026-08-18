@@ -319,7 +319,7 @@ impl HealthReport {
         if self.max_score == 0 {
             0.0
         } else {
-            (self.total_score as f64 / self.max_score as f64) * 100.0
+            (f64::from(self.total_score) / f64::from(self.max_score)) * 100.0
         }
     }
 

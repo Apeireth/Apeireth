@@ -360,15 +360,15 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 criterion = { version = "0.5", features = ["html_reports"] }
 proptest = "1.5"
 async-trait = "0.1"
-lru = "0.16"
+# CI fix 2026-08: lru 0.16.4 有 RUSTSEC-2026-0253 (unsound use-after-free), 0.18.2 已修复.
+lru = "0.18"
 # Tech-Review 2026-08-05 P0-1 + P0-4: shell-words 用作 safe argv 解析, 替换 `cmd /c <user_input>` 注入
 # 轻量 (1 transitive dep), POSIX shell 风格引号/转义/空白
 # 钉到 1.1.x (P0-4 时写的 "1" 太松, 1.1 是当前 stable)
 shell-words = "1.1"
 # R18 第 0 阶段第 4 项: clippy.toml 的 disallowed-types/methods 把 std::fs / tokio::fs
-# 强制替换为 fs_err. 先把 fs_err 加到 workspace deps, 等 R18 T10 迁移调用方.
-# (clippy.toml 配置完整, 但代码迁移留作下一 PR — 业界做法)
-fs_err = "3.0"
+# 强制替换为 fs_err. (crate 名 fs_err, 包名 fs-err — 2026-08 CI fix 修正声明)
+fs-err = "3.0"
 # R125-2: clap 4.5 derive macros 替换 apeireth-cli/commands.rs 手写 argv 解析
 # (R124-1 borrow: clap-rs/clap 4f7a2c1 + clap/examples/git-derive.rs pattern)
 clap = { version = "4.5", features = ["derive"] }

@@ -40,7 +40,7 @@ impl<T> L1Frame<T> {
 }
 
 #[cfg(unix)]
-fn read_frame<T: for<'de> Deserialize<'de>>(stream: &mut UnixStream) -> BusResult<L1Frame<T>> {
+fn read_frame<T: for<'de> Deserialize<'de>>(_stream: &mut UnixStream) -> BusResult<L1Frame<T>> {
     // 同步式 read_frame — 在 async context 里调用的话改用 read_frame_async
     unreachable!("use read_frame_async");
 }
@@ -195,19 +195,22 @@ pub struct L1Client<T: Clone + Send + Sync + 'static + Serialize + for<'de> Dese
 impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L1Client<T> {
     /// 连接 UDS path.
     pub async fn connect(path: &str) -> BusResult<Self> {
-        let stream = UnixStream::connect(path).await?;
+        let stream = Arc::new(AsyncMutex::new(UnixStream::connect(path).await?));
         let topics: Arc<AsyncRwLock<HashMap<String, broadcast::Sender<L1Frame<T>>>>> =
             Arc::new(AsyncRwLock::new(HashMap::new()));
         let stats = BusStats::shared();
-        let mut s = stream;
-        // 后台 read loop — fan-out frames to topic subs
+        // 后台 read loop — fan-out frames to topic subs (锁内读帧, 锁外 send)
+        let stream_r = stream.clone();
         let topics_c = topics.clone();
         let stats_c = stats.clone();
         tokio::spawn(async move {
             loop {
-                let frame: L1Frame<T> = match read_frame_async(&mut s).await {
-                    Ok(f) => f,
-                    Err(_) => return,
+                let frame: L1Frame<T> = {
+                    let mut s = stream_r.lock().await;
+                    match read_frame_async(&mut s).await {
+                        Ok(f) => f,
+                        Err(_) => return,
+                    }
                 };
                 stats_c.received.fetch_add(1, Ordering::Relaxed);
                 let tx = {
@@ -224,7 +227,7 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
         });
         Ok(Self {
             path: path.to_string(),
-            stream: Arc::new(AsyncMutex::new(stream)),
+            stream,
             topics,
             stats,
             _phantom: std::marker::PhantomData,

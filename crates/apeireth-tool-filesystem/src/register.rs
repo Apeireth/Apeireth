@@ -26,7 +26,11 @@ pub const TOOL_NAME: &str = "EnhancedFileOps";
 /// 沙盒允许根: env 覆盖, 默认当前工作目录.
 pub fn allowed_roots_from_env() -> Vec<PathBuf> {
     if let Ok(v) = std::env::var("APEIRETH_TOOL_FS_ROOTS") {
-        let roots: Vec<PathBuf> = v.split(',').map(|s| PathBuf::from(s.trim())).filter(|p| !p.as_os_str().is_empty()).collect();
+        let roots: Vec<PathBuf> = v
+            .split(',')
+            .map(|s| PathBuf::from(s.trim()))
+            .filter(|p| !p.as_os_str().is_empty())
+            .collect();
         if !roots.is_empty() {
             return roots;
         }
@@ -75,7 +79,11 @@ impl Tool for EnhancedFileOpsTool {
         let path = std::path::Path::new(path_s);
         match op {
             "read" => {
-                let content = self.ops.read_sandboxed(path).await.map_err(|e| e.to_string())?;
+                let content = self
+                    .ops
+                    .read_sandboxed(path)
+                    .await
+                    .map_err(|e| e.to_string())?;
                 Ok(json!({ "op": "read", "path": path_s, "content": content }))
             }
             "write" => {
@@ -151,7 +159,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let tool = make_tool(tmp.path());
         // 沙盒外路径 (父目录的父目录) 应被沙盒拒绝
-        let outside = tmp.path().parent().and_then(|p| p.parent()).unwrap_or(tmp.path());
+        let outside = tmp
+            .path()
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(tmp.path());
         let e = tool
             .call(json!({"op": "read", "path": outside.join("definitely-outside.txt").to_string_lossy()}))
             .await
@@ -163,7 +175,10 @@ mod tests {
     async fn unknown_op_rejected() {
         let tmp = tempfile::tempdir().unwrap();
         let tool = make_tool(tmp.path());
-        let e = tool.call(json!({"op": "fly", "path": "x"})).await.unwrap_err();
+        let e = tool
+            .call(json!({"op": "fly", "path": "x"}))
+            .await
+            .unwrap_err();
         assert!(e.contains("unknown op"));
     }
 }

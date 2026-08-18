@@ -133,7 +133,11 @@ async fn main() {
     if let Some(id) = resume {
         match snap_store.consume(&id) {
             Ok(s) => {
-                println!("[续传] 恢复快照 {id}: turn={}, messages={} 条", s.turn, s.messages.len());
+                println!(
+                    "[续传] 恢复快照 {id}: turn={}, messages={} 条",
+                    s.turn,
+                    s.messages.len()
+                );
                 messages = s.messages;
                 turn = s.turn;
                 fresh = false;
@@ -163,7 +167,7 @@ async fn main() {
 
     let mut tool_count = 0u32;
     let mut final_answer = String::from("(未完成)");
-    for round in 1..=8u64 {
+    for _round in 1..=8u64 {
         // 每轮循环前: 原子保存续行快照 (断点 = 此处)
         let snap = ContinuationSnapshot {
             id: SNAP_ID.into(),
@@ -180,7 +184,10 @@ async fn main() {
         if let Some(c) = crash_after {
             if turn == c {
                 println!("[崩溃演示] 第 {turn} 轮后保存快照并退出 (模拟崩溃) — 下次 --resume={SNAP_ID} 续传");
-                println!("[快照文件] {}", store_dir.join(format!("{SNAP_ID}.json")).display());
+                println!(
+                    "[快照文件] {}",
+                    store_dir.join(format!("{SNAP_ID}.json")).display()
+                );
                 return;
             }
         }
@@ -196,7 +203,10 @@ async fn main() {
                     role: v["role"].as_str().unwrap_or("user").to_string(),
                     content: v["content"].clone(),
                     tool_calls: v.get("tool_calls").and_then(|x| x.as_array()).cloned(),
-                    tool_call_id: v.get("tool_call_id").and_then(|x| x.as_str()).map(|s| s.to_string()),
+                    tool_call_id: v
+                        .get("tool_call_id")
+                        .and_then(|x| x.as_str())
+                        .map(|s| s.to_string()),
                 })
                 .collect(),
             temperature: Some(0.5),
@@ -206,12 +216,18 @@ async fn main() {
             tools: Some(tools.as_array().cloned().unwrap_or_default()),
             tool_choice: Some(json!("auto")),
         };
-        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("第{turn}轮")).await else {
+        let Some((content, tcs)) = chat_once(&pipeline, &req, &format!("第{turn}轮")).await
+        else {
             final_answer = "(被限流)".to_string();
             break;
         };
         if tcs.is_empty() {
-            let answer = content.split("</think>").last().unwrap_or(&content).trim().to_string();
+            let answer = content
+                .split("</think>")
+                .last()
+                .unwrap_or(&content)
+                .trim()
+                .to_string();
             if answer.is_empty() {
                 messages.push(json!({"role":"user","content":"你刚才没有输出, 请继续执行任务。"}));
                 turn += 1;
@@ -227,9 +243,12 @@ async fn main() {
             let id = tc["id"].clone();
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
             let args: Value =
-                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}")).unwrap_or(json!({}));
+                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}"))
+                    .unwrap_or(json!({}));
             let risk = ToolBridge::tool_risk(&name);
-            let pack_hit = bridge.packs.check_and_consume(&name, chrono::Utc::now().timestamp_millis());
+            let pack_hit = bridge
+                .packs
+                .check_and_consume(&name, chrono::Utc::now().timestamp_millis());
             println!("  他调用 {name} (risk={risk:?}, 权限包={pack_hit})");
             let r = bridge
                 .execute_if_allowed(&ParsedToolCall {
@@ -256,10 +275,18 @@ async fn main() {
     let file_ok = target.exists();
     println!("\n=== 结果 ===");
     println!("[他的汇报] {final_answer}");
-    println!("文件: {} ({} 字节, 工具调用 {tool_count} 次)", if file_ok { "✅" } else { "❌" }, std::fs::read_to_string(&target).unwrap_or_default().len());
+    println!(
+        "文件: {} ({} 字节, 工具调用 {tool_count} 次)",
+        if file_ok { "✅" } else { "❌" },
+        std::fs::read_to_string(&target).unwrap_or_default().len()
+    );
     println!("快照剩余: {:?}", snap_store.list());
     if file_ok {
-        for line in std::fs::read_to_string(&target).unwrap_or_default().lines().take(8) {
+        for line in std::fs::read_to_string(&target)
+            .unwrap_or_default()
+            .lines()
+            .take(8)
+        {
             println!("  | {line}");
         }
     }

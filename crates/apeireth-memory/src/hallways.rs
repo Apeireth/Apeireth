@@ -109,7 +109,11 @@ impl Hallway {
             self.entity_a,
             self.entity_b,
             self.co_occurrence_count,
-            if self.co_occurrence_count == 1 { "" } else { "s" },
+            if self.co_occurrence_count == 1 {
+                ""
+            } else {
+                "s"
+            },
             self.wing
         )
     }
@@ -288,8 +292,7 @@ pub fn compute_hallways_for_wing_with(
 
     // 保留旧 dynamics (与 mempalace PR #1578 一致)
     let existing = list_hallways_for_wing_internal(&*store.conn()?, wing)?;
-    let mut existing_dyn: HashMap<(String, String), (f64, f64, Option<i64>, i64)> =
-        HashMap::new();
+    let mut existing_dyn: HashMap<(String, String), (f64, f64, Option<i64>, i64)> = HashMap::new();
     for h in &existing {
         existing_dyn.insert(
             (h.entity_a.clone(), h.entity_b.clone()),
@@ -365,10 +368,7 @@ fn upsert_hallway_raw(conn: &Connection, h: &Hallway) -> MemoryResult<()> {
 }
 
 /// 查询 (wing 可选) 的全部 hallways, 过滤 tombstoned.
-pub fn list_hallways(
-    store: &SqliteMemoryStore,
-    wing: Option<&str>,
-) -> MemoryResult<Vec<Hallway>> {
+pub fn list_hallways(store: &SqliteMemoryStore, wing: Option<&str>) -> MemoryResult<Vec<Hallway>> {
     let conn = &*store.conn()?;
     let mut sql = String::from(
         "SELECT id, wing, entity_a, entity_b, co_occurrence_count,
@@ -407,10 +407,7 @@ pub fn list_hallways(
     Ok(rows)
 }
 
-fn list_hallways_for_wing_internal(
-    conn: &Connection,
-    wing: &str,
-) -> MemoryResult<Vec<Hallway>> {
+fn list_hallways_for_wing_internal(conn: &Connection, wing: &str) -> MemoryResult<Vec<Hallway>> {
     let mut stmt = conn.prepare(
         "SELECT id, wing, entity_a, entity_b, co_occurrence_count,
                 created_at, updated_at, strength, stability,

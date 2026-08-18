@@ -313,7 +313,7 @@ fn flatten_keys(prefix: &str, v: &toml::Value, out: &mut Vec<String>) {
 }
 
 fn load_locale_file(path: &str) -> toml::Value {
-    let raw = fs::read_to_string(path).unwrap_or_else(|e| panic!("读 {path} 失败: {e}"));
+    let raw = fs_err::read_to_string(path).unwrap_or_else(|e| panic!("读 {path} 失败: {e}"));
     toml::from_str(&raw).unwrap_or_else(|e| panic!("{path} TOML 解析失败: {e}"))
 }
 
@@ -548,14 +548,14 @@ async fn test_translate_10_common() {
 // =============================================================================
 
 fn file_contains_any(path: &str, chars: &[char]) -> bool {
-    let raw = fs::read_to_string(path).unwrap_or_else(|e| panic!("读 {path} 失败: {e}"));
+    let raw = fs_err::read_to_string(path).unwrap_or_else(|e| panic!("读 {path} 失败: {e}"));
     chars.iter().any(|c| raw.contains(*c))
 }
 
 #[test]
 fn test_zh_cn_chinese_chars() {
     // zh-CN 必须含 CJK 字符 (汉字)
-    let raw = fs::read_to_string("locales/zh-CN.toml").expect("读 zh-CN.toml 失败");
+    let raw = fs_err::read_to_string("locales/zh-CN.toml").expect("读 zh-CN.toml 失败");
     let cjk_count = raw
         .chars()
         .filter(|c| {
@@ -577,7 +577,7 @@ fn test_zh_cn_chinese_chars() {
 #[test]
 fn test_ja_japanese_chars() {
     // ja 必须含 日文 (平假名 / 片假名 / 汉字)
-    let raw = fs::read_to_string("locales/ja.toml").expect("读 ja.toml 失败");
+    let raw = fs_err::read_to_string("locales/ja.toml").expect("读 ja.toml 失败");
     // 至少含 20 个片假名 (categories 0x30A0-0x30FF) 或 平假名 (0x3040-0x309F)
     let jp_count = raw
         .chars()
@@ -606,7 +606,7 @@ fn test_ja_japanese_chars() {
 #[test]
 fn test_fr_french_chars() {
     // fr 必须含法语特殊字符 (é, à, ç, è, ê, ô, î, ù, û)
-    let raw = fs::read_to_string("locales/fr.toml").expect("读 fr.toml 失败");
+    let raw = fs_err::read_to_string("locales/fr.toml").expect("读 fr.toml 失败");
     let french_chars = ['é', 'à', 'ç', 'è', 'ê', 'ô', 'î', 'ù', 'û', 'œ'];
     let mut count = 0;
     for c in french_chars {
@@ -627,7 +627,7 @@ fn test_fr_french_chars() {
 #[test]
 fn test_de_german_chars() {
     // de 必须含德语特殊字符 (ä, ö, ü, ß)
-    let raw = fs::read_to_string("locales/de.toml").expect("读 de.toml 失败");
+    let raw = fs_err::read_to_string("locales/de.toml").expect("读 de.toml 失败");
     let german_chars = ['ä', 'ö', 'ü', 'ß', 'Ä', 'Ö', 'Ü'];
     let mut count = 0;
     for c in german_chars {
@@ -657,7 +657,7 @@ fn test_locale_format_toml() {
         "locales/fr.toml",
         "locales/de.toml",
     ] {
-        let raw = fs::read_to_string(f).unwrap_or_else(|e| panic!("读 {f} 失败: {e}"));
+        let raw = fs_err::read_to_string(f).unwrap_or_else(|e| panic!("读 {f} 失败: {e}"));
         let _: toml::Value =
             toml::from_str(&raw).unwrap_or_else(|e| panic!("{f} TOML 解析失败: {e}"));
     }

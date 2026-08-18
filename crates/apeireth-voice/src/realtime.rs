@@ -717,7 +717,7 @@ pub(crate) fn simple_base64_encode(input: &[u8]) -> String {
         let b0 = input[i];
         let b1 = input[i + 1];
         let b2 = input[i + 2];
-        let triple = ((b0 as u32) << 16) | ((b1 as u32) << 8) | (b2 as u32);
+        let triple = (u32::from(b0) << 16) | (u32::from(b1) << 8) | u32::from(b2);
         out.push(BASE64_ALPHABET[((triple >> 18) & 0x3F) as usize] as char);
         out.push(BASE64_ALPHABET[((triple >> 12) & 0x3F) as usize] as char);
         out.push(BASE64_ALPHABET[((triple >> 6) & 0x3F) as usize] as char);
@@ -727,7 +727,7 @@ pub(crate) fn simple_base64_encode(input: &[u8]) -> String {
     let rem = input.len() - i;
     if rem == 1 {
         let b0 = input[i];
-        let triple = (b0 as u32) << 16;
+        let triple = u32::from(b0) << 16;
         out.push(BASE64_ALPHABET[((triple >> 18) & 0x3F) as usize] as char);
         out.push(BASE64_ALPHABET[((triple >> 12) & 0x3F) as usize] as char);
         out.push('=');
@@ -735,7 +735,7 @@ pub(crate) fn simple_base64_encode(input: &[u8]) -> String {
     } else if rem == 2 {
         let b0 = input[i];
         let b1 = input[i + 1];
-        let triple = ((b0 as u32) << 16) | ((b1 as u32) << 8);
+        let triple = (u32::from(b0) << 16) | (u32::from(b1) << 8);
         out.push(BASE64_ALPHABET[((triple >> 18) & 0x3F) as usize] as char);
         out.push(BASE64_ALPHABET[((triple >> 12) & 0x3F) as usize] as char);
         out.push(BASE64_ALPHABET[((triple >> 6) & 0x3F) as usize] as char);

@@ -24,30 +24,37 @@ struct MiniRedisState {
 type SharedState = Arc<AsyncMutex<MiniRedisState>>;
 
 fn find_crlf(buf: &[u8]) -> Option<usize> {
-    for i in 0..buf.len().saturating_sub(1) {
-        if buf[i] == b'\r' && buf[i + 1] == b'\n' { return Some(i); }
-    }
-    None
+    (0..buf.len().saturating_sub(1)).find(|&i| buf[i] == b'\r' && buf[i + 1] == b'\n')
 }
 
 async fn fill_buf(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Result<usize, String> {
     let mut tmp = [0u8; 2048];
-    let n: usize = AsyncReadExt::read(stream, &mut tmp).await.map_err(|e: std::io::Error| e.to_string())?;
+    let n: usize = AsyncReadExt::read(stream, &mut tmp)
+        .await
+        .map_err(|e: std::io::Error| e.to_string())?;
     buf.extend_from_slice(&tmp[..n]);
     Ok(n)
 }
 
-async fn read_resp_command(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Result<Vec<Vec<u8>>, String> {
+async fn read_resp_command(
+    stream: &mut TcpStream,
+    buf: &mut Vec<u8>,
+) -> Result<Vec<Vec<u8>>, String> {
     // Fill until we have enough to parse a complete command.
     while find_crlf(buf).is_none() {
         let n = fill_buf(stream, buf).await?;
-        if n == 0 { return Err("eof".into()); }
+        if n == 0 {
+            return Err("eof".into());
+        }
     }
     let header_end = find_crlf(buf).ok_or("no header crlf")?;
-    if buf[0] != b'*' { return Err(format!("expected '*' got {:?}'", buf[0])); }
+    if buf[0] != b'*' {
+        return Err(format!("expected '*' got {:?}'", buf[0]));
+    }
     let n: usize = std::str::from_utf8(&buf[1..header_end])
         .map_err(|e: std::str::Utf8Error| e.to_string())?
-        .trim().parse::<usize>()
+        .trim()
+        .parse::<usize>()
         .map_err(|e: std::num::ParseIntError| e.to_string())?;
     let mut consumed = header_end + 2;
     let mut args: Vec<Vec<u8>> = Vec::with_capacity(n);
@@ -55,13 +62,18 @@ async fn read_resp_command(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Result<
         // Wait for $header CRLF.
         while find_crlf(&buf[consumed..]).is_none() {
             let rn = fill_buf(stream, buf).await?;
-            if rn == 0 { return Err("eof mid-arg".into()); }
+            if rn == 0 {
+                return Err("eof mid-arg".into());
+            }
         }
         let header_end2 = find_crlf(&buf[consumed..]).unwrap();
-        if buf[consumed] != b'$' { return Err(format!("expected '$'")); }
+        if buf[consumed] != b'$' {
+            return Err("expected '$'".to_string());
+        }
         let len: i64 = std::str::from_utf8(&buf[consumed + 1..consumed + header_end2])
             .map_err(|e: std::str::Utf8Error| e.to_string())?
-            .trim().parse::<i64>()
+            .trim()
+            .parse::<i64>()
             .map_err(|e: std::num::ParseIntError| e.to_string())?;
         let hdr_len = consumed + header_end2 + 2;
         if len < 0 {
@@ -71,7 +83,9 @@ async fn read_resp_command(stream: &mut TcpStream, buf: &mut Vec<u8>) -> Result<
             let need = hdr_len + (len as usize) + 2;
             while buf.len() < need {
                 let rn = fill_buf(stream, buf).await?;
-                if rn == 0 { return Err("eof mid-data".into()); }
+                if rn == 0 {
+                    return Err("eof mid-data".into());
+                }
             }
             let data = buf[hdr_len..hdr_len + len as usize].to_vec();
             args.push(data);
@@ -89,12 +103,18 @@ async fn handle_conn(mut stream: TcpStream, state: SharedState) {
             Ok(c) => c,
             Err(_) => return,
         };
-        if cmd.is_empty() { return; }
+        if cmd.is_empty() {
+            return;
+        }
         let cmd_name_upper: Vec<u8> = cmd[0].iter().map(|b| b.to_ascii_uppercase()).collect();
-        let nm = std::str::from_utf8(&cmd_name_upper).unwrap_or("?");
+        let _nm = std::str::from_utf8(&cmd_name_upper).unwrap_or("?");
         let reply = dispatch(state.clone(), &cmd_name_upper, &cmd[1..]).await;
-        if stream.write_all(&reply).await.is_err() { return; }
-        if cmd_name_upper == b"QUIT" { return; }
+        if stream.write_all(&reply).await.is_err() {
+            return;
+        }
+        if cmd_name_upper == b"QUIT" {
+            return;
+        }
     }
 }
 
@@ -114,7 +134,9 @@ async fn dispatch(state: SharedState, cmd_name: &[u8], args: &[Vec<u8>]) -> Vec<
 }
 
 async fn cmd_set(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
-    if args.len() < 2 { return b"-ERR wrong\r\n".to_vec(); }
+    if args.len() < 2 {
+        return b"-ERR wrong\r\n".to_vec();
+    }
     let key = args[0].clone();
     let value = args[1].clone();
     state.lock().await.kv.insert(key, value);
@@ -122,7 +144,9 @@ async fn cmd_set(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
 }
 
 async fn cmd_get(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
-    if args.len() != 1 { return b"-ERR wrong\r\n".to_vec(); }
+    if args.len() != 1 {
+        return b"-ERR wrong\r\n".to_vec();
+    }
     let st = state.lock().await;
     match st.kv.get(&args[0]) {
         Some(v) => {
@@ -138,14 +162,22 @@ async fn cmd_get(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
 async fn cmd_del(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
     let mut st = state.lock().await;
     let mut n = 0i64;
-    for k in args { if st.kv.remove(k).is_some() { n += 1; } }
+    for k in args {
+        if st.kv.remove(k).is_some() {
+            n += 1;
+        }
+    }
     format!(":{}\r\n", n).into_bytes()
 }
 
 async fn cmd_exists(state: SharedState, args: &[Vec<u8>]) -> Vec<u8> {
     let st = state.lock().await;
     let mut n = 0i64;
-    for k in args { if st.kv.contains_key(k) { n += 1; } }
+    for k in args {
+        if st.kv.contains_key(k) {
+            n += 1;
+        }
+    }
     format!(":{}\r\n", n).into_bytes()
 }
 
@@ -160,8 +192,10 @@ async fn cmd_dbsize(state: SharedState) -> Vec<u8> {
 }
 
 pub async fn spawn_mini_redis() -> (SocketAddr, tokio::task::JoinHandle<()>) {
-    let _ = std::fs::File::create("/tmp/miniredis.log");
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind 127.0.0.1:0");
+    let _ = fs_err::File::create("/tmp/miniredis.log");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind 127.0.0.1:0");
     let addr = listener.local_addr().expect("local_addr");
     let state: SharedState = Arc::new(AsyncMutex::new(MiniRedisState::default()));
     let handle = tokio::spawn(async move {
@@ -217,9 +251,14 @@ async fn e2e_02_redis_set_get_roundtrip() {
     let url = format!("redis://127.0.0.1:{}/0", addr.port());
     let p = RedisProvider::new(make_cfg(url)).unwrap();
     p.set("hello", b"world").await.expect("set");
-    p.set("k2", &[0u8, 1, 2, b'\r', b'\n', 3]).await.expect("set binary");
+    p.set("k2", &[0u8, 1, 2, b'\r', b'\n', 3])
+        .await
+        .expect("set binary");
     assert_eq!(p.get("hello").await.unwrap(), Some(b"world".to_vec()));
-    assert_eq!(p.get("k2").await.unwrap(), Some(vec![0u8, 1, 2, b'\r', b'\n', 3]));
+    assert_eq!(
+        p.get("k2").await.unwrap(),
+        Some(vec![0u8, 1, 2, b'\r', b'\n', 3])
+    );
 }
 
 #[tokio::test]
@@ -250,7 +289,9 @@ async fn e2e_05_redis_clear() {
     let (addr, _h) = spawn_mini_redis().await;
     let url = format!("redis://127.0.0.1:{}/0", addr.port());
     let p = RedisProvider::new(make_cfg(url)).unwrap();
-    for i in 0..10 { p.set(&format!("k{}", i), b"v").await.unwrap(); }
+    for i in 0..10 {
+        p.set(&format!("k{}", i), b"v").await.unwrap();
+    }
     assert_eq!(p.size().await.unwrap(), 10);
     p.clear().await.unwrap();
     assert_eq!(p.size().await.unwrap(), 0);
@@ -263,14 +304,14 @@ async fn e2e_06_redis_full_cycle_no_off_by_one() {
     let url = format!("redis://127.0.0.1:{}/0", addr.port());
     let p = RedisProvider::new(make_cfg(url)).unwrap();
     for i in 0..100 {
-        let k = format!("key_{i:04}", i=i);
-        let v = format!("val_{i:04}_with_padding_xxxxxxxxxxxxxxxxx", i=i);
+        let k = format!("key_{i:04}", i = i);
+        let v = format!("val_{i:04}_with_padding_xxxxxxxxxxxxxxxxx", i = i);
         p.set(&k, v.as_bytes()).await.unwrap();
     }
     assert_eq!(p.size().await.unwrap(), 100);
     for i in 0..100 {
-        let k = format!("key_{i:04}", i=i);
-        let expected = format!("val_{i:04}_with_padding_xxxxxxxxxxxxxxxxx", i=i);
+        let k = format!("key_{i:04}", i = i);
+        let expected = format!("val_{i:04}_with_padding_xxxxxxxxxxxxxxxxx", i = i);
         assert_eq!(p.get(&k).await.unwrap(), Some(expected.into_bytes()));
     }
     p.clear().await.unwrap();

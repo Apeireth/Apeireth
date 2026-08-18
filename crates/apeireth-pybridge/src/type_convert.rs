@@ -259,10 +259,10 @@ mod tests {
         let r: Result<Sample, _> = json_to_rust("not json");
         assert!(r.is_err());
         let e = r.unwrap_err();
-        assert_eq!(e.suggested_action(), SuggestedAction_from_br());
+        assert_eq!(e.suggested_action(), suggested_action_from_br());
     }
 
-    fn SuggestedAction_from_br() -> crate::error::SuggestedAction {
+    fn suggested_action_from_br() -> crate::error::SuggestedAction {
         crate::error::SuggestedAction::Fail
     }
 

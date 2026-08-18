@@ -95,7 +95,9 @@ pub struct DirAclGuard {
 pub fn apply_read_only_acl(cfg: &DirAclConfig) -> Result<DirAclGuard, String> {
     if cfg.roots.is_empty() {
         // 0 装 PASS: 无根目录无需收紧, 返回空 guard.
-        return Ok(DirAclGuard { original_acls: Vec::new() });
+        return Ok(DirAclGuard {
+            original_acls: Vec::new(),
+        });
     }
 
     let mut originals = Vec::new();
@@ -131,12 +133,12 @@ pub fn apply_read_only_acl(cfg: &DirAclConfig) -> Result<DirAclGuard, String> {
             eprintln!("[sandbox] 设 DACL 失败 {root:?}: {e} (跳过)");
             // 失败不污染原 DACL (已取出但未替换, free 它).
             unsafe {
-                windows_sys::Win32::Foundation::LocalFree(new_dacl as _);
+                windows_sys::Win32::Foundation::LocalFree(new_dacl.cast());
             }
             continue;
         }
         unsafe {
-            windows_sys::Win32::Foundation::LocalFree(new_dacl as _);
+            windows_sys::Win32::Foundation::LocalFree(new_dacl.cast());
         }
 
         originals.push(win_imp::OriginalAcl {
@@ -151,22 +153,22 @@ pub fn apply_read_only_acl(cfg: &DirAclConfig) -> Result<DirAclGuard, String> {
         // 全部失败: 把已取出的 DACL 释放 + 返回 Err.
         for orig in originals.drain(..) {
             unsafe {
-                windows_sys::Win32::Foundation::LocalFree(orig.acl as _);
+                windows_sys::Win32::Foundation::LocalFree(orig.acl.cast());
             }
         }
         return Err("目录 ACL 收紧: 全部路径均失败".to_string());
     }
 
-    Ok(DirAclGuard { original_acls: originals })
+    Ok(DirAclGuard {
+        original_acls: originals,
+    })
 }
 
 /// 跨平台 no-op stub (0 装 PASS).
 #[cfg(not(windows))]
 pub fn apply_read_only_acl(cfg: &DirAclConfig) -> Result<DirAclGuard, String> {
     if cfg.needs_hardening() {
-        return Err(
-            "Directory ACL 收紧: 非 Windows 平台未实现 (0 装 PASS, 走 no-op)".to_string(),
-        );
+        return Err("Directory ACL 收紧: 非 Windows 平台未实现 (0 装 PASS, 走 no-op)".to_string());
     }
     Ok(DirAclGuard { _private: () })
 }
@@ -178,14 +180,12 @@ pub fn apply_read_only_acl(cfg: &DirAclConfig) -> Result<DirAclGuard, String> {
 pub(crate) mod win_imp {
     use std::ptr;
 
-    use windows_sys::Win32::Security::ACL;
     use windows_sys::Win32::Security::Authorization::{
-        GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W, GRANT_ACCESS,
-        SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
+        GetNamedSecurityInfoW, SetEntriesInAclW, SetNamedSecurityInfoW, EXPLICIT_ACCESS_W,
+        GRANT_ACCESS, SE_FILE_OBJECT, TRUSTEE_IS_SID, TRUSTEE_IS_UNKNOWN, TRUSTEE_W,
     };
-    use windows_sys::Win32::Security::{
-        DACL_SECURITY_INFORMATION, SID,
-    };
+    use windows_sys::Win32::Security::ACL;
+    use windows_sys::Win32::Security::{DACL_SECURITY_INFORMATION, SID};
 
     use crate::sandbox::WellKnownSid;
 
@@ -249,10 +249,13 @@ pub(crate) mod win_imp {
     /// - Owner: 允许 GENERIC_ALL (若 cfg.owner_retain_write=true)
     /// - Administrators: 允许 GENERIC_ALL (防自锁)
     pub fn build_read_only_dacl(owner_retain_write: bool) -> Result<*mut ACL, String> {
-        let world_sid = crate::restricted_token::win_imp::lookup_well_known_sid(WellKnownSid::World)
-            .ok_or_else(|| "World SID 解析失败".to_string())?;
+        let world_sid =
+            crate::restricted_token::win_imp::lookup_well_known_sid(WellKnownSid::World)
+                .ok_or_else(|| "World SID 解析失败".to_string())?;
         let owner_sid = if owner_retain_write {
-            crate::restricted_token::win_imp::lookup_well_known_sid(WellKnownSid::BuiltinAdministrators)
+            crate::restricted_token::win_imp::lookup_well_known_sid(
+                WellKnownSid::BuiltinAdministrators,
+            )
         } else {
             None
         };
@@ -271,7 +274,7 @@ pub(crate) mod win_imp {
                 MultipleTrusteeOperation: 0,
                 TrusteeForm: TRUSTEE_IS_SID,
                 TrusteeType: TRUSTEE_IS_UNKNOWN,
-                ptstrName: world_sid.as_ptr() as *mut _,
+                ptstrName: world_sid.as_ptr().cast(),
             },
         });
         if let Some(ref o) = owner_sid {
@@ -284,7 +287,7 @@ pub(crate) mod win_imp {
                     MultipleTrusteeOperation: 0,
                     TrusteeForm: TRUSTEE_IS_SID,
                     TrusteeType: TRUSTEE_IS_UNKNOWN,
-                    ptstrName: o.as_ptr() as *mut _,
+                    ptstrName: o.as_ptr().cast(),
                 },
             });
         }

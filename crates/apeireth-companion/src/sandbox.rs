@@ -327,14 +327,19 @@ pub fn prepare_child(cfg: &SandboxConfig) -> Result<PreparedChild, String> {
         return Err("S1 prepare_child: 非 Windows 平台未实现 (0 装 PASS, 走 no-op)".to_string());
     }
     Ok(PreparedChild {
-        token: crate::restricted_token::create_restricted_token(&crate::restricted_token::RestrictedTokenConfig {
-            integrity_level: None,
-            deny_only_sids: Vec::new(),
-            default_dacl_open: false,
-            app_container_roots: Vec::new(),
-        })
+        token: crate::restricted_token::create_restricted_token(
+            &crate::restricted_token::RestrictedTokenConfig {
+                integrity_level: None,
+                deny_only_sids: Vec::new(),
+                default_dacl_open: false,
+                app_container_roots: Vec::new(),
+            },
+        )
         .ok(),
-        dir_acl: crate::directory_acl::apply_read_only_acl(&crate::directory_acl::DirAclConfig::default()).ok(),
+        dir_acl: crate::directory_acl::apply_read_only_acl(
+            &crate::directory_acl::DirAclConfig::default(),
+        )
+        .ok(),
     })
 }
 
@@ -377,23 +382,38 @@ mod tests {
 
     #[test]
     fn from_json_empty_is_default() {
-        assert_eq!(SandboxConfig::from_json(&json!({})), SandboxConfig::default());
-        assert_eq!(SandboxConfig::from_json(&json!(null)), SandboxConfig::default());
+        assert_eq!(
+            SandboxConfig::from_json(&json!({})),
+            SandboxConfig::default()
+        );
+        assert_eq!(
+            SandboxConfig::from_json(&json!(null)),
+            SandboxConfig::default()
+        );
     }
 
     #[test]
     fn backends_are_honest_not_available() {
         for b in backends() {
             assert!(!b.available(), "{} 未接必须如实返回 false", b.name());
-            assert!(b.status().contains("未接"), "{} 状态须诚实标注未接", b.name());
+            assert!(
+                b.status().contains("未接"),
+                "{} 状态须诚实标注未接",
+                b.name()
+            );
         }
     }
 
     #[test]
     fn sandboxie_renders_param_template() {
-        let p = SandboxieBackend.render_params(&SandboxConfig { timeout_secs: 60, ..Default::default() });
+        let p = SandboxieBackend.render_params(&SandboxConfig {
+            timeout_secs: 60,
+            ..Default::default()
+        });
         assert!(p.iter().any(|s| s.contains("timeout_secs=60")));
-        assert!(LandlockBackend.render_params(&SandboxConfig::default()).is_empty());
+        assert!(LandlockBackend
+            .render_params(&SandboxConfig::default())
+            .is_empty());
     }
 
     #[test]
@@ -402,7 +422,10 @@ mod tests {
         assert_eq!(IntegrityLevel::parse("LOW"), IntegrityLevel::Low);
         assert_eq!(IntegrityLevel::parse("Medium"), IntegrityLevel::Medium);
         assert_eq!(IntegrityLevel::parse("med"), IntegrityLevel::Medium);
-        assert_eq!(IntegrityLevel::parse("untrusted"), IntegrityLevel::Untrusted);
+        assert_eq!(
+            IntegrityLevel::parse("untrusted"),
+            IntegrityLevel::Untrusted
+        );
         assert_eq!(IntegrityLevel::parse("high"), IntegrityLevel::Untrusted);
         assert_eq!(IntegrityLevel::parse("system"), IntegrityLevel::Untrusted);
         assert_eq!(IntegrityLevel::parse("garbage"), IntegrityLevel::Untrusted);
@@ -417,11 +440,23 @@ mod tests {
 
     #[test]
     fn wellknown_sid_roundtrips_through_parse() {
-        assert_eq!(WellKnownSid::parse("BUILTIN\\Administrators"), Some(WellKnownSid::BuiltinAdministrators));
-        assert_eq!(WellKnownSid::parse("administrators"), Some(WellKnownSid::BuiltinAdministrators));
+        assert_eq!(
+            WellKnownSid::parse("BUILTIN\\Administrators"),
+            Some(WellKnownSid::BuiltinAdministrators)
+        );
+        assert_eq!(
+            WellKnownSid::parse("administrators"),
+            Some(WellKnownSid::BuiltinAdministrators)
+        );
         assert_eq!(WellKnownSid::parse("world"), Some(WellKnownSid::World));
-        assert_eq!(WellKnownSid::parse("authenticated_user"), Some(WellKnownSid::AuthenticatedUser));
-        assert_eq!(WellKnownSid::parse("interactive"), Some(WellKnownSid::Interactive));
+        assert_eq!(
+            WellKnownSid::parse("authenticated_user"),
+            Some(WellKnownSid::AuthenticatedUser)
+        );
+        assert_eq!(
+            WellKnownSid::parse("interactive"),
+            Some(WellKnownSid::Interactive)
+        );
         assert_eq!(WellKnownSid::parse("garbage"), None);
     }
 
@@ -434,8 +469,14 @@ mod tests {
             "use_app_container": true,
         }));
         assert_eq!(c.integrity_level, Some(IntegrityLevel::Low));
-        assert_eq!(c.deny_only_sids, vec![WellKnownSid::BuiltinAdministrators, WellKnownSid::World]);
-        assert_eq!(c.directory_acl_roots, vec![std::path::PathBuf::from("C:\\sandbox\\root")]);
+        assert_eq!(
+            c.deny_only_sids,
+            vec![WellKnownSid::BuiltinAdministrators, WellKnownSid::World]
+        );
+        assert_eq!(
+            c.directory_acl_roots,
+            vec![std::path::PathBuf::from("C:\\sandbox\\root")]
+        );
         assert!(c.use_app_container);
         assert!(c.has_privilege_hardening());
     }
@@ -455,10 +496,16 @@ mod tests {
             "deny_only_sids": ["world", "garbage", "BUILTIN\\Administrators"],
             "directory_acl_roots": ["C:\\valid", "", "C:\\also-valid"],
         }));
-        assert_eq!(c.deny_only_sids, vec![WellKnownSid::World, WellKnownSid::BuiltinAdministrators]);
+        assert_eq!(
+            c.deny_only_sids,
+            vec![WellKnownSid::World, WellKnownSid::BuiltinAdministrators]
+        );
         assert_eq!(
             c.directory_acl_roots,
-            vec![std::path::PathBuf::from("C:\\valid"), std::path::PathBuf::from("C:\\also-valid")]
+            vec![
+                std::path::PathBuf::from("C:\\valid"),
+                std::path::PathBuf::from("C:\\also-valid")
+            ]
         );
     }
 
@@ -489,7 +536,7 @@ mod tests {
 
     #[test]
     fn prepare_child_with_hardening_fails_off_windows() {
-        let cfg = SandboxConfig {
+        let _cfg = SandboxConfig {
             integrity_level: Some(IntegrityLevel::Low),
             ..Default::default()
         };

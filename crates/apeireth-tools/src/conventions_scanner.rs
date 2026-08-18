@@ -40,7 +40,7 @@ pub struct ProjectConventions {
     pub members_count: usize,
     /// [workspace.dependencies] 数量
     pub workspace_deps_count: usize,
-    /// [workspace.lints.X] 已配置的 lint 类别 (e.g. ["rust", "clippy"])
+    /// `[workspace.lints.X]` 已配置的 lint 类别 (e.g. `["rust", "clippy"]`)
     pub lint_categories: Vec<String>,
     /// 关键 deps key 名 (Aider 风格: 提示 LLM "项目用啥栈")
     pub key_deps: Vec<String>,

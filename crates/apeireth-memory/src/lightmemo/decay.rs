@@ -13,7 +13,9 @@ pub struct DecayConfig {
 
 impl Default for DecayConfig {
     fn default() -> Self {
-        Self { half_life_hours: 24.0 }
+        Self {
+            half_life_hours: 24.0,
+        }
     }
 }
 
@@ -25,10 +27,16 @@ pub struct DecayEngine {
 
 impl DecayEngine {
     pub fn new() -> Self {
-        Self { config: DecayConfig::default(), clock: Arc::new(SystemClock) }
+        Self {
+            config: DecayConfig::default(),
+            clock: Arc::new(SystemClock),
+        }
     }
     pub fn with_config(config: DecayConfig) -> Self {
-        Self { config, clock: Arc::new(SystemClock) }
+        Self {
+            config,
+            clock: Arc::new(SystemClock),
+        }
     }
     /// 注入时钟版 (虚拟时间模拟/测试).
     pub fn with_config_and_clock(config: DecayConfig, clock: Arc<dyn Clock>) -> Self {
@@ -50,7 +58,9 @@ impl DecayEngine {
 }
 
 impl Default for DecayEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -72,7 +82,9 @@ mod tests {
 
     #[test]
     fn old_item_weak() {
-        let e = DecayEngine::with_config(DecayConfig { half_life_hours: 1.0 });
+        let e = DecayEngine::with_config(DecayConfig {
+            half_life_hours: 1.0,
+        });
         let old = Utc::now() - chrono::Duration::hours(10);
         let s = e.strength(old);
         assert!(s < 0.01);

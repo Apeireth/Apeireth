@@ -206,7 +206,7 @@ where
                 let inst = v.inserted_at();
                 let dur = std::time::Instant::now().saturating_duration_since(inst);
                 let elapsed_ns =
-                    (dur.as_secs() as u128) * 1_000_000_000 + (dur.subsec_nanos() as u128);
+                    u128::from(dur.as_secs()) * 1_000_000_000 + u128::from(dur.subsec_nanos());
                 u128::MAX - elapsed_ns
             });
             if evicted.is_some() {

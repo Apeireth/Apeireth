@@ -184,7 +184,6 @@ impl LlmProvider for MultiLlmRouter {
                     );
                     self.update_health(&p_name, false, 0);
                     last_err = Some(e);
-                    continue;
                 }
                 Err(e) => {
                     tracing::error!(

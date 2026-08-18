@@ -74,10 +74,10 @@ impl FileFinder {
         let mut entries = Vec::new();
         let mut walker = WalkDir::new(root.as_ref()).into_iter();
         while let Some(entry_result) = walker.next() {
-            let entry = match entry_result {
-                Ok(e) => e,
-                Err(_) => continue,
+            let Ok(entry) = entry_result else {
+                continue;
             };
+
             let path = entry.path();
             let name = entry.file_name().to_str().unwrap_or("");
             // Skip hidden subtrees (depth > 0)

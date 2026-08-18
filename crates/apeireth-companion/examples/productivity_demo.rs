@@ -95,8 +95,13 @@ async fn main() {
     let judge = ConstitutionJudicator;
     let api_key = load_key().expect("key");
     let pipeline = Arc::new(
-        build_pipeline(BASE_URL.trim_end_matches("/v1/chat/completions").to_string(), Some(api_key))
-            .expect("pipeline"),
+        build_pipeline(
+            BASE_URL
+                .trim_end_matches("/v1/chat/completions")
+                .to_string(),
+            Some(api_key),
+        )
+        .expect("pipeline"),
     );
 
     println!("=== 生产力测试 ===");
@@ -180,21 +185,26 @@ async fn main() {
 
         messages.push(json!({"role": "assistant", "content": content, "tool_calls": tcs}));
         let mut tool_msgs: Vec<Value> = Vec::new();
-        let tcs_snapshot = chat_resp.choices[0].message.tool_calls.clone().unwrap_or_default();
+        let tcs_snapshot = chat_resp.choices[0]
+            .message
+            .tool_calls
+            .clone()
+            .unwrap_or_default();
         for tc in &tcs_snapshot {
             tool_count += 1;
             let id = tc["id"].clone();
             let name = tc["function"]["name"].as_str().unwrap_or("").to_string();
-            let args: Value = serde_json::from_str(
-                tc["function"]["arguments"].as_str().unwrap_or("{}"),
-            )
-            .unwrap_or(json!({}));
+            let args: Value =
+                serde_json::from_str(tc["function"]["arguments"].as_str().unwrap_or("{}"))
+                    .unwrap_or(json!({}));
             let risk = ToolBridge::tool_risk(&name);
-            let pack_hit = bridge.packs.check_and_consume(
-                &name,
-                chrono::Utc::now().timestamp_millis(),
+            let pack_hit = bridge
+                .packs
+                .check_and_consume(&name, chrono::Utc::now().timestamp_millis());
+            println!(
+                "  他调用 {} (risk={:?}, 权限包覆盖={})",
+                name, risk, pack_hit
             );
-            println!("  他调用 {} (risk={:?}, 权限包覆盖={})", name, risk, pack_hit);
             // Medium+ → 宪法评审
             if requires_llm_review(risk) {
                 let desc = format!("调用工具 {} 参数 {}", name, args);
@@ -229,11 +239,15 @@ async fn main() {
             tool_msgs.push(json!({"role":"tool","tool_call_id":id,"content":body_str}));
         }
         messages.extend(tool_msgs);
-        messages.push(json!({"role":"user","content":"继续下一步; 若任务完成, 只回复一句话汇报。"}));
+        messages
+            .push(json!({"role":"user","content":"继续下一步; 若任务完成, 只回复一句话汇报。"}));
     }
 
     println!("\n=== 结果 ===");
-    println!("耗时 {:.1}s, 工具调用 {tool_count} 次", start.elapsed().as_secs_f32());
+    println!(
+        "耗时 {:.1}s, 工具调用 {tool_count} 次",
+        start.elapsed().as_secs_f32()
+    );
     if target.exists() {
         let content = std::fs::read_to_string(&target).unwrap_or_default();
         println!("✅ 文件已创建 ({} 字节):", content.len());

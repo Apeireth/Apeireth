@@ -84,7 +84,11 @@ impl TopicPrediction {
         self.hints
             .iter()
             .filter(|h| h.confidence > 0.0)
-            .max_by(|a, b| a.confidence.partial_cmp(&b.confidence).unwrap_or(std::cmp::Ordering::Equal))
+            .max_by(|a, b| {
+                a.confidence
+                    .partial_cmp(&b.confidence)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
             .map(|h| h.topic)
     }
 }
@@ -195,7 +199,10 @@ fn time_topic(now: NaiveDateTime) -> Option<TopicHint> {
             } else {
                 0.25
             };
-            return Some(TopicHint { topic, confidence: conf });
+            return Some(TopicHint {
+                topic,
+                confidence: conf,
+            });
         }
     }
     None
@@ -205,7 +212,10 @@ fn mood_topic(mood: &str) -> Option<TopicHint> {
     let lower = mood.to_lowercase();
     for (anchor, topic) in MOOD_ANCHORS {
         if lower.contains(anchor) {
-            return Some(TopicHint { topic, confidence: 0.4 });
+            return Some(TopicHint {
+                topic,
+                confidence: 0.4,
+            });
         }
     }
     None
@@ -242,7 +252,9 @@ pub fn predict_topic(cue: &TopicCue) -> TopicPrediction {
         }
     }
 
-    TopicPrediction { hints: aggregate_topic_confidence(&all_hits) }
+    TopicPrediction {
+        hints: aggregate_topic_confidence(&all_hits),
+    }
 }
 
 // ============================================================
@@ -309,12 +321,18 @@ impl PreloadChannel for KeywordChannel {
         let mut scored: Vec<(usize, MemoryCandidate)> = Vec::new();
         for c in candidates.iter() {
             let lc = c.content.to_lowercase();
-            let hits = keywords.iter().filter(|k| lc.contains(&k.to_lowercase())).count();
+            let hits = keywords
+                .iter()
+                .filter(|k| lc.contains(&k.to_lowercase()))
+                .count();
             if hits > 0 {
                 scored.push((hits, c.clone()));
             }
         }
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.importance.cmp(&a.1.importance)));
+        scored.sort_by(|a, b| {
+            b.0.cmp(&a.0)
+                .then_with(|| b.1.importance.cmp(&a.1.importance))
+        });
         scored.into_iter().take(top_k).map(|(_, c)| c).collect()
     }
 }
@@ -363,7 +381,11 @@ impl PreloadChannel for ImportanceChannel {
             .filter(|c| c.importance >= self.threshold)
             .cloned()
             .collect();
-        sorted.sort_by(|a, b| b.importance.cmp(&a.importance).then(b.timestamp.cmp(&a.timestamp)));
+        sorted.sort_by(|a, b| {
+            b.importance
+                .cmp(&a.importance)
+                .then(b.timestamp.cmp(&a.timestamp))
+        });
         sorted.into_iter().take(top_k).collect()
     }
 }
@@ -643,7 +665,11 @@ mod tests {
     // --- PreloadChannel ---
 
     fn cand(content: &str, ts: i64, imp: u8) -> MemoryCandidate {
-        MemoryCandidate { content: content.into(), timestamp: ts, importance: imp }
+        MemoryCandidate {
+            content: content.into(),
+            timestamp: ts,
+            importance: imp,
+        }
     }
 
     #[test]
@@ -655,7 +681,12 @@ mod tests {
             cand("高数作业还没写", 3, 5),
         ];
         let out = ch.fetch(&["exam_prep"], &cands, 5);
-        assert_eq!(out.len(), 2, "应命中含 exam_prep 关键词的两条: {:?}", out.iter().map(|c| &c.content).collect::<Vec<_>>());
+        assert_eq!(
+            out.len(),
+            2,
+            "应命中含 exam_prep 关键词的两条: {:?}",
+            out.iter().map(|c| &c.content).collect::<Vec<_>>()
+        );
         assert!(out.iter().any(|c| c.content.contains("线代")));
         assert!(out.iter().any(|c| c.content.contains("高数")));
     }
@@ -767,7 +798,11 @@ mod tests {
     fn render_truncates_long_entries() {
         let s = render_proactive_content(&[cand(&"x".repeat(500), 1, 5)], 300);
         // 500 字符条目被截到 120
-        assert!(s.matches('x').count() <= 120, "应截断: {}", s.matches('x').count());
+        assert!(
+            s.matches('x').count() <= 120,
+            "应截断: {}",
+            s.matches('x').count()
+        );
     }
 
     #[test]
@@ -777,10 +812,7 @@ mod tests {
             now: Some(dt(2026, 8, 18, 10, 0)),
             ..Default::default()
         };
-        let cands = vec![
-            cand("线代重点", 100, 9),
-            cand("换元法", 50, 7),
-        ];
+        let cands = vec![cand("线代重点", 100, 9), cand("换元法", 50, 7)];
         let ch = KeywordChannel;
         let pb = build_proactive_block(&cue, &cands, &ch, 800);
         assert_eq!(pb.name(), "proactive");
@@ -849,7 +881,11 @@ mod tests {
             .push(pb_block);
         let blocks = asm.assemble_budgeted_blocks();
         let pb = blocks.iter().find(|b| b.name == "proactive").unwrap();
-        assert!(pb.content.chars().count() <= 500, "cap 应被尊重: {}", pb.content.chars().count());
+        assert!(
+            pb.content.chars().count() <= 500,
+            "cap 应被尊重: {}",
+            pb.content.chars().count()
+        );
     }
 
     #[test]

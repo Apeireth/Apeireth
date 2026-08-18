@@ -83,8 +83,18 @@ mod tests {
     #[test]
     fn catalog_snapshots_sorted_names() {
         let registry = ToolRegistry::new();
-        registry.register("zeta".to_string(), std::sync::Arc::new(MockSyncTool { name: "zeta".to_string() }));
-        registry.register("alpha".to_string(), std::sync::Arc::new(MockSyncTool { name: "alpha".to_string() }));
+        registry.register(
+            "zeta".to_string(),
+            std::sync::Arc::new(MockSyncTool {
+                name: "zeta".to_string(),
+            }),
+        );
+        registry.register(
+            "alpha".to_string(),
+            std::sync::Arc::new(MockSyncTool {
+                name: "alpha".to_string(),
+            }),
+        );
         let cat = CapabilityCatalog::from_registry(&registry);
         assert_eq!(cat.len(), 2);
         assert_eq!(cat.names(), vec!["alpha", "zeta"], "必须按名排序");
@@ -95,18 +105,34 @@ mod tests {
     #[test]
     fn catalog_tracks_unregister() {
         let registry = ToolRegistry::new();
-        registry.register("tmp".to_string(), std::sync::Arc::new(MockSyncTool { name: "tmp".to_string() }));
+        registry.register(
+            "tmp".to_string(),
+            std::sync::Arc::new(MockSyncTool {
+                name: "tmp".to_string(),
+            }),
+        );
         assert!(CapabilityCatalog::from_registry(&registry).contains("tmp"));
         registry.unregister("tmp");
-        assert!(!CapabilityCatalog::from_registry(&registry).contains("tmp"), "卸载后清单不得残留");
+        assert!(
+            !CapabilityCatalog::from_registry(&registry).contains("tmp"),
+            "卸载后清单不得残留"
+        );
     }
 
     #[test]
     fn render_markdown_lists_rows() {
         let registry = ToolRegistry::new();
-        registry.register("alpha".to_string(), std::sync::Arc::new(MockSyncTool { name: "alpha".to_string() }));
+        registry.register(
+            "alpha".to_string(),
+            std::sync::Arc::new(MockSyncTool {
+                name: "alpha".to_string(),
+            }),
+        );
         let md = CapabilityCatalog::from_registry(&registry).render_markdown();
-        assert!(md.contains("| alpha | synchronous |"), "markdown 应含工具行: {md}");
+        assert!(
+            md.contains("| alpha | synchronous |"),
+            "markdown 应含工具行: {md}"
+        );
     }
 
     #[test]

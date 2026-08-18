@@ -25,7 +25,9 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 
 # L1: UDS + bincode
-bincode = "2"
+# CI fix 2026-08: bincode 2.x 的 bincode::serde:: 模块需要 serde feature (默认不开),
+# l1.rs 用 decode_from_slice/encode_to_vec → 必须开
+bincode = { version = "2", features = ["serde"] }
 
 # L2: pipe + JSON / MsgPack
 rmp-serde = "1.3"

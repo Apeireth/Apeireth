@@ -22,7 +22,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
+use crate::voice::error::{VoiceError, VoiceResult};
 
 // ============================================================================
 // §1 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)

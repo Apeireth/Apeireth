@@ -228,7 +228,6 @@ fn parse_sse_frame(text: &str) -> crate::transport::sse::SseFrame {
         if let Some(rest) = line.strip_prefix("data:") {
             let v = rest.strip_prefix(' ').unwrap_or(rest);
             frame.data_lines.push(v.to_string());
-            continue;
         }
         // id / retry / 未知字段忽略
     }

@@ -3,12 +3,16 @@
 //! 真: Bond(关系) + EmergenceLoop(机制) + ConsoleDelivery(送达).
 //! 诚实: 交互是「演示的」, 不是接真用户/真通道; 生产用 ProactiveDriver + lark/通知.
 
-use apeireth_companion::emergence::{Boundaries, ConsoleDelivery, Delivery, EmergenceLoop, Feedback};
+use apeireth_companion::emergence::{
+    Boundaries, ConsoleDelivery, Delivery, EmergenceLoop, Feedback,
+};
 use apeireth_companion::{Bond, BondStage};
 use chrono::{TimeZone, Utc};
 
 fn at(day: u32, h: u32, m: u32) -> chrono::DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0).single().unwrap()
+    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0)
+        .single()
+        .unwrap()
 }
 
 #[tokio::main]
@@ -46,5 +50,12 @@ async fn main() {
 
     println!("--- 同一天 09:00 再心跳 ---");
     let again = l.tick(at(16, 9, 0), None);
-    println!("再次主动? {}", if again.is_some() { "是" } else { "否 (频率门禁)" });
+    println!(
+        "再次主动? {}",
+        if again.is_some() {
+            "是"
+        } else {
+            "否 (频率门禁)"
+        }
+    );
 }

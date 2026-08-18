@@ -59,15 +59,24 @@ impl CritiqueReport {
     }
 
     pub fn confirmed(&self) -> usize {
-        self.items.iter().filter(|(_, v)| *v == Verification::Confirmed).count()
+        self.items
+            .iter()
+            .filter(|(_, v)| *v == Verification::Confirmed)
+            .count()
     }
 
     pub fn contradicted(&self) -> usize {
-        self.items.iter().filter(|(_, v)| *v == Verification::Contradicted).count()
+        self.items
+            .iter()
+            .filter(|(_, v)| *v == Verification::Contradicted)
+            .count()
     }
 
     pub fn unverifiable(&self) -> usize {
-        self.items.iter().filter(|(_, v)| *v == Verification::Unverifiable).count()
+        self.items
+            .iter()
+            .filter(|(_, v)| *v == Verification::Unverifiable)
+            .count()
     }
 
     /// markdown 报告 (回注反思/写记忆用).
@@ -91,7 +100,17 @@ impl CritiqueReport {
 /// 声明提取启发式: 含推断词/不确定表述的句子视为可验证声明.
 /// 0 假装: 行级规则, 非 LLM 语义判定 (LLM 判定留 trait 口由宿主升级).
 const HINT_WORDS: &[&str] = &[
-    "推测", "可能", "似乎", "我观察", "观察", "模式", "倾向", "看起来", "大约", "约", "趋势",
+    "推测",
+    "可能",
+    "似乎",
+    "我观察",
+    "观察",
+    "模式",
+    "倾向",
+    "看起来",
+    "大约",
+    "约",
+    "趋势",
 ];
 
 /// 从反思文本提取可验证声明 (按行).
@@ -112,7 +131,10 @@ pub fn extract_claims(text: &str) -> Vec<Claim> {
         }
         // 声明 = 含推断词的句子
         if HINT_WORDS.iter().any(|w| clean.contains(w)) {
-            out.push(Claim { text: clean.to_string(), line: i + 1 });
+            out.push(Claim {
+                text: clean.to_string(),
+                line: i + 1,
+            });
         }
     }
     out
@@ -155,9 +177,18 @@ mod tests {
         let text = "主人最近似乎更喜欢深色主题。\n这是纯事实句, 无推断。\n- 列表项推测下周会忙\n## 标题\n```\ncode\n```";
         let claims = extract_claims(text);
         let texts: Vec<&str> = claims.iter().map(|c| c.text.as_str()).collect();
-        assert!(texts.iter().any(|t| t.contains("深色主题")), "含'似乎'应提取: {texts:?}");
-        assert!(texts.iter().any(|t| t.contains("下周会忙")), "列表内推断也应提取");
-        assert!(!texts.iter().any(|t| t.contains("纯事实句")), "无推断词不应提取");
+        assert!(
+            texts.iter().any(|t| t.contains("深色主题")),
+            "含'似乎'应提取: {texts:?}"
+        );
+        assert!(
+            texts.iter().any(|t| t.contains("下周会忙")),
+            "列表内推断也应提取"
+        );
+        assert!(
+            !texts.iter().any(|t| t.contains("纯事实句")),
+            "无推断词不应提取"
+        );
         assert!(!texts.iter().any(|t| t.contains("标题")), "标题行应被跳过");
     }
 
@@ -221,12 +252,19 @@ mod tests {
         }
         let critic = ReflectionCritic::new(FailingVerifier);
         let report = critic.critique("主人可能明天出门。").await;
-        assert_eq!(report.unverifiable(), 1, "验证失败 → Unverifiable (不吞不猜)");
+        assert_eq!(
+            report.unverifiable(),
+            1,
+            "验证失败 → Unverifiable (不吞不猜)"
+        );
     }
 
     #[tokio::test]
     async fn no_claims_yields_empty_report() {
-        let critic = ReflectionCritic::new(StubVerifier { confirmed: vec![], contradicted: vec![] });
+        let critic = ReflectionCritic::new(StubVerifier {
+            confirmed: vec![],
+            contradicted: vec![],
+        });
         let report = critic.critique("纯事实, 无推断。").await;
         assert!(report.is_empty());
         assert!(report.to_markdown().is_empty());

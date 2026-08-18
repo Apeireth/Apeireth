@@ -30,7 +30,10 @@ pub struct SandboxPolicy {
 
 impl SandboxPolicy {
     pub fn new(allowed_roots: Vec<PathBuf>) -> Self {
-        Self { allowed_roots, follow_symlinks: false }
+        Self {
+            allowed_roots,
+            follow_symlinks: false,
+        }
     }
 }
 

@@ -89,7 +89,11 @@ impl ExperimentField {
     }
 
     /// 受理提案 → 实验候选 (Proposed).
-    pub fn propose(&mut self, proposal: impl Into<String>, artifact: impl Into<String>) -> Experiment {
+    pub fn propose(
+        &mut self,
+        proposal: impl Into<String>,
+        artifact: impl Into<String>,
+    ) -> Experiment {
         let e = Experiment {
             id: self.next_id,
             proposal: proposal.into(),
@@ -144,7 +148,11 @@ impl ExperimentField {
 
     /// 回滚学习信号: 失败实验 → 经验候选 (yoyo revert-receipt 模式).
     /// 集成而非分立: 写 [`crate::experience::ExperienceStore`].
-    pub fn learn_from_failure(&self, id: u64, store: &crate::experience::ExperienceStore) -> Result<(), String> {
+    pub fn learn_from_failure(
+        &self,
+        id: u64,
+        store: &crate::experience::ExperienceStore,
+    ) -> Result<(), String> {
         let e = self.items.get(&id).ok_or("实验不存在")?;
         if e.status != ExperimentStatus::Failed {
             return Err(format!("状态 {:?} 无失败可学 (仅 Failed 可)", e.status));
@@ -200,7 +208,9 @@ mod tests {
 
     #[test]
     fn propose_run_pass_approve_flow() {
-        let mut field = ExperimentField::new(Box::new(MockRunner { fail_artifact: "bad".into() }));
+        let mut field = ExperimentField::new(Box::new(MockRunner {
+            fail_artifact: "bad".into(),
+        }));
         let e = field.propose("cap-1 改进", "artifact-good");
         assert_eq!(e.status, ExperimentStatus::Proposed);
         let st = field.run(e.id).unwrap();
@@ -211,8 +221,12 @@ mod tests {
 
     #[test]
     fn failed_experiment_learns() {
-        let store = crate::experience::ExperienceStore::new(std::sync::Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap()));
-        let mut field = ExperimentField::new(Box::new(MockRunner { fail_artifact: "bad".into() }));
+        let store = crate::experience::ExperienceStore::new(std::sync::Arc::new(
+            apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap(),
+        ));
+        let mut field = ExperimentField::new(Box::new(MockRunner {
+            fail_artifact: "bad".into(),
+        }));
         let e = field.propose("cap-2 改进", "artifact-bad");
         let st = field.run(e.id).unwrap();
         assert_eq!(st, ExperimentStatus::Failed);
@@ -232,12 +246,18 @@ mod tests {
         let e = field.propose("cap-3", "artifact");
         let err = field.run(e.id).unwrap_err();
         assert!(err.contains("未接入"), "{err}");
-        assert_eq!(field.get(e.id).unwrap().status, ExperimentStatus::Proposed, "VM 未接不假装已实验");
+        assert_eq!(
+            field.get(e.id).unwrap().status,
+            ExperimentStatus::Proposed,
+            "VM 未接不假装已实验"
+        );
     }
 
     #[test]
     fn cannot_rerun_or_approve_wrong_state() {
-        let mut field = ExperimentField::new(Box::new(MockRunner { fail_artifact: "bad".into() }));
+        let mut field = ExperimentField::new(Box::new(MockRunner {
+            fail_artifact: "bad".into(),
+        }));
         let e = field.propose("cap-4", "artifact-ok");
         assert!(field.approve_for_deploy(e.id).is_err(), "Proposed 不可批准");
         field.run(e.id).unwrap();
@@ -246,10 +266,17 @@ mod tests {
 
     #[test]
     fn failed_experiment_learn_requires_failed_state() {
-        let store = crate::experience::ExperienceStore::new(std::sync::Arc::new(apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap()));
-        let mut field = ExperimentField::new(Box::new(MockRunner { fail_artifact: "bad".into() }));
+        let store = crate::experience::ExperienceStore::new(std::sync::Arc::new(
+            apeireth_memory::SqliteMemoryStore::open_in_memory().unwrap(),
+        ));
+        let mut field = ExperimentField::new(Box::new(MockRunner {
+            fail_artifact: "bad".into(),
+        }));
         let e = field.propose("cap-5", "artifact-ok");
         field.run(e.id).unwrap(); // Passed
-        assert!(field.learn_from_failure(e.id, &store).is_err(), "Passed 无失败可学");
+        assert!(
+            field.learn_from_failure(e.id, &store).is_err(),
+            "Passed 无失败可学"
+        );
     }
 }

@@ -27,12 +27,18 @@ impl DailyNoteCommand {
 pub struct DailyNoteCompatRouter;
 
 impl DailyNoteCompatRouter {
-    pub fn new() -> Self { Self }
-    pub fn command_count() -> usize { DAILYNOTE_COMMAND_COUNT }
+    pub fn new() -> Self {
+        Self
+    }
+    pub fn command_count() -> usize {
+        DAILYNOTE_COMMAND_COUNT
+    }
 }
 
 impl Default for DailyNoteCompatRouter {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -40,7 +46,12 @@ mod tests {
     use super::*;
     #[test]
     fn parse_4_commands() {
-        for s in ["DailyNote", "DailyNoteSearcher", "DailyNoteFolder", "DailyNoteExporter"] {
+        for s in [
+            "DailyNote",
+            "DailyNoteSearcher",
+            "DailyNoteFolder",
+            "DailyNoteExporter",
+        ] {
             assert_ne!(DailyNoteCommand::from_str(s), DailyNoteCommand::Unknown);
         }
         assert_eq!(DAILYNOTE_COMMAND_COUNT, 4);

@@ -25,9 +25,11 @@ async-trait = { workspace = true }
 notify = "6.1"
 fd-lock = "4.0"
 tempfile = "3.10"
-lopdf = { version = "0.34", optional = true }
+# CI fix 2026-08: 升级修 RUSTSEC-2026-0187 (lopdf 0.34 stack overflow) / quick-xml 0.31
+# (calamine 0.26 依赖, quadratic time + NsReader). 0 代码改动: 3 个依赖均 feature-gated 预留.
+lopdf = { version = "0.44", optional = true }
 docx-rs = { version = "0.4", optional = true }
-calamine = { version = "0.26", optional = true }
+calamine = { version = "0.36", optional = true }
 
 [features]
 default = []

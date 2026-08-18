@@ -142,23 +142,20 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
         let schema_c = schema_v.clone();
         tokio::spawn(async move {
             loop {
-                let (tcp, _peer) = match listener.accept().await {
-                    Ok(x) => x,
-                    Err(_) => continue,
+                let Ok((tcp, _peer)) = listener.accept().await else {
+                    continue;
                 };
                 let topics = topics_c.clone();
                 let stats = stats_c.clone();
                 let schema = schema_c.clone();
                 tokio::spawn(async move {
-                    let ws = match tokio_tungstenite::accept_async(tcp).await {
-                        Ok(w) => w,
-                        Err(_) => return,
+                    let Ok(ws) = tokio_tungstenite::accept_async(tcp).await else {
+                        return;
                     };
                     let (mut write, mut read) = ws.split();
                     while let Some(msg_res) = read.next().await {
-                        let msg = match msg_res {
-                            Ok(m) => m,
-                            Err(_) => return,
+                        let Ok(msg) = msg_res else {
+                            return;
                         };
                         if let tungstenite::Message::Text(text) = msg {
                             stats.received.fetch_add(1, Ordering::Relaxed);
@@ -226,9 +223,8 @@ impl<T: Clone + Send + Sync + 'static + Serialize + for<'de> Deserialize<'de>> L
         tokio::spawn(async move {
             let mut read = read;
             while let Some(msg_res) = read.next().await {
-                let msg = match msg_res {
-                    Ok(m) => m,
-                    Err(_) => return,
+                let Ok(msg) = msg_res else {
+                    return;
                 };
                 if let tungstenite::Message::Text(text) = msg {
                     stats_c.received.fetch_add(1, Ordering::Relaxed);

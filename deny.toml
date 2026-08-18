@@ -112,7 +112,7 @@ skip = [
     { name = "fallible-iterator", reason = "postgres 决定" },
     { name = "fancy-regex", reason = "regex 决定" },
     { name = "hmac", reason = "0.12 (apeireth-keyring) + 0.13 (postgres-protocol)" },
-    { name = "lru", reason = "3 版本 — workspace 各自钉" },
+    { name = "lru", reason = "0.12.5 (ratatui 固定) vs 0.18.2 — 0.12 API 不兼容 (NonZeroUsize), ratatui 0.30 已移除 0.12, e2e 已升 0.30" },
     { name = "notify", reason = "0.6 vs 0.7 — 等所有 consumer 升 0.7" },
     { name = "ratatui", reason = "0.x 跨 minor — workspace 决定" },
     { name = "rustc-hash", reason = "tokio / anyhow 决定" },

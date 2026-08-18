@@ -106,7 +106,7 @@ pub enum Response {
 /// 处理 Body 命令
 ///
 /// **不假装**: 6 命令全部用 PLACEHOLDER_* 编译期 hardcode 占位
-pub fn handle(state: &mut State, cmd: Command) -> Result<Response, OrganError> {
+pub fn handle(state: &State, cmd: Command) -> Result<Response, OrganError> {
     match cmd {
         Command::GetProcessInfo => Ok(Response::ProcessInfo {
             pid: PLACEHOLDER_PID,
@@ -172,7 +172,7 @@ mod tests {
     #[test]
     fn get_process_info() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetProcessInfo).unwrap();
+        let r = handle(&state, Command::GetProcessInfo).unwrap();
         match r {
             Response::ProcessInfo { pid, process } => {
                 assert_eq!(pid, PLACEHOLDER_PID);
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn get_memory_usage_returns_placeholder() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetMemoryUsage).unwrap();
+        let r = handle(&state, Command::GetMemoryUsage).unwrap();
         assert_eq!(r, Response::MemoryUsage(PLACEHOLDER_MEM_MB));
     }
 
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn get_disk_usage_returns_placeholder() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetDiskUsage).unwrap();
+        let r = handle(&state, Command::GetDiskUsage).unwrap();
         assert_eq!(r, Response::DiskUsage(PLACEHOLDER_DISK_PCT));
     }
 
@@ -205,7 +205,7 @@ mod tests {
     #[test]
     fn get_cpu_snapshot_returns_placeholder() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetCpuSnapshot).unwrap();
+        let r = handle(&state, Command::GetCpuSnapshot).unwrap();
         assert_eq!(r, Response::CpuSnapshot(PLACEHOLDER_CPU_PCT));
     }
 
@@ -214,7 +214,7 @@ mod tests {
     #[test]
     fn get_thread_count_returns_placeholder() {
         let mut state = fresh_state();
-        let r = handle(&mut state, Command::GetThreadCount).unwrap();
+        let r = handle(&state, Command::GetThreadCount).unwrap();
         assert_eq!(r, Response::ThreadCount(PLACEHOLDER_THREADS));
     }
 
@@ -224,7 +224,7 @@ mod tests {
     fn get_uptime_real_data() {
         let mut state = fresh_state();
         std::thread::sleep(std::time::Duration::from_millis(10));
-        let r = handle(&mut state, Command::GetUptime).unwrap();
+        let r = handle(&state, Command::GetUptime).unwrap();
         // 唯一真数据 — uptime 应该 >= 0 且很小 (因为才 sleep 10ms)
         match r {
             Response::Uptime(s) => assert!(s < 60, "uptime 异常大: {s}"),

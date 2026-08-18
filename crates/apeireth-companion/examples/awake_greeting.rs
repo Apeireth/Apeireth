@@ -23,7 +23,9 @@ const BASE_URL: &str = "https://api.minimaxi.com";
 const MODEL: &str = "MiniMax-M3";
 
 fn at(day: u32, h: u32, m: u32) -> chrono::DateTime<Utc> {
-    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0).single().unwrap()
+    Utc.with_ymd_and_hms(2026, 8, day, h, m, 0)
+        .single()
+        .unwrap()
 }
 
 fn load_key() -> Result<String, String> {
@@ -57,14 +59,13 @@ async fn main() {
     }
 
     // 3. 心跳 → 全器官决策 (上下文来自 APEIRETH_CONTEXT 环境变量)
-    let ctx = std::env::var("APEIRETH_CONTEXT").ok().filter(|s| !s.trim().is_empty());
+    let ctx = std::env::var("APEIRETH_CONTEXT")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
     let init = c.tick(at(16, 8, 40), ctx);
-    let init = match init {
-        Some(i) => i,
-        None => {
-            println!("(所有器官审议后决定: 保持安静)");
-            return;
-        }
+    let Some(init) = init else {
+        println!("(所有器官审议后决定: 保持安静)");
+        return;
     };
 
     // 4. 真 LLM: 把机制的诚实事实变成「他的话」

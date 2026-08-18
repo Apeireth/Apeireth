@@ -147,9 +147,17 @@ mod tests {
     fn corpus() -> (Vec<(String, usize, String)>, Vec<(String, String)>) {
         (
             vec![
-                ("2026-08-15".into(), 0, "今天复习线代, 换元法还是要多练".into()),
+                (
+                    "2026-08-15".into(),
+                    0,
+                    "今天复习线代, 换元法还是要多练".into(),
+                ),
                 ("2026-08-15".into(), 1, "晚上泡了深烘咖啡, 香气很足".into()),
-                ("2026-08-16".into(), 0, "线代作业交了, 换元积分写得顺".into()),
+                (
+                    "2026-08-16".into(),
+                    0,
+                    "线代作业交了, 换元积分写得顺".into(),
+                ),
             ],
             vec![
                 ("f1".into(), "主人 擅长薄弱点 线代换元法".into()),
@@ -164,9 +172,15 @@ mod tests {
         let (d, f) = corpus();
         let links = link_core(&d, &f, 2);
         // 线代两条日记 ↔ f1 (线代/换元 共享); 咖啡日记 ↔ f2 (深烘/咖啡)
-        assert!(links.iter().any(|l| l.fact_id == "f1" && l.diary_date == "2026-08-15" && l.diary_entry_idx == 0));
-        assert!(links.iter().any(|l| l.fact_id == "f1" && l.diary_date == "2026-08-16"));
-        assert!(links.iter().any(|l| l.fact_id == "f2" && l.diary_entry_idx == 1));
+        assert!(links
+            .iter()
+            .any(|l| l.fact_id == "f1" && l.diary_date == "2026-08-15" && l.diary_entry_idx == 0));
+        assert!(links
+            .iter()
+            .any(|l| l.fact_id == "f1" && l.diary_date == "2026-08-16"));
+        assert!(links
+            .iter()
+            .any(|l| l.fact_id == "f2" && l.diary_entry_idx == 1));
         assert!(!links.iter().any(|l| l.fact_id == "f3"), "无共享不应建链");
         // 审计证据非空且排序去重
         let any_link = links.iter().find(|l| l.fact_id == "f1").unwrap();
@@ -260,11 +274,16 @@ mod tests {
                 .unwrap_or(0)
         ));
         let _ = std::fs::remove_dir_all(&root);
-        let clock = Arc::new(
-            VirtualClock::new(chrono::Utc.with_ymd_and_hms(2026, 8, 16, 6, 0, 0).single().unwrap()),
-        );
+        let clock = Arc::new(VirtualClock::new(
+            chrono::Utc
+                .with_ymd_and_hms(2026, 8, 16, 6, 0, 0)
+                .single()
+                .unwrap(),
+        ));
         let diary = DiaryStore::new(&root, clock);
-        diary.append("test", "今天复习线代换元法, 感觉顺手").unwrap();
+        diary
+            .append("test", "今天复习线代换元法, 感觉顺手")
+            .unwrap();
 
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let graph = MemoryGraph::new(store);

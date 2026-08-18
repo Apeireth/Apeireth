@@ -19,7 +19,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LiveKitError;
+use crate::livekit::error::LiveKitError;
 
 // ============================================================================
 // §1 API Key + Secret holders (per task spec §4 提到 `SecretString`, 但 workspace 无 secrecy, 用 String + 内存存)

@@ -70,7 +70,11 @@ impl AwakeCompanion {
         let at = Utc::now().timestamp_millis();
         let _ = evolution.transition(EvolutionState::Draft, TransitionReason::Start, at);
         let _ = evolution.transition(EvolutionState::Proposed, TransitionReason::Submit, at);
-        let _ = evolution.transition(EvolutionState::Ratified, TransitionReason::CouncilApprove, at);
+        let _ = evolution.transition(
+            EvolutionState::Ratified,
+            TransitionReason::CouncilApprove,
+            at,
+        );
         let _ = evolution.transition(EvolutionState::Active, TransitionReason::Activate, at);
     }
 
@@ -86,7 +90,7 @@ impl AwakeCompanion {
 
         // 情绪调制: PAD 愉悦度低 → 更克制
         let pad = self.emotion.current_pad();
-        let mood = ((pad.p + 1.0) / 2.0) as f64;
+        let mood = f64::from((pad.p + 1.0) / 2.0);
         if mood < self.loop_.config.mood_floor {
             return None;
         }
@@ -168,11 +172,11 @@ impl AwakeCompanion {
         {
             let c = self.loop_.relationship.character_mut();
             c.apply_emotion(
-                pad.p.max(0.0) as f64,  // joy
-                pad.p.max(0.0) as f64,  // trust 代理 (愉悦 → 信任)
+                f64::from(pad.p.max(0.0)), // joy
+                f64::from(pad.p.max(0.0)), // trust 代理 (愉悦 → 信任)
                 0.0,
                 0.0,
-                (-pad.p).max(0.0) as f64, // sadness (不悦)
+                f64::from((-pad.p).max(0.0)), // sadness (不悦)
                 0.0,
                 0.0,
                 0.0,
@@ -232,10 +236,10 @@ impl AwakeCompanion {
     /// 换机制参数 (实验调参入口, 必须在开始观察前调用).
     pub fn with_config(mut self, config: crate::emergence::LoopConfig) -> Self {
         self.loop_.config = config.clone();
-        self.loop_.rhythm = crate::emergence::RhythmEstimator::new(28, config.rhythm_bucket_minutes);
+        self.loop_.rhythm =
+            crate::emergence::RhythmEstimator::new(28, config.rhythm_bucket_minutes);
         self
     }
-
 }
 
 #[cfg(test)]
@@ -244,7 +248,9 @@ mod tests {
     use chrono::TimeZone;
 
     fn at(day: u32, h: u32, m: u32) -> DateTime<Utc> {
-        Utc.with_ymd_and_hms(2026, 8, day, h, m, 0).single().unwrap()
+        Utc.with_ymd_and_hms(2026, 8, day, h, m, 0)
+            .single()
+            .unwrap()
     }
 
     fn trusted_bond() -> Bond {
@@ -311,7 +317,10 @@ mod tests {
         // 1) 尚未审议: 语调只有两层 (关系基线 + 情绪中性 Friendly), 无审议回声
         assert_eq!(c.last_deliberation(), None);
         let t0 = c.tone();
-        assert!(t0.contains("轻松友好"), "新伙伴情绪基线应是 Friendly 档: {t0}");
+        assert!(
+            t0.contains("轻松友好"),
+            "新伙伴情绪基线应是 Friendly 档: {t0}"
+        );
         assert!(!t0.contains("智囊团"), "审议前不应有强度层: {t0}");
         // 2) 全器官心跳后: 审议回声被捕获, 语调获得第三层
         for d in 9..=15 {
@@ -325,11 +334,17 @@ mod tests {
         // 3) 审议→措辞强度: 语调强度层与回声的确定性分档一致
         let expected = crate::tone::deliberation_intensity(echo.weighted_score, echo.confidence)
             .expect("council 报告应归一化在合法区间");
-        assert!(t1.contains(expected), "强度层应与回声分档一致: {t1} vs {expected}");
+        assert!(
+            t1.contains(expected),
+            "强度层应与回声分档一致: {t1} vs {expected}"
+        );
         // 4) 情绪→语气: 没回 (UserCritique → Anger → Diplomatic) 真实改变情绪层
         c.apply_feedback(Feedback::Ignored, at(16, 9, 0));
         let t2 = c.tone();
-        assert!(t2.contains("平稳客观"), "被批评后情绪层应转 Diplomatic 档: {t2}");
+        assert!(
+            t2.contains("平稳客观"),
+            "被批评后情绪层应转 Diplomatic 档: {t2}"
+        );
         assert_ne!(t1, t2, "情绪事件应真实改变语调");
     }
 

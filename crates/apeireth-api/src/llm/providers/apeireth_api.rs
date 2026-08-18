@@ -221,7 +221,6 @@ impl LlmProvider for ApeirethApiProvider {
                     });
                     let backoff = DEFAULT_RETRY_BACKOFF_MS * (1 << attempt.min(5));
                     tokio::time::sleep(Duration::from_millis(backoff)).await;
-                    continue;
                 }
                 Err(e) => {
                     tracing::warn!(provider = PROVIDER_NAME, attempt, error = %e, "network error");
@@ -231,7 +230,6 @@ impl LlmProvider for ApeirethApiProvider {
                     });
                     let backoff = DEFAULT_RETRY_BACKOFF_MS * (1 << attempt.min(5));
                     tokio::time::sleep(Duration::from_millis(backoff)).await;
-                    continue;
                 }
             }
         }

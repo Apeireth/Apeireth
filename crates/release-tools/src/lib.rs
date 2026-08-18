@@ -47,7 +47,10 @@ mod tests {
         // 若失败 = 有人把 version 设成空, 触发 release 阻断
         // ponytail: workspace version 实际值 (1.2.0) 不在这里钉死, 而是在 .github/workflows/release.yml
         // 的 APEIRETH_VERSION env 与 CI gate 同步, 避免本测试与 release gate 双源真相漂移
-        assert!(!VERSION.is_empty(), "VERSION must be non-empty (workspace version)");
+        assert!(
+            !VERSION.is_empty(),
+            "VERSION must be non-empty (workspace version)"
+        );
         assert!(
             VERSION.chars().next().unwrap().is_ascii_digit(),
             "VERSION must start with a digit (semver-shaped)"

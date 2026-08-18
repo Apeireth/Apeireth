@@ -334,25 +334,29 @@ impl KeyringBackend for PlatformKeyring {
         let raw = match entry.get_password() {
             Ok(s) => s,
             Err(keyring::Error::NoEntry) => {
-                self.audit.record(AuditEvent::Get, service, "platform", false);
+                self.audit
+                    .record(AuditEvent::Get, service, "platform", false);
                 return Err(KeyringError::UnknownService {
                     service: service.to_string(),
                 });
             }
             Err(e) => {
                 let reason = e.to_string();
-                self.audit.record(AuditEvent::Get, service, "platform", false);
+                self.audit
+                    .record(AuditEvent::Get, service, "platform", false);
                 return Err(self.classify_error(service, &reason));
             }
         };
         if raw.len() > MAX_SECRET_LEN {
-            self.audit.record(AuditEvent::Get, service, "platform", false);
+            self.audit
+                .record(AuditEvent::Get, service, "platform", false);
             return Err(KeyringError::SecretTooLong {
                 len: raw.len(),
                 max: MAX_SECRET_LEN,
             });
         }
-        self.audit.record(AuditEvent::Get, service, "platform", true);
+        self.audit
+            .record(AuditEvent::Get, service, "platform", true);
         Ok(SecretBuf::new(raw.into_bytes()))
     }
 
@@ -370,12 +374,14 @@ impl KeyringBackend for PlatformKeyring {
         let s = String::from_utf8_lossy(secret.expose()).into_owned();
         match entry.set_password(&s) {
             Ok(()) => {
-                self.audit.record(AuditEvent::Set, service, "platform", true);
+                self.audit
+                    .record(AuditEvent::Set, service, "platform", true);
                 Ok(())
             }
             Err(e) => {
                 let reason = e.to_string();
-                self.audit.record(AuditEvent::Set, service, "platform", false);
+                self.audit
+                    .record(AuditEvent::Set, service, "platform", false);
                 Err(self.classify_error(service, &reason))
             }
         }
@@ -387,18 +393,21 @@ impl KeyringBackend for PlatformKeyring {
             .map_err(|e| self.classify_error(service, &e.to_string()))?;
         match entry.delete_credential() {
             Ok(()) => {
-                self.audit.record(AuditEvent::Delete, service, "platform", true);
+                self.audit
+                    .record(AuditEvent::Delete, service, "platform", true);
                 Ok(())
             }
             Err(keyring::Error::NoEntry) => {
-                self.audit.record(AuditEvent::Delete, service, "platform", false);
+                self.audit
+                    .record(AuditEvent::Delete, service, "platform", false);
                 Err(KeyringError::UnknownService {
                     service: service.to_string(),
                 })
             }
             Err(e) => {
                 let reason = e.to_string();
-                self.audit.record(AuditEvent::Delete, service, "platform", false);
+                self.audit
+                    .record(AuditEvent::Delete, service, "platform", false);
                 Err(self.classify_error(service, &reason))
             }
         }
@@ -584,11 +593,13 @@ impl EncryptedFileBackend {
                     aad: b"apeireth-keyring-v1",
                 },
             )
-            .map_err(|_| KeyringError::Crypto("AEAD decrypt failed (wrong key or tampered)".into()))?;
+            .map_err(|_| {
+                KeyringError::Crypto("AEAD decrypt failed (wrong key or tampered)".into())
+            })?;
 
         // plaintext = btreemap JSON
-        let map: BTreeMap<String, String> = serde_json::from_slice(&plaintext)
-            .map_err(|e| KeyringError::Format(e.to_string()))?;
+        let map: BTreeMap<String, String> =
+            serde_json::from_slice(&plaintext).map_err(|e| KeyringError::Format(e.to_string()))?;
         Ok(map.into_iter().map(|(k, v)| (k, v.into_bytes())).collect())
     }
 
@@ -599,8 +610,8 @@ impl EncryptedFileBackend {
             .iter()
             .map(|(k, v)| (k.clone(), String::from_utf8_lossy(v).into_owned()))
             .collect();
-        let plaintext = serde_json::to_vec(&string_map)
-            .map_err(|e| KeyringError::Format(e.to_string()))?;
+        let plaintext =
+            serde_json::to_vec(&string_map).map_err(|e| KeyringError::Format(e.to_string()))?;
 
         // nonce 24B 随机
         let mut nonce_bytes = [0u8; NONCE_LEN];
@@ -639,10 +650,8 @@ impl EncryptedFileBackend {
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(
-                &self.data_path,
-                std::fs::Permissions::from_mode(0o600),
-            );
+            let _ =
+                std::fs::set_permissions(&self.data_path, std::fs::Permissions::from_mode(0o600));
         }
         Ok(())
     }
@@ -1039,7 +1048,8 @@ fn check_service_name(service: &str) -> Result<()> {
         });
     }
     // 复用 CredentialsStore 的校验 (防注入/路径穿越).
-    validate_service_name(service).map_err(|_| KeyringError::InvalidServiceName(service.to_string()))
+    validate_service_name(service)
+        .map_err(|_| KeyringError::InvalidServiceName(service.to_string()))
 }
 
 // ============================================================================
@@ -1065,7 +1075,8 @@ mod tests {
         ));
 
         // set + get round-trip
-        k.set("openai", &SecretBuf::from_str("sk-test-001")).unwrap();
+        k.set("openai", &SecretBuf::from_str("sk-test-001"))
+            .unwrap();
         let v = k.get("openai").unwrap();
         assert_eq!(v.expose(), b"sk-test-001");
 
@@ -1111,7 +1122,8 @@ mod tests {
         assert!(!k.data_path().exists(), "data 文件首次应不存在");
 
         // set + get
-        k.set("openai", &SecretBuf::from_str("sk-test-encrypted")).unwrap();
+        k.set("openai", &SecretBuf::from_str("sk-test-encrypted"))
+            .unwrap();
         assert!(k.data_path().exists(), "set 后 data 文件应存在");
         let v = k.get("openai").unwrap();
         assert_eq!(v.expose(), b"sk-test-encrypted");
@@ -1159,7 +1171,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&tmp);
         let r = KeyringSelector::select(Some("auto"), audit, Some(tmp.clone())).unwrap();
         assert!(
-            matches!(r.kind, BackendKind::Platform | BackendKind::EncryptedFile | BackendKind::InMemory),
+            matches!(
+                r.kind,
+                BackendKind::Platform | BackendKind::EncryptedFile | BackendKind::InMemory
+            ),
             "Auto 应至少落到 3 后端之一: {:?}",
             r.kind
         );
@@ -1200,7 +1215,10 @@ mod tests {
         let r = KeyringSelector::select(Some("definitely-not-a-backend"), audit, None).unwrap();
         // Auto 路径在 CI 通常落到 EncryptedFile 或 InMemory.
         assert!(
-            matches!(r.kind, BackendKind::Platform | BackendKind::EncryptedFile | BackendKind::InMemory),
+            matches!(
+                r.kind,
+                BackendKind::Platform | BackendKind::EncryptedFile | BackendKind::InMemory
+            ),
             "未知 env 值应安全默认 Auto: {:?}",
             r.kind
         );
@@ -1215,7 +1233,8 @@ mod tests {
 
         let plaintext_services = ["openai", "anthropic", "master-token"];
         for svc in plaintext_services {
-            k.set(svc, &SecretBuf::from_str("super-secret-value")).unwrap();
+            k.set(svc, &SecretBuf::from_str("super-secret-value"))
+                .unwrap();
             k.get(svc).unwrap();
             k.delete(svc).unwrap();
         }
@@ -1228,7 +1247,10 @@ mod tests {
             let h = name_hash(svc);
             assert_ne!(h, svc, "name_hash 不应等于 service 明文");
             assert_eq!(h.len(), 16, "name_hash 应 16 hex 字符");
-            assert!(h.chars().all(|c| c.is_ascii_hexdigit()), "name_hash 应 hex: {h}");
+            assert!(
+                h.chars().all(|c| c.is_ascii_hexdigit()),
+                "name_hash 应 hex: {h}"
+            );
         }
     }
 
@@ -1257,7 +1279,8 @@ mod tests {
         // 从 keyring 取出的 SecretBuf Drop 时 zeroize.
         let audit = Arc::new(CountingAudit::new());
         let k = InMemoryKeyring::new(audit.clone());
-        k.set("svc", &SecretBuf::from_str("zero-me-please")).unwrap();
+        k.set("svc", &SecretBuf::from_str("zero-me-please"))
+            .unwrap();
 
         let buf = k.get("svc").unwrap();
         assert_eq!(buf.expose(), b"zero-me-please");
@@ -1280,23 +1303,35 @@ mod tests {
         let secret_value = "sk-leak-check-plaintext-must-not-appear";
 
         let cases = vec![
-            (KeyringError::UnknownService {
-                service: service.into(),
-            }, false),
+            (
+                KeyringError::UnknownService {
+                    service: service.into(),
+                },
+                false,
+            ),
             (KeyringError::InvalidServiceName(service.into()), false),
-            (KeyringError::ServiceNameTooLong {
-                len: 200,
-                max: 128,
-            }, false),
-            (KeyringError::SecretTooLong {
-                len: secret_value.len(),
-                max: 10,
-            }, false),
-            (KeyringError::AccessDenied {
-                service: service.into(),
-                reason: "test".into(),
-            }, false),
-            (KeyringError::BackendUnavailable("platform off".into()), false),
+            (
+                KeyringError::ServiceNameTooLong { len: 200, max: 128 },
+                false,
+            ),
+            (
+                KeyringError::SecretTooLong {
+                    len: secret_value.len(),
+                    max: 10,
+                },
+                false,
+            ),
+            (
+                KeyringError::AccessDenied {
+                    service: service.into(),
+                    reason: "test".into(),
+                },
+                false,
+            ),
+            (
+                KeyringError::BackendUnavailable("platform off".into()),
+                false,
+            ),
             (KeyringError::Crypto("AEAD failed".into()), false),
         ];
 
@@ -1327,14 +1362,8 @@ mod tests {
                 k.set(bad, &SecretBuf::from_str("v")).is_err(),
                 "应拒绝非法名: {bad:?}"
             );
-            assert!(
-                k.get(bad).is_err(),
-                "应拒绝非法名 (get): {bad:?}"
-            );
-            assert!(
-                k.delete(bad).is_err(),
-                "应拒绝非法名 (delete): {bad:?}"
-            );
+            assert!(k.get(bad).is_err(), "应拒绝非法名 (get): {bad:?}");
+            assert!(k.delete(bad).is_err(), "应拒绝非法名 (delete): {bad:?}");
         }
     }
 
@@ -1353,10 +1382,7 @@ mod tests {
     fn backend_kind_from_env_str_parses_canonical() {
         assert_eq!(BackendKind::from_env_str(""), BackendKind::Auto);
         assert_eq!(BackendKind::from_env_str("auto"), BackendKind::Auto);
-        assert_eq!(
-            BackendKind::from_env_str("platform"),
-            BackendKind::Platform
-        );
+        assert_eq!(BackendKind::from_env_str("platform"), BackendKind::Platform);
         assert_eq!(
             BackendKind::from_env_str("encrypted-file"),
             BackendKind::EncryptedFile
@@ -1370,10 +1396,7 @@ mod tests {
             BackendKind::InMemory
         );
         // 大小写不敏感
-        assert_eq!(
-            BackendKind::from_env_str("PLATFORM"),
-            BackendKind::Platform
-        );
+        assert_eq!(BackendKind::from_env_str("PLATFORM"), BackendKind::Platform);
         // 未知 → Auto (fail-closed)
         assert_eq!(
             BackendKind::from_env_str("unknown-thing"),

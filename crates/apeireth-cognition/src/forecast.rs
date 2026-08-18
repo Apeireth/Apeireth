@@ -157,13 +157,14 @@ impl EnsembleForecast {
                 let sum: f64 = members.iter().map(|m| m.prediction).sum();
                 sum / members.len() as f64
             }
-            AggregationStrategy::Median => median(&members.iter().map(|m| m.prediction).collect::<Vec<_>>()),
+            AggregationStrategy::Median => {
+                median(&members.iter().map(|m| m.prediction).collect::<Vec<_>>())
+            }
             AggregationStrategy::Bayesian => {
                 // 权重 = confidence × contrarian_factor
                 // contrarian_factor = 1 + contrarian_weight * (1 - agreement)
                 //   低 agreement (多数派 vs 少数派) → 少数派 weight 增加
-                let contrarian_factor =
-                    1.0 + config.contrarian_weight * (1.0 - agreement);
+                let contrarian_factor = 1.0 + config.contrarian_weight * (1.0 - agreement);
                 // 每个成员 deviation from median → minority gets extra boost
                 let med = median(&members.iter().map(|m| m.prediction).collect::<Vec<_>>());
                 let total_weight: f64 = members
@@ -265,7 +266,11 @@ fn agreement_score(members: &[EnsembleMember]) -> f64 {
     }
     let n = members.len() as f64;
     let mean: f64 = members.iter().map(|m| m.prediction).sum::<f64>() / n;
-    let var: f64 = members.iter().map(|m| (m.prediction - mean).powi(2)).sum::<f64>() / n;
+    let var: f64 = members
+        .iter()
+        .map(|m| (m.prediction - mean).powi(2))
+        .sum::<f64>()
+        / n;
     let stddev = var.sqrt();
     // 1 - 2 * stddev (stddev ∈ [0, 0.5] → score ∈ [0, 1])
     (1.0 - 2.0 * stddev).clamp(0.0, 1.0)
@@ -362,11 +367,7 @@ impl PredictionMarket {
     /// LMSR cost function `C(q) = b * log(Σ_i exp(q_i / b))`.
     pub fn cost(&self) -> f64 {
         let b = self.config.liquidity_b;
-        let sum_exp: f64 = self
-            .quantities
-            .iter()
-            .map(|q| (q / b).exp())
-            .sum();
+        let sum_exp: f64 = self.quantities.iter().map(|q| (q / b).exp()).sum();
         b * sum_exp.ln()
     }
 
@@ -431,7 +432,11 @@ impl PredictionMarket {
             outcome_idx: idx,
             shares,
             cost,
-            avg_price: if shares > 0.0 { cost / shares } else { price_after },
+            avg_price: if shares > 0.0 {
+                cost / shares
+            } else {
+                price_after
+            },
             price_after,
         };
         Ok(receipt)
@@ -542,7 +547,11 @@ mod tests {
         };
         let agg = EnsembleForecast::aggregate(members, cfg);
         // a weight = 1.0, b weight = 0.1 → aggregate ≈ (1*0.9 + 0.1*0.1)/(1.1) ≈ 0.827
-        assert!(agg.aggregate_prediction > 0.8, "high-conf member should dominate, got {}", agg.aggregate_prediction);
+        assert!(
+            agg.aggregate_prediction > 0.8,
+            "high-conf member should dominate, got {}",
+            agg.aggregate_prediction
+        );
     }
 
     #[test]
@@ -658,7 +667,12 @@ mod tests {
         let before = m.price_of(0);
         m.execute_buy(0, 10.0).unwrap();
         let after = m.price_of(0);
-        assert!(after > before, "buying should increase price: {} → {}", before, after);
+        assert!(
+            after > before,
+            "buying should increase price: {} → {}",
+            before,
+            after
+        );
     }
 
     #[test]
@@ -671,8 +685,18 @@ mod tests {
         let cost_5 = m.cost_to_buy(0, 5.0);
         let cost_10 = m.cost_to_buy(0, 10.0);
         let cost_20 = m.cost_to_buy(0, 20.0);
-        assert!(cost_5 < cost_10, "LMSR cost should be monotone: 5={}, 10={}", cost_5, cost_10);
-        assert!(cost_10 < cost_20, "LMSR cost should be monotone: 10={}, 20={}", cost_10, cost_20);
+        assert!(
+            cost_5 < cost_10,
+            "LMSR cost should be monotone: 5={}, 10={}",
+            cost_5,
+            cost_10
+        );
+        assert!(
+            cost_10 < cost_20,
+            "LMSR cost should be monotone: 10={}, 20={}",
+            cost_10,
+            cost_20
+        );
     }
 
     #[test]
@@ -694,7 +718,10 @@ mod tests {
         high_b.execute_buy(0, 10.0).unwrap();
         let low_delta = low_b.price_of(0) - p_low_before;
         let high_delta = high_b.price_of(0) - p_high_before;
-        assert!(high_delta < low_delta, "higher b should give lower price impact");
+        assert!(
+            high_delta < low_delta,
+            "higher b should give lower price impact"
+        );
     }
 
     #[test]
@@ -714,7 +741,10 @@ mod tests {
         let cost_yes = m_yes.cost_to_buy(0, 5.0);
         // outcome 0 has price 0.5 (fair), so deficit = 0 → subsidy = 1
         // For more visible effect, buy into low-price outcome:
-        assert!(cost_yes <= cost_no, "contrarian weight should not increase cost");
+        assert!(
+            cost_yes <= cost_no,
+            "contrarian weight should not increase cost"
+        );
     }
 
     #[test]

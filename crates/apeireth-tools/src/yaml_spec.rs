@@ -29,7 +29,10 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-use apeireth_tool_registry::{Tool, ToolAxes, ToolKind, ToolRegistry, TriggerAxis, AwaitingAxis, ResidentAxis, TransportAxis, OutputAxis};
+use apeireth_tool_registry::{
+    AwaitingAxis, OutputAxis, ResidentAxis, Tool, ToolAxes, ToolKind, ToolRegistry, TransportAxis,
+    TriggerAxis,
+};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -48,13 +51,23 @@ pub enum SpecError {
     YamlParse { path: String, msg: String },
     #[error("必填字段缺失: {field} (path={path})")]
     MissingField { path: String, field: String },
-    #[error("参数类型非法: {param}={ty} (path={path}, 允许: string/integer/float/boolean/array/object)")]
-    InvalidParameterType { path: String, param: String, ty: String },
+    #[error(
+        "参数类型非法: {param}={ty} (path={path}, 允许: string/integer/float/boolean/array/object)"
+    )]
+    InvalidParameterType {
+        path: String,
+        param: String,
+        ty: String,
+    },
     #[error("权限声明非法: {perm} (path={path}, 允许: file:read:<path> / file:write:<path> / network:<host> / env:<var>)")]
     InvalidPermission { path: String, perm: String },
-    #[error("凭证声明非法: {cred} (path={path}, 必须 ${{VAR:?msg}} 形式; 真实密码不入 yml — TP33 纪律)")]
+    #[error(
+        "凭证声明非法: {cred} (path={path}, 必须 ${{VAR:?msg}} 形式; 真实密码不入 yml — TP33 纪律)"
+    )]
     InvalidCredential { path: String, cred: String },
-    #[error("工具名冲突: {name} (path={path}, registry 已存在同名工具, 不覆盖; 保持现有工具链不断)")]
+    #[error(
+        "工具名冲突: {name} (path={path}, registry 已存在同名工具, 不覆盖; 保持现有工具链不断)"
+    )]
     NameConflict { path: String, name: String },
     #[error("目录扫描错误: {0}")]
     Directory(String),
@@ -143,17 +156,22 @@ impl PermissionType {
     /// 解析 "file:read:./input.txt" 形式字符串 → `PermissionType`.
     /// 失败时返 `SpecError::InvalidPermission` (含原文便于诊断).
     pub fn parse(s: &str, path: &str) -> Result<Self, SpecError> {
-        let (scheme, rest) = s.split_once(':').ok_or_else(|| SpecError::InvalidPermission {
-            path: path.into(),
-            perm: s.into(),
-        })?;
+        let (scheme, rest) = s
+            .split_once(':')
+            .ok_or_else(|| SpecError::InvalidPermission {
+                path: path.into(),
+                perm: s.into(),
+            })?;
         let payload = rest;
         match scheme {
             "file" => {
-                let (sub, target) = payload.split_once(':').ok_or_else(|| SpecError::InvalidPermission {
-                    path: path.into(),
-                    perm: s.into(),
-                })?;
+                let (sub, target) =
+                    payload
+                        .split_once(':')
+                        .ok_or_else(|| SpecError::InvalidPermission {
+                            path: path.into(),
+                            perm: s.into(),
+                        })?;
                 match sub {
                     "read" => Ok(Self::FileRead(target.into())),
                     "write" => Ok(Self::FileWrite(target.into())),
@@ -269,10 +287,15 @@ impl CredentialSpec {
     /// 尝试解析 `env` 字段: 若 `${VAR}` 或 `${VAR:?msg}` 命中 → 返 env var 值;
     /// 缺变量 + 无 `:?` 守卫 → 返 None; 缺变量 + 有 `:?msg` 守卫 → 返 Err(msg).
     pub fn resolve(&self) -> Result<Option<String>, String> {
-        let Some(env) = &self.env else { return Ok(None) };
+        let Some(env) = &self.env else {
+            return Ok(None);
+        };
         let trimmed = env.trim();
         if !trimmed.starts_with("${") || !trimmed.ends_with('}') {
-            return Err(format!("credential({}).env 不是 ${{VAR}} 形式: {env}", self.name));
+            return Err(format!(
+                "credential({}).env 不是 ${{VAR}} 形式: {env}",
+                self.name
+            ));
         }
         let inner = &trimmed[2..trimmed.len() - 1];
         if let Some((var, guard)) = inner.split_once(':') {
@@ -491,10 +514,7 @@ pub fn load_tool_spec(path: &Path) -> Result<Arc<dyn ToolSpec>, SpecError> {
 /// 从目录批量加载所有 `*.yaml` / `*.yml` 文件; 任一失败返整体 Err.
 pub fn load_directory(dir: &Path) -> Result<Vec<Arc<dyn ToolSpec>>, SpecError> {
     if !dir.is_dir() {
-        return Err(SpecError::Directory(format!(
-            "不是目录: {}",
-            dir.display()
-        )));
+        return Err(SpecError::Directory(format!("不是目录: {}", dir.display())));
     }
     let mut specs = Vec::new();
     let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
@@ -518,10 +538,7 @@ pub fn load_directory(dir: &Path) -> Result<Vec<Arc<dyn ToolSpec>>, SpecError> {
 ///
 /// **纪律**: 失败不阻断 — 失败时返 `Err(SpecError)`, 由调用方决定是否 eprintln.
 /// **冲突策略**: 若同名已注册 → 返 [`SpecError::NameConflict`], 不覆盖 (保持现有工具链不断).
-pub fn register_yaml_spec(
-    registry: &ToolRegistry,
-    path: &Path,
-) -> Result<String, SpecError> {
+pub fn register_yaml_spec(registry: &ToolRegistry, path: &Path) -> Result<String, SpecError> {
     let spec = load_tool_spec(path)?;
     let name = spec.name().to_string();
     // 冲突检测: registry.get 返回 Some → 已存在同名 → 拒绝.
@@ -695,31 +712,35 @@ mod tests {
             CredentialSpec {
                 name: "api_key".into(),
                 required: true,
-                env: Some("secret123".into()),       // 裸字符串
+                env: Some("secret123".into()), // 裸字符串
             },
             CredentialSpec {
                 name: "password".into(),
                 required: true,
-                env: Some("hunter2".into()),         // 裸字符串
+                env: Some("hunter2".into()), // 裸字符串
             },
             CredentialSpec {
                 name: "token".into(),
                 required: true,
-                env: Some("Bearer xyz".into()),      // 含空格 + 裸值
+                env: Some("Bearer xyz".into()), // 含空格 + 裸值
             },
             CredentialSpec {
                 name: "k".into(),
                 required: true,
-                env: Some(r"${}".into()),            // 空变量名
+                env: Some(r"${}".into()), // 空变量名
             },
             CredentialSpec {
                 name: "k".into(),
                 required: true,
-                env: Some(r"${1BAD:?msg}".into()),   // 变量名首字符数字
+                env: Some(r"${1BAD:?msg}".into()), // 变量名首字符数字
             },
         ];
         for c in bad {
-            assert!(c.validate("<test>").is_err(), "应拒绝 env=`{}`", c.env.as_deref().unwrap_or("None"));
+            assert!(
+                c.validate("<test>").is_err(),
+                "应拒绝 env=`{}`",
+                c.env.as_deref().unwrap_or("None")
+            );
         }
     }
 
@@ -876,7 +897,10 @@ permissions:
     #[test]
     fn load_directory_not_a_dir_rejected() {
         let res = load_directory(Path::new("/nonexistent/never"));
-        assert!(matches!(res, Err(SpecError::Io(_)) | Err(SpecError::Directory(_))));
+        assert!(matches!(
+            res,
+            Err(SpecError::Io(_)) | Err(SpecError::Directory(_))
+        ));
     }
 
     // -------- ToolSpec trait / StaticToolSpec --------
@@ -927,7 +951,10 @@ permissions:
         let tool = SpecPlaceholderTool::new(spec);
         let r = tool.call(json!({"input": "hello"})).await.expect("call ok");
         assert_eq!(r["tool"], "ph_tool");
-        assert_eq!(r["error"], "yaml_spec only declares metadata; no executable implementation yet (TP29 placeholder)");
+        assert_eq!(
+            r["error"],
+            "yaml_spec only declares metadata; no executable implementation yet (TP29 placeholder)"
+        );
         // 暴露的参数/权限/凭证声明.
         assert_eq!(r["parameters_declared"][0]["name"], "input");
     }
@@ -937,11 +964,7 @@ permissions:
         use apeireth_tool_registry::ToolRegistry;
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("reg.yaml");
-        fs::write(
-            &path,
-            "name: reg_tool\ndescription: registered\n",
-        )
-        .unwrap();
+        fs::write(&path, "name: reg_tool\ndescription: registered\n").unwrap();
         let registry = ToolRegistry::new();
         let name = register_yaml_spec(&registry, &path).expect("register ok");
         assert_eq!(name, "reg_tool");
@@ -1022,7 +1045,10 @@ permissions:
         assert!(res.is_err(), "bad.yaml 缺 description 应使整体加载失败");
         match res {
             Err(SpecError::YamlParse { path, .. }) => {
-                assert!(path.contains("bad.yaml"), "path 应含 bad.yaml, got {path:?}");
+                assert!(
+                    path.contains("bad.yaml"),
+                    "path 应含 bad.yaml, got {path:?}"
+                );
             }
             Err(SpecError::Directory(_)) | Err(SpecError::Io(_)) => {
                 // 目录或 IO 错误也可接受
@@ -1032,8 +1058,15 @@ permissions:
 
         // 不论 ok.yaml 是否成功 load, register_yaml_spec 都不应被调用 (因为整体失败).
         // 此时 registry 应为空.
-        assert_eq!(registry.len(), 0, "失败后无任何 spec 被注册 (transactional)");
-        assert!(registry.get("ok_tool").is_none(), "失败时 ok_tool 也不应被注册");
+        assert_eq!(
+            registry.len(),
+            0,
+            "失败后无任何 spec 被注册 (transactional)"
+        );
+        assert!(
+            registry.get("ok_tool").is_none(),
+            "失败时 ok_tool 也不应被注册"
+        );
         assert!(registry.get("bad_tool").is_none(), "bad_tool 不应被注册");
     }
 }

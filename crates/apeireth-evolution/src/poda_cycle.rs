@@ -807,7 +807,7 @@ mod tests {
     }
 
     #[test]
-    fn poda_stage_names_match_aGLM() {
+    fn poda_stage_names_match_a_glm() {
         // ✅ 真断言: 阶段名
         assert_eq!(PodaStage::Plan.name(), "Plan");
         assert_eq!(PodaStage::Observe.name(), "Observe");

@@ -117,7 +117,9 @@ pub struct Deployment {
 pub enum DeployError {
     NotFound,
     /// 能力不在可部署状态 (仅 active 可部署).
-    IllegalState { status: CapabilityStatus },
+    IllegalState {
+        status: CapabilityStatus,
+    },
     /// 部署通道执行失败 (已留痕 Failed 部署, 能力保持 active 可重试).
     ChannelFailed(String),
     /// 部署非 live (未部署/已失败/已回滚), 不接受观测.
@@ -193,13 +195,19 @@ impl DeployManager {
             content: serde_json::to_string(d).map_err(|e| DeployError::Store(e.to_string()))?,
             session_id: self.session_id.clone(),
         };
-        self.store.put_episode(&ep).map_err(|e| DeployError::Store(e.to_string()))
+        self.store
+            .put_episode(&ep)
+            .map_err(|e| DeployError::Store(e.to_string()))
     }
 
     /// 重放全部版本, 每条部署取 rev 最大 (最新).
     fn load_latest_all(&self) -> Result<Vec<Deployment>, DeployError> {
-        let eps = self.store.recent_episodes(&self.session_id, 500).map_err(|e| DeployError::Store(e.to_string()))?;
-        let mut best: std::collections::HashMap<String, Deployment> = std::collections::HashMap::new();
+        let eps = self
+            .store
+            .recent_episodes(&self.session_id, 500)
+            .map_err(|e| DeployError::Store(e.to_string()))?;
+        let mut best: std::collections::HashMap<String, Deployment> =
+            std::collections::HashMap::new();
         for e in eps.iter().filter(|e| e.id.starts_with(DEP_PREFIX)) {
             if let Ok(d) = serde_json::from_str::<Deployment>(&e.content) {
                 match best.get(&d.id) {
@@ -265,7 +273,11 @@ impl DeployManager {
     }
 
     /// 监控观测: 记录一次运行结果 (成功/失败), 越限自动回滚.
-    pub fn observe(&self, capability_id: &str, success: bool) -> Result<ObserveOutcome, DeployError> {
+    pub fn observe(
+        &self,
+        capability_id: &str,
+        success: bool,
+    ) -> Result<ObserveOutcome, DeployError> {
         self.observe_inner(capability_id, success, false)
     }
 
@@ -274,12 +286,19 @@ impl DeployManager {
         self.observe_inner(capability_id, false, true)
     }
 
-    fn observe_inner(&self, capability_id: &str, success: bool, negative: bool) -> Result<ObserveOutcome, DeployError> {
+    fn observe_inner(
+        &self,
+        capability_id: &str,
+        success: bool,
+        negative: bool,
+    ) -> Result<ObserveOutcome, DeployError> {
         let cap = self.capability(capability_id)?;
         if cap.status != CapabilityStatus::Active {
             return Err(DeployError::NotLive);
         }
-        let mut dep = self.deployment_of(capability_id)?.ok_or(DeployError::NotLive)?;
+        let mut dep = self
+            .deployment_of(capability_id)?
+            .ok_or(DeployError::NotLive)?;
         if dep.status != DeployStatus::Live {
             return Err(DeployError::NotLive);
         }
@@ -294,16 +313,27 @@ impl DeployManager {
         let _ = self.registry.record_use(capability_id, success);
         if let Some(reason) = self.rollback_trigger(&dep.metrics) {
             let receipt = self.rollback(capability_id, &reason)?;
-            return Ok(ObserveOutcome { metrics: dep.metrics, rolled_back: true, receipt: Some(receipt) });
+            return Ok(ObserveOutcome {
+                metrics: dep.metrics,
+                rolled_back: true,
+                receipt: Some(receipt),
+            });
         }
         dep.rev += 1;
         self.put(&dep)?;
-        Ok(ObserveOutcome { metrics: dep.metrics, rolled_back: false, receipt: None })
+        Ok(ObserveOutcome {
+            metrics: dep.metrics,
+            rolled_back: false,
+            receipt: None,
+        })
     }
 
     fn rollback_trigger(&self, m: &MonitorMetrics) -> Option<String> {
         if m.negative_signals >= self.max_negative_signals {
-            return Some(format!("差评信号 {} ≥ {} (用户负反馈触发)", m.negative_signals, self.max_negative_signals));
+            return Some(format!(
+                "差评信号 {} ≥ {} (用户负反馈触发)",
+                m.negative_signals, self.max_negative_signals
+            ));
         }
         if m.calls >= self.min_observations && m.failure_rate() >= self.max_failure_rate {
             return Some(format!(
@@ -320,27 +350,40 @@ impl DeployManager {
     /// 时间敏感测试用 VirtualClock 快进, 0 真等待.
     pub fn check_deadline(&self, capability_id: &str) -> Result<Option<String>, DeployError> {
         let cap = self.capability(capability_id)?;
-        let Some(expected) = &cap.expected else { return Ok(None) };
+        let Some(expected) = &cap.expected else {
+            return Ok(None);
+        };
         if self.now_ms() < expected.deadline_ms || cap.status != CapabilityStatus::Active {
             return Ok(None);
         }
-        let Some(dep) = self.deployment_of(capability_id)?.filter(|d| d.status == DeployStatus::Live) else {
+        let Some(dep) = self
+            .deployment_of(capability_id)?
+            .filter(|d| d.status == DeployStatus::Live)
+        else {
             return Ok(None);
         };
         if dep.metrics.calls > 0 {
             return Ok(None); // 信号已有观测, 由观测指标判定, 不在期限通道重复判
         }
-        let reason = format!("预期未达标 (信号: {}; 期限已过): {}", expected.signal, expected.rollback);
+        let reason = format!(
+            "预期未达标 (信号: {}; 期限已过): {}",
+            expected.signal, expected.rollback
+        );
         let receipt = self.rollback(capability_id, &reason)?;
         Ok(Some(receipt))
     }
 
     /// 回滚: active → rolled_back (能力状态机) + 部署留痕 + 收据 (revert 即学习信号).
     pub fn rollback(&self, capability_id: &str, reason: &str) -> Result<String, DeployError> {
-        let cap = self.registry.rollback(capability_id, reason).map_err(|e| match e {
-            CapabilityError::NotFound => DeployError::NotFound,
-            CapabilityError::IllegalTransition { from, .. } => DeployError::IllegalState { status: from },
-        })?;
+        let cap = self
+            .registry
+            .rollback(capability_id, reason)
+            .map_err(|e| match e {
+                CapabilityError::NotFound => DeployError::NotFound,
+                CapabilityError::IllegalTransition { from, .. } => {
+                    DeployError::IllegalState { status: from }
+                }
+            })?;
         let metrics = if let Some(mut dep) = self.deployment_of(capability_id)? {
             let m = dep.metrics;
             if dep.status == DeployStatus::Live {
@@ -372,11 +415,17 @@ impl DeployManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::clock::VirtualClock;
     use crate::capability::CapabilityKind;
     use crate::evolution_gate::{EvalGate, GateDecision, LoopAction, VerifyOutcome};
+    use apeireth_core::clock::VirtualClock;
 
-    fn fixture(channel: Arc<dyn DeployChannel>) -> (Arc<CapabilityRegistry>, Arc<SqliteMemoryStore>, DeployManager) {
+    fn fixture(
+        channel: Arc<dyn DeployChannel>,
+    ) -> (
+        Arc<CapabilityRegistry>,
+        Arc<SqliteMemoryStore>,
+        DeployManager,
+    ) {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
         let mgr = DeployManager::new(Arc::clone(&reg), Arc::clone(&store), "me", channel);
@@ -384,7 +433,9 @@ mod tests {
     }
 
     fn activated(reg: &CapabilityRegistry, name: &str) -> String {
-        let p = reg.propose(name, "测试能力", CapabilityKind::Skill, "apeireth").unwrap();
+        let p = reg
+            .propose(name, "测试能力", CapabilityKind::Skill, "apeireth")
+            .unwrap();
         reg.approve(&p.id).unwrap();
         reg.activate(&p.id).unwrap();
         p.id
@@ -405,13 +456,28 @@ mod tests {
     fn deploy_requires_active_state() {
         let (reg, _, mgr) = fixture(Arc::new(MockDeployChannel::ok()));
         // pending 不能部署
-        let p = reg.propose("未批准", "x", CapabilityKind::Skill, "apeireth").unwrap();
-        assert!(matches!(mgr.deploy(&p.id, "a"), Err(DeployError::IllegalState { status: CapabilityStatus::Pending })));
+        let p = reg
+            .propose("未批准", "x", CapabilityKind::Skill, "apeireth")
+            .unwrap();
+        assert!(matches!(
+            mgr.deploy(&p.id, "a"),
+            Err(DeployError::IllegalState {
+                status: CapabilityStatus::Pending
+            })
+        ));
         // approved 不能部署 (须先激活)
         reg.approve(&p.id).unwrap();
-        assert!(matches!(mgr.deploy(&p.id, "a"), Err(DeployError::IllegalState { status: CapabilityStatus::Approved })));
+        assert!(matches!(
+            mgr.deploy(&p.id, "a"),
+            Err(DeployError::IllegalState {
+                status: CapabilityStatus::Approved
+            })
+        ));
         // 不存在
-        assert!(matches!(mgr.deploy("cap-404", "a"), Err(DeployError::NotFound)));
+        assert!(matches!(
+            mgr.deploy("cap-404", "a"),
+            Err(DeployError::NotFound)
+        ));
     }
 
     #[test]
@@ -419,12 +485,26 @@ mod tests {
         let ch = Arc::new(MockDeployChannel::failing());
         let (reg, _, mgr) = fixture(ch.clone());
         let id = activated(&reg, "故障通道");
-        assert!(matches!(mgr.deploy(&id, "a"), Err(DeployError::ChannelFailed(_))));
+        assert!(matches!(
+            mgr.deploy(&id, "a"),
+            Err(DeployError::ChannelFailed(_))
+        ));
         assert_eq!(ch.call_count(), 1);
         // 失败留痕 (Failed 部署)
-        assert_eq!(mgr.deployment_of(&id).unwrap().unwrap().status, DeployStatus::Failed);
+        assert_eq!(
+            mgr.deployment_of(&id).unwrap().unwrap().status,
+            DeployStatus::Failed
+        );
         // 能力保持 active, 通道恢复后可重试
-        assert_eq!(reg.list(None).unwrap().into_iter().find(|c| c.id == id).unwrap().status, CapabilityStatus::Active);
+        assert_eq!(
+            reg.list(None)
+                .unwrap()
+                .into_iter()
+                .find(|c| c.id == id)
+                .unwrap()
+                .status,
+            CapabilityStatus::Active
+        );
         ch.set_fail(false);
         let d = mgr.deploy(&id, "a").unwrap();
         assert_eq!(d.status, DeployStatus::Live);
@@ -444,7 +524,12 @@ mod tests {
         assert_eq!(o2.metrics.failures, 1);
         assert!((o2.metrics.failure_rate() - 0.5).abs() < 1e-9);
         // 能力自身 EMA/置信度台账同步
-        let cap = reg.list(None).unwrap().into_iter().find(|c| c.id == id).unwrap();
+        let cap = reg
+            .list(None)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == id)
+            .unwrap();
         assert_eq!(cap.confidence.unwrap().observations, 2);
     }
 
@@ -459,11 +544,19 @@ mod tests {
         assert!(o2.rolled_back);
         assert!(o2.receipt.unwrap().contains("[deploy-revert]"));
         // 状态机回退留痕: active → rolled_back
-        let cap = reg.list(None).unwrap().into_iter().find(|c| c.id == id).unwrap();
+        let cap = reg
+            .list(None)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == id)
+            .unwrap();
         assert_eq!(cap.status, CapabilityStatus::RolledBack);
         assert!(cap.rollback_reason.unwrap().contains("差评信号"));
         // 部署记录回滚留痕
-        assert_eq!(mgr.deployment_of(&id).unwrap().unwrap().status, DeployStatus::RolledBack);
+        assert_eq!(
+            mgr.deployment_of(&id).unwrap().unwrap().status,
+            DeployStatus::RolledBack
+        );
         // 回滚后不接受观测
         assert!(matches!(mgr.observe(&id, true), Err(DeployError::NotLive)));
     }
@@ -472,7 +565,12 @@ mod tests {
     fn failure_rate_trigger_rollback() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
-        let mut mgr = DeployManager::new(Arc::clone(&reg), Arc::clone(&store), "me", Arc::new(MockDeployChannel::ok()));
+        let mut mgr = DeployManager::new(
+            Arc::clone(&reg),
+            Arc::clone(&store),
+            "me",
+            Arc::new(MockDeployChannel::ok()),
+        );
         mgr.min_observations = 3;
         mgr.max_failure_rate = 0.6;
         let id = activated(&reg, "失败率回滚");
@@ -484,7 +582,12 @@ mod tests {
         let o3 = mgr.observe(&id, false).unwrap();
         assert!(o3.rolled_back);
         assert!(o3.receipt.unwrap().contains("失败率"));
-        let cap = reg.list(None).unwrap().into_iter().find(|c| c.id == id).unwrap();
+        let cap = reg
+            .list(None)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == id)
+            .unwrap();
         assert_eq!(cap.status, CapabilityStatus::RolledBack);
     }
 
@@ -507,14 +610,21 @@ mod tests {
         let deadline = vc.current().timestamp_millis() + 3_600_000; // 1h 后
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
-        let mgr = DeployManager::new(Arc::clone(&reg), Arc::clone(&store), "me", Arc::new(MockDeployChannel::ok()))
-            .with_clock(vc.clone());
+        let mgr = DeployManager::new(
+            Arc::clone(&reg),
+            Arc::clone(&store),
+            "me",
+            Arc::new(MockDeployChannel::ok()),
+        )
+        .with_clock(vc.clone());
         let expected = crate::capability::ExpectedOutcome {
             signal: "被采用 ≥3 次".into(),
             deadline_ms: deadline,
             rollback: "retire".into(),
         };
-        let p = reg.propose_with_expected("期限能力", "y", CapabilityKind::Skill, "apeireth", expected).unwrap();
+        let p = reg
+            .propose_with_expected("期限能力", "y", CapabilityKind::Skill, "apeireth", expected)
+            .unwrap();
         reg.approve(&p.id).unwrap();
         reg.activate(&p.id).unwrap();
         mgr.deploy(&p.id, "a").unwrap();
@@ -524,7 +634,12 @@ mod tests {
         vc.advance(chrono::Duration::hours(2));
         let receipt = mgr.check_deadline(&p.id).unwrap();
         assert!(receipt.unwrap().contains("[deploy-revert]"));
-        let cap = reg.list(None).unwrap().into_iter().find(|c| c.id == p.id).unwrap();
+        let cap = reg
+            .list(None)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == p.id)
+            .unwrap();
         assert_eq!(cap.status, CapabilityStatus::RolledBack);
         assert!(cap.rollback_reason.unwrap().contains("预期未达标"));
     }
@@ -535,10 +650,21 @@ mod tests {
         let deadline = vc.current().timestamp_millis() + 1000;
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
-        let mgr = DeployManager::new(Arc::clone(&reg), Arc::clone(&store), "me", Arc::new(MockDeployChannel::ok()))
-            .with_clock(vc.clone());
-        let expected = crate::capability::ExpectedOutcome { signal: "s".into(), deadline_ms: deadline, rollback: "r".into() };
-        let p = reg.propose_with_expected("有观测", "y", CapabilityKind::Skill, "apeireth", expected).unwrap();
+        let mgr = DeployManager::new(
+            Arc::clone(&reg),
+            Arc::clone(&store),
+            "me",
+            Arc::new(MockDeployChannel::ok()),
+        )
+        .with_clock(vc.clone());
+        let expected = crate::capability::ExpectedOutcome {
+            signal: "s".into(),
+            deadline_ms: deadline,
+            rollback: "r".into(),
+        };
+        let p = reg
+            .propose_with_expected("有观测", "y", CapabilityKind::Skill, "apeireth", expected)
+            .unwrap();
         reg.approve(&p.id).unwrap();
         reg.activate(&p.id).unwrap();
         mgr.deploy(&p.id, "a").unwrap();
@@ -554,7 +680,12 @@ mod tests {
         mgr.deploy(&id, "a").unwrap();
         mgr.observe(&id, true).unwrap();
         // 重开 manager (同库): 重放取最新 rev
-        let mgr2 = DeployManager::new(Arc::clone(&reg), store, "me", Arc::new(MockDeployChannel::ok()));
+        let mgr2 = DeployManager::new(
+            Arc::clone(&reg),
+            store,
+            "me",
+            Arc::new(MockDeployChannel::ok()),
+        );
         let d = mgr2.deployment_of(&id).unwrap().unwrap();
         assert_eq!(d.status, DeployStatus::Live);
         assert_eq!(d.metrics.calls, 1);
@@ -567,11 +698,22 @@ mod tests {
         // 1. 提案
         let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
         let reg = Arc::new(CapabilityRegistry::new(Arc::clone(&store), "me"));
-        let p = reg.propose("全链能力", "演化回路全链测试", CapabilityKind::Skill, "apeireth").unwrap();
+        let p = reg
+            .propose(
+                "全链能力",
+                "演化回路全链测试",
+                CapabilityKind::Skill,
+                "apeireth",
+            )
+            .unwrap();
         // 2. 验证闸门 (evolution_gate): 首轮通过 → Promoted → LoopAction::Deploy
         let gate = EvalGate::new("pre-sha");
         let (decision, _, _) = gate.run_until_conclusion(
-            |_| VerifyOutcome { passed: true, changed: true, error: None },
+            |_| VerifyOutcome {
+                passed: true,
+                changed: true,
+                error: None,
+            },
             std::time::Instant::now(),
         );
         assert_eq!(decision, GateDecision::Promoted);
@@ -581,20 +723,38 @@ mod tests {
         // 3. 批准 + 激活 + 部署
         reg.approve(&p.id).unwrap();
         reg.activate(&p.id).unwrap();
-        let mgr = DeployManager::new(Arc::clone(&reg), Arc::clone(&store), "me", Arc::new(MockDeployChannel::ok()));
+        let mgr = DeployManager::new(
+            Arc::clone(&reg),
+            Arc::clone(&store),
+            "me",
+            Arc::new(MockDeployChannel::ok()),
+        );
         let d = mgr.deploy(&p.id, "制品").unwrap();
         assert_eq!(d.status, DeployStatus::Live);
         // 4. 监控: 两次差评 → 5. 自动回滚
         assert!(!mgr.observe_negative(&p.id).unwrap().rolled_back);
         let o = mgr.observe_negative(&p.id).unwrap();
         assert!(o.rolled_back && o.receipt.unwrap().contains("[deploy-revert]"));
-        let cap = reg.list(None).unwrap().into_iter().find(|c| c.id == p.id).unwrap();
+        let cap = reg
+            .list(None)
+            .unwrap()
+            .into_iter()
+            .find(|c| c.id == p.id)
+            .unwrap();
         assert_eq!(cap.status, CapabilityStatus::RolledBack);
         // 回滚收据进学习信号 (供下一轮提案参考)
-        assert!(reg.revert_receipts().unwrap().iter().any(|(_, s, _)| s == "rolled_back"));
+        assert!(reg
+            .revert_receipts()
+            .unwrap()
+            .iter()
+            .any(|(_, s, _)| s == "rolled_back"));
         // 验证失败路径对照: Rejected → LoopAction::Rollback (不部署)
         let (d2, _, _) = gate.run_until_conclusion(
-            |_| VerifyOutcome { passed: false, changed: false, error: Some("编译失败".into()) },
+            |_| VerifyOutcome {
+                passed: false,
+                changed: false,
+                error: Some("编译失败".into()),
+            },
             std::time::Instant::now(),
         );
         assert!(matches!(gate.loop_action(&d2), LoopAction::Rollback { .. }));

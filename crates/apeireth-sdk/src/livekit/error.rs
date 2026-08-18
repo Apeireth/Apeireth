@@ -18,13 +18,11 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum LiveKitError {
     // ===== m3 防御 (1 类) =====
-
     /// m3 防御: 工具未在白名单内 (per m3-hallucination-defense §2.4).
     #[error("tool not whitelisted: {0}")]
     ToolNotWhitelisted(String),
 
     // ===== K-1 强校验 (4 类) =====
-
     /// K-1 #1: API Key 未设置 (per keyring get 返回 None).
     #[error("livekit api key not set (per apeireth-keyring::get returns None)")]
     ApiKeyMissing,
@@ -42,7 +40,9 @@ pub enum LiveKitError {
     ApiSecretInvalid(String),
 
     /// K-1 #3: Room Name 为空.
-    #[error("livekit room name empty (must be 1..=256 chars, per livekit-server RoomName constraint)")]
+    #[error(
+        "livekit room name empty (must be 1..=256 chars, per livekit-server RoomName constraint)"
+    )]
     RoomNameEmpty,
 
     /// K-1 #3: Room Name 含非法字符 (per livekit-server 限制, ASCII alphanumeric + `-` + `_`).
@@ -52,11 +52,12 @@ pub enum LiveKitError {
     /// K-1 #4: URL 不是 `wss://` 开头.
     ///
     /// LiveKit 强制要求 wss:// 协议 (WebSocket Secure), 跟普通 WebRTC 信令服务器一致.
-    #[error("livekit url must start with `wss://` (per livekit-client v0.9.21 强制要求): got `{0}`")]
+    #[error(
+        "livekit url must start with `wss://` (per livekit-client v0.9.21 强制要求): got `{0}`"
+    )]
     InvalidUrl(String),
 
     // ===== 通用 LiveKit 失败面 (3 类, per livekit-client v0.9.21 1:1 翻译) =====
-
     /// 连接失败 (per livekit-client `Room.connect` 异常, R20 阶段 4 续真接时用).
     #[error("livekit connection failed: {0}")]
     ConnectionFailed(String),
@@ -70,7 +71,6 @@ pub enum LiveKitError {
     RoomDisconnected(String),
 
     // ===== 6 核心 API NotImplemented (1 类 — R20 阶段 4 skeleton 主标志) =====
-
     /// 6 核心 API NotImplemented (R20 阶段 4 skeleton, R21 续真接).
     ///
     /// **O-5 不假装**: 6 核心 API 全部返 `Err(LiveKitError::NotImplemented)`, 0 假装已调通 LiveKit 服务.
@@ -80,7 +80,6 @@ pub enum LiveKitError {
     NotImplemented(&'static str),
 
     // ===== K-1 fixture 字样 (诚实标志, 0 假装已实现) =====
-
     /// must-do 诚实标志 (per 任务规范 5 K-1 字样 #5).
     #[error("must-do 诚实标志: 当前 R20 阶段 4 skeleton, 0 假装已接 livekit-server SDK")]
     MustDoHonestFlag,
@@ -232,7 +231,10 @@ mod tests {
         // 32 chars secret
         assert!(LiveKitError::validate_api_secret("abcdef1234567890abcdef1234567890").is_ok());
         // 64 chars secret (typical LiveKit server-side)
-        assert!(LiveKitError::validate_api_secret("aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV3wX4yZ5aB6cD7eF8gH9iJ0kL1mN2oP3").is_ok());
+        assert!(LiveKitError::validate_api_secret(
+            "aB3cD4eF5gH6iJ7kL8mN9oP0qR1sT2uV3wX4yZ5aB6cD7eF8gH9iJ0kL1mN2oP3"
+        )
+        .is_ok());
     }
 
     #[test]

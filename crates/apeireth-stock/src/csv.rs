@@ -54,7 +54,12 @@ struct CsvRow {
     country: String,
     #[serde(default, alias = "Currency", alias = "CURRENCY")]
     currency: String,
-    #[serde(default, alias = "Market Cap", alias = "MARKET_CAP", alias = "marketCap")]
+    #[serde(
+        default,
+        alias = "Market Cap",
+        alias = "MARKET_CAP",
+        alias = "marketCap"
+    )]
     market_cap: String,
     #[serde(default, alias = "IPO Year", alias = "IPO_YEAR", alias = "ipoYear")]
     ipo_year: String,
@@ -125,11 +130,35 @@ pub fn import_from_csv<P: AsRef<Path>>(
         .collect();
     debug!("CSV headers: {:?}", headers);
     let known_headers = [
-        "symbol", "name", "sector", "industry", "exchange", "country", "currency",
-        "market_cap", "ipo_year", "Market Cap", "IPO Year", "marketCap", "ipoYear",
-        "Symbol", "Name", "Sector", "Industry", "Exchange", "Country", "Currency",
-        "MARKET_CAP", "IPO_YEAR", "SYMBOL", "NAME", "SECTOR", "INDUSTRY", "EXCHANGE",
-        "COUNTRY", "CURRENCY",
+        "symbol",
+        "name",
+        "sector",
+        "industry",
+        "exchange",
+        "country",
+        "currency",
+        "market_cap",
+        "ipo_year",
+        "Market Cap",
+        "IPO Year",
+        "marketCap",
+        "ipoYear",
+        "Symbol",
+        "Name",
+        "Sector",
+        "Industry",
+        "Exchange",
+        "Country",
+        "Currency",
+        "MARKET_CAP",
+        "IPO_YEAR",
+        "SYMBOL",
+        "NAME",
+        "SECTOR",
+        "INDUSTRY",
+        "EXCHANGE",
+        "COUNTRY",
+        "CURRENCY",
     ];
     let extra_headers: Vec<String> = headers
         .iter()
@@ -193,7 +222,7 @@ mod tests {
 
     fn write_fixture(content: &str) -> tempfile::NamedTempFile {
         let f = tempfile::NamedTempFile::new().unwrap();
-        std::fs::write(f.path(), content).unwrap();
+        fs_err::write(f.path(), content).unwrap();
         f
     }
 
@@ -344,16 +373,31 @@ BRK.B,"Berkshire Hathaway Inc., Class B",Financial,Insurance—Diversified,NYSE,
     #[test]
     fn parse_perf_baseline_30k() {
         // 性能基线 (非 30 万, 测试时间约束): 1 万行 < 5s, 推算 30 万 < 30s.
-        let mut csv = String::from("symbol,name,sector,industry,exchange,country,currency,market_cap,ipo_year\n");
+        let mut csv = String::from(
+            "symbol,name,sector,industry,exchange,country,currency,market_cap,ipo_year\n",
+        );
         for i in 0..10_000 {
-            csv.push_str(&format!("SYM{:05},Symbol {},Tech,Hardware,NYSE,US,USD,{},2000\n", i, i, i as f64 * 1_000_000.0));
+            csv.push_str(&format!(
+                "SYM{:05},Symbol {},Tech,Hardware,NYSE,US,USD,{},2000\n",
+                i,
+                i,
+                i as f64 * 1_000_000.0
+            ));
         }
         let f = write_fixture(&csv);
         let s = open_store();
         let stats = import_from_csv(&s, f.path(), Provenance::FinanceDatabase).unwrap();
         assert_eq!(stats.imported, 10_000);
         // 1 万行 < 5s (留 5x 余量给 CI 抖动)
-        assert!(stats.elapsed_sec < 5.0, "1 万行导入耗时 {}s 超阈值", stats.elapsed_sec);
-        assert!(stats.rows_per_sec > 1000.0, "导入速率 {} rows/sec 低于 1000", stats.rows_per_sec);
+        assert!(
+            stats.elapsed_sec < 5.0,
+            "1 万行导入耗时 {}s 超阈值",
+            stats.elapsed_sec
+        );
+        assert!(
+            stats.rows_per_sec > 1000.0,
+            "导入速率 {} rows/sec 低于 1000",
+            stats.rows_per_sec
+        );
     }
 }

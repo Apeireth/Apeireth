@@ -20,7 +20,8 @@ pub enum HelloCapability {
 }
 
 /// Windows Hello NGC 凭据提供方注册表键.
-const NGC_PROVIDER_KEY: &str = r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers";
+const NGC_PROVIDER_KEY: &str =
+    r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers";
 
 /// 探测 Windows Hello 可用性 (尽力真实探测; 失败如实 Unavailable).
 ///
@@ -43,7 +44,9 @@ pub fn detect_hello_capability() -> HelloCapability {
         };
         let stdout = String::from_utf8_lossy(&probe.stdout);
         if probe.status.success() && stdout.contains("NGC") {
-            HelloCapability::Available { provider: "NGC Credential Provider".to_string() }
+            HelloCapability::Available {
+                provider: "NGC Credential Provider".to_string(),
+            }
         } else {
             HelloCapability::Unavailable {
                 reason: "未探测到 NGC 凭据提供方 (Windows Hello 可能未配置)".to_string(),
@@ -52,7 +55,9 @@ pub fn detect_hello_capability() -> HelloCapability {
     }
     #[cfg(not(windows))]
     {
-        HelloCapability::Unavailable { reason: "Windows Hello 是 Windows 专属机制".to_string() }
+        HelloCapability::Unavailable {
+            reason: "Windows Hello 是 Windows 专属机制".to_string(),
+        }
     }
 }
 

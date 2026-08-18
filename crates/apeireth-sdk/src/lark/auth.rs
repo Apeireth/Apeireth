@@ -25,7 +25,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::LarkError;
+use crate::lark::error::LarkError;
 
 // ============================================================================
 // §1 编译期 hardcode 常量 (per R20 P0 5 crate 风格 + K-1 强校验)
@@ -514,11 +514,8 @@ mod tests {
 
     #[test]
     fn tenant_token_rejects_invalid_app_id() {
-        let result = TenantAccessToken::new(
-            "invalid".to_string(),
-            "t-abc123def456".to_string(),
-            7200,
-        );
+        let result =
+            TenantAccessToken::new("invalid".to_string(), "t-abc123def456".to_string(), 7200);
         assert!(matches!(result, Err(LarkError::AppIdInvalid(_))));
     }
 
@@ -576,8 +573,11 @@ mod tests {
 
     #[test]
     fn webhook_token_creation_valid() {
-        let wh = WebhookToken::new("verify_token_xxx".to_string(), "encrypt_key_xxx".to_string())
-            .expect("valid");
+        let wh = WebhookToken::new(
+            "verify_token_xxx".to_string(),
+            "encrypt_key_xxx".to_string(),
+        )
+        .expect("valid");
         assert!(wh.verify("verify_token_xxx"));
         assert!(!wh.verify("wrong_token"));
     }

@@ -67,7 +67,10 @@ impl Tool for EnhancedShellTool {
                     .get("cmd")
                     .and_then(Value::as_str)
                     .ok_or_else(|| "missing `cmd`".to_string())?;
-                let timeout_ms = args.get("timeout_ms").and_then(Value::as_u64).unwrap_or(30_000);
+                let timeout_ms = args
+                    .get("timeout_ms")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(30_000);
                 let (exit_code, output) = if op == "exec_persistent" {
                     self.shell.exec_persistent(cmd, timeout_ms).await
                 } else {
@@ -83,9 +86,12 @@ impl Tool for EnhancedShellTool {
 
 /// 统一注册进 registry (§10 铁边界③: 每 crate 提供 register 函数).
 pub fn register(registry: &ToolRegistry) -> Result<(), String> {
-    let shell = EnhancedShell::new(default_db_path())
-        .map_err(|e| format!("EnhancedShell::new: {e}"))?;
-    registry.register(TOOL_NAME.to_string(), Arc::new(EnhancedShellTool::new(shell)));
+    let shell =
+        EnhancedShell::new(default_db_path()).map_err(|e| format!("EnhancedShell::new: {e}"))?;
+    registry.register(
+        TOOL_NAME.to_string(),
+        Arc::new(EnhancedShellTool::new(shell)),
+    );
     Ok(())
 }
 
@@ -117,10 +123,16 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(windows, ignore = "Windows echo spawn PATH 限制, 同 register.rs 既有口径")]
+    #[cfg_attr(
+        windows,
+        ignore = "Windows echo spawn PATH 限制, 同 register.rs 既有口径"
+    )]
     async fn exec_sandboxed_echo_runs() {
         let (tool, _tmp) = make_tool();
-        let r = tool.call(json!({"op": "exec", "cmd": "echo n17-shell"})).await.expect("exec");
+        let r = tool
+            .call(json!({"op": "exec", "cmd": "echo n17-shell"}))
+            .await
+            .expect("exec");
         assert_eq!(r["exit_code"], 0);
         assert!(r["output"].as_str().unwrap().contains("n17-shell"));
     }

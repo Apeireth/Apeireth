@@ -12,21 +12,21 @@
 
 #![warn(missing_docs)]
 
-pub mod note;
-pub mod store;
-pub mod search;
-pub mod export;
-pub mod mcp;
 pub mod compat;
 pub mod enhanced;
+pub mod export;
+pub mod mcp;
+pub mod note;
+pub mod search;
+pub mod store;
 
-pub use note::{DailyNote, NoteId};
-pub use store::{DailyNoteStore, DailyNoteError};
-pub use search::{search_notes, SearchHit};
-pub use export::{export_markdown, export_json, ExportFormat};
-pub use mcp::{DailyNoteMcp, DailyNoteTool};
 pub use compat::{DailyNoteCommand, DailyNoteCompatRouter, DAILYNOTE_COMMAND_COUNT};
 pub use enhanced::EnhancedDailyNote;
+pub use export::{export_json, export_markdown, ExportFormat};
+pub use mcp::{DailyNoteMcp, DailyNoteTool};
+pub use note::{DailyNote, NoteId};
+pub use search::{search_notes, SearchHit};
+pub use store::{DailyNoteError, DailyNoteStore};
 
 /// R141 deliverables for dailynote:
 /// - 4 modules (note / store / search / export) + mcp + compat + enhanced

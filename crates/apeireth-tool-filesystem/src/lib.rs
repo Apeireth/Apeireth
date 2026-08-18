@@ -1,5 +1,5 @@
 //! `apeireth-tool-filesystem` - R137 filesystem 扩展层
-//! 
+//!
 //! **目标**: 在 `apeireth-tools/file_ops` (6 ops 真实现) 基础上扩展 5 维度能力:
 //! 1. **真沙箱** (realpath 路径校验, 防 symlink 逃逸)
 //! 2. **原子写入** (tmp + rename, 崩溃恢复)
@@ -40,32 +40,31 @@
 
 pub mod sandbox;
 // R177: organ invariants (5 tests + 2 Kani)
-mod organ_kani_proofs;
 pub mod atomic;
-pub mod watch;
 pub mod lock;
-#[cfg(feature = "full")]
-pub mod parse;
+mod organ_kani_proofs;
+pub mod watch;
+// CI fix 2026-08: `pub mod parse;` (cfg full) 的 parse.rs 从未存在 → clippy --all-features
+// E0583. 文档解析 (lopdf PDF) 落地时恢复此模块 + 下方 re-export (0 装: 不留指向虚无的声明).
 pub mod compat;
 pub mod enhanced;
 pub mod register; // N17/TP2: 装配统一注册件 (§10 铁边界: Tool + ToolRegistry.register)
 
-pub use enhanced::{EnhancedFileOps, StdEnhancedFileOps};
-pub use sandbox::{Sandbox, SandboxPolicy, SandboxError};
 pub use atomic::{atomic_write, AtomicWriteError};
-pub use watch::{FileWatcher, WatchEvent, WatchError};
+pub use compat::{CompatCommand, CompatError, CompatManifest, CompatRouter};
+pub use enhanced::{EnhancedFileOps, StdEnhancedFileOps};
 pub use lock::{FileLock, FileLockGuard, LockError};
-#[cfg(feature = "full")]
-pub use parse::{parse_document, DocumentType, ParseError};
-pub use compat::{CompatCommand, CompatManifest, CompatRouter, CompatError};
+pub use sandbox::{Sandbox, SandboxError, SandboxPolicy};
+pub use watch::{FileWatcher, WatchError, WatchEvent};
 
 /// R137 完成定义 (per 主人 R134 A4 闭环):
-/// - 6 模块 (sandbox/atomic/watch/lock/parse/compat) 全部真实现
+/// - 5 模块 (sandbox/atomic/watch/lock/compat) 真实现; parse (文档解析) 声明已移除,
+///   parse.rs 从未存在 (0 装 PASS), 落地时恢复 (见上方注释)
 /// - EnhancedFileOps 在 apeireth-tools/file_ops 6 ops 基础上加 5 维度
 /// - VCP FileOperator 19 command 兼容层 (cargo test 19 个 e2e)
 /// - 4 维测试: unit + 沙箱逃逸 + 并发 + 集成
 /// - cargo test --workspace 全过 (target `20599+1+新增`)
-pub const R137_DELIVERABLES: usize = 6;
+pub const R137_DELIVERABLES: usize = 5;
 
 /// 5 维度扩展 (per R137 报告 v3)
 pub const UPGRADE_DIMENSIONS: usize = 5;

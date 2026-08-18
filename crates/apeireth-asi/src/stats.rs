@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn t09_percentile_p90() {
-        let mut v: Vec<f64> = (1..=100).map(|i| i as f64).collect();
+        let mut v: Vec<f64> = (1..=100).map(|i| f64::from(i)).collect();
         // P90 of 1..100 (R type 7): rank = 0.9 * 99 = 89.1, values[89]=90, values[90]=91
         // 90 * 0.9 + 91 * 0.1 = 90.1
         assert!(approx_eq(percentile(&mut v, 0.9), 90.1, 0.001));
@@ -260,7 +260,7 @@ mod tests {
     fn t12_welford_streaming() {
         let mut w = Welford::new();
         for i in 1..=5 {
-            w.update(i as f64);
+            w.update(f64::from(i));
         }
         assert_eq!(w.count(), 5);
         assert_eq!(w.mean(), 3.0);

@@ -100,7 +100,12 @@ async fn isolated_worker_timeout_is_killed_and_reported() {
     let worker = env!("CARGO_BIN_EXE_exec_worker");
     let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
     let bridge = ToolBridge::new(store).with_isolation(worker);
-    bridge.packs.grant(PermissionPack::timed("隔离测试包", vec!["ShellExec".to_string()], 1, Some(2)));
+    bridge.packs.grant(PermissionPack::timed(
+        "隔离测试包",
+        vec!["ShellExec".to_string()],
+        1,
+        Some(2),
+    ));
     // ShellExec 走 worker; 不存在的命令 → worker 返回错误 (非超时), 验证错误透传
     let call = ParsedToolCall {
         tool_name: "ShellExec".into(),

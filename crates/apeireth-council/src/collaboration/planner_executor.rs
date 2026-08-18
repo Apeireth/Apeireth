@@ -64,7 +64,7 @@ pub struct PlannerExecutor {
 }
 
 impl PlannerExecutor {
-    /// 构造 (默认 executor_roles = ["design", "implement", "verify"])
+    /// 构造 (默认 executor_roles = `["design", "implement", "verify"]`)
     pub fn new(planner_role: impl Into<String>) -> Self {
         Self {
             planner_role: planner_role.into(),
@@ -103,11 +103,11 @@ impl PlannerExecutor {
     /// **Planner 拆 query 为 N 步 SubTask** (D-3 keyword 简化, 0 LLM)
     ///
     /// **拆解规则** (per query description 关键词匹配):
-    /// - "deploy" / "release" / "上线" → ["design", "implement", "deploy"]
-    /// - "design" / "设计" / "架构" → ["analyze", "propose", "review"]
-    /// - "test" / "测试" / "verify" → ["spec", "implement_test", "verify"]
-    /// - "fix" / "bug" / "修复" → ["reproduce", "diagnose", "fix"]
-    /// - 其他 → 默认 ["analyze", "execute", "verify"]
+    /// - "deploy" / "release" / "上线" → `["design", "implement", "deploy"]`
+    /// - "design" / "设计" / "架构" → `["analyze", "propose", "review"]`
+    /// - "test" / "测试" / "verify" → `["spec", "implement_test", "verify"]`
+    /// - "fix" / "bug" / "修复" → `["reproduce", "diagnose", "fix"]`
+    /// - 其他 → 默认 `["analyze", "execute", "verify"]`
     ///
     /// **0 漂移**: 0 引入 LLM, 0 假装"planner 真接 LLM"
     /// (per 主人偏好 #3 "0 假装" + 0 I/O 哲学锚)

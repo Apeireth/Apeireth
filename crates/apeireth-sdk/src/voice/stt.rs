@@ -17,7 +17,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
+use crate::voice::error::{VoiceError, VoiceResult};
 
 // ============================================================================
 // §1 4 STT 模型 enum (K-1 强校验守门, 编译期 hardcode 4 variant)
@@ -136,7 +136,13 @@ pub struct Transcription {
 
 impl Transcription {
     /// 创建新转写结果 (STUB 模式由调用方构造, R21 续真接时由 transcribe 返).
-    pub fn new(text: String, model: SttModel, language: String, confidence: f32, duration_ms: u64) -> Self {
+    pub fn new(
+        text: String,
+        model: SttModel,
+        language: String,
+        confidence: f32,
+        duration_ms: u64,
+    ) -> Self {
         Self {
             text,
             model,
@@ -237,7 +243,11 @@ mod tests {
 
     #[test]
     fn k1_stt_model_has_4_variants() {
-        assert_eq!(SUPPORTED_STT_MODELS.len(), 4, "K-1 强校验: 必须 4 个 STT 模型");
+        assert_eq!(
+            SUPPORTED_STT_MODELS.len(),
+            4,
+            "K-1 强校验: 必须 4 个 STT 模型"
+        );
         assert_eq!(SttModel::COUNT, 4);
         assert_eq!(SttModel::Whisper.as_str(), "whisper");
         assert_eq!(SttModel::Wav2Vec.as_str(), "wav2vec");
@@ -306,7 +316,13 @@ mod tests {
         let t = Transcription::new(String::new(), SttModel::Whisper, "en".to_string(), 0.0, 0);
         assert!(t.is_empty());
 
-        let t2 = Transcription::new("   ".to_string(), SttModel::Whisper, "en".to_string(), 0.0, 0);
+        let t2 = Transcription::new(
+            "   ".to_string(),
+            SttModel::Whisper,
+            "en".to_string(),
+            0.0,
+            0,
+        );
         assert!(t2.is_empty());
     }
 

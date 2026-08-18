@@ -20,8 +20,8 @@ pub mod l0;
 #[cfg(test)]
 pub mod r216_tests; // R216: 三套通知 + 4 BackpressurePolicy 测试覆盖
                     // R177: bus invariants (10 tests + 2 Kani proofs)
-pub mod event_log; // R229 — append-only event log + filter replay
 pub mod event_bridge; // A4/TP26: 统一事件流 (六类归一) + PerceptionGate 感知门控 (类型过滤 + 突发检测)
+pub mod event_log; // R229 — append-only event log + filter replay
 #[cfg(unix)]
 pub mod l1;
 #[cfg(unix)]

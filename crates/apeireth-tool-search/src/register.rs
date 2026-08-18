@@ -104,7 +104,9 @@ impl Tool for VSearchTool {
                 Ok(json!({ "op": "remove", "id": id }))
             }
             "len" => Ok(json!({ "op": "len", "len": self.engine.len() })),
-            _ => Err(format!("unknown op `{op}` (expected index|search|remove|len)")),
+            _ => Err(format!(
+                "unknown op `{op}` (expected index|search|remove|len)"
+            )),
         }
     }
 }
@@ -157,14 +159,20 @@ mod tests {
     #[tokio::test]
     async fn remove_missing_doc_errors() {
         let tool = VSearchTool::new(Arc::new(SearchEngine::new()));
-        let e = tool.call(json!({"op": "remove", "id": 99999})).await.unwrap_err();
+        let e = tool
+            .call(json!({"op": "remove", "id": 99999}))
+            .await
+            .unwrap_err();
         assert!(!e.is_empty(), "删除不存在的文档应报错");
     }
 
     #[tokio::test]
     async fn empty_query_errors() {
         let tool = VSearchTool::new(Arc::new(SearchEngine::new()));
-        let e = tool.call(json!({"op": "search", "query": ""})).await.unwrap_err();
+        let e = tool
+            .call(json!({"op": "search", "query": ""}))
+            .await
+            .unwrap_err();
         assert!(!e.is_empty(), "空查询应报错");
     }
 }

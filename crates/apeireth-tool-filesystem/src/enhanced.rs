@@ -1,18 +1,21 @@
 //! EnhancedFileOps - R137 5-dimension extension entrypoint.
 
 #![allow(missing_docs)] // R162 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
-use std::path::{Path, PathBuf};
-use apeireth_tools::{StdFileOps, FileOps};
-use crate::{atomic, lock, sandbox};
-use crate::sandbox::{Sandbox, SandboxPolicy};
 use crate::atomic::AtomicWriteError;
 use crate::lock::LockError;
+use crate::sandbox::{Sandbox, SandboxPolicy};
+use crate::{atomic, lock, sandbox};
+use apeireth_tools::{FileOps, StdFileOps};
+use std::path::{Path, PathBuf};
 
 #[async_trait::async_trait]
 pub trait EnhancedFileOps: Send + Sync {
     async fn read_sandboxed(&self, path: &Path) -> Result<String, EnhancedError>;
     async fn write_atomic(&self, path: &Path, content: &[u8]) -> Result<(), EnhancedError>;
-    async fn read_with_lock(&self, path: &Path) -> Result<(String, lock::FileLockGuard), EnhancedError>;
+    async fn read_with_lock(
+        &self,
+        path: &Path,
+    ) -> Result<(String, lock::FileLockGuard), EnhancedError>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -45,8 +48,10 @@ impl StdEnhancedFileOps {
 impl EnhancedFileOps for StdEnhancedFileOps {
     async fn read_sandboxed(&self, path: &Path) -> Result<String, EnhancedError> {
         let canonical = self.sandbox.resolve(path).await?;
-        let content = self.inner.read(&canonical).await
-            .map_err(|e| EnhancedError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let content =
+            self.inner.read(&canonical).await.map_err(|e| {
+                EnhancedError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+            })?;
         Ok(content)
     }
 
@@ -57,18 +62,23 @@ impl EnhancedFileOps for StdEnhancedFileOps {
             .sandbox
             .resolve(path.parent().unwrap_or(Path::new(".")))
             .await?;
-        let file_name = path
-            .file_name()
-            .ok_or_else(|| EnhancedError::Atomic(AtomicWriteError::ParentNotFound(path.to_path_buf())))?;
+        let file_name = path.file_name().ok_or_else(|| {
+            EnhancedError::Atomic(AtomicWriteError::ParentNotFound(path.to_path_buf()))
+        })?;
         let target = canonical_parent.join(file_name);
         Ok(atomic::atomic_write(&target, content).await?)
     }
 
-    async fn read_with_lock(&self, path: &Path) -> Result<(String, lock::FileLockGuard), EnhancedError> {
+    async fn read_with_lock(
+        &self,
+        path: &Path,
+    ) -> Result<(String, lock::FileLockGuard), EnhancedError> {
         let canonical = self.sandbox.resolve(path).await?;
         let guard = lock::FileLock::shared(&canonical)?;
-        let content = self.inner.read(&canonical).await
-            .map_err(|e| EnhancedError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+        let content =
+            self.inner.read(&canonical).await.map_err(|e| {
+                EnhancedError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+            })?;
         Ok((content, guard))
     }
 }

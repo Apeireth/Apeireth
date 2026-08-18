@@ -2,7 +2,7 @@
 //!
 //! **真接 (per 8 项之 1, "0 不假装已实现")**:
 //! - 内部用 `Arc<Mutex<HashMap<String, Vec<u8>>>>` 持内存索引 (跟 DiskLru 同模式)
-//! - `set` 走 HashMap insert + JSON-Lines append (`std::fs::OpenOptions::append`)
+//! - `set` 走 HashMap insert + JSON-Lines append (`fs_err::OpenOptions::append`)
 //! - `get` 走 HashMap get clone (启动时 replay JSON-Lines 重建索引)
 //! - `delete` 走 HashMap remove + JSON-Lines append `del` marker
 //! - `clear` 走 truncate 文件 + 清 HashMap
@@ -22,8 +22,8 @@
 //! 5. cache_ttl = [0ms, 7d] (File 不主动 expire, 仅供接口一致)
 //! 6. scope = Local (单进程文件)
 
+use fs_err::{File, OpenOptions};
 use std::collections::HashMap;
-use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -32,9 +32,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **FileProvider**: 本地 JSON-Lines append-only 文件 provider (per R23 #6 派工).
 #[derive(Debug)]
@@ -76,11 +74,10 @@ enum FileOp {
 }
 
 /// **FileProvider 编译期守门**: base64 字母表 (RFC 4648 §4 standard alphabet).
-const B64_ALPHABET: &[u8; 64] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const B64_ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 fn base64_encode(input: &[u8]) -> String {
-    let mut out = String::with_capacity((input.len() + 2) / 3 * 4);
+    let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
     let mut i = 0;
     while i + 3 <= input.len() {
         let b0 = input[i];
@@ -165,11 +162,9 @@ impl FileProvider {
         let file_path = PathBuf::from(path_str);
         if let Some(parent) = file_path.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    MemoryProviderError::Connection {
-                        provider: ProviderKind::File,
-                        reason: format!("create_dir_all({}): {e}", parent.display()),
-                    }
+                fs_err::create_dir_all(parent).map_err(|e| MemoryProviderError::Connection {
+                    provider: ProviderKind::File,
+                    reason: format!("create_dir_all({}): {e}", parent.display()),
                 })?;
             }
         }
@@ -269,26 +264,36 @@ impl FileProvider {
                 reason: format!("append open: {e}"),
             })?;
         file.write_all(json.as_bytes())
-            .and_then(|()| file.write_all(b"
-"))
+            .and_then(|()| {
+                file.write_all(
+                    b"
+",
+                )
+            })
             .map_err(|e| MemoryProviderError::Backend {
                 provider: ProviderKind::File,
                 reason: format!("append write: {e}"),
             })?;
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("size lock poisoned: {e}"),
-        })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("size lock poisoned: {e}"),
+            })?;
         *size = size.saturating_add(json.len() as u64 + 1);
         Ok(())
     }
 
     /// 校验容量上限 (6 K-1 #3).
     fn check_capacity(&self, incoming: u64) -> MemoryProviderResult<()> {
-        let current = *self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("capacity lock poisoned: {e}"),
-        })?;
+        let current = *self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("capacity lock poisoned: {e}"),
+            })?;
         if current.saturating_add(incoming) > self.config.max_size {
             return Err(MemoryProviderError::Capacity {
                 provider: ProviderKind::File,
@@ -320,10 +325,13 @@ impl MemoryProvider for FileProvider {
             key: key.to_string(),
             value: Some(b64),
         })?;
-        let mut index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let mut index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         index.insert(key.to_string(), value.to_vec());
         Ok(())
     }
@@ -335,10 +343,13 @@ impl MemoryProvider for FileProvider {
                 reason: "key must be non-empty".to_string(),
             });
         }
-        let index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         Ok(index.get(key).cloned())
     }
 
@@ -354,10 +365,13 @@ impl MemoryProvider for FileProvider {
             key: key.to_string(),
             value: None,
         })?;
-        let mut index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let mut index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         index.remove(key);
         Ok(())
     }
@@ -369,36 +383,48 @@ impl MemoryProvider for FileProvider {
                 reason: "key must be non-empty".to_string(),
             });
         }
-        let index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         Ok(index.contains_key(key))
     }
 
     async fn clear(&self) -> MemoryProviderResult<()> {
-        std::fs::write(&self.file_path, b"").map_err(|e| MemoryProviderError::Backend {
+        fs_err::write(&self.file_path, b"").map_err(|e| MemoryProviderError::Backend {
             provider: ProviderKind::File,
             reason: format!("truncate: {e}"),
         })?;
-        let mut index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let mut index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         index.clear();
-        let mut size = self.current_size.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("size lock poisoned: {e}"),
-        })?;
+        let mut size = self
+            .current_size
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("size lock poisoned: {e}"),
+            })?;
         *size = 0;
         Ok(())
     }
 
     async fn size(&self) -> MemoryProviderResult<u64> {
-        let index = self.inner.lock().map_err(|e| MemoryProviderError::Backend {
-            provider: ProviderKind::File,
-            reason: format!("index lock poisoned: {e}"),
-        })?;
+        let index = self
+            .inner
+            .lock()
+            .map_err(|e| MemoryProviderError::Backend {
+                provider: ProviderKind::File,
+                reason: format!("index lock poisoned: {e}"),
+            })?;
         Ok(index.len() as u64)
     }
 }
@@ -432,7 +458,9 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let path = dir.path().join(format!("apeireth-file-{tag}-{nanos}.jsonl"));
+        let path = dir
+            .path()
+            .join(format!("apeireth-file-{tag}-{nanos}.jsonl"));
         let conn = format!("{}{}", FILE_SCHEME, path.display());
         (dir, conn)
     }

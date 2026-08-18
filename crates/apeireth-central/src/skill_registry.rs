@@ -504,8 +504,8 @@ mod tests {
     /// 2. startup_validate 0 skill → count_ok false
     #[test]
     fn startup_validate_zero_skills_count_not_ok() {
-        let registry = SkillRegistry::default(); // SkillRegistry::new() 等价
-                                                 // 删除所有 skill (手动 walk, 0 装"empty 状态"伪造)
+        let _registry = SkillRegistry::default(); // SkillRegistry::new() 等价
+                                                  // 删除所有 skill (手动 walk, 0 装"empty 状态"伪造)
         let mut empty = SkillRegistry::new();
         for id in empty.all_ids() {
             // 0 删 fn — 仅 walk, 0 改

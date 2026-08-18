@@ -16,8 +16,8 @@
 use apeireth_companion::approval_requests::{list, mark_approved, record_request};
 use apeireth_memory::SqliteMemoryStore;
 use apeireth_team_lead::{
-    ApprovalBridge, ApprovalRequest as WireApprovalRequest, ApprovalResponse as WireApprovalResponse,
-    InProcessBridge,
+    ApprovalBridge, ApprovalRequest as WireApprovalRequest,
+    ApprovalResponse as WireApprovalResponse, InProcessBridge,
 };
 use serde_json::json;
 use std::sync::Arc;
@@ -40,7 +40,10 @@ fn t01_bridge_missing_field_not_panics() {
     };
     let err = bridge.dispatch_request(bad).unwrap_err();
     assert!(
-        matches!(err, apeireth_team_lead::ApprovalBridgeError::MissingField(_)),
+        matches!(
+            err,
+            apeireth_team_lead::ApprovalBridgeError::MissingField(_)
+        ),
         "expected MissingField, got {err:?}"
     );
 }
@@ -68,7 +71,11 @@ fn t02_companion_to_orchestrator_two_way_sync() {
     );
     // 回调返回 approved, apply_wire_response 写回本地 approved
     let approved = list(&s, Some("approved"));
-    assert_eq!(approved.len(), 1, "bridge.approved 必须写回本地 approved 列表");
+    assert_eq!(
+        approved.len(),
+        1,
+        "bridge.approved 必须写回本地 approved 列表"
+    );
     assert!(approved[0].updated_at >= 1_700_000_999);
     // bridge 收到 1 请求 + 1 响应 (回调自动 dispatch)
     assert_eq!(bridge.received_requests().len(), 1);
@@ -106,13 +113,7 @@ fn t04_mark_approved_dispatches_response_to_bridge() {
     let bridge = Arc::new(InProcessBridge::new());
     let bridge_ref: Arc<dyn ApprovalBridge> = bridge.clone();
     // 先 record_request (无 bridge 时是 pending)
-    record_request(
-        &s,
-        "ShellExec",
-        &json!({"cmd": "ls"}),
-        "需要批准",
-        None,
-    );
+    record_request(&s, "ShellExec", &json!({"cmd": "ls"}), "需要批准", None);
     let pending = list(&s, Some("pending"));
     assert_eq!(pending.len(), 1);
     let chain = pending[0].chain.clone();
@@ -124,7 +125,10 @@ fn t04_mark_approved_dispatches_response_to_bridge() {
     let mark_resp = responses
         .iter()
         .find(|r| r.chain == chain && r.decision == "approved");
-    assert!(mark_resp.is_some(), "mark_approved 必须 dispatch 1 个 approved 响应");
+    assert!(
+        mark_resp.is_some(),
+        "mark_approved 必须 dispatch 1 个 approved 响应"
+    );
 
     // 本地状态 approved
     let approved = list(&s, Some("approved"));

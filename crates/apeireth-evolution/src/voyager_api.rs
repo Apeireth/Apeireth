@@ -71,7 +71,7 @@ impl Skill {
         if total == 0 {
             0.5
         } else {
-            self.success_count as f64 / total as f64
+            f64::from(self.success_count) / f64::from(total)
         }
     }
 

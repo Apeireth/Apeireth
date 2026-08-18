@@ -30,21 +30,29 @@ pub struct AdapterRegistry {
 }
 
 impl AdapterRegistry {
-    pub fn new() -> Self { Self { adapters: HashMap::new() } }
+    pub fn new() -> Self {
+        Self {
+            adapters: HashMap::new(),
+        }
+    }
     pub fn register(&mut self, adapter: Box<dyn MemoryAdapter>) {
         self.adapters.insert(adapter.source().id.clone(), adapter);
     }
     pub fn get(&self, id: &str) -> Option<&dyn MemoryAdapter> {
         self.adapters.get(id).map(|b| b.as_ref())
     }
-    pub fn count(&self) -> usize { self.adapters.len() }
+    pub fn count(&self) -> usize {
+        self.adapters.len()
+    }
     pub fn sources(&self) -> Vec<MemorySource> {
         self.adapters.values().map(|a| a.source().clone()).collect()
     }
 }
 
 impl Default for AdapterRegistry {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 /// Built-in: simple conversation adapter (in-memory).
@@ -70,7 +78,9 @@ impl ConversationAdapter {
 }
 
 impl MemoryAdapter for ConversationAdapter {
-    fn source(&self) -> &MemorySource { &self.source }
+    fn source(&self) -> &MemorySource {
+        &self.source
+    }
     fn fetch(&self) -> Result<Vec<(String, String)>, String> {
         Ok(self.messages.clone())
     }
@@ -99,7 +109,9 @@ impl FileAdapter {
 }
 
 impl MemoryAdapter for FileAdapter {
-    fn source(&self) -> &MemorySource { &self.source }
+    fn source(&self) -> &MemorySource {
+        &self.source
+    }
     fn fetch(&self) -> Result<Vec<(String, String)>, String> {
         let mut out = Vec::new();
         for path in &self.paths {

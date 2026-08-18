@@ -157,7 +157,6 @@ fn run_ast_grep(mut cmd: Command) -> Result<Vec<AstGrepMatch>, AstGrepError> {
             Ok(entry) => matches.push(entry.into_match()),
             Err(_) => {
                 // 跳过无法解析的行 (兼容 ast-grep 启动信息)
-                continue;
             }
         }
     }

@@ -55,7 +55,6 @@ impl ChatPlaceholderContext {
                             new_out.push_str(&out[i..j + 2]);
                         }
                         i = j + 2;
-                        continue;
                     } else {
                         new_out.push_str(&out[i..]);
                         break;

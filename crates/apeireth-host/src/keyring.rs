@@ -1070,14 +1070,14 @@ impl RateLimit {
 
         // 首次调用初始化
         if self.last_refill_ms == 0 {
-            self.tokens = self.burst as f64;
+            self.tokens = f64::from(self.burst);
             self.last_refill_ms = now_ms;
         }
 
         // Refill: (elapsed_ms / 1000) * rps
         let elapsed_ms = now_ms.saturating_sub(self.last_refill_ms);
-        let refill = (elapsed_ms as f64 / 1000.0) * self.rps as f64;
-        self.tokens = (self.tokens + refill).min(self.burst as f64);
+        let refill = (elapsed_ms as f64 / 1000.0) * f64::from(self.rps);
+        self.tokens = (self.tokens + refill).min(f64::from(self.burst));
         self.last_refill_ms = now_ms;
 
         if self.tokens >= 1.0 {
@@ -1557,7 +1557,8 @@ pub(crate) fn base64_simple_encode(bytes: &[u8]) -> String {
     let mut out = String::with_capacity((bytes.len() + 2) / 3 * 4);
     let mut i = 0;
     while i + 3 <= bytes.len() {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | (bytes[i + 2] as u32);
+        let n =
+            (u32::from(bytes[i]) << 16) | (u32::from(bytes[i + 1]) << 8) | u32::from(bytes[i + 2]);
         out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
@@ -1566,13 +1567,13 @@ pub(crate) fn base64_simple_encode(bytes: &[u8]) -> String {
     }
     let rem = bytes.len() - i;
     if rem == 1 {
-        let n = (bytes[i] as u32) << 16;
+        let n = u32::from(bytes[i]) << 16;
         out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
         out.push('=');
         out.push('=');
     } else if rem == 2 {
-        let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8);
+        let n = (u32::from(bytes[i]) << 16) | (u32::from(bytes[i + 1]) << 8);
         out.push(ALPHABET[((n >> 18) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 12) & 0x3F) as usize] as char);
         out.push(ALPHABET[((n >> 6) & 0x3F) as usize] as char);
@@ -1586,9 +1587,9 @@ pub(crate) fn base64_simple_encode(bytes: &[u8]) -> String {
 pub(crate) fn base64_simple_decode(s: &str) -> Option<Vec<u8>> {
     fn val(c: u8) -> Option<u32> {
         match c {
-            b'A'..=b'Z' => Some((c - b'A') as u32),
-            b'a'..=b'z' => Some((c - b'a' + 26) as u32),
-            b'0'..=b'9' => Some((c - b'0' + 52) as u32),
+            b'A'..=b'Z' => Some(u32::from(c - b'A')),
+            b'a'..=b'z' => Some(u32::from(c - b'a' + 26)),
+            b'0'..=b'9' => Some(u32::from(c - b'0' + 52)),
             b'+' => Some(62),
             b'/' => Some(63),
             _ => None,

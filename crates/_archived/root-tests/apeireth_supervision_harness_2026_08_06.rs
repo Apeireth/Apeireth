@@ -59,7 +59,10 @@ fn load_minimax_key() -> String {
             }
         }
     }
-    panic!("Failed to read MINIMAX API key from any of: {:?}", candidates);
+    panic!(
+        "Failed to read MINIMAX API key from any of: {:?}",
+        candidates
+    );
 }
 
 fn call_minimax_chat(key: &str, prompt: &str) -> String {
@@ -70,12 +73,18 @@ fn call_minimax_chat(key: &str, prompt: &str) -> String {
     );
     let output = std::process::Command::new("curl")
         .args(&[
-            "-s", "-X", "POST",
+            "-s",
+            "-X",
+            "POST",
             &format!("{}/v1/chat/completions", MINIMAX_BASE_URL),
-            "-H", &format!("Authorization: Bearer {}", key),
-            "-H", "Content-Type: application/json",
-            "-d", &body,
-            "--max-time", "30",
+            "-H",
+            &format!("Authorization: Bearer {}", key),
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            &body,
+            "--max-time",
+            "30",
         ])
         .output()
         .expect("Failed to call MINIMAX");
@@ -90,20 +99,20 @@ fn call_minimax_chat(key: &str, prompt: &str) -> String {
 fn test_l1_14_endpoint_compile_time() {
     // L1 编译期 hardcode: 14 endpoint 编译期断言
     const ENDPOINTS: [&str; 14] = [
-        "/v1/chat/completions",       // 1. OpenAI Chat
-        "/v1/responses",              // 2. OpenAI Responses
-        "/v1/messages",               // 3. Anthropic Messages
+        "/v1/chat/completions",               // 1. OpenAI Chat
+        "/v1/responses",                      // 2. OpenAI Responses
+        "/v1/messages",                       // 3. Anthropic Messages
         "/v1beta/models/{m}:generateContent", // 4. Gemini
-        "/v1/tools/list",             // 5. Tool list
-        "/v1/tools/invoke",           // 6. Tool invoke
-        "/v1/memory/episodes",        // 7. Memory episodes
-        "/v1/memory/append",          // 8. Memory append
-        "/v1/memory/identity",        // 9. Memory identity
-        "/v1/memory/identity/update", // 10. Memory update
-        "/v1/organs",                 // 11. Organs list
-        "/v1/organs/{name}",          // 12. Organ get
-        "/v1/organs/{name}/invoke",   // 13. Organ invoke
-        "/v1/asi/score",              // 14. ASI score
+        "/v1/tools/list",                     // 5. Tool list
+        "/v1/tools/invoke",                   // 6. Tool invoke
+        "/v1/memory/episodes",                // 7. Memory episodes
+        "/v1/memory/append",                  // 8. Memory append
+        "/v1/memory/identity",                // 9. Memory identity
+        "/v1/memory/identity/update",         // 10. Memory update
+        "/v1/organs",                         // 11. Organs list
+        "/v1/organs/{name}",                  // 12. Organ get
+        "/v1/organs/{name}/invoke",           // 13. Organ invoke
+        "/v1/asi/score",                      // 14. ASI score
     ];
     assert_eq!(ENDPOINTS.len(), 14, "L1 14 endpoint 编译期 hardcode 严守");
 }
@@ -113,7 +122,11 @@ fn test_l2_double_onion_5plus6() {
     // L2 双洋葱 5 原则 (E/S/A/M/O) + 6 权限 (L0..L5) = 11 trait
     const PRINCIPLE_LAYERS: [&str; 5] = ["E", "S", "A", "M", "O"];
     const PERMISSION_LAYERS: [&str; 6] = ["L0", "L1", "L2", "L3", "L4", "L5"];
-    assert_eq!(PRINCIPLE_LAYERS.len() + PERMISSION_LAYERS.len(), 11, "L2 双洋葱 5+6 = 11 trait");
+    assert_eq!(
+        PRINCIPLE_LAYERS.len() + PERMISSION_LAYERS.len(),
+        11,
+        "L2 双洋葱 5+6 = 11 trait"
+    );
 }
 
 #[test]
@@ -146,13 +159,7 @@ fn test_l4_supervisor_pid_one_plus_5() {
 #[test]
 fn test_l5_5_r_measure_5_steps() {
     // L5 5 R-Measure 5 步: R-1..R-5
-    const R_MEASURE: [&str; 5] = [
-        "R-1 直行",
-        "R-2 直说",
-        "R-3 闭环",
-        "R-4 守门",
-        "R-5 诚实",
-    ];
+    const R_MEASURE: [&str; 5] = ["R-1 直行", "R-2 直说", "R-3 闭环", "R-4 守门", "R-5 诚实"];
     assert_eq!(R_MEASURE.len(), 5, "L5 5 R-Measure 5 步");
 }
 
@@ -167,9 +174,18 @@ fn test_l5_24_measure_dim() {
 fn test_l5_12_dim_m1_m12() {
     // L5 12 维度 M1-M12
     const M_DIMS: [&str; 12] = [
-        "M1 反思期", "M2 涌现", "M3 6 历史流", "M4 E 隔离",
-        "M5 L0 真实人类", "M6 电子环", "M7 5 轴正交", "M8 6 维 pluginType",
-        "M9 异构", "M10 5 类轴", "M11 平台中立", "M12 自我升级",
+        "M1 反思期",
+        "M2 涌现",
+        "M3 6 历史流",
+        "M4 E 隔离",
+        "M5 L0 真实人类",
+        "M6 电子环",
+        "M7 5 轴正交",
+        "M8 6 维 pluginType",
+        "M9 异构",
+        "M10 5 类轴",
+        "M11 平台中立",
+        "M12 自我升级",
     ];
     assert_eq!(M_DIMS.len(), 12, "L5 12 维度 M1-M12");
 }
@@ -178,8 +194,12 @@ fn test_l5_12_dim_m1_m12() {
 fn test_l6_6_history_streams() {
     // L6 6 历史流: 提案/决定/行动/反思/治理/涌现
     const STREAMS: [&str; 6] = [
-        "ProposalStream", "DecisionStream", "ActionStream",
-        "ReflectionStream", "GovernanceStream", "EmergenceStream",
+        "ProposalStream",
+        "DecisionStream",
+        "ActionStream",
+        "ReflectionStream",
+        "GovernanceStream",
+        "EmergenceStream",
     ];
     assert_eq!(STREAMS.len(), 6, "L6 6 历史流");
 }
@@ -208,9 +228,18 @@ fn test_real_minimax_m2_7_highspeed_1_round() {
     let response = call_minimax_chat(&key, "hi, say 1 word");
     let elapsed = start.elapsed();
     println!("[MiniMax-M2.7-highspeed] 1 轮耗时: {:?}", elapsed);
-    println!("[MiniMax-M2.7-highspeed] Response (前 200): {}", &response[..response.len().min(200)]);
-    assert!(response.contains("choices"), "MiniMax Response 0 返 choices");
-    assert!(response.contains(MINIMAX_MODEL), "MiniMax Response 0 返 model");
+    println!(
+        "[MiniMax-M2.7-highspeed] Response (前 200): {}",
+        &response[..response.len().min(200)]
+    );
+    assert!(
+        response.contains("choices"),
+        "MiniMax Response 0 返 choices"
+    );
+    assert!(
+        response.contains(MINIMAX_MODEL),
+        "MiniMax Response 0 返 model"
+    );
 }
 
 #[test]
@@ -253,8 +282,15 @@ fn test_5_provider_5_entry_trait() {
 fn test_9_organ_9_crate() {
     // 9 器官 9 crate
     const ORGANS: [&str; 9] = [
-        "perception", "cognition", "consciousness", "memory",
-        "motivation", "value", "relation", "action", "life-force",
+        "perception",
+        "cognition",
+        "consciousness",
+        "memory",
+        "motivation",
+        "value",
+        "relation",
+        "action",
+        "life-force",
     ];
     assert_eq!(ORGANS.len(), 9, "9 器官 9 crate");
 }

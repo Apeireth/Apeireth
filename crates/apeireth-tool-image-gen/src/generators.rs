@@ -48,7 +48,7 @@ impl ImageGenProvider for MockProvider {
                 width: w,
                 height: h,
                 url: None,
-                seed: params.seed.map(|s| s + i as u64),
+                seed: params.seed.map(|s| s + u64::from(i)),
             })
             .collect();
         Ok(ImageGenResult {
@@ -103,7 +103,7 @@ impl ImageGenProvider for OpenAiDallEProvider {
                 width: w,
                 height: h,
                 url: None,
-                seed: params.seed.map(|s| s + i as u64),
+                seed: params.seed.map(|s| s + u64::from(i)),
             })
             .collect();
         Ok(ImageGenResult {
@@ -156,7 +156,7 @@ impl ImageGenProvider for StabilityAiProvider {
                 width: w,
                 height: h,
                 url: None,
-                seed: params.seed.map(|s| s + i as u64),
+                seed: params.seed.map(|s| s + u64::from(i)),
             })
             .collect();
         Ok(ImageGenResult {
@@ -211,7 +211,7 @@ impl ImageGenProvider for MiniMaxImageProvider {
                 width: w,
                 height: h,
                 url: None,
-                seed: params.seed.map(|s| s + i as u64),
+                seed: params.seed.map(|s| s + u64::from(i)),
             })
             .collect();
         Ok(ImageGenResult {

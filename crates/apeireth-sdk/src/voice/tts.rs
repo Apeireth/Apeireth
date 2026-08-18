@@ -17,7 +17,7 @@ use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::{VoiceError, VoiceResult};
+use crate::voice::error::{VoiceError, VoiceResult};
 
 // ============================================================================
 // §1 4 TTS 模型 enum (K-1 强校验守门, 编译期 hardcode 4 variant)
@@ -287,7 +287,11 @@ mod tests {
 
     #[test]
     fn k1_tts_model_has_4_variants() {
-        assert_eq!(SUPPORTED_TTS_MODELS.len(), 4, "K-1 强校验: 必须 4 个 TTS 模型");
+        assert_eq!(
+            SUPPORTED_TTS_MODELS.len(),
+            4,
+            "K-1 强校验: 必须 4 个 TTS 模型"
+        );
         assert_eq!(TtsModel::COUNT, 4);
         assert_eq!(TtsModel::ElevenLabs.as_str(), "elevenlabs");
         assert_eq!(TtsModel::Azure.as_str(), "azure");
@@ -337,8 +341,8 @@ mod tests {
 
     #[test]
     fn k1_audio_new_valid() {
-        let audio = Audio::new(vec![0u8; 100], "mp3".to_string(), 44100, 16, 2, 5000)
-            .expect("valid audio");
+        let audio =
+            Audio::new(vec![0u8; 100], "mp3".to_string(), 44100, 16, 2, 5000).expect("valid audio");
         assert_eq!(audio.size(), 100);
         assert!(!audio.is_empty());
         assert_eq!(audio.format, "mp3");
@@ -370,8 +374,8 @@ mod tests {
 
     #[test]
     fn k1_audio_empty_check() {
-        let audio = Audio::new(Vec::new(), "wav".to_string(), 16000, 16, 1, 0)
-            .expect("valid empty audio");
+        let audio =
+            Audio::new(Vec::new(), "wav".to_string(), 16000, 16, 1, 0).expect("valid empty audio");
         assert!(audio.is_empty());
     }
 

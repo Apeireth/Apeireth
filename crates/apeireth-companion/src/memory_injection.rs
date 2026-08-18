@@ -12,11 +12,13 @@ pub fn build_memory_injection(entries: &[String]) -> String {
     if entries.is_empty() {
         return String::new();
     }
-    let mut s = String::from(
-        "[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n",
-    );
+    let mut s = String::from("[记忆证据 — 你只知道以下条目, 不要声称记得列表之外的任何对话]\n");
     for (i, e) in entries.iter().enumerate() {
-        s.push_str(&format!("{}. {}\n", i + 1, e.chars().take(120).collect::<String>()));
+        s.push_str(&format!(
+            "{}. {}\n",
+            i + 1,
+            e.chars().take(120).collect::<String>()
+        ));
     }
     s.push_str(
         "规则: 说话只能基于以上编号条目; 不确定就说「我猜」; \
@@ -43,7 +45,10 @@ mod tests {
         assert!(s.contains("[记忆证据"));
         assert!(s.contains("1. 主人明天要交线代作业"));
         assert!(s.contains("2. 主人换元法常忘换 dx"));
-        assert!(s.contains("禁止说「我记得我们以前聊过」"), "反幻觉指令必须存在: {s}");
+        assert!(
+            s.contains("禁止说「我记得我们以前聊过」"),
+            "反幻觉指令必须存在: {s}"
+        );
         assert!(s.contains("我猜"), "不确定就说我猜");
     }
 
@@ -51,7 +56,11 @@ mod tests {
     fn long_entries_truncated() {
         let long = "x".repeat(300);
         let s = build_memory_injection(&[long]);
-        assert!(s.matches('x').count() <= 120, "条目应截断到 120 字: {}", s.matches('x').count());
+        assert!(
+            s.matches('x').count() <= 120,
+            "条目应截断到 120 字: {}",
+            s.matches('x').count()
+        );
         assert!(s.contains("禁止说"), "反幻觉指令仍在");
     }
 }

@@ -22,9 +22,7 @@ use serde::{Deserialize, Serialize};
 use tokio_postgres::NoTls;
 
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **PG schema**: 单表 `kv (key TEXT PRIMARY KEY, value BYTEA, created_at BIGINT)`.
 const PG_SCHEMA: &str = r#"
@@ -61,12 +59,12 @@ impl PostgresProvider {
             })?;
 
         // 真解析 tokio-postgres Config (0 实际连接)
-        let pg_config: tokio_postgres::Config = url
-            .parse()
-            .map_err(|e: tokio_postgres::Error| MemoryProviderError::Connection {
-                provider: ProviderKind::Postgres,
-                reason: format!("parse postgres URL failed: {e}"),
-            })?;
+        let pg_config: tokio_postgres::Config =
+            url.parse()
+                .map_err(|e: tokio_postgres::Error| MemoryProviderError::Connection {
+                    provider: ProviderKind::Postgres,
+                    reason: format!("parse postgres URL failed: {e}"),
+                })?;
 
         Ok(Self { pg_config, config })
     }
@@ -83,14 +81,14 @@ impl PostgresProvider {
 
     /// 真连 PG (借 tokio-postgres 业界标准), R21+ 测试用.
     pub async fn connect(&self) -> MemoryProviderResult<tokio_postgres::Client> {
-        let (client, connection) = self
-            .pg_config
-            .connect(NoTls)
-            .await
-            .map_err(|e| MemoryProviderError::Connection {
-                provider: ProviderKind::Postgres,
-                reason: format!("connect failed: {e}"),
-            })?;
+        let (client, connection) =
+            self.pg_config
+                .connect(NoTls)
+                .await
+                .map_err(|e| MemoryProviderError::Connection {
+                    provider: ProviderKind::Postgres,
+                    reason: format!("connect failed: {e}"),
+                })?;
         // spawn connection task (per tokio-postgres 强制要求)
         tokio::spawn(async move {
             if let Err(e) = connection.await {
@@ -217,7 +215,7 @@ mod tests {
             "postgres://user:pass@localhost:5432/apeireth",
             Duration::from_secs(5),
             1024 * 1024,
-            true, // PG 表持久化
+            true,                   // PG 表持久化
             Duration::from_secs(0), // 永不过期
             ProviderScope::Global,
         )
@@ -311,10 +309,25 @@ mod tests {
     #[tokio::test]
     async fn test_10_get_delete_exists_clear_size_without_server_returns_connection_error() {
         let p = PostgresProvider::new(make_config()).unwrap();
-        assert!(matches!(p.get("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.delete("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.exists("k1").await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.clear().await, Err(MemoryProviderError::Connection { .. })));
-        assert!(matches!(p.size().await, Err(MemoryProviderError::Connection { .. })));
+        assert!(matches!(
+            p.get("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.delete("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.exists("k1").await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.clear().await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
+        assert!(matches!(
+            p.size().await,
+            Err(MemoryProviderError::Connection { .. })
+        ));
     }
 }

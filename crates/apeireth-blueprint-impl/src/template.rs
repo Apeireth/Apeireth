@@ -247,8 +247,9 @@ impl RateLimit for TokenBucket {
             .as_millis() as u64;
         let elapsed_ms = now.saturating_sub(s.last_refill_ms);
         let refill_ms = self.refill_interval.as_millis() as u64;
-        if refill_ms > 0 {
-            let refilled = (elapsed_ms / refill_ms) as u32;
+        // checked_div: refill_ms == 0 时 None, 天然处理除零 (clippy manual_checked_div)
+        if let Some(div) = elapsed_ms.checked_div(refill_ms) {
+            let refilled = div as u32;
             if refilled > 0 {
                 s.available = (s.available + refilled).min(self.capacity);
                 s.last_refill_ms += (refilled as u64) * refill_ms;
@@ -330,6 +331,7 @@ pub trait MockAuth: Auth {
 }
 
 /// Mock 鉴权 — 用于单元测试.
+#[derive(Default)]
 pub struct MockAuthImpl {
     inner: InMemoryAuth,
     next_verify_ok: Arc<Mutex<Option<bool>>>,
@@ -422,7 +424,7 @@ impl EnvFileConfig {
 
     pub fn with_file(mut self, path: &std::path::Path) -> BlueprintResult<Self> {
         let content =
-            std::fs::read_to_string(path).map_err(|e| BlueprintError::Io(e.to_string()))?;
+            fs_err::read_to_string(path).map_err(|e| BlueprintError::Io(e.to_string()))?;
         for line in content.lines() {
             let line = line.trim();
             if line.is_empty() || line.starts_with('#') {
@@ -664,11 +666,11 @@ mod tests {
         use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("conf.env");
-        let mut f = std::fs::File::create(&path).unwrap();
+        let mut f = fs_err::File::create(&path).unwrap();
         writeln!(f, "FOO_BAR=from_file").unwrap();
         writeln!(f, "# comment line").unwrap();
         writeln!(f, "EMPTY_LINE_BELOW").unwrap();
-        writeln!(f, "").unwrap();
+        writeln!(f).unwrap();
         writeln!(f, "BAZ=qux").unwrap();
         drop(f);
 
@@ -683,7 +685,7 @@ mod tests {
         use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("conf.env");
-        let mut f = std::fs::File::create(&path).unwrap();
+        let mut f = fs_err::File::create(&path).unwrap();
         writeln!(f, "MY_TEST_KEY=from_file").unwrap();
         drop(f);
 

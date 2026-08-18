@@ -113,7 +113,8 @@ impl SovereigntyGate {
         if !g.guard.is_armed {
             return;
         }
-        g.violations.push((mechanism.to_string(), context.to_string()));
+        g.violations
+            .push((mechanism.to_string(), context.to_string()));
         eprintln!("[sovereignty] 越界尝试: {mechanism} | {context}");
         if !g.frozen {
             g.frozen = true;

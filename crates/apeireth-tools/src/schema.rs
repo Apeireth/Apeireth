@@ -267,8 +267,10 @@ fn schema_label(s: &SchemaNode) -> String {
         SchemaNode::Bool => "bool".into(),
         SchemaNode::Null => "null".into(),
         SchemaNode::Object { fields } => {
-            let inner: Vec<String> =
-                fields.iter().map(|(k, v)| format!("{k}:{}", schema_label(v))).collect();
+            let inner: Vec<String> = fields
+                .iter()
+                .map(|(k, v)| format!("{k}:{}", schema_label(v)))
+                .collect();
             format!("object<{}>", inner.join(", "))
         }
         SchemaNode::Array { item } => format!("array<{}>", schema_label(item)),
@@ -413,17 +415,23 @@ mod tests {
     fn validate_realistic_web_search_output() {
         let schema = SchemaNode::Object {
             fields: BTreeMap::from([
-                ("results".into(), SchemaNode::Array {
-                    item: Box::new(SchemaNode::Object {
-                        fields: BTreeMap::from([
-                            ("title".into(), SchemaNode::String),
-                            ("url".into(), SchemaNode::String),
-                            ("snippet".into(), SchemaNode::Optional {
-                                inner: Box::new(SchemaNode::String),
-                            }),
-                        ]),
-                    }),
-                }),
+                (
+                    "results".into(),
+                    SchemaNode::Array {
+                        item: Box::new(SchemaNode::Object {
+                            fields: BTreeMap::from([
+                                ("title".into(), SchemaNode::String),
+                                ("url".into(), SchemaNode::String),
+                                (
+                                    "snippet".into(),
+                                    SchemaNode::Optional {
+                                        inner: Box::new(SchemaNode::String),
+                                    },
+                                ),
+                            ]),
+                        }),
+                    },
+                ),
                 ("total".into(), SchemaNode::Number),
             ]),
         };

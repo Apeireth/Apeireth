@@ -32,7 +32,9 @@ pub enum LocalEmbedderSource {
 /// `hash` | `onnx:<model.onnx>`. 未设置 → Hash (默认诚实降级).
 pub fn local_embedder_source_from_env() -> LocalEmbedderSource {
     match std::env::var("APEIRETH_LOCAL_EMBEDDER") {
-        Ok(v) if v.starts_with("onnx:") => LocalEmbedderSource::Onnx(v["onnx:".len()..].to_string()),
+        Ok(v) if v.starts_with("onnx:") => {
+            LocalEmbedderSource::Onnx(v["onnx:".len()..].to_string())
+        }
         _ => LocalEmbedderSource::Hash,
     }
 }
@@ -54,7 +56,9 @@ pub fn resolve_local_embedder() -> Result<Arc<dyn EmbedFn>, String> {
 /// ONNX 本地嵌入器 (feature "onnx"): tract-onnx 真加载真推理.
 #[cfg(feature = "onnx")]
 pub struct OnnxEmbedder {
-    model: tract_core::model::typed::TypedSimplePlan<tract_core::model::TypedModel>,
+    // tract 0.23: into_runnable() 返回 Arc<TypedRunnableModel> (SimplePlan alias),
+    // run() 接收 &Arc<Self> → 必须持 Arc
+    model: Arc<tract_core::model::typed::TypedRunnableModel>,
     dim: usize,
 }
 
@@ -71,9 +75,7 @@ impl OnnxEmbedder {
             .map_err(|e| e.to_string())?;
         let input_shape: Vec<usize> = {
             let inputs = model.input_outlets().map_err(|e| e.to_string())?;
-            let fact = model
-                .outlet_fact(inputs[0])
-                .map_err(|e| e.to_string())?;
+            let fact = model.outlet_fact(inputs[0]).map_err(|e| e.to_string())?;
             fact.shape
                 .as_concrete_finite()
                 .map_err(|e| e.to_string())?
@@ -83,7 +85,7 @@ impl OnnxEmbedder {
         if input_shape.is_empty() {
             return Err("ONNX 模型输入 shape 无法确定 (无法构造探测输入)".to_string());
         }
-        // 2. 编译 + 运行 (SimplePlan::run 直接可用, 无需 Runnable trait)
+        // 2. 编译 + 运行 (into_runnable → Arc<TypedRunnableModel>, run 直接可用)
         let plan = model
             .into_optimized()
             .map_err(|e| e.to_string())?
@@ -91,7 +93,9 @@ impl OnnxEmbedder {
             .map_err(|e| e.to_string())?;
         let tensor = tract_ndarray::Array::<i64, _>::zeros(input_shape).into_tensor();
         let outputs = plan.run(tvec!(tensor.into())).map_err(|e| e.to_string())?;
-        let out = outputs[0].to_array_view::<f32>().map_err(|e| e.to_string())?;
+        let out = outputs[0]
+            .to_plain_array_view::<f32>() // tract 0.23: to_array_view → to_plain_array_view
+            .map_err(|e| e.to_string())?;
         let dim = out.shape().last().copied().unwrap_or(0);
         if dim == 0 {
             return Err("ONNX 模型输出维度为 0 (无法确定 dim)".to_string());
@@ -112,7 +116,9 @@ impl OnnxEmbedder {
             .model
             .run(tvec!(tensor.into()))
             .map_err(|e| e.to_string())?;
-        let out = outputs[0].to_array_view::<f32>().map_err(|e| e.to_string())?;
+        let out = outputs[0]
+            .to_plain_array_view::<f32>() // tract 0.23: to_array_view → to_plain_array_view
+            .map_err(|e| e.to_string())?;
         // 取最后一维 (句向量/池化输出)
         let flat: Vec<f32> = out.iter().copied().collect();
         let len = flat.len();
@@ -196,7 +202,11 @@ mod tests {
             LocalEmbedderSource::Onnx("C:/models/emb.onnx".to_string())
         );
         unsafe { std::env::set_var("APEIRETH_LOCAL_EMBEDDER", "garbage") };
-        assert_eq!(local_embedder_source_from_env(), LocalEmbedderSource::Hash, "未知值如实降级 Hash");
+        assert_eq!(
+            local_embedder_source_from_env(),
+            LocalEmbedderSource::Hash,
+            "未知值如实降级 Hash"
+        );
         unsafe { std::env::remove_var("APEIRETH_LOCAL_EMBEDDER") };
     }
 
@@ -211,10 +221,14 @@ mod tests {
     #[test]
     fn onnx_missing_file_errors_honestly() {
         let _g = ENV_LOCK.lock().unwrap();
-        unsafe { std::env::set_var("APEIRETH_LOCAL_EMBEDDER", "onnx:C:/definitely/missing/model.onnx") };
-        let msg = match resolve_local_embedder() {
-            Ok(_) => panic!("模型缺失应明确报错 (不假装)"),
-            Err(e) => e,
+        unsafe {
+            std::env::set_var(
+                "APEIRETH_LOCAL_EMBEDDER",
+                "onnx:C:/definitely/missing/model.onnx",
+            )
+        };
+        let Err(msg) = resolve_local_embedder() else {
+            panic!("模型缺失应明确报错 (不假装)")
         };
         assert!(msg.contains("ONNX 加载失败"), "错误应点名 ONNX 路径: {msg}");
         assert!(msg.contains("hash"), "应提示 hash 降级选项: {msg}");

@@ -94,12 +94,12 @@ pub struct CuriosityConfig {
 impl Default for CuriosityConfig {
     fn default() -> Self {
         Self {
-            daily_budget: 2000.0,   // 待拟合
-            shallow_cost: 100.0,    // 待拟合
-            deep_cost: 500.0,       // 待拟合
-            deepen_echo_threshold: 0.6, // 待拟合
+            daily_budget: 2000.0,        // 待拟合
+            shallow_cost: 100.0,         // 待拟合
+            deep_cost: 500.0,            // 待拟合
+            deepen_echo_threshold: 0.6,  // 待拟合
             oracle_surprise_weight: 0.5, // 待拟合
-            ask_master_ratio: 8.0,  // 待拟合
+            ask_master_ratio: 8.0,       // 待拟合
             seed: 42,
         }
     }
@@ -163,11 +163,8 @@ impl CuriosityEngine {
         }
         // 候选: 已知回声主题 + 当前深度. 按主题字典序排序 — HashMap 迭代序随机,
         // 排序保证同输入同序列 (确定性, 测试可复现).
-        let mut candidates: Vec<(String, f64)> = self
-            .echoes
-            .iter()
-            .map(|(t, s)| (t.clone(), *s))
-            .collect();
+        let mut candidates: Vec<(String, f64)> =
+            self.echoes.iter().map(|(t, s)| (t.clone(), *s)).collect();
         candidates.sort_by(|a, b| a.0.cmp(&b.0));
         // 回声 0 的"自由好奇"通道: 每 1000 次采样有 1 次随机冷主题 (确定性 LCG).
         if self.lcg_next() % 1000 == 0 {
@@ -212,8 +209,7 @@ impl CuriosityEngine {
     /// 回声强 → 加深 (浅尝辄止的"加深"线). 返回是否升级.
     pub fn deepen(&mut self, topic: &str) -> bool {
         let echo = self.echoes.get(topic).copied().unwrap_or(0.0);
-        if echo >= self.config.deepen_echo_threshold
-            && self.depths.get(topic) != Some(&Depth::Deep)
+        if echo >= self.config.deepen_echo_threshold && self.depths.get(topic) != Some(&Depth::Deep)
         {
             self.depths.insert(topic.to_string(), Depth::Deep);
             true
@@ -254,7 +250,10 @@ impl CuriosityEngine {
 
     fn lcg_next(&mut self) -> u64 {
         // LCG (Lehmer): 可复现, 无外部依赖.
-        self.lcg = self.lcg.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        self.lcg = self
+            .lcg
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         self.lcg >> 33
     }
 }
@@ -284,7 +283,10 @@ mod tests {
                 weak += 1;
             }
         }
-        assert!(strong > weak * 3, "强回声应主导采样: strong={strong} weak={weak}");
+        assert!(
+            strong > weak * 3,
+            "强回声应主导采样: strong={strong} weak={weak}"
+        );
     }
 
     #[test]
@@ -362,8 +364,14 @@ mod tests {
         let b = CuriosityEngine::new(CuriosityConfig::default());
         let mut a = a;
         let mut b = b;
-        a.feed_echoes([Echo::new("x", 0.5, EchoSource::Memory), Echo::new("y", 0.5, EchoSource::Memory)]);
-        b.feed_echoes([Echo::new("x", 0.5, EchoSource::Memory), Echo::new("y", 0.5, EchoSource::Memory)]);
+        a.feed_echoes([
+            Echo::new("x", 0.5, EchoSource::Memory),
+            Echo::new("y", 0.5, EchoSource::Memory),
+        ]);
+        b.feed_echoes([
+            Echo::new("x", 0.5, EchoSource::Memory),
+            Echo::new("y", 0.5, EchoSource::Memory),
+        ]);
         let ta = a.sample_targets(5);
         let tb = b.sample_targets(5);
         assert_eq!(ta.len(), tb.len());

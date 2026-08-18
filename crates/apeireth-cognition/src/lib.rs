@@ -31,25 +31,25 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub mod consciousness_bridge;
-pub mod forecast; // TP18 (E3, P1): EnsembleForecast + PredictionMarket (LMSR)
-mod decision; // R172: bridge 1 of 7
-              // R176: bridge 1 Kani proofs
+mod decision;
+pub mod forecast; // TP18 (E3, P1): EnsembleForecast + PredictionMarket (LMSR) // R172: bridge 1 of 7
+                  // R176: bridge 1 Kani proofs
 mod bridge_kani_proofs;
 // R177: organ invariants (10 tests + 2 Kani proofs)
+pub mod calibration; // TP18 (E3, P1): Brier 单调分解 + CalibrationBin
 mod organ_kani_proofs;
 pub mod planning;
-pub mod calibration; // TP18 (E3, P1): Brier 单调分解 + CalibrationBin
 mod reflection;
 mod scoring; // A1/P2#7: MCTS/LATS 规划搜索机制 (trait 注入, 零 LLM 依赖)
 
+pub use calibration::{
+    brier_score, brier_single, calibration_bins, decompose, expected_calibration_error,
+    BrierDecomposition, CalibrationBin, Observation, DEFAULT_NUM_BINS,
+};
 pub use decision::{CognitiveOutput, CognitivePipeline};
 pub use forecast::{
     AggregationStrategy, EnsembleConfig, EnsembleForecast, EnsembleMember, MarketConfig,
     MarketError, PredictionMarket, TradeReceipt,
-};
-pub use calibration::{
-    brier_score, brier_single, calibration_bins, decompose, expected_calibration_error,
-    BrierDecomposition, CalibrationBin, Observation, DEFAULT_NUM_BINS,
 };
 pub use planning::{
     MctsConfig, MctsPlanner, SearchAction, SearchResult, SearchState, StateEvaluator,

@@ -99,7 +99,9 @@ impl Default for ItemLayerState {
 }
 
 impl ItemLayerState {
-    fn new() -> Self { Self::default() }
+    fn new() -> Self {
+        Self::default()
+    }
     fn touch(&mut self, layer: Layer) {
         let idx = (layer as usize) - 1;
         self.in_layer[idx] = true;
@@ -130,33 +132,50 @@ pub struct LayerProgression {
 }
 
 impl LayerProgression {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn touch_l1(&mut self, id: &str) {
-        let s = self.items.entry(id.to_string()).or_insert_with(ItemLayerState::new);
+        let s = self
+            .items
+            .entry(id.to_string())
+            .or_insert_with(ItemLayerState::new);
         s.touch(Layer::L1);
     }
 
     pub fn touch_l2(&mut self, id: &str) {
-        let s = self.items.entry(id.to_string()).or_insert_with(ItemLayerState::new);
+        let s = self
+            .items
+            .entry(id.to_string())
+            .or_insert_with(ItemLayerState::new);
         s.touch(Layer::L1);
         s.touch(Layer::L2);
     }
 
     pub fn touch_l3(&mut self, id: &str, _tags: &[String]) {
-        let s = self.items.entry(id.to_string()).or_insert_with(ItemLayerState::new);
+        let s = self
+            .items
+            .entry(id.to_string())
+            .or_insert_with(ItemLayerState::new);
         s.touch(Layer::L1);
         s.touch(Layer::L3);
     }
 
     pub fn touch_l4(&mut self, id: &str) {
-        let s = self.items.entry(id.to_string()).or_insert_with(ItemLayerState::new);
+        let s = self
+            .items
+            .entry(id.to_string())
+            .or_insert_with(ItemLayerState::new);
         s.touch(Layer::L1);
         s.touch(Layer::L4);
     }
 
     pub fn is_in(&self, id: &str, layer: Layer) -> bool {
-        self.items.get(id).map(|s| s.in_layer[(layer as usize) - 1]).unwrap_or(false)
+        self.items
+            .get(id)
+            .map(|s| s.in_layer[(layer as usize) - 1])
+            .unwrap_or(false)
     }
 
     pub fn top_layer_of(&self, id: &str) -> Layer {
@@ -170,12 +189,13 @@ impl LayerProgression {
     /// 按 decay 降级: 超过 threshold_hours 未访问, 从高到低 demote (除 L1).
     pub fn decay_demote(&mut self, id: &str, threshold_hours: f64) -> usize {
         let now = Utc::now();
-        let state = match self.items.get_mut(id) {
-            Some(s) => s,
-            None => return 0,
+        let Some(state) = self.items.get_mut(id) else {
+            return 0;
         };
         let elapsed_hours = (now - state.last_accessed).num_seconds() as f64 / 3600.0;
-        if elapsed_hours < threshold_hours { return 0; }
+        if elapsed_hours < threshold_hours {
+            return 0;
+        }
         let mut demoted = 0;
         for layer in [Layer::L4, Layer::L3, Layer::L2] {
             if state.in_layer[(layer as usize) - 1] {
@@ -203,7 +223,9 @@ impl LayerProgression {
         let mut out = [0usize; 4];
         for s in self.items.values() {
             for (i, &b) in s.in_layer.iter().enumerate() {
-                if b { out[i] += 1; }
+                if b {
+                    out[i] += 1;
+                }
             }
         }
         out
@@ -285,13 +307,13 @@ mod tests {
     fn count_per_layer() {
         let mut p = LayerProgression::new();
         p.touch_l1("a");
-        p.touch_l2("b");  // L1 + L2
-        p.touch_l3("c", &[]);  // L1 + L3
-        p.touch_l4("d");  // L1 + L4
+        p.touch_l2("b"); // L1 + L2
+        p.touch_l3("c", &[]); // L1 + L3
+        p.touch_l4("d"); // L1 + L4
         let counts = p.count_per_layer();
         assert_eq!(counts[0], 4);
         assert_eq!(counts[1], 1);
-        assert_eq!(counts[2], 1);  // only c
+        assert_eq!(counts[2], 1); // only c
         assert_eq!(counts[3], 1);
     }
 
@@ -321,9 +343,18 @@ mod tests {
     fn recommend_by_content_length() {
         let c = L4LcmCompressor::with_chunk_size(L4LcmCompressor::new(), 1000);
         assert_eq!(LayerProgression::recommend_top_layer("hi", &c), Layer::L1);
-        assert_eq!(LayerProgression::recommend_top_layer(&"x".repeat(100), &c), Layer::L2);
-        assert_eq!(LayerProgression::recommend_top_layer(&"x".repeat(400), &c), Layer::L3);
-        assert_eq!(LayerProgression::recommend_top_layer(&"x".repeat(2000), &c), Layer::L4);
+        assert_eq!(
+            LayerProgression::recommend_top_layer(&"x".repeat(100), &c),
+            Layer::L2
+        );
+        assert_eq!(
+            LayerProgression::recommend_top_layer(&"x".repeat(400), &c),
+            Layer::L3
+        );
+        assert_eq!(
+            LayerProgression::recommend_top_layer(&"x".repeat(2000), &c),
+            Layer::L4
+        );
     }
 
     #[test]

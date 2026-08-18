@@ -27,10 +27,10 @@ jobs:
       # Kani 自带 nightly toolchain (kani-init); 不需要 dtolnay/rust-toolchain
 
       - name: Install cargo-kani
-        # ponytail: 直接装最新稳定版. 若未来要锁版本, 在 kani-version 文件里改.
+        # kani-verifier 包自带 cargo-kani 二进制; crates.io 上不存在独立 cargo-kani 包
+        # (2026-08 CI fix: 之前第二行 `cargo install cargo-kani` 必然失败)
         run: |
           cargo install --locked kani-verifier
-          cargo install --locked cargo-kani
 
       - name: Cache cargo registry
         uses: actions/cache@v4

@@ -330,7 +330,7 @@ mod tests {
         let skill = BrainstormingSkill;
         for i in 1..=5 {
             let idx = ex
-                .advance_step(id, &skill, 1000 + i as u64)
+                .advance_step(id, &skill, 1000 + u64::from(i))
                 .expect("advance");
             assert_eq!(idx, i);
         }

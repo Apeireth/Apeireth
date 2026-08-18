@@ -62,11 +62,15 @@ impl BondDepth {
         Self(value.clamp(0.0, 1.0))
     }
 
-    pub fn value(self) -> f64 { self.0 }
+    pub fn value(self) -> f64 {
+        self.0
+    }
 }
 
 impl Default for BondDepth {
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 impl std::fmt::Display for BondDepth {
@@ -96,8 +100,19 @@ impl BondCharacter {
     }
 
     /// 注入情感 (per consciousness bridge, via Plutchik 状态)
-    pub fn apply_emotion(&mut self, joy: f64, trust: f64, fear: f64, surprise: f64, sadness: f64, disgust: f64, anger: f64, anticipation: f64) {
-        self.resonance = (self.resonance * 0.7 + (joy + trust + anticipation) * 0.1).clamp(0.0, 1.0);
+    pub fn apply_emotion(
+        &mut self,
+        joy: f64,
+        trust: f64,
+        fear: f64,
+        surprise: f64,
+        sadness: f64,
+        disgust: f64,
+        anger: f64,
+        anticipation: f64,
+    ) {
+        self.resonance =
+            (self.resonance * 0.7 + (joy + trust + anticipation) * 0.1).clamp(0.0, 1.0);
         self.trust = (self.trust * 0.8 + trust * 0.2).clamp(0.0, 1.0);
         let _ = (fear, surprise, sadness, disgust, anger);
     }
@@ -135,12 +150,24 @@ impl Bond {
         }
     }
 
-    pub fn stage(&self) -> BondStage { self.stage }
-    pub fn depth(&self) -> BondDepth { self.depth }
-    pub fn character(&self) -> &BondCharacter { &self.character }
-    pub fn character_mut(&mut self) -> &mut BondCharacter { &mut self.character }
-    pub fn formed_at(&self) -> DateTime<Utc> { self.formed_at }
-    pub fn last_evolved(&self) -> DateTime<Utc> { self.last_evolved }
+    pub fn stage(&self) -> BondStage {
+        self.stage
+    }
+    pub fn depth(&self) -> BondDepth {
+        self.depth
+    }
+    pub fn character(&self) -> &BondCharacter {
+        &self.character
+    }
+    pub fn character_mut(&mut self) -> &mut BondCharacter {
+        &mut self.character
+    }
+    pub fn formed_at(&self) -> DateTime<Utc> {
+        self.formed_at
+    }
+    pub fn last_evolved(&self) -> DateTime<Utc> {
+        self.last_evolved
+    }
 
     pub fn evolve(&mut self, new_stage: BondStage, delta_depth: f64) {
         self.stage = new_stage;
@@ -148,8 +175,27 @@ impl Bond {
         self.last_evolved = Utc::now();
     }
 
-    pub fn apply_emotion(&mut self, joy: f64, trust: f64, fear: f64, surprise: f64, sadness: f64, disgust: f64, anger: f64, anticipation: f64) {
-        self.character.apply_emotion(joy, trust, fear, surprise, sadness, disgust, anger, anticipation);
+    pub fn apply_emotion(
+        &mut self,
+        joy: f64,
+        trust: f64,
+        fear: f64,
+        surprise: f64,
+        sadness: f64,
+        disgust: f64,
+        anger: f64,
+        anticipation: f64,
+    ) {
+        self.character.apply_emotion(
+            joy,
+            trust,
+            fear,
+            surprise,
+            sadness,
+            disgust,
+            anger,
+            anticipation,
+        );
     }
 }
 

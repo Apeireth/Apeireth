@@ -79,7 +79,8 @@ impl ExperienceStore {
     /// 列出全部经验 (按 chain 去重取最新版; updated_at 降序; scene 过滤可选).
     pub fn list(&self, scene: Option<&str>) -> Vec<Experience> {
         let eps = self.store.recent_episodes("me", 500).unwrap_or_default();
-        let mut by_chain: std::collections::HashMap<String, Experience> = std::collections::HashMap::new();
+        let mut by_chain: std::collections::HashMap<String, Experience> =
+            std::collections::HashMap::new();
         for e in eps
             .iter()
             .filter(|e| e.id.starts_with("exp-"))
@@ -153,7 +154,9 @@ impl ExperienceStore {
         if ready.is_empty() {
             return String::new();
         }
-        let mut s = String::from("【经验晋级提示】以下经验已验证达标, 考虑用 propose_capability 提案为能力:\n");
+        let mut s = String::from(
+            "【经验晋级提示】以下经验已验证达标, 考虑用 propose_capability 提案为能力:\n",
+        );
         for e in ready.iter().take(5) {
             s.push_str(&format!(
                 "  • {} (验证 {} 次, 评分 {:.2}) — 做法: {}\n",
@@ -191,12 +194,30 @@ impl apeireth_tool_registry::Tool for SaveExperienceTool {
         apeireth_tool_registry::ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let scene = args.get("scene").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty())
+        let scene = args
+            .get("scene")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| "scene (触发场景) 不能为空".to_string())?;
-        let practice = args.get("practice").and_then(|v| v.as_str()).map(|s| s.trim()).filter(|s| !s.is_empty())
+        let practice = args
+            .get("practice")
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| "practice (做法) 不能为空".to_string())?;
-        let result = args.get("result").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        let outcome = args.get("outcome").and_then(|v| v.as_str()).unwrap_or("partial").trim().to_string();
+        let result = args
+            .get("result")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        let outcome = args
+            .get("outcome")
+            .and_then(|v| v.as_str())
+            .unwrap_or("partial")
+            .trim()
+            .to_string();
         if !["success", "failure", "partial"].contains(&outcome.as_str()) {
             return Err("outcome 应为 success/failure/partial".to_string());
         }
@@ -219,7 +240,9 @@ impl apeireth_tool_registry::Tool for SaveExperienceTool {
         };
         let store = ExperienceStore::new(Arc::clone(&self.store));
         store.save(&exp)?;
-        Ok(json!({"ok": true, "id": exp.id, "note": "经验已入经验库, 验证 3 次且评分达标后自动促能力提案"}))
+        Ok(
+            json!({"ok": true, "id": exp.id, "note": "经验已入经验库, 验证 3 次且评分达标后自动促能力提案"}),
+        )
     }
 }
 
@@ -246,7 +269,10 @@ impl apeireth_tool_registry::Tool for ListExperienceTool {
         apeireth_tool_registry::ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let scene = args.get("scene").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+        let scene = args
+            .get("scene")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty());
         let store = ExperienceStore::new(Arc::clone(&self.store));
         let list = store.list(scene);
         Ok(json!({
@@ -285,9 +311,15 @@ impl apeireth_tool_registry::Tool for VerifyExperienceTool {
         apeireth_tool_registry::ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let id = args.get("id").and_then(|v| v.as_str()).filter(|s| !s.is_empty())
+        let id = args
+            .get("id")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
             .ok_or_else(|| "需要 id (经验 id)".to_string())?;
-        let success = args.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+        let success = args
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let store = ExperienceStore::new(Arc::clone(&self.store));
         let exp = store.verify(id, success)?;
         Ok(json!({
@@ -385,9 +417,15 @@ mod tests {
         let l = list.call(json!({})).await.unwrap();
         assert_eq!(l["count"], json!(1));
         let verify = VerifyExperienceTool::new(Arc::clone(&st));
-        let v = verify.call(json!({"id": id, "success": true})).await.unwrap();
+        let v = verify
+            .call(json!({"id": id, "success": true}))
+            .await
+            .unwrap();
         assert_eq!(v["verify_count"], json!(1));
         // 非法 outcome 拒绝
-        assert!(save.call(json!({"scene": "x", "practice": "y", "outcome": "maybe"})).await.is_err());
+        assert!(save
+            .call(json!({"scene": "x", "practice": "y", "outcome": "maybe"}))
+            .await
+            .is_err());
     }
 }

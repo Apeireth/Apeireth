@@ -408,9 +408,8 @@ impl TextToolProtocol {
         let mut calls = Vec::new();
         let mut offset = 0usize;
         while offset < visible.len() {
-            let block = match extract_next_tool_block(&visible, offset) {
-                Some(b) => b,
-                None => break,
+            let Some(block) = extract_next_tool_block(&visible, offset) else {
+                break;
             };
             if let Some(parsed) = parse_block(&block.content, &block.start_marker) {
                 calls.push(parsed);

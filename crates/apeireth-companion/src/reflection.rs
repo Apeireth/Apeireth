@@ -10,7 +10,9 @@
 use std::sync::Arc;
 
 use apeireth_core::clock::Clock;
-use apeireth_memory::{CoreEpisode, EpisodeStore, ReflectionCycleScheduler, ReflectionPhase, SqliteMemoryStore};
+use apeireth_memory::{
+    CoreEpisode, EpisodeStore, ReflectionCycleScheduler, ReflectionPhase, SqliteMemoryStore,
+};
 use chrono::{DateTime, Utc};
 
 /// 深度反思器 (LLM 提炼; lib 无 LLM 依赖, 同做梦摘要的 trait 策略).
@@ -61,7 +63,10 @@ impl ReflectionScheduler {
     }
 
     /// N4 元自学习读取口: 反思时附历史思维链 (≤3 簇×最新 1 篇×400 字); 未接 = 不附.
-    pub fn with_thought_reader(mut self, r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>) -> Self {
+    pub fn with_thought_reader(
+        mut self,
+        r: Arc<dyn crate::thought_cluster::ThoughtClusterReader>,
+    ) -> Self {
         self.thought_reader = Some(r);
         self
     }
@@ -85,11 +90,14 @@ impl ReflectionScheduler {
 
     /// 重要事件积累触发 (Generative Agents: 最近 100 条 importance 和 > 150).
     fn importance_surge(&self) -> bool {
-        let eps = self.store.recent_episodes(&self.session, 100).unwrap_or_default();
+        let eps = self
+            .store
+            .recent_episodes(&self.session, 100)
+            .unwrap_or_default();
         let sum: u64 = eps
             .iter()
             .filter(|e| !e.id.starts_with("reflect-"))
-            .map(|e| crate::memory_extractor::parse_importance(&e.content) as u64)
+            .map(|e| u64::from(crate::memory_extractor::parse_importance(&e.content)))
             .sum();
         sum > 150
     }
@@ -131,7 +139,13 @@ impl ReflectionScheduler {
                 .recent_episodes(&self.session, 40)
                 .unwrap_or_default()
                 .iter()
-                .map(|e| format!("[{}] {}", e.role, e.content.chars().take(200).collect::<String>()))
+                .map(|e| {
+                    format!(
+                        "[{}] {}",
+                        e.role,
+                        e.content.chars().take(200).collect::<String>()
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join("\n");
             // N4 元自学习: 附历史思维链 (≤3 簇×最新 1 篇×400 字, 确定性序), 反思做"思考的再思考"
@@ -149,7 +163,10 @@ impl ReflectionScheduler {
             }
             match r.reflect(&context).await {
                 Ok(insight) if !insight.trim().is_empty() => {
-                    reflect_content = format!("【深度反思】第 {} 轮:\n{insight}", self.cycle.cycles_completed);
+                    reflect_content = format!(
+                        "【深度反思】第 {} 轮:\n{insight}",
+                        self.cycle.cycles_completed
+                    );
                 }
                 Ok(_) => eprintln!("[reflection] 深度反思返回空, 降级状态文本"),
                 Err(e) => eprintln!("[reflection] 深度反思失败: {e}, 降级状态文本"),
@@ -159,7 +176,11 @@ impl ReflectionScheduler {
             id: format!("reflect-{}", uuid::Uuid::new_v4()),
             timestamp: now.timestamp(),
             role: "assistant".into(),
-            content: if reflect_content.is_empty() { content } else { reflect_content },
+            content: if reflect_content.is_empty() {
+                content
+            } else {
+                reflect_content
+            },
             session_id: self.session.clone(),
         };
         if let Err(e) = self.store.put_episode(&ep) {
@@ -269,10 +290,20 @@ mod tests {
             .with_thought_reader(Arc::new(StubReader));
         vc.advance(chrono::Duration::hours(1));
         assert_eq!(s.tick().await, 1);
-        let ctx = captured.lock().unwrap().clone().expect("reflector 应收到 context");
-        assert!(ctx.contains("【历史思维链】"), "context 应含历史思维链段: {ctx}");
+        let ctx = captured
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("reflector 应收到 context");
+        assert!(
+            ctx.contains("【历史思维链】"),
+            "context 应含历史思维链段: {ctx}"
+        );
         assert!(ctx.contains("甲簇/"), "应按簇名序附思维链: {ctx}");
-        assert!(ctx.contains("历史思考链内容"), "应附最新思考文件内容: {ctx}");
+        assert!(
+            ctx.contains("历史思考链内容"),
+            "应附最新思考文件内容: {ctx}"
+        );
     }
 
     #[tokio::test]
@@ -285,7 +316,14 @@ mod tests {
             .with_reflector(Arc::new(CaptureReflector(Arc::clone(&captured))));
         vc.advance(chrono::Duration::hours(1));
         assert_eq!(s.tick().await, 1);
-        let ctx = captured.lock().unwrap().clone().expect("reflector 应收到 context");
-        assert!(!ctx.contains("【历史思维链】"), "未接读取口不应附思维链: {ctx}");
+        let ctx = captured
+            .lock()
+            .unwrap()
+            .clone()
+            .expect("reflector 应收到 context");
+        assert!(
+            !ctx.contains("【历史思维链】"),
+            "未接读取口不应附思维链: {ctx}"
+        );
     }
 }

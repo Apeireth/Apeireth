@@ -49,12 +49,33 @@ impl MorphologyVerdict {
 
 /// 深度线索词 (叙事/回溯/梳理诉求 → 推高深爬 logit).
 const DEPTH_CUES: &[&str] = &[
-    "详细", "深入", "全面", "背景", "历史", "过程", "来龙去脉", "前因后果", "为什么", "原因",
-    "梳理", "总结", "回顾", "整个",
+    "详细",
+    "深入",
+    "全面",
+    "背景",
+    "历史",
+    "过程",
+    "来龙去脉",
+    "前因后果",
+    "为什么",
+    "原因",
+    "梳理",
+    "总结",
+    "回顾",
+    "整个",
 ];
 /// 疑问形态词 (直接提问 → 推高浅扫 logit).
 const QUESTION_MARKS: &[&str] = &[
-    "？", "?", "吗", "呢", "怎么", "如何", "是否", "哪些", "什么", "为什么",
+    "？",
+    "?",
+    "吗",
+    "呢",
+    "怎么",
+    "如何",
+    "是否",
+    "哪些",
+    "什么",
+    "为什么",
 ];
 
 fn clamp01(v: f64) -> f64 {
@@ -86,11 +107,22 @@ fn extract(q: &str) -> Features {
     let question = clamp01(cue_hits(q, QUESTION_MARKS) / 2.0);
     let depth = clamp01(cue_hits(q, DEPTH_CUES) / 2.0);
     let segs = q
-        .split(|c: char| matches!(c, '，' | ',' | '。' | '！' | '!' | '？' | '?' | '；' | ';' | '、' | '：' | ':' | '\n'))
+        .split(|c: char| {
+            matches!(
+                c,
+                '，' | ',' | '。' | '！' | '!' | '？' | '?' | '；' | ';' | '、' | '：' | ':' | '\n'
+            )
+        })
         .filter(|s| !s.trim().is_empty())
         .count();
     let clauses = clamp01(segs.saturating_sub(1) as f64 / 3.0);
-    Features { length, entity, question, clauses, depth }
+    Features {
+        length,
+        entity,
+        question,
+        clauses,
+        depth,
+    }
 }
 
 /// 三档 logits [浅扫, 标准, 深爬] (系数为手调启发式, 仿 VCP 加权结构).
@@ -205,7 +237,11 @@ mod tests {
 
     #[test]
     fn weights_are_valid_distribution() {
-        for q in ["你好", "帮我详细回顾整个历史", "进度，风险，资源，时间，分别什么情况？"] {
+        for q in [
+            "你好",
+            "帮我详细回顾整个历史",
+            "进度，风险，资源，时间，分别什么情况？",
+        ] {
             let v = classify(q, 1.0);
             let sum: f64 = v.weights.iter().sum();
             assert!((sum - 1.0).abs() < 1e-9, "softmax 应归一: {sum}");
@@ -226,13 +262,20 @@ mod tests {
     fn invalid_temperature_falls_back() {
         let base = classify("随便聊聊天", 1.0);
         for bad in [0.0, -3.0, f64::NAN, f64::INFINITY] {
-            assert_eq!(classify("随便聊聊天", bad), base, "非法温度应回落 1.0: {bad}");
+            assert_eq!(
+                classify("随便聊聊天", bad),
+                base,
+                "非法温度应回落 1.0: {bad}"
+            );
         }
     }
 
     #[test]
     fn budget_bounds() {
-        let v = |w: [f64; 3]| MorphologyVerdict { mode: RetrievalMode::Shallow, weights: w };
+        let v = |w: [f64; 3]| MorphologyVerdict {
+            mode: RetrievalMode::Shallow,
+            weights: w,
+        };
         assert_eq!(v([1.0, 0.0, 0.0]).budget(), 1);
         assert_eq!(v([0.0, 1.0, 0.0]).budget(), 3);
         assert_eq!(v([0.0, 0.0, 1.0]).budget(), 6);

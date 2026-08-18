@@ -26,7 +26,9 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use apeireth_tool_registry::ToolRegistry;
-use apeireth_tools::{pre_call_guard, post_call_tripwire, GuardrailError, SchemaMap, Tripwire, ValidationError};
+use apeireth_tools::{
+    post_call_tripwire, pre_call_guard, GuardrailError, SchemaMap, Tripwire, ValidationError,
+};
 use serde_json::Value;
 use tracing::{debug, warn};
 
@@ -187,20 +189,17 @@ impl ToolExecutor {
         }
 
         // 1. 查 registry (VCP toolExecutor.js:358-367 插件不存在检查)
-        let tool = match self.registry.get(&tool_name) {
-            Some(t) => t,
-            None => {
-                let message = format!("Tool not found: {tool_name}");
-                warn!("[ToolExecutor] {message}");
-                return ExecutionResult {
-                    success: false,
-                    output: Value::String(format!("[Error] {message}")),
-                    error: Some(message),
-                    duration_ms: started.elapsed().as_millis() as u64,
-                    tool_name,
-                    ..Default::default()
-                };
-            }
+        let Some(tool) = self.registry.get(&tool_name) else {
+            let message = format!("Tool not found: {tool_name}");
+            warn!("[ToolExecutor] {message}");
+            return ExecutionResult {
+                success: false,
+                output: Value::String(format!("[Error] {message}")),
+                error: Some(message),
+                duration_ms: started.elapsed().as_millis() as u64,
+                tool_name,
+                ..Default::default()
+            };
         };
 
         // 2. tokio::time::timeout 包裹 call (Apeireth 优势: 防止工具 hang 住)
@@ -625,7 +624,10 @@ mod tests {
         };
         let r = exec.execute(&call).await;
         assert!(!r.success, "路径穿越应被阻断");
-        assert!(r.guardrail_error.is_some(), "应有 guardrail_error 结构化字段");
+        assert!(
+            r.guardrail_error.is_some(),
+            "应有 guardrail_error 结构化字段"
+        );
         let ge = r.guardrail_error.unwrap();
         assert_eq!(ge.tool_name, "EchoSync");
         assert!(r.error.as_ref().unwrap().contains("path"));
@@ -793,7 +795,11 @@ mod tests {
         assert_eq!(trip.tool_name, "SecretTool");
         assert!(trip.detail.contains("AWS"));
         // 原始 output 不应回灌, 应用 redacted 标记替代
-        assert!(res.output.as_str().unwrap().starts_with("[TripwireBlocked]"));
+        assert!(res
+            .output
+            .as_str()
+            .unwrap()
+            .starts_with("[TripwireBlocked]"));
     }
 
     /// post_call_tripwire 可关闭

@@ -55,12 +55,7 @@ fn full_pipeline_semantic_search_then_user_profile() {
     for (i, content) in assistant_contents.iter().enumerate() {
         <SqliteMemoryStore as EpisodeStore>::put_episode(
             &mem,
-            &make_episode(
-                &format!("a-{i}"),
-                2000 + i as i64,
-                "assistant",
-                content,
-            ),
+            &make_episode(&format!("a-{i}"), 2000 + i as i64, "assistant", content),
         )
         .expect("put assistant episode");
     }
@@ -105,7 +100,10 @@ fn full_pipeline_semantic_search_then_user_profile() {
     let profile = mem
         .extract_user_profile(Arc::clone(&embedder))
         .expect("extract profile");
-    assert_eq!(profile.interaction_count, 12, "12 episodes total (9 user + 3 assistant)");
+    assert_eq!(
+        profile.interaction_count, 12,
+        "12 episodes total (9 user + 3 assistant)"
+    );
     assert!(profile.last_active.is_some());
     // expertise_areas 应至少包含 sql/rust/python 之一 (取决于哪些 keyword 命中次数最多)
     let expertise_hit = profile
@@ -117,7 +115,10 @@ fn full_pipeline_semantic_search_then_user_profile() {
         "expertise_areas 应含 sql/rust/python 至少一个, got {:?}",
         profile.expertise_areas
     );
-    assert!(!profile.recurring_topics.is_empty(), "recurring_topics 非空");
+    assert!(
+        !profile.recurring_topics.is_empty(),
+        "recurring_topics 非空"
+    );
     println!(
         "✅ full pipeline: sql_in_top3={} rust_in_top3={} expertise={:?} style={} prefs={:?}",
         sql_in_top3,

@@ -161,7 +161,7 @@ impl std::fmt::Display for BridgeHealth {
 
 pub fn health_check() -> BridgeHealth {
     BridgeHealth {
-        python_version: python_version_string().to_string(),
+        python_version: python_version_string().to_owned(),
         r11_compat_version: r11_compat::r11_compat_version(),
         r11_module_count: r11_compat::r11_module_count(),
         python_available: python_is_available(),
@@ -271,11 +271,8 @@ pub fn eval_python_expression(expr: &str) -> Result<String, BridgeError> {
     }
     let raw = with_python(|py| {
         // 用 CString 路径 (避免 &str → &CStr unsafe leak)
-        let c_expr = std::ffi::CString::new(expr).map_err(|e| {
-            pyo3::PyErr::from(pyo3::exceptions::PyValueError::new_err(format!(
-                "expr nul byte: {e}"
-            )))
-        })?;
+        let c_expr = std::ffi::CString::new(expr)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("expr nul byte: {e}")))?;
         let result = py.eval(c_expr.as_c_str(), None, None)?;
         result
             .str()
@@ -324,9 +321,7 @@ pub fn call_python_function_via_pool(
 ) -> Result<String, BridgeError> {
     validate_args(module_name, func_name)?;
     let raw = with_python(|py| {
-        let module = pool
-            .get_or_import(py, module_name)
-            .map_err(|e| pyo3::PyErr::from(e))?;
+        let module = pool.get_or_import(py, module_name).map_err(|e| e)?;
         let func = module.getattr(func_name)?;
         let bound_args: Vec<pyo3::Bound<'_, pyo3::PyAny>> = args
             .iter()

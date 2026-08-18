@@ -11,7 +11,10 @@ pub struct Category {
 
 impl Category {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into(), parent: None }
+        Self {
+            name: name.into(),
+            parent: None,
+        }
     }
     pub fn with_parent(mut self, parent: impl Into<String>) -> Self {
         self.parent = Some(parent.into());
@@ -28,7 +31,10 @@ pub struct Librarian {
 
 impl Librarian {
     pub fn new() -> Self {
-        Self { categories: HashMap::new(), items: HashMap::new() }
+        Self {
+            categories: HashMap::new(),
+            items: HashMap::new(),
+        }
     }
 
     /// Register a category. Returns false if already exists.
@@ -45,13 +51,15 @@ impl Librarian {
         if !self.categories.contains_key(category_name) {
             return false;
         }
-        self.items.insert(item_id.to_string(), category_name.to_string());
+        self.items
+            .insert(item_id.to_string(), category_name.to_string());
         true
     }
 
     /// List items in a category.
     pub fn items_in(&self, category_name: &str) -> Vec<String> {
-        self.items.iter()
+        self.items
+            .iter()
             .filter(|(_, cat)| cat == &category_name)
             .map(|(id, _)| id.clone())
             .collect()
@@ -67,12 +75,18 @@ impl Librarian {
         tree
     }
 
-    pub fn category_count(&self) -> usize { self.categories.len() }
-    pub fn item_count(&self) -> usize { self.items.len() }
+    pub fn category_count(&self) -> usize {
+        self.categories.len()
+    }
+    pub fn item_count(&self) -> usize {
+        self.items.len()
+    }
 }
 
 impl Default for Librarian {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]

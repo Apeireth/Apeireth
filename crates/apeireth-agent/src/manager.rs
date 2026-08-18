@@ -391,7 +391,7 @@ impl AgentManager {
         let mut watcher: RecommendedWatcher =
             notify::recommended_watcher(move |res: notify::Result<Event>| match res {
                 Ok(event) => {
-                    let kind = event.kind.clone();
+                    let kind = event.kind;
                     if matches!(
                         kind,
                         EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)

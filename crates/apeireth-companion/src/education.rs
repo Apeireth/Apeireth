@@ -9,7 +9,7 @@
 //! - 模式匹配用简单字符串扫描 (√( 括号配对), 复杂公式请让 AI 自己拆解后调用
 //!
 //! 装配: `EducationDxPlugin` 的 on_load 注册 `dx_check` 工具 + 授权日常包;
-//! 教育套件 (suites.rs) 声明 plugins: ["education-dx-check"] — 插件先装, 套件才能装配.
+//! 教育套件 (suites.rs) 声明 plugins: `["education-dx-check"]` — 插件先装, 套件才能装配.
 
 use std::sync::Arc;
 
@@ -54,22 +54,37 @@ impl DxCheckTool {
         } else if has_dx && has_replaced {
             issues.push(format!(
                 "dx 与 {} 混用 — 换元后微分只能有一种写法 (若令 t=f(x), 应写 dt=f'(x)dx)",
-                REPLACED_DIFFS.iter().find(|t| after.contains(*t)).unwrap_or(&"新微分")
+                REPLACED_DIFFS
+                    .iter()
+                    .find(|t| after.contains(*t))
+                    .unwrap_or(&"新微分")
             ));
         } else if has_dx && !has_replaced && has_subs {
             issues.push(format!(
                 "忘换 dx — 你声明了换元「{substitution}」但式子仍写 dx; 换元后微分必须跟着换 (令 t=f(x) → dt=f'(x)dx)"
             ));
         } else if !has_dx && !has_replaced {
-            issues.push("缺微分标记 — 换元后的式子应有微分 (如 dt / du / dx), 检查是否写全".to_string());
+            issues.push(
+                "缺微分标记 — 换元后的式子应有微分 (如 dt / du / dx), 检查是否写全".to_string(),
+            );
         } else {
-            let mark = if has_replaced { REPLACED_DIFFS.iter().find(|t| after.contains(*t)).unwrap_or(&"新微分") } else { "dx" };
+            let mark = if has_replaced {
+                REPLACED_DIFFS
+                    .iter()
+                    .find(|t| after.contains(*t))
+                    .unwrap_or(&"新微分")
+            } else {
+                "dx"
+            };
             checks.push(format!("微分标记: {mark} ✓"));
         }
 
         // ② 残留 x 检查 (声明了 t/u 换元但式子还有 x)
         if has_subs && has_replaced && after.contains('x') {
-            tips.push("式子仍含 x — 若换元令 t=..., x 应全部换成 t 的表达式 (检查未替换干净的项)".to_string());
+            tips.push(
+                "式子仍含 x — 若换元令 t=..., x 应全部换成 t 的表达式 (检查未替换干净的项)"
+                    .to_string(),
+            );
         }
 
         // ③ 根号模式提示 (三角换元表; 只提示不判决 — 换元选择是主人的自由)
@@ -89,12 +104,25 @@ impl DxCheckTool {
                     }
                 }
             } else {
-                tips.push(format!("检测到根式 √({content}) — 试试 令整个根式为 t (去根号), 再算 dx"));
+                tips.push(format!(
+                    "检测到根式 √({content}) — 试试 令整个根式为 t (去根号), 再算 dx"
+                ));
             }
         }
 
-        let verdict = if !issues.is_empty() { "fix" } else if !tips.is_empty() { "warn" } else { "ok" };
-        DxReport { verdict, checks, issues, tips }
+        let verdict = if !issues.is_empty() {
+            "fix"
+        } else if !tips.is_empty() {
+            "warn"
+        } else {
+            "ok"
+        };
+        DxReport {
+            verdict,
+            checks,
+            issues,
+            tips,
+        }
     }
 
     /// 提取 √( ... ) 的内容 (括号配对, 未闭合返回 None).
@@ -124,7 +152,10 @@ impl DxCheckTool {
         if !c.contains("^2") {
             // 线性根式 √(ax+b) 或 √(1-x) 等
             if c.contains('x') && (c.contains('+') || c.contains('-')) {
-                return Some(("线性根式 √(ax+b)", "令 t = √(ax+b), 则 x=(t²−b)/a, dx=(2t/a)dt"));
+                return Some((
+                    "线性根式 √(ax+b)",
+                    "令 t = √(ax+b), 则 x=(t²−b)/a, dx=(2t/a)dt",
+                ));
             }
             return None;
         }
@@ -161,13 +192,29 @@ impl Tool for DxCheckTool {
         ToolAxes::default()
     }
     async fn call(&self, args: Value) -> Result<Value, String> {
-        let problem = args.get("problem").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let substitution = args.get("substitution").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let after = args.get("after").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let problem = args
+            .get("problem")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let substitution = args
+            .get("substitution")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let after = args
+            .get("after")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
         if problem.trim().is_empty() && after.trim().is_empty() {
             return Err("需要 problem (原题) 和/或 after (换元后的式子)".to_string());
         }
-        Ok(Self::to_json(&Self::analyze(&problem, &substitution, &after)))
+        Ok(Self::to_json(&Self::analyze(
+            &problem,
+            &substitution,
+            &after,
+        )))
     }
 }
 
@@ -190,7 +237,9 @@ impl Plugin for EducationDxPlugin {
         "换元法 dx 检查: 忘换 dx / 混用 / 缺微分 / 残留 x / 根号模式提示 (规则层)"
     }
     fn on_load(&self, bridge: &ToolBridge) -> Result<(), String> {
-        bridge.registry.register("dx_check".to_string(), Arc::new(DxCheckTool));
+        bridge
+            .registry
+            .register("dx_check".to_string(), Arc::new(DxCheckTool));
         bridge.packs.grant(crate::packs::PermissionPack::permanent(
             "教育插件授权",
             vec!["dx_check".to_string()],
@@ -212,23 +261,22 @@ mod tests {
     #[test]
     fn catches_forgotten_dx() {
         // 经典错法: 令 t=x², 但式子还写 dx (验收场景: 主人「换元后忘记换 dx」)
-        let r = DxCheckTool::analyze(
-            "∫ x·e^(x²) dx",
-            "令 t = x²",
-            "∫ e^t dx",
-        );
+        let r = DxCheckTool::analyze("∫ x·e^(x²) dx", "令 t = x²", "∫ e^t dx");
         assert_eq!(r.verdict, "fix");
-        assert!(r.issues.iter().any(|i| i.contains("忘换 dx")), "{:?}", r.issues);
-        assert!(r.issues.iter().any(|i| i.contains("dt=f'(x)dx")), "错误信息应教正确写法");
+        assert!(
+            r.issues.iter().any(|i| i.contains("忘换 dx")),
+            "{:?}",
+            r.issues
+        );
+        assert!(
+            r.issues.iter().any(|i| i.contains("dt=f'(x)dx")),
+            "错误信息应教正确写法"
+        );
     }
 
     #[test]
     fn ok_when_dx_replaced() {
-        let r = DxCheckTool::analyze(
-            "∫ x·e^(x²) dx",
-            "t = x²",
-            "∫ e^t · (1/2) dt",
-        );
+        let r = DxCheckTool::analyze("∫ x·e^(x²) dx", "t = x²", "∫ e^t · (1/2) dt");
         assert_eq!(r.verdict, "ok", "{:?} {:?}", r.issues, r.tips);
         assert!(r.checks.iter().any(|c| c.contains("dt")));
     }
@@ -257,11 +305,38 @@ mod tests {
     #[test]
     fn radical_patterns_table() {
         // .1 是建议 (含换元写法); .0 是模式名
-        assert!(DxCheckTool::classify_radical("a²-x²").unwrap().1.contains("sin"), "√(a²−x²) → sin");
-        assert!(DxCheckTool::classify_radical("x²-a²").unwrap().1.contains("sec"), "√(x²−a²) → sec");
-        assert!(DxCheckTool::classify_radical("a²+x²").unwrap().1.contains("tan"), "√(a²+x²) → tan");
-        assert!(DxCheckTool::classify_radical("1-x").unwrap().0.contains("线性"), "√(1-x) → 线性");
-        assert!(DxCheckTool::classify_radical("1-x²").unwrap().1.contains("sin"));
+        assert!(
+            DxCheckTool::classify_radical("a²-x²")
+                .unwrap()
+                .1
+                .contains("sin"),
+            "√(a²−x²) → sin"
+        );
+        assert!(
+            DxCheckTool::classify_radical("x²-a²")
+                .unwrap()
+                .1
+                .contains("sec"),
+            "√(x²−a²) → sec"
+        );
+        assert!(
+            DxCheckTool::classify_radical("a²+x²")
+                .unwrap()
+                .1
+                .contains("tan"),
+            "√(a²+x²) → tan"
+        );
+        assert!(
+            DxCheckTool::classify_radical("1-x")
+                .unwrap()
+                .0
+                .contains("线性"),
+            "√(1-x) → 线性"
+        );
+        assert!(DxCheckTool::classify_radical("1-x²")
+            .unwrap()
+            .1
+            .contains("sin"));
         // 完整问题文本 → 提示带建议换元
         let r = DxCheckTool::analyze("∫ x/√(1-x²) dx", "", "∫ x/√(1-x²) dx");
         assert!(r.tips.iter().any(|t| t.contains("sin")), "{:?}", r.tips);
@@ -291,7 +366,9 @@ mod tests {
         assert!(reg.is_installed("education-dx-check"));
         assert!(bridge.registry.list().iter().any(|n| n == "dx_check"));
         // 授权包覆盖 → 免现场审批直接执行
-        assert!(bridge.packs.check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()));
+        assert!(bridge
+            .packs
+            .check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()));
         // 全链路: 桥执行 dx_check (忘换 dx 场景)
         let call = apeireth_tool_runtime::parser::ParsedToolCall {
             tool_name: "dx_check".into(),
@@ -309,8 +386,16 @@ mod tests {
         assert_eq!(r.output["verdict"], json!("fix"));
         // 卸载 → 真清理: 工具注销 + 授权撤销 (幂等)
         reg.uninstall(&bridge, "education-dx-check").unwrap();
-        assert!(!bridge.registry.list().iter().any(|n| n == "dx_check"), "卸载后工具应注销");
-        assert!(!bridge.packs.check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()), "卸载后授权应撤销");
+        assert!(
+            !bridge.registry.list().iter().any(|n| n == "dx_check"),
+            "卸载后工具应注销"
+        );
+        assert!(
+            !bridge
+                .packs
+                .check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()),
+            "卸载后授权应撤销"
+        );
         let r = bridge.execute_if_allowed(&call).await;
         assert!(!r.success, "卸载后 dx_check 不可再调");
     }

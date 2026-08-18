@@ -23,12 +23,12 @@ fn r177_sdk_03_string_basic() {
 #[test]
 fn r177_sdk_04_result_basic() {
     let r: Result<u32, &str> = Ok(1);
-    assert_eq!(r.unwrap(), 1);
+    assert_eq!(r, Ok(1));
 }
 
 #[test]
 fn r177_sdk_05_submodule_check() {
-    assert!(SDK_SUBMODULE_COUNT > 0);
+    assert_eq!(SDK_SUBMODULE_COUNT, 4);
 }
 
 #[cfg(kani)]

@@ -87,7 +87,9 @@ impl ThreeLayerMemory {
             1 => {
                 let now = chrono::Utc::now().timestamp();
                 let since = now - SHORT_TERM_WINDOW_SECS;
-                let q = EpisodeQuery::new().in_range(Some(since), Some(now)).limit(limit);
+                let q = EpisodeQuery::new()
+                    .in_range(Some(since), Some(now))
+                    .limit(limit);
                 self.episodes
                     .query(&q)
                     .map_err(|e| format!("query short: {e}"))
@@ -349,8 +351,8 @@ mod regex_lite {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::Episode;
     use crate::SqliteMemoryStore;
+    use apeireth_core::Episode;
     use std::sync::Arc;
 
     fn fresh_episode(id: &str, role: &str, content: &str) -> Episode {
@@ -370,7 +372,8 @@ mod tests {
         let mem = ThreeLayerMemory::new(store.clone(), notes, 5);
 
         for i in 0..3 {
-            mem.write(fresh_episode(&format!("e{i}"), "user", &format!("msg{i}"))).unwrap();
+            mem.write(fresh_episode(&format!("e{i}"), "user", &format!("msg{i}")))
+                .unwrap();
         }
         assert_eq!(mem.working_size(), 3);
 
@@ -386,7 +389,8 @@ mod tests {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 3);
         for i in 0..5 {
-            mem.write(fresh_episode(&format!("e{i}"), "user", &format!("m{i}"))).unwrap();
+            mem.write(fresh_episode(&format!("e{i}"), "user", &format!("m{i}")))
+                .unwrap();
         }
         assert_eq!(mem.working_size(), 3, "ring buffer 满了保留最后 3");
         let got = mem.recall(0, 10).unwrap();
@@ -454,23 +458,32 @@ mod tests {
     fn r33_promote_with_summarize_extracts_digit_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        mem.write(fresh_episode("e1", "user", "我有 3 只猫")).unwrap();
+        mem.write(fresh_episode("e1", "user", "我有 3 只猫"))
+            .unwrap();
         let n = mem.promote_with_summarize().expect("promote");
         assert!(n >= 1, "应至少抽 1 个 fact (数字), got {n}");
         let notes = mem.recall(2, 100).expect("long recall");
-        let has_digit = notes.iter().any(|n| n.content.contains("数字") && n.content.contains("3"));
-        assert!(has_digit, "long-term note 应含数字 fact '3', notes: {notes:?}");
+        let has_digit = notes
+            .iter()
+            .any(|n| n.content.contains("数字") && n.content.contains("3"));
+        assert!(
+            has_digit,
+            "long-term note 应含数字 fact '3', notes: {notes:?}"
+        );
     }
 
     #[test]
     fn r33_promote_with_summarize_extracts_identity_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        mem.write(fresh_episode("e1", "user", "我叫 Mavis")).unwrap();
+        mem.write(fresh_episode("e1", "user", "我叫 Mavis"))
+            .unwrap();
         let n = mem.promote_with_summarize().expect("promote");
         assert!(n >= 1, "应抽身份 fact, got {n}");
         let notes = mem.recall(2, 100).expect("long recall");
-        let has_id = notes.iter().any(|n| n.content.contains("身份") && n.content.contains("Mavis"));
+        let has_id = notes
+            .iter()
+            .any(|n| n.content.contains("身份") && n.content.contains("Mavis"));
         assert!(has_id, "应含身份 fact 'Mavis', notes: {notes:?}");
     }
 
@@ -478,11 +491,14 @@ mod tests {
     fn r33_promote_with_summarize_extracts_iso_date_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        mem.write(fresh_episode("e1", "user", "生日 1990-05-15")).unwrap();
+        mem.write(fresh_episode("e1", "user", "生日 1990-05-15"))
+            .unwrap();
         let n = mem.promote_with_summarize().expect("promote");
         assert!(n >= 1, "应抽日期 fact, got {n}");
         let notes = mem.recall(2, 100).expect("long recall");
-        let has_date = notes.iter().any(|n| n.content.contains("日期") && n.content.contains("1990-05-15"));
+        let has_date = notes
+            .iter()
+            .any(|n| n.content.contains("日期") && n.content.contains("1990-05-15"));
         assert!(has_date, "应含日期 fact, notes: {notes:?}");
     }
 
@@ -490,7 +506,8 @@ mod tests {
     fn r33_promote_with_summarize_extracts_chinese_time_fact() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        mem.write(fresh_episode("e1", "user", "我今天去公园")).unwrap();
+        mem.write(fresh_episode("e1", "user", "我今天去公园"))
+            .unwrap();
         let n = mem.promote_with_summarize().expect("promote");
         assert!(n >= 1, "应抽中文时间 fact, got {n}");
         let notes = mem.recall(2, 100).expect("long recall");
@@ -510,7 +527,8 @@ mod tests {
     fn r33_promote_with_summarize_no_fact_in_text_returns_zero() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        mem.write(fresh_episode("e1", "user", "今天天气不错")).unwrap();
+        mem.write(fresh_episode("e1", "user", "今天天气不错"))
+            .unwrap();
         let n = mem.promote_with_summarize().expect("promote");
         // "今天" 是中文时间, 应抽 1 个 fact
         assert!(n >= 1, "含 '今天' 应至少 1 fact, got {n}");

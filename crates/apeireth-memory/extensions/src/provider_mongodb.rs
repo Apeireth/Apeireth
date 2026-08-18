@@ -21,11 +21,8 @@
 
 use async_trait::async_trait;
 
-
 use crate::error::{MemoryProviderError, MemoryProviderResult};
-use crate::memory_provider::{
-    MemoryProvider, ProviderConfig, ProviderKind, ProviderScope,
-};
+use crate::memory_provider::{MemoryProvider, ProviderConfig, ProviderKind, ProviderScope};
 
 /// **MongoDB schema**: 单 collection `kv` (key TEXT PRIMARY KEY, value BYTEA-style BinData).
 const MONGODB_COLLECTION: &str = "kv";
@@ -113,7 +110,11 @@ fn parse_mongodb_uri(conn: &str) -> MemoryProviderResult<(String, String)> {
         Some(idx) => &path_part[idx + 1..],
         None => "",
     };
-    let db_name = if db.is_empty() { "apeireth".to_string() } else { db.to_string() };
+    let db_name = if db.is_empty() {
+        "apeireth".to_string()
+    } else {
+        db.to_string()
+    };
     let coll_name = match query_part {
         Some(q) => {
             let mut coll = MONGODB_COLLECTION.to_string();
@@ -306,7 +307,10 @@ mod tests {
             ProviderScope::Global,
         );
         let p = MongoDbProvider::new(cfg).unwrap();
-        assert_eq!(p.connection_string(), "mongodb://example-host:27018/my_db?collection=my_coll");
+        assert_eq!(
+            p.connection_string(),
+            "mongodb://example-host:27018/my_db?collection=my_coll"
+        );
         assert_eq!(p.database(), "my_db");
         assert_eq!(p.collection(), "my_coll");
     }
@@ -325,7 +329,10 @@ mod tests {
         runtime().block_on(async {
             let err = p.set("k", b"v").await.unwrap_err();
             let msg = format!("{err:?}");
-            assert!(msg.contains("audit-host"), "URI 必须在 skeleton msg 中: {msg}");
+            assert!(
+                msg.contains("audit-host"),
+                "URI 必须在 skeleton msg 中: {msg}"
+            );
             assert!(msg.contains("audit_db"));
             assert!(msg.contains("audit_coll"));
             assert!(msg.contains("kv"), "target collection 默认 kv 在 msg 中");
