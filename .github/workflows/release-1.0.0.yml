@@ -55,14 +55,14 @@ jobs:
       matrix:
         include:
           # Linux deb (Debian/Ubuntu, 2 arch)
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: deb
             arch: amd64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: deb
             arch: arm64
           # Linux rpm (RHEL/Fedora, 1 arch 起步)
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: rpm
             arch: amd64
           # macOS brew
@@ -74,10 +74,10 @@ jobs:
             target: scoop
             arch: x64
           # Linux tarball (通用, 2 arch)
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: tarball
             arch: amd64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: tarball
             arch: arm64
           # Windows msi
@@ -85,10 +85,10 @@ jobs:
             target: msi
             arch: x64
           # Docker (multi-arch, 1 个 job 走 buildx, 不拆 2 个)
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: docker
             arch: amd64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: docker
             arch: arm64
     steps:
@@ -186,7 +186,7 @@ jobs:
   # =========================================================================
   docker-multi-arch:
     name: docker multi-arch push (amd64 + arm64)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: build-packages
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')
     steps:
@@ -222,7 +222,7 @@ jobs:
   # =========================================================================
   security:
     name: cargo audit + cargo deny (5 守门 #3)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: build-packages
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')) ||
@@ -278,7 +278,7 @@ jobs:
   # =========================================================================
   perf:
     name: cargo bench baseline 1.0.0
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: build-packages
     if: |
       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v1.0.0')) ||
@@ -290,12 +290,20 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
+      # keyring → dbus-secret-service → libdbus-sys 需要系统库 (cargo bench 全编译)
+      - name: "Install system deps (Linux: libdbus)"
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      # === cargo bench 跑全部 workspace, 保存 1.0.0 baseline ===
-      - name: cargo bench --workspace -- --save-baseline 1.0.0
-        run: cargo bench --workspace -- --save-baseline 1.0.0
+      # === cargo bench 只跑 criterion (harness=false) bench 的 crate, 保存 1.0.0 baseline ===
+      # (--workspace 会给无 [[bench]] 的 crate 生成默认 libtest harness bench,
+      #  不认 --save-baseline → "Unrecognized option: 'save-baseline'";
+      #  8 个 criterion crate 已设 [lib] bench = false, 只跑显式 [[bench]])
+      - name: cargo bench (criterion crates) -- --save-baseline 1.0.0
+        run: |
+          cargo bench -p apeireth-bench -p apeireth-graph -p apeireth-i18n -p apeireth-lark -p apeireth-memory -p apeireth-team-lead -p apeireth-tui -p apeireth-voice -- --save-baseline 1.0.0
 
       - name: Upload bench baseline
         uses: actions/upload-artifact@v4
@@ -314,7 +322,7 @@ jobs:
   # =========================================================================
   release-checklist:
     name: 1.0 release 12 项 checklist (dry-run)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [build-packages, security, perf]
     if: always() && needs.build-packages.result == 'success'
     steps:
@@ -356,7 +364,7 @@ jobs:
   # =========================================================================
   release-gate:
     name: 1.0 release gate (5/5 success)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: [build-packages, security, perf, release-checklist]
     if: always()
     steps:
