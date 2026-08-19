@@ -185,3 +185,45 @@
 - `cargo test -p apeireth-companion --lib packs` → 12 passed (含 5 个 phase4: list/revoke/evaluate/no-secret/expiry-boundary).
 - `cargo test -p apeireth-companion --lib runtime_capabilities` → 12 passed.
 - `cargo build --example companion_serve` PASS.
+
+## Phase 5 — Structured Agent Trace (DONE)
+
+### Trace / Span Model
+- `TraceSpan { span_id, trace_id, parent_span_id, kind, actor, status, summary, attributes, started_at, ended_at, session_id }`.
+- kind: conversation/agent/worker/memory/tool/workflow/runtime. actor: user/commander/worker:`<id>`/tool:`<name>`.
+- status: pending/running/succeeded/failed/cancelled (succeeded/failed/cancelled 为终态).
+- 一次用户请求 → 一个 trace_id; Commander/Worker/Tool/Memory 各为 span, parent_span_id 关联成因果树.
+- ID 形态: 16-hex (与 telemetry W3C span 同形态, 便于未来打通; 不复用 bus u64).
+
+### 持久化 (V7 `agent_traces` 表)
+- append-only: 每 span 一行. 运行中 span (ended_at=NULL) 可后续 end (写终态 status/ended_at).
+- 索引: (trace_id, started_at) / (session_id, started_at) / (started_at DESC).
+
+### 严禁存储原始 Chain-of-Thought
+- Trace 是 **execution trace**, 不是 hidden reasoning dump. summary 只存 safe user-facing 文本.
+- `summary_is_safe()` 检查 CoT 标记 (reasoning_content/chain_of_thought/`<thought>`/thinking); 命中 → 替换为 `[execution step]` (不存储 CoT).
+- **Raw Chain-of-Thought persisted: NO**.
+
+### Redaction
+- `redact_attributes()` 递归脱敏: 敏感 key (api_key/master_token/authorization/bearer/password/secret/token/cookie...) → `[REDACTED]`; 敏感值前缀 (sk-/ghp_/gho_/glpat-/Bearer ) → `[REDACTED]`.
+- recorder 在 store 前对 attributes 做 redaction (有测试: secret 不落库).
+
+### SSE 集成
+- recorder 通过现有 broadcast `events` 推送 span 事件 (兼容现有 `/v1/apeireth/events`). 事件含 trace_id/span_id/parent_span_id, type=`trace`.
+- 无订阅者忽略 (best-effort).
+
+### 查询 API (只读, /v1/panel 合理位置)
+- `GET /v1/panel/traces` (list, ?limit, 每 trace 摘要: trace_id + root span + span_count)
+- `GET /v1/panel/traces/:id` (detail, 完整 span 树按 started_at 升序)
+
+### Capability Manifest 更新
+- `trace.read/subscribe` → supported=true.
+
+### 验证
+- `cargo test -p apeireth-memory --lib agent_trace` → 7 passed (root+children/end-terminal/failure/list-recent/not-found/persistence/no-cot).
+- `cargo test -p apeireth-companion --lib agent_trace` → 6 passed (redact/cot-reject/tree/attributes-redacted/cot-not-stored/failure).
+- `cargo test -p apeireth-companion --lib runtime_capabilities` → 13 passed.
+- `cargo build --example companion_serve` PASS.
+
+### Bug Found & Fixed (Reality Check)
+- **list_recent_traces 死锁**: 原实现在 conn guard 持有期间调用 `self.list_trace_spans()` (再次 `self.conn()?` 锁同一 `Mutex<Connection>`, 不可重入 → 死锁, 测试挂起 >60s). 修复: 全部在同一 conn 内用窗口查询完成, 不重入. (回归测试: trace_list_recent_traces 0.07s 通过.)
