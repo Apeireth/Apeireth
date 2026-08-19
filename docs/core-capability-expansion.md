@@ -252,3 +252,37 @@
 - `vite build` PASS.
 - `node tests/desktop-capability-gating.mjs` → 5 passed (current 解锁 / legacy 降级 / null 保守 / version 刷新 / 未知 id false).
 - `node tests/capability-manifest.mjs` → 7 passed (仍绿).
+
+## Phase 7 — Backward Compatibility & Migration (DONE)
+
+### SQLite Migration
+- V5/V6/V7 全部 append-only 追加 (不改历史 entry).
+- 全新 DB: V1-V7 全部应用, schema_migrations 记录完整 (测试 `all_migrations_v1_to_v7_applied_on_fresh_db`).
+- 存量 DB: 新列全 NULLable/默认值, 零数据迁移 (legacy episode/session 无 governance/lifecycle 行 → LEFT JOIN NULL → 默认 active/unprotected/rev0).
+- 幂等: 二次 run_migrations 不重复插入 (测试 `migrations_apply_idempotently` + `migrations_reopen_preserves_data_and_idempotent`).
+- migration 失败不 destroy DB (每条 DDL 在事务内, 失败回滚).
+
+### LocalStorage Migration
+- 旧 localStorage config (`apeireth-config`): `loadConfig` 主动 purge legacy apiKey/masterToken (Phase 1 已验证, reality-check Test 1b).
+- 旧 localStorage conversations (`apeireth-conversations`): 保留, 不强制上传 backend. backend session mutation 端点已接 fetcher 但未强制切换 (legacy 不丢).
+
+### Legacy Runtime Compatibility (新前端 + 旧 runtime)
+- `/v1/apeireth/capabilities` 不存在 (旧 runtime) → `fetchCapabilities` 回落 legacy profile (不白屏). 测试: capability-manifest Test 2 + desktop-capability-gating Test 2.
+- 旧 runtime: 所有 mutation 按钮 disabled/隐藏 (memory forget/protect, session create, revoke, trace link). 只读/chat 仍可用.
+
+### Old Frontend + New Runtime
+- 新 runtime 保留全部既有端点 (`/health`, `/v1/chat/completions`, `/v1/panel/*`, `/v1/apeireth/grant`, `/v1/apeireth/approval-requests`, `/v1/apeireth/events`). 旧前端基础能力不失效.
+- 新端点 (`/v1/apeireth/sessions`, `/v1/apeireth/memory/episodes/:id/forget`, `/v1/apeireth/grants`, `/v1/panel/traces`) 是增量的, 旧前端不调用即无影响.
+
+### Revision / Concurrency
+- Session rename/archive/restore/close: expected_rev CAS, 冲突 → Conflict (测试 session_revision_conflict_rename_race).
+- Memory update/forget/protect/unprotect: expected_rev CAS, 冲突 → Conflict (测试 memory_concurrent_revision_conflict).
+- Grant revoke: 即时生效 (测试 phase4_revoke_grant_immediate_effect).
+
+### Error Model (统一, 区分语义)
+- NotFound(404) / Conflict(409) / IllegalTransition(409) / AlreadyForgotten(409) / Protected(409) / Validation(400) / Forbidden(403 master token) / Internal(500).
+- 统一 JSON `{"error": code, "message": ...}` (session + memory + governance 处理器). Frontend 显示具体错误码而非统一"请求失败".
+
+### 验证
+- `cargo test -p apeireth-memory --lib migrations` → 5 passed (idempotent + V1-V7 fresh + reopen 数据不丢 + legacy episode + append-only trigger).
+- 前端 3 套测试全绿 (reality-check / capability-manifest / desktop-gating).
