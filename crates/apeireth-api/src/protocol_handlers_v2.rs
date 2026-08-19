@@ -31,7 +31,7 @@
 //! - ✅ 1.0 行为 0 漂移 (server.rs 仍调 dispatch_cached_with_status, 本模块是 v2 升级版入口)
 //! - ✅ Send + Sync (Arc<Pipeline> 持有, 跨 await 安全)
 //! - ✅ 8 unit test 都用 mock Pipeline (0 真实 HTTP, 0 装"已调 upstream")
-//! - ✅ 0 改 protocol_handlers.rs (内部 fn 实施可改, 入口签名 0 改, 24 LOCKED 严守)
+//! - ✅ 0 改 protocol_handlers.rs (内部 fn 实施可改, 入口签名 0 改, 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱 严守)
 
 use apeireth_pipeline::Pipeline;
 use apeireth_protocol::{NormalizedRequest, NormalizedResponse, ProtocolKind};
