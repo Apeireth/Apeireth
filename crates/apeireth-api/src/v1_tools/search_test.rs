@@ -23,8 +23,7 @@
 //! - ✅ 占位返结构化 Err 含 query 反射 + 占位提示
 //! - ✅ search "name" 用 "Search" (跟 web_search "WebSearch" 区分)
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1 不漂移: 4 actions 真接 dispatch + 5 K-1 真跑, 引擎显式 NotImplemented
+//! **8 哲学锚穿透**://! - 锚 #1 不漂移: 4 actions 真接 dispatch + 5 K-1 真跑, 引擎显式 NotImplemented
 //! - 锚 #2 编译期 hardcode: `SEARCH_ACTIONS_COUNT = 4` const assert
 //! - 锚 #3 不引入 unsafe: `#![deny(unsafe_code)]` 继承
 //! - 锚 #4 真值守门: 5 K-1 强校验输入守门
@@ -34,11 +33,11 @@
 //! **8 项不修改承诺 (严守)**:
 //! - ❌ 不改 LOCKED `search.rs` (本文件 0 触碰)
 //! - ❌ 不改 LOCKED `mod.rs` (本文件用 `#[path]` 注入, 不动 mod.rs)
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方搜索引擎 (留 R21)
 //! - ❌ 不假装已实现搜索 (显式 NotImplemented, 不假数据)
-//! - ❌ 不破坏 24 LOCKED crate
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - ❌ 不引 reqwest 之外 HTTP 客户端 (workspace reqwest 0.12 已用)
 
 #![deny(unsafe_code)]
