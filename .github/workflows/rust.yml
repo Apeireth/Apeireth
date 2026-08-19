@@ -108,8 +108,9 @@ jobs:
             echo "::warning::base_sha 空, 跳过守门 1"
             exit 0
           fi
-          # 24 LOCKED crate (per 8 硬墙)
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
+          # 注: 之前 hard-walls job 漏了 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
+          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
           LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
           HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' 'crates/*/Cargo.toml' 2>/dev/null | grep -E "^crates/($LOCKED_REGEX)/" || true)
           if [ -n "$HITS" ]; then
