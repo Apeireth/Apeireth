@@ -50,16 +50,19 @@
 - **三层生态**：模块（官方核心）/ 套件（官方积木）/ 插件（社区热插拔）
 - **五原型**：世界模型/自我改进/好奇心/连续感知/价值内化——ASI 北极星的工程骨架
 
-## 六、当前负债（诚实）
+## 六、当前负债（诚实, 2026-08-19 post-v1.0.0 更新）
 
-| 项 | 状态 |
-|---|---|
-| Docker 构建实测 | 待实测（无本地 docker）|
-| LLM 接入层 | E4 探索行为/F4 提问生成/TP25 模型——trait 口已备未接 |
-| 产品形态 | 桌宠/Tauri/语音——08 愿景规划中 |
-| 投资模拟盘主链 | 零件已备（时序/事件/标的），主链未做 |
-| VM 级隔离 | 调研中（smol-vm 方向）|
+| 项 | 状态 (v1.0.0) | 状态 (post-1.0.0) |
+|---|---|---|
+| Docker 多架构 | 待实测 (单架构 amd64) | ✅ 修 (commit 4596357, $TARGETARCH, arm64 跑通) |
+| 产品形态: 桌宠 | 规划中 | ✅ PR #1 合并 (Svelte 5 + Tauri 2 桌面伙伴, 102 行 shell) |
+| LLM 接入层 | trait 口已备未接 | 同左 (real LLM E2E 待 `APEIRETH_API_KEY`) |
+| 桌宠真实 LLM 流式 | 不在 1.0 scope | 🆕 **TP34** v1.5 中期 (companion_serve stream: false 写死, 6 种 RuntimeEvent 0 触发) |
+| 投资模拟盘主链 | 零件已备 (时序/事件/标的)，主链未做 | 同左 |
+| VM 级隔离 | 调研中 (smol-vm 方向) | 同左 |
 
 ## 七、一句话
 
 **34 万行 Rust，从"哲学声明"到"真实存在的伙伴"——Apeireth 1.0 证明了一件事：诚实不是工程的成本，而是工程的地基。**
+
+> post-1.0.0 (2026-08-19): 诚实是地基, **不漂移**是屋顶 — templates / docs / CI gates 全部跟实际 hard-walls job 1:1 对齐. 后续 TP34 (real LLM streaming) 是屋顶下一层, 见 `docs/04-internal/next-team-handbook.md`.
