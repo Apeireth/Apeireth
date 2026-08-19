@@ -1,15 +1,17 @@
 <script lang="ts">
   import {onMount} from 'svelte';
-  import {Layers3, MessageCircleMore, MessagesSquare, Settings} from 'lucide-svelte';
+  import {Layers3, MessageCircleMore, MessagesSquare, Settings, Wrench} from 'lucide-svelte';
   import Sidebar from './app/Sidebar.svelte';
   import ChatView from './features/chat/ChatView.svelte';
   import ConversationsView from './features/conversations/ConversationsView.svelte';
   import MemoryView from './features/memory/MemoryView.svelte';
+  import ToolRegistryView from './features/tools/ToolRegistryView.svelte';
   import SettingsView from './features/settings/SettingsView.svelte';
-  import type {ApeirethConfig, ChatMessage, ChatMessageEvent, Conversation, HealthState, ViewId} from './lib/types';
+  import type {ApeirethConfig, ApprovalRequest, ChatMessage, ChatMessageEvent, Conversation, HealthState, ViewId} from './lib/types';
   import {
     checkHealth,
     createAgentRuntime,
+    fetchPendingApprovals,
     listModels,
     loadConfig,
     loadConversations,
@@ -20,6 +22,7 @@
   const nav = [
     {id: 'chat', label: '对话', icon: MessageCircleMore},
     {id: 'conversations', label: '会话', icon: MessagesSquare},
+    {id: 'tools', label: '工具', icon: Wrench},
     {id: 'memory', label: '记忆', icon: Layers3},
     {id: 'settings', label: '设置', icon: Settings},
   ] as const;
@@ -31,6 +34,7 @@
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
+  let pendingApprovals = $state<ApprovalRequest[]>([]);
   // runtime 绑定当前配置; config 变更时在 saveSettings 重建
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
 
@@ -146,15 +150,19 @@
     persist();
   }
 
-  /** 真实 HTTP /health 检测 — 驱动 healthState. 不生成时不覆盖 generating. */
+  /** 真实 HTTP /health 检测与待审批请求轮询. */
   async function refreshConnection(): Promise<void> {
     const ok = await checkHealth(config.baseUrl);
     if (busy) {
-      // 生成中: 保持 generating, health 只是后台探测
       if (healthState === 'offline' || healthState === 'connecting') healthState = 'generating';
-      return;
+    } else {
+      healthState = ok ? 'ready' : 'offline';
     }
-    healthState = ok ? 'ready' : 'offline';
+    if (ok) {
+      pendingApprovals = await fetchPendingApprovals(config);
+    } else {
+      pendingApprovals = [];
+    }
   }
 
   async function send(customText?: string): Promise<void> {
@@ -253,8 +261,7 @@
     } finally {
       busy = false;
       // 生成结束: 恢复真实 health (backend 可能已离线)
-      const ok = await checkHealth(config.baseUrl);
-      healthState = ok ? 'ready' : 'offline';
+      await refreshConnection();
     }
   }
 
@@ -267,7 +274,6 @@
     const msgs = activeConversation.messages;
     const idx = msgs.findIndex((m) => m.id === messageId);
     if (idx < 0) return;
-    // 找到该 assistant 消息对应的 user 消息
     let userText = '';
     for (let i = idx - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') {
@@ -275,7 +281,6 @@
         break;
       }
     }
-    // 移除失败的这条 assistant 消息，并重新发送
     const filtered = msgs.filter((m) => m.id !== messageId);
     updateConversation(activeConversation.id, {messages: filtered});
     if (userText) {
@@ -353,7 +358,7 @@
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
     void refreshConnection();
-    // 后台健康轮询 (真实 HTTP /health) — 检测 backend 恢复/掉线, 不要求重启 app.
+    // 后台健康轮询与审批请求同步 (真实 HTTP /health + /v1/apeireth/approval-requests)
     const timer = window.setInterval(() => {
       void refreshConnection();
     }, 10000);
@@ -376,12 +381,14 @@
         {config}
         conversation={activeConversation}
         messages={activeMessages}
+        approvalRequests={pendingApprovals}
         bind:draft
         {busy}
         {error}
         onSend={(text) => send(text)}
         onStop={stop}
         onRetry={retry}
+        onApproved={refreshConnection}
         onNewConversation={newConversation}
       />
     {:else if activeView === 'conversations'}
@@ -393,6 +400,8 @@
         onArchive={archiveConversation}
         onDelete={deleteConversation}
       />
+    {:else if activeView === 'tools'}
+      <ToolRegistryView {config} />
     {:else if activeView === 'memory'}
       <MemoryView {config} />
     {:else}
