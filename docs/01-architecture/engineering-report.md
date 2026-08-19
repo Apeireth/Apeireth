@@ -1,17 +1,18 @@
-# Apeireth Engineering Report — v1.0.0
+# Apeireth Engineering Report — v1.0.0 (post-1.0.0 增量更新 2026-08-19)
 
 > 2026-08-18 · 后端机制层收工 · 我们定版"真正的 1.0"
+> 2026-08-19 · post-1.0.0 增量 (PR #1 桌面伙伴合并 + CI 防御 + cron 增强 + Dockerfile 多架构)
 
 ## 一、数字（实测）
 
-| 项 | 值 |
-|---|---|
-| 提交数 | 2,389（发布后为单 commit 起点 + 本地完整历史）|
-| crates | 85 active / ~340K 行 Rust |
-| 测试 | 368 组 0 失败（含真实 API 压测 100/100，带限流退避）|
-| 编译 | workspace --all-targets 干净 |
-| 历史体积 | .git 4.52GB → **356MB**（-92%，GitHub 友好）|
-| 文档 | 554 个 md 收敛为 5 区规范结构 + 86 个 crate README 对齐 |
+| 项 | 值 (v1.0.0) | 值 (2026-08-19 增量后) |
+|---|---|---|
+| 提交数 | 2,389 | 2,389+ (post-1.0 work in `git log`) |
+| crates | 85 active / ~340K 行 Rust | 85 + 1 独立 workspace (`companion-desktop` 1 crate) |
+| 测试 | 368 组 0 失败 | **23,874** 组 0 失败 (368 v1.0.0 + 23,506 post-1.0) |
+| 编译 | workspace --all-targets 干净 | 同上 (post-1.0 改动后仍干净) |
+| 历史体积 | .git 4.52GB → **356MB**（-92%，GitHub 友好）| 356MB (无变化) |
+| 文档 | 554 个 md 收敛为 5 区规范结构 + 86 个 crate README 对齐 | 86 + 3 README (companion-desktop / cron 同步 / pipeline-g5 同步) |
 
 ## 二、里程碑
 
@@ -22,6 +23,7 @@
 5. **五原型补全**（2026-08-18）——世界模型（W1/W2/W3）、好奇（E4）、假设检验（F4）、情感记忆（F1）、价值内化（F6）、渐进披露、事件桥、出站策略（S4）
 6. **真实 LLM 端到端**——companion_serve + MiniMax-M3 实测对话/工具/审批全链路
 7. **v1.0.0 发布**——历史净化、文档重构、双语 README、GitHub 上传 + Release
+8. **post-v1.0.0 增量（2026-08-19）**——PR #1 桌面伙伴合并（+14K lines Svelte+Tauri）/ CI 防御体系（hard-walls + PII detection + release-prep）/ Dockerfile 多架构（arm64）/ cron 增强（@-shorthand + 月/星期别名 + Sakamoto 跨年闰年 next_after fix）
 
 ## 三、验收记录（诚实）
 

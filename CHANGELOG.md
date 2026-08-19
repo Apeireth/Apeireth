@@ -1,6 +1,6 @@
 # Changelog — Apeireth
 
-## [2026-08-19] post-v1.0.0 增量 (PR #1 合并 + CI 修复 + Dockerfile 多架构)
+## [2026-08-19] post-v1.0.0 增量 (PR #1 合并 + CI 修复 + Dockerfile 多架构 + cron)
 
 - **PR #1 合并**: Svelte 5 + Tauri 2 桌面伙伴 (`frontend/companion-desktop/`), Phase 0-5 (11 commits, +14099 lines)
   - Tauri shell 102 行 (窗口 + 托盘 + 通知), 0 apeireth-* 依赖 (独立 `[workspace]`)
@@ -28,6 +28,49 @@
   - 13 键 verdict cache 守门
   - V0.5 V1136 哲学常量不被删
   - companion-desktop 不污染 root workspace
+
+### [2026-08-19] cron 增强 (apeireth-cron v1.2.0 +)
+
+- **@-shorthand** (per Vixie cron convention):
+  - `@hourly` `0 * * * *`
+  - `@daily` / `@midnight` `0 0 * * *`
+  - `@weekly` `0 0 * * 0`
+  - `@monthly` `0 0 1 * *`
+  - `@yearly` / `@annually` `0 0 1 1 *`
+  - `@reboot` 特殊 (启动时一次, 不走时间表; `is_reboot()` 标识)
+- **月/星期别名** (case-insensitive 3-letter prefix):
+  - 月: `JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC` → 1..=12
+  - 星期: `SUN MON TUE WED THU FRI SAT` → 0..=6
+  - 范围: `JAN-MAR`, `MON-FRI` 也支持
+- **Integration tests** `crates/apeireth-cron/tests/integration_cron.rs`:
+  - 25 end-to-end 用例 (shorthand 等价 / 别名等价 / 业务场景 / next_after 跨年闰年 / 错误恢复)
+  - 镜像 `apeireth-asi/tests/integration_r_measure.rs` 约定
+- **next_after 真生产 bug fix** (测试暴露):
+  - 之前: 跨日 / 跨月 / 跨年永远 None (d/mo/dw 不 increment)
+  - 现在: Sakamoto's algorithm, year 参数, 月天数含闰年, 真处理
+  - **⚠️ BREAKING API 变更**: `next_after(expr, m, h, dom, mon, dow)` → `next_after(expr, year, m, h, dom, mon, dow)`
+  - Migration: 旧 callers 加 `2026` (或当前年) 作第 2 参
+
+### [2026-08-19] CI 防御 (post-PR #1 / Dockerfile)
+
+- **PII leak detection** `.github/workflows/pii-leak-detection.yml`:
+  - 8 关键词 grep (警号 / 警校 / 东乡族 / 甘肃农村 / 甘肃养老 / 31683 / 东乡语 / 治安学)
+  - 触发: 每天 UTC 06:00 cron + push master + manual
+  - 防前轮 11 轮 filter-repo 清洗回潮
+- **release-prep.sh** `scripts/release-prep.sh`:
+  - 3 维度本地自检 (8 硬墙 + PII + 12 项 checklist)
+  - 切 tag 前最后一关, 跟 .github/workflows/release-1.0.0.yml 互补
+- **硬墙 CI fix** (.github/workflows/rust.yml + companion-desktop-ci.yml):
+  - R11 baseline 检查位置错 (`src/lib.rs` → `tests/integration_r_measure.rs`, 修)
+  - 跨 workflow hard-walls 校验, 防 LOCKED crate 触碰 / workspace.version 改动
+
+### [2026-08-19] 路线排期 (next-team-handbook.md)
+
+- **TP34 (v1.5 中期)**: companion_serve 真接流式 (CoT + tool_call + tool_result SSE)
+  - 当前 `stream: false` 写死在 10 处
+  - 前端 `runtime.ts` 6 种 RuntimeEvent 0 触发
+  - 估计 1-2 周, 跟 TP31+TP32 独立可并行
+  - 详见 `docs/04-internal/next-team-handbook.md`
 - **验证**: `cargo test --workspace --all-targets`: 23,806 passed, 0 failed (61 crates / 440 binaries)
 - **隐私清洗** (前 1 轮 + 本轮巩固):
   - `git filter-repo` 11 轮, 替换 PII 关键词 (警号/警校/东乡族/甘肃*/31683/东乡语/治安学 等)
