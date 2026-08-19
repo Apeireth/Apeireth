@@ -106,6 +106,31 @@ pub const MIGRATIONS: &[Migration] = &[
               CREATE INDEX IF NOT EXISTS idx_episode_governance_status ON episode_governance(status);\n\
               CREATE INDEX IF NOT EXISTS idx_episode_governance_protected ON episode_governance(protected);",
     },
+    // Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace).
+    // 一次用户请求 → trace_id; Commander/Worker/Tool/Memory 各为 span (parent_span_id 关联).
+    // append-only (每 span 一行, 终态时写 ended_at/status). 属性 attributes_json 已 redaction.
+    // **严禁**存储模型内部原始 Chain-of-Thought; 只存 safe user-facing summary.
+    // trace_id/span_id 用 16-hex (与 telemetry W3C span 同形态, 便于未来打通).
+    Migration {
+        version: 7,
+        name: "V7__agent_traces",
+        sql: "CREATE TABLE IF NOT EXISTS agent_traces (\n\
+              span_id        TEXT PRIMARY KEY,\n\
+              trace_id       TEXT NOT NULL,\n\
+              parent_span_id TEXT,\n\
+              kind           TEXT NOT NULL,\n\
+              actor          TEXT NOT NULL,\n\
+              status         TEXT NOT NULL DEFAULT 'running',\n\
+              summary        TEXT,\n\
+              attributes_json TEXT NOT NULL DEFAULT '{}',\n\
+              started_at     INTEGER NOT NULL,\n\
+              ended_at       INTEGER,\n\
+              session_id     TEXT\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_agent_traces_trace ON agent_traces(trace_id, started_at);\n\
+              CREATE INDEX IF NOT EXISTS idx_agent_traces_session ON agent_traces(session_id, started_at);\n\
+              CREATE INDEX IF NOT EXISTS idx_agent_traces_started ON agent_traces(started_at DESC);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
