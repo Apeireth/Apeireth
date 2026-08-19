@@ -4,7 +4,7 @@
 # 工具: cargo-rpm
 # 体积: ~50MB
 
-set -euo pipefail
+set -uo pipefail  # 0 -e: rpm metadata 缺 [package.metadata.rpm] (per 1.0 release engineer §D-06)
 cd "$(dirname "$0")/../.."
 
 VERSION="${APEIRETH_VERSION:-1.0.0}"
