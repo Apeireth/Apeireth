@@ -90,3 +90,20 @@
 .status-dot.tiny{width:8px;height:8px}
 .status-dot.small{width:10px;height:10px}
 .status-dot.large{width:16px;height:16px}
+
+/* ---------- Reasoning / Think Box ---------- */
+.reasoning-box{margin-bottom:10px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);overflow:hidden}
+.reasoning-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;padding:7px 12px;border:0;background:transparent;color:var(--muted);font-size:12px;cursor:pointer}
+.reasoning-toggle:hover{background:var(--surface-3);color:var(--text)}
+.reasoning-title{display:flex;align-items:center;gap:6px;font-weight:500}
+.reasoning-duration{font-size:11px;color:var(--faint);font-family:var(--mono)}
+.reasoning-content{padding:10px 14px;border-top:1px solid var(--line);color:var(--muted);font-size:13px;line-height:1.6;max-height:360px;overflow:auto;background:rgba(0,0,0,0.15)}
+.reasoning-content p{margin:0 0 8px}
+.reasoning-content p:last-child{margin:0}
+
+/* ---------- Aborted & Retry ---------- */
+.message-aborted{display:inline-block;font-size:11px;color:var(--faint);margin-top:6px;font-style:italic}
+.message-retry-row{display:flex;align-items:center;gap:8px;margin-top:8px}
+.message-retry-btn{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:5px;background:var(--surface-3);border:1px solid var(--line);color:var(--muted);cursor:pointer}
+.message-retry-btn:hover{color:var(--text);border-color:var(--amber-line)}
+
