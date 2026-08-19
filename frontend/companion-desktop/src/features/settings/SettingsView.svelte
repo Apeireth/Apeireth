@@ -31,14 +31,13 @@
   type SettingsTab = 'connection' | 'security' | 'persona' | 'diagnostics';
   let activeTab = $state<SettingsTab>('connection');
 
-  let masterToken = $state(localStorage.getItem('apeireth-master-token') || '');
+  let masterToken = $state('');
   let subjectId = $state(localStorage.getItem('apeireth-subject-id') || 'companion-main');
   let savedHint = $state(false);
   let pingMs = $state<number | null>(null);
   let pinging = $state(false);
 
   function handleSaveAll(): void {
-    localStorage.setItem('apeireth-master-token', masterToken.trim());
     localStorage.setItem('apeireth-subject-id', subjectId.trim());
     onSave();
     savedHint = true;
