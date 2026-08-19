@@ -81,8 +81,19 @@ export interface AgentRuntime {
 /** 从 HTTP 状态码推断标准化错误码. */
 export function classifyHttpError(status: number): RuntimeError['code'] {
   if (status === 401 || status === 403) return 'auth';
+  if (status === 404) return 'http';
   if (status >= 500) return 'http';
   return 'http';
+}
+
+/** 带 HTTP 状态码的传输错误 — streamChat/chatOnce 抛此, toRuntimeError 可分类. */
+export class HttpError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = 'HttpError';
+    this.status = status;
+  }
 }
 
 export function toRuntimeError(caught: unknown): RuntimeError {
@@ -91,6 +102,13 @@ export function toRuntimeError(caught: unknown): RuntimeError {
   }
   if (caught instanceof TypeError) {
     return {code: 'network', message: '网络错误: 后端不可达'};
+  }
+  if (caught instanceof HttpError) {
+    return {
+      code: classifyHttpError(caught.status),
+      message: caught.message,
+      status: caught.status,
+    };
   }
   const message = caught instanceof Error ? caught.message : String(caught);
   return {code: 'unknown', message};
@@ -121,7 +139,7 @@ function normalizeBaseUrl(baseUrl: string): string {
 async function checkJson(response: Response): Promise<unknown> {
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`HTTP ${response.status} ${text.slice(0, 300)}`);
+    throw new HttpError(response.status, `HTTP ${response.status} ${text.slice(0, 300)}`);
   }
   return response.json();
 }
@@ -170,7 +188,7 @@ export async function streamChat(
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(`HTTP ${response.status} ${text.slice(0, 300)}`);
+    throw new HttpError(response.status, `HTTP ${response.status} ${text.slice(0, 300)}`);
   }
   if (!response.body) throw new Error('响应无 body');
 
