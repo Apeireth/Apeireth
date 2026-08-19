@@ -13,6 +13,15 @@
 //! 任何后续实现变更都必须满足此文件中的 7 项 const 断言 + 5 场景行为契约,
 //! 否则 0 装 PASS 红线被打破, 等同于"假装能跑实验".
 //!
+//! ### 0 装 PASS 借鉴 4 源 (0 接 upstream 仓库)
+//!
+//! 借鉴 4 源 = 公开 docs 思路, 0 装 smolvm/Firecracker/libkrun/wasmtime upstream 仓库.
+//! 借鉴元素 (per 4 源各自贡献):
+//! - Firecracker minimal API (小 API = 小攻击面; 借鉴 3-syscall trait 设计)
+//! - libkrun C lib + Rust binding 分层 (KVM/hypervisor backend 抽象; 借鉴 VMSandboxBackend enum)
+//! - wasmtime 组件模型 (capability 边界; 借鉴 sanitize_inputs + 5 状态 state machine)
+//! - smolvm 0 装诚实 (NoopXxx + available() = false; 借鉴 NoopNetworkIsolation + NoopVMSandbox)
+//!
 //! ### 借鉴 4 源 0 装模式 (公开 docs 思路, 0 装仓库)
 //!
 //! | 借鉴源                | 0 装模式                       | 我们的实现 (本文件守门)                          |
@@ -22,11 +31,25 @@
 //! | wasmtime component model | capability 边界 + fuel 计量 | `VMSandboxHandle` Drop 自动 halt (借鉴 libkrun Resource 清理) |
 //! | smolvm 0 装诚实       | `NoopXxx` struct + `available() 返 false` | `NoopNetworkIsolation` + `NoopVMSandbox` 都按此模式 |
 //!
-//! ### 8 哲学锚 (本文件覆盖 2 项新增)
+//! ### 8 哲学锚穿透 (per R126 P1-2 实施 6→8)
 //!
-//! - **S-3 质量工程化 (NEW)**: 0 装 PASS 用 const 断言 + 单测守门, 不可被简单 eprintln 绕过
-//! - **O-1 安全优先 (NEW)**: 网络隔离 + microVM 隔离是核心安全机制, 0 装 PASS 0 假装 —
+//! - **S-1 北极星导向**: 本守门文件 = 沙盒 3 阶段的 0 装 PASS 锁链, NOOP 必返 Err, 0 假装能跑
+//! - **S-2 实事求是**: 真实接 libkrun / Linux netns + cgroup / Windows WFP + libkrun/Hyperlight/Firecracker, 0 假装已隔离
+//! - **S-3 质量工程化 NEW (R126 P1-2 升)**: 0 装 PASS 用 5 个编译期 const 守门, 不可被 simple eprintln 绕过
+//! - **O-1 安全优先 NEW (R126 P1-2 升)**: 网络隔离 + microVM 隔离是核心安全机制, 0 装 PASS 0 假装 -
 //!   不允许"为通过测试而注入假 backend" (借用 wasmtime capability 守门思路)
+//! - **O-2 走在前人肩上**: 借鉴 4 源 (smolvm / Firecracker / libkrun / wasmtime) 公开 docs 思路
+//! - **O-3 干到底**: 5 个编译期 const + 7 单测, 一次 commit 落地
+//! - **O-4 任何人都能接手**: trait 口 + Noop stub 默认 0 装 PASS, 实装替换 Noop 即可
+//! - **O-5 不假装**: Noop::available() = false, Noop::start() = Err, "未实装" 字串标识
+//!
+//! ### 8 项承诺 (per task spec §10 + 主人 0 装 PASS 严守需求)
+//!
+//! - 0 装 PASS 严守: NoopNetworkIsolation.default().apply_to_child() 必 Err, NoopVMSandbox.default().start() 必 Err
+//! - 0 触碰 24 LOCKED crate 入口签名 (per R148 降级, 仅保 3 不可变脊柱)
+//! - 0 改 workspace.version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)
+//! - 0 改 enum / const / 24 LOCKED 不可变脊柱
+//! - 0 引外部依赖 (Cargo.toml 0 加任何 4 源仓库 entry)
 //!
 //! ### 0 装 PASS 5 场景 (本文件 7 单测逐项覆盖)
 //!

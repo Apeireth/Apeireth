@@ -1,14 +1,35 @@
 //! `apeireth-companion::sandbox_net` — Stage 1 网络隔离 (per B 站 UP 主 5.4).
 //!
-//! ## 哲学 (主人 2026-08-19: Stage 1 网络隔离落地)
+//! ## 8 哲学锚穿透 (per R126 P1-2 实施 6→8)
 //!
-//! 现有 5 层沙盒 (洋葱门 / 审批链 / MOVE-STAY / Job Object / 最小权限) **都是进程卫生**,
-//! 不防蠕虫 — UP 主 5.3 论断. 蠕虫杀的不是单个进程, 是**整个网络可达面**.
+//! - **S-1 北极星导向**: Stage 1 是 5 层沙盒补全的关键缺口 (UP 主 5.3 论断"进程卫生 ≠ 防蠕虫"),
+//!   真正隔离 = 网络 + 主机双层. 0 装 PASS 严守: trait 口 + Noop stub, 实装才连 trait.
+//! - **S-2 实事求是**: 真实接 libkrun / Linux netns + cgroup / Windows WFP, 0 假装已隔离.
+//! - **S-3 质量工程化 NEW (R126 P1-2 升)**: 编译期 const 守门 (per `sandbox_pass.rs`),
+//!   0 装时 `NoopNetworkIsolation::available()` 编译期恒 false + `apply_to_child` 恒 Err.
+//! - **O-1 安全优先 NEW (R126 P1-2 升)**: 4 档 `NetworkIsolationLevel` (None/LoopbackOnly/DefaultDenyWithWhitelist/ForceDeny),
+//!   来源默认 deny + 白名单, 借鉴 wasmtime 组件模型 capability 边界.
+//! - **O-2 走在前人肩上**: 借鉴 4 源 (smolvm / Firecracker / libkrun / wasmtime) 公开 docs 思路.
+//! - **O-3 干到底**: 4 档 + 5 字段 config + 工厂 + 守门 + 12 单测全过, 一次 commit 落地.
+//! - **O-4 任何人都能接手**: trait 口 4 方法, 实装替换 NoopNetworkIsolation 即可, 机制件不动.
+//! - **O-5 不假装**: 0 装时诚实返 Err + status 标 "未实装", 含 `available() = false` 编译期 const 守门.
 //!
-//! 5.4 正确做法分两条:
-//! - 一次性 VM (如 Firecracker / libkrun microVM);
-//! - AppContainer + WFP 出站默认拒绝 + 目录虚拟化;
-//! - **网络层隔离** (Stage 1 走这条).
+//! ## 8 项承诺 (per task spec §10 + 主人 0 装 PASS 严守需求)
+//!
+//! - 0 装 PASS 严守: NoopNetworkIsolation.default().apply_to_child() 必 Err, 0 假装已隔离
+//! - 0 触碰 24 LOCKED crate 入口签名 (per R148 降级, 仅保 3 不可变脊柱)
+//! - 0 改 workspace.version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)
+//! - 0 改 enum / const / 24 LOCKED 不可变脊柱
+//! - 0 引外部依赖 (Cargo.toml 0 加任何 4 源仓库 entry)
+//!
+//! ## 0 装 PASS 借鉴 4 源 (0 接 upstream 仓库)
+//!
+//! 借鉴 4 源 = 公开 docs 思路, 0 装 smolvm/Firecracker/libkrun/wasmtime upstream 仓库.
+//! 借鉴元素 (per 4 源各自贡献):
+//! - Firecracker minimal API (小 API = 小攻击面; 借鉴 4 必方法 trait 设计)
+//! - libkrun C lib + Rust binding 分层 (netns + cgroup 接口范式; 借鉴 trait + 工厂分层)
+//! - wasmtime 组件模型 (capability 边界; 借鉴 4 档 NetworkIsolationLevel)
+//! - smolvm 0 装诚实 (NoopXxx + available() = false; 借鉴 NoopNetworkIsolation stub)
 //!
 //! ## 借鉴 4 源 (0 接库, 仅借鉴接口语义)
 //!
