@@ -116,7 +116,7 @@ jobs:
             echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: "守门: 0 触碰 24 LOCKED crate"
+      - name: "守门: 0 触碰 24 LOCKED crate + R11 baseline"
         run: |
           BASE="${{ steps.base.outputs.base_sha }}"
           if [ -z "$BASE" ]; then
@@ -130,6 +130,24 @@ jobs:
             exit 1
           fi
           echo "✅ 0 触碰 24 LOCKED crate"
+
+          # R11 baseline 3 值 (per APEIRETH-CONVENTIONS §11)
+          R11_FILE="crates/apeireth-asi/tests/integration_r_measure.rs"
+          if [ ! -f "$R11_FILE" ]; then
+            echo "::error::$R11_FILE 不存在 (R11 baseline 编译期 hardcode 必有)"
+            exit 1
+          fi
+          R11_MISS=""
+          for VAL in 0.8682 0.8532 0.9063; do
+            if ! grep -q "$VAL" "$R11_FILE"; then
+              R11_MISS="$R11_MISS $VAL"
+            fi
+          done
+          if [ -n "$R11_MISS" ]; then
+            echo "::error::R11 baseline 缺失: $R11_MISS"
+            exit 1
+          fi
+          echo "✅ R11 baseline 3 值 (0.8682/0.8532/0.9063) 在 $R11_FILE 完整"
 
       - name: "守门: workspace.version 不变"
         run: |
