@@ -6,7 +6,7 @@
   import ConversationsView from './features/conversations/ConversationsView.svelte';
   import MemoryView from './features/memory/MemoryView.svelte';
   import SettingsView from './features/settings/SettingsView.svelte';
-  import type {ApeirethConfig, ChatMessage, Conversation, HealthState, ViewId} from './lib/types';
+  import type {ApeirethConfig, ChatMessage, ChatMessageEvent, Conversation, HealthState, ViewId} from './lib/types';
   import {
     checkHealth,
     createAgentRuntime,
@@ -97,7 +97,7 @@
     persist();
   }
 
-  /** 按 id 原子拼接流式 delta — 纯函数式, 不依赖闭包捕获的 conversations 快照. */
+  /** 按 id 原子拼接流式文本 delta. */
   function appendDelta(conversationId: string, messageId: string, delta: string): void {
     conversations = conversations.map((item) => {
       if (item.id !== conversationId) return item;
@@ -105,6 +105,42 @@
         ...item,
         updatedAt: Date.now(),
         messages: item.messages.map((m) => m.id === messageId ? {...m, text: m.text + delta} : m),
+      };
+    });
+    persist();
+  }
+
+  /** 按 id 原子拼接推理思考 delta. */
+  function appendReasoningDelta(conversationId: string, messageId: string, delta: string): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => m.id === messageId ? {...m, reasoning: (m.reasoning || '') + delta} : m),
+      };
+    });
+    persist();
+  }
+
+  /** 按 id 原子追加或更新执行步骤事件. */
+  function appendMessageEvent(conversationId: string, messageId: string, event: ChatMessageEvent): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => {
+          if (m.id !== messageId) return m;
+          const prevEvents = m.events || [];
+          const existingIndex = prevEvents.findIndex((e) => e.id === event.id);
+          if (existingIndex >= 0) {
+            const updated = [...prevEvents];
+            updated[existingIndex] = {...updated[existingIndex], ...event};
+            return {...m, events: updated};
+          }
+          return {...m, events: [...prevEvents, event]};
+        }),
       };
     });
     persist();
@@ -121,8 +157,8 @@
     healthState = ok ? 'ready' : 'offline';
   }
 
-  async function send(): Promise<void> {
-    const text = draft.trim();
+  async function send(customText?: string): Promise<void> {
+    const text = (customText ?? draft).trim();
     if (!text || busy) return;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
@@ -130,13 +166,26 @@
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({role: m.role, content: m.text}));
 
-    draft = '';
+    if (!customText) draft = '';
     busy = true;
     healthState = 'generating';
     error = '';
 
-    const userMessage: ChatMessage = {id: crypto.randomUUID(), role: 'user', text, time: new Date().toLocaleTimeString('zh-CN')};
-    const assistantMessage: ChatMessage = {id: crypto.randomUUID(), role: 'assistant', text: '', time: new Date().toLocaleTimeString('zh-CN'), streaming: true};
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      text,
+      time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
+    };
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      text: '',
+      time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
+      streaming: true,
+      reasoning: '',
+      events: [],
+    };
 
     pushMessage(conversationId, userMessage);
     pushMessage(conversationId, assistantMessage);
@@ -145,6 +194,10 @@
     if (conversation.messages.length <= 2) {
       updateConversation(conversationId, {title: text.slice(0, 24)});
     }
+
+    const startTime = Date.now();
+    let reasoningStartTime = startTime;
+    let reasoningEndTime = 0;
 
     try {
       // UI 只面对 Agent Runtime Contract (§15) — 事件流驱动更新, 不裸碰 HTTP
@@ -157,17 +210,46 @@
         },
         (event) => {
           if (event.type === 'text-delta') {
-            // 按 conversationId 定位写入 — 切换会话也不串流
+            if (!reasoningEndTime && reasoningStartTime) {
+              reasoningEndTime = Date.now();
+              const duration = reasoningEndTime - reasoningStartTime;
+              updateMessage(conversationId, assistantMessage.id, {reasoningDurationMs: duration});
+            }
             appendDelta(conversationId, assistantMessage.id, event.text);
+          } else if (event.type === 'reasoning-delta') {
+            appendReasoningDelta(conversationId, assistantMessage.id, event.text);
+          } else if (event.type === 'tool-call') {
+            appendMessageEvent(conversationId, assistantMessage.id, {
+              id: `${event.requestId}-${event.tool}`,
+              kind: 'tool',
+              text: `调用工具 ${event.tool}`,
+              status: 'running',
+              action: typeof event.args === 'string' ? event.args : JSON.stringify(event.args),
+              ts: Date.now(),
+            });
+          } else if (event.type === 'tool-result') {
+            appendMessageEvent(conversationId, assistantMessage.id, {
+              id: `${event.requestId}-${event.tool}`,
+              kind: 'tool',
+              text: `工具 ${event.tool} ${event.ok ? '执行成功' : '执行失败'}`,
+              status: event.ok ? 'done' : 'failed',
+              receipt: event.summary,
+              ts: Date.now(),
+            });
           }
         },
       );
       updateMessage(conversationId, assistantMessage.id, {text: full || '(空响应)', streaming: false});
     } catch (caught) {
+      const isAborted = caught instanceof Error && caught.name === 'AbortError';
       const message = caught instanceof Error ? caught.message : String(caught);
-      error = message;
-      updateMessage(conversationId, assistantMessage.id, {text: '', streaming: false, error: message});
-      healthState = 'error';
+      if (isAborted) {
+        updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
+      } else {
+        error = message;
+        updateMessage(conversationId, assistantMessage.id, {streaming: false, error: message});
+        healthState = 'error';
+      }
     } finally {
       busy = false;
       // 生成结束: 恢复真实 health (backend 可能已离线)
@@ -178,6 +260,27 @@
 
   function stop(): void {
     agentRuntime.abort();
+  }
+
+  function retry(messageId: string): void {
+    if (busy || !activeConversation) return;
+    const msgs = activeConversation.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    // 找到该 assistant 消息对应的 user 消息
+    let userText = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        userText = msgs[i].text;
+        break;
+      }
+    }
+    // 移除失败的这条 assistant 消息，并重新发送
+    const filtered = msgs.filter((m) => m.id !== messageId);
+    updateConversation(activeConversation.id, {messages: filtered});
+    if (userText) {
+      void send(userText);
+    }
   }
 
   /** health 状态 → 人类可读文案 (Phase 5E). */
@@ -276,8 +379,9 @@
         bind:draft
         {busy}
         {error}
-        onSend={send}
+        onSend={(text) => send(text)}
         onStop={stop}
+        onRetry={retry}
         onNewConversation={newConversation}
       />
     {:else if activeView === 'conversations'}
