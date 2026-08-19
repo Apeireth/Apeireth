@@ -3,7 +3,7 @@
 //! Apeireth 专用 rate limiter (R20 阶段 6 估补, **专用 rate limiter, 比 apeireth-constraint 简单**,
 //! 1:1 翻译 v0.9.21 `@anthropic-ai/rate-limiter` 商业版)。
 //!
-//! ## 6 哲学锚穿透 (per APEIRETH-CONVENTIONS §9)
+//! ## 8 哲学锚穿透 (per APEIRETH-CONVENTIONS §9, R125 B5 升 6→8, R126 P1-2 实施)
 //!
 //! 1. **S-1 主 22:33 — 北极星导向**: 服务 ASI 北极星, rate limiter 是「主对话 / Tool call / LLM 调用」
 //!    的限流基础设施, 直接影响 1.0 release 12 项 checklist #7 稳定性
@@ -15,6 +15,10 @@
 //! 5. **O-3 主 23:44 — 干到底**: API / 4 算法 / 5 storage / 30+ 测试 / example 全在一 PR 一次落地
 //! 6. **O-4 主 00:56 — 任何人都能接手**: 模块边界 (token_bucket / leaky_bucket / fixed_window /
 //!    sliding_window / storage / error / config) 清晰, 每模块可独立 review
+//! 7. **S-3 主 — 质量工程化**: retry/backoff 借鉴 3 限流重试 (LiteLLM full-jitter + opencode agent
+//!    retry + Guardrails action policy) → `retry` 模块, 0 装严守从公开文档借鉴, 0 假装 git clone 上游
+//! 8. **O-1 主 — 安全优先**: `RetryAfter` 解析尊重 server 给的 429/503 (借鉴 Guardrails), 0 假装
+//!    client 端算 backoff 就能覆盖 server 限流 — server 说等多久就等多久
 //!
 //! ## 8 项不修改承诺 (per task spec §10)
 //!
@@ -38,6 +42,7 @@
 //! - [`storage`]: 5 storage (in-memory 完整 + 4 stub)
 //! - [`error`]: 9 种错误
 //! - [`config`]: 4 段配置 (bucket / strategy / storage / observability)
+//! - [`retry`]: retry / backoff 策略 (借鉴 3 限流重试: LiteLLM full-jitter + opencode + Guardrails action policy)
 //!
 //! ## 快速开始
 //!
@@ -92,6 +97,7 @@ pub mod error;
 pub mod fixed_window;
 pub mod leaky_bucket;
 mod organ_kani_proofs;
+pub mod retry; // 2026-08-19 借鉴 3 限流重试: LiteLLM full-jitter + opencode + Guardrails action policy
 pub mod sliding_window;
 pub mod storage;
 pub mod token_bucket;
@@ -107,6 +113,7 @@ pub use crate::config::{
 pub use crate::error::{RateLimiterError, Result};
 pub use crate::fixed_window::FixedWindow;
 pub use crate::leaky_bucket::LeakyBucket;
+pub use crate::retry::{Backoff, ConstantBackoff, ExponentialBackoff, RetryAfter, RetryOutcome, StopReason};
 pub use crate::sliding_window::SlidingWindow;
 pub use crate::storage::{
     build_storage, DistributedStorage, FileStorage, InMemoryStorage, MemcachedStorage,
