@@ -1,6 +1,6 @@
 # Apeireth Architecture (1.0)
 
-> 对齐实际代码（2026-08-18 master）。84 active crates / ~34 万行 Rust。
+> 对齐实际代码（2026-08-19 master HEAD `9bf36b1e`）。85 active crates / ~34 万行 Rust。
 
 ## Layer View
 
