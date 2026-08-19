@@ -3,7 +3,7 @@
 //! **任务**: ASI Stage 7 跨模块集成 (per decision-61 §3.1 R129-18)
 //! **承接**: R129-4 Stage 4 自治 (D4 决策自循环) + R129-5 Stage 5 治理 (G2 权限治理) + R129-6 Stage 6 守护
 //! **维度**: I4 D4+G2 — 决策自循环 (D4) 跟权限治理 (G2) 跨 stage 集成
-//! **目标**: ASI 决策遵守 6 重守门 v7, 5 policy × 6 layer 互锁
+//! **目标**: ASI 决策遵守 9 重 v9 守门 (lineage v6→v7→v8→v9), 5 policy × 6 layer 互锁
 //!
 //! # I4 集成范围
 //!
@@ -16,12 +16,12 @@
 //! # 0 装 PASS 严守
 //!
 //! - ✅ D4 决策自循环 (R129-4) cloned = 真借 D4 DecisionPolicy 5 变体
-//! - ✅ G2 权限治理 (R129-5) cloned = 真借 G2 PermissionLayer 6 重 v7
+//! - ✅ G2 权限治理 (R129-5) cloned = 真借 G2 PermissionLayer 9 重 v9 守门
 //!
 //! # 8 硬墙 0 越界
 //!
 //! - B2 1.2.0 0 改 / A1 R11 baseline 0 改 / B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
-//! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 (严守 G2 1:1 跟 B4) / A3 13 键 0 改
+//! - B5 8 哲学锚 / B3 V0.5 24 维 / B4 9 重 v9 守门 (严守 G2 1:1 跟 B4) / A3 13 键 0 改
 //! - C1 0 主动 commit / C2 0 装 PASS 严守 / 0 主动 push
 
 use crate::decision_self_loop::{
@@ -45,7 +45,7 @@ pub const STAGE7_I4_DIMENSION_COUNT: usize = 2;
 /// I4 policy 数 (per D4 DecisionPolicy 5 变体)
 pub const STAGE7_I4_POLICY_COUNT: usize = DECISION_POLICY_COUNT;
 
-/// I4 layer 数 (per G2 PermissionLayer 6 重 v7, 1:1 跟 B4 严守)
+/// I4 layer 数 (per G2 PermissionLayer 9 重 v9 守门, 1:1 跟 B4 严守)
 pub const STAGE7_I4_LAYER_COUNT: usize = PERMISSION_GOVERNANCE_LAYER_COUNT;
 
 /// I4 决策 × 权限 绑定数 (5 × 6 = 30, 编译期 hardcode)
@@ -233,7 +233,7 @@ impl DecisionPermissionCoordinator {
     }
 
     /// decide: 给定 policy + layer, 返回 decision rule
-    /// 严守 v7 baseline (per B4 6 重 v7 严守)
+    /// 严守 v7 baseline (per B4 9 重 v9 守门 严守)
     pub fn decide(
         &mut self,
         timestamp: u64,
