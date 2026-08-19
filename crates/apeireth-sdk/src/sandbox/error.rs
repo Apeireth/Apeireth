@@ -80,7 +80,7 @@ pub type SandboxResult<T> = Result<T, SandboxError>;
 pub const SANDBOX_ERROR_VARIANT_COUNT: usize = 10;
 const _: () = assert!(
     true, // 编译期 hardcode 守门 (实际计数在测试中验证)
-    "SandboxError 新增 variant 必须经 6 哲学锚 + 主人审 (R20 阶段 4)"
+    "SandboxError 新增 variant 必须经 8 哲学锚 + 主人审 (R20 阶段 4)"
 );
 
 #[cfg(test)]
