@@ -83,6 +83,29 @@ pub const MIGRATIONS: &[Migration] = &[
               CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);\n\
               CREATE INDEX IF NOT EXISTS idx_sessions_scope ON sessions(scope);",
     },
+    // Core Capability Expansion Phase 3: 记忆治理 — episode governance 表.
+    // episodes 表是 append-only (trigger 拒绝 UPDATE/DELETE), 不能直接改其内容/状态.
+    // 治理层用独立 sidecar 表记录可变元数据: forgotten (软删, 从检索排除) /
+    // protected (防自动遗忘) / content_override (修订内容) / revision (乐观并发).
+    // 原始 episode 行不动 → provenance 完整 + 审计可追溯. 存量行无 governance 记录 =
+    // 默认 active/unprotected (LEFT JOIN NULL 语义), 零数据迁移.
+    Migration {
+        version: 6,
+        name: "V6__episode_governance",
+        sql: "CREATE TABLE IF NOT EXISTS episode_governance (\n\
+              episode_id    TEXT PRIMARY KEY,\n\
+              status        TEXT NOT NULL DEFAULT 'active',\n\
+              protected     INTEGER NOT NULL DEFAULT 0,\n\
+              content_override TEXT,\n\
+              revision      INTEGER NOT NULL DEFAULT 0,\n\
+              updated_at    INTEGER,\n\
+              updated_by    TEXT,\n\
+              reason        TEXT,\n\
+              forgotten_at  INTEGER\n\
+              );\n\
+              CREATE INDEX IF NOT EXISTS idx_episode_governance_status ON episode_governance(status);\n\
+              CREATE INDEX IF NOT EXISTS idx_episode_governance_protected ON episode_governance(protected);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"
