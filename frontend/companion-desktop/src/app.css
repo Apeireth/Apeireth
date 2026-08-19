@@ -107,3 +107,33 @@
 .message-retry-btn{display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:5px;background:var(--surface-3);border:1px solid var(--line);color:var(--muted);cursor:pointer}
 .message-retry-btn:hover{color:var(--text);border-color:var(--amber-line)}
 
+/* ---------- Approval Drawer ---------- */
+.approval-drawer{margin:12px max(28px,calc((100% - 820px)/2)) 0;padding:12px 16px;border:1px solid var(--amber-line);border-radius:10px;background:var(--amber-wash);display:flex;flex-direction:column;gap:10px}
+.approval-header{display:flex;align-items:center;justify-content:space-between}
+.approval-title{display:flex;align-items:center;gap:8px;color:var(--amber);font-size:13px}
+.approval-hint{font-size:11px;color:var(--muted)}
+.approval-list{display:flex;flex-direction:column;gap:8px}
+.approval-card{padding:10px 14px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px}
+.approval-card-top{display:flex;align-items:center;justify-content:space-between}
+.approval-tool-info{display:flex;align-items:center;gap:8px}
+.approval-reason{margin:0;font-size:12px;color:var(--text)}
+.approval-args{padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font:11px var(--mono);color:var(--muted);word-break:break-all}
+.approval-actions{display:flex;align-items:center;gap:8px;margin-top:4px}
+.approval-token-input input{padding:4px 8px;font-size:11px;border:1px solid var(--line);border-radius:5px;background:var(--surface-3);color:var(--text);outline:0;width:160px}
+.grant-btn{padding:4px 10px;font-size:11px;display:flex;align-items:center;gap:4px}
+.grant-long-btn{padding:4px 10px;font-size:11px}
+.approval-error{margin:0;color:var(--danger);font-size:11px}
+
+/* ---------- Tool Registry Grid ---------- */
+.tool-filter-bar{display:flex;gap:12px;align-items:center;padding:4px 42px 14px;flex-wrap:wrap}
+.tool-grid{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.tool-card-detailed{padding:14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
+.tool-card-detailed:hover{border-color:var(--line-strong)}
+.tool-card-header{display:flex;align-items:center;justify-content:space-between}
+.tool-name-box{display:flex;align-items:center;gap:8px;color:var(--amber);font-family:var(--mono);font-size:13px}
+.tool-desc{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.tool-schema{margin-top:auto;border-top:1px solid var(--line);padding-top:6px}
+.tool-schema-label{font-size:10px;color:var(--faint);font-family:var(--mono)}
+.tool-schema pre{margin:4px 0 0;font:10px var(--mono);color:var(--muted);background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;max-height:120px;overflow:auto}
+
+

@@ -1,7 +1,8 @@
 <script lang="ts">
   import {ArrowUp, Loader2, Plus} from 'lucide-svelte';
   import MessageContent from './MessageContent.svelte';
-  import type {ApeirethConfig, ChatMessage, Conversation} from '../../lib/types';
+  import ApprovalDrawer from '../tools/ApprovalDrawer.svelte';
+  import type {ApeirethConfig, ApprovalRequest, ChatMessage, Conversation} from '../../lib/types';
 
   let {
     config,
@@ -10,9 +11,11 @@
     draft = $bindable(''),
     busy = false,
     error = '',
+    approvalRequests = [],
     onSend,
     onStop,
     onRetry,
+    onApproved,
     onNewConversation,
   }: {
     config: ApeirethConfig;
@@ -21,9 +24,11 @@
     draft: string;
     busy: boolean;
     error: string;
+    approvalRequests?: ApprovalRequest[];
     onSend: (text?: string) => void;
     onStop: () => void;
     onRetry?: (messageId: string) => void;
+    onApproved?: () => void;
     onNewConversation: () => void;
   } = $props();
 </script>
@@ -41,6 +46,14 @@
       <button class="text-action" onclick={onNewConversation}><Plus size={14}/>新对话</button>
     </div>
   </header>
+
+  {#if approvalRequests.length}
+    <ApprovalDrawer
+      {config}
+      requests={approvalRequests}
+      {onApproved}
+    />
+  {/if}
 
   <div class="messages">
     {#if !messages.length}
