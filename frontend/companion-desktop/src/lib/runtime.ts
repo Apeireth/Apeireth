@@ -613,6 +613,68 @@ export async function grantApproval(
   }
 }
 
+export type CompanionPresentationState =
+  | 'idle'
+  | 'thinking'
+  | 'speaking'
+  | 'working'
+  | 'reflecting'
+  | 'concerned'
+  | 'happy';
+
+export interface CompanionEvent {
+  text: string;
+  ts: number;
+  kind?: string;
+}
+
+/**
+ * 订阅 Apeireth 伴随体事件流 (GET /v1/apeireth/events)
+ * 接收后端 CompanionDaemon 涌现问候、反思完成与做梦通知
+ */
+export function subscribeCompanionEvents(
+  config: ApeirethConfig,
+  onEvent: (event: CompanionEvent) => void,
+): () => void {
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const response = await fetch(url, {
+        headers: {Authorization: `Bearer ${config.apiKey}`},
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) return;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, {stream: true});
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data:')) {
+            const data = trimmed.slice(5).trim();
+            if (data) {
+              onEvent({text: data, ts: Date.now()});
+            }
+          }
+        }
+      }
+    } catch {
+      // stream closed or aborted
+    }
+  })();
+
+  return () => {
+    controller.abort();
+  };
+}
+
 /**
  * 会话持久化 — 存 localStorage (前端侧). Apeireth 后端记忆走 companion memory,
  * 这里只存 UI 会话历史.

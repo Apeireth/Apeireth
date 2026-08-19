@@ -1,6 +1,8 @@
 <script lang="ts">
   import {Plug, Plus, type Icon} from 'lucide-svelte';
   import StatusDot from '../components/StatusDot.svelte';
+  import CompanionWidget from '../features/companion/CompanionWidget.svelte';
+  import type {CompanionPresentationState} from '../lib/runtime';
   import type {HealthState, ViewId} from '../lib/types';
 
   interface NavItem {
@@ -14,19 +16,30 @@
     activeView = $bindable('chat'),
     healthState,
     healthLabel,
+    companionState = 'idle',
+    proactiveText = '',
+    onDismissProactive,
     onNewConversation,
   }: {
     nav: readonly NavItem[];
     activeView: ViewId;
     healthState: HealthState;
     healthLabel: Record<HealthState, string>;
+    companionState?: CompanionPresentationState;
+    proactiveText?: string;
+    onDismissProactive?: () => void;
     onNewConversation: () => void;
   } = $props();
 </script>
 
 <aside class="sidebar">
   <div class="sidebar-brand">
-    <span class="logo-mark">A</span>
+    <CompanionWidget
+      state={companionState}
+      {proactiveText}
+      {onDismissProactive}
+      onActivate={() => activeView = 'chat'}
+    />
     <span class="brand-name">Apeireth 伙伴</span>
     <StatusDot
       size="small"
