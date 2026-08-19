@@ -108,8 +108,16 @@ export function loadConfig(): ApeirethConfig {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      // Security migration: ensure legacy masterToken keys are purged
+      // Security migration: purge any legacy apiKey or masterToken from local storage
       let modified = false;
+      if ('apiKey' in parsed) {
+        delete parsed.apiKey;
+        modified = true;
+      }
+      if ('api_key' in parsed) {
+        delete parsed.api_key;
+        modified = true;
+      }
       if ('masterToken' in parsed) {
         delete parsed.masterToken;
         modified = true;
@@ -120,12 +128,16 @@ export function loadConfig(): ApeirethConfig {
       }
       const cleaned: ApeirethConfig = {
         baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8090',
-        apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
+        apiKey: '', // transient in-memory only; not persisted
         model: typeof parsed.model === 'string' ? parsed.model : 'MiniMax-M3',
         theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
       };
       if (modified) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          baseUrl: cleaned.baseUrl,
+          model: cleaned.model,
+          theme: cleaned.theme,
+        }));
       }
       return cleaned;
     }
@@ -136,14 +148,15 @@ export function loadConfig(): ApeirethConfig {
 }
 
 export function saveConfig(config: ApeirethConfig): void {
-  const safeConfig: ApeirethConfig = {
+  // Never persist apiKey or masterToken to local storage
+  const safeConfig = {
     baseUrl: config.baseUrl,
-    apiKey: config.apiKey,
     model: config.model,
     theme: config.theme,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(safeConfig));
 }
+
 
 
 function normalizeBaseUrl(baseUrl: string): string {
@@ -612,39 +625,39 @@ export async function fetchAuditLogs(config: ApeirethConfig, limit = 100): Promi
   }));
 }
 
-/** 获取工具列表 */
+/** 获取工具列表 (严格请求后端真实注册表端点) */
 export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
-  try {
-    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/tools/list`, {
+  const baseUrl = normalizeBaseUrl(config.baseUrl);
+  // 先尝试 /v1/tools/list，再尝试 /v1/panel/tools
+  let res = await fetch(`${baseUrl}/v1/tools/list`, {
+    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+  }).catch(() => null);
+
+  if (!res || !res.ok) {
+    res = await fetch(`${baseUrl}/v1/panel/tools`, {
       headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-    });
-    if (res.ok) {
-      const data = (await res.json()) as {tools?: Array<{name: string; description?: string; args_schema?: unknown}>};
-      if (Array.isArray(data.tools) && data.tools.length > 0) {
-        return data.tools.map((t) => ({
-          name: t.name,
-          description: t.description || '无描述信息',
-          argsSchema: t.args_schema,
-          source: 'builtin',
-          permission: 'prompt',
-          available: true,
-        }));
-      }
-    }
-  } catch {
-    // ignore error and fallback to builtin companion tools
+    }).catch(() => null);
   }
 
-  // 基础常驻伙伴内置工具列表 (companion 机制装配)
-  return [
-    {name: 'FileOperator', description: '文件读写与目录操作 (需要主人授权)', source: 'builtin', permission: 'prompt', available: true},
-    {name: 'ShellExec', description: '本地命令行执行工具 (高危特权)', source: 'builtin', permission: 'prompt', available: true},
-    {name: 'save_memory', description: '持久化记忆静默写入工具', source: 'builtin', permission: 'none', available: true},
-    {name: 'web_search', description: '互联网搜索与信息抓取', source: 'builtin', permission: 'none', available: true},
-    {name: 'calendar', description: '日程管理与提醒工具', source: 'builtin', permission: 'none', available: true},
-    {name: 'message', description: '向外部通道发送通知消息', source: 'builtin', permission: 'none', available: true},
-  ];
+  if (!res || !res.ok) {
+    throw new HttpError(
+      res ? res.status : 503,
+      `后端工具注册表端点不可用 (${res ? `HTTP ${res.status}` : '连接失败'})`,
+    );
+  }
+
+  const data = (await res.json()) as {tools?: Array<{name: string; description?: string; args_schema?: unknown}>};
+  if (!Array.isArray(data.tools)) return [];
+  return data.tools.map((t) => ({
+    name: t.name,
+    description: t.description || '无描述信息',
+    argsSchema: t.args_schema,
+    source: 'builtin',
+    permission: 'prompt',
+    available: true,
+  }));
 }
+
 
 
 /** 获取待审批授权请求 */
