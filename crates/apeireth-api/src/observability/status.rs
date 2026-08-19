@@ -11,8 +11,7 @@
 //! - `philosophy_anchors`: 6 锚 (per `docs/stage4/apeireth-formal-invariants-2026-08-05.md` §11)
 //! - `timestamp` / `schema_version` / `platform`
 //!
-//! **6 哲学锚穿透**:
-//! - S-1: 1:1 翻译 v0.9.21 `out/main` observability 集成 (per 蓝图 §2.5.3)
+//! **8 哲学锚穿透**://! - S-1: 1:1 翻译 v0.9.21 `out/main` observability 集成 (per 蓝图 §2.5.3)
 //! - S-2: 估 100-130 LOC, 5 R-Measure 标 stub (不假装已采)
 //! - O-2: 借鉴 OpenTelemetry `service.version` + `service.instance.id` 工业字段
 //! - O-3: 8 字段 + 5 R-Measure + 6 anchor 编译期 hardcode
@@ -65,7 +64,7 @@ pub struct StatusResponseBody {
     pub sessions: SessionsInfo,
     /// 5 R-Measure (R-1 ~ R-5)
     pub r_measures: Vec<RMeasure>,
-    /// 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5)
+    /// 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
     pub philosophy_anchors: Vec<PhilosophyAnchor>,
     /// 端点列表
     pub endpoints: Vec<String>,

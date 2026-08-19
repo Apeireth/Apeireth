@@ -1,7 +1,7 @@
 //! # 9 器官端到端测试
 //!
 //! **职责**: 验证 9 器官 (Heart / Brain / Hand / Eye / Ear / Memory / Voice / Body / Mind)
-//! 各自能渲染, health 数字正确, Mind 显 6 哲学锚.
+//! 各自能渲染, health 数字正确, Mind 显 8 哲学锚.
 //!
 //! **9 器官** (per R19 拟人化原则 — 心脑手眼耳鼻记忆声体意):
 //! - 0 Heart (心) — 60Hz CPU 脉冲, partial
@@ -12,7 +12,7 @@
 //! - 5 Memory (记忆) — 会话历史, partial
 //! - 6 Voice (声) — STT / TTS, stub
 //! - 7 Body (体) — 进程 / 资源, partial
-//! - 8 Mind (意) — AGI 状态 + 6 哲学锚, partial
+//! - 8 Mind (意) — AGI 状态 + 8 哲学锚, partial
 //!
 //! **测试函数** (派活单 §6 要求 9 个 pub async fn):
 //! - `test_organ_heart_60hz_pulse`
@@ -131,7 +131,7 @@ pub async fn test_organ_body_process_resources() -> TuiE2EResult<()> {
     Ok(())
 }
 
-/// 8 Mind — 6 哲学锚 (跟派活单 "9 器官 mind 6 哲学锚" 同步)
+/// 8 Mind — 8 哲学锚 (跟派活单 "9 器官 mind 8 哲学锚" 同步)
 pub async fn test_organ_mind_6_philosophy_anchors() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
     h.app.organ_health[Organ::Mind as usize] = 1.0;

@@ -8,7 +8,7 @@
 //! 表达的 proof 都搬到编译期, 不可表达的留给运行期.
 //!
 //! **演示 8 个关键不变量** (R217 真接用, 后续 R 周期扩):
-//! 1. V0.5 30 维 sum = 1.00 (用于哲学守门)
+//! 1. V0.5 24 维 sum = 1.00 (用于哲学守门, baseline 2026-08-19: 30 维升级 R126 P1-4 未合入)
 //! 2. 13 键 verdict cache 数量 (SoT 不可变脊柱 #3)
 //! 3. 6 Ekman BaseEmotion 数量
 //! 4. 8 PlutchikBasic 数量 (R218 Plutchik)
@@ -45,7 +45,7 @@ macro_rules! const_proof {
 // 8 关键不变量 const 证明
 // ============================================================================
 
-/// V0.5 30 维评估体系 — 6 类 (PC/RC/HG/GP/Meta/Quality) 每类 5 维 = 30.
+/// V0.5 24 维评估体系 — 6 类 (PC/RC/HG/GP/Meta/Quality) 每类 4 维 = 24 (baseline 2026-08-19, 30 维升级 R126 P1-4 未合入).
 /// 默认权重 (用于 ASI 测量).
 pub const V05_DIMENSION_WEIGHTS: [f64; 6] = [0.20, 0.20, 0.15, 0.15, 0.15, 0.15];
 // const fn 数组求和 (rust 1.80 stable iter().sum() 还不是 const)
@@ -143,7 +143,7 @@ pub struct ProofReport {
 /// 列出 8 个 const proofs 的报告.
 pub const ALL_CONST_PROOFS: &[ProofReport] = &[
     ProofReport {
-        name: "V0.5 30 维权重和=1.0",
+        name: "V0.5 24 维权重和=1.0",
         status: ProofStatus::Proven,
         description: "ASI V0.5 评估体系编译期守门",
     },

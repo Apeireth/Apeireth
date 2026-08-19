@@ -7,7 +7,7 @@
 //! - 1 Session (活跃 session 列表)
 //! - 2 Tools (6 工具 endpoint)
 //! - 3 Settings (5 权限 + 5 Provider + 4 SDK)
-//! - 4 Help (6 哲学锚 + 8 不修改承诺 + 1.0 release 文档)
+//! - 4 Help (8 哲学锚 + 8 不修改承诺 + 1.0 release 文档)
 //!
 //! **测试函数** (派活单 §5 要求 5 个 pub async fn):
 //! - `test_nav_status_renders_5_components`
@@ -21,7 +21,7 @@
 //! - 错误数 hardcode ✓ (复用 error.rs)
 //! - 0 改 LOCKED ✓
 //! - 0 改 workspace version ✓
-//! - 6 哲学锚透传 ✓ (Help nav 渲染 6 锚)
+//! - 8 哲学锚透传 ✓ (Help nav 渲染 8 锚)
 //! - 0 依赖 NewAPI ✓
 //! - 0 重复造轮子 ✓ (复用 harness / render)
 //! - 0 假装实缺 ✓ (5 nav 1:1 验证, 不假装 "通通渲染")
@@ -101,7 +101,7 @@ pub async fn test_nav_settings_shows_5_providers() -> TuiE2EResult<()> {
     Ok(())
 }
 
-/// 4 Help nav — 应显示 6 哲学锚 (per 派活单明确要求 6 anchor)
+/// 4 Help nav — 应显示 8 哲学锚 (per 派活单明确要求 8 anchor)
 pub async fn test_nav_help_shows_6_philosophy_anchors() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
     h.app.sub_nav = crate::Nav::Help;

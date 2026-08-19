@@ -19,7 +19,7 @@ pub struct TxId(pub Uuid);
 pub struct ActionPlan {
     /// 唯一 plan ID.
     pub plan_id: Uuid,
-    /// 行动目标 (12 键 hardcode 锁定的对象).
+    /// 行动目标 (13 键 hardcode 锁定的对象).
     pub target: ActionTarget,
     /// 执行步骤的有序列表 (描述字符串).
     pub steps: Vec<String>,
