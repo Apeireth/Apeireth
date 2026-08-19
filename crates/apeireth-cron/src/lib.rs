@@ -426,8 +426,9 @@ pub fn next_after(
         let y_adj: u16 = if mo < 3 { y.wrapping_sub(1) } else { y };
         let t: [i32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
         let m_idx = (mo - 1) as usize;
-        let y_i = y_adj as i32;
-        let d_i = d as i32;
+        // u16 / u8 -> i32 用 From, 跟 clippy::cast_lossless 一致
+        let y_i = i32::from(y_adj);
+        let d_i = i32::from(d);
         // Sakamoto 公式: (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7
         // 直接返 0=Sunday, 1=Monday, ..., 6=Saturday, 无需 remap
         let dow = (d_i + t[m_idx] + y_i + y_i / 4 - y_i / 100 + y_i / 400) % 7;
