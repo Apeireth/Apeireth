@@ -4,7 +4,7 @@
 # 模式: qdrant/tokio 业界惯例 (GitHub Issue Forms 2024+ YAML 1:1)
 # 参考: https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-issue-forms
 # 硬约束 (per CONTRIBUTING.md + rust.yml hard-walls job):
-#   - 0 触碰 23 LOCKED crate (per hard-walls job 实际清单, 不含 graph/formal)
+#   - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
 #   - 0 改 workspace version (1.2.0 semver 严守)
 #   - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
 #   - R11 在 `crates/apeireth-asi/tests/integration_r_measure.rs`
@@ -12,7 +12,7 @@
 # 跟 .github/ISSUE_TEMPLATE/bug.md (R20 写, 1.0 release 阶段 bug) 共存, 不删 (向后兼容)
 
 name: Bug Report
-description: Report a bug in Apeireth (Rust 85 + 1 desktop crate backend, 23 LOCKED + 9 organ + 5 重守门)
+description: Report a bug in Apeireth (Rust 85 + 1 desktop crate backend, 24 LOCKED + 9 organ + 5 重守门)
 title: "[BUG] "
 labels:
   - bug
@@ -110,7 +110,8 @@ body:
         Run before submitting:
 
         ```bash
-        # 0 改 24 LOCKED crate (24 个 crate: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
+        # 0 改 24 LOCKED crate (per hard-walls job, 跟 .github/workflows/rust.yml LOCKED 1:1, 含 graph)
+        # 23 -> 24 修于 commit 9bd81be6 (发现 hard-walls 漏 graph)
         git diff main..HEAD -- crates/apeireth-{supervisor,agent,council,bus,protocol,mcp,tool-registry,tool-runtime,graph,pipeline,tool-approval,extension,evolution,api,core,memory,asi,tools,cli,bench,cognition,action,life-force,constraint}/
         # 必须 0 行
         ```
@@ -121,7 +122,7 @@ body:
       label: 0 触碰实查确认
       description: Confirm no hard-locked items were modified (per rust.yml hard-walls job)
       options:
-        - label: 0 改 23 LOCKED crate (mtime 实查, per hard-walls job 实际清单)
+        - label: 0 改 24 LOCKED crate (mtime 实查, per hard-walls job 实际清单, 含 graph)
           required: false
         - label: 0 改 workspace version (1.2.0)
           required: false
