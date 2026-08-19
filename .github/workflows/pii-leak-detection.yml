@@ -60,6 +60,9 @@ jobs:
           # - .git/refs/original (filter-repo 备份, 不应扫描)
           # - *.lock (Cargo.lock 含第三方元数据)
           # - node_modules/, target/, dist/ (build artifacts)
+          # - .github/workflows/pii-leak-detection.yml (本 workflow 自身, 含关键词定义)
+          # - CHANGELOG.md (post-v1.0.0 entry 记录 PII 清洗关键词, 合法元提及)
+          # - docs/04-internal/ci-fix-log-2026-08.md (CI fix log 历史提及)
           EXCLUDES=(
             ':(exclude)docs/archive/**'
             ':(exclude)research/source/**'
@@ -67,6 +70,9 @@ jobs:
             ':(exclude)Cargo.lock'
             ':(exclude)frontend/companion-desktop/pnpm-lock.yaml'
             ':(exclude)frontend/companion-desktop/src-tauri/Cargo.lock'
+            ':(exclude).github/workflows/pii-leak-detection.yml'
+            ':(exclude)CHANGELOG.md'
+            ':(exclude)docs/04-internal/ci-fix-log-2026-08.md'
             ':(exclude)**/target/**'
             ':(exclude)**/node_modules/**'
             ':(exclude)**/dist/**'
