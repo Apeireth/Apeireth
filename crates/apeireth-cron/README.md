@@ -1,6 +1,6 @@
 # apeireth-cron
 
-> R23 cron 子模块: 计划任务声明 + 时间窗校验 + 5-field cron 解析 + @-shorthand + 月/星期别名
+> R23 cron 子模块: 计划任务声明 + 时间窗校验 + 5-field cron 解析 + @-shorthand + 月/星期别名 + 跨年闰年时间推算 (Sakamoto's algorithm)
 
 apeireth-cron 是 Apeireth 1.0 (AGI 操作系统) 工作区 crate 之一。完整架构见 [docs/](../../docs/README.md)。
 
@@ -11,7 +11,7 @@ apeireth-cron 是 Apeireth 1.0 (AGI 操作系统) 工作区 crate 之一。完�
 | `Schedule` | 简单周期任务 (name + interval_secs) | `Schedule::new() / validate()` |
 | `CronExpr` | 5-field cron 表达式 (minute hour dom month dow) | `CronExpr::parse() / matches() / is_reboot()` |
 | `Field` | 单字段位图 (0..=59 / 0..=23 / ...) | `Field::parse() / parse_alias() / matches()` |
-| `next_after` | 算下次触发时间 (O(N) 扫描) | `next_after(expr, m, h, dom, mon, dow)` |
+| `next_after` | 算下次触发时间 (Sakamoto's algorithm, 1 年 O(N)) | `next_after(expr, year, m, h, dom, mon, dow)` |
 | `describe` | human-readable 描述 | `describe(expr)` |
 
 ## 用法
@@ -68,9 +68,18 @@ pub enum CronError {
 
 ## 测试
 
-- 16 unit tests (5-field cron + aliases + shorthand + backward compat)
+- 25 unit tests (5-field cron + aliases + shorthand + backward compat) in `src/lib.rs mod tests`
 - 5 scheduler tests (`#[cfg(test)] mod scheduler`)
-- 总计: `cargo test -p apeireth-cron` → 43 passed
+- 25 integration tests in `tests/integration_cron.rs` (端到端, 跨字段组合 / 业务场景 / 跨年闰年)
+- 总计: `cargo test -p apeireth-cron` → **68 passed** (43 unit + 25 integration)
+
+### Integration tests 覆盖
+
+- **@-shorthand 等价** (5): @hourly/@daily/@midnight/@weekly/@monthly/@yearly/@annually 跟 5-field 一致
+- **别名 vs 数字** (4): JAN/1, JAN-MAR/1-3, MON-FRI/1-5, SUN/0 (semantic 比 `bits`)
+- **真实业务场景** (5): business hours 9-17, nightly backup 2:30, heartbeat 5min, quarterly, last-Friday-of-month
+- **next_after 时间推算** (7): 跨日 / 跨周 / 跨月 / 跨年 / 闰年 (2028-02-29)
+- **错误恢复** (3): invalid exprs, unknown shorthand, schedule validation
 
 ## Honest (per O-5 不假装)
 
