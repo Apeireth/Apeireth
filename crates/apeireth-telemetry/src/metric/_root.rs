@@ -588,7 +588,7 @@ mod tests {
         assert!(!PROMISE_8.is_empty());
     }
 
-    /// 守门 #22: 6 哲学锚 1:1 计数 + 各自守门.
+    /// 守门 #22: 哲学锚 1:1 计数 + 各自守门 (本模块保留 6 锚 const; B5 8 哲学锚权威源 = apeireth-core::eight_anchors).
     #[test]
     fn philosophy_anchors_6() {
         assert_eq!(PHILOSOPHY_ANCHOR_S1, "S-1 主 22:33 北极星导向");

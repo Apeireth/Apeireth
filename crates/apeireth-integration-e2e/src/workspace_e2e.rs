@@ -4,12 +4,12 @@
 //!
 //! **5 测试** (per 派活单 §6):
 //! 1. `test_workspace_cargo_check_passes`            — 主仓 `cargo check --workspace` 0 error
-//! 2. `test_workspace_no_locked_violation`           — 24 LOCKED crate 没被改
+//! 2. `test_workspace_no_locked_violation`           — 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 没被改
 //! 3. `test_workspace_no_sandbox_path_writes`        — 没写到 sandbox 错路径
 //! 4. `test_workspace_no_workspace_version (R38 1.1.0)_modified` — workspace version = 1.0.0
 //! 5. `test_workspace_8_promises_audit_passes`       — 8 项不修改承诺源头文件 LOCKED
 //!
-//! **24 LOCKED 清单** (per `docs/stage4/8-locked-unified-2026-08-05.md` + omnibus):
+//! **24 LOCKED crate 清单 (入口签名已降级 — 仅保 3 项不可变脊柱)** (per `docs/stage4/8-locked-unified-2026-08-05.md` + omnibus):
 //! apeireth-core / apeireth-memory / apeireth-asi / apeireth-tools / apeireth-cli /
 //! apeireth-bench / apeireth-cognition / apeireth-action / apeireth-life-force /
 //! apeireth-constraint / apeireth-central / apeireth-value / apeireth-consciousness /
@@ -25,7 +25,7 @@ use std::path::Path;
 
 use crate::error::{E2EError, E2EResult};
 
-/// 24 LOCKED crate 名字 (跟主仓 `crates/*/Cargo.toml` `[package] name` 对齐)
+/// 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 名字 (跟主仓 `crates/*/Cargo.toml` `[package] name` 对齐)
 pub const LOCKED_CRATES: &[&str] = &[
     "apeireth-core",
     "apeireth-memory",
@@ -57,7 +57,7 @@ pub const LOCKED_CRATES: &[&str] = &[
 ///
 /// R121 续 (V2-5 战区 2.5): 改承载到实际存在的 docs/{conventions,glossary,stage4} LOCKED 源
 /// (原 R11 baseline 文件 APEIRETH-* / FINISH-* / START-* 在 R20 阶段 5 已演化为 docs/ 下结构)
-/// **0 漂移概念**: 8 项不修改承诺 (6 哲学锚 / 5 重守门 / 双洋葱 / 9 器官) 1:1 改承载文件
+/// **0 漂移概念**: 8 项不修改承诺 (8 哲学锚 / 9 重 v9 守门 / 双洋葱 / 9 器官) 1:1 改承载文件
 /// **2026-08-15 docs 归位**: stage4 历史文档随 document-relocation-map.md 进 `_history/audits-reviews/`,
 /// 本常量同步更新 (归位只动位置与索引, 索引在此).
 /// **2026-08-18 docs(1.0) 重构**: 文档体系规范重构 (bb6978da) 把 conventions/glossary/stage4
@@ -102,9 +102,9 @@ pub fn test_workspace_cargo_check_passes(workspace_root: &Path) -> E2EResult<()>
     Ok(())
 }
 
-/// 测试 2: 24 LOCKED crate 没被改 (跟 git baseline 对比)
+/// 测试 2: 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 没被改 (跟 git baseline 对比)
 ///
-/// 简化版: 验 24 LOCKED crate 的 `Cargo.toml` 和 `src/lib.rs` 存在
+/// 简化版: 验 24 LOCKED crate (入口签名已降级) 的 `Cargo.toml` 和 `src/lib.rs` 存在
 /// (不实际跑 git diff, 因为 e2e 跑时可能 commit 了)
 pub fn test_workspace_no_locked_violation(workspace_root: &Path) -> E2EResult<()> {
     let mut missing = Vec::new();

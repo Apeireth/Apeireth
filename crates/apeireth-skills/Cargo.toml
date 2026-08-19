@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-skills — R23 6 module (cron/skills/acp/config/test/eval) skills 子模块: 可复用能力声明 + 描述 + 输入/输出 schema + 版本"
+description = "apeireth-skills — 可复用能力声明: id/version/input_schema/output_schema + Registry + 严格 semver 3 段比较 (R23 P1 #5 实质化). 10 pub 模块 + 1 private (organ_kani_proofs). TP23 加双通道 SkillRegistry (Capability + Discipline 互斥). 0 改 workspace.version."
 [lib]
 name = "apeireth_skills"
 path = "src/lib.rs"

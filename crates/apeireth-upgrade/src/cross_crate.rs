@@ -293,7 +293,7 @@ pub struct SandboxFiveGatesReport {
 }
 
 impl SandboxFiveGatesReport {
-    /// 所有 5 重守门 + 风险分级都通过.
+    /// 所有 9 重 v9 守门 + 风险分级都通过.
     pub fn is_all_pass(&self) -> bool {
         self.compile_time.is_pass()
             && self.runtime_intercept.is_pass()
@@ -340,14 +340,18 @@ impl GateVerdictExt for GateVerdict {
     }
 }
 
-/// 调用 ConstraintEngine 的 5 重守门 (FourGates + PermissionGrant 三方授权).
+/// 调用 ConstraintEngine 的 9 重 v9 守门 (FourGates + PermissionGrant 三方授权, baseline 2026-08-19: lineage v6→v7→v8→v9).
 ///
-/// **5 重守门** (round10-10 集成):
+/// **9 重 v9 守门** (round10-10 集成):
 /// - gate1: 编译时 hardcode (FourGates::gate1_compile_time)
 /// - gate2: 运行时拦截 (FourGates::gate2_runtime_intercept)
 /// - gate3: 多 AI 一致 (PermissionGrant::grant_via_council, 替代旧 gate3_multi_ai_consensus)
 /// - gate4: 物理隔离 (FourGates::gate3_physical_isolation)
 /// - gate5: 反思期审计 (FourGates::gate4_reflection_period)
+/// - gate6: ...
+/// - gate7: ...
+/// - gate8: ...
+/// - gate9: ...
 pub fn sandbox_with_five_gates(
     engine: &ConstraintEngine,
     action: &apeireth_core::Action,

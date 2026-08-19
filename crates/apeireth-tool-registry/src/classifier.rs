@@ -35,7 +35,7 @@
 //!
 //! **不修改承诺** (R119 形式撤销后原意保留):
 //! - ✅ 0 改 Tool trait 4 方法签名
-//! - ✅ 0 触碰 24 LOCKED crate (apeireth-cognition/core/sovereignty/formal)
+//! - ✅ 0 触碰 24 LOCKED crate (apeireth-cognition/core/sovereignty/formal; R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
 //! - ✅ 0 引入 fastembed (重编译, 留 R21+)
 //! - ✅ 0 主动 commit
 //!

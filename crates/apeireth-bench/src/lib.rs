@@ -26,7 +26,7 @@ pub mod agent_bench;
 /// Self-Disable 攻击场景库 (v2-strategy §05 Step 6)。
 ///
 /// 20 case × 5 大机制 (A 元问题 / B 重组洋葱 / C Evolution / D HA 抗胁迫 / E 自动检测),
-/// smoke 级守门 (纯文本 pattern), R121+ 接真守门 (24 LOCKED crate).
+/// smoke 级守门 (纯文本 pattern), R121+ 接真守门 (24 LOCKED crate 入口签名已降级).
 pub mod self_disable_bench;
 
 /// B-2 (B 留) latency P50/P99 bench — wiremock 4 协议 + cache hit / miss / retry 三场景.
