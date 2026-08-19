@@ -7,7 +7,7 @@
 # 跟 .github/ISSUE_TEMPLATE/feature.md (R20 写, R20 阶段 1-6) 共存, 不删 (向后兼容)
 
 name: Feature Request
-description: Propose a new feature for Apeireth (Rust 92+ crate backend, 24 LOCKED + 9 organ)
+description: Propose a new feature for Apeireth (Rust 85 + 1 desktop crate backend, 23 LOCKED + 9 organ)
 title: "[FEATURE] "
 labels:
   - enhancement
@@ -24,9 +24,9 @@ body:
       label: Target release
       description: Which release cycle does this target?
       options:
-        - R26+ (post-1.0 patch, e.g. 1.1.1 / 1.1.2)
-        - R27+ (1.2 minor, e.g. 1.2.0)
-        - R30+ (1.x major, e.g. 2.0.0)
+        - post-1.0 patch (e.g. 1.0.1)
+        - v1.5 mid-term (e.g. 1.5.0)
+        - v2.0 major (breaking changes)
         - Backlog (no timeline)
     validations:
       required: true
@@ -37,19 +37,32 @@ body:
       label: Affected crate(s)
       description: Which crate(s) does this feature touch?
       options:
-        - apeireth-asi (24 LOCKED — 0 触碰!)
-        - apeireth-cognition (24 LOCKED — 0 触碰!)
-        - apeireth-core (24 LOCKED — 0 触碰!)
-        - apeireth-sovereignty (24 LOCKED — 0 触碰!)
-        - apeireth-formal (24 LOCKED — 0 触碰!)
+        - apeireth-supervisor (23 LOCKED — 0 触碰!)
+        - apeireth-agent (23 LOCKED — 0 触碰!)
+        - apeireth-council (23 LOCKED — 0 触碰!)
+        - apeireth-bus (23 LOCKED — 0 触碰!)
+        - apeireth-protocol (23 LOCKED — 0 触碰!)
+        - apeireth-mcp (23 LOCKED — 0 触碰!)
+        - apeireth-tool-registry (23 LOCKED — 0 触碰!)
+        - apeireth-tool-runtime (23 LOCKED — 0 触碰!)
+        - apeireth-pipeline (23 LOCKED — 0 触碰!)
+        - apeireth-tool-approval (23 LOCKED — 0 触碰!)
+        - apeireth-extension (23 LOCKED — 0 触碰!)
+        - apeireth-evolution (23 LOCKED — 0 触碰!)
+        - apeireth-api (23 LOCKED — 0 触碰!)
+        - apeireth-core (23 LOCKED — 0 触碰!)
         - apeireth-memory (semantic_search + user_profile)
-        - apeireth-vector (sqlite-vec backend)
+        - apeireth-asi (23 LOCKED — 0 触碰!)
+        - apeireth-tools (23 LOCKED — 0 触碰!)
+        - apeireth-cli (23 LOCKED — 0 触碰!)
+        - apeireth-bench (23 LOCKED — 0 触碰!)
+        - apeireth-cognition (23 LOCKED — 0 触碰!)
+        - apeireth-action (23 LOCKED — 0 触碰!)
+        - apeireth-life-force (23 LOCKED — 0 触碰!)
+        - apeireth-constraint (23 LOCKED — 0 触碰!)
         - apeireth-tui (瘦客户端)
-        - apeireth-api (cache / retry / routing)
-        - apeireth-tool-registry (8 工具)
-        - apeireth-council (多 AI 投票)
-        - apeireth-eval (7 阶段 eval)
-        - apeireth-pipeline (orchestrator)
+        - apeireth-vector (sqlite-vec backend)
+        - apeireth-pipeline-g5 (5 阶段 pipeline 框架)
         - workspace-level (CI / docs / tooling)
     validations:
       required: true
@@ -128,13 +141,13 @@ body:
   - type: checkboxes
     id: locked_check
     attributes:
-      label: 0 触碰实查确认
+      label: 0 触碰实查确认 (per rust.yml hard-walls job)
       options:
-        - label: 0 触碰 24 LOCKED crate (mtime 实查)
+        - label: 0 触碰 23 LOCKED crate (mtime 实查, per hard-walls job 实际清单)
           required: true
-        - label: 0 改 workspace version (1.1.0)
+        - label: 0 改 workspace version (1.2.0)
           required: true
-        - label: 0 改 R11 baseline 3 值 (V1141 / V1131 / V1136)
+        - label: 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
           required: true
         - label: 0 改 7 LOCKED 文档
           required: true

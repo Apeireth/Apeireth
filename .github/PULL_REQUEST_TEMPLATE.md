@@ -4,10 +4,11 @@
   参考:
     - https://github.com/tokio-rs/tokio/blob/master/.github/PULL_REQUEST_TEMPLATE.md
     - https://github.com/qdrant/qdrant/blob/master/.github/PULL_REQUEST_TEMPLATE.md
-  硬约束 (per CONTRIBUTING.md §0 触碰实查):
-    - 0 触碰 24 LOCKED crate
-    - 0 改 workspace.version (1.1.0 semver 严守)
-    - 0 改 R11 baseline 3 值 (V1141 / V1131 / V1136, in `apeireth-asi/src/lib.rs`)
+  硬约束 (per CONTRIBUTING.md §0 触碰实查 + rust.yml hard-walls job):
+    - 0 触碰 23 LOCKED crate (per hard-walls job, 实际清单)
+    - 0 改 workspace.version (1.2.0 semver 严守)
+    - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
+    - R11 baseline 在 `crates/apeireth-asi/tests/integration_r_measure.rs` (编译期 const)
     - cargo test pass (cargo test --workspace 全绿)
     - 0 假装 (不假装已实现, skeleton 标 ⏳)
 -->
@@ -41,9 +42,9 @@
 
 <!-- 任务要的 5 项 1:1, 提交前必跑实查 -->
 
-- [ ] **0 触碰 24 LOCKED crate** (mtime 实查, 24 个 crate: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
-- [ ] **0 改 workspace.version** (1.1.0 semver 严守, per `docs/versioning/`)
-- [ ] **0 改 R11 baseline 3 值** (V1141 / V1131 / V1136, in `apeireth-asi/src/lib.rs`)
+- [ ] **0 触碰 23 LOCKED crate** (per hard-walls job 实际清单, 23 个: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
+- [ ] **0 改 workspace.version** (1.2.0 semver 严守, per `docs/versioning/`)
+- [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `crates/apeireth-asi/tests/integration_r_measure.rs`)
 - [ ] **cargo test pass** (`cargo test --workspace` 全绿 + `cargo test --doc` 全绿)
 - [ ] **0 假装** (skeleton 标 ⏳, 不假装已实现, 编译期 hardcode 守门)
 
@@ -88,22 +89,22 @@
 - [ ] 不重复造轮子
 - [ ] 诚实标缺
 
-## 1.0 release 12 项 checklist (per [CONTRIBUTING.md §1.0 release 12 项 checklist](https://github.com/apeireth/apeireth-rust/blob/main/CONTRIBUTING.md))
+## 1.0 release 12 项 checklist (per [scripts/release-1.0-checklist.sh](https://github.com/apeireth/apeireth-rust/blob/main/scripts/release-1.0-checklist.sh))
 
 <!-- 仅在 1.0 release 收尾时勾选, 日常 PR 留空 -->
 
-- [ ] #1 doc
-- [ ] #2 test
-- [ ] #3 signature (cosign)
-- [ ] #4 install (8 包)
-- [ ] #5 upgrade (D-07 1 次迁移)
-- [ ] #6 uninstall (8 包 0 残留)
-- [ ] #7 perf (cargo bench)
-- [ ] #8 observability
-- [ ] #9 ci (GitHub Actions green)
-- [ ] #10 i18n
-- [ ] #11 license (OSS NOTICE)
-- [ ] #12 security (cargo audit)
+- [ ] #1 doc (README + CHANGELOG + 4 docs 站)
+- [ ] #2 test (cargo test --workspace 0 fail)
+- [ ] #3 security (5 守门 + cargo audit + cargo deny)
+- [ ] #4 install (8 包 dry-run install 0 错)
+- [ ] #5 upgrade (D-07 1 次迁移脚本 dry-run 0 错)
+- [ ] #6 uninstall (apt remove / dnf remove / brew uninstall 0 残留)
+- [ ] #7 perf (cargo bench baseline 0 regression, P95 < 2s)
+- [ ] #8 observability (tracing + Prometheus metrics endpoint 200)
+- [ ] #9 ci (GitHub Actions green, 5 守门 + 7 matrix)
+- [ ] #10 i18n (中英文档 0 missing)
+- [ ] #11 license (Apache 2.0 + NOTICE + 第三方 LICENSE)
+- [ ] #12 signature (8 形态签名: deb.gpg / rpm.gpg / brew / scoop / tarball / image.cosign / git.tag.gpg / crates.io.token)
 
 ## Checklist (PR 提交前自查)
 
