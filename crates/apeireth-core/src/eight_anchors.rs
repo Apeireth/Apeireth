@@ -169,26 +169,14 @@ pub const ALL_EIGHT_ANCHORS: [PhilosophicalAnchor8; 8] = [
 
 /// 8 哲学锚代号列表 (顺序匹配 `ALL_EIGHT_ANCHORS`, 编译期 hardcode)
 pub const ALL_EIGHT_ANCHOR_CODES: [&str; 8] = [
-    "S-1",
-    "S-2",
-    "S-3", // R126 NEW
+    "S-1", "S-2", "S-3", // R126 NEW
     "O-1", // R126 NEW
-    "O-2",
-    "O-3",
-    "O-4",
-    "O-5",
+    "O-2", "O-3", "O-4", "O-5",
 ];
 
 /// 6 哲学锚 (向后兼容) 顺序锁定 (per `apeireth-council::PHILOSOPHICAL_ANCHORS`)
 /// 顺序: S-1 → S-2 → O-2 → O-3 → O-4 → O-5 (原 6 锚, 0 改)
-pub const LEGACY_SIX_ANCHOR_CODES: [&str; 6] = [
-    "S-1",
-    "S-2",
-    "O-2",
-    "O-3",
-    "O-4",
-    "O-5",
-];
+pub const LEGACY_SIX_ANCHOR_CODES: [&str; 6] = ["S-1", "S-2", "O-2", "O-3", "O-4", "O-5"];
 
 /// R126 新增 2 锚代号 (S-3 + O-1, per 决策 #22 §2.5 B5 升级)
 pub const R126_NEW_ANCHOR_CODES: [&str; 2] = [
@@ -322,14 +310,7 @@ pub const fn anchor_code_to_eight(code: &str) -> Option<PhilosophicalAnchor8> {
 }
 
 /// 6 锚代号列表 (per `apeireth-council::PHILOSOPHICAL_ANCHORS: [&str; 6]`, 0 改)
-pub const LEGACY_SIX_ANCHORS: [&str; 6] = [
-    "S-1",
-    "S-2",
-    "O-2",
-    "O-3",
-    "O-4",
-    "O-5",
-];
+pub const LEGACY_SIX_ANCHORS: [&str; 6] = ["S-1", "S-2", "O-2", "O-3", "O-4", "O-5"];
 
 // ============================================
 // 5. 内联单元测试 (per R125-8 模式, 8+ tests)
@@ -352,7 +333,11 @@ mod tests {
         for (i, anchor) in ALL_EIGHT_ANCHORS.iter().enumerate() {
             // 同一 anchor 多次出现 = 重复
             for j in 0..i {
-                assert_ne!(ALL_EIGHT_ANCHORS[j], *anchor, "8 锚数组中出现重复: {:?}", anchor);
+                assert_ne!(
+                    ALL_EIGHT_ANCHORS[j], *anchor,
+                    "8 锚数组中出现重复: {:?}",
+                    anchor
+                );
             }
             seen[i] = true;
         }
@@ -362,11 +347,20 @@ mod tests {
     /// 测试 2: 8 锚命名空间分组 = 3 S-* + 5 O-*
     #[test]
     fn test_eight_anchors_namespace_distribution() {
-        let s_count = ALL_EIGHT_ANCHORS.iter().filter(|a| a.namespace() == 1).count();
-        let o_count = ALL_EIGHT_ANCHORS.iter().filter(|a| a.namespace() == 2).count();
+        let s_count = ALL_EIGHT_ANCHORS
+            .iter()
+            .filter(|a| a.namespace() == 1)
+            .count();
+        let o_count = ALL_EIGHT_ANCHORS
+            .iter()
+            .filter(|a| a.namespace() == 2)
+            .count();
 
         assert_eq!(s_count, 3, "S-* 命名空间必须有 3 个 (S-1, S-2, S-3)");
-        assert_eq!(o_count, 5, "O-* 命名空间必须有 5 个 (O-1, O-2, O-3, O-4, O-5)");
+        assert_eq!(
+            o_count, 5,
+            "O-* 命名空间必须有 5 个 (O-1, O-2, O-3, O-4, O-5)"
+        );
         assert_eq!(s_count + o_count, 8, "S-* + O-* 必须 = 8");
     }
 
@@ -374,7 +368,10 @@ mod tests {
     #[test]
     fn test_eight_anchors_r126_new() {
         let r126_new_count = ALL_EIGHT_ANCHORS.iter().filter(|a| a.is_r126_new()).count();
-        let legacy_six_count = ALL_EIGHT_ANCHORS.iter().filter(|a| a.is_legacy_six()).count();
+        let legacy_six_count = ALL_EIGHT_ANCHORS
+            .iter()
+            .filter(|a| a.is_legacy_six())
+            .count();
 
         assert_eq!(r126_new_count, 2, "R126 新增必须有 2 个 (S-3 + O-1)");
         assert_eq!(legacy_six_count, 6, "原 6 锚必须有 6 个 (向后兼容)");
@@ -405,31 +402,75 @@ mod tests {
     /// 测试 6: 8 锚 description() 函数返回正确描述
     #[test]
     fn test_eight_anchors_description() {
-        assert!(PhilosophicalAnchor8::S1NorthStar.description().contains("S-1"));
-        assert!(PhilosophicalAnchor8::S2TruthFromReality.description().contains("S-2"));
-        assert!(PhilosophicalAnchor8::S3QualityEngineering.description().contains("S-3"));
-        assert!(PhilosophicalAnchor8::S3QualityEngineering.description().contains("质量工程化"));
-        assert!(PhilosophicalAnchor8::O1SafetyFirst.description().contains("O-1"));
-        assert!(PhilosophicalAnchor8::O1SafetyFirst.description().contains("安全优先"));
-        assert!(PhilosophicalAnchor8::O2StandingOnShoulders.description().contains("O-2"));
-        assert!(PhilosophicalAnchor8::O3SeeItThrough.description().contains("O-3"));
-        assert!(PhilosophicalAnchor8::O4AnyoneCanTakeOver.description().contains("O-4"));
-        assert!(PhilosophicalAnchor8::O5NoPretend.description().contains("O-5"));
+        assert!(PhilosophicalAnchor8::S1NorthStar
+            .description()
+            .contains("S-1"));
+        assert!(PhilosophicalAnchor8::S2TruthFromReality
+            .description()
+            .contains("S-2"));
+        assert!(PhilosophicalAnchor8::S3QualityEngineering
+            .description()
+            .contains("S-3"));
+        assert!(PhilosophicalAnchor8::S3QualityEngineering
+            .description()
+            .contains("质量工程化"));
+        assert!(PhilosophicalAnchor8::O1SafetyFirst
+            .description()
+            .contains("O-1"));
+        assert!(PhilosophicalAnchor8::O1SafetyFirst
+            .description()
+            .contains("安全优先"));
+        assert!(PhilosophicalAnchor8::O2StandingOnShoulders
+            .description()
+            .contains("O-2"));
+        assert!(PhilosophicalAnchor8::O3SeeItThrough
+            .description()
+            .contains("O-3"));
+        assert!(PhilosophicalAnchor8::O4AnyoneCanTakeOver
+            .description()
+            .contains("O-4"));
+        assert!(PhilosophicalAnchor8::O5NoPretend
+            .description()
+            .contains("O-5"));
     }
 
     /// 测试 7: 6→8 互转 (向后兼容, 6 锚 input 仍 work)
     #[test]
     fn test_anchor_code_to_eight_legacy_six() {
         // 6 锚 input 0 改 (向后兼容, B1 入口签名 0 改)
-        assert_eq!(anchor_code_to_eight("S-1"), Some(PhilosophicalAnchor8::S1NorthStar));
-        assert_eq!(anchor_code_to_eight("S-2"), Some(PhilosophicalAnchor8::S2TruthFromReality));
-        assert_eq!(anchor_code_to_eight("O-2"), Some(PhilosophicalAnchor8::O2StandingOnShoulders));
-        assert_eq!(anchor_code_to_eight("O-3"), Some(PhilosophicalAnchor8::O3SeeItThrough));
-        assert_eq!(anchor_code_to_eight("O-4"), Some(PhilosophicalAnchor8::O4AnyoneCanTakeOver));
-        assert_eq!(anchor_code_to_eight("O-5"), Some(PhilosophicalAnchor8::O5NoPretend));
+        assert_eq!(
+            anchor_code_to_eight("S-1"),
+            Some(PhilosophicalAnchor8::S1NorthStar)
+        );
+        assert_eq!(
+            anchor_code_to_eight("S-2"),
+            Some(PhilosophicalAnchor8::S2TruthFromReality)
+        );
+        assert_eq!(
+            anchor_code_to_eight("O-2"),
+            Some(PhilosophicalAnchor8::O2StandingOnShoulders)
+        );
+        assert_eq!(
+            anchor_code_to_eight("O-3"),
+            Some(PhilosophicalAnchor8::O3SeeItThrough)
+        );
+        assert_eq!(
+            anchor_code_to_eight("O-4"),
+            Some(PhilosophicalAnchor8::O4AnyoneCanTakeOver)
+        );
+        assert_eq!(
+            anchor_code_to_eight("O-5"),
+            Some(PhilosophicalAnchor8::O5NoPretend)
+        );
         // 0 装 PASS: 0 假装"已升级"
-        assert_eq!(anchor_code_to_eight("S-3"), Some(PhilosophicalAnchor8::S3QualityEngineering));
-        assert_eq!(anchor_code_to_eight("O-1"), Some(PhilosophicalAnchor8::O1SafetyFirst));
+        assert_eq!(
+            anchor_code_to_eight("S-3"),
+            Some(PhilosophicalAnchor8::S3QualityEngineering)
+        );
+        assert_eq!(
+            anchor_code_to_eight("O-1"),
+            Some(PhilosophicalAnchor8::O1SafetyFirst)
+        );
         // 无效 input
         assert_eq!(anchor_code_to_eight("S-99"), None);
         assert_eq!(anchor_code_to_eight(""), None);
@@ -442,13 +483,25 @@ mod tests {
         // S-1 = [0], S-2 = [1], O-2 = [4], O-3 = [5], O-4 = [6], O-5 = [7]
         // R126 新增: S-3 = [2], O-1 = [3]
         assert_eq!(ALL_EIGHT_ANCHORS[0], PhilosophicalAnchor8::S1NorthStar);
-        assert_eq!(ALL_EIGHT_ANCHORS[1], PhilosophicalAnchor8::S2TruthFromReality);
-        assert_eq!(ALL_EIGHT_ANCHORS[4], PhilosophicalAnchor8::O2StandingOnShoulders);
+        assert_eq!(
+            ALL_EIGHT_ANCHORS[1],
+            PhilosophicalAnchor8::S2TruthFromReality
+        );
+        assert_eq!(
+            ALL_EIGHT_ANCHORS[4],
+            PhilosophicalAnchor8::O2StandingOnShoulders
+        );
         assert_eq!(ALL_EIGHT_ANCHORS[5], PhilosophicalAnchor8::O3SeeItThrough);
-        assert_eq!(ALL_EIGHT_ANCHORS[6], PhilosophicalAnchor8::O4AnyoneCanTakeOver);
+        assert_eq!(
+            ALL_EIGHT_ANCHORS[6],
+            PhilosophicalAnchor8::O4AnyoneCanTakeOver
+        );
         assert_eq!(ALL_EIGHT_ANCHORS[7], PhilosophicalAnchor8::O5NoPretend);
         // R126 新增位置
-        assert_eq!(ALL_EIGHT_ANCHORS[2], PhilosophicalAnchor8::S3QualityEngineering);
+        assert_eq!(
+            ALL_EIGHT_ANCHORS[2],
+            PhilosophicalAnchor8::S3QualityEngineering
+        );
         assert_eq!(ALL_EIGHT_ANCHORS[3], PhilosophicalAnchor8::O1SafetyFirst);
     }
 
@@ -477,8 +530,12 @@ mod tests {
     #[test]
     fn test_r126_new_anchor_codes() {
         assert_eq!(R126_NEW_ANCHOR_CODES, ["S-3", "O-1"]);
-        assert!(anchor_code_to_eight(R126_NEW_ANCHOR_CODES[0]).unwrap().is_r126_new());
-        assert!(anchor_code_to_eight(R126_NEW_ANCHOR_CODES[1]).unwrap().is_r126_new());
+        assert!(anchor_code_to_eight(R126_NEW_ANCHOR_CODES[0])
+            .unwrap()
+            .is_r126_new());
+        assert!(anchor_code_to_eight(R126_NEW_ANCHOR_CODES[1])
+            .unwrap()
+            .is_r126_new());
     }
 
     /// 测试 12 (额外): is_legacy_six() 跟 is_r126_new() 互斥
