@@ -64,6 +64,25 @@ pub const MIGRATIONS: &[Migration] = &[
               ALTER TABLE episodes ADD COLUMN provenance TEXT;\n\
               CREATE INDEX IF NOT EXISTS idx_episodes_created_ms ON episodes(created_ms);",
     },
+    // Core Capability Expansion Phase 2: sessions 表生命周期扩展列.
+    // 向后兼容铁律: 全部新增列 NULLable / 有默认值, 存量行 ALTER 后自动取默认语义
+    // (title NULL→"未命名", state NULL→active, revision NULL→0, scope NULL→global).
+    // 不改既有 sessions 列定义, 不动既有 SessionStore trait 行为 (旧 upsert 仍只写 4 列).
+    // SQLite ALTER TABLE 一次一列 → 多条语句.
+    Migration {
+        version: 5,
+        name: "V5__sessions_lifecycle",
+        sql: "ALTER TABLE sessions ADD COLUMN title TEXT;\n\
+              ALTER TABLE sessions ADD COLUMN scope TEXT;\n\
+              ALTER TABLE sessions ADD COLUMN project_id TEXT;\n\
+              ALTER TABLE sessions ADD COLUMN state TEXT;\n\
+              ALTER TABLE sessions ADD COLUMN metadata_json TEXT;\n\
+              ALTER TABLE sessions ADD COLUMN revision INTEGER NOT NULL DEFAULT 0;\n\
+              ALTER TABLE sessions ADD COLUMN archived_at INTEGER;\n\
+              ALTER TABLE sessions ADD COLUMN updated_at INTEGER;\n\
+              CREATE INDEX IF NOT EXISTS idx_sessions_state ON sessions(state);\n\
+              CREATE INDEX IF NOT EXISTS idx_sessions_scope ON sessions(scope);",
+    },
 ];
 
 const HALLWAYS_SQL: &str = r#"

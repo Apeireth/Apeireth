@@ -91,3 +91,37 @@
 
 ## Phase 2..N
 (追加)
+
+## Phase 2 — Backend Session Lifecycle (DONE)
+
+### Domain Model
+- `SessionLifecycleRecord` (V5 扩展列): `id, title, scope(global/project), project_id, state(active/archived/closed), started_at, last_active_at, updated_at, archived_at, closed_at, revision, metadata`.
+- 状态机: `active --archive--> archived --restore--> active`; `active|archived --close--> closed (终态)`. closed 不可再 archive/restore.
+- 乐观并发: rename/archive/restore/close 携带 `expected_rev`, CAS 失败 → `Conflict`. revision 单调递增.
+- 删除: 本轮**不**实现 hard delete (episode/audit 依赖 session, 直接 DELETE 留 orphan). archive/close = tombstone 语义. 永久删除留待后续.
+
+### Migration (V5)
+- `sessions` 表加 8 列 (title/scope/project_id/state/metadata_json/revision/archived_at/updated_at) + 2 索引 (state, scope).
+- 向后兼容: 全 NULLable/默认值. 存量行 NULL → (state=active, revision=0, scope=global). 零数据迁移.
+- 幂等 (schema_migrations 表守护). 既有 `SessionStore` trait (旧 upsert 4 列) 不变.
+
+### API (canonical session resource, 不污染 /v1/panel)
+- `GET /v1/apeireth/sessions` (list, ?include_archived)
+- `POST /v1/apeireth/sessions` (create)
+- `GET /v1/apeireth/sessions/:id` (get)
+- `PATCH /v1/apeireth/sessions/:id` (rename, expected_rev)
+- `POST /v1/apeireth/sessions/:id/archive|restore|close` (expected_rev)
+- 错误: NotFound(404) / Conflict(409) / IllegalTransition(409) / Validation(400) 统一 JSON `{"error","message"}`.
+
+### Capability Manifest 更新
+- `sessions.create/rename/archive/restore/close` 全部 → supported=true.
+
+### 验证
+- `cargo test -p apeireth-memory --lib session_lifecycle` → 12 passed.
+- `cargo test -p apeireth-companion --test session_lifecycle_integration` → 10 passed.
+- `cargo test -p apeireth-companion --lib runtime_capabilities` → 10 passed (含 sessions mutation supported).
+- `cargo build --example companion_serve` PASS.
+- `svelte-check` 0 err.
+
+### 迁移/兼容
+- Local localStorage sessions: 本轮**不**自动上传 (schema/安全未明确). Desktop 仍读本地 + 后端只读展示; backend mutation 真接入待 Phase 6. legacy local session 保留, 不丢.
