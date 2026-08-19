@@ -23,7 +23,7 @@
 //! - 错误数 hardcode ✓ (不变, 复用 error.rs)
 //! - 0 改 LOCKED ✓
 //! - 0 改 workspace version ✓
-//! - 6 哲学锚透传 ✓ (mind organ 渲染 6 锚)
+//! - 8 哲学锚透传 ✓ (mind organ 渲染 8 锚)
 //! - 0 依赖 NewAPI ✓
 //! - 0 重复造轮子 ✓ (ratatui 现成 Layout / Paragraph)
 //! - 0 假装实缺 ✓ (4 panel 高度 hardcode, 跟 tui 一致)
@@ -128,7 +128,7 @@ pub fn render_content(f: &mut Frame, area: Rect, app: &TuiApp) {
     f.render_widget(p, area);
 }
 
-/// Bridge nav 内容 (主页: 9 器官 + 6 哲学锚)
+/// Bridge nav 内容 (主页: 9 器官 + 8 哲学锚)
 fn render_bridge_content(app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
@@ -444,7 +444,7 @@ fn render_sub_settings_content(_app: &TuiApp) -> Vec<Line<'_>> {
     lines
 }
 
-/// Help sub-nav 内容 — 6 哲学锚 + 5 R-Measure + 1.0 release 文档
+/// Help sub-nav 内容 — 8 哲学锚 + 5 R-Measure + 1.0 release 文档
 fn render_help_content(_app: &TuiApp) -> Vec<Line<'_>> {
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::from(Span::styled(
