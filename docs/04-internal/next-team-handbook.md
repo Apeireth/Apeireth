@@ -73,6 +73,14 @@
 | TP29 | **工具声明式配置**（Composio 借鉴） | 插件规范升级: 工具 = YAML 声明（名称/参数/权限声明）+ 实现; 认证走 N21 credentials |
 | TP30 | **待评估清单**（~40 项） | 剩余项目（OpenSquilla/exo/project-nomad/OCR 类/Scrapling/maigret/airllm/taipy/GitNexus/Agent-S/OpenStock/Vibe-Trading/OpenAlice/FinSight-AI/Lean 等）按价值下放给团队分批调研, 每批输出"机制+对照+吸收建议"（0 装 PASS: 未调研不写结论） |
 
+### v1.5 中期 (post-v1.0.0)
+
+| 包 | 名称 | 挂接 | 边界要点 | 验收 |
+|---|---|---|---|---|
+| TP34 | **companion_serve 真接流式**（CoT + tool_call + tool_result SSE） | `apeireth-companion/examples/companion_serve.rs` | 当前 `stream: false` 写死在 10 处 (line 130/214/426/477/527/584/643/711/768/1002), `next_after` line 1002 真发非流式。前端 `frontend/companion-desktop/src/lib/runtime.ts` 收的 `reasoning-delta` / `tool-call` / `tool-result` / `reasoning_content` 等 RuntimeEvent 0 触发, UI `ExecutionTimeline.svelte` 拿不到真 SSE 流。<br><br>**设计点**: (1) CoT tag 怎么拆 delta? `<think>...</think>` 在流里分段 emit; (2) tool_call 怎么在流里 emit? OpenAI tool_calls 数组 vs 单 event 顺序; (3) chunked vs full — 每次 mini-batch emit; (4) backpressure / cancellation token.<br><br>**估计**: 1-2 周 (后端 + 前端解析 + 测试 + e2e). 跟 0.5 mock SSE 走端到端验证. | 6 种 RuntimeEvent 都能 e2e 触发; real LLM (有 API key) E2E; mock SSE 回归; 前端 UI timeline 显示工具流. |
+
+> **TP34 来源**: 2026-08-19 PR #1 (companion-desktop 合并) 后的真生产洞. PR 作者的 e2e 是 mock SSE, 已知 real LLM streaming 是 follow-up. 留集成层 0 装 PASS.
+
 ---
 
 ## 2. 执行顺序建议
@@ -83,6 +91,7 @@
 3. **TP25→TP26**（投资场景主链: 时序预测器 → 事件架构）
 4. TP27（数据资产, 1 人）TP28（知识库, 1 人）并行
 5. TP29（规范, 随 N17 装配批收尾）; TP30（持续下放调研, 2 人轮值）
+6. **TP34 v1.5 中期排期**（companion_serve 流式; 1-2 周; 跟 TP31+TP32 不冲突, 可独立排期）
 
 ## 3. 明确不做（防重复调研）
 
