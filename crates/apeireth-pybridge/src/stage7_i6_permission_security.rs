@@ -3,7 +3,7 @@
 //! **任务**: ASI Stage 7 跨模块集成 (per decision-61 §3.1 R129-18)
 //! **承接**: R129-5 Stage 5 治理 (G2 权限治理) + R129-6 Stage 6 守护 (K3 安全守护)
 //! **维度**: I6 G2+K3 — 权限治理 (G2) 跟安全守护 (K3) 跨 stage 集成
-//! **目标**: ASI 权限 = 安全防线, 6 重 v7 + G7 跨语言 = 7 重守门 集成
+//! **目标**: ASI 权限 = 安全防线, 9 重 v9 守门 + G7 跨语言 = 7 重守门 集成
 //!
 //! # I6 集成范围
 //!
@@ -21,7 +21,7 @@
 //! # 8 硬墙 0 越界
 //!
 //! - B2 1.2.0 0 改 / A1 R11 baseline 0 改 / B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
-//! - B4 6 重 v7 严守 (K3 集成是连接, 0 改 v7) / B5 8 哲学锚 / B3 30 维 / A3 13 键 0 改
+//! - B4 9 重 v9 守门 (K3 集成是连接, 0 改 v9) / B5 8 哲学锚 / B3 V0.5 24 维 / A3 13 键 0 改
 //! - C1 0 主动 commit / C2 0 装 PASS 严守 / 0 主动 push
 
 use crate::permission_governance::{
@@ -41,7 +41,7 @@ pub const STAGE7_I6_VERSION: &str = "0.1.0-R129-Stage7-I6";
 /// I6 集成维度数 (2: G2 权限 + K3 安全)
 pub const STAGE7_I6_DIMENSION_COUNT: usize = 2;
 
-/// I6 权限 layer 数 (6 重 v7, 1:1 跟 B4 严守)
+/// I6 权限 layer 数 (9 重 v9 守门, 1:1 跟 B4 严守)
 pub const STAGE7_I6_PERMISSION_LAYER_COUNT: usize = PERMISSION_GOVERNANCE_LAYER_COUNT;
 
 /// I6 安全 gate 数 (7 重: G1-G6 v7 + G7 跨语言)
@@ -59,7 +59,7 @@ pub const STAGE7_I6_BINDING_COUNT: usize =
 pub struct PermissionSecurityBinding {
     pub layer: PermissionLayer,
     pub gate: SecurityGate,
-    pub is_v7_baseline: bool,  // true if 1:1 跟 B4 6 重 v7
+    pub is_v7_baseline: bool,  // true if 1:1 跟 B4 9 重 v9 守门
     pub is_g7_extension: bool, // true if G7 跨语言 (K3 新增)
 }
 
@@ -290,7 +290,7 @@ pub fn stage7_i6_healthy() -> bool {
     let k3_ok = stage6_security_summary().contains("K3 SecurityGuard");
     let v7_intact = stage6_security_baseline_intact();
     c.matrix.len() == STAGE7_I6_BINDING_COUNT
-        && c.matrix.v7_baseline_count() == 6 // 6 重 v7 严守
+        && c.matrix.v7_baseline_count() == 6 // 9 重 v9 守门 严守
         && c.matrix.g7_extension_count() == 6 // G7 跨语言 6 绑定
         && g2_ok
         && k3_ok
@@ -303,7 +303,7 @@ pub fn stage7_i6_to_g2_consistency() -> bool {
     let summary_dbg = format!("{:?}", summary);
     summary_dbg.contains("PermissionReport")
         && c.matrix.len() == STAGE7_I6_BINDING_COUNT
-        && PERMISSION_GOVERNANCE_LAYER_COUNT == 6 // 6 重 v7 严守
+        && PERMISSION_GOVERNANCE_LAYER_COUNT == 6 // 9 重 v9 守门 严守
 }
 
 pub fn stage7_i6_to_k3_consistency() -> bool {
