@@ -70,16 +70,30 @@ pub struct Field {
 /// Month name aliases (case-insensitive, 3-letter prefix per Vixie cron convention).
 /// JAN/FEB/MAR/APR/MAY/JUN/JUL/AUG/SEP/OCT/NOV/DEC → 1..=12.
 pub const MONTH_ALIASES: &[(&str, u8)] = &[
-    ("JAN", 1), ("FEB", 2), ("MAR", 3), ("APR", 4),
-    ("MAY", 5), ("JUN", 6), ("JUL", 7), ("AUG", 8),
-    ("SEP", 9), ("OCT", 10), ("NOV", 11), ("DEC", 12),
+    ("JAN", 1),
+    ("FEB", 2),
+    ("MAR", 3),
+    ("APR", 4),
+    ("MAY", 5),
+    ("JUN", 6),
+    ("JUL", 7),
+    ("AUG", 8),
+    ("SEP", 9),
+    ("OCT", 10),
+    ("NOV", 11),
+    ("DEC", 12),
 ];
 
 /// Day-of-week aliases (case-insensitive, 3-letter prefix per Vixie cron convention).
 /// SUN/MON/TUE/WED/THU/FRI/SAT → 0..=6 (Sunday = 0).
 pub const DOW_ALIASES: &[(&str, u8)] = &[
-    ("SUN", 0), ("MON", 1), ("TUE", 2), ("WED", 3),
-    ("THU", 4), ("FRI", 5), ("SAT", 6),
+    ("SUN", 0),
+    ("MON", 1),
+    ("TUE", 2),
+    ("WED", 3),
+    ("THU", 4),
+    ("FRI", 5),
+    ("SAT", 6),
 ];
 
 impl Field {
@@ -106,16 +120,14 @@ impl Field {
                 continue;
             }
             // 2. alias 范围 (e.g. `MON-FRI`) — 把别名转数字后当数字范围
-            if let Some((alias_start, alias_end)) =
-                piece.split_once('-').and_then(|(a, b)| {
-                    let start = aliases.iter().find(|(name, _)| a == *name).map(|(_, v)| *v);
-                    let end = aliases.iter().find(|(name, _)| b == *name).map(|(_, v)| *v);
-                    match (start, end) {
-                        (Some(s), Some(e)) => Some((s, e)),
-                        _ => None,
-                    }
-                })
-            {
+            if let Some((alias_start, alias_end)) = piece.split_once('-').and_then(|(a, b)| {
+                let start = aliases.iter().find(|(name, _)| a == *name).map(|(_, v)| *v);
+                let end = aliases.iter().find(|(name, _)| b == *name).map(|(_, v)| *v);
+                match (start, end) {
+                    (Some(s), Some(e)) => Some((s, e)),
+                    _ => None,
+                }
+            }) {
                 if alias_start < lo || alias_end > hi || alias_start > alias_end {
                     return Err(CronError::ParseError(
                         s.into(),
@@ -135,9 +147,8 @@ impl Field {
             let (range_part, step) = match piece.split_once('/') {
                 Some((r, st)) => (
                     r,
-                    st.parse::<u8>().map_err(|e| {
-                        CronError::ParseError(s.into(), format!("step parse: {e}"))
-                    })?,
+                    st.parse::<u8>()
+                        .map_err(|e| CronError::ParseError(s.into(), format!("step parse: {e}")))?,
                 ),
                 None => (piece, 1u8),
             };
@@ -266,11 +277,36 @@ impl CronExpr {
                     return Ok(CronExpr {
                         raw: "@reboot".into(),
                         fields: [
-                            Field { raw: "0".into(), lo: 0, hi: 59, bits: 1 },
-                            Field { raw: "0".into(), lo: 0, hi: 23, bits: 1 },
-                            Field { raw: "1".into(), lo: 1, hi: 31, bits: 1 << 1 },
-                            Field { raw: "1".into(), lo: 1, hi: 12, bits: 1 << 1 },
-                            Field { raw: "0".into(), lo: 0, hi: 6, bits: 1 },
+                            Field {
+                                raw: "0".into(),
+                                lo: 0,
+                                hi: 59,
+                                bits: 1,
+                            },
+                            Field {
+                                raw: "0".into(),
+                                lo: 0,
+                                hi: 23,
+                                bits: 1,
+                            },
+                            Field {
+                                raw: "1".into(),
+                                lo: 1,
+                                hi: 31,
+                                bits: 1 << 1,
+                            },
+                            Field {
+                                raw: "1".into(),
+                                lo: 1,
+                                hi: 12,
+                                bits: 1 << 1,
+                            },
+                            Field {
+                                raw: "0".into(),
+                                lo: 0,
+                                hi: 6,
+                                bits: 1,
+                            },
                         ],
                     });
                 }
@@ -369,7 +405,13 @@ pub fn next_after(
         match mo {
             1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
             4 | 6 | 9 | 11 => 30,
-            2 => if is_leap(y) { 29 } else { 28 },
+            2 => {
+                if is_leap(y) {
+                    29
+                } else {
+                    28
+                }
+            }
             _ => 0,
         }
     };
@@ -524,14 +566,14 @@ mod tests {
     fn shorthand_daily_and_midnight() {
         let e1 = CronExpr::parse("@daily").unwrap();
         let e2 = CronExpr::parse("@midnight").unwrap();
-        assert_eq!(e1.raw, e2.raw);  // both → 0 0 * * *
+        assert_eq!(e1.raw, e2.raw); // both → 0 0 * * *
         assert!(e1.matches(0, 0, 1, 1, 0));
         assert!(!e1.matches(0, 1, 1, 1, 0));
     }
     #[test]
     fn shorthand_weekly() {
         let e = CronExpr::parse("@weekly").unwrap();
-        assert!(e.matches(0, 0, 1, 1, 0));   // Sun midnight
+        assert!(e.matches(0, 0, 1, 1, 0)); // Sun midnight
         assert!(!e.matches(0, 0, 1, 1, 1)); // Mon
     }
     #[test]
@@ -540,7 +582,7 @@ mod tests {
         let y = CronExpr::parse("@yearly").unwrap();
         assert!(m.matches(0, 0, 1, 1, 0)); // 1st of any month
         assert!(!m.matches(0, 0, 2, 1, 0));
-        assert!(y.matches(0, 0, 1, 1, 0));  // Jan 1 midnight
+        assert!(y.matches(0, 0, 1, 1, 0)); // Jan 1 midnight
         assert!(!y.matches(0, 0, 1, 2, 0)); // Feb 1
     }
     #[test]
@@ -566,7 +608,7 @@ mod tests {
     #[test]
     fn month_alias_jan() {
         let e = CronExpr::parse("0 0 1 JAN *").unwrap();
-        assert!(e.matches(0, 0, 1, 1, 0));  // Jan 1
+        assert!(e.matches(0, 0, 1, 1, 0)); // Jan 1
         assert!(!e.matches(0, 0, 1, 2, 0)); // Feb 1
     }
     #[test]
@@ -587,22 +629,22 @@ mod tests {
     #[test]
     fn dow_alias_mon_to_fri() {
         let e = CronExpr::parse("0 9 * * MON-FRI").unwrap();
-        assert!(e.matches(0, 9, 1, 1, 1));  // Mon
-        assert!(e.matches(0, 9, 1, 1, 5));  // Fri
+        assert!(e.matches(0, 9, 1, 1, 1)); // Mon
+        assert!(e.matches(0, 9, 1, 1, 5)); // Fri
         assert!(!e.matches(0, 9, 1, 1, 0)); // Sun
         assert!(!e.matches(0, 9, 1, 1, 6)); // Sat
     }
     #[test]
     fn dow_alias_sun() {
         let e = CronExpr::parse("0 0 * * SUN").unwrap();
-        assert!(e.matches(0, 0, 1, 1, 0));  // Sun
+        assert!(e.matches(0, 0, 1, 1, 0)); // Sun
         assert!(!e.matches(0, 0, 1, 1, 1)); // Mon
     }
     #[test]
     fn backward_compat_numeric_still_works() {
         // alias 加了, 数字必须仍然能用 (避免 breaking change)
         let e = CronExpr::parse("30 14 1 6 3").unwrap();
-        assert!(e.matches(30, 14, 1, 6, 3));  // 14:30 Wed Jun 1
+        assert!(e.matches(30, 14, 1, 6, 3)); // 14:30 Wed Jun 1
         assert!(!e.matches(30, 14, 1, 7, 3)); // Jul 1
     }
 }
