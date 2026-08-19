@@ -327,7 +327,7 @@ mod stub_test_count {
     const A3_BASELINE: usize = 19;  // per `tests/verdict_keys.rs` 现有 19 测试
     const R125_12_ADD: usize = 5;   // PHL-07 5 单元测试
     const ORGAN_TEST: usize = 18;   // 9 organ snapshot + 9 organ render
-    const _ = ();  // 占位, 0 装准备 0 编译
+    // 注: 原 `const _ = ();` 占位 (line 330) 是 E0762 invalid 语法 (缺类型), 删去.
 
     #[test]
     fn stub_total_23() {
