@@ -16,7 +16,7 @@
 //!
 //! **不漂移**:
 //! - 0 改 `apeireth-keyring` (LOCKED crate, 阶段 1 已就位)
-//! - 0 改 24 LOCKED crate
+//! - 0 改 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - 0 引 NewAPI
 //! - 复用 workspace 现有 `parking_lot::Mutex` / `tracing` / `serde_json`
 //!

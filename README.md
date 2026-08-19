@@ -189,9 +189,10 @@ The five ASI prototypes all have skeletons: **World Model ✓ · Self-Improvemen
 ## What We're Building Next
 
 - **A face and a voice** — desktop pet frontend (the "someone is on the other side" experience), microphone real-time voice, screen-significance perception
+  - *In progress:* [`frontend/companion-desktop/`](frontend/companion-desktop/) — Svelte 5 + Tauri 2 thin shell (102 lines) over existing `apeireth-companion` OpenAI-compatible endpoint. Real LLM E2E pending API key; mock SSE e2e passes. See [PR #1 reports](docs/integration/) for Phase 0–5.
 - **The investment suite** — simulation trading mainline (backtest/risk/orders) on top of the ready parts (time-series adapter, event bridge, 300K-symbol catalog)
 - **The self-improvement loop** — a VM experiment field so improvement proposals can be built and tested without touching the living base: *independent is the experiment; approved is the deployment*
-- **Formal release** — Docker build verification, full-history push, ecosystem docs
+- **Formal release** — Docker build verification (multi-arch linux/amd64 + linux/arm64 ✅ via `$TARGETARCH`), full-history push, ecosystem docs
 
 ---
 

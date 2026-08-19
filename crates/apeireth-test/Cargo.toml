@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-test — R23 6 module test 子模块: 测试用例描述 + 重试 + 报告"
+description = "apeireth-test — TestCase + RetryPolicy (exponential backoff) + SuiteSummary + Budget + flaky_cases (R23 P1 #5 实质化). 实质 1 模块 (lib.rs). R150 P1 #12 加 proptest dev-dep. 0 改 workspace.version."
 [lib]
 name = "apeireth_test"
 path = "src/lib.rs"

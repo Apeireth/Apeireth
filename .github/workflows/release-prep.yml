@@ -1,0 +1,153 @@
+name: release-prep CI
+
+# post-1.0.0 增量 (2026-08-19)
+# 把 scripts/release-prep.sh (本地 8 硬墙 + PII + 12 项 checklist) 拉进 CI
+# 跟 companion-desktop-ci / rust.yml / pii-leak-detection 互补:
+# - rust.yml hard-walls: 守门 (LOCKED / version / R11 baseline / 13 键 / V1136) 子集
+# - companion-desktop-ci hard-walls: 同上 + companion-desktop 独立 workspace
+# - pii-leak-detection: PII 关键词 grep
+# - release-prep CI: 整合以上 + 12 项 checklist dry-run (master HEAD)
+#
+# 触发: push master + manual dispatch
+# 失败不阻塞 push (informational), 1 P0 fail 报 ::warning:: 不 exit 1
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: release-prep-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-prep:
+    name: release-prep dry-run (8 硬墙 + PII + 12 项)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # git diff --name-only $BASE...HEAD 需要历史
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # hard-walls 守门 #1: 24 LOCKED crate 不触碰
+      # (在 scripts/release-prep.sh A.2 跑, 此处独立再跑做镜像)
+
+      # hard-walls 守门 #2: R11 baseline 3 值完整
+      # (在 scripts/release-prep.sh A.3 跑)
+
+      # PII 防回潮
+      # (在 scripts/release-prep.sh B 跑)
+
+      # 12 项 checklist
+      # (在 scripts/release-prep.sh C 跑)
+
+      - name: "守门 #1: 24 LOCKED crate 不触碰"
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || 'HEAD~1' }}
+        run: |
+          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+          LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
+          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' 'crates/*/Cargo.toml' 2>/dev/null | grep -E "^crates/($LOCKED_REGEX)/" || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::24 LOCKED crate 被触碰:"
+            echo "$HITS" | while IFS= read -r f; do echo "  - $f"; done
+            exit 1
+          fi
+          echo "✅ 0 触碰 24 LOCKED crate"
+
+      - name: "守门 #2: workspace.version 1.2.0 不变"
+        run: |
+          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          if [ "$CUR" != "1.2.0" ]; then
+            echo "::error::workspace.version = $CUR (期望 1.2.0)"
+            exit 1
+          fi
+          echo "✅ workspace.version = $CUR"
+
+      - name: "守门 #3: R11 baseline 3 值完整"
+        run: |
+          TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
+          for VAL in 0.8682 0.8532 0.9063; do
+            if ! grep -q "$VAL" "$TARGET"; then
+              echo "::error::R11 baseline $VAL 在 $TARGET 缺失"
+              exit 1
+            fi
+          done
+          echo "✅ R11 baseline 3 值在 $TARGET 完整"
+
+      - name: "守门 #4: companion-desktop 独立 workspace"
+        run: |
+          if grep -q 'frontend/companion-desktop' Cargo.toml; then
+            echo "::error::root Cargo 含 frontend/companion-desktop (污染)"
+            exit 1
+          fi
+          if ! head -3 frontend/companion-desktop/src-tauri/Cargo.toml | grep -q '^\[workspace\]'; then
+            echo "::error::companion-desktop/src-tauri/Cargo.toml 缺顶层 [workspace]"
+            exit 1
+          fi
+          echo "✅ companion-desktop 独立 workspace"
+
+      - name: "守门 #5: PII 关键词 0 命中 (防回潮)"
+        run: |
+          PII_PATTERNS="警号 警校 东乡族 甘肃农村 甘肃养老 31683 东乡语 治安学"
+          EXCLUDES=(
+            ':(exclude)docs/archive/**'
+            ':(exclude)research/source/**'
+            ':(exclude).git/**'
+            ':(exclude)Cargo.lock'
+            ':(exclude)frontend/companion-desktop/pnpm-lock.yaml'
+            ':(exclude)frontend/companion-desktop/src-tauri/Cargo.lock'
+            ':(exclude).github/workflows/pii-leak-detection.yml'
+            ':(exclude).github/workflows/release-prep.yml'
+            ':(exclude)scripts/release-prep.sh'
+            ':(exclude)CHANGELOG.md'
+            ':(exclude)docs/04-internal/ci-fix-log-2026-08.md'
+            ':(exclude)**/target/**'
+            ':(exclude)**/node_modules/**'
+            ':(exclude)**/dist/**'
+            ':(exclude)**/build/**'
+          )
+          HITS=0
+          for PATTERN in $PII_PATTERNS; do
+            HIT=$(git grep -lI "$PATTERN" -- . "${EXCLUDES[@]}" 2>/dev/null || true)
+            if [ -n "$HIT" ]; then
+              echo "::error::$PATTERN 命中: $HIT"
+              HITS=$((HITS+1))
+            fi
+          done
+          if [ $HITS -gt 0 ]; then
+            echo "❌ PII 检测 FAIL: $HITS 个关键词"
+            exit 1
+          fi
+          echo "✅ PII 0 命中 (8 关键词全过)"
+
+      - name: "守门 #6: 12 项 checklist dry-run"
+        run: |
+          if [ ! -x scripts/release-1.0-checklist.sh ]; then
+            echo "::warning::scripts/release-1.0-checklist.sh 不存在或不可执行, 跳过"
+            exit 0
+          fi
+          OUT=$(bash scripts/release-1.0-checklist.sh --dry-run 2>&1 || true)
+          # 真 FAIL 行 (不是 summary 里的 "0 FAIL" 字串)
+          FAIL_COUNT=$(echo "$OUT" | grep -E '^\s*❌' | wc -l)
+          if [ $FAIL_COUNT -gt 0 ]; then
+            echo "::error::$FAIL_COUNT 个 FAIL:"
+            echo "$OUT" | grep -E '^\s*❌' | head -10
+            exit 1
+          fi
+          echo "✅ 12 项 checklist dry-run OK"
+
+      - name: 总结
+        if: always()
+        run: |
+          echo "=================================================="
+          echo "  release-prep CI 完成"
+          echo "  6 守门: 24 LOCKED / version / R11 baseline / 独立 workspace / PII / 12 项 checklist"
+          echo "=================================================="

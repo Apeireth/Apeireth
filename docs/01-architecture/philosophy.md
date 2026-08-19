@@ -1,11 +1,13 @@
 # Apeireth Philosophy
 
-## The Six Anchors
+## The Eight Anchors (升 6→8, R125 B5 + R126 P1-2 实施)
 
 | Anchor | Meaning |
 |---|---|
 | S-1 北极星 | Everything serves the ASI north star (五原型) |
 | S-2 实事求是 | Verify before writing; truth over narrative |
+| S-3 质量工程化 NEW | Engineering rigor over narrative — CI gates + Kani proofs + clippy 0-warning (R126 P1-2 升) |
+| O-1 安全优先 NEW | Safety precedes all other concerns — 9 重 v9 + 13 键 verdict cache + 3 项不可变脊柱 (R126 P1-2 升) |
 | O-2 前人肩上 | Stand on prior work (borrow, attribute, adapt) |
 | O-3 干到底 | Finish what we start; no half-measures |
 | O-4 任何人都能接手 | Any newcomer can onboard from docs alone |
@@ -20,13 +22,14 @@
 - **集成而非分立**: new needs hang onto existing mechanisms
 - **文档同步自觉**: code changes update docs; research lands in the ledger
 
-## Double Onion (双洋葱)
+## Triple Onion (三洋葱, R125-5 升双→三, 加 DSL 洋葱)
 
-**Principle onion** (E/S/A/M/O principles) **embedded in** the **permission onion** (L0–L5):
+**Principle onion** (E/S/A/M/O principles) **embedded in** the **permission onion** (L0–L5), plus **DSL onion** (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴):
 
 - L0: human approval — **never mutable** (Self-Disable protection, "百年章节")
 - L1-L5: escalating permission layers (approval gate, sandbox, etc.)
-- Any layer can independently reject (V1+V2+V3 AND gate)
+- DSL onion: Colang DSL 表达"什么操作允许/禁止" (守门 6, R125-5)
+- Any layer can independently reject (V1+V2+V3 AND gate + DSL 守门)
 
 ## 0 装 PASS (The Trust Bedrock)
 
@@ -48,5 +51,5 @@
 | Value cases (F6) | `value_cases.rs` |
 | Emergence loop (E7, when to speak) | `emergence.rs` |
 | Tool pipeline (schema/guardrail/approval) | `apeireth-tool-runtime` + `apeireth-tool-approval` |
-| Outbound policy (S4, default-deny + audit chain) | `apeireth-http-client::egress` |
+| Outbound policy (S4, default-deny + audit chain) | `apeireth-http-client::egress` (**trait 口已备, 实装待补**, per backlog S4 P1 未实施) |
 | Event bridge + PerceptionGate (A4/TP26) | `apeireth-bus::event_bridge` |

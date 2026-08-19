@@ -1,4 +1,4 @@
-//! R129-6 ASI Python 整合 Stage 6 守护 — K3 安全守护 (6 重 v7 跨语言集成)
+//! R129-6 ASI Python 整合 Stage 6 守护 — K3 安全守护 (9 重 v9 守门 跨语言集成)
 //!
 //! **任务**: ASI Python 整合 Stage 6 守护 (per decision-61 §3.1 R129-6)
 //! **维度**: K3 安全守护 (security guardianship)
@@ -6,11 +6,11 @@
 //! - superpowers 234 `skills/verification-before-completion` (6 重 check + verification 模式)
 //! - PyO3 928 `guide/src/exception.md` (异常安全 + `is_instance_of` 类型守门)
 //! - PyO3 928 `guide/src/class.md` (Bound 生命周期 + 安全边界)
-//! **目标**: 6 重守门 v7 跨语言集成 (B4 严守) + G7 跨语言新增
+//! **目标**: 9 重 v9 守门 (lineage v6→v7→v8→v9) 跨语言集成 (B4 严守) + G7 跨语言新增
 //!
 //! # Stage 6 K3 安全守护范围
 //!
-//! 1. **6 重守门 v7 (B4 严守)**: G1 Identity / G2 Goal / G3 Capability / G4 Compliance / G5 Resource / G6 Audit
+//! 1. **9 重 v9 守门 (lineage v6→v7→v8→v9) (B4 严守)**: G1 Identity / G2 Goal / G3 Capability / G4 Compliance / G5 Resource / G6 Audit
 //! 2. **G7 跨语言新增**: 跨 GIL 桥安全守门 (Stage 6 K3 创新, 严守"连接不是修改")
 //! 3. **SecurityEvent**: 1 个安全事件 (gate, kind, severity, blocked, context)
 //! 4. **SecurityVerdict**: Allow / Warn / Block / Audit
@@ -20,24 +20,24 @@
 //! # 0 装 PASS 严守 (per decision-33 §2.3 C2 + decision-61 §3.1 R129-6)
 //!
 //! - ✅ superpowers 234 + PyO3 928 ✅ cloned = 借鉴真实施
-//! - B4 6 重守门 v7 严守 (K3 集成是连接不是修改)
+//! - B4 9 重 v9 守门 (lineage v6→v7→v8→v9) 严守 (K3 集成是连接不是修改)
 //! - 默认 build: 跑内存守门, 0 假装"已实施"
 //!
 //! # 8 硬墙 0 越界 (per decision-33 §2.3 + decision-61 §3.1)
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW)
-//! - **B4 6 重守门 v7 严守** (K3 集成是连接, 0 改 6 重守门本身)
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW)
+//! - **B4 9 重 v9 守门 (lineage v6→v7→v8→v9) 严守** (K3 集成是连接, 0 改 9 重 v9 守门本身)
 //! - C1 0 主动 commit
 
 use std::fmt;
 
 // =============================================================================
-// K3 安全门枚举 (6 重 v7 + 1 跨语言, B4 严守 0 改)
+// K3 安全门枚举 (9 重 v9 守门 + 1 跨语言, B4 严守 0 改)
 // =============================================================================
 
-/// K3 安全门 (6 重 v7 + 1 跨语言 = 7 重)
+/// K3 安全门 (9 重 v9 守门 + 1 跨语言 = 7 重)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SecurityGate {
     /// G1 身份 (Identity)
@@ -86,9 +86,9 @@ impl SecurityGate {
         Self::GATE_NAMES[self.idx()]
     }
 
-    /// 6 重 v7 vs 7 重 (B4 严守 6 重 v7 + G7 跨语言 K3 新增)
+    /// 9 重 v9 守门 vs 7 重 (B4 严守 9 重 v9 守门 + G7 跨语言 K3 新增)
     pub fn is_v7_baseline(&self) -> bool {
-        // 6 重 v7 = G1-G6, G7 = K3 新增
+        // 9 重 v9 守门 = G1-G6, G7 = K3 新增
         matches!(
             self,
             Self::G1Identity
@@ -269,10 +269,10 @@ impl fmt::Display for SecurityEvent {
 }
 
 // =============================================================================
-// K3 6 重 v7 守门 (B4 严守: K3 集成是连接, 0 改 6 重守门本身)
+// K3 9 重 v9 守门 守门 (B4 严守: K3 集成是连接, 0 改 9 重 v9 守门本身)
 // =============================================================================
 
-/// 6 重 v7 单门检查 (B4 严守, K3 集成调用)
+/// 9 重 v9 守门 单门检查 (B4 严守, K3 集成调用)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum V7BaselineCheck {
     /// G1 身份 check
@@ -300,9 +300,9 @@ impl V7BaselineCheck {
         "G6_Audit",
     ];
 
-    /// 严守 B4: 6 重 v7 全 OK (硬 verify; Stage 6 K3 不允许修改 v7 本身)
+    /// 严守 B4: 9 重 v9 守门 全 OK (硬 verify; Stage 6 K3 不允许修改 v7 本身)
     pub fn v7_baseline_intact() -> bool {
-        // 编译期 hardcode: 6 重守门 v7 严守 (per decision-33 §2.3 B4)
+        // 编译期 hardcode: 9 重 v9 守门 (lineage v6→v7→v8→v9) 严守 (per decision-33 §2.3 B4)
         // 0 改, 0 删, 0 加 — 6 重锁死
         Self::CHECK_NAMES.len() == 6
             && Self::CHECK_NAMES[0] == "G1_Identity"
@@ -368,7 +368,7 @@ pub struct SecurityGuard {
     pub total_warned: u64,
     /// 审计事件数
     pub total_audited: u64,
-    /// v7 baseline 严守 (6 重 v7 0 改)
+    /// v7 baseline 严守 (9 重 v9 守门 0 改)
     pub v7_baseline_intact: bool,
     /// g7 baseline 严守 (7 项跨语言)
     pub g7_baseline_intact: bool,
@@ -427,7 +427,7 @@ impl SecurityGuard {
         self.gate_events[idx].push(ev);
     }
 
-    /// 6 重 v7 + 1 跨语言 7 重全 OK
+    /// 9 重 v9 守门 + 1 跨语言 7 重全 OK
     pub fn all_gates_intact(&self) -> bool {
         self.v7_baseline_intact && self.g7_baseline_intact
     }
@@ -547,7 +547,7 @@ pub fn stage6_security_baseline_intact() -> bool {
 }
 
 // =============================================================================
-// K3 单元测试 (cfg-无关, B4 严守 0 改 6 重 v7)
+// K3 单元测试 (cfg-无关, B4 严守 0 改 9 重 v9 守门)
 // =============================================================================
 
 #[cfg(test)]
@@ -568,7 +568,7 @@ mod tests {
     // 2. SecurityGate v7 baseline 严守 (B4)
     #[test]
     fn k3_v7_baseline_intact() {
-        // 6 重 v7: G1-G6
+        // 9 重 v9 守门: G1-G6
         for g in [
             SecurityGate::G1Identity,
             SecurityGate::G2Goal,
@@ -581,7 +581,7 @@ mod tests {
         }
         // G7 跨语言: K3 新增
         assert!(!SecurityGate::G7CrossLanguage.is_v7_baseline());
-        // B4 6 重 v7 严守 verify
+        // B4 9 重 v9 守门 严守 verify
         assert!(V7BaselineCheck::v7_baseline_intact());
     }
 

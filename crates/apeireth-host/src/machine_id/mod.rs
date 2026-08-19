@@ -16,11 +16,12 @@
 //! (`WIN_WMI_COMMAND` / `DARWIN_IOREG_COMMAND` / `LINUX_DMI_PATH` / `BSD_KENV_COMMAND` 等) 编译期 hardcode,
 //! 防 m3 hallucination 改 `wmic` → `wmi` 等.
 //!
-//! ## 6 哲学 anchor + 8 项不修改承诺
+//! ## 8 哲学 anchor + 8 项不修改承诺
 //!
+//! S-1 / S-2 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 / O-3 / O-4 / O-5 (baseline 2026-08-19).
 //! S-1 北极星 / S-2 实事求是 / O-2 走在前人肩上 / O-3 干到底 / O-4 任何人都能接手 / O-5 不假装.
 //!
-//! 0 改 24 LOCKED crate / 0 改 workspace root Cargo.toml / 0 引 NewAPI / 0 重复造轮子 /
+//! 0 改 24 LOCKED crate 入口签名 (R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache) / 0 改 workspace root Cargo.toml (v1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0) / 0 引 NewAPI / 0 重复造轮子 /
 //! 0 假装已实现 (4 平台命令真实 probe) / 0 改 LOCKED 文档 / 0 git add / 0 git commit.
 //!
 //! ## 公开 API (本阶段 flesh out 加实接)
