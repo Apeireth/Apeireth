@@ -346,6 +346,7 @@ export interface ToolInfo {
   name: string;
   description?: string;
   args_schema?: unknown;
+  tier?: number;
 }
 
 export async function fetchTools(config: ApeirethConfig): Promise<ToolInfo[]> {
