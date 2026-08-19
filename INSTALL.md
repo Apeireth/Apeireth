@@ -174,7 +174,7 @@ cargo run --bin apeireth-cli session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 6+ tests pass，apeireth-core 当前）
+# 2. Test（应该 23,874 套全 workspace PASS, per CHANGELOG post-1.0.0）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
@@ -252,13 +252,13 @@ EOF
 
 1. **读 README.md**（顶层入口）
 2. **读 CONTRIBUTING.md**（PR 流程）
-3. **读 docs/00-R14-START-HERE.md**（5/30/60/240 分钟路径）
-4. **读 docs/ROADMAP.md**（路线图）
-5. **读 docs/GLOSSARY.md**（17 项术语）
-6. **运行 examples/hello_world.rs**（最小 demo）
+3. **读 docs/01-architecture/vision.md**（5/30/60 分钟路径起点, docs/stage1 体系重构后)
+4. **读 ROADMAP.md**（顶层路线图, 8/19 已反映 v1.0.0 实际）
+5. **读 docs/03-reference/glossary.md**（术语, 含 7-4-gates / 17-4 视角漂移诚实标注）
+6. **运行 examples/**（最小 demo, `cargo run --example hello_world` 选具体 example）
 
 ---
 
 _安装指南 v1 修订版（leader 亲自产出）._
 _依据我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 1.97.1 锁定._
-_主哲学 6 锚穿透._
+_主哲学 8 锚穿透 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装; per R125 B5 升 8 锚 + R126 P1-2 实施)._
