@@ -7,7 +7,7 @@
 # 跟 .github/ISSUE_TEMPLATE/feature.md (R20 写, R20 阶段 1-6) 共存, 不删 (向后兼容)
 
 name: Feature Request
-description: Propose a new feature for Apeireth (Rust 85 + 1 desktop crate backend, 23 LOCKED + 9 organ)
+description: Propose a new feature for Apeireth (Rust 85 + 1 desktop crate backend, 24 LOCKED + 9 organ)
 title: "[FEATURE] "
 labels:
   - enhancement
@@ -37,29 +37,30 @@ body:
       label: Affected crate(s)
       description: Which crate(s) does this feature touch?
       options:
-        - apeireth-supervisor (23 LOCKED — 0 触碰!)
-        - apeireth-agent (23 LOCKED — 0 触碰!)
-        - apeireth-council (23 LOCKED — 0 触碰!)
-        - apeireth-bus (23 LOCKED — 0 触碰!)
-        - apeireth-protocol (23 LOCKED — 0 触碰!)
-        - apeireth-mcp (23 LOCKED — 0 触碰!)
-        - apeireth-tool-registry (23 LOCKED — 0 触碰!)
-        - apeireth-tool-runtime (23 LOCKED — 0 触碰!)
-        - apeireth-pipeline (23 LOCKED — 0 触碰!)
-        - apeireth-tool-approval (23 LOCKED — 0 触碰!)
-        - apeireth-extension (23 LOCKED — 0 触碰!)
-        - apeireth-evolution (23 LOCKED — 0 触碰!)
-        - apeireth-api (23 LOCKED — 0 触碰!)
-        - apeireth-core (23 LOCKED — 0 触碰!)
+        - apeireth-supervisor (24 LOCKED — 0 触碰!)
+        - apeireth-agent (24 LOCKED — 0 触碰!)
+        - apeireth-council (24 LOCKED — 0 触碰!)
+        - apeireth-bus (24 LOCKED — 0 触碰!)
+        - apeireth-protocol (24 LOCKED — 0 触碰!)
+        - apeireth-mcp (24 LOCKED — 0 触碰!)
+        - apeireth-tool-registry (24 LOCKED — 0 触碰!)
+        - apeireth-tool-runtime (24 LOCKED — 0 触碰!)
+        - apeireth-graph (24 LOCKED — 0 触碰!)
+        - apeireth-pipeline (24 LOCKED — 0 触碰!)
+        - apeireth-tool-approval (24 LOCKED — 0 触碰!)
+        - apeireth-extension (24 LOCKED — 0 触碰!)
+        - apeireth-evolution (24 LOCKED — 0 触碰!)
+        - apeireth-api (24 LOCKED — 0 触碰!)
+        - apeireth-core (24 LOCKED — 0 触碰!)
         - apeireth-memory (semantic_search + user_profile)
-        - apeireth-asi (23 LOCKED — 0 触碰!)
-        - apeireth-tools (23 LOCKED — 0 触碰!)
-        - apeireth-cli (23 LOCKED — 0 触碰!)
-        - apeireth-bench (23 LOCKED — 0 触碰!)
-        - apeireth-cognition (23 LOCKED — 0 触碰!)
-        - apeireth-action (23 LOCKED — 0 触碰!)
-        - apeireth-life-force (23 LOCKED — 0 触碰!)
-        - apeireth-constraint (23 LOCKED — 0 触碰!)
+        - apeireth-asi (24 LOCKED — 0 触碰!)
+        - apeireth-tools (24 LOCKED — 0 触碰!)
+        - apeireth-cli (24 LOCKED — 0 触碰!)
+        - apeireth-bench (24 LOCKED — 0 触碰!)
+        - apeireth-cognition (24 LOCKED — 0 触碰!)
+        - apeireth-action (24 LOCKED — 0 触碰!)
+        - apeireth-life-force (24 LOCKED — 0 触碰!)
+        - apeireth-constraint (24 LOCKED — 0 触碰!)
         - apeireth-tui (瘦客户端)
         - apeireth-vector (sqlite-vec backend)
         - apeireth-pipeline-g5 (5 阶段 pipeline 框架)
@@ -124,7 +125,7 @@ body:
 
         If this feature touches a LOCKED crate, **DO NOT propose direct changes**. Propose an extension crate or feature flag instead.
 
-        24 LOCKED crate (per `docs/conventions/10-locked.md`):
+        24 LOCKED crate (per `CODEOWNERS` 1:1 跟 hard-walls job, 含 apeireth-graph):
 
         ```
         apeireth-supervisor  apeireth-agent       apeireth-council
@@ -143,7 +144,7 @@ body:
     attributes:
       label: 0 触碰实查确认 (per rust.yml hard-walls job)
       options:
-        - label: 0 触碰 23 LOCKED crate (mtime 实查, per hard-walls job 实际清单)
+        - label: 0 触碰 24 LOCKED crate (mtime 实查, per hard-walls job 实际清单, 含 graph)
           required: true
         - label: 0 改 workspace version (1.2.0)
           required: true
