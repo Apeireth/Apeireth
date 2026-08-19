@@ -1074,7 +1074,8 @@ async fn chat_completions(
         eprintln!(
             "[stream] req.stream=true, 透传 SSE 到 {MODEL} (tool loop 跳过, per v1.5 known limit)"
         );
-        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), MODEL).await
+        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), MODEL)
+            .await
         {
             Ok(r) => r.into_response(),
             Err(e) => {
