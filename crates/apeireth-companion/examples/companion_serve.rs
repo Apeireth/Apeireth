@@ -1368,6 +1368,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/apeireth/approval-requests", get(approval_requests))
         .route("/v1/apeireth/events", get(events))
         .route("/v1/apeireth/test-event", post(test_event))
+        // Core Capability Expansion: Runtime Capability Manifest (能力发现契约).
+        // Desktop 启动时拉取此端点 gate UI, 不再 404-probing. 这是 information 不是 authorization.
+        .route("/v1/apeireth/capabilities", get(capabilities))
         // B1 Web 面板 v2: 静态面板页 (assets/panel/) + 只读数据端点 (apeireth-api panel_readonly)
         .route("/panel", get(panel_index))
         .route("/panel/:asset", get(panel_asset))
@@ -1478,6 +1481,12 @@ async fn approval_requests(State(st): State<Arc<AppState>>) -> impl IntoResponse
     Json(apeireth_companion::approval_requests::pending_json(
         &st.store,
     ))
+}
+
+/// Runtime Capability Manifest: 声明本 runtime 真实支持的能力 (versioned, machine-readable).
+/// Desktop 据此 gate UI, 不再逐个撞 endpoint. 仅暴露 public 信息, 不含 secret/路径.
+async fn capabilities() -> impl IntoResponse {
+    Json(apeireth_companion::runtime_capabilities::current_manifest())
 }
 
 /// 主人批准端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),

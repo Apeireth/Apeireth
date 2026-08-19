@@ -1,0 +1,93 @@
+# Apeireth Core Capability Expansion — Engineering Log
+
+> 本轮单一工程文档. 记录架构审计事实、设计决策、迁移、安全检查与验证证据.
+> Phase 0 审计只读; 后续 Phase 在此追加. 禁止制造分散的 notes/scratch 文件.
+
+---
+
+## Phase 0 — Architecture Audit (事实表)
+
+### Baseline
+- 分支: `feature/core-capability-expansion` (基于 `4d0ac12e` = `origin/integration/pattern-fresh`)
+- `origin` = `Jimmyxiao2009/apeireth-rust`. `origin/master`(`968b4ce`) 是**分叉分支**(217 commits ahead, 384 files differ, merge-base `91b2d2e0`). 本轮**不** rebase/merge 进 master (避免破坏已验收的桌面 UI 基线 + 高风险冲突), 仅 fetch 同步 + 功能分支推送. 主干协调为独立 P1 事项.
+- 凭据基线已验证: Desktop 不持久化 apiKey / masterToken (`saveConfig` 白名单 + `loadConfig` 主动 purge).
+
+### A. Session 模型
+- `Session`(core, `apeireth-core/src/memory.rs:49-56`): `id, started_at, last_active_at` (3 字段).
+- `SessionRecord`(storage, `apeireth-memory/src/session_note.rs:21-30`): 多 `closed_at: Option<i64>`.
+- SQLite `sessions` 表(`migrations.rs:224-229`): `id PK, started_at, last_active_at, closed_at`.
+- `SessionStore` trait: `upsert_session`(INSERT…ON CONFLICT DO UPDATE last_active_at) / `get_session` / `close_session` / `list_open_sessions` / `list_all_sessions`.
+- session id 由调用方提供 (companion 硬编码 `"me"`; council 用 `session-{:06}`). 无中心生成器.
+- **无** `Conversation`/`LedgerSession` 类型. OneRing ledger(`onering_messages` 表)是另一套会话语义, 未与 sessions 表对齐.
+- `/v1/chat/completions` **不绑定 session** — 纯无状态代理 (messages 全量上行); 通过 `X-Apeireth-Continuity` header 传 continuity_id (日志/记忆锚点).
+- episodes 表 `session_id` 关联 sessions; episodes **append-only**(BEFORE UPDATE/DELETE trigger 拒绝).
+
+### B. Memory 结构
+- `Episode`(core): `id, timestamp, role, content, session_id`. V4 migration 加 `valid_from_ms, valid_until_ms, created_ms, provenance`(枚举 Dialog/Tool/Reflection/Observation/Manual). **无** importance/tags/status/protected/tombstone/revision/updated_at.
+- `Note`: `id, timestamp, content, source_episode_ids, confidence, tags` (+ V3 `valid_from/valid_until`). 设计上可遗忘/合并, 但**无** forgotten/tombstone 列.
+- 6 个 append-only history streams(thought/proposal/action/relation/evolution/reflection), `HistoryEntry` 有 `tombstoned_at`(单向软删) + `source` + `tags` + `subject_rev`.
+- `GraphFact`(`memory_graph.rs`): `id, chain, rev, subject, predicate, object, valid_at, invalid_at, importance:u8` — 存为 `factg-*` episodes. `MemoryLink`: `id, from, to, weight` — 存为 `link-*` episodes. **无独立图谱表**, 复用 episodes.
+- 现有 memory HTTP: `GET /v1/memory/episodes`, `POST /v1/memory/append`(已有), `GET /v1/memory/identity`, `POST /v1/memory/identity/update`. **无** update/forget/protect.
+- 删除/墓碑现状: episodes 表无 tombstone 列(trigger 明确 redirect 到 reflection_stream); streams 有 tombstoned_at 且已用; identity_cards/hallways 有 tombstoned_at.
+
+### C. Tool 权限概念
+- `ApprovalRequest`(companion, 存为 `apreq-*` episodes): `id, chain, rev, tool, args_preview, reason, status, created_at, updated_at`.
+- `PermissionPack`(companion, `packs.rs`, **内存** `Mutex<Vec>`, 不持久化): `id, name, tools, paths, expiry(PackExpiry: Permanent|Hours(u64)|SingleUse), op_budget, used_ops, spend_budget, spend_used, sandbox, activated_at_ms, created_at_ms`. `PackRegistry::check_and_consume`.
+- `ApprovalDecision`(tool-approval): `Allow | RequireApproval{timeout_ms} | Deny{reason,silent} | NoMatch`. 6 条规则(Trust/Risk/Frequency/Whitelist/Blacklist/ApprovalList).
+- Master token: `PrincipleStore.master_token: Option<String>`(内存, env `APEIRETH_MASTER_TOKEN` 注入, constant_time_eq 比对, **不落盘**).
+- HTTP grant: `POST /v1/apeireth/grant`(companion_serve) — 校验 master token → `PermissionPack::timed` grant. **无** revoke / list-grants 端点.
+- 工具描述 `ToolDescription`: name/kind/axes/brief/description/version/author. **无** risk_level/scope/requires_approval 字段(风险由规则按工具名前缀判定).
+
+### D. Agent Runtime ID
+- **无** Commander/Worker/run_id/worker_id/commander_id/tool_invocation_id/correlation_id.
+- 已有: `event_id`(workflow u64; frozen credentials audit Uuid), `trace_id`(两套未打通: bus u64 `next_trace_id` vs telemetry W3C 32-hex), `span_id`(supervisor `SpanId(u64)` vs telemetry 16-hex), `task_id`(tool_registry).
+- `ToolCallRecord`(`record.rs`): `id="tcr-{uuid}", tool_name, caller_signature, caller_type, request_ip, source_node, started_at_ms, finished_at_ms, duration_ms, status, success, call_content, return_content, error_text, masked`. **executor 不自动记录** — 调用方须显式 `RecordStore::record`.
+- 工具调用 ID 字段名是 `id`(`tcr-{uuid}`), 非 `tool_invocation_id`.
+
+### E. HTTP 端点
+- `companion_serve:8090` (前端默认): `/health`, `/v1/models`, `/v1/chat/completions`, `POST /v1/apeireth/grant`, `GET /v1/apeireth/approval-requests`, `GET /v1/apeireth/events`(SSE), `POST /v1/apeireth/test-event`, `/v1/panel/*`(只读, nest panel_readonly).
+- `apeireth-api:8080`: `/health(/deps)`, 协议端点(`/v1/chat/completions`,`/v1/responses`,`/v1/messages`,`/v1beta/.../generateContent`), V2 端点(`/v1/tools/*`,`/v1/memory/*`,`/v1/organs/*`,`/v1/asi/*`,`/v1/sovereignty/*`,`/v1/guard`,`/v1/agent/*`,`/v1/audit/stats`).
+- SSE: 协议端点 `stream:true` 透传上游字节(不解析/不注入 correlation id); companion `/v1/apeireth/events` 是独立 broadcast SSE.
+- 错误模型: **不统一**. Panel 用 `{"error": "..."}` JSON(多 500, 输入 400); V2 用 `(StatusCode, String)` 纯文本; 协议层 `err_to_response` 按前缀映射. 无 NotFound/Conflict/Validation 统一枚举.
+- 迁移: `apeireth-memory/src/migrations.rs` 手写 `MIGRATIONS` 数组, `run_migrations` 启动时跑, 幂等(`schema_migrations` 表 + `IF NOT EXISTS`), 已测 idempotent. 单 `Mutex<Connection>`, WAL+foreign_keys.
+
+### Desktop 现状 (frontend/companion-desktop)
+- `runtime.ts`(792 行): 无能力发现; `checkHealthDetailed` 探测 5 固定子端点(非 404-probing); `fetchTools` 双 URL fallback(404 抛错不伪造, 有测试守护).
+- 会话: 本地 `localStorage['apeireth-conversations']` 为主, 后端 `/v1/panel/sessions` 只读展示(无后端 CRUD). `X-Apeireth-Continuity` 传本地 UUID.
+- Memory: 只读 + append(`POST /v1/memory/append`). 编辑/删除按钮**已渲染但永久 disabled**("后端能力未开放").
+- Tools: approval 请求 + grant(master token modal, 用后即清). **无** revoke/list-grants UI.
+- Activity: `EventSource('/v1/apeireth/events')` + `fetchAuditLogs`. ActivityItem 无 traceId/correlation; SSE 解析无 trace 字段. destroy 时 close EventSource.
+- RuntimeModal: 仅展示 health report, 无 capability 信息.
+- 安全: apiKey/masterToken **不持久化**(已验证).
+
+---
+
+## Phase 1 — Runtime Capability Discovery Manifest (DONE)
+
+### 实现
+- 端点: `GET /v1/apeireth/capabilities` (companion_serve). Panel 不污染, 保持 read-only.
+- Rust: `crates/apeireth-companion/src/runtime_capabilities.rs` (新模块, 区别于 `capability.rs` 的 AI 演化提案).
+  - `CapabilityManifest { schema_version: 1, runtime: RuntimeInfo, capabilities: Vec<CapabilityGroup>, legacy: bool }`.
+  - `Capability { id, supported, read, write, version, operations }`. 稳定 ID 形如 `sessions.create`.
+  - `current_manifest()`: 各 Phase 按真实接线状态声明 (已接线的 supported=true, 未接线的 supported=false 诚实声明).
+  - `legacy_manifest()`: 保守 profile, 只声明历史契约证明存在的只读/对话能力.
+  - Forward compat: serde 不 deny_unknown, 未知字段保留.
+  - 无 secret 泄漏 (有测试).
+- Desktop: `runtime.ts` `fetchCapabilities()` + `capabilitySupported()` + `findCapability()` + `legacyCapabilityManifest()`. `types.ts` 加 `CapabilityManifest`/`Capability`/`CapabilityGroup`/`RuntimeInfo`.
+  - 启动流程: health → capabilities. 非 200/网络错误 → legacy fallback (不白屏). 畸形 manifest → legacy.
+  - 404 仅作 legacy 触发, 非长期协议.
+
+### Phase 1 能力声明现状
+- supported=true (已接线): chat.completions, health, models.list, sessions.read, memory.read, memory.append, tools.list, tools.invoke, permissions.requests.read, permissions.grant, activity.sse, activity.audit.
+- supported=false (诚实声明未接线, 待后续 Phase 打开): sessions.create/rename/archive/restore/close, memory.update/forget/protect/unprotect, permissions.revoke/grants.read/policy.read/policy.write, trace.read/subscribe.
+
+### 验证
+- Rust: `cargo test -p apeireth-companion --lib runtime_capabilities` → 9 passed.
+- Desktop: `svelte-check` 0 err/0 warn; `vite build` PASS; `node tests/capability-manifest.mjs` → 7 passed.
+- `cargo build --example companion_serve` PASS (路由接线验证).
+
+### 设计要点
+- Capability Manifest = information, 不是 authorization. 前端不可信: 即便 manifest 声明 memory.forget=true, 后端 mutation 仍必须验证权限与状态 (Phase 8 攻击测试覆盖).
+
+## Phase 2..N
+(追加)
