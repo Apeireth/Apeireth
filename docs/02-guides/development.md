@@ -13,6 +13,59 @@ cargo test -p apeireth-companion --lib  # 伙伴器官 644 测试（最快的核
 cargo fmt --all --check              # 格式
 ```
 
+## CI 复刻 SOP — push 前必跑 (post-1.0.0 加固, commit 95c358af)
+
+**为什么需要**: 本地 `cargo test` 绿 ≠ push 后 GitHub Actions 必绿。常见 fail 原因:
+- **格式漂移** (rustfmt.yml fail): 多人并发 commit, 有人 commit 时没跑 `cargo fmt` → CI fail
+- **锁文件过期** (`--locked`): Cargo.lock 落后, CI fail
+- **测试集差异** (nextest vs libtest): CI 用 `cargo nextest`, 本地 `cargo test` 跑的不一样
+
+**SOP (push 前必跑, 10 分钟)**:
+
+```bash
+# === 1. 格式 + 锁文件 ===
+cargo fmt --all --check --locked     # 一行: format check + locked
+# ⚠️ Windows 用户注意: cargo fmt --all 在 windows cargo 1.97.1 有 bug,
+#    跑 "文件名或扩展名太长 (os error 206)"; workaround:
+cargo fmt --package <each-crate>     # 逐 crate 跑 (等价效果, 见下方脚本)
+# 推荐: 直接用 git bash 跑
+bash -c 'cargo fmt --all -- --check'
+
+# === 2. 完整 CI 复刻 (Makefile 一键) ===
+make ci                               # = ci-build + ci-test + ci-release (commit 818c6857)
+
+# 等价手动命令:
+cargo build --workspace --tests --locked                              # 5 分钟
+cargo nextest run --workspace --profile ci --locked                    # 3 分钟 (需装 cargo-nextest)
+cargo build --release --workspace --locked                            # 3 分钟
+
+# === 3. 8 硬墙守门 (仓库级) ===
+make release-prep                     # 8 硬墙 + PII + 12 项 checklist (post-1.0.0)
+# BLOCKING 模式 (1 P0 fail 退出 1):
+make release-prep-block
+
+# === 4. 全绿后才 push ===
+git push origin master
+```
+
+**4 个 SOP,缺一不可**:
+| 步骤 | 命令 | 含义 |
+|---|---|---|
+| 1. fmt | `cargo fmt --all -- --check` | CI rustfmt.yml 必绿 |
+| 2. ci-build | `cargo build --workspace --tests --locked` | CI rust.yml line 63 |
+| 3. ci-test | `cargo nextest run --workspace --profile ci --locked` | CI rust.yml line 67 |
+| 4. ci-release | `cargo build --release --workspace --locked` | CI rust-ci.yml line 106 |
+
+**4 个绿了** → push 必绿(同一份 source, Linux CI 重跑一遍)。
+
+**Windows 已知 workaround**: `cargo fmt --all` 在 windows cargo 1.97.1 触发"文件名或扩展名太长 (os error 206)"。
+- 短期: 逐 crate 跑 `cargo fmt --package <crate>` (手动模拟 --all)
+- 中期: 装 git bash, `bash -c "cargo fmt --all -- --check"`
+- 长期: 升 rustfmt 修 (需 cargo upstream fix)
+
+**真实案例**: 2026-08-19 PR #83 commit `a77f16f` 没 fmt, CI rustfmt.yml fail。
+修: `cargo fmt --package apeireth-guard` → commit `95c358af` → push → CI 必绿。
+
 ## 前端开发 (companion-desktop, post-1.0.0 新增)
 
 `frontend/companion-desktop/` 是**独立 [workspace]** (Svelte 5 + Tauri 2), 不在 root cargo workspace.
