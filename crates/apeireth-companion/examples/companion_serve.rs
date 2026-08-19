@@ -66,7 +66,7 @@ use axum::{
         sse::{Event as SseEvent, KeepAlive, Sse},
         IntoResponse,
     },
-    routing::{get, post},
+    routing::{get, patch, post},
     Json, Router,
 };
 use chrono::{Timelike, Utc};
@@ -1371,6 +1371,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Core Capability Expansion: Runtime Capability Manifest (能力发现契约).
         // Desktop 启动时拉取此端点 gate UI, 不再 404-probing. 这是 information 不是 authorization.
         .route("/v1/apeireth/capabilities", get(capabilities))
+        // Core Capability Expansion Phase 2: 后端会话生命周期 (canonical session resource).
+        // Panel 保持只读; mutation 走 /v1/apeireth/sessions. 状态机 + 乐观并发 (expected_rev).
+        .route("/v1/apeireth/sessions", get(sessions_list).post(session_create))
+        .route("/v1/apeireth/sessions/:id", get(session_get).patch(session_rename))
+        .route("/v1/apeireth/sessions/:id/archive", post(session_archive))
+        .route("/v1/apeireth/sessions/:id/restore", post(session_restore))
+        .route("/v1/apeireth/sessions/:id/close", post(session_close))
         // B1 Web 面板 v2: 静态面板页 (assets/panel/) + 只读数据端点 (apeireth-api panel_readonly)
         .route("/panel", get(panel_index))
         .route("/panel/:asset", get(panel_asset))
@@ -1487,6 +1494,150 @@ async fn approval_requests(State(st): State<Arc<AppState>>) -> impl IntoResponse
 /// Desktop 据此 gate UI, 不再逐个撞 endpoint. 仅暴露 public 信息, 不含 secret/路径.
 async fn capabilities() -> impl IntoResponse {
     Json(apeireth_companion::runtime_capabilities::current_manifest())
+}
+
+// ============================================================
+// Core Capability Expansion Phase 2 — 后端会话生命周期 HTTP
+// Panel 保持只读; mutation 走 /v1/apeireth/sessions. 状态机 + 乐观并发 (expected_rev).
+// ============================================================
+
+use apeireth_memory::{SessionLifecycleError, SessionLifecycleRecord, SessionLifecycleStore, SessionScope};
+
+/// 把 SessionLifecycleError 映射到统一 HTTP 错误 (NotFound/Conflict/Validation 区分).
+fn session_err_response(e: SessionLifecycleError) -> axum::response::Response {
+    let (status, code) = match &e {
+        SessionLifecycleError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
+        SessionLifecycleError::Conflict { .. } => (StatusCode::CONFLICT, "conflict"),
+        SessionLifecycleError::IllegalTransition { .. } => (StatusCode::CONFLICT, "illegal_transition"),
+        SessionLifecycleError::Invalid(_) => (StatusCode::BAD_REQUEST, "validation"),
+    };
+    (status, Json(json!({"error": code, "message": e.to_string()}))).into_response()
+}
+
+/// GET /v1/apeireth/sessions — 列出会话 (?include_archived=true 含归档).
+async fn sessions_list(
+    State(st): State<Arc<AppState>>,
+    axum::extract::Query(q): axum::extract::Query<SessionListQuery>,
+) -> impl IntoResponse {
+    let include = q.include_archived.unwrap_or(false);
+    match SessionLifecycleStore::list_sessions(&*st.store, include) {
+        Ok(list) => {
+            let count = list.len();
+            Json(json!({"count": count, "sessions": list})).into_response()
+        }
+        Err(e) => session_err_response(e),
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct SessionListQuery {
+    include_archived: Option<bool>,
+}
+
+/// POST /v1/apeireth/sessions — 创建会话.
+async fn session_create(
+    State(st): State<Arc<AppState>>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let id = req
+        .get("id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("sess-{}", uuid::Uuid::new_v4()));
+    let title = req.get("title").and_then(|v| v.as_str());
+    let scope = match req.get("scope").and_then(|v| v.as_str()) {
+        Some("project") => SessionScope::Project,
+        _ => SessionScope::Global,
+    };
+    let project_id = req.get("project_id").and_then(|v| v.as_str());
+    let metadata = req.get("metadata").cloned();
+    match SessionLifecycleStore::create_session(
+        &*st.store,
+        &id,
+        title,
+        scope,
+        project_id,
+        metadata.as_ref(),
+    ) {
+        Ok(rec) => (StatusCode::CREATED, Json(json!(rec))).into_response(),
+        Err(e) => session_err_response(e),
+    }
+}
+
+/// GET /v1/apeireth/sessions/:id — 读取单会话.
+async fn session_get(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match SessionLifecycleStore::get_session_lifecycle(&*st.store, &id) {
+        Ok(Some(rec)) => Json(json!(rec)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "not_found", "message": format!("session `{id}` not found")})),
+        )
+            .into_response(),
+        Err(e) => session_err_response(e),
+    }
+}
+
+/// PATCH /v1/apeireth/sessions/:id — 重命名 (乐观并发 expected_rev).
+async fn session_rename(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let Some(title) = req.get("title").and_then(|v| v.as_str()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "validation", "message": "需要 title"})),
+        )
+            .into_response();
+    };
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match SessionLifecycleStore::rename_session(&*st.store, &id, title, expected_rev) {
+        Ok(rec) => Json(json!(rec)).into_response(),
+        Err(e) => session_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/sessions/:id/archive — 归档.
+async fn session_archive(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match SessionLifecycleStore::archive_session(&*st.store, &id, expected_rev) {
+        Ok(rec) => Json(json!(rec)).into_response(),
+        Err(e) => session_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/sessions/:id/restore — 恢复.
+async fn session_restore(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match SessionLifecycleStore::restore_session(&*st.store, &id, expected_rev) {
+        Ok(rec) => Json(json!(rec)).into_response(),
+        Err(e) => session_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/sessions/:id/close — 关闭 (终态).
+async fn session_close(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match SessionLifecycleStore::close_session_lifecycle(&*st.store, &id, expected_rev) {
+        Ok(rec) => Json(json!(rec)).into_response(),
+        Err(e) => session_err_response(e),
+    }
 }
 
 /// 主人批准端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
