@@ -28,7 +28,7 @@
 //! 2. R11 baseline 3 值数字严守 (0 动 baseline)
 //! 3. 24 LOCKED 持续更新 + 9 organ 文件名 + 入口签名 0 改 (本 stub 仅新增, 0 改 9 文件)
 //! 4. 6 → 8 哲学锚 (B5) (8 哲学锚已穿透 per oh-my-opencode 4 角色 spec §4)
-//! 5. V0.5 25 维 → 30 维 (B3) (0 改 V0.5)
+//! 5. V0.5 24 维 (B3, 30 维升级 R126 P1-4 未合入) (0 改 V0.5)
 //! 6. 6 重守门 v6 (B4) (cargo check + test + clippy 0 警告, LOC 减量, doc 100%, behavior 真 verify)
 //! 7. 13 键 (A3: 12 + PHL-07, R125-12 实施) (本 stub 是 PHL-07 5 单元测试)
 //! 8. C1 0 commit + C2 0 装解除 + C3 升 6 重 v6 + 0 push (0 主动 commit + 0 主动 push)
