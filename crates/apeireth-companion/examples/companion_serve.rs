@@ -1378,6 +1378,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/apeireth/sessions/:id/archive", post(session_archive))
         .route("/v1/apeireth/sessions/:id/restore", post(session_restore))
         .route("/v1/apeireth/sessions/:id/close", post(session_close))
+        // Core Capability Expansion Phase 3: 记忆治理 (forget/protect/update, 不破坏 append-only).
+        // 原始 episode 不动; sidecar governance 表记录 forgotten/protected/content_override.
+        .route("/v1/apeireth/memory/episodes/:id", get(memory_episode_get).patch(memory_episode_update))
+        .route("/v1/apeireth/memory/episodes/:id/forget", post(memory_episode_forget))
+        .route("/v1/apeireth/memory/episodes/:id/protect", post(memory_episode_protect))
+        .route("/v1/apeireth/memory/episodes/:id/unprotect", post(memory_episode_unprotect))
         // B1 Web 面板 v2: 静态面板页 (assets/panel/) + 只读数据端点 (apeireth-api panel_readonly)
         .route("/panel", get(panel_index))
         .route("/panel/:asset", get(panel_asset))
@@ -1637,6 +1643,101 @@ async fn session_close(
     match SessionLifecycleStore::close_session_lifecycle(&*st.store, &id, expected_rev) {
         Ok(rec) => Json(json!(rec)).into_response(),
         Err(e) => session_err_response(e),
+    }
+}
+
+// ============================================================
+// Core Capability Expansion Phase 3 — 记忆治理 HTTP
+// forget/protect/unprotect/update; 原始 episode append-only 不动.
+// ============================================================
+
+use apeireth_memory::{MemoryGovernanceError, MemoryGovernanceStore};
+
+fn governance_err_response(e: MemoryGovernanceError) -> axum::response::Response {
+    let (status, code) = match &e {
+        MemoryGovernanceError::NotFound(_) => (StatusCode::NOT_FOUND, "not_found"),
+        MemoryGovernanceError::Conflict { .. } => (StatusCode::CONFLICT, "conflict"),
+        MemoryGovernanceError::AlreadyForgotten(_) => (StatusCode::CONFLICT, "already_forgotten"),
+        MemoryGovernanceError::Protected(_) => (StatusCode::CONFLICT, "protected"),
+        MemoryGovernanceError::Invalid(_) => (StatusCode::BAD_REQUEST, "validation"),
+    };
+    (status, Json(json!({"error": code, "message": e.to_string()}))).into_response()
+}
+
+/// GET /v1/apeireth/memory/episodes/:id — 读取单 episode 治理视图.
+async fn memory_episode_get(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match MemoryGovernanceStore::get_governed(&*st.store, &id) {
+        Ok(Some(g)) => Json(json!(g)).into_response(),
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "not_found", "message": format!("episode `{id}` not found")})),
+        )
+            .into_response(),
+        Err(e) => governance_err_response(e),
+    }
+}
+
+/// PATCH /v1/apeireth/memory/episodes/:id — 更新内容 (修订, expected_rev CAS).
+async fn memory_episode_update(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let Some(content) = req.get("content").and_then(|v| v.as_str()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "validation", "message": "需要 content"})),
+        )
+            .into_response();
+    };
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    let updated_by = req.get("updated_by").and_then(|v| v.as_str());
+    match MemoryGovernanceStore::update_episode_content(&*st.store, &id, content, updated_by, expected_rev) {
+        Ok(g) => Json(json!(g)).into_response(),
+        Err(e) => governance_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/memory/episodes/:id/forget — 遗忘 (软删).
+async fn memory_episode_forget(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    let reason = req.get("reason").and_then(|v| v.as_str());
+    match MemoryGovernanceStore::forget_episode(&*st.store, &id, reason, expected_rev) {
+        Ok(g) => Json(json!(g)).into_response(),
+        Err(e) => governance_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/memory/episodes/:id/protect — 保护.
+async fn memory_episode_protect(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match MemoryGovernanceStore::protect_episode(&*st.store, &id, expected_rev) {
+        Ok(g) => Json(json!(g)).into_response(),
+        Err(e) => governance_err_response(e),
+    }
+}
+
+/// POST /v1/apeireth/memory/episodes/:id/unprotect — 解除保护.
+async fn memory_episode_unprotect(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let expected_rev = req.get("expected_rev").and_then(|v| v.as_i64()).unwrap_or(0);
+    match MemoryGovernanceStore::unprotect_episode(&*st.store, &id, expected_rev) {
+        Ok(g) => Json(json!(g)).into_response(),
+        Err(e) => governance_err_response(e),
     }
 }
 
