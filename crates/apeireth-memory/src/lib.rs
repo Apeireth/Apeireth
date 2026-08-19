@@ -83,6 +83,11 @@ pub mod session_lifecycle;
 pub use session_lifecycle::{
     SessionLifecycleError, SessionLifecycleRecord, SessionScope, SessionState, SessionStore as SessionLifecycleStore,
 };
+// Core Capability Expansion Phase 3: 记忆治理 (forget/protect/update, 不破坏 append-only episodes).
+pub mod memory_governance;
+pub use memory_governance::{
+    GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStore, MemoryGovernanceStatus,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,

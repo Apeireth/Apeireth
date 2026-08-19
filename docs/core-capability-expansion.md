@@ -125,3 +125,31 @@
 
 ### 迁移/兼容
 - Local localStorage sessions: 本轮**不**自动上传 (schema/安全未明确). Desktop 仍读本地 + 后端只读展示; backend mutation 真接入待 Phase 6. legacy local session 保留, 不丢.
+
+## Phase 3 — Memory Mutation / Forget / Protect (DONE)
+
+### 设计: sidecar 治理表, 不破坏 append-only episodes
+- episodes 表由 trigger 强制 append-only (UPDATE/DELETE ABORT). 治理层用独立 `episode_governance` 表 (V6) 记录可变元数据, **不**改原始 episode 行.
+- 字段: `status(active/forgotten), protected(0/1), content_override, revision, updated_at, updated_by, reason, forgotten_at`.
+- 存量 episode 无 governance 行 → LEFT JOIN NULL → 默认 active/unprotected/rev0 (零数据迁移).
+
+### 操作语义
+- **update**: content_override (用户修订). 原始 content 通过 get_episode 仍可读 → provenance 完整. expected_rev CAS.
+- **forget**: 软删 (status=forgotten). 从 governed 检索 (governed_recent/governed_query) 排除. 保留最小审计 (episode_id/forgotten_at/reason). **不**物理删除 (≠ purge).
+- **protect**: protected=true, 阻止普通 forget (返回 Protected 错误). 需先 unprotect. 防自动压缩误删.
+- **Forget != Purge**: forget = 软删; purge (真正物理删除) 本轮不实现.
+
+### Graph Integrity
+- factg-*/link-* 存为 episodes. forget 一个 factg → governed 检索排除. 不重建关系 (复杂度高, 留待后续), 但不留 dangling pointer (link.from/to 指向的 episode 仍存在, 仅 forgotten 状态过滤).
+
+### API (不污染 /v1/panel)
+- `GET /v1/apeireth/memory/episodes/:id`, `PATCH .../:id` (update), `POST .../:id/forget|protect|unprotect`.
+- 错误: NotFound(404) / Conflict(409) / AlreadyForgotten(409) / Protected(409) / Validation(400).
+
+### Capability Manifest 更新
+- `memory.update/forget/protect/unprotect` → supported=true.
+
+### 验证
+- `cargo test -p apeireth-memory --lib memory_governance` → 10 passed (update/forget/protect/conflict/persistence/graph-integrity/legacy/invalid/not-found).
+- `cargo test -p apeireth-companion --lib runtime_capabilities` → 11 passed.
+- `cargo build --example companion_serve` PASS.
