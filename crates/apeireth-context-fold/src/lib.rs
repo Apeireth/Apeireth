@@ -31,7 +31,7 @@ mod organ_kani_proofs;
 pub mod semantic;
 
 pub use accumulator::{AccumulatorSnapshot, TokenAccumulator};
-pub use fold::{fold, unfold, FoldResult, FoldStrategy};
+pub use fold::{fold, unfold, FoldError, FoldResult, FoldStrategy};
 pub use fold_block::{
     has_fold_markers, parse_fold_blocks, render_fold_blocks, FoldBlock, FoldBlockRender,
 };
