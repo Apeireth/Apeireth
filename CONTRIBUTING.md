@@ -1,10 +1,10 @@
 # 贡献指南 (Apeireth 1.0)
 
-> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（6 锚 / 双洋葱 / 0 装 PASS）。
+> Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（8 锚 / 三洋葱 / 0 装 PASS）。
 
 ## 必读
 
-- [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（6 锚 / 双洋葱 / 0 装 PASS）
+- [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（8 锚 / 三洋葱 / 0 装 PASS）
 - [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（85 crates 分组）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引

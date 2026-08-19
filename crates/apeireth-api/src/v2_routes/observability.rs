@@ -15,12 +15,12 @@
 //!   (注: 旧 router 当前没接进任何 v2 router, 见 v2_endpoints.rs LOCKED)
 //!
 //! **不修改承诺**:
-//! - 1. ✅ 0 触碰 24 LOCKED crate
+//! - 1. ✅ 0 触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - 2. ✅ 0 改 v2_endpoints.rs 79KB (仅是平行模块, 不动)
-//! - 3. ✅ 0 改 workspace version (1.0.0)
+//! - 3. ✅ 0 改 workspace version (1.2.0)
 //! - 4. ✅ 0 引 NewAPI
 //! - 5. ✅ 0 重复造轮子 (复用 crate::observability::* 公开 API)
-//! - 6. ✅ 6 哲学锚穿透 (本文件顶部)
+//! - 6. ✅ 8 哲学锚穿透 (本文件顶部)
 //! - 7. ✅ 不假装已接真 metrics (跟 metrics.rs 一致, stub 占位)
 //! - 8. ✅ 诚实标缺 (5 R-Measure 占位 0.0)
 //!

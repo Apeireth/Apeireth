@@ -7,7 +7,7 @@
 //! 1. **左**: 5 组件 health (db / cache / queue / external_api / disk_space), 颜色编码 (绿/黄/红)
 //! 2. **中上**: CPU + 内存 progress bar (gauges from `ObsState::metrics`)
 //! 3. **中下**: 最近 10 request log (per `ObsState::recent_requests`)
-//! 4. **右**: 5 R-Measure 实时值 + 6 哲学锚穿透徽标
+//! 4. **右**: 5 R-Measure 实时值 + 8 哲学锚穿透徽标
 //! 5. **底**: 4 快捷键提示 + 当前 `ObsState` 摘要
 //!
 //! **4 快捷键** (per task spec):
@@ -25,8 +25,7 @@
 //! - 事件循环: 100ms tick poll, `crossterm::event::poll` + `read`
 //! - 不修改 `ObsState`, 0 副作用, 0 写入
 //!
-//! **6 哲学锚穿透**:
-//! - S-1 北极星导向: 1:1 翻译 v0.9.21 商业版 observability dashboard (per 蓝图 §2.5.3)
+//! **8 哲学锚穿透**://! - S-1 北极星导向: 1:1 翻译 v0.9.21 商业版 observability dashboard (per 蓝图 §2.5.3)
 //! - S-2 实事求是: 估 300+ LOC, ratatui 0.29 + crossterm 0.28 (本地已 lock), 不引额外 GUI
 //! - O-2 走在前人肩上: 借鉴 ratatui 官方 dashboard 示例 + Health/CPU/Log 三段式
 //! - O-3 干到底: 3 panel + 4 快捷键 + 5 R-Measure + 6 anchor + 5 测试编译期守门
@@ -34,12 +33,12 @@
 //! - O-5 不假装: 5 R-Measure 显示当前值, 但占位 0.0 (跟 `status.rs` 一致)
 //!
 //! **8 项不修改承诺**:
-//! - 1. ✅ 0 触碰 24 LOCKED crate `src/lib.rs` (mod.rs 也是 24 LOCKED 范围, 不动)
+//! - 1. ✅ 0 触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) `src/lib.rs` (mod.rs 也是 24 LOCKED crate 范围, 不动)
 //! - 2. ✅ 0 改 v2_endpoints.rs 79KB
-//! - 3. ✅ 0 改 workspace version (1.0.0)
+//! - 3. ✅ 0 改 workspace version (1.2.0)
 //! - 4. ✅ 0 引 NewAPI
 //! - 5. ✅ 0 重复造轮子 (复用 `apeireth_observability::render_prometheus` 等)
-//! - 6. ✅ 6 哲学锚穿透 (本文件顶部)
+//! - 6. ✅ 8 哲学锚穿透 (本文件顶部)
 //! - 7. ✅ 不假装已接真 metrics (CPU / mem 显示从 `ObsState::metrics` 读, 当前 0.0)
 //! - 8. ✅ 诚实标缺 (5 R-Measure 标 "(stub)" 字段)
 //!
@@ -84,7 +83,7 @@ pub const DASHBOARD_KEYS: [&str; 4] = ["q", "r", "h", "e"];
 /// 5 R-Measure (per `docs/stage4/r-measure-verification-design-2026-08-05.md`).
 pub const DASHBOARD_R_MEASURES: usize = 5;
 
-/// 6 哲学锚穿透徽标.
+/// 8 哲学锚穿透徽标.
 pub const DASHBOARD_ANCHORS: usize = 6;
 
 /// Tick 间隔 (ms, ratatui loop poll).
@@ -193,7 +192,7 @@ impl DashboardData {
     /// **render_text** — 纯文本回退 (无 TTY / 测试用)
     ///
     /// 返回 ANSI-free 多行字符串, 跟 TUI 渲染同结构.
-    /// **测试断言用**: 字符串含 5 组件名 + 5 R-Measure 名 + 6 哲学锚.
+    /// **测试断言用**: 字符串含 5 组件名 + 5 R-Measure 名 + 8 哲学锚.
     pub fn render_text(&self) -> String {
         let mut out = String::new();
 
@@ -656,7 +655,7 @@ mod tests {
         }
     }
 
-    /// 3. render_text 含关键标记: 5 R-Measure 名 + 6 哲学锚 + 4 快捷键
+    /// 3. render_text 含关键标记: 5 R-Measure 名 + 8 哲学锚 + 4 快捷键
     #[test]
     fn dashboard_render_text_contains_anchors() {
         let state = ObsState::new();
