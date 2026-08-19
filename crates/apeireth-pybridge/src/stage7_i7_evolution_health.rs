@@ -21,7 +21,7 @@
 //! # 8 硬墙 0 越界
 //!
 //! - B2 1.2.0 0 改 / A1 R11 baseline 0 改 / B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
-//! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 / A3 13 键 0 改
+//! - B5 8 哲学锚 / B3 V0.5 24 维 / B4 9 重 v9 守门 / A3 13 键 0 改
 //! - C1 0 主动 commit / C2 0 装 PASS 严守 / 0 主动 push
 
 use crate::evolution_governance::{

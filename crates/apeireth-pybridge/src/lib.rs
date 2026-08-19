@@ -871,7 +871,7 @@ mod tests {
         assert!(stage7_i3_to_g3_consistency());
     }
 
-    /// Stage 7 I4 D4+G2 集成 公共 API (B4 6 重 v7 严守)
+    /// Stage 7 I4 D4+G2 集成 公共 API (B4 9 重 v9 守门 严守)
     #[test]
     fn r129_18_stage7_i4_callable() {
         assert!(stage7_i4_healthy());
@@ -889,7 +889,7 @@ mod tests {
         assert!(stage7_i5_to_k2_consistency());
     }
 
-    /// Stage 7 I6 G2+K3 集成 公共 API (B4 6 重 v7 + G7 跨语言 严守)
+    /// Stage 7 I6 G2+K3 集成 公共 API (B4 9 重 v9 守门 + G7 跨语言 严守)
     #[test]
     fn r129_18_stage7_i6_callable() {
         assert!(stage7_i6_healthy());

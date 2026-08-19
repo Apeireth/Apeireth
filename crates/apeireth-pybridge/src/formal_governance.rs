@@ -38,7 +38,7 @@
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
 //! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW, 不算改)
-//! - B4 6 重 v7 / B5 8 锚 / B3 30 维 / A3 13 键 0 改
+//! - B4 9 重 v9 守门 / B5 8 锚 / B3 V0.5 24 维 / A3 13 键 0 改
 //! - C1 0 主动 commit (Mavis 整合 #5 commit 时机拍板)
 //! - C2 0 装 PASS 严守
 //!
@@ -204,7 +204,7 @@ impl ProofResult {
 /// 6 字段 1:1 跟 ASI Stage 5 治理 6 维度对应:
 /// - stage1_7_modules = Stage 1 注册的 7 关键 ASI Python 模块 (V1077..V1470, 编译期 = 7)
 /// - g1_resource_dims = G1 资源治理 4 维度 (rate/memory/time/count, 编译期 = 4)
-/// - g2_permission_layers = G2 权限治理 6 重守门 v7 (1:1 跟 B4)
+/// - g2_permission_layers = G2 权限治理 9 重 v9 守门 (lineage v6→v7→v8→v9) (1:1 跟 B4)
 /// - g3_harnesses = G3 形式化治理 8 Kani-style harness
 /// - g4_evolution_rules = G4 演进治理规则数 (Stage 5 G4 写 = 4)
 /// - ceiling_critical = ASI ceiling_critical 模块数 (V1458 = 1)
@@ -214,7 +214,7 @@ pub struct AsiStage5Token {
     pub stage1_7_modules: u8,
     /// G1 资源治理 4 维度 (rate/memory/time/count)
     pub g1_resource_dims: u8,
-    /// G2 权限治理 6 重守门 v7 (1:1 跟 B4)
+    /// G2 权限治理 9 重 v9 守门 (lineage v6→v7→v8→v9) (1:1 跟 B4)
     pub g2_permission_layers: u8,
     /// G3 形式化治理 8 Kani-style harness
     pub g3_harnesses: u8,
@@ -531,7 +531,7 @@ pub fn run_all_8_harnesses() -> ProofReport {
     };
     report.record(h2, r2);
 
-    // 3. proof_g2_permission_layers_6 (G2: 6 重守门 v7, 1:1 跟 B4)
+    // 3. proof_g2_permission_layers_6 (G2: 9 重 v9 守门 (lineage v6→v7→v8→v9), 1:1 跟 B4)
     let h3 = ProofHarness::new(
         "proof_g2_permission_layers_6",
         "formal_governance.rs",

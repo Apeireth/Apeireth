@@ -29,7 +29,7 @@
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 0.8682/0.8532/0.9063 数字严守
 //! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
-//! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 / A3 13 键 0 改
+//! - B5 8 哲学锚 / B3 V0.5 24 维 / B4 9 重 v9 守门 / A3 13 键 0 改
 //! - C1 0 主动 commit
 
 use crate::asi_modules::{
@@ -313,13 +313,13 @@ impl HardWallsVerify {
                 || env!("CARGO_PKG_VERSION") == "1.1.0", // 整合 #4 严守 1.2.0
             // A1: R11 baseline 3 值 0.8682/0.8532/0.9063 (本模块未触碰 apeireth-asi, 严守)
             a1_baseline_locked: !contains_asi_baseline_modified(),
-            // B1: 24 LOCKED 入口签名 0 改 (本模块是 NEW src, 不算改 LOCKED)
+            // B1: 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本模块是 NEW src, 不算改 LOCKED)
             b1_24_locked_unchanged: !contains_locked_signature_modified(),
             // B5: 8 哲学锚 (per decision-22 §2.5; 决策 #33 严守)
             b5_8_philosophical_anchors: true,
-            // B3: V0.5 30 维 (per decision-22 §2.3; P1-4 R126 verify done)
+            // B3: V0.5 24 维 (R126 P1-4 30 维未合入) (per decision-22 §2.3; P1-4 R126 verify done)
             b3_30_dimensions: true,
-            // B4: 6 重守门 v7 (per decision-33 §2.1; P1-3 R126 retry done)
+            // B4: 9 重 v9 守门 (lineage v6→v7→v8→v9) (per decision-33 §2.1; P1-3 R126 retry done)
             b4_6_gates_v7: true,
             // A3: 12 键 + PHL-07 = 13 键 (per decision-22 §2.8; 整合 #4 commit done)
             a3_13_keys: true,
@@ -327,7 +327,7 @@ impl HardWallsVerify {
             c1_no_commit: true,
             // C2: 0 装 PASS 严守 (✅ cloned = 真实施, ⏳ 限流 = 准备, ❌ 跳过 = 0 集成)
             c2_no_fake_pass: true,
-            // C3: 升 6 重 v7 (per decision-33 §2.1)
+            // C3: 升 9 重 v9 守门 (per decision-33 §2.1)
             c3_6_gates_v7: true,
         }
     }
@@ -357,12 +357,12 @@ impl std::fmt::Display for HardWallsVerify {
              {} A1 R11 baseline 0.8682/0.8532/0.9063 数字严守\n  \
              {} B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)\n  \
              {} B5 8 哲学锚 (S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5)\n  \
-             {} B3 V0.5 30 维\n  \
-             {} B4 6 重守门 v7\n  \
+             {} B3 V0.5 24 维 (R126 P1-4 30 维未合入)\n  \
+             {} B4 9 重 v9 守门 (lineage v6→v7→v8→v9)\n  \
              {} A3 12 键 + PHL-07 = 13 键\n  \
              {} C1 0 主动 commit\n  \
              {} C2 0 装 PASS 严守\n  \
-             {} C3 升 6 重 v7",
+             {} C3 升 9 重 v9 守门",
             mark(self.b2_workspace_version_unchanged),
             mark(self.a1_baseline_locked),
             mark(self.b1_24_locked_unchanged),
