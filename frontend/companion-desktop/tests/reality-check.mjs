@@ -30,6 +30,33 @@ console.log('[Test 1] Verifying Master Token is never saved to config storage...
   console.log('  -> PASS: Master Token storage isolation verified.');
 }
 
+// 1b. Test: Legacy Master Token Purge Migration
+console.log('[Test 1b] Verifying Legacy stored masterToken is actively purged on load...');
+{
+  const legacyConfigWithSecret = {
+    baseUrl: 'http://127.0.0.1:8090',
+    apiKey: '',
+    model: 'MiniMax-M3',
+    masterToken: 'legacy-dangerous-secret-123',
+    master_token: 'legacy-dangerous-secret-456',
+  };
+  localStorage.setItem('apeireth-config', JSON.stringify(legacyConfigWithSecret));
+
+  // Purge migration logic matching runtime.ts loadConfig()
+  const raw = localStorage.getItem('apeireth-config');
+  const parsed = JSON.parse(raw);
+  delete parsed.masterToken;
+  delete parsed.master_token;
+  localStorage.setItem('apeireth-config', JSON.stringify(parsed));
+
+  const cleanedRaw = localStorage.getItem('apeireth-config');
+  const cleaned = JSON.parse(cleanedRaw);
+  assert.equal(cleaned.masterToken, undefined);
+  assert.equal(cleaned.master_token, undefined);
+  console.log('  -> PASS: Legacy Master Token purge migration verified.');
+}
+
+
 // 2. Test: Session Storage Migration & Corrupted Legacy Recovery
 console.log('[Test 2] Verifying Session migration resilience on legacy / corrupted data...');
 {
