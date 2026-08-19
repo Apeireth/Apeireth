@@ -165,12 +165,22 @@ export async function listModels(baseUrl: string, apiKey: string): Promise<strin
  * 流式聊天: 通过 SSE 拉取 OpenAI 兼容 chat completion.
  * 每个 text delta 回调 onDelta; 结束回调 onDone.
  */
+export interface StreamCallbacks {
+  onDelta: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
+  onToolCall?: (tool: string, args?: unknown) => void;
+}
+
 export async function streamChat(
   config: ApeirethConfig,
   messages: Array<{role: 'user' | 'assistant' | 'system'; content: string}>,
-  onDelta: (text: string) => void,
+  callbacks: ((text: string) => void) | StreamCallbacks,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{content: string; reasoning: string}> {
+  const onDelta = typeof callbacks === 'function' ? callbacks : callbacks.onDelta;
+  const onReasoningDelta = typeof callbacks === 'object' ? callbacks.onReasoningDelta : undefined;
+  const onToolCall = typeof callbacks === 'object' ? callbacks.onToolCall : undefined;
+
   const base = normalizeBaseUrl(config.baseUrl);
   const response = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
@@ -195,7 +205,9 @@ export async function streamChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let full = '';
+  let fullContent = '';
+  let fullReasoning = '';
+  let inThinkBlock = false;
 
   try {
     while (true) {
@@ -209,15 +221,74 @@ export async function streamChat(
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') return full;
+        if (payload === '[DONE]') return {content: fullContent, reasoning: fullReasoning};
         try {
           const json = JSON.parse(payload) as {
-            choices?: Array<{delta?: {content?: string}; message?: {content?: string}}>;
+            choices?: Array<{
+              delta?: {
+                content?: string;
+                reasoning_content?: string;
+                tool_calls?: Array<{function?: {name?: string; arguments?: string}}>;
+              };
+              message?: {content?: string};
+            }>;
           };
-          const delta = json.choices?.[0]?.delta?.content;
+          const choice = json.choices?.[0];
+          if (!choice) continue;
+
+          // 1. Explicit reasoning_content delta
+          if (choice.delta?.reasoning_content) {
+            const rDelta = choice.delta.reasoning_content;
+            fullReasoning += rDelta;
+            onReasoningDelta?.(rDelta);
+          }
+
+          // 2. Tool calls delta
+          if (choice.delta?.tool_calls) {
+            for (const tc of choice.delta.tool_calls) {
+              if (tc.function?.name) {
+                onToolCall?.(tc.function.name, tc.function.arguments);
+              }
+            }
+          }
+
+          // 3. Regular content delta (including inline <think> tags handling)
+          const delta = choice.delta?.content;
           if (delta) {
-            full += delta;
-            onDelta(delta);
+            let remaining = delta;
+            while (remaining.length > 0) {
+              if (!inThinkBlock) {
+                const thinkStart = remaining.indexOf('<think>');
+                if (thinkStart !== -1) {
+                  const before = remaining.slice(0, thinkStart);
+                  if (before) {
+                    fullContent += before;
+                    onDelta(before);
+                  }
+                  inThinkBlock = true;
+                  remaining = remaining.slice(thinkStart + 7);
+                } else {
+                  fullContent += remaining;
+                  onDelta(remaining);
+                  remaining = '';
+                }
+              } else {
+                const thinkEnd = remaining.indexOf('</think>');
+                if (thinkEnd !== -1) {
+                  const thinkText = remaining.slice(0, thinkEnd);
+                  if (thinkText) {
+                    fullReasoning += thinkText;
+                    onReasoningDelta?.(thinkText);
+                  }
+                  inThinkBlock = false;
+                  remaining = remaining.slice(thinkEnd + 8);
+                } else {
+                  fullReasoning += remaining;
+                  onReasoningDelta?.(remaining);
+                  remaining = '';
+                }
+              }
+            }
           }
         } catch {
           // skip malformed SSE line
@@ -227,7 +298,7 @@ export async function streamChat(
   } finally {
     reader.releaseLock();
   }
-  return full;
+  return {content: fullContent, reasoning: fullReasoning};
 }
 
 /** 非流式聊天 (用于简单问答/健康检查). */
@@ -283,16 +354,20 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
         // Adapter: contract → Apeireth HTTP/SSE. future 可替换为其他 provider.
-        const full = await streamChat(
+        const result = await streamChat(
           config,
           request.messages.map((m) => ({role: m.role, content: m.content})),
-          (delta) => onEvent({type: 'text-delta', requestId, text: delta}),
+          {
+            onDelta: (delta) => onEvent({type: 'text-delta', requestId, text: delta}),
+            onReasoningDelta: (rDelta) => onEvent({type: 'reasoning-delta', requestId, text: rDelta}),
+            onToolCall: (tool, args) => onEvent({type: 'tool-call', requestId, tool, args}),
+          },
           request.signal ?? abortController.signal,
         );
 
-        onEvent({type: 'message-end', requestId, messageId: requestId, fullText: full});
+        onEvent({type: 'message-end', requestId, messageId: requestId, fullText: result.content});
         onEvent({type: 'run-end', requestId, aborted: false});
-        return full;
+        return result.content;
       } catch (caught) {
         const error = toRuntimeError(caught);
         if (error.code !== 'aborted') {
