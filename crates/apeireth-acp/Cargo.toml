@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-acp — R23 6 module acp 子模块: Agent Communication Protocol 抽象 + 信封 + 路由"
+description = "apeireth-acp — R23 acp 子模块: Agent Communication Protocol 抽象 + 信封 + 路由 + R177 llm_facade (6 provider)"
 [lib]
 name = "apeireth_acp"
 path = "src/lib.rs"
