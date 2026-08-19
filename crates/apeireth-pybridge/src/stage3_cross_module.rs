@@ -28,7 +28,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 0.8682/0.8532/0.9063 数字严守
-//! - B1 24 LOCKED 入口签名 0 改
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
 //! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 / A3 13 键 0 改
 //! - C1 0 主动 commit
 
@@ -355,7 +355,7 @@ impl std::fmt::Display for HardWallsVerify {
             "8 硬墙 (B1-B7 + A1-A3 + C1-C3, per decision-33 §2.3 + decision-58 §4) verify:\n  \
              {} B2 workspace.version 1.2.0 0 改\n  \
              {} A1 R11 baseline 0.8682/0.8532/0.9063 数字严守\n  \
-             {} B1 24 LOCKED 入口签名 0 改\n  \
+             {} B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)\n  \
              {} B5 8 哲学锚 (S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5)\n  \
              {} B3 V0.5 30 维\n  \
              {} B4 6 重守门 v7\n  \

@@ -38,7 +38,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW, 不算改)
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW, 不算改)
 //! - B4 6 重 v7 / B5 8 锚 / B3 30 维 / A3 13 键 0 改
 //! - C1 0 主动 commit (Mavis 整合 #5 commit 时机拍板)
 //! - C2 0 装 PASS 严守
@@ -156,7 +156,7 @@ impl EvolutionRule {
                 "新增模块必通过 7 项安全 check (类型/范围/速率/守门/审计/来源/POD)"
             }
             EvolutionRule::R2UpgradeBackwardCompat => {
-                "升级必保持向后兼容 (24 LOCKED 入口签名 0 改)"
+                "升级必保持向后兼容 (24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱))"
             }
             EvolutionRule::R3DowngradeJustified => "降级必记录原因 (避免悄悄降级)",
             EvolutionRule::R4RetireConfirmed => "退役必 3 方确认 (Mavis + 主人 + 借鉴 ID)",
@@ -493,7 +493,7 @@ impl EvolutionEngine {
 
     /// R3 DowngradeJustified — 降级必记录原因
     /// - 降级必带 reason (ctx 里有 reason 字段)
-    /// - 24 LOCKED 入口签名 0 改
+    /// - 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
     pub fn check_r3_downgrade_justified(
         &mut self,
         ctx: &EvolutionContext,
