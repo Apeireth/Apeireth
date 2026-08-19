@@ -899,3 +899,213 @@ export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
   }
 }
 
+// ============================================================
+// Core Capability Expansion Phase 6 — 后端 mutation 真实接入
+// 所有调用都应先由 capabilitySupported() gate (UI 按钮). 不 fake.
+// ============================================================
+
+/** 后端会话生命周期记录 (对应 Rust SessionLifecycleRecord). */
+export interface BackendSessionRecord {
+  id: string;
+  title: string | null;
+  scope: 'global' | 'project';
+  project_id: string | null;
+  state: 'active' | 'archived' | 'closed';
+  started_at: number;
+  last_active_at: number;
+  updated_at: number | null;
+  archived_at: number | null;
+  closed_at: number | null;
+  revision: number;
+  metadata: unknown;
+}
+
+/** 治理后的 episode (含 forgotten/protected/override). */
+export interface GovernedEpisodeItem extends MemoryEpisodeItem {
+  status: 'active' | 'forgotten';
+  protected: boolean;
+  content_override: string | null;
+  revision: number;
+  updated_at: number | null;
+  updated_by: string | null;
+  forgotten_at: number | null;
+}
+
+/** Grant 视图 (对应 Rust GrantView). */
+export interface GrantView {
+  id: string;
+  name: string;
+  tools: string[];
+  paths: string[];
+  expiry: string;
+  op_budget: number | null;
+  used_ops: number;
+  spend_budget: number | null;
+  spend_used: number;
+  activated_at_ms: number;
+  created_at_ms: number;
+  active: boolean;
+  expired: boolean;
+}
+
+/** Trace span (对应 Rust TraceSpan). */
+export interface TraceSpanItem {
+  span_id: string;
+  trace_id: string;
+  parent_span_id: string | null;
+  kind: string;
+  actor: string;
+  status: string;
+  summary: string | null;
+  attributes: unknown;
+  started_at: number;
+  ended_at: number | null;
+  session_id: string | null;
+}
+
+async function postJson(config: ApeirethConfig, path: string, body: unknown): Promise<{ok: boolean; status: number; data?: unknown; error?: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {ok: false, status: res.status, error: (data && (data as {message?: string}).message) || `HTTP ${res.status}`};
+    }
+    return {ok: true, status: res.status, data};
+  } catch (caught) {
+    return {ok: false, status: 0, error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+async function patchJson(config: ApeirethConfig, path: string, body: unknown): Promise<{ok: boolean; status: number; data?: unknown; error?: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}${path}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: config.apiKey ? `Bearer ${config.apiKey}` : '',
+      },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => null);
+    if (!res.ok) {
+      return {ok: false, status: res.status, error: (data && (data as {message?: string}).message) || `HTTP ${res.status}`};
+    }
+    return {ok: true, status: res.status, data};
+  } catch (caught) {
+    return {ok: false, status: 0, error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+// --- Session lifecycle ---
+
+export async function fetchBackendSessionsV2(config: ApeirethConfig, includeArchived = false): Promise<BackendSessionRecord[]> {
+  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/sessions?include_archived=${includeArchived}`, {
+    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+  });
+  const data = (await checkJson(res)) as {sessions?: BackendSessionRecord[]};
+  return data.sessions || [];
+}
+
+export async function createBackendSession(config: ApeirethConfig, title?: string, scope: 'global' | 'project' = 'global', projectId?: string): Promise<BackendSessionRecord | {error: string}> {
+  const r = await postJson(config, '/v1/apeireth/sessions', {title, scope, project_id: projectId});
+  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'create failed'};
+}
+
+export async function renameBackendSession(config: ApeirethConfig, id: string, title: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
+  const r = await patchJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}`, {title, expected_rev: expectedRev});
+  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'rename failed'};
+}
+
+export async function archiveBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/archive`, {expected_rev: expectedRev});
+  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'archive failed'};
+}
+
+export async function restoreBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/restore`, {expected_rev: expectedRev});
+  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'restore failed'};
+}
+
+export async function closeBackendSession(config: ApeirethConfig, id: string, expectedRev: number): Promise<BackendSessionRecord | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/sessions/${encodeURIComponent(id)}/close`, {expected_rev: expectedRev});
+  return r.ok ? (r.data as BackendSessionRecord) : {error: r.error || 'close failed'};
+}
+
+// --- Memory governance ---
+
+export async function updateMemoryEpisode(config: ApeirethConfig, id: string, content: string, expectedRev: number, updatedBy?: string): Promise<GovernedEpisodeItem | {error: string}> {
+  const r = await patchJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}`, {content, expected_rev: expectedRev, updated_by: updatedBy});
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'update failed'};
+}
+
+export async function forgetMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number, reason?: string): Promise<GovernedEpisodeItem | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/forget`, {expected_rev: expectedRev, reason});
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'forget failed'};
+}
+
+export async function protectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/protect`, {expected_rev: expectedRev});
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'protect failed'};
+}
+
+export async function unprotectMemoryEpisode(config: ApeirethConfig, id: string, expectedRev: number): Promise<GovernedEpisodeItem | {error: string}> {
+  const r = await postJson(config, `/v1/apeireth/memory/episodes/${encodeURIComponent(id)}/unprotect`, {expected_rev: expectedRev});
+  return r.ok ? (r.data as GovernedEpisodeItem) : {error: r.error || 'unprotect failed'};
+}
+
+// --- Permission grants (revoke + list) ---
+
+export async function fetchGrants(config: ApeirethConfig): Promise<GrantView[]> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/grants`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    const data = (await checkJson(res)) as {grants?: GrantView[]};
+    return data.grants || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function revokeGrant(config: ApeirethConfig, id: string, masterToken: string): Promise<{ok: boolean; error?: string}> {
+  const r = await postJson(config, `/v1/apeireth/grants/${encodeURIComponent(id)}/revoke`, {master_token: masterToken.trim()});
+  return r.ok ? {ok: true} : {ok: false, error: r.error};
+}
+
+// --- Trace ---
+
+export async function fetchTraces(config: ApeirethConfig, limit = 50): Promise<Array<{trace_id: string; root_span: TraceSpanItem; span_count: number}>> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces?limit=${limit}`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    const data = (await checkJson(res)) as {traces?: Array<{trace_id: string; root_span: TraceSpanItem; span_count: number}>};
+    return data.traces || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchTraceDetail(config: ApeirethConfig, traceId: string): Promise<TraceSpanItem[] | {error: string}> {
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/panel/traces/${encodeURIComponent(traceId)}`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as {message?: string};
+      return {error: err.message || `HTTP ${res.status}`};
+    }
+    const data = (await res.json()) as {spans?: TraceSpanItem[]};
+    return data.spans || [];
+  } catch (caught) {
+    return {error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+

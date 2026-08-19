@@ -24,19 +24,64 @@
   import ErrorState from './components/ErrorState.svelte';
   import LoadingState from './components/LoadingState.svelte';
   import StatusBadge from './components/StatusBadge.svelte';
-  import type {ApeirethConfig, MemoryCategory, MemoryEpisodeItem} from './types';
+  import type {ApeirethConfig, CapabilityManifest, MemoryCategory, MemoryEpisodeItem} from './types';
   import {
     appendMemoryEpisode,
     fetchGraphData,
     fetchMemoryEpisodes,
     fetchMemoryStreams,
+    forgetMemoryEpisode,
+    protectMemoryEpisode,
+    unprotectMemoryEpisode,
+    capabilitySupported,
   } from './runtime';
+  import ConfirmDialog from './components/ConfirmDialog.svelte';
 
   let {
     config,
+    capabilities = null,
   }: {
     config: ApeirethConfig;
+    capabilities: CapabilityManifest | null;
   } = $props();
+
+  // Capability gating — 后端不支持则按钮 disabled/隐藏, 不 404-probe.
+  let canForget = $derived(capabilitySupported(capabilities, 'memory.forget'));
+  let canProtect = $derived(capabilitySupported(capabilities, 'memory.protect'));
+  let canUnprotect = $derived(capabilitySupported(capabilities, 'memory.unprotect'));
+
+  // Memory mutation state (forget/protect). revision 从 0 起 (客户端无本地缓存治理态).
+  let forgetTarget = $state<MemoryEpisodeItem | null>(null);
+  let mutationError = $state('');
+  let mutating = $state(false);
+
+  async function handleForget(ep: MemoryEpisodeItem): Promise<void> {
+    forgetTarget = null;
+    mutating = true;
+    mutationError = '';
+    const r = await forgetMemoryEpisode(config, ep.id, 0, '用户手动遗忘');
+    mutating = false;
+    if ('error' in r) {
+      mutationError = r.error;
+      return;
+    }
+    // 本地从列表移除 (forgotten 不再默认检索).
+    episodes = episodes.filter((item) => item.id !== ep.id);
+  }
+
+  async function handleToggleProtect(ep: MemoryEpisodeItem, currentlyProtected: boolean): Promise<void> {
+    mutating = true;
+    mutationError = '';
+    const r = currentlyProtected
+      ? await unprotectMemoryEpisode(config, ep.id, 0)
+      : await protectMemoryEpisode(config, ep.id, 0);
+    mutating = false;
+    if ('error' in r) {
+      mutationError = r.error;
+    }
+    // 重新拉取以反映新状态.
+    await loadData();
+  }
 
   type MemoryTab = 'all' | 'working' | 'recent' | 'long_term' | 'profile' | 'graph';
 
@@ -313,14 +358,51 @@
             <div class="ep-foot">
               <span class="ep-id">#{ep.id.slice(0, 8)}</span>
               <div class="foot-actions">
-                <button
-                  class="disabled-action-btn"
-                  title="后端能力未开放：当前仅支持读取与追加 (Backend capability unavailable)"
-                  onclick={(e) => e.stopPropagation()}
-                >
-                  <Lock size={11} />
-                  <span>编辑/删除 (只读)</span>
-                </button>
+                {#if canForget || canProtect}
+                  {#if canProtect}
+                    <button
+                      class="foot-btn protect-btn"
+                      title={ep.protected ? '解除保护' : '保护 (防自动遗忘)'}
+                      disabled={mutating}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        void handleToggleProtect(ep, !!ep.protected);
+                      }}
+                    >
+                      {#if ep.protected}
+                        <Lock size={11} />
+                        <span>取消保护</span>
+                      {:else}
+                        <Lock size={11} />
+                        <span>保护</span>
+                      {/if}
+                    </button>
+                  {/if}
+                  {#if canForget}
+                    <button
+                      class="foot-btn forget-btn"
+                      title="遗忘此条记忆 (软删, 可审计)"
+                      disabled={mutating || !!ep.protected}
+                      onclick={(e) => {
+                        e.stopPropagation();
+                        if (ep.protected) return;
+                        forgetTarget = ep;
+                      }}
+                    >
+                      <Lock size={11} />
+                      <span>遗忘</span>
+                    </button>
+                  {/if}
+                {:else}
+                  <button
+                    class="disabled-action-btn"
+                    title="后端能力未开放：当前仅支持读取与追加 (Backend capability unavailable)"
+                    onclick={(e) => e.stopPropagation()}
+                  >
+                    <Lock size={11} />
+                    <span>编辑/删除 (只读)</span>
+                  </button>
+                {/if}
               </div>
             </div>
           </div>
@@ -330,6 +412,23 @@
     {/if}
   </div>
 </section>
+
+<!-- Phase 3: Forget 确认弹窗 (forget 不可逆软删, 必须 confirm). -->
+<ConfirmDialog
+  open={forgetTarget !== null}
+  title="遗忘此条记忆？"
+  message={forgetTarget ? `将软删除记忆 #${forgetTarget.id.slice(0, 8)}（从检索中隐藏，保留审计记录）。此操作可审计但不易撤销，确定继续？` : ''}
+  confirmText="确认遗忘"
+  danger={true}
+  onConfirm={() => {
+    if (forgetTarget) void handleForget(forgetTarget);
+  }}
+  onCancel={() => (forgetTarget = null)}
+/>
+
+{#if mutationError}
+  <div class="mutation-error" role="alert">记忆操作失败：{mutationError}</div>
+{/if}
 
 <!-- Detail Modal -->
 {#if selectedEpisode}
@@ -814,5 +913,46 @@
     .graph-section {
       grid-template-columns: 1fr;
     }
+  }
+
+  .foot-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 5px;
+    cursor: pointer;
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    background: transparent;
+    color: var(--text-dim, #aaa);
+  }
+  .foot-btn:hover:not(:disabled) {
+    background: rgba(255,255,255,0.05);
+  }
+  .foot-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .forget-btn {
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.3);
+  }
+  .protect-btn {
+    color: var(--accent, #f5a623);
+    border-color: rgba(245, 166, 35, 0.3);
+  }
+  .mutation-error {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 1100;
+    max-width: 320px;
   }
 </style>
