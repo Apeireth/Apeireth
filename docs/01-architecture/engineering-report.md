@@ -57,7 +57,7 @@
 | Docker 多架构 | 待实测 (单架构 amd64) | ✅ 修 (commit 4596357, $TARGETARCH, arm64 跑通) |
 | 产品形态: 桌宠 | 规划中 | ✅ PR #1 合并 (Svelte 5 + Tauri 2 桌面伙伴, 102 行 shell) |
 | LLM 接入层 | trait 口已备未接 | 同左 (real LLM E2E 待 `APEIRETH_API_KEY`) |
-| 桌宠真实 LLM 流式 | 不在 1.0 scope | 🆕 **TP34** v1.5 中期 (companion_serve stream: false 写死, 6 种 RuntimeEvent 0 触发) |
+| 桌宠真实 LLM 流式 | 不在 1.0 scope | 🆕 **TP34** v1.5 中期 (companion_serve stream: false 写死, 6 种 RuntimeEvent 0 触发) | 🟡 2026-08-19 后端 50% (streaming 分支 + extract_minimax_cot + 8 单测; 透传 SSE, 跳过 tool loop; 前端 `<!-- -->` 状态机 v1.5 续) |
 | 投资模拟盘主链 | 零件已备 (时序/事件/标的)，主链未做 | 同左 |
 | VM 级隔离 | 调研中 (smol-vm 方向) | 同左 |
 
