@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth PyO3 桥 (Python 3.13.14 <-> Rust) — R14 Phase 3 (暴露 Rust crate 给 Python mvp/) — ADR 0007 compat-components-layer + ADR 0008 feature-gating-pybridge (round9-11 qa_engineer)"
+description = "Apeireth PyO3 桥 (Python 3.13.14 <-> Rust) — ADR 0007 compat-components-layer + ADR 0008 feature-gating (default 0 pyo3, --features python-ext 才编). R129-4/5/6/18 ASI Stage 4-7 + R220 async_wrapper + R128 Stage 2/3 集成验证. 32 src 模块 + 593 #[test] + 561 集成"
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }

@@ -127,16 +127,23 @@ COPY crates/ ./crates/
 RUN cargo build --release --workspace --bin apeireth \
     && strip target/release/apeireth
 
-# === Stage 2: runtime-deps (运行时动态库) ===
+# === Stage 2: runtime-deps (运行时动态库, 多架构) ===
+# debian:bookworm-slim 是 Docker Hub 多架构镜像 (linux/amd64 + linux/arm64),
+# buildx --platform 会拉对应架构 variant, apt 装相应架构 libs.
 FROM debian:bookworm-slim AS runtime-deps
+ARG TARGETARCH
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 libsqlite3-0 libgit2-1.7 \
     && rm -rf /var/lib/apt/lists/*
 
 # === Stage 3: final (distroless, ~150MB, 非 root 用户) ===
+# distroless cc-debian12:nonroot 同样多架构; COPY lib 路径用 $TARGETARCH 动态展开:
+# - linux/amd64 build → /usr/lib/amd64-linux-gnu/
+# - linux/arm64 build → /usr/lib/arm64-linux-gnu/
 FROM gcr.io/distroless/cc-debian12:nonroot AS final
-COPY --from=runtime-deps /usr/lib/x86_64-linux-gnu/ /usr/lib/x86_64-linux-gnu/
-COPY --from=runtime-deps /lib/x86_64-linux-gnu/ /lib/x86_64-linux-gnu/
+ARG TARGETARCH
+COPY --from=runtime-deps /usr/lib/${TARGETARCH}-linux-gnu/ /usr/lib/${TARGETARCH}-linux-gnu/
+COPY --from=runtime-deps /lib/${TARGETARCH}-linux-gnu/ /lib/${TARGETARCH}-linux-gnu/
 COPY --from=builder /build/target/release/apeireth /usr/local/bin/apeireth
 
 # 默认数据/配置/日志目录 (volumes 挂载)

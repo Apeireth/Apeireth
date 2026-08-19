@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-eval — R23 6 module eval 子模块: 评测维度 + 分数聚合"
+description = "apeireth-eval — 7 module eval 子模块: cross_model_benchmark / mcp_bridge / organ_kani_proofs / real_llm_smoke (R32-3-1) / smoke_task (R32-3) / swe_bench + lib, 79 单测"
 [lib]
 name = "apeireth_eval"
 path = "src/lib.rs"

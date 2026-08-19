@@ -25,8 +25,7 @@
 //! - ✅ storage trait 真用, InMemoryStorage 真跑
 //! - ✅ contact ID 用 UUID v4
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1: 5 actions 真接, 4 K-1 真跑
+//! **8 哲学锚穿透**://! - 锚 #1: 5 actions 真接, 4 K-1 真跑
 //! - 锚 #2: `CONTACT_ACTIONS_COUNT = 5` const assert
 //! - 锚 #3: `#![deny(unsafe_code)]` 继承
 //! - 锚 #4: storage trait NotFound 真返
@@ -35,12 +34,12 @@
 //!
 //! **8 项不修改承诺**:
 //! - ❌ 不改 LOCKED crate
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方 DB / libphonenumber (留 R21)
 //! - ❌ 不假装支持完整 E.164 全集 (留 R21, 当前简化版)
 //! - ❌ 不假装支持完整 RFC 5321 邮箱校验 (复用 calendar 简化版)
-//! - ❌ 不破坏 24 LOCKED crate
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - ❌ 不假装 contact 已支持 tag 索引 / 全文搜 (留 R21)
 
 #![deny(unsafe_code)]

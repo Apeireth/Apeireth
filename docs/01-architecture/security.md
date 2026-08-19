@@ -11,19 +11,20 @@
 | **Constitution** | structured constitution hard-gate (compile-time rules) + LLM constitution review (E-layer judging) | council, companion::constitution_gate |
 | **Isolation** | Windows Job Object (time/memory/CPU limits + violation trace) + restricted token + AppContainer trait 口 + exec_worker per-call subprocess | companion::job_object, restricted_token, app_container |
 | **Privacy** | PII detection + redaction + audit (outbound LLM requests scrubbed) | apeireth-guard |
-| **Outbound** | **S4 default-deny**: domain/protocol allowlist + SHA-256 audit chain + budget hook — every HttpClient request checked | http-client::egress |
+| **Outbound** | **S4 default-deny** (trait 口已备): domain/protocol allowlist + SHA-256 audit chain + budget hook — **实装待补** (per backlog S4 P1 未实施, 2026-08-18 复核) | http-client::egress (trait) |
 | **Audit** | HASH-SQL arbitration (immutable timeline), session log hash chain, egress audit chain | arbitration, session_log |
 | **Credentials** | CredentialsStore trait + file backend; high-risk credentials go through approval gate trait | credentials |
 
-## The Double Onion (核心)
+## The Triple Onion (三洋葱, R125-5 升双→三, 加 DSL 洋葱)
 
 - **L0**: real human approval — **never mutable** (Self-Disable "百年章节" prevents AI self-bypass)
 - V1 (principles) + V2 (permissions) + V3 (HA) AND-gate: any independent rejection blocks
+- DSL onion (Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴): 表达"什么操作允许/禁止"
 - Risk grading → council seat count (critical 7 / high 5 / medium 3 / low 1)
 
 ## Verified Behaviors
 
-- Outbound: `egress.rs` — default deny outside allowlist; https-only unless explicitly allowed; audit chain tamper-detected (tests)
+- Outbound: `egress.rs` — **trait 口已备, 实装待补** (backlog S4 P1 未实施; 真出站策略在 gateway 暂未挂载, 2026-08-18 复核)
 - Tool: schema validation rejects missing/wrong-typed fields; guardrail blocks path traversal + shell injection; tripwire flags credential leaks
 - Sandbox: CPU-time limit kills child (trace kept); memory limit **denies allocation** (Windows semantics: OOM not kill — 0 装 PASS)
 - Approval: rejected → cannot approve (only pending); silent reject transmitted end-to-end (N20)

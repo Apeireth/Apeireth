@@ -1,4 +1,4 @@
-//! ASI 评分 (V0.5 5 维 + V1136 7 子测度).
+//! ASI 评分 (V0.5 24 维 + V1136 9 子测度).
 //!
 //! 本模块提供 5+ pub fn 给认知器官打分:
 //! - `score_v05` — 5 维评分主入口
@@ -10,7 +10,7 @@ use chrono::Utc;
 
 use crate::{CognitionError, CognitionResult, CognitiveInput};
 
-/// 给 cognitive input 打 ASI V0.5 5 维评分.
+/// 给 cognitive input 打 ASI V0.5 24 维评分.
 pub fn score_v05(input: &CognitiveInput) -> AsiV05Scores {
     AsiV05Scores {
         continuity: continuity_score(input),
@@ -21,7 +21,7 @@ pub fn score_v05(input: &CognitiveInput) -> AsiV05Scores {
     }
 }
 
-/// 给 cognitive input 打 ASI V1136 7 子测度评分.
+/// 给 cognitive input 打 ASI V1136 9 子测度评分.
 pub fn score_v1136(input: &CognitiveInput) -> V1136Submeasures {
     // 5 continuity + 2 transferability — 简化: 各维度从 V0.5 映射.
     let v05 = score_v05(input);

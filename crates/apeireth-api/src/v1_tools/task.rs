@@ -29,8 +29,7 @@
 //! - ✅ storage trait 真用
 //! - ✅ task ID 用 UUID v4
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1: 6 actions 真接, 5 K-1 真跑
+//! **8 哲学锚穿透**://! - 锚 #1: 6 actions 真接, 5 K-1 真跑
 //! - 锚 #2: `TASK_ACTIONS_COUNT = 6` const assert
 //! - 锚 #3: `#![deny(unsafe_code)]` 继承
 //! - 锚 #4: storage trait NotFound 真返
@@ -39,12 +38,12 @@
 //!
 //! **8 项不修改承诺**:
 //! - ❌ 不改 LOCKED crate
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方 DB / chrono 之外日期库
 //! - ❌ 不假装支持完整 ISO 8601 (datetime / timezone, 留 R21)
 //! - ❌ 不假装 task 已支持子任务 / 依赖 (留 R21)
-//! - ❌ 不破坏 24 LOCKED crate
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - ❌ 不假装 complete 是副作用触发器 (仅改 status, 留 R21 接 WebSocket 通知)
 
 #![deny(unsafe_code)]

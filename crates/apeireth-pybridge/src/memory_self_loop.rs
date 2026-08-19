@@ -27,7 +27,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 0.8682/0.8532/0.9063 数字严守
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW)
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW)
 //! - C1 0 主动 commit
 //! - C2 0 装 PASS 严守
 
