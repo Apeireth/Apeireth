@@ -1365,6 +1365,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
         .route("/v1/apeireth/grant", post(grant))
+        // Core Capability Expansion Phase 4: grant 可见性 + 撤销 + 评估 (deterministic).
+        .route("/v1/apeireth/grants", get(grants_list))
+        .route("/v1/apeireth/grants/evaluate", post(grants_evaluate))
+        .route("/v1/apeireth/grants/:id/revoke", post(grant_revoke))
         .route("/v1/apeireth/approval-requests", get(approval_requests))
         .route("/v1/apeireth/events", get(events))
         .route("/v1/apeireth/test-event", post(test_event))
@@ -1743,6 +1747,7 @@ async fn memory_episode_unprotect(
 
 /// 主人批准端点 (权限洋葱对齐): 主人带 master token 直接批准工具授权 (PermissionPack),
 /// AI 只请求不接触 token. 授权后高危工具在时限内可直接执行.
+/// 返回 grant id (供后续 revoke).
 async fn grant(State(st): State<Arc<AppState>>, Json(req): Json<Value>) -> impl IntoResponse {
     let tool = req
         .get("tool")
@@ -1776,19 +1781,83 @@ async fn grant(State(st): State<Arc<AppState>>, Json(req): Json<Value>) -> impl 
         )
             .into_response();
     }
-    st.bridge
-        .packs
-        .grant(apeireth_companion::packs::PermissionPack::timed(
-            "主人授权",
-            vec![tool.to_string()],
-            hours,
-            None,
-        ));
+    let pack = apeireth_companion::packs::PermissionPack::timed(
+        "主人授权",
+        vec![tool.to_string()],
+        hours,
+        None,
+    );
+    let grant_id = pack.id.clone();
+    st.bridge.packs.grant(pack);
+    // master token 不进响应/不进 audit (仅作请求参数校验后即丢弃).
     (
         StatusCode::OK,
-        Json(json!({"ok": true, "tool": tool, "hours": hours, "note": "已按权限洋葱授权 (PermissionPack); 到期自动失效"})),
+        Json(json!({
+            "ok": true,
+            "grant_id": grant_id,
+            "tool": tool,
+            "hours": hours,
+            "note": "已按权限洋葱授权 (PermissionPack); 到期自动失效; 可用 grant_id 撤销"
+        })),
     )
         .into_response()
+}
+
+/// GET /v1/apeireth/grants — 列出全部 grants (含 active/expired 状态). 供 Tools 页展示.
+async fn grants_list(State(st): State<Arc<AppState>>) -> impl IntoResponse {
+    let now = chrono::Utc::now().timestamp_millis();
+    let grants = st.bridge.packs.list_grants(now);
+    Json(json!({"count": grants.len(), "grants": grants}))
+}
+
+/// POST /v1/apeireth/grants/:id/revoke — 撤销 grant (需 master token). 即时生效.
+async fn grant_revoke(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let token = req
+        .get("master_token")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let expected = std::env::var("APEIRETH_MASTER_TOKEN").unwrap_or_default();
+    if expected.is_empty() || token != expected {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(json!({"error": "master token 不匹配 (撤销权在主人手里)"})),
+        )
+            .into_response();
+    }
+    let revoked = st.bridge.packs.revoke_grant(&id);
+    if revoked {
+        Json(json!({"ok": true, "grant_id": id, "note": "已撤销, 下次权限评估即时生效"})).into_response()
+    } else {
+        (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "not_found", "message": format!("grant `{id}` not found")})),
+        )
+            .into_response()
+    }
+}
+
+/// POST /v1/apeireth/grants/evaluate — 权限评估 (deterministic). 输入 tool → Allow/Deny/RequireApproval.
+/// 这是只读评估 (不记账); 真实执行记账走 check_and_consume.
+async fn grants_evaluate(
+    State(st): State<Arc<AppState>>,
+    Json(req): Json<Value>,
+) -> impl IntoResponse {
+    let Some(tool) = req.get("tool").and_then(|v| v.as_str()) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "validation", "message": "需要 tool"})),
+        )
+            .into_response();
+    };
+    let now = chrono::Utc::now().timestamp_millis();
+    let decision = st.bridge.packs.evaluate(tool, now);
+    Json(json!(decision)).into_response()
 }
 
 /// 内置聊天页 (零依赖单文件前端, 浏览器打开即用; 供主人/任何前端先体验).
