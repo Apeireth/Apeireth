@@ -199,6 +199,34 @@
 .workflow-steps-flow{display:flex;align-items:center;gap:6px;margin-top:4px}
 .step-pill{padding:3px 8px;border-radius:4px;background:var(--surface-3);border:1px solid var(--line);font-size:11px;color:var(--text)}
 
+/* ---------- Companion Presentation Widget ---------- */
+.companion-widget{position:relative;display:flex;align-items:center;gap:10px}
+.companion-avatar-btn{background:transparent;border:0;padding:0;cursor:pointer;display:grid;place-items:center}
+.companion-eye{position:relative;width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 34% 28%,#ffe0a1 0%,var(--amber) 55%,#a56b17 100%);box-shadow:0 0 12px rgba(231,162,59,0.4);transition:transform 0.2s,box-shadow 0.2s}
+.companion-eye:hover{transform:scale(1.08);box-shadow:0 0 16px rgba(231,162,59,0.6)}
+.companion-eye.thinking{animation:pulseGlow 1.6s infinite ease-in-out;box-shadow:0 0 18px rgba(231,162,59,0.75)}
+.companion-eye.speaking{animation:pulseSpeak 0.8s infinite alternate ease-in-out}
+.companion-eye.working{box-shadow:0 0 0 3px var(--amber-wash),0 0 14px rgba(231,162,59,0.5)}
+.companion-eye.reflecting{animation:pulseSlow 3s infinite ease-in-out;box-shadow:0 0 20px rgba(112,163,220,0.6)}
+.companion-eye.concerned{box-shadow:0 0 0 3px rgba(224,91,80,0.3),0 0 14px rgba(224,91,80,0.6)}
+
+.eye-pupil{position:absolute;left:50%;top:50%;width:3px;height:12px;transform:translate(-50%,-50%);border-radius:2px;background:#151217;animation:eyeBlink 6s infinite ease-in-out}
+
+@keyframes eyeBlink{0%,92%,100%{transform:translate(-50%,-50%) scaleY(1)}96%{transform:translate(-50%,-50%) scaleY(0.1)}}
+@keyframes pulseGlow{0%,100%{transform:scale(1);box-shadow:0 0 10px rgba(231,162,59,0.4)}50%{transform:scale(1.06);box-shadow:0 0 20px rgba(231,162,59,0.85)}}
+@keyframes pulseSpeak{0%{transform:scale(0.96)}100%{transform:scale(1.08)}}
+@keyframes pulseSlow{0%,100%{transform:scale(1);box-shadow:0 0 12px rgba(112,163,220,0.3)}50%{transform:scale(1.04);box-shadow:0 0 22px rgba(112,163,220,0.7)}}
+
+.companion-speech-bubble{position:absolute;left:34px;top:-4px;z-index:20;min-width:200px;max-width:320px;background:var(--surface-2);border:1px solid var(--amber-line);border-radius:10px;box-shadow:var(--shadow);padding:8px 12px;animation:slideIn 0.25s ease-out}
+.bubble-tail{position:absolute;left:-6px;top:12px;width:10px;height:10px;background:var(--surface-2);border-left:1px solid var(--amber-line);border-bottom:1px solid var(--amber-line);transform:rotate(45deg)}
+.bubble-body{display:flex;align-items:flex-start;gap:6px;position:relative}
+.bubble-body p{margin:0;font-size:12px;line-height:1.5;color:var(--text)}
+.bubble-icon{color:var(--amber);flex:none;margin-top:2px}
+.bubble-close{border:0;background:transparent;color:var(--faint);padding:0;cursor:pointer;margin-left:auto;flex:none}
+.bubble-close:hover{color:var(--text)}
+@keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
+
+
 
 
 
