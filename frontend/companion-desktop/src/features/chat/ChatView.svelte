@@ -31,6 +31,18 @@
     onApproved?: () => void;
     onNewConversation: () => void;
   } = $props();
+
+  let messagesContainer = $state<HTMLElement | null>(null);
+
+  $effect(() => {
+    // Follow messages changes and auto-scroll smoothly when generating or new messages arrive
+    const _len = messages.length;
+    const _lastText = messages[messages.length - 1]?.text || '';
+    const _lastReason = messages[messages.length - 1]?.reasoning || '';
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+  });
 </script>
 
 <section class="chat-view">
@@ -55,7 +67,7 @@
     />
   {/if}
 
-  <div class="messages">
+  <div class="messages" bind:this={messagesContainer}>
     {#if !messages.length}
       <div class="blank-state">
         <div class="blank-mark">⌁</div>
