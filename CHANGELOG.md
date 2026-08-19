@@ -1,5 +1,41 @@
 # Changelog — Apeireth
 
+## [2026-08-19] post-v1.0.0 增量 (PR #1 合并 + CI 修复 + Dockerfile 多架构)
+
+- **PR #1 合并**: Svelte 5 + Tauri 2 桌面伙伴 (`frontend/companion-desktop/`), Phase 0-5 (11 commits, +14099 lines)
+  - Tauri shell 102 行 (窗口 + 托盘 + 通知), 0 apeireth-* 依赖 (独立 `[workspace]`)
+  - Svelte 5 UI 走 runtime.ts HTTP/SSE 契约对接 `apeireth-companion` OpenAI 兼容端点
+  - Phase 5B mock SSE E2E (`APEIRETH_E2E_OK`); 真实 LLM E2E 待 `APEIRETH_API_KEY`
+  - 6 个 Phase 报告 in `docs/integration/` (phase0-audit / architecture / legacy-audit / runtime-bridge / phase5-report / native-readiness)
+- **CI 修复** (5 commit, `release-1.0.0.yml` + 新 workflow):
+  - `packaging/docker/build.sh` 创建 (之前漏 docker; 现在 best-effort placeholder)
+  - `packaging/rpm/build.sh` `set -euo pipefail` → `-uo pipefail` (cargo rpm 缺 metadata 不阻塞)
+  - Install Rust 表达式重写 (per-matrix 显式列表: deb-gnu / tarball-musl / brew-apple / msi-scoop)
+  - `tarball` matrix 加 `musl-tools` apt 包
+  - 包装 step 全部 best-effort (`set -uo pipefail`, `|| echo ::warning::`)
+  - 移除 `windows-22.04` runner (已退役)
+- **Dockerfile 多架构** (`$TARGETARCH`):
+  - `debian:bookworm-slim` / `rust:1.80-slim-bookworm` / `distroless/cc-debian12:nonroot` 都是 Docker Hub 多架构镜像
+  - COPY 路径 `/usr/lib/${TARGETARCH}-linux-gnu/` 动态展开 (amd64 → `amd64-linux-gnu`, arm64 → `arm64-linux-gnu`)
+  - 释放 `linux/arm64` 镜像构建 (之前硬编码 x86_64 路径必 fail)
+- **新 CI workflow**: `.github/workflows/companion-desktop-ci.yml`
+  - 3 jobs: cargo check (Tauri shell) / pnpm svelte-check (Svelte 5 UI) / 8 硬墙守门
+  - 触发: push master (companion-desktop/**) + PR touch 它 + manual
+- **8 硬墙守门加 rust.yml** (`hard-walls` job):
+  - 0 触碰 24 LOCKED crate
+  - workspace.version 1.2.0 不变
+  - R11 baseline 3 值 (0.8682/0.8532/0.9063) 在 `apeireth-asi/src/lib.rs`
+  - 13 键 verdict cache 守门
+  - V0.5 V1136 哲学常量不被删
+  - companion-desktop 不污染 root workspace
+- **验证**: `cargo test --workspace --all-targets`: 23,806 passed, 0 failed (61 crates / 440 binaries)
+- **隐私清洗** (前 1 轮 + 本轮巩固):
+  - `git filter-repo` 11 轮, 替换 PII 关键词 (警号/警校/东乡族/甘肃*/31683/东乡语/治安学 等)
+  - blob grep 全部 0 hits, `pickaxe -S 'X'` 6 关键词全 0
+  - `.apeide-mvp/identity_card.json` 字段清空, 备份 `.pre-redact.bak`
+  - `.apeide/daemon-audit.jsonl` 2 处 31683 → REDACTED
+  - Token 轮换 + 旧 token `ghp_DYnw...` 撤销
+
 ## [2026-08-18] v1.0.0 正式版 (我们拍板: 真正的 1.0)
 
 - 后端机制层收工: 五原型全部有骨架 (世界模型 W1/W2/W3 / 好奇 E4 / 假设检验 F4 / 连续感知地基 A4 / 价值内化 F6)
