@@ -39,14 +39,14 @@
 //!
 //! ## 8 硬墙 verify (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略)
 //!
-//! - **B1** 24 LOCKED 持续更新 — `apeireth-evolution` 在 24 LOCKED #5, **本文件是 NEW**, 0 触碰
+//! - **B1** 24 LOCKED 入口签名已降级 — `apeireth-evolution` 在 24 LOCKED #5, **本文件是 NEW**, 0 触碰
 //!   `lib.rs` 入口签名, 仅 +1 行 `pub mod library_autonomy_loop;` + 1 re-export group (8 类型).
 //!   0 触碰 `library_autonomy.rs` (P5-1) 任何入口签名 (仅 import 类型).
 //! - **B2** workspace.version 1.2.0 0 改 — 0 触碰 `Cargo.toml:246`.
 //! - **A1** R11 baseline 3 值 数字严守 — 0 触碰 `integration_r_measure.rs` (本文件 0 涉及 R11 baseline).
 //! - **B5** 8 哲学锚 — 0 改 8 哲学锚原 8 实质.
-//! - **B3** 30 维 — 0 改 V0.5 公式.
-//! - **B4** 6 重 v7 守门 — 0 改 6 重守门原 6 重.
+//! - **B3** V0.5 24 维 — 0 改 V0.5 公式 (R126 P1-4 30 维升级未合入 master).
+//! - **B4** 9 重 v9 守门 — 0 改 6 重守门原 6 重, lineage v6→v7→v8→v9 是扩展.
 //! - **A3** 13 键 — 0 改 12 键原 12.
 //! - **C1** 0 主动 commit — 严守 (Mavis 整合 #5 commit 时机拍板).
 //! - **C2** 0 装 解除 — 主人 17:22, ✅ cloned = 真实施 (本文件直接 import + 调 P5-1 类型).
@@ -1353,10 +1353,10 @@ mod tests {
     fn eight_hard_walls_compile_time_gates_stage_4_1() {
         // B2: workspace.version 1.2.0 0 改 (per B2 严守)
         // A1: R11 baseline 3 值 0 改 (本 crate 0 涉及)
-        // B1: 24 LOCKED 入口签名 0 改 (本测试通过, 即编译通过)
+        // B1: 24 LOCKED 入口签名 0 改 (R128 已降级; 本测试通过, 即编译通过)
         // B5: 8 哲学锚 0 改 (0 涉及)
-        // B3: 30 维 0 改 (0 涉及)
-        // B4: 6 重 v7 守门 0 改 (0 涉及)
+        // B3: V0.5 24 维 0 改 (R126 P1-4 30 维未合入)
+        // B4: 9 重 v9 守门 0 改 (lineage v6→v7→v8→v9)
         // A3: 13 键 0 改 (0 涉及)
         // C1: 0 主动 commit (Mavis 整合 #5 拍板)
         // C2: 0 装 解除 (✅ cloned 真实施)

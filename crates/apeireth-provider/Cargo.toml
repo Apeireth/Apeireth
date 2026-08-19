@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-provider \u2014 R35: 6 Provider + R176: LlmFacade + http_dispatch"
+description = "apeireth-provider — R35: 6 Provider (claude-code/codex/copilot/gemini-cli/opencode/minimax) + R176: LlmFacade + http_dispatch"
 [lib]
 name = "apeireth_provider"
 path = "src/lib.rs"

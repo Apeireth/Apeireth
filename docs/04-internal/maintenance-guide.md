@@ -1,4 +1,9 @@
-# Apeireth companion 维护指南（2026-08-16）
+# Apeireth companion 维护指南（2026-08-16, post-1.0.0 增量 2026-08-19）
+
+> **post-1.0.0 增量**: 本文件 (apeireth-companion, LOCKED) 内容本身在 1.0 release 后未变, 但生态有增量:
+> - `frontend/companion-desktop/` (Svelte 5 + Tauri 2) 走 HTTP/SSE 调 companion_serve — 真实 LLM 流式待 TP34 v1.5 中期
+> - `apeireth-pipeline-g5/` 通用 5 阶段 pipeline 框架, 跟 companion 配 chat 专用 pipeline 共存
+> - 0 触碰 companion 入口签名 (per R128 + R148 形式撤销, R218 实质仍守)
 
 > **团队作战总纲见 [docs/team-work-doc.md](team-work-doc.md)**（三哲学 + 工程/文档规范 + 工作全景 + 插件生态矩阵）。
 > 本文件是**维护用的活文档**：概念词典、模块地图、加新模块的规范、生命周期接线点。
@@ -155,15 +160,6 @@
 · `APEIRETH_REASONING_MODEL_FILTERS` (逗号分隔模型子串白名单, 空=不转换任何模型)
 · `APEIRETH_REASONING_TAG` (think 块标签, 默认 think; 仅 think/thinking 两种归一结果)
 
-=======
-# Apeireth companion 维护指南（2026-08-16）
-
-> **团队作战总纲见 [docs/team-work-doc.md](team-work-doc.md)**（三哲学 + 工程/文档规范 + 工作全景 + 插件生态矩阵）。
-> 本文件是**维护用的活文档**：概念词典、模块地图、加新模块的规范、生命周期接线点。
-> 改代码前先看这里，避免概念混用。
-> **社区插件开发规范见 [docs/plugin-authoring-guide.md](plugin-authoring-guide.md)**（team-work-doc §5.6 官方交付：Plugin trait 用法 / 白名单与日常包 / 测试模板 / 卸载真清理 / 数据源模板 / 发布检查单）。
-
-## 一、概念词典（澄清易混词）
 
 ### 能力栈（上位 → 载体 → 打包）
 ```

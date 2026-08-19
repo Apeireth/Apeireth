@@ -44,22 +44,23 @@
 //!
 //! 6 mock = 5+ 满足子任务"5+ 平台 mock"要求.
 //!
-//! ## 6 哲学锚穿透 (本模块)
+//! ## 8 哲学锚穿透 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5) — 本模块
 //!
 //! - ✅ **S-1 北极星 (走在前人经验上)**: Provider trait 模式抄 HashMap/Provider 在 git2/sqlx/db 行业惯例
 //! - ✅ **S-2 实事求是**: 4 真实 Provider 实跑平台命令, mock 返真实预置值, 不假装
 //! - ✅ **O-2 走在前人肩上 (用户看结果不看哲学)**: Provider trait 是内部抽象, UI/用户不可见
 //! - ✅ **O-3 干到底 (信息密度"高")**: 1 张表说清 4 Provider 行为, 1 张说清 6 mock 行为
 //! - ✅ **O-4 任何人都能接手 (干净状态)**: 每个 Provider 是独立 struct, 测试隔离, 不共享状态
-//! - ✅ **O-5 不假装 (6 哲学锚穿透)**: 本节自检; "诚实标缺" 段显式标 macOS 不走 SMBIOS 等
+//! - ✅ **O-5 不假装 (8 哲学锚穿透)**: 本节自检; "诚实标缺" 段显式标 macOS 不走 SMBIOS 等
+//! - (S-3 质量工程化 NEW / O-1 安全优先 NEW 见 baseline 2026-08-19)
 //!
 //! ## 8 项不修改承诺
 //!
 //! - ✅ **不假装已实现**: 4 真实 Provider 都真跑平台命令 (cfg-gated), mock 返真实预置值
 //! - ✅ **编译期 hardcode**: `Provider` trait 接口 4 方法 (name/description/is_applicable/probe) 编译期固化
-//! - ✅ **不改 LOCKED**: 0 触碰 24 LOCKED crate
-//! - ✅ **不改 workspace version**: v1.0.0 严守
-//! - ✅ **6 哲学锚穿透**: 上节
+//! - ✅ **不改 LOCKED**: 0 触碰 24 LOCKED crate 入口签名 (R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! - ✅ **不改 workspace version**: v1.2.0 严守 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)
+//! - ✅ **8 哲学锚穿透**: 上节
 //! - ✅ **不依赖 NewAPI**: 纯 std/tokio/fs_err, 0 引外部 RPC 框架
 //! - ✅ **不重复造轮子**: Provider trait 是行业惯例 (sqlx/db/git2), 不自造
 //! - ✅ **诚实标缺**: 4 Provider 局限性在"诚实标缺"段显式登记
@@ -82,7 +83,7 @@ use std::sync::Arc;
 /// 抽象 1 层, 让业务代码用 `&dyn MachineIdProvider` 接口调用, 不依赖 cfg 路由.
 /// Provider 可链式组合, 实现"SMBIOS → MAC → machine-id file" fallback chain.
 ///
-/// # 6 哲学锚穿透
+/// # 8 哲学锚穿透 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 ///
 /// - **S-1**: Provider trait 是业界标准抽象 (sqlx Pool, git2 remote, axum extractor 都用类似模式)
 /// - **O-4**: trait 接口 4 方法保持最小, 易实现 / 易 mock / 易测

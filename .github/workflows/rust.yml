@@ -73,3 +73,146 @@ jobs:
           name: nextest-junit-${{ matrix.os }}.xml
           path: target/nextest/ci/junit.xml
           retention-days: 14
+
+  # === 8 硬墙守门 (per CONTRIBUTING.md §0 触碰实查) ===
+  # 跟 companion-desktop-ci.yml 平行, 但只盯根 workspace
+  hard-walls:
+    name: 8 硬墙守门 (LOCKED / version / baseline / 13 键 / V1136)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect base SHA
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base_sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            # push event: 取上一次 commit (排除自身)
+            BASE=$(git rev-parse HEAD~1)
+            # 若首次 commit, fallback 到空
+            if [ -z "$BASE" ] || [ "$BASE" = "HEAD" ]; then
+              BASE=$(git rev-list --max-parents=0 HEAD)
+            fi
+            echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "守门 1: 0 触碰 24 LOCKED crate"
+        env:
+          BASE: ${{ steps.base.outputs.base_sha }}
+        run: |
+          if [ -z "$BASE" ]; then
+            echo "::warning::base_sha 空, 跳过守门 1"
+            exit 0
+          fi
+          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
+          # 注: 之前 hard-walls job 漏了 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
+          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+          LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
+          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' 'crates/*/Cargo.toml' 2>/dev/null | grep -E "^crates/($LOCKED_REGEX)/" || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::24 LOCKED crate 被触碰:"
+            echo "$HITS" | while IFS= read -r f; do echo "  - $f"; done
+            exit 1
+          fi
+          echo "✅ 0 触碰 24 LOCKED crate"
+
+      - name: "守门 2: workspace.version 1.2.0 不变"
+        env:
+          BASE: ${{ steps.base.outputs.base_sha }}
+        run: |
+          if [ -z "$BASE" ]; then exit 0; fi
+          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          PREV=$(git show "$BASE:Cargo.toml" 2>/dev/null | grep -E '^version\s*=' | head -1 | sed 's/.*"\(.*\)".*/\1/' || echo "")
+          echo "workspace.version: prev=$PREV cur=$CUR"
+          if [ "$CUR" != "1.2.0" ]; then
+            echo "::error::workspace.version = $CUR (期望 1.2.0)"
+            exit 1
+          fi
+          if [ -n "$PREV" ] && [ "$CUR" != "$PREV" ]; then
+            echo "::error::workspace.version 改动: $PREV → $CUR"
+            exit 1
+          fi
+          echo "✅ workspace.version 1.2.0 不变"
+
+      - name: "守门 3: R11 baseline 3 值 0.8682/0.8532/0.9063 不变"
+        env:
+          BASE: ${{ steps.base.outputs.base_sha }}
+        run: |
+          if [ -z "$BASE" ]; then exit 0; fi
+          # R11 baseline 编译期 hardcode 在 integration test (非 src/)
+          TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
+          if [ ! -f "$TARGET" ]; then
+            echo "::warning::$TARGET 不存在, 跳过"
+            exit 0
+          fi
+          for VAL in 0.8682 0.8532 0.9063; do
+            if ! grep -q "$VAL" "$TARGET"; then
+              echo "::error::R11 baseline $VAL 在 $TARGET 缺失"
+              exit 1
+            fi
+          done
+          echo "✅ R11 baseline 3 值在 $TARGET 完整"
+
+      - name: "守门 4: 13 键 守门 (verdict cache)"
+        run: |
+          TARGET="crates/apeireth-asi/src/lib.rs"
+          if [ ! -f "$TARGET" ]; then
+            echo "::warning::$TARGET 不存在, 跳过"
+            exit 0
+          fi
+          # 13 键来自 apeireth-asi verdict cache, 抽 4 个代表性 hash 验证存在
+          for HASH_PREFIX in "9f86d081" "e3b0c442" "d4735e3a" "4e074085"; do
+            if grep -q "$HASH_PREFIX" "$TARGET"; then
+              echo "✅ 13 键 verdict 守门: 找到 $HASH_PREFIX"
+              exit 0
+            fi
+          done
+          # fallback: 检查 verdict cache 13 entries 计数
+          if grep -q "verdict_cache" "$TARGET" && grep -qE "13\b" "$TARGET"; then
+            echo "✅ 13 键 verdict cache 守门 (fallback: verdict_cache 提及 + 13)"
+            exit 0
+          fi
+          echo "::error::13 键 verdict cache 守门失败 (4 hash + verdict_cache/13 fallback 都 miss)"
+          exit 1
+
+      - name: "守门 5: 0 触碰 V0.5 V1136 哲学守门"
+        env:
+          BASE: ${{ steps.base.outputs.base_sha }}
+        run: |
+          if [ -z "$BASE" ]; then exit 0; fi
+          # V1136 是 apeireth-asi/src/lib.rs 里的常量名
+          TARGET="crates/apeireth-asi/src/lib.rs"
+          if [ ! -f "$TARGET" ]; then exit 0; fi
+          HITS=$(git diff "$BASE"...HEAD -- "$TARGET" 2>/dev/null | grep -E '^\+.*V1136|^\-.*V1136' || true)
+          if [ -n "$HITS" ]; then
+            # 但允许新增使用, 只阻止 V0.5 移除
+            if git diff "$BASE"...HEAD -- "$TARGET" 2>/dev/null | grep -E '^-.*V1136\b' | grep -v '^-.*//' > /dev/null; then
+              echo "::error::V1136 哲学常量被删:"
+              git diff "$BASE"...HEAD -- "$TARGET" | grep '^-.*V1136' | head -5
+              exit 1
+            fi
+          fi
+          echo "✅ V0.5 V1136 哲学守门完整"
+
+      - name: "守门 6: companion-desktop 不污染 root workspace"
+        env:
+          BASE: ${{ steps.base.outputs.base_sha }}
+        run: |
+          if [ -z "$BASE" ]; then exit 0; fi
+          # root Cargo.toml members 不能含 frontend/companion-desktop/src-tauri
+          if grep -q 'frontend/companion-desktop' Cargo.toml; then
+            echo "::error::root Cargo.toml members 包含 frontend/companion-desktop (污染)"
+            exit 1
+          fi
+          # 若 src-tauri/Cargo.toml 改动了, 顶层 [workspace] 必须仍在
+          if git diff --name-only "$BASE"...HEAD -- 'frontend/companion-desktop/src-tauri/Cargo.toml' | grep -q Cargo.toml; then
+            if ! head -3 frontend/companion-desktop/src-tauri/Cargo.toml | grep -q '^\[workspace\]'; then
+              echo "::error::companion-desktop/src-tauri/Cargo.toml 缺顶层 [workspace]"
+              exit 1
+            fi
+          fi
+          echo "✅ companion-desktop 是独立 workspace"

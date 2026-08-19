@@ -20,31 +20,33 @@
 //!   `String` (ratatui 喂入, 0 引 ratatui)
 //! - `render_dashboard()` — 9 器官 + 3 端点统一渲染
 //!
-//! ## 编译期 hardcode (per 6 哲学锚 O-3 干到底)
+//! ## 编译期 hardcode (per 8 哲学锚 O-3 干到底)
 //!
 //! - `ORGAN_KIND_COUNT == 9` (守门)
 //! - `ORGAN_KIND_NAMES_ZH` 9 元素编译期数组 (跟 `apeireth-state::organ::ORGAN_NAMES_ZH` 1:1 镜像)
 //! - `ORGAN_KIND_ASCII_CHARS` 9 元素编译期数组 (跟 `apeireth-state::organ::ORGAN_ASCII_CHARS` 1:1 镜像)
 //! - 3 health 端点 (`/health` / `/ready` / `/metrics` 跟 `super::HEALTH_ENDPOINTS` 对齐)
-//! - 6 哲学锚 hardcode (`SIX_ANCHORS` 数组, 跟 `apeireth-tui/src/organ/mind.rs::SIX_ANCHORS` 1:1 镜像)
+//! - 6 哲学锚 hardcode (本模块 const `SIX_ANCHORS` 仍 6 元素, R128 未升 8; B5 8 哲学锚
+//!   权威源 = `apeireth-core::eight_anchors::ALL_EIGHT_ANCHORS`, 6 + S-3 质量工程化 + O-1 安全优先)
 //!
 //! ## 严守
 //!
 //! - **0 引 ratatui / 0 引 crossterm** — `String` 返 (TUI / 其他前端 都能喂入)
 //! - **0 引 apeireth-state** — 因 apeireth-observability 的 `Cargo.toml` 是 24 LOCKED
-//!   边界, 9 organ enum 字段镜像 sister #6 (编译期守门数组同长度同顺序, 互不依赖)
+//!   入口签名已降级 (R128 仅保 3 项不可变脊柱), 9 organ enum 字段镜像 sister #6
+//!   (编译期守门数组同长度同顺序, 互不依赖)
 //! - **0 引 apeireth-tui** — TUI 集成通过 TUI 自己加 1 行 `mod observability;` (per
 //!   借鉴 #1 sister 报告 1 行 mod 声明的 "必要小改" 模式)
 //! - **公开 API 100% 文档化** — 每个 pub fn/pub struct/pub enum/pub const 都有 `///` doc
 //!
-//! ## 不假装 (per 6 哲学锚 O-5)
+//! ## 不假装 (per 8 哲学锚 O-5)
 //!
 //! - `TuiOrganState.value` 默认 0.0, 0 业务真值 (skeleton 阶段)
 //! - `OrganDashboard::new()` 9 字段全 `TuiOrganState::stub()`, 真接在 R25.3 续做
 //! - `register_tui_organ_state()` 是内存注册 (Mutex 守门), 0 持久化
 //! - 9 widget 渲染是 `String` 模板, 0 ratatui widget 适配
 //!
-//! ## 6 哲学锚穿透
+//! ## 8 哲学锚穿透 (R126 B5 6→8, 本模块 const 仍 6 锚标记, 锚权威 = apeireth-core::eight_anchors)
 //!
 //! - **S-1 北极星导向** — 9 器官 dashboard 服务 ASI 北极星 (跟 sister #1 命令模块同源)
 //! - **S-2 实事求是** — OrganKind 镜像 sister #6 字段, 0 编造 "已集成 9 organ State"
@@ -73,7 +75,7 @@ use tracing::{debug, info};
 use super::{HealthEndpoint, HealthResponse, HealthStatus, HEALTH_ENDPOINTS, PLATFORM_NAME};
 
 // ============================================================================
-// 编译期 hardcode 常量 (10 项, per 6 哲学锚 O-3)
+// 编译期 hardcode 常量 (10 项, per 8 哲学锚 O-3)
 // ============================================================================
 
 /// 9 器官编译期 hardcode (跟 `apeireth-state::organ::ORGAN_COUNT` 1:1 镜像).
@@ -128,7 +130,11 @@ const _: () = [()][(DASHBOARD_HEALTH_ENDPOINTS.len() > 3) as usize];
 /// 6 哲学锚 hardcode (per 主人 R19 锚定 + sister #1 报告 `mind::SIX_ANCHORS`,
 /// 1:1 镜像).
 ///
-/// 这 6 锚是 Apeireth 顶层哲学守门, mind 器官 widget 渲染时显式列出.
+/// **R128 stale 提示**: 本 const 仍 6 元素 (R126 8 哲学锚升级未合入本模块).
+/// B5 8 哲学锚权威源 = `apeireth-core::eight_anchors::ALL_EIGHT_ANCHORS`
+/// (6 原版 + S-3 质量工程化 + O-1 安全优先 = 8).
+///
+/// 这 6 锚是 Apeireth 顶层哲学守门 (legacy 6 子集), mind 器官 widget 渲染时显式列出.
 pub const SIX_ANCHORS: [&str; 6] = [
     "S-1 北极星导向",     // 主人 22:13 拍
     "S-2 实事求是",       // 0 假装已实现
@@ -181,9 +187,10 @@ pub type TuiDashboardResult<T> = Result<T, TuiDashboardError>;
 /// **变体索引** (0-8) 用于 `ORGAN_KIND_NAMES_ZH` / `ORGAN_KIND_ASCII_CHARS` 数组查找.
 ///
 /// **LOCKED 边界说明**: 本 enum **不是** `apeireth-state::Organ`, 是镜像副本.
-/// 原因: `apeireth-observability` 的 `Cargo.toml` 是 24 LOCKED, 0 引
-/// `apeireth-state` (sister #6 估补). 集成时 (R25.3+) 在 `apeireth-tui/app.rs`
-/// LOCKED 边界外做 `apeireth_state::Organ -> observability::OrganKind` 1:1 转换.
+/// 原因: `apeireth-observability` 的 `Cargo.toml` 是 24 LOCKED 入口签名已降级 (R128,
+/// 仅保 3 项不可变脊柱), 0 引 `apeireth-state` (sister #6 估补).
+/// 集成时 (R25.3+) 在 `apeireth-tui/app.rs` LOCKED 边界外做
+/// `apeireth_state::Organ -> observability::OrganKind` 1:1 转换.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum OrganKind {
@@ -203,7 +210,7 @@ pub enum OrganKind {
     Voice = 6,
     /// 7: 体 (body) — 进程 / 内存 / 磁盘.
     Body = 7,
-    /// 8: 意 (mind) — AGI 状态 + 6 哲学锚.
+    /// 8: 意 (mind) — AGI 状态 + 哲学锚 (本模块 const 仍 6 锚标记; B5 8 哲学锚权威源 = apeireth-core::eight_anchors).
     Mind = 8,
 }
 
@@ -562,7 +569,7 @@ pub fn render_body_widget(state: &TuiOrganState) -> String {
     )
 }
 
-/// 渲染 mind (意) 器官 widget — 9 器官中唯一显示 6 哲学锚.
+/// 渲染 mind (意) 器官 widget — 9 器官中唯一显示哲学锚 (本模块 const 仍 6 锚标记, B5 8 锚权威源 = apeireth-core).
 ///
 /// 显示: `[MIND] 意 mind    growth=0.85  partial  "seed, 6/9 锚 1:1 镜像"`.
 #[must_use]
@@ -624,7 +631,7 @@ pub struct OrganDashboard {
 impl OrganDashboard {
     /// 新建 (9 字段全 stub, 3 端点全 default Healthy).
     ///
-    /// **不假装** (per 6 哲学锚 O-5): 默认 readiness=Stub, 真实化由 R25.3 续做
+    /// **不假装** (per 8 哲学锚 O-5): 默认 readiness=Stub, 真实化由 R25.3 续做
     /// (在 `apeireth-tui/app.rs` LOCKED 边界外做真接).
     #[must_use]
     pub fn new() -> Self {
