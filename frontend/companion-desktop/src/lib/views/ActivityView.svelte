@@ -25,14 +25,53 @@
   import ErrorState from '../components/ErrorState.svelte';
   import LoadingState from '../components/LoadingState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
-  import type {ActivityItem, ApeirethConfig} from '../types';
-  import {fetchAuditLogs} from '../runtime';
+  import type {ActivityItem, ApeirethConfig, CapabilityManifest} from '../types';
+  import {fetchAuditLogs, fetchTraceDetail, capabilitySupported} from '../runtime';
 
   let {
     config,
+    capabilities = null,
   }: {
     config: ApeirethConfig;
+    capabilities: CapabilityManifest | null;
   } = $props();
+
+  // Capability gating: trace 关联 (Phase 5).
+  let canReadTrace = $derived(capabilitySupported(capabilities, 'trace.read'));
+
+  // Trace detail modal (Phase 5): 点击带 traceId 的活动 → 打开 span 树.
+  import type {TraceSpanItem} from '../runtime';
+  let traceDetail = $state<{traceId: string; spans: TraceSpanItem[]; loading: boolean; error: string} | null>(null);
+
+  async function openTrace(traceId: string): Promise<void> {
+    if (!canReadTrace) return;
+    traceDetail = {traceId, spans: [], loading: true, error: ''};
+    const r = await fetchTraceDetail(config, traceId);
+    if (Array.isArray(r)) {
+      traceDetail = {traceId, spans: r, loading: false, error: ''};
+    } else {
+      traceDetail = {traceId, spans: [], loading: false, error: r.error};
+    }
+  }
+
+  /** 把 span 列表渲染成缩进树 (按 parent_span_id 关联). */
+  function spanTree(spans: TraceSpanItem[]): TraceSpanItem[] {
+    // 按 started_at 升序; 根 (parent=null) 在前.
+    return [...spans].sort((a, b) => a.started_at - b.started_at);
+  }
+
+  function spanIndent(spans: TraceSpanItem[], span: TraceSpanItem): number {
+    let depth = 0;
+    let cur = span.parent_span_id;
+    const guard = new Set<string>();
+    while (cur && !guard.has(cur)) {
+      guard.add(cur);
+      depth++;
+      const parent = spans.find((s) => s.span_id === cur);
+      cur = parent?.parent_span_id ?? null;
+    }
+    return Math.min(depth, 6);
+  }
 
   type CategoryFilter = 'all' | 'tool' | 'agent' | 'memory' | 'workflow' | 'runtime' | 'error';
   type SeverityFilter = 'all' | 'info' | 'success' | 'warning' | 'error';
@@ -148,6 +187,9 @@
             detail?: string;
             status?: string;
             ts?: number;
+            trace_id?: string;
+            span_id?: string;
+            kind?: string;
           };
 
           const newEvent: ActivityItem = {
@@ -160,6 +202,7 @@
             severity: parsed.status === 'error' || parsed.status === 'failed' ? 'error' : 'info',
             detail: JSON.stringify(parsed, null, 2),
             raw: parsed,
+            traceId: parsed.trace_id,
           };
 
           activities = mergeActivities(activities, [newEvent]);
@@ -376,6 +419,16 @@
 
               <p class="item-summary">{item.summary}</p>
 
+              {#if item.traceId && canReadTrace}
+                <button
+                  class="trace-link-btn"
+                  onclick={() => openTrace(item.traceId as string)}
+                  title="查看执行轨迹 (trace 树)"
+                >
+                  轨迹 →
+                </button>
+              {/if}
+
               {#if expandedIds[item.id] && item.detail}
                 <div class="item-detail-wrap">
                   <span class="detail-label">技术详情 / 原始参数</span>
@@ -389,6 +442,44 @@
     {/if}
   </div>
 </section>
+
+{#if traceDetail}
+  <div class="modal-backdrop" onclick={() => (traceDetail = null)} role="presentation">
+    <div
+      class="modal-dialog"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+    >
+      <div class="modal-header">
+        <h3>执行轨迹：{traceDetail.traceId.slice(0, 12)}…</h3>
+        <button class="modal-close-btn" onclick={() => (traceDetail = null)} aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        {#if traceDetail.loading}
+          <p class="trace-loading">加载轨迹中…</p>
+        {:else if traceDetail.error}
+          <p class="trace-error">轨迹加载失败：{traceDetail.error}</p>
+        {:else if traceDetail.spans.length === 0}
+          <p class="trace-empty">该轨迹无 span 记录。</p>
+        {:else}
+          <div class="trace-tree">
+            {#each spanTree(traceDetail.spans) as span}
+              <div class="trace-span" style="margin-left: {spanIndent(traceDetail.spans, span) * 16}px">
+                <span class="span-kind">{span.kind}</span>
+                <span class="span-actor">{span.actor}</span>
+                <span class="span-status status-{span.status}">{span.status}</span>
+                <span class="span-summary">{span.summary || ''}</span>
+              </div>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .activity-view {
@@ -663,5 +754,107 @@
   }
   :global(.spin) {
     animation: spin 1s linear infinite;
+  }
+
+  .trace-link-btn {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+    background: rgba(245, 166, 35, 0.12);
+    color: var(--accent, #f5a623);
+    border: 1px solid rgba(245, 166, 35, 0.2);
+    cursor: pointer;
+  }
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    display: grid;
+    place-items: center;
+    z-index: 1000;
+    padding: 20px;
+  }
+  .modal-dialog {
+    background: var(--bg-card, #1a1a1a);
+    border: 1px solid var(--border, rgba(255,255,255,0.1));
+    border-radius: 12px;
+    width: 90%;
+    max-width: 640px;
+    max-height: 80vh;
+    overflow: auto;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border, rgba(255,255,255,0.08));
+  }
+  .modal-header h3 {
+    font-size: 14px;
+    margin: 0;
+  }
+  .modal-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim, #888);
+    font-size: 20px;
+    cursor: pointer;
+  }
+  .modal-body {
+    padding: 14px 20px;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  .trace-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .trace-span {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 4px 8px;
+    border-left: 2px solid var(--border, rgba(255,255,255,0.1));
+  }
+  .span-kind {
+    color: var(--accent, #f5a623);
+    min-width: 70px;
+  }
+  .span-actor {
+    color: var(--text-dim, #aaa);
+    min-width: 90px;
+  }
+  .span-status {
+    font-size: 10px;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+  .status-succeeded {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+  }
+  .status-failed {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+  }
+  .status-running {
+    background: rgba(245, 166, 35, 0.15);
+    color: #f5a623;
+  }
+  .span-summary {
+    color: var(--text, #ccc);
+  }
+  .trace-loading, .trace-error, .trace-empty {
+    color: var(--text-dim, #888);
+    text-align: center;
+    padding: 20px;
+  }
+  .trace-error {
+    color: #f87171;
   }
 </style>

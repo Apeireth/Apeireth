@@ -16,17 +16,19 @@
     XCircle,
     AlertTriangle,
   } from 'lucide-svelte';
-  import type {RuntimeHealthReport} from '../types';
+  import type {CapabilityManifest, RuntimeHealthReport} from '../types';
 
   let {
     open = false,
     report,
+    capabilities = null,
     onClose,
     onRefresh,
     isRefreshing = false,
   }: {
     open: boolean;
     report: RuntimeHealthReport;
+    capabilities: CapabilityManifest | null;
     onClose: () => void;
     onRefresh: () => Promise<void> | void;
     isRefreshing?: boolean;
@@ -156,6 +158,34 @@
           </div>
         </div>
       </div>
+
+      {#if capabilities}
+        <div class="cap-section">
+          <div class="cap-head">
+            <span class="cap-title">能力清单 (Capability Manifest)</span>
+            <span class="cap-version">schema v{capabilities.schema_version}{capabilities.legacy ? ' · legacy' : ''}</span>
+          </div>
+          <div class="cap-runtime">
+            {capabilities.runtime.service} · {capabilities.runtime.version}
+          </div>
+          <div class="cap-grid">
+            {#each capabilities.capabilities as group}
+              <div class="cap-group">
+                <div class="cap-group-name">{group.name}</div>
+                <div class="cap-ops">
+                  {#each group.capabilities as cap}
+                    {#if cap.supported}
+                      <span class="cap-tag" title={`${cap.id}${cap.write ? ' (read/write)' : cap.read ? ' (read)' : ''}`}>
+                        {cap.id.split('.').pop()}
+                      </span>
+                    {/if}
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <div class="modal-foot">
         <span class="foot-hint">提示：Apeireth 服务常驻于本地或指定端点</span>
@@ -416,5 +446,55 @@
     .subsystem-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  .cap-section {
+    padding: 14px 20px;
+    border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  }
+  .cap-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .cap-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text, #e6e6e6);
+  }
+  .cap-version {
+    font-size: 11px;
+    color: var(--text-dim, #888);
+  }
+  .cap-runtime {
+    font-size: 11px;
+    color: var(--text-dim, #888);
+    margin-bottom: 10px;
+    font-family: monospace;
+  }
+  .cap-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .cap-group-name {
+    font-size: 11px;
+    color: var(--accent, #f5a623);
+    text-transform: capitalize;
+    margin-bottom: 3px;
+  }
+  .cap-ops {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .cap-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(245, 166, 35, 0.12);
+    color: var(--accent, #f5a623);
+    border: 1px solid rgba(245, 166, 35, 0.2);
   }
 </style>
