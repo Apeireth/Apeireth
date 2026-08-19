@@ -18,7 +18,7 @@
 | 术语 | 含义 |
 |---|---|
 | **基地（Base）** | LLM 的操作系统——器官/工具/记忆/安全/协议；模型是租客不是建筑 |
-| **双洋葱（Double Onion）** | 原则洋葱（E/S/A/M/O）嵌入权限洋葱（L0-L5）；L0 人类批准永不可变 |
+| **三洋葱（Triple Onion）** | 原则洋葱（E/S/A/M/O）嵌入权限洋葱（L0-L5），**外加 DSL 洋葱**（Colang DSL 守门, R125-5 NVIDIA Guardrails 借鉴）；L0 人类批准永不可变 |
 | **L0/L1 常驻** | 注入管线核心块：Identity 人格 + Essential Story，永不截断 |
 | **器官（Organ）** | 记忆/意识/认知/感知/情绪/价值等——每个是真实 Rust crate + trait |
 | **三层生态** | 模块（官方核心）/ 套件（官方积木）/ 插件（社区热插拔）|
@@ -55,7 +55,7 @@
 | **工具管线** | 注册 → 审批（5 规则）→ 执行（schema+guardrail）→ 记录 |
 | **guardrail** | 调用前拦路径穿越/命令注入；调用后凭据泄漏 tripwire |
 | **ApprovalBridge** | companion ↔ orchestrator 审批双向同步（silent 透传）|
-| **出站策略（S4）** | 白名单默认拒绝 + SHA-256 审计链 + 预算钩子 |
+| **出站策略（S4）** | 白名单默认拒绝 + SHA-256 审计链 + 预算钩子（**trait 口已备, 实装待补** per backlog S4 P1 未实施, 2026-08-18 复核） |
 | **Job Object 沙箱** | Windows 进程级隔离（时间/内存/CPU 限额 + 超限留痕）|
 | **HASH-SQL** | 不可篡改审计时间线（arbitration）|
 | **宪法（Constitution）** | 结构化规则硬门 + LLM 评审（E 层判案）|
