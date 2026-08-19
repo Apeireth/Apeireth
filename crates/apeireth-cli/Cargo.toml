@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth CLI (CliRunner, 暴露 Rust 子系统给终端) — R14 Phase 0 接口规范对照"
+description = "Apeireth CLI (CliRunner, 暴露 Rust 子系统给终端) — R14 Phase 0 接口规范对照 + clap derive macros (R125-2) + B2 装配 feature (base/capability/upgrade suites). 6 src / 48 测试 + 2 Kani"
 
 [[bin]]
 name = "apeireth"
