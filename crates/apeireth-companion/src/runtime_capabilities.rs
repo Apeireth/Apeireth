@@ -207,10 +207,10 @@ pub fn current_manifest() -> CapabilityManifest {
         cap("activity.audit", true, true, false, &["list"]),
     ];
 
-    // --- trace: 结构化 Agent 执行轨迹 (待 Phase 5) ---
+    // --- trace: 结构化 Agent 执行轨迹 (Phase 5 已接线 read + SSE subscribe) ---
     let trace = vec![
-        cap("trace.read", false, false, false, &["list", "detail"]),
-        cap("trace.subscribe", false, false, false, &[]),
+        cap("trace.read", true, true, false, &["list", "detail"]),
+        cap("trace.subscribe", true, true, false, &["subscribe"]),
     ];
 
     CapabilityManifestBuilder::new()
@@ -332,10 +332,16 @@ mod tests {
     #[test]
     fn unimplemented_mutations_declared_unsupported() {
         let m = current_manifest();
-        // 这些 mutation 尚未接线 (Phase 5 trace / Phase 4 policy.write), 必须诚实声明 unsupported.
-        // (sessions.* P2, memory.* P3, permissions.revoke P4 已接线, 不在此列.)
+        // policy.write (持久化策略) 本轮不实现 → unsupported.
         assert!(!m.is_supported("permissions.policy.write"));
-        assert!(!m.is_supported("trace.read"));
+    }
+
+    #[test]
+    fn trace_supported_after_phase5() {
+        let m = current_manifest();
+        // Phase 5 接线后: trace read + SSE subscribe.
+        assert!(m.is_supported("trace.read"));
+        assert!(m.is_supported("trace.subscribe"));
     }
 
     #[test]
