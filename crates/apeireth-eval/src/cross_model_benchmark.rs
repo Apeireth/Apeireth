@@ -10,7 +10,7 @@
 //!
 //! **不漂移 (主哲学锚 #1)**:
 //! - 0 改 `real_llm_smoke` (复用 7 阶段 metric struct + load_api_key)
-//! - 0 改 workspace 1.0.0 / 24 LOCKED crate
+//! - 0 改 workspace 1.2.0 (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制) / 24 LOCKED crate 入口签名已降级
 //! - 0 引入新外部依赖
 //!
 //! **借鉴锚 (S-1)**:

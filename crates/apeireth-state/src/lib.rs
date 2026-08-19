@@ -32,7 +32,7 @@
 //!    - 适用: 计数器 / LLM call 频率 / 工具调用历史
 //! 3. **[`RwLockState<T>`]** — 跨线程读写锁, 1 writer 或 N readers
 //!    - 借鉴 Golutra `state: tauri::State<RwLock<T>>` 注入
-//!    - 适用: 内存历史 / 6 哲学锚 / organ state (读多写少)
+//!    - 适用: 内存历史 / 8 哲学锚 / organ state (读多写少)
 //!
 //! ## 9 器官 state 共享 (跟借鉴 Golutra #1 集成)
 //!
@@ -59,12 +59,14 @@
 //! | [`registry`] | `OrganStateRegistry` (9 字段) / `OrganStateRegistry::new()` | 9 器官 state 聚合 |
 //! | [`error`] | `StateError` (5 variant) / `StateErrorKind` | 错误类型 + 序列化摘要 |
 //!
-//! ## 6 哲学锚穿透 (per APEIRETH-CONVENTIONS §9)
+//! ## 8 哲学锚穿透 (per APEIRETH-CONVENTIONS §9, baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //!
-//! - **S-1 北极星导向** — 9 器官 state 服务 ASI 北极星 (heart 60Hz / brain LLM / mind 6 哲学锚 1:1 镜像)
+//! - **S-1 北极星导向** — 9 器官 state 服务 ASI 北极星 (heart 60Hz / brain LLM / mind 8 哲学锚 1:1 镜像)
 //! - **S-2 实事求是** — 3 模式 trait + 3 模式具体类型全部 stub impl (R21 续真接), 0 假装 async/Tokio
+//! - **S-3 质量工程化 NEW** — 9 器官 × 3 模式 = 27 hardcode, 25+ 集成测试, 1 完整例子 (本 crate 体现)
+//! - **O-1 安全优先 NEW** — 9 器官 state 字段编译期 hardcode, 改 1 器官 = 改 1 字段 + 1 match arm (本 crate 体现)
 //! - **O-2 走在前人肩上** — 借鉴 Golutra 9 Tauri state 模式, 借 `std::sync::{Mutex, RwLock, OnceLock}` 业界标准
-//! - **O-3 干到底** — 9 器官 × 3 模式 = 27 hardcode, 25+ 集成测试, 1 完整例子
+//! - **O-3 干到底** — 7 src 模块 + 1 example + 1 tests + 顶部 §0-§10 完整
 //! - **O-4 任何人都能接手** — 7 src 模块 + 1 example + 1 tests + 顶部 §0-§10 完整
 //! - **O-5 不假装** — 3 模式全部 stub impl, 标 `// TODO R21: 真接 tokio::sync::Mutex`, 0 编造"已实现 async"
 //!
@@ -81,12 +83,12 @@
 //! | 5 | v6 基础架构 (4 重守门 + 权限发放 + E 层修改路径) | ✅ 不动 |
 //! | 6 | R11 baseline 三值 (V1141/V1131/V1136) | ✅ 不动 |
 //! | 7 | 顶层 3 规范文件 (CONVENTIONS/VERSIONING/GLOSSARY) | ✅ 不动 |
-//! | 8 | workspace version 1.0.0 (semver 严格) | ✅ 不动 (本 crate 0.1.0 + workspace.members 新增) |
+//! | 8 | workspace version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0) | ✅ 不动 (本 crate 0.1.0 + workspace.members 新增) |
 //!
 //! **0 触碰 24 LOCKED crate** (per `git diff`):
-//! - `apeireth-tui/` LOCKED (8 src files mtime 16:34:11 baseline 严守, 0 改)
+//! - `apeireth-tui/` LOCKED (8 src files mtime 16:34:11 baseline 严守, 0 改; R128 + R148 已降级, 入口签名仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
 //! - 23 其他 LOCKED crate 0 触碰
-//! - workspace `[workspace.package] version = "1.0.0"` 0 改
+//! - workspace `[workspace.package] version = "1.2.0"` 0 改 (产品轴 tag v1.0.0 严守)
 //!
 //! ## 状态
 //!

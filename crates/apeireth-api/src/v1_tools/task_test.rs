@@ -25,8 +25,7 @@
 //! - ✅ task ID 用 UUID v4
 //! - ✅ complete 真设 done_at ts (per ts 在 update 路径也跑)
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1 不漂移: 6 actions 真接, 5 K-1 真跑
+//! **8 哲学锚穿透**://! - 锚 #1 不漂移: 6 actions 真接, 5 K-1 真跑
 //! - 锚 #2 编译期 hardcode: `TASK_ACTIONS_COUNT = 6` const assert
 //! - 锚 #3 不引入 unsafe: `#![deny(unsafe_code)]` 继承
 //! - 锚 #4 真值守门: storage trait NotFound 真返
@@ -37,7 +36,7 @@
 //! - ❌ 不改 LOCKED `task.rs` (本文件 0 触碰)
 //! - ❌ 不改 LOCKED `storage.rs` (本文件 0 触碰)
 //! - ❌ 不改 LOCKED `mod.rs` (本文件用 `#[path]` 注入, 不动 mod.rs)
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方 DB / chrono 之外日期库
 //! - ❌ 不假装支持完整 ISO 8601 (datetime / timezone, 留 R21)

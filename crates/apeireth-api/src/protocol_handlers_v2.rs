@@ -31,7 +31,7 @@
 //! - ✅ 1.0 行为 0 漂移 (server.rs 仍调 dispatch_cached_with_status, 本模块是 v2 升级版入口)
 //! - ✅ Send + Sync (Arc<Pipeline> 持有, 跨 await 安全)
 //! - ✅ 8 unit test 都用 mock Pipeline (0 真实 HTTP, 0 装"已调 upstream")
-//! - ✅ 0 改 protocol_handlers.rs (内部 fn 实施可改, 入口签名 0 改, 24 LOCKED 严守)
+//! - ✅ 0 改 protocol_handlers.rs (内部 fn 实施可改, 入口签名 0 改, 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱 严守)
 
 use apeireth_pipeline::Pipeline;
 use apeireth_protocol::{NormalizedRequest, NormalizedResponse, ProtocolKind};
@@ -312,7 +312,10 @@ impl RegistryBuilder {
     /// `protocol_handler_trait::HANDLER_REGISTRY_PROTOCOL_COUNT = 4` 严守.
     pub fn register_all(pipeline: Arc<Pipeline>) -> HandlerRegistry {
         let mut registry = HandlerRegistry::new();
-        registry.register(ProtocolKind::OpenAiChat, OpenAiChatHandler::new(Arc::clone(&pipeline)));
+        registry.register(
+            ProtocolKind::OpenAiChat,
+            OpenAiChatHandler::new(Arc::clone(&pipeline)),
+        );
         registry.register(
             ProtocolKind::OpenAiResponses,
             OpenAiResponsesHandler::new(Arc::clone(&pipeline)),
@@ -321,7 +324,10 @@ impl RegistryBuilder {
             ProtocolKind::AnthropicMessages,
             AnthropicMessagesHandler::new(Arc::clone(&pipeline)),
         );
-        registry.register(ProtocolKind::Gemini, GeminiHandler::new(Arc::clone(&pipeline)));
+        registry.register(
+            ProtocolKind::Gemini,
+            GeminiHandler::new(Arc::clone(&pipeline)),
+        );
         registry
     }
 }
@@ -359,13 +365,16 @@ pub fn resolve_endpoint_url(
     model: Option<&str>,
 ) -> Result<String, EndpointUrlError> {
     match kind {
-        ProtocolKind::OpenAiChat | ProtocolKind::OpenAiResponses | ProtocolKind::AnthropicMessages => {
+        ProtocolKind::OpenAiChat
+        | ProtocolKind::OpenAiResponses
+        | ProtocolKind::AnthropicMessages => {
             // 静态 URL, 无占位符
             Ok(template.to_string())
         }
         ProtocolKind::Gemini => {
             // Gemini 模板含 `{model}`, 必须替换
-            let m = model.ok_or_else(|| EndpointUrlError::MissingModelPlaceholder(template.to_string()))?;
+            let m = model
+                .ok_or_else(|| EndpointUrlError::MissingModelPlaceholder(template.to_string()))?;
             Ok(template.replace("{model}", m))
         }
     }
@@ -378,9 +387,18 @@ pub fn resolve_endpoint_url(
 const _: () = {
     // 4 endpoint URL 都不为空
     assert!(!ENDPOINT_OPENAI_CHAT.is_empty(), "OpenAI Chat endpoint URL");
-    assert!(!ENDPOINT_OPENAI_RESPONSES.is_empty(), "OpenAI Responses endpoint URL");
-    assert!(!ENDPOINT_ANTHROPIC_MESSAGES.is_empty(), "Anthropic Messages endpoint URL");
-    assert!(!ENDPOINT_GEMINI_TEMPLATE.is_empty(), "Gemini template endpoint URL");
+    assert!(
+        !ENDPOINT_OPENAI_RESPONSES.is_empty(),
+        "OpenAI Responses endpoint URL"
+    );
+    assert!(
+        !ENDPOINT_ANTHROPIC_MESSAGES.is_empty(),
+        "Anthropic Messages endpoint URL"
+    );
+    assert!(
+        !ENDPOINT_GEMINI_TEMPLATE.is_empty(),
+        "Gemini template endpoint URL"
+    );
     // Gemini 模板必含 `{model}` 占位符
     assert!(
         ENDPOINT_GEMINI_TEMPLATE.contains("{model}"),
@@ -404,24 +422,36 @@ mod protocol_handlers_v2_tests {
     fn four_handlers_endpoint_url_matches_protocol_handlers_const() {
         // 我们不在每个 handler 创建 Pipeline, 仅测 endpoint_url 字段级
         // (Pipeline 创建需 HttpClient 配置, 走 mock 在 Test 7 验证)
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
         // endpoint_url 应 1:1 对齐 protocol_handlers.rs 的 const
-        assert_eq!(OpenAiChatHandler::new(Arc::clone(&pipeline)).endpoint_url(), "/v1/chat/completions");
-        assert_eq!(OpenAiResponsesHandler::new(Arc::clone(&pipeline)).endpoint_url(), "/v1/responses");
-        assert_eq!(AnthropicMessagesHandler::new(Arc::clone(&pipeline)).endpoint_url(), "/v1/messages");
-        assert_eq!(GeminiHandler::new(Arc::clone(&pipeline)).endpoint_url(), "/v1beta/models/{model}:generateContent");
+        assert_eq!(
+            OpenAiChatHandler::new(Arc::clone(&pipeline)).endpoint_url(),
+            "/v1/chat/completions"
+        );
+        assert_eq!(
+            OpenAiResponsesHandler::new(Arc::clone(&pipeline)).endpoint_url(),
+            "/v1/responses"
+        );
+        assert_eq!(
+            AnthropicMessagesHandler::new(Arc::clone(&pipeline)).endpoint_url(),
+            "/v1/messages"
+        );
+        assert_eq!(
+            GeminiHandler::new(Arc::clone(&pipeline)).endpoint_url(),
+            "/v1beta/models/{model}:generateContent"
+        );
     }
 
     // ---------- Test 2: 4 handler supports_stream 都 true (跟 1.0 行为对齐) ----------
 
     #[test]
     fn four_handlers_supports_stream_all_true() {
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
@@ -435,8 +465,8 @@ mod protocol_handlers_v2_tests {
 
     #[test]
     fn cache_key_stable_and_unique() {
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
@@ -456,8 +486,8 @@ mod protocol_handlers_v2_tests {
 
     #[test]
     fn registry_builder_registers_all_4_kinds() {
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
@@ -474,8 +504,8 @@ mod protocol_handlers_v2_tests {
 
     #[test]
     fn registry_supports_stream_all_4_kinds_true() {
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
@@ -495,7 +525,10 @@ mod protocol_handlers_v2_tests {
             "/v1beta/models/{model}:generateContent",
             Some("gemini-1.5-pro"),
         );
-        assert_eq!(result.unwrap(), "/v1beta/models/gemini-1.5-pro:generateContent");
+        assert_eq!(
+            result.unwrap(),
+            "/v1beta/models/gemini-1.5-pro:generateContent"
+        );
     }
 
     // ---------- Test 7: resolve_endpoint_url Gemini 缺 model 返 Err ----------
@@ -507,7 +540,10 @@ mod protocol_handlers_v2_tests {
             "/v1beta/models/{model}:generateContent",
             None,
         );
-        assert!(matches!(result, Err(EndpointUrlError::MissingModelPlaceholder(_))));
+        assert!(matches!(
+            result,
+            Err(EndpointUrlError::MissingModelPlaceholder(_))
+        ));
     }
 
     // ---------- Test 8: resolve_endpoint_url 静态 URL 无 model 替换 ----------
@@ -522,7 +558,11 @@ mod protocol_handlers_v2_tests {
         ] {
             let template = "/v1/test";
             let result = resolve_endpoint_url(kind, template, None);
-            assert_eq!(result.unwrap(), "/v1/test", "static URL 不替换 for {kind:?}");
+            assert_eq!(
+                result.unwrap(),
+                "/v1/test",
+                "static URL 不替换 for {kind:?}"
+            );
         }
     }
 
@@ -530,8 +570,8 @@ mod protocol_handlers_v2_tests {
 
     #[test]
     fn dispatch_works_without_caller_tokio_runtime() {
-        use apeireth_pipeline::Pipeline;
         use apeireth_http_client::KeepAliveConfig;
+        use apeireth_pipeline::Pipeline;
         let http = apeireth_http_client::HttpClient::new(KeepAliveConfig::chat_default()).unwrap();
         let pipeline = Arc::new(Pipeline::new(http).unwrap());
 
@@ -542,7 +582,7 @@ mod protocol_handlers_v2_tests {
         let result = h.dispatch(req);
         // 0 装"已调 upstream" — 实际 network 失败返 Err (或上层 pipeline error)
         // 不强求具体 err 内容, 关键是 0 panic, 0 装"已成功"
-        let _ = result;  // 不 panic 即 OK
+        let _ = result; // 不 panic 即 OK
     }
 
     // ---------- Test 10 (额外 bonus): compile-time endpoint URL 不变 ----------
@@ -553,7 +593,10 @@ mod protocol_handlers_v2_tests {
         assert_eq!(ENDPOINT_OPENAI_CHAT, "/v1/chat/completions");
         assert_eq!(ENDPOINT_OPENAI_RESPONSES, "/v1/responses");
         assert_eq!(ENDPOINT_ANTHROPIC_MESSAGES, "/v1/messages");
-        assert_eq!(ENDPOINT_GEMINI_TEMPLATE, "/v1beta/models/{model}:generateContent");
+        assert_eq!(
+            ENDPOINT_GEMINI_TEMPLATE,
+            "/v1beta/models/{model}:generateContent"
+        );
     }
 
     // ---------- Helper: 构造测试用 NormalizedRequest ----------
