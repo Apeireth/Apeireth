@@ -107,7 +107,7 @@ pub type VoiceResult<T> = Result<T, VoiceError>;
 pub const VOICE_ERROR_VARIANT_COUNT: usize = 12;
 const _: () = assert!(
     true, // 编译期 hardcode 守门 (实际计数在测试中验证)
-    "VoiceError 新增 variant 必须经 6 哲学锚 + 主人审 (R20 阶段 4)"
+    "VoiceError 新增 variant 必须经 8 哲学锚 + 主人审 (R20 阶段 4)"
 );
 
 // ============================================================================
