@@ -165,12 +165,22 @@ export async function listModels(baseUrl: string, apiKey: string): Promise<strin
  * 流式聊天: 通过 SSE 拉取 OpenAI 兼容 chat completion.
  * 每个 text delta 回调 onDelta; 结束回调 onDone.
  */
+export interface StreamCallbacks {
+  onDelta: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
+  onToolCall?: (tool: string, args?: unknown) => void;
+}
+
 export async function streamChat(
   config: ApeirethConfig,
   messages: Array<{role: 'user' | 'assistant' | 'system'; content: string}>,
-  onDelta: (text: string) => void,
+  callbacks: ((text: string) => void) | StreamCallbacks,
   signal?: AbortSignal,
-): Promise<string> {
+): Promise<{content: string; reasoning: string}> {
+  const onDelta = typeof callbacks === 'function' ? callbacks : callbacks.onDelta;
+  const onReasoningDelta = typeof callbacks === 'object' ? callbacks.onReasoningDelta : undefined;
+  const onToolCall = typeof callbacks === 'object' ? callbacks.onToolCall : undefined;
+
   const base = normalizeBaseUrl(config.baseUrl);
   const response = await fetch(`${base}/v1/chat/completions`, {
     method: 'POST',
@@ -195,7 +205,9 @@ export async function streamChat(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  let full = '';
+  let fullContent = '';
+  let fullReasoning = '';
+  let inThinkBlock = false;
 
   try {
     while (true) {
@@ -209,15 +221,74 @@ export async function streamChat(
         const trimmed = line.trim();
         if (!trimmed || !trimmed.startsWith('data:')) continue;
         const payload = trimmed.slice(5).trim();
-        if (payload === '[DONE]') return full;
+        if (payload === '[DONE]') return {content: fullContent, reasoning: fullReasoning};
         try {
           const json = JSON.parse(payload) as {
-            choices?: Array<{delta?: {content?: string}; message?: {content?: string}}>;
+            choices?: Array<{
+              delta?: {
+                content?: string;
+                reasoning_content?: string;
+                tool_calls?: Array<{function?: {name?: string; arguments?: string}}>;
+              };
+              message?: {content?: string};
+            }>;
           };
-          const delta = json.choices?.[0]?.delta?.content;
+          const choice = json.choices?.[0];
+          if (!choice) continue;
+
+          // 1. Explicit reasoning_content delta
+          if (choice.delta?.reasoning_content) {
+            const rDelta = choice.delta.reasoning_content;
+            fullReasoning += rDelta;
+            onReasoningDelta?.(rDelta);
+          }
+
+          // 2. Tool calls delta
+          if (choice.delta?.tool_calls) {
+            for (const tc of choice.delta.tool_calls) {
+              if (tc.function?.name) {
+                onToolCall?.(tc.function.name, tc.function.arguments);
+              }
+            }
+          }
+
+          // 3. Regular content delta (including inline <think> tags handling)
+          const delta = choice.delta?.content;
           if (delta) {
-            full += delta;
-            onDelta(delta);
+            let remaining = delta;
+            while (remaining.length > 0) {
+              if (!inThinkBlock) {
+                const thinkStart = remaining.indexOf('<think>');
+                if (thinkStart !== -1) {
+                  const before = remaining.slice(0, thinkStart);
+                  if (before) {
+                    fullContent += before;
+                    onDelta(before);
+                  }
+                  inThinkBlock = true;
+                  remaining = remaining.slice(thinkStart + 7);
+                } else {
+                  fullContent += remaining;
+                  onDelta(remaining);
+                  remaining = '';
+                }
+              } else {
+                const thinkEnd = remaining.indexOf('</think>');
+                if (thinkEnd !== -1) {
+                  const thinkText = remaining.slice(0, thinkEnd);
+                  if (thinkText) {
+                    fullReasoning += thinkText;
+                    onReasoningDelta?.(thinkText);
+                  }
+                  inThinkBlock = false;
+                  remaining = remaining.slice(thinkEnd + 8);
+                } else {
+                  fullReasoning += remaining;
+                  onReasoningDelta?.(remaining);
+                  remaining = '';
+                }
+              }
+            }
           }
         } catch {
           // skip malformed SSE line
@@ -227,7 +298,7 @@ export async function streamChat(
   } finally {
     reader.releaseLock();
   }
-  return full;
+  return {content: fullContent, reasoning: fullReasoning};
 }
 
 /** 非流式聊天 (用于简单问答/健康检查). */
@@ -283,16 +354,20 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
         onEvent({type: 'message-start', requestId, messageId: requestId});
 
         // Adapter: contract → Apeireth HTTP/SSE. future 可替换为其他 provider.
-        const full = await streamChat(
+        const result = await streamChat(
           config,
           request.messages.map((m) => ({role: m.role, content: m.content})),
-          (delta) => onEvent({type: 'text-delta', requestId, text: delta}),
+          {
+            onDelta: (delta) => onEvent({type: 'text-delta', requestId, text: delta}),
+            onReasoningDelta: (rDelta) => onEvent({type: 'reasoning-delta', requestId, text: rDelta}),
+            onToolCall: (tool, args) => onEvent({type: 'tool-call', requestId, tool, args}),
+          },
           request.signal ?? abortController.signal,
         );
 
-        onEvent({type: 'message-end', requestId, messageId: requestId, fullText: full});
+        onEvent({type: 'message-end', requestId, messageId: requestId, fullText: result.content});
         onEvent({type: 'run-end', requestId, aborted: false});
-        return full;
+        return result.content;
       } catch (caught) {
         const error = toRuntimeError(caught);
         if (error.code !== 'aborted') {
@@ -346,6 +421,7 @@ export interface ToolInfo {
   name: string;
   description?: string;
   args_schema?: unknown;
+  tier?: number;
 }
 
 export async function fetchTools(config: ApeirethConfig): Promise<ToolInfo[]> {
@@ -365,6 +441,253 @@ export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
     headers: {Authorization: `Bearer ${config.apiKey}`},
   });
   return checkJson(response) as Promise<unknown[]>;
+}
+
+export interface GraphFact {
+  subject: string;
+  predicate: string;
+  object: string;
+  confidence?: number;
+  id?: string;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  relation: string;
+  id?: string;
+}
+
+export interface GraphData {
+  facts_count: number;
+  links_count: number;
+  facts: GraphFact[];
+  links: GraphLink[];
+}
+
+export async function fetchGraphData(
+  config: ApeirethConfig,
+  params?: {subject?: string; predicate?: string; object?: string; limit?: number},
+): Promise<GraphData> {
+  const query = new URLSearchParams();
+  if (params?.subject) query.set('subject', params.subject);
+  if (params?.predicate) query.set('predicate', params.predicate);
+  if (params?.object) query.set('object', params.object);
+  if (params?.limit) query.set('limit', String(params.limit));
+
+  const response = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph?${query.toString()}`,
+    {headers: {Authorization: `Bearer ${config.apiKey}`}},
+  );
+  if (!response.ok) {
+    return {facts_count: 0, links_count: 0, facts: [], links: []};
+  }
+  return (await response.json()) as GraphData;
+}
+
+export interface StreamEntry {
+  id: string;
+  subject_id: string;
+  session_id: string;
+  created_at: number;
+  payload: string;
+  source: string;
+  tags?: string[];
+}
+
+export async function fetchMemoryStreams(
+  config: ApeirethConfig,
+  kind = 'reflection',
+  limit = 50,
+): Promise<StreamEntry[]> {
+  try {
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/streams?kind=${kind}&limit=${limit}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) return [];
+    const data = (await response.json()) as {entries?: StreamEntry[]};
+    return data.entries || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchPanelEpisodes(
+  config: ApeirethConfig,
+  q?: string,
+  limit = 100,
+): Promise<MemoryEpisode[]> {
+  try {
+    const query = new URLSearchParams({limit: String(limit)});
+    if (q) query.set('q', q);
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?${query.toString()}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) {
+      return fetchEpisodes(config, limit);
+    }
+    const data = (await response.json()) as {episodes?: MemoryEpisode[]};
+    return data.episodes || [];
+  } catch {
+    return fetchEpisodes(config, limit);
+  }
+}
+
+export interface AuditRecord {
+  tool_name?: string;
+  call_content?: string;
+  execution_result?: string;
+  status?: string;
+  success?: boolean;
+  timestamp?: number;
+  created_at?: number;
+  masked?: boolean;
+}
+
+export async function fetchAuditRecords(
+  config: ApeirethConfig,
+  limit = 50,
+  tool?: string,
+): Promise<AuditRecord[]> {
+  try {
+    const query = new URLSearchParams({limit: String(limit)});
+    if (tool) query.set('tool', tool);
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/audit?${query.toString()}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) return [];
+    const data = (await response.json()) as {records?: AuditRecord[]};
+    return data.records || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 待批授权请求 — 权限洋葱 (GET /v1/apeireth/approval-requests)
+ */
+export async function fetchPendingApprovals(config: ApeirethConfig): Promise<import('./types').ApprovalRequest[]> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/approval-requests`, {
+      headers: {Authorization: `Bearer ${config.apiKey}`},
+    });
+    if (!response.ok) return [];
+    return (await response.json()) as import('./types').ApprovalRequest[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 主人授权放行 (POST /v1/apeireth/grant)
+ */
+export async function grantApproval(
+  config: ApeirethConfig,
+  tool: string,
+  hours = 1,
+  masterToken = '',
+): Promise<{ok: boolean; error?: string}> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/grant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        tool,
+        hours,
+        master_token: masterToken,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {ok: false, error: (data as {error?: string}).error || `HTTP ${response.status}`};
+    }
+    return {ok: true};
+  } catch (caught) {
+    return {ok: false, error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+export type CompanionPresentationState =
+  | 'idle'
+  | 'thinking'
+  | 'speaking'
+  | 'working'
+  | 'reflecting'
+  | 'concerned'
+  | 'happy';
+
+export interface CompanionEvent {
+  text: string;
+  ts: number;
+  kind?: string;
+}
+
+/**
+ * 订阅 Apeireth 伴随体事件流 (GET /v1/apeireth/events)
+ * 接收后端 CompanionDaemon 涌现问候、反思完成与做梦通知
+ * 支持断线指数退避自动重连 (2s ~ 30s)
+ */
+export function subscribeCompanionEvents(
+  config: ApeirethConfig,
+  onEvent: (event: CompanionEvent) => void,
+): () => void {
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
+  let active = true;
+  let currentController: AbortController | null = null;
+  let retryDelay = 2000;
+
+  async function connectLoop(): Promise<void> {
+    while (active) {
+      currentController = new AbortController();
+      try {
+        const response = await fetch(url, {
+          headers: {Authorization: `Bearer ${config.apiKey}`},
+          signal: currentController.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        retryDelay = 2000; // Reset delay on successful connection
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (active) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              const data = trimmed.slice(5).trim();
+              if (data) {
+                onEvent({text: data, ts: Date.now()});
+              }
+            }
+          }
+        }
+      } catch {
+        // Disconnected or aborted
+      }
+      if (!active) break;
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      retryDelay = Math.min(retryDelay * 1.5, 30000);
+    }
+  }
+
+  void connectLoop();
+
+  return () => {
+    active = false;
+    currentController?.abort();
+  };
 }
 
 /**

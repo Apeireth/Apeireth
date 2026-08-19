@@ -1,7 +1,7 @@
 // Apeireth 桌面伙伴 — 共享类型 (从 Pattern apps/desktop 移植, 精简)
 // 已移除旧 Pattern 残留字段 (recovery/screenshotPath/steps[].tier)
 
-export type ViewId = 'chat' | 'conversations' | 'memory' | 'settings';
+export type ViewId = 'chat' | 'conversations' | 'activity' | 'tools' | 'memory' | 'settings';
 export type Theme = 'night' | 'day' | 'ocean' | 'forest' | 'paper';
 export type MemoryCategory = '事实' | '偏好' | '事件' | '反馈' | '参考';
 export type ConversationScope = 'global' | 'project';
@@ -27,6 +27,18 @@ export interface TaskCardInfo {
   detail?: string;
 }
 
+export interface ApprovalRequest {
+  id: string;
+  chain: string;
+  rev: number;
+  tool: string;
+  args_preview: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'expired';
+  created_at: number;
+  updated_at: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -36,6 +48,13 @@ export interface ChatMessage {
   events?: ChatMessageEvent[];
   error?: string;
   streaming?: boolean;
+  aborted?: boolean;
+  reasoning?: string;
+  reasoningDurationMs?: number;
+  provenance?: {
+    count?: number;
+    memories?: string[];
+  };
   taskCard?: TaskCardInfo;
 }
 
