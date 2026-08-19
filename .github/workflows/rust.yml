@@ -142,7 +142,8 @@ jobs:
           BASE: ${{ steps.base.outputs.base_sha }}
         run: |
           if [ -z "$BASE" ]; then exit 0; fi
-          TARGET="crates/apeireth-asi/src/lib.rs"
+          # R11 baseline 编译期 hardcode 在 integration test (非 src/)
+          TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
           if [ ! -f "$TARGET" ]; then
             echo "::warning::$TARGET 不存在, 跳过"
             exit 0
