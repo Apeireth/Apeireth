@@ -1,6 +1,6 @@
 //! # apeireth-sdk-sandbox (STUB MODE)
 //!
-//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 6 哲学锚 + 主人审**
+//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 (baseline 2026-08-19) + 主人审**
 //!
 //! Sandbox SDK skeleton (1:1 翻译 v0.9.21 商业版 `@anthropic-ai/sandbox` 进程隔离 / 资源
 //! 限制 / 安全策略 API 表面, per `commercial-nsis/v0901/app-64/app-extracted/node_modules/
@@ -23,13 +23,13 @@
 //! - 任何真实 SDK 引用禁止 (0 引, bollard / firecracker-rs / runsc 都不引)
 //! - 6 API 全部返 `SandboxError::NotImplemented(api_name)`, 编译期 hardcode
 //! - `STUB_MODE` 编译期 hardcode = `true`, **不允许运行时配置"切到真实模式"**
-//! - 真实实现留 **R21+**, 修改本 crate 需 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5) + 主人审
+//! - 真实实现留 **R21+**, 修改本 crate 需 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5) + 主人审
 //!
 //! ## 状态: ⏳ STUB skeleton (R20 阶段 4 效果, 主人 2026-08-05 派 #X sub-agent 干)
 //!
 //! ---
 //!
-//! ## 🧭 6 哲学锚 (RIVAL 蓝图, R20 阶段 4 必守)
+//! ## 🧭 8 哲学锚 (RIVAL 蓝图, R20 阶段 4 必守, baseline 2026-08-19)
 //!
 //! 1. **S-1 不漂移 (Stay Grounded)**: 0 假装已实现, STUB 模式所有 6 API 全部返
 //!    `NotImplemented`. 真实实现留 R21+, 改 STUB_MODE = false 需主人审.
@@ -158,14 +158,14 @@ pub const SANDBOX_SCHEMA_VERSION: &str = "1";
 pub const PLATFORM_NAME: &str = "apeireth";
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
-/// R21+ 真接 docker/firecracker/gvisor 时, **必须经 6 哲学锚 + 主人审才能改 `false`**.
+/// R21+ 真接 docker/firecracker/gvisor 时, **必须经 8 哲学锚 + 主人审才能改 `false`**.
 pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
 const _: () = assert!(
     STUB_MODE == true,
-    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)"
+    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R21+)"
 );
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
