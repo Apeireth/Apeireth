@@ -36,12 +36,12 @@
 //! **8 硬墙 verify (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略, per decision-33 §2.3)**:
 //! - **B2** workspace.version 1.2.0 — ✅ 0 改 (`version.workspace = true` 继承, Cargo.toml 0 触碰)
 //! - **A1** R11 baseline 3 值 0.8682/0.8532/0.9063 — ✅ 0 触碰 (R125-19 0 改 17 文件 baseline)
-//! - **B1** 24 LOCKED entry sigs 0 改 — ✅ 0 触碰 24 LOCKED crate entry sigs (`apeireth-skills` **不在 24 LOCKED**,
+//! - **B1** 24 LOCKED entry sigs 0 改 — ✅ 0 触碰 24 LOCKED crate entry sigs (R128 入口签名已降级, 仅保 3 项不可变脊柱; `apeireth-skills` **不在 24 LOCKED**,
 //!   内部 fn 实施可改, 新 module 加 = OK)
 //! - **A3** 13 键 — ✅ 0 触碰 12+1 键 (R125-19 0 触碰 verdict cache)
 //! - **C1** 0 主动 commit — ✅ 0 commit (Mavis 整合 #5 commit 时机拍板, 跑过夜明早 8/11-8/22 done)
 //! - **C2** 0 装 PASS 严守 — ✅ ✅ cloned = 真实施 (5 状态机 + 30 unit test + 8 integration test + 1 demo)
-//! - **C3** 6 重 v6 0 改 — ✅ 0 触碰 sovereignty
+//! - **C3** 9 重 v9 守门 lineage 0 改 (v6 起点 → 现 v9) — ✅ 0 触碰 sovereignty
 //! - 0 主动 push — ✅ 0 push (等 1.0 release 配 GitHub remote)
 //!
 //! **不漂移 (主哲学锚 #1)**:
