@@ -10,7 +10,7 @@
 //! 镜像其他 LOCKED 重 crate 约定 (e.g. apeireth-asi/tests/integration_r_measure.rs),
 //! integration tests 是 per-行为样板, 跟单元测互补。
 
-use apeireth_cron::{CronExpr, Schedule, describe, next_after};
+use apeireth_cron::{describe, next_after, CronExpr, Schedule};
 
 // =============================================================================
 // Helper: 比 Field 语义 (bits) 不比 lexical (raw)
@@ -288,16 +288,16 @@ fn parse_display_reparse_round_trip() {
 fn invalid_exprs_fail_gracefully() {
     // 5-field 表达式必须正好 5 段, 否则 Err
     let invalid = vec![
-        "",                                       // 空
-        "* * * *",                                 // 4 段
-        "* * * * * *",                             // 6 段
-        "60 * * * *",                              // minute 越界
-        "* 24 * * *",                              // hour 越界
-        "* * 32 * *",                              // dom 越界
-        "* * 0 * *",                               // dom 下界 0
-        "* * * 0 *",                               // month 下界 0
-        "* * * 13 *",                              // month 上界 13
-        "* * * * 7",                               // dow 上界 7
+        "",            // 空
+        "* * * *",     // 4 段
+        "* * * * * *", // 6 段
+        "60 * * * *",  // minute 越界
+        "* 24 * * *",  // hour 越界
+        "* * 32 * *",  // dom 越界
+        "* * 0 * *",   // dom 下界 0
+        "* * * 0 *",   // month 下界 0
+        "* * * 13 *",  // month 上界 13
+        "* * * * 7",   // dow 上界 7
     ];
 
     for bad in invalid {
