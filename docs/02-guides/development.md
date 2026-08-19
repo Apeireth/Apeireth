@@ -58,7 +58,7 @@ pnpm check                          # svelte-check (类型 + 语法)
 
 | crate | 内容 |
 |---|---|
-| `apeireth-http-client::egress` | 出站默认拒绝 + 审计链 |
+| `apeireth-http-client::egress` | 出站默认拒绝 + 审计链（**trait 口已备, 实装待补** per backlog S4 P1 未实施, 2026-08-18 复核） |
 | `apeireth-guard` | PII 脱敏 |
 | `apeireth-companion::job_object` | Windows Job Object 沙箱 |
 
