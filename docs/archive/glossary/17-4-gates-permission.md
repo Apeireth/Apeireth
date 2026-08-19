@@ -99,3 +99,65 @@ Status: 🟢 活跃 (v7 7 重, R125-5 + R126-guard-7 实施时落地)
 - 0 改 R11 baseline 3 值
 - 0 改 13 键原 13 (R125-12 后 PHL-07 = 13 键, A3 严守)
 - 0 改 V0.5 30 维 (R126 P1-4 verify done, sum=1.00 守门 0 改)
+
+## v7 视角漂移 (Skill 视角 vs 嵌套视角, 2026-08-19)
+
+> **诚实标注 (0 装 PASS 严守)**: 本节描述 §7 重守门列表与实际代码 `SkillId::ALL` 不 1:1 对齐的事实. 0 假装"已统一".
+
+### 两套视角并存
+
+升级 v7 时 (R126-guard-7) 实际写代码用了 **"Skill 编排"视角** (7 个 SkillId 1:1 映射 7 重, 见 `crates/apeireth-sovereignty/src/skill_guard.rs:99` `pub enum SkillId`), 但本文件 §7 重守门 (本节之前) 沿用 v6 时期产物 **"嵌套结构"视角** (编译时→运行时→物理隔离→反思期审计→多 AI 一致→Colang DSL + 守门 7). 两套视角**并存于代码 + 文档**, 没整合成一套.
+
+### 实际代码的 7 Skill (`SkillId::ALL`, 编译期 hardcode `[SkillId; 7]`)
+
+```rust
+pub enum SkillId {
+    MultiAiGuard,           // gate 1 (Skill 视角)
+    MultiHumanGuard,        // gate 2 (Skill 视角)
+    PhysicalMultisigGuard,  // gate 3
+    ReflectionGuard,        // gate 4
+    MewgGuard,              // gate 5 (Skill 视角)
+    ColangDslGuard,         // gate 6 (R125-5)
+    SuperpowersSkillGuard,  // gate 7 (R126-guard-7 NEW)
+}
+pub const ALL: [SkillId; 7] = [...];  // 编译期 hardcode 7 entries
+pub const COUNT: usize = 7;
+```
+
+### 两套视角的 1-to-1 对齐表 (0 完全对齐)
+
+| 嵌套视角 (本文件 §7) | Skill 视角 (`SkillId::ALL`) | 1-to-1? |
+|---|---|:---:|
+| 守门 1 编译时 hardcode | (不在 7 Skill — orthogonal 编译期机制) | ❌ 不在 |
+| 守门 2 运行时拦截 | (不在 7 Skill — orthogonal 运行时机制) | ❌ 不在 |
+| 守门 3 物理隔离 | gate 3 `PhysicalMultisigGuard` | ✅ 名字 + 编号一致 |
+| 守门 4 反思期审计 | gate 4 `ReflectionGuard` | ✅ 一致 |
+| 守门 5 多 AI 一致 | gate 1 `MultiAiGuard` | ❌ 编号重号 (Skill 视角 1, 嵌套视角 5) |
+| 守门 6 Colang DSL | gate 6 `ColangDslGuard` | ✅ 一致 |
+| (嵌套视角无7) | gate 7 `SuperpowersSkillGuard` (R126-guard-7 NEW) | ❌ 嵌套视角补 7 |
+| (嵌套视角无) | gate 2 `MultiHumanGuard` (多人投票) | ❌ 嵌套视角**漏列** |
+| (嵌套视角无) | gate 5 `MewgGuard` (MEWG 汇总) | ❌ 嵌套视角**漏列** |
+
+### 3 处诚实标注
+
+1. **编译时 hardcode + 运行时拦截** 在嵌套视角是 gate 1 + gate 2, 在 Skill 视角**不在 7 Skill** (它们是 orthogonal 机制: 编译期 `assert!(SkillId::COUNT == 7)` 硬约束 + 运行时 `async trait check`, 跟 Skill 编排的"运行顺序"是两条线). 嵌套视角把它们算 gate, Skill 视角不算.
+
+2. **MultiHumanGuard + MewgGuard** Skill 视角有, 嵌套视角**没列**. 可能旧 v6 文件漏了, 可能嵌套视角根本不包含它们 (它们是 Skill 编排特有: `MultiHumanGuardSkill` 借鉴 superpowers 模式, `MewgGuardSkill` 借鉴 MEWG 模式). **0 假装对齐**.
+
+3. **Superpowers Skill Guard** 在 Skill 视角是 gate 7 (R126-guard-7 NEW), 嵌套视角**没列** v7 之前的7 (嵌套视角本来只有 6 重). 嵌套视角的"v7 加 守门 7"是后补的, 严格说不是真嵌套, 是把 Skill 视角的 gate 7 **硬塞**进嵌套视角的位置. 嵌套视角 gate 7 跟 gate 3-6 同质 (都是某种"外层"), 但 Superpowers Skill Guard 本质是"中心调度编排器", 跟外层守门是**不同维度**.
+
+### 当前选择 (主人 2026-08-19 拍板: 末尾加一段, 0 重写)
+
+- 保留嵌套视角 (本文件 §7 重守门列表, 含 v7 后补的守门 7)
+- 保留 Skill 视角 (代码 `SkillId::ALL` 实际实施)
+- **0 假装两套视角 1-to-1 对齐**
+- **0 重写本文件为 Skill 视角** (那是另一项工作, 需要重新画 v4→v5→v6→v7 的演变图 + 同步所有引用本文件的章节)
+- 后续如果要重写, 应是 R128+ 路线 (per 旧 ROADMAP §4 v2.0 长期 + 决策 #21 Phase 4)
+
+### 引用本节的下游
+
+- `crates/apeireth-sovereignty/src/seven_fold_guard.rs` (7 重守门 v7 衔接器) — 引用 Skill 视角
+- `crates/apeireth-sovereignty/src/skill_guard.rs` (守门 7 实施) — 引用 Skill 视角
+- `crates/apeireth-pybridge/src/stage7_i6_permission_security.rs` (K3 集成) — 引用"6 重 v7 + G7 跨语言 = 7 重", 跟本文件嵌套视角错位
+- `crates/_archived/apeireth-formal/src/stage5_2/verdict_cache_13keys_formal.rs` (形式化) — 引用 13 键 (本文件 §不漂移 已对齐)
+- `docs/archive/pages-source/{api,architecture,index,getting-started}.md` — 全部写"6 重守门 v7" (gate 数错, 应是 7 重 v7)
