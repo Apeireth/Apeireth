@@ -2,20 +2,20 @@
 //!
 //! **任务**: ASI Python 整合 Stage 5 治理 (per decision-61 §3.1 R129-5)
 //! **承接**: P10-1/2/3 Stage 1-3 + R129-4 Stage 4 自治 + P5-2 Library Stage 5 治理 + P8-2 retry Library Stage 5.1 形式化证明
-//! **维度**: G2 权限治理 (permission governance) — 6 重守门 v7 跟 ASI 集成
+//! **维度**: G2 权限治理 (permission governance) — 9 重 v9 守门 (lineage v6→v7→v8→v9) 跟 ASI 集成
 //! **借鉴**:
 //! - superpowers 234 (R125-14 ✅ done) — Skill Permission 模式 (per-Skill permission gates)
 //! - langgraph 829 (R125-13 ✅ done) — StateGraph 节点守门 (StateGuard 模式)
 //! - PyO3 928 (R125-9 ✅ done) — Python ↔ Rust bridge 权限守门
-//! **目标**: ASI Python 6 重守门 v7 (per P1-3 R126) + ASI Stage 5 4 权限维度
+//! **目标**: ASI Python 9 重 v9 守门 (lineage v6→v7→v8→v9) (per P1-3 R126) + ASI Stage 5 4 权限维度
 //!
 //! # G2 权限治理 范围
 //!
-//! 1. **PermissionLayer** (6 重守门 v7, 1:1 跟 B4 严守) — 借 superpowers 234 Skill Permission
+//! 1. **PermissionLayer** (9 重 v9 守门 (lineage v6→v7→v8→v9), 1:1 跟 B4 严守) — 借 superpowers 234 Skill Permission
 //!    - L1 TypeCheck (类型守门)
 //!    - L2 ScopeCheck (范围守门)
 //!    - L3 RateCheck (速率守门 — 跟 G1 接)
-//!    - L4 GuardCheck (守门守门 — 6 重 v7)
+//!    - L4 GuardCheck (守门守门 — 9 重 v9 守门)
 //!    - L5 AuditCheck (审计守门)
 //!    - L6 ProvenanceCheck (来源守门)
 //! 2. **PermissionDecision** — 3 状态 (Allow / Deny / AuditRequired)
@@ -35,9 +35,9 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW, 不算改)
-//! - **B4 6 重守门 v7** (P1-3 R126 done, 0 触碰 — G2 1:1 翻译)
-//! - B5 8 哲学锚 / B3 30 维 / A3 13 键 0 改
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW, 不算改)
+//! - **B4 9 重 v9 守门 (lineage v6→v7→v8→v9)** (P1-3 R126 done, 0 触碰 — G2 1:1 翻译)
+//! - B5 8 哲学锚 / B3 V0.5 24 维 / A3 13 键 0 改
 //! - C1 0 主动 commit (Mavis 整合 #5 commit 时机拍板)
 //! - C2 0 装 PASS 严守
 
@@ -48,17 +48,17 @@
 /// G2 权限治理版本 (per decision-61 §3.1 R129-5)
 pub const PERMISSION_GOVERNANCE_VERSION: &str = "0.1.0-R129-Stage5-G2";
 
-/// G2 权限治理 6 重守门层数 (1:1 跟 B4 6 重守门 v7 严守)
+/// G2 权限治理 9 重 v9 守门层数 (1:1 跟 B4 9 重 v9 守门 (lineage v6→v7→v8→v9) 严守)
 pub const PERMISSION_GOVERNANCE_LAYER_COUNT: usize = 6;
 
 /// G2 权限治理 ASI Stage 数 (1-3 + R129-4 = 4 stages)
 pub const PERMISSION_GOVERNANCE_STAGE_COUNT: usize = 4;
 
 // =============================================================================
-// PermissionLayer 枚举 (6 重守门 v7, 1:1 跟 B4 严守)
+// PermissionLayer 枚举 (9 重 v9 守门 (lineage v6→v7→v8→v9), 1:1 跟 B4 严守)
 // =============================================================================
 
-/// 6 重守门 (1:1 跟 B4 6 重守门 v7 严守, per P1-3 R126 done)
+/// 9 重 v9 守门 (1:1 跟 B4 9 重 v9 守门 (lineage v6→v7→v8→v9) 严守, per P1-3 R126 done)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum PermissionLayer {
     /// L1 类型守门 (TypeCheck)
@@ -67,7 +67,7 @@ pub enum PermissionLayer {
     L2ScopeCheck = 2,
     /// L3 速率守门 (RateCheck — 跟 G1 接)
     L3RateCheck = 3,
-    /// L4 守门守门 (GuardCheck — 6 重 v7 守门本身)
+    /// L4 守门守门 (GuardCheck — 9 重 v9 守门 守门本身)
     L4GuardCheck = 4,
     /// L5 审计守门 (AuditCheck)
     L5AuditCheck = 5,
@@ -104,7 +104,7 @@ impl PermissionLayer {
             PermissionLayer::L1TypeCheck => "类型检查 (Rust type ↔ Python type)",
             PermissionLayer::L2ScopeCheck => "范围检查 (per-Stage 范围)",
             PermissionLayer::L3RateCheck => "速率检查 (跟 G1 资源治理接)",
-            PermissionLayer::L4GuardCheck => "守门检查 (6 重 v7 守门本身)",
+            PermissionLayer::L4GuardCheck => "守门检查 (9 重 v9 守门 守门本身)",
             PermissionLayer::L5AuditCheck => "审计检查 (per-event audit trail)",
             PermissionLayer::L6ProvenanceCheck => "来源检查 (P10-1/2/3 借鉴 ID 严守)",
         }
@@ -359,11 +359,11 @@ impl PermissionEngine {
         self
     }
 
-    /// 跑 6 重守门 (1:1 跟 B4 6 重 v7 严守)
+    /// 跑 9 重 v9 守门 (1:1 跟 B4 9 重 v9 守门 严守)
     /// - L1 TypeCheck → context.module_id ∈ [0, 6]
     /// - L2 ScopeCheck → context.asi_stage ∈ [1, 4]
     /// - L3 RateCheck → context.resource_used ≤ 100 (跟 G1 资源守门)
-    /// - L4 GuardCheck → 6 重 v7 守门本身 (永远通过 = Allow)
+    /// - L4 GuardCheck → 9 重 v9 守门 守门本身 (永远通过 = Allow)
     /// - L5 AuditCheck → context.audit_required → AuditRequired
     /// - L6 ProvenanceCheck → context.source_id ∈ [0, 10] (借鉴 ID 索引)
     pub fn check(&mut self, context: PermissionContext) -> PermissionDecision {
@@ -416,7 +416,7 @@ impl PermissionEngine {
                 ),
             ));
 
-        // L4 GuardCheck — 6 重 v7 守门本身 (永远 Allow, 1:1 跟 B4 严守)
+        // L4 GuardCheck — 9 重 v9 守门 守门本身 (永远 Allow, 1:1 跟 B4 严守)
         let l4 = if self.stage4_strict && context.asi_stage == 4 {
             // Stage 4 严格守门: 4 层 + audit 必
             if context.audit_required {
@@ -502,7 +502,7 @@ impl Default for PermissionEngine {
 // Stage 5 G2 公开 API helper
 // =============================================================================
 
-/// Stage 5 G2 权限治理 6 重守门 v7 verify (1:1 跟 B4 严守)
+/// Stage 5 G2 权限治理 9 重 v9 守门 (lineage v6→v7→v8→v9) verify (1:1 跟 B4 严守)
 pub fn permission_governance_layer_count() -> usize {
     PERMISSION_GOVERNANCE_LAYER_COUNT
 }
@@ -537,7 +537,7 @@ pub fn permission_governance_health() -> PermissionGovernanceHealth {
         version: permission_governance_version(),
         layer_count: PERMISSION_GOVERNANCE_LAYER_COUNT,
         stage_count: PERMISSION_GOVERNANCE_STAGE_COUNT,
-        is_ok: PERMISSION_GOVERNANCE_LAYER_COUNT == 6, // 1:1 跟 B4 6 重 v7
+        is_ok: PERMISSION_GOVERNANCE_LAYER_COUNT == 6, // 1:1 跟 B4 9 重 v9 守门
     }
 }
 
@@ -563,7 +563,7 @@ mod tests {
 
     #[test]
     fn layer_count_is_6() {
-        // 1:1 跟 B4 6 重 v7 严守
+        // 1:1 跟 B4 9 重 v9 守门 严守
         assert_eq!(PERMISSION_GOVERNANCE_LAYER_COUNT, 6);
         assert_eq!(PermissionLayer::ALL.len(), 6);
     }
@@ -634,7 +634,7 @@ mod tests {
         let mut e = PermissionEngine::new();
         let d = e.check(PermissionContext::safe_default());
         assert_eq!(d, PermissionDecision::Allow);
-        assert_eq!(e.report.total(), 6); // 6 重守门
+        assert_eq!(e.report.total(), 6); // 9 重 v9 守门
     }
 
     #[test]
@@ -822,7 +822,7 @@ mod tests {
 
     #[test]
     fn six_fold_v7_gate_verified() {
-        // 1:1 跟 B4 6 重 v7 严守
+        // 1:1 跟 B4 9 重 v9 守门 严守
         assert_eq!(permission_governance_layer_count(), 6);
         assert_eq!(PermissionLayer::ALL.len(), 6);
     }

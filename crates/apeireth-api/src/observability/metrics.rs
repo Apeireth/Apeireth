@@ -8,8 +8,7 @@
 //! - 渲染: 复用 `apeireth_telemetry::observability::render_prometheus` (1:1 翻译 Prometheus 工业标准)
 //! - 0 假装 OTLP push (R20 阶段 3 续, skeleton 阶段仅 expose HTTP scrape)
 //!
-//! **6 哲学锚穿透**:
-//! - S-1: 1:1 翻译 `apeireth-observability::render_prometheus` (per `docs/stage4/apeireth-formal-invariants-2026-08-05.md` §11)
+//! **8 哲学锚穿透**://! - S-1: 1:1 翻译 `apeireth-observability::render_prometheus` (per `docs/stage4/apeireth-formal-invariants-2026-08-05.md` §11)
 //! - S-2: 估 80-120 LOC, 0 假装 OpenTelemetry SDK 集成
 //! - O-2: 借鉴 Prometheus exposition format 工业标准
 //! - O-3: 18 metric 编译期 hardcode 名字

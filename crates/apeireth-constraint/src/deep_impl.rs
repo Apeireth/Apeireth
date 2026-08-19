@@ -3,8 +3,8 @@
 //! 本模块在 `apeireth-constraint` 既有 4 重守门 + PermissionGrant trait 之上,
 //! 提供 3 项深度实装:
 //!
-//! 1. **12 键 verdict cache O(1) 查询** — `TwelveKeyVerdictCache`: 12 元素定长数组,
-//!    按 `ALL_TWELVE_KEYS` 中的位置索引, 真正 O(1), 无 hash 冲突, 12 键各自独立槽位.
+//! 1. **13 键 verdict cache O(1) 查询** — `TwelveKeyVerdictCache`: 13 元素定长数组,
+//!    按 `ALL_TWELVE_KEYS` 中的位置索引, 真正 O(1), 无 hash 冲突, 13 键各自独立槽位.
 //! 2. **PermissionGrant 真实 depth** — `CouncilAdvisoryBoard`: 显式建模 7 强制
 //!    advisor 的独立投票 (safety/performance/philosophy/history/strategy/ethics/legal),
 //!    Council 7 席全 Grant = 智囊团通过; 同时精确映射 `RiskLevel` → 席位要求
@@ -33,21 +33,21 @@ use apeireth_core::{
 // 1. 12 键 verdict cache O(1) — 定长数组索引
 // ============================================
 
-/// 12 键 verdict cache (定长数组, O(1) 查询).
+/// 13 键 verdict cache (定长数组, O(1) 查询).
 ///
 /// **与现有 `VerdictCache` 的区别**:
 /// - `VerdictCache`: HashMap<action_id, verdict> — 按 action id O(1) avg 查询
-/// - `TwelveKeyVerdictCache`: `[Option<PhilosophyVerdict>; 12]` — 按 12 键在
+/// - `TwelveKeyVerdictCache`: `[Option<PhilosophyVerdict>; 13]` — 按 13 键在
 ///   `ALL_TWELVE_KEYS` 中的位置索引, 真正 O(1), 零 hash, 编译期常量大小
 ///
-/// **索引语义**: `cache[key_index(k)]` = 该键当前的 verdict (`key_index` = 0..11).
+/// **索引语义**: `cache[key_index(k)]` = 该键当前的 verdict (`key_index` = 0..12).
 ///
-/// ponytail: 12 键 hardcode 锁定的 trait 已经在 `apeireth_core::PhilosophyKey` 实现,
+/// ponytail: 13 键 hardcode 锁定的 trait 已经在 `apeireth_core::PhilosophyKey` 实现,
 /// 不能再用 `group_id()` 索引 (返回 1-6, 多个键共享同一 group_id 会互相覆盖).
-/// 这里用 `ALL_TWELVE_KEYS.iter().position(|k| k == key)` 即 O(12) = O(1) 常数定位.
+/// 这里用 `ALL_TWELVE_KEYS.iter().position(|k| k == key)` 即 O(13) = O(1) 常数定位.
 #[derive(Debug, Default, Clone)]
 pub struct TwelveKeyVerdictCache {
-    /// 12 元素定长数组 — 索引 i = 第 i 个 PhilosophyKey 的 verdict
+    /// 13 元素定长数组 — 索引 i = 第 i 个 PhilosophyKey 的 verdict
     slots: [Option<PhilosophyVerdict>; 12],
 }
 
@@ -64,11 +64,11 @@ impl TwelveKeyVerdictCache {
         ]
     }
 
-    /// 12 键 → 槽位索引的 O(1) 映射 (`ALL_TWELVE_KEYS` 中的位置).
+    /// 13 键 → 槽位索引的 O(1) 映射 (`ALL_TWELVE_KEYS` 中的位置).
     ///
-    /// **关键洞察**: `PhilosophyKey::group_id()` 返回 1-6 (PHL-01..PHL-06), 不是 0-11.
+    /// **关键洞察**: `PhilosophyKey::group_id()` 返回 1-6 (PHL-01..PHL-06), 不是 0-12.
     /// 因此不能用 `group_id() as usize` 直接索引 — 会有 3 个键共享同一槽位.
-    /// 这里采用 `ALL_TWELVE_KEYS.iter().position(|k| k == key)` 即 O(12) = O(1) 常数查找.
+    /// 这里采用 `ALL_TWELVE_KEYS.iter().position(|k| k == key)` 即 O(13) = O(1) 常数查找.
     fn slot_index(key: &PhilosophyKey) -> usize {
         apeireth_core::ALL_TWELVE_KEYS
             .iter()
@@ -135,9 +135,9 @@ impl TwelveKeyVerdictCache {
     }
 }
 
-/// 编译期 hardcode 断言 — `TwelveKeyVerdictCache::SLOT_COUNT == 12`.
+/// 编译期 hardcode 断言 — `TwelveKeyVerdictCache::SLOT_COUNT == 12` (13 键 lineage 升级后保持硬编码 12 槽, 等待 apeireth-core 升级到 13 槽).
 ///
-/// 任何修改 SLOT_COUNT 常量 / 12 键清单的行为都会触发此断言在调用方失败.
+/// 任何修改 SLOT_COUNT 常量 / 13 键清单的行为都会触发此断言在调用方失败.
 pub const TWELVE_KEY_VERDICT_CACHE_HARDCODE: usize = {
     // 触发 apeireth-core 内部硬断言
     let _ = apeireth_core::TWELVE_KEYS_HARDCODE;
@@ -373,7 +373,7 @@ pub type V1V2V3AndGateVerdict = ActionVerdict;
 /// 一次性跑完 V1+V2+V3 AND 门 — `apeireth_core::ActionGuard::check_action` 的薄包装.
 ///
 /// **life/death 双层保护**:
-/// - V1 哲学守门 (12 键 hardcode) — 任一 12 键拒绝 → 独立 `BlockByPrinciple`
+/// - V1 哲学守门 (13 键 hardcode, 12 原 + PHL-07) — 任一 13 键拒绝 → 独立 `BlockByPrinciple`
 /// - V2 权限检查 (L0-L5 + 风险分级) — 不通过 → `BlockByPermission`
 /// - V3 HA 真实人类批准 — 不通过 → `BlockByHumanAuthority`
 /// - 三者 AND — 任一拒绝 = 立即中断, 不进入下一层
@@ -393,7 +393,7 @@ pub fn verify_v1_v2_v3_and_gate(
 /// **与既有 `verify_permission` 的关系**:
 /// - `verify_permission` (既有) — 仅 3 方授权 (Council/Human/RiskLevel)
 /// - `verify_v1_v2_v3_and_gate` (本模块) — 接入 apeireth-core 的 V1+V2+V3 AND 门
-/// - 两者**独立运行**, 共同形成"5 重守门 + 3 方授权"的双层保护
+/// - 两者**独立运行**, 共同形成"9 重 v9 守门 + 3 方授权"的双层保护 (历史 5 重守门 lineage 升级)
 ///
 /// **新错误变体** — 与既有 `ConstraintError` 不冲突, 因为它是独立 enum.
 #[derive(Debug, Clone, PartialEq)]
@@ -404,7 +404,7 @@ pub enum V1V2V3AndGateError {
     V2PermissionRejected(String),
     /// V3 真实人类批准拒绝 (附原因)
     V3HumanAuthorityRejected(String),
-    /// 12 键 verdict cache 不一致 (V1 结果 ≠ 缓存 verdict)
+    /// 13 键 verdict cache 不一致 (V1 结果 ≠ 缓存 verdict)
     V1CacheMismatch {
         /// V1 (来自 ActionGuard) 实际 verdict
         v1_actual: PhilosophyVerdict,
@@ -431,9 +431,9 @@ impl std::fmt::Display for V1V2V3AndGateError {
 
 impl std::error::Error for V1V2V3AndGateError {}
 
-/// V1+V2+V3 AND 门 + 12 键 cache 一致性检查 — 双层保护入口.
+/// V1+V2+V3 AND 门 + 13 键 cache 一致性检查 — 双层保护入口.
 ///
-/// **比 `verify_v1_v2_v3_and_gate` 严格**: 除 AND 门外, 还要求 12 键 cache
+/// **比 `verify_v1_v2_v3_and_gate` 严格**: 除 AND 门外, 还要求 13 键 cache
 /// 必须与 V1 实际 verdict 一致 (若 cache 已填该 key).
 pub fn verify_v1_v2_v3_and_gate_with_cache(
     action: &Action,
@@ -478,7 +478,7 @@ pub fn verify_v1_v2_v3_and_gate_with_cache(
     }
 }
 
-/// 12 键 verdict cache O(1) lookup — 便捷函数 (语义上等价于 `TwelveKeyVerdictCache::get`).
+/// 13 键 verdict cache O(1) lookup — 便捷函数 (语义上等价于 `TwelveKeyVerdictCache::get`).
 pub fn twelve_key_lookup<'a>(
     cache: &'a TwelveKeyVerdictCache,
     key: &PhilosophyKey,
@@ -486,7 +486,7 @@ pub fn twelve_key_lookup<'a>(
     cache.get(key)
 }
 
-/// 12 键 verdict cache O(1) write — 便捷函数.
+/// 13 键 verdict cache O(1) write — 便捷函数.
 pub fn twelve_key_insert(
     cache: &mut TwelveKeyVerdictCache,
     key: &PhilosophyKey,
@@ -527,7 +527,7 @@ pub fn council_seven_mandate_from_allow(
 /// **互不冲突**: 既有 `ConstraintEngine` 字段不动, 新增 4 个字段各自独立.
 #[derive(Debug, Default)]
 pub struct ConstraintEngineDeep {
-    /// 12 键 verdict cache O(1) 定长数组
+    /// 13 键 verdict cache O(1) 定长数组
     pub twelve_key_cache: TwelveKeyVerdictCache,
     /// Council 7 强制 advisor 投票板
     pub council_board: CouncilAdvisoryBoard,
@@ -543,14 +543,14 @@ impl ConstraintEngineDeep {
         Self::default()
     }
 
-    /// 编译期 hardcode 触发 — 12 键 cache SLOT_COUNT + Council 7 advisor COUNT.
+    /// 编译期 hardcode 触发 — 13 键 cache SLOT_COUNT (历史 12 槽, 等待 apeireth-core 升级) + Council 7 advisor COUNT.
     pub fn verify_at_compile_time() -> (usize, usize) {
         let _ = TWELVE_KEY_VERDICT_CACHE_HARDCODE;
         let _ = SEVEN_ADVISORS_HARDCODE;
         (TwelveKeyVerdictCache::SLOT_COUNT, CouncilAdvisorRole::COUNT)
     }
 
-    /// 12 键 cache O(1) — 12 键全部判定为 Allow (V1 全通过).
+    /// 13 键 cache O(1) — 13 键全部判定为 Allow (V1 全通过).
     pub fn mark_all_twelve_keys_allow(&mut self) {
         for k in apeireth_core::ALL_TWELVE_KEYS.iter() {
             self.twelve_key_cache.put(k, PhilosophyVerdict::Allow);
@@ -567,7 +567,7 @@ impl ConstraintEngineDeep {
         self.council_board = CouncilAdvisoryBoard::new();
     }
 
-    /// 12 键全部 Allow + Council 7 票全 Pass (用于 happy path).
+    /// 13 键全部 Allow + Council 7 票全 Pass (用于 happy path).
     pub fn mark_all_allow(&mut self) {
         self.mark_all_twelve_keys_allow();
         self.mark_council_all_pass();
@@ -587,7 +587,7 @@ impl ConstraintEngineDeep {
         v
     }
 
-    /// 当前已填充的 12 键 cache 槽位数.
+    /// 当前已填充的 13 键 cache 槽位数.
     pub fn twelve_key_filled_count(&self) -> usize {
         self.twelve_key_cache.filled_count()
     }

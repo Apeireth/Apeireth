@@ -52,13 +52,13 @@ pub mod state;
 pub mod traits;
 // R127 P5-1 Library Stage 4 自治 (per decision-55-r127-integration-5-library-stage-4-6-2026-08-10.md §2.2)
 // 3 机制: SelfEvolution (superpowers 234 ⏳ + aGLM 108 PODA ✅) + SelfUpgrade (superpowers 234 ⏳ + aGLM 108 PODA ✅)
-//       + SelfRepair (chidori journal ✅ + apeireth-rollback 6 策略 ✅). 0 改 24 LOCKED #5 入口签名.
+//       + SelfRepair (chidori journal ✅ + apeireth-rollback 6 策略 ✅). 0 改 24 LOCKED #5 入口签名 (R128 24 LOCKED 入口签名已降级, 仅保 3 项不可变脊柱).
 pub mod library_autonomy;
 // R127-2 P8-1 Library Stage 4.1 自治 - 自循环 (per decision-56-r127-2-borrowed-3-retry-release-prep-2026-08-10.md §2.3)
 // 3 模块: 自循环 (AutonomyLoop + LoopStage 借鉴 aGLM 108 PODA 4 阶段) +
 //        自反馈 (FeedbackChannel + 3 FeedbackSignal 借鉴 aGLM 108 PODA 闭环) +
 //        自调整 (SelfAdjust + 5 AdjustPolicy + 5 AdjustPolicyTrigger 借鉴 superpowers 234 skill priority).
-// 0 改 P5-1 任何入口签名, 仅 import 类型 + 调其 step() / metrics() 方法. 0 改 24 LOCKED #5 入口签名.
+// 0 改 P5-1 任何入口签名, 仅 import 类型 + 调其 step() / metrics() 方法. 0 改 24 LOCKED #5 入口签名 (R128 已降级).
 pub mod library_autonomy_loop;
 
 pub use council_bridge::{

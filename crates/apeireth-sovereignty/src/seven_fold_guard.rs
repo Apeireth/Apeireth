@@ -1,13 +1,13 @@
-//! `seven_fold_guard`: 7 重守门 v7 衔接器 (B4 6 重守门 v6 → v7 升级)
+//! `seven_fold_guard`: 7 重守门 v7 衔接器 (per lineage v6→v7→v8→v9, B4 升级)
 //!
 //! **借鉴信息** (R126-guard-7 / 决策 #33 + 决策 #47 + 决策 #51 §1.2 P1-3):
 //! - 借鉴: superpowers 234 cloned (R125-14/R125-15e 实施时已研究, per 决策 #36 §1.1)
 //! - 借鉴 ID: `R126-guard-7-BORROW-obra/superpowers-2026-05-2026-08-10`
 //! - 借鉴源码: `.openclaw\workspace\borrowed-repos\superpowers\`
 //!
-//! **设计意图** (B4 6 重守门 v6 → v7 升级):
+//! **设计意图** (per lineage v6→v7→v8→v9, B4 升级):
 //! - **0 改** `Governance.process` / `GovernanceOutcome` / `GovernanceStep` / `MEWG_FIVE_FOLDS_HARDCODE`
-//!   (B1 24 LOCKED 入口签名 0 改严守, per 决策 #33 §2.3 + 决策 #41 §2)
+//!   (B1 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱 严守, per 决策 #33 §2.3 + 决策 #41 §2)
 //! - 提供新 wrapper `SevenFoldGuardRunner.process()` 跑 7 重:
 //!   1. **守门 1** = MultiAi (Governance.process step 1)
 //!   2. **守门 2** = MultiHuman (Governance.process step 2)
@@ -61,7 +61,7 @@ use crate::skill_guard::{SkillGuard, SkillGuardOutcome, SkillRegistry};
 /// - 守门 7 (skill_guard.rs) 是新模块, 内部实施可改
 /// - `GovernanceOutcome` / `GovernanceStep` enum 不增 variant (避免破坏外部 match)
 pub struct SevenFoldGuardRunner<'a> {
-    /// 守门 1-5 (现有 5 重治理, 24 LOCKED 入口签名 0 改)
+    /// 守门 1-5 (现有 5 重治理, 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱)
     pub governance: &'a Governance,
     /// 守门 6 (Colang DSL, R125-5 实施, 0 改)
     pub dsl_layer: DslOnionLayer,

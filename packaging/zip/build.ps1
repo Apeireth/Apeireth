@@ -103,3 +103,6 @@ Write-Host "    sha256: ${ZIP_SHA256}"
 Write-Host "    解压: Expand-Archive ${ZIP_PATH}"
 Write-Host "    二进制: ${STAGE_DIR}\bin\apeireth.exe"
 Write-Host "[5/5] DONE"
+
+# CI fix: 明确 exit 0 (跟 packaging/{deb,rpm,tarball,msi,scoop,docker,brew}/build.* 一致)
+exit 0

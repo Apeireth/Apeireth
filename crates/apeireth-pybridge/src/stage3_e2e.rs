@@ -10,7 +10,7 @@
 //! 2. **asi_modules 7 关键模块全注册校验**: V1077 / V1400 / V1447 / V1457 / V1458 / V1467 / V1470
 //! 3. **r11_compat + type_convert 协同**: 1103 模块兼容 + JSON 序列化往返
 //! 4. **apeireth-core 类型 + bridge 协同**: Episode / Note / Session / IdentityCard roundtrip
-//! 5. **apeireth-asi V0.5 + Stage 3 e2e 协同**: 24 维 + 9 子测度 + 6 哲学锚集成
+//! 5. **apeireth-asi V0.5 + Stage 3 e2e 协同**: V0.5 24 维 + V1136 9 子测度 + 8 哲学锚集成
 //! 6. **cfg-gated 0 装 PASS 严守**: 默认 build 跑 0 体积 stub, python-ext build 真实施
 //!
 //! # 0 装 PASS 严守 (per decision-33 §2.3 C2 + decision-58 §3)
@@ -23,8 +23,8 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 0.8682/0.8532/0.9063 数字严守
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW, 不算改)
-//! - B5 8 哲学锚 / B3 30 维 / B4 6 重 v7 / A3 13 键 0 改
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW, 不算改)
+//! - B5 8 哲学锚 / B3 V0.5 24 维 / B4 9 重 v9 / A3 13 键 0 改
 //! - C1 0 主动 commit (写到 reports)
 //! - 0 主动 push
 
