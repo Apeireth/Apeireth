@@ -224,3 +224,7 @@ coverage/
 **/dist/
 **/build/
 **/coverage/
+
+# Frontend (companion-desktop)
+**/node_modules/
+frontend/companion-desktop/dist/
