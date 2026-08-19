@@ -1,0 +1,28 @@
+# 独立 workspace: 与 Apeireth 主 workspace (root Cargo.toml) 隔离, 不强行加入 upstream members
+[workspace]
+
+[package]
+name = "companion-desktop"
+version = "0.1.0"
+description = "Apeireth 桌面伙伴 — 薄 Tauri shell (窗口/托盘/通知), Agent runtime 由 apeireth-companion 后端承担"
+edition = "2021"
+rust-version = "1.77.2"
+
+[lib]
+name = "companion_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true
