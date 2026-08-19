@@ -156,9 +156,9 @@ pub fn run_silence(engine: &dyn ActionSilence, intent: &ActionIntent) -> Silence
     }
 }
 
-/// 工具函数: 判定一个 plan 是否可执行 (非空 + 不是永远禁止的 12 键 variant).
+/// 工具函数: 判定一个 plan 是否可执行 (非空 + 不是永远禁止的 13 键 variant)。
 ///
-/// 12 键 hardcode 拒绝 — ModifyL0HA / ReorganizeOnion / ModifyEvolutionL0 永远不可执行。
+/// 13 键 hardcode 拒绝 (含 PHL-07 不假装) — ModifyL0HA / ReorganizeOnion / ModifyEvolutionL0 永远不可执行。
 pub fn is_actionable(plan: &ActionPlan) -> bool {
     !plan.steps.is_empty()
         && !matches!(
