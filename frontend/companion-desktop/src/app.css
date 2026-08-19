@@ -159,5 +159,46 @@
 .reflection-payload{margin:0;font-size:13px;line-height:1.65;color:var(--text);white-space:pre-wrap}
 .reflection-footer{display:flex;align-items:center;justify-content:space-between;color:var(--faint);font-size:11px;border-top:1px solid var(--line);padding-top:6px;margin-top:4px}
 
+/* ---------- Activity Center ---------- */
+.activity-tabs{display:flex;gap:6px;padding:0 42px 14px;flex-wrap:wrap}
+.activity-tabs button{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:7px;background:var(--surface-2);color:var(--muted);padding:7px 13px;font-size:12px;cursor:pointer}
+.activity-tabs button:hover{border-color:var(--amber-line);color:var(--amber)}
+.activity-tabs button.active{background:var(--amber-wash);color:var(--amber);border-color:var(--amber-line)}
+.activity-content{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:flex;flex-direction:column;gap:14px}
+
+/* Goals */
+.goal-create-box{padding:14px 16px;background:var(--surface-2);border:1px solid var(--amber-line);border-radius:8px;display:flex;flex-direction:column;gap:10px}
+.goal-create-box input{padding:8px 12px;background:var(--surface-3);border:1px solid var(--line);border-radius:6px;color:var(--text);outline:0}
+.goal-create-actions{display:flex;gap:8px}
+.goal-list{display:flex;flex-direction:column;gap:12px}
+.goal-card{padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
+.goal-card:hover{border-color:var(--line-strong)}
+.goal-card-header{display:flex;align-items:center;justify-content:space-between}
+.goal-phase-badge{display:flex;align-items:center;gap:10px}
+.goal-progress-bar{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.goal-progress-fill{height:100%;background:var(--amber);border-radius:3px;transition:width 0.3s ease}
+.goal-progress-stats{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--faint);font-family:var(--mono)}
+.goal-milestones{list-style:none;margin:0;padding:6px 0 0;display:flex;flex-direction:column;gap:6px}
+.goal-milestones li{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.goal-milestones li.done{color:var(--text)}
+
+/* Runs & Audit */
+.audit-list{display:flex;flex-direction:column;gap:10px}
+.audit-card{padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px}
+.audit-card-head{display:flex;align-items:center;justify-content:space-between}
+.audit-tool-box{display:flex;align-items:center;gap:8px;color:var(--amber)}
+.audit-call-box{padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;font:11px var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px}
+.audit-result{margin:0;padding:8px 10px;background:rgba(0,0,0,0.15);border-radius:6px;font:11px var(--mono);color:var(--text);max-height:140px;overflow:auto}
+
+/* Workflows & Scheduled */
+.workflow-presets-grid,.scheduled-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.workflow-card,.scheduled-card{padding:16px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:10px}
+.workflow-card:hover,.scheduled-card:hover{border-color:var(--line-strong)}
+.workflow-card-head,.scheduled-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.workflow-card p,.scheduled-card p{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.workflow-steps-flow{display:flex;align-items:center;gap:6px;margin-top:4px}
+.step-pill{padding:3px 8px;border-radius:4px;background:var(--surface-3);border:1px solid var(--line);font-size:11px;color:var(--text)}
+
+
 
 
