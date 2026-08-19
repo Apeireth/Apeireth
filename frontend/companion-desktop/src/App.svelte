@@ -6,7 +6,7 @@
   import MemoryView from './lib/MemoryView.svelte';
   import PageHeader from './lib/PageHeader.svelte';
   import StatusDot from './lib/StatusDot.svelte';
-  import type {ApeirethConfig, ChatMessage, Conversation, ViewId} from './lib/types';
+  import type {ApeirethConfig, ChatMessage, Conversation, HealthState, ViewId} from './lib/types';
   import {
     checkHealth,
     createAgentRuntime,
@@ -30,10 +30,12 @@
   let activeId = $state<string | null>(null);
   let draft = $state('');
   let busy = $state(false);
-  let connected = $state(false);
   let error = $state('');
   // runtime 绑定当前配置; config 变更时在 saveSettings 重建
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
+
+  // Phase 5E: 真实 runtime health 状态 (connecting/ready/generating/error/offline)
+  let healthState = $state<HealthState>('connecting');
 
   // 设置视图临时值 (初始从持久化配置读取, 编辑期间独立)
   let editBaseUrl = $state(loadConfig().baseUrl);
@@ -73,21 +75,50 @@
     persist();
   }
 
+  /** 按 id 原子更新某会话的一条消息 — 不依赖 activeConversation, 防 stale write. */
   function updateMessage(id: string, messageId: string, patch: Partial<ChatMessage>): void {
-    if (!activeConversation) return;
-    updateConversation(id, {
-      messages: activeConversation.messages.map((m) => m.id === messageId ? {...m, ...patch} : m),
+    conversations = conversations.map((item) => {
+      if (item.id !== id) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => m.id === messageId ? {...m, ...patch} : m),
+      };
     });
+    persist();
   }
 
+  /** 按 id 原子追加消息到指定会话. */
   function pushMessage(conversationId: string, message: ChatMessage): void {
-    const conv = conversations.find((item) => item.id === conversationId);
-    if (!conv) return;
-    updateConversation(conversationId, {messages: [...conv.messages, message]});
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {...item, updatedAt: Date.now(), messages: [...item.messages, message]};
+    });
+    persist();
   }
 
+  /** 按 id 原子拼接流式 delta — 纯函数式, 不依赖闭包捕获的 conversations 快照. */
+  function appendDelta(conversationId: string, messageId: string, delta: string): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => m.id === messageId ? {...m, text: m.text + delta} : m),
+      };
+    });
+    persist();
+  }
+
+  /** 真实 HTTP /health 检测 — 驱动 healthState. 不生成时不覆盖 generating. */
   async function refreshConnection(): Promise<void> {
-    connected = await checkHealth(config.baseUrl);
+    const ok = await checkHealth(config.baseUrl);
+    if (busy) {
+      // 生成中: 保持 generating, health 只是后台探测
+      if (healthState === 'offline' || healthState === 'connecting') healthState = 'generating';
+      return;
+    }
+    healthState = ok ? 'ready' : 'offline';
   }
 
   async function send(): Promise<void> {
@@ -101,6 +132,7 @@
 
     draft = '';
     busy = true;
+    healthState = 'generating';
     error = '';
 
     const userMessage: ChatMessage = {id: crypto.randomUUID(), role: 'user', text, time: new Date().toLocaleTimeString('zh-CN')};
@@ -125,12 +157,8 @@
         },
         (event) => {
           if (event.type === 'text-delta') {
-            const current = conversations.find((item) => item.id === conversationId);
-            if (current) {
-              updateConversation(conversationId, {
-                messages: current.messages.map((m) => m.id === assistantMessage.id ? {...m, text: m.text + event.text} : m),
-              });
-            }
+            // 按 conversationId 定位写入 — 切换会话也不串流
+            appendDelta(conversationId, assistantMessage.id, event.text);
           }
         },
       );
@@ -139,14 +167,27 @@
       const message = caught instanceof Error ? caught.message : String(caught);
       error = message;
       updateMessage(conversationId, assistantMessage.id, {text: '', streaming: false, error: message});
+      healthState = 'error';
     } finally {
       busy = false;
+      // 生成结束: 恢复真实 health (backend 可能已离线)
+      const ok = await checkHealth(config.baseUrl);
+      healthState = ok ? 'ready' : 'offline';
     }
   }
 
   function stop(): void {
     agentRuntime.abort();
   }
+
+  /** health 状态 → 人类可读文案 (Phase 5E). */
+  const healthLabel: Record<HealthState, string> = {
+    connecting: '连接中…',
+    ready: '后端已连接',
+    generating: '生成中…',
+    error: '出错了',
+    offline: '后端离线',
+  };
 
   function newConversation(): void {
     const now = Date.now();
@@ -185,8 +226,10 @@
     saveConfig(config);
     // 重建 runtime 以使用新配置 (§15 contract 实例绑定 config)
     agentRuntime = createAgentRuntime(config);
-    connected = await checkHealth(config.baseUrl);
-    if (connected) {
+    healthState = 'connecting';
+    const ok = await checkHealth(config.baseUrl);
+    healthState = ok ? 'ready' : 'offline';
+    if (ok) {
       try {
         modelsList = await listModels(config.baseUrl, config.apiKey);
       } catch {
@@ -207,6 +250,11 @@
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
     void refreshConnection();
+    // 后台健康轮询 (真实 HTTP /health) — 检测 backend 恢复/掉线, 不要求重启 app.
+    const timer = window.setInterval(() => {
+      void refreshConnection();
+    }, 10000);
+    return () => window.clearInterval(timer);
   });
 </script>
 
@@ -215,7 +263,7 @@
     <div class="sidebar-brand">
       <span class="logo-mark">A</span>
       <span class="brand-name">Apeireth 伙伴</span>
-      <StatusDot size="small" off={!connected} />
+      <StatusDot size="small" off={healthState !== 'ready' && healthState !== 'generating'} active={healthState === 'generating'} />
     </div>
     <nav class="nav">
       {#each nav as item}
@@ -227,9 +275,9 @@
     </nav>
     <div class="sidebar-footer">
       <button class="quiet-button wide" onclick={newConversation}><Plus size={14}/>新对话</button>
-      <div class="conn-hint">
+      <div class="conn-hint" class:offline={healthState === 'offline'}>
         <Plug size={12} />
-        <span>{connected ? '后端已连接' : '后端未连接'}</span>
+        <span>{healthLabel[healthState]}</span>
       </div>
     </div>
   </aside>
@@ -329,8 +377,8 @@
             </div>
           {/if}
           <div class="conn-status">
-            <StatusDot size="small" off={!connected} />
-            <span>{connected ? '已连接' : '未连接'} · {config.baseUrl}</span>
+            <StatusDot size="small" off={healthState !== 'ready' && healthState !== 'generating'} active={healthState === 'generating'} />
+            <span>{healthLabel[healthState]} · {config.baseUrl}</span>
           </div>
           {#if error}
             <p class="error-banner" role="alert">{error}</p>
