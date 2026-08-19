@@ -1,10 +1,10 @@
 <script lang="ts">
   import {onMount} from 'svelte';
-  import {Layers3, Wrench, Cpu, RefreshCw, BrainCircuit} from 'lucide-svelte';
-  import PageHeader from './PageHeader.svelte';
-  import type {ApeirethConfig, MemoryCategory} from './types';
-  import {categoryFromWire, categoryToWire} from './types';
-  import {fetchEpisodes, fetchOrgans, fetchTools, type MemoryEpisode, type ToolInfo} from './runtime';
+  import {Layers3, Wrench, BrainCircuit, RefreshCw} from 'lucide-svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
+  import type {ApeirethConfig, MemoryCategory} from '../../lib/types';
+  import {categoryFromWire, categoryToWire} from '../../lib/types';
+  import {fetchEpisodes, fetchOrgans, fetchTools, type MemoryEpisode, type ToolInfo} from '../../lib/runtime';
 
   let {
     config,
@@ -106,58 +106,70 @@
           <option value="反馈">反馈</option>
           <option value="参考">参考</option>
         </select>
-        <button class="primary-button" onclick={appendMemory} disabled={!newMemory.trim()}>写入记忆</button>
+        <button class="primary-button" onclick={appendMemory} disabled={!newMemory.trim()}>追加</button>
       </div>
       {#if appended}
-        <p class="ok-hint">已写入后端。</p>
+        <small class="appended-hint">已写入后端 memory_store。</small>
       {/if}
     </div>
 
-    <div class="memory-list">
-      {#if !episodes.length && !loading}
-        <div class="blank-state"><p>还没有记忆。先对话或写入一条。</p></div>
+    <div class="episode-list">
+      {#if loading && !episodes.length}
+        <p class="dim-hint">加载中…</p>
+      {:else if !episodes.length}
+        <div class="blank-state">
+          <div class="blank-mark">⌁</div>
+          <h3>暂无记忆条目</h3>
+          <p>对话中的重要信息会被后端自动提取并持久化到 SQLite。</p>
+        </div>
       {:else}
-        {#each episodes as ep (ep.id)}
-          <article class="memory-item">
-            <div class="memory-item-meta">
-              <span class="badge" class:blue={ep.role === 'user'} class:amber={ep.role === 'assistant'}>{ep.role}</span>
-              <span>{formatTime(ep.timestamp)}</span>
-              <small>{ep.session_id}</small>
+        {#each episodes as episode}
+          <article class="episode-card">
+            <div class="episode-head">
+              <span class="badge blue">{episode.role}</span>
+              <time>{formatTime(episode.timestamp)}</time>
+              <small>{episode.id.slice(0, 10)}</small>
             </div>
-            <p>{ep.content}</p>
+            <p>{episode.content}</p>
           </article>
         {/each}
       {/if}
     </div>
   {:else if activeTab === 'tools'}
     <div class="tool-list">
-      {#if !tools.length && !loading}
-        <div class="blank-state"><p>工具注册表为空。后端未注册工具，或未连接。</p></div>
+      {#if loading && !tools.length}
+        <p class="dim-hint">加载中…</p>
+      {:else if !tools.length}
+        <div class="blank-state">
+          <div class="blank-mark">⌁</div>
+          <h3>未发现工具</h3>
+          <p>后端 tool_registry 动态加载的工具会列在此处。</p>
+        </div>
       {:else}
         {#each tools as tool}
-          <article class="tool-item">
-            <div class="tool-item-head">
-              <Cpu size={15} />
+          <article class="tool-card">
+            <div class="tool-head">
+              <Wrench size={14} />
               <strong>{tool.name}</strong>
+              {#if tool.tier}
+                <span class="badge amber">Tier {tool.tier}</span>
+              {/if}
             </div>
-            {#if tool.description}
-              <p>{tool.description}</p>
-            {/if}
+            <p>{tool.description}</p>
           </article>
         {/each}
       {/if}
     </div>
   {:else}
     <div class="organ-list">
-      {#if !organs.length && !loading}
-        <div class="blank-state"><p>器官状态为空。后端未连接，或未暴露器官。</p></div>
-      {:else}
-        {#each organs as organ, index}
-          <article class="organ-item">
-            <strong>器官 {index + 1}</strong>
-            <pre>{JSON.stringify(organ, null, 2)}</pre>
-          </article>
-        {/each}
+      {#if loading && !organs.length}
+        <p class="dim-hint">加载中…</p>
+      {:else if !organs.length}
+        <div class="blank-state">
+          <div class="blank-mark">⌁</div>
+          <h3>器官状态</h3>
+          <p>Apeireth 9+1 器官运行指标。</p>
+        </div>
       {/if}
     </div>
   {/if}
