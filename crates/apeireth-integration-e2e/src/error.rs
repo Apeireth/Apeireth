@@ -4,7 +4,7 @@
 //! 跨 `test_*` 边界不漏 `anyhow::Error`, 守"错误能装到实现"承诺 (8 项不修改承诺 #1).
 //!
 //! **9 变体** (per 8 项不修改承诺 #2 — 8-10 变体对应失败类型):
-//! - `WorkspaceAudit`     — workspace 审计失败 (e.g. 24 LOCKED 被改, sandbox 错路径)
+//! - `WorkspaceAudit`     — workspace 审计失败 (e.g. 24 LOCKED crate (入口签名已降级) 被改, sandbox 错路径)
 //! - `WorkspaceCargo`     — `cargo check` / `cargo metadata` 调用失败
 //! - `ApiHttp`            — wiremock / reqwest HTTP 调用失败 (4xx / 5xx / timeout)
 //! - `ApiStatus`          — HTTP 状态码非期望 (e.g. 期望 200 实际 500)
@@ -19,7 +19,7 @@
 //! - 错误数 hardcode ✓ (9 变体 = 8-10 区间, 编译期 `nine_variants_const` 测试守门)
 //! - 0 改 LOCKED ✓
 //! - 0 改 workspace version ✓
-//! - 6 哲学锚透传 ✓ (本文件不变, 上游 lib.rs 守)
+//! - 8 哲学锚透传 ✓ (本文件不变, 上游 lib.rs 守)
 //! - 0 依赖 NewAPI ✓
 //! - 0 重复造轮子 ✓ (thiserror 现成)
 //! - 0 假装实缺 ✓ (9 变体 = 9 真实失败类型, 1:1 映射)
@@ -29,7 +29,7 @@ use std::fmt;
 /// e2e 统一错误 (9 变体 hardcode, 跟 8-10 区间对齐)
 #[derive(Debug)]
 pub enum E2EError {
-    /// workspace 审计失败 (e.g. 24 LOCKED 被改, sandbox 错路径, parent Cargo.toml 改)
+    /// workspace 审计失败 (e.g. 24 LOCKED crate (入口签名已降级) 被改, sandbox 错路径, parent Cargo.toml 改)
     WorkspaceAudit {
         /// 失败维度 (e.g. "locked_crate_modified", "sandbox_path", "workspace_version")
         dimension: String,

@@ -1,6 +1,6 @@
 //! # apeireth-sdk-lark (STUB MODE)
 //!
-//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 6 哲学锚 + 主人审**
+//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
 //!
 //! 飞书 Lark SDK stub (1:1 翻译 `@larksuiteoapi/lark-sdk` v0.9.21 商业版, per
 //! `core/Response.d.ts` + `client/api_im_open.js` + `client/api_calendar_open.js` +
@@ -17,7 +17,7 @@
 //! 1. 改 `STUB_MODE = false` (编译期 hardcode)
 //! 2. 放开 Cargo.toml 的 reqwest deps
 //! 3. 加 workspace members (`crates/apeireth-sdk-lark`)
-//! 4. 经 6 哲学锚 (RIVAL 蓝图) + 主人审
+//! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
 //! 跳过任何一条 → 整合时 cargo build 必挂, fixture 必挂.
 //!
 //! ## 8 核心 API (per task spec §3 + v0.9.21 商业版 1:1)
@@ -58,7 +58,7 @@
 //! - **K-1 #5**: Email 非空 + RFC 5322 邮箱 (per `LarkError::validate_email`)
 //! - **K-1 #6**: Mobile 非空 + E.164 国际格式 (per `LarkError::validate_mobile`)
 //!
-//! ## 6 哲学 anchor 穿透
+//! ## 8 哲学 anchor 穿透 (baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //!
 //! - **S-1 不漂移**: 1:1 翻译 v0.9.21 商业版 IM / Calendar / Contact / Doc / Sheet / Approval
 //!   / Event API 表面, 0 业务重设计
@@ -74,9 +74,9 @@
 //!
 //! ## 8 项不修改承诺
 //!
-//! - ✅ 0 改 24 LOCKED crate (`crates/apeireth-{action,agent,asi,bench,bus,central,cli,cognition,consciousness,constraint,core,council,evolution,extension,life-force,motivation,onion,perception,protocol,pybridge,relation,sovereignty,supervisor,tauri-stub,upgrade,value,verify,web}/src/`, 0 触碰)
-//! - ✅ 0 改 workspace version (1.0.0 LOCKED, 走 workspace inherit)
-//! - ✅ 0 改 6 哲学锚 + 8 项不修改承诺
+//! - ✅ 0 改 24 LOCKED crate (`crates/apeireth-{action,agent,asi,bench,bus,central,cli,cognition,consciousness,constraint,core,council,evolution,extension,life-force,motivation,onion,perception,protocol,pybridge,relation,sovereignty,supervisor,tauri-stub,upgrade,value,verify,web}/src/`, 0 触碰; R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! - ✅ 0 改 workspace version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0, 走 workspace inherit)
+//! - ✅ 0 改 8 哲学锚 + 8 项不修改承诺
 //! - ✅ 0 引 reqwest / hyper / tokio-tungstenite (留 R21 续真接)
 //! - ✅ 0 重复造轮子 (复用 apeireth-protocol 4 协议 ZST adapter + apeireth-keyring keyring 模式)
 //! - ✅ 0 假装已实现 (8 API 全 NotImplemented)
@@ -236,14 +236,14 @@ pub fn validate_tool_call(tool: &str, _args: &serde_json::Value) -> LarkResult<(
 pub const LARK_API_VERSION: &str = LARK_SCHEMA_VERSION;
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
-/// R21+ 真接 @larksuiteoapi/lark-sdk 时, **必须经 6 哲学锚 + 主人审才能改 `false`**.
+/// R21+ 真接 @larksuiteoapi/lark-sdk 时, **必须经 8 哲学锚 + 主人审才能改 `false`**.
 pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
 const _: () = assert!(
     STUB_MODE == true,
-    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21+)"
+    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R21+)"
 );
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 守门).
@@ -560,14 +560,14 @@ mod tests {
     use crate::lark::auth::WebhookToken;
     use crate::lark::message::{ReceiveIdType, TextContent};
 
-    /// 6 哲学锚 + 8 项承诺: STUB_MODE 必须为 true.
+    /// 8 哲学锚 + 8 项承诺: STUB_MODE 必须为 true.
     #[test]
     fn k1_stub_mode_is_true() {
         assert!(STUB_MODE);
         assert!(is_stub_mode());
     }
 
-    /// 6 哲学锚 + 8 项承诺: PLATFORM_NAME 必须为 "apeireth".
+    /// 8 哲学锚 + 8 项承诺: PLATFORM_NAME 必须为 "apeireth".
     #[test]
     fn k1_platform_name_is_apeireth() {
         assert_eq!(PLATFORM_NAME, "apeireth");

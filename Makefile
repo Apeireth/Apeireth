@@ -1,24 +1,15 @@
 # ============================================================================
-# Makefile — TP20-S5 塞缝批 (DevOps 工程师2 交付)
+# Makefile — TP20-S5 塞缝批 + post-1.0.0 增量 (2026-08-19)
 # ----------------------------------------------------------------------------
-# 一键发布期供应链验证 + SBOM 生成。
+# 一键发布期供应链验证 + SBOM 生成 + 日常开发检查。
 #
-# 与 scripts/vet.sh + scripts/sbom.sh 的关系:
+# 与 scripts/vet.sh + scripts/sbom.sh + scripts/release-prep.sh 的关系:
 #   - scripts/* 是真正的执行体, Makefile 只是 thin wrapper + 入口聚合
 #   - CI release.yml 调 scripts/ 直跑 (跨平台 shell 不依赖 make)
 #   - 本地开发者 + 主人手动快速验证用 Makefile (跨平台兼容性: Linux/macOS
 #     make 都有, Windows 走 WSL 或 chocolatey install make)
 #
-# 用法:
-#   make audit        # cargo vet + audit + deny (三件套)
-#   make sbom         # 生成 cyclonedx-sbom.json
-#   make release-check # audit + sbom (1.0 release 前必跑)
-#   make tools-install # 装 cargo-vet / cargo-audit / cargo-deny / cargo-cyclonedx
-#   make help         # 看所有 target
-#
-# 0 装 PASS 边界 (主人拍板):
-#   - 缺工具 → 脚本内 fallback 标缺 + SKIP, 不假装通过
-#   - `make tools-install` 是 best-effort, 失败不影响主流程
+# 用法见 help target.
 # ============================================================================
 
 # 强制 bash (脚本用 bash 语法, Windows make 默认 sh 不一定支持)
@@ -33,24 +24,31 @@ TOOLS_DIR   := tools
 .DEFAULT_GOAL := help
 
 # 假目标声明 (避免与同名文件冲突)
-.PHONY: help audit sbom release-check tools-install tools-check clean-vet clean-sbom
+.PHONY: help audit sbom release-check release-prep release-prep-block test check fmt fmt-check tools-install tools-check clean-vet clean-sbom
 
 # ----------------------------------------------------------------------------
 # help — 列出所有 target
 # ----------------------------------------------------------------------------
 help: ## 列出所有 make target
 	@echo "=========================================="
-	@echo "  Apeireth 发布期工具链 (TP20-S5)"
+	@echo "  Apeireth 开发 + 发布期工具链 (TP20-S5 + post-1.0.0)"
 	@echo "=========================================="
 	@echo ""
-	@echo "  make tools-install   装 cargo-vet/audit/deny/cyclonedx (best-effort)"
-	@echo "  make tools-check     检查工具链是否齐全 (exit 0 = 缺也 OK, 仅打印)"
-	@echo "  make audit           跑 cargo vet + audit + deny (scripts/vet.sh)"
-	@echo "  make sbom            生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)"
-	@echo "  make release-check   audit + sbom (1.0 release 前必跑)"
-	@echo "  make clean-vet       清 reports/ 里 tp20-s5-* 日志"
-	@echo "  make clean-sbom      删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt"
-	@echo "  make help            本帮助"
+	@echo "  make check            cargo check --workspace --all-targets (~25s, 增量编译)"
+	@echo "  make test             cargo test --workspace --all-targets (全测试, 23K+)"
+	@echo "  make fmt              cargo fmt --all (格式)"
+	@echo ""
+	@echo "  make tools-install    装 cargo-vet/audit/deny/cyclonedx (best-effort)"
+	@echo "  make tools-check      检查工具链是否齐全 (exit 0 = 缺也 OK, 仅打印)"
+	@echo "  make audit            跑 cargo vet + audit + deny (scripts/vet.sh)"
+	@echo "  make sbom             生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)"
+	@echo ""
+	@echo "  make release-prep     8 硬墙 + PII + 12 项 checklist (scripts/release-prep.sh, post-1.0.0)"
+	@echo "  make release-check    audit + sbom (1.0 release 前必跑)"
+	@echo ""
+	@echo "  make clean-vet        清 reports/ 里 tp20-s5-* 日志"
+	@echo "  make clean-sbom       删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt"
+	@echo "  make help             本帮助"
 	@echo ""
 
 # ----------------------------------------------------------------------------
@@ -94,6 +92,30 @@ audit: ## 跑 cargo vet + audit + deny
 	@bash $(SCRIPTS_DIR)/vet.sh
 
 # ----------------------------------------------------------------------------
+# check / test / fmt — 增量编译 + 全测试 + 格式 (本地开发者快速反馈环)
+# ----------------------------------------------------------------------------
+check: ## cargo check --workspace --all-targets
+	cargo check --workspace --all-targets
+
+test: ## cargo test --workspace --all-targets (23K+ 测试)
+	cargo test --workspace --all-targets
+
+fmt: ## cargo fmt --all
+	cargo fmt --all
+
+fmt-check: ## cargo fmt --all --check (CI 模式, 0 diff exit 0)
+	cargo fmt --all --check
+
+# ----------------------------------------------------------------------------
+# release-prep — 8 硬墙 + PII + 12 项 checklist (post-1.0.0)
+# ----------------------------------------------------------------------------
+release-prep: ## 8 硬墙 + PII + 12 项 checklist (scripts/release-prep.sh, post-1.0.0)
+	@bash $(SCRIPTS_DIR)/release-prep.sh --dry-run
+
+release-prep-block: ## 8 硬墙 + PII + 12 项 checklist BLOCKING 模式 (1 P0 fail 退出 1)
+	@bash $(SCRIPTS_DIR)/release-prep.sh
+
+# ----------------------------------------------------------------------------
 # sbom — 生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)
 # ----------------------------------------------------------------------------
 sbom: ## 生成 CycloneDX 1.5 SBOM
@@ -124,7 +146,9 @@ clean-sbom: ## 删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt
 
 # ----------------------------------------------------------------------------
 # 内部约定: 不要在 Makefile 里塞业务逻辑, 业务在 scripts/ 里
-# ponytail: 升级路径 — 若需要 release 全自动 (vet+audit+deny+sbom+test+build),
-# 加一个 `make release-full` target 串 5 个 script, 但**不**替 CI release.yml
+# ponytail: 升级路径 — 若需要 release 全自动 (vet+audit+deny+sbom+test+build+release-prep),
+# 加一个 `make release-full` target 串 6 个 script, 但**不**替 CI release.yml
 # (CI 用 GitHub Actions matrix 更可靠, Makefile 只给本地开发者用)
+#
+# post-1.0.0 新增: release-prep (8 硬墙 + PII + 12 项 checklist 本地化, commit cf0cafc2)
 # ============================================================================
