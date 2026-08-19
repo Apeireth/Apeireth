@@ -157,10 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         found_rust_preference,
         "R17 不假装: '我喜欢 Rust' 必须被记住"
     );
-    assert!(
-        found_research_context,
-        "R17 不假装: '学术研究' 必须被记住"
-    );
+    assert!(found_research_context, "R17 不假装: '学术研究' 必须被记住");
 
     // 7. 清理
     drop(store2);
