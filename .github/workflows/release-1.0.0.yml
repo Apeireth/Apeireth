@@ -184,8 +184,9 @@ jobs:
               --platform "${PLATFORM}" \
               -t "ghcr.io/apeireth/apeireth:${APEIRETH_VERSION}-${PLATFORM##*/}" \
               --load . \
-              || echo "::warning::docker ${PLATFORM} build non-fatal skip (Dockerfile 暂 amd64-only, arm64 follow-up)"
+              || echo "::warning::docker ${PLATFORM} build failed (best-effort, 不阻塞 CI; 跟 release-gate 解耦)"
             # 多架构 push 单独在 docker-multi-arch job 跑 (避免每 arch 重复 push)
+            # 注: Dockerfile 多架构 \$TARGETARCH 已修 (commit 45963574), 失败是 buildx/QEMU 临时问题
           fi
 
       # === Upload 包产物 (per arch) ===
