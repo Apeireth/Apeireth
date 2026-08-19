@@ -1,19 +1,19 @@
 //! # apeireth-tui-e2e — TUI 5 nav + 9 器官 端到端集成测试
 //!
 //! **R20 阶段 5 估补** (per 主人 2026-08-05 派活单) — 用 `ratatui::backend::TestBackend`
-//! 验证 apeireth TUI 的**设计契约** (5 nav / 9 organ / 1 屏 4 panel / 6 哲学锚),
+//! 验证 apeireth TUI 的**设计契约** (5 nav / 9 organ / 1 屏 4 panel / 8 哲学锚),
 //! 不开真终端, 不跑 tauri, **干 TUI 不干前端** (主人 22:13 拍板).
 //!
 //! ---
 //!
-//! ## 6 哲学锚 (per `docs/architecture-v4-living-intelligence.md` §0.2)
+//! ## 8 哲学锚 (per baseline S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //!
 //! | ID | 时戳 | 标题 | TUI 体现 |
 //! |----|------|------|----------|
 //! | S-1 | 22:33 | 算力是电 — 强调 ASI 算力供给 | status bar 实时 CPU% / 60Hz tick |
-//! | S-2 | 17:43 | 实积寸累 — 反对写 LOCKED 跳板 | 不动 24 LOCKED crate 的 src/ |
-//! | O-2 | 19:33 | 反对前倾草率 — 先锁定后写 | 6 哲学锚 / 8 不修改承诺写在 header |
-//! | O-3 | 23:44 | 可读性 — 6 锚全显不藏 | 9 器官全显 + 6 锚全显 (MIND 模块) |
+//! | S-2 | 17:43 | 实积寸累 — 反对写 LOCKED 跳板 | 不动 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 的 src/ |
+//! | O-2 | 19:33 | 反对前倾草率 — 先锁定后写 | 8 哲学锚 / 8 不修改承诺写在 header |
+//! | O-3 | 23:44 | 可读性 — 6 锚全显不藏 | 9 器官全显 + 8 锚全显 (MIND 模块) |
 //! | O-4 | 00:56 | 任何人都能读懂 — 文档全开 | 本文件 + 单元 + e2e 三层都讲人话 |
 //! | O-5 | 17:58 | 仓廪实 — 仓廪实而知礼节 | 9 器官 ASCII [?] 状态条, 不浮夸 |
 //!
@@ -21,19 +21,19 @@
 //!
 //! 1. ✅ 错误能装到实现 — `TuiE2EError` thiserror + 7-10 变体
 //! 2. ✅ 错误数 hardcode — `TuiE2EError` 8-10 变体对应失败类型
-//! 3. ✅ 0 改 LOCKED — 本 crate 不触碰 24 LOCKED crate 的 src/
+//! 3. ✅ 0 改 LOCKED — 本 crate 不触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 的 src/
 //! 4. ✅ 0 改 workspace version — `version.workspace = true`
-//! 5. ✅ 6 哲学锚透传 — S-1/S-2/O-2/O-3/O-4/O-5 全显 (MIND organ + lib header)
+//! 5. ✅ 8 哲学锚透传 — S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5 全显 (MIND organ + lib header)
 //! 6. ✅ 0 依赖 NewAPI — 镜像 tui 公开 API, 不引入额外代理
 //! 7. ✅ 0 重复造轮子 — `dispatch_render` / `render_*` 直接镜像 tui 已有签名
-//! 8. ✅ 0 假装实缺 — 1 屏 4 panel + 5 nav + 9 器官 + 6 锚 全部 hardcode
+//! 8. ✅ 0 假装实缺 — 1 屏 4 panel + 5 nav + 9 器官 + 8 锚 全部 hardcode
 //!
 //! ## 边界
 //!
 //! - `apeireth-tui` 当前是 **binary-only** (无 `lib.rs`), 不能 path-dep
-//! - e2e crate 镜像其公开 API 表面 (NavPage / Nav / Organ / 6 哲学锚),
+//! - e2e crate 镜像其公开 API 表面 (NavPage / Nav / Organ / 8 哲学锚),
 //!   后续 tui 加 `lib.rs` 后可切到 `path = "../apeireth-tui"` 真实依赖
-//! - **0 触碰** 24 LOCKED crate, **0 改** workspace Cargo.toml
+//! - **0 触碰** 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱), **0 改** workspace Cargo.toml
 //!
 //! ## 模块
 //!
@@ -197,7 +197,7 @@ pub enum Nav {
     Tools = 2,
     /// 3 设置 (5 权限 + 5 Provider + 4 SDK)
     Settings = 3,
-    /// 4 帮助 (6 哲学锚 + 8 不修改承诺 + 1.0 release 文档)
+    /// 4 帮助 (8 哲学锚 + 8 不修改承诺 + 1.0 release 文档)
     Help = 4,
 }
 
@@ -269,7 +269,7 @@ pub enum Organ {
     Voice = 6,
     /// 7 体 (Body) — 进程 / 资源
     Body = 7,
-    /// 8 意 (Mind) — AGI 状态 + 6 哲学锚
+    /// 8 意 (Mind) — AGI 状态 + 8 哲学锚
     Mind = 8,
 }
 
@@ -448,7 +448,7 @@ impl Default for Theme {
     }
 }
 
-/// 6 哲学锚 (per `docs/architecture-v4-living-intelligence.md` §0.2)
+/// 8 哲学锚 (per baseline S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 ///
 /// 跟 tui `organ::mind::SIX_ANCHORS` 镜像 — S-1/S-2/O-2/O-3/O-4/O-5
 pub const SIX_PHI_ANCHORS: [(&str, &str, &str); 6] = [

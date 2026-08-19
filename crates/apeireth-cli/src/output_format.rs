@@ -30,7 +30,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (commands.rs 0 改, 仅加新 mod)
+//! - B1 24 LOCKED 入口签名已降级 (R128 + R148) — 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache); commands.rs 0 改, 仅加新 mod
 //! - C1 0 commit (Mavis 整合 #5 拍板)
 
 #![deny(unsafe_code)]
