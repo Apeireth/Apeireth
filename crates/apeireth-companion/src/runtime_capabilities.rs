@@ -174,15 +174,14 @@ pub fn current_manifest() -> CapabilityManifest {
         cap("sessions.close", true, false, true, &["close"]),
     ];
 
-    // --- memory: 记忆 ---
-    // 已存在 read + append. update/forget/protect 待 Phase 3 接线后打开.
+    // --- memory: 记忆 (Phase 3 已接线 update/forget/protect/unprotect) ---
     let memory = vec![
         cap("memory.read", true, true, false, &["list", "search", "streams", "graph"]),
         cap("memory.append", true, false, true, &["append"]),
-        cap("memory.update", false, false, false, &[]),
-        cap("memory.forget", false, false, false, &[]),
-        cap("memory.protect", false, false, false, &[]),
-        cap("memory.unprotect", false, false, false, &[]),
+        cap("memory.update", true, false, true, &["update"]),
+        cap("memory.forget", true, false, true, &["forget"]),
+        cap("memory.protect", true, false, true, &["protect"]),
+        cap("memory.unprotect", true, false, true, &["unprotect"]),
     ];
 
     // --- tools: 工具注册表 + 调用 ---
@@ -333,10 +332,8 @@ mod tests {
     #[test]
     fn unimplemented_mutations_declared_unsupported() {
         let m = current_manifest();
-        // 这些 mutation 尚未接线 (Phase 3/4/5), 必须诚实声明 unsupported.
-        // (sessions.* mutation 已在 Phase 2 接线, 不在此列.)
-        assert!(!m.is_supported("memory.forget"));
-        assert!(!m.is_supported("memory.protect"));
+        // 这些 mutation 尚未接线 (Phase 4/5), 必须诚实声明 unsupported.
+        // (sessions.* 在 Phase 2, memory.* 在 Phase 3 接线, 不在此列.)
         assert!(!m.is_supported("permissions.revoke"));
         assert!(!m.is_supported("trace.read"));
     }
@@ -350,6 +347,16 @@ mod tests {
         assert!(m.is_supported("sessions.archive"));
         assert!(m.is_supported("sessions.restore"));
         assert!(m.is_supported("sessions.close"));
+    }
+
+    #[test]
+    fn memory_mutations_supported_after_phase3() {
+        let m = current_manifest();
+        // Phase 3 接线后: memory 治理 mutation 全部 supported.
+        assert!(m.is_supported("memory.update"));
+        assert!(m.is_supported("memory.forget"));
+        assert!(m.is_supported("memory.protect"));
+        assert!(m.is_supported("memory.unprotect"));
     }
 
     #[test]
