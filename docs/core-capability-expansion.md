@@ -286,3 +286,36 @@
 ### 验证
 - `cargo test -p apeireth-memory --lib migrations` → 5 passed (idempotent + V1-V7 fresh + reopen 数据不丢 + legacy episode + append-only trigger).
 - 前端 3 套测试全绿 (reality-check / capability-manifest / desktop-gating).
+
+## Phase 8 — Security Reality Check (DONE)
+
+### 全文搜索结果 (localStorage / sessionStorage / secret)
+- Frontend localStorage 写入仅 3 处: `saveConfig`×2 (白名单 baseUrl/model/theme) + `saveConversations` (仅消息). **0** sessionStorage.
+- `loadConfig` 主动 purge legacy apiKey/masterToken (reality-check Test 1b 验证).
+- API Key: **NOT persisted** (in-memory only, `apiKey: ''` on load).
+- Master Token: **NOT persisted** (从不进 ApeirethConfig, 仅作 grant/revoke 请求参数, 用后即清).
+
+### Trace Secret Injection (攻击测试)
+- 工具 args 携带 secret (`api_key`, `Authorization: Bearer`, `MASTER_TOKEN`, `cookie`, `ghp_` PAT) → `redact_attributes()` 递归 redaction → 持久化 attributes 不含 secret (Rust 测试 `recorder_tool_args_secret_injection_neutralized` + `recorder_nested_secret_redaction`).
+- secret 值前缀 (sk-/ghp_/gho_/glpat-/Bearer ) 也 redaction.
+
+### Capability Spoofing (前端不可信)
+- Capability Manifest = information, **不是** authorization. 即便恶意 frontend 声明 `memory.delete=true`, 后端不实现 → 端点 404. 后端所有 mutation 仍验证权限与状态.
+- 后端 `current_manifest()` 不声明未实现能力 (memory.delete 从不存在). (node 测试 Attack 2.)
+
+### Master Token 不泄漏
+- grant/revoke 响应只返回 grant_id/tool/hours, **不**回显 token. (node 测试 Attack 3.)
+- GrantView (list) 不含 token 字段 (Rust 测试 phase4_grant_view_no_secret).
+- trace SSE 事件 attributes 经 redaction, 不含 token (Rust 测试 recorder_tool_args_secret_injection_neutralized).
+
+### Raw Chain-of-Thought
+- `summary_is_safe()` 检查 CoT 标记 (reasoning_content/chain_of_thought/`<thought>`/thinking); 命中 → 替换 `[execution step]`. (node 测试 Attack 4 + Rust 测试 recorder_cot_summary_not_stored.)
+- **Raw Chain-of-Thought persisted: NO**.
+
+### Path / Tool Security
+- 本轮未放宽既有安全边界. PermissionPack paths/sandbox 仍约束工具执行. CredentialGate 仍 fail-closed (master token class). 未解除 Sandbox.
+
+### 验证
+- `cargo test -p apeireth-companion --lib agent_trace` → 8 passed (含 2 个 secret-injection 攻击测试).
+- `node tests/security-attack.mjs` → 5 passed (tool-args injection / capability spoofing / token non-leak / CoT rejection / manifest secret-free).
+- 凭据基线 (API Key / Master Token NOT persisted) 维持, 无回归.

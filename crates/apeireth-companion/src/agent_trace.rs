@@ -320,4 +320,54 @@ mod tests {
         let got = s.get_trace_span(&root.span_id).unwrap().unwrap();
         assert_eq!(got.status, TraceSpanStatus::Failed);
     }
+
+    #[test]
+    fn recorder_tool_args_secret_injection_neutralized() {
+        // 攻击场景: 工具调用 args 携带 secret (api_key / Authorization / master_token / cookie / PAT).
+        // trace attributes 必须 redaction — secret 绝不落库.
+        let (r, s) = recorder();
+        let attrs = json!({
+            "tool": "ShellExec",
+            "api_key": "sk-SECRET-LIVE-12345",
+            "headers": {"Authorization": "Bearer SECRET-TOKEN"},
+            "env": {"MASTER_TOKEN": "master-SECRET"},
+            "cookie": "session=SECRET-COOKIE",
+            "args": ["--pat", "ghp_GITHUB-PAT-SECRET"],
+            "command": "ls -la"
+        });
+        let span = r
+            .start_root(TraceSpanKind::Tool, "tool:ShellExec", Some("执行命令"), None, Some(attrs))
+            .unwrap();
+        let got = s.get_trace_span(&span.span_id).unwrap().unwrap();
+        let stored = serde_json::to_string(&got.attributes).unwrap();
+        // secret 绝不出现在持久化的 attributes
+        assert!(!stored.contains("SECRET"), "SECRET must not persist: {stored}");
+        assert!(!stored.contains("sk-SECRET"));
+        assert!(!stored.contains("master-SECRET"));
+        assert!(!stored.contains("ghp_GITHUB"));
+        assert!(!stored.contains("Bearer SECRET"));
+        assert!(stored.contains("[REDACTED]"));
+        // 非 secret 值保留
+        assert!(stored.contains("ls -la"));
+        assert!(stored.contains("ShellExec"));
+    }
+
+    #[test]
+    fn recorder_nested_secret_redaction() {
+        // 深层嵌套的 secret 也要 redaction.
+        let (r, s) = recorder();
+        let attrs = json!({
+            "outer": {"inner": {"password": "hunter2", "ok": "keep"}},
+            "arr": [{"token": "tok-secret"}, {"name": "tool"}]
+        });
+        let span = r
+            .start_root(TraceSpanKind::Tool, "tool:X", None, None, Some(attrs))
+            .unwrap();
+        let got = s.get_trace_span(&span.span_id).unwrap().unwrap();
+        let stored = serde_json::to_string(&got.attributes).unwrap();
+        assert!(!stored.contains("hunter2"));
+        assert!(!stored.contains("tok-secret"));
+        assert!(stored.contains("keep"));
+        assert!(stored.contains("tool"));
+    }
 }
