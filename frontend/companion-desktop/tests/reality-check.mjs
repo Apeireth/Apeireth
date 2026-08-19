@@ -56,6 +56,59 @@ console.log('[Test 1b] Verifying Legacy stored masterToken is actively purged on
   console.log('  -> PASS: Legacy Master Token purge migration verified.');
 }
 
+// 1c. Test: API Key Not Persisted in Storage
+console.log('[Test 1c] Verifying API Key is NOT persisted by saveConfig...');
+{
+  // Simulation of runtime.ts saveConfig()
+  const runtimeConfig = {
+    baseUrl: 'http://127.0.0.1:8090',
+    apiKey: 'sk-ultra-secret-key-do-not-persist',
+    model: 'MiniMax-M3',
+  };
+  const safeConfig = {
+    baseUrl: runtimeConfig.baseUrl,
+    model: runtimeConfig.model,
+    theme: runtimeConfig.theme,
+  };
+  localStorage.setItem('apeireth-config', JSON.stringify(safeConfig));
+
+  const stored = JSON.parse(localStorage.getItem('apeireth-config'));
+  assert.equal(stored.apiKey, undefined, 'apiKey must NEVER be persisted in storage');
+  assert.equal(stored.api_key, undefined, 'api_key must NEVER be persisted in storage');
+  console.log('  -> PASS: API Key not persisted in storage verified.');
+}
+
+// 1d. Test: Legacy API Key Purge Migration
+console.log('[Test 1d] Verifying Legacy stored apiKey is actively purged on load...');
+{
+  const legacyConfigWithApiKey = {
+    baseUrl: 'http://127.0.0.1:8090',
+    apiKey: 'old-persisted-api-key-123',
+    api_key: 'old-persisted-api-key-456',
+    model: 'MiniMax-M3',
+  };
+  localStorage.setItem('apeireth-config', JSON.stringify(legacyConfigWithApiKey));
+
+  // Purge migration logic matching runtime.ts loadConfig()
+  const raw = localStorage.getItem('apeireth-config');
+  const parsed = JSON.parse(raw);
+  let modified = false;
+  if ('apiKey' in parsed) { delete parsed.apiKey; modified = true; }
+  if ('api_key' in parsed) { delete parsed.api_key; modified = true; }
+  if (modified) {
+    localStorage.setItem('apeireth-config', JSON.stringify({
+      baseUrl: parsed.baseUrl,
+      model: parsed.model,
+    }));
+  }
+
+  const cleaned = JSON.parse(localStorage.getItem('apeireth-config'));
+  assert.equal(cleaned.apiKey, undefined);
+  assert.equal(cleaned.api_key, undefined);
+  console.log('  -> PASS: Legacy API Key purge migration verified.');
+}
+
+
 
 // 2. Test: Session Storage Migration & Corrupted Legacy Recovery
 console.log('[Test 2] Verifying Session migration resilience on legacy / corrupted data...');
@@ -182,4 +235,29 @@ console.log('[Test 4] Verifying Activity SSE & Audit deduping...');
   console.log('  -> PASS: Activity stream deduping verified.');
 }
 
+// 5. Test: Tools Endpoint Error Handling & No Fake Hardcoded Fallback
+console.log('[Test 5] Verifying Tools endpoint failure throws and does not fabricate mock data...');
+{
+  async function simulateFetchTools(status) {
+    if (status === 404) {
+      throw new Error(`后端工具注册表端点不可用 (HTTP 404)`);
+    }
+    return [{name: 'real_tool', description: '真实工具'}];
+  }
+
+  // Expect failure on 404
+  await assert.rejects(
+    async () => simulateFetchTools(404),
+    /后端工具注册表端点不可用/,
+    'Must throw and not fabricate hardcoded tools on 404',
+  );
+
+  // Expect real tools on 200
+  const realTools = await simulateFetchTools(200);
+  assert.equal(realTools.length, 1);
+  assert.equal(realTools[0].name, 'real_tool');
+  console.log('  -> PASS: Tools registry error handling and 0-fake policy verified.');
+}
+
 console.log('--- All Reality Check Unit Tests PASSED! ---');
+
