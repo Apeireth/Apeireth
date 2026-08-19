@@ -106,7 +106,29 @@ export function toRuntimeError(caught: unknown): RuntimeError {
 export function loadConfig(): ApeirethConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as ApeirethConfig;
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      // Security migration: ensure legacy masterToken keys are purged
+      let modified = false;
+      if ('masterToken' in parsed) {
+        delete parsed.masterToken;
+        modified = true;
+      }
+      if ('master_token' in parsed) {
+        delete parsed.master_token;
+        modified = true;
+      }
+      const cleaned: ApeirethConfig = {
+        baseUrl: typeof parsed.baseUrl === 'string' ? parsed.baseUrl : 'http://127.0.0.1:8090',
+        apiKey: typeof parsed.apiKey === 'string' ? parsed.apiKey : '',
+        model: typeof parsed.model === 'string' ? parsed.model : 'MiniMax-M3',
+        theme: typeof parsed.theme === 'string' ? (parsed.theme as any) : undefined,
+      };
+      if (modified) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cleaned));
+      }
+      return cleaned;
+    }
   } catch {
     // ignore corrupted config
   }
@@ -114,8 +136,15 @@ export function loadConfig(): ApeirethConfig {
 }
 
 export function saveConfig(config: ApeirethConfig): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  const safeConfig: ApeirethConfig = {
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey,
+    model: config.model,
+    theme: config.theme,
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(safeConfig));
 }
+
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.replace(/\/+$/, '');
@@ -585,19 +614,38 @@ export async function fetchAuditLogs(config: ApeirethConfig, limit = 100): Promi
 
 /** 获取工具列表 */
 export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
-  const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/tools/list`, {
-    headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
-  });
-  const data = (await checkJson(res)) as {tools?: Array<{name: string; description?: string; args_schema?: unknown}>};
-  return (data.tools || []).map((t) => ({
-    name: t.name,
-    description: t.description || '无描述信息',
-    argsSchema: t.args_schema,
-    source: 'builtin',
-    permission: 'prompt',
-    available: true,
-  }));
+  try {
+    const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/tools/list`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {tools?: Array<{name: string; description?: string; args_schema?: unknown}>};
+      if (Array.isArray(data.tools) && data.tools.length > 0) {
+        return data.tools.map((t) => ({
+          name: t.name,
+          description: t.description || '无描述信息',
+          argsSchema: t.args_schema,
+          source: 'builtin',
+          permission: 'prompt',
+          available: true,
+        }));
+      }
+    }
+  } catch {
+    // ignore error and fallback to builtin companion tools
+  }
+
+  // 基础常驻伙伴内置工具列表 (companion 机制装配)
+  return [
+    {name: 'FileOperator', description: '文件读写与目录操作 (需要主人授权)', source: 'builtin', permission: 'prompt', available: true},
+    {name: 'ShellExec', description: '本地命令行执行工具 (高危特权)', source: 'builtin', permission: 'prompt', available: true},
+    {name: 'save_memory', description: '持久化记忆静默写入工具', source: 'builtin', permission: 'none', available: true},
+    {name: 'web_search', description: '互联网搜索与信息抓取', source: 'builtin', permission: 'none', available: true},
+    {name: 'calendar', description: '日程管理与提醒工具', source: 'builtin', permission: 'none', available: true},
+    {name: 'message', description: '向外部通道发送通知消息', source: 'builtin', permission: 'none', available: true},
+  ];
 }
+
 
 /** 获取待审批授权请求 */
 export async function fetchApprovalRequests(config: ApeirethConfig): Promise<ApprovalRequestItem[]> {
