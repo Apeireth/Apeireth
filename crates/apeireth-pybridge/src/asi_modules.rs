@@ -40,7 +40,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改 (整合 #4 commit abf12243 严守)
 //! - A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 (17 文件原位, 0 删 0 改)
-//! - B1 24 LOCKED 持续更新, 内部 fn 实施可改, **入口签名 0 改**
+//! - B1 24 LOCKED 入口签名已降级, 内部 fn 实施可改, **入口签名 0 改** (R128 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
 //! - A3 12 键 + PHL-07 = 13 键
 //! - C1 0 主动 commit
 //! - C2 0 装 PASS 严守
@@ -432,7 +432,7 @@ pub const V1400_CAPABILITIES: [SelfCapability; V1400_N_CAPABILITIES] = [
     SelfCapability::new(
         "code_writing",
         "写代码",
-        "R14-R19 战役 + 22-trait interlock + 24 LOCKED",
+        "R14-R19 战役 + 22-trait interlock + 24 LOCKED (R128 入口签名已降级, 仅保 3 项不可变脊柱)",
     ),
     SelfCapability::new(
         "philosophy_anchoring",
@@ -442,7 +442,7 @@ pub const V1400_CAPABILITIES: [SelfCapability; V1400_N_CAPABILITIES] = [
     SelfCapability::new(
         "real_measurement",
         "真测",
-        "V0.5 30 维 + V1131/V1136/V1141 baseline",
+        "V0.5 24 维 (R126 P1-4 30 维升级未合入 master) + V1131/V1136 9 子测度/V1141 baseline",
     ),
     SelfCapability::new(
         "real_borrow",
@@ -463,7 +463,7 @@ pub const V1400_CAPABILITIES: [SelfCapability; V1400_N_CAPABILITIES] = [
     SelfCapability::new(
         "real_guard",
         "真守门",
-        "6 重守门 v6 → v7 + 13 键 verdict cache",
+        "6→7→8→9 重守门 lineage v9 + 13 键 verdict cache",
     ),
     SelfCapability::new(
         "real_commit",
