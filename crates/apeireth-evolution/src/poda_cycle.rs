@@ -19,7 +19,7 @@
 //! - 限流结束后: 补 0 装 src 实施 (见 §ZERO_INSTALL_FOLLOWUP)
 //!
 //! **8 硬墙 verify** (per 主人 17:22 升级授权 + decision-33):
-//! - B1 24 LOCKED 持续更新 — `apeireth-evolution` 在 24 LOCKED #5, 内部 fn 实施可改
+//! - B1 24 LOCKED 入口签名已降级 — `apeireth-evolution` 在 24 LOCKED #5, 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache)
 //! - ✅ 0 改 `lib.rs` 入口签名 (新增 `pub mod poda_cycle` + 6 re-exports, 0 改原)
 //! - ✅ 0 触碰 `EvolutionState` / `TransitionReason` / `EvolutionStep` / `EvolutionLog`
 //! - ✅ 0 触碰 `EvolutionEngine` 公开方法签名
@@ -729,7 +729,7 @@ impl PodaCycle {
 // 3. 决策表 (state → action mapping)
 // 4. 审计轨迹 (action history + outcome)
 //
-// **0 触碰 verify** (B1 24 LOCKED 持续更新 + 入口签名 0 改):
+// **0 触碰 verify** (B1 24 LOCKED 入口签名已降级 + 入口签名 0 改):
 // - ✅ 0 改 `EvolutionState` (6 状态枚举)
 // - ✅ 0 改 `TransitionReason` (12+ 转换原因)
 // - ✅ 0 改 `EvolutionStep` (8 步骤枚举)
