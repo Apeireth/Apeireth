@@ -77,6 +77,12 @@ pub use semantic::{episode_uuid, EmbedFn, HashEmbedder};
 #[cfg(feature = "semantic")]
 pub use semantic_persist::PersistentSemanticIndex;
 pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
+// Core Capability Expansion Phase 2: 后端会话生命周期 (state machine + 乐观并发).
+// 独立于 SessionStore trait (旧 upsert 不变), 走 inherent impl on SqliteMemoryStore.
+pub mod session_lifecycle;
+pub use session_lifecycle::{
+    SessionLifecycleError, SessionLifecycleRecord, SessionScope, SessionState, SessionStore as SessionLifecycleStore,
+};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
