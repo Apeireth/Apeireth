@@ -56,7 +56,10 @@
     error = '';
     try {
       const [toolsRes, approvalsRes] = await Promise.all([
-        fetchTools(config).catch(() => []),
+        fetchTools(config).catch((e) => {
+          error = e instanceof Error ? e.message : String(e);
+          return [];
+        }),
         fetchApprovalRequests(config).catch(() => []),
       ]);
       tools = toolsRes;
@@ -67,6 +70,7 @@
       loading = false;
     }
   }
+
 
   function openApprovalModal(req: ApprovalRequestItem) {
     approvingTool = req;
