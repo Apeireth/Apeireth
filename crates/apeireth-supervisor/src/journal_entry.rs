@@ -12,8 +12,9 @@
 //! `ChildSpec`), host 改为"父监督者 / PID 1" (pid_one.rs `PidOneSupervisor`),
 //! journal 复用 chidori 字段集 (event_kind / ts / payload / determinism_meta).
 //!
-//! B1 24 LOCKED (#1 supervisor) 严守: 本文件是 NEW, 0 触碰 mtime 16:34 baseline.
-//! 入口签名 0 改 (per 主人 17:22 升级授权 + decision-33 §2.3): 本文件 0 修改
+//! B1 24 LOCKED (#1 supervisor) 入口签名已降级 严守: 本文件是 NEW, 0 触碰 mtime 16:34 baseline.
+//! 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache), 入口签名 0 改
+//! (per 主人 17:22 升级授权 + decision-33 §2.3): 本文件 0 修改
 //! child.rs / supervisor.rs / pid_one.rs / actor.rs / strategy.rs / lib.rs 任何
 //! 入口签名. 内部 fn 实施可改 (R125 续 supervisor 内部 fn 可 `journal.append()`).
 //!
