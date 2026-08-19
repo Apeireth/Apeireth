@@ -227,3 +227,28 @@
 
 ### Bug Found & Fixed (Reality Check)
 - **list_recent_traces 死锁**: 原实现在 conn guard 持有期间调用 `self.list_trace_spans()` (再次 `self.conn()?` 锁同一 `Mutex<Connection>`, 不可重入 → 死锁, 测试挂起 >60s). 修复: 全部在同一 conn 内用窗口查询完成, 不重入. (回归测试: trace_list_recent_traces 0.07s 通过.)
+
+## Phase 6 — Desktop Capability-Driven Integration (DONE)
+
+### Capability Gating (所有功能按钮依据 manifest)
+- `App.svelte`: 启动 `refreshConnection` 先 health → 再 `fetchCapabilities`; version 变化/重连时刷新 (15s 节拍). `capabilities` state 传给所有视图 + RuntimeModal.
+- MemoryView: `memory.forget/protect/unprotect` supported → 解锁按钮; 否则保留原 disabled "只读" 按钮 (legacy 降级). Forget 必须 ConfirmDialog. Protected episode 的 forget 按钮 disabled.
+- ToolsView: `permissions.grants.read` → 展示活跃 grants (active/expired 状态); `permissions.revoke` → revoke 按钮 + master token modal (用后即清).
+- ActivityView: `trace.read` → 带 traceId 的活动卡片显示 "轨迹→" 按钮, 点击打开 trace span 树 (按 parent_span_id 缩进).
+- RuntimeModal: 新增能力清单区 (schema version + runtime version + supported capability tags), 不直接 dump JSON.
+
+### 接入的新能力 (backend mutation 真接入)
+- Session: create/rename/archive/restore/close (fetchers 在 runtime.ts, 后端端点 Phase 2).
+- Memory: update/forget/protect/unprotect (fetchers, Phase 3).
+- Permission: grants list/revoke (fetchers, Phase 4).
+- Trace: fetchTraces/fetchTraceDetail (fetchers, Phase 5).
+
+### 仍 read-only (诚实)
+- 本地 localStorage 会话仍为主; backend session mutation 端点已接 fetchers 但本轮未强制切换 local→backend (schema/安全未明确, legacy 不丢). Desktop 后端账本 tab 仍只读展示.
+- `permissions.policy.write` (持久化策略) manifest 声明 unsupported → 无写入 UI.
+
+### 验证
+- `svelte-check` 0 err / 0 warn.
+- `vite build` PASS.
+- `node tests/desktop-capability-gating.mjs` → 5 passed (current 解锁 / legacy 降级 / null 保守 / version 刷新 / 未知 id false).
+- `node tests/capability-manifest.mjs` → 7 passed (仍绿).
