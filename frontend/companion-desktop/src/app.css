@@ -136,4 +136,28 @@
 .tool-schema-label{font-size:10px;color:var(--faint);font-family:var(--mono)}
 .tool-schema pre{margin:4px 0 0;font:10px var(--mono);color:var(--muted);background:rgba(0,0,0,0.2);padding:6px;border-radius:4px;max-height:120px;overflow:auto}
 
+/* ---------- Memory View: Graph & Reflection ---------- */
+.memory-top-bar,.graph-top-bar{display:flex;gap:12px;align-items:center;padding:4px 42px 14px;flex-wrap:wrap}
+.graph-counts-badge{margin-left:auto;font-size:11px;color:var(--muted);font-family:var(--mono);background:var(--surface-3);padding:4px 10px;border-radius:999px;border:1px solid var(--line)}
+.graph-view-container{flex:1;min-height:0;overflow:auto;padding:0 42px 28px}
+.graph-triples-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.graph-triple-card{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;gap:8px}
+.graph-triple-card:hover{border-color:var(--amber-line)}
+.triple-node{display:flex;flex-direction:column;gap:2px}
+.triple-node span{font-size:10px;color:var(--faint);text-transform:uppercase}
+.triple-node strong{font-size:12px;color:var(--text)}
+.triple-node.subject-node strong{color:var(--amber)}
+.triple-node.object-node strong{color:var(--blue)}
+.triple-edge{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:11px;padding:3px 8px;border-radius:4px;background:var(--surface-3);border:1px solid var(--line)}
+.triple-edge code{font-family:var(--mono);font-size:11px;color:var(--green)}
+
+.reflection-list{flex:1;min-height:0;overflow:auto;padding:0 42px 28px;display:flex;flex-direction:column;gap:12px}
+.reflection-card{padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:var(--surface-2);display:flex;flex-direction:column;gap:8px}
+.reflection-card:hover{border-color:var(--line-strong)}
+.reflection-head{display:flex;align-items:center;justify-content:space-between}
+.reflection-title-box{display:flex;align-items:center;gap:8px;color:var(--amber)}
+.reflection-payload{margin:0;font-size:13px;line-height:1.65;color:var(--text);white-space:pre-wrap}
+.reflection-footer{display:flex;align-items:center;justify-content:space-between;color:var(--faint);font-size:11px;border-top:1px solid var(--line);padding-top:6px;margin-top:4px}
+
+
 
