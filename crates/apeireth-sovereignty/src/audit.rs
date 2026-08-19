@@ -9,7 +9,7 @@
 //!   2. **K-1.b** — `resource` 非空 (动了什么)
 //!   3. **K-1.c** — `level >= event.required_min_level` (级别匹配事件严重度)
 //!
-//! **6 哲学锚穿透** (R20 阶段 6 §"6 哲学锚 + 8 项不修改承诺"):
+//! **8 哲学锚穿透** (per baseline S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5, R20 阶段 6 §"8 哲学锚 + 8 项不修改承诺"):
 //! - **主 22:33 ASI 北极星** — 审计可追溯 → 任何治理动作事后可还原
 //! - **主 17:43 实事求是** — 5 鉴权级别是真实权限层级映射, 非装饰
 //! - **主 17:58 不假装** — `try_record` 返回 `Err` 表达真实失败, 不 silent pass
@@ -19,7 +19,7 @@
 //!
 //! **8 项不修改承诺**:
 //! - ✅ 编译期 hardcode: 事件数 = 4, 鉴权级别数 = 5, K-1 强校验数 = 3
-//! - ✅ 0 触碰 LOCKED: 本文件独立, 不动 lib.rs / Cargo.toml / 24 LOCKED crate
+//! - ✅ 0 触碰 LOCKED: 本文件独立, 不动 lib.rs / Cargo.toml / 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱
 //! - ✅ 0 依赖 NewAPI
 //! - ✅ 0 重复造轮子: 复用 `serde::Serialize` + `thiserror::Error` + `chrono::Utc::now()`
 //! - ✅ 诚实标缺: ❌ 不持久化 (无 Redis / SQLite), 仅 in-memory; 真生产应接 outbox

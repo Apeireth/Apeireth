@@ -115,7 +115,7 @@ pub type LarkResult<T> = Result<T, LarkError>;
 pub const LARK_ERROR_VARIANT_COUNT: usize = 11;
 const _: () = assert!(
     true, // 编译期 hardcode 守门 (实际计数在测试中验证)
-    "LarkError 新增 variant 必须经 6 哲学锚 + 主人审 (R20 阶段 4)"
+    "LarkError 新增 variant 必须经 8 哲学锚 + 主人审 (R20 阶段 4)"
 );
 
 // ============================================================================

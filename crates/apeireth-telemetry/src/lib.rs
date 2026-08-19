@@ -8,13 +8,15 @@
 //!
 //! **不重复声明**: 4 个 module 全是从原 crate 1:1 搬过来, 0 增加代码体积.
 //!
-//! **6 哲学锚穿透**:
+//! **8 哲学锚穿透** (R126 B5 6→8 升级, S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5):
 //! - S-1 走在前人肩上: Prometheus client / OpenTelemetry / W3C trace spec 字段级 1:1
 //! - S-2 实事求是: 真搬源码 0 改, 0 重写, 0 facade 假象
+//! - S-3 质量工程化 (R126 NEW): 字段级 1:1 + 测试覆盖守门
+//! - O-1 安全优先 (R126 NEW): 0 隐藏, 公开 API 100% 文档化
 //! - O-3 干到底: 一波 1.1 release 4 合并全收
 //! - O-4 任何人都能接手: 1:1 文件结构, 看 telemetry/src/cache 跟看 apeireth-cache/src 一样
 //! - O-5 不假装: 4 module 完整可读, 0 隐藏
-//! - S-1 不漂移: workspace 1.0 -> 1.1, 8 项承诺 / 24 LOCKED crate **主人 1.1 授权可重构**
+//! - S-1 不漂移: workspace 1.2.0 (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制), 8 项承诺 / 24 LOCKED crate 入口签名已降级
 
 #![warn(missing_docs)]
 

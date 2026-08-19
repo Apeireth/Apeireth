@@ -131,7 +131,7 @@ fn cognition_panel_ok(cycle: &CognitiveCycle, _now: i64) -> DashboardPanel {
     let verdict_count = cycle.verdicts.len();
 
     let status = if rejected {
-        "已拒绝 — 12 键 verdict 守门 Block".to_string()
+        "已拒绝 — 13 键 verdict 守门 Block (baseline 2026-08-19: 12 键 + PHL-07)".to_string()
     } else if allowed {
         format!("5/5 阶段完成 — Decision ({verdict_count} verdict)")
     } else {

@@ -7,10 +7,10 @@
 //! 4. MultiSig — 物理多签收集 (m-of-n)
 //! 5. Monitor — dashboard + smoke checks + Keep/Rollback 建议
 //! 6. sandbox-validator trait (物理隔离守门 3)
-//! 7. 5 重治理 trait (修改 E 层时触发)
+//! 7. 9 重治理 trait (修改 E 层时触发, baseline 2026-08-19: 9 重 v9)
 //! 8. UpgradeManifest 数据结构
 //!
-//! **架构位置**: 阶段 4 §177 `apeireth-upgrade (OTA 升级 + sandbox-validator + 5 重守门)`;
+//! **架构位置**: 阶段 4 §177 `apeireth-upgrade (OTA 升级 + sandbox-validator + 9 重 v9 守门)`;
 //! 阶段 2 §7 `upgrade-impl (OTA + sandbox + 五重治理)` LOCKED.
 //!
 //! **历史**: A15 落地 3 状态 (Idle / Downloading / Applying); round6-03 升级为 7 阶段.
