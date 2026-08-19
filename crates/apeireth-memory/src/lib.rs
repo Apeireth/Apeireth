@@ -88,6 +88,9 @@ pub mod memory_governance;
 pub use memory_governance::{
     GovernedEpisode, MemoryGovernanceError, MemoryGovernanceStore, MemoryGovernanceStatus,
 };
+// Core Capability Expansion Phase 5: Agent 执行轨迹 (structured trace, 持久化 + 查询).
+pub mod agent_trace;
+pub use agent_trace::{TraceQueryError, TraceSpan, TraceSpanKind, TraceSpanStatus, TraceStore};
 pub use streams::{
     ActionStream, EvolutionStream, GoalStream, LifeStream, MigrationStream, ProposalStream,
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
