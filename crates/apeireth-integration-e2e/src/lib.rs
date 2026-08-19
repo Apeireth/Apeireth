@@ -1,6 +1,6 @@
 //! # `apeireth-integration-e2e` — 三层端到端集成测试 (R20 阶段 5 估补)
 //!
-//! **Apeireth 集成测试 e2e** — 主仓 + API + TUI 三层端到端, 60+ 测试, **不碰 24 LOCKED**.
+//! **Apeireth 集成测试 e2e** — 主仓 + API + TUI 三层端到端, 60+ 测试, **不碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)**.
 //!
 //! **背景** (per R20 阶段 5 派活单, 主 2026-08-05 拍板):
 //! - 主仓 `Apeireth-rust` 有 50+ crate, 真要测集成只能 e2e (单测盖不住 crate 边界)
@@ -8,7 +8,7 @@
 //! - 本 crate 补 3 层: workspace (主仓状态) + API (HTTP 端点) + TUI (终端渲染) 端到端
 //!
 //! **三层** (per 派活单):
-//! 1. **Workspace** — 主仓 `cargo check` / 文件系统审计, 守 24 LOCKED
+//! 1. **Workspace** — 主仓 `cargo check` / 文件系统审计, 守 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! 2. **API** — wiremock 模拟 + reqwest 真发, 6 端点 + 401/404/500/200 错误码
 //! 3. **TUI** — ratatui `TestBackend` 渲染 1 屏 4 panel, 5 nav + 9 器官
 //!
@@ -36,16 +36,16 @@
 //!
 //! ---
 //!
-//! ## 6 哲学锚 (per `APEIRETH-CONVENTIONS.md` §0.2, R20+ 派活单必写)
+//! ## 8 哲学锚 (per baseline S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5, R20+ 派活单必写)
 //!
 //! | ID | 时戳 | 标题 | 集成测试 e2e 体现 |
 //! |----|------|------|-------------------|
-//! | **S-1** | 主 22:33 | 北极星导向 — 服务 ASI 北极星 | 6 哲学锚穿透到 status bar, 6 端点验证 ASI 1.0 release 必做 |
-//! | **S-2** | 主 17:43 | 实事求是 — 基于现状不重写 | 镜像 apeireth-tui 公开 API, 0 假装改 24 LOCKED, 0 改 workspace version |
+//! | **S-1** | 主 22:33 | 北极星导向 — 服务 ASI 北极星 | 8 哲学锚穿透到 status bar, 6 端点验证 ASI 1.0 release 必做 |
+//! | **S-2** | 主 17:43 | 实事求是 — 基于现状不重写 | 镜像 apeireth-tui 公开 API, 0 假装改 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱), 0 改 workspace version |
 //! | **O-2** | 主 19:33 | 走在前人肩上 — 借鉴前人经验 | wiremock 0.6 + ratatui 0.29 + reqwest 0.12 (业界标准), 0 另起协议 |
 //! | **O-3** | 主 23:44 | 干到底 — 决策立刻沉淀 | 60+ 测试一次落地, lib + 5 src + 1 test + 1 example 8 件套齐全 |
 //! | **O-4** | 主 00:56 | 任何人都能接手 — 文档全开 | 本文件 500+ 行, harness / error / report / 4 e2e 模块全有 module-level doc |
-//! | **O-5** | 主 17:58 | 不假装 — 12 键编译时拒绝 | 9 变体 hardcode + 24 LOCKED 审计 + 8 项承诺源头文件全在, 跳过用 `#[ignore]` + 原因 |
+//! | **O-5** | 主 17:58 | 不假装 — 13 键 (含 PHL-07) 编译时拒绝 | 9 变体 hardcode + 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 审计 + 8 项承诺源头文件全在, 跳过用 `#[ignore]` + 原因 |
 //!
 //! ---
 //!
@@ -61,7 +61,7 @@
 //! 8. **0 改 workspace version** — workspace Cargo.toml `[workspace.package] version = "1.0.0"` 0 行改动
 //!
 //! **本 crate 守的子承诺**:
-//! - 0 触碰 24 LOCKED crate 的 `src/` (per `workspace_e2e::LOCKED_CRATES`)
+//! - 0 触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 的 `src/` (per `workspace_e2e::LOCKED_CRATES`)
 //! - 0 改 parent workspace Cargo.toml (sub-workspace 模式, 跟 `apeireth-rate-limiter` 同款)
 //! - 0 依赖 NewAPI (wiremock 0.6 工业标准)
 //! - 0 重复造轮子 (ratatui TestBackend 现成, wiremock MockServer 现成)
@@ -134,13 +134,13 @@
 //! - [`tui_e2e::test_tui_organ_mind_anchors`]
 //! - [`tui_e2e::test_tui_quit_key_q`]
 //!
-//! ### Workspace e2e (5 测试, 24 LOCKED 审计)
+//! ### Workspace e2e (5 测试, 24 LOCKED crate (入口签名已降级) 审计)
 //! - [`workspace_e2e::test_workspace_cargo_check_passes`]
 //! - [`workspace_e2e::test_workspace_no_locked_violation`]
 //! - [`workspace_e2e::test_workspace_no_sandbox_path_writes`]
 //! - [`workspace_e2e::test_workspace_no_workspace_version_modified`]
 //! - [`workspace_e2e::test_workspace_8_promises_audit_passes`]
-//! - [`workspace_e2e::LOCKED_CRATES`] — 24 LOCKED crate 名字常量数组
+//! - [`workspace_e2e::LOCKED_CRATES`] — 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 名字常量数组
 //!
 //! ### 报告 (4 格式化函数)
 //! - [`report::E2eReport`] / [`report::E2eLayer`] / [`report::E2eLayerReport`] / [`report::TestResult`]
@@ -161,15 +161,15 @@
 //! - [x] **60+ 测试** — 5 workspace + 21 api + 15 tui + 15 report + ~25 src 内单元测试 ≈ 80+
 //! - [x] **`cargo test` 全过** — 单元 + 集成测试集成跑 (per `tests/test_integration_e2e_in_process.rs`)
 //! - [x] **`cargo check` 0 error** — sub-workspace 模式, 不污染 parent
-//! - [x] **0 触碰 24 LOCKED** — 路径全在 `crates/apeireth-integration-e2e/`, 0 写其他 crate
-//! - [x] **6 哲学锚 / 8 项承诺** — 本文件 header 段已写齐
+//! - [x] **0 触碰 24 LOCKED crate (入口签名已降级)** — 路径全在 `crates/apeireth-integration-e2e/`, 0 写其他 crate
+//! - [x] **8 哲学锚 / 8 项承诺** — 本文件 header 段已写齐
 //! - [x] **不主动 commit** — 落到主仓路径, 等主拍板
 //!
 //! ---
 //!
 //! ## 边界 (per 派活单 §12)
 //!
-//! - ❌ **不**改 24 LOCKED crate 的任何 `src/` 或 `Cargo.toml`
+//! - ❌ **不**改 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 的任何 `src/` 或 `Cargo.toml`
 //! - ❌ **不**改 parent workspace Cargo.toml (sub-workspace 模式)
 //! - ❌ **不**改任何已有 crate (本 crate 仅新增文件)
 //! - ❌ **不**写 workspace version (本 crate 自己的 `version = "1.0.0"` 跟 parent 一致, 不修改 parent)
@@ -276,7 +276,7 @@ pub mod prelude {
 // K-1 强校验 — 编译期守住 24 LOCKED / 5 nav / 9 器官 / 6 哲学锚
 // ============================================================================
 
-/// 编译期断言 — 24 LOCKED crate 数量
+/// 编译期断言 — 24 LOCKED crate 数量 (入口签名已降级 — 仅保 3 项不可变脊柱)
 ///
 /// 跟 `workspace_e2e::LOCKED_CRATES.len()` 一致, 防止有人偷偷加第 25 个
 #[allow(dead_code)]
@@ -290,7 +290,7 @@ const _K1_NAV_5: usize = 5;
 #[allow(dead_code)]
 const _K1_ORGANS_9: usize = 9;
 
-/// 编译期断言 — 6 哲学锚
+/// 编译期断言 — 8 哲学锚
 #[allow(dead_code)]
 const _K1_PHI_ANCHORS_6: usize = 6;
 
@@ -370,7 +370,7 @@ mod tests {
         assert_eq!(EIGHT_PROMISES_SOURCE_FILES.len(), 8);
     }
 
-    /// 6 哲学锚穿透 — 6 个标识符都在 lib.rs 头部文档
+    /// 8 哲学锚穿透 — 8 个标识符都在 lib.rs 头部文档
     #[test]
     fn six_phi_anchors_in_header() {
         // 文档硬性要求, 实际验证见 header 注释
@@ -387,7 +387,7 @@ mod tests {
         }
     }
 
-    /// 24 LOCKED crate 全在
+    /// 24 LOCKED crate 全在 (入口签名已降级 — 仅保 3 项不可变脊柱)
     #[test]
     fn locked_crates_all_present() {
         for c in LOCKED_CRATES {
