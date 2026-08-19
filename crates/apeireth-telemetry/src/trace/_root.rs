@@ -676,7 +676,7 @@ const _M3_DEFENSE_CHECK: &str = "
 - [x] 0 PII 暴露: Display 截前 8 hex 字符, 错误消息不含完整 trace_id
 - [x] 0 假装已对接: 2 stub exporter + 2 stub propagator 全部守门
 - [x] K-1 强校验 3 项: trace_id 32 hex + span_id 16 hex + service.name 非空
-- [x] 0 触碰 24 LOCKED crate: 仅本 crate 内操作
-- [x] 0 改 workspace Cargo.toml 其他字段: 仅 + 1 个 members 行 (整合 #2 时)
+- [x] 0 触碰 24 LOCKED crate (R128 入口签名已降级, 仅保 3 项不可变脊柱): 仅本 crate 内操作
+- [x] 0 改 workspace Cargo.toml 其他字段 (workspace.version 1.2.0 双轴制守门): 仅 + 1 个 members 行 (整合 #2 时)
 - [x] 0 改 K-1 强校验: 3 项 K-1 必保留
 ";
