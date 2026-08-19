@@ -535,6 +535,37 @@ export async function fetchPanelEpisodes(
   }
 }
 
+export interface AuditRecord {
+  tool_name?: string;
+  call_content?: string;
+  execution_result?: string;
+  status?: string;
+  success?: boolean;
+  timestamp?: number;
+  created_at?: number;
+  masked?: boolean;
+}
+
+export async function fetchAuditRecords(
+  config: ApeirethConfig,
+  limit = 50,
+  tool?: string,
+): Promise<AuditRecord[]> {
+  try {
+    const query = new URLSearchParams({limit: String(limit)});
+    if (tool) query.set('tool', tool);
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/audit?${query.toString()}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) return [];
+    const data = (await response.json()) as {records?: AuditRecord[]};
+    return data.records || [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * 待批授权请求 — 权限洋葱 (GET /v1/apeireth/approval-requests)
  */
