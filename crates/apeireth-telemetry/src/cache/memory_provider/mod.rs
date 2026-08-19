@@ -45,8 +45,8 @@
 //!
 //! 1. **阶段 1+2+3 LOCKED** — 不动 ✅
 //! 2. **v2 / v4 / v4.1 LOCKED** — 不动 ✅
-//! 3. **24 LOCKED crate** — 不触碰 (本模块在 `apeireth-cache` 内, 该 crate 不在 LOCKED list) ✅
-//! 4. **workspace version 1.0.0** — 不动 ✅
+//! 3. **24 LOCKED crate 入口签名已降级** — 不触碰 (本模块在 `apeireth-cache` 内, 该 crate 不在 LOCKED list) ✅
+//! 4. **workspace version 1.2.0** (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制) — 不动 ✅
 //! 5. **v6 修正** (4 重守门 + 权限发放 + E 层修改路径) — 不动 ✅
 //! 6. **R11 baseline 三值** — 不动 ✅
 //! 7. **v1 → v5 历史链** — 不删除 ✅
