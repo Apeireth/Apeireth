@@ -100,14 +100,15 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # 每个 matrix 显式列出所需 target, 避免单表达式 bug
-          # - deb arm64: cargo deb --target aarch64-unknown-linux-gnu
-          # - tarball arm64: aarch64-unknown-linux-musl (workflow) + x86_64-unknown-linux-musl (script default)
-          # - tarball amd64: x86_64-unknown-linux-musl (script default)
-          # - docker arm64: buildx 跨编译, 不需 host target
-          # - brew: macos universal
-          # - msi/scoop: windows-msvc
-          targets: ${{ matrix.target == 'deb' && (matrix.arch == 'arm64' && 'aarch64-unknown-linux-gnu' || '') || (matrix.target == 'tarball' && (matrix.arch == 'arm64' && 'aarch64-unknown-linux-musl,x86_64-unknown-linux-musl' || 'x86_64-unknown-linux-musl') || (matrix.os == 'macos-13' && 'aarch64-apple-darwin,x86_64-apple-darwin' || ((matrix.target == 'msi' || matrix.target == 'scoop') && 'x86_64-pc-windows-msvc' || '')))) }}
+          # 装所有可能 target (rustup target add 幂等, ~1s/target)
+          # 比嵌套表达式更稳. 覆盖:
+          # - deb arm64: aarch64-unknown-linux-gnu
+          # - tarball arm64: aarch64-unknown-linux-musl + x86_64-unknown-linux-musl (script 默认)
+          # - tarball amd64: x86_64-unknown-linux-musl (script 默认)
+          # - brew (macos-13): aarch64-apple-darwin + x86_64-apple-darwin
+          # - msi/scoop: x86_64-pc-windows-msvc
+          # - docker amd64/arm64: buildx 跨编译不需 host target, 跳过 apt 不报错
+          targets: aarch64-unknown-linux-gnu,aarch64-unknown-linux-musl,x86_64-unknown-linux-musl,aarch64-apple-darwin,x86_64-apple-darwin,x86_64-pc-windows-msvc
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
