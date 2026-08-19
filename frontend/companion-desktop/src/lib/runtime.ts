@@ -631,47 +631,62 @@ export interface CompanionEvent {
 /**
  * 订阅 Apeireth 伴随体事件流 (GET /v1/apeireth/events)
  * 接收后端 CompanionDaemon 涌现问候、反思完成与做梦通知
+ * 支持断线指数退避自动重连 (2s ~ 30s)
  */
 export function subscribeCompanionEvents(
   config: ApeirethConfig,
   onEvent: (event: CompanionEvent) => void,
 ): () => void {
   const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
-  const controller = new AbortController();
+  let active = true;
+  let currentController: AbortController | null = null;
+  let retryDelay = 2000;
 
-  (async () => {
-    try {
-      const response = await fetch(url, {
-        headers: {Authorization: `Bearer ${config.apiKey}`},
-        signal: controller.signal,
-      });
-      if (!response.ok || !response.body) return;
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, {stream: true});
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (trimmed.startsWith('data:')) {
-            const data = trimmed.slice(5).trim();
-            if (data) {
-              onEvent({text: data, ts: Date.now()});
+  async function connectLoop(): Promise<void> {
+    while (active) {
+      currentController = new AbortController();
+      try {
+        const response = await fetch(url, {
+          headers: {Authorization: `Bearer ${config.apiKey}`},
+          signal: currentController.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        retryDelay = 2000; // Reset delay on successful connection
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (active) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              const data = trimmed.slice(5).trim();
+              if (data) {
+                onEvent({text: data, ts: Date.now()});
+              }
             }
           }
         }
+      } catch {
+        // Disconnected or aborted
       }
-    } catch {
-      // stream closed or aborted
+      if (!active) break;
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      retryDelay = Math.min(retryDelay * 1.5, 30000);
     }
-  })();
+  }
+
+  void connectLoop();
 
   return () => {
-    controller.abort();
+    active = false;
+    currentController?.abort();
   };
 }
 
