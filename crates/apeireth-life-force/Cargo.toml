@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 生命力维 (A13 落点 — R14 Phase 4 维度 1 穿透架构: 持续力 + 反思期 + SGI 单字段 + 涌现 + 内稳态)"
+description = "Apeireth 生命力维 (A13 落点 — R14 Phase 4 维度 1 穿透架构: 持续力 + 反思期 + SGI 单字段 + 涌现 + 内稳态). R22 反思期 4 阶段 + R22 涌现识别 + R173 consciousness→life-force bridge 2 + R177 organ_kani_proofs. 6 src 模块 + 63 #[test] + 7 集成"
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }
