@@ -12,6 +12,7 @@
     error = '',
     onSend,
     onStop,
+    onRetry,
     onNewConversation,
   }: {
     config: ApeirethConfig;
@@ -20,8 +21,9 @@
     draft: string;
     busy: boolean;
     error: string;
-    onSend: () => void;
+    onSend: (text?: string) => void;
     onStop: () => void;
+    onRetry?: (messageId: string) => void;
     onNewConversation: () => void;
   } = $props();
 </script>
@@ -52,7 +54,10 @@
         <article class="message-row" class:user={message.role === 'user'} class:assistant={message.role === 'assistant'}>
           <div class="message-avatar">{message.role === 'user' ? '主' : 'A'}</div>
           <div class="message-body">
-            <MessageContent {message} />
+            <MessageContent
+              {message}
+              onRetry={onRetry ? () => onRetry(message.id) : undefined}
+            />
           </div>
         </article>
       {/each}
@@ -74,7 +79,7 @@
         }
       }}
     ></textarea>
-    <button class="primary-button send-button" onclick={onSend} disabled={busy || !draft.trim()} aria-label="发送">
+    <button class="primary-button send-button" onclick={() => onSend()} disabled={busy || !draft.trim()} aria-label="发送">
       {#if busy}<Loader2 size={18}/>{:else}<ArrowUp size={18}/>{/if}
     </button>
   </footer>

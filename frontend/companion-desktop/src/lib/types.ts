@@ -36,6 +36,13 @@ export interface ChatMessage {
   events?: ChatMessageEvent[];
   error?: string;
   streaming?: boolean;
+  aborted?: boolean;
+  reasoning?: string;
+  reasoningDurationMs?: number;
+  provenance?: {
+    count?: number;
+    memories?: string[];
+  };
   taskCard?: TaskCardInfo;
 }
 
