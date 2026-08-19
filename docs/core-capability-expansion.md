@@ -153,3 +153,35 @@
 - `cargo test -p apeireth-memory --lib memory_governance` → 10 passed (update/forget/protect/conflict/persistence/graph-integrity/legacy/invalid/not-found).
 - `cargo test -p apeireth-companion --lib runtime_capabilities` → 11 passed.
 - `cargo build --example companion_serve` PASS.
+
+## Phase 4 — Tool Permission Policy / Grant / Revoke (DONE)
+
+### 扩展现有 PackRegistry (不建第二套 permission engine)
+- `PermissionPack` 已有 expiry (Permanent/Hours/SingleUse) / op_budget / spend_budget / paths / sandbox — 直接复用.
+- 新增 `PackRegistry::list_grants(now)` → `Vec<GrantView>` (active/expired 状态, 供 Tools 页展示).
+- 新增 `PackRegistry::revoke_grant(id)` → bool (即时生效, 下次 evaluate 不再覆盖).
+- 新增 `PackRegistry::evaluate(tool, now)` → `GrantDecision { Allow | Deny | RequireApproval }` (deterministic 评估, 不记账).
+- `GrantView` 不含 secret (有测试).
+
+### Safe Defaults
+- 无覆盖工具 → `RequireApproval` (走 ApprovalManager, 默认需主人批准).
+- 覆盖但过期/无预算 → `Deny`.
+- 无 `allow_everything` 逃生门.
+
+### Master Token 安全
+- grant / revoke 需 master token (`APEIRETH_MASTER_TOKEN` env). token 仅作请求参数校验后丢弃, **不**进响应/audit/log.
+- 不持久化到 frontend / DB.
+
+### API
+- `GET /v1/apeireth/grants` (list, 含 active/expired)
+- `POST /v1/apeireth/grants/evaluate` (deterministic 评估)
+- `POST /v1/apeireth/grants/:id/revoke` (master token, 即时生效)
+- 既有 `POST /v1/apeireth/grant` 现返回 `grant_id` (供后续 revoke).
+
+### Capability Manifest 更新
+- `permissions.revoke/grants.read/policy.read` → supported=true. `policy.write` (持久化策略) 本轮不实现 → unsupported.
+
+### 验证
+- `cargo test -p apeireth-companion --lib packs` → 12 passed (含 5 个 phase4: list/revoke/evaluate/no-secret/expiry-boundary).
+- `cargo test -p apeireth-companion --lib runtime_capabilities` → 12 passed.
+- `cargo build --example companion_serve` PASS.
