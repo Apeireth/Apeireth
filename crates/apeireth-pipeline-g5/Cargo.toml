@@ -5,7 +5,7 @@ edition = "2021"
 rust-version.workspace = true
 authors = ["Apeireth Team"]
 license.workspace = true
-description = "R20 阶段 6 估补: 通用 5 阶段 pipeline 框架 (placeholder, 整合 #3 B-7 R21 续补范畴, 真实实现待 R21+ 重建)"
+description = "通用 5 阶段 pipeline 框架 (circuit_breaker + bounded_reliability + 9 src 模块 + 13 integration tests + 10 organ_kani_proofs, 17+ 编译期 hardcode 守门 K-1 强校验; R20 阶段 6 估补, R21 G-2 已完成真实施)"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
