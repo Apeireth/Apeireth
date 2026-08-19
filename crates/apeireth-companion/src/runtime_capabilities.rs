@@ -164,15 +164,14 @@ pub fn current_manifest() -> CapabilityManifest {
     // --- models: 模型列表 (已存在) ---
     let models = vec![cap("models.list", true, true, false, &["list"])];
 
-    // --- sessions: 后端会话生命周期 ---
-    // Phase 1 起点: 只读 (panel sessions 已存在). mutation 待 Phase 2 接线后打开.
+    // --- sessions: 后端会话生命周期 (Phase 2 已接线 mutation) ---
     let sessions = vec![
         cap("sessions.read", true, true, false, &["list", "get", "timeline"]),
-        cap("sessions.create", false, false, false, &[]),
-        cap("sessions.rename", false, false, false, &[]),
-        cap("sessions.archive", false, false, false, &[]),
-        cap("sessions.restore", false, false, false, &[]),
-        cap("sessions.close", false, false, false, &[]),
+        cap("sessions.create", true, false, true, &["create"]),
+        cap("sessions.rename", true, false, true, &["rename"]),
+        cap("sessions.archive", true, false, true, &["archive"]),
+        cap("sessions.restore", true, false, true, &["restore"]),
+        cap("sessions.close", true, false, true, &["close"]),
     ];
 
     // --- memory: 记忆 ---
@@ -334,12 +333,23 @@ mod tests {
     #[test]
     fn unimplemented_mutations_declared_unsupported() {
         let m = current_manifest();
-        // Phase 1 起点: 这些 mutation 尚未接线, 必须诚实声明 unsupported
-        assert!(!m.is_supported("sessions.create"));
+        // 这些 mutation 尚未接线 (Phase 3/4/5), 必须诚实声明 unsupported.
+        // (sessions.* mutation 已在 Phase 2 接线, 不在此列.)
         assert!(!m.is_supported("memory.forget"));
         assert!(!m.is_supported("memory.protect"));
         assert!(!m.is_supported("permissions.revoke"));
         assert!(!m.is_supported("trace.read"));
+    }
+
+    #[test]
+    fn sessions_mutations_supported_after_phase2() {
+        let m = current_manifest();
+        // Phase 2 接线后: session 生命周期 mutation 全部 supported.
+        assert!(m.is_supported("sessions.create"));
+        assert!(m.is_supported("sessions.rename"));
+        assert!(m.is_supported("sessions.archive"));
+        assert!(m.is_supported("sessions.restore"));
+        assert!(m.is_supported("sessions.close"));
     }
 
     #[test]
