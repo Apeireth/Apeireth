@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth Library Stage 5 governance — policy framework + formal verification + cross-crate consistency (R127 P5-2, per decision-33 §1.4 + decision-55 §2.3)"
+description = "Apeireth Library Stage 5 governance — policy framework + formal verification + cross-crate consistency (R127 P5-2, per decision-33 §1.4 + decision-55 §2.3). strategy + verification + consistency + formal_proof (P8-2 Kani 形式化 Stage 5.1 深化). 7 src 模块 + 112 #[test] + 52 集成"
 
 [lib]
 name = "apeireth_library_governance"

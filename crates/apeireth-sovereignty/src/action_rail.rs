@@ -9,7 +9,7 @@
 //! - 借鉴 Guardrails `_RegisteredActions(Mapping[str, RegisteredAction])` (action_dispatcher.py:52-60)
 //! - 借鉴 Guardrails `ActionDispatcher.register_action / register_actions` 模式 (action_dispatcher.py)
 //! - 借鉴 Guardrails 5 main types of guardrails (Input/Dialog/Retrieval/Execution/Output, README §Types of Guardrails)
-//! - 8 重 = 7 重 v7 + 1 NEW 行动轨 (守门 8 = Action Rail Guard, 借鉴 Guardrails ActionDispatcher)
+//! - 8 重 v8 = 7 重 v7 + 1 NEW 行动轨 (守门 8 = Action Rail Guard, 借鉴 Guardrails ActionDispatcher, lineage v6→v7→v8→v9 中间态)
 //!
 //! **ActionKind 借鉴 Guardrails 5 main types**:
 //! - `Input`     - 借鉴 Guardrails Input rails (用户输入守门)
@@ -22,7 +22,7 @@
 //! **R127-2 P6-3 8 硬墙严守**:
 //! - A1: R11 baseline 3 值 0 改 (不触动 metric crate)
 //! - B1: sovereignty 入口签名 0 改 (本模块是 **新增** mod, 不改现有 pub API)
-//! - B4: 8 重守门 v8 = 7 重 v7 + 1 NEW 行动轨
+//! - B4: 8 重守门 v8 = 7 重 v7 + 1 NEW 行动轨 (lineage v6→v7→v8→v9)
 //! - C2: ✅ 借鉴代码 0 装解除 — 真实施 ActionDispatcher + ActionRegistry
 //! - C3: 0 主动 commit, 0 主动 push
 //!

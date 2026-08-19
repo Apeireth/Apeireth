@@ -227,7 +227,7 @@ pub struct ValueCandidate {
     pub intrinsic_motivation: f64,
     /// 时间戳 (Unix seconds).
     pub timestamp: i64,
-    /// 关联 verdict (来自 apeireth-core 12 键 verdict 守门) — 可选.
+    /// 关联 verdict (来自 apeireth-core 13 键 verdict 守门, baseline 2026-08-19: 12 键 + PHL-07) — 可选.
     pub verdict: Option<PhilosophyVerdict>,
     /// 关联行为目标 (用于演示与回放).
     pub target: Option<ActionTarget>,

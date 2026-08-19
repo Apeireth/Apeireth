@@ -16,8 +16,8 @@
 
 use apeireth_memory_extensions::{
     DiskLruProvider, HybridProvider, InMemoryProvider, MemoryProvider, PostgresProvider,
-    ProviderConfig, ProviderKind, ProviderRegistry, ProviderRegistryBuilder, ProviderScope,
-    RedisProvider, S3Provider, SqliteProvider,
+    ProviderConfig, ProviderKind, ProviderRegistryBuilder, ProviderScope, RedisProvider,
+    S3Provider, SqliteProvider,
 };
 use std::sync::Arc;
 use std::time::Duration;

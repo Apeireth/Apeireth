@@ -21,10 +21,10 @@
 //! 8 硬墙 0 越界 (per 决策 #55 §4 + 决策 #33 §2.3):
 //! - B2 workspace.version 1.2.0 0 改 (本模块不碰 Cargo.toml)
 //! - A1 R11 baseline 3 值 0 改 (本模块无 baseline 文件, 0 触碰)
-//! - B1 24 LOCKED crate 入口签名 0 改 (apeireth-skills 0 24 LOCKED, 加 `pub mod library_stage6_guardianship;` 是加 1 行 mod 注册, 不改入口签名)
+//! - B1 24 LOCKED crate 入口签名已降级 (R128 仅保 3 项不可变脊柱; apeireth-skills 0 24 LOCKED, 加 `pub mod library_stage6_guardianship;` 是加 1 行 mod 注册, 不改入口签名)
 //! - B5 8 哲学锚 (本模块 0 触碰哲学 anchor 文件)
-//! - B3 30 维 (本模块 0 触碰 30 维测度)
-//! - B4 6 重守门 v7 (本模块 0 触碰守门)
+//! - B3 V0.5 24 维 (本模块 0 触碰 24 维测度; R126 P1-4 30 维升级未合入 master)
+//! - B4 9 重 v9 守门 (本模块 0 触碰守门; lineage v6→v7→v8→v9)
 //! - A3 13 键 (本模块 0 触碰 13 键)
 //! - C1 0 主动 commit (本模块改动留到整合 #5 commit 时机)
 //!

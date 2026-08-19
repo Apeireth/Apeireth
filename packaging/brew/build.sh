@@ -41,3 +41,7 @@ cd -
 
 echo "[4/4] brew 产物: ${TAP_DIR}/Formula/apeireth.rb"
 echo "    验证: brew tap apeireth/tap && brew install apeireth/tap/apeireth"
+
+# CI fix: 明确 exit 0 (跟 packaging/{deb,rpm,tarball,msi,scoop,docker}/build.* 一致)
+# brew formula 模板不重算 (依赖 cargo wix + 复杂 sha256), 1.0 release engineer 续补
+exit 0

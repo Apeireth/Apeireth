@@ -14,7 +14,7 @@
 //!   2. **K-1.b** — `stages.len() >= 2` (至少 Request + Verdict)
 //!   3. **K-1.c** — 最后一个 stage 必须是 `VerdictReached` 或 `RationaleStated` (终止态)
 //!
-//! **6 哲学锚穿透**:
+//! **8 哲学锚穿透**:
 //! - **主 22:33 ASI 北极星** — 可解释性让治理透明, 服务"事后可还原 + 主人可审计"
 //! - **主 17:43 实事求是** — rationale 是真实推理, 非装饰
 //! - **主 17:58 不假装** — `try_push_stage` 返回 `Err` 表达真实失败, 不 silent pass
