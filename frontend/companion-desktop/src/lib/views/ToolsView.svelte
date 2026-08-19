@@ -24,17 +24,24 @@
   import LoadingState from '../components/LoadingState.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
-  import type {ApeirethConfig, ApprovalRequestItem, ToolItem} from '../types';
-  import {fetchApprovalRequests, fetchTools, grantToolPermission} from '../runtime';
+  import type {ApeirethConfig, ApprovalRequestItem, CapabilityManifest, ToolItem} from '../types';
+  import {fetchApprovalRequests, fetchGrants, fetchTools, grantToolPermission, revokeGrant, capabilitySupported} from '../runtime';
 
   let {
     config,
+    capabilities = null,
   }: {
     config: ApeirethConfig;
+    capabilities: CapabilityManifest | null;
   } = $props();
+
+  // Capability gating.
+  let canRevoke = $derived(capabilitySupported(capabilities, 'permissions.revoke'));
+  let canListGrants = $derived(capabilitySupported(capabilities, 'permissions.grants.read'));
 
   let tools = $state<ToolItem[]>([]);
   let approvalRequests = $state<ApprovalRequestItem[]>([]);
+  let grants = $state<Array<{id: string; name: string; tools: string[]; expiry: string; active: boolean; expired: boolean; activated_at_ms: number}>>([]);
   let loading = $state(false);
   let error = $state('');
   let searchQuery = $state('');
@@ -51,23 +58,46 @@
   let grantError = $state('');
   let grantSuccess = $state(false);
 
+  // Revoke modal state (Phase 4).
+  let revokingGrant = $state<{id: string; name: string} | null>(null);
+  let revokeTokenDraft = $state('');
+  let revokeBusy = $state(false);
+  let revokeError = $state('');
+
   async function loadData() {
     loading = true;
     error = '';
     try {
-      const [toolsRes, approvalsRes] = await Promise.all([
+      const [toolsRes, approvalsRes, grantsRes] = await Promise.all([
         fetchTools(config).catch((e) => {
           error = e instanceof Error ? e.message : String(e);
           return [];
         }),
         fetchApprovalRequests(config).catch(() => []),
+        canListGrants ? fetchGrants(config).catch(() => []) : Promise.resolve([]),
       ]);
       tools = toolsRes;
       approvalRequests = approvalsRes;
+      grants = grantsRes;
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     } finally {
       loading = false;
+    }
+  }
+
+  async function executeRevoke(): Promise<void> {
+    if (!revokingGrant) return;
+    revokeBusy = true;
+    revokeError = '';
+    const r = await revokeGrant(config, revokingGrant.id, revokeTokenDraft);
+    revokeBusy = false;
+    revokeTokenDraft = '';
+    if (r.ok) {
+      revokingGrant = null;
+      await loadData();
+    } else {
+      revokeError = r.error || '撤销失败';
     }
   }
 
@@ -244,8 +274,78 @@
         {/each}
       </div>
     {/if}
+
+    {#if canListGrants && grants.length > 0}
+      <div class="grants-section">
+        <h3 class="section-subtitle">活跃授权 (Grants)</h3>
+        <div class="grant-list">
+          {#each grants as g}
+            <div class="grant-card" class:expired={g.expired}>
+              <div class="grant-head">
+                <strong>{g.name}</strong>
+                <StatusBadge
+                  label={g.active ? '活跃' : g.expired ? '已过期' : '不可用'}
+                  variant={g.active ? 'green' : 'neutral'}
+                  size="small"
+                />
+              </div>
+              <div class="grant-tools">{g.tools.join(', ')}</div>
+              <div class="grant-meta">时效：{g.expiry}</div>
+              {#if canRevoke}
+                <button
+                  class="revoke-btn"
+                  disabled={!g.active}
+                  onclick={() => { revokingGrant = {id: g.id, name: g.name}; revokeTokenDraft = ''; revokeError = ''; }}
+                >
+                  撤销
+                </button>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
   </div>
 </section>
+
+{#if revokingGrant}
+  <div class="modal-backdrop" onclick={() => (revokingGrant = null)} role="presentation">
+    <div
+      class="modal-dialog"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      tabindex="-1"
+      aria-modal="true"
+    >
+      <div class="modal-header">
+        <h3>撤销授权：{revokingGrant.name}</h3>
+        <button class="modal-close-btn" onclick={() => (revokingGrant = null)} aria-label="关闭">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">撤销后下次权限评估即时生效。需 Master Token 验证 (不持久化)。</p>
+        {#if revokeError}
+          <div class="grant-error">{revokeError}</div>
+        {/if}
+        <label class="field-label" for="revoke-token-input">Master Token</label>
+        <input
+          id="revoke-token-input"
+          type="password"
+          class="token-input"
+          placeholder="Master Token"
+          bind:value={revokeTokenDraft}
+          autocomplete="off"
+        />
+      </div>
+      <div class="modal-foot">
+        <button class="secondary-button" onclick={() => (revokingGrant = null)}>取消</button>
+        <button class="primary-button" onclick={executeRevoke} disabled={revokeBusy || !revokeTokenDraft.trim()}>
+          {revokeBusy ? '撤销中…' : '确认撤销'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Tool Details Modal -->
 {#if selectedTool}
@@ -767,5 +867,104 @@
   }
   :global(.spin) {
     animation: spin 1s linear infinite;
+  }
+
+  .grants-section {
+    margin-top: 24px;
+  }
+  .section-subtitle {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: var(--text, #e6e6e6);
+  }
+  .grant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .grant-card {
+    padding: 10px 12px;
+    border: 1px solid var(--border, rgba(255,255,255,0.08));
+    border-radius: 8px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    align-items: center;
+  }
+  .grant-card.expired {
+    opacity: 0.55;
+  }
+  .grant-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .grant-tools {
+    font-size: 12px;
+    color: var(--text-dim, #999);
+    grid-column: 1 / 2;
+  }
+  .grant-meta {
+    font-size: 11px;
+    color: var(--text-dim, #777);
+    grid-column: 1 / 2;
+  }
+  .revoke-btn {
+    grid-row: 1 / 4;
+    grid-column: 2 / 3;
+    align-self: center;
+    padding: 4px 12px;
+    font-size: 12px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    cursor: pointer;
+  }
+  .revoke-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .modal-hint {
+    font-size: 12px;
+    color: var(--text-dim, #999);
+    margin-bottom: 12px;
+  }
+  .grant-error {
+    font-size: 12px;
+    color: #ef4444;
+    margin-bottom: 8px;
+  }
+  .field-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim, #aaa);
+    margin-bottom: 4px;
+  }
+  .token-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border, rgba(255,255,255,0.12));
+    background: var(--bg-input, rgba(0,0,0,0.3));
+    color: var(--text, #e6e6e6);
+    font-size: 13px;
+  }
+  .modal-foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 20px;
+    border-top: 1px solid var(--border, rgba(255,255,255,0.08));
+  }
+  .secondary-button {
+    padding: 7px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--border, rgba(255,255,255,0.15));
+    background: transparent;
+    color: var(--text, #ccc);
+    cursor: pointer;
+    font-size: 13px;
   }
 </style>
