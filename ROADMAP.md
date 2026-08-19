@@ -148,10 +148,10 @@ cherry-pick:     进行中 (master HEAD 在 pick d1912c53 — feat(companion): �
 | **5 拆 crate 真接** | per 决策 #21 Phase 4 | 持续 |
 | **4 协议 handler trait 真接** | per R123-2 + R125-1/13 | 持续 |
 | **守门 v8+** | NVIDIA Guardrails + 借鉴 | 持续 |
-| **30 维 V0.5 + 9 子测度结构** (B3 实施) | per R125-13 + P1-4 | 持续 |
+| **30 维 V0.5 + 9 子测度结构** (B3 实施, 当前 24 维 — 升级未合) | per R125-13 + P1-4 (P1-4 待真实施) | 持续 |
 | **8 哲学锚 → 12+ 锚** (B5 升 12) | per R126 P1-2 升级 | 持续 |
-| **13 键 → 16+ 键** (新增 PHL-08/09/10) | per R125-12 P0-3 升级 | 持续 |
-| **7 重守门 v7 → 9 重 v9** | per P1-3 升级 | 持续 |
+| **13 键 → 16+ 键** (新增 PHL-08/09/10, 当前 13 键 — PHL-07 仍待合并 core) | per R125-12 P0-3 升级 | 持续 |
+| **9 重守门 v9 → v11+** (v6→v7→v8→v9 已完成, 未来 v10+) | per P1-3 升级 (已 done 到 v9) | 持续 |
 
 **v2.0 关键约束**：0 主动 push 仍严守（per §10）；R128+ 升级派活 = 16 派满策略（per 旧决策 #33 §4）。
 
@@ -162,18 +162,18 @@ cherry-pick:     进行中 (master HEAD 在 pick d1912c53 — feat(companion): �
 | 硬墙 | 旧状态 | 当前实际 (8/19) | 来源 |
 |---|---|---|---|
 | **B1** 24 LOCKED 入口签名冻结 | 严守 | **降级**：仅保 3 项不可变脊柱（Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义），其余可重构 | 决策 #74 §1.1 + #130 §2.4 + **R148** (CHANGELOG §2.5) |
-| **B2** workspace.version | 1.2.0 严守 | **解除**：1.0 release 时已归 1.0.0 (RELEASE_NOTES 8/18); v1.5/v2.0 可调 | 决策 #130 §2.4 + 8/18 实际 |
+| **B2** workspace.version | 1.2.0 严守 | **解除 + 双轴制**：产品轴 = git tag `v1.0.0` (8/18 发布)，workspace 轴 = `1.2.0` (`Cargo.toml:228`, B2 升级严守)。顶层 README 明确"双轴制" (v1.0.0 product; workspace crates 1.2.0); v1.5/v2.0 可调 | 决策 #130 §2.4 + 顶层 README 双轴说明 |
 | **A1** R11 baseline 3 值 0.8682/0.8532/0.9063 | 严守 | **仍严守**：17 文件原位 0 删 0 改 (per `crates/apeireth-asi/tests/integration_r_measure.rs:42-44`) | 决策 #33 §2.1 + 旧 #55 §4 |
-| **A2** R11 9 子测度结构 | 严守 | **仍严守**：结构不动，数字可调 | 决策 #33 §2.2 |
-| **A3** 12 键 + PHL-07 = 13 键 | 严守 | **仍严守**：PHL-07 NotUnoptimizable 接受实施 | 决策 #33 §2.1 + R125-12 P0-3 done |
-| **B3** V0.5 25→30 维 | 升级版严守 | ✅ R125-13 done (60 tests 30 维 sum=1.0) | 决策 #33 §2.1 + R125-13 |
-| **B4** 守门 6→7 重 v7 | 升级版严守 | ✅ 升 7 重（+ Colang DSL + Superpowers Skill Guard） | 决策 #33 §2.1 + P1-3 retry |
+| **A2** R11 9 子测度结构 | 严守 | **仍严守**：结构不动，数字可调 (代码 `V1136_SUBMEASURE_COUNT: usize = 9`) | 决策 #33 §2.2 |
+| **A3** 12 键 + PHL-07 = 13 键 | 严守 | **仍严守**：PHL-07 NotUnoptimizable 接受实施 (但 `apeireth-core/src/lib.rs` philosophy.rs 仍 hardcode `[PhilosophyKey; 12]` — PHL-07 待合并) | 决策 #33 §2.1 + R125-12 P0-3 done |
+| **B3** V0.5 25→30 维 | 升级版未实施 | ⏳ 当前实际 **`V05_DIM_COUNT: usize = 24`** (`apeireth-asi/src/lib.rs:56`); 30 维升级 (R126 P1-4) 在 master HEAD `9bf36b1e` **未合入** (git log 搜 "P1-4 / 30 维 / v05.*30" 全0 命中); 升级是 v2.0 长期路线 | 决策 #33 §2.1 + 实际代码 |
+| **B4** 守门 v6→v7→v8→v9 | 升级版实施 | ✅ **9 重 v9** 实施: v6 (colang_dsl) → v7 (skill_guard + seven_fold_guard, R126-guard-7) → v8 (action_rail + flow_executor, R127-2 P6-3) → v9 (evidence_guard, R131) | `crates/apeireth-sovereignty/src/lib.rs:65-83` lineage |
 | **B5** 6→8 哲学锚 | 升级版严守 | ✅ 升 8 锚（+ S-3 质量工程化 + O-1 安全优先） | 决策 #33 §2.1 + R126 P1-2 |
 | **B6** 双→三洋葱 | 升级版严守 | ✅ 升三洋葱（+ DSL 洋葱, R125-5 done） | 决策 #22 §2.6 |
 | **B7** 9 organ 内部 fn 借 OpenCode | 严守 | **降级**：9 organ 文件名 + 入口签名 0 改，内部 fn 可借（实施进度未跟踪到 done） | 决策 #22 §2.7 |
 | **C1** 0 主动 commit | 严守 | **解除**：Mavis 全自决 commit (per 决策 #126); 本次 ROADMAP 更新按 doc-change commit | 决策 #126 |
 | **C2** 0 装 PASS 严守 | 严守 | **仍严守**：✅ cloned = 真实施, ⏳ 限流 = 准备 (诚实标), ❌ 跳过 (OpenCog AGPL-3.0 = 0 集成) | 决策 #33 §2.3 + R125-16 retry verify |
-| **C3** 6→7 重 v6→v7 | 严守 | ✅ 升 v7 (P1-3 retry done) | 决策 #33 §2.3 + 决策 #55 §4 |
+| **C3** 守门 v6→v9 lineage | 严守 | ✅ 升 v9 (lineage: v6 → v7 → v8 → v9, 决策 #52/55/#130) | 决策 #33 §2.3 + 决策 #55 §4 |
 | **0 主动 push** | 严守 | **仍严守**：等 1.0 release 配 GitHub remote (主人拍板) | 决策 #33 §2.3 + #53 §1 + #55 §7 |
 
 **小结**：旧"8 硬墙"11 项中，6 项解除 / 降级 (B1, B2, B7, C1 + 24 LOCKED 形式撤销 per R148)，5 项仍严守 (A1, A2, A3, C2, 0 主动 push)。
