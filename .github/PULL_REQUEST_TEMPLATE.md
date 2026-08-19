@@ -5,7 +5,7 @@
     - https://github.com/tokio-rs/tokio/blob/master/.github/PULL_REQUEST_TEMPLATE.md
     - https://github.com/qdrant/qdrant/blob/master/.github/PULL_REQUEST_TEMPLATE.md
   硬约束 (per CONTRIBUTING.md §0 触碰实查 + rust.yml hard-walls job):
-    - 0 触碰 23 LOCKED crate (per hard-walls job, 实际清单)
+    - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
     - 0 改 workspace.version (1.2.0 semver 严守)
     - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
     - R11 baseline 在 `crates/apeireth-asi/tests/integration_r_measure.rs` (编译期 const)
@@ -42,7 +42,7 @@
 
 <!-- 任务要的 5 项 1:1, 提交前必跑实查 -->
 
-- [ ] **0 触碰 23 LOCKED crate** (per hard-walls job 实际清单, 23 个: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
+- [ ] **0 触碰 24 LOCKED crate** (per hard-walls job 实际清单, 24 个: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
 - [ ] **0 改 workspace.version** (1.2.0 semver 严守, per `docs/versioning/`)
 - [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `crates/apeireth-asi/tests/integration_r_measure.rs`)
 - [ ] **cargo test pass** (`cargo test --workspace` 全绿 + `cargo test --doc` 全绿)
