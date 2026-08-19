@@ -252,10 +252,7 @@ impl Journal {
     /// Filter entries by child_id (immutable iterator).
     ///
     /// 入口签名 0 改 (B1): 0 触碰 supervisor 现有 fn.
-    pub fn filter_child<'a>(
-        &'a self,
-        child_id: &'a str,
-    ) -> impl Iterator<Item = &'a JournalEntry> {
+    pub fn filter_child<'a>(&'a self, child_id: &'a str) -> impl Iterator<Item = &'a JournalEntry> {
         self.entries.iter().filter(move |e| e.child_id == child_id)
     }
 
@@ -348,8 +345,7 @@ mod tests {
             HostCallResult::Deferred,
             HostCallResult::Error,
         ] {
-            let e = JournalEntry::new(0, HostCallKind::Health, "x", 1, json!(null))
-                .with_result(r);
+            let e = JournalEntry::new(0, HostCallKind::Health, "x", 1, json!(null)).with_result(r);
             assert_eq!(e.result, r);
         }
     }
@@ -360,9 +356,27 @@ mod tests {
     fn journal_append_assigns_monotonic_seq() {
         let mut j = Journal::new();
         // Pass arbitrary seq values; journal reassigns them.
-        let s0 = j.append(JournalEntry::new(999, HostCallKind::Health, "a", 1, json!(null)));
-        let s1 = j.append(JournalEntry::new(999, HostCallKind::Health, "b", 1, json!(null)));
-        let s2 = j.append(JournalEntry::new(999, HostCallKind::Health, "c", 1, json!(null)));
+        let s0 = j.append(JournalEntry::new(
+            999,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
+        let s1 = j.append(JournalEntry::new(
+            999,
+            HostCallKind::Health,
+            "b",
+            1,
+            json!(null),
+        ));
+        let s2 = j.append(JournalEntry::new(
+            999,
+            HostCallKind::Health,
+            "c",
+            1,
+            json!(null),
+        ));
         assert_eq!(s0, 0);
         assert_eq!(s1, 1);
         assert_eq!(s2, 2);
@@ -382,9 +396,27 @@ mod tests {
     #[test]
     fn journal_filter_kind_isolates() {
         let mut j = Journal::new();
-        j.append(JournalEntry::new(0, HostCallKind::Health, "a", 1, json!(null)));
-        j.append(JournalEntry::new(0, HostCallKind::RestartRequest, "b", 1, json!(null)));
-        j.append(JournalEntry::new(0, HostCallKind::Health, "c", 1, json!(null)));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::RestartRequest,
+            "b",
+            1,
+            json!(null),
+        ));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "c",
+            1,
+            json!(null),
+        ));
         let healths: Vec<&JournalEntry> = j.filter_kind(HostCallKind::Health).collect();
         assert_eq!(healths.len(), 2);
         assert_eq!(healths[0].child_id, "a");
@@ -394,9 +426,27 @@ mod tests {
     #[test]
     fn journal_filter_child_isolates() {
         let mut j = Journal::new();
-        j.append(JournalEntry::new(0, HostCallKind::Health, "a", 1, json!(null)));
-        j.append(JournalEntry::new(0, HostCallKind::Health, "b", 1, json!(null)));
-        j.append(JournalEntry::new(0, HostCallKind::Health, "a", 1, json!(null)));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "b",
+            1,
+            json!(null),
+        ));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
         let a_entries: Vec<&JournalEntry> = j.filter_child("a").collect();
         assert_eq!(a_entries.len(), 2);
     }
@@ -404,12 +454,24 @@ mod tests {
     #[test]
     fn journal_clear_resets() {
         let mut j = Journal::new();
-        j.append(JournalEntry::new(0, HostCallKind::Health, "a", 1, json!(null)));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
         assert_eq!(j.len(), 1);
         j.clear();
         assert!(j.is_empty());
         // After clear, next append starts at seq 0 again.
-        let s = j.append(JournalEntry::new(0, HostCallKind::Health, "b", 1, json!(null)));
+        let s = j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "b",
+            1,
+            json!(null),
+        ));
         assert_eq!(s, 0);
     }
 
@@ -417,14 +479,20 @@ mod tests {
 
     #[test]
     fn journal_entry_serde_roundtrip() {
-        let e = JournalEntry::new(0, HostCallKind::SnapshotRequest, "snap", 7, json!({"id":"s1"}))
-            .with_output(json!({"ok":true}))
-            .with_result(HostCallResult::Ok)
-            .with_determinism(DeterminismMeta {
-                host_pid: 42,
-                logical_clock: 100,
-                rng_seed: 0,
-            });
+        let e = JournalEntry::new(
+            0,
+            HostCallKind::SnapshotRequest,
+            "snap",
+            7,
+            json!({"id":"s1"}),
+        )
+        .with_output(json!({"ok":true}))
+        .with_result(HostCallResult::Ok)
+        .with_determinism(DeterminismMeta {
+            host_pid: 42,
+            logical_clock: 100,
+            rng_seed: 0,
+        });
         let s = serde_json::to_string(&e).expect("serialize");
         let back: JournalEntry = serde_json::from_str(&s).expect("deserialize");
         assert_eq!(e, back);
@@ -435,9 +503,25 @@ mod tests {
         // chidori 借鉴: journal 持久化为 JSONL (每行一个 entry). 验证每行
         // 可独立 parse.
         let mut j = Journal::new();
-        j.append(JournalEntry::new(0, HostCallKind::Health, "a", 1, json!(null)));
-        j.append(JournalEntry::new(0, HostCallKind::RestartRequest, "b", 1, json!(null)));
-        let lines: Vec<String> = j.entries().iter().map(|e| serde_json::to_string(e).unwrap()).collect();
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::Health,
+            "a",
+            1,
+            json!(null),
+        ));
+        j.append(JournalEntry::new(
+            0,
+            HostCallKind::RestartRequest,
+            "b",
+            1,
+            json!(null),
+        ));
+        let lines: Vec<String> = j
+            .entries()
+            .iter()
+            .map(|e| serde_json::to_string(e).unwrap())
+            .collect();
         assert_eq!(lines.len(), 2);
         // Each line is a valid JournalEntry
         for line in &lines {
