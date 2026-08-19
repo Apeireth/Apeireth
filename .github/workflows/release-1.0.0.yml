@@ -100,7 +100,14 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target == 'docker' && '' || (matrix.arch == 'arm64' && 'aarch64-unknown-linux-musl' || (matrix.os == 'macos-13' && 'aarch64-apple-darwin,x86_64-apple-darwin' || (matrix.target == 'msi' && 'x86_64-pc-windows-msvc' || (matrix.target == 'scoop' && 'x86_64-pc-windows-msvc' || '')))) }}
+          # 每个 matrix 显式列出所需 target, 避免单表达式 bug
+          # - deb arm64: cargo deb --target aarch64-unknown-linux-gnu
+          # - tarball arm64: aarch64-unknown-linux-musl (workflow) + x86_64-unknown-linux-musl (script default)
+          # - tarball amd64: x86_64-unknown-linux-musl (script default)
+          # - docker arm64: buildx 跨编译, 不需 host target
+          # - brew: macos universal
+          # - msi/scoop: windows-msvc
+          targets: ${{ matrix.target == 'deb' && (matrix.arch == 'arm64' && 'aarch64-unknown-linux-gnu' || '') || (matrix.target == 'tarball' && (matrix.arch == 'arm64' && 'aarch64-unknown-linux-musl,x86_64-unknown-linux-musl' || 'x86_64-unknown-linux-musl') || (matrix.os == 'macos-13' && 'aarch64-apple-darwin,x86_64-apple-darwin' || ((matrix.target == 'msi' || matrix.target == 'scoop') && 'x86_64-pc-windows-msvc' || '')))) }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -111,6 +118,11 @@ jobs:
       - name: "Install system deps (Linux: libdbus)"
         if: matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      # tarball 用 musl 静态链接, 需要 musl-tools (x86_64-linux-musl-gcc / aarch64-linux-musl-gcc)
+      - name: "Install system deps (tarball: musl-tools)"
+        if: (matrix.os == 'ubuntu-22.04' || matrix.os == 'ubuntu-latest') && matrix.target == 'tarball'
+        run: sudo apt-get install -y musl-tools
 
       - name: cargo build --release --workspace --locked
         run: cargo build --release --workspace --locked
