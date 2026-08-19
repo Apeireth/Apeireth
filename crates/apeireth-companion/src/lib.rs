@@ -124,8 +124,8 @@ pub mod topic_groups; // §5.1: 记忆主题分组 + 主题索引注入 (VCP Sem
 pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
 pub mod voice_session; // 连续感知①: 麦克风实时语音会话桥 (STT→对话→TTS 编排, SpeechIO trait 口) // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录, CompanionApp 接线层)
                        // R177: organ invariants
-pub mod vm_sandbox; // 2026-08-19 Stage 2 microVM 隔离 (借鉴 Firecracker minimal API + libkrun backend 抽象; 0 装 PASS trait 口, 接 libkrun/Hyperlight/Firecracker 后启用)
 mod organ_kani_proofs;
+pub mod vm_sandbox; // 2026-08-19 Stage 2 microVM 隔离 (借鉴 Firecracker minimal API + libkrun backend 抽象; 0 装 PASS trait 口, 接 libkrun/Hyperlight/Firecracker 后启用)
 
 use std::sync::Arc;
 use thiserror::Error;
@@ -222,8 +222,8 @@ pub use tone::{
 };
 pub use tool_bridge::{RecallMemoryTool, ToolBridge};
 pub use vm_sandbox::{
-    default_vm_sandbox, validate_config, NoopVMSandbox, VMSandbox, VMSandboxBackend, VMSandboxConfig,
-    VMSandboxHandle, VMSandboxState,
+    default_vm_sandbox, validate_config, NoopVMSandbox, VMSandbox, VMSandboxBackend,
+    VMSandboxConfig, VMSandboxHandle, VMSandboxState,
 };
 pub use world_model::{
     CounterfactualChain, MockTimelineLlm, TextualSimulator, TimelineContext, TimelineLlm,

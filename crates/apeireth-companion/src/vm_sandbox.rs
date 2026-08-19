@@ -183,7 +183,11 @@ pub struct VMSandboxHandle {
 
 impl VMSandboxHandle {
     /// 构造 handle (0 装路径: 仅内部 trait 实现可调用, 用户拿不到).
-    pub(crate) fn new(inner: Box<dyn VMSandbox>, config: VMSandboxConfig, state: VMSandboxState) -> Self {
+    pub(crate) fn new(
+        inner: Box<dyn VMSandbox>,
+        config: VMSandboxConfig,
+        state: VMSandboxState,
+    ) -> Self {
         Self {
             inner,
             config,
@@ -409,10 +413,7 @@ mod tests {
     #[test]
     fn backend_parse_aliases() {
         // 借鉴 libkrun 宽容 alias
-        assert_eq!(
-            VMSandboxBackend::parse("HV"),
-            VMSandboxBackend::Hypervisor
-        );
+        assert_eq!(VMSandboxBackend::parse("HV"), VMSandboxBackend::Hypervisor);
         assert_eq!(
             VMSandboxBackend::parse("default"),
             VMSandboxBackend::PlatformDefault
