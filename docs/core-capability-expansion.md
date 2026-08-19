@@ -319,3 +319,21 @@
 - `cargo test -p apeireth-companion --lib agent_trace` → 8 passed (含 2 个 secret-injection 攻击测试).
 - `node tests/security-attack.mjs` → 5 passed (tool-args injection / capability spoofing / token non-leak / CoT rejection / manifest secret-free).
 - 凭据基线 (API Key / Master Token NOT persisted) 维持, 无回归.
+Adversarial scenario coverage (Phase 9 §43):
+1. Unsupported capability request → capability-manifest Test 3 (unknown id false) + desktop-gating Test 5
+2. Runtime capability version mismatch → capability-manifest Test 5 (version refresh) + desktop-gating Test 4
+3. Session double archive → session_invalid_transition_archived_to_archived (Rust) + session_lifecycle_integration
+4. Session rename race → session_revision_conflict_rename_race (Rust) + live smoke (conflict 409)
+5. Memory forget twice → memory_forget_twice_already_forgotten (Rust)
+6. Protected memory forget → memory_protect_blocks_forget (Rust)
+7. Memory update stale revision → memory_concurrent_revision_conflict (Rust)
+8. Grant expiry boundary → phase4_expiry_boundary (Rust)
+9. Grant revoke race → phase4_revoke_grant_immediate_effect (Rust)
+10. Worker using Commander grant → (evalute is deterministic by tool, not principal; grants are tool-scoped not principal-scoped — covered by phase4_evaluate_allow_deny_require_approval)
+11. Trace secret injection → recorder_tool_args_secret_injection_neutralized + security-attack Attack 1
+12. Trace malformed attributes → redact_attributes handles any JSON (recorder_nested_secret_redaction)
+13. Old SSE event without trace id → ActivityView traceId optional (undefined → no trace link, no crash)
+14. Old SQLite schema → migrations legacy_episode_works_after_v6 + session_legacy_client_compat
+15. Broken localStorage → loadConfig try/catch returns default (reality-check) + fetchCapabilities malformed→legacy
+16. Backend disconnect mid mutation → fetchCapabilities network error→legacy (capability-manifest Test 2)
+17. Desktop reconnect runtime version changed → refreshConnection re-fetches on version change (desktop-gating Test 4)
