@@ -1395,6 +1395,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/v1/panel",
             apeireth_api::panel_readonly::panel_router(store_for_panel),
         )
+        // Core Capability Expansion Phase 5: Agent 执行轨迹查询 (只读, /v1/panel 合理位置).
+        .route("/v1/panel/traces", get(traces_list))
+        .route("/v1/panel/traces/:id", get(trace_detail))
         .with_state(state.clone());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
@@ -1742,6 +1745,61 @@ async fn memory_episode_unprotect(
     match MemoryGovernanceStore::unprotect_episode(&*st.store, &id, expected_rev) {
         Ok(g) => Json(json!(g)).into_response(),
         Err(e) => governance_err_response(e),
+    }
+}
+
+// ============================================================
+// Core Capability Expansion Phase 5 — Agent Trace 查询 HTTP (只读)
+// /v1/panel/traces (list) + /v1/panel/traces/:id (detail, span 树).
+// 实时 span 事件通过现有 /v1/apeireth/events SSE 推送 (type=trace).
+// ============================================================
+
+use apeireth_memory::TraceStore;
+
+#[derive(serde::Deserialize)]
+struct TracesListQuery {
+    limit: Option<usize>,
+}
+
+/// GET /v1/panel/traces — 列出最近 traces (摘要: trace_id + root span + span_count).
+async fn traces_list(
+    State(st): State<Arc<AppState>>,
+    axum::extract::Query(q): axum::extract::Query<TracesListQuery>,
+) -> impl IntoResponse {
+    let limit = q.limit.unwrap_or(50).min(500);
+    match TraceStore::list_recent_traces(&*st.store, limit) {
+        Ok(traces) => {
+            let count = traces.len();
+            Json(json!({"count": count, "traces": traces})).into_response()
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "internal", "message": e.to_string()})),
+        )
+            .into_response(),
+    }
+}
+
+/// GET /v1/panel/traces/:id — 读取单 trace 的完整 span 树 (按 started_at 升序).
+async fn trace_detail(
+    State(st): State<Arc<AppState>>,
+    Path(id): Path<String>,
+) -> impl IntoResponse {
+    match TraceStore::list_trace_spans(&*st.store, &id) {
+        Ok(spans) if !spans.is_empty() => {
+            let count = spans.len();
+            Json(json!({"trace_id": id, "count": count, "spans": spans})).into_response()
+        }
+        Ok(_) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "not_found", "message": format!("trace `{id}` not found")})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": "internal", "message": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
