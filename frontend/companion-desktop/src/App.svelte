@@ -1,11 +1,12 @@
 <script lang="ts">
   import {onMount} from 'svelte';
-  import {Layers3, MessageCircleMore, MessagesSquare, Settings, Wrench} from 'lucide-svelte';
+  import {Activity, Layers3, MessageCircleMore, MessagesSquare, Settings, Wrench} from 'lucide-svelte';
   import Sidebar from './app/Sidebar.svelte';
   import ChatView from './features/chat/ChatView.svelte';
   import ConversationsView from './features/conversations/ConversationsView.svelte';
-  import MemoryView from './features/memory/MemoryView.svelte';
+  import ActivityCenterView from './features/activity/ActivityCenterView.svelte';
   import ToolRegistryView from './features/tools/ToolRegistryView.svelte';
+  import MemoryView from './features/memory/MemoryView.svelte';
   import SettingsView from './features/settings/SettingsView.svelte';
   import type {ApeirethConfig, ApprovalRequest, ChatMessage, ChatMessageEvent, Conversation, HealthState, ViewId} from './lib/types';
   import {
@@ -22,6 +23,7 @@
   const nav = [
     {id: 'chat', label: '对话', icon: MessageCircleMore},
     {id: 'conversations', label: '会话', icon: MessagesSquare},
+    {id: 'activity', label: '活动', icon: Activity},
     {id: 'tools', label: '工具', icon: Wrench},
     {id: 'memory', label: '记忆', icon: Layers3},
     {id: 'settings', label: '设置', icon: Settings},
@@ -400,6 +402,8 @@
         onArchive={archiveConversation}
         onDelete={deleteConversation}
       />
+    {:else if activeView === 'activity'}
+      <ActivityCenterView {config} />
     {:else if activeView === 'tools'}
       <ToolRegistryView {config} />
     {:else if activeView === 'memory'}
