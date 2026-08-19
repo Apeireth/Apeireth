@@ -128,7 +128,10 @@ mod tests {
             "STAGE_1_NOOP_NETWORK_ISOLATION_AVAILABLE 编译期必须为 false (0 装 PASS 红线)"
         );
         let n = NoopNetworkIsolation;
-        assert!(!n.available(), "NoopNetworkIsolation::available() 必须返 false");
+        assert!(
+            !n.available(),
+            "NoopNetworkIsolation::available() 必须返 false"
+        );
     }
 
     /// 2. 编译期恒 `false` 守门 — Stage 2 `NoopVMSandbox` 不假装可用.
@@ -189,7 +192,10 @@ mod tests {
             "NoopVMSandbox::status 必须说明真接路径: {status}"
         );
         // backends() 0 装期必须空 (0 backend = 0 假装).
-        assert!(v.backends().is_empty(), "NoopVMSandbox::backends() 0 装必须空");
+        assert!(
+            v.backends().is_empty(),
+            "NoopVMSandbox::backends() 0 装必须空"
+        );
         // backend() 0 装期固定 PlatformDefault.
         assert_eq!(
             v.backend(),
@@ -227,14 +233,12 @@ mod tests {
         // S-3 质量工程化 (NEW): 0 装 PASS 用 const 断言 + 单测守门, 不可被简单 eprintln 绕过.
         // 守门: 4 个 const 都必须在文件里被声明且语义自洽.
         assert!(
-            !STAGE_1_NOOP_NETWORK_ISOLATION_AVAILABLE
-                && !STAGE_2_NOOP_VM_SANDBOX_AVAILABLE,
+            !STAGE_1_NOOP_NETWORK_ISOLATION_AVAILABLE && !STAGE_2_NOOP_VM_SANDBOX_AVAILABLE,
             "S-3 质量工程化: 0 装 PASS 编译期 const 守门必须恒 false"
         );
         // 错误字串必须显式含 "未实装" 标记 (S-3 不可绕过).
         assert!(
-            SANDBOX_NET_0PASS_ERROR.contains("未实装")
-                && SANDBOX_VM_0PASS_ERROR.contains("未实装"),
+            SANDBOX_NET_0PASS_ERROR.contains("未实装") && SANDBOX_VM_0PASS_ERROR.contains("未实装"),
             "S-3 质量工程化: 0 装错误字串必须显式 '未实装' 标记"
         );
         // O-1 安全优先 (NEW): 0 装 = 0 假装, 0 接受 "为通过测试而注入假 backend".
@@ -281,7 +285,10 @@ mod tests {
         let cfg = VMSandboxConfig::default();
         assert_eq!(cfg.vcpus, 1, "0 装 default vcpus 必须 1 (Firecracker 底线)");
         assert_eq!(cfg.memory_mb, 512, "0 装 default memory_mb 必须 512");
-        assert_eq!(cfg.boot_timeout_secs, 30, "0 装 default boot_timeout_secs 必须 30");
+        assert_eq!(
+            cfg.boot_timeout_secs, 30,
+            "0 装 default boot_timeout_secs 必须 30"
+        );
         assert!(cfg.rootfs.is_none(), "0 装 default rootfs 必须 None");
         assert!(cfg.kernel.is_none(), "0 装 default kernel 必须 None");
         assert!(cfg.initrd.is_none(), "0 装 default initrd 必须 None");
@@ -358,11 +365,8 @@ mod tests {
         let vm = NoopVMSandbox;
         assert!(vm.start(&cfg).is_err(), "NoopVMSandbox 0 装必须 Err");
         // VMSandboxHandle Drop 自动 halt (借鉴 libkrun Resource 清理).
-        let mut h = VMSandboxHandle::new(
-            Box::new(NoopVMSandbox),
-            cfg.clone(),
-            VMSandboxState::Booted,
-        );
+        let mut h =
+            VMSandboxHandle::new(Box::new(NoopVMSandbox), cfg.clone(), VMSandboxState::Booted);
         assert!(!h.is_halted(), "构造后未 halt");
         h.halt().expect("halt 必 Ok");
         assert!(h.is_halted(), "halt 后必须 is_halted=true");
