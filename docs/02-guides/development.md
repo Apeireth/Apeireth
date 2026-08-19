@@ -1,16 +1,33 @@
 # Apeireth Development Guide
 
-> 对齐实际工作流（2026-08-18）。给想参与开发的人：构建/测试/代码地图/纪律。
+> 对齐实际工作流（2026-08-19 post-1.0.0）。给想参与开发的人：构建/测试/代码地图/纪律。
 
 ## 构建与测试
 
 ```bash
-cargo build --workspace              # 85 crates 全量构建
+cargo build --workspace              # 85 + 1 desktop crates 全量构建
 cargo check --workspace --all-targets  # 编译全 target（含 examples/bins/tests）— 必跑
-cargo test --workspace               # 368 组 0 失败（含真实 API 压测，带退避）
+cargo test --workspace               # 23,874 组 0 失败（含 post-1.0.0 增量）
+cargo test -p apeireth-cron --test integration_cron  # cron 25 case integration tests
 cargo test -p apeireth-companion --lib  # 伙伴器官 644 测试（最快的核心反馈环）
 cargo fmt --all --check              # 格式
 ```
+
+## 前端开发 (companion-desktop, post-1.0.0 新增)
+
+`frontend/companion-desktop/` 是**独立 [workspace]** (Svelte 5 + Tauri 2), 不在 root cargo workspace.
+其 CI 守门在 `.github/workflows/companion-desktop-ci.yml` 单独跑 (cargo check Tauri shell + pnpm svelte-check + 8 硬墙).
+
+```bash
+# 前置: Node 20+ + pnpm 9+ (Windows: WebView2 runtime)
+cd frontend/companion-desktop
+pnpm install
+pnpm dev                            # Vite + Svelte (http://localhost:1420)
+pnpm check                          # svelte-check (类型 + 语法)
+```
+
+> 真实 LLM 流式 (CoT + tool_call + tool_result SSE) 仍 deferred (TP34 v1.5 中期). 当前 `stream: false` 写死,
+> 前端 6 种 RuntimeEvent 中部分不可触发, mock SSE e2e 跑通. 详见 `docs/04-internal/next-team-handbook.md` TP34.
 
 **注意**：`cargo test --workspace` 不编译 examples——改公共结构后必须 `--all-targets`。
 
@@ -44,6 +61,17 @@ cargo fmt --all --check              # 格式
 | `apeireth-http-client::egress` | 出站默认拒绝 + 审计链 |
 | `apeireth-guard` | PII 脱敏 |
 | `apeireth-companion::job_object` | Windows Job Object 沙箱 |
+
+### CI 守门 (post-1.0.0 加固)
+
+| workflow | 守门内容 |
+|---|---|
+| `rust.yml` | cargo nextest (3 OS matrix) + 8 硬墙 job (LOCKED / version / R11 baseline / 13 键 / V1136) |
+| `companion-desktop-ci.yml` | cargo check (Tauri shell) + pnpm svelte-check + 8 硬墙 |
+| `pii-leak-detection.yml` | 8 关键词 grep (防前轮 11 轮 filter-repo 清洗回潮) |
+| `release-1.0.0.yml` | 8 包齐发矩阵 (deb/rpm/brew/scoop/tarball/msi/docker×2) + 5/5 gate |
+
+详见 `docs/04-internal/ci-fix-log-2026-08.md` 历史 + `docs/04-internal/next-team-handbook.md` 排期.
 
 ## 机制设计模式（本项目特色）
 
