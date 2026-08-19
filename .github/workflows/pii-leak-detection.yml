@@ -1,0 +1,124 @@
+name: PII leak detection (防回潮)
+
+# 2026-08-19 前: 11 轮 git filter-repo 清洗 PII 关键词.
+# 2026-08-19 后: 此 workflow 周期性检查 + manual, 防未来 commit 再引入 PII.
+#
+# 关键词源 (per handover doc "PII 隐私清洗 (本会话前段, 11 轮 git filter-repo 完成)"):
+#   - 警号 / 警校 / 东乡族 / 甘肃农村 / 甘肃养老 / 31683 / 东乡语 / 治安学
+#
+# 检查范围: tracked files in HEAD (排除 binary / vendor / .git/refs/original / docs/archive/)
+# 触发: daily cron + workflow_dispatch + push master (立即检测)
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # 每天 UTC 06:00 (= 北京 14:00)
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+# 防并发同分支多跑 (节省 CI 分钟)
+concurrency:
+  group: pii-leak-detection-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # =========================================================================
+  # PII 关键词 grep (per handover doc PII 清洗列表)
+  # =========================================================================
+  pii-grep:
+    name: PII 关键词 grep (tracked files)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 需 git history (虽只用 HEAD 内容, fetch-depth=0 简化逻辑)
+
+      - name: PII 关键词扫描
+        env:
+          # 6 个核心 PII 关键词 (per handover doc, filter-repo 已替换)
+          PII_PATTERNS: |
+            警号
+            警校
+            东乡族
+            甘肃农村
+            甘肃养老
+            31683
+            东乡语
+            治安学
+        run: |
+          echo "=== PII leak detection: 扫描 tracked files ==="
+          HITS=0
+          PATTERNS_HITS=()
+
+          # 排除列表 (允许出现的合法上下文):
+          # - docs/archive/ (历史归档, filter-repo 前内容)
+          # - research/source/ (上游源码引用, 含第三方代码可能含这些词)
+          # - .git/refs/original (filter-repo 备份, 不应扫描)
+          # - *.lock (Cargo.lock 含第三方元数据)
+          # - node_modules/, target/, dist/ (build artifacts)
+          EXCLUDES=(
+            ':(exclude)docs/archive/**'
+            ':(exclude)research/source/**'
+            ':(exclude).git/**'
+            ':(exclude)Cargo.lock'
+            ':(exclude)frontend/companion-desktop/pnpm-lock.yaml'
+            ':(exclude)frontend/companion-desktop/src-tauri/Cargo.lock'
+            ':(exclude)**/target/**'
+            ':(exclude)**/node_modules/**'
+            ':(exclude)**/dist/**'
+            ':(exclude)**/build/**'
+            ':(exclude)**/*.png'
+            ':(exclude)**/*.jpg'
+            ':(exclude)**/*.jpeg'
+            ':(exclude)**/*.gif'
+            ':(exclude)**/*.ico'
+            ':(exclude)**/*.icns'
+            ':(exclude)**/*.pdf'
+            ':(exclude)**/*.zip'
+            ':(exclude)**/*.tar.gz'
+          )
+
+          # 仅扫 tracked + text files (binary 已排除)
+          # 用 git grep 避免 .git/index 干扰
+          for PATTERN in $(echo "$PII_PATTERNS"); do
+            echo ""
+            echo "--- 扫描: $PATTERN ---"
+            # git grep + pathspec exclude
+            HITS_FOR_PATTERN=$(git grep -lI "$PATTERN" -- . "${EXCLUDES[@]}" 2>/dev/null || true)
+            if [ -n "$HITS_FOR_PATTERN" ]; then
+              echo "❌ 发现 '$PATTERN' 在以下文件:"
+              echo "$HITS_FOR_PATTERN" | while IFS= read -r f; do echo "  - $f"; done
+              PATTERNS_HITS+=("$PATTERN")
+              HITS=$((HITS+1))
+            else
+              echo "✅ 未发现 '$PATTERN'"
+            fi
+          done
+
+          echo ""
+          echo "=================================================="
+          if [ $HITS -gt 0 ]; then
+            echo "  ❌ PII 检测 FAIL: ${#PATTERNS_HITS[@]} 个关键词命中"
+            echo "  关键词: ${PATTERNS_HITS[*]}"
+            echo ""
+            echo "  这是 8 硬墙'0 主动 commit'的反模式 — 应:"
+            echo "  1. 立刻 git revert 或 git commit --amend 移除 PII"
+            echo "  2. 参考 docs/04-internal/ci-fix-log-2026-08.md 的 PII 清洗流程"
+            echo "  3. 如需保留上下文 (e.g. 引用历史), 改用匿名化标签 (USER_A / LOC_X)"
+            echo "=================================================="
+            exit 1
+          fi
+          echo "  ✅ PII 检测 PASS: 0 关键词命中"
+          echo "=================================================="
+
+      - name: 报告 (success)
+        if: success()
+        run: |
+          echo "PII 扫描周期: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "扫描范围: HEAD tracked text files (excludes archive/ research/source/ binary)"
+          echo "8 关键词: 警号 / 警校 / 东乡族 / 甘肃农村 / 甘肃养老 / 31683 / 东乡语 / 治安学"
+          echo "结果: 0 命中 ✅"
