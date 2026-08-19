@@ -443,6 +443,98 @@ export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
   return checkJson(response) as Promise<unknown[]>;
 }
 
+export interface GraphFact {
+  subject: string;
+  predicate: string;
+  object: string;
+  confidence?: number;
+  id?: string;
+}
+
+export interface GraphLink {
+  source: string;
+  target: string;
+  relation: string;
+  id?: string;
+}
+
+export interface GraphData {
+  facts_count: number;
+  links_count: number;
+  facts: GraphFact[];
+  links: GraphLink[];
+}
+
+export async function fetchGraphData(
+  config: ApeirethConfig,
+  params?: {subject?: string; predicate?: string; object?: string; limit?: number},
+): Promise<GraphData> {
+  const query = new URLSearchParams();
+  if (params?.subject) query.set('subject', params.subject);
+  if (params?.predicate) query.set('predicate', params.predicate);
+  if (params?.object) query.set('object', params.object);
+  if (params?.limit) query.set('limit', String(params.limit));
+
+  const response = await fetch(
+    `${normalizeBaseUrl(config.baseUrl)}/v1/panel/graph?${query.toString()}`,
+    {headers: {Authorization: `Bearer ${config.apiKey}`}},
+  );
+  if (!response.ok) {
+    return {facts_count: 0, links_count: 0, facts: [], links: []};
+  }
+  return (await response.json()) as GraphData;
+}
+
+export interface StreamEntry {
+  id: string;
+  subject_id: string;
+  session_id: string;
+  created_at: number;
+  payload: string;
+  source: string;
+  tags?: string[];
+}
+
+export async function fetchMemoryStreams(
+  config: ApeirethConfig,
+  kind = 'reflection',
+  limit = 50,
+): Promise<StreamEntry[]> {
+  try {
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/streams?kind=${kind}&limit=${limit}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) return [];
+    const data = (await response.json()) as {entries?: StreamEntry[]};
+    return data.entries || [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchPanelEpisodes(
+  config: ApeirethConfig,
+  q?: string,
+  limit = 100,
+): Promise<MemoryEpisode[]> {
+  try {
+    const query = new URLSearchParams({limit: String(limit)});
+    if (q) query.set('q', q);
+    const response = await fetch(
+      `${normalizeBaseUrl(config.baseUrl)}/v1/panel/memory/episodes?${query.toString()}`,
+      {headers: {Authorization: `Bearer ${config.apiKey}`}},
+    );
+    if (!response.ok) {
+      return fetchEpisodes(config, limit);
+    }
+    const data = (await response.json()) as {episodes?: MemoryEpisode[]};
+    return data.episodes || [];
+  } catch {
+    return fetchEpisodes(config, limit);
+  }
+}
+
 /**
  * 待批授权请求 — 权限洋葱 (GET /v1/apeireth/approval-requests)
  */
