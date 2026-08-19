@@ -111,6 +111,8 @@ pub mod reflexion; // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRIT
 pub mod restricted_token; // S1: Windows 受限 token (CreateRestrictedToken + TokenIntegrityLevel + DACL)
 pub mod runtime_brain;
 pub mod sandbox; // B3 + S1: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + 完整性级别 + deny-only SID + 目录 ACL 根 + AppContainer 档 + Sandboxie/landlock trait 留口)
+pub mod sandbox_net; // 2026-08-19 Stage 1 网络隔离 (借鉴 Firecracker minimal API + libkrun netns; Linux netns+cgroup / Windows WFP 接入点)
+pub mod sandbox_pass; // Stage 1+2 0 装 PASS 编译期 const 守门 (sandbox_net.rs / vm_sandbox.rs 契约源, 7 单测 0 装 PASS 红线)
 pub mod screen_perception; // 连续感知②: 屏幕显著性事件 (窗口切换/聚焦/空闲, ScreenEventSource trait 口)
 pub mod security;
 pub mod session_log;
@@ -122,6 +124,7 @@ pub mod topic_groups; // §5.1: 记忆主题分组 + 主题索引注入 (VCP Sem
 pub mod value_cases; // F6: 价值内化 (案例库 + 裁决记录 + 主人反馈回流 → 原则候选, 确定性无 LLM)
 pub mod voice_session; // 连续感知①: 麦克风实时语音会话桥 (STT→对话→TTS 编排, SpeechIO trait 口) // 机制件运行时聚合 (E4 好奇 + F1 情绪 + F4 假设 + TP21 目录, CompanionApp 接线层)
                        // R177: organ invariants
+pub mod vm_sandbox; // 2026-08-19 Stage 2 microVM 隔离 (借鉴 Firecracker minimal API + libkrun backend 抽象; 0 装 PASS trait 口, 接 libkrun/Hyperlight/Firecracker 后启用)
 mod organ_kani_proofs;
 
 use std::sync::Arc;
@@ -200,6 +203,10 @@ pub use prompt_assembler::{
 };
 pub use prompt_cache::{assemble_tiered, build_messages, redact_secrets};
 pub use reflection::ReflectionScheduler;
+pub use sandbox_net::{
+    assert_isolated, default_network_isolation, NetworkIsolation, NetworkIsolationConfig,
+    NetworkIsolationLevel, NoopNetworkIsolation,
+};
 pub use security::SecurityGate;
 pub use session_log::{SessionEvent, SessionLog};
 pub use simulation::{run_simulation, SimReport, SimulatedUser, XorShift64};
@@ -214,6 +221,10 @@ pub use tone::{
     DeliberationEcho, ToneError, ToneRefiner,
 };
 pub use tool_bridge::{RecallMemoryTool, ToolBridge};
+pub use vm_sandbox::{
+    default_vm_sandbox, validate_config, NoopVMSandbox, VMSandbox, VMSandboxBackend, VMSandboxConfig,
+    VMSandboxHandle, VMSandboxState,
+};
 pub use world_model::{
     CounterfactualChain, MockTimelineLlm, TextualSimulator, TimelineContext, TimelineLlm,
     TimelineStep,
