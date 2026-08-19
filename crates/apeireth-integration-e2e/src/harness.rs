@@ -54,7 +54,7 @@ pub const DEFAULT_HEIGHT: u16 = 24;
 /// 6 类 V2 endpoint 总数 (per v2_endpoints §3)
 pub const V2_ENDPOINT_GROUPS: u8 = 6;
 
-/// 6 哲学锚 数量 (per APEIRETH-CONVENTIONS §0.2)
+/// 8 哲学锚 数量 (per baseline S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5)
 pub const SIX_PHI_ANCHORS: u8 = 6;
 
 /// 5 nav 数 (per TuiApp::NavPage)
