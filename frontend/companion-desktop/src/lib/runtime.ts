@@ -12,6 +12,8 @@ import type {
   MemoryEpisodeItem,
   ToolItem,
   ApprovalRequestItem,
+  CapabilityManifest,
+  Capability,
 } from './types';
 
 
@@ -531,6 +533,113 @@ export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
 // ============================================================
 // Backend Real API Fetchers (Activity, Memory, Tools, Sessions)
 // ============================================================
+
+// ------------------------------------------------------------
+// Runtime Capability Manifest — 能力发现 (不再 404-probing)
+// ------------------------------------------------------------
+
+/**
+ * 拉取 Runtime Capability Manifest.
+ *
+ * 启动流程: 先 health → 再 capabilities.
+ * 当 runtime 无原生 `/v1/apeireth/capabilities` 端点 (旧 runtime) 时,
+ * 回落到保守的 legacy profile — 只声明历史契约证明存在的只读/对话能力,
+ * 绝不推测 mutation. UI 据此降级 (mutation 按钮 disabled/隐藏).
+ *
+ * 404 仅作为 legacy fallback 触发条件, 不作为长期协议设计.
+ */
+export async function fetchCapabilities(config: ApeirethConfig): Promise<CapabilityManifest> {
+  const base = normalizeBaseUrl(config.baseUrl);
+  try {
+    const res = await fetch(`${base}/v1/apeireth/capabilities`, {
+      headers: config.apiKey ? {Authorization: `Bearer ${config.apiKey}`} : {},
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) {
+      // 非 200 → legacy fallback (不抛错, 不弄死 Desktop)
+      return legacyCapabilityManifest();
+    }
+    const data = (await res.json()) as CapabilityManifest;
+    // 基本校验: 必须有 schema_version + capabilities 数组, 否则视为损坏 → legacy
+    if (
+      typeof data.schema_version !== 'number' ||
+      !Array.isArray(data.capabilities) ||
+      !data.runtime ||
+      typeof data.runtime.service !== 'string'
+    ) {
+      return legacyCapabilityManifest();
+    }
+    return data;
+  } catch {
+    // 网络错误/超时 → legacy fallback
+    return legacyCapabilityManifest();
+  }
+}
+
+/**
+ * 查询 manifest 是否支持某 capability ID. 未知 ID 一律返回 false (保守).
+ * null manifest (尚未加载) 也返回 false.
+ */
+export function capabilitySupported(manifest: CapabilityManifest | null, id: string): boolean {
+  if (!manifest) return false;
+  for (const group of manifest.capabilities) {
+    for (const cap of group.capabilities) {
+      if (cap.id === id) return cap.supported === true;
+    }
+  }
+  return false;
+}
+
+/** 查找某 capability 完整声明 (跨组). */
+export function findCapability(manifest: CapabilityManifest | null, id: string): Capability | null {
+  if (!manifest) return null;
+  for (const group of manifest.capabilities) {
+    for (const cap of group.capabilities) {
+      if (cap.id === id) return cap;
+    }
+  }
+  return null;
+}
+
+/**
+ * Legacy 兼容 profile: runtime 无原生 manifest 端点时的保守声明.
+ * 只声明经过历史契约证明存在的能力 (chat / health / models / 只读 panel 端点).
+ * 不推测任何 mutation — memory.forget / sessions.create / permissions.revoke 等一律 unsupported.
+ */
+export function legacyCapabilityManifest(): CapabilityManifest {
+  const cap = (id: string, supported: boolean, read: boolean, write: boolean, ops: string[]): Capability => ({
+    id,
+    supported,
+    read,
+    write,
+    version: 1,
+    operations: ops,
+  });
+  return {
+    schema_version: 1,
+    runtime: {service: 'apeireth-legacy-runtime', version: 'unknown'},
+    legacy: true,
+    capabilities: [
+      {name: 'chat', capabilities: [cap('chat.completions', true, true, true, ['stream'])]},
+      {name: 'health', capabilities: [cap('health', true, true, false, ['check'])]},
+      {name: 'models', capabilities: [cap('models.list', true, true, false, ['list'])]},
+      {name: 'sessions', capabilities: [cap('sessions.read', true, true, false, ['list', 'timeline'])]},
+      {name: 'memory', capabilities: [cap('memory.read', true, true, false, ['list', 'search'])]},
+      {name: 'tools', capabilities: [cap('tools.list', true, true, false, ['list'])]},
+      {
+        name: 'permissions',
+        capabilities: [cap('permissions.requests.read', true, true, false, ['list'])],
+      },
+      {
+        name: 'activity',
+        capabilities: [
+          cap('activity.sse', true, true, false, ['subscribe']),
+          cap('activity.audit', true, true, false, ['list']),
+        ],
+      },
+    ],
+  };
+}
 
 /** 获取真实后端会话列表 (只读数据) */
 export async function fetchBackendSessions(config: ApeirethConfig): Promise<Array<{id: string; started_at: number; last_active_at: number; closed_at?: number; episode_count: number}>> {
