@@ -444,6 +444,53 @@ export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
 }
 
 /**
+ * 待批授权请求 — 权限洋葱 (GET /v1/apeireth/approval-requests)
+ */
+export async function fetchPendingApprovals(config: ApeirethConfig): Promise<import('./types').ApprovalRequest[]> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/approval-requests`, {
+      headers: {Authorization: `Bearer ${config.apiKey}`},
+    });
+    if (!response.ok) return [];
+    return (await response.json()) as import('./types').ApprovalRequest[];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 主人授权放行 (POST /v1/apeireth/grant)
+ */
+export async function grantApproval(
+  config: ApeirethConfig,
+  tool: string,
+  hours = 1,
+  masterToken = '',
+): Promise<{ok: boolean; error?: string}> {
+  try {
+    const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/grant`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify({
+        tool,
+        hours,
+        master_token: masterToken,
+      }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return {ok: false, error: (data as {error?: string}).error || `HTTP ${response.status}`};
+    }
+    return {ok: true};
+  } catch (caught) {
+    return {ok: false, error: caught instanceof Error ? caught.message : String(caught)};
+  }
+}
+
+/**
  * 会话持久化 — 存 localStorage (前端侧). Apeireth 后端记忆走 companion memory,
  * 这里只存 UI 会话历史.
  */
