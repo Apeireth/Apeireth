@@ -1,0 +1,187 @@
+name: companion-desktop CI
+
+# frontend/companion-desktop/ 是独立 pnpm workspace + 独立 [workspace] 的 Tauri 2 crate,
+# 不在根 cargo workspace, 故 rust.yml / release-1.0.0.yml 不覆盖.
+# 此 workflow 是 companion-desktop 唯一 CI gate, 防 Svelte 5 UI / Tauri shell 退化.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'frontend/companion-desktop/**'
+      - '.github/workflows/companion-desktop-ci.yml'
+  pull_request:
+    branches: [master]
+    paths:
+      - 'frontend/companion-desktop/**'
+      - '.github/workflows/companion-desktop-ci.yml'
+  workflow_dispatch:
+
+# 复用 rust.yml 的 cache group, 避免 cargo 缓存碎片化
+concurrency:
+  group: companion-desktop-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+jobs:
+  # =========================================================================
+  # 1. Tauri shell (Rust) 编译 + 静态检查
+  # =========================================================================
+  tauri-shell:
+    name: cargo check (Tauri shell)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # WebKitGTK-4.1 + librsvg + libdbus 系统库 (Tauri 2 链接)
+      - name: "Install system deps (Tauri: webkit/gtk/dbus)"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libdbus-1-dev \
+            pkg-config \
+            build-essential \
+            curl wget file
+
+      - name: Cache cargo (Tauri shell)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'frontend/companion-desktop/src-tauri -> target'
+
+      - name: cargo check (Tauri shell)
+        working-directory: frontend/companion-desktop/src-tauri
+        run: cargo check --workspace --all-targets
+
+  # =========================================================================
+  # 2. Svelte 5 UI 类型/语法检查 (pnpm + svelte-check)
+  # =========================================================================
+  svelte-ui:
+    name: pnpm svelte-check (Svelte 5 UI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/companion-desktop/pnpm-lock.yaml'
+
+      - name: pnpm install
+        working-directory: frontend/companion-desktop
+        run: pnpm install --frozen-lockfile
+
+      - name: pnpm check (svelte-check)
+        working-directory: frontend/companion-desktop
+        run: pnpm check
+
+  # =========================================================================
+  # 3. 8 硬墙守门 — 确认 companion-desktop 没有偷偷碰 LOCKED crate
+  # =========================================================================
+  hard-walls:
+    name: 8 硬墙守门 (无 LOCKED 触碰 / version  不变)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect base SHA
+        id: base
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base_sha=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            # push: 取上一次成功的 master commit (排除自身)
+            BASE=$(git rev-parse HEAD~1)
+            echo "base_sha=$BASE" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: "守门: 0 触碰 24 LOCKED crate"
+        run: |
+          BASE="${{ steps.base.outputs.base_sha }}"
+          if [ -z "$BASE" ]; then
+            echo "::warning::base_sha 空, 跳过守门"
+            exit 0
+          fi
+          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+          HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' | grep -E "crates/($(echo $LOCKED | tr ' ' '|'))/" || true)
+          if [ -n "$HITS" ]; then
+            echo "::error::LOCKED crate 被触碰: $HITS"
+            exit 1
+          fi
+          echo "✅ 0 触碰 24 LOCKED crate"
+
+      - name: "守门: workspace.version 不变"
+        run: |
+          BASE="${{ steps.base.outputs.base_sha }}"
+          if [ -z "$BASE" ]; then exit 0; fi
+          # root Cargo.toml workspace.version 必须保持 1.2.0 (per 8 硬墙)
+          CUR=$(grep -E '^version\s*=' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "workspace.version = $CUR"
+          if [ "$CUR" != "1.2.0" ]; then
+            echo "::error::workspace.version 改动: $CUR (期望 1.2.0)"
+            exit 1
+          fi
+          echo "✅ workspace.version 1.2.0 不变"
+
+      - name: "守门: companion-desktop 是独立 workspace"
+        run: |
+          # companion-desktop/src-tauri/Cargo.toml 顶层必须有 [workspace],
+          # 否则 会污染 root workspace (24 LOCKED crate 进 cargo test --workspace).
+          if ! head -3 frontend/companion-desktop/src-tauri/Cargo.toml | grep -q '^\[workspace\]'; then
+            echo "::error::companion-desktop/src-tauri/Cargo.toml 缺顶层 [workspace] (会污染 root)"
+            exit 1
+          fi
+          # 反向检查: root Cargo.toml members 不能含 frontend/companion-desktop/src-tauri
+          if grep -q 'frontend/companion-desktop' Cargo.toml; then
+            echo "::error::root Cargo.toml members 包含 frontend/companion-desktop (污染)"
+            exit 1
+          fi
+          echo "✅ companion-desktop 是独立 workspace"
+
+  # =========================================================================
+  # 4. ci-gate — 3/3 job 成功才算 green
+  # =========================================================================
+  ci-gate:
+    name: companion-desktop CI gate (3/3)
+    runs-on: ubuntu-latest
+    needs: [tauri-shell, svelte-ui, hard-walls]
+    if: always()
+    steps:
+      - name: Check all 3 jobs succeeded
+        run: |
+          if [[ "${{ needs.tauri-shell.result }}" != "success" ]]; then
+            echo "❌ tauri-shell failed: ${{ needs.tauri-shell.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.svelte-ui.result }}" != "success" ]]; then
+            echo "❌ svelte-ui failed: ${{ needs.svelte-ui.result }}"
+            exit 1
+          fi
+          if [[ "${{ needs.hard-walls.result }}" != "success" ]]; then
+            echo "❌ hard-walls failed: ${{ needs.hard-walls.result }}"
+            exit 1
+          fi
+          echo "================================================"
+          echo "  ✅ companion-desktop CI gate: 3/3 success"
+          echo "================================================"
