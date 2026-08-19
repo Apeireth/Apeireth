@@ -263,17 +263,6 @@ mod tests {
         )
     }
 
-    fn make_persist_config(path: &str) -> ProviderConfig {
-        ProviderConfig::new(
-            format!("sqlite://{path}"),
-            Duration::from_secs(5),
-            1024 * 1024,
-            true, // 文件
-            Duration::from_secs(0),
-            ProviderScope::Shared,
-        )
-    }
-
     // ----- 10 unit tests -----
 
     #[test]
