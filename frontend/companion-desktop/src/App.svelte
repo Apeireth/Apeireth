@@ -18,6 +18,8 @@
     loadConversations,
     saveConfig,
     saveConversations,
+    subscribeCompanionEvents,
+    type CompanionPresentationState,
   } from './lib/runtime';
 
   const nav = [
@@ -37,11 +39,24 @@
   let busy = $state(false);
   let error = $state('');
   let pendingApprovals = $state<ApprovalRequest[]>([]);
+  let isReasoning = $state(false);
+  let isExecutingTool = $state(false);
+  let proactiveGreeting = $state('');
+
   // runtime 绑定当前配置; config 变更时在 saveSettings 重建
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
 
   // Phase 5E: 真实 runtime health 状态 (connecting/ready/generating/error/offline)
   let healthState = $state<HealthState>('connecting');
+
+  // 后端信号驱动的伴随体表现态 (严禁前端造假)
+  const companionPresentation = $derived.by<CompanionPresentationState>(() => {
+    if (pendingApprovals.length > 0) return 'concerned';
+    if (isExecutingTool) return 'working';
+    if (isReasoning) return 'thinking';
+    if (busy) return 'speaking';
+    return 'idle';
+  });
 
   // 设置视图临时值 (初始从持久化配置读取, 编辑期间独立)
   let editBaseUrl = $state(loadConfig().baseUrl);
@@ -178,6 +193,8 @@
 
     if (!customText) draft = '';
     busy = true;
+    isReasoning = false;
+    isExecutingTool = false;
     healthState = 'generating';
     error = '';
 
@@ -220,6 +237,7 @@
         },
         (event) => {
           if (event.type === 'text-delta') {
+            isReasoning = false;
             if (!reasoningEndTime && reasoningStartTime) {
               reasoningEndTime = Date.now();
               const duration = reasoningEndTime - reasoningStartTime;
@@ -227,8 +245,10 @@
             }
             appendDelta(conversationId, assistantMessage.id, event.text);
           } else if (event.type === 'reasoning-delta') {
+            isReasoning = true;
             appendReasoningDelta(conversationId, assistantMessage.id, event.text);
           } else if (event.type === 'tool-call') {
+            isExecutingTool = true;
             appendMessageEvent(conversationId, assistantMessage.id, {
               id: `${event.requestId}-${event.tool}`,
               kind: 'tool',
@@ -238,6 +258,7 @@
               ts: Date.now(),
             });
           } else if (event.type === 'tool-result') {
+            isExecutingTool = false;
             appendMessageEvent(conversationId, assistantMessage.id, {
               id: `${event.requestId}-${event.tool}`,
               kind: 'tool',
@@ -262,6 +283,8 @@
       }
     } finally {
       busy = false;
+      isReasoning = false;
+      isExecutingTool = false;
       // 生成结束: 恢复真实 health (backend 可能已离线)
       await refreshConnection();
     }
@@ -360,11 +383,24 @@
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
     void refreshConnection();
+
+    // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知)
+    const unsubscribeEvents = subscribeCompanionEvents(config, (event) => {
+      proactiveGreeting = event.text;
+      window.setTimeout(() => {
+        if (proactiveGreeting === event.text) proactiveGreeting = '';
+      }, 12000);
+    });
+
     // 后台健康轮询与审批请求同步 (真实 HTTP /health + /v1/apeireth/approval-requests)
     const timer = window.setInterval(() => {
       void refreshConnection();
     }, 10000);
-    return () => window.clearInterval(timer);
+
+    return () => {
+      window.clearInterval(timer);
+      unsubscribeEvents();
+    };
   });
 </script>
 
@@ -374,6 +410,9 @@
     bind:activeView
     {healthState}
     {healthLabel}
+    companionState={companionPresentation}
+    proactiveText={proactiveGreeting}
+    onDismissProactive={() => proactiveGreeting = ''}
     onNewConversation={newConversation}
   />
 
