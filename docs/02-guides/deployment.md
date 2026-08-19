@@ -62,7 +62,7 @@ http://127.0.0.1:8090/v1  (模型 MiniMax-M3, Key 任意非空)
 ## 生产注意事项
 
 - **默认无认证**：伙伴端点接受任意 Bearer——本地单用户场景设计；公网部署前必须接真实令牌/网关
-- **出站策略**：`apeireth-http-client::egress` 默认不启用（None=放行）；启用后白名单外域名默认拒绝 + 审计链——LLM 调用域名需入白名单
+- **出站策略**：`apeireth-http-client::egress` 默认不启用（None=放行）；启用后白名单外域名默认拒绝 + 审计链——LLM 调用域名需入白名单（**trait 口已备, 实装待补** per backlog S4 P1 未实施, 2026-08-18 复核）
 - **工具审批**：高危工具（FileOperator/ShellExec 等）默认需主人批准；`APEIRETH_GRANT` 显式扩权
 - **Docker**：`Dockerfile` 已就绪（3-stage/multi-arch/distroless+nonroot/健康检查），**构建实测待补**（当前环境无 docker，如实标注）
 
