@@ -12,7 +12,7 @@
 //! **不修改承诺**:
 //! - ❌ 0 改 `apeireth-mcp/src/` (LOCKED, calendar 不走 mcp, 走 Tool trait)
 //! - ❌ 0 改 `apeireth-tool-registry/src/` (LOCKED, 仅实现 Tool trait, 不改 trait 定义)
-//! - ❌ 0 改 workspace version (1.0.0)
+//! - ❌ 0 改 workspace version (1.2.0)
 
 use std::collections::HashMap;
 use std::sync::Arc;

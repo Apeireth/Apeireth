@@ -11,7 +11,7 @@
 //! **背景** (R137 主人提示):
 //! - 我们之前已借鉴模仿了很多 (R17 战役 2-5 已 5 trait 真实现)
 //! - R137 不从零新建, 而是扩展现有 `apeireth-tools/file_ops`
-//! - 不破坏 24 LOCKED 约束 (owner: apeireth-tools, 我们只在它上层扩展)
+//! - 不破坏 24 LOCKED 约束 (R128 入口签名已降级, 仅保 3 项不可变脊柱; owner: apeireth-tools, 我们只在它上层扩展)
 //!
 //! **架构**:
 //! `

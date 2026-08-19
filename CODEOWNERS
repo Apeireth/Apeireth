@@ -14,7 +14,7 @@
 /README.md             @chuling
 /ROADMAP.md            @chuling
 
-# 7 LOCKED 文档 (per APEIRETH-CONVENTIONS)
+# 7 LOCKED 文档 (per APEIRETH-CONVENTIONS, 8 hard-walls 之一)
 /docs/APEIRETH-CONVENTIONS.md  @chuling
 /docs/APEIRETH-VERSIONING.md   @chuling
 /docs/APEIRETH-GLOSSARY.md     @chuling
@@ -27,7 +27,9 @@
 /docs/v6-baseline-architecture/ @chuling
 /docs/stage4/R11-baseline.md    @chuling
 
-# 24 LOCKED crate
+# 24 LOCKED crate (per .github/workflows/rust.yml hard-walls job, 2026-08-19 同步)
+# 注: hard-walls job 实际锁 23 个 (缺 apeireth-graph), 这是漂移
+#      修 hard-walls job 之前这里先加回, 保持 1:1
 /crates/apeireth-supervisor/   @chuling
 /crates/apeireth-agent/        @chuling
 /crates/apeireth-council/      @chuling
@@ -64,4 +66,7 @@
 # 1.0 release 估补 (实际存在的)
 /crates/apeireth-i18n/            @chuling
 /crates/apeireth-sdk/             @chuling
-/src-tauri/                       @chuling
+
+# post-1.0.0 新增 (PR #1 合并, 2026-08-19)
+# companion-desktop 独立 [workspace] (Svelte 5 + Tauri 2), 不在根 cargo workspace
+/frontend/companion-desktop/      @chuling

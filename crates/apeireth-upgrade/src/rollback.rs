@@ -22,7 +22,7 @@
 //! 4. **3 重清理钩子** (per `CLEANUP_HOOK_STARTUP` / `_BEFORE_SNAPSHOT` / `_CRON_DAILY`):
 //!    启动时 / 每次 snapshot 前 / cron 每天清理过期影子
 //!
-//! **修改需经** 6 哲学锚 + 主人审 (per APEIRETH-CONVENTIONS §9 + 8 项不修改承诺).
+//! **修改需经** 8 哲学锚 (baseline 2026-08-19) + 主人审 (per APEIRETH-CONVENTIONS §9 + 8 项不修改承诺).
 //! 71GB 4 重防御常量是 incident 防止再发生的硬约束.
 //!
 //! ## v0.9.21 RollbackService.js 实查 (obfuscated webpack bundle, 22KB, 单行)
@@ -923,7 +923,7 @@ mod tests {
         // 编译期 hardcode 字符串字面量含 71GB 字样
         let src = concat!(
             "本 crate 防 71GB 事故, 4 重防御 hardcode, ",
-            "修改需经 6 哲学锚 + 主人审"
+            "修改需经 8 哲学锚 + 主人审"
         );
         assert!(src.contains("71GB"), "71GB 字样必在顶部 doc");
     }

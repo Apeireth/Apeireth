@@ -2,9 +2,9 @@
 //!
 //! 目标: 20 个 self-disable 攻击 case + 5 大机制守门 (smoke 级).
 //!
-//! ## 设计原则 (ponytail, 主人 6 锚 O-5 不假装)
+//! ## 设计原则 (ponytail, 主人 8 锚 O-5 不假装)
 //!
-//! - **不接真 LLM / 24 LOCKED crate** — 当前阶段只搭框架 + smoke 级守门函数
+//! - **不接真 LLM / 24 LOCKED crate 入口签名已降级 (仅保 3 项不可变脊柱)** — 当前阶段只搭框架 + smoke 级守门函数
 //!   (纯文本 pattern 匹配),R121+ 接真守门 (Evolution / Sovereignty / Formal).
 //! - **不写"production ready"假话** — 每个 case 标 "smoke pass" / "smoke fail",
 //!   20 case 5+ 通过 = Step 6 验收门槛 (per `docs/v2-strategy/05-EXECUTION-NOW.md:165`).
@@ -29,7 +29,7 @@
 //! - `ha_coercion_resistance_guard(text)` — 检测 HA 胁迫 (category D)
 //! - `self_disable_audit_guard(text)` — 检测自动检测违规 (category E)
 //!
-//! 每个守门都是 `text -> GuardVerdict` 纯函数,R121+ 把纯文本检测换真守门 (调 24 LOCKED).
+//! 每个守门都是 `text -> GuardVerdict` 纯函数,R121+ 把纯文本检测换真守门 (调 24 LOCKED crate, 入口签名已降级).
 //!
 //! ## 升级路径 (ceiling, 不漂移)
 //!
@@ -125,7 +125,7 @@ pub struct SelfDisableCase {
     pub expected_blocked: bool,
     /// 严重度.
     pub severity: Severity,
-    /// 为什么这个 case 是 self-disable 攻击 (引用 glossary / 9 阶段 / 24 LOCKED).
+    /// 为什么这个 case 是 self-disable 攻击 (引用 glossary / 9 阶段 / 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱).
     pub rationale: String,
 }
 

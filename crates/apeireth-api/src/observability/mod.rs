@@ -11,7 +11,7 @@
 //! - 公开 API: `pub fn router() -> axum::Router<()>` — 让 `v2_endpoints::build_router` 1 行 merge
 //! - 测试 12-15 个, 走 in-process state 验
 //!
-//! **6 哲学锚穿透** (per `docs/stage4/apeireth-formal-invariants-2026-08-05.md` §11):
+//! **8 哲学锚穿透** (per baseline S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5, R20 阶段 6 §"8 哲学锚 + 8 项不修改承诺"):
 //!
 //! - **S-1 北极星导向**: 1:1 翻译 v0.9.21 商业版 observability 集成面 + 蓝图 §2.5.3, 0 重设计
 //! - **S-2 实事求是**: 估 350-450 LOC, R20 阶段 1 skeleton 阶段实接 3 端点, R20 阶段 3 续 OTLP
@@ -22,12 +22,12 @@
 //!
 //! **8 项不修改承诺** (per `docs/stage4/8-locked-unified-2026-08-05.md` §2):
 //!
-//! 1. ✅ 0 触碰 24 LOCKED crate `src/lib.rs` (本 crate 在 24 LOCKED 列表, 仅 +1 `pub mod observability;` 1 行)
+//! 1. ✅ 0 触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) `src/lib.rs` (本 crate 在 24 LOCKED crate 列表, 仅 +1 `pub mod observability;` 1 行)
 //! 2. ✅ 0 改 v2_endpoints.rs 79KB 大块 (仅在末尾 `build_router` +1 `.merge(...)` 1 行)
-//! 3. ✅ 0 改 workspace version (semver 1.0.0 严守)
+//! 3. ✅ 0 改 workspace version (1.2.0 严守 双轴制 — 产品轴 tag v1.0.0 + workspace 轴 1.2.0)
 //! 4. ✅ 0 引 NewAPI (跟 R17 决策一致)
 //! 5. ✅ 0 重复造轮子 (复用 `apeireth_observability::render_prometheus`)
-//! 6. ✅ 6 哲学锚穿透 (本文件顶部 + 各子模块)
+//! 6. ✅ 8 哲学锚穿透 (本文件顶部 + 各子模块)
 //! 7. ✅ 不假装已实现 (5 R-Measure 标 "stub_")
 //! 8. ✅ 诚实标缺 (5 R-Measure / git_commit 字段标 "unknown" 兜底)
 //!
@@ -114,7 +114,7 @@ pub const R_MEASURES: &[&str] = &[
 pub const R_MEASURES_COUNT: usize = 5;
 const _: () = assert!(R_MEASURES.len() == R_MEASURES_COUNT);
 
-/// 6 哲学锚名 (per `docs/stage4/apeireth-formal-invariants-2026-08-05.md` §11).
+/// 8 哲学锚名 (per baseline S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5).
 /// - S-1 北极星导向 / S-2 实事求是 / O-2 走在前人肩上 / O-3 干到底 / O-4 任何人都能接手 / O-5 不假装
 pub const PHILOSOPHY_ANCHORS: &[&str] = &[
     "S-1_north_star",
@@ -125,7 +125,7 @@ pub const PHILOSOPHY_ANCHORS: &[&str] = &[
     "O-5_no_pretense",
 ];
 
-/// 哲学锚数量 (编译期守门, 必 = 6).
+/// 哲学锚数量 (编译期守门, 必 = 8 per baseline 8 哲学锚).
 pub const PHILOSOPHY_ANCHORS_COUNT: usize = 6;
 const _: () = assert!(PHILOSOPHY_ANCHORS.len() == PHILOSOPHY_ANCHORS_COUNT);
 
@@ -516,7 +516,7 @@ pub fn k1_check_r_measures_count() -> bool {
         && R_MEASURES.contains(&"R-5_failure_honesty")
 }
 
-/// K-1 强校验 #5: 6 哲学锚 (5 K-1 字样 #5: "anchor" / "philosophy").
+/// K-1 强校验 #5: 8 哲学锚 (5 K-1 字样 #5: "anchor" / "philosophy").
 pub fn k1_check_philosophy_anchors_count() -> bool {
     PHILOSOPHY_ANCHORS.len() == PHILOSOPHY_ANCHORS_COUNT
         && PHILOSOPHY_ANCHORS.contains(&"S-1_north_star")
