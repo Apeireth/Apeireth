@@ -110,6 +110,43 @@ export interface RuntimeHealthReport {
 
 export type HealthState = 'connecting' | 'online' | 'ready' | 'degraded' | 'generating' | 'error' | 'offline';
 
+// ============================================================
+// Runtime Capability Manifest — 后端能力发现契约
+// Desktop 据此 gate UI 按钮, 不再 404-probing. 这是 information 不是 authorization.
+// 未知字段保留 (forward compat); 未知 capability id 一律视为 unsupported.
+// ============================================================
+
+/** 单条能力声明 (稳定能力 ID 如 sessions.create). */
+export interface Capability {
+  id: string;
+  supported: boolean;
+  read?: boolean;
+  write?: boolean;
+  version?: number;
+  operations?: string[];
+}
+
+/** 一个能力组 (如 sessions / memory / permissions / trace). */
+export interface CapabilityGroup {
+  name: string;
+  capabilities: Capability[];
+}
+
+/** Runtime 元信息 (仅 public 信息, 绝不含 secret/路径). */
+export interface RuntimeInfo {
+  service: string;
+  version: string;
+}
+
+/** Capability Manifest — runtime 能力契约. */
+export interface CapabilityManifest {
+  schema_version: number;
+  runtime: RuntimeInfo;
+  capabilities: CapabilityGroup[];
+  /** 是否为 legacy 兼容 profile (runtime 无原生 manifest 端点时客户端构造的保守声明). */
+  legacy?: boolean;
+}
+
 export interface ApeirethConfig {
   baseUrl: string;
   apiKey: string;
