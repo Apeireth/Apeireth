@@ -52,3 +52,31 @@ tool-call · tool-result · message-end · run-error · run-end
 - `reasoning-delta` / `tool-call` / `tool-result` 的 UI 渲染：后端当前无 reasoning/tool 流事件，
   等 companion_serve 暴露后接入（类型已就绪）
 - 完整 RAG / vector DB：§17 明确不做，context 注入点已留位
+
+---
+
+## Phase 5 更新（2026-08-19）
+
+### 错误语义加固
+
+- 新增 `HttpError`（带 status）：`streamChat`/`chatOnce`/`checkJson` 抛它
+- `toRuntimeError` 识别：`HttpError`(→auth/http) / `AbortError`(→aborted) / `TypeError`(→network)
+- 稳定语义：401/403 → `auth`，5xx → `http`，abort → `aborted`，unreachable → `network`
+
+### Runtime health（Phase 5E）
+
+- `HealthState`: `connecting/ready/generating/error/offline`
+- 由真实 `checkHealth`(HTTP /health) + `agentRuntime.running` 驱动，非纯 timer
+- 10s 后台轮询检测 backend 恢复，无需重启 app
+
+### E2E 验证结果（Phase 5B, mock upstream）
+
+| 场景 | 结果 |
+|---|---|
+| streaming | `APEIRETH_E2E_OK` 完整到达, delta 正确累积无重复 |
+| cancellation | mid-stream abort → AbortError, 无幽灵 delta |
+| error-network | unreachable → network |
+| error-401 | → auth |
+| error-500 | → http |
+
+真模型 E2E 待 MiniMax key（环境无 key，诚实标注）。测试工具在 `_scripts/`。
