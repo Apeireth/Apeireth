@@ -15,7 +15,7 @@
 //! - ✅ `build_legacy_client` fn 实际 use `hyper_util::client::legacy::Client` 类型
 //! - ✅ `tokio_io_bridge_marker` use `hyper_util::rt::TokioIo` 类型 marker
 //! - ✅ 3 unit tests (cargo test 跑得通, 0 panic, 编译期 hardcode 守门)
-//! - ✅ 0 越界 8 硬墙 (B1 24 LOCKED 入口签名 0 改 — 借脑 1.0 跟 LOCKED crate 0 耦合)
+//! - ✅ 0 越界 8 硬墙 (B1 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱, 借脑 1.0 跟 LOCKED crate 0 耦合)
 //!
 //! # 借鉴 ID
 //!
@@ -31,7 +31,7 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改 (Cargo.toml 1.2.0 严守)
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (本文件 0 触碰 LOCKED crate)
+//! - B1 24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱 (本文件 0 触碰 LOCKED crate)
 //! - C1 0 commit (Mavis 整合 #5 拍板)
 
 #![deny(unsafe_code)]
