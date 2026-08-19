@@ -79,6 +79,20 @@
 |---|---|---|---|---|
 | TP34 | **companion_serve 真接流式**（CoT + tool_call + tool_result SSE） | `apeireth-companion/examples/companion_serve.rs` | 当前 `stream: false` 写死在 10 处 (line 130/214/426/477/527/584/643/711/768/1002), `next_after` line 1002 真发非流式。前端 `frontend/companion-desktop/src/lib/runtime.ts` 收的 `reasoning-delta` / `tool-call` / `tool-result` / `reasoning_content` 等 RuntimeEvent 0 触发, UI `ExecutionTimeline.svelte` 拿不到真 SSE 流。<br><br>**设计点**: (1) CoT tag 怎么拆 delta? `<think>...</think>` 在流里分段 emit; (2) tool_call 怎么在流里 emit? OpenAI tool_calls 数组 vs 单 event 顺序; (3) chunked vs full — 每次 mini-batch emit; (4) backpressure / cancellation token.<br><br>**估计**: 1-2 周 (后端 + 前端解析 + 测试 + e2e). 跟 0.5 mock SSE 走端到端验证. | 6 种 RuntimeEvent 都能 e2e 触发; real LLM (有 API key) E2E; mock SSE 回归; 前端 UI timeline 显示工具流. |
 
+> **TP34 进展 (2026-08-19)**: 后端 50% 落地 —
+> 1. `stream_forward` 已在 `apeireth-api/protocol_handlers.rs:1379` 透传 SSE 字节, `stream_forward` 真接 MiniMax 流
+> 2. companion_serve `chat_completions` 新增 streaming 分支: 检测 `req.stream = true` 后调 `stream_forward`, **跳过 tool loop (0 装严守, v1.5 后续补)**
+> 3. MiniMax M3 **没有** OpenAI 风格 `delta.reasoning_content` 字段, CoT 嵌入 `delta.content` 内的 `<!-- ... -->` 边界标记 (验证报告 `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md`)
+> 4. 加 `extract_minimax_cot(content) -> (reasoning, visible)` helper: 服务端拼成完整 text 后切分 (方案 B 兜底, per 验证 §6)
+> 5. 非流式响应 `x_apeireth.reasoning_content` 字段挂 reasoning (0 装严守: 无 CoT 时空字符串)
+> 6. 8 个单元测试 (`cot_extraction_tests` mod): happy / no_markers / empty / multiple / at_end / unterminated / realistic / nested
+>
+> **待续 (v1.5 后续)**:
+> 1. streaming + tool loop 整合 (per 验证 §6 方案 A 提及, 需要消费 SSE + 工具循环 + 重启流)
+> 2. 前端 `<!-- ... -->` 状态机切分, 触发 `reasoning-delta` / `content-delta` RuntimeEvent
+> 3. 前端 e2e: 真实 LLM + companion-desktop UI 显示工具流
+> 4. mock SSE 回归 (per 验证 §7 字段探测双轨)
+
 > **TP34 来源**: 2026-08-19 PR #1 (companion-desktop 合并) 后的真生产洞. PR 作者的 e2e 是 mock SSE, 已知 real LLM streaming 是 follow-up. 留集成层 0 装 PASS.
 
 ---

@@ -67,7 +67,7 @@ pnpm dev                                      # http://localhost:1420 (Vite + Sv
 pnpm tauri dev                                 # 桌面窗口 + dev tools
 ```
 
-详见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md)。 真实 LLM E2E 待 `APEIRETH_API_KEY` (目前是 mock SSE 端到端, 6 种 RuntimeEvent 中部分触发受限于后端 stream: false, 详见 `docs/04-internal/next-team-handbook.md` TP34)。
+详见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md)。 真实 LLM E2E 待 `APEIRETH_API_KEY` (目前是 mock SSE 端到端, **🟡 2026-08-19 TP34 后端 50%** — companion_serve 加 streaming 分支 + `extract_minimax_cot` helper, 6 种 RuntimeEvent 中 reasoning-delta 前端状态机待续, 详见 `docs/04-internal/next-team-handbook.md` TP34)。
 
 ## Tool orchestration e2e
 
