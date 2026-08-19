@@ -2,13 +2,13 @@
 
 ## 1. Git
 - Branch: `feature/core-capability-expansion`
-- HEAD: `7e5e9f8c` (after final doc commit)
-- Commits: 10 this session (43044504..7e5e9f8c)
+- HEAD: `8f610dd4` (after final doc commit)
+- Commits: 10 this session (43044504..8f610dd4)
 - git status: clean (working tree clean, all pushed)
 
 ## 2. Baseline
 - Starting SHA: `4d0ac12e` (integration/pattern-fresh, UI 验收基线)
-- Ending SHA: `7e5e9f8c`
+- Ending SHA: `8f610dd4`
 - origin/feature/core-capability-expansion synced with local HEAD.
 
 ## 3. Capability Manifest
