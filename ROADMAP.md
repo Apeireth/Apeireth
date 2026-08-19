@@ -152,6 +152,7 @@ cherry-pick:     进行中 (master HEAD 在 pick d1912c53 — feat(companion): �
 | **8 哲学锚 → 12+ 锚** (B5 升 12) | per R126 P1-2 升级 | 持续 |
 | **13 键 → 16+ 键** (新增 PHL-08/09/10, 当前 13 键 — PHL-07 仍待合并 core) | per R125-12 P0-3 升级 | 持续 |
 | **9 重守门 v9 → v11+** (v6→v7→v8→v9 已完成, 未来 v10+) | per P1-3 升级 (已 done 到 v9) | 持续 |
+| **沙盒 3 阶段自研 (Stage 1 网络 + Stage 2 microVM + Stage 3 集成)** | 借鉴 Firecracker minimal API + libkrun netns/KVM 思路, 0 装 PASS 严守: trait 口 + NoopXxx stub, 实装接 libkrun / Hyperlight / Firecracker. 文档 `reports/sandbox-self-research-design-2026-08-19.md`. per B 站 UP 主 5.4 思路 (网络隔离 + microVM 隔离 = "环境隔离" 门槛) | v1.5 中期 → v2.0 长期 |
 
 **v2.0 关键约束**：0 主动 push 仍严守（per §10）；R128+ 升级派活 = 16 派满策略（per 旧决策 #33 §4）。
 
