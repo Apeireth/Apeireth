@@ -26,7 +26,7 @@ pnpm dev                            # Vite + Svelte (http://localhost:1420)
 pnpm check                          # svelte-check (类型 + 语法)
 ```
 
-> 真实 LLM 流式 (CoT + tool_call + tool_result SSE) 仍 deferred (TP34 v1.5 中期). 当前 `stream: false` 写死,
+> 真实 LLM 流式 (CoT + tool_call + tool_result SSE) **🟡 TP34 后端 50% 落地 (2026-08-19)**: companion_serve 加 streaming 分支 (`stream_forward` 透传, 跳过 tool loop), `extract_minimax_cot` helper 拆 `<!-- -->` 边界 (MiniMax M3 0 OpenAI 风格 reasoning 字段, 验证报告 `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md`), 8 个单测全过 (`cot_extraction_tests` mod). 前端 `<!-- ... -->` 状态机切分 + `reasoning-delta` / `content-delta` RuntimeEvent 触发 v1.5 续. 当前 non-streaming `stream: false` 仍写死, 但响应 `x_apeireth.reasoning_content` 字段已挂 reasoning,
 > 前端 6 种 RuntimeEvent 中部分不可触发, mock SSE e2e 跑通. 详见 `docs/04-internal/next-team-handbook.md` TP34.
 
 **注意**：`cargo test --workspace` 不编译 examples——改公共结构后必须 `--all-targets`。
