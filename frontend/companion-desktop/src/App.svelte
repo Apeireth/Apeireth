@@ -1,25 +1,32 @@
 <script lang="ts">
   import {onMount} from 'svelte';
-  import {MessageCircleMore, Settings, MessagesSquare, Layers3, Plus, ArrowUp, Trash2, Loader2, Plug} from 'lucide-svelte';
-  import MessageContent from './lib/MessageContent.svelte';
-  import ConversationsView from './lib/ConversationsView.svelte';
-  import MemoryView from './lib/MemoryView.svelte';
-  import PageHeader from './lib/PageHeader.svelte';
-  import StatusDot from './lib/StatusDot.svelte';
-  import type {ApeirethConfig, ChatMessage, Conversation, HealthState, ViewId} from './lib/types';
+  import {Activity, Layers3, MessageCircleMore, MessagesSquare, Settings, Wrench} from 'lucide-svelte';
+  import Sidebar from './app/Sidebar.svelte';
+  import ChatView from './features/chat/ChatView.svelte';
+  import ConversationsView from './features/conversations/ConversationsView.svelte';
+  import ActivityCenterView from './features/activity/ActivityCenterView.svelte';
+  import ToolRegistryView from './features/tools/ToolRegistryView.svelte';
+  import MemoryView from './features/memory/MemoryView.svelte';
+  import SettingsView from './features/settings/SettingsView.svelte';
+  import type {ApeirethConfig, ApprovalRequest, ChatMessage, ChatMessageEvent, Conversation, HealthState, ViewId} from './lib/types';
   import {
     checkHealth,
     createAgentRuntime,
+    fetchPendingApprovals,
     listModels,
     loadConfig,
     loadConversations,
     saveConfig,
     saveConversations,
+    subscribeCompanionEvents,
+    type CompanionPresentationState,
   } from './lib/runtime';
 
   const nav = [
     {id: 'chat', label: '对话', icon: MessageCircleMore},
     {id: 'conversations', label: '会话', icon: MessagesSquare},
+    {id: 'activity', label: '活动', icon: Activity},
+    {id: 'tools', label: '工具', icon: Wrench},
     {id: 'memory', label: '记忆', icon: Layers3},
     {id: 'settings', label: '设置', icon: Settings},
   ] as const;
@@ -31,11 +38,25 @@
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
+  let pendingApprovals = $state<ApprovalRequest[]>([]);
+  let isReasoning = $state(false);
+  let isExecutingTool = $state(false);
+  let proactiveGreeting = $state('');
+
   // runtime 绑定当前配置; config 变更时在 saveSettings 重建
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
 
   // Phase 5E: 真实 runtime health 状态 (connecting/ready/generating/error/offline)
   let healthState = $state<HealthState>('connecting');
+
+  // 后端信号驱动的伴随体表现态 (严禁前端造假)
+  const companionPresentation = $derived.by<CompanionPresentationState>(() => {
+    if (pendingApprovals.length > 0) return 'concerned';
+    if (isExecutingTool) return 'working';
+    if (isReasoning) return 'thinking';
+    if (busy) return 'speaking';
+    return 'idle';
+  });
 
   // 设置视图临时值 (初始从持久化配置读取, 编辑期间独立)
   let editBaseUrl = $state(loadConfig().baseUrl);
@@ -97,7 +118,7 @@
     persist();
   }
 
-  /** 按 id 原子拼接流式 delta — 纯函数式, 不依赖闭包捕获的 conversations 快照. */
+  /** 按 id 原子拼接流式文本 delta. */
   function appendDelta(conversationId: string, messageId: string, delta: string): void {
     conversations = conversations.map((item) => {
       if (item.id !== conversationId) return item;
@@ -110,19 +131,59 @@
     persist();
   }
 
-  /** 真实 HTTP /health 检测 — 驱动 healthState. 不生成时不覆盖 generating. */
+  /** 按 id 原子拼接推理思考 delta. */
+  function appendReasoningDelta(conversationId: string, messageId: string, delta: string): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => m.id === messageId ? {...m, reasoning: (m.reasoning || '') + delta} : m),
+      };
+    });
+    persist();
+  }
+
+  /** 按 id 原子追加或更新执行步骤事件. */
+  function appendMessageEvent(conversationId: string, messageId: string, event: ChatMessageEvent): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => {
+          if (m.id !== messageId) return m;
+          const prevEvents = m.events || [];
+          const existingIndex = prevEvents.findIndex((e) => e.id === event.id);
+          if (existingIndex >= 0) {
+            const updated = [...prevEvents];
+            updated[existingIndex] = {...updated[existingIndex], ...event};
+            return {...m, events: updated};
+          }
+          return {...m, events: [...prevEvents, event]};
+        }),
+      };
+    });
+    persist();
+  }
+
+  /** 真实 HTTP /health 检测与待审批请求轮询. */
   async function refreshConnection(): Promise<void> {
     const ok = await checkHealth(config.baseUrl);
     if (busy) {
-      // 生成中: 保持 generating, health 只是后台探测
       if (healthState === 'offline' || healthState === 'connecting') healthState = 'generating';
-      return;
+    } else {
+      healthState = ok ? 'ready' : 'offline';
     }
-    healthState = ok ? 'ready' : 'offline';
+    if (ok) {
+      pendingApprovals = await fetchPendingApprovals(config);
+    } else {
+      pendingApprovals = [];
+    }
   }
 
-  async function send(): Promise<void> {
-    const text = draft.trim();
+  async function send(customText?: string): Promise<void> {
+    const text = (customText ?? draft).trim();
     if (!text || busy) return;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
@@ -130,13 +191,28 @@
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({role: m.role, content: m.text}));
 
-    draft = '';
+    if (!customText) draft = '';
     busy = true;
+    isReasoning = false;
+    isExecutingTool = false;
     healthState = 'generating';
     error = '';
 
-    const userMessage: ChatMessage = {id: crypto.randomUUID(), role: 'user', text, time: new Date().toLocaleTimeString('zh-CN')};
-    const assistantMessage: ChatMessage = {id: crypto.randomUUID(), role: 'assistant', text: '', time: new Date().toLocaleTimeString('zh-CN'), streaming: true};
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      text,
+      time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
+    };
+    const assistantMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      text: '',
+      time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
+      streaming: true,
+      reasoning: '',
+      events: [],
+    };
 
     pushMessage(conversationId, userMessage);
     pushMessage(conversationId, assistantMessage);
@@ -145,6 +221,10 @@
     if (conversation.messages.length <= 2) {
       updateConversation(conversationId, {title: text.slice(0, 24)});
     }
+
+    const startTime = Date.now();
+    let reasoningStartTime = startTime;
+    let reasoningEndTime = 0;
 
     try {
       // UI 只面对 Agent Runtime Contract (§15) — 事件流驱动更新, 不裸碰 HTTP
@@ -157,27 +237,80 @@
         },
         (event) => {
           if (event.type === 'text-delta') {
-            // 按 conversationId 定位写入 — 切换会话也不串流
+            isReasoning = false;
+            if (!reasoningEndTime && reasoningStartTime) {
+              reasoningEndTime = Date.now();
+              const duration = reasoningEndTime - reasoningStartTime;
+              updateMessage(conversationId, assistantMessage.id, {reasoningDurationMs: duration});
+            }
             appendDelta(conversationId, assistantMessage.id, event.text);
+          } else if (event.type === 'reasoning-delta') {
+            isReasoning = true;
+            appendReasoningDelta(conversationId, assistantMessage.id, event.text);
+          } else if (event.type === 'tool-call') {
+            isExecutingTool = true;
+            appendMessageEvent(conversationId, assistantMessage.id, {
+              id: `${event.requestId}-${event.tool}`,
+              kind: 'tool',
+              text: `调用工具 ${event.tool}`,
+              status: 'running',
+              action: typeof event.args === 'string' ? event.args : JSON.stringify(event.args),
+              ts: Date.now(),
+            });
+          } else if (event.type === 'tool-result') {
+            isExecutingTool = false;
+            appendMessageEvent(conversationId, assistantMessage.id, {
+              id: `${event.requestId}-${event.tool}`,
+              kind: 'tool',
+              text: `工具 ${event.tool} ${event.ok ? '执行成功' : '执行失败'}`,
+              status: event.ok ? 'done' : 'failed',
+              receipt: event.summary,
+              ts: Date.now(),
+            });
           }
         },
       );
       updateMessage(conversationId, assistantMessage.id, {text: full || '(空响应)', streaming: false});
     } catch (caught) {
+      const isAborted = caught instanceof Error && caught.name === 'AbortError';
       const message = caught instanceof Error ? caught.message : String(caught);
-      error = message;
-      updateMessage(conversationId, assistantMessage.id, {text: '', streaming: false, error: message});
-      healthState = 'error';
+      if (isAborted) {
+        updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
+      } else {
+        error = message;
+        updateMessage(conversationId, assistantMessage.id, {streaming: false, error: message});
+        healthState = 'error';
+      }
     } finally {
       busy = false;
+      isReasoning = false;
+      isExecutingTool = false;
       // 生成结束: 恢复真实 health (backend 可能已离线)
-      const ok = await checkHealth(config.baseUrl);
-      healthState = ok ? 'ready' : 'offline';
+      await refreshConnection();
     }
   }
 
   function stop(): void {
     agentRuntime.abort();
+  }
+
+  function retry(messageId: string): void {
+    if (busy || !activeConversation) return;
+    const msgs = activeConversation.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    let userText = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        userText = msgs[i].text;
+        break;
+      }
+    }
+    const filtered = msgs.filter((m) => m.id !== messageId);
+    updateConversation(activeConversation.id, {messages: filtered});
+    if (userText) {
+      void send(userText);
+    }
   }
 
   /** health 状态 → 人类可读文案 (Phase 5E). */
@@ -250,141 +383,83 @@
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
     void refreshConnection();
-    // 后台健康轮询 (真实 HTTP /health) — 检测 backend 恢复/掉线, 不要求重启 app.
+
+    // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知)
+    const unsubscribeEvents = subscribeCompanionEvents(config, (event) => {
+      proactiveGreeting = event.text;
+      window.setTimeout(() => {
+        if (proactiveGreeting === event.text) proactiveGreeting = '';
+      }, 12000);
+    });
+
+    // 后台健康轮询与审批请求同步 (真实 HTTP /health + /v1/apeireth/approval-requests)
     const timer = window.setInterval(() => {
       void refreshConnection();
     }, 10000);
-    return () => window.clearInterval(timer);
+
+    return () => {
+      window.clearInterval(timer);
+      unsubscribeEvents();
+    };
   });
 </script>
 
 <div class="shell">
-  <aside class="sidebar">
-    <div class="sidebar-brand">
-      <span class="logo-mark">A</span>
-      <span class="brand-name">Apeireth 伙伴</span>
-      <StatusDot size="small" off={healthState !== 'ready' && healthState !== 'generating'} active={healthState === 'generating'} />
-    </div>
-    <nav class="nav">
-      {#each nav as item}
-        <button class:active={activeView === item.id} onclick={() => activeView = item.id}>
-          <item.icon size={17} />
-          <span>{item.label}</span>
-        </button>
-      {/each}
-    </nav>
-    <div class="sidebar-footer">
-      <button class="quiet-button wide" onclick={newConversation}><Plus size={14}/>新对话</button>
-      <div class="conn-hint" class:offline={healthState === 'offline'}>
-        <Plug size={12} />
-        <span>{healthLabel[healthState]}</span>
-      </div>
-    </div>
-  </aside>
+  <Sidebar
+    {nav}
+    bind:activeView
+    {healthState}
+    {healthLabel}
+    companionState={companionPresentation}
+    proactiveText={proactiveGreeting}
+    onDismissProactive={() => proactiveGreeting = ''}
+    onNewConversation={newConversation}
+  />
 
   <main class="main">
     {#if activeView === 'chat'}
-      <section class="chat-view">
-        <header class="chat-header">
-          <div>
-            <h1>{activeConversation?.title || '新对话'}</h1>
-            <small>{config.model} · {config.baseUrl}</small>
-          </div>
-          <div class="chat-header-actions">
-            {#if busy}
-              <button class="text-action" onclick={stop}><Loader2 size={14}/>停止</button>
-            {/if}
-            <button class="text-action" onclick={newConversation}><Plus size={14}/>新对话</button>
-          </div>
-        </header>
-
-        <div class="messages">
-          {#if !activeMessages.length}
-            <div class="blank-state">
-              <div class="blank-mark">⌁</div>
-              <h3>开始对话</h3>
-              <p>连接 Apeireth 后端后，在这里与伙伴对话。记忆、工具与宪法评审由后端负责。</p>
-            </div>
-          {:else}
-            {#each activeMessages as message}
-              <article class="message-row" class:user={message.role === 'user'} class:assistant={message.role === 'assistant'}>
-                <div class="message-avatar">{message.role === 'user' ? '主' : 'A'}</div>
-                <div class="message-body">
-                  <MessageContent message={message} />
-                </div>
-              </article>
-            {/each}
-          {/if}
-          {#if error}
-            <p class="error-banner" role="alert">{error}</p>
-          {/if}
-        </div>
-
-        <footer class="composer">
-          <textarea
-            bind:value={draft}
-            rows="3"
-            placeholder="给阿佩瑞斯留言…… (Enter 发送, Shift+Enter 换行)"
-            onkeydown={(event) => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void send();
-              }
-            }}
-          ></textarea>
-          <button class="primary-button send-button" onclick={send} disabled={busy || !draft.trim()} aria-label="发送">
-            {#if busy}<Loader2 size={18}/>{:else}<ArrowUp size={18}/>{/if}
-          </button>
-        </footer>
-      </section>
+      <ChatView
+        {config}
+        conversation={activeConversation}
+        messages={activeMessages}
+        approvalRequests={pendingApprovals}
+        bind:draft
+        {busy}
+        {error}
+        onSend={(text) => send(text)}
+        onStop={stop}
+        onRetry={retry}
+        onApproved={refreshConnection}
+        onNewConversation={newConversation}
+      />
     {:else if activeView === 'conversations'}
       <ConversationsView
-        conversations={conversations}
+        {conversations}
         activeId={activeId || ''}
         onOpen={openConversation}
         onCreate={newConversation}
         onArchive={archiveConversation}
         onDelete={deleteConversation}
       />
+    {:else if activeView === 'activity'}
+      <ActivityCenterView {config} />
+    {:else if activeView === 'tools'}
+      <ToolRegistryView {config} />
     {:else if activeView === 'memory'}
       <MemoryView {config} />
     {:else}
-      <section class="view">
-        <PageHeader eyebrow="配置" title="后端连接" subtitle="连接 Apeireth 的 OpenAI 兼容端点 (companion_serve :8090 或 apeireth-api :8080)。">
-          <button class="primary-button" onclick={saveSettings}><Settings size={14}/>保存</button>
-        </PageHeader>
-        <div class="settings-form">
-          <label>
-            <span>端点地址</span>
-            <input bind:value={editBaseUrl} placeholder="http://127.0.0.1:8090" />
-          </label>
-          <label>
-            <span>API Key</span>
-            <input bind:value={editApiKey} type="password" placeholder="后端持有的 key (任意非空串)" />
-          </label>
-          <label>
-            <span>模型</span>
-            <div class="model-row">
-              <input bind:value={editModel} placeholder="MiniMax-M3" />
-              <button class="quiet-button" onclick={loadModels} title="拉取模型列表">刷新</button>
-            </div>
-          </label>
-          {#if modelsList.length}
-            <div class="model-list">
-              {#each modelsList as model}
-                <button class="model-chip" onclick={() => editModel = model}>{model}</button>
-              {/each}
-            </div>
-          {/if}
-          <div class="conn-status">
-            <StatusDot size="small" off={healthState !== 'ready' && healthState !== 'generating'} active={healthState === 'generating'} />
-            <span>{healthLabel[healthState]} · {config.baseUrl}</span>
-          </div>
-          {#if error}
-            <p class="error-banner" role="alert">{error}</p>
-          {/if}
-        </div>
-      </section>
+      <SettingsView
+        {config}
+        {healthState}
+        {healthLabel}
+        bind:editBaseUrl
+        bind:editApiKey
+        bind:editModel
+        {modelsList}
+        {error}
+        onSave={saveSettings}
+        onRefreshModels={loadModels}
+      />
     {/if}
   </main>
 </div>
