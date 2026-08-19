@@ -5,7 +5,7 @@
 //! - 借鉴模块: `Guardrails/nemoguardrails/colang/v1_0/lang/` (ColangParser + 语法)
 //! - 借鉴示例: `Guardrails/examples/bots/{hello_world,abc}/`
 //!
-//! **设计意图** (B4 6 重守门 v6 + B6 DSL 洋葱层):
+//! **设计意图** (B4 lineage v6→v7→v8→v9, 当前 6 重守门 v6, + B6 DSL 洋葱层):
 //! - Colang DSL 是对话流/守门规则的领域语言 (define user/bot/flow + when/else when/goto/run)
 //! - 本 crate 提供 **纯 Rust** 解析器 + 验证器 + 守门 6 包装
 //! - 不调 LLM, 不调 PyO3, 无 I/O — 与 sovereignty 整体哲学一致
@@ -24,13 +24,13 @@
 //!      ↓
 //!   DslOnionLayer (B6 DSL 洋葱层)
 //!      ↓
-//!   SixFoldGuardRunner (6 重守门 v6 总入口, 衔接 Governance.process)
+//!   SixFoldGuardRunner (6 重守门 v6 总入口, 衔接 Governance.process; lineage v6→v7→v8→v9)
 //! ```
 //!
 //! **R125-5 8 硬墙严守**:
 //! - A1: R11 baseline 3 值 0 改 (不触动 metric crate)
 //! - B1: sovereignty 入口签名 0 改 (本模块是 **新增** mod, 不改现有 pub API)
-//! - B4: 6 重守门 v6 = 守门 1-5 (已有) + 守门 6 (本模块新增, wrapper 包装)
+//! - B4: 6 重守门 v6 = 守门 1-5 (已有) + 守门 6 (本模块新增, wrapper 包装; lineage v6→v7→v8→v9)
 //! - B6: 三洋葱 (原则/权限/DSL) — DSL 洋葱层在本模块新加
 //! - C2: ✅ 借鉴代码 0 装解除 — 真实施解析器 + AST
 //! - C3: 0 主动 commit, 0 主动 push
@@ -810,7 +810,7 @@ pub enum ColangGuardOutcome {
 
 /// 守门 6 — Colang DSL 守门
 ///
-/// **设计** (B4 升 6 重守门 v6):
+/// **设计** (B4 升 6 重守门 v6; lineage v6→v7→v8→v9):
 /// - 输入: Colang DSL 源文本 (`.co` 文件内容)
 /// - 流程: parse → validate → 黑名单 → 约束检查
 /// - 失败: Blocked (不通过)
@@ -1097,7 +1097,7 @@ impl DslOnionLayer {
 // 7. 6 重守门 v6 衔接器 (B4 升) — 衔接 Governance.process (0 改入口)
 // ============================================================
 
-/// 6 重守门 v6 衔接器 (R125-5 触发 B4 升)
+/// 6 重守门 v6 衔接器 (R125-5 触发 B4 升; lineage v6→v7→v8→v9)
 ///
 /// **设计**:
 /// - 不修改 `Governance.process` 入口签名 (B1 入口签名 0 改)
@@ -1110,7 +1110,7 @@ impl DslOnionLayer {
 ///   6. **守门 6** = Colang DSL (本模块新增, 独立验证)
 /// - 守门 6 在守门 1-5 之前 (DSL 守门便宜, 先做) — 也可后置, 取决于业务
 ///
-/// **6 重守门 v6 硬墙**:
+/// **6 重守门 v6 硬墙 (lineage v6→v7→v8→v9 起点)**:
 /// - 守门 1-5 入口签名 0 改 (B1 实质保留)
 /// - 守门 6 是新模块, 内部实施可改
 /// - `GovernanceOutcome` / `GovernanceStep` enum 不增 variant (避免破坏外部 match)
@@ -1121,7 +1121,7 @@ pub struct SixFoldGuardRunner<'a> {
     pub dsl_layer: DslOnionLayer,
 }
 
-/// 6 重守门 v6 总结果
+/// 6 重守门 v6 总结果 (lineage v6→v7→v8→v9)
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum SixFoldGuardOutcome {
     /// 全部通过 (6 重都 OK)
@@ -1157,7 +1157,7 @@ pub enum SixFoldGuardOutcome {
 }
 
 impl<'a> SixFoldGuardRunner<'a> {
-    /// 新建 6 重守门衔接器
+    /// 新建 6 重守门衔接器 (lineage v6→v7→v8→v9)
     pub fn new(governance: &'a crate::governance::Governance) -> Self {
         Self {
             governance,
@@ -1170,7 +1170,7 @@ impl<'a> SixFoldGuardRunner<'a> {
         self
     }
 
-    /// 跑 6 重守门 v6 — 流程:
+    /// 跑 6 重守门 v6 — 流程 (lineage v6→v7→v8→v9):
     /// 1. 守门 6 (Colang DSL) — 先跑, 便宜
     /// 2. 守门 1-5 (现有 Governance.process) — 后跑, 重
     pub async fn process(
