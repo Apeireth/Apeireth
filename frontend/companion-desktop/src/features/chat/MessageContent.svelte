@@ -1,8 +1,8 @@
 <script lang="ts">
-  import {renderMarkdown} from './markdown';
-  import TaskCard from './TaskCard.svelte';
-  import ExecutionTimeline from './ExecutionTimeline.svelte';
-  import type {ChatMessage} from './types';
+  import {renderMarkdown} from '../../lib/markdown';
+  import TaskCard from '../../components/TaskCard.svelte';
+  import ExecutionTimeline from '../../components/ExecutionTimeline.svelte';
+  import type {ChatMessage} from '../../lib/types';
 
   let {
     message,
