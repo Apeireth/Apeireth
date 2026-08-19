@@ -344,29 +344,83 @@ pub fn describe(expr: &CronExpr) -> String {
     out
 }
 
-/// 算 next trigger (往后 `from_secs` 内), 仅 enumerate cron 错位 (crude O(N)).
+/// 算 next trigger (往后 1 年内), 跨日 / 跨月 / 跨年正确处理.
+///
+/// 返回 (`minute`, `hour`, `day`, `month`, `dow`) 元组, 从给定时间后 1 分钟开始枚举。
+/// `year` 用于计算闰年 (影响 2 月天数) 和 dow 推导。
+///
+/// 实现: O(N) 枚举, N = 1 年分钟数 (525,600, 非闰年). 简单但正确.
+/// 真实 production 用 croniter (Python) 或 tokio-cron-scheduler (Rust), 我们只做
+/// 基础 next_after, 不优化.
 pub fn next_after(
     expr: &CronExpr,
+    year: u16,
     minute: u8,
     hour: u8,
     dom: u8,
     month: u8,
     dow: u8,
 ) -> Option<(u8, u8, u8, u8, u8)> {
-    let mut m = minute;
-    let mut h = hour;
-    let mut d = dom;
+    // 闰年判断 (per Gregorian: %4 == 0 && (%100 != 0 || %400 == 0))
+    let is_leap = |y: u16| y % 4 == 0 && (y % 100 != 0 || y % 400 == 0);
+
+    // 月天数 (平年 / 闰年)
+    let days_in_month = |y: u16, mo: u8| -> u8 {
+        match mo {
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
+            2 => if is_leap(y) { 29 } else { 28 },
+            _ => 0,
+        }
+    };
+
+    // Zeller's congruence 计算 dow (0=Sunday, 1=Monday, ..., 6=Saturday)
+    // Sakamoto's algorithm 计算 dow (0=Sunday, 1=Monday, ..., 6=Saturday)
+    // 注: 我们的 dow 0 = Sunday 跟 Sakamoto 直接对齐
+    let compute_dow = |y: u16, mo: u8, d: u8| -> u8 {
+        // Sakamoto 不 remap month, 只在 m<3 时把 y 减 1
+        // t 数组是 [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4] 跟 natural month 1-12 对应
+        // (Jan=0, Feb=3, Mar=2, Apr=5, May=0, Jun=3, Jul=5, Aug=1, Sep=4, Oct=6, Nov=2, Dec=4)
+        let y_adj: u16 = if mo < 3 { y.wrapping_sub(1) } else { y };
+        let t: [i32; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+        let m_idx = (mo - 1) as usize;
+        let y_i = y_adj as i32;
+        let d_i = d as i32;
+        // Sakamoto 公式: (y + y/4 - y/100 + y/400 + t[m-1] + d) % 7
+        // 直接返 0=Sunday, 1=Monday, ..., 6=Saturday, 无需 remap
+        let dow = (d_i + t[m_idx] + y_i + y_i / 4 - y_i / 100 + y_i / 400) % 7;
+        dow as u8
+    };
+
+    let mut y = year;
     let mut mo = month;
+    let mut d = dom;
+    let mut h = hour;
+    let mut m = minute;
     let mut dw = dow;
-    for _ in 0..(60 * 24 * 32 * 12) {
-        if m < 59 {
-            m += 1;
-        } else {
+
+    // 枚举 1 年 (525,600 分钟, 非闰年; 525,948 含 2-29)
+    for _ in 0..(366 * 24 * 60) {
+        // advance 1 minute
+        m += 1;
+        if m >= 60 {
             m = 0;
-            if h < 23 {
-                h += 1;
-            } else {
-                h = 0; /* crudely wrap d/mo/dw */
+            h += 1;
+            if h >= 24 {
+                h = 0;
+                d += 1;
+                if d > days_in_month(y, mo) {
+                    d = 1;
+                    mo += 1;
+                    if mo > 12 {
+                        mo = 1;
+                        y += 1;
+                        if y > year + 1 {
+                            return None;
+                        }
+                    }
+                }
+                dw = compute_dow(y, mo, d);
             }
         }
         if expr.matches(m, h, d, mo, dw) {
@@ -450,7 +504,7 @@ mod tests {
     fn next_after_finds_match() {
         let e = CronExpr::parse("0 * * * *").unwrap();
         // 从 m=5, h=9 出发, 下个 minute=0 触发点
-        let n = next_after(&e, 5, 9, 1, 1, 0);
+        let n = next_after(&e, 2026, 5, 9, 1, 1, 0);
         assert!(n.is_some(), "next_after should find a trigger");
         let (m, _, _, _, _) = n.unwrap();
         assert_eq!(
