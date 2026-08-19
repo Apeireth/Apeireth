@@ -57,8 +57,9 @@ check_hard_walls() {
         pass "$section.1" "workspace.version = $CUR"
     fi
 
-    # A2: 0 触碰 24 LOCKED crate
-    local LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+    # A2: 0 触碰 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
+    # 注: 之前漏 apeireth-graph, 修于 commit 71984e03 + 后续 hard-walls job 修
+    local LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
     local LOCKED_REGEX
     LOCKED_REGEX=$(echo "$LOCKED" | tr ' ' '|')
     local HITS
@@ -109,7 +110,7 @@ check_pii() {
         "31683" "东乡语" "治安学"
     )
 
-    # 排除 self + CHANGELOG (合法元提及) + 历史 ci-fix-log
+    # 排除 self + 合法元提及 (CHANGELOG, ci-fix-log, release-prep.sh 自身含 PII_PATTERNS 定义)
     local EXCLUDES=(
         ':(exclude)docs/archive/**'
         ':(exclude)research/source/**'
@@ -118,6 +119,7 @@ check_pii() {
         ':(exclude)frontend/companion-desktop/pnpm-lock.yaml'
         ':(exclude)frontend/companion-desktop/src-tauri/Cargo.lock'
         ':(exclude).github/workflows/pii-leak-detection.yml'
+        ':(exclude)scripts/release-prep.sh'
         ':(exclude)CHANGELOG.md'
         ':(exclude)docs/04-internal/ci-fix-log-2026-08.md'
         ':(exclude)**/target/**'

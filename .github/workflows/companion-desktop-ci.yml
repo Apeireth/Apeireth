@@ -123,7 +123,9 @@ jobs:
             echo "::warning::base_sha 空, 跳过守门"
             exit 0
           fi
-          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
+          # 24 LOCKED crate (per 8 硬墙 + CODEOWNERS 1:1)
+          # 注: 之前漏 apeireth-graph (commit 71984e03 CODEOWNERS sync 发现)
+          LOCKED="apeireth-supervisor apeireth-agent apeireth-council apeireth-bus apeireth-protocol apeireth-mcp apeireth-tool-registry apeireth-tool-runtime apeireth-graph apeireth-pipeline apeireth-tool-approval apeireth-extension apeireth-evolution apeireth-api apeireth-core apeireth-memory apeireth-asi apeireth-tools apeireth-cli apeireth-bench apeireth-cognition apeireth-action apeireth-life-force apeireth-constraint"
           HITS=$(git diff --name-only "$BASE"...HEAD -- 'crates/*.rs' | grep -E "crates/($(echo $LOCKED | tr ' ' '|'))/" || true)
           if [ -n "$HITS" ]; then
             echo "::error::LOCKED crate 被触碰: $HITS"
