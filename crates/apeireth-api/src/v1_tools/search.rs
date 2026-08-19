@@ -22,8 +22,7 @@
 //! - ✅ 占位返结构化结果, 含 query 反射 + 占位提示
 //! - ✅ search "name" 用 "Search" (跟 web_search 的 "WebSearch" 区分)
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1: 4 actions 真接 dispatch + 5 K-1 真跑, 但底层引擎显式 NotImplemented (不假装)
+//! **8 哲学锚穿透**://! - 锚 #1: 4 actions 真接 dispatch + 5 K-1 真跑, 但底层引擎显式 NotImplemented (不假装)
 //! - 锚 #2: `SEARCH_ACTIONS_COUNT = 4` const assert
 //! - 锚 #3: `#![deny(unsafe_code)]` 继承
 //! - 锚 #4: 5 K-1 强校验全真跑 (输入守门)
@@ -32,12 +31,12 @@
 //!
 //! **8 项不修改承诺**:
 //! - ❌ 不改 LOCKED crate
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方搜索引擎 (留 R21 接 reqwest 真调 Google / Bing API)
 //! - ❌ 不引 reqwest 之外 HTTP 客户端 (workspace reqwest 0.12 已用)
 //! - ❌ 不假装已实现搜索 (显式 NotImplemented, 不假数据)
-//! - ❌ 不破坏 24 LOCKED crate
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - ❌ 不假装支持所有 200+ ISO 639 语言 (留 R21, 当前简化版)
 
 #![deny(unsafe_code)]

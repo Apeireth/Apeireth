@@ -393,4 +393,176 @@ mod tests {
         let result = p.complete_stream(req).await;
         assert!(matches!(result, Err(LlmError::Config(_))));
     }
+
+    // ============================================================
+    // 单元测试 — ChatMessage / LlmRequest / ProviderCapabilities
+    // (per 2026-08-19 zero-test report P0: 接口 crate 真正 0 业务测试)
+    // ============================================================
+
+    /// ChatMessage 3 构造器 happy path: 各自 role 正确
+    #[test]
+    fn chat_message_constructors_set_correct_role() {
+        let s = ChatMessage::system("sys prompt");
+        let u = ChatMessage::user("hi");
+        let a = ChatMessage::assistant("reply");
+        assert_eq!(s.role, ChatRole::System);
+        assert_eq!(s.content, "sys prompt");
+        assert_eq!(u.role, ChatRole::User);
+        assert_eq!(u.content, "hi");
+        assert_eq!(a.role, ChatRole::Assistant);
+        assert_eq!(a.content, "reply");
+    }
+
+    /// LlmRequest builder 链 happy path: new + with_temperature + with_max_tokens + with_trace_id 字段正确
+    #[test]
+    fn llm_request_builder_chain_populates_fields_correctly() {
+        let req = LlmRequest::new("claude-sonnet-4", vec![ChatMessage::user("hi")])
+            .with_temperature(0.7)
+            .with_max_tokens(2048)
+            .with_trace_id(42);
+        assert_eq!(req.model, "claude-sonnet-4");
+        assert_eq!(req.messages.len(), 1);
+        assert_eq!(req.messages[0].role, ChatRole::User);
+        assert!((req.temperature - 0.7).abs() < 1e-6);
+        assert_eq!(req.max_tokens, 2048);
+        assert_eq!(req.trace_id, Some(42));
+        // stop 字段空 (无 with_stop 构造器)
+        assert!(req.stop.is_empty());
+    }
+
+    /// LlmRequest edge case: with_temperature clamp 到 [0, 2], with_max_tokens 限 32_768
+    #[test]
+    fn llm_request_builder_clamps_out_of_range_values() {
+        // 边界: temperature 越界 clamp
+        let r1 = LlmRequest::new("m", vec![]).with_temperature(5.0);
+        assert!((r1.temperature - 2.0).abs() < 1e-6, "temperature 上限 clamp 到 2.0");
+        let r2 = LlmRequest::new("m", vec![]).with_temperature(-1.0);
+        assert!((r2.temperature - 0.0).abs() < 1e-6, "temperature 下限 clamp 到 0.0");
+        // 边界: max_tokens 越界 clamp
+        let r3 = LlmRequest::new("m", vec![]).with_max_tokens(100_000);
+        assert_eq!(r3.max_tokens, 32_768, "max_tokens 上限 clamp 到 32_768");
+    }
+
+    /// LlmRequest edge case: 空 messages vec 合法 (某些 provider 支持纯 system prompt)
+    #[test]
+    fn llm_request_empty_messages_is_legal() {
+        let req = LlmRequest::new("gpt-4o", vec![]);
+        assert_eq!(req.messages.len(), 0);
+        assert_eq!(req.model, "gpt-4o");
+    }
+
+    /// ProviderCapabilities bitflag: NONE=0, 各常量独立位, union + contains 正确
+    #[test]
+    fn provider_capabilities_bitflag_works() {
+        assert_eq!(ProviderCapabilities::NONE.bits(), 0);
+        assert_eq!(ProviderCapabilities::CHAT.bits(), 1 << 0);
+        assert_eq!(ProviderCapabilities::STREAMING.bits(), 1 << 1);
+        assert_eq!(ProviderCapabilities::TOOLS.bits(), 1 << 2);
+        assert_eq!(ProviderCapabilities::VISION.bits(), 1 << 3);
+        assert_eq!(ProviderCapabilities::JSON_MODE.bits(), 1 << 4);
+        assert_eq!(ProviderCapabilities::SYSTEM_PROMPT.bits(), 1 << 5);
+        assert_eq!(ProviderCapabilities::THINKING.bits(), 1 << 6);
+        assert_eq!(ProviderCapabilities::LONG_CONTEXT.bits(), 1 << 7);
+        assert_eq!(ProviderCapabilities::CUSTOM_TEMPERATURE.bits(), 1 << 8);
+        // union + contains
+        let caps = ProviderCapabilities::CHAT | ProviderCapabilities::STREAMING;
+        assert!(caps.contains(ProviderCapabilities::CHAT));
+        assert!(caps.contains(ProviderCapabilities::STREAMING));
+        assert!(!caps.contains(ProviderCapabilities::TOOLS));
+        // contains 严格 (subset): caps ⊇ target → true; caps ⊃ target (有 target 没的) → true
+        let subset = ProviderCapabilities::CHAT;
+        assert!(caps.contains(subset));
+        // 全部 9 个位开 (0x1FF)
+        let all = ProviderCapabilities::CHAT
+            | ProviderCapabilities::STREAMING
+            | ProviderCapabilities::TOOLS
+            | ProviderCapabilities::VISION
+            | ProviderCapabilities::JSON_MODE
+            | ProviderCapabilities::SYSTEM_PROMPT
+            | ProviderCapabilities::THINKING
+            | ProviderCapabilities::LONG_CONTEXT
+            | ProviderCapabilities::CUSTOM_TEMPERATURE;
+        assert_eq!(all.bits(), 0x1FF);
+    }
+
+    /// ProviderHealth::default 是 healthy=true
+    #[test]
+    fn provider_health_default_is_healthy() {
+        let h = ProviderHealth::default();
+        assert!(h.healthy);
+        assert_eq!(h.latency_p50_ms, 0);
+        assert_eq!(h.error_rate, 0.0);
+        assert_eq!(h.consecutive_failures, 0);
+        assert_eq!(h.last_check_ms, 0);
+    }
+
+    /// LlmProvider trait contract: mock impl 实现 4 个必需方法 + capabilities 默认值
+    #[tokio::test]
+    async fn llm_provider_trait_contract_mock_completes() {
+        // 验证: 实现 LlmProvider 的 mock provider 在 dyn dispatch 下能正常调 complete()
+        struct MockProvider {
+            resp_content: String,
+        }
+        #[async_trait]
+        impl LlmProvider for MockProvider {
+            fn name(&self) -> &str {
+                "mock"
+            }
+            fn supports_model(&self, model: &str) -> bool {
+                model == "mock-v1"
+            }
+            async fn complete(&self, _req: LlmRequest) -> Result<LlmResponse, LlmError> {
+                Ok(LlmResponse {
+                    content: self.resp_content.clone(),
+                    usage: TokenUsage::new(5, 2),
+                    latency_ms: 10,
+                    model: "mock-v1".to_string(),
+                    finish_reason: "stop".to_string(),
+                    provider: "mock".to_string(),
+                })
+            }
+        }
+        let p = MockProvider { resp_content: "hi from mock".to_string() };
+        // 1) dyn dispatch
+        let dyn_p: &dyn LlmProvider = &p;
+        assert_eq!(dyn_p.name(), "mock");
+        assert!(dyn_p.supports_model("mock-v1"));
+        assert!(!dyn_p.supports_model("gpt-4o"));
+        // 2) capabilities 默认值
+        let caps = dyn_p.capabilities();
+        assert!(caps.contains(ProviderCapabilities::CHAT));
+        assert!(caps.contains(ProviderCapabilities::SYSTEM_PROMPT));
+        assert!(caps.contains(ProviderCapabilities::CUSTOM_TEMPERATURE));
+        // 3) complete 返 Ok
+        let req = LlmRequest::new("mock-v1", vec![ChatMessage::user("x")]);
+        let resp = dyn_p.complete(req).await.expect("complete ok");
+        assert_eq!(resp.content, "hi from mock");
+        assert_eq!(resp.usage.prompt_tokens, 5);
+        assert_eq!(resp.usage.completion_tokens, 2);
+        assert_eq!(resp.usage.total_tokens, 7); // new(prompt, completion) 算的
+        assert_eq!(resp.finish_reason, "stop");
+        assert_eq!(resp.provider, "mock");
+    }
+
+    /// LlmProvider trait contract: metadata() 默认实现用 name() + CARGO_PKG_VERSION
+    #[test]
+    fn llm_provider_metadata_default_uses_name_and_cargo_version() {
+        struct P;
+        #[async_trait]
+        impl LlmProvider for P {
+            fn name(&self) -> &str {
+                "p"
+            }
+            fn supports_model(&self, _: &str) -> bool {
+                true
+            }
+            async fn complete(&self, _: LlmRequest) -> Result<LlmResponse, LlmError> {
+                unimplemented!()
+            }
+        }
+        let m = P.metadata();
+        assert_eq!(m.name, "p");
+        assert_eq!(m.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(m.endpoint, None);
+    }
 }

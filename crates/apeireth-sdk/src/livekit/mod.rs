@@ -1,6 +1,6 @@
 //! # apeireth-sdk-livekit (STUB MODE)
 //!
-//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 6 哲学锚 + 主人审**
+//! ⚠️ **STUB MODE: R20 阶段 4 效果, 修改需经 8 哲学锚 + 主人审**
 //!
 //! LiveKit 实时音视频 SDK stub (1:1 翻译 `livekit-client` v0.9.21 商业版, per
 //! `livekit-client/dist/src/room/Room.d.ts` + `dist/src/room/Participant.d.ts` +
@@ -16,7 +16,7 @@
 //! 1. 改 `STUB_MODE = false` (编译期 hardcode)
 //! 2. 放开 Cargo.toml 的 `livekit-server-sdk` deps
 //! 3. 加 workspace members (`crates/apeireth-sdk-livekit`)
-//! 4. 经 6 哲学锚 (RIVAL 蓝图) + 主人审
+//! 4. 经 8 哲学锚 (RIVAL 蓝图) + 主人审
 //! 跳过任何一条 → 整合时 cargo build 必挂, fixture 5 必挂.
 //!
 //! ## 6 核心 API (per task spec §3 + v0.9.21 商业版 Room 1:1)
@@ -56,9 +56,9 @@
 //!
 //! ## 8 项不修改承诺
 //!
-//! - ✅ 0 改 24 LOCKED crate (`crates/apeireth-{action,agent,asi,bench,bus,central,cli,cognition,consciousness,constraint,core,council,evolution,extension,life-force,motivation,onion,perception,protocol,pybridge,relation,sovereignty,supervisor,tauri-stub,upgrade,value,verify,web}/src/`, 0 触碰)
-//! - ✅ 0 改 workspace version (1.0.0 LOCKED, 走 workspace inherit)
-//! - ✅ 0 改 6 哲学锚 + 8 项不修改承诺
+//! - ✅ 0 改 24 LOCKED crate (`crates/apeireth-{action,agent,asi,bench,bus,central,cli,cognition,consciousness,constraint,core,council,evolution,extension,life-force,motivation,onion,perception,protocol,pybridge,relation,sovereignty,supervisor,tauri-stub,upgrade,value,verify,web}/src/`, 0 触碰; R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! - ✅ 0 改 workspace version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0, 走 workspace inherit)
+//! - ✅ 0 改 8 哲学锚 + 8 项不修改承诺
 //! - ✅ 0 引 NewAPI (不引 livekit-server-sdk Rust crate, R21 续)
 //! - ✅ 0 重复造轮子 (复用 apeireth-protocol 4 协议 ZST adapter + apeireth-keyring keyring 模式)
 //! - ✅ 0 假装已实现 (6 API 全 NotImplemented)
@@ -144,7 +144,7 @@ pub const EVENT_CHANNEL_CAPACITY: usize = 100;
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
 ///
-/// R20 阶段 4 续真接 / R21 续真接 livekit-server SDK 时, **必须经 6 哲学锚 + 主人审才能改 `false`**.
+/// R20 阶段 4 续真接 / R21 续真接 livekit-server SDK 时, **必须经 8 哲学锚 + 主人审才能改 `false`**.
 pub const STUB_MODE: bool = true;
 
 /// 编译期守门: STUB_MODE 必须 == true (per STUB MODE 守门 + 8 项不修改承诺).
@@ -152,7 +152,7 @@ pub const STUB_MODE: bool = true;
 /// 改 false 需同时改本 assert + STUB_MODE 标志, 强行提醒 reviewer.
 const _: () = assert!(
     STUB_MODE == true,
-    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R20 阶段 4 续 / R21)"
+    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R20 阶段 4 续 / R21)"
 );
 
 /// m3 防御: 查 STUB_MODE 状态 (per task spec 额外 1 守门工具).
