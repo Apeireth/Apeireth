@@ -226,6 +226,22 @@
 .bubble-close:hover{color:var(--text)}
 @keyframes slideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:none}}
 
+/* ---------- Quick Window (Spotlight Mode) ---------- */
+.quick-window-shell{display:flex;flex-direction:column;min-height:100vh;background:rgba(21,20,25,0.92);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--amber-line);border-radius:12px;padding:14px 18px;box-shadow:var(--shadow);overflow:hidden}
+.quick-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;user-select:none;cursor:grab}
+.quick-brand{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--amber);font-weight:600}
+.quick-close-btn{border:0;background:transparent;color:var(--muted);cursor:pointer;display:grid;place-items:center;padding:2px}
+.quick-close-btn:hover{color:var(--danger)}
+.quick-input-container{display:flex;align-items:center;gap:8px;background:var(--surface-2);border:1px solid var(--line-strong);border-radius:8px;padding:4px 8px 4px 12px}
+.quick-input-container:focus-within{border-color:var(--amber-line);box-shadow:0 0 0 2px var(--amber-wash)}
+.quick-input-container input{flex:1;background:transparent;border:0;outline:0;color:var(--text);font-size:13px}
+.quick-send-btn{width:28px;height:28px;padding:0;border:0;border-radius:6px;background:var(--amber);color:#19120a;display:grid;place-items:center;flex:none}
+.quick-tags-row{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.quick-tag{border:1px solid var(--line);background:var(--surface-3);color:var(--muted);border-radius:999px;padding:3px 9px;font-size:11px;cursor:pointer}
+.quick-tag:hover{border-color:var(--amber-line);color:var(--amber)}
+.quick-response-area{flex:1;min-height:0;overflow:auto;margin-top:12px;padding:10px 12px;background:rgba(0,0,0,0.25);border:1px solid var(--line);border-radius:8px;font-size:13px;line-height:1.6;color:var(--text);max-height:220px}
+
+
 
 
 
