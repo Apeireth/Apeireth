@@ -8,7 +8,7 @@
 //!
 //! **不漂移 (主哲学锚 #1)**:
 //! - 0 改 Skill / Registry / parse_version / is_valid_id (R23 LOCKED)
-//! - 0 改 workspace 1.0.0 / 24 LOCKED crate
+//! - 0 改 workspace 1.2.0 (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制) / 24 LOCKED crate 入口签名已降级
 //!
 //! **借鉴锚 (S-1)**: VCP `vcptoolbox/modules/<name>/index.js` 的 5 字段 metadata 模式
 //! (name / description / dependencies / env / handler)
