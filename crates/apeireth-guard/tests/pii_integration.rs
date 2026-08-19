@@ -2,14 +2,14 @@
 
 #![allow(missing_docs)]
 
-use apeireth_guard::{
-    PiiKind, PiiMatch, RedactionStrategy, detect_pii, redact_one, redact_text,
-};
+use apeireth_guard::{detect_pii, redact_one, redact_text, PiiKind, PiiMatch, RedactionStrategy};
 
 #[test]
 fn detect_pii_email() {
     let r = detect_pii("contact me at user@example.com please");
-    assert!(r.iter().any(|m| m.kind == PiiKind::Email && m.value == "user@example.com"));
+    assert!(r
+        .iter()
+        .any(|m| m.kind == PiiKind::Email && m.value == "user@example.com"));
 }
 
 #[test]
@@ -33,7 +33,9 @@ fn detect_pii_credit_card() {
 #[test]
 fn detect_pii_ip_address() {
     let r = detect_pii("server at 192.168.1.1");
-    assert!(r.iter().any(|m| m.kind == PiiKind::IpAddress && m.value == "192.168.1.1"));
+    assert!(r
+        .iter()
+        .any(|m| m.kind == PiiKind::IpAddress && m.value == "192.168.1.1"));
 }
 
 #[test]
@@ -100,7 +102,11 @@ fn detect_pii_offset_is_byte_accurate() {
 
 #[test]
 fn redact_one_email_remove() {
-    let r = redact_one("user@example.com", PiiKind::Email, RedactionStrategy::Remove);
+    let r = redact_one(
+        "user@example.com",
+        PiiKind::Email,
+        RedactionStrategy::Remove,
+    );
     assert_eq!(r, "[REDACTED]");
     assert!(!r.contains("user"));
     assert!(!r.contains("example.com"));
@@ -125,13 +131,19 @@ fn redact_one_email_hash() {
     } else {
         r.as_str()
     };
-    assert!(hex_part.chars().all(|c| c.is_ascii_hexdigit()),
-            "Hash 应含 hex digits: {r}");
+    assert!(
+        hex_part.chars().all(|c| c.is_ascii_hexdigit()),
+        "Hash 应含 hex digits: {r}"
+    );
 }
 
 #[test]
 fn redact_one_email_replace_label() {
-    let r = redact_one("user@example.com", PiiKind::Email, RedactionStrategy::ReplaceLabel);
+    let r = redact_one(
+        "user@example.com",
+        PiiKind::Email,
+        RedactionStrategy::ReplaceLabel,
+    );
     assert_eq!(r, "[EMAIL]", "ReplaceLabel 应返大写 [EMAIL]");
 }
 
@@ -143,14 +155,22 @@ fn redact_one_phone_remove() {
 
 #[test]
 fn redact_one_high_entropy_token_remove() {
-    let r = redact_one("FAKE-type1-1234567890abcdefxyz", PiiKind::SecretToken, RedactionStrategy::Remove);
+    let r = redact_one(
+        "FAKE-type1-1234567890abcdefxyz",
+        PiiKind::SecretToken,
+        RedactionStrategy::Remove,
+    );
     assert_eq!(r, "[REDACTED]");
     assert!(!r.contains("FAKE"));
 }
 
 #[test]
 fn redact_one_env_assignment_remove() {
-    let r = redact_one("FAKE-VALUE-TO-REMOVE-00", PiiKind::EnvSecret, RedactionStrategy::Remove);
+    let r = redact_one(
+        "FAKE-VALUE-TO-REMOVE-00",
+        PiiKind::EnvSecret,
+        RedactionStrategy::Remove,
+    );
     assert_eq!(r, "[REDACTED]");
 }
 
