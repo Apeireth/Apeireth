@@ -19,6 +19,7 @@
 .nav button.active{background:var(--amber-wash);color:var(--amber)}
 .sidebar-footer{padding:12px 10px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
 .conn-hint{display:flex;align-items:center;gap:6px;color:var(--faint);font-size:11px;padding:0 4px}
+.conn-hint.offline{color:var(--danger)}
 
 .main{flex:1;min-width:0;display:flex;min-height:0;background:var(--surface)}
 

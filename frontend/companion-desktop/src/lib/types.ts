@@ -62,6 +62,9 @@ export interface RuntimeStatus {
   model?: string;
 }
 
+/** Runtime health 状态 (Phase 5E) — 来自真实 runtime 状态, 非纯 UI timer. */
+export type HealthState = 'connecting' | 'ready' | 'generating' | 'error' | 'offline';
+
 // Apeireth 端点配置 (持久化到 localStorage)
 export interface ApeirethConfig {
   baseUrl: string;
