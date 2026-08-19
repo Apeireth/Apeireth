@@ -101,9 +101,10 @@ impl NetworkIsolationLevel {
         match s.to_ascii_lowercase().as_str() {
             "none" | "off" | "disabled" | "" => NetworkIsolationLevel::None,
             "loopback_only" | "loopback" | "lo" => NetworkIsolationLevel::LoopbackOnly,
-            "default_deny_with_whitelist" | "default_deny" | "whitelist" | "deny_with_whitelist" => {
-                NetworkIsolationLevel::DefaultDenyWithWhitelist
-            }
+            "default_deny_with_whitelist"
+            | "default_deny"
+            | "whitelist"
+            | "deny_with_whitelist" => NetworkIsolationLevel::DefaultDenyWithWhitelist,
             "force_deny" | "force" | "deny_all" => NetworkIsolationLevel::ForceDeny,
             _ => NetworkIsolationLevel::None, // 0 装默认, 不假装
         }
@@ -160,7 +161,8 @@ pub trait NetworkIsolation: Send + Sync + std::fmt::Debug {
     /// Windows 计划: `WFP` (Windows Filtering Platform) 命名空间 + 进程 token.
     ///
     /// **0 装契约**: trait 未实装时必返 `Err`, 不返回 `Ok(())`.
-    fn apply_to_child(&self, cmd: &mut Command, cfg: &NetworkIsolationConfig) -> Result<(), String>;
+    fn apply_to_child(&self, cmd: &mut Command, cfg: &NetworkIsolationConfig)
+        -> Result<(), String>;
 
     /// 清理隔离 (子进程退出时调用, 借鉴 libkrun 清理思路).
     ///
@@ -186,8 +188,15 @@ impl NetworkIsolation for NoopNetworkIsolation {
         "NoopNetworkIsolation: 未实装 (0 装 PASS, 0 假装已隔离; Linux netns+cgroup / Windows WFP 接入后启用)".into()
     }
 
-    fn apply_to_child(&self, _cmd: &mut Command, _cfg: &NetworkIsolationConfig) -> Result<(), String> {
-        Err("NoopNetworkIsolation: 网络隔离未实装 (Linux netns + cgroup / Windows WFP 接入后启用)".into())
+    fn apply_to_child(
+        &self,
+        _cmd: &mut Command,
+        _cfg: &NetworkIsolationConfig,
+    ) -> Result<(), String> {
+        Err(
+            "NoopNetworkIsolation: 网络隔离未实装 (Linux netns + cgroup / Windows WFP 接入后启用)"
+                .into(),
+        )
     }
 
     fn cleanup(&self) -> Result<(), String> {
@@ -218,7 +227,10 @@ pub fn default_network_isolation() -> Box<dyn NetworkIsolation> {
 /// - `cfg.level != None` 且 `isol.available() = true` → 返 `Ok` (实装在岗, 调用方继续).
 ///
 /// **借鉴 Firecracker 失败语义透明**: trait 未实装时返 Err 含可行动信息 (不是 silent).
-pub fn assert_isolated(cfg: &NetworkIsolationConfig, isol: &dyn NetworkIsolation) -> Result<(), String> {
+pub fn assert_isolated(
+    cfg: &NetworkIsolationConfig,
+    isol: &dyn NetworkIsolation,
+) -> Result<(), String> {
     if cfg.level == NetworkIsolationLevel::None {
         return Ok(()); // 0 装 PASS: 不强制隔离
     }
@@ -414,7 +426,11 @@ mod tests {
             fn status(&self) -> String {
                 "MockAvailable: 实装可用 (test only)".into()
             }
-            fn apply_to_child(&self, _cmd: &mut Command, _cfg: &NetworkIsolationConfig) -> Result<(), String> {
+            fn apply_to_child(
+                &self,
+                _cmd: &mut Command,
+                _cfg: &NetworkIsolationConfig,
+            ) -> Result<(), String> {
                 Ok(())
             }
             fn cleanup(&self) -> Result<(), String> {
