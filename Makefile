@@ -24,7 +24,7 @@ TOOLS_DIR   := tools
 .DEFAULT_GOAL := help
 
 # 假目标声明 (避免与同名文件冲突)
-.PHONY: help audit sbom release-check release-prep release-prep-block test check fmt fmt-check tools-install tools-check clean-vet clean-sbom
+.PHONY: help audit sbom release-check release-prep release-prep-block test check fmt fmt-check tools-install tools-check clean-vet clean-sbom ci-build ci-test ci-release ci
 
 # ----------------------------------------------------------------------------
 # help — 列出所有 target
@@ -34,18 +34,27 @@ help: ## 列出所有 make target
 	@echo "  Apeireth 开发 + 发布期工具链 (TP20-S5 + post-1.0.0)"
 	@echo "=========================================="
 	@echo ""
+	@echo "  === 日常开发 (本地反馈环) ==="
 	@echo "  make check            cargo check --workspace --all-targets (~25s, 增量编译)"
-	@echo "  make test             cargo test --workspace --all-targets (全测试, 23K+)"
+	@echo "  make test             cargo test --workspace --all-targets --locked (全测试, 23K+)"
 	@echo "  make fmt              cargo fmt --all (格式)"
 	@echo ""
+	@echo "  === CI 复刻 (本地 == GitHub Actions, 防 push 后 fail) ==="
+	@echo "  make ci               ci-build + ci-test + ci-release 一键复刻 rust-ci.yml"
+	@echo "  make ci-build         cargo build --workspace --tests --locked  (rust.yml line 63)"
+	@echo "  make ci-test          cargo nextest run --workspace --profile ci --locked (rust.yml line 67)"
+	@echo "  make ci-release       cargo build --release --workspace --locked  (rust-ci.yml line 106)"
+	@echo "  ↑ 任何 1 个 exit != 0 → 不要 push (跟 CI 必 fail 一样)"
+	@echo ""
+	@echo "  === 发布期 (1.0 release 前必跑) ==="
 	@echo "  make tools-install    装 cargo-vet/audit/deny/cyclonedx (best-effort)"
 	@echo "  make tools-check      检查工具链是否齐全 (exit 0 = 缺也 OK, 仅打印)"
 	@echo "  make audit            跑 cargo vet + audit + deny (scripts/vet.sh)"
 	@echo "  make sbom             生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)"
-	@echo ""
 	@echo "  make release-prep     8 硬墙 + PII + 12 项 checklist (scripts/release-prep.sh, post-1.0.0)"
 	@echo "  make release-check    audit + sbom (1.0 release 前必跑)"
 	@echo ""
+	@echo "  === 清理 ==="
 	@echo "  make clean-vet        清 reports/ 里 tp20-s5-* 日志"
 	@echo "  make clean-sbom       删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt"
 	@echo "  make help             本帮助"
@@ -97,14 +106,44 @@ audit: ## 跑 cargo vet + audit + deny
 check: ## cargo check --workspace --all-targets
 	cargo check --workspace --all-targets
 
-test: ## cargo test --workspace --all-targets (23K+ 测试)
-	cargo test --workspace --all-targets
+test: ## cargo test --workspace --all-targets --locked (本地全测试, 锁文件校验)
+	cargo test --workspace --all-targets --locked
 
 fmt: ## cargo fmt --all
 	cargo fmt --all
 
 fmt-check: ## cargo fmt --all --check (CI 模式, 0 diff exit 0)
 	cargo fmt --all --check
+
+# ----------------------------------------------------------------------------
+# CI 复刻 — 1:1 模拟 .github/workflows/rust-ci.yml + rust.yml 跑的命令
+# ----------------------------------------------------------------------------
+# 设计: 本地 make ci exit 0 → push 后 GitHub Actions 必绿 (本机 + CI 同源)
+# 失败处理: 任何 step exit != 0 → make 中止, 不要 push (跟 CI fail 一致)
+# 注意: CI 还会跑 8 硬墙 (make release-prep), 但 8硬墙 是仓库级守门, 不算编译/测试
+# ----------------------------------------------------------------------------
+
+ci-build: ## cargo build --workspace --tests --locked  (rust.yml line 63 1:1)
+	@echo "=== ci-build: cargo build --workspace --tests --locked ==="
+	cargo build --workspace --tests --locked
+
+ci-test: ## cargo nextest run --workspace --profile ci --locked  (rust.yml line 67 1:1)
+	@echo "=== ci-test: cargo nextest run --workspace --profile ci --locked ==="
+	@command -v cargo-nextest >/dev/null 2>&1 || { \
+		echo "  ❌ cargo-nextest 未装, 跑 'cargo install cargo-nextest --locked' 后重试"; \
+		exit 1; }
+	cargo nextest run --workspace --profile ci --locked
+
+ci-release: ## cargo build --release --workspace --locked  (rust-ci.yml line 106 1:1)
+	@echo "=== ci-release: cargo build --release --workspace --locked ==="
+	cargo build --release --workspace --locked
+
+ci: ci-build ci-test ci-release ## ci-build + ci-test + ci-release 一键复刻 (== push 后 CI)
+	@echo ""
+	@echo "=========================================="
+	@echo "  ✅ make ci 全绿 — 本地 == GitHub Actions 验证通过"
+	@echo "  ↑ 现在可以安全 git push 了"
+	@echo "=========================================="
 
 # ----------------------------------------------------------------------------
 # release-prep — 8 硬墙 + PII + 12 项 checklist (post-1.0.0)
