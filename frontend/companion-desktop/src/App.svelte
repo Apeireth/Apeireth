@@ -45,7 +45,10 @@
     loadConversations,
     saveConfig,
     saveConversations,
+    fetchCapabilities,
+    capabilitySupported,
   } from './lib/runtime';
+  import type {CapabilityManifest} from './lib/types';
 
   // 6 大一级导航
   const nav = [
@@ -76,6 +79,9 @@
   });
   let showRuntimeModal = $state(false);
   let isRefreshingHealth = $state(false);
+
+  // Runtime Capability Manifest — gate UI 按钮的依据 (不再 404-probing).
+  let capabilities = $state<CapabilityManifest | null>(null);
 
   // 智能滚动状态管理
   let messagesContainer = $state<HTMLElement | null>(null);
@@ -231,6 +237,16 @@
       healthReport = report;
       if (!busy) {
         healthState = report.overall;
+      }
+      // health 之后拉取 capability manifest (runtime version 变化/重连时刷新).
+      // 不每次 render 重复 fetch — 仅在 refreshConnection (15s 节拍/手动) 时.
+      if (report.overall !== 'offline') {
+        const prevVersion = capabilities?.runtime.version;
+        const fresh = await fetchCapabilities(config);
+        // 仅在 version 变化或首次加载时更新 (避免 15s 节拍无谓刷新覆盖).
+        if (!capabilities || fresh.runtime.version !== prevVersion || fresh.legacy !== capabilities.legacy) {
+          capabilities = fresh;
+        }
       }
     } finally {
       isRefreshingHealth = false;
@@ -567,11 +583,11 @@
         }}
       />
     {:else if activeView === 'activity'}
-      <ActivityView {config} />
+      <ActivityView {config} {capabilities} />
     {:else if activeView === 'tools'}
-      <ToolsView {config} />
+      <ToolsView {config} {capabilities} />
     {:else if activeView === 'memory'}
-      <MemoryView {config} />
+      <MemoryView {config} {capabilities} />
     {:else if activeView === 'settings'}
       <SettingsView
         {config}
@@ -596,6 +612,7 @@
 <RuntimeModal
   open={showRuntimeModal}
   report={healthReport}
+  {capabilities}
   isRefreshing={isRefreshingHealth}
   onClose={() => showRuntimeModal = false}
   onRefresh={refreshConnection}

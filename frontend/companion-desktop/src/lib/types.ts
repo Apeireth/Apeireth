@@ -164,6 +164,8 @@ export interface ActivityItem {
   severity: 'info' | 'success' | 'warning' | 'error';
   detail?: string;
   raw?: unknown;
+  /** Phase 5: 关联的 trace_id (SSE trace 事件携带). */
+  traceId?: string;
 }
 
 export interface MemoryEpisodeItem {
@@ -176,6 +178,10 @@ export interface MemoryEpisodeItem {
   stream?: string;
   importance?: number;
   tags?: string[];
+  /** Phase 3 governance: 是否受保护 (防自动遗忘). */
+  protected?: boolean;
+  /** Phase 3 governance: active / forgotten. */
+  status?: 'active' | 'forgotten';
 }
 
 export interface ToolItem {
