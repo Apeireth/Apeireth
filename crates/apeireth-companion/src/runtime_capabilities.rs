@@ -190,14 +190,14 @@ pub fn current_manifest() -> CapabilityManifest {
         cap("tools.invoke", true, false, true, &["invoke"]),
     ];
 
-    // --- permissions: 授权 ---
-    // grant 已存在 (master token). revoke / list-grants / policy 待 Phase 4.
+    // --- permissions: 授权 (Phase 4 已接线 revoke/grants.read/evaluate) ---
+    // policy.write (持久化策略模型) 本轮不实现; policy.read = evaluate (只读评估).
     let permissions = vec![
         cap("permissions.requests.read", true, true, false, &["list"]),
         cap("permissions.grant", true, false, true, &["grant"]),
-        cap("permissions.revoke", false, false, false, &[]),
-        cap("permissions.grants.read", false, false, false, &[]),
-        cap("permissions.policy.read", false, false, false, &[]),
+        cap("permissions.revoke", true, false, true, &["revoke"]),
+        cap("permissions.grants.read", true, true, false, &["list"]),
+        cap("permissions.policy.read", true, true, false, &["evaluate"]),
         cap("permissions.policy.write", false, false, false, &[]),
     ];
 
@@ -332,10 +332,19 @@ mod tests {
     #[test]
     fn unimplemented_mutations_declared_unsupported() {
         let m = current_manifest();
-        // 这些 mutation 尚未接线 (Phase 4/5), 必须诚实声明 unsupported.
-        // (sessions.* 在 Phase 2, memory.* 在 Phase 3 接线, 不在此列.)
-        assert!(!m.is_supported("permissions.revoke"));
+        // 这些 mutation 尚未接线 (Phase 5 trace / Phase 4 policy.write), 必须诚实声明 unsupported.
+        // (sessions.* P2, memory.* P3, permissions.revoke P4 已接线, 不在此列.)
+        assert!(!m.is_supported("permissions.policy.write"));
         assert!(!m.is_supported("trace.read"));
+    }
+
+    #[test]
+    fn permissions_revoke_supported_after_phase4() {
+        let m = current_manifest();
+        // Phase 4 接线后: grant 可见性 + 撤销 + 评估.
+        assert!(m.is_supported("permissions.revoke"));
+        assert!(m.is_supported("permissions.grants.read"));
+        assert!(m.is_supported("permissions.policy.read"));
     }
 
     #[test]
