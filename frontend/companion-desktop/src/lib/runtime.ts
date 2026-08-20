@@ -625,6 +625,9 @@ export async function fetchCapabilities(config: ApeirethConfig): Promise<Capabil
 /**
  * 查询 manifest 是否支持某 capability ID. 未知 ID 一律返回 false (保守).
  * null manifest (尚未加载) 也返回 false.
+ *
+ * 注意: supported 是静态语义 (runtime 是否实现该能力). 要判断「现在能否调用」
+ * 应使用 capabilityAvailable() — 它反映 provider/凭据状态.
  */
 export function capabilitySupported(manifest: CapabilityManifest | null, id: string): boolean {
   if (!manifest) return false;
@@ -634,6 +637,41 @@ export function capabilitySupported(manifest: CapabilityManifest | null, id: str
     }
   }
   return false;
+}
+
+/**
+ * 查询某 capability 是否**当前可用** (动态语义, 受 provider/凭据影响).
+ *
+ * 语义:
+ * - available === true → 可用
+ * - available === false → 不可用 (reason 给出 machine-readable 原因)
+ * - available === undefined (旧 manifest 无此字段) → 回落 supported (向后兼容)
+ *
+ * Runtime Decoupling: 桌面端 gating 应优先用 capabilityAvailable 判断「现在能否用」,
+ * 用 capabilitySupported 判断「runtime 是否实现」, 两者 UI 可区分表达
+ * (Unsupported vs Provider not configured).
+ */
+export function capabilityAvailable(manifest: CapabilityManifest | null, id: string): boolean {
+  if (!manifest) return false;
+  const cap = findCapability(manifest, id);
+  if (!cap) return false;
+  // 回落: 旧 manifest 无 available → 按 supported 解释.
+  return cap.available === undefined ? cap.supported === true : cap.available === true;
+}
+
+/**
+ * 查询某 capability 不可用的 machine-readable 原因 (仅当 available === false).
+ * 可用或旧 manifest 回落时返回 null.
+ */
+export function capabilityUnavailableReason(
+  manifest: CapabilityManifest | null,
+  id: string,
+): import('./types').CapabilityAvailabilityReason | null {
+  if (!manifest) return null;
+  const cap = findCapability(manifest, id);
+  if (!cap) return null;
+  if (cap.available === false) return cap.reason ?? null;
+  return null;
 }
 
 /** 查找某 capability 完整声明 (跨组). */
