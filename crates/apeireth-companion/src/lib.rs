@@ -111,6 +111,7 @@ pub mod reflexion; // E1: 口头强化闭环 (Reflexion 式: 失败轨迹→CRIT
 pub mod restricted_token; // S1: Windows 受限 token (CreateRestrictedToken + TokenIntegrityLevel + DACL)
 pub mod runtime_brain;
 pub mod sandbox; // B3 + S1: 沙盒参数口 (SandboxConfig 内存/CPU/超时 + 完整性级别 + deny-only SID + 目录 ACL 根 + AppContainer 档 + Sandboxie/landlock trait 留口)
+pub mod sandbox_integration; // 2026-08-20 Stage 3 集成 (Stage 1 + Stage 2 在 exec_worker spawn 点的 helper; 0 装 PASS 默认双 Noop, 失败不阻断)
 pub mod sandbox_net; // 2026-08-19 Stage 1 网络隔离 (借鉴 Firecracker minimal API + libkrun netns; Linux netns+cgroup / Windows WFP 接入点)
 pub mod sandbox_pass; // Stage 1+2 0 装 PASS 编译期 const 守门 (sandbox_net.rs / vm_sandbox.rs 契约源, 7 单测 0 装 PASS 红线)
 pub mod screen_perception; // 连续感知②: 屏幕显著性事件 (窗口切换/聚焦/空闲, ScreenEventSource trait 口)
