@@ -1,0 +1,15 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
+warning: the following packages contain code that will be rejected by a future version of Rust: nom v1.2.4
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 2`
+     Running `target\debug\examples\companion_serve.exe`
+[mem] 鎸佷箙璁板繂搴? 宸叉墦寮€ (閲嶅惎涓嶅け蹇? 路 subject: companion-main
+[bridge] 瀹硶璇勫 (鐪?LLM): Medium+ 宸ュ叿鎵ц鍓嶆寜 E 灞傚垽妗?[app] CompanionApp 瑁呴厤瀹屾垚: L0 Identity + L1 Essential 甯搁┗, 鎻愮偧 600s 鑺傛祦
+[sink] Lark 鏈惎鐢?(闇€瑕?APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID): 椋炰功鍑嵁缂哄け: APEIRETH_LARK_APP_ID (璁?APEIRETH_LARK_* 鐜鍙橀噺)
+[sink] Telegram 鏈惎鐢?(闇€瑕?APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID): Telegram 鍑嵁缂哄け: APEIRETH_TELEGRAM_BOT_TOKEN (璁?APEIRETH_TELEGRAM_* 鐜鍙橀噺)
+[daemon] 甯搁┗: 鍋氭ⅵ(LLM 鎽樿, 瀹夐潤鏈?21600s) + 鍙嶆€?TimeDelta { secs: 86400, nanos: 0 }, LLM 娣卞害) + 娑岀幇(LLM 娑﹁壊, SSE 鎺ㄩ€?
+鉁?companion_serve v4 鈥?浼欎即绔偣鍏ㄨ兘鍔涚増 (CompanionApp 鏈哄埗瑁呴厤)
+   http://127.0.0.1:8088/panel  (Web 闈㈡澘 v2: 浼氳瘽/璁板繂/鍥捐氨/鎺堟潈/瀹¤, 鍙鐪熸帴鍙?
+   http://127.0.0.1:8088/v1  (妯″瀷 MiniMax-M3, Key 浠绘剰闈炵┖)
+   浼氳瘽鏍囩: X-Apeireth-Continuity (缂虹渷 companion-main) 路 宸ュ叿: 鍏ㄩ儴鍙, 鎵ц鍙楀娉?鏉冮檺绾︽潫
+[growth] 鏅嬬骇鍊欓€夊凡鎴愭枃: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 1.9857ms

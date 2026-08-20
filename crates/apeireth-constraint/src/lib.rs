@@ -54,11 +54,14 @@ mod organ_kani_proofs;
 /// 任何修改 13 键清单的行为都会触发 `apeireth_core::TWELVE_KEYS_HARDCODE` 编译失败。
 pub trait PhilosophyKeyAccess: Send + Sync {
     /// 返回 13 键完整清单 (编译时 hardcode, 顺序锁定)
-    fn all_twelve_keys() -> &'static [PhilosophyKey; 12] {
-        apeireth_core::ALL_TWELVE_KEYS
+    ///
+    /// 0 装 PASS 严守: 返回类型 `[PhilosophyKey; 13]` 必须跟 `apeireth_core::ALL_THIRTEEN_KEYS` 长度匹配.
+    /// 任何修改 13 键清单的行为都会触发编译期 panic 或长度不匹配错误.
+    fn all_twelve_keys() -> &'static [PhilosophyKey; 13] {
+        apeireth_core::ALL_THIRTEEN_KEYS
             .as_slice()
             .try_into()
-            .expect("apeireth-core ALL_TWELVE_KEYS 长度必须是 12")
+            .expect("apeireth-core ALL_THIRTEEN_KEYS 长度必须是 13 (V3 9 + v4.1 3 + R125-12 PHL-07)")
     }
 
     /// 返回当前 action 的 verdict (子类实现 = 真实业务守门)
