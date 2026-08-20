@@ -23,12 +23,29 @@ use serde::{Deserialize, Serialize};
 /// (新增可选 capability / 新增可选字段 = 兼容, 不递增).
 pub const MANIFEST_SCHEMA_VERSION: u32 = 1;
 
+/// Capability 不可用的 machine-readable 原因.
+///
+/// 仅当 `available == false` 时填充. 客户端据此区分 UI 文案
+/// (如 "Provider not configured" vs "Unsupported"), 而非猜错误.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AvailabilityReason {
+    /// Provider 凭据未配置 (无 API key) — runtime 支持该能力, 但当前环境无法调用.
+    ProviderNotConfigured,
+    /// Provider 已配置但不可达 / 报错.
+    ProviderUnavailable,
+    /// 当前平台不支持 (如某原生能力在当前 OS 不可用).
+    PlatformUnsupported,
+    /// 被策略显式禁用.
+    DisabledByPolicy,
+}
+
 /// 单条能力声明.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Capability {
     /// 稳定能力 ID, 如 `sessions.create`.
     pub id: String,
-    /// 是否支持.
+    /// 是否支持 (runtime/build 是否实现该能力 — 静态/准静态).
     pub supported: bool,
     /// 是否可读 (查询).
     #[serde(default)]
@@ -42,6 +59,28 @@ pub struct Capability {
     /// 该能力暴露的操作 (稳定字符串列表, 如 `["list","create","archive"]`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<String>,
+    /// 该能力**此时此刻**是否真正可调用 (动态, 受 provider/凭据/平台影响).
+    ///
+    /// **向后兼容**: 旧 manifest 无此字段 → 反序列化为 `None` → 客户端按
+    /// `available = supported` 解释 (见 [`Capability::is_available`]).
+    /// 新 manifest 总是写 `Some(...)`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub available: Option<bool>,
+    /// 不可用原因 (仅当 `available == Some(false)` 时填充).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<AvailabilityReason>,
+}
+
+impl Capability {
+    /// 该能力是否当前可用.
+    ///
+    /// 语义:
+    /// - `available: Some(b)` → 返回 `b`
+    /// - `available: None` (旧 manifest 无此字段) → 回落到 `supported`
+    ///   (向后兼容: 旧 runtime 不区分 supported/available, 二者等价).
+    pub fn is_available(&self) -> bool {
+        self.available.unwrap_or(self.supported)
+    }
 }
 
 fn default_capability_version() -> u32 {
@@ -105,6 +144,46 @@ impl CapabilityManifest {
             .map(|c| c.id.clone())
             .collect()
     }
+
+    /// 查找某 capability ID 是否当前**可用** (动态 available, 回落 supported).
+    ///
+    /// 未知 ID 一律返回 false (保守). 旧 manifest 无 `available` 字段时
+    /// 回落到 `supported` (向后兼容).
+    pub fn is_available(&self, id: &str) -> bool {
+        self.find(id).map_or(false, |c| c.is_available())
+    }
+}
+
+/// Provider Runtime 状态 — 解耦 Core Runtime 与 Provider.
+///
+/// 设计原则: **Provider 未配置 ≠ Companion Runtime 启动失败.**
+/// Core Runtime (health / capabilities / sessions / memory / permissions / traces)
+/// 在 `Unconfigured` 下仍正常服务; 仅 provider-backed 能力 (chat / inference)
+/// 降级为 `available = false, reason = provider_not_configured`.
+///
+/// 未来可扩展 `Unavailable { reason }` (provider 已配置但不可达) 而不破坏当前 call site.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProviderRuntimeState {
+    /// Provider 凭据就绪, inference / chat / provider-backed streaming 可用.
+    Ready,
+    /// 无 provider 凭据 (无 env key, 无 key 文件) — 正常 runtime state, 非错误.
+    /// Core runtime 照常启动; provider-backed 能力降级.
+    Unconfigured,
+}
+
+impl ProviderRuntimeState {
+    /// 是否就绪 (provider 可用).
+    pub fn is_ready(&self) -> bool {
+        matches!(self, Self::Ready)
+    }
+
+    /// 该状态下 provider-backed capability 的不可用原因 (若有).
+    pub fn unavailability_reason(&self) -> Option<AvailabilityReason> {
+        match self {
+            Self::Ready => None,
+            Self::Unconfigured => Some(AvailabilityReason::ProviderNotConfigured),
+        }
+    }
 }
 
 /// Manifest 构建器: 各 Phase 按真实接线状态声明能力.
@@ -149,22 +228,41 @@ impl CapabilityManifestBuilder {
 ///
 /// 仅声明 Phase 1 时**已真实接线**的能力. 后续 Phase (session/memory/permission/trace)
 /// 完成端点后, 在此追加对应 capability 的 `supported = true`.
-pub fn current_manifest() -> CapabilityManifest {
+///
+/// **Runtime Decoupling**: `provider` 参数反映 Provider Runtime 状态.
+/// - Core 能力 (health/sessions/memory/permissions/trace/tools-list) 与 provider 无关,
+///   `available = Some(true)`.
+/// - Provider-backed 能力 (`chat.completions`, `tools.invoke` 调 LLM judicator) 在
+///   `Unconfigured` 时 `available = Some(false), reason = provider_not_configured`,
+///   但 `supported` 不变 (runtime 仍实现该能力, 只是当前环境调不动).
+pub fn current_manifest(provider: &ProviderRuntimeState) -> CapabilityManifest {
     let runtime = RuntimeInfo {
         service: "apeireth-companion-serve".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     };
 
-    // --- chat: OpenAI 兼容对话端点 (已存在) ---
-    let chat = vec![cap("chat.completions", true, true, true, &["stream"])];
+    // Provider-backed: chat 需要 provider 才能真正推理.
+    let chat_available = provider.is_ready();
+    let chat_reason = provider.unavailability_reason();
 
-    // --- health: 健康检查 (已存在) ---
+    // --- chat: OpenAI 兼容对话端点 (provider-backed) ---
+    let chat = vec![cap_avail(
+        "chat.completions",
+        true,
+        true,
+        true,
+        &["stream"],
+        chat_available,
+        chat_reason.clone(),
+    )];
+
+    // --- health: 健康检查 (core, provider-independent) ---
     let health = vec![cap("health", true, true, false, &["check"])];
 
-    // --- models: 模型列表 (已存在) ---
+    // --- models: 模型列表 (core — 静态硬编码, 不调 provider) ---
     let models = vec![cap("models.list", true, true, false, &["list"])];
 
-    // --- sessions: 后端会话生命周期 (Phase 2 已接线 mutation) ---
+    // --- sessions: 后端会话生命周期 (core, Phase 2 已接线 mutation) ---
     let sessions = vec![
         cap("sessions.read", true, true, false, &["list", "get", "timeline"]),
         cap("sessions.create", true, false, true, &["create"]),
@@ -174,7 +272,7 @@ pub fn current_manifest() -> CapabilityManifest {
         cap("sessions.close", true, false, true, &["close"]),
     ];
 
-    // --- memory: 记忆 (Phase 3 已接线 update/forget/protect/unprotect) ---
+    // --- memory: 记忆 (core, Phase 3 已接线 update/forget/protect/unprotect) ---
     let memory = vec![
         cap("memory.read", true, true, false, &["list", "search", "streams", "graph"]),
         cap("memory.append", true, false, true, &["append"]),
@@ -185,12 +283,21 @@ pub fn current_manifest() -> CapabilityManifest {
     ];
 
     // --- tools: 工具注册表 + 调用 ---
+    // tools.list = core (只读注册表); tools.invoke 调 LLM judicator (provider-backed).
     let tools = vec![
         cap("tools.list", true, true, false, &["list"]),
-        cap("tools.invoke", true, false, true, &["invoke"]),
+        cap_avail(
+            "tools.invoke",
+            true,
+            false,
+            true,
+            &["invoke"],
+            chat_available,
+            chat_reason.clone(),
+        ),
     ];
 
-    // --- permissions: 授权 (Phase 4 已接线 revoke/grants.read/evaluate) ---
+    // --- permissions: 授权 (core, Phase 4 已接线 revoke/grants.read/evaluate) ---
     // policy.write (持久化策略模型) 本轮不实现; policy.read = evaluate (只读评估).
     let permissions = vec![
         cap("permissions.requests.read", true, true, false, &["list"]),
@@ -201,13 +308,13 @@ pub fn current_manifest() -> CapabilityManifest {
         cap("permissions.policy.write", false, false, false, &[]),
     ];
 
-    // --- activity: 实时活动 (SSE + audit) ---
+    // --- activity: 实时活动 (core, SSE + audit) ---
     let activity = vec![
         cap("activity.sse", true, true, false, &["subscribe"]),
         cap("activity.audit", true, true, false, &["list"]),
     ];
 
-    // --- trace: 结构化 Agent 执行轨迹 (Phase 5 已接线 read + SSE subscribe) ---
+    // --- trace: 结构化 Agent 执行轨迹 (core, Phase 5 已接线 read + SSE subscribe) ---
     let trace = vec![
         cap("trace.read", true, true, false, &["list", "detail"]),
         cap("trace.subscribe", true, true, false, &["subscribe"]),
@@ -226,7 +333,9 @@ pub fn current_manifest() -> CapabilityManifest {
         .build(runtime)
 }
 
-/// 构造一条 capability 声明 (supported / read / write / version=1).
+/// 构造一条 core capability 声明 (supported / read / write / version=1, available=true).
+///
+/// Core 能力与 provider 无关, `available = Some(true)`.
 fn cap(id: &str, supported: bool, read: bool, write: bool, ops: &[&str]) -> Capability {
     Capability {
         id: id.to_string(),
@@ -235,6 +344,30 @@ fn cap(id: &str, supported: bool, read: bool, write: bool, ops: &[&str]) -> Capa
         write,
         version: 1,
         operations: ops.iter().map(|s| s.to_string()).collect(),
+        available: Some(supported),
+        reason: None,
+    }
+}
+
+/// 构造一条 provider-backed capability 声明, 显式指定 available + reason.
+fn cap_avail(
+    id: &str,
+    supported: bool,
+    read: bool,
+    write: bool,
+    ops: &[&str],
+    available: bool,
+    reason: Option<AvailabilityReason>,
+) -> Capability {
+    Capability {
+        id: id.to_string(),
+        supported,
+        read,
+        write,
+        version: 1,
+        operations: ops.iter().map(|s| s.to_string()).collect(),
+        available: Some(available),
+        reason: if !available { reason } else { None },
     }
 }
 
@@ -299,16 +432,26 @@ pub fn legacy_manifest(service_version: &str) -> CapabilityManifest {
 mod tests {
     use super::*;
 
+    /// Helper: manifest with provider Ready (existing capabilities unchanged).
+    fn ready_manifest() -> CapabilityManifest {
+        current_manifest(&ProviderRuntimeState::Ready)
+    }
+
+    /// Helper: manifest with provider Unconfigured (no key).
+    fn unconfigured_manifest() -> CapabilityManifest {
+        current_manifest(&ProviderRuntimeState::Unconfigured)
+    }
+
     #[test]
     fn manifest_has_stable_schema_version() {
-        let m = current_manifest();
+        let m = ready_manifest();
         assert_eq!(m.schema_version, MANIFEST_SCHEMA_VERSION);
         assert!(!m.legacy);
     }
 
     #[test]
     fn known_runtime_supports_chat_and_readonly() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // 已接线的真实能力
         assert!(m.is_supported("chat.completions"));
         assert!(m.is_supported("health"));
@@ -322,7 +465,7 @@ mod tests {
 
     #[test]
     fn unknown_capability_is_unsupported() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // 未知 ID 保守返回 false (不假装支持)
         assert!(!m.is_supported("memory.purge"));
         assert!(!m.is_supported("nonexistent.thing"));
@@ -331,14 +474,14 @@ mod tests {
 
     #[test]
     fn unimplemented_mutations_declared_unsupported() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // policy.write (持久化策略) 本轮不实现 → unsupported.
         assert!(!m.is_supported("permissions.policy.write"));
     }
 
     #[test]
     fn trace_supported_after_phase5() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // Phase 5 接线后: trace read + SSE subscribe.
         assert!(m.is_supported("trace.read"));
         assert!(m.is_supported("trace.subscribe"));
@@ -346,7 +489,7 @@ mod tests {
 
     #[test]
     fn permissions_revoke_supported_after_phase4() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // Phase 4 接线后: grant 可见性 + 撤销 + 评估.
         assert!(m.is_supported("permissions.revoke"));
         assert!(m.is_supported("permissions.grants.read"));
@@ -355,7 +498,7 @@ mod tests {
 
     #[test]
     fn sessions_mutations_supported_after_phase2() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // Phase 2 接线后: session 生命周期 mutation 全部 supported.
         assert!(m.is_supported("sessions.create"));
         assert!(m.is_supported("sessions.rename"));
@@ -366,7 +509,7 @@ mod tests {
 
     #[test]
     fn memory_mutations_supported_after_phase3() {
-        let m = current_manifest();
+        let m = ready_manifest();
         // Phase 3 接线后: memory 治理 mutation 全部 supported.
         assert!(m.is_supported("memory.update"));
         assert!(m.is_supported("memory.forget"));
@@ -408,7 +551,7 @@ mod tests {
 
     #[test]
     fn manifest_no_secret_leak() {
-        let m = current_manifest();
+        let m = ready_manifest();
         let json = serde_json::to_string(&m).unwrap();
         // manifest 绝不暴露 secret / 内部路径
         assert!(!json.contains("api_key"));
@@ -422,7 +565,7 @@ mod tests {
 
     #[test]
     fn capability_ids_are_stable_dotted_strings() {
-        let m = current_manifest();
+        let m = ready_manifest();
         for id in m.supported_ids() {
             // 稳定能力 ID 形如 group.op (如 sessions.create) 或单字根能力 (如 health).
             // 约束: 仅小写字母/数字/点/下划线, 无空格/大写/特殊字符 (保证跨语言稳定).
@@ -437,8 +580,97 @@ mod tests {
 
     #[test]
     fn supported_ids_nonempty() {
-        let m = current_manifest();
+        let m = ready_manifest();
         let ids = m.supported_ids();
         assert!(!ids.is_empty(), "manifest 应至少声明一个 supported 能力");
+    }
+
+    // ===== Runtime Decoupling: supported vs available semantics =====
+
+    #[test]
+    fn provider_ready_makes_all_supported_available() {
+        // Provider Ready: supported caps 都 available.
+        let m = ready_manifest();
+        assert!(m.is_available("chat.completions")); // provider-backed, ready → available
+        assert!(m.is_available("sessions.create")); // core → available
+        assert!(m.is_available("memory.forget"));
+        assert!(m.is_available("trace.read"));
+    }
+
+    #[test]
+    fn provider_unconfigured_makes_chat_unavailable_but_core_still_available() {
+        // Provider Unconfigured (no key): chat 降级, core 能力照常 available.
+        let m = unconfigured_manifest();
+        // chat.completions supported 但 available=false, reason=provider_not_configured
+        let chat = m.find("chat.completions").unwrap();
+        assert!(chat.supported, "chat 仍 supported (runtime 实现了)");
+        assert!(!chat.is_available(), "chat unconfigured 不可用");
+        assert_eq!(
+            chat.reason,
+            Some(AvailabilityReason::ProviderNotConfigured),
+            "chat 不可用原因 = provider_not_configured"
+        );
+        // tools.invoke 也 provider-backed (LLM judicator)
+        let invoke = m.find("tools.invoke").unwrap();
+        assert!(invoke.supported);
+        assert!(!invoke.is_available());
+        assert_eq!(invoke.reason, Some(AvailabilityReason::ProviderNotConfigured));
+        // core 能力不受 provider 影响
+        assert!(m.is_available("sessions.create"));
+        assert!(m.is_available("memory.forget"));
+        assert!(m.is_available("trace.read"));
+        assert!(m.is_available("health"));
+        assert!(m.is_available("permissions.revoke"));
+    }
+
+    #[test]
+    fn provider_unconfigured_core_caps_have_no_reason() {
+        // core 能力 available=true 时 reason 必须为 None.
+        let m = unconfigured_manifest();
+        let s = m.find("sessions.create").unwrap();
+        assert!(s.is_available());
+        assert!(s.reason.is_none(), "available 的能力不应有 reason");
+        let health = m.find("health").unwrap();
+        assert!(health.reason.is_none());
+    }
+
+    #[test]
+    fn backward_compat_old_manifest_without_available_falls_back_to_supported() {
+        // 旧 manifest (无 available 字段) 反序列化 → available=None →
+        // is_available() 回落 supported. 这是客户端兼容旧 runtime 的关键.
+        let json = r#"{
+            "schema_version": 1,
+            "runtime": {"service":"old-runtime","version":"0.9"},
+            "capabilities": [{"name":"chat","capabilities":[
+                {"id":"chat.completions","supported":true,"read":true,"write":true,"version":1,"operations":["stream"]},
+                {"id":"memory.read","supported":true,"read":true,"write":false,"version":1,"operations":[]}
+            ]}],
+            "legacy": false
+        }"#;
+        let m: CapabilityManifest = serde_json::from_str(json).unwrap();
+        let chat = m.find("chat.completions").unwrap();
+        assert!(chat.available.is_none(), "旧 manifest 无 available 字段 → None");
+        assert!(chat.is_available(), "None 回落 supported=true → available");
+        assert_eq!(chat.reason, None);
+        // is_available() 走回落
+        assert!(m.is_available("chat.completions"));
+    }
+
+    #[test]
+    fn available_field_serialized_for_new_manifest() {
+        // 新 manifest 序列化必须含 available 字段 (新客户端可读).
+        let m = unconfigured_manifest();
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains("\"available\""), "新 manifest 序列化含 available");
+        assert!(json.contains("provider_not_configured"), "含 machine-readable reason");
+    }
+
+    #[test]
+    fn unsupported_capability_available_false_even_if_field_present() {
+        // supported=false 的能力 (如 policy.write) 即使 available 字段存在也是 false.
+        let m = ready_manifest();
+        let pw = m.find("permissions.policy.write").unwrap();
+        assert!(!pw.supported);
+        assert!(!pw.is_available());
     }
 }
