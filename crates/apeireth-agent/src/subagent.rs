@@ -35,7 +35,7 @@
 //!
 //! # 0 越界 8 硬墙 (per 决策 #33 §2.3 + 决策 #55 §4)
 //!
-//! - **B1** 24 LOCKED 入口签名 0 改 (本文件 + lib.rs 仅 +1 `pub mod subagent;`, 入口签名 0 改)
+//! - **B1** 24 LOCKED crate 入口签名已降级 / 仅保 3 项不可变脊柱 (本文件 + lib.rs 仅 +1 `pub mod subagent;`, 入口签名 0 改)
 //! - **B2** workspace.version 1.2.0 0 改 (本文件 0 触碰 Cargo.toml)
 //! - **A1** R11 baseline 3 值 0 改 (本文件 0 触碰 integration_r_measure.rs)
 //! - **A3** 13 键 0 改 (本文件 0 触碰)

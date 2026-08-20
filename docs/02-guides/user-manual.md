@@ -65,11 +65,14 @@
 | 换模型？ | 换 `APEIRETH_API_KEY`/provider 配置即可——基地不绑定模型（trait 注入）|
 | 她说的我不信？ | 她的校准机制（Brier）会标注不确定——0 装 PASS 是设计不是缺陷 |
 
-## 8. 诚实标注（未实装/待定）
+## 8. 诚实标注（未实装/待定, 2026-08-19 post-1.0.0 更新）
 
-| 项 | 状态 |
-|---|---|
-| 桌宠前端 / 麦克风实时语音 / 屏幕感知 | 规划中（08 愿景）|
-| 投资模拟盘主链 | 零件已备（时序/事件/标的），主链未做 |
-| Docker 构建实测 | 待实测 |
-| E4 探索行为 / F4 提问生成的 LLM 实现 | trait 口已备未接（确定性机制件在工作）|
+| 项 | 状态 (v1.0.0) | 状态 (post-1.0.0) |
+|---|---|---|
+| 桌宠前端 (`frontend/companion-desktop/`) | 规划中（08 愿景）| ✅ 已合并 (PR #1, Svelte 5 + Tauri 2 102 行 shell, 走 mock SSE e2e) |
+| 麦克风实时语音 | 规划中 | 规划中（同左）|
+| 屏幕感知 | 规划中 | 规划中（同左）|
+| 桌宠真实 LLM 流式 (CoT + tool_call + tool_result SSE) | 不在 1.0 scope | 🆕 **TP34** v1.5 中期 (companion_serve stream: false 写死, 6 种 RuntimeEvent 0 触发) | 🟡 2026-08-19 后端 50% (streaming 分支 + extract_minimax_cot; 透传 SSE, 跳过 tool loop; 前端状态机 v1.5 续) |
+| 投资模拟盘主链 | 零件已备（时序/事件/标的），主链未做 | 同左 |
+| Docker 多架构构建 | 待实测 | ✅ 修 ($TARGETARCH, commit 4596357, linux/amd64 + linux/arm64) |
+| E4 探索行为 / F4 提问生成的 LLM 实现 | trait 口已备未接 | trait 口已备未接（同左, 确定性机制件在工作）|
