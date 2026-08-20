@@ -645,7 +645,7 @@
                 {:else}
                   <button
                     class="primary-button send-btn"
-                    onclick={send}
+                    onclick={() => send()}
                     disabled={!draft.trim() || healthState === 'offline'}
                     aria-label="发送消息"
                   >
