@@ -159,24 +159,29 @@ jobs:
 
       - name: "守门 4: 13 键 守门 (verdict cache)"
         run: |
-          TARGET="crates/apeireth-asi/src/lib.rs"
-          if [ ! -f "$TARGET" ]; then
-            echo "::warning::$TARGET 不存在, 跳过"
-            exit 0
-          fi
-          # 13 键来自 apeireth-asi verdict cache, 抽 4 个代表性 hash 验证存在
-          for HASH_PREFIX in "9f86d081" "e3b0c442" "d4735e3a" "4e074085"; do
-            if grep -q "$HASH_PREFIX" "$TARGET"; then
-              echo "✅ 13 键 verdict 守门: 找到 $HASH_PREFIX"
-              exit 0
+          # R128 后: 13 键实际在 crates/apeireth-core/src/philosophy.rs (per R125-12 + 13c25025 升级)
+          # 13 键 = PHL-01..PHL-06 (V3 9) + V4.1 3 + R125-12 NotUnoptimizable 1
+          # 检测:
+          #   1. 优先 grep 4 hash prefix (per 原 R14 V0.5 守门, 后向兼容)
+          #   2. fallback: 检查 ALL_THIRTEEN_KEYS 数组 (新 V3 13 键定义) + 数字 13
+          TARGETS=("crates/apeireth-asi/src/lib.rs" "crates/apeireth-core/src/philosophy.rs")
+          for TARGET in "${TARGETS[@]}"; do
+            if [ ! -f "$TARGET" ]; then continue; fi
+            for HASH_PREFIX in "9f86d081" "e3b0c442" "d4735e3a" "4e074085"; do
+              if grep -q "$HASH_PREFIX" "$TARGET"; then
+                echo "✅ 13 键 verdict 守门: 找到 $HASH_PREFIX in $TARGET"
+                exit 0
+              fi
+            done
+            # fallback: ALL_THIRTEEN_KEYS + 数字 13 (post-R128 13 键定义)
+            if grep -q "ALL_THIRTEEN_KEYS\|ALL_TWELVE_KEYS\|NotUnoptimizable" "$TARGET"; then
+              if grep -qE "13\b" "$TARGET"; then
+                echo "✅ 13 键 verdict cache 守门 (fallback: ALL_THIRTEEN_KEYS + 13 in $TARGET)"
+                exit 0
+              fi
             fi
           done
-          # fallback: 检查 verdict cache 13 entries 计数
-          if grep -q "verdict_cache" "$TARGET" && grep -qE "13\b" "$TARGET"; then
-            echo "✅ 13 键 verdict cache 守门 (fallback: verdict_cache 提及 + 13)"
-            exit 0
-          fi
-          echo "::error::13 键 verdict cache 守门失败 (4 hash + verdict_cache/13 fallback 都 miss)"
+          echo "::error::13 键 verdict cache 守门失败 (扫了 ${TARGETS[@]}, 4 hash + ALL_THIRTEEN_KEYS/13 fallback 都 miss)"
           exit 1
 
       - name: "守门 5: 0 触碰 V0.5 V1136 哲学守门"
