@@ -61,9 +61,11 @@ jobs:
           # - *.lock (Cargo.lock 含第三方元数据)
           # - node_modules/, target/, dist/ (build artifacts)
           # - .github/workflows/pii-leak-detection.yml (本 workflow 自身, 含关键词定义)
+          # - .github/workflows/release-prep.yml (sister workflow 含同样关键词)
           # - CHANGELOG.md (post-v1.0.0 entry 记录 PII 清洗关键词, 合法元提及)
           # - docs/04-internal/ci-fix-log-2026-08.md (CI fix log 历史提及)
           # - reports/** (post-1.0.0 subagent 调查/审计报告, PII 关键词是用户名/地点等元数据, 合法历史)
+          # - scripts/release-prep.sh (8 硬墙 + PII 检查脚本自身, 含 PII_PATTERNS 列表)
           EXCLUDES=(
             ':(exclude)docs/archive/**'
             ':(exclude)research/source/**'
@@ -72,9 +74,11 @@ jobs:
             ':(exclude)frontend/companion-desktop/pnpm-lock.yaml'
             ':(exclude)frontend/companion-desktop/src-tauri/Cargo.lock'
             ':(exclude).github/workflows/pii-leak-detection.yml'
+            ':(exclude).github/workflows/release-prep.yml'
             ':(exclude)CHANGELOG.md'
             ':(exclude)docs/04-internal/ci-fix-log-2026-08.md'
             ':(exclude)reports/**'
+            ':(exclude)scripts/release-prep.sh'
             ':(exclude)**/target/**'
             ':(exclude)**/node_modules/**'
             ':(exclude)**/dist/**'
