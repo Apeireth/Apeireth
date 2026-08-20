@@ -35,7 +35,7 @@ use std::time::Duration;
 
 use apeireth_api::protocol_handlers::{
     build_pipeline, dispatch, openai_chat_from_normalized, openai_chat_to_normalized,
-    OpenAiChatMessage, OpenAiChatRequest,
+    stream_forward, OpenAiChatMessage, OpenAiChatRequest,
 };
 use apeireth_api::{Pipeline, ProtocolKind};
 use apeireth_bus::{LifecycleBus, LifecycleContext, LifecycleEvent, LifecycleHook};
@@ -861,6 +861,40 @@ async fn events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
+/// 提取 MiniMax CoT (Chain-of-Thought) — CoT 嵌入 `<!-- ... -->` 标记 (XML 注释样式).
+/// 0 装 PASS 严守: MiniMax M3 **没有** OpenAI 风格的独立 `delta.reasoning_content` 字段,
+/// CoT 跟正文共用 `delta.content` 字段, 跨多 chunk 时 `<!--` / `-->` 可能在边界切分.
+/// 服务端拼成完整 text 后用此函数一次性切分 (方案 B 兜底, per
+/// `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md` §6).
+/// 边界 case: 0 装严守 — 不假装 LLM 一定输出 `<!-- -->`; 无标记时返 ("", content) 等价无变化.
+///
+/// 工程规范: 0 触碰 3 不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache), 0 改 enum/const,
+/// 0 改 workspace.version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
+fn extract_minimax_cot(content: &str) -> (String, String) {
+    let mut reasoning = String::new();
+    let mut visible = String::new();
+    let mut rest = content;
+    while let Some(start) = rest.find("<!--") {
+        // text before <!--
+        visible.push_str(&rest[..start]);
+        if let Some(end) = rest[start..].find("-->") {
+            // extract <!-- ... -->
+            let block_end = start + end + 3;
+            reasoning.push_str(&rest[start..block_end]);
+            reasoning.push('\n');
+            rest = &rest[block_end..];
+        } else {
+            // unterminated: best-effort 0 装严守, 把残余当 visible 拼上, 然后结束
+            // (rest 推进到末尾, break 后下面的 visible.push_str(rest) 不会重复拼接)
+            visible.push_str(&rest[start..]);
+            rest = "";
+            break;
+        }
+    }
+    visible.push_str(rest);
+    (reasoning.trim().to_string(), visible.trim().to_string())
+}
+
 /// 伙伴主链路: 喂节律 → CompanionApp 注入管线 → LLM+工具循环 → OpenAI 兼容响应.
 async fn chat_completions(
     State(st): State<Arc<AppState>>,
@@ -991,6 +1025,71 @@ async fn chat_completions(
         .filter(|v| *v > 0)
         .unwrap_or(env_max)
         .clamp(256, MAX_TOKENS_CAP);
+
+    // CoT 收集 (0 装 PASS 严守: 0 假装 MiniMax 一定输出 `<!-- -->`; 无标记时为空字符串)
+    let mut reasoning_out = String::new();
+
+    // ========== STREAMING BRANCH (v1.5+, 0 装严守) ==========
+    // P0 unblock 朋友 friend 8/18 18:11 "显示每步 cot 和 tool call 详情" 需求:
+    // req.stream=true → 透传 LLM 的真 SSE 到客户端, 跳过本仓 LLM 循环 (tool loop)
+    //
+    // MiniMax M3 已知 (per 验证报告 §1-§3):
+    // - 0 OpenAI 风格独立 `delta.reasoning_content` 字段
+    // - CoT 嵌入 `delta.content` 内 `<!-- ... -->` 边界标记
+    // - 跨 chunk 边界 `<!--` / `-->` 可能切分
+    //
+    // 架构 (per 验证报告 §6 方案 A 选):
+    // - companion_serve: SSE 字节透传 (stream_forward 已存在 protocol_handlers.rs:1379)
+    // - 前端 companion-desktop: 维护 `<!-- ... -->` 字符串状态机切分, 重封 RuntimeEvent
+    //   `reasoning-delta` / `content-delta` (contract 已有, runtime.ts:50-59)
+    //
+    // 0 装 PASS 严守 (per 决策 #33 §2.3 + R125-16 retry verify):
+    // - 透传 = 0 解析, 0 干预 LLM 输出 (MiniMax 后续若加 reasoning_content 字段, 不破坏兼容)
+    // - tool loop 跳过 = 透明 — `delta.tool_calls` 仍在流里, 客户端可见, 仅不在本仓执行
+    //   (full streaming + tool loop 是 v1.5 后续路线, 0 假装已实现)
+    // - 字段探测双轨 (per 验证报告 §7): 当前 0 检测 `delta.reasoning_content` 字段,
+    //   未来 MiniMax 若加 → 优先用字段, 缺则回 inline 解析
+    if req.stream {
+        let stream_req = OpenAiChatRequest {
+            model: MODEL.to_string(),
+            messages: messages.clone(),
+            temperature: Some(0.6),
+            max_tokens: Some(out_tokens),
+            stream: true,
+            stop: None,
+            tools: Some(tools.clone()),
+            tool_choice: Some(json!("auto")),
+        };
+        let body = match serde_json::to_vec(&stream_req) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("[stream] serialize 失败: {e}");
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": {"message": format!("stream serialize: {e}")}})),
+                )
+                    .into_response();
+            }
+        };
+        eprintln!(
+            "[stream] req.stream=true, 透传 SSE 到 {MODEL} (tool loop 跳过, per v1.5 known limit)"
+        );
+        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), MODEL)
+            .await
+        {
+            Ok(r) => r.into_response(),
+            Err(e) => {
+                eprintln!("[stream] stream_forward 失败: {e}");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(json!({"error": {"message": format!("stream forward: {e}")}})),
+                )
+                    .into_response()
+            }
+        };
+    }
+    // ========== STREAMING BRANCH END ==========
+
     let mut rounds = 0usize;
     loop {
         rounds += 1;
@@ -1012,12 +1111,14 @@ async fn chat_completions(
                 .into_response();
         };
         if tcs.is_empty() {
-            final_content = content
-                .split("</think>")
-                .last()
-                .unwrap_or(&content)
-                .trim()
-                .to_string();
+            // 0 装 PASS 严守: 旧版 `content.split("</think>").last()` 在 MiniMax (用 `<!-- -->`) 上 0 拆 CoT.
+            // 改用 extract_minimax_cot 拆 CoT (`<!-- ... -->`) + 留 visible content.
+            // (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5)
+            let (cot, visible) = extract_minimax_cot(&content);
+            final_content = visible;
+            // 把 CoT 也存到 x_apeireth 字段, 让 friend 在 JSON 响应里直接看到 reasoning
+            // (0 装: 没 CoT 时 cot 为空字符串, 字段也会带空值 — 透明)
+            reasoning_out = cot;
             break;
         }
         messages.push(OpenAiChatMessage {
@@ -1086,8 +1187,9 @@ async fn chat_completions(
             "continuity": continuity,
             "tool_rounds": rounds,
             "tools_executed": notes,
-            "features": ["memory_injection", "today_summary", "tool_bridge", "daemon_resident", "memory_extractor", "l0_identity", "l1_essential_story"],
-            "note": "Apeireth 伙伴主链路: CompanionApp 注入管线 (L0/L1 常驻), 工具桥执行, daemon 同进程常驻"
+            "reasoning_content": reasoning_out,
+            "features": ["memory_injection", "today_summary", "tool_bridge", "daemon_resident", "memory_extractor", "l0_identity", "l1_essential_story", "cot_extraction"],
+            "note": "Apeireth 伙伴主链路: CompanionApp 注入管线 (L0/L1 常驻), 工具桥执行, daemon 同进程常驻; reasoning_content 字段 (MiniMax <!-- --> 拆 CoT, 0 装严守 字段探测双轨, 未来 reasoning_content 字段直传)"
         }
     });
 
@@ -1983,4 +2085,94 @@ async fn list_models() -> impl IntoResponse {
         "object": "list",
         "data": [{"id": MODEL, "object": "model", "created": 0, "owned_by": "minimax"}]
     }))
+}
+
+#[cfg(test)]
+mod cot_extraction_tests {
+    //! 单元测试 — extract_minimax_cot 拆 `<!-- ... -->` 边界标记.
+    //!
+    //! 工程规范:
+    //! - 0 装 PASS 严守: 无标记 / 单标记 / 多标记 / 不闭合 / 边界情况 7 测全齐
+    //! - 0 改 enum/const, 0 触碰 3 不可变脊柱
+    //! - 0 改 workspace.version (1.2.0)
+    //!
+    //! (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5)
+
+    use super::extract_minimax_cot;
+
+    /// Happy path: 1 段 CoT 在前, 正文在后.
+    #[test]
+    fn happy_path_cot_then_content() {
+        let content = "<!-- We need to think -->Here is the answer.";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<!-- We need to think -->");
+        assert_eq!(visible, "Here is the answer.");
+    }
+
+    /// 0 装 PASS: 无 `<!-- -->` 标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
+    #[test]
+    fn no_markers_returns_empty_cot_full_visible() {
+        let content = "Plain answer without any CoT markers.";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "");
+        assert_eq!(visible, "Plain answer without any CoT markers.");
+    }
+
+    /// 0 装 PASS: 空字符串 → (空, 空), 边界 0 panic.
+    #[test]
+    fn empty_content_returns_empty_both() {
+        let (cot, visible) = extract_minimax_cot("");
+        assert_eq!(cot, "");
+        assert_eq!(visible, "");
+    }
+
+    /// 多段 CoT: 2 段 `<!-- ... -->` 中间夹 + 末尾夹.
+    #[test]
+    fn multiple_cot_blocks_all_extracted() {
+        let content = "<!-- first thought -->middle<!-- second thought -->end";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<!-- first thought -->\n<!-- second thought -->");
+        assert_eq!(visible, "middleend"); // 中间无分隔符, 实际 LLM 会在段间加 \n\n
+    }
+
+    /// CoT 在末尾 (per 验证报告 §2 chunk 9 模式): CoT 跨 chunk 仍可切分.
+    #[test]
+    fn cot_at_end_extracted() {
+        let content = "Visible answer first.\n\n<!-- thinking more -->";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<!-- thinking more -->");
+        assert_eq!(visible, "Visible answer first.");
+    }
+
+    /// 边界: 不闭合的 `<!--` (跨 chunk 残余) — best-effort 当 visible, 0 装严守.
+    #[test]
+    fn unterminated_cot_treated_as_visible_best_effort() {
+        // chunk 边界切分, `<!-- thinking...` 还没收到 `-->` (per 验证报告 §5 跨 chunk case)
+        let content = "answer part\n<!-- still thinking without close";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, ""); // 不闭合 → 0 假装这是 CoT
+        assert_eq!(visible, "answer part\n<!-- still thinking without close");
+    }
+
+    /// 边界: 真实 MiniMax 样本 (per 验证报告 §2 摘录)
+    #[test]
+    fn realistic_minimax_sample_extracts_cot() {
+        // 取自验证报告 §2 chunk 1+9+10 拼接
+        let content = "<!-- We need answer Chinese. User asks 9.11 vs 9.9 compare. ... -->\n\n按**小数**比较,**9.9 更大**.";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert!(cot.starts_with("<!--"), "CoT 以 <!-- 开头");
+        assert!(cot.ends_with("-->"), "CoT 以 --> 结尾");
+        assert!(visible.contains("9.9 更大"), "正文保留 9.9 更大");
+    }
+
+    /// 工程规范: 0 装 PASS — `<!--` 嵌套时 (罕见) 状态机不退化, 取最外层.
+    /// 注: LLM 不会输出嵌套, 此测试是 robust 防御, 不是合同.
+    #[test]
+    fn nested_marker_handled_robustly_no_panic() {
+        // 嵌套: `<!-- outer <!-- inner --> tail -->`
+        // 状态机从 first <!-- 开始, 找 first --> 关闭. outer 不闭合 → 当 visible
+        let content = "<!-- outer <!-- inner --> tail -->";
+        let (_cot, _visible) = extract_minimax_cot(content);
+        // 不 panic 即可, 0 装严守 — 不依赖精确拆分
+    }
 }

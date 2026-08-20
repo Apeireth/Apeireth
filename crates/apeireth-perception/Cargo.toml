@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth 感知器官 (A9 落点 — R14 Phase 3 外部输入接入层: 信号/IO/Token 流 → 统一 PerceptionEvent)"
+description = "Apeireth 感知器官 (A9 落点 — R14 Phase 3 外部输入接入层: 信号/IO/Token 流 → 统一 PerceptionEvent). 5 input + 2 attention + 5 channel. 5 src 模块 + 39 #[test] + 2 集成 (R37-2 consciousness→perception 透明 re-export)"
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }

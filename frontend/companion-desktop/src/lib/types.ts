@@ -52,6 +52,18 @@ export interface TaskCardInfo {
   detail?: string;
 }
 
+export interface ApprovalRequest {
+  id: string;
+  chain: string;
+  rev: number;
+  tool: string;
+  args_preview: string;
+  reason: string;
+  status: 'pending' | 'approved' | 'expired';
+  created_at: number;
+  updated_at: number;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -62,6 +74,13 @@ export interface ChatMessage {
   events?: ChatMessageEvent[];
   error?: string;
   streaming?: boolean;
+  aborted?: boolean;
+  reasoning?: string;
+  reasoningDurationMs?: number;
+  provenance?: {
+    count?: number;
+    memories?: string[];
+  };
   taskCard?: TaskCardInfo;
   toolCalls?: ToolCallDetails[];
   modelInfo?: {

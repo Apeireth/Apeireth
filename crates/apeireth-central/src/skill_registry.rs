@@ -236,7 +236,7 @@ impl SkillRegistry {
 
 // ============================================================================
 // R125-18 升级: 4 个新 fn 整合 SkillPrompt / SkillValidation / SkillCompanion
-// (0 改 R125-15e + R125-16 原 fn, 仅在末尾追加, 严守 B1 24 LOCKED 入口签名 0 改)
+// (0 改 R125-15e + R125-16 原 fn, 仅在末尾追加, 严守 B1 24 LOCKED 入口签名已降级 — 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
 //
 // 注: R125-18 原本包含 1 个 SkillExecutor (skill_execution.rs), 但 R125-16 派活 (P0-3) 已经
 // 实施了 SkillExecution / SkillRunner / SkillOutcome 3 个 engine mod, R125-18 范围内不再

@@ -1,4 +1,16 @@
 // Apeireth 桌面伙伴 — Agent Runtime Contract & Adapter (Svelte 5 + Tauri 2)
+//
+// Reconciled integration baseline: capability-manifest-driven gating (core
+// capability expansion) is the canonical contract; upstream master's companion
+// presentation event stream is fused in. All V2 mutation endpoints and the
+// capability discovery functions must not regress. Security invariant:
+// apiKey / masterToken are NEVER persisted to localStorage.
+//
+// Conflict resolution (merge origin/master into feature): feature's richer
+// signatures win for duplicated fetchers (fetchTools / fetchGraphData /
+// fetchMemoryStreams / fetchEpisodes / fetchOrgans) because the capability-gated
+// views depend on them; master's subscribeCompanionEvents + CompanionPresentationState
+// + chatOnce + runtimeStatus are added as pure additions.
 
 import type {
   ApeirethConfig,
@@ -69,6 +81,12 @@ export interface AgentRuntime {
   abort(): void;
   readonly running: boolean;
   health(): Promise<RuntimeHealthReport>;
+}
+
+export interface RuntimeStatus {
+  connected: boolean;
+  baseUrl: string;
+  model?: string;
 }
 
 export function classifyHttpError(status: number): RuntimeError['code'] {
@@ -321,16 +339,20 @@ export async function listModels(baseUrl: string, apiKey: string): Promise<strin
 /**
  * 流式聊天: 通过 SSE 请求 OpenAI 兼容 chat completion 端点.
  * 覆盖：text delta, tool calls, reasoning delta, malformed lines, interruptions.
+ * Reconciled: feature's structured ToolCallDetails callback + sessionId header
+ * (canonical, verified) retained; reasoning_content delta handling retained.
  */
+export interface StreamCallbacks {
+  onDelta?: (text: string) => void;
+  onReasoningDelta?: (text: string) => void;
+  onToolCall?: (toolCall: ToolCallDetails) => void;
+  onToolResult?: (id: string, ok: boolean, summary?: string) => void;
+}
+
 export async function streamChat(
   config: ApeirethConfig,
   messages: Array<{role: 'user' | 'assistant' | 'system'; content: string}>,
-  callbacks: {
-    onDelta?: (text: string) => void;
-    onReasoningDelta?: (text: string) => void;
-    onToolCall?: (toolCall: ToolCallDetails) => void;
-    onToolResult?: (id: string, ok: boolean, summary?: string) => void;
-  },
+  callbacks: StreamCallbacks,
   signal?: AbortSignal,
   sessionId?: string,
 ): Promise<string> {
@@ -468,6 +490,30 @@ export async function streamChat(
   }
 
   return fullText;
+}
+
+/** 非流式聊天 (用于简单问答/健康检查). Reconciled from master. */
+export async function chatOnce(config: ApeirethConfig, prompt: string): Promise<string> {
+  const response = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages: [{role: 'user', content: prompt}],
+      stream: false,
+    }),
+  });
+  const data = await checkJson(response) as {
+    choices?: Array<{message?: {content?: string}}>;
+  };
+  return data.choices?.[0]?.message?.content || '';
+}
+
+export function runtimeStatus(baseUrl: string, model?: string): RuntimeStatus {
+  return {connected: false, baseUrl, model};
 }
 
 export function createAgentRuntime(config: ApeirethConfig): AgentRuntime {
@@ -767,8 +813,6 @@ export async function fetchTools(config: ApeirethConfig): Promise<ToolItem[]> {
   }));
 }
 
-
-
 /** 获取待审批授权请求 */
 export async function fetchApprovalRequests(config: ApeirethConfig): Promise<ApprovalRequestItem[]> {
   const res = await fetch(`${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/approval-requests`, {
@@ -829,6 +873,11 @@ export async function grantToolPermission(
     return {ok: false, error: caught instanceof Error ? caught.message : String(caught)};
   }
 }
+
+// Compatibility alias — master used `grantApproval` for the same endpoint.
+export const grantApproval = grantToolPermission;
+// Compatibility alias — master used `fetchPendingApprovals`.
+export const fetchPendingApprovals = fetchApprovalRequests;
 
 /** 写入记忆条目 */
 export async function appendMemoryEpisode(
@@ -897,6 +946,89 @@ export async function fetchOrgans(config: ApeirethConfig): Promise<unknown[]> {
   } catch {
     return [];
   }
+}
+
+// ============================================================
+// Companion Presentation Events — reconciled from upstream master
+// 后端信号驱动的伴随体表现态 (严禁前端造假). Raw CoT 仍不持久化;
+// 这是 SSE 事件流的 presentation 层, 与 trace 持久化无关.
+// ============================================================
+
+export type CompanionPresentationState =
+  | 'idle'
+  | 'thinking'
+  | 'speaking'
+  | 'working'
+  | 'reflecting'
+  | 'concerned'
+  | 'happy';
+
+export interface CompanionEvent {
+  text: string;
+  ts: number;
+  kind?: string;
+}
+
+/**
+ * 订阅 Apeireth 伴随体事件流 (GET /v1/apeireth/events)
+ * 接收后端 CompanionDaemon 涌现问候、反思完成与做梦通知
+ * 支持断线指数退避自动重连 (2s ~ 30s)
+ */
+export function subscribeCompanionEvents(
+  config: ApeirethConfig,
+  onEvent: (event: CompanionEvent) => void,
+): () => void {
+  const url = `${normalizeBaseUrl(config.baseUrl)}/v1/apeireth/events`;
+  let active = true;
+  let currentController: AbortController | null = null;
+  let retryDelay = 2000;
+
+  async function connectLoop(): Promise<void> {
+    while (active) {
+      currentController = new AbortController();
+      try {
+        const response = await fetch(url, {
+          headers: {Authorization: `Bearer ${config.apiKey}`},
+          signal: currentController.signal,
+        });
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        retryDelay = 2000; // Reset delay on successful connection
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (active) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith('data:')) {
+              const data = trimmed.slice(5).trim();
+              if (data) {
+                onEvent({text: data, ts: Date.now()});
+              }
+            }
+          }
+        }
+      } catch {
+        // Disconnected or aborted
+      }
+      if (!active) break;
+      await new Promise((resolve) => setTimeout(resolve, retryDelay));
+      retryDelay = Math.min(retryDelay * 1.5, 30000);
+    }
+  }
+
+  void connectLoop();
+
+  return () => {
+    active = false;
+    currentController?.abort();
+  };
 }
 
 // ============================================================
@@ -1108,4 +1240,3 @@ export async function fetchTraceDetail(config: ApeirethConfig, traceId: string):
     return {error: caught instanceof Error ? caught.message : String(caught)};
   }
 }
-

@@ -1,6 +1,6 @@
 # Apeireth Architecture (1.0)
 
-> 对齐实际代码（2026-08-18 master）。84 active crates / ~34 万行 Rust。
+> 对齐实际代码（2026-08-19 master HEAD `9bf36b1e`）。85 active crates / ~34 万行 Rust。
 
 ## Layer View
 
@@ -35,7 +35,7 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-## Crate Groups (85 crates, aligned with code)
+## Crate Groups (85 crates + 1 desktop, aligned with code)
 
 | Group | Crates | Responsibility |
 |---|---|---|
@@ -46,7 +46,9 @@
 | **Security** | sovereignty, guard, arbitration, credentials, restricted-token, directory-acl, app-container, sandbox | Double onion, PII redaction, HASH-SQL audit, sandboxes |
 | **Infrastructure** | bus, api, protocol, gateway, http-client, acp, mcp, telemetry, pipeline, pipeline-g5, runtime, host, central, cron, config, i18n | Transport, gateway, protocols, lifecycle |
 | **Integration** | integration-e2e, pybridge, tui, tui-e2e, web, cli, sdk, bench, eval, repo-tools, naming-v05, blueprint-impl, upgrade, plugin, extension | Consumers, tooling, e2e |
-| **External adapters** | stock (N3 financial data), wiki (Markdown KB), lark, voice, livekit, rate-limiter, llm-iface, constraint, onion, supervi-sor, team-lead, agent, workflow, action, central, experience, credentials, cron, environment, eval, gateway, naming-v05, telemetry, upgrade, value, vector, verify, archive | Adapters & ecosystem |
+| **External adapters** | stock (N3 financial data), wiki (Markdown KB), lark, voice, livekit, rate-limiter, llm-iface, constraint, onion, supervisor, team-lead, agent, workflow, action, experience, environment, telemetry, value, vector, verify | Adapters & ecosystem (multi-domain pluggable) |
+
+> **2026-08-19 post-v1.0.0 增量**: `frontend/companion-desktop/` 加了 1 个 **独立 workspace** (Svelte 5 + Tauri 2 桌面伙伴) — 不在 root workspace (per 8 硬墙 "companion-desktop 独立 workspace" 守门). 见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md) + 6 个 Phase 报告 in [`docs/integration/`](../../integration/).
 
 > Full list with descriptions: [docs/03-reference/crates.md](../03-reference/crates.md)
 

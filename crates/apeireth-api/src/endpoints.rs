@@ -6,7 +6,7 @@
 //! **不假装**: 30 件是 axum 真接的 (cargo test --lib 现有 3559 passed 验证),
 //! 不是 fake stub. handler 字段是字符串引用编译期记, 不重复声明 callable.
 //!
-//! **6 哲学锚 守门**: 这份硬列表是 "S-1 北极星" (诚实标结构) + "S-6 透明"
+//! **8 哲学锚 守门**: 这份硬列表是 "S-1 北极星" (诚实标结构) + "S-6 透明"
 //! 双锚的具体化 — 任何 auditor 1 屏能看完整 30 route.
 
 /// HTTP method enum (编译期 exhaustive match 守门, axum 的 `get`/`post` 闭包里的).

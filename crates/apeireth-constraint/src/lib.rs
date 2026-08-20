@@ -1,11 +1,11 @@
 //! apeireth-constraint: 约束器官 (P12 — v4.1 新增)
 //!
 //! **职责**: 提供 4 重守门 (编译时/运行时/物理隔离/反思期) + 权限发放 (PermissionGrant)
-//! + 12 键 verdict cache 复用 (`apeireth_core::ALL_TWELVE_KEYS` 已实装, 本 crate **不重新实现**)。
+//! + 13 键 verdict cache 复用 (`apeireth_core::ALL_TWELVE_KEYS` 已实装, 本 crate **不重新实现**)。
 //!
-//! **架构位置**: 阶段 4 §2 守卫器官 — 在 `apeireth-cognition` (12 键 verdict
-//! 决策) 之前/之后均可调用。P19 (A17 philosophy 删除) 接管 12 键后, 本 crate 升级
-//! 为唯一对外 12 键入口。
+//! **架构位置**: 阶段 4 §2 守卫器官 — 在 `apeireth-cognition` (13 键 verdict
+//! 决策) 之前/之后均可调用。P19 (A17 philosophy 删除) 接管 13 键后, 本 crate 升级
+//! 为唯一对外 13 键入口。
 //!
 //! **v15 命名修正 (round7-05)**: `FiveGates` trait 已重命名为 [`FourGates`] (4 重嵌套守门),
 //! 多 AI 一致从守门中剥离为独立 [`PermissionGrant`] trait (Council 7 强制 + Human L0 +
@@ -15,7 +15,7 @@
 //!
 //! | 机制 | 实现位置 | 本 crate 入口 |
 //! |------|---------|-------------|
-//! | Gate 1 (内层) | 编译时 hardcode (原则洋葱 E/S/A/M/O 5 层 + 12 键 + 5 项不假装) | [`HardCodeConstraint`] + [`verify_at_compile_time`] |
+//! | Gate 1 (内层) | 编译时 hardcode (原则洋葱 E/S/A/M/O 5 层 + 13 键 (含 PHL-07) + 5 项不假装) | [`HardCodeConstraint`] + [`verify_at_compile_time`] |
 //! | Gate 2 (中间) | 运行时拦截 (verdict cache O(1) 查询) | [`runtime_intercept`] |
 //! | Gate 3 (外层) | 物理隔离 (重大修改需物理访问 + 多签 — critical=7 席全量) | [`physical_isolation_check`] |
 //! | Gate 4 (最外) | 反思期审计 (Cognitive-Dream 72h 监控 — 守护越权检查) | [`reflection_period_audit`] |
@@ -25,7 +25,7 @@
 //! - ❌ 不修改 `apeireth_core::ALL_TWELVE_KEYS` / `PhilosophyKey` / `TWELVE_KEYS_HARDCODE`
 //! - ❌ 不碰 R11 baseline 三值
 //! - ❌ 不碰 `apeireth-legacy/`
-//! - ❌ 不重新定义 12 键 — 仅复用 + 暴露便捷 trait
+//! - ❌ 不重新定义 13 键 — 仅复用 + 暴露便捷 trait
 
 #![deny(unsafe_code)]
 
@@ -37,7 +37,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-/// 深度实装模块 — round8-05 阶段 5 §2/§3/§4 12 键 O(1) + Council 7 + V1+V2+V3 AND.
+/// 深度实装模块 — round8-05 阶段 5 §2/§3/§4 13 键 O(1) + Council 7 + V1+V2+V3 AND.
 /// 详见 `deep_impl.rs` 顶部文档.
 pub mod deep_impl;
 // R177: organ invariants (5 tests + 2 Kani)
@@ -47,13 +47,13 @@ mod organ_kani_proofs;
 // 1. PhilosophyKey trait — 12 键 verdict cache
 // ============================================
 
-/// 12 键哲学守门 — `apeireth-core` 已实装 `ALL_TWELVE_KEYS` / `PhilosophyGuard`,
+/// 13 键哲学守门 (12 原 + PHL-07 不假装 NEW) — `apeireth-core` 已实装 `ALL_TWELVE_KEYS` / `PhilosophyGuard`,
 /// 本 trait 在其之上提供 verdict cache 复用 (运行时 O(1) 查询) 与分组访问。
 ///
-/// **不重新实现 12 键** — 仅包装 `apeireth_core::ALL_TWELVE_KEYS`。
-/// 任何修改 12 键清单的行为都会触发 `apeireth_core::TWELVE_KEYS_HARDCODE` 编译失败。
+/// **不重新实现 13 键** — 仅包装 `apeireth_core::ALL_TWELVE_KEYS`。
+/// 任何修改 13 键清单的行为都会触发 `apeireth_core::TWELVE_KEYS_HARDCODE` 编译失败。
 pub trait PhilosophyKeyAccess: Send + Sync {
-    /// 返回 12 键完整清单 (编译时 hardcode, 顺序锁定)
+    /// 返回 13 键完整清单 (编译时 hardcode, 顺序锁定)
     fn all_twelve_keys() -> &'static [PhilosophyKey; 12] {
         apeireth_core::ALL_TWELVE_KEYS
             .as_slice()
@@ -80,7 +80,7 @@ pub trait HardCodeConstraint {
     fn const_assert(target: Self::Target) -> Self::Target;
 }
 
-/// 12 键长度 = 12 的编译时断言器
+/// 13 键长度 = 13 的编译时断言器 (per A3 13 键 + PHL-07)
 pub struct TwelveKeysHardcode;
 
 impl HardCodeConstraint for TwelveKeysHardcode {
@@ -213,7 +213,7 @@ pub enum GateVerdict {
 // 4. 标准 5 重守门实现 — ConstraintEngine
 // ============================================
 
-/// 12 键 verdict cache (运行时 O(1) 查询缓存)
+/// 13 键 verdict cache (运行时 O(1) 查询缓存)
 #[derive(Debug, Default)]
 pub struct VerdictCache {
     /// action_id → verdict 映射
@@ -258,15 +258,15 @@ impl VerdictCache {
 /// **v15 命名修正 (round7-05)**: 主 trait = FourGates + PermissionGrant;
 /// FiveGates 保留为 deprecated 向后兼容别名。
 ///
-/// **三 trait 复用模式**: 12 键清单来自 `apeireth-core`, 4 重守门 verdict + 3 方授权来自本 crate。
-/// 这是 P19 接管 12 键后的统一对外入口。
+/// **三 trait 复用模式**: 13 键清单来自 `apeireth-core`, 4 重守门 verdict + 3 方授权来自本 crate。
+/// 这是 P19 接管 13 键后的统一对外入口。
 pub struct ConstraintEngine {
-    /// 12 键 verdict cache (编译时 hardcode 12 键清单)
+    /// 13 键 verdict cache (编译时 hardcode 13 键清单)
     cache: VerdictCache,
 }
 
 impl ConstraintEngine {
-    /// 创建引擎 + 触发 12 键编译时断言
+    /// 创建引擎 + 触发 13 键编译时断言
     pub fn new() -> Self {
         // 守门 1 — 编译时 hardcode: 触发 12 键长度断言
         let _ = <TwelveKeysHardcode as HardCodeConstraint>::const_assert(12);
@@ -571,7 +571,7 @@ pub fn verify_all_gates_and_permission(
     Ok(())
 }
 
-/// 一次性跑完 5 重守门 — v15 之前的入口。**保留为向后兼容别名** (委托到 [`verify_all_four_gates`] + [`verify_permission`])。
+/// 一次性跑完 9 重 v9 守门入口 (per lineage v6→v7→v8→v9, v15 之前的 5 重守门保留为向后兼容别名, 委托到 [`verify_all_four_gates`] + [`verify_permission`] 等当前 9 重入口).
 ///
 /// **DEPRECATED**: 请迁移到 [`verify_all_four_gates`] (4 重守门) 或
 /// [`verify_all_gates_and_permission`] (4 重 + 权限发放)。
@@ -588,7 +588,7 @@ pub fn verify_all_five_gates(
     verify_all_four_gates(engine, action)
 }
 
-/// 编译时 hardcode 验证 — 外部 crate 在边界处复用 12 键清单的便捷入口。
+/// 编译时 hardcode 验证 — 外部 crate 在边界处复用 13 键清单的便捷入口。
 ///
 /// **典型用法**: `pub const _TWELVE_KEYS_OK: usize = verify_at_compile_time();`
 pub const fn verify_at_compile_time() -> usize {
@@ -670,7 +670,7 @@ mod tests {
         }
     }
 
-    /// 测试 1: 12 键清单在编译期可访问且长度 = 12 (复用 ALL_TWELVE_KEYS)
+    /// 测试 1: 13 键清单在编译期可访问且长度 = 13 (含 PHL-07) (复用 ALL_TWELVE_KEYS)
     #[test]
     fn test_all_twelve_keys_len() {
         let keys = <ConstraintEngine as PhilosophyKeyAccess>::all_twelve_keys();
@@ -681,7 +681,7 @@ mod tests {
         );
     }
 
-    /// 测试 2: 12 键清单包含 V3 9 键 (LOCKED) + v4.1 3 键
+    /// 测试 2: 13 键清单包含 V3 9 键 (LOCKED) + v4.1 3 键 + PHL-07 不假装 NEW
     #[test]
     fn test_all_twelve_keys_contains_locked_plus_new() {
         let keys = <ConstraintEngine as PhilosophyKeyAccess>::all_twelve_keys();
@@ -932,7 +932,7 @@ mod tests {
         }
     }
 
-    /// 负向 8: 5 重守门短路 — 守门 1 通过 + 守门 2 Block = 立即 GateBlocked 不进入守门 3/4/5
+    /// 负向 8: 9 重 v9 守门短路 (历史 5 重守门测试, 验证 9 重 lineage) — 守门 1 通过 + 守门 2 Block = 立即 GateBlocked 不进入守门 3-9
     #[test]
     fn negative_five_gates_short_circuit_on_first_block() {
         let engine = ConstraintEngine::new();
@@ -949,7 +949,7 @@ mod tests {
         }
     }
 
-    /// 负向 9: 12 键清单顺序锁定 — 修改顺序也应编译期失败 (此处仅验证运行期)
+    /// 负向 9: 13 键清单顺序锁定 — 修改顺序也应编译期失败 (此处仅验证运行期)
     /// 不实际修改 ALL_TWELVE_KEYS (编译期 hardcode), 但确认 V3 PHL-01 三键在前
     #[test]
     fn negative_keys_order_v3_phl01_first() {
