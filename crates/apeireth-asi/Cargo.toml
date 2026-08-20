@@ -5,7 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "Apeireth ASI 北极星指标 (V0.5 5 维 + V1136 真测 7 子测度) — R14 Phase 2 Rust 重设计"
+description = "Apeireth ASI 北极星指标 (V0.5 24 维 + V1136 真测 9 子测度) — R14 Phase 2 Rust 重设计"
 
 [dependencies]
 apeireth-core = { path = "../apeireth-core" }

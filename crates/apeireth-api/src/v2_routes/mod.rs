@@ -10,15 +10,15 @@
 //! **架构**:
 //! - 自包含, 0 循环依赖 (跟 v2_endpoints 一致)
 //! - 公开 API: `pub fn router() -> axum::Router<()>` — 让 caller 决定如何 merge
-//! - 不动 `v2_endpoints.rs` (24 LOCKED 守门)
+//! - 不动 `v2_endpoints.rs` (24 LOCKED crate 入口签名已降级 — 仅保 3 项不可变脊柱 守门)
 //!
 //! **8 项不修改承诺**:
-//! - 1. ✅ 0 触碰 24 LOCKED crate
+//! - 1. ✅ 0 触碰 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - 2. ✅ 0 改 v2_endpoints.rs 79KB
-//! - 3. ✅ 0 改 workspace version (1.0.0)
+//! - 3. ✅ 0 改 workspace version (1.2.0)
 //! - 4. ✅ 0 引 NewAPI
 //! - 5. ✅ 0 重复造轮子 (复用 `crate::observability::*`)
-//! - 6. ✅ 6 哲学锚穿透 (子模块顶部)
+//! - 6. ✅ 8 哲学锚穿透 (子模块顶部)
 //! - 7. ✅ 不假装已接 observability 真依赖 (跟 status.rs 一致, stub 占位)
 //! - 8. ✅ 诚实标缺 (5 R-Measure 占位 0.0)
 

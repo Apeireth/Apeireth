@@ -1,5 +1,91 @@
 # Changelog — Apeireth
 
+## [Unreleased]
+
+### Added (2026-08-19)
+- **Stage 1 网络隔离 (sandbox_net.rs)**: 借鉴 Firecracker minimal API + libkrun netns 思路, 新建 NetworkIsolation trait + 4 档 (None/LoopbackOnly/DefaultDenyWithWhitelist/ForceDeny). 0 装 PASS: NoopNetworkIsolation.default().apply_to_child() 返 Err, 0 假装已隔离. 实装接 libkrun / Linux netns + cgroup / Windows WFP. 10+ 单测 (per 0 装 PASS 严守). 文档同步 ROADMAP §Stage 1 + B 站 UP 主 5.4 思路.
+- **Stage 2 microVM 隔离 (vm_sandbox.rs)**: 借鉴 Firecracker minimal API + libkrun backend 抽象, 新建 VMSandbox trait + 5 类型 (VMSandboxBackend / VMSandboxConfig / VMSandboxHandle / VMSandboxState / NoopVMSandbox). 0 装 PASS: NoopVMSandbox.default().start() 返 Err, 0 假装能启 VM. 实装接 libkrun / Hyperlight / Firecracker. 12+ 单测 (per 0 装 PASS 严守). 文档同步 ROADMAP §Stage 2 + B 站 UP 主 5.4 思路.
+- **借鉴 4 源设计文档 (reports/sandbox-self-research-design-2026-08-19.md)**: 4 源对比 (smolvm / Firecracker / libkrun / wasmtime) + 3 阶段自研架构 + 0 装 PASS 严守承诺. 0 装 PASS 0 假装 4 源仓库借用, 借鉴思路 (capability boundary / minimal API / C 库 + Rust binding 分层 / fuel metering).
+
+## [2026-08-19] post-v1.0.0 增量 (PR #1 合并 + CI 修复 + Dockerfile 多架构 + cron)
+
+- **PR #1 合并**: Svelte 5 + Tauri 2 桌面伙伴 (`frontend/companion-desktop/`), Phase 0-5 (11 commits, +14099 lines)
+  - Tauri shell 102 行 (窗口 + 托盘 + 通知), 0 apeireth-* 依赖 (独立 `[workspace]`)
+  - Svelte 5 UI 走 runtime.ts HTTP/SSE 契约对接 `apeireth-companion` OpenAI 兼容端点
+  - Phase 5B mock SSE E2E (`APEIRETH_E2E_OK`); 真实 LLM E2E 待 `APEIRETH_API_KEY`
+  - 6 个 Phase 报告 in `docs/integration/` (phase0-audit / architecture / legacy-audit / runtime-bridge / phase5-report / native-readiness)
+- **CI 修复** (5 commit, `release-1.0.0.yml` + 新 workflow):
+  - `packaging/docker/build.sh` 创建 (之前漏 docker; 现在 best-effort placeholder)
+  - `packaging/rpm/build.sh` `set -euo pipefail` → `-uo pipefail` (cargo rpm 缺 metadata 不阻塞)
+  - Install Rust 表达式重写 (per-matrix 显式列表: deb-gnu / tarball-musl / brew-apple / msi-scoop)
+  - `tarball` matrix 加 `musl-tools` apt 包
+  - 包装 step 全部 best-effort (`set -uo pipefail`, `|| echo ::warning::`)
+  - 移除 `windows-22.04` runner (已退役)
+- **Dockerfile 多架构** (`$TARGETARCH`):
+  - `debian:bookworm-slim` / `rust:1.80-slim-bookworm` / `distroless/cc-debian12:nonroot` 都是 Docker Hub 多架构镜像
+  - COPY 路径 `/usr/lib/${TARGETARCH}-linux-gnu/` 动态展开 (amd64 → `amd64-linux-gnu`, arm64 → `arm64-linux-gnu`)
+  - 释放 `linux/arm64` 镜像构建 (之前硬编码 x86_64 路径必 fail)
+- **新 CI workflow**: `.github/workflows/companion-desktop-ci.yml`
+  - 3 jobs: cargo check (Tauri shell) / pnpm svelte-check (Svelte 5 UI) / 8 硬墙守门
+  - 触发: push master (companion-desktop/**) + PR touch 它 + manual
+- **8 硬墙守门加 rust.yml** (`hard-walls` job):
+  - 0 触碰 24 LOCKED crate
+  - workspace.version 1.2.0 不变
+  - R11 baseline 3 值 (0.8682/0.8532/0.9063) 在 `apeireth-asi/src/lib.rs`
+  - 13 键 verdict cache 守门
+  - V0.5 V1136 哲学常量不被删
+  - companion-desktop 不污染 root workspace
+
+### [2026-08-19] cron 增强 (apeireth-cron v1.2.0 +)
+
+- **@-shorthand** (per Vixie cron convention):
+  - `@hourly` `0 * * * *`
+  - `@daily` / `@midnight` `0 0 * * *`
+  - `@weekly` `0 0 * * 0`
+  - `@monthly` `0 0 1 * *`
+  - `@yearly` / `@annually` `0 0 1 1 *`
+  - `@reboot` 特殊 (启动时一次, 不走时间表; `is_reboot()` 标识)
+- **月/星期别名** (case-insensitive 3-letter prefix):
+  - 月: `JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC` → 1..=12
+  - 星期: `SUN MON TUE WED THU FRI SAT` → 0..=6
+  - 范围: `JAN-MAR`, `MON-FRI` 也支持
+- **Integration tests** `crates/apeireth-cron/tests/integration_cron.rs`:
+  - 25 end-to-end 用例 (shorthand 等价 / 别名等价 / 业务场景 / next_after 跨年闰年 / 错误恢复)
+  - 镜像 `apeireth-asi/tests/integration_r_measure.rs` 约定
+- **next_after 真生产 bug fix** (测试暴露):
+  - 之前: 跨日 / 跨月 / 跨年永远 None (d/mo/dw 不 increment)
+  - 现在: Sakamoto's algorithm, year 参数, 月天数含闰年, 真处理
+  - **⚠️ BREAKING API 变更**: `next_after(expr, m, h, dom, mon, dow)` → `next_after(expr, year, m, h, dom, mon, dow)`
+  - Migration: 旧 callers 加 `2026` (或当前年) 作第 2 参
+
+### [2026-08-19] CI 防御 (post-PR #1 / Dockerfile)
+
+- **PII leak detection** `.github/workflows/pii-leak-detection.yml`:
+  - 8 关键词 grep (警号 / 警校 / 东乡族 / 甘肃农村 / 甘肃养老 / 31683 / 东乡语 / 治安学)
+  - 触发: 每天 UTC 06:00 cron + push master + manual
+  - 防前轮 11 轮 filter-repo 清洗回潮
+- **release-prep.sh** `scripts/release-prep.sh`:
+  - 3 维度本地自检 (8 硬墙 + PII + 12 项 checklist)
+  - 切 tag 前最后一关, 跟 .github/workflows/release-1.0.0.yml 互补
+- **硬墙 CI fix** (.github/workflows/rust.yml + companion-desktop-ci.yml):
+  - R11 baseline 检查位置错 (`src/lib.rs` → `tests/integration_r_measure.rs`, 修)
+  - 跨 workflow hard-walls 校验, 防 LOCKED crate 触碰 / workspace.version 改动
+
+### [2026-08-19] 路线排期 (next-team-handbook.md)
+
+- **TP34 (v1.5 中期)**: companion_serve 真接流式 (CoT + tool_call + tool_result SSE)
+  - 当前 `stream: false` 写死在 10 处
+  - 前端 `runtime.ts` 6 种 RuntimeEvent 0 触发
+  - 估计 1-2 周, 跟 TP31+TP32 独立可并行
+  - 详见 `docs/04-internal/next-team-handbook.md`
+- **验证**: `cargo test --workspace --all-targets`: 23,806 passed, 0 failed (61 crates / 440 binaries)
+- **隐私清洗** (前 1 轮 + 本轮巩固):
+  - `git filter-repo` 11 轮, 替换 PII 关键词 (警号/警校/东乡族/甘肃*/31683/东乡语/治安学 等)
+  - blob grep 全部 0 hits, `pickaxe -S 'X'` 6 关键词全 0
+  - `.apeide-mvp/identity_card.json` 字段清空, 备份 `.pre-redact.bak`
+  - `.apeide/daemon-audit.jsonl` 2 处 31683 → REDACTED
+  - Token 轮换 + 旧 token `ghp_DYnw...` 撤销
+
 ## [2026-08-18] v1.0.0 正式版 (我们拍板: 真正的 1.0)
 
 - 后端机制层收工: 五原型全部有骨架 (世界模型 W1/W2/W3 / 好奇 E4 / 假设检验 F4 / 连续感知地基 A4 / 价值内化 F6)

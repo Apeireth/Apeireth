@@ -10,10 +10,10 @@
 //!
 //! B-2 (Mavis 派) 接 B 的位, 干 B 留的 latency bench.
 //!
-//! ## 设计原则 (ponytail, 主人 6 锚 O-5 不假装)
+//! ## 设计原则 (ponytail, 主人 8 锚 O-5 不假装)
 //!
 //! - **不直接 import** `apeireth-api` (会引入 24+ transitive dep + 风险) —
-//!   mini 复刻 B 写的 cache + retry 行为, 0 触碰 24 LOCKED.
+//!   mini 复刻 B 写的 cache + retry 行为, 0 触碰 24 LOCKED crate 入口签名已降级 (仅保 3 项不可变脊柱).
 //! - **wiremock 模拟 4 协议上游 LLM** — 跟 `apeireth-pipeline/tests/pipeline.rs:60-127`
 //!   复用同款 wiremock 模式 (Cargo.lock 0.6.5 已有).
 //! - **0 接真 LLM** (主人 0 授权真 key) — 只 mock 4 协议 response shape, latency

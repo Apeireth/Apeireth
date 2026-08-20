@@ -11,15 +11,15 @@
 ## Build
 
 ```bash
-cargo build --workspace          # ~34 万行, 84 crates
-cargo check --workspace --all-targets   # 编译全 target 干净
+cargo build --workspace          # ~34 万行, 85 + 1 desktop crates
+cargo check --workspace --all-targets   # 编译全 target 干净 (含 post-1.0.0 cron 改进)
 ```
 
 ## Test
 
 ```bash
-cargo test --workspace           # 368 组全绿 (含真实 API 压测, 有退避)
-cargo test -p apeireth-companion --lib   # 伙伴器官 644 测试
+cargo test --workspace           # 23,874 组全绿 (含 post-1.0.0 增量)
+cargo test -p apeireth-cron --test integration_cron  # cron integration tests 25 cases
 ```
 
 ## Run the Companion (the full partner endpoint)
@@ -54,6 +54,20 @@ Optional env:
 ```bash
 cargo run -p apeireth-tui
 ```
+
+## Desktop 伙伴 (companion-desktop, post-v1.0.0 新增)
+
+```bash
+# 前置: Node 20+ + pnpm 9+ (Windows: WebView2 runtime)
+cd frontend/companion-desktop
+pnpm install
+pnpm dev                                      # http://localhost:1420 (Vite + Svelte)
+
+# 或: Tauri 桌面窗口 (需 WebView2)
+pnpm tauri dev                                 # 桌面窗口 + dev tools
+```
+
+详见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md)。 真实 LLM E2E 待 `APEIRETH_API_KEY` (目前是 mock SSE 端到端, **🟡 2026-08-19 TP34 后端 50%** — companion_serve 加 streaming 分支 + `extract_minimax_cot` helper, 6 种 RuntimeEvent 中 reasoning-delta 前端状态机待续, 详见 `docs/04-internal/next-team-handbook.md` TP34)。
 
 ## Tool orchestration e2e
 

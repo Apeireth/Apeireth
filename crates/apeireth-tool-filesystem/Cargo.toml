@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Apeireth R137: filesystem extension (sandbox + atomic write + fsnotify + file lock + doc parsing)"
+description = "Apeireth R137: filesystem extension (sandbox + atomic write + fsnotify + file lock + compat). 5 真实现模块 (sandbox/atomic/watch/lock/compat) + enhanced + register. doc parsing 已声明移除 (parse.rs 从未存在 → E0583, 落地时恢复, deps lopdf/docx-rs/calamine feature-gated 保留)."
 
 [dependencies]
 apeireth-tools = { path = "../apeireth-tools" }

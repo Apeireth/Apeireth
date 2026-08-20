@@ -25,8 +25,7 @@
 //!   (v1_tools/storage.rs 内部测试未跑, 因为 mod.rs 不 declare storage;
 //!    本文件通过 tests/ runner 注入, 跑同一份逻辑, 保证 "真测试有效")
 //!
-//! **6 哲学锚穿透**:
-//! - 锚 #1 不漂移: InMemory 真跑, JsonFile 真跑, Sqlite NotImplemented 显式
+//! **8 哲学锚穿透**://! - 锚 #1 不漂移: InMemory 真跑, JsonFile 真跑, Sqlite NotImplemented 显式
 //! - 锚 #2 编译期 hardcode: `STORAGE_BACKEND_COUNT = 3` 在 storage.rs const assert
 //! - 锚 #3 不引入 unsafe: `#![deny(unsafe_code)]` 继承 + `Mutex` 守并发
 //! - 锚 #4 真值守门: trait `EntityStorage` 4 方法, SqliteStorage 显式 NotImplemented
@@ -35,11 +34,11 @@
 //!
 //! **8 项不修改承诺 (严守)**:
 //! - ❌ 不改 LOCKED `storage.rs` (本文件 0 触碰)
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml
 //! - ❌ 不引第三方 DB 库 (除 workspace 已锁 rusqlite 0.32, 本测试不引)
 //! - ❌ 不假装 SqliteStorage 已实现 (per 锚 #1)
-//! - ❌ 不破坏 24 LOCKED crate
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱)
 //! - ❌ 不引入新依赖 (仅用 serde_json + tempfile 已在 dev-deps)
 //! - ❌ 不重写 storage.rs 内部已有测试 (本文件是独立双测, 逻辑同源不同源)
 

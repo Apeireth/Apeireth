@@ -1,8 +1,8 @@
 <script lang="ts">
   import {Copy, Check, Bot, User, Terminal} from 'lucide-svelte';
   import {renderMarkdown} from './markdown';
-  import TaskCard from './TaskCard.svelte';
-  import ExecutionTimeline from './ExecutionTimeline.svelte';
+  import TaskCard from '../components/TaskCard.svelte';
+  import ExecutionTimeline from '../components/ExecutionTimeline.svelte';
   import ToolCallCard from './components/ToolCallCard.svelte';
   import type {ChatMessage} from './types';
 

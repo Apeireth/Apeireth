@@ -1,15 +1,15 @@
-//! `skill_guard`: Superpowers Skill 化守门 7 (B4 6 重守门 v6 → v7 升级新增)
+//! `skill_guard`: Superpowers Skill 化守门 7 (per lineage v6→v7→v8→v9, B4 6 重守门 v6 → v7 → v8 → v9 升级新增)
 //!
 //! **借鉴信息** (R126-guard-7 / R125-14/R125-15e-BORROW-obra/superpowers-2026-05-2026-08-10):
 //! - 借鉴源码: `.openclaw\workspace\borrowed-repos\superpowers\`
 //! - 借鉴模块: `superpowers/skills/*/SKILL.md` (14 Skill, 公开 frontmatter 1:1 映射)
 //! - 借鉴模式: Skill trait (id / name / when_to_use / steps / tdd_required) + SkillRegistry 中心调度
 //!
-//! **设计意图** (B4 6 重守门 v6 → v7 升级):
+//! **设计意图** (per lineage v6→v7→v8→v9, B4 升级):
 //! - 守门 1-5: Governance.process 5 step (MultiAi/MultiHuman/PhysicalMultisig/Reflection/Mewg) — **0 改**
 //! - 守门 6: Colang DSL (colang_dsl.rs 1442 行, R125-5 实施) — **0 改**
 //! - **守门 7 (NEW)**: Superpowers Skill Guard = 借鉴 superpowers Skill 化工作流 (TDD RED-GREEN-REFACTOR)
-//!   把"6 重守门 v6" 升级为"7 重守门 v7", 守门 7 = Skill 化守门, 强制 TDD RED 强校验 + SkillRegistry 中心调度
+//!   把"6 重守门 v6" 升级为"7 重守门 v7 → 8 重 v8 → 9 重 v9", 守门 7 = Skill 化守门, 强制 TDD RED 强校验 + SkillRegistry 中心调度 (守门 8 action_rail / 守门 9 evidence_guard 是 lineage 后续升级)
 //!
 //! **模块结构**:
 //! ```text
@@ -95,7 +95,7 @@ pub trait Skill {
 /// - 守门 1-5 = Governance.process 5 step (MultiAi/MultiHuman/PhysicalMultisig/Reflection/Mewg) — 0 改
 /// - 守门 6 = Colang DSL (R125-5) — 0 改
 /// - 守门 7 = Superpowers Skill Guard (本模块, 借鉴 superpowers 公开 SKILL.md 模式)
-/// - **总共 7 个 Skill** (不引入 superpowers 14 skill 全部, 只挑跟 6 重守门强匹配的 7 个, 1:1 映射)
+/// - **总共 7 个 Skill** (不引入 superpowers 14 skill 全部, 只挑跟 9 重 v9 守门 lineage 强匹配的 7 个, 1:1 映射)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum SkillId {
     /// 守门 1: MultiAi (守门 1: 多 AI 一致)
@@ -554,7 +554,7 @@ pub enum SkillGuardOutcome {
 
 /// 守门 7 — Superpowers Skill Guard
 ///
-/// **设计** (B4 6 重守门 v6 → v7 升级, R126-guard-7 NEW):
+/// **设计** (per lineage v6→v7→v8→v9, B4 升级, R126-guard-7 NEW):
 /// - 输入: 7 Skill 跑过的 steps 列表 (从 SkillRegistry.run_skill)
 /// - 流程: 7 严守 verify + TDD RED ≥ min + 6-before-7 verify
 /// - 通过: Approved (进入 7 重守门 v7 编排)

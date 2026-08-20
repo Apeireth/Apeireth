@@ -14,7 +14,7 @@
 //! 5. `void apeireth_sdk_free_string(char* ptr)` — 释放 char* (Rust 分配)
 //!
 //! **0 重复造轮子 (O-2)**: 复用 `apeireth-sdk::version::SDK_VERSION` 公共 API (per lib.rs §A 268-269),
-//! 0 改 24 LOCKED / 0 改 workspace.version.
+//! 0 改 24 LOCKED crate 入口签名 (R128 + R148 已降级, 仅保 3 项不可变脊柱) / 0 改 workspace.version (1.2.0 双轴制).
 //!
 //! **不漂移**: c.rs 仅用 std + apeireth-sdk::version, 0 跨 crate dep, 0 触碰 5 集成点 / 4 类核心类型.
 //!
@@ -147,7 +147,7 @@ pub extern "C" fn apeireth_sdk_hash_request(
 
 /// **C-ABI fn #3**: `apeireth_sdk_version() -> *const c_char`.
 ///
-/// **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.1.0.
+/// **不漂移**: 复用 `apeireth_sdk::version::SDK_VERSION` 公共 API, 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
 /// 返 Rust static str, 生命周期 'static, 0 需要 free (1:1 libc `getenv` pattern).
 #[cfg(feature = "c")]
 #[no_mangle]
@@ -157,7 +157,7 @@ pub extern "C" fn apeireth_sdk_version() -> *const c_char {
     use crate::version::SDK_VERSION;
     // SDK_VERSION 是 SdkVersion struct, 不是 str. 转 "0.1.0" 字面量 (per R20 阶段 6 stub)
     // 注: SDK_VERSION.major/minor/patch 来自 version.rs:102 LOCKED, 0 重复造轮子.
-    // 注: workspace.version 1.1.0 是 workspace 顶层, SDK_VERSION 0.1.0 是 SDK 协议版本 (R20 决策原意)
+    // 注: workspace.version 1.2.0 是 workspace 顶层 (双轴制), SDK_VERSION 0.1.0 是 SDK 协议版本 (R20 决策原意)
     let s = format!(
         "{}.{}.{}",
         SDK_VERSION.major, SDK_VERSION.minor, SDK_VERSION.patch
@@ -293,9 +293,9 @@ mod c_ffi_tests {
         // 验证 semver 格式 X.Y.Z
         let parts: Vec<&str> = v_str.split('.').collect();
         assert_eq!(parts.len(), 3, "version 应是 semver X.Y.Z 格式");
-        // 0 改 workspace.version 1.1.0 (per hard-constraint #1)
+        // 0 改 workspace.version 1.2.0 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0) (per hard-constraint #1)
         // 0 改 SDK_VERSION = 0.1.0 (R20 阶段 6 stub, version.rs:102 LOCKED)
-        // version_c 返 SDK_VERSION.as_str() (0.1.0), 跟 workspace.version 1.1.0 解耦
+        // version_c 返 SDK_VERSION.as_str() (0.1.0), 跟 workspace.version 1.2.0 解耦
         assert_eq!(v_str, "0.1.0", "version_c 返 SDK_VERSION (0.1.0) 0 改");
         apeireth_sdk_free_string(v_ptr as *mut _);
 

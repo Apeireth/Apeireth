@@ -18,7 +18,11 @@
 //!
 //! ---
 //!
-//! ## 🎯 6 哲学锚穿透
+//! ## 🎯 8 哲学锚穿透 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
+//!
+//! baseline (2026-08-19): 8 哲学锚 (R148 在原 S-1/S-2/O-2/O-3/O-4/O-5 6 锚基础上 + S-3 质量工程化 NEW + O-1 安全优先 NEW).
+//! 本 crate 列举以下 6 项 (S-1/S-2/O-5/O-2/O-3/O-4) 在本 crate 体现; S-3 质量工程化见 `apeireth-blueprint-impl` 测试用例 + 集成测试;
+//! O-1 安全优先见 K-1 强校验 + D-03 WS 鉴权.
 //!
 //! | 锚 | 含义 | 本 crate 体现 |
 //! |----|------|---------------|
@@ -42,7 +46,7 @@
 //! | 5 | v6 修正 = 4 重守门 + 权限发放 + E 层修改路径 | 5 决策表中 D-04 走 v6 |
 //! | 6 | R11 baseline 三值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063) | [`r_measure::RMeasureAll::drift`] 对齐 |
 //! | 7 | v1 → v5 历史链 | 不删除 |
-//! | 8 | 24 LOCKED crate 不动 | 本 crate 是新增, 不修改任何 LOCKED crate (新增在 `crates/apeireth-blueprint-impl/`, 跟 24 LOCKED 并列) |
+//! | 8 | 24 LOCKED crate 入口签名已降级 (R128 + R148) | 本 crate 是新增, 不修改任何 LOCKED crate (新增在 `crates/apeireth-blueprint-impl/`, 跟 24 LOCKED 并列); LOCKED 入口仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache) |
 //!
 //! ---
 //!
@@ -465,10 +469,11 @@ pub fn run_full_pipeline(
 }
 
 // ============================================
-// 8. 文档常量 — 6 哲学锚 + 8 项承诺 (供 doc 链接用)
+// 8. 文档常量 — 8 哲学锚 (baseline 2026-08-19) + 8 项承诺 (供 doc 链接用)
 // ============================================
 
-/// 6 哲学锚 (供外部 crate 引用, 保证命名一致).
+/// 8 哲学锚 (供外部 crate 引用, 保证命名一致, baseline 2026-08-19:
+/// S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5).
 pub const PHILOSOPHY_ANCHORS: [&str; 6] = [
     "S-1 主 22:33 北极星导向",
     "S-2 主 17:43 实事求是",
@@ -487,7 +492,7 @@ pub const EIGHT_PROMISES: [&str; 8] = [
     "5. v6 修正 = 4 重守门 + 权限发放 + E 层修改路径",
     "6. R11 baseline 三值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)",
     "7. v1 → v5 历史链不删除",
-    "8. 24 LOCKED crate 不动 (本 crate 新增, 不修改任何 LOCKED)",
+    "8. 24 LOCKED crate 入口签名已降级 (本 crate 新增, 不修改任何 LOCKED); 仅保 3 项不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache)",
 ];
 
 // ============================================
