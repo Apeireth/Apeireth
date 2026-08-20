@@ -348,6 +348,9 @@ struct AppState {
     bridge: Arc<ToolBridge>,
     store: Arc<SqliteMemoryStore>,
     pipeline: Arc<Pipeline>,
+    /// Provider Runtime 状态 (Runtime Decoupling). provider-backed handler (chat)
+    /// 据此短路: Unconfigured → 稳定 503 provider_not_configured, 不打无 token 请求.
+    provider_state: apeireth_companion::runtime_capabilities::ProviderRuntimeState,
     /// 互动通知通道 (daemon task 持有 daemon, 此处只发「主人来消息了」时刻).
     interactions: tokio::sync::mpsc::Sender<chrono::DateTime<Utc>>,
     /// 主动送达广播 (模块 4: daemon 涌现/事件 → SSE 推送前端).
@@ -382,15 +385,30 @@ impl LifecycleHook for LifecycleLogHook {
     }
 }
 
-fn load_key() -> Result<String, String> {
+/// Load provider API key best-effort. Returns None when no key is configured
+/// (no env var, no key file) — this is a **normal runtime state**, not an error.
+///
+/// Runtime Decoupling: a missing key must NOT prevent companion boot. The Core
+/// Runtime (health / capabilities / sessions / memory / permissions / traces)
+/// works without any provider credential; only provider-backed capabilities
+/// (chat / inference) degrade to `available = false`.
+fn load_key() -> Option<String> {
     if let Ok(k) = std::env::var("APEIRETH_API_KEY") {
         if !k.trim().is_empty() {
-            return Ok(k.trim().to_string());
+            return Some(k.trim().to_string());
         }
     }
-    std::fs::read_to_string(r"apikey-ultra.txt")
-        .map(|s| s.trim().to_string())
-        .map_err(|e| format!("读 apikey 失败: {e}"))
+    match std::fs::read_to_string(r"apikey-ultra.txt") {
+        Ok(s) => {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                Some(t.to_string())
+            }
+        }
+        Err(_) => None,
+    }
 }
 
 // ============================================================
@@ -901,6 +919,21 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(req): Json<OpenAiChatRequest>,
 ) -> impl IntoResponse {
+    // Runtime Decoupling: provider-backed endpoint. Unconfigured (no key) → 稳定 503,
+    // 不打无 token 请求 (避免用户等 dispatch 重试 6s×3). 复用现有 error envelope.
+    if !st.provider_state.is_ready() {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({
+                "error": {
+                    "message": "Provider not configured: chat/inference requires an API key (APEIRETH_API_KEY or apikey-ultra.txt). Core runtime is healthy; set a key to enable chat.",
+                    "code": "provider_not_configured",
+                    "type": "provider_unavailable"
+                }
+            })),
+        )
+            .into_response();
+    }
     let continuity = headers
         .get("x-apeireth-continuity")
         .and_then(|v| v.to_str().ok())
@@ -1249,7 +1282,15 @@ async fn chat_once(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let key = load_key()?;
+    // Runtime Decoupling: key is optional. Missing key → ProviderRuntimeState::Unconfigured,
+    // but Core Runtime still boots (health / capabilities / sessions / memory / traces).
+    let key = load_key();
+    let provider_state = if key.is_some() {
+        apeireth_companion::runtime_capabilities::ProviderRuntimeState::Ready
+    } else {
+        eprintln!("[boot] 无 provider 凭据 (无 APEIRETH_API_KEY / apikey-ultra.txt) — Core Runtime 正常启动, chat/inference 降级为不可用");
+        apeireth_companion::runtime_capabilities::ProviderRuntimeState::Unconfigured
+    };
     let port: u16 = std::env::var("PORT")
         .ok()
         .and_then(|p| p.parse().ok())
@@ -1286,7 +1327,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::sync::Arc::new(std::sync::Mutex::new(goals));
 
     // ② 工具桥全增强 (宪法 LLM 评审 + 目标工具 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
-    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone()))?);
+    // Runtime Decoupling: pipeline 构建接受 Option<token>; 无 key 时 auth_token=None,
+    // pipeline 仍可构建 (类型允许, 不校验 token). provider-backed 调用会 best-effort 失败
+    // 并被各组件 swallow (见 daemon 审计); chat handler 由 provider_state 短路.
+    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), key.clone())?);
     let bridge = Arc::new(
         ToolBridge::new(Arc::clone(&store))
             .with_judicator(Arc::new(LlmJudicator::new(Arc::new(
@@ -1455,6 +1499,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bridge,
         store,
         pipeline,
+        provider_state: provider_state.clone(),
         interactions: tx_interact,
         events: tx_events,
         app,
@@ -1607,8 +1652,14 @@ async fn approval_requests(State(st): State<Arc<AppState>>) -> impl IntoResponse
 
 /// Runtime Capability Manifest: 声明本 runtime 真实支持的能力 (versioned, machine-readable).
 /// Desktop 据此 gate UI, 不再逐个撞 endpoint. 仅暴露 public 信息, 不含 secret/路径.
-async fn capabilities() -> impl IntoResponse {
-    Json(apeireth_companion::runtime_capabilities::current_manifest())
+///
+/// Runtime Decoupling: manifest 反映 ProviderRuntimeState — provider-backed 能力
+/// (chat / tools.invoke) 在 Unconfigured 时 available=false, reason=provider_not_configured;
+/// core 能力 (sessions/memory/trace/permissions) 始终 available.
+async fn capabilities(State(st): State<Arc<AppState>>) -> impl IntoResponse {
+    Json(apeireth_companion::runtime_capabilities::current_manifest(
+        &st.provider_state,
+    ))
 }
 
 // ============================================================
@@ -2071,12 +2122,27 @@ async fn panel_asset(Path(asset): Path<String>) -> axum::response::Response {
     ([(CONTENT_TYPE, ctype)], body).into_response()
 }
 
-async fn health() -> impl IntoResponse {
+async fn health(State(st): State<Arc<AppState>>) -> impl IntoResponse {
+    // Runtime Decoupling: /health 分轴 — core (runtime 自身) 与 provider 解耦.
+    // 保留旧字段 (status/service/version/features) 保 backward compat;
+    // 新增 core{} / provider{} 分轴, 旧客户端仍可读 status.
+    let provider_ready = st.provider_state.is_ready();
+    let provider_status = if provider_ready { "ready" } else { "unconfigured" };
+    // 顶层 status: core healthy 即 "ok" (provider 缺失 ≠ runtime dead).
+    let overall = "ok";
     Json(json!({
-        "status": "ok",
+        // === 旧字段 (backward compat, 保留) ===
+        "status": overall,
         "service": "apeireth-companion-serve-v4",
         "version": env!("CARGO_PKG_VERSION"),
         "features": ["persistent_memory", "daemon_resident", "dream_llm_summarizer", "utterance_llm", "constitution_llm_judicator", "memory_injection", "today_summary", "tool_bridge_all", "openai_compat", "companion_app", "l0_identity", "l1_essential_story"],
+        // === 新增分轴 (additive, Runtime Decoupling) ===
+        "core": {
+            "status": "healthy"
+        },
+        "provider": {
+            "status": provider_status
+        }
     }))
 }
 
