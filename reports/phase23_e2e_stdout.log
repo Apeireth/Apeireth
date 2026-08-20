@@ -1,0 +1,10 @@
+[mem] 持久记忆库: 已打开 (重启不失忆) · subject: companion-main
+[bridge] 宪法评审 (真 LLM): Medium+ 工具执行前按 E 层判案
+[app] CompanionApp 装配完成: L0 Identity + L1 Essential 常驻, 提炼 600s 节流
+[sink] Lark 未启用 (需要 APEIRETH_LARK_APP_ID/SECRET/RECEIVE_ID): 飞书凭据缺失: APEIRETH_LARK_APP_ID (设 APEIRETH_LARK_* 环境变量)
+[sink] Telegram 未启用 (需要 APEIRETH_TELEGRAM_BOT_TOKEN/CHAT_ID): Telegram 凭据缺失: APEIRETH_TELEGRAM_BOT_TOKEN (设 APEIRETH_TELEGRAM_* 环境变量)
+[daemon] 常驻: 做梦(LLM 摘要, 安静期 21600s) + 反思(TimeDelta { secs: 86400, nanos: 0 }, LLM 深度) + 涌现(LLM 润色, SSE 推送)
+✅ companion_serve v4 — 伙伴端点全能力版 (CompanionApp 机制装配)
+   http://127.0.0.1:8088/panel  (Web 面板 v2: 会话/记忆/图谱/授权/审计, 只读真接口)
+   http://127.0.0.1:8088/v1  (模型 MiniMax-M3, Key 任意非空)
+   会话标签: X-Apeireth-Continuity (缺省 companion-main) · 工具: 全部可见, 执行受宪法/权限约束
