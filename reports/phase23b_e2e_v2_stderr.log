@@ -1,0 +1,28 @@
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 59.9752ms
+[lifecycle] user_prompt_submit (session: companion-main): 请调用 audit_log 工具查最近 2 条审计, 简述本座看到了什么
+[llm] 轮1 成功 (2458ms)
+  [管线] 轮2 第1次失败: suppressed: openai-chat:MiniMax-M3:请调用 audit_log 工具查最近 2 条审计, 简述本座看到了什么, 6s 后重试
+  [管线] 轮2 第2次失败: suppressed: openai-chat:MiniMax-M3:请调用 audit_log 工具查最近 2 条审计, 简述本座看到了什么, 6s 后重试
+[llm] 轮2 成功 (6765ms)
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.765ms
+[lifecycle] user_prompt_submit (session: companion-main): 记住: 主人喜欢傍晚看夕阳, 尤其秋天的金红色天空. 请调用 save_memory 写入这条事实.
+[llm] 轮1 成功 (2768ms)
+  [管线] 轮2 第1次失败: suppressed: openai-chat:MiniMax-M3:记住: 主人喜欢傍晚看夕阳, 尤其秋天的金红色天空. 请调用 save_memory 写入这条事实., 6s 后重试
+  [管线] 轮2 第2次失败: suppressed: openai-chat:MiniMax-M3:记住: 主人喜欢傍晚看夕阳, 尤其秋天的金红色天空. 请调用 save_memory 写入这条事实., 6s 后重试
+[llm] 轮2 成功 (985ms)
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.7003ms
+[lifecycle] user_prompt_submit (session: companion-main): 主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座
+[llm] 轮1 成功 (2769ms)
+  [管线] 轮2 第1次失败: suppressed: openai-chat:MiniMax-M3:主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座, 6s 后重试
+  [管线] 轮2 第2次失败: suppressed: openai-chat:MiniMax-M3:主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座, 6s 后重试
+[llm] 轮2 成功 (1979ms)
+  [管线] 轮3 第1次失败: suppressed: openai-chat:MiniMax-M3:主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座, 6s 后重试
+  [管线] 轮3 第2次失败: suppressed: openai-chat:MiniMax-M3:主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座, 6s 后重试
+[llm] 轮3 成功 (7487ms)
+  [管线] 轮4 第1次失败: suppressed: openai-chat:MiniMax-M3:主人喜欢什么天气? 用 recall_memory 查查偏好, 告诉本座, 6s 后重试
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 8.9313ms
+[llm] 轮4 成功 (4886ms)
