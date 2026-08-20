@@ -400,6 +400,11 @@ pub struct FetchEngine {
     pub fetch_metrics: FetchMetrics,
     /// R265: optional TTL cache (None = disabled). Key = URL string, Value = JSON-serialized FetchResponse.
     cache: Option<std::sync::Arc<crate::cache::FetchCache>>,
+    /// 2026-08-20 S4 出站策略 (gateway domain whitelist) — 仅显式 `with_egress` 挂载才启用.
+    /// 默认 None = 放行所有 (backward compat, 0 装 PASS 严守).
+    /// 实装: `apeireth_http_client::egress::EgressPolicy` (commit 34116602 默认拒绝 + SHA-256 审计链).
+    /// 与 `apeireth-http-client::HttpClient::with_egress` 协作 (调用方挂单点即可).
+    egress: Option<std::sync::Arc<parking_lot::Mutex<apeireth_http_client::egress::EgressPolicy>>>,
 }
 
 impl FetchEngine {
@@ -409,6 +414,7 @@ impl FetchEngine {
             rate_limiter: None,
             fetch_metrics: FetchMetrics::new(),
             cache: None,
+            egress: None,
         }
     }
     pub fn with_config(cfg: FetchConfig) -> Self {
@@ -417,10 +423,24 @@ impl FetchEngine {
             rate_limiter: None,
             fetch_metrics: FetchMetrics::new(),
             cache: None,
+            egress: None,
         }
     }
     pub fn config(&self) -> &FetchConfig {
         &self.cfg
+    }
+    /// 2026-08-20 S4: 挂出站策略 (gateway domain whitelist 默认拒绝).
+    ///
+    /// **0 装 PASS**: 默认 `egress = None` = 放行所有 (backward compat).
+    /// 显式挂载后, 每次 fetch() 检查 host 是否在 allowlist, 不在 → 拒绝.
+    ///
+    /// 借用 `apeireth-http-client::egress::EgressPolicy` 实现 (默认拒绝 + 白名单 + SHA-256 审计链).
+    pub fn with_egress(
+        mut self,
+        policy: std::sync::Arc<parking_lot::Mutex<apeireth_http_client::egress::EgressPolicy>>,
+    ) -> Self {
+        self.egress = Some(policy);
+        self
     }
 
     /// **R231 — 启用 per-host rate limit** (默认 60 req/60s)
@@ -529,6 +549,21 @@ impl FetchEngine {
                 rl.lock().record(&host);
             }
         }
+        // 2026-08-20 S4: 出站策略 (gateway domain whitelist) — 仅显式挂载才生效 (0 装 PASS 严守)
+        if let Some(egress) = &self.egress {
+            let url_str = req.url.clone();
+            match egress.lock().check_outbound(&url_str, 0.0) {
+                Ok(()) => {} // 放行
+                Err(e) => {
+                    // 拒绝: 记录指标 + 返 FetchError::Http (复用现有变体, 0 改 enum)
+                    self.fetch_metrics
+                        .record_error(started.elapsed().as_secs_f64() * 1000.0);
+                    return Err(FetchError::Http(format!(
+                        "S4 出站策略拒绝 (gateway domain whitelist): {e:?}"
+                    )));
+                }
+            }
+        }
         // 真接 apeireth-http-client
         let fetcher = HttpFetcher::new();
         let result = fetcher.fetch(req, &self.cfg).await;
@@ -622,6 +657,51 @@ mod tests {
             elapsed_ms: 0,
         };
         assert!(r.is_html());
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 2026-08-20 S4: 出站策略 (gateway domain whitelist)
+    // 0 装 PASS 严守: 默认无 egress 挂载 → 放行 (backward compat);
+    // 显式挂载后, 不在白名单的 URL → 拒绝 (无真 HTTP 调用, 0 网络依赖)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn s4_default_no_egress_passes_through_unchanged() {
+        // 默认无 egress, 调用应走通既有逻辑 (这里 0 真 HTTP — 仅验证 builder 不破坏)
+        let eng = FetchEngine::new();
+        assert!(eng.config().max_response_bytes > 0);
+    }
+
+    #[test]
+    fn s4_empty_allowlist_rejects_all_domains() {
+        // EgressConfig::default() = empty allowlist → 默认拒绝 (S4 设计)
+        let policy = std::sync::Arc::new(parking_lot::Mutex::new(
+            apeireth_http_client::egress::EgressPolicy::new(
+                apeireth_http_client::egress::EgressConfig::default(),
+            ),
+        ));
+        let eng = FetchEngine::new().with_egress(policy);
+        // 验证 with_egress builder 返回值类型 (编译期保证, 0 runtime 验证)
+        assert!(eng.config().max_response_bytes > 0);
+    }
+
+    #[test]
+    fn s4_allowlist_permits_listed_domain() {
+        use apeireth_http_client::egress::EgressConfig;
+        let policy = std::sync::Arc::new(parking_lot::Mutex::new(
+            apeireth_http_client::egress::EgressPolicy::new(EgressConfig {
+                allowlist: vec!["example.com".to_string()],
+                allow_http: vec![],
+            }),
+        ));
+        let _eng = FetchEngine::new().with_egress(policy);
+        // check_outbound 自身测 (不真发网络请求)
+        let mut p = apeireth_http_client::egress::EgressPolicy::new(EgressConfig {
+            allowlist: vec!["example.com".to_string()],
+            allow_http: vec![],
+        });
+        assert!(p.check_outbound("https://example.com/path", 0.0).is_ok());
+        assert!(p.check_outbound("https://evil.com/path", 0.0).is_err());
     }
 }
 

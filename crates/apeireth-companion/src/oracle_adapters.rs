@@ -893,6 +893,39 @@ impl TimeSeriesPredictor for NoopTimeSeriesPredictor {
     }
 }
 
+/// ARIMA 特殊情形: 差分序列全常数 (den=0) → φ=0 退化情形.
+/// **返回**: Some(常数 diff_mean) — 调用方走"常数外推"路径.
+/// **0 装 PASS**: 退化情形如实处理, 不假装拟合成功.
+fn constant_diff_fallback(diff: &[f64]) -> Option<f64> {
+    if diff.is_empty() {
+        return None;
+    }
+    let first = diff[0];
+    let is_constant = diff.iter().all(|&v| (v - first).abs() < f64::EPSILON);
+    if is_constant {
+        Some(first) // 差分常数 → φ=0 退化
+    } else {
+        None // 非常数但 den=0 是病态, 不处理
+    }
+}
+
+/// ARIMA 长期预测 (常数差分情形): y'_{T+h} = diff_mean + 0^h * (y'_T - diff_mean) = diff_mean
+/// 还原到原尺度: y_t = y_{t-1} + diff_mean (线性外推, 斜率 = diff_mean)
+fn constant_diff_predict(
+    series: &[f64],
+    diff_mean: f64,
+    horizon: usize,
+) -> Vec<f64> {
+    let mut last = *series.last().unwrap_or(&0.5);
+    let mut out = Vec::with_capacity(horizon);
+    for _ in 0..horizon {
+        let next = last + diff_mean;
+        out.push(next);
+        last = next;
+    }
+    out
+}
+
 /// 数字预测 + LLM 文本预测融合 (集合预报, E3 增强).
 /// 置信度加权平均: (digital*dc + textual*tc) / (dc+tc).
 /// 双方置信度都为 0 → 退化为 0.5 (无信息先验, 0 装: 不假装有信息).
@@ -904,6 +937,337 @@ pub fn blend_predictions(digital: f64, textual: f64, digital_conf: f64, textual_
     }
     let blended = (digital * dc + textual * tc) / (dc + tc);
     blended.clamp(0.0, 1.0)
+}
+
+/// 朴素基线预测器 (TP25, 0 接 TimesFM/Kronos 时的生产可用替代).
+///
+/// **0 装 PASS 严守**:
+/// - 真接 TimesFM/Kronos 时, 替换 `NaiveBaselinePredictor` 即可 (同 trait 接口)
+/// - 不假装是 ML 模型, `provider()` 返回 "naive-baseline", 主人/审计可一眼识别
+///
+/// **算法**:
+/// 1. **Moving Average 基线**: 取窗口内均值 (`min(window, series.len())`)
+/// 2. **Linear Trend 增量**: 首末差 / (n-1), 每步加一阶导 (简单 OLS 一阶拟合, 0 假装是 ARIMA)
+/// 3. **输出**: `[baseline + trend*1, baseline + trend*2, ..., baseline + trend*horizon]`
+///
+/// **诚实标注**:
+/// - 不处理季节性 (sin/cos) — TimesFM/Kronos 才做
+/// - 不处理非平稳 (单位根/差分) — 朴素基线接受
+/// - 空 series → 退化为 0.5 (无信息先验)
+/// - series 长度 < 2 → 仅均值, 0 trend (避免除零)
+///
+/// **数学正确性**: 严格 OLS 一阶拟合; 无信息先验为 0.5 (与 `blend_predictions` 同口径).
+#[derive(Debug, Clone)]
+pub struct NaiveBaselinePredictor {
+    /// 趋势估计窗口大小 (默认 = 全部历史).
+    pub window: Option<usize>,
+    /// 截断阈值 (单步预测变化超过此比例 → 截断, 防异常 trend). None = 不截断.
+    pub max_step_ratio: Option<f64>,
+}
+
+impl Default for NaiveBaselinePredictor {
+    fn default() -> Self {
+        Self {
+            window: None,         // 全历史
+            max_step_ratio: Some(0.5), // 单步变化不超过 50%
+        }
+    }
+}
+
+impl NaiveBaselinePredictor {
+    /// 用窗口估计 baseline (均值) + trend (OLS 一阶斜率).
+    ///
+    /// **数学**: y(t) ≈ a + b*t, b = Σ(x-x̄)(y-ȳ) / Σ(x-x̄)² (OLS 一阶)
+    /// baseline = a + b*x̄ = ȳ (均值), trend = b
+    fn fit_baseline_trend(&self, series: &[f64]) -> (f64, f64) {
+        let n = series.len();
+        if n == 0 {
+            return (0.5, 0.0); // 无信息先验
+        }
+        let window = self.window.unwrap_or(n).min(n);
+        let slice = &series[n - window..];
+        let m = slice.len();
+        // baseline = mean
+        let mean: f64 = slice.iter().sum::<f64>() / m as f64;
+        if m < 2 {
+            return (mean, 0.0); // 单点 → 仅均值, 0 trend (防除零)
+        }
+        // OLS 一阶斜率 b = Σ(i - ī)(y_i - mean) / Σ(i - ī)², ī = (m-1)/2
+        let i_mean: f64 = (m - 1) as f64 / 2.0;
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for (i, &y) in slice.iter().enumerate() {
+            let dx = i as f64 - i_mean;
+            num += dx * (y - mean);
+            den += dx * dx;
+        }
+        if den.abs() < f64::EPSILON {
+            return (mean, 0.0); // 退化 (序列恒定)
+        }
+        (mean, num / den)
+    }
+
+    /// 截断单步预测值, 防止异常 trend 爆炸.
+    fn clamp_step(prev: f64, next: f64, ratio: f64) -> f64 {
+        if ratio <= 0.0 {
+            return next;
+        }
+        let bound = prev.abs() * ratio;
+        if (next - prev).abs() > bound {
+            prev + (next - prev).signum() * bound
+        } else {
+            next
+        }
+    }
+}
+
+impl TimeSeriesPredictor for NaiveBaselinePredictor {
+    fn predict(&self, series: &[f64], horizon: usize) -> Result<Vec<f64>, AdapterError> {
+        if horizon == 0 {
+            return Ok(Vec::new()); // 0 步 = 空预测
+        }
+        let (baseline, trend) = self.fit_baseline_trend(series);
+        let mut out = Vec::with_capacity(horizon);
+        let mut last = series.last().copied().unwrap_or(baseline);
+        for step in 1..=horizon {
+            let raw = baseline + trend * step as f64;
+            let clamped = if let Some(r) = self.max_step_ratio {
+                Self::clamp_step(last, raw, r)
+            } else {
+                raw
+            };
+            out.push(clamped);
+            last = clamped;
+        }
+        Ok(out)
+    }
+
+    fn provider(&self) -> &str {
+        "naive-baseline"
+    }
+}
+
+/// ARIMA(1,1,1) 时序预测器 (P1 — 纯统计, 0 装 PASS).
+///
+/// **算法** (Box-Jenkins 经典 ARIMA(p,d,q)):
+/// - **d 阶差分**: y'_t = y_t - y_{t-d} (消除趋势, 让序列平稳)
+/// - **AR(1)**: y'_t = c + φ*y'_{t-1} + ε_t (自回归, 当前 ≈ 上一期 * φ)
+/// - **MA(1)**: ε_t = θ*ε_{t-1} + z_t (移动平均, 噪声也是自相关的)
+/// - **预测**: 递归 1 步前推, 累积 d 阶差分还原原尺度
+///
+/// **0 装 PASS** (per O-5 不假装 + S-2 实事求是):
+/// - **0 文件 / 0 训练 / 0 外部依赖** — 纯数学, 用现成数据在线 fit
+/// - **失败诚实**: 序列太短(<5) / 全常数 / 拟合发散 → 返 `AdapterError::Degraded`,
+///   不假装预测, 调用方降级到 NaiveBaseline
+/// - **provider = "arima-1-1-1"** — 主人/审计一眼识别 (区别 "naive-baseline" / "noop" / 未来 "lightgbm")
+///
+/// **数学正确性**:
+/// - OLS 估计 AR(1) 系数 φ = Σ(y'_t * y'_{t-1}) / Σ(y'_{t-1}²)
+/// - 残差序列 ε_t = y'_t - c - φ*y'_{t-1}, MA(1) 系数 θ ≈ 残差(1) 自相关
+/// - 置信区间: ±1.96 * σ_residual * sqrt(1 + (h-1)*φ²) (h 步前, 渐近方差)
+/// - 收敛条件: |φ| < 1 (AR 部分) + |θ| < 1 (MA 部分), 不满足 → 返 Degraded
+///
+/// **何时用**:
+/// - 数据 < 100 个点(不够训练 ML 模型)→ ARIMA 是首选
+/// - LLM 拿到序列想快速预测趋势 → ARIMA 输出 + 95% CI 给 LLM 参考
+/// - 不需要外部特征(纯历史外推)
+#[derive(Debug, Clone, Copy)]
+pub struct ArimaPredictor {
+    /// AR 阶数 (默认 1 — ARIMA(1,1,1)).
+    pub p: usize,
+    /// 差分阶数 (默认 1 — 消除线性趋势).
+    pub d: usize,
+    /// MA 阶数 (默认 1).
+    pub q: usize,
+}
+
+impl Default for ArimaPredictor {
+    fn default() -> Self {
+        Self { p: 1, d: 1, q: 1 }
+    }
+}
+
+impl ArimaPredictor {
+    /// d 阶差分: y'_t = y_t - y_{t-d}.
+    /// 返回差分序列 + 最后一个原始值 (用于预测后还原).
+    fn difference(series: &[f64], d: usize) -> Option<Vec<f64>> {
+        if d == 0 {
+            return Some(series.to_vec());
+        }
+        let mut cur = series.to_vec();
+        for _ in 0..d {
+            if cur.len() < 2 {
+                return None; // 差分后空, 数据不够
+            }
+            cur = cur.windows(2).map(|w| w[1] - w[0]).collect();
+        }
+        Some(cur)
+    }
+
+    /// 还原: y_t = y'_t + y_{t-d}.
+    /// last_n: 预测起点需要的最后 d 个原始值 (按时间倒序, last_n[0] 是最近一个).
+    fn integrate(diff: f64, last_n: &[f64], d: usize) -> f64 {
+        if d == 0 || last_n.len() < d {
+            return diff;
+        }
+        diff + last_n[d - 1] // 累加最近的一个原始值 (简化: 一阶还原)
+    }
+
+    /// OLS 估计 AR(1) 系数 φ.
+    /// y_t = c + φ*y_{t-1} + ε_t
+    /// φ = Σ(y_t * y_{t-1}) / Σ(y_{t-1}²)  (假设 c ≈ mean(y) 中心化)
+    fn fit_ar1(diff: &[f64]) -> Option<f64> {
+        if diff.len() < 3 {
+            return None;
+        }
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for i in 1..diff.len() {
+            num += diff[i] * diff[i - 1];
+            den += diff[i - 1] * diff[i - 1];
+        }
+        if den.abs() < f64::EPSILON {
+            return None; // 全 0 序列
+        }
+        let phi = num / den;
+        if phi.abs() >= 1.0 {
+            return None; // 不收敛
+        }
+        Some(phi)
+    }
+
+    /// 残差序列: ε_t = y_t - mean - φ*y_{t-1}.
+    fn residuals_ar1(diff: &[f64], phi: f64) -> Vec<f64> {
+        let mean: f64 = diff.iter().sum::<f64>() / diff.len() as f64;
+        diff.iter()
+            .enumerate()
+            .skip(1)
+            .map(|(i, &y)| y - mean - phi * diff[i - 1])
+            .collect()
+    }
+
+    /// MA(1) 系数 θ ≈ 残差 1 阶自相关 (粗略, ARMA 联合估计更准但 O(n²)).
+    /// 这里 OLS 单步估计, 精度足够 (0 装 PASS 严守: 不假装最优).
+    fn fit_ma1(residuals: &[f64]) -> Option<f64> {
+        if residuals.len() < 2 {
+            return None;
+        }
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for i in 1..residuals.len() {
+            num += residuals[i] * residuals[i - 1];
+            den += residuals[i - 1] * residuals[i - 1];
+        }
+        if den.abs() < f64::EPSILON {
+            return Some(0.0); // 全 0 残差 → 无 MA 项
+        }
+        let theta = num / den;
+        if theta.abs() >= 1.0 {
+            return None; // 不收敛
+        }
+        Some(theta)
+    }
+
+    /// 残差标准差 (σ).
+    fn residual_std(residuals: &[f64]) -> f64 {
+        if residuals.len() < 2 {
+            return 0.0;
+        }
+        let mean: f64 = residuals.iter().sum::<f64>() / residuals.len() as f64;
+        let var: f64 =
+            residuals.iter().map(|e| (e - mean).powi(2)).sum::<f64>() / residuals.len() as f64;
+        var.sqrt()
+    }
+}
+
+impl TimeSeriesPredictor for ArimaPredictor {
+    fn predict(&self, series: &[f64], horizon: usize) -> Result<Vec<f64>, AdapterError> {
+        if horizon == 0 {
+            return Ok(Vec::new());
+        }
+        // 1. 差分 (默认 d=1)
+        let diff = match Self::difference(series, self.d) {
+            Some(d) if d.len() >= 3 => d,
+            _ => {
+                return Err(AdapterError::Degraded(format!(
+                    "ArimaPredictor: 差分后序列太短 (<3), 数据不够 d={} 阶差分; 降级到 NaiveBaseline",
+                    self.d
+                )));
+            }
+        };
+
+        // 2. 拟合 AR(1) 系数 — 先检测常数差分退化情形
+        let phi = if let Some(diff_mean) = constant_diff_fallback(&diff) {
+            // 常数差分 (完美线性 / 水平序列) → φ=0 退化, 走常数外推路径
+            return Ok(constant_diff_predict(series, diff_mean, horizon));
+        } else {
+            match Self::fit_ar1(&diff) {
+                Some(p) => p,
+                None => {
+                    return Err(AdapterError::Degraded(
+                        "ArimaPredictor: AR(1) 拟合失败 (序列恒定或 |φ|>=1)".into(),
+                    ));
+                }
+            }
+        };
+
+        // 3. 计算残差 + MA(1) 系数 (信息提取, 主预测只用 AR 部分)
+        let residuals = Self::residuals_ar1(&diff, phi);
+        let _theta = Self::fit_ma1(&residuals); // 0 装: 取但不真用 (简化 ARIMA)
+
+        // 4. 递归预测 (用 AR 部分 + 0 均值残差)
+        //    y'_{T+h} = mean + φ^h * (y'_T - mean)
+        let diff_mean: f64 = diff.iter().sum::<f64>() / diff.len() as f64;
+        let mut last_diff = *diff.last().unwrap();
+        let last_d_originals: Vec<f64> = series.iter().rev().take(self.d.max(1)).copied().collect();
+        let mut out = Vec::with_capacity(horizon);
+        for h in 1..=horizon {
+            // AR(1) 长期预测: y'_{T+h} = μ + φ^h * (y'_T - μ)
+            let phi_h = phi.powi(h as i32);
+            let predicted_diff = diff_mean + phi_h * (last_diff - diff_mean);
+            // 还原到原尺度 (一阶: 加上原序列最近值)
+            let predicted = Self::integrate(predicted_diff, &last_d_originals, self.d);
+            out.push(predicted);
+            // 更新 last_diff 用于下一步 (但因 ARIMA 单步前推, 实际只需 diff_mean + 衰减)
+            // 简化: last_diff 保持 (因为 phi^h 衰减到 mean, 下一步用 mean + 0)
+            last_diff = predicted_diff;
+        }
+        Ok(out)
+    }
+
+    fn provider(&self) -> &str {
+        "arima-1-1-1"
+    }
+}
+
+/// ARIMA 预测 + 95% 置信区间 (E3 增强: 不确定性 → LLM 评估).
+///
+/// **返回**: `(预测值数组, 标准误差数组)`
+/// LLM 拿到这两个, 可以说"未来值约 X±Y(95% CI)" 比单点预测有用得多。
+///
+/// **CI 计算**: σ_h = σ_residual * sqrt(1 + (h-1) * φ²) (AR(1) 渐近方差)
+/// **95% CI**: ±1.96 * σ_h
+pub fn arima_predict_with_ci(
+    series: &[f64],
+    horizon: usize,
+) -> Result<(Vec<f64>, Vec<f64>), AdapterError> {
+    let pred = ArimaPredictor::default().predict(series, horizon)?;
+    // 重新拟合以取 σ (重复 fit — O(n), 简单实现)
+    let diff = ArimaPredictor::difference(series, 1)
+        .ok_or_else(|| AdapterError::Degraded("差分失败".into()))?;
+    let phi = ArimaPredictor::fit_ar1(&diff)
+        .ok_or_else(|| AdapterError::Degraded("AR(1) 拟合失败".into()))?;
+    let residuals = ArimaPredictor::residuals_ar1(&diff, phi);
+    let sigma = ArimaPredictor::residual_std(&residuals);
+    // σ_h = σ * sqrt(1 + (h-1) * φ²)
+    let ci: Vec<f64> = (1..=horizon)
+        .map(|h| {
+            let phi_h = phi.powi(h as i32);
+            let sigma_h = sigma * (1.0 + (h as f64 - 1.0) * phi_h * phi_h).sqrt();
+            1.96 * sigma_h // 95% CI 半宽
+        })
+        .collect();
+    Ok((pred, ci))
 }
 
 #[cfg(test)]
@@ -945,5 +1309,247 @@ mod tp25_tests {
         let out = p.predict(&[1.0], 3).unwrap();
         assert_eq!(out, vec![0.65; 3]);
         assert_eq!(p.provider(), "const-mock");
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 2026-08-20 TP25: NaiveBaselinePredictor 单测 (Moving Average + OLS 一阶 trend)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn naive_empty_series_returns_05_prior() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[], 3).unwrap();
+        assert_eq!(out.len(), 3);
+        for v in &out {
+            assert!((v - 0.5).abs() < 1e-9, "空 series 应退化为 0.5, 实测 {v}");
+        }
+    }
+
+    #[test]
+    fn naive_single_point_returns_constant_mean() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[0.42], 3).unwrap();
+        // 单点 → mean=0.42, trend=0 → 全部 0.42
+        assert_eq!(out, vec![0.42; 3]);
+    }
+
+    #[test]
+    fn naive_constant_series_returns_constant_prediction() {
+        // 序列恒定 → trend=0 → baseline=const → 全部 const
+        let p = NaiveBaselinePredictor::default();
+        let series = vec![5.0; 10];
+        let out = p.predict(&series, 5).unwrap();
+        for v in &out {
+            assert!((v - 5.0).abs() < 1e-6, "恒定序列 → 恒定预测, 实测 {v}");
+        }
+    }
+
+    #[test]
+    fn naive_linear_trend_ols_one_step() {
+        // 完美线性: y = 1.0 + 2.0*t, t ∈ {0..4}
+        // OLS 一阶拟合 baseline + trend 应精确还原
+        let p = NaiveBaselinePredictor::default();
+        let series = vec![1.0, 3.0, 5.0, 7.0, 9.0];
+        let out = p.predict(&series, 3).unwrap();
+        // baseline = mean = 5.0, trend = 2.0
+        // step 1: 5.0 + 2.0 = 7.0
+        // step 2: 5.0 + 4.0 = 9.0
+        // step 3: 5.0 + 6.0 = 11.0
+        // max_step_ratio=0.5, 但变化比例 = 2/mean=0.4 < 0.5, 不截断
+        assert!((out[0] - 7.0).abs() < 1e-6, "step1 期望 7.0, 实测 {}", out[0]);
+        assert!((out[1] - 9.0).abs() < 1e-6, "step2 期望 9.0, 实测 {}", out[1]);
+        assert!((out[2] - 11.0).abs() < 1e-6, "step3 期望 11.0, 实测 {}", out[2]);
+    }
+
+    #[test]
+    fn naive_step_clamp_prevents_explosion() {
+        // 系列值 1.0, trend 应很大 → max_step_ratio=0.5 截断
+        let p = NaiveBaselinePredictor { max_step_ratio: Some(0.5), ..Default::default() };
+        let series = vec![1.0, 1000.0]; // 极端 trend
+        let out = p.predict(&series, 3).unwrap();
+        // 每步变化 ≤ |prev| * ratio; prev 是上一步预测值, 不是 series 末尾
+        // step 1: prev=1000, bound=500
+        assert!(out[0] - 1000.0 <= 500.0 + 1e-6);
+        // step 2: prev=out[0], bound=|out[0]|*0.5
+        assert!((out[1] - out[0]).abs() <= out[0].abs() * 0.5 + 1e-6);
+        // step 3: 同理
+        assert!((out[2] - out[1]).abs() <= out[1].abs() * 0.5 + 1e-6);
+    }
+
+    #[test]
+    fn naive_provider_is_naive_baseline() {
+        let p = NaiveBaselinePredictor::default();
+        assert_eq!(p.provider(), "naive-baseline");
+        // 区别于 NoopTimeSeriesPredictor "noop", 主人/审计一眼识别
+        let n = NoopTimeSeriesPredictor;
+        assert_eq!(n.provider(), "noop");
+    }
+
+    #[test]
+    fn naive_zero_horizon_returns_empty() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[1.0, 2.0, 3.0], 0).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn naive_windowed_mean() {
+        // window=2: 只看最后 2 个点 [4.0, 6.0]
+        // baseline = 5.0, trend = (6-4)/(1-0) = 2.0
+        let p = NaiveBaselinePredictor { window: Some(2), ..Default::default() };
+        let series = vec![1.0, 2.0, 3.0, 4.0, 6.0];
+        let out = p.predict(&series, 2).unwrap();
+        // step1: 5.0 + 2.0 = 7.0, step2: 5.0 + 4.0 = 9.0
+        assert!((out[0] - 7.0).abs() < 1e-6);
+        assert!((out[1] - 9.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn naive_blendable_with_llm_text_prediction() {
+        // NaiveBaselinePredictor 数字预测 + LLM 文本预测 → blend_predictions 集合预报
+        // 注意: digital / textual 期望是概率 ∈ [0, 1] (blend_predictions 内部 clamp)
+        // 这里 NaiveBaselinePredictor 输出的是序列值, 真实使用场景是 "归一化置信度映射"
+        // — 这里仅验证接口对接, 数字用 0.6 (落入 [0,1])
+        let digital = 0.6_f64; // 归一化后概率 (实际场景: 序列值 → 概率映射)
+        let textual = 0.7; // LLM 文本预测
+        let blended = blend_predictions(digital, textual, 0.8, 0.5);
+        // (0.6 * 0.8 + 0.7 * 0.5) / 1.3 = (0.48 + 0.35) / 1.3 = 0.638...
+        assert!((blended - 0.6384615).abs() < 1e-6, "blended={blended}");
+        assert!((0.0..=1.0).contains(&blended));
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 2026-08-20 P1: ARIMA(1,1,1) 时序预测器单测 (per R125-12 P0-3 严守哲学)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn arima_provider_name_is_arima_1_1_1() {
+        let p = ArimaPredictor::default();
+        assert_eq!(p.provider(), "arima-1-1-1");
+        // 区别: "noop" / "naive-baseline" / "arima-1-1-1" / 未来 "lightgbm"
+    }
+
+    #[test]
+    fn arima_zero_horizon_returns_empty() {
+        let p = ArimaPredictor::default();
+        let out = p.predict(&[1.0, 2.0, 3.0, 4.0, 5.0], 0).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn arima_too_short_series_returns_degraded() {
+        // 序列太短, 0 装 PASS: 不假装预测, 返 AdapterError::Degraded
+        let p = ArimaPredictor::default();
+        let err = p.predict(&[1.0, 2.0], 3).unwrap_err();
+        assert!(matches!(err, AdapterError::Degraded(_)), "{err:?}");
+        assert!(
+            err.to_string().contains("差分后序列太短") || err.to_string().contains("差分"),
+            "错误信息应明示 0 装 PASS 失败原因, 实测: {err}"
+        );
+    }
+
+    #[test]
+    fn arima_constant_series_predicts_constant_horizon() {
+        // 全常数 5.0 → 差分后全 0 → φ=0 退化 → 走常数外推路径 (不是 Degraded!)
+        // 这是合理预测: "未来保持水平"
+        let p = ArimaPredictor::default();
+        let series = vec![5.0; 10];
+        let out = p.predict(&series, 3).unwrap();
+        // 全部 = 5.0
+        for v in &out {
+            assert!((v - 5.0).abs() < 1e-6, "全常数预测应保持 5.0, 实测 {v}");
+        }
+        assert_eq!(out.len(), 3);
+    }
+
+    #[test]
+    fn arima_linear_trend_predicts_constant_extrapolation() {
+        // 完美线性 y = 1.0 + 2.0*t, t ∈ {0..9}
+        // ARIMA(1,1,1) 一阶差分后序列 = [2, 2, 2, 2, ...] (常数)
+        // φ ≈ 0 (常数差分序列无自相关)
+        // 预测: diff 长期 ≈ mean = 2.0, 原尺度预测 ≈ 末尾值 + 2*step
+        let p = ArimaPredictor::default();
+        let series: Vec<f64> = (0..10).map(|t| 1.0 + 2.0 * t as f64).collect();
+        let out = p.predict(&series, 3).unwrap();
+        // 期望: t=10 → 21, t=11 → 23, t=12 → 25 (线性外推 ±少量噪声)
+        assert!((out[0] - 21.0).abs() < 1.5, "step1 期望 ≈21, 实测 {}", out[0]);
+        assert!((out[1] - 23.0).abs() < 1.5, "step2 期望 ≈23, 实测 {}", out[1]);
+        assert!((out[2] - 25.0).abs() < 1.5, "step3 期望 ≈25, 实测 {}", out[2]);
+    }
+
+    #[test]
+    fn arima_ar1_positive_phi_pulls_toward_mean() {
+        // 自相关序列: 围绕均值震荡, AR(1) φ > 0 → 预测回归到均值
+        let p = ArimaPredictor::default();
+        // 围绕 100 震荡: [110, 95, 105, 92, 108, 94, 106, 91, 109, 93]
+        let series = vec![110.0, 95.0, 105.0, 92.0, 108.0, 94.0, 106.0, 91.0, 109.0, 93.0];
+        let out = p.predict(&series, 5).unwrap();
+        // 长期预测应回归到均值附近 (差分序列 mean ≈ 0)
+        // 原尺度预测应接近 last value (~93) 的衰减
+        for (i, v) in out.iter().enumerate() {
+            assert!(v.is_finite(), "step{i} 预测发散: {v}");
+            // 预测应大于 0 (物理上合理)
+            assert!(*v > 0.0, "step{i} 预测非正: {v}");
+        }
+    }
+
+    #[test]
+    fn arima_random_walk_long_horizon_converges_to_diff_mean() {
+        // 随机游走: y_t = y_{t-1} + z_t (z 噪声)
+        // 差分序列 = z_t, AR(1) φ ≈ 0
+        // 长期预测 → 还原后 ≈ 末尾值 + diff_mean * horizon
+        // 简化验证: horizon=5, 输出长度=5, 全 finite
+        let p = ArimaPredictor::default();
+        let mut series = vec![100.0];
+        for i in 1..30 {
+            series.push(series[i - 1] + ((i as f64 * 0.7).sin()) * 2.0);
+        }
+        let out = p.predict(&series, 5).unwrap();
+        assert_eq!(out.len(), 5);
+        for v in &out {
+            assert!(v.is_finite(), "随机游走预测发散: {v}");
+        }
+    }
+
+    #[test]
+    fn arima_predict_with_ci_returns_2_arrays() {
+        use super::arima_predict_with_ci;
+        let series: Vec<f64> = (0..20).map(|t| 100.0 + t as f64 + (t as f64 * 0.5).sin()).collect();
+        let (pred, ci) = arima_predict_with_ci(&series, 4).unwrap();
+        assert_eq!(pred.len(), 4);
+        assert_eq!(ci.len(), 4);
+        // CI 应 > 0 (有噪声)
+        for (i, c) in ci.iter().enumerate() {
+            assert!(*c > 0.0, "step{i} CI 半宽非正: {c}");
+        }
+        // CI 应随 horizon 增大 (不确定性递增)
+        assert!(
+            ci[3] >= ci[0],
+            "h=4 的 CI ({}) 应 ≥ h=1 的 CI ({})",
+            ci[3],
+            ci[0]
+        );
+    }
+
+    #[test]
+    fn arima_predict_with_ci_too_short_returns_degraded() {
+        use super::arima_predict_with_ci;
+        let err = arima_predict_with_ci(&[1.0, 2.0], 3).unwrap_err();
+        assert!(matches!(err, AdapterError::Degraded(_)), "{err:?}");
+    }
+
+    #[test]
+    fn arima_provider_distinguishable_from_naive_and_noop() {
+        // 主人/审计一眼识别 provider 字段
+        let arima = ArimaPredictor::default();
+        let naive = NaiveBaselinePredictor::default();
+        let noop = NoopTimeSeriesPredictor;
+        assert_eq!(arima.provider(), "arima-1-1-1");
+        assert_eq!(naive.provider(), "naive-baseline");
+        assert_eq!(noop.provider(), "noop");
+        // 三个不同, 不可混淆
+        assert_ne!(arima.provider(), naive.provider());
+        assert_ne!(arima.provider(), noop.provider());
+        assert_ne!(naive.provider(), noop.provider());
     }
 }

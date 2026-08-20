@@ -415,6 +415,11 @@ pub struct ToolBridge {
     worker: Option<PathBuf>,
     /// B3 沙盒参数 (内存/CPU/超时): 默认不限+30s; 套件清单/权限包可在运行时覆盖.
     sandbox: std::sync::Arc<std::sync::Mutex<crate::sandbox::SandboxConfig>>,
+    /// 2026-08-20: Stage3 HardenedSandbox (NetIsolation + VMSandbox 双 Noop 默认).
+    /// 真接入点: 高危工具执行前 arm_for_high_risk → net.apply + vm.start (0 装期双双 Err,
+    /// 返 receipt boolean 表示加固结果, 不阻断主链路).
+    /// 参考: crates/apeireth-companion/src/sandbox_integration.rs (commit 1288d617).
+    hardened: Option<Arc<crate::sandbox_integration::HardenedSandbox>>,
     /// 结果溢出存储 (可选): 超大工具输出 spill 到会话私有文件, messages 只留定位.
     spill: Option<SpillStore>,
     /// post-execute 钩子链 (顺序执行, 审计前).
@@ -588,6 +593,7 @@ impl ToolBridge {
             sandbox: std::sync::Arc::new(std::sync::Mutex::new(
                 crate::sandbox::SandboxConfig::default(),
             )),
+            hardened: None, // 2026-08-20: Stage3 HardenedSandbox (默认 None, 0 装 PASS: 不加固)
             spill: None,
             post_hooks: Vec::new(),
             goals: None,
@@ -661,6 +667,26 @@ impl ToolBridge {
         if let Ok(mut g) = self.sandbox.lock() {
             *g = cfg;
         }
+    }
+
+    /// 2026-08-20: 挂 Stage3 HardenedSandbox (NetIsolation + VMSandbox).
+    /// **0 装 PASS 严守**: 默认 `None` = 不加固 (backward compat 1:1).
+    /// 显式挂载后, 高危工具 (shell / filesystem-write / code-search-replace) 执行前
+    /// 自动走 `arm_for_high_risk()` → net.apply + vm.start (0 装期双双 Err).
+    /// 加固失败不阻断 (per JobGuard 同款 "增强不是门" 语义).
+    ///
+    /// 示例:
+    /// ```ignore
+    /// use apeireth_companion::sandbox_integration::HardenedSandbox;
+    /// let sandbox = HardenedSandbox::default(); // 双 Noop
+    /// bridge.with_hardened_sandbox(Arc::new(sandbox));
+    /// ```
+    pub fn with_hardened_sandbox(
+        mut self,
+        sandbox: Arc<crate::sandbox_integration::HardenedSandbox>,
+    ) -> Self {
+        self.hardened = Some(sandbox);
+        self
     }
 
     /// 当前桥级沙盒参数 (克隆读取).
@@ -1062,6 +1088,32 @@ impl ToolBridge {
 
             ..Default::default()
         };
+        // 2026-08-20: Stage3 HardenedSandbox arm_for_high_risk 真接入点.
+        // NetIsolation + VMSandbox 0 装期双双 Err → receipt 双 false → 不阻断 (per JobGuard 同款).
+        // 真接 NetIsolation/VMSandbox 后, 高危工具自动获网络/VM 加固.
+        if let Some(hardened) = &self.hardened {
+            let tool_static: &'static str = Box::leak(call.tool_name.clone().into_boxed_str());
+            let net_cfg = crate::sandbox_net::NetworkIsolationConfig {
+                level: crate::sandbox_net::NetworkIsolationLevel::LoopbackOnly,
+                outbound_whitelist: Vec::new(),
+                allow_inbound: false,
+                allow_dns: false,
+            };
+            let vm_cfg = crate::vm_sandbox::VMSandboxConfig {
+                vcpus: 1,
+                memory_mb: 256,
+                rootfs: None,
+                kernel: None,
+                initrd: None,
+                network: None,
+                boot_timeout_secs: 60,
+            };
+            let receipt = hardened.arm_for_high_risk(tool_static, &net_cfg, &vm_cfg);
+            eprintln!(
+                "[hardened-sandbox] arm_for_high_risk(\"{}\"): net={} vm={}",
+                call.tool_name, receipt.net, receipt.vm
+            );
+        }
         let mut child = match tokio::process::Command::new(worker)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
@@ -1695,6 +1747,61 @@ mod tests {
             ..crate::sandbox::SandboxConfig::default()
         });
         assert_eq!(bridge.sandbox_config().timeout_secs, 90);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 2026-08-20: Stage3 HardenedSandbox 真接入 (NetIsolation + VMSandbox)
+    // 0 装 PASS: 默认 hardened = None, builder 链等价 1:1
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn hardened_sandbox_default_none_backward_compatible() {
+        // 0 装 PASS: 不挂 HardenedSandbox 时, 桥级 1:1 行为 (旧版完全兼容)
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store);
+        // 桥级 hardened 字段不可访问 (pub struct), 但执行器路径不会调 arm_for_high_risk
+        // 验证: bridge.sandbox_config() 仍可用, 不挂 hardened 1:1 行为
+        assert_eq!(bridge.sandbox_config().timeout_secs, 30); // default
+    }
+
+    #[test]
+    fn hardened_sandbox_with_builder_accepted() {
+        // 0 装 PASS: 挂 HardenedSandbox (默认双 Noop) 时, 桥级链不 panic
+        use crate::sandbox_integration::HardenedSandbox;
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let bridge = ToolBridge::new(store).with_hardened_sandbox(Arc::new(HardenedSandbox::default()));
+        // 验证桥级创建后仍可访问 sandbox_config (与 hardened 平行)
+        assert_eq!(bridge.sandbox_config().timeout_secs, 30);
+    }
+
+    #[test]
+    fn hardened_sandbox_arm_noop_does_not_panic() {
+        // 0 装 PASS: Noop NetworkIsolation + NoopVMSandbox 双双 Err → receipt 双 false + 不 panic
+        use crate::sandbox_integration::HardenedSandbox;
+        let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
+        let hardened = HardenedSandbox::default();
+        let net_cfg = crate::sandbox_net::NetworkIsolationConfig {
+            level: crate::sandbox_net::NetworkIsolationLevel::LoopbackOnly,
+            outbound_whitelist: Vec::new(),
+            allow_inbound: false,
+            allow_dns: false,
+        };
+        let vm_cfg = crate::vm_sandbox::VMSandboxConfig {
+            vcpus: 1,
+            memory_mb: 256,
+            rootfs: None,
+            kernel: None,
+            initrd: None,
+            network: None,
+            boot_timeout_secs: 60,
+        };
+        let receipt = hardened.arm_for_high_risk("shell", &net_cfg, &vm_cfg);
+        // 0 装期: receipt 双 false (加固失败, 不假装)
+        assert!(!receipt.net, "Noop NetworkIsolation → receipt.net = false");
+        assert!(!receipt.vm, "Noop VMSandbox → receipt.vm = false");
+        assert_eq!(receipt.tool, "shell");
+        // 桥级挂了 hardened 也能 1:1 创建
+        let _bridge = ToolBridge::new(store).with_hardened_sandbox(Arc::new(hardened));
     }
 
     // 带真 worker 的沙盒限额 e2e 在 tests/exec_worker_isolation.rs
