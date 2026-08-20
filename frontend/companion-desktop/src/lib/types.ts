@@ -143,7 +143,22 @@ export interface Capability {
   write?: boolean;
   version?: number;
   operations?: string[];
+  /**
+   * 该能力**此时此刻**是否真正可调用 (动态, 受 provider/凭据/平台影响).
+   * 向后兼容: 旧 manifest 无此字段 → 客户端按 available = supported 解释
+   * (见 runtime.ts capabilityAvailable).
+   */
+  available?: boolean;
+  /** 不可用原因 (machine-readable, 仅 available === false 时存在). */
+  reason?: CapabilityAvailabilityReason;
 }
+
+/** Capability 不可用的 machine-readable 原因 (镜像 Rust AvailabilityReason). */
+export type CapabilityAvailabilityReason =
+  | 'provider_not_configured'
+  | 'provider_unavailable'
+  | 'platform_unsupported'
+  | 'disabled_by_policy';
 
 /** 一个能力组 (如 sessions / memory / permissions / trace). */
 export interface CapabilityGroup {
