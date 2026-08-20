@@ -26,7 +26,7 @@
 //!
 //! **不修改承诺**:
 //! - ❌ 0 改 `apeireth-tools/src/`, `apeireth-mcp/src/`, `apeireth-tool-registry/src/`
-//! - ❌ 0 改 workspace version (1.0.0)
+//! - ❌ 0 改 workspace version (1.2.0)
 //! - ❌ 0 引 NewAPI / 0 重复造轮子
 
 #![deny(unsafe_code)]

@@ -1,6 +1,6 @@
 //! `apeireth-sdk` — 多语言 SDK 统一测试入口 (V2 战区 1/4/5, `docs/v2-strategy/03 §0.2`)
 //!
-//! # ========================== 6 哲学锚 ==========================
+//! # ========================== 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5) ==========================
 //!
 //! ## S-1 北极星 — Apeireth = AGI 操作系统
 //!
@@ -60,7 +60,7 @@
 //!
 //! ## R122-8 更新 (2026-08-10, O-5 实质守门, cfg-gated features 隔离)
 //!
-//! **R119 拍板**: 8 项不修改承诺 **形式撤销**, 原意保留. 6 哲学锚 (含 O-5) 实质仍严守.
+//! **R119 拍板**: 8 项不修改承诺 **形式撤销**, 原意保留. 8 哲学锚 (含 O-5 / S-3 质量工程化 NEW / O-1 安全优先 NEW) 实质仍严守.
 //! **R122 路线图**: 多语言 SDK skeleton (PyO3 + napi-rs + cbindgen) 加 cfg-gated features.
 //!
 //! **3 个 cfg-gated features** (per `Cargo.toml [features]`):
@@ -71,9 +71,10 @@
 //! **O-5 实质守门**: `default = []` → `cargo build -p apeireth-sdk` 0 装 pyo3/napi/cbindgen,
 //! 跨语言客户按需 `--features python|node|c` 启用. R25 "0 PyO3, 0 .venv" 原意保留.
 //!
-//! **不漂移**: R122-8 0 改 6 哲学锚定义 / 8 项承诺原意 / K-1 强校验 4 条 / 5 集成点 / 4 类核心类型
+//! **不漂移**: R122-8 0 改 8 哲学锚定义 / 8 项承诺原意 / K-1 强校验 4 条 / 5 集成点 / 4 类核心类型
 //! 顶层 re-export (per `lib.rs §A` line 268-279) / 11 agent 公共 API 签名 / 24 LOCKED mtime
-//! / workspace.version 1.1.0. 仅在 O-5 段尾 + mod 声明区加 cfg-gated 桥接.
+//! (R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! / workspace.version 1.2.0 严守 (双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0). 仅在 O-5 段尾 + mod 声明区加 cfg-gated 桥接.
 
 #![deny(unsafe_code)]
 
@@ -116,7 +117,7 @@ pub use client::{
 };
 
 // ============================================================================
-// §B 编译期守门常量 (K-1 强校验 4 条 + 6 哲学锚穿透 + 8 项不修改承诺)
+// §B 编译期守门常量 (K-1 强校验 4 条 + 8 哲学锚穿透 + 8 项不修改承诺)
 // ============================================================================
 
 /// **K-1 强校验编译期守门 #1**: 平台名 = "apeireth".
@@ -132,7 +133,7 @@ const _K1_LIB_PLATFORM_APEIRETH: &str = "apeireth";
 #[allow(dead_code)]
 const _K1_LIB_VERSION_LOCKED: (u16, u16, u16) = (1, 0, 0);
 
-/// **6 哲学锚编译期守门**: 6 字样必含 (per 任务稿 6 哲学锚穿透).
+/// **8 哲学锚编译期守门** (baseline 2026-08-19): 6 字样必含 (per 任务稿 8 哲学锚穿透: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5).
 #[allow(dead_code)]
 const _SIX_PHILOSOPHY_ANCHORS: [&str; 6] = [
     "S-1", // 北极星
@@ -150,7 +151,7 @@ const _EIGHT_COMMITMENTS: [&str; 8] = [
     "编译期 hardcode",
     "不改 LOCKED crate",
     "不改 workspace version",
-    "6 哲学锚穿透",
+    "8 哲学锚穿透",
     "不依赖 NewAPI",
     "不重复造轮子",
     "诚实标缺",
@@ -161,13 +162,13 @@ const _EIGHT_COMMITMENTS: [&str; 8] = [
 // ============================================================================
 
 /// **维护清单** (per R25 阶段验收):
-/// - R26+: 真接 `apeireth-api` HTTP/WS 时, 改 `STUB_MODE = false` (经 6 哲学锚 + 主人审)
+/// - R26+: 真接 `apeireth-api` HTTP/WS 时, 改 `STUB_MODE = false` (经 8 哲学锚 + 主人审)
 /// - R26+: 加 `apeireth-http-client` 作为 SDK HTTP 传输层 (不重复造轮子)
 /// - R26+: 加 `apeireth-mcp` MCP protocol 集成 (per 战区 5)
 /// - R27+: 跨语言 binding (PyO3 / napi-rs / cxx) **必须**独立 crate (per 8 项承诺 #1)
 #[allow(dead_code)]
 const _MAINTENANCE_CHECKLIST: [&str; 4] = [
-    "STUB_MODE 改 false 经 6 哲学锚 + 主人审",
+    "STUB_MODE 改 false 经 8 哲学锚 + 主人审",
     "HTTP 传输走 apeireth-http-client 不重复造轮子",
     "MCP 协议走 apeireth-mcp 不重复造轮子",
     "跨语言 binding 永远独立 crate",
@@ -219,13 +220,13 @@ const _MODULE_COUNT: usize = {
 // 3. PLATFORM_NAME == "apeireth" (跟 v0.9.21 商业版 1:1 翻译)
 // 4. TOOL_WHITELIST.len() == 6 (per 蓝图 §2.2)
 // 5. SDK_TOOL_WHITELIST.len() == 8 (6 工具 + 2 通用 invoke)
-// 6. STUB_MODE == true (R21 才改 false, 经 6 哲学锚 + 主人审)
+// 6. STUB_MODE == true (R21 才改 false, 经 8 哲学锚 + 主人审)
 // 7. AUTH_HEADER_NAME == "Authorization" (HTTP 1.1 RFC 7235)
 // 8. AUTH_SCHEME == "Bearer" (RFC 6750)
 //
 // # ========================== 跟 LOCKED crate 的边界 ==========================
 //
-// 24 LOCKED crate (5 P0 + 9 skeleton + 1 observability + 8 原有):
+// 24 LOCKED crate (5 P0 + 9 skeleton + 1 observability + 8 原有; R128 + R148 已降级, 入口签名仅保 3 项不可变脊柱):
 // - `apeireth-protocol` — **5 集成点直接复用** (1:1 翻译 ws_v1)
 // - `apeireth-keyring` — 阶段 6 不依赖 (留 R21 真接 keyring 时再用)
 // - `apeireth-machine-id` — 阶段 6 不依赖 (留 R21 真接 machine-id 时再用)

@@ -11,17 +11,17 @@
 //! ## 适用场景
 //!
 //! - 启动后只读的配置 / 路由表 / capability list
-//! - 编译期 hardcode 的 6 哲学锚 (mind 器官)
+//! - 编译期 hardcode 的 8 哲学锚 (mind 器官, baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //! - 进程级常量 (e.g. PLATFORM_NAME)
 //!
 //! **不假装**:
 //! - `init` 是 stub impl, 当前 0 真接 (R21+ 续做)
-//! - 9 器官中, 真实集成通常 mind 走 OnceLock (6 锚 + 成长阶段), 其他 8 器官走 Mutex / RwLock
+//! - 9 器官中, 真实集成通常 mind 走 OnceLock (8 锚 + 成长阶段), 其他 8 器官走 Mutex / RwLock
 //!
 //! ## 与 LOCKED crate 边界
 //!
-//! - 0 触碰 24 LOCKED crate
-//! - 0 改 workspace version
+//! - 0 触碰 24 LOCKED crate (R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! - 0 改 workspace version (1.2.0 双轴制)
 //! - 0 假装 "OnceLockState 是异步的" (它本质是 sync)
 
 use std::sync::{Arc, OnceLock};

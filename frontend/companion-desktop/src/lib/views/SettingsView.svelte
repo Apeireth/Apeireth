@@ -17,7 +17,7 @@
     EyeOff,
     AlertTriangle,
   } from 'lucide-svelte';
-  import PageHeader from '../PageHeader.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import StatusBadge from '../components/StatusBadge.svelte';
   import ConfirmDialog from '../components/ConfirmDialog.svelte';
   import type {ApeirethConfig, RuntimeHealthReport} from '../types';

@@ -107,7 +107,7 @@ pub const V1136_SUBMEASURE_NAMES: [&str; V1136_SUBMEASURE_COUNT] = [
     "v3_action_guard_rate",
 ];
 
-/// 旧版 V0.5 5 维投影 (保留兼容, 不让现有结构体字面量失效)。
+/// 旧版 V0.5 24 维投影 (保留兼容, 不让现有结构体字面量失效)。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct AsiV05Scores {
     /// continuity (5 维投影均值)
@@ -122,7 +122,7 @@ pub struct AsiV05Scores {
     pub transferability: f64,
 }
 
-/// 旧版 V1136 7 子测度投影 (保留兼容)。
+/// 旧版 V1136 9 子测度投影 (保留兼容)。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct V1136Submeasures {
     /// 5 continuity 子测度 (兼容旧 7 维布局)

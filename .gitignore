@@ -28,6 +28,17 @@ Thumbs.db
 # Python egg-info (apeireth-sdk/src-py) — src-py 整目录已于 R25 删 (纯 Rust 重写)
 *.egg-info/
 
+# AI agent 临时产物 (post-1.0.0 CI 审计 + fix patch 留痕, 应不入 commit)
+# 模式: subagent 跑 clippy / fmt / cargo-audit 的输出留痕 + 临时 diff 文件
+# 用法: 看但不 commit, 看完 rm
+all_rs_files.txt
+clippy*.log
+fmt_*.log
+fmt_per_crate*.log
+fmt_per_crate*.txt
+fix_*.diff
+
+
 # R25 防御: apeireth-sdk 虚拟环境 (Cargo.toml 已无 pyo3, 别再创建 .venv)
 crates/apeireth-sdk/.venv/
 
