@@ -154,6 +154,14 @@ Master's 217 commits preserved via merge (not overwritten by cherry-pick): 129 d
 
 No backend bugs found — auto-merge was semantically clean (confirmed by 694 + 10 + memory tests).
 
+### Human review of the 8 deleted master views (pre-merge gate)
+
+Verified all 8 are genuine dead code — **no live entry lost**:
+- 0 live imports reference any of the 8 deleted views in the reconciled tree.
+- `main.ts` entry mounts only `App` + `features/quick/QuickWindowView` (kept).
+- Cross-checked each deleted view against its feature-side counterpart: feature views are the canonical, working versions (capability-gated, richer).
+- **Notable edge case**: master's `ChatView.svelte` imported `../tools/ApprovalDrawer.svelte`, but `src/features/tools/` **never existed on master** — the import was already a broken/dangling reference, so `ChatView` could not have compiled on master alone. Deleting it removed dead code, not a live "in-chat approval" entry. The working approval path is feature's `ToolsView` approval banner + `pendingApprovals` polling. No UX regression.
+
 ## 16. Remaining Issues
 
 **P0**: none outstanding (all P0 invariants verified: migration, capability manifest, session/memory/permission schema, security, workspace build/tests).
