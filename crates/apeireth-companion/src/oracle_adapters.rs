@@ -906,6 +906,114 @@ pub fn blend_predictions(digital: f64, textual: f64, digital_conf: f64, textual_
     blended.clamp(0.0, 1.0)
 }
 
+/// 朴素基线预测器 (TP25, 0 接 TimesFM/Kronos 时的生产可用替代).
+///
+/// **0 装 PASS 严守**:
+/// - 真接 TimesFM/Kronos 时, 替换 `NaiveBaselinePredictor` 即可 (同 trait 接口)
+/// - 不假装是 ML 模型, `provider()` 返回 "naive-baseline", 主人/审计可一眼识别
+///
+/// **算法**:
+/// 1. **Moving Average 基线**: 取窗口内均值 (`min(window, series.len())`)
+/// 2. **Linear Trend 增量**: 首末差 / (n-1), 每步加一阶导 (简单 OLS 一阶拟合, 0 假装是 ARIMA)
+/// 3. **输出**: `[baseline + trend*1, baseline + trend*2, ..., baseline + trend*horizon]`
+///
+/// **诚实标注**:
+/// - 不处理季节性 (sin/cos) — TimesFM/Kronos 才做
+/// - 不处理非平稳 (单位根/差分) — 朴素基线接受
+/// - 空 series → 退化为 0.5 (无信息先验)
+/// - series 长度 < 2 → 仅均值, 0 trend (避免除零)
+///
+/// **数学正确性**: 严格 OLS 一阶拟合; 无信息先验为 0.5 (与 `blend_predictions` 同口径).
+#[derive(Debug, Clone)]
+pub struct NaiveBaselinePredictor {
+    /// 趋势估计窗口大小 (默认 = 全部历史).
+    pub window: Option<usize>,
+    /// 截断阈值 (单步预测变化超过此比例 → 截断, 防异常 trend). None = 不截断.
+    pub max_step_ratio: Option<f64>,
+}
+
+impl Default for NaiveBaselinePredictor {
+    fn default() -> Self {
+        Self {
+            window: None,         // 全历史
+            max_step_ratio: Some(0.5), // 单步变化不超过 50%
+        }
+    }
+}
+
+impl NaiveBaselinePredictor {
+    /// 用窗口估计 baseline (均值) + trend (OLS 一阶斜率).
+    ///
+    /// **数学**: y(t) ≈ a + b*t, b = Σ(x-x̄)(y-ȳ) / Σ(x-x̄)² (OLS 一阶)
+    /// baseline = a + b*x̄ = ȳ (均值), trend = b
+    fn fit_baseline_trend(&self, series: &[f64]) -> (f64, f64) {
+        let n = series.len();
+        if n == 0 {
+            return (0.5, 0.0); // 无信息先验
+        }
+        let window = self.window.unwrap_or(n).min(n);
+        let slice = &series[n - window..];
+        let m = slice.len();
+        // baseline = mean
+        let mean: f64 = slice.iter().sum::<f64>() / m as f64;
+        if m < 2 {
+            return (mean, 0.0); // 单点 → 仅均值, 0 trend (防除零)
+        }
+        // OLS 一阶斜率 b = Σ(i - ī)(y_i - mean) / Σ(i - ī)², ī = (m-1)/2
+        let i_mean: f64 = (m - 1) as f64 / 2.0;
+        let mut num = 0.0;
+        let mut den = 0.0;
+        for (i, &y) in slice.iter().enumerate() {
+            let dx = i as f64 - i_mean;
+            num += dx * (y - mean);
+            den += dx * dx;
+        }
+        if den.abs() < f64::EPSILON {
+            return (mean, 0.0); // 退化 (序列恒定)
+        }
+        (mean, num / den)
+    }
+
+    /// 截断单步预测值, 防止异常 trend 爆炸.
+    fn clamp_step(prev: f64, next: f64, ratio: f64) -> f64 {
+        if ratio <= 0.0 {
+            return next;
+        }
+        let bound = prev.abs() * ratio;
+        if (next - prev).abs() > bound {
+            prev + (next - prev).signum() * bound
+        } else {
+            next
+        }
+    }
+}
+
+impl TimeSeriesPredictor for NaiveBaselinePredictor {
+    fn predict(&self, series: &[f64], horizon: usize) -> Result<Vec<f64>, AdapterError> {
+        if horizon == 0 {
+            return Ok(Vec::new()); // 0 步 = 空预测
+        }
+        let (baseline, trend) = self.fit_baseline_trend(series);
+        let mut out = Vec::with_capacity(horizon);
+        let mut last = series.last().copied().unwrap_or(baseline);
+        for step in 1..=horizon {
+            let raw = baseline + trend * step as f64;
+            let clamped = if let Some(r) = self.max_step_ratio {
+                Self::clamp_step(last, raw, r)
+            } else {
+                raw
+            };
+            out.push(clamped);
+            last = clamped;
+        }
+        Ok(out)
+    }
+
+    fn provider(&self) -> &str {
+        "naive-baseline"
+    }
+}
+
 #[cfg(test)]
 mod tp25_tests {
     use super::*;
@@ -945,5 +1053,112 @@ mod tp25_tests {
         let out = p.predict(&[1.0], 3).unwrap();
         assert_eq!(out, vec![0.65; 3]);
         assert_eq!(p.provider(), "const-mock");
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // 2026-08-20 TP25: NaiveBaselinePredictor 单测 (Moving Average + OLS 一阶 trend)
+    // ──────────────────────────────────────────────────────────────────
+
+    #[test]
+    fn naive_empty_series_returns_05_prior() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[], 3).unwrap();
+        assert_eq!(out.len(), 3);
+        for v in &out {
+            assert!((v - 0.5).abs() < 1e-9, "空 series 应退化为 0.5, 实测 {v}");
+        }
+    }
+
+    #[test]
+    fn naive_single_point_returns_constant_mean() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[0.42], 3).unwrap();
+        // 单点 → mean=0.42, trend=0 → 全部 0.42
+        assert_eq!(out, vec![0.42; 3]);
+    }
+
+    #[test]
+    fn naive_constant_series_returns_constant_prediction() {
+        // 序列恒定 → trend=0 → baseline=const → 全部 const
+        let p = NaiveBaselinePredictor::default();
+        let series = vec![5.0; 10];
+        let out = p.predict(&series, 5).unwrap();
+        for v in &out {
+            assert!((v - 5.0).abs() < 1e-6, "恒定序列 → 恒定预测, 实测 {v}");
+        }
+    }
+
+    #[test]
+    fn naive_linear_trend_ols_one_step() {
+        // 完美线性: y = 1.0 + 2.0*t, t ∈ {0..4}
+        // OLS 一阶拟合 baseline + trend 应精确还原
+        let p = NaiveBaselinePredictor::default();
+        let series = vec![1.0, 3.0, 5.0, 7.0, 9.0];
+        let out = p.predict(&series, 3).unwrap();
+        // baseline = mean = 5.0, trend = 2.0
+        // step 1: 5.0 + 2.0 = 7.0
+        // step 2: 5.0 + 4.0 = 9.0
+        // step 3: 5.0 + 6.0 = 11.0
+        // max_step_ratio=0.5, 但变化比例 = 2/mean=0.4 < 0.5, 不截断
+        assert!((out[0] - 7.0).abs() < 1e-6, "step1 期望 7.0, 实测 {}", out[0]);
+        assert!((out[1] - 9.0).abs() < 1e-6, "step2 期望 9.0, 实测 {}", out[1]);
+        assert!((out[2] - 11.0).abs() < 1e-6, "step3 期望 11.0, 实测 {}", out[2]);
+    }
+
+    #[test]
+    fn naive_step_clamp_prevents_explosion() {
+        // 系列值 1.0, trend 应很大 → max_step_ratio=0.5 截断
+        let p = NaiveBaselinePredictor { max_step_ratio: Some(0.5), ..Default::default() };
+        let series = vec![1.0, 1000.0]; // 极端 trend
+        let out = p.predict(&series, 3).unwrap();
+        // 每步变化 ≤ |prev| * ratio; prev 是上一步预测值, 不是 series 末尾
+        // step 1: prev=1000, bound=500
+        assert!(out[0] - 1000.0 <= 500.0 + 1e-6);
+        // step 2: prev=out[0], bound=|out[0]|*0.5
+        assert!((out[1] - out[0]).abs() <= out[0].abs() * 0.5 + 1e-6);
+        // step 3: 同理
+        assert!((out[2] - out[1]).abs() <= out[1].abs() * 0.5 + 1e-6);
+    }
+
+    #[test]
+    fn naive_provider_is_naive_baseline() {
+        let p = NaiveBaselinePredictor::default();
+        assert_eq!(p.provider(), "naive-baseline");
+        // 区别于 NoopTimeSeriesPredictor "noop", 主人/审计一眼识别
+        let n = NoopTimeSeriesPredictor;
+        assert_eq!(n.provider(), "noop");
+    }
+
+    #[test]
+    fn naive_zero_horizon_returns_empty() {
+        let p = NaiveBaselinePredictor::default();
+        let out = p.predict(&[1.0, 2.0, 3.0], 0).unwrap();
+        assert!(out.is_empty());
+    }
+
+    #[test]
+    fn naive_windowed_mean() {
+        // window=2: 只看最后 2 个点 [4.0, 6.0]
+        // baseline = 5.0, trend = (6-4)/(1-0) = 2.0
+        let p = NaiveBaselinePredictor { window: Some(2), ..Default::default() };
+        let series = vec![1.0, 2.0, 3.0, 4.0, 6.0];
+        let out = p.predict(&series, 2).unwrap();
+        // step1: 5.0 + 2.0 = 7.0, step2: 5.0 + 4.0 = 9.0
+        assert!((out[0] - 7.0).abs() < 1e-6);
+        assert!((out[1] - 9.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn naive_blendable_with_llm_text_prediction() {
+        // NaiveBaselinePredictor 数字预测 + LLM 文本预测 → blend_predictions 集合预报
+        // 注意: digital / textual 期望是概率 ∈ [0, 1] (blend_predictions 内部 clamp)
+        // 这里 NaiveBaselinePredictor 输出的是序列值, 真实使用场景是 "归一化置信度映射"
+        // — 这里仅验证接口对接, 数字用 0.6 (落入 [0,1])
+        let digital = 0.6_f64; // 归一化后概率 (实际场景: 序列值 → 概率映射)
+        let textual = 0.7; // LLM 文本预测
+        let blended = blend_predictions(digital, textual, 0.8, 0.5);
+        // (0.6 * 0.8 + 0.7 * 0.5) / 1.3 = (0.48 + 0.35) / 1.3 = 0.638...
+        assert!((blended - 0.6384615).abs() < 1e-6, "blended={blended}");
+        assert!((0.0..=1.0).contains(&blended));
     }
 }
