@@ -1,0 +1,42 @@
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 5.5937ms
+[lifecycle] user_prompt_submit (session: companion-main): 记住: 主人养了一只叫「小雪」的猫, 三花色, 性格温顺. 调用 save_memory 工具写入长期记忆. 不要宣告.
+[llm] 轮1 成功 (1792ms)
+  [管线] 轮2 第1次失败: suppressed: openai-chat:MiniMax-M3:记住: 主人养了一只叫「小雪」的猫, 三花色, 性格温顺. 调用 save_memory 工具写入长期记忆. 不要宣告., 6s 后重试
+  [管线] 轮2 第2次失败: suppressed: openai-chat:MiniMax-M3:记住: 主人养了一只叫「小雪」的猫, 三花色, 性格温顺. 调用 save_memory 工具写入长期记忆. 不要宣告., 6s 后重试
+  [管线] 轮2 第3次失败: suppressed: openai-chat:MiniMax-M3:记住: 主人养了一只叫「小雪」的猫, 三花色, 性格温顺. 调用 save_memory 工具写入长期记忆. 不要宣告., 6s 后重试
+[reflection] 重要事件积累触发反思 (importance 阈值)
+[reflection] 深度反思失败: 深度反思返回空, 降级状态文本
+[daemon] 反思周期: 完成 1 轮 (累计 1)
+[growth] 反思周期完成 (累计 1), 提炼经验...
+[growth] 本次反思无可提炼经验
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 19.4646078s
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.6204ms
+[lifecycle] user_prompt_submit (session: companion-main): 本座饿了, 推荐 3 种清淡午餐, 一句话一种
+[llm] 轮1 成功 (3355ms)
+[lifecycle] user_prompt_submit (session: companion-main): 汇总一下: 我一共问了多少个加法问题? 总和是多少?
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.8478ms
+[llm] 轮1 成功 (13487ms)
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 7.8329ms
+[lifecycle] user_prompt_submit (session: companion-main): 你好, 一句话自我介绍
+[llm] 轮1 成功 (2115ms)
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.8988ms
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 5.9381ms
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 7.8142ms
+[lifecycle] user_prompt_submit (session: companion-main): 请简短告诉本座: 你是谁? 你的核心职责是什么? 30 字以内.
+[llm] 轮1 成功 (1363ms)
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 8.1571ms
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.297ms
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.4211ms
+[growth] 晋级候选已成文: "C:\\Users\\31683\\AppData\\Roaming\\apeireth\\promotion-candidates.md"
+[daemon-loop] tick done in 6.5329ms
