@@ -10,8 +10,8 @@
 //! - 6 tools (calendar / message / contact / task / search / drive)
 //! - 9 organs (heart / brain / hand / eye / ear / memory / voice / body / mind)
 //! - 5 R-Measure (R-1 直行 / R-2 直说 / R-3 闭环 / R-4 守门 / R-5 诚实)
-//! - 6 哲学锚 (S-1 / S-2 / O-2 / O-3 / O-4 / O-5)
-//! - 8 承诺 (不假装 / hardcode / LOCKED / version / 6 锚 / 不 NewAPI / 不造轮子 / 诚实标缺)
+//! - 8 哲学锚 (S-1 / S-2 / S-3 / O-1 / O-2 / O-3 / O-4 / O-5, R126 B5 6→8 升级)
+//! - 8 承诺 (不假装 / hardcode / LOCKED / version / 8 锚 / 不 NewAPI / 不造轮子 / 诚实标缺)
 //! - 5 Provider (claude-code / gemini-cli / codex / opencode / copilot)
 //! - 4 SDK (lark / voice / livekit / sandbox)
 //! - 3 observability (metrics / health / status)
@@ -32,14 +32,14 @@
 //! **状态**: ⏳ skeleton (R20 阶段 1 续, 主 2026-08-05 21:09 拍板"BC 都派" — i18n 是 1.0 release 12 项 checklist #10, 早做早交付).
 //!          1.0 release #10 收尾: 5 语言 TOML 格式 (替代 JSON), 12 类别 69 keys 100% 翻译, 0 fallback.
 //!
-//! ## 6 哲学 anchor 验证 (per 主人 19:37 "全用 rust" 强调)
+//! ## 8 哲学 anchor 验证 (per 主人 19:37 "全用 rust" 强调 + R126 B5 6→8 升级)
 //!
 //! - **S-1** 北极星导向: 1:1 翻译 v0.9.21 商业版 i18next 集成面 (5 语言 + t()/changeLanguage/use())
 //! - **S-2** 实事求是: 用商业版 `package.json` line 59/71 实查 `i18next@^26` + `react-i18next@^17`,
 //!   5 Locale 枚举 + 8 TOOL_WHITELIST 实证, 不假装 1:1
 //! - **O-2** 走在前人肩上: 编译期 hardcode 5 Locale + 8 工具白名单, 借鉴 5 P0 / 9 skeleton crate 同模式
 //! - **O-3** 干到底: 12 类别 × 5 语言 = 345 翻译 (5 nav / 6 tools / 9 organs / 5 R-Measure /
-//!   6 哲学锚 / 8 承诺 / 5 Provider / 4 SDK / 3 observability / 5 鉴权 / 10 通用 / 3 readiness)
+//!   8 哲学锚 / 8 承诺 / 5 Provider / 4 SDK / 3 observability / 5 鉴权 / 10 通用 / 3 readiness)
 //! - **O-4** 任何人都能接手: 6 § 文档头 + 8 承诺穿透 + 6 I18nError + 8 工具 + 5 fixture 跟主草稿 1:1
 //! - **O-5** 不假装: 8 工具 skeleton 阶段均返 I18nError / 严格 `try_t` 缺 key 返 `KeyNotFound`,
 //!   5 语言 100% 翻译无英语 fallback 占位
@@ -48,9 +48,10 @@
 //!
 //! 1. **不假装已实现**: 5 语言 12 类别 69 keys 100% 翻译, 不留 fallback 占位, 0 占位
 //! 2. **编译期 hardcode**: `SUPPORTED_LOCALES` 长度 5 / `TOOL_WHITELIST` 长度 8 / `LOCALE_FALLBACK_CHAIN` 等 const 守门
-//! 3. **不改 LOCKED**: 24 LOCKED crate 0 改动 (本 crate 不在 24 内, 是 skeleton 之一)
+//! 3. **不改 LOCKED**: 24 LOCKED crate 入口签名已降级 (本 crate 不在 24 内, 是 skeleton 之一)
 //! 4. **不改 workspace version**: workspace Cargo.toml 0 改动 (本 crate 显式 `version = "0.1.0"`)
-//! 5. **6 哲学锚穿透**: 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5) 在本头文件 + 翻译 key (`philosophy.*`) 均明确
+//! 5. **8 哲学锚穿透**: 8 哲学锚 (S-1/S-2/S-3/O-1/O-2/O-3/O-4/O-5, R126 B5 6→8 升级)
+//!    在本头文件 + 翻译 key (`philosophy.*`) 均明确
 //! 6. **不依赖 NewAPI**: 无独立代理服务依赖 (m3 防御 + 白名单 + 本地翻译表)
 //! 7. **不重复造轮子**: 借 `apeireth-image-prompt` 模板 pattern / `apeireth-tui` locale detection / 5 P0 0 unwrap
 //! 8. **诚实标缺**: 5 K-1 字样必现 ("apeireth" / "i18n" / "translate" / "locale" / "must-do"),
@@ -122,7 +123,7 @@ pub const I18N_SCHEMA_VERSION: &str = "1";
 /// 平台名 (K-1 强校验 #1: 编译期 hardcode `"apeireth"`, v0.9.21 1:1 翻译, 不写 "SpectrAI" 等装饰名).
 pub const PLATFORM_NAME: &str = "apeireth";
 
-/// **默认语言** (K-1 强校验 #2): 编译期 hardcode `Locale::En`, 改需经 6 哲学锚 + 主人审.
+/// **默认语言** (K-1 强校验 #2): 编译期 hardcode `Locale::En`, 改需经 8 哲学锚 + 主人审.
 /// 业务启动时, 若系统 locale 推断失败, 用本默认值.
 pub const DEFAULT_LOCALE: Locale = Locale::En;
 

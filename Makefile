@@ -1,24 +1,15 @@
 # ============================================================================
-# Makefile — TP20-S5 塞缝批 (DevOps 工程师2 交付)
+# Makefile — TP20-S5 塞缝批 + post-1.0.0 增量 (2026-08-19)
 # ----------------------------------------------------------------------------
-# 一键发布期供应链验证 + SBOM 生成。
+# 一键发布期供应链验证 + SBOM 生成 + 日常开发检查。
 #
-# 与 scripts/vet.sh + scripts/sbom.sh 的关系:
+# 与 scripts/vet.sh + scripts/sbom.sh + scripts/release-prep.sh 的关系:
 #   - scripts/* 是真正的执行体, Makefile 只是 thin wrapper + 入口聚合
 #   - CI release.yml 调 scripts/ 直跑 (跨平台 shell 不依赖 make)
 #   - 本地开发者 + 主人手动快速验证用 Makefile (跨平台兼容性: Linux/macOS
 #     make 都有, Windows 走 WSL 或 chocolatey install make)
 #
-# 用法:
-#   make audit        # cargo vet + audit + deny (三件套)
-#   make sbom         # 生成 cyclonedx-sbom.json
-#   make release-check # audit + sbom (1.0 release 前必跑)
-#   make tools-install # 装 cargo-vet / cargo-audit / cargo-deny / cargo-cyclonedx
-#   make help         # 看所有 target
-#
-# 0 装 PASS 边界 (主人拍板):
-#   - 缺工具 → 脚本内 fallback 标缺 + SKIP, 不假装通过
-#   - `make tools-install` 是 best-effort, 失败不影响主流程
+# 用法见 help target.
 # ============================================================================
 
 # 强制 bash (脚本用 bash 语法, Windows make 默认 sh 不一定支持)
@@ -33,24 +24,40 @@ TOOLS_DIR   := tools
 .DEFAULT_GOAL := help
 
 # 假目标声明 (避免与同名文件冲突)
-.PHONY: help audit sbom release-check tools-install tools-check clean-vet clean-sbom
+.PHONY: help audit sbom release-check release-prep release-prep-block test check fmt fmt-check tools-install tools-check clean-vet clean-sbom ci-build ci-test ci-release ci
 
 # ----------------------------------------------------------------------------
 # help — 列出所有 target
 # ----------------------------------------------------------------------------
 help: ## 列出所有 make target
 	@echo "=========================================="
-	@echo "  Apeireth 发布期工具链 (TP20-S5)"
+	@echo "  Apeireth 开发 + 发布期工具链 (TP20-S5 + post-1.0.0)"
 	@echo "=========================================="
 	@echo ""
-	@echo "  make tools-install   装 cargo-vet/audit/deny/cyclonedx (best-effort)"
-	@echo "  make tools-check     检查工具链是否齐全 (exit 0 = 缺也 OK, 仅打印)"
-	@echo "  make audit           跑 cargo vet + audit + deny (scripts/vet.sh)"
-	@echo "  make sbom            生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)"
-	@echo "  make release-check   audit + sbom (1.0 release 前必跑)"
-	@echo "  make clean-vet       清 reports/ 里 tp20-s5-* 日志"
-	@echo "  make clean-sbom      删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt"
-	@echo "  make help            本帮助"
+	@echo "  === 日常开发 (本地反馈环) ==="
+	@echo "  make check            cargo check --workspace --all-targets (~25s, 增量编译)"
+	@echo "  make test             cargo test --workspace --all-targets --locked (全测试, 23K+)"
+	@echo "  make fmt              cargo fmt --all (格式)"
+	@echo ""
+	@echo "  === CI 复刻 (本地 == GitHub Actions, 防 push 后 fail) ==="
+	@echo "  make ci               ci-build + ci-test + ci-release 一键复刻 rust-ci.yml"
+	@echo "  make ci-build         cargo build --workspace --tests --locked  (rust.yml line 63)"
+	@echo "  make ci-test          cargo nextest run --workspace --profile ci --locked (rust.yml line 67)"
+	@echo "  make ci-release       cargo build --release --workspace --locked  (rust-ci.yml line 106)"
+	@echo "  ↑ 任何 1 个 exit != 0 → 不要 push (跟 CI 必 fail 一样)"
+	@echo ""
+	@echo "  === 发布期 (1.0 release 前必跑) ==="
+	@echo "  make tools-install    装 cargo-vet/audit/deny/cyclonedx (best-effort)"
+	@echo "  make tools-check      检查工具链是否齐全 (exit 0 = 缺也 OK, 仅打印)"
+	@echo "  make audit            跑 cargo vet + audit + deny (scripts/vet.sh)"
+	@echo "  make sbom             生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)"
+	@echo "  make release-prep     8 硬墙 + PII + 12 项 checklist (scripts/release-prep.sh, post-1.0.0)"
+	@echo "  make release-check    audit + sbom (1.0 release 前必跑)"
+	@echo ""
+	@echo "  === 清理 ==="
+	@echo "  make clean-vet        清 reports/ 里 tp20-s5-* 日志"
+	@echo "  make clean-sbom       删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt"
+	@echo "  make help             本帮助"
 	@echo ""
 
 # ----------------------------------------------------------------------------
@@ -94,6 +101,60 @@ audit: ## 跑 cargo vet + audit + deny
 	@bash $(SCRIPTS_DIR)/vet.sh
 
 # ----------------------------------------------------------------------------
+# check / test / fmt — 增量编译 + 全测试 + 格式 (本地开发者快速反馈环)
+# ----------------------------------------------------------------------------
+check: ## cargo check --workspace --all-targets
+	cargo check --workspace --all-targets
+
+test: ## cargo test --workspace --all-targets --locked (本地全测试, 锁文件校验)
+	cargo test --workspace --all-targets --locked
+
+fmt: ## cargo fmt --all
+	cargo fmt --all
+
+fmt-check: ## cargo fmt --all --check (CI 模式, 0 diff exit 0)
+	cargo fmt --all --check
+
+# ----------------------------------------------------------------------------
+# CI 复刻 — 1:1 模拟 .github/workflows/rust-ci.yml + rust.yml 跑的命令
+# ----------------------------------------------------------------------------
+# 设计: 本地 make ci exit 0 → push 后 GitHub Actions 必绿 (本机 + CI 同源)
+# 失败处理: 任何 step exit != 0 → make 中止, 不要 push (跟 CI fail 一致)
+# 注意: CI 还会跑 8 硬墙 (make release-prep), 但 8硬墙 是仓库级守门, 不算编译/测试
+# ----------------------------------------------------------------------------
+
+ci-build: ## cargo build --workspace --tests --locked  (rust.yml line 63 1:1)
+	@echo "=== ci-build: cargo build --workspace --tests --locked ==="
+	cargo build --workspace --tests --locked
+
+ci-test: ## cargo nextest run --workspace --profile ci --locked  (rust.yml line 67 1:1)
+	@echo "=== ci-test: cargo nextest run --workspace --profile ci --locked ==="
+	@command -v cargo-nextest >/dev/null 2>&1 || { \
+		echo "  ❌ cargo-nextest 未装, 跑 'cargo install cargo-nextest --locked' 后重试"; \
+		exit 1; }
+	cargo nextest run --workspace --profile ci --locked
+
+ci-release: ## cargo build --release --workspace --locked  (rust-ci.yml line 106 1:1)
+	@echo "=== ci-release: cargo build --release --workspace --locked ==="
+	cargo build --release --workspace --locked
+
+ci: ci-build ci-test ci-release ## ci-build + ci-test + ci-release 一键复刻 (== push 后 CI)
+	@echo ""
+	@echo "=========================================="
+	@echo "  ✅ make ci 全绿 — 本地 == GitHub Actions 验证通过"
+	@echo "  ↑ 现在可以安全 git push 了"
+	@echo "=========================================="
+
+# ----------------------------------------------------------------------------
+# release-prep — 8 硬墙 + PII + 12 项 checklist (post-1.0.0)
+# ----------------------------------------------------------------------------
+release-prep: ## 8 硬墙 + PII + 12 项 checklist (scripts/release-prep.sh, post-1.0.0)
+	@bash $(SCRIPTS_DIR)/release-prep.sh --dry-run
+
+release-prep-block: ## 8 硬墙 + PII + 12 项 checklist BLOCKING 模式 (1 P0 fail 退出 1)
+	@bash $(SCRIPTS_DIR)/release-prep.sh
+
+# ----------------------------------------------------------------------------
 # sbom — 生成 CycloneDX 1.5 SBOM (scripts/sbom.sh)
 # ----------------------------------------------------------------------------
 sbom: ## 生成 CycloneDX 1.5 SBOM
@@ -124,7 +185,9 @@ clean-sbom: ## 删 cyclonedx-sbom.json + sbom-cyclonedx.stderr.txt
 
 # ----------------------------------------------------------------------------
 # 内部约定: 不要在 Makefile 里塞业务逻辑, 业务在 scripts/ 里
-# ponytail: 升级路径 — 若需要 release 全自动 (vet+audit+deny+sbom+test+build),
-# 加一个 `make release-full` target 串 5 个 script, 但**不**替 CI release.yml
+# ponytail: 升级路径 — 若需要 release 全自动 (vet+audit+deny+sbom+test+build+release-prep),
+# 加一个 `make release-full` target 串 6 个 script, 但**不**替 CI release.yml
 # (CI 用 GitHub Actions matrix 更可靠, Makefile 只给本地开发者用)
+#
+# post-1.0.0 新增: release-prep (8 硬墙 + PII + 12 项 checklist 本地化, commit cf0cafc2)
 # ============================================================================

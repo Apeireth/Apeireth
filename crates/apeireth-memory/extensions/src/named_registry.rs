@@ -215,9 +215,7 @@ impl MemoryProviderRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory_provider::{ProviderConfig, ProviderScope};
     use async_trait::async_trait;
-    use std::time::Duration;
 
     /// 测试用 dummy provider (7 通用方法返 Ok 占位, 只有 kind 有真实值).
     #[derive(Debug)]

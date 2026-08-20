@@ -41,9 +41,10 @@
 //! - ✅ unit tests >= 12 (按 DoD)
 //!
 //! **不修改承诺** (R149 沿用 R148 撤销):
-//! - ✅ 24 LOCKED 已形式撤销 (R128 + R148 扫尾)
-//! - ✅ workspace.version 0 改
-//! - ✅ V0.5 / V1136 / 9键 原始 0 触碰
+//! - ✅ 24 LOCKED 已形式撤销 (R128 + R148 扫尾); 入口签名已降级, 仅保 3 项不可变脊柱
+//!   (Self-Disable / L0 HA / 13 键 verdict cache)
+//! - ✅ workspace.version 0 改 (1.2.0 产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制)
+//! - ✅ V0.5 24 维 / V1136 9 子测度 / 13 键 (12 键 + PHL-07) 原始 0 触碰
 
 #![allow(missing_docs)]
 // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
