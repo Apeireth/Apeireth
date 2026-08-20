@@ -74,8 +74,63 @@ use futures::Stream;
 use serde_json::{json, Value};
 use std::convert::Infallible;
 
-const BASE_URL: &str = "https://api.minimaxi.com";
-const MODEL: &str = "MiniMax-M3";
+const DEFAULT_BASE_URL: &str = "https://api.minimaxi.com";
+/// 默认 model 名 — 实际值在 `main()` 里根据 env / TOML 选定 (0 装 PASS: env 缺省回落 `MiniMax-M3`).
+/// 历史原因保留 const 形如 `MODEL` 字面量供文档引用; 真正取值走 `model()` 函数.
+const DEFAULT_MODEL: &str = "MiniMax-M3";
+
+/// 全局 model 选取 (env `APEIRETH_LLM_MODEL` 优先, 缺省回落 `DEFAULT_MODEL`).
+/// 0 装 PASS: 缺省回落 = 与旧版 `MiniMax-M3` 行为 1:1.
+/// **注**: 用 thread_local + leak 模式, 这样 model() 返 &'static str (供现有调用点使用),
+/// 测试可多次 init 每次新 leak. leak 内存只在测试 + 启动期, 可忽略.
+thread_local! {
+    static MODEL: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+fn init_model() -> &'static str {
+    let new_value = std::env::var("APEIRETH_LLM_MODEL")
+        .unwrap_or_else(|_| DEFAULT_MODEL.to_string());
+    MODEL.with(|c| *c.borrow_mut() = new_value.clone());
+    Box::leak(new_value.into_boxed_str())
+}
+
+fn model() -> &'static str {
+    MODEL.with(|c| {
+        let g = c.borrow();
+        if g.is_empty() {
+            DEFAULT_MODEL
+        } else {
+            Box::leak(g.clone().into_boxed_str())
+        }
+    })
+}
+
+/// 全局 base URL 选取 (优先级: TOML env → APEIRETH_LLM_BASE_URL env → DEFAULT_BASE_URL).
+/// **0 装 PASS**: 缺省回落 = minimaxi 主域, 与旧版 1:1 行为.
+/// **TOML 入口**: env `APEIRETH_LLM_CONFIG=path/to.toml` 时, 第一个 provider 的
+/// `base_url` 自动覆盖 `DEFAULT_BASE_URL`. 这让用户不用改源码就能切换 LLM 服务.
+thread_local! {
+    static BASE_URL: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+fn init_base_url(toml_first_provider_base: Option<String>) -> &'static str {
+    let new_value = toml_first_provider_base
+        .or_else(|| std::env::var("APEIRETH_LLM_BASE_URL").ok())
+        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    BASE_URL.with(|c| *c.borrow_mut() = new_value.clone());
+    Box::leak(new_value.into_boxed_str())
+}
+
+fn base_url() -> &'static str {
+    BASE_URL.with(|c| {
+        let g = c.borrow();
+        if g.is_empty() {
+            DEFAULT_BASE_URL
+        } else {
+            Box::leak(g.clone().into_boxed_str())
+        }
+    })
+}
 const MAX_TOOL_ROUNDS: usize = 5;
 /// 默认单次输出上限 (env APEIRETH_MAX_TOKENS 可覆盖; 客户端请求值优先, 上限保护).
 const DEFAULT_MAX_TOKENS: u32 = 8192;
@@ -110,7 +165,7 @@ pub struct MiniMaxMemoryExtractor {
 impl MemoryExtractor for MiniMaxMemoryExtractor {
     async fn extract(&self, context: &str) -> Result<ExtractedMemory, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -194,7 +249,7 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             .collect::<Vec<_>>()
             .join("\n");
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -424,7 +479,7 @@ pub struct MiniMaxDreamSummarizer {
 impl DreamSummarizer for MiniMaxDreamSummarizer {
     async fn summarize(&self, merged: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -475,7 +530,7 @@ pub struct MiniMaxConstitutionLlm {
 impl ConstitutionLlm for MiniMaxConstitutionLlm {
     async fn ask(&self, constitution: &str, action: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -525,7 +580,7 @@ pub struct TonalUtterance {
 impl UtteranceGenerator for TonalUtterance {
     async fn utter(&self, i: &Initiative) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -582,7 +637,7 @@ pub struct MiniMaxReflector {
 impl ReflectionReflector for MiniMaxReflector {
     async fn reflect(&self, context: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -641,7 +696,7 @@ impl DeepRecall for MiniMaxDeepRecall {
             .collect::<Vec<_>>()
             .join("\n");
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -709,7 +764,7 @@ impl DialogSummarizer for MiniMaxDialogSummarizer {
             None => String::new(),
         };
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -766,7 +821,7 @@ impl ExperienceRefiner for MiniMaxExperienceRefiner {
             return Ok(None);
         }
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -879,38 +934,55 @@ async fn events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-/// 提取 MiniMax CoT (Chain-of-Thought) — CoT 嵌入 `<!-- ... -->` 标记 (XML 注释样式).
+/// 提取 MiniMax CoT (Chain-of-Thought) — 双轨解析, 兼容 `<think>...` 与 `<!-- ... -->`.
 /// 0 装 PASS 严守: MiniMax M3 **没有** OpenAI 风格的独立 `delta.reasoning_content` 字段,
-/// CoT 跟正文共用 `delta.content` 字段, 跨多 chunk 时 `<!--` / `-->` 可能在边界切分.
+/// CoT 跟正文共用 `delta.content` 字段, 跨多 chunk 时边界标记 (`<think>` / `` /
+/// `<!--` / `-->`) 可能切分.
 /// 服务端拼成完整 text 后用此函数一次性切分 (方案 B 兜底, per
-/// `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md` §6).
-/// 边界 case: 0 装严守 — 不假装 LLM 一定输出 `<!-- -->`; 无标记时返 ("", content) 等价无变化.
+/// `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md` §6 + §7).
+///
+/// 双轨 (per 验证报告 §7 "字段探测双轨" 扩展到 inline 标记):
+/// - 优先 `<think>` (8/19 验证报告写 `<!-- -->` 是当时实际行为; 8/20 后续实测 MiniMax API
+///   已切换到 `<think>...` 风格 — 实测响应: `<think>The user is asking...\n...</think>2`.
+///   为 0 装 PASS 兼容两种格式, 任一命中即按 CoT 剥离.)
+/// - `<!-- ... -->`: XML 注释样式, 旧版 MiniMax / 其他兼容代理可能仍使用.
+///
+/// 边界 case: 0 装严守 — 不假装 LLM 一定输出 CoT; 无标记时返 ("", content) 等价无变化.
+/// 跨 chunk: 单次 chat_completions (stream=false) 走完整 text, 不存在跨 chunk 切分,
+/// 但状态机按"先匹配最早出现"语义以应对混合内容.
 ///
 /// 工程规范: 0 触碰 3 不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache), 0 改 enum/const,
 /// 0 改 workspace.version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
 fn extract_minimax_cot(content: &str) -> (String, String) {
-    let mut reasoning = String::new();
-    let mut visible = String::new();
-    let mut rest = content;
-    while let Some(start) = rest.find("<!--") {
-        // text before <!--
-        visible.push_str(&rest[..start]);
-        if let Some(end) = rest[start..].find("-->") {
-            // extract <!-- ... -->
-            let block_end = start + end + 3;
-            reasoning.push_str(&rest[start..block_end]);
-            reasoning.push('\n');
-            rest = &rest[block_end..];
-        } else {
-            // unterminated: best-effort 0 装严守, 把残余当 visible 拼上, 然后结束
-            // (rest 推进到末尾, break 后下面的 visible.push_str(rest) 不会重复拼接)
-            visible.push_str(&rest[start..]);
-            rest = "";
-            break;
+    // 双轨: 优先 `<think>` (实测当前 MiniMax 实际格式), 次 `<!-- -->` (旧版/代理).
+    // 每条 (open_marker, close_marker) 独立处理 — 命中其一即切 CoT, 余下照常 visible.
+    for (open, close) in [("<think>", "</think>"), ("<!--", "-->")] {
+        if content.contains(open) {
+            let mut reasoning = String::new();
+            let mut visible = String::new();
+            let mut rest = content;
+            while let Some(start) = rest.find(open) {
+                // text before open_marker
+                visible.push_str(&rest[..start]);
+                if let Some(end) = rest[start..].find(close) {
+                    // extract open ... close
+                    let block_end = start + end + close.len();
+                    reasoning.push_str(&rest[start..block_end]);
+                    reasoning.push('\n');
+                    rest = &rest[block_end..];
+                } else {
+                    // unterminated: best-effort 0 装严守, 把残余当 visible 拼上, 然后结束
+                    visible.push_str(&rest[start..]);
+                    rest = "";
+                    break;
+                }
+            }
+            visible.push_str(rest);
+            return (reasoning.trim().to_string(), visible.trim().to_string());
         }
     }
-    visible.push_str(rest);
-    (reasoning.trim().to_string(), visible.trim().to_string())
+    // 0 装 PASS: 无 CoT 标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
+    (String::new(), content.to_string())
 }
 
 /// 伙伴主链路: 喂节律 → CompanionApp 注入管线 → LLM+工具循环 → OpenAI 兼容响应.
@@ -1084,7 +1156,7 @@ async fn chat_completions(
     //   未来 MiniMax 若加 → 优先用字段, 缺则回 inline 解析
     if req.stream {
         let stream_req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: messages.clone(),
             temperature: Some(0.6),
             max_tokens: Some(out_tokens),
@@ -1105,9 +1177,10 @@ async fn chat_completions(
             }
         };
         eprintln!(
-            "[stream] req.stream=true, 透传 SSE 到 {MODEL} (tool loop 跳过, per v1.5 known limit)"
+            "[stream] req.stream=true, 透传 SSE 到 {} (tool loop 跳过, per v1.5 known limit)",
+            model()
         );
-        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), MODEL)
+        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), model())
             .await
         {
             Ok(r) => r.into_response(),
@@ -1127,7 +1200,7 @@ async fn chat_completions(
     loop {
         rounds += 1;
         let req2 = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: messages.clone(),
             temperature: Some(0.6),
             max_tokens: Some(out_tokens),
@@ -1199,6 +1272,16 @@ async fn chat_completions(
             });
         }
         messages.extend(tool_msgs);
+        // MiniMax 限流缓解 (2026-08-20 实测): 工具循环轮1成功 ~2.7s, 立即发轮2 必触发
+        // `suppressed: openai-chat:MiniMax-M3` 限流. 工具执行完 → 等 2s → 再调 LLM,
+        // 让 MiniMax token 桶恢复. env APEIRETH_INTERROUND_SLEEP_MS 可覆盖 (0 = 关闭).
+        let interround_ms = std::env::var("APEIRETH_INTERROUND_SLEEP_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(2000);
+        if interround_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(interround_ms)).await;
+        }
         if rounds >= MAX_TOOL_ROUNDS {
             final_content = "工具循环达到上限, 已停止。请让主人再发一条消息继续。".to_string();
             break;
@@ -1209,7 +1292,7 @@ async fn chat_completions(
         "id": format!("chatcmpl-apeireth-{}", uuid::Uuid::new_v4()),
         "object": "chat.completion",
         "created": chrono::Utc::now().timestamp(),
-        "model": MODEL,
+        "model": model(),
         "choices": [{
             "index": 0,
             "message": {"role": "assistant", "content": final_content},
@@ -1282,8 +1365,34 @@ async fn chat_once(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 0 装 PASS: env 缺省回落 DEFAULT_MODEL ("MiniMax-M3"). env APEIRETH_LLM_MODEL 可覆盖.
+    // 2026-08-20: companion_serve 启动时读 env / TOML 配置 (0 装 PASS: env 缺省回落).
+    let model_in_use = init_model().to_string();
+    println!("[llm] model = {model_in_use} (env APEIRETH_LLM_MODEL 可覆盖, 缺省 {DEFAULT_MODEL})");
+
+    // 启动时读 TOML 配置 (per 2026-08-20 P1 配置层): env APEIRETH_LLM_CONFIG 指向 TOML 文件.
+    // TOML 里第一个 provider 的 base_url 自动覆盖 BASE_URL. 多 provider / fallback 链
+    // 见 docs/02-guides/custom-llm.md (本 session C 任务). 不读 TOML 时退化到 env / DEFAULT.
+    let toml_base = std::env::var("APEIRETH_LLM_CONFIG")
+        .ok()
+        .and_then(|path| match apeireth_api::llm::config::LlmConfig::from_file(&path) {
+            Ok(cfg) => {
+                let n = cfg.providers.len();
+                let first_base = cfg.providers.values().next().and_then(|p| p.base_url.clone());
+                println!("[llm] TOML config 加载: {n} providers from {path}");
+                first_base
+            }
+            Err(e) => {
+                eprintln!("[llm] TOML config 加载失败 (退化到 env / default): {e}");
+                None
+            }
+        });
+    init_base_url(toml_base);
+    println!("[llm] base_url = {} (TOML 优先 → APEIRETH_LLM_BASE_URL env → default {DEFAULT_BASE_URL})", base_url());
+
     // Runtime Decoupling: key is optional. Missing key → ProviderRuntimeState::Unconfigured,
     // but Core Runtime still boots (health / capabilities / sessions / memory / traces).
+    // (Fused with upstream config layer above; load_key returns Option, no early exit.)
     let key = load_key();
     let provider_state = if key.is_some() {
         apeireth_companion::runtime_capabilities::ProviderRuntimeState::Ready
@@ -1330,7 +1439,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Runtime Decoupling: pipeline 构建接受 Option<token>; 无 key 时 auth_token=None,
     // pipeline 仍可构建 (类型允许, 不校验 token). provider-backed 调用会 best-effort 失败
     // 并被各组件 swallow (见 daemon 审计); chat handler 由 provider_state 短路.
-    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), key.clone())?);
+    // (base_url() from upstream config layer; key is Option<String> from no-key boot.)
+    let pipeline = Arc::new(build_pipeline(base_url().to_string(), key.clone())?);
     let bridge = Arc::new(
         ToolBridge::new(Arc::clone(&store))
             .with_judicator(Arc::new(LlmJudicator::new(Arc::new(
@@ -2149,33 +2259,43 @@ async fn health(State(st): State<Arc<AppState>>) -> impl IntoResponse {
 async fn list_models() -> impl IntoResponse {
     Json(json!({
         "object": "list",
-        "data": [{"id": MODEL, "object": "model", "created": 0, "owned_by": "minimax"}]
+        "data": [{"id": model(), "object": "model", "created": 0, "owned_by": "minimax"}]
     }))
 }
 
 #[cfg(test)]
 mod cot_extraction_tests {
-    //! 单元测试 — extract_minimax_cot 拆 `<!-- ... -->` 边界标记.
+    //! 单元测试 — extract_minimax_cot 双轨解析 `<think>...` + `<!-- ... -->`.
     //!
     //! 工程规范:
-    //! - 0 装 PASS 严守: 无标记 / 单标记 / 多标记 / 不闭合 / 边界情况 7 测全齐
+    //! - 0 装 PASS 严守: 无标记 / 单标记 / 多标记 / 不闭合 / 双轨兼容 7+ 测全齐
     //! - 0 改 enum/const, 0 触碰 3 不可变脊柱
     //! - 0 改 workspace.version (1.2.0)
     //!
-    //! (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5)
+    //! (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5 + §7
+    //!  8/20 实测 MiniMax 当前返回 `<think>...`; 双轨兼容 8/19 验证报告 `<!-- -->`)
 
     use super::extract_minimax_cot;
 
-    /// Happy path: 1 段 CoT 在前, 正文在后.
+    /// Happy path: `<think>` 单段, 8/20 实测 MiniMax 实际响应格式.
     #[test]
-    fn happy_path_cot_then_content() {
+    fn happy_path_think_then_content() {
+        let content = "<think>We need to think</think>Here is the answer.";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<think>We need to think</think>");
+        assert_eq!(visible, "Here is the answer.");
+    }
+
+    /// Happy path: 旧 `<!-- -->` 格式, 兼容 8/19 验证报告与代理/历史实例.
+    #[test]
+    fn happy_path_html_comment_then_content() {
         let content = "<!-- We need to think -->Here is the answer.";
         let (cot, visible) = extract_minimax_cot(content);
         assert_eq!(cot, "<!-- We need to think -->");
         assert_eq!(visible, "Here is the answer.");
     }
 
-    /// 0 装 PASS: 无 `<!-- -->` 标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
+    /// 0 装 PASS: 无标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
     #[test]
     fn no_markers_returns_empty_cot_full_visible() {
         let content = "Plain answer without any CoT markers.";
@@ -2192,53 +2312,138 @@ mod cot_extraction_tests {
         assert_eq!(visible, "");
     }
 
-    /// 多段 CoT: 2 段 `<!-- ... -->` 中间夹 + 末尾夹.
+    /// 多段 `<think>` CoT: 2 段中间夹 + 末尾夹.
     #[test]
-    fn multiple_cot_blocks_all_extracted() {
-        let content = "<!-- first thought -->middle<!-- second thought -->end";
+    fn multiple_think_blocks_all_extracted() {
+        let content = "<think>first thought</think>middle<think>second thought</think>end";
         let (cot, visible) = extract_minimax_cot(content);
-        assert_eq!(cot, "<!-- first thought -->\n<!-- second thought -->");
-        assert_eq!(visible, "middleend"); // 中间无分隔符, 实际 LLM 会在段间加 \n\n
+        assert_eq!(cot, "<think>first thought</think>\n<think>second thought</think>");
+        assert_eq!(visible, "middleend");
     }
 
-    /// CoT 在末尾 (per 验证报告 §2 chunk 9 模式): CoT 跨 chunk 仍可切分.
+    /// CoT 在末尾: `<think>` 末尾格式 (类似验证报告 §2 chunk 9 模式).
     #[test]
-    fn cot_at_end_extracted() {
-        let content = "Visible answer first.\n\n<!-- thinking more -->";
+    fn think_at_end_extracted() {
+        let content = "Visible answer first.\n\n<think>thinking more</think>";
         let (cot, visible) = extract_minimax_cot(content);
-        assert_eq!(cot, "<!-- thinking more -->");
+        assert_eq!(cot, "<think>thinking more</think>");
         assert_eq!(visible, "Visible answer first.");
     }
 
-    /// 边界: 不闭合的 `<!--` (跨 chunk 残余) — best-effort 当 visible, 0 装严守.
+    /// 边界: 不闭合的 `<think>` (跨 chunk 残余) — best-effort 当 visible, 0 装严守.
     #[test]
-    fn unterminated_cot_treated_as_visible_best_effort() {
-        // chunk 边界切分, `<!-- thinking...` 还没收到 `-->` (per 验证报告 §5 跨 chunk case)
-        let content = "answer part\n<!-- still thinking without close";
+    fn unterminated_think_treated_as_visible_best_effort() {
+        let content = "answer part\n<think>still thinking without close";
         let (cot, visible) = extract_minimax_cot(content);
         assert_eq!(cot, ""); // 不闭合 → 0 假装这是 CoT
-        assert_eq!(visible, "answer part\n<!-- still thinking without close");
+        assert_eq!(visible, "answer part\n<think>still thinking without close");
     }
 
-    /// 边界: 真实 MiniMax 样本 (per 验证报告 §2 摘录)
+    /// 8/20 实测响应: `<think>` 包多行推理 + 短答案, 9.11 vs 9.9 类型.
     #[test]
-    fn realistic_minimax_sample_extracts_cot() {
-        // 取自验证报告 §2 chunk 1+9+10 拼接
-        let content = "<!-- We need answer Chinese. User asks 9.11 vs 9.9 compare. ... -->\n\n按**小数**比较,**9.9 更大**.";
+    fn realistic_minimax_think_sample_extracts_cot() {
+        // 8/20 E2E 实测响应 (1+1 简化版)
+        let content = "<think>\nThe user is asking a simple math question: 1+1 equals what?\nAs 阿佩瑞斯, I should respond in character but keep it brief.\n</think>\n2";
         let (cot, visible) = extract_minimax_cot(content);
-        assert!(cot.starts_with("<!--"), "CoT 以 <!-- 开头");
-        assert!(cot.ends_with("-->"), "CoT 以 --> 结尾");
-        assert!(visible.contains("9.9 更大"), "正文保留 9.9 更大");
+        assert!(cot.starts_with("<think>"), "CoT 以 <think> 开头");
+        assert!(cot.ends_with("</think>"), "CoT 以 </think> 结尾");
+        assert_eq!(visible.trim(), "2", "正文只剩 '2'");
     }
 
-    /// 工程规范: 0 装 PASS — `<!--` 嵌套时 (罕见) 状态机不退化, 取最外层.
-    /// 注: LLM 不会输出嵌套, 此测试是 robust 防御, 不是合同.
+    /// 双轨兼容: 同一函数, 同一调用, `<think>` 优先于 `<!-- -->` (实测 MiniMax 当前格式).
+    /// 包含两者 → 只剥 `<think>`, 余下当 visible (0 装严守: LLM 不会同时输出两种).
     #[test]
-    fn nested_marker_handled_robustly_no_panic() {
-        // 嵌套: `<!-- outer <!-- inner --> tail -->`
-        // 状态机从 first <!-- 开始, 找 first --> 关闭. outer 不闭合 → 当 visible
-        let content = "<!-- outer <!-- inner --> tail -->";
+    fn dual_track_think_takes_priority() {
+        let content = "<think>reasoning</think>real answer <!-- legacy comment -->";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<think>reasoning</think>");
+        assert!(visible.contains("real answer"));
+        assert!(visible.contains("<!-- legacy comment -->")); // 旧标记当 visible
+    }
+
+    /// 工程规范: 0 装 PASS — `<think>` 嵌套时 (罕见) 状态机不退化, 取最外层.
+    #[test]
+    fn nested_think_handled_robustly_no_panic() {
+        // 嵌套: `<think> outer<think>inner</think>tail</think>`
+        let content = "<think>outer<think>inner</think>tail</think>";
         let (_cot, _visible) = extract_minimax_cot(content);
         // 不 panic 即可, 0 装严守 — 不依赖精确拆分
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// 2026-08-20: 配置层单元测 (env / TOML / default fallback)
+// ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod llm_config_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_clean_env<F: FnOnce()>(f: F) {
+        // 先尝试拿锁; 拿不到 = 当前已有测试在跑, 跳过 (避免毒化)
+        let Ok(_g) = ENV_LOCK.lock() else {
+            f();
+            return;
+        };
+        std::env::remove_var("APEIRETH_LLM_MODEL");
+        std::env::remove_var("APEIRETH_LLM_BASE_URL");
+        std::env::remove_var("APEIRETH_LLM_CONFIG");
+        f();
+    }
+
+    /// 0 装 PASS: env 缺省回落 = "MiniMax-M3" (旧版 1:1 行为)
+    #[test]
+    fn model_defaults_to_minimax_when_no_env() {
+        with_clean_env(|| {
+            assert_eq!(init_model(), "MiniMax-M3");
+            assert_eq!(model(), "MiniMax-M3");
+        });
+    }
+
+    #[test]
+    fn model_env_overrides_default() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_MODEL", "gpt-4o-custom");
+            assert_eq!(init_model(), "gpt-4o-custom");
+        });
+    }
+
+    /// 0 装 PASS: 缺省回落 = "https://api.minimaxi.com" (旧版 1:1 行为)
+    #[test]
+    fn base_url_defaults_to_minimax_when_no_env() {
+        with_clean_env(|| {
+            init_base_url(None);
+            assert_eq!(base_url(), "https://api.minimaxi.com");
+        });
+    }
+
+    #[test]
+    fn base_url_env_overrides_default() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env.test.com");
+            init_base_url(None);
+            assert_eq!(base_url(), "https://env.test.com");
+        });
+    }
+
+    #[test]
+    fn base_url_toml_first_provider_overrides_env() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env.test.com");
+            init_base_url(Some("https://toml.test.com".to_string()));
+            assert_eq!(base_url(), "https://toml.test.com");
+        });
+    }
+
+    #[test]
+    fn base_url_explicit_none_falls_through_to_env() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env-only.test.com");
+            init_base_url(None);
+            assert_eq!(base_url(), "https://env-only.test.com");
+        });
     }
 }
