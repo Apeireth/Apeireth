@@ -861,38 +861,55 @@ async fn events(
     Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
-/// 提取 MiniMax CoT (Chain-of-Thought) — CoT 嵌入 `<!-- ... -->` 标记 (XML 注释样式).
+/// 提取 MiniMax CoT (Chain-of-Thought) — 双轨解析, 兼容 `<think>...` 与 `<!-- ... -->`.
 /// 0 装 PASS 严守: MiniMax M3 **没有** OpenAI 风格的独立 `delta.reasoning_content` 字段,
-/// CoT 跟正文共用 `delta.content` 字段, 跨多 chunk 时 `<!--` / `-->` 可能在边界切分.
+/// CoT 跟正文共用 `delta.content` 字段, 跨多 chunk 时边界标记 (`<think>` / `` /
+/// `<!--` / `-->`) 可能切分.
 /// 服务端拼成完整 text 后用此函数一次性切分 (方案 B 兜底, per
-/// `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md` §6).
-/// 边界 case: 0 装严守 — 不假装 LLM 一定输出 `<!-- -->`; 无标记时返 ("", content) 等价无变化.
+/// `_research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md` §6 + §7).
+///
+/// 双轨 (per 验证报告 §7 "字段探测双轨" 扩展到 inline 标记):
+/// - 优先 `<think>` (8/19 验证报告写 `<!-- -->` 是当时实际行为; 8/20 后续实测 MiniMax API
+///   已切换到 `<think>...` 风格 — 实测响应: `<think>The user is asking...\n...</think>2`.
+///   为 0 装 PASS 兼容两种格式, 任一命中即按 CoT 剥离.)
+/// - `<!-- ... -->`: XML 注释样式, 旧版 MiniMax / 其他兼容代理可能仍使用.
+///
+/// 边界 case: 0 装严守 — 不假装 LLM 一定输出 CoT; 无标记时返 ("", content) 等价无变化.
+/// 跨 chunk: 单次 chat_completions (stream=false) 走完整 text, 不存在跨 chunk 切分,
+/// 但状态机按"先匹配最早出现"语义以应对混合内容.
 ///
 /// 工程规范: 0 触碰 3 不可变脊柱 (Self-Disable / L0 HA / 13 键 verdict cache), 0 改 enum/const,
 /// 0 改 workspace.version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0).
 fn extract_minimax_cot(content: &str) -> (String, String) {
-    let mut reasoning = String::new();
-    let mut visible = String::new();
-    let mut rest = content;
-    while let Some(start) = rest.find("<!--") {
-        // text before <!--
-        visible.push_str(&rest[..start]);
-        if let Some(end) = rest[start..].find("-->") {
-            // extract <!-- ... -->
-            let block_end = start + end + 3;
-            reasoning.push_str(&rest[start..block_end]);
-            reasoning.push('\n');
-            rest = &rest[block_end..];
-        } else {
-            // unterminated: best-effort 0 装严守, 把残余当 visible 拼上, 然后结束
-            // (rest 推进到末尾, break 后下面的 visible.push_str(rest) 不会重复拼接)
-            visible.push_str(&rest[start..]);
-            rest = "";
-            break;
+    // 双轨: 优先 `<think>` (实测当前 MiniMax 实际格式), 次 `<!-- -->` (旧版/代理).
+    // 每条 (open_marker, close_marker) 独立处理 — 命中其一即切 CoT, 余下照常 visible.
+    for (open, close) in [("<think>", "</think>"), ("<!--", "-->")] {
+        if content.contains(open) {
+            let mut reasoning = String::new();
+            let mut visible = String::new();
+            let mut rest = content;
+            while let Some(start) = rest.find(open) {
+                // text before open_marker
+                visible.push_str(&rest[..start]);
+                if let Some(end) = rest[start..].find(close) {
+                    // extract open ... close
+                    let block_end = start + end + close.len();
+                    reasoning.push_str(&rest[start..block_end]);
+                    reasoning.push('\n');
+                    rest = &rest[block_end..];
+                } else {
+                    // unterminated: best-effort 0 装严守, 把残余当 visible 拼上, 然后结束
+                    visible.push_str(&rest[start..]);
+                    rest = "";
+                    break;
+                }
+            }
+            visible.push_str(rest);
+            return (reasoning.trim().to_string(), visible.trim().to_string());
         }
     }
-    visible.push_str(rest);
-    (reasoning.trim().to_string(), visible.trim().to_string())
+    // 0 装 PASS: 无 CoT 标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
+    (String::new(), content.to_string())
 }
 
 /// 伙伴主链路: 喂节律 → CompanionApp 注入管线 → LLM+工具循环 → OpenAI 兼容响应.
@@ -1701,27 +1718,37 @@ async fn list_models() -> impl IntoResponse {
 
 #[cfg(test)]
 mod cot_extraction_tests {
-    //! 单元测试 — extract_minimax_cot 拆 `<!-- ... -->` 边界标记.
+    //! 单元测试 — extract_minimax_cot 双轨解析 `<think>...` + `<!-- ... -->`.
     //!
     //! 工程规范:
-    //! - 0 装 PASS 严守: 无标记 / 单标记 / 多标记 / 不闭合 / 边界情况 7 测全齐
+    //! - 0 装 PASS 严守: 无标记 / 单标记 / 多标记 / 不闭合 / 双轨兼容 7+ 测全齐
     //! - 0 改 enum/const, 0 触碰 3 不可变脊柱
     //! - 0 改 workspace.version (1.2.0)
     //!
-    //! (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5)
+    //! (per _research_mem/sub_agent_reports/2026-08-19/MiniMax_reasoning_verification.md §5 + §7
+    //!  8/20 实测 MiniMax 当前返回 `<think>...`; 双轨兼容 8/19 验证报告 `<!-- -->`)
 
     use super::extract_minimax_cot;
 
-    /// Happy path: 1 段 CoT 在前, 正文在后.
+    /// Happy path: `<think>` 单段, 8/20 实测 MiniMax 实际响应格式.
     #[test]
-    fn happy_path_cot_then_content() {
+    fn happy_path_think_then_content() {
+        let content = "<think>We need to think</think>Here is the answer.";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<think>We need to think</think>");
+        assert_eq!(visible, "Here is the answer.");
+    }
+
+    /// Happy path: 旧 `<!-- -->` 格式, 兼容 8/19 验证报告与代理/历史实例.
+    #[test]
+    fn happy_path_html_comment_then_content() {
         let content = "<!-- We need to think -->Here is the answer.";
         let (cot, visible) = extract_minimax_cot(content);
         assert_eq!(cot, "<!-- We need to think -->");
         assert_eq!(visible, "Here is the answer.");
     }
 
-    /// 0 装 PASS: 无 `<!-- -->` 标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
+    /// 0 装 PASS: 无标记 → (空 reasoning, 全部 content 返 visible), 0 假装 CoT 必有.
     #[test]
     fn no_markers_returns_empty_cot_full_visible() {
         let content = "Plain answer without any CoT markers.";
@@ -1738,52 +1765,60 @@ mod cot_extraction_tests {
         assert_eq!(visible, "");
     }
 
-    /// 多段 CoT: 2 段 `<!-- ... -->` 中间夹 + 末尾夹.
+    /// 多段 `<think>` CoT: 2 段中间夹 + 末尾夹.
     #[test]
-    fn multiple_cot_blocks_all_extracted() {
-        let content = "<!-- first thought -->middle<!-- second thought -->end";
+    fn multiple_think_blocks_all_extracted() {
+        let content = "<think>first thought</think>middle<think>second thought</think>end";
         let (cot, visible) = extract_minimax_cot(content);
-        assert_eq!(cot, "<!-- first thought -->\n<!-- second thought -->");
-        assert_eq!(visible, "middleend"); // 中间无分隔符, 实际 LLM 会在段间加 \n\n
+        assert_eq!(cot, "<think>first thought</think>\n<think>second thought</think>");
+        assert_eq!(visible, "middleend");
     }
 
-    /// CoT 在末尾 (per 验证报告 §2 chunk 9 模式): CoT 跨 chunk 仍可切分.
+    /// CoT 在末尾: `<think>` 末尾格式 (类似验证报告 §2 chunk 9 模式).
     #[test]
-    fn cot_at_end_extracted() {
-        let content = "Visible answer first.\n\n<!-- thinking more -->";
+    fn think_at_end_extracted() {
+        let content = "Visible answer first.\n\n<think>thinking more</think>";
         let (cot, visible) = extract_minimax_cot(content);
-        assert_eq!(cot, "<!-- thinking more -->");
+        assert_eq!(cot, "<think>thinking more</think>");
         assert_eq!(visible, "Visible answer first.");
     }
 
-    /// 边界: 不闭合的 `<!--` (跨 chunk 残余) — best-effort 当 visible, 0 装严守.
+    /// 边界: 不闭合的 `<think>` (跨 chunk 残余) — best-effort 当 visible, 0 装严守.
     #[test]
-    fn unterminated_cot_treated_as_visible_best_effort() {
-        // chunk 边界切分, `<!-- thinking...` 还没收到 `-->` (per 验证报告 §5 跨 chunk case)
-        let content = "answer part\n<!-- still thinking without close";
+    fn unterminated_think_treated_as_visible_best_effort() {
+        let content = "answer part\n<think>still thinking without close";
         let (cot, visible) = extract_minimax_cot(content);
         assert_eq!(cot, ""); // 不闭合 → 0 假装这是 CoT
-        assert_eq!(visible, "answer part\n<!-- still thinking without close");
+        assert_eq!(visible, "answer part\n<think>still thinking without close");
     }
 
-    /// 边界: 真实 MiniMax 样本 (per 验证报告 §2 摘录)
+    /// 8/20 实测响应: `<think>` 包多行推理 + 短答案, 9.11 vs 9.9 类型.
     #[test]
-    fn realistic_minimax_sample_extracts_cot() {
-        // 取自验证报告 §2 chunk 1+9+10 拼接
-        let content = "<!-- We need answer Chinese. User asks 9.11 vs 9.9 compare. ... -->\n\n按**小数**比较,**9.9 更大**.";
+    fn realistic_minimax_think_sample_extracts_cot() {
+        // 8/20 E2E 实测响应 (1+1 简化版)
+        let content = "<think>\nThe user is asking a simple math question: 1+1 equals what?\nAs 阿佩瑞斯, I should respond in character but keep it brief.\n</think>\n2";
         let (cot, visible) = extract_minimax_cot(content);
-        assert!(cot.starts_with("<!--"), "CoT 以 <!-- 开头");
-        assert!(cot.ends_with("-->"), "CoT 以 --> 结尾");
-        assert!(visible.contains("9.9 更大"), "正文保留 9.9 更大");
+        assert!(cot.starts_with("<think>"), "CoT 以 <think> 开头");
+        assert!(cot.ends_with("</think>"), "CoT 以 </think> 结尾");
+        assert_eq!(visible.trim(), "2", "正文只剩 '2'");
     }
 
-    /// 工程规范: 0 装 PASS — `<!--` 嵌套时 (罕见) 状态机不退化, 取最外层.
-    /// 注: LLM 不会输出嵌套, 此测试是 robust 防御, 不是合同.
+    /// 双轨兼容: 同一函数, 同一调用, `<think>` 优先于 `<!-- -->` (实测 MiniMax 当前格式).
+    /// 包含两者 → 只剥 `<think>`, 余下当 visible (0 装严守: LLM 不会同时输出两种).
     #[test]
-    fn nested_marker_handled_robustly_no_panic() {
-        // 嵌套: `<!-- outer <!-- inner --> tail -->`
-        // 状态机从 first <!-- 开始, 找 first --> 关闭. outer 不闭合 → 当 visible
-        let content = "<!-- outer <!-- inner --> tail -->";
+    fn dual_track_think_takes_priority() {
+        let content = "<think>reasoning</think>real answer <!-- legacy comment -->";
+        let (cot, visible) = extract_minimax_cot(content);
+        assert_eq!(cot, "<think>reasoning</think>");
+        assert!(visible.contains("real answer"));
+        assert!(visible.contains("<!-- legacy comment -->")); // 旧标记当 visible
+    }
+
+    /// 工程规范: 0 装 PASS — `<think>` 嵌套时 (罕见) 状态机不退化, 取最外层.
+    #[test]
+    fn nested_think_handled_robustly_no_panic() {
+        // 嵌套: `<think> outer<think>inner</think>tail</think>`
+        let content = "<think>outer<think>inner</think>tail</think>";
         let (_cot, _visible) = extract_minimax_cot(content);
         // 不 panic 即可, 0 装严守 — 不依赖精确拆分
     }
