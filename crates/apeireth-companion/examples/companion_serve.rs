@@ -1183,6 +1183,16 @@ async fn chat_completions(
             });
         }
         messages.extend(tool_msgs);
+        // MiniMax 限流缓解 (2026-08-20 实测): 工具循环轮1成功 ~2.7s, 立即发轮2 必触发
+        // `suppressed: openai-chat:MiniMax-M3` 限流. 工具执行完 → 等 2s → 再调 LLM,
+        // 让 MiniMax token 桶恢复. env APEIRETH_INTERROUND_SLEEP_MS 可覆盖 (0 = 关闭).
+        let interround_ms = std::env::var("APEIRETH_INTERROUND_SLEEP_MS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(2000);
+        if interround_ms > 0 {
+            tokio::time::sleep(Duration::from_millis(interround_ms)).await;
+        }
         if rounds >= MAX_TOOL_ROUNDS {
             final_content = "工具循环达到上限, 已停止。请让主人再发一条消息继续。".to_string();
             break;
