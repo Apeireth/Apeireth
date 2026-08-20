@@ -18,7 +18,7 @@
     ChevronDown,
     ChevronRight,
   } from 'lucide-svelte';
-  import PageHeader from '../PageHeader.svelte';
+  import PageHeader from '../../components/PageHeader.svelte';
   import EmptyState from '../components/EmptyState.svelte';
   import ErrorState from '../components/ErrorState.svelte';
   import LoadingState from '../components/LoadingState.svelte';

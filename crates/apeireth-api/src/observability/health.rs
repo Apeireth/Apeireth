@@ -13,8 +13,7 @@
 //! - 200: all ok / partial degraded (仍可服务)
 //! - 503: ≥1 组件 down (不能服务)
 //!
-//! **6 哲学锚穿透**:
-//! - S-1: 1:1 翻译 `apeireth-observability::HealthStatus` 三态枚举
+//! **8 哲学锚穿透**://! - S-1: 1:1 翻译 `apeireth-observability::HealthStatus` 三态枚举
 //! - S-2: 估 80-120 LOC, 0 假装已接真依赖 (R20 阶段 6 stub "ok")
 //! - O-2: 借鉴 Kubernetes liveness/readiness probe 工业标准
 //! - O-3: 5 组件编译期 hardcode (HEALTH_COMPONENTS 守门)

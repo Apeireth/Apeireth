@@ -9,7 +9,7 @@
 //! - **TTS**: `POST https://api.minimaxi.com/v1/t2a_v2` — hex-encoded MP3 audio
 //! - **STT**: `POST https://api.minimaxi.com/v1/asr` — JSON text (R172+ 续)
 //!
-//! ## 设计原则 (per 蓝图 §1 6 哲学锚穿透)
+//! ## 设计原则 (per 蓝图 §1 8 哲学锚穿透, baseline 2026-08-19)
 //!
 //! - **S-1 北极星**: 1:1 翻译 MiniMax 官方 API spec (T2A v2 + ASR), 不重新发明协议.
 //! - **S-2 实事求是**: R172 已 LIVE 验证 (122KB MP3 ID3 header 确认), 不假装"调通".

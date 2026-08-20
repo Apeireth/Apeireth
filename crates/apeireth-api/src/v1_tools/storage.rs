@@ -13,7 +13,7 @@
 //! - ✅ `SqliteStorage` 留 `unimplemented!()` placeholder, **不假装"已实现但没真跑"**,
 //!   `unimplemented!()` panic 在编译期/测试期就被发现, 不让坏数据流出去
 //!
-//! **6 哲学锚 (per R17 主哲学锚) 穿透 storage.rs**:
+//! **8 哲学锚 (per baseline S-1/S-2/S-3 + O-1/O-2/O-3/O-4/O-5) 穿透 storage.rs**:
 //! - 锚 #1 不漂移: InMemory 真跑, JsonFile 真跑, Sqlite 显式 unimplemented! (不假装)
 //! - 锚 #2 编译期 hardcode: `STORAGE_BACKEND_COUNT = 3` const assert
 //! - 锚 #3 不引入 unsafe: `#![deny(unsafe_code)]` 继承 + `Mutex` 守并发
@@ -27,10 +27,10 @@
 //! - ❌ 不改 `apeireth-tools` 任何源码
 //! - ❌ 不改 `apeireth-mcp` 任何源码
 //! - ❌ 不改 `apeireth-memory` 任何源码
-//! - ❌ 不改 workspace version (1.0.0)
+//! - ❌ 不改 workspace version (1.2.0)
 //! - ❌ 不改 workspace Cargo.toml (rusqlite 0.32 bundled 已是 workspace 依赖, 不再加)
 //! - ❌ 不引第三方 DB 库 (除 workspace 已锁的 rusqlite 0.32)
-//! - ❌ 不破坏 24 LOCKED crate 任何源码
+//! - ❌ 不破坏 24 LOCKED crate (入口签名已降级 — 仅保 3 项不可变脊柱) 任何源码
 //!
 //! **架构位置**:
 //! ```text

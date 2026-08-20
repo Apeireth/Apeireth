@@ -14,13 +14,12 @@
     Plug,
     ChevronDown,
     Sparkles,
-    CheckCircle2,
     AlertCircle,
     Info,
     RotateCcw,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
-  import StatusDot from './lib/StatusDot.svelte';
+  import StatusDot from './components/StatusDot.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
   import EmptyState from './lib/components/EmptyState.svelte';
   import ConversationsView from './lib/ConversationsView.svelte';
@@ -41,12 +40,15 @@
   import {
     checkHealthDetailed,
     createAgentRuntime,
+    fetchApprovalRequests,
     loadConfig,
     loadConversations,
     saveConfig,
     saveConversations,
     fetchCapabilities,
     capabilitySupported,
+    subscribeCompanionEvents,
+    type CompanionPresentationState,
   } from './lib/runtime';
   import type {CapabilityManifest} from './lib/types';
 
@@ -67,6 +69,10 @@
   let draft = $state('');
   let busy = $state(false);
   let error = $state('');
+  let pendingApprovals = $state<import('./lib/types').ApprovalRequestItem[]>([]);
+  let isReasoning = $state(false);
+  let isExecutingTool = $state(false);
+  let proactiveGreeting = $state('');
   let agentRuntime = $state(createAgentRuntime(loadConfig()));
 
   // 深度运行时报告与健康状态
@@ -87,6 +93,15 @@
   let messagesContainer = $state<HTMLElement | null>(null);
   let isNearBottom = $state(true);
   let showScrollBottomBtn = $state(false);
+
+  // 后端信号驱动的伴随体表现态 (严禁前端造假). Reconciled from master.
+  const companionPresentation = $derived.by<CompanionPresentationState>(() => {
+    if (pendingApprovals.length > 0) return 'concerned';
+    if (isExecutingTool) return 'working';
+    if (isReasoning) return 'thinking';
+    if (busy) return 'speaking';
+    return 'idle';
+  });
 
   const activeConversation = $derived(
     conversations.find((item) => item.id === activeId) || null,
@@ -160,6 +175,7 @@
     persist();
   }
 
+  /** 按 id 原子拼接流式文本 delta. */
   function appendDelta(conversationId: string, messageId: string, delta: string): void {
     conversations = conversations.map((item) => {
       if (item.id !== conversationId) return item;
@@ -169,6 +185,19 @@
         messages: item.messages.map((m) =>
           m.id === messageId ? {...m, text: m.text + delta} : m,
         ),
+      };
+    });
+    persist();
+  }
+
+  /** 按 id 原子拼接推理思考 delta. Reconciled from master. */
+  function appendReasoningDelta(conversationId: string, messageId: string, delta: string): void {
+    conversations = conversations.map((item) => {
+      if (item.id !== conversationId) return item;
+      return {
+        ...item,
+        updatedAt: Date.now(),
+        messages: item.messages.map((m) => (m.id === messageId ? {...m, reasoning: (m.reasoning || '') + delta} : m)),
       };
     });
     persist();
@@ -239,22 +268,26 @@
         healthState = report.overall;
       }
       // health 之后拉取 capability manifest (runtime version 变化/重连时刷新).
-      // 不每次 render 重复 fetch — 仅在 refreshConnection (15s 节拍/手动) 时.
+      // 不每次 render 重复 fetch — 仅在 refreshConnection (节拍/手动) 时.
       if (report.overall !== 'offline') {
         const prevVersion = capabilities?.runtime.version;
         const fresh = await fetchCapabilities(config);
-        // 仅在 version 变化或首次加载时更新 (避免 15s 节拍无谓刷新覆盖).
+        // 仅在 version 变化或首次加载时更新 (避免节拍无谓刷新覆盖).
         if (!capabilities || fresh.runtime.version !== prevVersion || fresh.legacy !== capabilities.legacy) {
           capabilities = fresh;
         }
+        // 同步待审批请求 (后端权限洋葱).
+        pendingApprovals = await fetchApprovalRequests(config).catch(() => []);
+      } else {
+        pendingApprovals = [];
       }
     } finally {
       isRefreshingHealth = false;
     }
   }
 
-  async function send(): Promise<void> {
-    const text = draft.trim();
+  async function send(customText?: string): Promise<void> {
+    const text = (customText ?? draft).trim();
     if (!text || busy) return;
     const conversation = ensureConversation();
     const conversationId = conversation.id;
@@ -262,8 +295,10 @@
       .filter((m) => m.role === 'user' || m.role === 'assistant')
       .map((m) => ({role: m.role, content: m.text}));
 
-    draft = '';
+    if (!customText) draft = '';
     busy = true;
+    isReasoning = false;
+    isExecutingTool = false;
     healthState = 'generating';
     error = '';
 
@@ -282,6 +317,7 @@
       timestamp: Date.now(),
       streaming: true,
       toolCalls: [],
+      reasoning: '',
       modelInfo: {id: config.model, provider: 'apeireth'},
     };
 
@@ -305,13 +341,18 @@
         },
         (event) => {
           if (event.type === 'text-delta') {
+            isReasoning = false;
             appendDelta(conversationId, assistantMessage.id, event.text);
             void triggerAutoScroll();
+          } else if (event.type === 'reasoning-delta') {
+            isReasoning = true;
+            appendReasoningDelta(conversationId, assistantMessage.id, event.text);
           } else if (event.type === 'tool-call') {
+            isExecutingTool = true;
             updateMessageToolCall(conversationId, assistantMessage.id, event.toolCall);
             void triggerAutoScroll();
           } else if (event.type === 'tool-result') {
-            // handle tool result
+            isExecutingTool = false;
             void triggerAutoScroll();
           }
         },
@@ -321,16 +362,24 @@
         streaming: false,
       });
     } catch (caught) {
+      const isAborted = caught instanceof Error && caught.name === 'AbortError';
       const msg = caught instanceof Error ? caught.message : String(caught);
-      error = msg;
-      updateMessage(conversationId, assistantMessage.id, {
-        text: '',
-        streaming: false,
-        error: msg,
-      });
-      healthState = 'error';
+      if (isAborted) {
+        updateMessage(conversationId, assistantMessage.id, {streaming: false, aborted: true});
+      } else {
+        error = msg;
+        updateMessage(conversationId, assistantMessage.id, {
+          text: '',
+          streaming: false,
+          error: msg,
+        });
+        healthState = 'error';
+      }
     } finally {
       busy = false;
+      isReasoning = false;
+      isExecutingTool = false;
+      // 生成结束: 恢复真实 health (backend 可能已离线)
       await refreshConnection();
       await tick();
       void triggerAutoScroll();
@@ -339,6 +388,26 @@
 
   function stop(): void {
     agentRuntime.abort();
+  }
+
+  /** 重试一条失败/中止的 assistant 消息: 找到其上一条 user 文本重新发送. Reconciled from master. */
+  function retry(messageId: string): void {
+    if (busy || !activeConversation) return;
+    const msgs = activeConversation.messages;
+    const idx = msgs.findIndex((m) => m.id === messageId);
+    if (idx < 0) return;
+    let userText = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') {
+        userText = msgs[i].text;
+        break;
+      }
+    }
+    const filtered = msgs.filter((m) => m.id !== messageId);
+    updateConversation(activeConversation.id, {messages: filtered});
+    if (userText) {
+      void send(userText);
+    }
   }
 
   function newConversation(): void {
@@ -381,10 +450,24 @@
   onMount(() => {
     if (!activeId && conversations.length) activeId = conversations[0].id;
     void refreshConnection();
+
+    // 订阅 SSE 伴随体事件通道 (主动涌现与反思通知). Reconciled from master.
+    const unsubscribeEvents = subscribeCompanionEvents(config, (event) => {
+      proactiveGreeting = event.text;
+      window.setTimeout(() => {
+        if (proactiveGreeting === event.text) proactiveGreeting = '';
+      }, 12000);
+    });
+
+    // 后台健康轮询与审批请求同步 (真实 HTTP /health + capability manifest).
     const timer = window.setInterval(() => {
       void refreshConnection();
     }, 15000);
-    return () => window.clearInterval(timer);
+
+    return () => {
+      window.clearInterval(timer);
+      unsubscribeEvents();
+    };
   });
 </script>
 
@@ -415,6 +498,13 @@
         </button>
       {/each}
     </nav>
+
+    {#if proactiveGreeting}
+      <div class="proactive-hint" role="status">
+        <Sparkles size={12} />
+        <span>{proactiveGreeting}</span>
+      </div>
+    {/if}
 
     <div class="sidebar-footer">
       <button class="quiet-button wide new-chat-btn" onclick={newConversation}>
@@ -693,6 +783,19 @@
     background: var(--amber-wash);
     color: var(--amber);
     font-weight: 500;
+  }
+  .proactive-hint {
+    margin: 8px 10px;
+    padding: 8px 10px;
+    border-radius: 7px;
+    background: var(--amber-wash);
+    border: 1px solid var(--amber-line);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--amber);
+    font-size: 11px;
+    line-height: 1.4;
   }
   .sidebar-footer {
     padding: 12px 10px;

@@ -17,7 +17,7 @@ pub enum SilenceReason {
     NoNeed,
     /// 主动选择沉默 (reflexion / 反思期 / 等待).
     Deliberate,
-    /// 伦理怀疑 (违反 12 键或核心原则).
+    /// 伦理怀疑 (违反 13 键或核心原则).
     EthicalDoubt,
 }
 

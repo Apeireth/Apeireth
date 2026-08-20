@@ -38,8 +38,8 @@
 //!
 //! - B2 workspace.version 1.2.0 0 改
 //! - A1 R11 baseline 3 值 0 改
-//! - B1 24 LOCKED 入口签名 0 改 (本文件是 NEW, 不算改)
-//! - B4 6 重 v7 / B5 8 锚 / B3 30 维 / A3 13 键 0 改
+//! - B1 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱; 本文件是 NEW, 不算改)
+//! - B4 9 重 v9 守门 / B5 8 锚 / B3 V0.5 24 维 / A3 13 键 0 改
 //! - C1 0 主动 commit (Mavis 整合 #5 commit 时机拍板)
 //! - C2 0 装 PASS 严守
 
@@ -245,7 +245,7 @@ pub struct EvolutionContext {
     pub current_version: u32,
     /// 借鉴 ID 索引 (0-10, 跟 G2 接)
     pub borrow_id: u8,
-    /// 守门层数 (1:1 跟 G2 6 重 v7 = 6)
+    /// 守门层数 (1:1 跟 G2 9 重 v9 守门 = 6)
     pub guard_layers: u8,
 }
 
@@ -256,7 +256,7 @@ impl EvolutionContext {
             module: module.to_string(),
             current_version: version,
             borrow_id: 0,
-            guard_layers: 6, // 1:1 跟 B4 6 重 v7
+            guard_layers: 6, // 1:1 跟 B4 9 重 v9 守门
         }
     }
 }
@@ -432,7 +432,7 @@ impl EvolutionEngine {
 
     /// R1 NewModuleSafe — 新增模块必通过 7 项安全 check
     /// - module_id ∈ [0, 6] (跟 G2 L1 TypeCheck 接)
-    /// - guard_layers = 6 (跟 G2 6 重 v7 接)
+    /// - guard_layers = 6 (跟 G2 9 重 v9 守门 接)
     /// - borrow_id ∈ [0, 10] (跟 G2 L6 接)
     /// - 版本号 v# > 0
     /// - 守门层 = 6 (1:1 跟 B4)
@@ -463,7 +463,7 @@ impl EvolutionEngine {
 
     /// R2 UpgradeBackwardCompat — 升级必保持向后兼容
     /// - current_version > 0 (升级必须有原版本)
-    /// - 24 LOCKED 入口签名 0 改 (B1 严守, 通过 guard_layers=6 检查)
+    /// - 24 LOCKED 入口签名已降级, 0 改 (B1 严守 R128 仅保 3 项不可变脊柱; 通过 guard_layers=6 检查)
     pub fn check_r2_upgrade_backward_compat(
         &mut self,
         ctx: &EvolutionContext,
@@ -493,7 +493,7 @@ impl EvolutionEngine {
 
     /// R3 DowngradeJustified — 降级必记录原因
     /// - 降级必带 reason (ctx 里有 reason 字段)
-    /// - 24 LOCKED 入口签名 0 改
+    /// - 24 LOCKED 入口签名已降级, 0 改 (R128 仅保 3 项不可变脊柱)
     pub fn check_r3_downgrade_justified(
         &mut self,
         ctx: &EvolutionContext,
