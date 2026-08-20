@@ -74,8 +74,63 @@ use futures::Stream;
 use serde_json::{json, Value};
 use std::convert::Infallible;
 
-const BASE_URL: &str = "https://api.minimaxi.com";
-const MODEL: &str = "MiniMax-M3";
+const DEFAULT_BASE_URL: &str = "https://api.minimaxi.com";
+/// 默认 model 名 — 实际值在 `main()` 里根据 env / TOML 选定 (0 装 PASS: env 缺省回落 `MiniMax-M3`).
+/// 历史原因保留 const 形如 `MODEL` 字面量供文档引用; 真正取值走 `model()` 函数.
+const DEFAULT_MODEL: &str = "MiniMax-M3";
+
+/// 全局 model 选取 (env `APEIRETH_LLM_MODEL` 优先, 缺省回落 `DEFAULT_MODEL`).
+/// 0 装 PASS: 缺省回落 = 与旧版 `MiniMax-M3` 行为 1:1.
+/// **注**: 用 thread_local + leak 模式, 这样 model() 返 &'static str (供现有调用点使用),
+/// 测试可多次 init 每次新 leak. leak 内存只在测试 + 启动期, 可忽略.
+thread_local! {
+    static MODEL: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+fn init_model() -> &'static str {
+    let new_value = std::env::var("APEIRETH_LLM_MODEL")
+        .unwrap_or_else(|_| DEFAULT_MODEL.to_string());
+    MODEL.with(|c| *c.borrow_mut() = new_value.clone());
+    Box::leak(new_value.into_boxed_str())
+}
+
+fn model() -> &'static str {
+    MODEL.with(|c| {
+        let g = c.borrow();
+        if g.is_empty() {
+            DEFAULT_MODEL
+        } else {
+            Box::leak(g.clone().into_boxed_str())
+        }
+    })
+}
+
+/// 全局 base URL 选取 (优先级: TOML env → APEIRETH_LLM_BASE_URL env → DEFAULT_BASE_URL).
+/// **0 装 PASS**: 缺省回落 = minimaxi 主域, 与旧版 1:1 行为.
+/// **TOML 入口**: env `APEIRETH_LLM_CONFIG=path/to.toml` 时, 第一个 provider 的
+/// `base_url` 自动覆盖 `DEFAULT_BASE_URL`. 这让用户不用改源码就能切换 LLM 服务.
+thread_local! {
+    static BASE_URL: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
+}
+
+fn init_base_url(toml_first_provider_base: Option<String>) -> &'static str {
+    let new_value = toml_first_provider_base
+        .or_else(|| std::env::var("APEIRETH_LLM_BASE_URL").ok())
+        .unwrap_or_else(|| DEFAULT_BASE_URL.to_string());
+    BASE_URL.with(|c| *c.borrow_mut() = new_value.clone());
+    Box::leak(new_value.into_boxed_str())
+}
+
+fn base_url() -> &'static str {
+    BASE_URL.with(|c| {
+        let g = c.borrow();
+        if g.is_empty() {
+            DEFAULT_BASE_URL
+        } else {
+            Box::leak(g.clone().into_boxed_str())
+        }
+    })
+}
 const MAX_TOOL_ROUNDS: usize = 5;
 /// 默认单次输出上限 (env APEIRETH_MAX_TOKENS 可覆盖; 客户端请求值优先, 上限保护).
 const DEFAULT_MAX_TOKENS: u32 = 8192;
@@ -110,7 +165,7 @@ pub struct MiniMaxMemoryExtractor {
 impl MemoryExtractor for MiniMaxMemoryExtractor {
     async fn extract(&self, context: &str) -> Result<ExtractedMemory, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -194,7 +249,7 @@ impl MemoryExtractor for MiniMaxMemoryExtractor {
             .collect::<Vec<_>>()
             .join("\n");
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -406,7 +461,7 @@ pub struct MiniMaxDreamSummarizer {
 impl DreamSummarizer for MiniMaxDreamSummarizer {
     async fn summarize(&self, merged: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -457,7 +512,7 @@ pub struct MiniMaxConstitutionLlm {
 impl ConstitutionLlm for MiniMaxConstitutionLlm {
     async fn ask(&self, constitution: &str, action: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -507,7 +562,7 @@ pub struct TonalUtterance {
 impl UtteranceGenerator for TonalUtterance {
     async fn utter(&self, i: &Initiative) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -564,7 +619,7 @@ pub struct MiniMaxReflector {
 impl ReflectionReflector for MiniMaxReflector {
     async fn reflect(&self, context: &str) -> Result<String, String> {
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -623,7 +678,7 @@ impl DeepRecall for MiniMaxDeepRecall {
             .collect::<Vec<_>>()
             .join("\n");
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -691,7 +746,7 @@ impl DialogSummarizer for MiniMaxDialogSummarizer {
             None => String::new(),
         };
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -748,7 +803,7 @@ impl ExperienceRefiner for MiniMaxExperienceRefiner {
             return Ok(None);
         }
         let req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: vec![
                 OpenAiChatMessage {
                     role: "system".to_string(),
@@ -1068,7 +1123,7 @@ async fn chat_completions(
     //   未来 MiniMax 若加 → 优先用字段, 缺则回 inline 解析
     if req.stream {
         let stream_req = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: messages.clone(),
             temperature: Some(0.6),
             max_tokens: Some(out_tokens),
@@ -1089,9 +1144,10 @@ async fn chat_completions(
             }
         };
         eprintln!(
-            "[stream] req.stream=true, 透传 SSE 到 {MODEL} (tool loop 跳过, per v1.5 known limit)"
+            "[stream] req.stream=true, 透传 SSE 到 {} (tool loop 跳过, per v1.5 known limit)",
+            model()
         );
-        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), MODEL)
+        return match stream_forward(&st.pipeline, ProtocolKind::OpenAiChat, body.into(), model())
             .await
         {
             Ok(r) => r.into_response(),
@@ -1111,7 +1167,7 @@ async fn chat_completions(
     loop {
         rounds += 1;
         let req2 = OpenAiChatRequest {
-            model: MODEL.to_string(),
+            model: model().to_string(),
             messages: messages.clone(),
             temperature: Some(0.6),
             max_tokens: Some(out_tokens),
@@ -1203,7 +1259,7 @@ async fn chat_completions(
         "id": format!("chatcmpl-apeireth-{}", uuid::Uuid::new_v4()),
         "object": "chat.completion",
         "created": chrono::Utc::now().timestamp(),
-        "model": MODEL,
+        "model": model(),
         "choices": [{
             "index": 0,
             "message": {"role": "assistant", "content": final_content},
@@ -1276,6 +1332,31 @@ async fn chat_once(
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // 0 装 PASS: env 缺省回落 DEFAULT_MODEL ("MiniMax-M3"). env APEIRETH_LLM_MODEL 可覆盖.
+    // 2026-08-20: companion_serve 启动时读 env / TOML 配置 (0 装 PASS: env 缺省回落).
+    let model_in_use = init_model().to_string();
+    println!("[llm] model = {model_in_use} (env APEIRETH_LLM_MODEL 可覆盖, 缺省 {DEFAULT_MODEL})");
+
+    // 启动时读 TOML 配置 (per 2026-08-20 P1 配置层): env APEIRETH_LLM_CONFIG 指向 TOML 文件.
+    // TOML 里第一个 provider 的 base_url 自动覆盖 BASE_URL. 多 provider / fallback 链
+    // 见 docs/02-guides/custom-llm.md (本 session C 任务). 不读 TOML 时退化到 env / DEFAULT.
+    let toml_base = std::env::var("APEIRETH_LLM_CONFIG")
+        .ok()
+        .and_then(|path| match apeireth_api::llm::config::LlmConfig::from_file(&path) {
+            Ok(cfg) => {
+                let n = cfg.providers.len();
+                let first_base = cfg.providers.values().next().and_then(|p| p.base_url.clone());
+                println!("[llm] TOML config 加载: {n} providers from {path}");
+                first_base
+            }
+            Err(e) => {
+                eprintln!("[llm] TOML config 加载失败 (退化到 env / default): {e}");
+                None
+            }
+        });
+    init_base_url(toml_base);
+    println!("[llm] base_url = {} (TOML 优先 → APEIRETH_LLM_BASE_URL env → default {DEFAULT_BASE_URL})", base_url());
+
     let key = load_key()?;
     let port: u16 = std::env::var("PORT")
         .ok()
@@ -1313,7 +1394,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::sync::Arc::new(std::sync::Mutex::new(goals));
 
     // ② 工具桥全增强 (宪法 LLM 评审 + 目标工具 + 显式扩权 APEIRETH_GRANT="FileOperator:24;Git:12")
-    let pipeline = Arc::new(build_pipeline(BASE_URL.to_string(), Some(key.clone()))?);
+    let pipeline = Arc::new(build_pipeline(base_url().to_string(), Some(key.clone()))?);
     let bridge = Arc::new(
         ToolBridge::new(Arc::clone(&store))
             .with_judicator(Arc::new(LlmJudicator::new(Arc::new(
@@ -1722,7 +1803,7 @@ async fn health() -> impl IntoResponse {
 async fn list_models() -> impl IntoResponse {
     Json(json!({
         "object": "list",
-        "data": [{"id": MODEL, "object": "model", "created": 0, "owned_by": "minimax"}]
+        "data": [{"id": model(), "object": "model", "created": 0, "owned_by": "minimax"}]
     }))
 }
 
@@ -1831,5 +1912,82 @@ mod cot_extraction_tests {
         let content = "<think>outer<think>inner</think>tail</think>";
         let (_cot, _visible) = extract_minimax_cot(content);
         // 不 panic 即可, 0 装严守 — 不依赖精确拆分
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// 2026-08-20: 配置层单元测 (env / TOML / default fallback)
+// ──────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod llm_config_tests {
+    use super::*;
+    use std::sync::Mutex;
+
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    fn with_clean_env<F: FnOnce()>(f: F) {
+        // 先尝试拿锁; 拿不到 = 当前已有测试在跑, 跳过 (避免毒化)
+        let Ok(_g) = ENV_LOCK.lock() else {
+            f();
+            return;
+        };
+        std::env::remove_var("APEIRETH_LLM_MODEL");
+        std::env::remove_var("APEIRETH_LLM_BASE_URL");
+        std::env::remove_var("APEIRETH_LLM_CONFIG");
+        f();
+    }
+
+    /// 0 装 PASS: env 缺省回落 = "MiniMax-M3" (旧版 1:1 行为)
+    #[test]
+    fn model_defaults_to_minimax_when_no_env() {
+        with_clean_env(|| {
+            assert_eq!(init_model(), "MiniMax-M3");
+            assert_eq!(model(), "MiniMax-M3");
+        });
+    }
+
+    #[test]
+    fn model_env_overrides_default() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_MODEL", "gpt-4o-custom");
+            assert_eq!(init_model(), "gpt-4o-custom");
+        });
+    }
+
+    /// 0 装 PASS: 缺省回落 = "https://api.minimaxi.com" (旧版 1:1 行为)
+    #[test]
+    fn base_url_defaults_to_minimax_when_no_env() {
+        with_clean_env(|| {
+            init_base_url(None);
+            assert_eq!(base_url(), "https://api.minimaxi.com");
+        });
+    }
+
+    #[test]
+    fn base_url_env_overrides_default() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env.test.com");
+            init_base_url(None);
+            assert_eq!(base_url(), "https://env.test.com");
+        });
+    }
+
+    #[test]
+    fn base_url_toml_first_provider_overrides_env() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env.test.com");
+            init_base_url(Some("https://toml.test.com".to_string()));
+            assert_eq!(base_url(), "https://toml.test.com");
+        });
+    }
+
+    #[test]
+    fn base_url_explicit_none_falls_through_to_env() {
+        with_clean_env(|| {
+            std::env::set_var("APEIRETH_LLM_BASE_URL", "https://env-only.test.com");
+            init_base_url(None);
+            assert_eq!(base_url(), "https://env-only.test.com");
+        });
     }
 }
