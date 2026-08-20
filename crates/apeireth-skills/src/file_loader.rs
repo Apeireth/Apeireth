@@ -12,7 +12,7 @@
 //! **不漂移 (主哲学锚 #1)**:
 //! - 0 改 Skill (R23 LOCKED 4 字段)
 //! - 0 改 SkillDescriptor / DescriptorRegistry (R36 batch 后续 7 字段)
-//! - 0 改 workspace 1.0.0 / 24 LOCKED crate
+//! - 0 改 workspace 1.2.0 (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制) / 24 LOCKED crate 入口签名已降级
 //! - 0 引入异步 I/O (sync std::fs + walkdir, 跟 descriptor in-memory 一致)
 //!
 //! **JSON 描述符 schema** (单文件 1 个 SkillDescriptor):

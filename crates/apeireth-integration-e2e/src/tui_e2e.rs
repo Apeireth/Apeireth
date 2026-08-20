@@ -1,6 +1,6 @@
 //! # tui_e2e — TUI 5 nav + 9 器官 e2e (14 测试)
 //!
-//! **职责**: 端到端验证 TUI 设计契约 — 1 屏 4 panel + 5 nav + 9 器官 + 6 哲学锚.
+//! **职责**: 端到端验证 TUI 设计契约 — 1 屏 4 panel + 5 nav + 9 器官 + 8 哲学锚.
 //!
 //! **跟 `apeireth-tui-e2e` 的关系**: 互补, 不重复
 //! - `apeireth-tui-e2e` 测 TUI 设计契约 (20+ 测试, 镜像 tui 公开 API)
@@ -12,7 +12,7 @@
 //! 2. `test_tui_session_nav_lists`            — session nav 列出活跃 session
 //! 3. `test_tui_tools_nav_shows_6`            — tools nav 6 工具
 //! 4. `test_tui_settings_nav_5_providers`     — settings nav 5 provider
-//! 5. `test_tui_help_nav_6_anchors`           — help nav 6 哲学锚
+//! 5. `test_tui_help_nav_8_anchors`           — help nav 8 哲学锚
 //! 6. `test_tui_organ_heart_pulse`            — heart 60Hz 脉冲
 //! 7. `test_tui_organ_brain_llm`              — brain LLM 调用
 //! 8. `test_tui_organ_hand_tools`             — hand 6 工具
@@ -21,7 +21,7 @@
 //! 11. `test_tui_organ_memory_history`        — memory 历史
 //! 12. `test_tui_organ_voice_state`           — voice 状态
 //! 13. `test_tui_organ_body_resources`        — body 资源
-//! 14. `test_tui_organ_mind_anchors`          — mind 6 哲学锚
+//! 14. `test_tui_organ_mind_anchors`          — mind 8 哲学锚
 //!
 //! **附加** (per 派活单 §5 续):
 //! 15. `test_tui_quit_key_q`                  — q 退出
@@ -119,7 +119,7 @@ pub fn test_tui_settings_nav_5_providers(h: &mut IntegrationHarness) -> E2EResul
     Ok(())
 }
 
-/// 5. help nav 6 哲学锚
+/// 5. help nav 8 哲学锚
 pub fn test_tui_help_nav_6_anchors(h: &mut IntegrationHarness) -> E2EResult<()> {
     {
         let mut app = h.tui_app.lock();
@@ -259,7 +259,7 @@ pub fn test_tui_organ_body_resources(h: &mut IntegrationHarness) -> E2EResult<()
     Ok(())
 }
 
-/// 14. mind 器官 (6 哲学锚)
+/// 14. mind 器官 (8 哲学锚)
 pub fn test_tui_organ_mind_anchors(h: &mut IntegrationHarness) -> E2EResult<()> {
     h.tui_render()?;
     let text = h.tui_buffer_text()?;

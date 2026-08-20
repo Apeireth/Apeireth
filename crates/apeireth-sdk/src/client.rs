@@ -21,9 +21,9 @@
 //! 4. `apeireth-protocol::ws_v1::WS_TOKEN_DEFAULT_TTL_SECS` — 5min TTL
 //! 5. `apeireth-protocol::ws_v1::WS_PING_INTERVAL_SECS` — 30s 心跳
 //!
-//! **不漂移** (8 项不修改承诺 + 6 哲学 anchor):
-//! - ❌ 0 改 24 LOCKED crate (5 P0 + 9 skeleton + 1 observability + 8 原有)
-//! - ❌ 0 改 workspace version (1.0.0 semver 严格)
+//! **不漂移** (8 项不修改承诺 + 8 哲学 anchor, baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5):
+//! - ❌ 0 改 24 LOCKED crate 入口签名 (5 P0 + 9 skeleton + 1 observability + 8 原有; R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)
+//! - ❌ 0 改 workspace version (1.2.0 双轴制: 产品轴 tag v1.0.0 + workspace 轴 1.2.0)
 //! - ❌ 0 引 NewAPI (per 主人 R17 决策)
 //! - ❌ 0 重复造轮子 (复用 `apeireth-protocol` 5 集成点 + workspace deps)
 //! - ✅ 编译期 hardcode K-1 强校验 4 条
@@ -107,7 +107,7 @@ pub const PLATFORM_NAME: &str = "apeireth";
 
 /// **STUB MODE 守门标志** (K-1 强校验 #4): 编译期 hardcode = `true`.
 ///
-/// R21 真接 `apeireth-api` HTTP/WS 时, **必须经 6 哲学锚 (S-1/S-2/O-2/O-3/O-4/O-5)
+/// R21 真接 `apeireth-api` HTTP/WS 时, **必须经 8 哲学锚 (S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5, baseline 2026-08-19)
 /// + 主人审才能改 `false`**.
 pub const STUB_MODE: bool = true;
 
@@ -129,7 +129,7 @@ const _: () = assert!(
 /// 编译期守门: STUB_MODE == true.
 const _: () = assert!(
     STUB_MODE == true,
-    "STUB_MODE 改 false 需经 6 哲学锚 + 主人审 (R21)"
+    "STUB_MODE 改 false 需经 8 哲学锚 + 主人审 (R21)"
 );
 
 // 编译期守门: WS 协议版本 / TTL / 心跳 — 字符串/整数 const 算术尚未稳定 (rust-lang #143874),

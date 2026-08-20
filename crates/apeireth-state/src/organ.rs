@@ -72,7 +72,7 @@ pub enum Organ {
     Voice = 6,
     /// 7: 体 (body) — 进程 / 内存 / 磁盘.
     Body = 7,
-    /// 8: 意 (mind) — AGI 状态 + 6 哲学锚.
+    /// 8: 意 (mind) — AGI 状态 + 8 哲学锚 (baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5).
     Mind = 8,
 }
 

@@ -55,14 +55,14 @@
 //!
 //! ## 8 硬墙 verify (B1-B7 升级版 + A1-A3 严守 + C1-C3 策略)
 //!
-//! - **B1** 24 LOCKED 持续更新 — `apeireth-evolution` 在 24 LOCKED #5, **本文件是 NEW**, 0 触碰
+//! - **B1** 24 LOCKED 入口签名已降级 — `apeireth-evolution` 在 24 LOCKED #5, **本文件是 NEW**, 0 触碰
 //!   `lib.rs` 入口签名, 仅 +1 行 `pub mod library_autonomy;` + 1 re-export group (12 类型).
 //!   0 触碰 `engine.rs` / `state.rs` / `fail.rs` / `poda_cycle.rs` / `council_bridge.rs` / `traits.rs` 任何入口签名.
 //! - **B2** workspace.version 1.2.0 0 改 — 0 触碰 `Cargo.toml:246`.
 //! - **A1** R11 baseline 3 值 数字严守 — 0 触碰 `integration_r_measure.rs` (本文件 0 涉及 R11 baseline).
 //! - **B5** 8 哲学锚 — 0 改 8 哲学锚原 8 实质.
-//! - **B3** 30 维 — 0 改 V0.5 公式, 30 维是扩展.
-//! - **B4** 6 重 v7 守门 — 0 改 6 重守门原 6 重, v7 是扩展.
+//! - **B3** V0.5 24 维 — 0 改 V0.5 公式 (R126 P1-4 30 维升级未合入 master).
+//! - **B4** 9 重 v9 守门 — 0 改 6 重守门原 6 重, lineage v6→v7→v8→v9 是扩展.
 //! - **A3** 13 键 — 0 改 12 键原 12, PHL-07 是扩展.
 //! - **C1** 0 主动 commit — 严守 (Mavis 整合 #5 commit 时机拍板).
 //! - **C2** 0 装 解除 — 主人 17:22, ✅ cloned = 真实施 (PODA + journal 复用), ⏳ 限流 = 准备模式 (superpowers 公开模式 1:1).
@@ -431,7 +431,7 @@ impl SkillRegistry {
 ///   避免改 EvolutionEngine 状态 (aGLM 108 借鉴类型 marker, 0 假装已用 PODA 推进 engine)
 /// - 0 触碰 `EvolutionEngine` 任何公开方法签名 (内部 fn 实施可改)
 ///
-/// **0 触碰 24 LOCKED**:
+/// **0 触碰 24 LOCKED** (R128 已降级, 仅保 3 项不可变脊柱):
 /// - 0 改 `apeireth-evolution/src/lib.rs` 入口签名 (仅 +1 行 `pub mod library_autonomy;`)
 /// - 0 改 `engine.rs` / `state.rs` / `fail.rs` / `poda_cycle.rs` / `council_bridge.rs` / `traits.rs` 任何入口签名
 // 注: 不 derive Debug 因 `PodaCycle` 未 derive Debug. 手 impl `Debug` 仅显示关键字段.
@@ -1821,8 +1821,8 @@ mod tests {
         assert!(BORROWED_MAX_SHADOW_SIZE_BYTES == 100 * 1024 * 1024);
         // B1: 入口签名 0 改 (本测试通过, 即编译通过)
         // B5: 8 哲学锚 (0 改原 8, 0 涉及本 crate)
-        // B3: 30 维 (0 改 V0.5 公式)
-        // B4: 6 重 v7 (0 改原 6 重)
+        // B3: V0.5 24 维 (0 改 V0.5 公式, R126 P1-4 30 维未合入)
+        // B4: 9 重 v9 (0 改原 6 重, lineage v6→v7→v8→v9 扩展)
         // A3: 13 键 (0 改 12 键原 12)
         // C1-C3: 0 commit / 0 push / 0 装 解除
         assert!(AutonomyReport::BORROW_IDS.len() == 3);

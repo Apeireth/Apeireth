@@ -15,7 +15,7 @@
 //! - 错误数 hardcode ✓ (3 跟 backend 相关的变体)
 //! - 0 改 LOCKED ✓
 //! - 0 改 workspace version ✓
-//! - 6 哲学锚透传 ✓
+//! - 8 哲学锚透传 ✓
 //! - 0 依赖 NewAPI ✓
 //! - 0 重复造轮子 ✓ (TestBackend 本身是 ratatui 现成)
 //! - 0 假装实缺 ✓ (0 尺寸 backend 显式拒绝, K-1 强校验)

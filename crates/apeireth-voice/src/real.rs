@@ -31,18 +31,21 @@
 //!    STT = `multipart/form-data; boundary=...`,
 //!    声纹 = `application/json; charset=utf-8`
 //!
-//! ## 6 哲学锚穿透 (per 蓝图 §1)
+//! ## 8 哲学锚穿透 (per 蓝图 §1, baseline 2026-08-19: S-1/S-2/S-3 质量工程化 NEW/O-1 安全优先 NEW/O-2/O-3/O-4/O-5)
 //!
 //! - **S-1 北极星**: 1:1 翻译 v0.9.21 商业版 voice API 3 端点 URL (跟 OpenAI audio API
 //!   同模式, v0.9.21 voice SDK 默认 Client 一致). wake_word 是 STUB hardcode, 不引 Porcupine
 //!   (per 0 重复造轮子 + 8 项承诺 #7).
 //! - **S-2 实事求是**: wiremock 0.6 mock server 真起 socket 监听, 走真 HTTP 请求路径
 //!   (tokio + reqwest), 不假装"调通了"; 远端 `code != 0` 真测覆盖 3 个错误 variant.
+//! - **S-3 质量工程化 NEW**: 4 块 × 2 路径 (happy + error) = 8+ 测试 + 1 集成 e2e +
+//!   1 demo + 1 文档章节, 信息密度高, 1 屏可读.
+//! - **O-1 安全优先 NEW**: `VoiceRealImpl` 是内部模块, 0 触碰 24 LOCKED crate 入口签名
+//!   (R128 + R148 已降级, 仅保 3 项不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache).
 //! - **O-2 走在前人肩上**: `reqwest` 0.12 + `rustls-tls` 走 workspace deps, 跟
 //!   `apeireth-lark` / `apeireth-http-client` 同款 0 重复造轮子; URL 解析走 `url` crate
 //!   (业界成熟).
-//! - **O-3 干到底**: 4 块 × 2 路径 (happy + error) = 8+ 测试 + 1 集成 e2e +
-//!   1 demo + 1 文档章节, 信息密度高, 1 屏可读.
+//! - **O-3 干到底**: 4 块 × 2 路径 编译期守门全覆盖.
 //! - **O-4 任何人都能接手**: `VoiceRealImpl` 单一 struct, 字段最小
 //!   (config/http/api_key/base_url/wake_word), 每个方法独立可测, 0 共享状态,
 //!   集成时直接 `use VoiceRealImpl` 即可.
@@ -54,9 +57,11 @@
 //!   happy/error 双路径; wake_word 显式标 STUB, 不假装"Porcupine 调通了".
 //! - **#2 编译期 hardcode**: `VOICE_API_BASE_URL` / `VOICE_DEFAULT_KEYWORD` /
 //!   `VOICE_MAX_AUDIO_SECONDS` 仍 hardcode, 0 改.
-//! - **#3 不改 LOCKED**: `VoiceRealImpl` 是 `apeireth-voice` 内部模块, 0 改 24 LOCKED crate.
-//! - **#4 不改 workspace version**: `Cargo.toml` `version = "0.1.0"` 沿用, 0 改 v1.0.0.
-//! - **#5 6 哲学锚穿透**: 上 6 行.
+//! - **#3 不改 LOCKED**: `VoiceRealImpl` 是 `apeireth-voice` 内部模块, 0 改 24 LOCKED crate
+//!   (R128 + R148 已降级, 仅保 3 项不可变脊柱).
+//! - **#4 不改 workspace version**: `Cargo.toml` `version = "0.1.0"` 沿用, 0 改 v1.2.0
+//!   (产品轴 tag v1.0.0 + workspace 轴 1.2.0 双轴制).
+//! - **#5 8 哲学锚穿透**: 上 8 行.
 //! - **#6 不依赖 NewAPI**: 0 引外部 RPC 服务, 走 reqwest + 远端 voice API endpoint.
 //! - **#7 不重复造轮子**: reqwest 0.12 + url 2.5 + tokio 1.40 + serde 1.0 + thiserror 1.0
 //!   全是 workspace 已有, 0 新增 dep (只把 reqwest 从 workspace 拉成本 crate 显式版本).
