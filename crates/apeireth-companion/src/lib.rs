@@ -119,6 +119,7 @@ pub mod security;
 pub mod session_log;
 pub mod simulation;
 pub mod spill;
+pub mod streaming_chat; // TP34 Phase A: streaming + tool loop 状态机骨架 (5 态 + 5 种 SSE 事件 + 双轨 CoT 跨 chunk 切分)
 pub mod tone;
 pub mod tool_bridge;
 pub mod topic_groups; // §5.1: 记忆主题分组 + 主题索引注入 (VCP SemanticGroupManager 精神, 确定性分组)
