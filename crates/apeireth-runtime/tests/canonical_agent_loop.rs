@@ -24,7 +24,10 @@ use std::sync::{Arc, Mutex};
 use apeireth_core::kernel::{
     CapabilityId, Clock, ModelId, PluginId, SessionId, Timestamp, VirtualClock,
 };
-use apeireth_governance::{AllowAll, DenyCapabilities, GovernancePipeline, MaxRounds};
+use apeireth_governance::{
+    AllowAll, Decision, DenyCapabilities, GovernanceHook, GovernancePipeline, GovernanceRequest,
+    MaxRounds,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
@@ -34,7 +37,8 @@ use apeireth_protocol::canonical::{
     NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 use apeireth_runtime::canonical::{
-    ExecutionTrace, InMemorySessionStore, Runtime, RuntimeError, TraceEvent, TurnRequest,
+    ExecutionTrace, InMemorySessionStore, Runtime, RuntimeError, SessionEventKind, TraceEvent,
+    TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -308,6 +312,42 @@ fn message_text(message: &apeireth_protocol::canonical::NormalizedMessage) -> St
             ContentPart::ImageUrl { .. } => None,
         })
         .collect()
+}
+
+struct DenyEveryCompletion;
+
+#[async_trait]
+impl GovernanceHook for DenyEveryCompletion {
+    fn name(&self) -> &str {
+        "governance.input.safety"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        match &request.action {
+            apeireth_governance::Action::Completion { .. } => {
+                Decision::deny("input blocked by deterministic policy")
+            }
+            _ => Decision::Allow,
+        }
+    }
+}
+
+struct ApproveEveryCompletion;
+
+#[async_trait]
+impl GovernanceHook for ApproveEveryCompletion {
+    fn name(&self) -> &str {
+        "governance.input.approval"
+    }
+
+    async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        match &request.action {
+            apeireth_governance::Action::Completion { .. } => {
+                Decision::require_approval("a human must approve this input")
+            }
+            _ => Decision::Allow,
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -624,9 +664,11 @@ async fn a_tool_that_fails_keeps_the_turn_alive() {
         ],
     );
     let calculator = CalculatorPlugin::new();
+    let store = Arc::new(InMemorySessionStore::new());
 
     let runtime = Runtime::builder()
         .with_clock(frozen_clock())
+        .with_session_store(store)
         .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
         .with_plugin(calculator.clone())
         .with_default_model(MODEL)
@@ -634,8 +676,9 @@ async fn a_tool_that_fails_keeps_the_turn_alive() {
         .await
         .unwrap();
 
+    let session_id = SessionId::new();
     let outcome = runtime
-        .execute(TurnRequest::new(SessionId::new(), "calculate nonsense"))
+        .execute(TurnRequest::new(session_id, "calculate nonsense"))
         .await
         .unwrap();
 
@@ -648,6 +691,102 @@ async fn a_tool_that_fails_keeps_the_turn_alive() {
         }
     )));
     assert_eq!(outcome.text, "That input was not valid.");
+
+    let persisted = runtime.sessions().load_or_create(session_id).await.unwrap();
+    assert!(persisted.events.iter().any(|event| matches!(
+        &event.event,
+        SessionEventKind::ToolFailed {
+            capability: Some(capability),
+            tool_call_id,
+            error,
+            round: 1,
+        } if capability.as_str() == "tool.calculator"
+            && tool_call_id == "call_1"
+            && error.contains("integer fields")
+    )));
+}
+
+#[tokio::test]
+async fn a_completion_denial_persists_the_attempt_and_decision() {
+    let provider = FakeProvider::new("provider.fake", vec![Scripted::Say("must not run")]);
+    let store = Arc::new(InMemorySessionStore::new());
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_session_store(store)
+        .with_governance(Arc::new(DenyEveryCompletion))
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+
+    let error = runtime
+        .execute(TurnRequest::new(session_id, "blocked input"))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, RuntimeError::Denied { .. }));
+    assert_eq!(provider.call_count(), 0);
+
+    let session = runtime.sessions().load_or_create(session_id).await.unwrap();
+    assert_eq!(session.messages.len(), 1);
+    assert_eq!(message_text(&session.messages[0]), "blocked input");
+    assert!(session.revision >= 3);
+    let denial = session
+        .events
+        .iter()
+        .find(|event| matches!(&event.event, SessionEventKind::GovernanceDenied { .. }))
+        .expect("denial is durable");
+    match &denial.event {
+        SessionEventKind::GovernanceDenied {
+            hook,
+            action,
+            reason,
+            round,
+        } => {
+            assert_eq!(hook, "governance.input.safety");
+            assert_eq!(action, "completion");
+            assert!(reason.contains("blocked"));
+            assert_eq!(*round, 1);
+        }
+        other => panic!("expected governance denial, got {other:?}"),
+    }
+    assert_eq!(session.events[0].trace, denial.trace);
+}
+
+#[tokio::test]
+async fn an_approval_requirement_persists_the_attempt_and_pause() {
+    let provider = FakeProvider::new("provider.fake", vec![Scripted::Say("must not run")]);
+    let runtime = Runtime::builder()
+        .with_clock(frozen_clock())
+        .with_governance(Arc::new(ApproveEveryCompletion))
+        .with_plugin(ProviderPlugin::new("vendor.fake", provider.clone()))
+        .with_default_model(MODEL)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+
+    let error = runtime
+        .execute(TurnRequest::new(session_id, "approval input"))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, RuntimeError::ApprovalRequired { .. }));
+    assert_eq!(provider.call_count(), 0);
+
+    let session = runtime.sessions().load_or_create(session_id).await.unwrap();
+    assert_eq!(message_text(&session.messages[0]), "approval input");
+    assert!(session.events.iter().any(|event| matches!(
+        &event.event,
+        SessionEventKind::ApprovalRequired {
+            hook,
+            action,
+            reason,
+            round: 1,
+        } if hook == "governance.input.approval"
+            && action == "completion"
+            && reason.contains("human")
+    )));
 }
 
 #[tokio::test]
@@ -913,6 +1052,17 @@ async fn a_failed_turn_still_preserves_the_users_message() {
         "a retry should continue the conversation, not lose the user's turn"
     );
     assert_eq!(message_text(&session.messages[0]), "hello");
+    let failure = session
+        .events
+        .iter()
+        .find(|event| matches!(&event.event, SessionEventKind::ProviderFailed { .. }))
+        .expect("provider failure is durable");
+    assert!(matches!(
+        &failure.event,
+        SessionEventKind::ProviderFailed { error, round: 1 }
+            if error.contains("no provider")
+    ));
+    assert_eq!(session.events[0].trace, failure.trace);
 }
 
 #[tokio::test]

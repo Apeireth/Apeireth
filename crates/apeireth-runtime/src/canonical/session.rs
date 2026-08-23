@@ -13,9 +13,10 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{Clock, SessionId, Timestamp};
+use apeireth_core::kernel::{CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_protocol::canonical::NormalizedMessage;
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
 use super::error::{RuntimeError, RuntimeResult};
@@ -28,6 +29,12 @@ pub struct Session {
     /// The transcript, in order. Includes assistant tool-call messages and
     /// tool-result messages, so a resumed session can continue mid-tool-loop.
     pub messages: Vec<NormalizedMessage>,
+    /// Structured execution facts needed to reconstruct denied and failed
+    /// turns without polluting the provider transcript.
+    pub events: Vec<SessionEvent>,
+    /// Monotonic state revision. It advances whenever a message or event is
+    /// appended, including on a failed turn.
+    pub revision: u64,
     /// When the session was created.
     pub created_at: Timestamp,
     /// When it was last written to.
@@ -41,6 +48,8 @@ impl Session {
         Self {
             id,
             messages: Vec::new(),
+            events: Vec::new(),
+            revision: 0,
             created_at: now,
             updated_at: now,
         }
@@ -49,7 +58,7 @@ impl Session {
     /// Append a message and update the modification time.
     pub fn append(&mut self, message: NormalizedMessage, clock: &dyn Clock) {
         self.messages.push(message);
-        self.updated_at = Timestamp::from_clock(clock);
+        self.touch(clock);
     }
 
     /// Append several messages, touching the modification time once.
@@ -59,7 +68,24 @@ impl Session {
         clock: &dyn Clock,
     ) {
         self.messages.extend(messages);
-        self.updated_at = Timestamp::from_clock(clock);
+        self.touch(clock);
+    }
+
+    /// Append one structured execution event.
+    pub fn record(
+        &mut self,
+        request: RequestId,
+        trace: TraceId,
+        event: SessionEventKind,
+        clock: &dyn Clock,
+    ) {
+        self.events.push(SessionEvent {
+            at: Timestamp::from_clock(clock),
+            request,
+            trace,
+            event,
+        });
+        self.touch(clock);
     }
 
     /// Number of messages in the transcript.
@@ -71,6 +97,85 @@ impl Session {
     pub fn is_empty(&self) -> bool {
         self.messages.is_empty()
     }
+
+    fn touch(&mut self, clock: &dyn Clock) {
+        self.revision = self.revision.saturating_add(1);
+        self.updated_at = Timestamp::from_clock(clock);
+    }
+}
+
+/// One persisted execution fact for a session.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionEvent {
+    /// When it happened according to the runtime clock.
+    pub at: Timestamp,
+    /// Inbound request that caused it.
+    pub request: RequestId,
+    /// Execution trace that caused it.
+    pub trace: TraceId,
+    /// Structured event payload.
+    pub event: SessionEventKind,
+}
+
+/// Persisted execution outcomes. No variant carries model chain-of-thought.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "event", rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum SessionEventKind {
+    /// A user turn entered canonical execution.
+    TurnStarted,
+    /// Governance denied an action.
+    GovernanceDenied {
+        /// Hook that decided.
+        hook: String,
+        /// Stable action label.
+        action: String,
+        /// Stated denial reason.
+        reason: String,
+        /// Runtime round.
+        round: u32,
+    },
+    /// Governance suspended an action for human approval.
+    ApprovalRequired {
+        /// Hook that decided.
+        hook: String,
+        /// Stable action label.
+        action: String,
+        /// What needs approval.
+        reason: String,
+        /// Runtime round.
+        round: u32,
+    },
+    /// Provider routing could not serve a round.
+    ProviderFailed {
+        /// Legible terminal routing/provider error.
+        error: String,
+        /// Runtime round.
+        round: u32,
+    },
+    /// A requested tool did not complete successfully.
+    ToolFailed {
+        /// Resolved capability, absent when the model named no known tool.
+        capability: Option<CapabilityId>,
+        /// Model tool-call correlation id.
+        tool_call_id: String,
+        /// Legible failure.
+        error: String,
+        /// Runtime round.
+        round: u32,
+    },
+    /// Execution failed outside provider/tool/governance handling.
+    ExecutionFailed {
+        /// Stable phase label.
+        phase: String,
+        /// Legible failure.
+        error: String,
+    },
+    /// The turn reached a final assistant response.
+    TurnCompleted {
+        /// Provider round-trips taken.
+        rounds: u32,
+    },
 }
 
 /// Where sessions live.
@@ -225,6 +330,31 @@ mod tests {
 
         assert_eq!(store.len().await, 1);
         assert_eq!(manager.load_or_create(id).await.unwrap().len(), 2);
+    }
+
+    #[tokio::test]
+    async fn messages_and_events_advance_one_monotonic_revision() {
+        let clock = clock();
+        let mut session = Session::new(SessionId::new(), clock.as_ref());
+        let request = RequestId::new();
+        let trace = TraceId::new();
+
+        session.append(NormalizedMessage::user("attempt"), clock.as_ref());
+        session.record(
+            request,
+            trace,
+            SessionEventKind::ProviderFailed {
+                error: "offline".into(),
+                round: 1,
+            },
+            clock.as_ref(),
+        );
+
+        assert_eq!(session.revision, 2);
+        assert_eq!(session.messages.len(), 1);
+        assert_eq!(session.events.len(), 1);
+        assert_eq!(session.events[0].request, request);
+        assert_eq!(session.events[0].trace, trace);
     }
 
     #[tokio::test]

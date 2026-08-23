@@ -44,6 +44,7 @@ use apeireth_protocol::canonical::{
 
 use super::error::{RuntimeError, RuntimeResult};
 use super::runtime::Runtime;
+use super::session::SessionEventKind;
 use super::trace::{ExecutionTrace, TraceEvent};
 
 /// One turn's input.
@@ -121,16 +122,6 @@ impl Runtime {
         let request_id = RequestId::new();
         let mut trace = ExecutionTrace::new(trace_id, request.session, request_id);
 
-        let model = request
-            .model
-            .clone()
-            .or_else(|| self.config.default_model.clone())
-            .ok_or_else(|| {
-                RuntimeError::misconfigured(
-                    "no model: the turn named none and the runtime has no default_model",
-                )
-            })?;
-
         let clock = self.clock.as_ref();
         let mut session = self.sessions.load_or_create(request.session).await?;
 
@@ -140,19 +131,52 @@ impl Runtime {
             }
         }
         session.append(NormalizedMessage::user(request.input.clone()), clock);
+        session.record(request_id, trace_id, SessionEventKind::TurnStarted, clock);
+        // Persist the attempted turn before any policy/provider early return.
+        self.sessions.save(&session).await?;
+
+        let model = match request
+            .model
+            .clone()
+            .or_else(|| self.config.default_model.clone())
+        {
+            Some(model) => model,
+            None => {
+                let error = RuntimeError::misconfigured(
+                    "no model: the turn named none and the runtime has no default_model",
+                );
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ExecutionFailed {
+                        phase: "model_selection".into(),
+                        error: error.to_string(),
+                    },
+                    clock,
+                );
+                self.sessions.save(&session).await?;
+                return Err(error);
+            }
+        };
 
         let tools = self.plugins.tool_declarations();
 
         for round in 1..=self.config.max_rounds {
-            self.authorize_completion(
-                &mut trace,
-                &request.session,
-                trace_id,
-                &model,
-                &session,
-                round,
-            )
-            .await?;
+            if let Err(error) = self
+                .authorize_completion(
+                    &mut trace,
+                    &request.session,
+                    request_id,
+                    trace_id,
+                    &model,
+                    &mut session,
+                    round,
+                )
+                .await
+            {
+                self.sessions.save(&session).await?;
+                return Err(error);
+            }
 
             let mut provider_request =
                 NormalizedRequest::new(model.clone(), session.messages.clone());
@@ -163,8 +187,15 @@ impl Runtime {
             let routed = match routed {
                 Ok(routed) => routed,
                 Err(e) => {
-                    // The turn is over, but the session keeps the user's message
-                    // so a retry continues the conversation rather than losing it.
+                    session.record(
+                        request_id,
+                        trace_id,
+                        SessionEventKind::ProviderFailed {
+                            error: e.to_string(),
+                            round,
+                        },
+                        clock,
+                    );
                     self.sessions.save(&session).await?;
                     return Err(e);
                 }
@@ -229,19 +260,44 @@ impl Runtime {
             );
 
             for call in &response.tool_calls {
-                let result = self
-                    .dispatch_tool_call(&mut trace, &request.session, trace_id, call, round)
-                    .await?;
+                let result = match self
+                    .dispatch_tool_call(
+                        &mut trace,
+                        &mut session,
+                        &request.session,
+                        request_id,
+                        trace_id,
+                        call,
+                        round,
+                    )
+                    .await
+                {
+                    Ok(result) => result,
+                    Err(error) => {
+                        self.sessions.save(&session).await?;
+                        return Err(error);
+                    }
+                };
                 session.append(result.into_message(), clock);
             }
 
             self.sessions.save(&session).await?;
         }
 
-        self.sessions.save(&session).await?;
-        Err(RuntimeError::RoundLimitExceeded {
+        let error = RuntimeError::RoundLimitExceeded {
             limit: self.config.max_rounds,
-        })
+        };
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ExecutionFailed {
+                phase: "round_limit".into(),
+                error: error.to_string(),
+            },
+            clock,
+        );
+        self.sessions.save(&session).await?;
+        Err(error)
     }
 
     /// Ask governance whether this round's completion may proceed.
@@ -249,9 +305,10 @@ impl Runtime {
         &self,
         trace: &mut ExecutionTrace,
         session_id: &SessionId,
+        request_id: RequestId,
         trace_id: TraceId,
         model: &str,
-        session: &super::session::Session,
+        session: &mut super::session::Session,
         round: u32,
     ) -> RuntimeResult<()> {
         let action = Action::Completion {
@@ -281,14 +338,36 @@ impl Runtime {
 
         match decision {
             Decision::Allow => Ok(()),
-            Decision::Deny { reason } => Err(RuntimeError::Denied {
-                hook: self.governance.name().to_string(),
-                reason,
-            }),
-            Decision::RequireApproval { reason } => Err(RuntimeError::ApprovalRequired {
-                hook: self.governance.name().to_string(),
-                reason,
-            }),
+            Decision::Deny { reason } => {
+                let hook = self.governance.name().to_string();
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::GovernanceDenied {
+                        hook: hook.clone(),
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    self.clock.as_ref(),
+                );
+                Err(RuntimeError::Denied { hook, reason })
+            }
+            Decision::RequireApproval { reason } => {
+                let hook = self.governance.name().to_string();
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ApprovalRequired {
+                        hook: hook.clone(),
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    self.clock.as_ref(),
+                );
+                Err(RuntimeError::ApprovalRequired { hook, reason })
+            }
         }
     }
 
@@ -299,7 +378,9 @@ impl Runtime {
     async fn dispatch_tool_call(
         &self,
         trace: &mut ExecutionTrace,
+        session: &mut super::session::Session,
         session_id: &SessionId,
+        request_id: RequestId,
         trace_id: TraceId,
         call: &ToolCall,
         round: u32,
@@ -330,6 +411,17 @@ impl Runtime {
                     reason: reason.clone(),
                     round,
                 },
+            );
+            session.record(
+                request_id,
+                trace_id,
+                SessionEventKind::ToolFailed {
+                    capability: None,
+                    tool_call_id: call.id.clone(),
+                    error: reason.clone(),
+                    round,
+                },
+                clock,
             );
             return Ok(ToolResult::permanent_error(&call.id, reason).with_name(&call.name));
         };
@@ -363,6 +455,18 @@ impl Runtime {
         match decision {
             Decision::Allow => {}
             Decision::Deny { reason } => {
+                let hook = self.governance.name().to_string();
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::GovernanceDenied {
+                        hook,
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
                 // The model is told, and the turn continues. It may well have a
                 // permitted way to answer.
                 return Ok(ToolResult::permanent_error(
@@ -373,10 +477,19 @@ impl Runtime {
             }
             Decision::RequireApproval { reason } => {
                 // A human has to decide, so the turn genuinely cannot continue.
-                return Err(RuntimeError::ApprovalRequired {
-                    hook: self.governance.name().to_string(),
-                    reason,
-                });
+                let hook = self.governance.name().to_string();
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ApprovalRequired {
+                        hook: hook.clone(),
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
+                return Err(RuntimeError::ApprovalRequired { hook, reason });
             }
         }
 
@@ -390,6 +503,20 @@ impl Runtime {
         );
 
         let result = tool.invoke(call).await;
+
+        if !result.is_ok() {
+            session.record(
+                request_id,
+                trace_id,
+                SessionEventKind::ToolFailed {
+                    capability: Some(capability.clone()),
+                    tool_call_id: call.id.clone(),
+                    error: result.render(),
+                    round,
+                },
+                clock,
+            );
+        }
 
         trace.record(
             Timestamp::from_clock(clock),
@@ -417,6 +544,12 @@ impl Runtime {
         let clock = self.clock.as_ref();
         session.append(
             NormalizedMessage::assistant(response.content.clone()),
+            clock,
+        );
+        session.record(
+            request_id,
+            trace.trace,
+            SessionEventKind::TurnCompleted { rounds },
             clock,
         );
         self.sessions.save(&session).await?;
