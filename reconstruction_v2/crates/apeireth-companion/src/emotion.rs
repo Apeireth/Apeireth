@@ -34,6 +34,17 @@ pub struct Pad {
     pub dominance: f64,
 }
 
+impl Default for Pad {
+    fn default() -> Self {
+        Self {
+            pleasure: 0.5,
+            arousal: 0.5,
+            dominance: 0.5,
+        }
+    }
+}
+
+
 impl Plutchik {
     pub fn apply_stimulus(&mut self, stimulus: &Plutchik, weight: f64) {
         self.joy = (self.joy + stimulus.joy * weight).clamp(0.0, 1.0);
