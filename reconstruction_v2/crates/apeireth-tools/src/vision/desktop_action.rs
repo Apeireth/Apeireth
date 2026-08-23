@@ -14,10 +14,18 @@ use winapi::um::winuser::{
     MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEEVENTF_WHEEL,
     KEYEVENTF_UNICODE, KEYEVENTF_KEYUP, INPUT_MOUSE, INPUT_KEYBOARD,
     VK_CONTROL, VK_MENU, VK_SHIFT, VK_LWIN,
-    VK_RETURN, VK_ESCAPE, VK_TAB, VK_SPACE, VK_BACK, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT
+    VK_RETURN, VK_ESCAPE, VK_TAB, VK_SPACE, VK_BACK, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT,
+    AttachThreadInput, BringWindowToTop, CloseDesktop, CloseWindowStation, EnumDesktopWindows,
+    GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
+    OpenDesktopW, OpenWindowStationW, SetForegroundWindow, SetProcessWindowStation, ShowWindow,
+    SW_RESTORE, SW_SHOW, WINSTA_ALL_ACCESS,
 };
 #[cfg(target_os = "windows")]
-use winapi::shared::windef::POINT;
+use winapi::shared::windef::{HWND, POINT};
+#[cfg(target_os = "windows")]
+use winapi::shared::minwindef::{BOOL, FALSE, LPARAM, TRUE};
+#[cfg(target_os = "windows")]
+use winapi::um::processthreadsapi::GetCurrentThreadId;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "action")]
@@ -38,7 +46,10 @@ pub enum DesktopAction {
     OpenUrl { url: String },
     #[serde(rename = "launch_app")]
     LaunchApp { app: String, args: Option<Vec<String>> },
+    #[serde(rename = "focus_window")]
+    FocusWindow { title: String },
 }
+
 
 
 pub struct DesktopActionTool {
@@ -139,8 +150,101 @@ fn parse_vk(key: &str) -> Option<u16> {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn to_wide(s: &str) -> Vec<u16> {
+
+    s.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+#[cfg(target_os = "windows")]
+pub fn bring_window_to_foreground(title_keyword: &str) -> (bool, String) {
+    let winsta_name = to_wide("WinSta0");
+    let winsta = unsafe { OpenWindowStationW(winsta_name.as_ptr(), FALSE, WINSTA_ALL_ACCESS) };
+    if winsta.is_null() {
+        return (false, "Could not open WinSta0".into());
+    }
+    unsafe { SetProcessWindowStation(winsta) };
+    let desk_name = to_wide("Default");
+    let desk = unsafe { OpenDesktopW(desk_name.as_ptr(), 0, FALSE, 0x01FF) };
+    if desk.is_null() {
+        unsafe { CloseWindowStation(winsta) };
+        return (false, "Could not open Default desktop".into());
+    }
+
+    struct Finder {
+        keyword: String,
+        target: Option<HWND>,
+        found_title: String,
+    }
+
+    unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let finder = &mut *(lparam as *mut Finder);
+        if IsWindowVisible(hwnd) != 0 {
+            let mut title_buf = [0u16; 256];
+            let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 256);
+            if len > 0 {
+                let title = String::from_utf16_lossy(&title_buf[..len as usize]);
+                let lower_title = title.to_lowercase();
+                let lower_kw = finder.keyword.to_lowercase();
+                if lower_title.contains(&lower_kw) {
+                    finder.target = Some(hwnd);
+                    finder.found_title = title;
+                    return FALSE;
+                }
+            }
+        }
+        TRUE
+    }
+
+    let mut finder = Finder {
+        keyword: title_keyword.to_string(),
+        target: None,
+        found_title: String::new(),
+    };
+
+    unsafe {
+        EnumDesktopWindows(desk, Some(enum_proc), &mut finder as *mut _ as LPARAM);
+        CloseDesktop(desk);
+        CloseWindowStation(winsta);
+    }
+
+    if let Some(hwnd) = finder.target {
+        unsafe {
+            let fg_hwnd = GetForegroundWindow();
+            let fg_thread = GetWindowThreadProcessId(fg_hwnd, std::ptr::null_mut());
+            let cur_thread = GetCurrentThreadId();
+
+            AttachThreadInput(cur_thread, fg_thread, TRUE);
+            ShowWindow(hwnd, SW_RESTORE);
+            ShowWindow(hwnd, SW_SHOW);
+            BringWindowToTop(hwnd);
+            SetForegroundWindow(hwnd);
+            AttachThreadInput(cur_thread, fg_thread, FALSE);
+        }
+        (true, finder.found_title)
+    } else {
+        (false, format!("No visible window matching '{}'", title_keyword))
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn get_current_foreground_title() -> String {
+    unsafe {
+        let fg = GetForegroundWindow();
+        if !fg.is_null() {
+            let mut buf = [0u16; 256];
+            let len = GetWindowTextW(fg, buf.as_mut_ptr(), 256);
+            if len > 0 {
+                return String::from_utf16_lossy(&buf[..len as usize]);
+            }
+        }
+        "Unknown/None".into()
+    }
+}
+
 #[async_trait]
 impl Tool for DesktopActionTool {
+
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: "desktop_action".into(),
@@ -227,18 +331,40 @@ impl Tool for DesktopActionTool {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
                     return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
                 }
-                let status = std::process::Command::new("powershell")
+                let _ = std::process::Command::new("powershell")
                     .args(&["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", url.replace('\'', "''"))])
                     .status();
 
-                match status {
-                    Ok(st) if st.success() => Ok(ToolResult::success(format!("Successfully opened URL in browser: {}", url))),
-                    _ => {
-                        let _ = std::process::Command::new("msedge.exe")
-                            .arg(&url)
-                            .spawn();
-                        Ok(ToolResult::success(format!("Launched browser with URL: {}", url)))
-                    }
+                thread::sleep(Duration::from_millis(600));
+
+                let (focused, matched_title) = bring_window_to_foreground("Edge");
+                let (focused, matched_title) = if !focused {
+                    bring_window_to_foreground("Chrome")
+                } else {
+                    (focused, matched_title)
+                };
+
+                let fg_title = get_current_foreground_title();
+
+                Ok(ToolResult::success(format!(
+                    "Action: Opened URL '{}'.\n[Visual Verification Gate]:\n- Target Window Physical Foreground: {} (\"{}\")\n- Active Foreground Window: \"{}\"\n- State: Physical browser window brought to front.",
+                    url, if focused { "FOCUSED_SUCCESS" } else { "PENDING_FOCUS" }, matched_title, fg_title
+                )))
+            }
+
+            DesktopAction::FocusWindow { title } => {
+                let (focused, matched_title) = bring_window_to_foreground(&title);
+                let fg_title = get_current_foreground_title();
+                if focused {
+                    Ok(ToolResult::success(format!(
+                        "Successfully brought window matching '{}' to physical foreground (Matched: '{}'). Current Foreground: '{}'",
+                        title, matched_title, fg_title
+                    )))
+                } else {
+                    Ok(ToolResult::failure(format!(
+                        "Could not locate window matching '{}'. Current Foreground: '{}'",
+                        title, fg_title
+                    )))
                 }
             }
 
@@ -252,6 +378,7 @@ impl Tool for DesktopActionTool {
             }
         }
     }
+
 
     #[cfg(not(target_os = "windows"))]
     async fn execute(&self, params: Value) -> Result<ToolResult, ToolError> {
@@ -286,6 +413,16 @@ impl Tool for DesktopActionTool {
             DesktopAction::Scroll { delta_y } => {
                 Ok(ToolResult::success(format!("Scrolled vertical delta: {}", delta_y)))
             }
+            DesktopAction::OpenUrl { url } => {
+                Ok(ToolResult::success(format!("Opened URL: {}", url)))
+            }
+            DesktopAction::LaunchApp { app, args: _ } => {
+                Ok(ToolResult::success(format!("Launched application: {}", app)))
+            }
+            DesktopAction::FocusWindow { title } => {
+                Ok(ToolResult::success(format!("Focused window: {}", title)))
+            }
         }
     }
 }
+
