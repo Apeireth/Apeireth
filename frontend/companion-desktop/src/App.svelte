@@ -17,10 +17,14 @@
     Sofa,
     Gauge,
     Eclipse,
+    PhoneCall,
   } from 'lucide-svelte';
   import MessageContent from './lib/MessageContent.svelte';
   import StatusDot from './components/StatusDot.svelte';
   import RuntimeModal from './lib/components/RuntimeModal.svelte';
+  import VoiceCallModal from './components/VoiceCallModal.svelte';
+  import { voiceCallManager } from './lib/voice';
+
   import EmptyState from './lib/components/EmptyState.svelte';
   import SceneLayer from './lib/scene/SceneLayer.svelte';
   import PlanetLayer from './lib/scene/PlanetLayer.svelte';
@@ -172,10 +176,57 @@
     model: loadConfig().model,
   });
   let showRuntimeModal = $state(false);
+  let showVoiceCall = $state(false);
   let isRefreshingHealth = $state(false);
+
+  async function openVoiceCall() {
+    showVoiceCall = true;
+    await voiceCallManager.startCall();
+  }
+
+  async function handleVoiceMessage(userText: string): Promise<string> {
+    if (!userText.trim()) return '';
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: userText,
+      timestamp: Date.now(),
+    };
+    if (activeConversation) {
+      activeConversation.messages.push(userMsg);
+      activeConversation.updatedAt = Date.now();
+      saveConversations(conversations);
+    }
+    try {
+      const agent = createAgentRuntime(config);
+      const resp = await agent.run({
+        messages: activeConversation?.messages.map((m) => ({
+          role: m.role as any,
+          content: m.content,
+        })) || [{ role: 'user', content: userText }],
+        model: { id: config.model },
+      });
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'assistant',
+        content: resp.content,
+        timestamp: Date.now(),
+      };
+      if (activeConversation) {
+        activeConversation.messages.push(assistantMsg);
+        activeConversation.updatedAt = Date.now();
+        saveConversations(conversations);
+      }
+      return resp.content;
+    } catch (e) {
+      console.error('Voice turn failed:', e);
+      return '抱歉，实时对话连接暂时中断。';
+    }
+  }
 
   // Runtime Capability Manifest — gate UI 按钮的依据 (不再 404-probing).
   let capabilities = $state<CapabilityManifest | null>(null);
+
 
   // 智能滚动状态管理
   let messagesContainer = $state<HTMLElement | null>(null);
@@ -779,6 +830,10 @@
               </div>
             </div>
             <div class="chat-header-actions">
+              <button class="voice-call-trigger-btn" onclick={openVoiceCall} title="开启全双工实时语音通话">
+                <PhoneCall size={14} />
+                <span>实时语音</span>
+              </button>
               {#if busy}
                 <button class="text-action stop-action" onclick={stop}>
                   <Square size={13} />
@@ -786,6 +841,7 @@
                 </button>
               {/if}
             </div>
+
           </header>
 
           <!-- Messages Stream：容器让出空区指针事件给场景（点黑洞=临渊机位），
@@ -976,6 +1032,14 @@
   {/if}
 </div>
 
+<!-- Voice Call Modal (Phase 3 Full-Duplex Audio & PAD Visualizer) -->
+<VoiceCallModal
+  isOpen={showVoiceCall}
+  padState={$presenceStore.pad}
+  onClose={() => showVoiceCall = false}
+  onSendMessage={handleVoiceMessage}
+/>
+
 <!-- Runtime Diagnostics Modal -->
 <RuntimeModal
   open={showRuntimeModal}
@@ -985,6 +1049,7 @@
   onClose={() => showRuntimeModal = false}
   onRefresh={refreshConnection}
 />
+
 
 <style>
   /* ============================================================
@@ -1181,7 +1246,27 @@
     align-items: center;
     gap: 8px;
   }
+  .voice-call-trigger-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #e2e8f0;
+    background: rgba(99, 102, 241, 0.18);
+    border: 1px solid rgba(129, 140, 248, 0.35);
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  .voice-call-trigger-btn:hover {
+    background: rgba(99, 102, 241, 0.32);
+    border-color: rgba(129, 140, 248, 0.6);
+    transform: scale(1.02);
+  }
   .stop-action {
+
     display: inline-flex;
     align-items: center;
     gap: 4px;
