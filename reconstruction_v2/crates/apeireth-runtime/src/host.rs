@@ -254,8 +254,9 @@ impl UnifiedRuntimeHost {
             silence_pressure: 0.0,
         };
 
-        let tools = vec!["shell", "fs", "fetch", "desktop_action"];
+        let tools = vec!["shell", "filesystem", "fetch", "desktop_action", "tool_synthesis", "mcp_hub"];
         let system_prompt = self.prompt_assembler.assemble_system_prompt(&context_state, &tools);
+
 
         // ---------------------------------------------------------------------
         // Session History Management & Request Formatting

@@ -57,8 +57,19 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
     assert!(!turn3.assistant_text.contains("作为一个人工智能语言模型"), "Must not use AI disclaimer clichés");
     assert!(!turn3.assistant_text.contains("作为一个AI语言模型"), "Must not use AI disclaimer clichés");
     println!("  ✓ Turn 3 Self-Awareness: \"{}\"",
-        &turn3.assistant_text[..turn3.assistant_text.len().min(120)]
+        turn3.assistant_text.chars().take(60).collect::<String>()
     );
+
+    // Turn 4: User queries available system tools
+    let user_msg4 = "你目前挂载了哪些系统工具？分别能用来做什么？";
+    let turn4 = host.handle_chat_turn(&session_id, user_msg4).await.expect("Turn 4 execution");
+
+    assert!(!turn4.assistant_text.is_empty());
+    println!("  ✓ Turn 4 Tool Awareness: \"{}\"",
+        turn4.assistant_text.chars().take(60).collect::<String>()
+    );
+
+
 
 
     println!("[3/5] Testing 4 Live Engineering Telemetry Panels on Bridge...");
