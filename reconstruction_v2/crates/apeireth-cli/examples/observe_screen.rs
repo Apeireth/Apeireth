@@ -17,12 +17,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let host = UnifiedRuntimeHost::new(api_key, ":memory:").await?;
     let session_id = "live_screen_check_session";
 
-    let prompt = "请调用你的 screen_observe 工具捕获并分析我现在的物理屏幕，如实、详细地告诉我：你捕获到的物理分辨率是多少、当前前台活动窗口以及屏幕上检测到了哪些可见窗口与控件，并用你作为认知伴侣的口吻直接向我汇报。";
+    let prompt = "请调用你的 screen_observe 工具，把当前我电脑上打开的【所有】应用程序窗口（包括代码编辑器、浏览器、后台工具、系统窗口等）一个不漏地全部列成清单汇报给我，标明每个窗口的软件类型和标题。";
+
 
     println!("\n📤 向 Apeireth 伴侣发出指令: \"{}\"\n", prompt);
-    println!("⏳ 正在执行物理 GDI 屏幕抓取、OmniParser 逆解与大模型认知推理...\n");
+    use apeireth_tools::vision::ScreenObserveTool;
+    use apeireth_tools::Tool;
+    let screen_tool = ScreenObserveTool::new();
+    let raw_obs = screen_tool.execute(serde_json::json!({
+        "detect_elements": true,
+        "max_elements": 50
+    })).await?;
+    println!("🖥️ 【Win32 GDI & OmniParser 物理抓屏原始清单】:\n{}\n", raw_obs.output);
 
     let output = host.handle_chat_turn(session_id, prompt).await?;
+
 
     println!("==================================================");
     println!("🤖 Apeireth 大模型实时观察汇报：");

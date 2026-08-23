@@ -110,7 +110,8 @@ impl ContextAssembler {
             "shell" => "本地终端沙箱执行器。在 Windows Job Object 隔离沙箱中执行 PowerShell/CMD 命令、编译构建、系统排查，受严格破坏性指令拦截保护。参数: {\"command\": \"...\"}",
             "filesystem" => "文件系统管理器。读取/创建/写入/修改本地文件与配置，检索目录树结构，保障原子化操作。参数: {\"operation\": \"read|write|list\", \"path\": \"...\"}",
             "fetch" => "安全网络数据抓取器。发起 HTTP GET/POST 请求抓取公开网页、API 数据与金融行情，受 SSRF 与出站白名单保护。参数: {\"url\": \"...\", \"method\": \"GET|POST\"}",
-            "desktop_action" => "Win32 桌面操作。通过 SendInput API 执行鼠标点击/移动/拖拽、键盘输入/快捷键、滚轮操作，受坐标边界与速率限流保护。参数: {\"action\": \"click|move|drag|type|hotkey|scroll\", ...}",
+            "desktop_action" => "Win32 桌面操作。通过 SendInput 与 Windows 系统接口执行鼠标点击/移动/拖拽、键盘输入/快捷键、打开网址 (open_url)、启动应用程序 (launch_app)，受坐标边界与速率限流保护。参数: {\"action\": \"open_url|click|type|hotkey|launch_app\", ...}",
+
             "screen_observe" => "屏幕视觉感知与 UI 逆解工具。抓取 Windows 物理屏幕像素与分辨率，计算感知哈希，识别窗口与按钮/输入框/菜单等子控件并生成 Set-of-Marks (SoM) 结构化坐标标记。参数: {\"detect_elements\": true, \"max_elements\": 30}",
             "browser" => "网页阅读器。抓取指定网页并解析为干净文本，用于信息检索与知识提取。参数: {\"url\": \"https://...\", \"max_chars\": 8000}",
             "search" => "本地代码与文件检索器。递归搜索代码库文件名与文本内容。参数: {\"query\": \"keyword\", \"path\": \".\", \"max_results\": 20}",

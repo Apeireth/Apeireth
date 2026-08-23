@@ -34,7 +34,12 @@ pub enum DesktopAction {
     Hotkey { keys: Vec<String> },
     #[serde(rename = "scroll")]
     Scroll { delta_y: i32 },
+    #[serde(rename = "open_url")]
+    OpenUrl { url: String },
+    #[serde(rename = "launch_app")]
+    LaunchApp { app: String, args: Option<Vec<String>> },
 }
+
 
 pub struct DesktopActionTool {
     max_screen_width: u32,
@@ -139,9 +144,10 @@ impl Tool for DesktopActionTool {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
             name: "desktop_action".into(),
-            description: "Executes safe desktop actions (click, move, drag, type, hotkey, scroll) with bounding verification".into(),
+            description: "Executes safe physical desktop actions (click, move, drag, type, hotkey, scroll, open_url, launch_app) on Windows. Parameters: {\"action\": \"open_url|click|type|hotkey|launch_app\", ...}".into(),
             risk_level: RiskLevel::High,
         }
+
     }
 
     #[cfg(target_os = "windows")]
@@ -216,6 +222,23 @@ impl Tool for DesktopActionTool {
             DesktopAction::Scroll { delta_y } => {
                 send_mouse_input(MOUSEEVENTF_WHEEL, (delta_y * 120) as u32);
                 Ok(ToolResult::success(format!("Scrolled vertical delta: {}", delta_y)))
+            }
+            DesktopAction::OpenUrl { url } => {
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
+                }
+                let _ = std::process::Command::new("cmd")
+                    .args(&["/C", "start", "", &url])
+                    .spawn();
+                Ok(ToolResult::success(format!("Successfully opened URL in browser: {}", url)))
+            }
+            DesktopAction::LaunchApp { app, args } => {
+                let mut cmd = std::process::Command::new(&app);
+                if let Some(arg_list) = args {
+                    cmd.args(arg_list);
+                }
+                let _ = cmd.spawn();
+                Ok(ToolResult::success(format!("Successfully launched application: {}", app)))
             }
         }
     }
