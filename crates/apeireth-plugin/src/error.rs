@@ -69,6 +69,17 @@ pub enum PluginError {
         kind: &'static str,
     },
 
+    /// Two distinct tool capabilities expose the same model-facing name.
+    #[error("model-facing tool name {name:?} is provided by both {incumbent} and {challenger}")]
+    AmbiguousToolName {
+        /// Name a model would emit in a tool call.
+        name: String,
+        /// Capability registered first.
+        incumbent: CapabilityId,
+        /// Capability whose registration was rejected.
+        challenger: CapabilityId,
+    },
+
     /// A plugin declares a dependency that was never registered.
     #[error("plugin {dependent} depends on {missing}, which is not registered")]
     MissingDependency {
