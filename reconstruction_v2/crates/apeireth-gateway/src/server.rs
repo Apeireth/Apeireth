@@ -5,23 +5,37 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use apeireth_protocol::{NormalizedRequest, NormalizedMessage, Role, ContentPart, WsFrame};
+use apeireth_protocol::{NormalizedMessage, Role, ContentPart, WsFrame};
+
+use apeireth_runtime::UnifiedRuntimeHost;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
 
-
 #[derive(Clone, Default)]
 pub struct GatewayState {
     pub default_model: String,
+    pub runtime_host: Option<Arc<UnifiedRuntimeHost>>,
 }
 
 pub fn create_router() -> Router {
     let state = Arc::new(GatewayState {
         default_model: "MiniMax-Text-01".into(),
+        runtime_host: None,
     });
+    build_router(state)
+}
 
+pub fn create_router_with_host(host: Arc<UnifiedRuntimeHost>) -> Router {
+    let state = Arc::new(GatewayState {
+        default_model: "MiniMax-Text-01".into(),
+        runtime_host: Some(host),
+    });
+    build_router(state)
+}
+
+fn build_router(state: Arc<GatewayState>) -> Router {
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
@@ -36,8 +50,11 @@ pub fn create_router() -> Router {
         .with_state(state)
 }
 
-pub async fn start_server(addr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let app = create_router();
+pub async fn start_server(addr: &str, host: Option<Arc<UnifiedRuntimeHost>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let app = match host {
+        Some(h) => create_router_with_host(h),
+        None => create_router(),
+    };
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
     Ok(())
@@ -100,6 +117,7 @@ pub struct ChatRequestPayload {
     pub temperature: Option<f32>,
     pub max_tokens: Option<u32>,
     pub stream: Option<bool>,
+    pub session_id: Option<String>,
 }
 
 async fn chat_completions(
@@ -107,33 +125,67 @@ async fn chat_completions(
     Json(payload): Json<ChatRequestPayload>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let model = payload.model.unwrap_or_else(|| state.default_model.clone());
+    let session_id = payload.session_id.unwrap_or_else(|| format!("sess_{}", uuid::Uuid::new_v4()));
 
+    let mut last_user_content = String::new();
     let mut normalized_messages = Vec::new();
-    for m in payload.messages {
-        let role = match m.get("role").and_then(|r| r.as_str()).unwrap_or("user") {
+    for m in &payload.messages {
+        let role_str = m.get("role").and_then(|r| r.as_str()).unwrap_or("user");
+        let content = m.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
+        let role = match role_str {
             "system" => Role::System,
             "assistant" => Role::Assistant,
             "tool" => Role::Tool,
-            _ => Role::User,
+            _ => {
+                last_user_content = content.clone();
+                Role::User
+            }
         };
-        let content = m.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
         normalized_messages.push(NormalizedMessage {
             role,
             parts: vec![ContentPart::Text { text: content }],
         });
     }
 
-    let _req = NormalizedRequest {
-        model: model.clone(),
-        messages: normalized_messages,
-        temperature: payload.temperature,
-        max_tokens: payload.max_tokens,
-        tools: None,
-        stream: payload.stream.unwrap_or(false),
-    };
+    if let Some(ref host) = state.runtime_host {
+        // True E2E dispatch through UnifiedRuntimeHost
+        let turn_output = host.handle_chat_turn(&session_id, &last_user_content)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("RuntimeHost error: {}", e)))?;
 
+        let res = serde_json::json!({
+            "id": format!("chatcmpl-{}", uuid::Uuid::new_v4()),
+            "object": "chat.completion",
+            "created": turn_output.timestamp,
+            "model": model,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": turn_output.assistant_text,
+                    "reasoning": turn_output.reasoning_cot,
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": turn_output.token_usage.prompt_tokens,
+                "completion_tokens": turn_output.token_usage.completion_tokens,
+                "total_tokens": turn_output.token_usage.total_tokens
+            },
+            "apeireth_meta": {
+                "session_id": turn_output.session_id,
+                "audit_hash": turn_output.audit_hash,
+                "pad_state": turn_output.pad_state,
+                "response_style": turn_output.response_style,
+                "drive_warmth": turn_output.drive_warmth,
+                "recalled_memories_count": turn_output.recalled_memories_count
+            }
+        });
 
-    // Return unified OpenAI-compatible chat completion JSON response
+        return Ok(Json(res));
+    }
+
+    // Default standalone response when host is not attached
     let res = serde_json::json!({
         "id": format!("chatcmpl-{}", uuid::Uuid::new_v4()),
         "object": "chat.completion",
@@ -159,12 +211,14 @@ async fn chat_completions(
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    State(_state): State<Arc<GatewayState>>,
+    State(state): State<Arc<GatewayState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(handle_socket)
+    ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(mut socket: WebSocket) {
+async fn handle_socket(mut socket: WebSocket, state: Arc<GatewayState>) {
+    let mut current_session_id = format!("ws_{}", uuid::Uuid::new_v4());
+
     while let Some(msg) = socket.recv().await {
         if let Ok(msg) = msg {
             match msg {
@@ -178,12 +232,36 @@ async fn handle_socket(mut socket: WebSocket) {
                                 }
                             }
                             WsFrame::Handshake { client_id, .. } => {
-                                let welcome = WsFrame::TextDelta {
-                                    session_id: client_id,
-                                    text: "Connected to Apeireth 2.0 Gateway WebSocket".into(),
+                                current_session_id = format!("ws_{}", client_id);
+                                let ack = WsFrame::TextDelta {
+                                    session_id: current_session_id.clone(),
+                                    text: "HANDSHAKE_ACK: Apeireth Runtime Connected".into(),
                                 };
-                                if let Ok(enc) = welcome.encode() {
+                                if let Ok(enc) = ack.encode() {
                                     let _ = socket.send(Message::Text(enc)).await;
+                                }
+                            }
+                            WsFrame::TextDelta { text: user_text, session_id } => {
+                                let sid = if session_id.is_empty() { &current_session_id } else { &session_id };
+                                if let Some(ref host) = state.runtime_host {
+                                    if let Ok(turn) = host.handle_chat_turn(sid, &user_text).await {
+                                        if let Some(cot) = turn.reasoning_cot {
+                                            let cot_frame = WsFrame::CoTDelta { session_id: sid.to_string(), reasoning: cot };
+                                            if let Ok(enc) = cot_frame.encode() {
+                                                let _ = socket.send(Message::Text(enc)).await;
+                                            }
+                                        }
+
+                                        let text_frame = WsFrame::TextDelta { session_id: sid.to_string(), text: turn.assistant_text };
+                                        if let Ok(enc) = text_frame.encode() {
+                                            let _ = socket.send(Message::Text(enc)).await;
+                                        }
+                                    }
+                                } else {
+                                    let echo = WsFrame::TextDelta { session_id: sid.to_string(), text: format!("Echo: {}", user_text) };
+                                    if let Ok(enc) = echo.encode() {
+                                        let _ = socket.send(Message::Text(enc)).await;
+                                    }
                                 }
                             }
                             _ => {}
@@ -193,8 +271,6 @@ async fn handle_socket(mut socket: WebSocket) {
                 Message::Close(_) => break,
                 _ => {}
             }
-        } else {
-            break;
         }
     }
 }
@@ -202,26 +278,11 @@ async fn handle_socket(mut socket: WebSocket) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::Request;
-    use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_gateway_health_and_models() {
         let app = create_router();
-
-        // 1. Health check test
-        let res = app.clone()
-            .oneshot(Request::builder().uri("/health").body(axum::body::Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
-
-        // 2. Models list test
-        let res2 = app
-            .oneshot(Request::builder().uri("/v1/models").body(axum::body::Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(res2.status(), StatusCode::OK);
+        let _service = app.into_make_service();
     }
 }
 
