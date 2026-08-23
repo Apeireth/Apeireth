@@ -6,6 +6,8 @@ use chrono::Utc;
 use apeireth_runtime::UnifiedRuntimeHost;
 use apeireth_storage::memory_v2::QueryMode;
 
+pub mod tui;
+
 #[derive(Parser)]
 #[command(name = "apeireth", version = "2.0.0", about = "Apeireth 2.0 High-Performance Cognitive Companion OS")]
 pub struct Cli {
@@ -15,6 +17,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Launches the Full-Screen Ratatui TUI Cognitive Companion Workbench
+    Tui {
+        #[arg(short, long, default_value = "apeireth_v2.db")]
+        db: String,
+    },
     /// Starts the Apeireth Gateway REST/WS server with full UnifiedRuntimeHost
     Serve {
         #[arg(short, long, default_value = "127.0.0.1:8080")]
@@ -61,6 +68,10 @@ pub async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + 
     let api_key = get_default_api_key();
 
     match cli.command {
+        Commands::Tui { db } => {
+            tui::run_tui(api_key, &db).await?;
+        }
+
         Commands::Serve { bind, db } => {
             println!("===============================================================================");
             println!("       APEIRETH 2.0 LIVING GATEWAY & RUNTIME BACKBONE SERVING ON {}     ", bind);
@@ -201,5 +212,13 @@ mod tests {
             Commands::Audit { hash, .. } => assert_eq!(hash, Some("sha256_mock_hash".into())),
             _ => panic!("Expected audit command"),
         }
+
+        let args3 = vec!["apeireth", "tui", "--db", "test_db.db"];
+        let cli3 = Cli::try_parse_from(args3).unwrap();
+        match cli3.command {
+            Commands::Tui { db } => assert_eq!(db, "test_db.db"),
+            _ => panic!("Expected tui command"),
+        }
     }
 }
+
