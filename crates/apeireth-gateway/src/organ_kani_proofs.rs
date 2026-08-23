@@ -16,7 +16,7 @@ fn r177_gw_02_node_kinds() {
 
 #[test]
 fn r177_gw_03_modules() {
-    assert_eq!(MODULES, 8);
+    assert_eq!(MODULES, 9);
 }
 
 #[test]
