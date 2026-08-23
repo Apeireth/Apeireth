@@ -212,16 +212,24 @@ pub fn bring_window_to_foreground(title_keyword: &str) -> (bool, String) {
         unsafe {
             let fg_hwnd = GetForegroundWindow();
             let fg_thread = GetWindowThreadProcessId(fg_hwnd, std::ptr::null_mut());
+            let target_thread = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
             let cur_thread = GetCurrentThreadId();
 
             AttachThreadInput(cur_thread, fg_thread, TRUE);
+            AttachThreadInput(cur_thread, target_thread, TRUE);
+
             ShowWindow(hwnd, SW_RESTORE);
             ShowWindow(hwnd, SW_SHOW);
+            winapi::um::winuser::ShowWindowAsync(hwnd, SW_RESTORE);
+            winapi::um::winuser::SwitchToThisWindow(hwnd, TRUE);
             BringWindowToTop(hwnd);
             SetForegroundWindow(hwnd);
+
             AttachThreadInput(cur_thread, fg_thread, FALSE);
+            AttachThreadInput(cur_thread, target_thread, FALSE);
         }
         (true, finder.found_title)
+
     } else {
         (false, format!("No visible window matching '{}'", title_keyword))
     }
