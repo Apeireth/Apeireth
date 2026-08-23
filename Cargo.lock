@@ -1037,6 +1037,7 @@ dependencies = [
 name = "apeireth-protocol"
 version = "1.2.0"
 dependencies = [
+ "apeireth-core",
  "async-trait",
  "reqwest",
  "serde",

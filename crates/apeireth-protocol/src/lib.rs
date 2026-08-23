@@ -56,6 +56,11 @@
 
 pub mod adapter;
 pub mod adapters;
+// reconstruct_v2 canonical convergence: the canonical interaction contract.
+// Re-exports the normalized types that already existed and adds the three that
+// were missing (ToolResult / StreamEvent / ModelDescriptor). See `canonical`'s
+// module docs for what this crate must never own.
+pub mod canonical;
 // R37-1: 砍 ProtocolRouter 中间层, 加 ProtocolBridge trait + 4 Bridge struct
 pub mod bridge;
 pub mod bridge_ext;
