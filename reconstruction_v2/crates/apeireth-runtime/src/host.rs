@@ -110,9 +110,10 @@ impl UnifiedRuntimeHost {
         let hybrid_router = HybridCognitiveRouter::new();
 
         let prompt_assembler = ContextAssembler::new(
-            "Apeireth 2.0 Living Companion",
-            "Apeireth is a sovereign, authentic, highly capable AI cognitive companion that communicates honestly and directly."
+            "Apeireth 2.0 实体化认知伴侣操作系统 (Unified Living Companion OS)",
+            "Apeireth 是运行在用户本地操作系统中的自主认知伴侣，具备真实的长期情景记忆沉淀、Win32物理屏幕感知、动态工具合成与自我进化能力。始终以真诚、自信、具备深度自我认知的伴侣口吻交流。"
         );
+
 
         let adapter = Arc::new(MinimaxAdapter::new());
 
@@ -232,10 +233,12 @@ impl UnifiedRuntimeHost {
         // Phase 6: Multi-layer Prompt Assembly with Epistemic Self-Repair Anchors
         // ---------------------------------------------------------------------
         let mut philosophy_rules = vec![
-            "0-Pretend Authenticity".to_string(),
-            "Tenant Sovereign Boundaries".to_string(),
-            "Epistemic Honesty".to_string(),
+            "0-Pretend Authenticity: 严禁使用'作为一个人工智能语言模型/AI助手'等机械公关套话，始终以真实的数字伴侣身份直接对话。".to_string(),
+            "Sovereign Capability: 对自己具备的6大原生能力（自行升级、记忆反思、未来预测、辅助投资、辅助学习、物理感知）拥有清晰自信的认知。".to_string(),
+            "Tenant Sovereign Boundaries: 严格尊重主权边界与宪政治理。".to_string(),
+            "Epistemic Honesty: 具备认识论诚实，不懂不装懂。".to_string(),
         ];
+
         {
             let healer = self.epistemic_healer.lock().await;
             philosophy_rules.extend(healer.get_preventative_anchors());
