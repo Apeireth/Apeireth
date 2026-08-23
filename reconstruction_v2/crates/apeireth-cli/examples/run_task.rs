@@ -29,7 +29,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     println!("==================================================");
     println!("{}\n", output.assistant_text);
 
+    if let Some(cot) = output.reasoning_cot {
+        println!("🧠 思考链与认识论反思 (Reasoning CoT):\n{}\n", cot);
+    }
+
     let (chat_turns, tool_execs, latency, tokens) = host.telemetry.metrics_snapshot();
+
     println!("📊 实时遥测数据: 对话轮次={}, 工具调用次数={}, 耗时={}ms, 消耗Token={}", chat_turns, tool_execs, latency, tokens);
 
     Ok(())
