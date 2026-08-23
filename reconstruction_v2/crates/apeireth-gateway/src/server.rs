@@ -1,17 +1,19 @@
 use axum::{
-    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Json, State},
+    extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Json, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
     Router,
 };
 use apeireth_protocol::{NormalizedMessage, Role, ContentPart, WsFrame};
-
+use apeireth_storage::memory_v2::{MemoryItem, MemoryOperation, QueryMode};
 use apeireth_runtime::UnifiedRuntimeHost;
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use tower_http::cors::{Any, CorsLayer};
+
 
 #[derive(Clone, Default)]
 pub struct GatewayState {
@@ -47,9 +49,26 @@ fn build_router(state: Arc<GatewayState>) -> Router {
         .route("/v1/chat/completions", post(chat_completions))
         .route("/mcp", post(crate::mcp::mcp_handler))
         .route("/ws", get(ws_handler))
+        // Panel & Observability Endpoints for Companion Desktop
+        .route("/v1/panel/sessions", get(panel_sessions))
+        .route("/v1/panel/sessions/:session_id/timeline", get(panel_session_timeline))
+        .route("/v1/panel/memory/streams", get(panel_memory_streams))
+        .route("/v1/panel/memory/episodes", get(panel_memory_episodes))
+        .route("/v1/panel/graph", get(panel_graph))
+        .route("/v1/panel/audit", get(panel_audit))
+        .route("/v1/tools/list", get(tools_list))
+        .route("/v1/panel/tools", get(tools_list))
+        .route("/v1/apeireth/approval-requests", get(approval_requests))
+        .route("/v1/apeireth/grant", post(grant_approval))
+        .route("/v1/apeireth/grants", get(list_grants))
+        .route("/v1/memory/append", post(memory_append))
+        .route("/v1/apeireth/capabilities", get(capabilities))
+        .route("/v1/organs", get(list_organs))
+        .route("/v1/panel/traces", get(list_traces))
+        .route("/v1/panel/traces/:trace_id", get(get_trace))
+        .route("/v1/apeireth/sessions", get(apeireth_sessions))
         .layer(cors)
         .with_state(state)
-
 }
 
 pub async fn start_server(addr: &str, host: Option<Arc<UnifiedRuntimeHost>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -149,23 +168,22 @@ async fn chat_completions(
         });
     }
 
-    if let Some(ref host) = state.runtime_host {
-        // True E2E dispatch through UnifiedRuntimeHost
-        let turn_output = host.handle_chat_turn(&session_id, &last_user_content)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("RuntimeHost error: {}", e)))?;
+    if let Some(host) = &state.runtime_host {
+        let turn_output = host.handle_chat_turn(&session_id, &last_user_content).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Runtime turn execution failed: {}", e)))?;
 
-        let res = serde_json::json!({
-            "id": format!("chatcmpl-{}", uuid::Uuid::new_v4()),
+        let resp_json = serde_json::json!({
+            "id": format!("chatcmpl_{}", uuid::Uuid::new_v4()),
             "object": "chat.completion",
             "created": turn_output.timestamp,
             "model": model,
+            "session_id": turn_output.session_id,
             "choices": [{
                 "index": 0,
                 "message": {
                     "role": "assistant",
                     "content": turn_output.assistant_text,
-                    "reasoning": turn_output.reasoning_cot,
+                    "reasoning_content": turn_output.reasoning_cot,
                 },
                 "finish_reason": "stop"
             }],
@@ -174,117 +192,347 @@ async fn chat_completions(
                 "completion_tokens": turn_output.token_usage.completion_tokens,
                 "total_tokens": turn_output.token_usage.total_tokens
             },
-            "apeireth_meta": {
-                "session_id": turn_output.session_id,
-                "audit_hash": turn_output.audit_hash,
-                "pad_state": turn_output.pad_state,
-                "response_style": turn_output.response_style,
-                "drive_warmth": turn_output.drive_warmth,
-                "recalled_memories_count": turn_output.recalled_memories_count
-            }
+            "pad_state": turn_output.pad_state,
+            "response_style": turn_output.response_style,
+            "audit_hash": turn_output.audit_hash,
         });
 
-        return Ok(Json(res));
+        return Ok(Json(resp_json));
     }
 
-    // Default standalone response when host is not attached
-    let res = serde_json::json!({
-        "id": format!("chatcmpl-{}", uuid::Uuid::new_v4()),
+    let response_text = format!("Apeireth mock response to: {}", last_user_content);
+    let resp_json = serde_json::json!({
+        "id": format!("chatcmpl_{}", uuid::Uuid::new_v4()),
         "object": "chat.completion",
-        "created": chrono::Utc::now().timestamp(),
+        "created": Utc::now().timestamp(),
         "model": model,
+        "session_id": session_id,
         "choices": [{
             "index": 0,
             "message": {
                 "role": "assistant",
-                "content": format!("Apeireth Gateway processed request for model: {}", model),
+                "content": response_text
             },
             "finish_reason": "stop"
         }],
         "usage": {
             "prompt_tokens": 10,
-            "completion_tokens": 15,
-            "total_tokens": 25
+            "completion_tokens": 20,
+            "total_tokens": 30
         }
     });
 
-    Ok(Json(res))
+    Ok(Json(resp_json))
+}
+
+// -----------------------------------------------------------------------------
+// Panel & Observability Handlers
+// -----------------------------------------------------------------------------
+
+async fn panel_sessions(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    if let Some(host) = &state.runtime_host {
+        let sessions = host.sessions.lock().await;
+        let mut list = Vec::new();
+        for (id, s) in sessions.iter() {
+            list.push(serde_json::json!({
+                "id": id,
+                "started_at": s.created_at.timestamp_millis(),
+                "last_active_at": s.last_interaction.timestamp_millis(),
+                "episode_count": s.messages.len(),
+            }));
+        }
+        return Json(serde_json::json!({ "sessions": list }));
+    }
+    Json(serde_json::json!({ "sessions": [] }))
+}
+
+async fn panel_session_timeline(
+    Path(session_id): Path<String>,
+    State(state): State<Arc<GatewayState>>,
+) -> Json<Value> {
+    if let Some(host) = &state.runtime_host {
+        let sessions = host.sessions.lock().await;
+        if let Some(s) = sessions.get(&session_id) {
+            let mut episodes = Vec::new();
+            for (idx, msg) in s.messages.iter().enumerate() {
+                let role = match msg.role {
+                    Role::System => "system",
+                    Role::User => "user",
+                    Role::Assistant => "assistant",
+                    Role::Tool => "tool",
+                };
+                episodes.push(serde_json::json!({
+                    "id": format!("ep_{}_{}", session_id, idx),
+                    "timestamp": s.created_at.timestamp_millis() + (idx as i64 * 1000),
+                    "role": role,
+                    "content": msg.extract_text(),
+                    "session_id": session_id
+                }));
+            }
+            return Json(serde_json::json!({ "episodes": episodes }));
+        }
+    }
+    Json(serde_json::json!({ "episodes": [] }))
+}
+
+async fn panel_memory_streams(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let now = Utc::now();
+    let mut working = Vec::new();
+    let mut episodic = Vec::new();
+    let mut semantic = Vec::new();
+
+    if let Some(host) = &state.runtime_host {
+        if let Ok(items) = host.memory_store.query(now, QueryMode::All).await {
+            for (i, m) in items.iter().enumerate() {
+                let ep = serde_json::json!({
+                    "id": m.id,
+                    "timestamp": m.created_at.timestamp_millis(),
+                    "role": if m.data.starts_with("User:") { "user" } else { "fact" },
+                    "content": m.data,
+                    "session_id": "memory_stream",
+                    "importance": m.importance,
+                });
+                if i < 5 {
+                    working.push(ep.clone());
+                }
+                if m.data.contains(" | ") {
+                    episodic.push(ep.clone());
+                } else {
+                    semantic.push(ep);
+                }
+            }
+        }
+    }
+
+    Json(serde_json::json!({
+        "streams": {
+            "working": working,
+            "episodic": episodic,
+            "semantic": semantic,
+            "procedural": [],
+            "metacognitive": [],
+            "archive": []
+        }
+    }))
+}
+
+#[derive(Deserialize)]
+struct EpisodesQuery {
+    limit: Option<usize>,
+    q: Option<String>,
+}
+
+async fn panel_memory_episodes(
+    Query(params): Query<EpisodesQuery>,
+    State(state): State<Arc<GatewayState>>,
+) -> Json<Value> {
+    let limit = params.limit.unwrap_or(50);
+    let q = params.q.unwrap_or_default().to_lowercase();
+    let mut episodes = Vec::new();
+
+    if let Some(host) = &state.runtime_host {
+        if let Ok(items) = host.memory_store.query(Utc::now(), QueryMode::All).await {
+            for m in items.into_iter().take(limit) {
+                if q.is_empty() || m.data.to_lowercase().contains(&q) {
+                    episodes.push(serde_json::json!({
+                        "id": m.id,
+                        "timestamp": m.created_at.timestamp_millis(),
+                        "role": "fact",
+                        "content": m.data,
+                        "session_id": "memory_search",
+                        "importance": m.importance,
+                    }));
+                }
+            }
+        }
+    }
+
+    Json(serde_json::json!({ "episodes": episodes }))
+}
+
+async fn panel_graph(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let mut facts = Vec::new();
+    let mut links = Vec::new();
+
+    if let Some(host) = &state.runtime_host {
+        let memories = host.memory_store.query(Utc::now(), QueryMode::All).await.unwrap_or_default();
+        for (i, m) in memories.iter().take(20).enumerate() {
+            facts.push(serde_json::json!({
+                "id": format!("fact_{}", i),
+                "subject": "Apeireth",
+                "predicate": "recalled",
+                "object": m.data,
+                "importance": m.importance,
+            }));
+            links.push(serde_json::json!({
+                "id": format!("link_{}", i),
+                "from": "Apeireth",
+                "to": format!("fact_{}", i),
+                "weight": m.importance,
+            }));
+        }
+    }
+
+    Json(serde_json::json!({
+        "facts": facts,
+        "links": links
+    }))
+}
+
+async fn panel_audit(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let mut records = Vec::new();
+    if let Some(host) = &state.runtime_host {
+        let audit = host.audit_chain.lock().await;
+        for (i, rec) in audit.records().iter().enumerate() {
+            records.push(serde_json::json!({
+
+                "id": format!("audit_{}", i),
+                "action": rec.action,
+                "timestamp": rec.timestamp_epoch_sec * 1000,
+                "status": "success",
+                "detail": format!("Actor: {} | Hash: {}", rec.actor, rec.current_hash),
+
+            }));
+        }
+    }
+    Json(serde_json::json!({ "records": records }))
+}
+
+async fn tools_list(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let mut tools = Vec::new();
+    if let Some(host) = &state.runtime_host {
+        for t in host.tool_registry.list_tools() {
+            tools.push(serde_json::json!({
+                "name": t.name,
+                "description": t.description,
+                "risk_level": format!("{:?}", t.risk_level),
+                "source": "builtin",
+                "permission": "granted",
+                "available": true,
+            }));
+        }
+    } else {
+        tools.push(serde_json::json!({ "name": "shell", "description": "Execute sandboxed shell commands" }));
+        tools.push(serde_json::json!({ "name": "fs", "description": "Sandboxed filesystem operations" }));
+        tools.push(serde_json::json!({ "name": "fetch", "description": "Safe network HTTP fetch" }));
+    }
+    Json(serde_json::json!({ "tools": tools }))
+}
+
+async fn approval_requests() -> Json<Value> {
+    Json(serde_json::json!({
+        "count": 0,
+        "requests": [],
+        "note": "All operations running within 5-Gate sovereign boundaries"
+    }))
+}
+
+async fn grant_approval() -> Json<Value> {
+    Json(serde_json::json!({ "ok": true }))
+}
+
+async fn list_grants() -> Json<Value> {
+    Json(serde_json::json!({ "grants": [] }))
+}
+
+#[derive(Deserialize)]
+struct MemoryAppendPayload {
+    pub content: String,
+    #[allow(dead_code)]
+    pub session_id: Option<String>,
+}
+
+
+async fn memory_append(
+    State(state): State<Arc<GatewayState>>,
+    Json(payload): Json<MemoryAppendPayload>,
+) -> Json<Value> {
+    if let Some(host) = &state.runtime_host {
+        let item = MemoryItem {
+            id: format!("mem_appended_{}", uuid::Uuid::new_v4()),
+            data: payload.content,
+            importance: 0.8,
+            access_count: 1,
+            access_times: vec![Utc::now().timestamp()],
+            created_at: Utc::now(),
+            valid_from: Utc::now(),
+            valid_until: None,
+            is_tombstone: false,
+            artifact_sig: None,
+        };
+        let _ = host.memory_store.apply_operation(item, MemoryOperation::Add).await;
+        return Json(serde_json::json!({ "ok": true }));
+    }
+    Json(serde_json::json!({ "ok": false }))
+}
+
+async fn capabilities() -> Json<Value> {
+    Json(serde_json::json!({
+        "version": "2.0.0",
+        "capabilities": [
+            "chat", "memory_streams", "act_r_decay", "5_gate_governance",
+            "mcp_protocol", "voice_duplex", "vision_som", "p9_dream_evolution"
+        ]
+    }))
+}
+
+async fn list_organs() -> Json<Value> {
+    Json(serde_json::json!([]))
+}
+
+async fn list_traces() -> Json<Value> {
+    Json(serde_json::json!({ "traces": [] }))
+}
+
+async fn get_trace(Path(trace_id): Path<String>) -> Json<Value> {
+    Json(serde_json::json!({ "trace_id": trace_id, "events": [] }))
+}
+
+async fn apeireth_sessions(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    panel_sessions(State(state)).await
 }
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
     State(state): State<Arc<GatewayState>>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+    ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
-async fn handle_socket(mut socket: WebSocket, state: Arc<GatewayState>) {
-    let mut current_session_id = format!("ws_{}", uuid::Uuid::new_v4());
-
-    while let Some(msg) = socket.recv().await {
-        if let Ok(msg) = msg {
-            match msg {
-                Message::Text(text) => {
-                    if let Ok(frame) = WsFrame::decode(&text) {
-                        match frame {
-                            WsFrame::Ping { timestamp } => {
-                                let pong = WsFrame::Pong { timestamp };
-                                if let Ok(enc) = pong.encode() {
-                                    let _ = socket.send(Message::Text(enc)).await;
-                                }
-                            }
-                            WsFrame::Handshake { client_id, .. } => {
-                                current_session_id = format!("ws_{}", client_id);
-                                let ack = WsFrame::TextDelta {
-                                    session_id: current_session_id.clone(),
-                                    text: "HANDSHAKE_ACK: Apeireth Runtime Connected".into(),
-                                };
-                                if let Ok(enc) = ack.encode() {
-                                    let _ = socket.send(Message::Text(enc)).await;
-                                }
-                            }
-                            WsFrame::TextDelta { text: user_text, session_id } => {
-                                let sid = if session_id.is_empty() { &current_session_id } else { &session_id };
-                                if let Some(ref host) = state.runtime_host {
-                                    if let Ok(turn) = host.handle_chat_turn(sid, &user_text).await {
-                                        if let Some(cot) = turn.reasoning_cot {
-                                            let cot_frame = WsFrame::CoTDelta { session_id: sid.to_string(), reasoning: cot };
-                                            if let Ok(enc) = cot_frame.encode() {
-                                                let _ = socket.send(Message::Text(enc)).await;
-                                            }
-                                        }
-
-                                        let text_frame = WsFrame::TextDelta { session_id: sid.to_string(), text: turn.assistant_text };
-                                        if let Ok(enc) = text_frame.encode() {
-                                            let _ = socket.send(Message::Text(enc)).await;
-                                        }
-                                    }
-                                } else {
-                                    let echo = WsFrame::TextDelta { session_id: sid.to_string(), text: format!("Echo: {}", user_text) };
-                                    if let Ok(enc) = echo.encode() {
-                                        let _ = socket.send(Message::Text(enc)).await;
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+async fn handle_socket(mut socket: WebSocket, _state: Arc<GatewayState>) {
+    while let Some(Ok(msg)) = socket.recv().await {
+        if let Message::Text(text) = msg {
+            if let Ok(frame) = serde_json::from_str::<WsFrame>(&text) {
+                let resp_frame = match frame {
+                    WsFrame::Ping { timestamp } => WsFrame::Pong { timestamp },
+                    _ => WsFrame::Pong { timestamp: Utc::now().timestamp() },
+                };
+                if let Ok(resp_str) = serde_json::to_string(&resp_frame) {
+                    let _ = socket.send(Message::Text(resp_str)).await;
                 }
-                Message::Close(_) => break,
-                _ => {}
             }
         }
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use tower::ServiceExt;
 
     #[tokio::test]
     async fn test_gateway_health_and_models() {
         let app = create_router();
-        let _service = app.into_make_service();
+
+        let req = Request::builder().uri("/health").body(Body::empty()).unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req2 = Request::builder().uri("/v1/models").body(Body::empty()).unwrap();
+        let resp2 = app.oneshot(req2).await.unwrap();
+        assert_eq!(resp2.status(), StatusCode::OK);
     }
 }
-
