@@ -7,8 +7,9 @@ use apeireth_asi::{DimensionTrace, TraceRepository};
 use apeireth_cli::{
     build_default_human_authority, build_default_permission_onion, build_sample_measurement,
     create_default_session, describe_verdict, dispatch_asi_calibrate, dispatch_asi_diagnose,
-    dispatch_asi_trace, dispatch_asi_trend, dispatch_gateway_serve, handle_input_line,
-    welcome_message, AsiSubCommand, CalibrateMode, CliCommand, GatewaySubCommand,
+    dispatch_asi_trace, dispatch_asi_trend, dispatch_canonical_chat, dispatch_gateway_serve,
+    handle_input_line, welcome_message, AsiSubCommand, CalibrateMode, CliCommand,
+    GatewaySubCommand,
 };
 use std::env;
 use std::io::{self, BufRead, Write};
@@ -22,6 +23,40 @@ fn parse_args(args: &[String]) -> Result<CliCommand, String> {
     }
     match args[1].as_str() {
         "session" => Ok(CliCommand::Session),
+        "chat" => {
+            let mut model = None;
+            let mut session = None;
+            let mut prompt = Vec::new();
+            let mut index = 2;
+            while index < args.len() {
+                match args[index].as_str() {
+                    "--model" => {
+                        index += 1;
+                        model = args.get(index).cloned();
+                        if model.is_none() {
+                            return Err("chat --model requires a value".into());
+                        }
+                    }
+                    "--session" => {
+                        index += 1;
+                        session = args.get(index).cloned();
+                        if session.is_none() {
+                            return Err("chat --session requires a value".into());
+                        }
+                    }
+                    value => prompt.push(value.to_string()),
+                }
+                index += 1;
+            }
+            if prompt.is_empty() {
+                return Err("chat requires a prompt".into());
+            }
+            Ok(CliCommand::Chat {
+                prompt: prompt.join(" "),
+                model,
+                session,
+            })
+        }
         "list-episodes" => Ok(CliCommand::ListEpisodes),
         "run-v1136" => Ok(CliCommand::RunV1136),
         "asi" => {
@@ -141,6 +176,8 @@ fn print_help() {
     println!("用法: apeireth-cli <COMMAND>\n");
     println!("命令:");
     println!("  session         启动一次 session（默认，接 core Session API）");
+    println!("  chat TEXT       通过 canonical Runtime 执行一次真实 chat turn");
+    println!("  gateway serve   启动 canonical HTTP gateway");
     println!("  list-episodes   列出最近 N 个 episode");
     println!("  run-v1136       运行 V1136 真测");
     println!("  asi             ASI 测量子命令 (trace / trend / diagnose)");
@@ -155,6 +192,8 @@ fn print_help() {
     println!("  -V, --version   显示版本\n");
     println!("示例:");
     println!("  apeireth-cli session");
+    println!("  apeireth-cli chat \"hello\" --model MiniMax-M3");
+    println!("  apeireth-cli gateway serve --port 8080");
     println!("  apeireth-cli list-episodes");
     println!("  apeireth-cli run-v1136");
 }
@@ -215,6 +254,11 @@ fn run_session() -> ExitCode {
 fn dispatch(cmd: CliCommand) -> ExitCode {
     match cmd {
         CliCommand::Session => run_session(),
+        CliCommand::Chat {
+            prompt,
+            model,
+            session,
+        } => run_chat(prompt, model, session),
         CliCommand::ListEpisodes => {
             println!("📜 列出最近 episode...");
             println!("   (待 A11 apeireth-memory SQLite 实装后真正查询)");
@@ -233,6 +277,30 @@ fn dispatch(cmd: CliCommand) -> ExitCode {
             ExitCode::SUCCESS
         }
         CliCommand::Gateway(gw) => run_gateway(gw),
+    }
+}
+
+fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> ExitCode {
+    let rt = match tokio::runtime::Runtime::new() {
+        Ok(rt) => rt,
+        Err(error) => {
+            eprintln!("tokio runtime 创建失败: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match rt.block_on(dispatch_canonical_chat(prompt, model, session)) {
+        Ok(outcome) => {
+            println!("{}", outcome.text);
+            eprintln!(
+                "session={} trace={} provider={} rounds={}",
+                outcome.session, outcome.trace.trace, outcome.served_by, outcome.rounds
+            );
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("canonical chat failed: {error}");
+            ExitCode::FAILURE
+        }
     }
 }
 

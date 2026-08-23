@@ -17,6 +17,9 @@ apeireth-memory = { path = "../apeireth-memory" }
 apeireth-asi = { path = "../apeireth-asi" }
 # DEPRECATED(V2 Day 1 Step 1.1): `apeireth-philosophy` 已删; 来源已物理删除，依赖摘除。
 apeireth-api = { path = "../apeireth-api" }
+apeireth-gateway = { path = "../apeireth-gateway" }
+apeireth-provider = { path = "../apeireth-provider" }
+apeireth-runtime = { path = "../apeireth-runtime" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -28,8 +31,6 @@ apeireth-skills = { path = "../apeireth-skills" }
 apeireth-eval = { path = "../apeireth-eval" }
 apeireth-council = { path = "../apeireth-council" }
 apeireth-mcp = { path = "../apeireth-mcp" }
-axum = { version = "0.7", features = ["macros"] }
-tower-http = { version = "0.5", features = ["trace"] }
 # R125-2: clap derive macros 替换手写 argv 解析 (commands.rs -55%)
 clap = { workspace = true }
 
