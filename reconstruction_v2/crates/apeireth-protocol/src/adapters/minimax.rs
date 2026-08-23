@@ -60,6 +60,20 @@ impl MinimaxAdapter {
             payload["max_tokens"] = serde_json::json!(tokens);
         }
 
+        if let Some(tools) = &req.tools {
+            let tools_json: Vec<Value> = tools.iter().map(|t| {
+                serde_json::json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters,
+                    }
+                })
+            }).collect();
+            payload["tools"] = serde_json::json!(tools_json);
+        }
+
         payload
     }
 
@@ -106,9 +120,23 @@ impl MinimaxAdapter {
             if pieces.len() > 1 && !pieces[1].trim().is_empty() {
                 parts.push(ContentPart::Text { text: pieces[1].trim().to_string() });
             }
-        } else {
+        } else if !raw_content.is_empty() {
             parts.push(ContentPart::Text { text: raw_content });
         }
+
+        // Parse tool_calls if returned by MiniMax
+        if let Some(tool_calls_arr) = choice.get("message").and_then(|m| m.get("tool_calls")).and_then(|tc| tc.as_array()) {
+            for tc in tool_calls_arr {
+                let id = tc.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let func = tc.get("function");
+                let name = func.and_then(|f| f.get("name")).and_then(|v| v.as_str()).unwrap_or("").to_string();
+                let args = func.and_then(|f| f.get("arguments")).and_then(|v| v.as_str()).unwrap_or("{}").to_string();
+                parts.push(ContentPart::ToolCall {
+                    tool_call: crate::normalized::ToolCall { id, name, arguments: args },
+                });
+            }
+        }
+
 
         let prompt_tokens = json.get("usage").and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_u64()).unwrap_or(0) as u32;
         let completion_tokens = json.get("usage").and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_u64()).unwrap_or(0) as u32;

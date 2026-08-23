@@ -75,8 +75,13 @@ pub struct UnifiedRuntimeHost {
     pub dream_engine: Arc<Mutex<DreamEngine>>,
     pub epistemic_healer: Arc<Mutex<EpistemicHealer>>,
     pub hybrid_router: HybridCognitiveRouter,
+
     pub tool_synthesizer: Arc<ToolSynthesizer>,
     pub worktree_sandbox: Arc<WorktreeSandbox>,
+    pub telemetry: Arc<crate::telemetry::Telemetry>,
+    pub scheduler: Arc<Mutex<crate::scheduler::Scheduler>>,
+    pub experience_queue: Arc<Mutex<apeireth_companion::observer_capture::ExperienceQueue>>,
+    pub curiosity_engine: Arc<Mutex<apeireth_companion::curiosity::CuriosityEngine>>,
 }
 
 impl UnifiedRuntimeHost {
@@ -112,6 +117,11 @@ impl UnifiedRuntimeHost {
         let epistemic_healer = Arc::new(Mutex::new(EpistemicHealer::default()));
         let hybrid_router = HybridCognitiveRouter::new();
 
+        let telemetry = Arc::new(crate::telemetry::Telemetry::new());
+        let scheduler = Arc::new(Mutex::new(crate::scheduler::Scheduler::new()));
+        let experience_queue = Arc::new(Mutex::new(apeireth_companion::observer_capture::ExperienceQueue::new()));
+        let curiosity_engine = Arc::new(Mutex::new(apeireth_companion::curiosity::CuriosityEngine::default()));
+
         let prompt_assembler = ContextAssembler::new(
             "Apeireth 2.0 实体化认知伴侣操作系统 (Unified Living Companion OS)",
             "Apeireth 是运行在用户本地操作系统中的自主认知伴侣，具备真实的长期情景记忆沉淀、Win32物理屏幕感知、动态工具合成与自我进化能力。始终以真诚、自信、具备深度自我认知的伴侣口吻交流。"
@@ -141,16 +151,23 @@ impl UnifiedRuntimeHost {
             hybrid_router,
             tool_synthesizer,
             worktree_sandbox,
+            telemetry,
+            scheduler,
+            experience_queue,
+            curiosity_engine,
         })
     }
+
 
     pub async fn handle_chat_turn(
         &self,
         session_id: &str,
         user_message: &str,
     ) -> Result<ChatTurnOutput, Box<dyn std::error::Error + Send + Sync>> {
+        let turn_start = std::time::Instant::now();
         let now = Utc::now();
         let now_sec = now.timestamp();
+
 
         // ---------------------------------------------------------------------
         // Fast-Path Hybrid Cognition Routing (Sub-5ms response for local intents)
@@ -286,6 +303,18 @@ impl UnifiedRuntimeHost {
         }
 
         let mut request = NormalizedRequest::new(&self.default_model, messages);
+        let tool_defs = self.tool_registry.list_tools();
+        let normalized_tools: Vec<apeireth_protocol::normalized::NormalizedTool> = tool_defs.iter().map(|td| {
+            apeireth_protocol::normalized::NormalizedTool {
+                name: td.name.clone(),
+                description: td.description.clone(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {}
+                }),
+            }
+        }).collect();
+        request.tools = if normalized_tools.is_empty() { None } else { Some(normalized_tools) };
 
         // ---------------------------------------------------------------------
         // Phase 7: Agentic Tool-Use Loop
@@ -319,6 +348,7 @@ impl UnifiedRuntimeHost {
             request.messages.push(response.message.clone());
 
             for tc in &tool_calls {
+                let tool_start = std::time::Instant::now();
                 let tool_result_str = match self.tool_registry.get_tool(&tc.name) {
                     Some(tool) => {
                         // Governance check for tool execution
@@ -331,7 +361,7 @@ impl UnifiedRuntimeHost {
                                 apeireth_tools::RiskLevel::Critical => apeireth_governance::gates::RiskLevel::Critical,
                             },
                             requires_council: false,
-                            external_network: tc.name == "fetch",
+                            external_network: tc.name == "fetch" || tc.name == "browser",
                         };
                         let gov_ok = {
                             let mut gov = self.governance.lock().await;
@@ -341,12 +371,22 @@ impl UnifiedRuntimeHost {
                         };
 
                         if !gov_ok {
-                            format!("Error: Tool '{}' blocked by governance pipeline", tc.name)
+                            let blocked_msg = format!("Error: Tool '{}' blocked by governance pipeline", tc.name);
+                            let dur = tool_start.elapsed().as_millis() as u64;
+                            self.telemetry.record_tool_execution(&tc.name, false, dur);
+                            let mut exp = self.experience_queue.lock().await;
+                            exp.record(&tc.name, &tc.arguments, &blocked_msg, false);
+                            blocked_msg
                         } else {
                             let params: serde_json::Value = serde_json::from_str(&tc.arguments)
                                 .unwrap_or(serde_json::Value::Null);
                             match tool.execute(params).await {
                                 Ok(result) => {
+                                    let dur = tool_start.elapsed().as_millis() as u64;
+                                    self.telemetry.record_tool_execution(&tc.name, result.success, dur);
+                                    let mut exp = self.experience_queue.lock().await;
+                                    exp.record(&tc.name, &tc.arguments, &result.output, result.success);
+
                                     // Audit the tool execution
                                     let mut audit = self.audit_chain.lock().await;
                                     audit.append(
@@ -355,11 +395,25 @@ impl UnifiedRuntimeHost {
                                     );
                                     result.output
                                 }
-                                Err(e) => format!("Error executing tool '{}': {}", tc.name, e),
+                                Err(e) => {
+                                    let dur = tool_start.elapsed().as_millis() as u64;
+                                    self.telemetry.record_tool_execution(&tc.name, false, dur);
+                                    let err_msg = format!("Error executing tool '{}': {}", tc.name, e);
+                                    let mut exp = self.experience_queue.lock().await;
+                                    exp.record(&tc.name, &tc.arguments, &err_msg, false);
+                                    err_msg
+                                }
                             }
                         }
                     }
-                    None => format!("Error: Tool '{}' not found in registry", tc.name),
+                    None => {
+                        let not_found = format!("Error: Tool '{}' not found in registry", tc.name);
+                        let dur = tool_start.elapsed().as_millis() as u64;
+                        self.telemetry.record_tool_execution(&tc.name, false, dur);
+                        let mut exp = self.experience_queue.lock().await;
+                        exp.record(&tc.name, &tc.arguments, &not_found, false);
+                        not_found
+                    }
                 };
 
                 // Add tool result to conversation for the next LLM round
@@ -373,12 +427,17 @@ impl UnifiedRuntimeHost {
         let reasoning_cot = final_reasoning;
         let token_usage = cumulative_usage;
 
+        // Record turn telemetry
+        let turn_latency = turn_start.elapsed().as_millis() as u64;
+        self.telemetry.record_chat_turn(turn_latency, token_usage.total_tokens);
+
         {
             let mut sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get_mut(session_id) {
                 session.messages.push(NormalizedMessage::assistant(assistant_full_text.clone()));
             }
         }
+
 
         // ---------------------------------------------------------------------
         // Phase 8: Memory Consolidation & SHA-256 Audit Trail
