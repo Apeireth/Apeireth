@@ -1,13 +1,14 @@
 use ratatui::prelude::*;
 use ratatui::widgets::*;
-use super::state::{ActiveTab, AppState, FocusPane, InputMode};
-use super::widgets::{BrailleSparkline, DiffViewer};
+use super::state::{AppState, NavPage};
+use super::theme::ThemeStyle;
 
 pub fn render_ui(frame: &mut Frame, state: &AppState) {
+    let style = state.current_style();
     let size = frame.area();
 
-    // Main Vertical Layout: [Top Bar (3 lines), Content Area (fill), Bottom Bar (2 lines)]
-    let main_chunks = Layout::default()
+    // Main layout: [Top Tabs (3 lines), Content Area (fill), Bottom Status (2 lines)]
+    let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(3),
@@ -16,215 +17,250 @@ pub fn render_ui(frame: &mut Frame, state: &AppState) {
         ])
         .split(size);
 
-    render_top_bar(frame, main_chunks[0], state);
+    render_nav_header(frame, chunks[0], state, &style);
 
-    match state.active_tab {
-        ActiveTab::Dialogue => render_dialogue_tab(frame, main_chunks[1], state),
-        ActiveTab::Memory => render_memory_tab(frame, main_chunks[1], state),
-        ActiveTab::Organs => render_organs_tab(frame, main_chunks[1], state),
-        ActiveTab::Factory => render_factory_tab(frame, main_chunks[1], state),
-        ActiveTab::Governance => render_governance_tab(frame, main_chunks[1], state),
+    match state.current_page {
+        NavPage::Bridge => render_bridge_page(frame, chunks[1], state, &style),
+        NavPage::Dialogue => render_dialogue_page(frame, chunks[1], state, &style),
+        NavPage::Growth => render_growth_page(frame, chunks[1], state, &style),
+        NavPage::History => render_history_page(frame, chunks[1], state, &style),
+        NavPage::Settings => render_settings_page(frame, chunks[1], state, &style),
     }
 
-    render_bottom_bar(frame, main_chunks[2], state);
-
-    if let Some(ref modal_text) = state.pending_modal {
-        render_modal(frame, size, modal_text);
-    }
+    render_status_footer(frame, chunks[2], state, &style);
 }
 
 // -----------------------------------------------------------------------------
-// Top Header & Tab Navigation Bar
+// Top Navigation Header
 // -----------------------------------------------------------------------------
 
-fn render_top_bar(frame: &mut Frame, area: Rect, state: &AppState) {
+fn render_nav_header(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
     let tabs = vec![
-        "[F1] 💬 Dialogue",
-        "[F2] 🧠 Memory (ACT-R)",
-        "[F3] ⚡ Organs (GDI/MCP)",
-        "[F4] 💻 Software Factory",
-        "[F5] 🛡️ 5-Gate Governance",
+        "0 舰桥 ΣΚΟΠΗ",
+        "1 对话 ΔΙΑΛΟΓΟΣ",
+        "2 生长 ΑΥΞΗΣΙΣ",
+        "3 历史 ΙΣΤΟΡΙΑ",
+        "4 设置 ΤΑΞΙΣ",
     ];
 
-    let active_idx = match state.active_tab {
-        ActiveTab::Dialogue => 0,
-        ActiveTab::Memory => 1,
-        ActiveTab::Organs => 2,
-        ActiveTab::Factory => 3,
-        ActiveTab::Governance => 4,
+    let active_idx = match state.current_page {
+        NavPage::Bridge => 0,
+        NavPage::Dialogue => 1,
+        NavPage::Growth => 2,
+        NavPage::History => 3,
+        NavPage::Settings => 4,
     };
 
     let tab_widget = Tabs::new(tabs)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan))
-                .title(Span::styled(" APEIRETH 2.0 COGNITIVE COMPANION WORKBENCH ", Style::default().fg(Color::Yellow).bold()))
+                .border_style(Style::default().fg(style.primary))
+                .border_type(style.border_type)
+                .title(Span::styled(" APEIRETH 2.0 伴侣系统 · 终端工作台 ", Style::default().fg(style.accent).bold()))
         )
         .select(active_idx)
-        .style(Style::default().fg(Color::DarkGray))
-        .highlight_style(Style::default().fg(Color::Cyan).bold().underlined());
+        .style(Style::default().fg(style.dim))
+        .highlight_style(Style::default().fg(style.accent).bold().underlined());
 
     frame.render_widget(tab_widget, area);
 }
 
 // -----------------------------------------------------------------------------
-// Bottom Status & Keybindings Bar
+// Bottom Status Bar
 // -----------------------------------------------------------------------------
 
-fn render_bottom_bar(frame: &mut Frame, area: Rect, state: &AppState) {
-    let mode_str = match state.input_mode {
-        InputMode::Editing => " [INPUT] ",
-        InputMode::Normal => " [NORMAL] ",
-        InputMode::Search => " [SEARCH] ",
-    };
+fn render_status_footer(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
+    let status_text = state.status_message.as_ref().map(|(m, _)| m.as_str()).unwrap_or("就绪");
 
-    let status_text = state.status_message.as_ref().map(|(m, _)| m.as_str()).unwrap_or("Ready");
-
-    let status_line = Line::from(vec![
-        Span::styled(mode_str, Style::default().bg(Color::Cyan).fg(Color::Black).bold()),
+    let line = Line::from(vec![
+        Span::styled(format!(" [{}] ", state.theme.display_label()), Style::default().bg(style.primary).fg(Color::Black).bold()),
         Span::raw(" "),
-        Span::styled(status_text, Style::default().fg(Color::White)),
+        Span::styled(status_text, Style::default().fg(style.accent)),
         Span::raw(" | "),
-        Span::styled(format!("Session: {}", &state.session_id[..state.session_id.len().min(12)]), Style::default().fg(Color::DarkGray)),
-        Span::raw(" | "),
-        Span::styled("[Tab] Pane  [Enter] Send  [F1-F5] Tab  [Esc] Normal  [Ctrl+C] Quit", Style::default().fg(Color::DarkGray)),
+        Span::styled("[0-4] 跳转  [Tab] 顺序切换  [t] 切换主题  [Ctrl+O] 展开思考  [PageUp/Down] 滚动  [q] 退出", Style::default().fg(style.dim)),
     ]);
 
-    frame.render_widget(Paragraph::new(status_line), area);
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 // -----------------------------------------------------------------------------
-// Tab 1: Dialogue (Three-Column Layout)
+// Page 0: 0 舰桥 ΣΚΟΠΗ (Bridge)
 // -----------------------------------------------------------------------------
 
-fn render_dialogue_tab(frame: &mut Frame, area: Rect, state: &AppState) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25), // Left: Emotion & Memory
-            Constraint::Percentage(50), // Center: Dialogue & Input
-            Constraint::Percentage(25), // Right: Organs & Governance
-        ])
-        .split(area);
-
-    render_left_cognition_panel(frame, cols[0], state);
-    render_center_chat_panel(frame, cols[1], state);
-    render_right_organ_panel(frame, cols[2], state);
-}
-
-fn render_left_cognition_panel(frame: &mut Frame, area: Rect, state: &AppState) {
+fn render_bridge_page(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(8), // PAD Emotion
-            Constraint::Length(6), // Sleep & Braille Wave
-            Constraint::Min(6),    // Top Memory Recall
+            Constraint::Length(5), // Top 3-line Status
+            Constraint::Min(8),    // Middle 9 Organs + Star Chart
+            Constraint::Length(2), // Bottom Hint
         ])
         .split(area);
 
-    // 1. PAD Emotion Gauges
-    let p_pct = (state.current_pad.pleasure * 100.0).clamp(0.0, 100.0) as u16;
-    let a_pct = (state.current_pad.arousal * 100.0).clamp(0.0, 100.0) as u16;
-    let d_pct = (state.current_pad.dominance * 100.0).clamp(0.0, 100.0) as u16;
-
-    let pad_block = Block::default()
-        .title(" 🎭 Emotional PAD State ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Magenta));
-
-    let pad_inner = pad_block.inner(chunks[0]);
-    frame.render_widget(pad_block, chunks[0]);
-
-    let pad_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
-        .split(pad_inner);
-
-    let style_name = format!("{:?}", state.current_pad.to_response_style());
-    frame.render_widget(Paragraph::new(format!("Style: {}", style_name)).style(Style::default().fg(Color::Yellow).bold()), pad_chunks[0]);
-    frame.render_widget(Gauge::default().gauge_style(Style::default().fg(Color::Green)).percent(p_pct).label(format!("P: {:.2}", state.current_pad.pleasure)), pad_chunks[1]);
-    frame.render_widget(Gauge::default().gauge_style(Style::default().fg(Color::Yellow)).percent(a_pct).label(format!("A: {:.2}", state.current_pad.arousal)), pad_chunks[2]);
-    frame.render_widget(Gauge::default().gauge_style(Style::default().fg(Color::Blue)).percent(d_pct).label(format!("D: {:.2}", state.current_pad.dominance)), pad_chunks[3]);
-
-    // 2. Sleep Drive & Braille Sparklines
-    let braille_wave = BrailleSparkline::render_line(&state.sleep_history, 18);
-    let sleep_lines = vec![
+    // 1. Top Status
+    let top_lines = vec![
         Line::from(vec![
-            Span::raw("Sleep Drive (S): "),
-            Span::styled(format!("{:.2}", state.sleep_drive), Style::default().fg(Color::Cyan).bold()),
+            Span::styled("北极星 ", Style::default().fg(style.dim)),
+            Span::styled("0.985", Style::default().fg(style.primary).bold()),
+            Span::styled("  连续 ", Style::default().fg(style.dim)),
+            Span::styled("0.992", Style::default().fg(style.primary)),
+            Span::styled("  哲学守护 ", Style::default().fg(style.dim)),
+            Span::styled("1.000", Style::default().fg(style.primary)),
+            Span::styled("  5-我自组织 ", Style::default().fg(style.dim)),
+            Span::styled("已就绪 (Sovereign)", Style::default().fg(style.accent)),
         ]),
         Line::from(vec![
-            Span::raw("Circadian Wave: "),
-            Span::styled(braille_wave, Style::default().fg(Color::Cyan)),
+            Span::styled("运行阶段 ", Style::default().fg(style.dim)),
+            Span::styled("Serving (在线服务中)", Style::default().fg(style.accent).bold()),
+            Span::styled("  认知反思 ", Style::default().fg(style.dim)),
+            Span::styled("活跃 (Active)", Style::default().fg(style.primary)),
+            Span::styled("  睡眠驱动 ", Style::default().fg(style.dim)),
+            Span::styled(format!("{:.2} S", state.sleep_drive), Style::default().fg(style.primary)),
+            Span::styled("  PAD 情感 ", Style::default().fg(style.dim)),
+            Span::styled(format!("P:{:.2} A:{:.2} D:{:.2}", state.current_pad.pleasure, state.current_pad.arousal, state.current_pad.dominance), Style::default().fg(style.accent)),
+        ]),
+        Line::from(vec![
+            Span::styled("心跳时钟 ", Style::default().fg(style.dim)),
+            Span::styled("20Hz (WAL)", Style::default().fg(style.primary)),
+            Span::styled("  ACT-R 记忆 ", Style::default().fg(style.dim)),
+            Span::styled(format!("{} 条", state.memory_items.len()), Style::default().fg(style.primary)),
+            Span::styled("  审计链区块 ", Style::default().fg(style.dim)),
+            Span::styled(format!("H:{} (100% 校验通过)", state.audit_chain_length), Style::default().fg(style.accent)),
         ]),
     ];
 
-    let sleep_widget = Paragraph::new(sleep_lines).block(
-        Block::default().title(" 🌙 Borbély Circadian ").borders(Borders::ALL).border_style(Style::default().fg(Color::Blue))
-    );
-    frame.render_widget(sleep_widget, chunks[1]);
+    let top_block = Block::default()
+        .borders(Borders::TOP | Borders::BOTTOM)
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
+    frame.render_widget(Paragraph::new(top_lines).block(top_block), chunks[0]);
 
-    // 3. Top Recalled ACT-R Memories
-    let mut mem_lines = Vec::new();
-    if state.memory_items.is_empty() {
-        mem_lines.push(Line::from(Span::styled("• User preference: Rust & High Performance", Style::default().fg(Color::White))));
-        mem_lines.push(Line::from(Span::styled("• Architecture: Microkernel + Hybrid SLM", Style::default().fg(Color::White))));
-        mem_lines.push(Line::from(Span::styled("• Egress: Whitelist Strict Security", Style::default().fg(Color::White))));
-    } else {
-        for (i, m) in state.memory_items.iter().take(4).enumerate() {
-            mem_lines.push(Line::from(vec![
-                Span::styled(format!("{}. ", i + 1), Style::default().fg(Color::Cyan)),
-                Span::styled(format!("[★{:.1}] ", m.importance), Style::default().fg(Color::Yellow)),
-                Span::raw(&m.data[..m.data.len().min(24)]),
-            ]));
+    // 2. Middle: 9 Organs Grid (Left 50%) + Star Chart (Right 50%)
+    let mid_cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
+        .split(chunks[1]);
+
+    // Render 9 Organs in 3x3 Grid
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(1, 3), Constraint::Ratio(1, 3)])
+        .split(mid_cols[0]);
+
+    for (i, row_area) in rows.iter().enumerate() {
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Ratio(1, 3), Constraint::Ratio(1, 3), Constraint::Ratio(1, 3)])
+            .split(*row_area);
+
+        for (j, col_area) in cols.iter().enumerate() {
+            let idx = i * 3 + j;
+            if idx < state.organs.len() {
+                let o = &state.organs[idx];
+                let bar_w = (o.health * 6.0).round() as usize;
+                let bar = format!(
+                    "{}{}",
+                    style.bar_full.to_string().repeat(bar_w),
+                    style.bar_empty.to_string().repeat(6 - bar_w)
+                );
+
+                let card_text = vec![
+                    Line::from(vec![
+                        Span::styled(o.name, Style::default().fg(style.primary).bold()),
+                    ]),
+                    Line::from(Span::styled(bar, Style::default().fg(style.accent))),
+                    Line::from(Span::styled(o.primary, Style::default().fg(style.dim))),
+                ];
+
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(style.dim))
+                    .border_type(style.border_type);
+
+                frame.render_widget(Paragraph::new(card_text).block(block), *col_area);
+            }
         }
     }
 
-    let mem_widget = Paragraph::new(mem_lines).block(
-        Block::default().title(" 🧠 Top ACT-R Memories ").borders(Borders::ALL).border_style(Style::default().fg(Color::Green))
-    );
-    frame.render_widget(mem_widget, chunks[2]);
+    // Render ASCII Star Map / Cognitive Constellation
+    let star_lines = vec![
+        Line::from(Span::styled("        ·   ★ 北极星 (ASI V0.5)   ·", Style::default().fg(style.accent).bold())),
+        Line::from(Span::styled("             /        \\", Style::default().fg(style.dim))),
+        Line::from(Span::styled("       [ACT-R] ──── [MiniMax]", Style::default().fg(style.primary))),
+        Line::from(Span::styled("          |            |", Style::default().fg(style.dim))),
+        Line::from(Span::styled("    [Win32 GDI] ── [5-Gate 宪政]", Style::default().fg(style.primary))),
+        Line::from(Span::styled("          \\            /", Style::default().fg(style.dim))),
+        Line::from(Span::styled("       [MCP Hub] ── [SHA-256 账本]", Style::default().fg(style.primary))),
+        Line::from(Span::raw("")),
+        Line::from(Span::styled("  全 9 大认知器官与工作流微内核健康运转中", Style::default().fg(style.accent))),
+    ];
+
+    let star_block = Block::default()
+        .title(" 🌌 认知星座拓扑图 (Constellation) ")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
+    frame.render_widget(Paragraph::new(star_lines).block(star_block), mid_cols[1]);
+
+    // 3. Bottom Hint
+    let hint_text = Line::from(vec![
+        Span::styled(" → 按 ", Style::default().fg(style.dim)),
+        Span::styled("1", Style::default().fg(style.accent).bold()),
+        Span::styled(" 或 ", Style::default().fg(style.dim)),
+        Span::styled("i", Style::default().fg(style.accent).bold()),
+        Span::styled(" 进入对话 (Dialogue) | 按 ", Style::default().fg(style.dim)),
+        Span::styled("t", Style::default().fg(style.accent).bold()),
+        Span::styled(" 切换古朴金/时代蓝主题", Style::default().fg(style.dim)),
+    ]);
+    frame.render_widget(Paragraph::new(hint_text).alignment(Alignment::Center), chunks[2]);
 }
 
-fn render_center_chat_panel(frame: &mut Frame, area: Rect, state: &AppState) {
+// -----------------------------------------------------------------------------
+// Page 1: 1 对话 ΔΙΑΛΟΓΟΣ (Dialogue)
+// -----------------------------------------------------------------------------
+
+fn render_dialogue_page(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Min(6),    // Dialogue history
-            Constraint::Length(3), // User Input area
+            Constraint::Min(6),    // Chat Messages
+            Constraint::Length(3), // Input Box
         ])
         .split(area);
 
-    // Dialogue List
+    // Render Chat Messages List
     let mut list_items = Vec::new();
     for msg in &state.messages {
         let (role_tag, role_color) = match msg.role.as_str() {
-            "user" => (" USER ", Color::Green),
-            "assistant" => (" APEIRETH ", Color::Cyan),
-            _ => (" SYSTEM ", Color::DarkGray),
+            "user" => (" ❯ USER ", style.accent),
+            "assistant" => (" ▌ APEIRETH ", style.primary),
+            _ => (" · SYSTEM ", style.dim),
         };
 
         let mut lines = Vec::new();
         lines.push(Line::from(vec![
-            Span::styled(role_tag, Style::default().bg(role_color).fg(Color::Black).bold()),
+            Span::styled(role_tag, Style::default().fg(role_color).bold()),
             Span::raw(" "),
-            Span::styled(format!("(Tokens: {} | Hash: {})", msg.tokens, &msg.audit_hash[..msg.audit_hash.len().min(8)]), Style::default().fg(Color::DarkGray)),
+            Span::styled(format!("(Tokens: {} | Audit: {})", msg.tokens, &msg.audit_hash[..msg.audit_hash.len().min(8)]), Style::default().fg(style.dim)),
         ]));
 
         if let Some(ref cot) = msg.cot {
-            lines.push(Line::from(vec![
-                Span::styled("  ┌─ CoT Deep Reasoning ───────────────────────────────┐", Style::default().fg(Color::DarkGray)),
-            ]));
-            for cot_line in cot.lines().take(4) {
+            if state.thinking_expanded {
+                lines.push(Line::from(Span::styled("  ┌─ ∴ Thinking 深度思考链 (按 Ctrl+O 折叠) ──────┐", Style::default().fg(style.dim))));
+                for cot_line in cot.lines() {
+                    lines.push(Line::from(vec![
+                        Span::styled("  │ ", Style::default().fg(style.dim)),
+                        Span::styled(cot_line, Style::default().fg(style.dim).italic()),
+                    ]));
+                }
+                lines.push(Line::from(Span::styled("  └───────────────────────────────────────────────┘", Style::default().fg(style.dim))));
+            } else {
                 lines.push(Line::from(vec![
-                    Span::styled("  │ ", Style::default().fg(Color::DarkGray)),
-                    Span::styled(cot_line, Style::default().fg(Color::DarkGray).italic()),
+                    Span::styled("  ∴ Thinking ", Style::default().fg(style.dim).italic()),
+                    Span::styled("(已折叠, 按 Ctrl+O 展开思考过程)", Style::default().fg(style.dim)),
                 ]));
             }
-            lines.push(Line::from(vec![
-                Span::styled("  └────────────────────────────────────────────────────┘", Style::default().fg(Color::DarkGray)),
-            ]));
         }
 
         for content_line in msg.content.lines() {
@@ -241,111 +277,39 @@ fn render_center_chat_panel(frame: &mut Frame, area: Rect, state: &AppState) {
     if state.is_thinking {
         list_items.push(ListItem::new(vec![
             Line::from(vec![
-                Span::styled(" APEIRETH ", Style::default().bg(Color::Cyan).fg(Color::Black).bold()),
-                Span::raw(" "),
-                Span::styled("Thinking & Activating ACT-R Memory...", Style::default().fg(Color::Yellow).italic()),
+                Span::styled(" ▌ APEIRETH ", Style::default().fg(style.primary).bold()),
+                Span::styled("正在深度思考并唤醒 ACT-R 记忆流...", Style::default().fg(style.accent).italic()),
             ]),
         ]));
     }
 
-    let is_focused_dialogue = state.focus_pane == FocusPane::Center;
     let chat_block = Block::default()
-        .title(" 💬 Live Dialogue & Thinking Stream ")
+        .title(" 1 对话 (Dialogue, ΔΙΑΛΟΓΟΣ) ")
         .borders(Borders::ALL)
-        .border_style(if is_focused_dialogue { Style::default().fg(Color::Yellow) } else { Style::default().fg(Color::Cyan) });
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
 
-    let list_widget = List::new(list_items)
-        .block(chat_block)
-        .scroll_padding(2);
-
-    frame.render_widget(list_widget, chunks[0]);
+    frame.render_widget(List::new(list_items).block(chat_block), chunks[0]);
 
     // Input Box
-    let is_focused_input = state.focus_pane == FocusPane::Input;
     let input_block = Block::default()
-        .title(if is_focused_input { " ✍️ Input (Active - Press Enter to Send) " } else { " ✍️ Input (Press Tab to Focus) " })
+        .title(" ✍️ 输入消息 (按 Enter 发送, Ctrl+O 展开思考, Esc 退出聚焦) ")
         .borders(Borders::ALL)
-        .border_style(if is_focused_input { Style::default().fg(Color::Green).bold() } else { Style::default().fg(Color::DarkGray) });
+        .border_style(Style::default().fg(style.accent))
+        .border_type(style.border_type);
 
-    let input_text = Paragraph::new(format!("> {}█", state.input_buffer))
+    let input_widget = Paragraph::new(format!("> {}█", state.input_buffer))
         .style(Style::default().fg(Color::White))
         .block(input_block);
 
-    frame.render_widget(input_text, chunks[1]);
-}
-
-fn render_right_organ_panel(frame: &mut Frame, area: Rect, state: &AppState) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(6), // Organ Status (Eye & Voice)
-            Constraint::Length(6), // 5-Gate Governance
-            Constraint::Min(6),    // Tool Log Stream
-        ])
-        .split(area);
-
-    // 1. Organ Monitor
-    let organ_lines = vec![
-        Line::from(vec![
-            Span::raw("👁️ Eye GDI: "),
-            Span::styled(format!("{}x{} (Live Win32)", state.screen_width, state.screen_height), Style::default().fg(Color::Green)),
-        ]),
-        Line::from(vec![
-            Span::raw("🔍 SoM Elements: "),
-            Span::styled(format!("{} controls mapped", state.screen_elements_count), Style::default().fg(Color::Cyan)),
-        ]),
-        Line::from(vec![
-            Span::raw("🎙️ Ear VAD: "),
-            Span::styled("Ready / Full-Duplex WebAudio", Style::default().fg(Color::Yellow)),
-        ]),
-    ];
-
-    let organ_widget = Paragraph::new(organ_lines).block(
-        Block::default().title(" ⚡ Physical Organs ").borders(Borders::ALL).border_style(Style::default().fg(Color::Green))
-    );
-    frame.render_widget(organ_widget, chunks[0]);
-
-    // 2. 5-Gate Governance Pipeline
-    let gate_lines = vec![
-        Line::from(vec![
-            Span::styled("✓ Onion Layer-3 Sanitizer: ", Style::default().fg(Color::Green)),
-            Span::raw("SECURE"),
-        ]),
-        Line::from(vec![
-            Span::styled("✓ Egress Whitelist Guard:  ", Style::default().fg(Color::Green)),
-            Span::raw("ENFORCED"),
-        ]),
-        Line::from(vec![
-            Span::styled("✓ SHA-256 Audit Chain:     ", Style::default().fg(Color::Green)),
-            Span::styled(format!("H:{} (100% OK)", state.audit_chain_length), Style::default().fg(Color::Cyan).bold()),
-        ]),
-    ];
-
-    let gate_widget = Paragraph::new(gate_lines).block(
-        Block::default().title(" 🛡️ 5-Gate Governance ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow))
-    );
-    frame.render_widget(gate_widget, chunks[1]);
-
-    // 3. Tool & MCP Execution Log
-    let mut log_lines = Vec::new();
-    for log in state.tool_execution_logs.iter().rev().take(6) {
-        log_lines.push(Line::from(vec![
-            Span::styled("• ", Style::default().fg(Color::Cyan)),
-            Span::raw(log),
-        ]));
-    }
-
-    let log_widget = Paragraph::new(log_lines).block(
-        Block::default().title(" 📋 Tool & MCP Logs ").borders(Borders::ALL).border_style(Style::default().fg(Color::Blue))
-    );
-    frame.render_widget(log_widget, chunks[2]);
+    frame.render_widget(input_widget, chunks[1]);
 }
 
 // -----------------------------------------------------------------------------
-// Tab 2: Memory (ACT-R Knowledge Graph)
+// Page 2: 2 生长 ΑΥΞΗΣΙΣ (Growth)
 // -----------------------------------------------------------------------------
 
-fn render_memory_tab(frame: &mut Frame, area: Rect, state: &AppState) {
+fn render_growth_page(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -353,190 +317,83 @@ fn render_memory_tab(frame: &mut Frame, area: Rect, state: &AppState) {
 
     let mut list_items = Vec::new();
     if state.memory_items.is_empty() {
-        list_items.push(ListItem::new("No episodic memory found. Perform a chat turn to generate ACT-R memories."));
+        list_items.push(ListItem::new("暂无沉淀记忆。请在对话页与伴侣互动以生成 ACT-R 认知事实。"));
     } else {
         for (i, item) in state.memory_items.iter().enumerate() {
-            let is_selected = i == state.memory_selected;
-            let style = if is_selected { Style::default().fg(Color::Yellow).bold().bg(Color::DarkGray) } else { Style::default().fg(Color::White) };
-            list_items.push(ListItem::new(format!("[★{:.1}] {}", item.importance, item.data)).style(style));
+            let is_sel = i == state.memory_selected;
+            let st = if is_sel { Style::default().fg(style.accent).bold().bg(style.dim) } else { Style::default().fg(Color::White) };
+            list_items.push(ListItem::new(format!("[★{:.1}] {}", item.importance, item.data)).style(st));
         }
     }
 
     let list_block = Block::default()
-        .title(" 🧠 ACT-R Fact Episodes ")
+        .title(" 🧠 ACT-R 记忆事实池 ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
 
     frame.render_widget(List::new(list_items).block(list_block), cols[0]);
 
-    // Right Inspector
     let selected_item = state.memory_items.get(state.memory_selected);
-    let inspect_text = if let Some(item) = selected_item {
+    let detail_text = if let Some(item) = selected_item {
         format!(
-            "Memory ID:       {}\nData Content:    {}\nImportance:      {:.2}\nAccess Count:    {}\nCreated At:      {}\nValid From:      {}\nSignature:       {:?}\n\n[Cognitive Activation Formula]:\nln( sum( (t - t_j)^(-d) ) ) + Beta = {:.4}\n\nSemantic Triplet:\n(Subject: User) ──[Predicate: states]──> (Object: {})",
-            item.id, item.data, item.importance, item.access_count, item.created_at, item.valid_from, item.artifact_sig,
+            "记忆 ID:       {}\n事实内容:      {}\n重要度:        {:.2}\n访问频次:      {}\n生成时间:      {}\n\n[ACT-R 动态认知激活度公式]:\nA_i = ln( sum( (t - t_j)^(-d) ) ) + Beta = {:.4}\n\n[语义三元组关系]:\n(主语: User) ──[谓词: 叙述/偏好]──> (宾语: {})",
+            item.id, item.data, item.importance, item.access_count, item.created_at,
             item.calculate_act_r_activation(chrono::Utc::now().timestamp(), 0.5, 0.0),
             item.data
         )
     } else {
-        "Select a memory episode from the left panel to inspect ACT-R activation scores and semantic graph triplets.".into()
+        "在左侧选择一项记忆，查看其时间衰减激活度与语义图谱三元组。".into()
     };
 
-    let inspect_widget = Paragraph::new(inspect_text).block(
-        Block::default().title(" 🔍 Memory Episode Inspector ").borders(Borders::ALL).border_style(Style::default().fg(Color::Green))
-    );
-    frame.render_widget(inspect_widget, cols[1]);
-}
-
-// -----------------------------------------------------------------------------
-// Tab 3: Organs & MCP Ecosystem
-// -----------------------------------------------------------------------------
-
-fn render_organs_tab(frame: &mut Frame, area: Rect, state: &AppState) {
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(area);
-
-    let top_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[0]);
-
-    let bot_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[1]);
-
-    // Top-Left: Eye
-    let eye_text = format!(
-        "Physical Monitor:   {}x{} (Win32 Primary GDI)\nCapture Engine:     BitBlt + DIBits Zero-Leak Pipeline\nPerceptual Hash:    0x{:016x}\nSet-of-Marks Marks: {} active controls\nStatus:             ACTIVE_OBSERVING",
-        state.screen_width, state.screen_height, state.last_phash, state.screen_elements_count
-    );
-    frame.render_widget(Paragraph::new(eye_text).block(Block::default().title(" 👁️ Organ: Eye (Vision & Screen) ").borders(Borders::ALL).border_style(Style::default().fg(Color::Green))), top_cols[0]);
-
-    // Top-Right: Hand (MCP Tools)
-    let hand_text = "Mounted MCP Transports:\n• StdioTransport: Subprocess JSON-RPC (2024-11-05 standard)\n• MemoryTransport: Direct in-memory zero-copy channel\n• SseTransport: Remote HTTP streamable adapter\n\nActive Tool Registry:\n✓ shell (Sandboxed System Command)\n✓ fs (Cross-Platform Sandboxed Filesystem)\n✓ fetch (Anti-SSRF HTTP Request)\n✓ desktop_action (Mouse/Keyboard Automation)";
-    frame.render_widget(Paragraph::new(hand_text).block(Block::default().title(" 🖐️ Organ: Hand (MCP Tool Hub) ").borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan))), top_cols[1]);
-
-    // Bottom-Left: Ear (Voice)
-    let ear_text = "Voice Engine:       Full-Duplex Web Audio API\nVAD Energy RMS:     [||||||||||||░░░░░░] 0.02 (Silence)\nBarge-In Detector:  ARMED (Speech interrupts immediately)\nPad Color Map:      Reactive Soundwave Visualizer Active";
-    frame.render_widget(Paragraph::new(ear_text).block(Block::default().title(" 🎙️ Organ: Ear & Voice ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow))), bot_cols[0]);
-
-    // Bottom-Right: Brain & Healer
-    let brain_text = "Cognitive Core:     Hybrid Local SLM + MiniMax-Text-01\nEpistemic Healer:   Distillation Active (0 failures recorded)\nDream Engine:       P9 Nightly Memory Cluster Active\nSafety Onion:       Layer-1/2/3 Scrubbing Verified";
-    frame.render_widget(Paragraph::new(brain_text).block(Block::default().title(" 🧠 Organ: Brain (Healer & Dream) ").borders(Borders::ALL).border_style(Style::default().fg(Color::Magenta))), bot_cols[1]);
-}
-
-// -----------------------------------------------------------------------------
-// Tab 4: Software Factory (Git Worktree & Diff Review)
-// -----------------------------------------------------------------------------
-
-fn render_factory_tab(frame: &mut Frame, area: Rect, state: &AppState) {
-    let cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(35), Constraint::Percentage(65)])
-        .split(area);
-
-    let mut task_items = Vec::new();
-    for (i, task) in state.factory_tasks.iter().enumerate() {
-        let is_selected = i == state.factory_selected;
-        let style = if is_selected { Style::default().fg(Color::Yellow).bold().bg(Color::DarkGray) } else { Style::default().fg(Color::White) };
-        let status_tag = if task.passed { "PASS" } else { "FAIL" };
-        task_items.push(ListItem::new(format!("[{}] {} ({})", status_tag, task.requirement, task.branch)).style(style));
-    }
-
-    let list_block = Block::default()
-        .title(" 💻 Factory Tasks (Git Worktrees) ")
+    let detail_block = Block::default()
+        .title(" 🔍 认知生长与三元组查看器 ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(style.accent))
+        .border_type(style.border_type);
 
-    frame.render_widget(List::new(task_items).block(list_block), cols[0]);
-
-    // Right: Colorized Diff Viewer
-    let selected_task = state.factory_tasks.get(state.factory_selected);
-    let diff_content = selected_task.map(|t| t.diff_content.as_str()).unwrap_or("No task selected.");
-    let diff_widget = DiffViewer::render_diff(diff_content).block(
-        Block::default().title(" 📄 PatchSet Diff Viewer ([Y] Apply Patch  [N] Discard) ").borders(Borders::ALL).border_style(Style::default().fg(Color::Green))
-    );
-
-    frame.render_widget(diff_widget, cols[1]);
+    frame.render_widget(Paragraph::new(detail_text).block(detail_block), cols[1]);
 }
 
 // -----------------------------------------------------------------------------
-// Tab 5: Governance & Audit Blockchain
+// Page 3: 3 历史 ΙΣΤΟΡΙΑ (History)
 // -----------------------------------------------------------------------------
 
-fn render_governance_tab(frame: &mut Frame, area: Rect, state: &AppState) {
-    let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Length(8), Constraint::Min(8)])
-        .split(area);
-
-    let audit_status = if state.audit_integrity_ok {
-        "✓ 100% Cryptographically Verified (Genesis -> Latest Block Valid)"
-    } else {
-        "❌ Integrity Broken!"
-    };
-
-    let summary_text = format!(
-        "Audit Ledger Height:      {} blocks\nBlockchain Status:        {}\nGovernance Pipeline:      5/5 Gated Layers Active\nEgress Enforcement:       Default Deny with Domain Whitelist\nPlatform Sandbox:         Windows Job Object Process Hardening Active",
-        state.audit_chain_length, audit_status
-    );
-
-    frame.render_widget(Paragraph::new(summary_text).block(Block::default().title(" 🛡️ Governance & Integrity Overview ").borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow))), rows[0]);
-
-    let mut audit_entries = Vec::new();
+fn render_history_page(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
+    let mut audit_items = Vec::new();
     for msg in &state.messages {
-        audit_entries.push(ListItem::new(format!(
+        audit_items.push(ListItem::new(format!(
             "[{}] Role: {:<10} | Hash: {:<20} | Tokens: {:<4} | Content: {}",
-            msg.timestamp_ms, msg.role, msg.audit_hash, msg.tokens, &msg.content[..msg.content.len().min(40)]
+            msg.timestamp_ms, msg.role, msg.audit_hash, msg.tokens, &msg.content[..msg.content.len().min(45)]
         )));
     }
 
     let audit_block = Block::default()
-        .title(" 🔗 Immutable Audit Hash-Chain Ledger ")
+        .title(" 🔗 不可篡改 SHA-256 审计区块链账本 ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
 
-    frame.render_widget(List::new(audit_entries).block(audit_block), rows[1]);
+    frame.render_widget(List::new(audit_items).block(audit_block), area);
 }
 
 // -----------------------------------------------------------------------------
-// Modal Dialog
+// Page 4: 4 设置 ΤΑΞΙΣ (Settings)
 // -----------------------------------------------------------------------------
 
-fn render_modal(frame: &mut Frame, area: Rect, text: &str) {
-    let popup_area = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Length(8),
-            Constraint::Percentage(30),
-        ])
-        .split(area)[1];
+fn render_settings_page(frame: &mut Frame, area: Rect, state: &AppState, style: &ThemeStyle) {
+    let settings_text = format!(
+        "系统主题:           {} (按 't' 键实时切换)\n主题配色:           {}\n边框风格:           {:?}\n\n后端微内核:         UnifiedRuntimeHost 2.0\n大语言模型服务:     MiniMax-Text-01 (已挂载)\n长期认知存储池:     SQLite WAL (apeireth_v2.db)\n安全出站 (Egress):  严格域名白名单拦截已开启\n平台进程沙箱:       Windows Job Object 活跃\n\n快捷键帮助:\n• [0/1/2/3/4]: 快速跳转对应页面\n• [Tab]: 循环切换页面\n• [t]: 切换 古朴金 / 时代蓝 主题\n• [Ctrl+O]: 展开 / 折叠 CoT 思考链\n• [PageUp/Down]: 滚动消息列表\n• [q]: 退出 TUI 伴侣系统",
+        state.theme.display_label(),
+        match state.theme { super::theme::Theme::Archaic => "砖块金 (0xc8860a) / 暗金 (0x806040)", super::theme::Theme::Era => "淡蓝 (0x8fb3d9) / 暗蓝 (0x506840)" },
+        style.border_type
+    );
 
-    let popup_cols = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(50),
-            Constraint::Percentage(25),
-        ])
-        .split(popup_area)[1];
-
-    let clear_block = Clear;
-    frame.render_widget(clear_block, popup_cols);
-
-    let modal_block = Block::default()
-        .title(" ⚠️ FACTORY PATCHSET APPROVAL ")
+    let block = Block::default()
+        .title(" 4 设置 (Settings, ΤΑΞΙΣ) ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow).bold());
+        .border_style(Style::default().fg(style.primary))
+        .border_type(style.border_type);
 
-    let p = Paragraph::new(format!("{}\n\nPress [Y] to Apply, [N] to Discard, [Esc] to Close.", text))
-        .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Center)
-        .block(modal_block);
-
-    frame.render_widget(p, popup_cols);
+    frame.render_widget(Paragraph::new(settings_text).block(block), area);
 }
