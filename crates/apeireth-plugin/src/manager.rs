@@ -58,9 +58,71 @@ impl PluginManager {
         if self.plugins.contains(&id) {
             return Err(PluginError::DuplicatePlugin(id));
         }
+        Self::validate_implementations(plugin.as_ref())?;
         // Index first: a capability collision must not leave the plugin behind.
         self.capabilities.index(&id, &manifest.capabilities)?;
         self.plugins.register(plugin)?;
+        Ok(())
+    }
+
+    /// Fail closed when the manifest and executable capability surface differ.
+    fn validate_implementations(plugin: &dyn Plugin) -> PluginResult<()> {
+        let manifest = plugin.manifest();
+        let plugin_id = &manifest.id;
+        let tools = plugin.tools();
+        let providers = plugin.providers();
+
+        let implemented_tools: BTreeSet<CapabilityId> =
+            tools.iter().map(|tool| tool.id().clone()).collect();
+        let implemented_providers: BTreeSet<CapabilityId> = providers
+            .iter()
+            .map(|provider| provider.id().clone())
+            .collect();
+
+        for tool in &tools {
+            let declared = manifest
+                .capability(tool.id())
+                .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Tool);
+            if !declared {
+                return Err(PluginError::UndeclaredCapabilityImplementation {
+                    plugin: plugin_id.clone(),
+                    capability: tool.id().clone(),
+                    kind: CapabilityKind::Tool.id_prefix(),
+                });
+            }
+        }
+        for provider in &providers {
+            let declared = manifest
+                .capability(provider.id())
+                .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Provider);
+            if !declared {
+                return Err(PluginError::UndeclaredCapabilityImplementation {
+                    plugin: plugin_id.clone(),
+                    capability: provider.id().clone(),
+                    kind: CapabilityKind::Provider.id_prefix(),
+                });
+            }
+        }
+
+        for descriptor in manifest.capabilities_of_kind(CapabilityKind::Tool) {
+            if !implemented_tools.contains(&descriptor.id) {
+                return Err(PluginError::MissingCapabilityImplementation {
+                    plugin: plugin_id.clone(),
+                    capability: descriptor.id.clone(),
+                    kind: CapabilityKind::Tool.id_prefix(),
+                });
+            }
+        }
+        for descriptor in manifest.capabilities_of_kind(CapabilityKind::Provider) {
+            if !implemented_providers.contains(&descriptor.id) {
+                return Err(PluginError::MissingCapabilityImplementation {
+                    plugin: plugin_id.clone(),
+                    capability: descriptor.id.clone(),
+                    kind: CapabilityKind::Provider.id_prefix(),
+                });
+            }
+        }
+
         Ok(())
     }
 
@@ -467,6 +529,21 @@ mod tests {
         }
     }
 
+    fn plugin_with(
+        manifest: PluginManifest,
+        tools: Vec<Arc<dyn ToolCapability>>,
+        log: &Arc<BootLog>,
+    ) -> Arc<dyn Plugin> {
+        Arc::new(TestPlugin {
+            manifest,
+            tools,
+            log: Arc::clone(log),
+            fail_init: false,
+            fail_shutdown: false,
+            inits: AtomicUsize::new(0),
+        })
+    }
+
     fn context() -> PluginContext {
         PluginContext::new(system_clock(), Arc::new(NoCredentials), TraceId::new())
     }
@@ -674,6 +751,88 @@ mod tests {
             "the rejected plugin must not be registered"
         );
         assert_eq!(m.capabilities().len(), 1);
+    }
+
+    #[test]
+    fn a_declared_tool_without_an_implementation_is_rejected() {
+        let log = Arc::new(BootLog::default());
+        let capability = CapabilityId::new("tool.calculator").unwrap();
+        let manifest = PluginManifest::new(
+            PluginId::new("p.calculator").unwrap(),
+            "1.0.0",
+            "calculator",
+        )
+        .declare_capability(capability.clone(), CapabilityKind::Tool, "calculator")
+        .unwrap();
+        let mut manager = PluginManager::new();
+
+        let error = manager
+            .register(plugin_with(manifest, Vec::new(), &log))
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            PluginError::MissingCapabilityImplementation {
+                capability: missing,
+                kind: "tool",
+                ..
+            } if missing == capability
+        ));
+        assert!(manager.plugins().is_empty());
+        assert!(manager.capabilities().is_empty());
+    }
+
+    #[test]
+    fn a_declared_provider_without_an_implementation_is_rejected() {
+        let log = Arc::new(BootLog::default());
+        let capability = CapabilityId::new("provider.acme").unwrap();
+        let manifest =
+            PluginManifest::new(PluginId::new("p.provider").unwrap(), "1.0.0", "provider")
+                .declare_capability(capability.clone(), CapabilityKind::Provider, "provider")
+                .unwrap();
+        let mut manager = PluginManager::new();
+
+        let error = manager
+            .register(plugin_with(manifest, Vec::new(), &log))
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            PluginError::MissingCapabilityImplementation {
+                capability: missing,
+                kind: "provider",
+                ..
+            } if missing == capability
+        ));
+        assert!(manager.plugins().is_empty());
+        assert!(manager.capabilities().is_empty());
+    }
+
+    #[test]
+    fn an_undeclared_tool_implementation_is_rejected() {
+        let log = Arc::new(BootLog::default());
+        let capability = CapabilityId::new("tool.secret").unwrap();
+        let manifest = PluginManifest::new(PluginId::new("p.secret").unwrap(), "1.0.0", "secret");
+        let tools: Vec<Arc<dyn ToolCapability>> = vec![Arc::new(Echo {
+            id: capability.clone(),
+            name: "secret".into(),
+        })];
+        let mut manager = PluginManager::new();
+
+        let error = manager
+            .register(plugin_with(manifest, tools, &log))
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            PluginError::UndeclaredCapabilityImplementation {
+                capability: undeclared,
+                kind: "tool",
+                ..
+            } if undeclared == capability
+        ));
+        assert!(manager.plugins().is_empty());
+        assert!(manager.capabilities().is_empty());
     }
 
     #[tokio::test]
