@@ -46,5 +46,7 @@ pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{TurnRequest, TurnResponse};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
-pub use session::{InMemorySessionStore, Session, SessionManager, SessionStore};
+pub use session::{
+    InMemorySessionStore, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
+};
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};
