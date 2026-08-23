@@ -39,7 +39,7 @@
 use std::fmt;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, Metadata, SessionId, TraceId};
+use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -155,6 +155,15 @@ impl Decision {
             Self::Deny { reason } | Self::RequireApproval { reason } => Some(reason),
         }
     }
+
+    /// Stable decision label for structured traces.
+    pub const fn label(&self) -> &'static str {
+        match self {
+            Self::Allow => "allow",
+            Self::Deny { .. } => "deny",
+            Self::RequireApproval { .. } => "require_approval",
+        }
+    }
 }
 
 impl fmt::Display for Decision {
@@ -172,6 +181,8 @@ impl fmt::Display for Decision {
 pub struct GovernanceVerdict {
     /// The hook that produced this decision.
     pub hook: String,
+    /// Plugin that owns the hook, when the hook comes from a plugin.
+    pub owner: Option<PluginId>,
     /// What it decided.
     pub decision: Decision,
     /// Additional annotations from the hook.
@@ -183,9 +194,17 @@ impl GovernanceVerdict {
     pub fn new(hook: impl Into<String>, decision: Decision) -> Self {
         Self {
             hook: hook.into(),
+            owner: None,
             decision,
             metadata: Metadata::new(),
         }
+    }
+
+    /// Attribute the verdict to a plugin owner.
+    #[must_use]
+    pub fn with_owner(mut self, owner: Option<PluginId>) -> Self {
+        self.owner = owner;
+        self
     }
 
     /// Whether the action may proceed.
@@ -200,6 +219,11 @@ pub trait GovernanceHook: Send + Sync {
     /// Stable name, used in verdicts and audit records.
     fn name(&self) -> &str;
 
+    /// Plugin owner when this hook is contributed by a plugin.
+    fn owner(&self) -> Option<&PluginId> {
+        None
+    }
+
     /// Judge one action.
     ///
     /// Returns a [`Decision`] rather than a `Result`: a policy refusal is a
@@ -208,6 +232,12 @@ pub trait GovernanceHook: Send + Sync {
     /// saying so, which is both safer and more legible than an error type the
     /// caller has to interpret.
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision;
+
+    /// Judge one action and preserve the identity of the deciding hook.
+    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
+        GovernanceVerdict::new(self.name(), self.evaluate(request).await)
+            .with_owner(self.owner().cloned())
+    }
 }
 
 /// Allows everything.
@@ -344,13 +374,19 @@ impl GovernanceHook for GovernancePipeline {
     }
 
     async fn evaluate(&self, request: &GovernanceRequest<'_>) -> Decision {
+        <Self as GovernanceHook>::evaluate_verbose(self, request)
+            .await
+            .decision
+    }
+
+    async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
         for hook in &self.hooks {
-            let decision = hook.evaluate(request).await;
-            if !decision.is_allowed() {
-                return decision;
+            let verdict = hook.evaluate_verbose(request).await;
+            if !verdict.is_allowed() {
+                return verdict;
             }
         }
-        Decision::Allow
+        GovernanceVerdict::new(self.name(), Decision::Allow)
     }
 }
 
@@ -360,19 +396,32 @@ impl GovernancePipeline {
     /// Prefer this over [`GovernanceHook::evaluate`] at a call site that records
     /// an audit trail: "denied" is much less useful than "denied by max_rounds".
     pub async fn evaluate_verbose(&self, request: &GovernanceRequest<'_>) -> GovernanceVerdict {
-        for hook in &self.hooks {
-            let decision = hook.evaluate(request).await;
-            if !decision.is_allowed() {
-                return GovernanceVerdict::new(hook.name(), decision);
-            }
-        }
-        GovernanceVerdict::new(self.name(), Decision::Allow)
+        <Self as GovernanceHook>::evaluate_verbose(self, request).await
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct OwnedDeny {
+        owner: PluginId,
+    }
+
+    #[async_trait]
+    impl GovernanceHook for OwnedDeny {
+        fn name(&self) -> &str {
+            "governance.input.safety"
+        }
+
+        fn owner(&self) -> Option<&PluginId> {
+            Some(&self.owner)
+        }
+
+        async fn evaluate(&self, _request: &GovernanceRequest<'_>) -> Decision {
+            Decision::deny("blocked by owned hook")
+        }
+    }
 
     fn dispatch_request<'a>(
         capability: &'a CapabilityId,
@@ -474,6 +523,26 @@ mod tests {
             .await;
         assert_eq!(verdict.hook, "deny_capabilities");
         assert!(!verdict.is_allowed());
+    }
+
+    #[tokio::test]
+    async fn a_trait_object_pipeline_preserves_hook_and_plugin_owner() {
+        let owner = PluginId::new("plugin.safety").unwrap();
+        let pipeline: Arc<dyn GovernanceHook> =
+            Arc::new(GovernancePipeline::new().with(Arc::new(OwnedDeny {
+                owner: owner.clone(),
+            })));
+        let capability = CapabilityId::new("tool.shell").unwrap();
+        let arguments = serde_json::Value::Null;
+
+        let verdict = pipeline
+            .evaluate_verbose(&dispatch_request(&capability, &arguments, 1))
+            .await;
+
+        assert_eq!(verdict.hook, "governance.input.safety");
+        assert_eq!(verdict.owner, Some(owner));
+        assert_eq!(verdict.decision.label(), "deny");
+        assert_eq!(verdict.decision.reason(), Some("blocked by owned hook"));
     }
 
     #[tokio::test]
