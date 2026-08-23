@@ -5,8 +5,11 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct FsParams {
+    #[serde(alias = "op", alias = "action")]
     pub operation: String,
+    #[serde(alias = "file", alias = "filepath", alias = "target", alias = "target_path")]
     pub path: String,
+    #[serde(alias = "data", alias = "text", alias = "code", alias = "body")]
     pub content: Option<String>,
 }
 
@@ -52,11 +55,12 @@ impl FilesystemTool {
 impl Tool for FilesystemTool {
     fn definition(&self) -> ToolDefinition {
         ToolDefinition {
-            name: "fs".into(),
-            description: "Cross-platform sandboxed filesystem manager (read, write, list, delete)".into(),
+            name: "filesystem".into(),
+            description: "Cross-platform sandboxed filesystem manager (read, write, list, delete). Parameters: {\"operation\": \"read|write|list|delete\", \"path\": \"...\", \"content\": \"...\"}".into(),
             risk_level: RiskLevel::Medium,
         }
     }
+
 
     async fn execute(&self, params: serde_json::Value) -> Result<ToolResult, ToolError> {
         let params: FsParams = serde_json::from_value(params)

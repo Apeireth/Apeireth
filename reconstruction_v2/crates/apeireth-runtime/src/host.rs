@@ -105,6 +105,8 @@ impl UnifiedRuntimeHost {
         tool_reg.register(Arc::new(apeireth_tools::vision::ScreenObserveTool::new()));
         tool_reg.register(Arc::new(apeireth_tools::builtin::invest::InvestTool::new()));
         tool_reg.register(Arc::new(apeireth_tools::builtin::learning::LearningTool::new()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::system_monitor::SystemMonitorTool::new()));
+
 
 
 
