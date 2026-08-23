@@ -583,6 +583,30 @@ async fn a_governance_denial_stops_the_tool_but_not_the_turn() {
     );
     assert_eq!(outcome.trace.capability_dispatches(), 0);
     assert_eq!(provider.call_count(), 2, "the turn continues to round 2");
+    let decision = outcome
+        .trace
+        .events()
+        .find(|event| {
+            matches!(
+                event,
+                TraceEvent::GovernanceEvaluated { action, .. }
+                    if action == "capability_dispatch"
+            )
+        })
+        .expect("tool governance decision is traced");
+    assert!(matches!(
+        decision,
+        TraceEvent::GovernanceEvaluated {
+            hook,
+            owner: None,
+            decision,
+            reason: Some(reason),
+            round: 1,
+            ..
+        } if hook == "deny_capabilities"
+            && decision == "deny"
+            && reason.contains("tool.calculator")
+    ));
 
     // The model is told why, so it can try something else.
     let second_request = provider.request(1);
@@ -866,7 +890,7 @@ async fn a_governance_hook_can_bound_the_loop_before_the_structural_limit() {
 
     match err {
         RuntimeError::Denied { hook, reason } => {
-            assert_eq!(hook, "pipeline");
+            assert_eq!(hook, "max_rounds");
             assert!(reason.contains('2'), "{reason}");
         }
         other => panic!("expected Denied, got {other}"),
