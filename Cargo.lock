@@ -385,17 +385,18 @@ dependencies = [
  "apeireth-core",
  "apeireth-council",
  "apeireth-eval",
+ "apeireth-gateway",
  "apeireth-mcp",
  "apeireth-memory",
+ "apeireth-provider",
+ "apeireth-runtime",
  "apeireth-skills",
- "axum",
  "chrono",
  "clap",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
- "tower-http 0.5.2",
 ]
 
 [[package]]
@@ -654,17 +655,24 @@ name = "apeireth-gateway"
 version = "1.2.0"
 dependencies = [
  "apeireth-bus",
+ "apeireth-core",
+ "apeireth-governance",
  "apeireth-guard",
+ "apeireth-plugin",
+ "apeireth-protocol",
  "apeireth-rate-limiter",
  "apeireth-runtime",
  "apeireth-tool-registry",
  "async-trait",
+ "axum",
  "chrono",
+ "http-body-util",
  "parking_lot",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tower 0.5.3",
  "tracing",
  "uuid",
 ]
@@ -1076,7 +1084,12 @@ name = "apeireth-provider"
 version = "1.2.0"
 dependencies = [
  "apeireth-acp",
+ "apeireth-core",
  "apeireth-http-client",
+ "apeireth-llm-iface",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "async-trait",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
