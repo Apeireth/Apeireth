@@ -19,7 +19,7 @@
 //! offers reasoning, and can be asserted on in tests. The end-to-end test in this
 //! crate proves the loop's behaviour entirely through this type.
 
-use apeireth_core::kernel::{CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_core::kernel::{CapabilityId, PluginId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_protocol::canonical::{NormalizedFinishReason, NormalizedUsage};
 use serde::{Deserialize, Serialize};
 
@@ -63,10 +63,14 @@ pub enum TraceEvent {
     GovernanceEvaluated {
         /// Which hook decided.
         hook: String,
+        /// Plugin that owns the hook, when applicable.
+        owner: Option<PluginId>,
         /// Which action was judged.
         action: String,
         /// What was decided.
         decision: String,
+        /// Structured reason for a refusal or approval requirement.
+        reason: Option<String>,
         /// Which round.
         round: u32,
     },
