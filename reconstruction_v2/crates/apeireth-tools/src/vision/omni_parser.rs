@@ -74,12 +74,15 @@ impl OmniParser {
         }
     }
 
-    /// Detects real interactive windows on Windows desktop
+    /// Detects real interactive windows and controls on Windows desktop
     #[cfg(target_os = "windows")]
     pub fn detect_live_elements(width: u32, height: u32) -> Vec<UiElement> {
         use winapi::shared::minwindef::{BOOL, LPARAM, TRUE};
         use winapi::shared::windef::{HWND, RECT};
-        use winapi::um::winuser::{EnumWindows, GetWindowRect, GetWindowTextW, IsWindowVisible};
+        use winapi::um::winuser::{
+            EnumWindows, EnumChildWindows, GetWindowRect, GetWindowTextW,
+            GetClassNameW, IsWindowVisible, GetForegroundWindow,
+        };
 
         struct EnumCtx {
             elements: Vec<UiElement>,
@@ -88,37 +91,71 @@ impl OmniParser {
             id_counter: u32,
         }
 
-        unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        fn map_class_to_type(class_name: &str) -> (UiElementType, bool) {
+            let lower = class_name.to_lowercase();
+            if lower.contains("button") {
+                if lower.contains("check") {
+                    (UiElementType::Checkbox, true)
+                } else {
+                    (UiElementType::Button, true)
+                }
+            } else if lower.contains("edit") {
+                (UiElementType::InputBox, true)
+            } else if lower.contains("combo") || lower.contains("list") || lower.contains("menu") {
+                (UiElementType::MenuItem, true)
+            } else if lower.contains("link") || lower.contains("hyperlink") {
+                (UiElementType::Link, true)
+            } else if lower.contains("static") || lower.contains("label") {
+                (UiElementType::Text, false)
+            } else {
+                (UiElementType::Button, true)
+            }
+        }
+
+        unsafe extern "system" fn inspect_hwnd(hwnd: HWND, lparam: LPARAM) -> BOOL {
             let ctx = &mut *(lparam as *mut EnumCtx);
             if IsWindowVisible(hwnd) != 0 {
                 let mut rect: RECT = std::mem::zeroed();
                 if GetWindowRect(hwnd, &mut rect) != 0 {
                     let w = rect.right - rect.left;
                     let h = rect.bottom - rect.top;
-                    if w > 40 && h > 40 && rect.left >= 0 && rect.top >= 0 {
+                    if w > 10 && h > 10 && rect.left >= -100 && rect.top >= -100 {
                         let mut title_buf = [0u16; 256];
                         let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 256);
                         let title = if len > 0 {
                             String::from_utf16_lossy(&title_buf[..len as usize])
                         } else {
-                            "Desktop Control".into()
+                            String::new()
                         };
 
-                        if !title.trim().is_empty() {
-                            let x_norm = rect.left as f32 / ctx.width.max(1) as f32;
-                            let y_norm = rect.top as f32 / ctx.height.max(1) as f32;
-                            let w_norm = w as f32 / ctx.width.max(1) as f32;
-                            let h_norm = h as f32 / ctx.height.max(1) as f32;
+                        let mut class_buf = [0u16; 128];
+                        let class_len = GetClassNameW(hwnd, class_buf.as_mut_ptr(), 128);
+                        let class_name = if class_len > 0 {
+                            String::from_utf16_lossy(&class_buf[..class_len as usize])
+                        } else {
+                            "Window".into()
+                        };
 
-                            ctx.id_counter += 1;
-                            ctx.elements.push(UiElement {
-                                id: ctx.id_counter,
-                                element_type: UiElementType::Button,
-                                label: title,
-                                bbox: [x_norm, y_norm, w_norm, h_norm],
-                                is_interactive: true,
-                            });
-                        }
+                        let (elem_type, is_interactive) = map_class_to_type(&class_name);
+                        let label = if !title.trim().is_empty() {
+                            title
+                        } else {
+                            format!("[{}]", class_name)
+                        };
+
+                        let x_norm = (rect.left.max(0) as f32) / ctx.width.max(1) as f32;
+                        let y_norm = (rect.top.max(0) as f32) / ctx.height.max(1) as f32;
+                        let w_norm = (w as f32) / ctx.width.max(1) as f32;
+                        let h_norm = (h as f32) / ctx.height.max(1) as f32;
+
+                        ctx.id_counter += 1;
+                        ctx.elements.push(UiElement {
+                            id: ctx.id_counter,
+                            element_type: elem_type,
+                            label,
+                            bbox: [x_norm, y_norm, w_norm, h_norm],
+                            is_interactive,
+                        });
                     }
                 }
             }
@@ -133,9 +170,17 @@ impl OmniParser {
         };
 
         unsafe {
-            EnumWindows(Some(enum_proc), &mut ctx as *mut _ as LPARAM);
+            // First inspect foreground active window child controls
+            let fg = GetForegroundWindow();
+            if !fg.is_null() {
+                inspect_hwnd(fg, &mut ctx as *mut _ as LPARAM);
+                EnumChildWindows(fg, Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
+            }
+            // Then enumerate top-level windows (cap to max 50 elements)
+            EnumWindows(Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
         }
 
+        ctx.elements.truncate(50);
         ctx.elements
     }
 

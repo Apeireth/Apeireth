@@ -72,6 +72,26 @@ impl NormalizedMessage {
         }
         if out.is_empty() { None } else { Some(out) }
     }
+
+    pub fn extract_tool_calls(&self) -> Vec<ToolCall> {
+        self.parts.iter().filter_map(|p| {
+            if let ContentPart::ToolCall { tool_call } = p {
+                Some(tool_call.clone())
+            } else {
+                None
+            }
+        }).collect()
+    }
+
+    pub fn tool_result(tool_call_id: impl Into<String>, result: impl Into<String>) -> Self {
+        Self {
+            role: Role::Tool,
+            parts: vec![ContentPart::ToolResult {
+                tool_call_id: tool_call_id.into(),
+                result: result.into(),
+            }],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
