@@ -45,6 +45,30 @@ pub enum PluginError {
         expected: &'static str,
     },
 
+    /// A manifest declaration has no implementation on its owning plugin.
+    #[error(
+        "plugin {plugin} declares {kind} capability {capability} but provides no implementation"
+    )]
+    MissingCapabilityImplementation {
+        /// Plugin whose manifest and implementation disagree.
+        plugin: PluginId,
+        /// Declared capability with no implementation.
+        capability: CapabilityId,
+        /// Canonical capability kind.
+        kind: &'static str,
+    },
+
+    /// A plugin exposes an implementation its manifest does not declare.
+    #[error("plugin {plugin} provides undeclared {kind} capability {capability}")]
+    UndeclaredCapabilityImplementation {
+        /// Plugin whose implementation is not declared.
+        plugin: PluginId,
+        /// Implementation missing from the manifest.
+        capability: CapabilityId,
+        /// Canonical capability kind.
+        kind: &'static str,
+    },
+
     /// A plugin declares a dependency that was never registered.
     #[error("plugin {dependent} depends on {missing}, which is not registered")]
     MissingDependency {
