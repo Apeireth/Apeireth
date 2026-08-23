@@ -91,10 +91,13 @@ impl UnifiedRuntimeHost {
 
         let tool_reg = ToolRegistry::new();
         tool_reg.register(Arc::new(ShellTool::new()));
-
         tool_reg.register(Arc::new(FilesystemTool::new()));
         tool_reg.register(Arc::new(FetchTool::new()));
         tool_reg.register(Arc::new(DesktopActionTool::default()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::browser::BrowserTool::new()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::search::SearchTool::new()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::repo_tools::RepoTools::new()));
+
 
         let sandbox = Arc::new(PlatformSandbox::new()?);
         let _ = sandbox.apply_restrictions();
@@ -254,8 +257,10 @@ impl UnifiedRuntimeHost {
             silence_pressure: 0.0,
         };
 
-        let tools = vec!["shell", "filesystem", "fetch", "desktop_action", "tool_synthesis", "mcp_hub"];
-        let system_prompt = self.prompt_assembler.assemble_system_prompt(&context_state, &tools);
+        let tool_defs = self.tool_registry.list_tools();
+        let tool_names: Vec<String> = tool_defs.iter().map(|t| t.name.clone()).collect();
+        let tool_refs: Vec<&str> = tool_names.iter().map(|s| s.as_str()).collect();
+        let system_prompt = self.prompt_assembler.assemble_system_prompt(&context_state, &tool_refs);
 
 
         // ---------------------------------------------------------------------
@@ -280,15 +285,93 @@ impl UnifiedRuntimeHost {
             session.last_interaction = now;
         }
 
-        let request = NormalizedRequest::new(&self.default_model, messages);
+        let mut request = NormalizedRequest::new(&self.default_model, messages);
 
         // ---------------------------------------------------------------------
-        // Phase 7: Live Protocol Dispatch & CoT Decomposition
+        // Phase 7: Agentic Tool-Use Loop
+        // Dispatch to LLM, check for tool_calls, execute them, feed results
+        // back to LLM, repeat up to MAX_TOOL_ROUNDS.
         // ---------------------------------------------------------------------
-        let response = self.protocol_adapter.execute(&self.api_key, &request).await?;
-        let assistant_full_text = response.message.extract_text();
-        let reasoning_cot = response.message.extract_reasoning();
-        let token_usage = response.usage;
+        const MAX_TOOL_ROUNDS: usize = 5;
+        let mut cumulative_usage = Usage::default();
+        let mut final_text = String::new();
+        let mut final_reasoning: Option<String> = None;
+
+        for _round in 0..MAX_TOOL_ROUNDS {
+            let response = self.protocol_adapter.execute(&self.api_key, &request).await?;
+            cumulative_usage.prompt_tokens += response.usage.prompt_tokens;
+            cumulative_usage.completion_tokens += response.usage.completion_tokens;
+            cumulative_usage.total_tokens += response.usage.total_tokens;
+
+            let tool_calls = response.message.extract_tool_calls();
+            final_text = response.message.extract_text();
+            if final_reasoning.is_none() {
+                final_reasoning = response.message.extract_reasoning();
+            }
+
+            if tool_calls.is_empty() {
+                // No tool calls — LLM gave a final text answer, break out
+                break;
+            }
+
+            // LLM wants to call tools — execute each one
+            // Add the assistant message (with tool_calls) to the conversation
+            request.messages.push(response.message.clone());
+
+            for tc in &tool_calls {
+                let tool_result_str = match self.tool_registry.get_tool(&tc.name) {
+                    Some(tool) => {
+                        // Governance check for tool execution
+                        let tool_target = apeireth_governance::gates::ActionTarget {
+                            name: format!("tool_execute:{}", tc.name),
+                            risk_level: match tool.definition().risk_level {
+                                apeireth_tools::RiskLevel::Low => apeireth_governance::gates::RiskLevel::Low,
+                                apeireth_tools::RiskLevel::Medium => apeireth_governance::gates::RiskLevel::Medium,
+                                apeireth_tools::RiskLevel::High => apeireth_governance::gates::RiskLevel::High,
+                                apeireth_tools::RiskLevel::Critical => apeireth_governance::gates::RiskLevel::Critical,
+                            },
+                            requires_council: false,
+                            external_network: tc.name == "fetch",
+                        };
+                        let gov_ok = {
+                            let mut gov = self.governance.lock().await;
+                            gov.evaluate_action(&tool_target, "2.0.0", 100.0, 4096, 0, 0, true)
+                                .map(|results| results.iter().all(|r| r.passed))
+                                .unwrap_or(false)
+                        };
+
+                        if !gov_ok {
+                            format!("Error: Tool '{}' blocked by governance pipeline", tc.name)
+                        } else {
+                            let params: serde_json::Value = serde_json::from_str(&tc.arguments)
+                                .unwrap_or(serde_json::Value::Null);
+                            match tool.execute(params).await {
+                                Ok(result) => {
+                                    // Audit the tool execution
+                                    let mut audit = self.audit_chain.lock().await;
+                                    audit.append(
+                                        &format!("tool_executed:{}", tc.name),
+                                        format!("session:{} success:{}", session_id, result.success),
+                                    );
+                                    result.output
+                                }
+                                Err(e) => format!("Error executing tool '{}': {}", tc.name, e),
+                            }
+                        }
+                    }
+                    None => format!("Error: Tool '{}' not found in registry", tc.name),
+                };
+
+                // Add tool result to conversation for the next LLM round
+                request.messages.push(NormalizedMessage::tool_result(&tc.id, tool_result_str));
+            }
+
+            // Loop back to query LLM again with tool results
+        }
+
+        let assistant_full_text = final_text;
+        let reasoning_cot = final_reasoning;
+        let token_usage = cumulative_usage;
 
         {
             let mut sessions = self.sessions.lock().await;

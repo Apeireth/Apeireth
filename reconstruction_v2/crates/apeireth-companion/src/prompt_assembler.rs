@@ -52,20 +52,18 @@ impl ContextAssembler {
 
         // ---------------------------------------------------------------------
         // L2: 当前挂载的系统级工具总线与物理能力 (System Tools Registry)
+        // Generated dynamically from actually-registered tools only.
         // ---------------------------------------------------------------------
-        prompt.push_str("## 🧰 当前挂载的系统工具总线与物理能力 (System Tools Registry):\n");
-        prompt.push_str("你拥有直接调用与操作本地系统的工具总线，被问及或需要执行操作时，你具备并可以使用以下具体工具：\n");
-        prompt.push_str("• `shell` (本地终端沙箱执行器): 在 Windows Job Object 隔离沙箱中执行 PowerShell/CMD 命令、编译构建、系统状态排查与程序运行，受严格破坏性指令拦截保护。\n");
-        prompt.push_str("• `filesystem` (文件系统管理器): 读取本地文件与代码库、创建/写入/修改配置文件、检索目录树结构，保障文件原子化操作。\n");
-        prompt.push_str("• `fetch` (安全网络数据抓取器): 发起 HTTP GET/POST 请求抓取实时公开网页内容、API 数据与金融行情，受 SSRF 与严格出站白名单保护。\n");
-        prompt.push_str("• `desktop_action` (Win32 GDI 屏幕视觉与桌面协同): 实时截取物理屏幕像素（1707x1067 RGB）、计算感知哈希与画面变化、解析 OmniParser UI 控件、执行鼠标点击、拖拽、键盘按键与快捷键输入。\n");
-        prompt.push_str("• `tool_synthesis` (动态工具自我进化器): 在独立的 Git Worktree 隔离沙箱中编写新工具 Rust 源码、运行测试闭环并动态注册到当前运行时。\n");
-        prompt.push_str("• `mcp_hub` (MCP 协议扩展总线): 挂载并协同调用符合 Anthropic Model Context Protocol (2024-11-05) 的各类外部工具服务器。\n");
         if !tools.is_empty() {
-            prompt.push_str(&format!("[当前在线工具节点]: {}\n\n", tools.join(", ")));
-        } else {
+            prompt.push_str("## 🧰 当前挂载的系统工具总线 (System Tools Registry):\n");
+            prompt.push_str("你拥有直接调用与操作本地系统的工具总线。以下是当前已注册并可用的工具：\n");
+            for tool_name in tools {
+                let desc = Self::tool_description(tool_name);
+                prompt.push_str(&format!("• `{}`: {}\n", tool_name, desc));
+            }
             prompt.push_str("\n");
         }
+
 
         // ---------------------------------------------------------------------
         // L3: 哲学锚点与宪政治理原则 (Core Philosophy & 5-Gate Governance)
@@ -103,6 +101,22 @@ impl ContextAssembler {
 
         prompt
     }
+
+    /// Maps registered tool names to their human-readable descriptions for the LLM.
+    /// This is the single source of truth — only tools that appear in ToolRegistry
+    /// will have their descriptions injected into the system prompt.
+    fn tool_description(name: &str) -> &'static str {
+        match name {
+            "shell" => "本地终端沙箱执行器。在 Windows Job Object 隔离沙箱中执行 PowerShell/CMD 命令、编译构建、系统排查，受严格破坏性指令拦截保护。参数: {\"command\": \"...\"}",
+            "filesystem" => "文件系统管理器。读取/创建/写入/修改本地文件与配置，检索目录树结构，保障原子化操作。参数: {\"operation\": \"read|write|list\", \"path\": \"...\"}",
+            "fetch" => "安全网络数据抓取器。发起 HTTP GET/POST 请求抓取公开网页、API 数据与金融行情，受 SSRF 与出站白名单保护。参数: {\"url\": \"...\", \"method\": \"GET|POST\"}",
+            "desktop_action" => "Win32 桌面操作。通过 SendInput API 执行鼠标点击/移动/拖拽、键盘输入/快捷键、滚轮操作，受坐标边界与速率限流保护。参数: {\"action\": \"click|move|drag|type|hotkey|scroll\", ...}",
+            "browser" => "网页阅读器。抓取指定网页并解析为干净文本，用于信息检索与知识提取。参数: {\"url\": \"https://...\", \"max_chars\": 8000}",
+            "search" => "本地代码与文件检索器。递归搜索代码库文件名与文本内容。参数: {\"query\": \"keyword\", \"path\": \".\", \"max_results\": 20}",
+            "repo" => "Git 仓库协同检查工具。安全查询 Git 状态、提交记录、分支与差异。参数: {\"command\": \"status|log|diff|branch|summary\"}",
+            _ => "已注册的系统工具",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -125,13 +139,13 @@ mod tests {
             silence_pressure: 0.1,
         };
 
-        let prompt = assembler.assemble_system_prompt(&state, &["shell", "filesystem", "fetch", "desktop_action", "tool_synthesis", "mcp_hub"]);
+        let prompt = assembler.assemble_system_prompt(&state, &["shell", "filesystem", "fetch", "desktop_action"]);
         assert!(prompt.contains("自行升级自己的能力"));
         assert!(prompt.contains("记忆反思总结的能力"));
-        assert!(prompt.contains("shell (本地终端沙箱执行器)"));
-        assert!(prompt.contains("desktop_action (Win32 GDI 屏幕视觉与桌面协同)"));
+        assert!(prompt.contains("`shell`: 本地终端沙箱执行器"));
+        assert!(prompt.contains("`desktop_action`: Win32 桌面操作"));
         assert!(prompt.contains("严禁套话"));
-        assert!(prompt.contains("User works on Rust concurrency"));
-        assert!(prompt.contains("Pleasure=0.80"));
+        assert!(prompt.contains("愉悦度(Pleasure)=0.80"));
     }
 }
+

@@ -90,8 +90,8 @@ async fn test_worktree_and_tool_synthesis() {
     let tool_name = synthesizer.synthesize_and_register(
         "json_prettifier",
         "Synthesized tool to prettify JSON",
-        "python",
-        "import json\ndef run(s): return json.dumps(json.loads(s), indent=2)",
+        "powershell",
+        "Write-Output 'json_prettifier output ok'",
         &mut reg,
     ).unwrap();
 
@@ -100,3 +100,4 @@ async fn test_worktree_and_tool_synthesis() {
     assert!(res.success);
     assert!(res.output.contains("json_prettifier"));
 }
+
