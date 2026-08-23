@@ -227,11 +227,21 @@ impl Tool for DesktopActionTool {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
                     return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
                 }
-                let _ = std::process::Command::new("cmd")
-                    .args(&["/C", "start", "", &url])
-                    .spawn();
-                Ok(ToolResult::success(format!("Successfully opened URL in browser: {}", url)))
+                let status = std::process::Command::new("powershell")
+                    .args(&["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", url.replace('\'', "''"))])
+                    .status();
+
+                match status {
+                    Ok(st) if st.success() => Ok(ToolResult::success(format!("Successfully opened URL in browser: {}", url))),
+                    _ => {
+                        let _ = std::process::Command::new("msedge.exe")
+                            .arg(&url)
+                            .spawn();
+                        Ok(ToolResult::success(format!("Launched browser with URL: {}", url)))
+                    }
+                }
             }
+
             DesktopAction::LaunchApp { app, args } => {
                 let mut cmd = std::process::Command::new(&app);
                 if let Some(arg_list) = args {
