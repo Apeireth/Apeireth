@@ -85,7 +85,9 @@ impl StdioTransport {
 #[async_trait]
 impl McpTransport for StdioTransport {
     async fn send_request(&self, req: JsonRpcRequest) -> Result<JsonRpcResponse, String> {
+        let req_id = req.id.clone();
         let mut req_str = serde_json::to_string(&req).map_err(|e| e.to_string())?;
+
         req_str.push('\n');
 
         {
@@ -94,18 +96,27 @@ impl McpTransport for StdioTransport {
             stdin.flush().await.map_err(|e| format!("Stdio flush error: {}", e))?;
         }
 
-        let mut line = String::new();
-        {
-            let mut reader = self.reader.lock().await;
-            reader.read_line(&mut line).await.map_err(|e| format!("Stdio read error: {}", e))?;
-        }
+        let mut reader = self.reader.lock().await;
+        loop {
+            let mut line = String::new();
+            let bytes_read = reader.read_line(&mut line).await.map_err(|e| format!("Stdio read error: {}", e))?;
+            if bytes_read == 0 {
+                return Err("MCP process closed stdout stream prematurely".into());
+            }
 
-        if line.trim().is_empty() {
-            return Err("Received empty line from MCP process".into());
-        }
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
 
-        serde_json::from_str::<JsonRpcResponse>(&line).map_err(|e| format!("Failed to parse JSON-RPC response '{}': {}", line.trim(), e))
+            if let Ok(resp) = serde_json::from_str::<JsonRpcResponse>(trimmed) {
+                if resp.id == req_id {
+                    return Ok(resp);
+                }
+            }
+        }
     }
+
 
     async fn send_notification(&self, notif: JsonRpcNotification) -> Result<(), String> {
         let mut notif_str = serde_json::to_string(&notif).map_err(|e| e.to_string())?;

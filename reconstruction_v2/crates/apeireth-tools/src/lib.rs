@@ -135,8 +135,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_registry() {
-        let mut reg = ToolRegistry::new();
+        let reg = ToolRegistry::new();
         reg.register(Arc::new(DummyTool));
+
         let res = reg.execute("dummy", serde_json::json!({})).await.unwrap();
         assert!(res.success);
     }

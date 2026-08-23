@@ -127,7 +127,14 @@ impl ScreenCapture {
             }
 
             let old_bm = SelectObject(hdc_mem, hbm as *mut _);
-            BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, 0, 0, SRCCOPY);
+            let blt_res = BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, 0, 0, SRCCOPY);
+            if blt_res == 0 {
+                SelectObject(hdc_mem, old_bm);
+                DeleteObject(hbm as *mut _);
+                DeleteDC(hdc_mem);
+                ReleaseDC(null_mut(), hdc_screen);
+                return None;
+            }
 
             let mut bi: BITMAPINFO = std::mem::zeroed();
             bi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
@@ -162,6 +169,7 @@ impl ScreenCapture {
             }
         }
     }
+
 
     #[cfg(not(target_os = "windows"))]
     pub fn capture_native_screen() -> Option<(Vec<u8>, u32, u32)> {
