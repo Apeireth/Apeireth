@@ -1,11 +1,10 @@
 use std::sync::Arc;
-use chrono::Utc;
 use apeireth_runtime::UnifiedRuntimeHost;
-use apeireth_storage::memory_v2::QueryMode;
-use apeireth_cli::tui::state::{AppState, NavPage, ChatMessageItem};
+use apeireth_cli::tui::state::{AppState, NavPage};
 use apeireth_cli::tui::theme::Theme;
 use apeireth_cli::tui::ui::{compute_scroll_y, compute_scrollbar_position};
 use apeireth_cli::tui::widgets::BrailleSparkline;
+
 
 fn get_api_key() -> String {
     let key_file = r"C:\Users\31683\apikey-ultra.txt";
@@ -50,6 +49,17 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
         &turn2.assistant_text[..turn2.assistant_text.len().min(60)],
         turn2.audit_hash
     );
+
+    // Turn 3: User queries self-awareness and native capabilities
+    let user_msg3 = "你是谁？你都有哪些核心能力？请直接介绍。";
+    let turn3 = host.handle_chat_turn(&session_id, user_msg3).await.expect("Turn 3 execution");
+
+    assert!(!turn3.assistant_text.contains("作为一个人工智能语言模型"), "Must not use AI disclaimer clichés");
+    assert!(!turn3.assistant_text.contains("作为一个AI语言模型"), "Must not use AI disclaimer clichés");
+    println!("  ✓ Turn 3 Self-Awareness: \"{}\"",
+        &turn3.assistant_text[..turn3.assistant_text.len().min(120)]
+    );
+
 
     println!("[3/5] Testing 4 Live Engineering Telemetry Panels on Bridge...");
     let mut app_state = AppState::new(session_id.clone(), &db_path);
