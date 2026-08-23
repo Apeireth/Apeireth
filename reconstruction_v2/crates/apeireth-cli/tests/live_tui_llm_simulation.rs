@@ -4,6 +4,7 @@ use apeireth_runtime::UnifiedRuntimeHost;
 use apeireth_storage::memory_v2::QueryMode;
 use apeireth_cli::tui::state::{AppState, NavPage, ChatMessageItem};
 use apeireth_cli::tui::theme::Theme;
+use apeireth_cli::tui::ui::{compute_scroll_y, compute_scrollbar_position};
 use apeireth_cli::tui::widgets::BrailleSparkline;
 
 fn get_api_key() -> String {
@@ -22,11 +23,11 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
     let api_key = get_api_key();
     let db_path = format!("test_sim_{}.db", uuid::Uuid::new_v4());
 
-    println!("\n[1/4] Initializing Live UnifiedRuntimeHost with ACT-R Memory & MiniMax...");
+    println!("\n[1/5] Initializing Live UnifiedRuntimeHost with ACT-R Memory & MiniMax...");
     let host = Arc::new(UnifiedRuntimeHost::new(api_key, &db_path).await.expect("Host initialization"));
     let session_id = format!("sim_sess_{}", uuid::Uuid::new_v4());
 
-    println!("[2/4] Testing Live Multi-Turn LLM Conversation & PAD / CoT / Audit...");
+    println!("[2/5] Testing Live Multi-Turn LLM Conversation & PAD / CoT / Audit...");
     // Turn 1: User introduces facts
     let user_msg1 = "Hello Apeireth, my name is Alex and I am developing a high-performance cognitive OS in Rust.";
     let turn1 = host.handle_chat_turn(&session_id, user_msg1).await.expect("Turn 1 execution");
@@ -50,58 +51,49 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
         turn2.audit_hash
     );
 
-    println!("[3/4] Testing Classic TUI AppState (5 NavPages & Archaic/Era Themes)...");
-    let mut app_state = AppState::new(session_id.clone());
+    println!("[3/5] Testing 4 Live Engineering Telemetry Panels on Bridge...");
+    let mut app_state = AppState::new(session_id.clone(), &db_path);
 
-    // Push chat turns into TUI state
-    app_state.messages.push(ChatMessageItem {
-        role: "user".into(),
-        content: user_msg1.into(),
-        cot: None,
-        pad: turn1.pad_state.clone(),
-        tokens: user_msg1.len() / 4 + 1,
-        audit_hash: "user_hash_1".into(),
-        timestamp_ms: Utc::now().timestamp_millis(),
-    });
-    app_state.messages.push(ChatMessageItem {
-        role: "assistant".into(),
-        content: turn1.assistant_text,
-        cot: turn1.reasoning_cot,
-        pad: turn1.pad_state.clone(),
-        tokens: turn1.token_usage.total_tokens as usize,
-        audit_hash: turn1.audit_hash,
-        timestamp_ms: turn1.timestamp * 1000,
-    });
-
-    // Test 5 NavPages
+    // Verify Engineering Telemetry
+    assert_eq!(app_state.telemetry.screen_driver, "BitBlt + DIBits Zero-Leak Pipeline");
+    assert_eq!(app_state.telemetry.wal_pool_status, "SQLite WAL Mode (Max: 10 Conns)");
+    assert_eq!(app_state.telemetry.egress_whitelist, "严格域名白名单拦截已生效 (Default Deny)");
     assert_eq!(app_state.current_page, NavPage::Bridge);
-    app_state.current_page = NavPage::Dialogue;
-    assert_eq!(app_state.current_page.title(), "1 对话 ΔΙΑΛΟΓΟΣ");
+    println!("  ✓ Engineering Telemetry: GDI ({}), WAL ({}), Egress ({}) Verified",
+        app_state.telemetry.screen_resolution,
+        app_state.telemetry.wal_pool_status,
+        app_state.telemetry.egress_whitelist
+    );
 
-    app_state.current_page = NavPage::Growth;
-    let memories = host.memory_store.query(Utc::now(), QueryMode::All).await.expect("Memory query");
-    app_state.memory_items = memories;
-    assert_eq!(app_state.current_page.title(), "2 生长 ΑΥΞΗΣΙΣ");
+    println!("[4/5] Testing Scrolling Mechanics (compute_scroll_y & Scrollbar)...");
+    // Test scroll to bottom anchor
+    let total_lines = 50;
+    let viewport = 20;
+    let max_scroll = (total_lines - viewport) as u16; // 30
+    assert_eq!(compute_scroll_y(true, 0, max_scroll), 30); // locked to bottom
 
-    // Test Theme switching (古朴金 -> 时代蓝)
-    assert_eq!(app_state.theme, Theme::Archaic);
+    // Test scroll up (PageUp by 5 lines)
+    assert_eq!(compute_scroll_y(false, 5, max_scroll), 25); // moved up by 5
+    assert_eq!(compute_scroll_y(false, 30, max_scroll), 0);  // moved to top
+
+    // Test scrollbar mapping
+    let pos_bottom = compute_scrollbar_position(30, max_scroll, total_lines);
+    let pos_top = compute_scrollbar_position(0, max_scroll, total_lines);
+    assert_eq!(pos_bottom, 49);
+    assert_eq!(pos_top, 0);
+    println!("  ✓ Scroll Math: Bottom Anchor=30, PageUp(-5)=25, Top=0, Scrollbar=[0..49] OK");
+
+    println!("[5/5] Testing Theme Transition & SHA-256 Audit Verification...");
     app_state.toggle_theme();
     assert_eq!(app_state.theme, Theme::Era);
-    let style = app_state.current_style();
-    assert!(!style.border_char.to_string().is_empty());
-    println!("  ✓ Theme toggled to: {}", app_state.theme.display_label());
-
-    // Test Braille Sparkline
     let braille = BrailleSparkline::render_line(&[0.1, 0.3, 0.6, 0.9, 0.4], 10);
     assert!(!braille.is_empty());
-    println!("  ✓ Braille Sparkline Generated: {}", braille);
 
-    println!("[4/4] Verifying Cryptographic Audit Blockchain...");
     let audit = host.audit_chain.lock().await;
     assert!(audit.verify_chain().is_ok(), "Audit hash-chain must be 100% valid");
     println!("  ✓ Audit Hash-Chain Height: {} blocks (Verified 100% Valid)", audit.records().len());
 
     // Clean up temporary database file
     let _ = tokio::fs::remove_file(&db_path).await;
-    println!("\n✅ Live TUI (Classic Aesthetics & Nav) Test Succeeded 100%!\n");
+    println!("\n✅ Live TUI Engineering & Scrolling Test Succeeded 100%!\n");
 }

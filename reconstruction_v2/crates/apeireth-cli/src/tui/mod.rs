@@ -45,16 +45,18 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
     let session_id = format!("tui_{}", uuid::Uuid::new_v4());
     let host = Arc::new(UnifiedRuntimeHost::new(api_key, db_path).await?);
 
-    let state = Arc::new(Mutex::new(AppState::new(session_id.clone())));
+    let state = Arc::new(Mutex::new(AppState::new(session_id.clone(), db_path)));
 
-    // Load initial memories into state
+    // Load initial memories into state and update telemetry
     {
         let mut st = state.lock().await;
         if let Ok(memories) = host.memory_store.query(Utc::now(), QueryMode::All).await {
+            st.telemetry.total_memory_facts = memories.len();
             st.memory_items = memories;
         }
         if let Ok(audit) = host.audit_chain.try_lock() {
             st.audit_chain_length = audit.records().len();
+            st.telemetry.audit_ledger_height = audit.records().len();
         }
     }
 
@@ -110,14 +112,18 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                     continue;
                 }
 
-                // Global Page Navigation via 0-4
-                match key.code {
-                    KeyCode::Char('0') => { st.current_page = NavPage::Bridge; st.set_status("已跳转至 0 舰桥 (ΣΚΟΠΗ)"); continue; }
-                    KeyCode::Char('1') if st.current_page != NavPage::Dialogue => { st.current_page = NavPage::Dialogue; st.set_status("已跳转至 1 对话 (ΔΙΑΛΟΓΟΣ)"); continue; }
-                    KeyCode::Char('2') if st.current_page != NavPage::Dialogue => { st.current_page = NavPage::Growth; st.set_status("已跳转至 2 生长 (ΑΥΞΗΣΙΣ)"); continue; }
-                    KeyCode::Char('3') if st.current_page != NavPage::Dialogue => { st.current_page = NavPage::History; st.set_status("已跳转至 3 历史 (ΙΣΤΟΡΙΑ)"); continue; }
-                    KeyCode::Char('4') if st.current_page != NavPage::Dialogue => { st.current_page = NavPage::Settings; st.set_status("已跳转至 4 设置 (ΤΑΞΙΣ)"); continue; }
-                    _ => {}
+                // Global Navigation Keys (when not in focused text input or pressing 0-4 on non-dialogue pages)
+                let is_typing = st.current_page == NavPage::Dialogue && st.input_focused;
+
+                if !is_typing {
+                    match key.code {
+                        KeyCode::Char('0') => { st.current_page = NavPage::Bridge; st.set_status("已跳转至 0 舰桥 (ΣΚΟΠΗ)"); continue; }
+                        KeyCode::Char('1') => { st.current_page = NavPage::Dialogue; st.input_focused = true; st.set_status("已跳转至 1 对话 (ΔΙΑΛΟΓΟΣ)"); continue; }
+                        KeyCode::Char('2') => { st.current_page = NavPage::Growth; st.set_status("已跳转至 2 生长 (ΑΥΞΗΣΙΣ)"); continue; }
+                        KeyCode::Char('3') => { st.current_page = NavPage::History; st.set_status("已跳转至 3 历史 (ΙΣΤΟΡΙΑ)"); continue; }
+                        KeyCode::Char('4') => { st.current_page = NavPage::Settings; st.set_status("已跳转至 4 设置 (ΤΑΞΙΣ)"); continue; }
+                        _ => {}
+                    }
                 }
 
                 // Global Tab / BackTab Navigation
@@ -145,6 +151,7 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                             }
                             KeyCode::Char('i') | KeyCode::Char('I') | KeyCode::Enter => {
                                 st.current_page = NavPage::Dialogue;
+                                st.input_focused = true;
                                 st.set_status("进入对话 (Dialogue)");
                             }
                             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -155,6 +162,12 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                     }
                     NavPage::Dialogue => {
                         match key.code {
+                            KeyCode::Esc => {
+                                st.input_focused = !st.input_focused;
+                                let msg = if st.input_focused { "已聚焦输入框" } else { "已切换至导航浏览模式 (按 0-4 切页，PageUp/Down 翻看)" };
+                                st.set_status(msg);
+                            }
+
                             KeyCode::Enter => {
                                 let input_text = st.input_buffer.trim().to_string();
                                 if !input_text.is_empty() && !st.is_thinking {
@@ -162,6 +175,8 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                                     let sess_id = st.session_id.clone();
                                     st.input_buffer.clear();
                                     st.is_thinking = true;
+                                    st.scroll_to_bottom = true;
+                                    st.scroll_offset = 0;
                                     st.messages.push(ChatMessageItem {
                                         role: "user".into(),
                                         content: input_text.clone(),
@@ -176,13 +191,20 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                                     let state_clone = state.clone();
 
                                     tokio::spawn(async move {
+                                        let start = std::time::Instant::now();
                                         let res = host_clone.handle_chat_turn(&sess_id, &input_text).await;
+                                        let elapsed_ms = start.elapsed().as_millis() as u64;
                                         let mut inner_st = state_clone.lock().await;
                                         inner_st.is_thinking = false;
+                                        inner_st.scroll_to_bottom = true;
+                                        inner_st.scroll_offset = 0;
 
                                         match res {
                                             Ok(turn) => {
                                                 inner_st.current_pad = turn.pad_state.clone();
+                                                inner_st.telemetry.last_latency_ms = elapsed_ms;
+                                                inner_st.telemetry.session_tokens += turn.token_usage.total_tokens as usize;
+
                                                 inner_st.messages.push(ChatMessageItem {
                                                     role: "assistant".into(),
                                                     content: turn.assistant_text,
@@ -195,10 +217,12 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
 
                                                 // Update memories & audit height
                                                 if let Ok(mems) = host_clone.memory_store.query(Utc::now(), QueryMode::All).await {
+                                                    inner_st.telemetry.total_memory_facts = mems.len();
                                                     inner_st.memory_items = mems;
                                                 }
                                                 if let Ok(audit) = host_clone.audit_chain.try_lock() {
                                                     inner_st.audit_chain_length = audit.records().len();
+                                                    inner_st.telemetry.audit_ledger_height = audit.records().len();
                                                 }
 
                                                 inner_st.set_status("消息已送达并完成记忆沉淀。");
@@ -217,12 +241,31 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                                 st.input_buffer.push(c);
                             }
                             KeyCode::PageUp => {
-                                if st.message_scroll > 0 {
-                                    st.message_scroll -= 5;
-                                }
+                                let new_off = st.scroll_offset.saturating_add(5);
+                                st.scroll_offset = new_off;
+                                st.scroll_to_bottom = false;
+                                st.set_status(format!("向上翻看历史 (偏移: {} 行)", new_off));
                             }
                             KeyCode::PageDown => {
-                                st.message_scroll += 5;
+                                let new_off = st.scroll_offset.saturating_sub(5);
+                                st.scroll_offset = new_off;
+                                if new_off == 0 {
+                                    st.scroll_to_bottom = true;
+                                    st.set_status("已滚动至最新消息");
+                                } else {
+                                    st.set_status(format!("向下翻看历史 (偏移: {} 行)", new_off));
+                                }
+                            }
+
+                            KeyCode::Home => {
+                                st.scroll_offset = 9999;
+                                st.scroll_to_bottom = false;
+                                st.set_status("已跳转至对话顶部");
+                            }
+                            KeyCode::End => {
+                                st.scroll_offset = 0;
+                                st.scroll_to_bottom = true;
+                                st.set_status("已跳转至对话底部");
                             }
                             _ => {}
                         }
@@ -242,7 +285,7 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                             KeyCode::Char('t') | KeyCode::Char('T') => {
                                 st.toggle_theme();
                             }
-                            KeyCode::Char('q') => {
+                            KeyCode::Char('q') | KeyCode::Char('Q') => {
                                 break;
                             }
                             _ => {}
@@ -250,10 +293,22 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                     }
                     NavPage::History => {
                         match key.code {
+                            KeyCode::PageUp | KeyCode::Up => {
+                                st.history_scroll_offset = st.history_scroll_offset.saturating_add(3);
+                            }
+                            KeyCode::PageDown | KeyCode::Down => {
+                                st.history_scroll_offset = st.history_scroll_offset.saturating_sub(3);
+                            }
+                            KeyCode::Home => {
+                                st.history_scroll_offset = 9999;
+                            }
+                            KeyCode::End => {
+                                st.history_scroll_offset = 0;
+                            }
                             KeyCode::Char('t') | KeyCode::Char('T') => {
                                 st.toggle_theme();
                             }
-                            KeyCode::Char('q') => {
+                            KeyCode::Char('q') | KeyCode::Char('Q') => {
                                 break;
                             }
                             _ => {}
@@ -264,7 +319,7 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                             KeyCode::Char('t') | KeyCode::Char('T') => {
                                 st.toggle_theme();
                             }
-                            KeyCode::Char('q') => {
+                            KeyCode::Char('q') | KeyCode::Char('Q') => {
                                 break;
                             }
                             _ => {}
