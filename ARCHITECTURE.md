@@ -289,6 +289,9 @@ two will diverge at the first behaviour change.
 
 Proved end to end in
 [`crates/apeireth-runtime/tests/canonical_agent_loop.rs`](crates/apeireth-runtime/tests/canonical_agent_loop.rs).
+The production HTTP wiring is proved separately through the real gateway router
+in
+[`crates/apeireth-gateway/tests/canonical_entry_e2e.rs`](crates/apeireth-gateway/tests/canonical_entry_e2e.rs).
 
 Behavioural rules the loop encodes:
 
@@ -310,3 +313,86 @@ plugins. Existing implementations of all of these remain, are audited, and are
 scheduled — not extended.
 
 Structure first, features later.
+
+---
+
+## 9. Current migration status
+
+### DONE — canonical product entry ownership
+
+The canonical runtime is now the production execution owner for the migrated
+chat paths.
+
+```text
+apeireth CLI `chat`
+    -> canonical TurnRequest
+    -> Runtime::execute
+
+apeireth CLI `gateway serve`
+    -> apeireth-gateway HTTP router
+    -> canonical TurnRequest
+    -> Runtime::execute
+```
+
+The gateway exposes `/v1/chat` and `/v1/chat/completions` as transport adapters.
+They decode HTTP, construct canonical requests, invoke the runtime directly, and
+encode canonical outcomes. They do not route providers, dispatch tools, manage
+plugin lifecycle, or run an agent loop.
+
+Before this cutover, `gateway serve` assembled `apeireth-api::AppState` and sent
+requests through the historical API pipeline and LLM router. The CLI's
+historical `session` command also executed its own pre-canonical action flow.
+The migrated `chat` and `gateway serve` paths no longer use those execution
+paths. Unmigrated administrative and historical commands remain in place.
+
+The real-entry deterministic E2E exercises an Axum request through the
+production gateway router, then proves:
+
+```text
+user request
+    -> fake provider (tool call)
+    -> calculator capability
+    -> tool result in the same session and trace
+    -> fake provider (final answer)
+    -> HTTP response
+```
+
+It requires no network provider, API key, wall-clock sleep, or developer-machine
+filesystem.
+
+### DONE — reconstructable failures
+
+The session persists the user message and a structured `TurnStarted` event before
+governance or provider execution. Governance denial, approval requirement,
+provider failure, tool failure, structural execution failure, and successful
+completion advance the session revision with structured events. Failed
+execution therefore remains observable without inserting audit prose into the
+provider transcript.
+
+### IN PROGRESS — production provider capability migration
+
+Production bootstrap currently wraps the existing `LlmProvider` implementation
+in a small `ProviderCapability` compatibility plugin. Runtime sees only
+`ProviderRouter` and `ProviderCapability`; it does not name or match vendors.
+Moving each production provider implementation directly behind canonical plugin
+capabilities is the next migration, not part of the entry cutover.
+
+### PENDING
+
+- Integrate `apeireth-credentials` backends fully through
+  `plugin::CredentialResolver`; production bootstrap currently reads only the
+  existing environment-based provider configuration.
+- Retire the historical runtime modules after their remaining consumers migrate.
+- Consolidate legacy registries only when each remaining caller has moved to the
+  canonical `PluginRegistry` and `CapabilityRegistry` ownership path.
+- Finish protocol crate cleanup without moving vendor DTOs into runtime.
+- Adapt dynamic MCP discovery into canonical capabilities; do not create a
+  parallel MCP runtime or registry.
+- Remove the nested `reconstruction_v2/` workspace only after provider migration
+  and product stabilization.
+
+### DEPRECATED
+
+The nested `reconstruction_v2/` workspace remains a historical architecture
+donor. It is not a production execution path and is intentionally not deleted
+during this cutover.
