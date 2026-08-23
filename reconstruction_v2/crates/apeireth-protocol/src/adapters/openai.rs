@@ -31,11 +31,50 @@ impl OpenAiAdapter {
                 Role::System => "system",
                 Role::Tool => "tool",
             };
-            messages.push(serde_json::json!({
-                "role": role_str,
-                "content": msg.extract_text(),
-            }));
+
+            match msg.role {
+                Role::Tool => {
+                    for part in &msg.parts {
+                        if let ContentPart::ToolResult { tool_call_id, result } = part {
+                            messages.push(serde_json::json!({
+                                "role": "tool",
+                                "tool_call_id": tool_call_id,
+                                "content": result,
+                            }));
+                        }
+                    }
+                }
+                Role::Assistant => {
+                    let text = msg.extract_text();
+                    let tool_calls = msg.extract_tool_calls();
+                    let mut msg_json = serde_json::json!({
+                        "role": "assistant",
+                        "content": text,
+                    });
+                    if !tool_calls.is_empty() {
+                        let tc_json: Vec<Value> = tool_calls.iter().map(|tc| {
+                            serde_json::json!({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.name,
+                                    "arguments": tc.arguments,
+                                }
+                            })
+                        }).collect();
+                        msg_json["tool_calls"] = serde_json::json!(tc_json);
+                    }
+                    messages.push(msg_json);
+                }
+                _ => {
+                    messages.push(serde_json::json!({
+                        "role": role_str,
+                        "content": msg.extract_text(),
+                    }));
+                }
+            }
         }
+
 
         let mut payload = serde_json::json!({
             "model": req.model,
