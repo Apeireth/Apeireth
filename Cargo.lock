@@ -1034,6 +1034,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-plugin"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "apeireth-protocol",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-protocol"
 version = "1.2.0"
 dependencies = [

@@ -202,6 +202,17 @@ members = [
     "crates/apeireth-library-governance",
     "crates/release-tools",  # TP20-S5 塞缝批: 发布期供应链验证 (vet/audit/deny + SBOM) 的工程化锚点 (零运行时)
     "crates/apeireth-stock",  # TP27: 标的元数据资产 (N3 金融源, FinanceDatabase 30 万标的入库, T0 可信度)
+    # ========================================================================
+    # reconstruct_v2 canonical convergence
+    # ------------------------------------------------------------------------
+    # Canonical plugin + capability model. The name was free in `crates/`
+    # (only `crates/_frozen/apeireth-plugin` held it), so this is a new crate
+    # rather than an in-place evolution. Owns Plugin / PluginManifest /
+    # Capability{Descriptor,Kind} and, once the registries land, the single
+    # source of truth for what capabilities exist.
+    # Depends only on apeireth-core + apeireth-protocol.
+    # See `docs/01-architecture/reconstruct-v2-audit.md` and `ARCHITECTURE.md`.
+    "crates/apeireth-plugin",
 ]
 
 # ============================================================================
