@@ -213,6 +213,11 @@ members = [
     # Depends only on apeireth-core + apeireth-protocol.
     # See `docs/01-architecture/reconstruct-v2-audit.md` and `ARCHITECTURE.md`.
     "crates/apeireth-plugin",
+    # Canonical governance hook. The name was free in `crates/`; existing policy
+    # lives in apeireth-guard / apeireth-council / apeireth-library-governance,
+    # which become GovernanceHook implementations rather than being rewritten.
+    # Depends on apeireth-core only.
+    "crates/apeireth-governance",
 ]
 
 # ============================================================================
