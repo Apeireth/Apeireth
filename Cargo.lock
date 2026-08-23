@@ -670,6 +670,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-governance"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-graph"
 version = "1.2.0"
 dependencies = [
