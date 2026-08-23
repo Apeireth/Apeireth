@@ -19,7 +19,11 @@ apeireth-tools = { path = "../apeireth-tools" }
 apeireth-runtime = { path = "../apeireth-runtime" }
 apeireth-companion = { path = "../apeireth-companion" }
 apeireth-gateway = { path = "../apeireth-gateway" }
+
 apeireth-sdk = { path = "../apeireth-sdk" }
 async-trait = "0.1"
+ratatui = "0.30"
+crossterm = "0.28"
+
 
 
