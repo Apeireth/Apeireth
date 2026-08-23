@@ -316,22 +316,27 @@ impl Runtime {
             message_count: session.len(),
         };
         let label = action.label();
-        let decision = self
+        let verdict = self
             .governance
-            .evaluate(&GovernanceRequest::new(
+            .evaluate_verbose(&GovernanceRequest::new(
                 action,
                 *session_id,
                 trace_id,
                 round,
             ))
             .await;
+        let hook = verdict.hook;
+        let owner = verdict.owner;
+        let decision = verdict.decision;
 
         trace.record(
             Timestamp::from_clock(self.clock.as_ref()),
             TraceEvent::GovernanceEvaluated {
-                hook: self.governance.name().to_string(),
+                hook: hook.clone(),
+                owner,
                 action: label.to_string(),
-                decision: decision.to_string(),
+                decision: decision.label().to_string(),
+                reason: decision.reason().map(str::to_owned),
                 round,
             },
         );
@@ -339,7 +344,6 @@ impl Runtime {
         match decision {
             Decision::Allow => Ok(()),
             Decision::Deny { reason } => {
-                let hook = self.governance.name().to_string();
                 session.record(
                     request_id,
                     trace_id,
@@ -354,7 +358,6 @@ impl Runtime {
                 Err(RuntimeError::Denied { hook, reason })
             }
             Decision::RequireApproval { reason } => {
-                let hook = self.governance.name().to_string();
                 session.record(
                     request_id,
                     trace_id,
@@ -432,22 +435,27 @@ impl Runtime {
             arguments: &call.arguments,
         };
         let label = action.label();
-        let decision = self
+        let verdict = self
             .governance
-            .evaluate(&GovernanceRequest::new(
+            .evaluate_verbose(&GovernanceRequest::new(
                 action,
                 *session_id,
                 trace_id,
                 round,
             ))
             .await;
+        let hook = verdict.hook;
+        let owner = verdict.owner;
+        let decision = verdict.decision;
 
         trace.record(
             Timestamp::from_clock(clock),
             TraceEvent::GovernanceEvaluated {
-                hook: self.governance.name().to_string(),
+                hook: hook.clone(),
+                owner,
                 action: label.to_string(),
-                decision: decision.to_string(),
+                decision: decision.label().to_string(),
+                reason: decision.reason().map(str::to_owned),
                 round,
             },
         );
@@ -455,7 +463,6 @@ impl Runtime {
         match decision {
             Decision::Allow => {}
             Decision::Deny { reason } => {
-                let hook = self.governance.name().to_string();
                 session.record(
                     request_id,
                     trace_id,
@@ -477,7 +484,6 @@ impl Runtime {
             }
             Decision::RequireApproval { reason } => {
                 // A human has to decide, so the turn genuinely cannot continue.
-                let hook = self.governance.name().to_string();
                 session.record(
                     request_id,
                     trace_id,
