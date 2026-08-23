@@ -14,22 +14,28 @@ categories = ["api-bindings"]
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync", "rt", "macros", "time"] }
+tokio = { workspace = true, features = ["sync", "rt", "macros", "time", "net"] }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 parking_lot = "0.12"
 tracing = "0.1"
+axum = { version = "0.7", features = ["macros"] }
+apeireth-core = { path = "../apeireth-core" }
+apeireth-protocol = { path = "../apeireth-protocol" }
+apeireth-runtime = { path = "../apeireth-runtime" }
 apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
 # R174 stage 6: Privacy Guard integration — PII detection + redaction at the gateway boundary
 apeireth-guard = { path = "../apeireth-guard" }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-# R174 integration: gateway drive runtime cycles via AsyncWorker
-apeireth-runtime = { path = "../apeireth-runtime" }
 apeireth-bus = { path = "../apeireth-bus" }
+apeireth-governance = { path = "../apeireth-governance" }
+apeireth-plugin = { path = "../apeireth-plugin" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
 
 [lib]
 name = "apeireth_gateway"
