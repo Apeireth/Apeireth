@@ -45,9 +45,11 @@ fn build_router(state: Arc<GatewayState>) -> Router {
         .route("/health", get(health_check))
         .route("/v1/models", get(list_models))
         .route("/v1/chat/completions", post(chat_completions))
+        .route("/mcp", post(crate::mcp::mcp_handler))
         .route("/ws", get(ws_handler))
         .layer(cors)
         .with_state(state)
+
 }
 
 pub async fn start_server(addr: &str, host: Option<Arc<UnifiedRuntimeHost>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
