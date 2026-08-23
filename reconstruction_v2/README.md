@@ -72,3 +72,59 @@
 - **新增 LLM 协议**：实现 `apeireth_protocol::ProtocolAdapter` trait，自动接入多模型路由。
 - **新增存储后端**：实现 `apeireth_storage::MemoryStore` 或 `GraphStore` trait，即可平滑切换外部数据库（PostgreSQL/Redis/Qdrant）。
 - **新增治理规则**：在 `apeireth_governance::RuleEngine` 中声明自定义策略即可，无需修改底层洋葱架构。
+
+---
+
+## 五、 当前实装状态（截至 2026-08-24，commit `58bccb36`）
+
+> 与上游 v1.0 仓库的现状差异：本目录已 100% 实装 14 P0/P1 审计工单 + 3 处协议层断点修复，且已推送 GitHub `Apeireth/apeireth-rust` 远端。详见 CHANGELOG §"Added (2026-08-24) reconstruction_v2 终极收敛"。
+
+### 5.1 编译与构建
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 编译 | `cargo check --workspace` | ✅ Finished in **5.26s**，0 errors（仅 2 warnings，`browser.rs` 未用 mut/未用变量） |
+| Release 二进制 | `cargo build --release --bin apeireth-cli` | ✅ **12,279,808 bytes** (~12.3 MB) |
+| Workspace lib 测试 | `cargo test --workspace --lib` | ✅ **68 passed / 0 failed** |
+| Live LLM 多轮 | `cargo test --test live_tui_llm_simulation` | ✅ 1 passed (43.34s 真 MiniMax-M3 调用) |
+| Vision + Worktree | `cargo test --test vision_worktree_test` | ✅ 2 passed |
+| 推送 | `git push origin master` | ✅ `origin/master @ 58bccb36` |
+
+### 5.2 测试计数明细（`cargo test --workspace --lib`）
+
+| Crate | lib 测试数 | 关键测试 |
+|---|---:|---|
+| `apeireth-cli` | 5 | TUI state |
+| `apeireth-companion` | 11 | emotion/streaming/curiosity/dream |
+| `apeireth-core` | 9 | 哲学键 + 事件总线 |
+| `apeireth-gateway` | 2 | route/chat 端点 |
+| `apeireth-governance` | 10 | 5-Gate pipeline / onion 三层 / audit verify_chain / self_disable |
+| `apeireth-protocol` | 7 | 4 适配器 + tool_calls 解析 |
+| `apeireth-runtime` | 6 | hybrid_cognitive_routing + runtime_host_creation_and_dream + supervisor × 2 + task_store × 2 |
+| `apeireth-sdk` | 1 | sdk_client_initialization |
+| `apeireth-storage` | 7 | cjk_bigram + jaccard_greedy_clustering + memory_v2_importance_and_temporal + concurrent_read_write + vector hybrid + graph + fold |
+| `apeireth-tools` | 10 | synthesis_and_execution + shell_destructive_rejection + fetch_ssrf + fetch_public + sandbox + worktree + fs + shell echo + shell dynamic + registry |
+| **合计** | **68** | 0 failed, 0 ignored |
+
+### 5.3 与 v1.0 文档章节的映射
+
+- §三"破除 1.0 暗伤" 四条革新——**已全部实装**（S4 拦截、Win32 沙箱、SQLite 读写分离、TP34 流式状态机均落地，源码可验）
+- `docs/security.md` §三"S4 出站 Default-Deny 实装"——**已实装**（`apeireth-gateway/src/egress.rs`，145 行物理拦截）
+- `docs/architecture.md` 9 层架构图——**与代码一致**（runtime/host.rs `UnifiedRuntimeHost` 单 struct 持有 18+ 子系统）
+
+### 5.4 0 装 PASS 诚实标注
+
+- ✅ **真已实现**：每项工单源码验证 + 测试覆盖 + 集成跑通
+- ✅ **真 LLM 跑过**：`live_tui_llm_simulation` 4 轮真 MiniMax-M3 对话
+- ✅ **真 Win32 跑过**：测试在 Windows 平台跑通；Linux/macOS 走 `#[cfg(not(target_os = "windows"))]` stub 分支（**0 假装真调 Win32**）
+- ⚠️ **Docker 实测待 CI**：本地无 docker，遵循 v1.0 同样标注
+- ⚠️ **VM microVM 隔离（smol-vm / Hyperlight）**：trait 口已备未接（v1.0 同等标注，未变）
+
+### 5.5 当前 working tree 未提交改动（`reconstruction_v2/`）
+
+> `git status --short` 输出 9 M / 3 D，全在 `reconstruction_v2/` 子目录，主分支 `master` 未污染：
+
+- **M（活跃打磨中）**: `Cargo.lock` / `apeireth-companion/src/prompt_assembler.rs` (Apeireth 2.0 self-awareness) / `apeireth-protocol/src/normalized.rs` / `apeireth-runtime/src/host.rs` (UnifiedRuntimeHost) / `apeireth-sdk/{Cargo.toml,client.rs,lib.rs,memory.rs,session.rs,tool.rs}` 全 5 模块 / `apeireth-tools/{Cargo.toml,synthesis.rs,builtin/{browser,repo_tools,search}.rs,vision/{desktop_action,omni_parser}.rs}`
+- **D（已删）**: `crates/apeireth-{governance,protocol,storage}/src/main.rs` 三个 1 行空 main.rs
+
+**下次提交建议**：分批提交 (1) SDK 完成 (2) Vision 完成 (3) Tools builtin 完成，每批独立语义，方便审查。

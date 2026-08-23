@@ -255,6 +255,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-governance",
  "async-trait",
+ "chrono",
  "libc",
  "reqwest 0.11.27",
  "serde",

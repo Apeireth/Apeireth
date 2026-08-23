@@ -111,10 +111,14 @@ impl ContextAssembler {
             "filesystem" => "文件系统管理器。读取/创建/写入/修改本地文件与配置，检索目录树结构，保障原子化操作。参数: {\"operation\": \"read|write|list\", \"path\": \"...\"}",
             "fetch" => "安全网络数据抓取器。发起 HTTP GET/POST 请求抓取公开网页、API 数据与金融行情，受 SSRF 与出站白名单保护。参数: {\"url\": \"...\", \"method\": \"GET|POST\"}",
             "desktop_action" => "Win32 桌面操作。通过 SendInput API 执行鼠标点击/移动/拖拽、键盘输入/快捷键、滚轮操作，受坐标边界与速率限流保护。参数: {\"action\": \"click|move|drag|type|hotkey|scroll\", ...}",
+            "screen_observe" => "屏幕视觉感知与 UI 逆解工具。抓取 Windows 物理屏幕像素与分辨率，计算感知哈希，识别窗口与按钮/输入框/菜单等子控件并生成 Set-of-Marks (SoM) 结构化坐标标记。参数: {\"detect_elements\": true, \"max_elements\": 30}",
             "browser" => "网页阅读器。抓取指定网页并解析为干净文本，用于信息检索与知识提取。参数: {\"url\": \"https://...\", \"max_chars\": 8000}",
             "search" => "本地代码与文件检索器。递归搜索代码库文件名与文本内容。参数: {\"query\": \"keyword\", \"path\": \".\", \"max_results\": 20}",
             "repo" => "Git 仓库协同检查工具。安全查询 Git 状态、提交记录、分支与差异。参数: {\"command\": \"status|log|diff|branch|summary\"}",
+            "invest_analysis" => "辅助投资与金融分析工具。抓取实时市场行情，记录投资标的推演假设与 Brier 预测胜率，计算风险敞口与止损仓位。参数: {\"action\": \"quote|hypothesis|risk_plan\", ...}",
+            "learning_digest" => "辅助学习与知识萃取工具。提炼文档/论文/代码的核心知识点、概念三元组与自测闪卡，准备存入 ACT-R 长期记忆。参数: {\"action\": \"digest|generate_flashcards|explain_concept\", ...}",
             _ => "已注册的系统工具",
+
         }
     }
 }

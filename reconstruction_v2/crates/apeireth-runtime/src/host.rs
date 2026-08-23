@@ -102,6 +102,10 @@ impl UnifiedRuntimeHost {
         tool_reg.register(Arc::new(apeireth_tools::builtin::browser::BrowserTool::new()));
         tool_reg.register(Arc::new(apeireth_tools::builtin::search::SearchTool::new()));
         tool_reg.register(Arc::new(apeireth_tools::builtin::repo_tools::RepoTools::new()));
+        tool_reg.register(Arc::new(apeireth_tools::vision::ScreenObserveTool::new()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::invest::InvestTool::new()));
+        tool_reg.register(Arc::new(apeireth_tools::builtin::learning::LearningTool::new()));
+
 
 
         let sandbox = Arc::new(PlatformSandbox::new()?);
