@@ -77,31 +77,30 @@ impl OmniParser {
     /// Detects real interactive windows and controls on Windows desktop
     #[cfg(target_os = "windows")]
     pub fn detect_live_elements(width: u32, height: u32) -> Vec<UiElement> {
-        use winapi::shared::minwindef::{BOOL, LPARAM, TRUE};
+        use winapi::shared::minwindef::{BOOL, FALSE, LPARAM, TRUE};
         use winapi::shared::windef::{HWND, RECT};
         use winapi::um::winuser::{
-            EnumWindows, EnumChildWindows, GetWindowRect, GetWindowTextW,
-            GetClassNameW, IsWindowVisible, GetForegroundWindow,
+            CloseDesktop, CloseWindowStation, EnumChildWindows, EnumDesktopWindows, EnumWindows,
+            GetClassNameW, GetForegroundWindow, GetWindowRect, GetWindowTextW, IsWindowVisible,
+            OpenDesktopW, OpenWindowStationW, SetProcessWindowStation, WINSTA_ALL_ACCESS,
         };
 
         struct EnumCtx {
             elements: Vec<UiElement>,
             width: u32,
             height: u32,
-            id_counter: u32,
+            id_counter: usize,
         }
 
         fn map_class_to_type(class_name: &str) -> (UiElementType, bool) {
             let lower = class_name.to_lowercase();
             if lower.contains("button") {
-                if lower.contains("check") {
-                    (UiElementType::Checkbox, true)
-                } else {
-                    (UiElementType::Button, true)
-                }
-            } else if lower.contains("edit") {
+                (UiElementType::Button, true)
+            } else if lower.contains("edit") || lower.contains("textbox") || lower.contains("richedit") {
                 (UiElementType::InputBox, true)
-            } else if lower.contains("combo") || lower.contains("list") || lower.contains("menu") {
+            } else if lower.contains("check") {
+                (UiElementType::Checkbox, true)
+            } else if lower.contains("menu") {
                 (UiElementType::MenuItem, true)
             } else if lower.contains("link") || lower.contains("hyperlink") {
                 (UiElementType::Link, true)
@@ -138,24 +137,28 @@ impl OmniParser {
 
                         let (elem_type, is_interactive) = map_class_to_type(&class_name);
                         let label = if !title.trim().is_empty() {
-                            title
-                        } else {
+                            title.trim().to_string()
+                        } else if is_interactive && !class_name.is_empty() && class_name != "Default IME" && class_name != "MSCTFIME UI" {
                             format!("[{}]", class_name)
+                        } else {
+                            String::new()
                         };
 
-                        let x_norm = (rect.left.max(0) as f32) / ctx.width.max(1) as f32;
-                        let y_norm = (rect.top.max(0) as f32) / ctx.height.max(1) as f32;
-                        let w_norm = (w as f32) / ctx.width.max(1) as f32;
-                        let h_norm = (h as f32) / ctx.height.max(1) as f32;
+                        if !label.is_empty() && rect.right > 0 && rect.bottom > 0 {
+                            let x_norm = (rect.left.max(0) as f32) / ctx.width.max(1) as f32;
+                            let y_norm = (rect.top.max(0) as f32) / ctx.height.max(1) as f32;
+                            let w_norm = (w as f32) / ctx.width.max(1) as f32;
+                            let h_norm = (h as f32) / ctx.height.max(1) as f32;
 
-                        ctx.id_counter += 1;
-                        ctx.elements.push(UiElement {
-                            id: ctx.id_counter,
-                            element_type: elem_type,
-                            label,
-                            bbox: [x_norm, y_norm, w_norm, h_norm],
-                            is_interactive,
-                        });
+                            ctx.id_counter += 1;
+                            ctx.elements.push(UiElement {
+                                id: ctx.id_counter as u32,
+                                element_type: elem_type,
+                                label,
+                                bbox: [x_norm, y_norm, w_norm, h_norm],
+                                is_interactive,
+                            });
+                        }
                     }
                 }
             }
@@ -176,8 +179,22 @@ impl OmniParser {
                 inspect_hwnd(fg, &mut ctx as *mut _ as LPARAM);
                 EnumChildWindows(fg, Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
             }
-            // Then enumerate top-level windows (cap to max 50 elements)
-            EnumWindows(Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
+
+            // Enumerate interactive user desktop windows (WinSta0\Default)
+            let winsta_name: Vec<u16> = "WinSta0\0".encode_utf16().collect();
+            let winsta = OpenWindowStationW(winsta_name.as_ptr(), FALSE, WINSTA_ALL_ACCESS);
+            if !winsta.is_null() {
+                SetProcessWindowStation(winsta);
+                let desk_name: Vec<u16> = "Default\0".encode_utf16().collect();
+                let desk = OpenDesktopW(desk_name.as_ptr(), 0, FALSE, 0x01FF);
+                if !desk.is_null() {
+                    EnumDesktopWindows(desk, Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
+                    CloseDesktop(desk);
+                }
+                CloseWindowStation(winsta);
+            } else {
+                EnumWindows(Some(inspect_hwnd), &mut ctx as *mut _ as LPARAM);
+            }
         }
 
         ctx.elements.truncate(50);
