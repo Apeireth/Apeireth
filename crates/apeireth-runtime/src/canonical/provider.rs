@@ -14,8 +14,9 @@
 //! (`crates/apeireth-api/src/llm/router.rs`), which is mature and already
 //! handles the cases a fresh implementation gets wrong. Preserved exactly:
 //!
-//! - candidates are filtered by `supports_model`, then ordered by their position
-//!   in an explicit fallback list, with unlisted providers going last;
+//! - candidates are filtered by `supports_model` and current health, then ordered
+//!   by their position in an explicit fallback list, with unlisted providers
+//!   going last;
 //! - no candidate at all is a distinct error that names the providers that *are*
 //!   registered, rather than a generic failure;
 //! - a **retryable** failure falls through to the next candidate;
@@ -146,14 +147,13 @@ impl ProviderRouter {
     /// reconstructible afterwards. Without them a trace cannot say "the turn used
     /// provider.b because provider.a was rate limited".
     pub async fn complete(&self, request: &NormalizedRequest) -> RuntimeResult<RoutedCompletion> {
-        let mut candidates: Vec<&Arc<dyn ProviderCapability>> = self
+        let supporting: Vec<&Arc<dyn ProviderCapability>> = self
             .providers
             .iter()
             .filter(|p| p.supports_model(&request.model))
             .collect();
-        candidates.sort_by_key(|p| self.rank(p.id()));
 
-        if candidates.is_empty() {
+        if supporting.is_empty() {
             let available: Vec<&str> = self.providers.iter().map(|p| p.id().as_str()).collect();
             return Err(RuntimeError::NoProvider {
                 model: request.model.clone(),
@@ -164,6 +164,31 @@ impl ProviderRouter {
                 },
             });
         }
+
+        let (mut candidates, unhealthy) = {
+            let health = self.health.read();
+            let mut unhealthy = Vec::new();
+            let mut candidates = Vec::new();
+            for provider in supporting {
+                if health
+                    .get(provider.id())
+                    .is_some_and(|status| !status.healthy)
+                {
+                    unhealthy.push(provider.id().as_str());
+                } else {
+                    candidates.push(provider);
+                }
+            }
+            (candidates, unhealthy)
+        };
+
+        if candidates.is_empty() {
+            return Err(RuntimeError::NoHealthyProvider {
+                model: request.model.clone(),
+                unhealthy: unhealthy.join(", "),
+            });
+        }
+        candidates.sort_by_key(|p| self.rank(p.id()));
 
         let mut failed_attempts: Vec<(CapabilityId, ProviderError)> = Vec::new();
 
@@ -510,6 +535,49 @@ mod tests {
             !router.health(&id).unwrap().healthy,
             "three consecutive failures must sideline a provider"
         );
+    }
+
+    #[tokio::test]
+    async fn an_unhealthy_provider_is_skipped_for_a_healthy_candidate() {
+        let a = Scripted::failing("provider.a", "shared-model", rate_limited("provider.a"));
+        let b = Scripted::ok("provider.b", "shared-model");
+        let router = ProviderRouter::new(vec![a.clone(), b.clone()], clock());
+        let id_a = CapabilityId::new("provider.a").unwrap();
+
+        for _ in 0..UNHEALTHY_AFTER_FAILURES {
+            let routed = router.complete(&request("shared-model")).await.unwrap();
+            assert_eq!(routed.served_by.as_str(), "provider.b");
+        }
+        assert!(!router.health(&id_a).unwrap().healthy);
+
+        let routed = router.complete(&request("shared-model")).await.unwrap();
+        assert_eq!(routed.served_by.as_str(), "provider.b");
+        assert_eq!(
+            a.calls(),
+            UNHEALTHY_AFTER_FAILURES as usize,
+            "the unhealthy provider must not be invoked again"
+        );
+        assert_eq!(b.calls(), UNHEALTHY_AFTER_FAILURES as usize + 1);
+    }
+
+    #[tokio::test]
+    async fn all_unhealthy_candidates_return_an_explicit_error() {
+        let a = Scripted::failing("provider.a", "shared-model", rate_limited("provider.a"));
+        let router = ProviderRouter::new(vec![a.clone()], clock());
+
+        for _ in 0..UNHEALTHY_AFTER_FAILURES {
+            let _ = router.complete(&request("shared-model")).await;
+        }
+
+        let error = router.complete(&request("shared-model")).await.unwrap_err();
+        match error {
+            RuntimeError::NoHealthyProvider { model, unhealthy } => {
+                assert_eq!(model, "shared-model");
+                assert_eq!(unhealthy, "provider.a");
+            }
+            other => panic!("expected NoHealthyProvider, got {other}"),
+        }
+        assert_eq!(a.calls(), UNHEALTHY_AFTER_FAILURES as usize);
     }
 
     #[tokio::test]
