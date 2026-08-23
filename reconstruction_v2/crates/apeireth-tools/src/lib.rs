@@ -1,5 +1,7 @@
 pub mod builtin;
 pub mod sandbox;
+pub mod mcp;
+
 
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
@@ -27,6 +29,23 @@ pub struct ToolResult {
     pub success: bool,
     pub output: String,
 }
+
+impl ToolResult {
+    pub fn success(output: impl Into<String>) -> Self {
+        Self {
+            success: true,
+            output: output.into(),
+        }
+    }
+
+    pub fn failure(output: impl Into<String>) -> Self {
+        Self {
+            success: false,
+            output: output.into(),
+        }
+    }
+}
+
 
 #[derive(Error, Debug)]
 pub enum ToolError {
@@ -61,11 +80,20 @@ impl ToolRegistry {
         self.tools.insert(tool.definition().name, tool);
     }
 
+    pub fn list_tools(&self) -> Vec<ToolDefinition> {
+        self.tools.values().map(|t| t.definition()).collect()
+    }
+
+    pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
+        self.tools.get(name).cloned()
+    }
+
     pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolResult, ToolError> {
         let tool = self.tools.get(name).ok_or_else(|| ToolError::NotFound(name.to_string()))?;
         tool.execute(params).await
     }
 }
+
 
 #[cfg(test)]
 mod tests {

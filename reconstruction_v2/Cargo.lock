@@ -139,6 +139,7 @@ dependencies = [
  "apeireth-core",
  "apeireth-protocol",
  "apeireth-runtime",
+ "apeireth-tools",
  "axum",
  "chrono",
  "futures",
