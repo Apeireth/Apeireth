@@ -30,6 +30,12 @@
 
 #![deny(unsafe_code)]
 
+// reconstruct_v2 canonical convergence: the canonical composition root, session
+// management, provider routing and agent loop. Depends only on core / protocol /
+// plugin / governance; shares this crate with the legacy orchestrator below
+// during migration. See `canonical`'s module docs.
+pub mod canonical;
+
 pub mod g5_runtime_bridge; // R160: runtime task lifecycle 5 stages -> g5 substrate (4th caller)
                            // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
