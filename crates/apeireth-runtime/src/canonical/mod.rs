@@ -36,13 +36,15 @@
 //! convergence exists to correct.
 
 pub mod error;
+pub mod execute;
 pub mod provider;
 pub mod runtime;
 pub mod session;
 pub mod trace;
 
 pub use error::{RuntimeError, RuntimeResult};
-pub use provider::{ProviderHealth, ProviderRouter};
+pub use execute::{TurnRequest, TurnResponse};
+pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{InMemorySessionStore, Session, SessionManager, SessionStore};
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};
