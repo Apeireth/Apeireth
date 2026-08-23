@@ -58,7 +58,10 @@ impl PluginManager {
         if self.plugins.contains(&id) {
             return Err(PluginError::DuplicatePlugin(id));
         }
-        Self::validate_implementations(plugin.as_ref())?;
+        let tools = plugin.tools();
+        let providers = plugin.providers();
+        Self::validate_implementations(plugin.as_ref(), &tools, &providers)?;
+        self.validate_tool_names(&tools)?;
         // Index first: a capability collision must not leave the plugin behind.
         self.capabilities.index(&id, &manifest.capabilities)?;
         self.plugins.register(plugin)?;
@@ -66,11 +69,13 @@ impl PluginManager {
     }
 
     /// Fail closed when the manifest and executable capability surface differ.
-    fn validate_implementations(plugin: &dyn Plugin) -> PluginResult<()> {
+    fn validate_implementations(
+        plugin: &dyn Plugin,
+        tools: &[Arc<dyn ToolCapability>],
+        providers: &[Arc<dyn ProviderCapability>],
+    ) -> PluginResult<()> {
         let manifest = plugin.manifest();
         let plugin_id = &manifest.id;
-        let tools = plugin.tools();
-        let providers = plugin.providers();
 
         let implemented_tools: BTreeSet<CapabilityId> =
             tools.iter().map(|tool| tool.id().clone()).collect();
@@ -79,7 +84,7 @@ impl PluginManager {
             .map(|provider| provider.id().clone())
             .collect();
 
-        for tool in &tools {
+        for tool in tools {
             let declared = manifest
                 .capability(tool.id())
                 .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Tool);
@@ -91,7 +96,7 @@ impl PluginManager {
                 });
             }
         }
-        for provider in &providers {
+        for provider in providers {
             let declared = manifest
                 .capability(provider.id())
                 .is_some_and(|descriptor| descriptor.kind == CapabilityKind::Provider);
@@ -120,6 +125,34 @@ impl PluginManager {
                     capability: descriptor.id.clone(),
                     kind: CapabilityKind::Provider.id_prefix(),
                 });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Ensure every model-facing tool name maps to exactly one capability id.
+    fn validate_tool_names(&self, candidate_tools: &[Arc<dyn ToolCapability>]) -> PluginResult<()> {
+        let mut names: BTreeMap<String, CapabilityId> = BTreeMap::new();
+
+        for plugin_id in self.plugins.ids() {
+            for tool in self.plugins.get(plugin_id)?.tools() {
+                names.insert(tool.declaration().name, tool.id().clone());
+            }
+        }
+
+        for tool in candidate_tools {
+            let name = tool.declaration().name;
+            if let Some(incumbent) = names.get(&name) {
+                if incumbent != tool.id() {
+                    return Err(PluginError::AmbiguousToolName {
+                        name,
+                        incumbent: incumbent.clone(),
+                        challenger: tool.id().clone(),
+                    });
+                }
+            } else {
+                names.insert(name, tool.id().clone());
             }
         }
 
@@ -331,10 +364,7 @@ impl PluginManager {
     /// The active tool whose model-facing name is `name`.
     ///
     /// Models emit names, not capability ids, so dispatch needs this lookup. A
-    /// name collision between two active tools is resolved by capability-id
-    /// order; the manager rejects duplicate *ids*, but two plugins may still
-    /// choose the same short name, and that is a manifest-quality problem rather
-    /// than a dispatch-time one.
+    /// Registration rejects name collisions, so this lookup is unambiguous.
     pub fn tool_by_name(&self, name: &str) -> Option<Arc<dyn ToolCapability>> {
         self.active_tools()
             .into_iter()
@@ -751,6 +781,40 @@ mod tests {
             "the rejected plugin must not be registered"
         );
         assert_eq!(m.capabilities().len(), 1);
+    }
+
+    #[test]
+    fn a_model_facing_tool_name_collision_rejects_the_whole_plugin() {
+        let log = Arc::new(BootLog::default());
+        let mut manager = PluginManager::new();
+        manager
+            .register(
+                Builder::new("p.a", &log)
+                    .tool("tool.calculator_a", "calculator")
+                    .build(),
+            )
+            .unwrap();
+
+        let error = manager
+            .register(
+                Builder::new("p.b", &log)
+                    .tool("tool.calculator_b", "calculator")
+                    .build(),
+            )
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            PluginError::AmbiguousToolName {
+                name,
+                incumbent,
+                challenger,
+            } if name == "calculator"
+                && incumbent.as_str() == "tool.calculator_a"
+                && challenger.as_str() == "tool.calculator_b"
+        ));
+        assert_eq!(manager.plugins().len(), 1);
+        assert_eq!(manager.capabilities().len(), 1);
     }
 
     #[test]
