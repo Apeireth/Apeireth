@@ -18,6 +18,10 @@
 #![warn(missing_docs)]
 
 // 5 module, 各自由 src/<name>.rs 实现 (R35 阶段 1: 只 5 Provider struct + 8 工具 + 3 ModelKind, R21+ 真接 SDK)
+/// Temporary bridge from the legacy `LlmProvider` contract to canonical
+/// provider capabilities. Remove after production providers implement the
+/// canonical contract directly.
+pub mod canonical_bridge;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot;
