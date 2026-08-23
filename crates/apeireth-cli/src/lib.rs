@@ -21,10 +21,12 @@ use apeireth_asi::{
     DimensionTrace, LinearCalibration, MeasurementSample, RecalibrationScheduler, TraceRepository,
     V05_DIMENSION_NAMES,
 };
+use apeireth_core::kernel::{CapabilityId, PluginId, SessionId};
 use apeireth_core::{
     Action, ActionGuard, ActionTarget, ActionVerdict, DefaultPhilosophyGuard, HAAuthentication,
     HAMode, HumanAuthority, PermissionLayer, PermissionOnion, RealHuman, RiskLevel, Session,
 };
+use apeireth_runtime::canonical::{Runtime, TurnRequest, TurnResponse};
 
 /// CLI 命令协议
 #[derive(Debug, Clone)]
@@ -37,6 +39,15 @@ pub enum CliCommand {
     RunV1136,
     /// ASI 子命令 (round10-12 qa_engineer)
     Asi(AsiSubCommand),
+    /// Execute one real chat turn through the canonical runtime.
+    Chat {
+        /// User input.
+        prompt: String,
+        /// Optional model override.
+        model: Option<String>,
+        /// Optional canonical session id.
+        session: Option<String>,
+    },
     /// 🆕 R16-09 apeireth-api 聚合网关子命令
     Gateway(GatewaySubCommand),
     /// 退出
@@ -576,53 +587,97 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
 }
 
 // ===================
-// R16-09 聚合网关 dispatch (real apeireth-api integration)
+// Canonical product bootstrap + entry dispatch
 // ===================
 
-use apeireth_api::llm::{
-    providers::scripted::{ScriptedLlmProvider, ScriptedResponse},
-    LlmProvider,
-};
-use std::sync::Arc;
+/// Build the one canonical runtime used by CLI chat and the HTTP gateway.
+///
+/// Provider implementations are still legacy during this migration phase, so
+/// the existing environment-backed provider is wrapped by the temporary
+/// `ProviderCapability` compatibility adapter. Missing credentials do not stop
+/// the runtime from booting; execution then fails explicitly with no provider.
+pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
+    use apeireth_api::llm::{ApeirethApiConfig, ApeirethApiProvider, LlmProvider};
+    use apeireth_provider::canonical_bridge::CompatibilityProviderPlugin;
+    use std::sync::Arc;
 
-/// 启动 apeireth-api HTTP server (默认端口 8080, 可用 APEIRETH_LLM_BACKEND=scripted|real 切换)
-/// 阻塞直到 Ctrl-C
+    let configured_model = std::env::var("APEIRETH_MODEL")
+        .ok()
+        .filter(|model| !model.trim().is_empty());
+    let mut builder = Runtime::builder();
+
+    match ApeirethApiConfig::from_env() {
+        Ok(config) => {
+            let models = config.models.clone();
+            let default_model = configured_model.or_else(|| models.first().cloned());
+            let legacy: Arc<dyn LlmProvider> =
+                Arc::new(ApeirethApiProvider::new(config).map_err(|error| {
+                    format!("production provider initialization failed: {error}")
+                })?);
+            let plugin = CompatibilityProviderPlugin::new(
+                PluginId::new("compat.apeireth_api").map_err(|error| error.to_string())?,
+                CapabilityId::new("provider.apeireth_api").map_err(|error| error.to_string())?,
+                models,
+                legacy,
+            )
+            .map_err(|error| format!("compatibility provider activation failed: {error}"))?;
+            builder = builder.with_plugin(Arc::new(plugin));
+            if let Some(model) = default_model {
+                builder = builder.with_default_model(model);
+            }
+        }
+        Err(_error) => {
+            // `from_env` currently fails here only when APEIRETH_API_KEY is
+            // absent. Runtime boot remains keyless; the first execution reports
+            // the missing provider/model without hiding it behind a fake key.
+            if let Some(model) = configured_model {
+                builder = builder.with_default_model(model);
+            }
+        }
+    }
+
+    builder
+        .build()
+        .await
+        .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))
+}
+
+/// Execute one CLI turn directly through [`Runtime::execute`].
+pub async fn execute_canonical_cli_turn(
+    runtime: &Runtime,
+    prompt: impl Into<String>,
+    model: Option<String>,
+    session: Option<SessionId>,
+) -> Result<TurnResponse, String> {
+    let mut request = TurnRequest::new(session.unwrap_or_else(SessionId::new), prompt);
+    if let Some(model) = model {
+        request = request.with_model(model);
+    }
+    runtime
+        .execute(request)
+        .await
+        .map_err(|error| error.to_string())
+}
+
+/// Bootstrap and execute the canonical CLI chat path.
+pub async fn dispatch_canonical_chat(
+    prompt: impl Into<String>,
+    model: Option<String>,
+    session: Option<String>,
+) -> Result<TurnResponse, String> {
+    let session = session
+        .map(|id| id.parse::<SessionId>().map_err(|error| error.to_string()))
+        .transpose()?;
+    let runtime = build_canonical_runtime_from_env().await?;
+    execute_canonical_cli_turn(&runtime, prompt, model, session).await
+}
+
+/// Start the HTTP Gateway backed by one long-lived canonical runtime.
+/// Blocks until the server exits.
 pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
-    use apeireth_api::llm::{ApeirethApiConfig, ApeirethApiProvider};
-    use apeireth_api::protocol_handlers;
-    use apeireth_api::server::{build_router, AppState};
+    use std::sync::Arc;
 
-    let llm: Arc<dyn LlmProvider> = match std::env::var("APEIRETH_LLM_BACKEND").as_deref() {
-        Ok("scripted") | Ok("mock") => {
-            let scripted = ScriptedLlmProvider::new("scripted-mock")
-                .with_script("hello", ScriptedResponse::new("hi from scripted"));
-            Arc::new(scripted)
-        }
-        _ => {
-            let llm_config = ApeirethApiConfig::from_env()
-                .map_err(|e| format!("ApeirethApiConfig 初始化失败: {e}\n提示: 设 APEIRETH_LLM_BACKEND=scripted 跳过 LLM key 依赖"))?;
-            let real = ApeirethApiProvider::new(llm_config)
-                .map_err(|e| format!("ApeirethApiProvider 初始化失败: {e}"))?;
-            Arc::new(real)
-        }
-    };
-
-    // R17 战役 4-4 deploy glue: AppState 升级后需 pipeline + llm (战役 1-4 引入 pipeline 字段)
-    // 用 protocol_handlers::build_pipeline 构造 4 协议管线 (战役 1-3 5 步 + 战役 1-2 Keep-Alive LIFO)
-    let base_url = std::env::var("APEIRETH_API_URL")
-        .unwrap_or_else(|_| protocol_handlers::MINIMAXI_BASE_URL.to_string());
-    let auth_token = std::env::var("APEIRETH_API_KEY").ok();
-    let pipeline = Arc::new(
-        protocol_handlers::build_pipeline(base_url.clone(), auth_token.clone())
-            .map_err(|e| format!("build_pipeline 失败: {e}"))?,
-    );
-
-    let state = Arc::new(AppState {
-        pipeline,
-        llm,
-        response_cache: None,
-    });
-    let app = build_router(state);
+    let runtime = Arc::new(build_canonical_runtime_from_env().await?);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -633,16 +688,13 @@ pub async fn dispatch_gateway_serve(port: u16) -> Result<String, String> {
         .map_err(|e| format!("local_addr: {e}"))?;
     let url = format!("http://{local_addr}");
 
-    eprintln!("✅ apeireth-api server 启动, URL: {url}");
+    eprintln!("✅ canonical gateway 启动, URL: {url}");
     eprintln!("   GET  /health");
+    eprintln!("   POST /v1/chat");
     eprintln!("   POST /v1/chat/completions");
-    eprintln!("   GET  /channels");
-    eprintln!("   POST /council/advise");
-    eprintln!("   POST /verdict");
     eprintln!("   (Ctrl-C 停止)");
 
-    // 阻塞 axum::serve (直到 Ctrl-C 或错误)
-    axum::serve(listener, app)
+    apeireth_gateway::serve_canonical(listener, runtime)
         .await
         .map_err(|e| format!("server 错误: {e}"))?;
 
