@@ -31,14 +31,14 @@
 
 use std::sync::Arc;
 
-use apeireth_core::kernel::{system_clock, Clock, PluginId, TraceId};
+use apeireth_core::kernel::{system_clock, CapabilityId, Clock, PluginId, TraceId};
 use apeireth_governance::{AllowAll, GovernanceHook};
 use apeireth_plugin::{
-    CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ProviderCapability,
-    ToolCapability,
+    CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
 
 use super::error::{RuntimeError, RuntimeResult};
+use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
 /// How many provider round-trips one turn may take before the runtime stops it.
@@ -69,6 +69,7 @@ impl Default for RuntimeConfig {
 /// The assembled runtime.
 pub struct Runtime {
     pub(super) plugins: PluginManager,
+    pub(super) providers: ProviderRouter,
     pub(super) sessions: SessionManager,
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
@@ -111,12 +112,13 @@ impl Runtime {
         self.plugins.active_tools()
     }
 
-    /// Every provider that can currently serve a completion.
+    /// The router over every provider that can currently serve a completion.
     ///
-    /// Sourced from the capability registry, which is why the runtime can name
-    /// no vendor: it knows only that some plugin declared `provider.something`.
-    pub fn providers(&self) -> Vec<Arc<dyn ProviderCapability>> {
-        self.plugins.active_providers()
+    /// Its members come from the capability registry, which is why the runtime
+    /// can name no vendor: it knows only that some plugin declared
+    /// `provider.something`.
+    pub fn providers(&self) -> &ProviderRouter {
+        &self.providers
     }
 
     /// Stop every plugin in reverse start order.
@@ -132,6 +134,7 @@ impl std::fmt::Debug for Runtime {
         f.debug_struct("Runtime")
             .field("plugins", &self.plugins.plugins().len())
             .field("capabilities", &self.plugins.capabilities().len())
+            .field("providers", &self.providers.len())
             .field("governance", &self.governance.name())
             .field("config", &self.config)
             .finish_non_exhaustive()
@@ -149,6 +152,7 @@ pub struct RuntimeBuilder {
     session_store: Arc<dyn SessionStore>,
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
+    fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
 }
 
@@ -167,6 +171,7 @@ impl RuntimeBuilder {
             session_store: Arc::new(InMemorySessionStore::new()),
             governance: Arc::new(AllowAll),
             plugins: Vec::new(),
+            fallback_order: None,
             config: RuntimeConfig::default(),
         }
     }
@@ -209,6 +214,16 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Order in which providers are tried.
+    ///
+    /// Providers absent from `order` remain usable and are tried after every
+    /// listed one. Without this, providers are tried in registration order.
+    #[must_use]
+    pub fn with_fallback_order(mut self, order: Vec<CapabilityId>) -> Self {
+        self.fallback_order = Some(order);
+        self
+    }
+
     /// Model used when a request does not name one.
     #[must_use]
     pub fn with_default_model(mut self, model: impl Into<String>) -> Self {
@@ -247,8 +262,18 @@ impl RuntimeBuilder {
         );
         manager.start_all(&ctx).await?;
 
+        // Providers are read out of the capability registry *after* start-up, so
+        // the router contains exactly those whose plugins actually came up. A
+        // provider whose plugin failed to initialize is never routed to.
+        let mut providers =
+            ProviderRouter::new(manager.active_providers(), Arc::clone(&self.clock));
+        if let Some(order) = self.fallback_order {
+            providers = providers.with_fallback_order(order);
+        }
+
         Ok(Runtime {
             plugins: manager,
+            providers,
             sessions: SessionManager::new(self.session_store, Arc::clone(&self.clock)),
             governance: self.governance,
             clock: self.clock,
@@ -265,7 +290,7 @@ pub fn plugin_ids(runtime: &Runtime) -> Vec<&PluginId> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::kernel::{CapabilityId, Lifecycle, Timestamp, VirtualClock};
+    use apeireth_core::kernel::{Lifecycle, Timestamp, VirtualClock};
     use apeireth_governance::{DenyCapabilities, GovernancePipeline};
     use apeireth_plugin::{
         CapabilityKind, PluginManifest, PluginResult, StaticCredentials, ToolCapability,
