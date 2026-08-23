@@ -73,8 +73,10 @@
 // ============================================================
 
 pub mod code_exec;
+pub mod mcp_adapter;
 // R177: organ invariants (5 tests + 2 Kani)
 pub mod apply_patch; // R30 U1: Codex-style apply_patch
+
 pub mod classifier; // R30 U5: tool classifier (8 类 keyword routing)
 pub mod conventions_scanner; // R33-1: Aider-style project conventions scanner
 pub mod file_ops;
