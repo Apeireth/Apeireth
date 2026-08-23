@@ -270,6 +270,7 @@ fn http_error(error: CanonicalEntryError, session: Option<SessionId>) -> HttpErr
         CanonicalEntryError::Runtime(RuntimeError::Denied { .. }) => StatusCode::FORBIDDEN,
         CanonicalEntryError::Runtime(RuntimeError::ApprovalRequired { .. }) => StatusCode::CONFLICT,
         CanonicalEntryError::Runtime(RuntimeError::NoProvider { .. })
+        | CanonicalEntryError::Runtime(RuntimeError::NoHealthyProvider { .. })
         | CanonicalEntryError::Runtime(RuntimeError::Misconfigured(_)) => {
             StatusCode::SERVICE_UNAVAILABLE
         }

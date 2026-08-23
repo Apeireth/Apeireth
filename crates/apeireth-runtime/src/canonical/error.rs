@@ -43,6 +43,15 @@ pub enum RuntimeError {
         available: String,
     },
 
+    /// Providers claim the model, but each has been sidelined by health state.
+    #[error("all providers serving model {model:?} are unhealthy: {unhealthy}")]
+    NoHealthyProvider {
+        /// The model that was requested.
+        model: String,
+        /// Providers excluded from this routing attempt.
+        unhealthy: String,
+    },
+
     /// Governance refused the turn.
     #[error("governance denied the turn: {reason}")]
     Denied {
