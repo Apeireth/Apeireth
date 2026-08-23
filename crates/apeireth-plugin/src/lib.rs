@@ -16,9 +16,12 @@
 //! became another place that had to be consulted, kept in sync, and eventually
 //! contradicted the others.
 //!
-//! This crate replaces that with one declaration model — a plugin declares
-//! capabilities, each with a stable id and a typed kind — over which the
-//! canonical registries are built.
+//! This crate replaces that with two registries and a rule: [`PluginRegistry`]
+//! owns plugins, [`CapabilityRegistry`] owns the id-to-owner index, and nothing
+//! else stores a second copy of either fact. The index is an index, not a copy —
+//! a capability's declaration continues to live only in its owner's manifest.
+//! Typed views over the registries are encouraged, and [`PluginManager`] provides
+//! them; second sources of truth are not.
 //!
 //! # Layering
 //!
@@ -36,7 +39,12 @@
 //! ```text
 //!   PluginManifest  declares  ->  CapabilityDescriptor (id + kind)
 //!         |                              |
-//!    Plugin (lifecycle)          ToolCapability / ProviderCapability
+//!    PluginRegistry                CapabilityRegistry (id -> owner)
+//!         \                              /
+//!          `------  PluginManager  ------'
+//!                  lifecycle + typed views
+//!                          |
+//!            ToolCapability / ProviderCapability
 //! ```
 
 #![deny(unsafe_code)]
@@ -44,15 +52,19 @@
 pub mod capability;
 pub mod credentials;
 pub mod error;
+pub mod manager;
 pub mod manifest;
 pub mod plugin;
 pub mod provider;
+pub mod registry;
 pub mod tool;
 
 pub use capability::{CapabilityDescriptor, CapabilityKind};
 pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentials};
 pub use error::{PluginError, PluginResult};
+pub use manager::PluginManager;
 pub use manifest::PluginManifest;
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError};
+pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
 pub use tool::ToolCapability;
