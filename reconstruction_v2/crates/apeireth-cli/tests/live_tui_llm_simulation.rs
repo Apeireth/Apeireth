@@ -2,9 +2,9 @@ use std::sync::Arc;
 use chrono::Utc;
 use apeireth_runtime::UnifiedRuntimeHost;
 use apeireth_storage::memory_v2::QueryMode;
-use apeireth_cli::tui::state::{ActiveTab, AppState, ChatMessageItem, FactoryTaskItem};
-use apeireth_cli::tui::widgets::{BrailleSparkline, DiffViewer};
-
+use apeireth_cli::tui::state::{AppState, NavPage, ChatMessageItem};
+use apeireth_cli::tui::theme::Theme;
+use apeireth_cli::tui::widgets::BrailleSparkline;
 
 fn get_api_key() -> String {
     let key_file = r"C:\Users\31683\apikey-ultra.txt";
@@ -50,7 +50,7 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
         turn2.audit_hash
     );
 
-    println!("[3/4] Testing TUI AppState Transition & Memory / Factory / Braille Widgets...");
+    println!("[3/4] Testing Classic TUI AppState (5 NavPages & Archaic/Era Themes)...");
     let mut app_state = AppState::new(session_id.clone());
 
     // Push chat turns into TUI state
@@ -73,28 +73,23 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
         timestamp_ms: turn1.timestamp * 1000,
     });
 
-    // Test Tab switching
-    app_state.active_tab = ActiveTab::Memory;
+    // Test 5 NavPages
+    assert_eq!(app_state.current_page, NavPage::Bridge);
+    app_state.current_page = NavPage::Dialogue;
+    assert_eq!(app_state.current_page.title(), "1 对话 ΔΙΑΛΟΓΟΣ");
+
+    app_state.current_page = NavPage::Growth;
     let memories = host.memory_store.query(Utc::now(), QueryMode::All).await.expect("Memory query");
     app_state.memory_items = memories;
-    assert_eq!(app_state.active_tab, ActiveTab::Memory);
+    assert_eq!(app_state.current_page.title(), "2 生长 ΑΥΞΗΣΙΣ");
 
-    // Test Factory tasks and DiffViewer
-    app_state.active_tab = ActiveTab::Factory;
-    app_state.factory_tasks.push(FactoryTaskItem {
-        id: "task_egress_hardening".into(),
-        requirement: "Enforce strict domain whitelist in egress pipeline".into(),
-        branch: "factory/task_egress_hardening".into(),
-        diff_content: "+pub fn verify_domain(domain: &str) -> bool { domain == \"api.minimaxi.com\" }\n-pub fn allow_all() -> bool { true }".into(),
-        passed: true,
-        test_count: 70,
-        pending_approval: true,
-    });
-    assert_eq!(app_state.factory_tasks.len(), 2);
-
-    let _diff_rendered = DiffViewer::render_diff(&app_state.factory_tasks[1].diff_content);
-    assert!(app_state.factory_tasks[1].diff_content.contains("+pub fn verify_domain"));
-
+    // Test Theme switching (古朴金 -> 时代蓝)
+    assert_eq!(app_state.theme, Theme::Archaic);
+    app_state.toggle_theme();
+    assert_eq!(app_state.theme, Theme::Era);
+    let style = app_state.current_style();
+    assert!(!style.border_char.to_string().is_empty());
+    println!("  ✓ Theme toggled to: {}", app_state.theme.display_label());
 
     // Test Braille Sparkline
     let braille = BrailleSparkline::render_line(&[0.1, 0.3, 0.6, 0.9, 0.4], 10);
@@ -108,5 +103,5 @@ async fn test_live_unified_host_multiturn_with_act_r_and_tui_state() {
 
     // Clean up temporary database file
     let _ = tokio::fs::remove_file(&db_path).await;
-    println!("\n✅ Live TUI & LLM Simulation Test Succeeded 100%!\n");
+    println!("\n✅ Live TUI (Classic Aesthetics & Nav) Test Succeeded 100%!\n");
 }
