@@ -8,7 +8,9 @@ apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-core = { path = "../apeireth-core" }
 apeireth-companion = { path = "../apeireth-companion" }
 apeireth-runtime = { path = "../apeireth-runtime" }
+apeireth-tools = { path = "../apeireth-tools" }
 axum = { version = "0.7", features = ["ws"] }
+
 
 tokio = { version = "1.34", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
