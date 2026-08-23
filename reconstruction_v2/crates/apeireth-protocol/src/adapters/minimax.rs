@@ -1,5 +1,6 @@
 use super::{ProtocolAdapter, ProtocolError};
-use crate::normalized::{ContentPart, NormalizedMessage, NormalizedRequest, NormalizedResponse, Role, Usage};
+use crate::normalized::{ContentPart, NormalizedMessage, NormalizedRequest, NormalizedResponse, Role, ToolCall, Usage};
+
 use async_trait::async_trait;
 use serde_json::Value;
 
@@ -46,23 +47,32 @@ impl MinimaxAdapter {
                 Role::Tool => {
                     for part in &msg.parts {
                         if let ContentPart::ToolResult { tool_call_id, result } = part {
-                            messages.push(serde_json::json!({
-                                "role": "tool",
-                                "tool_call_id": tool_call_id,
-                                "content": result,
-                            }));
+                            if tool_call_id.starts_with("text_") {
+                                messages.push(serde_json::json!({
+                                    "role": "user",
+                                    "content": format!("[系统工具执行结果]:\n{}", result),
+                                }));
+                            } else {
+                                messages.push(serde_json::json!({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call_id,
+                                    "content": result,
+                                }));
+                            }
                         }
                     }
                 }
                 Role::Assistant => {
                     let text = msg.extract_text();
-                    let tool_calls = msg.extract_tool_calls();
+                    let native_tool_calls: Vec<ToolCall> = msg.extract_tool_calls().into_iter()
+                        .filter(|tc| !tc.id.starts_with("text_"))
+                        .collect();
                     let mut msg_json = serde_json::json!({
                         "role": "assistant",
                         "content": text,
                     });
-                    if !tool_calls.is_empty() {
-                        let tc_json: Vec<Value> = tool_calls.iter().map(|tc| {
+                    if !native_tool_calls.is_empty() {
+                        let tc_json: Vec<Value> = native_tool_calls.iter().map(|tc| {
                             serde_json::json!({
                                 "id": tc.id,
                                 "type": "function",
@@ -76,6 +86,7 @@ impl MinimaxAdapter {
                     }
                     messages.push(msg_json);
                 }
+
                 _ => {
                     messages.push(serde_json::json!({
                         "role": role_str,

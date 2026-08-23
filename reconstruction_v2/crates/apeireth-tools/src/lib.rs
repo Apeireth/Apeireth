@@ -98,8 +98,23 @@ impl ToolRegistry {
 
     pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
         let map = self.tools.read().unwrap();
-        map.get(name).cloned()
+        if let Some(t) = map.get(name) {
+            return Some(t.clone());
+        }
+        let alias = match name {
+            "fs" => "filesystem",
+            "filesystem" => "fs",
+            "sh" => "shell",
+            "bash" => "shell",
+            "cmd" => "shell",
+            "powershell" => "shell",
+            "gui" => "desktop_action",
+            "vision" => "screen_observe",
+            _ => name,
+        };
+        map.get(alias).cloned()
     }
+
 
     pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolResult, ToolError> {
         let tool = {

@@ -74,14 +74,43 @@ impl NormalizedMessage {
     }
 
     pub fn extract_tool_calls(&self) -> Vec<ToolCall> {
-        self.parts.iter().filter_map(|p| {
+        let mut calls: Vec<ToolCall> = self.parts.iter().filter_map(|p| {
             if let ContentPart::ToolCall { tool_call } = p {
                 Some(tool_call.clone())
             } else {
                 None
             }
-        }).collect()
+        }).collect();
+
+        if calls.is_empty() {
+            let text = self.extract_text();
+            let marker = "functions.";
+            if let Some(pos) = text.find(marker) {
+                let rest = &text[pos + marker.len()..];
+                if let Some(paren_open) = rest.find('(') {
+                    let tool_name = rest[..paren_open].trim();
+                    let args_rest = &rest[paren_open + 1..];
+                    if let Some(paren_close) = args_rest.rfind(')') {
+                        let raw_args = args_rest[..paren_close].trim();
+                        let ts = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0);
+                        calls.push(ToolCall {
+                            id: format!("text_{}", ts),
+                            name: tool_name.to_string(),
+                            arguments: raw_args.to_string(),
+                        });
+
+
+                    }
+                }
+            }
+        }
+
+        calls
     }
+
 
     pub fn tool_result(tool_call_id: impl Into<String>, result: impl Into<String>) -> Self {
         Self {

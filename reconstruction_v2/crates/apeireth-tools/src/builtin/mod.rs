@@ -6,3 +6,4 @@ pub mod browser;
 pub mod repo_tools;
 pub mod invest;
 pub mod learning;
+pub mod system_monitor;

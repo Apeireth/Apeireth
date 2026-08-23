@@ -20,7 +20,8 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["jobapi2", "winnt", "processthreadsapi", "handleapi", "securitybaseapi", "winuser", "wingdi", "windef", "shellapi"] }
+winapi = { version = "0.3", features = ["jobapi2", "winnt", "processthreadsapi", "handleapi", "securitybaseapi", "winuser", "wingdi", "windef", "shellapi", "sysinfoapi"] }
+
 
 
 

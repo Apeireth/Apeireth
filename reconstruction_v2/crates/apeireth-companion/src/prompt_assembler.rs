@@ -58,13 +58,14 @@ impl ContextAssembler {
             prompt.push_str("## 🧰 系统工具总线与执行架构 (System Tools Registry):\n");
             prompt.push_str("你拥有直接调用与操作本地系统的工具总线，根据执行模态分为以下 4 大领域：\n\n");
 
-            let os_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "shell" | "filesystem" | "search" | "repo")).collect();
+            let os_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "shell" | "filesystem" | "search" | "repo" | "system_monitor")).collect();
             if !os_tools.is_empty() {
                 prompt.push_str("### 1. 【系统与终端底座 (OS Execution & Files)】 (后台安全沙箱):\n");
                 for &&t in &os_tools {
                     prompt.push_str(&format!("• `{}`: {}\n", t, Self::tool_description(t)));
                 }
             }
+
 
             let headless_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "fetch" | "browser")).collect();
             if !headless_tools.is_empty() {
@@ -160,7 +161,9 @@ impl ContextAssembler {
             "repo" => "Git 仓库协同检查工具。安全查询 Git 状态、提交记录、分支与差异。参数: {\"command\": \"status|log|diff|branch|summary\"}",
             "invest_analysis" => "辅助投资与金融分析工具。抓取实时市场行情，记录投资标的推演假设与 Brier 预测胜率，计算风险敞口与止损仓位。参数: {\"action\": \"quote|hypothesis|risk_plan\", ...}",
             "learning_digest" => "辅助学习与知识萃取工具。提炼文档/论文/代码的核心知识点、概念三元组与自测闪卡，准备存入 ACT-R 长期记忆。参数: {\"action\": \"digest|generate_flashcards|explain_concept\", ...}",
+            "system_monitor" => "系统硬件与内存性能监控器。通过 Win32 原生 API 实时采集物理内存、虚拟内存占用、内存负载率与操作系统硬件指标。参数: {}",
             _ => "已注册的系统工具",
+
 
         }
     }
