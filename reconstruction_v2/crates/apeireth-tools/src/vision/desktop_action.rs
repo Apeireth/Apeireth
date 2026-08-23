@@ -17,9 +17,10 @@ use winapi::um::winuser::{
     VK_RETURN, VK_ESCAPE, VK_TAB, VK_SPACE, VK_BACK, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT,
     AttachThreadInput, BringWindowToTop, CloseDesktop, CloseWindowStation, EnumDesktopWindows,
     GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible,
-    OpenDesktopW, OpenWindowStationW, SetForegroundWindow, SetProcessWindowStation, ShowWindow,
+    OpenDesktopW, OpenWindowStationW, SetForegroundWindow, SetProcessWindowStation, SetThreadDesktop, ShowWindow,
     SW_RESTORE, SW_SHOW, WINSTA_ALL_ACCESS,
 };
+
 #[cfg(target_os = "windows")]
 use winapi::shared::windef::{HWND, POINT};
 #[cfg(target_os = "windows")]
@@ -37,18 +38,35 @@ pub enum DesktopAction {
     #[serde(rename = "drag")]
     Drag { from_x: u32, from_y: u32, to_x: u32, to_y: u32 },
     #[serde(rename = "type")]
-    TypeText { text: String },
+    TypeText {
+        #[serde(alias = "content", alias = "input", alias = "value")]
+        text: String
+    },
     #[serde(rename = "hotkey")]
-    Hotkey { keys: Vec<String> },
+    Hotkey {
+        #[serde(alias = "hotkey", alias = "key")]
+        keys: Vec<String>
+    },
     #[serde(rename = "scroll")]
     Scroll { delta_y: i32 },
     #[serde(rename = "open_url")]
-    OpenUrl { url: String },
+    OpenUrl {
+        #[serde(alias = "uri", alias = "link", alias = "target_url")]
+        url: String
+    },
     #[serde(rename = "launch_app")]
-    LaunchApp { app: String, args: Option<Vec<String>> },
+    LaunchApp {
+        #[serde(alias = "application", alias = "name", alias = "path")]
+        app: String,
+        args: Option<Vec<String>>,
+    },
     #[serde(rename = "focus_window")]
-    FocusWindow { title: String },
+    FocusWindow {
+        #[serde(alias = "window_title", alias = "window", alias = "name", alias = "target", alias = "window_name")]
+        title: String,
+    },
 }
+
 
 
 
@@ -94,8 +112,25 @@ fn rate_limit() {
 }
 
 #[cfg(target_os = "windows")]
+pub fn attach_to_interactive_desktop() {
+    unsafe {
+        let winsta_name = to_wide("WinSta0");
+        let winsta = OpenWindowStationW(winsta_name.as_ptr(), FALSE, WINSTA_ALL_ACCESS);
+        if !winsta.is_null() {
+            SetProcessWindowStation(winsta);
+        }
+        let desk_name = to_wide("Default");
+        let desk = OpenDesktopW(desk_name.as_ptr(), 0, FALSE, 0x01FF);
+        if !desk.is_null() {
+            SetThreadDesktop(desk);
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn send_mouse_input(flags: u32, mouse_data: u32) {
     rate_limit();
+    attach_to_interactive_desktop();
     unsafe {
         let mut input: INPUT = std::mem::zeroed();
         input.type_ = INPUT_MOUSE;
@@ -110,6 +145,7 @@ fn send_mouse_input(flags: u32, mouse_data: u32) {
 #[cfg(target_os = "windows")]
 fn send_keyboard_input(w_vk: u16, w_scan: u16, flags: u32) {
     rate_limit();
+    attach_to_interactive_desktop();
     unsafe {
         let mut input: INPUT = std::mem::zeroed();
         input.type_ = INPUT_KEYBOARD;
@@ -121,6 +157,7 @@ fn send_keyboard_input(w_vk: u16, w_scan: u16, flags: u32) {
         SendInput(1, &mut input, std::mem::size_of::<INPUT>() as i32);
     }
 }
+
 
 #[cfg(target_os = "windows")]
 fn parse_vk(key: &str) -> Option<u16> {
@@ -277,8 +314,10 @@ impl Tool for DesktopActionTool {
 
     #[cfg(target_os = "windows")]
     async fn execute(&self, params: Value) -> Result<ToolResult, ToolError> {
+        attach_to_interactive_desktop();
         let action: DesktopAction = serde_json::from_value(params)
             .map_err(|e| ToolError::ValidationFailed(format!("Invalid desktop action schema: {}", e)))?;
+
 
         match action {
             DesktopAction::Click { x, y, button } => {
