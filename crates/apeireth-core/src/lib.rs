@@ -21,6 +21,15 @@ use serde::{Deserialize, Serialize};
 pub mod memory;
 // 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
 pub mod clock;
+// reconstruct_v2 canonical convergence: stable primitives shared by every
+// canonical subsystem (ids / time / lifecycle / event / metadata / errors).
+//
+// Deliberately **not** `pub use kernel::*` — the legacy `pub use memory::*`,
+// `pub use lifecycle::*` etc. below would shadow primitives with same-named
+// historical types (`Session`, `Lifecycle`). Canonical code addresses these as
+// `apeireth_core::kernel::...`, which keeps the two vocabularies distinguishable
+// while the legacy content is migrated out. See `ARCHITECTURE.md`.
+pub mod kernel;
 // R177: organ invariants (5 tests + 2 Kani)
 mod organ_kani_proofs;
 pub use memory::*;
