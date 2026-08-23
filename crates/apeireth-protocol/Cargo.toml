@@ -11,6 +11,11 @@ keywords = ["ai", "agent", "protocol", "normalization", "llm"]
 categories = ["api-bindings", "data-structures"]
 
 [dependencies]
+# reconstruct_v2 canonical convergence: `ModelDescriptor` uses the stable
+# `ModelId` / `CapabilityId` primitives instead of inventing protocol-local id
+# types. Permitted direction (core <- protocol); `apeireth-core` has no internal
+# crate dependencies, so this introduces no cycle.
+apeireth-core = { path = "../apeireth-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
