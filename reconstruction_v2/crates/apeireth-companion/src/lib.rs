@@ -8,3 +8,10 @@ pub mod presence;
 pub mod prompt_assembler;
 pub mod continuation;
 pub mod observer_capture;
+pub mod dream;
+pub mod epistemic;
+
+pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
+pub use epistemic::{EpistemicHealer, FailureIncident};
+
+
