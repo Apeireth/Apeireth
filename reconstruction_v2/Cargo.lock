@@ -244,6 +244,7 @@ dependencies = [
  "sha2",
  "thiserror",
  "tokio",
+ "uuid",
  "winapi",
 ]
 

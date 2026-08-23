@@ -73,4 +73,75 @@ impl OmniParser {
             screen_height: height,
         }
     }
+
+    /// Detects real interactive windows on Windows desktop
+    #[cfg(target_os = "windows")]
+    pub fn detect_live_elements(width: u32, height: u32) -> Vec<UiElement> {
+        use winapi::shared::minwindef::{BOOL, LPARAM, TRUE};
+        use winapi::shared::windef::{HWND, RECT};
+        use winapi::um::winuser::{EnumWindows, GetWindowRect, GetWindowTextW, IsWindowVisible};
+
+        struct EnumCtx {
+            elements: Vec<UiElement>,
+            width: u32,
+            height: u32,
+            id_counter: u32,
+        }
+
+        unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            let ctx = &mut *(lparam as *mut EnumCtx);
+            if IsWindowVisible(hwnd) != 0 {
+                let mut rect: RECT = std::mem::zeroed();
+                if GetWindowRect(hwnd, &mut rect) != 0 {
+                    let w = rect.right - rect.left;
+                    let h = rect.bottom - rect.top;
+                    if w > 40 && h > 40 && rect.left >= 0 && rect.top >= 0 {
+                        let mut title_buf = [0u16; 256];
+                        let len = GetWindowTextW(hwnd, title_buf.as_mut_ptr(), 256);
+                        let title = if len > 0 {
+                            String::from_utf16_lossy(&title_buf[..len as usize])
+                        } else {
+                            "Desktop Control".into()
+                        };
+
+                        if !title.trim().is_empty() {
+                            let x_norm = rect.left as f32 / ctx.width.max(1) as f32;
+                            let y_norm = rect.top as f32 / ctx.height.max(1) as f32;
+                            let w_norm = w as f32 / ctx.width.max(1) as f32;
+                            let h_norm = h as f32 / ctx.height.max(1) as f32;
+
+                            ctx.id_counter += 1;
+                            ctx.elements.push(UiElement {
+                                id: ctx.id_counter,
+                                element_type: UiElementType::Button,
+                                label: title,
+                                bbox: [x_norm, y_norm, w_norm, h_norm],
+                                is_interactive: true,
+                            });
+                        }
+                    }
+                }
+            }
+            TRUE
+        }
+
+        let mut ctx = EnumCtx {
+            elements: Vec::new(),
+            width,
+            height,
+            id_counter: 0,
+        };
+
+        unsafe {
+            EnumWindows(Some(enum_proc), &mut ctx as *mut _ as LPARAM);
+        }
+
+        ctx.elements
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn detect_live_elements(_width: u32, _height: u32) -> Vec<UiElement> {
+        Vec::new()
+    }
 }
+

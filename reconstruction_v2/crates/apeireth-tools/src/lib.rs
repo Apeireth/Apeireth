@@ -71,33 +71,46 @@ pub trait Tool: Send + Sync {
 }
 
 pub struct ToolRegistry {
-    tools: HashMap<String, Arc<dyn Tool>>,
+    tools: std::sync::RwLock<HashMap<String, Arc<dyn Tool>>>,
 }
 
 impl ToolRegistry {
     pub fn new() -> Self {
         Self {
-            tools: HashMap::new(),
+            tools: std::sync::RwLock::new(HashMap::new()),
         }
     }
 
-    pub fn register(&mut self, tool: Arc<dyn Tool>) {
-        self.tools.insert(tool.definition().name, tool);
+    pub fn register(&self, tool: Arc<dyn Tool>) {
+        let mut map = self.tools.write().unwrap();
+        map.insert(tool.definition().name, tool);
+    }
+
+    pub fn unregister(&self, name: &str) -> bool {
+        let mut map = self.tools.write().unwrap();
+        map.remove(name).is_some()
     }
 
     pub fn list_tools(&self) -> Vec<ToolDefinition> {
-        self.tools.values().map(|t| t.definition()).collect()
+        let map = self.tools.read().unwrap();
+        map.values().map(|t| t.definition()).collect()
     }
 
     pub fn get_tool(&self, name: &str) -> Option<Arc<dyn Tool>> {
-        self.tools.get(name).cloned()
+        let map = self.tools.read().unwrap();
+        map.get(name).cloned()
     }
 
     pub async fn execute(&self, name: &str, params: serde_json::Value) -> Result<ToolResult, ToolError> {
-        let tool = self.tools.get(name).ok_or_else(|| ToolError::NotFound(name.to_string()))?;
+        let tool = {
+            let map = self.tools.read().unwrap();
+            map.get(name).cloned()
+        };
+        let tool = tool.ok_or_else(|| ToolError::NotFound(name.to_string()))?;
         tool.execute(params).await
     }
 }
+
 
 
 #[cfg(test)]

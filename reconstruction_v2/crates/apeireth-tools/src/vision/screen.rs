@@ -90,4 +90,82 @@ impl ScreenCapture {
 
         (frame, is_significant_change)
     }
+
+    /// Captures the actual physical primary monitor screen
+    #[cfg(target_os = "windows")]
+    pub fn capture_native_screen() -> Option<(Vec<u8>, u32, u32)> {
+        use std::ptr::null_mut;
+        use winapi::um::wingdi::{
+            BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject, GetDIBits,
+            SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, SRCCOPY,
+        };
+        use winapi::um::winuser::{GetDC, GetSystemMetrics, ReleaseDC, SM_CXSCREEN, SM_CYSCREEN};
+
+        unsafe {
+            let width = GetSystemMetrics(SM_CXSCREEN);
+            let height = GetSystemMetrics(SM_CYSCREEN);
+            if width <= 0 || height <= 0 {
+                return None;
+            }
+
+            let hdc_screen = GetDC(null_mut());
+            if hdc_screen.is_null() {
+                return None;
+            }
+
+            let hdc_mem = CreateCompatibleDC(hdc_screen);
+            if hdc_mem.is_null() {
+                ReleaseDC(null_mut(), hdc_screen);
+                return None;
+            }
+
+            let hbm = CreateCompatibleBitmap(hdc_screen, width, height);
+            if hbm.is_null() {
+                DeleteDC(hdc_mem);
+                ReleaseDC(null_mut(), hdc_screen);
+                return None;
+            }
+
+            let old_bm = SelectObject(hdc_mem, hbm as *mut _);
+            BitBlt(hdc_mem, 0, 0, width, height, hdc_screen, 0, 0, SRCCOPY);
+
+            let mut bi: BITMAPINFO = std::mem::zeroed();
+            bi.bmiHeader.biSize = std::mem::size_of::<BITMAPINFOHEADER>() as u32;
+            bi.bmiHeader.biWidth = width;
+            bi.bmiHeader.biHeight = -height;
+            bi.bmiHeader.biPlanes = 1;
+            bi.bmiHeader.biBitCount = 24;
+            bi.bmiHeader.biCompression = BI_RGB;
+
+            let row_size = ((width * 3 + 3) & !3) as usize;
+            let mut buffer = vec![0u8; row_size * height as usize];
+
+            let lines = GetDIBits(
+                hdc_mem,
+                hbm,
+                0,
+                height as u32,
+                buffer.as_mut_ptr() as *mut _,
+                &mut bi,
+                DIB_RGB_COLORS,
+            );
+
+            SelectObject(hdc_mem, old_bm);
+            DeleteObject(hbm as *mut _);
+            DeleteDC(hdc_mem);
+            ReleaseDC(null_mut(), hdc_screen);
+
+            if lines > 0 {
+                Some((buffer, width as u32, height as u32))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    pub fn capture_native_screen() -> Option<(Vec<u8>, u32, u32)> {
+        None
+    }
 }
+
