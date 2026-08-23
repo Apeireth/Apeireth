@@ -222,6 +222,18 @@ pub fn bring_window_to_foreground(title_keyword: &str) -> (bool, String) {
             ShowWindow(hwnd, SW_SHOW);
             winapi::um::winuser::ShowWindowAsync(hwnd, SW_RESTORE);
             winapi::um::winuser::SwitchToThisWindow(hwnd, TRUE);
+            winapi::um::winuser::SetWindowPos(
+                hwnd,
+                winapi::um::winuser::HWND_TOPMOST,
+                0, 0, 0, 0,
+                winapi::um::winuser::SWP_NOMOVE | winapi::um::winuser::SWP_NOSIZE | winapi::um::winuser::SWP_SHOWWINDOW,
+            );
+            winapi::um::winuser::SetWindowPos(
+                hwnd,
+                winapi::um::winuser::HWND_NOTOPMOST,
+                0, 0, 0, 0,
+                winapi::um::winuser::SWP_NOMOVE | winapi::um::winuser::SWP_NOSIZE | winapi::um::winuser::SWP_SHOWWINDOW,
+            );
             BringWindowToTop(hwnd);
             SetForegroundWindow(hwnd);
 
@@ -229,6 +241,7 @@ pub fn bring_window_to_foreground(title_keyword: &str) -> (bool, String) {
             AttachThreadInput(cur_thread, target_thread, FALSE);
         }
         (true, finder.found_title)
+
 
     } else {
         (false, format!("No visible window matching '{}'", title_keyword))
@@ -339,16 +352,24 @@ impl Tool for DesktopActionTool {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
                     return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
                 }
-                let _ = std::process::Command::new("explorer.exe")
-                    .arg(&url)
+                let temp_dir = std::env::temp_dir().join("apeireth_browser_profile");
+                let profile_arg = format!("--user-data-dir={}", temp_dir.to_string_lossy());
+
+                let spawned = std::process::Command::new(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
+                    .args(&[&profile_arg, "--no-first-run", "--no-default-browser-check", &url])
                     .spawn();
 
-                thread::sleep(Duration::from_millis(600));
+                if spawned.is_err() {
+                    let _ = std::process::Command::new("explorer.exe")
+                        .arg(&url)
+                        .spawn();
+                }
 
+                thread::sleep(Duration::from_millis(800));
 
                 let (focused, matched_title) = bring_window_to_foreground("Edge");
                 let (focused, matched_title) = if !focused {
-                    bring_window_to_foreground("Chrome")
+                    bring_window_to_foreground("bilibili")
                 } else {
                     (focused, matched_title)
                 };
@@ -356,10 +377,11 @@ impl Tool for DesktopActionTool {
                 let fg_title = get_current_foreground_title();
 
                 Ok(ToolResult::success(format!(
-                    "Action: Opened URL '{}'.\n[Visual Verification Gate]:\n- Target Window Physical Foreground: {} (\"{}\")\n- Active Foreground Window: \"{}\"\n- State: Physical browser window brought to front.",
+                    "Action: Opened URL '{}' in active dedicated browser instance.\n[Visual Verification Gate]:\n- Browser Window Focused: {} (\"{}\")\n- Active Foreground Window: \"{}\"\n- State: Browser window launched and brought to physical foreground.",
                     url, if focused { "FOCUSED_SUCCESS" } else { "PENDING_FOCUS" }, matched_title, fg_title
                 )))
             }
+
 
             DesktopAction::FocusWindow { title } => {
                 let (focused, matched_title) = bring_window_to_foreground(&title);

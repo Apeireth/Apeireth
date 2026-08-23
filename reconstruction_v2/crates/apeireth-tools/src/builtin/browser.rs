@@ -21,13 +21,25 @@ impl Default for BrowserTool {
 
 impl BrowserTool {
     pub fn new() -> Self {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(
+            reqwest::header::ACCEPT,
+            reqwest::header::HeaderValue::from_static("text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"),
+        );
+        headers.insert(
+            reqwest::header::ACCEPT_LANGUAGE,
+            reqwest::header::HeaderValue::from_static("zh-CN,zh;q=0.9,en;q=0.8"),
+        );
+
         let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .user_agent("Apeireth/2.0 (Cognitive OS; Living Companion)")
+            .timeout(Duration::from_secs(15))
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0")
+            .default_headers(headers)
             .build()
             .unwrap_or_default();
         Self { client }
     }
+
 
     /// Strips basic HTML tags and decodes common entities to plain text
     fn extract_text_from_html(html: &str) -> String {
@@ -96,15 +108,27 @@ impl Tool for BrowserTool {
             return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
         }
 
-        let resp = self.client.get(&params.url)
-            .send()
-            .await
-            .map_err(|e| ToolError::ExecutionFailed(format!("HTTP fetch failed: {}", e)))?;
+        let resp = match self.client.get(&params.url).send().await {
+            Ok(r) => r,
+            Err(_) => {
+                let proxy_client = reqwest::Client::builder()
+                    .timeout(Duration::from_secs(10))
+                    .proxy(reqwest::Proxy::all("http://127.0.0.1:7897").unwrap_or_else(|_| reqwest::Proxy::all("http://127.0.0.1:7890").unwrap()))
+                    .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0")
+                    .build()
+                    .unwrap_or_default();
+                proxy_client.get(&params.url)
+                    .send()
+                    .await
+                    .map_err(|e| ToolError::ExecutionFailed(format!("HTTP fetch failed (both direct and proxy): {}", e)))?
+            }
+        };
 
         let status = resp.status();
         if !status.is_success() {
             return Err(ToolError::ExecutionFailed(format!("HTTP error status: {}", status)));
         }
+
 
         let raw_html = resp.text()
             .await
