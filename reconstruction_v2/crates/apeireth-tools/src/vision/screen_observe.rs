@@ -69,7 +69,8 @@ impl Tool for ScreenObserveTool {
 
 
             let should_detect = params.detect_elements.unwrap_or(true);
-            let max_el = params.max_elements.unwrap_or(30).min(100);
+            let max_el = params.max_elements.unwrap_or(50).min(100);
+
 
             let mut elements = if should_detect {
                 OmniParser::detect_live_elements(width, height)
