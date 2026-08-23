@@ -26,6 +26,9 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 pub mod auth;
+/// Canonical HTTP/chat transport entry. This is the production execution path;
+/// it translates transport DTOs and delegates all semantics to Runtime.
+pub mod canonical_entry;
 // R177: organ invariants (5 tests + 2 Kani)
 pub mod gateway;
 pub mod guard_bridge;
@@ -38,6 +41,10 @@ pub mod transport;
 pub mod workspace;
 
 pub use auth::{AccessPolicy, ApiKey, AuthDecision, AuthError, AuthResult, DmScope};
+pub use canonical_entry::{
+    canonical_router, execute_chat, serve_canonical, CanonicalChatRequest, CanonicalChatResponse,
+    CanonicalEntryError,
+};
 pub use gateway::{
     Admission, Gateway, GatewayError, GatewayMode, GatewayResult, GatewaySnapshot,
     MAX_GATEWAY_NODES, MAX_GATEWAY_SESSIONS,
@@ -64,8 +71,8 @@ pub const MODES_SUPPORTED: usize = 1;
 /// Compile-time guard: 5 Node kinds (OpenClaw taxonomy).
 pub const NODE_KINDS: usize = 5;
 
-/// Compile-time guard: 8 modules exposed by this crate.
-pub const MODULES: usize = 8;
+/// Compile-time guard: 9 modules exposed by this crate.
+pub const MODULES: usize = 9;
 
 #[cfg(test)]
 mod tests {
@@ -75,7 +82,7 @@ mod tests {
     fn compile_time_guards_hold() {
         assert_eq!(MODES_SUPPORTED, 1);
         assert_eq!(NODE_KINDS, 5);
-        assert_eq!(MODULES, 8);
+        assert_eq!(MODULES, 9);
     }
 
     #[test]
