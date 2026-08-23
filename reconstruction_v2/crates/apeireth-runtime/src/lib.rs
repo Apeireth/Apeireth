@@ -2,6 +2,9 @@ pub mod scheduler;
 pub mod task_store;
 pub mod supervisor;
 pub mod telemetry;
+pub mod host;
+
+pub use host::{UnifiedRuntimeHost, ChatTurnOutput, SessionState};
 
 use std::sync::Arc;
 
