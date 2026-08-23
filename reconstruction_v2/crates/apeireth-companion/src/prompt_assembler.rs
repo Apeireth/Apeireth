@@ -51,18 +51,50 @@ impl ContextAssembler {
         prompt.push_str("6. 【感知世界的能力 (Physical & Desktop Perception)】：通过 Win32 GDI 引擎实时捕获屏幕像素（1707x1067 RGB）、计算 64-bit 感知哈希 pHash 与帧间海明差分 ΔH，结合 OmniParser / DesktopActionTool 逆解物理控件并执行桌面协同操作；同时拥有 WebAudio/VAD 听觉感知。\n\n");
 
         // ---------------------------------------------------------------------
-        // L2: 当前挂载的系统级工具总线与物理能力 (System Tools Registry)
-        // Generated dynamically from actually-registered tools only.
+        // L2: 当前挂载的系统级工具总线与分层架构 (System Tools Registry)
+        // Categorized by execution domain & Headless/Interactive modality.
         // ---------------------------------------------------------------------
         if !tools.is_empty() {
-            prompt.push_str("## 🧰 当前挂载的系统工具总线 (System Tools Registry):\n");
-            prompt.push_str("你拥有直接调用与操作本地系统的工具总线。以下是当前已注册并可用的工具：\n");
-            for tool_name in tools {
-                let desc = Self::tool_description(tool_name);
-                prompt.push_str(&format!("• `{}`: {}\n", tool_name, desc));
+            prompt.push_str("## 🧰 系统工具总线与执行架构 (System Tools Registry):\n");
+            prompt.push_str("你拥有直接调用与操作本地系统的工具总线，根据执行模态分为以下 4 大领域：\n\n");
+
+            let os_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "shell" | "filesystem" | "search" | "repo")).collect();
+            if !os_tools.is_empty() {
+                prompt.push_str("### 1. 【系统与终端底座 (OS Execution & Files)】 (后台安全沙箱):\n");
+                for &&t in &os_tools {
+                    prompt.push_str(&format!("• `{}`: {}\n", t, Self::tool_description(t)));
+                }
             }
-            prompt.push_str("\n");
+
+            let headless_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "fetch" | "browser")).collect();
+            if !headless_tools.is_empty() {
+                prompt.push_str("### 2. 【后台静默认知与网络 (Headless Digestion)】 (无侵入后台工作，零弹窗打扰):\n");
+                for &&t in &headless_tools {
+                    prompt.push_str(&format!("• `{}`: {}\n", t, Self::tool_description(t)));
+                }
+            }
+
+            let gui_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "desktop_action" | "screen_observe")).collect();
+            if !gui_tools.is_empty() {
+                prompt.push_str("### 3. 【物理屏幕与桌面协同 (Foreground Interactive GUI)】 (真实交互桌面 WinSta0\\Default):\n");
+                for &&t in &gui_tools {
+                    prompt.push_str(&format!("• `{}`: {}\n", t, Self::tool_description(t)));
+                }
+            }
+
+            let domain_tools: Vec<&&str> = tools.iter().filter(|&&t| matches!(t, "invest_analysis" | "learning_digest")).collect();
+            if !domain_tools.is_empty() {
+                prompt.push_str("### 4. 【垂直专业领域引擎 (Domain Expertise)】:\n");
+                for &&t in &domain_tools {
+                    prompt.push_str(&format!("• `{}`: {}\n", t, Self::tool_description(t)));
+                }
+            }
+
+            prompt.push_str("\n【执行模式准则】:\n");
+            prompt.push_str("- 静默模式 (Headless)：知识抓取、行情分析、代码检索、文件处理优先使用第 1/2/4 类工具在后台静默完成，不侵入用户当前屏幕。\n");
+            prompt.push_str("- 交互模式 (Interactive)：当用户明确要求“在屏幕上打开/展示/操作窗口”时，调用 `desktop_action` 将目标应用拉到物理前台呈现在用户眼前。\n\n");
         }
+
 
 
         // ---------------------------------------------------------------------

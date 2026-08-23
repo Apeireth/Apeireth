@@ -15,7 +15,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let host = UnifiedRuntimeHost::new(api_key, ":memory:").await?;
     let session_id = "live_edge_bilibili_search";
-    let prompt = "请帮我在 Edge 浏览器里打开 Bilibili 并搜索 live2d 模型（直接通过 open_url 打开 Bilibili 的 live2d 模型搜索结果页面）。请调用 desktop_action 在我的 Windows 电脑上真实执行这个操作并向我汇报。";
+    let prompt = "请调用 desktop_action 的 open_url 功能，在我的物理桌面上打开 Edge 浏览器并直接导航到 Bilibili 的 live2d 模型搜索页面 (https://search.bilibili.com/all?keyword=live2d模型)，确保浏览器窗口真实弹到屏幕最前方呈现在我眼前！";
+
+
 
 
 
