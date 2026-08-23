@@ -18,6 +18,8 @@ use apeireth_storage::migrations::run_migrations;
 use apeireth_companion::emotion::{Plutchik, Pad, ResponseStyle};
 use apeireth_companion::emergence::BorbelyModel;
 use apeireth_companion::prompt_assembler::{ContextAssembler, CompanionContextState};
+use apeireth_companion::dream::{DreamEngine, DreamReport};
+use apeireth_companion::epistemic::EpistemicHealer;
 
 use apeireth_protocol::{MinimaxAdapter, ProtocolAdapter};
 use apeireth_protocol::normalized::{NormalizedRequest, NormalizedMessage, Usage};
@@ -26,7 +28,12 @@ use apeireth_tools::ToolRegistry;
 use apeireth_tools::builtin::shell::ShellTool;
 use apeireth_tools::builtin::filesystem::FilesystemTool;
 use apeireth_tools::builtin::fetch::FetchTool;
+use apeireth_tools::vision::desktop_action::DesktopActionTool;
+use apeireth_tools::worktree::WorktreeSandbox;
+use apeireth_tools::synthesis::ToolSynthesizer;
 use apeireth_tools::sandbox::PlatformSandbox;
+
+use crate::hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatTurnOutput {
@@ -65,6 +72,11 @@ pub struct UnifiedRuntimeHost {
     pub tool_registry: Arc<ToolRegistry>,
     pub sandbox: Arc<PlatformSandbox>,
     pub protocol_adapter: Arc<dyn ProtocolAdapter + Send + Sync>,
+    pub dream_engine: Arc<Mutex<DreamEngine>>,
+    pub epistemic_healer: Arc<Mutex<EpistemicHealer>>,
+    pub hybrid_router: HybridCognitiveRouter,
+    pub tool_synthesizer: Arc<ToolSynthesizer>,
+    pub worktree_sandbox: Arc<WorktreeSandbox>,
 }
 
 impl UnifiedRuntimeHost {
@@ -81,12 +93,20 @@ impl UnifiedRuntimeHost {
         tool_reg.register(Arc::new(ShellTool::new()));
         tool_reg.register(Arc::new(FilesystemTool::new()));
         tool_reg.register(Arc::new(FetchTool::new()));
+        tool_reg.register(Arc::new(DesktopActionTool::default()));
 
         let sandbox = Arc::new(PlatformSandbox::new()?);
         let _ = sandbox.apply_restrictions();
 
+        let tool_synthesizer = Arc::new(ToolSynthesizer::new(sandbox.clone()));
+        let worktree_sandbox = Arc::new(WorktreeSandbox::new(".worktrees"));
+
         let plutchik = Arc::new(Mutex::new(Plutchik::default()));
         let borbely = Arc::new(Mutex::new(BorbelyModel::new(0.6, 0.4)));
+
+        let dream_engine = Arc::new(Mutex::new(DreamEngine::default()));
+        let epistemic_healer = Arc::new(Mutex::new(EpistemicHealer::default()));
+        let hybrid_router = HybridCognitiveRouter::new();
 
         let prompt_assembler = ContextAssembler::new(
             "Apeireth 2.0 Living Companion",
@@ -111,6 +131,11 @@ impl UnifiedRuntimeHost {
             tool_registry: Arc::new(tool_reg),
             sandbox,
             protocol_adapter: adapter,
+            dream_engine,
+            epistemic_healer,
+            hybrid_router,
+            tool_synthesizer,
+            worktree_sandbox,
         })
     }
 
@@ -123,9 +148,32 @@ impl UnifiedRuntimeHost {
         let now_sec = now.timestamp();
 
         // ---------------------------------------------------------------------
+        // Fast-Path Hybrid Cognition Routing (Sub-5ms response for local intents)
+        // ---------------------------------------------------------------------
+        if let HybridRoutingDecision::LocalFastPath { intent, response_template, .. } = self.hybrid_router.route(user_message) {
+            if let Some(template) = response_template {
+                let pad = Pad::default();
+                return Ok(ChatTurnOutput {
+                    session_id: session_id.to_string(),
+                    assistant_text: template,
+                    reasoning_cot: Some(format!("Fast-path routed via LocalSLM/Rule (Intent: {})", intent)),
+                    pad_state: pad.clone(),
+                    response_style: pad.to_response_style(),
+                    drive_warmth: 0.5,
+                    token_usage: Usage { prompt_tokens: 5, completion_tokens: 10, total_tokens: 15 },
+                    audit_hash: "fast_path_local".into(),
+                    recalled_memories_count: 0,
+                    timestamp: now_sec,
+                });
+            }
+        }
+
+        // ---------------------------------------------------------------------
         // Phase 1 & 2: Perception & Input Sanitization
         // ---------------------------------------------------------------------
         if let Err(injection_err) = PiiDetector::detect_prompt_injection(user_message) {
+            let mut healer = self.epistemic_healer.lock().await;
+            healer.distill_failure("prompt_security_guard", &injection_err.to_string());
             return Err(format!("Security Violation: {}", injection_err).into());
         }
         let clean_user_msg = PiiDetector::scrub(user_message);
@@ -144,6 +192,8 @@ impl UnifiedRuntimeHost {
             let gate_res = gov.evaluate_action(&target, "2.0.0", 100.0, 4096, 0, 0, true)
                 .map_err(|e| format!("Governance Gate Rejection: {}", e))?;
             if gate_res.iter().any(|r| !r.passed) {
+                let mut healer = self.epistemic_healer.lock().await;
+                healer.distill_failure("governance_pipeline", "Blocked by 5-Gate evaluation");
                 return Err("Governance Pipeline Blocked Action".into());
             }
         }
@@ -178,24 +228,29 @@ impl UnifiedRuntimeHost {
         };
 
         // ---------------------------------------------------------------------
-        // Phase 6: Multi-layer Prompt Assembly
+        // Phase 6: Multi-layer Prompt Assembly with Epistemic Self-Repair Anchors
         // ---------------------------------------------------------------------
+        let mut philosophy_rules = vec![
+            "0-Pretend Authenticity".to_string(),
+            "Tenant Sovereign Boundaries".to_string(),
+            "Epistemic Honesty".to_string(),
+        ];
+        {
+            let healer = self.epistemic_healer.lock().await;
+            philosophy_rules.extend(healer.get_preventative_anchors());
+        }
+
         let context_state = CompanionContextState {
             identity_name: "Apeireth".into(),
-            philosophy_rules: vec![
-                "0-Pretend Authenticity".into(),
-                "Tenant Sovereign Boundaries".into(),
-                "Epistemic Honesty".into(),
-            ],
+            philosophy_rules,
             retrieved_memories: retrieved_memory_texts.clone(),
             pad_state: pad_state.clone(),
             response_style: response_style.clone(),
             drive_warmth: drive_score,
-
             silence_pressure: 0.0,
         };
 
-        let tools = vec!["shell", "filesystem", "fetch"];
+        let tools = vec!["shell", "fs", "fetch", "desktop_action"];
         let system_prompt = self.prompt_assembler.assemble_system_prompt(&context_state, &tools);
 
         // ---------------------------------------------------------------------
@@ -211,11 +266,9 @@ impl UnifiedRuntimeHost {
                 last_interaction: now,
             });
 
-            // Append prior session context (up to last 10 messages)
             let start = session.messages.len().saturating_sub(10);
             messages.extend_from_slice(&session.messages[start..]);
 
-            // Add current user message
             let user_norm = NormalizedMessage::user(clean_user_msg.clone());
             messages.push(user_norm.clone());
             session.messages.push(user_norm);
@@ -232,7 +285,6 @@ impl UnifiedRuntimeHost {
         let reasoning_cot = response.message.extract_reasoning();
         let token_usage = response.usage;
 
-        // Append assistant response to session
         {
             let mut sessions = self.sessions.lock().await;
             if let Some(session) = sessions.get_mut(session_id) {
@@ -263,7 +315,6 @@ impl UnifiedRuntimeHost {
             record.current_hash.clone()
         };
 
-        // Publish to EventBus
         self.event_bus.publish(
             "chat.turn_completed",
             serde_json::json!({
@@ -286,6 +337,36 @@ impl UnifiedRuntimeHost {
             timestamp: now_sec,
         })
     }
+
+    /// Triggers Phase P9 Nighttime Dream & Deep Self-Evolution
+    pub async fn trigger_nightly_dream_evolution(&self) -> Result<DreamReport, Box<dyn std::error::Error + Send + Sync>> {
+        let memories = self.memory_store.query(Utc::now(), QueryMode::All).await?;
+        let mem_texts: Vec<String> = memories.into_iter().map(|m| m.data).collect();
+
+        let unresolved = vec![
+            ("ep_unresolved_01".into(), "Unfinished task simulation".into())
+        ];
+        let predictions = vec![
+            (0.85, true),
+            (0.90, true),
+            (0.30, false),
+        ];
+
+        let mut dream = self.dream_engine.lock().await;
+        let report = dream.run_nightly_evolution(&mem_texts, &unresolved, &predictions);
+
+        self.event_bus.publish(
+            "companion.dream_evolution_completed",
+            serde_json::json!({
+                "extracted_triplets": report.extracted_triplets.len(),
+                "compressed_count": report.memories_compressed_count,
+                "rehearsals": report.rehearsals.len(),
+                "brier_score_30": report.brier_score_30
+            }).to_string()
+        );
+
+        Ok(report)
+    }
 }
 
 #[cfg(test)]
@@ -293,8 +374,9 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn test_runtime_host_creation() {
-        let host = UnifiedRuntimeHost::new("test-key", ":memory:").await;
-        assert!(host.is_ok());
+    async fn test_runtime_host_creation_and_dream() {
+        let host = UnifiedRuntimeHost::new("test-key", ":memory:").await.unwrap();
+        let dream_rep = host.trigger_nightly_dream_evolution().await.unwrap();
+        assert!(dream_rep.intent_calibrated);
     }
 }

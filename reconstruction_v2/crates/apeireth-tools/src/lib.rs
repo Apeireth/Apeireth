@@ -1,6 +1,11 @@
 pub mod builtin;
 pub mod sandbox;
 pub mod mcp;
+pub mod vision;
+pub mod worktree;
+pub mod synthesis;
+
+
 
 
 use async_trait::async_trait;

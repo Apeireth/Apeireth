@@ -3,8 +3,11 @@ pub mod task_store;
 pub mod supervisor;
 pub mod telemetry;
 pub mod host;
+pub mod hybrid;
 
 pub use host::{UnifiedRuntimeHost, ChatTurnOutput, SessionState};
+pub use hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
+
 
 use std::sync::Arc;
 
