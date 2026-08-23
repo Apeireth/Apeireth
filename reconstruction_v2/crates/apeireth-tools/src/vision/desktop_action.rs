@@ -331,11 +331,12 @@ impl Tool for DesktopActionTool {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
                     return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
                 }
-                let _ = std::process::Command::new("powershell")
-                    .args(&["-NoProfile", "-NonInteractive", "-Command", &format!("Start-Process '{}'", url.replace('\'', "''"))])
-                    .status();
+                let _ = std::process::Command::new("explorer.exe")
+                    .arg(&url)
+                    .spawn();
 
                 thread::sleep(Duration::from_millis(600));
+
 
                 let (focused, matched_title) = bring_window_to_foreground("Edge");
                 let (focused, matched_title) = if !focused {
