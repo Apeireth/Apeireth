@@ -109,13 +109,22 @@ impl WorktreeSandbox {
         for (rel_path, content) in files_to_write {
             let target_path = temp_dir.join(&rel_path);
             if let Some(parent) = target_path.parent() {
-                let _ = tokio::fs::create_dir_all(parent).await;
+                tokio::fs::create_dir_all(parent).await
+                    .map_err(|e| format!("Failed to create directory {:?}: {}", parent, e))?;
             }
-            let _ = tokio::fs::write(&target_path, content).await;
+            tokio::fs::write(&target_path, content).await
+                .map_err(|e| format!("Failed to write file {:?}: {}", target_path, e))?;
             changed_files.push(rel_path);
         }
 
-        // 3. Run validation test command
+        // 3. Stage changes so untracked and modified files are captured
+        let _ = tokio::process::Command::new("git")
+            .current_dir(&temp_dir)
+            .args(&["add", "-A"])
+            .output()
+            .await;
+
+        // 4. Run validation test command
         let val_result = if let Some(cmd) = test_cmd {
             let parts: Vec<&str> = cmd.split_whitespace().collect();
             if !parts.is_empty() {
@@ -138,10 +147,10 @@ impl WorktreeSandbox {
             Self::evaluate_test_output("no test command requested", 0)
         };
 
-        // 4. Extract real git diff
+        // 5. Extract real git diff from HEAD
         let diff_out = tokio::process::Command::new("git")
             .current_dir(&temp_dir)
-            .args(&["diff"])
+            .args(&["diff", "HEAD"])
             .output()
             .await;
 
@@ -150,7 +159,7 @@ impl WorktreeSandbox {
             Err(_) => String::new(),
         };
 
-        // 5. Clean up worktree directory
+        // 6. Clean up worktree directory
         let _ = tokio::process::Command::new("git")
             .current_dir(repo_path)
             .args(&["worktree", "remove", temp_dir.to_str().unwrap(), "--force"])
@@ -160,6 +169,7 @@ impl WorktreeSandbox {
         let patch_set = Self::create_patch_set(&branch, changed_files, diff_str, None);
         Ok((patch_set, val_result))
     }
+
 
     /// Applies a live patch onto the repository
     pub async fn apply_live_patch(repo_path: &str, diff_content: &str) -> Result<String, String> {

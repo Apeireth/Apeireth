@@ -38,10 +38,8 @@ impl MemoryItem {
     pub fn calculate_act_r_activation(&self, current_time: i64, decay: f64, beta: f64) -> f64 {
         let mut sum = 0.0;
         for &t_j in &self.access_times {
-            let diff = current_time - t_j;
-            if diff > 0 {
-                sum += (diff as f64).powf(-decay);
-            }
+            let diff = (current_time - t_j).max(1);
+            sum += (diff as f64).powf(-decay);
         }
         if sum > 0.0 {
             sum.ln() + beta
@@ -121,9 +119,15 @@ impl MemoryStore {
             }
         }
         
-        results.sort_by(|a, b| b.importance.partial_cmp(&a.importance).unwrap());
+        let now_sec = as_of.timestamp();
+        results.sort_by(|a, b| {
+            let act_a = a.calculate_act_r_activation(now_sec, 0.5, 0.0) + a.importance * 2.0;
+            let act_b = b.calculate_act_r_activation(now_sec, 0.5, 0.0) + b.importance * 2.0;
+            act_b.partial_cmp(&act_a).unwrap_or(std::cmp::Ordering::Equal)
+        });
         Ok(results)
     }
+
 
     pub fn cjk_bigram_tokenize(text: &str) -> Vec<String> {
         let chars: Vec<char> = text.chars().collect();

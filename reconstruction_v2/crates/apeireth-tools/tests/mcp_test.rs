@@ -7,8 +7,9 @@ use apeireth_tools::mcp::{McpServer, McpClient, MemoryTransport};
 #[tokio::test]
 async fn test_mcp_client_server_roundtrip_and_tool_adapter() {
     // 1. Setup Server with Native Apeireth Tools
-    let mut server_registry = ToolRegistry::new();
+    let server_registry = ToolRegistry::new();
     server_registry.register(Arc::new(ShellTool::new()));
+
     server_registry.register(Arc::new(FilesystemTool::new()));
 
     let server = Arc::new(McpServer::with_info(
