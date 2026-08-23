@@ -192,10 +192,13 @@ async fn native_chat(
     State(runtime): State<Arc<Runtime>>,
     Json(request): Json<CanonicalChatRequest>,
 ) -> Result<Json<CanonicalChatResponse>, HttpError> {
+    let mut request = request;
+    let session = request.session.unwrap_or_else(SessionId::new);
+    request.session = Some(session);
     execute_chat(runtime.as_ref(), request)
         .await
         .map(Json)
-        .map_err(|error| http_error(error, None))
+        .map_err(|error| http_error(error, Some(session)))
 }
 
 async fn openai_chat(
