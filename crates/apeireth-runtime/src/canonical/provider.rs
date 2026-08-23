@@ -75,6 +75,18 @@ const UNHEALTHY_AFTER_FAILURES: u32 = 3;
 /// Error rate at or above which a provider is considered unhealthy.
 const UNHEALTHY_ERROR_RATE: f64 = 0.5;
 
+/// The outcome of one routed completion.
+#[derive(Debug)]
+pub struct RoutedCompletion {
+    /// The provider that answered.
+    pub served_by: CapabilityId,
+    /// What it answered.
+    pub response: NormalizedResponse,
+    /// Providers that failed transiently before one succeeded, in the order
+    /// they were tried. Empty on a first-try success.
+    pub failed_attempts: Vec<(CapabilityId, ProviderError)>,
+}
+
 /// Chooses among providers and falls back when one fails transiently.
 pub struct ProviderRouter {
     providers: Vec<Arc<dyn ProviderCapability>>,
@@ -129,13 +141,11 @@ impl ProviderRouter {
 
     /// Serve a completion, falling back on transient failures.
     ///
-    /// Returns which provider succeeded alongside the response, so the caller can
-    /// record it: "the turn used provider.b because provider.a was rate limited"
-    /// is not reconstructible after the fact otherwise.
-    pub async fn complete(
-        &self,
-        request: &NormalizedRequest,
-    ) -> RuntimeResult<(CapabilityId, NormalizedResponse)> {
+    /// Returns a [`RoutedCompletion`] rather than a bare response: which provider
+    /// served the request, and which ones failed on the way there, are not
+    /// reconstructible afterwards. Without them a trace cannot say "the turn used
+    /// provider.b because provider.a was rate limited".
+    pub async fn complete(&self, request: &NormalizedRequest) -> RuntimeResult<RoutedCompletion> {
         let mut candidates: Vec<&Arc<dyn ProviderCapability>> = self
             .providers
             .iter()
@@ -155,7 +165,7 @@ impl ProviderRouter {
             });
         }
 
-        let mut last_error: Option<ProviderError> = None;
+        let mut failed_attempts: Vec<(CapabilityId, ProviderError)> = Vec::new();
 
         for provider in candidates {
             let id = provider.id().clone();
@@ -168,11 +178,15 @@ impl ProviderRouter {
                         .saturating_sub(started.epoch_millis())
                         .unsigned_abs();
                     self.record_success(&id, elapsed);
-                    return Ok((id, response));
+                    return Ok(RoutedCompletion {
+                        served_by: id,
+                        response,
+                        failed_attempts,
+                    });
                 }
                 Err(e) if e.is_retryable() => {
                     self.record_failure(&id);
-                    last_error = Some(e);
+                    failed_attempts.push((id, e));
                 }
                 Err(e) => {
                     // A permanent failure must not cascade: retrying a rejected
@@ -183,9 +197,12 @@ impl ProviderRouter {
             }
         }
 
+        let (_, last_error) = failed_attempts
+            .pop()
+            .expect("a non-empty candidate list always records at least one attempt");
         Err(RuntimeError::ProvidersExhausted {
             model: request.model.clone(),
-            source: last_error.expect("a non-empty candidate list always sets last_error"),
+            source: last_error,
         })
     }
 
@@ -338,10 +355,11 @@ mod tests {
         let b = Scripted::ok("provider.b", "shared-model");
         let router = ProviderRouter::new(vec![a.clone(), b.clone()], clock());
 
-        let (served_by, response) = router.complete(&request("shared-model")).await.unwrap();
+        let routed = router.complete(&request("shared-model")).await.unwrap();
 
-        assert_eq!(served_by.as_str(), "provider.a");
-        assert_eq!(response.content, "answered by provider.a");
+        assert_eq!(routed.served_by.as_str(), "provider.a");
+        assert_eq!(routed.response.content, "answered by provider.a");
+        assert!(routed.failed_attempts.is_empty());
         assert_eq!(a.calls(), 1);
         assert_eq!(b.calls(), 0, "the second provider must not be consulted");
     }
@@ -352,9 +370,18 @@ mod tests {
         let b = Scripted::ok("provider.b", "shared-model");
         let router = ProviderRouter::new(vec![a.clone(), b.clone()], clock());
 
-        let (served_by, _) = router.complete(&request("shared-model")).await.unwrap();
+        let routed = router.complete(&request("shared-model")).await.unwrap();
 
-        assert_eq!(served_by.as_str(), "provider.b");
+        assert_eq!(routed.served_by.as_str(), "provider.b");
+        assert_eq!(
+            routed
+                .failed_attempts
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>(),
+            ["provider.a"],
+            "the caller must be able to see why the first choice was skipped"
+        );
         assert_eq!(a.calls(), 1);
         assert_eq!(b.calls(), 1);
     }
@@ -440,8 +467,8 @@ mod tests {
             ["provider.b", "provider.a"]
         );
 
-        let (served_by, _) = router.complete(&request("shared-model")).await.unwrap();
-        assert_eq!(served_by.as_str(), "provider.b");
+        let routed = router.complete(&request("shared-model")).await.unwrap();
+        assert_eq!(routed.served_by.as_str(), "provider.b");
         assert_eq!(a.calls(), 0);
     }
 
