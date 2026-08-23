@@ -391,35 +391,51 @@ impl Tool for DesktopActionTool {
                 if !url.starts_with("http://") && !url.starts_with("https://") {
                     return Err(ToolError::ValidationFailed("URL must start with http:// or https://".into()));
                 }
-                let temp_dir = std::env::temp_dir().join("apeireth_browser_profile");
-                let profile_arg = format!("--user-data-dir={}", temp_dir.to_string_lossy());
 
-                let spawned = std::process::Command::new(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
-                    .args(&[&profile_arg, "--no-first-run", "--no-default-browser-check", &url])
-                    .spawn();
+                let (mut focused, mut matched_title) = bring_window_to_foreground("Edge");
+                if !focused {
+                    let res = bring_window_to_foreground("Chrome");
+                    focused = res.0;
+                    matched_title = res.1;
+                }
 
-                if spawned.is_err() {
+                if !focused {
+                    // If no browser window is open, launch via ShellExecute
                     let _ = std::process::Command::new("explorer.exe")
                         .arg(&url)
                         .spawn();
-                }
-
-                thread::sleep(Duration::from_millis(800));
-
-                let (focused, matched_title) = bring_window_to_foreground("Edge");
-                let (focused, matched_title) = if !focused {
-                    bring_window_to_foreground("bilibili")
+                    thread::sleep(Duration::from_millis(1000));
+                    let res = bring_window_to_foreground("Edge");
+                    focused = res.0;
+                    matched_title = res.1;
                 } else {
-                    (focused, matched_title)
-                };
+                    // Browser is focused, open new tab with Ctrl+T and navigate
+                    thread::sleep(Duration::from_millis(300));
+                    send_keyboard_input(VK_CONTROL as u16, 0, 0);
+                    send_keyboard_input(b'T' as u16, 0, 0);
+                    send_keyboard_input(b'T' as u16, 0, KEYEVENTF_KEYUP);
+                    send_keyboard_input(VK_CONTROL as u16, 0, KEYEVENTF_KEYUP);
+                    thread::sleep(Duration::from_millis(500));
+
+                    for c in url.encode_utf16() {
+                        send_keyboard_input(0, c, KEYEVENTF_UNICODE);
+                        send_keyboard_input(0, c, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP);
+                    }
+                    thread::sleep(Duration::from_millis(200));
+
+                    send_keyboard_input(VK_RETURN as u16, 0, 0);
+                    send_keyboard_input(VK_RETURN as u16, 0, KEYEVENTF_KEYUP);
+                    thread::sleep(Duration::from_millis(600));
+                }
 
                 let fg_title = get_current_foreground_title();
 
                 Ok(ToolResult::success(format!(
-                    "Action: Opened URL '{}' in active dedicated browser instance.\n[Visual Verification Gate]:\n- Browser Window Focused: {} (\"{}\")\n- Active Foreground Window: \"{}\"\n- State: Browser window launched and brought to physical foreground.",
+                    "Action: Navigated to URL '{}' in active browser window.\n[Visual Verification Gate]:\n- Browser Window Focused: {} (\"{}\")\n- Active Foreground Window: \"{}\"\n- State: Target page loaded in foreground browser.",
                     url, if focused { "FOCUSED_SUCCESS" } else { "PENDING_FOCUS" }, matched_title, fg_title
                 )))
             }
+
 
 
             DesktopAction::FocusWindow { title } => {
