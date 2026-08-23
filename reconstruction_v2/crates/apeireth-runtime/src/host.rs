@@ -89,8 +89,9 @@ impl UnifiedRuntimeHost {
         }
         let memory_store = Arc::new(MemoryStore::new(pool.clone()));
 
-        let mut tool_reg = ToolRegistry::new();
+        let tool_reg = ToolRegistry::new();
         tool_reg.register(Arc::new(ShellTool::new()));
+
         tool_reg.register(Arc::new(FilesystemTool::new()));
         tool_reg.register(Arc::new(FetchTool::new()));
         tool_reg.register(Arc::new(DesktopActionTool::default()));

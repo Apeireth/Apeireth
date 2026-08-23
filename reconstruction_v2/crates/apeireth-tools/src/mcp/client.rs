@@ -108,8 +108,9 @@ impl McpClient {
     /// Automatically discovers all tools from remote MCP Server and registers them into Apeireth's ToolRegistry
     pub async fn discover_and_register_tools(
         client_arc: Arc<Self>,
-        registry: &mut ToolRegistry,
+        registry: &ToolRegistry,
     ) -> Result<usize, String> {
+
         let tools = client_arc.list_tools().await?;
         let count = tools.len();
         for mcp_tool in tools {
