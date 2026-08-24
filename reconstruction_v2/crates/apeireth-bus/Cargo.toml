@@ -67,6 +67,8 @@ path = "src/lib.rs"
 
 # CI fix 2026-08: 重建 bus_echo bin (round15-03 删除导致 l2 pipe 集成测试失去 echo 子进程).
 # required-features = ["full-bus"] → 0 默认装, 0 影响 Windows/默认构建.
+# v2 适配: bus_echo 仅 unix (l2 module 是 #[cfg(unix)], Windows 跳过).
+# 通过将 bin 内容用 cfg(unix) 包起来, Windows 上 bin 编译但内容空.
 [[bin]]
 name = "bus_echo"
 path = "src/bin/bus_echo.rs"

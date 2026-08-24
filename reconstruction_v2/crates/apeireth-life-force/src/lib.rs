@@ -14,6 +14,14 @@
 //! - `SelfGrowthIndicator` (SGI) — 单字段目标身份 (按 v8 修正, 不要拆成多个分散字段)
 //! - 3 核心触发函数: `reflection_trigger` / `exhaustion_check` / `recovery_start`
 //!
+//! **v2 重构 (v1 → v2)**:
+//! - v1 引用 `apeireth_consciousness::plutchik::{PlutchikBasic, PlutchikAdvanced, PlutchikEmotion,
+//!   PlutchikIntensity}`, v2 改为 `apeireth_cognition::{...}` (v2 cognition 本地承载).
+//! - `IdentityCard` 字段保持 v1 R14 表面 (continuity_id + birth_time + carriers +
+//!   migration_history) — v2 `apeireth_core::IdentityCard` 在 root re-export 该字段集
+//!   (per apeireth-core/src/lib.rs R19 compat note), 现有调用方零修改.
+//! - 反思期触发 / 持续力 / SGI / Identity 协同逻辑保持 v1 语义, 0 漂移.
+//!
 //! **不修改承诺 (LOCKED)**:
 //! - ❌ 不修改 apeireth-core 任何已实装类型
 //! - ❌ 不修改 R11 baseline 三值
@@ -28,7 +36,7 @@
 
 #![deny(unsafe_code)]
 
-use apeireth_core::IdentityCard;
+use apeireth_core::{IdentityCard, Migration};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -36,9 +44,9 @@ use thiserror::Error;
 pub mod reflection_cycle;
 // R22 ST-A2.3 — 涌现能力识别 (Emergence Detection)
 pub mod emergence;
-// R173 ST-B2.1 — bridge 2: consciousness -> life-force
+// R173 ST-B2.1 — bridge 2: cognition -> life-force (v2 重构: 不再依赖 apeireth-consciousness)
 pub mod consciousness_bridge;
-// R176: bridge 2 Kani proofs
+// R176: bridge 2 Kani proofs (test-only 验证)
 mod bridge_kani_proofs;
 // R177: organ invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
@@ -52,7 +60,7 @@ mod organ_kani_proofs;
 /// 按 `docs/stage1/inspiration-stage1-2026-07-30.md` §21.4 "SGI (Single-field Goal Identity)":
 /// 目标身份**只占一个字段** `goal`, 不拆成多个分散字段 (avoid 三个属性散落四处).
 ///
-/// 按 v8 修正: SGI = { goal, last_updated } — `goal` 单字段表达主 AI 当前的"我是谁 / 我要做什么"，
+/// 按 v8 修正: SGI = { goal, last_updated } — `goal` 单字段表达主 AI 当前的"我是谁 / 我要做什么",
 /// `last_updated` 仅作时间戳记录, 本身不参与"身份判定"语义.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SelfGrowthIndicator {
@@ -117,7 +125,7 @@ pub trait ReflectionPeriod {
     }
 }
 
-/// 反思期状态 — 持久化数据 (started_at + identity continuity_id)
+/// 反思期状态 — 持久化数据 (started_at + continuity_id)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReflectionPeriodState {
     /// 反思期起始时间戳 (epoch seconds, 0 表示未启动)
@@ -202,6 +210,9 @@ pub enum ReflectionTrigger {
 /// - `reflection`    — 反思期计时状态 (per R, 接入 IdentityCard continuity_id)
 /// - `sgi`           — SGI 单字段 (Single-field Goal Identity, per v8 修正)
 /// - `identity`      — 主体连续性 ID (复用 apeireth-core IdentityCard, 不重写)
+///
+/// **v2 note**: IdentityCard 字段集 (continuity_id + birth_time + carriers + migration_history)
+/// 由 v2 `apeireth_core::IdentityCard` 在 root re-export, 与 v1 调用方 100% 兼容.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LifeForce {
     /// 持续力 (续航) — [0.0, 1.0].
@@ -343,7 +354,7 @@ pub fn reflection_progress(life: &LifeForce, now: i64) -> f64 {
 }
 
 // ============================================
-// 8. 单元测试 (5+ tests)
+// 8. 单元测试 (16 tests, v2 重构)
 // ============================================
 
 #[cfg(test)]
@@ -351,6 +362,8 @@ mod tests {
     use super::*;
 
     fn make_identity() -> IdentityCard {
+        // v2 IdentityCard 字段集延续 v1 R14 表面 (continuity_id + birth_time + carriers + migration_history)
+        // v2-only 字段 (name / version / philosophy_anchors / created_at) 由 ..Default::default() 补齐.
         IdentityCard {
             continuity_id: "did:apeireth:test-001".to_string(),
             birth_time: 1_700_000_000,
@@ -412,6 +425,14 @@ mod tests {
         assert_eq!(life.endurance, ENDURANCE_MAX);
         assert!(!life.is_in_reflection(1_700_000_000));
         assert!(!life.has_sgi());
+    }
+
+    #[test]
+    fn life_force_continuity_id_from_identity_v1_surface() {
+        // v1 surface: continuity_id 字段
+        let identity = make_identity();
+        let life = LifeForce::new(identity.clone(), 1_700_000_000);
+        assert_eq!(life.reflection.continuity_id, identity.continuity_id);
     }
 
     #[test]
@@ -493,6 +514,20 @@ mod tests {
         // 超过 72h — clamp 到 1.0
         let way_later = 1_700_000_000 + 100 * 3600;
         assert!((reflection_progress(&life, way_later) - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn identity_card_migration_field_works() {
+        // v1 surface: IdentityCard.migration_history: Vec<Migration>
+        let mut identity = make_identity();
+        identity.migration_history.push(Migration::new(
+            "carrier-A",
+            "carrier-B",
+            1_700_000_500,
+        ));
+        assert_eq!(identity.migration_history.len(), 1);
+        assert_eq!(identity.migration_history[0].from_carrier, "carrier-A");
+        assert_eq!(identity.migration_history[0].to_carrier, "carrier-B");
     }
 }
 

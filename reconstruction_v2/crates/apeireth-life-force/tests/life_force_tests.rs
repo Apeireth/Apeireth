@@ -23,6 +23,8 @@ fn real_identity() -> IdentityCard {
             to_carrier: "carrier-1".to_string(),
             timestamp: 1_700_000_000,
         }],
+        // v2 适配: continuity_id 派生自 identity.name (per life-force::continuity_id_from_identity)
+        name: "did:apeireth:integration-001".to_string(),
         ..Default::default()
     }
 }
