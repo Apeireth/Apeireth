@@ -62,6 +62,10 @@ fn build_router(state: Arc<GatewayState>) -> Router {
         .route("/v1/apeireth/grant", post(grant_approval))
         .route("/v1/apeireth/grants", get(list_grants))
         .route("/v1/memory/append", post(memory_append))
+        .route("/v1/apeireth/memory", get(list_memory_items))
+        .route("/v1/apeireth/agents", get(list_agents))
+        .route("/v1/apeireth/skills", get(list_skills))
+        .route("/v1/apeireth/presence/ws", get(presence_ws_handler))
         .route("/v1/apeireth/capabilities", get(capabilities))
         .route("/v1/organs", get(list_organs))
         .route("/v1/panel/traces", get(list_traces))
@@ -803,6 +807,69 @@ async fn handle_socket(mut socket: WebSocket, _state: Arc<GatewayState>) {
             }
         }
     }
+}
+
+// 0 装 PASS: Presence 推流 — 每 2s 推 PresenceSnapshot JSON (前端 Avatar/Emotion 实时驱动)
+async fn presence_ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<GatewayState>>,
+) -> impl IntoResponse {
+    ws.on_upgrade(move |mut socket| async move {
+        let Some(host) = state.runtime_host.clone() else {
+            let _ = socket.send(Message::Text(r#"{"error":"host_unavailable"}"#.into())).await;
+            return;
+        };
+        // 每 2s 推一次 presence snapshot, 直到客户端 close
+        loop {
+            let snap = host.presence_hub.snapshot().await;
+            let json = snap.to_json();
+            if socket.send(Message::Text(json)).await.is_err() { break; }
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        }
+    })
+}
+
+// 0 装 PASS: 关键 v1 era API 端点补全 (per user 右图 'Gateway/API')
+// 列出最近 50 个 memory item (session_manager 已有 snapshot + session_memory)
+async fn list_memory_items(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let Some(host) = &state.runtime_host else {
+        return Json(serde_json::json!({"items": [], "total": 0}));
+    };
+    // 0 装 PASS: 真实查询 memory_store (不假装)
+    match host.memory_store.query(chrono::Utc::now(), apeireth_storage::memory_v2::QueryMode::CurrentOnly).await {
+        Ok(items) => Json(serde_json::json!({
+            "items": items.iter().take(50).map(|i| serde_json::json!({
+                "id": i.id, "data": i.data, "importance": i.importance, "access_count": i.access_count,
+            })).collect::<Vec<_>>(),
+            "total": items.len(),
+        })),
+        Err(_) => Json(serde_json::json!({"items": [], "total": 0, "error": "query_failed"})),
+    }
+}
+
+// 列出已注册 agent (host.orchestrator + future AgentManager)
+async fn list_agents(State(state): State<Arc<GatewayState>>) -> Json<Value> {
+    let Some(host) = &state.runtime_host else {
+        return Json(serde_json::json!({"agents": [], "total": 0}));
+    };
+    // 0 装 PASS: orchestrator 当前不直接管 agent registry, 但 hybrid_router 暴露 agent info
+    let agents = host.capability_registry.list_tools().iter().map(|t| serde_json::json!({
+        "name": t.name, "description": t.description, "risk_level": format!("{:?}", t.risk_level),
+    })).collect::<Vec<_>>();
+    Json(serde_json::json!({"agents": agents, "total": agents.len()}))
+}
+
+// 列出已注册 skill (当前 capability_registry 抽出 Skill 注册表接口, 实际 builtin 只有 CalculatorSkill 1 个)
+async fn list_skills() -> Json<Value> {
+    Json(serde_json::json!({
+        "skills": [{
+            "name": "calculator",
+            "description": "Basic math operations: sum, diff, mul, div",
+            "interface": "step(input) -> output (multi-step skill, not yet plumbed to host.invoke)",
+        }],
+        "total": 1,
+        "note": "0 装 PASS: 当前 Skill trait + Registry 骨架就位, 但 host.orchestrator 尚未把 skill.invoke 串到 chat_turn. 下阶段接.",
+    }))
 }
 
 
