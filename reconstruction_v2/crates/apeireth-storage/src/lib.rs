@@ -1,6 +1,12 @@
 pub mod pool;
 pub mod migrations;
 pub mod memory_v2;
+pub mod memory_onnx;
+pub mod memory_memory_governance;
+pub mod memory_hallways;
+pub mod memory_gen_cache;
+pub mod memory_continuity_link;
+pub mod memory_agent_trace;
 pub mod memory_user_profile;
 pub mod memory_session_note;
 pub mod memory_llm_analysis;
