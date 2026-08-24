@@ -1158,6 +1158,7 @@ dependencies = [
  "apeireth-pipeline-g5",
  "apeireth-plugin",
  "apeireth-protocol",
+ "apeireth-provider",
  "apeireth-supervisor",
  "apeireth-tool-registry",
  "apeireth-tool-search",
