@@ -88,7 +88,7 @@
 | Workspace lib 测试 | `cargo test --workspace --lib` | ✅ **68 passed / 0 failed** |
 | Live LLM 多轮 | `cargo test --test live_tui_llm_simulation` | ✅ 1 passed (43.34s 真 MiniMax-M3 调用) |
 | Vision + Worktree | `cargo test --test vision_worktree_test` | ✅ 2 passed |
-| 推送 | `git push origin master` | ✅ `origin/master @ 58bccb36` |
+| 推送 | `git push origin master` | ✅ `origin/master @ 9d700242 (阶段 2 归档完成)` |
 
 ### 5.2 测试计数明细（`cargo test --workspace --lib`）
 
