@@ -14,6 +14,7 @@ members = [
     "crates/apeireth-avatar",
     "crates/apeireth-voice",
     "crates/apeireth-bridge",
+    "crates/apeireth-pybridge",
 ]
 
 
