@@ -1,0 +1,22 @@
+[package]
+name = "apeireth-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Canonical storage foundation: SQLite pool, configuration, schema migrations, and storage errors."
+
+[dependencies]
+rusqlite = { workspace = true }
+r2d2 = { workspace = true }
+r2d2_sqlite = { workspace = true }
+tokio = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_storage"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
