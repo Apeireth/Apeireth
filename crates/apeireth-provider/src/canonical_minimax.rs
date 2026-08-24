@@ -1,11 +1,11 @@
 //! The minimax provider as a first-class canonical capability.
 //!
-//! This is the first production provider to implement
+//! The first production provider to implement
 //! [`ProviderCapability`](apeireth_plugin::ProviderCapability) directly, rather
-//! than reaching the runtime through the temporary `LegacyLlmCapability` bridge.
-//! The runtime therefore names no vendor here: it sees only `provider.minimax`
-//! in its router, and this module is the one place that knows minimaxi speaks
-//! the OpenAI Chat Completions protocol.
+//! than reaching the runtime through the now-removed `LegacyLlmCapability`
+//! bridge. The runtime therefore names no vendor here: it sees only
+//! `provider.minimax` in its router, and this module is the one place that
+//! knows minimaxi speaks the OpenAI Chat Completions protocol.
 //!
 //! # What moved where
 //!
