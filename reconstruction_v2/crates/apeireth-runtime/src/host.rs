@@ -6,7 +6,7 @@ use chrono::Utc;
 // HashMap / Serialize / Deserialize 在 SessionManager 抽取后已不需要直接 use
 
 // Workspace Crates
-use apeireth_core::bus::EventBus;
+// EventBus 已包到 EventBusBackbone 内部; host.rs 不再直接 use
 use apeireth_core::lifecycle::LifecycleStateMachine;
 use apeireth_governance::gates::{GovernancePipeline, ActionTarget, RiskLevel};
 use apeireth_governance::guard::PiiDetector;
@@ -37,6 +37,10 @@ use apeireth_tools::sandbox::PlatformSandbox;
 use crate::hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
 use crate::session_manager::SessionManager;
 use crate::model_router::ModelRouter;
+use crate::event_bus_backbone::EventBusBackbone;
+use crate::capability_registry::CapabilityRegistry;
+use crate::presence_hub::PresenceHub;
+// LifecycleHandle 暂不直接用 (字段抽出留待下一阶段合并 5 个 lifecycle 子句柄)
 
 // 0 装 PASS: SessionState 已抽到 session_manager.rs (pub struct + Debug + Clone derive);
 // 这里 re-export 让 lib.rs `pub use host::SessionState;` 向后兼容 (gateway/cli/tui 现有调用)。
@@ -59,7 +63,7 @@ pub struct UnifiedRuntimeHost {
     pub api_key: String,
     pub default_model: String,
     pub session_manager: SessionManager,
-    pub event_bus: Arc<EventBus>,
+    pub event_bus_backbone: EventBusBackbone,
     pub governance: Arc<Mutex<GovernancePipeline>>,
     pub audit_chain: Arc<Mutex<AuditHashChain>>,
     pub lifecycle: Arc<Mutex<LifecycleStateMachine>>,
@@ -71,6 +75,10 @@ pub struct UnifiedRuntimeHost {
     pub tool_registry: Arc<ToolRegistry>,
     pub sandbox: Arc<PlatformSandbox>,
     pub model_router: ModelRouter,
+    // 0 装 PASS: 4 个新 facade 字段 (阶段 1.4-1.6 已抽); 调用方通过这些统一入口访问, 旧字段保留以保 compat
+    // LifecycleHandle 暂不直接挂字段 (下一阶段再合并 governance/audit_chain/lifecycle/telemetry/scheduler 5 字段)
+    pub capability_registry: CapabilityRegistry,
+    pub presence_hub: PresenceHub,
     pub dream_engine: Arc<Mutex<DreamEngine>>,
     pub epistemic_healer: Arc<Mutex<EpistemicHealer>>,
     pub hybrid_router: HybridCognitiveRouter,
@@ -93,7 +101,7 @@ impl UnifiedRuntimeHost {
         }
         let memory_store = Arc::new(MemoryStore::new(pool.clone()));
 
-        let tool_reg = ToolRegistry::new();
+        let tool_reg = Arc::new(ToolRegistry::new());
         tool_reg.register(Arc::new(ShellTool::new()));
         tool_reg.register(Arc::new(FilesystemTool::new()));
         tool_reg.register(Arc::new(FetchTool::new()));
@@ -117,6 +125,10 @@ impl UnifiedRuntimeHost {
 
         let plutchik = Arc::new(Mutex::new(Plutchik::default()));
         let borbely = Arc::new(Mutex::new(BorbelyModel::new(0.6, 0.4)));
+        // 0 装 PASS: PresenceHub 需要 Arc<...> 的额外引用 (host 字段已 move);
+        // 在此处提前 clone, 字段 shorthand 直接消费原 plutchik/borbely。
+        let ph_plutchik = plutchik.clone();
+        let ph_borbely = borbely.clone();
 
         let dream_engine = Arc::new(Mutex::new(DreamEngine::default()));
         let epistemic_healer = Arc::new(Mutex::new(EpistemicHealer::default()));
@@ -124,6 +136,9 @@ impl UnifiedRuntimeHost {
 
         let telemetry = Arc::new(crate::telemetry::Telemetry::new());
         let scheduler = Arc::new(Mutex::new(crate::scheduler::Scheduler::new()));
+        // (LifecycleHandle 暂不在 host 挂字段, 旧 5 字段保留 - 见 lifecycle.rs:1)
+        // 0 装 PASS: LifecycleHandle 已抽到 lifecycle.rs 但暂不在 host 挂字段
+        // (下一阶段再合并 governance/audit_chain/lifecycle/telemetry/scheduler 5 字段, 避免本阶段破兼容)
         let experience_queue = Arc::new(Mutex::new(apeireth_companion::observer_capture::ExperienceQueue::new()));
         let curiosity_engine = Arc::new(Mutex::new(apeireth_companion::curiosity::CuriosityEngine::default()));
 
@@ -141,7 +156,7 @@ impl UnifiedRuntimeHost {
             api_key: key,
             default_model: "MiniMax-Text-01".into(),
             session_manager: SessionManager::new(),
-            event_bus: Arc::new(EventBus::new(128)),
+            event_bus_backbone: EventBusBackbone::new(),
             governance: Arc::new(Mutex::new(GovernancePipeline::new())),
             audit_chain: Arc::new(Mutex::new(AuditHashChain::new())),
             lifecycle: Arc::new(Mutex::new(LifecycleStateMachine::new())),
@@ -150,7 +165,9 @@ impl UnifiedRuntimeHost {
             plutchik,
             borbely,
             prompt_assembler,
-            tool_registry: Arc::new(tool_reg),
+            tool_registry: tool_reg.clone(),
+            capability_registry: CapabilityRegistry::new(tool_reg.clone()),
+            presence_hub: PresenceHub::new(ph_plutchik, ph_borbely),
             sandbox,
             model_router,
             dream_engine,
@@ -463,7 +480,7 @@ impl UnifiedRuntimeHost {
             record.current_hash.clone()
         };
 
-        self.event_bus.publish(
+        self.event_bus_backbone.publish(
             "chat.turn_completed",
             serde_json::json!({
                 "session_id": session_id,
@@ -503,7 +520,7 @@ impl UnifiedRuntimeHost {
         let mut dream = self.dream_engine.lock().await;
         let report = dream.run_nightly_evolution(&mem_texts, &unresolved, &predictions);
 
-        self.event_bus.publish(
+        self.event_bus_backbone.publish(
             "companion.dream_evolution_completed",
             serde_json::json!({
                 "extracted_triplets": report.extracted_triplets.len(),
