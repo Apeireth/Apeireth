@@ -216,7 +216,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_capability_lifecycle_state_machine() {
-        let e = Evolution::new();
         let mut p = CapabilityProposal::new(
             "c1".into(), CapabilityKind::Tool, "search-tool".into(),
             "advanced grep".into(), "user".into(), "faster than existing".into(),

@@ -10,6 +10,10 @@ pub mod continuation;
 pub mod observer_capture;
 pub mod dream;
 pub mod epistemic;
+pub mod blueprint;
+pub mod consciousness;
+pub mod cognition;
+pub mod asi;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
