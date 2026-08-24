@@ -1,11 +1,13 @@
 pub mod scheduler;
+pub mod session_manager;
 pub mod task_store;
 pub mod supervisor;
 pub mod telemetry;
 pub mod host;
 pub mod hybrid;
 
-pub use host::{UnifiedRuntimeHost, ChatTurnOutput, SessionState};
+pub use host::{UnifiedRuntimeHost, ChatTurnOutput};
+pub use session_manager::SessionState;
 pub use hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
 
 
