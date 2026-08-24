@@ -5,6 +5,7 @@ pub mod supervisor;
 pub mod telemetry;
 pub mod host;
 pub mod hybrid;
+pub mod model_router;
 
 pub use host::{UnifiedRuntimeHost, ChatTurnOutput};
 pub use session_manager::SessionState;
