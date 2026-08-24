@@ -11,6 +11,7 @@ apeireth-tools = { path = "../apeireth-tools" }
 apeireth-storage = { path = "../apeireth-storage" }
 apeireth-runtime = { path = "../apeireth-runtime" }
 axum = { version = "0.7", features = ["ws"] }
+async-stream = "0.3"
 
 
 

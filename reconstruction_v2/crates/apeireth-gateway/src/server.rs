@@ -1,7 +1,7 @@
 use axum::{
     extract::{ws::{Message, WebSocket, WebSocketUpgrade}, Json, Path, Query, State},
     http::StatusCode,
-    response::IntoResponse,
+    response::{sse::{Event, KeepAlive, Sse}, IntoResponse},
     routing::{get, post},
     Router,
 };
@@ -66,6 +66,7 @@ fn build_router(state: Arc<GatewayState>) -> Router {
         .route("/v1/apeireth/agents", get(list_agents))
         .route("/v1/apeireth/skills", get(list_skills))
         .route("/v1/apeireth/presence/ws", get(presence_ws_handler))
+        .route("/v1/apeireth/events", get(companion_events_sse))
         .route("/v1/apeireth/capabilities", get(capabilities))
         .route("/v1/organs", get(list_organs))
         .route("/v1/panel/traces", get(list_traces))
@@ -827,6 +828,28 @@ async fn presence_ws_handler(
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
         }
     })
+}
+
+// 0 装 PASS: Companion events SSE (per desktop/src/lib/runtime.ts subscribeCompanionEvents)
+// 每 3s 推一行 SSE "data: {...}"\n  (3s 而非 2s 是降低 desktop 唤醒频率)
+async fn companion_events_sse(
+    State(state): State<Arc<GatewayState>>,
+) -> Sse<impl futures::Stream<Item = Result<Event, std::convert::Infallible>>> {
+    use std::time::Duration;
+    let host = state.runtime_host.clone();
+    let stream = async_stream::stream! {
+        loop {
+            if let Some(ref h) = host {
+                let snap = h.presence_hub.snapshot().await;
+                let json = snap.to_json();
+                yield Ok(Event::default().data(json));
+            } else {
+                yield Ok(Event::default().data(r#"{"error":"host_unavailable"}"#.to_string()));
+            }
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+    };
+    Sse::new(stream).keep_alive(KeepAlive::default())
 }
 
 // 0 装 PASS: 关键 v1 era API 端点补全 (per user 右图 'Gateway/API')
