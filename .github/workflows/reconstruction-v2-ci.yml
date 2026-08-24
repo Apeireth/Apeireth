@@ -1,0 +1,45 @@
+name: reconstruction_v2 CI (v2.0 era)
+
+# R180 (2026-08-24): 适配 v2.0 architecture migration.
+# 仅跑 reconstruction_v2/ 子目录, 不依赖 v1.0 root workspace (已 archived).
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'reconstruction_v2/**'
+  pull_request:
+    branches: ['**']
+    paths:
+      - 'reconstruction_v2/**'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  reconstruction-v2-tests:
+    name: reconstruction_v2 tests (ubuntu + windows)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: reconstruction_v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.97.1
+        with:
+          toolchain: 1.97.1
+          components: rustfmt, clippy
+      - name: cargo check
+        run: cargo check --workspace --all-targets
+      - name: cargo test --workspace --lib
+        run: cargo test --workspace --lib --no-fail-fast
+      - name: cargo clippy
+        run: cargo clippy --workspace --tests -- -D warnings
+        continue-on-error: true
+      - name: cargo fmt --check
+        run: cargo fmt --all -- --check
+        continue-on-error: true
