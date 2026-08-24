@@ -23,6 +23,11 @@ pub mod confidence;
 pub mod audit;
 pub mod memory_extractor;
 pub mod emotion_memory;
+pub mod goal;
+pub mod timeline;
+pub mod session_log;
+pub mod tone;
+pub mod onering;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
