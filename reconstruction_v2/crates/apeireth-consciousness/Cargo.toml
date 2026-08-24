@@ -1,0 +1,18 @@
+[package]
+name = "apeireth-consciousness"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+authors = ["Apeireth Team"]
+description = "Stub for v2 compatibility"
+
+[dependencies]
+serde = { workspace = true }
+
+[lib]
+name = "apeireth_consciousness"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

@@ -1,0 +1,33 @@
+[package]
+name = "apeireth-life-force"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+authors = ["Apeireth Team"]
+description = "Apeireth 生命力维 (A13 落点 — R14 Phase 4 维度 1 穿透架构: 持续力 + 反思期 + SGI 单字段 + 涌现 + 内稳态). R22 反思期 4 阶段 + R22 涌现识别 + R173 consciousness→life-force bridge 2 + R177 organ_kani_proofs. v2 重构保 v1 API: 复用 apeireth-consciousness stub 的 plutchik 模块 (同 variant 集, 不同字段序), 复用 apeireth_core::domain::IdentityCard (扩展 v1 continuity 字段)."
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+# R173 bridge 2: consciousness -> life-force (v2 复用 apeireth-consciousness 的 plutchik 模块).
+# v2 架构选择: 复用 v1 crate 名 + 8 basic + 8 advanced + 4 intensity variant 集, 保 v1 surface 100%.
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+
+[dev-dependencies]
+
+[lib]
+name = "apeireth_life_force"
+path = "src/lib.rs"
+
+[[example]]
+name = "life_force_demo"
+path = "examples/life_force_demo.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true
