@@ -1,16 +1,17 @@
-# ROADMAP — Apeireth (1.0 已发布 → 后 1.0 阶段)
+# ROADMAP — Apeireth (1.0 已发布 → 后 1.0 阶段 → reconstruction_v2 进化中)
 
 ```
 [Document-Meta]
 Document:        ROADMAP.md
-Version:         2.0-post1.0
-R-Cycle:         后-R178 (master 已 8/18 v1.0.0 正式发布 + 后续 CI 收尾 + companion-desktop PR #1 合并)
-Last-Modified:   2026-08-19
+Version:         3.0-post1.0
+R-Cycle:         后-R178 (master 已 8/18 v1.0.0 正式发布 + 8/24 reconstruction_v2 终极收敛 + 14 P0/P1 审计完成)
+Last-Modified:   2026-08-24
 Status:          🟢 活跃
-Source-of-Truth: CHANGELOG.md [2026-08-18] v1.0.0 + RELEASE_NOTES.md + 决策 #62/#74/#126/#128/#130
+Source-of-Truth: CHANGELOG.md "Added (2026-08-24) reconstruction_v2 终极收敛 + 14 P0/P1 审计完成" + [2026-08-18] v1.0.0 + 决策 #62/#74/#126/#128/#130
 0 主动 commit:   解除 (per 决策 #126 Mavis 全自决 commit); 本次 ROADMAP 更新按 doc-change commit
-0 主动 push:     仍严守 (等 1.0 release 配 GitHub remote 后主人拍板)
-master HEAD:     37fa420e (fix(ci): simplify Install Rust targets to flat list)
+0 主动 push:     已落地 (reconstruction_v2 audit `58bccb36` 已推 GitHub `Apeireth/apeireth-rust` 远端)
+master HEAD:     58bccb36 (fix(pipeline): wire MiniMax adapter tool serialization, request.tools mapping, and telemetry/experience tracking into host)
+reconstruct_v2:  同步推到 `origin/reconstruct_v2` 分支 (per git fetch 输出)
 release-1.0:     e27ac0b2 (feat(companion): 连续感知①②) — release-1.0 分支顶
 v1.0.0 tag:      993e9107 (docs(1.0): RELEASE_NOTES 正式版重写 (主人拍板真正的 1.0))
 cherry-pick:     进行中 (master HEAD 在 pick d1912c53 — feat(companion): 连续感知①②
@@ -325,3 +326,75 @@ cherry-pick:     进行中 (master HEAD 在 pick d1912c53 — feat(companion): �
 ---
 
 _本 ROADMAP 由 Mavis 后-R178 重写 (2026-08-19), 反映 v1.0.0 实际发布 (8/18) + R128-R178 横扫 + 决策 #62/#74/#126/#128/#130 硬墙解除 + companion-desktop PR #1 + 11 项 CI 收尾 + 当前 cherry-pick `d1912c53` 进行中. 详单下沉 `docs/archive/roadmap/v1.0-released-r128-r178-2026-08-18.md`. 思想层 (8 锚 / 13 键 / 7 重 / 三洋葱 / 9 organ / R11 baseline 3 值) LOCKED 保留, 0 主动 commit 解除按 #126, 0 主动 push 仍严守. 报告 `reports/agent-post1.0-roadmap-2026-08-19.md` ready._
+---
+
+## 14. reconstruction_v2 进化路径 (2026-08-23/24 实装落地)
+
+> **历史性转变**：v1.0 主分支 (85 crate) 之上，并行 workspace `reconstruction_v2/` 已在 **2026-08-24 完成 14 P0/P1 审计工单 + 3 处协议层断点修复**，且 **commit `58bccb36` 已推 GitHub `Apeireth/apeireth-rust` 远端 master**（另同步推 `reconstruct_v2` 分支）。本节取代 §4 "v2.0 长期" 的架构方向描述。
+
+### 14.1 收敛对比
+
+| 维度 | v1.0 (root) | v2.0 (reconstruction_v2/) |
+|---|---|---|
+| Crate 数 | 85 active | **10 高内聚** |
+| 编译 (`cargo check`) | ~5 min | **5.26s** |
+| S4 出站拦截 | trait 口未接 | **`EgressFilter` 物理拦截** (145 行 `egress.rs`) |
+| SQLite 锁 | 偶发 `database is locked` | **读写分离池 + 单通道写协程** (`pool.rs`) |
+| Vision (屏幕) | 无 | **OmniParser + Win32 BitBlt + SendInput** |
+| MCP | 骨架 | **完整 4 文件** (Server/Client/Protocol/Transport) |
+| Tool 闭环 | stub | **5 轮 Agentic + 5-Gate governance 真卡** |
+| 动态工具合成 | 不存在 | **`ToolSynthesizer`** + tokio subprocess |
+
+### 14.2 已实装的 14 P0/P1 工单（commit `b08a1668`）
+
+| # | 任务 | 实装位置 |
+|---|---|---|
+| P0-1 | 真 Win32 `SendInput` / `SetCursorPos` / `KEYEVENTF_UNICODE` utf16 | `crates/apeireth-tools/src/vision/desktop_action.rs` |
+| P0-2 | `tokio::process::Command` + TempFileGuard RAII + env + 30s timeout + 64KB 截断 | `crates/apeireth-tools/src/synthesis.rs` |
+| P0-3 | browser (reqwest+HTML 剥离) / search (递归+跳过+500KB) / repo (git 5 命令) | `crates/apeireth-tools/src/builtin/` |
+| P0-4 | SDK 4 模块 reqwest 真接 | `crates/apeireth-sdk/src/` |
+| P0-5 | `MAX_TOOL_ROUNDS=5` + list_tools 注入 + 5-Gate 真卡 + telemetry/exp_queue 双记录 | `crates/apeireth-runtime/src/host.rs:305-394` |
+| P0-6 | OmniParser `EnumChildWindows` + `GetClassNameW` 分类 6 类控件 | `crates/apeireth-tools/src/vision/omni_parser.rs` |
+| P0-7 | 删 3 个空 main.rs | `crates/apeireth-{governance,protocol,storage}/src/main.rs` |
+| P0-8 | Prompt 工具列表动态注入 | `crates/apeireth-companion/src/prompt_assembler.rs` |
+| P1-9 | 4 × AtomicU64 + tracing::info + metrics_snapshot | `crates/apeireth-runtime/src/telemetry.rs` |
+| P1-10 | tokio::interval + Arc<AtomicBool> + Drop graceful shutdown | `crates/apeireth-runtime/src/scheduler.rs` |
+| P1-11 | tokio::sync::broadcast::channel(256) | `crates/apeireth-gateway/src/sse.rs` |
+| P1-12 | observer_capture drain() + 最近观测查询 | `crates/apeireth-companion/src/observer_capture.rs` |
+| P1-13 | curiosity 主动探索信号 | `crates/apeireth-companion/src/curiosity.rs` |
+| P1-14 | hybrid 4 快速路径 + MCTS 触发 | `crates/apeireth-runtime/src/hybrid.rs` |
+
+### 14.3 已修复的 3 处协议层断点（commit `58bccb36`）
+
+- **#15 MiniMax tool_calls**: `minimax.rs` 漏发 `tools` 字段 + 漏解 `tool_calls` → 已实装 OpenAI spec 序列化 + 完整解析
+- **#16 list_tools 注入**: `host.rs` 未注入 `tool_registry` 工具定义 → 已实装完整映射
+- **#17 全链路挂载**: `host.rs` 未接 telemetry/scheduler/exp_queue → 已实装实时上报
+
+### 14.4 验证（`58bccb36`，2026-08-24）
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 编译 | `cargo check --workspace` | ✅ 5.26s, 0 errors |
+| Release | `cargo build --release --bin apeireth-cli` | ✅ 12,279,808 bytes (~12.3 MB) |
+| Workspace lib 测试 | `cargo test --workspace --lib` | ✅ **68 passed / 0 failed** |
+| Live LLM 多轮 | `cargo test --test live_tui_llm_simulation` | ✅ 1 passed (43.34s 真 MiniMax-M3 调用) |
+| Vision + Worktree | `cargo test --test vision_worktree_test` | ✅ 2 passed |
+| 推送 | `git push origin master` | ✅ `origin/master @ 58bccb36` |
+
+### 14.5 v1.0 → v2.0 迁移路径
+
+**当前状态**：
+- v1.0 root workspace (85 crate) 仍是 master 的"主分支"
+- `reconstruction_v2/` 是 master HEAD 包含的子目录（不是独立 branch——已通过 fetch 验证 `origin/reconstruct_v2` 分支同步推送）
+
+**建议迁移路径**（待主人拍板）：
+1. **短期（v1.0 维护期）**：v1.0 root 仍是发布线；v2.0 audit commit (58bccb36) 作为里程碑保留
+2. **中期（v2.0 切换）**：当 v2.0 覆盖率 ≥ v1.0 时，将 `reconstruction_v2/crates/*` 平移为根 `crates/*`，root 旧 85 crate 降级为 `_archived/`
+3. **长期（v2.0 接管）**：新 root 仅保留 10 高内聚 crate；v1.0 era 文档全部入 `docs/archive/v1.0/`；ROADMAP §1-§13 整体下沉到 `docs/archive/roadmap/post1.0/`
+
+**核心约束 (迁移期间 LOCKED)**：
+- 思想层 (8 锚 / 13 键 / 三洋葱 / 9 organ) 不变（per §13）
+- 0 装 PASS 严守（per §5 C2）
+- 每步迁移都要"reconstruction_v2 实跑 ≥ v1.0 等价测试集"，避免单边切换
+
+详见 [`reconstruction_v2/README.md`](../reconstruction_v2/README.md) §五 当前实装状态 + CHANGELOG "Added (2026-08-24) reconstruction_v2 终极收敛"。
