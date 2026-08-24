@@ -1090,6 +1090,7 @@ dependencies = [
  "apeireth-plugin",
  "apeireth-protocol",
  "async-trait",
+ "reqwest",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
