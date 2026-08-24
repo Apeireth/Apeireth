@@ -75,7 +75,7 @@ const SUCCESS_BODY: &str = r#"{
 }"#;
 
 #[tokio::test]
-async fn the_cli_bootstrap_serves_through_the_migrated_canonical_provider() {
+async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax() {
     let _lock = ENV_LOCK.lock().unwrap();
     let base_url = mock_vendor(SUCCESS_BODY).await;
 
@@ -83,19 +83,27 @@ async fn the_cli_bootstrap_serves_through_the_migrated_canonical_provider() {
     let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
     let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+    // Anthropic key absent — its provider is still registered (keyless), but
+    // would fail explicitly if routed to. Minimax serves this turn.
+    let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
 
     let runtime = build_canonical_runtime_from_env()
         .await
         .expect("the rewired bootstrap builds a runtime");
 
-    // Exactly the canonical minimax provider is registered — no compat.* bridge.
+    // Both canonical providers are registered — no compat.* bridge.
     let ids: Vec<String> = runtime
         .providers()
         .provider_ids()
         .into_iter()
         .map(|id| id.to_string())
         .collect();
-    assert_eq!(ids, vec!["provider.minimax".to_string()]);
+    assert!(ids.contains(&"provider.minimax".to_string()), "{ids:?}");
+    assert!(ids.contains(&"provider.anthropic".to_string()), "{ids:?}");
+    assert!(
+        !ids.iter().any(|id| id.starts_with("compat.")),
+        "no compatibility bridge provider: {ids:?}"
+    );
 
     let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
         .await
@@ -106,13 +114,45 @@ async fn the_cli_bootstrap_serves_through_the_migrated_canonical_provider() {
 }
 
 #[tokio::test]
+async fn the_cli_bootstrap_routes_an_anthropic_model_to_provider_anthropic() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    // A mock speaking the Anthropic Messages API shape.
+    let anthropic_body = r#"{
+        "id": "msg_cli_anthropic",
+        "model": "claude-sonnet-4-5",
+        "stop_reason": "end_turn",
+        "content": [{"type": "text", "text": "hello from anthropic cli"}],
+        "usage": {"input_tokens": 3, "output_tokens": 2}
+    }"#;
+    let anthropic_url = mock_vendor(anthropic_body).await;
+
+    let _g_minimax_key = EnvGuard::set("APEIRETH_API_KEY", None);
+    let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", Some("sk-ant-cli-bootstrap"));
+    let _g_ant_url = EnvGuard::set("APEIRETH_ANTHROPIC_URL", Some(&anthropic_url));
+    let _g_ant_models = EnvGuard::set("APEIRETH_ANTHROPIC_MODELS", Some("claude-sonnet-4-5"));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("claude-sonnet-4-5"));
+
+    let runtime = build_canonical_runtime_from_env()
+        .await
+        .expect("bootstrap builds a runtime with both providers");
+
+    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
+        .await
+        .expect("the turn completes");
+    assert_eq!(outcome.served_by.as_str(), "provider.anthropic");
+    assert_eq!(outcome.text, "hello from anthropic cli");
+}
+
+#[tokio::test]
 async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
     let _lock = ENV_LOCK.lock().unwrap();
     let base_url = mock_vendor(SUCCESS_BODY).await;
 
-    // Key absent: the runtime must still build (keyless boot), and the first
-    // execution must fail explicitly — never a silent success or mock fallback.
+    // Both keys absent: the runtime must still build (keyless boot), and
+    // executing against the default minimax model must fail explicitly — never
+    // a silent success or mock fallback.
     let _g_key = EnvGuard::set("APEIRETH_API_KEY", None);
+    let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
     let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
     let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
@@ -121,16 +161,18 @@ async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
         .await
         .expect("keyless boot must succeed");
 
-    // The provider is registered even without a key...
+    // Both providers are registered even without keys...
     let ids: Vec<String> = runtime
         .providers()
         .provider_ids()
         .into_iter()
         .map(|id| id.to_string())
         .collect();
-    assert_eq!(ids, vec!["provider.minimax".to_string()]);
+    assert!(ids.contains(&"provider.minimax".to_string()));
+    assert!(ids.contains(&"provider.anthropic".to_string()));
 
-    // ...but executing a turn fails explicitly with the credential problem.
+    // ...but executing a turn against the default model fails explicitly with
+    // the credential problem.
     let err = execute_canonical_cli_turn(&runtime, "hi", None, None)
         .await
         .expect_err("a missing key must fail the turn");
