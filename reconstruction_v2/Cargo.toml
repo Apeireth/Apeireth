@@ -25,17 +25,17 @@ members = [
     "crates/apeireth-bus",
     "crates/apeireth-guard",
     "crates/apeireth-graph",
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-pipeline",
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-graph-primitive",
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-pipeline-g5",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-context-fold",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-skills",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-experience",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-team-lead",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-naming-v05",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-knowledge",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-library-governance",  # 目录不存在
-    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-rate-limiter",  # 目录不存在
+    "crates/apeireth-graph-primitive",
+    "crates/apeireth-pipeline",
+    "crates/apeireth-pipeline-g5",
+    "crates/apeireth-context-fold",
+    "crates/apeireth-skills",
+    "crates/apeireth-experience",
+    "crates/apeireth-team-lead",
+    "crates/apeireth-naming-v05",
+    "crates/apeireth-knowledge",
+    "crates/apeireth-library-governance",
+    "crates/apeireth-rate-limiter",
     "crates/apeireth-constraint",
     "crates/apeireth-life-force",
     "crates/apeireth-upgrade",
