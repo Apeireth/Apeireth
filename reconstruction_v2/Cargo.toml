@@ -55,15 +55,29 @@ members = [
     "crates/apeireth-credentials",
     "crates/apeireth-stock",
     "crates/apeireth-cross-diary",
-    "crates/apeireth-experience",
-    "crates/apeireth-skills",
-    "crates/apeireth-knowledge",
-    "crates/apeireth-team-lead",
-    "crates/apeireth-library-governance",
+    "crates/apeireth-config",
+    "crates/apeireth-environment",
+    "crates/apeireth-i18n",
+    "crates/apeireth-evolution",
+    "crates/apeireth-workflow",
+    "crates/apeireth-lark",
+    "crates/apeireth-livekit",
+    "crates/apeireth-vector",
+    "crates/apeireth-value",
+    "crates/apeireth-verify",
+    "crates/apeireth-test",
+    "crates/apeireth-memory",
+    "crates/apeireth-tool-registry",
+    "crates/apeireth-tool-approval",
+    "crates/apeireth-tool-shell",
+    "crates/apeireth-tool-fetch",
+    "crates/apeireth-tool-codesearch",
+    "crates/apeireth-tool-filesystem",
+    "crates/apeireth-tool-browser",
+    "crates/apeireth-tool-image-gen",
+    "crates/apeireth-tool-image-process",
+    "crates/apeireth-tool-search",
 ]
-
-
-
 
 [workspace.package]
 version = "2.0.0"
@@ -74,7 +88,6 @@ license = "Apache-2.0"
 homepage = "https://github.com/apeireth/apeireth"
 repository = "https://github.com/apeireth/apeireth"
 
-# Minimal [workspace.lints] (mirror Apeireth-rust root)
 [workspace.lints.rust]
 unused_extern_crates = 'warn'
 trivial_numeric_casts = 'warn'
@@ -117,17 +130,16 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 axum = { version = "0.7", features = ["ws", "macros"] }
 tower = { version = "0.5", features = ["util", "timeout", "limit"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
-rusqlite = { version = "0.32", features = ["bundled", "blob", "time", "backup"] }
+rusqlite = { version = "0.31", features = ["bundled", "blob", "time", "backup"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.24"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"    "crates/apeireth-tool-search",
-    "crates/apeireth-tool-shell",
-    "crates/apeireth-tool-fetch",
-    "crates/apeireth-tool-codesearch",
-] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 sha2 = "0.10"
 rand = "0.8"
+shell-words = "1.1"
+lru = "0.12"
+sqlite-vec = "0.1"
 
 apeireth-core = { path = "crates/apeireth-core" }
 apeireth-governance = { path = "crates/apeireth-governance" }
@@ -140,3 +152,5 @@ apeireth-gateway = { path = "crates/apeireth-gateway" }
 apeireth-sdk = { path = "crates/apeireth-sdk" }
 apeireth-bus = { path = "crates/apeireth-bus" }
 apeireth-life-force = { path = "crates/apeireth-life-force" }
+apeireth-sovereignty = { path = "crates/apeireth-sovereignty" }
+apeireth-verify = { path = "crates/apeireth-verify" }

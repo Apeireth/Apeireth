@@ -1,0 +1,41 @@
+[package]
+name = "apeireth-tool-filesystem"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R137: filesystem extension (sandbox + atomic write + fsnotify + file lock + compat). 5 真实现模块 (sandbox/atomic/watch/lock/compat) + enhanced + register. doc parsing 已声明移除 (parse.rs 从未存在 → E0583, 落地时恢复, deps lopdf/docx-rs/calamine feature-gated 保留)."
+
+[dependencies]
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-core = { path = "../apeireth-core" }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+notify = "6.1"
+fd-lock = "4.0"
+tempfile = "3.10"
+# CI fix 2026-08: 升级修 RUSTSEC-2026-0187 (lopdf 0.34 stack overflow) / quick-xml 0.31
+# (calamine 0.26 依赖, quadratic time + NsReader). 0 代码改动: 3 个依赖均 feature-gated 预留.
+lopdf = { version = "0.44", optional = true }
+docx-rs = { version = "0.4", optional = true }
+calamine = { version = "0.36", optional = true }
+
+[features]
+default = []
+full = ["lopdf", "docx-rs", "calamine"]
+
+[lib]
+path = "src/lib.rs"
+# R179 P0#X (warnings cleanup): 加 [lints] section 继承 workspace (含 unexpected_cfgs.check-cfg = ['cfg(kani)'])
+[lints]
+workspace = true
