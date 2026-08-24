@@ -39,7 +39,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::kernel::{CapabilityId, ModelId, PluginId};
+use apeireth_core::kernel::{CapabilityId, PluginId};
 use apeireth_plugin::{
     CapabilityKind, CredentialResolver, Plugin, PluginContext, PluginError, PluginManifest,
     PluginResult, ProviderCapability, ProviderError, Secret,
@@ -51,6 +51,7 @@ use apeireth_protocol::canonical::{
 use async_trait::async_trait;
 
 use crate::credentials::MINIMAX_API_KEY;
+use crate::provider_model::{find_model, ProviderModel};
 
 /// Stable capability identity for the minimax provider.
 const CAPABILITY_ID: &str = "provider.minimax";
@@ -80,7 +81,7 @@ type ResolverSlot = Arc<Mutex<Option<Arc<dyn CredentialResolver>>>>;
 /// [`MinimaxProviderCapability::new`] or the [`MinimaxProviderPlugin`] builder.
 pub struct MinimaxProviderCapability {
     id: CapabilityId,
-    models: Vec<ModelDescriptor>,
+    models: Vec<ProviderModel>,
     base_url: String,
     http: reqwest::Client,
     timeout_ms: u64,
@@ -155,6 +156,16 @@ impl MinimaxProviderCapability {
             });
         }
 
+        // Map the canonical requested model to the vendor wire name. The
+        // runtime routes on canonical ids; the vendor expects its own spelling.
+        // Failing to resolve is a request error, not a guess.
+        let wire_model = find_model(&self.models, &request.model)
+            .map(|m| m.wire_name().to_string())
+            .ok_or_else(|| ProviderError::BadResponse {
+                provider: self.id.to_string(),
+                detail: format!("model {} is not served by {}", request.model, self.id),
+            })?;
+
         let mut messages = Vec::with_capacity(request.messages.len());
         for message in &request.messages {
             if !message.tool_calls.is_empty() || message.role == MessageRole::Tool {
@@ -188,7 +199,7 @@ impl MinimaxProviderCapability {
         }
 
         let mut body = serde_json::json!({
-            "model": request.model,
+            "model": wire_model,
             "messages": messages,
             "stream": false,
         });
@@ -311,27 +322,17 @@ impl ProviderCapability for MinimaxProviderCapability {
     }
 
     fn models(&self) -> Vec<ModelDescriptor> {
-        self.models.clone()
+        self.models.iter().map(|m| m.descriptor.clone()).collect()
     }
 
-    /// Case-insensitive match against the canonical (lowercase) model ids.
+    /// Match by canonical id or vendor spelling.
     ///
-    /// The router calls this with the request's model string, which carries the
-    /// vendor's spelling (`MiniMax-M3`); the canonical id is `minimax-m3`.
-    /// Matching case-insensitively lets a request for either spelling route
-    /// here, while the vendor spelling is preserved on the wire by
-    /// [`MinimaxProviderCapability::adapt_request`].
+    /// The router calls this with the request's model string, which may carry
+    /// either the canonical id (`minimax-m3`) or the vendor spelling
+    /// (`MiniMax-M3`); [`ProviderModel::matches`] accepts either. The vendor
+    /// wire name is then resolved in [`MinimaxProviderCapability::adapt_request`].
     fn supports_model(&self, model: &str) -> bool {
-        let needle = model.to_ascii_lowercase();
-        self.models
-            .iter()
-            .any(|m| m.id.as_str() == needle)
-            // Also accept the vendor display spelling, in case a model was
-            // configured with mixed case and matched against its display_name.
-            || self
-                .models
-                .iter()
-                .any(|m| m.display_name.as_deref() == Some(model))
+        self.models.iter().any(|m| m.matches(model))
     }
 
     async fn complete(
@@ -477,12 +478,12 @@ impl MinimaxProviderPlugin {
         Ok(Self::new(base_url, models, http, DEFAULT_TIMEOUT_MS)?)
     }
 
-    /// The configured model ids, in declaration order.
+    /// The configured canonical model ids, in declaration order.
     pub fn model_ids(&self) -> Vec<String> {
         self.capability
             .models
             .iter()
-            .map(|m| m.id.as_str().to_string())
+            .map(|m| m.canonical_id().as_str().to_string())
             .collect()
     }
 
@@ -547,16 +548,17 @@ impl std::fmt::Debug for MinimaxProviderPlugin {
     }
 }
 
-/// Build the model descriptor list from configured ids, de-duplicating.
+/// Build the provider model list from configured ids, de-duplicating by
+/// canonical id.
 ///
-/// Canonical [`ModelId`]s are lowercase by contract (the core id grammar
-/// requires it), but minimaxi's wire model names are mixed-case (`MiniMax-M3`).
-/// Each configured id is therefore lower-cased into a stable canonical id, and
-/// the original vendor spelling is kept as the descriptor's `display_name`. The
-/// provider matches models case-insensitively ([`MinimaxProviderCapability::supports_model`])
-/// and sends the request's model string to the vendor verbatim, so the wire
-/// name is preserved.
-fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<ModelDescriptor>> {
+/// Each configured id becomes a [`ProviderModel`]: a lower-cased canonical id
+/// (routing identity) paired with the original spelling as the vendor wire name
+/// (HTTP body identity). Features advertised are **only those the implementation
+/// actually supports**: this provider transports system messages (SystemPrompt)
+/// and honours a custom temperature, but sends `stream:false` and rejects
+/// tools/images/tool-results, so it does **not** advertise `Streaming`,
+/// `ToolCalls`, or `Vision` (§9/§30 — feature truthfulness).
+fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<ProviderModel>> {
     if model_ids.is_empty() {
         return Err(PluginError::InvalidArguments {
             capability: id.clone(),
@@ -568,24 +570,15 @@ fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<M
         let canonical = model.to_ascii_lowercase();
         if models
             .iter()
-            .any(|known: &ModelDescriptor| known.id.as_str() == canonical)
+            .any(|known: &ProviderModel| known.canonical_id().as_str() == canonical)
         {
             continue;
         }
-        let descriptor = ModelDescriptor::new(ModelId::new(canonical.clone())?, id.clone())
-            .with_feature(ModelFeature::SystemPrompt)
-            .with_feature(ModelFeature::Streaming)
-            .with_feature(ModelFeature::ToolCalls);
-        // Preserve the vendor spelling for display; it is metadata, not identity.
-        let descriptor = if model != canonical {
-            ModelDescriptor {
-                display_name: Some(model),
-                ..descriptor
-            }
-        } else {
-            descriptor
-        };
-        models.push(descriptor);
+        models.push(ProviderModel::from_configured(
+            model,
+            id,
+            [ModelFeature::SystemPrompt],
+        )?);
     }
     Ok(models)
 }
@@ -645,6 +638,49 @@ mod tests {
         assert!(cap.supports_model("MiniMax-M3"));
         assert!(cap.supports_model("minimax-m3"));
         assert!(!cap.supports_model("gpt-4o"));
+        // Feature truthfulness (§9/§30): only SystemPrompt is advertised. The
+        // implementation sends stream:false and rejects tools/images, so it
+        // must NOT claim Streaming, ToolCalls, or Vision.
+        assert!(cap.models()[0].supports(ModelFeature::SystemPrompt));
+        assert!(!cap.models()[0].supports(ModelFeature::Streaming));
+        assert!(!cap.models()[0].supports(ModelFeature::ToolCalls));
+        assert!(!cap.models()[0].supports(ModelFeature::Vision));
+    }
+
+    #[test]
+    fn a_canonical_model_request_maps_to_the_vendor_wire_name() {
+        // §8: a request naming the canonical id (minimax-m3) must send the
+        // vendor wire spelling (MiniMax-M3) in the HTTP body, not the
+        // canonical id. The runtime routes on canonical ids; the vendor
+        // expects its own spelling.
+        let cap = capability(empty_resolver_slot());
+        let canonical_req = NormalizedRequest::new(
+            "minimax-m3",
+            vec![apeireth_protocol::canonical::NormalizedMessage::user("hi")],
+        );
+        let body = cap.adapt_request(&canonical_req).expect("adapts");
+        assert_eq!(body["model"], "MiniMax-M3", "wire name, not canonical id");
+
+        // A vendor-spelling request resolves to the same wire name.
+        let vendor_req = NormalizedRequest::new(
+            "MiniMax-M3",
+            vec![apeireth_protocol::canonical::NormalizedMessage::user("hi")],
+        );
+        let body = cap.adapt_request(&vendor_req).expect("adapts");
+        assert_eq!(body["model"], "MiniMax-M3");
+    }
+
+    #[test]
+    fn an_unsupported_model_is_rejected_not_guesses() {
+        // A model the provider does not serve must surface as a request error,
+        // not a silent fallback to some default model.
+        let cap = capability(empty_resolver_slot());
+        let req = NormalizedRequest::new(
+            "gpt-4o",
+            vec![apeireth_protocol::canonical::NormalizedMessage::user("hi")],
+        );
+        let err = cap.adapt_request(&req).unwrap_err();
+        assert!(matches!(err, ProviderError::BadResponse { .. }), "{err}");
     }
 
     #[test]

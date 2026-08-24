@@ -33,6 +33,9 @@ pub mod copilot;
 pub mod credentials;
 pub mod gemini_cli;
 pub mod opencode;
+/// Provider-local canonical-id ↔ vendor-wire-name mapping
+/// ([`ProviderModel`]).
+pub mod provider_model;
 // R177: provider invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 // R176: LlmFacade trait 统一接入 (per ADR-0033)
