@@ -1,0 +1,21 @@
+[package]
+name = "apeireth-config"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-config — ConfigEntry slice ops (validate / lookup / merge / diff / three-layer-merge / parse_json_layer / to_json_layer) (v2 port of v1.0-legacy, full API surface)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["ai"]
+categories = ["ai"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+
+[lints]
+workspace = true

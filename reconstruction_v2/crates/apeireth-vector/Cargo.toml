@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-vector"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-vector — Vector store (traits + sqlite backend + qdrant HTTP compat + distance) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["vector", "embedding"]
+categories = ["database"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+rusqlite = { workspace = true }
+uuid = { workspace = true }
+apeireth-http-client = { path = "../apeireth-http-client" }
+sqlite-vec = { workspace = true }
+
+[lints]
+workspace = true
