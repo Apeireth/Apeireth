@@ -21,7 +21,9 @@ impl Diary {
 
     /// 0 装 PASS: 真 append (按 date)
     pub fn append(&mut self, date: impl Into<String>, content: impl Into<String>) {
-        let entry = DiaryEntry { id: format!("de-{}-{}", date.as_ref().to_string().len(), chrono::Utc::now().timestamp_millis()), date: date.into(), content: content.into(), timestamp_ms: chrono::Utc::now().timestamp_millis() };
+        let date_str: String = date.into();
+        let content_str: String = content.into();
+        let entry = DiaryEntry { id: format!("de-{}-{}", date_str.len(), chrono::Utc::now().timestamp_millis()), date: date_str, content: content_str, timestamp_ms: chrono::Utc::now().timestamp_millis() };
         self.entries.entry(entry.date.clone()).or_default().push(entry);
     }
 
