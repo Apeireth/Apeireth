@@ -15,7 +15,7 @@
 
 ```bash
 cargo check --workspace --all-targets   # 编译全 target 干净（含 examples/bins/tests）
-cargo test --workspace                  # 全量 368 组 0 失败
+cargo test --workspace                  # 全量测试 0 失败（精确数字见 CHANGELOG 最新 "Verified" 节）
 cargo fmt --all --check                 # 格式
 ```
 
