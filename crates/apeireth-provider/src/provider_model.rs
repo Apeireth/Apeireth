@@ -47,14 +47,32 @@ impl ProviderModel {
         provider: &CapabilityId,
         features: impl IntoIterator<Item = apeireth_protocol::canonical::ModelFeature>,
     ) -> Result<Self, apeireth_plugin::PluginError> {
-        let canonical = configured_id.to_ascii_lowercase();
+        // The canonical id is lower-cased and any character the core id grammar
+        // forbids (only `a-z 0-9 . - _` are allowed) is folded to `-`. So a
+        // vendor model like `Qwen/Qwen3-32B` becomes the canonical id
+        // `qwen-qwen3-32b` while its wire name stays `Qwen/Qwen3-32B`. This keeps
+        // routing identity stable and lowercase without losing the wire spelling.
+        let canonical: String = configured_id
+            .to_ascii_lowercase()
+            .chars()
+            .map(|c| {
+                if c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '.' | '-' | '_') {
+                    c
+                } else {
+                    '-'
+                }
+            })
+            .collect();
         let mut descriptor =
             ModelDescriptor::new(ModelId::new(canonical.clone())?, provider.clone());
         for feature in features {
             descriptor = descriptor.with_feature(feature);
         }
-        // display_name is presentational; carry the configured spelling only
-        // when it differs from the canonical id (i.e. the vendor mixes case).
+        // display_name is presentational; carry the configured spelling when
+        // it differs from the canonical id in any way — case or characters
+        // folded to `-`. When the configured spelling already equals the
+        // canonical id (lowercase, no folded characters), display_name stays
+        // None so there is no redundant alias.
         if configured_id != canonical {
             descriptor.display_name = Some(configured_id.clone());
         }
