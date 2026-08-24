@@ -14,6 +14,10 @@ pub mod blueprint;
 pub mod consciousness;
 pub mod cognition;
 pub mod asi;
+pub mod motivation;
+pub mod value;
+pub mod perception;
+pub mod experience;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
