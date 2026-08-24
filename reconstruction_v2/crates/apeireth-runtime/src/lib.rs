@@ -11,6 +11,8 @@ pub mod capability_registry;
 pub mod presence_hub;
 pub mod lifecycle;
 pub mod upgrade;
+pub mod extension;
+pub mod agent;
 pub mod evolution;
 pub mod council;
 
