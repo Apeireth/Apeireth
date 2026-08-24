@@ -10,6 +10,74 @@ this document wins, and the disagreement is recorded in
 
 ---
 
+# Canonical Architecture Freeze
+
+The canonical skeleton is frozen on `reconstruct_v2`. The rules in this section
+are authoritative. Future features — including functionality migrated from
+`master` or `reconstruction_v2/` — must adapt to this skeleton; the skeleton is
+not reshaped around an imported feature.
+
+## Freeze rules
+
+1. **Runtime is the only orchestration root.** `Runtime::execute` owns the agent
+   loop: session lifecycle, governance evaluation, provider selection and
+   invocation, tool dispatch, tool continuation, failure persistence, and trace.
+2. **Gateway and CLI are adapters.** They decode/encode transport DTOs and call
+   `Runtime::execute`. They must not orchestrate providers, tools, sessions, or
+   governance.
+3. **Runtime never branches on vendor identity.** No `MiniMax`, `Anthropic`,
+   `OpenAI`, `Claude`, `Gemini`, `Bearer`, `x-api-key`, `/chat/completions`, or
+   `/messages` logic may exist in `apeireth-runtime::canonical`.
+4. **ProviderCapability owns vendor invocation.** Vendor protocol adaptation,
+   vendor wire model identity, vendor HTTP transport, and vendor authentication
+   header construction live below the provider boundary.
+5. **Providers obtain secrets only via CredentialResolver.** Providers resolve
+   logical names such as `provider.anthropic.api_key` per turn and receive
+   redacted `Secret` values. Long-lived `api_key: String` fields and hardcoded
+   credentials are forbidden in canonical production code.
+6. **Protocol contains canonical contracts, not vendor transport ownership.**
+   `apeireth-protocol` translates DTOs; it does not construct an HTTP client, own
+   credentials, or run retry/routing.
+7. **Provider never executes tools.** Providers may emit canonical `ToolCall`
+   requests and receive canonical `ToolResult` messages, but never resolve or
+   invoke a `ToolCapability`.
+8. **Runtime owns tool dispatch and continuation.** Tools are registered
+   capabilities; the runtime resolves model-facing names through the capability
+   registry, asks governance, dispatches the capability, and feeds the result
+   back to the provider.
+9. **PluginRegistry / CapabilityRegistry are the authoritative capability
+   ownership system.** Capability declarations live only in plugin manifests;
+   the capability registry is an index over those declarations. No second
+   registry or manager may store ownership facts.
+10. **Governance returns Allow / Deny / RequireApproval.** These three semantics
+    are stable and distinct. Runtime must not recreate policy; providers must not
+    make tool-policy decisions; gateway must not contain governance business
+    rules.
+11. **Session lifecycle belongs to Runtime.** One canonical session ownership
+    path. Transport-local metadata in gateway/CLI must not become a competing
+    session store.
+12. **Structured trace never exposes raw chain-of-thought.** Public canonical
+    contracts carry no `reasoning_cot`, `raw_chain_of_thought`, or equivalent.
+    Diagnostics use `ExecutionTrace` / `SessionEvent` with provider, governance,
+    capability, and round facts.
+
+## Freeze means
+
+After this commit, future features adapt to the skeleton. When functionality is
+migrated from `master`, the migration direction is:
+
+```text
+master feature -> canonical ownership
+```
+
+not:
+
+```text
+canonical architecture -> reshape itself to match master
+```
+
+---
+
 ## 1. The three sentences
 
 **Protocol translates. Plugins provide capability. Runtime orchestrates.**
