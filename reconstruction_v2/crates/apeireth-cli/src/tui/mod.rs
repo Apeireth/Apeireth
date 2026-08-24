@@ -54,7 +54,7 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
             st.telemetry.total_memory_facts = memories.len();
             st.memory_items = memories;
         }
-        if let Ok(audit) = host.audit_chain.try_lock() {
+        if let Ok(audit) = host.lifecycle_handle.audit_chain.try_lock() {
             st.audit_chain_length = audit.records().len();
             st.telemetry.audit_ledger_height = audit.records().len();
         }
@@ -220,7 +220,7 @@ pub async fn run_tui(api_key: String, db_path: &str) -> Result<(), Box<dyn std::
                                                     inner_st.telemetry.total_memory_facts = mems.len();
                                                     inner_st.memory_items = mems;
                                                 }
-                                                if let Ok(audit) = host_clone.audit_chain.try_lock() {
+                                                if let Ok(audit) = host_clone.lifecycle_handle.audit_chain.try_lock() {
                                                     inner_st.audit_chain_length = audit.records().len();
                                                     inner_st.telemetry.audit_ledger_height = audit.records().len();
                                                 }

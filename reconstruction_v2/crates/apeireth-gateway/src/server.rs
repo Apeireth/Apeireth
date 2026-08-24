@@ -415,7 +415,7 @@ async fn panel_graph(State(state): State<Arc<GatewayState>>) -> Json<Value> {
 async fn panel_audit(State(state): State<Arc<GatewayState>>) -> Json<Value> {
     let mut records = Vec::new();
     if let Some(host) = &state.runtime_host {
-        let audit = host.audit_chain.lock().await;
+        let audit = host.lifecycle_handle.audit_chain.lock().await;
         for (i, rec) in audit.records().iter().enumerate() {
             records.push(serde_json::json!({
 
