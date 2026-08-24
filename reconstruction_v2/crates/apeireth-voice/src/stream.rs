@@ -1,4 +1,7 @@
 use crate::lipsync::{LipSyncCalculator, VisemeFrame};
+// Reserved for real audio stream API integration (VAD/TTS pipeline).
+// Current synthetic stub doesn't consume Bytes yet; flag suppress until next iteration.
+#[allow(unused_imports)]
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 

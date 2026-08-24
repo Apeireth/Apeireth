@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -46,6 +45,9 @@ pub struct TtsConfig {
     pub rate_percentage: i32,  // -50..+50%
     pub pitch_percentage: i32, // -50..+50%
     pub volume_percentage: i32,
+    /// Reserved for output sample rate validation (16k/24k/48k).
+    /// 当前 synthesize 走合成 PCM；真接 TTS API 后据此校验 PCM 帧。
+    #[allow(dead_code)]
     pub sample_rate: u32,
 }
 
@@ -64,6 +66,9 @@ impl Default for TtsConfig {
 
 pub struct TtsClient {
     pub config: TtsConfig,
+    /// Reserved for real TTS API HTTP calls (EdgeTTS / Kokoro / VITS / Piper).
+    /// 当前 synthesize 走合成 PCM 占位，http_client 待接入真 API 时启用。
+    #[allow(dead_code)]
     http_client: reqwest::Client,
 }
 
@@ -88,19 +93,22 @@ impl TtsClient {
     }
 
     /// Synthesizes speech into raw audio bytes
-    pub async fn synthesize(&self, text: &str) -> Result<Bytes, TtsError> {
+    ///
+    /// 当前走合成 PCM 占位路径（正弦波）以测试 pipeline 不依赖真 TTS API；
+    /// 接入真 EdgeTTS / Kokoro / VITS / Piper 后用 self.http_client 切。
+    pub async fn synthesize(&self, text: &str) -> Result<bytes::Bytes, TtsError> {
         if text.trim().is_empty() {
-            return Ok(Bytes::new());
+            return Ok(bytes::Bytes::new());
         }
 
-        // Return synthetic PCM frames or EdgeTTS payload
-        let sample_count = text.chars().count() * 1600; // ~100ms per character
+        // Synthetic PCM at self.config.sample_rate
+        let sample_count = text.chars().count() * (self.config.sample_rate / 10) as usize;
         let mut pcm = Vec::with_capacity(sample_count * 2);
         for i in 0..sample_count {
             let sample = ((i as f32 * 0.05).sin() * 8000.0) as i16;
             pcm.extend_from_slice(&sample.to_le_bytes());
         }
 
-        Ok(Bytes::from(pcm))
+        Ok(bytes::Bytes::from(pcm))
     }
 }

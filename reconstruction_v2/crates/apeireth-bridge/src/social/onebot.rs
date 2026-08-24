@@ -19,6 +19,10 @@ pub struct OneBotSendAction {
 }
 
 pub struct OneBotBridge {
+    /// Reserved for OneBot v11 HTTP/WebSocket endpoint URL (e.g. http://localhost:5700).
+    /// 当前 `format_*` 系列方法只构造 action payload; 实际 HTTP 推送待接入 reqwest::Client
+    /// (与 Discord/Telegram bridge 同模式)。
+    #[allow(dead_code)]
     endpoint: String,
 }
 
