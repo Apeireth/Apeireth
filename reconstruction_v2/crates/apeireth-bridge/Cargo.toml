@@ -13,6 +13,7 @@ thiserror = "1.0"
 apeireth-core = { path = "../apeireth-core" }
 apeireth-tools = { path = "../apeireth-tools" }
 chrono = { version = "0.4", features = ["serde"] }
+jsonwebtoken = "9.0"
 
 [dev-dependencies]
 tokio-test = "0.4"
