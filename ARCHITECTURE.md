@@ -369,19 +369,63 @@ completion advance the session revision with structured events. Failed
 execution therefore remains observable without inserting audit prose into the
 provider transcript.
 
-### IN PROGRESS — production provider capability migration
+### DONE — production provider capability migration (Phase 1)
 
-Production bootstrap currently wraps the existing `LlmProvider` implementation
-in a small `ProviderCapability` compatibility plugin. Runtime sees only
-`ProviderRouter` and `ProviderCapability`; it does not name or match vendors.
-Moving each production provider implementation directly behind canonical plugin
-capabilities is the next migration, not part of the entry cutover.
+The first production provider — minimax (minimaxi, OpenAI Chat Completions
+protocol) — now reaches the runtime as a first-class canonical
+`ProviderCapability`, not through `LegacyLlmCapability`:
+
+```text
+Runtime
+  -> ProviderRouter
+  -> MinimaxProviderCapability   (apeireth-provider, canonical)
+  -> CredentialResolver          (EnvCredentialResolver, logical name → env var)
+  -> vendor HTTP                 (reqwest, OpenAI Chat Completions)
+```
+
+The runtime names no vendor; `apeireth-provider::canonical_minimax` is the one
+place that knows minimaxi's protocol. The capability owns its `reqwest::Client`
+and the canonical↔vendor translation; the router owns cross-provider fallback;
+credentials arrive per-turn through `CredentialResolver`, never as a stored
+`String`. The legacy provider's internal retry loop was dropped so retry has one
+owner per layer (the router).
+
+Production bootstrap (`apeireth-cli::build_canonical_runtime_from_env`) wires
+`EnvCredentialResolver` + `MinimaxProviderPlugin::from_env`. `LegacyLlmCapability`
+is retained but is no longer on the production CLI/Gateway path.
+
+Provider migration status:
+
+```text
+Canonical Entry Cutover        DONE
+CredentialResolver Production  DONE  (EnvCredentialResolver; apeireth-credentials store = P1)
+Provider Migration:
+  minimax (OpenAI-compat)      DONE  (canonical capability, no bridge, real-entry tested)
+  openai-compatible            PENDING (Phase 2 — same shape, proves generality)
+  anthropic-compatible         PENDING (Phase 2 — protocol diversity)
+  (descriptors claude_code/codex/copilot/gemini_cli/opencode + http_dispatch)  NOT IN CANONICAL PATH
+LegacyLlmCapability            PARTIAL / TEMPORARY (no longer on production path; remains for unported consumers)
+```
+
+Migration matrix (Phase 2 roadmap):
+
+| Provider | Canonical capability? | Canonical credentials? | Legacy bridge? | Deterministic tests? | Real-entry tested? | Remaining blocker |
+| --- | --- | --- | --- | --- | --- | --- |
+| minimax (OpenAI-compat) | yes | yes (EnvCredentialResolver) | no | yes | yes (runtime + gateway + cli) | none |
+| openai-compatible | no | no | n/a | legacy unit only | no | migrate to canonical capability |
+| anthropic-compatible | no | no | n/a | legacy unit only | no | migrate; protocol diversity proof |
+| LegacyLlmCapability | n/a | n/a | yes (retained) | yes | n/a | delete after all providers migrate |
 
 ### PENDING
 
-- Integrate `apeireth-credentials` backends fully through
-  `plugin::CredentialResolver`; production bootstrap currently reads only the
-  existing environment-based provider configuration.
+- Migrate `openai-compatible` and `anthropic-compatible` providers to canonical
+  capabilities (Phase 2). The latter proves the abstraction across a different
+  vendor protocol shape.
+- Integrate `apeireth-credentials` backends (file store / keyring) behind
+  `plugin::CredentialResolver`; the production resolver is currently
+  `EnvCredentialResolver`. A `CredentialsStore`-backed resolver is a drop-in
+  once wired — the contract a provider sees is identical.
+- Delete `LegacyLlmCapability` once no production consumer remains on it.
 - Retire the historical runtime modules after their remaining consumers migrate.
 - Consolidate legacy registries only when each remaining caller has moved to the
   canonical `PluginRegistry` and `CapabilityRegistry` ownership path.
