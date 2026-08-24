@@ -33,6 +33,11 @@ pub mod approval_requests;
 pub mod daily_summary;
 pub mod milestone;
 pub mod memory_graph;
+pub mod oracle;
+pub mod meta_thinking;
+pub mod prompt_cache;
+pub mod constitution_gate;
+pub mod principles;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};

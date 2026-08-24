@@ -28,7 +28,7 @@ impl ApprovalQueue {
 
     /// 0 装 PASS: 真 submit
     pub fn submit(&mut self, requester: impl Into<String>, action: impl Into<String>, reason: impl Into<String>) -> String {
-        let id = format!("ap-{}", chrono::Utc::now().timestamp_millis());
+        let id = format!("ap-{}-{}", chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0), std::process::id());
         let req = ApprovalRequest { id: id.clone(), requester: requester.into(), action: action.into(), reason: reason.into(), status: ApprovalStatus::Pending, created_ms: chrono::Utc::now().timestamp_millis(), decided_ms: None, decider: None };
         self.requests.insert(id.clone(), req);
         id
