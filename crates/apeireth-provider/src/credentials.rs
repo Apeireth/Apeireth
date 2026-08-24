@@ -52,6 +52,17 @@ pub const ANTHROPIC_API_KEY: &str = "provider.anthropic.api_key";
 /// upstream `ANTHROPIC_API_KEY`, so existing user configuration keeps working.
 pub const ANTHROPIC_API_KEY_ENV: &str = "APEIRETH_ANTHROPIC_KEY";
 
+/// The logical credential name for the generic OpenAI-compatible provider's
+/// API key. The provider identity is `provider.openai-compatible` (a protocol
+/// family, not a vendor) — the key is named for that identity, not for "openai"
+/// the vendor (§8/§9).
+pub const OPENAI_COMPATIBLE_API_KEY: &str = "provider.openai-compatible.api_key";
+
+/// The environment variable the default mapping reads for the
+/// OpenAI-compatible key. Follows the repository's documented config
+/// convention (`OPENAI_API_KEY`), so existing user configuration keeps working.
+pub const OPENAI_COMPATIBLE_API_KEY_ENV: &str = "OPENAI_API_KEY";
+
 /// A production [`CredentialResolver`] backed by environment variables.
 ///
 /// Holds only a name→variable map (configuration, not secret material). Each
@@ -66,17 +77,23 @@ pub struct EnvCredentialResolver {
 impl EnvCredentialResolver {
     /// A resolver with the default semantic-name → env-var mappings.
     ///
-    /// Maps [`MINIMAX_API_KEY`] → [`MINIMAX_API_KEY_ENV`] and
-    /// [`ANTHROPIC_API_KEY`] → [`ANTHROPIC_API_KEY_ENV`]. Adding a further
-    /// canonical provider means adding its default mapping here, not teaching
-    /// the provider a new resolver type. Unknown semantic ids resolve to `None`
-    /// (§20): there is no catch-all `provider.<anything>.api_key` mapping.
+    /// Maps [`MINIMAX_API_KEY`] → [`MINIMAX_API_KEY_ENV`],
+    /// [`ANTHROPIC_API_KEY`] → [`ANTHROPIC_API_KEY_ENV`], and
+    /// [`OPENAI_COMPATIBLE_API_KEY`] → [`OPENAI_COMPATIBLE_API_KEY_ENV`].
+    /// Adding a further canonical provider means adding its default mapping
+    /// here, not teaching the provider a new resolver type. Unknown semantic
+    /// ids resolve to `None` (§20): there is no catch-all
+    /// `provider.<anything>.api_key` mapping.
     pub fn new() -> Self {
         let mut mappings = BTreeMap::new();
         mappings.insert(MINIMAX_API_KEY.to_string(), MINIMAX_API_KEY_ENV.to_string());
         mappings.insert(
             ANTHROPIC_API_KEY.to_string(),
             ANTHROPIC_API_KEY_ENV.to_string(),
+        );
+        mappings.insert(
+            OPENAI_COMPATIBLE_API_KEY.to_string(),
+            OPENAI_COMPATIBLE_API_KEY_ENV.to_string(),
         );
         Self { mappings }
     }
@@ -240,6 +257,10 @@ mod tests {
             resolver.env_var_for(ANTHROPIC_API_KEY),
             Some(ANTHROPIC_API_KEY_ENV)
         );
+        assert_eq!(
+            resolver.env_var_for(OPENAI_COMPATIBLE_API_KEY),
+            Some(OPENAI_COMPATIBLE_API_KEY_ENV)
+        );
         // Unknown semantic ids have no mapping — no catch-all (§20).
         assert!(resolver.env_var_for("provider.openai.api_key").is_none());
         assert!(resolver
@@ -254,5 +275,16 @@ mod tests {
         let resolver = EnvCredentialResolver::new();
         let secret = resolver.resolve(ANTHROPIC_API_KEY).expect("mapped + set");
         assert_eq!(secret.expose(), "sk-ant-env-456");
+    }
+
+    #[test]
+    fn resolves_the_openai_compatible_mapping_from_env() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g = EnvGuard::set(OPENAI_COMPATIBLE_API_KEY_ENV, Some("sk-openai-env-789"));
+        let resolver = EnvCredentialResolver::new();
+        let secret = resolver
+            .resolve(OPENAI_COMPATIBLE_API_KEY)
+            .expect("mapped + set");
+        assert_eq!(secret.expose(), "sk-openai-env-789");
     }
 }
