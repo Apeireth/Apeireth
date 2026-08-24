@@ -6,6 +6,10 @@ pub mod telemetry;
 pub mod host;
 pub mod hybrid;
 pub mod model_router;
+pub mod event_bus_backbone;
+pub mod capability_registry;
+pub mod presence_hub;
+pub mod lifecycle;
 
 pub use host::{UnifiedRuntimeHost, ChatTurnOutput};
 pub use session_manager::SessionState;
