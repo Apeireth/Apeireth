@@ -490,6 +490,26 @@ impl MinimaxProviderPlugin {
     pub fn base_url(&self) -> &str {
         &self.capability.base_url
     }
+
+    /// Attach a credential resolver without booting a full runtime.
+    ///
+    /// Mirrors what [`Plugin::initialize`] does in the real boot path: fills the
+    /// shared resolver slot. Exposed for integration tests that exercise the
+    /// capability directly rather than through `Runtime::execute`.
+    #[doc(hidden)]
+    pub fn attach_resolver_for_test(&self, resolver: Arc<dyn CredentialResolver>) {
+        let mut slot = self.resolver.lock().expect("resolver slot lock poisoned");
+        *slot = Some(resolver);
+    }
+
+    /// The canonical capability this plugin owns, for direct testing.
+    ///
+    /// In the real runtime this is reached through the plugin registry; tests
+    /// that do not assemble a `Runtime` use this to call `complete` directly.
+    #[doc(hidden)]
+    pub fn provider_for_test(&self) -> Arc<MinimaxProviderCapability> {
+        Arc::clone(&self.capability)
+    }
 }
 
 #[async_trait]
