@@ -1,0 +1,141 @@
+//! Deterministic proof that the rewired CLI bootstrap reaches the migrated
+//! canonical provider.
+//!
+//! `build_canonical_runtime_from_env` is the real production bootstrap used by
+//! both `dispatch_canonical_chat` and `dispatch_gateway_serve`. This test points
+//! it at a mock vendor HTTP server (via `APEIRETH_API_URL`) and proves the
+//! assembled runtime serves a turn through `provider.minimax` — the canonical
+//! capability, not the `LegacyLlmCapability` bridge.
+//!
+//! No Internet, no real key. Env-mutating tests are serialized because
+//! `std::env` is process-global.
+
+use std::sync::Mutex;
+
+use apeireth_cli::{build_canonical_runtime_from_env, execute_canonical_cli_turn};
+use apeireth_core::kernel::SessionId;
+
+/// Serializes env-mutating tests (std::env is process-global).
+static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+/// Restores an env var on drop.
+struct EnvGuard {
+    key: &'static str,
+    prev: Option<String>,
+}
+
+impl EnvGuard {
+    fn set(key: &'static str, value: Option<&str>) -> Self {
+        let prev = std::env::var(key).ok();
+        match value {
+            Some(v) => std::env::set_var(key, v),
+            None => std::env::remove_var(key),
+        }
+        Self { key, prev }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        match &self.prev {
+            Some(v) => std::env::set_var(self.key, v),
+            None => std::env::remove_var(self.key),
+        }
+    }
+}
+
+/// A minimal one-shot mock vendor HTTP server returning a canned 200 body.
+async fn mock_vendor(body: &'static str) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        let (mut socket, _) = match listener.accept().await {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let mut buf = [0u8; 4096];
+        let _ = socket.read(&mut buf).await;
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        let _ = socket.write_all(resp.as_bytes()).await;
+        let _ = socket.flush().await;
+    });
+    format!("http://{addr}")
+}
+
+const SUCCESS_BODY: &str = r#"{
+    "id": "chatcmpl-cli-bootstrap",
+    "model": "MiniMax-M3",
+    "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello from canonical cli"}, "finish_reason": "stop"}],
+    "usage": {"prompt_tokens": 5, "completion_tokens": 4, "total_tokens": 9}
+}"#;
+
+#[tokio::test]
+async fn the_cli_bootstrap_serves_through_the_migrated_canonical_provider() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let base_url = mock_vendor(SUCCESS_BODY).await;
+
+    let _g_key = EnvGuard::set("APEIRETH_API_KEY", Some("sk-fake-cli-bootstrap"));
+    let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
+    let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+
+    let runtime = build_canonical_runtime_from_env()
+        .await
+        .expect("the rewired bootstrap builds a runtime");
+
+    // Exactly the canonical minimax provider is registered — no compat.* bridge.
+    let ids: Vec<String> = runtime
+        .providers()
+        .provider_ids()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert_eq!(ids, vec!["provider.minimax".to_string()]);
+
+    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
+        .await
+        .expect("the turn completes");
+    assert_eq!(outcome.served_by.as_str(), "provider.minimax");
+    assert_eq!(outcome.text, "hello from canonical cli");
+    assert_eq!(outcome.rounds, 1);
+}
+
+#[tokio::test]
+async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    let base_url = mock_vendor(SUCCESS_BODY).await;
+
+    // Key absent: the runtime must still build (keyless boot), and the first
+    // execution must fail explicitly — never a silent success or mock fallback.
+    let _g_key = EnvGuard::set("APEIRETH_API_KEY", None);
+    let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
+    let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+
+    let runtime = build_canonical_runtime_from_env()
+        .await
+        .expect("keyless boot must succeed");
+
+    // The provider is registered even without a key...
+    let ids: Vec<String> = runtime
+        .providers()
+        .provider_ids()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert_eq!(ids, vec!["provider.minimax".to_string()]);
+
+    // ...but executing a turn fails explicitly with the credential problem.
+    let err = execute_canonical_cli_turn(&runtime, "hi", None, None)
+        .await
+        .expect_err("a missing key must fail the turn");
+    assert!(
+        err.contains("api_key") || err.contains("auth"),
+        "the failure must name the credential problem: {err}"
+    );
+}
