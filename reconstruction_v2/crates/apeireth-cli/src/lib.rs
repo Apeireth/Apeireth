@@ -7,6 +7,9 @@ use apeireth_runtime::UnifiedRuntimeHost;
 use apeireth_storage::memory_v2::QueryMode;
 
 pub mod tui;
+pub mod tui_theme;
+pub mod tui_app;
+pub mod tui_error;
 
 #[derive(Parser)]
 #[command(name = "apeireth", version = "2.0.0", about = "Apeireth 2.0 High-Performance Cognitive Companion OS")]
