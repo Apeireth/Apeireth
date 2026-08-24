@@ -592,48 +592,43 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
 ///
-/// Provider implementations are still legacy during this migration phase, so
-/// the existing environment-backed provider is wrapped by the temporary
-/// `ProviderCapability` compatibility adapter. Missing credentials do not stop
-/// the runtime from booting; execution then fails explicitly with no provider.
+/// The production provider is the canonical `MinimaxProviderCapability`:
+/// it reaches the runtime as a first-class `ProviderCapability` through the
+/// `MinimaxProviderPlugin`, **not** through the `LegacyLlmCapability` bridge.
+/// Its API key is resolved per-turn through an `EnvCredentialResolver`
+/// (`provider.minimax.api_key` → `APEIRETH_API_KEY`), so no secret is stored on
+/// the runtime or the provider.
+///
+/// Missing credentials do not stop the runtime from booting: the resolver
+/// simply resolves `None`, the provider is still registered, and the first
+/// execution fails explicitly with `AuthFailed` rather than silently falling
+/// back (§40). No mock response, no default-vendor lock-in (§41).
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
-    use apeireth_api::llm::{ApeirethApiConfig, ApeirethApiProvider, LlmProvider};
-    use apeireth_provider::canonical_bridge::CompatibilityProviderPlugin;
+    use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
+    use apeireth_provider::credentials::EnvCredentialResolver;
     use std::sync::Arc;
 
     let configured_model = std::env::var("APEIRETH_MODEL")
         .ok()
         .filter(|model| !model.trim().is_empty());
+
     let mut builder = Runtime::builder();
 
-    match ApeirethApiConfig::from_env() {
-        Ok(config) => {
-            let models = config.models.clone();
-            let default_model = configured_model.or_else(|| models.first().cloned());
-            let legacy: Arc<dyn LlmProvider> =
-                Arc::new(ApeirethApiProvider::new(config).map_err(|error| {
-                    format!("production provider initialization failed: {error}")
-                })?);
-            let plugin = CompatibilityProviderPlugin::new(
-                PluginId::new("compat.apeireth_api").map_err(|error| error.to_string())?,
-                CapabilityId::new("provider.apeireth_api").map_err(|error| error.to_string())?,
-                models,
-                legacy,
-            )
-            .map_err(|error| format!("compatibility provider activation failed: {error}"))?;
-            builder = builder.with_plugin(Arc::new(plugin));
-            if let Some(model) = default_model {
-                builder = builder.with_default_model(model);
-            }
-        }
-        Err(_error) => {
-            // `from_env` currently fails here only when APEIRETH_API_KEY is
-            // absent. Runtime boot remains keyless; the first execution reports
-            // the missing provider/model without hiding it behind a fake key.
-            if let Some(model) = configured_model {
-                builder = builder.with_default_model(model);
-            }
-        }
+    // The production credential resolver: logical names map to env vars, and
+    // a missing key resolves to None. The provider fails explicitly if the key
+    // is absent at execution time.
+    let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
+        Arc::new(EnvCredentialResolver::new());
+    builder = builder.with_credentials(resolver);
+
+    // The canonical minimax provider plugin. `from_env` reads only non-secret
+    // configuration (base URL, model list); the API key is never read here.
+    let plugin = MinimaxProviderPlugin::from_env()
+        .map_err(|error| format!("canonical provider activation failed: {error}"))?;
+    let default_model = configured_model.or_else(|| plugin.model_ids().first().cloned());
+    builder = builder.with_plugin(Arc::new(plugin));
+    if let Some(model) = default_model {
+        builder = builder.with_default_model(model);
     }
 
     builder
