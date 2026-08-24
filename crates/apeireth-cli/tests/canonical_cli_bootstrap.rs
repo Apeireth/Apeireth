@@ -144,6 +144,76 @@ async fn the_cli_bootstrap_routes_an_anthropic_model_to_provider_anthropic() {
 }
 
 #[tokio::test]
+async fn the_cli_bootstrap_routes_an_openai_model_to_provider_openai_compatible() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    // A mock speaking the OpenAI Chat Completions shape.
+    let openai_body = r#"{
+        "id": "chatcmpl_cli_openai",
+        "model": "gpt-4o-mini",
+        "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello from openai cli"}, "finish_reason": "stop"}],
+        "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5}
+    }"#;
+    let openai_url = mock_vendor(openai_body).await;
+
+    let _g_minimax_key = EnvGuard::set("APEIRETH_API_KEY", None);
+    let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
+    let _g_openai_key = EnvGuard::set("OPENAI_API_KEY", Some("sk-openai-cli-bootstrap"));
+    let _g_openai_url = EnvGuard::set("APEIRETH_OPENAI_URL", Some(&openai_url));
+    let _g_openai_models = EnvGuard::set("APEIRETH_OPENAI_MODELS", Some("gpt-4o-mini"));
+    let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("gpt-4o-mini"));
+
+    let runtime = build_canonical_runtime_from_env()
+        .await
+        .expect("bootstrap builds a runtime with the openai-compatible provider");
+
+    // The openai-compatible provider is registered only when models are
+    // configured; here they are, so it participates.
+    let ids: Vec<String> = runtime
+        .providers()
+        .provider_ids()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert!(
+        ids.contains(&"provider.openai-compatible".to_string()),
+        "{ids:?}"
+    );
+
+    let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
+        .await
+        .expect("the turn completes");
+    assert_eq!(outcome.served_by.as_str(), "provider.openai-compatible");
+    assert_eq!(outcome.text, "hello from openai cli");
+}
+
+#[tokio::test]
+async fn the_cli_bootstrap_omits_openai_compatible_when_unconfigured() {
+    let _lock = ENV_LOCK.lock().unwrap();
+    // No APEIRETH_OPENAI_MODELS: the generic provider must NOT be registered
+    // (it has no hardcoded model default — §21/§38).
+    let _g_minimax_key = EnvGuard::set("APEIRETH_API_KEY", Some("sk-fake"));
+    let _g_openai_models = EnvGuard::set("APEIRETH_OPENAI_MODELS", None);
+
+    let runtime = build_canonical_runtime_from_env()
+        .await
+        .expect("bootstrap builds without the generic provider");
+
+    let ids: Vec<String> = runtime
+        .providers()
+        .provider_ids()
+        .into_iter()
+        .map(|id| id.to_string())
+        .collect();
+    assert!(
+        !ids.contains(&"provider.openai-compatible".to_string()),
+        "unconfigured generic provider must not register: {ids:?}"
+    );
+    // The minimax + anthropic providers are still present.
+    assert!(ids.contains(&"provider.minimax".to_string()));
+    assert!(ids.contains(&"provider.anthropic".to_string()));
+}
+
+#[tokio::test]
 async fn the_cli_bootstrap_boots_keyless_and_fails_explicitly_on_execute() {
     let _lock = ENV_LOCK.lock().unwrap();
     let base_url = mock_vendor(SUCCESS_BODY).await;
