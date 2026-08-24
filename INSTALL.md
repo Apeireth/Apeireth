@@ -174,7 +174,10 @@ cargo run --bin apeireth-cli session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 23,874 套全 workspace PASS, per CHANGELOG post-1.0.0）
+# 2. Test（应该 0 failed — 实时数量见 CHANGELOG 最新 "Verified" 节）
+#    v1.0.0 正式版: 368 组 (per 2026-08-18 12d4323b marker)
+#    post-v1.0.0 增量: 23,806 passed / 0 failed (per 2026-08-19 路线排期)
+#    当前 reconstruction_v2: 68 lib passed + 3 integration (per 2026-08-24 58bccb36)
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
