@@ -12,6 +12,7 @@ async-trait = "0.1"
 thiserror = "1.0"
 apeireth-core = { path = "../apeireth-core" }
 apeireth-tools = { path = "../apeireth-tools" }
+chrono = { version = "0.4", features = ["serde"] }
 
 [dev-dependencies]
 tokio-test = "0.4"

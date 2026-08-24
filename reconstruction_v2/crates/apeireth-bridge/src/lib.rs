@@ -1,6 +1,11 @@
 pub mod social;
 pub mod game;
 pub mod dispatcher;
+pub mod web;
+pub mod stock;
+pub mod livekit;
+pub mod lark;
+pub mod acp;
 
 pub use social::discord::DiscordBridge;
 pub use social::telegram::TelegramBridge;
