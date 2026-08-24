@@ -210,16 +210,16 @@ chains live in their own crates and become `GovernanceHook` implementations.
 > internal dependencies. The graph stays acyclic and the canonical code touches
 > none of that, but the crate boundary is not yet clean. Migration item #1.
 
-### `apeireth-storage` — durability *(not yet created)*
+### `apeireth-storage` — durability foundation
 
-**Will own.** Durable session, memory, vector, and graph persistence.
+**Owns.** Low-level durable persistence infrastructure: SQLite connection pool and configuration, versioned schema migrations, storage-level errors, and low-level persistence helpers. M1A created the foundation only.
 
 **May depend on.** `apeireth-core`.
 
-**Must not depend on.** Gateway, runtime, plugin.
+**Must not depend on.** Gateway, runtime, plugin, provider, companion, governance.
 
-Deferred: not in this phase's priority list. `InMemorySessionStore` occupies the
-seam so the interface is real rather than hypothetical.
+M1A scope: `SqliteConnectionPool`, `SqliteConfig`, versioned migrations (`PRAGMA user_version`), and `StorageError`. Memory, vector, graph, and session persistence are later migration items; `InMemorySessionStore` remains the
+runtime session seam until the storage backend is connected.
 
 ### `apeireth-companion` — cognition
 
@@ -276,7 +276,7 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Execution trace | `apeireth-runtime::canonical::trace` |
 | Composition root | `apeireth-runtime::canonical::runtime` |
 | Policy decision | `apeireth-governance` |
-| Durable storage | `apeireth-storage` *(deferred)* |
+| Durable storage | `apeireth-storage` *(foundation created; memory/vector/graph/session persistence deferred)* |
 | HTTP transport | `apps/gateway` |
 | Companion cognition | `apeireth-companion` |
 | Credential storage backend | `apeireth-credentials`, behind `plugin::CredentialResolver` |
