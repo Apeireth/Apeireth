@@ -10,6 +10,9 @@ pub mod event_bus_backbone;
 pub mod capability_registry;
 pub mod presence_hub;
 pub mod lifecycle;
+pub mod upgrade;
+pub mod evolution;
+pub mod council;
 
 pub use host::{UnifiedRuntimeHost, ChatTurnOutput};
 pub use session_manager::SessionState;

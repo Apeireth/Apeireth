@@ -1,4 +1,5 @@
 pub mod builtin;
+pub mod skills;
 pub mod sandbox;
 pub mod mcp;
 pub mod vision;
