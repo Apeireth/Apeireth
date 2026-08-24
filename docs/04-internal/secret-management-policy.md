@@ -44,10 +44,10 @@
 | 凭证类型 | 路径 (Windows) | .gitignore 模式 | 备注 |
 |----------|----------------|-------------------|------|
 | **MiniMax API key** | `C:\Users\<user>\apikey-ultra.txt` | `apikey-ultra.txt` / `apikey-*.txt` | **唯一合法存放点** |
-| **GitHub PAT** | `C:\Users\<user>\GitHubtoken.txt` | (无 .gitignore, 因不在 workspace) | 主人本地管理, 不放 workspace |
+| **GitHub PAT** | `C:\Users\<user>\GitHubtoken.txt` | `GitHub*.txt` (根 .gitignore 全局规则, 防任何后续同名凭证入仓) | 主人本地管理, 文件在 workspace 之外但全局规则兜底 |
 | **OpenAI API key** | `C:\Users\<user>\apikey-openai.txt` (建议) | `apikey-*.txt` | 多 provider 模式 |
 
-**为什么 GitHubtoken.txt 不在 .gitignore**: 它根本不在 workspace 目录里 (`C:\Users\<user>\`), 不可能被 commit。.gitignore 只防 workspace 内的凭证。
+**为什么 GitHubtoken.txt 仍要写进 .gitignore**: 文件本身在 workspace 外 (`C:\Users\<user>\`), 默认不可能 commit。但根 .gitignore 加 `GitHub*.txt` 是**防御性全局兜底**——如果未来主人误将该文件 symlink/copy 进 workspace，或在子目录命名相似文件，新规则立即生效，不依赖任何特殊位置假设。0 装 PASS: 防"边缘情况"也要写规则。
 
 ### 2.2 子代理读取凭证 (per task 流程)
 
