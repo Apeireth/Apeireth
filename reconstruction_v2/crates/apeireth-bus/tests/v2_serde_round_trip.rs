@@ -92,9 +92,19 @@ fn v2_channel_set_bits_serde_round_trip() {
     let json = serde_json::to_string(&s).unwrap();
     let back: ChannelSet = serde_json::from_str(&json).unwrap();
     assert_eq!(back.bits(), s.bits());
+    // 0b011 = Ai | Human = BOTH mask, so Ai+Human 满足 contains(Both)
     assert!(back.contains(Channel::Ai));
     assert!(back.contains(Channel::Human));
-    assert!(!back.contains(Channel::Both));
+    assert!(back.contains(Channel::Both), "Ai+Human 满足 BOTH mask");
+
+    // 仅 Ai → 不满足 BOTH mask
+    let mut s2 = ChannelSet::empty();
+    s2.insert(Channel::Ai);
+    let json2 = serde_json::to_string(&s2).unwrap();
+    let back2: ChannelSet = serde_json::from_str(&json2).unwrap();
+    assert!(back2.contains(Channel::Ai));
+    assert!(!back2.contains(Channel::Human));
+    assert!(!back2.contains(Channel::Both), "仅 Ai 不满足 BOTH mask");
 }
 
 #[test]
