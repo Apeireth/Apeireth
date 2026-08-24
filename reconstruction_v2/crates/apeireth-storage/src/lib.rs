@@ -7,6 +7,9 @@ pub mod cosine;
 pub mod graph;
 pub mod vector;
 pub mod fold;
+pub mod memory_episode;
+pub mod memory_dedup;
+pub mod memory_continuity;
 
 pub use pool::SqliteConnectionPool;
 pub use migrations::run_migrations;
