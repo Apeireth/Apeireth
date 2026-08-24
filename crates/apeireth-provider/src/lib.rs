@@ -25,6 +25,9 @@ pub mod canonical_bridge;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot;
+/// Production credential resolution for canonical providers
+/// ([`EnvCredentialResolver`]).
+pub mod credentials;
 pub mod gemini_cli;
 pub mod opencode;
 // R177: provider invariants (10 tests + 2 Kani proofs)

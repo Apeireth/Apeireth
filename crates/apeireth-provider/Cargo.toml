@@ -21,5 +21,13 @@ apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-acp = { path = "../apeireth-acp" }
 apeireth-http-client = { path = "../apeireth-http-client" }
 tokio = { workspace = true }
+# Canonical provider transport: the provider owns its reqwest client and its
+# lifetime (per ARCHITECTURE.md HTTP-ownership rule). rustls-tls matches the
+# workspace default; no native-tls.
+reqwest = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "time", "test-util"] }
+apeireth-core = { path = "../apeireth-core" }
 [lints]
 workspace = true
