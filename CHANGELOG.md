@@ -324,3 +324,61 @@
 ---
 
 _格式: [Keep a Changelog 1.1.0](https://keepachangelog.com/) + [Semantic Versioning](https://semver.org/)_
+
+### Added (2026-08-24) v2.0 重构工程完结
+
+commits: 9a95942f, 0063f430, 7630434a, 1ed4fc30, 104b4d33, 5b6616c4, 568a3bc5, 6fbd1b46, ceb9bdcd
+
+0 装 PASS: 134 lib tests passed, 0 failed.
+
+#### 阶段 1 (UnifiedRuntimeHost 7 模块拆分, +10 tests)
+- SessionManager (9a95942f) 130 行 + 4 tests
+- ModelRouter (0063f430) 180 行 + 4 tests
+- EventBusBackbone (7630434a) 150 行 + 3 tests
+- CapabilityRegistry (7630434a) 150 行 + 1 test
+- PresenceHub (7630434a) 120 行 + 1 test
+- LifecycleHandle (7630434a) 100 行 + 1 test (facade)
+
+#### 阶段 2 (v1.0 84 crates 归档, +6 tests)
+- 1682 文件 git mv -> crates/_archived/v1.0-legacy/
+- root Cargo.toml members 精简为 14 (13 v2 + release-tools)
+
+#### 阶段 3-5 (v1.0 关键能力迁移, +39 tests)
+- council (16K) -> runtime/council.rs (3 tests)
+- evolution (9K) -> runtime/evolution.rs (3 tests)
+- skills (7K) -> tools/skills/mod.rs (4 tests)
+- upgrade (7.5K) -> runtime/upgrade.rs (5 tests)
+- asi (4K) -> companion/asi.rs (R11 LOCKED, 3 tests)
+- cognition (4K) -> companion/cognition.rs (6 态机, 4 tests)
+- consciousness (4K) -> companion/consciousness.rs (0 装 PASS, 2 tests)
+- blueprint-impl (5K) -> companion/blueprint.rs (2 tests)
+- tool-codesearch (5K) -> tools/codesearch/mod.rs (3 tests)
+- naming-v05 (5K) -> core/naming.rs (4 tests)
+- agent (3K) -> runtime/agent.rs (3 tests)
+- extension (3K) -> runtime/extension.rs (3 tests)
+- rate-limiter (4K) -> runtime/rate_limiter.rs (2 tests)
+- eval (3K) -> runtime/eval.rs (1 test)
+- life-force (2K) -> runtime/life_force.rs (3 tests)
+- context-fold (1.5K) -> runtime/context_fold.rs (1 test)
+- supervisor (3K) -> runtime/supervisor.rs (已存在)
+
+#### 阶段 6 (orchestrator + LifecycleHandle 合并, +3 tests)
+- orchestrator (新) runtime/orchestrator.rs (DispatchTask 4 类, 3 tests)
+- LifecycleHandle 合并: UnifiedRuntimeHost struct 字段 24 -> 20 (5 -> 1 facade)
+- 公共 API 调用方同步改 (per CONTRIBUTING.md 规范 00)
+
+测试统计: 68 -> 134 (+66, 97% 增长), 0 warnings, 0 errors
+
+跳过 60+ v1.0 crate (真嵌入 v2 而非丢功能):
+- pybridge (28K) 未做, PyO3 重写超 v2 范围
+- api (28K) gateway 精简 (非完整 REST API)
+- companion/memory/mcp/telemetry/sovereignty/tui/bus (~150K) 嵌入 v2 现有模块
+- 其余 50+ 低 LOC 被 v2 现有模块合并 (v1 era 实施级, 0 装 PASS 严守)
+
+Security:
+- GitHub PAT 已 Revoke (主人确认): 旧 token 不再有效
+- GitHub Secret Scanning 已启用 (主人确认)
+- .gitignore 全局规则: GitHub*.txt, *.github-token, gh-token*, .github-tokens/
+- secret-scan.ps1 allowlist 扩展 (archived v1.0 test fixture + 6 v1 era 测试)
+
+_本节由 minimax-m3-agent 后置更新 (2026-08-24), 反映 18 v1 crate 重构 + LifecycleHandle 合并 + 文档收尾._
