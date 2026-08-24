@@ -34,6 +34,10 @@ apeireth-bus = { path = "../apeireth-bus" }
 apeireth-governance = { path = "../apeireth-governance" }
 apeireth-plugin = { path = "../apeireth-plugin" }
 apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# Real-entry test wires the migrated canonical minimax provider through the
+# gateway router against a mock HTTP server.
+apeireth-provider = { path = "../apeireth-provider" }
+reqwest = { workspace = true }
 http-body-util = "0.1"
 tower = { version = "0.5", features = ["util"] }
 
