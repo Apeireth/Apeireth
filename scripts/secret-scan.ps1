@@ -80,6 +80,7 @@ $AllowlistPaths = @(
     'crates/apeireth-guard/src/pii.rs',                # PII detection test (ghp_aaa...)
     'crates/apeireth-guard/tests/*',
     'crates/apeireth-tools/src/guardrail.rs',          # guardrail test (ghp_aaa...)
+    'crates/_archived/v1.0-legacy/apeireth-tool-runtime/src/privacy.rs',  # archived v1.0 PII detector test fixture (ghp_aaa...)
     'crates/apeireth-tools/tests/*',
     'crates/apeireth-tool-runtime/src/privacy.rs',     # privacy test (sk-verylong...)
     'crates/apeireth-tool-runtime/tests/*',
