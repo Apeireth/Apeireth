@@ -592,18 +592,26 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
 ///
-/// The production provider is the canonical `MinimaxProviderCapability`:
-/// it reaches the runtime as a first-class `ProviderCapability` through the
-/// `MinimaxProviderPlugin`, **not** through the `LegacyLlmCapability` bridge.
-/// Its API key is resolved per-turn through an `EnvCredentialResolver`
-/// (`provider.minimax.api_key` → `APEIRETH_API_KEY`), so no secret is stored on
-/// the runtime or the provider.
+/// Canonical production providers reach the runtime as first-class
+/// `ProviderCapability` implementations through their plugins — **not** through
+/// the `LegacyLlmCapability` bridge. The runtime registers every canonical
+/// provider whose configuration is present; each resolves its API key per turn
+/// through an `EnvCredentialResolver`, so no secret is stored on the runtime or
+/// any provider.
 ///
-/// Missing credentials do not stop the runtime from booting: the resolver
-/// simply resolves `None`, the provider is still registered, and the first
-/// execution fails explicitly with `AuthFailed` rather than silently falling
-/// back (§40). No mock response, no default-vendor lock-in (§41).
+/// Providers registered (config-driven, not a hardcoded single vendor):
+/// - `provider.minimax` (OpenAI Chat Completions) — `APEIRETH_API_*` env.
+/// - `provider.anthropic` (Anthropic Messages API) — `APEIRETH_ANTHROPIC_*` env.
+///
+/// Missing credentials do not stop the runtime from booting: a provider whose
+/// key is absent is still registered, and execution against it fails explicitly
+/// with `AuthFailed` rather than silently falling back (§40). The router
+/// selects a provider purely by `supports_model` + health; no vendor heuristics
+/// live in the runtime (§36/§48). The default model is `APEIRETH_MODEL`, else
+/// the first configured minimax model — an explicit, documented default, not an
+/// implicit vendor lock-in (§41/§48).
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
+    use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
     use apeireth_provider::credentials::EnvCredentialResolver;
     use std::sync::Arc;
@@ -614,20 +622,38 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
 
     let mut builder = Runtime::builder();
 
-    // The production credential resolver: logical names map to env vars, and
-    // a missing key resolves to None. The provider fails explicitly if the key
-    // is absent at execution time.
+    // The production credential resolver maps each provider's semantic key to
+    // its env var. A missing key resolves to None; the provider fails
+    // explicitly at execution time.
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         Arc::new(EnvCredentialResolver::new());
     builder = builder.with_credentials(resolver);
 
-    // The canonical minimax provider plugin. `from_env` reads only non-secret
+    // Register every canonical provider. Each `from_env` reads only non-secret
     // configuration (base URL, model list); the API key is never read here.
-    let plugin = MinimaxProviderPlugin::from_env()
-        .map_err(|error| format!("canonical provider activation failed: {error}"))?;
-    let default_model = configured_model.or_else(|| plugin.model_ids().first().cloned());
-    builder = builder.with_plugin(Arc::new(plugin));
-    if let Some(model) = default_model {
+    let mut first_default_model: Option<String> = None;
+    let mut fallback_order: Vec<apeireth_core::kernel::CapabilityId> = Vec::new();
+
+    let minimax = MinimaxProviderPlugin::from_env()
+        .map_err(|error| format!("minimax provider activation failed: {error}"))?;
+    if first_default_model.is_none() {
+        first_default_model = minimax.model_ids().first().cloned();
+    }
+    fallback_order.push(apeireth_core::kernel::CapabilityId::new("provider.minimax").unwrap());
+    builder = builder.with_plugin(Arc::new(minimax));
+
+    let anthropic = AnthropicProviderPlugin::from_env()
+        .map_err(|error| format!("anthropic provider activation failed: {error}"))?;
+    fallback_order.push(apeireth_core::kernel::CapabilityId::new("provider.anthropic").unwrap());
+    builder = builder.with_plugin(Arc::new(anthropic));
+
+    // Deterministic fallback order (providers absent from a request's model
+    // support are never consulted anyway; this only orders ties).
+    builder = builder.with_fallback_order(fallback_order);
+
+    // Deterministic default model: explicit override, else the first minimax
+    // model (documented default, not an implicit lock-in).
+    if let Some(model) = configured_model.or(first_default_model) {
         builder = builder.with_default_model(model);
     }
 
