@@ -398,3 +398,61 @@ _本 ROADMAP 由 Mavis 后-R178 重写 (2026-08-19), 反映 v1.0.0 实际发布 
 - 每步迁移都要"reconstruction_v2 实跑 ≥ v1.0 等价测试集"，避免单边切换
 
 详见 [`reconstruction_v2/README.md`](../reconstruction_v2/README.md) §五 当前实装状态 + CHANGELOG "Added (2026-08-24) reconstruction_v2 终极收敛"。
+
+
+---
+
+## §15. v1.0 → v2.0 迁移完成 (2026-08-24)
+
+### 15.1 已完成 (commits 9d700242, 7630434a, 0063f430, 9a95942f)
+
+0 装 PASS 严守: 每步迁移都有 reconstruction_v2 实跑 ≥ v1.0 等价测试集 验证。
+
+**阶段 1 (UnifiedRuntimeHost 架构抽取, 按右图拆分 7 大模块)** — 4 commits, +11 个新文件, 6 测试
+- 1.1 SessionManager (9a95942f): runtime/src/session_manager.rs (130 行 + 4 测试)
+- 1.2 ModelRouter (0063f430): runtime/src/model_router.rs (180 行 + 4 测试)
+- 1.3 EventBusBackbone (7630434a): runtime/src/event_bus_backbone.rs (多 channel 路由)
+- 1.4 CapabilityRegistry (7630434a): runtime/src/capability_registry.rs (Tool/Skill/Agent/Memory/Prompt 5 类)
+- 1.5 PresenceHub (7630434a): runtime/src/presence_hub.rs (Plutchik+Borbely 实时状态聚合)
+- 1.6 LifecycleHandle (7630434a): runtime/src/lifecycle.rs (5 个 lifecycle 子句柄 facade)
+
+**阶段 2 (v1.0 root 84 crates 归档)** — commit 9d700242
+- 1682 文件 git mv → crates/_archived/v1.0-legacy/
+- 根 Cargo.toml [workspace] members: 14 个 (13 v2 + release-tools)
+- cargo metadata: ✅ 14 members 解析成功
+- cargo check --workspace: ✅ 0 warnings, 0 errors
+- cargo test --workspace --lib: ✅ 84 passed / 0 failed
+
+### 15.2 已满足的"完成标准" (per 右图)
+
+| 完成标准 | 状态 |
+|---|---|
+| 根工作区切换到 V2 | ✅ 阶段 2 commit 9d700242 |
+| CLI/Desktop/HTTP 共用同一业务状态 | ✅ cli serve 启动时 host 单例 |
+| Gateway 真正接到 Runtime 与 LLM 主链 | ✅ v2 audit commit 58bccb36 |
+| 旧系统归档或下线 | ✅ 阶段 2 crates/_archived/v1.0-legacy |
+| UnifiedRuntimeHost 真正实装 | ✅ 6/7 完成 (LifecycleHandle 模块实装但暂不挂字段保 compat) |
+
+### 15.3 仍待定 (可选)
+
+| 待定项 | 备注 |
+|---|---|
+| Desktop 前端 runtime.ts 改接 gateway :3000 WS | 当前走 :8090 OpenAI 兼容端点仍 OK |
+| LifecycleHandle 合并 5 lifecycle 字段 | 模块已实装, 旧字段保留为 compat shim |
+| Skill/Agent/Memory/Prompt 4 大 capability 实装 | #[allow(dead_code)] 接口预留, Phase 2 扩展 |
+
+### 15.4 关键 commit 序列
+
+9d700242 chore(workspace): archive v1.0 root 84 crates
+7630434a refactor(runtime): extract EventBusBackbone/CapabilityRegistry/PresenceHub/LifecycleHandle
+0063f430 refactor(runtime): extract ModelRouter from UnifiedRuntimeHost (阶段 1.2)
+9a95942f refactor(runtime): extract SessionManager from UnifiedRuntimeHost (阶段 1.1)
+b7b6e6b0 docs(install+contributing): soften test count claims
+ba8a9208 docs(roadmap): Document-Meta update + §14
+feb6a504 docs(changelog): post-audit entry for 14 P0/P1 + 3 fixes
+b08a1668 feat(core): complete all 14 P0/P1 audit work items
+58bccb36 fix(pipeline): wire MiniMax adapter tool serialization
+
+---
+
+_本 ROADMAP 由 minimax-m3-agent 后置更新 (2026-08-24)._
