@@ -44,6 +44,7 @@ pub mod partner;
 pub mod reflexion;
 pub mod streaming_chat;
 pub mod tool_bridge;
+pub mod oracle_adapters;
 pub mod thought_cluster;
 pub mod topic_groups;
 pub mod progressive;
