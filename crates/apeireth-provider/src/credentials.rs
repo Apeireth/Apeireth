@@ -42,6 +42,16 @@ pub const MINIMAX_API_KEY: &str = "provider.minimax.api_key";
 /// The environment variable the default mapping reads for the minimax key.
 pub const MINIMAX_API_KEY_ENV: &str = "APEIRETH_API_KEY";
 
+/// The logical credential name for the anthropic provider's API key.
+pub const ANTHROPIC_API_KEY: &str = "provider.anthropic.api_key";
+
+/// The environment variable the default mapping reads for the anthropic key.
+///
+/// Follows the repository's existing convention (`APEIRETH_ANTHROPIC_KEY`, set
+/// by the legacy `AnthropicCompatibleConfig::from_env`) rather than the
+/// upstream `ANTHROPIC_API_KEY`, so existing user configuration keeps working.
+pub const ANTHROPIC_API_KEY_ENV: &str = "APEIRETH_ANTHROPIC_KEY";
+
 /// A production [`CredentialResolver`] backed by environment variables.
 ///
 /// Holds only a name→variable map (configuration, not secret material). Each
@@ -56,12 +66,18 @@ pub struct EnvCredentialResolver {
 impl EnvCredentialResolver {
     /// A resolver with the default semantic-name → env-var mappings.
     ///
-    /// Currently maps [`MINIMAX_API_KEY`] to [`MINIMAX_API_KEY_ENV`]. Adding a
-    /// second canonical provider means adding its default mapping here, not
-    /// teaching the provider a new resolver type.
+    /// Maps [`MINIMAX_API_KEY`] → [`MINIMAX_API_KEY_ENV`] and
+    /// [`ANTHROPIC_API_KEY`] → [`ANTHROPIC_API_KEY_ENV`]. Adding a further
+    /// canonical provider means adding its default mapping here, not teaching
+    /// the provider a new resolver type. Unknown semantic ids resolve to `None`
+    /// (§20): there is no catch-all `provider.<anything>.api_key` mapping.
     pub fn new() -> Self {
         let mut mappings = BTreeMap::new();
         mappings.insert(MINIMAX_API_KEY.to_string(), MINIMAX_API_KEY_ENV.to_string());
+        mappings.insert(
+            ANTHROPIC_API_KEY.to_string(),
+            ANTHROPIC_API_KEY_ENV.to_string(),
+        );
         Self { mappings }
     }
 
@@ -214,12 +230,29 @@ mod tests {
     }
 
     #[test]
-    fn default_resolver_maps_exactly_the_minimax_key() {
+    fn default_resolver_maps_each_known_provider_key() {
         let resolver = EnvCredentialResolver::new();
         assert_eq!(
             resolver.env_var_for(MINIMAX_API_KEY),
             Some(MINIMAX_API_KEY_ENV)
         );
+        assert_eq!(
+            resolver.env_var_for(ANTHROPIC_API_KEY),
+            Some(ANTHROPIC_API_KEY_ENV)
+        );
+        // Unknown semantic ids have no mapping — no catch-all (§20).
         assert!(resolver.env_var_for("provider.openai.api_key").is_none());
+        assert!(resolver
+            .env_var_for("provider.<anything>.api_key")
+            .is_none());
+    }
+
+    #[test]
+    fn resolves_the_anthropic_mapping_from_env() {
+        let _lock = ENV_LOCK.lock().unwrap();
+        let _g = EnvGuard::set(ANTHROPIC_API_KEY_ENV, Some("sk-ant-env-456"));
+        let resolver = EnvCredentialResolver::new();
+        let secret = resolver.resolve(ANTHROPIC_API_KEY).expect("mapped + set");
+        assert_eq!(secret.expose(), "sk-ant-env-456");
     }
 }
