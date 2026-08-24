@@ -13,6 +13,9 @@ pub mod memory_continuity;
 pub mod memory_three_layer;
 pub mod memory_streams;
 pub mod memory_semantic;
+pub mod memory_identity;
+pub mod memory_session_lifecycle;
+pub mod memory_provenance;
 
 pub use pool::SqliteConnectionPool;
 pub use migrations::run_migrations;
