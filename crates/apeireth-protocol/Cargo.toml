@@ -19,12 +19,17 @@ apeireth-core = { path = "../apeireth-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# tokio and reqwest moved to [dev-dependencies]; see below.
 async-trait = { workspace = true }  # R30 U10: ProtocolBridge async trait
 
 [dev-dependencies]
 serde_json = { workspace = true }
+# Canonical protocol is a translation layer: no HTTP client, no async runtime.
+# Examples/tests may use these, but library code must not construct a reqwest
+# client or an async runtime. Keeping them here enforces that boundary in the
+# dependency graph itself.
+tokio = { workspace = true, features = ["macros", "rt"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [[example]]
 name = "router_demo"
