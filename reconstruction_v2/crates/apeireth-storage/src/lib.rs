@@ -1,6 +1,9 @@
 pub mod pool;
 pub mod migrations;
 pub mod memory_v2;
+pub mod graph_ops;
+pub mod graph_primitive;
+pub mod cosine;
 pub mod graph;
 pub mod vector;
 pub mod fold;
