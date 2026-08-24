@@ -75,7 +75,7 @@
 
 ---
 
-## 五、 当前实装状态（截至 2026-08-24，commit `58bccb36`）
+## 五、 当前实装状态（截至 2026-08-24，commit `9a95942f`）
 
 > 与上游 v1.0 仓库的现状差异：本目录已 100% 实装 14 P0/P1 审计工单 + 3 处协议层断点修复，且已推送 GitHub `Apeireth/apeireth-rust` 远端。详见 CHANGELOG §"Added (2026-08-24) reconstruction_v2 终极收敛"。
 
@@ -100,11 +100,11 @@
 | `apeireth-gateway` | 2 | route/chat 端点 |
 | `apeireth-governance` | 10 | 5-Gate pipeline / onion 三层 / audit verify_chain / self_disable |
 | `apeireth-protocol` | 7 | 4 适配器 + tool_calls 解析 |
-| `apeireth-runtime` | 6 | hybrid_cognitive_routing + runtime_host_creation_and_dream + supervisor × 2 + task_store × 2 |
+| `apeireth-runtime` | 12 | hybrid_cognitive_routing + runtime_host_creation_and_dream + supervisor × 2 + task_store × 2 + SessionManager (4 测试) + ModelRouter (4 测试) |
 | `apeireth-sdk` | 1 | sdk_client_initialization |
 | `apeireth-storage` | 7 | cjk_bigram + jaccard_greedy_clustering + memory_v2_importance_and_temporal + concurrent_read_write + vector hybrid + graph + fold |
 | `apeireth-tools` | 10 | synthesis_and_execution + shell_destructive_rejection + fetch_ssrf + fetch_public + sandbox + worktree + fs + shell echo + shell dynamic + registry |
-| **合计** | **68** | 0 failed, 0 ignored |
+| **合计** | **78** | 0 failed, 0 ignored |
 
 ### 5.3 与 v1.0 文档章节的映射
 
@@ -119,6 +119,23 @@
 - ✅ **真 Win32 跑过**：测试在 Windows 平台跑通；Linux/macOS 走 `#[cfg(not(target_os = "windows"))]` stub 分支（**0 假装真调 Win32**）
 - ⚠️ **Docker 实测待 CI**：本地无 docker，遵循 v1.0 同样标注
 - ⚠️ **VM microVM 隔离（smol-vm / Hyperlight）**：trait 口已备未接（v1.0 同等标注，未变）
+
+
+
+### 5.6 UnifiedRuntimeHost 架构抽取进展（按右图重构主线）
+
+> 0 装 PASS: 阶段 1.1+1.2 已实装 (commit 9a95942f)；其余 5 模块仍是 host.rs 内字段, 待阶段 1.3-1.6 抽取。
+
+| 模块 | 状态 | 位置 |
+|---|---|---|
+| SessionManager | 已抽取完成 | runtime/src/session_manager.rs (130 行 + 4 测试) |
+| ModelRouter | 已抽取完成 (按 model name 前缀路由) | runtime/src/model_router.rs (含 4 测试) |
+| EventBus backbone | 阶段 1.3 待抽 | 当前为单 channel 简化版 |
+| CapabilityRegistry | 阶段 1.4 待抽 | 当前借用 ToolRegistry |
+| PresenceHub | 阶段 1.5 待建 | 聚合 avatar/voice/bridge 状态 |
+| LifecycleHandle | 阶段 1.6 待抽 | 当前 Arc<Mutex<LifecycleStateMachine>> |
+
+详见 ROADMAP.md §14 历史架构抽取任务（按用户右图 7 大模块拆分）。Stage 1 完成后 host.rs 应从 530 行降至 ~200 行 root composer。
 
 ### 5.5 当前 working tree 未提交改动（`reconstruction_v2/`）
 

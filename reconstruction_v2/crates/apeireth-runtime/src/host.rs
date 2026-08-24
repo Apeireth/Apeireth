@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use chrono::Utc;
+// Arc 仍用于 MinimaxAdapter / SessionManager / EventBus / GovernancePipeline 等字段包装
 // DateTime 已抽到 session_manager.rs; Utc 仍直接用于 chat_turn 时间戳
 // HashMap / Serialize / Deserialize 在 SessionManager 抽取后已不需要直接 use
 
@@ -21,7 +22,7 @@ use apeireth_companion::prompt_assembler::{ContextAssembler, CompanionContextSta
 use apeireth_companion::dream::{DreamEngine, DreamReport};
 use apeireth_companion::epistemic::EpistemicHealer;
 
-use apeireth_protocol::{MinimaxAdapter, ProtocolAdapter};
+use apeireth_protocol::MinimaxAdapter;
 use apeireth_protocol::normalized::{NormalizedRequest, NormalizedMessage, Usage};
 
 use apeireth_tools::ToolRegistry;
@@ -35,6 +36,7 @@ use apeireth_tools::sandbox::PlatformSandbox;
 
 use crate::hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
 use crate::session_manager::SessionManager;
+use crate::model_router::ModelRouter;
 
 // 0 装 PASS: SessionState 已抽到 session_manager.rs (pub struct + Debug + Clone derive);
 // 这里 re-export 让 lib.rs `pub use host::SessionState;` 向后兼容 (gateway/cli/tui 现有调用)。
@@ -68,7 +70,7 @@ pub struct UnifiedRuntimeHost {
     pub prompt_assembler: ContextAssembler,
     pub tool_registry: Arc<ToolRegistry>,
     pub sandbox: Arc<PlatformSandbox>,
-    pub protocol_adapter: Arc<dyn ProtocolAdapter + Send + Sync>,
+    pub model_router: ModelRouter,
     pub dream_engine: Arc<Mutex<DreamEngine>>,
     pub epistemic_healer: Arc<Mutex<EpistemicHealer>>,
     pub hybrid_router: HybridCognitiveRouter,
@@ -131,7 +133,9 @@ impl UnifiedRuntimeHost {
         );
 
 
-        let adapter = Arc::new(MinimaxAdapter::new());
+        // 0 装 PASS: ModelRouter 默认持有 MinimaxAdapter 作为 fallback;
+        // 调用方后续可通过 host.model_router.register() 加更多 provider。
+        let model_router = ModelRouter::new(Arc::new(MinimaxAdapter::new()));
 
         Ok(Self {
             api_key: key,
@@ -148,7 +152,7 @@ impl UnifiedRuntimeHost {
             prompt_assembler,
             tool_registry: Arc::new(tool_reg),
             sandbox,
-            protocol_adapter: adapter,
+            model_router,
             dream_engine,
             epistemic_healer,
             hybrid_router,
@@ -327,7 +331,7 @@ impl UnifiedRuntimeHost {
         let mut final_reasoning: Option<String> = None;
 
         for _round in 0..MAX_TOOL_ROUNDS {
-            let response = self.protocol_adapter.execute(&self.api_key, &request).await?;
+            let response = self.model_router.execute(&self.api_key, &request).await?;
             cumulative_usage.prompt_tokens += response.usage.prompt_tokens;
             cumulative_usage.completion_tokens += response.usage.completion_tokens;
             cumulative_usage.total_tokens += response.usage.total_tokens;
