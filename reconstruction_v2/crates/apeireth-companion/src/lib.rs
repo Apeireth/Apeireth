@@ -18,6 +18,11 @@ pub mod motivation;
 pub mod value;
 pub mod perception;
 pub mod experience;
+pub mod capability;
+pub mod confidence;
+pub mod audit;
+pub mod memory_extractor;
+pub mod emotion_memory;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
