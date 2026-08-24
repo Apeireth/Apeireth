@@ -1,0 +1,52 @@
+[package]
+name = "apeireth-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth Web 前端 (v2 reconstruction) — axum SSR + 端到端接通 apeireth-storage / apeireth-sovereignty / apeireth-asi / apeireth-council"
+
+[lib]
+name = "apeireth_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "apeireth-web"
+path = "src/main.rs"
+
+[features]
+# SSR mode (服务端渲染)
+ssr = [
+    "dep:axum",
+    "dep:tokio",
+    "dep:tower-http",
+    "dep:apeireth-storage",
+    "dep:apeireth-sovereignty",
+    "dep:apeireth-asi",
+    "dep:tracing",
+]
+
+# 默认 features: ssr (R18 MVP 简化, 暂不搞 client WASM hydration)
+default = ["ssr"]
+
+[dependencies]
+# Workspace crates
+apeireth-storage = { path = "../apeireth-storage", optional = true }
+apeireth-sovereignty = { path = "../apeireth-sovereignty", optional = true }
+apeireth-asi = { path = "../apeireth-asi", optional = true }
+
+# Web server deps
+axum = { version = "0.7", optional = true, features = ["macros"] }
+tokio = { workspace = true, optional = true }
+tower-http = { version = "0.5", features = ["fs"], optional = true }
+
+# Serialization
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# Misc
+tracing = { version = "0.1", optional = true }
+
+[lints]
+workspace = true
