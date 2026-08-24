@@ -46,7 +46,8 @@ async fn test_mcp_client_server_roundtrip_and_tool_adapter() {
     assert!(tools.len() >= 2);
     let tool_names: Vec<String> = tools.iter().map(|t| t.name.clone()).collect();
     assert!(tool_names.contains(&"shell".to_string()));
-    assert!(tool_names.contains(&"fs".to_string()));
+    assert!(tool_names.contains(&"filesystem".to_string()));
+
 
 
     // 6. Test Direct Tool Call (tools/call)

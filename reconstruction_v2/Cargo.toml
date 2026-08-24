@@ -11,7 +11,11 @@ members = [
     "crates/apeireth-gateway",
     "crates/apeireth-cli",
     "crates/apeireth-sdk",
+    "crates/apeireth-avatar",
+    "crates/apeireth-voice",
+    "crates/apeireth-bridge",
 ]
+
 
 
 
