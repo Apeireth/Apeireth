@@ -1,6 +1,12 @@
 pub mod pool;
 pub mod migrations;
 pub mod memory_v2;
+pub mod memory_user_profile;
+pub mod memory_session_note;
+pub mod memory_llm_analysis;
+pub mod memory_history_streams;
+pub mod memory_g5_bridge;
+pub mod memory_append_only;
 pub mod graph_ops;
 pub mod graph_primitive;
 pub mod cosine;
