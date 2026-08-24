@@ -28,6 +28,11 @@ pub mod timeline;
 pub mod session_log;
 pub mod tone;
 pub mod onering;
+pub mod agent_trace;
+pub mod approval_requests;
+pub mod daily_summary;
+pub mod milestone;
+pub mod memory_graph;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
