@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use chrono::Utc;
+// DateTime 已抽到 session_manager.rs; Utc 仍直接用于 chat_turn 时间戳
+// HashMap / Serialize / Deserialize 在 SessionManager 抽取后已不需要直接 use
 
 // Workspace Crates
 use apeireth_core::bus::EventBus;
@@ -34,8 +34,12 @@ use apeireth_tools::synthesis::ToolSynthesizer;
 use apeireth_tools::sandbox::PlatformSandbox;
 
 use crate::hybrid::{HybridCognitiveRouter, HybridRoutingDecision};
+use crate::session_manager::SessionManager;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+// 0 装 PASS: SessionState 已抽到 session_manager.rs (pub struct + Debug + Clone derive);
+// 这里 re-export 让 lib.rs `pub use host::SessionState;` 向后兼容 (gateway/cli/tui 现有调用)。
+pub use crate::session_manager::SessionState;
+
 pub struct ChatTurnOutput {
     pub session_id: String,
     pub assistant_text: String,
@@ -49,17 +53,10 @@ pub struct ChatTurnOutput {
     pub timestamp: i64,
 }
 
-pub struct SessionState {
-    pub id: String,
-    pub messages: Vec<NormalizedMessage>,
-    pub created_at: DateTime<Utc>,
-    pub last_interaction: DateTime<Utc>,
-}
-
 pub struct UnifiedRuntimeHost {
     pub api_key: String,
     pub default_model: String,
-    pub sessions: Arc<Mutex<HashMap<String, SessionState>>>,
+    pub session_manager: SessionManager,
     pub event_bus: Arc<EventBus>,
     pub governance: Arc<Mutex<GovernancePipeline>>,
     pub audit_chain: Arc<Mutex<AuditHashChain>>,
@@ -139,7 +136,7 @@ impl UnifiedRuntimeHost {
         Ok(Self {
             api_key: key,
             default_model: "MiniMax-Text-01".into(),
-            sessions: Arc::new(Mutex::new(HashMap::new())),
+            session_manager: SessionManager::new(),
             event_bus: Arc::new(EventBus::new(128)),
             governance: Arc::new(Mutex::new(GovernancePipeline::new())),
             audit_chain: Arc::new(Mutex::new(AuditHashChain::new())),
@@ -291,21 +288,18 @@ impl UnifiedRuntimeHost {
         // ---------------------------------------------------------------------
         let mut messages = vec![NormalizedMessage::system(system_prompt)];
         {
-            let mut sessions = self.sessions.lock().await;
-            let session = sessions.entry(session_id.to_string()).or_insert_with(|| SessionState {
-                id: session_id.to_string(),
-                messages: Vec::new(),
-                created_at: now,
-                last_interaction: now,
-            });
+            // 1) 读路径: get_or_create 返回 cloned SessionState, 取最近 10 条消息作 context
+            let session_snapshot = self.session_manager.get_or_create(session_id).await;
+            let start = session_snapshot.messages.len().saturating_sub(10);
+            messages.extend_from_slice(&session_snapshot.messages[start..]);
 
-            let start = session.messages.len().saturating_sub(10);
-            messages.extend_from_slice(&session.messages[start..]);
-
+            // 2) 写路径: with_mut 闭包拿 &mut SessionState, 追 user 消息
             let user_norm = NormalizedMessage::user(clean_user_msg.clone());
             messages.push(user_norm.clone());
-            session.messages.push(user_norm);
-            session.last_interaction = now;
+            self.session_manager.with_mut(session_id, |session| {
+                session.messages.push(user_norm.clone());
+                session.last_interaction = now;
+            }).await;
         }
 
         let mut request = NormalizedRequest::new(&self.default_model, messages);
@@ -437,12 +431,9 @@ impl UnifiedRuntimeHost {
         let turn_latency = turn_start.elapsed().as_millis() as u64;
         self.telemetry.record_chat_turn(turn_latency, token_usage.total_tokens);
 
-        {
-            let mut sessions = self.sessions.lock().await;
-            if let Some(session) = sessions.get_mut(session_id) {
-                session.messages.push(NormalizedMessage::assistant(assistant_full_text.clone()));
-            }
-        }
+        self.session_manager.with_mut(session_id, |session| {
+            session.messages.push(NormalizedMessage::assistant(assistant_full_text.clone()));
+        }).await;
 
 
         // ---------------------------------------------------------------------

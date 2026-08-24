@@ -249,9 +249,8 @@ async fn chat_completions(
 
 async fn panel_sessions(State(state): State<Arc<GatewayState>>) -> Json<Value> {
     if let Some(host) = &state.runtime_host {
-        let sessions = host.sessions.lock().await;
         let mut list = Vec::new();
-        for (id, s) in sessions.iter() {
+        for (id, s) in host.session_manager.snapshot().await {
             list.push(serde_json::json!({
                 "id": id,
                 "started_at": s.created_at.timestamp_millis(),
@@ -269,8 +268,7 @@ async fn panel_session_timeline(
     State(state): State<Arc<GatewayState>>,
 ) -> Json<Value> {
     if let Some(host) = &state.runtime_host {
-        let sessions = host.sessions.lock().await;
-        if let Some(s) = sessions.get(&session_id) {
+        if let Some(s) = host.session_manager.get(&session_id).await {
             let mut episodes = Vec::new();
             for (idx, msg) in s.messages.iter().enumerate() {
                 let role = match msg.role {
