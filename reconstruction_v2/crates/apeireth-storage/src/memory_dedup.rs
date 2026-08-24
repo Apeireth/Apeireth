@@ -1,5 +1,5 @@
 //! Memory Dedup - 去重 (从 v1.0 apeireth-memory/dedup.rs 410 LOC 抄录升级)
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DedupStrategy { Exact, Jaccard, Cosine, MinHash }

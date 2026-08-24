@@ -10,6 +10,9 @@ pub mod fold;
 pub mod memory_episode;
 pub mod memory_dedup;
 pub mod memory_continuity;
+pub mod memory_three_layer;
+pub mod memory_streams;
+pub mod memory_semantic;
 
 pub use pool::SqliteConnectionPool;
 pub use migrations::run_migrations;
