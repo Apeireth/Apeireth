@@ -1,0 +1,22 @@
+[package]
+name = "apeireth-graph"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth v2.0 deterministic graph orchestration (LangGraph-style) — Node, Graph, Executor, Checkpoint, Subgraph, Channel, StateGraph, ContextGraph, ThreadHistory"
+
+[lib]
+name = "apeireth_graph"
+path = "src/lib.rs"
+bench = false
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "rt", "macros", "sync"] }
+uuid = { workspace = true }
+parking_lot = "0.12"
