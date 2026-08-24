@@ -18,6 +18,7 @@ apeireth-asi = { path = "../apeireth-asi" }
 # DEPRECATED(V2 Day 1 Step 1.1): `apeireth-philosophy` 已删; 来源已物理删除，依赖摘除。
 apeireth-api = { path = "../apeireth-api" }
 apeireth-gateway = { path = "../apeireth-gateway" }
+apeireth-plugin = { path = "../apeireth-plugin" }
 apeireth-provider = { path = "../apeireth-provider" }
 apeireth-runtime = { path = "../apeireth-runtime" }
 tokio = { workspace = true }
@@ -33,6 +34,10 @@ apeireth-council = { path = "../apeireth-council" }
 apeireth-mcp = { path = "../apeireth-mcp" }
 # R125-2: clap derive macros 替换手写 argv 解析 (commands.rs -55%)
 clap = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+reqwest = { workspace = true }
 
 [features]
 # B2 workspace 级装配层 (docs/release-plan.md §三.4): base / capability packs / upgrade suites 三档.
