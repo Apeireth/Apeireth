@@ -1,50 +1,21 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/apeireth-core",
-    "crates/apeireth-memory",
-    "crates/apeireth-llm-iface",  # R179 P0-3: LLM iface (拆 memory<->api 编译期边)
-    "crates/apeireth-asi",
-    "crates/apeireth-telemetry",  # R35: observability 4 umbrella (cache/observability/metrics/tracing facade)
-    "crates/apeireth-provider",  # R35+R36: 5 Provider 真合并, 5 老 crate (.bak) 已删
-    "crates/apeireth-tools",
-    "crates/apeireth-cli",
-    "crates/apeireth-bench",
-    "crates/apeireth-cognition",
-    "crates/apeireth-action",
-    "crates/apeireth-life-force",  # R37-2: transparent re-export 到 memory (workspace members 保留, 0 breaking)
-    "crates/apeireth-constraint",
-    "crates/apeireth-central",
-    "crates/apeireth-value",       # R37-2: transparent re-export 到 motivation
-    "crates/apeireth-consciousness", # R37-2: transparent re-export 到 perception
-    "crates/apeireth-graph-primitive",
-    "crates/apeireth-companion",
-    "crates/apeireth-skills",
-    "crates/apeireth-acp",
-    "crates/apeireth-cron",
-    "crates/apeireth-test",
-    "crates/apeireth-eval",
-    "crates/apeireth-experience",  # R173 stage2 §3: experience layer
-    "crates/apeireth-gateway",  # R174 stage 6 §3: OpenClaw-mode single long-lived gateway
-    "crates/apeireth-environment",  # R173 stage2 §3: 6 terminal backends
-    "crates/apeireth-config",
-    "crates/apeireth-motivation",
-    "crates/apeireth-perception",
-    "crates/apeireth-upgrade",
-    "crates/apeireth-wiki",  # TP28: Markdown 知识库 (llm_wiki 模式, 文件树 + 索引 + 检索)
-    "crates/apeireth-onion",
-    "crates/apeireth-council",
-    "crates/apeireth-sovereignty",
-    "crates/apeireth-supervisor",
-    "crates/apeireth-pybridge",
-    "crates/apeireth-verify",
-    "crates/apeireth-extension",
-    "crates/apeireth-evolution",
-    "crates/apeireth-bus",
-    "crates/apeireth-arbitration",  # R145: HASH-SQL 仲裁 + 唯一事实时间线
-    "crates/apeireth-runtime",       # R147: 7 模块端到端 orchestration (heartbeat/task/bus/arbitration/search/group_chat/emotion)
-    "crates/apeireth-api",
-    "crates/apeireth-web",
+    "reconstruction_v2/crates/apeireth-core",
+    "reconstruction_v2/crates/apeireth-governance",
+    "reconstruction_v2/crates/apeireth-storage",
+    "reconstruction_v2/crates/apeireth-protocol",
+    "reconstruction_v2/crates/apeireth-tools",
+    "reconstruction_v2/crates/apeireth-runtime",
+    "reconstruction_v2/crates/apeireth-companion",
+    "reconstruction_v2/crates/apeireth-gateway",
+    "reconstruction_v2/crates/apeireth-cli",
+    "reconstruction_v2/crates/apeireth-sdk",
+    "reconstruction_v2/crates/apeireth-avatar",
+    "reconstruction_v2/crates/apeireth-voice",
+    "reconstruction_v2/crates/apeireth-bridge",
+    "crates/release-tools",  # TP20-S5 锚点 (零运行时)
+    # 0 装 PASS: crates/_archived/ v1.0-legacy 不作为 workspace member (是 git archive, 不参与 build)
     # V1307 fix (R-Cycle v2-strategy / V1306 audit leftover): 加 apeireth-tauri-stub 到 workspace members.
     # 原 DEPRECATED(V2 Day 1 Step 1.3, docs/v2-strategy/05-EXECUTION-NOW.md): 原 `apeireth-desktop`
     # 重命名为 `apeireth-tauri-stub`(R17 stub 从未实船,R19 战役计划用真前端);
@@ -57,57 +28,26 @@ members = [
     # 解开: V1307 修真, 真正启用 (R19 战役参考样例保留, src/main.rs 借 autobins=false 不默认 build)。
     # R145: tauri-stub 冻结到 _frozen/, 移出 workspace members (per 16-crate-merge-policy.md §2)
     # "crates/_frozen/apeireth-tauri-stub",  # frozen R145 — 0 业务依赖, 留 archive
-    "crates/apeireth-tui",
-    "crates/apeireth-protocol",
-    "crates/apeireth-http-client",
-    "crates/apeireth-pipeline",
     # R20 阶段 6 估补: 通用 5 阶段 pipeline 框架 (Dispatch/Normalize/Policy/Reliability/Throttle).
     # 借鉴 Golutra v0.1.0 chat_db 5 阶段 pipeline 思想 (per docs/stage6/borrowed-from-golutra.md §8 P2),
     # 1:1 翻译 v0.1.0 message_service/pipeline/ 架构到 Rust. 与 LOCKED apeireth-pipeline (R17 chat 专用)
     # 严格区分, 路径带 -g5 后缀避名 (LOCKED mtime 16:34:11 baseline 严守, 0 触碰).
     # 0 业务耦合, 通用化, 任何模块 (chat/task/memory/MCP/...) 都能包成 Pipeline<T,I,O>.
     # 纯 Rust, 0 引 pyo3/qt/GDI (per 主 2026-08-06 01:00 拍板). 0 改 workspace version.
-    "crates/apeireth-pipeline-g5",
-    "crates/apeireth-tool-registry",
-    "crates/apeireth-tool-runtime",
-    "crates/apeireth-tool-search",  # R145: VSearch + aggregate + TF-IDF-like score
-    "crates/apeireth-tool-shell",
-    "crates/apeireth-tool-fetch",  # R149: Tier 1.5 unified fetch engine (absorb VCP 7 plugins)
-    "crates/apeireth-tool-filesystem",
-    "crates/apeireth-tool-browser",
-    "crates/apeireth-tool-codesearch",
-    "crates/apeireth-tool-image-gen",
-    "crates/apeireth-tool-image-process",
     # R165: apeireth-protocol-bridge -> _archived/apeireth-protocol-bridge (0 业务调用者, 死码归档)
-    "crates/apeireth-context-fold",
-    "crates/apeireth-tool-approval",
-    "crates/apeireth-guard",  # R173 VCP-3: Privacy Guard
-    "crates/apeireth-credentials",  # TP3/N21: 统一凭据存取层 (§10 装配主链第一环)
-    "crates/apeireth-agent",
     # V2 战区 5 — MCP skeleton (docs/v2-strategy/05 §Step 2, R-Cycle v2-strategy)
-    "crates/apeireth-mcp",
     # V2 战区 3 — graph orchestration (docs/v2-strategy/05 §Step 3, R-Cycle v2-strategy)
-    "crates/apeireth-graph",
     # V2 战区 4 — vector retrieval (docs/v2-strategy/05 §Step 4, R-Cycle v2-strategy)
-    "crates/apeireth-vector",
     # V2 战区 1/4/5 — multi-language SDK (docs/v2-strategy/05 §Step 1.4, R-Cycle v2-strategy)
-    "crates/apeireth-sdk",
     # V2 战区 5 — formal verification (docs/v2-strategy/03 §4A, R-Cycle v2-strategy)
     # R165: apeireth-formal -> _archived/apeireth-formal (0 外部依赖; apeireth-library-governance::formal_proof 承担生产路径)
     # 5 P0 crate skeleton (per v09021-rust-translation-blueprint-RIVAL §5.1, R20 阶段 1)
-    "crates/apeireth-workflow",
-    "crates/apeireth-team-lead",
     # R128: shared infrastructure facade replacing standalone keyring and machine-id crates.
-    "crates/apeireth-host",
     # R128: repository scanning and analysis facade.
-    "crates/apeireth-repo-tools",
     # R128: i18n remains active because TUI consumes its translation runtime.
-    "crates/apeireth-i18n",
     # 2 估缺工具 (R20 阶段 4 主体, per RIVAL §2.3)
     # 2 估缺基础设施 (P0 安全, per RIVAL §2.4)
     # 2 SDK stub (R20 阶段 3 必补, per RIVAL §2.5)
-    "crates/apeireth-lark",
-    "crates/apeireth-voice",
     # R36: 5 老 provider crate 真删 (claude-code / codex / copilot / gemini-cli / opencode).
     # R35 阶段 1 facade 阶段已 re-export 到 apeireth-provider, R36 真删 5 老 crate, workspace 91 → 86.
     # 5 老 crate 目录 rename 到 *.bak (保留 backup, 防 rollback), 内容已 verify 0 引用.
@@ -116,18 +56,14 @@ members = [
     # 4 大类 (PC 0.40 / RC 0.30 / HG 0.15 / GP 0.15) × 6 维度 (level/domain/modality/safety/completeness/lineage)
     # = 24 维, sum=1.00 守门, 编译期 hardcode enum, encode/decode/validate/sum_guard 完整.
     # 0 触碰 24 LOCKED crate + 0 改 workspace version + 6 哲学 anchor + 8 项不修改承诺
-    "crates/apeireth-naming-v05",
     # R20 阶段 5 估补: TUI 5 nav + 9 器官 端到端集成测试 (per 主人 2026-08-05 派活单)
     # ratatui TestBackend 测 TUI 设计契约, 25+ 测试, 0 触碰 24 LOCKED, 0 改 workspace version
     # 0 干 Tauri, 0 主动 commit
-    "crates/apeireth-tui-e2e",
     # R21 借鉴 Golutra #6: 9 Tauri state 模式 (OnceLock + Arc + Mutex) 转 TUI 等价物 (ratatui state 共享框架).
     # per analysis/golututra/BORROW_FROM_GOLUTRA.md §8 P1 第 9/10 项, 主 2026-08-06 01:55 派活.
     # 3 模式 (OnceLockState / MutexState / RwLockState) + 9 器官 state 共享 (heart/brain/hand/eye/ear/memory/voice/body/mind) +
     # 1 完整 state sharing 例子 + 25+ 集成测试. 0 真接 tokio/async, 留 R21 续真接. 0 触碰 24 LOCKED crate +
     # 0 改 workspace version (1.0.0) + 6 哲学 anchor + 8 项不修改承诺.
-    "crates/apeireth-state",
-    "crates/apeireth-livekit",
     # R21 借鉴 Golutra #3: 9 memory provider 模式 (in_memory / redis / sqlite / postgres / s3 / disk_lru / hybrid + R23 #6 加 file / mongodb),
     # 1:1 镜像 Golutra v0.1.0 memory gateway 5 provider 模式 (5+1+1+2). 9 provider × 6 K-1 强校验
     # (connection_string / timeout / max_size / persist / cache_ttl / scope) + 145 lib + 8 集成 (R23 #6 重做后, +95 tests, 含 file/mongodb 23 new).
@@ -136,7 +72,6 @@ members = [
     # 仅加 `pub use apeireth_memory_extensions::{...}` re-export 3 Provider, 24 LOCKED 集合 0 触).
     # 跟借鉴 #1 (TUI organ command) + 借鉴 #6 (TUI state) 1:1 镜像模式. skeleton 阶段 0 改 LOCKED 24 crate
     # + 0 改 workspace version (1.0.0) + 6 哲学锚穿透 + 8 项不修改承诺.
-    "crates/apeireth-memory/extensions",
     # V1302 fix (R-Cycle v2-strategy / V1301 audit P0 修真): 加 apeireth-blueprint-impl 到 workspace members.
     # 之前是 orphan: 不在 members 但有 Cargo.toml + 12 tracked files + 7 src .rs.
     # 修真: 同步删 crates/apeireth-blueprint-impl/Cargo.toml 末尾空 [workspace] 块 (skeleton 阶段 hack).
@@ -145,7 +80,6 @@ members = [
     # V1301 audit 另外两个 orphan (sdk-livekit / tauri-stub) 留 V1303+ 处理:
     #   - sdk-livekit: V1306 已修真 (改 version "0.1.0" → version.workspace = true + 删 [workspace*] 块)
     #   - tauri-stub: V1307 已修真 (原 "reqwest 0.13 强约束" 注释无据, V1307 实证 cargo check 通过)
-    "crates/apeireth-blueprint-impl",
     # V1304 fix (R-Cycle v2-strategy / V1303 audit low 风险修真): 加 apeireth-sdk-sandbox 到 workspace members.
     # 修真仅 +1 行 (V1303 audit 标 low risk, 单 sub-agent 整合步骤, 0 sub-workspace 块 / 0 version 冲突).
     # 现状: version.workspace = true / edition.workspace = true / deps 用 { workspace = true } 全 OK.
@@ -157,7 +91,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-integration-e2e.
     # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
-    "crates/apeireth-integration-e2e",
     # V1305 fix (R-Cycle v2-strategy / V1303 audit medium 风险修真): 加 apeireth-integration-r20-stage4 到 workspace members.
     # 修真: 删 crates/apeireth-integration-r20-stage4/Cargo.toml 起始空 [workspace] 块 (sub-workspace 隔离 hack).
     # 修真策略 (V1303 标 medium risk): 0 改 [package], 0 改 deps, 0 改 dev-deps (version 1.0.0 / edition 2021 已 match workspace).
@@ -170,7 +103,6 @@ members = [
     # 风险: skeleton crate 加到 members 仅触发 workspace 总数 +1 (87 -> 88), 0 触碰 24 LOCKED crate, 0 改 workspace version (1.0.0).
     # cargo metadata 验证: 应能解析, members 列表应含 apeireth-rate-limiter.
     # V1306 修真 high risk crates (sdk-lark / sdk-livekit / sdk-voice 需改 version + 删 sub-workspace 块).
-    "crates/apeireth-rate-limiter",
     # V1306 fix (R-Cycle v2-strategy / V1303 audit high 风险修真): 加 apeireth-sdk-lark 到 workspace members.
     # 修真: 删 crates/apeireth-sdk-lark/Cargo.toml 起始 [workspace] / [workspace.package] / [workspace.dependencies] 三块.
     # 修真策略 (V1303 标 high risk): 修真 [workspace.package] version "0.1.0" -> 由主仓 1.0.0 接管 ([package] 早已 version.workspace = true).
@@ -199,9 +131,7 @@ members = [
     # 0 触碰 24 LOCKED crate + 0 改 workspace version 1.2.0 (B2 严守, 整合 #4 commit abf12243)
     # + R11 baseline 3 值 0 删 0 改 (A1 严守) + 8 硬墙 0 越界 + 0 装 PASS 严守.
     # 0 主动 commit (Mavis 整合 #5 拍板) + 0 push (等 1.0 release 配 GitHub remote).
-    "crates/apeireth-library-governance",
     "crates/release-tools",  # TP20-S5 塞缝批: 发布期供应链验证 (vet/audit/deny + SBOM) 的工程化锚点 (零运行时)
-    "crates/apeireth-stock",  # TP27: 标的元数据资产 (N3 金融源, FinanceDatabase 30 万标的入库, T0 可信度)
 ]
 
 # ============================================================================

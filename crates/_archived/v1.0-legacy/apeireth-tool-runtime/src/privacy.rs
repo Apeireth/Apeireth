@@ -459,7 +459,7 @@ mod tests {
         // 字符串内嵌 high-confidence token (sk- / ghp_ / AKIA...)
         let guard = PrivacyGuard::new();
         let input = json!({
-            "logs": "User used token sk-1234567890abcdefghijklmnop to login. Also tried ghp_abcdefghijklmnopqrstuvwxyz0123456789. AWS key AKIAIOSFODNN7EXAMPLE was leaked."
+            "logs": "User used token sk-1234567890abcdefghijklmnop to login. Also tried ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa. AWS key AKIAIOSFODNN7EXAMPLE was leaked."
         });
         let masked = guard.mask(&input);
         let logs = masked["logs"].as_str().unwrap();
