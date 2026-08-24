@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::world_model::{W2CausalGraphSimulator, W3CounterfactualGenerator};
+use crate::world_model_v1::{W2CausalGraphSimulator, W3CounterfactualGenerator};
 use crate::intent_brier::IntentBrierTracker;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

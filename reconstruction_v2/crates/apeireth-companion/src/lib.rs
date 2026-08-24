@@ -1,6 +1,6 @@
 pub mod emergence;
 pub mod emotion;
-pub mod world_model;
+pub mod world_model_v1;
 pub mod curiosity;
 pub mod intent_brier;
 pub mod streaming;
