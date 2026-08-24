@@ -13,6 +13,7 @@ pub mod lifecycle;
 pub mod upgrade;
 pub mod extension;
 pub mod context_fold;
+pub mod orchestrator;
 pub mod life_force;
 pub mod eval;
 pub mod rate_limiter;

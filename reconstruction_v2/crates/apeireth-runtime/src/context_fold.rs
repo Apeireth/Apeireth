@@ -35,10 +35,10 @@ impl ContextChunk {
     }
 }
 
-pub struct ContextWindow { chunks: VecDeque<ContextChunk>, max_chars: usize }
+pub struct ContextWindow { chunks: VecDeque<ContextChunk>, _max_chars: usize }
 
 impl ContextWindow {
-    pub fn new(max_chars: usize) -> Self { Self { chunks: VecDeque::new(), max_chars } }
+    pub fn new(max_chars: usize) -> Self { Self { chunks: VecDeque::new(), _max_chars: max_chars } }
     pub fn push(&mut self, chunk: ContextChunk) { self.chunks.push_back(chunk); }
     pub fn total_chars(&self) -> usize { self.chunks.iter().map(|c| c.content.len()).sum() }
     pub fn len(&self) -> usize { self.chunks.len() }

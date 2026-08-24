@@ -138,7 +138,7 @@ pub async fn run_cli(cli: Cli) -> Result<(), Box<dyn std::error::Error + Send + 
             println!("                  APEIRETH SHA-256 AUDIT HASH-CHAIN VERIFIER                   ");
             println!("===============================================================================");
             let host = UnifiedRuntimeHost::new(&api_key, &db).await?;
-            let audit = host.audit_chain.lock().await;
+            let audit = host.lifecycle_handle.audit_chain.lock().await;
             match audit.verify_chain() {
                 Ok(()) => {
                     println!("  ✓ Audit Hash-Chain Integrity Verified: 100% VALID");

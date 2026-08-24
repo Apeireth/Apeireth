@@ -40,7 +40,7 @@ use crate::model_router::ModelRouter;
 use crate::event_bus_backbone::EventBusBackbone;
 use crate::capability_registry::CapabilityRegistry;
 use crate::presence_hub::PresenceHub;
-// LifecycleHandle 暂不直接用 (字段抽出留待下一阶段合并 5 个 lifecycle 子句柄)
+use crate::lifecycle::LifecycleHandle;
 
 // 0 装 PASS: SessionState 已抽到 session_manager.rs (pub struct + Debug + Clone derive);
 // 这里 re-export 让 lib.rs `pub use host::SessionState;` 向后兼容 (gateway/cli/tui 现有调用)。
@@ -64,9 +64,9 @@ pub struct UnifiedRuntimeHost {
     pub default_model: String,
     pub session_manager: SessionManager,
     pub event_bus_backbone: EventBusBackbone,
-    pub governance: Arc<Mutex<GovernancePipeline>>,
-    pub audit_chain: Arc<Mutex<AuditHashChain>>,
-    pub lifecycle: Arc<Mutex<LifecycleStateMachine>>,
+    /// 0 装 PASS: 5 个 lifecycle 子句柄 (governance/audit_chain/lifecycle_state/telemetry/scheduler) + pii_detector
+    /// 整合到 1 个 facade (per decision-22 §5.2 lifecycle 严守).
+    pub lifecycle_handle: LifecycleHandle,
     pub storage_pool: SqliteConnectionPool,
     pub memory_store: Arc<MemoryStore>,
     pub plutchik: Arc<Mutex<Plutchik>>,
@@ -157,9 +157,6 @@ impl UnifiedRuntimeHost {
             default_model: "MiniMax-Text-01".into(),
             session_manager: SessionManager::new(),
             event_bus_backbone: EventBusBackbone::new(),
-            governance: Arc::new(Mutex::new(GovernancePipeline::new())),
-            audit_chain: Arc::new(Mutex::new(AuditHashChain::new())),
-            lifecycle: Arc::new(Mutex::new(LifecycleStateMachine::new())),
             storage_pool: pool,
             memory_store,
             plutchik,
@@ -168,6 +165,14 @@ impl UnifiedRuntimeHost {
             tool_registry: tool_reg.clone(),
             capability_registry: CapabilityRegistry::new(tool_reg.clone()),
             presence_hub: PresenceHub::new(ph_plutchik, ph_borbely),
+            lifecycle_handle: LifecycleHandle::new(
+                Arc::new(Mutex::new(GovernancePipeline::new())),
+                Arc::new(Mutex::new(AuditHashChain::new())),
+                Arc::new(Mutex::new(LifecycleStateMachine::new())),
+                PiiDetector,
+                telemetry.clone(),
+                scheduler.clone(),
+            ),
             sandbox,
             model_router,
             dream_engine,
@@ -234,7 +239,7 @@ impl UnifiedRuntimeHost {
                 requires_council: false,
                 external_network: true,
             };
-            let mut gov = self.governance.lock().await;
+            let mut gov = self.lifecycle_handle.governance.lock().await;
             let gate_res = gov.evaluate_action(&target, "2.0.0", 100.0, 4096, 0, 0, true)
                 .map_err(|e| format!("Governance Gate Rejection: {}", e))?;
             if gate_res.iter().any(|r| !r.passed) {
@@ -385,7 +390,7 @@ impl UnifiedRuntimeHost {
                             external_network: tc.name == "fetch" || tc.name == "browser",
                         };
                         let gov_ok = {
-                            let mut gov = self.governance.lock().await;
+                            let mut gov = self.lifecycle_handle.governance.lock().await;
                             gov.evaluate_action(&tool_target, "2.0.0", 100.0, 4096, 0, 0, true)
                                 .map(|results| results.iter().all(|r| r.passed))
                                 .unwrap_or(false)
@@ -394,7 +399,7 @@ impl UnifiedRuntimeHost {
                         if !gov_ok {
                             let blocked_msg = format!("Error: Tool '{}' blocked by governance pipeline", tc.name);
                             let dur = tool_start.elapsed().as_millis() as u64;
-                            self.telemetry.record_tool_execution(&tc.name, false, dur);
+                            self.lifecycle_handle.telemetry.record_tool_execution(&tc.name, false, dur);
                             let mut exp = self.experience_queue.lock().await;
                             exp.record(&tc.name, &tc.arguments, &blocked_msg, false);
                             blocked_msg
@@ -404,12 +409,12 @@ impl UnifiedRuntimeHost {
                             match tool.execute(params).await {
                                 Ok(result) => {
                                     let dur = tool_start.elapsed().as_millis() as u64;
-                                    self.telemetry.record_tool_execution(&tc.name, result.success, dur);
+                                    self.lifecycle_handle.telemetry.record_tool_execution(&tc.name, result.success, dur);
                                     let mut exp = self.experience_queue.lock().await;
                                     exp.record(&tc.name, &tc.arguments, &result.output, result.success);
 
                                     // Audit the tool execution
-                                    let mut audit = self.audit_chain.lock().await;
+                                    let mut audit = self.lifecycle_handle.audit_chain.lock().await;
                                     audit.append(
                                         &format!("tool_executed:{}", tc.name),
                                         format!("session:{} success:{}", session_id, result.success),
@@ -418,7 +423,7 @@ impl UnifiedRuntimeHost {
                                 }
                                 Err(e) => {
                                     let dur = tool_start.elapsed().as_millis() as u64;
-                                    self.telemetry.record_tool_execution(&tc.name, false, dur);
+                                    self.lifecycle_handle.telemetry.record_tool_execution(&tc.name, false, dur);
                                     let err_msg = format!("Error executing tool '{}': {}", tc.name, e);
                                     let mut exp = self.experience_queue.lock().await;
                                     exp.record(&tc.name, &tc.arguments, &err_msg, false);
@@ -430,7 +435,7 @@ impl UnifiedRuntimeHost {
                     None => {
                         let not_found = format!("Error: Tool '{}' not found in registry", tc.name);
                         let dur = tool_start.elapsed().as_millis() as u64;
-                        self.telemetry.record_tool_execution(&tc.name, false, dur);
+                        self.lifecycle_handle.telemetry.record_tool_execution(&tc.name, false, dur);
                         let mut exp = self.experience_queue.lock().await;
                         exp.record(&tc.name, &tc.arguments, &not_found, false);
                         not_found
@@ -450,7 +455,7 @@ impl UnifiedRuntimeHost {
 
         // Record turn telemetry
         let turn_latency = turn_start.elapsed().as_millis() as u64;
-        self.telemetry.record_chat_turn(turn_latency, token_usage.total_tokens);
+        self.lifecycle_handle.telemetry.record_chat_turn(turn_latency, token_usage.total_tokens);
 
         self.session_manager.with_mut(session_id, |session| {
             session.messages.push(NormalizedMessage::assistant(assistant_full_text.clone()));
@@ -475,7 +480,7 @@ impl UnifiedRuntimeHost {
         let _ = self.memory_store.apply_operation(new_mem, MemoryOperation::Add).await;
 
         let audit_hash = {
-            let mut audit = self.audit_chain.lock().await;
+            let mut audit = self.lifecycle_handle.audit_chain.lock().await;
             let record = audit.append("chat_turn_completed", format!("session:{session_id}"));
             record.current_hash.clone()
         };
