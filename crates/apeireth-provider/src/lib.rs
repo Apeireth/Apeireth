@@ -22,6 +22,9 @@
 /// provider capabilities. Remove after production providers implement the
 /// canonical contract directly.
 pub mod canonical_bridge;
+/// The minimax provider as a first-class canonical capability
+/// ([`MinimaxProviderCapability`] / [`MinimaxProviderPlugin`]).
+pub mod canonical_minimax;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot;
