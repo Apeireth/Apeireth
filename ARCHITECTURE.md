@@ -369,63 +369,90 @@ completion advance the session revision with structured events. Failed
 execution therefore remains observable without inserting audit prose into the
 provider transcript.
 
-### DONE — production provider capability migration (Phase 1)
+### DONE — production provider capability migration (Phase 1 + 2)
 
-The first production provider — minimax (minimaxi, OpenAI Chat Completions
-protocol) — now reaches the runtime as a first-class canonical
-`ProviderCapability`, not through `LegacyLlmCapability`:
+Two production providers now reach the runtime as first-class canonical
+`ProviderCapability` implementations, not through `LegacyLlmCapability`:
 
 ```text
 Runtime
   -> ProviderRouter
-  -> MinimaxProviderCapability   (apeireth-provider, canonical)
-  -> CredentialResolver          (EnvCredentialResolver, logical name → env var)
-  -> vendor HTTP                 (reqwest, OpenAI Chat Completions)
+  -> MinimaxProviderCapability      (apeireth-provider, OpenAI Chat Completions)
+  -> AnthropicProviderCapability     (apeireth-provider, Anthropic Messages API)
+  -> CredentialResolver              (EnvCredentialResolver, logical name → env var)
+  -> vendor HTTP                    (reqwest)
 ```
 
-The runtime names no vendor; `apeireth-provider::canonical_minimax` is the one
-place that knows minimaxi's protocol. The capability owns its `reqwest::Client`
-and the canonical↔vendor translation; the router owns cross-provider fallback;
+The runtime names no vendor. `apeireth-provider::canonical_minimax` is the one
+place that knows minimaxi speaks OpenAI Chat Completions;
+`apeireth-provider::canonical_anthropic` is the one place that knows the
+Anthropic Messages API shape. Each capability owns its `reqwest::Client` and
+the canonical↔vendor translation; the router owns cross-provider fallback;
 credentials arrive per-turn through `CredentialResolver`, never as a stored
-`String`. The legacy provider's internal retry loop was dropped so retry has one
-owner per layer (the router).
+`String`. Legacy internal retry loops were dropped so retry has one owner per
+layer (the router).
 
-Production bootstrap (`apeireth-cli::build_canonical_runtime_from_env`) wires
-`EnvCredentialResolver` + `MinimaxProviderPlugin::from_env`. `LegacyLlmCapability`
-is retained but is no longer on the production CLI/Gateway path.
+Phase 2 was a protocol-diversity proof: the Anthropic provider's wire shape
+differs from OpenAI's (different endpoint `/v1/messages`, `x-api-key` +
+`anthropic-version` headers instead of Bearer, top-level `system` field instead
+of a messages entry, `content[].type=="text"` response, `stop_reason`/`input_tokens`/
+`output_tokens`), yet all of those differences are contained **below** the
+Runtime boundary. The runtime, router, gateway, session, governance, and tool
+loop are unchanged; no vendor branch was added. `NormalizedFinishReason::
+from_anthropic` already existed and now closes the legacy `stop_reason`
+passthrough gap.
+
+Phase 2 hardening (Goal A) also separated canonical model identity from the
+vendor wire model name: a provider-local `ProviderModel` pairs a canonical
+`ModelDescriptor` (routing identity) with an explicit `wire_name` (HTTP body
+identity), so a request for `minimax-m3` sends `MiniMax-M3` to the vendor.
+`ModelDescriptor::display_name` stays presentational. Advertised `ModelFeature`s
+are truthful — neither provider claims `Streaming`/`ToolCalls`/`Vision` it does
+not implement (fail-closed on unsupported content).
+
+Production bootstrap (`apeireth-cli::build_canonical_runtime_from_env`) is
+config-driven: it registers every canonical provider whose configuration is
+present (minimax + anthropic), with a deterministic fallback order, and routes
+purely by `supports_model` + health — no vendor heuristics. `LegacyLlmCapability`
+is retained but has **no production consumers**.
 
 Provider migration status:
 
 ```text
-Canonical Entry Cutover        DONE
-CredentialResolver Production  DONE  (EnvCredentialResolver; apeireth-credentials store = P1)
+Canonical Entry Cutover             DONE
+CredentialResolver Production       DONE  (EnvCredentialResolver; apeireth-credentials store = P1)
+  EnvCredentialResolver             DONE
+  keyring/file backend              PENDING
 Provider Migration:
-  minimax (OpenAI-compat)      DONE  (canonical capability, no bridge, real-entry tested)
-  openai-compatible            PENDING (Phase 2 — same shape, proves generality)
-  anthropic-compatible         PENDING (Phase 2 — protocol diversity)
+  minimax                           DONE  (canonical capability, no bridge, real-entry tested, model-id/wire split)
+  anthropic                         DONE  (canonical capability, no bridge, real-entry tested, protocol-diversity proof)
+  openai-compatible                 PENDING (Phase 3 — mechanical, same shape as minimax)
   (descriptors claude_code/codex/copilot/gemini_cli/opencode + http_dispatch)  NOT IN CANONICAL PATH
-LegacyLlmCapability            PARTIAL / TEMPORARY (no longer on production path; remains for unported consumers)
+LegacyLlmCapability:
+  production consumers              NONE
+  retained for migration            YES
 ```
 
-Migration matrix (Phase 2 roadmap):
+Migration matrix:
 
-| Provider | Canonical capability? | Canonical credentials? | Legacy bridge? | Deterministic tests? | Real-entry tested? | Remaining blocker |
-| --- | --- | --- | --- | --- | --- | --- |
-| minimax (OpenAI-compat) | yes | yes (EnvCredentialResolver) | no | yes | yes (runtime + gateway + cli) | none |
-| openai-compatible | no | no | n/a | legacy unit only | no | migrate to canonical capability |
-| anthropic-compatible | no | no | n/a | legacy unit only | no | migrate; protocol diversity proof |
-| LegacyLlmCapability | n/a | n/a | yes (retained) | yes | n/a | delete after all providers migrate |
+| Provider | Canonical capability? | Canonical credentials? | Protocol family | Legacy bridge? | Deterministic transport? | Runtime E2E? | Gateway E2E? | Remaining blocker |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| minimax | yes | yes (EnvCredentialResolver) | OpenAI Chat Completions | no | yes | yes | yes | none |
+| anthropic | yes | yes (EnvCredentialResolver) | Anthropic Messages API | no | yes | yes | yes | none |
+| openai-compatible | no | no | OpenAI Chat Completions | n/a | legacy unit only | no | no | migrate to canonical capability (mechanical) |
+| (descriptors + http_dispatch) | no | n/a | mixed | n/a | descriptor tests | no | no | not in canonical path; separate task |
+| LegacyLlmCapability | n/a | n/a | n/a | yes (retained) | yes | n/a | n/a | production consumers = NONE; delete after convergence |
 
 ### PENDING
 
-- Migrate `openai-compatible` and `anthropic-compatible` providers to canonical
-  capabilities (Phase 2). The latter proves the abstraction across a different
-  vendor protocol shape.
+- Migrate `openai-compatible` provider to a canonical capability (Phase 3 —
+  mechanical, same shape as minimax; not a protocol-diversity proof).
 - Integrate `apeireth-credentials` backends (file store / keyring) behind
   `plugin::CredentialResolver`; the production resolver is currently
   `EnvCredentialResolver`. A `CredentialsStore`-backed resolver is a drop-in
   once wired — the contract a provider sees is identical.
-- Delete `LegacyLlmCapability` once no production consumer remains on it.
+- Delete `LegacyLlmCapability` once the convergence audit confirms no remaining
+  consumer.
 - Retire the historical runtime modules after their remaining consumers migrate.
 - Consolidate legacy registries only when each remaining caller has moved to the
   canonical `PluginRegistry` and `CapabilityRegistry` ownership path.
