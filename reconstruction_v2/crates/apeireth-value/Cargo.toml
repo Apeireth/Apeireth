@@ -1,0 +1,26 @@
+[package]
+name = "apeireth-value"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-value — Value framework (ValueDimensions + Onion consistency + Prioritization + Evaluation) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["ai", "values"]
+categories = ["ai"]
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-asi = { path = "../apeireth-asi" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

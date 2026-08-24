@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Apeireth",
+    "tagline": "AGI operating system for long-running AI growth",
+    "version": "Version {{version}}"
+  },
+  "nav": {
+    "home": "Home",
+    "tools": "Tools",
+    "history": "History",
+    "settings": "Settings",
+    "organs": "Organs"
+  },
+  "tools": {
+    "web_search": "Web Search",
+    "file_ops": "File Operations",
+    "git_ops": "Git Operations",
+    "code_exec": "Code Execution",
+    "calendar": "Calendar",
+    "message": "Message",
+    "terminal": "Terminal"
+  },
+  "error": {
+    "not_implemented": "This feature is not yet implemented",
+    "tool_not_whitelisted": "Tool {{tool}} is not whitelisted",
+    "key_not_found": "Translation key not found: {{key}}",
+    "locale_not_supported": "Locale {{locale}} is not supported",
+    "template_render": "Template render failed for key {{key}}",
+    "io": "I/O error: {{message}}",
+    "parse": "JSON parse error: {{message}}"
+  },
+  "health": {
+    "ok": "Service is healthy",
+    "degraded": "Service is degraded",
+    "unhealthy": "Service is unhealthy"
+  },
+  "status": {
+    "loading": "Loading...",
+    "ready": "Ready",
+    "busy": "Busy",
+    "error": "Error"
+  },
+  "locale": {
+    "name": {
+      "en": "English",
+      "zh_cn": "Simplified Chinese",
+      "ja": "Japanese",
+      "fr": "French",
+      "de": "German"
+    }
+  },
+  "tauri": {
+    "window": {
+      "title": "Apeireth Desktop"
+    },
+    "menu": {
+      "file": "File",
+      "edit": "Edit",
+      "view": "View",
+      "help": "Help"
+    }
+  },
+  "tui": {
+    "welcome": "Welcome to Apeireth TUI",
+    "prompt": ">",
+    "goodbye": "Goodbye",
+    "shortcut": {
+      "quit": "Press Ctrl+C to quit"
+    }
+  },
+  "settings": {
+    "language": "Language",
+    "theme": "Theme",
+    "about": "About"
+  },
+  "must_do": {
+    "translation_complete": "i18n is must-do for 1.0 release"
+  }
+}

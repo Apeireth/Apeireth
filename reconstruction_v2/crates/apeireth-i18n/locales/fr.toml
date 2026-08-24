@@ -1,0 +1,102 @@
+# apeireth-i18n Français (fr) — 1.0 release #10
+#
+# 12 catégories 69 clés 100% traduites (11 catégories + readiness, suite R21 G-1)
+# K-1 marqueur: la traduction fr contient « indispensable 1.0 »
+
+[nav]
+status = "Statut"
+session = "Session"
+tools = "Outils"
+settings = "Paramètres"
+help = "Aide"
+
+[tools]
+calendar = "Calendrier"
+message = "Message"
+contact = "Contact"
+task = "Tâche"
+search = "Recherche"
+drive = "Drive"
+
+[organs]
+# 9 organes (anthropomorphisme, surveillance de l'état de l'IA)
+heart = "Cœur"
+brain = "Cerveau"
+hand = "Main"
+eye = "Œil"
+ear = "Oreille"
+memory = "Mémoire"
+voice = "Voix"
+body = "Corps"
+mind = "Esprit"
+
+[r_measure]
+r1 = "R-1 Exécution directe ({{count}} étapes, indispensable 1.0)"
+r2 = "R-2 Parler franchement (pas d'évitement)"
+r3 = "R-3 Boucle fermée (committer puis vérifier)"
+r4 = "R-4 Gardien (défense contre les hallucinations m3)"
+r5 = "R-5 Honnêteté (marquer les manques, ne jamais simuler)"
+
+[philosophy]
+# 6 ancres philosophiques
+s1 = "S-1 Étoile polaire : croissance IA à long terme, pas simulation"
+s2 = "S-2 Faits d'abord : vérifier via package.json / Cargo.lock, ne pas simuler"
+o2 = "O-2 Sur les épaules des géants : emprunter les patterns 5 P0 / 9 skeleton"
+o3 = "O-3 Aller au bout : 11 catégories fois 5 langues égale 330 traductions"
+o4 = "O-4 Reprenable par tous : docs / tests / structure 1:1"
+o5 = "O-5 Pas de simulation : try_t retourne Err sur clé manquante, jamais de repli silencieux"
+
+[promises]
+# 8 engagements de non-modification
+no_pretense = "Pas de simulation : 5 langues entièrement traduites, zéro repli"
+hardcode = "Hardcode à la compilation : SUPPORTED_LOCALES / TOOL_WHITELIST / LOCALE_FALLBACK_CHAIN"
+locked = "24 crates LOCKED inchangés (porte stricte R17)"
+version = "Version workspace inchangée (1.0.0)"
+six_anchors = "6 ancres philosophiques traversantes (S-1, S-2, O-2, O-3, O-4, O-5)"
+no_newapi = "Pas de dépendance NewAPI (décision R17 : pas de service agent autonome)"
+no_reinvent = "Pas de réinvention (emprunter les patterns P0 et skeleton)"
+honest_mark_missing = "Marquage honnête des manques (R21 : écarts estimés deviennent TODO explicites)"
+
+[providers]
+claude_code = "Claude Code"
+gemini_cli = "Gemini CLI"
+codex = "Codex"
+opencode = "OpenCode"
+copilot = "GitHub Copilot"
+
+[sdks]
+lark = "SDK Feishu / Lark"
+voice = "SDK Vocal"
+livekit = "SDK LiveKit"
+sandbox = "SDK Sandbox"
+
+[observability]
+metrics = "Métriques"
+health = "Santé"
+status = "Statut"
+
+[auth]
+token = "Jeton"
+refresh = "Rafraîchir"
+scope = "Portée"
+expire = "Expirer"
+refresh_on_use = "Rafraîchir à l'usage"
+
+[common]
+yes = "Oui"
+no = "Non"
+ok = "OK"
+cancel = "Annuler"
+save = "Enregistrer"
+delete = "Supprimer"
+edit = "Modifier"
+add = "Ajouter"
+remove = "Retirer"
+confirm = "Confirmer"
+
+[readiness]
+# 3 niveaux d'intégration (marquage honnête TUI 9 organes, per O-5 pas de simulation)
+# ok = prêt / partial = partiel / stub = ébauche
+ok = "Prêt"
+partial = "partiel"
+stub = "ébauche"

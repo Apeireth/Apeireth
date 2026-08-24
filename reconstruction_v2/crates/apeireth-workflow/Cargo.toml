@@ -1,0 +1,23 @@
+[package]
+name = "apeireth-workflow"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-workflow — Workflow runner (Activity + Workflow + EventHistory) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["ai"]
+categories = ["ai"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = "0.12"
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

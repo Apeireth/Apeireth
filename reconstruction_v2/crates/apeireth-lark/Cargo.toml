@@ -1,0 +1,27 @@
+[package]
+name = "apeireth-lark"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-lark — Lark/Feishu SDK integration (8 tool whitelist, trait API + real HTTP impl) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["lark", "feishu"]
+categories = ["api-bindings"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+reqwest = { workspace = true }
+url = "2.5"
+
+[lints]
+workspace = true

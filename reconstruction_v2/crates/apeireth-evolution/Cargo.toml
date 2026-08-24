@@ -1,0 +1,23 @@
+[package]
+name = "apeireth-evolution"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-evolution — Evolution organ (6 state machine + fail-6 policy + 4 learning traits + Council integration + PODA cycle + Library autonomy) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["ai"]
+categories = ["ai"]
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-cognition = { path = "../apeireth-cognition" }
+apeireth-verify = { path = "../apeireth-verify" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

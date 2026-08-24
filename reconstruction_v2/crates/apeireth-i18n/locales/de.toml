@@ -1,0 +1,102 @@
+# apeireth-i18n Deutsch (de) — 1.0 release #10
+#
+# 12 Kategorien 69 Schlüssel 100% übersetzt (11 Kategorien + readiness, R21 G-1 Folge)
+# K-1 Markierung: die de-Übersetzung enthält « Pflicht 1.0 »
+
+[nav]
+status = "Status"
+session = "Sitzung"
+tools = "Werkzeuge"
+settings = "Einstellungen"
+help = "Hilfe"
+
+[tools]
+calendar = "Kalender"
+message = "Nachricht"
+contact = "Kontakt"
+task = "Aufgabe"
+search = "Suche"
+drive = "Drive"
+
+[organs]
+# 9 Organe (Vermenschlichung, KI-Zustandsüberwachung)
+heart = "Herz"
+brain = "Gehirn"
+hand = "Hand"
+eye = "Auge"
+ear = "Ohr"
+memory = "Gedächtnis"
+voice = "Stimme"
+body = "Körper"
+mind = "Verstand"
+
+[r_measure]
+r1 = "R-1 Direkte Ausführung ({{count}} Schritte, Pflicht 1.0)"
+r2 = "R-2 Direkt sagen (keine Ausflüchte)"
+r3 = "R-3 Geschlossener Kreislauf (Commit dann prüfen)"
+r4 = "R-4 Torwächter (m3-Halluzinationsabwehr)"
+r5 = "R-5 Ehrlich (Lücken markieren, niemals vortäuschen)"
+
+[philosophy]
+# 6 philosophische Anker
+s1 = "S-1 Polarstern: langfristiges KI-Wachstum, keine Simulation"
+s2 = "S-2 Tatsachenbasiert: über package.json / Cargo.lock verifizieren, nicht vortäuschen"
+o2 = "O-2 Auf den Schultern von Riesen: 5 P0 / 9 Skeleton-Crate-Muster ausleihen"
+o3 = "O-3 Zu Ende bringen: 11 Kategorien mal 5 Sprachen gleich 330 Übersetzungen"
+o4 = "O-4 Für jeden übernehmbar: Doks / Tests / Struktur 1:1"
+o5 = "O-5 Keine Vortäuschung: try_t gibt Err bei fehlendem Schlüssel zurück, kein stiller Fallback"
+
+[promises]
+# 8 Nicht-Änderungs-Versprechen
+no_pretense = "Keine Vortäuschung: 5 Sprachen vollständig übersetzt, null Fallback-Platzhalter"
+hardcode = "Compile-Zeit-Hardcode: SUPPORTED_LOCALES / TOOL_WHITELIST / LOCALE_FALLBACK_CHAIN"
+locked = "24 LOCKED-Crates unverändert (R17 strikte Schranke)"
+version = "Workspace-Version unverändert (1.0.0)"
+six_anchors = "6 philosophische Anker durchdringend (S-1, S-2, O-2, O-3, O-4, O-5)"
+no_newapi = "Keine NewAPI-Abhängigkeit (R17-Entscheidung: kein eigenständiger Agentendienst)"
+no_reinvent = "Keine Neuerfindung (P0- und Skeleton-Muster ausleihen)"
+honest_mark_missing = "Lücken ehrlich markieren (R21 geschätzte Lücken werden explizite TODOs)"
+
+[providers]
+claude_code = "Claude Code"
+gemini_cli = "Gemini CLI"
+codex = "Codex"
+opencode = "OpenCode"
+copilot = "GitHub Copilot"
+
+[sdks]
+lark = "Feishu / Lark SDK"
+voice = "Sprach-SDK"
+livekit = "LiveKit SDK"
+sandbox = "Sandbox-SDK"
+
+[observability]
+metrics = "Metriken"
+health = "Gesundheit"
+status = "Status"
+
+[auth]
+token = "Token"
+refresh = "Aktualisieren"
+scope = "Geltungsbereich"
+expire = "Ablaufen"
+refresh_on_use = "Bei Verwendung aktualisieren"
+
+[common]
+yes = "Ja"
+no = "Nein"
+ok = "OK"
+cancel = "Abbrechen"
+save = "Speichern"
+delete = "Löschen"
+edit = "Bearbeiten"
+add = "Hinzufügen"
+remove = "Entfernen"
+confirm = "Bestätigen"
+
+[readiness]
+# 3 Integrationsstufen (ehrliche Kennzeichnung TUI 9 Organe, per O-5 keine Vortäuschung)
+# ok = bereit / partial = teilweise / stub = Platzhalter
+ok = "Bereit"
+partial = "teilweise"
+stub = "Stub"

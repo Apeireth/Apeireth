@@ -1,0 +1,79 @@
+{
+  "app": {
+    "name": "Apeireth",
+    "tagline": "AGI-Betriebssystem für langfristiges KI-Wachstum",
+    "version": "Version {{version}}"
+  },
+  "nav": {
+    "home": "Startseite",
+    "tools": "Werkzeuge",
+    "history": "Verlauf",
+    "settings": "Einstellungen",
+    "organs": "Organe"
+  },
+  "tools": {
+    "web_search": "Websuche",
+    "file_ops": "Dateibearbeitung",
+    "git_ops": "Git-Operationen",
+    "code_exec": "Code-Ausführung",
+    "calendar": "Kalender",
+    "message": "Nachricht",
+    "terminal": "Terminal"
+  },
+  "error": {
+    "not_implemented": "Diese Funktion ist noch nicht implementiert",
+    "tool_not_whitelisted": "Werkzeug {{tool}} ist nicht auf der Whitelist",
+    "key_not_found": "Übersetzungsschlüssel nicht gefunden: {{key}}",
+    "locale_not_supported": "Sprache nicht unterstützt: {{locale}}",
+    "template_render": "Template-Rendering für Schlüssel {{key}} fehlgeschlagen",
+    "io": "E/A-Fehler: {{message}}",
+    "parse": "JSON-Parse-Fehler: {{message}}"
+  },
+  "health": {
+    "ok": "Dienst ist gesund",
+    "degraded": "Dienst ist beeinträchtigt",
+    "unhealthy": "Dienst ist fehlerhaft"
+  },
+  "status": {
+    "loading": "Wird geladen...",
+    "ready": "Bereit",
+    "busy": "Beschäftigt",
+    "error": "Fehler"
+  },
+  "locale": {
+    "name": {
+      "en": "Englisch",
+      "zh_cn": "Vereinfachtes Chinesisch",
+      "ja": "Japanisch",
+      "fr": "Französisch",
+      "de": "Deutsch"
+    }
+  },
+  "tauri": {
+    "window": {
+      "title": "Apeireth Desktop"
+    },
+    "menu": {
+      "file": "Datei",
+      "edit": "Bearbeiten",
+      "view": "Ansicht",
+      "help": "Hilfe"
+    }
+  },
+  "tui": {
+    "welcome": "Willkommen bei Apeireth TUI",
+    "prompt": ">",
+    "goodbye": "Auf Wiedersehen",
+    "shortcut": {
+      "quit": "Drücken Sie Strg+C zum Beenden"
+    }
+  },
+  "settings": {
+    "language": "Sprache",
+    "theme": "Thema",
+    "about": "Über"
+  },
+  "must_do": {
+    "translation_complete": "i18n ist ein Muss für die 1.0-Veröffentlichung"
+  }
+}

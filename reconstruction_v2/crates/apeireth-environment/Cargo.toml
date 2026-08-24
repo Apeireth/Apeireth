@@ -1,0 +1,25 @@
+[package]
+name = "apeireth-environment"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-environment — Environment info (system / container / singularity / path / fs) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["ai"]
+categories = ["ai"]
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

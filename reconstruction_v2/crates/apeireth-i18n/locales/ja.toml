@@ -1,0 +1,102 @@
+# apeireth-i18n 日本語 (ja) — 1.0 release #10
+#
+# 12 カテゴリ 69 keys 100% 翻訳カバー (11 カテゴリ + readiness, R21 G-1 続補)
+# K-1 字様: ja 翻訳に「必須 1.0」マーカー含む
+
+[nav]
+status = "ステータス"
+session = "セッション"
+tools = "ツール"
+settings = "設定"
+help = "ヘルプ"
+
+[tools]
+calendar = "カレンダー"
+message = "メッセージ"
+contact = "連絡先"
+task = "タスク"
+search = "検索"
+drive = "ドライブ"
+
+[organs]
+# 9 器官 (擬人化, AI 状態を監視)
+heart = "心臓"
+brain = "脳"
+hand = "手"
+eye = "目"
+ear = "耳"
+memory = "記憶"
+voice = "声"
+body = "身体"
+mind = "心"
+
+[r_measure]
+r1 = "R-1 直行 ({{count}} ステップ, 必須 1.0)"
+r2 = "R-2 直言 (回避しない)"
+r3 = "R-3 閉ループ (コミット即検証)"
+r4 = "R-4 門番 (m3 幻覚防御)"
+r5 = "R-5 誠実 (欠如を明記, 偽装しない)"
+
+[philosophy]
+# 6 哲学アンカー
+s1 = "S-1 北極星志向: 長期的 AI 成長, シミュレーションではない"
+s2 = "S-2 実事求是: package.json / Cargo.lock で検証, 偽装しない"
+o2 = "O-2 先人の肩の上に立つ: 5 P0 / 9 skeleton crate パターンを借りる"
+o3 = "O-3 やり遂げる: 11 カテゴリ × 5 言語 = 330 翻訳"
+o4 = "O-4 誰でも接手可: 文書 / テスト / 構造 1:1 整合"
+o5 = "O-5 偽装なし: try_t は欠如キーで Err 返却, 沈黙のフォールバックなし"
+
+[promises]
+# 8 項不変更コミットメント
+no_pretense = "偽装なし: 5 言語完全翻訳, フォールバックプレースホルダゼロ"
+hardcode = "コンパイル時ハードコード: SUPPORTED_LOCALES / TOOL_WHITELIST / LOCALE_FALLBACK_CHAIN"
+locked = "24 LOCKED クレート不改変 (R17 厳格ゲート)"
+version = "ワークスペースバージョン不改変 (1.0.0)"
+six_anchors = "6 哲学アンカー貫通 (S-1, S-2, O-2, O-3, O-4, O-5)"
+no_newapi = "NewAPI 非依存 (R17 決議: 独立エージェントサービスではない)"
+no_reinvent = "車輪の再発明なし (P0 / skeleton パターンを借りる)"
+honest_mark_missing = "欠如を誠実に明記 (R21 推定ギャップは明示 TODO)"
+
+[providers]
+claude_code = "Claude Code"
+gemini_cli = "Gemini CLI"
+codex = "Codex"
+opencode = "OpenCode"
+copilot = "GitHub Copilot"
+
+[sdks]
+lark = "Feishu / Lark SDK"
+voice = "音声 SDK"
+livekit = "LiveKit SDK"
+sandbox = "サンドボックス SDK"
+
+[observability]
+metrics = "メトリクス"
+health = "ヘルス"
+status = "ステータス"
+
+[auth]
+token = "トークン"
+refresh = "リフレッシュ"
+scope = "スコープ"
+expire = "有効期限"
+refresh_on_use = "使用時リフレッシュ"
+
+[common]
+yes = "はい"
+no = "いいえ"
+ok = "OK"
+cancel = "キャンセル"
+save = "保存"
+delete = "削除"
+edit = "編集"
+add = "追加"
+remove = "削除"
+confirm = "確認"
+
+[readiness]
+# 3 実接度 (TUI 9 器官 誠実明記, per O-5 偽装なし)
+# ok = 完全準備 / partial = 部分接続 / stub = スタブ
+ok = "準備完了"
+partial = "部分的"
+stub = "スタブ"

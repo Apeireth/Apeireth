@@ -1,0 +1,25 @@
+[package]
+name = "apeireth-i18n"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.85"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth"
+description = "apeireth-i18n — i18n framework (5 locales en/zh-CN/ja/fr/de, 12 类别 69 keys, compile-time hardcode) (v2 port of v1.0-legacy)"
+homepage = "https://github.com/apeireth/apeireth"
+keywords = ["i18n", "l10n", "translation"]
+categories = ["localization"]
+
+[dependencies]
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+async-trait = { workspace = true }
+
+[lints]
+workspace = true
