@@ -18,6 +18,9 @@
 #![warn(missing_docs)]
 
 // 5 module, 各自由 src/<name>.rs 实现 (R35 阶段 1: 只 5 Provider struct + 8 工具 + 3 ModelKind, R21+ 真接 SDK)
+/// The anthropic (Messages API) provider as a first-class canonical capability
+/// ([`AnthropicProviderCapability`] / [`AnthropicProviderPlugin`]).
+pub mod canonical_anthropic;
 /// Temporary bridge from the legacy `LlmProvider` contract to canonical
 /// provider capabilities. Remove after production providers implement the
 /// canonical contract directly.
