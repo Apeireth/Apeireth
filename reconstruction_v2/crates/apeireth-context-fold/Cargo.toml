@@ -1,0 +1,11 @@
+[package]
+name = "apeireth-context-fold"
+version = "2.0.0"
+edition = "2021"
+description = "Apeireth v2 R144 context folding"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+regex = "1.10"

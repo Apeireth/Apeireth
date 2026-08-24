@@ -40,6 +40,26 @@ members = [
     "crates/apeireth-life-force",
     "crates/apeireth-upgrade",
     "crates/apeireth-web",
+    "crates/apeireth-mcp",
+    "crates/apeireth-eval",
+    "crates/apeireth-api",
+    "crates/apeireth-tool-runtime",
+    "crates/apeireth-http-client",
+    "crates/apeireth-tui",
+    "crates/apeireth-llm-iface",
+    "crates/apeireth-telemetry",
+    "crates/apeireth-supervision",
+    "crates/apeireth-sandbox-net",
+    "crates/apeireth-cron",
+    "crates/apeireth-wiki",
+    "crates/apeireth-credentials",
+    "crates/apeireth-stock",
+    "crates/apeireth-cross-diary",
+    "crates/apeireth-experience",
+    "crates/apeireth-skills",
+    "crates/apeireth-knowledge",
+    "crates/apeireth-team-lead",
+    "crates/apeireth-library-governance",
 ]
 
 
@@ -101,7 +121,11 @@ rusqlite = { version = "0.32", features = ["bundled", "blob", "time", "backup"] 
 r2d2 = "0.8"
 r2d2_sqlite = "0.24"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"    "crates/apeireth-tool-search",
+    "crates/apeireth-tool-shell",
+    "crates/apeireth-tool-fetch",
+    "crates/apeireth-tool-codesearch",
+] }
 sha2 = "0.10"
 rand = "0.8"
 
@@ -114,6 +138,5 @@ apeireth-runtime = { path = "crates/apeireth-runtime" }
 apeireth-companion = { path = "crates/apeireth-companion" }
 apeireth-gateway = { path = "crates/apeireth-gateway" }
 apeireth-sdk = { path = "crates/apeireth-sdk" }
-apeireth-upgrade = { path = "crates/apeireth-upgrade" }
 apeireth-bus = { path = "crates/apeireth-bus" }
 apeireth-life-force = { path = "crates/apeireth-life-force" }
