@@ -602,6 +602,9 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
 /// Providers registered (config-driven, not a hardcoded single vendor):
 /// - `provider.minimax` (OpenAI Chat Completions) — `APEIRETH_API_*` env.
 /// - `provider.anthropic` (Anthropic Messages API) — `APEIRETH_ANTHROPIC_*` env.
+/// - `provider.openai-compatible` (generic OpenAI Chat Completions) —
+///   `APEIRETH_OPENAI_*` env. Registered only when models are configured, since
+///   the generic provider has no hardcoded model default (§21/§38).
 ///
 /// Missing credentials do not stop the runtime from booting: a provider whose
 /// key is absent is still registered, and execution against it fails explicitly
@@ -613,6 +616,7 @@ pub fn build_sample_measurement(rate: f64, n: u32) -> MeasurementSample {
 pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
     use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
+    use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
     use apeireth_provider::credentials::EnvCredentialResolver;
     use std::sync::Arc;
 
@@ -646,6 +650,22 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         .map_err(|error| format!("anthropic provider activation failed: {error}"))?;
     fallback_order.push(apeireth_core::kernel::CapabilityId::new("provider.anthropic").unwrap());
     builder = builder.with_plugin(Arc::new(anthropic));
+
+    // The generic OpenAI-compatible provider is registered only when models are
+    // configured — it has no hardcoded model default, so an unconfigured
+    // instance would reject construction (§21/§38). This keeps registration
+    // config-driven rather than unconditionally enabling every provider.
+    if std::env::var("APEIRETH_OPENAI_MODELS")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .is_some()
+    {
+        let openai = OpenAiCompatibleProviderPlugin::from_env()
+            .map_err(|error| format!("openai-compatible provider activation failed: {error}"))?;
+        fallback_order
+            .push(apeireth_core::kernel::CapabilityId::new("provider.openai-compatible").unwrap());
+        builder = builder.with_plugin(Arc::new(openai));
+    }
 
     // Deterministic fallback order (providers absent from a request's model
     // support are never consulted anyway; this only orders ties).
