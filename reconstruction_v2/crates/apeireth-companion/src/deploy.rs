@@ -26,8 +26,10 @@ impl DeployTracker {
 
     /// 0 装 PASS: 真部署
     pub fn deploy(&mut self, component: impl Into<String>, version: impl Into<String>) -> String {
-        let id = format!("d-{}-{}", component.as_ref().to_string().len(), chrono::Utc::now().timestamp_millis());
-        self.deployments.insert(id.clone(), Deployment { id: id.clone(), component: component.into(), version: version.into(), timestamp_ms: chrono::Utc::now().timestamp_millis(), status: DeployStatus::Active });
+        let component_str: String = component.into();
+        let version_str: String = version.into();
+        let id = format!("d-{}-{}", component_str.len(), chrono::Utc::now().timestamp_millis());
+        self.deployments.insert(id.clone(), Deployment { id: id.clone(), component: component_str, version: version_str, timestamp_ms: chrono::Utc::now().timestamp_millis(), status: DeployStatus::Active });
         id
     }
 

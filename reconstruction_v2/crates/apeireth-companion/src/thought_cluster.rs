@@ -11,6 +11,7 @@ pub struct ThoughtCluster {
     pub topic: String,
 }
 
+#[derive(Default)]
 pub struct ThoughtClusterManager {
     clusters: HashMap<String, ThoughtCluster>,
 }

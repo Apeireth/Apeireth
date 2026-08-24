@@ -24,8 +24,9 @@ impl HypothesisStore {
 
     /// 0 装 PASS: 真 propose
     pub fn propose(&mut self, claim: impl Into<String>) -> String {
-        let id = format!("h-{}-{}", claim.as_ref().to_string().len(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
-        self.hypotheses.insert(id.clone(), Hypothesis { id: id.clone(), claim: claim.into(), state: HypothesisState::Proposed, evidence: Vec::new() });
+        let claim_str: String = claim.into();
+        let id = format!("h-{}-{}", claim_str.len(), chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0));
+        self.hypotheses.insert(id.clone(), Hypothesis { id: id.clone(), claim: claim_str, state: HypothesisState::Proposed, evidence: Vec::new() });
         id
     }
 
