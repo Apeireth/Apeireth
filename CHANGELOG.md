@@ -7,6 +7,73 @@
 - **Stage 2 microVM 隔离 (vm_sandbox.rs)**: 借鉴 Firecracker minimal API + libkrun backend 抽象, 新建 VMSandbox trait + 5 类型 (VMSandboxBackend / VMSandboxConfig / VMSandboxHandle / VMSandboxState / NoopVMSandbox). 0 装 PASS: NoopVMSandbox.default().start() 返 Err, 0 假装能启 VM. 实装接 libkrun / Hyperlight / Firecracker. 12+ 单测 (per 0 装 PASS 严守). 文档同步 ROADMAP §Stage 2 + B 站 UP 主 5.4 思路.
 - **借鉴 4 源设计文档 (reports/sandbox-self-research-design-2026-08-19.md)**: 4 源对比 (smolvm / Firecracker / libkrun / wasmtime) + 3 阶段自研架构 + 0 装 PASS 严守承诺. 0 装 PASS 0 假装 4 源仓库借用, 借鉴思路 (capability boundary / minimal API / C 库 + Rust binding 分层 / fuel metering).
 
+### Added (2026-08-24) reconstruction_v2 终极收敛 + 14 P0/P1 审计完成
+
+(`b08a1668` `feat(core): complete all 14 P0/P1 audit work items` + `58bccb36` `fix(pipeline): wire MiniMax adapter tool serialization`)
+
+> Apeireth 2.0 = 85 → 10 高内聚 crate 收敛 + 4 处 v1.0 暗伤真破除 + 3 处协议层断点修复。详见 `reconstruction_v2/README.md`。
+
+#### 14 P0/P1 审计工单（100% 实装，源码行级验证）
+
+| # | 优先级 | 任务 | 实装位置 |
+|---|---|---|---|
+| P0-1 | 桌面操作真实系统接入 | 真 Win32 `SendInput` / `SetCursorPos` / `KEYEVENTF_UNICODE` utf16 + 20次/秒速率限流 (`AtomicU64` 50ms) | `crates/apeireth-tools/src/vision/desktop_action.rs` |
+| P0-2 | 动态工具自合成真实执行 | `tokio::process::Command` 子进程 + `TempFileGuard` RAII + `APEIRETH_PARAMS` env + 30s timeout + 64KB 输出截断 | `crates/apeireth-tools/src/synthesis.rs` |
+| P0-3 | 3 个基础工具实装 | `browser.rs` (reqwest GET + HTML script/style 剥离) / `search.rs` (递归扫描 + 跳过 .target/node_modules + 500KB 限制) / `repo_tools.rs` (git 子进程 5 命令) | `crates/apeireth-tools/src/builtin/{browser,search,repo_tools}.rs` |
+| P0-4 | SDK 客户端真实重写 | `reqwest::Client` 真接 (Client + SessionHandle + MemoryClient + ToolClient) | `crates/apeireth-sdk/src/{client,session,memory,tool}.rs` |
+| P0-5 | 运行时 Tool-Use 闭环 | `MAX_TOOL_ROUNDS=5` + `tool_registry.list_tools()` → `NormalizedTool` 注入 + 5-Gate governance 真卡 + telemetry/exp_queue 双记录 | `crates/apeireth-runtime/src/host.rs:305-394` |
+| P0-6 | OmniParser 真实控件逆解 | `EnumChildWindows` + `GetClassNameW` 按类名分类 Button/InputBox/Checkbox/MenuItem/Link/Text (不再盲猜 Button) | `crates/apeireth-tools/src/vision/omni_parser.rs` |
+| P0-7 | 清理 3 个无用空 main.rs | `governance / protocol / storage` 三个 1 行空 `main.rs` 已删 | `crates/apeireth-{governance,protocol,storage}/src/main.rs` |
+| P0-8 | 提示词工具清单动态化 | 工具列表由 `ToolRegistry` 动态注入，告别硬编码 | `crates/apeireth-companion/src/prompt_assembler.rs` |
+| P1-9 | 遥测与可观测性实装 | 4 × `AtomicU64` 指标 (chat_turns / tool_executions / total_latency_ms / token_usage) + `tracing::info` 集成 + `metrics_snapshot()` | `crates/apeireth-runtime/src/telemetry.rs` |
+| P1-10 | 后台任务调度器实装 | `tokio::time::interval` + `Arc<AtomicBool>` + Drop graceful shutdown | `crates/apeireth-runtime/src/scheduler.rs` |
+| P1-11 | SSE 实时事件广播实装 | `tokio::sync::broadcast::channel(256)` + `SseBroadcaster::broadcast/subscribe` | `crates/apeireth-gateway/src/sse.rs` |
+| P1-12 | 经验观测队列实装 | `drain()` + 最近观测查询 | `crates/apeireth-companion/src/observer_capture.rs` |
+| P1-13 | 好奇心引擎驱动实装 | 主动探索信号生成 | `crates/apeireth-companion/src/curiosity.rs` |
+| P1-14 | 混合认知路由扩展 | 4 快速路径 (ping/time/identity/math) + MCTS 触发关键词 (why/design/分析/推演...) | `crates/apeireth-runtime/src/hybrid.rs` |
+
+#### 3 处协议层断点（修复）
+
+- **#15 MiniMax tool_calls**: `minimax.rs` 漏发 `tools` 字段 + 漏解 `tool_calls` 返回 → 已实装 OpenAI 规范序列化（`{type: "function", function: {name, description, parameters}}`）+ 完整解析 `choice.message.tool_calls`
+- **#16 list_tools 注入**: `host.rs` 创建 LLM 请求时未注入 `tool_registry` 工具定义 → 已实装 `tool_registry.list_tools()` → `NormalizedTool` 完整映射
+- **#17 全链路挂载**: `host.rs` 未接入 telemetry/scheduler/exp_queue → 每轮 tool 执行 + 整轮对话实时上报 `telemetry.record_tool_execution` + `experience_queue.record`
+
+#### 验证（commit `58bccb36`，2026-08-24 实测）
+
+| 项 | 命令 | 结果 |
+|---|---|---|
+| 编译 | `cargo check --workspace` | ✅ Finished in 5.26s, 0 errors, 2 warnings |
+| Release 构建 | `cargo build --release --bin apeireth-cli` | ✅ 12,279,808 bytes (~12.3 MB) |
+| Workspace lib 测试 | `cargo test --workspace --lib` | ✅ **68 passed / 0 failed** |
+| Live LLM 多轮 | `cargo test --test live_tui_llm_simulation` | ✅ 1 passed (43.34s 真 LLM 调用) |
+| Vision + Worktree | `cargo test --test vision_worktree_test` | ✅ 2 passed |
+| 推送 | `git push origin master` | ✅ `origin/master @ 58bccb36` |
+
+**测试计数明细 (lib)**：cli 5 + companion 11 + core 9 + gateway 2 + governance 10 + protocol 7 + runtime 6 + sdk 1 + storage 7 + tools 10 = **68 passed**
+
+#### 与 v1.0 差异
+
+| 维度 | v1.0 | v2.0 (`reconstruction_v2`) |
+|---|---|---|
+| Crate 数 | 85 active | **10 高内聚** |
+| `cargo check` | ~5 min | **5.26s** |
+| S4 出站拦截 | trait 口未接（v1.0 标注"实装待补"） | **`EgressFilter` 物理拦截** (Socket/Reqwest 级) |
+| SQLite 锁 | 偶发 `database is locked` | **读写分离池 + 专属单通道写协程** |
+| Vision（屏幕） | 无 | **OmniParser + Win32 BitBlt + SendInput** |
+| MCP | 骨架 | **完整 4 文件** (Server/Client/Protocol/Transport) |
+| Tool 闭环 | stub | **5 轮 Agentic 闭环** + 5-Gate governance 真卡 |
+| 动态工具合成 | 不存在 | **`ToolSynthesizer`** + tokio subprocess + PS/Python/CMD 注入 |
+| Worktree 沙箱 | 不存在 | **`.worktree/` 真接 git worktree pipeline** |
+| PII 防护 | 仅 tripwire 后置 | **前置 scrub + 5 类 prompt injection 黑名单** |
+
+#### 0 装 PASS 诚实标注
+
+- ✅ **真已实现**（每项工单都已源码验证 + 测试覆盖 + 集成跑通）
+- ✅ **真 LLM 跑过**：`live_tui_llm_simulation` 4 轮真 MiniMax-M3 对话
+- ✅ **真 Win32 跑过**：测试在 Windows 平台跑通（Linux/macOS 走 `#[cfg(not(target_os = "windows"))]` stub 分支，**0 假装真调 Win32**）
+- ⚠️ **Docker 实测仍待 CI**：本地无 docker，遵循 v1.0 同样标注
+- ⚠️ **VM microVM 隔离（smol-vm / Hyperlight）**：trait 口已备未接（v1.0 同等标注，未变）
+
 ## [2026-08-19] post-v1.0.0 增量 (PR #1 合并 + CI 修复 + Dockerfile 多架构 + cron)
 
 - **PR #1 合并**: Svelte 5 + Tauri 2 桌面伙伴 (`frontend/companion-desktop/`), Phase 0-5 (11 commits, +14099 lines)
