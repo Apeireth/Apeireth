@@ -35,6 +35,9 @@ pub mod copilot;
 /// ([`EnvCredentialResolver`]).
 pub mod credentials;
 pub mod gemini_cli;
+/// Shared OpenAI Chat Completions protocol primitives for canonical providers
+/// that speak that wire protocol.
+pub mod openai_chat;
 pub mod opencode;
 /// Provider-local canonical-id ↔ vendor-wire-name mapping
 /// ([`ProviderModel`]).
