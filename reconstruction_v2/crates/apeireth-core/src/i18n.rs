@@ -60,7 +60,7 @@ impl Locale {
 
 /// 翻译 (0 装 PASS: 真实翻译字符串, 不 mock)
 #[derive(Debug, Clone)]
-struct Translations {
+pub struct Translations {
     data: HashMap<String, String>,  // key -> msg
 }
 
