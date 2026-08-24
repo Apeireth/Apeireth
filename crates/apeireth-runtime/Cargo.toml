@@ -52,6 +52,9 @@ tracing = "0.1"
 tempfile = "3"
 # Canonical tests advance a `VirtualClock`, whose `advance` takes a chrono Duration.
 chrono = { workspace = true }
+# Integration test wires the migrated canonical minimax provider through the
+# real runtime/router against a mock HTTP server.
+apeireth-provider = { path = "../apeireth-provider" }
 
 [[example]]
 name = "r147_full_chain"
