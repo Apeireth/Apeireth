@@ -38,6 +38,11 @@ pub mod meta_thinking;
 pub mod prompt_cache;
 pub mod constitution_gate;
 pub mod principles;
+pub mod judicator;
+pub mod packs;
+pub mod partner;
+pub mod reflexion;
+pub mod streaming_chat;
 
 pub use dream::{DreamEngine, DreamReport, EntityTriplet, DreamRehearsalResult};
 pub use epistemic::{EpistemicHealer, FailureIncident};
