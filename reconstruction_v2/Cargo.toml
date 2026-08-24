@@ -7,14 +7,39 @@ members = [
     "crates/apeireth-protocol",
     "crates/apeireth-tools",
     "crates/apeireth-runtime",
+    "crates/apeireth-sovereignty",
     "crates/apeireth-companion",
     "crates/apeireth-gateway",
     "crates/apeireth-cli",
     "crates/apeireth-sdk",
+    "crates/apeireth-asi",
     "crates/apeireth-avatar",
     "crates/apeireth-voice",
     "crates/apeireth-bridge",
+    "crates/apeireth-provider",
     "crates/apeireth-pybridge",
+    "crates/apeireth-perception",
+    "crates/apeireth-cognition",
+    "crates/apeireth-council",
+    "crates/apeireth-action",
+    "crates/apeireth-bus",
+    "crates/apeireth-guard",
+    "crates/apeireth-graph",
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-pipeline",
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-graph-primitive",
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-pipeline-g5",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-context-fold",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-skills",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-experience",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-team-lead",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-naming-v05",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-knowledge",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-library-governance",  # 目录不存在
+    # TEMP-DISABLED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): "crates/apeireth-rate-limiter",  # 目录不存在
+    "crates/apeireth-constraint",
+    "crates/apeireth-life-force",
+    "crates/apeireth-upgrade",
+    "crates/apeireth-web",
 ]
 
 
@@ -29,8 +54,33 @@ license = "Apache-2.0"
 homepage = "https://github.com/apeireth/apeireth"
 repository = "https://github.com/apeireth/apeireth"
 
+# Minimal [workspace.lints] (mirror Apeireth-rust root)
+[workspace.lints.rust]
+unused_extern_crates = 'warn'
+trivial_numeric_casts = 'warn'
+unstable_features = 'warn'
+unused_import_braces = 'warn'
+missing_docs = 'allow'
+unused_imports = 'allow'
+dead_code = 'allow'
+unused_must_use = 'allow'
+
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(kani)', 'cfg(fuzzing)']
+
+[workspace.lints.clippy]
+all = { level = 'allow', priority = -1 }
+unused_async = 'allow'
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = 'allow'
+invalid_html_tags = 'allow'
+private_intra_doc_links = 'allow'
+invalid_rust_codeblocks = 'allow'
+bare_urls = 'allow'
+
 [workspace.dependencies]
-# Serialization & Utilities
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 serde_yaml = "0.9"
@@ -39,8 +89,6 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1.0"
 anyhow = "1.0"
-
-# Async & Networking
 tokio = { version = "1.40", features = ["full"] }
 tokio-util = { version = "0.7", features = ["codec"] }
 async-trait = "0.1"
@@ -49,19 +97,14 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "str
 axum = { version = "0.7", features = ["ws", "macros"] }
 tower = { version = "0.5", features = ["util", "timeout", "limit"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
-
-# Database & Storage
 rusqlite = { version = "0.32", features = ["bundled", "blob", "time", "backup"] }
 r2d2 = "0.8"
 r2d2_sqlite = "0.24"
-
-# Telemetry & Security
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 sha2 = "0.10"
 rand = "0.8"
 
-# Internal Workspace Crates
 apeireth-core = { path = "crates/apeireth-core" }
 apeireth-governance = { path = "crates/apeireth-governance" }
 apeireth-storage = { path = "crates/apeireth-storage" }
@@ -71,3 +114,6 @@ apeireth-runtime = { path = "crates/apeireth-runtime" }
 apeireth-companion = { path = "crates/apeireth-companion" }
 apeireth-gateway = { path = "crates/apeireth-gateway" }
 apeireth-sdk = { path = "crates/apeireth-sdk" }
+apeireth-upgrade = { path = "crates/apeireth-upgrade" }
+apeireth-bus = { path = "crates/apeireth-bus" }
+apeireth-life-force = { path = "crates/apeireth-life-force" }
