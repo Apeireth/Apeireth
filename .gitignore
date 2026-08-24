@@ -73,6 +73,14 @@ frontend/design-preview/reference/
 **/cosign.key
 **/cosign.key.*
 
+# 2026-08-24 (接手 AI 补): GitHub PAT 凭据文件必须忽略 (per 7.2.1 安全告警).
+# 历史教训: GitHubtoken.txt 不在原 .gitignore 中, 已通过对话历史暴露 token.
+# 新规则: 任何形如 GitHub*.txt / *.github-token / gh-token* 都忽略.
+GitHub*.txt
+*.github-token
+gh-token*
+.github-tokens/
+
 # 台账 #28 续: Companion provider credential files (本地真实 API key, 严禁入库)
 # companion_serve 启动读取 apikey-ultra.txt (用户本地管理的 secret).
 # 规则精确: 仅忽略 apikey-ultra.txt + apikey-*.txt (连字符变体),

@@ -20,6 +20,9 @@ pub struct VisemeFrame {
 }
 
 pub struct LipSyncCalculator {
+    /// Audio sample rate (Hz). Reserved for actual phoneme-frame conversion
+    /// when real audio frames are fed in (current stub uses synthetic timing).
+    #[allow(dead_code)]
     sample_rate: u32,
     silence_threshold: f32,
 }
