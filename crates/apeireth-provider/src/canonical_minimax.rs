@@ -45,12 +45,13 @@ use apeireth_plugin::{
     PluginResult, ProviderCapability, ProviderError, Secret,
 };
 use apeireth_protocol::canonical::{
-    ContentPart, MessageRole, ModelDescriptor, ModelFeature, NormalizedFinishReason,
-    NormalizedRequest, NormalizedResponse, NormalizedUsage,
+    ModelDescriptor, ModelFeature, NormalizedFinishReason, NormalizedRequest, NormalizedResponse,
+    NormalizedUsage,
 };
 use async_trait::async_trait;
 
 use crate::credentials::MINIMAX_API_KEY;
+use crate::openai_chat;
 use crate::provider_model::{find_model, ProviderModel};
 
 /// Stable capability identity for the minimax provider.
@@ -140,22 +141,14 @@ impl MinimaxProviderCapability {
 
     /// Translate a canonical request into the OpenAI Chat Completions JSON body.
     ///
-    /// Text content of each message is joined; image/tool parts are not
-    /// transported by this provider (the legacy bridge rejected them too — this
-    /// is a faithful port, not a regression). Tools and tool results are
-    /// surfaced as a permanent `BadResponse` so a caller can see the provider
-    /// cannot transport them, rather than silently dropping them.
+    /// Delegates to the shared [`openai_chat`] protocol helper; this provider
+    /// only supplies the vendor-resolved wire model name and its own id for
+    /// error attribution. Tools/images/tool-results surface as a permanent
+    /// `BadResponse` (fail-closed) rather than being silently dropped.
     fn adapt_request(
         &self,
         request: &NormalizedRequest,
     ) -> Result<serde_json::Value, ProviderError> {
-        if !request.tools.is_empty() {
-            return Err(ProviderError::BadResponse {
-                provider: self.id.to_string(),
-                detail: "minimax canonical provider does not transport tool declarations".into(),
-            });
-        }
-
         // Map the canonical requested model to the vendor wire name. The
         // runtime routes on canonical ids; the vendor expects its own spelling.
         // Failing to resolve is a request error, not a guess.
@@ -165,153 +158,23 @@ impl MinimaxProviderCapability {
                 provider: self.id.to_string(),
                 detail: format!("model {} is not served by {}", request.model, self.id),
             })?;
-
-        let mut messages = Vec::with_capacity(request.messages.len());
-        for message in &request.messages {
-            if !message.tool_calls.is_empty() || message.role == MessageRole::Tool {
-                return Err(ProviderError::BadResponse {
-                    provider: self.id.to_string(),
-                    detail: "minimax canonical provider does not transport tool calls/results"
-                        .into(),
-                });
-            }
-            if message
-                .content
-                .iter()
-                .any(|part| matches!(part, ContentPart::ImageUrl { .. }))
-            {
-                return Err(ProviderError::BadResponse {
-                    provider: self.id.to_string(),
-                    detail: "minimax canonical provider only supports text content".into(),
-                });
-            }
-
-            let role = match message.role {
-                MessageRole::System => "system",
-                MessageRole::User => "user",
-                MessageRole::Assistant => "assistant",
-                MessageRole::Tool => unreachable!("tool messages rejected above"),
-            };
-            messages.push(serde_json::json!({
-                "role": role,
-                "content": ContentPart::join_text(&message.content),
-            }));
-        }
-
-        let mut body = serde_json::json!({
-            "model": wire_model,
-            "messages": messages,
-            "stream": false,
-        });
-        if let Some(temperature) = request.temperature {
-            body["temperature"] = serde_json::json!(temperature.clamp(0.0, 2.0));
-        }
-        if let Some(max_tokens) = request.max_tokens {
-            body["max_tokens"] = serde_json::json!(max_tokens.min(32_768));
-        }
-        if !request.stop.is_empty() {
-            body["stop"] = serde_json::json!(request.stop);
-        }
-        Ok(body)
+        openai_chat::build_request_body(request, &wire_model, self.id.as_str())
     }
 
     /// Classify a vendor HTTP outcome into a canonical [`ProviderError`].
-    ///
-    /// Mirrors the classification the legacy `ApeirethApiProvider` already
-    /// performed, ported to the canonical error enum. Transport failures are
-    /// transient; auth and policy failures are permanent.
+    /// Delegates to the shared [`openai_chat`] status classifier.
     fn classify_status(&self, status: reqwest::StatusCode, body_text: String) -> ProviderError {
-        let provider = self.id.to_string();
-        match status.as_u16() {
-            401 | 403 => ProviderError::AuthFailed {
-                provider,
-                detail: format!("vendor returned {status}: {body_text}"),
-            },
-            429 => {
-                let retry_after_ms = parse_retry_after_ms(&body_text).unwrap_or(1_000);
-                ProviderError::RateLimited {
-                    provider,
-                    retry_after_ms,
-                }
-            }
-            408 | 504 => ProviderError::Timeout {
-                provider,
-                timeout_ms: self.timeout_ms,
-            },
-            _ if status.is_server_error() => ProviderError::Refused {
-                provider,
-                detail: format!("vendor returned {status}: {body_text}"),
-            },
-            _ => ProviderError::BadResponse {
-                provider,
-                detail: format!("vendor returned {status}: {body_text}"),
-            },
-        }
+        openai_chat::classify_status(status, body_text, self.id.as_str(), self.timeout_ms)
     }
 
     /// Parse an OpenAI Chat Completions response into a canonical response.
+    /// Delegates to the shared [`openai_chat`] response parser.
     fn adapt_response(
         &self,
         body: serde_json::Value,
         request_model: &str,
     ) -> Result<NormalizedResponse, ProviderError> {
-        let provider = self.id.to_string();
-
-        let choices = body
-            .get("choices")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| ProviderError::BadResponse {
-                provider: provider.clone(),
-                detail: "response has no choices array".into(),
-            })?;
-        let choice = choices.first().ok_or_else(|| ProviderError::BadResponse {
-            provider: provider.clone(),
-            detail: "response choices array is empty".into(),
-        })?;
-
-        let content = choice
-            .get("message")
-            .and_then(|m| m.get("content"))
-            .and_then(|c| c.as_str())
-            .unwrap_or("")
-            .to_string();
-        let finish_reason = choice
-            .get("finish_reason")
-            .and_then(|f| f.as_str())
-            .unwrap_or("stop");
-
-        let usage = body
-            .get("usage")
-            .map(|u| NormalizedUsage {
-                prompt_tokens: u.get("prompt_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-                completion_tokens: u
-                    .get("completion_tokens")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32,
-                total_tokens: u.get("total_tokens").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
-            })
-            .unwrap_or_default();
-
-        let model = body
-            .get("model")
-            .and_then(|m| m.as_str())
-            .filter(|s| !s.is_empty())
-            .unwrap_or(request_model)
-            .to_string();
-
-        Ok(NormalizedResponse {
-            id: body
-                .get("id")
-                .and_then(|i| i.as_str())
-                .map(str::to_string)
-                .unwrap_or_else(|| format!("minimax-{}", self.id)),
-            model,
-            content,
-            finish_reason: Some(NormalizedFinishReason::from_openai(finish_reason)),
-            usage,
-            tool_calls: Vec::new(),
-            raw_metadata: serde_json::Map::new(),
-        })
+        openai_chat::parse_response(body, request_model, self.id.as_str())
     }
 }
 
@@ -342,7 +205,7 @@ impl ProviderCapability for MinimaxProviderCapability {
         // One HTTP attempt. The router, not this provider, owns fallback.
         let key = self.resolve_key()?;
         let body = self.adapt_request(request)?;
-        let url = format!("{}/chat/completions", self.base_url.trim_end_matches('/'));
+        let url = openai_chat::join_endpoint(&self.base_url, "chat/completions");
 
         let send_result = self
             .http
@@ -583,16 +446,6 @@ fn build_models(id: &CapabilityId, model_ids: Vec<String>) -> PluginResult<Vec<P
     Ok(models)
 }
 
-/// Parse the vendor's `Retry-After` hint into milliseconds.
-///
-/// `retry-after` arrives as a header in real responses; for unit-testability of
-/// the classification (which receives the body text) this helper also accepts a
-/// plain seconds integer. Returns `None` when no hint is present.
-fn parse_retry_after_ms(text: &str) -> Option<u64> {
-    let trimmed = text.trim();
-    trimmed.parse::<u64>().ok().map(|secs| secs * 1_000)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -800,8 +653,8 @@ mod tests {
 
     #[test]
     fn parse_retry_after_accepts_seconds() {
-        assert_eq!(parse_retry_after_ms("2"), Some(2_000));
-        assert_eq!(parse_retry_after_ms("not-a-number"), None);
+        assert_eq!(openai_chat::parse_retry_after_ms("2"), Some(2_000));
+        assert_eq!(openai_chat::parse_retry_after_ms("not-a-number"), None);
     }
 
     #[test]
