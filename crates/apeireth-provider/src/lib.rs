@@ -28,6 +28,9 @@ pub mod canonical_bridge;
 /// The minimax provider as a first-class canonical capability
 /// ([`MinimaxProviderCapability`] / [`MinimaxProviderPlugin`]).
 pub mod canonical_minimax;
+/// The generic OpenAI-compatible provider as a first-class canonical capability
+/// ([`OpenAiCompatibleProviderCapability`] / [`OpenAiCompatibleProviderPlugin`]).
+pub mod canonical_openai_compatible;
 pub mod claude_code;
 pub mod codex;
 pub mod copilot;
