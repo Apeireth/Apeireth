@@ -2,7 +2,10 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{
+    ALIAS_NOT_FOUND_PLACEHOLDER_PREFIX_CONST, AGENT_EVENT_VARIANT_COUNT, AGENT_FIELD_COUNT,
+    BORROWED_LEGACY_FIELDS, DEFAULT_CACHE_SIZE_CONST,
+};
 
 #[test]
 fn r177_agt_01_borrowed_legacy_fields() {

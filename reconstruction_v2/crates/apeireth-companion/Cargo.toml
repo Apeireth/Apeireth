@@ -17,3 +17,6 @@ chrono = { version = "0.4", features = ["serde"] }
 apeireth-core = { path = "../apeireth-core" }
 apeireth-sdk = { path = "../apeireth-sdk" }
 
+[dev-dependencies]
+tempfile = "3"
+

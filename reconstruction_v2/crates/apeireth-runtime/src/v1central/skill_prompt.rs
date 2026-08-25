@@ -191,7 +191,7 @@ impl SkillPromptCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::skill_trait::{BrainstormingSkill, TestDrivenDevelopmentSkill};
+    use crate::v1central::skill_trait::{BrainstormingSkill, TestDrivenDevelopmentSkill};
 
     #[test]
     fn prompt_contains_extremely_important_marker() {
@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn count_tdd_red_steps_for_meta_skill_is_zero() {
-        let skill = crate::skill_trait::UsingSuperpowersSkill;
+        let skill = crate::v1central::skill_trait::UsingSuperpowersSkill;
         assert_eq!(count_tdd_red_steps(&skill), 0);
     }
 

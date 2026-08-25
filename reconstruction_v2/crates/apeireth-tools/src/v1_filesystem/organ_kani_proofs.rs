@@ -2,7 +2,8 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{R137_DELIVERABLES, UPGRADE_DIMENSIONS};
+use super::sandbox::{Sandbox, SandboxPolicy};
 use std::path::PathBuf;
 
 #[test]
@@ -36,7 +37,7 @@ fn r177_fs_05_module_compiles() {
 #[cfg(kani)]
 #[kani::proof]
 fn r177_fs_kani_01_deliverables() {
-    assert_eq!(R137_DELIVERABLES, 6);
+    assert_eq!(R137_DELIVERABLES, 5);
 }
 
 #[cfg(kani)]

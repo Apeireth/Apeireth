@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 #[tokio::test]
+#[ignore = "network e2e: real HTTP requests to bilibili.com / api.bilibili.com"]
 async fn test_proxy_and_direct_fetch() {
     let urls = ["https://www.bilibili.com", "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=live2d"];
 

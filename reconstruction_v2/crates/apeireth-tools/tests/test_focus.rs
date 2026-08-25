@@ -71,6 +71,7 @@ unsafe fn focus_edge_window() -> bool {
 }
 
 #[test]
+#[ignore = "invasive e2e: takes over desktop focus"]
 fn test_focus_edge() {
     unsafe {
         let res = focus_edge_window();

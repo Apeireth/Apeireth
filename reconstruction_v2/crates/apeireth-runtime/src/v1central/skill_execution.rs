@@ -308,7 +308,7 @@ impl SkillExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::skill_trait::{
+    use crate::v1central::skill_trait::{
         BrainstormingSkill, TestDrivenDevelopmentSkill, UsingSuperpowersSkill,
     };
 

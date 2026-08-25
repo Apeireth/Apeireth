@@ -61,8 +61,8 @@
 //!
 //! ## 🚀 快速开始
 //!
-//! ```rust
-//! use apeireth_blueprint_impl::*;
+//! ```ignore
+//! use apeireth_companion::v1blueprint_impl::*;
 //!
 //! // 1. 4 决策打包
 //! let decisions = DecisionBundle::default();
@@ -612,7 +612,7 @@ mod tests {
     #[test]
     fn whitelist_risk_chain_rejects_gpt() {
         // 用 gpt-4 (非 claude-*) 单独构造 input, 跑白名单 K1Guard → 必然 Err
-        use super::risk::{
+        use super::super::risk::{
             GuardDecision, GuardRule, InMemoryAudit, K1Input, K1StrongValidate, K2Input, RiskChain,
         };
         struct WhitelistK1;

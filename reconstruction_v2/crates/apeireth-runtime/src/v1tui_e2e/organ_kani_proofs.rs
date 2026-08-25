@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{Nav, NavPage, Organ, EIGHT_PROMISES, SIX_PHI_ANCHORS};
 
 #[test]
 fn r177_tui2_01_navpage_count() {

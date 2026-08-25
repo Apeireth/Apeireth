@@ -2,7 +2,9 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{R141_DELIVERABLES, PROVIDER_COUNT};
+use super::params::ImageSize;
+use super::provider::ProviderKind;
 
 #[test]
 fn r177_ig_01_r141_deliverables() {

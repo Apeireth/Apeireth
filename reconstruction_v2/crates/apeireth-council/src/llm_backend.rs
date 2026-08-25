@@ -95,15 +95,16 @@ mod tests {
 
     #[test]
     fn test_llm_backend_with_scripted() {
+        // ScriptedLlmProvider matches by exact user-message key (per llm_judge impl).
+        // Use the full prompt as the script key so the lookup hits.
         let llm = Arc::new(
             ScriptedLlmProvider::new("test-llm")
-                .with_script("hello", ScriptedResponse::new("hi from LLM")),
+                .with_script("hello world", ScriptedResponse::new("hi from LLM")),
         );
         let backend = LlmAdvisorBackend::new(llm);
 
         // 同步调用 (MockLlmProvider trait)
         let resp = backend.generate("hello world", "you are a test");
-        // ScriptedLlmProvider 匹配 "hello" 关键字
         assert_eq!(resp.text, "hi from LLM");
         assert!(!resp.triggers_hold);
         assert!((resp.confidence - 0.9).abs() < 0.01);
@@ -111,10 +112,15 @@ mod tests {
 
     #[test]
     fn test_llm_backend_default_response() {
-        let llm = Arc::new(ScriptedLlmProvider::new("test-llm"));
+        // ScriptedLlmProvider requires an exact user-message key to match; missing key
+        // would error. Use with_default() so unmatched prompts return scripted content.
+        let llm = Arc::new(
+            ScriptedLlmProvider::new("test-llm")
+                .with_default(ScriptedResponse::new("默认响应 (v2 default)")),
+        );
         let backend = LlmAdvisorBackend::new(llm);
         let resp = backend.generate("nothing matches", "system");
-        // 没匹配任何脚本, 返回默认 (ok 构造)
+        // default 路径触达
         assert!(resp.text.contains("默认响应"));
     }
 }

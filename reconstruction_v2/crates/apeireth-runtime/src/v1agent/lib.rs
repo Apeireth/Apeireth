@@ -146,7 +146,7 @@ const _: () = {
 #[cfg(test)]
 mod lib_tests {
     use super::*;
-    use super::agent::Agent;
+    use crate::v1agent::agent::Agent;
     use apeireth_tool_registry::{MockSyncTool, ToolRegistry};
     use std::sync::Arc;
 

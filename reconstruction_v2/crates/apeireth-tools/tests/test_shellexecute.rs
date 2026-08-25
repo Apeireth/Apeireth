@@ -4,6 +4,7 @@ use winapi::um::shellapi::ShellExecuteW;
 use winapi::um::winuser::SW_SHOWNORMAL;
 
 #[test]
+#[ignore = "invasive e2e: ShellExecuteW opens live2d bilibili URL in real Edge"]
 fn test_shell_execute_url() {
     #[cfg(target_os = "windows")]
     unsafe {
