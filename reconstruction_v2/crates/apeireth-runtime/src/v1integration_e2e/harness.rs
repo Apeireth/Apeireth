@@ -501,7 +501,7 @@ impl IntegrationHarness {
                         Constraint::Min(5),    // content
                         Constraint::Length(3), // status
                     ])
-                    .split(f.area());
+                    .split(f.size());
                 // top: 5 nav (英文 label)
                 let nav_text: String = NavPageMirror::ALL
                     .iter()
@@ -563,7 +563,7 @@ impl IntegrationHarness {
         let mut cells = String::with_capacity((area.width as usize) * (area.height as usize));
         for y in 0..area.height {
             for x in 0..area.width {
-                let cell = &buf[(x, y)];
+                let cell = &buf.get(x, y);
                 let sym = cell.symbol();
                 if sym.is_empty() {
                     cells.push(' ');

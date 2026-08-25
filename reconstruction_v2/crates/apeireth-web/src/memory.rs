@@ -114,19 +114,22 @@ pub struct WebMemoryStore {
 impl WebMemoryStore {
     pub fn new() -> Self {
         Self {
-            episodes: InMemoryEpisodeStore::new(),
+            episodes: InMemoryEpisodeStore::new(1024),
             identities: InMemoryIdentityCardStore::new(),
         }
     }
 
     /// Query episode (跟 v1 SqliteMemoryStore.query 同款).
+    /// v2 EpisodeStore.query 返回 Vec<&Episode>; 这里 .cloned() 转 Vec<Episode>.
     pub fn query(&self, q: &EpisodeQuery) -> Vec<Episode> {
-        self.episodes.query(q)
+        self.episodes.query(q).into_iter().cloned().collect()
     }
 
-    /// Append episode.
+    /// Append episode (兼容 v1 SqliteMemoryStore.put_episode 签名).
+    /// v2 EpisodeStore 没有 put_episode, 用 append 代替 (append 返回 (), 这里包成 Ok(())).
     pub fn put_episode(&mut self, ep: &Episode) -> Result<(), String> {
-        self.episodes.put_episode(ep)
+        self.episodes.append(ep.clone());
+        Ok(())
     }
 
     /// IdentityCard get / list / exists (wrapper).

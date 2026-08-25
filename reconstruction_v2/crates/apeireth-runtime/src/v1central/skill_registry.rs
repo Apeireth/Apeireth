@@ -255,11 +255,11 @@ impl SkillRegistry {
         &self,
         id: SkillId,
         tool_mapping: &str,
-    ) -> Result<crate::skill_prompt::SkillPrompt, SkillLookupError> {
+    ) -> Result<super::skill_prompt::SkillPrompt, SkillLookupError> {
         let skill = self.get(id).ok_or_else(|| SkillLookupError::UnknownSkill {
             name: id.kebab_name().to_string(),
         })?;
-        Ok(crate::skill_prompt::SkillPrompt::render(
+        Ok(super::skill_prompt::SkillPrompt::render(
             skill.as_ref(),
             tool_mapping,
         ))
@@ -271,11 +271,11 @@ impl SkillRegistry {
     pub fn validate(
         &self,
         id: SkillId,
-    ) -> Result<crate::skill_validation::SkillValidationReport, SkillLookupError> {
+    ) -> Result<super::skill_validation::SkillValidationReport, SkillLookupError> {
         let skill = self.get(id).ok_or_else(|| SkillLookupError::UnknownSkill {
             name: id.kebab_name().to_string(),
         })?;
-        Ok(crate::skill_validation::validate_skill(skill.as_ref()))
+        Ok(super::skill_validation::validate_skill(skill.as_ref()))
     }
 
     /// 启动 1 个 skill execution 在 R125-18 的 SkillExecutor (R125-18 升级整合, 0 重写).
@@ -287,9 +287,9 @@ impl SkillRegistry {
     pub fn start_execution(
         &self,
         id: SkillId,
-        executor: &mut crate::skill_execution::SkillExecutor,
+        executor: &mut super::skill_execution::SkillExecutor,
         at_unix_ms: u64,
-    ) -> Result<crate::skill_execution::InvocationId, SkillLookupError> {
+    ) -> Result<super::skill_execution::InvocationId, SkillLookupError> {
         if !self.contains(id) {
             return Err(SkillLookupError::UnknownSkill {
                 name: id.kebab_name().to_string(),
@@ -304,13 +304,13 @@ impl SkillRegistry {
     pub fn list_with_companions(
         &self,
         id: SkillId,
-    ) -> Result<&'static [crate::skill_companion::SkillCompanion], SkillLookupError> {
+    ) -> Result<&'static [super::skill_companion::SkillCompanion], SkillLookupError> {
         if !self.contains(id) {
             return Err(SkillLookupError::UnknownSkill {
                 name: id.kebab_name().to_string(),
             });
         }
-        Ok(crate::skill_companion::companions_for_skill(id))
+        Ok(super::skill_companion::companions_for_skill(id))
     }
 
     // ============================================================

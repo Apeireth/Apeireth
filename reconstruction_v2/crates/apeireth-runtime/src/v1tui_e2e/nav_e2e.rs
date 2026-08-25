@@ -28,7 +28,7 @@
 
 use super::error::TuiE2EResult;
 use super::harness::TuiHarness;
-use crate::NavPage;
+use super::lib::NavPage;
 use crossterm::event::KeyCode;
 
 /// 0 Status nav — 应渲染 5 大 health 组件 (CPU / mem / 5 self / cycle / tok)
@@ -68,7 +68,7 @@ pub async fn test_nav_session_lists_sessions() -> TuiE2EResult<()> {
 /// e2e 验证这个 6 工具在 Nav enum Tools 路径下可达
 pub async fn test_nav_tools_shows_6_tools() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
-    h.app.sub_nav = crate::Nav::Tools;
+    h.app.sub_nav = super::lib::Nav::Tools;
     // 6 工具 (跟 tui nav::tools 镜像, 简化版)
     let six_tools = ["calendar", "message", "contact", "task", "search", "drive"];
     for tool in &six_tools {
@@ -86,7 +86,7 @@ pub async fn test_nav_tools_shows_6_tools() -> TuiE2EResult<()> {
 /// 3 Settings nav — 应显示 5 Provider (per R19 5 provider + 4 SDK 估补)
 pub async fn test_nav_settings_shows_5_providers() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
-    h.app.sub_nav = crate::Nav::Settings; // 切到副 nav Settings, 显 5 Provider
+    h.app.sub_nav = super::lib::Nav::Settings; // 切到副 nav Settings, 显 5 Provider
     h.render_4_panel()?;
     let snap = h.snapshot();
     // 5 Provider (claude-code / gemini-cli / codex / copilot / opencode)
@@ -104,10 +104,10 @@ pub async fn test_nav_settings_shows_5_providers() -> TuiE2EResult<()> {
 /// 4 Help nav — 应显示 8 哲学锚 (per 派活单明确要求 8 anchor)
 pub async fn test_nav_help_shows_6_philosophy_anchors() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
-    h.app.sub_nav = crate::Nav::Help;
+    h.app.sub_nav = super::lib::Nav::Help;
     h.render_4_panel()?;
     let snap = h.snapshot();
-    for (id, _, _) in crate::SIX_PHI_ANCHORS.iter() {
+    for (id, _, _) in super::lib::SIX_PHI_ANCHORS.iter() {
         assert!(snap.contains(id), "Help nav 应渲染哲学锚 {id}");
     }
     Ok(())

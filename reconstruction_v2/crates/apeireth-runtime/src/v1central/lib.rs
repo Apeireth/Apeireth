@@ -48,7 +48,33 @@
 
 #![deny(unsafe_code)]
 
-pub use apeireth_core::LifeStage;
+// `LifeStage` is defined locally as a v1-era stub because `apeireth_core` does not
+/// currently export it (the canonical 9-stage lifecycle lives here for backward compatibility).
+#[allow(non_camel_case_types)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub enum LifeStage {
+    /// 孕育 (Gestation)
+    Gestation = 0,
+    /// 诞生 (Birth)
+    Birth = 1,
+    /// 幼儿 (Infancy)
+    Infancy = 2,
+    /// 成长 (Growth)
+    Growth = 3,
+    /// 成熟 (Maturity)
+    Maturity = 4,
+    /// 复制 (Reproduction)
+    Reproduction = 5,
+    /// 衰老 (Decline)
+    Decline = 6,
+    /// 死亡 (Death)
+    Death = 7,
+    /// 迁移 (Migration)
+    Migration = 8,
+    /// 重生 (Rebirth)
+    Rebirth = 9,
+}
+
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fmt;

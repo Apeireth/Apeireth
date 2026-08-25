@@ -124,7 +124,7 @@ impl SkillValidationReport {
 /// 3. `steps` 数 >= `MIN_STEP_COUNT`
 /// 4. TDD skill 必含至少 1 个 `is_tdd_red` step
 /// 5. 每个 step `description` 必填非空
-pub fn validate_skill(skill: &dyn crate::skill_trait::Skill) -> SkillValidationReport {
+pub fn validate_skill(skill: &dyn super::skill_trait::Skill) -> SkillValidationReport {
     let mut errors = Vec::new();
 
     // 1. name
@@ -169,7 +169,7 @@ pub fn validate_skill(skill: &dyn crate::skill_trait::Skill) -> SkillValidationR
 
 /// 批量验证: 跑过 1 个 `SkillRegistry` 全部 14 skill, 返回 14 reports.
 pub fn validate_registry(
-    registry: &crate::skill_registry::SkillRegistry,
+    registry: &super::skill_registry::SkillRegistry,
 ) -> Vec<SkillValidationReport> {
     registry
         .all()

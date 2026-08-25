@@ -62,7 +62,7 @@ impl TuiTestBackend {
 
     /// 24×80 默认 (跟 `DEFAULT_WIDTH` / `DEFAULT_HEIGHT` 一致)
     pub fn default_24x80() -> TuiE2EResult<Self> {
-        Self::new(crate::DEFAULT_WIDTH, crate::DEFAULT_HEIGHT)
+        Self::new(super::lib::DEFAULT_WIDTH, super::lib::DEFAULT_HEIGHT)
     }
 
     /// 120×40 宽屏
@@ -85,7 +85,7 @@ impl TuiTestBackend {
         for y in 0..area.height {
             let mut prev_was_cjk = false;
             for x in 0..area.width {
-                let cell = &buf[(x, y)];
+                let cell = &buf.get(x, y);
                 let sym = cell.symbol();
                 if prev_was_cjk && sym == " " {
                     prev_was_cjk = false;
@@ -161,7 +161,7 @@ impl TuiTestBackend {
                 context: "assert_color".into(),
             });
         }
-        let cell = &buf[(x, y)];
+        let cell = &buf.get(x, y);
         if let Some(want_fg) = fg {
             if cell.fg != want_fg {
                 return Err(TuiE2EError::BufferAssert {
@@ -276,7 +276,7 @@ mod tests {
         // 调试: 看 row0 前 20 cell 的 (symbol, width)
         let buf = h.buffer();
         for x in 0..20 {
-            let cell = &buf[(x, 0)];
+            let cell = &buf.get(x, 0);
             eprintln!(
                 "DEBUG cell[{x}]: symbol={:?} width={}",
                 cell.symbol(),

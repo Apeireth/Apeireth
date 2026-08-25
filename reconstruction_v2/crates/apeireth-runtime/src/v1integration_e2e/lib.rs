@@ -250,19 +250,21 @@ pub use super::report::{
 
 /// Prelude — 集成测试 / example 用, `use apeireth_integration_e2e::prelude::*;`
 pub mod prelude {
-    pub use super::api_e2e::*;
-    pub use super::error::{E2EError, E2EResult};
-    pub use super::harness::{
+    // `prelude` is a sub-module of `lib`, so `super` here is `lib`. To reach sibling
+    // modules declared in `mod.rs` (i.e. children of `v1integration_e2e`), walk up one more level.
+    pub use super::super::api_e2e::*;
+    pub use super::super::error::{E2EError, E2EResult};
+    pub use super::super::harness::{
         IntegrationHarness, ModeMirror, NavPageMirror, OrganMirror, OrganMirrorState, TuiAppMirror,
         TuiTestBackend, DEFAULT_HEIGHT, DEFAULT_WIDTH, EIGHT_PROMISES, FIVE_NAV, NINE_ORGANS,
         SIX_PHI_ANCHORS, V2_ENDPOINT_GROUPS,
     };
-    pub use super::report::{
+    pub use super::super::report::{
         assert_all_passed, format_human_readable, format_json, generate_report, E2eLayer,
         E2eLayerReport, E2eReport, TestResult,
     };
-    pub use super::tui_e2e::*;
-    pub use super::workspace_e2e::*;
+    pub use super::super::tui_e2e::*;
+    pub use super::super::workspace_e2e::*;
 }
 
 // ============================================================================

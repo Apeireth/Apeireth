@@ -62,6 +62,9 @@ use apeireth_web::asi::{asi_calibrate_handler, asi_calibration_handler, asi_page
 #[cfg(feature = "ssr")]
 use apeireth_web::api_endpoints::dashboard_handler;
 
+#[cfg(feature = "ssr")]
+use std::collections::HashMap;
+
 // ============================================================
 // Main
 // ============================================================
@@ -371,8 +374,10 @@ fn save_council_to_memory(
         role: "council".to_string(),
         content,
         session_id: "council-history".to_string(),
+        metadata: HashMap::new(),
     };
-    web.episodes.put_episode(&ep).map_err(|e| format!("put_episode: {e}"))?;
+    // v2 EpisodeStore 没有 put_episode, 用 append(e: Episode). append 返回 (), 不需要 map_err.
+    web.episodes.append(ep);
 
     eprintln!(
         "💾 Council 辩论已存 memory: id={}, verdict={}, protocol={}",

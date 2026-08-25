@@ -85,10 +85,14 @@ pub use super::harness::TuiHarness;
 
 /// Prelude — 集成测试 / example 用, 一次性导入所有公开 API
 pub mod prelude {
-    pub use super::backend::{BufferSnapshot, TuiTestBackend};
-    pub use super::error::{TuiE2EError, TuiE2EResult};
-    pub use super::harness::TuiHarness;
-    pub use crate::{
+    // `prelude` is a sub-module of `lib`, so `super` here is `lib`. To reach sibling
+    // modules declared in `mod.rs` (i.e. children of `v1tui_e2e`), we walk up one more level.
+    pub use super::super::backend::{BufferSnapshot, TuiTestBackend};
+    pub use super::super::error::{TuiE2EError, TuiE2EResult};
+    pub use super::super::harness::TuiHarness;
+    // Items in this lib submodule are re-exported as `super::*` since `use crate::*` would
+    // resolve to the actual crate root (`apeireth_runtime::*`), where these types do not live.
+    pub use super::{
         ChatMessage, Language, Mode, Nav, NavPage, Organ, Theme, TuiApp, DEFAULT_HEIGHT,
         DEFAULT_WIDTH, EIGHT_PROMISES, EIGHT_PROMISES as PROMISES, FIVE_R_MEASURES, PANEL_HEIGHTS,
         R_MEASURE_COUNT, SIX_PHI_ANCHORS,
