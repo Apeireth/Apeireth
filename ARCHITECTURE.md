@@ -218,8 +218,20 @@ chains live in their own crates and become `GovernanceHook` implementations.
 
 **Must not depend on.** Gateway, runtime, plugin, provider, companion, governance.
 
-M1A scope: `SqliteConnectionPool`, `SqliteConfig`, versioned migrations (`PRAGMA user_version`), and `StorageError`. Memory, vector, graph, and session persistence are later migration items; `InMemorySessionStore` remains the
+M1A scope: `SqliteConnectionPool`, `SqliteConfig`, versioned migrations (`PRAGMA user_version`), and `StorageError`. Vector, graph, and session persistence are later migration items; `InMemorySessionStore` remains the
 runtime session seam until the storage backend is connected.
+
+### `apeireth-memory` — durable memory domain
+
+**Owns.** The canonical memory entity, the memory repository contract, memory-level errors, and the SQLite-backed repository implementation. M1B1 created the
+canonical surface under `apeireth_memory::canonical`: `MemoryId`, `MemoryItem`,
+`MemoryRepository`, `MemoryFilter`, `MemoryError`, and `SqliteMemoryRepository`.
+
+**May depend on.** `apeireth-core`, `apeireth-storage`, `serde`, `thiserror`, `async-trait`.
+
+**Must not depend on.** Runtime, gateway, CLI, provider, companion, plugin, governance.
+
+**Is not.** Retrieval/ranking intelligence, vector search, graph traversal, or a product memory feature. Those are later migration items layered on top of this crate, not collapsed into it.
 
 ### `apeireth-companion` — cognition
 
@@ -276,7 +288,8 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Execution trace | `apeireth-runtime::canonical::trace` |
 | Composition root | `apeireth-runtime::canonical::runtime` |
 | Policy decision | `apeireth-governance` |
-| Durable storage | `apeireth-storage` *(foundation created; memory/vector/graph/session persistence deferred)* |
+| Durable storage | `apeireth-storage` *(SQLite pool, writer, migrations)* |
+| Durable memory domain | `apeireth-memory::canonical` *(M1B1: entity + repository + SQLite backend)* |
 | HTTP transport | `apps/gateway` |
 | Companion cognition | `apeireth-companion` |
 | Credential storage backend | `apeireth-credentials`, behind `plugin::CredentialResolver` |
