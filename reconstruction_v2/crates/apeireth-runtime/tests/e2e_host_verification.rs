@@ -2,6 +2,7 @@ use std::sync::Arc;
 use apeireth_runtime::UnifiedRuntimeHost;
 
 #[tokio::test]
+#[ignore = "live e2e: reads real apikey-ultra.txt + makes real LLM API calls + creates real SQLite DB"]
 async fn test_unified_runtime_host_multiturn_living_chain() {
     let key_path = r"C:\Users\31683\apikey-ultra.txt";
     let api_key = match std::fs::read_to_string(key_path) {
