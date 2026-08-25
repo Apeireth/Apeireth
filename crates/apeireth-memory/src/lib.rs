@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 mod append_only;
+pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
