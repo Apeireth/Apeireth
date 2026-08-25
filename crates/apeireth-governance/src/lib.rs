@@ -43,6 +43,13 @@ use apeireth_core::kernel::{CapabilityId, Metadata, PluginId, SessionId, TraceId
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod input_security;
+
+pub use input_security::{
+    CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
+    PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
+};
+
 /// What the runtime is about to do.
 #[derive(Debug, Clone, PartialEq)]
 #[non_exhaustive]
