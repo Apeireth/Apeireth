@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::ha_modes::AuthorityMode;
+
 pub trait BiometricProvider: Send + Sync {
     fn authenticate(&self, human_id: &str) -> BiometricResult;
     fn is_available(&self) -> bool { true }

@@ -31,6 +31,7 @@ mod tests {
     fn test_add() {
         let mut h = Hallways::new();
         h.add(Hallway { id: "a".into(), entry: "a".into(), exits: vec!["b".into()] });
+        h.add(Hallway { id: "b".into(), entry: "b".into(), exits: vec![] });
         assert_eq!(h.neighbors("a").len(), 1);
     }
     #[test]
@@ -38,6 +39,7 @@ mod tests {
         let mut h = Hallways::new();
         h.add(Hallway { id: "a".into(), entry: "a".into(), exits: vec!["b".into()] });
         h.add(Hallway { id: "b".into(), entry: "b".into(), exits: vec!["c".into()] });
+        h.add(Hallway { id: "c".into(), entry: "c".into(), exits: vec![] });
         assert_eq!(h.neighbors("a").len(), 1);
         assert_eq!(h.neighbors("b").len(), 1);
     }
