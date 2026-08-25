@@ -178,11 +178,12 @@ impl Runtime {
                 return Err(error);
             }
 
-            let mut provider_request =
-                NormalizedRequest::new(model.clone(), session.messages.clone());
-            provider_request.tools = tools.clone();
+            let provider_request = NormalizedRequest::new(model.clone(), session.messages.clone());
 
-            let routed = self.providers.complete(&provider_request).await;
+            let routed = self
+                .providers
+                .complete_with_tools(&provider_request, &tools)
+                .await;
 
             let routed = match routed {
                 Ok(routed) => routed,
