@@ -32,5 +32,9 @@ jobs:
       - name: cargo test -p apeireth-tools-canonical --locked
         run: cargo test -p apeireth-tools-canonical --locked
 
+      - name: Controlled egress tests
+        run: cargo test -p apeireth-tools-canonical --locked egress::tests -- --nocapture
+
       - name: Process isolation integration tests
         run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
+
