@@ -606,6 +606,14 @@ the executor fails closed before spawn when a requirement cannot be met.
 See
 [`docs/01-architecture/m2b-x-cross-platform-isolation.md`](docs/01-architecture/m2b-x-cross-platform-isolation.md).
 
+M2D added the canonical controlled-egress boundary in
+`apeireth-tools-canonical::egress`: `EgressPolicy`, `EgressAllowList`,
+`ControlledEgress`, and structured `EgressError`. It validates scheme,
+host, port, resolved addresses, pins DNS through reqwest, disables
+ambient proxies, and revalidates every redirect hop. Process-level
+`NetworkIsolation` remains `UNSUPPORTED` on all platforms.
+See [`docs/01-architecture/m2d-network-egress-enforcement.md`](docs/01-architecture/m2d-network-egress-enforcement.md).
+
 ### PENDING
 
 - Integrate `apeireth-credentials` backends (file store / keyring) behind
