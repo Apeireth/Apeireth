@@ -271,7 +271,7 @@ mod tests {
     #[test]
     fn assert_contains_finds_text() {
         // 用 harness 渲染 4 panel, buffer 必有内容
-        let mut h = crate::harness::TuiHarness::start_with_size(80, 24).unwrap();
+        let mut h = crate::v1tui_e2e::harness::TuiHarness::start_with_size(80, 24).unwrap();
         h.render_4_panel().unwrap();
         // 调试: 看 row0 前 20 cell 的 (symbol, width)
         let buf = h.buffer();
@@ -289,7 +289,7 @@ mod tests {
 
     #[test]
     fn assert_contains_fails_on_missing() {
-        let mut h = crate::harness::TuiHarness::start_with_size(80, 24).unwrap();
+        let mut h = crate::v1tui_e2e::harness::TuiHarness::start_with_size(80, 24).unwrap();
         h.render_4_panel().unwrap();
         let r = h.assert_contains("xyzzy_missing");
         assert!(matches!(r, Err(TuiE2EError::BufferAssert { .. })));
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn assert_not_contains_fails_on_present() {
         // 渲染后 buffer 必有 "桥接", 验 "不包含桥接" 失败
-        let mut h = crate::harness::TuiHarness::start_with_size(80, 24).unwrap();
+        let mut h = crate::v1tui_e2e::harness::TuiHarness::start_with_size(80, 24).unwrap();
         h.render_4_panel().unwrap();
         let r = h.assert_not_contains("桥接");
         assert!(matches!(r, Err(TuiE2EError::BufferAssert { .. })));

@@ -69,6 +69,7 @@ unsafe fn send_enter() {
 }
 
 #[test]
+#[ignore = "invasive e2e: takes over desktop, drives Edge via SendInput"]
 fn test_live_dynamic_edge_locate_and_navigate() {
     unsafe {
         let winsta_name = to_wide("WinSta0");

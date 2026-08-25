@@ -464,7 +464,7 @@ impl AgentManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::agent::Agent;
+    use crate::v1agent::agent::Agent;
     use std::thread;
     use std::time::Duration;
     use tempfile::TempDir;

@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{placeholder, v1190_summary, v2_expansion_summary, V1190_BENCH_NAME};
 
 #[test]
 fn r177_bench_01_v1190_name() {

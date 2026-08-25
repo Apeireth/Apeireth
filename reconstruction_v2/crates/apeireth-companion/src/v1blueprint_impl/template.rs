@@ -518,7 +518,7 @@ fn rand_suffix() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::risk::AuditEvent;
+    use super::super::risk::AuditEvent;
 
     // --- A ---
     #[test]
@@ -666,7 +666,7 @@ mod tests {
         use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("conf.env");
-        let mut f = fs_err::File::create(&path).unwrap();
+        let mut f = std::fs::File::create(&path).unwrap();
         writeln!(f, "FOO_BAR=from_file").unwrap();
         writeln!(f, "# comment line").unwrap();
         writeln!(f, "EMPTY_LINE_BELOW").unwrap();
@@ -685,7 +685,7 @@ mod tests {
         use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("conf.env");
-        let mut f = fs_err::File::create(&path).unwrap();
+        let mut f = std::fs::File::create(&path).unwrap();
         writeln!(f, "MY_TEST_KEY=from_file").unwrap();
         drop(f);
 

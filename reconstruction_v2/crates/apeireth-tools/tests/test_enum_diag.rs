@@ -38,6 +38,7 @@ unsafe extern "system" fn test_enum_proc(hwnd: HWND, _: LPARAM) -> BOOL {
 }
 
 #[test]
+#[ignore = "diagnostic: opens WinSta0 / Default desktop handle"]
 fn test_enum_winsta0() {
     unsafe {
         let winsta_name = to_wide("WinSta0");

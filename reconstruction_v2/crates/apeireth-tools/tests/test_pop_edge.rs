@@ -70,6 +70,7 @@ unsafe fn send_enter() {
 }
 
 #[test]
+#[ignore = "invasive e2e: ShellExecuteW opens Edge with live2d bilibili URL"]
 fn test_pop_and_navigate_edge() {
     unsafe {
         // Step 1: Open URL via native ShellExecuteW

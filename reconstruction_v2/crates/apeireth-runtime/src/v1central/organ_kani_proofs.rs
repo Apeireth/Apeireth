@@ -2,7 +2,10 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{
+    ApeirethCentral, COMPONENT_COUNT, LEGAL_TRANSITION_COUNT, STAGE_COUNT,
+    V05_MATURITY_THRESHOLD_MILLI,
+};
 
 #[test]
 fn r177_cen_01_component_count() {

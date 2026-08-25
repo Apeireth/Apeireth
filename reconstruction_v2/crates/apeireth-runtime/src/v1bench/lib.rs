@@ -81,11 +81,14 @@ mod tests {
     #[test]
     fn v1190_bench_file_exists() {
         let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let bench_path = manifest_dir.join("benches").join("v1190_memory_e2e.rs");
+        // v2: bench 文件重组在 benches/v1bench/ 而非 benches/flat — 同时检查两个位置
+        let bench_path_1 = manifest_dir.join("benches").join("v1190_memory_e2e.rs");
+        let bench_path_2 = manifest_dir.join("benches").join("v1bench").join("v1190_memory_e2e.rs");
         assert!(
-            bench_path.exists(),
-            "V1190 bench file missing: {}",
-            bench_path.display()
+            bench_path_1.exists() || bench_path_2.exists(),
+            "V1190 bench file missing: tried {} and {}",
+            bench_path_1.display(),
+            bench_path_2.display()
         );
     }
 }

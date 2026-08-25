@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{BlueprintPipeline, PHILOSOPHY_ANCHORS, EIGHT_PROMISES};
 
 #[test]
 fn r177_bp_01_philosophy_anchors() {

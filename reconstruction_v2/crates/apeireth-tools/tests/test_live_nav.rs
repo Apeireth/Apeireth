@@ -79,6 +79,7 @@ unsafe fn send_enter() {
 }
 
 #[test]
+#[ignore = "invasive e2e: takes over desktop, focuses Edge, types live2d bilibili URL via SendInput"]
 fn test_live_navigate_foreground_edge() {
     unsafe {
         attach_desktop();

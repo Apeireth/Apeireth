@@ -19,6 +19,7 @@ apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-storage = { path = "../apeireth-storage" }
 apeireth-companion = { path = "../apeireth-companion" }
 apeireth-verify = { path = "../apeireth-verify" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
 tokio = { version = "1.0", features = ["full"] }
 async-trait = "0.1"
 tracing = "0.1"

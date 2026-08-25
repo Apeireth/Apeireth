@@ -61,6 +61,6 @@ mod tests {
 
     #[test]
     fn default_registry_helper() {
-        assert_eq!(crate::generators::default_registry().count(), 4);
+        assert_eq!(crate::v1_image_gen::generators::default_registry().count(), 4);
     }
 }

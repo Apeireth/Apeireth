@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn start_default_ok() {
         let h = TuiHarness::start().unwrap();
-        assert_eq!(h.app.nav, super::lib::NavPage::Bridge);
+        assert_eq!(h.app.nav, crate::v1tui_e2e::lib::NavPage::Bridge);
         assert!(!h.app.should_quit);
     }
 
@@ -308,18 +308,18 @@ mod tests {
     #[test]
     fn send_tab_advances_nav() {
         let mut h = TuiHarness::start().unwrap();
-        assert_eq!(h.app.nav, super::lib::NavPage::Bridge);
+        assert_eq!(h.app.nav, crate::v1tui_e2e::lib::NavPage::Bridge);
         h.send_key(KeyCode::Tab).unwrap();
-        assert_eq!(h.app.nav, super::lib::NavPage::Dialogue);
+        assert_eq!(h.app.nav, crate::v1tui_e2e::lib::NavPage::Dialogue);
     }
 
     #[test]
     fn send_1_to_5_jumps() {
         let mut h = TuiHarness::start().unwrap();
         h.send_key(KeyCode::Char('3')).unwrap();
-        assert_eq!(h.app.nav, super::lib::NavPage::Growth);
+        assert_eq!(h.app.nav, crate::v1tui_e2e::lib::NavPage::Growth);
         h.send_key(KeyCode::Char('5')).unwrap();
-        assert_eq!(h.app.nav, super::lib::NavPage::Settings);
+        assert_eq!(h.app.nav, crate::v1tui_e2e::lib::NavPage::Settings);
     }
 
     #[test]

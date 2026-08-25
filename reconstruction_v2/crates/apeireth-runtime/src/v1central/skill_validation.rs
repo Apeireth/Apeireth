@@ -194,8 +194,8 @@ pub fn registry_validity_ratio(reports: &[SkillValidationReport]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::skill_registry::SkillRegistry;
-    use super::skill_trait::{
+    use crate::v1central::skill_registry::SkillRegistry;
+    use crate::v1central::skill_trait::{
         BrainstormingSkill, TestDrivenDevelopmentSkill, UsingSuperpowersSkill,
     };
 
