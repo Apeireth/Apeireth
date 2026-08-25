@@ -6,11 +6,16 @@
 //! ```text
 //! sandbox-test-child sleep <seconds>
 //! sandbox-test-child print stdout|stderr <bytes>
+//! sandbox-test-child print-both <stdout-bytes> <stderr-bytes>
 //! sandbox-test-child echo-args [args...]
 //! sandbox-test-child print-cwd
 //! sandbox-test-child print-env <name>
+//! sandbox-test-child print-pid
+//! sandbox-test-child platform-security-info
+//! sandbox-test-child token-info            # alias for platform-security-info
+//! sandbox-test-child print-no-new-privs
+//! sandbox-test-child write-file <path> [content]
 //! sandbox-test-child exit-code <n>
-//! sandbox-test-child check-job
 //! sandbox-test-child allocate <mebibytes>
 //! sandbox-test-child spawn-child sleep <seconds>
 //! ```
@@ -77,6 +82,50 @@ fn main() {
                 Ok(value) => println!("ENV:{value}"),
                 Err(std::env::VarError::NotPresent) => println!("ENV_MISSING"),
                 Err(std::env::VarError::NotUnicode(_)) => println!("ENV_NOT_UNICODE"),
+            }
+        }
+        "print-pid" => {
+            println!("PID:{}", std::process::id());
+        }
+        "platform-security-info" | "token-info" => {
+            print_platform_security_info();
+        }
+        "print-no-new-privs" => {
+            #[cfg(target_os = "linux")]
+            {
+                match std::fs::read_to_string("/proc/self/status") {
+                    Ok(status) => {
+                        for line in status.lines() {
+                            if let Some(value) = line.strip_prefix("NoNewPrivs:") {
+                                println!("NO_NEW_PRIVS:{}", value.trim());
+                                return;
+                            }
+                        }
+                        println!("NO_NEW_PRIVS_MISSING");
+                    }
+                    Err(e) => {
+                        eprintln!("status read error: {e}");
+                        std::process::exit(2);
+                    }
+                }
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                println!("NOT_LINUX");
+            }
+        }
+        "write-file" => {
+            let Some(path) = args.get(1) else {
+                eprintln!("missing path");
+                std::process::exit(2);
+            };
+            let content = args.get(2).map(String::as_str).unwrap_or("MARK");
+            match std::fs::write(path, content) {
+                Ok(()) => println!("WRITE_OK"),
+                Err(e) => {
+                    eprintln!("write error: {e}");
+                    std::process::exit(2);
+                }
             }
         }
         "exit-code" => {
@@ -156,6 +205,61 @@ fn main() {
             eprintln!("unknown mode: {other}");
             std::process::exit(2);
         }
+    }
+}
+
+fn print_platform_security_info() {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::BOOL;
+        use windows_sys::Win32::Security::IsTokenRestricted;
+        use windows_sys::Win32::System::JobObjects::IsProcessInJob;
+        use windows_sys::Win32::System::Threading::GetCurrentProcess;
+
+        let mut in_job: BOOL = 0;
+        let ret = unsafe { IsProcessInJob(GetCurrentProcess(), std::ptr::null_mut(), &mut in_job) };
+        if ret != 0 && in_job != 0 {
+            println!("IN_JOB");
+        } else {
+            println!("NOT_IN_JOB");
+        }
+
+        let restricted = unsafe { IsTokenRestricted(GetCurrentProcess()) };
+        if restricted != 0 {
+            println!("TOKEN_RESTRICTED");
+        } else {
+            println!("TOKEN_NOT_RESTRICTED");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        println!("PGRP:{}", unsafe { libc::getpgrp() });
+        println!("PID:{}", std::process::id());
+        match std::fs::read_to_string("/proc/self/status") {
+            Ok(status) => {
+                for line in status.lines() {
+                    if let Some(value) = line.strip_prefix("NoNewPrivs:") {
+                        println!("NO_NEW_PRIVS:{}", value.trim());
+                        return;
+                    }
+                }
+                println!("NO_NEW_PRIVS_MISSING");
+            }
+            Err(_) => println!("NO_NEW_PRIVS_UNAVAILABLE"),
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        println!("PGRP:{}", unsafe { libc::getpgrp() });
+        println!("PID:{}", std::process::id());
+        println!("NO_NEW_PRIVS_UNSUPPORTED");
+    }
+
+    #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
+    {
+        println!("PLATFORM_OTHER");
     }
 }
 

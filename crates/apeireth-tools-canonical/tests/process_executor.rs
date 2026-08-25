@@ -8,7 +8,9 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use apeireth_tools_canonical::process::{
-    EnvironmentSpec, ProcessError, ProcessExecutor, ProcessLimits, ProcessRequest, ProcessResult,
+    current_platform_capabilities, EnforcementLevel, EnvironmentSpec, IsolationCapability,
+    IsolationRequirement, ProcessError, ProcessExecutor, ProcessLimits, ProcessRequest,
+    ProcessResult,
 };
 
 fn helper() -> &'static str {
@@ -188,6 +190,84 @@ fn environment_explicit_mode_sets_only_requested_vars() {
     assert_eq!(text(&result.stdout), "ENV:explicit-value\n");
 }
 
+#[test]
+fn unsupported_network_requirement_fails_closed_before_child_starts() {
+    let capabilities = current_platform_capabilities();
+    if capabilities.network_isolation == EnforcementLevel::Enforced {
+        eprintln!("network isolation is enforced on this platform; skipping fail-closed test");
+        return;
+    }
+
+    let marker = tempfile::Builder::new()
+        .prefix("apeireth m2b failclosed ")
+        .tempdir()
+        .unwrap()
+        .path()
+        .join("child-started.marker");
+    let request = ProcessRequest::new(helper())
+        .with_args(["write-file", marker.to_str().unwrap()])
+        .with_isolation(IsolationRequirement::new().require(
+            IsolationCapability::NetworkIsolation,
+            EnforcementLevel::Enforced,
+        ))
+        .with_limits(ProcessLimits::default());
+
+    let error = execute(&request).unwrap_err();
+    assert!(
+        matches!(error, ProcessError::IsolationRequirementUnsatisfied { .. }),
+        "expected IsolationRequirementUnsatisfied, got {error:?}"
+    );
+    assert!(
+        !marker.exists(),
+        "child must never start when isolation requirements are unsatisfied"
+    );
+}
+
+#[test]
+fn unsupported_optional_limit_fails_before_child_starts() {
+    let capabilities = current_platform_capabilities();
+    if capabilities.cpu_limit != EnforcementLevel::Unsupported {
+        eprintln!("cpu limit is supported on this platform; skipping unsupported-limit test");
+        return;
+    }
+
+    let marker = tempfile::Builder::new()
+        .prefix("apeireth m2b limitfail ")
+        .tempdir()
+        .unwrap()
+        .path()
+        .join("child-started.marker");
+    let mut limits = ProcessLimits::default();
+    limits.max_cpu_seconds = Some(1);
+    let request = ProcessRequest::new(helper())
+        .with_args(["write-file", marker.to_str().unwrap()])
+        .with_limits(limits);
+
+    let error = execute(&request).unwrap_err();
+    assert!(
+        matches!(error, ProcessError::UnsupportedLimit(_)),
+        "expected UnsupportedLimit, got {error:?}"
+    );
+    assert!(
+        !marker.exists(),
+        "child must never start for unsupported limits"
+    );
+}
+
+#[test]
+fn result_enforcement_reports_platform_capabilities() {
+    let result = execute(&request_for("print-pid", "")).unwrap();
+    assert!(result.success(), "{}", text(&result.stderr));
+    assert!(
+        result.enforcement.capabilities.structured_spawn == EnforcementLevel::Enforced,
+        "structured spawn must be enforced on every backend"
+    );
+    assert!(
+        result.enforcement.capabilities.stdout_limit == EnforcementLevel::Enforced,
+        "stdout limit must be enforced on every backend"
+    );
+}
+
 #[cfg(windows)]
 mod windows_tests {
     use super::*;
@@ -295,6 +375,34 @@ mod windows_tests {
         );
     }
 
+    #[test]
+    fn privilege_reduction_requirement_is_enforced_or_fails_closed() {
+        let capabilities = current_platform_capabilities();
+        let requirement = IsolationRequirement::new().require(
+            IsolationCapability::PrivilegeReduction,
+            EnforcementLevel::Enforced,
+        );
+        let request = ProcessRequest::new(helper())
+            .with_args(["platform-security-info"])
+            .with_isolation(requirement)
+            .with_limits(ProcessLimits::default());
+
+        match capabilities.privilege_reduction {
+            EnforcementLevel::Enforced => {
+                let result = execute(&request).unwrap();
+                assert!(result.success(), "{}", text(&result.stderr));
+                assert_eq!(text(&result.stdout), "TOKEN_RESTRICTED\n");
+            }
+            _ => {
+                let error = execute(&request).unwrap_err();
+                assert!(
+                    matches!(error, ProcessError::IsolationRequirementUnsatisfied { .. }),
+                    "expected IsolationRequirementUnsatisfied, got {error:?}"
+                );
+            }
+        }
+    }
+
     fn assert_process_terminated(pid: u32) {
         unsafe {
             let handle = OpenProcess(PROCESS_SYNCHRONIZE, 0, pid);
@@ -308,6 +416,135 @@ mod windows_tests {
                 wait, WAIT_OBJECT_0,
                 "descendant process {pid} should have been terminated by Job Object timeout"
             );
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_tests {
+    use super::*;
+
+    #[test]
+    fn timeout_terminates_the_whole_process_group_tree() {
+        let mut limits = ProcessLimits::default();
+        limits.max_runtime = Duration::from_secs(2);
+        let request = ProcessRequest::new(helper())
+            .with_args(["spawn-child", "sleep", "60"])
+            .with_limits(limits);
+
+        let result = execute(&request).unwrap();
+        assert!(
+            result.timed_out(),
+            "expected TimedOut, got {:?}",
+            result.termination
+        );
+
+        let stdout = text(&result.stdout);
+        let grandchild_pid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("SPAWN_OK "))
+            .map(|pid| pid.parse::<i32>().unwrap())
+            .unwrap_or_else(|| panic!("expected SPAWN_OK <pid> in child stdout, got {stdout:?}"));
+
+        assert_process_gone(grandchild_pid);
+    }
+
+    #[test]
+    fn privilege_reduction_requirement_sets_no_new_privs() {
+        let request = ProcessRequest::new(helper())
+            .with_args(["print-no-new-privs"])
+            .with_isolation(IsolationRequirement::new().require(
+                IsolationCapability::PrivilegeReduction,
+                EnforcementLevel::Partial,
+            ))
+            .with_limits(ProcessLimits::default());
+
+        let result = execute(&request).unwrap();
+        assert!(result.success(), "{}", text(&result.stderr));
+        assert_eq!(text(&result.stdout), "NO_NEW_PRIVS:1\n");
+    }
+
+    #[test]
+    fn process_count_limit_is_reported_partial_not_enforced() {
+        let capabilities = current_platform_capabilities();
+        assert_eq!(
+            capabilities.process_count_limit,
+            EnforcementLevel::Partial,
+            "Linux backend advertises RLIMIT_NPROC as PARTIAL only"
+        );
+    }
+
+    fn assert_process_gone(pid: i32) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let ret = unsafe { libc::kill(pid, 0) };
+            if ret == -1 {
+                let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(-1);
+                if errno == libc::ESRCH {
+                    return;
+                }
+            }
+            if Instant::now() >= deadline {
+                panic!("descendant process {pid} survived process-group termination");
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod macos_tests {
+    use super::*;
+
+    #[test]
+    fn timeout_terminates_the_whole_process_group_tree() {
+        let mut limits = ProcessLimits::default();
+        limits.max_runtime = Duration::from_secs(2);
+        let request = ProcessRequest::new(helper())
+            .with_args(["spawn-child", "sleep", "60"])
+            .with_limits(limits);
+
+        let result = execute(&request).unwrap();
+        assert!(
+            result.timed_out(),
+            "expected TimedOut, got {:?}",
+            result.termination
+        );
+
+        let stdout = text(&result.stdout);
+        let grandchild_pid = stdout
+            .lines()
+            .find_map(|line| line.strip_prefix("SPAWN_OK "))
+            .map(|pid| pid.parse::<i32>().unwrap())
+            .unwrap_or_else(|| panic!("expected SPAWN_OK <pid> in child stdout, got {stdout:?}"));
+
+        assert_process_gone(grandchild_pid);
+    }
+
+    #[test]
+    fn privilege_reduction_is_honestly_unsupported() {
+        let capabilities = current_platform_capabilities();
+        assert_eq!(
+            capabilities.privilege_reduction,
+            EnforcementLevel::Unsupported,
+            "macOS backend must not invent a Windows RestrictedToken equivalent"
+        );
+    }
+
+    fn assert_process_gone(pid: i32) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let ret = unsafe { libc::kill(pid, 0) };
+            if ret == -1 {
+                let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(-1);
+                if errno == libc::ESRCH {
+                    return;
+                }
+            }
+            if Instant::now() >= deadline {
+                panic!("descendant process {pid} survived process-group termination");
+            }
+            std::thread::sleep(Duration::from_millis(20));
         }
     }
 }

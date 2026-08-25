@@ -286,7 +286,7 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Plugin, manifest, lifecycle | `apeireth-plugin` |
 | Capability (id, kind, declaration, registry) | `apeireth-plugin` |
 | Tool implementation | a plugin, via `ToolCapability` |
-| Process execution / containment | `apeireth-tools-canonical::process` *(structured `ProcessRequest`, bounded output, timeout, Windows Job Object)* |
+| Process execution / containment | `apeireth-tools-canonical::process` *(canonical `ProcessRequest` / `IsolationRequirement` / `IsolationCapabilities`, platform backends)* |
 | Provider implementation (credentials, HTTP, transport) | a plugin, via `ProviderCapability` |
 | Provider routing, fallback, health | `apeireth-runtime::canonical::provider` |
 | Session | `apeireth-runtime::canonical::session` |
@@ -581,13 +581,30 @@ The tools own their identity, schema, execution, and result. Runtime owns
 dispatch and governance. No second tool registry, no runtime tool branching,
 and no shell/network/browser tool was introduced.
 
-M2B added the canonical process execution boundary in
-`apeireth-tools-canonical::process`. It enforces timeout, bounded stdout/stderr,
-working directory, environment policy, and Windows Job Object containment
-(fail-closed suspended spawn, kill-on-close, optional memory/active-process
-limits). It does not implement restricted-token launch, filesystem OS
-isolation, or network isolation. See
-[`docs/01-architecture/m2b-process-containment.md`](docs/01-architecture/m2b-process-containment.md).
+M2B-X completed the cross-platform process isolation foundation. The public
+contract in `apeireth-tools-canonical::process` now exposes
+`IsolationCapabilities`, `IsolationRequirement`, `IsolationProfile`,
+`ProcessLimits`, `ProcessRequest`, `ProcessResult`, and
+`PlatformEnforcement`. Platform backends report their real enforcement level
+per capability, callers declare minimum requirements on `ProcessRequest`, and
+the executor fails closed before spawn when a requirement cannot be met.
+
+| Capability | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| Structured spawn / explicit cwd | ENFORCED | ENFORCED | ENFORCED |
+| Timeout / stdout / stderr | ENFORCED | ENFORCED | ENFORCED |
+| Environment isolation | ENFORCED | ENFORCED | ENFORCED |
+| Process-tree containment | ENFORCED (Job Object) | PARTIAL (process group) | PARTIAL (process group) |
+| Memory limit | ENFORCED (Job Object, opt-in) | PARTIAL (`RLIMIT_AS`) | PARTIAL (`RLIMIT_AS`) |
+| Process-count limit | ENFORCED (Job Object, opt-in) | PARTIAL (`RLIMIT_NPROC`, UID-scoped) | PARTIAL (`RLIMIT_NPROC`, UID-scoped) |
+| CPU / file-size limit | UNSUPPORTED | ENFORCED (`setrlimit`) | ENFORCED (`setrlimit`) |
+| Privilege reduction | ENFORCED when restricted-token launch is available, otherwise UNSUPPORTED | PARTIAL (`PR_SET_NO_NEW_PRIVS`) | UNSUPPORTED |
+| Filesystem isolation | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
+| Network isolation | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
+| Fail-closed pre-exec containment | ENFORCED (suspended spawn) | ENFORCED (pre_exec setup) | ENFORCED (pre_exec setup) |
+
+See
+[`docs/01-architecture/m2b-x-cross-platform-isolation.md`](docs/01-architecture/m2b-x-cross-platform-isolation.md).
 
 ### PENDING
 
