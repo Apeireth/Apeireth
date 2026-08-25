@@ -8,6 +8,7 @@ members = [
     "crates/apeireth-telemetry",  # R35: observability 4 umbrella (cache/observability/metrics/tracing facade)
     "crates/apeireth-provider",  # R35+R36: 5 Provider 真合并, 5 老 crate (.bak) 已删
     "crates/apeireth-tools",
+    "crates/apeireth-tools-canonical",  # M2A canonical builtin tool capabilities (filesystem/search/repo)
     "crates/apeireth-cli",
     "crates/apeireth-bench",
     "crates/apeireth-cognition",
