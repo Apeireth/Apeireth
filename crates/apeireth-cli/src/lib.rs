@@ -633,6 +633,16 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         Arc::new(EnvCredentialResolver::new());
     builder = builder.with_credentials(resolver);
 
+    // Builtin tools arrive through the same plugin path as providers: one
+    // utility plugin declares tool.filesystem, tool.search, and tool.repo.
+    // The workspace root is the process current directory, supplied
+    // explicitly by this bootstrap — the tools never read it themselves.
+    let workspace_root = std::env::current_dir()
+        .map_err(|error| format!("canonical runtime bootstrap failed: current_dir: {error}"))?;
+    builder = builder.with_plugin(Arc::new(apeireth_tools_canonical::BuiltinToolsPlugin::new(
+        workspace_root,
+    )));
+
     // Register every canonical provider. Each `from_env` reads only non-secret
     // configuration (base URL, model list); the API key is never read here.
     let mut first_default_model: Option<String> = None;
