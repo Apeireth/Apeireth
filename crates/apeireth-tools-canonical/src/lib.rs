@@ -13,7 +13,9 @@
 #![deny(unsafe_code)]
 
 pub mod filesystem;
+pub mod repo;
 pub mod search;
 
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
