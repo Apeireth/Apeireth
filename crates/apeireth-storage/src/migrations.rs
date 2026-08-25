@@ -9,7 +9,7 @@ use rusqlite::Connection;
 use crate::StorageError;
 
 /// The latest schema version this storage foundation knows about.
-pub const LATEST_SCHEMA_VERSION: i64 = 1;
+pub const LATEST_SCHEMA_VERSION: i64 = 2;
 
 /// One schema migration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,10 +29,11 @@ pub struct Migration {
 /// be opened without data loss. The SQL is intentionally `IF NOT EXISTS`:
 /// donor databases may already contain these tables while still carrying
 /// `user_version = 0`, so the first migration must be idempotent.
-static MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    name: "initial_storage_schema",
-    sql: r#"
+static MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "initial_storage_schema",
+        sql: r#"
 CREATE TABLE IF NOT EXISTS episodes (id TEXT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT);
@@ -43,7 +44,30 @@ CREATE TABLE IF NOT EXISTS topic_groups (id TEXT PRIMARY KEY, data TEXT);
 CREATE TABLE IF NOT EXISTS provenance (id TEXT PRIMARY KEY, data TEXT);
 CREATE INDEX IF NOT EXISTS idx_facts_id ON facts(id);
 "#,
-}];
+    },
+    Migration {
+        version: 2,
+        name: "canonical_memory_items",
+        sql: r#"
+CREATE TABLE IF NOT EXISTS memory_items (
+    id              TEXT PRIMARY KEY,
+    data            TEXT NOT NULL,
+    importance      REAL NOT NULL,
+    access_count    INTEGER NOT NULL,
+    access_times    TEXT NOT NULL,
+    created_at      INTEGER NOT NULL,
+    valid_from      INTEGER NOT NULL,
+    valid_until     INTEGER,
+    is_tombstone    INTEGER NOT NULL,
+    artifact_sig    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_memory_items_created_at ON memory_items(created_at);
+CREATE INDEX IF NOT EXISTS idx_memory_items_valid_from ON memory_items(valid_from);
+CREATE INDEX IF NOT EXISTS idx_memory_items_valid_until ON memory_items(valid_until);
+CREATE INDEX IF NOT EXISTS idx_memory_items_tombstone ON memory_items(is_tombstone);
+"#,
+    },
+];
 
 /// Returns the current schema version recorded in `PRAGMA user_version`.
 pub fn current_version(conn: &Connection) -> Result<i64, StorageError> {
@@ -119,6 +143,76 @@ mod tests {
 
         let version = pool.read(current_version).unwrap();
         assert_eq!(version, LATEST_SCHEMA_VERSION);
+    }
+
+    #[tokio::test]
+    async fn fresh_database_migrates_through_v1_and_v2() {
+        let pool = SqliteConnectionPool::in_memory().await.unwrap();
+
+        pool.write(|conn| run_migrations(conn)).await.unwrap();
+
+        let version = pool.read(current_version).unwrap();
+        assert_eq!(version, 2);
+
+        let facts_exists: bool = pool
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'facts')",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert!(facts_exists);
+
+        let memory_items_exists: bool = pool
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_items')",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert!(memory_items_exists);
+    }
+
+    #[tokio::test]
+    async fn existing_v1_database_upgrades_to_v2_without_data_loss() {
+        let pool = SqliteConnectionPool::in_memory().await.unwrap();
+
+        pool.write(|conn| {
+            conn.execute_batch(MIGRATIONS[0].sql)?;
+            conn.pragma_update(None, "user_version", 1)?;
+            conn.execute(
+                "INSERT INTO facts (id, data) VALUES ('f1', '{\"kept\":true}')",
+                [],
+            )?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+
+        pool.write(|conn| run_migrations(conn)).await.unwrap();
+
+        let version = pool.read(current_version).unwrap();
+        assert_eq!(version, 2);
+
+        let facts_count: i64 = pool
+            .read(|conn| Ok(conn.query_row("SELECT count(*) FROM facts", [], |row| row.get(0))?))
+            .unwrap();
+        assert_eq!(facts_count, 1);
+
+        let memory_items_exists: bool = pool
+            .read(|conn| {
+                Ok(conn.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memory_items')",
+                    [],
+                    |row| row.get(0),
+                )?)
+            })
+            .unwrap();
+        assert!(memory_items_exists);
     }
 
     #[tokio::test]
