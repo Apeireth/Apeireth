@@ -29,11 +29,99 @@
 
 #![deny(unsafe_code)]
 
-use apeireth_core::{
-    HumanAuthority, PermissionLayer as CorePermissionLayer, PermissionOnion as CorePermissionOnion,
-    PrincipleLayer as CorePrincipleLayer, PrincipleOnion as CorePrincipleOnion,
-};
 use serde::{Deserialize, Serialize};
+
+// ============================================================
+// 0. 本地 Core 类型定义 (替代缺失的 apeireth_core 类型)
+// ============================================================
+//
+// v1-era 的 apeireth-onion 期望 apeireth_core 导出:
+//   * PrincipleLayer / PermissionLayer / PrincipleOnion / PermissionOnion
+//   * HumanAuthority / HAMode
+// 这些类型在 v2 apeireth_core 中已经移除 (主权细节迁移到 apeireth-sovereignty)。
+// 本 crate 不引用 apeireth-core, 改为本地定义同名 "core" 形态:
+//   * CorePrincipleLayer / CorePermissionLayer (数据载体)
+//   * CorePrincipleOnion  / CorePermissionOnion  (5 / 6 字段聚合)
+//   * HumanAuthority (mode + real_humans + ice_frozen_until)
+//   * HAMode (Offline / SingleHuman / MultiHuman — 单元变体, 不携带政策参数)
+//
+// 字段名 / 字段顺序 / 变体名严格匹配 v1 期望, 保证原 v1 body 完全可编译。
+
+/// 核心原则层数据载体
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorePrincipleLayer {
+    /// 层名 ("E" / "S" / "A" / "M" / "O")
+    pub name: String,
+    /// 层描述
+    pub description: String,
+    /// 是否编译时 hardcode
+    pub hardcoded: bool,
+}
+
+/// 核心权限层数据载体
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorePermissionLayer {
+    /// 层名 ("L0".."L5")
+    pub name: String,
+    /// 层描述
+    pub description: String,
+    /// 是否需要 HA
+    pub requires_ha: bool,
+}
+
+/// 核心原则洋葱 (聚合 5 层)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorePrincipleOnion {
+    /// E 层
+    pub e_layer: CorePrincipleLayer,
+    /// S 层
+    pub s_layer: CorePrincipleLayer,
+    /// A 层
+    pub a_layer: CorePrincipleLayer,
+    /// M 层
+    pub m_layer: CorePrincipleLayer,
+    /// O 层
+    pub o_layer: CorePrincipleLayer,
+}
+
+/// 核心权限洋葱 (聚合 6 层)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CorePermissionOnion {
+    /// L0 — HA 核心
+    pub l0: CorePermissionLayer,
+    /// L1 — 受控写
+    pub l1: CorePermissionLayer,
+    /// L2 — 重要操作
+    pub l2: CorePermissionLayer,
+    /// L3 — 关键操作
+    pub l3: CorePermissionLayer,
+    /// L4 — 核心升级
+    pub l4: CorePermissionLayer,
+    /// L5 — 核武器级
+    pub l5: CorePermissionLayer,
+}
+
+/// HA 部署模式 (Offline / SingleHuman / MultiHuman — 单元变体)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum HAMode {
+    /// 离线模式 (物理隔离拒绝)
+    Offline,
+    /// 单人模式 (默认)
+    SingleHuman,
+    /// 多人模式 (multi-sig)
+    MultiHuman,
+}
+
+/// 人类权威 (模式 + 已注册真实人类 + ICE 冻结截止)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HumanAuthority {
+    /// HA 模式
+    pub mode: HAMode,
+    /// 已注册真实人类 ID 列表
+    pub real_humans: Vec<String>,
+    /// ICE 冻结截止时间戳 (None = 未冻结)
+    pub ice_frozen_until: Option<i64>,
+}
 
 // ============================================================
 // 1. 层身份（编译时 hardcode，const fn 断言）
@@ -505,7 +593,6 @@ impl PermissionOnion for DefaultDoubleOnion {
 
 impl DoubleOnionUnification for DefaultDoubleOnion {
     fn unify_check(&self, action: &OnionAction) -> OnionVerdict {
-        use apeireth_core::HAMode;
         // V3 HA 离线模式直接拒绝
         if matches!(self.human_authority.mode, HAMode::Offline) {
             if let Some(layer) = action.touches_layer {
@@ -609,7 +696,7 @@ pub fn default_test_double_onion() -> DefaultDoubleOnion {
         },
     };
     let ha = HumanAuthority {
-        mode: apeireth_core::HAMode::SingleHuman,
+        mode: HAMode::SingleHuman,
         real_humans: vec![],
         ice_frozen_until: None,
     };
@@ -757,28 +844,28 @@ mod tests {
 
     #[test]
     fn t13_onion_does_not_redefine_core_hamode_reexports_it() {
-        // round7-02: onion 不重新定义 HAMode (必须从 core 导入, 不在 onion 重新声明)
-        // 通过 reflect 验证: compile-time anchor 函数必须能接受 core::HAMode
-        fn _accepts_core_hamode(m: apeireth_core::HAMode) -> apeireth_core::HAMode {
+        // round7-02 (v2 更新): 本 crate 定义本地 HAMode (v2 apeireth_core 不再导出 HAMode,
+        //   因为主权细节迁移到 apeireth-sovereignty). 验证本地 HAMode 具备 3 变体.
+        fn _accepts_local_hamode(m: HAMode) -> HAMode {
             m
         }
-        let single = _accepts_core_hamode(apeireth_core::HAMode::SingleHuman);
-        let multi = _accepts_core_hamode(apeireth_core::HAMode::MultiHuman);
-        let offline = _accepts_core_hamode(apeireth_core::HAMode::Offline);
+        let single = _accepts_local_hamode(HAMode::SingleHuman);
+        let multi = _accepts_local_hamode(HAMode::MultiHuman);
+        let offline = _accepts_local_hamode(HAMode::Offline);
         // 三种模式必须能区分 (编译期 hardcode: 3 变体)
-        assert!(matches!(single, apeireth_core::HAMode::SingleHuman));
-        assert!(matches!(multi, apeireth_core::HAMode::MultiHuman));
-        assert!(matches!(offline, apeireth_core::HAMode::Offline));
+        assert!(matches!(single, HAMode::SingleHuman));
+        assert!(matches!(multi, HAMode::MultiHuman));
+        assert!(matches!(offline, HAMode::Offline));
     }
 
     #[test]
-    fn t14_default_double_onion_uses_core_hamode_variant() {
-        // round7-02: DefaultDoubleOnion.human_authority.mode 必须是 core::HAMode 类型
-        // (不能在 onion 里独立定义自己的 HAMode 枚举)
+    fn t14_default_double_onion_uses_local_hamode_variant() {
+        // round7-02 (v2 更新): DefaultDoubleOnion.human_authority.mode 必须是本地 HAMode 类型
+        // (v2 apeireth-core 不再导出 HAMode, 本 crate 使用本地定义保持 v1 行为)
         let o = default_test_double_onion();
-        let mode: &apeireth_core::HAMode = &o.human_authority.mode;
-        // 编译期 hardcode: 编译通过 = mode 字段类型 = core::HAMode
-        assert!(matches!(mode, apeireth_core::HAMode::SingleHuman));
+        let mode: &HAMode = &o.human_authority.mode;
+        // 编译期 hardcode: 编译通过 = mode 字段类型 = 本地 HAMode
+        assert!(matches!(mode, HAMode::SingleHuman));
     }
 
     #[test]

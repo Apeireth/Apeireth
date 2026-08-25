@@ -12,8 +12,9 @@ impl IdentityStore {
     pub fn get(&self, user_id: &str) -> Option<&IdentityCard> { self.cards.get(user_id) }
     pub fn migrate(&mut self, user_id: &str, from: impl Into<String>, to: impl Into<String>) {
         if let Some(card) = self.cards.get_mut(user_id) {
-            card.migration_history.push(Migration { from: from.into(), to: to.into(), timestamp_ms: chrono::Utc::now().timestamp_millis() });
-            card.continuity_id = Some(to.into());
+            let to_str: String = to.into();
+            card.migration_history.push(Migration { from: from.into(), to: to_str.clone(), timestamp_ms: chrono::Utc::now().timestamp_millis() });
+            card.continuity_id = Some(to_str);
         }
     }
 }

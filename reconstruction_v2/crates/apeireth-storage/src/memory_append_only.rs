@@ -6,7 +6,8 @@ impl AppendOnlyLog {
     pub fn new() -> Self { Self { entries: HashMap::new() } }
     pub fn append(&mut self, e: AppendEntry) -> Result<(), String> {
         if self.entries.contains_key(&e.id) { return Err(format!("duplicate: {}", e.id)); }
-        self.entries.insert(e.id, e); Ok(())
+        let id = e.id.clone();
+        self.entries.insert(id, e); Ok(())
     }
     pub fn try_delete(&self, _id: &str) -> Result<(), String> { Err("append-only: delete rejected".into()) }
     pub fn try_update(&self, _id: &str) -> Result<(), String> { Err("append-only: update rejected".into()) }
