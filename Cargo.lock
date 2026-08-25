@@ -392,6 +392,7 @@ dependencies = [
  "apeireth-provider",
  "apeireth-runtime",
  "apeireth-skills",
+ "apeireth-tools-canonical",
  "chrono",
  "clap",
  "reqwest",
@@ -1169,6 +1170,7 @@ dependencies = [
  "apeireth-supervisor",
  "apeireth-tool-registry",
  "apeireth-tool-search",
+ "apeireth-tools-canonical",
  "apeireth-workflow",
  "async-trait",
  "chrono",
@@ -1601,6 +1603,20 @@ dependencies = [
  "tracing",
  "uuid",
  "walkdir",
+]
+
+[[package]]
+name = "apeireth-tools-canonical"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "apeireth-plugin",
+ "apeireth-protocol",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
