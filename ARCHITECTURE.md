@@ -286,6 +286,7 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Plugin, manifest, lifecycle | `apeireth-plugin` |
 | Capability (id, kind, declaration, registry) | `apeireth-plugin` |
 | Tool implementation | a plugin, via `ToolCapability` |
+| Process execution / containment | `apeireth-tools-canonical::process` *(structured `ProcessRequest`, bounded output, timeout, Windows Job Object)* |
 | Provider implementation (credentials, HTTP, transport) | a plugin, via `ProviderCapability` |
 | Provider routing, fallback, health | `apeireth-runtime::canonical::provider` |
 | Session | `apeireth-runtime::canonical::session` |
@@ -578,7 +579,15 @@ tool.repo        read-only git inspection (status/diff/log/branch/summary)
 
 The tools own their identity, schema, execution, and result. Runtime owns
 dispatch and governance. No second tool registry, no runtime tool branching,
-and no shell/network/browser tool was introduced. Sandbox enforcement is M2B.
+and no shell/network/browser tool was introduced.
+
+M2B added the canonical process execution boundary in
+`apeireth-tools-canonical::process`. It enforces timeout, bounded stdout/stderr,
+working directory, environment policy, and Windows Job Object containment
+(fail-closed suspended spawn, kill-on-close, optional memory/active-process
+limits). It does not implement restricted-token launch, filesystem OS
+isolation, or network isolation. See
+[`docs/01-architecture/m2b-process-containment.md`](docs/01-architecture/m2b-process-containment.md).
 
 ### PENDING
 
