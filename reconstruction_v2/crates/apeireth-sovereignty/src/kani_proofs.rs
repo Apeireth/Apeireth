@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::self_disable::SelfDisableTrigger;
+use crate::self_disable::{SelfDisableTrigger, SelfDisableGuard, SelfDisableCheck, SelfDisableRecord};
 
 fn trigger_no_degrade() -> SelfDisableTrigger {
     SelfDisableTrigger::NoDegradeViolation { from: "high".to_string(), to: "low".to_string() }
