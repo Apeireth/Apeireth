@@ -687,6 +687,7 @@ version = "1.2.0"
 dependencies = [
  "apeireth-core",
  "async-trait",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
