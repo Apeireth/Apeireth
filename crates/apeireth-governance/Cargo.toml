@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 regex = "1.13"
+sha2 = "0.10"
 
 [lib]
 name = "apeireth_governance"
