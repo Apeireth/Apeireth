@@ -57,5 +57,9 @@ fn canonical_providers_do_not_store_or_execute_anything_else() {
             !source.contains("execute_tool"),
             "{name}: a canonical provider must never execute a tool"
         );
+        assert!(
+            !source.contains("ProcessExecutor") && !source.contains("ProcessRequest"),
+            "{name}: a canonical provider must never own or use the process execution boundary"
+        );
     }
 }
