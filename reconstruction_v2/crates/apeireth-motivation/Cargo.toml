@@ -2,10 +2,21 @@
 name = "apeireth-motivation"
 version = "2.0.0"
 edition = "2021"
+
 [lib]
 path = "src/lib.rs"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.34", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+# R37-2: value -> motivation transparent re-export
+apeireth-value = { path = "../apeireth-value" }
+# R173 bridges: consciousness + life-force -> motivation
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+apeireth-life-force = { path = "../apeireth-life-force" }
+apeireth-core = { path = "../apeireth-core" }
+thiserror = "1.0"
+anyhow = "1.0"
+uuid = { version = "1.10", features = ["v4"] }

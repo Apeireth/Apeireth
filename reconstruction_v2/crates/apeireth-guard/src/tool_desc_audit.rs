@@ -385,7 +385,7 @@ mod tests {
             assert_eq!(
                 report.verdict,
                 DescVerdict::Reject,
-                "U+{:04X} \u5e94\u786c\u62d2",
+                "U+{:04X} \u{5e94}\u{786c}\u{62d2}",
                 ch as u32
             );
         }
@@ -446,7 +446,7 @@ mod tests {
             .count();
         assert_eq!(
             hidden_count, MAX_HIDDEN_FINDINGS,
-            "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+            "隐藏字符 findings \u{5e94}\u{622a}\u{65ad}\u{5230}\u{4e0a}\u{9650}"
         );
     }
 
@@ -499,9 +499,9 @@ mod tests {
         assert_eq!(log.len(), 2, "超容量应挤掉最旧");
         assert_eq!(log.capacity(), 2);
         let snap = log.snapshot();
-        assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+        assert_eq!(snap[0].tool, "t2", "t1 \u{5e94}\u{88ab}\u{6324}\u{51fa}");
         assert_eq!(snap[1].tool, "t3");
-        assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+        assert!(snap[1].changed, "diff \u{544a}\u{8b66}\u{6807}\u{8bb0}\u{5e94}\u{7559}\u{75d5}");
         assert_eq!(log.count_by_verdict(DescVerdict::Reject), 1);
         assert_eq!(log.count_by_verdict(DescVerdict::Suspect), 1);
         assert!(!log.is_empty());

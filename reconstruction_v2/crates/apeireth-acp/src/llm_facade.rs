@@ -1,46 +1,46 @@
-//! apeireth-acp::llm_facade \u2014 LLM \u552f\u4e00\u63a5\u5165\u53e3 (per ADR-0033)
+//! apeireth-acp::llm_facade \u{2014} LLM \u{552f}\u{4e00}\u{63a5}\u{5165}\u{53e3} (per ADR-0033)
 //!
-//! \u300c\u672c\u8d44\u4ea7\u300d: LLM (HTTP / MCP / JSON-RPC \u63a5\u5165) \u552f\u4e00\u80fd\u8c03\u7684\u662f `LlmFacade::dispatch`.
-//! \u4e0d\u80fd\u76f4\u63a5\u8c03 organ crate (consciousness/perception/cognition/...) \u907f\u514d\u8df3\u8fc7\u9274\u6743/\u9650\u6d41/\u534f\u8bae\u8f6c\u6362.
+//! \u{300c}\u{672c}\u{8d44}\u{4ea7}\u{300d}: LLM (HTTP / MCP / JSON-RPC \u{63a5}\u{5165}) \u{552f}\u{4e00}\u{80fd}\u{8c03}\u{7684}\u{662f} `LlmFacade::dispatch`.
+//! \u{4e0d}\u{80fd}\u{76f4}\u{63a5}\u{8c03} organ crate (consciousness/perception/cognition/...) \u{907f}\u{514d}\u{8df3}\u{8fc7}\u{9274}\u{6743}/\u{9650}\u{6d41}/\u{534f}\u{8bae}\u{8f6c}\u{6362}.
 //!
-//! **5 Provider \u7edf\u4e00\u63a5\u5165**: claude_code / codex / copilot / gemini_cli / opencode / minimax \u90fd\u5b9e\u73b0 `LlmFacade` trait.
+//! **5 Provider \u{7edf}\u{4e00}\u{63a5}\u{5165}**: claude_code / codex / copilot / gemini_cli / opencode / minimax \u{90fd}\u{5b9e}\u{73b0} `LlmFacade` trait.
 //!
-//! **\u4e0d\u6f02\u79fb**:
-//! - 0 \u6539 Envelope (R23 LOCKED)
-//! - 0 \u6539 5 Provider \u5b9e\u88c5 (R35 LOCKED)
-//! - 0 \u52a8 workspace.version
+//! **\u{4e0d}\u{6f02}\u{79fb}**:
+//! - 0 \u{6539} Envelope (R23 LOCKED)
+//! - 0 \u{6539} 5 Provider \u{5b9e}\u{88c5} (R35 LOCKED)
+//! - 0 \u{52a8} workspace.version
 //!
-//! **\u72b6\u6001**: R176 (2026-08-14) \u521d\u59cb\u7248, 5 \u9879 + 6 Provider \u63a5\u5165 facade.
+//! **\u{72b6}\u{6001}**: R176 (2026-08-14) \u{521d}\u{59cb}\u{7248}, 5 \u{9879} + 6 Provider \u{63a5}\u{5165} facade.
 
 #![allow(missing_docs)]
 
 use serde::{Deserialize, Serialize};
 
-/// LLM \u8bf7\u6c42\u7edf\u4e00\u5f62\u5f0f (per ADR-0033 \u00a72.2)
+/// LLM \u{8bf7}\u{6c42}\u{7edf}\u{4e00}\u{5f62}\u{5f0f} (per ADR-0033 \u00a72.2)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LlmRequest {
-    /// \u63a5\u5165\u534f\u8bae (http / mcp / jsonrpc / cli)
+    /// \u{63a5}\u{5165}\u{534f}\u{8bae} (http / mcp / jsonrpc / cli)
     pub protocol: String,
-    /// \u9009\u5b9a\u7684 provider (\u4e00\u4e2a\u4e8e 6 \u4e2a ALL_PROVIDERS \u4e4b\u4e2d)
+    /// \u{9009}\u{5b9a}\u{7684} provider (\u{4e00}\u{4e2a}\u{4e8e} 6 \u{4e2a} ALL_PROVIDERS \u{4e4b}\u{4e2d})
     pub provider: String,
-    /// \u9009\u5b9a\u7684 model_kind (\u7531 provider \u51b3\u5b9a\u662f\u5426\u5408\u6cd5)
+    /// \u{9009}\u{5b9a}\u{7684} model_kind (\u{7531} provider \u{51b3}\u{5b9a}\u{662f}\u{5426}\u{5408}\u{6cd5})
     pub model: String,
-    /// \u4f7f\u547d (system prompt)
+    /// \u{4f7f}\u{547d} (system prompt)
     pub system: String,
-    /// \u7528\u6237\u8f93\u5165 (user prompt)
+    /// \u{7528}\u{6237}\u{8f93}\u{5165} (user prompt)
     pub user: String,
-    /// \u6d41\u5f0f\u54cd\u5e94 (\u9ed8\u8ba4 false)
+    /// \u{6d41}\u{5f0f}\u{54cd}\u{5e94} (\u{9ed8}\u{8ba4} false)
     pub stream: bool,
-    /// \u6700\u5927 token (\u9650\u6d41, \u9ed8\u8ba4 8192)
+    /// \u{6700}\u{5927} token (\u{9650}\u{6d41}, \u{9ed8}\u{8ba4} 8192)
     pub max_tokens: u32,
-    /// \u6e29\u5ea6 (\u9ed8\u8ba4 0.7, range [0.0, 2.0])
+    /// \u{6e29}\u{5ea6} (\u{9ed8}\u{8ba4} 0.7, range [0.0, 2.0])
     pub temperature_x100: u16,
-    /// \u8bf7\u6c42 ID (\u8d28\u8bc1\u7528, \u9ed8\u8ba4 empty = \u672a\u8d28\u8bc1)
+    /// \u{8bf7}\u{6c42} ID (\u{8d28}\u{8bc1}\u{7528}, \u{9ed8}\u{8ba4} empty = \u{672a}\u{8d28}\u{8bc1})
     pub auth_token: String,
 }
 
 impl LlmRequest {
-    /// \u6784\u9020 \u9ed8\u8ba4\u8bf7\u6c42
+    /// \u{6784}\u{9020} \u{9ed8}\u{8ba4}\u{8bf7}\u{6c42}
     pub fn new(
         provider: impl Into<String>,
         system: impl Into<String>,
@@ -59,7 +59,7 @@ impl LlmRequest {
         }
     }
 
-    /// \u9a8c\u8bc1\u8bf7\u6c42\u5408\u6cd5\u6027
+    /// \u{9a8c}\u{8bc1}\u{8bf7}\u{6c42}\u{5408}\u{6cd5}\u{6027}
     pub fn validate(&self) -> Result<(), LlmFacadeError> {
         if self.provider.is_empty() {
             return Err(LlmFacadeError::EmptyProvider);
@@ -76,33 +76,33 @@ impl LlmRequest {
         Ok(())
     }
 
-    /// \u6e29\u5ea6\u8fd4\u56de f64 (temperature_x100 / 100)
+    /// \u{6e29}\u{5ea6}\u{8fd4}\u{56de} f64 (temperature_x100 / 100)
     pub fn temperature(&self) -> f64 {
         f64::from(self.temperature_x100) / 100.0
     }
 }
 
-/// LLM \u54cd\u5e94\u7edf\u4e00\u5f62\u5f0f
+/// LLM \u{54cd}\u{5e94}\u{7edf}\u{4e00}\u{5f62}\u{5f0f}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LlmResponse {
-    /// \u8bf7\u6c42 ID (\u4e0e LlmRequest \u4e2d\u7684 trace_id \u5bf9\u5e94)
+    /// \u{8bf7}\u{6c42} ID (\u{4e0e} LlmRequest \u{4e2d}\u{7684} trace_id \u{5bf9}\u{5e94})
     pub request_id: String,
-    /// provider \u540d
+    /// provider \u{540d}
     pub provider: String,
     /// model_kind
     pub model: String,
-    /// \u54cd\u5e94\u6587\u672c
+    /// \u{54cd}\u{5e94}\u{6587}\u{672c}
     pub text: String,
     /// prompt tokens
     pub prompt_tokens: u32,
     /// completion tokens
     pub completion_tokens: u32,
-    /// \u54cd\u5e94\u72b6\u6001 (ok / error)
+    /// \u{54cd}\u{5e94}\u{72b6}\u{6001} (ok / error)
     pub status: LlmStatus,
 }
 
 impl LlmResponse {
-    /// \u6784\u9020 ok \u54cd\u5e94
+    /// \u{6784}\u{9020} ok \u{54cd}\u{5e94}
     pub fn ok(
         provider: impl Into<String>,
         model: impl Into<String>,
@@ -121,7 +121,7 @@ impl LlmResponse {
         }
     }
 
-    /// \u6784\u9020 error \u54cd\u5e94
+    /// \u{6784}\u{9020} error \u{54cd}\u{5e94}
     pub fn error(
         provider: impl Into<String>,
         model: impl Into<String>,
@@ -138,13 +138,13 @@ impl LlmResponse {
         }
     }
 
-    /// \u603b token \u6570 (prompt + completion)
+    /// \u{603b} token \u{6570} (prompt + completion)
     pub fn total_tokens(&self) -> u32 {
         self.prompt_tokens + self.completion_tokens
     }
 }
 
-/// LLM \u54cd\u5e94\u72b6\u6001
+/// LLM \u{54cd}\u{5e94}\u{72b6}\u{6001}
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LlmStatus {
     Ok,
@@ -160,7 +160,7 @@ impl LlmStatus {
     }
 }
 
-/// LlmFacade \u9519\u8bef
+/// LlmFacade \u{9519}\u{8bef}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LlmFacadeError {
     EmptyProvider,
@@ -203,26 +203,26 @@ impl std::fmt::Display for LlmFacadeError {
 
 impl std::error::Error for LlmFacadeError {}
 
-/// LlmFacade trait \u2014 5 Provider \u7edf\u4e00\u63a5\u5165
+/// LlmFacade trait \u{2014} 5 Provider \u{7edf}\u{4e00}\u{63a5}\u{5165}
 ///
-/// **\u7ea6\u5b9a**: \u6240\u6709 Provider \u90fd\u5b9e\u73b0\u6b64 trait, \u8c03\u7528\u65b9\u4e0d\u80fd\u76f4\u63a5\u8bbf\u95ee provider \u5b9e\u73b0\u3002
-/// \u8fd9\u662f ADR-0033 \u00a72.2 \u7684\u5f3a\u5236\u70b9 \u2014 \u7edf\u4e00\u9274\u6743/\u9650\u6d41/\u534f\u8bae\u8f6c\u6362\u5728 facade \u5904\u5b8c\u6210.
+/// **\u{7ea6}\u{5b9a}**: \u{6240}\u{6709} Provider \u{90fd}\u{5b9e}\u{73b0}\u{6b64} trait, \u{8c03}\u{7528}\u{65b9}\u{4e0d}\u{80fd}\u{76f4}\u{63a5}\u{8bbf}\u{95ee} provider \u{5b9e}\u{73b0}\u{3002}
+/// \u{8fd9}\u{662f} ADR-0033 \u00a72.2 \u{7684}\u{5f3a}\u{5236}\u{70b9} \u{2014} \u{7edf}\u{4e00}\u{9274}\u{6743}/\u{9650}\u{6d41}/\u{534f}\u{8bae}\u{8f6c}\u{6362}\u{5728} facade \u{5904}\u{5b8c}\u{6210}.
 pub trait LlmFacade: Send + Sync {
-    /// Provider \u540d (\u4e0e ALL_PROVIDERS \u5bf9\u9f50)
+    /// Provider \u{540d} (\u{4e0e} ALL_PROVIDERS \u{5bf9}\u{9f50})
     fn name(&self) -> &'static str;
 
-    /// \u652f\u6301\u7684 model_kind \u5217\u8868
+    /// \u{652f}\u{6301}\u{7684} model_kind \u{5217}\u{8868}
     fn supported_models(&self) -> Vec<&'static str>;
 
-    /// \u652f\u6301\u7684\u5de5\u5177\u540d\u5217\u8868
+    /// \u{652f}\u{6301}\u{7684}\u{5de5}\u{5177}\u{540d}\u{5217}\u{8868}
     fn supported_tools(&self) -> Vec<&'static str>;
 
-    /// \u8c03\u5ea6\u8bf7\u6c42 \u2014 \u9ed8\u8ba4\u5b9e\u73b0\u4f1a\u9a8c\u8bc1 + \u63a5\u5165 upstream + \u8fd4\u54cd\u5e94
+    /// \u{8c03}\u{5ea6}\u{8bf7}\u{6c42} \u{2014} \u{9ed8}\u{8ba4}\u{5b9e}\u{73b0}\u{4f1a}\u{9a8c}\u{8bc1} + \u{63a5}\u{5165} upstream + \u{8fd4}\u{54cd}\u{5e94}
     ///
-    /// \u7eaf\u51fd\u6570\u7c7b\u63a5\u53e3, \u4e0d\u4fee\u6539\u8bf7\u6c42, \u8fd4\u54cd\u5e94\u4e0e upstream \u4e00\u81f4\u3002
+    /// \u{7eaf}\u{51fd}\u{6570}\u{7c7b}\u{63a5}\u{53e3}, \u{4e0d}\u{4fee}\u{6539}\u{8bf7}\u{6c42}, \u{8fd4}\u{54cd}\u{5e94}\u{4e0e} upstream \u{4e00}\u{81f4}\u{3002}
     fn dispatch(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError>;
 
-    /// \u9ed8\u8ba4\u8c03\u5ea6 \u2014 \u8c03\u7528 dispatch \u4e0e\u9a8c\u8bc1
+    /// \u{9ed8}\u{8ba4}\u{8c03}\u{5ea6} \u{2014} \u{8c03}\u{7528} dispatch \u{4e0e}\u{9a8c}\u{8bc1}
     fn handle(&self, request: LlmRequest) -> Result<LlmResponse, LlmFacadeError> {
         request.validate()?;
         if !self.supported_models().iter().any(|m| *m == request.model) {
@@ -237,7 +237,7 @@ pub trait LlmFacade: Send + Sync {
     }
 }
 
-/// 6 Provider \u540d\u5b57\u5217\u8868 (\u4e0e ALL_PROVIDERS \u5bf9\u9f50)
+/// 6 Provider \u{540d}\u{5b57}\u{5217}\u{8868} (\u{4e0e} ALL_PROVIDERS \u{5bf9}\u{9f50})
 pub const ALL_PROVIDER_NAMES: [&str; 6] = [
     "claude-code",
     "codex",
@@ -247,7 +247,7 @@ pub const ALL_PROVIDER_NAMES: [&str; 6] = [
     "minimax",
 ];
 
-/// \u68c0\u67e5 provider \u540d\u662f\u5426\u5408\u6cd5
+/// \u{68c0}\u{67e5} provider \u{540d}\u{662f}\u{5426}\u{5408}\u{6cd5}
 pub fn is_valid_provider(name: &str) -> bool {
     ALL_PROVIDER_NAMES.contains(&name)
 }

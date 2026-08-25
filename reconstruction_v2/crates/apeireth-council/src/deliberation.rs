@@ -5,28 +5,48 @@
 //! - `Deliberation` 引擎 + `MultiCouncilDeliberation` 多 council 投票
 //! - 加权: `Σ(stance × confidence × weight) / Σ(confidence × weight)`
 
+use crate::advisor::{Advisor, AdvisorDomain};
 use crate::persona::BondCharacter;
 use crate::sovereign::{CouncilEvent, SovereigntyHook};
+use crate::sovereignty::CouncilEvent as SovereigntyCouncilEvent;
+use crate::synthesis::SynthesisWeights;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-
-/// Backward-compat alias used by v1 evolution integration.
-pub type CouncilVerdict = Verdict;
+/// Council 裁决结果 — checkpoint_integration 用 (包含 query_id / session_id /
+/// report / elapsed_ms / held / hold_outcome).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CouncilVerdict {
+    /// query ID
+    pub query_id: String,
+    /// session ID
+    pub session_id: String,
+    /// synthesis 报告
+    pub report: crate::synthesis::SynthesisReport,
+    /// 耗时 (ms)
+    pub elapsed_ms: u64,
+    /// 是否按住
+    pub held: bool,
+    /// 按住后果 (per HoldOutcome 枚举)
+    pub hold_outcome: Option<crate::hold::HoldOutcome>,
+}
 
 /// Backward-compat struct used by v1 evolution integration.
 pub struct Council {
-    pub members: Vec<crate::council_member::CouncilMember>,
+    pub members: Vec<Box<dyn Advisor>>,
 }
 
 impl Council {
     pub fn new() -> Self { Self { members: Vec::new() } }
     pub fn advisor_count(&self) -> usize { self.members.len() }
-    pub fn advisors_iter(&self) -> impl Iterator<Item = &crate::council_member::CouncilMember> { self.members.iter() }
-    pub fn weights_for(&self, _advisor_id: &str) -> f64 { 0.5 }
-    pub fn emit_event(&self, _event: DeliberationStreamEvent) { /* noop */ }
-    pub fn weights_clone(&self) -> Vec<f64> { self.members.iter().map(|_| 0.5).collect() }
-
+    pub fn advisors_iter(&self) -> impl Iterator<Item = &Box<dyn Advisor>> { self.members.iter() }
+    pub fn weights_for(&self, domain: AdvisorDomain) -> f64 { domain.default_weight() }
+    pub fn emit_event(&self, _event: &SovereigntyCouncilEvent) { /* noop */ }
+    pub fn weights_clone(&self) -> SynthesisWeights { SynthesisWeights::default() }
+    /// 招募 advisor (Box<dyn Advisor>).
+    pub fn recruit(&mut self, advisor: Box<dyn Advisor>) {
+        self.members.push(advisor);
+    }
 }
 
 impl Default for Council {
@@ -48,6 +68,9 @@ pub const SEVEN_MANDATORY_DOMAINS: [BondCharacter; 5] = [
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RiskLevel { Low, Medium, High, Nuclear }
+impl Default for RiskLevel {
+    fn default() -> Self { Self::Low }
+}
 impl RiskLevel {
     pub fn as_str(&self) -> &'static str {
         match self { Self::Low=>"low",Self::Medium=>"medium",Self::High=>"high",Self::Nuclear=>"nuclear" }
@@ -67,16 +90,40 @@ pub struct CouncilQuery {
 }
 
 /// Query context for v1 evolution integration.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct QueryContext {
     pub session_id: String,
     pub tags: Vec<String>,
     pub risk: RiskLevel,
+    /// 区域 (e.g. "cognition_graph" / "L4") — 由 graph_bridge 注入.
+    pub area: Option<String>,
+    /// 风险等级 hint (e.g. "low" / "medium" / "high" / "nuclear")
+    pub risk_level: Option<String>,
+    /// 历史引用 (per CognitionSummary 等)
+    pub history_refs: Vec<String>,
 }
 
 impl CouncilQuery {
-    pub fn new(q: impl Into<String>, d: impl Into<String>, r: RiskLevel, t: i64) -> Self {
-        Self { query_id: q.into(), description: d.into(), risk: r, started_at_ms: t }
+    /// 3-arg 便利构造 — risk 默认 Low, started_at_ms 默认 0.
+    pub fn new(q: impl Into<String>, d: impl Into<String>, t: i64) -> Self {
+        Self {
+            query_id: q.into(),
+            description: d.into(),
+            risk: RiskLevel::Low,
+            started_at_ms: t,
+            context: QueryContext::default(),
+        }
+    }
+
+    /// 带 risk 的便利构造.
+    pub fn with_risk(q: impl Into<String>, d: impl Into<String>, r: RiskLevel, t: i64) -> Self {
+        Self {
+            query_id: q.into(),
+            description: d.into(),
+            risk: r,
+            started_at_ms: t,
+            context: QueryContext::default(),
+        }
     }
 }
 
@@ -212,28 +259,28 @@ mod tests {
         assert_eq!(op.stance_score,1.0); assert_eq!(op.confidence,0.0);
     }
     #[test] fn t03_synthesize_empty_pending() {
-        let d = Deliberation::new(CouncilQuery::new("q","d",RiskLevel::Low,0));
+        let d = Deliberation::new(CouncilQuery::with_risk("q","d",RiskLevel::Low,0));
         assert!(matches!(d.synthesize(), Verdict::Pending{..}));
     }
     #[test] fn t04_synthesize_all_approve() {
-        let mut d = Deliberation::new(CouncilQuery::new("q","d",RiskLevel::Low,0));
+        let mut d = Deliberation::new(CouncilQuery::with_risk("q","d",RiskLevel::Low,0));
         d.add_opinion(Opinion::new("o1","a1",BondCharacter::Sage,0.8,0.9));
         d.add_opinion(Opinion::new("o2","a2",BondCharacter::Guardian,0.6,0.8));
         assert!(d.synthesize().is_approved());
     }
     #[test] fn t05_synthesize_all_reject() {
-        let mut d = Deliberation::new(CouncilQuery::new("q","d",RiskLevel::High,0));
+        let mut d = Deliberation::new(CouncilQuery::with_risk("q","d",RiskLevel::High,0));
         d.add_opinion(Opinion::new("o1","a1",BondCharacter::Sage,-0.7,0.9));
         d.add_opinion(Opinion::new("o2","a2",BondCharacter::Guardian,-0.9,0.8));
         assert!(d.synthesize().is_rejected());
     }
     #[test] fn t06_synthesize_neutral_pending() {
-        let mut d = Deliberation::new(CouncilQuery::new("q","d",RiskLevel::Low,0)).with_threshold(0.5);
+        let mut d = Deliberation::new(CouncilQuery::with_risk("q","d",RiskLevel::Low,0)).with_threshold(0.5);
         d.add_opinion(Opinion::new("o","a",BondCharacter::Sage,0.1,0.9));
         assert!(matches!(d.synthesize(), Verdict::Pending{..}));
     }
     #[test] fn t07_run_with_broadcast_hook() {
-        let mut d = Deliberation::new(CouncilQuery::new("q","d",RiskLevel::Low,1000));
+        let mut d = Deliberation::new(CouncilQuery::with_risk("q","d",RiskLevel::Low,1000));
         d.add_opinion(Opinion::new("o1","a1",BondCharacter::Sage,0.5,0.9));
         let mut h = BroadcastHook::new(20);
         d.run_with_hook(&mut h);
@@ -242,7 +289,7 @@ mod tests {
     #[test] fn t08_multi_council_all() {
         let mut m = MultiCouncilDeliberation::new(2);
         for i in 0..3 {
-            let mut d = Deliberation::new(CouncilQuery::new(format!("q{i}"),"x",RiskLevel::Low,0));
+            let mut d = Deliberation::new(CouncilQuery::with_risk(format!("q{i}"),"x",RiskLevel::Low,0));
             d.add_opinion(Opinion::new("o","a",BondCharacter::Sage,0.5,0.9));
             m.push(d);
         }
@@ -251,18 +298,18 @@ mod tests {
     #[test] fn t09_multi_council_split_or_majority() {
         let mut m = MultiCouncilDeliberation::new(2);
         for i in 0..2 {
-            let mut d = Deliberation::new(CouncilQuery::new(format!("q{i}"),"x",RiskLevel::Low,0));
+            let mut d = Deliberation::new(CouncilQuery::with_risk(format!("q{i}"),"x",RiskLevel::Low,0));
             d.add_opinion(Opinion::new("o","a",BondCharacter::Sage,0.5,0.9));
             m.push(d);
         }
-        let mut d3 = Deliberation::new(CouncilQuery::new("q3","x",RiskLevel::Low,0));
+        let mut d3 = Deliberation::new(CouncilQuery::with_risk("q3","x",RiskLevel::Low,0));
         d3.add_opinion(Opinion::new("o","a",BondCharacter::Sage,-0.8,0.9));
         m.push(d3);
         let v = m.vote();
         assert!(matches!(v, CouncilVote::All{..}|CouncilVote::Majority{..}));
     }
     #[test] fn t10_noop_hook_run() {
-        let mut d = Deliberation::new(CouncilQuery::new("q","x",RiskLevel::Low,0));
+        let mut d = Deliberation::new(CouncilQuery::with_risk("q","x",RiskLevel::Low,0));
         d.add_opinion(Opinion::new("o","a",BondCharacter::Sage,0.5,0.9));
         let mut h = NoopSovereigntyHook::new();
         let _ = d.run_with_hook(&mut h);

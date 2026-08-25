@@ -312,4 +312,17 @@ mod tests {
         assert_eq!(p.depth(), 0.0);
     }
 }
-\n\nuse serde::{Deserialize, Serialize};\n\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct DebateRound {\n    pub round: u32,\n    pub advisor_id: String,\n    pub opinion: String,\n}\n\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct PersonaSession {\n    pub persona_id: String,\n    pub active: bool,\n    pub rounds: Vec<DebateRound>,\n}\n
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DebateRound {
+    pub round: u32,
+    pub advisor_id: String,
+    pub opinion: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PersonaSession {
+    pub persona_id: String,
+    pub active: bool,
+    pub rounds: Vec<DebateRound>,
+}

@@ -17,6 +17,12 @@
 //! - 0 改 Persona (R19 LOCKED 0 触碰)
 //! - 0 改 advisor / deliberation / hold / lifecycle / mock_llm / sovereignty / synthesis (0 业务漂移)
 //! - 0 引入 I/O / 网络 (CouncilMember 0 业务状态, 0 真调 LLM)
+use crate::advisor::{
+    Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+    DeliberationOutcome, Stance, StanceKind,
+};
+use crate::deliberation::CouncilQuery;
+use crate::lifecycle::AdvisorLifecycle;
 use serde::{Deserialize, Serialize};
 
 /// CouncilMember — 多 LLM 协商成员 (AutoGen 借鉴)
@@ -161,11 +167,50 @@ mod council_member_tests {
     }
 }
 
-impl CouncilMember {
-    pub fn id(&self) -> &str { &self.role }
-    pub fn domain(&self) -> &str { &self.role }
-    pub fn deliberate(&self, _q: &str) -> Result<String, String> { Ok(format!("[{}] {}", self.role, self.goal)) }
-}
 impl Default for CouncilMember {
     fn default() -> Self { Self::new("default", "default", "default", "default") }
+}
+
+/// 把 CouncilMember 当作 Advisor 看待 — 0 引入 HTTP / 文件 / PyO3,
+/// 走 Rust trait 真实实现, 跟其他 7 强制 advisor 1:1 模式一致.
+///
+/// 委托到 system_prompt + 简易 stance 推导 (默认 Approve, 与 CouncilMember 角色对齐).
+impl Advisor for CouncilMember {
+    fn id(&self) -> AdvisorId {
+        AdvisorId::new(self.role.clone())
+    }
+    fn domain(&self) -> AdvisorDomain {
+        // 5 域 hash 映射 (确定性):
+        //   architect/security/legal -> Safety, performance -> Performance,
+        //   product_manager/strategy -> Strategy, qa/devops -> Ethics (default).
+        match self.role.as_str() {
+            "architect" | "security_reviewer" | "legal" => AdvisorDomain::Safety,
+            "performance" => AdvisorDomain::Performance,
+            "product_manager" | "strategy" => AdvisorDomain::Strategy,
+            "qa" | "devops" => AdvisorDomain::Ethics,
+            _ => AdvisorDomain::Philosophy,
+        }
+    }
+    fn lifecycle(&self) -> AdvisorLifecycle {
+        AdvisorLifecycle::Persistent
+    }
+    fn deliberate(
+        &self,
+        query: &CouncilQuery,
+        ctx: &mut DeliberationContext,
+    ) -> Result<DeliberationOutcome, AdvisorError> {
+        let started_at_ms = ctx.started_at_ms;
+        let reasoning = format!(
+            "CouncilMember[{}]: goal={} provider={} query={}",
+            self.role, self.goal, self.provider, query.query_id
+        );
+        let stance = Stance::new(StanceKind::Approve, reasoning.clone());
+        let opinion = AdvisorOpinion::new(self.id(), stance, 0.7, reasoning, started_at_ms)
+            .with_weight(self.domain().default_weight());
+        let _ = &mut ctx.current_round;
+        Ok(DeliberationOutcome {
+            opinion,
+            needs_rebuttal: false,
+        })
+    }
 }
