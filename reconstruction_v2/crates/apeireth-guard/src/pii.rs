@@ -403,7 +403,7 @@ mod tests {
     fn secret_token_short_not_detected() {
         // 短 token (低于最小长度阈值) 不检测 — 误报控制
         assert!(detect_pii("sk-abc").is_empty());
-        assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+        assert!(detect_pii("sk-ab \u{77ed} token \u{4fdd}\u{7559}")
             .iter()
             .all(|x| x.kind != PiiKind::SecretToken));
     }
@@ -430,7 +430,7 @@ mod tests {
 
     #[test]
     fn detect_env_secret_export_quoted_comment() {
-        let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u91ca");
+        let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u{6ce8}\u{91ca}");
         let env: Vec<_> = m.iter().filter(|x| x.kind == PiiKind::EnvSecret).collect();
         assert_eq!(env.len(), 1);
         assert_eq!(env[0].value, "hunter2hunter2");
