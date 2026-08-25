@@ -39,7 +39,7 @@ use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, Clock, Timestamp};
 use apeireth_plugin::{ProviderCapability, ProviderError};
-use apeireth_protocol::canonical::{NormalizedRequest, NormalizedResponse};
+use apeireth_protocol::canonical::{NormalizedRequest, NormalizedResponse, NormalizedTool};
 use parking_lot::RwLock;
 
 use super::error::{RuntimeError, RuntimeResult};
@@ -142,11 +142,33 @@ impl ProviderRouter {
 
     /// Serve a completion, falling back on transient failures.
     ///
-    /// Returns a [`RoutedCompletion`] rather than a bare response: which provider
-    /// served the request, and which ones failed on the way there, are not
-    /// reconstructible afterwards. Without them a trace cannot say "the turn used
-    /// provider.b because provider.a was rate limited".
+    /// Preserves the original `request.tools` for every candidate; use
+    /// [`ProviderRouter::complete_with_tools`] when tool declarations must be
+    /// sent only to providers that support tool calls.
     pub async fn complete(&self, request: &NormalizedRequest) -> RuntimeResult<RoutedCompletion> {
+        self.complete_inner(request, None).await
+    }
+
+    /// Serve a completion with per-provider tool declarations.
+    ///
+    /// The runtime owns tool dispatch, so it says *which tools exist* here.
+    /// The router only decides whether a candidate provider can transport
+    /// them: providers whose selected model does not advertise
+    /// [`ModelFeature::ToolCalls`] receive an empty tool list instead of a
+    /// request their adapter would have to reject.
+    pub async fn complete_with_tools(
+        &self,
+        request: &NormalizedRequest,
+        tool_declarations: &[NormalizedTool],
+    ) -> RuntimeResult<RoutedCompletion> {
+        self.complete_inner(request, Some(tool_declarations)).await
+    }
+
+    async fn complete_inner(
+        &self,
+        request: &NormalizedRequest,
+        tool_declarations: Option<&[NormalizedTool]>,
+    ) -> RuntimeResult<RoutedCompletion> {
         let supporting: Vec<&Arc<dyn ProviderCapability>> = self
             .providers
             .iter()
@@ -194,9 +216,18 @@ impl ProviderRouter {
 
         for provider in candidates {
             let id = provider.id().clone();
+
+            let mut candidate_request = request.clone();
+            if let Some(tool_declarations) = tool_declarations {
+                candidate_request.tools.clear();
+                if provider.supports_tool_calls(&request.model) {
+                    candidate_request.tools = tool_declarations.to_vec();
+                }
+            }
+
             let started = Timestamp::from_clock(self.clock.as_ref());
 
-            match provider.complete(request).await {
+            match provider.complete(&candidate_request).await {
                 Ok(response) => {
                     let elapsed = Timestamp::from_clock(self.clock.as_ref())
                         .epoch_millis()
