@@ -10,7 +10,9 @@
 //! runtime's router, because they are decisions *between* providers.
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_protocol::canonical::{ModelDescriptor, NormalizedRequest, NormalizedResponse};
+use apeireth_protocol::canonical::{
+    ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
+};
 use async_trait::async_trait;
 use thiserror::Error;
 
@@ -118,6 +120,17 @@ pub trait ProviderCapability: Send + Sync {
     /// provider accepts a family of names it cannot enumerate.
     fn supports_model(&self, model: &str) -> bool {
         self.models().iter().any(|m| m.id.as_str() == model)
+    }
+
+    /// Whether this provider's `model` can receive tool declarations.
+    ///
+    /// Defaults to the [`ModelFeature::ToolCalls`] feature on the matching
+    /// descriptor. Providers that cannot transport tools simply return `false`;
+    /// the runtime then omits tool declarations for that provider.
+    fn supports_tool_calls(&self, model: &str) -> bool {
+        self.models()
+            .iter()
+            .any(|m| m.id.as_str() == model && m.features.contains(&ModelFeature::ToolCalls))
     }
 
     /// Serve one completion.
