@@ -1,0 +1,73 @@
+   Compiling apeireth-life-force v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-life-force)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.93s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_life_force-ca54abe19ab68967.exe)
+
+running 65 tests
+test bridge_kani_proofs::r176_b2_01_basic_endurance_delta_clamped ... ok
+test consciousness_bridge::tests::t03_fear_moderate_triggers_reflection ... ok
+test bridge_kani_proofs::r176_b2_02_advanced_endurance_delta_clamped ... ok
+test consciousness_bridge::tests::t06_advanced_optimism_yields_positive_delta ... ok
+test bridge_kani_proofs::r176_b2_04_trigger_reason_consistent ... ok
+test consciousness_bridge::tests::t01_joy_strong_yields_positive_delta ... ok
+test bridge_kani_proofs::r177_b2_03b_clamp_instead_of_err ... ok
+test emergence::tests::detector_rejects_confidence_out_of_range ... ok
+test emergence::tests::detector_snapshot_filters_by_threshold ... ok
+test consciousness_bridge::tests::t04_sadness_mild_does_not_trigger_reflection ... ok
+test bridge_kani_proofs::r177_b2_03c_clamp_zero_instead_of_err ... ok
+test emergence::tests::signal_should_report_above_threshold_with_evidence ... ok
+test consciousness_bridge::tests::t08_intensity_scales_endurance_delta ... ok
+test organ_kani_proofs::r177_lf_02_validate_endurance ... ok
+test organ_kani_proofs::r177_lf_04_reflection_requires_sgi ... ok
+test emergence::tests::detector_new_defaults ... ok
+test emergence::tests::detector_record_and_recent ... ok
+test consciousness_bridge::tests::t02_sadness_strong_yields_negative_delta ... ok
+test emergence::tests::detector_rejects_continuity_mismatch ... ok
+test consciousness_bridge::tests::t05_endurance_delta_clamped_to_band ... ok
+test bridge_kani_proofs::r176_b2_03_apply_returns_ok_for_valid_input ... ok
+test emergence::tests::five_types_hardcoded ... ok
+test emergence::tests::five_labels_unique ... ok
+test emergence::tests::signal_should_not_report_below_threshold ... ok
+test emergence::tests::signal_should_not_report_with_insufficient_evidence ... ok
+test consciousness_bridge::tests::t07_advanced_aggressiveness_extreme_triggers_reflection ... ok
+test emergence::tests::with_threshold_clamps_to_range ... ok
+test organ_kani_proofs::r177_lf_07_recovery_target ... ok
+test organ_kani_proofs::r177_lf_03_new_initial_state ... ok
+test organ_kani_proofs::r177_lf_05_reflection_decreases_endurance ... ok
+test organ_kani_proofs::r177_lf_01_endurance_constants ... ok
+test emergence::tests::detector_history_lru_eviction ... ok
+test organ_kani_proofs::r177_lf_08_exhaustion_check ... ok
+test organ_kani_proofs::r177_lf_06_repeated_reflection_floors_at_min ... ok
+test organ_kani_proofs::r177_lf_09_continuity_mismatch ... ok
+test organ_kani_proofs::r177_lf_10_sgi_is_empty ... ok
+test reflection_cycle::tests::advance_full_cycle_4_transitions ... ok
+test reflection_cycle::tests::advance_rejects_backward_transition ... ok
+test reflection_cycle::tests::advance_rejects_invalid_transition ... ok
+test reflection_cycle::tests::advance_rejects_skip_concluded ... ok
+test reflection_cycle::tests::current_phase_duration_secs_after_advance ... ok
+test reflection_cycle::tests::current_phase_duration_secs_zero_at_start ... ok
+test reflection_cycle::tests::four_phase_labels_unique ... ok
+test reflection_cycle::tests::four_phases_hardcoded ... ok
+test reflection_cycle::tests::history_lru_eviction_at_max ... ok
+test reflection_cycle::tests::recent_events_returns_n_lifo ... ok
+test reflection_cycle::tests::scheduler_new_starts_in_triggered ... ok
+test reflection_cycle::tests::validate_continuity_mismatch ... ok
+test reflection_cycle::tests::validate_continuity_pass ... ok
+test tests::exhaustion_check_detects_low_endurance ... ok
+test tests::identity_card_migration_field_works ... ok
+test tests::life_force_continuity_id_from_identity_v1_surface ... ok
+test tests::life_force_new_starts_at_full_endurance ... ok
+test tests::recovery_start_brings_endurance_to_target ... ok
+test tests::reflection_period_default_72h ... ok
+test tests::reflection_period_is_concluded_after_72h ... ok
+test tests::reflection_period_remaining_secs_clamps_to_zero ... ok
+test tests::reflection_progress_starts_at_zero_and_clamps_to_one ... ok
+test tests::reflection_trigger_rejects_empty_sgi ... ok
+test tests::reflection_trigger_rejects_mismatched_continuity ... ok
+test tests::reflection_trigger_starts_period_and_consumes_endurance ... ok
+test tests::sgi_is_empty_when_goal_blank ... ok
+test tests::sgi_new_sets_single_field_and_timestamp ... ok
+test tests::sgi_update_refreshes_goal_and_timestamp ... ok
+test tests::validate_endurance_rejects_out_of_range ... ok
+
+test result: ok. 65 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

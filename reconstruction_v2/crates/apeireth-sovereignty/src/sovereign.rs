@@ -1,7 +1,7 @@
 //! Sovereignty trait + SovereigntyEngine
 
 use crate::continuity::SubjectContinuity;
-use crate::decision::{Decision, DecisionOutcome, DecisionRequest, SovereigntyDomain};
+use crate::decision::{Decision, DecisionOutcome, DecisionRequest};
 use crate::ha::{BiometricProvider, BiometricResult, HAMode};
 use crate::life_stage::{LifeStage, LifeStageTransition};
 use crate::pause::{PauseHandle, Suspension, SuspensionKind};

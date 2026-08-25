@@ -711,7 +711,7 @@ pub fn default_test_double_onion() -> DefaultDoubleOnion {
 // R177: onion invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
 mod tests {
-    use super::*;
+    
 
     #[test]
     fn t1_principle_layers_hardcoded_count_is_5() {

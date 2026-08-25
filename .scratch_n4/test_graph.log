@@ -1,0 +1,57 @@
+warning: unused imports: `Deserialize` and `Serialize`
+ --> crates\apeireth-graph\src\conditional.rs:5:13
+  |
+5 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Graph`
+ --> crates\apeireth-graph\src\state_graph.rs:7:25
+  |
+7 | use crate::{FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result};
+  |                         ^^^^^
+
+warning: `apeireth-graph` (lib test) generated 2 warnings (run `cargo fix --lib -p apeireth-graph --tests` to apply 2 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_graph-48eca9481f17dead.exe)
+
+running 35 tests
+test channel::tests::barrier_arrive ... ok
+test channel::tests::last_value_basic ... ok
+test channel::tests::binary_operator_value_eq ... ok
+test channel::tests::registry_register_get ... ok
+test checkpoint::tests::store_save_and_latest ... ok
+test context_graph::tests::phase_from_u8_round_trip ... ok
+test context_graph::tests::store_put_get_delete ... ok
+test conditional::tests::decide_returns_default_on_miss ... ok
+test state::tests::state_with ... ok
+test conditional::tests::decide_returns_goto_on_match ... ok
+test cognition_graph::tests::cognition_graph_runs_all_stages ... ok
+test context_graph::tests::context_graph_lifecycle ... ok
+test mcp_resource::tests::server_register_default ... ok
+test executor::tests::cycle_detected ... ok
+test executor::tests::edge_new ... ok
+test mcp_resource::tests::from_context_graph ... ok
+test mcp_resource::tests::from_state_graph_lists ... ok
+test state::tests::node_output_new ... ok
+test executor::tests::executor_snapshot_present ... ok
+test conditional::tests::decide_end_label ... ok
+test state_graph::tests::builder_default ... ok
+test subgraph::tests::subgraph_debug ... ok
+test thread_history::tests::thread_history_append ... ok
+test subgraph::tests::subgraph_run_with_prefix ... ok
+test state::tests::insert_get_remove ... ok
+test tests::executes_linear_in_order ... ok
+test context_graph::tests::node_with_data ... ok
+test tests::rejects_cycles ... ok
+test tests::duplicate_node_rejected ... ok
+test state_graph::tests::state_graph_builder_basic ... ok
+test tests::conditional_edge_routes ... ok
+test channel::tests::topic_pubsub ... ok
+test thread_history::tests::thread_store_save_get ... ok
+test subgraph::tests::subgraph_as_node_runs ... ok
+test checkpoint::tests::checkpoint_roundtrip ... ok
+
+test result: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

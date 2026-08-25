@@ -1,6 +1,6 @@
 //! HA 部署模式
 
-use crate::ha::{AuthorityMode, BiometricProvider, BiometricResult, HumanAuthority, MultiSigPolicy};
+use crate::ha::{BiometricProvider, BiometricResult, HumanAuthority, MultiSigPolicy};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

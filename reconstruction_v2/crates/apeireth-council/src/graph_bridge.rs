@@ -24,7 +24,7 @@
 //! - LangGraph `MemorySaver.get_tuple()` → graph state → context window
 //! - AutoGen GroupChat context compaction (每轮 summary 注入)
 
-use crate::deliberation::{CouncilQuery, QueryContext};
+use crate::deliberation::CouncilQuery;
 
 /// **CognitionSummary — 本地等价定义** (替代 v1 `apeireth_graph::cognition_graph::CognitionSummary`)
 ///

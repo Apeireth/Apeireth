@@ -2,9 +2,6 @@
 
 #![allow(missing_docs)]
 
-use super::llm_facade::{
-    is_valid_provider, LlmRequest, LlmResponse, LlmStatus, ALL_PROVIDER_NAMES,
-};
 
 #[test]
 fn r177_acp_01_all_provider_names_6() {

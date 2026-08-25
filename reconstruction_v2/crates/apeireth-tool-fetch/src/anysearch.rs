@@ -315,7 +315,7 @@ impl AnySearchClient {
         );
         let body = serde_json::to_value(&req)?;
 
-        let api_key = if self.api_keys.is_empty() {
+        let _api_key = if self.api_keys.is_empty() {
             None
         } else {
             Some(self.api_keys[id as usize % self.api_keys.len()].clone())

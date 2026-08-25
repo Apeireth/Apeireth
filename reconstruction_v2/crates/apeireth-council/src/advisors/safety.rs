@@ -3,9 +3,9 @@
 //! **职责**: 5 项不假装 + E 层兜底 + L0 HA 物理隔离 + 编译时 hardcode 约束
 //! **风险关键词**: nuke / weapons / self-modify / kill / E 层 / L5 / override
 
-use super::{default_lifecycle, init_context, keyword_stance, make_opinion};
+use super::{default_lifecycle, keyword_stance, make_opinion};
 use crate::advisor::{
-    Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+    Advisor, AdvisorDomain, AdvisorError, AdvisorId, DeliberationContext,
     DeliberationOutcome, StanceKind,
 };
 use crate::deliberation::CouncilQuery;

@@ -8,7 +8,7 @@ use apeireth_core::ActionTarget;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{ActionExecution, ActionExpression, ActionSilence};
+use crate::ActionExecution;
 
 /// Transaction ID (UUID-backed) — for "atomic + rollback" tracking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
