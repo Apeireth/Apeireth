@@ -223,15 +223,16 @@ runtime session seam until the storage backend is connected.
 
 ### `apeireth-memory` — durable memory domain
 
-**Owns.** The canonical memory entity, the memory repository contract, memory-level errors, and the SQLite-backed repository implementation. M1B1 created the
+**Owns.** The canonical memory entity, the memory repository contract, memory-level errors, the SQLite-backed repository implementation, and deterministic retrieval semantics. M1B1 created the
 canonical surface under `apeireth_memory::canonical`: `MemoryId`, `MemoryItem`,
 `MemoryRepository`, `MemoryFilter`, `MemoryError`, and `SqliteMemoryRepository`.
+M1B2 added `RetrievalOptions`, `MemoryHit`, `act_r_activation`, and `retrieve`.
 
 **May depend on.** `apeireth-core`, `apeireth-storage`, `serde`, `thiserror`, `async-trait`.
 
 **Must not depend on.** Runtime, gateway, CLI, provider, companion, plugin, governance.
 
-**Is not.** Retrieval/ranking intelligence, vector search, graph traversal, or a product memory feature. Those are later migration items layered on top of this crate, not collapsed into it.
+**Is not.** Vector search, graph traversal, or a product memory feature. Those are later migration items layered on top of this crate, not collapsed into it.
 
 ### `apeireth-companion` — cognition
 
@@ -289,7 +290,7 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Composition root | `apeireth-runtime::canonical::runtime` |
 | Policy decision | `apeireth-governance` |
 | Durable storage | `apeireth-storage` *(SQLite pool, writer, migrations)* |
-| Durable memory domain | `apeireth-memory::canonical` *(M1B1: entity + repository + SQLite backend)* |
+| Durable memory domain | `apeireth-memory::canonical` *(M1B1 entity + repository + SQLite; M1B2 retrieval/ACT-R)* |
 | HTTP transport | `apps/gateway` |
 | Companion cognition | `apeireth-companion` |
 | Credential storage backend | `apeireth-credentials`, behind `plugin::CredentialResolver` |
