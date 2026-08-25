@@ -45,12 +45,14 @@ use serde::{Deserialize, Serialize};
 
 pub mod audit;
 pub mod input_security;
+pub mod permission;
 
 pub use audit::{AuditChainError, AuditHashChain, AuditRecord, GENESIS_PREVIOUS_HASH};
 pub use input_security::{
     CredentialDisclosureHook, PiiDetector, PiiFinding, PiiKind, PromptInjectionHeuristic,
     PromptInjectionHook, PromptInjectionKind, PromptInjectionSignal,
 };
+pub use permission::{Permission, PermissionGovernanceHook, PermissionPolicy, PermissionSet};
 
 /// What the runtime is about to do.
 #[derive(Debug, Clone, PartialEq)]
