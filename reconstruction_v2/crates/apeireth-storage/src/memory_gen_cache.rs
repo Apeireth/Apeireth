@@ -17,4 +17,4 @@ impl<V: Clone> GenCache<V> {
     }
     pub fn count(&self) -> usize { self.entries.len() }
 }
-#[cfg(test)] mod tests { use super::*; #[test] fn test_basic() { let mut c: GenCache<String> = GenCache::new(Duration::from_secs(60), 10); c.put("a", "v"); assert_eq!(c.get("a"), Some("v".into())); } #[test] fn test_miss() { let c: GenCache<String> = GenCache::new(Duration::from_secs(60), 10); assert!(c.get("x").is_none()); } }
+#[cfg(test)] mod tests { use super::*; #[test] fn test_basic() { let mut c: GenCache<String> = GenCache::new(Duration::from_secs(60), 10); c.put("a", "v".to_string()); assert_eq!(c.get("a"), Some("v".into())); } #[test] fn test_miss() { let c: GenCache<String> = GenCache::new(Duration::from_secs(60), 10); assert!(c.get("x").is_none()); } }
