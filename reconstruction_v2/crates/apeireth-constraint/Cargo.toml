@@ -1,0 +1,13 @@
+[package]
+name = "apeireth-constraint"
+version = "2.0.0"
+edition = "2021"
+description = "Apeireth constraint engine (stub for v2 compatibility — real impl lives in crate referenced via lib re-export)"
+
+[dependencies]
+# TEMP-ADDED-FOR-CARGO-CHECK (apeireth-upgrade 抄录): stub re-exports apeireth_governance::*
+apeireth-governance = { path = "../apeireth-governance" }
+
+[lib]
+name = "apeireth_constraint"
+path = "src/lib.rs"

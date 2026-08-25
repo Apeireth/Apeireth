@@ -31,6 +31,19 @@ impl VirtualClock {
     pub fn set(&self, new_time: DateTime<Utc>) {
         self.epoch_ms.store(new_time.timestamp_millis(), Ordering::SeqCst);
     }
+
+    /// v1 compat: alias for `now()`.
+    pub fn current(&self) -> DateTime<Utc> {
+        self.now()
+    }
+}
+
+// v1 compat: manual Clone impl (AtomicI64 is not Clone but VirtualClock semantically
+// should be cloneable — share same epoch_ms via Arc-like semantics; we just share Arc).
+impl Clone for VirtualClock {
+    fn clone(&self) -> Self {
+        Self { epoch_ms: AtomicI64::new(self.epoch_ms.load(Ordering::SeqCst)) }
+    }
 }
 
 impl Clock for VirtualClock {

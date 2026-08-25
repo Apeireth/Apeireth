@@ -1,0 +1,16 @@
+[package]
+name = "apeireth-asi"
+version = "2.0.0"
+edition = "2021"
+description = "ASI North-star metrics (V0.5 24 dims + V1136 9 sub-measures) - v2.0 port, full v1 API surface"
+license = "Apache-2.0"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+tokio = { version = "1.40", features = ["macros", "rt", "rt-multi-thread", "sync"] }
+async-trait = "0.1"
+thiserror = "1.0"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full"] }

@@ -4,6 +4,11 @@ version = "2.0.0"
 edition = "2021"
 
 [dependencies]
+
+# v1_repo_tools/v1_browser/v1_filesystem/v1_image_gen/v1_image_process dependencies (transcribed from apeireth-repo-tools/tool-* v1)
+base64 = "0.22"
+notify = "6.1"
+tracing = "0.1"
 apeireth-core = { path = "../apeireth-core" }
 apeireth-governance = { path = "../apeireth-governance" }
 tokio = { version = "1.0", features = ["full"] }

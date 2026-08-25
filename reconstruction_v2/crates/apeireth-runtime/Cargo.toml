@@ -4,6 +4,14 @@ version = "2.0.0"
 edition = "2021"
 
 [dependencies]
+
+# v1agent/v1bench/v1central/v1integration_e2e/v1tui_e2e dependencies (transcribed from apeireth-agent/bench/central/integration-e2e/tui-e2e v1)
+lru = "0.12"
+notify = "6.1"
+parking_lot = "0.12"
+ratatui = "0.26"
+crossterm = "0.27"
+tempfile = "3"
 apeireth-core = { path = "../apeireth-core" }
 apeireth-governance = { path = "../apeireth-governance" }
 apeireth-tools = { path = "../apeireth-tools" }
@@ -19,3 +27,17 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.0", features = ["v4"] }
 thiserror = "1.0"
 
+# v1host::keyring dependencies (transcribed from apeireth-host v1)
+aes-gcm = "0.10"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+rand = "0.8"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+fs-err = "3.0"
+cfg-if = "1.0"
+
+[dev-dependencies]
+tempfile = "3"

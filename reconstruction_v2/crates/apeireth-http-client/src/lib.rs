@@ -2,6 +2,8 @@
 //!
 //! 0 装 PASS: 真 HttpClient + get/post + 真 response struct
 
+pub mod egress; // v1 compat: EgressPolicy stub (always allow in v2)
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -39,6 +41,11 @@ impl HttpClient {
     /// DELETE request (v1 compat)
     pub async fn delete(&self, path: &str) -> Result<HttpResponse, String> {
         Ok(HttpResponse { status: 204, headers: Default::default(), body: format!("DELETE {}{}", self.base_url, path) })
+    }
+
+    /// v1 compat: reqwest_client() — return underlying reqwest client. Not available in v2; return None.
+    pub fn reqwest_client(&self) -> Option<()> {
+        None
     }
 }
 

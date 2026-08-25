@@ -1,0 +1,46 @@
+[package]
+name = "apeireth-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth v2 记忆子系统 (v1 完整抄录: 24 core + dailynote + lightmemo + g5 bridge)"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-llm-iface = { path = "../apeireth-llm-iface" }
+apeireth-pipeline-g5 = { path = "../apeireth-pipeline-g5" }
+apeireth-life-force = { path = "../apeireth-life-force" }
+
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v5"] }
+parking_lot = "0.12"
+tracing = "0.1"
+# Optional: ONNX embedding (tract) — feature-gated
+tract-onnx = { version = "0.23", optional = true }
+tract-core = { version = "0.23", optional = true }
+
+[features]
+default = []
+onnx = ["dep:tract-onnx", "dep:tract-core"]
+
+[dev-dependencies]
+tempfile = "3"
+rusqlite = { workspace = true }
+
+[lib]
+name = "apeireth_memory"
+path = "src/lib.rs"
+bench = false
+
+[lints]
+workspace = true

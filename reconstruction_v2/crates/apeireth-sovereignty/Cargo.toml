@@ -1,0 +1,23 @@
+[package]
+name = "apeireth-sovereignty"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 主权 + MEWG 五重治理 (Multi-Evidence Weighted Governance: MEWG/多人/多AI/物理多签/反思期) — R14 Phase 5, 纯 Rust trait + mock, 无 PyO3/外部 SDK"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+sha2 = "0.10"
+futures = "0.3"
+
+[lib]
+name = "apeireth_sovereignty"
+path = "src/lib.rs"
