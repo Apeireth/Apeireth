@@ -1,5 +1,6 @@
 pub mod adapters;
 pub mod normalized;
+pub mod v1_era;
 pub mod ws;
 pub mod voice;
 

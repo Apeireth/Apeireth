@@ -1,0 +1,33 @@
+[package]
+name = "apeireth-tool-fetch"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R149 Tier 1.5 统一 fetch 引擎: HTTP+search+deep+Bilibili+anime. 源 VCP v1.1 8 plugin (UrlFetch+WebReadFile / TavilySearch+AnySearch / FlashDeepSearch / BilibiliFetch / AnimeFinder) + VSearch 已并入 apeireth-tool-search 不重复. 实际本 crate 吸收 6 个 (ABSORBED_LEGACY_PLUGINS = 6, 旧描述 7 包含 VSearch 误). 9 核心模块 + register/search_providers/rate_limit/anysearch. 上升为 Rust trait + 多 provider 单 crate."
+keywords = ["ai", "tool", "fetch", "http", "search", "bilibili", "anime"]
+categories = ["text-processing", "web-programming"]
+
+[dependencies]
+tokio = { workspace = true, features = ["sync", "time", "rt", "macros"] }
+async-trait = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+url = "2.5"
+regex = "1.10"
+apeireth-http-client = { path = "../apeireth-http-client" }
+# N17/TP2: 装配统一注册件需要 Tool/ToolKind/ToolAxes (register.rs)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+anyhow = "1.0"
+apeireth-tool-fetch = { path = "." }
+
+[lints]
+workspace = true

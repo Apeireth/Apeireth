@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-council"
+version = "2.0.0"
+edition = "2021"
+description = "Apeireth 智囊团 7 强制 Advisor + 按住机制 + 拟人化 synthesis + mock LLM provider (v2 port from v1.0-legacy)"
+license = "Apache-2.0"
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+apeireth-asi = { path = "../apeireth-asi" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tokio = { version = "1.0", features = ["sync", "macros", "rt-multi-thread", "time"] }
+async-trait = "0.1"
+parking_lot = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+uuid = { version = "1.0", features = ["v4"] }
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }
+
+[lib]
+name = "apeireth_council"
+path = "src/lib.rs"
+
+[lints.rust]
+unsafe_code = "deny"

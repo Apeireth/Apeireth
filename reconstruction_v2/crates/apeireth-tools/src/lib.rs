@@ -1,11 +1,17 @@
+#[cfg(feature = "cdp")]
+pub mod v1_browser;
 pub mod builtin;
 pub mod codesearch;
-pub mod skills;
-pub mod sandbox;
 pub mod mcp;
+pub mod sandbox;
+pub mod skills;
+pub mod synthesis;
+pub mod v1_filesystem;
+pub mod v1_image_gen;
+pub mod v1_image_process;
+pub mod v1_repo_tools;
 pub mod vision;
 pub mod worktree;
-pub mod synthesis;
 
 
 

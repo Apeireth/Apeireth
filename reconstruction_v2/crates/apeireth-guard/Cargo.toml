@@ -1,0 +1,20 @@
+ [package]
+name = "apeireth-guard"
+version = "2.0.0"
+edition = "2021"
+
+description = "Apeireth Privacy Guard (VCP 模式 3/8): PII 检测 + 脱敏 + 审计 (v2 重构)"
+keywords = ["ai", "privacy", "pii", "redaction", "vcp"]
+categories = ["data-structures"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+regex = "1.10"
+once_cell = "1.18"
+sha2 = "0.10"
+parking_lot = "0.12"
+
+[dev-dependencies]
+
+[lints]
+workspace = true

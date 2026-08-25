@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-tool-search"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R145 VSearch: 全文 + 聚合 + BM25-lite 排序内存搜索. 区别于 apeireth-tool-codesearch (regex/AST) + apeireth-tool-image-process (perceptual). R236 search_batch + R239 SortBy/SearchOptions + N17/TP2 register. 3 src 模块 + 31 #[test] + 0 集成"
+keywords = ["ai", "tool", "search", "full-text", "tf-idf", "vsearch"]
+categories = ["text-processing"]
+
+[dependencies]
+tokio = { workspace = true, features = ["sync"] }
+async-trait = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+unicode-segmentation = "1.12"
+# N17/TP2: 装配统一注册件需要 Tool/ToolKind/ToolAxes (register.rs)
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+
+[lints]
+workspace = true

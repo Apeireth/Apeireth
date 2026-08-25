@@ -77,6 +77,16 @@ members = [
     "crates/apeireth-tool-image-gen",
     "crates/apeireth-tool-image-process",
     "crates/apeireth-tool-search",
+    "crates/apeireth-bench",
+    "crates/apeireth-supervisor",
+    "crates/apeireth-state",
+ "crates/apeireth-host",
+    "crates/apeireth-onion",
+    "crates/apeireth-blueprint-impl",
+    "crates/apeireth-motivation",
+    "crates/apeireth-arbitration",
+    "crates/apeireth-acp",
+    "crates/apeireth-agent",
 ]
 
 [workspace.package]

@@ -1,0 +1,13 @@
+[package]
+name = "apeireth-perception"
+version = "2.0.0"
+edition = "2021"
+description = "Apeireth perception organ (A9 — external input adapter layer: signals/IO/token stream -> unified PerceptionEvent). 5 inputs + 2 attention + 5 channels. v2 style rewrite with v1 pub API surface 100% covered."
+
+[dependencies]
+apeireth-core = { path = "../apeireth-core" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.0", features = ["v4", "serde"] }
