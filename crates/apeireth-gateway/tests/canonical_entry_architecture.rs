@@ -28,6 +28,9 @@ fn canonical_gateway_entry_does_not_reach_around_the_runtime() {
         "PluginManager",
         "ProviderRouter",
         "ToolResult",
+        "ProcessExecutor",
+        "ProcessRequest",
+        "ProcessLimits",
     ] {
         assert!(
             !CANONICAL_ENTRY.contains(forbidden),
