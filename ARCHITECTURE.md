@@ -565,6 +565,21 @@ capability dispatch to Allow / Deny / RequireApproval.
 Detection is separated from decision; the runtime still only sees canonical
 governance decisions.
 
+### DONE — M2A canonical simple tool capability ports
+
+`apeireth-tools-canonical` now provides three low-risk builtin tools through
+the canonical plugin path:
+
+```text
+tool.filesystem  read/list/stat inside an explicit workspace root
+tool.search      deterministic local substring search
+tool.repo        read-only git inspection (status/diff/log/branch/summary)
+```
+
+The tools own their identity, schema, execution, and result. Runtime owns
+dispatch and governance. No second tool registry, no runtime tool branching,
+and no shell/network/browser tool was introduced. Sandbox enforcement is M2B.
+
 ### PENDING
 
 - Integrate `apeireth-credentials` backends (file store / keyring) behind
