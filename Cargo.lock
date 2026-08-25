@@ -935,6 +935,7 @@ dependencies = [
  "apeireth-llm-iface",
  "apeireth-memory-extensions",
  "apeireth-pipeline-g5",
+ "apeireth-storage",
  "apeireth-vector",
  "async-trait",
  "chrono",
