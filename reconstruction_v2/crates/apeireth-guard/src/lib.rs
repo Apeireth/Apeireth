@@ -243,8 +243,12 @@ impl PrivacyGuard {
         let matches = detect_pii(text);
         if self.audit_enabled {
             for m in &matches {
-                self.audit
-                    .record_match(PrivacyAction::Detected, m, timestamp, "detect-only");
+                self.audit.record_match(
+                    PrivacyAction::Detected,
+                    m,
+                    timestamp,
+                    "detect-only".to_string(),
+                );
             }
         }
         matches

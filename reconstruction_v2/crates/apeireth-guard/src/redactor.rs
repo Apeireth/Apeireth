@@ -165,18 +165,18 @@ mod tests {
         use crate::pii::detect_pii;
         let text = "API_KEY=sk-1234567890abcdefghijklmnopqrstuv";
         let matches = detect_pii(text);
-        assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+        assert!(matches.len() >= 2, "\u{5e94}\u{540c}\u{65f6}\u{68c0}\u{51fa} EnvSecret + SecretToken");
         let out = redact_text(text, &matches, RedactionStrategy::Mask);
         assert!(
             out.starts_with("API_KEY=s"),
-            "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+            "KEY= \u{524d}\u{7f00}\u{4fdd}\u{7559}, \u{503c}\u{90e8}\u{9996}\u{5b57}\u{7b26}\u{4fdd}\u{7559}: {}",
             out
         );
-        assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
-        assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+        assert!(out.ends_with('v'), "\u{503c}\u{90e8}\u{5c3e}\u{5b57}\u{7b26}\u{4fdd}\u{7559}: {}", out);
+        assert!(!out.contains("1234567890"), "token \u{4e3b}\u{4f53}\u{4e0d}\u{5e94}\u{53ef}\u{89c1}: {}", out);
         assert!(
             !out.contains("sk-1234"),
-            "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+            "token \u{524d}\u{7f00}+\u{4e3b}\u{4f53}\u{4e0d}\u{5e94}\u{8fde}\u{7eed}\u{53ef}\u{89c1}: {}",
             out
         );
     }

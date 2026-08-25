@@ -2,10 +2,32 @@
 name = "apeireth-host"
 version = "2.0.0"
 edition = "2021"
+
 [lib]
 path = "src/lib.rs"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.34", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+
+# Crypto / secrets (keyring)
+aes-gcm = "0.10"
+async-trait = "0.1"
+base64 = "0.22"
+hmac = "0.12"
+pbkdf2 = { version = "0.12", features = ["simple"] }
+sha2 = "0.10"
+hex = "0.4"
+rand = "0.8"
+zeroize = { version = "1.8", features = ["zeroize_derive"] }
+thiserror = "1.0"
+tracing = "0.1"
+keyring = { version = "3.6", default-features = false, features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+# Atomic write
+uuid = { version = "1.10", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"

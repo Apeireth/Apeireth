@@ -250,7 +250,7 @@ mod tests {
 
     #[test]
     fn estimate_token_count_cjk_chars() {
-        // CJK 字符各算 1 token (VCP `[\u3400-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]`)
+        // CJK 字符各算 1 token (VCP `[\u{3400}-\u{9FFF}\u{3040}-\u{30FF}\u{AC00}-\u{D7AF}]`)
         let s = "你好世界";
         // 4 字符 (无拉丁), VCP 启发式: 4 token
         assert_eq!(estimate_token_count(s), 4);

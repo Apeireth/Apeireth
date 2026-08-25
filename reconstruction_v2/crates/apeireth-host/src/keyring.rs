@@ -75,6 +75,8 @@ use aes_gcm::{
     Aes256Gcm, Key, Nonce,
 };
 use async_trait::async_trait;
+use base64::engine::general_purpose::STANDARD;
+use base64::Engine;
 use pbkdf2::pbkdf2_hmac;
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -83,6 +85,20 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tracing::{debug, info, instrument, warn};
 use zeroize::{Zeroize, ZeroizeOnDrop};
+
+// ============================================================================
+// Local base64 helpers (replaces legacy `base64_simple_encode` / `decode`)
+// ============================================================================
+
+/// Encode bytes as standard base64 (no extra padding quirks).
+fn base64_simple_encode(bytes: &[u8]) -> String {
+    STANDARD.encode(bytes)
+}
+
+/// Decode standard base64 into bytes. Returns `None` on invalid input.
+fn base64_simple_decode(s: &str) -> Option<Vec<u8>> {
+    STANDARD.decode(s).ok()
+}
 
 // ============================================================================
 // 编译期 hardcode 常量 (5 重防御 + 设计表 §2.4.1)
@@ -815,9 +831,17 @@ fn derive_key(passphrase: &[u8], salt: &[u8]) -> [u8; FALLBACK_AES_KEY_LEN] {
 
 /// Keyring 主入口 (1:1 翻译 v0.9.21 `KeychainTokenStore` class).
 /// 优先走 OS keyring, 不可用时自动 fallback 到 EncryptedFileStore.
+///
+/// **v2 design note**: holds the primary adapter as the concrete
+/// `KeyringCrateAdapter` rather than `Box<dyn KeyringAdapter>`. The
+/// `KeyringAdapter` trait is `#[async_trait]` (returns boxed futures), which
+/// makes it **not dyn compatible**. Only one adapter type exists in this
+/// crate, so the indirection costs nothing and removing it lets us keep the
+/// `KeyringAdapter` trait object-friendly for downstream callers who may
+/// want to roll their own (concrete) implementation.
 pub struct KeyringStore {
     config: KeyringConfig,
-    primary: Box<dyn KeyringAdapter>,
+    primary: KeyringCrateAdapter,
     fallback: Arc<RwLock<Option<EncryptedFileStore>>>,
     entries: Arc<RwLock<HashMap<(String, String), TokenEntry>>>,
 }
@@ -826,7 +850,7 @@ impl KeyringStore {
     /// 新建.
     pub fn new(config: KeyringConfig) -> Self {
         let platform = config.platform_kind;
-        let primary = Box::new(KeyringCrateAdapter::new(platform));
+        let primary = KeyringCrateAdapter::new(platform);
         let fallback = if config.enable_fallback {
             Some(EncryptedFileStore::new(&config.fallback_dir))
         } else {
@@ -1198,7 +1222,6 @@ impl EncryptedFileStore {
         // 读现有 entries (JSON in-memory map)
         let mut entries: HashMap<String, String> = self.read_entries(&key_arr).unwrap_or_default();
         // 存 token_base64
-        use base64_simple_encode;
         let token_b64 = base64_simple_encode(token.expose());
         let composite_key = format!("{service}\x00{account}");
         entries.insert(composite_key, token_b64);

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};\n\n//! Council 成员生命周期 — 3 模式 (Persistent / Ephemeral / Dynamic) (v2 自洽)
+//! Council 成员生命周期 — 3 模式 (Persistent / Ephemeral / Dynamic) (v2 自洽)
 //!
 //! **设计** (对齐 v1 lifecycle.rs intent, 不抄 v1 FFI/HTTP/SQL):
 //! - `LifecycleKind` 枚举: Persistent / Ephemeral / Dynamic
@@ -145,4 +145,65 @@ mod tests {
         assert_eq!(lm.count_by_lifecycle(LifecycleKind::Dynamic), 1);
     }
 }
-\n\n#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]\npub struct AdvisorLifecycle {\n    pub state: String,\n    pub cycles: u32,\n    pub last_active_ms: i64,\n}\n\nimpl AdvisorLifecycle {\n    pub fn new() -> Self { Self { state: "idle".into(), cycles: 0, last_active_ms: 0 } }\n    pub fn tick(&mut self) { self.cycles += 1; }\n    pub fn is_active(&self) -> bool { self.state == "active" }\n}\n
+
+/// Advisor lifecycle mode (matches `Advisor::lifecycle()` return type).
+///
+/// Used as the canonical lifecycle enum across the council crate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum AdvisorLifecycle {
+    /// Persistent advisor — never expires, always available
+    Persistent,
+    /// Ephemeral advisor — session-bound, expires after `ephemeral_max_age_ms`
+    Ephemeral,
+    /// Dynamic advisor — idle-purged after `dynamic_idle_ms` of inactivity
+    Dynamic,
+}
+
+impl AdvisorLifecycle {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Persistent => "persistent",
+            Self::Ephemeral => "ephemeral",
+            Self::Dynamic => "dynamic",
+        }
+    }
+
+    pub fn is_persistent(&self) -> bool {
+        matches!(self, Self::Persistent)
+    }
+}
+
+impl From<LifecycleKind> for AdvisorLifecycle {
+    fn from(k: LifecycleKind) -> Self {
+        match k {
+            LifecycleKind::Persistent => AdvisorLifecycle::Persistent,
+            LifecycleKind::Ephemeral => AdvisorLifecycle::Ephemeral,
+            LifecycleKind::Dynamic => AdvisorLifecycle::Dynamic,
+        }
+    }
+}
+
+/// Lifecycle stats — simple aggregate over a LifecycleManager.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LifecycleStats {
+    pub total: usize,
+    pub persistent: usize,
+    pub ephemeral: usize,
+    pub dynamic: usize,
+}
+
+impl LifecycleManager {
+    /// Aggregate stats for current membership.
+    pub fn stats(&self) -> LifecycleStats {
+        let mut s = LifecycleStats::default();
+        s.total = self.members.len();
+        for m in self.members.values() {
+            match m.lifecycle {
+                LifecycleKind::Persistent => s.persistent += 1,
+                LifecycleKind::Ephemeral => s.ephemeral += 1,
+                LifecycleKind::Dynamic => s.dynamic += 1,
+            }
+        }
+        s
+    }
+}

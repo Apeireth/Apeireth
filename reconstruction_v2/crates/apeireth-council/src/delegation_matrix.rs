@@ -1,19 +1,19 @@
 //! R176 Agent delegation 7×7=49 paths test matrix
 //!
-//! **\u80cc\u666f**: 7 AdvisorDomain (\u5b89\u5168/\u6027\u80fd/\u54f2\u5b66/\u5386\u53f2/\u7b56\u7565/\u4f26\u7406/\u6cd5\u5f8b) \u53ef\u4ee5\u4e92\u76f8\u59d4\u6258.
-//! \u672c\u6a21\u5757\u9a8c\u8bc1 7×7=49 \u59d4\u6258\u8def\u5f84\u90fd\u80fd\u6784\u9020\u5e76\u8fd0\u884c (\u4e0d\u5fc5\u90fd\u6709\u4e1a\u52a1\u542b\u4e49, \u4f46\u8bed\u4e49\u4e0a\u5e94\u53ef\u884c).
+//! **\u{80cc}\u{666f}**: 7 AdvisorDomain (\u{5b89}\u{5168}/\u{6027}\u{80fd}/\u{54f2}\u{5b66}/\u{5386}\u{53f2}/\u{7b56}\u{7565}/\u{4f26}\u{7406}/\u{6cd5}\u{5f8b}) \u{53ef}\u{4ee5}\u{4e92}\u{76f8}\u{59d4}\u{6258}.
+//! \u{672c}\u{6a21}\u{5757}\u{9a8c}\u{8bc1} 7×7=49 \u{59d4}\u{6258}\u{8def}\u{5f84}\u{90fd}\u{80fd}\u{6784}\u{9020}\u{5e76}\u{8fd0}\u{884c} (\u{4e0d}\u{5fc5}\u{90fd}\u{6709}\u{4e1a}\u{52a1}\u{542b}\u{4e49}, \u{4f46}\u{8bed}\u{4e49}\u{4e0a}\u{5e94}\u{53ef}\u{884c}).
 //!
-//! **\u4e0d\u6f02\u79fb**:
-//! - 0 \u6539 AdvisorDomain enum (R10 LOCKED)
-//! - 0 \u52a8 workspace.version
+//! **\u{4e0d}\u{6f02}\u{79fb}**:
+//! - 0 \u{6539} AdvisorDomain enum (R10 LOCKED)
+//! - 0 \u{52a8} workspace.version
 //!
-//! **\u72b6\u6001**: R176 (2026-08-15) \u521d\u59cb\u7248, 49 paths + 7 self-delegation + \u4e92\u9001\u68c0\u67e5.
+//! **\u{72b6}\u{6001}**: R176 (2026-08-15) \u{521d}\u{59cb}\u{7248}, 49 paths + 7 self-delegation + \u{4e92}\u{9001}\u{68c0}\u{67e5}.
 
 #![allow(missing_docs)]
 
 use crate::advisor::AdvisorDomain;
 
-/// \u4e00\u4e2a\u59d4\u6258\u8def\u5f84: (from, to)
+/// \u{4e00}\u{4e2a}\u{59d4}\u{6258}\u{8def}\u{5f84}: (from, to)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DelegationPath(pub AdvisorDomain, pub AdvisorDomain);
 
@@ -29,9 +29,9 @@ impl DelegationPath {
     }
 }
 
-/// 7×7=49 \u59d4\u6258\u8def\u5f84 (\u542b\u81ea\u59d4\u6258)
+/// 7×7=49 \u{59d4}\u{6258}\u{8def}\u{5f84} (\u{542b}\u{81ea}\u{59d4}\u{6258})
 pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
-    // Safety \u59d4\u6258 7 \u4e2a
+    // Safety \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Safety, AdvisorDomain::Safety),
     (AdvisorDomain::Safety, AdvisorDomain::Performance),
     (AdvisorDomain::Safety, AdvisorDomain::Philosophy),
@@ -39,7 +39,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Safety, AdvisorDomain::Strategy),
     (AdvisorDomain::Safety, AdvisorDomain::Ethics),
     (AdvisorDomain::Safety, AdvisorDomain::Legal),
-    // Performance \u59d4\u6258 7 \u4e2a
+    // Performance \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Performance, AdvisorDomain::Safety),
     (AdvisorDomain::Performance, AdvisorDomain::Performance),
     (AdvisorDomain::Performance, AdvisorDomain::Philosophy),
@@ -47,7 +47,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Performance, AdvisorDomain::Strategy),
     (AdvisorDomain::Performance, AdvisorDomain::Ethics),
     (AdvisorDomain::Performance, AdvisorDomain::Legal),
-    // Philosophy \u59d4\u6258 7 \u4e2a
+    // Philosophy \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Philosophy, AdvisorDomain::Safety),
     (AdvisorDomain::Philosophy, AdvisorDomain::Performance),
     (AdvisorDomain::Philosophy, AdvisorDomain::Philosophy),
@@ -55,7 +55,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Philosophy, AdvisorDomain::Strategy),
     (AdvisorDomain::Philosophy, AdvisorDomain::Ethics),
     (AdvisorDomain::Philosophy, AdvisorDomain::Legal),
-    // History \u59d4\u6258 7 \u4e2a
+    // History \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::History, AdvisorDomain::Safety),
     (AdvisorDomain::History, AdvisorDomain::Performance),
     (AdvisorDomain::History, AdvisorDomain::Philosophy),
@@ -63,7 +63,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::History, AdvisorDomain::Strategy),
     (AdvisorDomain::History, AdvisorDomain::Ethics),
     (AdvisorDomain::History, AdvisorDomain::Legal),
-    // Strategy \u59d4\u6258 7 \u4e2a
+    // Strategy \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Strategy, AdvisorDomain::Safety),
     (AdvisorDomain::Strategy, AdvisorDomain::Performance),
     (AdvisorDomain::Strategy, AdvisorDomain::Philosophy),
@@ -71,7 +71,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Strategy, AdvisorDomain::Strategy),
     (AdvisorDomain::Strategy, AdvisorDomain::Ethics),
     (AdvisorDomain::Strategy, AdvisorDomain::Legal),
-    // Ethics \u59d4\u6258 7 \u4e2a
+    // Ethics \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Ethics, AdvisorDomain::Safety),
     (AdvisorDomain::Ethics, AdvisorDomain::Performance),
     (AdvisorDomain::Ethics, AdvisorDomain::Philosophy),
@@ -79,7 +79,7 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Ethics, AdvisorDomain::Strategy),
     (AdvisorDomain::Ethics, AdvisorDomain::Ethics),
     (AdvisorDomain::Ethics, AdvisorDomain::Legal),
-    // Legal \u59d4\u6258 7 \u4e2a
+    // Legal \u{59d4}\u{6258} 7 \u{4e2a}
     (AdvisorDomain::Legal, AdvisorDomain::Safety),
     (AdvisorDomain::Legal, AdvisorDomain::Performance),
     (AdvisorDomain::Legal, AdvisorDomain::Philosophy),
@@ -89,14 +89,14 @@ pub const DELEGATION_PATHS: [(AdvisorDomain, AdvisorDomain); 49] = [
     (AdvisorDomain::Legal, AdvisorDomain::Legal),
 ];
 
-/// \u68c0\u67e5\u59d4\u6258\u662f\u5426\u5408\u6cd5\u8bed\u4e49 (\u672c\u8d33 49 \u8def\u5f84\u90fd\u5408\u6cd5)
+/// \u{68c0}\u{67e5}\u{59d4}\u{6258}\u{662f}\u{5426}\u{5408}\u{6cd5}\u{8bed}\u{4e49} (\u{672c}\u{8d33} 49 \u{8def}\u{5f84}\u{90fd}\u{5408}\u{6cd5})
 pub fn is_valid_delegation(path: &DelegationPath) -> bool {
     DELEGATION_PATHS
         .iter()
         .any(|&(f, t)| f == path.0 && t == path.1)
 }
 
-/// 7 \u81ea\u59d4\u6258\u8def\u5f84 (\u4e00\u4e2a advisor \u59d4\u6258\u7ed9\u81ea\u5df1)
+/// 7 \u{81ea}\u{59d4}\u{6258}\u{8def}\u{5f84} (\u{4e00}\u{4e2a} advisor \u{59d4}\u{6258}\u{7ed9}\u{81ea}\u{5df1})
 pub fn self_delegations() -> Vec<DelegationPath> {
     DELEGATION_PATHS
         .iter()
@@ -105,7 +105,7 @@ pub fn self_delegations() -> Vec<DelegationPath> {
         .collect()
 }
 
-/// \u4ece\u67d0\u4e2a advisor \u53d1\u51fa\u7684\u59d4\u6258\u5217\u8868
+/// \u{4ece}\u{67d0}\u{4e2a} advisor \u{53d1}\u{51fa}\u{7684}\u{59d4}\u{6258}\u{5217}\u{8868}
 pub fn delegations_from(from: AdvisorDomain) -> Vec<DelegationPath> {
     DELEGATION_PATHS
         .iter()
@@ -114,7 +114,7 @@ pub fn delegations_from(from: AdvisorDomain) -> Vec<DelegationPath> {
         .collect()
 }
 
-/// \u67d0\u4e2a advisor \u63a5\u6536\u7684\u59d4\u6258\u5217\u8868
+/// \u{67d0}\u{4e2a} advisor \u{63a5}\u{6536}\u{7684}\u{59d4}\u{6258}\u{5217}\u{8868}
 pub fn delegations_to(to: AdvisorDomain) -> Vec<DelegationPath> {
     DELEGATION_PATHS
         .iter()
