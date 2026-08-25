@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! v1 era apeireth-tool-browser transcription (10 files).
 //!
 //! Source: crates/_archived/v1.0-legacy/apeireth-tool-browser/src

@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 #[cfg(feature = "cdp")]
 pub mod v1_browser;
 pub mod builtin;
