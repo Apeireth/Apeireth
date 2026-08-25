@@ -66,7 +66,15 @@ fn working_directory_is_explicit_not_ambient() {
     assert!(result.success());
     let stdout = text(&result.stdout);
     let expected = format!("CWD:{}", dir.path().display());
-    assert!(stdout.contains(&expected), "{stdout}");
+    let canonical = dir
+        .path()
+        .canonicalize()
+        .unwrap_or_else(|_| dir.path().to_path_buf());
+    let expected_canonical = format!("CWD:{}", canonical.display());
+    assert!(
+        stdout.contains(&expected) || stdout.contains(&expected_canonical),
+        "{stdout}"
+    );
 }
 
 #[test]
