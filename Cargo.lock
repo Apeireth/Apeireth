@@ -1613,6 +1613,7 @@ dependencies = [
  "apeireth-plugin",
  "apeireth-protocol",
  "async-trait",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",
