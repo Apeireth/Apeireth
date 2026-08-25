@@ -142,7 +142,7 @@ struct MacOsChild {
 impl MacOsChild {
     fn group_signal(&self, signal: libc::c_int) -> io::Result<()> {
         let pid = self.child.id() as i32;
-        if libc::kill(-pid, signal) != 0 {
+        if unsafe { libc::kill(-pid, signal) } != 0 {
             return Err(io::Error::last_os_error());
         }
         Ok(())
