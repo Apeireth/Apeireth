@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use apeireth_consciousness::plutchik::{
+use apeireth_cognition::{
     PlutchikAdvanced, PlutchikBasic, PlutchikEmotion, PlutchikIntensity,
 };
 use apeireth_core::IdentityCard;

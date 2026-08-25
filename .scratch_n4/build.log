@@ -1,0 +1,178 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+   Compiling serde v1.0.229
+   Compiling num-traits v0.2.19
+   Compiling getrandom v0.3.4
+   Compiling ahash v0.8.12
+   Compiling thiserror v2.0.20
+   Compiling regex-automata v0.4.18
+   Compiling futures-util v0.3.34
+   Compiling rand v0.8.7
+   Compiling itertools v0.14.0
+   Compiling h2 v0.4.19
+   Compiling tokio-rustls v0.24.1
+   Compiling anyhow v1.0.104
+   Compiling tokio-rustls v0.26.4
+   Compiling getrandom v0.4.3
+   Compiling bytes v1.12.1
+   Compiling hashbrown v0.17.1
+   Compiling prettyplease v0.2.37
+   Compiling regex-syntax v0.8.11
+   Compiling windows-sys v0.61.2
+   Compiling fixedbitset v0.5.7
+   Compiling ref-cast v1.0.27
+   Compiling fastrand v2.5.0
+   Compiling ref-cast-impl v1.0.27
+   Compiling indexmap v1.9.3
+   Compiling multimap v0.10.1
+   Compiling idna v1.1.0
+   Compiling pin-project-internal v1.1.13
+   Compiling borrow-or-share v0.2.4
+   Compiling hashbrown v0.12.3
+   Compiling protoc-bin-vendored-linux-ppcle_64 v3.2.0
+   Compiling protoc-bin-vendored-linux-s390_64 v3.2.0
+   Compiling protoc-bin-vendored-linux-x86_64 v3.2.0
+   Compiling protoc-bin-vendored-win32 v3.2.0
+   Compiling protoc-bin-vendored-linux-x86_32 v3.2.0
+   Compiling bit-vec v0.8.0
+   Compiling protoc-bin-vendored-macos-x86_64 v3.2.0
+   Compiling protoc-bin-vendored-linux-aarch_64 v3.2.0
+   Compiling protoc-bin-vendored-macos-aarch_64 v3.2.0
+   Compiling outref v0.5.2
+   Compiling vsimd v0.8.0
+   Compiling virtue v0.0.18
+   Compiling lazy_static v1.5.0
+   Compiling tokio-stream v0.1.19
+   Compiling bytecount v0.6.9
+   Compiling protoc-bin-vendored v3.2.0
+   Compiling unty v0.0.4
+   Compiling num-cmp v0.1.0
+   Compiling bit-set v0.8.0
+   Compiling url v2.5.8
+   Compiling indexmap v2.14.0
+   Compiling tungstenite v0.24.0
+   Compiling uuid-simd v0.8.0
+   Compiling tempfile v3.27.0
+   Compiling pin-project v1.1.13
+   Compiling kasuari v0.4.12
+   Compiling tungstenite v0.25.0
+   Compiling ratatui-core v0.1.2
+   Compiling tungstenite v0.21.0
+   Compiling bincode_derive v2.0.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling fluent-uri v0.3.2
+   Compiling apeireth-asi v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-asi)
+   Compiling email_address v0.2.9
+   Compiling prost-derive v0.13.5
+   Compiling ureq v2.12.1
+   Compiling apeireth-graph v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-graph)
+   Compiling petgraph v0.7.1
+   Compiling chrono v0.4.45
+   Compiling num-integer v0.1.47
+   Compiling num-complex v0.4.6
+   Compiling rmp v0.8.15
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-asi\src\organ_kani_proofs.rs:100:7
+    |
+100 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 32 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-asi\src\organ_kani_proofs.rs:107:7
+    |
+107 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused imports: `AsiV05Scores`, `V05_DIMENSION_NAMES`, `V05_DIM_COUNT`, `V1136Submeasures`, `V1136_SUBMEASURE_COUNT`, and `V1136_SUBMEASURE_NAMES`
+ --> crates\apeireth-asi\src\organ_kani_proofs.rs:8:5
+  |
+8 |     AsiV05Scores, V1136Submeasures, V05_DIMENSION_NAMES, V05_DIM_COUNT,
+  |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+9 |     V1136_SUBMEASURE_COUNT, V1136_SUBMEASURE_NAMES,
+  |     ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling toml_edit v0.22.27
+   Compiling hashbrown v0.14.5
+warning: unused imports: `Deserialize` and `Serialize`
+ --> crates\apeireth-graph\src\conditional.rs:5:13
+  |
+5 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `NodeOutput`
+ --> crates\apeireth-graph\src\state_graph.rs:7:58
+  |
+7 | use crate::{FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result};
+  |                                                          ^^^^^^^^^^
+
+   Compiling num-bigint v0.4.8
+   Compiling num-iter v0.1.46
+warning: variable does not need to be mutable
+  --> crates\apeireth-graph\src\state_graph.rs:96:13
+   |
+96 |         let mut graph = Graph::new();
+   |             ----^^^^^
+   |             |
+   |             help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+   Compiling bincode v2.0.1
+   Compiling rmp-serde v1.3.1
+   Compiling referencing v0.28.3
+error[E0277]: the trait bound `dyn Node: Clone` is not satisfied
+  --> crates\apeireth-graph\src\state_graph.rs:34:5
+   |
+32 | #[derive(Clone)]
+   |          ----- in this derive macro expansion
+33 | pub struct StateGraph {
+34 |     pub nodes: BTreeMap<NodeId, Box<dyn Node>>,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `Clone` is not implemented for `dyn Node`
+   |
+   = note: required for `Box<dyn Node>` to implement `Clone`
+   = note: 1 redundant requirement hidden
+   = note: required for `BTreeMap<std::string::String, Box<dyn Node>>` to implement `Clone`
+
+warning: unused variable: `graph`
+  --> crates\apeireth-graph\src\state_graph.rs:96:13
+   |
+96 |         let mut graph = Graph::new();
+   |             ^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_graph`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `id`
+  --> crates\apeireth-graph\src\state_graph.rs:98:17
+   |
+98 |             let id = id.clone();
+   |                 ^^ help: if this is intentional, prefix it with an underscore: `_id`
+
+For more information about this error, try `rustc --explain E0277`.
+warning: `apeireth-graph` (lib) generated 5 warnings
+error: could not compile `apeireth-graph` (lib) due to 1 previous error; 5 warnings emitted
+warning: build failed, waiting for other jobs to finish...
+warning: `apeireth-asi` (lib) generated 3 warnings (run `cargo fix --lib -p apeireth-asi` to apply 1 suggestion)

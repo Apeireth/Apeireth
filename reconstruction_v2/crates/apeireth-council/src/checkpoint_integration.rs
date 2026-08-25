@@ -272,6 +272,7 @@ mod tests {
             area: Some("test".to_string()),
             risk_level: Some("low".to_string()),
             history_refs: Vec::new(),
+            ..Default::default()
         };
         q
     }

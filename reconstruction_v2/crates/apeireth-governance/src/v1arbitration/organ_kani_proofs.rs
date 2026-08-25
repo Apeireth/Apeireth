@@ -2,7 +2,7 @@
 
 #![allow(missing_docs)]
 
-use crate::*;
+use super::lib::{ArbitrationLog, EventSource};
 
 #[test]
 fn r177_arb_01_event_source_count() {

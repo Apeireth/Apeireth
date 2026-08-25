@@ -60,6 +60,7 @@ impl McpClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
     struct EchoTool;
     impl Tool for EchoTool {
         fn name(&self) -> &str { "echo" }
@@ -70,7 +71,7 @@ mod tests {
     #[test]
     fn test_server() {
         let mut s = McpServer::new(ServerInfo { name: "t".into(), version: "1".into(), protocol_version: "1".into() });
-        s.register(Box::new(EchoTool));
+        s.register(Arc::new(EchoTool));
         assert_eq!(s.list_tools().len(), 1);
         assert_eq!(s.call_tool("echo", serde_json::json!({"x": 1})).unwrap()["x"], 1);
     }

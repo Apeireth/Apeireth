@@ -1,8 +1,93 @@
-# Apeireth 2.0 (终极收敛架构 / Reconstruction V2)
+# Apeireth 2.0 (reconstruction_v2)
 
-> **哲学基石**：Apeiron（无名与涌现） · 0 装 PASS（绝对诚信） · 基地不是 AI 本身（LLM 只是租客） · 机制而非补丁
+> **status (2026-08-25)**：`cargo check -p <crate>` 全 19 个 originally-broken crate clean。
+> Workspace `cargo check --workspace` 直接 broken = 0。Test-only fix subagent 正在跑。
+> 真正的 Runtime Host 重构在协作者分支进行中（see "协作" section）。
 
-本项目是基于 Apeireth 1.0 全量 50 万行代码与 9,400+ 篇架构文档进行**深度重构与终极收敛**的现代化 AGI / 伴侣操作系统。
+---
+
+## 当前实装状态
+
+### 已完成（2026-08-25 commit `ed177adf` 等 6 commit）
+
+- v1 全量 50 万行代码 → v2 子树 `reconstruction_v2/crates/` 完整搬运（9 个 factory output commit）
+- **19 个原本编译失败的 crate** 全 standalone build green：
+  - `arbitration` / `motivation` / `host` / `guard` / `council` / `acp` / `api` / `mcp`
+  - `supervisor` / `agent` / `blueprint-impl` / `eval` / `state` / `bench` / `onion` / `storage` / `web` / `runtime`
+- `apeireth-state` 7 个 stub 模块填了实质类型（OrganImpl trait, OrganStub alias, MutexState/RwLockState/OnceLockState, OrganStateRegistry, StateError with thiserror derive）
+
+### 与目标架构的差距（按用户图）
+
+| 项 | 状态 |
+|---|---|
+| 根工作区切换到 V2 | ❌ `root Cargo.toml` 还在跑老 85+ crates；`reconstruction_v2/` 仅**并行**目录 |
+| Unified Runtime Host 6 模块收口 | ❌ SessionManager / EventBus / CapabilityRegistry / Lifecycle / ModelRouter / PresenceHub 都没做 |
+| Gateway 真接 Runtime + LLM 主链 | ❌ chat_completions 还走伪响应 |
+| Protocol Adapters 真统一（OpenAI / Anthropic / Gemini / MiniMax） | ❌ 没做 |
+| 新增模块走统一 contract/command/event | ❌ 没做 |
+| 旧 85+ crates → 新 10 crates 的迁移 | ❌ 没动 |
+| 真 E2E 主链 | ❌ 没接 LLM |
+
+### 协作（Jimmy 在做）
+
+Jimmy 的 `integration/core-capability-reconcile` 分支正在实现：
+
+- Unified Runtime Host（按 6 模块拆分）
+- Protocol Adapter trait 统一
+- Capability 系统
+- EventBus backbone
+
+我们这边不动那块，专注把基础设施做干净。
+
+---
+
+## 我们的工作方向（不冲突骨架）
+
+1. **Build 修复层** — 让 v2 子树编译通过 ✅
+2. **Code quality** — warnings 清理 + thiserror 集成 ✅ (部分)
+3. **CI 验证** — `.github/workflows/rust-ci.yml` 已存在，下次 push 自动跑 `cargo test --workspace`
+4. **可测性** — test stubs 与 lib API 对齐（in progress subagent）
+
+---
+
+## 快速开始
+
+```bash
+cd reconstruction_v2
+cargo check -p apeireth-state          # 单独编译 state（已 green）
+cargo test --workspace --no-fail-fast  # 全 workspace test
+cargo check --workspace                # 全 workspace check（已 0 broken）
+```
+
+## Crate 状态（19 个原本 broken → 全 clean）
+
+| Crate | lib | test | 备注 |
+|---|---|---|---|
+| `arbitration` | ✅ | ✅ | 加 deps |
+| `motivation` | ✅ | ❌ fix subagent | 1 error（test-only stub）|
+| `host` | ✅ | ✅ | 加 deps |
+| `guard` | ✅ | ✅ | 一处字符串→String 修复 |
+| `council` | ✅ | ❌ fix subagent | QueryContext 缺字段 + 2 errors |
+| `acp` | ✅ | ✅ | 加 thiserror |
+| `api` | ✅ | ✅ | 删非 dyn-compat 的 Clone derive |
+| `mcp` | ✅ | ❌ fix subagent | 测试需要 Arc 重新加 |
+| `supervisor` | ✅ | ✅ | 加 thiserror + async-trait |
+| `agent` | ✅ | ✅ | 加 6 deps（含 async-trait auto 修 dyn-compat） |
+| `blueprint-impl` | ✅ | ✅ | 加 thiserror/tracing/fs-err/tempfile |
+| `eval` | ✅ | ✅ | 一行 derive fix |
+| `state` | ✅ | ✅ | 7 stub 模块填实质 + thiserror derive |
+| `bench` | ✅ | ❌ fix subagent | 12 errors（test-only） |
+| `onion` | ✅ | ✅ | 本地 type 定义 |
+| `storage` | ✅ | ❌ fix subagent | 7 errors（test-only） |
+| `web` | ✅ | ✅ | 加 InMemoryEpisodeStore alias + builders |
+| `runtime` | ✅ | ✅ | 加 4 deps + Heartbeat trait dyn-compat |
+
+---
+
+## 历史
+
+本项目从 Apeireth 1.0 全量 50 万行代码与 9,400+ 篇架构文档**深度重构与终极收敛**而来。
+终极目标：把 85+ 碎片 crate 收敛为 10 大高内聚模块（core / governance / storage / protocol / tools / runtime / companion / gateway / cli / sdk）。
 
 ---
 

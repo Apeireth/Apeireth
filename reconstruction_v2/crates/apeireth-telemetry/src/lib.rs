@@ -44,6 +44,11 @@ impl Registry {
     pub fn counter(&mut self, name: &str) -> &mut Counter {
         self.counters.entry(name.to_string()).or_insert_with(|| Counter::new(name))
     }
+
+    /// 0 装 PASS: 真 get or create gauge
+    pub fn gauge(&mut self, name: &str) -> &mut Gauge {
+        self.gauges.entry(name.to_string()).or_insert_with(|| Gauge::new(name))
+    }
     /// 0 装 PASS: 真 export
     pub fn export(&self) -> Vec<Metric> {
         let mut out = vec![];

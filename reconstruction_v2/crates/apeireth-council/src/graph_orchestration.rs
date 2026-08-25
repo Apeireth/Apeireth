@@ -227,7 +227,7 @@ mod tests {
         let driver: Arc<dyn CollaborationDriver> = Arc::new(MockDriver::default());
         let node =
             CollaborationNode::new("node.1", CollaborationMode::Voting, "test query", driver);
-        assert_eq!(node.id(), "node.1");
+        assert_eq!(node.id(), "node.1".into());
         assert_eq!(node.query_desc, "test query");
     }
 
