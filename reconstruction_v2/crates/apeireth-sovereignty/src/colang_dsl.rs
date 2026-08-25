@@ -514,7 +514,7 @@ mod tests {
         let l = DslOnionLayer::new();
         let v = l.evaluate(HELLO_WORLD);
         assert!(v.is_pass());
-        assert_eq!(v.layer_name(), "colang-dsl-ok");
+        assert_eq!(v.layer_name(), "colang-dsl");
     }
     #[test] fn dsl_onion_layer_block() {
         let mut g = ColangDslGuard::new();
