@@ -149,10 +149,33 @@ attempted first.
 | Process `NetworkIsolation` | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
 | Filesystem isolation | UNSUPPORTED | UNSUPPORTED | UNSUPPORTED |
 
-## 6. Remaining gaps
+## 6. CI evidence
+
+Workflow: `M2B-XV three-OS process isolation validation` (extended with an explicit controlled-egress test step)
+
+Run: https://github.com/Apeireth/apeireth-rust/actions/runs/32875581292
+Commit: `fdd339a9fc2c018274b7db00dbf68b1868235c84`
+
+| Platform | Job | Result | Tests |
+| --- | --- | --- | --- |
+| Windows | `process isolation (windows-latest)` | success | 44 lib + 4 architecture + 21 process-executor + 19 egress, 0 failed |
+| Ubuntu | `process isolation (ubuntu-latest)` | success | 44 lib + 4 architecture + 18 process-executor + 19 egress, 0 failed |
+| macOS | `process isolation (macos-latest)` | success | 44 lib + 4 architecture + 17 process-executor + 19 egress, 0 failed |
+
+Each job ran:
+
+```text
+cargo check -p apeireth-tools-canonical --locked
+cargo test -p apeireth-tools-canonical --locked
+cargo test -p apeireth-tools-canonical --locked egress::tests -- --nocapture
+cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
+```
+
+## 7. Remaining gaps
 
 - Controlled egress supports GET only; POST/HEAD and request bodies are future.
 - Explicit proxy support is deferred; restricted transport disables ambient proxies.
 - Process-level network isolation is not available on any platform in this phase.
 - `PublicInternetOnly` treats documentation IPv6 ranges as public; if stronger
   classification is needed it belongs to a future policy revision.
+
