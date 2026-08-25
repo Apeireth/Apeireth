@@ -6,7 +6,7 @@
 #![allow(missing_docs)] // R163 O-5: items here are implementation helpers / private internals; public API is documented in lib.rs
 use super::{default_lifecycle, make_opinion};
 use crate::advisor::{
-    Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+    Advisor, AdvisorDomain, AdvisorError, AdvisorId, DeliberationContext,
     DeliberationOutcome, StanceKind,
 };
 use crate::deliberation::CouncilQuery;
@@ -80,7 +80,7 @@ impl Advisor for EthicsAdvisor {
     ) -> Result<DeliberationOutcome, AdvisorError> {
         let started_at_ms = ctx.started_at_ms;
 
-        let mut kind = if let Some(llm) = &self.llm {
+        let kind = if let Some(llm) = &self.llm {
             let resp = llm.generate(&query.description, "你是 ethics advisor, 评估是否违反主 17:43 实事求是 / 主 22:33 ASI 北极星 / 主 17:58 不假装");
             if resp.triggers_hold {
                 StanceKind::StrongDisapprove

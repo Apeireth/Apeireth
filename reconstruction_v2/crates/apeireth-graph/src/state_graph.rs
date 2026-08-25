@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use crate::conditional::{ConditionalDecision, ConditionalEdge};
 use crate::state::State;
-use crate::{FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result};
+use crate::{FinalState, GraphError, Node, NodeId, Result};
 
 /// StateGraph edge — typed edge in a state graph.
 #[derive(Debug, Clone)]

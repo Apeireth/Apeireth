@@ -3,9 +3,9 @@
 //! **职责**: V1130 wallclock 评估 + 资源消耗 + 性能基准
 //! **风险关键词**: heavy / 100x / memory leak / 阻塞 / timeout / 资源耗尽
 
-use super::{default_lifecycle, init_context, keyword_stance, make_opinion};
+use super::{default_lifecycle, keyword_stance, make_opinion};
 use crate::advisor::{
-    Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+    Advisor, AdvisorDomain, AdvisorError, AdvisorId, DeliberationContext,
     DeliberationOutcome, StanceKind,
 };
 use crate::deliberation::CouncilQuery;

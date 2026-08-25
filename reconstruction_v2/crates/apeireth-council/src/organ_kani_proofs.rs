@@ -2,11 +2,6 @@
 
 #![allow(missing_docs)]
 
-use crate::advisor::AdvisorDomain;
-use crate::delegation_matrix::{
-    delegations_from, delegations_to, is_valid_delegation, self_delegations, DelegationPath,
-    DELEGATION_PATHS,
-};
 
 #[test]
 fn r177_cou_01_delegation_paths_49() {

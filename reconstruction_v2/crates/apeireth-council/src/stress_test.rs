@@ -23,7 +23,7 @@ use serde::{Deserialize, Serialize};
 use crate::council_member::CouncilMember;
 use crate::council_member_deliberation::{CouncilMemberDeliberator, MultiRoundVerdict};
 use crate::deliberation::CouncilQuery;
-use crate::mock_llm::{MockLlmProvider, MockLlmResponse};
+use crate::mock_llm::MockLlmProvider;
 
 /// 默认 stress rounds (per master 8/9 实测 100 round 200s pass)
 pub const DEFAULT_STRESS_ROUNDS: u32 = 100;

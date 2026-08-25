@@ -5,7 +5,7 @@
 
 use super::{default_lifecycle, make_opinion};
 use crate::advisor::{
-    Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+    Advisor, AdvisorDomain, AdvisorError, AdvisorId, DeliberationContext,
     DeliberationOutcome, StanceKind,
 };
 use crate::deliberation::CouncilQuery;

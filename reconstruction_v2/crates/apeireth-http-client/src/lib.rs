@@ -27,7 +27,7 @@ impl HttpClient {
     pub async fn get(&self, path: &str) -> Result<HttpResponse, String> {
         Ok(HttpResponse { status: 200, headers: Default::default(), body: format!("GET {}{}", self.base_url, path) })
     }
-    pub async fn post(&self, path: &str, body: Value) -> Result<HttpResponse, String> {
+    pub async fn post(&self, _path: &str, body: Value) -> Result<HttpResponse, String> {
         Ok(HttpResponse { status: 200, headers: Default::default(), body: serde_json::to_string(&body).unwrap_or_default() })
     }
     /// POST with JSON body (v1 compat for qdrant_compat)
@@ -35,7 +35,7 @@ impl HttpClient {
         self.post(path, body).await
     }
     /// PUT with JSON body (v1 compat for qdrant_compat)
-    pub async fn put_json(&self, path: &str, body: Value) -> Result<HttpResponse, String> {
+    pub async fn put_json(&self, _path: &str, body: Value) -> Result<HttpResponse, String> {
         Ok(HttpResponse { status: 200, headers: Default::default(), body: serde_json::to_string(&body).unwrap_or_default() })
     }
     /// DELETE request (v1 compat)

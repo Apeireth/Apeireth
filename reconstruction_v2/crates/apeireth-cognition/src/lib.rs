@@ -25,7 +25,7 @@
 #![deny(unsafe_code)]
 
 use apeireth_asi::{AsiV05Scores, V1136Submeasures};
-use apeireth_core::{verdict_for_target, ActionTarget, PhilosophyVerdict};
+use apeireth_core::{ActionTarget, PhilosophyVerdict};
 use thiserror::Error;
 use uuid::Uuid;
 

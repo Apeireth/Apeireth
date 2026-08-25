@@ -4,10 +4,6 @@
 
 #![allow(missing_docs)]
 
-use crate::{
-    AsiV05Scores, V1136Submeasures, V05_DIMENSION_NAMES, V05_DIM_COUNT,
-    V1136_SUBMEASURE_COUNT, V1136_SUBMEASURE_NAMES,
-};
 
 #[test]
 fn r177_asi_01_v05_24_dims() {

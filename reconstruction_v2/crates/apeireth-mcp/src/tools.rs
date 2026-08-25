@@ -1,9 +1,7 @@
 //! MCP tools 协议 (从 v1 tools.rs 抄录升级核心)
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::sync::Arc;
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDef {

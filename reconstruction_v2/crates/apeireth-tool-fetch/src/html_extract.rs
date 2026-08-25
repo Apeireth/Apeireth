@@ -133,7 +133,7 @@ pub fn extract_links(html: &str) -> Vec<(String, String)> {
                 j += 1;
             }
             let url = String::from_utf8_lossy(&bytes[start..j]).to_string();
-            let mut text_start = j + 1;
+            let text_start = j + 1;
             let mut text_end = text_start;
             while text_end + 4 < bytes.len() {
                 if &bytes[text_end..text_end + 4] == b"</a>" {

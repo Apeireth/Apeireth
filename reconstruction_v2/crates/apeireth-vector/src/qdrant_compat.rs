@@ -373,7 +373,7 @@ impl QdrantClient {
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status_code();
-        let body = resp
+        let _body = resp
             .body_text().to_string().clone();
         let body = String::new();
         if !(200..300).contains(&status) {
@@ -415,7 +415,7 @@ impl QdrantClient {
             .await
             .map_err(|e| QdrantError::HttpClient(e.to_string()))?;
         let status = resp.status_code();
-        let body = resp
+        let _body = resp
             .body_text().to_string().clone();
         let body = String::new();
         if status == 404 {

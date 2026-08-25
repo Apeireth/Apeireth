@@ -329,7 +329,7 @@ impl HeartbeatScheduler {
             loop {
                 // 等待下一个 tick 或 shutdown
                 let sleep_dur = {
-                    let mut state = inner.lock().await;
+                    let state = inner.lock().await;
                     if !state.running {
                         break;
                     }
