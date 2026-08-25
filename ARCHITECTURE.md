@@ -359,6 +359,29 @@ end-to-end test reproducible with no sleeps and no network.
 `Runtime::execute` is the only agent loop. If a second one appears anywhere, the
 two will diverge at the first behaviour change.
 
+### 6.7 Shell capability profiles
+
+A future `tool.shell` capability may only ship under these readiness rules:
+
+- **Trusted Shell** is the only v1 candidate: per-invocation `RequireApproval`,
+  explicit cwd, `Clear`/`Explicit` environment, bounded timeout/output,
+  `ProcessExecutor` guardrails, no filesystem or network isolation claim, and
+  disabled for autonomous/background operation. Its
+  `IsolationRequirement` must be satisfied on Windows, Linux, and macOS and
+  must accept `ProcessTreeContainment: Partial` on Unix.
+- **Restricted Shell** requires at least `PrivilegeReduction: Partial`,
+  stronger process-tree containment, and resource limits; it is platform
+  conditional and is not a sandbox.
+- **Untrusted Shell** requires `PrivilegeReduction: Enforced`,
+  `FilesystemIsolation: Enforced`, and `NetworkIsolation: Enforced`; it is
+  unsatisfiable on all current backends and must fail closed.
+- Approval is not containment; containment is not approval. Shell
+  implementation is blocked until the canonical approval-resume lifecycle
+  exists.
+
+See `docs/01-architecture/m2c-shell-readiness-review.md` for the full review.
+
+
 ---
 
 ## 7. The minimal agent loop
