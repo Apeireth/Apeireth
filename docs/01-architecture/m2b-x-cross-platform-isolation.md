@@ -1,6 +1,6 @@
 # M2B-X — Cross-Platform Process Isolation Foundation
 
-Status: complete (Windows tested locally; Linux/macOS CI-validated per matrix)
+Status: complete (validated on Windows, Ubuntu, and macOS CI; see CI Evidence)
 Branch: `reconstruct_v2`
 
 ## 1. Canonical contract
@@ -95,7 +95,28 @@ requirements fail before any child is spawned, with
     not called a seccomp or namespace sandbox.
   - macOS: `UNSUPPORTED`.
 
-## 8. Remaining gaps
+## 8. CI evidence
+
+Workflow: `M2B-XV three-OS process isolation validation` (`.github/workflows/m2b-xv-isolation.yml`)
+
+Run: https://github.com/Apeireth/apeireth-rust/actions/runs/32871298920
+Commit: `49ea32ec8947d5b184de72c3af6a513c73fc3127` — `test(tool): accept canonicalized cwd path on macOS`
+
+| Platform | Job | Result | Tool-canonical tests | Process-executor tests |
+| --- | --- | --- | --- | --- |
+| Windows | `process isolation (windows-latest)` | success | 25 lib + 3 architecture passed | 21 passed |
+| Ubuntu | `process isolation (ubuntu-latest)` | success | 25 lib + 3 architecture passed | 18 passed |
+| macOS | `process isolation (macos-latest)` | success | 25 lib + 3 architecture passed | 17 passed |
+
+Each job ran:
+
+```text
+cargo check -p apeireth-tools-canonical --locked
+cargo test -p apeireth-tools-canonical --locked
+cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
+```
+
+## 9. Remaining gaps
 
 - Linux/macOS process-tree containment is process-group based; descendants
   that create their own process group/session can escape.
