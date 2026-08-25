@@ -13,5 +13,7 @@
 #![deny(unsafe_code)]
 
 pub mod filesystem;
+pub mod search;
 
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use search::{SearchError, SearchTool};
