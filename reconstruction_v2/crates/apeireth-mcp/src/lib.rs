@@ -1,4 +1,3 @@
-use std::sync::Arc;
 //! apeireth-mcp — Model Context Protocol 实现 (v2 完整抄录 v1 pub API 表面)
 //!
 //! 0 装 PASS: 真 JSON-RPC 2.0 + 真 initialize handshake + 真 tools/list/call
@@ -7,6 +6,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub mod protocol;
 pub mod initialize;

@@ -141,7 +141,7 @@ pub use crate::mode_mutex::{MutexState, MutexStateInit, MutexStateMode};
 pub use crate::mode_once_lock::{OnceLockState, OnceLockStateInit, OnceLockStateMode};
 pub use crate::mode_rw_lock::{RwLockState, RwLockStateInit, RwLockStateMode};
 pub use crate::organ::{
-    BodyStub, BrainStub, EarStub, EyeStub, HandStub, HeartStub, MemoryStub, MindStub, Organ,
+    BodyStub, BrainStub, EarStub, EyeStub, HandStub, HeartStub, MemoryStub, MindStub, Organ, OrganImpl,
     VoiceStub, ORGAN_ASCII_CHARS, ORGAN_COUNT, ORGAN_NAMES_ZH,
 };
 pub use crate::registry::{OrganStateRegistry, OrganStateRegistryBuilder, REGISTRY_ORGAN_COUNT};
