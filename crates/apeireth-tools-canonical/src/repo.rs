@@ -7,14 +7,16 @@
 //! This is not a shell tool: `git` is invoked with structured, fixed argument
 //! construction only.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
-use std::process::Command;
 
 use apeireth_core::kernel::CapabilityId;
 use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
+
+use crate::process::{ProcessExecutor, ProcessLimits, ProcessRequest};
 
 /// Maximum bytes of git output returned to the model before truncation.
 pub const MAX_OUTPUT_BYTES: usize = 64 * 1024;
@@ -53,24 +55,34 @@ impl RepoTool {
         }
     }
 
-    fn command(&self, operation: &str) -> Result<Command, RepoError> {
-        let mut cmd = Command::new("git");
-        cmd.arg("-C").arg(&self.root);
+    fn command_request(&self, operation: &str) -> Result<ProcessRequest, RepoError> {
+        let mut base_args: Vec<OsString> =
+            vec![OsString::from("-C"), self.root.as_os_str().to_os_string()];
         match operation {
             "status" => {
-                cmd.arg("status").arg("--short");
+                base_args.extend([OsString::from("status"), OsString::from("--short")]);
             }
             "diff" => {
-                cmd.arg("diff").arg("--stat");
+                base_args.extend([OsString::from("diff"), OsString::from("--stat")]);
             }
             "log" => {
-                cmd.arg("log").arg("-n").arg("20").arg("--oneline");
+                base_args.extend([
+                    OsString::from("log"),
+                    OsString::from("-n"),
+                    OsString::from("20"),
+                    OsString::from("--oneline"),
+                ]);
             }
             "branch" => {
-                cmd.arg("branch").arg("-a");
+                base_args.extend([OsString::from("branch"), OsString::from("-a")]);
             }
             "summary" => {
-                cmd.arg("log").arg("-n").arg("1").arg("--stat");
+                base_args.extend([
+                    OsString::from("log"),
+                    OsString::from("-n"),
+                    OsString::from("1"),
+                    OsString::from("--stat"),
+                ]);
             }
             other => {
                 return Err(RepoError::InvalidInput(format!(
@@ -78,18 +90,15 @@ impl RepoTool {
                 )))
             }
         }
-        Ok(cmd)
+
+        Ok(ProcessRequest::new("git")
+            .with_args(base_args)
+            .with_working_directory(self.root.clone())
+            .with_limits(ProcessLimits::default()))
     }
 
     fn error_result(&self, call: &ToolCall, error: RepoError) -> ToolResult {
         ToolResult::permanent_error(&call.id, error.message())
-    }
-
-    fn truncate_utf8(bytes: &mut Vec<u8>) {
-        if bytes.len() <= MAX_OUTPUT_BYTES {
-            return;
-        }
-        bytes.truncate(MAX_OUTPUT_BYTES);
     }
 }
 
@@ -140,22 +149,43 @@ impl ToolCapability for RepoTool {
         };
 
         let operation = params.operation.to_lowercase();
-        let mut cmd = match self.command(&operation) {
-            Ok(cmd) => cmd,
+        let request = match self.command_request(&operation) {
+            Ok(request) => request,
             Err(e) => return self.error_result(call, e),
         };
+        let max_runtime = request.limits().max_runtime;
 
-        let output = match cmd.output() {
-            Ok(output) => output,
-            Err(e) => {
+        let result = match tokio::task::spawn_blocking(move || {
+            let executor = ProcessExecutor::new();
+            executor.execute(&request)
+        })
+        .await
+        {
+            Ok(Ok(result)) => result,
+            Ok(Err(e)) => {
                 return ToolResult::permanent_error(&call.id, format!("failed to execute git: {e}"))
+            }
+            Err(join_error) => {
+                return ToolResult::retryable_error(
+                    &call.id,
+                    format!("repo executor task failed: {join_error}"),
+                )
             }
         };
 
-        if output.status.success() {
-            let mut stdout = output.stdout;
-            let truncated = stdout.len() > MAX_OUTPUT_BYTES;
-            Self::truncate_utf8(&mut stdout);
+        if result.timed_out() {
+            return ToolResult::retryable_error(
+                &call.id,
+                format!("git {operation} timed out after {max_runtime:?}"),
+            );
+        }
+
+        if result.success() {
+            let mut stdout = result.stdout;
+            let truncated = result.stdout_truncated || stdout.len() > MAX_OUTPUT_BYTES;
+            if stdout.len() > MAX_OUTPUT_BYTES {
+                stdout.truncate(MAX_OUTPUT_BYTES);
+            }
             let text = if stdout.is_empty() {
                 format!("git {operation} completed with empty output")
             } else {
@@ -168,10 +198,16 @@ impl ToolCapability for RepoTool {
             });
             ToolResult::ok(&call.id, value)
         } else {
-            let mut stderr = output.stderr;
-            Self::truncate_utf8(&mut stderr);
+            let code = result
+                .exit_code()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|| "unknown".into());
+            let mut stderr = result.stderr;
+            if stderr.len() > MAX_OUTPUT_BYTES {
+                stderr.truncate(MAX_OUTPUT_BYTES);
+            }
             let message = if stderr.is_empty() {
-                format!("git {operation} failed with status {}", output.status)
+                format!("git {operation} failed with status {code}")
             } else {
                 String::from_utf8_lossy(&stderr).to_string()
             };
@@ -185,6 +221,7 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::fs;
+    use std::process::Command;
 
     fn git_available() -> bool {
         Command::new("git")
