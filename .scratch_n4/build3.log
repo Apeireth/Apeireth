@@ -1,0 +1,1297 @@
+   Compiling hyper v0.14.32
+   Compiling apeireth-governance v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-governance)
+   Compiling hyper-util v0.1.20
+   Compiling r2d2_sqlite v0.24.0
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-asi\src\organ_kani_proofs.rs:100:7
+    |
+100 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 32 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-asi\src\organ_kani_proofs.rs:107:7
+    |
+107 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused imports: `AsiV05Scores`, `V05_DIMENSION_NAMES`, `V05_DIM_COUNT`, `V1136Submeasures`, `V1136_SUBMEASURE_COUNT`, and `V1136_SUBMEASURE_NAMES`
+ --> crates\apeireth-asi\src\organ_kani_proofs.rs:8:5
+  |
+8 |     AsiV05Scores, V1136Submeasures, V05_DIMENSION_NAMES, V05_DIM_COUNT,
+  |     ^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+9 |     V1136_SUBMEASURE_COUNT, V1136_SUBMEASURE_NAMES,
+  |     ^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `apeireth-asi` (lib) generated 3 warnings (run `cargo fix --lib -p apeireth-asi` to apply 1 suggestion)
+   Compiling prost-types v0.13.5
+   Compiling ratatui-macros v0.7.2
+   Compiling apeireth-sovereignty v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-sovereignty)
+   Compiling apeireth-cognition v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-cognition)
+   Compiling apeireth-council v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-council)
+   Compiling apeireth-action v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-action)
+   Compiling apeireth-perception v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-perception)
+   Compiling apeireth-upgrade v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-upgrade)
+   Compiling apeireth-provider v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-provider)
+   Compiling apeireth-guard v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-guard)
+   Compiling apeireth-graph v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-graph)
+   Compiling jsonwebtoken v9.3.1
+   Compiling apeireth-extension v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-extension)
+   Compiling tower-http v0.6.11
+error: character constant must be escaped: `\n`
+  --> crates\apeireth-provider\src\reasoning_adapter.rs:33:45
+   |
+33 |       let closing_prefix = if text.ends_with('
+   |  _____________________________________________^
+34 | | ') { "" } else { "
+   | |_^
+   |
+help: escape the character
+   |
+33 |     let closing_prefix = if text.ends_with('\n') { "" } else { "
+   |                                             ++
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\pii.rs:406:35
+    |
+406 |         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+    |                                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+406 -         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+406 +         assert!(detect_pii("sk-ab \u{77ed} token \u4fdd\u7559")
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\pii.rs:406:48
+    |
+406 |         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+    |                                                ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+406 -         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+406 +         assert!(detect_pii("sk-ab \u77ed token \u{4fdd}\u7559")
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\pii.rs:406:54
+    |
+406 |         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+    |                                                      ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+406 -         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u7559")
+406 +         assert!(detect_pii("sk-ab \u77ed token \u4fdd\u{7559}")
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\pii.rs:433:67
+    |
+433 |         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u91ca");
+    |                                                                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+433 -         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u91ca");
+433 +         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u{6ce8}\u91ca");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\pii.rs:433:73
+    |
+433 |         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u91ca");
+    |                                                                         ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+433 -         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u91ca");
+433 +         let m = detect_pii("export DB_PASSWORD='hunter2hunter2' # \u6ce8\u{91ca}");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:168:38
+    |
+168 |         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |                                      ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+168 -         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+168 +         assert!(matches.len() >= 2, "\u{5e94}\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:168:44
+    |
+168 |         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |                                            ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+168 -         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+168 +         assert!(matches.len() >= 2, "\u5e94\u{540c}\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:168:50
+    |
+168 |         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |                                                  ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+168 -         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+168 +         assert!(matches.len() >= 2, "\u5e94\u540c\u{65f6}\u68c0\u51fa EnvSecret + SecretToken");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:168:56
+    |
+168 |         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |                                                        ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+168 -         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+168 +         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u{68c0}\u51fa EnvSecret + SecretToken");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:168:62
+    |
+168 |         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+    |                                                              ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+168 -         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u51fa EnvSecret + SecretToken");
+168 +         assert!(matches.len() >= 2, "\u5e94\u540c\u65f6\u68c0\u{51fa} EnvSecret + SecretToken");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:19
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u{524d}\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:25
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                         ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u{7f00}\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:31
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                               ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u{4fdd}\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:37
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                     ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u{7559}, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:45
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                             ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u{503c}\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:51
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u{90e8}\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:57
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                         ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u{9996}\u5b57\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:63
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                               ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u{5b57}\u7b26\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:69
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                                     ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u{7b26}\u4fdd\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:75
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                                           ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u{4fdd}\u7559: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:172:81
+    |
+172 |             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+    |                                                                                 ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+172 -             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u7559: {}",
+172 +             "KEY= \u524d\u7f00\u4fdd\u7559, \u503c\u90e8\u9996\u5b57\u7b26\u4fdd\u{7559}: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:38
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                      ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u{503c}\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:44
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                            ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u{90e8}\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:50
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                                  ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u90e8\u{5c3e}\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:56
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                                        ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u{5b57}\u7b26\u4fdd\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:62
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                                              ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u{7b26}\u4fdd\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:68
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                                                    ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u{4fdd}\u7559: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:175:74
+    |
+175 |         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+    |                                                                          ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+175 -         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u7559: {}", out);
+175 +         assert!(out.ends_with('v'), "\u503c\u90e8\u5c3e\u5b57\u7b26\u4fdd\u{7559}: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:53
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                     ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u{4e3b}\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:59
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                           ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u4e3b\u{4f53}\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:65
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                                 ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u{4e0d}\u5e94\u53ef\u89c1: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:71
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                                       ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u{5e94}\u53ef\u89c1: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:77
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                                             ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u{53ef}\u89c1: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:176:83
+    |
+176 |         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+    |                                                                                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+176 -         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u89c1: {}", out);
+176 +         assert!(!out.contains("1234567890"), "token \u4e3b\u4f53\u4e0d\u5e94\u53ef\u{89c1}: {}", out);
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:20
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                    ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u{524d}\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:26
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                          ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u{7f00}+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:33
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                 ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u{4e3b}\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:39
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                       ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u{4f53}\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:45
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                             ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u{4e0d}\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:51
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                                   ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u{5e94}\u8fde\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:57
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                                         ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u{8fde}\u7eed\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:63
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                                               ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u{7eed}\u53ef\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:69
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                                                     ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u{53ef}\u89c1: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\redactor.rs:179:75
+    |
+179 |             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+    |                                                                           ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+179 -             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u89c1: {}",
+179 +             "token \u524d\u7f00+\u4e3b\u4f53\u4e0d\u5e94\u8fde\u7eed\u53ef\u{89c1}: {}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:388:27
+    |
+388 |                 "U+{:04X} \u5e94\u786c\u62d2",
+    |                           ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+388 -                 "U+{:04X} \u5e94\u786c\u62d2",
+388 +                 "U+{:04X} \u{5e94}\u786c\u62d2",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:388:33
+    |
+388 |                 "U+{:04X} \u5e94\u786c\u62d2",
+    |                                 ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+388 -                 "U+{:04X} \u5e94\u786c\u62d2",
+388 +                 "U+{:04X} \u5e94\u{786c}\u62d2",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:388:39
+    |
+388 |                 "U+{:04X} \u5e94\u786c\u62d2",
+    |                                       ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+388 -                 "U+{:04X} \u5e94\u786c\u62d2",
+388 +                 "U+{:04X} \u5e94\u786c\u{62d2}",
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:28
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u{5e94}\u622a\u65ad\u5230\u4e0a\u9650"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:34
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                      ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u5e94\u{622a}\u65ad\u5230\u4e0a\u9650"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:40
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                            ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u5e94\u622a\u{65ad}\u5230\u4e0a\u9650"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:46
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                                  ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u5e94\u622a\u65ad\u{5230}\u4e0a\u9650"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:52
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                                        ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u{4e0a}\u9650"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:449:58
+    |
+449 |             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+    |                                                              ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+449 -             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u9650"
+449 +             "隐藏字符 findings \u5e94\u622a\u65ad\u5230\u4e0a\u{9650}"
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:502:44
+    |
+502 |         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+    |                                            ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+502 -         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+502 +         assert_eq!(snap[0].tool, "t2", "t1 \u{5e94}\u88ab\u6324\u51fa");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:502:50
+    |
+502 |         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+    |                                                  ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+502 -         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+502 +         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u{88ab}\u6324\u51fa");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:502:56
+    |
+502 |         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+    |                                                        ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+502 -         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+502 +         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u{6324}\u51fa");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:502:62
+    |
+502 |         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+    |                                                              ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+502 -         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u51fa");
+502 +         assert_eq!(snap[0].tool, "t2", "t1 \u5e94\u88ab\u6324\u{51fa}");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:40
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                        ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u{544a}\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:46
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                              ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u{8b66}\u6807\u8bb0\u5e94\u7559\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:52
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                                    ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u8b66\u{6807}\u8bb0\u5e94\u7559\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:58
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                                          ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u{8bb0}\u5e94\u7559\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:64
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                                                ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u{5e94}\u7559\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:70
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                                                      ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u{7559}\u75d5");
+    |
+
+error: incorrect unicode escape sequence
+   --> crates\apeireth-guard\src\tool_desc_audit.rs:504:76
+    |
+504 |         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+    |                                                                            ^^^
+    |
+help: format of unicode escape sequences uses braces
+    |
+504 -         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u75d5");
+504 +         assert!(snap[1].changed, "diff \u544a\u8b66\u6807\u8bb0\u5e94\u7559\u{75d5}");
+    |
+
+   Compiling ratatui v0.30.2
+   Compiling apeireth-storage v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-storage)
+error: could not compile `apeireth-provider` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+warning: unused imports: `ActionExpression` and `ActionSilence`
+  --> crates\apeireth-action\src\execution.rs:11:30
+   |
+11 | use crate::{ActionExecution, ActionExpression, ActionSilence};
+   |                              ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `verdict_for_target`
+  --> crates\apeireth-cognition\src\lib.rs:28:21
+   |
+28 | use apeireth_core::{verdict_for_target, ActionTarget, PhilosophyVerdict};
+   |                     ^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0432]: unresolved import `apeireth_constraint`
+  --> crates\apeireth-upgrade\src\cross_crate.rs:31:5
+   |
+31 | use apeireth_constraint::{ConstraintEngine, FourGates, GateVerdict, PermissionGrant, RiskGrant};
+   |     ^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_constraint`
+   |
+   = help: if you wanted to use a crate named `apeireth_constraint`, use `cargo add apeireth_constraint` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `apeireth_council`
+  --> crates\apeireth-upgrade\src\cross_crate.rs:32:5
+   |
+32 | use apeireth_council::{
+   |     ^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_council`
+   |
+help: there is a crate or module with a similar name
+   |
+32 - use apeireth_council::{
+32 + use apeireth_core::{
+   |
+
+error[E0432]: unresolved import `apeireth_sovereignty`
+  --> crates\apeireth-upgrade\src\cross_crate.rs:36:5
+   |
+36 | use apeireth_sovereignty::{
+   |     ^^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_sovereignty`
+   |
+   = help: if you wanted to use a crate named `apeireth_sovereignty`, use `cargo add apeireth_sovereignty` to add it to your `Cargo.toml`
+
+error[E0432]: unresolved import `apeireth_council`
+   --> crates\apeireth-upgrade\src\cross_crate.rs:385:9
+    |
+385 |     use apeireth_council::StanceKind;
+    |         ^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_council`
+    |
+help: there is a crate or module with a similar name
+    |
+385 -     use apeireth_council::StanceKind;
+385 +     use apeireth_core::StanceKind;
+    |
+
+error[E0308]: mismatched types
+   --> crates\apeireth-guard\src\lib.rs:247:74
+    |
+247 |                     .record_match(PrivacyAction::Detected, m, timestamp, "detect-only");
+    |                      ------------ arguments to this method are incorrect ^^^^^^^^^^^^^ expected `String`, found `&str`
+    |
+note: method defined here
+   --> crates\apeireth-guard\src\lib.rs:127:12
+    |
+127 |     pub fn record_match(
+    |            ^^^^^^^^^^^^
+...
+132 |         note: String,
+    |         ------------
+help: try using a conversion method
+    |
+247 |                     .record_match(PrivacyAction::Detected, m, timestamp, "detect-only".to_string());
+    |                                                                                       ++++++++++++
+
+warning: unused imports: `Deserialize` and `Serialize`
+ --> crates\apeireth-graph\src\conditional.rs:5:13
+  |
+5 | use serde::{Deserialize, Serialize};
+  |             ^^^^^^^^^^^  ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Graph` and `NodeOutput`
+ --> crates\apeireth-graph\src\state_graph.rs:7:25
+  |
+7 | use crate::{FinalState, Graph, GraphError, Node, NodeId, NodeOutput, Result};
+  |                         ^^^^^                            ^^^^^^^^^^
+
+error[E0433]: cannot find module or crate `apeireth_constraint` in this scope
+   --> crates\apeireth-upgrade\src\cross_crate.rs:378:9
+    |
+378 |         apeireth_constraint::GrantVerdict::Pass => GateVerdict::Pass,
+    |         ^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_constraint`
+    |
+    = help: if you wanted to use a crate named `apeireth_constraint`, use `cargo add apeireth_constraint` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `apeireth_constraint` in this scope
+   --> crates\apeireth-upgrade\src\cross_crate.rs:379:9
+    |
+379 |         apeireth_constraint::GrantVerdict::Block(r) => GateVerdict::Block(r),
+    |         ^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_constraint`
+    |
+    = help: if you wanted to use a crate named `apeireth_constraint`, use `cargo add apeireth_constraint` to add it to your `Cargo.toml`
+
+error[E0425]: cannot find type `Action` in crate `apeireth_core`
+   --> crates\apeireth-upgrade\src\cross_crate.rs:357:29
+    |
+357 |     action: &apeireth_core::Action,
+    |                             ^^^^^^ not found in `apeireth_core`
+
+For more information about this error, try `rustc --explain E0308`.
+warning: unused import: `std::collections::HashMap`
+ --> crates\apeireth-storage\src\memory_agent_trace.rs:5:5
+  |
+5 | use std::collections::HashMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error: could not compile `apeireth-guard` (lib) due to 65 previous errors
+error[E0432]: unresolved import `crate::sovereign`
+ --> crates\apeireth-council\src\deliberation.rs:9:12
+  |
+9 | use crate::sovereign::{CouncilEvent, SovereigntyHook};
+  |            ^^^^^^^^^ could not find `sovereign` in the crate root
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+ --> crates\apeireth-council\src\advisor.rs:8:5
+  |
+8 | use crate::lifecycle::AdvisorLifecycle;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved imports `crate::deliberation::Council`, `crate::deliberation::CouncilVerdict`
+  --> crates\apeireth-council\src\checkpoint_integration.rs:24:27
+   |
+24 | use crate::deliberation::{Council, CouncilQuery, CouncilVerdict};
+   |                           ^^^^^^^                ^^^^^^^^^^^^^^ no `CouncilVerdict` in `deliberation`
+   |                           |
+   |                           no `Council` in `deliberation`
+
+error[E0432]: unresolved import `crate::deliberation::QueryContext`
+  --> crates\apeireth-council\src\graph_bridge.rs:27:41
+   |
+27 | use crate::deliberation::{CouncilQuery, QueryContext};
+   |                                         ^^^^^^^^^^^^ no `QueryContext` in `deliberation`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\ethics.rs:13:5
+   |
+13 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\history.rs:12:5
+   |
+12 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\legal.rs:12:5
+   |
+12 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\performance.rs:12:5
+   |
+12 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\philosophy.rs:14:5
+   |
+14 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\safety.rs:12:5
+   |
+12 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\strategy.rs:12:5
+   |
+12 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved import `crate::lifecycle::AdvisorLifecycle`
+  --> crates\apeireth-council\src\advisors\mod.rs:31:5
+   |
+31 | use crate::lifecycle::AdvisorLifecycle;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved imports `deliberation::Council`, `deliberation::CouncilVerdict`, `deliberation::DeliberationStreamEvent`
+  --> crates\apeireth-council\src\lib.rs:84:5
+   |
+84 |     Council, CouncilQuery, CouncilVerdict, DeliberationStreamEvent, DEFAULT_DELIBERATION_TIMEOUT_MS,
+   |     ^^^^^^^                ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^ no `DeliberationStreamEvent` in `deliberation`
+   |     |                      |
+   |     |                      no `CouncilVerdict` in `deliberation`
+   |     no `Council` in `deliberation`
+
+error[E0432]: unresolved imports `lifecycle::AdvisorLifecycle`, `lifecycle::LifecycleStats`
+  --> crates\apeireth-council\src\lib.rs:87:21
+   |
+87 | pub use lifecycle::{AdvisorLifecycle, LifecycleManager, LifecycleStats};
+   |                     ^^^^^^^^^^^^^^^^                    ^^^^^^^^^^^^^^ no `LifecycleStats` in `lifecycle`
+   |                     |
+   |                     no `AdvisorLifecycle` in `lifecycle`
+
+error[E0432]: unresolved imports `persona::DebateRound`, `persona::PersonaSession`
+  --> crates\apeireth-council\src\lib.rs:99:19
+   |
+99 | pub use persona::{DebateRound, Persona, PersonaSession};
+   |                   ^^^^^^^^^^^           ^^^^^^^^^^^^^^ no `PersonaSession` in `persona`
+   |                   |
+   |                   no `DebateRound` in `persona`
+
+error[E0433]: cannot find module or crate `apeireth_constraint` in this scope
+   --> crates\apeireth-upgrade\src\cross_crate.rs:376:21
+    |
+376 | fn grant_to_gate(g: apeireth_constraint::GrantVerdict) -> GateVerdict {
+    |                     ^^^^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_constraint`
+    |
+    = help: if you wanted to use a crate named `apeireth_constraint`, use `cargo add apeireth_constraint` to add it to your `Cargo.toml`
+
+error[E0433]: cannot find module or crate `apeireth_council` in this scope
+   --> crates\apeireth-upgrade\src\cross_crate.rs:384:26
+    |
+384 | fn stance_kind_to_str(k: apeireth_council::StanceKind) -> String {
+    |                          ^^^^^^^^^^^^^^^^ use of unresolved module or unlinked crate `apeireth_council`
+    |
+help: there is a crate or module with a similar name
+    |
+384 - fn stance_kind_to_str(k: apeireth_council::StanceKind) -> String {
+384 + fn stance_kind_to_str(k: apeireth_core::StanceKind) -> String {
+    |
+
+Some errors have detailed explanations: E0425, E0432, E0433.
+For more information about an error, try `rustc --explain E0425`.
+error: could not compile `apeireth-upgrade` (lib) due to 9 previous errors
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-council\src\organ_kani_proofs.rs:102:7
+    |
+102 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: expected names are: `docsrs`, `feature`, and `test` and 32 more
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+    = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition name: `kani`
+   --> crates\apeireth-council\src\organ_kani_proofs.rs:108:7
+    |
+108 | #[cfg(kani)]
+    |       ^^^^
+    |
+    = help: consider using a Cargo feature instead
+    = help: or consider adding in `Cargo.toml` the `check-cfg` lint config for the lint:
+             [lints.rust]
+             unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)'] }
+    = help: or consider adding `println!("cargo::rustc-check-cfg=cfg(kani)");` to the top of the `build.rs`
+    = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused import: `crate::advisor::AdvisorDomain`
+ --> crates\apeireth-council\src\organ_kani_proofs.rs:5:5
+  |
+5 | use crate::advisor::AdvisorDomain;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `DELEGATION_PATHS`, `DelegationPath`, `delegations_from`, `delegations_to`, `is_valid_delegation`, and `self_delegations`
+ --> crates\apeireth-council\src\organ_kani_proofs.rs:7:5
+  |
+7 |     delegations_from, delegations_to, is_valid_delegation, self_delegations, DelegationPath,
+  |     ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^
+8 |     DELEGATION_PATHS,
+  |     ^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::synthesis::SynthesisReport`
+  --> crates\apeireth-council\src\graph_orchestration.rs:23:5
+   |
+23 | use crate::synthesis::SynthesisReport;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Edge`
+  --> crates\apeireth-council\src\graph_orchestration.rs:24:28
+   |
+24 | use crate::graph_runtime::{Edge, Graph, Node, NodeId, NodeOutput, State};
+   |                            ^^^^
+
+warning: unused import: `MockLlmResponse`
+  --> crates\apeireth-council\src\stress_test.rs:26:40
+   |
+26 | use crate::mock_llm::{MockLlmProvider, MockLlmResponse};
+   |                                        ^^^^^^^^^^^^^^^
+   |
+help: if this is a test module, consider adding a `#[cfg(test)]` to the containing module
+  --> crates\apeireth-council\src\lib.rs:66:1
+   |
+66 | pub mod stress_test;
+   | ^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\ethics.rs:9:54
+  |
+9 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\history.rs:8:54
+  |
+8 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\legal.rs:8:54
+  |
+8 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `init_context`
+ --> crates\apeireth-council\src\advisors\performance.rs:6:32
+  |
+6 | use super::{default_lifecycle, init_context, keyword_stance, make_opinion};
+  |                                ^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\performance.rs:8:54
+  |
+8 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+  --> crates\apeireth-council\src\advisors\philosophy.rs:10:54
+   |
+10 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+   |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `init_context`
+ --> crates\apeireth-council\src\advisors\safety.rs:6:32
+  |
+6 | use super::{default_lifecycle, init_context, keyword_stance, make_opinion};
+  |                                ^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\safety.rs:8:54
+  |
+8 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `AdvisorOpinion`
+ --> crates\apeireth-council\src\advisors\strategy.rs:8:54
+  |
+8 |     Advisor, AdvisorDomain, AdvisorError, AdvisorId, AdvisorOpinion, DeliberationContext,
+  |                                                      ^^^^^^^^^^^^^^
+
+warning: unused import: `AuthorityMode`
+ --> crates\apeireth-sovereignty\src\ha_modes.rs:3:17
+  |
+3 | use crate::ha::{AuthorityMode, BiometricProvider, BiometricResult, HumanAuthority, MultiSigPolicy};
+  |                 ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SovereigntyDomain`
+ --> crates\apeireth-sovereignty\src\sovereign.rs:4:67
+  |
+4 | use crate::decision::{Decision, DecisionOutcome, DecisionRequest, SovereigntyDomain};
+  |                                                                   ^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `SelfDisableCheck`, `SelfDisableGuard`, and `SelfDisableRecord`
+ --> crates\apeireth-sovereignty\src\kani_proofs.rs:6:5
+  |
+6 |     SelfDisableCheck, SelfDisableGuard, SelfDisableRecord, SelfDisableTrigger,
+  |     ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `SelfDisableGuard` and `SelfDisableTrigger`
+ --> crates\apeireth-sovereignty\src\organ_kani_proofs.rs:5:27
+  |
+5 | use crate::self_disable::{SelfDisableGuard, SelfDisableTrigger};
+  |                           ^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^
+
+warning: `apeireth-graph` (lib) generated 2 warnings (run `cargo fix --lib -p apeireth-graph` to apply 2 suggestions)
+For more information about this error, try `rustc --explain E0432`.
+warning: `apeireth-council` (lib) generated 16 warnings
+error: could not compile `apeireth-council` (lib) due to 15 previous errors; 16 warnings emitted
+warning: `apeireth-action` (lib) generated 1 warning (run `cargo fix --lib -p apeireth-action` to apply 1 suggestion)
+warning: `apeireth-cognition` (lib) generated 1 warning (run `cargo fix --lib -p apeireth-cognition` to apply 1 suggestion)
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> crates\apeireth-storage\src\memory_identity.rs:100:9
+    |
+100 |         drop(target);
+    |         ^^^^^------^
+    |              |
+    |              argument has type `&mut UserIdentity`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+100 -         drop(target);
+100 +         let _ = target;
+    |
+
+warning: method `push_record` is never used
+   --> crates\apeireth-sovereignty\src\self_disable.rs:112:8
+    |
+ 92 | impl SelfDisableGuard {
+    | --------------------- method in this implementation
+...
+112 |     fn push_record(&mut self, trigger: SelfDisableTrigger, context: String) -> SelfDisableRecord {
+    |        ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `trigger_no_degrade` is never used
+ --> crates\apeireth-sovereignty\src\kani_proofs.rs:9:4
+  |
+9 | fn trigger_no_degrade() -> SelfDisableTrigger {
+  |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `trigger_no_patch` is never used
+  --> crates\apeireth-sovereignty\src\kani_proofs.rs:12:4
+   |
+12 | fn trigger_no_patch() -> SelfDisableTrigger {
+   |    ^^^^^^^^^^^^^^^^
+
+warning: function `trigger_no_bypass` is never used
+  --> crates\apeireth-sovereignty\src\kani_proofs.rs:15:4
+   |
+15 | fn trigger_no_bypass() -> SelfDisableTrigger {
+   |    ^^^^^^^^^^^^^^^^^
+
+warning: function `trigger_no_reverse` is never used
+  --> crates\apeireth-sovereignty\src\kani_proofs.rs:18:4
+   |
+18 | fn trigger_no_reverse() -> SelfDisableTrigger {
+   |    ^^^^^^^^^^^^^^^^^^
+
+warning: function `trigger_no_hide` is never used
+  --> crates\apeireth-sovereignty\src\kani_proofs.rs:21:4
+   |
+21 | fn trigger_no_hide() -> SelfDisableTrigger {
+   |    ^^^^^^^^^^^^^^^
+
+warning: `apeireth-storage` (lib) generated 2 warnings (run `cargo fix --lib -p apeireth-storage` to apply 1 suggestion)
+warning: `apeireth-sovereignty` (lib) generated 10 warnings (run `cargo fix --lib -p apeireth-sovereignty` to apply 4 suggestions)

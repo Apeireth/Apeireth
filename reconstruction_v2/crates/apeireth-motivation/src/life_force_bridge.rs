@@ -176,6 +176,7 @@ mod tests {
             birth_time: 1_700_000_000,
             carriers: vec!["carrier-A".to_string()],
             migration_history: vec![],
+            ..Default::default()
         }
     }
 

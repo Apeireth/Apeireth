@@ -44,7 +44,7 @@ mod tests {
     fn test_request_serde() {
         let r = JsonRpcRequest { jsonrpc: "2.0".into(), method: "x".into(), params: serde_json::json!({}), id: 1 };
         let s = serde_json::to_string(&r).unwrap();
-        assert!(s.contains(""method":"x""));
+        assert!(s.contains("\"method\":\"x\""));
     }
     #[test]
     fn test_error_serde() {

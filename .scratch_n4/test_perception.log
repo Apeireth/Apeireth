@@ -1,0 +1,37 @@
+   Compiling apeireth-perception v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-perception)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.62s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_perception-be7937a4d15b097d.exe)
+
+running 29 tests
+test attention::tests::default_threshold_is_half ... ok
+test attention::tests::default_top_k_is_five ... ok
+test attention::tests::top_k_k_greater_than_len_returns_all ... ok
+test attention::tests::threshold_filters_below ... ok
+test attention::tests::top_k_keeps_highest_priorities ... ok
+test channel::tests::command_channel_tags_user_initiated ... ok
+test channel::tests::channel_kind_labels_distinct ... ok
+test attention::tests::threshold_clamps_argument ... ok
+test attention::tests::top_k_k_zero_returns_empty ... ok
+test input::tests::vision_priority_proportional_to_pixels ... ok
+test input::tests::voice_priority_equals_loudness_clamped ... ok
+test tests::default_top_k_is_five ... ok
+test channel::tests::text_channel_emits_event ... ok
+test channel::tests::tactile_channel_includes_pressure ... ok
+test input::tests::command_input_default_high_priority ... ok
+test input::tests::signal_source_labels_are_stable ... ok
+test input::tests::tactile_priority_uses_absolute_pressure ... ok
+test input::tests::text_input_priority_clamps_to_range ... ok
+test channel::tests::process_all_returns_one_per_input ... ok
+test tests::default_attention_threshold_is_half ... ok
+test channel::tests::vision_channel_includes_dimensions ... ok
+test channel::tests::voice_channel_serializes_payload_as_json ... ok
+test tests::now_timestamp_is_recent ... ok
+test tests::pipeline_filters_by_threshold ... ok
+test tests::validate_event_accepts_good ... ok
+test tests::validate_event_rejects_empty_payload ... ok
+test channel::tests::event_with_tag_appends ... ok
+test tests::validate_event_rejects_out_of_range_priority ... ok
+test tests::batch_process_routes_to_channel ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

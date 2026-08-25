@@ -1,0 +1,418 @@
+   Compiling apeireth-core v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-core)
+   Compiling apeireth-sovereignty v2.0.0 (C:\Users\31683\Apeireth-rust\reconstruction_v2\crates\apeireth-sovereignty)
+warning: unused imports: `HAAuthentication` and `Signatory`
+   --> crates\apeireth-sovereignty\src\ha_modes.rs:179:36
+    |
+179 |     use crate::ha::{HumanApproval, HAAuthentication, Signatory};
+    |                                    ^^^^^^^^^^^^^^^^  ^^^^^^^^^
+    |
+    = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `SovereigntyDomain`
+ --> crates\apeireth-sovereignty\src\sovereign.rs:4:67
+  |
+4 | use crate::decision::{Decision, DecisionOutcome, DecisionRequest, SovereigntyDomain};
+  |                                                                   ^^^^^^^^^^^^^^^^^
+
+warning: unused import: `InMemoryHumanVoter`
+   --> crates\apeireth-sovereignty\src\governance.rs:261:39
+    |
+261 |     use crate::multi_human::{HumanId, InMemoryHumanVoter, Vote};
+    |                                       ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `InMemoryPhysicalMultisig`
+   --> crates\apeireth-sovereignty\src\governance.rs:262:36
+    |
+262 |     use crate::physical_multisig::{InMemoryPhysicalMultisig, PhysicalSignerId};
+    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `ActionRegistry`
+   --> crates\apeireth-sovereignty\src\flow_executor.rs:179:40
+    |
+179 |     use crate::action_rail::{ActionId, ActionRegistry};
+    |                                        ^^^^^^^^^^^^^^
+
+warning: method `push_record` is never used
+   --> crates\apeireth-sovereignty\src\self_disable.rs:112:8
+    |
+ 92 | impl SelfDisableGuard {
+    | --------------------- method in this implementation
+...
+112 |     fn push_record(&mut self, trigger: SelfDisableTrigger, context: String) -> SelfDisableRecord {
+    |        ^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `apeireth-sovereignty` (lib test) generated 6 warnings (run `cargo fix --lib -p apeireth-sovereignty --tests` to apply 5 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.88s
+     Running unittests src\lib.rs (target\debug\deps\apeireth_sovereignty-42992768e1910510.exe)
+
+running 344 tests
+test action_rail::tests::all_eight_action_ids_match ... ok
+test action_rail::tests::by_kind_filters ... ok
+test action_rail::tests::action_registry_has_eight ... ok
+test action_rail::tests::outcome_id_extraction ... ok
+test action_rail::tests::five_guardrails_kinds_unique ... ok
+test action_rail::tests::input_rail_rejects_empty ... ok
+test action_rail::tests::input_rail_accepts_non_empty ... ok
+test action_rail::tests::chain_executes_all_eight ... ok
+test action_rail::tests::output_rail_rejects_empty_llm ... ok
+test action_rail::tests::retrieval_rail_rewrites_empty ... ok
+test audit::tests::required_min_level_mapping ... ok
+test anti_ai::tests::k1_three_failures ... ok
+test audit::tests::with_id_override ... ok
+test audit_window::tests::best_effort_thought_not_applicable ... ok
+test anti_ai::tests::clear ... ok
+test anti_ai::tests::emit_and_filter ... ok
+test anti_ai::tests::high_severity_threshold ... ok
+test anti_ai::tests::threat_count_4 ... ok
+test audit::tests::audit_level_count_5_and_ordering ... ok
+test anti_ai::tests::default_severity_ordering ... ok
+test audit::tests::clear ... ok
+test audit::tests::k1_strict_three_failures ... ok
+test action_rail::tests::kebab_names_unique ... ok
+test audit::tests::event_kind_count_4 ... ok
+test action_rail::tests::run_five_rails_executes_five ... ok
+test audit::tests::try_record_passes_and_rejects ... ok
+test audit_window::tests::audit_by_owner ... ok
+test audit_window::tests::best_effort_no_thought ... ok
+test audit_window::tests::history_mark_audited ... ok
+test audit_window::tests::best_effort_window_expired ... ok
+test audit_window::tests::best_effort_within_window ... ok
+test audit_window::tests::clear_history ... ok
+test audit_window::tests::default_window_is_1_second ... ok
+test audit_window::tests::history_records_thought ... ok
+test audit::tests::filter_by_actor_and_kind ... ok
+test audit_window::tests::is_empty_default ... ok
+test audit_window::tests::history_records_downstream ... ok
+test colang_dsl::tests::dsl_onion_layer_block ... ok
+test colang_dsl::tests::classify_main_token_full ... ok
+test colang_dsl::tests::guard_allows_clean ... ok
+test colang_dsl::tests::guard_blocks_harm ... ok
+test colang_dsl::tests::guard_blocks_max_lines_exceeded ... ok
+test colang_dsl::tests::dsl_onion_layer_pass ... FAILED
+test colang_dsl::tests::guard_blocks_max_elements_exceeded ... ok
+test colang_dsl::tests::guard_blocks_max_utterances_exceeded ... ok
+test colang_dsl::tests::parse_comments_only ... ok
+test colang_dsl::tests::parse_unclosed_string ... ok
+test colang_dsl::tests::guard_pending_required_missing ... ok
+test colang_dsl::tests::parse_unknown_define_kind ... ok
+test colang_dsl::tests::parse_missing_define_name ... ok
+test colang_dsl::tests::parse_empty ... ok
+test colang_dsl::tests::validate_happy_path ... ok
+test colang_dsl::tests::parse_hello_world ... ok
+test continuity::tests::continuity_new_initial_carrier ... ok
+test colang_dsl::tests::validation_report_ok_and_with_errors ... ok
+test continuity::tests::integrity_proof ... ok
+test continuity::tests::migrate_changes_carrier_and_records ... ok
+test continuity::tests::migrate_same_carrier_rejected ... ok
+test continuity::tests::verify_continuity_rejects_empty_and_space ... ok
+test decision::tests::decision_outcome_is_allowed ... ok
+test decision::tests::decision_pending_and_rejected_predicates ... ok
+test decision::tests::decision_request_new_defaults_low_risk ... ok
+test evidence_guard::tests::all_evidence_kinds_eq ... ok
+test evidence_guard::tests::claim_count ... ok
+test evidence_guard::tests::empty_evidence_fails ... ok
+test evidence_guard::tests::failures_list_grows ... ok
+test evidence_guard::tests::get_returns_recorded ... ok
+test evidence_guard::tests::has_empirical_inference_only_false ... ok
+test evidence_guard::tests::has_empirical_with_tool_call_true ... ok
+test evidence_guard::tests::inference_high_confidence_fails ... ok
+test evidence_guard::tests::inference_low_confidence_passes ... ok
+test evidence_guard::tests::multi_evidence_record ... ok
+test evidence_guard::tests::nine_fold_hardcode_asserted ... ok
+test evidence_guard::tests::record_tool_call_evidence_passes ... ok
+test evidence_guard::tests::verify_missing_claim ... ok
+test explain::tests::complete_lifecycle ... ok
+test explain::tests::k1_three_failures ... ok
+test explain::tests::new_trace_empty ... ok
+test explain::tests::stage_count_5 ... ok
+test explain::tests::stage_str_round_trip ... ok
+test explain::tests::verdict_outcome_str ... ok
+test fail_closed::tests::all_phases_pass ... ok
+test fail_closed::tests::apply_failure ... ok
+test fail_closed::tests::error_display_includes_phase ... ok
+test fail_closed::tests::phase_labels ... ok
+test fail_closed::tests::prepare_failure_aborts ... ok
+test fail_closed::tests::verify_failure_aborts ... ok
+test flow_executor::tests::abort_terminates ... ok
+test flow_executor::tests::flow_executor_run_all ... ok
+test flow_executor::tests::flow_state_terminal_predicate ... ok
+test flow_executor::tests::flow_executor_runs_multiple ... ok
+test flow_executor::tests::flow_step_count_17 ... ok
+test flow_executor::tests::flow_step_from_colang_kind ... ok
+test flow_executor::tests::simple_colang_flow_runs ... ok
+test flow_executor::tests::unknown_flow_error ... ok
+test flow_executor::tests::v8_complete ... ok
+test governance::tests::step_names ... ok
+test ha::tests::approval_validity_check ... ok
+test ha::tests::authority_display_format ... ok
+test ha::tests::authority_dynamic_user_defined ... ok
+test ha::tests::authority_multi_2_of_3_threshold ... ok
+test ha::tests::authority_multi_3_of_5_threshold ... ok
+test governance::tests::pending_when_ai_insufficient ... ok
+test ha::tests::authority_multi_rejects_m_gt_n ... ok
+test governance::tests::blocked_on_ai_rejection ... ok
+test governance::tests::full_approval_path ... ok
+test governance::tests::pending_when_human_insufficient ... ok
+test ha::tests::authority_records_and_revokes ... ok
+test ha::tests::authority_single_defaults ... ok
+test ha::tests::authority_valid_percentage ... ok
+test ha::tests::biometric_provider_trait_methods ... ok
+test ha::tests::biometric_result_predicates ... ok
+test ha::tests::ha_mode_display_format ... ok
+test ha::tests::ha_mode_required_signatures ... ok
+test ha::tests::meets_authority_dynamic ... ok
+test ha::tests::meets_authority_multi_2_of_3 ... ok
+test ha::tests::meets_authority_single ... ok
+test ha::tests::meets_threshold ... ok
+test ha::tests::multi_sig_default_2_of_3 ... ok
+test ha::tests::multi_sig_policy_new_validates_m_lt_n ... ok
+test ha::tests::multi_sig_three_of_five ... ok
+test ha::tests::process_owner_request_insufficient ... ok
+test ha::tests::process_owner_request_master_approved ... ok
+test ha::tests::process_owner_request_readonly_rejected ... ok
+test ha::tests::process_owner_request_unknown_signatory ... ok
+test ha::tests::process_request_with_authority_dynamic ... ok
+test ha::tests::process_request_with_authority_insufficient ... ok
+test ha::tests::process_request_with_authority_multi ... ok
+test ha::tests::process_request_with_authority_readonly ... ok
+test ha::tests::process_request_with_authority_single ... ok
+test ha::tests::process_request_with_authority_unknown ... ok
+test ha::tests::single_human_policy_new ... ok
+test ha_modes::tests::dynamic_mode_e_layer_raises ... ok
+test ha_modes::tests::dynamic_mode_emergency_floor_30 ... ok
+test ha_modes::tests::dynamic_mode_emergency_lowers ... ok
+test ha_modes::tests::dynamic_mode_reflection_plus_30 ... ok
+test ha_modes::tests::emergency_layer_threshold_minus_20 ... ok
+test ha_modes::tests::existence_layer_threshold_plus_20 ... ok
+test ha_modes::tests::multi_mode_1_of_3_rejected ... ok
+test ha_modes::tests::multi_mode_2_of_3_approved ... ok
+test ha_modes::tests::normal_layer_threshold_zero ... ok
+test ha_modes::tests::outcome_predicates ... ok
+test ha_modes::tests::reflection_layer_threshold_plus_30 ... ok
+test ha_modes::tests::reflection_tracker_active_in_window ... ok
+test ha_modes::tests::reflection_tracker_remaining ... ok
+test ha_modes::tests::select_for_context_multi_e_layer_returns_multi ... ok
+test ha_modes::tests::select_for_context_multi_normal_returns_dynamic ... ok
+test ha_modes::tests::select_for_context_one_returns_single ... ok
+test ha_modes::tests::select_for_context_zero_returns_dynamic ... ok
+test ha_modes::tests::single_mode_approved_with_one_signature ... ok
+test ha_modes::tests::single_mode_rejected_critical ... ok
+test ha_modes::tests::single_mode_rejected_high_risk ... ok
+test ha_modes::tests::single_mode_rejected_two_signatures ... ok
+test ha_modes::tests::single_mode_rejected_zero_signatures ... ok
+test kani_proofs::r253_01_no_revoke_when_triggered ... ok
+test kani_proofs::r253_02_armed_blocks_all_violations ... ok
+test kani_proofs::r253_03_no_path_disarm_when_triggered ... ok
+test kani_proofs::r253_04_integration_all_three ... ok
+test kani_proofs::r268_01_disarmed_blocks_all ... ok
+test kani_proofs::r268_02_rearm_restores ... ok
+test kani_proofs::r268_03_pass_path_no_record ... ok
+test kani_proofs::r268_05_mechanism_ids_stable ... ok
+test kani_proofs::r268_04_trigger_id_uniqueness ... ok
+test life_stage::tests::death_to_rebirth_allowed ... ok
+test life_stage::tests::gestation_to_maturity_not_allowed ... ok
+test life_stage::tests::next_and_previous_round_trip ... ok
+test life_stage::tests::nine_stages_count ... ok
+test life_stage::tests::ordinal_is_1_to_9 ... ok
+test mewg::tests::approved_above_threshold ... ok
+test life_stage::tests::stage_classifications ... ok
+test mewg::tests::authority_id_default ... ok
+test mewg::tests::blocked_below_threshold ... ok
+test mewg::tests::decision_with_metadata ... ok
+test mewg::tests::e_layer_hard_gate_no_human ... ok
+test mewg::tests::e_layer_passes_with_human ... ok
+test mewg::tests::empty_evidences_uses_zero_score ... ok
+test mewg::tests::evidence_validates_weight ... ok
+test mewg::tests::threshold_can_be_configured ... ok
+test mewg::tests::zero_weight_evidence_ignored ... ok
+test mock_biometric::tests::current_behavior_snapshot ... ok
+test mock_biometric::tests::mock_default_normal ... ok
+test mock_biometric::tests::mock_offline_returns_unavailable ... ok
+test mock_biometric::tests::mock_fail_returns_failed ... ok
+test mock_biometric::tests::mock_per_human_unavailable ... ok
+test mock_biometric::tests::mock_set_behavior_per_human ... ok
+test multi_ai::tests::abstain_skipped_in_avg_confidence ... ok
+test multi_ai::tests::insufficient_with_two ... ok
+test multi_ai::tests::rejects_duplicate_provider ... ok
+test multi_ai::tests::low_confidence_unanimous_blocks ... ok
+test multi_ai::tests::rejected_when_two_reject ... ok
+test multi_ai::tests::partial_when_mixed ... ok
+test multi_human::tests::abstain_increments_abstain_count ... ok
+test multi_human::tests::has_quorum_when_2_approved ... ok
+test multi_ai::tests::three_ai_unanimous_approve ... ok
+test multi_human::tests::registered_count_and_vote_count ... ok
+test multi_human::tests::reject_overrides_approves ... ok
+test multi_human::tests::rejects_duplicate_vote ... ok
+test multi_human::tests::rejects_unknown_voter ... ok
+test multi_human::tests::requires_two_approves ... ok
+test multi_human::tests::with_population_constructor ... ok
+test organ_kani_proofs::r177_sov_01_new_armed_default ... ok
+test organ_kani_proofs::r177_sov_02_disarm_relaxes ... ok
+test organ_kani_proofs::r177_sov_03_rearm_reactivates ... ok
+test organ_kani_proofs::r177_sov_04_records_append_only ... ok
+test organ_kani_proofs::r177_sov_05_no_degrade_high_to_low ... ok
+test organ_kani_proofs::r177_sov_06_no_degrade_same_passes ... ok
+test organ_kani_proofs::r177_sov_07_trigger_id_format ... ok
+test organ_kani_proofs::r177_sov_08_has_triggered_consistent ... ok
+test organ_kani_proofs::r177_sov_09_records_by_mechanism ... ok
+test owner::tests::owner_action_touches_e_layer ... ok
+test owner::tests::owner_token_privileged ... ok
+test owner::tests::owner_request_touches_e_layer_propagates ... ok
+test owner::tests::owner_token_can_attempt_core_rule ... ok
+test organ_kani_proofs::r177_sov_10_trigger_name ... ok
+test owner::tests::owner_token_str_round_trip ... ok
+test pause::tests::pause_handle_with_resume_at ... ok
+test pause::tests::suspension_kind_display ... ok
+test physical_multisig::tests::register_idempotent ... ok
+test physical_multisig::tests::registered_and_signature_count ... ok
+test physical_multisig::tests::approved_with_two_distinct_kinds_and_witness ... ok
+test pause::tests::pause_handle_new ... ok
+test physical_multisig::tests::rejects_duplicate_signature ... ok
+test physical_multisig::tests::rejects_same_kind_only ... ok
+test physical_multisig::tests::unknown_signer_rejected ... ok
+test physical_multisig::tests::with_required_sets_minimum ... ok
+test physical_multisig::tests::rejected_without_witness ... ok
+test pause::tests::suspension_states ... ok
+test physical_multisig::tests::with_required_floor_at_one ... ok
+test reflection::tests::already_terminal_on_rebegin ... ok
+test physical_multisig::tests::pending_with_one_signature ... ok
+test reflection::tests::reflecting_ids ... ok
+test reflection::tests::cancel_only_in_reflecting ... ok
+test reflection::tests::begin_uses_default_seven_days ... ok
+test reflection::tests::resolve_only_in_awaiting ... ok
+test reflection::tests::resolve_rejects_unknown ... ok
+test reflection::tests::default_is_seven_days ... ok
+test reflection::tests::state_terminal_check ... ok
+test self_disable::tests::disarm_relaxes ... ok
+test reflection::tests::tick_promotes_to_awaiting ... ok
+test self_disable::tests::mechanism_ids_are_stable ... ok
+test self_disable::tests::new_armed_by_default ... ok
+test self_disable::tests::mechanism_names ... ok
+test self_disable::tests::no_degrade_same_or_up_passes ... ok
+test self_disable::tests::no_degrade_high_to_low_triggers ... ok
+test self_disable::tests::no_reverse_always_triggers_when_armed ... ok
+test self_disable::tests::no_hide_always_triggers_when_armed ... ok
+test self_disable::tests::no_bypass_conditional ... ok
+test self_disable::tests::rearm_reactivates ... ok
+test self_disable::tests::records_by_mechanism ... ok
+test self_disable::tests::trigger_id_format ... ok
+test self_disable::tests::trigger_id_uniqueness ... ok
+test self_disable::tests::records_append_only ... ok
+test seven_fold_guard::tests::approves_when_all_conditions ... ok
+test seven_fold_guard::tests::seven_fold_runner_constructs ... ok
+test seven_fold_guard::tests::blocks_when_tdd_insufficient ... ok
+test seven_fold_guard::tests::skill_registry_seven_entries ... ok
+test seven_fold_guard::tests::blocks_when_six_not_completed ... ok
+test sgi::tests::cooldown_active_blocks_second_write ... ok
+test sgi::tests::default_rules_seven ... ok
+test sgi::tests::pass_for_unknown_field ... ok
+test sgi::tests::cooldown_expires ... ok
+test sgi::tests::sgi_field_triggers ... ok
+test signature::tests::algorithm_count_3 ... ok
+test signature::tests::ed_key_id_mismatch ... ok
+test signature::tests::rsa_key_id_mismatch ... ok
+test skill_guard::tests::all_skills_at_least_three_steps ... ok
+test signature::tests::three_signers_sign_and_verify ... ok
+test signature::tests::k1_three_failures ... ok
+test skill_guard::tests::approves_when_all_conditions ... ok
+test skill_guard::tests::blocks_when_six_not_completed ... ok
+test skill_guard::tests::blocks_when_tdd_insufficient ... ok
+test skill_guard::tests::all_seven_match ... ok
+test skill_guard::tests::kebab_names_unique ... ok
+test skill_guard::tests::registry_has_seven ... ok
+test skill_guard::tests::run_skill_all_ids ... ok
+test skill_guard::tests::tdd_required_skill_ids_returns_seven ... ok
+test skill_guard::tests::superpowers_skill_marks_tdd_red ... ok
+test sovereign::tests::decide_action_passes_with_ha ... ok
+test skill_guard::tests::unknown_skill_returns_error ... FAILED
+test sovereign::tests::decide_proposal_rejects_violation ... ok
+test sovereign::tests::decide_thought_free ... ok
+test sovereign::tests::migrate_subject ... ok
+test sovereign::tests::pause_sets_active_pause ... ok
+test sovereign::tests::sovereignty_engine_new ... ok
+test sovereign::tests::suspend_self_coercion_temporary ... ok
+test sovereign::tests::suspend_self_permanent ... ok
+test sovereign::tests::suspend_self_sgi_pending ... ok
+test sovereign::tests::transition_stage_invalid ... ok
+test sovereign::tests::transition_stage_one_step ... ok
+test sovereign::tests::verify_ha_insufficient ... ok
+test sovereign::tests::write_field_through_sgi_cooldown_active ... ok
+test sovereign::tests::write_field_through_sgi_pass ... ok
+test sovereign::tests::write_field_through_sgi_triggers ... ok
+test swap::tests::default_gates_all_present ... ok
+test swap::tests::swap_action_gate ... ok
+test swap::tests::swap_proposal_gate ... ok
+test swap::tests::swap_rejects_wrong_domain - should panic ... ok
+test swap::tests::swap_thought_gate ... ok
+test swap::tests::swapper_routes_by_domain ... ok
+test tests::eight_fold_guards_compile_time_hardcode ... ok
+test tests::nine_stages_compile_time_hardcode ... ok
+test tests::re_exports_compile ... ok
+test tests::seven_fold_guards_compile_time_hardcode ... ok
+test three_domain::tests::action_gate_6_layers_complete ... ok
+test three_domain::tests::action_gate_passes_low_risk ... ok
+test three_domain::tests::action_gate_passes_nuclear ... ok
+test three_domain::tests::proposal_gate_5_keys_complete ... ok
+test three_domain::tests::proposal_gate_passes_clean ... ok
+test three_domain::tests::proposal_gate_rejects_pretend ... ok
+test three_domain::tests::thought_gate_always_free ... ok
+test three_domain::tests::three_domain_guard_routes_correctly ... ok
+test three_domain::tests::to_decision_routes_pass ... ok
+test three_domain::tests::to_decision_routes_reject ... ok
+test three_domain_enforce::tests::bypass_detection ... ok
+test three_domain_enforce::tests::bypass_no_violation_when_matched ... ok
+test three_domain_enforce::tests::enforcer_compromise_action_missing_layers ... ok
+test three_domain_enforce::tests::enforcer_compromise_proposal_missing_keys ... ok
+test three_domain_enforce::tests::enforcer_disable_detected_for_action ... ok
+test three_domain_enforce::tests::enforcer_proposal_passes_clean ... ok
+test three_domain_enforce::tests::enforcer_thought_always_passes ... ok
+test three_domain_enforce::tests::gate_state_complete_with_correct_count ... ok
+test three_domain_enforce::tests::gate_state_incomplete_empty ... ok
+test three_domain_enforce::tests::gate_state_incomplete_with_wrong_count ... ok
+test three_domain_enforce::tests::gate_state_missing_checkpoints ... ok
+test three_domain_enforce::tests::violation_type_ids ... ok
+test wasm_runtime::tests::capability_all_count ... ok
+test wasm_runtime::tests::execution_is_ok_semantics ... ok
+test wasm_runtime::tests::module_empty_rejected ... ok
+test wasm_runtime::tests::module_hash_len_64 ... ok
+test wasm_runtime::tests::policy_allow_deny ... ok
+test wasm_runtime::tests::policy_allow_idempotent ... ok
+test wasm_runtime::tests::policy_strict_defaults ... ok
+test wasm_runtime::tests::registry_with_stub ... ok
+test wasm_runtime::tests::sha256_deterministic ... ok
+test wasm_runtime::tests::stub_execute_empty_entry ... ok
+test wasm_runtime::tests::stub_execute_memory ... ok
+test wasm_runtime::tests::stub_execute_fuel ... ok
+test wasm_runtime::tests::stub_execute_ok ... ok
+test wasm_runtime::tests::stub_validate_in_bounds ... ok
+test wasm_runtime::tests::validate_magic_bad ... ok
+test wasm_runtime::tests::validate_magic_bad_version ... ok
+test wasm_runtime::tests::validate_magic_ok ... ok
+test wasm_runtime::tests::validate_magic_short ... ok
+test wasm_runtime::tests::stub_validate_oversize ... ok
+
+failures:
+
+---- colang_dsl::tests::dsl_onion_layer_pass stdout ----
+
+thread 'colang_dsl::tests::dsl_onion_layer_pass' (19596) panicked at crates\apeireth-sovereignty\src\colang_dsl.rs:517:9:
+assertion `left == right` failed
+  left: "colang-dsl"
+ right: "colang-dsl-ok"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- skill_guard::tests::unknown_skill_returns_error stdout ----
+
+thread 'skill_guard::tests::unknown_skill_returns_error' (4112) panicked at crates\apeireth-sovereignty\src\skill_guard.rs:277:55:
+called `Result::unwrap_err()` on an `Ok` value: [SkillStep { order: 1, description: "≥3 个不同 LLM 独立 check", is_tdd_red: false }, SkillStep { order: 2, description: "聚合 4 类结果", is_tdd_red: false }, SkillStep { order: 3, description: "Rejected → Blocked, Insufficient → PendingReview", is_tdd_red: false }]
+
+
+failures:
+    colang_dsl::tests::dsl_onion_layer_pass
+    skill_guard::tests::unknown_skill_returns_error
+
+test result: FAILED. 342 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+error: test failed, to rerun pass `-p apeireth-sovereignty --lib`

@@ -26,7 +26,7 @@
 
 #![deny(unsafe_code)]
 
-use crate::{reflection_trigger, validate_endurance, LifeForce, LifeForceError, ReflectionTrigger};
+use crate::{reflection_trigger, validate_endurance, LifeForce, LifeForceError, ReflectionTrigger, SelfGrowthIndicator};
 use apeireth_cognition::{
     PlutchikAdvanced, PlutchikBasic, PlutchikEmotion, PlutchikIntensity,
 };
@@ -390,6 +390,8 @@ mod tests {
     fn t10_apply_clamp_at_lower_bound() {
         let mut life = fresh_life_force();
         life.endurance = 0.0;
+        // 初始化 SGI 让反思期触发可执行 (SGI 不能为空)
+        life.sgi = SelfGrowthIndicator::new("anchor", 1_700_000_000);
         let e = PlutchikEmotion::basic(PlutchikBasic::Fear, PlutchikIntensity::Extreme);
         let res = apply_plutchik_to_life_force(&mut life, &e, 1_700_001_000);
         assert!(res.is_ok(), "apply Ok after clamp, got {:?}", res);

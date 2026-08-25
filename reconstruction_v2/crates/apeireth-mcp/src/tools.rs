@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDef {
@@ -59,14 +60,14 @@ mod tests {
     #[test]
     fn test_list() {
         let mut s = McpServer::new(ServerInfo { name: "s".into(), version: "1".into(), protocol_version: "1".into() });
-        s.register(Box::new(Adder));
+        s.register(Arc::new(Adder));
         let r = handle_tools_list(&s);
         assert_eq!(r.tools.len(), 1);
     }
     #[test]
     fn test_call() {
         let mut s = McpServer::new(ServerInfo { name: "s".into(), version: "1".into(), protocol_version: "1".into() });
-        s.register(Box::new(Adder));
+        s.register(Arc::new(Adder));
         let r = handle_tools_call(&s, ToolsCallParams { name: "add".into(), arguments: json!({"a": 1, "b": 2}) }).unwrap();
         assert_eq!(r, 3);
     }
