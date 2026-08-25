@@ -30,12 +30,8 @@ pub fn normalize_tag(tag: &str) -> &'static str {
 pub fn wrap_reasoning_text(text: &str, tag: &str) -> String {
     if text.is_empty() { return String::new(); }
     let tag = normalize_tag(tag);
-    let closing_prefix = if text.ends_with('
-') { "" } else { "
-" };
-    format!("<{tag}>
-{text}{closing_prefix}</{tag}>
-")
+    let closing_prefix = if text.ends_with('\n') { "" } else { "\n" };
+    format!("<{tag}>\n{text}{closing_prefix}</{tag}>\n")
 }
 
 /// 启发式提取 text (per v1 valueToReasoningText 简化).

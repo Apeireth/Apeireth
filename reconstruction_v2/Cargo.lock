@@ -155,6 +155,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fb5dfbc6d8d2675589ccbe4d0fd61df2419075625f8c1a62325e718e2b0049f9"
 
 [[package]]
+name = "apeireth-acp"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-action"
 version = "2.0.0"
 dependencies = [
@@ -166,9 +176,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-agent"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-api"
 version = "2.0.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-arbitration"
+version = "2.0.0"
+dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "tokio",
@@ -197,6 +227,26 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
+]
+
+[[package]]
+name = "apeireth-bench"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-blueprint-impl"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -532,6 +582,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-host"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-http-client"
 version = "2.0.0"
 dependencies = [
@@ -678,6 +738,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-motivation"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-naming-v05"
 version = "2.0.0"
 dependencies = [
@@ -691,6 +761,16 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "apeireth-onion"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -880,6 +960,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-state"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "apeireth-stock"
 version = "2.0.0"
 dependencies = [
@@ -908,6 +998,16 @@ dependencies = [
 name = "apeireth-supervision"
 version = "2.0.0"
 dependencies = [
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-supervisor"
+version = "2.0.0"
+dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "tokio",
