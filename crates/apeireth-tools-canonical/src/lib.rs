@@ -12,6 +12,7 @@
 
 #![deny(unsafe_code)]
 
+pub mod egress;
 pub mod filesystem;
 pub mod plugin;
 pub mod process;
