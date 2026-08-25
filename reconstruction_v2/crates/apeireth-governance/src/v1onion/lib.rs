@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! `apeireth-onion`: 双洋葱统一体 trait abstraction layer
 //!
 //! 依据：

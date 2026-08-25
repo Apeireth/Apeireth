@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! v1 era apeireth-motivation transcription (4 files).
 //!
 //! Source: crates/_archived/v1.0-legacy/apeireth-motivation/src

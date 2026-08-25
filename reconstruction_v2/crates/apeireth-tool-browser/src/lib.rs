@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! `apeireth-tool-browser` - R139 browser tool extension.
 //!
 //! Extends `apeireth-tools::web_search` (HTTP fetch) with 5-dim browser
