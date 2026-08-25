@@ -273,6 +273,7 @@ pub async fn memory_append_handler(
         role: role.clone(),
         content: content.clone(),
         session_id: WEB_SESSION_ID.to_string(),
+        metadata: HashMap::new(),
     };
 
     {
@@ -618,6 +619,7 @@ mod tests {
             role: "user".into(),
             content: "hello".into(),
             session_id: "s".into(),
+            metadata: HashMap::new(),
         };
         store.put_episode(&ep).unwrap();
         let q = EpisodeQuery::new().for_session("s").limit(10);
@@ -642,6 +644,7 @@ mod tests {
             role: "user".into(),
             content: "你好".into(),
             session_id: "s".into(),
+            metadata: HashMap::new(),
         };
         let card = IdentityCard {
             continuity_id: "cid".into(),
