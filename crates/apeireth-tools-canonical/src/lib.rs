@@ -13,9 +13,11 @@
 #![deny(unsafe_code)]
 
 pub mod filesystem;
+pub mod plugin;
 pub mod repo;
 pub mod search;
 
 pub use filesystem::{FilesystemError, FilesystemTool};
+pub use plugin::BuiltinToolsPlugin;
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
