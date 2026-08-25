@@ -34,6 +34,8 @@ fn process_sources() -> Vec<(&'static str, &'static str)> {
     vec![
         ("mod", include_str!("../src/process/mod.rs")),
         ("windows", include_str!("../src/process/windows.rs")),
+        ("linux", include_str!("../src/process/linux.rs")),
+        ("macos", include_str!("../src/process/macos.rs")),
         ("platform", include_str!("../src/process/platform.rs")),
     ]
 }
@@ -59,6 +61,9 @@ fn process_infrastructure_does_not_depend_on_runtime_gateway_or_provider() {
         "ProcessRegistry",
         "ExecutionManager",
         "GovernancePipeline",
+        "PlatformManager",
+        "BackendRegistry",
+        "SecurityFacade",
     ] {
         assert!(
             !code.contains(forbidden),
@@ -75,6 +80,31 @@ fn process_infrastructure_does_not_create_a_shell_backdoor() {
         assert!(
             !code.contains(forbidden),
             "process execution boundary must not accept shell command strings: {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn public_contract_does_not_name_platform_sandbox_mechanisms() {
+    let public_contract = strip_comments(include_str!("../src/process/mod.rs"));
+
+    // The public canonical contract only names platform-agnostic capabilities.
+    // Platform mechanism names belong to backend modules.
+    for forbidden in [
+        "JobObject",
+        "RestrictedToken",
+        "CreateProcessW",
+        "cgroup",
+        "seccomp",
+        "Landlock",
+        "namespace",
+        "setrlimit",
+        "Seatbelt",
+        "sandbox-exec",
+    ] {
+        assert!(
+            !public_contract.contains(forbidden),
+            "public canonical process contract must not expose {forbidden:?}"
         );
     }
 }

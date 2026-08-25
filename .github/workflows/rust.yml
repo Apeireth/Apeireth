@@ -66,6 +66,9 @@ jobs:
         # profile "ci" 在 .config/nextest.toml 定义 (fail-fast + retries 2)
         run: cargo nextest run --workspace --profile ci --locked
 
+      - name: Canonical process isolation integration tests
+        run: cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
+
       - name: Upload JUnit report
         if: always()
         uses: actions/upload-artifact@v4
