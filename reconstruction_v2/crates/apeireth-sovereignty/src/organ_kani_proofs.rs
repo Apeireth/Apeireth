@@ -2,6 +2,8 @@
 
 #![allow(missing_docs)]
 
+use crate::self_disable::{SelfDisableGuard, SelfDisableTrigger};
+
 
 #[test]
 fn r177_sov_01_new_armed_default() {

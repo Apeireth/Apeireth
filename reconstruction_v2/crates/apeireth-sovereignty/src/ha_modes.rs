@@ -176,7 +176,7 @@ impl DeploymentReflectionTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ha::{HumanApproval, HAAuthentication, Signatory};
+    use crate::ha::{AuthorityMode, HumanApproval, HAAuthentication, Signatory};
     use crate::mock_biometric::MockBiometric;
 
     fn auth_with_approvals(n: u8, mode: AuthorityMode) -> HumanAuthority {
