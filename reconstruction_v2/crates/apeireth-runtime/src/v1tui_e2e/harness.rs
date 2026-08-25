@@ -23,7 +23,7 @@
 
 use super::backend::BufferSnapshot;
 use super::error::{TuiE2EError, TuiE2EResult};
-use crate::TuiApp;
+use super::lib::TuiApp;
 use crossterm::event::KeyCode;
 use ratatui::backend::TestBackend;
 use ratatui::Terminal;
@@ -139,7 +139,7 @@ impl TuiHarness {
         for y in 0..area.height {
             let mut prev_was_cjk = false;
             for x in 0..area.width {
-                let cell = &buf[(x, y)];
+                let cell = &buf.get(x, y);
                 let sym = cell.symbol();
                 // ratatui 0.29: CJK char width=2, 下一格是 " " 续位
                 // 跳过 CJK 续位空格, 让 "桥接" 在 text 里连续
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn start_default_ok() {
         let h = TuiHarness::start().unwrap();
-        assert_eq!(h.app.nav, crate::NavPage::Bridge);
+        assert_eq!(h.app.nav, super::lib::NavPage::Bridge);
         assert!(!h.app.should_quit);
     }
 
@@ -308,18 +308,18 @@ mod tests {
     #[test]
     fn send_tab_advances_nav() {
         let mut h = TuiHarness::start().unwrap();
-        assert_eq!(h.app.nav, crate::NavPage::Bridge);
+        assert_eq!(h.app.nav, super::lib::NavPage::Bridge);
         h.send_key(KeyCode::Tab).unwrap();
-        assert_eq!(h.app.nav, crate::NavPage::Dialogue);
+        assert_eq!(h.app.nav, super::lib::NavPage::Dialogue);
     }
 
     #[test]
     fn send_1_to_5_jumps() {
         let mut h = TuiHarness::start().unwrap();
         h.send_key(KeyCode::Char('3')).unwrap();
-        assert_eq!(h.app.nav, crate::NavPage::Growth);
+        assert_eq!(h.app.nav, super::lib::NavPage::Growth);
         h.send_key(KeyCode::Char('5')).unwrap();
-        assert_eq!(h.app.nav, crate::NavPage::Settings);
+        assert_eq!(h.app.nav, super::lib::NavPage::Settings);
     }
 
     #[test]

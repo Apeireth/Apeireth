@@ -17,6 +17,7 @@
 //! - Episode `content` = JSON 序列化的 `CouncilDebate`
 //! - Episode `continuity_id` 不再需要 (v2 EpisodeQuery 也没这个字段)
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::memory::WebMemoryStore;
@@ -108,15 +109,16 @@ pub async fn get_history_handler(
         .for_session("council-history")
         .with_role("council")
         .limit(100);
-    let episodes = {
+    // 把 query 结果 clone 出来 (Vec<Episode>), 避免借用 web lock guard 短命.
+    let episodes: Vec<Episode> = {
         let web = state.store.lock().expect("council history mutex poisoned");
-        web.episodes.query(&q)
+        web.episodes.query(&q).into_iter().cloned().collect()
     };
 
     // 按时间倒序 (新 → 旧)
     let mut debates: Vec<CouncilDebate> = episodes
         .iter()
-        .filter_map(CouncilDebate::from_episode)
+        .filter_map(|ep| CouncilDebate::from_episode(ep))
         .collect();
     debates.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
 
@@ -166,11 +168,13 @@ pub async fn post_save_handler(
         role: "council".into(),
         content,
         session_id: "council-history".into(),
+        metadata: HashMap::new(),
     };
 
     {
         let mut web = state.store.lock().expect("council history mutex poisoned");
-        web.episodes.put_episode(&ep).map_err(|e| format!("save episode: {e}"))?;
+        // v2 EpisodeStore 没有 put_episode, 用 append(e: Episode). append 返回 (), 不需要 map_err.
+        web.episodes.append(ep);
     }
 
     Ok(Json(serde_json::json!({
@@ -429,6 +433,7 @@ mod tests {
             role: "council".into(),
             content: r#"{"id":"d3","timestamp":300,"topic":"t","protocol":"openai","advisors":[],"verdict":"approved"}"#.into(),
             session_id: "council-history".into(),
+            metadata: HashMap::new(),
         };
         let d = CouncilDebate::from_episode(&ep).unwrap();
         assert_eq!(d.id, "d3");

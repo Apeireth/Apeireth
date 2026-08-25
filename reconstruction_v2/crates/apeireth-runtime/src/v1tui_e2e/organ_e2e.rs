@@ -29,7 +29,7 @@
 
 use super::error::TuiE2EResult;
 use super::harness::TuiHarness;
-use crate::Organ;
+use super::lib::Organ;
 
 /// 0 Heart — 60Hz 脉冲 (跟 tui heart organ 镜像)
 pub async fn test_organ_heart_60hz_pulse() -> TuiE2EResult<()> {
@@ -100,7 +100,7 @@ pub async fn test_organ_memory_session_history() -> TuiE2EResult<()> {
     h.app.organ_health[Organ::Memory as usize] = 0.9;
     h.app.push_user_input("remember this");
     h.app.push_assistant_reply("stored");
-    h.app.nav = crate::NavPage::History;
+    h.app.nav = super::lib::NavPage::History;
     h.render_4_panel()?;
     let snap = h.snapshot();
     assert!(snap.contains("[MEM]"), "Memory organ 应渲染 ASCII");
@@ -135,12 +135,12 @@ pub async fn test_organ_body_process_resources() -> TuiE2EResult<()> {
 pub async fn test_organ_mind_6_philosophy_anchors() -> TuiE2EResult<()> {
     let mut h = TuiHarness::start()?;
     h.app.organ_health[Organ::Mind as usize] = 1.0;
-    h.app.nav = crate::NavPage::Bridge; // Bridge 渲染 Mind + 6 锚
+    h.app.nav = super::lib::NavPage::Bridge; // Bridge 渲染 Mind + 6 锚
     h.render_4_panel()?;
     let snap = h.snapshot();
     assert!(snap.contains("[MIND]"), "Mind organ 应渲染 ASCII");
     assert!(snap.contains("100%"), "Mind 100% health 应渲染");
-    for (id, _, _) in crate::SIX_PHI_ANCHORS.iter() {
+    for (id, _, _) in super::lib::SIX_PHI_ANCHORS.iter() {
         assert!(snap.contains(id), "Mind 应渲染哲学锚 {id}");
     }
     Ok(())
