@@ -226,7 +226,6 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         assert!(init_repo(dir.path()));
-        fs::write(dir.path().join("a.txt"), "hello").unwrap();
 
         let result = invoke(&RepoTool::new(dir.path()), "status").await;
         assert!(result.is_ok());
