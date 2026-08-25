@@ -19,6 +19,7 @@ apeireth-asi = { path = "../apeireth-asi" }
 apeireth-api = { path = "../apeireth-api" }
 apeireth-gateway = { path = "../apeireth-gateway" }
 apeireth-plugin = { path = "../apeireth-plugin" }
+apeireth-tools-canonical = { path = "../apeireth-tools-canonical" }
 apeireth-provider = { path = "../apeireth-provider" }
 apeireth-runtime = { path = "../apeireth-runtime" }
 tokio = { workspace = true }
