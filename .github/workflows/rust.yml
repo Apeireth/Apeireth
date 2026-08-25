@@ -274,11 +274,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y powershell
 
-      - name: Secret scan: working tree (scan-all)
+      - name: "Secret scan: working tree (scan-all)"
         shell: pwsh
         run: pwsh scripts/secret-scan.ps1 -Mode scan-all
 
-      - name: Secret scan: git history (scan-history, 防御 force-push 偷渡)
+      - name: "Secret scan: git history (scan-history, 防御 force-push 偷渡)"
         shell: pwsh
         run: pwsh scripts/secret-scan.ps1 -Mode scan-history
-          echo "✅ companion-desktop 是独立 workspace"
