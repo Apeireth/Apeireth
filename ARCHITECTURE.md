@@ -191,8 +191,11 @@ reload, remote plugins, or marketplace.
 **Must not depend on.** Anything else. A policy that knows what it is guarding
 cannot be reused to guard anything else.
 
-**Is not.** A policy library. PII detection, rate limiting, councils and audit
-chains live in their own crates and become `GovernanceHook` implementations.
+**Is not.** A policy library in the orchestration sense. The canonical contract
+stays thin; concrete detectors, audit-chain primitives, and permission primitives
+become `GovernanceHook` implementations. M1C added `input_security`, `audit`, and
+`permission` modules inside this crate as deterministic primitives, without adding a
+second pipeline or decision enum.
 
 ### `apeireth-runtime::canonical` — orchestration
 
@@ -539,6 +542,28 @@ Migration matrix:
 | openai-compatible | yes | yes (EnvCredentialResolver) | OpenAI Chat Completions (generic) | n/a (bridge removed) | yes | yes | yes | none |
 | (descriptors + http_dispatch) | no | n/a | mixed | n/a | descriptor tests | no | no | not in canonical path; separate task |
 | LegacyLlmCapability | n/a | n/a | n/a | REMOVED | n/a | n/a | n/a | deleted — zero production consumers |
+
+### DONE — M1C canonical governance donor primitives
+
+`apeireth-governance` now hosts deterministic security primitives without adding
+a second pipeline, second decision enum, or runtime special-case policy:
+
+```text
+input_security: PiiDetector (email/phone/credential-like, structured findings,
+redaction), PromptInjectionHeuristic (structured signals),
+PromptInjectionHook and CredentialDisclosureHook -> RequireApproval for
+capability arguments.
+
+audit: AuditHashChain with explicit Timestamp injection, SHA-256, stable
+canonical serialization, genesis zero-hash, and tamper-evident verification.
+This is an integrity primitive; ExecutionTrace remains the runtime trace owner.
+
+permission: PermissionSet, PermissionPolicy, and PermissionGovernanceHook map
+capability dispatch to Allow / Deny / RequireApproval.
+```
+
+Detection is separated from decision; the runtime still only sees canonical
+governance decisions.
 
 ### PENDING
 
