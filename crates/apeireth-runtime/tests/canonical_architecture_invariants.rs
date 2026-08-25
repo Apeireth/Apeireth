@@ -89,3 +89,21 @@ fn canonical_runtime_code_does_not_construct_concrete_providers_or_http_clients(
         );
     }
 }
+
+#[test]
+fn canonical_runtime_code_does_not_reference_process_containment_internals() {
+    let code = canonical_code();
+
+    for forbidden in [
+        "JobObject",
+        "RestrictedToken",
+        "PlatformSandbox",
+        "ProcessExecutor",
+        "AssignProcessToJobObject",
+    ] {
+        assert!(
+            !code.contains(forbidden),
+            "canonical runtime code must not reach into OS process containment: {forbidden:?}"
+        );
+    }
+}
