@@ -227,12 +227,13 @@ runtime session seam until the storage backend is connected.
 canonical surface under `apeireth_memory::canonical`: `MemoryId`, `MemoryItem`,
 `MemoryRepository`, `MemoryFilter`, `MemoryError`, and `SqliteMemoryRepository`.
 M1B2 added `RetrievalOptions`, `MemoryHit`, `act_r_activation`, and `retrieve`.
+M1B3 added in-memory `VectorIndex` (cosine top-k) and `MemoryGraph` primitives (nodes, weighted edges, neighbours, cycle-safe bounded traversal, shortest path).
 
 **May depend on.** `apeireth-core`, `apeireth-storage`, `serde`, `thiserror`, `async-trait`.
 
 **Must not depend on.** Runtime, gateway, CLI, provider, companion, plugin, governance.
 
-**Is not.** Vector search, graph traversal, or a product memory feature. Those are later migration items layered on top of this crate, not collapsed into it.
+**Is not.** A vector database, a knowledge-graph product, an embedding provider, or a product memory feature. Those are later migration items layered on top of this crate, not collapsed into it.
 
 ### `apeireth-companion` — cognition
 
@@ -290,7 +291,7 @@ runtime    -> gateway | cli | desktop | concrete provider adapter
 | Composition root | `apeireth-runtime::canonical::runtime` |
 | Policy decision | `apeireth-governance` |
 | Durable storage | `apeireth-storage` *(SQLite pool, writer, migrations)* |
-| Durable memory domain | `apeireth-memory::canonical` *(M1B1 entity + repository + SQLite; M1B2 retrieval/ACT-R)* |
+| Durable memory domain | `apeireth-memory::canonical` *(M1B1 entity + repository + SQLite; M1B2 retrieval/ACT-R; M1B3 vector/graph primitives)* |
 | HTTP transport | `apps/gateway` |
 | Companion cognition | `apeireth-companion` |
 | Credential storage backend | `apeireth-credentials`, behind `plugin::CredentialResolver` |
