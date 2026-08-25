@@ -29,6 +29,7 @@ use thiserror::Error;
 
 use crate::advisor::AdvisorOpinion;
 use crate::deliberation::CouncilQuery;
+use crate::mock_llm::MockLlmResponse;
 
 // 注意: CouncilQuery / QueryContext 未 derive Serialize/Deserialize (R212 0 触碰 deliberation.rs).
 // 我们用自实现的 Serde-friendly 镜像结构 CheckpointQuery 来持久化 query 快照.
