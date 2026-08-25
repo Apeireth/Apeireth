@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 motivation organ Kani proofs (W2)
 //!
 //! **要验证的不变量** (C-SGI-1~7 七条硬约束):

@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 life-force organ Kani proofs (W2)
 //!
 //! **要验证的不变量**:

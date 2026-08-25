@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 i18n organ Kani proofs (W6)
 
 #![allow(missing_docs)]

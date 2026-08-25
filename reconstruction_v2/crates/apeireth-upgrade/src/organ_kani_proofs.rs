@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 upgrade organ Kani proofs (W12)
 
 #![allow(missing_docs)]

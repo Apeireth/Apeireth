@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 repo-tools organ Kani proofs (W11)
 
 #![allow(missing_docs)]

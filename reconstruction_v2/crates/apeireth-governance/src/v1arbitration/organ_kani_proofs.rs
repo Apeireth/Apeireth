@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 arbitration organ Kani proofs (W9)
 
 #![allow(missing_docs)]

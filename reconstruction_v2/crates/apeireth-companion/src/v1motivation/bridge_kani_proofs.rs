@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R176 Bridge 3 Kani proofs: consciousness -> motivation bridge invariants
 //! R176 Bridge 6 Kani proofs: life-force -> motivation bridge invariants
 
