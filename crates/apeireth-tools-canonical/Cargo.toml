@@ -18,10 +18,32 @@ async-trait = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true }
+
+# Windows process containment uses the same windows-sys convention as the
+# companion crate. The dependency is target-scoped so non-Windows builds never
+# compile or link Windows-only imports.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tempfile = "3"
-tokio = { workspace = true, features = ["macros", "rt"] }
 
 [lints]
 workspace = true
+
+# Test-only helper for proving real OS process enforcement. It is not a
+# product tool, accepts no user command strings, and is driven only by fixed
+# modes (sleep, print, allocate, spawn-child, check-job, ...).
+[[bin]]
+name = "sandbox-test-child"
+path = "src/bin/sandbox_test_child.rs"
+test = false
+bench = false
+doc = false

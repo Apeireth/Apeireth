@@ -14,6 +14,7 @@
 
 pub mod filesystem;
 pub mod plugin;
+pub mod process;
 pub mod repo;
 pub mod search;
 
