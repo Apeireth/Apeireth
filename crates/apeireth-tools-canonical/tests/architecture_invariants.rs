@@ -40,6 +40,10 @@ fn process_sources() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+fn egress_code() -> String {
+    strip_comments(include_str!("../src/egress.rs"))
+}
+
 fn process_code() -> String {
     process_sources()
         .into_iter()
@@ -80,6 +84,27 @@ fn process_infrastructure_does_not_create_a_shell_backdoor() {
         assert!(
             !code.contains(forbidden),
             "process execution boundary must not accept shell command strings: {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn egress_infrastructure_does_not_depend_on_runtime_gateway_or_provider() {
+    let code = egress_code();
+
+    for forbidden in [
+        "apeireth_runtime",
+        "apeireth_gateway",
+        "apeireth_provider",
+        "apeireth_companion",
+        "FetchTool",
+        "BrowserTool",
+        "ToolRegistry",
+        "GovernancePipeline",
+    ] {
+        assert!(
+            !code.contains(forbidden),
+            "controlled egress infrastructure must not depend on {forbidden:?}"
         );
     }
 }
