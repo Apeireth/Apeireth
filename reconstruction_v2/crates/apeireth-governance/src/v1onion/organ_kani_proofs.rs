@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 onion organ Kani proofs (W4)
 
 #![allow(missing_docs)]

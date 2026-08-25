@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 acp (LLM facade) organ Kani proofs (W3+W4)
 
 #![allow(missing_docs)]

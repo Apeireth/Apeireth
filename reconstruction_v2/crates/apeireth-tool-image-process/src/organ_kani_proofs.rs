@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 tool-image-process organ Kani proofs (W10)
 
 #![allow(missing_docs)]

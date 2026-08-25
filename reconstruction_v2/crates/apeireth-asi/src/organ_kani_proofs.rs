@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 asi organ Kani proofs (W5) — v1 10 tests + 2 Kani proofs 完整抄录
 //!
 //! Kani proofs 在 `#[cfg(kani)]` gate 下, 默认 cargo test 不参与.

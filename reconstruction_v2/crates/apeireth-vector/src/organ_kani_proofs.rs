@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 vector organ Kani proofs (W6)
 
 #![allow(missing_docs)]

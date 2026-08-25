@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 council organ Kani proofs (W3) — delegation matrix 49 paths
 
 #![allow(missing_docs)]

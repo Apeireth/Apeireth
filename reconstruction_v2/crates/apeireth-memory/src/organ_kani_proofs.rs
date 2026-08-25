@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 memory organ Kani proofs (W2)
 
 #![allow(missing_docs)]

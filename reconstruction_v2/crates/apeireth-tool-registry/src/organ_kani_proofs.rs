@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 tool-registry organ Kani proofs (W3)
 
 #![allow(missing_docs)]

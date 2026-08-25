@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 blueprint-impl organ Kani proofs (W9)
 
 #![allow(missing_docs)]

@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R176 Bridge 2 Kani proofs: consciousness -> life-force bridge invariants
 
 #![allow(missing_docs)]

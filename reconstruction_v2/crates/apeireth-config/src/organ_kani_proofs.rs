@@ -1,3 +1,5 @@
+﻿#![allow(unexpected_cfgs)]
+
 //! R177 config organ Kani proofs (W7)
 
 #![allow(missing_docs)]
