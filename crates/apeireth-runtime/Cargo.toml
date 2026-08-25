@@ -55,6 +55,8 @@ chrono = { workspace = true }
 # Integration test wires the migrated canonical minimax provider through the
 # real runtime/router against a mock HTTP server.
 apeireth-provider = { path = "../apeireth-provider" }
+# M2A E2E wires the canonical builtin tools through the real plugin path.
+apeireth-tools-canonical = { path = "../apeireth-tools-canonical" }
 
 [[example]]
 name = "r147_full_chain"
