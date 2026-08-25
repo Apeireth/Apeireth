@@ -9,3 +9,14 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.34", features = ["full"] }
 chrono = { version = "0.4", features = ["serde"] }
+# 战役 2-4 / VCP agentManager.js: 真 LRU cache + 真 notify 热加载 + 真 tracing 日志 + 真 typed 错误
+lru = "0.12"
+notify = "5"
+parking_lot = "0.12"
+tracing = "0.1"
+thiserror = "1.0"
+async-trait = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }

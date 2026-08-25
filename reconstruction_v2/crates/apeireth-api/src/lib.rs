@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Clone)]
 pub struct ApiServer { pub routes: HashMap<String, Box<dyn Route>> }
 
 pub trait Route: Send + Sync {

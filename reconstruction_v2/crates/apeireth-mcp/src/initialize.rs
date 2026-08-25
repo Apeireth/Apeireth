@@ -5,6 +5,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
+use crate::protocol::JSON_RPC_VERSION;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientInfo {
     pub name: String,
@@ -31,7 +33,7 @@ pub fn handle_initialize(req: InitializeRequest, server: &super::ServerInfo) -> 
         return Err(format!("unsupported protocol version: {}", req.protocol_version));
     }
     Ok(InitializeResponse {
-        protocol_version: crate::JSON_RPC_VERSION.into(),
+        protocol_version: JSON_RPC_VERSION.into(),
         server_info: server.clone(),
         capabilities: serde_json::Map::from_iter([
             ("tools".into(), json!({})),
@@ -46,7 +48,7 @@ mod tests {
     use super::*;
     fn mkreq() -> InitializeRequest {
         InitializeRequest {
-            protocol_version: crate::JSON_RPC_VERSION.into(),
+            protocol_version: JSON_RPC_VERSION.into(),
             capabilities: serde_json::Map::new(),
             client_info: ClientInfo { name: "c".into(), version: "1".into() },
         }

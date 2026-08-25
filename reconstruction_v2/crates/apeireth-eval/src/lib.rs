@@ -14,7 +14,7 @@ pub struct EvalTask {
     pub timeout_ms: u64,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EvalStatus { Pending, Running, Passed, Failed, Timeout }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
