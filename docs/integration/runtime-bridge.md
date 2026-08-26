@@ -9,7 +9,7 @@ Companion UI
      ↓  (仅面对 AgentRuntime 接口)
 Agent Runtime Contract      ← frontend/companion-desktop/src/lib/runtime.ts
      ↓  (HTTP/SSE adapter)
-Apeireth 端点 (companion_serve :8090 / apeireth-api :8080)
+     Apeireth gateway (`apeireth gateway serve`, default :8080)
      ↓
 Runtime / Provider / Tools
 ```
@@ -79,4 +79,5 @@ tool-call · tool-result · message-end · run-error · run-end
 | error-401 | → auth |
 | error-500 | → http |
 
-真模型 E2E 待 MiniMax key（环境无 key，诚实标注）。测试工具在 `_scripts/`。
+真模型 E2E 待 MiniMax key（环境无 key，诚实标注）。测试工具在
+`frontend/companion-desktop/tests/`。

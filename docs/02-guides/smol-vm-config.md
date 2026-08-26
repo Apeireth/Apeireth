@@ -1,4 +1,8 @@
-# smol-vm / libkrun 真接配置指南
+# smol-vm / libkrun 真接配置指南（历史设计记录）
+
+> Historical record. The smol-vm workflow and prototype workspace are not part
+> of the current product baseline; see the current architecture and deferred
+> work list instead.
 
 > **2026-08-20 新增**: Apeireth 可真接 libkrun (Red Hat 维护 KVM/HVF microVM 库) 通过 `--features libkrun` 启用.
 > 默认 build 0 装 PASS (NoopVMSandbox) 1:1 兼容现状; 真接仅 Linux/macOS 启用 libkrun 编译 + libkrun.so 装载时.
