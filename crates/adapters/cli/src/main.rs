@@ -1,299 +1,57 @@
-// apeireth-cli binary entry point
-// R14 Phase 0: 命令协议稳定, Phase 3 后才接 PyO3 桥
-// Fix-16: 提前实现 CliRunner parse + dispatch (解决 #1 #2 困难)
-// A1.1: dispatch(Session) 接 core Session API —— 真实构造 Session / HA / PermissionOnion / DefaultPhilosophyGuard
-
-use apeireth_asi::{DimensionTrace, TraceRepository};
-use apeireth_cli::{
-    build_default_human_authority, build_default_permission_onion, build_sample_measurement,
-    create_default_session, describe_verdict, dispatch_asi_calibrate, dispatch_asi_diagnose,
-    dispatch_asi_trace, dispatch_asi_trend, dispatch_canonical_chat, dispatch_gateway_serve,
-    handle_input_line, welcome_message, AsiSubCommand, CalibrateMode, CliCommand,
-    GatewaySubCommand,
-};
 use std::env;
-use std::io::{self, BufRead, Write};
 use std::process::ExitCode;
 
-/// 解析 CLI 参数为 CliCommand
-fn parse_args(args: &[String]) -> Result<CliCommand, String> {
-    // args[0] = program name, args[1..] = 用户参数
-    if args.len() < 2 {
-        return Ok(CliCommand::Session); // 默认 = 启动 session
-    }
-    match args[1].as_str() {
-        "session" => Ok(CliCommand::Session),
-        "chat" => {
-            let mut model = None;
-            let mut session = None;
-            let mut prompt = Vec::new();
-            let mut index = 2;
-            while index < args.len() {
-                match args[index].as_str() {
-                    "--model" => {
-                        index += 1;
-                        model = args.get(index).cloned();
-                        if model.is_none() {
-                            return Err("chat --model requires a value".into());
-                        }
-                    }
-                    "--session" => {
-                        index += 1;
-                        session = args.get(index).cloned();
-                        if session.is_none() {
-                            return Err("chat --session requires a value".into());
-                        }
-                    }
-                    value => prompt.push(value.to_string()),
-                }
-                index += 1;
-            }
-            if prompt.is_empty() {
-                return Err("chat requires a prompt".into());
-            }
-            Ok(CliCommand::Chat {
-                prompt: prompt.join(" "),
-                model,
-                session,
-            })
-        }
-        "list-episodes" => Ok(CliCommand::ListEpisodes),
-        "run-v1136" => Ok(CliCommand::RunV1136),
-        "asi" => {
-            // 二级子命令: asi trace / asi trend / asi diagnose
-            if args.len() < 3 {
-                return Err("asi 子命令需要二级参数 (trace|trend|diagnose)".into());
-            }
-            match args[2].as_str() {
-                "trace" => {
-                    let mut n: usize = 10;
-                    if let Some(idx) = args.iter().position(|a| a == "--tail") {
-                        if let Some(v) = args.get(idx + 1) {
-                            n = v
-                                .parse()
-                                .map_err(|_| format!("invalid --tail value: {v}"))?;
-                        }
-                    }
-                    Ok(CliCommand::Asi(AsiSubCommand::Trace { n }))
-                }
-                "trend" => {
-                    let mut dim = String::new();
-                    let mut last: usize = 20;
-                    if let Some(idx) = args.iter().position(|a| a == "--dim") {
-                        if let Some(v) = args.get(idx + 1) {
-                            dim = v.clone();
-                        }
-                    }
-                    if let Some(idx) = args.iter().position(|a| a == "--last") {
-                        if let Some(v) = args.get(idx + 1) {
-                            last = v
-                                .parse()
-                                .map_err(|_| format!("invalid --last value: {v}"))?;
-                        }
-                    }
-                    if dim.is_empty() {
-                        return Err("asi trend 需要 --dim <dimension_name>".into());
-                    }
-                    Ok(CliCommand::Asi(AsiSubCommand::Trend { dim, last }))
-                }
-                "diagnose" => {
-                    let mut top: usize = 3;
-                    if let Some(idx) = args.iter().position(|a| a == "--top") {
-                        if let Some(v) = args.get(idx + 1) {
-                            top = v.parse().map_err(|_| format!("invalid --top value: {v}"))?;
-                        }
-                    }
-                    Ok(CliCommand::Asi(AsiSubCommand::Diagnose { top }))
-                }
-                "calibrate" => {
-                    // default = dry-run, every=100, scope=all
-                    let mode = if args.iter().any(|a| a == "--apply") {
-                        CalibrateMode::Apply
-                    } else {
-                        CalibrateMode::DryRun
-                    };
-                    let mut every: usize = 100;
-                    if let Some(idx) = args.iter().position(|a| a == "--every") {
-                        if let Some(v) = args.get(idx + 1) {
-                            every = v
-                                .parse()
-                                .map_err(|_| format!("invalid --every value: {v}"))?;
-                        }
-                    }
-                    let mut scope = "all".to_string();
-                    if let Some(idx) = args.iter().position(|a| a == "--scope") {
-                        if let Some(v) = args.get(idx + 1) {
-                            scope = v.clone();
-                        }
-                    }
-                    Ok(CliCommand::Asi(AsiSubCommand::Calibrate {
-                        mode,
-                        every,
-                        scope,
-                    }))
-                }
-                unknown => Err(format!("未知 asi 子命令: {unknown}")),
-            }
-        }
-        "quit" | "exit" => Ok(CliCommand::Quit),
-        "gateway" => {
-            // R16-09 gateway 子命令
-            if args.len() < 3 {
-                return Err("gateway 子命令需要二级参数 (serve|status|routes)".into());
-            }
-            match args[2].as_str() {
-                "serve" => {
-                    let mut port: Option<u16> = None;
-                    if let Some(idx) = args.iter().position(|a| a == "--port") {
-                        if let Some(v) = args.get(idx + 1) {
-                            port = v.parse().ok();
-                        }
-                    }
-                    Ok(CliCommand::Gateway(GatewaySubCommand::Serve { port }))
-                }
-                // R17 砍掉: status / routes (NewAPI channel 借鉴已砍, 见 lib.rs GatewaySubCommand)
-                unknown => Err(format!(
-                    "未知 gateway 子命令: {unknown} (R17 只支持 'serve')"
-                )),
-            }
-        }
-        "--help" | "-h" => Ok(CliCommand::Quit), // 帮助信息由 main() 输出
-        "--version" | "-V" => {
-            println!("apeireth-cli {}", env!("CARGO_PKG_VERSION"));
-            std::process::exit(0);
-        }
-        unknown => Err(format!(
-            "未知命令: {}\n可用命令: session, list-episodes, run-v1136, asi, quit\n\
-             试用: apeireth-cli --help",
-            unknown
-        )),
-    }
-}
+use apeireth_cli::{
+    build_canonical_runtime_from_env, dispatch_canonical_chat, dispatch_gateway_serve,
+};
 
-/// 输出帮助信息
 fn print_help() {
-    println!("apeireth-cli R14 - Apeireth 命令行接口\n");
-    println!("用法: apeireth-cli <COMMAND>\n");
-    println!("命令:");
-    println!("  session         启动一次 session（默认，接 core Session API）");
-    println!("  chat TEXT       通过 canonical Runtime 执行一次真实 chat turn");
-    println!("  gateway serve   启动 canonical HTTP gateway");
-    println!("  list-episodes   列出最近 N 个 episode");
-    println!("  run-v1136       运行 V1136 真测");
-    println!("  asi             ASI 测量子命令 (trace / trend / diagnose)");
-    println!("  quit, exit      退出\n");
-    println!("ASI 子命令:");
-    println!("  asi trace --tail N              最近 N 条 DimensionTrace 详细表 (默认 10)");
-    println!("  asi trend --dim X --last N     X 维最近 N 个值的 sparkline (默认 20)");
-    println!("  asi diagnose --top N            定位最弱 N 维度 (默认 3)");
-    println!("  asi calibrate [--apply] [--every M] [--scope X]  ML 在线校准 (默认 dry-run + M=100 + scope=all)\n");
-    println!("选项:");
-    println!("  -h, --help      显示帮助");
-    println!("  -V, --version   显示版本\n");
-    println!("示例:");
-    println!("  apeireth-cli session");
-    println!("  apeireth-cli chat \"hello\" --model MiniMax-M3");
-    println!("  apeireth-cli gateway serve --port 8080");
-    println!("  apeireth-cli list-episodes");
-    println!("  apeireth-cli run-v1136");
+    println!(
+        "apeireth\n\nUsage:\n  apeireth session\n  apeireth chat <PROMPT> [--model MODEL] [--session SESSION]\n  apeireth gateway serve [--port PORT]\n\nOptions:\n  -h, --help       Show this help\n  -V, --version    Show the version"
+    );
 }
 
-/// 真实构造 Session + 跑 stdin 对话循环（A1.1 主实现）
 fn run_session() -> ExitCode {
-    // 1) 真实构造（不再是 println! 硬编码）
-    let session = create_default_session();
-    let ha = build_default_human_authority();
-    let po = build_default_permission_onion();
-    // DefaultPhilosophyGuard 已封装在 handle_input_line_default 内部（ADR 0002: main.rs 不直接 use apeireth_core::*）
-
-    // 2) 欢迎信息从 Session 字段动态生成
-    println!("{}", welcome_message(&session, &ha, &po));
-    println!();
-    println!("📥 输入一行文本 → 自动构造 Action → 走 V1+V2+V3 AND 门");
-    println!("   输入 \":quit\" / \":exit\" 或 Ctrl-D / Ctrl-Z 退出");
-    println!();
-
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
-    let mut handle = stdin.lock();
-    let mut buf = String::new();
-
-    loop {
-        // ponytail: prompt 写到 stderr 风格更地道，但这里保持 println 兼容非 TTY
-        print!("> ");
-        if stdout.flush().is_err() {
-            break;
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("failed to create Tokio runtime: {error}");
+            return ExitCode::FAILURE;
         }
-        buf.clear();
-        let Ok(n) = handle.read_line(&mut buf) else {
-            break;
-        };
-        if n == 0 {
-            // EOF (Ctrl-D on Unix / Ctrl-Z on Windows)
-            println!();
-            break;
-        }
-        let line = buf.trim();
-        if line.is_empty() {
-            continue;
-        }
-        if line == ":quit" || line == ":exit" {
-            println!("👋 退出 session ({})", session.id);
-            break;
-        }
-
-        // 3) 跑完整 V1+V2+V3 AND 门（lib.rs 封装：run_session_action + DefaultPhilosophyGuard）
-        let verdict = handle_input_line(line, &session);
-        println!("  {}", describe_verdict(&verdict));
-    }
-
-    ExitCode::SUCCESS
-}
-
-/// 执行 CliCommand
-fn dispatch(cmd: CliCommand) -> ExitCode {
-    match cmd {
-        CliCommand::Session => run_session(),
-        CliCommand::Chat {
-            prompt,
-            model,
-            session,
-        } => run_chat(prompt, model, session),
-        CliCommand::ListEpisodes => {
-            println!("📜 列出最近 episode...");
-            println!("   (待 A11 apeireth-memory SQLite 实装后真正查询)");
-            println!("   目前 placeholder 返回空列表");
+    };
+    match runtime.block_on(build_canonical_runtime_from_env()) {
+        Ok(runtime) => {
+            let providers = runtime
+                .providers()
+                .provider_ids()
+                .into_iter()
+                .map(|id| id.to_string())
+                .collect::<Vec<_>>();
+            println!("canonical runtime ready");
+            println!("providers: {}", providers.join(", "));
             ExitCode::SUCCESS
         }
-        CliCommand::RunV1136 => {
-            println!("🔬 运行 V1136 真测...");
-            println!("   (待 A5 apeireth-asi 真测引擎实装后真正跑)");
-            println!("   目前 placeholder: 7 子测度 baseline = 0.9063");
-            ExitCode::SUCCESS
+        Err(error) => {
+            eprintln!("canonical runtime bootstrap failed: {error}");
+            ExitCode::FAILURE
         }
-        CliCommand::Asi(sub) => run_asi(sub),
-        CliCommand::Quit => {
-            println!("👋 Apeireth-cli 退出");
-            ExitCode::SUCCESS
-        }
-        CliCommand::Gateway(gw) => run_gateway(gw),
     }
 }
 
 fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> ExitCode {
-    let rt = match tokio::runtime::Runtime::new() {
-        Ok(rt) => rt,
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
         Err(error) => {
-            eprintln!("tokio runtime 创建失败: {error}");
+            eprintln!("failed to create Tokio runtime: {error}");
             return ExitCode::FAILURE;
         }
     };
-    match rt.block_on(dispatch_canonical_chat(prompt, model, session)) {
-        Ok(outcome) => {
-            println!("{}", outcome.text);
+    match runtime.block_on(dispatch_canonical_chat(prompt, model, session)) {
+        Ok(response) => {
+            println!("{}", response.text);
             eprintln!(
                 "session={} trace={} provider={} rounds={}",
-                outcome.session, outcome.trace.trace, outcome.served_by, outcome.rounds
+                response.session, response.trace.trace, response.served_by, response.rounds
             );
             ExitCode::SUCCESS
         }
@@ -304,85 +62,104 @@ fn run_chat(prompt: String, model: Option<String>, session: Option<String>) -> E
     }
 }
 
-/// R17 简化: gateway 只支持 serve (status / routes 砍掉, NewAPI channel 借鉴已砍)
-fn run_gateway(gw: GatewaySubCommand) -> ExitCode {
-    match gw {
-        GatewaySubCommand::Serve { port } => {
-            let p = port.unwrap_or(8080);
-            let rt = match tokio::runtime::Runtime::new() {
-                Ok(rt) => rt,
-                Err(e) => {
-                    eprintln!("tokio runtime 创建失败: {e}");
-                    return ExitCode::FAILURE;
-                }
-            };
-            let result = rt.block_on(dispatch_gateway_serve(p));
-            match result {
-                Ok(msg) => {
-                    println!("{msg}");
-                    ExitCode::SUCCESS
-                }
-                Err(e) => {
-                    eprintln!("❌ gateway serve 失败: {e}");
-                    ExitCode::FAILURE
-                }
-            }
+fn run_gateway(port: u16) -> ExitCode {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("failed to create Tokio runtime: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
+    match runtime.block_on(dispatch_gateway_serve(port)) {
+        Ok(message) => {
+            println!("{message}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("gateway serve failed: {error}");
+            ExitCode::FAILURE
         }
     }
 }
 
-/// round10-12 (qa_engineer): ASI 子命令 dispatch
-fn run_asi(sub: AsiSubCommand) -> ExitCode {
-    // Ponytail: in-memory repo 演示, 真实生产可接 SQLite backend
-    let mut repo = TraceRepository::new();
-
-    // 预填 5 条 trace (1.0 → 0.6) 让 trend / diagnose 有数据
-    for i in 0..5 {
-        let rate = 1.0 - (f64::from(i) * 0.1);
-        let sample = build_sample_measurement(rate, 10);
-        let trace = DimensionTrace::from_sample(0, 0, 1_700_000_000 + i64::from(i), &sample, None);
-        repo.append(trace);
-    }
-
-    match sub {
-        AsiSubCommand::Trace { n } => {
-            let out = dispatch_asi_trace(&repo, n);
-            print!("{out}");
-        }
-        AsiSubCommand::Trend { dim, last } => {
-            let out = dispatch_asi_trend(&repo, &dim, last);
-            print!("{out}");
-        }
-        AsiSubCommand::Diagnose { top } => {
-            let tail = repo.tail(1);
-            if tail.is_empty() {
-                println!("TraceRepository is empty.");
-                return ExitCode::SUCCESS;
+fn parse_chat(args: &[String]) -> Result<(String, Option<String>, Option<String>), String> {
+    let mut prompt = Vec::new();
+    let mut model = None;
+    let mut session = None;
+    let mut index = 0;
+    while index < args.len() {
+        match args[index].as_str() {
+            "--model" => {
+                index += 1;
+                model = args.get(index).cloned();
+                if model.is_none() {
+                    return Err("chat --model requires a value".into());
+                }
             }
-            let out = dispatch_asi_diagnose(&tail[0], top);
-            print!("{out}");
+            "--session" => {
+                index += 1;
+                session = args.get(index).cloned();
+                if session.is_none() {
+                    return Err("chat --session requires a value".into());
+                }
+            }
+            value => prompt.push(value),
         }
-        AsiSubCommand::Calibrate { mode, every, scope } => {
-            let out = dispatch_asi_calibrate(&repo, mode, every, &scope);
-            print!("{out}");
-        }
+        index += 1;
     }
-    ExitCode::SUCCESS
+    if prompt.is_empty() {
+        return Err("chat requires a prompt".into());
+    }
+    Ok((prompt.join(" "), model, session))
 }
 
 fn main() -> ExitCode {
-    let args: Vec<String> = env::args().collect();
-
-    // --help / -h 单独处理
-    if args.len() >= 2 && (args[1] == "--help" || args[1] == "-h") {
+    let args = env::args().skip(1).collect::<Vec<_>>();
+    if args.is_empty() || args[0] == "session" {
+        return run_session();
+    }
+    if args[0] == "--help" || args[0] == "-h" {
         print_help();
         return ExitCode::SUCCESS;
     }
+    if args[0] == "--version" || args[0] == "-V" {
+        println!("apeireth {}", env!("CARGO_PKG_VERSION"));
+        return ExitCode::SUCCESS;
+    }
 
-    match parse_args(&args) {
-        Ok(cmd) => dispatch(cmd),
-        Err(e) => {
-            eprintln!("❌ {}", e);
+    match args[0].as_str() {
+        "chat" => match parse_chat(&args[1..]) {
+            Ok((prompt, model, session)) => run_chat(prompt, model, session),
+            Err(error) => {
+                eprintln!("{error}");
+                print_help();
+                ExitCode::FAILURE
+            }
+        },
+        "gateway" if args.get(1).map(String::as_str) == Some("serve") => {
+            let mut port = 8080;
+            let mut index = 2;
+            while index < args.len() {
+                if args[index] == "--port" {
+                    index += 1;
+                    let Some(value) = args.get(index) else {
+                        eprintln!("gateway serve --port requires a value");
+                        return ExitCode::FAILURE;
+                    };
+                    port = match value.parse() {
+                        Ok(port) => port,
+                        Err(_) => {
+                            eprintln!("invalid gateway port: {value}");
+                            return ExitCode::FAILURE;
+                        }
+                    };
+                }
+                index += 1;
+            }
+            run_gateway(port)
+        }
+        _ => {
+            eprintln!("unknown command");
             print_help();
             ExitCode::FAILURE
         }
