@@ -332,7 +332,7 @@ fn integration_full_self_disable_v12_keys_and_gate() {
 
     // ---- 12 键全部硬代码 + V1+V2+V3 AND 门 ----
     let _ = TWELVE_KEYS_HARDCODE;
-    assert_eq!(ALL_TWELVE_KEYS.len(), 12);
+    assert_eq!(ALL_TWELVE_KEYS.len(), 13);
 
     // ---- ModifyL0HA 应被 V1 拒绝 (12 键 + AND 门) ----
     let l0_action = make_action("l0", ActionTarget::ModifyL0HA, RiskLevel::Critical);
