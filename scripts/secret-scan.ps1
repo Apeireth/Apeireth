@@ -77,14 +77,14 @@ $SecretPatterns = @(
 # 借鉴自 .gitignore 的 "允许" 文件 (placeholder / 测试数据, false positive)
 # ============================================================================
 $AllowlistPaths = @(
-    'crates/apeireth-guard/src/pii.rs',                # PII detection test (ghp_aaa...)
-    'crates/apeireth-guard/tests/*',
-    'crates/apeireth-tools/src/guardrail.rs',          # guardrail test (ghp_aaa...)
-    'crates/apeireth-tools/tests/*',
-    'crates/apeireth-tool-runtime/src/privacy.rs',     # privacy test (sk-verylong...)
-    'crates/apeireth-tool-runtime/tests/*',
-    'crates/apeireth-sdk/src/voice/*',                # voice SDK test (sk-ant-...)
-    'crates/_archived/apeireth-sdk-voice/*',
+    'legacy/donor/apeireth-guard/src/pii.rs',                # PII detection test (ghp_aaa...)
+    'legacy/donor/apeireth-guard/tests/*',
+    'legacy/donor/apeireth-tools/src/guardrail.rs',          # guardrail test (ghp_aaa...)
+    'legacy/donor/apeireth-tools/tests/*',
+    'legacy/donor/apeireth-tool-runtime/src/privacy.rs',     # privacy test (sk-verylong...)
+    'legacy/donor/apeireth-tool-runtime/tests/*',
+    'crates/adapters/sdk/src/voice/*',                # voice SDK test (sk-ant-...)
+    'legacy/archived/apeireth-sdk-voice/*',
     # 真凭证存放位置 (per .gitignore, 不入库)
     'apikey-ultra.txt', 'apikey-*.txt',
     '*.git-credentials', 'Users*.git-credentials',

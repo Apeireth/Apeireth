@@ -104,7 +104,7 @@ jobs:
 
       - name: "守门 #3: R11 baseline 3 值完整"
         run: |
-          TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
+          TARGET="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
           for VAL in 0.8682 0.8532 0.9063; do
             if ! grep -q "$VAL" "$TARGET"; then
               echo "::error::R11 baseline $VAL 在 $TARGET 缺失"
