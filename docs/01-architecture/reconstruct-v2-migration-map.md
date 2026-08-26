@@ -3,9 +3,11 @@
 Companion to [`ARCHITECTURE.md`](../../ARCHITECTURE.md) and
 [`reconstruct-v2-audit.md`](reconstruct-v2-audit.md).
 
-**Nothing is deleted yet.** The canonical skeleton was added alongside the
-existing 86-crate workspace, which still builds and still passes its tests. This
-document says where each piece is going, why, and what has to happen first.
+This is the historical migration map for the canonical skeleton. The root
+workspace is now the only product workspace; the nested `reconstruction_v2/`
+prototype described below was removed during the pre-freeze cleanup after its
+surviving ideas had been captured. Historical decisions remain here for
+traceability.
 
 Decision vocabulary:
 
@@ -43,7 +45,7 @@ mechanically.
 | `apeireth-protocol` | four-protocol normalization, zero internal deps, no I/O | itself | **KEEP** | none; this is the canonical protocol layer | — |
 | `apeireth-companion` (`plugin.rs`, `capability.rs`, `capabilities_manifest.rs`, `runtime_capabilities.rs`) | a `Plugin` trait, a `PluginRegistry`, and three separate `Capability` structs | `apeireth-plugin` | **MERGE** | re-express each as a `CapabilityDescriptor` in a manifest; delete the rival registry | callers audited — these are internal to companion, so this is the least risky registry merge |
 | `crates/_frozen/apeireth-plugin` | frozen prior plugin system, 1,276 LOC, no callers | `apeireth-plugin` | **DEPRECATE** | mine for anything the canonical model lacks, then delete the frozen copy | none |
-| `reconstruction_v2/` (10 crates, separate workspace) | parallel prototype, not built by the root workspace | — | **DEPRECATE** | delete the directory and its `Cargo.toml` once the ideas listed in the audit are captured; its governance gates and clock contract already are | agreement that nothing else is worth harvesting |
+| `reconstruction_v2/` (10 crates, separate workspace) | parallel prototype, not built by the root workspace | — | **REMOVED** | deleted in the pre-freeze cleanup after the audit captured the useful governance and clock ideas; Git history remains the recovery path | no remaining product or build references |
 
 ---
 
