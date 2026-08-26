@@ -359,27 +359,34 @@ end-to-end test reproducible with no sleeps and no network.
 `Runtime::execute` is the only agent loop. If a second one appears anywhere, the
 two will diverge at the first behaviour change.
 
-### 6.7 Shell capability profiles
+### 6.7 Approval lifecycle and Shell capability
+
+The canonical approval/resume lifecycle is owned by Runtime and persisted
+through the `SessionStore` seam. `Runtime::execute_outcome` returns either a
+completed turn or a `PendingApproval`; `Runtime::resolve_approval` resumes the
+stored frozen operation at most once. Governance remains the sole source of
+`RequireApproval`.
 
 A future `tool.shell` capability may only ship under these readiness rules:
 
-- **Trusted Shell** is the only v1 candidate: per-invocation `RequireApproval`,
-  explicit cwd, `Clear`/`Explicit` environment, bounded timeout/output,
-  `ProcessExecutor` guardrails, no filesystem or network isolation claim, and
-  disabled for autonomous/background operation. Its
-  `IsolationRequirement` must be satisfied on Windows, Linux, and macOS and
-  must accept `ProcessTreeContainment: Partial` on Unix.
+- **Trusted Shell** is the only implemented v1 mode: per-invocation
+  `RequireApproval`, explicit cwd, `Clear`/`Explicit` environment, bounded
+  timeout/output, `ProcessExecutor` guardrails, no filesystem or network
+  isolation claim, and disabled for autonomous/background operation. It is
+  registered only when explicitly enabled by application configuration. Its
+  `IsolationRequirement` is satisfied on Windows, Linux, and macOS and accepts
+  `ProcessTreeContainment: Partial` on Unix.
 - **Restricted Shell** requires at least `PrivilegeReduction: Partial`,
   stronger process-tree containment, and resource limits; it is platform
   conditional and is not a sandbox.
 - **Untrusted Shell** requires `PrivilegeReduction: Enforced`,
   `FilesystemIsolation: Enforced`, and `NetworkIsolation: Enforced`; it is
   unsatisfiable on all current backends and must fail closed.
-- Approval is not containment; containment is not approval. Shell
-  implementation is blocked until the canonical approval-resume lifecycle
-  exists.
+- Approval is not containment; containment is not approval.
 
-See `docs/01-architecture/m2c-shell-readiness-review.md` for the full review.
+See `docs/01-architecture/m2c-shell-readiness-review.md`,
+`docs/01-architecture/m2c-approval-resume-lifecycle.md`, and
+`docs/01-architecture/m2c-trusted-shell.md`.
 
 
 ---
