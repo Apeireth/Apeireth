@@ -1,84 +1,77 @@
 # Quick Start
 
-> Verified against master (2026-08-18). Rust toolchain: stable (rust-toolchain.toml pinned 1.97.1).
+> 当前基线：根 workspace 13 个 Rust crate；桌面端是独立的
+> `frontend/companion-desktop` workspace。工具链由 `rust-toolchain.toml` 锁定。
 
 ## Prerequisites
 
-- Rust stable (rust-toolchain.toml)
-- Windows 10+ (Job Object sandbox) / Linux/macOS (some Windows-only features degrade honestly)
-- Optional: MiniMax API key for real LLM features
+- Rust toolchain from `rust-toolchain.toml`
+- Node 20+ and pnpm 9+ for the desktop frontend
+- An API key only when running a real provider-backed chat
 
-## Build
-
-```bash
-cargo build --workspace          # ~34 万行, 85 + 1 desktop crates
-cargo check --workspace --all-targets   # 编译全 target 干净 (含 post-1.0.0 cron 改进)
-```
-
-## Test
+## Build and test
 
 ```bash
-cargo test --workspace           # 23,874 组全绿 (含 post-1.0.0 增量)
-cargo test -p apeireth-cron --test integration_cron  # cron integration tests 25 cases
+cargo check --workspace --all-targets --locked
+cargo test --workspace --all-targets --locked
+cargo fmt --all -- --check
 ```
 
-## Run the Companion (the full partner endpoint)
+The canonical process-isolation integration test is:
+
+```bash
+cargo test -p apeireth-tools-canonical --test process_executor --locked -- --nocapture
+```
+
+## Run the canonical gateway
+
+```bash
+cargo run -p apeireth-cli -- gateway serve --port 8080
+```
+
+The gateway is backed by one `apeireth-runtime::canonical::Runtime`:
+
+```text
+GET  http://127.0.0.1:8080/health
+POST http://127.0.0.1:8080/v1/chat
+POST http://127.0.0.1:8080/v1/chat/completions
+```
+
+For a provider-backed turn, configure the resolver before starting the
+gateway. The default mappings are `APEIRETH_API_KEY` for MiniMax,
+`APEIRETH_ANTHROPIC_KEY` for Anthropic, and `OPENAI_API_KEY` for the optional
+OpenAI-compatible provider.
 
 ```powershell
-# PowerShell:
 $env:APEIRETH_API_KEY = (Get-Content C:\path\to\your-key.txt -Raw).Trim()
-cargo run -p apeireth-companion --example companion_serve
+cargo run -p apeireth-cli -- gateway serve --port 8080
 ```
 
-Then talk to her at `http://127.0.0.1:8090/v1` (OpenAI-compatible, any non-empty key):
+## CLI
 
 ```bash
-curl http://127.0.0.1:8090/v1/chat/completions \
-  -H "Content-Type: application/json" -H "Authorization: Bearer any" \
-  -d '{"model":"MiniMax-M3","messages":[{"role":"user","content":"你好"}]}'
+cargo run -p apeireth-cli -- --help
+cargo run -p apeireth-cli -- session
+cargo run -p apeireth-cli -- chat "hello" --model MiniMax-M3
 ```
 
-What you get: L0/L1 injection, memory (persistent, `%APPDATA%\apeireth\memory.sqlite`), daemon resident (dream/reflect/utter), tool bridge, approval queue at `/v1/apeireth/approval-requests`.
-
-Optional env:
-
-| Var | Meaning |
-|---|---|
-| `APEIRETH_SEED_MEMORY` | seed memories (semicolon-separated) |
-| `APEIRETH_GRANT` | explicit tool grant, e.g. `FileOperator:24` (hours) |
-| `APEIRETH_DREAM_QUIET_SECONDS` | dream quiet period (default 6h) |
-| `APEIRETH_LARK_*` / `APEIRETH_TELEGRAM_*` | delivery sinks (optional) |
-
-## TUI
+## Desktop frontend
 
 ```bash
-cargo run -p apeireth-tui
-```
-
-## Desktop 伙伴 (companion-desktop, post-v1.0.0 新增)
-
-```bash
-# 前置: Node 20+ + pnpm 9+ (Windows: WebView2 runtime)
 cd frontend/companion-desktop
-pnpm install
-pnpm dev                                      # http://localhost:1420 (Vite + Svelte)
-
-# 或: Tauri 桌面窗口 (需 WebView2)
-pnpm tauri dev                                 # 桌面窗口 + dev tools
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+pnpm dev
 ```
 
-详见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md)。 真实 LLM E2E 待 `APEIRETH_API_KEY` (目前是 mock SSE 端到端, **🟡 2026-08-19 TP34 后端 50%** — companion_serve 加 streaming 分支 + `extract_minimax_cot` helper, 6 种 RuntimeEvent 中 reasoning-delta 前端状态机待续, 详见 `docs/04-internal/next-team-handbook.md` TP34)。
-
-## Tool orchestration e2e
-
-```bash
-cargo run -p apeireth-integration-e2e --example tool_orchestrator_e2e
-cargo run -p apeireth-companion --example tp_acceptance_sim   # TP 验收模拟 4/4
-```
+The frontend talks to the gateway over HTTP. Its mock upstream and streaming
+integration test are kept with the frontend at
+`frontend/companion-desktop/tests/`.
 
 ## More
 
-- [User manual](../02-guides/user-manual.md)
-- [Architecture](../01-architecture/architecture.md)
-- [Security model](../01-architecture/security.md)
-- [Crate index](../03-reference/crates.md)
+- [Repository layout and ownership](../development/repository-layout.md)
+- [Current architecture](../01-architecture/architecture.md)
+- [API reference](../03-reference/api.md)
+- [Desktop frontend guide](../../frontend/companion-desktop/README.md)
