@@ -1,18 +1,8 @@
-name: 4 协议 e2e (R17 战役 4-4 升级)
-
-# 战役 4-4: 后端部署升级
-# 4 协议 e2e 真接 minimaxi (主人 apikey env), 验证 200 OK
-# - OpenAI Chat Completions (/v1/chat/completions)
-# - OpenAI Responses API (/v1/responses)
-# - Anthropic Messages (/v1/messages)
-# - Google Gemini (generateContent)
-#
-# 条件: APEIRETH_API_KEY secret 存在时跑, 不存在时 skip (with notice)
-# 不假装: 4 协议全真接, 任何失败都让 CI fail
+name: Protocol integration tests
 
 on:
   push:
-    branches: [master, main, rebase/d7d8-into-integration]
+    branches: [master, main]
   pull_request:
   workflow_dispatch:
 
@@ -20,83 +10,26 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: short
 
+permissions:
+  contents: read
+
 jobs:
-  # ==============================================================
-  # 4 协议 e2e 真接 minimaxi
-  # ==============================================================
-  protocol-e2e:
-    name: 4 协议 e2e (minimaxi)
+  protocol-tests:
+    name: protocol and gateway tests
     runs-on: ubuntu-latest
-    # CI fix 2026-08: job-level if 不能读 env 上下文 (Unrecognized named-value: 'env')
-    # → 各协议步骤用 step-level if: env.APEIRETH_API_KEY (step 级 env 可用)
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # keyring → dbus-secret-service → libdbus-sys 需要系统库 (apeireth-api 依赖链)
-      - name: "Install system deps (Linux: libdbus)"
+      - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
-      - name: Cache cargo registry + target
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-e2e-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-e2e-
+      - uses: Swatinem/rust-cache@v2
 
-      # === 步骤 1: 编译 apeireth-api (含 4 协议 e2e examples) ===
-      - name: cargo build --release -p apeireth-api --examples
-        run: cargo build --release -p apeireth-api --examples --verbose
+      - name: Protocol tests
+        run: cargo test -p apeireth-protocol --tests --locked
 
-      # === 步骤 2: OpenAI Chat Completions 真接 minimaxi ===
-      - name: "协议 1/4 - OpenAI Chat Completions (/v1/chat/completions)"
-        if: env.APEIRETH_API_KEY != ''
-        run: cargo run --release -p apeireth-api --example openai_chat
-        env:
-          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
-          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
-
-      # === 步骤 3: OpenAI Responses API 真接 minimaxi ===
-      - name: "协议 2/4 - OpenAI Responses API (/v1/responses)"
-        if: env.APEIRETH_API_KEY != ''
-        run: cargo run --release -p apeireth-api --example openai_responses
-        env:
-          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
-          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
-
-      # === 步骤 4: Anthropic Messages 真接 minimaxi ===
-      - name: "协议 3/4 - Anthropic Messages (/v1/messages)"
-        if: env.APEIRETH_API_KEY != ''
-        run: cargo run --release -p apeireth-api --example anthropic
-        env:
-          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
-          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
-
-      # === 步骤 5: Google Gemini GenerateContent 真接 minimaxi ===
-      - name: "协议 4/4 - Google Gemini (generateContent)"
-        if: env.APEIRETH_API_KEY != ''
-        run: cargo run --release -p apeireth-api --example gemini
-        env:
-          APEIRETH_API_KEY: ${{ secrets.APEIRETH_API_KEY }}
-          APEIRETH_API_URL: ${{ vars.APEIRETH_API_URL || 'https://api.minimaxi.com' }}
-
-  # ==============================================================
-  # 4 协议 e2e 跳过提示 (无 apikey 时)
-  # ==============================================================
-  skipped-notice:
-    name: 4 协议 e2e (skipped - 无 APEIRETH_API_KEY)
-    runs-on: ubuntu-latest
-    # CI fix 2026-08: job-level if 不能读 env → step 级 if
-    steps:
-      - name: Notice
-        if: env.APEIRETH_API_KEY == ''
-        run: |
-          echo "⚠️ APEIRETH_API_KEY secret 未配置, 4 协议 e2e 跳过."
-          echo "   在 Settings → Secrets → Actions 配置 APEIRETH_API_KEY 后重跑."
-          echo "   单元测试 + integration test (wiremock 4 协议 fake server) 见 rust-ci.yml workspace job."
+      - name: Gateway contract tests
+        run: cargo test -p apeireth-gateway --tests --locked
