@@ -8,9 +8,9 @@ authors.workspace = true
 description = "Apeireth companion organ (A12.5) - 长期跨 session 用户关系器官, 承载''用户是 AI 伙伴'' 语义. 基于 apeireth-graph-primitive, 提供 Partner / Bond / Milestone / Timeline / Companion 核心类型."
 
 [dependencies]
-apeireth-core = { path = "../../foundation/core" }
-apeireth-graph-primitive = { path = "../../../legacy/donor/apeireth-graph-primitive" }
-apeireth-consciousness = { path = "../../../legacy/donor/apeireth-consciousness" }
+apeireth-core = { path = "../../../crates/foundation/core" }
+apeireth-graph-primitive = { path = "../apeireth-graph-primitive" }
+apeireth-consciousness = { path = "../apeireth-consciousness" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -22,34 +22,34 @@ sha2 = "0.10" # S6: session_log 审计哈希链 FNV-1a 64 → SHA-256 (工作区
 async-trait = { workspace = true }
 # TelegramSink (daemon) 真 HTTP: 复用 workspace reqwest 0.12 + rustls (同 LarkSink 走法).
 reqwest = { workspace = true }
-apeireth-memory = { path = "../../engine/memory" }
+apeireth-memory = { path = "../../../crates/engine/memory" }
 # N2 OneRing: 账本表 + 迁移接口直连 SQLite (workspace 锁 0.32 bundled, 同 memory crate)
 rusqlite = { workspace = true }
-apeireth-lark = { path = "../../../legacy/donor/apeireth-lark" }
-apeireth-asi = { path = "../../../legacy/donor/apeireth-asi" }
-apeireth-council = { path = "../../../legacy/donor/apeireth-council" }
-apeireth-evolution = { path = "../../../legacy/donor/apeireth-evolution" }
+apeireth-lark = { path = "../apeireth-lark" }
+apeireth-asi = { path = "../apeireth-asi" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-evolution = { path = "../apeireth-evolution" }
 # TP18 校准/集合预报/预测市场 (E3 oracle 增强) — 主线程验收模拟直连
-apeireth-cognition = { path = "../../../legacy/donor/apeireth-cognition" }
+apeireth-cognition = { path = "../apeireth-cognition" }
 # TP20-N20 ApprovalBridge — 跨 crate 审批透传契约 (companion ↔ team-lead orchestrator)
-apeireth-team-lead = { path = "../../../legacy/donor/apeireth-team-lead" }
-apeireth-tool-registry = { path = "../../../legacy/donor/apeireth-tool-registry" }
-apeireth-tool-runtime = { path = "../../../legacy/donor/apeireth-tool-runtime" }
-apeireth-tool-approval = { path = "../../../legacy/donor/apeireth-tool-approval" }
+apeireth-team-lead = { path = "../apeireth-team-lead" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
 # N17/TP2: 9 工具子 crate 装配 (每个 register.rs 暴露统一注册函数)
-apeireth-tool-shell = { path = "../../../legacy/donor/apeireth-tool-shell" }
-apeireth-tool-fetch = { path = "../../../legacy/donor/apeireth-tool-fetch" }
-apeireth-tool-browser = { path = "../../../legacy/donor/apeireth-tool-browser" }
-apeireth-tool-codesearch = { path = "../../../legacy/donor/apeireth-tool-codesearch" }
-apeireth-tool-image-gen = { path = "../../../legacy/donor/apeireth-tool-image-gen" }
-apeireth-tool-image-process = { path = "../../../legacy/donor/apeireth-tool-image-process" }
-apeireth-tool-search = { path = "../../../legacy/donor/apeireth-tool-search" }
-apeireth-tool-filesystem = { path = "../../../legacy/donor/apeireth-tool-filesystem" }
-apeireth-repo-tools = { path = "../../../legacy/donor/apeireth-repo-tools" }
-apeireth-tools = { path = "../../../legacy/donor/apeireth-tools" }
-apeireth-guard = { path = "../../../legacy/donor/apeireth-guard" }
-apeireth-sovereignty = { path = "../../../legacy/donor/apeireth-sovereignty" }
-apeireth-bus = { path = "../../../legacy/donor/apeireth-bus" }
+apeireth-tool-shell = { path = "../apeireth-tool-shell" }
+apeireth-tool-fetch = { path = "../apeireth-tool-fetch" }
+apeireth-tool-browser = { path = "../apeireth-tool-browser" }
+apeireth-tool-codesearch = { path = "../apeireth-tool-codesearch" }
+apeireth-tool-image-gen = { path = "../apeireth-tool-image-gen" }
+apeireth-tool-image-process = { path = "../apeireth-tool-image-process" }
+apeireth-tool-search = { path = "../apeireth-tool-search" }
+apeireth-tool-filesystem = { path = "../apeireth-tool-filesystem" }
+apeireth-repo-tools = { path = "../apeireth-repo-tools" }
+apeireth-tools = { path = "../apeireth-tools" }
+apeireth-guard = { path = "../apeireth-guard" }
+apeireth-sovereignty = { path = "../apeireth-sovereignty" }
+apeireth-bus = { path = "../apeireth-bus" }
 
 # TP25 (E3 增强): LightGBMProvider 纯 Rust ONNX 推理 (per spec 2026-08-20)
 # 0 系统库 / 0 CMake / 0 MSVC - 替代 lightgbm-rs (C++ 编译链 Windows 0 pre-built)
@@ -89,7 +89,7 @@ windows-sys = { version = "0.59", features = [
 tokio = { workspace = true }
 tokio-stream = "0.1"
 futures = "0.3"
-apeireth-api = { path = "../../../legacy/donor/apeireth-api" }
+apeireth-api = { path = "../apeireth-api" }
 # TP29 (生态批): yaml_spec 与 tool_bridge 衔接测试用
 tempfile = "3"
 # companion_serve: 伙伴端点 (任何 OpenAI 兼容前端接入 Apeireth 主链路)

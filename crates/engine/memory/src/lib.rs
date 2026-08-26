@@ -20,7 +20,7 @@
 
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard};
 
 use apeireth_core::{Episode, IdentityCard, Note, Session};
 use rusqlite::Connection;
@@ -32,27 +32,13 @@ pub mod canonical;
 mod episode;
 mod identity;
 mod migrations;
-// R19 P2 战区 4: 公开 semantic + user_profile 模块 (bench 依赖)
-// 54ed4c7d: semantic 模块内部分割 — 纯件 (EmbedFn/HashEmbedder/EmbedderIdentity/episode_uuid) 无条件,
-// 向量路径 (SemanticIndex 等) 挂 semantic feature; semantic_persist/user_profile 整模块挂门控.
-pub mod semantic;
-// R19 P2 战区 4 续 (A-3): 公开 semantic_persist 模块 (跨 daemon 持久化路径)
-#[cfg(feature = "semantic")]
-pub mod semantic_persist;
 // N8: generation 绑定观测缓存 (自包含, VCP MemoRuntime 精神, artifact_sig 联动口; 移交续接; merge 吞行后二次补回)
 pub mod gen_cache;
-// P2#12: 本地 ONNX embedding (feature onnx; 关闭时诚实 Err + hash 降级)
-pub mod onnx;
-// R179 P1-9: Episode Dedup (借鉴 mempalace dedup.py — session 内近重复检测)
-pub mod dedup;
 // R179 P1-10: Hallway — wing 内 entity-pair 跨位置走廊 (借鉴 mempalace hallways.py)
 pub mod hallways;
 mod session_note;
 mod streams;
 mod three_layer; // R30 U9: claude-mem 3 层 facade
-                 // R19 P2 战区 4: 公开 user_profile 模块 (bench 后续可依赖)
-#[cfg(feature = "semantic")]
-pub mod user_profile;
 
 pub use append_only::{AppendOnlyError, HistoryEntry, HistoryStream, Tombstone};
 // R22 ST-A2.4 — 6 历史流深度公共 API (query / insert / count)
@@ -63,20 +49,9 @@ pub use episode::{EpisodeQuery, EpisodeStore};
 // TP24 (M5 + N25): 记忆来源链 + 时间元数据 (episodes 表的 4 列 V4 扩展).
 // 方法以 inherent impl on SqliteMemoryStore 暴露, 不引入 trait (减少 import, 保持向后兼容).
 pub mod provenance;
-pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
-pub mod llm_analysis;
 pub use identity::{IdentityCardRecord, IdentityCardStore, IdentityConflict};
-pub use llm_analysis::{analyze_episode, AnalysisKind, AnalysisResult};
 pub use migrations::{run_migrations, Migration as SchemaMigration, MIGRATIONS};
-// R19 P2 战区 4: 公开 EmbedFn / SemanticIndex / UserProfile / ProfileExtractor
-// (semantic + user_profile 模块是新文件, 0 触碰 LOCKED 9 文件)
-// 54ed4c7d: 纯件无条件导出; SemanticIndex/PersistentSemanticIndex/user_profile 挂 semantic feature
-#[cfg(feature = "semantic")]
-pub use semantic::SemanticIndex;
-pub use semantic::{episode_uuid, EmbedFn, HashEmbedder};
-// R19 P2 战区 4 续 (A-3): 公开 PersistentSemanticIndex (跨 daemon 长程索引)
-#[cfg(feature = "semantic")]
-pub use semantic_persist::PersistentSemanticIndex;
+pub use provenance::{normalize_meta, validate_meta, EpisodeMeta, Provenance};
 pub use session_note::{NoteQuery, NoteRecord, NoteStore, SessionRecord, SessionStore};
 // Core Capability Expansion Phase 2: 后端会话生命周期 (state machine + 乐观并发).
 // 独立于 SessionStore trait (旧 upsert 不变), 走 inherent impl on SqliteMemoryStore.
@@ -98,52 +73,11 @@ pub use streams::{
     ReflectionStream, RelationStream, StanceStream, ThoughtStream,
 };
 pub use three_layer::{ThreeLayerMemory, SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY}; // R30 U9
-#[cfg(feature = "semantic")]
-pub use user_profile::{ProfileEmbedder, ProfileExtractor, UserProfile};
 
 /// 重新导出 `apeireth_core::Episode` 方便下游不必记多个导入路径.
 pub use apeireth_core::Episode as CoreEpisode;
 // R177: organ invariants (10 tests + 2 Kani proofs)
 mod organ_kani_proofs;
-// R23 #6 派工: 从 extensions/ 子 crate re-export 3 Provider (in_memory / file / mongodb).
-// 透明登记: 此处 +1 行 (pub use), 不动 LOCKED 9 文件 (append_only / identity / migrations /
-// episode / session_note / streams / history_streams / continuity_link / llm_analysis).
-pub use apeireth_memory_extensions::{
-    provider_file::FileProvider, provider_in_memory::InMemoryProvider,
-    provider_mongodb::MongoDbProvider,
-};
-// R37-2: 9 organ 部分合并 — life_force 透明 re-export 到 memory.
-// 注释修正 (R131 P0-1 真实化): apeireth-life-force 仍是 workspace member
-// (path dep 在 Cargo.toml:93), re-export 仅为 API 便利, 0 breaking.
-// 显式列出导出 (避免 `pub use ...::*` 隐藏依赖关系).
-pub use apeireth_life_force::{
-    // 子模块 re-export
-    emergence::{
-        EmergenceDetector, EmergenceError, EmergenceReport, EmergenceSignal, EmergenceSignalType,
-    },
-    exhaustion_check,
-    recovery_start,
-    reflection_cycle::{
-        ReflectionCycleError, ReflectionCycleEvent, ReflectionCycleScheduler, ReflectionPhase,
-    },
-    reflection_progress,
-    // 触发函数
-    reflection_trigger,
-    validate_endurance,
-    LifeForce,
-    LifeForceError,
-    ReflectionPeriod,
-    ReflectionPeriodState,
-    ReflectionTrigger,
-    // 核心类型
-    SelfGrowthIndicator,
-    StandardReflectionPeriod,
-    ENDURANCE_EXHAUSTION_THRESHOLD,
-    ENDURANCE_MAX,
-    // 常量
-    ENDURANCE_MIN,
-    ENDURANCE_RECOVERY_TARGET,
-};
 
 /// 顶层错误: 所有 memory 子系统的 fallback error.
 #[derive(Debug, Error)]
@@ -166,8 +100,7 @@ pub enum MemoryError {
     /// 互斥锁中毒 (panic 持有锁后).
     #[error("memory store mutex poisoned: {0}")]
     Poisoned(String),
-    /// R19 P2 战区 4: vector/semantic 子系统错误 (vec0 操作 / embedder / 等).
-    /// 加在 lib.rs 顶层 (不触碰 9 LOCKED 文件, 与 R23 P3 / R37-2 透明 re-export 同模式).
+    /// Memory subsystem error not covered by a more specific variant.
     #[error("memory subsystem error: {0}")]
     Other(String),
 }
@@ -320,125 +253,6 @@ impl SqliteMemoryStore {
     pub fn export_streams_jsonl(&self) -> MemoryResult<Vec<HistoryEntry>> {
         let conn = self.conn()?;
         append_only::export_all_streams(&conn)
-    }
-
-    /// R19 P2 战区 4: 一次性语义搜索 (用 in-memory vector store).
-    ///
-    /// 适合 "偶发" 查询; 高频场景请自己持 `SemanticIndex` 复用.
-    ///
-    /// 流程:
-    /// 1. 拉 memory 里所有 episodes (limit 100_000)
-    /// 2. 在 in-memory vec0 backend 重建索引
-    /// 3. embed query + KNN 检索
-    /// 4. 反查 episode 返回
-    ///
-    /// 返回 episodes 按相似度降序, 长度 <= k.
-    #[cfg(feature = "semantic")]
-    pub fn semantic_search(
-        &self,
-        query: &str,
-        k: usize,
-        embedder: Arc<dyn EmbedFn>,
-    ) -> MemoryResult<Vec<Episode>> {
-        use apeireth_vector::{SqliteVecBackend, VectorStore};
-
-        if k == 0 {
-            return Ok(Vec::new());
-        }
-
-        // 1. 拉所有 episodes.
-        let eps = <Self as EpisodeStore>::query(self, &EpisodeQuery::new().limit(100_000))?;
-        if eps.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // 2. in-memory vec0 backend.
-        let mut backend = SqliteVecBackend::open_in_memory()
-            .map_err(|e| MemoryError::Other(format!("vector open: {e}")))?;
-        backend
-            .set_dimension(embedder.dim())
-            .map_err(|e| MemoryError::Other(format!("vector set_dim: {e}")))?;
-        let index = SemanticIndex::new(self, Box::new(backend), embedder);
-
-        // 3. 索引 + 检索.
-        index.index_episodes(&eps)?;
-        index.search(query, k)
-    }
-
-    /// R19 P2 战区 4: 一次性提取用户画像.
-    ///
-    /// 跟 `semantic_search` 一样, 一次性 in-memory index.
-    /// 高频场景请自己持 `SemanticIndex` 复用.
-    #[cfg(feature = "semantic")]
-    pub fn extract_user_profile(&self, embedder: Arc<dyn EmbedFn>) -> MemoryResult<UserProfile> {
-        use apeireth_vector::SqliteVecBackend;
-
-        let backend = SqliteVecBackend::open_in_memory()
-            .map_err(|e| MemoryError::Other(format!("vector open: {e}")))?;
-        let index = SemanticIndex::new(self, Box::new(backend), embedder);
-        index.extract_profile()
-    }
-
-    // ============================================================================
-    // R19 P2 战区 4 续 (A-3): 跨 daemon 持久化长程 API
-    // ----------------------------------------------------------------------------
-    // 跟 A 一次性的 `semantic_search` / `extract_user_profile` 0 冲突.
-    // 1:1 对齐: 一次性用 in-memory vec0 重建, 长程用 path-based vec0 真接 disk.
-    // ============================================================================
-
-    /// 打开一个跨 daemon 持久化的 `PersistentSemanticIndex`.
-    ///
-    /// 跟 A 一次性 `SemanticIndex::new` 区别:
-    /// - 内部 `Arc<SqliteMemoryStore>` (不借用, 跨 daemon 共享)
-    /// - 内部 `SqliteVecBackend::open(path)` 真接 disk (write-through WAL)
-    /// - `save()` 公开 (实际 no-op, WAL 已 write-through)
-    /// - `as_semantic_index(&mem)` 桥接 A 一次性 API 借用视图
-    ///
-    /// 用法: daemon 启动时 `open`, 运行时复用, daemon 关闭时 `save` (no-op).
-    #[cfg(feature = "semantic")]
-    pub fn open_persistent_semantic_index(
-        self: &Arc<Self>,
-        vector_path: impl AsRef<std::path::Path>,
-        embedder: Arc<dyn EmbedFn>,
-    ) -> MemoryResult<PersistentSemanticIndex> {
-        PersistentSemanticIndex::open(Arc::clone(self), vector_path, embedder)
-    }
-
-    /// 一次性持久化语义搜索 (便捷方法).
-    ///
-    /// 等价于:
-    /// ```ignore
-    /// let arc_self: Arc<SqliteMemoryStore> = Arc::new(...);
-    /// let idx = arc_self.open_persistent_semantic_index(vector_path, embedder)?;
-    /// let hits = idx.search(query, k)?;
-    /// idx.save()?;
-    /// hits
-    /// ```
-    /// 但不开 `PersistentSemanticIndex` 长期持有, 一次调用完.
-    ///
-    /// 跟 A 一次性 `semantic_search` 区别: 复用 path-based vec0 db, 跨 daemon
-    /// 重启数据不丢. 首次调用会建立空 index; 后续调用累积.
-    #[cfg(feature = "semantic")]
-    pub fn semantic_search_persistent(
-        self: &Arc<Self>,
-        query: &str,
-        k: usize,
-        vector_path: impl AsRef<std::path::Path>,
-        embedder: Arc<dyn EmbedFn>,
-    ) -> MemoryResult<Vec<Episode>> {
-        if k == 0 {
-            return Ok(Vec::new());
-        }
-        // 1. 拉所有 episodes.
-        let eps = <Self as EpisodeStore>::query(self, &EpisodeQuery::new().limit(100_000))?;
-        if eps.is_empty() {
-            return Ok(Vec::new());
-        }
-        // 2. 打开 / 复用 path-based vec0.
-        let idx = PersistentSemanticIndex::open(Arc::clone(self), vector_path, embedder)?;
-        // 3. 索引 + 检索.
-        idx.index_episodes(&eps)?;
-        idx.search(query, k)
     }
 }
 
@@ -595,8 +409,7 @@ mod tests {
 /// dailynote: 按日期分区存储 (R141)
 /// lightmemo: VCP production V3 拓扑简化 (R142-R143)
 pub mod dailynote;
-pub mod g5_memory_bridge;
-pub mod lightmemo; // R161: memory insert/retrieve 5 步 -> g5 substrate (5th caller)
+pub mod lightmemo;
 
 /// 编译期守门 (per O-5 不假装)
 pub const MEMORY_SUBMODULE_COUNT: usize = 2;

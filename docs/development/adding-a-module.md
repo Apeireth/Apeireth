@@ -58,7 +58,9 @@ adapters
 - foundation must not depend on modules/adapters.
 - engine may depend on foundation.
 - capabilities may depend on foundation and approved engine primitives.
-- modules may depend on canonical contracts, not adapters or legacy.
+- modules may depend on canonical contracts, not adapters or legacy. The
+  `crates/modules/` directory currently has no active product module; historical
+  Companion code is donor-only under `legacy/donor/apeireth-companion`.
 - adapters may depend inward.
 - product code must not depend on `legacy/`.
 

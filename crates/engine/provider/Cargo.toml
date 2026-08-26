@@ -5,29 +5,25 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "apeireth-provider — R35: 6 Provider (claude-code/codex/copilot/gemini-cli/opencode/minimax) + R176: LlmFacade + http_dispatch"
+description = "Canonical provider capabilities for Anthropic, MiniMax, and OpenAI-compatible APIs"
+
 [lib]
 name = "apeireth_provider"
 path = "src/lib.rs"
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-thiserror = { workspace = true }
 async-trait = { workspace = true }
 apeireth-core = { path = "../../foundation/core" }
-apeireth-llm-iface = { path = "../../../legacy/donor/apeireth-llm-iface" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-protocol = { path = "../../foundation/protocol" }
-apeireth-acp = { path = "../../../legacy/donor/apeireth-acp" }
-apeireth-http-client = { path = "../../../legacy/donor/apeireth-http-client" }
 tokio = { workspace = true }
-# Canonical provider transport: the provider owns its reqwest client and its
-# lifetime (per ARCHITECTURE.md HTTP-ownership rule). rustls-tls matches the
-# workspace default; no native-tls.
 reqwest = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt", "net", "io-util", "time", "test-util"] }
 apeireth-core = { path = "../../foundation/core" }
+
 [lints]
 workspace = true
