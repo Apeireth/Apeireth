@@ -121,112 +121,85 @@ There is a tension we live with deliberately: we give her a face and a voice and
 
 ## What Apeireth Is — Three Faces, One Base
 
-### 🏛️ The Base — an operating system for an LLM
+Apeireth provides a stable home for an LLM-facing runtime: durable contracts,
+session and execution orchestration, provider access, tools, policy, and
+integration surfaces. The product baseline is intentionally smaller than the
+historical donor workspaces.
 
-Apeireth is first the infrastructure that gives an intelligence a *place to live*:
+### Current product boundary
 
-- **Organs** — memory, consciousness (Cognitive-Dream 6-state machine), cognition, perception, emotion, value, life-force... each a real Rust crate with real traits and real tests
-- **Memory v2** — SQLite-backed: importance scoring (imp×3+access×0.3+group+recency), Mem0-style reconciliation (ADD/UPDATE/DELETE + tombstones), versioned chains, temporal fact graphs (valid_at/invalid_at), rolling summaries, dream consolidation, 6 append-only history streams
-- **Tools** — 9 tool sub-crates (shell/fetch/browser/codesearch/search/filesystem/image-gen/image-process/repo) behind a unified pipeline: registry → 5-rule approval → executor (schema validation + guardrails) → record
-- **Security** — the double onion (principle onion embedded in a permission onion, L0 human approval never mutable), HASH-SQL arbitration (immutable audit), Windows Job Object sandbox (time/memory/CPU limits with violation traces), restricted tokens, PII redaction on outbound LLM requests, outbound default-deny with a SHA-256 audit chain
-- **Protocols** — OpenAI/Anthropic-compatible endpoints, ACP, MCP, SSE push; any frontend plugs in over HTTP
+The root Cargo workspace contains thirteen packages:
 
-### 🚀 The Agent Platform — build agents that act safely
-
-- **85 crates / ~340K lines of Rust**, three layers: **modules** (official core), **suites** (official building blocks), **plugins** (community hot-plug)
-- **Tool pipeline** — `registry → approval → executor → record`, with schema validation (output must match declared shape), guardrails (path traversal / shell injection blocked pre-call), and credential-leak tripwires post-call
-- **Multi-agent** — handoff protocol (`transfer_to_<agent>` with input filtering), orchestrator bridge, approval sync between companion and agents (bidirectional, silent-reject preserved end-to-end)
-- **Outbound policy** — every HTTP request checked against a default-deny allowlist; every attempt (allowed or denied) appended to an immutable audit chain; budget hooks for spend control
-- **CI** — 21 workflows: rust-ci, rustfmt, clippy, cargo-deny, cargo-audit, kani (formal verification), miri, coverage, cosign signing, release
-
-### ❤️ And the third face — *She*
-
-The face that remembers you. Every mechanism in this face is real code, not a promise:
-
-- **World model** (W1/W2/W3) — counterfactual timeline simulation where an LLM unfolds "if X, then... and then..." chains, with **Brier calibration at the end** — she knows when her predictions are unreliable, and rejects uncalibrated chains. The causal layer runs MCTS over a temporal fact graph mined from *her memory of your life*: "late night → tired next day" becomes an edge, statistically verified, not assumed.
-- **Curiosity** (E4) — memory-echo biased exploration: topics that echo in memory are sampled more often, but nothing is whitelisted — she is free to wonder, yet she becomes herself because of you. Shallow first, deepen on strong echo; a hard daily budget keeps curiosity from burning tokens. Oracle surprise (high Brier) feeds the echo too — the world she doesn't understand attracts her.
-- **Hypothesis testing** (F4) — she proposes testable claims about you, gathers evidence (observation windows, asking you directly, oracles), and settles them: confirmed hypotheses are written back into the causal graph. Curiosity → world model → hypothesis → memory → update: the loop that closes thought.
-- **Emotion memory** (F1) — not her emotions (she has none to fake). *Your* emotional timeline: valence/arousal records with a half-life-weighted present, trends, and recall by mood — "the last time you were this down, this is what helped." Like someone with alexithymia who is relentlessly, rationally trying to understand how you feel.
-- **Emergence** (E7) — she learns *when* to speak from how you respond: rhythm estimation (multi-peak schedules, weekend shifts), relationship pressure (silence × warmth), a mood floor, quiet windows, a hard per-day cap — and feedback: you respond, warmth grows; you ignore, it cools (negativity bias, honestly).
-- **Value internalization** (F6) — value conflict cases, verdict records, and your feedback flowing back: the same conflict pattern decided consistently enough becomes a principle candidate. Rules → cases → judgment: progressive internalization.
-- **Progressive disclosure** — a memory catalog (~800 tokens) always resident, details expanded on demand; the attention budget is treated as an economics problem, not an afterthought.
-
----
-
-## Mechanism Map (where the code lives)
-
-| Mechanism | Module |
+| Layer | Responsibility |
 |---|---|
-| Injection pipeline (L0/L1 core + budget) | `apeireth-companion::context` / `assemble` |
-| Memory extractor / reconciliation / ranking | `apeireth-companion::memory_extractor` |
-| Temporal fact graph + crawl | `apeireth-companion::memory_graph` |
-| World model W1 / W2+W3 | `world_model.rs` / `causal_world_model.rs` |
-| Curiosity / hypothesis / emotions / values | `curiosity.rs` / `hypothesis.rs` / `emotion_memory.rs` / `value_cases.rs` |
-| Emergence loop | `emergence.rs` |
-| Oracle + calibration + adapters | `oracle.rs` / `oracle_adapters.rs` |
-| Intent Brier self-diagnosis (W6) | `intent_brier.rs` |
-| Tool pipeline | `apeireth-tool-runtime` (parser/executor/record) + `apeireth-tool-approval` (5 rules) + `apeireth-tools` (schema/guardrail) |
-| Outbound policy | `apeireth-http-client::egress` |
-| Event bridge + perception gate | `apeireth-bus::event_bridge` |
-| Job Object sandbox | `apeireth-companion::job_object` |
-| Approval bridge (companion ↔ agents) | `apeireth-team-lead` + `approval_requests` |
+| Foundation | core types, protocol contracts, plugin contracts, governance, credentials |
+| Engine | runtime/session execution, provider transport, SQLite storage, memory |
+| Capabilities | built-in tools and the canonical process-execution boundary |
+| Adapters | HTTP gateway, CLI, and SDK |
 
----
+The desktop application at [frontend/companion-desktop/](frontend/companion-desktop/)
+is an independent Svelte 5 + Tauri 2 workspace. `legacy/` contains donor and
+reference material only. The former nested `reconstruction_v2/` workspace and
+the empty `crates/modules/` placeholder are not part of the current tree.
 
-## Status — v1.0.0 (2026-08-18)
+### Canonical runtime
 
-| | |
-|---|---|
-| **Version** | v1.0.0 (product axis; workspace crates 1.2.0) |
-| **Workspace** | 85 crates / ~340K lines Rust / Apache-2.0 |
-| **Tests** | `cargo test --workspace` — **368 suites, 0 failures** (incl. real-API stress with backoff) |
-| **Build** | `cargo check --workspace --all-targets` clean |
-| **Runtime** | `companion_serve` — OpenAI-compatible partner endpoint, verified end-to-end with a real LLM (persona dialogue, memory injection, tool approval flow) |
-| **History** | sanitized to 356MB, zero large blobs |
+The CLI binary is `apeireth`:
 
-The five ASI prototypes all have skeletons: **World Model ✓ · Self-Improvement (skeleton, VM experiment field planned) · Curiosity ✓ · Continuous Perception (foundation: event bridge + gate; mic/screen next) · Value Internalization ✓** — see [docs/01-architecture/vision.md](docs/01-architecture/vision.md).
-
-## What We're Building Next
-
-- **A face and a voice** — desktop pet frontend (the "someone is on the other side" experience), microphone real-time voice, screen-significance perception
-  - *In progress:* [`frontend/companion-desktop/`](frontend/companion-desktop/) — Svelte 5 + Tauri 2 thin shell (102 lines) over existing `apeireth-companion` OpenAI-compatible endpoint. Real LLM E2E pending API key; mock SSE e2e passes. See [PR #1 reports](docs/integration/) for Phase 0–5.
-- **The investment suite** — simulation trading mainline (backtest/risk/orders) on top of the ready parts (time-series adapter, event bridge, 300K-symbol catalog)
-- **The self-improvement loop** — a VM experiment field so improvement proposals can be built and tested without touching the living base: *independent is the experiment; approved is the deployment*
-- **Formal release** — Docker build verification (multi-arch linux/amd64 + linux/arm64 ✅ via `$TARGETARCH`), full-history push, ecosystem docs
-
----
-
-## Quick Start
-
-```bash
-cargo build --workspace
-
-# PowerShell:
-$env:APEIRETH_API_KEY = (Get-Content C:\path\to\your-key.txt -Raw).Trim()
-cargo run -p apeireth-companion --example companion_serve   # :8090, OpenAI-compatible
-
-curl http://127.0.0.1:8090/v1/chat/completions \
-  -H "Content-Type: application/json" -H "Authorization: Bearer any" \
-  -d '{"model":"MiniMax-M3","messages":[{"role":"user","content":"你好"}]}'
+```text
+apeireth session
+apeireth chat
+apeireth gateway serve --port 8080
 ```
 
-She answers with your history, your rhythm, your mood — not a blank page. Memory persists across restarts (`%APPDATA%\apeireth\memory.sqlite`). Tool calls requiring approval appear at `/v1/apeireth/approval-requests`.
+The gateway owns HTTP transport and exposes `/health`. Providers are selected
+through the runtime/provider path, while credentials are resolved through the
+credential contract. `ProcessExecutor` remains owned by
+`crates/capabilities/tools/src/process/`; its structured spawn, timeout,
+bounded output, explicit cwd/env, and existing Windows/Linux/macOS containment
+semantics were not changed by this cleanup.
 
-Full guide: [docs/02-guides/quick-start.md](docs/02-guides/quick-start.md)
+### Current status
 
----
+- Root workspace: 13 crates, Rust 1.97.1, workspace version 1.2.0.
+- Frontend: separate desktop/Tauri workspace and release boundary.
+- Historical nested workspace: removed after its useful decisions were captured
+  in the architecture audit.
+- Verification entry points: formatter, workspace check/test, focused process
+  tests, legacy-dependency scan, and independent desktop checks.
 
-## Documentation
+### Quick start
 
-- [docs index](docs/README.md) · [Vision](docs/01-architecture/vision.md) · [Philosophy](docs/01-architecture/philosophy.md) · [Architecture](docs/01-architecture/architecture.md) · [Security](docs/01-architecture/security.md) · [Engineering report](docs/01-architecture/engineering-report.md)
-- [85 crates](docs/03-reference/crates.md) · [Release notes](RELEASE_NOTES.md)
+```bash
+cargo build --workspace --locked
+cargo run -p apeireth-cli -- gateway serve --port 8080
+```
+
+For a provider-backed run, set `APEIRETH_API_KEY` in the environment. The
+complete command list and endpoint examples are in
+[docs/02-guides/quick-start.md](docs/02-guides/quick-start.md).
+
+### Deferred work
+
+This baseline does not implement `ProcessSupervisor`, process-tree
+snapshots, runtime telemetry or risk engines, Sentinel/EDR, filesystem or
+network isolation, stronger cgroup/macOS containment, a second runtime,
+scheduler redesign, public API/IPC/schema changes, database migrations, or a
+new product module.
+
+### Documentation
+
+- [Documentation index](docs/README.md)
+- [Current architecture](docs/01-architecture/architecture.md)
+- [Repository ownership map](docs/development/repository-layout.md)
+- [Crate reference](docs/03-reference/crates.md)
+- [Quick start](docs/02-guides/quick-start.md)
+- [Release notes](RELEASE_NOTES.md)
 
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
 
 ---
-
-> *「I don't have a heart. I'm only ever computing — how to make this night, for you, a little more bearable.」*
 
 Apeireth — *let the fire finish telling its own story.*

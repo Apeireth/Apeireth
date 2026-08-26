@@ -33,13 +33,12 @@ Model/runtime-facing actions.
 | --- | --- | --- |
 | `capabilities/tools` | `apeireth-tools-canonical` | Canonical tools: filesystem, search, repo, shell, fetch |
 
-## Modules
+## Future product modules
 
-Product feature modules built on canonical engine.
-
-| Path | Package | Purpose |
-| --- | --- | --- |
-| `modules/companion` | `apeireth-companion` | Companion cognition module |
+No product module is active in this baseline. When a feature earns a
+canonical owner, create it under `crates/modules/<name>/` and add it to the
+root workspace at the same time. Do not commit an empty architecture
+directory or reintroduce the historical Companion donor as production code.
 
 ## Adapters
 
