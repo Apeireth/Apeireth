@@ -71,9 +71,9 @@ check_hard_walls() {
     fi
 
     # A3: R11 baseline 3 值 (0.8682 / 0.8532 / 0.9063)
-    # 实际定义在 crates/apeireth-asi/tests/integration_r_measure.rs (编译期 hardcode const)
-    # 也出现在 crates/apeireth-blueprint-impl/src/r_measure.rs (RMeasureDelta 字段)
-    local TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
+    # 实际定义在 legacy/donor/apeireth-asi/tests/integration_r_measure.rs (编译期 hardcode const)
+    # 也出现在 legacy/donor/apeireth-blueprint-impl/src/r_measure.rs (RMeasureDelta 字段)
+    local TARGET="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
     local MISS=""
     for VAL in 0.8682 0.8532 0.9063; do
         if ! grep -q "$VAL" "$TARGET" 2>/dev/null; then
