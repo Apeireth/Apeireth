@@ -1,4 +1,9 @@
-# scripts/release/ — 1.0 release 流程 (R129-8 准备, 主人手跑)
+# scripts/release/ — 历史 1.0 release 流程
+
+> 本目录保留 1.0 release 的历史流程与决策记录，不是当前根 workspace 的
+> 封板入口。文中旧 package、旧 workspace 路径和旧版本号均按当时状态保留。
+> 当前验证请使用根目录 `cargo test --workspace --all-targets --locked`、
+> `scripts/check-assembly-matrix.ps1` 与 `scripts/audit/orphan-scan.ps1`。
 
 > **Date**: 2026-08-11
 > **Author**: Mavis (mvs_367e66fae08342ffa399befe4f85dbac, 0:08 派 R129-8)
