@@ -1,11 +1,11 @@
-//! round10-07: 12 键 O 层 hardcode LOCKED 真实集成测试
+//! round10-07: 13 键 O 层 hardcode 真实集成测试
 //!
-//! 目的: 验证 V3 9 键 (PHL-01/02b/03) + v4.1 3 键 (PHL-04/05/06) = 12 键编译期 hardcode 锁
+//! 目的: 验证 V3 9 键 + v4.1 3 键 + PHL-07 = 13 键编译期 hardcode 锁
 //!
 //! 测试策略 (基于"工程实现有没有受到欺骗或误解"用户关切):
-//! - 单元测试 (≥6): 12 键全部存在、3+3+3+1+1+1 分组、各 group_id 正确、description 唯一、
-//!                   ALL_TWELVE_KEYS 数组字面量 hardcode、每个 key 都被数组包含
-//! - 集成测试 (≥2): 12 键被 PhilosophyGuard 全部遍历 + 12 键都被 verdict_for_target 锁死
+//! - 单元测试 (≥6): 13 键全部存在、3+3+3+1+1+1+1 分组、各 group_id 正确、description 唯一、
+//!                   旧名 ALL_TWELVE_KEYS 的兼容别名仍覆盖全部键
+//! - 集成测试 (≥2): 13 键被 PhilosophyGuard 全部遍历 + target 路由保持锁定
 //!
 //! **不修改**:
 //! - `ALL_TWELVE_KEYS` 数组字面量
@@ -29,30 +29,31 @@ fn twelve_keys_hardcode_const_evaluates() {
 }
 
 #[test]
-fn all_twelve_keys_array_length_is_exactly_twelve() {
-    assert_eq!(ALL_TWELVE_KEYS.len(), 12, "12 键 hardcode 锁必须保持 12");
+fn all_twelve_keys_compat_alias_contains_thirteen_keys() {
+    assert_eq!(ALL_TWELVE_KEYS.len(), 13, "兼容别名必须覆盖 13 键");
 }
 
 #[test]
 fn all_twelve_keys_distinct_no_duplicates() {
-    // 12 键必须唯一 (不重复), 避免一个 key 出现两次, 另一 key 缺失
+    // 13 键必须唯一 (不重复), 避免一个 key 出现两次, 另一 key 缺失
     let mut seen: Vec<PhilosophyKey> = Vec::new();
     for k in ALL_TWELVE_KEYS.iter() {
         assert!(!seen.contains(k), "重复键: {:?}", k);
         seen.push(*k);
     }
-    assert_eq!(seen.len(), 12);
+    assert_eq!(seen.len(), 13);
 }
 
 #[test]
-fn group_distribution_matches_three_three_three_one_one_one() {
-    // V3 PHL-01 (3) + V3 PHL-02b (3) + V3 PHL-03 (3) + v4.1 PHL-04/05/06 (1+1+1) = 12
+fn group_distribution_matches_thirteen_key_layout() {
+    // V3 PHL-01/02b/03 (3+3+3) + PHL-04/05/06/07 (1+1+1+1) = 13
     let mut phl01 = 0u8;
     let mut phl02b = 0u8;
     let mut phl03 = 0u8;
     let mut phl04 = 0u8;
     let mut phl05 = 0u8;
     let mut phl06 = 0u8;
+    let mut phl07 = 0u8;
     for k in ALL_TWELVE_KEYS.iter() {
         match k.group_id() {
             1 => phl01 += 1,
@@ -61,6 +62,7 @@ fn group_distribution_matches_three_three_three_one_one_one() {
             4 => phl04 += 1,
             5 => phl05 += 1,
             6 => phl06 += 1,
+            7 => phl07 += 1,
             _ => panic!("未分组键: {:?}", k),
         }
     }
@@ -70,6 +72,7 @@ fn group_distribution_matches_three_three_three_one_one_one() {
     assert_eq!(phl04, 1, "PHL-04 必须 1 键");
     assert_eq!(phl05, 1, "PHL-05 必须 1 键");
     assert_eq!(phl06, 1, "PHL-06 必须 1 键");
+    assert_eq!(phl07, 1, "PHL-07 必须 1 键");
 }
 
 #[test]
@@ -105,7 +108,7 @@ fn all_thirteen_v3_locked_keys_absent_from_v4_1_only_three() {
 
 #[test]
 fn philosophy_key_descriptions_are_unique() {
-    // 12 键不能 description 重复 (避免 confusing)
+    // 13 键不能 description 重复 (避免 confusing)
     let mut descs: Vec<&str> = Vec::new();
     for k in ALL_TWELVE_KEYS.iter() {
         let d = k.description();
@@ -113,7 +116,7 @@ fn philosophy_key_descriptions_are_unique() {
         assert!(!descs.contains(&d), "description 重复: {}", d);
         descs.push(d);
     }
-    assert_eq!(descs.len(), 12);
+    assert_eq!(descs.len(), 13);
 }
 
 // ============================================================================
@@ -177,7 +180,7 @@ fn philosophy_verdict_block_carries_distinct_keys_each_time() {
             }
         }
     }
-    assert_eq!(uniq_keys.len(), 12, "12 个 Block 应带 12 个不同 key");
+    assert_eq!(uniq_keys.len(), 13, "13 个 Block 应带 13 个不同 key");
 }
 
 #[test]
