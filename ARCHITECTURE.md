@@ -253,8 +253,8 @@ not part of one.
 
 ### `apps/` — entry points *(cli, gateway, desktop)* — **target layout, does not exist yet**
 
-Today these live as `crates/apeireth-cli`, `crates/apeireth-gateway`,
-`crates/apeireth-tui` and `crates/apeireth-web`. The rules below apply to them
+Today these live as `crates/adapters/cli`, `crates/adapters/gateway`,
+`legacy/donor/apeireth-tui` and `legacy/donor/apeireth-web`. The rules below apply to them
 where they are; the move under `apps/` is a migration item, not a precondition.
 
 **May depend on.** `apeireth-runtime`, `apeireth-protocol`.
@@ -420,10 +420,10 @@ See `docs/01-architecture/m2c-shell-readiness-review.md`,
 ```
 
 Proved end to end in
-[`crates/apeireth-runtime/tests/canonical_agent_loop.rs`](crates/apeireth-runtime/tests/canonical_agent_loop.rs).
+[`crates/engine/runtime/tests/canonical_agent_loop.rs`](crates/engine/runtime/tests/canonical_agent_loop.rs).
 The production HTTP wiring is proved separately through the real gateway router
 in
-[`crates/apeireth-gateway/tests/canonical_entry_e2e.rs`](crates/apeireth-gateway/tests/canonical_entry_e2e.rs).
+[`crates/adapters/gateway/tests/canonical_entry_e2e.rs`](crates/adapters/gateway/tests/canonical_entry_e2e.rs).
 
 Behavioural rules the loop encodes:
 

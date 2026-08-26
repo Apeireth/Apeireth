@@ -7,7 +7,7 @@
 #   - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
 #   - 0 改 workspace version (1.2.0 semver 严守)
 #   - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
-#   - R11 在 `crates/apeireth-asi/tests/integration_r_measure.rs`
+#   - R11 在 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`
 # 字段验证: 必填项 = 复现步骤 + 期望行为 + 实际行为 + version + severity + OS (跟业界 1:1)
 # 跟 .github/ISSUE_TEMPLATE/bug.md (R20 写, 1.0 release 阶段 bug) 共存, 不删 (向后兼容)
 

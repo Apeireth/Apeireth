@@ -179,7 +179,7 @@ jobs:
         run: |
           if [ -z "$BASE" ]; then exit 0; fi
           # R11 baseline 编译期 hardcode 在 integration test (非 src/)
-          TARGET="crates/apeireth-asi/tests/integration_r_measure.rs"
+          TARGET="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
           if [ ! -f "$TARGET" ]; then
             echo "::warning::$TARGET 不存在, 跳过"
             exit 0
@@ -194,12 +194,12 @@ jobs:
 
       - name: "守门 4: 13 键 守门 (verdict cache)"
         run: |
-          # R128 后: 13 键实际在 crates/apeireth-core/src/philosophy.rs (per R125-12 + 13c25025 升级)
+          # R128 后: 13 键实际在 crates/foundation/core/src/philosophy.rs (per R125-12 + 13c25025 升级)
           # 13 键 = PHL-01..PHL-06 (V3 9) + V4.1 3 + R125-12 NotUnoptimizable 1
           # 检测:
           #   1. 优先 grep 4 hash prefix (per 原 R14 V0.5 守门, 后向兼容)
           #   2. fallback: 检查 ALL_THIRTEEN_KEYS 数组 (新 V3 13 键定义) + 数字 13
-          TARGETS=("crates/apeireth-asi/src/lib.rs" "crates/apeireth-core/src/philosophy.rs")
+          TARGETS=("legacy/donor/apeireth-asi/src/lib.rs" "crates/foundation/core/src/philosophy.rs")
           for TARGET in "${TARGETS[@]}"; do
             if [ ! -f "$TARGET" ]; then continue; fi
             for HASH_PREFIX in "9f86d081" "e3b0c442" "d4735e3a" "4e074085"; do
@@ -225,7 +225,7 @@ jobs:
         run: |
           if [ -z "$BASE" ]; then exit 0; fi
           # V1136 是 apeireth-asi/src/lib.rs 里的常量名
-          TARGET="crates/apeireth-asi/src/lib.rs"
+          TARGET="legacy/donor/apeireth-asi/src/lib.rs"
           if [ ! -f "$TARGET" ]; then exit 0; fi
           HITS=$(git diff "$BASE"...HEAD -- "$TARGET" 2>/dev/null | grep -E '^\+.*V1136|^\-.*V1136' || true)
           if [ -n "$HITS" ]; then

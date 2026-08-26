@@ -30,42 +30,42 @@
 # 24 LOCKED crate (per .github/workflows/rust.yml hard-walls job, 2026-08-19 同步)
 # 注: hard-walls job 实际锁 23 个 (缺 apeireth-graph), 这是漂移
 #      修 hard-walls job 之前这里先加回, 保持 1:1
-/crates/apeireth-supervisor/   @chuling
-/crates/apeireth-agent/        @chuling
-/crates/apeireth-council/      @chuling
-/crates/apeireth-bus/          @chuling
-/crates/apeireth-protocol/     @chuling
-/crates/apeireth-mcp/          @chuling
-/crates/apeireth-tool-registry/ @chuling
-/crates/apeireth-tool-runtime/ @chuling
-/crates/apeireth-graph/        @chuling
-/crates/apeireth-pipeline/     @chuling
-/crates/apeireth-tool-approval/ @chuling
-/crates/apeireth-extension/    @chuling
-/crates/apeireth-evolution/    @chuling
-/crates/apeireth-api/          @chuling
-/crates/apeireth-core/         @chuling
-/crates/apeireth-memory/       @chuling
-/crates/apeireth-asi/          @chuling
-/crates/apeireth-tools/        @chuling
-/crates/apeireth-cli/          @chuling
-/crates/apeireth-bench/        @chuling
-/crates/apeireth-cognition/    @chuling
-/crates/apeireth-action/       @chuling
-/crates/apeireth-life-force/   @chuling
-/crates/apeireth-constraint/   @chuling
+/legacy/donor/apeireth-supervisor/   @chuling
+/legacy/donor/apeireth-agent/        @chuling
+/legacy/donor/apeireth-council/      @chuling
+/legacy/donor/apeireth-bus/          @chuling
+/crates/foundation/protocol/     @chuling
+/legacy/donor/apeireth-mcp/          @chuling
+/legacy/donor/apeireth-tool-registry/ @chuling
+/legacy/donor/apeireth-tool-runtime/ @chuling
+/legacy/donor/apeireth-graph/        @chuling
+/legacy/donor/apeireth-pipeline/     @chuling
+/legacy/donor/apeireth-tool-approval/ @chuling
+/legacy/donor/apeireth-extension/    @chuling
+/legacy/donor/apeireth-evolution/    @chuling
+/legacy/donor/apeireth-api/          @chuling
+/crates/foundation/core/         @chuling
+/crates/engine/memory/       @chuling
+/legacy/donor/apeireth-asi/          @chuling
+/legacy/donor/apeireth-tools/        @chuling
+/crates/adapters/cli/          @chuling
+/legacy/donor/apeireth-bench/        @chuling
+/legacy/donor/apeireth-cognition/    @chuling
+/legacy/donor/apeireth-action/       @chuling
+/legacy/donor/apeireth-life-force/   @chuling
+/legacy/donor/apeireth-constraint/   @chuling
 
 # 实际存在的 P0 MCP + 团队协作 (R20 阶段 1 残留)
-/crates/apeireth-workflow/        @chuling
-/crates/apeireth-team-lead/       @chuling
+/legacy/donor/apeireth-workflow/        @chuling
+/legacy/donor/apeireth-team-lead/       @chuling
 
 # 实际存在的 skeleton (R20 阶段 1 续 残留)
-/crates/apeireth-lark/            @chuling
-/crates/apeireth-voice/           @chuling
+/legacy/donor/apeireth-lark/            @chuling
+/legacy/donor/apeireth-voice/           @chuling
 
 # 1.0 release 估补 (实际存在的)
-/crates/apeireth-i18n/            @chuling
-/crates/apeireth-sdk/             @chuling
+/legacy/donor/apeireth-i18n/            @chuling
+/crates/adapters/sdk/             @chuling
 
 # post-1.0.0 新增 (PR #1 合并, 2026-08-19)
 # companion-desktop 独立 [workspace] (Svelte 5 + Tauri 2), 不在根 cargo workspace
