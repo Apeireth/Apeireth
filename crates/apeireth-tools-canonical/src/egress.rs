@@ -18,6 +18,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures::StreamExt;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 /// Default total/connect/read timeout for controlled egress.
@@ -50,6 +51,8 @@ pub enum EgressError {
     TooManyRedirects,
     #[error("request timed out")]
     Timeout,
+    #[error("invalid request header: {0}")]
+    InvalidHeader(String),
 }
 
 /// Classification of an IP address for egress policy decisions.
@@ -119,7 +122,7 @@ fn classify_ipv6(ip: Ipv6Addr) -> EgressIpClass {
 }
 
 /// A single allow-list entry: exact host and optional port.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EgressAllowEntry {
     pub host: String,
     pub port: Option<u16>,
@@ -138,7 +141,7 @@ impl EgressAllowEntry {
 ///
 /// Matching is intentionally simple: hostname (or IP literal) is compared
 /// case-insensitively and exactly; subdomains and wildcards are not implied.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EgressAllowList {
     entries: HashSet<(String, Option<u16>)>,
 }
@@ -168,7 +171,7 @@ impl EgressAllowList {
 }
 
 /// Canonical egress policy for Apeireth-controlled network requests.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EgressPolicy {
     /// No destination is allowed.
     DenyAll,
@@ -286,7 +289,10 @@ impl EgressDestination {
 pub struct EgressHttpResponse {
     pub status: u16,
     pub final_url: String,
+    pub content_type: Option<String>,
+    pub content_length: Option<u64>,
     pub body: Vec<u8>,
+    pub redirects: usize,
 }
 
 #[async_trait]
@@ -376,18 +382,55 @@ impl ControlledEgress {
         self
     }
 
+    /// The policy this transport enforces.
+    pub fn policy(&self) -> &EgressPolicy {
+        &self.policy
+    }
+
+    /// The configured timeout.
+    pub const fn timeout(&self) -> Duration {
+        self.timeout
+    }
+
+    /// The configured maximum response body size.
+    pub const fn max_response_bytes(&self) -> usize {
+        self.max_response_bytes
+    }
+
+    /// The configured maximum number of redirect hops.
+    pub const fn max_redirects(&self) -> usize {
+        self.max_redirects
+    }
+
     /// Perform a controlled GET request.
     pub async fn get(&self, url: &str) -> Result<EgressHttpResponse, EgressError> {
+        self.get_with_headers(url, &[]).await
+    }
+
+    /// Perform a controlled GET request with fixed headers.
+    ///
+    /// Header names and values are validated for CRLF injection and sent on
+    /// every hop. Callers must only pass non-sensitive, fixed headers.
+    pub async fn get_with_headers(
+        &self,
+        url: &str,
+        headers: &[(&str, &str)],
+    ) -> Result<EgressHttpResponse, EgressError> {
+        validate_headers(headers)?;
         let parsed = Url::parse(url).map_err(|e| EgressError::InvalidUrl(e.to_string()))?;
         let first = EgressDestination::parse(&parsed)?;
         self.policy.validate_destination(&first)?;
 
-        tokio::time::timeout(self.timeout, self.get_inner(parsed))
+        tokio::time::timeout(self.timeout, self.get_inner(parsed, headers))
             .await
             .map_err(|_| EgressError::Timeout)?
     }
 
-    async fn get_inner(&self, mut current: Url) -> Result<EgressHttpResponse, EgressError> {
+    async fn get_inner(
+        &self,
+        mut current: Url,
+        headers: &[(&str, &str)],
+    ) -> Result<EgressHttpResponse, EgressError> {
         let mut hops = 0usize;
         loop {
             if hops >= self.max_redirects {
@@ -399,7 +442,9 @@ impl ControlledEgress {
             let addresses = self.resolve(&destination).await?;
             self.policy.validate_resolved(&destination, &addresses)?;
 
-            let response = self.send(&destination, &addresses, &current).await?;
+            let response = self
+                .send(&destination, &addresses, &current, headers)
+                .await?;
 
             let status = response.status().as_u16();
             if (300..400).contains(&status) {
@@ -424,11 +469,24 @@ impl ControlledEgress {
                 }
             }
 
+            let content_type = response
+                .headers()
+                .get(reqwest::header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .map(ToOwned::to_owned);
+            let content_length = response
+                .headers()
+                .get(reqwest::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok())
+                .and_then(|v| v.parse::<u64>().ok());
             let body = read_limited(response, self.max_response_bytes).await?;
             return Ok(EgressHttpResponse {
                 status,
                 final_url: current.to_string(),
+                content_type,
+                content_length,
                 body,
+                redirects: hops,
             });
         }
     }
@@ -450,6 +508,7 @@ impl ControlledEgress {
         destination: &EgressDestination,
         addresses: &[SocketAddr],
         url: &Url,
+        headers: &[(&str, &str)],
     ) -> Result<reqwest::Response, EgressError> {
         let mut builder = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -464,12 +523,32 @@ impl ControlledEgress {
         let client = builder
             .build()
             .map_err(|e| EgressError::ConnectionFailed(e.to_string()))?;
-        client
-            .get(url.clone())
-            .send()
-            .await
-            .map_err(map_reqwest_error)
+        let mut request = client.get(url.clone());
+        for (name, value) in headers {
+            request = request.header(*name, *value);
+        }
+        request.send().await.map_err(map_reqwest_error)
     }
+}
+fn validate_headers(headers: &[(&str, &str)]) -> Result<(), EgressError> {
+    for (name, value) in headers {
+        if name.is_empty() || value.is_empty() {
+            return Err(EgressError::InvalidHeader(
+                "header name and value must not be empty".into(),
+            ));
+        }
+        if name.contains('\r') || name.contains('\n') {
+            return Err(EgressError::InvalidHeader(
+                "header name must not contain CR or LF".into(),
+            ));
+        }
+        if value.contains('\r') || value.contains('\n') {
+            return Err(EgressError::InvalidHeader(
+                "header value must not contain CR or LF".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn map_reqwest_error(error: reqwest::Error) -> EgressError {

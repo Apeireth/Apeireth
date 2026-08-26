@@ -11,6 +11,7 @@ use apeireth_plugin::{
 };
 use async_trait::async_trait;
 
+use crate::fetch::{FetchConfig, FetchTool};
 use crate::filesystem::FilesystemTool;
 use crate::repo::RepoTool;
 use crate::search::SearchTool;
@@ -24,6 +25,11 @@ pub struct BuiltinToolsOptions {
     /// Default is `None`: Shell is disabled by default and must be explicitly
     /// enabled by application configuration.
     pub shell: Option<TrustedShellConfig>,
+
+    /// When set, `tool.fetch` is registered as a controlled HTTP(S) fetch
+    /// tool. Default is `None`: Fetch is disabled by default and must be
+    /// explicitly enabled by application configuration.
+    pub fetch: Option<FetchConfig>,
 }
 
 /// One builtin plugin providing `tool.filesystem`, `tool.search`, and
@@ -47,7 +53,7 @@ impl BuiltinToolsPlugin {
         let mut manifest = PluginManifest::new(
             PluginId::new("builtin.tools").unwrap(),
             "1.1.0",
-            "Canonical builtin tools: filesystem, search, repository inspection, and opt-in shell",
+            "Canonical builtin tools: filesystem, search, repository inspection, opt-in shell, and opt-in fetch",
         )
         .declare(
             CapabilityDescriptor::new(
@@ -103,6 +109,22 @@ impl BuiltinToolsPlugin {
                 )
                 .unwrap();
             tools.push(Arc::new(ShellTool::new(shell_config)));
+        }
+
+        if let Some(fetch_config) = options.fetch {
+            manifest = manifest
+                .declare(
+                    CapabilityDescriptor::new(
+                        CapabilityId::new("tool.fetch").unwrap(),
+                        CapabilityKind::Tool,
+                        "Fetches one bounded HTTP(S) text resource through controlled egress",
+                    )
+                    .unwrap()
+                    .with_metadata("risk", "medium")
+                    .with_metadata("m3a", "controlled-fetch"),
+                )
+                .unwrap();
+            tools.push(Arc::new(FetchTool::new(fetch_config)));
         }
 
         Self { manifest, tools }
@@ -161,6 +183,7 @@ mod tests {
             ".",
             BuiltinToolsOptions {
                 shell: Some(TrustedShellConfig::new(".")),
+                fetch: None,
             },
         );
         assert_eq!(plugin.manifest.capabilities.len(), 4);
@@ -174,5 +197,39 @@ mod tests {
             .tools()
             .iter()
             .any(|t| t.id().as_str() == "tool.shell"));
+    }
+    #[test]
+    fn fetch_is_registered_only_when_explicitly_enabled() {
+        let plugin = BuiltinToolsPlugin::with_options(
+            ".",
+            BuiltinToolsOptions {
+                shell: None,
+                fetch: Some(FetchConfig::deny_all()),
+            },
+        );
+        assert_eq!(plugin.manifest.capabilities.len(), 4);
+        assert_eq!(plugin.tools().len(), 4);
+        assert!(plugin
+            .manifest
+            .capabilities
+            .iter()
+            .any(|c| c.id.as_str() == "tool.fetch"));
+        assert!(plugin
+            .tools()
+            .iter()
+            .any(|t| t.id().as_str() == "tool.fetch"));
+    }
+
+    #[test]
+    fn fetch_and_shell_can_be_enabled_together_without_duplicates() {
+        let plugin = BuiltinToolsPlugin::with_options(
+            ".",
+            BuiltinToolsOptions {
+                shell: Some(TrustedShellConfig::new(".")),
+                fetch: Some(FetchConfig::deny_all()),
+            },
+        );
+        assert_eq!(plugin.manifest.capabilities.len(), 5);
+        assert_eq!(plugin.tools().len(), 5);
     }
 }

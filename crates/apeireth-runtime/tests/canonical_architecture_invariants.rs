@@ -127,3 +127,14 @@ fn canonical_approval_lifecycle_does_not_create_a_parallel_approval_engine() {
         );
     }
 }
+#[test]
+fn canonical_runtime_code_does_not_know_fetch_or_controlled_egress() {
+    let code = canonical_code();
+
+    for forbidden in ["tool.fetch", "FetchTool", "EgressTransport", "EgressPolicy"] {
+        assert!(
+            !code.contains(forbidden),
+            "canonical runtime must remain capability-generic; it must not mention {forbidden:?}"
+        );
+    }
+}
