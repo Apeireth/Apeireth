@@ -35,7 +35,7 @@ We need a real desktop companion for Apeireth. The previous `apeireth-web` (Lept
 - [x] **0 触碰 24 LOCKED crate** — `git diff c78ff614..0bd63405 -- crates/apeireth-{supervisor,agent,council,bus,protocol,mcp,tool-registry,tool-runtime,graph,pipeline,tool-approval,extension,evolution,api,core,memory,asi,tools,cli,bench,cognition,action,life-force,constraint}` is empty. Diff is scoped to `frontend/companion-desktop/`, `_scripts/`, `docs/integration/`, `.gitignore` only.
 - [x] **0 改 workspace.version** — `git diff c78ff614..0bd63405 -- Cargo.toml | grep version` is empty. `workspace.version` stays at `1.1.0`.
 - [x] **0 改 R11 baseline 3 值** — `git diff c78ff614..0bd63405 | grep -E 'V1141|V1131|V1136'` is empty. `apeireth-asi/src/lib.rs` baseline values untouched.
-- [ ] **cargo test pass** — **Not run for this PR.** `cargo test --workspace` was not executed against the diff because: (a) Phase 5B E2E already covered the new frontend path via mock SSE (`APEIRETH_E2E_OK`, see `_scripts/e2e-streamChat-test.mts`), (b) `svelte-check` ran green on the desktop frontend, (c) `cargo check` ran clean on the touched `companion-desktop` Rust shell. Reviewer please re-run `cargo test --workspace --all-targets` before merge.
+- [ ] **cargo test pass** — **Not run for this PR.** `cargo test --workspace` was not executed against the diff because: (a) Phase 5B E2E already covered the new frontend path via mock SSE (`APEIRETH_E2E_OK`, see `frontend/companion-desktop/tests/e2e-streamChat-test.mts`), (b) `svelte-check` ran green on the desktop frontend, (c) `cargo check` ran clean on the touched `companion-desktop` Rust shell. Reviewer please re-run `cargo test --workspace --all-targets` before merge.
 - [x] **0 假装** — Phase 5B E2E used `APEIRETH_LLM_BACKEND=scripted` (mock OpenAI SSE upstream at `127.0.0.1:9999`). No real LLM key was wired in. The companion runtime **does not yet have a real-model E2E trace**; this is called out in `docs/integration/phase5-report.md`. Tracking issue welcome.
 
 ## 测试 (per CONTRIBUTING.md §PR 流程 第 2 步)
@@ -45,7 +45,7 @@ What was actually run against the diff:
 - `git diff c78ff614..0bd63405 --stat` → 45 files / +14099 lines / 0 LOCKED-crate hits.
 - `pnpm svelte-check --tsconfig ./tsconfig.json` (frontend/companion-desktop) → green (last seen in commit `2899fc88` integration log).
 - `cargo check -p companion-desktop` (frontend/companion-desktop/src-tauri) → clean, finished `dev` profile (last seen in commit `7d71deb7` integration log).
-- `_scripts/e2e-streamChat-test.mts` → `accumulated: "APEIRETH_E2E_OK"`, `delta count: 4`, `PASS: true` against mock OpenAI SSE upstream (`_scripts/mock-openai-sse.mjs`).
+- `frontend/companion-desktop/tests/e2e-streamChat-test.mts` → `accumulated: "APEIRETH_E2E_OK"`, `delta count: 4`, `PASS: true` against mock OpenAI SSE upstream (`frontend/companion-desktop/tests/mock-openai-sse.mjs`).
 - 401 passthrough test → mock returns 401, `apeireth-api` passes it through with `HTTP_STATUS:401`.
 
 What was **not** run (reviewer please do):
