@@ -1,11 +1,11 @@
-//! 12 键 verdict cache 编译时 hardcode 违反测试
+//! 13 键 verdict cache 编译时 hardcode 违反测试
 //!
-//! A3 成就: 12 键编译时 hardcode + 5+ 违反测试失败
+//! A3 成就: 13 键编译时 hardcode + 5+ 违反测试失败
 //!
 //! 目的：
-//! - 验证 V3 9 键 (PHL-01/02b/03) + v4.1 新增 3 键 (PHL-04/05/06) = 12 键
+//! - 验证 V3 9 键 (PHL-01/02b/03) + v4.1 新增 3 键 (PHL-04/05/06) + PHL-07 = 13 键
 //! - 每个键至少 1 个故意违反测试 — 期望 hardcode 拒绝（运行期 ActionGuard 拒绝）
-//! - 编译期断言 `TWELVE_KEYS_HARDCODE` 自动锁定数组长度 = 12 + 分组 3+3+3+1+1+1
+//! - 编译期断言 `TWELVE_KEYS_HARDCODE` 自动锁定数组长度 = 13 + 分组 3+3+3+1+1+1+1
 //!
 //! 设计意图 (主 O-5 17:58 不假装)：
 //! - 任何 ActionTarget 变体都被 `verdict_for_target` const fn 锁死到具体 PhilosophyKey
@@ -74,39 +74,35 @@ fn make_test_env() -> (
 fn make_violation_action(id: &str, target: ActionTarget) -> Action {
     Action {
         id: id.into(),
-        description: format!("故意违反 12 键测试: {:?}", target),
+        description: format!("故意违反 13 键测试: {:?}", target),
         risk_level: RiskLevel::Critical,
         target,
     }
 }
 
 // ============================================
-// 第 1 部分: 12 键 hardcode 完整性测试 (编译期断言已自动运行)
+// 第 1 部分: 13 键 hardcode 完整性测试 (编译期断言已自动运行)
 // ============================================
 
-/// 测试 1: ALL_TWELVE_KEYS 数组长度 = 12
+/// 测试 1: ALL_TWELVE_KEYS 兼容别名覆盖 13 键
 /// (const TWELVE_KEYS_HARDCODE 编译期已断言; 此为运行期冗余验证)
 #[test]
 fn test_all_twelve_keys_complete() {
-    assert_eq!(
-        ALL_TWELVE_KEYS.len(),
-        12,
-        "12 键 hardcode 数组长度必须 = 12"
-    );
+    assert_eq!(ALL_TWELVE_KEYS.len(), 13, "兼容别名必须覆盖 13 键");
 
     // 验证每个键都在数组中（无重复、无遗漏）
-    let mut seen = vec![false; 12];
+    let mut seen = vec![false; 13];
     for (i, key) in ALL_TWELVE_KEYS.iter().enumerate() {
         // 同一 key 多次出现 = 重复，标记 false 仍为 false
         for j in 0..i {
-            assert_ne!(ALL_TWELVE_KEYS[j], *key, "12 键数组中出现重复: {:?}", key);
+            assert_ne!(ALL_TWELVE_KEYS[j], *key, "13 键数组中出现重复: {:?}", key);
         }
         seen[i] = true;
     }
     assert!(seen.iter().all(|x| *x), "12 键数组完整性检查");
 }
 
-/// 测试 2: 12 键分组 = 3+3+3+1+1+1
+/// 测试 2: 13 键分组 = 3+3+3+1+1+1+1
 #[test]
 fn test_twelve_keys_group_distribution() {
     let phl01_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 1).count();
@@ -115,6 +111,7 @@ fn test_twelve_keys_group_distribution() {
     let phl04_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 4).count();
     let phl05_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 5).count();
     let phl06_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 6).count();
+    let phl07_count = ALL_TWELVE_KEYS.iter().filter(|k| k.group_id() == 7).count();
 
     assert_eq!(phl01_count, 3, "PHL-01 not_X 应有 3 个键");
     assert_eq!(phl02b_count, 3, "PHL-02b not_X 应有 3 个键");
@@ -122,9 +119,16 @@ fn test_twelve_keys_group_distribution() {
     assert_eq!(phl04_count, 1, "PHL-04 v4.1 新增应 1 个键");
     assert_eq!(phl05_count, 1, "PHL-05 v4.1 新增应 1 个键");
     assert_eq!(phl06_count, 1, "PHL-06 v4.1 新增应 1 个键");
+    assert_eq!(phl07_count, 1, "PHL-07 新增应 1 个键");
     assert_eq!(
-        phl01_count + phl02b_count + phl03_count + phl04_count + phl05_count + phl06_count,
-        12
+        phl01_count
+            + phl02b_count
+            + phl03_count
+            + phl04_count
+            + phl05_count
+            + phl06_count
+            + phl07_count,
+        13
     );
 }
 
