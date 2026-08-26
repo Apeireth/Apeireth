@@ -1,0 +1,27 @@
+[package]
+name = "apeireth-plugin"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Canonical plugin and capability model: a plugin is a capability provider, and the registries here are the single source of truth for what the runtime can do."
+
+[dependencies]
+# Permitted direction: core <- protocol <- plugin.
+apeireth-core = { path = "../core" }
+apeireth-protocol = { path = "../protocol" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lib]
+name = "apeireth_plugin"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true
