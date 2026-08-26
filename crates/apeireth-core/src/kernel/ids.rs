@@ -104,6 +104,15 @@ generated_id! {
     RequestId
 }
 
+generated_id! {
+    /// Identifies one pending human approval.
+    ///
+    /// Minted when governance returns `RequireApproval` and stored with the
+    /// frozen operation. It is the stable handle callers use to approve or
+    /// reject the pending operation later.
+    ApprovalId
+}
+
 /// Longest permitted stable identifier.
 ///
 /// Generous enough for `provider.some-vendor.some-long-model-name`, short enough

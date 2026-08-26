@@ -807,6 +807,7 @@ async fn an_approval_requirement_persists_the_attempt_and_pause() {
             action,
             reason,
             round: 1,
+            approval_id: _,
         } if hook == "governance.input.approval"
             && action == "completion"
             && reason.contains("human")

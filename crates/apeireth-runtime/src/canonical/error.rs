@@ -1,6 +1,6 @@
 //! Failures at the orchestration layer.
 
-use apeireth_core::kernel::{CoreError, SessionId};
+use apeireth_core::kernel::{ApprovalId, CoreError, SessionId};
 use apeireth_plugin::{PluginError, ProviderError};
 use thiserror::Error;
 
@@ -68,6 +68,17 @@ pub enum RuntimeError {
         hook: String,
         /// What a human is being asked to approve.
         reason: String,
+    },
+
+    /// The session already has a pending approval and cannot start a new turn.
+    #[error(
+        "session {session} is waiting for approval {approval}; resolve or let it expire before starting a new turn"
+    )]
+    SessionApprovalPending {
+        /// The busy session.
+        session: SessionId,
+        /// The approval that is currently pending.
+        approval: ApprovalId,
     },
 
     /// The session store could not serve or persist a session.
