@@ -1,0 +1,74 @@
+[package]
+name = "apeireth-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 记忆子系统 (Episode/Note/Session SQLite 存储 + BM25 检索) — R14 Phase 1 主目标 (V1130 wallclock 2.5s)"
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+# M1B1: canonical memory persists through the M1A storage foundation only.
+apeireth-storage = { path = "../storage" }
+# R179 P0-3: 拆 memory <-> api 编译期边, 不再 dep apeireth-api (3 类型走 apeireth-llm-iface)
+apeireth-llm-iface = { path = "../../../legacy/donor/apeireth-llm-iface" }
+async-trait = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true, features = ["v5"] }
+apeireth-vector = { path = "../../../legacy/donor/apeireth-vector", optional = true }
+# R23 #6 派工: extensions 子 crate (per Cargo.toml workspace "0 触碰 src/", 仅在 src/lib.rs 加 pub use re-export 1 行)
+apeireth-memory-extensions = { path = "../../../legacy/donor/apeireth-memory-extensions" }
+# R37-2: 9 organ 部分合并 — life_force → memory 透明 re-export (workspace member 真删)
+apeireth-life-force = { path = "../../../legacy/donor/apeireth-life-force" }
+# R161: memory 接 g5 substrate (第 5 个生产调用方)
+apeireth-pipeline-g5 = { path = "../../../legacy/donor/apeireth-pipeline-g5" }
+# P2#12 (审计 backlog 全清, 2026-08-16): 本地 ONNX embedding — tract 纯 Rust 推理
+# (无 runtime 下载, GitHub 被墙可构建); 默认关, 开启后模型文件由主人提供
+tract-onnx = { version = "0.23", optional = true } # 0.21.10 tract-nnef 有 RUSTSEC-2026-0xxx (integer overflow OOB)
+tract-core = { version = "0.23", optional = true }
+
+[features]
+# R19 P2 战区 4: 默认开 semantic feature, 让 SqliteMemoryStore::semantic_search + extract_user_profile
+# 即可用 (SemanticIndex / UserProfile / ProfileExtractor 都在 semantic.rs / user_profile.rs).
+# 0 改 workspace.version, 0 触碰 24 LOCKED crate, 0 改 semantic feature 形状.
+# 注意: bench `v2-memory-vector-bench` 的 `required-features = ["semantic"]` 保持不变
+# (bench 是可选目标, 显式 opt-in, 不被 default 覆盖).
+default = ["semantic"]
+semantic = ["apeireth-vector"]
+# P2#12: 本地 ONNX embedding (tract-onnx)
+onnx = ["dep:tract-onnx", "dep:tract-core"]
+
+[dev-dependencies]
+criterion = { workspace = true }
+tempfile = "3"
+# R18 第 2 阶段: in-memory SQLite 测试
+rusqlite = { workspace = true }
+
+[lib]
+name = "apeireth_memory"
+path = "src/lib.rs"
+# CI fix 2026-08: lib 默认 bench=true → cargo bench 无参数/--benches 会把 lib 当
+# libtest harness bench 跑, 不认 criterion 的 --save-baseline → 显式关掉
+bench = false
+
+[[example]]
+name = "memory_effect_demo"
+path = "examples/memory_effect_demo.rs"
+
+[[bench]]
+name = "v2-memory-vector-bench"
+path = "benches/v2-memory-vector-bench.rs"
+harness = false
+required-features = ["semantic"]
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true

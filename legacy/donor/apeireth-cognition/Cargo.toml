@@ -1,0 +1,34 @@
+[package]
+name = "apeireth-cognition"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth cognitive organ (cognitive organ ) + R172 consciousness bridge"
+
+[dependencies]
+apeireth-core = { path = "../../../crates/foundation/core" }
+apeireth-asi = { path = "../apeireth-asi" }
+apeireth-consciousness = { path = "../apeireth-consciousness" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lib]
+name = "apeireth_cognition"
+path = "src/lib.rs"
+
+[[example]]
+name = "cognition_demo"
+path = "examples/cognition_demo.rs"
+
+[lints]
+workspace = true
