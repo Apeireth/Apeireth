@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Apeireth 桌面伙伴 — Svelte 5 + Tauri 2 对话壳, 对接 apeireth-companion OpenAI 兼容端点",
+  "description": "Apeireth 桌面伙伴 — Svelte 5 + Tauri 2 对话壳, 对接 Apeireth gateway",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

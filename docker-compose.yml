@@ -38,7 +38,7 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "/usr/local/bin/apeireth", "--health-check"]
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
       interval: 30s
       timeout: 5s
       retries: 3
