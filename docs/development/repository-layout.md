@@ -18,8 +18,7 @@ crates/
 │   └── memory/
 ├── capabilities/     # model/runtime-facing actions
 │   └── tools/        # package: apeireth-tools-canonical
-├── modules/          # product feature modules
-│   └── companion/
+├── modules/          # future canonical product feature modules
 └── adapters/         # external surfaces
     ├── gateway/
     ├── cli/
@@ -45,5 +44,7 @@ docs/
 
 - Root `Cargo.toml` explicitly lists current product packages.
 - `legacy/` is excluded from the root workspace and has its own workspace.
-- Current product packages still path-depend on some `legacy/donor` packages;
-  that is tracked migration debt, not an architecture target.
+- Current product packages do not path-depend on `legacy/`; the dependency guard
+  makes this boundary deterministic.
+- Historical Companion code lives at `legacy/donor/apeireth-companion` and is
+  intentionally outside the current workspace.

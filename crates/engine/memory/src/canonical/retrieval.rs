@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn zero_access_items_are_ranked_by_importance_bonus() {
-        let as_of = ts(200_000_000);
+        let _as_of = ts(200_000_000);
         let zero_access = 0.0 + DEFAULT_ACT_R_BETA; // activation beta
         let importance_bonus_high = 0.9 * DEFAULT_IMPORTANCE_WEIGHT;
         let importance_bonus_low = 0.1 * DEFAULT_IMPORTANCE_WEIGHT;
