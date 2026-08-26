@@ -47,15 +47,17 @@ impl ServeProc {
         // 但仅在 example 自身 + tests 间共享; 部分 cargo 版本对 integration tests 注入有时序差异, 因此双路径兜底:
         //   1. 优先读 CARGO_EXAMPLE_EXAMPLE_companion_serve env (cargo 标准注入)
         //   2. fallback: 用 CARGO_MANIFEST_DIR (编译期注入的 crate 根) 推 workspace target/debug/examples/
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let exe = std::env::var("CARGO_EXAMPLE_EXAMPLE_companion_serve")
             .ok()
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| {
-                // workspace root = manifest_dir 上 2 级 (本 crate 在 crates/apeireth-companion/ 下)
-                let workspace_root = std::path::Path::new(manifest_dir)
-                    .parent()
-                    .and_then(|p| p.parent())
+                // Topology-independent workspace-root discovery: walk ancestors
+                // until a directory contains Cargo.toml (the workspace root),
+                // then use the standard target/debug/examples path.
+                let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+                let workspace_root = manifest_dir
+                    .ancestors()
+                    .find(|p| p.join("Cargo.toml").exists())
                     .expect("workspace_root 解析");
                 // Windows 路径加 .exe 后缀
                 let exe_path = workspace_root
