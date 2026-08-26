@@ -165,6 +165,12 @@ The implemented guarantee is **at-most-once execution after approval**:
 - expired approval does not execute
 - pending approval survives runtime rebuild over the same store
 - new turn while pending is blocked
+- claim save happens strictly before tool invocation
+- claim save failure prevents tool invocation
+- crash after claim before invoke never re-executes
+- crash after tool side effect before consumed save never re-executes
+- fingerprint corruption fails closed without invoking
+- invalid shell request never mints a pending approval
 
 `crates/apeireth-runtime/tests/canonical_architecture_invariants.rs` proves no
 parallel approval engine exists in canonical runtime source.

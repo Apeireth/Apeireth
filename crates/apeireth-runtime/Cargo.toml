@@ -22,6 +22,8 @@ apeireth-core = { path = "../apeireth-core" }
 apeireth-protocol = { path = "../apeireth-protocol" }
 apeireth-plugin = { path = "../apeireth-plugin" }
 apeireth-governance = { path = "../apeireth-governance" }
+apeireth-storage = { path = "../apeireth-storage" }
+rusqlite = { workspace = true }
 # ==========================================================================
 # R257: reqwest for LlmWorker Bearer auth header (raw client, not via HttpClient)
 reqwest = { workspace = true }
