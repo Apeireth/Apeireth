@@ -40,6 +40,8 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use serde::{Deserialize, Serialize};
+
 #[cfg(target_os = "linux")]
 pub(crate) mod linux;
 #[cfg(target_os = "macos")]
@@ -61,7 +63,7 @@ const READER_JOIN_TIMEOUT: Duration = Duration::from_secs(5);
 /// Enforcement level for one isolation property.
 ///
 /// The ordering is meaningful: `Unsupported < Partial < Enforced`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum EnforcementLevel {
     /// The platform/backend cannot provide this property. A caller that
     /// requires it must fail closed.
@@ -76,7 +78,7 @@ pub enum EnforcementLevel {
 /// Isolation properties that a caller can observe, require, or inspect in a
 /// result. These are platform-agnostic by design; none of them is named after
 /// a specific OS mechanism.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum IsolationCapability {
     /// The executable and argv are passed as a structured array, never as a
     /// shell command string.
@@ -212,7 +214,7 @@ impl IsolationCapabilities {
 /// on the common contract (structured spawn, cwd, timeout, output bounds).
 /// A future shell or any safety-sensitive tool must set explicit requirements
 /// and fail closed when the platform cannot meet them.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IsolationRequirement {
     required: Vec<(IsolationCapability, EnforcementLevel)>,
 }

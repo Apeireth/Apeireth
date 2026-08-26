@@ -5,7 +5,7 @@
 //! are test fixtures.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{
     CapabilityId, Clock, ModelId, PluginId, SessionId, Timestamp, VirtualClock,
@@ -14,8 +14,8 @@ use apeireth_governance::{
     GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
 };
 use apeireth_plugin::{
-    CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
-    ProviderError, ToolCapability,
+    CapabilityKind, FrozenInvocation, Plugin, PluginContext, PluginManifest, PluginResult,
+    ProviderCapability, ProviderError, ToolCapability,
 };
 use apeireth_protocol::canonical::{
     ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse, NormalizedTool,
@@ -23,7 +23,7 @@ use apeireth_protocol::canonical::{
 };
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ApprovalStatus, InMemorySessionStore, Runtime,
-    TurnOutcome, TurnRequest,
+    SessionStore, TurnOutcome, TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -713,7 +713,7 @@ async fn expired_approval_does_not_execute() {
 }
 
 #[tokio::test]
-async fn reopen_pending_approval_survives_runtime_rebuild() {
+async fn runtime_rebuild_over_same_store_pending_approval_survives() {
     let store: Arc<dyn apeireth_runtime::canonical::SessionStore> =
         Arc::new(InMemorySessionStore::new());
     let counting = CountingPlugin::new();
@@ -777,4 +777,477 @@ async fn new_turn_while_pending_is_blocked() {
         "expected SessionApprovalPending, got {err}"
     );
     assert_eq!(view.approval_id.to_string().len(), 36);
+}
+
+// ---------------------------------------------------------------------------
+// Claim-before-effect instrumentation
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+struct SequenceTool {
+    id: CapabilityId,
+    invocations: Arc<AtomicUsize>,
+    sequence: Arc<Mutex<Vec<String>>>,
+}
+
+#[async_trait]
+impl ToolCapability for SequenceTool {
+    fn id(&self) -> &CapabilityId {
+        &self.id
+    }
+
+    fn declaration(&self) -> NormalizedTool {
+        NormalizedTool {
+            name: "seq".into(),
+            description: Some("sequence tool".into()),
+            parameters: ToolParameters::new(),
+            strict: false,
+        }
+    }
+
+    async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        self.invocations.fetch_add(1, Ordering::SeqCst);
+        self.sequence.lock().unwrap().push("invoke".into());
+        ToolResult::ok(&call.id, serde_json::json!("seq ok"))
+    }
+
+    fn freeze_invocation(&self, _call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
+        Ok(Some(FrozenInvocation::new(
+            serde_json::json!({ "version": 1, "op": "seq" }),
+            serde_json::json!({ "version": 1, "op": "seq" }),
+        )))
+    }
+}
+
+struct SequencePlugin {
+    manifest: PluginManifest,
+    tool: Arc<SequenceTool>,
+}
+
+impl SequencePlugin {
+    fn new(tool: Arc<SequenceTool>) -> Arc<Self> {
+        Arc::new(Self {
+            manifest: PluginManifest::new(
+                PluginId::new("builtin.sequence").unwrap(),
+                "1.0.0",
+                "Sequence tool plugin",
+            )
+            .declare_capability(
+                CapabilityId::new("tool.seq").unwrap(),
+                CapabilityKind::Tool,
+                "Sequence tool",
+            )
+            .unwrap(),
+            tool,
+        })
+    }
+}
+
+#[async_trait]
+impl Plugin for SequencePlugin {
+    fn manifest(&self) -> &PluginManifest {
+        &self.manifest
+    }
+
+    async fn initialize(&self, _ctx: &PluginContext) -> PluginResult<()> {
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> PluginResult<()> {
+        Ok(())
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::clone(&self.tool) as Arc<dyn ToolCapability>]
+    }
+}
+
+#[derive(Clone)]
+struct RecordingStore {
+    inner: Arc<InMemorySessionStore>,
+    events: Arc<Mutex<Vec<String>>>,
+}
+
+impl RecordingStore {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(InMemorySessionStore::new()),
+            events: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn with_events(events: Arc<Mutex<Vec<String>>>) -> Self {
+        Self {
+            inner: Arc::new(InMemorySessionStore::new()),
+            events,
+        }
+    }
+
+    fn events(&self) -> Vec<String> {
+        self.events.lock().unwrap().clone()
+    }
+}
+
+#[async_trait]
+impl apeireth_runtime::canonical::SessionStore for RecordingStore {
+    async fn load(
+        &self,
+        id: &SessionId,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Option<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.load(id).await
+    }
+
+    async fn save(
+        &self,
+        session: &apeireth_runtime::canonical::Session,
+    ) -> apeireth_runtime::canonical::RuntimeResult<()> {
+        if session
+            .approvals
+            .values()
+            .any(|approval| approval.status == ApprovalStatus::Claimed)
+        {
+            self.events.lock().unwrap().push("save:Claimed".into());
+        }
+        self.inner.save(session).await
+    }
+}
+
+#[derive(Clone)]
+struct FailClaimedStore {
+    inner: Arc<InMemorySessionStore>,
+}
+
+impl FailClaimedStore {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(InMemorySessionStore::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl apeireth_runtime::canonical::SessionStore for FailClaimedStore {
+    async fn load(
+        &self,
+        id: &SessionId,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Option<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.load(id).await
+    }
+
+    async fn save(
+        &self,
+        session: &apeireth_runtime::canonical::Session,
+    ) -> apeireth_runtime::canonical::RuntimeResult<()> {
+        if session
+            .approvals
+            .values()
+            .any(|approval| approval.status == ApprovalStatus::Claimed)
+        {
+            return Err(apeireth_runtime::canonical::RuntimeError::session_save(
+                session.id,
+                "injected claim save failure",
+            ));
+        }
+        self.inner.save(session).await
+    }
+}
+
+#[derive(Clone)]
+struct FailConsumedStore {
+    inner: Arc<InMemorySessionStore>,
+}
+
+impl FailConsumedStore {
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(InMemorySessionStore::new()),
+        }
+    }
+}
+
+#[async_trait]
+impl apeireth_runtime::canonical::SessionStore for FailConsumedStore {
+    async fn load(
+        &self,
+        id: &SessionId,
+    ) -> apeireth_runtime::canonical::RuntimeResult<Option<apeireth_runtime::canonical::Session>>
+    {
+        self.inner.load(id).await
+    }
+
+    async fn save(
+        &self,
+        session: &apeireth_runtime::canonical::Session,
+    ) -> apeireth_runtime::canonical::RuntimeResult<()> {
+        if session
+            .approvals
+            .values()
+            .any(|approval| approval.status == ApprovalStatus::Consumed)
+        {
+            return Err(apeireth_runtime::canonical::RuntimeError::session_save(
+                session.id,
+                "injected consumed save failure",
+            ));
+        }
+        self.inner.save(session).await
+    }
+}
+
+async fn build_sequence_runtime(
+    store: Arc<dyn apeireth_runtime::canonical::SessionStore>,
+    sequence: Arc<Mutex<Vec<String>>>,
+) -> (Runtime, Arc<SequenceTool>, Arc<FakeProvider>) {
+    let tool = Arc::new(SequenceTool {
+        id: CapabilityId::new("tool.seq").unwrap(),
+        invocations: Arc::new(AtomicUsize::new(0)),
+        sequence,
+    });
+    let provider = FakeProvider::new(
+        "provider.fake",
+        vec![
+            ProviderStep::ToolCalls(vec![ToolCall {
+                id: "call_seq".into(),
+                name: "seq".into(),
+                arguments: serde_json::json!({}),
+            }]),
+            ProviderStep::Say("done"),
+        ],
+    );
+
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.seq".into()));
+    policy.require_approval_for("tool.seq");
+
+    let runtime = Runtime::builder()
+        .with_clock(fixed_clock())
+        .with_session_store(store)
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
+        .with_plugin(SequencePlugin::new(Arc::clone(&tool)))
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_default_model(MODEL)
+        .with_max_rounds(4)
+        .build()
+        .await
+        .unwrap();
+
+    (runtime, tool, provider)
+}
+
+#[tokio::test]
+async fn claim_save_happens_strictly_before_tool_invocation() {
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let store = Arc::new(RecordingStore::with_events(Arc::clone(&events)));
+    let (runtime, tool, _provider) = build_sequence_runtime(
+        store.clone() as Arc<dyn apeireth_runtime::canonical::SessionStore>,
+        Arc::clone(&events),
+    )
+    .await;
+    let session = SessionId::new();
+
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(session, "run one tool"))
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    // Ignore saves made while the approval was pending.
+    events.lock().unwrap().clear();
+
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+    ));
+
+    let events = events.lock().unwrap().clone();
+    assert_eq!(
+        events.first().map(String::as_str),
+        Some("save:Claimed"),
+        "claim persistence must happen before anything else: {events:?}"
+    );
+    assert_eq!(
+        events.get(1).map(String::as_str),
+        Some("invoke"),
+        "tool invocation must happen after claim persistence: {events:?}"
+    );
+    assert_eq!(tool.invocations.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn claim_save_failure_prevents_tool_invocation() {
+    let store = Arc::new(FailClaimedStore::new());
+    let (runtime, tool, _provider) = build_sequence_runtime(
+        store.clone() as Arc<dyn apeireth_runtime::canonical::SessionStore>,
+        Arc::new(Mutex::new(Vec::new())),
+    )
+    .await;
+    let session = SessionId::new();
+
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(session, "run one tool"))
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    let error = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap_err();
+
+    assert!(error.to_string().contains("injected claim save failure"));
+    assert_eq!(
+        tool.invocations.load(Ordering::SeqCst),
+        0,
+        "tool side effect must not happen when claim persistence fails"
+    );
+}
+
+#[tokio::test]
+async fn crash_after_claim_before_invoke_never_re_executes() {
+    let store: Arc<dyn apeireth_runtime::canonical::SessionStore> =
+        Arc::new(InMemorySessionStore::new());
+    let (runtime, tool, _provider) =
+        build_sequence_runtime(store.clone(), Arc::new(Mutex::new(Vec::new()))).await;
+    let session = SessionId::new();
+
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(session, "run one tool"))
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    // Simulate the process dying after the claim was persisted but before the
+    // approved tool invocation was dispatched.
+    let mut stored = store.load(&session).await.unwrap().unwrap();
+    let approval = stored.approvals.get_mut(&view.approval_id).unwrap();
+    approval.status = ApprovalStatus::Claimed;
+    stored.active_approval_id = Some(view.approval_id);
+    store.save(&stored).await.unwrap();
+
+    // Rebuild a fresh runtime over the same store.
+    let runtime = build_sequence_runtime(store.clone(), Arc::new(Mutex::new(Vec::new())))
+        .await
+        .0;
+
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::ExecutionInterrupted { approval_id } if approval_id == view.approval_id
+    ));
+    assert_eq!(
+        tool.invocations.load(Ordering::SeqCst),
+        0,
+        "a claimed approval must never be re-executed automatically"
+    );
+
+    let reloaded = store.load(&session).await.unwrap().unwrap();
+    assert_eq!(
+        reloaded.approvals.get(&view.approval_id).unwrap().status,
+        ApprovalStatus::Claimed
+    );
+}
+
+#[tokio::test]
+async fn crash_after_tool_side_effect_never_re_executes() {
+    let store = Arc::new(FailConsumedStore::new());
+    let (runtime, tool, _provider) = build_sequence_runtime(
+        store.clone() as Arc<dyn apeireth_runtime::canonical::SessionStore>,
+        Arc::new(Mutex::new(Vec::new())),
+    )
+    .await;
+    let session = SessionId::new();
+
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(session, "run one tool"))
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    let error = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("injected consumed save failure"));
+    assert_eq!(
+        tool.invocations.load(Ordering::SeqCst),
+        1,
+        "the tool side effect happened before the final save failed"
+    );
+
+    // Reopen over the same store: the failed consumed save means the store
+    // still holds the Claimed state.
+    let stored = store.load(&session).await.unwrap().unwrap();
+    assert_eq!(
+        stored.approvals.get(&view.approval_id).unwrap().status,
+        ApprovalStatus::Claimed
+    );
+
+    let runtime = build_sequence_runtime(
+        store.clone() as Arc<dyn apeireth_runtime::canonical::SessionStore>,
+        Arc::new(Mutex::new(Vec::new())),
+    )
+    .await
+    .0;
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::ExecutionInterrupted { .. }
+    ));
+    assert_eq!(
+        tool.invocations.load(Ordering::SeqCst),
+        1,
+        "no duplicate execution after interrupted claimed operation"
+    );
+}
+
+#[tokio::test]
+async fn fingerprint_corruption_fails_closed_before_invocation() {
+    let store: Arc<dyn apeireth_runtime::canonical::SessionStore> =
+        Arc::new(InMemorySessionStore::new());
+    let (runtime, tool, _provider) =
+        build_sequence_runtime(store.clone(), Arc::new(Mutex::new(Vec::new()))).await;
+    let session = SessionId::new();
+
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(session, "run one tool"))
+        .await
+        .unwrap();
+    let view = pending_view(&outcome);
+
+    let mut stored = store.load(&session).await.unwrap().unwrap();
+    let approval = stored.approvals.get_mut(&view.approval_id).unwrap();
+    approval.effective_invocation.as_mut().unwrap().payload =
+        serde_json::json!({ "tampered": true });
+    store.save(&stored).await.unwrap();
+
+    let resolution = runtime
+        .resolve_approval(session, view.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap();
+
+    assert!(
+        matches!(
+            resolution,
+            ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+        ),
+        "fingerprint mismatch must fail closed and let the model recover"
+    );
+    assert_eq!(
+        tool.invocations.load(Ordering::SeqCst),
+        0,
+        "fingerprint corruption must prevent invocation"
+    );
 }

@@ -28,6 +28,7 @@ const MODEL: &str = "fake-model-1";
 struct FakeProvider {
     id: CapabilityId,
     calls: AtomicUsize,
+    first_tool_call: Option<ToolCall>,
 }
 
 impl FakeProvider {
@@ -35,6 +36,15 @@ impl FakeProvider {
         Arc::new(Self {
             id: CapabilityId::new("provider.fake").unwrap(),
             calls: AtomicUsize::new(0),
+            first_tool_call: None,
+        })
+    }
+
+    fn with_first_tool_call(call: ToolCall) -> Arc<Self> {
+        Arc::new(Self {
+            id: CapabilityId::new("provider.fake").unwrap(),
+            calls: AtomicUsize::new(0),
+            first_tool_call: Some(call),
         })
     }
 
@@ -76,6 +86,16 @@ impl ProviderCapability for FakeProvider {
         };
 
         if index == 0 {
+            if let Some(call) = &self.first_tool_call {
+                return Ok(NormalizedResponse {
+                    finish_reason: Some(
+                        apeireth_protocol::canonical::NormalizedFinishReason::ToolCalls,
+                    ),
+                    tool_calls: vec![call.clone()],
+                    ..base
+                });
+            }
+
             #[cfg(windows)]
             let command = "echo shell_approval_e2e_ok";
             #[cfg(not(windows))]
@@ -296,4 +316,68 @@ async fn trusted_shell_reject_never_executes_and_model_recovers() {
         2,
         "model gets a chance to recover after rejection"
     );
+}
+
+#[tokio::test]
+async fn invalid_shell_request_never_creates_pending_approval() {
+    let tmp = tempdir().unwrap();
+    let invalid_call = ToolCall {
+        id: "call_shell_invalid".into(),
+        name: "shell".into(),
+        arguments: serde_json::json!({ "command": "echo hi", "cwd": "missing_dir" }),
+    };
+    let provider = FakeProvider::with_first_tool_call(invalid_call);
+    let tools_plugin = BuiltinToolsPlugin::with_options(
+        tmp.path().to_path_buf(),
+        BuiltinToolsOptions {
+            shell: Some(TrustedShellConfig::new(tmp.path().to_path_buf())),
+        },
+    );
+
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.shell".into()));
+    policy.require_approval_for("tool.shell");
+
+    let runtime = Runtime::builder()
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
+        .with_plugin(Arc::new(tools_plugin))
+        .with_plugin(ProviderPlugin::new(provider.clone()))
+        .with_default_model(MODEL)
+        .with_max_rounds(4)
+        .build()
+        .await
+        .unwrap();
+
+    let session = SessionId::new();
+    let outcome = runtime
+        .execute_outcome(TurnRequest::new(
+            session,
+            "please run an invalid shell command",
+        ))
+        .await
+        .unwrap();
+
+    match outcome {
+        TurnOutcome::Completed(response) => assert_eq!(response.text, "shell done"),
+        TurnOutcome::PendingApproval(view) => {
+            panic!("invalid shell must not create PendingApproval: {view:?}")
+        }
+    }
+
+    let stored = runtime
+        .sessions()
+        .load(&session)
+        .await
+        .unwrap()
+        .expect("session persisted");
+    assert!(
+        stored.approvals.is_empty(),
+        "invalid shell request must not mint a pending approval"
+    );
+    assert!(stored.events.iter().all(|event| !matches!(
+        &event.event,
+        apeireth_runtime::canonical::SessionEventKind::ApprovalRequired { .. }
+    )));
 }
