@@ -1,0 +1,65 @@
+[package]
+name = "apeireth-tools-canonical"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Canonical builtin tool capabilities: read-only filesystem, local search, and read-only repository inspection."
+
+[dependencies]
+# Permitted direction: builtin tools are plugin capabilities. They depend on the
+# canonical plugin/protocol/core contracts, never on the runtime or gateway.
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+async-trait = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+url = "2.5.8"
+
+# Windows process containment uses the same windows-sys convention as the
+# companion crate. The dependency is target-scoped so non-Windows builds never
+# compile or link Windows-only imports.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+] }
+
+# Unix backends use libc only inside target-scoped modules. The crate does not
+# expose libc types through the canonical public process layer.
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = { version = "0.2.189" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = { version = "0.2.189" }
+
+[dev-dependencies]
+tempfile = "3"
+
+[target.'cfg(unix)'.dev-dependencies]
+libc = { version = "0.2.189" }
+
+[lints]
+workspace = true
+
+# Test-only helper for proving real OS process enforcement. It is not a
+# product tool, accepts no user command strings, and is driven only by fixed
+# modes (sleep, print, allocate, spawn-child, check-job, ...).
+[[bin]]
+name = "sandbox-test-child"
+path = "src/bin/sandbox_test_child.rs"
+test = false
+bench = false
+doc = false
+

@@ -1,0 +1,75 @@
+[package]
+name = "apeireth-runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Apeireth R147: end-to-end runtime orchestration - HeartbeatScheduler + AsyncTaskStore + ChanneledBus + ArbitrationLog + SearchEngine + GroupChat + EmotionEngine integrated runtime. Borrows 'self-driven living day' concept (origin: open-source), lifted to Rust compile-time guaranteed unified runtime."
+keywords = ["ai", "agent", "runtime", "orchestration", "autopoietic", "living-day"]
+categories = ["asynchronous", "asynchronous"]
+
+[dependencies]
+# ==========================================================================
+# reconstruct_v2 canonical convergence (`src/canonical/`)
+# --------------------------------------------------------------------------
+# The canonical composition root depends on exactly these four and nothing
+# else. The legacy seven-module orchestrator below is what still makes this
+# *crate*'s dependency set larger than its canonical modules' -- see
+# `src/canonical/mod.rs` and the migration map.
+apeireth-core = { path = "../../foundation/core" }
+apeireth-protocol = { path = "../../foundation/protocol" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-governance = { path = "../../foundation/governance" }
+apeireth-storage = { path = "../storage" }
+rusqlite = { workspace = true }
+# ==========================================================================
+# R257: reqwest for LlmWorker Bearer auth header (raw client, not via HttpClient)
+reqwest = { workspace = true }
+# 7 orchestration core crates (per R147 design)
+apeireth-supervisor = { path = "../../../legacy/donor/apeireth-supervisor" }
+apeireth-tool-registry = { path = "../../../legacy/donor/apeireth-tool-registry" }
+apeireth-bus = { path = "../../../legacy/donor/apeireth-bus" }
+apeireth-arbitration = { path = "../../../legacy/donor/apeireth-arbitration" }
+apeireth-tool-search = { path = "../../../legacy/donor/apeireth-tool-search" }
+apeireth-council = { path = "../../../legacy/donor/apeireth-council" }
+apeireth-consciousness = { path = "../../../legacy/donor/apeireth-consciousness" }
+apeireth-http-client = { path = "../../../legacy/donor/apeireth-http-client" }
+# R160: runtime 接 g5 substrate (第 4 个生产调用方)
+apeireth-pipeline-g5 = { path = "../../../legacy/donor/apeireth-pipeline-g5" }
+# R263: apeireth-workflow runtime integration (AsyncWorker adapter)
+apeireth-workflow = { path = "../../../legacy/donor/apeireth-workflow" }
+
+# Workspace deps
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Canonical approval operation fingerprints. Small cryptographic primitive,
+# kept at the runtime orchestration layer for frozen-operation binding.
+sha2 = "0.10"
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+parking_lot = "0.12"
+tracing = "0.1"
+
+[dev-dependencies]
+tempfile = "3"
+# Canonical tests advance a `VirtualClock`, whose `advance` takes a chrono Duration.
+chrono = { workspace = true }
+# Integration test wires the migrated canonical minimax provider through the
+# real runtime/router against a mock HTTP server.
+apeireth-provider = { path = "../provider" }
+# M2A E2E wires the canonical builtin tools through the real plugin path.
+apeireth-tools-canonical = { path = "../../capabilities/tools" }
+
+[[example]]
+name = "r147_full_chain"
+path = "examples/r147_full_chain.rs"
+
+[[example]]
+name = "r257_minimax_real_api"
+path = "examples/r257_minimax_real_api.rs"
+
+[lints]
+workspace = true

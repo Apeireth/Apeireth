@@ -1,0 +1,29 @@
+[package]
+name = "apeireth-governance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Canonical governance hook: the decision point the runtime consults before it acts. Depends on core only."
+
+[dependencies]
+# Permitted direction: governance -> core, and nothing else. Governance must not
+# know about the runtime, the gateway, or any concrete capability.
+apeireth-core = { path = "../core" }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+regex = "1.13"
+sha2 = "0.10"
+
+[lib]
+name = "apeireth_governance"
+path = "src/lib.rs"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

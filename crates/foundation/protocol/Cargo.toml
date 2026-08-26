@@ -1,0 +1,45 @@
+[package]
+name = "apeireth-protocol"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Apeireth R17 战役 1-1: LLM 协议归一化层 (OpenAI Chat / OpenAI Responses / Anthropic Messages / Gemini), 字段级借鉴开源 protocol-bridge 真代码. R37-1 bridge facade + R20 阶段 2 WS 8 帧协议. 9 src 模块 + 51 #[test] + 27 集成 (wire_format + wire_format_ext)"
+keywords = ["ai", "agent", "protocol", "normalization", "llm"]
+categories = ["api-bindings", "data-structures"]
+
+[dependencies]
+# reconstruct_v2 canonical convergence: `ModelDescriptor` uses the stable
+# `ModelId` / `CapabilityId` primitives instead of inventing protocol-local id
+# types. Permitted direction (core <- protocol); `apeireth-core` has no internal
+# crate dependencies, so this introduces no cycle.
+apeireth-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+# tokio and reqwest moved to [dev-dependencies]; see below.
+async-trait = { workspace = true }  # R30 U10: ProtocolBridge async trait
+
+[dev-dependencies]
+serde_json = { workspace = true }
+# Canonical protocol is a translation layer: no HTTP client, no async runtime.
+# Examples/tests may use these, but library code must not construct a reqwest
+# client or an async runtime. Keeping them here enforces that boundary in the
+# dependency graph itself.
+tokio = { workspace = true, features = ["macros", "rt"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[[example]]
+name = "router_demo"
+path = "examples/router_demo.rs"
+
+[[example]]
+name = "live_normalize_minimaxi"
+path = "examples/live_normalize_minimaxi.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true
