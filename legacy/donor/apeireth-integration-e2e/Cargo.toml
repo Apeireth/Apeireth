@@ -1,0 +1,111 @@
+[package]
+name = "apeireth-integration-e2e"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Apeireth Team"]
+license = "Apache-2.0"
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 5 集成测试 e2e (主仓 + API + TUI 三层端到端, 163 测试 = src/ 107 + tests/ 56, 不碰 R148 仅保 3 不可变脊柱: Self-Disable / L0 HA / 13 键 verdict cache)"
+keywords = ["integration-test", "e2e", "workspace", "tui", "api"]
+categories = ["development-tools", "asynchronous", "api-bindings"]
+publish = false
+
+[lib]
+name = "apeireth_integration_e2e"
+path = "src/lib.rs"
+
+[dependencies]
+# 基础 — async runtime + 序列化 + 错误 + tracing
+tokio = { version = "1.40", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+async-trait = "0.1"
+chrono = { version = "0.4", features = ["serde"] }
+
+# TUI 测试 (跟 parent workspace 同款, 避免编译版本冲突)
+# 0.30.2: ratatui 0.29 拉 lru 0.12.5 (RUSTSEC-2026-0253 affected <0.18.2), 0.30 不再依赖 lru 0.12
+ratatui = "0.30"
+crossterm = "0.28"
+
+# HTTP mock server (wiremock 0.6, async + std 兼容)
+wiremock = "0.6"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# 临时目录 (workspace 隔离测试用)
+tempfile = "3"
+
+# 5 K-1 强校验: 同步原语 (parking_lot 比 std Mutex 快, 跟 parent workspace 风格一致)
+parking_lot = "0.12"
+
+# 8 项不修改承诺 #3 "0 改 LOCKED" — path-dep 5 个 LOCKED crate 全部进 dev-dependencies
+# 让 lib (apeireth_integration_e2e) 保持轻量, 仅 tests/ + examples/ 用真 source crate
+# 这也避免 5 crate 传递依赖 (axum + tower + rusqlite + lru + ...) 污染 lib
+[dev-dependencies]
+tokio = { version = "1.40", features = ["full", "test-util", "macros"] }
+
+# 6 source crate path-dep (dev-only, 0 进 lib)
+apeireth-api = { path = "../apeireth-api" }
+apeireth-memory = { path = "../../../crates/engine/memory" }
+apeireth-core = { path = "../../../crates/foundation/core" }
+# C1 e2e 场景测试 (task 6dec693a): 注入/折叠段真机制
+apeireth-context-fold = { path = "../apeireth-context-fold" }
+# C1 e2e 完整版 (tests/pending_companion_wip/) 待 apeireth-companion 并行 WIP
+# (job_object windows-sys 重构等) 编译稳定后恢复:
+# apeireth-companion = { path = "../../../crates/modules/companion" }
+apeireth-constraint = { path = "../apeireth-constraint" }
+apeireth-rate-limiter = { path = "../apeireth-rate-limiter" }
+apeireth-protocol = { path = "../../../crates/foundation/protocol" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-approval = { path = "../apeireth-tool-approval" }
+apeireth-tools = { path = "../apeireth-tools" }
+
+# 8 项不修改承诺 #4 — 本 crate 不进 parent workspace members
+# 验证: `cd crates/apeireth-integration-e2e && cargo test`
+
+# Lints — 复用 parent workspace 风格 (qdrant/wasmtime 精选, missing_docs allow)
+# 不继承 `workspace = true` (sub-workspace 没继承)
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
+unused_extern_crates = "warn"
+trivial_numeric_casts = "warn"
+unstable_features = "warn"
+unused_import_braces = "warn"
+unused_lifetimes = "warn"
+unused_macro_rules = "warn"
+missing_docs = "allow"
+unused_imports = "allow"
+dead_code = "allow"
+unused_must_use = "allow"
+unused_mut = "allow"
+
+[lints.clippy]
+all = { level = "allow", priority = -1 }
+uninlined_format_args = "allow"
+match_wildcard_for_single_variants = "allow"
+wildcard_enum_match_arm = "allow"
+missing_docs_in_private_items = "allow"
+needless_raw_string_hashes = "allow"
+unused_async = "allow"
+
+# CI fix 2026-08: 与 workspace [workspace.lints.rustdoc] 对齐 (78 处预存 doc 注释问题,
+# 见根 Cargo.toml 注释 — 本 crate 用显式 lints 段, 不继承 workspace lints)
+[lints.rustdoc]
+broken_intra_doc_links = "allow"
+invalid_html_tags = "allow"
+
+[[example]]
+name = "integration_e2e_demo"
+path = "examples/integration_e2e_demo.rs"
+
+[[example]]
+name = "minimax_memory_roundtrip"
+path = "examples/minimax_memory_roundtrip.rs"
+
+[[example]]
+name = "tool_orchestrator_e2e"
+path = "examples/tool_orchestrator_e2e.rs"
