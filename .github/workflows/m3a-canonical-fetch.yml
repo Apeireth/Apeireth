@@ -25,6 +25,9 @@ jobs:
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
+      - name: "Install system deps (Linux libdbus)"
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: cargo check -p apeireth-tools-canonical --locked
         run: cargo check -p apeireth-tools-canonical --locked
