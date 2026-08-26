@@ -53,5 +53,6 @@ pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{
     InMemorySessionStore, Session, SessionEvent, SessionEventKind, SessionManager, SessionStore,
+    SqliteSessionStore,
 };
 pub use trace::{ExecutionTrace, TraceEntry, TraceEvent};

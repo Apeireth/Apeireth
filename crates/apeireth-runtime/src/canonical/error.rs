@@ -92,6 +92,13 @@ pub enum RuntimeError {
         reason: String,
     },
 
+    /// The session store could not be opened or migrated.
+    #[error("session store could not be opened: {reason}")]
+    SessionStoreOpen {
+        /// What went wrong while opening/migrating the store.
+        reason: String,
+    },
+
     /// The turn made too many provider round-trips without reaching an answer.
     ///
     /// Distinct from a governance denial: this is the runtime's own structural
@@ -122,6 +129,13 @@ impl RuntimeError {
         Self::Session {
             session,
             operation: "saved",
+            reason: reason.into(),
+        }
+    }
+
+    /// The session store could not be opened or migrated.
+    pub fn session_store_open(reason: impl Into<String>) -> Self {
+        Self::SessionStoreOpen {
             reason: reason.into(),
         }
     }
