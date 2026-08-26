@@ -1,0 +1,45 @@
+name: M3A-XV three-OS controlled Fetch validation
+
+on:
+  push:
+    branches: [reconstruct_v2]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-validation:
+    name: controlled fetch validation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo check -p apeireth-tools-canonical --locked
+        run: cargo check -p apeireth-tools-canonical --locked
+
+      - name: cargo test -p apeireth-tools-canonical --locked
+        run: cargo test -p apeireth-tools-canonical --locked
+
+      - name: Fetch integration tests
+        run: cargo test -p apeireth-tools-canonical --test fetch_execution --locked -- --nocapture
+
+      - name: Tools architecture invariants
+        run: cargo test -p apeireth-tools-canonical --test architecture_invariants --locked
+
+      - name: Runtime Fetch acceptance E2E
+        run: cargo test -p apeireth-runtime --test canonical_fetch_e2e --locked
+
+      - name: Runtime architecture invariants
+        run: cargo test -p apeireth-runtime --test canonical_architecture_invariants --locked
