@@ -173,6 +173,7 @@ async fn trusted_shell_pending_approval_then_approve_executes_once_and_continues
         tmp.path().to_path_buf(),
         BuiltinToolsOptions {
             shell: Some(shell_config),
+            fetch: None,
         },
     );
 
@@ -270,6 +271,7 @@ async fn trusted_shell_reject_never_executes_and_model_recovers() {
         tmp.path().to_path_buf(),
         BuiltinToolsOptions {
             shell: Some(TrustedShellConfig::new(tmp.path().to_path_buf())),
+            fetch: None,
         },
     );
 
@@ -331,6 +333,7 @@ async fn invalid_shell_request_never_creates_pending_approval() {
         tmp.path().to_path_buf(),
         BuiltinToolsOptions {
             shell: Some(TrustedShellConfig::new(tmp.path().to_path_buf())),
+            fetch: None,
         },
     );
 

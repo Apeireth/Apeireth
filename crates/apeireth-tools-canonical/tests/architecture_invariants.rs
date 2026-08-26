@@ -133,3 +133,36 @@ fn public_contract_does_not_name_platform_sandbox_mechanisms() {
         );
     }
 }
+fn fetch_code() -> String {
+    strip_comments(include_str!("../src/fetch.rs"))
+}
+
+fn fetch_code_raw() -> String {
+    include_str!("../src/fetch.rs").to_string()
+}
+
+#[test]
+fn fetch_tool_uses_controlled_egress_and_no_second_http_client() {
+    let code = fetch_code();
+
+    for forbidden in [
+        "reqwest::",
+        "tokio::net::lookup_host",
+        "Command::new(\"curl\")",
+        "Command::new(\"wget\")",
+        "ProcessExecutor",
+        "is_private_host",
+        "is_ssrf",
+        "validate_localhost",
+    ] {
+        assert!(
+            !code.contains(forbidden),
+            "fetch tool must not bypass controlled egress with {forbidden:?}"
+        );
+    }
+
+    assert!(
+        fetch_code_raw().contains("get_with_headers"),
+        "fetch tool must execute through ControlledEgress::get_with_headers"
+    );
+}
