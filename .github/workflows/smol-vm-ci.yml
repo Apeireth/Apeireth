@@ -9,18 +9,18 @@ name: smol-vm CI matrix (--features libkrun 真接)
 # 0 触碰主 CI (rust.yml 跑默认 build), 独立 workflow 单独跑 libkrun 启用模式.
 # 0 改 24 LOCKED crate 入口签名 / workspace.version 1.2.0 / 3 不可变脊柱.
 # 0 引外部依赖 (libkrun-sys 0.9.7 已在 commit 36cdd601 Cargo.toml 加).
-# 0 触碰 crates/apeireth-environment/tests/ / crates/apeireth-provider/tests/ (其他 AI 区域).
+# 0 触碰 legacy/donor/apeireth-environment/tests/ / crates/engine/provider/tests/ (其他 AI 区域).
 
 on:
   push:
     branches: [master, main]
     paths:
-      - 'crates/apeireth-companion/**'
+      - 'crates/modules/companion/**'
       - '.github/workflows/smol-vm-ci.yml'
   pull_request:
     branches: ['**']
     paths:
-      - 'crates/apeireth-companion/**'
+      - 'crates/modules/companion/**'
       - '.github/workflows/smol-vm-ci.yml'
   workflow_dispatch:
 

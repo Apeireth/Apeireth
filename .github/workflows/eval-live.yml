@@ -1,4 +1,4 @@
-﻿name: Eval LIVE (env-gated MiniMax)
+name: Eval LIVE (env-gated MiniMax)
 
 # B5: APEIRETH_EVAL_LIVE=1 env-gated eval 跑 MiniMax
 # - 走 apeireth-eval cross_model_benchmark + smoke_task 真 LLM 跑
@@ -23,7 +23,7 @@ on:
   push:
     branches: [master]
     paths:
-      - 'crates/apeireth-eval/**'
+      - 'legacy/donor/apeireth-eval/**'
       - '.github/workflows/eval-live.yml'
 
 env:
