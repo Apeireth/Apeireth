@@ -32,6 +32,21 @@ pub trait ToolCapability: Send + Sync {
 
     /// Execute one call and describe what happened.
     async fn invoke(&self, call: &ToolCall) -> ToolResult;
+
+    /// Optional canonical frozen-invocation payload for approval binding.
+    ///
+    /// The runtime stores whatever this returns inside the pending approval and
+    /// includes it in the operation fingerprint. Tools whose security-relevant
+    /// execution shape is not fully captured by [`ToolCall::arguments`] — for
+    /// example a shell resolving cwd, shell executable, timeout, and
+    /// environment — should override this method and return the exact effective
+    /// invocation the human is approving.
+    ///
+    /// Returning `None` means the original [`ToolCall`] is the complete frozen
+    /// operation.
+    fn freeze_invocation(&self, _call: &ToolCall) -> Option<serde_json::Value> {
+        None
+    }
 }
 
 #[cfg(test)]

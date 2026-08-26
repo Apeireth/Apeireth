@@ -29,9 +29,14 @@
 //! questions about its capabilities — it simply cannot complete. Requiring a key
 //! to construct the object makes every test that does not need one pay for it.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{system_clock, CapabilityId, Clock, PluginId, TraceId};
+use tokio::sync::Mutex as TokioMutex;
+
+use apeireth_core::kernel::{
+    system_clock, ApprovalId, CapabilityId, Clock, PluginId, SessionId, TraceId,
+};
 use apeireth_governance::{AllowAll, GovernanceHook};
 use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
@@ -48,6 +53,9 @@ use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 /// a model stuck in a loop fails fast.
 pub const DEFAULT_MAX_ROUNDS: u32 = 8;
 
+/// Default lifetime of a pending approval before it expires.
+pub const DEFAULT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
+
 /// Runtime-wide settings.
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
@@ -55,6 +63,8 @@ pub struct RuntimeConfig {
     pub default_model: Option<String>,
     /// Round limit for one turn.
     pub max_rounds: u32,
+    /// How long a pending approval stays resumable, in milliseconds.
+    pub approval_ttl_ms: u64,
 }
 
 impl Default for RuntimeConfig {
@@ -62,7 +72,28 @@ impl Default for RuntimeConfig {
         Self {
             default_model: None,
             max_rounds: DEFAULT_MAX_ROUNDS,
+            approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
         }
+    }
+}
+
+/// Per-session serialization for turns and approval resolution.
+///
+/// This is deliberately not a global runtime mutex. Different sessions may
+/// proceed concurrently; the same session cannot start a new turn or resolve
+/// an approval while another operation on that session is still in progress.
+#[derive(Debug, Default)]
+pub struct SessionLocks {
+    locks: TokioMutex<BTreeMap<SessionId, Arc<TokioMutex<()>>>>,
+}
+
+impl SessionLocks {
+    pub(crate) async fn acquire(&self, session: SessionId) -> Arc<TokioMutex<()>> {
+        let mut map = self.locks.lock().await;
+        let entry = map
+            .entry(session)
+            .or_insert_with(|| Arc::new(TokioMutex::new(())));
+        Arc::clone(entry)
     }
 }
 
@@ -74,6 +105,7 @@ pub struct Runtime {
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
+    pub(super) session_locks: SessionLocks,
 }
 
 impl Runtime {
@@ -238,6 +270,13 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Pending-approval lifetime, in milliseconds.
+    #[must_use]
+    pub fn with_approval_ttl(mut self, ttl_ms: u64) -> Self {
+        self.config.approval_ttl_ms = ttl_ms;
+        self
+    }
+
     /// Register the plugins, start them in dependency order, and assemble.
     ///
     /// Plugins are started here rather than lazily on first use, so that a
@@ -278,6 +317,7 @@ impl RuntimeBuilder {
             governance: self.governance,
             clock: self.clock,
             config: self.config,
+            session_locks: SessionLocks::default(),
         })
     }
 }
