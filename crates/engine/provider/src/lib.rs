@@ -1,79 +1,22 @@
-//! `apeireth-provider` — **R35: 5 Provider client unified**
+//! Canonical provider capabilities.
 //!
-//! **背景**: R20 阶段 4 留 5 个 0.1.0 skeleton crate (claude-code/codex/copilot/gemini-cli/opencode),
-//! 5 个 crate 内容几乎一样 (8 工具 + 3-4 ModelKind + 8 TOOL_WHITELIST + 5 K-1 强校验), 重复维护.
-//!
-//! **R35 合并**: 1 个 `apeireth-provider` 主 crate, 5 module 各自包含 1 个 provider 实现.
-//! 5 个老 crate 留作 shell (re-export 新 crate module), 0 回归.
-//!
-//! **R36 阶段 2**: 删 5 个老 crate, 改所有 import 到 apeireth-provider::{claude_code, codex, copilot, gemini_cli, opencode}.
-//!
-//! **5 module** (R20 阶段 4 owner 1 owner × 1 仓库 模式, 字段级 1:1 翻译 v0.9.21 上游 client):
-//! - `claude_code` — @anthropic-ai/claude-agent-sdk 0.2.112 (8 工具 + 3 ModelKind)
-//! - `codex` — @openai/codex 0.9.21 (8 工具 + 4 ModelKind + 3 SandboxType)
-//! - `copilot` — @github/copilot-sdk 0.9.21 (8 工具 + 3 ModelKind + OAuth)
-//! - `gemini_cli` — @google/gemini-cli 0.9.21 (8 工具 + 3 ModelKind + Embedding)
-//! - `opencode` — @opencode-ai/opencode 0.9.21 (8 工具 + 3 ModelKind)
+//! Providers translate vendor wire protocols into the normalized protocol and
+//! expose themselves through `ProviderCapability` plugins. Routing, sessions,
+//! governance, and tool execution remain owned by the canonical runtime.
 
 #![warn(missing_docs)]
 
-// 5 module, 各自由 src/<name>.rs 实现 (R35 阶段 1: 只 5 Provider struct + 8 工具 + 3 ModelKind, R21+ 真接 SDK)
-/// The anthropic (Messages API) provider as a first-class canonical capability
-/// ([`AnthropicProviderCapability`] / [`AnthropicProviderPlugin`]).
+/// Anthropic Messages API provider capability and plugin.
 pub mod canonical_anthropic;
-/// The minimax provider as a first-class canonical capability
-/// ([`MinimaxProviderCapability`] / [`MinimaxProviderPlugin`]).
+/// MiniMax OpenAI-compatible provider capability and plugin.
 pub mod canonical_minimax;
-/// The generic OpenAI-compatible provider as a first-class canonical capability
-/// ([`OpenAiCompatibleProviderCapability`] / [`OpenAiCompatibleProviderPlugin`]).
+/// Generic OpenAI-compatible provider capability and plugin.
 pub mod canonical_openai_compatible;
-pub mod claude_code;
-pub mod codex;
-pub mod copilot;
-/// Production credential resolution for canonical providers
-/// ([`EnvCredentialResolver`]).
+/// Environment-backed credential resolution.
 pub mod credentials;
-pub mod gemini_cli;
-/// Shared OpenAI Chat Completions protocol primitives for canonical providers
-/// that speak that wire protocol.
+/// Shared OpenAI Chat Completions wire conversion.
 pub mod openai_chat;
-pub mod opencode;
-/// Provider-local canonical-id ↔ vendor-wire-name mapping
-/// ([`ProviderModel`]).
+/// Canonical provider model identifiers and vendor wire names.
 pub mod provider_model;
-// R177: provider invariants (10 tests + 2 Kani proofs)
-mod organ_kani_proofs;
-// R176: LlmFacade trait 统一接入 (per ADR-0033)
-pub mod facade_impls;
-// R176: HTTP 统一调度 (真接 6 Provider)
-pub mod http_dispatch;
-pub mod minimax; // R128: 6th provider (MiniMax-M3 family)
-                 // N12: 推理字段归一化适配件 (VCP reasoningContentAdapter 吸收; 12 别名 → think 块)
+/// Provider-local reasoning field normalization.
 pub mod reasoning_adapter;
-
-/// R35: 5 provider name 1:1 对应, 启动时配置用
-pub const ALL_PROVIDERS: [&str; 6] = [
-    "claude-code",
-    "codex",
-    "copilot",
-    "gemini-cli",
-    "opencode",
-    "minimax",
-];
-
-#[cfg(test)]
-mod r35_provider_umbrella_tests {
-    use super::*;
-
-    #[test]
-    fn r35_6_providers_all_present() {
-        assert_eq!(ALL_PROVIDERS.len(), 6);
-        // 5 module 都在
-        let _claude = std::any::type_name::<claude_code::ClaudeCodeProvider>();
-        let _codex = std::any::type_name::<codex::CodexProvider>();
-        let _copilot = std::any::type_name::<copilot::CopilotProvider>();
-        let _gemini = std::any::type_name::<gemini_cli::GeminiCliProvider>();
-        let _opencode = std::any::type_name::<opencode::OpencodeProvider>();
-        let _minimax = std::any::type_name::<minimax::MinimaxProvider>();
-    }
-}
