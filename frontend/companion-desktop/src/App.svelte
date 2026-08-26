@@ -189,7 +189,8 @@
     const userMsg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: userText,
+      text: userText,
+      time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
       timestamp: Date.now(),
     };
     if (activeConversation) {
@@ -199,17 +200,21 @@
     }
     try {
       const agent = createAgentRuntime(config);
-      const resp = await agent.run({
-        messages: activeConversation?.messages.map((m) => ({
-          role: m.role as any,
-          content: m.content,
-        })) || [{ role: 'user', content: userText }],
-        model: { id: config.model },
-      });
+      const resp = await agent.run(
+        {
+          messages: activeConversation?.messages.map((m) => ({
+            role: m.role,
+            content: m.text,
+          })) || [{role: 'user', content: userText}],
+          model: {id: config.model},
+        },
+        () => {},
+      );
       const assistantMsg: ChatMessage = {
         id: crypto.randomUUID(),
         role: 'assistant',
-        content: resp.content,
+        text: resp,
+        time: new Date().toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'}),
         timestamp: Date.now(),
       };
       if (activeConversation) {
@@ -217,7 +222,7 @@
         activeConversation.updatedAt = Date.now();
         saveConversations(conversations);
       }
-      return resp.content;
+      return resp;
     } catch (e) {
       console.error('Voice turn failed:', e);
       return '抱歉，实时对话连接暂时中断。';
@@ -1035,7 +1040,11 @@
 <!-- Voice Call Modal (Phase 3 Full-Duplex Audio & PAD Visualizer) -->
 <VoiceCallModal
   isOpen={showVoiceCall}
-  padState={$presenceStore.pad}
+  padState={{
+    pleasure: (($presenceStore.current?.p ?? 0.4) + 1) / 2,
+    arousal: (($presenceStore.current?.a ?? -0.2) + 1) / 2,
+    dominance: (($presenceStore.current?.d ?? 0.2) + 1) / 2,
+  }}
   onClose={() => showVoiceCall = false}
   onSendMessage={handleVoiceMessage}
 />
