@@ -366,7 +366,7 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 | TP6 | **OneRing 统一上下文**（N2） | A2 continuity 锚点升级 | 跨前端（SSE/Lark/Telegram/Web）同一时间线账本；SQLite 内容寻址 + fuzzy diff 对账 | 多前端同一叙事/来源标记测试 |
 | TP7 | **金融数据源**（N3） | oracle 预测机 | DigitalOracle 精神：宏观/利率/股票/加密/预测市场；mock 先行；可证伪预测自动登记 | mock 全测 + 预测 resolve 闭环 |
 | TP8 | **观测缓存**（N8） | 查询管线中间产物 | generation 绑定 + TTL + 防跨代脏读（VCP MemoRuntime 模式） | 缓存命中/代际失效测试 |
-| TP9 | **消费方规范落地**（N18） | maintenance-guide + 孤儿体检脚本 | 新 crate 必须登记消费方；`_scripts/orphan-scan.ps1` 入库为定期检查 | 规范写入 + 扫描脚本可跑 |
+| TP9 | **消费方规范落地**（N18） | maintenance-guide + 孤儿体检脚本 | 新 crate 必须登记消费方；`scripts/audit/orphan-scan.ps1` 入库为定期检查 | 规范写入 + 扫描脚本可跑 |
 | TP10 | **ThoughtCluster 元自学习**（N4） | 记忆域深化 | AI 思维链文件 + 反思/涌现消费；versioned chain | 创建/编辑/消费链测试 |
 
 **执行顺序建议**：TP3 → TP2 → TP4（装配主链）；TP1 并行；TP5/TP6/TP8（上下文组）并行；TP7（食粮）与 TP10 靠后；TP9 全程（先立规范再干活）。

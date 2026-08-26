@@ -10,8 +10,8 @@
 # 0 装 PASS: 本脚本只读分析, 不修改任何 crate; 孤儿处置决策归 Leader。
 #
 # 用法:
-#   powershell -NoProfile -ExecutionPolicy Bypass -File _scripts\orphan-scan.ps1
-#   powershell ... -File _scripts\orphan-scan.ps1 -OutFile reports\orphan-scan.md
+#   powershell -NoProfile -ExecutionPolicy Bypass -File scripts\audit\orphan-scan.ps1
+#   powershell ... -File scripts\audit\orphan-scan.ps1 -OutFile reports\orphan-scan.md
 # 建议: 每次新增 crate / release 前跑一次; 输出并入 docs/backlog.md 台账。
 
 param([string]$OutFile = '')
@@ -21,7 +21,7 @@ param([string]$OutFile = '')
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 $ErrorActionPreference = 'Stop'
-$repo = Split-Path -Parent $PSScriptRoot
+$repo = Join-Path $PSScriptRoot '..\..' | Resolve-Path
 Push-Location $repo
 try {
     $meta = & cargo metadata --no-deps --format-version 1 2>$null | ConvertFrom-Json

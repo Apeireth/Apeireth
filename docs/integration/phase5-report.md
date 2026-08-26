@@ -16,8 +16,8 @@
 | `frontend/companion-desktop/src/lib/types.ts` | +`HealthState` 类型 |
 | `docs/integration/runtime-bridge.md` | Phase 5 更新（错误语义/health/E2E 结果） |
 | `docs/integration/native-readiness.md` | 新增 Phase 5F native audit |
-| `_scripts/mock-openai-sse.mjs` | 新增 mock OpenAI SSE 上游（含故障注入 401/500/hang） |
-| `_scripts/e2e-streamChat-test.mts` | 新增 E2E 测试（真实 streamChat 跑真实链路） |
+| `frontend/companion-desktop/tests/mock-openai-sse.mjs` | mock OpenAI SSE 上游（含故障注入 401/500/hang） |
+| `frontend/companion-desktop/tests/e2e-streamChat-test.mts` | E2E 测试（真实 streamChat 跑真实链路） |
 
 ## 3. Real Chat E2E 结果
 
