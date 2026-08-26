@@ -19,7 +19,9 @@
 //! offers reasoning, and can be asserted on in tests. The end-to-end test in this
 //! crate proves the loop's behaviour entirely through this type.
 
-use apeireth_core::kernel::{CapabilityId, PluginId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_core::kernel::{
+    ApprovalId, CapabilityId, PluginId, RequestId, SessionId, Timestamp, TraceId,
+};
 use apeireth_protocol::canonical::{NormalizedFinishReason, NormalizedUsage};
 use serde::{Deserialize, Serialize};
 
@@ -71,6 +73,26 @@ pub enum TraceEvent {
         decision: String,
         /// Structured reason for a refusal or approval requirement.
         reason: Option<String>,
+        /// Which round.
+        round: u32,
+    },
+    /// A pending approval was created for a capability dispatch.
+    ApprovalRequested {
+        /// The stable approval id.
+        approval_id: ApprovalId,
+        /// Which capability requires approval.
+        capability: CapabilityId,
+        /// The call id it answers.
+        tool_call_id: String,
+        /// Which round.
+        round: u32,
+    },
+    /// A pending approval was resolved.
+    ApprovalResolved {
+        /// The stable approval id.
+        approval_id: ApprovalId,
+        /// `approved` / `rejected` / `expired`.
+        decision: String,
         /// Which round.
         round: u32,
     },
