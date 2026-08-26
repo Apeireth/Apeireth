@@ -1,7 +1,9 @@
 # Apeireth 桌面伙伴 (companion-desktop)
 
-Svelte 5 + Tauri 2 桌面 App, **薄 Tauri shell + 现有 apeireth-companion 后端**.
-对接 `apeireth-companion` 的 OpenAI 兼容 HTTP/SSE 端点 (`POST /v1/chat/completions`).
+Svelte 5 + Tauri 2 桌面 App，**独立的薄 Tauri shell + 前端运行时适配层**。
+它不属于根 Rust workspace；根 workspace 的 canonical gateway 与本桌面的
+兼容适配层分开维护。桌面当前保留历史 companion HTTP/SSE 接口的适配，
+完整迁移到 canonical gateway 属于 deferred work。
 
 ## 架构
 
@@ -17,13 +19,15 @@ Svelte 5 + Tauri 2 桌面 App, **薄 Tauri shell + 现有 apeireth-companion 后
 └────────────────┬────────────────────────┘
                  │ HTTP/SSE
 ┌────────────────┴────────────────────────┐
-│ apeireth-companion :8090                 │   已存在, 不变 (per R20 §3.1)
-│  OpenAI compatible chat completions     │
+│ legacy companion compatibility :8090     │   历史桌面兼容接口
+│  HTTP/SSE                                  │   不属于根 workspace
 └─────────────────────────────────────────┘
 ```
 
-- **Tauri shell** 不持任何业务逻辑 — 对话/记忆/工具/宪法都在 `apeireth-companion` 后端
+- **Tauri shell** 不持任何业务逻辑 — 业务请求由前端 runtime adapter 转发
 - **Svelte 5 UI** 把 `runtime.ts` 当契约, 不裸碰后端
+- `runtime.ts` 中面向旧 companion/API 的面板适配器保留作兼容参考，未并入根
+  workspace；完整对接属于 deferred work。
 - **设计参考**: 移植 Pattern 项目 (`App.svelte` / `runtime.ts` / CSS) 到 apeireth, 改传输层
 
 ## 开发
@@ -40,9 +44,11 @@ Svelte 5 + Tauri 2 桌面 App, **薄 Tauri shell + 现有 apeireth-companion 后
 ### 启动
 
 ```bash
-# 1. 启 apeireth-companion 后端 (另一个 terminal)
-cd crates/apeireth-companion
-cargo run --bin companion_serve    # 监听 :8090
+# 1. 启根 workspace 的 canonical gateway（用于当前 canonical API smoke；另一个 terminal）
+cargo run --locked --bin apeireth -- gateway serve --port 8080
+
+# 桌面完整的历史面板/自拉起流程仍需要仓库外的 companion_serve :8090；
+# 它不属于当前根 workspace，完整迁移暂列 deferred。
 
 # 2. 启前端 dev server (Vite + Svelte)
 cd frontend/companion-desktop
@@ -81,8 +87,9 @@ pnpm tauri build --target x86_64-unknown-linux-gnu
 pnpm tauri build --target aarch64-unknown-linux-gnu
 ```
 
-## 设计文档 (per Phase 0-5)
+## 设计文档（历史集成记录）
 
+- `docs/integration/README.md` — 说明这些文件均为历史记录
 - `docs/integration/phase0-audit.md` — Pattern → Apeireth 可行性
 - `docs/integration/architecture.md` — UI → Agent Runtime Contract (方案 C)
 - `docs/integration/legacy-audit.md` — Phase 3 legacy audit
@@ -96,7 +103,7 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 
 - `cargo check` (Tauri shell) on ubuntu-latest
 - `pnpm install` + `pnpm check` (svelte-check)
-- 8 硬墙守门: 0 触碰 24 LOCKED crate, workspace.version 1.2.0 不变,
+- workspace boundary 守门: 根 workspace 与 Tauri workspace 分离,
   独立 workspace 守门
 
 触发: push master (companion-desktop/**) + PR touch 它 + manual dispatch.
@@ -113,4 +120,5 @@ pnpm tauri build --target aarch64-unknown-linux-gnu
 - `companion-desktop/src-tauri/Cargo.toml` 顶层有 `[workspace]` — **不污染 root cargo workspace**
 - `cargo test --workspace` (root) **不会碰 Tauri shell** — companion-desktop-ci.yml 单独管
 - 0 apeireth-* 依赖 (Tauri shell 只用 tauri + serde + serde_json)
-- runtime.ts 用 HTTP/SSE 字符串调 `apeireth-api` 端点 (不算编译依赖)
+- runtime.ts 通过 HTTP/SSE 适配后端；旧 companion/API 端点字符串仅属于
+  兼容适配与历史测试，不代表根 workspace 的当前 package。
