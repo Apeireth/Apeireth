@@ -4,8 +4,6 @@
 # - 0 改 18 老 Dockerfile (deploy/ 保留), 新 compose 是 1.0 release 默认
 # - 8 包之 1 (D-06 拍板), Linux 重点优化 (D-06 主人补充: 搞技术用户主力)
 
-version: "3.9"
-
 services:
   # 1. apeireth 主服务 (HTTP API + WebSocket + Prometheus Metrics)
   apeireth:
@@ -24,7 +22,7 @@ services:
       APEIRETH_LLM_MODEL: ${APEIRETH_LLM_MODEL:-MiniMax-M3}
       APEIRETH_API_KEY: ${APEIRETH_API_KEY:-}
       APEIRETH_DATA_DIR: /var/lib/apeireth
-      APEIRETH_DB_URL: postgresql://apeireth:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置 — 禁止默认弱密码, 请 export POSTGRES_PASSWORD=... 或写入 .env (台账 #47)}@postgres:5432/apeireth
+      APEIRETH_DB_URL: postgresql://apeireth:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}@postgres:5432/apeireth
       APEIRETH_REDIS_URL: redis://redis:6379/0
       APEIRETH_METRICS_PORT: 9090
       RUST_LOG: info,apeireth_api=debug
@@ -56,7 +54,7 @@ services:
       POSTGRES_USER: apeireth
       # 台账 #47: 强制外部注入, 无默认值 — POSTGRES_PASSWORD 缺省时 `docker compose up`
       # 立即报错 (variable is not set), 不留 'secret' 弱默认.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 未设置 — 禁止默认弱密码, 请 export POSTGRES_PASSWORD=... 或写入 .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD_required}
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
     volumes:
       - postgres-data:/var/lib/postgresql/data

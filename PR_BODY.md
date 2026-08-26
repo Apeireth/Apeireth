@@ -1,3 +1,7 @@
+> Historical PR body retained for provenance. It describes the integration
+> branch at the time it was proposed and is not a current build or ownership
+> document.
+
 ## Description
 
 Fresh Integration of the **Pattern desktop UI** (Svelte 5 + Tauri 2) into the **Apeireth Rust workspace** as a new Tauri-based companion desktop application at `frontend/companion-desktop/`. The companion desktop connects to the existing `apeireth-api` (HTTP OpenAI-compatible) and `apeireth-companion` server runtime; the Svelte UI replaces the previous `apeireth-web` (Leptos) approach with the Pattern one (per the master plan "路线 A: 接现成开源 Chat 前端").
