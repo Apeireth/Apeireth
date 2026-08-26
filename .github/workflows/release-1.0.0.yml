@@ -291,7 +291,7 @@ jobs:
           test -f reports/audit-append-only.log 2>/dev/null && echo "  ✅ audit log 存在" || echo "  ⚠️  audit log 待初始化 (开发模式不强制)"
 
           echo ">>> 守门 4: 鉴权限流 (per docs/blueprint §3.4)"
-          grep -rq "rate_limit\|RateLimit" crates/apeireth-api/src/ && echo "  ✅ 鉴权限流代码存在" || echo "  ⚠️  鉴权代码未检出 (待 dev 阶段确认)"
+          grep -rq "rate_limit\|RateLimit" legacy/donor/apeireth-api/src/ && echo "  ✅ 鉴权限流代码存在" || echo "  ⚠️  鉴权代码未检出 (待 dev 阶段确认)"
 
           echo ">>> 守门 5: 内部网络隔离 (docker-compose network)"
           grep -q "internal: false\|internal: true" docker-compose.yml && echo "  ✅ 内部网络隔离配置" || echo "  ⚠️  docker-compose 网络未标 internal (待 dev 阶段确认)"

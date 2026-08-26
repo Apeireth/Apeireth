@@ -8,7 +8,7 @@
     - 0 触碰 24 LOCKED crate (per hard-walls job 实际清单, 含 apeireth-graph)
     - 0 改 workspace.version (1.2.0 semver 严守)
     - 0 改 R11 baseline 3 值 (V1141=0.8682 / V1131=0.8532 / V1136=0.9063)
-    - R11 baseline 在 `crates/apeireth-asi/tests/integration_r_measure.rs` (编译期 const)
+    - R11 baseline 在 `legacy/donor/apeireth-asi/tests/integration_r_measure.rs` (编译期 const)
     - cargo test pass (cargo test --workspace 全绿)
     - 0 假装 (不假装已实现, skeleton 标 ⏳)
 -->
@@ -44,7 +44,7 @@
 
 - [ ] **0 触碰 24 LOCKED crate** (per hard-walls job 实际清单, 24 个: apeireth-{supervisor, agent, council, bus, protocol, mcp, tool-registry, tool-runtime, graph, pipeline, tool-approval, extension, evolution, api, core, memory, asi, tools, cli, bench, cognition, action, life-force, constraint})
 - [ ] **0 改 workspace.version** (1.2.0 semver 严守, per `docs/versioning/`)
-- [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `crates/apeireth-asi/tests/integration_r_measure.rs`)
+- [ ] **0 改 R11 baseline 3 值** (V1141=0.8682 / V1131=0.8532 / V1136=0.9063, in `legacy/donor/apeireth-asi/tests/integration_r_measure.rs`)
 - [ ] **cargo test pass** (`cargo test --workspace` 全绿 + `cargo test --doc` 全绿)
 - [ ] **0 假装** (skeleton 标 ⏳, 不假装已实现, 编译期 hardcode 守门)
 
