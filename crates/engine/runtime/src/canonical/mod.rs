@@ -21,19 +21,8 @@
 //!
 //! Nothing below may depend on anything above it.
 //!
-//! # A transitional impurity, stated plainly
-//!
-//! These modules depend only on core, protocol, plugin, and governance. The
-//! *crate* they live in does not: `apeireth-runtime` still carries the historical
-//! seven-module orchestration driver and its ten internal dependencies
-//! (`apeireth-council`, `apeireth-consciousness`, `apeireth-arbitration`, and
-//! others). The crate-level graph stays acyclic and the canonical code touches
-//! none of that, but the crate boundary is not yet clean.
-//!
-//! This is deliberate and tracked, not overlooked. Evicting the legacy driver is
-//! the first item in the migration map. It is recorded here because a comment
-//! claiming the boundary is already clean would be the exact failure mode this
-//! convergence exists to correct.
+//! The crate boundary is intentionally the same as this canonical module:
+//! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
 pub mod error;

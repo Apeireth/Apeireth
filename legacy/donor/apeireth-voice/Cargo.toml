@@ -21,7 +21,7 @@ bench = false
 # R173 bridge 4: consciousness -> voice
 apeireth-consciousness = { path = "../apeireth-consciousness" }
 # R173 bridge 8: companion -> voice
-apeireth-companion = { path = "../../../crates/modules/companion" }
+apeireth-companion = { path = "../apeireth-companion" }
 tokio = { version = "1.40", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
