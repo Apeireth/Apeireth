@@ -1,0 +1,45 @@
+name: M2C-XV three-OS Trusted Shell validation
+
+on:
+  push:
+    branches: [reconstruct_v2]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: short
+
+permissions:
+  contents: read
+
+jobs:
+  shell-validation:
+    name: shell validation (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo check -p apeireth-tools-canonical --locked
+        run: cargo check -p apeireth-tools-canonical --locked
+
+      - name: cargo test -p apeireth-tools-canonical --locked
+        run: cargo test -p apeireth-tools-canonical --locked
+
+      - name: Shell execution integration tests
+        run: cargo test -p apeireth-tools-canonical --test shell_execution --locked -- --nocapture
+
+      - name: Runtime approval lifecycle tests
+        run: cargo test -p apeireth-runtime --test canonical_approval_lifecycle --locked
+
+      - name: Runtime shell approval E2E tests
+        run: cargo test -p apeireth-runtime --test canonical_shell_approval_e2e --locked
+
+      - name: Runtime architecture invariants
+        run: cargo test -p apeireth-runtime --test canonical_architecture_invariants --locked
