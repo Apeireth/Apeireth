@@ -1,8 +1,7 @@
 // Mock OpenAI-compatible SSE server for E2E testing.
-// Simulates a streaming chat completion upstream so the full chain
-// UI → AgentRuntime → apeireth-api (stream_forward) → upstream can be verified
-// without a real model key. This is a TEST DOUBLE for the *upstream provider*,
-// NOT a fake Apeireth backend capability.
+// Simulates a streaming chat completion upstream for the historical
+// compatibility integration test. This is a TEST DOUBLE for the *upstream
+// provider*, NOT a fake current Apeireth gateway capability.
 //
 // Responds to POST /v1/chat/completions with standard OpenAI SSE chunks.
 import {createServer} from 'node:http';

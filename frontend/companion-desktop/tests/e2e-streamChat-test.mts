@@ -1,8 +1,8 @@
-// E2E test for the frontend SSE parsing path (runtime.ts streamChat).
-// Runs the REAL streamChat function against the REAL apeireth-api :8080
-// (which stream_forwards to the mock upstream :9999). Verifies the UI-side
-// parsing chain that App.svelte relies on.
-import {streamChat} from '../frontend/companion-desktop/src/lib/runtime.ts';
+// Historical integration test for the frontend SSE parsing path
+// (runtime.ts streamChat). It targets the former HTTP/SSE compatibility
+// backend, which forwards to the mock upstream :9999; it is not a test of the
+// current root gateway's native JSON endpoint.
+import {streamChat} from '../src/lib/runtime.ts';
 
 // Node 24 has global fetch + AbortController. streamChat needs a Response-like
 // body reader; native fetch provides ReadableStream. Good.
@@ -99,7 +99,7 @@ async function testErrorStatus(status: number, model: string, expectedCode: stri
     console.log(`  NO ERROR (unexpected for ${status})`);
     return false;
   } catch (caught) {
-    const {toRuntimeError} = await import('../frontend/companion-desktop/src/lib/runtime.ts');
+    const {toRuntimeError} = await import('../src/lib/runtime.ts');
     const err = toRuntimeError(caught);
     console.log(`  classified: ${err.code} / status=${err.status} / ${err.message.slice(0, 80)}`);
     return err.code === expectedCode && err.status === status;
