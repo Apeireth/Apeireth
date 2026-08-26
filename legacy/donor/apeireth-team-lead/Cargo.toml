@@ -1,0 +1,69 @@
+[package]
+name = "apeireth-team-lead"
+version = "1.0.0"
+edition = "2021"
+rust-version.workspace = true
+authors = ["Apeireth Team"]
+license.workspace = true
+repository = "https://github.com/apeireth/apeireth-rust"
+description = "Apeireth R20 阶段 1: Team Lead (1:1 翻译 v0.9.21 商业版 out/main/agent/AgentMCPServer.js Orchestrator 缺 P0, A 改 13:34 的版本同步)"
+keywords = ["ai", "agent", "team-lead", "supervisor", "multi-agent"]
+categories = ["api-bindings", "asynchronous"]
+
+[lib]
+name = "apeireth_team_lead"
+path = "src/lib.rs"
+# CI fix 2026-08: lib 默认 bench=true → cargo bench 无参数/--benches 会把 lib 当
+# libtest harness bench 跑, 不认 criterion 的 --save-baseline → 显式关掉
+bench = false
+
+[dependencies]
+# async runtime
+tokio = { version = "1.40", features = ["full"] }
+# serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# error handling
+anyhow = "1.0"
+thiserror = "1.0"
+# tracing
+tracing = "0.1"
+# async traits
+async-trait = "0.1"
+# TP11 (A1, P0) Handoff 委托协议: parking_lot::RwLock (per apeireth-tool-registry 风格,
+# 工作区 30+ crates 已用此同步原语, 非"重型框架", 任务包新增依赖限制仅针对 LangGraph-style state machine lib)
+parking_lot = "0.12"
+# shared agent types
+apeireth-agent = { path = "../apeireth-agent" }
+apeireth-council = { path = "../apeireth-council" }
+apeireth-protocol = { path = "../../../crates/foundation/protocol" }
+apeireth-supervisor = { path = "../apeireth-supervisor" }
+apeireth-bus = { path = "../apeireth-bus" }
+# tools
+apeireth-tool-runtime = { path = "../apeireth-tool-runtime" }
+apeireth-tool-registry = { path = "../apeireth-tool-registry" }
+# graph (team DAG)
+apeireth-graph = { path = "../apeireth-graph" }
+# pipeline
+apeireth-pipeline = { path = "../apeireth-pipeline" }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1.40", features = ["full", "test-util"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bench"
+harness = false
+
+[[example]]
+name = "team_lead_demo"
+path = "examples/team_lead_demo.rs"
+
+# R19 第 0 阶段: standalone crate (R20 阶段 1 阶段临时独立 workspace,
+# 整合其他 5 P0 crate 时一起 rebase 回归 workspace members)
+# 当前 lints 设置, 不强求跟着 workspace 同步, 减少 noise
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(fuzzing)'] }
+unused_imports = "allow"
+dead_code = "allow"
