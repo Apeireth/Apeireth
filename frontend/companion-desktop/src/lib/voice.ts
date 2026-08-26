@@ -14,7 +14,7 @@ export class VoiceCallManager {
   private audioCtx: AudioContext | null = null;
   private mediaStream: MediaStream | null = null;
   private analyser: AnalyserNode | null = null;
-  private dataArray: Uint8Array | null = null;
+  private dataArray: Uint8Array<ArrayBuffer> | null = null;
   private isRunning: boolean = false;
   private isMuted: boolean = false;
   private recognition: any = null;
@@ -62,7 +62,7 @@ export class VoiceCallManager {
       source.connect(this.analyser);
 
       const bufferLength = this.analyser.frequencyBinCount;
-      this.dataArray = new Uint8Array(bufferLength);
+      this.dataArray = new Uint8Array(new ArrayBuffer(bufferLength));
 
       this.isRunning = true;
       this.state.isCalling = true;
