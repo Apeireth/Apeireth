@@ -2,6 +2,11 @@
 
 Status: recorded 2026-08-23. Baseline for the canonical-skeleton convergence work.
 
+Update 2026-08-26: the nested `reconstruction_v2/` donor workspace described
+by this snapshot was removed after the canonical provider path stabilized. The
+measurements and paths below are historical evidence, not current filesystem
+locations; the root workspace is the only active Rust workspace.
+
 ## 0. Git baseline
 
 | Item | Value |
@@ -148,9 +153,9 @@ Name availability in `crates/` decides the mechanism per crate:
 | `apeireth-runtime` | occupied by legacy (2 dependents) | evolve in place: add the canonical composition root |
 | `apeireth-storage` | free | deferred — not in this phase's priority list |
 
-`reconstruction_v2/` is left on disk untouched as a donor and is scheduled for
-removal in the migration map. No third architecture is created: no
-`reconstruction_v3/`, no `canonical_v2/`, no parallel root directory.
+The nested `reconstruction_v2/` donor has now been removed as scheduled in the
+migration map. No third architecture was created: no `reconstruction_v3/`, no
+`canonical_v2/`, and no parallel root directory.
 
 ### Known transitional impurity, stated up front
 
