@@ -104,30 +104,53 @@ FailClosedPreExecutionContainment Enforced
 No `FilesystemIsolation`, `NetworkIsolation`, or `PrivilegeReduction` is
 required for Trusted mode.
 
-## 10. Approval freeze
+## 10. Approval freeze and frozen execution
 
-`ToolCapability` gained one optional canonical hook:
+`ToolCapability` gained one optional canonical hook pair:
 
 ```rust
-fn freeze_invocation(&self, call: &ToolCall) -> Option<serde_json::Value> { None }
+fn freeze_invocation(
+    &self,
+    call: &ToolCall,
+) -> Result<Option<FrozenInvocation>, ToolResult>;
+
+async fn invoke_frozen(
+    &self,
+    call: &ToolCall,
+    frozen: Option<&FrozenInvocation>,
+) -> ToolResult;
 ```
 
-`ShellTool` overrides it and returns the exact effective invocation the human
-approves:
+`FrozenInvocation` separates two concepts:
 
-- resolved shell executable
-- resolved cwd
-- effective timeout
-- environment mode (`explicit_minimal`)
-- environment variable names (not values)
-- filesystem isolation level
-- network isolation level
-- process-tree containment level
+- `payload` — the opaque, versioned execution payload owned by the tool.
+- `display` — the redacted, human-facing view used by `PendingApprovalView`.
 
-The runtime stores this in `PendingApproval.effective_invocation`, shows it in
-`PendingApprovalView`, and includes it in the canonical operation fingerprint.
-The generic approval model is extended; there is no parallel shell approval
-hash.
+`ShellTool` freezes a versioned `ShellFrozenInvocation` with the exact
+effective execution fields:
+
+- `version` (`1`)
+- `shell_executable` (the selected shell path)
+- `shell_args` (exact argv, including the exact script)
+- `cwd` (canonicalized path)
+- `timeout_ms` (effective timeout)
+- `max_stdout_bytes` / `max_stderr_bytes`
+- `environment` (actual explicit environment **values**)
+- `isolation` (the exact `IsolationRequirement`)
+
+The display view contains environment variable **names only**, never values.
+
+Approved shell dispatch executes `ShellTool::invoke_frozen`, which deserializes
+the shell-owned frozen payload and builds a `ProcessRequest` **from frozen
+fields only**. It never calls `resolve_cwd_for`, `selected_shell`,
+`minimal_environment`, or `resolve_timeout_ms` during approved execution.
+If the frozen payload cannot be deserialized or its version is unsupported,
+the tool returns a `ToolResult` error (`FrozenInvocationUnavailable`) instead
+of silently using current configuration.
+
+Invalid shell requests (`invalid cwd`, `empty command`, `oversized command`,
+`invalid timeout`) return a `ToolResult` error from `freeze_invocation` and
+therefore never create a `PendingApproval`.
 
 ## 11. Result contract
 
@@ -162,4 +185,7 @@ blacklist, no command rewriting/sanitizing, no PowerShell v1.
 - `crates/apeireth-runtime/tests/canonical_shell_approval_e2e.rs`: full
   runtime path from provider tool call -> governance `RequireApproval` ->
   pending approval -> approve -> real shell execution -> provider
-  continuation; reject path as well.
+  continuation; reject path; invalid shell never pends.
+- `crates/apeireth-tools-canonical/src/shell.rs`: freeze validation, redacted
+  display (environment names only), and frozen cwd execution after config
+  mutation.

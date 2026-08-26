@@ -46,6 +46,7 @@
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
 use apeireth_governance::{Action, Decision, GovernanceRequest};
+use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::{
     NormalizedMessage, NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage,
     ToolCall, ToolResult,
@@ -151,8 +152,11 @@ pub enum ApprovalResolution {
     /// The resolution was accepted and the turn resumed. This may complete the
     /// turn or pause again on a later tool call.
     Resumed(TurnOutcome),
-    /// The approval had already reached a terminal state.
+    /// The approval had already reached a final (non-resumable) state.
     AlreadyResolved { status: ApprovalStatus },
+    /// The approval is claimed but no `Consumed` result was ever recorded. The
+    /// external effect may or may not have happened; automatic retry is unsafe.
+    ExecutionInterrupted { approval_id: ApprovalId },
     /// The approval expired before it was resolved.
     Expired,
     /// The approval id is unknown for this session.
@@ -165,7 +169,7 @@ enum ToolDispatch {
         capability_id: CapabilityId,
         tool_name: String,
         tool_call: ToolCall,
-        effective_invocation: Option<serde_json::Value>,
+        effective_invocation: Option<FrozenInvocation>,
         governance_hook: String,
         governance_reason: String,
     },
@@ -296,6 +300,10 @@ impl Runtime {
             return Ok(ApprovalResolution::NotFound);
         };
 
+        if approval.status == ApprovalStatus::Claimed {
+            return Ok(ApprovalResolution::ExecutionInterrupted { approval_id });
+        }
+
         if approval.status != ApprovalStatus::Pending {
             return Ok(ApprovalResolution::AlreadyResolved {
                 status: approval.status,
@@ -390,12 +398,16 @@ impl Runtime {
             ApprovalDecision::Approve => {
                 let claimed = {
                     let mut claimed = approval.clone();
-                    claimed.status = ApprovalStatus::Approved;
+                    claimed.status = ApprovalStatus::Claimed;
                     claimed.human_reason = None;
                     claimed
                 };
                 session.approvals.insert(approval_id, claimed);
-                session.active_approval_id = None;
+                // Keep the session blocked on this approval until the consumed
+                // result has been durably written after execution. If the
+                // process dies after this save, a restart must observe Claimed
+                // and refuse to re-execute.
+                session.active_approval_id = Some(approval_id);
                 session.record(
                     approval.request_id,
                     approval.trace_id,
@@ -407,6 +419,10 @@ impl Runtime {
                     },
                     self.clock.as_ref(),
                 );
+
+                // Claim-before-effect: the claimed state MUST be persisted
+                // before the approved tool is invoked.
+                self.sessions.save(&session).await?;
 
                 let mut continuation = approval.continuation.clone();
                 continuation.approved_tool_index = Some(continuation.next_tool_index);
@@ -593,6 +609,23 @@ impl Runtime {
                 let call = continuation.tool_calls[index].clone();
                 let is_preapproved = continuation.approved_tool_index == Some(index);
 
+                // The approved dispatch must execute the exact stored frozen
+                // approval, never a fresh freeze of the tool call.
+                let approved_approval = if is_preapproved {
+                    let approval_id = continuation
+                        .approved_approval_id
+                        .expect("approved_tool_index requires approved_approval_id");
+                    Some(
+                        session
+                            .approvals
+                            .get(&approval_id)
+                            .cloned()
+                            .expect("approved approval must exist in session"),
+                    )
+                } else {
+                    None
+                };
+
                 match self
                     .dispatch_one_tool(
                         &mut trace,
@@ -603,11 +636,25 @@ impl Runtime {
                         &call,
                         continuation.round,
                         is_preapproved,
+                        approved_approval.as_ref(),
                     )
                     .await?
                 {
                     ToolDispatch::Result(result) => {
                         session.append(result.into_message(), clock);
+
+                        if let Some(approved_approval_id) = continuation.approved_approval_id {
+                            if let Some(approval) = session.approvals.get_mut(&approved_approval_id)
+                            {
+                                approval.status = ApprovalStatus::Consumed;
+                            }
+                            session.active_approval_id = None;
+                            // Persist the consumed result promptly so a crash
+                            // after the external effect observes a terminal
+                            // approval, and a crash before this save observes
+                            // Claimed (which must never re-execute).
+                            self.sessions.save(&session).await?;
+                        }
                     }
                     ToolDispatch::Pending {
                         capability_id,
@@ -631,7 +678,7 @@ impl Runtime {
                             &tool_name,
                             &tool_call.id,
                             &tool_call.arguments,
-                            effective_invocation.as_ref(),
+                            effective_invocation.as_ref().map(|frozen| &frozen.payload),
                             session_id,
                             request_id,
                             continuation.round,
@@ -695,12 +742,6 @@ impl Runtime {
                         return Ok(TurnOutcome::PendingApproval(PendingApprovalView::from(
                             &pending,
                         )));
-                    }
-                }
-
-                if let Some(approved_approval_id) = continuation.approved_approval_id {
-                    if let Some(approval) = session.approvals.get_mut(&approved_approval_id) {
-                        approval.status = ApprovalStatus::Consumed;
                     }
                 }
 
@@ -778,15 +819,17 @@ impl Runtime {
                 Err(RuntimeError::Denied { hook, reason })
             }
             Decision::RequireApproval { reason } => {
+                // Completion-level approval is not resumable in this phase.
+                // It must not mint a stable ApprovalId that pretends a pending
+                // approval entity exists.
                 session.record(
                     request_id,
                     trace_id,
-                    SessionEventKind::ApprovalRequired {
+                    SessionEventKind::CompletionApprovalRequired {
                         hook: hook.clone(),
                         action: label.to_string(),
                         reason: reason.clone(),
                         round,
-                        approval_id: ApprovalId::new(),
                     },
                     self.clock.as_ref(),
                 );
@@ -798,7 +841,8 @@ impl Runtime {
     /// Resolve, authorize, and run one tool call.
     ///
     /// When `preapproved` is true the tool has already passed human approval
-    /// and must be dispatched without a second governance evaluation.
+    /// and must be dispatched without a second governance evaluation. The
+    /// approved dispatch must execute the exact stored frozen invocation.
     async fn dispatch_one_tool(
         &self,
         trace: &mut ExecutionTrace,
@@ -809,6 +853,7 @@ impl Runtime {
         call: &ToolCall,
         round: u32,
         preapproved: bool,
+        approved_approval: Option<&PendingApproval>,
     ) -> RuntimeResult<ToolDispatch> {
         let clock = self.clock.as_ref();
 
@@ -855,69 +900,167 @@ impl Runtime {
 
         let capability = tool.id().clone();
 
-        if !preapproved {
-            let action = Action::CapabilityDispatch {
-                capability: &capability,
-                arguments: &call.arguments,
-            };
-            let label = action.label();
-            let verdict = self
-                .governance
-                .evaluate_verbose(&GovernanceRequest::new(
-                    action,
-                    *session_id,
+        if preapproved {
+            let Some(approval) = approved_approval else {
+                let reason = "approved dispatch is missing its frozen approval".to_string();
+                session.record(
+                    request_id,
                     trace_id,
-                    round,
-                ))
-                .await;
-            let hook = verdict.hook;
-            let owner = verdict.owner;
-            let decision = verdict.decision;
+                    SessionEventKind::ToolFailed {
+                        capability: Some(capability.clone()),
+                        tool_call_id: call.id.clone(),
+                        error: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
+                return Ok(ToolDispatch::Result(
+                    ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
+                ));
+            };
+
+            if let Err(reason) = self.verify_frozen_approval_binding(approval, call, tool.as_ref())
+            {
+                // Fail closed: the stored approval does not match the live
+                // capability or its fingerprint. Do not invoke.
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ToolFailed {
+                        capability: Some(capability.clone()),
+                        tool_call_id: call.id.clone(),
+                        error: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
+                return Ok(ToolDispatch::Result(
+                    ToolResult::permanent_error(&call.id, reason).with_name(&call.name),
+                ));
+            }
 
             trace.record(
                 Timestamp::from_clock(clock),
-                TraceEvent::GovernanceEvaluated {
-                    hook: hook.clone(),
-                    owner,
-                    action: label.to_string(),
-                    decision: decision.label().to_string(),
-                    reason: decision.reason().map(str::to_owned),
+                TraceEvent::CapabilityDispatched {
+                    capability: capability.clone(),
+                    tool_call_id: call.id.clone(),
                     round,
                 },
             );
 
-            match decision {
-                Decision::Allow => {}
-                Decision::Deny { reason } => {
-                    session.record(
-                        request_id,
-                        trace_id,
-                        SessionEventKind::GovernanceDenied {
-                            hook,
-                            action: label.to_string(),
-                            reason: reason.clone(),
-                            round,
-                        },
-                        clock,
-                    );
-                    return Ok(ToolDispatch::Result(
-                        ToolResult::permanent_error(
-                            &call.id,
-                            format!("refused by governance: {reason}"),
-                        )
-                        .with_name(&call.name),
-                    ));
-                }
-                Decision::RequireApproval { reason } => {
-                    return Ok(ToolDispatch::Pending {
-                        capability_id: capability,
-                        tool_name: call.name.clone(),
-                        tool_call: call.clone(),
-                        effective_invocation: tool.freeze_invocation(call),
-                        governance_hook: hook,
-                        governance_reason: reason,
-                    });
-                }
+            let result = tool
+                .invoke_frozen(call, approval.effective_invocation.as_ref())
+                .await;
+
+            if !result.is_ok() {
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::ToolFailed {
+                        capability: Some(capability.clone()),
+                        tool_call_id: call.id.clone(),
+                        error: result.render(),
+                        round,
+                    },
+                    clock,
+                );
+            }
+
+            trace.record(
+                Timestamp::from_clock(clock),
+                TraceEvent::CapabilityCompleted {
+                    capability,
+                    tool_call_id: call.id.clone(),
+                    succeeded: result.is_ok(),
+                    round,
+                },
+            );
+
+            return Ok(ToolDispatch::Result(result));
+        }
+
+        let action = Action::CapabilityDispatch {
+            capability: &capability,
+            arguments: &call.arguments,
+        };
+        let label = action.label();
+        let verdict = self
+            .governance
+            .evaluate_verbose(&GovernanceRequest::new(
+                action,
+                *session_id,
+                trace_id,
+                round,
+            ))
+            .await;
+        let hook = verdict.hook;
+        let owner = verdict.owner;
+        let decision = verdict.decision;
+
+        trace.record(
+            Timestamp::from_clock(clock),
+            TraceEvent::GovernanceEvaluated {
+                hook: hook.clone(),
+                owner,
+                action: label.to_string(),
+                decision: decision.label().to_string(),
+                reason: decision.reason().map(str::to_owned),
+                round,
+            },
+        );
+
+        match decision {
+            Decision::Allow => {}
+            Decision::Deny { reason } => {
+                session.record(
+                    request_id,
+                    trace_id,
+                    SessionEventKind::GovernanceDenied {
+                        hook,
+                        action: label.to_string(),
+                        reason: reason.clone(),
+                        round,
+                    },
+                    clock,
+                );
+                return Ok(ToolDispatch::Result(
+                    ToolResult::permanent_error(
+                        &call.id,
+                        format!("refused by governance: {reason}"),
+                    )
+                    .with_name(&call.name),
+                ));
+            }
+            Decision::RequireApproval { reason } => {
+                let effective_invocation = match tool.freeze_invocation(call) {
+                    Ok(frozen) => frozen,
+                    Err(result) => {
+                        // A tool whose effective invocation cannot be prepared
+                        // must not produce a pending approval: asking a human to
+                        // approve an invalid operation is misleading.
+                        session.record(
+                            request_id,
+                            trace_id,
+                            SessionEventKind::ToolFailed {
+                                capability: Some(capability.clone()),
+                                tool_call_id: call.id.clone(),
+                                error: result.render(),
+                                round,
+                            },
+                            clock,
+                        );
+                        return Ok(ToolDispatch::Result(result));
+                    }
+                };
+
+                return Ok(ToolDispatch::Pending {
+                    capability_id: capability,
+                    tool_name: call.name.clone(),
+                    tool_call: call.clone(),
+                    effective_invocation,
+                    governance_hook: hook,
+                    governance_reason: reason,
+                });
             }
         }
 
@@ -957,6 +1100,56 @@ impl Runtime {
         );
 
         Ok(ToolDispatch::Result(result))
+    }
+
+    /// Recompute the operation fingerprint from the stored approval and verify
+    /// the live capability identity matches the frozen approval.
+    fn verify_frozen_approval_binding(
+        &self,
+        approval: &PendingApproval,
+        call: &ToolCall,
+        tool: &dyn apeireth_plugin::ToolCapability,
+    ) -> Result<(), String> {
+        if tool.id() != &approval.capability_id {
+            return Err(format!(
+                "capability mismatch: approval is for {} but the tool named {:?} resolves to {}",
+                approval.capability_id,
+                call.name,
+                tool.id()
+            ));
+        }
+        if call.name != approval.tool_name {
+            return Err(format!(
+                "tool name mismatch: approval is for {:?} but the call names {:?}",
+                approval.tool_name, call.name
+            ));
+        }
+        if call.id != approval.tool_call.id {
+            return Err(format!(
+                "tool call id mismatch: approval is for {:?} but the call id is {:?}",
+                approval.tool_call.id, call.id
+            ));
+        }
+
+        let computed = operation_fingerprint_with_invocation(
+            "capability_dispatch",
+            &approval.capability_id,
+            &approval.tool_name,
+            &approval.tool_call.id,
+            &approval.tool_call.arguments,
+            approval
+                .effective_invocation
+                .as_ref()
+                .map(|frozen| &frozen.payload),
+            approval.session_id,
+            approval.request_id,
+            approval.round,
+        );
+        if computed != approval.operation_fingerprint {
+            return Err("frozen invocation fingerprint mismatch".into());
+        }
+
+        Ok(())
     }
 
     /// Record the assistant's answer, persist the session, and close the trace.
