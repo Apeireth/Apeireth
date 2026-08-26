@@ -1,0 +1,78 @@
+[package]
+name = "apeireth-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth CLI (CliRunner, 暴露 Rust 子系统给终端) — R14 Phase 0 接口规范对照 + clap derive macros (R125-2) + B2 装配 feature (base/capability/upgrade suites). 6 src / 48 测试 + 2 Kani"
+
+[[bin]]
+name = "apeireth"
+path = "src/main.rs"
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+apeireth-memory = { path = "../../engine/memory" }
+apeireth-asi = { path = "../../../legacy/donor/apeireth-asi" }
+# DEPRECATED(V2 Day 1 Step 1.1): `apeireth-philosophy` 已删; 来源已物理删除，依赖摘除。
+apeireth-api = { path = "../../../legacy/donor/apeireth-api" }
+apeireth-gateway = { path = "../gateway" }
+apeireth-plugin = { path = "../../foundation/plugin" }
+apeireth-tools-canonical = { path = "../../capabilities/tools" }
+apeireth-provider = { path = "../../engine/provider" }
+apeireth-runtime = { path = "../../engine/runtime" }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+# R116: commands submodule (skills/eval/council subcommands)
+apeireth-skills = { path = "../../../legacy/donor/apeireth-skills" }
+apeireth-eval = { path = "../../../legacy/donor/apeireth-eval" }
+apeireth-council = { path = "../../../legacy/donor/apeireth-council" }
+apeireth-mcp = { path = "../../../legacy/donor/apeireth-mcp" }
+# R125-2: clap derive macros 替换手写 argv 解析 (commands.rs -55%)
+clap = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+reqwest = { workspace = true }
+
+[features]
+# B2 workspace 级装配层 (docs/release-plan.md §三.4): base / capability packs / upgrade suites 三档.
+# 套件清单 (crate 组映射) 见 workspace 根 suites.toml; 编译验证 scripts/check-assembly-matrix.ps1.
+default = ["base"]
+
+# ---- 档 1: base (基地本体) ----
+# 核心 crate 为无条件依赖, 本 feature 是装配语义标记 (cargo build --no-default-features 时显式 opt-out).
+base = []
+
+# ---- 档 2: capability packs (扩展能力包, 80% → 完全体) ----
+# local-intel 本地智能包: 转发 apeireth-memory/onnx (tract-onnx 本地嵌入, 真 cfg 门控).
+local-intel = ["apeireth-memory/onnx"]
+# gui 包: 转发 apeireth-api/tui-dashboard (ratatui TUI 仪表盘, 真 cfg 门控).
+gui = ["apeireth-api/tui-dashboard"]
+# 以下三包编译期未门控 (如实标注, 0 装 PASS):
+# - sandbox: 运行时机制件已在 apeireth-extension/sandbox.rs + companion/job_object.rs, 无条件编译
+# - channels: lark/livekit/voice 是独立 workspace crate, 未收敛为 feature
+# - audit: audit_log 已在核心主线 (memory action_stream), 属 base 不可裁
+sandbox = []
+channels = []
+audit = []
+
+# ---- 档 3: upgrade suites (升级套件 = crate 组 + 运行时 SuiteCatalog 装配) ----
+# 编译期标记; 套件组成见 suites.toml, 运行时装配走 companion::suites::SuiteCatalog.
+suite-education = []
+suite-pentest = []
+suite-oracle = []
+
+[lib]
+name = "apeireth_cli"
+path = "src/lib.rs"
+
+# R19 第 0 阶段: workspace lint 继承 (见 workspace Cargo.toml [workspace.lints])
+# 业界来源: wasmtime + qdrant 子 crate 都用 `workspace = true` 统一继承
+[lints]
+workspace = true
