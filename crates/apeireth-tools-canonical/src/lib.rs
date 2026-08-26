@@ -18,8 +18,10 @@ pub mod plugin;
 pub mod process;
 pub mod repo;
 pub mod search;
+pub mod shell;
 
 pub use filesystem::{FilesystemError, FilesystemTool};
-pub use plugin::BuiltinToolsPlugin;
+pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
 pub use search::{SearchError, SearchTool};
+pub use shell::{ShellTool, TrustedShellConfig};
