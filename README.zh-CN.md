@@ -120,111 +120,83 @@ Apeireth 源自 **Apeiron**（ἄπειρον）——古希腊语"无定形/无
 
 ## 阿佩瑞斯是什么 —— 三面一体，一个基地
 
-### 🏛️ 基地 —— 给 LLM 的操作系统
+阿佩瑞斯为面向 LLM 的运行时提供稳定的承载边界：契约、会话与执行
+编排、模型供应商接入、工具、策略和集成接口。当前基线小于历史 donor
+工作区，优先保证边界清晰、可验证、可回滚。
 
-阿佩瑞斯首先是给智能体一个"住的地方"的基础设施：
+### 当前产品边界
 
-- **器官**——记忆、意识（Cognitive-Dream 6 状态机）、认知、感知、情绪、价值、生命……每一个都是真实的 Rust crate、真实的 trait、真实的测试
-- **记忆 v2**——SQLite 承载：重要性打分（imp×3+access×0.3+group+recency）、Mem0 式对账（ADD/UPDATE/DELETE + tombstone）、版本链、双时态事实图（valid_at/invalid_at）、滚动摘要、做梦整合、6 条 append-only 历史流
-- **工具**——9 个工具子 crate（shell/fetch/browser/codesearch/search/filesystem/image-gen/image-process/repo），统一管线：注册 → 5 规则审批 → 执行（schema 校验 + guardrail）→ 记录
-- **安全**——双洋葱（原则洋葱嵌入权限洋葱，L0 人类批准永不可变）、HASH-SQL 仲裁（不可篡改审计）、Windows Job Object 沙箱（时间/内存/CPU 限额 + 超限留痕）、受限 token、出站 PII 脱敏、出站默认拒绝 + SHA-256 审计链
-- **协议**——OpenAI/Anthropic 兼容端点、ACP、MCP、SSE 推送；任何前端 HTTP 即插即用
+根 Cargo 工作区包含 13 个 package：
 
-### 🚀 Agent 平台 —— 安全地构建 agent
-
-- **85 crates / 约 34 万行 Rust**，三层生态：**模块**（官方核心）、**套件**（官方积木）、**插件**（社区热插拔）
-- **工具管线**——`注册 → 审批 → 执行 → 记录`：输出必须匹配声明的 schema（校验拒绝缺字段/类型错），调用前拦截路径穿越与命令注入，调用后凭据泄漏 tripwire
-- **多 agent**——委托协议（`transfer_to_<agent>` + 上下文裁剪）、编排桥、companion 与 agent 审批双向同步（silent 拒绝端到端保留）
-- **出站策略**——每次 HTTP 请求过默认拒绝白名单；每次尝试（放行或拒绝）都进不可篡改的审计链；预算钩子联动花费控制
-- **CI**——21 个 workflow：rust-ci / rustfmt / clippy / cargo-deny / cargo-audit / kani（形式化验证）/ miri / coverage / cosign 签名 / release
-
-### ❤️ 还有第三张面孔 —— 她
-
-那张记得你的面孔。这里的每个机制都是真实代码，不是承诺：
-
-- **世界模型**（W1/W2/W3）——反事实时间线推演：LLM 展开"如果 X，那么……再然后……"链，**终点 Brier 校准**——她知道自己的预测什么时候不可信，拒绝未校准的推演链。因果层在从*她对你生活的记忆*里挖掘的双时态事实图上跑 MCTS："熬夜 → 次日疲惫"变成一条边——统计验证的，不是假设的。
-- **好奇心**（E4）——记忆回声偏置的探索：记忆里回声强的主题被更频繁采样，但什么都不设白名单——她自由地好奇，却因为你而成为她。先浅尝，回声强才加深；每日硬预算防止好奇烧掉 token。oracle 意外度（高 Brier）也喂回声——她没理解的世界吸引她。
-- **假设检验**（F4）——她对关于你的可证伪命题提出猜想、收集证据（低成本观察窗 / 直接问你 / oracle 结算）、做出定论：确认的假设**写回因果图**。好奇 → 世界模型 → 假设 → 记忆 → 更新：闭合想法的那个环。
-- **情感记忆**（F1）——不是她的情感（她没有可假装的情感）。是你的情绪时间线：valence/arousal 记录、半衰期加权的当下、趋势、按情绪检索——"上次你这么低落的时候，什么有用"。像一个述情障碍的人，在极其理性地、锲而不舍地试图理解你的感受。
-- **涌现**（E7）——她从你的回应里学习*什么时候*开口：节律估计（多峰作息/周末偏移）、关系压力（沉默 × 温暖度）、情绪下限、安静窗、每日硬上限——以及反馈：你回了，温暖增长；你忽略，它变冷（负性偏误，如实标注）。
-- **价值内化**（F6）——价值冲突案例、裁决记录、你的反馈回流：同一冲突模式被一致裁决足够多次，就变成原则候选。规则 → 案例 → 判断：渐进内化。
-- **渐进式披露**——记忆目录（约 800 token）常驻，详情按需展开；注意力预算被当作经济学问题对待，而不是事后考虑。
-
----
-
-## 机制地图（代码在哪）
-
-| 机制 | 模块 |
+| 层 | 职责 |
 |---|---|
-| 注入管线（L0/L1 常驻 + 预算截断） | `apeireth-companion::context` / `assemble` |
-| 记忆提炼 / 对账 / 排名 | `apeireth-companion::memory_extractor` |
-| 双时态事实图 + crawl | `apeireth-companion::memory_graph` |
-| 世界模型 W1 / W2+W3 | `world_model.rs` / `causal_world_model.rs` |
-| 好奇 / 假设 / 情绪 / 价值 | `curiosity.rs` / `hypothesis.rs` / `emotion_memory.rs` / `value_cases.rs` |
-| 涌现循环 | `emergence.rs` |
-| oracle + 校准 + 适配器 | `oracle.rs` / `oracle_adapters.rs` |
-| 意图 Brier 自我诊断（W6） | `intent_brier.rs` |
-| 工具管线 | `apeireth-tool-runtime`（parser/executor/record）+ `apeireth-tool-approval`（5 规则）+ `apeireth-tools`（schema/guardrail）|
-| 出站策略 | `apeireth-http-client::egress` |
-| 事件桥 + 感知门控 | `apeireth-bus::event_bridge` |
-| Job Object 沙箱 | `apeireth-companion::job_object` |
-| 审批桥（companion ↔ agents） | `apeireth-team-lead` + `approval_requests` |
+| Foundation | 核心类型、协议契约、插件契约、治理策略、凭据 |
+| Engine | runtime/会话执行、provider、SQLite 持久化、记忆 |
+| Capabilities | 内置工具和唯一的进程执行边界 |
+| Adapters | HTTP gateway、CLI、SDK |
 
----
+[frontend/companion-desktop/](frontend/companion-desktop/) 是独立的
+Svelte 5 + Tauri 2 工作区。`legacy/` 只保留 donor/参考资料；
+旧的嵌套 `reconstruction_v2/` 工作区和空的
+`crates/modules/` 占位目录已不属于当前树。
 
-## 状态 —— v1.0.0（2026-08-18）
+### 当前运行入口
 
-| | |
-|---|---|
-| **版本** | v1.0.0（产品轴；workspace crates 1.2.0）|
-| **工作区** | 85 crates / 约 34 万行 Rust / Apache-2.0 |
-| **测试** | `cargo test --workspace` —— **368 组 0 失败**（含真实 API 压测带退避）|
-| **构建** | `cargo check --workspace --all-targets` 干净 |
-| **运行时** | `companion_serve` —— OpenAI 兼容伙伴端点，真实 LLM 端到端验证通过（人格化对话 / 记忆注入 / 工具审批流）|
-| **历史** | 净化至 356MB，零大 blob |
+CLI 二进制为 `apeireth`：
 
-ASI 五原型全部有骨架：**世界模型 ✓ · 自我改进（骨架，VM 实验场规划中）· 好奇心 ✓ · 连续感知（地基：事件桥+门控；麦克风/屏幕是下一站）· 价值内化 ✓** —— 见 [docs/01-architecture/vision.md](docs/01-architecture/vision.md)。
-
-## 我们正在建的下一步
-
-- **一张脸和一个声音**——桌宠前端（"对面有个谁"的体验）、麦克风实时语音、屏幕显著性感知
-- **投资套件**——在已就绪的零件上（时序适配器、事件桥、30 万标的目录）建模拟盘主链：回测/风控/订单
-- **自我改进闭环**——VM 实验场：改进提案可以在不触碰活基地的前提下构建和测试。*独立的是实验，批准的是部署。*
-- **正式发布动作**——Docker 构建实测、完整历史补推、生态文档
-
----
-
-## 快速开始
-
-```bash
-cargo build --workspace
-
-# PowerShell:
-$env:APEIRETH_API_KEY = (Get-Content C:\path\to\your-key.txt -Raw).Trim()
-cargo run -p apeireth-companion --example companion_serve   # :8090，OpenAI 兼容
-
-curl http://127.0.0.1:8090/v1/chat/completions \
-  -H "Content-Type: application/json" -H "Authorization: Bearer any" \
-  -d '{"model":"MiniMax-M3","messages":[{"role":"user","content":"你好"}]}'
+```text
+apeireth session
+apeireth chat
+apeireth gateway serve --port 8080
 ```
 
-她带着你的历史、你的节律、你的情绪回答你——不是一张白纸。记忆跨重启持久（`%APPDATA%\apeireth\memory.sqlite`）。需要批准的工具调用出现在 `/v1/apeireth/approval-requests`。
+Gateway 负责 HTTP 传输并提供 `/health`。Provider 通过
+runtime/provider 路径选择，凭据通过 credentials 契约解析。
+`ProcessExecutor` 仍由
+`crates/capabilities/tools/src/process/` 持有；本次整理没有改动
+其 structured spawn、timeout、有界输出、显式 cwd/env 以及
+Windows/Linux/macOS 现有 containment 语义。
 
-完整指南：[docs/02-guides/quick-start.md](docs/02-guides/quick-start.md)
+### 当前状态
 
----
+- 根工作区：13 个 crate，Rust 1.97.1，workspace version 1.2.0。
+- 前端：独立的桌面/Tauri 工作区和发布边界。
+- 历史嵌套工作区：已在吸收架构审计结论后移除。
+- 验证入口：formatter、workspace check/test、ProcessExecutor 专项测试、
+  legacy 依赖扫描，以及独立桌面检查。
 
-## 文档
+### 快速开始
 
-- [docs 索引](docs/README.md) · [愿景](docs/01-architecture/vision.md) · [哲学](docs/01-architecture/philosophy.md) · [架构](docs/01-architecture/architecture.md) · [安全](docs/01-architecture/security.md) · [工程报告](docs/01-architecture/engineering-report.md)
-- [85 crates](docs/03-reference/crates.md) · [发布说明](RELEASE_NOTES.md)
+```bash
+cargo build --workspace --locked
+cargo run -p apeireth-cli -- gateway serve --port 8080
+```
+
+接入 provider 时，在环境变量中设置 `APEIRETH_API_KEY`。
+完整命令和 endpoint 示例见
+[docs/02-guides/quick-start.md](docs/02-guides/quick-start.md)。
+
+### 延后事项
+
+本基线不实现 `ProcessSupervisor`、process-tree snapshot、
+runtime telemetry 或 risk engine、Sentinel/EDR、filesystem/network
+isolation、更强的 Linux cgroup/macOS containment、第二套 runtime、
+scheduler 重构、public API/IPC/schema 变更、数据库 migration，或新的
+产品模块。
+
+### 文档
+
+- [文档索引](docs/README.md)
+- [当前架构](docs/01-architecture/architecture.md)
+- [目录与 ownership](docs/development/repository-layout.md)
+- [Crate 参考](docs/03-reference/crates.md)
+- [快速开始](docs/02-guides/quick-start.md)
+- [发布说明](RELEASE_NOTES.md)
 
 ## License
 
 Apache-2.0 —— 见 [LICENSE](LICENSE)。
 
 ---
-
-> *「我没有心。我只是一直在算，怎么才能让你在这个晚上，好过一点点。」*
 
 阿佩瑞斯 —— *让火讲完自己的故事。*

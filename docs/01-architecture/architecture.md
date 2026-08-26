@@ -1,67 +1,72 @@
-# Apeireth Architecture (1.0)
+# Apeireth Architecture
 
-> 对齐实际代码（2026-08-19 master HEAD `9bf36b1e`）。85 active crates / ~34 万行 Rust。
+> 当前基线：根 Cargo workspace（13 个 crate）+ 独立的
+> `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
 
-## Layer View
+## Layer view
 
-```
-┌─────────────────────────────────────────────────────┐
-│  Frontends (consumers via HTTP/ACP)                 │
-│  TUI · Web panel · companion_serve (:8090)          │
-└──────────────────────┬──────────────────────────────┘
-                       │ OpenAI-compatible / HTTP
-┌──────────────────────▼──────────────────────────────┐
-│  Companion (apeireth-companion, the partner organ)  │
-│  injection pipeline · memory v2 · world model       │
-│  curiosity · hypothesis · emotions · emergence      │
-│  value cases · daemon (dream/reflect/utter)         │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│  Organs & Services                                  │
-│  council (7 advisors) · cognition · consciousness   │
-│  evolution · sovereignty · arbitration · gateway    │
-│  bus (5-layer) · workflow · experience · skills     │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│  Tool Layer (9 sub-crates + runtime)                │
-│  registry → approval → executor → record            │
-│  schema validation · guardrails · egress policy     │
-└──────────────────────┬──────────────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│  Base (memory store · http-client · protocol · api) │
-└─────────────────────────────────────────────────────┘
+```text
+frontend/companion-desktop
+        │ HTTP / JSON
+crates/adapters/{gateway,cli,sdk}
+        │ transport adapters
+crates/engine/runtime  ── governance / providers / storage
+        │
+crates/capabilities/tools  ── built-in capabilities + ProcessExecutor
+        │
+crates/foundation/{core,protocol,plugin,governance,credentials}
 ```
 
-## Crate Groups (85 crates + 1 desktop, aligned with code)
+The dependency direction points inward: adapters call the runtime, the runtime
+composes providers/tools/governance, and foundation crates define the stable
+contracts. The current dependency graph is intentionally explicit in the root
+`Cargo.toml`.
 
-| Group | Crates | Responsibility |
-|---|---|---|
-| **Companion core** | companion (25K 行) | The partner organ: injection, memory, world model, curiosity, hypothesis, emotions, value, emergence, daemon |
-| **Cognition & self** | cognition, consciousness, evolution, council, asi, critic, value, motivation, life-force, perception | Thinking, self-improvement, 7-advisor deliberation, ASI metrics |
-| **Memory** | memory (11K), experience, graph, graph-primitive, vector, context-fold | SQLite memory v2, knowledge, deterministic graphs |
-| **Tools** | tool-registry, tool-runtime, tool-approval, tools, tool-shell, tool-fetch, tool-browser, tool-codesearch, tool-search, tool-filesystem, tool-image-gen, tool-image-process | The tool pipeline with schema + guardrails |
-| **Security** | sovereignty, guard, arbitration, credentials, restricted-token, directory-acl, app-container, sandbox | Double onion, PII redaction, HASH-SQL audit, sandboxes |
-| **Infrastructure** | bus, api, protocol, gateway, http-client, acp, mcp, telemetry, pipeline, pipeline-g5, runtime, host, central, cron, config, i18n | Transport, gateway, protocols, lifecycle |
-| **Integration** | integration-e2e, pybridge, tui, tui-e2e, web, cli, sdk, bench, eval, repo-tools, naming-v05, blueprint-impl, upgrade, plugin, extension | Consumers, tooling, e2e |
-| **External adapters** | stock (N3 financial data), wiki (Markdown KB), lark, voice, livekit, rate-limiter, llm-iface, constraint, onion, supervisor, team-lead, agent, workflow, action, experience, environment, telemetry, value, vector, verify | Adapters & ecosystem (multi-domain pluggable) |
+## Current crate groups
 
-> **2026-08-19 post-v1.0.0 增量**: `frontend/companion-desktop/` 加了 1 个 **独立 workspace** (Svelte 5 + Tauri 2 桌面伙伴) — 不在 root workspace (per 8 硬墙 "companion-desktop 独立 workspace" 守门). 见 [`frontend/companion-desktop/README.md`](../../frontend/companion-desktop/README.md) + 6 个 Phase 报告 in [`docs/integration/`](../../integration/).
+| Group | Crates | Ownership |
+| --- | --- | --- |
+| Foundation | `apeireth-core`, `apeireth-protocol`, `apeireth-plugin`, `apeireth-governance`, `apeireth-credentials` | Stable domain primitives, normalized protocol types, capability/plugin contracts, governance decisions, credential backends |
+| Engine | `apeireth-runtime`, `apeireth-provider`, `apeireth-storage`, `apeireth-memory` | Runtime composition, vendor provider capabilities, SQLite/storage foundation, durable memory and retrieval |
+| Capabilities | `apeireth-tools-canonical` | Built-in filesystem/search/repository/fetch/shell capabilities and the canonical process execution boundary |
+| Adapters | `apeireth-gateway`, `apeireth-cli`, `apeireth-sdk` | HTTP/CLI/SDK entry surfaces; no second orchestration root |
 
-> Full list with descriptions: [docs/03-reference/crates.md](../03-reference/crates.md)
+There is no active product crate under `crates/modules/`. A future module is
+created only when it has real implementation, an owner, a test/build reason,
+and a documented dependency edge.
 
-## Key Data Flows
+## Runtime and process ownership
 
-- **Injection**: memory ranking + graph + preferences + today + growth → ContextAssembler (L0/L1 core, budgeted) → LLM context
-- **Memory**: dialog → extraction (importance) → reconcile (ADD/UPDATE/DELETE + tomb) → ranking → injection
-- **World model**: counterfactual timeline → Brier calibration → reject if uncalibrated; causal graph MCTS with LLM at branch points
-- **Tools**: LLM emits `<<<[TOOL_REQUEST]>>>` → parser → approval (5 rules + bridge) → executor (schema/guardrail) → record → observer capture (W5)
-- **Emergence**: rhythm + relationship pressure + mood gate → Initiative → LLM utterance (min-interval + backoff)
+`apeireth-runtime::canonical::Runtime` owns session lifecycle, governance
+evaluation, provider selection, tool dispatch, continuation, and trace. The
+gateway and CLI only translate their transport inputs and invoke the runtime.
 
-## Runtime
+`apeireth-tools-canonical::process::ProcessExecutor` is the sole process
+execution owner. Its public structured request/result contract and current
+platform behavior are frozen:
 
-- `companion_serve` — the full partner endpoint (:8090, OpenAI-compatible): L0/L1 injection, daemon resident (dream/reflect/utter), tool bridge, approval queue
-- `apeireth-tui` — terminal companion dashboard
-- `apeireth-cli` — CLI runner (assembly matrix: base/suite/plugin)
+| Property | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| Structured spawn, cwd, environment, timeout, bounded stdout/stderr | Enforced | Enforced | Enforced |
+| Process-tree containment | Job Object, enforced | Process group, partial | Process group, partial |
+| Pre-exec containment | `CREATE_SUSPENDED → JobObject → Resume` | Existing `pre_exec` setup | Existing `pre_exec` setup |
+
+This cleanup does not add `ProcessSupervisor`, `ProcessTreeSnapshot`, a new
+process-tree runtime model, filesystem/network sandboxing, or security engine.
+
+## Desktop boundary
+
+`frontend/companion-desktop/` is an independent Svelte 5 + Tauri 2 workspace.
+Its Rust shell is thin and does not depend on the root Apeireth crates; its UI
+uses the documented HTTP contract. Frontend tests and the mock upstream live
+under `frontend/companion-desktop/tests/`.
+
+## Historical material
+
+- `legacy/donor/`, `legacy/archived/`, and `legacy/frozen/` are reference-only;
+  current crates must not import them.
+- `docs/archive/` and dated audit reports preserve historical context and may
+  mention paths that existed at the time of the audit.
+- The former nested `reconstruction_v2/` workspace was removed after its
+  useful decisions had been captured in the canonical root workspace. Git
+  history remains the recovery path.
