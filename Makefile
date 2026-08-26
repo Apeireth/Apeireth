@@ -40,10 +40,10 @@ help: ## 列出所有 make target
 	@echo "  make fmt              cargo fmt --all (格式)"
 	@echo ""
 	@echo "  === CI 复刻 (本地 == GitHub Actions, 防 push 后 fail) ==="
-	@echo "  make ci               ci-build + ci-test + ci-release 一键复刻 rust-ci.yml"
+	@echo "  make ci               ci-build + ci-test + ci-release 一键复刻 rust.yml"
 	@echo "  make ci-build         cargo build --workspace --tests --locked  (rust.yml line 63)"
 	@echo "  make ci-test          cargo nextest run --workspace --profile ci --locked (rust.yml line 67)"
-	@echo "  make ci-release       cargo build --release --workspace --locked  (rust-ci.yml line 106)"
+	@echo "  make ci-release       cargo build --release --workspace --locked  (release validation)"
 	@echo "  ↑ 任何 1 个 exit != 0 → 不要 push (跟 CI 必 fail 一样)"
 	@echo ""
 	@echo "  === 发布期 (1.0 release 前必跑) ==="
@@ -116,7 +116,7 @@ fmt-check: ## cargo fmt --all --check (CI 模式, 0 diff exit 0)
 	cargo fmt --all --check
 
 # ----------------------------------------------------------------------------
-# CI 复刻 — 1:1 模拟 .github/workflows/rust-ci.yml + rust.yml 跑的命令
+# CI 复刻 — 模拟 .github/workflows/rust.yml 跑的命令
 # ----------------------------------------------------------------------------
 # 设计: 本地 make ci exit 0 → push 后 GitHub Actions 必绿 (本机 + CI 同源)
 # 失败处理: 任何 step exit != 0 → make 中止, 不要 push (跟 CI fail 一致)
@@ -134,7 +134,7 @@ ci-test: ## cargo nextest run --workspace --profile ci --locked  (rust.yml line 
 		exit 1; }
 	cargo nextest run --workspace --profile ci --locked
 
-ci-release: ## cargo build --release --workspace --locked  (rust-ci.yml line 106 1:1)
+ci-release: ## cargo build --release --workspace --locked  (release validation)
 	@echo "=== ci-release: cargo build --release --workspace --locked ==="
 	cargo build --release --workspace --locked
 
