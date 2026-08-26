@@ -221,8 +221,12 @@ second pipeline or decision enum.
 
 **Must not depend on.** Gateway, runtime, plugin, provider, companion, governance.
 
-M1A scope: `SqliteConnectionPool`, `SqliteConfig`, versioned migrations (`PRAGMA user_version`), and `StorageError`. Vector, graph, and session persistence are later migration items; `InMemorySessionStore` remains the
-runtime session seam until the storage backend is connected.
+M1A scope: `SqliteConnectionPool`, `SqliteConfig`, versioned migrations (`PRAGMA user_version`), and `StorageError`. Vector and graph persistence are later
+migration items. The runtime session seam is connected: `apeireth-runtime`
+owns the `SessionStore` trait and provides `SqliteSessionStore`, which
+serializes sessions into the storage `sessions` table. `apeireth-storage`
+does not import runtime domain types; the dependency direction is
+`apeireth-runtime -> apeireth-storage`, never the reverse.
 
 ### `apeireth-memory` — durable memory domain
 
@@ -366,6 +370,17 @@ through the `SessionStore` seam. `Runtime::execute_outcome` returns either a
 completed turn or a `PendingApproval`; `Runtime::resolve_approval` resumes the
 stored frozen operation at most once. Governance remains the sole source of
 `RequireApproval`.
+
+Claim-before-effect: approval `Approve` persists `Pending -> Claimed` before
+the approved tool is invoked, and `Consumed` is persisted only after the tool
+result is appended. A `Claimed` approval that is reloaded before `Consumed` is
+never re-executed automatically; resolution reports
+`ApprovalResolution::ExecutionInterrupted`. Duplicate execution after a
+persisted claim must be impossible; exactly-once is not claimed.
+
+Approved tool dispatch executes the stored frozen invocation via
+`ToolCapability::invoke_frozen`; the capability supplies a redacted display
+view for humans while the runtime treats the execution payload as opaque.
 
 A future `tool.shell` capability may only ship under these readiness rules:
 

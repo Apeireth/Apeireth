@@ -44,6 +44,10 @@ pub enum StorageError {
     /// Configuration failed validation.
     #[error("invalid storage configuration: {0}")]
     InvalidConfiguration(String),
+
+    /// A serialized payload could not be encoded or decoded.
+    #[error("storage serialization error: {0}")]
+    Serialization(String),
 }
 
 impl StorageError {
