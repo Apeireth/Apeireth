@@ -43,7 +43,7 @@ pub mod time;
 
 pub use error::{CoreError, CoreResult};
 pub use event::{Event, Topic};
-pub use ids::{CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId};
+pub use ids::{ApprovalId, CapabilityId, ModelId, PluginId, RequestId, SessionId, TaskId, TraceId};
 pub use lifecycle::Lifecycle;
 pub use metadata::Metadata;
 pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};

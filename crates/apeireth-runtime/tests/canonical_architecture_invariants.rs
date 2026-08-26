@@ -36,6 +36,7 @@ fn strip_comments(source: &str) -> String {
 fn canonical_sources() -> Vec<(&'static str, &'static str)> {
     vec![
         ("mod", include_str!("../src/canonical/mod.rs")),
+        ("approval", include_str!("../src/canonical/approval.rs")),
         ("error", include_str!("../src/canonical/error.rs")),
         ("execute", include_str!("../src/canonical/execute.rs")),
         ("provider", include_str!("../src/canonical/provider.rs")),
@@ -104,6 +105,25 @@ fn canonical_runtime_code_does_not_reference_process_containment_internals() {
         assert!(
             !code.contains(forbidden),
             "canonical runtime code must not reach into OS process containment: {forbidden:?}"
+        );
+    }
+}
+
+#[test]
+fn canonical_approval_lifecycle_does_not_create_a_parallel_approval_engine() {
+    let code = canonical_code();
+
+    for forbidden in [
+        "ApprovalManager",
+        "ApprovalRuntime",
+        "ApprovalExecutor",
+        "ApprovalEngine",
+        "ApprovalRegistry",
+        "ApprovalPipeline",
+    ] {
+        assert!(
+            !code.contains(forbidden),
+            "canonical runtime must own approval resume directly, not through {forbidden:?}"
         );
     }
 }

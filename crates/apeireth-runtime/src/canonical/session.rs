@@ -13,12 +13,15 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-use apeireth_core::kernel::{CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_core::kernel::{
+    ApprovalId, CapabilityId, Clock, RequestId, SessionId, Timestamp, TraceId,
+};
 use apeireth_protocol::canonical::NormalizedMessage;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
 
 /// One conversation.
@@ -32,6 +35,11 @@ pub struct Session {
     /// Structured execution facts needed to reconstruct denied and failed
     /// turns without polluting the provider transcript.
     pub events: Vec<SessionEvent>,
+    /// Every approval this session has produced, keyed by stable [`ApprovalId`].
+    /// Terminal approvals are retained for audit and idempotency.
+    pub approvals: BTreeMap<ApprovalId, PendingApproval>,
+    /// The currently active pending approval, when the session is paused.
+    pub active_approval_id: Option<ApprovalId>,
     /// Monotonic state revision. It advances whenever a message or event is
     /// appended, including on a failed turn.
     pub revision: u64,
@@ -49,6 +57,8 @@ impl Session {
             id,
             messages: Vec::new(),
             events: Vec::new(),
+            approvals: BTreeMap::new(),
+            active_approval_id: None,
             revision: 0,
             created_at: now,
             updated_at: now,
@@ -145,6 +155,19 @@ pub enum SessionEventKind {
         reason: String,
         /// Runtime round.
         round: u32,
+        /// The stable approval id that was minted for this pause.
+        approval_id: ApprovalId,
+    },
+    /// A pending approval reached a terminal decision.
+    ApprovalResolved {
+        /// The stable approval id.
+        approval_id: ApprovalId,
+        /// `approved` / `rejected` / `expired`.
+        decision: String,
+        /// Round that produced the approval.
+        round: u32,
+        /// Optional human reason recorded at resolution time.
+        human_reason: Option<String>,
     },
     /// Provider routing could not serve a round.
     ProviderFailed {
@@ -245,6 +268,14 @@ impl SessionManager {
     /// Build a manager over a store.
     pub fn new(store: Arc<dyn SessionStore>, clock: Arc<dyn Clock>) -> Self {
         Self { store, clock }
+    }
+
+    /// Load `id`, returning `None` when it does not exist.
+    pub async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>> {
+        self.store
+            .load(id)
+            .await
+            .map_err(|e| RuntimeError::session_load(*id, e.to_string()))
     }
 
     /// Load `id`, creating an empty session if it does not exist yet.
