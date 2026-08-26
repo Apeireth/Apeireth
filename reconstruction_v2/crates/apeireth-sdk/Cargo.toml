@@ -1,8 +1,0 @@
-[package]
-name = "apeireth-sdk"
-version = "2.0.0"
-edition = "2021"
-
-[dependencies]
-tokio = { version = "1.0", features = ["full"] }
-thiserror = "1.0"

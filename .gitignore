@@ -246,12 +246,8 @@ crates/*.db
 crates/*.db-shm
 crates/*.db-wal
 
-# TP13 #42 (backlog #42): .scratch_n4/ 验证 harness 残留 (Cargo.lock + target 巨大)
-# .scratch_n4/n17-tp2-assembly-summary.md 仍 tracked 作为产物, 其他全 ignore
-.scratch_n4/Cargo.lock
-.scratch_n4/Cargo.toml
-.scratch_n4/src/
-.scratch_n4/target/
+# Scratch work is local-only; durable validation reports belong in reports/.
+.scratch_n4/
 
 # TP13 #44 (backlog #28 之外): target/ dist/ build/ coverage/ (重复确认)
 # 顶部已有 target/ + **/target/, 此处加 dist/ build/ coverage/ 跨平台
