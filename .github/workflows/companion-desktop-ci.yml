@@ -134,7 +134,7 @@ jobs:
           echo "✅ 0 触碰 24 LOCKED crate"
 
           # R11 baseline 3 值 (per APEIRETH-CONVENTIONS §11)
-          R11_FILE="crates/apeireth-asi/tests/integration_r_measure.rs"
+          R11_FILE="legacy/donor/apeireth-asi/tests/integration_r_measure.rs"
           if [ ! -f "$R11_FILE" ]; then
             echo "::error::$R11_FILE 不存在 (R11 baseline 编译期 hardcode 必有)"
             exit 1

@@ -235,7 +235,7 @@ Run-Step 8 '8 硬墙 0 越界 + 0 装 PASS 严守' {
     # B2: workspace.version 1.2.0 0 改 (Step 1c verify done)
     $walls += 'B2 workspace.version 1.2.0 0 改 ✅ (整合 #4 commit abf12243 严守)'
     # A1: R11 baseline 3 值 0.8682/0.8532/0.9063 0 删 0 改
-    $baselineFiles = Get-ChildItem -Path 'crates/apeireth-asi' -Recurse -Filter '*.py' -ErrorAction SilentlyContinue | Select-Object -First 5
+    $baselineFiles = Get-ChildItem -Path 'legacy/donor/apeireth-asi' -Recurse -Filter '*.py' -ErrorAction SilentlyContinue | Select-Object -First 5
     $walls += "A1 R11 baseline 3 值 0.8682/0.8532/0.9063 数字严守 ✅ (17 文件原位, 0 删 0 改)"
     # B3: V0.5 30 维 (R126 P1-4 verify done)
     $walls += 'B3 V0.5 30 维 ✅ (P1-4 R126 25→30 维 verify retry done)'
