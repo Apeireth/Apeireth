@@ -13,6 +13,7 @@
 #![deny(unsafe_code)]
 
 pub mod egress;
+pub mod fetch;
 pub mod filesystem;
 pub mod plugin;
 pub mod process;
@@ -20,6 +21,8 @@ pub mod repo;
 pub mod search;
 pub mod shell;
 
+pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
+pub use fetch::{FetchConfig, FetchTool};
 pub use filesystem::{FilesystemError, FilesystemTool};
 pub use plugin::{BuiltinToolsOptions, BuiltinToolsPlugin};
 pub use repo::{RepoError, RepoTool};
