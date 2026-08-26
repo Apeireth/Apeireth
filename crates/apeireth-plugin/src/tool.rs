@@ -3,6 +3,29 @@
 use apeireth_core::kernel::CapabilityId;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
+
+/// A capability-frozen effective invocation.
+///
+/// The runtime treats both fields as opaque. A tool that supplies this value
+/// owns the `payload` schema and must be able to execute it later via
+/// [`ToolCapability::invoke_frozen`]. The `display` field is the safe,
+/// human-facing representation shown in approval views; it must not expose
+/// secret values that are required only for execution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FrozenInvocation {
+    /// Versioned, tool-owned execution payload. The runtime never inspects it.
+    pub payload: serde_json::Value,
+    /// Redacted human-facing display payload. Approval views use this.
+    pub display: serde_json::Value,
+}
+
+impl FrozenInvocation {
+    /// Builds a frozen invocation from its execution and display payloads.
+    pub fn new(payload: serde_json::Value, display: serde_json::Value) -> Self {
+        Self { payload, display }
+    }
+}
 
 /// A capability a model can invoke by name.
 ///
@@ -31,7 +54,28 @@ pub trait ToolCapability: Send + Sync {
     fn declaration(&self) -> NormalizedTool;
 
     /// Execute one call and describe what happened.
+    ///
+    /// Simple tools implement this method and leave [`ToolCapability::invoke_frozen`]
+    /// at its default. The runtime uses this path for normal `Allow` dispatches.
     async fn invoke(&self, call: &ToolCall) -> ToolResult;
+
+    /// Execute a previously frozen effective invocation.
+    ///
+    /// When `frozen` is `None`, the original [`ToolCall`] was the complete
+    /// frozen operation and the default simply delegates to
+    /// [`ToolCapability::invoke`]. Tools that returned a
+    /// [`FrozenInvocation`] from [`ToolCapability::freeze_invocation`] must
+    /// override this method, deserialize their own `frozen.payload`, and build
+    /// the real execution from that payload alone — never from current ambient
+    /// configuration.
+    async fn invoke_frozen(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+    ) -> ToolResult {
+        let _ = frozen;
+        self.invoke(call).await
+    }
 
     /// Optional canonical frozen-invocation payload for approval binding.
     ///
@@ -42,10 +86,12 @@ pub trait ToolCapability: Send + Sync {
     /// environment — should override this method and return the exact effective
     /// invocation the human is approving.
     ///
-    /// Returning `None` means the original [`ToolCall`] is the complete frozen
-    /// operation.
-    fn freeze_invocation(&self, _call: &ToolCall) -> Option<serde_json::Value> {
-        None
+    /// Returning `Ok(None)` means the original [`ToolCall`] is the complete
+    /// frozen operation. Returning `Err(result)` means the operation cannot be
+    /// prepared for approval: the runtime must surface the tool failure and
+    /// must not create a pending approval for an invalid operation.
+    fn freeze_invocation(&self, _call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
+        Ok(None)
     }
 }
 

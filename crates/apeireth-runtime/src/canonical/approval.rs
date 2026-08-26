@@ -10,6 +10,7 @@
 //! orchestration root that acts on them.
 
 use apeireth_core::kernel::{ApprovalId, CapabilityId, RequestId, SessionId, Timestamp, TraceId};
+use apeireth_plugin::FrozenInvocation;
 use apeireth_protocol::canonical::ToolCall;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -39,14 +40,20 @@ impl ApprovalDecision {
 }
 
 /// The lifecycle of one pending approval.
+///
+/// `Pending -> Claimed -> Consumed` is the approval path. `Claimed` is not
+/// final: it means a human approved the operation and the runtime has durably
+/// claimed it, but the external effect may not have happened (or may have
+/// happened and the final `Consumed` save was interrupted).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ApprovalStatus {
     /// Waiting for a human decision.
     Pending,
     /// A human approved the operation and the runtime atomically claimed it.
-    /// No other resolver may execute the operation again.
-    Approved,
+    /// No other resolver may execute the operation again. Execution may or may
+    /// not have occurred; only `Consumed` records that the result was appended.
+    Claimed,
     /// A human rejected the operation. It will never execute.
     Rejected,
     /// The approval expired before a human resolved it. It will never execute.
@@ -54,11 +61,35 @@ pub enum ApprovalStatus {
     /// The approved operation was executed and its result was appended to the
     /// transcript.
     Consumed,
+    /// A resolver re-opened a `Claimed` approval whose result was never
+    /// recorded. The external effect is unknown and must not be retried
+    /// automatically.
+    Interrupted,
 }
 
 impl ApprovalStatus {
+    /// True while the approval is waiting for a human decision.
+    pub const fn is_pending(self) -> bool {
+        matches!(self, Self::Pending)
+    }
+
+    /// True once a human decision or an expiry transition has been reached.
+    /// This includes `Claimed`, whose external effect is not yet final.
+    pub const fn is_resolved(self) -> bool {
+        !self.is_pending()
+    }
+
+    /// True when this approval can no longer move to `Consumed`.
+    pub const fn is_final(self) -> bool {
+        matches!(
+            self,
+            Self::Rejected | Self::Expired | Self::Consumed | Self::Interrupted
+        )
+    }
+
+    /// Backwards-compatible alias for [`Self::is_final`].
     pub const fn is_terminal(self) -> bool {
-        !matches!(self, Self::Pending)
+        self.is_final()
     }
 }
 
@@ -129,8 +160,10 @@ pub struct PendingApproval {
     /// Capability-frozen effective invocation, when the capability supplied
     /// one. This binds derived security-relevant values (for example shell
     /// cwd, shell executable, timeout, and environment profile) beyond the raw
-    /// provider tool arguments.
-    pub effective_invocation: Option<serde_json::Value>,
+    /// provider tool arguments. This is the executable payload and may contain
+    /// environment values required to execute; it is never shown directly in
+    /// approval views.
+    pub effective_invocation: Option<FrozenInvocation>,
     /// Governance hook that produced `RequireApproval`.
     pub governance_hook: String,
     /// Governance reason that is shown to the human.
@@ -167,7 +200,9 @@ pub struct PendingApprovalView {
     pub capability_id: CapabilityId,
     pub tool_name: String,
     pub tool_call: ToolCall,
-    /// Capability-frozen effective invocation, when one was supplied.
+    /// Redacted, human-facing capability-frozen effective invocation, when one
+    /// was supplied. This is [`PendingApproval::effective_invocation`]'s
+    /// display payload, never the raw executable payload.
     pub effective_invocation: Option<serde_json::Value>,
     pub governance_hook: String,
     pub governance_reason: String,
@@ -187,7 +222,10 @@ impl From<&PendingApproval> for PendingApprovalView {
             capability_id: value.capability_id.clone(),
             tool_name: value.tool_name.clone(),
             tool_call: value.tool_call.clone(),
-            effective_invocation: value.effective_invocation.clone(),
+            effective_invocation: value
+                .effective_invocation
+                .as_ref()
+                .map(|frozen| frozen.display.clone()),
             governance_hook: value.governance_hook.clone(),
             governance_reason: value.governance_reason.clone(),
             created_at: value.created_at,
@@ -408,10 +446,22 @@ mod tests {
 
     #[test]
     fn approval_status_terminals_are_clear() {
+        assert!(ApprovalStatus::Pending.is_pending());
+        assert!(!ApprovalStatus::Pending.is_resolved());
+        assert!(!ApprovalStatus::Pending.is_final());
         assert!(!ApprovalStatus::Pending.is_terminal());
-        assert!(ApprovalStatus::Approved.is_terminal());
-        assert!(ApprovalStatus::Rejected.is_terminal());
-        assert!(ApprovalStatus::Expired.is_terminal());
-        assert!(ApprovalStatus::Consumed.is_terminal());
+
+        assert!(!ApprovalStatus::Claimed.is_pending());
+        assert!(ApprovalStatus::Claimed.is_resolved());
+        assert!(
+            !ApprovalStatus::Claimed.is_final(),
+            "Claimed is not final: it must still be able to move to Consumed"
+        );
+        assert!(!ApprovalStatus::Claimed.is_terminal());
+
+        assert!(ApprovalStatus::Rejected.is_final());
+        assert!(ApprovalStatus::Expired.is_final());
+        assert!(ApprovalStatus::Consumed.is_final());
+        assert!(ApprovalStatus::Interrupted.is_final());
     }
 }

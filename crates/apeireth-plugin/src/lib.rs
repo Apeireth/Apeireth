@@ -67,4 +67,4 @@ pub use manifest::PluginManifest;
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError};
 pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};
-pub use tool::ToolCapability;
+pub use tool::{FrozenInvocation, ToolCapability};

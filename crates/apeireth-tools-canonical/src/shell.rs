@@ -11,14 +11,14 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use apeireth_core::kernel::CapabilityId;
-use apeireth_plugin::ToolCapability;
+use apeireth_plugin::{FrozenInvocation, ToolCapability};
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolParameters, ToolResult};
 use async_trait::async_trait;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::process::{
-    EnvironmentSpec, IsolationCapability, IsolationRequirement, ProcessLimits, ProcessRequest,
-    ProcessResult,
+    current_platform_capabilities, EnforcementLevel, EnvironmentSpec, IsolationCapability,
+    IsolationRequirement, ProcessLimits, ProcessRequest, ProcessResult,
 };
 
 /// Configuration for the M2C-T Trusted Shell capability.
@@ -98,6 +98,27 @@ struct ShellParams {
     command: String,
     cwd: Option<String>,
     timeout_ms: Option<u64>,
+}
+
+const SHELL_FROZEN_VERSION: u32 = 1;
+
+/// The exact, versioned execution inputs frozen at approval time.
+///
+/// This is Shell's own payload schema. Runtime treats it as opaque
+/// `serde_json::Value`; Shell owns deserialization and must execute these
+/// fields — and only these fields — when resuming an approved operation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ShellFrozenInvocation {
+    version: u32,
+    shell_executable: String,
+    shell_args: Vec<String>,
+    cwd: String,
+    timeout_ms: u64,
+    max_stdout_bytes: usize,
+    max_stderr_bytes: usize,
+    /// Actual environment values. The approval view displays names only.
+    environment: Vec<(String, String)>,
+    isolation: IsolationRequirement,
 }
 
 /// The M2C-T Trusted Shell tool.
@@ -233,8 +254,8 @@ impl ShellTool {
         }
     }
 
-    fn minimal_environment() -> EnvironmentSpec {
-        let mut vars: Vec<(OsString, OsString)> = Vec::new();
+    fn minimal_environment_strings() -> Result<Vec<(String, String)>, String> {
+        let mut vars: Vec<(String, String)> = Vec::new();
 
         #[cfg(windows)]
         {
@@ -248,7 +269,10 @@ impl ShellTool {
                 "COMSPEC",
             ] {
                 if let Some(value) = std::env::var_os(key) {
-                    vars.push((OsString::from(key), value));
+                    let value = value
+                        .into_string()
+                        .map_err(|_| format!("environment variable {key} is not valid unicode"))?;
+                    vars.push((key.to_string(), value));
                 }
             }
         }
@@ -256,30 +280,18 @@ impl ShellTool {
         #[cfg(not(windows))]
         {
             vars.push((
-                OsString::from("PATH"),
-                OsString::from("/usr/local/bin:/usr/bin:/bin"),
+                "PATH".to_string(),
+                "/usr/local/bin:/usr/bin:/bin".to_string(),
             ));
-            vars.push((OsString::from("TMPDIR"), OsString::from("/tmp")));
-            vars.push((OsString::from("LANG"), OsString::from("C.UTF-8")));
+            vars.push(("TMPDIR".to_string(), "/tmp".to_string()));
+            vars.push(("LANG".to_string(), "C.UTF-8".to_string()));
         }
 
-        EnvironmentSpec::Explicit(vars)
+        Ok(vars)
     }
 
-    fn process_request(
-        &self,
-        cwd: PathBuf,
-        timeout_ms: u64,
-        script: &str,
-    ) -> Result<ProcessRequest, String> {
-        let limits = ProcessLimits {
-            max_runtime: Duration::from_millis(timeout_ms),
-            max_stdout_bytes: self.config.max_stdout_bytes,
-            max_stderr_bytes: self.config.max_stderr_bytes,
-            ..ProcessLimits::default()
-        };
-
-        let isolation = IsolationRequirement::new()
+    fn isolation_requirements() -> IsolationRequirement {
+        IsolationRequirement::new()
             .require(
                 IsolationCapability::StructuredSpawn,
                 crate::process::EnforcementLevel::Enforced,
@@ -311,33 +323,177 @@ impl ShellTool {
             .require(
                 IsolationCapability::FailClosedPreExecutionContainment,
                 crate::process::EnforcementLevel::Enforced,
-            );
-
-        Ok(ProcessRequest::new(self.selected_shell())
-            .with_args(self.shell_args(script))
-            .with_working_directory(cwd)
-            .with_environment(Self::minimal_environment())
-            .with_limits(limits)
-            .with_isolation(isolation))
+            )
     }
 
-    fn environment_var_names() -> Vec<&'static str> {
-        #[cfg(windows)]
-        {
-            vec![
-                "SystemRoot",
-                "WINDIR",
-                "TEMP",
-                "TMP",
-                "PATH",
-                "PATHEXT",
-                "COMSPEC",
-            ]
+    fn os_string(value: &str) -> OsString {
+        OsString::from(value)
+    }
+
+    /// Builds a [`ProcessRequest`] from frozen fields only.
+    ///
+    /// This deliberately does not call `resolve_cwd_for`, `selected_shell`,
+    /// `minimal_environment`, or `resolve_timeout_ms`. If a frozen value is
+    /// unusable, it returns a structured failure instead of substituting
+    /// current configuration.
+    fn process_request_from_frozen(
+        frozen: &ShellFrozenInvocation,
+    ) -> Result<ProcessRequest, String> {
+        if frozen.version != SHELL_FROZEN_VERSION {
+            return Err(format!(
+                "unsupported frozen shell invocation version {} (expected {})",
+                frozen.version, SHELL_FROZEN_VERSION
+            ));
         }
 
-        #[cfg(not(windows))]
-        {
-            vec!["PATH", "TMPDIR", "LANG"]
+        let limits = ProcessLimits {
+            max_runtime: Duration::from_millis(frozen.timeout_ms),
+            max_stdout_bytes: frozen.max_stdout_bytes,
+            max_stderr_bytes: frozen.max_stderr_bytes,
+            ..ProcessLimits::default()
+        };
+
+        let environment = EnvironmentSpec::Explicit(
+            frozen
+                .environment
+                .iter()
+                .map(|(key, value)| (Self::os_string(key), Self::os_string(value)))
+                .collect(),
+        );
+
+        Ok(
+            ProcessRequest::new(Self::os_string(&frozen.shell_executable))
+                .with_args(frozen.shell_args.iter().map(|arg| Self::os_string(arg)))
+                .with_working_directory(PathBuf::from(&frozen.cwd))
+                .with_environment(environment)
+                .with_limits(limits)
+                .with_isolation(frozen.isolation.clone()),
+        )
+    }
+
+    fn build_frozen(&self, call: &ToolCall) -> Result<ShellFrozenInvocation, ToolResult> {
+        let params: ShellParams = serde_json::from_value(call.arguments.clone()).map_err(|e| {
+            ToolResult::permanent_error(&call.id, format!("invalid shell parameters: {e}"))
+                .with_name("shell")
+        })?;
+
+        if params.command.trim().is_empty() {
+            return Err(
+                ToolResult::permanent_error(&call.id, "shell command must not be empty")
+                    .with_name("shell"),
+            );
+        }
+        if params.command.len() > self.config.max_script_bytes {
+            return Err(ToolResult::permanent_error(
+                &call.id,
+                format!(
+                    "shell command is {} bytes; the configured maximum is {} bytes",
+                    params.command.len(),
+                    self.config.max_script_bytes
+                ),
+            )
+            .with_name("shell"));
+        }
+
+        let cwd = self
+            .resolve_cwd_for(&params.cwd)
+            .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?;
+        let timeout_ms = self
+            .resolve_timeout_ms(params.timeout_ms)
+            .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?;
+
+        let shell_executable = self
+            .selected_shell()
+            .into_os_string()
+            .into_string()
+            .map_err(|_| {
+                ToolResult::permanent_error(
+                    &call.id,
+                    "selected shell executable is not valid unicode",
+                )
+                .with_name("shell")
+            })?;
+        let shell_args = self
+            .shell_args(&params.command)
+            .into_iter()
+            .map(|arg| {
+                arg.into_string().map_err(|_| {
+                    ToolResult::permanent_error(&call.id, "shell argument is not valid unicode")
+                        .with_name("shell")
+                })
+            })
+            .collect::<Result<Vec<String>, _>>()?;
+
+        let environment = Self::minimal_environment_strings()
+            .map_err(|e| ToolResult::permanent_error(&call.id, e).with_name("shell"))?;
+
+        Ok(ShellFrozenInvocation {
+            version: SHELL_FROZEN_VERSION,
+            shell_executable,
+            shell_args,
+            cwd: cwd.to_string_lossy().to_string(),
+            timeout_ms,
+            max_stdout_bytes: self.config.max_stdout_bytes,
+            max_stderr_bytes: self.config.max_stderr_bytes,
+            environment,
+            isolation: Self::isolation_requirements(),
+        })
+    }
+
+    fn display_invocation(frozen: &ShellFrozenInvocation) -> serde_json::Value {
+        let capabilities = current_platform_capabilities();
+        serde_json::json!({
+            "version": frozen.version,
+            "shell_executable": frozen.shell_executable,
+            "shell_args": frozen.shell_args,
+            "cwd": frozen.cwd,
+            "timeout_ms": frozen.timeout_ms,
+            "max_stdout_bytes": frozen.max_stdout_bytes,
+            "max_stderr_bytes": frozen.max_stderr_bytes,
+            "environment_mode": "explicit_minimal",
+            "environment_vars": frozen
+                .environment
+                .iter()
+                .map(|(key, _value)| key)
+                .collect::<Vec<_>>(),
+            "filesystem_isolation": format!("{:?}", capabilities.filesystem_isolation),
+            "network_isolation": format!("{:?}", capabilities.network_isolation),
+            "process_tree_containment": format!("{:?}", capabilities.process_tree_containment),
+        })
+    }
+
+    async fn execute_frozen(&self, call: &ToolCall, frozen: &ShellFrozenInvocation) -> ToolResult {
+        let request = match Self::process_request_from_frozen(frozen) {
+            Ok(request) => request,
+            Err(e) => {
+                return ToolResult::permanent_error(
+                    &call.id,
+                    format!("frozen shell invocation unavailable: {e}"),
+                )
+                .with_name("shell")
+            }
+        };
+
+        let result = tokio::task::spawn_blocking(move || {
+            crate::process::ProcessExecutor::new().execute(&request)
+        })
+        .await;
+
+        match result {
+            Ok(Ok(process_result)) => {
+                let value = Self::format_result(&process_result);
+                ToolResult::ok(&call.id, value).with_name("shell")
+            }
+            Ok(Err(process_error)) => ToolResult::permanent_error(
+                &call.id,
+                format!("shell process execution failed: {process_error}"),
+            )
+            .with_name("shell"),
+            Err(join_error) => ToolResult::retryable_error(
+                &call.id,
+                format!("shell execution task failed to join: {join_error}"),
+            )
+            .with_name("shell"),
         }
     }
 
@@ -368,116 +524,60 @@ impl ToolCapability for ShellTool {
             .with_parameters(Self::declaration_parameters())
     }
 
-    fn freeze_invocation(&self, call: &ToolCall) -> Option<serde_json::Value> {
-        let params: Result<ShellParams, _> = serde_json::from_value(call.arguments.clone());
-        let params = match params {
-            Ok(params) => params,
-            Err(e) => {
-                return Some(serde_json::json!({
-                    "normalization_error": format!("invalid shell parameters: {e}"),
-                }))
-            }
-        };
-
-        if params.command.trim().is_empty() {
-            return Some(serde_json::json!({
-                "normalization_error": "shell command must not be empty",
-            }));
-        }
-        if params.command.len() > self.config.max_script_bytes {
-            return Some(serde_json::json!({
-                "normalization_error": format!(
-                    "shell command is {} bytes; the configured maximum is {} bytes",
-                    params.command.len(),
-                    self.config.max_script_bytes
-                ),
-            }));
-        }
-
-        let cwd = match self.resolve_cwd_for(&params.cwd) {
-            Ok(cwd) => cwd.to_string_lossy().to_string(),
-            Err(e) => e,
-        };
-        let timeout_ms = match self.resolve_timeout_ms(params.timeout_ms) {
-            Ok(timeout_ms) => timeout_ms.to_string(),
-            Err(e) => e,
-        };
-        let capabilities = crate::process::current_platform_capabilities();
-
-        Some(serde_json::json!({
-            "shell_executable": self.selected_shell().to_string_lossy().to_string(),
-            "cwd": cwd,
-            "timeout_ms": timeout_ms,
-            "environment_mode": "explicit_minimal",
-            "environment_vars": Self::environment_var_names(),
-            "filesystem_isolation": format!("{:?}", capabilities.filesystem_isolation),
-            "network_isolation": format!("{:?}", capabilities.network_isolation),
-            "process_tree_containment": format!("{:?}", capabilities.process_tree_containment),
-        }))
+    fn freeze_invocation(&self, call: &ToolCall) -> Result<Option<FrozenInvocation>, ToolResult> {
+        let frozen = self.build_frozen(call)?;
+        let payload = serde_json::to_value(&frozen).map_err(|e| {
+            ToolResult::permanent_error(
+                &call.id,
+                format!("failed to serialize frozen shell invocation: {e}"),
+            )
+            .with_name("shell")
+        })?;
+        let display = Self::display_invocation(&frozen);
+        Ok(Some(FrozenInvocation::new(payload, display)))
     }
 
-    async fn invoke(&self, call: &ToolCall) -> ToolResult {
-        let params: ShellParams = match serde_json::from_value(call.arguments.clone()) {
-            Ok(params) => params,
-            Err(e) => {
-                return ToolResult::permanent_error(
-                    &call.id,
-                    format!("invalid shell parameters: {e}"),
-                )
-                .with_name("shell")
-            }
+    async fn invoke_frozen(
+        &self,
+        call: &ToolCall,
+        frozen: Option<&FrozenInvocation>,
+    ) -> ToolResult {
+        let Some(frozen) = frozen else {
+            return self.invoke(call).await;
         };
 
-        if params.command.trim().is_empty() {
-            return ToolResult::permanent_error(&call.id, "shell command must not be empty")
-                .with_name("shell");
-        }
-        if params.command.len() > self.config.max_script_bytes {
+        let shell_frozen: ShellFrozenInvocation =
+            match serde_json::from_value(frozen.payload.clone()) {
+                Ok(shell_frozen) => shell_frozen,
+                Err(e) => {
+                    return ToolResult::permanent_error(
+                        &call.id,
+                        format!("frozen shell invocation is invalid: {e}"),
+                    )
+                    .with_name("shell")
+                }
+            };
+
+        if shell_frozen.version != SHELL_FROZEN_VERSION {
             return ToolResult::permanent_error(
                 &call.id,
                 format!(
-                    "shell command is {} bytes; the configured maximum is {} bytes",
-                    params.command.len(),
-                    self.config.max_script_bytes
+                    "unsupported frozen shell invocation version {} (expected {})",
+                    shell_frozen.version, SHELL_FROZEN_VERSION
                 ),
             )
             .with_name("shell");
         }
 
-        let cwd = match self.resolve_cwd_for(&params.cwd) {
-            Ok(cwd) => cwd,
-            Err(e) => return ToolResult::permanent_error(&call.id, e).with_name("shell"),
-        };
-        let timeout_ms = match self.resolve_timeout_ms(params.timeout_ms) {
-            Ok(timeout_ms) => timeout_ms,
-            Err(e) => return ToolResult::permanent_error(&call.id, e).with_name("shell"),
-        };
-        let request = match self.process_request(cwd, timeout_ms, &params.command) {
-            Ok(request) => request,
-            Err(e) => return ToolResult::permanent_error(&call.id, e).with_name("shell"),
-        };
+        self.execute_frozen(call, &shell_frozen).await
+    }
 
-        let result = tokio::task::spawn_blocking(move || {
-            crate::process::ProcessExecutor::new().execute(&request)
-        })
-        .await;
-
-        match result {
-            Ok(Ok(process_result)) => {
-                let value = Self::format_result(&process_result);
-                ToolResult::ok(&call.id, value).with_name("shell")
-            }
-            Ok(Err(process_error)) => ToolResult::permanent_error(
-                &call.id,
-                format!("shell process execution failed: {process_error}"),
-            )
-            .with_name("shell"),
-            Err(join_error) => ToolResult::retryable_error(
-                &call.id,
-                format!("shell execution task failed to join: {join_error}"),
-            )
-            .with_name("shell"),
-        }
+    async fn invoke(&self, call: &ToolCall) -> ToolResult {
+        let frozen = match self.build_frozen(call) {
+            Ok(frozen) => frozen,
+            Err(result) => return result,
+        };
+        self.execute_frozen(call, &frozen).await
     }
 }
 
@@ -568,11 +668,115 @@ mod tests {
         assert!(result.render().contains("escapes"), "{}", result.render());
     }
 
+    #[test]
+    fn freeze_invocation_rejects_invalid_cwd_without_pending() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tool = ShellTool::new(TrustedShellConfig::new(tmp.path().to_path_buf()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi", "cwd": "missing_dir" }),
+        };
+
+        let frozen = tool.freeze_invocation(&call);
+        assert!(frozen.is_err(), "invalid cwd must fail closed");
+        assert!(
+            frozen.unwrap_err().render().contains("not accessible"),
+            "freeze error must explain why preparation failed"
+        );
+    }
+
+    #[test]
+    fn frozen_display_does_not_expose_environment_values() {
+        let tool = ShellTool::new(TrustedShellConfig::new("."));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": "echo hi" }),
+        };
+
+        let frozen = tool.freeze_invocation(&call).unwrap().unwrap();
+        let shell_frozen: ShellFrozenInvocation =
+            serde_json::from_value(frozen.payload).expect("payload deserializes");
+        let display_text = serde_json::to_string(&frozen.display).unwrap();
+
+        for (_key, value) in &shell_frozen.environment {
+            assert!(
+                !display_text.contains(value.as_str()),
+                "display payload must not expose environment value {value:?}"
+            );
+        }
+        assert!(
+            display_text.contains("environment_vars"),
+            "display payload should still show environment variable names"
+        );
+    }
+
+    #[test]
+    fn invoke_frozen_uses_frozen_cwd_not_new_config_workspace_root() {
+        use apeireth_protocol::canonical::ToolOutcome;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let dir_a = tmp.path().join("target_a");
+        let dir_b = tmp.path().join("target_b");
+        std::fs::create_dir_all(&dir_a).unwrap();
+        std::fs::create_dir_all(&dir_b).unwrap();
+
+        #[cfg(windows)]
+        let command = "cd";
+        #[cfg(not(windows))]
+        let command = "pwd";
+
+        let old_tool = ShellTool::new(TrustedShellConfig::new(dir_a.clone()));
+        let call = ToolCall {
+            id: "call_1".into(),
+            name: "shell".into(),
+            arguments: json!({ "command": command }),
+        };
+        let frozen = old_tool.freeze_invocation(&call).unwrap().unwrap();
+
+        // Simulate configuration drift after approval: a rebuilt shell tool
+        // would now use a different workspace root.
+        let new_tool = ShellTool::new(TrustedShellConfig::new(dir_b.clone()));
+        let result = tokio_test_invoke_frozen(&new_tool, call.clone(), Some(&frozen));
+
+        assert!(result.is_ok(), "{}", result.render());
+        let ToolOutcome::Ok { value } = result.outcome else {
+            panic!("expected ok outcome");
+        };
+        let stdout = value["stdout"].as_str().unwrap_or_default();
+        let stdout_canonical = PathBuf::from(stdout.trim())
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(stdout.trim()));
+        let expected = dir_a.canonicalize().unwrap();
+        let not_expected = dir_b.canonicalize().unwrap();
+        assert_eq!(
+            stdout_canonical, expected,
+            "approved execution must use frozen cwd {expected:?}; got {stdout:?}"
+        );
+        assert_ne!(
+            stdout_canonical, not_expected,
+            "approved execution must not re-resolve against new config {not_expected:?}; got {stdout:?}"
+        );
+    }
+
     fn tokio_test_invoke(tool: &ShellTool, call: ToolCall) -> ToolResult {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
             .unwrap();
         runtime.block_on(tool.invoke(&call))
+    }
+
+    fn tokio_test_invoke_frozen(
+        tool: &ShellTool,
+        call: ToolCall,
+        frozen: Option<&FrozenInvocation>,
+    ) -> ToolResult {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        runtime.block_on(ToolCapability::invoke_frozen(tool, &call, frozen))
     }
 }

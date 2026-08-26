@@ -21,11 +21,13 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 
+use apeireth_storage::{run_migrations, SqliteConnectionPool, StorageError};
+
 use super::approval::PendingApproval;
 use super::error::{RuntimeError, RuntimeResult};
 
 /// One conversation.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     /// Stable identity.
     pub id: SessionId,
@@ -146,6 +148,9 @@ pub enum SessionEventKind {
         round: u32,
     },
     /// Governance suspended an action for human approval.
+    ///
+    /// Only capability dispatch uses this variant. The `approval_id` always
+    /// corresponds to a real [`PendingApproval`] stored in the session.
     ApprovalRequired {
         /// Hook that decided.
         hook: String,
@@ -157,6 +162,19 @@ pub enum SessionEventKind {
         round: u32,
         /// The stable approval id that was minted for this pause.
         approval_id: ApprovalId,
+    },
+    /// Governance requires completion-level approval. This path is not
+    /// resumable in the current phase and intentionally does not mint a
+    /// stable approval id, because no pending approval entity exists.
+    CompletionApprovalRequired {
+        /// Hook that decided.
+        hook: String,
+        /// Stable action label.
+        action: String,
+        /// What needs approval.
+        reason: String,
+        /// Runtime round.
+        round: u32,
     },
     /// A pending approval reached a terminal decision.
     ApprovalResolved {
@@ -213,10 +231,8 @@ pub trait SessionStore: Send + Sync {
 
 /// A session store held in process memory.
 ///
-/// Real durability belongs to `apeireth-storage`, which is out of scope for this
-/// phase. This exists so the runtime can be composed and tested end to end
-/// without a database, and so that the seam a database will slot into is real
-/// rather than hypothetical.
+/// Process-local only. For process-restart durability, compose the runtime with
+/// [`SqliteSessionStore`] or another durable [`SessionStore`] implementation.
 #[derive(Debug, Default)]
 pub struct InMemorySessionStore {
     sessions: Mutex<BTreeMap<SessionId, Session>>,
@@ -250,6 +266,92 @@ impl SessionStore for InMemorySessionStore {
             .lock()
             .await
             .insert(session.id, session.clone());
+        Ok(())
+    }
+}
+
+/// A SQLite-backed [`SessionStore`].
+///
+/// This store serializes [`Session`] into the `sessions` table owned by the
+/// `apeireth-storage` schema. The runtime still owns the [`SessionStore`]
+/// trait and the [`Session`] type; `apeireth-storage` stays a low-level
+/// storage foundation and does not import runtime domain types.
+pub struct SqliteSessionStore {
+    pool: SqliteConnectionPool,
+}
+
+impl SqliteSessionStore {
+    /// Opens a file-backed SQLite store and applies storage migrations.
+    pub async fn open(path: impl AsRef<std::path::Path>) -> RuntimeResult<Self> {
+        let path = path.as_ref().to_path_buf();
+        let pool = SqliteConnectionPool::open(&path)
+            .await
+            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
+        pool.write(|conn| run_migrations(conn))
+            .await
+            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
+        Ok(Self { pool })
+    }
+
+    /// Opens a shared in-memory SQLite store and applies storage migrations.
+    pub async fn in_memory() -> RuntimeResult<Self> {
+        let pool = SqliteConnectionPool::in_memory()
+            .await
+            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
+        pool.write(|conn| run_migrations(conn))
+            .await
+            .map_err(|e| RuntimeError::session_store_open(e.to_string()))?;
+        Ok(Self { pool })
+    }
+
+    fn storage_err(session: SessionId, operation: &'static str, e: StorageError) -> RuntimeError {
+        match operation {
+            "loaded" => RuntimeError::session_load(session, e.to_string()),
+            _ => RuntimeError::session_save(session, e.to_string()),
+        }
+    }
+}
+
+#[async_trait]
+impl SessionStore for SqliteSessionStore {
+    async fn load(&self, id: &SessionId) -> RuntimeResult<Option<Session>> {
+        use rusqlite::OptionalExtension;
+
+        let id = *id;
+        let loaded = self
+            .pool
+            .read(move |conn| {
+                let data: Option<String> = conn
+                    .prepare("SELECT data FROM sessions WHERE id = ?1")?
+                    .query_row([id.to_string()], |row| row.get(0))
+                    .optional()?;
+                data.map(|data| {
+                    serde_json::from_str::<Session>(&data)
+                        .map_err(|e| StorageError::Serialization(e.to_string()))
+                })
+                .transpose()
+            })
+            .map_err(|e| Self::storage_err(id, "loaded", e))?;
+        Ok(loaded)
+    }
+
+    async fn save(&self, session: &Session) -> RuntimeResult<()> {
+        let id = session.id;
+        let data = serde_json::to_string(session)
+            .map_err(|e| StorageError::Serialization(e.to_string()))
+            .map_err(|e| Self::storage_err(id, "saved", e))?;
+
+        self.pool
+            .write(move |conn| {
+                conn.execute(
+                    "INSERT INTO sessions (id, data) VALUES (?1, ?2)
+                     ON CONFLICT(id) DO UPDATE SET data = excluded.data",
+                    rusqlite::params![id.to_string(), data],
+                )?;
+                Ok(())
+            })
+            .await
+            .map_err(|e| Self::storage_err(id, "saved", e))?;
         Ok(())
     }
 }
@@ -423,5 +525,37 @@ mod tests {
         assert_eq!(manager.load_or_create(a.id).await.unwrap().len(), 1);
         assert_eq!(manager.load_or_create(b.id).await.unwrap().len(), 0);
         assert_eq!(store.len().await, 2);
+    }
+
+    #[tokio::test]
+    async fn sqlite_store_round_trips_across_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.sqlite");
+
+        let manager = {
+            let store = Arc::new(SqliteSessionStore::open(&path).await.unwrap());
+            SessionManager::new(store, clock())
+        };
+
+        let id = SessionId::new();
+        let mut session = manager.load_or_create(id).await.unwrap();
+        session.append(NormalizedMessage::user("durable hello"), clock().as_ref());
+        manager.save(&session).await.unwrap();
+
+        // Reopen a fresh store over the same file. This is a real file-backed
+        // reopen, not a shared in-memory Arc.
+        let manager = {
+            let store = Arc::new(SqliteSessionStore::open(&path).await.unwrap());
+            SessionManager::new(store, clock())
+        };
+        let reloaded = manager.load_or_create(id).await.unwrap();
+        assert_eq!(reloaded.len(), 1);
+        assert!(
+            matches!(
+                &reloaded.messages[0].content[0],
+                apeireth_protocol::canonical::ContentPart::Text { text } if text == "durable hello"
+            ),
+            "the transcript must survive a file-backed reopen"
+        );
     }
 }

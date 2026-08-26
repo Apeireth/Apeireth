@@ -802,16 +802,22 @@ async fn an_approval_requirement_persists_the_attempt_and_pause() {
     assert_eq!(message_text(&session.messages[0]), "approval input");
     assert!(session.events.iter().any(|event| matches!(
         &event.event,
-        SessionEventKind::ApprovalRequired {
+        SessionEventKind::CompletionApprovalRequired {
             hook,
             action,
             reason,
             round: 1,
-            approval_id: _,
         } if hook == "governance.input.approval"
             && action == "completion"
             && reason.contains("human")
     )));
+    assert!(
+        session
+            .events
+            .iter()
+            .all(|event| !matches!(&event.event, SessionEventKind::ApprovalRequired { .. })),
+        "completion approval must not mint a ghost capability approval id"
+    );
 }
 
 #[tokio::test]
