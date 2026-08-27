@@ -5,7 +5,7 @@
 //! - 物理允许: UPDATE 允许 (用于追加 migration_history / 改变 carriers)
 //! - API 风格: `IdentityCardStore` trait + `SqliteMemoryStore` 默认实现
 //!
-//! 与 `apeireth_core::IdentityCard` 关系:
+//! 与 `apeireth_core::kernel::memory::IdentityCard` 关系:
 //! - `IdentityCardRecord` 是存储层结构 (含 subject_rev, created_at, tombstoned_at 等)
 //! - `IdentityCard` 是核心层公开类型 (continuity_id / birth_time / carriers / migration_history)
 //! - `from_core` / `into_core` 双向转换
@@ -14,7 +14,7 @@ use rusqlite::{params, ErrorCode, OptionalExtension};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use apeireth_core::{IdentityCard, Migration};
+use apeireth_core::{kernel::memory::IdentityCard, kernel::memory::Migration};
 
 use crate::append_only::now_unix;
 use crate::{MemoryError, MemoryResult};
@@ -32,7 +32,7 @@ pub enum IdentityConflict {
 
 /// IdentityCard 存储层记录 (含审计字段).
 ///
-/// ⚠️ 与 `apeireth_core::IdentityCard` 不是同一个类型:
+/// ⚠️ 与 `apeireth_core::kernel::memory::IdentityCard` 不是同一个类型:
 /// - core 类型 = 业务对象 (4 字段)
 /// - record 类型 = 存储结构 (8 字段, 含 subject_rev / 时间戳 / tombstone)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ pub struct IdentityCardRecord {
 }
 
 impl IdentityCardRecord {
-    /// 从 `apeireth_core::IdentityCard` 构造存储记录.
+    /// 从 `apeireth_core::kernel::memory::IdentityCard` 构造存储记录.
     pub fn from_core(card: &IdentityCard) -> Self {
         let now = now_unix();
         Self {
@@ -74,7 +74,7 @@ impl IdentityCardRecord {
         }
     }
 
-    /// 转回 `apeireth_core::IdentityCard` (丢弃审计字段).
+    /// 转回 `apeireth_core::kernel::memory::IdentityCard` (丢弃审计字段).
     pub fn into_core(&self) -> IdentityCard {
         IdentityCard {
             continuity_id: self.continuity_id.clone(),

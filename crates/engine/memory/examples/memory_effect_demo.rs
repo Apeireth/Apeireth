@@ -12,7 +12,7 @@
 //!
 //! **跑法**: cargo run -p apeireth-memory --example memory_effect_demo
 
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 use apeireth_memory::{EpisodeQuery, EpisodeStore, SqliteMemoryStore};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

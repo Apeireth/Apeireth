@@ -23,7 +23,9 @@ use serde::{Deserialize, Serialize};
 // `pub use memory::*` 等) 排 v2.1: 需 12 个 crate 改路径, 1:1
 // aliases 已经在 kernel 准备好, drain 切路径只是改 use 行.
 // 详细: docs/04-internal/v2-unabsorbed-features.md §P1 core drain.
-pub mod memory;
+// (2026-08-27 O-6 锚 #9 兑现 #11: legacy compat shim 删, 12 consumer 已迁
+// `apeireth_core::kernel::memory::*`, 真 drain 完成)
+// pub mod memory;
 // (legacy compat shim — see Refactor-5 in v2-arch-refactor-batch.md; 真实
 // 域类型定义在 crate::kernel::memory)
 // 可注入时钟 (SystemClock / VirtualClock): 时间敏感机制测试与模拟快进
@@ -44,7 +46,8 @@ mod organ_kani_proofs;
 // (kernel 路径 `apeireth_core::kernel::Episode` 给新代码用).
 // 旧代码 `use apeireth_core::Episode` 仍可用 (走 crate::memory 路径).
 // v2.0.0-rc 阶段: 12 consumer 批量 `use apeireth_core::kernel::Episode` + 删此 `pub use`.
-pub use memory::*;
+// (2026-08-27 O-6 锚 #9 兑现: 12 consumer 批量迁 kernel::memory, `pub use memory::*` 删, 真 drain 完成)
+pub use crate::kernel::memory::{Episode, IdentityCard, Migration, Note, Session};
 
 pub mod gate;
 pub mod lifecycle;
