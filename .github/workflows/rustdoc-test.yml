@@ -1,0 +1,52 @@
+name: cargo test --doc (stable)
+
+# P-arch (2026-08-27) O-6 锚 #9 兑现: 跑 `cargo test --workspace --doc --locked`
+# 验证所有 rustdoc 代码块编译并产生预期输出。
+# 0 装诚实守门 — doc test 防止文档撒谎 ("should compile and run, not just look pretty").
+# 与 rustdoc.yml (nightly -Dwarnings) 互补: 本 workflow 跑 stable + 实际执行 doc test,
+# rustdoc.yml 跑 nightly + 链接 lint 检查.
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: ['**']
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-test-doc:
+    name: cargo test --doc --workspace --locked
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      # keyring → dbus-secret-service → libdbus-sys 需要系统库
+      - name: "Install system deps (Linux: libdbus)"
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
+
+      - uses: Swatinem/rust-cache@v2
+
+      # 0 装 PASS: doc test 必须真实执行 (不只检查链接)
+      # 任何 doc 代码块失败 = 文档撒谎 → 阻断 merge
+      - name: cargo test --doc --workspace --locked
+        run: cargo test --workspace --doc --locked
+
+      - name: "Upload doc test artifacts (Linux only)"
+        if: matrix.os == 'ubuntu-latest' && failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-test-${{ github.sha }}-${{ matrix.os }}
+          path: target/doc-test-output
+          retention-days: 7
