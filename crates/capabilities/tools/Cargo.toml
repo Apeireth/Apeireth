@@ -6,7 +6,7 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
-description = "Canonical builtin tool capabilities: read-only filesystem, local search, and read-only repository inspection."
+description = "Canonical builtin tool capabilities: filesystem / search / repo (默认启用); shell / fetch (opt-in, 默认关); egress 策略 + 唯一 ProcessExecutor 边界（Windows Job Object + CREATE_SUSPENDED 三 OS 隔离）"
 
 [dependencies]
 # Permitted direction: builtin tools are plugin capabilities. They depend on the
