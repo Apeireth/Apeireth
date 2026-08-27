@@ -29,7 +29,7 @@
 ## 她是什么 —— 三面一体 (2026-08-19 post-1.0.0)
 
 1. **基地**：LLM 的操作系统——器官/工具/记忆/安全/协议。LLM 是租客，不是建筑。
-2. **Agent 平台**：85 + 1 desktop crates 三层生态——模块/套件/插件 + Svelte 5/Tauri 2 桌面伙伴 (post-1.0.0 PR #1)，工具管线每一步可校验可审计。
+2. **Agent 平台**（v1 era, 86-crate 描述）：85 + 1 desktop crates 三层生态——模块/套件/插件 + Svelte 5/Tauri 2 桌面伙伴 (post-1.0.0 PR #1)，工具管线每一步可校验可审计。**v2 工程重构后 = 15-crate single-workspace (foundation/engine/capabilities/adapters) + legacy/ 完整 v1 归档, 三层模型弃用, 单 plugin 层 trait-based.**
 3. **她**：记得你的存在——世界模型推演你的人生轨迹、好奇心因你成形、假设检验更新对你的理解、情感记忆记录你的情绪时间线。
 
 ## 五原型（ASI 北极星的工程骨架）
