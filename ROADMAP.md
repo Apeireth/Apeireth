@@ -28,8 +28,8 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
   - CI 全绿：cargo-nextest 1338、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
-- **已知缺口（诚实）**：13 键 verdict cache 只在 core 内测试、未接执行路径（governance hook 装配已就绪：`PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`，upstream `873d2857`）；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
-- **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），剩余 13 键 verdict cache 拍板仍是 P0，见 §4。
+- **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
+- **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
 
 ---
 
@@ -71,7 +71,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 测试 | 1338 passed / 0 failed（cargo-nextest，3 OS） |
 | CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
-| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 仍待接线** |
+| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4）|
 
 ---
 

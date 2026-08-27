@@ -1,5 +1,14 @@
 # Changelog — Apeireth
 
+## [Unreleased] — v2.0.0-alpha.1 增量
+
+- **✅ 13 键 verdict cache 降级决策 (P0 拍板完成, 2026-08-27)**:
+  - 5 维分析: 安全性 (0 模型污染路径) / 延迟 (6 数量级差, hook 是 O(μs) 而 self-introspection 是 O(seconds)) / 正确性覆盖 (与 hook 少量互补) / 审计 (两者相当) / 场景 D 互补 (已被 SelfAssessmentCache + 多 agent 互审覆盖) → 加权 0.28/5
+  - **降级**: 保持 L2 哲学标准 (`philosophy.rs::RUNTIME_ENFORCED = false`), 不接 runtime 强制机制
+  - 13 键仍用于: (a) hook deny reason 引用, (b) CapabilityDescriptor risk 分级, (c) 哲学语义定义
+  - 详见 `ROADMAP.md` §5 / `docs/04-internal/v2-unabsorbed-features.md` §A4 / `docs/04-internal/scene-d-v2-plan.md` §3.4
+- **✅ 全工作区 clippy 0 警告 (2026-08-27)**: `cargo clippy --workspace --all-targets --locked -- -D warnings` 通过, 修了 8 处 `clone_on_copy` + `cast_lossless` (全在 `apeireth-perception` 新 crate)
+
 ## [2026-08-27] v2.0.0-alpha.1 — reconstruct_v2 工程重构（主线晋升 main）
 
 > 重构版是 1.0 的工程进步：内核、设计、哲学、愿景 0 变化；变的是工程形态。

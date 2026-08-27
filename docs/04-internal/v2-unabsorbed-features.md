@@ -336,7 +336,16 @@ Status:          🟢 活跃 (v1→v2 未吸收功能盘查)
 |---|---|---|---|
 | **P0 ✅ 已完成** | upstream `873d2857` governance 接线 | — | — |
 | **P1** | A4 MemoryBackend trait (File impl + SQLite 增强) + B4 sovereignty 多签扩展 + core drain + credentials 接线 | 2-3 周 | 进 `crates/engine/storage` + `crates/foundation/governance` |
-| **P2** | 13 键降级为哲学标准（已完成）+ scene-d 设计 + ROADMAP 同步 | 0（完成） | — |
+| **P2** | 13 键降级为哲学标准（已完成，2026-08-27 5 维分析拍板）+ scene-d 设计 + ROADMAP 同步 | 0（完成） | — |
+
+**13 键降级拍板记录 (2026-08-27)**：5 维评分（1=强烈支持降级, 5=强烈支持接线）
+- 安全性 **1** — self-introspection 是"AI 评 AI"路径, 被 prompt injection 影响后 verdict cache 同样被污染; external hook 0 模型参与, 0 污染路径
+- 延迟 **1** — verdict cache lookup O(1) 命中, 但 cache miss 调 LLM O(seconds); hook 字符串匹配 O(μs); 6 数量级差
+- 正确性覆盖 **2** — 13 键哲学层 vs hook 输入侧有少量互补, 但 v2 治理"走外部不靠 AI"已划走边界
+- 审计/可观测 **2** — verdict cache append-only 可重放, hook decision 有 reason 字符串, 两者相当
+- 场景 D 互补 **1** — 例 1 主人偏好 + 例 2 SelfAssessmentCache + 例 3 多 agent 互审已覆盖 self-introspection 所有应用场景; 13 键接进是边际冗余
+- 加权 0.28/5 → **降级** (保持 L2 哲学标准, RUNTIME_ENFORCED=false 永久)
+- 13 键仍用于: hook deny reason 引用 + CapabilityDescriptor risk 分级 + 哲学语义定义
 | **P3** | A6 tool-approval frequency/blacklist + B1 experience + B2 state machine + C 类 memory 周边 | 3-4 周 | 进 `crates/engine/memory` |
 | **P4** | A3 perception trait + Text impl（5 modality 的 forward-declared）| 1 周 | 进 `crates/engine/perception`（新 crate）|
 | **P5** | A5 tool-runtime ParsedToolCall + B5 process supervisor + scene-d 例 2 (SelfAssessmentCache multi-instance) | 3-4 周 | 进 `crates/foundation/protocol` + `crates/capabilities/tools` + `crates/foundation/orchestration` |
