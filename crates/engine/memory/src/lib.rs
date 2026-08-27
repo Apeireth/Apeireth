@@ -439,3 +439,4 @@ pub mod backend;
 /// v2.0 alpha 是 0 装 (trait 边界, 无 impl); v2.1 接 SQLite + gen_cache
 /// 完整 pipeline. 详见 `v2-unabsorbed-features.md` §B1.
 pub mod experience;
+pub mod preference_store;
