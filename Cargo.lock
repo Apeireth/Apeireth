@@ -205,6 +205,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "apeireth-orchestration"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "async-trait",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "apeireth-perception"
+version = "1.2.0"
+dependencies = [
+ "apeireth-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "apeireth-plugin"
 version = "1.2.0"
 dependencies = [
