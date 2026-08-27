@@ -126,7 +126,10 @@ pub struct TurnResponse {
     pub served_by: CapabilityId,
     /// Token accounting for the final response.
     pub usage: NormalizedUsage,
-    /// How many provider round-trips the turn took.
+    /// How many logical execution rounds the turn took.
+    ///
+    /// A module retry consumes one round-budget slot even when it prevents a
+    /// provider request from being sent in that slot.
     pub rounds: u32,
     /// Everything the runtime did, in order.
     pub trace: ExecutionTrace,
@@ -181,6 +184,13 @@ enum ToolDispatch {
     },
 }
 
+/// Deterministic aggregate of one hook's module outcomes.
+///
+/// Modules run in registration order, overlays are concatenated in that order,
+/// and the strongest directive wins (`Stop` > `Retry` > `Continue`). Ties keep
+/// the first module's directive and module id. Every module is still invoked for
+/// the hook; a directive only controls the canonical loop after the hook batch
+/// has completed.
 struct HookEffects {
     prompt_overlays: Vec<PromptOverlay>,
     directive: ModuleDirective,
@@ -387,7 +397,7 @@ impl Runtime {
         let state = Arc::new(ModuleTurnState::new(self.config.max_module_invocations));
         let request = TurnRequest::new(session_id, "");
         let result = self
-            .resolve_approval_locked(session_id, approval_id, decision)
+            .resolve_approval_locked(session_id, approval_id, decision, Arc::clone(&state))
             .await;
         if let Err(error) = &result {
             self.observe_error(&request, state, error).await;
@@ -400,6 +410,7 @@ impl Runtime {
         session_id: SessionId,
         approval_id: ApprovalId,
         decision: ApprovalDecision,
+        module_state: Arc<ModuleTurnState>,
     ) -> RuntimeResult<ApprovalResolution> {
         let Some(mut session) = self.sessions.load(&session_id).await? else {
             return Ok(ApprovalResolution::NotFound);
@@ -408,6 +419,8 @@ impl Runtime {
         let Some(approval) = session.approvals.get(&approval_id).cloned() else {
             return Ok(ApprovalResolution::NotFound);
         };
+
+        module_state.set_used(approval.continuation.module_invocations);
 
         if approval.status == ApprovalStatus::Claimed {
             return Ok(ApprovalResolution::ExecutionInterrupted { approval_id });
@@ -472,12 +485,74 @@ impl Runtime {
                     "operation rejected by user",
                 )
                 .with_name(&approval.tool_call.name);
-                session.append(rejection.into_message(), self.clock.as_ref());
+                session.append(rejection.clone().into_message(), self.clock.as_ref());
 
                 let mut continuation = approval.continuation.clone();
                 continuation.next_tool_index = continuation.next_tool_index.saturating_add(1);
                 continuation.approved_tool_index = None;
                 continuation.approved_approval_id = None;
+
+                let after_tool_messages = session.messages.clone();
+                let after_tool = self
+                    .run_hook_checked(
+                        HookPoint::AfterToolResult,
+                        &mut session,
+                        &session_id,
+                        &InvocationContext::user_turn(),
+                        &continuation.model,
+                        &after_tool_messages,
+                        None,
+                        Some(&approval.tool_call),
+                        Some(&rejection),
+                        None,
+                        approval.request_id,
+                        approval.trace_id,
+                        &module_state,
+                    )
+                    .await?;
+                let mut retry_scaffolding = Vec::new();
+                let pending_overlays = after_tool.prompt_overlays;
+                match after_tool.directive {
+                    ModuleDirective::Continue => {}
+                    ModuleDirective::Retry { feedback } => {
+                        Self::append_skipped_tool_results(
+                            &mut session,
+                            &continuation.tool_calls,
+                            continuation.next_tool_index,
+                            "remaining tool calls skipped by module after rejected result",
+                            self.clock.as_ref(),
+                        );
+                        retry_scaffolding = vec![NormalizedMessage::user(feedback)];
+                        continuation.tool_calls.clear();
+                        continuation.next_tool_index = 0;
+                        continuation.round += 1;
+                    }
+                    ModuleDirective::Stop { reason } => {
+                        Self::append_skipped_tool_results(
+                            &mut session,
+                            &continuation.tool_calls,
+                            continuation.next_tool_index,
+                            "remaining tool calls stopped by module after rejected result",
+                            self.clock.as_ref(),
+                        );
+                        return match self
+                            .fail_module_stop(
+                                &mut session,
+                                approval.request_id,
+                                approval.trace_id,
+                                after_tool
+                                    .directive_module_id
+                                    .as_deref()
+                                    .unwrap_or("unknown"),
+                                reason,
+                            )
+                            .await
+                        {
+                            Err(error) => Err(error),
+                            Ok(_) => unreachable!("module stop cannot complete a turn"),
+                        };
+                    }
+                }
 
                 let tools = self.plugins.tool_declarations();
                 let mut trace =
@@ -500,13 +575,10 @@ impl Runtime {
                         approval.trace_id,
                         tools,
                         continuation,
-                        Vec::new(),
-                        Vec::new(),
+                        retry_scaffolding,
+                        pending_overlays,
                         InvocationContext::user_turn(),
-                        Arc::new(ModuleTurnState::with_used(
-                            self.config.max_module_invocations,
-                            approval.continuation.module_invocations,
-                        )),
+                        Arc::clone(&module_state),
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -568,10 +640,7 @@ impl Runtime {
                         Vec::new(),
                         Vec::new(),
                         InvocationContext::user_turn(),
-                        Arc::new(ModuleTurnState::with_used(
-                            self.config.max_module_invocations,
-                            approval.continuation.module_invocations,
-                        )),
+                        Arc::clone(&module_state),
                     )
                     .await?;
                 Ok(ApprovalResolution::Resumed(outcome))
@@ -601,7 +670,12 @@ impl Runtime {
         let clock = self.clock.as_ref();
 
         loop {
-            let mut next_overlays = std::mem::take(&mut pending_overlays);
+            let request_overlays = std::mem::take(&mut pending_overlays);
+            let mut next_overlays = if continuation.tool_calls.is_empty() {
+                Vec::new()
+            } else {
+                request_overlays.clone()
+            };
             let mut current_candidate: Option<NormalizedResponse> = None;
 
             if continuation.tool_calls.is_empty() {
@@ -641,13 +715,17 @@ impl Runtime {
                         &module_state,
                     )
                     .await?;
-                next_overlays.extend(before_model.prompt_overlays);
+                let before_model_overlays = before_model.prompt_overlays;
 
                 match before_model.directive {
                     ModuleDirective::Continue => {}
                     ModuleDirective::Retry { feedback } => {
                         retry_scaffolding = vec![NormalizedMessage::user(feedback)];
-                        pending_overlays = next_overlays;
+                        // Nothing was sent to a provider in this attempt. Any
+                        // overlay staged for that attempt is therefore spent;
+                        // the next BeforeModelCall hook recomputes its own
+                        // transient request overlay.
+                        pending_overlays = Vec::new();
                         continuation.round += 1;
                         continue;
                     }
@@ -683,12 +761,14 @@ impl Runtime {
                     return Err(error);
                 }
 
+                let mut provider_overlays = request_overlays;
+                provider_overlays.extend(before_model_overlays);
                 let provider_request = NormalizedRequest::new(
                     continuation.model.clone(),
                     compose_provider_messages(
                         &session.messages,
                         &retry_scaffolding,
-                        &next_overlays,
+                        &provider_overlays,
                     ),
                 );
                 retry_scaffolding.clear();
@@ -945,16 +1025,68 @@ impl Runtime {
                         trace_id,
                         &module_state,
                     )
-                    .await?;
+                    .await;
+                let before_tool = match before_tool {
+                    Ok(effects) => effects,
+                    Err(error) => {
+                        Self::append_skipped_tool_results(
+                            &mut session,
+                            &continuation.tool_calls,
+                            index,
+                            "module hook failed before tool dispatch",
+                            clock,
+                        );
+                        self.sessions.save(&session).await?;
+                        return Err(error);
+                    }
+                };
                 next_overlays.extend(before_tool.prompt_overlays);
 
                 match before_tool.directive {
                     ModuleDirective::Continue => {}
                     ModuleDirective::Retry { feedback } => {
+                        if is_preapproved {
+                            if let Some(approval_id) = continuation.approved_approval_id {
+                                self.interrupt_claimed_approval(
+                                    &mut session,
+                                    approval_id,
+                                    request_id,
+                                    trace_id,
+                                    continuation.round,
+                                    clock,
+                                );
+                            }
+                        }
+                        Self::append_skipped_tool_results(
+                            &mut session,
+                            &continuation.tool_calls,
+                            index,
+                            "tool call skipped by module before dispatch",
+                            clock,
+                        );
                         retry_requested = Some(feedback);
                         break;
                     }
                     ModuleDirective::Stop { reason } => {
+                        if is_preapproved {
+                            if let Some(approval_id) = continuation.approved_approval_id {
+                                self.interrupt_claimed_approval(
+                                    &mut session,
+                                    approval_id,
+                                    request_id,
+                                    trace_id,
+                                    continuation.round,
+                                    clock,
+                                );
+                            }
+                        }
+                        Self::append_skipped_tool_results(
+                            &mut session,
+                            &continuation.tool_calls,
+                            index,
+                            "tool call stopped by module before dispatch",
+                            clock,
+                        );
                         return self
                             .fail_module_stop(
                                 &mut session,
@@ -1013,16 +1145,44 @@ impl Runtime {
                                 trace_id,
                                 &module_state,
                             )
-                            .await?;
+                            .await;
+                        let after_tool = match after_tool {
+                            Ok(effects) => effects,
+                            Err(error) => {
+                                Self::append_skipped_tool_results(
+                                    &mut session,
+                                    &continuation.tool_calls,
+                                    index.saturating_add(1),
+                                    "module hook failed after tool result",
+                                    clock,
+                                );
+                                self.sessions.save(&session).await?;
+                                return Err(error);
+                            }
+                        };
                         next_overlays.extend(after_tool.prompt_overlays);
 
                         match after_tool.directive {
                             ModuleDirective::Continue => {}
                             ModuleDirective::Retry { feedback } => {
+                                Self::append_skipped_tool_results(
+                                    &mut session,
+                                    &continuation.tool_calls,
+                                    index.saturating_add(1),
+                                    "remaining tool calls skipped by module after result",
+                                    clock,
+                                );
                                 retry_requested = Some(feedback);
                                 break;
                             }
                             ModuleDirective::Stop { reason } => {
+                                Self::append_skipped_tool_results(
+                                    &mut session,
+                                    &continuation.tool_calls,
+                                    index.saturating_add(1),
+                                    "remaining tool calls stopped by module after result",
+                                    clock,
+                                );
                                 return self
                                     .fail_module_stop(
                                         &mut session,
@@ -1136,6 +1296,7 @@ impl Runtime {
             if let Some(feedback) = retry_requested {
                 retry_scaffolding = vec![NormalizedMessage::user(feedback)];
                 pending_overlays = next_overlays;
+                self.sessions.save(&session).await?;
                 continuation.round += 1;
                 continuation.tool_calls.clear();
                 continuation.next_tool_index = 0;
@@ -1250,6 +1411,67 @@ impl Runtime {
             effects.push(&manifest.id, outcome);
         }
         Ok(effects)
+    }
+
+    /// Close the current assistant tool-call batch when a module prevents the
+    /// remaining calls from being dispatched. A tool result is required for
+    /// every call in the assistant message before that transcript can be sent
+    /// to another provider. The module's retry feedback remains a separate
+    /// transient user scaffold; it is never encoded as a tool result.
+    fn append_skipped_tool_results(
+        session: &mut Session,
+        tool_calls: &[ToolCall],
+        first_skipped: usize,
+        reason: &str,
+        clock: &dyn apeireth_core::kernel::Clock,
+    ) {
+        for call in tool_calls.iter().skip(first_skipped) {
+            session.append(
+                ToolResult::permanent_error(&call.id, reason)
+                    .with_name(&call.name)
+                    .into_message(),
+                clock,
+            );
+        }
+    }
+
+    /// A claimed approval whose dispatch is vetoed by a module cannot remain
+    /// active: the turn will continue with synthetic tool errors (Retry) or
+    /// terminate (Stop), so there is no longer an executable approval to resume.
+    /// `Interrupted` is the existing fail-closed terminal state for that case.
+    fn interrupt_claimed_approval(
+        &self,
+        session: &mut Session,
+        approval_id: ApprovalId,
+        request_id: RequestId,
+        trace_id: TraceId,
+        round: u32,
+        clock: &dyn apeireth_core::kernel::Clock,
+    ) {
+        let interrupted = match session.approvals.get_mut(&approval_id) {
+            Some(approval) if approval.status == ApprovalStatus::Claimed => {
+                approval.status = ApprovalStatus::Interrupted;
+                true
+            }
+            _ => false,
+        };
+        if !interrupted {
+            return;
+        }
+        if session.active_approval_id == Some(approval_id) {
+            session.active_approval_id = None;
+        }
+        session.record(
+            request_id,
+            trace_id,
+            SessionEventKind::ApprovalResolved {
+                approval_id,
+                decision: "interrupted".into(),
+                round,
+                human_reason: None,
+            },
+            clock,
+        );
     }
 
     async fn observe_error(
