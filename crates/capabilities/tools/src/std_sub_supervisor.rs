@@ -43,7 +43,7 @@ use crate::supervisor::{
 /// - 真 `Child` handle 持有 (可 `kill()`, 可 `try_wait()`)
 /// - 真 `ExitReason` 解析 (ExitCode → Normal/Abnormal, signal → Signaled on Unix)
 /// - 真 `RestartDecision` per `RestartStrategy`
-pub struct TokioSubSupervisor {
+pub struct StdSubSupervisor {
     kind: SubSupervisorKind,
     /// 声明式 child 规格 (user 给的)
     children: Vec<ChildSpec>,
@@ -56,7 +56,7 @@ pub struct TokioSubSupervisor {
     restart_window: Duration,
 }
 
-impl TokioSubSupervisor {
+impl StdSubSupervisor {
     pub fn new(kind: SubSupervisorKind, children: Vec<ChildSpec>) -> Self {
         Self {
             kind,
@@ -125,7 +125,7 @@ impl TokioSubSupervisor {
     }
 }
 
-impl SubSupervisor for TokioSubSupervisor {
+impl SubSupervisor for StdSubSupervisor {
     fn start(&mut self) -> Result<(), SupervisorError> {
         // 启动所有声明的 children (per v1 process:start)
         // 0 装 PASS: 真启进程, 不假装
@@ -247,11 +247,11 @@ impl SubSupervisor for TokioSubSupervisor {
 mod tests {
     use super::*;
 
-    /// RC-8 验收: TokioSubSupervisor 可构造 (Send + Sync)
+    /// RC-8 验收: StdSubSupervisor 可构造 (Send + Sync)
     #[test]
     fn tokio_sub_supervisor_is_send_sync() {
         fn _assert_send_sync<T: Send + Sync>() {}
-        _assert_send_sync::<TokioSubSupervisor>();
+        _assert_send_sync::<StdSubSupervisor>();
     }
 
     /// RC-8 验收: 5 个 kind 各自返正确 name
@@ -264,7 +264,7 @@ mod tests {
             SubSupervisorKind::Upgrade,
             SubSupervisorKind::Plugin,
         ] {
-            let s = TokioSubSupervisor::new(kind, vec![]);
+            let s = StdSubSupervisor::new(kind, vec![]);
             let name = s.name();
             assert!(name.starts_with("tokio_"));
         }
@@ -274,7 +274,7 @@ mod tests {
     #[test]
     fn children_returns_cloned_specs() {
         let specs = vec![ChildSpec::new("worker-1", "/bin/true")];
-        let s = TokioSubSupervisor::new(SubSupervisorKind::Core, specs.clone());
+        let s = StdSubSupervisor::new(SubSupervisorKind::Core, specs.clone());
         let returned = s.children();
         assert_eq!(returned.len(), 1);
         assert_eq!(returned[0].id, "worker-1");
@@ -284,7 +284,7 @@ mod tests {
     #[test]
     fn one_for_one_restarts_on_any_exit() {
         let spec = ChildSpec::new("c-1", "/bin/true");
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         for reason in [
             ExitReason::Normal { code: 0 },
             ExitReason::Abnormal { code: 1 },
@@ -300,7 +300,7 @@ mod tests {
     fn transient_only_restarts_on_abnormal() {
         let mut spec = ChildSpec::new("c-1", "/bin/true");
         spec.restart = RestartStrategy::Transient;
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // Normal 不重启
         let d = s.on_child_exit("c-1", ExitReason::Normal { code: 0 }).unwrap();
         assert_eq!(d, RestartDecision::DoNotRestart);
@@ -314,7 +314,7 @@ mod tests {
     fn restart_limit_exceeded_triggers_error() {
         let mut spec = ChildSpec::new("c-1", "/bin/true");
         spec.restart = RestartStrategy::OneForOne;
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // 默认 5 次
         for _ in 0..5 {
             let _ = s.on_child_exit("c-1", ExitReason::Abnormal { code: 1 }).unwrap();
@@ -327,7 +327,7 @@ mod tests {
     /// RC-8 验收: unknown child → UnknownChild error
     #[test]
     fn unknown_child_returns_error() {
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![]);
         let r = s.on_child_exit("nonexistent", ExitReason::Normal { code: 0 });
         assert!(matches!(r, Err(SupervisorError::UnknownChild(_))));
     }
@@ -338,7 +338,7 @@ mod tests {
     fn real_spawn_works() {
         // /bin/true 是 Unix 上总是 exit 0 的 cmd, 跨平台
         let spec = ChildSpec::new("true-1", "/bin/true");
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         // start 真启进程
         s.start().expect("start");
         // 进程应立刻 exit 0
@@ -359,7 +359,7 @@ mod tests {
         // /bin/sleep 60 持久进程, 立即 stop 应 kill 它
         let mut spec = ChildSpec::new("sleep-1", "/bin/sleep");
         spec.args = vec!["60".into()];
-        let mut s = TokioSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
+        let mut s = StdSubSupervisor::new(SubSupervisorKind::Core, vec![spec]);
         s.start().expect("start");
         s.stop().expect("stop");
         // 进程被 kill, handles 清空
@@ -372,7 +372,7 @@ mod tests {
     fn duplicate_child_id_returns_error() {
         let spec1 = ChildSpec::new("dup", "/bin/true");
         let spec2 = ChildSpec::new("dup", "/bin/false");
-        let mut s = TokioSubSupervisor::new(
+        let mut s = StdSubSupervisor::new(
             SubSupervisorKind::Core,
             vec![spec1, spec2],
         );
