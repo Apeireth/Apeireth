@@ -142,13 +142,13 @@ unsafe fn set_rlimits(limits: &ProcessLimits) -> io::Result<()> {
     if let Some(active) = limits.max_active_processes {
         // RLIMIT_NPROC is UID-scoped, not tree-scoped. It is advertised as
         // PARTIAL only and tests must avoid depending on global UID state.
-        set_rlimit(libc::RLIMIT_NPROC, active as libc::rlim_t)?;
+        set_rlimit(libc::RLIMIT_NPROC, libc::rlim_t::from(active))?;
     }
     if let Some(seconds) = limits.max_cpu_seconds {
-        set_rlimit(libc::RLIMIT_CPU, seconds as libc::rlim_t)?;
+        set_rlimit(libc::RLIMIT_CPU, seconds)?;
     }
     if let Some(bytes) = limits.max_file_size_bytes {
-        set_rlimit(libc::RLIMIT_FSIZE, bytes as libc::rlim_t)?;
+        set_rlimit(libc::RLIMIT_FSIZE, bytes)?;
     }
     Ok(())
 }
