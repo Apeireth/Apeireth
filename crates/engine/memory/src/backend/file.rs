@@ -36,6 +36,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use apeireth_core::kernel::memory::Episode;
+use apeireth_core::kernel::StreamKind;
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;
@@ -76,6 +77,7 @@ impl FileBackend {
     }
 
     fn stream_path(&self, kind: StreamKind) -> PathBuf {
+        let stream_name = kind.as_str();
         self.root.join("streams").join(format!("{stream_name}.jsonl"))
     }
 }
@@ -89,38 +91,37 @@ impl MemoryBackend for FileBackend {
         BackendKind::File
     }
 
-    fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
+    fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // append-only：先扫文件确认 id 不重复
-        if self.episode_exists(&ep.id)? {
-            return Err(crate::MemoryError::Invalid(format!(
+        if self.episode_exists(&ep.id).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })? {
+            return Err(Box::new(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
                 ep.id
-            )));
+            ))));
         }
         let _guard = self.episode_write_lock.lock().expect("FileBackend poisoned");
-        let line = serde_json::to_string(ep)?;
+        let line = serde_json::to_string(ep).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let path = self.episodes_path();
-        let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
-        writeln!(f, "{line}")?;
-        f.sync_all()?;
-        // id 索引（占位 file，未来可加更多索引）
+        let mut f = OpenOptions::new().create(true).append(true).open(&path).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        writeln!(f, "{line}").map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        f.sync_all().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let idx_path = self.root.join("index").join("episodes").join(format!("{}.id", ep.id));
-        std::fs::write(idx_path, b"")?;
+        std::fs::write(idx_path, b"").map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         Ok(())
     }
 
-    fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {
+    fn get_episode(&self, id: &str) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let path = self.episodes_path();
         if !path.exists() {
             return Ok(None);
         }
-        let f = File::open(&path)?;
+        let f = File::open(&path).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         for line in BufReader::new(f).lines() {
-            let line = line?;
+            let line = line.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if line.trim().is_empty() {
                 continue;
             }
-            let ep: Episode = serde_json::from_str(&line)?;
+            let ep: Episode = serde_json::from_str(&line).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if ep.id == id {
                 return Ok(Some(ep));
             }
@@ -128,19 +129,19 @@ impl MemoryBackend for FileBackend {
         Ok(None)
     }
 
-    fn recent_episodes(&self, session_id: &str, n: usize) -> MemoryResult<Vec<Episode>> {
+    fn recent_episodes(&self, session_id: &str, n: usize) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let path = self.episodes_path();
         if !path.exists() {
             return Ok(Vec::new());
         }
-        let f = File::open(&path)?;
+        let f = File::open(&path).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let mut all: Vec<Episode> = Vec::new();
         for line in BufReader::new(f).lines() {
-            let line = line?;
+            let line = line.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if line.trim().is_empty() {
                 continue;
             }
-            let ep: Episode = serde_json::from_str(&line)?;
+            let ep: Episode = serde_json::from_str(&line).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if ep.session_id == session_id {
                 all.push(ep);
             }
@@ -153,14 +154,13 @@ impl MemoryBackend for FileBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
-        // 0 装: stream_name 必须已是 6 个固定值之一 (caller 责任)
+    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let _guard = self.stream_write_lock.lock().expect("FileBackend poisoned");
-        let line = serde_json::to_string(&entry)?;
+        let line = serde_json::to_string(&entry).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let path = self.stream_path(kind);
-        let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
-        writeln!(f, "{line}")?;
-        f.sync_all()?;
+        let mut f = OpenOptions::new().create(true).append(true).open(&path).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        writeln!(f, "{line}").map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        f.sync_all().map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         Ok(())
     }
 
@@ -169,19 +169,19 @@ impl MemoryBackend for FileBackend {
         kind: StreamKind,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
+    ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
         let path = self.stream_path(kind);
         if !path.exists() {
             return Ok(Vec::new());
         }
-        let f = File::open(&path)?;
+        let f = File::open(&path).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         let mut alive: Vec<HistoryEntry> = Vec::new();
         for line in BufReader::new(f).lines() {
-            let line = line?;
+            let line = line.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if line.trim().is_empty() {
                 continue;
             }
-            let entry: HistoryEntry = serde_json::from_str(&line)?;
+            let entry: HistoryEntry = serde_json::from_str(&line).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
             if entry.tombstoned_at.is_some() {
                 continue;
             }
@@ -255,7 +255,7 @@ mod tests {
             created_at: 1_700_000_100,
             payload: serde_json::json!({"kind": "test"}),
             source: "test".to_string(),
-            tags: vec!["unit".to_string()),
+            tags: vec!["unit".to_string()],
             tombstoned_at: None,
         }
     }
