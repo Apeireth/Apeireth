@@ -1,508 +1,467 @@
-# Apeireth 社区插件开发规范（plugin-authoring-guide, 2026-08-16）
+# Apeireth 社区插件开发规范（v2 工程重构线, 2026-08-27）
 
-> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文是 v1 插件模型（`apeireth-companion`/`apeireth-tool-registry`，现 legacy）；v2 插件契约见 `docs/01-architecture/architecture.md` 与 `crates/foundation/plugin`。
+> **现状 (2026-08-27)**：本文**重写**为 v2 插件契约（`crates/foundation/plugin`），取代 v1 时代的 `apeireth-companion` Plugin/Tool trait 与 ToolBridge 装配模型（现 `legacy/`）。当前基线：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；v2 下一步见根 [ROADMAP.md](../../ROADMAP.md) §4。内核（哲学 8 锚、文档同步自觉、0 装 PASS）不变。
 
-> **给谁看**: 社区开发者 + 官方套件作者。对应 team-work-doc §5.6（官方交付文档）。
-> **定位**: 三层交付模型（team-work-doc §1.3）中**插件层**的开发规范——官方交付整合过的整件，细小特殊需求给社区。
-> **读法**: 先读 §1（最小可运行插件）→ §2（授权规则，决定你的工具能不能被调）→ §3/§4（测试与卸载，决定能不能合入）→ §5（数据源模板）→ §6（发布检查单）。
-> **0 假装红线**: 本文档所有示例均**摘自真实代码**（每节标注来源文件）；未实装的机制如实标注「未接」，不虚构 API。
+```
+[Document-Meta]
+Document:        docs/04-internal/plugin-authoring-guide.md
+Version:         Manual-Rev-N (v2 重写)
+Last-Modified:   2026-08-27
+Status:          🟢 活跃 (v2 插件契约)
+```
+
+>给谁看：社区插件作者 + 官方套件维护者。
+>读法：先读 §1（最小可可跑插件）→ §2（注册模型，决定能否被 runtime 看见）→ §3（ToolCapability 工具接口）→ §4（ProviderCapability 接口）→ §5（生命周期 + 治理 + 测试模板）→ §6（发布检查单）。
+>0 假装：本指南所有示例均**摘自真实 v2 代码**（`crates/foundation/plugin` + `crates/capabilities/tools`）；未实装的机制如实标注，R不假装。
 
 ---
 
-## 0. 插件在三层层级中的位置
+## 0. 一句话
 
-| 层 | 谁开发 | 改动方式 | 示例 |
-|---|---|---|---|
-| 模块（lib 核心） | 官方 | 整体大改，编译期强绑定 | companion lib（记忆/反思/工具桥） |
-| 套件（suite） | 官方 | 拼积木：套件 = 插件组 + 权限包 + 校验 | 教育/渗透/预测机套件 |
-| **插件（plugin）** | **社区为主** | **最小单元热插拔** | 翻译器、体育预测数据源、dx 检查 |
-
-- **插件 = 最小贡献单元**：工具注册 + 权限预设 + 生命周期（来源：`crates/apeireth-companion/src/plugin.rs:1-11` 模块头）。
-- **套件 = 插件组的官方打包**：`SuiteDef.plugins` 声明组成插件，装配前校验插件已装（来源：`crates/apeireth-companion/src/suites.rs:38-53`）。
-- **当前插件载体（0 假装）**：Rust 编译期单元。社区插件 = 向 `apeireth-companion` crate 提交新模块（`src/<your_plugin>.rs` + `lib.rs` 注册 `pub mod`）的 PR。**动态加载（运行时装载外部二进制插件）未接**——`apeireth-tool-registry` 的 `watch_plugin_dir` 目前只记录文件事件到日志（来源：`crates/apeireth-tool-registry/src/registry.rs:75-77` 注释），不是插件装载器。
+**v2 插件 = 一个 `Plugin` trait 实现 + 一个 `PluginManifest`**。插件注册到 **`PluginManager`**，由它统一维护 *plugin* 与 *capability* 两个 registry（**唯一**事实源）。能力分两类：`ToolCapability`（内置工具 + 第三方工具）与 `ProviderCapability`（LLM provider 适配器）。一个插件可以同时提供两类能力的任意多。
 
 ---
 
-## 1. Plugin trait 用法 + ToolBridge 注册示例
+## 1. 最小可可跑插件（HelloTool）
 
-### 1.1 Plugin trait（5 方法）
+### 1.1 完整示例（基于真实代码）
 
-来源：`crates/apeireth-companion/src/plugin.rs:18-26`（原文摘录）
-
-```rust
-/// 插件: 最小贡献单元.
-pub trait Plugin: Send + Sync {
-    fn id(&self) -> &str;
-    fn version(&self) -> &str;
-    fn description(&self) -> &str;
-    /// 加载: 注册工具 + 授权. 失败 → 安装拒绝 (0 装 PASS).
-    fn on_load(&self, bridge: &ToolBridge) -> Result<(), String>;
-    /// 卸载: 清理 (权限撤销等). 幂等.
-    fn on_unload(&self, bridge: &ToolBridge) -> Result<(), String>;
-}
-```
-
-生命周期语义（来源：`plugin.rs:44-89`）：
-
-- `PluginRegistry::install` 调 `on_load`，**成功才登记；失败不登记**（0 装 PASS：不假装装上了）。
-- `PluginRegistry::install_all`（套件装配用）：**全部成功才整体生效，任一失败回滚已装的**。
-- `uninstall` 调 `on_unload`，要求**幂等**。
-
-### 1.2 Tool trait（4 方法）
-
-来源：`crates/apeireth-tool-registry/src/trait_def.rs:27-45`（原文摘录）
+来源：`crates/foundation/plugin/src/plugin.rs:71-98`（Plugin trait）+ `crates/foundation/plugin/src/manifest.rs:38-54`（PluginManifest）+ `crates/capabilities/tools/src/plugin.rs:39-90`（BuiltinToolsPlugin 真实使用模式）。
 
 ```rust
-#[async_trait]
-pub trait Tool: Send + Sync {
-    /// 工具唯一名 (e.g. `"FileOperator"`, `"WebSearch"`, `"DailyNoteWrite"`)
-    fn name(&self) -> &str;
-
-    /// 6 类 enum (VCP `pluginType` 字段级)
-    fn kind(&self) -> ToolKind;
-
-    /// 5 轴正交属性
-    fn axes(&self) -> ToolAxes;
-
-    /// 异步执行入口
-    async fn call(&self, args: Value) -> Result<Value, String>;
-}
-```
-
-`ToolKind` 6 类（来源：`crates/apeireth-tool-registry/src/types.rs:42-66`）：
-`Sync` / `Async` / `Static` / `Service` / `MessagePreprocessor` / `Hybridservice`。
-
-`ToolAxes` 5 轴（来源：`types.rs` 各轴 enum + `tool_axes_default` 测试 lines 433-442）：
-
-| 轴 | 取值 | 默认 |
-|---|---|---|
-| trigger（触发） | OnDemand / Periodic / EventDriven | OnDemand |
-| awaiting（等待） | Immediate / Deferred / Streaming | Immediate |
-| resident（驻留） | Ephemeral / Cached / Persistent | Ephemeral |
-| transport（传输） | Local / Ipc / Network | Local |
-| output（输出） | Value / Stream / SideEffect | Value |
-
-纯规则层工具用 `ToolAxes::default()`（Local）；要发网络请求的工具把 `transport` 改成 `Network`（真实示例见 §1.4 与 `crates/apeireth-tools/src/github_accel.rs:226-234`）。
-
-### 1.3 完整示例：EducationDxPlugin（真代码摘录）
-
-来源：`crates/apeireth-companion/src/education.rs:152-206`（原文摘录；`analyze`/`to_json` 内部规则逻辑见源文件）
-
-```rust
-#[async_trait::async_trait]
-impl Tool for DxCheckTool {
-    fn name(&self) -> &str {
-        "dx_check"
-    }
-    fn kind(&self) -> ToolKind {
-        ToolKind::Sync
-    }
-    fn axes(&self) -> ToolAxes {
-        ToolAxes::default()
-    }
-    async fn call(&self, args: Value) -> Result<Value, String> {
-        let problem = args.get("problem").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let substitution = args.get("substitution").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let after = args.get("after").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if problem.trim().is_empty() && after.trim().is_empty() {
-            return Err("需要 problem (原题) 和/或 after (换元后的式子)".to_string());
-        }
-        Ok(Self::to_json(&Self::analyze(&problem, &substitution, &after)))
-    }
-}
-
-/// 教育套件插件: 注册 dx_check 工具 + 授权日常调用.
-/// 装配路径: PluginRegistry.install → on_load → ToolBridge.registry.register + packs.grant.
-pub struct EducationDxPlugin;
-
-impl Plugin for EducationDxPlugin {
-    fn id(&self) -> &str {
-        "education-dx-check"
-    }
-    fn version(&self) -> &str {
-        "0.1.0"
-    }
-    fn description(&self) -> &str {
-        "换元法 dx 检查: 忘换 dx / 混用 / 缺微分 / 残留 x / 根号模式提示 (规则层)"
-    }
-    fn on_load(&self, bridge: &ToolBridge) -> Result<(), String> {
-        bridge.registry.register("dx_check".to_string(), Arc::new(DxCheckTool));
-        bridge.packs.grant(crate::packs::PermissionPack::permanent(
-            "教育插件授权",
-            vec!["dx_check".to_string()],
-        ));
-        Ok(())
-    }
-    fn on_unload(&self, bridge: &ToolBridge) -> Result<(), String> {
-        // 真清理: 注销工具 + 撤销授权 (幂等; 卸载后 dx_check 不可再调)
-        bridge.registry.unregister("dx_check");
-        bridge.packs.revoke_by_name("教育插件授权");
-        Ok(())
-    }
-}
-```
-
-`on_load` 的两步是插件的标准动作：**注册工具**（`bridge.registry.register`）+ **授权**（`bridge.packs.grant`）。第二个真实例子 `GhAccelPlugin` 包装了 `apeireth-tools` 里已有的工具实现（来源：`crates/apeireth-companion/src/gh_accel.rs:20-45`）——社区插件也可以只装配已有工具，不重写逻辑。
-
-### 1.4 安装/运行入口（真代码摘录）
-
-来源：`crates/apeireth-companion/examples/education_suite_demo.rs:19-48`（原文摘录）
-
-```rust
-let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
-let bridge = Arc::new(ToolBridge::new(store));
-let plugins = PluginRegistry::new();
-
-// 1) 先装插件 (生态最小单元)
-plugins.install(&bridge, Arc::new(EducationDxPlugin)).unwrap();
-
-// 2) 套件装配 (校验: 插件已装 + 工具已注册 + 授权)
-let cat = SuiteCatalog::builtin();
-let r = cat.install_with_plugins(&bridge, Some(&plugins), "education-suite").unwrap();
-
-// 3) 真工具调用
-let bad = ParsedToolCall {
-    tool_name: "dx_check".into(),
-    args: json!({
-        "problem": "∫ x·√(1-x²) dx",
-        "substitution": "令 t = 1-x²",
-        "after": "∫ x·√(t) dx"
-    }),
-    raw_marker: String::new(),
-    archery: false,
-    archery_no_reply: false,
-};
-let r = bridge.execute_if_allowed(&bad).await;
-```
-
-`ToolBridge` 公开的插件装配面（来源：`crates/apeireth-companion/src/tool_bridge.rs:358-376`）：`registry`（工具注册表）、`packs`（权限包注册表）、`gate`/`sovereignty`/`records`。执行入口 `execute_if_allowed(&ParsedToolCall) -> ExecutionResult`（字段：`tool_name`/`success`/`output`/`error`/`duration_ms`）。
-
-### 1.5 依赖与注册清单
-
-- Cargo 依赖（最小集）：`apeireth-companion`（plugin/tool_bridge/packs）、`apeireth-tool-registry`（Tool/ToolKind/ToolAxes）、`serde_json`、`async-trait`；测试另需 `apeireth-memory`（`SqliteMemoryStore::open_in_memory`）、`apeireth-tool-runtime`（`ParsedToolCall`）、`tokio`、`chrono`。
-- 注册：`crates/apeireth-companion/src/lib.rs` 加 `pub mod <your_plugin>;`（共享文件改动**先通知集成守门员**，per team-work-doc §2.3）。
-- 模块头 `//!` 必写：职责 + **0 假装标注**（什么没做）。
-
----
-
-## 2. 白名单与日常包规则
-
-### 2.1 执行链路（你的工具被调用时过哪些闸）
-
-`bridge.execute_if_allowed` 的真实顺序（来源：`tool_bridge.rs:552-699`，逐段核实）：
-
-1. **主权总闸**：`sovereignty.is_frozen()` → 熔断即全拒（lines 553-562）。
-2. **洋葱门**：`gate.check("tool_call", "调用工具 X", 风险级别, target)`（SecurityGate，lines 563-578）。
-3. **宪法硬门**：`ConstitutionGate::check(&desc)`——编译期规则表，15 个前缀命中即拦 + sovereignty 记违规（lines 581-591）。规则表（来源：`crates/apeireth-companion/src/constitution_gate.rs:14-30`）：
-   自我复制 / 复制自己 / 多开分身（E-4）、绕过洋葱 / 绕过权限 / 越权 / 脱离沙盒（E-6）、删除全部 / 删库 / 格式化（E-2）、假装（PHL-01）、掩盖 / 篡改日志（E-5）、执行外部代码 / 下载并执行（E-4）。
-   **注意**：`desc = "调用工具 X 参数 Y"`——**参数也在检查范围内**，且描述由系统侧拼接、调用方不可伪造。**你的工具名与参数都不要包含这些词**。
-4. **动态原则层**（自成长 Level 2）：主人批准过的 active 原则做前缀匹配，命中 → 拦截 + 记违反（lines 592-606）。
-5. **宪法评审（真 LLM）**：风险 Medium+ 且配置了 judicator → 按原则判案；评审失败 → **保守拒绝**（lines 607-635）。风险映射按工具名关键词（`tool_risk`，lines 541-550）：名含 `exec`/`shell` → High；含 `file`/`patch`/`task` → Medium；其余 Low。
-6. **权限包**：`packs.check_and_consume(tool, now_ms)` → 被活跃包覆盖即**免现场审批**直接执行；文件类工具另做执行级路径校验（`paths` 前缀 + `..` 穿越防护，lines 636-666）。
-7. **审批规则**（未被权限包覆盖时才走，ApprovalManager 顺序：黑名单 → 白名单 → 风险，来源：`tool_bridge.rs:436-468`）：
-   - `BlacklistRule`：当前为空表（最严闸，先于一切）；
-   - `WhitelistRule`：内置白名单 16 个工具（`recall_memory`/`save_memory`/`propose_capability`/`simulate`/`forecast`/`audit_log`/`save_experience`/`list_experience`/`verify_experience`/`propose_principle`/`approve_principle`/`goal_create`/`goal_status`/`goal_complete`/`goal_pause`/`goal_block`）；
-   - `RiskRule`：类别含 `system`/`network`/`file`/`shell`/`exec`/`patch`/`task` 的调用 → 需主人批准（5 分钟批准窗口）；此时系统会写一条**授权请求**（`approval_requests::record_request`），前端轮询展示、主人一键批准（lines 672-688）——权限洋葱的真实载体，不是虚构的弹窗。
-8. **执行**：`run_executor`（可配隔离 worker / spill 超大输出）。
-
-**给插件作者的推论**：
-- 权限包（第 6 闸）只豁免第 7 闸的现场审批——**第 2-5 闸（洋葱/宪法硬门/动态原则/LLM 评审）对所有工具生效**，自授权救不了违禁词。
-- 不在白名单、又没有权限包覆盖的工具，每次调用都可能触发主人批准——体验差且可能被拒。所以 §2.3 的标准动作（on_load 自授权）是必做项。
-- 工具命名避开风险关键词（除非它真的是那类工具）：含 `file`/`patch`/`task` 会升为 Medium 风险，配了 judicator 的部署里每次调用都过真 LLM 评审（token 成本）。
-
-### 2.2 日常包（默认授权面）
-
-`PackRegistry::default_daily_pack()`（来源：`crates/apeireth-companion/src/packs.rs:149-164`）：永久包，覆盖 9 个工具——
-`recall_memory`、`save_memory`、`propose_capability`、`simulate`、`forecast`、`WebSearch`、`Grep`、`WebFetch`、`Git`。
-
-权限包三种有效期（来源：`packs.rs:16-23`）：`Permanent`（永久，90 天提醒续签）/ `Hours(u64)`（限时）/ `SingleUse`（单次）。构造器：`PermissionPack::permanent(name, tools)` / `timed(name, tools, hours, budget)`；可叠 `.with_paths(前缀)`（文件类工具执行级路径校验）与 `.with_spend_budget(上限)`（花钱类工具）。
-
-### 2.3 插件自授权的标准动作
-
-```rust
-// on_load 里:
-bridge.packs.grant(crate::packs::PermissionPack::permanent(
-    "你的插件授权",               // ← 名字是稳定锚点 (UUID 每次不同, 不可靠)
-    vec!["your_tool".to_string()],
-));
-// on_unload 里:
-bridge.packs.revoke_by_name("你的插件授权");
-```
-
-为什么按**名字**撤销：pack 的 `id` 是每次生成的 UUID，`name` 才是稳定键（来源：`packs.rs:176-179` 注释与实现）。三个真插件（education/pentest/gh_accel）全部遵循这一模式。
-
----
-
-## 3. 测试模板（含 0 装 PASS 写法）
-
-### 3.1 全链路测试模板（正常路径 + 卸载清理，真代码摘录）
-
-来源：`crates/apeireth-companion/src/education.rs:284-316`（原文摘录）——这是插件测试的**标准形状**：装 → 断言注册 → 断言授权 → 桥全链路执行 → 卸载 → 断言真清理。
-
-```rust
-#[tokio::test]
-async fn plugin_registers_tool_and_pack() {
-    use apeireth_memory::SqliteMemoryStore;
-    let store = Arc::new(SqliteMemoryStore::open_in_memory().unwrap());
-    let bridge = ToolBridge::new(store);
-    let reg = crate::plugin::PluginRegistry::new();
-    reg.install(&bridge, Arc::new(EducationDxPlugin)).unwrap();
-    assert!(reg.is_installed("education-dx-check"));
-    assert!(bridge.registry.list().iter().any(|n| n == "dx_check"));
-    // 授权包覆盖 → 免现场审批直接执行
-    assert!(bridge.packs.check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()));
-    // 全链路: 桥执行 dx_check (忘换 dx 场景)
-    let call = apeireth_tool_runtime::parser::ParsedToolCall {
-        tool_name: "dx_check".into(),
-        args: json!({
-            "problem": "∫ x·e^(x²) dx",
-            "substitution": "令 t = x²",
-            "after": "∫ e^t dx"
-        }),
-        raw_marker: String::new(),
-        archery: false,
-        archery_no_reply: false,
-    };
-    let r = bridge.execute_if_allowed(&call).await;
-    assert!(r.success, "dx_check 应可执行: {:?}", r.error);
-    assert_eq!(r.output["verdict"], json!("fix"));
-    // 卸载 → 真清理: 工具注销 + 授权撤销 (幂等)
-    reg.uninstall(&bridge, "education-dx-check").unwrap();
-    assert!(!bridge.registry.list().iter().any(|n| n == "dx_check"), "卸载后工具应注销");
-    assert!(!bridge.packs.check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()), "卸载后授权应撤销");
-    let r = bridge.execute_if_allowed(&call).await;
-    assert!(!r.success, "卸载后 dx_check 不可再调");
-}
-```
-
-### 3.2 失败路径测试（0 装 PASS 的机制保障，真代码摘录）
-
-加载失败必须**拒绝安装且不登记**（来源：`plugin.rs:114-124` + `143-150`）：
-
-```rust
-/// 加载失败的插件 (on_load 报错 → 安装拒绝).
-struct BadPlugin;
-impl Plugin for BadPlugin {
-    fn id(&self) -> &str { "bad-plugin" }
-    fn version(&self) -> &str { "0.0.1" }
-    fn description(&self) -> &str { "加载必失败" }
-    fn on_load(&self, _bridge: &ToolBridge) -> Result<(), String> {
-        Err("加载失败: 缺依赖".into())
-    }
-    fn on_unload(&self, _bridge: &ToolBridge) -> Result<(), String> { Ok(()) }
-}
-
-#[test]
-fn failing_plugin_not_registered() {
-    // ... bridge/reg 构造同 3.1 ...
-    assert!(reg.install(&bridge, Arc::new(BadPlugin)).is_err());
-    assert!(!reg.is_installed("bad-plugin"));
-}
-```
-
-套件批量安装的**回滚**语义也要测（来源：`plugin.rs:152-162`）：`install_all(&bridge, &[ok, bad])` → `bad` 失败 → 断言 `ok` 也被回滚（`!reg.is_installed(...)`）。
-
-### 3.3 0 装 PASS 写法（规范）
-
-| 禁止 | 正确写法 |
-|---|---|
-| 做不到返回 `Ok` 假装成功 | 返回 `Err` + **可行动提示**（如 education 的 `"需要 problem (原题) 和/或 after (换元后的式子)"`） |
-| 文档/注释写「已支持」实际没有 | 标注「trait 口已备，实现未接」 |
-| 静默吞错 | `eprintln!` 记录 + 降级路径说明 |
-| 解析不了的输入硬猜 | 如实归类（如 pentest `scan_report` 把不认识的行归入 `unknown_lines`，来源：`pentest.rs:192-199`） |
-
-模块头 0 假装标注示例（来源：`education.rs:6-9`，原文摘录）：
-
-```rust
-//! 0 假装 (诚实标注):
-//! - v1 是**字符串级规则表**, 不是真实符号计算 (无 CAS 引擎, 不宣称能解积分)
-//! - 覆盖四个检查: 忘换 dx / dx 与 dt 混用 / 缺微分 / 残留 x; 外加常见根号模式提示 (三角换元表)
-//! - 模式匹配用简单字符串扫描 (√( 括号配对), 复杂公式请让 AI 自己拆解后调用
-```
-
-### 3.4 测试命令
-
-```powershell
-cargo test -p apeireth-companion -j 4 <你的测试名>
-```
-
-`-j 4` 降并行防页文件耗尽；**不要**跑 `cargo test --workspace` 全量（集成守门员专属，per team-work-doc §2.2/§6.3）。
-
----
-
-## 4. 卸载真清理（不留注册残留）
-
-### 4.1 标准组合
-
-`on_load` 里你注册了什么，`on_unload` 就必须清掉什么。当前机制下就两样：
-
-```rust
-fn on_unload(&self, bridge: &ToolBridge) -> Result<(), String> {
-    bridge.registry.unregister("your_tool");        // 注销工具 (顺带清类别索引, registry.rs:107-115)
-    bridge.packs.revoke_by_name("你的插件授权");      // 撤销授权 (按名, 不按 UUID)
-    Ok(())
-}
-```
-
-### 4.2 要求
-
-1. **幂等**：`on_unload` 可能被重复调用，不得 panic（trait 契约，`plugin.rs:24-25`）。
-2. **无残留**：卸载后 `bridge.registry.list()` 不得含你的工具名；`packs.check_and_consume` 必须返回 false；再调用必须失败（§3.1 的最后三个断言就是验收式）。
-3. **自建状态自清**：若插件将来在 on_load 里创建文件/缓存/定时器等额外状态，on_unload 必须一并清理（当前三个官方插件都只有「工具+授权」两样，无额外状态）。
-
-### 4.3 验收断言（复制自 education.rs:310-315）
-
-```rust
-reg.uninstall(&bridge, "education-dx-check").unwrap();
-assert!(!bridge.registry.list().iter().any(|n| n == "dx_check"), "卸载后工具应注销");
-assert!(!bridge.packs.check_and_consume("dx_check", chrono::Utc::now().timestamp_millis()), "卸载后授权应撤销");
-let r = bridge.execute_if_allowed(&call).await;
-assert!(!r.success, "卸载后 dx_check 不可再调");
-```
-
----
-
-## 5. 数据源 adapter 模板（对接预测机套件 §5.2）
-
-### 5.1 现状（0 假装，先说实话）
-
-team-work-doc §5.2 规划的「**数据源 adapter trait + adapter registry 热插拔 + 4 旗舰适配器**」中，**adapter trait 目前未接**：
-
-- `crates/apeireth-companion/src/oracle.rs` 只有预测核心：`Forecast`（可证伪断言，lines 95-131）、`ForecastRegistry`（登记/resolve/Brier 校准，lines 135-215）、`UncertaintyResolver` trait 口（lines 52-54，LLM 语义裁决注入点）。
-- 全仓库无 `DataSource`/`ForecastSource` 类 adapter trait（2026-08-16 grep 核实）。
-- `ForecastRegistry` 也不向插件暴露注入入口（ToolBridge 内部自建，session 固定 `"me"`，`tool_bridge.rs:403-406`）——**插件不能直接登记预测**。
-
-**当前可行的数据源插件形态**：数据源 = 普通的取数 Tool 插件（本节的模板）；AI 拿到数据后，用内置 `forecast` 工具（在白名单 + 日常包内，`tool_bridge.rs:443` / `packs.rs:157`）登记可证伪预测。等官方 adapter trait 落地后再迁移（升级路径见 §5.4）。
-
-### 5.2 单文件模板（填一个文件 = 新插件）
-
-把下面的模板存为一个文件（如 `crates/apeireth-companion/src/weather_source.rs`），填三处 `TODO`，加 `lib.rs` 注册，就是一个新的数据源插件。
-
-> 标注：**模板代码**（基于上文已核实的真实 API 编写，非现有文件摘录；所用 API 来源：`trait_def.rs:27-45`、`types.rs` 5 轴、`education.rs:182-206` 装配模式、`github_accel.rs:226-234` Network 轴写法）。
-
-```rust
-//! `apeireth-companion::weather_source` — 天气数据源插件 (社区模板).
+//! `<your_plugin>` — 社区插件模板（v2）.
 //!
-//! 0 假装 (诚实标注): <TODO: 写清什么没做 — 如「v1 只 mock, 未接真 API」>
-//!
-//! 装配: on_load 注册 `weather_fetch` 工具 + 授权; on_unload 真清理.
+//! 0 装 PASS（必做做）：
+// - 写清"做了什么" + "没做什么"，未接的 trait 口必须标注 "未接".
+// - 任何网络调用 = 用 `PluginContext::credentials` 取 secret，R不用 `std::env::*`.
+//! 
+//! 装配：PluginManager 注册 → initialize() 拿 PluginContext → tools()/providers() 暴露能力 → shutdown() 真清理。
 
 use std::sync::Arc;
 
-use apeireth_tool_registry::{Tool, ToolAxes, ToolKind};
-use apeireth_tool_registry::types::{AwaitingAxis, OutputAxis, ResidentAxis, TransportAxis, TriggerAxis};
+use apeireth_core::kernel::{CapabilityId, PluginId, TraceId};
+use apeireth_plugin::{
+    CapabilityDescriptor, CapabilityKind, Plugin, PluginContext, PluginManifest,
+    PluginManager, PluginResult, ToolCapability,
+};
+use apeireth_protocol::canonical::NormalizedTool;
+use async_trait::async_trait;
 use serde_json::{json, Value};
+```
 
-use crate::plugin::Plugin;
-use crate::tool_bridge::ToolBridge;
+### 1.2 工具实现（ToolCapability trait）
 
-/// 天气数据源工具 — mock 先行: 测试用内置数据, 真 API 可选.
-pub struct WeatherFetchTool;
+来源：`crates/foundation/plugin/src/tool.rs:44`（trait 定义）。
 
-#[async_trait::async_trait]
-impl Tool for WeatherFetchTool {
-    fn name(&self) -> &str { "weather_fetch" }
-    fn kind(&self) -> ToolKind { ToolKind::Async }
-    fn axes(&self) -> ToolAxes {
-        ToolAxes {
-            trigger: TriggerAxis::OnDemand,
-            awaiting: AwaitingAxis::Immediate,
-            resident: ResidentAxis::Ephemeral,
-            transport: TransportAxis::Network, // 纯 mock/本地数据源 → 改 Local
-            output: OutputAxis::Value,
-        }
+```rust
+/// 社区示例工具：一个只读计算器，返回两个数相加.
+pub struct HelloCalc;
+
+#[async_trait]
+impl ToolCapability for HelloCalc {
+    /// 规范标识：runtime 用这个 id 在 `BuiltinToolsPlugin::tools()` 注册表里查找.
+    fn id(&self) -> &CapabilityId {
+        use std::sync::OnceLock;
+        static ID: OnceLock<CapabilityId> = OnceLock::new();
+        ID.get_or_init(||::::CapabilityId::new("tool.hello_calc").unwrap())
     }
-    async fn call(&self, args: Value) -> Result<Value, String> {
-        let city = args.get("city").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
-        if city.is_empty() {
-            return Err("需要 city (城市名)".to_string()); // 0 装 PASS: 可行动提示
-        }
-        // TODO: 接真 API (如 Open-Meteo 免费 API); 未接时返回 mock 并如实标注
-        Ok(json!({
-            "city": city,
-            "mock": true,
-            "note": "模板占位数据: 发布前接真数据源, 或如实保留 mock 标注",
-            "temperature_c": 20.0,
-            "condition": "clear"
-        }))
-    }
-}
 
-/// 天气数据源插件: 注册工具 + 授权.
-pub struct WeatherSourcePlugin;
-
-impl Plugin for WeatherSourcePlugin {
-    fn id(&self) -> &str { "weather-source" }
-    fn version(&self) -> &str { "0.1.0" }
-    fn description(&self) -> &str { "天气数据源: <TODO: 数据源与能力范围>" }
-    fn on_load(&self, bridge: &ToolBridge) -> Result<(), String> {
-        bridge.registry.register("weather_fetch".to_string(), Arc::new(WeatherFetchTool));
-        bridge.packs.grant(crate::packs::PermissionPack::permanent(
-            "天气数据源授权",
-            vec!["weather_fetch".to_string()],
-        ));
-        Ok(())
+    /// 展示 schema——provider 端可读的 tool declaration（OpenAI tool_calls 兼容）.
+    fn declaration(&self) -> NormalizedTool {
+        NormalizedTool::function(
+            "hello_calc",
+            "Return a+b (community template demo).",
+            json!({
+                "type": "object",
+                "properties": {
+                    "a": {"type": "number"},
+                    "b": {"type": "number"}
+                },
+                "required": ["a", "b"]
+            }),
+        )
     }
-    fn on_unload(&self, bridge: &ToolBridge) -> Result<(), String> {
-        bridge.registry.unregister("weather_fetch");
-        bridge.packs.revoke_by_name("天气数据源授权");
-        Ok(())
+
+    /// runtime 调用入口。Err 直接回灌模型，R不假装成功.
+    async fn call(&self, arguments: serde_json::Value) -> PluginResult<serde_json::Value> {
+        let a = arguments.get("a").and_then(|v| v.as_f64())
+            .ok_or_else(|| apeireth_plugin::PluginError::call_failed("hello_calc", "需要数字参数 a"))?;
+        let b = arguments.get("b").and_then(|v| v.as_f64())
+            .ok_or_else(|| apeireth_plugin::PluginError::call_failed("hello_calc", "需要数字参数 b"))?;
+        Ok(json!({ "sum": a + b }))
     }
 }
 ```
 
-模板纪律（对齐 team-work-doc §5.2 验收与 §4 任务包「数据源/外部依赖策略」）：
+### 1.3 插件实现（Plugin trait）
 
-- **mock 先行可测**：单测用内置数据跑通，不依赖网络（限流环境下不阻塞验收）。
-- **真 API 可选**：接真 API 后在模块头如实标注数据来源与限流。
-- **预测对接**：AI 用取数结果调内置 `forecast` 工具登记可证伪预测（`Forecast::new(statement, probability, deadline_ms)`，到期对照实际结果算 Brier，来源：`oracle.rs:95-131`）。插件本体不碰 `ForecastRegistry`（未暴露注入口，见 §5.1）。
-- **测试照抄 §3.1 模板**（把工具名/插件 id 换掉即可）。
+来源：`crates/foundation/plugin/src/plugin.rs:71-98`（4 方法：manifest/initialize/shutdown/tools/providers）。
 
-### 5.3 §5.2 规划的 8 个社区数据源
+```rust
+pub struct HelloCalcPlugin {
+    manifest: PluginManifest,
+}
 
-体育 / 选举 / 房价 / 航班 / 能源 / 流失 / 农业 / 销售（来源：team-work-doc §5.2）——每个都按本节模板填一个文件。
+impl HelloCalcPlugin {
+    pub fn new() -> Self {
+        let manifest = PluginManifest::new(
+            PluginId::new("community.hello_calc").unwrap(),
+            "0.1.0",
+            "社区插件模板：只读计算器示例（v2）",
+        )
+        .declare(
+            CapabilityDescriptor::new(
+                CapabilityId::new("tool.hello_calc").unwrap(),
+                CapabilityKind::Tool,
+                "Return a+b（社区模板演示）",
+            )
+            .unwrap()
+            .with_metadata("risk", "low")
+            .with_metadata("category", "demo"),
+        )
+        .unwrap();
+        Self { manifest }
+    }
+}
 
-### 5.4 升级路径（adapter trait 落地后）
+#[async_trait]
+impl Plugin for HelloCalcPlugin {
+    fn manifest(&self) -> &PluginManifest { &self.manifest }
 
-官方 adapter trait 实装后（§5.2 欠账，见 team-work-doc），数据源插件迁移为 adapter 实现；届时本节更新迁移对照表。**在此之前，不要自行发明平行的 adapter 体系**（集成而非分立，team-work-doc §1.2）。
+    async fn initialize(&self, _ctx: &PluginContext) -> PluginResult<()> {
+        // 0 装 PASS：明确"做了什么没做做"——本插件无外部资源，initialize 为空.
+        Ok(())
+    }
+
+    async fn shutdown(&self) -> PluginResult<()> {
+        // 幂等：可能重复调用，R不能 panic. 默认工具无额外状态=空实现.
+        Ok Ok(())
+    }
+
+    fn tools(&self) -> Vec<Arc<dyn ToolCapability>> {
+        vec![Arc::new(HelloCalc)]
+    }
+
+    fn providers(&self) -> Vec<Arc<dyn apeireth_plugin::ProviderCapability>> {
+        vec![]   // 本插件只提供工具；provider 在 §4.
+    }
+}
+```
+
+### 1.4 注册入口（运行时 bootstrap）
+
+来源：`crates/adapters/cli/src/lib.rs::build_canonical_runtime_from_env` + `crates/capabilities/tools/src/plugin.rs:39-90`（BuiltinToolsPlugin 实际装配）。
+
+```rust
+use apeireth_plugin::{PluginManager, CredentialResolver};
+use apeireth_provider::credentials::EnvCredentialResolver;
+use apeireth_tools_canonical::BuiltinToolsPlugin;
+use apeireth_core::kernel::{system_clock, TraceId};
+use std::sync::Arc;
+
+let mut manager = PluginManager::new();
+let resolver: Arc<dyn CredentialResolver> = Arc::new(EnvCredentialResolver::new());
+
+// 官方内置：filesystem / search / repo 三个只读工具（shell/fetch 默认 opt-in）.
+let tools_plugin = BuiltinToolsPlugin::new(std::env::current_dir().unwrap());
+manager.register(Arc::new(tools_plugin)).unwrap();
+
+// 社区插件：HelloCalcPlugin 接进同一个 manager.
+manager.register(Arc::new(HelloCalcPlugin::new())).unwrap();
+
+// 3 家 canonical provider 作为插件注册：
+use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
+use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
+manager.register(Arc::new(MinimaxProviderPlugin::from_env()?)).unwrap();
+manager.register(Arc::new(AnthropicProviderPlugin::from_env()?)).unwrap();
+
+// runtime 拿 manager 的 capability 视图（推荐 path）：
+let capabilities = manager.capabilities();
+for (id, owner) in capabilities.iter() {
+    println!("{} -> {}", id, owner);
+}
+```
+
+**插件 Manager 是 Runtime 唯一的能力登记点**（`crates/engine/runtime/src/canonical/runtime.rs::Runtime` 持有 `Arc<PluginManager>`）。旧版 v1 的"插件+ToolBridge+ToolRegistry+PackRegistry 四处注册"已收敛为 v2 的"manager 一处"。这是 v2 收敛的核心契约。
+
+---
+
+## 2. 注册模型（为什么 PluginManager 是唯一事实源）
+
+### 2.1 两个 registry，绝不并列
+
+来源：`crates/foundation/plugin/src/lib.rs:19-24`（明确陈述）。
+
+- **`PluginRegistry`**（`plugin::registry.rs:38`）—— 持有 `Arc<dyn Plugin>` 实例与 lifecycle
+- **`CapabilityRegistry`**（`plugin::registry.rs:122`）—— `CapabilityId -> PluginId` 索引，**index, 不是 copy**
+
+设计约束（v2 不可违反）：`CapabilityDescriptor` 的定义**只在** `PluginManifest` 里出现一次；capability registry 只是**索引**；runtime 拿真实描述永远去 plugin 拉 (`manager.record(id) -> CapabilityRecord<'_>`，`record.rs:202`)。
+
+### 2.2 注册 + lifecycle 语义
+
+来源：`crates/foundation/plugin/src/manager.rs:37-89`。
+
+| 方法 | 行为 | 失败语义 |
+| | | |
+| `PluginManager::register(plugin)` | 验证 manifest vs `tools()/providers()` 1:1（`manager.rs::register`）；重复 id 直接拒（**0 装 PASS：R假装重复装）| Err |
+| `PluginManager::state(id)` | 返回 `Lifecycle`（Inactive/Starting/Active/Stopping/Stopped/Failed）| — |
+| `initialize(ctx)` | 自动按 `.depend_on()` 拓扑序调用 | 任一失败→该 plugin 进 Failed，但**已初始化的不回滚**（manager:80-89 注释明确） |
+| `shutdown()` | 逆拓扑序调用 | 错误记录但**不停止其余** shutdown（plugin.rs:86-87 注释明确：a shutdown that abandons half its plugins leaks more than it protects） |
+
+### 2.3 v1 → v2 失去的东西（诚实标注）
+
+v1 companion 模型里你用过的工具，**有些 v2 没有等价物**——这是设计选择，不是 bug：
+
+| v1 概念 | v2 状态 | 替代路径 |
+| | | |
+| `ToolKind::Sync/Async/Static/Service/MessagePreprocessor/Hybridservice`（v1 6 类） | ****：v2 只有 `CapabilityKind::Tool / Provider / Memory`（3 大类）） | `ToolCapability` trait 自描述异步/同步语义，不靠枚举 |
+| `ToolAxes` 5 轴（trigger/awaiting/resident/transport/output） | **未接** | `with_metadata("axis", "...")` 自定义 metadata 表达 |
+| `PermissionPack`（v1 授权包）| ****：v2 改走 `crates/foundation/governance::PermissionPolicy` + `PermissionGovernanceHook`（P0 接线后生效）| 工具运行受 governance pipeline 管控，R**非**插件自授权 |
+| `watch_plugin_dir`（v1 动态加载注释）| **未接**：v2 明确"Static, in-process plugins only"（plugin.rs:34-35）| 动态加载 / WASM / 远程 plugin / marketplace = 明确 out of scope |
+| `Pluggable provider/套件/三层交付` | **partial**：v2 只保留 plugin 一个交付层；套件/模块 v1 三层模型已弃用 | 套件边界由 PluginManifest 的 CapabilityKind + depend_on 表达 |
+| `on_load/on_unload`（v1 生命周期）| | **已合并**：`initialize(ctx)/shutdown()` |
+
+---
+
+## 3. ToolCapability 接口（你的工具怎么被 runtime 调）
+
+### 3.1 trait 三个方法
+
+来源：`crates/foundation/plugin/src/tool.rs`。
+
+```rust
+#[async_trait]
+pub trait ToolCapability: Send + Sync {
+    fn id(&self) -> &CapabilityId;                              // 规范 id（必 unique）
+    fn declaration(&self) -> NormalizedTool;                  // OpenAI 兼容 tool_calls schema
+    async fn call(&self, arguments: serde_json::Value)         // runtime 调用入口
+        -> PluginResult<serde_json::Value>;
+}
+```
+
+**`declaration` 直接生成 `NormalizedTool`**（`crates/foundation/protocol/src/canonical/normalized.rs`）—— v2 抽象掉了"工具 schema"的 OpenAI/Anthropic 协议差异，provider 用统一 DTO 转发。**你的 declaration 写一次，所有协议自动兼容**。
+
+### 3.2 PluginManager 提供的工具视图
+
+来源：`crates/foundation/plugin/src/manager.rs:316-368`。
+
+| 方法 | 返回 | 用例 |
+| | | |
+| `manager.tool(id) -> Result<Arc<dyn ToolCapability>>` | 单一工具 | runtime 拿工具执行 |
+| `manager.active_tools() -> Vec<Arc<dyn ToolCapability>>` | 全部 active 工具 | runtime 启动时声明 |
+| `manager.tool_declarations() -> Vec<NormalizedTool>` | 全部工具的协议层 schema | 给 provider 的 tool_calls 系统消息 |
+| `manager.tool_by_name(name) -> Option<Arc<dyn ToolCapability>>` | 按名字查 | tracing/logging |
+
+**BuiltinToolsPlugin 真代码示例**（`crates/capabilities/tools/src/plugin.rs:44-90`）展示了完整形状：3 个 ToolCapability（filesystem/search/search / repo），每个都有 `id()` / `declaration()` / `call()`，通过 manifest 的 `.declare(CapabilityDescriptor...)` 注册。
+
+### 3.3 工具名（id）命名规范
+
+- 格式：`<scope>.<name>`（例：`tool.hello_calc`、`tool.filesystem`）
+- `tool.shell` / `tool.fetch` 是 **BuiltinToolsPlugin 的 opt-in 名**——**不要命名冲突**
+- 风险词（`file`/`patch`/`task`/`exec`/`shell`/`network`）会让 GovernancePipeline 第 5 闸 LLM 评审触发（per `crates/foundation/governance/src/input_security.rs`）；非该类工具避免
+- `id()` 必须返回**静态** `&CapabilityId`（推荐 `OnceLock<CapabilityId>`）
+
+### 3.4 执行链：runtime + governance 怎么用你的工具
+
+1. runtime 在 agent loop 拿到模型的 `tool_calls`
+2. runtime 经 **`Arc<PluginManager>::tool(id)`** 找工具
+3. runtime 构造 **`GovernanceRequest { action: CapabilityDispatch { capability, arguments }, ... }`**，调 `Arc<dyn GovernanceHook>::evaluate`
+4. governance 返回 `Decision::Allow/Deny/RequireApproval`（runtime 严格区分"拒绝"与"挂起"，`crates/foundation/governance/src/lib.rs:117-139`）
+5. Allow → `tool.call(arguments).await` → 结果回灌 transcript
+6. Deny → tool error 直接回灌模型（不终止回合，`crates/engine/runtime/src/canonical/execute.rs` 哲学）
+7. RequireApproval → turn 挂起为 `PendingApproval`，不调工具，等 resume
+
+> **P0 接线状态**：当前 `build_canonical_runtime_from_env` 默认 governance = `AllowAll`（`crates/foundation/governance/src/lib.rs:256-271` 注释明确），生产路径不评估 PII/注入/权限。**只有工具默认 opt-in 关闭（`shell`/`fetch`）这一层兜底**。详见根 `ROADMAP.md` §4 P0。
+
+---
+
+## 4. ProviderCapability 接口（你要不要提供 LLM 接入）
+
+来源：`crates/foundation/plugin/src/provider.rs:96-148`。
+
+```rust
+#[async_trait]
+pub trait ProviderCapability: Send + Sync {
+    fn name(&self) -> &str;                             // 唯一标识符（runtime 用它做 fallback order）
+    fn model_ids(&self) -> Vec<String>;                // 该 provider 支持的全部 model
+    fn credential_name(&self) -> &str;                  // "provider.minimax.api_key" 形式 logical name
+    async fn complete(&self, request: CompletionRequest)
+        -> PluginResult<CompletionResponse>;            // 核心：与 normalized protocol DTO 对接
+    async fn stream(&self, request: CompletionRequest)
+        -> PluginResult<Pin<Box<dyn Stream<Item = Result<StreamChunk, ProviderError>>>>>;
+}
+```
+
+**真实现示例**（`crates/engine/provider/src/canonical_minimax.rs`）：3 家 canonical provider（`MinimaxProviderPlugin` / `AnthropicProviderPlugin` / `OpenAiCompatibleProviderPlugin`），命名遵循 `provider.<vendor>` logical name，凭据走 `CredentialResolver::resolve(name)`，不复制定 adapter 翻译逻辑。
+
+**关键契约**：你的 provider 应复用 `apeireth_protocol::canonical::NormalizedRequest` / `NormalizedResponse`（见 `crates/foundation/protocol/src/canonical/`），**不要自己定义协议 DTO**——这是 v2 收敛点之一（v1 的 vendor-wire 翻译散在 4+ 处）。
+
+---
+
+## 5. 生命周期 + 治理 + 测试
+
+### 5.1 PluginContext 拿什么
+
+来源：`crates/foundation/plugin/src/plugin.rs:28-53`。
+
+```rust
+pub struct PluginContext {
+    pub clock: Arc<dyn Clock>,            // apeireth_core::kernel::Clock——必须用，R不用 Utc::now()
+    pub credentials: Arc<dyn CredentialResolver>,  // 取 secret 唯一路径
+    pub trace: TraceId,                    // 启动事件的 trace id（与你自己的事件相关）
+}
+```
+
+**0 装 PASS 红线**：禁止 `std::env::var("OPENAI_API_KEY")`、禁止 `std::fs::read("apikey.txt")`、禁止 `Utc::now()`。这些在 v1 是常见的"简化"模式，v2 **强制**走 ctx——这是为了可移植 (virtual clock) + 安全 (secret 不落 struct) + 可可观测 (trace 相关性)。
+
+### 5.2 凭据解析（怎么取 API key）
+
+`CredentialResolver`（`crates/foundation/plugin/src/credentials.rs:58`）：
+- `NoCredentials`：明确"没有凭据"（避免 `Option<>` 不可见）
+- `StaticCredentials`：测试用，直接注入
+- `EnvCredentialResolver`（生产默认在 `provider::credentials`）：logical name → env var，**secret 走 `Secret<T>` 类型（debug 不打印）**
+
+默认映射（`crates/engine/provider/src/credentials.rs:88-99`）：
+- `provider.minimax.api_key` → `APEIRETH_API_KEY`
+- `provider.anthropic.api_key` → `APEIRETH_ANTHROPIC_KEY`
+- `provider.openai-compatible.api_key` → `OPENAI_API_KEY`
+
+插件要加新 provider → 在 `EnvCredentialResolver::new()` 加一行 default mapping，**R**改 provider trait。
+
+### 5.3 治理（P0 未接线，但请按允许接入设计）
+
+可用的 hook（已在 `crates/foundation/governance`）：
+- `PermissionGovernanceHook`（`permission.rs:164`）：PermissionPolicy 包装（grant/revoke/需审批能力）
+- `PromptInjectionHook`（`input_security.rs:280`）：启发式注入信号
+- `CredentialDisclosureHook`（`input_security.rs:316`）：凭据泄漏拦截
+- `AuditHashChain`（`audit.rs:104`）：append-only 审计
+
+你的 plugin 应**只声明**风险等级（`with_metadata("risk", "low"/"medium"/"high")`），**不**自己实现拒绝逻辑——拒绝/批准是 governance crate 的责任。
+
+### 5.4 0 装 PASS 写法
+
+来源：`crates/foundation/plugin/src/error.rs::PluginError`（全 API 形态）+ `crates/foundation/governance/src/lib.rs` 治理决策 API。
+
+| 禁止 | 正确 |
+| | | |
+| 返 `Ok` 假装成功 | 返 `Err(PluginError::...)` + **可行动提示**（"需要参数 a"，R"失败请重试"） |
+| 文档/注释写"已支持"实际未接 | 标注 `// 0 装 PASS: <TODO> trait 口已备，实现未接` |
+| 静默吞错 | `tracing::warn!` 记录 + 降级路径明确 |
+| `std::env::*` 取 secret | `ctx.credentials.resolve("your.credential.name")` |
+| `Utc::now()` 取时间 | `ctx.clock.now_ms()` |
+| 文档写 plugin 名字就锁住 | `id()` 返 `OnceLock<CapabilityId>` 静态字串 |
+| 工具命含 `file`/`patch` 词 | 除真是文件系统工具，R触发 governance Medium risk + LLM 评审 |
+
+### 5.5 测试模板
+
+来源：`crates/foundation/plugin/src/plugin.rs::tests` + `crates/foundation/plugin/src/manager.rs::tests`。
+
+```rust
+#[tokio::test]
+async fn plugin_registers_and_resolves_tools() {
+    use apeireth_core::kernel::{system_clock, CapabilityId, PluginId, TraceId};
+    use apeireth_plugin::{NoCredentials, PluginManager};
+    use std::sync::Arc;
+
+    let mut mgr = PluginManager::new();
+    let plugin = Arc::new(HelloCalcPlugin::new());
+    let id = plugin.manifest().id().clone();
+    
+    // 1) 注册成功（manifest vs tools() 1:1 验证通过）
+    mgr.register(plugin).unwrap();
+    
+    // 2) tool 可见 + declaration 与 manifest 一致
+    let tool = mgr.tool(&CapabilityId::new("tool.hello_calc").unwrap()).unwrap();
+    assert_eq!(tool.id().as_str(), "tool.hello_calc");
+    
+    // 3) execute: 正常路径
+    let r = tool.call(serde_json::json!({"a": 1.0, "b": 2.0})).await.unwrap();
+    assert_eq!(r["sum"], 3.0);
+    
+    // 4) execute: 失败路径（缺参 → Err + 可行动提示，R假装成功）
+    let r = tool.call(serde_json::json!({})).await;
+    assert!(r.is_err(), "缺参必须失败");
+    
+    // 5) initialize/shutdown 幂等
+    let ctx = PluginContext::new(system_clock(), Arc::new(NoCredentials), TraceId::new());
+    plugin.initialize(&ctx).await.unwrap();
+    plugin.shutdown().await.unwrap();
+    plugin.shutdown().await.unwrap();  // 幂等
+}
+```
+
+测试命令：`cargo test -p apeireth-<your_plugin_crate> -j 4`（per `team-work-doc.md` §2.2）。
+
+### 5.6 失败语义（manager 行为）
+
+来源：`crates/foundation/plugin/src/manager.rs::register` + plugin.rs::tests。
+
+| 场景 | 期望 |
+| | |
+| manifest 声明 `tool.foo` 但 `tools()` 返空 | register **失败** + `PluginError::manifest_mismatch` |
+| manifest 声明 `tool.foo` 但 `tools()` 返 `tool.bar` | 同上 |
+| 重复注册同 id plugin | register 失败 + `PluginError::duplicate_plugin` |
+| `initialize` 返 Err | plugin 进 `Failed` lifecycle，**已成功的兄弟不回滚** |
+| `shutdown` 返 Err | 错误记录，**其他 plugin 的 shutdown 不停止** |
 
 ---
 
 ## 6. 发布检查单
 
-提交社区插件 PR 前逐项自查（对齐 team-work-doc §7 验收总纲 + maintenance-guide §三）：
+提交 PR 前逐项自查（0 装 PASS 红线 + 工程严守）：
 
 | # | 项 | 标准 | 证据 |
 |---|---|---|---|
-| 1 | 测试全绿 | `cargo test -p apeireth-companion -j 4` 通过，含失败路径（加载失败/非法输入） | 测试输出 |
-| 2 | 全链路测试 | §3.1 形状：装 → 注册 → 授权 → 桥执行 → 卸载 → 清理断言 | 测试代码 |
-| 3 | 卸载真清理 | `registry.unregister` + `revoke_by_name`，幂等，卸载后调用必失败 | §4.3 断言 |
-| 4 | 0 装 PASS | 模块头 `//!` 标注没做什么；错误 = `Err` + 可行动提示；未接的 trait 口如实标注 | 模块头 |
-| 5 | 命名合规 | 工具名/参数不触发宪法硬门前缀（§2.1 第 3 闸）；不滥用风险关键词（§2.1 第 5 闸） | 自查 |
-| 6 | 授权完整 | on_load 自授权 pack（按名可撤销）；不依赖白名单特例 | on_load 代码 |
-| 7 | 文档同步 | maintenance-guide 模块地图加行；本指南如涉及新形态则更新 | PR diff |
-| 8 | 提交纪律 | 小步提交 + 中文 message（为什么 + 做了什么 + 测试结果）；无调试输出；`git status` 只含自己的文件 | commit |
-| 9 | 自审报告 | 改动文件 / 测试结果 / 集成点 / 0 假装标注 / 给守门员的合并提示 | 报告文本 |
+| 1 | 测试覆盖 | `cargo test -p <your_crate> -j 4` 通过，含正常/失败/非法输入路径 | 测试输出 |
+| 2 | 全链路测试 | §5.5 形状：注册 → manifest 验证 → tool 可见 → declaration 一致 → execute 正常 + 失败 → initialize/shutdown 幂等 | 测试代码 |
+| 3 | 0 装 PASS | 模块头 `//!` 0 装块：做 + 没做明确分；Err 用 `PluginError::*` 而非字符串 | 模块头 |
+| 4 | 不依赖全局 | 不读 `std::env::var(...)` 取 secret；不用 `Utc::now()` 取时间——全部走 `PluginContext` | grep 审查 |
+| 5 | id() 静态 | `OnceLock<CapabilityId>` 缓存，不每次重 alloc | 源码 |
+| 6 | declaration 与 manifest 一致 | `manager.register` 自动验证；测试覆盖 | 测试 |
+| 7 | 命名合规 | `id()` 不含 `file`/`patch`/`task` 除非真是那类工具（避 governance Medium risk） | 自查 |
+| 8 | 文档同步 | 本指南如涉及新形态或新模式，本批补 update | PR diff |
+| 9 | 提交纪律 | 小步提交 + message 用中文（"为什么 + 做了什么 + 测试结果"）；无调试输出；`git status` 只含自己文件 | commit |
+| 10 | 自审报告 | 改动文件 / 测试结果 / 集成点（`PluginManager::register` 调用点）/ 0 装 PASS 标注 / 给集成守门员的合并提示 | 报告文本 |
 
-合入流程：PR → **集成守门员**合并（`cargo check --workspace` + 相关 crate 测试 + 规范执法，per team-work-doc §6.1/§6.2）。
+合入流程：PR → 集成守门员审查（`cargo check --workspace` + 相关 crate 测试 + 规范执法）→ merge。
 
 ---
 
-## 附：来源索引（本文档引用的真实代码）
+## 附 A：v2 与 v1 概念对照（不再用 v1 术语写新代码）
+
+| v1 概念（legacy/apeireth-companion）| v2 替代 |
+|---|---|
+| `Plugin` trait 5 方法（id/version/description/on_load/on_unload） | `Plugin` trait 4 方法（manifest/initialize/shutdown/tools/providers） |
+| `ToolRegistry` / `CapabilityCatalog` / `PluginRegistry` / `PackRegistry` 四处 | **`PluginManager` + 两个 registry（唯一事实源）** |
+| `Tool` trait + `ToolKind` 6 类 + `ToolAxes` 5 轴 | `ToolCapability` trait 3 方法 + `declaration() -> NormalizedTool` |
+| `ToolBridge` + `on_load` 自授权 `PermissionPack` | governance `Arc<dyn GovernanceHook>` + `PermissionPolicy`（P0 接线后生效）|
+| `on_load` 注入 `registry.register` + `packs.grant` 两步 | `Plugin::tools()` 返 Arc<dyn ToolCapability> + `initialize()` 仅做资源初始化 |
+| `on_unload` 撤销注册 + 撤销授权 | `shutdown()` 仅做资源释放（**v2 不再"撤销授权"——governance 接管**） |
+| `<<<[TOOL_REQUEST]>>>` marker 解析 | provider 原生 `tool_calls` 数组（OpenAI 兼容），protocol 抽象已统一 |
+| `crate::packs::PermissionPack` 三种期 | `Permission` + `PermissionPolicy`（governance/permission.rs） |
+| 三层交付模型（模块/套件/插件）| **单层 plugin**（套件/模块边界由 manifest depend_on + CapabilityKind 表达） |
+| `watch_plugin_dir` 动态加载 | **明确 out of scope**（plugin.rs:34-35） |
+
+## 附 B：来源索引（v2 真实代码）
 
 | API / 示例 | 位置 |
 |---|---|
-| `Plugin` trait / `PluginRegistry` | `crates/apeireth-companion/src/plugin.rs:18-26` / `29-90` |
-| `Tool` trait | `crates/apeireth-tool-registry/src/trait_def.rs:27-45` |
-| `ToolKind` 6 类 / `ToolAxes` 5 轴 | `crates/apeireth-tool-registry/src/types.rs:42-66` / 各轴 enum |
-| `ToolBridge`（registry/packs/执行链/审批规则/风险映射） | `crates/apeireth-companion/src/tool_bridge.rs:358-483` / `552-699` / `436-468` / `541-550` |
-| `PermissionPack` / `PackRegistry`（日常包/revoke_by_name） | `crates/apeireth-companion/src/packs.rs:27-124` / `141-222` |
-| `ConstitutionGate` 硬门规则表 | `crates/apeireth-companion/src/constitution_gate.rs:14-30` |
-| `SuiteDef` / `SuiteCatalog::install_with_plugins` | `crates/apeireth-companion/src/suites.rs:38-53` / `164-203` |
-| `Forecast` / `ForecastRegistry` / `UncertaintyResolver` 口 | `crates/apeireth-companion/src/oracle.rs:95-215` / `52-54` |
-| EducationDxPlugin（完整真插件） | `crates/apeireth-companion/src/education.rs:152-316` |
-| PentestReconPlugin / PentestScanPlugin（双插件 + E-1 范围闸） | `crates/apeireth-companion/src/pentest.rs:219-242` |
-| GhAccelPlugin（包装已有工具 + Network 轴） | `crates/apeireth-companion/src/gh_accel.rs:20-45` + `crates/apeireth-tools/src/github_accel.rs:219-234` |
-| 套件端到端演示 | `crates/apeireth-companion/examples/education_suite_demo.rs` |
+| `Plugin` trait（4 方法）/ `PluginContext` | `crates/foundation/plugin/src/plugin.rs:28-98` |
+| `PluginManifest`（declare/depend_on/with_metadata）| `crates/foundation/plugin/src/manifest.rs:17-110` |
+| `CapabilityDescriptor` / `CapabilityKind` 3 类 | `crates/foundation/plugin/src/capability.rs:71-160` |
+| `PluginManager`（register/state/typed views）| `crates/foundation/plugin/src/manager.rs:37-368` |
+| `PluginRegistry` / `CapabilityRegistry` | `crates/foundation/plugin/src/registry.rs:38-202` |
+| `ToolCapability` trait（id/declaration/call）| `crates/foundation/plugin/src/tool.rs:44-...` |
+| `ProviderCapability` trait | `crates/foundation/plugin/src/provider.rs:96-148` |
+| `CredentialResolver` / `Secret` / `NoCredentials` / `StaticCredentials` | `crates/foundation/plugin/src/credentials.rs:24-99` |
+| `PluginError`（init_failed/shutdown_failed/call_failed/manifest_mismatch/duplicate_plugin）| `crates/foundation/plugin/src/error.rs:138-200` |
+| 真实插件示例（BuiltinToolsPlugin） | `crates/capabilities/tools/src/plugin.rs:39-235` |
+| 真实 provider 示例（Minimax/Anthropic/OpenAI-compatible）| `crates/engine/provider/src/canonical_*.rs` |
+| 治理（hooks + Decision）| `crates/foundation/governance/src/lib.rs` |
+| 协议 DTO（NormalizedTool/Request/Response）| `crates/foundation/protocol/src/canonical/` |
 
-> 相关文档：[team-work-doc.md](team-work-doc.md)（§1.3 三层模型 / §5.6 本规范任务源 / §7 验收总纲）· [maintenance-guide.md](maintenance-guide.md)（模块地图 / 加新模块规范）· [release-plan.md](release-plan.md)（三件套发布规划）· [oracle-suite-design.md](oracle-suite-design.md)（预测机套件设计）
+> 相关文档：[team-work-doc.md](team-work-doc.md)（§1 三哲学 / §3 文档规范 / §2 工程规范）· [maintenance-guide.md](maintenance-guide.md)（13-crate 模块地图 + v2 维护流程）· [ROADMAP.md](../../ROADMAP.md)（§4 v2 路线 + §5 硬墙）· [ARCHITECTURE.md](../../ARCHITECTURE.md)（架构契约）· [architecture.md](../01-architecture/architecture.md)（foundation/engine/capabilities/adapters 详细归属）
+
+---
+
+_本指南 v2 重写 (2026-08-27)：取代 v1 companion Plugin/ToolBridge/Pack 装配模型；v2 单一事实源 = `PluginManager` + 两个 registry（plugin / capability），单一插件 trait = `Plugin`（4 方法），单一工具 trait = `ToolCapability`（3 方法 + declaration 直接出 `NormalizedTool`）。0 装 PASS：动态加载 / WASM / 远程 plugin / marketplace 明确 out of scope（plugin.rs:34-35），R**假装 v2 支持。_
