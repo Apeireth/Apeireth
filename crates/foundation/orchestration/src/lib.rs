@@ -362,6 +362,10 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
+// Send / Sync 由编译器自动派生: 字段全 String, 满足 Send + Sync 自动推导条件.
+// crate 内 #![forbid(unsafe_code)] 不允许 unsafe impl, 但自动派生无需 unsafe impl.
+// RC-5 runtime 集成时跨任务传输安全.
+
 // SelfAssessmentCache (scene-d 例 2) **0 在此 crate** (per 子代理审查 1.2):
 // 之前这里有 `SelfAssessment` / `Deviation` / `SelfAssessmentCache` 同名不同定义
 // (plugin::SelfAssessment 字段多, 含 id + reviewer_id, 比本处的字段全).

@@ -151,7 +151,7 @@ pub trait SubSupervisor: Send + Sync {
 }
 
 // ============================================
-// 错误
+// 错误 (P-arch 2026-08-27 + 子代理 A 建议: 显式 derive Send + Sync)
 // ============================================
 
 #[derive(Debug)]
@@ -180,6 +180,10 @@ impl std::fmt::Display for SupervisorError {
 }
 
 impl std::error::Error for SupervisorError {}
+
+// Send / Sync 由编译器自动派生: 字段全 String, 满足自动推导条件.
+// crate 内 #![deny(unsafe_code)] 不允许 unsafe impl, 自动派生无需 unsafe impl.
+// 上一版曾尝试 `#[derive(Debug, Send, Sync)]`, 但 Send / Sync 是 unsafe trait 不能 derive, 已修正.
 
 // ============================================
 // v2.0 alpha 唯一真实现: NoopSubSupervisor (0 装测试用)
