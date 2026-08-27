@@ -13,7 +13,7 @@ on:
   schedule:
     - cron: '0 6 * * *'  # 每天 UTC 06:00 (= 北京 14:00)
   push:
-    branches: [master]
+    branches: [main]
   workflow_dispatch:
 
 # 防并发同分支多跑 (节省 CI 分钟)

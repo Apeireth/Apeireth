@@ -6,12 +6,12 @@ name: companion-desktop CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
     paths:
       - 'frontend/companion-desktop/**'
       - '.github/workflows/companion-desktop-ci.yml'
   pull_request:
-    branches: [master]
+    branches: [main]
     paths:
       - 'frontend/companion-desktop/**'
       - '.github/workflows/companion-desktop-ci.yml'
