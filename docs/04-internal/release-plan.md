@@ -28,7 +28,7 @@ Status:          🟢 活跃 (v2 发布路线)
 |---|---|---|
 | 基地 = OS（不绑模型） | `ProviderCapability` trait + 3 canonical provider（minimax/anthropic/openai-compatible）插件化 | ✅ 无偏差 |
 | 涌现优先（AI 自己长能力） | `PluginManifest::declare()` + `PluginManager::register()` + runtime agent loop 用 typed view `active_tools()/active_providers()` | ✅ 无偏差（plugin 拼装 + capability registry 唯一事实源已建立） |
-| 治理 = 闸 + 批准 + 熔断 | `crates/foundation/governance` 提供完整 hook 实现（`AllowAll`/`DenyCapabilities`/`MaxRounds`/`PermissionGovernanceHook`/`PromptInjectionHook`/`CredentialDisclosureHook`/`AuditHashChain`） | ⚠️ **P0 未接线**：生产 bootstrap 默认 `AllowAll`；详见根 [ROADMAP.md](../../ROADMAP.md) §4 P0 |
+| 治理 = 闸 + 批准 + 熔断 | `crates/foundation/governance` 提供完整 hook 实现（`AllowAll`/`DenyCapabilities`/`MaxRounds`/`PermissionGovernanceHook`/`PromptInjectionHook`/`CredentialDisclosureHook`/`AuditHashChain`） | ✅ **P0 已接线 (upstream `873d2857`)**：CLI bootstrap 装 `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；MaxRounds 结构性、AuditHashChain 按部署需要 |
 | 记录/连续性（continuity 锚点） | `SessionId` + `TraceId` + `crates/engine/runtime/src/canonical/session.rs` 会话生命周期 | ✅ 锚点建立，approval 可恢复 |
 | 工具默认安全 | `BuiltinToolsPlugin::new()` 默认注册 filesystem/search/repo（3 只读）；shell/fetch opt-in | ✅ 无偏差 |
 | 0 装 PASS | SDK 7 个 `unimplemented!()` 守门；governance 默认空 pipeline → `AllowAll`（**可见默认非不可见 Option**） | ✅ 0 装 PASS 严守 |
@@ -58,7 +58,7 @@ Status:          🟢 活跃 (v2 发布路线)
 
 | 优先级 | 任务 | 状态 | 预计 tag |
 |---|---|---|---|
-| **P0** | 生产 governance 接线（`build_canonical_runtime_from_env` 装 `GovernancePipeline`）| ⏳ | `v2.0.0-alpha.2` |
+| **P0** | 生产 governance 接线（`build_canonical_runtime_from_env` 装 `GovernancePipeline`）| ✅ done (upstream `873d2857`) | — |
 | **P0** | 13 键 verdict cache 接线决策（接进 pipeline 或正式降级归档） | ⏳ | 同上 |
 | **P1** | core crate 脊椎去留（onion/gate/lifecycle/philosophy/memory 5 legacy 模块）+ `apeireth-credentials` 接线 | ⏳ | `v2.0.0-beta.1` |
 | **P3** | M1B 记忆全量移植（ACT-R + 完整管线） | ⏳ | `v2.0.0-beta.2` |
@@ -85,14 +85,17 @@ Status:          🟢 活跃 (v2 发布路线)
 - [x] **rustdoc**：`rustdoc.yml`（nightly `-Dwarnings`）✅
 - [x] **coverage**：`coverage.yml`（cargo tarpaulin）✅
 - [x] **13 键测试契约**：`rust.yml` hard-walls job（`crates/foundation/core/tests/verdict_keys.rs` 等）
+- [x] **生产 governance 接线**（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)`
+- [x] **敏感 workspace 路径保护**（upstream `ac5cbf5a`）：`tool.filesystem` + `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 自动屏蔽 `.env`/`.ssh`/`.aws`/`.gnupg`/`.secret`
 - [x] **M2B / M2C / M3A 三 OS 隔离验证**：m2b-xv-isolation.yml + m2c-xv-shell-validation.yml + m3a-canonical-fetch.yml ✅
 - [x] **protocol 集成测试** ✅
 - [x] **dock**：`crates/` + `legacy/` 双线管理（legacy reference-only + workspace exclude）
 - [x] **CI 防御**：`pii-leak-detection` + `release-prep` 保持 master-only，不在 main 跑（per `601e5c21`）|
 
-### 待完成（P0 = 下批第一优先）
+### 待完成（P1 接班）
 
-- [ ] **生产 governance 接线**（P0）：`build_canonical_runtime_from_env` 默认 `AllowAll` → 安装 `GovernancePipeline(PermissionGovernanceHook + PromptInjectionHook + CredentialDisclosureHook + AuditHashChain + MaxRounds)`；13 键 verdict cache 接线决策
+- [ ] **13 键 verdict cache 接线决策**（P0 之一）：接进 `GovernancePipeline` 或正式降级归档；治理 hook 装配已就绪
+- [ ] **core crate 脊椎去留 + `apeireth-credentials` 接线**（P1）
 - [ ] **World model W1/W2**（P6）：v1 发布前置清单遗留（文本层 + 因果图推演）——根 [ROADMAP.md](../../ROADMAP.md) §4 P6
 
 ## 五、配套发布产物（v2.0.0-alpha.1 已落地）

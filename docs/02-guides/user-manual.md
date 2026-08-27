@@ -83,15 +83,16 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | `AuditHashChain` | — | 防篡改审计哈希链（append-only）|
 | `PiiDetector` | — | PII 检测与 redact |
 
-**P0 安全接线状态**（**最大诚实标注**）：
+**生产治理接线（✅ 已通过 upstream `873d2857` 落地，2026-08-27）**：
 
-- 当前 `build_canonical_runtime_from_env`（`crates/adapters/cli/src/lib.rs`）**只挂载 `AllowAll`**——`PromptInjectionHook` / `CredentialDisclosureHook` / `AuditHashChain` / `PermissionGovernanceHook` 代码全在 crate 里、有单测，但生产路径**不挂载**。
-- `Runtime::builder()` 默认也是 `AllowAll`。
-- 工具层兜底：`shell` / `fetch` 默认 opt-in 关闭；`ProcessExecutor` 是 Windows Job Object 完整 / Linux·macOS 进程组部分隔离（参见 [architecture.md](../01-architecture/architecture.md) Process ownership 表）。
-- `credentials` 走 **`EnvCredentialResolver`**（`crates/engine/provider/src/credentials.rs`）：逻辑名→环境变量映射（`provider.minimax.api_key` → `APEIRETH_API_KEY`、`provider.anthropic.api_key` → `APEIRETH_ANTHROPIC_KEY`、`provider.openai-compatible.api_key` → `OPENAI_API_KEY`），无 secret 留 struct、secret 走 `Secret<T>`（debug redact）。
-- **`apeireth-credentials` crate（keyring / encrypted file / KMS backend）代码存在但未接线**——本批运行时用的是 `EnvCredentialResolver`；legacy OS keyring 集成排期见 ROADMAP §4 P2。
+- `crates/adapters/cli/src/lib.rs::build_canonical_runtime_from_env` **挂载 `GovernancePipeline`** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`（3 个）；配置来源 `build_production_governance_from_env()` 按环境变量 `APEIRETH_GOVERNANCE_*` 装配
+- runtime 每个 turn 的 `CapabilityDispatch` **都**先经 governance pipeline 评估，**不再**默认 `AllowAll`
+- `MaxRounds` 是**结构性**约束（runtime.rs 内部），`AuditHashChain` 按部署需要挂
+- 工具层兜底：`shell` / `fetch` 默认 opt-in 关闭；`ProcessExecutor` 是 Windows Job Object 完整 / Linux·macOS 进程组部分隔离（参见 [architecture.md](../01-architecture/architecture.md) Process ownership 表）
+- `credentials` 走 **`EnvCredentialResolver`**（`crates/engine/provider/src/credentials.rs`）：逻辑名→环境变量映射（`provider.minimax.api_key` → `APEIRETH_API_KEY`、`provider.anthropic.api_key` → `APEIRETH_ANTHROPIC_KEY`、`provider.openai-compatible.api_key` → `OPENAI_API_KEY`），无 secret 留 struct、secret 走 `Secret<T>`（debug redact）
+- **`apeireth-credentials` crate（keyring / encrypted file / KMS backend）代码存在但未接线**——本批运行时用的是 `EnvCredentialResolver`；legacy OS keyring 集成排期见 ROADMAP §4 P2
 
-**0 装 PASS 总结**：治理机制全部就位且有单测，但生产路径不调用，安全守护目前**仅靠工具默认 opt-in 关闭**这一兜底。这是 v2.0 的**已记录、已承认、已排期**的缺口（ROADMAP §4 P0 = 生产 governance 接线 = 下一批第一优先）。
+**0 装 PASS 总结**：治理机制全部就位且有单测，**生产 bootstrap 装 3 个 hook**（Permission + 凭据泄漏 + 注入检测），其余 hook（MaxRounds 结构性、AuditHashChain 按需、DenyCapabilities 显式）由部署方决定。PII/越权/凭据泄漏 3 类核心攻击面被上游 `873d2857` 守住；剩余延后项按 ROADMAP §4 P2-P8 排。
 
 ## 7. SDK（v2 stub）
 
@@ -101,7 +102,8 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 
 | 项 | 状态 |
 | | |
-| **生产 governance 接线** | ⚠️ P0 未做：默认 AllowAll（hook 已实现未挂载） |
+| **生产 governance 接线** | ✅ 已做（upstream `873d2857`）：`PermissionGovernanceHook` + `CredentialDisclosureHook` + `PromptInjectionHook` 安装到 CLI bootstrap |
+| **敏感 workspace 路径保护**（`.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` 等）| ✅ 已做（upstream `ac5cbf5a`）：`tool.filesystem` + `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 屏蔽（普通项目元数据如 `.gitignore` / `.cargo/config.toml` 仍可读）|
 | **13 键 verdict cache 接线** | ⚠️ P0 拍板：核心定义在 `crates/foundation/core/src/philosophy.rs`，测试在 `crates/foundation/core/tests/`，**未接 runtime agent loop** |
 | **`apeireth-credentials` 接线** | ⚠️ P2：env resolver 在 provider，生产足够；keyring 等后端未挂 |
 | **M1B 记忆全量移植（ACT-R / 完整管线）** | ⏳ P3：当前 memory crate 有 primitive；端到端管线待 P3 |
@@ -128,7 +130,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 
 ## 10. 一句话
 
-**v2.0.0-alpha.1 = canonical agent loop + 13-crate 工作区 + 3 provider + 5 工具（2 opt-in）+ 治理 hook 全在 + 生产未挂载**。alpha 这个名是诚实的：骨架与主链绿了，治理接线是 P0，其他延后项按 ROADMAP §4 排。
+**v2.0.0-alpha.1 = canonical agent loop + 13-crate 工作区 + 3 provider + 5 工具（2 opt-in）+ 治理 hook 全在 + 生产已挂 3 个（P0 接线 `873d2857`）+ sensitive_path 路径保护 (`ac5cbf5a`)**。alpha 这个名是诚实的：骨架与主链绿了，3 个核心安全 hook 已挂，剩余延后项按 ROADMAP §4 P2-P8 排。
 
 ---
 
