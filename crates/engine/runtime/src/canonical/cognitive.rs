@@ -868,7 +868,7 @@ impl AgentModule for SelfAssessmentModule {
                     quality: judged.score,
                     deviations: serde_json::json!({
                         "verdict": judged.verdict,
-                        "critique": bounded(&judged.critique, 2_000),
+                        "score": judged.score,
                     }),
                     assessed_at: now,
                     reviewer_id: "cognitive.judge".into(),
