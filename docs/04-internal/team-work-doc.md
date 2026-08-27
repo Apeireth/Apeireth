@@ -101,6 +101,8 @@
 
 ## 4. 后端工作全景（当前欠账，按价值排序）
 
+> **现状 (2026-08-27) — v2 已重新对齐**：本文 §4-§11 整体为 v1.0 时代（master 线/86-crate）后端欠账与任务包快照，**正文保留原样**。v2 工程重构后：当前基线见根 [ARCHITECTURE.md](../../ARCHITECTURE.md) + [architecture.md](../01-architecture/architecture.md)，后端欠账 = 根 [ROADMAP.md](../../ROADMAP.md) §4 的 P0-P8 路线，**R参考**本 § 旧条目。
+
 ### A 级：设计层欠账
 | # | 方向 | 说明 | 产出 |
 |---|---|---|---|
@@ -125,6 +127,8 @@
 ---
 
 ## 5. 插件生态矩阵（官方整合版）
+
+> **现状 (2026-08-27) — v1 时代插件生态**：本节描述 v1 三层交付模型（模块/套件/插件）下的官方整合版。v2 工程重构**已弃用三层模型**——单一 plugin 层 + `PluginManager` 唯一事实源（见 [plugin-authoring-guide.md](plugin-authoring-guide.md)）。§5.6 描述的社区插件规范在 v2 由 [plugin-authoring-guide.md](plugin-authoring-guide.md) 取代，**R在新插件开发时遵循 v2 指南**。
 
 > 分层原则见 §1.3。**官方 5 个整件**；社区按 §5.6 规范开发细件。
 
@@ -163,6 +167,8 @@
 
 ## 6. 团队组织与作战节奏
 
+> **现状 (2026-08-27) — v1 编制与节奏**：本节描述 v1 时代 "23 人 AI 团队" 编制与节奏。v2 工程重构后工作区收敛为 13-crate + 1 独立前端 workspace，节奏以根 [ROADMAP.md](../../ROADMAP.md) §4 优先级 P0-P8 为准。**R**用旧 "23 人 / 战区 / 5 大子项目" 视角。
+
 ### 6.1 编制（23 人）
 - **5 个工作流**：W1 记忆域深化（4 人）/ W2 预测机套件（4 人）/ W3 信息聚合（3 人）/ W4 日程通讯（3 人）/ W5 文档套件（3 人）
 - W6 后端全景 A/B/C（4 人，其中 A1 演化回路 2 人优先）
@@ -197,6 +203,8 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ## 7. 验收总纲（任何交付）
 
+> **现状 (2026-08-27) — 7 哲学锚穿透的验收总纲仍有效**：本文的"7 项硬性（每 5 成就穿透检查）" + "5 项强制（每交付穿透）" 验收清单本质是 8 哲学锚（per [philosophy.md](../01-architecture/philosophy.md) + [09-anchor.md](../../docs/archive/conventions/09-anchor.md)）的展开，v2 同样适用。具体 §7 内 PR 检查清单（构建/测试/文档/集成守门员路径）v2 改走 [plugin-authoring-guide.md](plugin-authoring-guide.md) §6 + [maintenance-guide.md](maintenance-guide.md) §3。
+
 1. `cargo test -p <crate> -j 4` 全绿（含失败路径测试）
 2. 0 装 PASS：诚实标注做了什么/没做什么
 3. 文档同步：模块地图/设计文档/env 清单/台账
@@ -206,6 +214,8 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 ---
 
 ## 8. 附：VCP 新版调研（2026-08-16）
+
+> **现状 (2026-08-27) — v1 时代调研快照**：本附是 v1 era 的 VCP 调研吸收记录（89 插件扫描 + Rust 记忆层 + 核心 modules 深读 + 可吸收清单）。v2 工程重构**已收敛 14-crate 为 13-crate**，且 SDK 走 normalized protocol 抽象（v1 的 vendor-wire 翻译散落问题已治），故本附的"建议吸收清单"（§8.4）**大部分已被 v2 架构选择覆盖**。**R**把 VCP 调研结论当 v1 历史证据，新调研需求见 [next-team-handbook.md](next-team-handbook.md)（已冻结）。
 
 > 新版 VCPToolBox（源码 research/source/vcptoolbox，从 Downloads 迁入工作区供团队只读，git 排除）：
 > Node.js 核心（server.js/Plugin.js/WebSocketServer.js/KnowledgeBaseManager.js + 20+ modules）+ **Rust N-API 记忆层（rust-vexus-lite：RiverMemo Topology V3）** + **84 插件**。
@@ -320,6 +330,8 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ## 9. 附录：任务包模板（队长拆任务的标准格式）
 
+> **现状 (2026-08-27) — v1 任务包模板**：本文模板的 "背景/边界/方向/验收/数据源/自审报告" 6 段格式仍是 v2 任务包拆解的可复用骨架（v2 任务见 [ROADMAP.md](../../ROADMAP.md) §4 P0-P8）。**v2 附加**：每包任务的现状/受领 crate 路径必须写 13-crate 实际路径（`crates/foundation|engine|capabilities|adapters/<name>`），**R**写 `crates/apeireth-*` 旧路径。
+
 每个任务包必须包含以下 6 节。**队长只写方向与边界，不写实现细节**（发挥成员自主性）；**验收必须可执行**（测试命令 + 判断标准）。
 
 ```markdown
@@ -354,6 +366,8 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 
 ## 10. 最后一公里任务包（第一批官方包, 2026-08-17 主人拍板）
 
+> **现状 (2026-08-27) — 已结案**：本节是 v1.0 时代 "最后一公里" 任务包（第一批官方包）。**v1.0 已发布 (tag v1.0.0 → 993e9107, 2026-08-18)**，本节任务作为 v1 阶段结案存档。v2 后续任务以 [ROADMAP.md](../../ROADMAP.md) §4 P0-P8 为唯一权威。
+
 > **定位**: 核心机制已齐（90%），这 10 个包把"零件"拼成"能干活的存在"——
 > 装配（TP1/TP2）+ 填空（TP5/TP6/TP7）+ 食粮（TP3）+ 规范（TP9）。
 > Leader 按 §9 模板拆细，边界以本节为准；台账编号 N16-N22 可追溯。
@@ -376,6 +390,8 @@ Windows Job Object 环境问题（终止不被记为非正常退出）。task �
 ---
 
 ## 11. 批次任务包：调研吸收批（2026-08-18, 主人拍板交付团队）
+
+> **现状 (2026-08-27) — 已结案**：本节是 v1.0 时代 "调研吸收批" 任务包（批次一/二/三/塞缝批）。**v1.0 已发布 (tag v1.0.0 → 993e9107, 2026-08-18)**，本节作为 v1 阶段结案存档。**吸收内容落地现状**对应 v2 工作区：v2 已收敛 14-crate 为 13-crate，新任务以 [ROADMAP.md](../../ROADMAP.md) §4 P0-P8 排期。
 
 > **定位**: 4 路模块对标调研（记忆/安全/进化/Agent）的落地批。台账编号可追溯（M*/S*/E*/A*）。
 > 分工: 批次按依赖分组, 组内可并行; 每包按 §9 模板拆细, 边界以本节为准。
