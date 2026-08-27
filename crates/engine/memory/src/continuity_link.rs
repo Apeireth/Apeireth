@@ -125,7 +125,7 @@ pub fn recall_recent(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::IdentityCard;
+    use apeireth_core::kernel::memory::IdentityCard;
     fn setup() -> (SqliteMemoryStore, String) {
         let db = SqliteMemoryStore::open_in_memory().unwrap();
         let id = "continuity-test".to_string();

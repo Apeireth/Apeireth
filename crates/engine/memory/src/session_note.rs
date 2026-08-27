@@ -1,7 +1,7 @@
 //! Session + Note 存储.
 //!
 //! - Session: 可变 (last_active_at 自动更新, closed_at 一次性设置)
-//! - Note: 可变 (apeireth_core::Note 文档明确 "可更新/合并/遗忘")
+//! - Note: 可变 (apeireth_core::kernel::memory::Note 文档明确 "可更新/合并/遗忘")
 //! - 与 6 历史流 + Episode 的差异: 这两个不是 append-only (按 D2 §5.4)
 //!
 //! 与 `apeireth_core` 类型关系:
@@ -11,7 +11,7 @@
 use rusqlite::{params, Connection, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-use apeireth_core::{Note, Session};
+use apeireth_core::{kernel::memory::Note, kernel::memory::Session};
 
 use crate::append_only::now_unix;
 use crate::{MemoryError, MemoryResult};
@@ -30,7 +30,7 @@ pub struct SessionRecord {
 }
 
 impl SessionRecord {
-    /// 从 `apeireth_core::Session` 构造.
+    /// 从 `apeireth_core::kernel::memory::Session` 构造.
     pub fn from_core(s: &Session) -> Self {
         Self {
             id: s.id.clone(),
@@ -40,7 +40,7 @@ impl SessionRecord {
         }
     }
 
-    /// 转回 `apeireth_core::Session` (丢弃 `closed_at`).
+    /// 转回 `apeireth_core::kernel::memory::Session` (丢弃 `closed_at`).
     pub fn into_core(self) -> Session {
         Session {
             id: self.id,
@@ -204,7 +204,7 @@ pub struct NoteRecord {
 }
 
 impl NoteRecord {
-    /// 从 `apeireth_core::Note` 构造 (核心类型无时间有效性字段 → 缺省永久有效).
+    /// 从 `apeireth_core::kernel::memory::Note` 构造 (核心类型无时间有效性字段 → 缺省永久有效).
     pub fn from_core(n: &Note) -> Self {
         Self {
             id: n.id.clone(),
@@ -218,7 +218,7 @@ impl NoteRecord {
         }
     }
 
-    /// 转回 `apeireth_core::Note` (核心类型不含有效性窗口, 此处丢弃两字段;
+    /// 转回 `apeireth_core::kernel::memory::Note` (核心类型不含有效性窗口, 此处丢弃两字段;
     /// M5 边界: 不改 apeireth_core, 接口稳定为先).
     pub fn into_core(self) -> Note {
         Note {
@@ -564,7 +564,7 @@ impl crate::SqliteMemoryStore {
     ///
     /// - `valid_from`/`valid_until` 均 `None` = 永久有效 (与 `put_note` 等价, 0 装缺省)
     /// - 校验: 两者都给时必须 `valid_from <= valid_until` (单点/反向窗口拒绝)
-    /// - 不改 `apeireth_core::Note` (核心类型无此字段, 接口稳定为先)
+    /// - 不改 `apeireth_core::kernel::memory::Note` (核心类型无此字段, 接口稳定为先)
     pub fn put_note_with_validity(
         &self,
         note: &Note,

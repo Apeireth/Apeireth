@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 use crate::append_only::{HistoryEntry, HistoryStream};
 use crate::episode::EpisodeStore;
