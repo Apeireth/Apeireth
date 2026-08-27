@@ -6,7 +6,46 @@
 use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
+use apeireth_governance::{
+    CredentialDisclosureHook, GovernancePipeline, Permission, PermissionGovernanceHook,
+    PermissionPolicy, PromptInjectionHook,
+};
 use apeireth_runtime::canonical::{Runtime, TurnRequest, TurnResponse};
+
+/// Enables the local filesystem and search tools in the production policy.
+pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
+
+/// Build the production governance policy from an explicit local-read choice.
+///
+/// The explicit boolean keeps the policy deterministic and easy to test. The
+/// environment-facing wrapper is [`build_production_governance_from_env`].
+/// Authorization is deliberately the first hook: a later content-risk hook
+/// must never turn an unauthorized capability into an approval request.
+pub fn build_production_governance(enable_local_read_tools: bool) -> GovernancePipeline {
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.repo".to_string()));
+    if enable_local_read_tools {
+        policy.grant(Permission::ExecuteTool("tool.filesystem".to_string()));
+        policy.grant(Permission::ExecuteTool("tool.search".to_string()));
+    }
+
+    GovernancePipeline::new()
+        .with(Arc::new(PermissionGovernanceHook::new(policy)))
+        .with(Arc::new(CredentialDisclosureHook::new()))
+        .with(Arc::new(PromptInjectionHook::new()))
+}
+
+/// Build the production governance policy using the process environment.
+///
+/// Production is default-deny for capability execution. Only the exact value
+/// `1` enables the two local read tools; shell, fetch, and unknown capabilities
+/// remain denied even if a future plugin registers them.
+pub fn build_production_governance_from_env() -> GovernancePipeline {
+    let enable_local_read_tools = std::env::var(ENABLE_LOCAL_READ_TOOLS_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    build_production_governance(enable_local_read_tools)
+}
 
 /// Build the one canonical runtime used by CLI chat and the HTTP gateway.
 ///
@@ -26,6 +65,7 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
         Arc::new(EnvCredentialResolver::new());
     builder = builder.with_credentials(resolver);
+    builder = builder.with_governance(Arc::new(build_production_governance_from_env()));
 
     let workspace_root = std::env::current_dir()
         .map_err(|error| format!("canonical runtime bootstrap failed: current_dir: {error}"))?;

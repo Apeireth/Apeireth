@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
+apeireth-governance = { path = "../../foundation/governance" }
 apeireth-gateway = { path = "../gateway" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-tools-canonical = { path = "../../capabilities/tools" }
@@ -23,6 +24,7 @@ tokio = { workspace = true }
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 reqwest = { workspace = true }
+serde_json = { workspace = true }
 
 [features]
 default = ["base"]
