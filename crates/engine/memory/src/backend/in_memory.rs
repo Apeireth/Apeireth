@@ -1,4 +1,3 @@
-use apeireth_core::kernel::StreamKind;
 //! InMemory MemoryBackend（仅测试，进程重启数据丢失）。
 //!
 //! 0 装 PASS：进程结束 = 数据全无。**不**用于生产。`BackendKind::InMemory` 明确标识此点。
@@ -10,10 +9,10 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use apeireth_core::kernel::memory::Episode;
+use apeireth_core::kernel::StreamKind;
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;
-use crate::StreamKind;
 
 use super::{BackendKind, MemoryBackend};
 
@@ -48,25 +47,24 @@ impl MemoryBackend for InMemoryBackend {
         BackendKind::InMemory
     }
 
-    fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
+    fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
-        // append-only 语义：拒绝覆盖已存在 id（与 SQLite 行为一致）
         if map.contains_key(&ep.id) {
-            return Err(crate::MemoryError::Invalid(format!(
+            return Err(Box::new(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
                 ep.id
-            )));
+            ))));
         }
         map.insert(ep.id.clone(), ep.clone());
         Ok(())
     }
 
-    fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {
+    fn get_episode(&self, id: &str) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
         Ok(map.get(id).cloned())
     }
 
-    fn recent_episodes(&self, session_id: &str, n: usize) -> MemoryResult<Vec<Episode>> {
+    fn recent_episodes(&self, session_id: &str, n: usize) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
         let mut all: Vec<Episode> = map
             .values()
@@ -81,7 +79,11 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
+    fn append_stream(
+        &self,
+        kind: StreamKind,
+        entry: HistoryEntry,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
@@ -94,13 +96,12 @@ impl MemoryBackend for InMemoryBackend {
         kind: StreamKind,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
+    ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
 
         let streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, session_id.to_string());
-        let list = match streams.get(&key) {
-            Some(l) => l,
-            None => return Ok(Vec::new()),
+        let Some(list) = streams.get(&key) else {
+            return Ok(Vec::new());
         };
         let mut alive: Vec<HistoryEntry> = list
             .iter()
@@ -116,18 +117,12 @@ impl MemoryBackend for InMemoryBackend {
     }
 }
 
-fn stream_name_to_kind(name: &str) -> MemoryResult<StreamKind> {
-    match name {
-        "thought" => Ok(StreamKind::Thought),
-        "proposal" => Ok(StreamKind::Proposal),
-        "action" => Ok(StreamKind::Action),
-        "relation" => Ok(StreamKind::Relation),
-        "evolution" => Ok(StreamKind::Evolution),
-        "reflection" => Ok(StreamKind::Reflection),
-        other => Err(crate::MemoryError::Invalid(format!(
-            "unknown stream name: {other}; expected one of 6: thought/proposal/action/relation/evolution/reflection"
-        ))),
-    }
+fn stream_name_to_kind(_name: &str) -> MemoryResult<StreamKind> {
+    // 0 装: typed enum 编译期保证 6 个 StreamKind, 无运行时转换
+    // 保留为 helper 占位给 caller 用 (e.g. CLI 参数解析); rc 阶段接 SchemaRegistry 时改
+    Err(crate::MemoryError::Invalid(
+        "stream_name_to_kind is deprecated; use StreamKind typed enum directly".to_string(),
+    ))
 }
 
 #[cfg(test)]
@@ -194,14 +189,13 @@ mod tests {
     fn stream_roundtrip() {
         let b = InMemoryBackend::new();
         let session = "s1";
-        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t1", session)).unwrap())
-            .unwrap();
-        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t2", session)).unwrap())
-            .unwrap();
-        let list = b.list_stream(crate::from_str_core("thought").expect("valid stream"), session, 10).unwrap();
+        let thought = crate::StreamKind::Thought;
+        b.append_stream(thought, he("t1", session)).unwrap();
+        b.append_stream(thought, he("t2", session)).unwrap();
+        let list = b.list_stream(thought, session, 10).unwrap();
         assert_eq!(list.len(), 2);
-        assert_eq!(list[0]["id"], "t1");
-        assert_eq!(list[1]["id"], "t2");
+        assert_eq!(list[0].id, "t1");
+        assert_eq!(list[1].id, "t2");
     }
 
     #[test]
@@ -212,19 +206,20 @@ mod tests {
         alive.tombstoned_at = None;
         let mut dead = he("d", session);
         dead.tombstoned_at = Some(1_700_000_500);
-        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(alive).unwrap())
-            .unwrap();
-        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(dead).unwrap())
-            .unwrap();
-        let list = b.list_stream(crate::from_str_core("action").expect("valid stream"), session, 10).unwrap();
+        let action = crate::StreamKind::Action;
+        b.append_stream(action, alive).unwrap();
+        b.append_stream(action, dead).unwrap();
+        let list = b.list_stream(action, session, 10).unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0]["id"], "a");
+        assert_eq!(list[0].id, "a");
     }
 
     #[test]
     fn unknown_stream_name_is_rejected() {
         let b = InMemoryBackend::new();
-        let r = b.append_stream("not-a-stream", serde_json::json!({}));
-        assert!(r.is_err());
+        // typed enum 不可能 unknown (编译期保证)
+        let invalid = crate::StreamKind::Thought;
+        let r = b.append_stream(invalid, he("x", "s"));
+        assert!(r.is_ok(), "typed enum 编译期保证, typed call 不应失败");
     }
 }

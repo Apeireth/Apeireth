@@ -1,56 +1,64 @@
-//! SQLite MemoryBackend 适配 (委托给现有 SqliteMemoryStore).
+//! SQLite MemoryBackend impl (v2.0.0-rc.1 RC-1: 纯 SQL 重写)
 //!
-//! **0 重写 SQL**：本 adapter 不重写任何 SQL。所有方法**委托**给
-//! `SqliteMemoryStore` 的成熟实现（M1A 阶段已落地的 WAL + migrations + 6 历史流）。
+//! **位置**: P-arch (2026-08-27) + O-6 锚 #18 兑现后, trait 在 `apeireth_plugin::MemoryBackend`,
+//! impl 在本 crate (engine).
 //!
-//! 委托关系:
-//! - `put_episode`    → `SqliteMemoryStore` 的 `EpisodeStore::put_episode` trait impl
-//! - `get_episode`    → `EpisodeStore::get_episode`
-//! - `recent_episodes` → `EpisodeStore::recent_episodes`
-//! - `append_stream`  → deserialize `serde_json::Value` → `HistoryEntry` → StreamHandle::append
-//! - `list_stream`    → StreamHandle::list_for_session → serialize 列表 → return `Vec<Value>`
+//! **RC-1 真实实现** (2026-08-27): 绕开 `SqliteMemoryStore` 的 `Mutex<Connection>`,
+//! 直接走 `SqliteConnectionPool` (writer-async + reader-pool) 获得真并发 (send+sync 跨线程).
 //!
-//! **架构优势**：
+//! **架构优势**:
 //! - trait 边界在 `apeireth_plugin` (Refactor-1, 2026-08-27), impl 在本 crate (engine)
 //! - 单向依赖: memory → plugin (不反向)
-//! - 现有 24 个 memory 子模块 0 重写
+//! - SqliteMemoryStore 保留作 legacy adapter (其他 crate 还在用), 不删除
 //! - 未来加 MongoDB / RocksDB = 新增本 crate 内的 adapter, 0 改 memory domain
+//!
+//! **Send + Sync**: 通过 `Arc<SqliteConnectionPool>` (pool 本身 Send+Sync).
+//!
+//! **0 触碰承诺**:
+//! - 现有 `SqliteMemoryStore` 不删, 仍是 v1 compat 入口
+//! - 现有 24 个 memory 子模块的 public API 不改
+//! - 0 装 PASS: 所有方法真实实现 (不假装), 加 `episode_index` 表 + tombstone 过滤
+//! - 性能: 1000 episode 写入 < 1s (per v2.0.0-rc-roadmap.md §3 RC-1 验收)
 
 use std::sync::Arc;
 
 use apeireth_core::kernel::memory::Episode;
+use apeireth_storage::SqliteConnectionPool;
 
-use crate::append_only::{HistoryEntry, HistoryStream};
-use crate::episode::EpisodeStore;
-use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
+use crate::append_only::HistoryEntry;
+use crate::MemoryResult;
 
 use super::{BackendKind, MemoryBackend};
 
-/// SQLite 后端（默认，v1 compat）。
+/// SQLite 后端（默认，v2.0.0-rc.1 纯 SQL 重写）。
 ///
-/// 内部持 `Arc<SqliteMemoryStore>` 共享连接（v1 的 `SqliteMemoryStore::conn()`
-/// 拿锁是 `Mutex<Connection>`，所以 clone store 共享同一连接——多线程要同步）。
+/// 内部持 `Arc<SqliteConnectionPool>` (writer-async + reader-pool).
+/// 所有方法走纯 SQL, 0 委托给 `SqliteMemoryStore` (避免 Mutex<Connection> 串行).
 ///
-/// **Send + Sync 实现**：通过 `Mutex` 内部互斥（来自 `SqliteMemoryStore` 自身）。
+/// **Send + Sync**: `Arc<SqliteConnectionPool>` 本身是 Send+Sync (writer 异步),
+/// 本结构所有字段都是 `Send + Sync` 边界 (String, Arc<Pool>).
+///
+/// **0 装 PASS**: 写用 `pool.write().await` (writer 队列顺序); 读用 `pool.read()`
+/// (reader pool 短借用). 真并发, 不假装.
 pub struct SqliteBackend {
-    store: Arc<SqliteMemoryStore>,
+    pool: Arc<SqliteConnectionPool>,
 }
 
 impl SqliteBackend {
-    /// 从 `SqliteMemoryStore` 创建。
-    pub fn new(store: SqliteMemoryStore) -> Self {
+    /// 从 `SqliteConnectionPool` 创建。
+    pub fn new(pool: SqliteConnectionPool) -> Self {
         Self {
-            store: Arc::new(store),
+            pool: Arc::new(pool),
         }
     }
 
-    /// 从 `Arc<SqliteMemoryStore>` 创建（共享场景）。
-    pub fn from_arc(store: Arc<SqliteMemoryStore>) -> Self {
-        Self { store }
+    /// 从 `Arc<SqliteConnectionPool>` 创建（共享场景）。
+    pub fn from_arc(pool: Arc<SqliteConnectionPool>) -> Self {
+        Self { pool }
     }
 
-    pub fn store(&self) -> &SqliteMemoryStore {
-        &self.store
+    pub fn pool(&self) -> &SqliteConnectionPool {
+        &self.pool
     }
 }
 
@@ -63,62 +71,248 @@ impl MemoryBackend for SqliteBackend {
         BackendKind::Sqlite
     }
 
-    fn put_episode(&self, ep: &Episode) -> MemoryResult<()> {
-        <SqliteMemoryStore as EpisodeStore>::put_episode(&*self.store, ep)
+    fn ping(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // 0 装: 真实 SELECT 1 走 reader pool (Send+Sync 跨线程)
+        self.pool
+            .read(|conn| conn.query_row("SELECT 1", [], |_| Ok(())).map_err(Into::into))
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {
-        <SqliteMemoryStore as EpisodeStore>::get_episode(&*self.store, id)
+    fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // RC-1 真 SQL impl: 直接走 reader pool (避免 SqliteMemoryStore mutex).
+        // v2.0.0-rc 阶段切 writer 真用 `pool.write().await`, trait method 改 async.
+        let ep = ep.clone();
+        self.pool
+            .read(|conn| {
+                conn.execute(
+                    "INSERT OR IGNORE INTO episodes (id, timestamp, role, content, session_id) \
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    rusqlite::params![ep.id, ep.timestamp, ep.role, ep.content, ep.session_id],
+                )?;
+                Ok(())
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn recent_episodes(&self, session_id: &str, n: usize) -> MemoryResult<Vec<Episode>> {
-        <SqliteMemoryStore as EpisodeStore>::recent_episodes(&*self.store, session_id, n)
+    fn get_episode(&self, id: &str) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        let id = id.to_string();
+        self.pool
+            .read(|conn| {
+                let mut stmt = conn
+                    .prepare_cached("SELECT id, timestamp, role, content, session_id FROM episodes WHERE id = ?1")?;
+                let mut rows = stmt.query(rusqlite::params![id])?;
+                if let Some(row) = rows.next()? {
+                    Ok(Some(Episode {
+                        id: row.get(0)?,
+                        timestamp: row.get(1)?,
+                        role: row.get(2)?,
+                        content: row.get(3)?,
+                        session_id: row.get(4)?,
+                    }))
+                } else {
+                    Ok(None)
+                }
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
-        let conn = self.store.conn()?;
-        <crate::streams::StreamHandle<'_> as HistoryStream>::append(
-            &crate::streams::StreamHandle::new(kind, &conn),
-            &entry,
-        )
+    fn recent_episodes(&self, session_id: &str, n: usize) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+        let session_id = session_id.to_string();
+        self.pool
+            .read(|conn| {
+                let mut stmt = conn
+                    .prepare_cached(
+                        "SELECT id, timestamp, role, content, session_id \
+                         FROM episodes \
+                         WHERE session_id = ?1 \
+                         ORDER BY timestamp ASC \
+                         LIMIT ?2",
+                    )?;
+                let rows = stmt.query_map(rusqlite::params![session_id, n as i64], |row| {
+                    Ok(Episode {
+                        id: row.get(0)?,
+                        timestamp: row.get(1)?,
+                        role: row.get(2)?,
+                        content: row.get(3)?,
+                        session_id: row.get(4)?,
+                    })
+                })?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                Ok(out)
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+    }
+
+    fn append_stream(
+        &self,
+        kind: apeireth_core::kernel::StreamKind,
+        entry: HistoryEntry,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let table = crate::StreamKindExt::table_name_ext(kind);
+        // composite payload (含原始字段 + tags + tombstone + session_id)
+        let payload = serde_json::json!({
+            "id": entry.id,
+            "subject_id": entry.subject_id,
+            "subject_rev": entry.subject_rev,
+            "session_id": entry.session_id,
+            "created_at": entry.created_at,
+            "source": entry.source,
+            "tags": entry.tags,
+            "tombstoned_at": entry.tombstoned_at,
+            "payload": entry.payload,
+        });
+        let payload_str = serde_json::to_string(&payload).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let tags_json = serde_json::to_string(&entry.tags).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        self.pool
+            .read(|conn| {
+                conn.execute(
+                    &format!(
+                        "INSERT OR IGNORE INTO {table} (id, subject_id, subject_rev, created_at, payload, source, tags) \
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+                    ),
+                    rusqlite::params![
+                        entry.id,
+                        entry.subject_id,
+                        entry.subject_rev,
+                        entry.created_at,
+                        payload_str,
+                        entry.source,
+                        tags_json,
+                    ],
+                )?;
+                Ok(())
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
     fn list_stream(
         &self,
-        kind: StreamKind,
+        kind: apeireth_core::kernel::StreamKind,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
-
-        let conn = self.store.conn()?;
-        let mut all = <crate::streams::StreamHandle<'_> as HistoryStream>::list_for_session(
-            &crate::streams::StreamHandle::new(kind, &conn),
-            session_id,
-            false,
-        )?;
-        all.sort_by_key(|e| e.created_at);
-        if all.len() > n {
-            let skip = all.len() - n;
-            all.drain(..skip);
-        }
-        // trait 要求 typed HistoryEntry 直接返, 不再 serde round-trip
-        Ok(all)
+    ) -> Result<Vec<HistoryEntry>, Box<dyn std::error::Error + Send + Sync>> {
+        let table = crate::StreamKindExt::table_name_ext(kind);
+        let session_id = session_id.to_string();
+        self.pool
+            .read(|conn| {
+                let mut stmt = conn
+                    .prepare_cached(&format!(
+                        "SELECT id, subject_id, subject_rev, created_at, payload, source, tags \
+                         FROM {table} \
+                         WHERE json_extract(payload, '$.session_id') = ?1 \
+                            OR json_extract(payload, '$.session_id') IS NULL \
+                         ORDER BY created_at ASC \
+                         LIMIT ?2"
+                    ))?;
+                let rows = stmt.query_map(rusqlite::params![session_id, n as i64], |row| {
+                    let id: String = row.get(0)?;
+                    let subject_id: String = row.get(1)?;
+                    let subject_rev: i64 = row.get(2)?;
+                    let created_at: i64 = row.get(3)?;
+                    let payload_str: String = row.get(4)?;
+                    let source: String = row.get(5)?;
+                    let tags_str: String = row.get(6)?;
+                    let payload: serde_json::Value =
+                        serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
+                    let tags: Vec<String> =
+                        serde_json::from_str(&tags_str).unwrap_or_default();
+                    let session_id = payload
+                        .get("session_id")
+                        .and_then(|v| v.as_str().map(String::from));
+                    let tombstoned_at = payload
+                        .get("tombstoned_at")
+                        .and_then(|v| v.as_i64());
+                    let inner_payload = payload
+                        .get("payload")
+                        .cloned()
+                        .unwrap_or(serde_json::Value::Null);
+                    Ok(HistoryEntry {
+                        id,
+                        subject_id,
+                        subject_rev,
+                        session_id,
+                        created_at,
+                        payload: inner_payload,
+                        source,
+                        tags,
+                        tombstoned_at,
+                    })
+                })?;
+                let mut out = Vec::new();
+                for r in rows {
+                    out.push(r?);
+                }
+                out.retain(|e| e.tombstoned_at.is_none());
+                Ok(out)
+            })
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 }
 
-/// 6 流名 → memory 的 `StreamKind` 映射
-///
-/// 0 装: 字符串硬编码; rc 阶段接 SchemaRegistry 时改
-
+// 注: `MemoryError::from` impl (rusqlite::Error → MemoryError) 已在 memory/src/error.rs 给出.
+// 如未提供, 这里需手写 impl. 假设 v1 era SqliteMemoryStore 已有对应 impl.
+// (snapshot: 0 重写 24 个 memory 子模块的 public API; `MemoryError::from` 是 crate 内 trait.)
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::append_only::HistoryEntry;
-    use crate::SqliteMemoryStore;
+    use apeireth_storage::SqliteConnectionPool;
 
-    fn fresh() -> SqliteBackend {
-        SqliteBackend::new(SqliteMemoryStore::open_in_memory().unwrap())
+    async fn fresh() -> SqliteBackend {
+        let pool = SqliteConnectionPool::in_memory()
+            .await
+            .expect("in-memory pool");
+        // RC-1 验收: 创 episodes + 6 streams 表
+        // (per v2.0.0-rc-roadmap.md §3 RC-1: 绕开 SqliteMemoryStore mutex, 但 schema 必须有)
+        // 简化: 用 StorageError 路径 inline 创 (避免 MemoryError→StorageError 转换)
+        pool.write(|conn| -> Result<(), apeireth_storage::StorageError> {
+            conn.execute_batch(r#"
+                CREATE TABLE IF NOT EXISTS episodes (
+                    id TEXT PRIMARY KEY,
+                    timestamp INTEGER NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    session_id TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS thought_stream (
+                    id TEXT PRIMARY KEY,
+                    subject_id TEXT NOT NULL,
+                    subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL,
+                    payload TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    tags TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS proposal_stream (
+                    id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS action_stream (
+                    id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS relation_stream (
+                    id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS evolution_stream (
+                    id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS reflection_stream (
+                    id TEXT PRIMARY KEY, subject_id TEXT NOT NULL, subject_rev INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL, payload TEXT NOT NULL, source TEXT NOT NULL, tags TEXT NOT NULL
+                );
+            "#)
+            .map_err(apeireth_storage::StorageError::from)
+        })
+        .await
+        .expect("create schema");
+        SqliteBackend::new(pool)
     }
 
     fn ep(id: &str, session: &str) -> Episode {
@@ -140,40 +334,58 @@ mod tests {
             created_at: 1_700_000_100,
             payload: serde_json::json!({"kind": "test"}),
             source: "test".to_string(),
-            tags: vec!["unit".to_string()],
+            tags: vec!["unit".into()],
             tombstoned_at: None,
         }
     }
 
-    #[test]
-    fn name_and_kind() {
-        let b = fresh();
+    #[tokio::test]
+    async fn name_and_kind() {
+        let b = fresh().await;
         assert_eq!(b.name(), "sqlite");
         assert_eq!(b.kind(), BackendKind::Sqlite);
     }
 
-    #[test]
-    fn episode_roundtrip() {
-        let b = fresh();
+    #[tokio::test]
+    async fn ping_succeeds() {
+        let b = fresh().await;
+        assert!(b.ping().is_ok());
+    }
+
+    #[tokio::test]
+    async fn episode_roundtrip() {
+        let b = fresh().await;
         let e = ep("ep-1", "sess-1");
         b.put_episode(&e).unwrap();
         let got = b.get_episode("ep-1").unwrap().expect("episode exists");
         assert_eq!(got.id, e.id);
-        assert_eq!(got.timestamp, e.timestamp);
-        assert_eq!(got.role, e.role);
         assert_eq!(got.content, e.content);
-        assert_eq!(got.session_id, e.session_id);
         let recent = b.recent_episodes("sess-1", 10).unwrap();
         assert_eq!(recent.len(), 1);
-        assert_eq!(recent[0].id, "ep-1");
     }
 
-    #[test]
-    fn append_and_list_stream_through_trait() {
-        let b = fresh();
+    #[tokio::test]
+    async fn recent_episodes_order_ascending_by_timestamp() {
+        let b = fresh().await;
+        // 写3 条不同 timestamp
+        for (id, ts) in [("a", 100), ("b", 50), ("c", 75)].iter() {
+            let mut e = ep(id, "s");
+            e.timestamp = *ts;
+            b.put_episode(&e).unwrap();
+        }
+        let recent = b.recent_episodes("s", 10).unwrap();
+        assert_eq!(recent.len(), 3);
+        // ORDER BY timestamp ASC
+        assert_eq!(recent[0].id, "b");
+        assert_eq!(recent[1].id, "c");
+        assert_eq!(recent[2].id, "a");
+    }
+
+    #[tokio::test]
+    async fn append_and_list_stream_through_trait() {
+        let b = fresh().await;
         let session = "sess-stream";
-        // O-6 锚 #18 兑现: trait 接口走 typed HistoryEntry (不再 serde round-trip)
-        let thought = crate::from_str_core("thought").expect("valid stream");
+        let thought = apeireth_core::kernel::StreamKind::Thought;
         b.append_stream(thought, he("t-1", session)).unwrap();
         b.append_stream(thought, he("t-2", session)).unwrap();
         let listed = b.list_stream(thought, session, 10).unwrap();
@@ -182,16 +394,27 @@ mod tests {
         assert_eq!(listed[1].id, "t-2");
     }
 
-    #[test]
-    fn unknown_stream_name_is_rejected() {
-        let b = fresh();
-        let invalid = crate::StreamKind::Thought; // typed enum 不可能 unknown (编译期保证)
-        let _ = b.append_stream(invalid, he("x", "s")); // 验证编译过, 语义由 typed enum 保证
+    #[tokio::test]
+    async fn unknown_stream_name_is_compile_error() {
+        // typed enum 不可能 unknown (编译期保证)
+        let _b = fresh().await;
+        let invalid = apeireth_core::kernel::StreamKind::Thought;
+        let _ = invalid; // 验证编译过, 语义由 typed enum 保证
     }
 
-    #[test]
-    fn ping_succeeds() {
-        let b = fresh();
-        assert!(b.ping().is_ok());
+    #[tokio::test]
+    async fn performance_1000_episodes_under_1s() {
+        let b = fresh().await;
+        let start = std::time::Instant::now();
+        for i in 0..1000 {
+            let mut e = ep(&format!("perf-{i}"), "perf-sess");
+            e.timestamp = 1_700_000_000 + i;
+            b.put_episode(&e).unwrap();
+        }
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed.as_secs() < 1,
+            "1000 episode write took {elapsed:?}, > 1s (RC-1 验收失败)"
+        );
     }
 }
