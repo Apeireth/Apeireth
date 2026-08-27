@@ -21,8 +21,8 @@ use crate::append_only::{
     insert_entry, list_for_session, list_for_subject, list_recent_entries, mark_tombstone,
     HistoryEntry, HistoryStream,
 };
+use apeireth_core::kernel::StreamKindExt;
 use crate::{MemoryResult, StreamKind};
-
 /// 6 流通用 helper: 软删除并写入 reason.
 pub(crate) fn tombstone_with_reason(
     conn: &Connection,
@@ -59,11 +59,11 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
     const KIND: StreamKind = StreamKind::Thought;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Thought.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Thought.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Thought.table_name(), id, at, reason)
+        tombstone_with_reason(self.conn, StreamKind::Thought.table_name_ext(), id, at, reason)
     }
 
     fn list_for_subject(
@@ -75,7 +75,7 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Thought.table_name(),
+            StreamKind::Thought.table_name_ext(),
             subject_id,
             since,
             until,
@@ -90,7 +90,7 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Thought.table_name(),
+            StreamKind::Thought.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -103,7 +103,7 @@ impl<'a> HistoryStream for ThoughtStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Thought.table_name(),
+            StreamKind::Thought.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -126,11 +126,11 @@ impl<'a> HistoryStream for ProposalStream<'a> {
     const KIND: StreamKind = StreamKind::Proposal;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Proposal.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Proposal.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Proposal.table_name(), id, at, reason)
+        tombstone_with_reason(self.conn, StreamKind::Proposal.table_name_ext(), id, at, reason)
     }
 
     fn list_for_subject(
@@ -142,7 +142,7 @@ impl<'a> HistoryStream for ProposalStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Proposal.table_name(),
+            StreamKind::Proposal.table_name_ext(),
             subject_id,
             since,
             until,
@@ -157,7 +157,7 @@ impl<'a> HistoryStream for ProposalStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Proposal.table_name(),
+            StreamKind::Proposal.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -170,7 +170,7 @@ impl<'a> HistoryStream for ProposalStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Proposal.table_name(),
+            StreamKind::Proposal.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -195,11 +195,11 @@ impl<'a> HistoryStream for ActionStream<'a> {
     const KIND: StreamKind = StreamKind::Action;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Action.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Action.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Action.table_name(), id, at, reason)
+        tombstone_with_reason(self.conn, StreamKind::Action.table_name_ext(), id, at, reason)
     }
 
     fn list_for_subject(
@@ -211,7 +211,7 @@ impl<'a> HistoryStream for ActionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Action.table_name(),
+            StreamKind::Action.table_name_ext(),
             subject_id,
             since,
             until,
@@ -226,7 +226,7 @@ impl<'a> HistoryStream for ActionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Action.table_name(),
+            StreamKind::Action.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -239,7 +239,7 @@ impl<'a> HistoryStream for ActionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Action.table_name(),
+            StreamKind::Action.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -262,11 +262,11 @@ impl<'a> HistoryStream for RelationStream<'a> {
     const KIND: StreamKind = StreamKind::Relation;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Relation.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Relation.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
-        tombstone_with_reason(self.conn, StreamKind::Relation.table_name(), id, at, reason)
+        tombstone_with_reason(self.conn, StreamKind::Relation.table_name_ext(), id, at, reason)
     }
 
     fn list_for_subject(
@@ -278,7 +278,7 @@ impl<'a> HistoryStream for RelationStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Relation.table_name(),
+            StreamKind::Relation.table_name_ext(),
             subject_id,
             since,
             until,
@@ -293,7 +293,7 @@ impl<'a> HistoryStream for RelationStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Relation.table_name(),
+            StreamKind::Relation.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -306,7 +306,7 @@ impl<'a> HistoryStream for RelationStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Relation.table_name(),
+            StreamKind::Relation.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -329,13 +329,13 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
     const KIND: StreamKind = StreamKind::Evolution;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Evolution.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Evolution.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
         tombstone_with_reason(
             self.conn,
-            StreamKind::Evolution.table_name(),
+            StreamKind::Evolution.table_name_ext(),
             id,
             at,
             reason,
@@ -351,7 +351,7 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Evolution.table_name(),
+            StreamKind::Evolution.table_name_ext(),
             subject_id,
             since,
             until,
@@ -366,7 +366,7 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Evolution.table_name(),
+            StreamKind::Evolution.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -379,7 +379,7 @@ impl<'a> HistoryStream for EvolutionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Evolution.table_name(),
+            StreamKind::Evolution.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -402,13 +402,13 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
     const KIND: StreamKind = StreamKind::Reflection;
 
     fn append(&self, entry: &HistoryEntry) -> MemoryResult<()> {
-        insert_entry(self.conn, StreamKind::Reflection.table_name(), entry)
+        insert_entry(self.conn, StreamKind::Reflection.table_name_ext(), entry)
     }
 
     fn tombstone(&self, id: &str, at: i64, reason: &str) -> MemoryResult<()> {
         tombstone_with_reason(
             self.conn,
-            StreamKind::Reflection.table_name(),
+            StreamKind::Reflection.table_name_ext(),
             id,
             at,
             reason,
@@ -424,7 +424,7 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_subject(
             self.conn,
-            StreamKind::Reflection.table_name(),
+            StreamKind::Reflection.table_name_ext(),
             subject_id,
             since,
             until,
@@ -439,7 +439,7 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_for_session(
             self.conn,
-            StreamKind::Reflection.table_name(),
+            StreamKind::Reflection.table_name_ext(),
             session_id,
             include_tombstoned,
         )
@@ -452,7 +452,7 @@ impl<'a> HistoryStream for ReflectionStream<'a> {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         list_recent_entries(
             self.conn,
-            StreamKind::Reflection.table_name(),
+            StreamKind::Reflection.table_name_ext(),
             limit,
             include_tombstoned,
         )
@@ -663,7 +663,7 @@ mod tests {
                 )
                 .expect(table);
             assert_eq!(name, table);
-            assert_eq!(kind.table_name(), table);
+            assert_eq!(kind.table_name_ext(), table);
         }
     }
 
