@@ -52,9 +52,11 @@
 pub mod capability;
 pub mod credentials;
 pub mod error;
+pub mod experience;
 pub mod manager;
 pub mod manifest;
 pub mod memory_backend;
+pub mod perception;
 pub mod plugin;
 pub mod provider;
 pub mod registry;
