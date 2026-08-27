@@ -39,7 +39,6 @@ use apeireth_core::Episode;
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;
-use crate::StreamKind;
 
 use super::{BackendKind, MemoryBackend};
 
@@ -76,16 +75,8 @@ impl FileBackend {
         self.root.join("episodes.jsonl")
     }
 
-    fn stream_path(&self, kind: StreamKind) -> PathBuf {
-        let name = match kind {
-            StreamKind::Thought => "thought",
-            StreamKind::Proposal => "proposal",
-            StreamKind::Action => "action",
-            StreamKind::Relation => "relation",
-            StreamKind::Evolution => "evolution",
-            StreamKind::Reflection => "reflection",
-        };
-        self.root.join("streams").join(format!("{name}.jsonl"))
+    fn stream_path(&self, stream_name: &str) -> PathBuf {
+        self.root.join("streams").join(format!("{stream_name}.jsonl"))
     }
 }
 
@@ -119,7 +110,6 @@ impl MemoryBackend for FileBackend {
     }
 
     fn get_episode(&self, id: &str) -> MemoryResult<Option<Episode>> {
-        // 流式读 episodes.jsonl，按行 JSON 解析，找 id
         let path = self.episodes_path();
         if !path.exists() {
             return Ok(None);
@@ -155,7 +145,6 @@ impl MemoryBackend for FileBackend {
                 all.push(ep);
             }
         }
-        // 按时间升序排，末尾 N 条
         all.sort_by_key(|e| e.timestamp);
         if all.len() > n {
             let skip = all.len() - n;
@@ -164,10 +153,13 @@ impl MemoryBackend for FileBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
+    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+        // 0 装: stream_name 必须已是 6 个固定值之一 (caller 责任)
+        // rc 阶段加 SchemaRegistry 验证
+        let _ = serde_json::from_value::<HistoryEntry>(entry.clone())?; // schema check
         let _guard = self.stream_write_lock.lock().expect("FileBackend poisoned");
         let line = serde_json::to_string(&entry)?;
-        let path = self.stream_path(kind);
+        let path = self.stream_path(stream_name);
         let mut f = OpenOptions::new().create(true).append(true).open(&path)?;
         writeln!(f, "{line}")?;
         f.sync_all()?;
@@ -176,11 +168,11 @@ impl MemoryBackend for FileBackend {
 
     fn list_stream(
         &self,
-        kind: StreamKind,
+        stream_name: &str,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
-        let path = self.stream_path(kind);
+    ) -> MemoryResult<Vec<serde_json::Value>> {
+        let path = self.stream_path(stream_name);
         if !path.exists() {
             return Ok(Vec::new());
         }
@@ -195,7 +187,6 @@ impl MemoryBackend for FileBackend {
             if entry.tombstoned_at.is_some() {
                 continue;
             }
-            // session 过滤：None = 全局，Some(s) = 仅匹配 s
             let matches = match &entry.session_id {
                 None => true,
                 Some(s) => s == session_id,
@@ -204,13 +195,16 @@ impl MemoryBackend for FileBackend {
                 alive.push(entry);
             }
         }
-        // 按 created_at 升序，末尾 N 条
         alive.sort_by_key(|e| e.created_at);
         if alive.len() > n {
             let skip = alive.len() - n;
             alive.drain(..skip);
         }
-        Ok(alive)
+        // 序列化为 trait 要求的 JSON Value
+        alive
+            .into_iter()
+            .map(|e| serde_json::to_value(e).map_err(crate::MemoryError::Json))
+            .collect()
     }
 }
 
@@ -238,6 +232,7 @@ impl FileBackend {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::append_only::HistoryEntry;
     use tempfile::TempDir;
 
     fn fresh() -> (FileBackend, TempDir) {
@@ -265,7 +260,7 @@ mod tests {
             created_at: 1_700_000_100,
             payload: serde_json::json!({"kind": "test"}),
             source: "test".to_string(),
-            tags: vec!["unit".to_string()],
+            tags: vec!["unit".to_string()),
             tombstoned_at: None,
         }
     }
@@ -282,7 +277,6 @@ mod tests {
         let (b, _d) = fresh();
         let e = ep("ep-1", "sess-1");
         b.put_episode(&e).unwrap();
-        // Episode 没有 PartialEq，字段级对比
         let got = b.get_episode("ep-1").unwrap().expect("episode exists");
         assert_eq!(got.id, e.id);
         assert_eq!(got.timestamp, e.timestamp);
@@ -304,10 +298,14 @@ mod tests {
     fn stream_roundtrip() {
         let (b, _d) = fresh();
         let session = "s1";
-        b.append_stream(StreamKind::Thought, he("t1", session)).unwrap();
-        b.append_stream(StreamKind::Thought, he("t2", session)).unwrap();
-        let list = b.list_stream(StreamKind::Thought, session, 10).unwrap();
+        b.append_stream("thought", serde_json::to_value(he("t1", session)).unwrap())
+            .unwrap();
+        b.append_stream("thought", serde_json::to_value(he("t2", session)).unwrap())
+            .unwrap();
+        let list = b.list_stream("thought", session, 10).unwrap();
         assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "t1");
+        assert_eq!(list[1]["id"], "t2");
     }
 
     #[test]
@@ -318,33 +316,33 @@ mod tests {
         alive.tombstoned_at = None;
         let mut dead = he("d", session);
         dead.tombstoned_at = Some(1_700_000_500);
-        b.append_stream(StreamKind::Action, alive).unwrap();
-        b.append_stream(StreamKind::Action, dead).unwrap();
-        let list = b.list_stream(StreamKind::Action, session, 10).unwrap();
+        b.append_stream("action", serde_json::to_value(alive).unwrap())
+            .unwrap();
+        b.append_stream("action", serde_json::to_value(dead).unwrap())
+            .unwrap();
+        let list = b.list_stream("action", session, 10).unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, "a");
+        assert_eq!(list[0]["id"], "a");
     }
 
     #[test]
     fn persistence_across_instances() {
-        // FileBackend 的核心承诺：append-only 文件 + 重启后能读回
         let dir = TempDir::new().expect("create tempdir");
         {
             let b = FileBackend::new(dir.path()).unwrap();
             b.put_episode(&ep("persist-1", "s")).unwrap();
-            b.append_stream(StreamKind::Action, he("p-1", "s")).unwrap();
+            b.append_stream("action", serde_json::to_value(he("p-1", "s")).unwrap())
+                .unwrap();
         }
-        // 重新打开同一目录
         let b2 = FileBackend::new(dir.path()).unwrap();
-        // 字段级对比（Episode 没有 PartialEq）
         let got = b2
             .get_episode("persist-1")
             .unwrap()
             .expect("persisted episode");
         assert_eq!(got.id, "persist-1");
         assert_eq!(got.session_id, "s");
-        let list = b2.list_stream(StreamKind::Action, "s", 10).unwrap();
+        let list = b2.list_stream("action", "s", 10).unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, "p-1");
+        assert_eq!(list[0]["id"], "p-1");
     }
 }
