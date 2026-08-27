@@ -385,4 +385,5 @@ pub mod backend;
 /// 完整 pipeline. 详见 `v2-unabsorbed-features.md` §B1.
 pub mod experience;
 pub mod preference_store;
+pub mod preference_store_sqlite;
 

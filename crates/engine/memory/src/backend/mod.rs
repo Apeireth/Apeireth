@@ -5,12 +5,13 @@
 //! 错误类型 (含 Io/AppendOnly/Identity 等 memory 专属); 0 触碰 24 个子模块 public API.
 //!
 //! 三个具体实现:
-//! - [`SqliteBackend`] — 包装现有 `SqliteMemoryStore`（v1 compat facade，委托）
+//! - [`SqliteBackend`] — v2.0.0-rc.1 纯 SQL 重写, 走 `SqliteConnectionPool` (RC-1 真实现,
+//!   0 委托给 `SqliteMemoryStore`)
 //! - [`FileBackend`] — JSON Lines 明文 append-only（keyring 加密后续）
 //! - [`InMemoryBackend`] — `HashMap`，仅测试用
 //!
-//! **不重写 SQL**: trait 委托给现有 `SqliteMemoryStore` 的成熟实现；
-//! 只是给"加新后端"一个清晰的 trait 边界。
+//! **不重写 SQL**: trait **不**委托给现有 `SqliteMemoryStore`; SqliteBackend 自起 3 个真
+//! SQL INSERT/SELECT. (历史: 0 装占位时委托, RC-1 重写为直接 SQL.)
 //!
 //! **0 触碰承诺**（per `v2-unabsorbed-features.md` §5 P1）:
 //! - 现有 `SqliteMemoryStore` 不改
