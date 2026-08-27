@@ -1,21 +1,21 @@
-# 贡献指南 (Apeireth 1.0)
+# 贡献指南 (Apeireth v2 工程线)
 
 > Apeireth 是我们的伙伴型 AGI 操作系统。贡献前请先读哲学——[docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md)（8 锚 / 三洋葱 / 0 装 PASS）。
 
 ## 必读
 
 - [docs/01-architecture/philosophy.md](docs/01-architecture/philosophy.md) — 哲学（8 锚 / 三洋葱 / 0 装 PASS）
-- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（85 crates 分组）
+- [docs/01-architecture/architecture.md](docs/01-architecture/architecture.md) — 架构总览（13 crates 分组）
 - [docs/01-architecture/security.md](docs/01-architecture/security.md) — 安全模型
 - [docs/03-reference/crates.md](docs/03-reference/crates.md) — crates 索引
 - [docs/04-internal/design-intent.md](docs/04-internal/design-intent.md) — 设计意图与我们拍板历史
-- [docs/04-internal/backlog.md](docs/04-internal/backlog.md) — 台账（完成项 ✅ / 待办 ⬜）
+- [ROADMAP.md](ROADMAP.md) — 路线图（v2 下一步按优先级排列；旧台账已冻结见 docs/04-internal/backlog.md）
 
 ## 提交前必跑
 
 ```bash
 cargo check --workspace --all-targets   # 编译全 target 干净（含 examples/bins/tests）
-cargo test --workspace                  # 全量 368 组 0 失败
+cargo test --workspace                  # 全量测试 0 失败（当前 13-crate 工作区 1338）
 cargo fmt --all --check                 # 格式
 ```
 
@@ -34,8 +34,8 @@ cargo fmt --all --check                 # 格式
 
 ## 工作流
 
-- 主分支 `master`（发布线）↔ `team/e8de47ae-.../integration`（集成线）
-- 开发在独立分支 → 全量验证 → 合入 integration → 发布时同步 master
+- 主分支 `main`（默认分支；旧 master 归档为 `archive/v1.0-master`）
+- 开发在独立分支 → 全量验证 → PR 合入 main
 - 禁止直接 force-push 共享分支（历史净化等特殊操作除外，需我们确认）
 
 ## License

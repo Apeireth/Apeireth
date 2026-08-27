@@ -1,5 +1,7 @@
 # Canonical Skeleton Freeze — Reality Audit
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：文中"crate root 仍带 legacy 内容"当时属实，现已大部分移出（runtime crate 已纯 canonical；core crate 根仍有 legacy 脊椎，见 ROADMAP P2）。
+
 Status: recorded before freeze corrections.
 Branch: `reconstruct_v2`
 Starting HEAD: `b34418834fce69fd2332c09580a1e214d18e3a01`

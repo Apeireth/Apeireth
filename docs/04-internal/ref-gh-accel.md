@@ -1,5 +1,7 @@
 # GitHub 加速插件调研与实战记录（gh-accel，2026-08-16）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 ## 一、调研：xiake.pro（虾壳）是什么
 
 [xiake.pro](https://xiake.pro) 是 **GitHub 下载加速网站**——它自己不是代理，而是**聚合了大量 GitHub 加速镜像节点**，并提供「节点检测」：前端并发测各节点加载真实 GitHub 文件（vscode 图标 PNG），按延迟排序选最快，然后用户通过 `https://{节点}/https://{github链接}` 前缀式访问。

@@ -1,5 +1,7 @@
 # Apeireth Runtime Decoupling — Final Report
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本报告代码落点在 `legacy/donor/apeireth-companion/examples/companion_serve.rs`；其思想是 reconstruct_v2 分层（engine/runtime + engine/provider + foundation/core）的前身。
+
 > `feature/companion-no-key-boot` — Runtime Decoupling Phase 1.
 > Companion boots without any provider credential; Core Runtime and Provider
 > Runtime are decoupled; capability manifest expresses supported/available/reason;

@@ -40,6 +40,8 @@
 
 ## Key Mechanisms (all implemented, verified by tests)
 
+> **现状 (2026-08-27)**：下表所列机制均为 v1 时代的真实实现与验证；reconstruct_v2 工程重构后，其代码位于 `legacy/`（参考代码），当前 13-crate 工作区的对应实现见 `docs/01-architecture/architecture.md` 与根 `ROADMAP.md` §4（如 S4 出站已由 M2D egress + M3A 受控 fetch 取代）。机制本身作为设计内核不变。
+
 | Mechanism | Where |
 |---|---|
 | Memory v2 (importance/reconcile/ranking/versioned chains) | `apeireth-companion::memory_extractor` |

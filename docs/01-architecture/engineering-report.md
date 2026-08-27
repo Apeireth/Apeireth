@@ -1,5 +1,10 @@
 # Apeireth Engineering Report — v1.0.0 (post-1.0.0 增量更新 2026-08-19)
 
+> **现状 (2026-08-27)**：本报告是 v1.0.0（86-crate 时代）的历史快照，正文保留原样。
+> 当前基线：默认分支 `main`、13-crate 工作区、tag `v2.0.0-alpha.1` @ `d6910cf7`；
+> 文中"85/86 crates、34 万行、23,874 测试"均为 v1 历史数字（v1 全量测试另见 CHANGELOG 记 23,806，两个口径均指 86-crate 工作区）。
+> v2 实测数据与下一步见本文末 §八 与根 `ROADMAP.md` §4。
+
 > 2026-08-18 · 后端机制层收工 · 我们定版"真正的 1.0"
 > 2026-08-19 · post-1.0.0 增量 (PR #1 桌面伙伴合并 + CI 防御 + cron 增强 + Dockerfile 多架构)
 
@@ -66,3 +71,22 @@
 **34 万行 Rust，从"哲学声明"到"真实存在的伙伴"——Apeireth 1.0 证明了一件事：诚实不是工程的成本，而是工程的地基。**
 
 > post-1.0.0 (2026-08-19): 诚实是地基, **不漂移**是屋顶 — templates / docs / CI gates 全部跟实际 hard-walls job 1:1 对齐. 后续 TP34 (real LLM streaming) 是屋顶下一层, 见 `docs/04-internal/next-team-handbook.md`.
+
+## 八、v2 现状（2026-08-27，reconstruct_v2 收敛后，实测）
+
+| 项 | 值 |
+|---|---|
+| 分支 | `main` @ `d6910cf7`（默认分支；旧 master 归档 `archive/v1.0-master`） |
+| Tag | `v2.0.0-alpha.1` → `d6910cf7` |
+| Workspace | 13 crates（foundation 5 / engine 4 / capabilities 1 / adapters 3），72,174 行 Rust |
+| 测试 | 1338 passed / 0 failed（cargo-nextest，3 OS） |
+| CI | 全绿：clippy 3 档 / fmt / audit / deny / miri / rustdoc / coverage / 13 键契约 / M2B·M2C·M3A 三 OS |
+| v1 代码 | 86 crates 整体在 `legacy/`（排除构建） |
+
+里程碑映射（v1 → v2）：记忆 v2 / 五原型 / companion → `legacy/`，待 ROADMAP P3/P6/P7 恢复；
+agent loop（v1 无）→ `crates/engine/runtime/src/canonical/execute.rs` 已实现；
+出站 S4 "trait 口已备实装待补" → 已被 M2D egress + M3A 受控 fetch 取代；
+Windows Job Object 沙箱 → `crates/capabilities/tools/src/process/` 保留并强化（CREATE_SUSPENDED）。
+
+负债更新（诚实）：生产 governance pipeline 未接线（P0）；13 键 verdict cache 未接执行路径（P0 拍板）；
+`apeireth-credentials` 孤儿；Docker 实测仍待补。全部排期见 `ROADMAP.md` §4。

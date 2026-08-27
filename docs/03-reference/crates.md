@@ -27,7 +27,7 @@ the product workspace.
 
 | Package | Path | Responsibility |
 | --- | --- | --- |
-| `apeireth-tools-canonical` | `crates/capabilities/tools` | Built-in filesystem, search, repository, fetch, shell, and egress capabilities; sole `ProcessExecutor` owner |
+| `apeireth-tools-canonical` | `crates/capabilities/tools` | Built-in filesystem, search, and repository capabilities (enabled by default); fetch and shell capabilities (opt-in, disabled by default); egress policy; sole `ProcessExecutor` owner |
 
 ## Adapters
 
@@ -35,7 +35,7 @@ the product workspace.
 | --- | --- | --- |
 | `apeireth-gateway` | `crates/adapters/gateway` | HTTP transport adapter for the canonical runtime |
 | `apeireth-cli` | `crates/adapters/cli` | CLI bootstrap and command dispatch through the canonical runtime |
-| `apeireth-sdk` | `crates/adapters/sdk` | Public Rust/FFI SDK surface |
+| `apeireth-sdk` | `crates/adapters/sdk` | Public Rust/FFI SDK surface（stub 模式：真 HTTP 未接，显式 `unimplemented!()` 守门） |
 
 ## Independent frontend workspace
 
@@ -48,4 +48,7 @@ It is deliberately outside the root Cargo workspace and is checked by
 `legacy/donor/`, `legacy/archived/`, and `legacy/frozen/` contain historical
 implementations and references. They are not product crates and current code
 must not depend on them. The former nested `reconstruction_v2/` workspace was
-removed after its useful ideas were captured in the root workspace.
+removed from git after its useful ideas were captured in the root workspace;
+an untracked local directory may remain on disk and is safe to delete.
+`crates/_archived/` holds untracked local build leftovers and is not
+repository content.
