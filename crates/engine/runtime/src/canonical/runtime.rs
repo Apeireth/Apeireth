@@ -42,6 +42,7 @@ use apeireth_plugin::{
     CredentialResolver, NoCredentials, Plugin, PluginContext, PluginManager, ToolCapability,
 };
 
+use super::cognitive::CognitiveTelemetry;
 use super::error::{RuntimeError, RuntimeResult};
 use super::module::{AgentModule, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
@@ -110,6 +111,7 @@ pub struct Runtime {
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
     pub(super) modules: Vec<Arc<dyn AgentModule>>,
+    pub(super) cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
     pub(super) session_locks: SessionLocks,
 }
 
@@ -163,6 +165,11 @@ impl Runtime {
         &self.modules
     }
 
+    /// Shared non-sensitive telemetry for the production cognitive slots.
+    pub fn cognitive_telemetry(&self) -> Option<&Arc<CognitiveTelemetry>> {
+        self.cognitive_telemetry.as_ref()
+    }
+
     /// Stop every plugin in reverse start order.
     ///
     /// Returns the failures encountered; shutdown continues past each one.
@@ -196,6 +203,7 @@ pub struct RuntimeBuilder {
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
     modules: Vec<Arc<dyn AgentModule>>,
+    cognitive_telemetry: Option<Arc<CognitiveTelemetry>>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
 }
@@ -216,6 +224,7 @@ impl RuntimeBuilder {
             governance: Arc::new(AllowAll),
             plugins: Vec::new(),
             modules: Vec::new(),
+            cognitive_telemetry: None,
             fallback_order: None,
             config: RuntimeConfig::default(),
         }
@@ -263,6 +272,13 @@ impl RuntimeBuilder {
     #[must_use]
     pub fn with_module(mut self, module: Arc<dyn AgentModule>) -> Self {
         self.modules.push(module);
+        self
+    }
+
+    /// Attach the telemetry sink owned by a production cognitive composition.
+    #[must_use]
+    pub fn with_cognitive_telemetry(mut self, telemetry: Arc<CognitiveTelemetry>) -> Self {
+        self.cognitive_telemetry = Some(telemetry);
         self
     }
 
@@ -365,6 +381,7 @@ impl RuntimeBuilder {
             clock: self.clock,
             config: self.config,
             modules: self.modules,
+            cognitive_telemetry: self.cognitive_telemetry,
             session_locks: SessionLocks::default(),
         })
     }
