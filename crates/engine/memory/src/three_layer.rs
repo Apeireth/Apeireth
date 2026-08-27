@@ -17,7 +17,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
-use apeireth_core::{Episode, Note};
+use apeireth_core::{kernel::memory::Episode, kernel::memory::Note};
 
 use crate::episode::{EpisodeQuery, EpisodeStore};
 use crate::session_note::{NoteQuery, NoteStore};
@@ -352,7 +352,7 @@ mod regex_lite {
 mod tests {
     use super::*;
     use crate::SqliteMemoryStore;
-    use apeireth_core::Episode;
+    use apeireth_core::kernel::memory::Episode;
     use std::sync::Arc;
 
     fn fresh_episode(id: &str, role: &str, content: &str) -> Episode {
@@ -416,7 +416,7 @@ mod tests {
     fn long_term_recall_returns_notes_as_episodes() {
         let store = Arc::new(SqliteMemoryStore::open_in_memory().expect("open"));
         let mem = ThreeLayerMemory::new(store.clone(), store.clone(), 10);
-        // 写一条 note (NoteStore::put_note 拿 apeireth_core::Note)
+        // 写一条 note (NoteStore::put_note 拿 apeireth_core::kernel::memory::Note)
         let note = Note {
             id: "n1".to_string(),
             timestamp: chrono::Utc::now().timestamp(),

@@ -718,7 +718,7 @@ mod tests {
         s.create_session("s1", None, SessionScope::Global, None, None)
             .unwrap();
         use crate::EpisodeStore;
-        let ep = apeireth_core::Episode {
+        let ep = apeireth_core::kernel::memory::Episode {
             id: "ep-1".into(),
             timestamp: 1000,
             role: "user".into(),
@@ -778,7 +778,7 @@ mod tests {
         // 生命周期读取必须兼容: NULL state → Active, NULL revision → 0.
         let s = store();
         use crate::SessionStore as LegacySessionStore;
-        let old = apeireth_core::Session {
+        let old = apeireth_core::kernel::memory::Session {
             id: "legacy-1".into(),
             started_at: 1000,
             last_active_at: 2000,

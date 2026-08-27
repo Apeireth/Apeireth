@@ -35,7 +35,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 use crate::append_only::HistoryEntry;
 use crate::MemoryResult;

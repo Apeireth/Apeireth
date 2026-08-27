@@ -54,6 +54,7 @@ pub mod credentials;
 pub mod error;
 pub mod experience;
 pub mod manager;
+pub mod preference;
 pub mod manifest;
 pub mod memory_backend;
 pub mod perception;

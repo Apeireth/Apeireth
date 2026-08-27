@@ -507,7 +507,7 @@ pub fn touch_hallway(store: &SqliteMemoryStore, id: &str) -> MemoryResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apeireth_core::Note;
+    use apeireth_core::kernel::memory::Note;
 
     fn make_note(id: &str, ts: i64, content: &str, tags: &[&str]) -> Note {
         Note {
