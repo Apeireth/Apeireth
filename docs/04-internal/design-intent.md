@@ -7,18 +7,18 @@
 
 ---
 
-## 1. 哲学 → 机制的映射（为什么有这些机制）
+## 1. 哲学 → 机制的映射（为什么有这些机制）【v2.0.0-alpha.1 当前落点】
 
-| 哲学原则 | 机制落点 | 为什么这样落 |
+| 哲学原则 | 机制落点（13-crate 工作区当前所有者） | 为什么这样落 |
 |---|---|---|
-| 基地不是 AI 本身 | companion 是"器官"不是"模型"；trait 策略（MemoryExtractor/DreamSummarizer/ReflectionReflector/...）全部注入 | LLM 只是基地的租客, 换模型不换基地 |
-| 涌现优先于预定义 | 能力提案（capability）+ 动态原则层 + 经验库 | "AI 自己长能力"的第一块工程; 预定义永远做不完 |
-| 用户是伙伴 | 记忆 v2（importance/对账/排名）+ 图谱 + 偏好库 | 伙伴 = 跨 session 记得你、懂你 |
-| 记录与连续性 | continuity_id + versioned chain + 滚动摘要链 | 不假装灵魂同一, 但工程上最大努力记录 |
-| 机制而非补丁 | 每次"加个 if"都要问: 该有的机制是什么 | 项目 1911+ 提交的教训: 补丁会累积成债 |
-| 集成而非分立 | 新需求挂进已有机制（ContextAssembler/MemoryExtractionService/...） | 分立 = 多余独立 = 维护地狱 |
-| 0 装 PASS | 全库: 未实现标注"trait 口已备未接", 错误信息可行动 | 不假装 = 信任的地基; AI 幻觉时代最稀缺的资产 |
-| 文档同步自觉 | 改码必改文档; 调研未落地必进 backlog 台账 | 项目庞大易忘, 白纸黑字防欠账 |
+| 基地不是 AI 本身 | `ProviderCapability` trait 在 `crates/foundation/plugin`；3 家 canonical provider 在 `crates/engine/provider::canonical_*`；运行时通过 plugin registry 持有 provider = "model is a tenant" | LLM 只是基地的租客；换模型只换 plugin 注册，不动 runtime / governance / tools |
+| 涌现优先于预定义 | `crates/foundation/plugin::CapabilityRegistry` + `Runtime::execute` 的 round loop；tool dispatcher 由 capability descriptor 声明而非硬编码 | 模型自发的能力表现由 capability 注册位 + runtime 的 decision-driven loop 承担，能力 = 已声明契约 + 运行时拼装 |
+| 用户是伙伴 | Session lifecycle 在 `crates/engine/runtime/src/canonical/session.rs`；transcript + approval 恢复；持续身份经 `SessionId`（见 `crates/foundation/core/src/kernel::ids.rs`）| 跨 turn / 跨入口的会话身份 + 持久化接缝是工程最低要求；v1 的"记忆 v2 + 偏好"全套在 legacy/，恢复排期 ROADMAP §4 P3 |
+| 记录与连续性 | trace 类型在 `crates/engine/runtime/src/canonical/trace.rs`（结构化 ExecutionTrace + TraceEvent）；`TurnResponse.trace` 沿 runtime 透出，不含原始 CoT | 真实机制 ≠ 假装灵魂同一；trace 是结构化证据 + 决策可重放 |
+| 机制而非补丁 | governance crate 单 trait `GovernanceHook` + 三种 Decision（Allow / Deny{reason} / RequireApproval{reason}，Deny ≠ RequireApproval，runtime 必须区分"拒绝"与"挂起"）；runtime 通过 `Arc<dyn GovernanceHook>` 持有政策而非 if-else 嵌套 | 补丁累积成债；trait 化让 policy 与 runtime 解耦，policy 升级不需要改 runtime |
+| 集成而非分立 | 14-crate 收敛为 13-crate（foundation 5 / engine 4 / capabilities 1 / adapters 3）；所有 provider / tool / governance 走 plugin trait 注入；新能力挂既有 plugin descriptor 而非新开 crate | 分立 = 多余独立 = 维护地狱；engine / adapters 不创独立插件位 |
+| 0 装 PASS | SDK stub 7 个 `unimplemented!()` 守门；`shell` / `fetch` opt-in 关闭默认；governance 默认空 pipeline → `AllowAll`（可见默认，非 `Option` 不可见默认）| 不假装 = 信任的地基；显式 stub + 显式默认 + 显式 opt-in = 不让任何机制被假装实现 |
+| 文档同步自觉 | 本文件 §1 维护映射表（每次新增 canonical crate 入口同步更新）；ROADMAP §4 P1 = 文档对账批；CODEOWNERS 把 `docs/01-architecture/` / `docs/03-reference/` / 顶层根文档归到 owner，强行 review gate | 项目庞大易忘；显式文档同步机制 = 抗欠账 |
 
 ## 2. 主人关键拍板记录（决策历史, 后人勿改勿删）
 
