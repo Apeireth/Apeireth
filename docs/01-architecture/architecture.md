@@ -1,6 +1,7 @@
 # Apeireth Architecture
 
-> 当前基线：根 Cargo workspace（13 个 crate）+ 独立的
+> 当前基线：默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`。
+> 根 Cargo workspace（13 个 crate）+ 独立的
 > `frontend/companion-desktop` workspace。历史 donor 不属于生产依赖。
 
 ## Layer view
@@ -67,6 +68,9 @@ under `frontend/companion-desktop/tests/`.
   current crates must not import them.
 - `docs/archive/` and dated audit reports preserve historical context and may
   mention paths that existed at the time of the audit.
-- The former nested `reconstruction_v2/` workspace was removed after its
-  useful decisions had been captured in the canonical root workspace. Git
-  history remains the recovery path.
+- The former nested `reconstruction_v2/` workspace was removed from git after
+  its useful decisions had been captured in the canonical root workspace. An
+  untracked local directory (leftover `target/` and database files) may remain
+  on disk and is safe to delete. Git history remains the recovery path.
+- `crates/_archived/` holds untracked local build leftovers from the v1
+  workspace; it is not repository content and is not part of any build.

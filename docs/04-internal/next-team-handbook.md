@@ -1,5 +1,7 @@
 # 下一团队开工手册（Team Handbook: Next Batch）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文任务包（TP21-TP34）是 v1.0/v1.5 收尾批次，挂接点（companion_serve/apeireth-api 等）已进 `legacy/donor/`；v2 下一步见 ROADMAP §4（旧 TP34 流式重映射为 P8）。
+
 > **定位**: 当前团队收尾后的下一批任务包 + 主线程调研吸收（60+ 项目扫描, 2026-08-18）。
 > **读法**: 先读 design-intent.md（三哲学 + 拍板历史 + 层级归属原则）→ 本手册任务包 → 台账对应条目 → 开工。
 > **纪律**: 每包按 team-work-doc §9 模板拆细; 层级归属 = 合并上级/能力下放; 0 装 PASS; 验收按 team-work-doc §7。

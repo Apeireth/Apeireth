@@ -1,5 +1,8 @@
 # Apeireth v1.0.0 — Release Notes（正式版）
 
+> 本文件是 v1.0.0 的发布说明（历史存档）。当前版本：`v2.0.0-alpha.1`（reconstruct_v2 工程重构），
+> 说明见 [CHANGELOG.md](CHANGELOG.md) 顶部 2026-08-27 段；v2 现状与路线见 [ARCHITECTURE.md](ARCHITECTURE.md) 与 [ROADMAP.md](ROADMAP.md)。
+
 > **Tag**: `v1.0.0`（2026-08-18 我们定版：后端收工，本版本才是**真正的 1.0**）
 > **定位**: 从"代码演进号 1.2.0 / 产品轴 v2.0.0-alpha"统一收口为 **1.0.0 正式版**
 > **基线**: master = integration（0/0 同步，commit `b7132fad`）

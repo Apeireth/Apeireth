@@ -1,5 +1,7 @@
 # Apeireth Unified Feature Map (Phase 0)
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 本矩阵用于指引桌面端能力与 Apeireth 原生后端的精确对接，坚持**现有后端优先、仅补薄表现层、Pattern 仅作设计参考**的原则。
 
 | 产品功能 (Product Feature) | Apeireth 后端实现 (Backend Source) | 当前 UI 状态 (Current UI) | 状态评级 (Gap) | 实施行动 (Action) |

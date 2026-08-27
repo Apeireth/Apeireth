@@ -1,6 +1,37 @@
 # Changelog — Apeireth
 
-## [Unreleased]
+## [2026-08-27] v2.0.0-alpha.1 — reconstruct_v2 工程重构（主线晋升 main）
+
+> 重构版是 1.0 的工程进步：内核、设计、哲学、愿景 0 变化；变的是工程形态。
+> 旧 86-crate 工作区整体归档 `legacy/`，新工作区 13 crates。
+
+### 工程重构（2026-08-23 → 08-27，branch reconstruct_v2 → main）
+
+- **拓扑收敛**：86-crate / 58.8 万行旧工作区 → 13-crate 单一工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）；旧代码整体移入 `legacy/`（workspace exclude）；嵌套 `reconstruction_v2/` 工作区从 git 删除（磁盘残留未跟踪文件可清理）
+- **agent loop 真实现**：`crates/engine/runtime/src/canonical/execute.rs` 单一执行入口——governance → provider → tool dispatch → 回灌续轮；approval 是 outcome 不是 error；tool 失败不终止回合；trace 不含原始 CoT
+- **Provider 插件化**：MiniMax / Anthropic / OpenAI-compatible 三家 canonical provider（`LegacyLlmCapability` 全仓 0 命中），凭据 per-turn 经 `CredentialResolver` 解析、不落地
+- **治理移植（M1C）**：Allow/Deny/RequireApproval 决策语义 + PII/注入检测 + 防篡改审计哈希链 → `crates/foundation/governance`
+- **工具与进程边界（M2A/M2B）**：filesystem/search/repo 三个只读工具默认可用；shell/fetch **默认关闭**（opt-in）；`ProcessExecutor` 唯一进程执行边界——Windows Job Object + CREATE_SUSPENDED 完整，Linux/macOS 进程组部分
+- **受控网络（M2D/M3A）**：egress 策略 + 受控 HTTP transport；`tool.fetch` GET-only、默认 DISABLED、DNS 钉扎 + 逐跳重校验
+- **审批生命周期（M2C）**：durable approval resume、冻结调用（FrozenInvocation）、SQLite 会话强化
+- **存储与记忆地基（M1A/M1B）**：单写者 + 读池、SQLite WAL、`PRAGMA user_version` 迁移；vector/graph/检索契约 primitive
+- **主线晋升**：默认分支 `main` @ `d6910cf7`；旧 `master` 归档为 `archive/v1.0-master`；远端 `reconstruct_v2` 已删；tag `v2.0.0-alpha.1` 指向 `d6910cf7`；旧 tag `v2.0-preview` 及对应 Release 已删除
+
+### 验证（2026-08-27）
+
+- `cargo test --workspace --tests --bins --lib --locked`：**1338 passed / 0 failed**
+- CI 全绿：cargo-nextest（3 OS）、clippy 3 档、fmt、cargo-audit、cargo-deny、miri、rustdoc、coverage、protocol integration、M2B/M2C/M3A 三 OS 验证、13 键测试契约
+- `release-prep` 与 `pii-leak-detection` 两个旧 gate 保持 master-only，不在 main 上运行
+
+### 已知缺口（诚实，见 ROADMAP §4）
+
+- 生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）——P0
+- 13 键 verdict cache 只在 core 内测试、未接 canonical 执行路径——P0 拍板去留
+- `apeireth-credentials` 未接线（孤儿 crate）；M1B 记忆/向量/图未全量移植；MCP、companion 器官、voice/screen 未移植（留 legacy）
+
+---
+
+## [2026-08-19] post-v1.0.0 增量（历史，v1 时代）
 
 ### Added (2026-08-19)
 - **Stage 1 网络隔离 (sandbox_net.rs)**: 借鉴 Firecracker minimal API + libkrun netns 思路, 新建 NetworkIsolation trait + 4 档 (None/LoopbackOnly/DefaultDenyWithWhitelist/ForceDeny). 0 装 PASS: NoopNetworkIsolation.default().apply_to_child() 返 Err, 0 假装已隔离. 实装接 libkrun / Linux netns + cgroup / Windows WFP. 10+ 单测 (per 0 装 PASS 严守). 文档同步 ROADMAP §Stage 1 + B 站 UP 主 5.4 思路.

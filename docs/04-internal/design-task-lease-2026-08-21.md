@@ -9,7 +9,7 @@
 
 ## 1. 问题陈述
 
-Team Lead / Orchestrator (`apeireth-team-lead`) 当前分配 task 给子 Agent 时, 没有任何"任务失败兜底"机制:
+Team Lead / Orchestrator (`apeireth-team-lead`，现 legacy/，v2 落点见根 ARCHITECTURE.md) 当前分配 task 给子 Agent 时, 没有任何"任务失败兜底"机制:
 
 - 子 Agent 拿到 task 后崩溃 (进程死 / 进程 hang / 网络断)
 - Orchestrator 无法感知, 任务永久卡在 `Running`
