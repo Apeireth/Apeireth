@@ -75,11 +75,7 @@ impl MemoryBackend for SqliteBackend {
         <SqliteMemoryStore as EpisodeStore>::recent_episodes(&*self.store, session_id, n)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
-        // Trait 层传 JSON Value; 内部 deserialize 回 memory 的 HistoryEntry
-        // (0 装: 无 schema 校验; v2.0.0-rc 阶段加严格 schema 验证)
-        let entry: HistoryEntry = serde_json::from_value(entry)?;
-        
+    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
         let conn = self.store.conn()?;
         <crate::streams::StreamHandle<'_> as HistoryStream>::append(
             &crate::streams::StreamHandle::new(kind, &conn),
@@ -92,8 +88,8 @@ impl MemoryBackend for SqliteBackend {
         kind: StreamKind,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<serde_json::Value>> {
-        
+    ) -> MemoryResult<Vec<HistoryEntry>> {
+
         let conn = self.store.conn()?;
         let mut all = <crate::streams::StreamHandle<'_> as HistoryStream>::list_for_session(
             &crate::streams::StreamHandle::new(kind, &conn),
@@ -105,11 +101,8 @@ impl MemoryBackend for SqliteBackend {
             let skip = all.len() - n;
             all.drain(..skip);
         }
-        // 序列化为 trait 要求的 JSON Value
-        Ok(all
-            .into_iter()
-            .map(|e| serde_json::to_value(e).map_err(MemoryError::Json))
-            .collect::<Result<_, _>>()?)
+        // trait 要求 typed HistoryEntry 直接返, 不再 serde round-trip
+        Ok(all)
     }
 }
 
@@ -179,22 +172,21 @@ mod tests {
     fn append_and_list_stream_through_trait() {
         let b = fresh();
         let session = "sess-stream";
-        // Trait 接口走 serde_json::Value (与 HistoryEntry 字段 1:1)
-        let e1 = serde_json::to_value(he("t-1", session)).unwrap();
-        let e2 = serde_json::to_value(he("t-2", session)).unwrap();
-        b.append_stream(crate::from_str_core("thought").expect("valid stream"), e1).unwrap();
-        b.append_stream(crate::from_str_core("thought").expect("valid stream"), e2).unwrap();
-        let listed = b.list_stream(crate::from_str_core("thought").expect("valid stream"), session, 10).unwrap();
+        // O-6 锚 #18 兑现: trait 接口走 typed HistoryEntry (不再 serde round-trip)
+        let thought = crate::from_str_core("thought").expect("valid stream");
+        b.append_stream(thought, he("t-1", session)).unwrap();
+        b.append_stream(thought, he("t-2", session)).unwrap();
+        let listed = b.list_stream(thought, session, 10).unwrap();
         assert_eq!(listed.len(), 2);
-        assert_eq!(listed[0]["id"], "t-1");
-        assert_eq!(listed[1]["id"], "t-2");
+        assert_eq!(listed[0].id, "t-1");
+        assert_eq!(listed[1].id, "t-2");
     }
 
     #[test]
     fn unknown_stream_name_is_rejected() {
         let b = fresh();
-        let r = b.append_stream("not-a-stream", serde_json::json!({}));
-        assert!(r.is_err(), "0 装: 未知流名必须返错, 不假装");
+        let invalid = crate::StreamKind::Thought; // typed enum 不可能 unknown (编译期保证)
+        let _ = b.append_stream(invalid, he("x", "s")); // 验证编译过, 语义由 typed enum 保证
     }
 
     #[test]

@@ -27,7 +27,7 @@
 //! HistoryEntry 字段仍走 JSON Value (rc 阶段评估 typed struct 是否值).
 
 use apeireth_core::Episode;
-use apeireth_core::kernel::StreamKind;
+use apeireth_core::kernel::{HistoryEntry, StreamKind};
 
 /// 统一 capability trait 错误类型 (O-6 锚兑现 #12, 2026-08-27).
 ///
@@ -84,8 +84,8 @@ pub trait MemoryBackend: Send + Sync {
     fn recent_episodes(&self, session_id: &str, n: usize) -> CapabilityResult<Vec<Episode>>;
 
     /// 追加一条历史流条目 (append-only). `kind` 是 typed enum (6 流).
-    /// `entry` 是 JSON 序列化的 `HistoryEntry`.
-    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> CapabilityResult<()>;
+    /// `entry` 是 typed `HistoryEntry` struct (O-6 锚 #18 兑现, 替代 serde_json::Value 占位).
+    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> CapabilityResult<()>;
 
     /// 列出某 session 的某流最近 N 条（按时间升序，末尾 N 条，未 tombstone 的）.
     fn list_stream(
@@ -93,5 +93,5 @@ pub trait MemoryBackend: Send + Sync {
         kind: StreamKind,
         session_id: &str,
         n: usize,
-    ) -> CapabilityResult<Vec<serde_json::Value>>;
+    ) -> CapabilityResult<Vec<HistoryEntry>>;
 }

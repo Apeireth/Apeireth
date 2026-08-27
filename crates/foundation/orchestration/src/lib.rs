@@ -141,6 +141,17 @@ impl Council {
     /// 多意见加权: 任一 advisor Deny (除 Abstain) 即触发 Veto
     /// (v1 30% 强反对 / 一致反对 / 60s 裁决超时的 v2 简化: 一票否决制 + Abstain 跳过)
     /// **0 装 PASS**: 真实 council 是 7 个 LLM 并行调用 + 加权 + 60s 超时, v2.0.0-rc.
+    ///
+    /// **v2.0.0-rc contract** (per `v2.0.0-rc-roadmap.md` §2.4 + scene-d §2):
+    /// - `decide` 内部走 `tokio::time::timeout(Duration::from_secs(60), futures::future::join_all(7 LLM calls))`
+    /// - 任一 advisor 失败 → 该 advisor 视为 Abstain (不算 30% 阈值)
+    /// - 任一 advisor Deny → `Vetoed { by, reason }`
+    /// - 全 Allow/Abstain → `Approved`
+    /// - 60s 触发 → `DeferToHuman { reason: "60s no consensus" }`
+    /// - runtime `DeferToHuman` 路径 → 转 `RequireApproval` (governance 已装, 直接复用 `8732857` wiring)
+    ///
+    /// **alpha 0 装**: 当前同步遍历 7 advisors, 没 60s timeout, 失败即 Deny (无 Abstain 路径).
+    /// rc 阶段改: `tokio::spawn` 7 个并发 LLM 调用 + `futures::future::join_all` + `tokio::time::timeout`.
     pub async fn decide(&self, proposal: &Proposal) -> CouncilVerdict {
         // 0 装: 不调 LLM, 不并发 (trait 是 async 但 v0 impl 同步返 Allow)
         // 真 council 在 v2.0.0-rc 改: futures::future::join_all 调 7 个 advisor
@@ -153,7 +164,7 @@ impl Council {
                     reason,
                 };
             }
-            // Allow | Abstain: continue (clippy 觉得冗余, 但语义清晰: veto 优先)
+            // Allow | Abstain: continue (语义清晰: veto 优先, Abstain 不计)
         }
         CouncilVerdict::Approved
     }

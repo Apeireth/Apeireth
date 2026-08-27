@@ -37,27 +37,9 @@ pub struct Tombstone {
 }
 
 /// 一条历史流条目 (D2 §5.3 #2: 每条必须含 subject_id + subject_rev).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct HistoryEntry {
-    /// 条目 id.
-    pub id: String,
-    /// 主体 ID.
-    pub subject_id: String,
-    /// 主体版本号.
-    pub subject_rev: i64,
-    /// 可选 session 关联.
-    pub session_id: Option<String>,
-    /// 创建时间 (unix seconds).
-    pub created_at: i64,
-    /// 自由结构化 payload (JSON 序列化).
-    pub payload: serde_json::Value,
-    /// 来源 (`ai_generated` / `human_overridden` / `council_synthesized`).
-    pub source: String,
-    /// 标签.
-    pub tags: Vec<String>,
-    /// 软删除标记; `None` = 未删除.
-    pub tombstoned_at: Option<i64>,
-}
+/// canonical 在 `apeireth_core::kernel::memory::HistoryEntry` (O-6 锚 #18 兑现, 2026-08-27).
+/// memory crate 通过 re-export 保持 v1 compat (100+ consumer 0 破, 同类型不同路径).
+pub use apeireth_core::kernel::memory::HistoryEntry;
 
 /// 6 历史流共享 trait: 6 张表都遵循同一组操作签名.
 pub trait HistoryStream {
