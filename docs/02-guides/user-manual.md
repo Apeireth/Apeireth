@@ -104,7 +104,7 @@ v1 的"世界模型 / 好奇心 / 假设检验 / 情感记忆 / 价值内化 / �
 | | |
 | **生产 governance 接线** | ✅ 已做（upstream `873d2857`）：`PermissionGovernanceHook` + `CredentialDisclosureHook` + `PromptInjectionHook` 安装到 CLI bootstrap |
 | **敏感 workspace 路径保护**（`.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` 等）| ✅ 已做（upstream `ac5cbf5a`）：`tool.filesystem` + `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 屏蔽（普通项目元数据如 `.gitignore` / `.cargo/config.toml` 仍可读）|
-| **13 键 verdict cache 接线** | ⚠️ P0 拍板：核心定义在 `crates/foundation/core/src/philosophy.rs`，测试在 `crates/foundation/core/tests/`，**未接 runtime agent loop** |
+| **13 键 verdict cache 接线** | ✅ 降级完成（2026-08-27）：`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注"非 runtime 强制"；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论）。13 键 v2 角色 = 哲学标准 / 判别词汇表（hook deny reason 引用 + CapabilityDescriptor risk 分级）。**v2 取代 13 键强制机制 = external hook 闸**（已装 3 个）。 |
 | **`apeireth-credentials` 接线** | ⚠️ P2：env resolver 在 provider，生产足够；keyring 等后端未挂 |
 | **M1B 记忆全量移植（ACT-R / 完整管线）** | ⏳ P3：当前 memory crate 有 primitive；端到端管线待 P3 |
 | **MCP 动态能力注册** | ⏳ P4 |

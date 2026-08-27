@@ -8,6 +8,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::philosophy::{PhilosophyKey, ALL_THIRTEEN_KEYS};
+
 // 2. 双洋葱统一体 (PrincipleOnion + PermissionOnion + HumanAuthority)
 // ============================================
 
@@ -120,6 +122,101 @@ pub struct BiometricData {
     pub heart_rate: Option<f64>,
     /// 压力水平 (0.0 - 1.0, 胁迫检测)
     pub stress_level: Option<f64>,
+}
+
+/// 5 原则洋葱切片名（与 `PrincipleOnion.{e,s,a,m,o}_layer.name` 对应）
+///
+/// 用于 `VERDICT_KEYS_BY_PRINCIPLE` 的字符串标签，避开引入新 enum（3 不漂移：
+/// 不新增公开类型，只新增数据）。
+pub const PRINCIPLE_LAYER_E: &str = "E";
+pub const PRINCIPLE_LAYER_S: &str = "S";
+pub const PRINCIPLE_LAYER_A: &str = "A";
+pub const PRINCIPLE_LAYER_M: &str = "M";
+pub const PRINCIPLE_LAYER_O: &str = "O";
+
+/// 13 键 → 5 原则洋葱映射（v2 工程重构，2026-08-27）。
+///
+/// v1 的 13 键没有显式的原则分组，group_id() 只返回 1-7 的 "PHL-01..07" 编号。
+/// v2 把 13 键挂到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论 / O 操作），
+/// **作为哲学标准的"判别词汇表"**——不作为 runtime 强制机制
+/// （runtime 强制 = external hook 闸 + 未来场景 D 长程 AI 判断，per `philosophy::RUNTIME_ENFORCED = false`）。
+///
+/// 映射原则（按 key 语义，非机械分组）:
+/// - **E 存在层**: NotClone / NotPerfect / NotUuid / NotUnobservable / NotSelfRelationless
+///   (本体论可观测性、身份连续性、不假装克隆/完美/唯一 → 5 键)
+/// - **S 价值层**: NotSafe / NotUnoptimizable
+///   (安全 + 最优价值判断 → 2 键)
+/// - **A 经验层**: NotUndo
+///   (过去经验不可撤销 → 1 键)
+/// - **M 方法论层**: NotProof / SpecIsNotProof / CounterexampleIsNotBug / ProverIsNotTruth / NotUnscientific
+///   (证明 / 规格 / 反例 / 证明者 / 科学方法 → 5 键)
+/// - **O 操作层**: (v2 当前无键显式归此层；预留扩展位)
+///   (含义：日常操作层。当前 13 键在 E/S/A/M 各层已覆盖 O 的语义)
+///
+/// 总数: 5 + 2 + 1 + 5 = 13 ✓ (与 ALL_THIRTEEN_KEYS.len() 一致)
+/// 0 触碰 ALL_THIRTEEN_KEYS / group_id() / THIRTEEN_KEYS_HARDCODE——纯新增映射表。
+pub const VERDICT_KEYS_BY_PRINCIPLE: &[(&str, &[PhilosophyKey])] = &[
+    (
+        PRINCIPLE_LAYER_E,
+        &[
+            PhilosophyKey::NotClone,
+            PhilosophyKey::NotPerfect,
+            PhilosophyKey::NotUuid,
+            PhilosophyKey::NotUnobservable,
+            PhilosophyKey::NotSelfRelationless,
+        ],
+    ),
+    (
+        PRINCIPLE_LAYER_S,
+        &[
+            PhilosophyKey::NotSafe,
+            PhilosophyKey::NotUnoptimizable,
+        ],
+    ),
+    (
+        PRINCIPLE_LAYER_A,
+        &[PhilosophyKey::NotUndo],
+    ),
+    (
+        PRINCIPLE_LAYER_M,
+        &[
+            PhilosophyKey::NotProof,
+            PhilosophyKey::SpecIsNotProof,
+            PhilosophyKey::CounterexampleIsNotBug,
+            PhilosophyKey::ProverIsNotTruth,
+            PhilosophyKey::NotUnscientific,
+        ],
+    ),
+    // O 操作层: 当前 13 键未显式归此层 (E/S/A/M 已覆盖 O 语义)
+    // 扩展位: 未来如新增 O 层 键，加在下面。
+];
+
+/// 编译期断言 — VERDICT_KEYS_BY_PRINCIPLE 总键数 = ALL_THIRTEEN_KEYS.len()（0 漂移）。
+///
+/// 防止新增/删 13 键后忘记同步原则映射。Rust const 不允许格式化宏，所以用长度求和做断言：
+/// sum(len of each slice) 必须 = 13。
+const _VERDICT_KEYS_BY_PRINCIPLE_LEN_MATCHES: () = {
+    let mut total: usize = 0;
+    let mut idx = 0;
+    while idx < VERDICT_KEYS_BY_PRINCIPLE.len() {
+        total += VERDICT_KEYS_BY_PRINCIPLE[idx].1.len();
+        idx += 1;
+    }
+    if total != ALL_THIRTEEN_KEYS.len() {
+        panic!("13 键映射完整性: 映射表总数与 ALL_THIRTEEN_KEYS.len() 不匹配");
+    }
+};
+
+/// 按原则名取 13 键子集。未知原则名返回空切片。
+///
+/// 用于 governance hook 在 deny 时附加原则归属 reason（v2 治理事实落地点）。
+pub fn verdict_keys_for_principle(principle: &str) -> &'static [PhilosophyKey] {
+    for (name, keys) in VERDICT_KEYS_BY_PRINCIPLE {
+        if *name == principle {
+            return keys;
+        }
+    }
+    &[]
 }
 
 // ============================================
