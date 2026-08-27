@@ -22,9 +22,9 @@ pub mod search;
 mod sensitive_path;
 pub mod shell;
 // P-arch (2026-08-27): B5 process supervisor trait 骨架. 详见 ROADMAP §4 P5.
-// v2.0.0-rc.1 RC-8: 加 tokio_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
+// v2.0.0-rc.1 RC-8: 加 std_sub_supervisor 模块 (真 impl, std::process::Command 同步启进程).
 pub mod supervisor;
-pub mod tokio_sub_supervisor;
+pub mod std_sub_supervisor;
 
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use fetch::{FetchConfig, FetchTool};
