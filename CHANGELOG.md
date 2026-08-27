@@ -12,11 +12,11 @@
 ## [2026-08-27] v2.0.0-alpha.1 — reconstruct_v2 工程重构（主线晋升 main）
 
 > 重构版是 1.0 的工程进步：内核、设计、哲学、愿景 0 变化；变的是工程形态。
-> 旧 86-crate 工作区整体归档 `legacy/`，新工作区 13 crates。
+> 旧 86-crate 工作区整体归档 `legacy/`，新工作区 15 crates（v2.0.0-alpha.1 后续又新增 experience / perception / orchestration 三个）。
 
 ### 工程重构（2026-08-23 → 08-27，branch reconstruct_v2 → main）
 
-- **拓扑收敛**：86-crate / 58.8 万行旧工作区 → 13-crate 单一工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）；旧代码整体移入 `legacy/`（workspace exclude）；嵌套 `reconstruction_v2/` 工作区从 git 删除（磁盘残留未跟踪文件可清理）
+- **拓扑收敛**：86-crate / 58.8 万行旧工作区 → 15-crate 单一工作区（foundation 7 / engine 5 / capabilities 1 / adapters 3，后续 +experience/+perception/+orchestration 三个 0 装 trait crate）；旧代码整体移入 `legacy/`（workspace exclude）；嵌套 `reconstruction_v2/` 工作区从 git 删除（磁盘残留未跟踪文件可清理）
 - **agent loop 真实现**：`crates/engine/runtime/src/canonical/execute.rs` 单一执行入口——governance → provider → tool dispatch → 回灌续轮；approval 是 outcome 不是 error；tool 失败不终止回合；trace 不含原始 CoT
 - **Provider 插件化**：MiniMax / Anthropic / OpenAI-compatible 三家 canonical provider（`LegacyLlmCapability` 全仓 0 命中），凭据 per-turn 经 `CredentialResolver` 解析、不落地
 - **治理移植（M1C）**：Allow/Deny/RequireApproval 决策语义 + PII/注入检测 + 防篡改审计哈希链 → `crates/foundation/governance`
@@ -28,7 +28,7 @@
 
 ### 验证（2026-08-27）
 
-- `cargo test --workspace --tests --bins --lib --locked`：**1338 passed / 0 failed**
+- `cargo test --workspace --tests --bins --lib --locked`（首版）：**1338 passed / 0 failed** — 现 v2 main = `9080cc93` 实测 **~1476 passed / 0 failed**（新增 138 个测试：B1 Experience 3 + P4 Perception 5 + P6 Orchestration 5 + 8 守门 1 = 138）
 - CI 全绿：cargo-nextest（3 OS）、clippy 3 档、fmt、cargo-audit、cargo-deny、miri、rustdoc、coverage、protocol integration、M2B/M2C/M3A 三 OS 验证、13 键测试契约
 - `release-prep` 与 `pii-leak-detection` 两个旧 gate 保持 master-only，不在 main 上运行
 
