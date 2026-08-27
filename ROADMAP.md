@@ -30,6 +30,7 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - CI 全绿：cargo-nextest ~1476、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
 - **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
 - **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
+- **O-6 重构批次 (2026-08-27 启动, 哲学锚 #9 登记后立刻做)**：v2.0.0-rc.1 前的架构最优整理批次, 详见 `docs/04-internal/v2-arch-refactor-batch.md` (5 项 trait 搬 crate + 12 consumer use 行迁移). 工作量约 1-2 天, "不重做" = 默认接受次优, 这是 O-6 锚的第一次兑现.
 
 ---
 
@@ -107,6 +108,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 - **3 项不可变脊柱**（R148 后仅保）：Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义——其中 13 键 v2 角色 = **哲学标准 / 判别词汇表**（`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱 E/S/A/M 层）。**不是** v2 runtime 强制机制——v2 治理用 external hook 闸（已装 `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`）。13 键仍用于: (a) hook deny reason 引用, (b) CapabilityDescriptor risk 分级, (c) ROADMAP §5 语义定义。
 - **0 装 PASS** 仍严守：SDK stub 显式 `unimplemented!()`；shell/fetch 默认关；LIVE e2e 缺 API key 如实标注。
+- **O-6 永远追求最优 (新哲学锚 9, 2026-08-27 登记)**：见 `docs/01-architecture/philosophy.md` §O-6 详述, 三阶审查 (总体 > 系统 > 架构) + 不做借口清单 + 可检查信号. O-6 兑现的工程化表现: clippy `--workspace --all-targets --locked -- -D warnings` 0 警告 + commit 0 静默失败 + trait 位置必写明理由.
 - **push 状态**：main 晋升与 tag 推送已实际发生（2026-08-27）；本地网络受 hosts 劫持（github.com → 127.0.0.1），远端操作走代理 + 真实 IP + Host 头（凭证在本地 `.git-credentials`，未写入 git config）。
 - 旧"8 硬墙"明细（B1-B7/A1-A3/C1-C3）见 v1 时代详单，不再逐条跟踪。
 
@@ -131,7 +133,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 立体架构 v2 | R11 / R14 | 🔒 LOCKED |
 | 生命架构 v4 | R11 / R14 | 🔒 LOCKED |
 | 哲学层升级 v4.1 | R11 / R14 | 🔒 LOCKED |
-| 6→8 哲学锚 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装) | 升 8 锚, P1-2 R126 done | 🔒 LOCKED |
+| 6→9 哲学锚 (8 锚 + **O-6 永远追求最优 NEW 2026-08-27**, 三阶审查 (总体 > 系统 > 架构) + 不做借口清单 + 可检查信号) | 升 9 锚, 哲学锚 #9 登记批次 O-6 重构启动 | 🔒 LOCKED |
 | 12 键 → 13 键编译期 hardcode (+ PHL-07 NotUnoptimizable NEW) | 升 13 键, R125-12 P0-3 done; **v2 角色: 哲学标准 / 5 原则洋葱判别词汇表（`VERDICT_KEYS_BY_PRINCIPLE`）**，不再是 runtime 强制机制（`RUNTIME_ENFORCED = false`） | 🔒 LOCKED |
 | 5 重守门 → 6 重 v6 → 7 重 v7 (+ Colang DSL + Superpowers Skill Guard) | 升 7 重, P1-3 retry done | 🔒 LOCKED |
 | 双洋葱 → 三洋葱 (+ DSL 洋葱, R125-5 done) | 升三洋葱 | 🔒 LOCKED |
