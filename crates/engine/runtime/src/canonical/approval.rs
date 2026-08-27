@@ -118,6 +118,12 @@ pub struct FrozenTurnContinuation {
     /// it. The approval is moved to [`ApprovalStatus::Consumed`] after the tool
     /// has been invoked and its result appended.
     pub approved_approval_id: Option<ApprovalId>,
+    /// Number of isolated module calls already spent by this turn.
+    ///
+    /// This is persisted with an approval pause so resolving the approval
+    /// cannot reset the turn's side-call budget.
+    #[serde(default)]
+    pub module_invocations: usize,
 }
 
 impl FrozenTurnContinuation {
@@ -137,6 +143,7 @@ impl FrozenTurnContinuation {
             next_tool_index: 0,
             approved_tool_index: None,
             approved_approval_id: None,
+            module_invocations: 0,
         }
     }
 }
