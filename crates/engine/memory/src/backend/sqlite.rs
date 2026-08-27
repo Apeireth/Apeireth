@@ -84,7 +84,10 @@ impl MemoryBackend for SqliteBackend {
     fn ping(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // 0 装: 真实 SELECT 1 走 reader pool (Send+Sync 跨线程)
         self.pool
-            .read(|conn| conn.query_row("SELECT 1", [], |_| Ok(())).map_err(Into::into))
+            .read(|conn| {
+                conn.query_row("SELECT 1", [], |_| Ok(()))
+                    .map_err(Into::into)
+            })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
@@ -105,12 +108,16 @@ impl MemoryBackend for SqliteBackend {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn get_episode(&self, id: &str) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+    fn get_episode(
+        &self,
+        id: &str,
+    ) -> Result<Option<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let id = id.to_string();
         self.pool
             .read(|conn| {
-                let mut stmt = conn
-                    .prepare_cached("SELECT id, timestamp, role, content, session_id FROM episodes WHERE id = ?1")?;
+                let mut stmt = conn.prepare_cached(
+                    "SELECT id, timestamp, role, content, session_id FROM episodes WHERE id = ?1",
+                )?;
                 let mut rows = stmt.query(rusqlite::params![id])?;
                 if let Some(row) = rows.next()? {
                     Ok(Some(Episode {
@@ -127,18 +134,21 @@ impl MemoryBackend for SqliteBackend {
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
     }
 
-    fn recent_episodes(&self, session_id: &str, n: usize) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
+    fn recent_episodes(
+        &self,
+        session_id: &str,
+        n: usize,
+    ) -> Result<Vec<Episode>, Box<dyn std::error::Error + Send + Sync>> {
         let session_id = session_id.to_string();
         self.pool
             .read(|conn| {
-                let mut stmt = conn
-                    .prepare_cached(
-                        "SELECT id, timestamp, role, content, session_id \
+                let mut stmt = conn.prepare_cached(
+                    "SELECT id, timestamp, role, content, session_id \
                          FROM episodes \
                          WHERE session_id = ?1 \
-                         ORDER BY timestamp ASC \
+                         ORDER BY timestamp DESC, id DESC \
                          LIMIT ?2",
-                    )?;
+                )?;
                 let rows = stmt.query_map(rusqlite::params![session_id, n as i64], |row| {
                     Ok(Episode {
                         id: row.get(0)?,
@@ -152,6 +162,7 @@ impl MemoryBackend for SqliteBackend {
                 for r in rows {
                     out.push(r?);
                 }
+                out.reverse();
                 Ok(out)
             })
             .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
@@ -178,8 +189,10 @@ impl MemoryBackend for SqliteBackend {
             "tombstoned_at": entry.tombstoned_at,
             "payload": entry.payload,
         });
-        let payload_str = serde_json::to_string(&payload).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
-        let tags_json = serde_json::to_string(&entry.tags).map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let payload_str = serde_json::to_string(&payload)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
+        let tags_json = serde_json::to_string(&entry.tags)
+            .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })?;
         self.pool
             .read(|conn| {
                 conn.execute(
@@ -212,15 +225,14 @@ impl MemoryBackend for SqliteBackend {
         let session_id = session_id.to_string();
         self.pool
             .read(|conn| {
-                let mut stmt = conn
-                    .prepare_cached(&format!(
-                        "SELECT id, subject_id, subject_rev, created_at, payload, source, tags \
+                let mut stmt = conn.prepare_cached(&format!(
+                    "SELECT id, subject_id, subject_rev, created_at, payload, source, tags \
                          FROM {table} \
                          WHERE json_extract(payload, '$.session_id') = ?1 \
                             OR json_extract(payload, '$.session_id') IS NULL \
                          ORDER BY created_at ASC \
                          LIMIT ?2"
-                    ))?;
+                ))?;
                 let rows = stmt.query_map(rusqlite::params![session_id, n as i64], |row| {
                     let id: String = row.get(0)?;
                     let subject_id: String = row.get(1)?;
@@ -231,14 +243,11 @@ impl MemoryBackend for SqliteBackend {
                     let tags_str: String = row.get(6)?;
                     let payload: serde_json::Value =
                         serde_json::from_str(&payload_str).unwrap_or(serde_json::Value::Null);
-                    let tags: Vec<String> =
-                        serde_json::from_str(&tags_str).unwrap_or_default();
+                    let tags: Vec<String> = serde_json::from_str(&tags_str).unwrap_or_default();
                     let session_id = payload
                         .get("session_id")
                         .and_then(|v| v.as_str().map(String::from));
-                    let tombstoned_at = payload
-                        .get("tombstoned_at")
-                        .and_then(|v| v.as_i64());
+                    let tombstoned_at = payload.get("tombstoned_at").and_then(|v| v.as_i64());
                     let inner_payload = payload
                         .get("payload")
                         .cloned()
@@ -393,6 +402,15 @@ mod tests {
         assert_eq!(recent[0].id, "b");
         assert_eq!(recent[1].id, "c");
         assert_eq!(recent[2].id, "a");
+
+        let recent = b.recent_episodes("s", 2).unwrap();
+        assert_eq!(
+            recent
+                .iter()
+                .map(|episode| episode.id.as_str())
+                .collect::<Vec<_>>(),
+            ["c", "a"]
+        );
     }
 
     #[tokio::test]

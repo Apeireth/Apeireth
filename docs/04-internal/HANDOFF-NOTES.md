@@ -1,8 +1,8 @@
 # 接手人手册 (HANDOFF-NOTES.md)
 
 > **给谁看**：从零接手 v2 工程的新人. 你**不**知道这个项目, 这份文档给你**第一个**上下文.
-> **HEAD**：`ad1c6d44` (主分支 `main`, 2026-08-27 后).
-> **状态**：v2.0.0-alpha.1 trait 边界完成 + v2.0.0-rc.1 实战 RC-1/2/3/4/8/9/10 已落地 + 哲学锚 #9 (O-6 永远追求最优) 12/12 兑现.
+> **HEAD**：以 `main` 当前提交为准（本文件随 cognitive module wiring 同步更新）。
+> **状态**：v2.0.0-rc.1 的 RC-1/2/3/4/8/9/10 已落地；canonical cognitive module ABI 已完成，记忆/偏好/写回/Judge-backed assessment 已接入单一 composition root；Orchestrator、真实 Council advisors、偏好学习、长程 reflection、非文本 perception 仍明确延期。
 
 ```yaml
 [Document-Meta]
@@ -56,7 +56,7 @@ Status:          🟢 活跃 (接手人入口)
 | **RC-8** | ✅ 真实现 + 改名 | SubSupervisor → tokio::process 真实 + 改名 (子代理 A 反馈) | `67fc66a0` / `4e4fba89` |
 | **RC-9** | ✅ 真实现 | Keyring 真接入 CLI bootstrap (4 backend + selector → EnvCredentialResolver fallback) | `aa661a66` |
 | **RC-10** | ✅ 真实现 | File AES-256-GCM 加密 (EncryptedFileBackend) | `e2a5be08` |
-| **3 cognitive** | ✅ 其他 dev | Cognitive module hook ABI + 集成 + 生命周期不变量 | `a699c5f5` / `1d227d6a` / `64e64f46` |
+| **cognitive wiring** | ✅ 本轮 | 唯一 slot ledger + production composition + Memory/Preference/Assessment/Writeback + Judge adapter；Critic/Reflection/Planner 不重复造 loop | `docs/04-internal/cognitive-module-wiring.md` |
 
 子代理审查 5 项修正 (`61cc0421`): RC-1 真 SQL impl 兑现 + RC-3 真 SQL impl + SelfAssessment 单 source of truth.
 
@@ -136,6 +136,20 @@ crates/
 3. **v1.0 parity 完成 (ROADMAP §4 P3-P6)** — 子代理 B 估 14-19 周: M1B 记忆移植 (P3) → perception trait (P4) → tool-runtime + supervisor + SelfAssessment (P5) → council + team-lead + cognition (P6).
 4. **13 键永久降级后** 仍有 3 用法 (hook deny reason / CapabilityDescriptor risk 分级 / ROADMAP §5 语义定义) — 不接回 runtime 强制.
 5. **前端 companion-desktop 对接 v2 gateway** — v2.0.0 阶段, 当前 0.5.0 前端接 v1.
+
+### 7.1 Cognitive module wiring (本轮新增)
+
+权威 slot ledger 见 `docs/04-internal/cognitive-module-wiring.md`。不要
+在 CLI、Gateway、SDK 或 Orchestrator 内另注册一套模块：CLI 的
+`build_canonical_runtime_from_env` 是当前 production composition root，Gateway
+复用它，SDK 目前是 client-only。Embedding caller 只能通过
+`ProductionCognitiveModules` + `RuntimeBuilder::with_module` 显式添加模块，
+并接受 runtime 的 duplicate-id / hook / round / side-call 守门。
+
+默认无额外模型成本：memory/preference recall 与 AfterTurn writeback 走注入
+backend；Judge 只有 `APEIRETH_COGNITIVE_JUDGE=1` 才开启；Experience 表已接线但
+`extract_experience_from_episode` 仍是显式 no-op，不得写文档声称长程 cognition
+已完成。
 
 ---
 

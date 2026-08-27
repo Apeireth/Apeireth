@@ -25,9 +25,11 @@
 //! there is no second orchestration driver or legacy runtime dependency.
 
 pub mod approval;
+pub mod cognitive;
 pub mod error;
 pub mod execute;
 pub mod module;
+pub mod production;
 pub mod provider;
 pub mod runtime;
 pub mod session;
@@ -37,6 +39,13 @@ pub use approval::{
     operation_fingerprint, operation_fingerprint_with_invocation, ApprovalDecision, ApprovalStatus,
     PendingApproval, PendingApprovalView,
 };
+pub use cognitive::{
+    turn_request_from_perception, CognitiveModuleEvent, CognitiveTelemetry, CouncilModule,
+    JudgeConfig, JudgeModule, JudgeObservations, JudgeResult, JudgeVerdict, MemoryRecallModule,
+    MemoryWritebackModule, ModuleMetricsSnapshot, PreferenceRecallModule, SelfAssessmentModule,
+    COUNCIL_MODULE_ID, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID, MEMORY_RECALL_MODULE_ID,
+    MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID, SELF_ASSESSMENT_MODULE_ID,
+};
 pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
 pub use module::{
@@ -45,6 +54,7 @@ pub use module::{
     ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH,
     DEFAULT_MAX_MODULE_INVOCATIONS,
 };
+pub use production::{CognitiveBackends, CognitiveModuleConfig, ProductionCognitiveModules};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{
