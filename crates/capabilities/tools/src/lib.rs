@@ -19,6 +19,7 @@ pub mod plugin;
 pub mod process;
 pub mod repo;
 pub mod search;
+mod sensitive_path;
 pub mod shell;
 
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
