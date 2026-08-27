@@ -78,3 +78,33 @@ pub struct Migration {
     /// 迁移时间戳
     pub timestamp: i64,
 }
+
+/// HistoryEntry: 6 历史流条目 (per stream_kind::StreamKind canonical)
+///
+/// **位置** (O-6 锚 #18 兑现, 2026-08-27): canonical 在 `apeireth_core::kernel::memory::HistoryEntry`,
+/// memory crate 通过 `pub use` re-export 保持 v1 compat. plugin::MemoryBackend trait method
+/// `append_stream` / `list_stream` 用 typed struct 替代 `serde_json::Value` 占位.
+///
+/// **LOCKED**: 字段不变 (D2 §5.3 #2 强制: subject_id + subject_rev 必填),
+/// 序列化兼容 (serde derive 不变, JSON 跨进程 0 异常).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HistoryEntry {
+    /// 条目 id
+    pub id: String,
+    /// 主体 ID (D2 §5.3 #2 必填)
+    pub subject_id: String,
+    /// 主体版本号 (D2 §5.3 #2 必填)
+    pub subject_rev: i64,
+    /// 可选 session 关联
+    pub session_id: Option<String>,
+    /// 创建时间 (unix seconds)
+    pub created_at: i64,
+    /// 自由结构化 payload (JSON 序列化)
+    pub payload: serde_json::Value,
+    /// 来源 (`ai_generated` / `human_overridden` / `council_synthesized`)
+    pub source: String,
+    /// 标签
+    pub tags: Vec<String>,
+    /// 软删除标记; `None` = 未删除
+    pub tombstoned_at: Option<i64>,
+}
