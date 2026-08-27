@@ -137,6 +137,7 @@ dependencies = [
 name = "apeireth-credentials"
 version = "1.2.0"
 dependencies = [
+ "apeireth-plugin",
  "chacha20poly1305",
  "hex",
  "keyring",
