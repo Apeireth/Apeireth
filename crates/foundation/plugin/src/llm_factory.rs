@@ -158,6 +158,63 @@ pub trait LlmFactory: Send + Sync {
     fn name(&self) -> &str;
 }
 
+// ============================================
+// 0 装 Noop impl (v2.0 alpha 阶段)
+// ============================================
+
+/// 0 装 PASS: NoopLlmInstance
+/// 不调真 LLM API, 返 `NotImplemented` 错误. rc 阶段真 LlmInstance (MiniMax / Anthropic /
+/// OpenAI-compatible) 替换 Noop. trait 边界 + interface contract 已经画好, rc 阶段
+/// 是"interface → real impl"一对一映射, 不会有结构性破坏.
+///
+/// **为何 0 装**: alpha 阶段没真 LLM API key, 也不该假装"我能调". runtime 拿 NoopLlmFactory
+/// 启动时, 所有 LLM 调用返 NotImplemented, governance 把 NotImplemented 转 Deny 或
+/// Abstain (per scene-d §2.2). 不假装有 AI 决策.
+pub struct NoopLlmInstance {
+    role: SubagentRole,
+    model: String,
+}
+
+impl NoopLlmInstance {
+    pub fn new(role: SubagentRole, model: impl Into<String>) -> Self {
+        Self { role, model: model.into() }
+    }
+}
+
+#[async_trait]
+impl LlmInstance for NoopLlmInstance {
+    async fn complete(&self, _req: CompletionRequest) -> Result<CompletionResponse, LlmError> {
+        Err(LlmError::NotImplemented(
+            "NoopLlmInstance::complete (0 装 PASS; rc 阶段真 LLM 接入)",
+        ))
+    }
+
+    fn name(&self) -> &str {
+        "noop"
+    }
+}
+
+/// 0 装 PASS: NoopLlmFactory
+/// spawn 即返 NoopLlmInstance. runtime 启动时用.
+pub struct NoopLlmFactory;
+
+#[async_trait]
+impl LlmFactory for NoopLlmFactory {
+    async fn spawn(&self, role: SubagentRole, model: &str) -> Result<Box<dyn LlmInstance>, LlmError> {
+        // 0 装: 返 Noop, 不是真 LLM. rc 阶段返 `LlmFactoryImpl::spawn(...)` 真 LLM instance.
+        Ok(Box::new(NoopLlmInstance::new(role, model)))
+    }
+
+    async fn available_models(&self) -> Result<Vec<String>, LlmError> {
+        // 0 装: 永返空 (没真可用 model)
+        Ok(Vec::new())
+    }
+
+    fn name(&self) -> &str {
+        "noop"
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +266,48 @@ mod tests {
             SubagentRole::Documenter,
         ];
         // 编译通过 = 5 role 都可达
+    }
+
+    /// 0 装 PASS: NoopLlmFactory::spawn 返 NoopLlmInstance (0 装占位, 不假装真 LLM)
+    #[tokio::test]
+    async fn noop_llm_factory_spawn_returns_noop_instance() {
+        let factory = NoopLlmFactory;
+        let instance = factory
+            .spawn(SubagentRole::Reviewer, "anthropic/claude-3-5")
+            .await
+            .expect("spawn NoopLlmInstance");
+        assert_eq!(instance.name(), "noop");
+        // complete 应该返 NotImplemented (0 装: 不假装调真 LLM)
+        let req = CompletionRequest {
+            system_prompt: "system".into(),
+            messages: vec![],
+            temperature: 1.0,
+            tools: vec![],
+            max_tokens: None,
+        };
+        let result = instance.complete(req).await;
+        match result {
+            Err(LlmError::NotImplemented(_)) => {}
+            other => panic!("expected NotImplemented, got {other:?}"),
+        }
+    }
+
+    /// 0 装 PASS: NoopLlmFactory::available_models 永返空 (没真 model)
+    #[tokio::test]
+    async fn noop_llm_factory_available_models_empty() {
+        let factory = NoopLlmFactory;
+        let models = factory
+            .available_models()
+            .await
+            .expect("available_models Noop");
+        assert!(models.is_empty(), "NoopLlmFactory 0 装, 无可用 model");
+    }
+
+    /// 0 装 PASS: NoopLlmFactory 可当 Send + Sync (NoopLlmInstance 含 trait bound Send+Sync)
+    #[test]
+    fn noop_llm_factory_is_send_sync() {
+        fn _assert_send_sync<T: Send + Sync>() {}
+        _assert_send_sync::<NoopLlmFactory>();
+        _assert_send_sync::<NoopLlmInstance>();
     }
 }
