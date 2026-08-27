@@ -66,6 +66,7 @@ fn make_test_env() -> (
         mode: apeireth_core::HAMode::SingleHuman,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     };
     (guard, permission, ha)
 }

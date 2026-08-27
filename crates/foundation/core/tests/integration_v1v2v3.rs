@@ -81,6 +81,7 @@ fn single_human_authority() -> HumanAuthority {
         mode: HAMode::SingleHuman,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     }
 }
 
@@ -89,6 +90,7 @@ fn multi_human_authority() -> HumanAuthority {
         mode: HAMode::MultiHuman,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     }
 }
 
@@ -97,6 +99,7 @@ fn offline_authority() -> HumanAuthority {
         mode: HAMode::Offline,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     }
 }
 
@@ -472,6 +475,7 @@ fn and_gate_semantics_v1_block_short_circuits() {
         mode: HAMode::Offline, // V3 已经会拒绝
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     };
     let action = make_action(
         "and-v1-block",

@@ -156,6 +156,7 @@ fn main() {
             biometric_data: None,
         }],
         ice_frozen_until: None,
+        multi_sign: None,
     };
     println!("   ✓ HA 模式: SingleHuman");
     println!("   ✓ Authentication: WindowsHello");
