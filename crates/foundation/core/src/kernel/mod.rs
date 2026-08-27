@@ -50,9 +50,10 @@ pub use metadata::Metadata;
 pub use time::{system_clock, Clock, SystemClock, Timestamp, VirtualClock};
 // Domain types (Episode / Note / Session / IdentityCard / Migration) live in
 // `crate::kernel::memory` — accessed as `apeireth_core::kernel::memory::Episode`.
-// NOT re-exported at kernel root (would conflict with `apeireth_core::Episode`
-// legacy compat at root). v2.0.0-rc 阶段: 12 consumer 批量迁 kernel::memory
-// 后, lib.rs `pub use memory::*` 删除, kernel 顶层 re-export 打开.
+// **O-6 锚兑现 (2026-08-27) #11 撤回**: kernel 顶层 re-export 与 crate::memory
+// re-export 冲突 (E0252 Session/Note 等). kernel 只声明 `pub mod memory;` 让用户走
+// `apeireth_core::kernel::memory::Episode`. 真 kernel 顶层 re-export 等 v2.0.0-rc
+// 12 consumer 迁完删 crate::memory 之后开.
 
 // P-arch (2026-08-27): core drain 第一阶段.
 // 真实 drain（删 root 的 `pub use memory::*` 等）需要 12 个 crate 改路径,

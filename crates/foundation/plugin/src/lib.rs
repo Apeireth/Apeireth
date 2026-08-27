@@ -67,6 +67,9 @@ pub use credentials::{CredentialResolver, NoCredentials, Secret, StaticCredentia
 pub use error::{PluginError, PluginResult};
 pub use manager::PluginManager;
 pub use manifest::PluginManifest;
+// O-6 锚兑现 #12: 统一 capability trait 错误通道 `CapabilityResult<T>` 在 crate root
+// 可用, 避免每个 use 点写 `crate::memory_backend::CapabilityResult`.
+pub use memory_backend::CapabilityResult;
 pub use plugin::{Plugin, PluginContext};
 pub use provider::{ProviderCapability, ProviderError};
 pub use registry::{CapabilityRecord, CapabilityRegistry, PluginRegistry};

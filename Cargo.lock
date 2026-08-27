@@ -191,6 +191,7 @@ version = "1.2.0"
 dependencies = [
  "anyhow",
  "apeireth-core",
+ "apeireth-plugin",
  "apeireth-storage",
  "async-trait",
  "chrono",
@@ -220,6 +221,7 @@ name = "apeireth-perception"
 version = "1.2.0"
 dependencies = [
  "apeireth-core",
+ "apeireth-plugin",
  "serde",
  "serde_json",
 ]

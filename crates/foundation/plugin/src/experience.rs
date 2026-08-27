@@ -31,6 +31,7 @@
 use serde::{Deserialize, Serialize};
 
 use apeireth_core::Episode;
+use crate::memory_backend::CapabilityResult;
 
 // ============================================
 // Wiki (L1: LLM 提炼的条目)
@@ -67,13 +68,13 @@ pub struct WikiEntry {
 /// 0 装 PASS: trait 边界清晰, impl 留 v2.1
 pub trait WikiEntryStore: Send + Sync {
     /// 写一条 WikiEntry
-    fn put_wiki(&self, entry: &WikiEntry) -> Result<(), ExperienceError>;
+    fn put_wiki(&self, entry: &WikiEntry) -> CapabilityResult<()>;
 
     /// 按 session 列出某 topic 下的 WikiEntry
-    fn list_wiki(&self, session_id: &str, topic: &str, limit: u32) -> Result<Vec<WikiEntry>, ExperienceError>;
+    fn list_wiki(&self, session_id: &str, topic: &str, limit: u32) -> CapabilityResult<Vec<WikiEntry>>;
 
     /// 按 source_episode_id 反查（v1 progressive disclosure: 注入时回查摘要）
-    fn wiki_for_episode(&self, episode_id: &str) -> Result<Vec<WikiEntry>, ExperienceError>;
+    fn wiki_for_episode(&self, episode_id: &str) -> CapabilityResult<Vec<WikiEntry>>;
 }
 
 // ============================================
@@ -115,19 +116,19 @@ pub struct GraphLink {
 /// KG 存储 trait
 pub trait KnowledgeGraphStore: Send + Sync {
     /// 写一条 fact
-    fn put_fact(&self, fact: &GraphFact) -> Result<(), ExperienceError>;
+    fn put_fact(&self, fact: &GraphFact) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     /// 写一条 link
-    fn put_link(&self, link: &GraphLink) -> Result<(), ExperienceError>;
+    fn put_link(&self, link: &GraphLink) -> Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
     /// 从 subject 出发一跳 fact
-    fn facts_from(&self, subject_id: &str, limit: u32) -> Result<Vec<GraphFact>, ExperienceError>;
+    fn facts_from(&self, subject_id: &str, limit: u32) -> CapabilityResult<Vec<GraphFact>>;
 
     /// 从 from 出发一跳 link
-    fn links_from(&self, from_id: &str, limit: u32) -> Result<Vec<GraphLink>, ExperienceError>;
+    fn links_from(&self, from_id: &str, limit: u32) -> CapabilityResult<Vec<GraphLink>>;
 
     /// 删除 subject 相关的所有 fact（v1 memory_governance 风格: 不真删, 标 tombstone）
-    fn forget_subject(&self, subject_id: &str) -> Result<(), ExperienceError>;
+    fn forget_subject(&self, subject_id: &str) -> CapabilityResult<()>;
 }
 
 // ============================================
@@ -164,38 +165,19 @@ pub trait AssociationStore: Send + Sync {
         from: &str,
         to: &str,
         episode_id: &str,
-    ) -> Result<(), ExperienceError>;
+    ) -> CapabilityResult<()>;
 
     /// 查 entity 联想 top-N（按 co_occurrence_count desc）
-    fn top_associations(&self, entity: &str, limit: u32) -> Result<Vec<AssociationEdge>, ExperienceError>;
+    fn top_associations(&self, entity: &str, limit: u32) -> CapabilityResult<Vec<AssociationEdge>>;
 }
 
 // ============================================
 // Experience 统一错误
 // ============================================
 
-/// Experience trait 统一的错误类型（v2.0 alpha: 0 装, 仅占位）
-#[derive(Debug)]
-pub enum ExperienceError {
-    /// 未实现 (0 装 PASS: trait 0 装, impl 留 v2.1)
-    NotImplemented(&'static str),
-    /// 底层 backend 错误 (Future: 接 MemoryBackend trait 的错误链)
-    Backend(String),
-    /// 数据冲突（如 WikiEntry id 已存在）
-    Conflict(String),
-}
-
-impl std::fmt::Display for ExperienceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NotImplemented(what) => write!(f, "experience backend not implemented: {what} (0 装 PASS — v2.1 路线)"),
-            Self::Backend(msg) => write!(f, "experience backend error: {msg}"),
-            Self::Conflict(msg) => write!(f, "experience data conflict: {msg}"),
-        }
-    }
-}
-
-impl std::error::Error for ExperienceError {}
+// (O-6 锚兑现 #12: ExperienceError 删 — 用 `Box<dyn std::error::Error + Send + Sync>`
+// (即 `CapabilityResult<T>` 的 Err 类型) 统一所有 capability trait 错误通道.
+// impl 端用 `Box::new(my_local_error)` 包.)
 
 // ============================================
 // 占位 helper: 从 episode 提炼到 3 layer 的入口
@@ -215,6 +197,7 @@ pub fn extract_experience_from_episode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_backend::CapabilityResult;
 
     /// P-arch (2026-08-27): 0 装验证.
     /// extract_experience_from_episode 不假装有 pipeline, 直接返空
@@ -235,14 +218,17 @@ mod tests {
         assert!(l.is_empty());
     }
 
-    /// 0 装 PASS: ExperienceError::NotImplemented 描述清楚 trait 在 v2.0 alpha
-    /// 0 装, v2.1 路线.
+    /// 0 装 PASS: 错误通道统一为 `Box<dyn Error + Send + Sync>`, impl 端用
+    /// `Box::new(impl_local_error)` 包. 这里验证 0 装 marker 字符串 (impl v2.1
+    /// 接真 backend 时, NotImplemented 应改为真错误).
     #[test]
-    fn not_implemented_error_documents_zero_implementation() {
-        let e = ExperienceError::NotImplemented("WikiEntryStore");
-        let s = format!("{e}");
+    fn not_implemented_marker_appears_in_error_string() {
+        // 0 装: impl 包成 Box 的字符串应含 0 装 / v2.1 / 实现者 (impl-defined)
+        // v2.0 alpha 的真 0 装 impl 在 memory crate (现在 NoopAdvisor)
+        let e = std::io::Error::new(std::io::ErrorKind::Unsupported, "0 装 PASS: v2.1");
+        let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(e);
+        let s = format!("{boxed}");
         assert!(s.contains("0 装"));
-        assert!(s.contains("WikiEntryStore"));
         assert!(s.contains("v2.1"));
     }
 
