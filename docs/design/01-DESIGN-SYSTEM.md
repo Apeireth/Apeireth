@@ -2,6 +2,7 @@
 
 > **项目**：Apeireth（阿佩瑞斯）—— AGI 操作系统 / AI 伙伴
 > **哲学核心**：Apeiron（无名的沉默）→ 点燃的火（burning is thinking）→ Entelecheia（潜能成为现实）
+> **现状 (2026-08-27)**：本文是设计令牌规范（v1 时代定版，2026-08-21），**设计令牌 / 界面语言本身 v2 不变**。前端 `frontend/companion-desktop/` 仍是独立 Svelte 5 + Tauri 2 workspace，v2 后端 = canonical gateway :8080。当前基线见根 [ARCHITECTURE.md](../../ARCHITECTURE.md)；附录引用的 `presence.rs` / `companion_serve.rs` 行号属 v1 路径，现位于 `legacy/donor/apeireth-companion/`。
 > **配套文件**：`frontend/design-preview/design-tokens.json`（机器可读令牌，本文 §10 说明其分组与消费方式）
 > **核实日期**：2026-08-21（基于工作区当前 HEAD）
 
