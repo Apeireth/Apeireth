@@ -1,0 +1,24 @@
+[package]
+name = "apeireth-orchestration"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth orchestration 编排层 (P-arch 2026-08-27, scene-d 例 3 基础): 7 Advisor + Council 多意见评审 + Orchestrator 调度 subagent + SelfAssessmentCache. v2.0 alpha 是 trait + 0 装占位, 真 LLM 实现留 v2.0.0-rc 路线. 详见 v2-unabsorbed-features.md §A1 + §A2 + scene-d-v2-plan.md."
+
+[dependencies]
+apeireth-core = { path = "../core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lib]
+name = "apeireth_orchestration"
+path = "src/lib.rs"
+
+[lints]
+workspace = true

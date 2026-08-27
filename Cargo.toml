@@ -7,6 +7,7 @@ members = [
     "crates/foundation/plugin",
     "crates/foundation/governance",
     "crates/foundation/credentials",
+    "crates/foundation/orchestration",
     "crates/engine/runtime",
     "crates/engine/provider",
     "crates/engine/storage",
