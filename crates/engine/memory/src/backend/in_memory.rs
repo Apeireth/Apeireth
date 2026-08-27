@@ -51,8 +51,6 @@ impl MemoryBackend for InMemoryBackend {
         let mut map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
         // append-only 语义：拒绝覆盖已存在 id（与 SQLite 行为一致）
         if map.contains_key(&ep.id) {
-            // 0 装：明确报错，**不**静默覆盖
-            // 返回 Invalid 错误，与 memory crate 风格一致
             return Err(crate::MemoryError::Invalid(format!(
                 "episode id already exists: {}",
                 ep.id
@@ -69,7 +67,6 @@ impl MemoryBackend for InMemoryBackend {
 
     fn recent_episodes(&self, session_id: &str, n: usize) -> MemoryResult<Vec<Episode>> {
         let map = self.episodes_by_id.lock().expect("InMemoryBackend poisoned");
-        // 按 timestamp 升序排，末尾 N 条
         let mut all: Vec<Episode> = map
             .values()
             .filter(|e| e.session_id == session_id)
@@ -83,9 +80,10 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
+    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+        let entry: HistoryEntry = serde_json::from_value(entry)?;
+        let kind = stream_name_to_kind(stream_name)?;
         let mut streams = self.streams.lock().expect("InMemoryBackend poisoned");
-        // append-only：按 (kind, session) 分组，tombstoned 的也保留（与 SQLite append-only 一致）
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
         list.push(entry);
@@ -94,17 +92,17 @@ impl MemoryBackend for InMemoryBackend {
 
     fn list_stream(
         &self,
-        kind: StreamKind,
+        stream_name: &str,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
+    ) -> MemoryResult<Vec<serde_json::Value>> {
+        let kind = stream_name_to_kind(stream_name)?;
         let streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, session_id.to_string());
-        let list = streams.get(&key);
-        let Some(list) = list else {
-            return Ok(Vec::new());
+        let list = match streams.get(&key) {
+            Some(l) => l,
+            None => return Ok(Vec::new()),
         };
-        // 过滤未 tombstone 的，按 created_at 升序，末尾 N 条
         let mut alive: Vec<HistoryEntry> = list
             .iter()
             .filter(|e| e.tombstoned_at.is_none())
@@ -115,13 +113,31 @@ impl MemoryBackend for InMemoryBackend {
             let skip = alive.len() - n;
             alive.drain(..skip);
         }
-        Ok(alive)
+        alive
+            .into_iter()
+            .map(|e| serde_json::to_value(e).map_err(crate::MemoryError::Json))
+            .collect()
+    }
+}
+
+fn stream_name_to_kind(name: &str) -> MemoryResult<StreamKind> {
+    match name {
+        "thought" => Ok(StreamKind::Thought),
+        "proposal" => Ok(StreamKind::Proposal),
+        "action" => Ok(StreamKind::Action),
+        "relation" => Ok(StreamKind::Relation),
+        "evolution" => Ok(StreamKind::Evolution),
+        "reflection" => Ok(StreamKind::Reflection),
+        other => Err(crate::MemoryError::Invalid(format!(
+            "unknown stream name: {other}; expected one of 6: thought/proposal/action/relation/evolution/reflection"
+        ))),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::append_only::HistoryEntry;
 
     fn ep(id: &str, session: &str) -> Episode {
         Episode {
@@ -159,7 +175,6 @@ mod tests {
         let b = InMemoryBackend::new();
         let e = ep("ep-1", "sess-1");
         b.put_episode(&e).unwrap();
-        // Episode 没有 PartialEq，字段级对比
         let got = b.get_episode("ep-1").unwrap().expect("episode exists");
         assert_eq!(got.id, e.id);
         assert_eq!(got.timestamp, e.timestamp);
@@ -175,19 +190,22 @@ mod tests {
         let b = InMemoryBackend::new();
         let e = ep("dup", "s");
         b.put_episode(&e).unwrap();
-        let e2 = ep("dup", "s");
-        let r = b.put_episode(&e2);
-        assert!(r.is_err(), "append-only backend must reject duplicate id");
+        let r = b.put_episode(&e);
+        assert!(r.is_err());
     }
 
     #[test]
     fn stream_roundtrip() {
         let b = InMemoryBackend::new();
         let session = "s1";
-        b.append_stream(StreamKind::Thought, he("t1", session)).unwrap();
-        b.append_stream(StreamKind::Thought, he("t2", session)).unwrap();
-        let list = b.list_stream(StreamKind::Thought, session, 10).unwrap();
+        b.append_stream("thought", serde_json::to_value(he("t1", session)).unwrap())
+            .unwrap();
+        b.append_stream("thought", serde_json::to_value(he("t2", session)).unwrap())
+            .unwrap();
+        let list = b.list_stream("thought", session, 10).unwrap();
         assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["id"], "t1");
+        assert_eq!(list[1]["id"], "t2");
     }
 
     #[test]
@@ -198,10 +216,19 @@ mod tests {
         alive.tombstoned_at = None;
         let mut dead = he("d", session);
         dead.tombstoned_at = Some(1_700_000_500);
-        b.append_stream(StreamKind::Action, alive).unwrap();
-        b.append_stream(StreamKind::Action, dead).unwrap();
-        let list = b.list_stream(StreamKind::Action, session, 10).unwrap();
+        b.append_stream("action", serde_json::to_value(alive).unwrap())
+            .unwrap();
+        b.append_stream("action", serde_json::to_value(dead).unwrap())
+            .unwrap();
+        let list = b.list_stream("action", session, 10).unwrap();
         assert_eq!(list.len(), 1);
-        assert_eq!(list[0].id, "a");
+        assert_eq!(list[0]["id"], "a");
+    }
+
+    #[test]
+    fn unknown_stream_name_is_rejected() {
+        let b = InMemoryBackend::new();
+        let r = b.append_stream("not-a-stream", serde_json::json!({}));
+        assert!(r.is_err());
     }
 }
