@@ -1,5 +1,7 @@
 # Apeireth Desktop RC1 — Native Desktop Acceptance Protocol
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 > **定位**: Apeireth Desktop RC1 (Backend / Runtime Integration 已经 100% 验证) 的最后一公里真实 GUI / 进程级验收协议。
 > **目标**: 针对真实端到端桌面动作进行 10 场景实测与证据留痕。
 

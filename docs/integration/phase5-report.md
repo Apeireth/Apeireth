@@ -1,5 +1,7 @@
 # Phase 5 — Real Chat E2E + 最小产品闭环报告（2026-08-19）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 ## 1. Baseline
 
 - 工作树基于 Fresh Integration HEAD `78c0c66a`（本地）同步远程 master

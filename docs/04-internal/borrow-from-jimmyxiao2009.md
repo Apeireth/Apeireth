@@ -1,5 +1,7 @@
 # 借鉴来源 — Jimmyxiao2009 个人项目 (2026-08-21)
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 > **目的**: 把 https://github.com/Jimmyxiao2009/ 个人项目中的可借鉴设计/模式吸收进 Apeireth-rust 主仓
 > **生成时间**: 2026-08-21
 > **执行**: 主代理 (本会话) 自主决策 + 派子代理调研

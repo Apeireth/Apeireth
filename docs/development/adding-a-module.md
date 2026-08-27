@@ -6,7 +6,7 @@ This is the quick decision guide for contributors.
 
 | Work | Location | Rule |
 | --- | --- | --- |
-| New product feature module | `crates/modules/<name>/` (create only with a real implementation) | Must be built on canonical engine/foundation contracts |
+| New product feature module | 归入 `crates/foundation/`、`crates/engine/`、`crates/capabilities/` 或 `crates/adapters/` 之一（新建 crate 须有真实实现；无 `crates/modules/` 层） | Must be built on canonical engine/foundation contracts |
 | New model-facing tool capability | `crates/capabilities/tools/` module | Do NOT create `apeireth-tool-foo` by default |
 | New provider capability | `crates/engine/provider/` | Vendor translation and vendor HTTP only |
 | New adapter surface | `crates/adapters/<name>/` | Decode/encode and call Runtime; no orchestration |
@@ -48,19 +48,16 @@ foundation
    ↓
 engine primitives / plugin contracts
    ↓
-capabilities + modules
+capabilities
    ↓
 runtime composition
    ↓
 adapters
 ```
 
-- foundation must not depend on modules/adapters.
+- foundation must not depend on engine/capabilities/adapters.
 - engine may depend on foundation.
 - capabilities may depend on foundation and approved engine primitives.
-- modules may depend on canonical contracts, not adapters or legacy. The
-  `crates/modules/` directory is intentionally absent until a real product
-  module has an owner, implementation, tests, and a workspace entry.
 - adapters may depend inward.
 - product code must not depend on `legacy/`.
 

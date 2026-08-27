@@ -14,7 +14,7 @@ removed. A donor location is a source of reference, not a production dependency.
 | Life-force and reflection semantics | `legacy/donor/apeireth-life-force` | No canonical endurance/reflection model | `apeireth-memory` or a future module | PORT — require an explicit ownership and governance design |
 | Gateway privacy guard and rate limiting | `legacy/donor/apeireth-guard`, `legacy/donor/apeireth-rate-limiter` | Canonical gateway currently validates transport and delegates execution; no PII redaction or quota policy | `apeireth-gateway` / `apeireth-governance` | PORT — define policy at the adapter/governance boundary before implementation |
 | CLI skills, eval, council, MCP, and ASI commands | `legacy/donor/apeireth-skills`, `legacy/donor/apeireth-eval`, `legacy/donor/apeireth-council`, `legacy/donor/apeireth-mcp`, `legacy/donor/apeireth-asi` | CLI now exposes only session, chat, and gateway serve | Future dedicated adapters | REASSESS — no historical command is part of the canonical CLI contract |
-| Companion module | `legacy/donor/apeireth-companion` | No canonical companion feature module in the current workspace | `crates/modules/companion` | PORT — reintroduce only as a canonical plugin/module with no donor dependency |
+| Companion module | `legacy/donor/apeireth-companion` | No canonical companion feature module in the current workspace | 一个未来 canonical plugin/module（归入 `crates/` 四组之一，无 `crates/modules/` 层） | PORT — reintroduce only as a canonical plugin/module with no donor dependency |
 
 This backlog is deliberately explicit about gaps. It is not permission for
 current crates to import donor code, and it does not claim that donor behavior

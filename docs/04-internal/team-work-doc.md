@@ -1,5 +1,7 @@
 # Apeireth 团队作战文档（v1.0, 2026-08-16）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：§1 三哲学保留为内核；§2-3 规范仍有效；§4-6 编制/欠账、§8-11 任务包为 v1 时代记录。
+
 > **给谁看**: Apeireth 全体协作者（23 人 AI 团队 + 未来社区开发者）
 > **读法**: 先读 §1 哲学（决定"为什么做/不做什么"）→ §2/§3 规范（决定"怎么做"）→ §4/§5 任务（决定"做什么"）→ §6 节奏（决定"何时合"）
 > **权威**: 本文件是**团队执行的唯一作战文档**；与已有文档冲突时，哲学优先，本文档优先于旧文档的过时细节。

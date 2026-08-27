@@ -2,7 +2,7 @@
 
 > **性质**: 接手团队第一份必读——三平台安装（Windows / Linux / macOS）+ 验证步骤。
 > **依据**: 我们 2026-07-31 "开干前补齐 4 件套" + rust-toolchain.toml 锁定 Rust 1.97.1 stable。
-> **commit 锚**: 23513387（v3 修订）。
+> **当前基线**: 默认分支 `main`、13-crate 工作区（v2.0.0-alpha.1）；`legacy/` 不参与构建。
 
 ---
 
@@ -21,7 +21,7 @@
 | **Git** | 2.30+ | 2.40+ |
 | **cmake** | 3.20+ | 3.25+（编译 sled）|
 | **Python** | 3.11+ | 3.13（PyO3 桥）|
-| **SQLite** | 3.35+ | 3.40+（apeireth-memory 持久化）|
+| **SQLite** | 3.35+ | 3.40+（`crates/engine/memory` 持久化）|
 
 ---
 
@@ -69,7 +69,7 @@ cargo test --workspace
 ### 步骤 5：验证
 
 ```powershell
-cargo run --bin apeireth-cli session
+cargo run --bin apeireth session
 # 应该看到：欢迎信息 + 启动 session
 ```
 
@@ -114,7 +114,7 @@ cargo test --workspace
 ### 步骤 4：验证
 
 ```bash
-cargo run --bin apeireth-cli session
+cargo run --bin apeireth session
 # 应该看到：欢迎信息 + 启动 session
 ```
 
@@ -161,7 +161,7 @@ cargo test --workspace
 ### 步骤 5：验证
 
 ```bash
-cargo run --bin apeireth-cli session
+cargo run --bin apeireth session
 ```
 
 ---
@@ -174,7 +174,7 @@ cargo run --bin apeireth-cli session
 # 1. Build（应该 0 error）
 cargo build --workspace
 
-# 2. Test（应该 23,874 套全 workspace PASS, per CHANGELOG post-1.0.0）
+# 2. Test（应该 1338 passed / 0 failed——13-crate 工作区实测；v1 时代 86-crate 全量为 23,806，见 CHANGELOG）
 cargo test --workspace
 
 # 3. Clippy（应该 0 warning）
@@ -184,7 +184,7 @@ cargo clippy --workspace -- -D warnings
 cargo fmt --check
 
 # 5. Hello World（应该看到欢迎信息）
-cargo run --bin apeireth-cli session
+cargo run --bin apeireth session
 ```
 
 如果全部通过 = **安装成功**，可以开始贡献代码。
@@ -252,9 +252,9 @@ EOF
 
 1. **读 README.md**（顶层入口）
 2. **读 CONTRIBUTING.md**（PR 流程）
-3. **读 docs/01-architecture/vision.md**（5/30/60 分钟路径起点, docs/stage1 体系重构后)
+3. **读 docs/01-architecture/vision.md**（5/30/60 分钟路径起点, docs/archive 体系重构后)
 4. **读 ROADMAP.md**（顶层路线图, 8/19 已反映 v1.0.0 实际）
-5. **读 docs/03-reference/glossary.md**（术语, 含 7-4-gates / 17-4 视角漂移诚实标注）
+5. **读 docs/03-reference/glossary.md**（术语；v2 现状见 docs/01-architecture/architecture.md）
 6. **运行 examples/**（最小 demo, `cargo run --example hello_world` 选具体 example）
 
 ---
