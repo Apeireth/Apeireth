@@ -51,9 +51,8 @@ impl MockServer {
         let served = Arc::new(Mutex::new(false));
         let served_clone = Arc::clone(&served);
         tokio::spawn(async move {
-            let (mut socket, _) = match listener.accept().await {
-                Ok(s) => s,
-                Err(_) => return,
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
             };
             use tokio::io::{AsyncReadExt, AsyncWriteExt};
             let mut buf = [0u8; 4096];
