@@ -20,6 +20,9 @@ thiserror = { workspace = true }
 rusqlite = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true, features = ["v5"] }
+# v2.0.0-rc.1 RC-10: AES-256-GCM 加密 (per v2.0.0-rc-roadmap.md §3 RC-10)
+aes-gcm = { workspace = true }
+rand = { workspace = true }
 
 [features]
 default = []
