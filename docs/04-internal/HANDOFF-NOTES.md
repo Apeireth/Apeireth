@@ -151,6 +151,28 @@ backend；Judge 只有 `APEIRETH_COGNITIVE_JUDGE=1` 才开启；Experience 表�
 `extract_experience_from_episode` 仍是显式 no-op，不得写文档声称长程 cognition
 已完成。
 
+### 7.2 远程验证记录 (2026-08-28)
+
+本轮验证统一在 `desktop-dcce212558a843ed-20260806111728416` 的
+`D:\apx\apeireth-rust` 执行，远程提交为 `e5dbca0605d123b00205b7efdaddc40d5a2d94d3`，
+工具链为 `rustc 1.97.1 / cargo 1.97.1`。以下结果均为远程结果：
+
+- `cargo test -p apeireth-runtime`
+- `cargo test -p apeireth-memory`
+- `cargo test -p apeireth-orchestration`
+- `cargo test -p apeireth-cli`
+- `cargo test -p apeireth-governance`
+- `cargo test -p apeireth-tools-canonical`
+- `cargo test -p apeireth-credentials`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace`
+- 本轮触碰 Rust 文件的定点 `rustfmt --check` 与 `git diff --check`
+
+`cargo clippy --workspace --all-targets --all-features -- -D warnings` 仍受远程机
+未安装 Python 3.x 阻断：可选 SDK 的 PyO3 feature 无法完成解释器探测；设置
+`PYO3_NO_PYTHON=1` 后又因当前 feature 未启用 abi3 而失败。`cargo fmt --all -- --check`
+只报告基线中未触碰文件的既有漂移；未对这些无关文件做格式化。
+
 ---
 
 ## 8. 接手人 5 条 actionable advice
