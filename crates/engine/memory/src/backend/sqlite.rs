@@ -75,11 +75,11 @@ impl MemoryBackend for SqliteBackend {
         <SqliteMemoryStore as EpisodeStore>::recent_episodes(&*self.store, session_id, n)
     }
 
-    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
         // Trait 层传 JSON Value; 内部 deserialize 回 memory 的 HistoryEntry
         // (0 装: 无 schema 校验; v2.0.0-rc 阶段加严格 schema 验证)
         let entry: HistoryEntry = serde_json::from_value(entry)?;
-        let kind = stream_name_to_kind(stream_name)?;
+        
         let conn = self.store.conn()?;
         <crate::streams::StreamHandle<'_> as HistoryStream>::append(
             &crate::streams::StreamHandle::new(kind, &conn),
@@ -89,11 +89,11 @@ impl MemoryBackend for SqliteBackend {
 
     fn list_stream(
         &self,
-        stream_name: &str,
+        kind: StreamKind,
         session_id: &str,
         n: usize,
     ) -> MemoryResult<Vec<serde_json::Value>> {
-        let kind = stream_name_to_kind(stream_name)?;
+        
         let conn = self.store.conn()?;
         let mut all = <crate::streams::StreamHandle<'_> as HistoryStream>::list_for_session(
             &crate::streams::StreamHandle::new(kind, &conn),
@@ -116,19 +116,7 @@ impl MemoryBackend for SqliteBackend {
 /// 6 流名 → memory 的 `StreamKind` 映射
 ///
 /// 0 装: 字符串硬编码; rc 阶段接 SchemaRegistry 时改
-fn stream_name_to_kind(name: &str) -> MemoryResult<crate::StreamKind> {
-    match name {
-        "thought" => Ok(crate::StreamKind::Thought),
-        "proposal" => Ok(crate::StreamKind::Proposal),
-        "action" => Ok(crate::StreamKind::Action),
-        "relation" => Ok(crate::StreamKind::Relation),
-        "evolution" => Ok(crate::StreamKind::Evolution),
-        "reflection" => Ok(crate::StreamKind::Reflection),
-        other => Err(MemoryError::Invalid(format!(
-            "unknown stream name: {other}; expected one of 6: thought/proposal/action/relation/evolution/reflection"
-        ))),
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -194,9 +182,9 @@ mod tests {
         // Trait 接口走 serde_json::Value (与 HistoryEntry 字段 1:1)
         let e1 = serde_json::to_value(he("t-1", session)).unwrap();
         let e2 = serde_json::to_value(he("t-2", session)).unwrap();
-        b.append_stream("thought", e1).unwrap();
-        b.append_stream("thought", e2).unwrap();
-        let listed = b.list_stream("thought", session, 10).unwrap();
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), e1).unwrap();
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), e2).unwrap();
+        let listed = b.list_stream(crate::from_str_core("thought").expect("valid stream"), session, 10).unwrap();
         assert_eq!(listed.len(), 2);
         assert_eq!(listed[0]["id"], "t-1");
         assert_eq!(listed[1]["id"], "t-2");

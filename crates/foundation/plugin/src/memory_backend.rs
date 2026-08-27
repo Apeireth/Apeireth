@@ -1,4 +1,4 @@
-//! P-arch (2026-08-27): MemoryBackend trait (O-6 重构批次 Refactor-1).
+//! P-arch (2026-08-27): MemoryBackend trait (O-6 重构批次 Refactor-1, 撤占位 #17).
 //!
 //! **位置**: trait 抽象层在 `apeireth-plugin` (foundation), impl 留在 `apeireth-memory` (engine).
 //! 与 `CredentialResolver` 同位: 都是 capability 抽象, plugin 管 trait 边界,
@@ -21,19 +21,18 @@
 //! 2. 系统: trait 在 foundation, impl 在 engine (单向, 与 plugin/Provider/Tool 一致)
 //! 3. 架构: 与 plugin manager 单 trait 边界, runtime 拿 `Arc<dyn MemoryBackend>` 注入, 不直接 import memory
 //!
-//! **关于 StreamKind / HistoryEntry**:
-//! 两者当前在 `apeireth-memory::append_only` (Refactor-1 不搬运它们, 范围控制).
-//! trait method `append_stream` / `list_stream` 用 `&str` (stream name) + `serde_json::Value`
-//! (single entry) — 避开 plugin → memory 直接依赖.
-//! rc 阶段 rc-2 任务 (Experience SQLite impl) 一起搬到 core (合并 refactor).
+//! **O-6 锚 #2 兑现** (2026-08-27): trait method `append_stream` / `list_stream`
+//! 从 `&str` + `serde_json::Value` 占位 改为 `apeireth_core::kernel::StreamKind`
+//! typed enum + `serde_json::Value`. `StreamKind` 6 变体 canonical 已在 core kernel.
+//! HistoryEntry 字段仍走 JSON Value (rc 阶段评估 typed struct 是否值).
 
 use apeireth_core::Episode;
+use apeireth_core::kernel::StreamKind;
 
 /// 统一 capability trait 错误类型 (O-6 锚兑现 #12, 2026-08-27).
 ///
 /// 用 std `Box<dyn Error + Send + Sync>` 而非各 backend 本地 error type — 避免
-/// plugin → backend crate 循环依赖. impl 端包: `Box::new(my_local_error) as
-/// Box<dyn Error + Send + Sync>`.
+/// plugin → backend crate 循环依赖. impl 端包: `Box::new(my_local_error)`.
 ///
 /// 0 装 PASS: v2.0.0-rc 阶段迁移到 associated `type Error` trait method (impl
 /// 自由选具体错误类型) + `From<impl error> for Box<dyn Error>` 自动转换.
@@ -69,9 +68,10 @@ impl BackendKind {
 /// - **append-only 写入**：所有 put_* / append_* 操作不可变
 /// - **同步 API**：当前 v2 runtime 在 spawn_blocking 里调 memory，sync trait 足够
 /// - **Send + Sync**：后端实例可跨线程共享
-/// - **错误统一**（O-6 锚 #9 #12 兑现）：所有错误走 `CapabilityResult<T>` (= `Box<dyn Error + Send + Sync>`)
-/// - **跨模块类型**: Episode 来自 `apeireth_core` (核心域), `StreamKind`/`HistoryEntry` 暂用
-///   `&str` + `serde_json::Value` 传, rc 阶段改 typed enum (合并 refactor)
+/// - **错误统一**（O-6 锚 #9 #12 兑现）：所有错误走 `CapabilityResult<T>`
+/// - **跨模块类型 (typed enum, O-6 锚 #2 兑现)**: Episode 来自 `apeireth_core`,
+///   `StreamKind` 是 `apeireth_core::kernel::StreamKind` typed enum. HistoryEntry 字段仍走
+///   `serde_json::Value` (rc 阶段评估 typed struct).
 pub trait MemoryBackend: Send + Sync {
     fn name(&self) -> &'static str;
     fn kind(&self) -> BackendKind;
@@ -83,10 +83,14 @@ pub trait MemoryBackend: Send + Sync {
     fn get_episode(&self, id: &str) -> CapabilityResult<Option<Episode>>;
     fn recent_episodes(&self, session_id: &str, n: usize) -> CapabilityResult<Vec<Episode>>;
 
-    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> CapabilityResult<()>;
+    /// 追加一条历史流条目 (append-only). `kind` 是 typed enum (6 流).
+    /// `entry` 是 JSON 序列化的 `HistoryEntry`.
+    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> CapabilityResult<()>;
+
+    /// 列出某 session 的某流最近 N 条（按时间升序，末尾 N 条，未 tombstone 的）.
     fn list_stream(
         &self,
-        stream_name: &str,
+        kind: StreamKind,
         session_id: &str,
         n: usize,
     ) -> CapabilityResult<Vec<serde_json::Value>>;

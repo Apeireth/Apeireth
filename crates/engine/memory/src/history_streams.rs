@@ -4,6 +4,7 @@
 //! **不修改承诺 (LOCKED)**: 不改 workspace 版本、StreamKind 或锁定文档。
 
 use crate::{HistoryEntry, MemoryError, MemoryResult, SqliteMemoryStore, StreamKind};
+use apeireth_core::kernel::StreamKindExt;
 use rusqlite::params;
 use std::str::FromStr;
 
@@ -20,7 +21,7 @@ impl StreamDepth {
         since_ts: Option<i64>,
     ) -> MemoryResult<Vec<HistoryEntry>> {
         let conn = store.conn()?;
-        let table = kind.table_name();
+        let table = kind.table_name_ext();
         let mut sql = format!("SELECT id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at FROM {table} WHERE subject_id = ?1");
         if since_ts.is_some() {
             sql.push_str(" AND created_at >= ?2");
@@ -48,7 +49,7 @@ impl StreamDepth {
         let conn = store.conn()?;
         let sql = format!(
             "SELECT COUNT(*) FROM {} WHERE subject_id = ?1",
-            kind.table_name()
+            kind.table_name_ext()
         );
         let count: i64 = conn.query_row(&sql, params![continuity_id], |row| row.get(0))?;
         Ok(count.max(0) as u64)
@@ -72,7 +73,7 @@ impl StreamDepth {
         let conn = store.conn()?;
         let payload = serde_json::to_string(&entry.payload)?;
         let tags = serde_json::to_string(&entry.tags)?;
-        let sql = format!("INSERT INTO {} (id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", kind.table_name());
+        let sql = format!("INSERT INTO {} (id, subject_id, subject_rev, session_id, created_at, payload, source, tags, tombstoned_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)", kind.table_name_ext());
         conn.execute(
             &sql,
             params![
@@ -100,7 +101,7 @@ impl StreamDepth {
     ) -> MemoryResult<Vec<HistoryEntry>> {
         Self::query(
             store,
-            StreamKind::from_str(kind_name)?,
+            crate::from_str_core(kind_name)?,
             continuity_id,
             limit,
             since_ts,
@@ -160,7 +161,7 @@ mod tests {
     fn all_streams_have_distinct_tables() {
         let names: std::collections::HashSet<_> = StreamKind::ALL
             .iter()
-            .map(|kind| kind.table_name())
+            .map(|kind| kind.table_name_ext())
             .collect();
         assert_eq!(names.len(), 6);
     }
@@ -241,3 +242,4 @@ mod tests {
             .is_empty());
     }
 }
+

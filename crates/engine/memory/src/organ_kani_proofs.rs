@@ -6,6 +6,7 @@ use crate::{
     append_only::kind_from_str, EpisodeQuery, HistoryEntry, StreamKind, Tombstone,
     SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY,
 };
+use apeireth_core::kernel::StreamKindExt;
 use apeireth_core::kernel::memory::Episode;
 
 fn make_episode(id: &str, session_id: &str, role: &str, content: &str) -> Episode {
@@ -122,12 +123,12 @@ fn r177_mem_10_query_chain_idempotent() {
 
 #[test]
 fn r177_mem_11_stream_kind_table_names() {
-    assert_eq!(StreamKind::Thought.table_name(), "thought_stream");
-    assert_eq!(StreamKind::Proposal.table_name(), "proposal_stream");
-    assert_eq!(StreamKind::Action.table_name(), "action_stream");
-    assert_eq!(StreamKind::Relation.table_name(), "relation_stream");
-    assert_eq!(StreamKind::Evolution.table_name(), "evolution_stream");
-    assert_eq!(StreamKind::Reflection.table_name(), "reflection_stream");
+    assert_eq!(StreamKind::Thought.table_name_ext(), "thought_stream");
+    assert_eq!(StreamKind::Proposal.table_name_ext(), "proposal_stream");
+    assert_eq!(StreamKind::Action.table_name_ext(), "action_stream");
+    assert_eq!(StreamKind::Relation.table_name_ext(), "relation_stream");
+    assert_eq!(StreamKind::Evolution.table_name_ext(), "evolution_stream");
+    assert_eq!(StreamKind::Reflection.table_name_ext(), "reflection_stream");
 }
 
 #[cfg(kani)]
