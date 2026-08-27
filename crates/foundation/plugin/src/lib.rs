@@ -56,6 +56,7 @@ pub mod experience;
 pub mod manager;
 pub mod preference;
 pub mod self_assessment;
+pub mod llm_factory;
 pub mod manifest;
 pub mod memory_backend;
 pub mod perception;
