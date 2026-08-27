@@ -122,6 +122,10 @@ impl std::fmt::Display for LlmError {
 
 impl std::error::Error for LlmError {}
 
+// Send / Sync 由编译器自动派生: 字段全 String / u64 / &'static str, 满足自动推导条件.
+// crate 内 #![deny(unsafe_code)] 不允许 unsafe impl, 但自动派生无需 unsafe impl.
+// RC-5 Council 7 advisor 并行调用时 LlmError 跨任务传输安全.
+
 /// 独立 LLM instance (per scene-d §3 多 instance 隔离)
 ///
 /// **关键**: 每个 LlmInstance 是**独立**的 LLM 调用上下文 (独立 temperature / 独立 system prompt /
