@@ -320,6 +320,7 @@ impl PerceptionInput for TactileInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_backend::CapabilityResult;
 
     /// 0 装 PASS: Text modality 是 v2.0 alpha 唯一真实现, 一次性 drain
     #[test]

@@ -29,20 +29,15 @@
 
 use apeireth_core::Episode;
 
-/// 记忆后端错误（trait 临时错误类型；rc 阶段统一）
-#[derive(Debug)]
-pub struct MemoryBackendError(pub String);
-
-impl std::fmt::Display for MemoryBackendError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "memory backend error: {}", self.0)
-    }
-}
-
-impl std::error::Error for MemoryBackendError {}
-
-/// trait result type: `Result<T, MemoryBackendError>`, rc 阶段替换为 `MemoryResult<T>` (搬 core)
-pub type MemoryBackendResult<T> = Result<T, MemoryBackendError>;
+/// 统一 capability trait 错误类型 (O-6 锚兑现 #12, 2026-08-27).
+///
+/// 用 std `Box<dyn Error + Send + Sync>` 而非各 backend 本地 error type — 避免
+/// plugin → backend crate 循环依赖. impl 端包: `Box::new(my_local_error) as
+/// Box<dyn Error + Send + Sync>`.
+///
+/// 0 装 PASS: v2.0.0-rc 阶段迁移到 associated `type Error` trait method (impl
+/// 自由选具体错误类型) + `From<impl error> for Box<dyn Error>` 自动转换.
+pub type CapabilityResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 /// 后端类型标识。
 ///
@@ -72,55 +67,27 @@ impl BackendKind {
 ///
 /// **核心契约**：
 /// - **append-only 写入**：所有 put_* / append_* 操作不可变
-///   （违反 append-only 语义是后端实现的 bug，不是 trait 的允许行为）
 /// - **同步 API**：当前 v2 runtime 在 spawn_blocking 里调 memory，sync trait 足够
-///   （async trait 留给未来 P-arch 评估）
 /// - **Send + Sync**：后端实例可跨线程共享
-/// - **错误统一**：所有错误走 `MemoryBackendResult<T>` (= `Result<T, MemoryError>`)
-/// - **跨模块类型**: Episode 来自 `apeireth_core` (核心域), 但 `StreamKind`/`HistoryEntry` 当前在
-///   `apeireth_memory`; trait 暂不直接引用它们, 用 `&str` (stream 名字) + `serde_json::Value`
-///   (单条 entry) 传, 让 impl 自己做转换. 完整类型安全等 Refactor-1-后 阶段把 StreamKind/HistoryEntry
-///   升 core 时再做.
+/// - **错误统一**（O-6 锚 #9 #12 兑现）：所有错误走 `CapabilityResult<T>` (= `Box<dyn Error + Send + Sync>`)
+/// - **跨模块类型**: Episode 来自 `apeireth_core` (核心域), `StreamKind`/`HistoryEntry` 暂用
+///   `&str` + `serde_json::Value` 传, rc 阶段改 typed enum (合并 refactor)
 pub trait MemoryBackend: Send + Sync {
-    /// 后端稳定标签 (e.g. `"sqlite"`, `"file"`, `"in_memory"`)
     fn name(&self) -> &'static str;
-
-    /// 后端类型枚举
     fn kind(&self) -> BackendKind;
-
-    /// 健康检查（启动时调，确认后端可用）
-    fn ping(&self) -> MemoryBackendResult<()> {
+    fn ping(&self) -> CapabilityResult<()> {
         Ok(())
     }
 
-    // ===== Episode 操作 =====
+    fn put_episode(&self, ep: &Episode) -> CapabilityResult<()>;
+    fn get_episode(&self, id: &str) -> CapabilityResult<Option<Episode>>;
+    fn recent_episodes(&self, session_id: &str, n: usize) -> CapabilityResult<Vec<Episode>>;
 
-    /// 写入一条 Episode (append-only)。
-    fn put_episode(&self, ep: &Episode) -> MemoryBackendResult<()>;
-
-    /// 按 id 读取一条 Episode。
-    fn get_episode(&self, id: &str) -> MemoryBackendResult<Option<Episode>>;
-
-    /// 检索某 session 的最近 N 条 Episode（按时间升序，末尾 N 条）。
-    fn recent_episodes(&self, session_id: &str, n: usize) -> MemoryBackendResult<Vec<Episode>>;
-
-    // ===== 6 历史流操作 =====
-
-    /// 追加一条历史流条目 (append-only)。
-    ///
-    /// `stream_name` 取 6 个固定值之一: `"thought"` / `"proposal"` / `"action"`
-    /// / `"relation"` / `"evolution"` / `"reflection"`. 0 装 impl 内部映射到
-    /// `apeireth_memory::StreamKind`; 完整的 13 键领域安全等 rc 阶段做.
-    /// `entry` 是 JSON 序列化的 `HistoryEntry` (id/subject_id/subject_rev/session_id/
-    /// created_at/payload/source/tags/tombstoned_at), 字段含义见 v1 era HistoryEntry.
-    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryBackendResult<()>;
-
-    /// 列出某 session 的某流最近 N 条（按时间升序，末尾 N 条，未 tombstone 的）。
-    /// 返回的 JSON 数组元素结构与 `append_stream` 的 `entry` 一致.
+    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> CapabilityResult<()>;
     fn list_stream(
         &self,
         stream_name: &str,
         session_id: &str,
         n: usize,
-    ) -> MemoryBackendResult<Vec<serde_json::Value>>;
+    ) -> CapabilityResult<Vec<serde_json::Value>>;
 }
