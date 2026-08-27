@@ -65,12 +65,13 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 | 项 | 值（实测） |
 |---|---|
-| 分支 | `main` @ `9080cc93`（默认分支，v1 → `archive/v1.0-master`） |
+| 分支 | `main` @ `240f3277`（默认分支，v1 → `archive/v1.0-master`） |
 | Tag | `v2.0.0-alpha.1` → `d6910cf7`（v1.0.0 / v1.5.0 保留） |
 | Workspace | **15 crates**（foundation 7 / engine 5 / capabilities 1 / adapters 3）—— 新增 `apeireth-experience` (B1) / `apeireth-perception` (A3) / `apeireth-orchestration` (A1+A2+场景D) |
 | 代码量 | ~74k 行 active（不含 legacy/） |
 | 测试 | ~1476 passed / 0 failed |
-| CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 |
+| CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 + **`cargo test --workspace --doc --locked`** (rustdoc-test.yml 新增, 2026-08-27) |
+| O-6 锚兑现 | **12/12 项全部完成**（2026-08-27, 哲学锚 #9 启动）：5 Refactor (trait 搬到 plugin) + 5 守门 workflow + 文档位置 + kernel re-export + 统一 error trait + clippy 0 警告。详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `.github/workflows/o6-anchor.yml` (5 重自动守门) |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
 | 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4） |
 | ROADMAP §4 P1-P6 | 全部完成（trait 边界 + 0 装占位）：A4 MemoryBackend / B4 sovereignty M-of-N / credentials 接线 / core drain / B1 Experience / A3 perception / B5 process supervisor / A1 council / A2 team-lead / 场景 D 例 1-3 |
