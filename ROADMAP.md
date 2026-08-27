@@ -79,7 +79,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
-| **P0** | **13 键 verdict cache 接线决策**（接进 `GovernancePipeline` 或正式降级归档） | governance hook 装配已就绪（upstream `873d2857`） |
+| **P0** | ✅ 完成（upstream `873d2857`）：`build_canonical_runtime_from_env` 装 `GovernancePipeline(PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)` | — |
 | **P1** | **文档对账**（本批进行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 13-crate 实测值 | 无 |
 | P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 |
 | P3 | M1B 记忆移植 | ACT-R 记忆、检索、向量/图全量移植进 `crates/engine/memory` | P2 |
@@ -93,7 +93,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ## 5. 硬墙与纪律现状（2026-08-27）
 
-- **3 项不可变脊柱**（R148 后仅保）：Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义——其中 13 键目前只在 core 内测试存在，未接 canonical 执行路径（见 P0）。
+- **3 项不可变脊柱**（R148 后仅保）：Self-Disable 判定 / L0 HA 物理隔离 / 13 键 verdict cache 语义——其中 13 键 v2 角色 = **哲学标准 / 判别词汇表**（`crates/foundation/core/src/philosophy.rs::RUNTIME_ENFORCED = false` 显式标注；`VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱 E/S/A/M 层）。**不是** v2 runtime 强制机制——v2 治理用 external hook 闸（已装 `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`）。13 键仍用于: (a) hook deny reason 引用, (b) CapabilityDescriptor risk 分级, (c) ROADMAP §5 语义定义。
 - **0 装 PASS** 仍严守：SDK stub 显式 `unimplemented!()`；shell/fetch 默认关；LIVE e2e 缺 API key 如实标注。
 - **push 状态**：main 晋升与 tag 推送已实际发生（2026-08-27）；本地网络受 hosts 劫持（github.com → 127.0.0.1），远端操作走代理 + 真实 IP + Host 头（凭证在本地 `.git-credentials`，未写入 git config）。
 - 旧"8 硬墙"明细（B1-B7/A1-A3/C1-C3）见 v1 时代详单，不再逐条跟踪。
@@ -104,7 +104,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 待拍板接线** |
+| 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 已降级为哲学标准**（`RUNTIME_ENFORCED = false`，映射到 5 原则洋葱）；**场景 D 长程 AI 判断待评估**（见 `docs/04-internal/scene-d-v2-plan.md`）|
 | 功能退坡（26 项 Lost Capabilities） | 产品能力暂时不可用 | 按 §4 P3-P7 顺序恢复；legacy/ 保留全部实现 |
 | 文档数字矛盾（23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | P1 本批统一为实测值 |
 | `crates/_archived` 1.4GB 未跟踪构建垃圾 | 本地仓库膨胀 | 可删除（git 历史已含） |
@@ -120,7 +120,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 生命架构 v4 | R11 / R14 | 🔒 LOCKED |
 | 哲学层升级 v4.1 | R11 / R14 | 🔒 LOCKED |
 | 6→8 哲学锚 (S-1 北极星 / S-2 实事求是 / S-3 质量工程化 NEW / O-1 安全优先 NEW / O-2 走在前人 / O-3 干到底 / O-4 接手 / O-5 不假装) | 升 8 锚, P1-2 R126 done | 🔒 LOCKED |
-| 12 键 → 13 键编译期 hardcode (+ PHL-07 NotUnoptimizable NEW) | 升 13 键, R125-12 P0-3 done | 🔒 LOCKED |
+| 12 键 → 13 键编译期 hardcode (+ PHL-07 NotUnoptimizable NEW) | 升 13 键, R125-12 P0-3 done; **v2 角色: 哲学标准 / 5 原则洋葱判别词汇表（`VERDICT_KEYS_BY_PRINCIPLE`）**，不再是 runtime 强制机制（`RUNTIME_ENFORCED = false`） | 🔒 LOCKED |
 | 5 重守门 → 6 重 v6 → 7 重 v7 (+ Colang DSL + Superpowers Skill Guard) | 升 7 重, P1-3 retry done | 🔒 LOCKED |
 | 双洋葱 → 三洋葱 (+ DSL 洋葱, R125-5 done) | 升三洋葱 | 🔒 LOCKED |
 | 9 organ 文件名 + 入口签名 0 改 | TUI 9 organ 内部可改（per R148 LOCKED 撤销扫尾原则） | 🔒 软 LOCKED |

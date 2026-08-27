@@ -124,6 +124,23 @@ pub const ALL_THIRTEEN_KEYS: [PhilosophyKey; 13] = [
 /// **0 假装 PASS 严守**: 数组长度就是 13, 名字说 12 是历史遗留, 内部断言用 `THIRTEEN_KEYS_HARDCODE` 强守.
 pub const ALL_TWELVE_KEYS: [PhilosophyKey; 13] = ALL_THIRTEEN_KEYS;
 
+/// **v2 角色降级 (2026-08-27)** — 13 键 = 哲学标准 / 判别词汇表 (🦴 LOCKED),
+/// **不是** v2 runtime 的强制机制.
+///
+/// v1: `VerdictCache` 被 AI 自己用来做 self-introspection (调工具后写 verdict, 下次同类动作前查)。
+/// v2: 治理 = external hook 闸 (PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook)，
+/// 不让模型自己当裁判。这个常量的目的是在代码层面显式标注"v2 不强制 13 键"。
+///
+/// 13 键 v2 仍用于: (a) hook deny reason 的引用 (e.g. "violates NotSafe"),
+/// (b) CapabilityDescriptor risk 分级, (c) ROADMAP §5 "3 项不可变脊柱" 的语义定义。
+/// 它**不再是** runtime 拦截器。
+///
+/// v2 取代 13 键强制机制的是 external hook 闸 + (未来) 场景 D 长程 AI 判断 (per docs/04-internal/scene-d-v2-plan.md)。
+///
+/// **3 不漂移**: 此常量是 v2 工程重构的显式声明，不改哲学、不改 LOCKED 数据 (ALL_THIRTEEN_KEYS 不动)、
+/// 不改 workspace.version (1.2.0)、不改 R11 baseline 3 值。
+pub const RUNTIME_ENFORCED: bool = false;
+
 /// 编译期断言 — 13 键 hardcode 锁。任何遗漏/重复都编译失败。
 ///
 /// 这是 v6 守门 1（编译时 hardcode）的真正落地：🦴 骨架不可变。

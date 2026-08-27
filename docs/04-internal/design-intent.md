@@ -18,6 +18,7 @@
 | 机制而非补丁 | governance crate 单 trait `GovernanceHook` + 三种 Decision（Allow / Deny{reason} / RequireApproval{reason}，Deny ≠ RequireApproval，runtime 必须区分"拒绝"与"挂起"）；runtime 通过 `Arc<dyn GovernanceHook>` 持有政策而非 if-else 嵌套 | 补丁累积成债；trait 化让 policy 与 runtime 解耦，policy 升级不需要改 runtime |
 | 集成而非分立 | 14-crate 收敛为 13-crate（foundation 5 / engine 4 / capabilities 1 / adapters 3）；所有 provider / tool / governance 走 plugin trait 注入；新能力挂既有 plugin descriptor 而非新开 crate | 分立 = 多余独立 = 维护地狱；engine / adapters 不创独立插件位 |
 | 0 装 PASS | SDK stub 7 个 `unimplemented!()` 守门；`shell` / `fetch` opt-in 关闭默认；governance 默认空 pipeline → `AllowAll`（可见默认，非 `Option` 不可见默认）| 不假装 = 信任的地基；显式 stub + 显式默认 + 显式 opt-in = 不让任何机制被假装实现 |
+| **判别词汇表挂原则洋葱**（v2 工程重构 2026-08-27 新增） | 13 键编译期 hardcode + `VERDICT_KEYS_BY_PRINCIPLE` 映射到 5 原则洋葱（E 存在 / S 价值 / A 经验 / M 方法论 / O 操作）；`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注"v2 不强制 13 键"；hook 在 deny 时 reason 字段引用 13 键名（如"violates NotSafe under S"） | 13 键作为**判别词汇表**而非 runtime 强制机制——治理拦截走 external hook 闸（rust hook + 字符串规则），不靠 AI 评 AI；13 键的语义由"哲学标准"层承担，runtime 拦截由 hook 闸承担，分层清晰 |
 | 文档同步自觉 | 本文件 §1 维护映射表（每次新增 canonical crate 入口同步更新）；ROADMAP §4 P1 = 文档对账批；CODEOWNERS 把 `docs/01-architecture/` / `docs/03-reference/` / 顶层根文档归到 owner，强行 review gate | 项目庞大易忘；显式文档同步机制 = 抗欠账 |
 
 ## 2. 主人关键拍板记录（决策历史, 后人勿改勿删）
