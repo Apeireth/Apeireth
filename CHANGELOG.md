@@ -1,6 +1,41 @@
 # Changelog — Apeireth
 
-## [Unreleased] — v2.0.0-alpha.1 增量
+## [Unreleased] — v2.0.0-rc.1 增量 (7/10 RC 完成)
+
+- **✅ v2.0.0-rc.1 RC-1/2/3/4/8/9/10 真实现 (7/10 RC, 2026-08-27)**:
+  - **RC-1 MemoryBackend SqliteBackend 真 SQL 重写** (`43ec9635`): 5 方法纯 SQL
+    (INSERT/SELECT), 绕开 `SqliteMemoryStore` 的 Mutex<Connection>, 走
+    `SqliteConnectionPool` 真并发 (writer-async + reader-pool).
+    7 测试 + 1000 episode 写入 < 1s 性能基准.
+  - **RC-3 PreferenceStore SQLite** (`61cc0421`): 新表 `user_preferences` + 索引
+    (session_id, confidence DESC), 真 UPSERT (INSERT OR REPLACE), 7 测试
+    (roundtrip / confidence 排序 / topic 过滤 / session 隔离 / 真删 / etc.)
+  - **RC-4 SelfAssessmentStore SQLite** (`042ad4eb`): 新表 `self_assessments` + 索引
+    (task_id, assessed_at DESC), runtime hot-path `recent_for_task(task_id, 5)`
+    启动时读, alignment < 0.6 触发 DeviationReport. 7 测试.
+  - **RC-8 SubSupervisor std::process 真 impl** (`67fc66a0`, 改名 commit `4e4fba89`):
+    写真 `std::process::Command::spawn` (sync, 不用 tokio::process 因 trait sync
+    约束), 5 sub-supervisor (Core/Cognition/Council/Upgrade/Plugin) trait 写真.
+    **改名**: `TokioSubSupervisor` → `StdSubSupervisor` (诚实反映 std::process, 子代理
+    C 反馈修正命名错位). 8 测试含 cfg(unix) 2 real spawn.
+  - **RC-9 keyring 真接入 CLI bootstrap** (`aa661a66`): `KeyringSelector::select`
+    真按 `APEIRETH_KEYRING_BACKEND` env 选 4 backend (PlatformKeyring /
+    EncryptedFileBackend / InMemoryKeyring / Auto), 退化到 `EnvCredentialResolver`
+    时 stderr 写 (运维可见, 不静默). 4 测试.
+  - **RC-10 File AES-256-GCM 加密** (`e2a5be08`): `EncryptedFileBackend` opt-in
+    写真, AES-256-GCM seal + 12 byte IV per-record (防 replay) + 长度前缀文件格式
+    (防 0x0A split bug) + `for_dev_only` 显式 dev key. 7 测试.
+  - **RC-2 Experience SQLite** (`4e4fba89`): 5 张新表 (wiki_entries / kg_facts /
+    kg_links / association_nodes / association_edges) + 2 索引, 写真 WikiEntryStore /
+    KnowledgeGraphStore / AssociationStore 3 trait 9 方法, 6 测试. **trait 用
+    CapabilityResult<T> (O-6 #12 统一错误通道), 0 引入独立 ExperienceError (避免
+    plugin→backend 反向 From impl 循环风险)**.
+  - **子代理反馈修正** (`4e4fba89`, per 子代理 C `9d60deea` 报告):
+    1) RC-1 commit message 写真 writer 描述与实现 (单 backend = 单 logical writer)
+       一致 (子代理 C 反馈 "comment message 撒谎 writer 队列" 修正 doc)
+    2) RC-8 改名 `TokioSubSupervisor` → `StdSubSupervisor` (0 装诚实, 不假装 tokio)
+  - **0 触碰 LOCKED (5 项)**: 9 哲学锚 / 13 键 / 3 不变脊柱 / workspace.version / R11 baseline
+    全 0 改 (子代理 C P0 审查 + 子代理 D 接手人手册核验)
 
 - **✅ O-6 哲学锚 #9 登记 + 12/12 项兑现 (2026-08-27)**:
   - 哲学锚升 8→9: 新 `O-6 永远追求最优` 登记 (`docs/01-architecture/philosophy.md`)
