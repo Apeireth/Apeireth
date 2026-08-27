@@ -280,4 +280,10 @@ pub trait IsolatedLlmInstance: Send + Sync {
 
 ---
 
-_本文 v2 首发 (2026-08-27)：场景 D 是 v2 架构必须补的层（v1 有，v2 砍了，砍得不彻底）。本方案按"不复制 v1 形态，做架构优化"原则：从 13 键降级 → 场景 D 的 v2-native 设计（multi-instance LLM + JSON 协议 + 5 原则洋葱挂载），不依赖 self-introspection，不复制 companion_serve 整套。三阶段 7-11 周，与 ROADMAP §4 P3-P6 对齐。**0 漂移承诺**: 8 哲学锚 / 13 键 LOCKED 数据 / 3 项不可变脊柱语义 / workspace.version / R11 baseline 全部不变；本批新增 `crates/foundation/orchestration/` crate + 多 instance LLM 隔离 + orchestrator crate，**不**改任何 LOCKED public API。_
+_本文 v2 首发 (2026-08-27) + rc.1 进展 (2026-08-27 收盘, HEAD `67c06d95`)：场景 D 是 v2 架构必须补的层（v1 有，v2 砍了，砍得不彻底）。本方案按"不复制 v1 形态，做架构优化"原则：从 13 键降级 → 场景 D 的 v2-native 设计（multi-instance LLM + JSON 协议 + 5 原则洋葱挂载），不依赖 self-introspection，不复制 companion_serve 整套。三阶段 7-11 周，与 ROADMAP §4 P3-P6 对齐。**0 漂移承诺**: 9 哲学锚（升 8→9, 加 O-6 永远追求最优）/ 13 键 LOCKED 数据 / 3 项不可变脊柱语义 / workspace.version / R11 baseline 全部不变；本批新增 `crates/foundation/orchestration/` crate + 多 instance LLM 隔离 + orchestrator crate，**不**改任何 LOCKED public API。
+
+**场景 D 3 例 rc.1 进展** (2026-08-27 收盘 HEAD `67c06d95`):
+- ✅ 例 1 (主人偏好 = PreferenceStore): RC-3 真 SQLite impl 写真 (`61cc0421`), 5 张表 + 真 UPSERT + 7 测试
+- ✅ 例 2 (自我评估 = SelfAssessmentCache): RC-4 真 SQLite impl 写真 (`042ad4eb`), self_assessments 表 + runtime hot-path `recent_for_task(task_id, 5)` + 7 测试
+- ⏳ 例 3 (多 agent 互审): trait 已落 (`apeireth_orchestration::Orchestrator`), 真 LLM harness impl 待 RC-5 (需 LLM API key)
+- 详见 `docs/04-internal/HANDOFF-NOTES.md` (子代理 D 接手人手册) + `CHANGELOG.md` (RC 进展时间表)_
