@@ -196,6 +196,19 @@ scheduler 重构、public API/IPC/schema 变更、数据库 migration，或新�
 - [快速开始](docs/02-guides/quick-start.md)
 - [发布说明](RELEASE_NOTES.md)
 
+### 需要 Apeireth v1.0?（保留 1.0 完整可访问）
+
+v2.0 工程重构（86-crate → 13-crate 工作区）改的是**工程形态**，**设计 / 哲学 / 愿景 / 规范 0 改**。但功能有延后（companion 器官 / 完整记忆 / voice 等仍在 legacy/）。如果你的场景需要 v1.0 的全部能力，按下面任一方式取：
+
+| 取 v1 的方式 | 命令 / 入口 |
+| | |
+| **切到 v1 线（推荐开发 v1 兼容代码）** | `git checkout archive/v1.0-master` —— 旧 master 线完整可编译可运行（86-crate + companion_serve :8090） |
+| **切到 v1.0 发布 tag（推荐部署/复现）** | `git checkout v1.0.0` —— tag 指向 commit `993e9107`，即"真正的 1.0"发布点 |
+| **查 v1 完整源码（不切分支）** | `legacy/` 目录 —— 86-crate 完整代码 + 9 器官 + companion + 记忆 v2 + voice + 工具桥 全部 reference-only（`Cargo.toml` `exclude = ["legacy"]` 排除构建） |
+| **查 v1 历史文档（不切分支）** | `docs/archive/` —— v1 时代的 R*/stage*/adr/conventions/glossary/versioning 全部归档保留，包含：<br>• `docs/archive/roadmap/v1.0-released-r128-r178-2026-08-18.md`（v1.0 发布路径详单）<br>• `docs/archive/stage4/R11-baseline.md`（R11 baseline LOCKED，0.8682/0.8532/0.906）<br>• `docs/archive/conventions/`（12 子规范 + 7 子系统 + 21 词条）<br>• `docs/archive/glossary/17-4-gates-permission.md`（v1 守门 v9 lineage） |
+
+> **设计哲学 / 哲学 8 锚 / 13 键 verdict cache / 三洋葱 / L0 HA / Self-Disable / 0 装 PASS 跨版本不变**。v2 与 v1 的关系是 "v2 = v1 的下一代工程形态"，不是替代关系。两者并列存在，按需取用。
+
 ## License
 
 Apache-2.0 —— 见 [LICENSE](LICENSE)。
