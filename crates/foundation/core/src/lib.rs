@@ -1780,6 +1780,7 @@ mod tests {
             mode: HAMode::SingleHuman,
             real_humans: vec![],
             ice_frozen_until: None,
+            multi_sign: None,
         };
 
         // 正常 action - Allow
@@ -2003,6 +2004,7 @@ mod tests {
             mode: HAMode::Offline,
             real_humans: vec![],
             ice_frozen_until: None,
+            multi_sign: None,
         };
         let guard = DefaultPhilosophyGuard;
         let action_critical = Action {
