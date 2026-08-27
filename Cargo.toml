@@ -172,7 +172,7 @@ pyo3 = { version = "0.29", features = ["auto-initialize"] }
 # 所有用 SQLite 的 crate (memory / vector / api / mcp) 必须写 `rusqlite = { workspace = true }`,
 # 禁止各 crate 钉自己的 minor/patch 版本。fix(R19/V1266 code_reviewer-audit): 统一 workspace 锁定。
 rusqlite = { version = "0.32", features = ["bundled"] }
-r2d2 = "0.8"
+r2d2 = { version = "0.8" }
 r2d2_sqlite = "0.25"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
