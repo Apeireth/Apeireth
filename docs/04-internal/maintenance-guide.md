@@ -133,7 +133,7 @@ adapters/
 
 ```bash
 make check       # cargo check --workspace --all-targets
-make test        # cargo test --workspace --all-targets --locked (1338 tests, v2)
+make test        # cargo test --workspace --all-targets --locked (~1476 tests, v2 main = 9080cc93)
 make fmt         # cargo fmt --all
 make ci          # make ci-build + ci-test + ci-release (一键)
 ```
