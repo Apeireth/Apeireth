@@ -471,9 +471,8 @@ fn exit_status(process_handle: HANDLE) -> Result<ChildStatus, ProcessError> {
 fn restricted_launch_capability() -> EnforcementLevel {
     static CACHED: OnceLock<EnforcementLevel> = OnceLock::new();
     *CACHED.get_or_init(|| {
-        let token = match create_restricted_token() {
-            Ok(token) => token,
-            Err(_) => return EnforcementLevel::Unsupported,
+        let Ok(token) = create_restricted_token() else {
+            return EnforcementLevel::Unsupported;
         };
         let launched = probe_restricted_launch(token);
         unsafe {
@@ -514,7 +513,7 @@ fn create_restricted_token() -> Result<HANDLE, ProcessError> {
         let ret = CreateWellKnownSid(
             WinBuiltinUsersSid,
             std::ptr::null_mut(),
-            sid.as_mut_ptr() as *mut c_void,
+            sid.as_mut_ptr().cast::<c_void>(),
             &mut sid_size,
         );
         if ret == 0 {
@@ -591,7 +590,7 @@ fn probe_restricted_launch(token: HANDLE) -> bool {
             CREATE_SUSPENDED,
             std::ptr::null(),
             std::ptr::null(),
-            &mut si,
+            &si,
             &mut pi,
         );
         if ret == 0 {
@@ -646,13 +645,13 @@ fn spawn_restricted_child(
             CREATE_SUSPENDED,
             environment_block
                 .as_ref()
-                .map(|b| b.as_ptr() as *const c_void)
+                .map(|b| b.as_ptr().cast::<c_void>())
                 .unwrap_or(std::ptr::null()),
             cwd_block
                 .as_ref()
-                .map(|b| b.as_ptr() as *const u16)
+                .map(|b| b.as_ptr().cast::<u16>())
                 .unwrap_or(std::ptr::null()),
-            &mut si,
+            &si,
             &mut pi,
         );
 
@@ -694,8 +693,8 @@ fn spawn_restricted_child(
             process_handle: pi.hProcess,
             thread_handle: pi.hThread,
             job,
-            stdout: Some(File::from_raw_handle(stdout_read as _)),
-            stderr: Some(File::from_raw_handle(stderr_read as _)),
+            stdout: Some(File::from_raw_handle(stdout_read.cast())),
+            stderr: Some(File::from_raw_handle(stderr_read.cast())),
         })
     }
 }
@@ -724,7 +723,7 @@ fn create_pipe() -> Result<(HANDLE, HANDLE), ProcessError> {
 fn build_windows_command_line(executable: &OsStr, args: &[OsString]) -> Vec<u16> {
     let mut line: Vec<u16> = quote_windows_arg(executable);
     for arg in args {
-        line.push(b' ' as u16);
+        line.push(u16::from(b' '));
         line.extend(quote_windows_arg(arg));
     }
     line.push(0);
@@ -737,29 +736,29 @@ fn build_windows_command_line(executable: &OsStr, args: &[OsString]) -> Vec<u16>
 fn quote_windows_arg(arg: &OsStr) -> Vec<u16> {
     let encoded = arg.encode_wide().collect::<Vec<u16>>();
     let mut out: Vec<u16> = Vec::with_capacity(encoded.len() + 2);
-    out.push(b'"' as u16);
+    out.push(u16::from(b'"'));
     let mut backslashes = 0usize;
     for ch in encoded {
-        if ch == b'\\' as u16 {
+        if ch == u16::from(b'\\') {
             backslashes += 1;
-        } else if ch == b'"' as u16 {
+        } else if ch == u16::from(b'"') {
             for _ in 0..backslashes * 2 + 1 {
-                out.push(b'\\' as u16);
+                out.push(u16::from(b'\\'));
             }
-            out.push(b'"' as u16);
+            out.push(u16::from(b'"'));
             backslashes = 0;
         } else {
             for _ in 0..backslashes {
-                out.push(b'\\' as u16);
+                out.push(u16::from(b'\\'));
             }
             backslashes = 0;
             out.push(ch);
         }
     }
     for _ in 0..backslashes * 2 {
-        out.push(b'\\' as u16);
+        out.push(u16::from(b'\\'));
     }
-    out.push(b'"' as u16);
+    out.push(u16::from(b'"'));
     out
 }
 
@@ -773,7 +772,7 @@ fn build_environment_block(
             let mut block = Vec::new();
             for (key, value) in vars {
                 let mut entry: Vec<u16> = key.encode_wide().collect();
-                entry.push(b'=' as u16);
+                entry.push(u16::from(b'='));
                 entry.extend(value.encode_wide());
                 entry.push(0);
                 block.extend(entry);

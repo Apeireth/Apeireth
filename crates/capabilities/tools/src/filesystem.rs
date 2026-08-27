@@ -203,10 +203,7 @@ impl FilesystemTool {
         match fs::read_dir(&canonical) {
             Ok(reader) => {
                 for entry in reader {
-                    let entry = match entry {
-                        Ok(e) => e,
-                        Err(_) => continue,
-                    };
+                    let Ok(entry) = entry else { continue };
                     let name = entry.file_name().to_string_lossy().to_string();
                     let kind = match entry.file_type() {
                         Ok(t) if t.is_dir() => "dir",
@@ -291,13 +288,7 @@ impl ToolCapability for FilesystemTool {
             "additionalProperties": false
         });
         let mut params = apeireth_protocol::canonical::ToolParameters::new();
-        params.extend(
-            parameters
-                .as_object()
-                .cloned()
-                .unwrap_or_default()
-                .into_iter(),
-        );
+        params.extend(parameters.as_object().cloned().unwrap_or_default());
 
         NormalizedTool::new("filesystem")
             .with_description("Read, list, or stat files and directories inside the workspace root. Read-only; write/delete are not available.")

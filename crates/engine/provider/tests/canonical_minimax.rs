@@ -53,9 +53,8 @@ impl MockServer {
         tokio::spawn(async move {
             // Accept exactly one connection; if the test never connects, the
             // task simply awaits forever and is dropped with the handle.
-            let (mut socket, _) = match listener.accept().await {
-                Ok(s) => s,
-                Err(_) => return,
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
             };
             let req = read_request(&mut socket).await;
             *received_clone.lock().unwrap() = Some(req);

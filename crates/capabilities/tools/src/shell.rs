@@ -161,13 +161,7 @@ impl ShellTool {
             "additionalProperties": false
         });
         let mut params = ToolParameters::new();
-        params.extend(
-            parameters
-                .as_object()
-                .cloned()
-                .unwrap_or_default()
-                .into_iter(),
-        );
+        params.extend(parameters.as_object().cloned().unwrap_or_default());
         params
     }
 
