@@ -386,4 +386,5 @@ pub mod backend;
 pub mod experience;
 pub mod preference_store;
 pub mod preference_store_sqlite;
+pub mod self_assessment_store_sqlite;
 
