@@ -3,7 +3,8 @@
 //! The tool reads, lists, and stats paths under a caller-supplied workspace
 //! root. Path resolution is canonicalized and checked for containment inside
 //! that root before any operation, so `..` and symlink traversal do not escape
-//! the root for the operations implemented here.
+//! the root for the operations implemented here. Known credential and key
+//! paths are protected by the shared workspace path policy.
 //!
 //! Write/delete/rename/copy are deliberately not implemented in M2A. They are
 //! deferred to the sandbox phase (M2B). This tool does **not** claim to be a
@@ -17,6 +18,8 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
+
+use crate::sensitive_path::is_sensitive_path;
 
 /// Default maximum file size for `read` (1 MiB).
 pub const DEFAULT_MAX_FILE_SIZE: u64 = 1024 * 1024;
@@ -122,6 +125,12 @@ impl FilesystemTool {
             )));
         }
 
+        if is_sensitive_path(&root, &candidate) || is_sensitive_path(&root, &canonical) {
+            return Err(FilesystemError::PermissionDenied(
+                "requested path is protected".to_string(),
+            ));
+        }
+
         Ok(canonical)
     }
 
@@ -204,6 +213,9 @@ impl FilesystemTool {
             Ok(reader) => {
                 for entry in reader {
                     let Ok(entry) = entry else { continue };
+                    if is_sensitive_path(&root, &entry.path()) {
+                        continue;
+                    }
                     let name = entry.file_name().to_string_lossy().to_string();
                     let kind = match entry.file_type() {
                         Ok(t) if t.is_dir() => "dir",
@@ -291,7 +303,7 @@ impl ToolCapability for FilesystemTool {
         params.extend(parameters.as_object().cloned().unwrap_or_default());
 
         NormalizedTool::new("filesystem")
-            .with_description("Read, list, or stat files and directories inside the workspace root. Read-only; write/delete are not available.")
+            .with_description("Read, list, or stat non-sensitive files and directories inside the workspace root. Read-only; write/delete are not available.")
             .with_parameters(params)
     }
 
@@ -455,5 +467,111 @@ mod tests {
             "{}",
             result.render()
         );
+    }
+
+    #[tokio::test]
+    async fn sensitive_paths_are_denied_for_read_and_stat() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in [
+            ".env",
+            ".env.local",
+            "foo.pem",
+            "foo.key",
+            "id_rsa",
+            "id_ed25519",
+            "credentials.json",
+            "secrets.production",
+        ] {
+            fs::write(dir.path().join(path), "protected").unwrap();
+        }
+        fs::create_dir_all(dir.path().join(".ssh")).unwrap();
+        fs::write(dir.path().join(".ssh/config"), "protected").unwrap();
+        fs::create_dir_all(dir.path().join(".config/gcloud")).unwrap();
+        fs::write(
+            dir.path()
+                .join(".config/gcloud/application_default_credentials.json"),
+            "protected",
+        )
+        .unwrap();
+
+        let tool = tool(dir.path());
+        for path in [
+            ".env",
+            ".env.local",
+            "foo.pem",
+            "foo.key",
+            "id_rsa",
+            "id_ed25519",
+            "credentials.json",
+            "secrets.production",
+            ".ssh/config",
+            ".config/gcloud/application_default_credentials.json",
+        ] {
+            let read = invoke(&tool, "read", path).await;
+            assert!(!read.is_ok(), "read unexpectedly allowed: {path}");
+            assert!(
+                read.render().contains("protected"),
+                "{path}: {}",
+                read.render()
+            );
+
+            let stat = invoke(&tool, "stat", path).await;
+            assert!(!stat.is_ok(), "stat unexpectedly allowed: {path}");
+            assert!(
+                stat.render().contains("protected"),
+                "{path}: {}",
+                stat.render()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn list_filters_sensitive_entries_but_keeps_normal_dotfiles() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(".env"), "protected").unwrap();
+        fs::write(dir.path().join("credentials.json"), "protected").unwrap();
+        fs::write(dir.path().join("foo.pem"), "protected").unwrap();
+        fs::create_dir_all(dir.path().join(".ssh")).unwrap();
+        fs::write(dir.path().join(".ssh/config"), "protected").unwrap();
+        fs::create_dir_all(dir.path().join(".cargo")).unwrap();
+        fs::write(dir.path().join(".cargo/config.toml"), "normal").unwrap();
+        fs::write(dir.path().join(".gitignore"), "normal").unwrap();
+        fs::write(dir.path().join("README.md"), "normal").unwrap();
+
+        let result = invoke(&tool(dir.path()), "list", ".").await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        for hidden in [".env", "credentials.json", "foo.pem", ".ssh"] {
+            assert!(
+                !rendered.contains(hidden),
+                "sensitive entry leaked: {hidden}: {rendered}"
+            );
+        }
+        for visible in [".cargo", ".gitignore", "README.md"] {
+            assert!(
+                rendered.contains(visible),
+                "normal entry missing: {visible}: {rendered}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn normal_project_files_and_dotfiles_remain_readable() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        for path in ["README.md", "Cargo.toml", "src/lib.rs", ".gitignore"] {
+            fs::write(dir.path().join(path), "normal").unwrap();
+        }
+
+        let tool = tool(dir.path());
+        for path in ["README.md", "Cargo.toml", "src/lib.rs", ".gitignore"] {
+            let result = invoke(&tool, "read", path).await;
+            assert!(
+                result.is_ok(),
+                "normal file was blocked: {path}: {}",
+                result.render()
+            );
+            assert_eq!(result.render(), "normal");
+        }
     }
 }

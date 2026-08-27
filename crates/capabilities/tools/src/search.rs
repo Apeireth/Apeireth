@@ -3,7 +3,7 @@
 //! Search is local, literal, and case-insensitive. It searches file names and
 //! UTF-8 text-file lines under a caller-supplied workspace root. It does not
 //! use regex, does not use the network, and returns results in deterministic
-//! (path, line, text) order.
+//! (path, line, text) order. Known credential and key paths are skipped.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,6 +13,8 @@ use apeireth_plugin::ToolCapability;
 use apeireth_protocol::canonical::{NormalizedTool, ToolCall, ToolResult};
 use async_trait::async_trait;
 use serde::Deserialize;
+
+use crate::sensitive_path::is_sensitive_path;
 
 const DEFAULT_MAX_RESULTS: usize = 20;
 const MAX_RESULTS_CAP: usize = 100;
@@ -118,6 +120,12 @@ impl SearchTool {
             )));
         }
 
+        if is_sensitive_path(&root, &candidate) || is_sensitive_path(&root, &canonical) {
+            return Err(SearchError::PermissionDenied(
+                "requested path is protected".to_string(),
+            ));
+        }
+
         Ok((root, canonical))
     }
 
@@ -156,7 +164,7 @@ impl SearchTool {
         truncated: &mut bool,
         depth: usize,
     ) {
-        if depth > MAX_DEPTH || *truncated {
+        if depth > MAX_DEPTH || *truncated || is_sensitive_path(root, target) {
             return;
         }
 
@@ -178,7 +186,8 @@ impl SearchTool {
                     break;
                 }
                 let name = entry.file_name().to_string_lossy().to_string();
-                if Self::is_skipped_dir(&name) {
+                let path = entry.path();
+                if is_sensitive_path(root, &path) {
                     continue;
                 }
 
@@ -188,8 +197,10 @@ impl SearchTool {
                 if file_type.is_symlink() {
                     continue;
                 }
+                if file_type.is_dir() && Self::is_skipped_dir(&name) {
+                    continue;
+                }
 
-                let path = entry.path();
                 if file_type.is_dir() {
                     self.search_path(
                         root,
@@ -243,6 +254,9 @@ impl SearchTool {
         results: &mut Vec<SearchMatch>,
         truncated: &mut bool,
     ) {
+        if is_sensitive_path(root, path) {
+            return;
+        }
         let rel = Self::relative_display(path, root);
 
         // Filename match.
@@ -320,7 +334,8 @@ impl ToolCapability for SearchTool {
         NormalizedTool::new("search")
             .with_description(
                 "Search file names and UTF-8 file contents inside the workspace root. \
-                 Literal case-insensitive substring search; read-only and local.",
+                 Literal case-insensitive substring search; read-only and local. \
+                 Known credential and key paths are not searched.",
             )
             .with_parameters(params)
     }
@@ -520,5 +535,83 @@ mod tests {
         let rendered = result.render();
         assert!(!rendered.contains(".git"), "{rendered}");
         assert!(rendered.contains("kept.txt"), "{rendered}");
+    }
+
+    #[tokio::test]
+    async fn sensitive_paths_are_skipped_and_direct_sensitive_search_is_denied() {
+        let dir = tempfile::tempdir().unwrap();
+        for path in [
+            ".env",
+            ".env.local",
+            "foo.pem",
+            "foo.key",
+            "id_rsa",
+            "id_ed25519",
+            "credentials.json",
+            "secrets.production",
+        ] {
+            fs::write(dir.path().join(path), "needle").unwrap();
+        }
+        fs::create_dir_all(dir.path().join(".ssh")).unwrap();
+        fs::write(dir.path().join(".ssh/config"), "needle").unwrap();
+        fs::create_dir_all(dir.path().join(".config/gcloud")).unwrap();
+        fs::write(
+            dir.path()
+                .join(".config/gcloud/application_default_credentials.json"),
+            "needle",
+        )
+        .unwrap();
+        fs::create_dir_all(dir.path().join("src")).unwrap();
+        for path in ["README.md", "Cargo.toml", "src/lib.rs", ".gitignore"] {
+            fs::write(dir.path().join(path), "needle").unwrap();
+        }
+
+        let tool = tool(dir.path());
+        let result = invoke(&tool, "needle", ".", None).await;
+        assert!(result.is_ok());
+        let rendered = result.render();
+        for hidden in [
+            ".env",
+            ".env.local",
+            "foo.pem",
+            "foo.key",
+            "id_rsa",
+            "id_ed25519",
+            "credentials.json",
+            "secrets.production",
+            ".ssh",
+            ".config",
+        ] {
+            assert!(
+                !rendered.contains(hidden),
+                "sensitive path leaked: {hidden}: {rendered}"
+            );
+        }
+        for visible in ["README.md", "Cargo.toml", ".gitignore"] {
+            assert!(
+                rendered.contains(visible),
+                "normal path missing: {visible}: {rendered}"
+            );
+        }
+        assert!(
+            rendered.contains("src") && rendered.contains("lib.rs"),
+            "normal path missing: src/lib.rs: {rendered}"
+        );
+
+        let direct = invoke(&tool, "needle", ".env", None).await;
+        assert!(!direct.is_ok());
+        assert!(
+            direct.render().contains("permission denied"),
+            "{}",
+            direct.render()
+        );
+
+        let nested_direct = invoke(&tool, "needle", ".ssh/config", None).await;
+        assert!(!nested_direct.is_ok());
+        assert!(
+            nested_direct.render().contains("permission denied"),
+            "{}",
+            nested_direct.render()
+        );
     }
 }
