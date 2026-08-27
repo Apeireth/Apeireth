@@ -1,9 +1,10 @@
 # Repository Layout
 
-This is the current repository map for the `reconstruct_v2` branch. It is
-intentionally small: a future product module is created under `crates/modules/`
-only when it has real code and an approved owner; no empty placeholder directory
-is committed.
+This is the current repository map for the `main` branch. New product
+code belongs to one of the four ownership groups (`foundation`, `engine`,
+`capabilities`, `adapters`) or to the independent frontend workspace; a crate
+is created only when it has real code and an approved owner. No empty
+placeholder directory is committed.
 
 ```text
 Cargo.toml            # current product workspace (explicit members only)
@@ -39,8 +40,12 @@ legacy/
 ├── archived/         # obsolete historical code
 └── frozen/           # intentionally untouched historical reference
 docs/
-├── 01-architecture/  # current architecture contracts
-└── development/      # contributor guides
+├── 01-architecture/  # current architecture contracts and audits
+├── 02-guides/        # quick start, user manual, deployment, development
+├── 03-reference/     # crate index, API reference, glossary
+├── 04-internal/      # design intent, policies, team material
+├── development/      # contributor guides and layout rules
+└── archive/          # historical design/round/decision records
 ```
 
 ## Physical vs logical
@@ -78,8 +83,11 @@ semantics are unchanged by repository organization work.
   intentionally outside the current workspace.
 - `frontend/companion-desktop/src-tauri` is an independent Cargo workspace and
   is validated by its own CI workflow.
-- `reconstruction_v2/` was a historical nested workspace and has been removed;
-  its architecture notes remain in the dated audit documents.
+- `reconstruction_v2/` was a historical nested workspace and has been removed
+  from git; an untracked local directory with leftover `target/` and database
+  files may still exist on disk and is safe to delete.
+- `crates/_archived/` holds untracked local build leftovers from the v1
+  workspace; it is not repository content and is not part of any build.
 
 ## Deferred work
 

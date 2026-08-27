@@ -1,5 +1,9 @@
 # Apeireth 前端数据契约（companion :8090）
 
+> **现状 (2026-08-27)**：本文契约针对 v1 时代后端 `companion_serve`（:8090，现 `legacy/donor/apeireth-companion/examples/companion_serve.rs`）。
+> 当前后端为 canonical gateway（:8080，三路由），前端接入见 [api.md](../03-reference/api.md)；
+> 本契约将在 companion 能力恢复（ROADMAP §4 P6-P7）时重新对齐。
+
 > **契约即真相**：本文档每个字段都标注了代码出处（`文件:行号`），与代码不一致时以代码为准并修正本文档。
 > 核实日期：2026-08（基于工作区当前 HEAD，路由表 `companion_serve.rs:1718-1751`）。
 > **W6 回写（2026-08-22）**：路由注册段已移至 `companion_serve.rs:1718-1751`（新增 `/v1/tools/list` 与 CorsLayer，行号整体后移）；新增 §1.4 工具注册表端点；差距表 G3 / G7 已修。handler 行号：health `:2034`、list_models `:2043`、tools_list `:2053`、chat `:1066`、grant `:1935`、approval-requests `:1927`、events `:998`、test-event `:990`。

@@ -11,6 +11,7 @@ docs/
 ├── 03-reference/        # 参考（crates/API/术语）
 ├── 04-internal/         # 内部工作文档（台账/设计意图/团队）
 ├── design/              # 前端设计（设计系统/交接/开场动画封存档案）
+├── development/         # 开发（目录布局/新增模块/移植清单）
 └── archive/             # 历史归档（stage*/r*/adr/conventions... 保留不展示）
 ```
 
@@ -20,7 +21,7 @@ docs/
 |---|---|
 | [01-architecture/brand.md](01-architecture/brand.md) | 品牌：命名（Apeiron）+ 宣言 + Logo Design Brief |
 | [01-architecture/vision.md](01-architecture/vision.md) | 愿景：五原型 + 产品北极星 + 三远合一 |
-| [01-architecture/philosophy.md](01-architecture/philosophy.md) | 哲学：6 锚 / 双洋葱 / 0 装 PASS |
+| [01-architecture/philosophy.md](01-architecture/philosophy.md) | 哲学：8 锚 / 三洋葱 / 0 装 PASS |
 | [01-architecture/architecture.md](01-architecture/architecture.md) | 架构总览（当前根工作区与独立桌面工作区）|
 | [01-architecture/security.md](01-architecture/security.md) | 安全模型（对齐实际机制）|
 | [01-architecture/engineering-report.md](01-architecture/engineering-report.md) | 工程报告（1.0 实测数据/里程碑/纪律）|
@@ -38,6 +39,12 @@ docs/
 | [design/frontend-handoff.md](design/frontend-handoff.md) | 前端交接（现状/联调/坑与纪律/欠账，接手先读）|
 | [design/intro-animation.md](design/intro-animation.md) | 开场动画「火之文明史」封存档案（2026-08-22 起默认关闭）|
 | [development/repository-layout.md](development/repository-layout.md) | 当前目录、ownership 与依赖边界 |
+| [../../ROADMAP.md](../../ROADMAP.md) | 顶层路线图（v2 下一步按优先级；v1 时代详单在 archive/roadmap） |
+| [../../CHANGELOG.md](../../CHANGELOG.md) | 变更流水（v2.0.0-alpha.1 段为重构版记录，其余为 v1 历史） |
+
+## 当前基线（2026-08-27）
+
+默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`；13-crate 工作区（foundation 5 / engine 4 / capabilities 1 / adapters 3）+ 独立前端 workspace；旧 86-crate 代码在 `legacy/`（排除构建）。带"现状 (2026-08-27)"指引的历史文档正文不改，只标历史属性。
 
 ## Archive
 

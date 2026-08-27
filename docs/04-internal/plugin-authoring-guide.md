@@ -1,5 +1,7 @@
 # Apeireth 社区插件开发规范（plugin-authoring-guide, 2026-08-16）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。补充：本文是 v1 插件模型（`apeireth-companion`/`apeireth-tool-registry`，现 legacy）；v2 插件契约见 `docs/01-architecture/architecture.md` 与 `crates/foundation/plugin`。
+
 > **给谁看**: 社区开发者 + 官方套件作者。对应 team-work-doc §5.6（官方交付文档）。
 > **定位**: 三层交付模型（team-work-doc §1.3）中**插件层**的开发规范——官方交付整合过的整件，细小特殊需求给社区。
 > **读法**: 先读 §1（最小可运行插件）→ §2（授权规则，决定你的工具能不能被调）→ §3/§4（测试与卸载，决定能不能合入）→ §5（数据源模板）→ §6（发布检查单）。

@@ -160,6 +160,9 @@ Windows/Linux/macOS 现有 containment 语义。
 ### 当前状态
 
 - 根工作区：13 个 crate，Rust 1.97.1，workspace version 1.2.0。
+- 产品线：默认分支 `main` @ `d6910cf7`，tag `v2.0.0-alpha.1`
+  （reconstruct_v2 工程重构首个 alpha；workspace 版本轴 1.2.0 与产品轴独立）。
+- 测试：1338 passed / 0 failed；CI 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage）。
 - 前端：独立的桌面/Tauri 工作区和发布边界。
 - 历史嵌套工作区：已在吸收架构审计结论后移除。
 - 验证入口：formatter、workspace check/test、ProcessExecutor 专项测试、

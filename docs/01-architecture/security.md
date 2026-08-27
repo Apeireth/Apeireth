@@ -2,6 +2,8 @@
 
 > 对齐实际代码（2026-08-18）。安全底线永不外包。
 
+> **现状 (2026-08-27)**：本文是 v1.0（86-crate 时代）的安全模型快照，安全设计本身（三洋葱 / L0 永不改变 / 默认拒绝哲学）不变。工程现状：表中旧 crate 现位于 `legacy/`；S4 出站"实装待补"已被 M2D egress + M3A 受控 fetch 取代（`crates/capabilities/tools/src/{egress,fetch}.rs`）；当前工作区的安全边界清单见根 `SECURITY.md`，恢复排期见根 `ROADMAP.md` §4。
+
 ## Layers (from code)
 
 | Layer | Mechanism | Crate |

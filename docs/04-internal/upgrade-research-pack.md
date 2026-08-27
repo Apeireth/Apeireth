@@ -1,5 +1,7 @@
 # 升级计划资料包（Upgrade Research Pack）
 
+> **现状 (2026-08-27)**：本文是 v1 时代（master 线/86-crate）或 reconstruct_v2 过程中的历史快照，正文保留原样。当前基线：默认分支 `main`、13-crate 工作区（`crates/foundation|engine|capabilities|adapters`，见根 `ARCHITECTURE.md` 与 `docs/01-architecture/architecture.md`）、tag `v2.0.0-alpha.1` @ `d6910cf7`；旧 86-crate 代码整体在 `legacy/`（workspace exclude）；v2 下一步见根 `ROADMAP.md` §4。
+
 > **定位**: 升级计划（W1/W2 世界模型、N25 数据可信度、N26 多模态、N27 连续感知、N28 重放巩固、E3 校准/预测市场）的行业顶尖方案调研汇总——给团队实施时的参考资料。
 > **来源**: ①4 个 subagent 全网文字调研（世界模型 S1/金融 S2/多模态感知 S3/重放巩固 S4）②主线程知识视频平台调研（B站/知乎/YouTube/百度开发者）③主线程 web_search 补充。
 > **重建记录**: 2026-08-18 团队分支 rebase 导致本文件丢失，主线程按对话历史完整重建并补入 §7 M-FLOW 对照。

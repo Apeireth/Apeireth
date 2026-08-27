@@ -3,6 +3,10 @@
 > 给运行 Apeireth 的人：它在做什么、我怎么控制它。机制描述以真实代码为准（2026-08-18）。
 > 快速跑起来见 [quick-start.md](quick-start.md)；部署见 [deployment.md](deployment.md)。
 
+> **现状 (2026-08-27)**：下文描述的 companion_serve / TUI 形态是 v1.0 时代（86-crate）的运行方式，
+> 实现现位于 `legacy/`。当前产品入口是 `apeireth gateway serve`（HTTP :8080）与 `apeireth chat` / `apeireth session`，
+> 见 [quick-start.md](quick-start.md)；companion 能力（记忆/器官/陪伴节奏）将按根 `ROADMAP.md` §4 P6-P7 恢复。
+
 ## 1. Apeireth 是什么
 
 **基地，不是 AI 本身**：Apeireth 是给 LLM 的操作系统——提供器官、工具、记忆、安全边界、关系可能性；不定义 AI 是什么。接入一个 LLM（默认 MiniMax-M3），基地给它：记忆、工具、安全边界、主动陪伴的节奏、与你的关系存档。

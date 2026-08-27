@@ -1,6 +1,9 @@
 # 前端交接文档（companion-desktop）
 
 > 写给任何接手的人（人或 AI）。最后更新：2026-08-22，状态与代码 HEAD 对齐。
+> **现状 (2026-08-27)**：前端部分（Tauri 2 + Svelte 5 场景引擎、三模式骨架）仍然有效；
+> 文中后端 `companion_serve`（:8090）是 v1 时代后端，代码在 `legacy/donor/apeireth-companion`。
+> 当前后端为 canonical gateway（:8080，三路由，见 `docs/03-reference/api.md`）；前后端重联排期见根 `ROADMAP.md` §4 P8。
 > 北极星：**电影感，不是软件感**。前端与后端浑然一体——用户住在一艘星环空间站的舰桥里，
 > 舷窗外是行星、星环、远处的黑洞；Apeireth 的一切能力从这个场景里长出来。
 

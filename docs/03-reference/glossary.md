@@ -1,6 +1,8 @@
 # Apeireth Glossary — 术语表
 
 > 面向读者：新开发者/使用者。从归档 22 词条提炼 + 1.0 新术语（2026-08-18）。
+> **现状 (2026-08-27)**：带 ⏳ 标记的术语为 v1 时代实现（代码在 `legacy/`，将按 ROADMAP §4 恢复）；
+> v2 工程术语以 `docs/01-architecture/architecture.md` 与根 `ARCHITECTURE.md` 为准。
 
 ## 品牌与哲学
 
@@ -27,7 +29,7 @@
 
 | 术语 | 含义 |
 |---|---|
-| **记忆 v2** | importance 打分 + Mem0 式对账（ADD/UPDATE/DELETE+tomb）+ 排名注入 |
+| **记忆 v2** ⏳ | importance 打分 + Mem0 式对账（ADD/UPDATE/DELETE+tomb）+ 排名注入 |
 | **记忆图（memory_graph）** | 双时态事实图（valid_at/invalid_at）+ 带权链接 + crawl 检索 |
 | **版本链** | 记忆变更 = 新 id + 同 chain + rev 单调递增（append-only）|
 | **做梦（Dream）** | 夜间记忆整合（Cognitive-Dream 6 状态机）|
@@ -39,7 +41,7 @@
 
 | 术语 | 含义 |
 |---|---|
-| **世界模型 W1/W2/W3** | 文本反事实推演（Brier 校准）/ 因果图 MCTS / 记忆时间线挖因果边 |
+| **世界模型 W1/W2/W3** ⏳ | 文本反事实推演（Brier 校准）/ 因果图 MCTS / 记忆时间线挖因果边 |
 | **好奇心（E4）** | 记忆回声偏置采样 + 浅尝辄止 + 疑问路由 |
 | **假设检验（F4）** | HypothesisStore 状态机 + 证据加权 + 对账写回因果图 |
 | **情感记忆（F1）** | 主人的情绪时间线（valence/arousal + 趋势 + 按情绪检索）|
@@ -55,7 +57,7 @@
 | **工具管线** | 注册 → 审批（5 规则）→ 执行（schema+guardrail）→ 记录 |
 | **guardrail** | 调用前拦路径穿越/命令注入；调用后凭据泄漏 tripwire |
 | **ApprovalBridge** | companion ↔ orchestrator 审批双向同步（silent 透传）|
-| **出站策略（S4）** | 白名单默认拒绝 + SHA-256 审计链 + 预算钩子（**trait 口已备, 实装待补** per backlog S4 P1 未实施, 2026-08-18 复核） |
+| **出站策略（S4）** | 白名单默认拒绝 + 审计链 + 预算钩子；v2 已由 M2D egress + M3A 受控 fetch 实现（`crates/capabilities/tools/src/{egress,fetch}.rs`） |
 | **Job Object 沙箱** | Windows 进程级隔离（时间/内存/CPU 限额 + 超限留痕）|
 | **HASH-SQL** | 不可篡改审计时间线（arbitration）|
 | **宪法（Constitution）** | 结构化规则硬门 + LLM 评审（E 层判案）|
