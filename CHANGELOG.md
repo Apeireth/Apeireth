@@ -2,6 +2,13 @@
 
 ## [Unreleased] — v2.0.0-alpha.1 增量
 
+- **✅ O-6 哲学锚 #9 登记 + 12/12 项兑现 (2026-08-27)**:
+  - 哲学锚升 8→9: 新 `O-6 永远追求最优` 登记 (`docs/01-architecture/philosophy.md`)
+  - 锚表达: 总体最优 / 系统最优 / 架构最优 + 三阶审查 (commit message 必含具体回答)
+  - 不做借口清单: 工作量大 / 等以后 / alpha 先这样 / v1 时代这样 / 用户没要求 (5 条)
+  - 工程化兑现 (12 项): 5 Refactor (MemoryBackend/Experience/Perception traits → plugin) + core drain 真正重定义 + KeyringCredentialResolver 重命名 + clippy 0 警告 + O-6 5 重守门 workflow + cargo test --doc workflow + 文档位置 + kernel re-export + 统一 error trait
+  - 5 重守门 (`.github/workflows/o6-anchor.yml`): clippy 0 警告 / workspace tests 0 失败 / legacy compat path < 100 引用 / 13 键 LOCKED + 9 哲学锚 + workspace.version + R11 baseline 0 触碰 / 哲学锚表头 0 减
+  - 详见 `docs/01-architecture/v2-arch-refactor-batch.md` + `docs/01-architecture/philosophy.md` §O-6
 - **✅ 13 键 verdict cache 降级决策 (P0 拍板完成, 2026-08-27)**:
   - 5 维分析: 安全性 (0 模型污染路径) / 延迟 (6 数量级差, hook 是 O(μs) 而 self-introspection 是 O(seconds)) / 正确性覆盖 (与 hook 少量互补) / 审计 (两者相当) / 场景 D 互补 (已被 SelfAssessmentCache + 多 agent 互审覆盖) → 加权 0.28/5
   - **降级**: 保持 L2 哲学标准 (`philosophy.rs::RUNTIME_ENFORCED = false`), 不接 runtime 强制机制
