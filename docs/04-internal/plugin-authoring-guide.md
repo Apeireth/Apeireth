@@ -271,7 +271,9 @@ pub trait ToolCapability: Send + Sync {
 6. Deny → tool error 直接回灌模型（不终止回合，`crates/engine/runtime/src/canonical/execute.rs` 哲学）
 7. RequireApproval → turn 挂起为 `PendingApproval`，不调工具，等 resume
 
-> **P0 接线状态**：当前 `build_canonical_runtime_from_env` 默认 governance = `AllowAll`（`crates/foundation/governance/src/lib.rs:256-271` 注释明确），生产路径不评估 PII/注入/权限。**只有工具默认 opt-in 关闭（`shell`/`fetch`）这一层兜底**。详见根 `ROADMAP.md` §4 P0。
+> **生产 governance 接线（✅ 已通过 upstream `873d2857` 落地）**：`build_canonical_runtime_from_env` 装 `GovernancePipeline` = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；runtime 每个 `CapabilityDispatch` 都先经 pipeline 评估，**不再**默认 `AllowAll`。你的插件不需要自己实现拒绝逻辑——只需要在 `CapabilityDescriptor::with_metadata("risk", ...)` 声明风险级别（low/medium/high），governance 闸会自动响应。MaxRounds 是 runtime 结构性约束，AuditHashChain 按部署需要挂。
+>
+> **敏感 workspace 路径保护（✅ upstream `ac5cbf5a`）**：`tool.filesystem` 与 `tool.search` 通过 `crates/capabilities/tools/src/sensitive_path.rs` 自动屏蔽 `.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` / `.config/gcloud` 等敏感路径（普通项目元数据如 `.gitignore` / `.cargo/config.toml` 仍可读）。**你的插件在 fork filesystem/search 行为时必须继承这个保护**，不要绕过 `is_sensitive_path` 检查。
 
 ---
 
