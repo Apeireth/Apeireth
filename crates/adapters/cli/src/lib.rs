@@ -3,6 +3,11 @@
 //! The CLI is a thin adapter: it bootstraps one canonical runtime, constructs
 //! a canonical turn request, and delegates execution to `Runtime::execute`.
 
+// v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring / EncryptedFile backend
+// (per `v2.0.0-rc-roadmap.md` §3 RC-9: "keyring 真正接到 EnvCredentialResolver 之前").
+// 0 装诚实: 4 backend + KeyringSelector alpha 已真 impl; 本模块只做 bootstrap 集成.
+pub mod keyring_bootstrap;
+
 use std::sync::Arc;
 
 use apeireth_core::kernel::{CapabilityId, SessionId};
@@ -55,15 +60,17 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
     use apeireth_provider::canonical_anthropic::AnthropicProviderPlugin;
     use apeireth_provider::canonical_minimax::MinimaxProviderPlugin;
     use apeireth_provider::canonical_openai_compatible::OpenAiCompatibleProviderPlugin;
-    use apeireth_provider::credentials::EnvCredentialResolver;
 
     let configured_model = std::env::var("APEIRETH_MODEL")
         .ok()
         .filter(|model| !model.trim().is_empty());
 
     let mut builder = Runtime::builder();
+    // P-arch (2026-08-27) + v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring
+    // 优先用 keyring (设 APEIRETH_KEYRING_BACKEND env), fallback 到 EnvCredentialResolver
+    // (alpha 0 装路径, 0 行为变化). 详见 `keyring_bootstrap` 模块.
     let resolver: Arc<dyn apeireth_plugin::CredentialResolver> =
-        Arc::new(EnvCredentialResolver::new());
+        keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
     builder = builder.with_governance(Arc::new(build_production_governance_from_env()));
 
