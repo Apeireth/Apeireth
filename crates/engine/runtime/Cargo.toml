@@ -15,6 +15,7 @@ apeireth-core = { path = "../../foundation/core" }
 apeireth-protocol = { path = "../../foundation/protocol" }
 apeireth-plugin = { path = "../../foundation/plugin" }
 apeireth-governance = { path = "../../foundation/governance" }
+apeireth-orchestration = { path = "../../foundation/orchestration" }
 apeireth-storage = { path = "../storage" }
 rusqlite = { workspace = true }
 tokio = { workspace = true, features = ["full"] }

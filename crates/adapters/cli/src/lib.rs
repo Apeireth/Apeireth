@@ -17,6 +17,12 @@ use apeireth_governance::{
 };
 use apeireth_runtime::canonical::{Runtime, TurnRequest, TurnResponse};
 
+/// One persistent SQLite database is shared by the cognitive backends.
+/// `APEIRETH_COGNITIVE_DB` may override the path; Judge remains opt-in.
+const COGNITIVE_DB_ENV: &str = "APEIRETH_COGNITIVE_DB";
+const COGNITIVE_JUDGE_ENV: &str = "APEIRETH_COGNITIVE_JUDGE";
+const COGNITIVE_COUNCIL_ENV: &str = "APEIRETH_COGNITIVE_COUNCIL";
+
 /// Enables the local filesystem and search tools in the production policy.
 pub const ENABLE_LOCAL_READ_TOOLS_ENV: &str = "APEIRETH_ENABLE_LOCAL_READ_TOOLS";
 
@@ -65,7 +71,8 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         .ok()
         .filter(|model| !model.trim().is_empty());
 
-    let mut builder = Runtime::builder();
+    let clock: Arc<dyn apeireth_core::kernel::Clock> = apeireth_core::kernel::system_clock();
+    let mut builder = Runtime::builder().with_clock(Arc::clone(&clock));
     // P-arch (2026-08-27) + v2.0.0-rc.1 RC-9: KeyringSelector 真接 OS keyring
     // 优先用 keyring (设 APEIRETH_KEYRING_BACKEND env), fallback 到 EnvCredentialResolver
     // (alpha 0 装路径, 0 行为变化). 详见 `keyring_bootstrap` 模块.
@@ -73,6 +80,11 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         keyring_bootstrap::build_keyring_resolver();
     builder = builder.with_credentials(resolver);
     builder = builder.with_governance(Arc::new(build_production_governance_from_env()));
+
+    // The CLI is the composition root. Gateway reuses this function, while
+    // SDK remains an HTTP client and does not host a second Runtime.
+    let cognitive = build_cognitive_modules_from_env(Arc::clone(&clock)).await?;
+    builder = cognitive.register_into(builder);
 
     let workspace_root = std::env::current_dir()
         .map_err(|error| format!("canonical runtime bootstrap failed: current_dir: {error}"))?;
@@ -114,6 +126,120 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
         .build()
         .await
         .map_err(|error| format!("canonical runtime bootstrap failed: {error}"))
+}
+
+async fn build_cognitive_modules_from_env(
+    clock: Arc<dyn apeireth_core::kernel::Clock>,
+) -> Result<apeireth_runtime::canonical::ProductionCognitiveModules, String> {
+    use apeireth_memory::backend::sqlite::SqliteBackend;
+    use apeireth_memory::{
+        experience_store_sqlite::SQLiteExperienceStore,
+        preference_store_sqlite::SQLitePreferenceStore,
+        self_assessment_store_sqlite::SQLiteSelfAssessmentStore,
+    };
+    use apeireth_runtime::canonical::{CognitiveBackends, CognitiveModuleConfig, JudgeConfig};
+    use apeireth_storage::{SqliteConnectionPool, StorageError};
+
+    let path = std::env::var(COGNITIVE_DB_ENV)
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| ".apeireth/cognitive.sqlite3".into());
+    let pool = Arc::new(
+        SqliteConnectionPool::open(&path)
+            .await
+            .map_err(|error| format!("cognitive backend open failed: {error}"))?,
+    );
+
+    // The storage foundation has an older generic `episodes(id, data)` table.
+    // Refuse that shape explicitly instead of letting an additive
+    // `CREATE IF NOT EXISTS` migration produce a runtime write failure.
+    pool.read(|conn| {
+        let mut statement = conn.prepare("PRAGMA table_info(episodes)")?;
+        let columns = statement
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !columns.is_empty()
+            && ["id", "timestamp", "role", "content", "session_id"]
+                .iter()
+                .any(|required| !columns.iter().any(|column| column == required))
+        {
+            return Err(apeireth_storage::StorageError::InvalidConfiguration(
+                "cognitive database uses incompatible generic episodes schema; migrate or choose a new APEIRETH_COGNITIVE_DB path".into(),
+            ));
+        }
+        Ok(())
+    })
+    .map_err(|error| format!("cognitive database schema validation failed: {error}"))?;
+
+    // Memory migrations own the episode and six-stream tables. The preference,
+    // experience, and assessment stores own their additive tables. All use
+    // this one injected pool; no module opens a connection itself.
+    let migration_pool = Arc::clone(&pool);
+    migration_pool
+        .write(|conn| {
+            apeireth_memory::run_migrations(conn).map_err(|error| StorageError::Migration {
+                version: 0,
+                name: "cognitive_memory",
+                message: error.to_string(),
+            })
+        })
+        .await
+        .map_err(|error| format!("cognitive memory schema failed: {error}"))?;
+
+    let experience = Arc::new(SQLiteExperienceStore::from_arc(Arc::clone(&pool)));
+    experience
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive experience schema failed: {error}"))?;
+    let preferences = Arc::new(SQLitePreferenceStore::from_arc(Arc::clone(&pool)));
+    preferences
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive preference schema failed: {error}"))?;
+    let self_assessments = Arc::new(SQLiteSelfAssessmentStore::from_arc(Arc::clone(&pool)));
+    self_assessments
+        .ensure_schema()
+        .await
+        .map_err(|error| format!("cognitive assessment schema failed: {error}"))?;
+
+    let judge_enabled = std::env::var(COGNITIVE_JUDGE_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let council_enabled = std::env::var(COGNITIVE_COUNCIL_ENV)
+        .ok()
+        .is_some_and(|value| value.trim() == "1");
+    let config = CognitiveModuleConfig {
+        judge: JudgeConfig {
+            enabled: judge_enabled,
+            ..JudgeConfig::default()
+        },
+        council: council_enabled,
+        ..CognitiveModuleConfig::default()
+    };
+    let memory: Arc<dyn apeireth_plugin::memory_backend::MemoryBackend> =
+        Arc::new(SqliteBackend::from_arc(Arc::clone(&pool)));
+    let wiki: Arc<dyn apeireth_plugin::experience::WikiEntryStore> = experience.clone();
+    let graph: Arc<dyn apeireth_plugin::experience::KnowledgeGraphStore> = experience.clone();
+    let associations: Arc<dyn apeireth_plugin::experience::AssociationStore> = experience.clone();
+    let preferences: Arc<dyn apeireth_plugin::preference::PreferenceStore> = preferences.clone();
+    let self_assessments: Arc<dyn apeireth_plugin::self_assessment::SelfAssessmentStore> =
+        self_assessments.clone();
+    let council = if council_enabled {
+        Some(Arc::new(apeireth_orchestration::Council::default_allow()))
+    } else {
+        None
+    };
+    let backends = CognitiveBackends {
+        memory: Some(memory),
+        wiki: Some(wiki),
+        graph: Some(graph),
+        associations: Some(associations),
+        preferences: Some(preferences),
+        self_assessments: Some(self_assessments),
+        council,
+    };
+    apeireth_runtime::canonical::ProductionCognitiveModules::build(config, backends, clock)
+        .map_err(|error| error.to_string())
 }
 
 /// Execute one CLI turn directly through [`Runtime::execute`].
