@@ -27,6 +27,7 @@
 pub mod approval;
 pub mod error;
 pub mod execute;
+pub mod module;
 pub mod provider;
 pub mod runtime;
 pub mod session;
@@ -38,6 +39,12 @@ pub use approval::{
 };
 pub use error::{RuntimeError, RuntimeResult};
 pub use execute::{ApprovalResolution, TurnOutcome, TurnRequest, TurnResponse};
+pub use module::{
+    AgentModule, HookPoint, InvocationContext, InvocationOrigin, ModuleContext, ModuleDirective,
+    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
+    ModuleInvoker, ModuleManifest, ModuleOutcome, PromptOverlay, DEFAULT_MAX_INVOCATION_DEPTH,
+    DEFAULT_MAX_MODULE_INVOCATIONS,
+};
 pub use provider::{ProviderHealth, ProviderRouter, RoutedCompletion};
 pub use runtime::{plugin_ids, Runtime, RuntimeBuilder, RuntimeConfig, DEFAULT_MAX_ROUNDS};
 pub use session::{

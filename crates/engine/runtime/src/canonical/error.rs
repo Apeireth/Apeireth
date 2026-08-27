@@ -4,6 +4,8 @@ use apeireth_core::kernel::{ApprovalId, CoreError, SessionId};
 use apeireth_plugin::{PluginError, ProviderError};
 use thiserror::Error;
 
+use super::module::ModuleError;
+
 /// Result alias for the canonical runtime.
 pub type RuntimeResult<T> = Result<T, RuntimeError>;
 
@@ -67,6 +69,25 @@ pub enum RuntimeError {
         /// Which hook decided.
         hook: String,
         /// What a human is being asked to approve.
+        reason: String,
+    },
+
+    /// A registered module failed while running a hook.
+    #[error("module {module_id} failed: {source}")]
+    Module {
+        /// Module whose hook failed.
+        module_id: String,
+        /// Module failure.
+        #[source]
+        source: ModuleError,
+    },
+
+    /// A module rejected the turn before its candidate was committed.
+    #[error("module {module_id} stopped the turn: {reason}")]
+    ModuleStopped {
+        /// Module whose policy stopped the turn.
+        module_id: String,
+        /// Stated rejection reason.
         reason: String,
     },
 
