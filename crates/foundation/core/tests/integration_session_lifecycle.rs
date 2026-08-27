@@ -115,6 +115,7 @@ fn integration_session_full_lifecycle() {
         mode: HAMode::SingleHuman,
         real_humans: vec![],
         ice_frozen_until: None,
+        multi_sign: None,
     };
     println!("✓ HA 真实人类批准创建成功");
 
