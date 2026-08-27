@@ -28,8 +28,8 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
   - CI 全绿：cargo-nextest 1338、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
-- **已知缺口（诚实）**：生产 bootstrap 尚未安装 governance pipeline（默认 AllowAll）；13 键 verdict cache 只在 core 内测试、未接执行路径；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
-- **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：安全机制已实现但未接线是 P0，见 §4。
+- **已知缺口（诚实）**：13 键 verdict cache 只在 core 内测试、未接执行路径（governance hook 装配已就绪：`PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`，upstream `873d2857`）；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
+- **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），剩余 13 键 verdict cache 拍板仍是 P0，见 §4。
 
 ---
 
@@ -71,7 +71,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 | 测试 | 1338 passed / 0 failed（cargo-nextest，3 OS） |
 | CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
-| 生产安全现状 | 工具层 shell/fetch 默认关；**governance pipeline 未装（默认 AllowAll）→ P0** |
+| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 仍待接线** |
 
 ---
 
@@ -79,7 +79,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 | P | 任务 | 说明 | 依赖 |
 |---|---|---|---|
-| **P0** | **生产 governance 接线** | `build_canonical_runtime_from_env` 安装 pipeline（PII + 注入 + 权限策略 + MaxRounds）；拍板 13 键 verdict cache 去留（接进 pipeline 或正式降级归档） | 无 |
+| **P0** | **13 键 verdict cache 接线决策**（接进 `GovernancePipeline` 或正式降级归档） | governance hook 装配已就绪（upstream `873d2857`） |
 | **P1** | **文档对账**（本批进行中） | ROADMAP/CHANGELOG/交接手册/审计数字统一到 13-crate 实测值 | 无 |
 | P2 | core 脊椎去留 + credentials 接线 | core crate 根 legacy 模块（onion/gate/philosophy/memory）决定接线或移入 legacy；`apeireth-credentials` 接回 CredentialResolver | P0 |
 | P3 | M1B 记忆移植 | ACT-R 记忆、检索、向量/图全量移植进 `crates/engine/memory` | P2 |
@@ -104,7 +104,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 | 风险 | 影响 | 缓解 |
 |---|---|---|
-| 生产路径 AllowAll governance | PII/注入/越权无守门，仅靠工具默认关兜底 | P0 接线（已排期） |
+| 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 待拍板接线** |
 | 功能退坡（26 项 Lost Capabilities） | 产品能力暂时不可用 | 按 §4 P3-P7 顺序恢复；legacy/ 保留全部实现 |
 | 文档数字矛盾（23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | P1 本批统一为实测值 |
 | `crates/_archived` 1.4GB 未跟踪构建垃圾 | 本地仓库膨胀 | 可删除（git 历史已含） |

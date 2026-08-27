@@ -87,7 +87,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 
 | crate | 职责 |
 | | |
-| `apeireth-tools-canonical`（包名带 -canonical 后缀，与 legacy `apeireth-tools` 区分）| 3 只读工具默认 + shell/fetch opt-in + egress + **唯一 ProcessExecutor**（Windows Job Object + CREATE_SUSPENDED 完整，Linux/macOS 进程组部分）|
+| `apeireth-tools-canonical`（包名带 -canonical 后缀，与 legacy `apeireth-tools` 区分）| 3 只读工具默认 + shell/fetch opt-in + egress + **唯一 ProcessExecutor**（Windows Job Object + CREATE_SUSPENDED 完整，Linux/macOS 进程组部分）+ **敏感路径保护**（upstream `ac5cbf5a`：filesystem/search 自动屏蔽 `.env` / `.ssh` / `.aws` / `.gnupg` / `.secret` 等，src/sensitive_path.rs）|
 
 `BuiltinToolsPlugin::new(workspace_root)` 注册：`tool.filesystem` / `tool.search` / `tool.repo`（默认）。`BuiltinToolsOptions { shell: Some(...), fetch: Some(...) }` 显式开启 shell/fetch。
 
@@ -96,7 +96,7 @@ v1 时代的三层交付模型（模块/套件/插件）已**弃用**——v2 �
 | crate | 职责 |
  | | | |
 | `apeireth-gateway` | canonical HTTP `:8080`（`GET /health` / `POST /v1/chat` / `POST /v1/chat/completions`）| 全部委托 `Runtime::execute`，R自创第二个 runtime |
-| `apeireth-cli` | `apeireth session / chat / gateway serve` 三命令入口 | 走 `build_canonical_runtime_from_env`（**当前 governance 默认 AllowAll——P0 接线排期见 ROADMAP §4**） |
+| `apeireth-cli` | `apeireth session / chat / gateway serve` 三命令入口 | 走 `build_canonical_runtime_from_env`，**已挂 GovernancePipeline = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`**（upstream `873d2857`）；MaxRounds 结构性，AuditHashChain 按部署需要挂 |
 | `apeireth-sdk` | **stub 模式**：6 工具白名单 + 鉴权 5 组件 + WS 8 帧协议类型已就位；真实 HTTP/WS 走 `unimplemented!()` 守门；R21 真接 | 真实用户 = R21 后才出现 |
 
 ### 2.5 依赖 DAG（实测，13 crate）
@@ -263,7 +263,7 @@ make ci          # make ci-build + ci-test + ci-release (一键)
 - 8 哲学锚穿透（per [09-anchor.md](../../docs/archive/conventions/09-anchor.md)）
 
 **R 假装**：
-- v2 路径接 governance hook 之外的任何机制（per ROADMAP P0 = 接线 hook 是排期，不是完成）
+- v2 路径接 governance hook 之外的任何机制（per ROADMAP P0 = 接线 hook 是排期，不是完成）— **上游 `873d2857` 已落实 P0 的 3 个核心 hook**（Permission + 凭据泄漏 + 注入检测），其余按部署需要
 - `BuiltinToolsPlugin` 默认开 shell/fetch（opt-in 守门，**不要**默认启用）
 - SDK 真接 HTTP/WS（stub 模式是诚实的，R21 才真接）
 - `apeireth-credentials` keyring backend 已接线（**孤儿**——EnvCredentialResolver 是生产默认）
