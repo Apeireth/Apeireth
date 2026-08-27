@@ -32,8 +32,14 @@ pub enum HookPoint {
     /// Immediately before a candidate answer is committed to the transcript.
     BeforeFinalCommit,
     /// After a turn has been committed successfully.
+    ///
+    /// This point is observational; its directive cannot undo the durable
+    /// commit.
     AfterTurn,
     /// When an observable runtime or module failure occurs.
+    ///
+    /// This point is best-effort observation; its directive cannot recover or
+    /// replace the original failure.
     OnError,
 }
 
@@ -85,7 +91,7 @@ impl PromptOverlay {
 pub enum ModuleDirective {
     /// Continue the canonical runtime path.
     Continue,
-    /// Ask the canonical loop to spend another round with feedback.
+    /// Ask the canonical loop to spend another logical round with feedback.
     Retry {
         /// Transient feedback for the next provider invocation.
         feedback: String,
@@ -98,6 +104,12 @@ pub enum ModuleDirective {
 }
 
 /// The value returned by one module hook.
+///
+/// When several modules observe the same hook, the canonical runtime invokes
+/// them in registration order, concatenates their overlays in that order, and
+/// resolves directives by strength: `Stop` overrides `Retry`, which overrides
+/// `Continue`. Equal-strength directives keep the first module's result, and a
+/// directive does not short-circuit the remaining modules for that hook.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ModuleOutcome {
     /// Prompt messages to prepend to the next provider request in this turn.
@@ -341,6 +353,11 @@ impl<'a> ModuleContext<'a> {
 }
 
 /// A module participating in the canonical runtime lifecycle.
+///
+/// Hook calls are sequential and deterministic. A hook error aborts an
+/// in-progress turn and is reported through [`HookPoint::OnError`] when
+/// possible; `AfterTurn` is already post-commit and `OnError` is best effort.
+/// Module directives cannot execute capabilities or alter a tool invocation.
 #[async_trait]
 pub trait AgentModule: Send + Sync {
     /// Stable module identity.
@@ -380,6 +397,10 @@ impl ModuleTurnState {
 
     pub(crate) fn used(&self) -> usize {
         self.used.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_used(&self, used: usize) {
+        self.used.store(used, Ordering::Relaxed);
     }
 
     fn reserve(&self) -> Result<(), ModuleInvocationError> {
@@ -438,14 +459,13 @@ impl ModuleInvoker for RuntimeModuleInvoker<'_> {
                 maximum: DEFAULT_MAX_INVOCATION_DEPTH,
             });
         }
-        self.state.reserve()?;
-
         let model = request
             .model
             .unwrap_or_else(|| self.current_model.to_string());
         if model.is_empty() {
             return Err(ModuleInvocationError::NoModel);
         }
+        self.state.reserve()?;
 
         let mut messages = Vec::with_capacity(2);
         if let Some(system) = request.system {

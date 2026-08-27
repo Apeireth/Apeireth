@@ -4,19 +4,22 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use apeireth_core::kernel::{CapabilityId, ModelId, PluginId, SessionId};
-use apeireth_governance::DenyCapabilities;
+use apeireth_governance::{
+    DenyCapabilities, GovernancePipeline, Permission, PermissionGovernanceHook, PermissionPolicy,
+};
 use apeireth_plugin::{
     CapabilityKind, Plugin, PluginContext, PluginManifest, PluginResult, ProviderCapability,
     ProviderError, ToolCapability,
 };
 use apeireth_protocol::canonical::{
-    ModelDescriptor, ModelFeature, NormalizedFinishReason, NormalizedMessage, NormalizedRequest,
-    NormalizedResponse, NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
+    MessageRole, ModelDescriptor, ModelFeature, NormalizedFinishReason, NormalizedMessage,
+    NormalizedRequest, NormalizedResponse, NormalizedTool, NormalizedUsage, ToolCall,
+    ToolParameters, ToolResult,
 };
 use apeireth_runtime::canonical::{
-    AgentModule, HookPoint, InvocationOrigin, ModuleContext, ModuleError, ModuleInvocationError,
-    ModuleInvocationRequest, ModuleManifest, ModuleOutcome, Runtime, RuntimeError,
-    SessionEventKind, TurnRequest,
+    AgentModule, ApprovalDecision, ApprovalResolution, HookPoint, InvocationOrigin, ModuleContext,
+    ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleManifest, ModuleOutcome,
+    Runtime, RuntimeError, SessionEventKind, TurnOutcome, TurnRequest,
 };
 use async_trait::async_trait;
 
@@ -26,6 +29,7 @@ const MODEL: &str = "fake-model-1";
 enum Reply {
     Text(&'static str),
     Tool,
+    TwoTools,
 }
 
 struct FakeProvider {
@@ -101,6 +105,22 @@ impl ProviderCapability for FakeProvider {
                     name: "echo".into(),
                     arguments: serde_json::json!({}),
                 }],
+                ..response
+            },
+            Reply::TwoTools => NormalizedResponse {
+                finish_reason: Some(NormalizedFinishReason::ToolCalls),
+                tool_calls: vec![
+                    ToolCall {
+                        id: "call-1".into(),
+                        name: "echo".into(),
+                        arguments: serde_json::json!({}),
+                    },
+                    ToolCall {
+                        id: "call-2".into(),
+                        name: "echo".into(),
+                        arguments: serde_json::json!({}),
+                    },
+                ],
                 ..response
             },
         })
@@ -355,9 +375,33 @@ impl AgentModule for StopModule {
     }
 }
 
+struct ApprovedToolStopModule {
+    manifest: ModuleManifest,
+    calls: AtomicUsize,
+}
+
+#[async_trait]
+impl AgentModule for ApprovedToolStopModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeToolCall && self.calls.fetch_add(1, Ordering::SeqCst) == 1 {
+            return Ok(ModuleOutcome::stop("module vetoed approved dispatch"));
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
 struct SideCallModule {
     manifest: ModuleManifest,
     side_text: Arc<Mutex<Option<String>>>,
+    side_tool_calls: Arc<Mutex<Option<usize>>>,
     hook_count: Arc<AtomicUsize>,
     origin: Arc<Mutex<Option<InvocationOrigin>>>,
 }
@@ -387,6 +431,7 @@ impl AgentModule for SideCallModule {
             ))
             .await?;
         *self.side_text.lock().unwrap() = Some(result.text().to_string());
+        *self.side_tool_calls.lock().unwrap() = Some(result.response.tool_calls.len());
         Ok(ModuleOutcome::continue_())
     }
 }
@@ -449,6 +494,130 @@ impl AgentModule for BudgetModule {
 struct ToolHookModule {
     manifest: ModuleManifest,
     hooks: Arc<Mutex<Vec<HookPoint>>>,
+}
+
+struct RetryOverlayModule {
+    manifest: ModuleManifest,
+    before_model_calls: AtomicUsize,
+    final_checks: AtomicUsize,
+}
+
+struct BeforeModelRetryModule {
+    manifest: ModuleManifest,
+    calls: AtomicUsize,
+}
+
+#[async_trait]
+impl AgentModule for BeforeModelRetryModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeModelCall && self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(ModuleOutcome::retry("retry before provider"));
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+#[async_trait]
+impl AgentModule for RetryOverlayModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeModelCall {
+            let call = self.before_model_calls.fetch_add(1, Ordering::SeqCst);
+            return Ok(ModuleOutcome::continue_().with_system_overlay(format!("overlay-{call}")));
+        }
+        if hook == HookPoint::BeforeFinalCommit
+            && self.final_checks.fetch_add(1, Ordering::SeqCst) == 0
+        {
+            return Ok(ModuleOutcome::retry("revise"));
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+struct BeforeToolRetryModule {
+    manifest: ModuleManifest,
+    calls: AtomicUsize,
+}
+
+#[async_trait]
+impl AgentModule for BeforeToolRetryModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeToolCall && self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(ModuleOutcome::retry("regenerate without this tool call"));
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+struct AfterToolRetryModule {
+    manifest: ModuleManifest,
+    calls: AtomicUsize,
+}
+
+#[async_trait]
+impl AgentModule for AfterToolRetryModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::AfterToolResult && self.calls.fetch_add(1, Ordering::SeqCst) == 0 {
+            return Ok(ModuleOutcome::retry("retry after the first result"));
+        }
+        Ok(ModuleOutcome::continue_())
+    }
+}
+
+struct OutcomeModule {
+    manifest: ModuleManifest,
+    order: Arc<Mutex<Vec<String>>>,
+    outcome: ModuleOutcome,
+}
+
+#[async_trait]
+impl AgentModule for OutcomeModule {
+    fn manifest(&self) -> &ModuleManifest {
+        &self.manifest
+    }
+
+    async fn on_hook(
+        &self,
+        hook: HookPoint,
+        _ctx: &ModuleContext<'_>,
+    ) -> Result<ModuleOutcome, ModuleError> {
+        if hook == HookPoint::BeforeFinalCommit {
+            self.order.lock().unwrap().push(self.manifest.id.clone());
+            return Ok(self.outcome.clone());
+        }
+        Ok(ModuleOutcome::continue_())
+    }
 }
 
 #[async_trait]
@@ -514,6 +683,47 @@ async fn hooks_fire_and_overlays_are_ordered_transient_and_not_persisted() {
     let persisted: Vec<String> = session.messages.iter().map(text).collect();
     assert_eq!(persisted, ["one", "first", "two", "second"]);
     assert!(!persisted.iter().any(|message| message.contains("MARKER")));
+}
+
+#[tokio::test]
+async fn overlays_are_recomputed_for_each_provider_retry() {
+    let provider = FakeProvider::new(vec![Reply::Text("candidate 1"), Reply::Text("candidate 2")]);
+    let module = Arc::new(RetryOverlayModule {
+        manifest: ModuleManifest::new("module.retry_overlay", "retry overlay"),
+        before_model_calls: AtomicUsize::new(0),
+        final_checks: AtomicUsize::new(0),
+    });
+    let runtime = runtime(Arc::clone(&provider), vec![module]).await;
+
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .unwrap();
+
+    let first: Vec<String> = provider.request(0).messages.iter().map(text).collect();
+    assert_eq!(first, ["overlay-0", "question"]);
+    let second: Vec<String> = provider.request(1).messages.iter().map(text).collect();
+    assert_eq!(second, ["overlay-1", "question", "candidate 1", "revise"]);
+}
+
+#[tokio::test]
+async fn before_model_retry_consumes_one_logical_round_without_double_provider_calling() {
+    let provider = FakeProvider::new(vec![Reply::Text("answer")]);
+    let module = Arc::new(BeforeModelRetryModule {
+        manifest: ModuleManifest::new("module.before_model_retry", "before model retry"),
+        calls: AtomicUsize::new(0),
+    });
+    let runtime = runtime(Arc::clone(&provider), vec![module]).await;
+
+    let response = runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .unwrap();
+
+    assert_eq!(response.rounds, 2);
+    assert_eq!(provider.call_count(), 1);
+    let request: Vec<String> = provider.request(0).messages.iter().map(text).collect();
+    assert_eq!(request, ["question", "retry before provider"]);
 }
 
 #[tokio::test]
@@ -595,6 +805,55 @@ async fn before_final_commit_stop_rejects_without_committing_the_candidate() {
 }
 
 #[tokio::test]
+async fn directive_precedence_is_strongest_first_and_all_modules_run() {
+    let provider = FakeProvider::new(vec![Reply::Text("candidate")]);
+    let order = Arc::new(Mutex::new(Vec::new()));
+    let modules: Vec<Arc<dyn AgentModule>> = vec![
+        Arc::new(OutcomeModule {
+            manifest: ModuleManifest::new("module.continue", "continue"),
+            order: Arc::clone(&order),
+            outcome: ModuleOutcome::continue_(),
+        }),
+        Arc::new(OutcomeModule {
+            manifest: ModuleManifest::new("module.retry", "retry"),
+            order: Arc::clone(&order),
+            outcome: ModuleOutcome::retry("retry"),
+        }),
+        Arc::new(OutcomeModule {
+            manifest: ModuleManifest::new("module.stop.first", "stop first"),
+            order: Arc::clone(&order),
+            outcome: ModuleOutcome::stop("stop first"),
+        }),
+        Arc::new(OutcomeModule {
+            manifest: ModuleManifest::new("module.stop.second", "stop second"),
+            order: Arc::clone(&order),
+            outcome: ModuleOutcome::stop("stop second"),
+        }),
+    ];
+    let runtime = runtime(Arc::clone(&provider), modules).await;
+
+    let error = runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        RuntimeError::ModuleStopped { ref module_id, ref reason }
+            if module_id == "module.stop.first" && reason == "stop first"
+    ));
+    assert_eq!(
+        order.lock().unwrap().as_slice(),
+        [
+            "module.continue",
+            "module.retry",
+            "module.stop.first",
+            "module.stop.second",
+        ]
+    );
+    assert_eq!(provider.call_count(), 1);
+}
+
+#[tokio::test]
 async fn runtime_errors_are_observable_through_on_error_without_being_swallowed() {
     let provider = FakeProvider::new(vec![Reply::Text("never reached")]);
     let saw_error = Arc::new(AtomicBool::new(false));
@@ -616,11 +875,13 @@ async fn runtime_errors_are_observable_through_on_error_without_being_swallowed(
 async fn isolated_side_calls_use_the_provider_without_tools_or_recursive_hooks() {
     let provider = FakeProvider::new(vec![Reply::Text("candidate"), Reply::Text("side verdict")]);
     let side_text = Arc::new(Mutex::new(None));
+    let side_tool_calls = Arc::new(Mutex::new(None));
     let hook_count = Arc::new(AtomicUsize::new(0));
     let origin = Arc::new(Mutex::new(None));
     let module = Arc::new(SideCallModule {
         manifest: ModuleManifest::new("module.side", "side"),
         side_text: Arc::clone(&side_text),
+        side_tool_calls: Arc::clone(&side_tool_calls),
         hook_count: Arc::clone(&hook_count),
         origin: Arc::clone(&origin),
     });
@@ -633,6 +894,7 @@ async fn isolated_side_calls_use_the_provider_without_tools_or_recursive_hooks()
 
     assert_eq!(provider.call_count(), 2);
     assert_eq!(side_text.lock().unwrap().as_deref(), Some("side verdict"));
+    assert_eq!(*side_tool_calls.lock().unwrap(), Some(0));
     let side_request = provider.request(1);
     assert!(side_request.tools.is_empty());
     assert_eq!(text(&side_request.messages[0]), "SIDE_SYSTEM_MARKER");
@@ -652,6 +914,40 @@ async fn isolated_side_calls_use_the_provider_without_tools_or_recursive_hooks()
             .len(),
         2
     );
+}
+
+#[tokio::test]
+async fn side_call_tool_responses_are_never_dispatched() {
+    let provider = FakeProvider::new(vec![Reply::Text("candidate"), Reply::Tool]);
+    let side_text = Arc::new(Mutex::new(None));
+    let side_tool_calls = Arc::new(Mutex::new(None));
+    let hook_count = Arc::new(AtomicUsize::new(0));
+    let origin = Arc::new(Mutex::new(None));
+    let module = Arc::new(SideCallModule {
+        manifest: ModuleManifest::new("module.side_tool_response", "side tool response"),
+        side_text,
+        side_tool_calls: Arc::clone(&side_tool_calls),
+        hook_count,
+        origin,
+    });
+    let tool_plugin = EchoPlugin::new();
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_plugin(tool_plugin.clone())
+        .with_module(module)
+        .build()
+        .await
+        .unwrap();
+
+    runtime
+        .execute(TurnRequest::new(SessionId::new(), "question"))
+        .await
+        .unwrap();
+
+    assert_eq!(*side_tool_calls.lock().unwrap(), Some(1));
+    assert_eq!(tool_plugin.calls.load(Ordering::SeqCst), 0);
+    assert!(provider.request(1).tools.is_empty());
 }
 
 #[tokio::test]
@@ -716,6 +1012,184 @@ async fn tool_hooks_run_around_governed_dispatch() {
         tool_plugin.calls.load(Ordering::SeqCst),
         0,
         "module Continue cannot bypass governance denial"
+    );
+}
+
+#[tokio::test]
+async fn before_tool_retry_closes_the_tool_transcript_before_the_next_provider_call() {
+    let provider = FakeProvider::new(vec![Reply::Tool, Reply::Text("done")]);
+    let module = Arc::new(BeforeToolRetryModule {
+        manifest: ModuleManifest::new("module.before_tool_retry", "before tool retry"),
+        calls: AtomicUsize::new(0),
+    });
+    let runtime = runtime(Arc::clone(&provider), vec![module]).await;
+    let session_id = SessionId::new();
+
+    let response = runtime
+        .execute(TurnRequest::new(session_id, "use tool"))
+        .await
+        .unwrap();
+    assert_eq!(response.rounds, 2);
+
+    let retry_request = provider.request(1);
+    assert_eq!(retry_request.messages[1].role, MessageRole::Assistant);
+    assert_eq!(retry_request.messages[1].tool_calls.len(), 1);
+    assert_eq!(retry_request.messages[2].role, MessageRole::Tool);
+    assert_eq!(
+        retry_request.messages[2].tool_call_id.as_deref(),
+        Some("call-1")
+    );
+    assert!(text(&retry_request.messages[2]).contains("skipped"));
+    assert_eq!(retry_request.messages[3].role, MessageRole::User);
+    assert_eq!(
+        text(&retry_request.messages[3]),
+        "regenerate without this tool call"
+    );
+
+    let session = runtime.sessions().load_or_create(session_id).await.unwrap();
+    assert_eq!(session.messages[2].role, MessageRole::Tool);
+    assert_eq!(session.messages.len(), 4);
+}
+
+#[tokio::test]
+async fn after_tool_retry_closes_remaining_calls_without_mixing_feedback_into_results() {
+    let provider = FakeProvider::new(vec![Reply::TwoTools, Reply::Text("done")]);
+    let tool_plugin = EchoPlugin::new();
+    let module = Arc::new(AfterToolRetryModule {
+        manifest: ModuleManifest::new("module.after_tool_retry", "after tool retry"),
+        calls: AtomicUsize::new(0),
+    });
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_plugin(tool_plugin.clone())
+        .with_module(module)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+
+    let response = runtime
+        .execute(TurnRequest::new(session_id, "use both tools"))
+        .await
+        .unwrap();
+    assert_eq!(response.rounds, 2);
+    assert_eq!(tool_plugin.calls.load(Ordering::SeqCst), 1);
+
+    let retry_request = provider.request(1);
+    assert_eq!(retry_request.messages[1].tool_calls.len(), 2);
+    assert_eq!(retry_request.messages[2].role, MessageRole::Tool);
+    assert_eq!(
+        retry_request.messages[2].tool_call_id.as_deref(),
+        Some("call-1")
+    );
+    assert_eq!(retry_request.messages[3].role, MessageRole::Tool);
+    assert_eq!(
+        retry_request.messages[3].tool_call_id.as_deref(),
+        Some("call-2")
+    );
+    assert!(text(&retry_request.messages[3]).contains("remaining tool calls skipped"));
+    assert_eq!(retry_request.messages[4].role, MessageRole::User);
+    assert_eq!(
+        text(&retry_request.messages[4]),
+        "retry after the first result"
+    );
+}
+
+#[tokio::test]
+async fn rejected_approval_still_emits_after_tool_result() {
+    let provider = FakeProvider::new(vec![Reply::Tool, Reply::Text("done")]);
+    let tool_plugin = EchoPlugin::new();
+    let hooks = Arc::new(Mutex::new(Vec::new()));
+    let module = Arc::new(ToolHookModule {
+        manifest: ModuleManifest::new("module.approval_hooks", "approval hooks"),
+        hooks: Arc::clone(&hooks),
+    });
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.require_approval_for("tool.echo");
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_plugin(tool_plugin.clone())
+        .with_module(module)
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+
+    let pending = match runtime
+        .execute_outcome(TurnRequest::new(session_id, "use tool"))
+        .await
+        .unwrap()
+    {
+        TurnOutcome::PendingApproval(view) => view,
+        TurnOutcome::Completed(_) => panic!("expected approval pause"),
+    };
+    let resolution = runtime
+        .resolve_approval(
+            session_id,
+            pending.approval_id,
+            ApprovalDecision::Reject {
+                reason: Some("not now".into()),
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        resolution,
+        ApprovalResolution::Resumed(TurnOutcome::Completed(_))
+    ));
+    assert_eq!(tool_plugin.calls.load(Ordering::SeqCst), 0);
+    assert!(hooks.lock().unwrap().contains(&HookPoint::AfterToolResult));
+}
+
+#[tokio::test]
+async fn module_veto_of_a_claimed_approval_clears_the_active_pause_fail_closed() {
+    let provider = FakeProvider::new(vec![Reply::Tool]);
+    let tool_plugin = EchoPlugin::new();
+    let mut policy = PermissionPolicy::new();
+    policy.grant(Permission::ExecuteTool("tool.echo".into()));
+    policy.require_approval_for("tool.echo");
+    let runtime = Runtime::builder()
+        .with_default_model(MODEL)
+        .with_governance(Arc::new(
+            GovernancePipeline::new().with(Arc::new(PermissionGovernanceHook::new(policy))),
+        ))
+        .with_plugin(ProviderPlugin::new(Arc::clone(&provider)))
+        .with_plugin(tool_plugin.clone())
+        .with_module(Arc::new(ApprovedToolStopModule {
+            manifest: ModuleManifest::new("module.approved_stop", "approved stop"),
+            calls: AtomicUsize::new(0),
+        }))
+        .build()
+        .await
+        .unwrap();
+    let session_id = SessionId::new();
+
+    let pending = match runtime
+        .execute_outcome(TurnRequest::new(session_id, "use tool"))
+        .await
+        .unwrap()
+    {
+        TurnOutcome::PendingApproval(view) => view,
+        TurnOutcome::Completed(_) => panic!("expected approval pause"),
+    };
+    let error = runtime
+        .resolve_approval(session_id, pending.approval_id, ApprovalDecision::Approve)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, RuntimeError::ModuleStopped { .. }));
+    assert_eq!(tool_plugin.calls.load(Ordering::SeqCst), 0);
+
+    let session = runtime.sessions().load_or_create(session_id).await.unwrap();
+    assert_eq!(session.active_approval_id, None);
+    assert_eq!(
+        session.approvals.get(&pending.approval_id).unwrap().status,
+        apeireth_runtime::canonical::ApprovalStatus::Interrupted
     );
 }
 
