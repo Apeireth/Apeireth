@@ -241,7 +241,7 @@ impl PerceptionInput for TextInput {
         let event = PerceptionEvent {
             id: format!("text-{}", self.session_id),
             source: self.source,
-            session_id: self.session_id.clone(),
+            session_id: self.session_id,
             timestamp_ms: 0,
             payload: serde_json::json!({ "text": payload }),
             attention_score: 1.0,
@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn text_input_drains_one_event() {
         let sid = SessionId::new();
-        let input = TextInput::new(sid.clone(), "hello".into());
+        let input = TextInput::new(sid, "hello".into());
         let e1 = input.next_event().unwrap().expect("first event");
         assert_eq!(e1.source, PerceptionModality::Text);
         assert_eq!(e1.payload["text"], "hello");
@@ -339,9 +339,9 @@ mod tests {
     fn voice_vision_tactile_are_zero_implementation() {
         let sid = SessionId::new();
         for input in [
-            Box::new(VoiceInput { session_id: sid.clone() }) as Box<dyn PerceptionInput>,
-            Box::new(VisionInput { session_id: sid.clone() }),
-            Box::new(TactileInput { session_id: sid.clone() }),
+            Box::new(VoiceInput { session_id: sid }) as Box<dyn PerceptionInput>,
+            Box::new(VisionInput { session_id: sid }),
+            Box::new(TactileInput { session_id: sid }),
         ] {
             let err = input.next_event().expect_err("should fail").to_string();
             assert!(err.contains("0 装"), "error must document 0 装: {err}");
@@ -358,7 +358,7 @@ mod tests {
             events.push(PerceptionEvent {
                 id: format!("e-{i}"),
                 source: PerceptionModality::Text,
-                session_id: sid.clone(),
+                session_id: sid,
                 timestamp_ms: 0,
                 payload: serde_json::json!({}),
                 attention_score: *score,
@@ -379,10 +379,10 @@ mod tests {
             .map(|i| PerceptionEvent {
                 id: format!("e-{i}"),
                 source: PerceptionModality::Text,
-                session_id: sid.clone(),
+                session_id: sid,
                 timestamp_ms: 0,
                 payload: serde_json::json!({}),
-                attention_score: i as f64 * 0.4, // 0.0, 0.4, 0.8
+                attention_score: f64::from(i) * 0.4, // 0.0, 0.4, 0.8
                 tags: vec![],
             })
             .collect();
