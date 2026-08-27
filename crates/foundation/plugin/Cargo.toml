@@ -10,8 +10,10 @@ description = "Canonical plugin and capability model: a plugin is a capability p
 [dependencies]
 # Permitted direction: core <- protocol <- plugin.
 apeireth-core = { path = "../core" }
+apeireth-orchestration = { path = "../orchestration" }
 apeireth-protocol = { path = "../protocol" }
 async-trait = { workspace = true }
+futures = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
