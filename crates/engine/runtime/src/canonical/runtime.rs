@@ -47,11 +47,11 @@ use super::module::{AgentModule, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
-/// How many provider round-trips one turn may take before the runtime stops it.
+/// How many logical execution rounds one turn may take before the runtime stops it.
 ///
 /// This is a structural guard, not a policy: it applies even when no governance
 /// is configured. Eight is enough for realistic tool chains and small enough that
-/// a model stuck in a loop fails fast.
+/// a model or module stuck in a loop fails fast. Module retries consume a slot.
 pub const DEFAULT_MAX_ROUNDS: u32 = 8;
 
 /// Default lifetime of a pending approval before it expires.
@@ -62,7 +62,7 @@ pub const DEFAULT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
 pub struct RuntimeConfig {
     /// Model used when a request does not name one.
     pub default_model: Option<String>,
-    /// Round limit for one turn.
+    /// Logical round limit for one turn, including module retry attempts.
     pub max_rounds: u32,
     /// How long a pending approval stays resumable, in milliseconds.
     pub approval_ttl_ms: u64,
