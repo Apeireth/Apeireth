@@ -109,6 +109,7 @@ name = "apeireth-cli"
 version = "1.2.0"
 dependencies = [
  "apeireth-core",
+ "apeireth-credentials",
  "apeireth-gateway",
  "apeireth-governance",
  "apeireth-plugin",
