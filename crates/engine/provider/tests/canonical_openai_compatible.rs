@@ -40,9 +40,8 @@ impl MockServer {
         let received = Arc::new(Mutex::new(None));
         let received_clone = Arc::clone(&received);
         tokio::spawn(async move {
-            let (mut socket, _) = match listener.accept().await {
-                Ok(s) => s,
-                Err(_) => return,
+            let Ok((mut socket, _)) = listener.accept().await else {
+                return;
             };
             let req = read_request(&mut socket).await;
             *received_clone.lock().unwrap() = Some(req);

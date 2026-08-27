@@ -49,8 +49,8 @@ pub async fn build_canonical_runtime_from_env() -> Result<Runtime, String> {
 
     if std::env::var("APEIRETH_OPENAI_MODELS")
         .ok()
-        .filter(|models| !models.trim().is_empty())
-        .is_some()
+        .as_ref()
+        .is_some_and(|models| !models.trim().is_empty())
     {
         let openai = OpenAiCompatibleProviderPlugin::from_env()
             .map_err(|error| format!("openai-compatible provider activation failed: {error}"))?;

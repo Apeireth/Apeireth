@@ -160,15 +160,13 @@ impl SearchTool {
             return;
         }
 
-        let metadata = match fs::symlink_metadata(target) {
-            Ok(m) => m,
-            Err(_) => return,
+        let Ok(metadata) = fs::symlink_metadata(target) else {
+            return;
         };
 
         if metadata.is_dir() {
-            let entries = match fs::read_dir(target) {
-                Ok(reader) => reader,
-                Err(_) => return,
+            let Ok(entries) = fs::read_dir(target) else {
+                return;
             };
 
             // Deterministic order independent of filesystem iteration order.
@@ -184,9 +182,8 @@ impl SearchTool {
                     continue;
                 }
 
-                let file_type = match entry.file_type() {
-                    Ok(t) => t,
-                    Err(_) => continue,
+                let Ok(file_type) = entry.file_type() else {
+                    continue;
                 };
                 if file_type.is_symlink() {
                     continue;
@@ -262,17 +259,15 @@ impl SearchTool {
             }
         }
 
-        let metadata = match fs::metadata(path) {
-            Ok(m) => m,
-            Err(_) => return,
+        let Ok(metadata) = fs::metadata(path) else {
+            return;
         };
         if metadata.len() > self.max_file_size {
             return;
         }
 
-        let content = match fs::read_to_string(path) {
-            Ok(c) => c,
-            Err(_) => return,
+        let Ok(content) = fs::read_to_string(path) else {
+            return;
         };
 
         for (line_idx, line) in content.lines().enumerate() {
@@ -320,13 +315,7 @@ impl ToolCapability for SearchTool {
             "additionalProperties": false
         });
         let mut params = apeireth_protocol::canonical::ToolParameters::new();
-        params.extend(
-            parameters
-                .as_object()
-                .cloned()
-                .unwrap_or_default()
-                .into_iter(),
-        );
+        params.extend(parameters.as_object().cloned().unwrap_or_default());
 
         NormalizedTool::new("search")
             .with_description(

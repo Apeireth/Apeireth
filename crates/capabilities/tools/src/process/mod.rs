@@ -295,7 +295,12 @@ impl IsolationProfile {
     /// Convert a profile into a concrete requirement preset.
     pub fn requirement(self) -> IsolationRequirement {
         use EnforcementLevel::{Enforced, Partial};
-        use IsolationCapability::*;
+        use IsolationCapability::{
+            CpuLimit, EnvironmentIsolation, ExplicitCwd, FailClosedPreExecutionContainment,
+            FileSizeLimit, FilesystemIsolation, MemoryLimit, NetworkIsolation, PrivilegeReduction,
+            ProcessCountLimit, ProcessTreeContainment, StderrLimit, StdoutLimit, StructuredSpawn,
+            Timeout,
+        };
 
         match self {
             Self::Trusted => IsolationRequirement::new()
