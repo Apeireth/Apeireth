@@ -1,12 +1,15 @@
-//! P-arch (2026-08-27): 把 `apeireth-credentials` 接到 `apeireth-plugin::CredentialResolver` trait。
+//! P-arch (2026-08-27): KeyringCredentialResolver (O-6 重构批次 Refactor-4).
+//!
+//! **位置**: 在 `apeireth-credentials` (foundation) 实现 `apeireth-plugin::CredentialResolver` trait.
+//! 文件名 `keyring_resolver.rs` 比旧名 `plugin_bridge.rs` 更准确 (impl only, 不是 bridge).
 //!
 //! **0 装 PASS**：
-//! - 本文件是**接线 bridge**，不新增 backend
+//! - 本文件是**接线**, 不新增 backend
 //! - backend trait (`KeyringBackend`) 和 impls (`InMemoryKeyring` / `PlatformKeyring` / `EncryptedFileBackend`) 已存在
-//! - bridge 只把 `KeyringError` 转 `Option<Secret>`：找不到/出错 = None（与 EnvCredentialResolver 行为一致）
+//! - resolver 只把 `KeyringError` 转 `Option<Secret>`：找不到/出错 = None（与 EnvCredentialResolver 行为一致）
 //! - 真 secret 0 装脱敏: 走 `Secret::new(buf.expose())` 转 string，`Secret::Debug` 是 `Secret(<redacted>)`
 //!
-//! **架构收益**：
+//! **架构收益** (O-6 锚 9, commit message 必写明):
 //! - `apeireth-credentials` 不再是孤儿（之前 0 依赖方）
 //! - provider / plugin 可以用 keyring 而不只是 env
 //! - runtime 可以用 `KeyringSelector::select(...)` 选 backend 后包装成 `KeyringCredentialResolver` 注入
