@@ -305,7 +305,7 @@ CREATE TABLE IF NOT EXISTS notes (
 );
 CREATE INDEX IF NOT EXISTS idx_notes_time ON notes(timestamp);
 CREATE INDEX IF NOT EXISTS idx_notes_conf ON notes(confidence);
--- Note 可被遗忘/合并 (apeireth_core::Note 文档明确), 不强制 append-only.
+-- Note 可被遗忘/合并 (apeireth_core::kernel::memory::Note 文档明确), 不强制 append-only.
 
 -- === Migration tracking ===
 CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -542,7 +542,7 @@ mod tests {
         use crate::agent_trace::{TraceSpan, TraceSpanKind, TraceSpanStatus};
         use crate::episode::EpisodeStore;
         use crate::{MemoryGovernanceStore, SessionLifecycleStore, TraceStore};
-        use apeireth_core::Episode;
+        use apeireth_core::kernel::memory::Episode;
         // session lifecycle (V5).
         store
             .create_session(
@@ -608,7 +608,7 @@ mod tests {
         use crate::episode::EpisodeStore;
         use crate::MemoryGovernanceStore;
         store
-            .put_episode(&apeireth_core::Episode {
+            .put_episode(&apeireth_core::kernel::memory::Episode {
                 id: "legacy-ep".into(),
                 timestamp: 1,
                 role: "user".into(),

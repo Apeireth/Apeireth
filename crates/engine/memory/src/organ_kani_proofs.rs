@@ -6,7 +6,7 @@ use crate::{
     append_only::kind_from_str, EpisodeQuery, HistoryEntry, StreamKind, Tombstone,
     SHORT_TERM_WINDOW_SECS, WORKING_CAPACITY,
 };
-use apeireth_core::Episode;
+use apeireth_core::kernel::memory::Episode;
 
 fn make_episode(id: &str, session_id: &str, role: &str, content: &str) -> Episode {
     Episode {
