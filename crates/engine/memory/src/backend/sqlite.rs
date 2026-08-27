@@ -7,13 +7,14 @@
 //! - `put_episode`    → `SqliteMemoryStore` 的 `EpisodeStore::put_episode` trait impl
 //! - `get_episode`    → `EpisodeStore::get_episode`
 //! - `recent_episodes` → `EpisodeStore::recent_episodes`
-//! - `append_stream`  → `HistoryStream::insert` (每流有自己 const KIND)
-//! - `list_stream`    → `HistoryStream::query_by_session`
+//! - `append_stream`  → deserialize `serde_json::Value` → `HistoryEntry` → StreamHandle::append
+//! - `list_stream`    → StreamHandle::list_for_session → serialize 列表 → return `Vec<Value>`
 //!
 //! **架构优势**：
-//! - trait 边界清晰（知道"何时调后端"）
-//! - 不破现有 24 个 memory 子模块（零重写 SQL，零迁移风险）
-//! - 未来加 MongoDB / RocksDB 后端时，**只写新 adapter**，不改 memory domain
+//! - trait 边界在 `apeireth_plugin` (Refactor-1, 2026-08-27), impl 在本 crate (engine)
+//! - 单向依赖: memory → plugin (不反向)
+//! - 现有 24 个 memory 子模块 0 重写
+//! - 未来加 MongoDB / RocksDB = 新增本 crate 内的 adapter, 0 改 memory domain
 
 use std::sync::Arc;
 
@@ -21,7 +22,7 @@ use apeireth_core::Episode;
 
 use crate::append_only::{HistoryEntry, HistoryStream};
 use crate::episode::EpisodeStore;
-use crate::{MemoryError, MemoryResult, SqliteMemoryStore, StreamKind};
+use crate::{MemoryError, MemoryResult, SqliteMemoryStore};
 
 use super::{BackendKind, MemoryBackend};
 
@@ -48,7 +49,6 @@ impl SqliteBackend {
         Self { store }
     }
 
-    /// 拿到内部 store（用于走完整 v1 API，如 EpisodeQuery 复合查询）。
     pub fn store(&self) -> &SqliteMemoryStore {
         &self.store
     }
@@ -75,9 +75,11 @@ impl MemoryBackend for SqliteBackend {
         <SqliteMemoryStore as EpisodeStore>::recent_episodes(&*self.store, session_id, n)
     }
 
-    fn append_stream(&self, kind: StreamKind, entry: HistoryEntry) -> MemoryResult<()> {
-        // StreamHandle::new(kind, &conn) 路由到正确的 *Stream
-        // 6 个流都实现 HistoryStream trait (const KIND 不同)
+    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+        // Trait 层传 JSON Value; 内部 deserialize 回 memory 的 HistoryEntry
+        // (0 装: 无 schema 校验; v2.0.0-rc 阶段加严格 schema 验证)
+        let entry: HistoryEntry = serde_json::from_value(entry)?;
+        let kind = stream_name_to_kind(stream_name)?;
         let conn = self.store.conn()?;
         <crate::streams::StreamHandle<'_> as HistoryStream>::append(
             &crate::streams::StreamHandle::new(kind, &conn),
@@ -87,24 +89,44 @@ impl MemoryBackend for SqliteBackend {
 
     fn list_stream(
         &self,
-        kind: StreamKind,
+        stream_name: &str,
         session_id: &str,
         n: usize,
-    ) -> MemoryResult<Vec<HistoryEntry>> {
-        // 通过 StreamHandle::list_for_session 委托
-        // 然后客户端按时间升序取末尾 N 条（与 InMemory/File 行为一致）
+    ) -> MemoryResult<Vec<serde_json::Value>> {
+        let kind = stream_name_to_kind(stream_name)?;
         let conn = self.store.conn()?;
         let mut all = <crate::streams::StreamHandle<'_> as HistoryStream>::list_for_session(
             &crate::streams::StreamHandle::new(kind, &conn),
             session_id,
-            false, // 默认不过滤 tombstone
+            false,
         )?;
         all.sort_by_key(|e| e.created_at);
         if all.len() > n {
             let skip = all.len() - n;
             all.drain(..skip);
         }
-        Ok(all)
+        // 序列化为 trait 要求的 JSON Value
+        Ok(all
+            .into_iter()
+            .map(|e| serde_json::to_value(e).map_err(MemoryError::Json))
+            .collect::<Result<_, _>>()?)
+    }
+}
+
+/// 6 流名 → memory 的 `StreamKind` 映射
+///
+/// 0 装: 字符串硬编码; rc 阶段接 SchemaRegistry 时改
+fn stream_name_to_kind(name: &str) -> MemoryResult<crate::StreamKind> {
+    match name {
+        "thought" => Ok(crate::StreamKind::Thought),
+        "proposal" => Ok(crate::StreamKind::Proposal),
+        "action" => Ok(crate::StreamKind::Action),
+        "relation" => Ok(crate::StreamKind::Relation),
+        "evolution" => Ok(crate::StreamKind::Evolution),
+        "reflection" => Ok(crate::StreamKind::Reflection),
+        other => Err(MemoryError::Invalid(format!(
+            "unknown stream name: {other}; expected one of 6: thought/proposal/action/relation/evolution/reflection"
+        ))),
     }
 }
 
@@ -154,7 +176,6 @@ mod tests {
         let b = fresh();
         let e = ep("ep-1", "sess-1");
         b.put_episode(&e).unwrap();
-        // Episode 没有 PartialEq，字段级对比
         let got = b.get_episode("ep-1").unwrap().expect("episode exists");
         assert_eq!(got.id, e.id);
         assert_eq!(got.timestamp, e.timestamp);
@@ -170,12 +191,22 @@ mod tests {
     fn append_and_list_stream_through_trait() {
         let b = fresh();
         let session = "sess-stream";
-        b.append_stream(StreamKind::Thought, he("t-1", session)).unwrap();
-        b.append_stream(StreamKind::Thought, he("t-2", session)).unwrap();
-        let listed = b.list_stream(StreamKind::Thought, session, 10).unwrap();
+        // Trait 接口走 serde_json::Value (与 HistoryEntry 字段 1:1)
+        let e1 = serde_json::to_value(he("t-1", session)).unwrap();
+        let e2 = serde_json::to_value(he("t-2", session)).unwrap();
+        b.append_stream("thought", e1).unwrap();
+        b.append_stream("thought", e2).unwrap();
+        let listed = b.list_stream("thought", session, 10).unwrap();
         assert_eq!(listed.len(), 2);
-        assert_eq!(listed[0].id, "t-1");
-        assert_eq!(listed[1].id, "t-2");
+        assert_eq!(listed[0]["id"], "t-1");
+        assert_eq!(listed[1]["id"], "t-2");
+    }
+
+    #[test]
+    fn unknown_stream_name_is_rejected() {
+        let b = fresh();
+        let r = b.append_stream("not-a-stream", serde_json::json!({}));
+        assert!(r.is_err(), "0 装: 未知流名必须返错, 不假装");
     }
 
     #[test]
