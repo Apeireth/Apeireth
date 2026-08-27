@@ -13,6 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 apeireth-core = { path = "../../foundation/core" }
+apeireth-credentials = { path = "../../foundation/credentials" }
 apeireth-governance = { path = "../../foundation/governance" }
 apeireth-gateway = { path = "../gateway" }
 apeireth-plugin = { path = "../../foundation/plugin" }
