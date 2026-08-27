@@ -75,7 +75,7 @@ impl FileBackend {
         self.root.join("episodes.jsonl")
     }
 
-    fn stream_path(&self, stream_name: &str) -> PathBuf {
+    fn stream_path(&self, kind: StreamKind) -> PathBuf {
         self.root.join("streams").join(format!("{stream_name}.jsonl"))
     }
 }
@@ -153,7 +153,7 @@ impl MemoryBackend for FileBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
         // 0 装: stream_name 必须已是 6 个固定值之一 (caller 责任)
         // rc 阶段加 SchemaRegistry 验证
         let _ = serde_json::from_value::<HistoryEntry>(entry.clone())?; // schema check
@@ -168,7 +168,7 @@ impl MemoryBackend for FileBackend {
 
     fn list_stream(
         &self,
-        stream_name: &str,
+        kind: StreamKind,
         session_id: &str,
         n: usize,
     ) -> MemoryResult<Vec<serde_json::Value>> {
@@ -298,11 +298,11 @@ mod tests {
     fn stream_roundtrip() {
         let (b, _d) = fresh();
         let session = "s1";
-        b.append_stream("thought", serde_json::to_value(he("t1", session)).unwrap())
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t1", session)).unwrap())
             .unwrap();
-        b.append_stream("thought", serde_json::to_value(he("t2", session)).unwrap())
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t2", session)).unwrap())
             .unwrap();
-        let list = b.list_stream("thought", session, 10).unwrap();
+        let list = b.list_stream(crate::from_str_core("thought").expect("valid stream"), session, 10).unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0]["id"], "t1");
         assert_eq!(list[1]["id"], "t2");
@@ -316,11 +316,11 @@ mod tests {
         alive.tombstoned_at = None;
         let mut dead = he("d", session);
         dead.tombstoned_at = Some(1_700_000_500);
-        b.append_stream("action", serde_json::to_value(alive).unwrap())
+        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(alive).unwrap())
             .unwrap();
-        b.append_stream("action", serde_json::to_value(dead).unwrap())
+        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(dead).unwrap())
             .unwrap();
-        let list = b.list_stream("action", session, 10).unwrap();
+        let list = b.list_stream(crate::from_str_core("action").expect("valid stream"), session, 10).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0]["id"], "a");
     }
@@ -331,7 +331,7 @@ mod tests {
         {
             let b = FileBackend::new(dir.path()).unwrap();
             b.put_episode(&ep("persist-1", "s")).unwrap();
-            b.append_stream("action", serde_json::to_value(he("p-1", "s")).unwrap())
+            b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(he("p-1", "s")).unwrap())
                 .unwrap();
         }
         let b2 = FileBackend::new(dir.path()).unwrap();
@@ -341,7 +341,7 @@ mod tests {
             .expect("persisted episode");
         assert_eq!(got.id, "persist-1");
         assert_eq!(got.session_id, "s");
-        let list = b2.list_stream("action", "s", 10).unwrap();
+        let list = b2.list_stream(crate::from_str_core("action").expect("valid stream"), "s", 10).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0]["id"], "p-1");
     }

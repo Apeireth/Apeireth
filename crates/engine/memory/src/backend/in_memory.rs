@@ -1,3 +1,4 @@
+use apeireth_core::kernel::StreamKind;
 //! InMemory MemoryBackend（仅测试，进程重启数据丢失）。
 //!
 //! 0 装 PASS：进程结束 = 数据全无。**不**用于生产。`BackendKind::InMemory` 明确标识此点。
@@ -80,9 +81,9 @@ impl MemoryBackend for InMemoryBackend {
         Ok(all)
     }
 
-    fn append_stream(&self, stream_name: &str, entry: serde_json::Value) -> MemoryResult<()> {
+    fn append_stream(&self, kind: StreamKind, entry: serde_json::Value) -> MemoryResult<()> {
         let entry: HistoryEntry = serde_json::from_value(entry)?;
-        let kind = stream_name_to_kind(stream_name)?;
+        
         let mut streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, entry.session_id.clone().unwrap_or_default());
         let list = streams.entry(key).or_insert_with(Vec::new);
@@ -92,11 +93,11 @@ impl MemoryBackend for InMemoryBackend {
 
     fn list_stream(
         &self,
-        stream_name: &str,
+        kind: StreamKind,
         session_id: &str,
         n: usize,
     ) -> MemoryResult<Vec<serde_json::Value>> {
-        let kind = stream_name_to_kind(stream_name)?;
+        
         let streams = self.streams.lock().expect("InMemoryBackend poisoned");
         let key = (kind, session_id.to_string());
         let list = match streams.get(&key) {
@@ -198,11 +199,11 @@ mod tests {
     fn stream_roundtrip() {
         let b = InMemoryBackend::new();
         let session = "s1";
-        b.append_stream("thought", serde_json::to_value(he("t1", session)).unwrap())
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t1", session)).unwrap())
             .unwrap();
-        b.append_stream("thought", serde_json::to_value(he("t2", session)).unwrap())
+        b.append_stream(crate::from_str_core("thought").expect("valid stream"), serde_json::to_value(he("t2", session)).unwrap())
             .unwrap();
-        let list = b.list_stream("thought", session, 10).unwrap();
+        let list = b.list_stream(crate::from_str_core("thought").expect("valid stream"), session, 10).unwrap();
         assert_eq!(list.len(), 2);
         assert_eq!(list[0]["id"], "t1");
         assert_eq!(list[1]["id"], "t2");
@@ -216,11 +217,11 @@ mod tests {
         alive.tombstoned_at = None;
         let mut dead = he("d", session);
         dead.tombstoned_at = Some(1_700_000_500);
-        b.append_stream("action", serde_json::to_value(alive).unwrap())
+        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(alive).unwrap())
             .unwrap();
-        b.append_stream("action", serde_json::to_value(dead).unwrap())
+        b.append_stream(crate::from_str_core("action").expect("valid stream"), serde_json::to_value(dead).unwrap())
             .unwrap();
-        let list = b.list_stream("action", session, 10).unwrap();
+        let list = b.list_stream(crate::from_str_core("action").expect("valid stream"), session, 10).unwrap();
         assert_eq!(list.len(), 1);
         assert_eq!(list[0]["id"], "a");
     }
