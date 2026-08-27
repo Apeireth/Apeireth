@@ -1,0 +1,20 @@
+[package]
+name = "apeireth-perception"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Apeireth 感知层 trait (P-arch 2026-08-27, A3): 5 modality (Text/Voice/Vision/Tactile/Command) + Attention 策略 (TopK/Threshold) + 统一 PerceptionEvent. v2.0 alpha 仅 Text 真实现; Voice/Vision/Tactile 是 forward-declared 0 装 (v2.1 路线)"
+
+[dependencies]
+apeireth-core = { path = "../../foundation/core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lib]
+name = "apeireth_perception"
+path = "src/lib.rs"
+
+[lints]
+workspace = true
