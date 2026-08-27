@@ -2,7 +2,7 @@ name: M2B-XV three-OS process isolation validation
 
 on:
   push:
-    branches: [reconstruct_v2]
+    branches: [main]
   workflow_dispatch:
 
 env:

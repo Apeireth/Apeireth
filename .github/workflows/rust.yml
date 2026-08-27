@@ -20,7 +20,7 @@ name: Rust tests (OS matrix + cargo-nextest)
 
 on:
   push:
-    branches: [master, main, rebase/d7d8-into-integration, reconstruct_v2]
+    branches: [main]
   pull_request:
     branches: ['**']
   workflow_dispatch:
