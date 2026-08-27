@@ -18,8 +18,8 @@ use apeireth_plugin::{
     ProviderCapability, ProviderError, ToolCapability,
 };
 use apeireth_protocol::canonical::{
-    ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse, NormalizedTool,
-    NormalizedUsage, ToolCall, ToolParameters, ToolResult,
+    ContentPart, ModelDescriptor, ModelFeature, NormalizedRequest, NormalizedResponse,
+    NormalizedTool, NormalizedUsage, ToolCall, ToolParameters, ToolResult,
 };
 use apeireth_runtime::canonical::{
     ApprovalDecision, ApprovalResolution, ApprovalStatus, InMemorySessionStore, Runtime,
@@ -710,6 +710,14 @@ async fn expired_approval_does_not_execute() {
         stored.approvals.get(&view.approval_id).unwrap().status,
         ApprovalStatus::Expired
     );
+    let messages = stored
+        .messages
+        .iter()
+        .map(|message| ContentPart::join_text(&message.content))
+        .collect::<Vec<_>>();
+    assert!(messages
+        .iter()
+        .any(|message| message.contains("operation expired before tool dispatch")));
 }
 
 #[tokio::test]
