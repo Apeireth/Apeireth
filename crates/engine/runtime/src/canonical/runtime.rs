@@ -43,6 +43,7 @@ use apeireth_plugin::{
 };
 
 use super::error::{RuntimeError, RuntimeResult};
+use super::module::{AgentModule, DEFAULT_MAX_MODULE_INVOCATIONS};
 use super::provider::ProviderRouter;
 use super::session::{InMemorySessionStore, SessionManager, SessionStore};
 
@@ -65,6 +66,8 @@ pub struct RuntimeConfig {
     pub max_rounds: u32,
     /// How long a pending approval stays resumable, in milliseconds.
     pub approval_ttl_ms: u64,
+    /// Maximum isolated module provider calls in one top-level turn.
+    pub max_module_invocations: usize,
 }
 
 impl Default for RuntimeConfig {
@@ -73,6 +76,7 @@ impl Default for RuntimeConfig {
             default_model: None,
             max_rounds: DEFAULT_MAX_ROUNDS,
             approval_ttl_ms: DEFAULT_APPROVAL_TTL_MS,
+            max_module_invocations: DEFAULT_MAX_MODULE_INVOCATIONS,
         }
     }
 }
@@ -105,6 +109,7 @@ pub struct Runtime {
     pub(super) governance: Arc<dyn GovernanceHook>,
     pub(super) clock: Arc<dyn Clock>,
     pub(super) config: RuntimeConfig,
+    pub(super) modules: Vec<Arc<dyn AgentModule>>,
     pub(super) session_locks: SessionLocks,
 }
 
@@ -153,6 +158,11 @@ impl Runtime {
         &self.providers
     }
 
+    /// The cognitive modules registered with this runtime, in execution order.
+    pub fn modules(&self) -> &[Arc<dyn AgentModule>] {
+        &self.modules
+    }
+
     /// Stop every plugin in reverse start order.
     ///
     /// Returns the failures encountered; shutdown continues past each one.
@@ -169,6 +179,7 @@ impl std::fmt::Debug for Runtime {
             .field("providers", &self.providers.len())
             .field("governance", &self.governance.name())
             .field("config", &self.config)
+            .field("modules", &self.modules.len())
             .finish_non_exhaustive()
     }
 }
@@ -184,6 +195,7 @@ pub struct RuntimeBuilder {
     session_store: Arc<dyn SessionStore>,
     governance: Arc<dyn GovernanceHook>,
     plugins: Vec<Arc<dyn Plugin>>,
+    modules: Vec<Arc<dyn AgentModule>>,
     fallback_order: Option<Vec<CapabilityId>>,
     config: RuntimeConfig,
 }
@@ -203,6 +215,7 @@ impl RuntimeBuilder {
             session_store: Arc::new(InMemorySessionStore::new()),
             governance: Arc::new(AllowAll),
             plugins: Vec::new(),
+            modules: Vec::new(),
             fallback_order: None,
             config: RuntimeConfig::default(),
         }
@@ -246,6 +259,13 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Register a cognitive module. Modules run in registration order.
+    #[must_use]
+    pub fn with_module(mut self, module: Arc<dyn AgentModule>) -> Self {
+        self.modules.push(module);
+        self
+    }
+
     /// Order in which providers are tried.
     ///
     /// Providers absent from `order` remain usable and are tried after every
@@ -277,6 +297,13 @@ impl RuntimeBuilder {
         self
     }
 
+    /// Set the per-turn budget for isolated module provider calls.
+    #[must_use]
+    pub fn with_max_module_invocations(mut self, invocations: usize) -> Self {
+        self.config.max_module_invocations = invocations;
+        self
+    }
+
     /// Register the plugins, start them in dependency order, and assemble.
     ///
     /// Plugins are started here rather than lazily on first use, so that a
@@ -287,6 +314,26 @@ impl RuntimeBuilder {
             return Err(RuntimeError::misconfigured(
                 "max_rounds must be at least 1, otherwise no turn can ever run",
             ));
+        }
+        if self.config.max_module_invocations == 0 {
+            return Err(RuntimeError::misconfigured(
+                "max_module_invocations must be at least 1",
+            ));
+        }
+
+        let mut module_ids = std::collections::BTreeSet::new();
+        for module in &self.modules {
+            if module.manifest().id.is_empty() {
+                return Err(RuntimeError::misconfigured(
+                    "registered modules must have a non-empty id",
+                ));
+            }
+            if !module_ids.insert(module.manifest().id.clone()) {
+                return Err(RuntimeError::misconfigured(format!(
+                    "duplicate module id {:?}",
+                    module.manifest().id
+                )));
+            }
         }
 
         let mut manager = PluginManager::new();
@@ -317,6 +364,7 @@ impl RuntimeBuilder {
             governance: self.governance,
             clock: self.clock,
             config: self.config,
+            modules: self.modules,
             session_locks: SessionLocks::default(),
         })
     }
