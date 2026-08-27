@@ -10,14 +10,20 @@
 pub mod canonical;
 
 pub use canonical::{
-    operation_fingerprint, operation_fingerprint_with_invocation, plugin_ids, AgentModule,
-    ApprovalDecision, ApprovalResolution, ApprovalStatus, ExecutionTrace, HookPoint,
-    InMemorySessionStore, InvocationContext, InvocationOrigin, ModuleContext, ModuleDirective,
+    operation_fingerprint, operation_fingerprint_with_invocation, plugin_ids,
+    turn_request_from_perception, AgentModule, ApprovalDecision, ApprovalResolution,
+    ApprovalStatus, CognitiveBackends, CognitiveModuleConfig, CognitiveModuleEvent,
+    CognitiveTelemetry, CouncilModule, ExecutionTrace, HookPoint, InMemorySessionStore,
+    InvocationContext, InvocationOrigin, JudgeConfig, JudgeModule, JudgeObservations, JudgeResult,
+    JudgeVerdict, MemoryRecallModule, MemoryWritebackModule, ModuleContext, ModuleDirective,
     ModuleError, ModuleInvocationError, ModuleInvocationRequest, ModuleInvocationResponse,
-    ModuleInvoker, ModuleManifest, ModuleOutcome, PendingApproval, PendingApprovalView,
-    PromptOverlay, ProviderHealth, ProviderRouter, RoutedCompletion, Runtime, RuntimeBuilder,
-    RuntimeConfig, RuntimeError, RuntimeResult, Session, SessionEvent, SessionEventKind,
+    ModuleInvoker, ModuleManifest, ModuleMetricsSnapshot, ModuleOutcome, PendingApproval,
+    PendingApprovalView, PreferenceRecallModule, ProductionCognitiveModules, PromptOverlay,
+    ProviderHealth, ProviderRouter, RoutedCompletion, Runtime, RuntimeBuilder, RuntimeConfig,
+    RuntimeError, RuntimeResult, SelfAssessmentModule, Session, SessionEvent, SessionEventKind,
     SessionManager, SessionStore, SqliteSessionStore, TraceEntry, TraceEvent, TurnOutcome,
-    TurnRequest, TurnResponse, DEFAULT_MAX_INVOCATION_DEPTH, DEFAULT_MAX_MODULE_INVOCATIONS,
-    DEFAULT_MAX_ROUNDS,
+    TurnRequest, TurnResponse, COUNCIL_MODULE_ID, DEFAULT_MAX_INVOCATION_DEPTH,
+    DEFAULT_MAX_MODULE_INVOCATIONS, DEFAULT_MAX_ROUNDS, DEFERRED_COGNITIVE_SLOTS, JUDGE_MODULE_ID,
+    MEMORY_RECALL_MODULE_ID, MEMORY_WRITEBACK_MODULE_ID, PREFERENCE_RECALL_MODULE_ID,
+    SELF_ASSESSMENT_MODULE_ID,
 };
