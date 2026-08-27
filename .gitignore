@@ -40,7 +40,7 @@ fix_*.diff
 
 
 # R25 防御: apeireth-sdk 虚拟环境 (Cargo.toml 已无 pyo3, 别再创建 .venv)
-crates/apeireth-sdk/.venv/
+crates/adapters/sdk/.venv/
 
 # 一次性 trash (V1271 smoke + 类似)
 _v1271_smoke_trash_*/
