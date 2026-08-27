@@ -22,12 +22,12 @@ Source-of-Truth: CHANGELOG.md + ARCHITECTURE.md + docs/01-architecture/ 系列�
 
 - **v1.0.0 已发布**（2026-08-18，tag `v1.0.0` → `993e9107`；旧线归档 `archive/v1.0-master`）。
 - **reconstruct_v2 工程重构第一阶段完成**（2026-08-23 → 08-27，tag `v2.0.0-alpha.1` → `d6910cf7`）：
-  - 旧 86-crate 工作区（58.8 万行 / 23,806+ 测试）整体归档 `legacy/`（workspace exclude）；
-  - 新单一工作区 **13 crates / 72,174 行 / 1338 tests**，按职责分组（foundation/engine/capabilities/adapters）；
+  - 旧 86-crate 工作区（58.8 万行 / 23,806 测试）整体归档 `legacy/`（workspace exclude，ref-only）；
+  - 新单一工作区 **15 crates / ~74k 行 / ~1476 tests**，按职责分组（foundation 7 / engine 5 / capabilities 1 / adapters 3）；
   - 嵌套 `reconstruction_v2/` 工作区从 git 删除（本地磁盘残留 target/db 未跟踪垃圾，可安全清理）；
   - **agent loop 真实现**——旧审计结论"任何地方都没有 agent loop"已被 `crates/engine/runtime/src/canonical/execute.rs` 推翻；
   - 3 家 provider 插件化（MiniMax/Anthropic/OpenAI-compatible）、5 内置工具（3 只读默认可用；shell/fetch 默认关）、三 OS 进程封装（Windows Job Object 完整 / Linux·macOS 进程组部分）；
-  - CI 全绿：cargo-nextest 1338、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
+  - CI 全绿：cargo-nextest ~1476、clippy 3 档、fmt、audit、deny、miri、rustdoc、coverage、13 键测试契约、M2B/M2C/M3A 三 OS 验证。
 - **已知缺口（诚实）**：13 键 verdict cache 已拍板降级为哲学标准（`philosophy.rs::RUNTIME_ENFORCED = false` 显式标注，详见 `docs/04-internal/v2-unabsorbed-features.md` §A4 与 `docs/04-internal/scene-d-v2-plan.md` §3.4），不接 runtime 强制机制；`apeireth-credentials` 未接线；M1B 记忆/向量/图未移植；MCP、companion 器官、voice/screen 未移植。
 - **v2.0.0-alpha.1 = 骨架 + 主链的 alpha**：governance P0 已 ✅ 接线（upstream `873d2857`），13 键降级决策 P0 已 ✅ 拍板完成，场景 D 路线见 `docs/04-internal/scene-d-v2-plan.md`。
 
@@ -118,7 +118,7 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 |---|---|---|
 | 生产路径 governance（已 ✅） | PII/注入/凭据泄漏 3 hook 已装（upstream `873d2857`） | **13 键 verdict cache 已降级为哲学标准**（`RUNTIME_ENFORCED = false`，映射到 5 原则洋葱）；**场景 D 长程 AI 判断待评估**（见 `docs/04-internal/scene-d-v2-plan.md`）|
 | 功能退坡（26 项 Lost Capabilities） | 产品能力暂时不可用 | 按 §4 P3-P7 顺序恢复；legacy/ 保留全部实现 |
-| 文档数字矛盾（23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | P1 本批统一为实测值 |
+| 文档数字矛盾（v1 era 残留：23,874 vs 23,806；3 vs 5 provider 等） | 误导接手者 | ✅ 文档对账批已统一为 v2 实测值（1476 tests / 15 crates / 3 provider canonical）|
 | `crates/_archived` 1.4GB 未跟踪构建垃圾 | 本地仓库膨胀 | 可删除（git 历史已含） |
 | 本地 `reconstruction_v2/` 26GB 未跟踪垃圾 | 磁盘占用 | 可删除 |
 

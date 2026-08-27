@@ -78,8 +78,8 @@
 |---|---|
 | 分支 | `main` @ `d6910cf7`（默认分支；旧 master 归档 `archive/v1.0-master`） |
 | Tag | `v2.0.0-alpha.1` → `d6910cf7` |
-| Workspace | 13 crates（foundation 5 / engine 4 / capabilities 1 / adapters 3），72,174 行 Rust |
-| 测试 | 1338 passed / 0 failed（cargo-nextest，3 OS） |
+| Workspace | **15 crates**（foundation 7 / engine 5 / capabilities 1 / adapters 3），**~74k** 行 Rust（不含 legacy/） |
+| 测试 | **~1476 passed / 0 failed**（cargo-nextest，3 OS） |
 | CI | 全绿：clippy 3 档 / fmt / audit / deny / miri / rustdoc / coverage / 13 键契约 / M2B·M2C·M3A 三 OS |
 | v1 代码 | 86 crates 整体在 `legacy/`（排除构建） |
 
