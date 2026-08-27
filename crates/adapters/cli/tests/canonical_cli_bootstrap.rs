@@ -13,7 +13,9 @@
 use std::sync::Mutex;
 
 use apeireth_cli::{build_canonical_runtime_from_env, execute_canonical_cli_turn};
-use apeireth_core::kernel::SessionId;
+use apeireth_core::kernel::{CapabilityId, SessionId, TraceId};
+use apeireth_governance::{Action, Decision, GovernanceHook, GovernanceRequest};
+use serde_json::Value;
 
 /// Serializes env-mutating tests (std::env is process-global).
 static ENV_LOCK: Mutex<()> = Mutex::new(());
@@ -82,6 +84,7 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
     let _g_url = EnvGuard::set("APEIRETH_API_URL", Some(&base_url));
     let _g_models = EnvGuard::set("APEIRETH_API_MODELS", Some("MiniMax-M3"));
     let _g_model = EnvGuard::set("APEIRETH_MODEL", Some("MiniMax-M3"));
+    let _g_local_read = EnvGuard::set("APEIRETH_ENABLE_LOCAL_READ_TOOLS", None);
     // Anthropic key absent — its provider is still registered (keyless), but
     // would fail explicitly if routed to. Minimax serves this turn.
     let _g_ant_key = EnvGuard::set("APEIRETH_ANTHROPIC_KEY", None);
@@ -103,6 +106,23 @@ async fn the_cli_bootstrap_registers_both_canonical_providers_and_serves_minimax
         !ids.iter().any(|id| id.starts_with("compat.")),
         "no compatibility bridge provider: {ids:?}"
     );
+
+    let shell = CapabilityId::new("tool.shell").unwrap();
+    let arguments = Value::Null;
+    let governance_verdict = runtime
+        .governance()
+        .evaluate_verbose(&GovernanceRequest::new(
+            Action::CapabilityDispatch {
+                capability: &shell,
+                arguments: &arguments,
+            },
+            SessionId::new(),
+            TraceId::new(),
+            1,
+        ))
+        .await;
+    assert!(matches!(governance_verdict.decision, Decision::Deny { .. }));
+    assert_eq!(governance_verdict.hook, "permission_governance");
 
     let outcome = execute_canonical_cli_turn(&runtime, "hi", None, None)
         .await
