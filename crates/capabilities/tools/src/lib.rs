@@ -21,6 +21,8 @@ pub mod repo;
 pub mod search;
 mod sensitive_path;
 pub mod shell;
+// P-arch (2026-08-27): B5 process supervisor trait 骨架. 详见 ROADMAP §4 P5.
+pub mod supervisor;
 
 pub use egress::{ControlledEgress, EgressAllowList, EgressError, EgressPolicy};
 pub use fetch::{FetchConfig, FetchTool};
