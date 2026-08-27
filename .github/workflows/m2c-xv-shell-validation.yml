@@ -2,7 +2,7 @@ name: M2C-XV three-OS Trusted Shell validation
 
 on:
   push:
-    branches: [reconstruct_v2]
+    branches: [main]
   workflow_dispatch:
 
 env:
