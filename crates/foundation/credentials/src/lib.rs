@@ -53,6 +53,7 @@
 pub mod error;
 pub mod gate;
 pub mod keyring;
+pub mod plugin_bridge;
 pub mod secret;
 pub mod store;
 
@@ -68,6 +69,10 @@ pub use keyring::{
 };
 pub use secret::{mask_for_display, redact_len, SecretBuf, SecretString};
 pub use store::{validate_service_name, CredentialsStore, FileCredentialsStore};
+
+/// P-arch (2026-08-27): bridge 到 `apeireth_plugin::CredentialResolver` trait.
+/// runtime 可用此把 keyring / encrypted file 后端注入到 plugin 体系。
+pub use plugin_bridge::KeyringCredentialResolver;
 
 /// 借 VCP 字段数 (编译期自审锚, 对照 apeireth-tool-approval 惯例)。
 ///
