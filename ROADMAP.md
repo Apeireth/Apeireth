@@ -60,18 +60,30 @@ v1.0.0 实际发布路径（R128-R178 + 1.0-final）与 post-1.0 增量（PR #1 
 
 ---
 
-## 3. 当前状态（v2.0.0-alpha.1，2026-08-27）
+## 3. 当前状态（v2.0.0-alpha.1，2026-08-27 收盘）
 
 | 项 | 值（实测） |
 |---|---|
-| 分支 | `main` @ `d6910cf7`（默认分支） |
+| 分支 | `main` @ `9080cc93`（默认分支，v1 → `archive/v1.0-master`） |
 | Tag | `v2.0.0-alpha.1` → `d6910cf7`（v1.0.0 / v1.5.0 保留） |
-| Workspace | 13 crates（foundation 5 / engine 4 / capabilities 1 / adapters 3） |
-| 代码量 | 72,174 行 Rust（不含 legacy/） |
-| 测试 | 1338 passed / 0 failed（cargo-nextest，3 OS） |
-| CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） |
+| Workspace | **15 crates**（foundation 7 / engine 5 / capabilities 1 / adapters 3）—— 新增 `apeireth-experience` (B1) / `apeireth-perception` (A3) / `apeireth-orchestration` (A1+A2+场景D) |
+| 代码量 | ~74k 行 active（不含 legacy/） |
+| 测试 | ~1476 passed / 0 failed |
+| CI | 全绿（lint/fmt/audit/deny/miri/rustdoc/coverage/13 键契约/M2B/M2C/M3A 三 OS） + `cargo clippy --workspace --all-targets --locked -- -D warnings` 0 警告 |
 | 旧 gate | `release-prep`、`pii-leak-detection` 保持 master-only，不在 main 跑 |
-| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4）|
+| 生产安全现状 | 工具层 shell/fetch 默认关 + **P0 governance 已装 (upstream `873d2857`)** = `PermissionGovernanceHook + CredentialDisclosureHook + PromptInjectionHook`；**13 键 verdict cache 已降级**（P0 拍板完成，2026-08-27，5 维分析：self-introspection 6 数量级延迟 + 0 模型污染路径 + 场景 D 覆盖，详 `v2-unabsorbed-features.md` §A4） |
+| ROADMAP §4 P1-P6 | 全部完成（trait 边界 + 0 装占位）：A4 MemoryBackend / B4 sovereignty M-of-N / credentials 接线 / core drain / B1 Experience / A3 perception / B5 process supervisor / A1 council / A2 team-lead / 场景 D 例 1-3 |
+
+### 3.5 阶段表（含 v2.0.0-rc.1 时间表）
+
+| 阶段 | 状态 | tag | 关键标志 | 预计日期 | 工作量 |
+|---|---|---|---|---|---|
+| **v1.0.0** | ✅ 已发布（历史） | `v1.0.0` → `993e9107` | 86-crate + 23k tests + 9 organ 完整 + companion_serve | 2026-08-18 已发 | — |
+| **v2.0.0-alpha.1** | ✅ 已发布（当前） | `v2.0.0-alpha.1` → `d6910cf7` / main = `9080cc93` | 15-crate 工程重构 + governance P0 + 13 键降级 + ROADMAP §4 P1-P6 trait 边界 | 2026-08-27 已发 | — |
+| **v2.0.0-rc.1** | 🎯 下一阶段 | `v2.0.0-rc.1`（待发） | alpha trait 接真 backend：MemoryBackend SQLite impl / Experience / PreferenceStore / Council multi-LLM / Orchestrator runtime LLM harness / keyring / process supervisor tokio | **2026-12 月**（预计） | 14-19 周一人 fulltime（10 个 RC 任务，per `docs/04-internal/v2.0.0-rc-roadmap.md`） |
+| **v2.0.0** | 远期 | `v2.0.0`（待发） | rc 全绿 + 至少 1 器官移植（W1/W2/E4/F1/F6 选 1） + frontend companion-desktop 接入 v2 gateway | **2027-02-04 月**（预计） | rc 后约 6-8 周 |
+| **v2.x (商业化)** | 远期 | — | 多用户 / 跨载体 / 租赁 / marketplace | 2027-Q3+ | — |
+| v1 (legacy) | 维护 | `v1.0.0` / `archive/v1.0-master` | 86-crate 完整功能 + 9 organ + companion；v2 rc 后只修严重 bug | 永久 | — |
 
 ---
 
