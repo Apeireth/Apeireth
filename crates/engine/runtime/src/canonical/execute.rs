@@ -453,6 +453,16 @@ impl Runtime {
                 },
                 self.clock.as_ref(),
             );
+            // Expiration permanently ends the paused turn. Close the frozen
+            // assistant tool-call batch so a later turn cannot send an
+            // orphaned tool call back to a provider.
+            Self::append_skipped_tool_results(
+                &mut session,
+                &approval.continuation.tool_calls,
+                approval.continuation.next_tool_index,
+                "operation expired before tool dispatch",
+                self.clock.as_ref(),
+            );
             self.sessions.save(&session).await?;
             return Ok(ApprovalResolution::Expired);
         }
