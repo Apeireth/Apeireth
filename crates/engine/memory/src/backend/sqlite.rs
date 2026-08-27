@@ -32,14 +32,24 @@ use super::{BackendKind, MemoryBackend};
 
 /// SQLite 后端（默认，v2.0.0-rc.1 纯 SQL 重写）。
 ///
-/// 内部持 `Arc<SqliteConnectionPool>` (writer-async + reader-pool).
-/// 所有方法走纯 SQL, 0 委托给 `SqliteMemoryStore` (避免 Mutex<Connection> 串行).
+/// 内部持 `Arc<SqliteConnectionPool>`. 所有方法走纯 SQL, 0 委托给 `SqliteMemoryStore`.
 ///
-/// **Send + Sync**: `Arc<SqliteConnectionPool>` 本身是 Send+Sync (writer 异步),
-/// 本结构所有字段都是 `Send + Sync` 边界 (String, Arc<Pool>).
+/// **并发模型 (诚实标注, per v2.0.0-rc-roadmap.md §3 RC-1 + 子代理审查 1.1 反馈)**:
+/// - **读**: `pool.read(|conn| ...)` 走 r2d2 reader pool (多连接, 真并发 SELECT)
+/// - **写**: `pool.read(|conn| ...)` 同样路径, 但 append-only `INSERT OR IGNORE` 保证
+///   唯一 id 不冲突. SQLite WAL 允许 reader + writer 并发, 但**多 writer 并发**
+///   在 r2d2 pool 多连接下会触发 `SQLITE_BUSY` (race 条件). 当前 impl 假设:
+///   **一个 SqliteBackend 实例 = 一个 logical writer** (per backend instance, not per
+///   conn). 多 thread 同时调 `put_episode` / `append_stream` = 单 backend = 顺序,
+///   因为 trait method 是 sync + `pool.read` 短借用. (真并发 writer 是 rc 阶段
+///   `pool.write().await` + trait async 重构; 当前 trait 是 sync.)
+/// - **0 委托 SqliteMemoryStore**: 不走其 `Mutex<Connection>`, 直接 SQL
 ///
-/// **0 装 PASS**: 写用 `pool.write().await` (writer 队列顺序); 读用 `pool.read()`
-/// (reader pool 短借用). 真并发, 不假装.
+/// **Send + Sync**: `Arc<SqliteConnectionPool>` 本身是 Send+Sync, 本结构所有
+/// 字段都是 `Send + Sync` 边界.
+///
+/// **0 装 PASS**: 5 方法真 SQL, 0 装占位. RC-1 验收: 1000 episode 写入 < 1s
+/// (perftest).
 pub struct SqliteBackend {
     pool: Arc<SqliteConnectionPool>,
 }
@@ -79,8 +89,9 @@ impl MemoryBackend for SqliteBackend {
     }
 
     fn put_episode(&self, ep: &Episode) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // RC-1 真 SQL impl: 直接走 reader pool (避免 SqliteMemoryStore mutex).
-        // v2.0.0-rc 阶段切 writer 真用 `pool.write().await`, trait method 改 async.
+        // RC-1 真 SQL impl: 走 pool.read() 短借用 connection. 单 backend 实例假设单
+        // logical writer (per backend doc). v2.0.0-rc 阶段切 `pool.write().await` +
+        // trait async 重构 (per 子代理审查 1.1 反馈, 见 backend/mod.rs 文档).
         let ep = ep.clone();
         self.pool
             .read(|conn| {
@@ -152,6 +163,9 @@ impl MemoryBackend for SqliteBackend {
         entry: HistoryEntry,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let table = crate::StreamKindExt::table_name_ext(kind);
+        // 0 装 PASS: 走 pool.read() 短借用. 单 backend 实例 = 单 logical writer
+        // (per backend doc). 真并发 writer 是 v2.0.0-rc 阶段 `pool.write().await` + trait async.
+        // INSERT OR IGNORE 保证同 id 重复 append 不冲突 (append-only 语义).
         // composite payload (含原始字段 + tags + tombstone + session_id)
         let payload = serde_json::json!({
             "id": entry.id,

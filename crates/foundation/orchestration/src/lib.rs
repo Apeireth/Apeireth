@@ -10,7 +10,9 @@
 //! - `Council::decide(proposal) -> CouncilVerdict` (按住 + 多意见加权)
 //! - `Orchestrator::dispatch(spec) -> SubagentOutcome` (调 subagent)
 //! - `SubagentSpec` (plan/impl/review 等 role + 隔离 LLM 实例 + JSON protocol)
-//! - `SelfAssessmentCache` (scene-d 例 2 触发)
+//!
+//! **SelfAssessmentCache** (scene-d 例 2 触发) 移到 `apeireth-plugin::self_assessment` 模块
+//! (canonical 单 source of truth, per 子代理审查 1.2, 2026-08-27). 本 crate 0 重复定义.
 //!
 //! **0 装 PASS (v2.0 alpha)**:
 //! - `Council::default()` 返 7 个 no-op advisor (全 Allow); 真 council
@@ -360,76 +362,12 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
-// ============================================
-// SelfAssessmentCache (scene-d 例 2)
-// ============================================
-
-/// 自评估条目 (scene-d 例 2 — multi-instance 评审写回)
-#[derive(Clone, Serialize, Deserialize)]
-pub struct SelfAssessment {
-    /// 任务 id
-    pub task_id: String,
-    /// 评审轮次 (每 N turn 一次)
-    pub round: u32,
-    /// 目标对齐 (0.0-1.0, multi-instance 评审输出)
-    pub alignment: f64,
-    /// 完成质量 (0.0-1.0)
-    pub quality: f64,
-    /// 偏差报告
-    pub deviations: Vec<Deviation>,
-    /// 时间戳
-    pub assessed_at: i64,
-    /// 评审者 subagent id
-    pub reviewer_id: String,
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct Deviation {
-    /// 哪个原则或目标被偏离
-    pub from_goal: String,
-    /// 严重性 (0.0-1.0)
-    pub severity: f64,
-    /// 证据
-    pub evidence: String,
-}
-
-pub struct SelfAssessmentCache {
-    assessments: std::sync::Mutex<Vec<SelfAssessment>>,
-}
-
-impl SelfAssessmentCache {
-    pub fn new() -> Self {
-        Self {
-            assessments: std::sync::Mutex::new(Vec::new()),
-        }
-    }
-
-    pub fn record(&self, sa: SelfAssessment) {
-        if let Ok(mut g) = self.assessments.lock() {
-            g.push(sa);
-        }
-    }
-
-    pub fn recent_for_task(&self, task_id: &str, n: usize) -> Vec<SelfAssessment> {
-        self.assessments
-            .lock()
-            .map(|g| {
-                g.iter()
-                    .rev()
-                    .filter(|sa| sa.task_id == task_id)
-                    .take(n)
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-}
-
-impl Default for SelfAssessmentCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+// SelfAssessmentCache (scene-d 例 2) **0 在此 crate** (per 子代理审查 1.2):
+// 之前这里有 `SelfAssessment` / `Deviation` / `SelfAssessmentCache` 同名不同定义
+// (plugin::SelfAssessment 字段多, 含 id + reviewer_id, 比本处的字段全).
+// **单一 source of truth**: plugin::self_assessment::SelfAssessment 是 canonical
+// 类型, plugin::self_assessment::SelfAssessmentStore 是 trait.
+// Orchestration 改为注入 `Arc<dyn SelfAssessmentStore>`, 0 重复定义.
 
 #[cfg(test)]
 mod tests {
@@ -483,46 +421,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn self_assessment_cache_record_and_query() {
-        let cache = SelfAssessmentCache::new();
-        let task = "task-1";
-        cache.record(SelfAssessment {
-            task_id: task.into(),
-            round: 1,
-            alignment: 0.9,
-            quality: 0.85,
-            deviations: vec![],
-            assessed_at: 1_700_000_000,
-            reviewer_id: "reviewer-1".into(),
-        });
-        cache.record(SelfAssessment {
-            task_id: task.into(),
-            round: 2,
-            alignment: 0.7,
-            quality: 0.6,
-            deviations: vec![Deviation {
-                from_goal: "stay minimal".into(),
-                severity: 0.3,
-                evidence: "added extra config".into(),
-            }],
-            assessed_at: 1_700_001_000,
-            reviewer_id: "reviewer-2".into(),
-        });
-        cache.record(SelfAssessment {
-            task_id: "other-task".into(),
-            round: 1,
-            alignment: 1.0,
-            quality: 1.0,
-            deviations: vec![],
-            assessed_at: 1_700_002_000,
-            reviewer_id: "r".into(),
-        });
-        let recent = cache.recent_for_task(task, 5);
-        assert_eq!(recent.len(), 2);
-        assert_eq!(recent[0].round, 2);
-        assert_eq!(recent[1].round, 1);
-    }
+    // 注: SelfAssessment / SelfAssessmentCache 测试在 `apeireth-plugin` crate 的
+    // `self_assessment` 模块 (canonical 单 source of truth), 不在本 crate 重复.
 
     #[test]
     fn subagent_spec_roundtrip_json() {
